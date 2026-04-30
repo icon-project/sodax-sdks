@@ -7,8 +7,8 @@
   "testRunner": "vitest",
   "plugins": ["@stryker-mutator/vitest-runner"],
   "inPlace": true,
-  "disableTypeChecks": "src/moneyMarket/MoneyMarketService.ts",
-  "mutate": ["src/moneyMarket/MoneyMarketService.ts"],
+  "disableTypeChecks": "src/shared/services/spoke/SonicSpokeService.ts",
+  "mutate": ["src/shared/services/spoke/SonicSpokeService.ts"],
   "reporters": ["clear-text", "html", "progress"],
   "vitest": {
     "configFile": "vitest.stryker.config.ts",
