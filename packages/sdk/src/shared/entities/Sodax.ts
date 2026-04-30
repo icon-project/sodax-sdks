@@ -11,6 +11,7 @@ import { sodaxConfig, type DeepPartial, type Result, type SodaxConfig } from '@s
 import type { HubProvider } from '../types/types.js';
 import { ConfigService } from '../config/index.js';
 import { PartnerService } from '../../partner/PartnerService.js';
+import { RecoveryService } from '../../recovery/RecoveryService.js';
 import { deepMerge } from '../utils/deepMerge.js';
 
 /**
@@ -28,6 +29,7 @@ export class Sodax {
   public readonly bridge: BridgeService; // Bridge service enabling cross-chain transfers
   public readonly staking: StakingService; // Staking service enabling SODA staking operations
   public readonly partners: PartnerService; // Partner service enabling partner fee claim and other partner operations
+  public readonly recovery: RecoveryService; // Recovery service for withdrawing stuck hub-wallet assets back to a spoke chain
   public readonly dex: DexService; // Dex service enabling DEX operations
   public readonly config: ConfigService; // Config service enabling configuration data fetching from the backend API or fallbacking to default values
 
@@ -67,6 +69,11 @@ export class Sodax {
     this.bridge = new BridgeService({ hubProvider: this.hubProvider, config: this.config, spoke: this.spokeService });
     this.staking = new StakingService({ hubProvider: this.hubProvider, config: this.config, spoke: this.spokeService });
     this.partners = new PartnerService({
+      hubProvider: this.hubProvider,
+      config: this.config,
+      spoke: this.spokeService,
+    });
+    this.recovery = new RecoveryService({
       hubProvider: this.hubProvider,
       config: this.config,
       spoke: this.spokeService,

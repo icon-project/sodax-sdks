@@ -1,5 +1,4 @@
-/*
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '@/zustand/useAppStore';
 import { ChainSelector } from '@/components/shared/ChainSelector';
 import { Button } from '@/components/ui/button';
@@ -7,20 +6,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Wallet, CheckCircle2, Loader2, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useXAccount, useWalletProvider, useEvmSwitchChain } from '@sodax/wallet-sdk-react';
-import { useGetUserHubWalletAddress, useSodaxContext, useSpokeProvider } from '@sodax/dapp-kit';
-import { hubAssets, erc20Abi, EvmAssetManagerService, SpokeService } from '@sodax/sdk';
-import { baseChainInfo, type ChainId, type SpokeChainId } from '@sodax/types';
+import {
+  useGetUserHubWalletAddress,
+  useHubAssetBalances,
+  useWithdrawHubAsset,
+} from '@sodax/dapp-kit';
+import type { HubAssetBalance } from '@sodax/sdk';
+import { baseChainInfo } from '@sodax/types';
 import { formatTokenAmount, getChainExplorerTxUrl, getReadableTxError } from '@/lib/utils';
-import type { Address, Hex } from 'viem';
-
-type HubAssetBalance = {
-  spokeTokenAddress: string;
-  hubAssetAddress: string;
-  symbol: string;
-  name: string;
-  decimal: number;
-  balance: bigint;
-};
+import type { Address } from 'viem';
 
 type WithdrawResult = {
   success: boolean;
@@ -32,142 +26,87 @@ export default function RecoveryPage() {
   const { selectedChainId, selectChainId, openWalletModal } = useAppStore();
   const xAccount = useXAccount(selectedChainId);
   const walletProvider = useWalletProvider(selectedChainId);
-  const spokeProvider = useSpokeProvider(selectedChainId as SpokeChainId, walletProvider);
-  const { data: hubWalletAddress } = useGetUserHubWalletAddress(selectedChainId as SpokeChainId, xAccount?.address);
-  const { sodax } = useSodaxContext();
+  const srcAddress = xAccount?.address as Address | undefined;
+  const { data: hubWalletAddress } = useGetUserHubWalletAddress(selectedChainId, srcAddress);
   const { isWrongChain, handleSwitchChain } = useEvmSwitchChain(selectedChainId);
 
-  const [balances, setBalances] = useState<HubAssetBalance[] | null>(null);
-  const [isLoadingBalances, setIsLoadingBalances] = useState(false);
-  const [balanceError, setBalanceError] = useState<string | null>(null);
-  const [withdrawingAssets, setWithdrawingAssets] = useState<Set<string>>(new Set());
   const [withdrawResults, setWithdrawResults] = useState<Record<string, WithdrawResult>>({});
   const [isWithdrawingAll, setIsWithdrawingAll] = useState(false);
+  const [withdrawingAssets, setWithdrawingAssets] = useState<Set<string>>(new Set());
 
   const allowedChains = useMemo(
-    () =>
-      Object.values(baseChainInfo)
-        .filter(chain => chain.type === 'EVM' && hubAssets[chain.id as SpokeChainId])
-        .map(chain => chain.id as ChainId),
+    () => Object.values(baseChainInfo).filter(chain => chain.type === 'EVM').map(chain => chain.key),
     [],
   );
 
-  // Clear state when chain changes
+  const {
+    data: balances,
+    isFetching: isLoadingBalances,
+    error: balancesError,
+    refetch: refetchBalances,
+  } = useHubAssetBalances({
+    chainKey: selectedChainId,
+    srcAddress,
+  });
+
+  const balanceError = balancesError ? getReadableTxError(balancesError) : null;
+
+  const { mutateAsync: withdrawHubAsset } = useWithdrawHubAsset();
+
+  // Reset per-chain UI state when chain changes
   // biome-ignore lint/correctness/useExhaustiveDependencies: selectedChainId is the intentional trigger to reset state
   useEffect(() => {
-    setBalances(null);
-    setBalanceError(null);
-    setWithdrawingAssets(new Set());
     setWithdrawResults({});
+    setWithdrawingAssets(new Set());
     setIsWithdrawingAll(false);
   }, [selectedChainId]);
 
-  const fetchBalances = useCallback(async () => {
-    if (!hubWalletAddress || !selectedChainId || !sodax) return;
-
-    const chainHubAssets = hubAssets[selectedChainId as SpokeChainId];
-    if (!chainHubAssets || Object.keys(chainHubAssets).length === 0) {
-      setBalances([]);
-      return;
-    }
-
-    setIsLoadingBalances(true);
-    setBalanceError(null);
-
-    try {
-      const entries = Object.entries(chainHubAssets);
-
-      const results = await sodax.hubProvider.publicClient.multicall({
-        contracts: entries.map(([, hubAsset]) => ({
-          address: hubAsset.asset as Address,
-          abi: erc20Abi,
-          functionName: 'balanceOf' as const,
-          args: [hubWalletAddress],
-        })),
-        allowFailure: true,
-      });
-
-      const assetBalances: HubAssetBalance[] = entries
-        .map(([spokeTokenAddress, hubAsset], index) => {
-          const result = results[index];
-          const balance = result.status === 'success' ? (result.result as bigint) : 0n;
-          return {
-            spokeTokenAddress,
-            hubAssetAddress: hubAsset.asset,
-            symbol: hubAsset.symbol,
-            name: hubAsset.name,
-            decimal: hubAsset.decimal,
-            balance,
-          };
-        })
-        .filter(asset => asset.balance > 0n);
-
-      setBalances(assetBalances);
-    } catch (err) {
-      setBalanceError(getReadableTxError(err));
-      setBalances(null);
-    } finally {
-      setIsLoadingBalances(false);
-    }
-  }, [hubWalletAddress, selectedChainId, sodax]);
-
-  useEffect(() => {
-    if (hubWalletAddress) {
-      fetchBalances();
-    }
-  }, [hubWalletAddress, fetchBalances]);
-
   const handleWithdrawAsset = useCallback(
     async (asset: HubAssetBalance) => {
-      if (!spokeProvider || !hubWalletAddress || !xAccount?.address || !sodax) return;
+      if (!walletProvider || !srcAddress) return;
 
       setWithdrawingAssets(prev => new Set(prev).add(asset.spokeTokenAddress));
 
-      try {
-        const data: Hex = EvmAssetManagerService.withdrawAssetData(
-          {
-            token: asset.spokeTokenAddress as Hex,
-            to: xAccount.address as Hex,
-            amount: asset.balance,
-          },
-          sodax.hubProvider,
-          selectedChainId as SpokeChainId,
-        );
+      const result = await withdrawHubAsset({
+        params: {
+          srcChainKey: selectedChainId,
+          srcAddress,
+          token: asset.spokeTokenAddress,
+          amount: asset.balance,
+        },
+        walletProvider,
+      });
 
-        const txHash = await SpokeService.callWallet(hubWalletAddress, data, spokeProvider, sodax.hubProvider);
+      setWithdrawResults(prev => ({
+        ...prev,
+        [asset.spokeTokenAddress]: result.ok
+          ? { success: true, txHash: result.value as string }
+          : { success: false, error: getReadableTxError(result.error) },
+      }));
 
-        setWithdrawResults(prev => ({
-          ...prev,
-          [asset.spokeTokenAddress]: { success: true, txHash: txHash as string },
-        }));
-      } catch (err) {
-        setWithdrawResults(prev => ({
-          ...prev,
-          [asset.spokeTokenAddress]: { success: false, error: getReadableTxError(err) },
-        }));
-      } finally {
-        setWithdrawingAssets(prev => {
-          const next = new Set(prev);
-          next.delete(asset.spokeTokenAddress);
-          return next;
-        });
-      }
+      setWithdrawingAssets(prev => {
+        const next = new Set(prev);
+        next.delete(asset.spokeTokenAddress);
+        return next;
+      });
     },
-    [spokeProvider, hubWalletAddress, xAccount, sodax, selectedChainId],
+    [walletProvider, srcAddress, selectedChainId, withdrawHubAsset],
   );
 
   const handleWithdrawAll = useCallback(async () => {
     if (!balances || balances.length === 0) return;
     setIsWithdrawingAll(true);
 
+    // Sequential by design: each withdraw is a relay tx that consumes nonce on the source chain;
+    // parallelising would race the wallet's nonce manager and produce nonce-replacement errors.
     for (const asset of balances) {
       if (withdrawResults[asset.spokeTokenAddress]?.success) continue;
       await handleWithdrawAsset(asset);
     }
 
     setIsWithdrawingAll(false);
-    await fetchBalances();
-  }, [balances, withdrawResults, handleWithdrawAsset, fetchBalances]);
+    await refetchBalances();
+  }, [balances, withdrawResults, handleWithdrawAsset, refetchBalances]);
 
   const pendingWithdrawCount = balances?.filter(a => !withdrawResults[a.spokeTokenAddress]?.success).length ?? 0;
 
@@ -201,7 +140,7 @@ export default function RecoveryPage() {
           </div>
         </div>
 
-        {xAccount?.address ? (
+        {srcAddress ? (
           <Card className="animate-in fade-in duration-500">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-cherry-dark">Hub Wallet Assets</CardTitle>
@@ -209,7 +148,7 @@ export default function RecoveryPage() {
                 <Button
                   variant="cherryOutline"
                   size="sm"
-                  onClick={fetchBalances}
+                  onClick={() => refetchBalances()}
                   disabled={isLoadingBalances || !hubWalletAddress}
                 >
                   <RefreshCw className={`w-4 h-4 ${isLoadingBalances ? 'animate-spin' : ''}`} />
@@ -238,9 +177,7 @@ export default function RecoveryPage() {
               {isWrongChain && (
                 <div className="flex items-center gap-3 p-3 mb-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                   <AlertTriangle className="w-5 h-5 text-yellow-600" />
-                  <span className="text-sm text-yellow-800">
-                    Your wallet is connected to a different network.
-                  </span>
+                  <span className="text-sm text-yellow-800">Your wallet is connected to a different network.</span>
                   <Button variant="cherry" size="sm" onClick={handleSwitchChain}>
                     Switch Network
                   </Button>
@@ -259,9 +196,7 @@ export default function RecoveryPage() {
                   Loading hub wallet balances...
                 </div>
               ) : balances && balances.length === 0 ? (
-                <div className="text-center py-12 text-clay">
-                  No recoverable assets found for this chain.
-                </div>
+                <div className="text-center py-12 text-clay">No recoverable assets found for this chain.</div>
               ) : balances && balances.length > 0 ? (
                 <Table>
                   <TableHeader>
@@ -340,9 +275,7 @@ export default function RecoveryPage() {
                   </TableBody>
                 </Table>
               ) : !hubWalletAddress ? (
-                <div className="text-center py-12 text-clay">
-                  Deriving hub wallet address...
-                </div>
+                <div className="text-center py-12 text-clay">Deriving hub wallet address...</div>
               ) : null}
             </CardContent>
           </Card>
@@ -366,4 +299,3 @@ export default function RecoveryPage() {
     </main>
   );
 }
-*/

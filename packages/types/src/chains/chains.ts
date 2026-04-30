@@ -843,7 +843,6 @@ export const bnUSDLegacyTokens = [
   spokeChainConfig[ChainKeys.SUI_MAINNET].supportedTokens.legacybnUSD,
   spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.legacybnUSD,
 ] as const;
-export const bnUSDNewTokens = newbnUSDSpokeChainIds.map(chainId => spokeChainConfig[chainId].supportedTokens.bnUSD);
 
 export type LegacybnUSDTokenAddress = (typeof bnUSDLegacyTokens)[number]['address'];
 export type LegacybnUSDToken = (typeof bnUSDLegacyTokens)[number];

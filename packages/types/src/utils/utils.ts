@@ -129,18 +129,26 @@ export function isLegacybnUSDToken(token: XToken | string): boolean {
   return bnUSDLegacyTokens.some(t => t.address.toLowerCase() === token.address.toLowerCase());
 }
 
+export function getbnUSDToken(chainId: SpokeChainKey): XToken | undefined {
+  if ("bnUSD" in spokeChainConfig[chainId].supportedTokens) {
+    return spokeChainConfig[chainId].supportedTokens.bnUSD;
+  }
+
+  return undefined;
+}
+
 /**
  * Returns true if the provided token (by object or address string) is a new bnUSD token.
  */
 export function isNewbnUSDToken(token: XToken | string): boolean {
   if (typeof token === 'string') {
     return newbnUSDSpokeChainIds
-      .map(chainId => spokeChainConfig[chainId].supportedTokens.bnUSD)
-      .some(t => t.address.toLowerCase() === token.toLowerCase());
+      .map(chainId => getbnUSDToken(chainId))
+      .some(t => t?.address.toLowerCase() === token.toLowerCase());
   }
   return newbnUSDSpokeChainIds
-    .map(chainId => spokeChainConfig[chainId].supportedTokens.bnUSD)
-    .some(t => t.address.toLowerCase() === token.address.toLowerCase());
+    .map(chainId => getbnUSDToken(chainId))
+    .some(t => t?.address.toLowerCase() === token.address.toLowerCase());
 }
 
 /**
