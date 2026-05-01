@@ -1,9 +1,9 @@
 // import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-// import type { ChainId } from '@sodax/types';
+// import type { ChainId } from '@sodax/sdk';
 // import { useSodaxContext } from '../shared/useSodaxContext.js';
 // import { parseUnits } from 'viem';
 // import type { IcxCreateRevertMigrationParams, UnifiedBnUSDMigrateParams, SpokeProvider } from '@sodax/sdk';
-// import { ICON_MAINNET_CHAIN_ID } from '@sodax/types';
+// import { ICON_MAINNET_CHAIN_ID } from '@sodax/sdk';
 // import { MIGRATION_MODE_ICX_SODA, type MigrationIntentParams } from './types.js';
 //
 // /**

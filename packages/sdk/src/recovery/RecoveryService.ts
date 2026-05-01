@@ -1,17 +1,11 @@
-import { erc20Abi, isAddress, type Address, type Hex } from 'viem';
-import type {
-  GetAddressType,
-  Result,
-  SpokeChainKey,
-  SpokeExecActionParams,
-  TxReturnType,
-} from '@sodax/types';
+import { erc20Abi, isAddress, type Address } from 'viem';
+import type { GetAddressType, Result, SpokeChainKey, SpokeExecActionParams, TxReturnType } from '@sodax/types';
 import type { ConfigService } from '../shared/config/ConfigService.js';
 import type { HubProvider } from '../shared/types/types.js';
 import type { SpokeService } from '../shared/services/spoke/SpokeService.js';
 import { EvmAssetManagerService } from '../shared/services/hub/EvmAssetManagerService.js';
-import { HubService } from '../shared/services/hub/HubService.js';
 import type { SendMessageParams } from '../shared/types/spoke-types.js';
+import { encodeAddress } from '../shared/index.js';
 
 export type HubAssetBalance = {
   /** The original token address on the spoke chain (key for the SDK's spoke→hub asset map). */
@@ -71,10 +65,6 @@ export class RecoveryService {
     this.spoke = spoke;
   }
 
-  private deriveHubWallet(srcAddress: string, chainKey: SpokeChainKey): Promise<Address> {
-    return HubService.getUserHubWalletAddress(srcAddress, chainKey, this.hubProvider);
-  }
-
   /**
    * Fetches the user's hub-side `balanceOf` for every supported token on the given spoke chain.
    * Iterates `config.spokeChainConfig[chainKey].supportedTokens`, skips placeholder hubAssets
@@ -98,7 +88,7 @@ export class RecoveryService {
         return { ok: true, value: [] };
       }
 
-      const hubWallet = await this.deriveHubWallet(srcAddress, chainKey);
+      const hubWallet = await this.hubProvider.getUserHubWalletAddress(srcAddress, chainKey);
 
       const balanceResults = await this.hubProvider.publicClient.multicall({
         contracts: entries.map(token => ({
@@ -143,15 +133,11 @@ export class RecoveryService {
   ): Promise<Result<TxReturnType<K, Raw>>> {
     const { params } = _params;
     try {
-      const hubWallet = await this.deriveHubWallet(params.srcAddress, params.srcChainKey);
-
-      // EvmAssetManagerService.withdrawAssetData types `to: Hex`. Recovery is EVM-only at the
-      // chain selector level (the user must hold a wallet on an EVM-compatible spoke chain to
-      // sign the relay), so this cast is sound for the supported call sites.
+      const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
       const payload = EvmAssetManagerService.withdrawAssetData(
         {
           token: params.token,
-          to: params.srcAddress as Hex,
+          to: encodeAddress(params.srcChainKey, params.srcAddress),
           amount: params.amount,
         },
         this.hubProvider,

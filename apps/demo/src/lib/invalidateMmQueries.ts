@@ -2,7 +2,7 @@
 // // so UI refreshes immediately after successful transactions.
 //
 // import type { QueryClient } from '@tanstack/react-query';
-// import type { ChainId } from '@sodax/types';
+// import type { ChainId } from '@sodax/sdk';
 // import { POST_TX_REFETCH_DELAY, POST_TX_REFETCH_DELAY_LONG } from '@/components/mm/constants';
 //
 // export type InvalidateMmQueriesParams = {

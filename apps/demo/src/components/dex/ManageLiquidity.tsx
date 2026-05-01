@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import type { ClPositionInfo, PoolData, PoolKey } from '@sodax/sdk';
-import { baseChainInfo, type SpokeChainKey } from '@sodax/types';
+import { baseChainInfo, type SpokeChainKey } from '@sodax/sdk';
 import { type IWalletProvider, type XAccount, getXChainType, useXService } from '@sodax/wallet-sdk-react';
 import { UserPositions } from '@/components/dex/UserPositions';
 import {

@@ -2,7 +2,7 @@ import React from 'react';
 import { useStakingInfo } from '@sodax/dapp-kit';
 import { Skeleton } from '../ui/skeleton';
 import { formatTokenAmount } from '@/lib/utils';
-import type { SpokeChainKey } from '@sodax/types';
+import type { SpokeChainKey } from '@sodax/sdk';
 
 export function StakingInfo({
   srcAddress,

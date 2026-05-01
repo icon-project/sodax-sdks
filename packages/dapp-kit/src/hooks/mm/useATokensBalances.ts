@@ -1,5 +1,4 @@
-import { HubService } from '@sodax/sdk';
-import type { SpokeChainKey } from '@sodax/types';
+import type { SpokeChainKey } from '@sodax/sdk';
 import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
 import { type Address, isAddress } from 'viem';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
@@ -13,7 +12,7 @@ export type UseATokensBalancesParams = {
 
 /**
  * React hook to fetch aToken balances for a list of addresses in a single multicall.
- * Derives the user's hub wallet via {@link HubService.getUserHubWalletAddress} from the
+ * Derives the user's hub wallet via `EvmHubProvider.getUserHubWalletAddress` from the
  * spoke `chainKey` + spoke wallet `userAddress`.
  */
 export function useATokensBalances({
@@ -39,11 +38,7 @@ export function useATokensBalances({
         }
       }
 
-      const hubWalletAddress = await HubService.getUserHubWalletAddress(
-        userAddress,
-        spokeChainKey,
-        sodax.hubProvider,
-      );
+      const hubWalletAddress = await sodax.hubProvider.getUserHubWalletAddress(userAddress, spokeChainKey);
       return sodax.moneyMarket.data.getATokensBalances(aTokens, hubWalletAddress);
     },
     enabled:

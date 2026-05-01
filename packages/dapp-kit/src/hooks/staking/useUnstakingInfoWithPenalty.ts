@@ -1,5 +1,5 @@
 import type { UnstakeRequestWithPenalty, UnstakingInfo } from '@sodax/sdk';
-import type { SpokeChainKey } from '@sodax/types';
+import type { SpokeChainKey } from '@sodax/sdk';
 import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 

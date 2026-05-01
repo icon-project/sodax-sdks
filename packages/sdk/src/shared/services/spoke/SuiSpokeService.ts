@@ -37,7 +37,7 @@ export class SuiSpokeService {
 
   public constructor(config: ConfigService) {
     // since we only support mainnet for now, we can hardcode the single sui chain config
-    const chainConfig = config.sodaxConfig.chains[ChainKeys.SUI_MAINNET];
+    const chainConfig = config.getChainConfig(ChainKeys.SUI_MAINNET);
     this.publicClient = new SuiClient({ url: chainConfig.rpc_url });
     this.pollingIntervalMs = chainConfig.pollingConfig.pollingIntervalMs;
     this.maxTimeoutMs = chainConfig.pollingConfig.maxTimeoutMs;

@@ -1,6 +1,5 @@
 import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
-import type { SubmitSwapTxStatusResponse } from '@sodax/types';
-import type { RequestOverrideConfig } from '@sodax/sdk';
+import type { RequestOverrideConfig, SubmitSwapTxStatusResponse } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import { unwrapResult } from './unwrapResult.js';
 

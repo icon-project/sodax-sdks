@@ -1,5 +1,5 @@
 import { type UseQueryResult, useQuery } from '@tanstack/react-query';
-import type { SpokeChainKey, IXServiceBase, XToken } from '@sodax/types';
+import type { SpokeChainKey, IXServiceBase, XToken } from '@sodax/sdk';
 
 /**
  * Params for {@link useXBalances}.

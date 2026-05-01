@@ -1,5 +1,5 @@
 /*
-import type { XToken } from '@sodax/types';
+import type { XToken } from '@sodax/sdk';
 
 export const MIGRATION_MODE_ICX_SODA = 'icxsoda';
 export const MIGRATION_MODE_BNUSD = 'bnusd';

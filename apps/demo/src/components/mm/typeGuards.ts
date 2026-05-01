@@ -2,7 +2,7 @@
 
 import { isAddress, type Address } from 'viem';
 import type { UserReserveData } from '@sodax/sdk';
-import type { XToken } from '@sodax/types';
+import type { XToken } from '@sodax/sdk';
 
 /**
  * Type guard to check if a value is a valid UserReserveData object.

@@ -3,7 +3,7 @@
  * Forbidden to import types from other packages in this file (exception for shared types)!
  */
 
-import type { Address, Hex, HttpUrl } from '../shared/shared.js';
+import type { Address, Hex, TxPollingConfig } from '../shared/shared.js';
 import {
   sonicSupportedTokens,
   redbellySupportedTokens,
@@ -29,7 +29,6 @@ import {
 
 import { ChainKeys, CHAIN_KEYS, type ChainKey, type ChainType } from './chain-keys.js';
 import type { XToken } from './tokens.js';
-import type { TxPollingConfig } from '../shared/shared.js';
 export * from './chain-keys.js';
 
 // NOTE: This is not the same as the actual chain ids (wormhole based ids), only used for intent relay
@@ -293,7 +292,7 @@ export type HubConfig = {
   };
   nativeToken: Address;
   wrappedNativeToken: Address;
-  rpcUrl: HttpUrl;
+  rpcUrl: string;
 } & BaseSpokeChainConfig<'EVM'>;
 
 export type EvmSpokeChainConfig = BaseSpokeChainConfig<'EVM'> & {
@@ -302,7 +301,7 @@ export type EvmSpokeChainConfig = BaseSpokeChainConfig<'EVM'> & {
     connection: Address;
   };
   nativeToken: string;
-  rpcUrl: HttpUrl;
+  rpcUrl: string;
 };
 
 export type SonicSpokeChainConfig = BaseSpokeChainConfig<'EVM'> & {
@@ -311,7 +310,7 @@ export type SonicSpokeChainConfig = BaseSpokeChainConfig<'EVM'> & {
     wrappedSonic: Address;
   };
   nativeToken: Address;
-  rpcUrl: HttpUrl;
+  rpcUrl: string;
 };
 
 export type SolanaChainConfig = BaseSpokeChainConfig<'SOLANA'> & {
@@ -340,8 +339,8 @@ export type StellarSpokeChainConfig = BaseSpokeChainConfig<'STELLAR'> & {
     xTokenManager: string;
     rateLimit: string;
   };
-  horizonRpcUrl: HttpUrl;
-  sorobanRpcUrl: HttpUrl;
+  horizonRpcUrl: string;
+  sorobanRpcUrl: string;
   trustlineConfigs: StellarAssetTrustline[];
   priorityFee: string;
   baseFee: string;
@@ -438,8 +437,8 @@ export type GetSpokeChainConfigType<T extends SpokeChainKey> = T extends SonicCh
 
 export type IconAddress = `hx${string}` | `cx${string}`;
 export type IconSpokeChainConfig = BaseSpokeChainConfig<'ICON'> & {
-  rpcUrl: HttpUrl;
-  debugRpcUrl: HttpUrl;
+  rpcUrl: string;
+  debugRpcUrl: string;
   addresses: {
     assetManager: IconAddress;
     connection: IconAddress;
@@ -824,10 +823,10 @@ export const supportedSpokeChains: SpokeChainKey[] = Object.keys(spokeChainConfi
 export type GetChainType<C extends SpokeChainKey | ChainType | undefined> = C extends undefined
   ? undefined
   : C extends ChainType
-  ? C
-  : C extends SpokeChainKey
-    ? (typeof spokeChainConfig)[C]['chain']['type']
-    : ChainType;
+    ? C
+    : C extends SpokeChainKey
+      ? (typeof spokeChainConfig)[C]['chain']['type']
+      : ChainType;
 
 // bnUSD Migration configs
 export const bnUSDLegacySpokeChainIds = [

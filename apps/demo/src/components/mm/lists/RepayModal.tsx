@@ -1,7 +1,7 @@
 import { useAppStore } from '@/zustand/useAppStore';
 import { useMMAllowance, useMMApprove, useRepay, useSodaxContext, useXBalances } from '@sodax/dapp-kit';
 import type { MoneyMarketRepayParams } from '@sodax/sdk';
-import { type SpokeChainKey, type XToken, baseChainInfo } from '@sodax/types';
+import { type SpokeChainKey, type XToken, baseChainInfo } from '@sodax/sdk';
 import { useEvmSwitchChain, useWalletProvider } from '@sodax/wallet-sdk-react';
 import React, { useMemo, useState, useEffect } from 'react';
 import { formatUnits, parseUnits } from 'viem';

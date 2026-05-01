@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import type { IBitcoinWalletProvider } from '@sodax/types';
+import type { IBitcoinWalletProvider } from '@sodax/sdk';
 import { useRadfiAuth, loadRadfiSession, saveRadfiSession, clearRadfiSession, type RadfiSession } from './useRadfiAuth.js';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 

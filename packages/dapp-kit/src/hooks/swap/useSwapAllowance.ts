@@ -1,7 +1,7 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import type { CreateIntentParams, CreateLimitOrderParams } from '@sodax/sdk';
-import type { GetWalletProviderType, SpokeChainKey } from '@sodax/types';
+import type { GetWalletProviderType, SpokeChainKey } from '@sodax/sdk';
 
 export function useSwapAllowance<K extends SpokeChainKey>(
   params: CreateIntentParams | CreateLimitOrderParams | undefined,

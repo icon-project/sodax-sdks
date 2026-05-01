@@ -14,7 +14,7 @@ import { BorrowAssetsListItem } from './BorrowAssetsListItem';
 import { formatUnits } from 'viem';
 import { getBorrowableAssetsWithMarketData } from '@/lib/borrowUtils';
 import { BorrowModal } from './BorrowModal';
-import { ChainKeys, type SpokeChainKey, type XToken } from '@sodax/types';
+import { ChainKeys, type SpokeChainKey, type XToken } from '@sodax/sdk';
 import { ChainSelector } from '@/components/shared/ChainSelector';
 import { RepayModal } from '../RepayModal';
 import { Info } from 'lucide-react';

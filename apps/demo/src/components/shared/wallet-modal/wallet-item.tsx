@@ -1,7 +1,7 @@
 import { XIcon, Loader2 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
-import type { ChainType } from '@sodax/types';
+import type { ChainType } from '@sodax/sdk';
 import {
   useXAccount,
   useXConnect,

@@ -30,7 +30,6 @@ import {
   getIntentRelayChainId,
   ChainKeys,
   spokeChainConfig,
-  type HttpUrl,
   type HubAddress,
   type SolanaAccountMeta,
   type SolanaBase58PublicKey,
@@ -63,13 +62,13 @@ export type SolanaTransferToHubParams = {
 };
 
 export class SolanaSpokeService {
-  private readonly rpcUrl: HttpUrl;
+  private readonly rpcUrl: string;
   public readonly connection: Connection;
   private readonly pollingIntervalMs: number;
   private readonly maxTimeoutMs: number;
 
   public constructor(config: ConfigService) {
-    const chainConfig = config.sodaxConfig.chains[ChainKeys.SOLANA_MAINNET];
+    const chainConfig = config.getChainConfig(ChainKeys.SOLANA_MAINNET);
     this.rpcUrl = chainConfig.rpcUrl;
     this.connection = new Connection(this.rpcUrl, 'confirmed');
     this.pollingIntervalMs = chainConfig.pollingConfig.pollingIntervalMs;

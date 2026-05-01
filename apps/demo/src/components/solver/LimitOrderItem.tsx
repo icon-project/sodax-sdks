@@ -4,7 +4,7 @@ import { TableCell, TableRow } from '@/components/ui/table';
 import { formatUnits } from 'viem';
 import type { IntentResponse, Intent, IntentRelayChainId } from '@sodax/sdk';
 import { useMemo } from 'react';
-import type { SpokeChainKey } from '@sodax/types';
+import type { SpokeChainKey } from '@sodax/sdk';
 import { useCancelLimitOrder, useSodaxContext } from '@sodax/dapp-kit';
 import { useWalletProvider } from '@sodax/wallet-sdk-react';
 import { useQueryClient } from '@tanstack/react-query';

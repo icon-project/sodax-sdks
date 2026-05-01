@@ -25,7 +25,6 @@
   },
   "dependencies": {
     "@sodax/sdk": "workspace:*",
-    "@sodax/types": "workspace:*",
     "viem": "catalog:"
   },
   "devDependencies": {

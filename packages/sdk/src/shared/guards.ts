@@ -19,10 +19,6 @@ import type {
   SuiChainKey,
   SonicChainKey,
   HubChainKey,
-  SolverConfigParams,
-  Prettify,
-  Optional,
-  PartnerFeeConfig,
   PartnerFeeAmount,
   PartnerFeePercentage,
   EvmSpokeOnlyChainKey,
@@ -35,8 +31,6 @@ import type {
 import {
   type EvmSpokeChainConfig,
   type SpokeChainConfig,
-  type SolverConfig,
-  type MoneyMarketConfig,
   type IconAddress,
   type SubmitSwapTxResponse,
   type SubmitSwapTxStatusResponse,
@@ -221,31 +215,6 @@ export function isSpokeApproveParamsStellar<K extends SpokeChainKey, Raw extends
 // export function isSpokeApproveParamsStellar(params: SpokeApproveParams<K, Raw>, K extends SpokeChainKey, Raw extends boolean): params is SpokeApproveParamsStellar<K, Raw> {
 //   return isStellarChainKeyType(params.srcChainKey);
 // }
-export function isConfiguredSolverConfig(
-  value: SolverConfigParams,
-): value is Prettify<SolverConfig & Optional<PartnerFeeConfig, 'partnerFee'>> {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'intentsContract' in value &&
-    'solverApiEndpoint' in value &&
-    'protocolIntentsContract' in value
-  );
-}
-
-export function isConfiguredMoneyMarketConfig(
-  value: MoneyMarketConfig,
-): value is Prettify<MoneyMarketConfig & Optional<PartnerFeeConfig, 'partnerFee'>> {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'lendingPool' in value &&
-    'uiPoolDataProvider' in value &&
-    'poolAddressesProvider' in value &&
-    'bnUSD' in value &&
-    'bnUSDVault' in value
-  );
-}
 
 export function isRawDestinationParams(value: unknown): value is RawDestinationParams {
   if (typeof value !== 'object' || value === null) return false;

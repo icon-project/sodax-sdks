@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { useGetBridgeableTokens, useGetBridgeableAmount, useSodaxContext, loadRadfiSession } from '@sodax/dapp-kit';
 import { useWalletProvider, useXAccount, useXDisconnect, getXChainType, useXConnection, useXService } from '@sodax/wallet-sdk-react';
-import { ChainKeys, type SpokeChainKey, type XToken } from '@sodax/types';
+import { ChainKeys, type SpokeChainKey, type XToken } from '@sodax/sdk';
 import type { CreateBridgeIntentParams } from '@sodax/sdk';
 import { ArrowDownUp } from 'lucide-react';
 import { formatUnits, parseUnits } from 'viem';

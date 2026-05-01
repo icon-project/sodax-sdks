@@ -7,7 +7,6 @@ import {
   Erc20Service,
   Erc4626Service,
   type ConfigService,
-  HubService,
   type HubProvider,
   isSolanaChainKeyType,
   isBitcoinChainKeyType,
@@ -331,11 +330,7 @@ export class ClService {
   ): Promise<Result<TxReturnType<K, Raw>> & RelayOptionalExtraData> {
     const { params, skipSimulation } = _params;
     try {
-      const hubWallet = await HubService.getUserHubWalletAddress(
-        params.srcAddress,
-        params.srcChainKey,
-        this.hubProvider,
-      );
+      const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
       const calls: EvmContractCall[] = [];
 
       const token0Approvals = this.permit2Approve(
@@ -455,11 +450,7 @@ export class ClService {
   ): Promise<Result<TxReturnType<K, Raw>> & RelayOptionalExtraData> {
     const { params, skipSimulation } = _params;
     try {
-      const hubWallet = await HubService.getUserHubWalletAddress(
-        params.srcAddress,
-        params.srcChainKey,
-        this.hubProvider,
-      );
+      const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
       const calls: EvmContractCall[] = [];
 
       const positionConfig: CLPositionConfig = {
@@ -541,11 +532,7 @@ export class ClService {
   ): Promise<Result<TxReturnType<K, Raw>> & RelayOptionalExtraData> {
     const { params, skipSimulation } = _params;
     try {
-      const hubWallet = await HubService.getUserHubWalletAddress(
-        params.srcAddress,
-        params.srcChainKey,
-        this.hubProvider,
-      );
+      const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
       const calls: EvmContractCall[] = [];
 
       const calldata = encodeCLPositionManagerDecreaseLiquidityCalldata({
@@ -831,11 +818,7 @@ export class ClService {
   ): Promise<Result<TxReturnType<K, Raw>> & RelayOptionalExtraData> {
     const { params, skipSimulation } = _params;
     try {
-      const hubWallet = await HubService.getUserHubWalletAddress(
-        params.srcAddress,
-        params.srcChainKey,
-        this.hubProvider,
-      );
+      const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
       const calls: EvmContractCall[] = [];
 
       // Call decrease liquidity with 0 liquidity to trigger reward distribution

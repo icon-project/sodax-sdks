@@ -102,7 +102,7 @@ export class SonicSpokeService {
   private readonly maxTimeoutMs: number;
 
   public constructor(config: ConfigService) {
-    const chainConfig = config.sodaxConfig.chains[ChainKeys.SONIC_MAINNET];
+    const chainConfig = config.getChainConfig(ChainKeys.SONIC_MAINNET);
     this.publicClient = createPublicClient({
       transport: http(chainConfig.rpcUrl),
       chain: getEvmViemChain(ChainKeys.SONIC_MAINNET),

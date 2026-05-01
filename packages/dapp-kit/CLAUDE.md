@@ -1,6 +1,6 @@
 # packages/dapp-kit
 
-High-level React hooks library for dApp developers. Wraps `@sodax/sdk` with React Query into feature-organized hooks. Used side-by-side with `@sodax/wallet-sdk-react` (no direct dependency — contracts shared via `@sodax/types`).
+High-level React hooks library for dApp developers. Wraps `@sodax/sdk` with React Query into feature-organized hooks. Used side-by-side with `@sodax/wallet-sdk-react` (no direct dependency — shared contract types come from `@sodax/sdk`, which re-exports `@sodax/types`).
 
 ## Architecture
 
@@ -72,15 +72,14 @@ src/
 
 ## Dependencies
 
-- `@sodax/sdk` (workspace) — core business logic
-- `@sodax/types` (workspace) — shared types (including contract interfaces like `IXService`)
+- `@sodax/sdk` (workspace) — core business logic and shared types (including contract interfaces like `IXService`; the SDK re-exports `@sodax/types` from its public entry)
 - `@tanstack/react-query` (peer) — server state management
 - `react` (peer, >=18)
 - `viem` — Ethereum utilities
 
 ## Decoupling from wallet-sdk-react
 
-dapp-kit does **not** depend on `@sodax/wallet-sdk-react`. When a hook needs wallet-layer state (e.g. `useXBalances` needs a balance reader), the consumer injects it as a param typed against a contract interface in `@sodax/types` (e.g. `IXService`).
+dapp-kit does **not** depend on `@sodax/wallet-sdk-react`. When a hook needs wallet-layer state (e.g. `useXBalances` needs a balance reader), the consumer injects it as a param typed against a contract interface from `@sodax/sdk` (e.g. `IXService`).
 
 Consumer apps wire both packages side-by-side:
 
@@ -92,7 +91,7 @@ const xService = useXService(getXChainType(chainId));
 const { data } = useXBalances({ xService, xChainId, xTokens, address });
 ```
 
-This mirrors the `wallet-sdk-core` ↔ `@sodax/sdk` pattern: both packages implement or consume contracts defined in `@sodax/types`, with no direct cross-package imports.
+This mirrors the `wallet-sdk-core` ↔ `@sodax/sdk` pattern: wallet-sdk-core implements wallet contracts; `@sodax/sdk` carries domain types consumers import from `@sodax/sdk` (`export * from '@sodax/types'`), without dapp-kit taking a separate `@sodax/types` dependency.
 
 ## AI Skills (Scaffolding Guides)
 

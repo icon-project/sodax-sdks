@@ -11,7 +11,6 @@ import type { SolanaRawTransaction, SolanaReturnType } from '../solana/solana.js
 import type { StacksRawTransaction, StacksReturnType } from '../stacks/stacks.js';
 import type { StellarRawTransaction, StellarReturnType } from '../stellar/stellar.js';
 import type { SuiRawTransaction, SuiReturnType } from '../sui/sui.js';
-import type { SolverConfig } from './constants.js';
 import type { GetWalletProviderType } from '../wallet/providers.js';
 
 export type Default = {
@@ -99,10 +98,6 @@ export type GetAddressType<C extends SpokeChainKey | ChainType> = GetChainType<C
               : GetChainType<C> extends 'NEAR'
                 ? Address
                 : string;
-
-export type SolverConfigParams =
-  | Prettify<SolverConfig & Optional<PartnerFeeConfig, 'partnerFee'>>
-  | Optional<PartnerFeeConfig, 'partnerFee'>;
 
 export type QuoteType = 'exact_input';
 
@@ -322,8 +317,8 @@ export type GetEstimateGasReturnType<C extends SpokeChainKey | ChainType> = C ex
 
 // Type for Stellar RPC configuration with horizon and soroban URLs
 export type StellarRpcConfig = {
-  horizonRpcUrl?: HttpUrl;
-  sorobanRpcUrl?: HttpUrl;
+  horizonRpcUrl?: string;
+  sorobanRpcUrl?: string;
 };
 
 // Type for Bitcoin RPC configuration with Radfi API endpoints

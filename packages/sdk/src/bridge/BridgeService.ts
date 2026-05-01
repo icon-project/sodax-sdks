@@ -12,7 +12,6 @@ import {
   wrappedSonicAbi,
   isHubChainKeyType,
   isStellarChainKeyType,
-  HubService,
   type SpokeIsAllowanceValidParamsHub,
   type SpokeIsAllowanceValidParamsEvmSpoke,
   type SpokeIsAllowanceValidParamsStellar,
@@ -23,6 +22,7 @@ import {
   type RelayOptionalExtraData,
   isOptionalEvmWalletProviderType,
   isOptionalStellarWalletProviderType,
+  type SpokeApproveParams,
 } from '../shared/index.js';
 import {
   type SpokeChainKey,
@@ -185,8 +185,8 @@ export class BridgeService {
           'Invalid wallet provider. Expected Evm wallet provider.',
         );
         const spender = isHubChainKeyType(params.srcChainKey)
-          ? await HubService.getUserHubWalletAddress(params.srcAddress, params.srcChainKey, this.hubProvider)
-          : this.config.sodaxConfig.chains[params.srcChainKey].addresses.assetManager;
+          ? await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey)
+          : this.config.getChainConfig(params.srcChainKey).addresses.assetManager;
 
         const coreParams = {
           srcChainKey: params.srcChainKey,
@@ -196,11 +196,13 @@ export class BridgeService {
           spender,
         } as const;
 
-        const result = await this.spoke.approve<HubChainKey | EvmSpokeOnlyChainKey, Raw>({
-          ...coreParams,
-          raw: _params.raw,
-          walletProvider: _params.walletProvider,
-        });
+        const result = await this.spoke.approve<HubChainKey | EvmSpokeOnlyChainKey, Raw>(
+          {
+            ...coreParams,
+            raw: _params.raw,
+            walletProvider: _params.walletProvider,
+          } as SpokeApproveParams<HubChainKey | EvmSpokeOnlyChainKey, Raw>,
+        );
 
         if (!result.ok) {
           return result;
@@ -381,11 +383,7 @@ export class BridgeService {
         await this.spoke.bitcoinSpokeService.radfi.ensureRadfiAccessToken(_params.walletProvider);
       }
 
-      const hubWallet = await HubService.getUserHubWalletAddress(
-        params.srcAddress,
-        params.srcChainKey,
-        this.hubProvider,
-      );
+      const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
 
       const data: Hex = this.buildBridgeData(params, srcToken, dstToken, this.config.bridge.partnerFee);
 

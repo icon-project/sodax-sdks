@@ -4,9 +4,11 @@
  * Mirrors the SwapService.test.ts pattern from PR #1174:
  *
  *   1. A single `new Sodax()` instance backs every runtime test (`sodax.migration` is the SUT).
- *   2. Static collaborators (HubService, IntentRelayApiService, encodeAddress) are mocked at
- *      their source paths via `vi.mock` + `vi.hoisted`, since SwapService-style barrel re-exports
- *      otherwise produce a different module instance than the test-side import.
+ *   2. Static collaborators (IntentRelayApiService, encodeAddress) are mocked at their source
+ *      paths via `vi.mock` + `vi.hoisted`, since SwapService-style barrel re-exports otherwise
+ *      produce a different module instance than the test-side import. `getUserHubWalletAddress`
+ *      and `getUserRouter` are now instance methods on `sodax.hubProvider` and are bound via
+ *      `vi.spyOn` in `beforeEach`.
  *   3. Instance methods on `sodax.spokeService` and on the sub-services (icxMigration,
  *      bnUSDMigrationService, balnSwapService) are stubbed per-test via `vi.spyOn`.
  *   4. Each public method has a top-level `describe` with branch-level coverage:
@@ -30,9 +32,10 @@ import {
 } from '@sodax/types';
 
 const mocks = vi.hoisted(() => ({
-  // HubService static methods — both `getUserHubWalletAddress` (used by every create-intent
-  // path to derive the hub-side recipient) and `getUserRouter` (used by revert flows that
-  // need the user's spending router on the hub).
+  // EvmHubProvider instance methods — `getUserHubWalletAddress` (used by every create-intent
+  // path to derive the hub-side recipient) and `getUserRouter` (used by revert flows that need
+  // the user's spending router on the hub). Bound to the live `sodax.hubProvider` via
+  // `vi.spyOn` in `beforeEach`.
   getUserHubWalletAddress: vi.fn(),
   getUserRouter: vi.fn(),
   // IntentRelayApiService — every facade method (migratebnUSD / migrateIcxToSoda /
@@ -43,13 +46,6 @@ const mocks = vi.hoisted(() => ({
   // encodeAddress is called for bnUSD migrate / revert paths to translate the dst address
   // into the hub's encoded form before being passed to the migration data builder.
   encodeAddress: vi.fn((_chainKey: unknown, addr: string) => `0xencoded:${addr}`),
-}));
-
-vi.mock('../shared/services/hub/HubService.js', () => ({
-  HubService: {
-    getUserHubWalletAddress: mocks.getUserHubWalletAddress,
-    getUserRouter: mocks.getUserRouter,
-  },
 }));
 
 // Preserve types and the rest of the module surface — only the network-touching helpers
@@ -220,6 +216,10 @@ beforeEach(() => {
   // before invoking the SUT.
   mocks.getUserHubWalletAddress.mockResolvedValue(hubWalletAddress);
   mocks.getUserRouter.mockResolvedValue(userRouterAddress);
+  // Bind the hoisted vi.fn stubs to the live EvmHubProvider instance so per-test
+  // `.mockResolvedValueOnce(...)` / `.mockReset()` calls keep working unchanged.
+  vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockImplementation(mocks.getUserHubWalletAddress);
+  vi.spyOn(sodax.hubProvider, 'getUserRouter').mockImplementation(mocks.getUserRouter);
 
   // verifyTxHash is invoked by migratebnUSD; default to ok so each happy-path test
   // doesn't need to re-stub it.
@@ -385,7 +385,7 @@ describe('MigrationService.isAllowanceValid — revert', () => {
     });
   });
 
-  it('uses HubService.getUserRouter to derive the spender for bnUSD revert on hub', async () => {
+  it('uses hubProvider.getUserRouter to derive the spender for bnUSD revert on hub', async () => {
     // Reuse the bnUSD new-to-legacy fixture (Sonic→Icon revert). srcChainKey is hub.
     const params = bnUSDNewToLegacyParams();
     mocks.getUserRouter.mockResolvedValueOnce(userRouterAddress);
@@ -394,7 +394,7 @@ describe('MigrationService.isAllowanceValid — revert', () => {
     const result = await sodax.migration.isAllowanceValid(params, 'revert');
 
     expect(result).toEqual({ ok: true, value: true });
-    expect(mocks.getUserRouter).toHaveBeenCalledWith(params.srcAddress, sodax.hubProvider);
+    expect(mocks.getUserRouter).toHaveBeenCalledWith(params.srcAddress);
     // The union type doesn't expose `spender` on every variant; cast to inspect it.
     const call = spy.mock.calls[0]?.[0] as { spender?: string };
     expect(call?.spender).toBe(userRouterAddress);

@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Wallet } from 'lucide-react';
-import type { ChainType, SpokeChainKey } from '@sodax/types';
+import type { ChainType, SpokeChainKey } from '@sodax/sdk';
 import { getXChainType, type XAccount } from '@sodax/wallet-sdk-react';
 import { ChainSelector } from '@/components/shared/ChainSelector';
 

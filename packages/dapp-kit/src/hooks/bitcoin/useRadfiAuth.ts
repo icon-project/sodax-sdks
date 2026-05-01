@@ -1,4 +1,4 @@
-import type { IBitcoinWalletProvider } from '@sodax/types';
+import type { IBitcoinWalletProvider } from '@sodax/sdk';
 import { useMutation, type UseMutationResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 

@@ -45,7 +45,7 @@ export class StacksSpokeService {
 
   constructor(config: ConfigService) {
     // since we only support mainnet for now, we can hardcode the single stacks chain config
-    const chainConfig = config.sodaxConfig.chains[ChainKeys.STACKS_MAINNET];
+    const chainConfig = config.getChainConfig(ChainKeys.STACKS_MAINNET);
     this.network = createNetwork({ network: 'mainnet', client: { baseUrl: chainConfig.rpcUrl } });
     this.pollingIntervalMs = chainConfig.pollingConfig.pollingIntervalMs;
     this.maxTimeoutMs = chainConfig.pollingConfig.maxTimeoutMs;

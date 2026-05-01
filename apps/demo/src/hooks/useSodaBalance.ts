@@ -1,6 +1,6 @@
 // apps/demo/src/hooks/useSodaBalance.ts
 import { useSodaxContext, useXBalances } from '@sodax/dapp-kit';
-import type { SpokeChainKey } from '@sodax/types';
+import type { SpokeChainKey } from '@sodax/sdk';
 import { getXChainType, useXService } from '@sodax/wallet-sdk-react';
 
 /**

@@ -1,7 +1,7 @@
 import React from 'react';
 import { TableCell, TableRow } from '@/components/ui/table';
 import { formatUnits } from 'viem';
-import type { SpokeChainKey, XToken } from '@sodax/types';
+import type { SpokeChainKey, XToken } from '@sodax/sdk';
 import { BorrowButton } from '../BorrowButton';
 import { formatDecimalForDisplay, truncateToDecimals } from '@/lib/utils';
 import { useReserveMetrics } from '@/hooks/useReserveMetrics';

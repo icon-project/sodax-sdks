@@ -1,5 +1,5 @@
 import type { SetSwapPreferenceAction, TxReturnType } from '@sodax/sdk';
-import type { HubChainKey, Result, SpokeChainKey } from '@sodax/types';
+import type { HubChainKey, Result, SpokeChainKey } from '@sodax/sdk';
 import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 

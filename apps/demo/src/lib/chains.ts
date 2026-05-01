@@ -1,4 +1,4 @@
-import { ChainKeys } from '@sodax/types';
+import { ChainKeys } from '@sodax/sdk';
 
 export interface ChainUI {
   id: string;

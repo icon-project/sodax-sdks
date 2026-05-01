@@ -1,5 +1,5 @@
-import { HubService, type PoolData, type PoolKey } from '@sodax/sdk';
-import type { SpokeChainKey } from '@sodax/types';
+import type { PoolData, PoolKey } from '@sodax/sdk';
+import type { SpokeChainKey } from '@sodax/sdk';
 import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
 import { erc20Abi } from 'viem';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
@@ -37,7 +37,7 @@ export function usePoolBalances({
         throw new Error('poolData, poolKey, spokeChainKey, and userAddress are required');
       }
 
-      const hubWallet = await HubService.getUserHubWalletAddress(userAddress, spokeChainKey, sodax.hubProvider);
+      const hubWallet = await sodax.hubProvider.getUserHubWalletAddress(userAddress, spokeChainKey);
 
       const [token0Balance, token1Balance] = await Promise.all([
         sodax.hubProvider.publicClient.readContract({

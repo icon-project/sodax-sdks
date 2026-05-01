@@ -7,10 +7,10 @@
  *      it narrows the associated `walletProvider` via `GetWalletProviderType<K>`.
  *   2. `walletProvider` is required on exec methods (`supply`, `borrow`, `withdraw`, `repay`,
  *      `create*Intent`, `approve`). Use `{ raw: true }` for raw transaction payloads (no walletProvider); `{ raw: false, walletProvider }` for exec.
- *   3. Every test runs against a single module-scope `new Sodax()`. Internal collaborators
- *      (HubService, IntentRelayApiService) are mocked at their source paths via `vi.mock`;
- *      instance methods on the real `sodax.spokeService` and `sodax.config` are stubbed per-test
- *      with `vi.spyOn(...).mockResolvedValueOnce(...)`.
+ *   3. Every test runs against a single module-scope `new Sodax()`. Static collaborators
+ *      (IntentRelayApiService) are mocked at their source paths via `vi.mock`; instance methods
+ *      on the real `sodax.hubProvider`, `sodax.spokeService`, and `sodax.config` are stubbed
+ *      per-test with `vi.spyOn(...).mockResolvedValueOnce(...)`.
  */
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import type {
@@ -31,20 +31,14 @@ import { Sodax } from '../shared/entities/Sodax.js';
 import { decodeFunctionData } from 'viem';
 import { poolAbi } from '../shared/abis/pool.abi.js';
 
-// MoneyMarketService imports HubService + relayTxAndWaitPacket statically. Like in
-// SwapService.test.ts we mock those at their source paths so the service-internal references
-// resolve to our test doubles. `vi.hoisted` lets the mock factories reference shared
-// top-level mocks despite `vi.mock` being hoisted to the file top.
+// MoneyMarketService now calls `getUserHubWalletAddress` / `getUserRouter` as instance methods on
+// `sodax.hubProvider`. We keep `vi.fn()` stubs in `vi.hoisted` so per-test
+// `.mockResolvedValueOnce(...)` and `.mockReset()` calls keep working, and bind them via
+// `vi.spyOn` in `beforeEach`. `relayTxAndWaitPacket` is still a static import — mocked at source.
 const mocks = vi.hoisted(() => ({
   getUserHubWalletAddress: vi.fn(),
   getUserRouter: vi.fn(),
   relayTxAndWaitPacket: vi.fn(),
-}));
-vi.mock('../shared/services/hub/HubService.js', () => ({
-  HubService: {
-    getUserHubWalletAddress: mocks.getUserHubWalletAddress,
-    getUserRouter: mocks.getUserRouter,
-  },
 }));
 // Partial mock — IntentRelayApiService also exports types we want to keep intact.
 vi.mock('../shared/services/intentRelay/IntentRelayApiService.js', async () => {
@@ -75,7 +69,7 @@ import {
 
 const sodax = new Sodax();
 
-// Hub-chain wallet address returned by HubService.getUserHubWalletAddress in most happy-path tests.
+// Hub-chain wallet address returned by hubProvider.getUserHubWalletAddress in most happy-path tests.
 const HUB_WALLET = '0x1111111111111111111111111111111111111111' as Address;
 const TO_HUB_WALLET = '0x2222222222222222222222222222222222222222' as Address;
 const USER_ROUTER = '0x3333333333333333333333333333333333333333' as Address;
@@ -147,10 +141,15 @@ beforeEach(() => {
   // Default: `isMoneyMarketSupportedToken` returns true so happy-path tests don't have to
   // re-stub it. Tests that exercise the unsupported-token invariant override it explicitly.
   vi.spyOn(sodax.config, 'isMoneyMarketSupportedToken').mockReturnValue(true);
-  // Default HubService responses — exec/raw create*Intent paths call this for src + dst wallets
+  // Default hub-wallet responses — exec/raw create*Intent paths call this for src + dst wallets
   // via Promise.all, so we configure the mock to always resolve. Per-test calls override.
   mocks.getUserHubWalletAddress.mockResolvedValue(HUB_WALLET);
   mocks.getUserRouter.mockResolvedValue(USER_ROUTER);
+  // Bind the hoisted vi.fn stubs to the live EvmHubProvider instance so `.mockResolvedValueOnce`
+  // / `.mockReset` calls in tests keep working unchanged. Spying replaces the method (and its
+  // internal hubAddressMap cache) so each test sees the configured response.
+  vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockImplementation(mocks.getUserHubWalletAddress);
+  vi.spyOn(sodax.hubProvider, 'getUserRouter').mockImplementation(mocks.getUserRouter);
 });
 
 afterEach(() => {
@@ -419,7 +418,7 @@ describe('MoneyMarketService.isAllowanceValid', () => {
       });
 
       expect(result).toEqual({ ok: true, value: true });
-      expect(mocks.getUserRouter).toHaveBeenCalledWith(SAMPLE_USER_ADDRESS, sodax.hubProvider);
+      expect(mocks.getUserRouter).toHaveBeenCalledWith(SAMPLE_USER_ADDRESS);
       expect(spy).toHaveBeenCalledWith(
         expect.objectContaining({
           srcChainKey: ChainKeys.SONIC_MAINNET,
@@ -618,7 +617,7 @@ describe('MoneyMarketService.isAllowanceValid', () => {
   });
 
   describe('propagates internal errors', () => {
-    it('returns ok:false when HubService.getUserRouter rejects (hub supply path)', async () => {
+    it('returns ok:false when hubProvider.getUserRouter rejects (hub supply path)', async () => {
       const routerError = new Error('ROUTER_LOOKUP_FAILED');
       mocks.getUserRouter.mockRejectedValueOnce(routerError);
 
@@ -799,7 +798,7 @@ describe('MoneyMarketService.approve', () => {
   });
 
   describe('propagates internal errors', () => {
-    it('returns ok:false when HubService.getUserRouter rejects (hub path)', async () => {
+    it('returns ok:false when hubProvider.getUserRouter rejects (hub path)', async () => {
       const routerError = new Error('ROUTER_LOOKUP_FAILED');
       mocks.getUserRouter.mockRejectedValueOnce(routerError);
 
@@ -1056,7 +1055,7 @@ describe('MoneyMarketService.createSupplyIntent', () => {
   });
 
   describe('propagates internal errors', () => {
-    it('returns ok:false when HubService.getUserHubWalletAddress rejects', async () => {
+    it('returns ok:false when hubProvider.getUserHubWalletAddress rejects', async () => {
       vi.spyOn(sodax.moneyMarket, 'buildSupplyData').mockReturnValueOnce('0xsupply-data');
       const hubError = new Error('HUB_LOOKUP_FAILED');
       mocks.getUserHubWalletAddress.mockReset();
@@ -1468,7 +1467,7 @@ describe('MoneyMarketService.createBorrowIntent', () => {
   });
 
   describe('propagates internal errors', () => {
-    it('returns ok:false when HubService.getUserHubWalletAddress rejects', async () => {
+    it('returns ok:false when hubProvider.getUserHubWalletAddress rejects', async () => {
       vi.spyOn(sodax.moneyMarket, 'buildBorrowData').mockReturnValueOnce('0xborrow-data');
       const hubError = new Error('HUB_LOOKUP_FAILED');
       mocks.getUserHubWalletAddress.mockReset();

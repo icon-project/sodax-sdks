@@ -1,7 +1,6 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
-import type { CreateBridgeIntentParams } from '@sodax/sdk';
-import type { GetWalletProviderType, SpokeChainKey } from '@sodax/types';
+import type { CreateBridgeIntentParams, GetWalletProviderType, SpokeChainKey } from '@sodax/sdk';
 
 export function useBridgeAllowance<K extends SpokeChainKey>(
   params: CreateBridgeIntentParams<K> | undefined,

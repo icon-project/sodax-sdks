@@ -10,7 +10,6 @@ import {
   encodeContractCalls,
   relayTxAndWaitPacket,
   type ConfigService,
-  HubService,
   wrappedSonicAbi,
   type HubProvider,
   isStellarChainKeyType,
@@ -154,7 +153,7 @@ export class AssetService {
 
       if (isEvmChainKeyType(params.srcChainKey) || isHubChainKeyType(params.srcChainKey)) {
         const spender = isHubChainKeyType(params.srcChainKey)
-          ? await HubService.getUserHubWalletAddress(params.srcAddress, params.srcChainKey, this.hubProvider)
+          ? await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey)
           : this.config.sodaxConfig.chains[params.srcChainKey].addresses.assetManager;
 
         const result = await this.spoke.isAllowanceValid({
@@ -250,7 +249,7 @@ export class AssetService {
         );
 
         const spender = isHubChainKeyType(params.srcChainKey)
-          ? await HubService.getUserHubWalletAddress(params.srcAddress, params.srcChainKey, this.hubProvider)
+          ? await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey)
           : this.config.sodaxConfig.chains[params.srcChainKey].addresses.assetManager;
 
         const coreParams = {
@@ -303,10 +302,10 @@ export class AssetService {
 
       const [fromHubWallet, recipient] = params.dst
         ? await Promise.all([
-            HubService.getUserHubWalletAddress(params.srcAddress, params.srcChainKey, this.hubProvider),
-            HubService.getUserHubWalletAddress(params.dst.dstAddress, params.dst.dstChainKey, this.hubProvider),
+            this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey),
+            this.hubProvider.getUserHubWalletAddress(params.dst.dstAddress, params.dst.dstChainKey),
           ])
-        : await HubService.getUserHubWalletAddress(params.srcAddress, params.srcChainKey, this.hubProvider).then(
+        : await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey).then(
             w => [w, w] as const,
           );
 
@@ -379,11 +378,11 @@ export class AssetService {
 
       const [fromHubWallet, recipient] = params.dst
         ? await Promise.all([
-            HubService.getUserHubWalletAddress(params.srcAddress, params.srcChainKey, this.hubProvider),
-            HubService.getUserHubWalletAddress(params.dst.dstAddress, params.dst.dstChainKey, this.hubProvider),
+            this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey),
+            this.hubProvider.getUserHubWalletAddress(params.dst.dstAddress, params.dst.dstChainKey),
           ])
         : [
-            await HubService.getUserHubWalletAddress(params.srcAddress, params.srcChainKey, this.hubProvider),
+            await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey),
             params.srcAddress,
           ];
       const dstChainKey: SpokeChainKey = params.dst?.dstChainKey ?? params.srcChainKey;
@@ -749,7 +748,7 @@ export class AssetService {
     chainKey: SpokeChainKey,
   ): Promise<Result<bigint>> {
     try {
-      const hubwallet = await HubService.getUserHubWalletAddress(walletAddress, chainKey, this.hubProvider);
+      const hubwallet = await this.hubProvider.getUserHubWalletAddress(walletAddress, chainKey);
       const value = await this.hubProvider.publicClient.readContract({
         address: poolToken,
         abi: erc20Abi,

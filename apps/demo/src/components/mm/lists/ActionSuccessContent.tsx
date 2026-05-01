@@ -4,7 +4,7 @@
 import React, { useState, type ReactElement } from 'react';
 import { Button } from '@/components/ui/button';
 import { DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import type { SpokeChainKey, XToken } from '@sodax/types';
+import type { SpokeChainKey, XToken } from '@sodax/sdk';
 import { chainIdToChainName } from '@/constants';
 import { getChainExplorerTxUrl } from '@/lib/utils';
 import { useSodaxScanMessageUrl } from '@/hooks/useSodaxScanMessageUrl';

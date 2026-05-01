@@ -12,7 +12,7 @@ import {
   useWithdrawHubAsset,
 } from '@sodax/dapp-kit';
 import type { HubAssetBalance } from '@sodax/sdk';
-import { baseChainInfo } from '@sodax/types';
+import { baseChainInfo } from '@sodax/sdk';
 import { formatTokenAmount, getChainExplorerTxUrl, getReadableTxError } from '@/lib/utils';
 import type { Address } from 'viem';
 

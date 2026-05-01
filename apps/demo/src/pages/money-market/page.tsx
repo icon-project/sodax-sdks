@@ -10,7 +10,7 @@ import { useGetUserHubWalletAddress } from '@sodax/dapp-kit';
 import { Info, Wallet } from 'lucide-react';
 import { BorrowAssetsList } from '@/components/mm/lists/borrow/BorrowAssetsList';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { baseChainInfo, type SpokeChainKey } from '@sodax/types';
+import { baseChainInfo, type SpokeChainKey } from '@sodax/sdk';
 
 const validChainIds = new Set<string>(Object.keys(baseChainInfo));
 const isValidChainId = (id: string | undefined): id is SpokeChainKey => !!id && validChainIds.has(id);

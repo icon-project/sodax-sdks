@@ -1,5 +1,5 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import type { XToken, SpokeChainKey } from '@sodax/types';
+import type { XToken, SpokeChainKey } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/index.js';
 
 export function useGetBridgeableTokens(

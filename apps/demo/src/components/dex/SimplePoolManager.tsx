@@ -19,7 +19,7 @@ import {
   createSupplyLiquidityParamsProps,
   useSodaxContext,
 } from '@sodax/dapp-kit';
-import type { Hash } from '@sodax/types';
+import type { Hash } from '@sodax/sdk';
 import { saveTokenIdToLocalStorage } from '@/lib/utils';
 
 export function SimplePoolManager(): JSX.Element {

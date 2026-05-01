@@ -1,6 +1,6 @@
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import type { SolverExecutionResponse, Intent, IntentDeliveryInfo, SwapActionParams } from '@sodax/sdk';
-import type { Result, SpokeChainKey } from '@sodax/types';
+import type { Result, SpokeChainKey } from '@sodax/sdk';
 import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
 
 type CreateIntentResult = Result<[SolverExecutionResponse, Intent, IntentDeliveryInfo]>;

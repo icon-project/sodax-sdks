@@ -1,6 +1,5 @@
 import { useMutation, type UseMutationOptions, type UseMutationResult } from '@tanstack/react-query';
-import type { SubmitSwapTxRequest, SubmitSwapTxResponse } from '@sodax/types';
-import type { RequestOverrideConfig } from '@sodax/sdk';
+import type { RequestOverrideConfig, SubmitSwapTxRequest, SubmitSwapTxResponse } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import { unwrapResult } from './unwrapResult.js';
 

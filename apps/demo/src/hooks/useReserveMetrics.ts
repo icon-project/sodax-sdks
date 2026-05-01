@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { formatUnits } from 'viem';
 
-import type { XToken } from '@sodax/types';
+import type { XToken } from '@sodax/sdk';
 import type { FormatReserveUSDResponse, UserReserveData } from '@sodax/sdk';
 import { formatCompactNumber } from '@/lib/utils';
 import { AAVE_INDEX_PRECISION } from '@/components/mm/constants';

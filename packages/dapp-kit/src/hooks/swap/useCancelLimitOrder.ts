@@ -1,6 +1,6 @@
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import type { Intent } from '@sodax/sdk';
-import type { GetWalletProviderType, Result, SpokeChainKey } from '@sodax/types';
+import type { GetWalletProviderType, Result, SpokeChainKey } from '@sodax/sdk';
 import { useMutation, type UseMutationResult } from '@tanstack/react-query';
 
 type CancelLimitOrderParams<K extends SpokeChainKey = SpokeChainKey> = {

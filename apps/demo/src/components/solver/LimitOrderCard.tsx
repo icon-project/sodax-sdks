@@ -44,7 +44,7 @@ import {
   type IStellarWalletProvider,
   type StellarChainKey,
   ChainKeys,
-} from '@sodax/types';
+} from '@sodax/sdk';
 import { useAppStore } from '@/zustand/useAppStore';
 import LimitOrderList from './LimitOrderList';
 import { useQueryClient } from '@tanstack/react-query';

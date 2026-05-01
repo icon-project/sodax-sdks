@@ -1,6 +1,6 @@
 import React, { type ReactElement, useMemo } from 'react';
 import { TableCell, TableRow } from '@/components/ui/table';
-import type { XToken, Address } from '@sodax/types';
+import type { XToken, Address } from '@sodax/sdk';
 import { formatUnits } from 'viem';
 import type { FormatReserveUSDResponse, UserReserveData } from '@sodax/sdk';
 import { useReserveMetrics } from '@/hooks/useReserveMetrics';

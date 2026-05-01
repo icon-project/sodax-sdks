@@ -1,8 +1,23 @@
 import invariant from 'tiny-invariant';
-import { IcxMigrationService, type IcxMigrateParams, type IcxCreateRevertMigrationParams, type IcxMigrateAction, type IcxRevertMigrationAction } from './IcxMigrationService.js';
-import { BnUSDMigrationService, type UnifiedBnUSDMigrateParams, type UnifiedBnUSDMigrateAction } from './BnUSDMigrationService.js';
+import {
+  IcxMigrationService,
+  type IcxMigrateParams,
+  type IcxCreateRevertMigrationParams,
+  type IcxMigrateAction,
+  type IcxRevertMigrationAction,
+} from './IcxMigrationService.js';
+import {
+  BnUSDMigrationService,
+  type UnifiedBnUSDMigrateParams,
+  type UnifiedBnUSDMigrateAction,
+} from './BnUSDMigrationService.js';
 import { BalnSwapService, type BalnMigrateParams, type BalnMigrateAction } from './BalnSwapService.js';
-import { isIcxMigrateParams, isBalnMigrateParams, isUnifiedBnUSDMigrateParams, isIcxCreateRevertMigrationParams } from './migration-guards.js';
+import {
+  isIcxMigrateParams,
+  isBalnMigrateParams,
+  isUnifiedBnUSDMigrateParams,
+  isIcxCreateRevertMigrationParams,
+} from './migration-guards.js';
 import {
   type SpokeService,
   relayTxAndWaitPacket,
@@ -11,7 +26,6 @@ import {
   type RelayExtraData,
   waitUntilIntentExecuted,
   type HubProvider,
-  HubService,
   isIconChainKeyType,
   isSolanaChainKeyType,
   isBitcoinChainKeyType,
@@ -49,6 +63,7 @@ import {
   type StellarChainKey,
   type HubChainKey,
   type EvmSpokeOnlyChainKey,
+  type IconContractAddress,
 } from '@sodax/types';
 import { isAddress } from 'viem';
 import type { ConfigService } from '../shared/config/ConfigService.js';
@@ -137,14 +152,18 @@ export class MigrationService {
 
         // bnUSD only requires allowance check for EVM spoke chains
         if (isUnifiedBnUSDMigrateParams(params) && isEvmChainKeyType(params.srcChainKey)) {
+          const bnUSDTokenAddress = this.config.getChainConfig(params.srcChainKey).supportedTokens.bnUSD?.address ?? '';
+
+          invariant(isAddress(bnUSDTokenAddress), `bnUSD token not found for chain key: ${params.srcChainKey}`);
+
           return await this.spoke.isAllowanceValid({
             srcChainKey: params.srcChainKey,
             token: params.srcbnUSD,
             amount: params.amount,
             owner: params.srcAddress,
             spender: isHubChainKeyType(params.srcChainKey)
-              ? (this.config.sodaxConfig.chains[params.srcChainKey].supportedTokens.bnUSD.address as Address)
-              : this.config.sodaxConfig.chains[params.srcChainKey].addresses.assetManager,
+              ? bnUSDTokenAddress
+              : this.config.getChainConfig(params.srcChainKey).addresses.assetManager,
           });
         }
 
@@ -169,8 +188,8 @@ export class MigrationService {
 
         if (isUnifiedBnUSDMigrateParams(params) && isEvmChainKeyType(params.srcChainKey)) {
           const spender: Address = isHubChainKeyType(params.srcChainKey)
-            ? await HubService.getUserRouter(params.srcAddress as Address, this.hubProvider)
-            : this.config.sodaxConfig.chains[params.srcChainKey].addresses.assetManager;
+            ? await this.hubProvider.getUserRouter(params.srcAddress as Address)
+            : this.config.getChainConfig(params.srcChainKey).addresses.assetManager;
 
           return await this.spoke.isAllowanceValid({
             srcChainKey: params.srcChainKey,
@@ -191,11 +210,7 @@ export class MigrationService {
         }
 
         if (isHubChainKeyType(params.srcChainKey) && isIcxCreateRevertMigrationParams(params)) {
-          const userRouter = await HubService.getUserHubWalletAddress(
-            params.srcAddress,
-            params.srcChainKey,
-            this.hubProvider,
-          );
+          const userRouter = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
 
           return await this.spoke.isAllowanceValid({
             srcChainKey: params.srcChainKey,
@@ -261,21 +276,19 @@ export class MigrationService {
             token: params.srcbnUSD as GetTokenAddressType<EvmSpokeOnlyChainKey>,
             amount: params.amount,
             owner: params.srcAddress as GetAddressType<EvmSpokeOnlyChainKey>,
-            spender: isHubChainKeyType(params.srcChainKey)
-              ? this.config.sodaxConfig.chains[srcChainKey].supportedTokens.bnUSD.address
-              : this.config.sodaxConfig.chains[srcChainKey].addresses.assetManager,
+            spender: this.config.getChainConfig(srcChainKey).addresses.assetManager,
           } as const;
 
           const approveParams = _params.raw
             ? ({
                 ...coreParams,
                 raw: true,
-              } satisfies SpokeApproveParams<EvmSpokeOnlyChainKey, true>)
+              } as SpokeApproveParams<EvmSpokeOnlyChainKey, true>)
             : ({
                 ...coreParams,
                 raw: false,
                 walletProvider: _params.walletProvider,
-              } satisfies SpokeApproveParams<EvmSpokeOnlyChainKey, false>);
+              } as SpokeApproveParams<EvmSpokeOnlyChainKey, false>);
 
           const result = await this.spoke.approve<EvmSpokeOnlyChainKey, boolean>(approveParams);
 
@@ -338,8 +351,8 @@ export class MigrationService {
           );
 
           const spender: Address = isHubChainKeyType(params.srcChainKey)
-            ? await HubService.getUserRouter(params.srcAddress as Address, this.hubProvider)
-            : this.config.sodaxConfig.chains[params.srcChainKey].addresses.assetManager;
+            ? await this.hubProvider.getUserRouter(params.srcAddress as Address)
+            : this.config.getChainConfig(params.srcChainKey).addresses.assetManager;
 
           const srcChainKey = params.srcChainKey as EvmSpokeOnlyChainKey;
           const coreParams = {
@@ -410,11 +423,7 @@ export class MigrationService {
             isOptionalEvmWalletProviderType(_params.walletProvider),
             'Invalid wallet provider. Expected Evm wallet provider.',
           );
-          const userRouter = await HubService.getUserHubWalletAddress(
-            params.srcAddress,
-            params.srcChainKey,
-            this.hubProvider,
-          );
+          const userRouter = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
 
           const coreParams = {
             srcChainKey: params.srcChainKey,
@@ -507,9 +516,7 @@ export class MigrationService {
    */
   async migratebnUSD<K extends SpokeChainKey>(
     _params: UnifiedBnUSDMigrateAction<K, false>,
-  ): Promise<
-    Result<[string, Hex]>
-  > {
+  ): Promise<Result<[string, Hex]>> {
     const { params, timeout } = _params;
     try {
       const intentResult = await this.createMigratebnUSDIntent(_params);
@@ -593,9 +600,7 @@ export class MigrationService {
    * ] = result.value;
    * console.log('Migration transaction hashes:', { spokeTxHash, hubTxHash });
    */
-  async migrateIcxToSoda(
-    _params: IcxMigrateAction<false>,
-  ): Promise<Result<[Hex, Hex]>> {
+  async migrateIcxToSoda(_params: IcxMigrateAction<false>): Promise<Result<[Hex, Hex]>> {
     const { timeout } = _params;
     try {
       const txResult = await this.createMigrateIcxToSodaIntent(_params);
@@ -653,11 +658,7 @@ export class MigrationService {
    * ] = result.value;
    * console.log('Revert migration transaction hashes:', { hubTxHash, spokeTxHash });
    */
-  async revertMigrateSodaToIcx(
-    _params: IcxRevertMigrationAction<false>,
-  ): Promise<
-    Result<[Hex, Hex]>
-  > {
+  async revertMigrateSodaToIcx(_params: IcxRevertMigrationAction<false>): Promise<Result<[Hex, Hex]>> {
     const { timeout } = _params;
     try {
       const txResult = await this.createRevertSodaToIcxMigrationIntent(_params);
@@ -720,11 +721,7 @@ export class MigrationService {
    * ] = result.value;
    * console.log('Migration transaction hashes:', { spokeTxHash, hubTxHash });
    */
-  async migrateBaln(
-    _params: BalnMigrateAction<false>,
-  ): Promise<
-    Result<[Hex, Hex]>
-  > {
+  async migrateBaln(_params: BalnMigrateAction<false>): Promise<Result<[Hex, Hex]>> {
     const { timeout } = _params;
     try {
       const txResult = await this.createMigrateBalnIntent(_params);
@@ -784,16 +781,13 @@ export class MigrationService {
     const { params, skipSimulation } = _params;
 
     try {
-      const balnToken = this.config.sodaxConfig.chains[params.srcChainKey].supportedTokens.BALN.address;
-      invariant(balnToken, 'BALN token not found');
+      const balnXToken = this.config.getChainConfig(params.srcChainKey).supportedTokens['BALN'];
+      invariant(balnXToken, 'BALN token not found');
+      const balnToken = balnXToken.address as IconContractAddress;
 
       const migrationData = this.balnSwapService.swapData(balnToken, params, this.config);
 
-      const hubWalletAddress = await HubService.getUserHubWalletAddress(
-        params.srcAddress,
-        params.srcChainKey,
-        this.hubProvider,
-      );
+      const hubWalletAddress = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
 
       const coreParams = {
         srcChainKey: params.srcChainKey,
@@ -944,11 +938,7 @@ export class MigrationService {
         throw new Error('srcbnUSD or dstbnUSD must be a legacy bnUSD token');
       }
 
-      const hubWalletAddress = await HubService.getUserHubWalletAddress(
-        params.srcAddress,
-        params.srcChainKey,
-        this.hubProvider,
-      );
+      const hubWalletAddress = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
 
       const coreParams = {
         srcChainKey: params.srcChainKey,
@@ -1045,10 +1035,9 @@ export class MigrationService {
         );
       }
 
-      const hubWalletAddress = await HubService.getUserHubWalletAddress(
+      const hubWalletAddress = await this.hubProvider.getUserHubWalletAddress(
         params.srcAddress,
         ChainKeys.SONIC_MAINNET,
-        this.hubProvider,
       );
 
       const coreParams = {
@@ -1111,11 +1100,7 @@ export class MigrationService {
   ): Promise<Result<TxReturnType<SonicChainKey, Raw>>> {
     const { params, skipSimulation } = _params;
     try {
-      const userRouter = await HubService.getUserHubWalletAddress(
-        params.srcAddress,
-        ChainKeys.SONIC_MAINNET,
-        this.hubProvider,
-      );
+      const userRouter = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, ChainKeys.SONIC_MAINNET);
       const wICX = this.config.sodaxConfig.chains[ChainKeys.ICON_MAINNET].addresses.wICX;
       invariant(wICX, 'wICX token not found');
       const data = this.icxMigration.revertMigration({

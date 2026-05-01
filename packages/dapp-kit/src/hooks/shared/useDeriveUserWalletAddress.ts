@@ -1,5 +1,4 @@
-import { HubService } from '@sodax/sdk';
-import type { SpokeChainKey } from '@sodax/types';
+import type { SpokeChainKey } from '@sodax/sdk';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from './useSodaxContext.js';
 import type { Address } from 'viem';
@@ -16,7 +15,7 @@ export function useDeriveUserWalletAddress(
       if (!spokeChainId || !spokeAddress) {
         throw new Error('Spoke chain id and address are required');
       }
-      return await HubService.getUserHubWalletAddress(spokeAddress, spokeChainId, sodax.hubProvider);
+      return await sodax.hubProvider.getUserHubWalletAddress(spokeAddress, spokeChainId);
     },
     enabled: !!spokeChainId && !!spokeAddress,
     refetchInterval: false,

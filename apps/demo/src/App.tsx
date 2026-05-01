@@ -2,7 +2,7 @@ import React from 'react';
 import './App.css';
 
 import { createBrowserRouter, Outlet, RouterProvider, Navigate } from 'react-router';
-import { ChainKeys } from '@sodax/types';
+import { ChainKeys } from '@sodax/sdk';
 import Header from './components/shared/header';
 import SolverPage from './pages/solver/page';
 import MoneyMarketPage from './pages/money-market/page';

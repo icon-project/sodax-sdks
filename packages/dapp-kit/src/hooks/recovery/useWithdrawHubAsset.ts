@@ -1,10 +1,10 @@
 import type { TxReturnType, WithdrawHubAssetAction } from '@sodax/sdk';
-import type { Result, SpokeChainKey } from '@sodax/types';
+import type { Result, SpokeChainKey } from '@sodax/sdk';
 import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 
 /**
- * Mutation variables for {@link useWithdrawHubAsset}. Generic over `K extends SpokeChainKey`
+ * Mutation variables for {@link useWithdrawHubAsset}. Generic over `K extends RecoveryChainKey`
  * (defaults to the full union). Sophisticated callers can lock K at the hook call site to narrow
  * the `walletProvider` and `params.srcChainKey` types.
  */

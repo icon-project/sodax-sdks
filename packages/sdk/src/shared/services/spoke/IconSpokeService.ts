@@ -14,7 +14,6 @@ import type {
 import type { ConfigService } from '../../config/ConfigService.js';
 import { sleep, BigIntToHex, encodeAddress } from '../../utils/shared-utils.js';
 import {
-  type HttpUrl,
   type HubAddress,
   type HubChainKey,
   type IconAddress,
@@ -60,13 +59,13 @@ export type IconCallParams<Raw extends boolean> = {
 
 export class IconSpokeService {
   public readonly iconService: IconService;
-  public readonly debugRpcUrl: HttpUrl;
+  public readonly debugRpcUrl: string;
   private readonly pollingIntervalMs: number;
   private readonly maxTimeoutMs: number;
 
   constructor(config: ConfigService) {
     // since we only support mainnet for now, we can hardcode the single icon chain config
-    const chainConfig = config.sodaxConfig.chains[ChainKeys.ICON_MAINNET];
+    const chainConfig = config.getChainConfig(ChainKeys.ICON_MAINNET);
     this.iconService = new IconSdk.IconService(new IconSdk.IconService.HttpProvider(chainConfig.rpcUrl));
     this.debugRpcUrl = chainConfig.debugRpcUrl;
     this.pollingIntervalMs = chainConfig.pollingConfig.pollingIntervalMs;

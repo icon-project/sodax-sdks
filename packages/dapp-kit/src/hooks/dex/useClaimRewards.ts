@@ -1,5 +1,5 @@
 import type { ClLiquidityClaimRewardsAction, HubTxHash, SpokeTxHash } from '@sodax/sdk';
-import type { Result, SpokeChainKey } from '@sodax/types';
+import type { Result, SpokeChainKey } from '@sodax/sdk';
 import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 

@@ -1,6 +1,6 @@
 import { createSupplyLiquidityParamsProps } from '@/utils/dex-utils.js';
 import type { ClSupplyParams, ClIncreaseLiquidityParams, PoolData, PoolKey } from '@sodax/sdk';
-import type { SpokeChainKey } from '@sodax/types';
+import type { SpokeChainKey } from '@sodax/sdk';
 import { useMemo } from 'react';
 
 export type UseCreateSupplyLiquidityParamsProps = {

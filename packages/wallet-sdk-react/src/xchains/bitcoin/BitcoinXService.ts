@@ -7,7 +7,7 @@ export class BitcoinXService extends XService {
   private static instance: BitcoinXService;
   private rpcUrl: string;
 
-  private constructor(rpcUrl = BITCOIN_DEFAULT_RPC_URL) {
+  private constructor(rpcUrl: string = BITCOIN_DEFAULT_RPC_URL) {
     super('BITCOIN');
     this.rpcUrl = rpcUrl;
   }

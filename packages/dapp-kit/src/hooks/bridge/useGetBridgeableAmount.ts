@@ -1,7 +1,6 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
-import type { BridgeLimit } from '@sodax/sdk';
-import type { XToken } from '@sodax/types';
+import type { BridgeLimit, XToken } from '@sodax/sdk';
 
 export function useGetBridgeableAmount(
   from: XToken | undefined,

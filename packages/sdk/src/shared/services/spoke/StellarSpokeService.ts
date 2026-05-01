@@ -121,7 +121,7 @@ export class StellarSpokeService {
   private readonly baseFee: string;
 
   constructor(config: ConfigService) {
-    this.chainConfig = config.sodaxConfig.chains[ChainKeys.STELLAR_MAINNET];
+    this.chainConfig = config.getChainConfig(ChainKeys.STELLAR_MAINNET);
 
     // since we only support mainnet for now, we can hardcode the single stellar chain config
     this.server = new Horizon.Server(this.chainConfig.horizonRpcUrl, {

@@ -15,7 +15,6 @@
 //   type RelayTxStatus,
 //   type Result,
 //   EvmSolverService,
-//   type SolverConfigParams,
 //   encodeAddress,
 //   getHubChainConfig,
 // } from '../../index.js';

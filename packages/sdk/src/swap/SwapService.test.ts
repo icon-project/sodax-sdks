@@ -44,12 +44,14 @@ import {
 } from '../index.js';
 import { Sodax } from '../shared/entities/Sodax.js';
 
-// SwapService imports SonicSpokeService, EvmSolverService, HubService, etc. via the SDK barrel
+// SwapService imports SonicSpokeService, EvmSolverService, etc. via the SDK barrel
 // (`../index.js`). Under Vitest's module graph the barrel's re-export ordering makes a direct
 // `vi.spyOn(Foo, ...)` unreliable — the SwapService-internal reference ends up as a different
 // module instance than the test-side import. We mock the modules at their source paths so the
 // SwapService sees our test doubles. `vi.hoisted` lets the mock factories reference top-level
-// bindings safely despite `vi.mock` being hoisted to the file top.
+// bindings safely despite `vi.mock` being hoisted to the file top. `getUserHubWalletAddress` is
+// now an instance method on `sodax.hubProvider`; we keep a vi.fn stub here and bind it via
+// `vi.spyOn` in `beforeEach` so the existing per-test `.mockResolvedValueOnce(...)` calls work.
 const mocks = vi.hoisted(() => ({
   sonicCreateSwapIntent: vi.fn(),
   constructCreateIntentData: vi.fn(),
@@ -95,11 +97,6 @@ vi.mock('./EvmSolverService.js', () => ({
     getIntentHash: mocks.getIntentHash,
   },
 }));
-vi.mock('../shared/services/hub/HubService.js', () => ({
-  HubService: {
-    getUserHubWalletAddress: mocks.getUserHubWalletAddress,
-  },
-}));
 // IntentRelayApiService exports a mix of functions and types. We use vi.importActual so the
 // type exports survive; only the three network-touching functions are replaced with mocks.
 vi.mock('../shared/services/intentRelay/IntentRelayApiService.js', async () => {
@@ -135,8 +132,9 @@ import type { WalletProviderSlot } from '../shared/types/types.js';
 // the full graph (EvmHubProvider, SpokeService, ConfigService, SwapService, ...) using
 // the default sodaxConfig — we then stub behavior per-test via `vi.spyOn(sodax.config, ...)`
 // and `vi.spyOn(sodax.spokeService, ...)`. Module-level `vi.mock` above still intercepts
-// SonicSpokeService / EvmSolverService / HubService because those are static imports
-// inside SwapService.ts that can't be reached through the instance.
+// SonicSpokeService / EvmSolverService because those are static imports inside SwapService.ts
+// that can't be reached through the instance. `getUserHubWalletAddress` is an instance method
+// on `sodax.hubProvider` and is rebound via `vi.spyOn` in `beforeEach`.
 
 const sodax = new Sodax();
 
@@ -657,6 +655,9 @@ beforeEach(() => {
   vi.spyOn(sodax.config, 'isValidSpokeChainKey').mockReturnValue(true);
   vi.spyOn(sodax.config, 'isValidIntentRelayChainId').mockReturnValue(true);
   vi.spyOn(sodax.spokeService, 'verifyTxHash').mockResolvedValue({ ok: true, value: true });
+  // Bind the hoisted vi.fn stub to the live EvmHubProvider instance method so per-test
+  // `.mockResolvedValueOnce(...)` calls on `mocks.getUserHubWalletAddress` keep working.
+  vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockImplementation(mocks.getUserHubWalletAddress);
 
   const emptyContractCall = { address: '0x0000000000000000000000000000000000000000' as const, value: 0n, data: '0x' as const };
   mocks.encodeCancelIntent.mockReturnValue(emptyContractCall);
@@ -997,9 +998,9 @@ describe('SwapService.createIntent', () => {
 
   // Error propagation — failures from collaborators inside the try/catch must be surfaced
   // as `{ok:false, error}`, not as a thrown rejection. Covers each internal call that can
-  // fail: HubService, SonicSpokeService, EvmSolverService, and SpokeService.deposit.
+  // fail: hubProvider.getUserHubWalletAddress, SonicSpokeService, EvmSolverService, and SpokeService.deposit.
   describe('propagates internal errors as Result.error', () => {
-    it('returns ok:false when HubService.getUserHubWalletAddress rejects', async () => {
+    it('returns ok:false when hubProvider.getUserHubWalletAddress rejects', async () => {
       const hubError = new Error('HUB_WALLET_LOOKUP_FAILED');
       mocks.getUserHubWalletAddress.mockRejectedValueOnce(hubError);
 

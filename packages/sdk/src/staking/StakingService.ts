@@ -12,7 +12,6 @@ import {
   type EvmHubProvider,
   encodeAddress,
   EvmAssetManagerService,
-  HubService,
   type ConfigService,
   isHubChainKeyType,
   isStellarChainKeyType,
@@ -23,6 +22,7 @@ import {
   isOptionalEvmWalletProviderType,
   isOptionalStellarWalletProviderType,
   type SendMessageParams,
+  type SpokeApproveParams,
 } from '../shared/index.js';
 import {
   type HttpUrl,
@@ -184,14 +184,14 @@ export class StakingService {
 
         const targetToken =
           params.action === 'stake' || !isHubChainKeyType(params.srcChainKey)
-            ? this.config.sodaxConfig.chains[params.srcChainKey].supportedTokens.SODA.address
+            ? (this.config.sodaxConfig.chains[params.srcChainKey].supportedTokens['SODA'] as XToken).address
             : this.hubProvider.chainConfig.addresses.xSoda;
         invariant(targetToken, 'Target token not found');
 
         if (isEvmChainKey(params.srcChainKey) || isHubChainKeyType(params.srcChainKey)) {
           const spender = isHubChainKeyType(params.srcChainKey)
-            ? await HubService.getUserHubWalletAddress(params.srcAddress, params.srcChainKey, this.hubProvider)
-            : this.config.sodaxConfig.chains[params.srcChainKey].addresses.assetManager;
+            ? await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey)
+            : this.config.getChainConfig(params.srcChainKey).addresses.assetManager;
 
           const allowanceResult = await this.spoke.isAllowanceValid({
             srcChainKey: params.srcChainKey,
@@ -259,7 +259,7 @@ export class StakingService {
 
         const targetToken =
           params.action === 'stake' || !isHubChainKeyType(params.srcChainKey)
-            ? this.config.sodaxConfig.chains[params.srcChainKey].supportedTokens.SODA.address
+            ? (this.config.sodaxConfig.chains[params.srcChainKey].supportedTokens['SODA'] as XToken).address
             : this.hubProvider.chainConfig.addresses.xSoda;
         invariant(targetToken, 'Target token not found');
 
@@ -270,8 +270,8 @@ export class StakingService {
           );
 
           const spender = isHubChainKeyType(params.srcChainKey)
-            ? await HubService.getUserHubWalletAddress(params.srcAddress, params.srcChainKey, this.hubProvider)
-            : this.config.sodaxConfig.chains[params.srcChainKey].addresses.assetManager;
+            ? await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey)
+            : this.config.getChainConfig(params.srcChainKey).addresses.assetManager;
 
           const coreParams = {
             srcChainKey: params.srcChainKey,
@@ -281,11 +281,13 @@ export class StakingService {
             spender: spender,
           } as const;
 
-          const result = await this.spoke.approve<HubChainKey | EvmSpokeOnlyChainKey, Raw>({
-            ...coreParams,
-            raw: _params.raw,
-            walletProvider: _params.walletProvider,
-          });
+          const result = await this.spoke.approve<HubChainKey | EvmSpokeOnlyChainKey, Raw>(
+            {
+              ...coreParams,
+              raw: _params.raw,
+              walletProvider: _params.walletProvider,
+            } as SpokeApproveParams<HubChainKey | EvmSpokeOnlyChainKey, Raw>,
+          );
 
           if (!result.ok) return result;
 
@@ -415,11 +417,7 @@ export class StakingService {
       const sodaAsset = this.config.getSpokeTokenFromOriginalAssetAddress(params.srcChainKey, sodaToken.address);
       invariant(sodaAsset, 'SODA asset not found');
 
-      const hubWallet = await HubService.getUserHubWalletAddress(
-        params.srcAddress,
-        params.srcChainKey,
-        this.hubProvider,
-      );
+      const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
 
       const data: Hex = this.buildStakeData(sodaAsset, hubWallet, params);
 
@@ -549,7 +547,7 @@ export class StakingService {
     try {
       const xSoda = this.hubProvider.chainConfig.addresses.xSoda;
       const [hubWallet, underlyingSodaAmount] = await Promise.all([
-        HubService.getUserHubWalletAddress(params.srcAddress, params.srcChainKey, this.hubProvider),
+        this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey),
         StakingLogic.convertXSodaSharesToSoda(xSoda, params.amount, this.hubProvider.publicClient),
       ]);
       const data: Hex = this.buildUnstakeData(hubWallet, params, xSoda, underlyingSodaAmount);
@@ -673,11 +671,7 @@ export class StakingService {
   ): Promise<Result<TxReturnType<K, Raw>> & RelayOptionalExtraData> {
     const { params } = _params;
     try {
-      const hubWallet = await HubService.getUserHubWalletAddress(
-        params.srcAddress,
-        params.srcChainKey,
-        this.hubProvider,
-      );
+      const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
 
       const sodaToken = this.hubProvider.chainConfig.supportedTokens.SODA;
       invariant(sodaToken, 'SODA token not found');
@@ -824,11 +818,7 @@ export class StakingService {
   ): Promise<Result<TxReturnType<K, Raw>> & RelayOptionalExtraData> {
     const { params } = _params;
     try {
-      const hubWallet = await HubService.getUserHubWalletAddress(
-        params.srcAddress,
-        params.srcChainKey,
-        this.hubProvider,
-      );
+      const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
 
       const sodaToken = this.config.sodaxConfig.chains[params.srcChainKey].supportedTokens.SODA as XToken;
       invariant(sodaToken, 'SODA token not found');
@@ -980,11 +970,7 @@ export class StakingService {
   ): Promise<Result<TxReturnType<K, Raw>> & RelayOptionalExtraData> {
     const { params } = _params;
     try {
-      const hubWallet = await HubService.getUserHubWalletAddress(
-        params.srcAddress,
-        params.srcChainKey,
-        this.hubProvider,
-      );
+      const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
 
       const data = await this.buildCancelUnstakeData(params, hubWallet);
 
@@ -1073,7 +1059,7 @@ export class StakingService {
     srcChainKey: K,
   ): Promise<Result<StakingInfo>> {
     try {
-      const hubWallet = await HubService.getUserHubWalletAddress(srcAddress, srcChainKey, this.hubProvider);
+      const hubWallet = await this.hubProvider.getUserHubWalletAddress(srcAddress, srcChainKey);
 
       return this.getStakingInfo(hubWallet);
     } catch (error) {
@@ -1136,7 +1122,7 @@ export class StakingService {
     srcChainKey: K,
   ): Promise<Result<UnstakingInfo>> {
     try {
-      const userAddress = await HubService.getUserHubWalletAddress(srcAddress, srcChainKey, this.hubProvider);
+      const userAddress = await this.hubProvider.getUserHubWalletAddress(srcAddress, srcChainKey);
 
       const hubConfig = this.config.getHubChainConfig();
       const stakedSoda = hubConfig.addresses.stakedSoda;

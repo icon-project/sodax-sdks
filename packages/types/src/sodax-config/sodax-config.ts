@@ -1,4 +1,4 @@
-import type { HttpUrl, TxPollingConfig } from '../shared/shared.js';
+import type { TxPollingConfig } from '../shared/shared.js';
 import {
   apiConfig,
   solverConfig,
@@ -22,12 +22,12 @@ import {
 // -- Per-chain shared config types (user-overridable runtime config) --
 
 export type EvmSharedChainConfig = TxPollingConfig & {
-  rpcUrl: HttpUrl;
+  rpcUrl: string;
 };
 
 export type StellarSharedChainConfig = TxPollingConfig & {
-  horizonRpcUrl: HttpUrl;
-  sorobanRpcUrl: HttpUrl;
+  horizonRpcUrl: string;
+  sorobanRpcUrl: string;
 };
 
 export type RadfiConfig = {
@@ -55,15 +55,15 @@ export const bridgeConfig = {
 
 export type SodaxConfig = {
   fee: PartnerFee | undefined; // global partner fee which can be overridden by feature specific fee config (e.g. swap, money market, bridge, etc.)
-  chains: Record<SpokeChainKey, SpokeChainConfig> & typeof spokeChainConfig;
-  swaps: SwapsConfig & typeof swapsConfig; // swaps config for supported swap tokens per chain
-  moneyMarket: MoneyMarketConfig & typeof moneyMarketConfig; // Optional Money Market service enabling cross-chain lending and borrowing
-  bridge: BridgeConfig & typeof bridgeConfig; // Optional Bridge config for partner fee
-  dex: DexConfig & typeof dexConfig; // Optional Dex service enabling DEX operations
-  hub: HubConfig & typeof hubConfig; // Hub provider for the hub chain (e.g. Sonic mainnet)
-  api: ApiConfig & typeof apiConfig; // API config used to interact with the Backend API
-  solver: SolverConfig & typeof solverConfig;
-  relay: RelayConfig & typeof relayConfig; // Relayer config to relay intents/user actions to the hub and vice versa
+  chains: Record<SpokeChainKey, SpokeChainConfig>;
+  swaps: SwapsConfig; // swaps config for supported swap tokens per chain
+  moneyMarket: MoneyMarketConfig; // Optional Money Market service enabling cross-chain lending and borrowing
+  bridge: BridgeConfig; // Optional Bridge config for partner fee
+  dex: DexConfig; // Optional Dex service enabling DEX operations
+  hub: HubConfig; // Hub provider for the hub chain (e.g. Sonic mainnet)
+  api: ApiConfig; // API config used to interact with the Backend API
+  solver: SolverConfig;
+  relay: RelayConfig; // Relayer config to relay intents/user actions to the hub and vice versa
 };
 
 // default sodax config object which can always be overriden through Sodax instance (i.e. new Sodax(...config))

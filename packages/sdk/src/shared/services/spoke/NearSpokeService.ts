@@ -38,7 +38,7 @@ export class NearSpokeService {
 
   public constructor(config: ConfigService) {
     // since we only support mainnet for now, we can hardcode the single near chain config
-    const chainConfig = config.sodaxConfig.chains[ChainKeys.NEAR_MAINNET];
+    const chainConfig = config.getChainConfig(ChainKeys.NEAR_MAINNET);
     this.rpcProvider = new JsonRpcProvider({ url: chainConfig.rpcUrl });
     this.pollingIntervalMs = chainConfig.pollingConfig.pollingIntervalMs;
     this.maxTimeoutMs = chainConfig.pollingConfig.maxTimeoutMs;

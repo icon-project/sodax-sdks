@@ -10,7 +10,6 @@ import {
   type SpokeIsAllowanceValidParamsHub,
   type SpokeIsAllowanceValidParamsEvmSpoke,
   type SpokeIsAllowanceValidParamsStellar,
-  HubService,
   Erc20Service,
   EvmAssetManagerService,
   EvmVaultTokenService,
@@ -297,7 +296,7 @@ export class MoneyMarketService {
       // Allowance on EVM (hub or spoke) is required only for supply / repay.
       if (params.action === 'supply' || params.action === 'repay') {
         if (isHubChainKeyType(srcChainKey)) {
-          const spender = await HubService.getUserRouter(params.srcAddress as Address, this.hubProvider);
+          const spender = await this.hubProvider.getUserRouter(params.srcAddress as Address);
           return await this.spoke.isAllowanceValid({
             srcChainKey,
             token: params.token,
@@ -391,7 +390,7 @@ export class MoneyMarketService {
         );
 
         const spender = isHubChainKeyType(params.srcChainKey)
-          ? await HubService.getUserRouter(params.srcAddress as Address, this.hubProvider)
+          ? await this.hubProvider.getUserRouter(params.srcAddress as Address)
           : spokeChainConfig[params.srcChainKey].addresses.assetManager;
 
         const coreParams = {
@@ -491,8 +490,8 @@ export class MoneyMarketService {
       const toAddress = params.toAddress ?? params.srcAddress;
 
       const [fromHubWallet, toHubWallet] = await Promise.all([
-        HubService.getUserHubWalletAddress(params.srcAddress, srcChainKey, this.hubProvider),
-        HubService.getUserHubWalletAddress(toAddress, toChainId, this.hubProvider),
+        this.hubProvider.getUserHubWalletAddress(params.srcAddress, srcChainKey),
+        this.hubProvider.getUserHubWalletAddress(toAddress, toChainId),
       ]);
 
       const data: Hex = this.buildSupplyData(srcChainKey, params.token, params.amount, toHubWallet);
@@ -599,7 +598,7 @@ export class MoneyMarketService {
       invariant(dstToken, `Money market token not found for spoke chain (${toChainId}) token: ${params.token}`);
 
       const encodedToAddress = encodeAddress(toChainId, toAddress);
-      const fromHubWallet = await HubService.getUserHubWalletAddress(fromAddress, fromChainId, this.hubProvider);
+      const fromHubWallet = await this.hubProvider.getUserHubWalletAddress(fromAddress, fromChainId);
 
       const payload: Hex = this.buildBorrowData(
         fromHubWallet,
@@ -713,7 +712,7 @@ export class MoneyMarketService {
       );
 
       const encodedToAddress = encodeAddress(toChainId, toAddress);
-      const fromHubWallet = await HubService.getUserHubWalletAddress(params.srcAddress, srcChainKey, this.hubProvider);
+      const fromHubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, srcChainKey);
 
       const payload: Hex = this.buildWithdrawData(
         fromHubWallet,
@@ -817,8 +816,8 @@ export class MoneyMarketService {
       const toAddress = params.toAddress ?? params.srcAddress;
 
       const [fromHubWallet, toHubWallet] = await Promise.all([
-        HubService.getUserHubWalletAddress(params.srcAddress, srcChainKey, this.hubProvider),
-        HubService.getUserHubWalletAddress(toAddress, toChainId, this.hubProvider),
+        this.hubProvider.getUserHubWalletAddress(params.srcAddress, srcChainKey),
+        this.hubProvider.getUserHubWalletAddress(toAddress, toChainId),
       ]);
 
       const data: Hex = this.buildRepayData(srcChainKey, params.token, params.amount, toHubWallet);

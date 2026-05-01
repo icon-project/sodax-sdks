@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
 import { parseUnits } from 'viem';
 import { useMMApprove, useWithdraw } from '@sodax/dapp-kit';
-import { type SpokeChainKey, type XToken, getChainType } from '@sodax/types';
+import { type SpokeChainKey, type XToken, getChainType } from '@sodax/sdk';
 import { useAppStore } from '@/zustand/useAppStore';
 import type { MoneyMarketWithdrawParams } from '@sodax/sdk';
 import { getMmErrorText, formatDecimalForDisplay, getSafeMaxAmountForInput } from '@/lib/utils';

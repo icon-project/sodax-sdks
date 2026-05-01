@@ -55,7 +55,11 @@ export class NearXService extends XService {
     // Near Fungible Token Standard(https://github.com/near/NEPs/blob/master/neps/nep-0141.md)
     // get balance of the token
 
-    const res = await provider.callFunction<number>({ contractId: xToken.address, method: 'ft_balance_of', args: { account_id: address } });
+    const res = await provider.callFunction<number>({
+      contractId: xToken.address,
+      method: 'ft_balance_of',
+      args: { account_id: address },
+    });
     return BigInt(res ?? 0);
   }
 }

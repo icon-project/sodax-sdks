@@ -15,7 +15,7 @@ import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet
 import { parseUnits, formatUnits } from 'viem';
 import type { FormatUserSummaryResponse, MoneyMarketBorrowParams } from '@sodax/sdk';
 import { useBorrow, useReservesUsdFormat, useAToken, useUserReservesData, useSodaxContext } from '@sodax/dapp-kit';
-import type { SpokeChainKey, XToken } from '@sodax/types';
+import type { SpokeChainKey, XToken } from '@sodax/sdk';
 import { useAppStore } from '@/zustand/useAppStore';
 import {
   getChainsWithThisToken,

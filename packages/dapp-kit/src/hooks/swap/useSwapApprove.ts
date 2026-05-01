@@ -1,7 +1,7 @@
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { CreateIntentParams, CreateLimitOrderParams } from '@sodax/sdk';
-import type { GetWalletProviderType, SpokeChainKey } from '@sodax/types';
+import type { GetWalletProviderType, SpokeChainKey } from '@sodax/sdk';
 
 interface UseApproveReturn {
   approve: ({ params }: { params: CreateIntentParams | CreateLimitOrderParams }) => Promise<boolean>;

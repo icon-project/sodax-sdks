@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useCancelUnstake, useClaim, useStakingConfig, useUnstakingInfoWithPenalty } from '@sodax/dapp-kit';
 import { Skeleton } from '../ui/skeleton';
 import { formatTokenAmount, getTimeRemaining } from '@/lib/utils';
-import type { SpokeChainKey } from '@sodax/types';
+import type { SpokeChainKey } from '@sodax/sdk';
 import type { IWalletProvider } from '@sodax/wallet-sdk-react';
 import { Button } from '../ui/button';
 import {

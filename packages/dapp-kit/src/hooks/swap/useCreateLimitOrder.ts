@@ -6,7 +6,7 @@ import type {
   Intent,
   IntentDeliveryInfo,
 } from '@sodax/sdk';
-import type { GetWalletProviderType, Result, SpokeChainKey } from '@sodax/types';
+import type { GetWalletProviderType, Result, SpokeChainKey } from '@sodax/sdk';
 
 type CreateLimitOrderResult = Result<[SolverExecutionResponse, Intent, IntentDeliveryInfo]>;
 

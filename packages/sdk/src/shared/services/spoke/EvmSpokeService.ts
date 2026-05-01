@@ -24,12 +24,11 @@ import {
   getIntentRelayChainId,
   spokeChainConfig,
   type EvmReturnType,
-  type HttpUrl,
 } from '@sodax/types';
 
 export type CreateViemPublicClientParams = {
   chainId: EvmSpokeOnlyChainKey;
-  rpcUrl?: HttpUrl;
+  rpcUrl?: string;
 };
 
 export class EvmSpokeService {

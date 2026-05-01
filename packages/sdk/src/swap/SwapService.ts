@@ -17,7 +17,6 @@ import {
   type IntentRelayRequest,
   type PacketData,
   isBitcoinChainKeyType,
-  HubService,
   isHubChainKeyType,
   reverseEncodeAddress,
   type SendMessageParams,
@@ -665,11 +664,7 @@ export class SwapService {
       }
 
       // derive users hub wallet address
-      const creatorHubWalletAddress = await HubService.getUserHubWalletAddress(
-        walletAddress,
-        params.srcChainKey,
-        this.hubProvider,
-      );
+      const creatorHubWalletAddress = await this.hubProvider.getUserHubWalletAddress(walletAddress, params.srcChainKey);
 
       if (isHubChainKeyType(params.srcChainKey) && isSonicChainKeyType(params.srcChainKey)) {
         const coreSonicParams = {

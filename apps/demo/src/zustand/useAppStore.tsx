@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import type { StateCreator } from 'zustand';
-import { ChainKeys, type SpokeChainKey } from '@sodax/types';
+import { ChainKeys, type SpokeChainKey } from '@sodax/sdk';
 
 export const DEFAULT_SELECTED_CHAIN = ChainKeys.ARBITRUM_MAINNET;
 

@@ -62,7 +62,7 @@ function ReservesList() {
 
 ```tsx
 import { useUserFormattedSummary } from '@sodax/dapp-kit';
-import type { SpokeChainKey } from '@sodax/types';
+import type { SpokeChainKey } from '@sodax/sdk';
 
 function UserPosition({ spokeChainKey, userAddress }: { spokeChainKey: SpokeChainKey; userAddress: string }) {
   const { data: summary } = useUserFormattedSummary({ spokeChainKey, userAddress });

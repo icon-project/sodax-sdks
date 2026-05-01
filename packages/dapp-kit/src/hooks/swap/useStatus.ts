@@ -1,5 +1,5 @@
 import type { Hex, SolverErrorResponse, SolverIntentStatusResponse } from '@sodax/sdk';
-import type { Result } from '@sodax/types';
+import type { Result } from '@sodax/sdk';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 

@@ -1,6 +1,5 @@
-import { normalizePsbtToBase64 } from '@sodax/sdk';
+import { normalizePsbtToBase64, type IBitcoinWalletProvider } from '@sodax/sdk';
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
-import type { IBitcoinWalletProvider } from '@sodax/types';
 import { loadRadfiSession } from './useRadfiAuth.js';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 

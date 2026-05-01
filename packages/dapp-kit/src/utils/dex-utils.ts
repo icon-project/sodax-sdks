@@ -11,7 +11,7 @@ import {
   type ClDecreaseLiquidityParams,
   type CreateAssetDepositParams,
 } from '@sodax/sdk';
-import type { SpokeChainKey } from '@sodax/types';
+import type { SpokeChainKey } from '@sodax/sdk';
 import { parseUnits } from 'viem';
 
 /**

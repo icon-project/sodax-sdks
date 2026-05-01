@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
-import type { IStellarWalletProvider, StellarChainKey } from '@sodax/types';
+import type { IStellarWalletProvider, StellarChainKey } from '@sodax/sdk';
 import { useSodaxContext } from './useSodaxContext.js';
 
 export function useRequestTrustline(token: string | undefined): {

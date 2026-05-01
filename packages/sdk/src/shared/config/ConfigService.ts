@@ -24,6 +24,7 @@ import {
   CONFIG_VERSION,
   type SwapsConfig,
   type BridgeConfig,
+  type GetSpokeChainConfigType,
 } from '@sodax/types';
 import { isAddress } from 'viem';
 import type { BackendApiService } from '../../backendApi/BackendApiService.js';
@@ -349,6 +350,10 @@ export class ConfigService {
 
   get dex(): DexConfig {
     return this.sodax.dex;
+  }
+
+  public getChainConfig<K extends SpokeChainKey>(key: K): GetSpokeChainConfigType<K> {
+    return this.sodax.chains[key] as GetSpokeChainConfigType<K>;
   }
 
   get sodaxConfig(): SodaxConfig {

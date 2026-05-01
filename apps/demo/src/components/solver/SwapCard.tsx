@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { calculateExchangeRate } from '@/lib/utils';
 import { parseUnits, formatUnits } from 'viem';
 import { type CreateIntentParams, getSupportedSolverTokens, type SolverIntentQuoteRequest } from '@sodax/sdk';
-import type { GetWalletProviderType, SubmitSwapTxRequest, SwapIntentData } from '@sodax/types';
+import type { GetWalletProviderType, SubmitSwapTxRequest, SwapIntentData } from '@sodax/sdk';
 import BigNumber from 'bignumber.js';
 import { ArrowDownUp, ArrowLeftRight } from 'lucide-react';
 import React, { type SetStateAction, useMemo, useState } from 'react';
@@ -46,11 +46,10 @@ import {
   type SpokeChainKey,
   type XToken,
   type ChainType,
-  type IBitcoinWalletProvider,
   type IStellarWalletProvider,
   type StellarChainKey,
   ChainKeys,
-} from '@sodax/types';
+} from '@sodax/sdk';
 import type { Order } from '@/components/solver/OrderStatus';
 import { DEFAULT_SELECTED_CHAIN, useAppStore } from '@/zustand/useAppStore';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
@@ -148,7 +147,7 @@ export default function SwapCard({
   const { data: sourceBalances } = useXBalances({
     xService: sourceXService,
     xChainId: src.chain,
-    xTokens: src.token ? [src.token as XToken] : [],
+    xTokens: src.token ? [src.token] : [],
     address: sourceAccount.address,
   });
   const sourceTokenBalance = sourceBalances?.[src.token?.address ?? ''] ?? 0n;
@@ -158,7 +157,7 @@ export default function SwapCard({
   const { data: destBalances } = useXBalances({
     xService: destXService,
     xChainId: dst.chain,
-    xTokens: dst.token ? [dst.token as XToken] : [],
+    xTokens: dst.token ? [dst.token] : [],
     address: destAccount.address,
   });
   const destTokenBalance = destBalances?.[dst.token?.address ?? ''] ?? 0n;

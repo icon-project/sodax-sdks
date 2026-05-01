@@ -83,7 +83,7 @@ export class BitcoinSpokeService {
 
   constructor(config: ConfigService) {
     // since we only support mainnet for now, we can hardcode the single bitcoin chain config
-    const chainConfig = config.sodaxConfig.chains[ChainKeys.BITCOIN_MAINNET];
+    const chainConfig = config.getChainConfig(ChainKeys.BITCOIN_MAINNET);
     this.rpcUrl = chainConfig.rpcUrl;
     this.radfi = new RadfiProvider(chainConfig.radfi);
     this.walletMode = chainConfig.radfi.walletMode ?? 'TRADING';
@@ -95,7 +95,7 @@ export class BitcoinSpokeService {
     return spokeChainConfig[chainId].network === 'MAINNET' ? bitcoin.networks.bitcoin : bitcoin.networks.testnet;
   }
 
-  public async getBalance(tokenAddress: string, walletAddress: string, rpcUrl: string): Promise<bigint> {
+  public async getBalance(tokenAddress: string, walletAddress: string): Promise<bigint> {
     // For native BTC (empty token address or special marker)
     if (!tokenAddress || tokenAddress === '0x' || tokenAddress === 'BTC') {
       const utxos = await this.fetchUTXOs(walletAddress);

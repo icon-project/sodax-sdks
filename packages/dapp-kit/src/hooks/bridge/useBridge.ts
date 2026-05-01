@@ -1,6 +1,5 @@
 import { useSodaxContext } from '../shared/useSodaxContext.js';
-import type { BridgeParams, HubTxHash, SpokeTxHash } from '@sodax/sdk';
-import type { Result, SpokeChainKey } from '@sodax/types';
+import type { BridgeParams, HubTxHash, SpokeTxHash, Result, SpokeChainKey  } from '@sodax/sdk';
 import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
 
 type BridgeResult = Result<[SpokeTxHash, HubTxHash]>;

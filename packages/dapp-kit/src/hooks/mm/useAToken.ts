@@ -1,5 +1,5 @@
 import type { Erc20Token } from '@sodax/sdk';
-import type { ChainKey } from '@sodax/types';
+import type { ChainKey } from '@sodax/sdk';
 import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
 import { type Address, isAddress } from 'viem';
 import { useSodaxContext } from '../shared/useSodaxContext.js';

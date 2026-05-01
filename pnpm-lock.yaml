@@ -172,9 +172,6 @@ importers:
       '@sodax/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
-      '@sodax/types':
-        specifier: workspace:*
-        version: link:../../packages/types
       '@sodax/wallet-sdk-react':
         specifier: workspace:*
         version: link:../../packages/wallet-sdk-react
@@ -687,9 +684,6 @@ importers:
       '@sodax/sdk':
         specifier: workspace:*
         version: link:../sdk
-      '@sodax/types':
-        specifier: workspace:*
-        version: link:../types
       react:
         specifier: '>=18'
         version: 19.1.4

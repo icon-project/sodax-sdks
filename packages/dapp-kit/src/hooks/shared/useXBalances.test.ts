@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { IXServiceBase, XToken } from '@sodax/types';
+import type { IXServiceBase, XToken } from '@sodax/sdk';
 import { getXBalancesQueryOptions } from './useXBalances.js';
 
 const makeToken = (symbol: string, address: string): XToken =>

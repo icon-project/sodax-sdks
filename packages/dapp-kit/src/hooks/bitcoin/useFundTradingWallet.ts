@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
-import { ChainKeys, type IBitcoinWalletProvider } from '@sodax/types';
+import { ChainKeys, type IBitcoinWalletProvider } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 
 export function useFundTradingWallet(

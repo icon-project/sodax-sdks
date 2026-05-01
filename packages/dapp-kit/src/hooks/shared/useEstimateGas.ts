@@ -1,5 +1,5 @@
 import type { EstimateGasParams, GetEstimateGasReturnType } from '@sodax/sdk';
-import type { Result, SpokeChainKey } from '@sodax/types';
+import type { Result, SpokeChainKey } from '@sodax/sdk';
 import { useMutation, type UseMutationResult } from '@tanstack/react-query';
 import { useSodaxContext } from './useSodaxContext.js';
 

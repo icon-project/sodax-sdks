@@ -21,7 +21,7 @@ pnpm add @sodax/wallet-sdk-react
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SodaxProvider } from '@sodax/dapp-kit';
 import type { SodaxConfig } from '@sodax/sdk';
-import type { RpcConfig } from '@sodax/types';
+import type { RpcConfig } from '@sodax/sdk';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 5_000, retry: 2 } },

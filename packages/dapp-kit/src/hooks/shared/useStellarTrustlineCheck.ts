@@ -1,4 +1,4 @@
-import { ChainKeys, type IStellarWalletProvider, type SpokeChainKey } from '@sodax/types';
+import { ChainKeys, type IStellarWalletProvider, type SpokeChainKey } from '@sodax/sdk';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from './useSodaxContext.js';
 

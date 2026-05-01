@@ -101,7 +101,7 @@ pnpm install @sodax/dapp-kit @tanstack/react-query @sodax/wallet-sdk-react
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SodaxWalletProvider } from '@sodax/wallet-sdk-react';
 import { SodaxProvider } from '@sodax/dapp-kit';
-import type { RpcConfig } from '@sodax/types';
+import type { RpcConfig } from '@sodax/sdk';
 
 const queryClient = new QueryClient();
 

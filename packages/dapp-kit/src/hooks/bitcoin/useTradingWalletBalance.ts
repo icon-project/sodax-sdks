@@ -1,6 +1,5 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import type { RadfiWalletBalance } from '@sodax/sdk';
-import type { IBitcoinWalletProvider } from '@sodax/types';
+import type { RadfiWalletBalance, IBitcoinWalletProvider } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 
 export function useTradingWalletBalance(
