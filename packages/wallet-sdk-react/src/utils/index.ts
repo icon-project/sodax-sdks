@@ -1,6 +1,12 @@
 import { baseChainInfo, type SpokeChainKey, type XToken } from '@sodax/types';
 
 export { sortConnectors, type SortConnectorsOptions } from './sortConnectors.js';
+export {
+  getEntryDefaults,
+  getRpcUrl,
+  resolveEvmDefaults,
+  type WalletDefaultsByKey,
+} from './walletRpcConfig.js';
 
 export const isNativeToken = (xToken: XToken): boolean => {
   const nativeAddresses = [

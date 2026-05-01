@@ -8,8 +8,9 @@ import {
   spokeChainConfig,
   type LegacybnUSDToken,
   HUB_CHAIN_KEY,
-  type EVM_CHAIN_KEYS,
+  EVM_CHAIN_KEYS,
   EVM_CHAIN_KEYS_SET,
+  type EvmChainKey,
   BITCOIN_CHAIN_KEYS_SET,
   type BITCOIN_CHAIN_KEYS,
   SONIC_CHAIN_KEYS_SET,
@@ -103,6 +104,25 @@ export function getChainType<K extends SpokeChainKey>(chainId: K): GetChainType<
     );
   }
   return type as GetChainType<K>;
+}
+
+/** Numeric viem/wagmi chain id → EvmChainKey. Built once from `baseChainInfo`. */
+export const EVM_CHAIN_ID_TO_KEY: ReadonlyMap<number, EvmChainKey> = new Map(
+  EVM_CHAIN_KEYS.map(key => {
+    const id = baseChainInfo[key].chainId;
+    if (typeof id !== 'number') {
+      throw new Error(`[@sodax/types] EVM chain ${key} has non-numeric chainId`);
+    }
+    return [id, key];
+  }),
+);
+
+/**
+ * Look up the `EvmChainKey` for a numeric viem/wagmi chain id.
+ * Inverse of `baseChainInfo[chainKey].chainId` for EVM chains.
+ */
+export function getEvmChainKeyByChainId(chainId: number | undefined): EvmChainKey | undefined {
+  return chainId === undefined ? undefined : EVM_CHAIN_ID_TO_KEY.get(chainId);
 }
 
 /**

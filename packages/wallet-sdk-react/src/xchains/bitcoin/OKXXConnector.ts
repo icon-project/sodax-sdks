@@ -1,5 +1,6 @@
 import type { XAccount } from '@/types/index.js';
 import { detectBitcoinAddressType, type IBitcoinWalletProvider, type BtcAddressType } from '@sodax/types';
+import type { BitcoinWalletDefaults } from '@sodax/wallet-sdk-core';
 import { WALLET_METADATA } from '@/constants.js';
 import { BitcoinXConnector } from './BitcoinXConnector.js';
 
@@ -25,10 +26,12 @@ class OKXWalletProvider implements IBitcoinWalletProvider {
   readonly chainType = 'BITCOIN' as const;
   private okx: OKXBitcoinWallet;
   private cachedAddress: string;
+  private readonly defaults: BitcoinWalletDefaults | undefined;
 
-  constructor(okx: OKXBitcoinWallet, address: string) {
+  constructor(okx: OKXBitcoinWallet, address: string, defaults?: BitcoinWalletDefaults) {
     this.okx = okx;
     this.cachedAddress = address;
+    this.defaults = defaults;
   }
 
   async getWalletAddress(): Promise<string> {
@@ -50,9 +53,10 @@ class OKXWalletProvider implements IBitcoinWalletProvider {
     return detectBitcoinAddressType(address);
   }
 
-  async signTransaction(psbtBase64: string, finalize = false): Promise<string> {
+  async signTransaction(psbtBase64: string, finalize?: boolean): Promise<string> {
+    const effectiveFinalize = finalize ?? this.defaults?.defaultFinalize ?? false;
     const psbtHex = Buffer.from(psbtBase64, 'base64').toString('hex');
-    return this.okx.signPsbt(psbtHex, { autoFinalized: finalize });
+    return this.okx.signPsbt(psbtHex, { autoFinalized: effectiveFinalize });
   }
 
   async signEcdsaMessage(message: string): Promise<string> {
@@ -74,8 +78,8 @@ class OKXWalletProvider implements IBitcoinWalletProvider {
 export class OKXXConnector extends BitcoinXConnector {
   private walletProvider: OKXWalletProvider | undefined;
 
-  constructor() {
-    super('OKX Wallet', 'okx-bitcoin');
+  constructor(defaults?: BitcoinWalletDefaults) {
+    super('OKX Wallet', 'okx-bitcoin', defaults);
   }
 
   public static isAvailable(): boolean {
@@ -106,7 +110,7 @@ export class OKXXConnector extends BitcoinXConnector {
       return undefined;
     }
 
-    this.walletProvider = new OKXWalletProvider(okx, address);
+    this.walletProvider = new OKXWalletProvider(okx, address, this.defaults);
 
     return {
       address,
@@ -125,6 +129,6 @@ export class OKXXConnector extends BitcoinXConnector {
   recreateWalletProvider(xAccount: XAccount): IBitcoinWalletProvider | undefined {
     const okx = window.okxwallet?.bitcoin;
     if (!okx || !xAccount.address) return undefined;
-    return new OKXWalletProvider(okx, xAccount.address);
+    return new OKXWalletProvider(okx, xAccount.address, this.defaults);
   }
 }

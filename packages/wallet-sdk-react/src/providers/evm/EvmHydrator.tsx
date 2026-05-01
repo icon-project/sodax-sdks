@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { useConfig, useConnectors, useConnections, useAccount, usePublicClient, useWalletClient } from 'wagmi';
+import { useEffect, useMemo } from 'react';
+import { useConfig, useConnectors, useAccount, usePublicClient, useWalletClient } from 'wagmi';
 import { EvmWalletProvider } from '@sodax/wallet-sdk-core';
-import { EvmXService } from '../../xchains/evm/EvmXService.js';
-import { EvmXConnector } from '../../xchains/evm/index.js';
-import { useXWalletStore } from '../../useXWalletStore.js';
+import { EvmXService } from '@/xchains/evm/EvmXService.js';
+import { EvmXConnector } from '@/xchains/evm/index.js';
+import { useXWalletStore } from '@/useXWalletStore.js';
+import { useWalletConfig } from '@/context/WalletConfigContext.js';
+import { resolveEvmDefaults } from '@/utils/walletRpcConfig.js';
 
 /**
  * Hydrates EVM state from wagmi hooks into EvmXService singleton and store.
@@ -12,13 +14,13 @@ import { useXWalletStore } from '../../useXWalletStore.js';
 export const EvmHydrator = () => {
   const wagmiConfig = useConfig();
   const connectors = useConnectors();
-  const evmConnections = useConnections();
-  const { address } = useAccount();
+  const { address, status, connector } = useAccount();
   const evmPublicClient = usePublicClient();
   const { data: evmWalletClient } = useWalletClient();
   const setXConnection = useXWalletStore(state => state.setXConnection);
   const unsetXConnection = useXWalletStore(state => state.unsetXConnection);
   const setWalletProvider = useXWalletStore(state => state.setWalletProvider);
+  const walletConfig = useWalletConfig();
 
   // Hydrate wagmiConfig into singleton
   useEffect(() => {
@@ -34,31 +36,39 @@ export const EvmHydrator = () => {
     useXWalletStore.getState().setXConnectors('EVM', evmConnectors);
   }, [evmConnectors]);
 
-  // Hydrate connection state into store (set + unset)
-  const wasConnectedRef = useRef(!!useXWalletStore.getState().xConnections.EVM);
+  // Hydrate connection state from wagmi `status` — single source of truth.
+  // Skip transient ('connecting'/'reconnecting') so we never write half-resolved
+  // state. Settled states map directly: 'connected' → set, 'disconnected' → unset.
+  // Idempotent — `unsetXConnection` on empty store is a no-op (Immer detects no
+  // structural change → no consumer notify, no persist write).
   useEffect(() => {
-    if (address && evmConnections?.[0]) {
-      wasConnectedRef.current = true;
+    if (status === 'connecting' || status === 'reconnecting') return;
+    if (status === 'connected' && address && connector) {
       setXConnection('EVM', {
         xAccount: { address: address as string, xChainType: 'EVM' },
-        xConnectorId: evmConnections[0].connector.id,
+        xConnectorId: connector.id,
       });
-    } else if (wasConnectedRef.current) {
-      wasConnectedRef.current = false;
+    } else if (status === 'disconnected') {
       unsetXConnection('EVM');
     }
-  }, [address, evmConnections, setXConnection, unsetXConnection]);
+  }, [address, status, connector, setXConnection, unsetXConnection]);
 
-  // Memoize wallet provider so a new instance is only created when client refs actually change.
-  // wagmi returns new client object refs across some renders even when underlying state is stable —
-  // without memoization, the store would receive a new EvmWalletProvider on every render, causing
-  // every consumer of useWalletProvider('EVM') to re-render unnecessarily.
+  // Build the wallet provider for the chain currently bound to the wagmi client.
+  // wagmi swaps clients on chain switch → memo re-fires → provider re-instantiates
+  // with the matching per-chain defaults. Each instance is single-chain, symmetric
+  // with all other chain providers (Solana/Sui/ICON/etc).
+  //
+  // Memoization also prevents new instances on unrelated parent re-renders —
+  // without it, every consumer of useWalletProvider('EVM') would re-render.
   const walletProvider = useMemo(() => {
-    if (evmPublicClient && evmWalletClient) {
-      return new EvmWalletProvider({ walletClient: evmWalletClient, publicClient: evmPublicClient });
-    }
-    return undefined;
-  }, [evmPublicClient, evmWalletClient]);
+    if (!evmPublicClient || !evmWalletClient) return undefined;
+    const defaults = resolveEvmDefaults(evmWalletClient.chain.id, walletConfig.EVM?.chains);
+    return new EvmWalletProvider({
+      walletClient: evmWalletClient,
+      publicClient: evmPublicClient,
+      defaults,
+    });
+  }, [evmPublicClient, evmWalletClient, walletConfig.EVM?.chains]);
 
   useEffect(() => {
     setWalletProvider('EVM', walletProvider);

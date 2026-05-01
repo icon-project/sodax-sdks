@@ -20,7 +20,8 @@ export type EvmWaitForTransactionReceiptPolicy = Partial<Omit<WaitForTransaction
 
 /**
  * Defaults applied to every call. Per-call options shallow-merge over these.
- * `publicClient`/`walletClient`/`transport` only apply in private-key mode (consumer brings clients in browser-extension mode).
+ * `publicClient`/`walletClient`/`transport` only apply in private-key mode
+ * (consumer brings clients in browser-extension mode).
  */
 export type EvmWalletDefaults = {
   publicClient?: Partial<Omit<PublicClientConfig, 'transport' | 'chain'>>;

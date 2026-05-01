@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
 import { useConnectWallet, useDisconnectWallet, useWallets, useSignPersonalMessage } from '@mysten/dapp-kit';
-import { SuiXService } from '../../xchains/sui/index.js';
 import { useXWalletStore } from '../../useXWalletStore.js';
 
 /**
@@ -41,7 +40,7 @@ export const SuiActions = () => {
         await disconnectRef.current();
         // SUI disconnection state is cleared by SuiHydrator (single writer for provider-managed chains)
       },
-      getConnectors: () => SuiXService.getInstance().getXConnectors(),
+      getConnectors: () => useXWalletStore.getState().xConnectorsByChain.SUI ?? [],
       getConnection: () => useXWalletStore.getState().xConnections.SUI,
       signMessage: async (message: string) => {
         const res = await signMessageRef.current({ message: new Uint8Array(new TextEncoder().encode(message)) });

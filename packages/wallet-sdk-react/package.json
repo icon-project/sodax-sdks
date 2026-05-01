@@ -79,12 +79,15 @@
     "bs58": "6.0.0"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.1.0",
     "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
     "happy-dom": "^20.8.9",
     "knip": "5.30.5",
+    "react-dom": "19.1.4",
     "tsup": "catalog:",
     "typescript": "catalog:",
-    "vitest": "^2.1.3"
+    "vitest": "catalog:"
   },
   "peerDependencies": {
     "@tanstack/react-query": "5.x",

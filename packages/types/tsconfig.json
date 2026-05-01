@@ -21,5 +21,6 @@
     "declaration": true,
     "declarationMap": true,
     "noUnusedLocals": true
-  }
+  },
+  "exclude": ["**/*.test.ts", "dist", "node_modules", ".turbo"]
 }

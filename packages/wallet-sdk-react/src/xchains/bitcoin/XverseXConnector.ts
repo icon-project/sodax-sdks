@@ -1,5 +1,6 @@
 import type { XAccount } from '@/types/index.js';
 import { detectBitcoinAddressType, type IBitcoinWalletProvider, type BtcAddressType, type BtcWalletAddressType } from '@sodax/types';
+import type { BitcoinWalletDefaults } from '@sodax/wallet-sdk-core';
 import { AddressPurpose, MessageSigningProtocols } from 'sats-connect';
 import { WALLET_METADATA } from '@/constants.js';
 import { BitcoinXConnector } from './BitcoinXConnector.js';
@@ -25,10 +26,12 @@ class XverseWalletProvider implements IBitcoinWalletProvider {
   readonly chainType = 'BITCOIN' as const;
   private address: string;
   private publicKey: string;
+  private readonly defaults: BitcoinWalletDefaults | undefined;
 
-  constructor(address: string, publicKey: string) {
+  constructor(address: string, publicKey: string, defaults?: BitcoinWalletDefaults) {
     this.address = address;
     this.publicKey = publicKey;
+    this.defaults = defaults;
   }
 
   async getWalletAddress(): Promise<string> {
@@ -74,7 +77,8 @@ class XverseWalletProvider implements IBitcoinWalletProvider {
     return 1; // fallback for unusual cases
   }
 
-  async signTransaction(psbtBase64: string, finalize = false): Promise<string> {
+  async signTransaction(psbtBase64: string, finalize?: boolean): Promise<string> {
+    const effectiveFinalize = finalize ?? this.defaults?.defaultFinalize ?? false;
     const { request } = await import('sats-connect');
 
     const inputCount = this.countPsbtInputs(psbtBase64);
@@ -94,7 +98,7 @@ class XverseWalletProvider implements IBitcoinWalletProvider {
 
     const result = response.result as SignPsbtResult;
 
-    if (finalize) {
+    if (effectiveFinalize) {
       // Return hex for broadcast
       return Buffer.from(result.psbt, 'base64').toString('hex');
     }
@@ -163,8 +167,8 @@ export class XverseXConnector extends BitcoinXConnector {
   /** Address purpose used when connecting. Taproot (Ordinals) by default to match Radfi. */
   public addressPurpose: AddressPurpose;
 
-  constructor() {
-    super('Xverse', 'xverse');
+  constructor(defaults?: BitcoinWalletDefaults) {
+    super('Xverse', 'xverse', defaults);
     // Restore saved preference, default to Taproot
     const saved = typeof window !== 'undefined' ? localStorage.getItem(XVERSE_ADDRESS_TYPE_KEY) : null;
     this.addressPurpose = saved === 'segwit' ? AddressPurpose.Payment : AddressPurpose.Ordinals;
@@ -218,6 +222,7 @@ export class XverseXConnector extends BitcoinXConnector {
     this.walletProvider = new XverseWalletProvider(
       paymentAccount.address,
       paymentAccount.publicKey,
+      this.defaults,
     );
 
     return {
@@ -237,6 +242,6 @@ export class XverseXConnector extends BitcoinXConnector {
 
   recreateWalletProvider(xAccount: XAccount): IBitcoinWalletProvider | undefined {
     if (!xAccount.address || !xAccount.publicKey) return undefined;
-    return new XverseWalletProvider(xAccount.address, xAccount.publicKey);
+    return new XverseWalletProvider(xAccount.address, xAccount.publicKey, this.defaults);
   }
 }

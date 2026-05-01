@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { SolanaWalletProvider } from '@sodax/wallet-sdk-core';
+import { ChainKeys } from '@sodax/types';
 import { SolanaXService } from '../../xchains/solana/SolanaXService.js';
 import { SolanaXConnector } from '../../xchains/solana/index.js';
 import { useXWalletStore } from '../../useXWalletStore.js';
+import { useWalletConfig } from '../../context/WalletConfigContext.js';
+import { getEntryDefaults } from '../../utils/walletRpcConfig.js';
 
 /**
  * Hydrates Solana state from @solana/wallet-adapter-react hooks into SolanaXService singleton and store.
@@ -14,6 +17,10 @@ export const SolanaHydrator = () => {
   const setXConnection = useXWalletStore(state => state.setXConnection);
   const unsetXConnection = useXWalletStore(state => state.unsetXConnection);
   const setWalletProvider = useXWalletStore(state => state.setWalletProvider);
+  const walletConfig = useWalletConfig();
+  const solanaDefaults = getEntryDefaults<typeof ChainKeys.SOLANA_MAINNET>(
+    walletConfig.SOLANA?.chains?.[ChainKeys.SOLANA_MAINNET],
+  );
 
   useEffect(() => {
     if (connection) {
@@ -68,10 +75,11 @@ export const SolanaHydrator = () => {
       return new SolanaWalletProvider({
         wallet: solanaWallet,
         endpoint: connection.rpcEndpoint,
+        defaults: solanaDefaults,
       });
     }
     return undefined;
-  }, [solanaWallet.connected, solanaWallet.publicKey, solanaWallet.wallet, connection]);
+  }, [solanaWallet.connected, solanaWallet.publicKey, solanaWallet.wallet, connection, solanaDefaults]);
 
   useEffect(() => {
     SolanaXService.getInstance().wallet = solanaWalletRef.current;

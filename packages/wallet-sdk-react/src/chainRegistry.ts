@@ -1,4 +1,4 @@
-import { type ChainType, type RpcConfig, ChainKeys, ChainTypeArr, detectBitcoinAddressType } from '@sodax/types';
+import { type ChainType, ChainKeys, ChainTypeArr, detectBitcoinAddressType } from '@sodax/types';
 import {
   IconWalletProvider,
   InjectiveWalletProvider,
@@ -12,8 +12,9 @@ import { getEthereumAddress } from '@injectivelabs/sdk-ts';
 import { XConnector, type XService } from './core/index.js';
 import type { IWalletProvider, XConnection } from './types/index.js';
 import type { IXConnector } from './types/interfaces.js';
-import type { ChainsConfig } from './types/config.js';
+import type { SodaxWalletConfig } from './types/config.js';
 import type { ChainActions, ChainActionsRegistry } from './types/chainActions.js';
+import { getEntryDefaults, getRpcUrl } from './utils/walletRpcConfig.js';
 
 import { EvmXService } from './xchains/evm/index.js';
 import { SolanaXService } from './xchains/solana/SolanaXService.js';
@@ -38,21 +39,33 @@ import { StacksXService, StacksXConnector, STACKS_PROVIDERS } from './xchains/st
 /** Store accessor — avoids circular dependency with useXWalletStore */
 export type StoreAccessor = () => {
   xConnections: Partial<Record<ChainType, XConnection>>;
+  xConnectorsByChain: Partial<Record<ChainType, XConnector[]>>;
   xServices: Partial<Record<ChainType, XService>>;
   setXConnectors: (xChainType: ChainType, connectors: XConnector[]) => void;
   unsetXConnection: (xChainType: ChainType) => void;
   setWalletProvider: (xChainType: ChainType, provider: IWalletProvider | undefined) => void;
+  /**
+   * User-supplied `SodaxWalletConfig` (per-chain-type slots, each with adapter
+   * settings + nested chains map). Source of `defaults` forwarded to core
+   * wallet provider constructors for non-provider chains.
+   */
+  walletConfig: SodaxWalletConfig | undefined;
 };
 
 export type ChainServiceFactory<S extends XService = XService> = {
   /** Create or get the XService singleton for this chain. */
-  createService(rpcConfig?: RpcConfig): S;
-  /** Human-readable chain name for display in modal UIs (spec §E of #1123). */
+  createService(walletConfig?: SodaxWalletConfig): S;
+  /** Human-readable chain name for display in modal UIs. */
   displayName: string;
   /** Optional icon URL for the chain. Consumers can override when rendering. */
   iconUrl?: string;
-  /** Static connectors known at build time. Ignored for provider-managed chains. */
-  defaultConnectors(): XConnector[];
+  /**
+   * Static connectors known at build time. Ignored for provider-managed chains.
+   * `walletConfig` is forwarded so chains whose connectors construct wallet
+   * providers eagerly (e.g. Bitcoin) can read per-chain-id `defaults` at
+   * registration time.
+   */
+  defaultConnectors(walletConfig?: SodaxWalletConfig): XConnector[];
   /** true = needs React provider (EVM/Solana/Sui), false = browser extension APIs. */
   providerManaged: boolean;
   /** ChainActions for non-provider chains. If omitted, uses createDefaultActions(). */
@@ -91,9 +104,9 @@ export type ChainServicesResult = {
 /**
  * Validate that consumer-supplied connectors (typed against the public
  * `IXConnector` interface) are actual `XConnector` instances. Required at the
- * `BaseChainConfig.connectors` boundary because the SDK stores `XConnector[]`
- * internally — `getXConnectorById` and chain-specific subclass methods rely
- * on the abstract class default behavior.
+ * connectors override boundary because the SDK stores `XConnector[]` internally
+ * — `getXConnectorById` and chain-specific subclass methods rely on the
+ * abstract class default behavior.
  */
 function narrowConnectors(items: readonly IXConnector[], chainType: ChainType): XConnector[] {
   return items.filter((item): item is XConnector => {
@@ -107,6 +120,16 @@ function narrowConnectors(items: readonly IXConnector[], chainType: ChainType): 
   });
 }
 
+/** Read `connectors` override from the matching chain-type slot, if any. */
+function readConnectorsOverride(chainType: ChainType, walletConfig: SodaxWalletConfig | undefined): readonly IXConnector[] | undefined {
+  return walletConfig?.[chainType]?.connectors;
+}
+
+/** Returns `true` if the chain-type slot is present in `walletConfig`. */
+function hasChainOfType(chainType: ChainType, walletConfig: SodaxWalletConfig): boolean {
+  return walletConfig[chainType] !== undefined;
+}
+
 // ─── Default Actions Helper ─────────────────────────────────────────────────
 
 const createDefaultActions = (chainType: ChainType, service: XService, getStore: StoreAccessor): ChainActions => ({
@@ -118,10 +141,14 @@ const createDefaultActions = (chainType: ChainType, service: XService, getStore:
     const store = getStore();
     const connectorId = store.xConnections[chainType]?.xConnectorId;
     const connector = connectorId ? service.getXConnectorById(connectorId) : undefined;
-    await connector?.disconnect();
-    store.unsetXConnection(chainType);
+    // Clear store even if wallet.disconnect() throws — UI must not get stuck "connected".
+    try {
+      await connector?.disconnect();
+    } finally {
+      store.unsetXConnection(chainType);
+    }
   },
-  getConnectors: () => service.getXConnectors(),
+  getConnectors: () => getStore().xConnectorsByChain[chainType] ?? [],
   getConnection: () => getStore().xConnections[chainType],
 });
 
@@ -147,9 +174,15 @@ export const chainRegistry: Record<string, ChainServiceFactory> = {
     providerManaged: true,
   }),
   BITCOIN: defineChain({
-    createService: rpcConfig => BitcoinXService.getInstance(rpcConfig?.[ChainKeys.BITCOIN_MAINNET]?.rpcUrl),
+    createService: walletConfig =>
+      BitcoinXService.getInstance(getRpcUrl(walletConfig?.BITCOIN?.chains?.[ChainKeys.BITCOIN_MAINNET])),
     displayName: 'Bitcoin',
-    defaultConnectors: () => [new UnisatXConnector(), new XverseXConnector(), new OKXXConnector()],
+    defaultConnectors: (walletConfig?: SodaxWalletConfig) => {
+      const defaults = getEntryDefaults<typeof ChainKeys.BITCOIN_MAINNET>(
+        walletConfig?.BITCOIN?.chains?.[ChainKeys.BITCOIN_MAINNET],
+      );
+      return [new UnisatXConnector(defaults), new XverseXConnector(defaults), new OKXXConnector(defaults)];
+    },
     providerManaged: false,
     createActions: (service, getStore) => ({
       ...createDefaultActions('BITCOIN', service, getStore),
@@ -196,7 +229,8 @@ export const chainRegistry: Record<string, ChainServiceFactory> = {
     },
   }),
   INJECTIVE: defineChain({
-    createService: rpcConfig => InjectiveXService.getInstance(rpcConfig?.[ChainKeys.INJECTIVE_MAINNET]),
+    createService: walletConfig =>
+      InjectiveXService.getInstance(walletConfig?.INJECTIVE?.chains?.[ChainKeys.INJECTIVE_MAINNET]),
     displayName: 'Injective',
     defaultConnectors: () => [
       new InjectiveXConnector('MetaMask', Wallet.Metamask),
@@ -221,14 +255,17 @@ export const chainRegistry: Record<string, ChainServiceFactory> = {
         return res;
       },
     }),
-    createWalletProvider: service => {
+    createWalletProvider: (service, getStore) => {
       if (!service) return undefined;
-      return new InjectiveWalletProvider({ msgBroadcaster: service.msgBroadcaster });
+      const defaults = getEntryDefaults<typeof ChainKeys.INJECTIVE_MAINNET>(
+        getStore().walletConfig?.INJECTIVE?.chains?.[ChainKeys.INJECTIVE_MAINNET],
+      );
+      return new InjectiveWalletProvider({ msgBroadcaster: service.msgBroadcaster, defaults });
     },
   }),
   STELLAR: defineChain({
-    createService: rpcConfig => {
-      const stellarRpc = rpcConfig?.[ChainKeys.STELLAR_MAINNET];
+    createService: walletConfig => {
+      const stellarRpc = walletConfig?.STELLAR?.chains?.[ChainKeys.STELLAR_MAINNET];
       return StellarXService.getInstance(stellarRpc?.horizonRpcUrl, stellarRpc?.sorobanRpcUrl);
     },
     displayName: 'Stellar',
@@ -249,35 +286,46 @@ export const chainRegistry: Record<string, ChainServiceFactory> = {
         return res.signedMessage;
       },
     }),
-    createWalletProvider: service => {
+    createWalletProvider: (service, getStore) => {
       if (!service?.walletsKit) return undefined;
+      const defaults = getEntryDefaults<typeof ChainKeys.STELLAR_MAINNET>(
+        getStore().walletConfig?.STELLAR?.chains?.[ChainKeys.STELLAR_MAINNET],
+      );
       return new StellarWalletProvider({
         type: 'BROWSER_EXTENSION',
         walletsKit: service.walletsKit,
         network: 'PUBLIC',
+        defaults,
       });
     },
   }),
   // ICON: signMessage not implemented — Hana wallet does not expose a signing API.
   // connect/disconnect use createDefaultActions (no createActions override needed).
   ICON: defineChain({
-    createService: rpcConfig => IconXService.getInstance(rpcConfig?.[ChainKeys.ICON_MAINNET] as string | undefined),
+    createService: walletConfig =>
+      IconXService.getInstance(getRpcUrl(walletConfig?.ICON?.chains?.[ChainKeys.ICON_MAINNET])),
     displayName: 'ICON',
     defaultConnectors: () => [new IconHanaXConnector()],
     providerManaged: false,
     createWalletProvider: (_service, getStore) => {
-      const address = getStore().xConnections.ICON?.xAccount.address;
+      const store = getStore();
+      const address = store.xConnections.ICON?.xAccount.address;
       if (!address) return undefined;
       const chainInfo = CHAIN_INFO[SupportedChainId.MAINNET];
       if (!chainInfo) throw new Error('ICON mainnet chain info not found');
+      const defaults = getEntryDefaults<typeof ChainKeys.ICON_MAINNET>(
+        store.walletConfig?.ICON?.chains?.[ChainKeys.ICON_MAINNET],
+      );
       return new IconWalletProvider({
         walletAddress: address as `hx${string}`,
         rpcUrl: chainInfo.APIEndpoint as `http${string}`,
+        defaults,
       });
     },
   }),
   NEAR: defineChain({
-    createService: rpcConfig => NearXService.getInstance(rpcConfig?.[ChainKeys.NEAR_MAINNET]),
+    createService: walletConfig =>
+      NearXService.getInstance(getRpcUrl(walletConfig?.NEAR?.chains?.[ChainKeys.NEAR_MAINNET])),
     displayName: 'NEAR',
     defaultConnectors: () => [],
     providerManaged: false,
@@ -290,17 +338,23 @@ export const chainRegistry: Record<string, ChainServiceFactory> = {
     createActions: (service, getStore) => ({
       ...createDefaultActions('NEAR', service, getStore),
       disconnect: async () => {
-        service.walletSelector.disconnect();
-        getStore().unsetXConnection('NEAR');
+        try {
+          service.walletSelector.disconnect();
+        } finally {
+          getStore().unsetXConnection('NEAR');
+        }
       },
     }),
-    createWalletProvider: service => {
+    createWalletProvider: (service, getStore) => {
       if (!service?.walletSelector) return undefined;
-      return new NearWalletProvider({ wallet: service.walletSelector });
+      const defaults = getEntryDefaults<typeof ChainKeys.NEAR_MAINNET>(
+        getStore().walletConfig?.NEAR?.chains?.[ChainKeys.NEAR_MAINNET],
+      );
+      return new NearWalletProvider({ wallet: service.walletSelector, defaults });
     },
   }),
   STACKS: defineChain({
-    createService: rpcConfig => StacksXService.getInstance(rpcConfig?.[ChainKeys.STACKS_MAINNET]),
+    createService: walletConfig => StacksXService.getInstance(walletConfig?.STACKS?.chains?.[ChainKeys.STACKS_MAINNET]),
     displayName: 'Stacks',
     defaultConnectors: () => STACKS_PROVIDERS.map(c => new StacksXConnector(c)),
     providerManaged: false,
@@ -311,7 +365,10 @@ export const chainRegistry: Record<string, ChainServiceFactory> = {
       if (!address) return undefined;
       const connector = connection?.xConnectorId ? service.getXConnectorById(connection.xConnectorId) : undefined;
       const provider = connector instanceof StacksXConnector ? connector.getProvider() : undefined;
-      return new StacksWalletProvider({ address, provider });
+      const defaults = getEntryDefaults<typeof ChainKeys.STACKS_MAINNET>(
+        store.walletConfig?.STACKS?.chains?.[ChainKeys.STACKS_MAINNET],
+      );
+      return new StacksWalletProvider({ address, provider, defaults });
     },
   }),
 };
@@ -319,9 +376,8 @@ export const chainRegistry: Record<string, ChainServiceFactory> = {
 // ─── createChainServices ─────────────────────────────────────────────────────
 
 export const createChainServices = (
-  config: ChainsConfig,
+  walletConfig: SodaxWalletConfig,
   getStore: StoreAccessor,
-  rpcConfig?: RpcConfig,
 ): ChainServicesResult => {
   const xServices: Partial<Record<ChainType, XService>> = {};
   const xConnectorsByChain: Partial<Record<ChainType, IXConnector[]>> = {};
@@ -329,19 +385,19 @@ export const createChainServices = (
   const chainActions: ChainActionsRegistry = {};
 
   for (const chainType of ChainTypeArr) {
-    const chainConfig = config[chainType];
-    if (!chainConfig) continue;
+    if (!hasChainOfType(chainType, walletConfig)) continue;
     const factory = chainRegistry[chainType];
     if (!factory) continue;
 
-    const service = factory.createService(rpcConfig);
+    const service = factory.createService(walletConfig);
     xServices[chainType] = service;
     enabledChains.push(chainType);
 
     if (!factory.providerManaged) {
-      const connectors = chainConfig.connectors
-        ? narrowConnectors(chainConfig.connectors, chainType)
-        : factory.defaultConnectors();
+      const override = readConnectorsOverride(chainType, walletConfig);
+      const connectors = override
+        ? narrowConnectors(override, chainType)
+        : factory.defaultConnectors(walletConfig);
       service.setXConnectors(connectors);
       xConnectorsByChain[chainType] = connectors;
 

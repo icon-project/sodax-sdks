@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
-import type { RpcConfig } from '@sodax/types';
-import type { ChainsConfig } from '../types/config.js';
+import type { SodaxWalletConfig } from '../types/config.js';
 import { useXWalletStore } from '../useXWalletStore.js';
 import { reconnectIcon } from '../xchains/icon/actions.js';
 import { reconnectInjective } from '../xchains/injective/actions.js';
@@ -11,28 +10,28 @@ import { reconnectStellar } from '../xchains/stellar/actions.js';
  * Config is immutable after initial render — dynamic changes require remounting SodaxWalletProvider.
  * Handles reconnect for ICON/Injective/Stellar after persist hydration.
  */
-export function useInitChainServices(chains: ChainsConfig, rpcConfig?: RpcConfig) {
+export function useInitChainServices(walletConfig: SodaxWalletConfig) {
   const initChainServices = useXWalletStore(state => state.initChainServices);
   const cleanupDisabledConnections = useXWalletStore(state => state.cleanupDisabledConnections);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: run-once on mount — config is immutable after initial render, dynamic changes require remounting SodaxWalletProvider
   useEffect(() => {
-    initChainServices(chains, rpcConfig);
+    initChainServices(walletConfig);
 
     const afterHydration = () => {
       // Clean up persisted connections for disabled chains (must run after hydration
       // because persist middleware restores xConnections from localStorage)
       cleanupDisabledConnections();
 
-      if (chains.ICON) {
+      if (walletConfig.ICON) {
         reconnectIcon().catch(error => console.warn('[wallet-sdk-react] ICON reconnect failed:', error));
       }
 
-      if (chains.INJECTIVE) {
+      if (walletConfig.INJECTIVE) {
         reconnectInjective().catch(error => console.warn('[wallet-sdk-react] Injective reconnect failed:', error));
       }
 
-      if (chains.STELLAR) {
+      if (walletConfig.STELLAR) {
         reconnectStellar().catch(error => console.warn('[wallet-sdk-react] Stellar reconnect failed:', error));
       }
     };
