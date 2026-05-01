@@ -9,7 +9,7 @@ export default defineConfig({
   },
   test: {
     environment: 'happy-dom',
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     server: {
       deps: {
         // Inline CJS dependencies that don't play well with Vite ESM resolution.

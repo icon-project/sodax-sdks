@@ -1,22 +1,22 @@
 import type { ReactNode } from 'react';
-import { ChainKeys, type RpcConfig } from '@sodax/types';
+import { ChainKeys } from '@sodax/types';
 import { SuiClientProvider, WalletProvider as SuiWalletProvider } from '@mysten/dapp-kit';
 import { getFullnodeUrl } from '@mysten/sui/client';
-import type { SuiChainConfig } from '../../types/config.js';
+import type { SuiTypeConfig } from '../../types/config.js';
 import { SuiHydrator } from './SuiHydrator.js';
 import { SuiActions } from './SuiActions.js';
 import { SUI_DEFAULT_AUTO_CONNECT, SUI_DEFAULT_NETWORK } from '../../constants.js';
 
 type SuiProviderProps = {
   children: ReactNode;
-  config?: SuiChainConfig;
-  rpcConfig?: RpcConfig;
+  /** Sui type slot — adapter settings + nested chain entries. */
+  config: SuiTypeConfig;
 };
 
-export const SuiProvider = ({ children, config, rpcConfig }: SuiProviderProps) => {
-  const autoConnect = config?.autoConnect ?? SUI_DEFAULT_AUTO_CONNECT;
-  const network = config?.network ?? SUI_DEFAULT_NETWORK;
-  const rpcUrl = config?.rpcUrl ?? rpcConfig?.[ChainKeys.SUI_MAINNET] ?? getFullnodeUrl(network);
+export const SuiProvider = ({ children, config }: SuiProviderProps) => {
+  const autoConnect = config.autoConnect ?? SUI_DEFAULT_AUTO_CONNECT;
+  const network = config.network ?? SUI_DEFAULT_NETWORK;
+  const rpcUrl = config.chains?.[ChainKeys.SUI_MAINNET]?.rpcUrl ?? getFullnodeUrl(network);
 
   return (
     <SuiClientProvider networks={{ [network]: { url: rpcUrl } }} defaultNetwork={network}>

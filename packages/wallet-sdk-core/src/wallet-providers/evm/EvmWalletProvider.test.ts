@@ -91,7 +91,7 @@ describe('EvmWalletProvider', () => {
       warnSpy.mockRestore();
     });
 
-    it('warns when ignored defaults keys are supplied in browser-extension mode', () => {
+    it('warns when ignored construction-time defaults are supplied', () => {
       const config = makeBrowserExtensionConfig();
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
@@ -104,7 +104,7 @@ describe('EvmWalletProvider', () => {
       expect(warnSpy.mock.calls[0]?.[0]).toMatch(/ignored in browser-extension mode/);
     });
 
-    it('does not warn when only method-level defaults are supplied in browser-extension mode', () => {
+    it('does not warn when only method-level defaults are supplied', () => {
       const config = makeBrowserExtensionConfig();
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
@@ -153,6 +153,21 @@ describe('EvmWalletProvider', () => {
 
       // Per-call confirmations wins; defaults timeout still applies (shallow merge)
       expect(spy).toHaveBeenCalledWith({ hash: '0xabc', confirmations: 5, timeout: 5_000 });
+    });
+
+    it('private-key flat defaults are picked up at runtime', async () => {
+      const provider = new EvmWalletProvider({
+        privateKey: PRIVATE_KEY,
+        chainId: ChainKeys.SONIC_MAINNET,
+        rpcUrl: RPC_URL,
+        defaults: { waitForTransactionReceipt: { confirmations: 4, timeout: 12_345 } },
+      });
+      const spy = vi.spyOn(provider.publicClient, 'waitForTransactionReceipt').mockResolvedValue(makeFakeReceipt());
+
+      await provider.waitForTransactionReceipt('0xabc');
+
+      expect(spy).toHaveBeenCalledWith({ hash: '0xabc', confirmations: 4, timeout: 12_345 });
+      spy.mockRestore();
     });
   });
 

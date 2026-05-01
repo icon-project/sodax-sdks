@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
 import { useConfig, useConnect, useDisconnect, useSignMessage } from 'wagmi';
-import { EvmXService } from '../../xchains/evm/EvmXService.js';
 import { useXWalletStore } from '../../useXWalletStore.js';
 
 /**
@@ -46,7 +45,7 @@ export const EvmActions = () => {
         await disconnectRef.current();
         // EVM disconnection state is cleared by EvmHydrator (single writer for provider-managed chains)
       },
-      getConnectors: () => EvmXService.getInstance().getXConnectors(),
+      getConnectors: () => useXWalletStore.getState().xConnectorsByChain.EVM ?? [],
       getConnection: () => useXWalletStore.getState().xConnections.EVM,
       signMessage: async (message: string) => {
         const signature = await signMessageRef.current({ message });

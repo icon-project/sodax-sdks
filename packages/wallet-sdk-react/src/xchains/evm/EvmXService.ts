@@ -1,6 +1,7 @@
 import { XService } from '@/core/XService.js';
-import { ChainKeys, type RpcConfig, type XToken } from '@sodax/types';
-import { getWagmiChainId, isNativeToken } from '@/utils/index.js';
+import { ChainKeys, type XToken } from '@sodax/types';
+import type { EvmTypeConfig } from '@/types/config.js';
+import { getRpcUrl, getWagmiChainId, isNativeToken } from '@/utils/index.js';
 
 import { type Address, type Chain, defineChain, erc20Abi } from 'viem';
 import { getPublicClient } from 'wagmi/actions';
@@ -50,7 +51,7 @@ export const hyper = /*#__PURE__*/ defineChain({
 });
 
 export const createWagmiConfig = (
-  config: RpcConfig,
+  evmChains: EvmTypeConfig['chains'],
   options?: WagmiOptions & { connectors?: CreateConnectorFn[] },
 ): Config => {
   return createConfig({
@@ -71,18 +72,18 @@ export const createWagmiConfig = (
     connectors: options?.connectors ?? [],
     ssr: options?.ssr,
     transports: {
-      [mainnet.id]: http(config[ChainKeys.ETHEREUM_MAINNET]),
-      [avalanche.id]: http(config[ChainKeys.AVALANCHE_MAINNET]),
-      [arbitrum.id]: http(config[ChainKeys.ARBITRUM_MAINNET]),
-      [base.id]: http(config[ChainKeys.BASE_MAINNET]),
-      [bsc.id]: http(config[ChainKeys.BSC_MAINNET]),
-      [sonic.id]: http(config[ChainKeys.SONIC_MAINNET]),
-      [optimism.id]: http(config[ChainKeys.OPTIMISM_MAINNET]),
-      [polygon.id]: http(config[ChainKeys.POLYGON_MAINNET]),
-      [hyper.id]: http(config[ChainKeys.HYPEREVM_MAINNET]),
-      [lightlinkPhoenix.id]: http(config[ChainKeys.LIGHTLINK_MAINNET]),
-      [redbellyMainnet.id]: http(config[ChainKeys.REDBELLY_MAINNET]),
-      [kaia.id]: http(config[ChainKeys.KAIA_MAINNET]),
+      [mainnet.id]: http(getRpcUrl(evmChains?.[ChainKeys.ETHEREUM_MAINNET])),
+      [avalanche.id]: http(getRpcUrl(evmChains?.[ChainKeys.AVALANCHE_MAINNET])),
+      [arbitrum.id]: http(getRpcUrl(evmChains?.[ChainKeys.ARBITRUM_MAINNET])),
+      [base.id]: http(getRpcUrl(evmChains?.[ChainKeys.BASE_MAINNET])),
+      [bsc.id]: http(getRpcUrl(evmChains?.[ChainKeys.BSC_MAINNET])),
+      [sonic.id]: http(getRpcUrl(evmChains?.[ChainKeys.SONIC_MAINNET])),
+      [optimism.id]: http(getRpcUrl(evmChains?.[ChainKeys.OPTIMISM_MAINNET])),
+      [polygon.id]: http(getRpcUrl(evmChains?.[ChainKeys.POLYGON_MAINNET])),
+      [hyper.id]: http(getRpcUrl(evmChains?.[ChainKeys.HYPEREVM_MAINNET])),
+      [lightlinkPhoenix.id]: http(getRpcUrl(evmChains?.[ChainKeys.LIGHTLINK_MAINNET])),
+      [redbellyMainnet.id]: http(getRpcUrl(evmChains?.[ChainKeys.REDBELLY_MAINNET])),
+      [kaia.id]: http(getRpcUrl(evmChains?.[ChainKeys.KAIA_MAINNET])),
     },
     storage: createStorage({
       storage: cookieStorage,
@@ -102,10 +103,6 @@ export class EvmXService extends XService {
 
   private constructor() {
     super('EVM');
-  }
-
-  override getXConnectors() {
-    return [];
   }
 
   public static getInstance(): EvmXService {

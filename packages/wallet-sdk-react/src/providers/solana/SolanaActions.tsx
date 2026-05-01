@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { SolanaXService } from '../../xchains/solana/SolanaXService.js';
 import { useXWalletStore } from '../../useXWalletStore.js';
 import { SOLANA_METAMASK_CONNECT_TIMEOUT_MS } from '../../constants.js';
 
@@ -74,7 +73,7 @@ export const SolanaActions = () => {
       disconnect: async () => {
         await walletRef.current.disconnect();
       },
-      getConnectors: () => SolanaXService.getInstance().getXConnectors(),
+      getConnectors: () => useXWalletStore.getState().xConnectorsByChain.SOLANA ?? [],
       getConnection: () => useXWalletStore.getState().xConnections.SOLANA,
       signMessage: async (message: string) => {
         if (!walletRef.current.signMessage) {

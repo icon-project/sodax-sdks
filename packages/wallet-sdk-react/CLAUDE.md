@@ -80,36 +80,44 @@ Only `xConnections` is persisted (key: `'xwagmi-store'`).
 
 ### Configurable Chain Opt-In
 
-`SodaxWalletProvider` accepts a `config` prop (`SodaxWalletConfig`):
+`SodaxWalletProvider` accepts a `config` prop (`SodaxWalletConfig`). Top-level keys are `ChainType` slots — omit a slot to skip mounting that adapter; pass `{}` to mount with SDK defaults.
+
+Each slot is `ChainTypeConfig<T>` = adapter fields (one value per React provider) merged with `{ connectors?, chains? }`. The nested `chains` map is keyed by `ChainKey` and holds per-chain RPC + wallet-provider `defaults`.
 
 ```typescript
-{
-  chains: {
-    EVM?: EvmChainConfig,      // reconnectOnMount, ssr, initialState, walletConnect
-    SOLANA?: SolanaChainConfig, // autoConnect
-    SUI?: SuiChainConfig,      // autoConnect, network, rpcUrl
-    BITCOIN?: SimpleChainConfig,
-    ICON?: SimpleChainConfig,
-    // ... etc
+const walletConfig: SodaxWalletConfig = {
+  EVM: {
+    ssr: true,
+    walletConnect: { projectId: '...' },
+    chains: {
+      [ChainKeys.ARBITRUM_MAINNET]: {
+        rpcUrl: '...',
+        defaults: { waitForTransactionReceipt: { confirmations: 1 } },
+      },
+    },
   },
-  rpcConfig?: RpcConfig,
-}
+  SOLANA: { autoConnect: true, chains: { [ChainKeys.SOLANA_MAINNET]: { rpcUrl: '...' } } },
+  SUI:    { network: 'mainnet' },
+  BITCOIN: {},  // mount with SDK defaults
+};
 ```
 
-Only listed chains are mounted. **Breaking change from v1**: old top-level props (`rpcConfig`, `options`, `initialState`) are removed — consumers must use the new `config` object.
+Per-chain entry shape varies: `EVM`/`SOLANA`/`SUI`/`ICON`/`NEAR` use `{ rpcUrl?, defaults? }`; `BITCOIN`/`STELLAR`/`INJECTIVE` extend their `*RpcConfig` with `{ defaults? }`; `STACKS` accepts a preset name or `StacksNetworkLike & { defaults? }`. See `src/types/config.ts`.
+
+**Single source of truth**: `ChainMeta` in `src/types/config.ts` is the only place edited when adding a new chain type. `SodaxWalletConfig`, `ChainEntry<K>`, `WalletDefaultsByKey<K>` derive from it automatically.
+
+**Breaking change from v1**: old top-level props (`rpcConfig`, `options`, `initialState`) are removed — consumers must use the new `config` object. The old `chains: { EVM, SOLANA, ... }` wrapper is also gone — chain-type slots are now top-level on `SodaxWalletConfig`.
 
 ### WalletConnect (Non-Injected Wallets)
 
-Default EVM wallet discovery uses EIP-6963 (browser extension injection only). Partners using enterprise custody solutions (e.g. Fireblocks) cannot install browser extensions — they need WalletConnect protocol to connect. The `walletConnect` field in `EvmChainConfig` extends wagmi's `WalletConnectParameters` directly — all wagmi options are available:
+Default EVM wallet discovery uses EIP-6963 (browser extension injection only). Partners using enterprise custody solutions (e.g. Fireblocks) cannot install browser extensions — they need WalletConnect protocol to connect. The `walletConnect` field on the `EVM` slot extends wagmi's `WalletConnectParameters` directly — all wagmi options are available:
 
 ```typescript
 {
-  chains: {
-    EVM: {
-      walletConnect: {
-        projectId: 'wc-cloud-project-id',  // required — from cloud.walletconnect.com
-        // showQrModal, isNewChainsStale, qrModalOptions, etc.
-      },
+  EVM: {
+    walletConnect: {
+      projectId: 'wc-cloud-project-id',  // required — from cloud.walletconnect.com
+      // showQrModal, isNewChainsStale, qrModalOptions, etc.
     },
   },
 }
@@ -136,17 +144,16 @@ walletConnect: {
 ```
 SodaxWalletProvider
  ├── WalletConfigProvider (React context for config)
- ├── EvmProvider (wagmi — if chains.EVM)
- │   ├── EvmHydrator (syncs wagmi state → store)
+ ├── EvmProvider (wagmi — if config.EVM)
+ │   ├── EvmHydrator (syncs wagmi state → store; gates writes on wagmi status)
  │   └── EvmActions (registers EVM ChainActions)
- ├── SuiProvider (@mysten/dapp-kit — if chains.SUI)
+ ├── SuiProvider (@mysten/dapp-kit — if config.SUI)
  │   ├── SuiHydrator (syncs dapp-kit state → store)
  │   └── SuiActions (registers SUI ChainActions)
- ├── SolanaProvider (@solana/wallet-adapter — if chains.SOLANA)
+ ├── SolanaProvider (@solana/wallet-adapter — if config.SOLANA)
  │   ├── SolanaHydrator (syncs wallet-adapter state → store)
  │   └── SolanaActions (registers SOLANA ChainActions)
- ├── useInitChainServices (creates services + registers non-provider ChainActions)
- └── useStacksHydration (Stacks network config)
+ └── useInitChainServices (creates services + registers non-provider ChainActions)
 ```
 
 ### Bridge to wallet-sdk-core
@@ -275,7 +282,7 @@ Configuration:
    - Provide `createActions` if the chain needs custom `signMessage` logic
    - Provide `createWalletProvider` if the chain needs a wallet provider
    - Provide `discoverConnectors` if connectors require async initialization
-6. Add chain type to `ChainsConfig` in `src/types/config.ts`
+6. Add one entry to `ChainMeta` in `src/types/config.ts` (`{ keys, entry, defaults, adapter }`). `SodaxWalletConfig`, `ChainEntry<K>`, `WalletDefaultsByKey<K>` auto-derive — no manual sync
 7. If the chain needs a native SDK provider (`providerManaged: true`):
    - Create `src/providers/<chain>/` with Provider, Hydrator, Actions components
    - Mount conditionally in `SodaxWalletProvider.tsx`

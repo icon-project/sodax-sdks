@@ -1,4 +1,10 @@
-import type { EvmChainKey, EvmRawTransaction, EvmRawTransactionReceipt, IEvmWalletProvider } from '@sodax/types';
+import {
+  ChainKeys,
+  type EvmChainKey,
+  type EvmRawTransaction,
+  type EvmRawTransactionReceipt,
+  type IEvmWalletProvider,
+} from '@sodax/types';
 import type { Account, Address, Chain, Hash, PublicClient, TransactionReceipt, Transport, WalletClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { createWalletClient, createPublicClient, http, defineChain } from 'viem';
@@ -24,7 +30,6 @@ import {
   kaia,
   lightlinkPhoenix,
 } from 'viem/chains';
-import { ChainKeys } from '@sodax/types';
 
 // HyperEVM is not in viem/chains; define manually.
 export const hyper = /*#__PURE__*/ defineChain({

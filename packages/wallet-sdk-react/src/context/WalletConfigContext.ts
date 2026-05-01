@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react';
-import { ChainTypeArr, type ChainType } from '@sodax/types';
-import type { ChainsConfig, SodaxWalletConfig } from '../types/config.js';
+import type { ChainType } from '@sodax/types';
+import type { SodaxWalletConfig } from '../types/config.js';
 
 /**
  * Config-level context — answers "what did the consumer configure?" (before service init).
@@ -19,23 +19,14 @@ export function useWalletConfig(): SodaxWalletConfig {
   return config;
 }
 
-/**
- * A chain is "enabled" only when its config value is truthy.
- * `chainType in chains` would also match `{ EVM: undefined }` — value-truthy check
- * matches the intent: omit a chain (or set it to undefined) to disable it.
- */
+/** A chain type is "enabled" only when its slot is present in SodaxWalletConfig. */
 export function useIsChainEnabled(chainType: ChainType): boolean {
-  const { chains } = useWalletConfig();
-  return !!chains[chainType];
+  const config = useWalletConfig();
+  return config[chainType] !== undefined;
 }
 
 /** See {@link useIsChainEnabled} for the "enabled" semantic. */
 export function useEnabledChainTypes(): ChainType[] {
-  const { chains } = useWalletConfig();
-  return ChainTypeArr.filter(t => !!chains[t]);
-}
-
-export function useChainsConfig(): ChainsConfig {
-  const { chains } = useWalletConfig();
-  return chains;
+  const config = useWalletConfig();
+  return (Object.keys(config) as ChainType[]).filter(t => config[t] !== undefined);
 }

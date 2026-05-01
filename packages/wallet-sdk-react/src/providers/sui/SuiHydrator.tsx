@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useCurrentAccount, useCurrentWallet, useSuiClient, useWallets } from '@mysten/dapp-kit';
 import { SuiWalletProvider } from '@sodax/wallet-sdk-core';
+import { ChainKeys } from '@sodax/types';
 import { SuiXService, SuiXConnector } from '../../xchains/sui/index.js';
 import { useXWalletStore } from '../../useXWalletStore.js';
+import { useWalletConfig } from '../../context/WalletConfigContext.js';
+import { getEntryDefaults } from '../../utils/walletRpcConfig.js';
 import { assertSuiProviderShape } from '@/shared/guards.js';
 
 /**
@@ -16,6 +19,8 @@ export const SuiHydrator = (): null => {
   const setXConnection = useXWalletStore(state => state.setXConnection);
   const unsetXConnection = useXWalletStore(state => state.unsetXConnection);
   const setWalletProvider = useXWalletStore(state => state.setWalletProvider);
+  const walletConfig = useWalletConfig();
+  const suiDefaults = getEntryDefaults<typeof ChainKeys.SUI_MAINNET>(walletConfig.SUI?.chains?.[ChainKeys.SUI_MAINNET]);
 
   // Sync dapp-kit values into the SuiXService singleton in a single effect.
   // The singleton is read by SuiXService.createWalletProvider() and balance methods.
@@ -65,10 +70,11 @@ export const SuiHydrator = (): null => {
         client: suiClient,
         wallet: currentWallet,
         account: suiAccount,
+        defaults: suiDefaults,
       } as unknown as SuiWalletProviderConfig);
     }
     return undefined;
-  }, [suiClient, currentWallet, suiAccount]);
+  }, [suiClient, currentWallet, suiAccount, suiDefaults]);
 
   useEffect(() => {
     setWalletProvider('SUI', walletProvider);

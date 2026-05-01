@@ -1,11 +1,11 @@
-import { ChainTypeArr, type ChainType, type GetWalletProviderType, type RpcConfig } from '@sodax/types';
+import { ChainTypeArr, type ChainType, type GetWalletProviderType } from '@sodax/types';
 import { create } from 'zustand';
 import { createJSONStorage, persist, devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import type { XService, XConnector } from './core/index.js';
 import type { XConnection, IWalletProvider } from './types/index.js';
 import type { ChainActions } from './types/chainActions.js';
-import type { ChainsConfig } from './types/config.js';
+import type { SodaxWalletConfig } from './types/config.js';
 import { chainRegistry, createChainServices } from './chainRegistry.js';
 
 /** Empty slot in `walletProviders` is normal before a wallet is connected. */
@@ -24,6 +24,13 @@ type XWalletStore = {
   chainActions: Partial<Record<ChainType, ChainActions>>;
   /** Wallet providers from wallet-sdk-core. Read by useWalletProvider() hook. */
   walletProviders: Partial<Record<ChainType, IWalletProvider>>;
+  /**
+   * User-supplied `SodaxWalletConfig` (per-chain-type slots, each with adapter
+   * settings + nested chains map). Source of `defaults` for non-provider chain
+   * `createWalletProvider` callbacks. Provider-managed chains (EVM/Solana/Sui)
+   * read from `WalletConfigContext` directly via Hydrators.
+   */
+  walletConfig: SodaxWalletConfig | undefined;
 
   setXConnection: (xChainType: ChainType, xConnection: XConnection) => void;
   unsetXConnection: (xChainType: ChainType) => void;
@@ -32,7 +39,7 @@ type XWalletStore = {
   getWalletProvider: <K extends ChainType | undefined>(xChainType: K) => GetWalletProviderReturnType<K>;
   setWalletProvider: (xChainType: ChainType, provider: IWalletProvider | undefined) => void;
   /** Initialize all chain services from config. Called once by useInitChainServices. */
-  initChainServices: (config: ChainsConfig, rpcConfig?: RpcConfig) => void;
+  initChainServices: (walletConfig: SodaxWalletConfig) => void;
   /** Remove persisted connections for chains not in enabledChains. Called after persist hydration. */
   cleanupDisabledConnections: () => void;
 };
@@ -47,6 +54,7 @@ export const useXWalletStore = create<XWalletStore>()(
         enabledChains: [],
         chainActions: {},
         walletProviders: {},
+        walletConfig: undefined,
 
         setXConnection: (xChainType: ChainType, xConnection: XConnection) => {
           set(state => {
@@ -97,8 +105,8 @@ export const useXWalletStore = create<XWalletStore>()(
           return get().walletProviders[xChainType] as GetWalletProviderReturnType<K>;
         },
 
-        initChainServices: (config: ChainsConfig, rpcConfig?: RpcConfig) => {
-          const result = createChainServices(config, () => get(), rpcConfig);
+        initChainServices: (walletConfig: SodaxWalletConfig) => {
+          const result = createChainServices(walletConfig, () => get());
           set(state => {
             state.xServices = result.xServices;
             state.enabledChains = result.enabledChains;
@@ -108,6 +116,10 @@ export const useXWalletStore = create<XWalletStore>()(
             Object.assign(state.xConnectorsByChain, result.xConnectorsByChain);
             Object.assign(state.chainActions, result.chainActions);
           });
+          // Set `walletConfig` outside the immer recipe — the deep-readonly viem
+          // types inside `EvmWalletDefaults.transport.rpcSchema` clash with immer's
+          // WritableDraft. We never mutate this field, so a plain replace is correct.
+          set({ walletConfig });
         },
 
         cleanupDisabledConnections: () => {
