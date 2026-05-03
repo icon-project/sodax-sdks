@@ -1,6 +1,5 @@
 import { useSodaxContext } from '../shared/useSodaxContext.js';
-import type { Intent } from '@sodax/sdk';
-import type { GetWalletProviderType, Result, SpokeChainKey } from '@sodax/sdk';
+import type { GetWalletProviderType, Result, SpokeChainKey, Intent, TxHashPair } from '@sodax/sdk';
 import { useMutation, type UseMutationResult } from '@tanstack/react-query';
 
 type CancelIntentParams<K extends SpokeChainKey = SpokeChainKey> = {
@@ -9,13 +8,13 @@ type CancelIntentParams<K extends SpokeChainKey = SpokeChainKey> = {
   intent: Intent;
 };
 
-type CancelIntentResult = Result<[string, string]>;
+type CancelIntentResult = Result<TxHashPair>;
 
 export function useCancelSwap(): UseMutationResult<CancelIntentResult, Error, CancelIntentParams> {
   const { sodax } = useSodaxContext();
 
   return useMutation<CancelIntentResult, Error, CancelIntentParams>({
     mutationFn: ({ srcChainKey, walletProvider, intent }) =>
-      sodax.swaps.cancelIntent({ srcChainKey, walletProvider, intent }),
+      sodax.swaps.cancelIntent({ params: { srcChainKey, intent }, walletProvider }),
   });
 }

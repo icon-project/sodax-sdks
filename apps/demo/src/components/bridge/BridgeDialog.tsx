@@ -53,10 +53,12 @@ export function BridgeDialog({
 
   const toAccount = useXAccount(toChainKey);
 
-  const { data: hasAllowance, isLoading: isAllowanceLoading } = useBridgeAllowance(
-    order,
-    walletProvider as GetWalletProviderType<typeof order.srcChainKey>,
-  );
+  const { data: hasAllowance, isLoading: isAllowanceLoading } = useBridgeAllowance({
+    params: {
+      payload: order,
+      walletProvider: walletProvider as GetWalletProviderType<typeof order.srcChainKey>,
+    },
+  });
 
   const { mutateAsync: approve, isPending: isApproving } = useBridgeApprove();
   const { mutateAsync: bridge, isPending: isBridging } = useBridge();
@@ -72,16 +74,18 @@ export function BridgeDialog({
 
   const stellarWalletProvider =
     toWalletProvider?.chainType === 'STELLAR' ? (toWalletProvider as IStellarWalletProvider) : undefined;
-  const { data: hasSufficientTrustline, isPending: isTrustlineLoading } = useStellarTrustlineCheck(
-    order.dstToken,
-    order.amount,
-    toChainKey,
-    stellarWalletProvider,
-  );
+  const { data: hasSufficientTrustline, isPending: isTrustlineLoading } = useStellarTrustlineCheck({
+    params: {
+      token: order.dstToken,
+      amount: order.amount,
+      chainId: toChainKey,
+      walletProvider: stellarWalletProvider,
+    },
+  });
   const { requestTrustline, isLoading: isRequestingTrustline } = useRequestTrustline(order.dstToken);
 
   const toBtcAddress = toChainKey === ChainKeys.BITCOIN_MAINNET ? toAccount.address : undefined;
-  const { data: toBtcBalance } = useBitcoinBalance(toBtcAddress);
+  const { data: toBtcBalance } = useBitcoinBalance({ params: { address: toBtcAddress } });
 
   const handleApprove = async () => {
     await approve({

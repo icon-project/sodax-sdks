@@ -1,4 +1,4 @@
-import type { AssetDepositAction, HubTxHash, SpokeTxHash } from '@sodax/sdk';
+import type { AssetDepositAction, TxHashPair } from '@sodax/sdk';
 import type { Result, SpokeChainKey } from '@sodax/sdk';
 import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
@@ -10,7 +10,7 @@ import { useSodaxContext } from '../shared/useSodaxContext.js';
  */
 export type UseDexDepositVars<K extends SpokeChainKey = SpokeChainKey> = Omit<AssetDepositAction<K, false>, 'raw'>;
 
-type DexDepositResult = Result<[SpokeTxHash, HubTxHash]>;
+type DexDepositResult = Result<TxHashPair>;
 
 /**
  * React hook for depositing an asset into a DEX pool. Pure mutation: all inputs (params,
@@ -22,7 +22,7 @@ type DexDepositResult = Result<[SpokeTxHash, HubTxHash]>;
  * const walletProvider = useWalletProvider(chainKey);
  * const { mutateAsync: deposit } = useDexDeposit();
  * const result = await deposit({ params, walletProvider });
- * if (result.ok) { const [spokeTxHash, hubTxHash] = result.value; }
+ * if (result.ok) { const { spokeTxHash, hubTxHash } = result.value; }
  * ```
  */
 export function useDexDeposit<K extends SpokeChainKey = SpokeChainKey>(): UseMutationResult<

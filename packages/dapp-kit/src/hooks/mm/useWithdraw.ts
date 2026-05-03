@@ -1,4 +1,4 @@
-import type { HubTxHash, MoneyMarketWithdrawActionParams, SpokeTxHash } from '@sodax/sdk';
+import type { MoneyMarketWithdrawActionParams, TxHashPair } from '@sodax/sdk';
 import type { Result, SpokeChainKey } from '@sodax/sdk';
 import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
@@ -13,7 +13,7 @@ export type UseWithdrawVars<K extends SpokeChainKey = SpokeChainKey> = Omit<
   'raw'
 >;
 
-type WithdrawResult = Result<[SpokeTxHash, HubTxHash]>;
+type WithdrawResult = Result<TxHashPair>;
 
 /**
  * React hook for withdrawing supplied tokens from the Sodax money market protocol.

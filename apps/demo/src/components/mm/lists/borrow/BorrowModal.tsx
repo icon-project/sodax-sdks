@@ -80,8 +80,7 @@ export function BorrowModal({
 
   const { address: destinationAddressForReserves } = useXAccount(destinationChainId);
   const { data: destinationUserReserves } = useUserReservesData({
-    spokeChainKey: destinationChainId,
-    userAddress: destinationAddressForReserves,
+    params: { spokeChainKey: destinationChainId, userAddress: destinationAddressForReserves },
   });
 
   const tokenForMetrics = destinationToken ?? token;
@@ -102,7 +101,7 @@ export function BorrowModal({
       ? rawATokenAddress
       : undefined;
 
-  const { data: aToken } = useAToken({ aToken: aTokenAddress });
+  const { data: aToken } = useAToken({ params: { aToken: aTokenAddress } });
 
   const maxBorrow = useMemo(() => {
     if (!userSummary) return initialMaxBorrow;

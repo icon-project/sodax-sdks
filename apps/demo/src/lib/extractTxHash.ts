@@ -1,6 +1,3 @@
-// Utility to extract a transaction hash from SDK mutation results.
-// Handles different response formats: direct hash fields, or Money Market's [spokeTxHash, hubTxHash] array pattern.
-
 export function extractTxHash(result: unknown): `0x${string}` | undefined {
   if (!result || typeof result !== 'object') {
     return undefined;
@@ -14,18 +11,13 @@ export function extractTxHash(result: unknown): `0x${string}` | undefined {
     return directCandidate;
   }
 
-  // Money Market pattern: { ok: true, value: [spokeTxHash, hubTxHash] }
   if ('value' in result) {
     const value = (result as { value?: unknown }).value;
-    if (Array.isArray(value)) {
-      const [spokeTxHash, hubTxHash] = value as [unknown, unknown];
-
-      if (typeof spokeTxHash === 'string' && spokeTxHash.startsWith('0x')) {
-        return spokeTxHash as `0x${string}`;
-      }
-
-      if (typeof hubTxHash === 'string' && hubTxHash.startsWith('0x')) {
-        return hubTxHash as `0x${string}`;
+    if (typeof value === 'object' && value !== null && 'spokeTxHash' in value) {
+      const pair = value as { spokeTxHash?: unknown; hubTxHash?: unknown };
+      const candidate = pair.spokeTxHash ?? pair.hubTxHash;
+      if (typeof candidate === 'string' && candidate.startsWith('0x')) {
+        return candidate as `0x${string}`;
       }
     }
   }

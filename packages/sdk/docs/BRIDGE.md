@@ -29,7 +29,7 @@ const result = await sodax.bridge.isAllowanceValid({
     dstAsset: '0xabcdef1234567890...',
     recipient: '0x9876543210fedcba...'
   },
-  spokeProvider: baseSpokeProvider
+  walletProvider: baseSpokeProvider
 });
 
 if (result.ok && result.value) {
@@ -65,7 +65,7 @@ const result = await sodax.bridge.approve({
     dstAsset: '0xabcdef1234567890...',
     recipient: '0x9876543210fedcba...'
   },
-  spokeProvider: baseSpokeProvider,
+  walletProvider: baseSpokeProvider,
   raw: false
 });
 
@@ -89,7 +89,7 @@ Executes a complete bridge transaction, including creating the bridge intent and
 - `spokeProvider`: The spoke chain provider instance
 - `timeout`: Optional timeout in milliseconds (default: 60 seconds)
 
-**Returns:** `Promise<Result<[SpokeTxHash, HubTxHash], BridgeError<BridgeErrorCode>>>`
+**Returns:** `Promise<Result<TxHashPair>>`
 
 **Example:**
 ```typescript
@@ -106,13 +106,13 @@ const result = await sodax.bridge.bridge({
       percentage: 0.1 
     }
   },
-  spokeProvider: baseSpokeProvider,
+  walletProvider: baseSpokeProvider,
   timeout: 30000
 });
 
 if (result.ok) {
-  const [spokeTxHash, hubTxHash] = result.value;
-  console.log('Bridge successful:', { spokeTxHash, hubTxHash });
+  const { srcChainTxHash, dstChainTxHash } = result.value;
+  console.log('Bridge successful:', { srcChainTxHash, dstChainTxHash });
 } else {
   console.error('Bridge failed:', result.error);
 }
@@ -127,7 +127,7 @@ Creates a bridge intent on the spoke chain without relaying it to the hub. This 
 - `spokeProvider`: The spoke chain provider instance
 - `raw`: Whether to return raw transaction data (optional, default: false)
 
-**Returns:** `Promise<Result<TxReturnType<S, R>, BridgeError<'CREATE_BRIDGE_INTENT_FAILED'>> & BridgeOptionalExtraData>`
+**Returns:** `Promise<Result<IntentTxResult<S, R>>>`
 
 **Example:**
 ```typescript
@@ -140,13 +140,13 @@ const result = await sodax.bridge.createBridgeIntent({
     dstAsset: '0xabcdef1234567890...',
     recipient: '0x9876543210fedcba...'
   },
-  spokeProvider: baseSpokeProvider,
+  walletProvider: baseSpokeProvider,
   raw: false
 });
 
 if (result.ok) {
   console.log('Bridge intent created:', result.value);
-  console.log('Extra data:', result.data);
+  console.log('Relay data:', result.value.relayData);
 } else {
   console.error('Bridge intent creation failed:', result.error);
 }
@@ -278,10 +278,12 @@ export type CreateBridgeIntentParams = {
 ### BridgeParams
 
 ```typescript
-export type BridgeParams<S extends SpokeProvider> = {
+export type BridgeParams<K extends SpokeChainKey, Raw extends boolean> = {
   params: CreateBridgeIntentParams;
-  spokeProvider: S;
+  walletProvider: GetWalletProviderType<K>; // required when Raw extends false
+  raw: Raw;
   skipSimulation?: boolean;
+  timeout?: number;
 };
 ```
 

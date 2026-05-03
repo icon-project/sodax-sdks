@@ -1,11 +1,14 @@
 import type { FeeTokenApproveParams } from '@sodax/sdk';
-import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { ReadHookParams } from '../shared/types.js';
 
-export type UseIsTokenApprovedProps = {
-  params: FeeTokenApproveParams | undefined;
-  queryOptions?: Omit<UseQueryOptions<boolean, Error>, 'queryKey' | 'queryFn' | 'enabled'>;
-};
+export type UseIsTokenApprovedParams = ReadHookParams<
+  boolean,
+  {
+    payload: FeeTokenApproveParams | undefined;
+  }
+>;
 
 /**
  * React hook to check whether a token is approved to the protocol-intents contract on Sonic for
@@ -14,20 +17,21 @@ export type UseIsTokenApprovedProps = {
 export function useIsTokenApproved({
   params,
   queryOptions,
-}: UseIsTokenApprovedProps): UseQueryResult<boolean, Error> {
+}: UseIsTokenApprovedParams = {}): UseQueryResult<boolean, Error> {
   const { sodax } = useSodaxContext();
+  const payload = params?.payload;
 
   return useQuery<boolean, Error>({
-    queryKey: ['partner', 'feeClaim', 'isTokenApproved', params?.srcChainKey, params?.srcAddress, params?.token],
+    queryKey: ['partner', 'feeClaim', 'isTokenApproved', payload?.srcChainKey, payload?.srcAddress, payload?.token],
     queryFn: async () => {
-      if (!params) {
+      if (!payload) {
         throw new Error('params are required');
       }
-      const result = await sodax.partners.feeClaim.isTokenApproved(params);
+      const result = await sodax.partners.feeClaim.isTokenApproved(payload);
       if (!result.ok) throw result.error;
       return result.value;
     },
-    enabled: !!params,
+    enabled: !!payload,
     refetchInterval: 5_000,
     gcTime: 0,
     ...queryOptions,

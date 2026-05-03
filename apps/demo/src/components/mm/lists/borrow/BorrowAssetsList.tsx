@@ -49,17 +49,15 @@ export function BorrowAssetsList({ initialChainId }: BorrowAssetsListProps): JSX
 
   const { address } = useXAccount(selectedChainId);
 
-  const { data: allMoneyMarketAssets, isLoading: isAssetsLoading } = useBackendAllMoneyMarketAssets({});
+  const { data: allMoneyMarketAssets, isLoading: isAssetsLoading } = useBackendAllMoneyMarketAssets();
 
   const { data: userReserves, isLoading: isUserReservesLoading } = useUserReservesData({
-    spokeChainKey: selectedChainId,
-    userAddress: address,
+    params: { spokeChainKey: selectedChainId, userAddress: address },
   });
 
   const { data: formattedReserves, isLoading: isFormattedReservesLoading } = useReservesUsdFormat();
   const { data: userSummary } = useUserFormattedSummary({
-    spokeChainKey: selectedChainId,
-    userAddress: address,
+    params: { spokeChainKey: selectedChainId, userAddress: address },
   });
   const borrowableAssets = useMemo(() => {
     if (!allMoneyMarketAssets) return [];
@@ -75,10 +73,12 @@ export function BorrowAssetsList({ initialChainId }: BorrowAssetsListProps): JSX
   const tokensOnSelectedChain = sodax.moneyMarket.getSupportedTokensByChainId(selectedChainId);
   const xService = useXService(getXChainType(selectedChainId));
   const { data: balances } = useXBalances({
-    xService,
-    xChainId: selectedChainId,
-    xTokens: tokensOnSelectedChain,
-    address,
+    params: {
+      xService,
+      xChainId: selectedChainId,
+      xTokens: tokensOnSelectedChain,
+      address,
+    },
   });
   const hasCollateral = !!userReserves?.[0]?.some(reserve => reserve.scaledATokenBalance > 0n);
 

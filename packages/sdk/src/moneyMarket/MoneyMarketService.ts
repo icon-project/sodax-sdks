@@ -20,13 +20,11 @@ import {
   isHubChainKeyType,
   isEvmSpokeOnlyChainKeyType,
   isStellarChainKeyType,
-  isSolanaChainKeyType,
-  isBitcoinChainKeyType,
   isOptionalEvmWalletProviderType,
   isOptionalStellarWalletProviderType,
   isUndefinedOrValidWalletProviderForChainKey,
 } from '../shared/index.js';
-import type { HubProvider, RelayOptionalExtraData } from '../shared/types/types.js';
+import type { HubProvider, IntentTxResult, TxHashPair } from '../shared/types/types.js';
 import {
   type SpokeChainKey,
   type XToken,
@@ -34,9 +32,7 @@ import {
   type Hex,
   type HttpUrl,
   type EvmContractCall,
-  type HubTxHash,
   type Result,
-  type SpokeTxHash,
   type TxReturnType,
   type GetAddressType,
   type GetTokenAddressType,
@@ -145,25 +141,24 @@ export type MoneyMarketParams<K extends SpokeChainKey = SpokeChainKey> =
   | MoneyMarketRepayParams<K>;
 
 // Exec-mode wrappers (walletProvider required, K-narrowed)
-export type MoneyMarketSupplyActionParams<K extends SpokeChainKey, Raw extends boolean> = SpokeExecActionParams<
+export type MoneyMarketSupplyActionParams<K extends SpokeChainKey, Raw extends boolean = false> = SpokeExecActionParams<
   K,
   Raw,
   MoneyMarketSupplyParams<K>
 >;
 
-export type MoneyMarketBorrowActionParams<K extends SpokeChainKey, Raw extends boolean> = SpokeExecActionParams<
+export type MoneyMarketBorrowActionParams<K extends SpokeChainKey, Raw extends boolean = false> = SpokeExecActionParams<
   K,
   Raw,
   MoneyMarketBorrowParams<K>
 >;
 
-export type MoneyMarketWithdrawActionParams<K extends SpokeChainKey, Raw extends boolean> = SpokeExecActionParams<
-  K,
-  Raw,
-  MoneyMarketWithdrawParams<K>
->;
+export type MoneyMarketWithdrawActionParams<
+  K extends SpokeChainKey,
+  Raw extends boolean = false,
+> = SpokeExecActionParams<K, Raw, MoneyMarketWithdrawParams<K>>;
 
-export type MoneyMarketRepayActionParams<K extends SpokeChainKey, Raw extends boolean> = SpokeExecActionParams<
+export type MoneyMarketRepayActionParams<K extends SpokeChainKey, Raw extends boolean = false> = SpokeExecActionParams<
   K,
   Raw,
   MoneyMarketRepayParams<K>
@@ -175,11 +170,10 @@ export type MoneyMarketAllowanceParams<K extends SpokeChainKey> = {
 };
 
 // `approve` accepts any action (but only supply/repay actually require approval on EVM).
-export type MoneyMarketApproveActionParams<K extends SpokeChainKey, Raw extends boolean> = SpokeExecActionParams<
-  K,
-  Raw,
-  MoneyMarketParams<K>
->;
+export type MoneyMarketApproveActionParams<
+  K extends SpokeChainKey,
+  Raw extends boolean = false,
+> = SpokeExecActionParams<K, Raw, MoneyMarketParams<K>>;
 
 export type MoneyMarketServiceConstructorParams = {
   config: ConfigService;
@@ -434,7 +428,7 @@ export class MoneyMarketService {
    */
   public async supply<K extends SpokeChainKey>(
     _params: MoneyMarketSupplyActionParams<K, false>,
-  ): Promise<Result<[SpokeTxHash, HubTxHash]>> {
+  ): Promise<Result<TxHashPair>> {
     const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;
     const srcChainKey = params.srcChainKey;
 
@@ -442,25 +436,28 @@ export class MoneyMarketService {
       const txResult = await this.createSupplyIntent(_params);
       if (!txResult.ok) return txResult;
 
-      const verify = await this.spoke.verifyTxHash({ txHash: txResult.value, chainKey: srcChainKey });
+      const verify = await this.spoke.verifyTxHash({ txHash: txResult.value.tx, chainKey: srcChainKey });
       if (!verify.ok) return verify;
 
       // Relay skipped only when source chain is the hub.
       if (isHubChainKeyType(srcChainKey)) {
-        return { ok: true, value: [txResult.value, txResult.value] };
+        return {
+          ok: true,
+          value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: txResult.value.tx },
+        };
       }
 
-      const packet = await relayTxAndWaitPacket(
-        txResult.value,
-        isSolanaChainKeyType(srcChainKey) || isBitcoinChainKeyType(srcChainKey) ? txResult.data : undefined,
-        srcChainKey,
-        this.relayerApiEndpoint,
+      const packet = await relayTxAndWaitPacket({
+        srcTxHash: txResult.value.tx,
+        data: txResult.value.relayData,
+        chainKey: srcChainKey,
+        relayerApiEndpoint: this.relayerApiEndpoint,
         timeout,
-      );
+      });
 
       if (!packet.ok) return packet;
 
-      return { ok: true, value: [txResult.value, packet.value.dst_tx_hash] };
+      return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packet.value.dst_tx_hash } };
     } catch (error) {
       return { ok: false, error };
     }
@@ -468,7 +465,7 @@ export class MoneyMarketService {
 
   public async createSupplyIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: MoneyMarketSupplyActionParams<K, Raw>,
-  ): Promise<Result<TxReturnType<K, Raw>> & RelayOptionalExtraData> {
+  ): Promise<Result<IntentTxResult<K, Raw>>> {
     const { params, walletProvider } = _params;
     const srcChainKey = params.srcChainKey;
     const skipSimulation = _params.skipSimulation ?? false;
@@ -523,8 +520,10 @@ export class MoneyMarketService {
 
       return {
         ok: true,
-        value: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
-        data: { address: fromHubWallet, payload: data },
+        value: {
+          tx: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
+          relayData: { address: fromHubWallet, payload: data },
+        },
       };
     } catch (error) {
       return { ok: false, error };
@@ -535,7 +534,7 @@ export class MoneyMarketService {
 
   public async borrow<K extends SpokeChainKey>(
     _params: MoneyMarketBorrowActionParams<K, false>,
-  ): Promise<Result<[SpokeTxHash, HubTxHash]>> {
+  ): Promise<Result<TxHashPair>> {
     const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;
     const srcChainKey = params.srcChainKey;
     const hubChainId = this.hubProvider.chainConfig.chain.key;
@@ -544,7 +543,7 @@ export class MoneyMarketService {
       const txResult = await this.createBorrowIntent(_params);
       if (!txResult.ok) return txResult;
 
-      const verify = await this.spoke.verifyTxHash({ txHash: txResult.value, chainKey: srcChainKey });
+      const verify = await this.spoke.verifyTxHash({ txHash: txResult.value.tx, chainKey: srcChainKey });
       if (!verify.ok) return verify;
 
       // Relay is not required when the borrow is executed on hub AND the target is also hub.
@@ -554,20 +553,23 @@ export class MoneyMarketService {
         (params.toChainId != null && params.toAddress != null && params.toChainId !== hubChainId);
 
       if (!needsRelay) {
-        return { ok: true, value: [txResult.value, txResult.value] };
+        return {
+          ok: true,
+          value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: txResult.value.tx },
+        };
       }
 
-      const packet = await relayTxAndWaitPacket(
-        txResult.value,
-        isSolanaChainKeyType(srcChainKey) || isBitcoinChainKeyType(srcChainKey) ? txResult.data : undefined,
-        srcChainKey,
-        this.relayerApiEndpoint,
+      const packet = await relayTxAndWaitPacket({
+        srcTxHash: txResult.value.tx,
+        data: txResult.value.relayData,
+        chainKey: srcChainKey,
+        relayerApiEndpoint: this.relayerApiEndpoint,
         timeout,
-      );
+      });
 
       if (!packet.ok) return packet;
 
-      return { ok: true, value: [txResult.value, packet.value.dst_tx_hash] };
+      return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packet.value.dst_tx_hash } };
     } catch (error) {
       return { ok: false, error };
     }
@@ -575,7 +577,7 @@ export class MoneyMarketService {
 
   public async createBorrowIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: MoneyMarketBorrowActionParams<K, Raw>,
-  ): Promise<Result<TxReturnType<K, Raw>> & RelayOptionalExtraData> {
+  ): Promise<Result<IntentTxResult<K, Raw>>> {
     const { params, walletProvider } = _params;
     const srcChainKey = params.srcChainKey;
     const skipSimulation = _params.skipSimulation ?? false;
@@ -634,8 +636,10 @@ export class MoneyMarketService {
 
       return {
         ok: true,
-        value: txResult.value satisfies TxReturnType<K, boolean> as TxReturnType<K, Raw>,
-        data: { address: fromHubWallet, payload },
+        value: {
+          tx: txResult.value satisfies TxReturnType<K, boolean> as TxReturnType<K, Raw>,
+          relayData: { address: fromHubWallet, payload },
+        },
       };
     } catch (error) {
       return { ok: false, error };
@@ -646,7 +650,7 @@ export class MoneyMarketService {
 
   public async withdraw<K extends SpokeChainKey>(
     _params: MoneyMarketWithdrawActionParams<K, false>,
-  ): Promise<Result<[SpokeTxHash, HubTxHash]>> {
+  ): Promise<Result<TxHashPair>> {
     const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;
     const srcChainKey = params.srcChainKey;
     const hubChainId = this.hubProvider.chainConfig.chain.key;
@@ -656,7 +660,7 @@ export class MoneyMarketService {
       const txResult = await this.createWithdrawIntent(_params);
       if (!txResult.ok) return txResult;
 
-      const verify = await this.spoke.verifyTxHash({ txHash: txResult.value, chainKey: srcChainKey });
+      const verify = await this.spoke.verifyTxHash({ txHash: txResult.value.tx, chainKey: srcChainKey });
       if (!verify.ok) return verify;
 
       // Relay is not required only when: source is hub AND target is hub AND target is not the walletRouter.
@@ -668,20 +672,23 @@ export class MoneyMarketService {
           params.toAddress !== walletRouter);
 
       if (!needsRelay) {
-        return { ok: true, value: [txResult.value, txResult.value] };
+        return {
+          ok: true,
+          value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: txResult.value.tx },
+        };
       }
 
-      const packet = await relayTxAndWaitPacket(
-        txResult.value,
-        isSolanaChainKeyType(srcChainKey) || isBitcoinChainKeyType(srcChainKey) ? txResult.data : undefined,
-        srcChainKey,
-        this.relayerApiEndpoint,
+      const packet = await relayTxAndWaitPacket({
+        srcTxHash: txResult.value.tx,
+        data: txResult.value.relayData,
+        chainKey: srcChainKey,
+        relayerApiEndpoint: this.relayerApiEndpoint,
         timeout,
-      );
+      });
 
       if (!packet.ok) return packet;
 
-      return { ok: true, value: [txResult.value, packet.value.dst_tx_hash] };
+      return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packet.value.dst_tx_hash } };
     } catch (error) {
       return { ok: false, error };
     }
@@ -689,7 +696,7 @@ export class MoneyMarketService {
 
   public async createWithdrawIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: MoneyMarketWithdrawActionParams<K, Raw>,
-  ): Promise<Result<TxReturnType<K, Raw>> & RelayOptionalExtraData> {
+  ): Promise<Result<IntentTxResult<K, Raw>>> {
     const { params, walletProvider } = _params;
     const srcChainKey = params.srcChainKey;
     const skipSimulation = _params.skipSimulation ?? false;
@@ -748,8 +755,10 @@ export class MoneyMarketService {
 
       return {
         ok: true,
-        value: txResult.value satisfies TxReturnType<K, boolean> as TxReturnType<K, Raw>,
-        data: { address: fromHubWallet, payload },
+        value: {
+          tx: txResult.value satisfies TxReturnType<K, boolean> as TxReturnType<K, Raw>,
+          relayData: { address: fromHubWallet, payload },
+        },
       };
     } catch (error) {
       return { ok: false, error };
@@ -760,7 +769,7 @@ export class MoneyMarketService {
 
   public async repay<K extends SpokeChainKey>(
     _params: MoneyMarketRepayActionParams<K, false>,
-  ): Promise<Result<[SpokeTxHash, HubTxHash]>> {
+  ): Promise<Result<TxHashPair>> {
     const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;
     const srcChainKey = params.srcChainKey;
 
@@ -768,25 +777,28 @@ export class MoneyMarketService {
       const txResult = await this.createRepayIntent(_params);
       if (!txResult.ok) return txResult;
 
-      const verify = await this.spoke.verifyTxHash({ txHash: txResult.value, chainKey: srcChainKey });
+      const verify = await this.spoke.verifyTxHash({ txHash: txResult.value.tx, chainKey: srcChainKey });
       if (!verify.ok) return verify;
 
       // Relay skipped only when source chain is the hub.
       if (isHubChainKeyType(srcChainKey)) {
-        return { ok: true, value: [txResult.value, txResult.value] };
+        return {
+          ok: true,
+          value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: txResult.value.tx },
+        };
       }
 
-      const packet = await relayTxAndWaitPacket(
-        txResult.value,
-        isSolanaChainKeyType(srcChainKey) || isBitcoinChainKeyType(srcChainKey) ? txResult.data : undefined,
-        srcChainKey,
-        this.relayerApiEndpoint,
+      const packet = await relayTxAndWaitPacket({
+        srcTxHash: txResult.value.tx,
+        data: txResult.value.relayData,
+        chainKey: srcChainKey,
+        relayerApiEndpoint: this.relayerApiEndpoint,
         timeout,
-      );
+      });
 
       if (!packet.ok) return packet;
 
-      return { ok: true, value: [txResult.value, packet.value.dst_tx_hash] };
+      return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packet.value.dst_tx_hash } };
     } catch (error) {
       return { ok: false, error };
     }
@@ -794,7 +806,7 @@ export class MoneyMarketService {
 
   public async createRepayIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: MoneyMarketRepayActionParams<K, Raw>,
-  ): Promise<Result<TxReturnType<K, Raw>> & RelayOptionalExtraData> {
+  ): Promise<Result<IntentTxResult<K, Raw>>> {
     const { params, walletProvider } = _params;
     const srcChainKey = params.srcChainKey;
     const skipSimulation = _params.skipSimulation ?? false;
@@ -849,8 +861,10 @@ export class MoneyMarketService {
 
       return {
         ok: true,
-        value: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
-        data: { address: fromHubWallet, payload: data },
+        value: {
+          tx: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
+          relayData: { address: fromHubWallet, payload: data },
+        },
       };
     } catch (error) {
       return { ok: false, error };

@@ -27,7 +27,7 @@ const result = await sodax.staking.isAllowanceValid({
     account: '0x1234567890abcdef...',
     action: 'stake'
   },
-  spokeProvider: baseSpokeProvider
+  walletProvider: baseSpokeProvider
 });
 
 if (result.ok && result.value) {
@@ -61,7 +61,7 @@ const result = await sodax.staking.approve({
     account: '0x1234567890abcdef...',
     action: 'stake'
   },
-  spokeProvider: baseSpokeProvider,
+  walletProvider: baseSpokeProvider,
   raw: false
 });
 
@@ -103,8 +103,8 @@ const result = await sodax.staking.stake(
 );
 
 if (result.ok) {
-  const [spokeTxHash, hubTxHash] = result.value;
-  console.log('Stake successful:', { spokeTxHash, hubTxHash });
+  const { srcChainTxHash, dstChainTxHash } = result.value;
+  console.log('Stake successful:', { srcChainTxHash, dstChainTxHash });
 } else {
   console.error('Stake failed:', result.error);
 }
@@ -130,7 +130,7 @@ const result = await sodax.staking.createStakeIntent({
     account: '0x1234567890abcdef...',
     action: 'stake'
   },
-  spokeProvider: baseSpokeProvider,
+  walletProvider: baseSpokeProvider,
   raw: false
 });
 
@@ -172,8 +172,8 @@ const result = await sodax.staking.unstake(
 );
 
 if (result.ok) {
-  const [spokeTxHash, hubTxHash] = result.value;
-  console.log('Unstake successful:', { spokeTxHash, hubTxHash });
+  const { srcChainTxHash, dstChainTxHash } = result.value;
+  console.log('Unstake successful:', { srcChainTxHash, dstChainTxHash });
 } else {
   console.error('Unstake failed:', result.error);
 }
@@ -198,7 +198,7 @@ const result = await sodax.staking.createUnstakeIntent({
     account: '0x1234567890abcdef...',
     action: 'unstake'
   },
-  spokeProvider: baseSpokeProvider,
+  walletProvider: baseSpokeProvider,
   raw: false
 });
 
@@ -241,8 +241,8 @@ const result = await sodax.staking.instantUnstake(
 );
 
 if (result.ok) {
-  const [spokeTxHash, hubTxHash] = result.value;
-  console.log('Instant unstake successful:', { spokeTxHash, hubTxHash });
+  const { srcChainTxHash, dstChainTxHash } = result.value;
+  console.log('Instant unstake successful:', { srcChainTxHash, dstChainTxHash });
 } else {
   console.error('Instant unstake failed:', result.error);
 }
@@ -268,7 +268,7 @@ const result = await sodax.staking.createInstantUnstakeIntent({
     account: '0x1234567890abcdef...',
     action: 'instantUnstake'
   },
-  spokeProvider: baseSpokeProvider,
+  walletProvider: baseSpokeProvider,
   raw: false
 });
 
@@ -308,8 +308,8 @@ const result = await sodax.staking.claim(
 );
 
 if (result.ok) {
-  const [spokeTxHash, hubTxHash] = result.value;
-  console.log('Claim successful:', { spokeTxHash, hubTxHash });
+  const { srcChainTxHash, dstChainTxHash } = result.value;
+  console.log('Claim successful:', { srcChainTxHash, dstChainTxHash });
 } else {
   console.error('Claim failed:', result.error);
 }
@@ -334,7 +334,7 @@ const result = await sodax.staking.createClaimIntent({
     amount: 950000000000000000n,
     action: 'claim'
   },
-  spokeProvider: baseSpokeProvider,
+  walletProvider: baseSpokeProvider,
   raw: false
 });
 
@@ -373,8 +373,8 @@ const result = await sodax.staking.cancelUnstake(
 );
 
 if (result.ok) {
-  const [spokeTxHash, hubTxHash] = result.value;
-  console.log('Cancel unstake successful:', { spokeTxHash, hubTxHash });
+  const { srcChainTxHash, dstChainTxHash } = result.value;
+  console.log('Cancel unstake successful:', { srcChainTxHash, dstChainTxHash });
 } else {
   console.error('Cancel unstake failed:', result.error);
 }
@@ -398,7 +398,7 @@ const result = await sodax.staking.createCancelUnstakeIntent({
     requestId: 1n,
     action: 'cancelUnstake'
   },
-  spokeProvider: baseSpokeProvider,
+  walletProvider: baseSpokeProvider,
   raw: false
 });
 

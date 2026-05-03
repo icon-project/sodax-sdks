@@ -1,4 +1,15 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import type { ReadHookParams } from '../shared/types.js';
+
+export type UseBitcoinBalanceParams = ReadHookParams<
+  bigint,
+  {
+    address: string | undefined;
+    rpcUrl?: string;
+  }
+>;
+
+const DEFAULT_RPC_URL = 'https://mempool.space/api';
 
 /**
  * Hook to fetch BTC balance for any Bitcoin address.
@@ -7,10 +18,13 @@ import { useQuery, type UseQueryResult } from '@tanstack/react-query';
  * The UTXO set already excludes spent outputs (even from unconfirmed txs),
  * so the total is always the correct spendable balance.
  */
-export function useBitcoinBalance(
-  address: string | undefined,
-  rpcUrl = 'https://mempool.space/api',
-): UseQueryResult<bigint, Error> {
+export function useBitcoinBalance({
+  params,
+  queryOptions,
+}: UseBitcoinBalanceParams = {}): UseQueryResult<bigint, Error> {
+  const address = params?.address;
+  const rpcUrl = params?.rpcUrl ?? DEFAULT_RPC_URL;
+
   return useQuery<bigint, Error>({
     queryKey: ['btc-balance', address],
     queryFn: async () => {
@@ -23,5 +37,6 @@ export function useBitcoinBalance(
       return BigInt(utxos.reduce((sum, utxo) => sum + utxo.value, 0));
     },
     enabled: !!address,
+    ...queryOptions,
   });
 }

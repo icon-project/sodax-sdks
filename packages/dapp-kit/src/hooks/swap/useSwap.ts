@@ -1,9 +1,9 @@
 import { useSodaxContext } from '../shared/useSodaxContext.js';
-import type { SolverExecutionResponse, Intent, IntentDeliveryInfo, SwapActionParams } from '@sodax/sdk';
+import type { SwapActionParams, SwapResponse } from '@sodax/sdk';
 import type { Result, SpokeChainKey } from '@sodax/sdk';
 import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
 
-type CreateIntentResult = Result<[SolverExecutionResponse, Intent, IntentDeliveryInfo]>;
+type SwapResult = Result<SwapResponse>;
 
 /**
  * Mutation variables for {@link useSwap}. Generic over `K extends SpokeChainKey` (defaults to the
@@ -18,16 +18,16 @@ export type UseSwapVars<K extends SpokeChainKey = SpokeChainKey> = Omit<SwapActi
  * SDK `Result<T>` as-is; callers branch on `data?.ok`.
  */
 export function useSwap<K extends SpokeChainKey = SpokeChainKey>(): UseMutationResult<
-  CreateIntentResult,
+  SwapResult,
   Error,
   UseSwapVars<K>
 > {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
 
-  return useMutation<CreateIntentResult, Error, UseSwapVars<K>>({
+  return useMutation<SwapResult, Error, UseSwapVars<K>>({
     mutationFn: async (vars) => {
-      return sodax.swaps.swap({ ...vars, raw: false });
+      return sodax.swaps.swap({ ...vars});
     },
     onSuccess: (_data, { params }) => {
       queryClient.invalidateQueries({ queryKey: ['xBalances', params.srcChainKey] });

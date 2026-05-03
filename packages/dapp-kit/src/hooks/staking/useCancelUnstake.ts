@@ -1,11 +1,11 @@
-import type { CancelUnstakeAction, HubTxHash, SpokeTxHash } from '@sodax/sdk';
+import type { CancelUnstakeAction, TxHashPair } from '@sodax/sdk';
 import type { Result, SpokeChainKey } from '@sodax/sdk';
 import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 
 export type UseCancelUnstakeVars<K extends SpokeChainKey = SpokeChainKey> = Omit<CancelUnstakeAction<K, false>, 'raw'>;
 
-type CancelUnstakeResult = Result<[SpokeTxHash, HubTxHash]>;
+type CancelUnstakeResult = Result<TxHashPair>;
 
 /**
  * React hook for cancelling a pending unstake request. Pure mutation: all inputs (params,

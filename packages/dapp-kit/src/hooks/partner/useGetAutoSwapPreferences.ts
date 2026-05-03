@@ -1,21 +1,25 @@
 import type { AutoSwapPreferences } from '@sodax/sdk';
-import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { ReadHookParams } from '../shared/types.js';
 
-export type UseGetAutoSwapPreferencesProps = {
-  queryAddress: string | undefined;
-  queryOptions?: Omit<UseQueryOptions<AutoSwapPreferences, Error>, 'queryKey' | 'queryFn' | 'enabled'>;
-};
+export type UseGetAutoSwapPreferencesParams = ReadHookParams<
+  AutoSwapPreferences,
+  {
+    queryAddress: string | undefined;
+  }
+>;
 
 /**
  * React hook to fetch the auto-swap preferences (output token, destination chain, destination
  * address) for a given EVM address. Disabled when `queryAddress` is missing. Throws on `!ok`.
  */
 export function useGetAutoSwapPreferences({
-  queryAddress,
+  params,
   queryOptions,
-}: UseGetAutoSwapPreferencesProps): UseQueryResult<AutoSwapPreferences, Error> {
+}: UseGetAutoSwapPreferencesParams = {}): UseQueryResult<AutoSwapPreferences, Error> {
   const { sodax } = useSodaxContext();
+  const queryAddress = params?.queryAddress;
 
   return useQuery<AutoSwapPreferences, Error>({
     queryKey: ['partner', 'feeClaim', 'autoSwapPreferences', queryAddress],

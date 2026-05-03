@@ -65,7 +65,7 @@ export function SupplyModal({ open, onOpenChange, token, onSuccess, maxSupply, i
     };
   }, [token.address, token.decimals, amount, address, selectedChainId]);
 
-  const { data: hasAllowed, isLoading: isAllowanceLoading } = useMMAllowance({ params });
+  const { data: hasAllowed, isLoading: isAllowanceLoading } = useMMAllowance({ params: { payload: params } });
   const {
     mutateAsync: approve,
     isPending: isApproving,

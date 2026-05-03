@@ -52,11 +52,13 @@ export function BridgeManager() {
       ? toBtcService.getXConnectorById(toBtcConnection.xConnectorId)
       : undefined;
 
-  const { data: bridgeableTokens, isLoading: isLoadingBridgeableTokens } = useGetBridgeableTokens(
-    fromToken?.chainKey,
-    toChainKey,
-    fromToken?.address,
-  );
+  const { data: bridgeableTokens, isLoading: isLoadingBridgeableTokens } = useGetBridgeableTokens({
+    params: {
+      from: fromToken?.chainKey,
+      to: toChainKey,
+      token: fromToken?.address,
+    },
+  });
 
   useEffect(() => {
     if (bridgeableTokens && bridgeableTokens.length > 0) {
@@ -73,7 +75,9 @@ export function BridgeManager() {
     setFromToken(tokens[0]);
   }, [fromChainKey, supportedTokensPerChain]);
 
-  const { data: bridgeableAmount, isLoading: isLoadingBridgeableAmount } = useGetBridgeableAmount(fromToken, toToken);
+  const { data: bridgeableAmount, isLoading: isLoadingBridgeableAmount } = useGetBridgeableAmount({
+    params: { from: fromToken, to: toToken },
+  });
 
   const isBridgeable = useMemo(() => {
     if (!fromToken || !toToken) return false;

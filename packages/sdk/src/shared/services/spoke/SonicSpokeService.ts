@@ -337,7 +337,7 @@ export class SonicSpokeService {
       dstChain: getIntentRelayChainId(createIntentParams.dstChainKey),
       srcAddress: encodeAddress(createIntentParams.srcChainKey, createIntentParams.srcAddress),
       dstAddress: encodeAddress(createIntentParams.dstChainKey, createIntentParams.dstAddress),
-      solver: createIntentParams.solver,
+      solver: createIntentParams.solver ?? '0x0000000000000000000000000000000000000000',
       data: feeData, // fee amount will be deducted from the input amount
     } satisfies Intent;
 

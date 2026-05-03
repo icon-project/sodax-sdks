@@ -1,14 +1,9 @@
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import { useMutation, type UseMutationResult } from '@tanstack/react-query';
-import type {
-  CreateLimitOrderParams,
-  SolverExecutionResponse,
-  Intent,
-  IntentDeliveryInfo,
-} from '@sodax/sdk';
+import type { CreateLimitOrderParams, SwapResponse } from '@sodax/sdk';
 import type { GetWalletProviderType, Result, SpokeChainKey } from '@sodax/sdk';
 
-type CreateLimitOrderResult = Result<[SolverExecutionResponse, Intent, IntentDeliveryInfo]>;
+type CreateLimitOrderResult = Result<SwapResponse>;
 
 export function useCreateLimitOrder<K extends SpokeChainKey>(
   srcChainKey: K | undefined,

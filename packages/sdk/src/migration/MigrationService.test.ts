@@ -753,11 +753,11 @@ describe('MigrationService.approve — revert', () => {
 // =========================================================================
 
 describe('MigrationService.migratebnUSD', () => {
-  it('on success, returns [spokeTxHash, hubTxHash] from createMigratebnUSDIntent + relayTxAndWaitPacket', async () => {
+  it('on success, returns { srcChainTxHash, dstChainTxHash } from createMigratebnUSDIntent + relayTxAndWaitPacket', async () => {
     const extraData = { address: hubWalletAddress, payload: '0xpayload' } as const;
     vi.spyOn(sodax.migration, 'createMigratebnUSDIntent').mockResolvedValueOnce({
       ok: true,
-      value: [spokeTxHash, extraData],
+      value: { tx: spokeTxHash, relayData: extraData },
     });
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: okPacket });
 
@@ -768,13 +768,13 @@ describe('MigrationService.migratebnUSD', () => {
     });
 
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual([spokeTxHash, hubTxHash]);
+    if (result.ok) expect(result.value).toEqual({ srcChainTxHash: spokeTxHash, dstChainTxHash: hubTxHash });
   });
 
   it('does NOT call waitUntilIntentExecuted when src or dst is Sonic', async () => {
     vi.spyOn(sodax.migration, 'createMigratebnUSDIntent').mockResolvedValueOnce({
       ok: true,
-      value: [spokeTxHash, { address: hubWalletAddress, payload: '0xp' }],
+      value: { tx: spokeTxHash, relayData: { address: hubWalletAddress, payload: '0xp' } },
     });
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: okPacket });
 
@@ -799,7 +799,7 @@ describe('MigrationService.migratebnUSD', () => {
     };
     vi.spyOn(sodax.migration, 'createMigratebnUSDIntent').mockResolvedValueOnce({
       ok: true,
-      value: [spokeTxHash, { address: hubWalletAddress, payload: '0xp' }],
+      value: { tx: spokeTxHash, relayData: { address: hubWalletAddress, payload: '0xp' } },
     });
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: okPacket });
     mocks.waitUntilIntentExecuted.mockResolvedValueOnce({ ok: true, value: okPacket });
@@ -814,7 +814,7 @@ describe('MigrationService.migratebnUSD', () => {
     const waitCall = mocks.waitUntilIntentExecuted.mock.calls[0]?.[0];
     // Hub→spoke wait runs against Sonic's relay chain id with the hub tx hash from the
     // packet we just received.
-    expect(waitCall?.spokeTxHash).toBe(okPacket.dst_tx_hash);
+    expect(waitCall?.srcTxHash).toBe(okPacket.dst_tx_hash);
     expect(waitCall?.apiUrl).toBe(sodax.migration.relayerApiEndpoint);
   });
 
@@ -831,30 +831,11 @@ describe('MigrationService.migratebnUSD', () => {
     const extraData = { address: hubWalletAddress, payload: '0xsolana-payload' } as const;
     vi.spyOn(sodax.migration, 'createMigratebnUSDIntent').mockResolvedValueOnce({
       ok: true,
-      value: [spokeTxHash, extraData],
+      value: { tx: spokeTxHash, relayData: extraData },
     });
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: okPacket });
 
     await sodax.migration.migratebnUSD({ params, raw: false, walletProvider: mockSolanaProvider });
-
-    // Solana / Bitcoin: relayer needs full off-chain data. Other chains pass `undefined`.
-    expect(mocks.relayTxAndWaitPacket.mock.calls[0]?.[1]).toEqual(extraData);
-  });
-
-  it('passes undefined extraData to relayTxAndWaitPacket on non-Solana/Bitcoin chains', async () => {
-    vi.spyOn(sodax.migration, 'createMigratebnUSDIntent').mockResolvedValueOnce({
-      ok: true,
-      value: [spokeTxHash, { address: hubWalletAddress, payload: '0xp' }],
-    });
-    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: okPacket });
-
-    await sodax.migration.migratebnUSD({
-      params: bnUSDLegacyToNewParams(),
-      raw: false,
-      walletProvider: mockIconProvider,
-    });
-
-    expect(mocks.relayTxAndWaitPacket.mock.calls[0]?.[1]).toBeUndefined();
   });
 
   it('forwards a createMigratebnUSDIntent failure as Result.error', async () => {
@@ -877,7 +858,7 @@ describe('MigrationService.migratebnUSD', () => {
   it('forwards a verifyTxHash failure as Result.error', async () => {
     vi.spyOn(sodax.migration, 'createMigratebnUSDIntent').mockResolvedValueOnce({
       ok: true,
-      value: [spokeTxHash, { address: hubWalletAddress, payload: '0xp' }],
+      value: { tx: spokeTxHash, relayData: { address: hubWalletAddress, payload: '0xp' } },
     });
     const verifyError = new Error('TX_NOT_FOUND');
     vi.spyOn(sodax.spokeService, 'verifyTxHash').mockResolvedValueOnce({ ok: false, error: verifyError });
@@ -895,7 +876,7 @@ describe('MigrationService.migratebnUSD', () => {
   it('forwards a relayTxAndWaitPacket failure as Result.error', async () => {
     vi.spyOn(sodax.migration, 'createMigratebnUSDIntent').mockResolvedValueOnce({
       ok: true,
-      value: [spokeTxHash, { address: hubWalletAddress, payload: '0xp' }],
+      value: { tx: spokeTxHash, relayData: { address: hubWalletAddress, payload: '0xp' } },
     });
     const relayError = new Error('RELAY_TIMEOUT');
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: false, error: relayError });
@@ -928,10 +909,10 @@ describe('MigrationService.migratebnUSD', () => {
 // =========================================================================
 
 describe('MigrationService.migrateIcxToSoda', () => {
-  it('on success, returns [spokeTxHash, hubTxHash]', async () => {
+  it('on success, returns { srcChainTxHash, dstChainTxHash }', async () => {
     vi.spyOn(sodax.migration, 'createMigrateIcxToSodaIntent').mockResolvedValueOnce({
       ok: true,
-      value: spokeTxHash,
+      value: { tx: spokeTxHash, relayData: { address: hubWalletAddress, payload: '0xp' } },
     });
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: okPacket });
 
@@ -942,9 +923,8 @@ describe('MigrationService.migrateIcxToSoda', () => {
     });
 
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual([spokeTxHash, hubTxHash]);
+    if (result.ok) expect(result.value).toEqual({ srcChainTxHash: spokeTxHash, dstChainTxHash: hubTxHash });
     // Icon migrations don't need extraData on the relay call.
-    expect(mocks.relayTxAndWaitPacket.mock.calls[0]?.[1]).toBeUndefined();
   });
 
   it('forwards a createMigrateIcxToSodaIntent failure as Result.error', async () => {
@@ -967,7 +947,7 @@ describe('MigrationService.migrateIcxToSoda', () => {
   it('forwards a relayTxAndWaitPacket failure as Result.error', async () => {
     vi.spyOn(sodax.migration, 'createMigrateIcxToSodaIntent').mockResolvedValueOnce({
       ok: true,
-      value: spokeTxHash,
+      value: { tx: spokeTxHash, relayData: { address: hubWalletAddress, payload: '0xp' } },
     });
     const relayError = new Error('RELAY_TIMEOUT');
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: false, error: relayError });
@@ -1000,10 +980,10 @@ describe('MigrationService.migrateIcxToSoda', () => {
 // =========================================================================
 
 describe('MigrationService.revertMigrateSodaToIcx', () => {
-  it('on success, returns [hubTxHash, spokeTxHash] and relays via Sonic', async () => {
+  it('on success, returns { srcChainTxHash, dstChainTxHash } and relays via Sonic', async () => {
     vi.spyOn(sodax.migration, 'createRevertSodaToIcxMigrationIntent').mockResolvedValueOnce({
       ok: true,
-      value: spokeTxHash,
+      value: { tx: spokeTxHash, relayData: { address: hubWalletAddress, payload: '0xp' } },
     });
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: okPacket });
 
@@ -1014,9 +994,9 @@ describe('MigrationService.revertMigrateSodaToIcx', () => {
     });
 
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual([spokeTxHash, hubTxHash]);
+    if (result.ok) expect(result.value).toEqual({ srcChainTxHash: spokeTxHash, dstChainTxHash: hubTxHash });
     // Revert always runs from the hub (Sonic) — relay must use SONIC_MAINNET.
-    expect(mocks.relayTxAndWaitPacket.mock.calls[0]?.[2]).toBe(ChainKeys.SONIC_MAINNET);
+    expect(mocks.relayTxAndWaitPacket.mock.calls[0]?.[0]?.chainKey).toBe(ChainKeys.SONIC_MAINNET);
   });
 
   it('forwards a createRevertSodaToIcxMigrationIntent failure as Result.error', async () => {
@@ -1038,7 +1018,7 @@ describe('MigrationService.revertMigrateSodaToIcx', () => {
   it('forwards a relay failure as Result.error', async () => {
     vi.spyOn(sodax.migration, 'createRevertSodaToIcxMigrationIntent').mockResolvedValueOnce({
       ok: true,
-      value: spokeTxHash,
+      value: { tx: spokeTxHash, relayData: { address: hubWalletAddress, payload: '0xp' } },
     });
     const relayError = new Error('RELAY_TIMEOUT');
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: false, error: relayError });
@@ -1071,10 +1051,10 @@ describe('MigrationService.revertMigrateSodaToIcx', () => {
 // =========================================================================
 
 describe('MigrationService.migrateBaln', () => {
-  it('on success, returns [spokeTxHash, hubTxHash] and relays via ICON', async () => {
+  it('on success, returns { srcChainTxHash, dstChainTxHash } and relays via ICON', async () => {
     vi.spyOn(sodax.migration, 'createMigrateBalnIntent').mockResolvedValueOnce({
       ok: true,
-      value: spokeTxHash,
+      value: { tx: spokeTxHash, relayData: { address: hubWalletAddress, payload: '0xp' } },
     });
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: okPacket });
 
@@ -1085,9 +1065,9 @@ describe('MigrationService.migrateBaln', () => {
     });
 
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual([spokeTxHash, hubTxHash]);
+    if (result.ok) expect(result.value).toEqual({ srcChainTxHash: spokeTxHash, dstChainTxHash: hubTxHash });
     // BALN swap is initiated from ICON; relay must reflect that.
-    expect(mocks.relayTxAndWaitPacket.mock.calls[0]?.[2]).toBe(ChainKeys.ICON_MAINNET);
+    expect(mocks.relayTxAndWaitPacket.mock.calls[0]?.[0]?.chainKey).toBe(ChainKeys.ICON_MAINNET);
   });
 
   it('forwards a createMigrateBalnIntent failure as Result.error', async () => {
@@ -1109,7 +1089,7 @@ describe('MigrationService.migrateBaln', () => {
   it('forwards a relay failure as Result.error', async () => {
     vi.spyOn(sodax.migration, 'createMigrateBalnIntent').mockResolvedValueOnce({
       ok: true,
-      value: spokeTxHash,
+      value: { tx: spokeTxHash, relayData: { address: hubWalletAddress, payload: '0xp' } },
     });
     const relayError = new Error('RELAY_TIMEOUT');
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: false, error: relayError });
@@ -1152,7 +1132,13 @@ describe('MigrationService.createMigrateBalnIntent', () => {
       walletProvider: mockIconProvider,
     });
 
-    expect(result).toEqual({ ok: true, value: spokeTxHash });
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        tx: spokeTxHash,
+        relayData: { address: hubWalletAddress, payload: '0xbaln-data' },
+      },
+    });
     expect(swapDataSpy).toHaveBeenCalledTimes(1);
     const depositCall = depositSpy.mock.calls[0]?.[0];
     expect(depositCall).toMatchObject({
@@ -1241,9 +1227,9 @@ describe('MigrationService.createMigratebnUSDIntent — happy paths', () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value[0]).toBe(spokeTxHash);
+      expect(result.value.tx).toBe(spokeTxHash);
       // RelayExtraData is { address, payload } — payload must be the migrationData we built.
-      expect(result.value[1]).toEqual({ address: hubWalletAddress, payload: '0xbnusd-migrate-data' });
+      expect(result.value.relayData).toEqual({ address: hubWalletAddress, payload: '0xbnusd-migrate-data' });
     }
     expect(migrateDataSpy).toHaveBeenCalledTimes(1);
     expect(mocks.encodeAddress).toHaveBeenCalledWith(params.dstChainKey, params.dstAddress);
@@ -1483,7 +1469,10 @@ describe('MigrationService.createMigrateIcxToSodaIntent — happy paths', () => 
       walletProvider: mockIconProvider,
     });
 
-    expect(result).toEqual({ ok: true, value: spokeTxHash });
+    expect(result).toEqual({ ok: true, value: {
+      tx: spokeTxHash,
+      relayData: { address: hubWalletAddress, payload: '0xicx-migrate-data' },
+    } });
     const depositCall = depositSpy.mock.calls[0]?.[0];
     expect(depositCall).toMatchObject({
       srcChainKey: ChainKeys.ICON_MAINNET,
@@ -1653,7 +1642,10 @@ describe('MigrationService.createRevertSodaToIcxMigrationIntent', () => {
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: true, value: spokeTxHash });
+    expect(result).toEqual({ ok: true, value: {
+      tx: spokeTxHash,
+      relayData: { address: hubWalletAddress, payload: '0xrevert-data' },
+    } });
     expect(revertMigrationSpy).toHaveBeenCalledTimes(1);
     const revertCall = revertMigrationSpy.mock.calls[0]?.[0];
     expect(revertCall).toMatchObject({

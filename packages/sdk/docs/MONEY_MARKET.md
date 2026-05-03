@@ -234,8 +234,8 @@ if (!allowanceCheck.value) {
 const supplyResult = await sodax.moneyMarket.supply(supplyParams, spokeProvider);
 
 if (supplyResult.ok) {
-  const [spokeTxHash, hubTxHash] = supplyResult.value;
-  console.log('Supply successful:', { spokeTxHash, hubTxHash });
+  const { srcChainTxHash, dstChainTxHash } = supplyResult.value;
+  console.log('Supply successful:', { srcChainTxHash, dstChainTxHash });
 } else {
   console.error('Supply failed:', supplyResult.error);
 }
@@ -403,8 +403,8 @@ const supplyAndSubmitResult = await sodax.moneyMarket.supply(
 );
 
 if (supplyAndSubmitResult.ok) {
-  const [spokeTxHash, hubTxHash] = supplyAndSubmitResult.value;
-  console.log('Supply successful:', { spokeTxHash, hubTxHash });
+  const { srcChainTxHash, dstChainTxHash } = supplyAndSubmitResult.value;
+  console.log('Supply successful:', { srcChainTxHash, dstChainTxHash });
 } else {
   // Handle error
   console.error('Supply failed:', supplyAndSubmitResult.error);
@@ -451,8 +451,8 @@ const borrowAndSubmitResult = await sodax.moneyMarket.borrow(
 );
 
 if (borrowAndSubmitResult.ok) {
-  const [spokeTxHash, hubTxHash] = borrowAndSubmitResult.value;
-  console.log('Borrow successful:', { spokeTxHash, hubTxHash });
+  const { srcChainTxHash, dstChainTxHash } = borrowAndSubmitResult.value;
+  console.log('Borrow successful:', { srcChainTxHash, dstChainTxHash });
 } else {
   // Handle error
   console.error('Borrow failed:', borrowAndSubmitResult.error);
@@ -499,8 +499,8 @@ const withdrawAndSubmitResult = await sodax.moneyMarket.withdraw(
 );
 
 if (withdrawAndSubmitResult.ok) {
-  const [spokeTxHash, hubTxHash] = withdrawAndSubmitResult.value;
-  console.log('Withdraw successful:', { spokeTxHash, hubTxHash });
+  const { srcChainTxHash, dstChainTxHash } = withdrawAndSubmitResult.value;
+  console.log('Withdraw successful:', { srcChainTxHash, dstChainTxHash });
 } else {
   // Handle error
   console.error('Withdraw failed:', withdrawAndSubmitResult.error);
@@ -575,8 +575,8 @@ const repayAndSubmitResult = await sodax.moneyMarket.repay(
 );
 
 if (repayAndSubmitResult.ok) {
-  const [spokeTxHash, hubTxHash] = repayAndSubmitResult.value;
-  console.log('Repay successful:', { spokeTxHash, hubTxHash });
+  const { srcChainTxHash, dstChainTxHash } = repayAndSubmitResult.value;
+  console.log('Repay successful:', { srcChainTxHash, dstChainTxHash });
 } else {
   // Handle error
   console.error('Repay failed:', repayAndSubmitResult.error);

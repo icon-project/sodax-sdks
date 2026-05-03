@@ -3,7 +3,7 @@ import invariant from 'tiny-invariant';
 import { erc20Abi, type Address, type Hex } from 'viem';
 import { StakingLogic } from './StakingLogic.js';
 import { stakedSodaAbi } from '../shared/abis/index.js';
-import type { RelayOptionalExtraData } from '../shared/types/types.js';
+import type { IntentTxResult, TxHashPair } from '../shared/types/types.js';
 import {
   encodeContractCalls,
   EvmVaultTokenService,
@@ -15,8 +15,6 @@ import {
   type ConfigService,
   isHubChainKeyType,
   isStellarChainKeyType,
-  isSolanaChainKeyType,
-  isBitcoinChainKeyType,
   Erc20Service,
   isEvmSpokeOnlyChainKeyType,
   isOptionalEvmWalletProviderType,
@@ -281,13 +279,11 @@ export class StakingService {
             spender: spender,
           } as const;
 
-          const result = await this.spoke.approve<HubChainKey | EvmSpokeOnlyChainKey, Raw>(
-            {
-              ...coreParams,
-              raw: _params.raw,
-              walletProvider: _params.walletProvider,
-            } as SpokeApproveParams<HubChainKey | EvmSpokeOnlyChainKey, Raw>,
-          );
+          const result = await this.spoke.approve<HubChainKey | EvmSpokeOnlyChainKey, Raw>({
+            ...coreParams,
+            raw: _params.raw,
+            walletProvider: _params.walletProvider,
+          } as SpokeApproveParams<HubChainKey | EvmSpokeOnlyChainKey, Raw>);
 
           if (!result.ok) return result;
 
@@ -329,7 +325,9 @@ export class StakingService {
 
       return {
         ok: false,
-        error: new Error('Approval only supported for EVM spoke chains and [stake, unstake, instantUnstake] operations'),
+        error: new Error(
+          'Approval only supported for EVM spoke chains and [stake, unstake, instantUnstake] operations',
+        ),
       };
     } catch (error) {
       console.error(error);
@@ -348,9 +346,7 @@ export class StakingService {
    * @param timeout - The timeout in milliseconds for the transaction (default: DEFAULT_RELAY_TX_TIMEOUT)
    * @returns Promise<Result<[SpokeTxHash, HubTxHash] | RelayError>>
    */
-  public async stake<K extends SpokeChainKey>(
-    _params: StakeAction<K, false>,
-  ): Promise<Result<[string, string]>> {
+  public async stake<K extends SpokeChainKey>(_params: StakeAction<K, false>): Promise<Result<TxHashPair>> {
     const { params, timeout } = _params;
 
     try {
@@ -360,31 +356,29 @@ export class StakingService {
 
       // verify the spoke tx hash exists on chain
       const verifyTxHashResult = await this.spoke.verifyTxHash({
-        txHash: txResult.value,
+        txHash: txResult.value.tx,
         chainKey: params.srcChainKey,
       });
 
       if (!verifyTxHashResult.ok) return verifyTxHashResult;
 
-      let hubTxHash: string | null = null;
+      let hubTxHash: string;
       if (!isHubChainKeyType(params.srcChainKey)) {
-        const packetResult = await relayTxAndWaitPacket(
-          txResult.value,
-          isSolanaChainKeyType(params.srcChainKey) || isBitcoinChainKeyType(params.srcChainKey)
-            ? txResult.data
-            : undefined,
-          params.srcChainKey,
-          this.relayerApiEndpoint,
+        const packetResult = await relayTxAndWaitPacket({
+          srcTxHash: txResult.value.tx,
+          data: txResult.value.relayData,
+          chainKey: params.srcChainKey,
+          relayerApiEndpoint: this.relayerApiEndpoint,
           timeout,
-        );
+        });
 
         if (!packetResult.ok) return packetResult;
         hubTxHash = packetResult.value.dst_tx_hash;
       } else {
-        hubTxHash = txResult.value;
+        hubTxHash = txResult.value.tx;
       }
 
-      return { ok: true, value: [txResult.value, hubTxHash] };
+      return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
     } catch (error) {
       return {
         ok: false,
@@ -409,7 +403,7 @@ export class StakingService {
    */
   async createStakeIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: StakeAction<K, Raw>,
-  ): Promise<Result<TxReturnType<K, Raw>> & RelayOptionalExtraData> {
+  ): Promise<Result<IntentTxResult<K, Raw>>> {
     const { params, skipSimulation } = _params;
     try {
       const sodaToken = this.config.sodaxConfig.chains[params.srcChainKey].supportedTokens.SODA as XToken;
@@ -444,14 +438,16 @@ export class StakingService {
             },
       );
 
-      if (!txResult.ok) { console.error(txResult.error); return txResult; }
+      if (!txResult.ok) {
+        console.error(txResult.error);
+        return txResult;
+      }
 
       return {
         ok: true,
-        value: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
-        data: {
-          address: hubWallet,
-          payload: data,
+        value: {
+          tx: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
+          relayData: { address: hubWallet, payload: data },
         },
       };
     } catch (error) {
@@ -491,33 +487,29 @@ export class StakingService {
    * @param timeout - The timeout in milliseconds for the transaction (default: DEFAULT_RELAY_TX_TIMEOUT)
    * @returns Promise<Result<[SpokeTxHash, HubTxHash] | RelayError>>
    */
-  public async unstake<K extends SpokeChainKey>(
-    _params: UnstakeAction<K, false>,
-  ): Promise<Result<[string, string]>> {
+  public async unstake<K extends SpokeChainKey>(_params: UnstakeAction<K, false>): Promise<Result<TxHashPair>> {
     const { params, timeout } = _params;
     try {
       const txResult = await this.createUnstakeIntent(_params);
 
       if (!txResult.ok) return txResult;
 
-      let hubTxHash: string | null = null;
+      let hubTxHash: string;
       if (!isHubChainKeyType(params.srcChainKey)) {
-        const packetResult = await relayTxAndWaitPacket(
-          txResult.value,
-          isSolanaChainKeyType(params.srcChainKey) || isBitcoinChainKeyType(params.srcChainKey)
-            ? txResult.data
-            : undefined,
-          params.srcChainKey,
-          this.relayerApiEndpoint,
+        const packetResult = await relayTxAndWaitPacket({
+          srcTxHash: txResult.value.tx,
+          data: txResult.value.relayData,
+          chainKey: params.srcChainKey,
+          relayerApiEndpoint: this.relayerApiEndpoint,
           timeout,
-        );
+        });
         if (!packetResult.ok) return packetResult;
         hubTxHash = packetResult.value.dst_tx_hash;
       } else {
-        hubTxHash = txResult.value;
+        hubTxHash = txResult.value.tx;
       }
 
-      return { ok: true, value: [txResult.value, hubTxHash ?? ''] };
+      return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
     } catch (error) {
       return {
         ok: false,
@@ -542,7 +534,7 @@ export class StakingService {
    */
   async createUnstakeIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: UnstakeAction<K, Raw>,
-  ): Promise<Result<TxReturnType<K, Raw>> & RelayOptionalExtraData> {
+  ): Promise<Result<IntentTxResult<K, Raw>>> {
     const { params } = _params;
     try {
       const xSoda = this.hubProvider.chainConfig.addresses.xSoda;
@@ -573,14 +565,16 @@ export class StakingService {
             } satisfies SendMessageParams<K, false>),
       );
 
-      if (!txResult.ok) { console.error(txResult.error); return txResult; }
+      if (!txResult.ok) {
+        console.error(txResult.error);
+        return txResult;
+      }
 
       return {
         ok: true,
-        value: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
-        data: {
-          address: hubWallet,
-          payload: data,
+        value: {
+          tx: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
+          relayData: { address: hubWallet, payload: data },
         },
       };
     } catch (error) {
@@ -621,31 +615,29 @@ export class StakingService {
    */
   public async instantUnstake<K extends SpokeChainKey>(
     _params: InstantUnstakeAction<K, false>,
-  ): Promise<Result<[string, string]>> {
+  ): Promise<Result<TxHashPair>> {
     const { params, timeout } = _params;
     try {
       const txResult = await this.createInstantUnstakeIntent(_params);
 
       if (!txResult.ok) return txResult;
 
-      let hubTxHash: string | null = null;
+      let hubTxHash: string;
       if (!isHubChainKeyType(params.srcChainKey)) {
-        const packetResult = await relayTxAndWaitPacket(
-          txResult.value,
-          isSolanaChainKeyType(params.srcChainKey) || isBitcoinChainKeyType(params.srcChainKey)
-            ? txResult.data
-            : undefined,
-          params.srcChainKey,
-          this.relayerApiEndpoint,
+        const packetResult = await relayTxAndWaitPacket({
+          srcTxHash: txResult.value.tx,
+          data: txResult.value.relayData,
+          chainKey: params.srcChainKey,
+          relayerApiEndpoint: this.relayerApiEndpoint,
           timeout,
-        );
+        });
         if (!packetResult.ok) return packetResult;
         hubTxHash = packetResult.value.dst_tx_hash;
       } else {
-        hubTxHash = txResult.value;
+        hubTxHash = txResult.value.tx;
       }
 
-      return { ok: true, value: [txResult.value, hubTxHash] };
+      return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
     } catch (error) {
       return {
         ok: false,
@@ -668,7 +660,7 @@ export class StakingService {
    */
   async createInstantUnstakeIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: InstantUnstakeAction<K, Raw>,
-  ): Promise<Result<TxReturnType<K, Raw>> & RelayOptionalExtraData> {
+  ): Promise<Result<IntentTxResult<K, Raw>>> {
     const { params } = _params;
     try {
       const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
@@ -706,14 +698,16 @@ export class StakingService {
 
       const txResult = await this.spoke.sendMessage(sendMessageParams);
 
-      if (!txResult.ok) { console.error(txResult.error); return txResult; }
+      if (!txResult.ok) {
+        console.error(txResult.error);
+        return txResult;
+      }
 
       return {
         ok: true,
-        value: txResult.value satisfies TxReturnType<K, boolean> as TxReturnType<K, Raw>,
-        data: {
-          address: hubWallet,
-          payload: data,
+        value: {
+          tx: txResult.value satisfies TxReturnType<K, boolean> as TxReturnType<K, Raw>,
+          relayData: { address: hubWallet, payload: data },
         },
       };
     } catch (error) {
@@ -766,9 +760,7 @@ export class StakingService {
    * @param timeout - The timeout in milliseconds for the transaction (default: DEFAULT_RELAY_TX_TIMEOUT)
    * @returns Promise<Result<[SpokeTxHash, HubTxHash] | RelayError>>
    */
-  public async claim<K extends SpokeChainKey>(
-    _params: ClaimAction<K, false>,
-  ): Promise<Result<[string, string]>> {
+  public async claim<K extends SpokeChainKey>(_params: ClaimAction<K, false>): Promise<Result<TxHashPair>> {
     const { params, timeout } = _params;
     try {
       const txResult = await this.createClaimIntent(_params);
@@ -777,22 +769,20 @@ export class StakingService {
 
       let hubTxHash: string;
       if (!isHubChainKeyType(params.srcChainKey)) {
-        const packetResult = await relayTxAndWaitPacket(
-          txResult.value,
-          isSolanaChainKeyType(params.srcChainKey) || isBitcoinChainKeyType(params.srcChainKey)
-            ? txResult.data
-            : undefined,
-          params.srcChainKey,
-          this.relayerApiEndpoint,
+        const packetResult = await relayTxAndWaitPacket({
+          srcTxHash: txResult.value.tx,
+          data: txResult.value.relayData,
+          chainKey: params.srcChainKey,
+          relayerApiEndpoint: this.relayerApiEndpoint,
           timeout,
-        );
+        });
         if (!packetResult.ok) return packetResult;
         hubTxHash = packetResult.value.dst_tx_hash;
       } else {
-        hubTxHash = txResult.value;
+        hubTxHash = txResult.value.tx;
       }
 
-      return { ok: true, value: [txResult.value, hubTxHash] };
+      return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
     } catch (error) {
       return {
         ok: false,
@@ -815,7 +805,7 @@ export class StakingService {
    */
   async createClaimIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: ClaimAction<K, Raw>,
-  ): Promise<Result<TxReturnType<K, Raw>> & RelayOptionalExtraData> {
+  ): Promise<Result<IntentTxResult<K, Raw>>> {
     const { params } = _params;
     try {
       const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
@@ -853,14 +843,16 @@ export class StakingService {
 
       const txResult = await this.spoke.sendMessage(sendMessageParams);
 
-      if (!txResult.ok) { console.error(txResult.error); return txResult; }
+      if (!txResult.ok) {
+        console.error(txResult.error);
+        return txResult;
+      }
 
       return {
         ok: true,
-        value: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
-        data: {
-          address: hubWallet,
-          payload: data,
+        value: {
+          tx: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
+          relayData: { address: hubWallet, payload: data },
         },
       };
     } catch (error) {
@@ -920,31 +912,30 @@ export class StakingService {
    */
   public async cancelUnstake<K extends SpokeChainKey>(
     _params: CancelUnstakeAction<K, false>,
-  ): Promise<Result<[string, string]>> {
+  ): Promise<Result<TxHashPair>> {
     const { params, timeout } = _params;
     try {
       const txResult = await this.createCancelUnstakeIntent(_params);
 
       if (!txResult.ok) return txResult;
 
-      let hubTxHash: string | null = null;
+      let hubTxHash: string;
       if (!isHubChainKeyType(params.srcChainKey)) {
-        const packetResult = await relayTxAndWaitPacket(
-          txResult.value,
-          isSolanaChainKeyType(params.srcChainKey) || isBitcoinChainKeyType(params.srcChainKey)
-            ? txResult.data
-            : undefined,
-          params.srcChainKey,
-          this.relayerApiEndpoint,
+        const packetResult = await relayTxAndWaitPacket({
+          srcTxHash: txResult.value.tx,
+          data: txResult.value.relayData,
+          chainKey: params.srcChainKey,
+          relayerApiEndpoint: this.relayerApiEndpoint,
           timeout,
-        );
+        });
+
         if (!packetResult.ok) return packetResult;
         hubTxHash = packetResult.value.dst_tx_hash;
       } else {
-        hubTxHash = txResult.value;
+        hubTxHash = txResult.value.tx;
       }
 
-      return { ok: true, value: [txResult.value, hubTxHash] };
+      return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
     } catch (error) {
       return {
         ok: false,
@@ -967,7 +958,7 @@ export class StakingService {
    */
   async createCancelUnstakeIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: CancelUnstakeAction<K, Raw>,
-  ): Promise<Result<TxReturnType<K, Raw>> & RelayOptionalExtraData> {
+  ): Promise<Result<IntentTxResult<K, Raw>>> {
     const { params } = _params;
     try {
       const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
@@ -995,14 +986,16 @@ export class StakingService {
 
       const txResult = await this.spoke.sendMessage(sendMessageParams);
 
-      if (!txResult.ok) { console.error(txResult.error); return txResult; }
+      if (!txResult.ok) {
+        console.error(txResult.error);
+        return txResult;
+      }
 
       return {
         ok: true,
-        value: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
-        data: {
-          address: hubWallet,
-          payload: data,
+        value: {
+          tx: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
+          relayData: { address: hubWallet, payload: data },
         },
       };
     } catch (error) {
@@ -1232,9 +1225,7 @@ export class StakingService {
   public async getUnstakingInfoWithPenalty<K extends SpokeChainKey>(
     srcAddress: Address,
     srcChainKey: K,
-  ): Promise<
-    Result<UnstakingInfo & { requestsWithPenalty: UnstakeRequestWithPenalty[] }>
-  > {
+  ): Promise<Result<UnstakingInfo & { requestsWithPenalty: UnstakeRequestWithPenalty[] }>> {
     try {
       const [unstakingResult, configResult] = await Promise.all([
         this.getUnstakingInfo(srcAddress, srcChainKey),

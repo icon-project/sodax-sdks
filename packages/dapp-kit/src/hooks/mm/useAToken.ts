@@ -1,15 +1,18 @@
 import type { Erc20Token } from '@sodax/sdk';
 import type { ChainKey } from '@sodax/sdk';
-import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { type Address, isAddress } from 'viem';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { ReadHookParams } from '../shared/types.js';
 
 export type ATokenData = Erc20Token & { chainKey: ChainKey };
 
-export type UseATokenParams = {
-  aToken: Address | string | undefined;
-  queryOptions?: Omit<UseQueryOptions<ATokenData, Error>, 'queryKey' | 'queryFn' | 'enabled'>;
-};
+export type UseATokenParams = ReadHookParams<
+  ATokenData,
+  {
+    aToken: Address | string | undefined;
+  }
+>;
 
 /**
  * React hook to fetch ERC-20 metadata for a given aToken address on the hub chain.
@@ -17,8 +20,9 @@ export type UseATokenParams = {
  * `chainKey`. Note: the returned shape is a subset of `XToken` — `hubAsset` and `vault` fields
  * must be resolved separately if needed.
  */
-export function useAToken({ aToken, queryOptions }: UseATokenParams): UseQueryResult<ATokenData, Error> {
+export function useAToken({ params, queryOptions }: UseATokenParams = {}): UseQueryResult<ATokenData, Error> {
   const { sodax } = useSodaxContext();
+  const aToken = params?.aToken;
 
   return useQuery({
     queryKey: ['mm', 'aToken', aToken],

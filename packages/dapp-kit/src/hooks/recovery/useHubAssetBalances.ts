@@ -1,14 +1,17 @@
 import type { HubAssetBalance } from '@sodax/sdk';
 import type { SpokeChainKey } from '@sodax/sdk';
-import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { ReadHookParams } from '../shared/types.js';
 
-export type UseHubAssetBalancesProps = {
-  chainKey: SpokeChainKey | undefined;
-  /** The user's address on the spoke chain. The SDK derives the hub wallet abstraction internally. */
-  srcAddress: string | undefined;
-  queryOptions?: Omit<UseQueryOptions<HubAssetBalance[], Error>, 'queryKey' | 'queryFn' | 'enabled'>;
-};
+export type UseHubAssetBalancesParams = ReadHookParams<
+  HubAssetBalance[],
+  {
+    chainKey: SpokeChainKey | undefined;
+    /** The user's address on the spoke chain. The SDK derives the hub wallet abstraction internally. */
+    srcAddress: string | undefined;
+  }
+>;
 
 /**
  * React hook to fetch the hub-side balances of every supported token on the given spoke chain
@@ -16,11 +19,12 @@ export type UseHubAssetBalancesProps = {
  * either input is missing. Throws on `!ok`.
  */
 export function useHubAssetBalances({
-  chainKey,
-  srcAddress,
+  params,
   queryOptions,
-}: UseHubAssetBalancesProps): UseQueryResult<HubAssetBalance[], Error> {
+}: UseHubAssetBalancesParams = {}): UseQueryResult<HubAssetBalance[], Error> {
   const { sodax } = useSodaxContext();
+  const chainKey = params?.chainKey;
+  const srcAddress = params?.srcAddress;
 
   return useQuery<HubAssetBalance[], Error>({
     queryKey: ['recovery', 'hubAssetBalances', chainKey, srcAddress],

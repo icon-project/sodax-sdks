@@ -152,10 +152,10 @@ const result = await sodax.migration.migrateIcxToSoda(
 );
 
 if (result.ok) {
-  const [spokeTxHash, hubTxHash] = result.value;
+  const { srcChainTxHash, dstChainTxHash } = result.value;
   console.log('ICX migration successful!');
-  console.log('Spoke transaction hash:', spokeTxHash);
-  console.log('Hub transaction hash:', hubTxHash);
+  console.log('Spoke transaction hash:', srcChainTxHash);
+  console.log('Hub transaction hash:', dstChainTxHash);
 } else {
   console.error('ICX migration failed:', result.error);
 }
@@ -183,10 +183,10 @@ const result = await sodax.migration.revertMigrateSodaToIcx(
 );
 
 if (result.ok) {
-  const [hubTxHash, spokeTxHash] = result.value;
+  const { srcChainTxHash, dstChainTxHash } = result.value;
   console.log('SODA to ICX revert successful!');
-  console.log('Hub transaction hash:', hubTxHash);
-  console.log('Spoke transaction hash:', spokeTxHash);
+  console.log('Hub transaction hash:', dstChainTxHash);
+  console.log('Spoke transaction hash:', srcChainTxHash);
 } else {
   console.error('SODA to ICX revert failed:', result.error);
 }
@@ -272,10 +272,10 @@ const result = await sodax.migration.migratebnUSD(
 );
 
 if (result.ok) {
-  const [spokeTxHash, hubTxHash] = result.value;
+  const { srcChainTxHash, dstChainTxHash } = result.value;
   console.log('bnUSD migration successful!');
-  console.log('Spoke transaction hash:', spokeTxHash);
-  console.log('Hub transaction hash:', hubTxHash);
+  console.log('Spoke transaction hash:', srcChainTxHash);
+  console.log('Hub transaction hash:', dstChainTxHash);
 } else {
   console.error('bnUSD migration failed:', result.error);
 }
@@ -334,10 +334,10 @@ const result = await sodax.migration.migratebnUSD(
 );
 
 if (result.ok) {
-  const [hubTxHash, spokeTxHash] = result.value;
+  const { srcChainTxHash, dstChainTxHash } = result.value;
   console.log('bnUSD reverse migration successful!');
-  console.log('Hub transaction hash:', hubTxHash);
-  console.log('Spoke transaction hash:', spokeTxHash);
+  console.log('Hub transaction hash:', dstChainTxHash);
+  console.log('Spoke transaction hash:', srcChainTxHash);
 } else {
   console.error('bnUSD reverse migration failed:', result.error);
 }
@@ -367,10 +367,10 @@ const result = await sodax.migration.migrateBaln(
 );
 
 if (result.ok) {
-  const [spokeTxHash, hubTxHash] = result.value;
+  const { srcChainTxHash, dstChainTxHash } = result.value;
   console.log('BALN migration successful!');
-  console.log('Spoke transaction hash:', spokeTxHash);
-  console.log('Hub transaction hash:', hubTxHash);
+  console.log('Spoke transaction hash:', srcChainTxHash);
+  console.log('Hub transaction hash:', dstChainTxHash);
 } else {
   console.error('BALN migration failed:', result.error);
 }
@@ -393,10 +393,10 @@ async function migrateIcx(amount: bigint, recipient: Address): Promise<void> {
   const result = await sodax.migration.migrateIcxToSoda(params, iconSpokeProvider);
 
   if (result.ok) {
-    const [spokeTxHash, hubTxHash] = result.value;
+    const { srcChainTxHash, dstChainTxHash } = result.value;
     console.log('[migrateIcx] Migration successful!');
-    console.log('[migrateIcx] Spoke transaction hash:', spokeTxHash);
-    console.log('[migrateIcx] Hub transaction hash:', hubTxHash);
+    console.log('[migrateIcx] Spoke transaction hash:', srcChainTxHash);
+    console.log('[migrateIcx] Hub transaction hash:', dstChainTxHash);
   } else {
     console.error('[migrateIcx] Migration failed:', result.error);
   }
@@ -442,10 +442,10 @@ async function reverseMigrateIcx(amount: bigint, to: IconEoaAddress): Promise<vo
   const result = await sodax.migration.revertMigrateSodaToIcx(params, sonicSpokeProvider);
 
   if (result.ok) {
-    const [hubTxHash, spokeTxHash] = result.value;
+    const { srcChainTxHash, dstChainTxHash } = result.value;
     console.log('[reverseMigrateIcx] Revert migration successful!');
-    console.log('[reverseMigrateIcx] Hub transaction hash:', hubTxHash);
-    console.log('[reverseMigrateIcx] Spoke transaction hash:', spokeTxHash);
+    console.log('[reverseMigrateIcx] Hub transaction hash:', dstChainTxHash);
+    console.log('[reverseMigrateIcx] Spoke transaction hash:', srcChainTxHash);
   } else {
     console.error('[reverseMigrateIcx] Revert migration failed:', result.error);
   }
@@ -479,10 +479,10 @@ async function migrateBnUSD(
   const result = await sodax.migration.migratebnUSD(params, iconSpokeProvider);
 
   if (result.ok) {
-    const [spokeTxHash, hubTxHash] = result.value;
+    const { srcChainTxHash, dstChainTxHash } = result.value;
     console.log('[migrateBnUSD] Migration successful!');
-    console.log('[migrateBnUSD] Spoke transaction hash:', spokeTxHash);
-    console.log('[migrateBnUSD] Hub transaction hash:', hubTxHash);
+    console.log('[migrateBnUSD] Spoke transaction hash:', srcChainTxHash);
+    console.log('[migrateBnUSD] Hub transaction hash:', dstChainTxHash);
   } else {
     console.error('[migrateBnUSD] Migration failed:', result.error);
   }
@@ -523,10 +523,10 @@ async function migrateBaln(amount: bigint, recipient: Address): Promise<void> {
   const result = await sodax.migration.migrateBaln(params, iconSpokeProvider);
 
   if (result.ok) {
-    const [spokeTxHash, hubTxHash] = result.value;
+    const { srcChainTxHash, dstChainTxHash } = result.value;
     console.log('[migrateBaln] Migration successful!');
-    console.log('[migrateBaln] Spoke transaction hash:', spokeTxHash);
-    console.log('[migrateBaln] Hub transaction hash:', hubTxHash);
+    console.log('[migrateBaln] Spoke transaction hash:', srcChainTxHash);
+    console.log('[migrateBaln] Hub transaction hash:', dstChainTxHash);
   } else {
     console.error('[migrateBaln] Migration failed:', result.error);
   }

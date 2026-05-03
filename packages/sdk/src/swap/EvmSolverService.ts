@@ -84,16 +84,19 @@ export class EvmSolverService {
     const calls: EvmContractCall[] = [];
     const intentsContract = config.solver.intentsContract;
     const intent = {
-      ...createIntentParams,
+      intentId: randomUint256(),
+      creator: creatorHubWalletAddress,
       inputToken,
       outputToken,
       inputAmount: createIntentParams.inputAmount - feeAmount,
+      minOutputAmount: createIntentParams.minOutputAmount,
+      deadline: createIntentParams.deadline,
+      allowPartialFill: createIntentParams.allowPartialFill,
       srcChain: getIntentRelayChainId(createIntentParams.srcChainKey),
       dstChain: getIntentRelayChainId(createIntentParams.dstChainKey),
       srcAddress: encodeAddress(createIntentParams.srcChainKey, createIntentParams.srcAddress),
       dstAddress: encodeAddress(createIntentParams.dstChainKey, createIntentParams.dstAddress),
-      intentId: randomUint256(),
-      creator: creatorHubWalletAddress,
+      solver: createIntentParams.solver ?? '0x0000000000000000000000000000000000000000',
       data: feeData, // fee amount will be deducted from the input amount
     } satisfies Intent;
 

@@ -1,4 +1,4 @@
-import type { HubTxHash, SpokeTxHash, StakeAction } from '@sodax/sdk';
+import type { StakeAction, TxHashPair } from '@sodax/sdk';
 import type { Result, SpokeChainKey } from '@sodax/sdk';
 import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
@@ -10,7 +10,7 @@ import { useSodaxContext } from '../shared/useSodaxContext.js';
  */
 export type UseStakeVars<K extends SpokeChainKey = SpokeChainKey> = Omit<StakeAction<K, false>, 'raw'>;
 
-type StakeResult = Result<[SpokeTxHash, HubTxHash]>;
+type StakeResult = Result<TxHashPair>;
 
 /**
  * React hook for staking SODA tokens. Pure mutation: all inputs (params, walletProvider) are

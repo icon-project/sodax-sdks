@@ -55,17 +55,19 @@ export function SupplyAssetsList(): ReactElement {
     isLoading: isBalancesLoading,
     refetch: refetchWalletBalances,
   } = useXBalances({
-    xService,
-    xChainId: selectedChainId,
-    xTokens: tokens,
-    address,
+    params: {
+      xService,
+      xChainId: selectedChainId,
+      xTokens: tokens,
+      address,
+    },
   });
 
   const {
     data: userReservesData,
     isLoading: isUserReservesLoading,
     refetch: refetchReserves,
-  } = useUserReservesData({ spokeChainKey: selectedChainId, userAddress: address });
+  } = useUserReservesData({ params: { spokeChainKey: selectedChainId, userAddress: address } });
   const userReserves = userReservesData?.[0] || [];
   const {
     data: formattedReserves,
@@ -73,8 +75,7 @@ export function SupplyAssetsList(): ReactElement {
     refetch: refetchFormattedReserves,
   } = useReservesUsdFormat();
   const { data: userSummary, refetch: refetchSummary } = useUserFormattedSummary({
-    spokeChainKey: selectedChainId,
-    userAddress: address,
+    params: { spokeChainKey: selectedChainId, userAddress: address },
   });
   const healthFactorRaw = userSummary?.healthFactor ? Number(userSummary.healthFactor) : undefined;
 
@@ -97,9 +98,11 @@ export function SupplyAssetsList(): ReactElement {
     isLoading: isATokensLoading,
     refetch: refetchBalances,
   } = useATokensBalances({
-    aTokens: aTokenAddresses,
-    spokeChainKey: selectedChainId,
-    userAddress: address,
+    params: {
+      aTokens: aTokenAddresses,
+      spokeChainKey: selectedChainId,
+      userAddress: address,
+    },
   });
 
   const handleRefresh = async () => {

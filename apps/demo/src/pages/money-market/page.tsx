@@ -40,7 +40,9 @@ export default function MoneyMarketPage() {
 
   const xAccount = useXAccount(chainId);
 
-  const { data: walletAddressOnHub } = useGetUserHubWalletAddress(chainId, xAccount?.address);
+  const { data: walletAddressOnHub } = useGetUserHubWalletAddress({
+    params: { spokeChainId: chainId, spokeAddress: xAccount?.address },
+  });
 
   return (
     <main className="min-h-screen bg-linear-to-br from-almost-white via-cream-white to-vibrant-white">

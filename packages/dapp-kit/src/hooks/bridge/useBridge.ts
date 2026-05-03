@@ -1,8 +1,8 @@
 import { useSodaxContext } from '../shared/useSodaxContext.js';
-import type { BridgeParams, HubTxHash, SpokeTxHash, Result, SpokeChainKey  } from '@sodax/sdk';
+import type { BridgeParams, TxHashPair, Result, SpokeChainKey } from '@sodax/sdk';
 import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
 
-type BridgeResult = Result<[SpokeTxHash, HubTxHash]>;
+type BridgeResult = Result<TxHashPair>;
 
 /**
  * Mutation variables for {@link useBridge}. Generic over `K extends SpokeChainKey` (defaults to

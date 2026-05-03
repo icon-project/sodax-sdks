@@ -1,4 +1,4 @@
-import type { HubTxHash, MoneyMarketSupplyActionParams, SpokeTxHash } from '@sodax/sdk';
+import type { MoneyMarketSupplyActionParams, TxHashPair } from '@sodax/sdk';
 import type { Result, SpokeChainKey } from '@sodax/sdk';
 import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
@@ -13,7 +13,7 @@ export type UseSupplyVars<K extends SpokeChainKey = SpokeChainKey> = Omit<
   'raw'
 >;
 
-type SupplyResult = Result<[SpokeTxHash, HubTxHash]>;
+type SupplyResult = Result<TxHashPair>;
 
 /**
  * React hook for supplying tokens to the Sodax money market protocol.

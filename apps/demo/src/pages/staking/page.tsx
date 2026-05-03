@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { SelectChain } from '@/components/solver/SelectChain';
+import { SelectChain } from '@/components/swaps/SelectChain';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -59,7 +59,9 @@ export default function StakingPage() {
   const walletProvider = useWalletProvider(selectedChainId);
   const srcAddress = account?.address as `0x${string}` | undefined;
   const supportedSpokeChains = useMemo(() => sodax.config.getSupportedSpokeChains(), [sodax]);
-  const { data: walletAddressOnHub } = useGetUserHubWalletAddress(selectedChainId, account?.address);
+  const { data: walletAddressOnHub } = useGetUserHubWalletAddress({
+    params: { spokeChainId: selectedChainId, spokeAddress: account?.address },
+  });
 
   const { isWrongChain, handleSwitchChain } = useEvmSwitchChain(selectedChainId);
 
@@ -82,50 +84,58 @@ export default function StakingPage() {
   const { mutateAsync: unstake, isPending: isUnstakingPending } = useUnstake();
 
   const { data: isStakeAllowed, isLoading: isStakeAllowanceLoading } = useStakeAllowance({
-    params:
-      stakeAmount && sodaToken && srcAddress
-        ? {
-            srcChainKey: selectedChainId,
-            srcAddress,
-            amount: scaleTokenAmount(stakeAmount, sodaToken.decimals),
-            minReceive: scaleTokenAmount(stakeAmount, sodaToken.decimals),
-          }
-        : undefined,
+    params: {
+      payload:
+        stakeAmount && sodaToken && srcAddress
+          ? {
+              srcChainKey: selectedChainId,
+              srcAddress,
+              amount: scaleTokenAmount(stakeAmount, sodaToken.decimals),
+              minReceive: scaleTokenAmount(stakeAmount, sodaToken.decimals),
+            }
+          : undefined,
+    },
   });
 
   const { data: isUnstakeAllowed, isLoading: isUnstakeAllowanceLoading } = useUnstakeAllowance({
-    params:
-      unstakeAmount && sodaToken && srcAddress
-        ? {
-            srcChainKey: selectedChainId,
-            srcAddress,
-            amount: scaleTokenAmount(unstakeAmount, 18),
-          }
-        : undefined,
+    params: {
+      payload:
+        unstakeAmount && sodaToken && srcAddress
+          ? {
+              srcChainKey: selectedChainId,
+              srcAddress,
+              amount: scaleTokenAmount(unstakeAmount, 18),
+            }
+          : undefined,
+    },
   });
 
   const { data: isInstantUnstakeAllowed, isLoading: isInstantUnstakeAllowanceLoading } = useInstantUnstakeAllowance({
-    params:
-      unstakeAmount && sodaToken && srcAddress
-        ? {
-            srcChainKey: selectedChainId,
-            srcAddress,
-            amount: scaleTokenAmount(unstakeAmount, 18),
-            minAmount: scaleTokenAmount(minUnstakeAmount || '0', 18),
-          }
-        : undefined,
+    params: {
+      payload:
+        unstakeAmount && sodaToken && srcAddress
+          ? {
+              srcChainKey: selectedChainId,
+              srcAddress,
+              amount: scaleTokenAmount(unstakeAmount, 18),
+              minAmount: scaleTokenAmount(minUnstakeAmount || '0', 18),
+            }
+          : undefined,
+    },
   });
 
   const scaledStakeAmount = stakeAmount && sodaToken ? scaleTokenAmount(stakeAmount, sodaToken.decimals) : undefined;
-  const { data: stakeRatio, isLoading: isLoadingStakeRatio } = useStakeRatio({ amount: scaledStakeAmount });
+  const { data: stakeRatio, isLoading: isLoadingStakeRatio } = useStakeRatio({
+    params: { amount: scaledStakeAmount },
+  });
 
   const scaledUnstakeAmount = unstakeAmount ? scaleTokenAmount(unstakeAmount, 18) : undefined;
   const { data: instantUnstakeRatio, isLoading: isLoadingInstantUnstakeRatio } = useInstantUnstakeRatio({
-    amount: scaledUnstakeAmount,
+    params: { amount: scaledUnstakeAmount },
   });
 
   const { data: convertedAssets, isLoading: isLoadingConvertedAssets } = useConvertedAssets({
-    amount: scaledUnstakeAmount,
+    params: { amount: scaledUnstakeAmount },
   });
 
   const { mutateAsync: instantUnstake, isPending: isInstantUnstakingPending } = useInstantUnstake();
@@ -594,7 +604,9 @@ export default function StakingPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Instant Unstake xSODA</DialogTitle>
-            <DialogDescription>InstantUnstake {unstakeAmount} xSODA shares to initiate unstaking process</DialogDescription>
+            <DialogDescription>
+              InstantUnstake {unstakeAmount} xSODA shares to initiate unstaking process
+            </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setInstantUnstakeDialogOpen(false)}>

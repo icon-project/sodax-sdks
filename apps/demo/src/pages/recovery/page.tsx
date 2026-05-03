@@ -27,7 +27,9 @@ export default function RecoveryPage() {
   const xAccount = useXAccount(selectedChainId);
   const walletProvider = useWalletProvider(selectedChainId);
   const srcAddress = xAccount?.address as Address | undefined;
-  const { data: hubWalletAddress } = useGetUserHubWalletAddress(selectedChainId, srcAddress);
+  const { data: hubWalletAddress } = useGetUserHubWalletAddress({
+    params: { spokeChainId: selectedChainId, spokeAddress: srcAddress },
+  });
   const { isWrongChain, handleSwitchChain } = useEvmSwitchChain(selectedChainId);
 
   const [withdrawResults, setWithdrawResults] = useState<Record<string, WithdrawResult>>({});
@@ -45,8 +47,7 @@ export default function RecoveryPage() {
     error: balancesError,
     refetch: refetchBalances,
   } = useHubAssetBalances({
-    chainKey: selectedChainId,
-    srcAddress,
+    params: { chainKey: selectedChainId, srcAddress },
   });
 
   const balanceError = balancesError ? getReadableTxError(balancesError) : null;

@@ -50,7 +50,9 @@ function PositionListItem({
 }: PositionListItemProps): JSX.Element | null {
   const srcAddress = userAddress as `0x${string}`;
   const [percentageToRemove, setPercentageToRemove] = useState(0);
-  const { data, isLoading, isError, error: positionInfoError } = usePositionInfo({ tokenId, poolKey });
+  const { data, isLoading, isError, error: positionInfoError } = usePositionInfo({
+    params: { tokenId, poolKey },
+  });
   const claimRewardsMutation = useClaimRewards();
   const decreaseLiquidityMutation = useDecreaseLiquidity();
   const [error, setError] = useState<string>('');
@@ -328,10 +330,14 @@ export function UserPositions({
     }
 
     try {
-      const mintPositionEvent = await sodax.dex.clService.getMintPositionEvent(hubTxHashInput.trim() as Hash);
-      saveTokenIdToLocalStorage(userAddress, chainKey, mintPositionEvent.tokenId.toString());
+      const mintPositionEventResult = await sodax.dex.clService.getMintPositionEvent(hubTxHashInput.trim() as Hash);
+      if (!mintPositionEventResult.ok) {
+        globalThis.alert(`Find position ID failed: ${mintPositionEventResult.error instanceof Error ? mintPositionEventResult.error.message : 'Unknown error'}`);
+        return;
+      }
+      saveTokenIdToLocalStorage(userAddress, chainKey, mintPositionEventResult.value.tokenId.toString());
       setHubTxHashInput('');
-      globalThis.alert(`Position ID: ${mintPositionEvent.tokenId.toString()}`);
+      globalThis.alert(`Position ID: ${mintPositionEventResult.value.tokenId.toString()}`);
     } catch (err) {
       console.error('Find position ID failed:', err);
       globalThis.alert(`Find position ID failed: ${err instanceof Error ? err.message : 'Unknown error'}`);

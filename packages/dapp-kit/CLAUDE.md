@@ -49,12 +49,62 @@ All hooks follow consistent patterns:
 - `useMMAllowance` skips on-chain checks for borrow/withdraw (never need approval)
 - `useBackendIntentByTxHash` polls at 1s only when a txHash is provided
 
+### Read hook shape (MANDATORY for new `useQuery`-backed hooks)
+
+All read-only hooks MUST accept a single object with **exactly two top-level keys**: `params` (SDK-feature-domain inputs — the *what* being fetched) and `queryOptions` (React Query knobs — the *how* the query behaves). The params type MUST be built on `ReadHookParams<TData, TParams>` from `src/hooks/shared/types.ts`.
+
+Rules:
+
+- **Single params object with two top-level keys.** `{ params, queryOptions }`. Nothing else at the top level. Domain inputs are nested inside `params`. No positional args.
+- **Use the shared types.** Params type MUST be `ReadHookParams<TData, TParams>`; the `queryOptions` slot is typed as `ReadQueryOptions<TData>` (which is `Omit<UseQueryOptions<TData, Error>, 'queryKey' | 'queryFn' | 'enabled'>`). Do NOT introduce hook-specific ad-hoc `Omit<UseQueryOptions<...>, ...>` types.
+- **Hook owns lifecycle.** `queryKey`, `queryFn`, and `enabled` are owned by the hook. `enabled` is derived from required-input presence and is never consumer-overridable.
+- **Hierarchical query keys.** `['feature', 'action', ...inputs]`. Stringify bigints with `.toString()`.
+- **No-input hooks.** Hooks without domain inputs type their params as `ReadHookParams<TData>` and accept the whole argument as optional, defaulting to `{}` for ergonomic no-arg calls.
+- **Generic hooks.** Keep generics on the hook function (e.g. `<K extends SpokeChainKey>`) and use them to constrain `TParams`.
+- **Mutation hooks are out of scope** for this rule — they keep their `useMutation` patterns and invalidate related query keys on success.
+
+Canonical example:
+
+```ts
+import type { PoolData, PoolKey } from '@sodax/sdk';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { ReadHookParams } from '../shared/types.js';
+
+export type UsePoolDataParams = ReadHookParams<PoolData, { poolKey: PoolKey | null }>;
+
+export function usePoolData({ params, queryOptions }: UsePoolDataParams = {}): UseQueryResult<PoolData, Error> {
+  const { sodax } = useSodaxContext();
+  const poolKey = params?.poolKey ?? null;
+
+  return useQuery<PoolData, Error>({
+    queryKey: ['dex', 'poolData', poolKey],
+    queryFn: async () => {
+      if (!poolKey) throw new Error('Pool key is required');
+      const result = await sodax.dex.clService.getPoolData(poolKey, sodax.hubProvider.publicClient);
+      if (!result.ok) throw result.error;
+      return result.value;
+    },
+    enabled: poolKey !== null,
+    staleTime: 10_000,
+    refetchInterval: 30_000,
+    ...queryOptions,
+  });
+}
+```
+
+Call site:
+
+```ts
+const { data } = usePoolData({ params: { poolKey } });
+```
+
 ### Adding a New Hook
 
 Follow the pattern of existing hooks in the same feature domain:
 1. Create the hook file in the appropriate `hooks/<feature>/` directory
 2. Use `useSodaxContext()` to access the SDK instance
-3. For queries: use `useQuery` with appropriate key, enabled condition, and refetch interval
+3. For queries: use `useQuery` with appropriate key, enabled condition, and refetch interval. Type params with `ReadHookParams<TData, TParams>` — see **Read hook shape** above.
 4. For mutations: use `useMutation` and invalidate related query keys on success
 5. Export from the feature's `index.ts` and from `hooks/index.ts`
 

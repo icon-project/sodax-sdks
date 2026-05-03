@@ -8,7 +8,9 @@ export function StakingInfo({
   srcAddress,
   srcChainKey,
 }: Readonly<{ srcAddress: `0x${string}` | undefined; srcChainKey: SpokeChainKey }>) {
-  const { data: stakingInfo, isLoading: isLoadingStakingInfo } = useStakingInfo({ srcAddress, srcChainKey });
+  const { data: stakingInfo, isLoading: isLoadingStakingInfo } = useStakingInfo({
+    params: { srcAddress, srcChainKey },
+  });
 
   return (
     <div className="space-y-4">

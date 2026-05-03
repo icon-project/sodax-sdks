@@ -1,26 +1,30 @@
 import type { UnstakeRequestWithPenalty, UnstakingInfo } from '@sodax/sdk';
 import type { SpokeChainKey } from '@sodax/sdk';
-import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { ReadHookParams } from '../shared/types.js';
 
 export type UnstakingInfoWithPenalty = UnstakingInfo & { requestsWithPenalty: UnstakeRequestWithPenalty[] };
 
-export type UseUnstakingInfoWithPenaltyProps = {
-  srcAddress: `0x${string}` | undefined;
-  srcChainKey: SpokeChainKey | undefined;
-  queryOptions?: Omit<UseQueryOptions<UnstakingInfoWithPenalty, Error>, 'queryKey' | 'queryFn' | 'enabled'>;
-};
+export type UseUnstakingInfoWithPenaltyParams = ReadHookParams<
+  UnstakingInfoWithPenalty,
+  {
+    srcAddress: `0x${string}` | undefined;
+    srcChainKey: SpokeChainKey | undefined;
+  }
+>;
 
 /**
  * React hook to fetch the user's pending unstake requests **with computed early-exit penalties**
  * by deriving the hub wallet from the spoke `srcAddress` + `srcChainKey`. Throws on `!ok`.
  */
 export function useUnstakingInfoWithPenalty({
-  srcAddress,
-  srcChainKey,
+  params,
   queryOptions,
-}: UseUnstakingInfoWithPenaltyProps): UseQueryResult<UnstakingInfoWithPenalty, Error> {
+}: UseUnstakingInfoWithPenaltyParams = {}): UseQueryResult<UnstakingInfoWithPenalty, Error> {
   const { sodax } = useSodaxContext();
+  const srcAddress = params?.srcAddress;
+  const srcChainKey = params?.srcChainKey;
 
   return useQuery<UnstakingInfoWithPenalty, Error>({
     queryKey: ['staking', 'unstakingInfoWithPenalty', srcChainKey, srcAddress],

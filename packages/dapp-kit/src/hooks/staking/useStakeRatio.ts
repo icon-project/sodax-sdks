@@ -1,20 +1,24 @@
-import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { ReadHookParams } from '../shared/types.js';
 
-export type UseStakeRatioProps = {
-  amount: bigint | undefined;
-  queryOptions?: Omit<UseQueryOptions<[bigint, bigint], Error>, 'queryKey' | 'queryFn' | 'enabled'>;
-};
+export type UseStakeRatioParams = ReadHookParams<
+  [bigint, bigint],
+  {
+    amount: bigint | undefined;
+  }
+>;
 
 /**
  * React hook to estimate the SODA → xSODA stake ratio for a given amount. Hub-only read. Throws
  * on `!ok`.
  */
 export function useStakeRatio({
-  amount,
+  params,
   queryOptions,
-}: UseStakeRatioProps): UseQueryResult<[bigint, bigint], Error> {
+}: UseStakeRatioParams = {}): UseQueryResult<[bigint, bigint], Error> {
   const { sodax } = useSodaxContext();
+  const amount = params?.amount;
 
   return useQuery<[bigint, bigint], Error>({
     queryKey: ['staking', 'stakeRatio', amount?.toString()],

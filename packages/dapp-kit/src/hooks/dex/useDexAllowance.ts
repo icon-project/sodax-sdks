@@ -1,12 +1,15 @@
 import type { CreateAssetDepositParams } from '@sodax/sdk';
 import type { SpokeChainKey } from '@sodax/sdk';
-import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { ReadHookParams } from '../shared/types.js';
 
-export type UseDexAllowanceProps<K extends SpokeChainKey = SpokeChainKey> = {
-  params: CreateAssetDepositParams<K> | undefined;
-  queryOptions?: Omit<UseQueryOptions<boolean, Error>, 'queryKey' | 'queryFn' | 'enabled'>;
-};
+export type UseDexAllowanceParams<K extends SpokeChainKey = SpokeChainKey> = ReadHookParams<
+  boolean,
+  {
+    payload: CreateAssetDepositParams<K> | undefined;
+  }
+>;
 
 /**
  * React hook to check whether the user has approved sufficient token allowance (or established a
@@ -16,20 +19,21 @@ export type UseDexAllowanceProps<K extends SpokeChainKey = SpokeChainKey> = {
 export function useDexAllowance<K extends SpokeChainKey = SpokeChainKey>({
   params,
   queryOptions,
-}: UseDexAllowanceProps<K>): UseQueryResult<boolean, Error> {
+}: UseDexAllowanceParams<K> = {}): UseQueryResult<boolean, Error> {
   const { sodax } = useSodaxContext();
+  const payload = params?.payload;
 
   return useQuery<boolean, Error>({
-    queryKey: ['dex', 'allowance', params?.srcChainKey, params?.asset, params?.amount?.toString()],
+    queryKey: ['dex', 'allowance', payload?.srcChainKey, payload?.asset, payload?.amount?.toString()],
     queryFn: async () => {
-      if (!params) {
+      if (!payload) {
         throw new Error('Params are required');
       }
-      const result = await sodax.dex.assetService.isAllowanceValid({ params, raw: true });
+      const result = await sodax.dex.assetService.isAllowanceValid({ params: payload, raw: true });
       if (!result.ok) throw result.error;
       return result.value;
     },
-    enabled: !!params,
+    enabled: !!payload,
     refetchInterval: 5_000,
     gcTime: 0,
     ...queryOptions,

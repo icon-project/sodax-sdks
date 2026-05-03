@@ -8,8 +8,6 @@ import {
   Erc4626Service,
   type ConfigService,
   type HubProvider,
-  isSolanaChainKeyType,
-  isBitcoinChainKeyType,
   isHubChainKeyType,
   type SendMessageParams,
 } from '../shared/index.js';
@@ -21,17 +19,15 @@ import type {
   GetAddressType,
   Hash,
   HttpUrl,
-  HubTxHash,
   OriginalAssetAddress,
   PoolKey,
   Result,
   SpokeChainKey,
   SpokeExecActionParams,
-  SpokeTxHash,
   TxReturnType,
   XToken,
 } from '@sodax/types';
-import type { RelayOptionalExtraData } from '../shared/types/types.js';
+import type { IntentTxResult, TxHashPair } from '../shared/types/types.js';
 import { erc20Abi, maxUint160, maxUint48, parseEventLogs } from 'viem';
 import { Price, Token } from '@pancakeswap/swap-sdk-core';
 
@@ -327,7 +323,7 @@ export class ClService {
    */
   public async executeSupplyLiquidity<K extends SpokeChainKey, Raw extends boolean>(
     _params: ClSupplyAction<K, Raw>,
-  ): Promise<Result<TxReturnType<K, Raw>> & RelayOptionalExtraData> {
+  ): Promise<Result<IntentTxResult<K, Raw>>> {
     const { params, skipSimulation } = _params;
     try {
       const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
@@ -402,10 +398,9 @@ export class ClService {
 
       return {
         ok: true,
-        value: txResult.value satisfies TxReturnType<K, boolean> as TxReturnType<K, Raw>,
-        data: {
-          address: hubWallet,
-          payload: data,
+        value: {
+          tx: txResult.value satisfies TxReturnType<K, boolean> as TxReturnType<K, Raw>,
+          relayData: { address: hubWallet, payload: data },
         },
       };
     } catch (error) {
@@ -422,32 +417,34 @@ export class ClService {
    * @param hubTxHash - The hub transaction hash
    * @returns The mint position event log
    */
-  public async getMintPositionEvent(hubTxHash: Hash): Promise<ClMintPositionEventLog> {
-    const receipt = await this.hubProvider.publicClient.waitForTransactionReceipt({ hash: hubTxHash });
-    const logs: MintPositionEventLog[] = parseEventLogs({
-      abi: CLPositionManagerAbi,
-      eventName: 'MintPosition',
-      logs: receipt.logs,
-      strict: true,
-    });
+  public async getMintPositionEvent(hubTxHash: Hash): Promise<Result<ClMintPositionEventLog>> {
+    try {
+      const receipt = await this.hubProvider.publicClient.waitForTransactionReceipt({ hash: hubTxHash });
+      const logs: MintPositionEventLog[] = parseEventLogs({
+        abi: CLPositionManagerAbi,
+        eventName: 'MintPosition',
+        logs: receipt.logs,
+        strict: true,
+      });
 
-    const eventLog = logs[0];
-    if (!eventLog) {
-      throw new Error(`No mint position event found for ${hubTxHash}`);
+      const eventLog = logs[0];
+      if (!eventLog) {
+        return { ok: false, error: new Error(`No mint position event found for ${hubTxHash}`) };
+      }
+
+      if (!eventLog.args.tokenId) {
+        return { ok: false, error: new Error(`No tokenId found for ${hubTxHash}`) };
+      }
+
+      return { ok: true, value: { tokenId: eventLog.args.tokenId } };
+    } catch (error) {
+      return { ok: false, error: new Error('GET_MINT_POSITION_EVENT_FAILED', { cause: error }) };
     }
-
-    if (!eventLog.args.tokenId) {
-      throw new Error(`No tokenId found for ${hubTxHash}`);
-    }
-
-    return {
-      tokenId: eventLog.args.tokenId,
-    };
   }
 
   public async executeIncreaseLiquidity<K extends SpokeChainKey, Raw extends boolean>(
     _params: ClLiquidityIncreaseLiquidityAction<K, Raw>,
-  ): Promise<Result<TxReturnType<K, Raw>> & RelayOptionalExtraData> {
+  ): Promise<Result<IntentTxResult<K, Raw>>> {
     const { params, skipSimulation } = _params;
     try {
       const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
@@ -513,10 +510,9 @@ export class ClService {
 
       return {
         ok: true,
-        value: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
-        data: {
-          address: hubWallet,
-          payload: encodeContractCalls(calls),
+        value: {
+          tx: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
+          relayData: { address: hubWallet, payload: encodeContractCalls(calls) },
         },
       };
     } catch (error) {
@@ -529,7 +525,7 @@ export class ClService {
 
   public async executeDecreaseLiquidity<K extends SpokeChainKey, Raw extends boolean>(
     _params: ClLiquidityDecreaseLiquidityAction<K, Raw>,
-  ): Promise<Result<TxReturnType<K, Raw>> & RelayOptionalExtraData> {
+  ): Promise<Result<IntentTxResult<K, Raw>>> {
     const { params, skipSimulation } = _params;
     try {
       const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
@@ -587,10 +583,9 @@ export class ClService {
 
       return {
         ok: true,
-        value: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
-        data: {
-          address: hubWallet,
-          payload: data,
+        value: {
+          tx: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
+          relayData: { address: hubWallet, payload: data },
         },
       };
     } catch (error) {
@@ -629,7 +624,7 @@ export class ClService {
    */
   public async supplyLiquidity<K extends SpokeChainKey>(
     _params: ClSupplyAction<K, false>,
-  ): Promise<Result<[SpokeTxHash, HubTxHash]>> {
+  ): Promise<Result<TxHashPair>> {
     const { params, timeout } = _params;
     try {
       const txResult = await this.executeSupplyLiquidity(_params);
@@ -638,26 +633,24 @@ export class ClService {
         return txResult;
       }
 
-      let intentTxHash: string | null = null;
+      let hubTxHash: string;
       if (!isHubChainKeyType(params.srcChainKey)) {
-        const packetResult = await relayTxAndWaitPacket(
-          txResult.value,
-          isSolanaChainKeyType(params.srcChainKey) || isBitcoinChainKeyType(params.srcChainKey)
-            ? txResult.data
-            : undefined,
-          params.srcChainKey,
-          this.relayerApiEndpoint,
-          timeout,
-        );
+        const packetResult = await relayTxAndWaitPacket({
+          srcTxHash: txResult.value.tx,
+          data: txResult.value.relayData,
+          chainKey: params.srcChainKey,
+          relayerApiEndpoint: this.relayerApiEndpoint,
+          timeout: timeout,
+        });
 
         if (!packetResult.ok) return packetResult;
 
-        intentTxHash = packetResult.value.dst_tx_hash;
+        hubTxHash = packetResult.value.dst_tx_hash;
       } else {
-        intentTxHash = txResult.value;
+        hubTxHash = txResult.value.tx;
       }
 
-      return { ok: true, value: [txResult.value, intentTxHash] };
+      return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
     } catch (error) {
       console.error('supplyLiquidity error:', error);
       return {
@@ -673,7 +666,7 @@ export class ClService {
    */
   public async increaseLiquidity<K extends SpokeChainKey>(
     _params: ClLiquidityIncreaseLiquidityAction<K, false>,
-  ): Promise<Result<[SpokeTxHash, HubTxHash]>> {
+  ): Promise<Result<TxHashPair>> {
     const { params, timeout } = _params;
     try {
       const txResult = await this.executeIncreaseLiquidity(_params);
@@ -682,26 +675,24 @@ export class ClService {
         return txResult;
       }
 
-      let intentTxHash: string | null = null;
+      let hubTxHash: string;
       if (!isHubChainKeyType(params.srcChainKey)) {
-        const packetResult = await relayTxAndWaitPacket(
-          txResult.value,
-          isSolanaChainKeyType(params.srcChainKey) || isBitcoinChainKeyType(params.srcChainKey)
-            ? txResult.data
-            : undefined,
-          params.srcChainKey,
-          this.relayerApiEndpoint,
-          timeout,
-        );
+        const packetResult = await relayTxAndWaitPacket({
+          srcTxHash: txResult.value.tx,
+          data: txResult.value.relayData,
+          chainKey: params.srcChainKey,
+          relayerApiEndpoint: this.relayerApiEndpoint,
+          timeout: timeout,
+        });
 
         if (!packetResult.ok) return packetResult;
 
-        intentTxHash = packetResult.value.dst_tx_hash;
+        hubTxHash = packetResult.value.dst_tx_hash;
       } else {
-        intentTxHash = txResult.value;
+        hubTxHash = txResult.value.tx;
       }
 
-      return { ok: true, value: [txResult.value, intentTxHash] };
+      return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
     } catch (error) {
       return {
         ok: false,
@@ -716,7 +707,7 @@ export class ClService {
    */
   public async decreaseLiquidity<K extends SpokeChainKey>(
     _params: ClLiquidityDecreaseLiquidityAction<K, false>,
-  ): Promise<Result<[SpokeTxHash, HubTxHash]>> {
+  ): Promise<Result<TxHashPair>> {
     const { params, timeout } = _params;
     try {
       const txResult = await this.executeDecreaseLiquidity(_params);
@@ -725,26 +716,24 @@ export class ClService {
         return txResult;
       }
 
-      let intentTxHash: string | null = null;
+      let hubTxHash: string;
       if (!isHubChainKeyType(params.srcChainKey)) {
-        const packetResult = await relayTxAndWaitPacket(
-          txResult.value,
-          isSolanaChainKeyType(params.srcChainKey) || isBitcoinChainKeyType(params.srcChainKey)
-            ? txResult.data
-            : undefined,
-          params.srcChainKey,
-          this.relayerApiEndpoint,
-          timeout,
-        );
+        const packetResult = await relayTxAndWaitPacket({
+          srcTxHash: txResult.value.tx,
+          data: txResult.value.relayData,
+          chainKey: params.srcChainKey,
+          relayerApiEndpoint: this.relayerApiEndpoint,
+          timeout: timeout,
+        });
 
         if (!packetResult.ok) return packetResult;
 
-        intentTxHash = packetResult.value.dst_tx_hash;
+        hubTxHash = packetResult.value.dst_tx_hash;
       } else {
-        intentTxHash = txResult.value;
+        hubTxHash = txResult.value.tx;
       }
 
-      return { ok: true, value: [txResult.value, intentTxHash] };
+      return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
     } catch (error) {
       return {
         ok: false,
@@ -815,7 +804,7 @@ export class ClService {
    */
   public async executeClaimRewards<K extends SpokeChainKey, Raw extends boolean>(
     _params: ClLiquidityClaimRewardsAction<K, Raw>,
-  ): Promise<Result<TxReturnType<K, Raw>> & RelayOptionalExtraData> {
+  ): Promise<Result<IntentTxResult<K, Raw>>> {
     const { params, skipSimulation } = _params;
     try {
       const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
@@ -875,10 +864,9 @@ export class ClService {
 
       return {
         ok: true,
-        value: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
-        data: {
-          address: hubWallet,
-          payload: data,
+        value: {
+          tx: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
+          relayData: { address: hubWallet, payload: data },
         },
       };
     } catch (error) {
@@ -896,7 +884,7 @@ export class ClService {
    */
   public async claimRewards<K extends SpokeChainKey>(
     _params: ClLiquidityClaimRewardsAction<K, false>,
-  ): Promise<Result<[SpokeTxHash, HubTxHash]>> {
+  ): Promise<Result<TxHashPair>> {
     const { params, timeout } = _params;
     try {
       const txResult = await this.executeClaimRewards(_params);
@@ -905,26 +893,24 @@ export class ClService {
         return txResult;
       }
 
-      let intentTxHash: string | null = null;
+      let hubTxHash: string;
       if (!isHubChainKeyType(params.srcChainKey)) {
-        const packetResult = await relayTxAndWaitPacket(
-          txResult.value,
-          isSolanaChainKeyType(params.srcChainKey) || isBitcoinChainKeyType(params.srcChainKey)
-            ? txResult.data
-            : undefined,
-          params.srcChainKey,
-          this.relayerApiEndpoint,
-          timeout,
-        );
+        const packetResult = await relayTxAndWaitPacket({
+          srcTxHash: txResult.value.tx,
+          data: txResult.value.relayData,
+          chainKey: params.srcChainKey,
+          relayerApiEndpoint: this.relayerApiEndpoint,
+          timeout: timeout,
+        });
 
         if (!packetResult.ok) return packetResult;
 
-        intentTxHash = packetResult.value.dst_tx_hash;
+        hubTxHash = packetResult.value.dst_tx_hash;
       } else {
-        intentTxHash = txResult.value;
+        hubTxHash = txResult.value.tx;
       }
 
-      return { ok: true, value: [txResult.value, intentTxHash] };
+      return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
     } catch (error) {
       console.error('claimRewards error:', error);
       return {
@@ -1074,7 +1060,10 @@ export class ClService {
 
    * ```
    */
-  public async getPoolData(poolKey: PoolKey<'CL'>, publicClient: PublicClient<HttpTransport>): Promise<PoolData> {
+  public async getPoolData(
+    poolKey: PoolKey<'CL'>,
+    publicClient: PublicClient<HttpTransport>,
+  ): Promise<Result<PoolData>> {
     try {
       // Get pool ID
       const poolId = getPoolId(poolKey);
@@ -1148,39 +1137,40 @@ export class ClService {
       }
 
       return {
-        poolId,
-        poolKey: {
-          currency0: poolKey.currency0,
-          currency1: poolKey.currency1,
-          hooks: poolKey.hooks ?? '0x',
-          poolManager: poolKey.poolManager,
-          fee: poolKey.fee,
-          parameters: typeof poolKey.parameters === 'string' ? poolKey.parameters : '0x',
+        ok: true,
+        value: {
+          poolId,
+          poolKey: {
+            currency0: poolKey.currency0,
+            currency1: poolKey.currency1,
+            hooks: poolKey.hooks ?? '0x',
+            poolManager: poolKey.poolManager,
+            fee: poolKey.fee,
+            parameters: typeof poolKey.parameters === 'string' ? poolKey.parameters : '0x',
+          },
+          sqrtPriceX96,
+          currentTick: tick,
+          protocolFee,
+          lpFee,
+          price,
+          totalLiquidity,
+          feeTier,
+          tickSpacing,
+          token0: currency0,
+          token1: currency1,
+          isActive: sqrtPriceX96 > 0n,
+          token0IsStatAToken: enrichment0.isStatAToken,
+          token0ConversionRate: enrichment0.conversionRate,
+          token0UnderlyingToken: enrichment0.underlyingToken,
+          token1IsStatAToken: enrichment1.isStatAToken,
+          token1ConversionRate: enrichment1.conversionRate,
+          token1UnderlyingToken: enrichment1.underlyingToken,
+          rewardConfig,
         },
-        sqrtPriceX96,
-        currentTick: tick,
-        protocolFee,
-        lpFee,
-        price,
-        totalLiquidity,
-        feeTier,
-        tickSpacing,
-        token0: currency0,
-        token1: currency1,
-        isActive: sqrtPriceX96 > 0n,
-        // StatAToken enrichment data
-        token0IsStatAToken: enrichment0.isStatAToken,
-        token0ConversionRate: enrichment0.conversionRate,
-        token0UnderlyingToken: enrichment0.underlyingToken,
-        token1IsStatAToken: enrichment1.isStatAToken,
-        token1ConversionRate: enrichment1.conversionRate,
-        token1UnderlyingToken: enrichment1.underlyingToken,
-        // Reward and APY data
-        rewardConfig,
       };
     } catch (error) {
       console.error('Failed to fetch pool data:', error);
-      throw new Error('GET_POOL_DATA_FAILED', { cause: error });
+      return { ok: false, error: new Error('GET_POOL_DATA_FAILED', { cause: error }) };
     }
   }
 
@@ -1202,152 +1192,164 @@ export class ClService {
    * });
    * ```
    */
-  public async getPositionInfo(tokenId: bigint, publicClient: PublicClient<HttpTransport>): Promise<ClPositionInfo> {
-    // Read position data from the position manager using PancakeSwap SDK ABI
-    const positionData = await publicClient.readContract({
-      address: this.config.sodaxConfig.dex.concentratedLiquidityConfig.clPositionManager,
-      abi: CLPositionManagerAbi,
-      functionName: 'positions',
-      args: [tokenId],
-    });
+  public async getPositionInfo(
+    tokenId: bigint,
+    publicClient: PublicClient<HttpTransport>,
+  ): Promise<Result<ClPositionInfo>> {
+    try {
+      // Read position data from the position manager using PancakeSwap SDK ABI
+      const positionData = await publicClient.readContract({
+        address: this.config.sodaxConfig.dex.concentratedLiquidityConfig.clPositionManager,
+        abi: CLPositionManagerAbi,
+        functionName: 'positions',
+        args: [tokenId],
+      });
 
-    // Extract position data from the PancakeSwap Infinity positions structure:
-    // Returns: (PoolKey poolKey, int24 tickLower, int24 tickUpper, uint128 liquidity,
-    //           uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128, ICLSubscriber _subscriber)
-    const [
-      encodedPoolKey,
-      tickLower,
-      tickUpper,
-      liquidity,
-      feeGrowthInside0LastX128,
-      feeGrowthInside1LastX128,
-      subscriber,
-    ] = positionData;
-    const poolKey = decodePoolKey(encodedPoolKey, 'CL') as PoolKey<'CL'>;
+      // Extract position data from the PancakeSwap Infinity positions structure:
+      // Returns: (PoolKey poolKey, int24 tickLower, int24 tickUpper, uint128 liquidity,
+      //           uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128, ICLSubscriber _subscriber)
+      const [
+        encodedPoolKey,
+        tickLower,
+        tickUpper,
+        liquidity,
+        feeGrowthInside0LastX128,
+        feeGrowthInside1LastX128,
+        subscriber,
+      ] = positionData;
+      const poolKey = decodePoolKey(encodedPoolKey, 'CL') as PoolKey<'CL'>;
 
-    // Get pool data to get current tick and token decimals
-    const poolData = await this.getPoolData(poolKey, publicClient);
+      // Get pool data to get current tick and token decimals
+      const poolDataResult = await this.getPoolData(poolKey, publicClient);
+      if (!poolDataResult.ok) return poolDataResult;
+      const poolData = poolDataResult.value;
 
-    const tokenAmount0 = PositionMath.getToken0Amount(
-      poolData.currentTick,
-      tickLower,
-      tickUpper,
-      poolData.sqrtPriceX96,
-      liquidity,
-    );
-    const tokenAmount1 = PositionMath.getToken1Amount(
-      poolData.currentTick,
-      tickLower,
-      tickUpper,
-      poolData.sqrtPriceX96,
-      liquidity,
-    );
+      const tokenAmount0 = PositionMath.getToken0Amount(
+        poolData.currentTick,
+        tickLower,
+        tickUpper,
+        poolData.sqrtPriceX96,
+        liquidity,
+      );
+      const tokenAmount1 = PositionMath.getToken1Amount(
+        poolData.currentTick,
+        tickLower,
+        tickUpper,
+        poolData.sqrtPriceX96,
+        liquidity,
+      );
 
-    // Calculate unclaimed fees using fee growth globals and tick data
-    // Get the pool ID for contract calls
-    const poolId = getPoolId(poolKey);
+      // Calculate unclaimed fees using fee growth globals and tick data
+      // Get the pool ID for contract calls
+      const poolId = getPoolId(poolKey);
 
-    // Get global fee growth from pool manager
-    const feeGrowthGlobals = await publicClient.readContract({
-      address: poolKey.poolManager,
-      abi: CLPoolManagerAbi,
-      functionName: 'getFeeGrowthGlobals',
-      args: [poolId],
-    });
-
-    const [feeGrowthGlobal0X128, feeGrowthGlobal1X128] = feeGrowthGlobals;
-
-    // Get tick info for lower and upper ticks
-    const [tickLowerInfo, tickUpperInfo] = await Promise.all([
-      publicClient.readContract({
+      // Get global fee growth from pool manager
+      const feeGrowthGlobals = await publicClient.readContract({
         address: poolKey.poolManager,
         abi: CLPoolManagerAbi,
-        functionName: 'getPoolTickInfo',
-        args: [poolId, tickLower],
-      }),
-      publicClient.readContract({
-        address: poolKey.poolManager,
-        abi: CLPoolManagerAbi,
-        functionName: 'getPoolTickInfo',
-        args: [poolId, tickUpper],
-      }),
-    ]);
+        functionName: 'getFeeGrowthGlobals',
+        args: [poolId],
+      });
 
-    const feeGrowthOutside0X128Lower = tickLowerInfo.feeGrowthOutside0X128;
-    const feeGrowthOutside1X128Lower = tickLowerInfo.feeGrowthOutside1X128;
-    const feeGrowthOutside0X128Upper = tickUpperInfo.feeGrowthOutside0X128;
-    const feeGrowthOutside1X128Upper = tickUpperInfo.feeGrowthOutside1X128;
+      const [feeGrowthGlobal0X128, feeGrowthGlobal1X128] = feeGrowthGlobals;
 
-    // Calculate fee growth inside the position's tick range
-    // If current tick is below the position, all fee growth is "above"
-    // If current tick is inside the position, we use the standard formula
-    // If current tick is above the position, all fee growth is "below"
-    let feeGrowthInside0X128: bigint;
-    let feeGrowthInside1X128: bigint;
+      // Get tick info for lower and upper ticks
+      const [tickLowerInfo, tickUpperInfo] = await Promise.all([
+        publicClient.readContract({
+          address: poolKey.poolManager,
+          abi: CLPoolManagerAbi,
+          functionName: 'getPoolTickInfo',
+          args: [poolId, tickLower],
+        }),
+        publicClient.readContract({
+          address: poolKey.poolManager,
+          abi: CLPoolManagerAbi,
+          functionName: 'getPoolTickInfo',
+          args: [poolId, tickUpper],
+        }),
+      ]);
 
-    if (poolData.currentTick < tickLower) {
-      // Current tick is below the position
-      feeGrowthInside0X128 = feeGrowthOutside0X128Lower - feeGrowthOutside0X128Upper;
-      feeGrowthInside1X128 = feeGrowthOutside1X128Lower - feeGrowthOutside1X128Upper;
-    } else if (poolData.currentTick < tickUpper) {
-      // Current tick is inside the position
-      feeGrowthInside0X128 = feeGrowthGlobal0X128 - feeGrowthOutside0X128Lower - feeGrowthOutside0X128Upper;
-      feeGrowthInside1X128 = feeGrowthGlobal1X128 - feeGrowthOutside1X128Lower - feeGrowthOutside1X128Upper;
-    } else {
-      // Current tick is above the position
-      feeGrowthInside0X128 = feeGrowthOutside0X128Upper - feeGrowthOutside0X128Lower;
-      feeGrowthInside1X128 = feeGrowthOutside1X128Upper - feeGrowthOutside1X128Lower;
+      const feeGrowthOutside0X128Lower = tickLowerInfo.feeGrowthOutside0X128;
+      const feeGrowthOutside1X128Lower = tickLowerInfo.feeGrowthOutside1X128;
+      const feeGrowthOutside0X128Upper = tickUpperInfo.feeGrowthOutside0X128;
+      const feeGrowthOutside1X128Upper = tickUpperInfo.feeGrowthOutside1X128;
+
+      // Calculate fee growth inside the position's tick range
+      // If current tick is below the position, all fee growth is "above"
+      // If current tick is inside the position, we use the standard formula
+      // If current tick is above the position, all fee growth is "below"
+      let feeGrowthInside0X128: bigint;
+      let feeGrowthInside1X128: bigint;
+
+      if (poolData.currentTick < tickLower) {
+        // Current tick is below the position
+        feeGrowthInside0X128 = feeGrowthOutside0X128Lower - feeGrowthOutside0X128Upper;
+        feeGrowthInside1X128 = feeGrowthOutside1X128Lower - feeGrowthOutside1X128Upper;
+      } else if (poolData.currentTick < tickUpper) {
+        // Current tick is inside the position
+        feeGrowthInside0X128 = feeGrowthGlobal0X128 - feeGrowthOutside0X128Lower - feeGrowthOutside0X128Upper;
+        feeGrowthInside1X128 = feeGrowthGlobal1X128 - feeGrowthOutside1X128Lower - feeGrowthOutside1X128Upper;
+      } else {
+        // Current tick is above the position
+        feeGrowthInside0X128 = feeGrowthOutside0X128Upper - feeGrowthOutside0X128Lower;
+        feeGrowthInside1X128 = feeGrowthOutside1X128Upper - feeGrowthOutside1X128Lower;
+      }
+
+      // Calculate unclaimed fees
+      // Formula: (currentFeeGrowthInside - feeGrowthInsideLastX128) * liquidity / 2^128
+      const Q128 = BigInt(2) ** BigInt(128);
+
+      // Handle potential underflow with modular arithmetic
+      const feeGrowthDelta0 = (feeGrowthInside0X128 - feeGrowthInside0LastX128 + (Q128 << 128n)) % (Q128 << 128n);
+      const feeGrowthDelta1 = (feeGrowthInside1X128 - feeGrowthInside1LastX128 + (Q128 << 128n)) % (Q128 << 128n);
+
+      const unclaimedFees0 = (feeGrowthDelta0 * liquidity) / Q128;
+      const unclaimedFees1 = (feeGrowthDelta1 * liquidity) / Q128;
+
+      // Calculate underlying amounts if tokens are StatATokens
+      let amount0Underlying: bigint | undefined;
+      let amount1Underlying: bigint | undefined;
+      let unclaimedFees0Underlying: bigint | undefined;
+      let unclaimedFees1Underlying: bigint | undefined;
+
+      if (poolData.token0IsStatAToken && poolData.token0ConversionRate) {
+        // Convert wrapped amount to underlying amount
+        // conversionRate is how much underlying per 1e18 shares
+        amount0Underlying = (tokenAmount0 * poolData.token0ConversionRate) / BigInt(10 ** 18);
+        unclaimedFees0Underlying = (unclaimedFees0 * poolData.token0ConversionRate) / BigInt(10 ** 18);
+      }
+
+      if (poolData.token1IsStatAToken && poolData.token1ConversionRate) {
+        // Convert wrapped amount to underlying amount
+        amount1Underlying = (tokenAmount1 * poolData.token1ConversionRate) / BigInt(10 ** 18);
+        unclaimedFees1Underlying = (unclaimedFees1 * poolData.token1ConversionRate) / BigInt(10 ** 18);
+      }
+
+      return {
+        ok: true,
+        value: {
+          poolKey,
+          tickLower,
+          tickUpper,
+          liquidity,
+          feeGrowthInside0LastX128,
+          feeGrowthInside1LastX128,
+          subscriber,
+          amount0: tokenAmount0,
+          amount1: tokenAmount1,
+          unclaimedFees0,
+          unclaimedFees1,
+          tickLowerPrice: tickToPrice(poolData.token0, poolData.token1, tickLower),
+          tickUpperPrice: tickToPrice(poolData.token0, poolData.token1, tickUpper),
+          ...(amount0Underlying !== undefined && { amount0Underlying }),
+          ...(amount1Underlying !== undefined && { amount1Underlying }),
+          ...(unclaimedFees0Underlying !== undefined && { unclaimedFees0Underlying }),
+          ...(unclaimedFees1Underlying !== undefined && { unclaimedFees1Underlying }),
+        },
+      };
+    } catch (error) {
+      return { ok: false, error: new Error('GET_POSITION_INFO_FAILED', { cause: error }) };
     }
-
-    // Calculate unclaimed fees
-    // Formula: (currentFeeGrowthInside - feeGrowthInsideLastX128) * liquidity / 2^128
-    const Q128 = BigInt(2) ** BigInt(128);
-
-    // Handle potential underflow with modular arithmetic
-    const feeGrowthDelta0 = (feeGrowthInside0X128 - feeGrowthInside0LastX128 + (Q128 << 128n)) % (Q128 << 128n);
-    const feeGrowthDelta1 = (feeGrowthInside1X128 - feeGrowthInside1LastX128 + (Q128 << 128n)) % (Q128 << 128n);
-
-    const unclaimedFees0 = (feeGrowthDelta0 * liquidity) / Q128;
-    const unclaimedFees1 = (feeGrowthDelta1 * liquidity) / Q128;
-
-    // Calculate underlying amounts if tokens are StatATokens
-    let amount0Underlying: bigint | undefined;
-    let amount1Underlying: bigint | undefined;
-    let unclaimedFees0Underlying: bigint | undefined;
-    let unclaimedFees1Underlying: bigint | undefined;
-
-    if (poolData.token0IsStatAToken && poolData.token0ConversionRate) {
-      // Convert wrapped amount to underlying amount
-      // conversionRate is how much underlying per 1e18 shares
-      amount0Underlying = (tokenAmount0 * poolData.token0ConversionRate) / BigInt(10 ** 18);
-      unclaimedFees0Underlying = (unclaimedFees0 * poolData.token0ConversionRate) / BigInt(10 ** 18);
-    }
-
-    if (poolData.token1IsStatAToken && poolData.token1ConversionRate) {
-      // Convert wrapped amount to underlying amount
-      amount1Underlying = (tokenAmount1 * poolData.token1ConversionRate) / BigInt(10 ** 18);
-      unclaimedFees1Underlying = (unclaimedFees1 * poolData.token1ConversionRate) / BigInt(10 ** 18);
-    }
-
-    return {
-      poolKey,
-      tickLower,
-      tickUpper,
-      liquidity,
-      feeGrowthInside0LastX128,
-      feeGrowthInside1LastX128,
-      subscriber,
-      amount0: tokenAmount0,
-      amount1: tokenAmount1,
-      unclaimedFees0,
-      unclaimedFees1,
-      tickLowerPrice: tickToPrice(poolData.token0, poolData.token1, tickLower),
-      tickUpperPrice: tickToPrice(poolData.token0, poolData.token1, tickUpper),
-      ...(amount0Underlying !== undefined && { amount0Underlying }),
-      ...(amount1Underlying !== undefined && { amount1Underlying }),
-      ...(unclaimedFees0Underlying !== undefined && { unclaimedFees0Underlying }),
-      ...(unclaimedFees1Underlying !== undefined && { unclaimedFees1Underlying }),
-    };
   }
 
   /**

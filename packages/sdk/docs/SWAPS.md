@@ -58,8 +58,7 @@ All swap methods are accessible through `sodax.swaps`:
 
 - `swap(params)` - Complete swap operation (recommended, handles all steps automatically)
 - `createLimitOrder(params)` - Create a limit order intent (no deadline, must be cancelled manually)
-- `createAndSubmitIntent(params)` - Create and submit intent (alternative to swap)
-- `createIntent(params)` - Create intent only (for custom handling)
+- `createSwapIntent(params)` - Create intent only (for custom handling)
 - `submitIntent(payload)` - Submit intent to relay API (for custom handling)
 - `postExecution(request)` - Post execution to Solver API(for custom handling)
 
@@ -72,8 +71,8 @@ All swap methods are accessible through `sodax.swaps`:
 - `getSolvedIntentPacket(params)` - Get the intent delivery info about solved intent from the Relayer API.
 - `getIntentHash(intent)` - Get keccak256 hash of an intent
 - `getStatus(request)` - Get intent status from Solver API
-- `cancelIntent(intent, spokeProvider, raw?)` - Cancel an active intent
-- `cancelLimitOrder(intent, spokeProvider, raw?)` - Cancel a limit order intent (wrapper around cancelIntent)
+- `cancelIntent(params)` - Cancel an active intent
+- `cancelLimitOrder(params)` - Cancel a limit order intent (wrapper around cancelIntent)
 
 ### Token Approval
 
@@ -155,17 +154,17 @@ const createIntentParams = {
 
 All solver functions use object parameters for better readability and extensibility. The common parameter structure includes:
 
-- **`intentParams`**: The `CreateIntentParams` object containing swap details
-- **`spokeProvider`**: The spoke provider instance for the source chain. Can be a regular `SpokeProvider` (e.g., `EvmSpokeProvider`) or a raw spoke provider (e.g., `EvmRawSpokeProvider`) when you only have a wallet address. See [HOW_TO_CREATE_A_SPOKE_PROVIDER.md](https://github.com/icon-project/sodax-frontend/blob/main/packages/sdk/docs/HOW_TO_CREATE_A_SPOKE_PROVIDER.md) for details on raw spoke providers.
+- **`params`**: The `CreateIntentParams` object containing swap details
+- **`walletProvider`**: The spoke provider instance for the source chain. Can be a regular `SpokeProvider` (e.g., `EvmSpokeProvider`) or a raw spoke provider (e.g., `EvmRawSpokeProvider`) when you only have a wallet address. See [HOW_TO_CREATE_A_SPOKE_PROVIDER.md](https://github.com/icon-project/sodax-frontend/blob/main/packages/sdk/docs/HOW_TO_CREATE_A_SPOKE_PROVIDER.md) for details on raw spoke providers.
 - **`fee`**: (Optional) Partner fee configuration. If not provided, uses the default partner fee from config. **Note**: Fees are now deducted from the input amount rather than added to it.
-- **`raw`**: (Optional) Whether to return raw transaction data instead of executing the transaction. **Note**: When using raw spoke providers, you must pass `raw: true`. Some methods like `swap` and `createAndSubmitIntent` do not support raw mode as they need to execute transactions.
+- **`raw`**: (Optional) Whether to return raw transaction data instead of executing the transaction. **Note**: When using raw spoke providers, you must pass `raw: true`. Some methods like `swap` do not support raw mode as they need to execute transactions.
 - **`timeout`**: (Optional) Timeout in milliseconds for relay operations (default: 60 seconds).
 - **`skipSimulation`**: (Optional) Whether to skip transaction simulation (default: false).
 
 **Raw Spoke Provider Support:**
 
-- **Methods that support raw mode**: `createIntent`, `approve`, `cancelIntent`
-- **Methods that do NOT support raw mode**: `swap`, `createAndSubmitIntent` (these methods need to execute transactions and submit them to the relay API)
+- **Methods that support raw mode**: `createSwapIntent`, `approve`, `cancelIntent`
+- **Methods that do NOT support raw mode**: `swap` (these methods need to execute transactions and submit them to the relay API)
 
 ### Get Fees
 
@@ -236,8 +235,8 @@ const evmWalletAddress = await evmWalletProvider.getWalletAddress();
 
 // First check if approval is needed
 const isApproved = await sodax.swaps.isAllowanceValid({
-  intentParams: createIntentParams,
-  spokeProvider: bscSpokeProvider,
+  params: createIntentParams,
+  walletProvider: bscSpokeProvider,
 });
 
 if (!isApproved.ok) {
@@ -246,8 +245,8 @@ if (!isApproved.ok) {
 } else if (!isApproved.value) {
   // Approve Sodax to transfer your tokens
   const approveResult = await sodax.swaps.approve({
-    intentParams: createIntentParams,
-    spokeProvider: bscSpokeProvider,
+    params: createIntentParams,
+    walletProvider: bscSpokeProvider,
   });
 
   if (!approveResult.ok) {
@@ -261,7 +260,7 @@ if (!isApproved.ok) {
 }
 
 // Now you can proceed with creating the intent
-// ... continue with createIntent or swap ...
+// ... continue with createSwapIntent or swap ...
 ```
 
 **Using Raw Spoke Providers with `approve`:**
@@ -285,11 +284,11 @@ const bscRawSpokeProvider = new EvmRawSpokeProvider(userWalletAddress, bscChainC
 
 // Get raw approval transaction
 const approveResult = await sodax.swaps.approve({
-  intentParams: {
+  params: {
     ...createIntentParams,
     srcAddress: userWalletAddress,
   },
-  spokeProvider: bscRawSpokeProvider,
+  walletProvider: bscRawSpokeProvider,
   raw: true, // Required when using raw spoke provider
 });
 
@@ -327,15 +326,15 @@ import {
 } from "@sodax/sdk";
 
 // Example: Estimate gas for an intent creation transaction using regular spoke provider
-const createIntentResult = await sodax.swaps.createIntent({
-  intentParams: createIntentParams,
-  spokeProvider: bscSpokeProvider,
+const createIntentResult = await sodax.swaps.createSwapIntent({
+  params: createIntentParams,
+  walletProvider: bscSpokeProvider,
   fee, // optional - uses configured partner fee if not provided
   raw: true, // true = get raw transaction
 });
 
 if (createIntentResult.ok) {
-  const [rawTx, intent] = createIntentResult.value;
+  const { tx: rawTx, intent } = createIntentResult.value;
   
   // Estimate gas for the raw transaction (static method)
   // Note: SwapService.estimateGas is a static method
@@ -353,18 +352,18 @@ const userWalletAddress = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb' as Address
 const bscChainConfig = spokeChainConfig[ChainKeys.BSC_MAINNET];
 const bscRawSpokeProvider = new EvmRawSpokeProvider(userWalletAddress, bscChainConfig);
 
-const createIntentResultWithRaw = await sodax.swaps.createIntent({
-  intentParams: {
+const createIntentResultWithRaw = await sodax.swaps.createSwapIntent({
+  params: {
     ...createIntentParams,
     srcAddress: userWalletAddress,
     dstAddress: userWalletAddress,
   },
-  spokeProvider: bscRawSpokeProvider,
+  walletProvider: bscRawSpokeProvider,
   raw: true, // Required when using raw spoke provider
 });
 
 if (createIntentResultWithRaw.ok) {
-  const [rawTx, intent] = createIntentResultWithRaw.value;
+  const { tx: rawTx, intent } = createIntentResultWithRaw.value;
   
   // Estimate gas using the raw spoke provider
   const gasEstimate = await SwapService.estimateGas(rawTx, bscRawSpokeProvider);
@@ -376,8 +375,8 @@ if (createIntentResultWithRaw.ok) {
 
 // Example: Estimate gas for an approval transaction
 const approveResult = await sodax.swaps.approve({
-  intentParams: createIntentParams,
-  spokeProvider: bscSpokeProvider,
+  params: createIntentParams,
+  walletProvider: bscSpokeProvider,
   raw: true // true = get raw transaction
 });
 
@@ -410,7 +409,7 @@ The `swap` method is the recommended way to perform a complete swap operation. I
 3. Wait for relayer to relay tx data to the hub chain (Sonic)
 4. Post hub chain tx hash to the Solver API
 
-**Note**: The `swap` method does NOT support raw mode (`raw: true`) because it needs to execute transactions and submit them to the relay API. If you need raw transaction data, use `createIntent` instead.
+**Note**: The `swap` method does NOT support raw mode (`raw: true`) because it needs to execute transactions and submit them to the relay API. If you need raw transaction data, use `createSwapIntent` instead.
 
 ```typescript
 import {
@@ -423,8 +422,8 @@ import {
  * NOTE: This method requires a regular spoke provider (not raw) as it needs to execute transactions
  */
 const swapResult = await sodax.swaps.swap({
-  intentParams: createIntentParams,
-  spokeProvider: bscSpokeProvider,
+  params: createIntentParams,
+  walletProvider: bscSpokeProvider,
   fee, // optional - uses configured partner fee if not provided
   timeout, // optional - timeout in milliseconds (default: 60 seconds)
   skipSimulation, // optional - whether to skip transaction simulation (default: false)
@@ -435,7 +434,7 @@ if (!swapResult.ok) {
 }
 
 // solverExecutionResponse, created Intent data, and intent delivery info
-const [solverExecutionResponse, intent, intentDeliveryInfo] = swapResult.value;
+const { solverExecutionResponse, intent, intentDeliveryInfo } = swapResult.value;
 ```
 
 #### Create Limit Order
@@ -468,8 +467,8 @@ const limitOrderParams = {
 
 // Create the limit order
 const createLimitOrderResult = await sodax.swaps.createLimitOrder({
-  intentParams: limitOrderParams,
-  spokeProvider: bscSpokeProvider,
+  params: limitOrderParams,
+  walletProvider: bscSpokeProvider,
   fee, // optional - uses configured partner fee if not provided
   timeout, // optional - timeout in milliseconds (default: 60 seconds)
 });
@@ -478,7 +477,7 @@ if (!createLimitOrderResult.ok) {
   // handle error
 }
 
-const [solverExecutionResponse, intent, intentDeliveryInfo] = createLimitOrderResult.value;
+const { solverExecutionResponse, intent, intentDeliveryInfo } = createLimitOrderResult.value;
 
 // Get intent hash for tracking
 const intentHash = sodax.swaps.getIntentHash(intent);
@@ -519,37 +518,37 @@ if (cancelResult.ok) {
 
 #### Create And Submit Intent (Alternative Method - Equal to Swap)
 
-If you need more control over the process, you can use `createAndSubmitIntent` which is equivalent to `swap`:
+`createAndSubmitIntent` was renamed to `swap`. Use `swap` directly:
 
-**Note**: The `createAndSubmitIntent` method does NOT support raw mode (`raw: true`) because it needs to execute transactions and submit them to the relay API. If you need raw transaction data, use `createIntent` instead.
+**Note**: The `swap` method does NOT support raw mode (`raw: true`) because it needs to execute transactions and submit them to the relay API. If you need raw transaction data, use `createSwapIntent` instead.
 
 ```typescript
-const createAndSubmitIntentResult = await sodax.swaps.createAndSubmitIntent({
-  intentParams: createIntentParams,
-  spokeProvider: bscSpokeProvider,
+const swapResult = await sodax.swaps.swap({
+  params: createIntentParams,
+  walletProvider: bscSpokeProvider,
   fee, // optional - uses configured partner fee if not provided
   timeout, // optional - timeout in milliseconds (default: 60 seconds)
   skipSimulation, // optional - whether to skip transaction simulation (default: false)
 });
 
-if (!createAndSubmitIntentResult.ok) {
+if (!swapResult.ok) {
   // handle error
 }
 
-const [solverExecutionResponse, intent, intentDeliveryInfo] = createAndSubmitIntentResult.value;
+const { solverExecutionResponse, intent, intentDeliveryInfo } = swapResult.value;
 ```
 
-#### Create Intent Only
+#### Create Intent Only (createSwapIntent)
 
-If you need to create an intent without automatically submitting it (for custom handling), use `createIntent`:
+If you need to create an intent without automatically submitting it (for custom handling), use `createSwapIntent`:
 
 ```typescript
 // Creates intent on-chain transaction or returns raw transaction
 // NOTE: After intent is created on-chain it should also be posted
 // to Solver API and submitted to Relay API (see swap function on how it is done)
-const createIntentResult = await sodax.swaps.createIntent({
-  intentParams: createIntentParams,
-  spokeProvider: bscSpokeProvider,
+const createIntentResult = await sodax.swaps.createSwapIntent({
+  params: createIntentParams,
+  walletProvider: bscSpokeProvider,
   fee, // optional - uses configured partner fee if not provided
   raw: true, // true = get raw transaction, false = execute and return tx hash
 });
@@ -558,11 +557,11 @@ if (!createIntentResult.ok) {
   // handle error
 }
 
-// txHash/rawTx, Intent & FeeAmount, and create intent data (Hex)
-const [rawTx, intent, intentDataHex] = createIntentResult.value;
+// txHash/rawTx, Intent & FeeAmount, and relay data
+const { tx: rawTx, intent, relayData } = createIntentResult.value;
 ```
 
-**Using Raw Spoke Providers with `createIntent`:**
+**Using Raw Spoke Providers with `createSwapIntent`:**
 
 When using raw spoke providers (e.g., `EvmRawSpokeProvider`), you must pass `raw: true` to get raw transaction data:
 
@@ -582,18 +581,18 @@ const arbChainConfig = spokeChainConfig[ChainKeys.ARBITRUM_MAINNET];
 const arbRawSpokeProvider = new EvmRawSpokeProvider(userWalletAddress, arbChainConfig);
 
 // Create intent with raw spoke provider
-const createIntentResult = await sodax.swaps.createIntent({
-  intentParams: {
+const createIntentResult = await sodax.swaps.createSwapIntent({
+  params: {
     ...createIntentParams,
     srcAddress: userWalletAddress,
     dstAddress: userWalletAddress,
   },
-  spokeProvider: arbRawSpokeProvider,
+  walletProvider: arbRawSpokeProvider,
   raw: true, // Required when using raw spoke provider
 });
 
 if (createIntentResult.ok) {
-  const [rawTx, intent, intentDataHex] = createIntentResult.value;
+  const { tx: rawTx, intent, relayData } = createIntentResult.value;
   // rawTx is a raw transaction object: { from, to, value, data }
   // This can be sent to the user for signing or used for gas estimation
   console.log('Raw transaction:', rawTx);
@@ -606,7 +605,7 @@ if (createIntentResult.ok) {
 
 Submit the spoke chain transaction hash to the relay API for processing. This step is required after creating an intent on the spoke chain.
 
-**Note**: This is typically handled automatically by the `swap` or `createAndSubmitIntent` methods. You only need to call this manually if you're using `createIntent` separately.
+**Note**: This is typically handled automatically by the `swap` method. You only need to call this manually if you're using `createSwapIntent` separately.
 
 ```typescript
 import type { IntentRelayRequest } from "@sodax/sdk";
@@ -615,7 +614,7 @@ const submitPayload = {
   action: 'submit',
   params: {
     chain_id: '0x38.bsc', // Chain ID where the intent was created
-    tx_hash: '0xba3dce19347264db32ced212ff1a2036f20d9d2c7493d06af15027970be061af', // Transaction hash from createIntent
+    tx_hash: '0xba3dce19347264db32ced212ff1a2036f20d9d2c7493d06af15027970be061af', // Transaction hash from createSwapIntent
   },
 } satisfies IntentRelayRequest<'submit'>;
 
@@ -665,7 +664,7 @@ const submitPayload = {
 
 ### Post Execution to Solver API
 
-Post execution of intent order transaction executed on hub chain to Solver API. This step is typically handled automatically by the `swap` or `createAndSubmitIntent` methods.
+Post execution of intent order transaction executed on hub chain to Solver API. This step is typically handled automatically by the `swap` method.
 
 **Note**: This is usually called automatically after the intent is executed on the hub chain. You only need to call this manually if you're handling the flow step by step.
 
@@ -743,7 +742,7 @@ Active Intent Order can be cancelled using Intent. See [Get Intent Order](#get-i
 ```typescript
 import type { Intent } from "@sodax/sdk";
 
-// Get intent first (or use intent from createIntent/swap response)
+// Get intent first (or use intent from createSwapIntent/swap response)
 const intent: Intent = await sodax.swaps.getIntent(txHash);
 
 // Cancel the intent
@@ -781,7 +780,7 @@ const userWalletAddress = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb' as Address
 const bscChainConfig = spokeChainConfig[ChainKeys.BSC_MAINNET];
 const bscRawSpokeProvider = new EvmRawSpokeProvider(userWalletAddress, bscChainConfig);
 
-// Get intent (or use from previous createIntent response)
+// Get intent (or use from previous createSwapIntent response)
 const intent: Intent = await sodax.swaps.getIntent(txHash);
 
 // Get raw cancel transaction
@@ -913,8 +912,8 @@ The `swap` function performs multiple operations in sequence, and each step can 
 
 ```typescript
 const swapResult = await sodax.swaps.swap({
-  intentParams: createIntentParams,
-  spokeProvider: bscSpokeProvider,
+  params: createIntentParams,
+  walletProvider: bscSpokeProvider,
   fee, // optional - uses configured partner fee if not provided
   timeout, // optional - timeout in milliseconds (default: 60 seconds)
 });
@@ -976,14 +975,14 @@ if (!swapResult.ok) {
 }
 ```
 
-### Handling `createIntent` Errors
+### Handling `createSwapIntent` Errors
 
-The `createIntent` function has a simpler error structure since it only handles intent creation on spoke chain (source chain):
+The `createSwapIntent` function has a simpler error structure since it only handles intent creation on spoke chain (source chain):
 
 ```typescript
-const createIntentResult = await sodax.swaps.createIntent({
-  intentParams: createIntentParams,
-  spokeProvider: bscSpokeProvider,
+const createIntentResult = await sodax.swaps.createSwapIntent({
+  params: createIntentParams,
+  walletProvider: bscSpokeProvider,
   fee, // optional - uses configured partner fee if not provided
   raw: false
 });
@@ -991,7 +990,7 @@ const createIntentResult = await sodax.swaps.createIntent({
 if (!createIntentResult.ok) {
   const error = createIntentResult.error;
 
-  // createIntent only returns IntentError<'CREATION_FAILED'>
+  // createSwapIntent only returns IntentError<'CREATION_FAILED'>
   if (isIntentCreationFailedError(error)) {
     console.error('Intent creation failed:', error.data.payload);
     console.error('Original error:', error.data.error);

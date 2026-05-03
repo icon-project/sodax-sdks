@@ -1,12 +1,15 @@
 import type { StakeParams } from '@sodax/sdk';
 import type { SpokeChainKey } from '@sodax/sdk';
-import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { ReadHookParams } from '../shared/types.js';
 
-export type UseStakeAllowanceProps<K extends SpokeChainKey = SpokeChainKey> = {
-  params: Omit<StakeParams<K>, 'action'> | undefined;
-  queryOptions?: Omit<UseQueryOptions<boolean, Error>, 'queryKey' | 'queryFn' | 'enabled'>;
-};
+export type UseStakeAllowanceParams<K extends SpokeChainKey = SpokeChainKey> = ReadHookParams<
+  boolean,
+  {
+    payload: Omit<StakeParams<K>, 'action'> | undefined;
+  }
+>;
 
 /**
  * React hook to check whether the user has approved sufficient SODA spending for the stake
@@ -16,23 +19,24 @@ export type UseStakeAllowanceProps<K extends SpokeChainKey = SpokeChainKey> = {
 export function useStakeAllowance<K extends SpokeChainKey = SpokeChainKey>({
   params,
   queryOptions,
-}: UseStakeAllowanceProps<K>): UseQueryResult<boolean, Error> {
+}: UseStakeAllowanceParams<K> = {}): UseQueryResult<boolean, Error> {
   const { sodax } = useSodaxContext();
+  const payload = params?.payload;
 
   return useQuery<boolean, Error>({
-    queryKey: ['staking', 'allowance', params?.srcChainKey, 'stake', params?.srcAddress, params?.amount?.toString()],
+    queryKey: ['staking', 'allowance', payload?.srcChainKey, 'stake', payload?.srcAddress, payload?.amount?.toString()],
     queryFn: async () => {
-      if (!params) {
+      if (!payload) {
         throw new Error('Params are required');
       }
       const result = await sodax.staking.isAllowanceValid({
-        params: { ...params, action: 'stake' },
+        params: { ...payload, action: 'stake' },
         raw: true,
       });
       if (!result.ok) throw result.error;
       return result.value;
     },
-    enabled: !!params,
+    enabled: !!payload,
     refetchInterval: 5_000,
     gcTime: 0,
     ...queryOptions,

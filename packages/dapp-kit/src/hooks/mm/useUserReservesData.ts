@@ -1,27 +1,28 @@
 import type { UserReserveData } from '@sodax/sdk';
 import type { SpokeChainKey } from '@sodax/sdk';
-import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { ReadHookParams } from '../shared/types.js';
 
-export type UseUserReservesDataParams = {
-  spokeChainKey: SpokeChainKey | undefined;
-  userAddress: string | undefined;
-  queryOptions?: Omit<
-    UseQueryOptions<readonly [readonly UserReserveData[], number], Error>,
-    'queryKey' | 'queryFn' | 'enabled'
-  >;
-};
+export type UseUserReservesDataParams = ReadHookParams<
+  readonly [readonly UserReserveData[], number],
+  {
+    spokeChainKey: SpokeChainKey | undefined;
+    userAddress: string | undefined;
+  }
+>;
 
 /**
  * React hook for fetching the raw user reserves data (positions on the hub) for a given spoke
  * chain and user address.
  */
 export function useUserReservesData({
-  spokeChainKey,
-  userAddress,
+  params,
   queryOptions,
-}: UseUserReservesDataParams): UseQueryResult<readonly [readonly UserReserveData[], number], Error> {
+}: UseUserReservesDataParams = {}): UseQueryResult<readonly [readonly UserReserveData[], number], Error> {
   const { sodax } = useSodaxContext();
+  const spokeChainKey = params?.spokeChainKey;
+  const userAddress = params?.userAddress;
 
   return useQuery({
     queryKey: ['mm', 'userReservesData', spokeChainKey, userAddress],

@@ -1,4 +1,4 @@
-import type { ClLiquidityClaimRewardsAction, HubTxHash, SpokeTxHash } from '@sodax/sdk';
+import type { ClLiquidityClaimRewardsAction, TxHashPair } from '@sodax/sdk';
 import type { Result, SpokeChainKey } from '@sodax/sdk';
 import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
@@ -13,7 +13,7 @@ export type UseClaimRewardsVars<K extends SpokeChainKey = SpokeChainKey> = Omit<
   'raw'
 >;
 
-type ClaimRewardsResult = Result<[SpokeTxHash, HubTxHash]>;
+type ClaimRewardsResult = Result<TxHashPair>;
 
 /**
  * React hook for claiming accrued fees on a concentrated-liquidity position. Pure mutation: all

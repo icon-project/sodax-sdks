@@ -1,20 +1,24 @@
-import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { ReadHookParams } from '../shared/types.js';
 
-export type UseInstantUnstakeRatioProps = {
-  amount: bigint | undefined;
-  queryOptions?: Omit<UseQueryOptions<bigint, Error>, 'queryKey' | 'queryFn' | 'enabled'>;
-};
+export type UseInstantUnstakeRatioParams = ReadHookParams<
+  bigint,
+  {
+    amount: bigint | undefined;
+  }
+>;
 
 /**
  * React hook to estimate the SODA amount received from instant-unstaking a given xSODA amount
  * (after slippage). Hub-only read. Throws on `!ok`.
  */
 export function useInstantUnstakeRatio({
-  amount,
+  params,
   queryOptions,
-}: UseInstantUnstakeRatioProps): UseQueryResult<bigint, Error> {
+}: UseInstantUnstakeRatioParams = {}): UseQueryResult<bigint, Error> {
   const { sodax } = useSodaxContext();
+  const amount = params?.amount;
 
   return useQuery<bigint, Error>({
     queryKey: ['staking', 'instantUnstakeRatio', amount?.toString()],

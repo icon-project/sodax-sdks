@@ -1,4 +1,4 @@
-import type { AssetWithdrawAction, HubTxHash, SpokeTxHash } from '@sodax/sdk';
+import type { AssetWithdrawAction, TxHashPair } from '@sodax/sdk';
 import type { Result, SpokeChainKey } from '@sodax/sdk';
 import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
@@ -10,7 +10,7 @@ import { useSodaxContext } from '../shared/useSodaxContext.js';
  */
 export type UseDexWithdrawVars<K extends SpokeChainKey = SpokeChainKey> = Omit<AssetWithdrawAction<K, false>, 'raw'>;
 
-type DexWithdrawResult = Result<[SpokeTxHash, HubTxHash]>;
+type DexWithdrawResult = Result<TxHashPair>;
 
 /**
  * React hook for withdrawing an asset from a DEX pool. Pure mutation: all inputs (params,

@@ -13,10 +13,12 @@ export function useSodaBalance(chainKey: SpokeChainKey, userAddress: string | un
   const xService = useXService(getXChainType(chainKey));
 
   const { data: balances } = useXBalances({
-    xService,
-    xChainId: chainKey,
-    xTokens: sodaToken ? [sodaToken] : [],
-    address: userAddress,
+    params: {
+      xService,
+      xChainId: chainKey,
+      xTokens: sodaToken ? [sodaToken] : [],
+      address: userAddress,
+    },
   });
 
   return sodaToken ? balances?.[sodaToken.address] : undefined;

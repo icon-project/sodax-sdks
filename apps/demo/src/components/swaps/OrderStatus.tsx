@@ -20,7 +20,9 @@ export type SubmitTxOrder = {
 export type Order = SolverOrder | SubmitTxOrder;
 
 function SolverOrderStatus({ order }: { order: SolverOrder }) {
-  const { data: status } = useStatus(order.intentDeliveryInfo.dstTxHash as `0x${string}`);
+  const { data: status } = useStatus({
+    params: { intentTxHash: order.intentDeliveryInfo.dstTxHash as `0x${string}` },
+  });
 
   if (status) {
     if (status.ok) {
@@ -50,8 +52,7 @@ function SubmitTxOrderStatus({ order }: { order: SubmitTxOrder }) {
     [order.apiBaseURL],
   );
   const { data: statusResponse } = useBackendSubmitSwapTxStatus({
-    params: { txHash: order.txHash, srcChainId: order.srcChainId },
-    apiConfig,
+    params: { txHash: order.txHash, srcChainId: order.srcChainId, apiConfig },
   });
 
   if (!statusResponse) {

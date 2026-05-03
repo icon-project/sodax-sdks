@@ -1,4 +1,4 @@
-import { SelectChain } from '@/components/solver/SelectChain';
+import { SelectChain } from '@/components/swaps/SelectChain';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -50,7 +50,7 @@ import {
   type StellarChainKey,
   ChainKeys,
 } from '@sodax/sdk';
-import type { Order } from '@/components/solver/OrderStatus';
+import type { Order } from '@/components/swaps/OrderStatus';
 import { DEFAULT_SELECTED_CHAIN, useAppStore } from '@/zustand/useAppStore';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
 
@@ -79,25 +79,30 @@ export default function SwapCard({
   const { mutateAsync: swap } = useSwap();
   const [sourceAmount, setSourceAmount] = useState<string>('');
   const [intentOrderPayload, setIntentOrderPayload] = useState<CreateIntentParams | undefined>(undefined);
-  const { data: hasAllowed, isLoading: isAllowanceLoading } = useSwapAllowance(
-    intentOrderPayload,
-    src.chain,
-    sourceWalletProvider,
-  );
+  const { data: hasAllowed, isLoading: isAllowanceLoading } = useSwapAllowance({
+    params: {
+      payload: intentOrderPayload,
+      srcChainKey: src.chain,
+      walletProvider: sourceWalletProvider,
+    },
+  });
   const { approve, isLoading: isApproving } = useSwapApprove(intentOrderPayload, src.chain, sourceWalletProvider);
   const supportedSpokeChains = sodax.config.getSupportedSpokeChains();
   const {
     data: hasSufficientTrustline,
     isPending: isTrustlineLoading,
     error: trustlineError,
-  } = useStellarTrustlineCheck(
-    intentOrderPayload?.outputToken,
-    BigInt(intentOrderPayload?.minOutputAmount ?? 0n),
-    intentOrderPayload?.dstChainKey,
-    dst.chain === ChainKeys.STELLAR_MAINNET
-      ? (destWalletProvider as GetWalletProviderType<typeof ChainKeys.STELLAR_MAINNET> | undefined)
-      : undefined,
-  );
+  } = useStellarTrustlineCheck({
+    params: {
+      token: intentOrderPayload?.outputToken,
+      amount: BigInt(intentOrderPayload?.minOutputAmount ?? 0n),
+      chainId: intentOrderPayload?.dstChainKey,
+      walletProvider:
+        dst.chain === ChainKeys.STELLAR_MAINNET
+          ? (destWalletProvider as GetWalletProviderType<typeof ChainKeys.STELLAR_MAINNET> | undefined)
+          : undefined,
+    },
+  });
   if (trustlineError) {
     console.error('trustlineError', trustlineError);
   }
@@ -145,20 +150,24 @@ export default function SwapCard({
   // Balance fetching- Fetch source token balance for the connected wallet
   const sourceXService = useXService(getXChainType(src.chain));
   const { data: sourceBalances } = useXBalances({
-    xService: sourceXService,
-    xChainId: src.chain,
-    xTokens: src.token ? [src.token] : [],
-    address: sourceAccount.address,
+    params: {
+      xService: sourceXService,
+      xChainId: src.chain,
+      xTokens: src.token ? [src.token] : [],
+      address: sourceAccount.address,
+    },
   });
   const sourceTokenBalance = sourceBalances?.[src.token?.address ?? ''] ?? 0n;
 
   // Fetch destination token balance for the connected wallet
   const destXService = useXService(getXChainType(dst.chain));
   const { data: destBalances } = useXBalances({
-    xService: destXService,
-    xChainId: dst.chain,
-    xTokens: dst.token ? [dst.token] : [],
-    address: destAccount.address,
+    params: {
+      xService: destXService,
+      xChainId: dst.chain,
+      xTokens: dst.token ? [dst.token] : [],
+      address: destAccount.address,
+    },
   });
   const destTokenBalance = destBalances?.[dst.token?.address ?? ''] ?? 0n;
 
@@ -179,8 +188,12 @@ export default function SwapCard({
     dst.chain === ChainKeys.BITCOIN_MAINNET
       ? (destWalletProvider as GetWalletProviderType<typeof ChainKeys.BITCOIN_MAINNET> | undefined)
       : undefined;
-  const { data: srcTradingBal } = useTradingWalletBalance(sourceBitcoinWallet, sourceTradingAddress);
-  const { data: destTradingBal } = useTradingWalletBalance(destBitcoinWallet, destTradingAddress);
+  const { data: srcTradingBal } = useTradingWalletBalance({
+    params: { walletProvider: sourceBitcoinWallet, tradingAddress: sourceTradingAddress },
+  });
+  const { data: destTradingBal } = useTradingWalletBalance({
+    params: { walletProvider: destBitcoinWallet, tradingAddress: destTradingAddress },
+  });
 
   const payload = useMemo(() => {
     if (!src.token || !dst.token) {
@@ -201,7 +214,7 @@ export default function SwapCard({
     } satisfies SolverIntentQuoteRequest;
   }, [src.token, dst.token, src.chain, dst.chain, sourceAmount]);
 
-  const quoteQuery = useQuote(payload);
+  const quoteQuery = useQuote({ params: { payload } });
 
   const quote = useMemo(() => {
     if (quoteQuery.data?.ok) {
@@ -301,7 +314,7 @@ export default function SwapCard({
       return;
     }
 
-    const [spokeTxHash, intent, relayData] = createIntentResult.value;
+    const { tx: spokeTxHash, intent, relayData } = createIntentResult.value;
     console.log('Intent created. Spoke tx hash:', spokeTxHash);
 
     const swapIntentData: SwapIntentData = {
@@ -326,7 +339,7 @@ export default function SwapCard({
       srcChainKey: src.chain,
       walletAddress: sourceAccount.address ?? '',
       intent: swapIntentData,
-      relayData,
+      relayData: relayData.payload,
     };
 
     const submitResult = await submitSwapTx(request);
@@ -351,12 +364,12 @@ export default function SwapCard({
 
     setOpen(false);
     console.log('intentOrderPayload', intentOrderPayload);
-    console.log("wallet provider", sourceWalletProvider);
+    console.log('wallet provider', sourceWalletProvider);
     if (!sourceWalletProvider) return;
     const result = await swap({ params: intentOrderPayload, walletProvider: sourceWalletProvider });
 
     if (result.ok) {
-      const [response, intent, intentDeliveryInfo] = result.value;
+      const { solverExecutionResponse: response, intent, intentDeliveryInfo } = result.value;
 
       setOrders(prev => [...prev, { mode: 'solver', intentHash: response.intent_hash, intent, intentDeliveryInfo }]);
     } else {

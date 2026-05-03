@@ -1,28 +1,32 @@
 import type { ClPositionInfo, PoolKey } from '@sodax/sdk';
-import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { ReadHookParams } from '../shared/types.js';
 
 export type UsePositionInfoResponse = {
   positionInfo: ClPositionInfo;
   isValid: boolean;
 };
 
-export type UsePositionInfoProps = {
-  tokenId: string | null;
-  poolKey: PoolKey | null;
-  queryOptions?: Omit<UseQueryOptions<UsePositionInfoResponse, Error>, 'queryKey' | 'queryFn' | 'enabled'>;
-};
+export type UsePositionInfoParams = ReadHookParams<
+  UsePositionInfoResponse,
+  {
+    tokenId: string | null;
+    poolKey: PoolKey | null;
+  }
+>;
 
 /**
  * React hook to fetch a CL position by NFT token id and validate it against an expected pool key.
  * Reads via the hub `publicClient`. Disabled when `tokenId` or `poolKey` is missing.
  */
 export function usePositionInfo({
-  tokenId,
-  poolKey,
+  params,
   queryOptions,
-}: UsePositionInfoProps): UseQueryResult<UsePositionInfoResponse, Error> {
+}: UsePositionInfoParams = {}): UseQueryResult<UsePositionInfoResponse, Error> {
   const { sodax } = useSodaxContext();
+  const tokenId = params?.tokenId ?? null;
+  const poolKey = params?.poolKey ?? null;
 
   return useQuery<UsePositionInfoResponse, Error>({
     queryKey: ['dex', 'positionInfo', tokenId, poolKey],
@@ -31,7 +35,9 @@ export function usePositionInfo({
         throw new Error('Token ID and pool key are required');
       }
 
-      const info = await sodax.dex.clService.getPositionInfo(BigInt(tokenId), sodax.hubProvider.publicClient);
+      const infoResult = await sodax.dex.clService.getPositionInfo(BigInt(tokenId), sodax.hubProvider.publicClient);
+      if (!infoResult.ok) throw infoResult.error;
+      const info = infoResult.value;
 
       const isValid =
         info.poolKey.currency0.toLowerCase() === poolKey.currency0.toLowerCase() &&
