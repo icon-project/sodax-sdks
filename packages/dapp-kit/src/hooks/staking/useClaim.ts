@@ -1,11 +1,11 @@
-import type { ClaimAction, HubTxHash, SpokeTxHash } from '@sodax/sdk';
+import type { ClaimAction, TxHashPair } from '@sodax/sdk';
 import type { Result, SpokeChainKey } from '@sodax/sdk';
 import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 
 export type UseClaimVars<K extends SpokeChainKey = SpokeChainKey> = Omit<ClaimAction<K, false>, 'raw'>;
 
-type ClaimResult = Result<[SpokeTxHash, HubTxHash]>;
+type ClaimResult = Result<TxHashPair>;
 
 /**
  * React hook for claiming an unstaked SODA request that has reached the end of its waiting

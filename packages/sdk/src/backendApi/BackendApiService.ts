@@ -173,7 +173,11 @@ export interface MoneyMarketBorrowers {
  */
 export class BackendApiService implements IConfigApi {
 
-  constructor(private readonly config: ApiConfig) {}
+  private readonly headers: Record<string, string>;
+
+  constructor(private readonly config: ApiConfig) {
+    this.headers = { ...config.headers };
+  }
 
   /**
    * Make HTTP request using fetch API
@@ -183,7 +187,7 @@ export class BackendApiService implements IConfigApi {
    */
   private async makeRequest<T>(endpoint: string, config: RequestConfig): Promise<T> {
     const url = config.baseURL ? `${config.baseURL}${endpoint}` : `${this.config.baseURL}${endpoint}`;
-    const headers = { ...this.config.headers, ...config.headers };
+    const headers = { ...this.headers, ...config.headers };
 
     // Create AbortController for timeout
     const controller = new AbortController();
@@ -308,7 +312,7 @@ export class BackendApiService implements IConfigApi {
   public async getOrderbook(
     params: { offset: string; limit: string },
     config?: RequestOverrideConfig,
-  ): Promise<OrderbookResponse> {
+  ): Promise<Result<OrderbookResponse>> {
     const queryParams = new URLSearchParams();
     queryParams.append('offset', params.offset);
     queryParams.append('limit', params.limit);
@@ -316,7 +320,7 @@ export class BackendApiService implements IConfigApi {
     const queryString = queryParams.toString();
     const endpoint = `/solver/orderbook?${queryString}`;
 
-    return this.makeRequest<OrderbookResponse>(endpoint, { ...config, method: 'GET' });
+    return this.request<OrderbookResponse>(endpoint, { ...config, method: 'GET' });
   }
 
   /**
@@ -340,7 +344,7 @@ export class BackendApiService implements IConfigApi {
       offset?: string;
     },
     config?: RequestOverrideConfig,
-  ): Promise<UserIntentsResponse> {
+  ): Promise<Result<UserIntentsResponse>> {
     const { userAddress, startDate, endDate, limit, offset } = params;
     const queryParams = new URLSearchParams();
     if (startDate) queryParams.append('startDate', new Date(startDate).toISOString());
@@ -352,7 +356,7 @@ export class BackendApiService implements IConfigApi {
     const endpoint =
       queryString.length > 0 ? `/intent/user/${userAddress}?${queryString}` : `/intent/user/${userAddress}`;
 
-    return this.makeRequest<UserIntentsResponse>(endpoint, { ...config, method: 'GET' });
+    return this.request<UserIntentsResponse>(endpoint, { ...config, method: 'GET' });
   }
 
   // Money Market endpoints
@@ -395,7 +399,7 @@ export class BackendApiService implements IConfigApi {
     reserveAddress: string,
     params: { offset: string; limit: string },
     config?: RequestOverrideConfig,
-  ): Promise<MoneyMarketAssetBorrowers> {
+  ): Promise<Result<MoneyMarketAssetBorrowers>> {
     const queryParams = new URLSearchParams();
     queryParams.append('offset', params.offset);
     queryParams.append('limit', params.limit);
@@ -403,7 +407,7 @@ export class BackendApiService implements IConfigApi {
     const queryString = queryParams.toString();
     const endpoint = `/moneymarket/asset/${reserveAddress}/borrowers?${queryString}`;
 
-    return this.makeRequest<MoneyMarketAssetBorrowers>(endpoint, { ...config, method: 'GET' });
+    return this.request<MoneyMarketAssetBorrowers>(endpoint, { ...config, method: 'GET' });
   }
 
   /**
@@ -416,7 +420,7 @@ export class BackendApiService implements IConfigApi {
     reserveAddress: string,
     params: { offset: string; limit: string },
     config?: RequestOverrideConfig,
-  ): Promise<MoneyMarketAssetSuppliers> {
+  ): Promise<Result<MoneyMarketAssetSuppliers>> {
     const queryParams = new URLSearchParams();
     queryParams.append('offset', params.offset);
     queryParams.append('limit', params.limit);
@@ -424,7 +428,7 @@ export class BackendApiService implements IConfigApi {
     const queryString = queryParams.toString();
     const endpoint = `/moneymarket/asset/${reserveAddress}/suppliers?${queryString}`;
 
-    return this.makeRequest<MoneyMarketAssetSuppliers>(endpoint, { ...config, method: 'GET' });
+    return this.request<MoneyMarketAssetSuppliers>(endpoint, { ...config, method: 'GET' });
   }
 
   /**
@@ -435,7 +439,7 @@ export class BackendApiService implements IConfigApi {
   public async getAllMoneyMarketBorrowers(
     params: { offset: string; limit: string },
     config?: RequestOverrideConfig,
-  ): Promise<MoneyMarketBorrowers> {
+  ): Promise<Result<MoneyMarketBorrowers>> {
     const queryParams = new URLSearchParams();
     queryParams.append('offset', params.offset);
     queryParams.append('limit', params.limit);
@@ -443,7 +447,7 @@ export class BackendApiService implements IConfigApi {
     const queryString = queryParams.toString();
     const endpoint = `/moneymarket/borrowers?${queryString}`;
 
-    return this.makeRequest<MoneyMarketBorrowers>(endpoint, { ...config, method: 'GET' });
+    return this.request<MoneyMarketBorrowers>(endpoint, { ...config, method: 'GET' });
   }
 
   /**
@@ -480,9 +484,9 @@ export class BackendApiService implements IConfigApi {
     config?: RequestOverrideConfig,
   ): Promise<Result<GetSwapTokensByChainIdApiResponse>> {
     return this.request<GetSwapTokensByChainIdApiResponse>(`/config/swap/${chainId}/tokens`, {
-        ...config,
-        method: 'GET',
-      });
+      ...config,
+      method: 'GET',
+    });
   }
 
   /**
@@ -491,9 +495,9 @@ export class BackendApiService implements IConfigApi {
    */
   public async getMoneyMarketTokens(config?: RequestOverrideConfig): Promise<Result<GetMoneyMarketTokensApiResponse>> {
     return this.request<GetMoneyMarketTokensApiResponse>('/config/money-market/tokens', {
-        ...config,
-        method: 'GET',
-      });
+      ...config,
+      method: 'GET',
+    });
   }
 
   /**
@@ -504,9 +508,9 @@ export class BackendApiService implements IConfigApi {
     config?: RequestOverrideConfig,
   ): Promise<Result<GetMoneyMarketReserveAssetsApiResponse>> {
     return this.request<GetMoneyMarketReserveAssetsApiResponse>('/config/money-market/reserve-assets', {
-        ...config,
-        method: 'GET',
-      });
+      ...config,
+      method: 'GET',
+    });
   }
 
   /**
@@ -519,9 +523,9 @@ export class BackendApiService implements IConfigApi {
     config?: RequestOverrideConfig,
   ): Promise<Result<GetMoneyMarketTokensByChainIdApiResponse>> {
     return this.request<GetMoneyMarketTokensByChainIdApiResponse>(
-        `/config/money-market/${chainId}/tokens`,
-        { ...config, method: 'GET' },
-      );
+      `/config/money-market/${chainId}/tokens`,
+      { ...config, method: 'GET' },
+    );
   }
 
   /**
@@ -530,9 +534,9 @@ export class BackendApiService implements IConfigApi {
    */
   public async getRelayChainIdMap(config?: RequestOverrideConfig): Promise<Result<GetRelayChainIdMapApiResponse>> {
     return this.request<GetRelayChainIdMapApiResponse>('/config/relay/chain-id-map', {
-        ...config,
-        method: 'GET',
-      });
+      ...config,
+      method: 'GET',
+    });
   }
 
   /**
@@ -541,9 +545,9 @@ export class BackendApiService implements IConfigApi {
    */
   public async getSpokeChainConfig(config?: RequestOverrideConfig): Promise<Result<GetSpokeChainConfigApiResponse>> {
     return this.request<GetSpokeChainConfigApiResponse>('/config/spoke/all-chains-configs', {
-        ...config,
-        method: 'GET',
-      });
+      ...config,
+      method: 'GET',
+    });
   }
 
   /**
@@ -552,7 +556,7 @@ export class BackendApiService implements IConfigApi {
    */
   public setHeaders(headers: Record<string, string>): void {
     Object.entries(headers).forEach(([key, value]) => {
-      this.config.headers[key] = value;
+      this.headers[key] = value;
     });
   }
 

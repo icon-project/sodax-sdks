@@ -26,3 +26,4 @@ public/dist
 .github/skills/
 
 scripts/find_malicious_npm_packages.sh
+.pnpm-store/

@@ -106,8 +106,8 @@ const result = await sodax.dex.assetService.deposit({
 });
 
 if (result.ok) {
-  const [spokeTxHash, hubTxHash] = result.value;
-  console.log("Deposit complete:", { spokeTxHash, hubTxHash });
+  const { srcChainTxHash, dstChainTxHash } = result.value;
+  console.log("Deposit complete:", { srcChainTxHash, dstChainTxHash });
 }
 ```
 
@@ -134,8 +134,8 @@ const result = await sodax.dex.assetService.withdraw({
 });
 
 if (result.ok) {
-  const [spokeTxHash, hubTxHash] = result.value;
-  console.log("Withdraw complete:", { spokeTxHash, hubTxHash });
+  const { srcChainTxHash, dstChainTxHash } = result.value;
+  console.log("Withdraw complete:", { srcChainTxHash, dstChainTxHash });
 }
 ```
 

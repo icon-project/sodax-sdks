@@ -38,14 +38,16 @@ export function SimplePoolManager(): JSX.Element {
     data: poolDataRaw,
     isLoading: isLoadingPoolData,
     error: poolDataError,
-  } = usePoolData({ poolKey: selectedPoolKey || null });
+  } = usePoolData({ params: { poolKey: selectedPoolKey || null } });
   const poolData = poolDataRaw ?? null;
 
   const { data: balances } = usePoolBalances({
-    poolData,
-    poolKey: selectedPoolKey || null,
-    spokeChainKey: selectedChainId,
-    userAddress: srcAddress,
+    params: {
+      poolData,
+      poolKey: selectedPoolKey || null,
+      spokeChainKey: selectedChainId,
+      userAddress: srcAddress,
+    },
   });
   const token0Balance = balances?.token0Balance ?? 0n;
   const token1Balance = balances?.token1Balance ?? 0n;
@@ -65,8 +67,10 @@ export function SimplePoolManager(): JSX.Element {
 
   const [positionId, setPositionId] = useState<string>('');
   const { data: positionData } = usePositionInfo({
-    tokenId: positionId || null,
-    poolKey: selectedPoolKey || null,
+    params: {
+      tokenId: positionId || null,
+      poolKey: selectedPoolKey || null,
+    },
   });
   const positionInfo = positionData?.positionInfo ?? null;
   const isValidPosition = positionData?.isValid ?? false;
@@ -154,9 +158,13 @@ export function SimplePoolManager(): JSX.Element {
         return;
       }
 
-      const [, hubTxHash] = result.value;
-      const mintPositionEvent = await sodax.dex.clService.getMintPositionEvent(hubTxHash as Hash);
-      saveTokenIdToLocalStorage(srcAddress, selectedChainId, mintPositionEvent.tokenId.toString());
+      const { dstChainTxHash } = result.value;
+      const mintPositionEventResult = await sodax.dex.clService.getMintPositionEvent(dstChainTxHash as Hash);
+      if (!mintPositionEventResult.ok) {
+        setError(`Failed to get position event: ${mintPositionEventResult.error instanceof Error ? mintPositionEventResult.error.message : 'Unknown error'}`);
+        return;
+      }
+      saveTokenIdToLocalStorage(srcAddress, selectedChainId, mintPositionEventResult.value.tokenId.toString());
 
       setMinPrice('');
       setMaxPrice('');

@@ -15,8 +15,6 @@
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import {
   getIntentRelayChainId,
-  type Address,
-  type EvmSpokeOnlyChainKey,
   type IBitcoinWalletProvider,
   type IEvmWalletProvider,
   type ISolanaWalletProvider,
@@ -24,23 +22,16 @@ import {
   type IWalletProvider,
   type Result,
   type SpokeChainKey,
-  type TxReturnType,
 } from '@sodax/types';
 // NOTE: `@sodax/types` is consumed from `dist/` in vitest. In this branch the generated dist entry
 // is stale/missing many exports (including ChainKeys/spokeChainConfig), so we import those from
 // source to make SDK unit tests runnable.
 import { ChainKeys } from '../../../types/src/chains/chain-keys.js';
 import { spokeChainConfig } from '../../../types/src/chains/chains.js';
-import {
-  isEvmChainKeyType,
-  isHubChainKeyType,
-  isSonicChainKeyType,
-  isSpokeApproveParamsStellar,
-  isStellarChainKeyType,
-  type SpokeApproveParams,
-  type SpokeIsAllowanceValidParams,
-  type SpokeIsAllowanceValidParamsEvmSpoke,
-  type SpokeIsAllowanceValidParamsHub,
+import type {
+  SpokeIsAllowanceValidParamsEvmSpoke,
+  SpokeIsAllowanceValidParamsHub,
+  WalletProviderSlot,
 } from '../index.js';
 import { Sodax } from '../shared/entities/Sodax.js';
 
@@ -115,16 +106,7 @@ vi.mock('./SolverApiService.js', () => ({
     postExecution: mocks.solverPostExecution,
   },
 }));
-import {
-  SwapService,
-  type CancelIntentParams,
-  type CreateIntentParams,
-  type Intent,
-  type SwapActionParams,
-  type SwapActionParamsRaw,
-  type SwapAllowanceParams,
-} from './SwapService.js';
-import type { WalletProviderSlot } from '../shared/types/types.js';
+import { type CancelIntentParams, type CreateIntentParams, type Intent, type SwapActionParams } from './SwapService.js';
 
 // --- test fixtures --------------------------------------------------------
 //
@@ -212,32 +194,32 @@ describe('SwapService types — walletProvider narrowing', () => {
     expectTypeOf<WalletProviderSlot<'0x38.bsc', true>>().toEqualTypeOf<{ raw: true; walletProvider?: never }>();
   });
 
-  it('WalletProviderSlot requires narrowed EVM walletProvider when raw is false', () => {
-    expectTypeOf<WalletProviderSlot<'0x38.bsc', false>>().toEqualTypeOf<{
-      raw: false;
+  it('WalletProviderSlot requires narrowed EVM walletProvider when raw is false or omitted', () => {
+    expectTypeOf<WalletProviderSlot<'0x38.bsc'>>().toEqualTypeOf<{
+      raw?: false;
       walletProvider: IEvmWalletProvider;
     }>();
-    expectTypeOf<WalletProviderSlot<'ethereum', false>>().toEqualTypeOf<{
-      raw: false;
+    expectTypeOf<WalletProviderSlot<'ethereum'>>().toEqualTypeOf<{
+      raw?: false;
       walletProvider: IEvmWalletProvider;
     }>();
-    expectTypeOf<WalletProviderSlot<'sonic', false>>().toEqualTypeOf<{
-      raw: false;
+    expectTypeOf<WalletProviderSlot<'sonic'>>().toEqualTypeOf<{
+      raw?: false;
       walletProvider: IEvmWalletProvider;
     }>();
   });
 
   it('WalletProviderSlot narrows walletProvider to Solana / Stellar / Bitcoin for their respective chain keys', () => {
-    expectTypeOf<WalletProviderSlot<'solana', false>>().toEqualTypeOf<{
-      raw: false;
+    expectTypeOf<WalletProviderSlot<'solana'>>().toEqualTypeOf<{
+      raw?: false;
       walletProvider: ISolanaWalletProvider;
     }>();
-    expectTypeOf<WalletProviderSlot<'stellar', false>>().toEqualTypeOf<{
-      raw: false;
+    expectTypeOf<WalletProviderSlot<'stellar'>>().toEqualTypeOf<{
+      raw?: false;
       walletProvider: IStellarWalletProvider;
     }>();
-    expectTypeOf<WalletProviderSlot<'bitcoin', false>>().toEqualTypeOf<{
-      raw: false;
+    expectTypeOf<WalletProviderSlot<'bitcoin'>>().toEqualTypeOf<{
+      raw?: false;
       walletProvider: IBitcoinWalletProvider;
     }>();
   });
@@ -251,14 +233,14 @@ describe('SwapService types — walletProvider narrowing', () => {
     expectTypeOf<SwapActionParams<'bitcoin'>['walletProvider']>().toEqualTypeOf<IBitcoinWalletProvider>();
   });
 
-  it('SwapActionParamsRaw has no walletProvider property', () => {
-    expectTypeOf<SwapActionParamsRaw<'0x38.bsc'>>().not.toHaveProperty('walletProvider');
-    expectTypeOf<SwapActionParamsRaw<'bitcoin'>>().not.toHaveProperty('walletProvider');
+  it('SwapActionParams in raw mode narrows walletProvider to never', () => {
+    expectTypeOf<SwapActionParams<'0x38.bsc', true>>().toHaveProperty('walletProvider').toEqualTypeOf<undefined>();
+    expectTypeOf<SwapActionParams<'bitcoin', true>>().toHaveProperty('walletProvider').toEqualTypeOf<undefined>();
   });
 
   it('SwapAllowanceParams narrows walletProvider via the K inferred from params.srcChain', () => {
-    expectTypeOf<SwapAllowanceParams<'0x38.bsc'>['walletProvider']>().toEqualTypeOf<IEvmWalletProvider>();
-    expectTypeOf<SwapAllowanceParams<'solana'>['walletProvider']>().toEqualTypeOf<ISolanaWalletProvider>();
+    expectTypeOf<SwapActionParams<'0x38.bsc'>['walletProvider']>().toEqualTypeOf<IEvmWalletProvider>();
+    expectTypeOf<SwapActionParams<'solana'>['walletProvider']>().toEqualTypeOf<ISolanaWalletProvider>();
   });
 
   it('CancelIntentParams narrows walletProvider via the explicit srcChainKey', () => {
@@ -278,7 +260,7 @@ describe('SwapService types — walletProvider narrowing', () => {
   });
 
   it('SwapActionParams with unconstrained K falls back to IWalletProvider', () => {
-    expectTypeOf<SwapActionParams<SpokeChainKey>['walletProvider']>().toEqualTypeOf<IWalletProvider>();
+    expectTypeOf<SwapActionParams<SpokeChainKey, false>['walletProvider']>().toEqualTypeOf<IWalletProvider>();
   });
 });
 
@@ -311,12 +293,12 @@ describe('SwapService types — method signatures reject mismatched walletProvid
   it('createIntentRaw rejects walletProvider — the raw twin has no such field', () => {
     const svc = sodax.swaps;
     if (false as boolean) {
+      // @ts-expect-error — walletProvider is forbidden when raw is true.
       void svc.createIntent({
         params: intentInput(ChainKeys.BSC_MAINNET),
         raw: true,
-        // @ts-expect-error — walletProvider is forbidden when raw is true.
         walletProvider: mockEvmProvider,
-      } as never);
+      });
     }
   });
 
@@ -428,12 +410,12 @@ describe('SwapService.createIntent — narrows walletProvider from params.srcCha
 
       // @ts-expect-error — walletProvider required on exec even with broad K.
       void svc.createIntent<SpokeChainKey>({ params });
-      void svc.createIntent<SpokeChainKey>({ params, raw: true });
+      void svc.createIntent({ params, raw: true });
 
       // Broad K falls back to IWalletProvider union; all chain providers are accepted.
-      void svc.createIntent<SpokeChainKey>({ params, walletProvider: mockEvmProvider });
-      void svc.createIntent<SpokeChainKey>({ params, walletProvider: mockSolanaProvider });
-      void svc.createIntent<SpokeChainKey>({ params, walletProvider: mockStellarProvider });
+      void svc.createIntent<SpokeChainKey, false>({ params, walletProvider: mockEvmProvider });
+      void svc.createIntent<SpokeChainKey, false>({ params, walletProvider: mockSolanaProvider });
+      void svc.createIntent<SpokeChainKey, false>({ params, walletProvider: mockStellarProvider });
     }
   });
 });
@@ -511,12 +493,12 @@ describe('SwapService.approve — narrows walletProvider from params.srcChain', 
   it('approveRaw takes no walletProvider', () => {
     if (false as boolean) {
       void svc.approve({ params: intentInput(ChainKeys.BSC_MAINNET), raw: true });
+      // @ts-expect-error — walletProvider is forbidden when raw is true.
       void svc.approve({
         params: intentInput(ChainKeys.BSC_MAINNET),
         raw: true,
-        // @ts-expect-error — walletProvider is forbidden when raw is true.
         walletProvider: mockEvmProvider,
-      } as never);
+      });
     }
   });
 });
@@ -594,12 +576,12 @@ describe('SwapService.createLimitOrder / createLimitOrderIntent — same narrowi
   it('createLimitOrderIntentRaw takes no walletProvider', () => {
     if (false as boolean) {
       void svc.createLimitOrderIntent({ params: intentInput(ChainKeys.BSC_MAINNET), raw: true });
+      // @ts-expect-error — walletProvider is forbidden when raw is true.
       void svc.createLimitOrderIntent({
         params: intentInput(ChainKeys.BSC_MAINNET),
         raw: true,
-        // @ts-expect-error — walletProvider is forbidden when raw is true.
         walletProvider: mockEvmProvider,
-      } as never);
+      });
     }
   });
 });
@@ -659,7 +641,11 @@ beforeEach(() => {
   // `.mockResolvedValueOnce(...)` calls on `mocks.getUserHubWalletAddress` keep working.
   vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockImplementation(mocks.getUserHubWalletAddress);
 
-  const emptyContractCall = { address: '0x0000000000000000000000000000000000000000' as const, value: 0n, data: '0x' as const };
+  const emptyContractCall = {
+    address: '0x0000000000000000000000000000000000000000' as const,
+    value: 0n,
+    data: '0x' as const,
+  };
   mocks.encodeCancelIntent.mockReturnValue(emptyContractCall);
   mocks.encodeCreateIntent.mockReturnValue(emptyContractCall);
 });
@@ -813,10 +799,16 @@ describe('SwapService.createIntent', () => {
 
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.value).toEqual([rawTx, { ...fakeIntent, feeAmount: 123n }, '0xdata']);
+        expect(result.value).toEqual({
+          tx: rawTx,
+          intent: { ...fakeIntent, feeAmount: 123n },
+          relayData: { address: fakeIntent.creator, payload: '0xdata' },
+        });
       }
       expect(mocks.sonicCreateSwapIntent).toHaveBeenCalled();
-      expect(mocks.sonicCreateSwapIntent.mock.calls[0]?.[0].createIntentParams.srcChainKey).toBe(ChainKeys.SONIC_MAINNET);
+      expect(mocks.sonicCreateSwapIntent.mock.calls[0]?.[0].createIntentParams.srcChainKey).toBe(
+        ChainKeys.SONIC_MAINNET,
+      );
     });
 
     it('on Sonic, delegates to SonicSpokeService.createAndExecuteSwapIntent when raw=false', async () => {
@@ -833,7 +825,11 @@ describe('SwapService.createIntent', () => {
 
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.value).toEqual(['0xexec-hash', { ...fakeIntent, feeAmount: 0n }, '0xdata']);
+        expect(result.value).toEqual({
+          tx: '0xexec-hash',
+          intent: { ...fakeIntent, feeAmount: 0n },
+          relayData: { address: fakeIntent.creator, payload: '0xdata' },
+        });
       }
       expect(mocks.sonicCreateSwapIntent).toHaveBeenCalled();
       const lastCall = mocks.sonicCreateSwapIntent.mock.calls.at(-1)?.[0];
@@ -855,7 +851,11 @@ describe('SwapService.createIntent', () => {
 
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.value).toEqual(['0xdeposit-hash', { ...fakeIntent, feeAmount: 42n }, '0xintentdata']);
+        expect(result.value).toEqual({
+          tx: '0xdeposit-hash',
+          intent: { ...fakeIntent, feeAmount: 42n },
+          relayData: { address: fakeIntent.creator, payload: '0xintentdata' },
+        });
       }
       expect(svc.spoke.deposit).toHaveBeenCalled();
       const depositCall = (svc.spoke.deposit as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
@@ -941,9 +941,7 @@ describe('SwapService.createIntent', () => {
 
     it('rejects when outputToken is not a valid original asset on dstChain', async () => {
       // First call (srcChain check) passes, second call (dstChain check) fails.
-      vi.spyOn(sodax.config, 'isValidOriginalAssetAddress')
-        .mockReturnValueOnce(true)
-        .mockReturnValueOnce(false);
+      vi.spyOn(sodax.config, 'isValidOriginalAssetAddress').mockReturnValueOnce(true).mockReturnValueOnce(false);
 
       await expect(
         sodax.swaps.createIntent({
@@ -1082,10 +1080,10 @@ describe('SwapService.createLimitOrder and createLimitOrderIntent', () => {
     const fakeIntent = makeIntent(ChainKeys.BSC_MAINNET);
     const swapSpy = vi.spyOn(svc, 'swap').mockResolvedValueOnce({
       ok: true,
-      value: [
-        { answer: 'OK', intent_hash: '0xhash' },
-        fakeIntent,
-        {
+      value: {
+        solverExecutionResponse: { answer: 'OK', intent_hash: '0xhash' },
+        intent: fakeIntent,
+        intentDeliveryInfo: {
           srcChainId: ChainKeys.BSC_MAINNET,
           srcTxHash: '0xsrc',
           srcAddress: baseInput.srcAddress,
@@ -1093,7 +1091,7 @@ describe('SwapService.createLimitOrder and createLimitOrderIntent', () => {
           dstTxHash: '0xdst',
           dstAddress: baseInput.dstAddress,
         },
-      ],
+      },
     });
 
     // Pass a non-zero deadline — the method must override it to 0n.
@@ -1108,8 +1106,6 @@ describe('SwapService.createLimitOrder and createLimitOrderIntent', () => {
     expect((forwarded?.params as CreateIntentParams).deadline).toBe(0n);
     expect(forwarded?.params.srcChainKey).toBe(ChainKeys.BSC_MAINNET);
     expect(forwarded?.walletProvider).toBe(mockEvmProvider);
-    expect(forwarded?.skipSimulation).toBe(false);
-    expect(forwarded?.fee).toBe(sodax.swaps.partnerFee);
   });
 
   it('createLimitOrderIntent delegates to createIntent with deadline=0n, preserving raw/K', async () => {
@@ -1118,7 +1114,11 @@ describe('SwapService.createLimitOrder and createLimitOrderIntent', () => {
     const fakeIntent = makeIntent(ChainKeys.BSC_MAINNET);
     const createIntentSpy = vi.spyOn(svc, 'createIntent').mockResolvedValueOnce({
       ok: true,
-      value: ['0xtx' as never, { ...fakeIntent, feeAmount: 0n }, '0x'],
+      value: {
+        tx: '0xtx' as never,
+        intent: { ...fakeIntent, feeAmount: 0n },
+        relayData: '0x' as never,
+      },
     });
 
     await svc.createLimitOrderIntent({
@@ -1141,12 +1141,14 @@ describe('SwapService.cancelIntent', () => {
     vi.spyOn(svc.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xcancel-hash' });
 
     const result = await svc.cancelIntent({
-      srcChainKey: ChainKeys.SONIC_MAINNET,
-      intent,
+      params: {
+        srcChainKey: ChainKeys.SONIC_MAINNET,
+        intent,
+      },
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: true, value: ['0xcancel-hash', '0xcancel-hash'] });
+    expect(result).toEqual({ ok: true, value: { srcChainTxHash: '0xcancel-hash', dstChainTxHash: '0xcancel-hash' } });
     const sendCall = (svc.spoke.sendMessage as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
     expect(sendCall.srcChainKey).toBe(ChainKeys.SONIC_MAINNET);
     expect(sendCall.walletProvider).toBe(mockEvmProvider);
@@ -1163,8 +1165,10 @@ describe('SwapService.cancelIntent', () => {
     const intent = makeIntent(ChainKeys.BSC_MAINNET);
 
     const result = await svc.cancelIntent({
-      srcChainKey: ChainKeys.ARBITRUM_MAINNET,
-      intent,
+      params: {
+        srcChainKey: ChainKeys.ARBITRUM_MAINNET,
+        intent,
+      },
       walletProvider: mockEvmProvider,
     });
 
@@ -1421,7 +1425,7 @@ describe('SwapService.getSolvedIntentPacket', () => {
 
     expect(result).toEqual({ ok: true, value: packet });
     const callArgs = mocks.waitUntilIntentExecuted.mock.calls[0]?.[0];
-    expect(callArgs.spokeTxHash).toBe('0xfillTxHash');
+    expect(callArgs.srcTxHash).toBe('0xfillTxHash');
     expect(callArgs.apiUrl).toBe(sodax.swaps.relayerApiEndpoint);
   });
 
@@ -1494,7 +1498,7 @@ describe('SwapService.submitIntent', () => {
 
   it('returns ok:true wrapping the submit response when success is true', async () => {
     const relayResponse = { success: true, message: 'accepted' };
-    mocks.submitTransaction.mockResolvedValueOnce(relayResponse);
+    mocks.submitTransaction.mockResolvedValueOnce({ ok: true, value: relayResponse });
 
     const result = await sodax.swaps.submitIntent(submitPayload);
 
@@ -1503,7 +1507,10 @@ describe('SwapService.submitIntent', () => {
   });
 
   it('wraps a success:false response as Error("SUBMIT_TX_FAILED") with the relay message on .cause', async () => {
-    mocks.submitTransaction.mockResolvedValueOnce({ success: false, message: 'relay rejected' });
+    mocks.submitTransaction.mockResolvedValueOnce({
+      ok: false,
+      error: new Error('SUBMIT_TX_FAILED', { cause: new Error('relay rejected') }),
+    });
 
     const result = await sodax.swaps.submitIntent(submitPayload);
 
@@ -1519,7 +1526,6 @@ describe('SwapService.submitIntent', () => {
     mocks.submitTransaction.mockRejectedValueOnce(networkError);
 
     const result = await sodax.swaps.submitIntent(submitPayload);
-
     expect(result).toEqual({ ok: false, error: networkError });
   });
 });
@@ -1546,7 +1552,11 @@ describe('SwapService.getQuote', () => {
 
     expect(result).toBe(quoteResponse);
     // Second arg is the solver config, third is ConfigService instance. We assert shape, not deep equality.
-    expect(mocks.solverGetQuote).toHaveBeenCalledWith(expect.objectContaining({ amount: expect.any(BigInt) }), sodax.swaps.solver, sodax.config);
+    expect(mocks.solverGetQuote).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: expect.any(BigInt) }),
+      sodax.swaps.solver,
+      sodax.config,
+    );
   });
 
   it('leaves the amount unchanged when no partnerFee is configured', async () => {
@@ -1696,7 +1706,11 @@ describe('SwapService.swap', () => {
     const intent = makeIntent(srcChain as Parameters<typeof getIntentRelayChainId>[0]);
     return vi.spyOn(sodax.swaps, 'createIntent').mockResolvedValueOnce({
       ok: true,
-      value: [spokeTxHash, { ...intent, feeAmount: 0n }, '0xdata' as never] as never,
+      value: {
+        tx: spokeTxHash,
+        intent: { ...intent, feeAmount: 0n },
+        relayData: { address: intent.creator, payload: '0xdata' } as never,
+      } as never,
     });
   };
 
@@ -1709,7 +1723,6 @@ describe('SwapService.swap', () => {
 
     const result = await sodax.swaps.swap({
       params: intentInput(ChainKeys.SONIC_MAINNET),
-      raw: false,
       walletProvider: mockEvmProvider,
     });
 
@@ -1735,8 +1748,8 @@ describe('SwapService.swap', () => {
     });
 
     expect(result.ok).toBe(true);
-    // Second arg is extraData — for EVM spokes it must be undefined (only Solana/Bitcoin pass extraData).
-    expect(mocks.relayTxAndWaitPacket.mock.calls[0]?.[1]).toBeUndefined();
+    // callsite always forwards relayData verbatim; the Solana/Bitcoin gate lives inside relayTxAndWaitPacket.
+    expect(mocks.relayTxAndWaitPacket.mock.calls[0]?.[0].data).toBeDefined();
     expect(mocks.solverPostExecution).toHaveBeenCalledWith(
       expect.objectContaining({ intent_tx_hash: '0xdstTx' }),
       sodax.swaps.solver,
@@ -1754,7 +1767,7 @@ describe('SwapService.swap', () => {
       walletProvider: mockSolanaProvider,
     });
 
-    const extraData = mocks.relayTxAndWaitPacket.mock.calls[0]?.[1];
+    const extraData = mocks.relayTxAndWaitPacket.mock.calls[0]?.[0].data;
     expect(extraData).toBeDefined();
     expect(extraData).toHaveProperty('address');
     expect(extraData).toHaveProperty('payload');
@@ -1845,8 +1858,8 @@ describe('SwapService.swap', () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      const [, , delivery] = result.value;
-      expect(delivery).toEqual({
+      const { intentDeliveryInfo } = result.value;
+      expect(intentDeliveryInfo).toEqual({
         srcChainId: ChainKeys.BSC_MAINNET,
         srcTxHash: '0xbscTx',
         srcAddress: params.srcAddress,
@@ -1870,8 +1883,10 @@ describe('SwapService.createCancelIntent', () => {
       .mockResolvedValueOnce({ ok: true, value: { from: '0x1', to: '0x2', data: '0x', value: 0n } as never });
 
     const result = await sodax.swaps.createCancelIntent({
-      srcChainKey: ChainKeys.BSC_MAINNET,
-      intent,
+      params: {
+        srcChainKey: ChainKeys.BSC_MAINNET,
+        intent,
+      },
       raw: true,
     });
 
@@ -1888,8 +1903,10 @@ describe('SwapService.createCancelIntent', () => {
       .mockResolvedValueOnce({ ok: true, value: '0xcancel-tx' });
 
     const result = await sodax.swaps.createCancelIntent({
-      srcChainKey: ChainKeys.BSC_MAINNET,
-      intent,
+      params: {
+        srcChainKey: ChainKeys.BSC_MAINNET,
+        intent,
+      },
       raw: false,
       walletProvider: mockEvmProvider,
     });
@@ -1905,8 +1922,10 @@ describe('SwapService.createCancelIntent', () => {
     vi.spyOn(sodax.config, 'isValidIntentRelayChainId').mockReturnValueOnce(false);
 
     const result = await sodax.swaps.createCancelIntent({
-      srcChainKey: ChainKeys.BSC_MAINNET,
-      intent,
+      params: {
+        srcChainKey: ChainKeys.BSC_MAINNET,
+        intent,
+      },
       raw: false,
       walletProvider: mockEvmProvider,
     });
@@ -1922,8 +1941,10 @@ describe('SwapService.createCancelIntent', () => {
     vi.spyOn(sodax.config, 'isValidIntentRelayChainId').mockReturnValueOnce(true).mockReturnValueOnce(false);
 
     const result = await sodax.swaps.createCancelIntent({
-      srcChainKey: ChainKeys.BSC_MAINNET,
-      intent,
+      params: {
+        srcChainKey: ChainKeys.BSC_MAINNET,
+        intent,
+      },
       raw: false,
       walletProvider: mockEvmProvider,
     });
@@ -1940,8 +1961,10 @@ describe('SwapService.createCancelIntent', () => {
     vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
 
     const result = await sodax.swaps.createCancelIntent({
-      srcChainKey: ChainKeys.BSC_MAINNET,
-      intent,
+      params: {
+        srcChainKey: ChainKeys.BSC_MAINNET,
+        intent,
+      },
       raw: false,
       walletProvider: mockEvmProvider,
     });
@@ -1955,8 +1978,10 @@ describe('SwapService.createCancelIntent', () => {
     vi.spyOn(sodax.spokeService, 'sendMessage').mockRejectedValueOnce(thrownError);
 
     const result = await sodax.swaps.createCancelIntent({
-      srcChainKey: ChainKeys.BSC_MAINNET,
-      intent,
+      params: {
+        srcChainKey: ChainKeys.BSC_MAINNET,
+        intent,
+      },
       raw: false,
       walletProvider: mockEvmProvider,
     });
@@ -1972,16 +1997,18 @@ describe('SwapService.cancelIntent — non-hub (relay) path', () => {
       .spyOn(sodax.spokeService, 'verifyTxHash')
       .mockResolvedValueOnce({ ok: true, value: true });
     vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeCancelTx' });
-    mocks.submitTransaction.mockResolvedValueOnce({ success: true, message: 'ok' });
+    mocks.submitTransaction.mockResolvedValueOnce({ ok: true, value: { success: true, message: 'ok' } });
     mocks.waitUntilIntentExecuted.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xdstCancelTx' } });
 
     const result = await sodax.swaps.cancelIntent({
-      srcChainKey: ChainKeys.BSC_MAINNET,
-      intent,
+      params: {
+        srcChainKey: ChainKeys.BSC_MAINNET,
+        intent,
+      },
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: true, value: ['0xspokeCancelTx', '0xdstCancelTx'] });
+    expect(result).toEqual({ ok: true, value: { srcChainTxHash: '0xspokeCancelTx', dstChainTxHash: '0xdstCancelTx' } });
 
     expect(verifyTxHashSpy).toHaveBeenCalledWith({
       txHash: '0xspokeCancelTx',
@@ -2001,8 +2028,7 @@ describe('SwapService.cancelIntent — non-hub (relay) path', () => {
 
     expect(mocks.waitUntilIntentExecuted).toHaveBeenCalledWith({
       intentRelayChainId: intent.srcChain.toString(),
-      spokeTxHash: '0xspokeCancelTx',
-      timeout: expect.any(Number),
+      srcTxHash: '0xspokeCancelTx',
       apiUrl: sodax.swaps.relayerApiEndpoint,
     });
   });
@@ -2010,11 +2036,16 @@ describe('SwapService.cancelIntent — non-hub (relay) path', () => {
   it('returns submitIntent failure when the relayer rejects the submit', async () => {
     const intent = makeIntent(ChainKeys.BSC_MAINNET);
     vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeCancelTx' });
-    mocks.submitTransaction.mockResolvedValueOnce({ success: false, message: 'relay rejected' });
+    mocks.submitTransaction.mockResolvedValueOnce({
+      ok: false,
+      error: new Error('SUBMIT_TX_FAILED', { cause: new Error('relay rejected') }),
+    });
 
     const result = await sodax.swaps.cancelIntent({
-      srcChainKey: ChainKeys.BSC_MAINNET,
-      intent,
+      params: {
+        srcChainKey: ChainKeys.BSC_MAINNET,
+        intent,
+      },
       walletProvider: mockEvmProvider,
     });
 
@@ -2027,12 +2058,14 @@ describe('SwapService.cancelIntent — non-hub (relay) path', () => {
     const intent = makeIntent(ChainKeys.BSC_MAINNET);
     const timeoutError = new Error('RELAY_TIMEOUT');
     vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeCancelTx' });
-    mocks.submitTransaction.mockResolvedValueOnce({ success: true, message: 'ok' });
+    mocks.submitTransaction.mockResolvedValueOnce({ ok: true, value: { success: true, message: 'ok' } });
     mocks.waitUntilIntentExecuted.mockResolvedValueOnce({ ok: false, error: timeoutError });
 
     const result = await sodax.swaps.cancelIntent({
-      srcChainKey: ChainKeys.BSC_MAINNET,
-      intent,
+      params: {
+        srcChainKey: ChainKeys.BSC_MAINNET,
+        intent,
+      },
       walletProvider: mockEvmProvider,
     });
 
@@ -2046,8 +2079,10 @@ describe('SwapService.cancelIntent — non-hub (relay) path', () => {
     vi.spyOn(sodax.spokeService, 'verifyTxHash').mockResolvedValueOnce({ ok: false, error: verifyError });
 
     const result = await sodax.swaps.cancelIntent({
-      srcChainKey: ChainKeys.BSC_MAINNET,
-      intent,
+      params: {
+        srcChainKey: ChainKeys.BSC_MAINNET,
+        intent,
+      },
       walletProvider: mockEvmProvider,
     });
 
@@ -2060,23 +2095,26 @@ describe('SwapService.cancelLimitOrder', () => {
     const intent = makeIntent(ChainKeys.SONIC_MAINNET);
     const cancelSpy = vi
       .spyOn(sodax.swaps, 'cancelIntent')
-      .mockResolvedValueOnce({ ok: true, value: ['0xspokeTx', '0xdstTx'] });
+      .mockResolvedValueOnce({ ok: true, value: { srcChainTxHash: '0xspokeTx', dstChainTxHash: '0xdstTx' } });
 
     const result = await sodax.swaps.cancelLimitOrder({
-      srcChainKey: ChainKeys.SONIC_MAINNET,
-      intent,
+      params: {
+        srcChainKey: ChainKeys.SONIC_MAINNET,
+        intent,
+      },
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: true, value: ['0xspokeTx', '0xdstTx'] });
+    expect(result).toEqual({ ok: true, value: { srcChainTxHash: '0xspokeTx', dstChainTxHash: '0xdstTx' } });
     // timeout defaults to DEFAULT_RELAY_TX_TIMEOUT; we don't pin the exact number so the test
     // isn't brittle to constant changes — just assert the pass-through.
     expect(cancelSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        srcChainKey: ChainKeys.SONIC_MAINNET,
-        intent,
+        params: {
+          srcChainKey: ChainKeys.SONIC_MAINNET,
+          intent,
+        },
         walletProvider: mockEvmProvider,
-        timeout: expect.any(Number),
       }),
     );
   });
@@ -2087,8 +2125,10 @@ describe('SwapService.cancelLimitOrder', () => {
     vi.spyOn(sodax.swaps, 'cancelIntent').mockResolvedValueOnce({ ok: false, error: cancelError });
 
     const result = await sodax.swaps.cancelLimitOrder({
-      srcChainKey: ChainKeys.SONIC_MAINNET,
-      intent,
+      params: {
+        srcChainKey: ChainKeys.SONIC_MAINNET,
+        intent,
+      },
       walletProvider: mockEvmProvider,
     });
 
@@ -2120,7 +2160,11 @@ describe('SwapService.createLimitOrderIntent — additional coverage', () => {
     const fakeIntent = makeIntent(ChainKeys.BSC_MAINNET);
     const createIntentSpy = vi.spyOn(sodax.swaps, 'createIntent').mockResolvedValueOnce({
       ok: true,
-      value: ['0xtx' as never, { ...fakeIntent, feeAmount: 0n }, '0x'],
+      value: {
+        tx: '0xtx' as never,
+        intent: { ...fakeIntent, feeAmount: 0n },
+        relayData: '0x' as never,
+      },
     });
 
     await sodax.swaps.createLimitOrderIntent({

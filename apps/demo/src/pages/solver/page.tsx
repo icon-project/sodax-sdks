@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import SwapCard from '@/components/solver/SwapCard';
-import LimitOrderCard from '@/components/solver/LimitOrderCard';
-import OrderStatus, { type Order } from '@/components/solver/OrderStatus';
+import SwapCard from '@/components/swaps/SwapCard';
+import LimitOrderCard from '@/components/swaps/LimitOrderCard';
+import OrderStatus, { type Order } from '@/components/swaps/OrderStatus';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SolverEnv, useAppStore } from '@/zustand/useAppStore';
 

@@ -410,9 +410,10 @@ export type BridgeLimit = {
 
 export type SpokeChainConfigMap = Record<SpokeChainKey, SpokeChainConfig>;
 
-export type WalletProviderSlot<K extends SpokeChainKey | ChainType, Raw extends boolean> = Raw extends true
-  ? { raw: true; walletProvider?: never }
-  : { raw: false; walletProvider: GetWalletProviderType<K> };
+export type WalletProviderSlot<K extends SpokeChainKey | ChainType, Raw extends boolean = false> =
+  Raw extends true
+    ? { raw: true; walletProvider?: never }
+    : { raw?: false; walletProvider: GetWalletProviderType<K> };
 
 /**
  * Standard exec-mode wrapper for hub/spoke flows: bounded `params`, optional relay toggles,

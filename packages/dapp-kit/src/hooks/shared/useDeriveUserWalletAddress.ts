@@ -2,14 +2,25 @@ import type { SpokeChainKey } from '@sodax/sdk';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from './useSodaxContext.js';
 import type { Address } from 'viem';
+import type { ReadHookParams } from './types.js';
 
-export function useDeriveUserWalletAddress(
-  spokeChainId?: SpokeChainKey | undefined,
-  spokeAddress?: string | undefined,
-): UseQueryResult<Address, Error> {
+export type UseDeriveUserWalletAddressParams = ReadHookParams<
+  Address,
+  {
+    spokeChainId?: SpokeChainKey;
+    spokeAddress?: string;
+  }
+>;
+
+export function useDeriveUserWalletAddress({
+  params,
+  queryOptions,
+}: UseDeriveUserWalletAddressParams = {}): UseQueryResult<Address, Error> {
   const { sodax } = useSodaxContext();
+  const spokeChainId = params?.spokeChainId;
+  const spokeAddress = params?.spokeAddress;
 
-  return useQuery({
+  return useQuery<Address, Error>({
     queryKey: ['deriveUserWalletAddress', spokeChainId, spokeAddress],
     queryFn: async (): Promise<Address> => {
       if (!spokeChainId || !spokeAddress) {
@@ -19,5 +30,6 @@ export function useDeriveUserWalletAddress(
     },
     enabled: !!spokeChainId && !!spokeAddress,
     refetchInterval: false,
+    ...queryOptions,
   });
 }

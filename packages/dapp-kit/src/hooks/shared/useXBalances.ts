@@ -1,15 +1,19 @@
 import { type UseQueryResult, useQuery } from '@tanstack/react-query';
 import type { SpokeChainKey, IXServiceBase, XToken } from '@sodax/sdk';
+import type { ReadHookParams } from './types.js';
 
 /**
- * Params for {@link useXBalances}.
+ * Domain inputs for {@link useXBalances}. `xChainId` is optional so the hook can be mounted
+ * before a chain is selected; `enabled` gates execution on every required field being present.
  */
-export interface UseXBalancesParams {
+export interface XBalancesInputs {
   xService: IXServiceBase | undefined;
-  xChainId: SpokeChainKey;
+  xChainId: SpokeChainKey | undefined;
   xTokens: readonly XToken[];
   address: string | undefined;
 }
+
+export type UseXBalancesParams = ReadHookParams<Record<string, bigint>, XBalancesInputs>;
 
 const REFETCH_INTERVAL_MS = 5_000;
 
@@ -17,7 +21,7 @@ const REFETCH_INTERVAL_MS = 5_000;
  * Pure builder for {@link useXBalances} query options. Exported for unit
  * tests and for advanced callers that compose their own `useQuery` wrapper.
  */
-export function getXBalancesQueryOptions({ xService, xChainId, xTokens, address }: UseXBalancesParams) {
+export function getXBalancesQueryOptions({ xService, xChainId, xTokens, address }: XBalancesInputs) {
   return {
     // Pair symbol + address: readable in devtools, unique on-chain (symbol alone
     // can collide — e.g. scam tokens copying legitimate ticker).
@@ -38,9 +42,20 @@ export function getXBalancesQueryOptions({ xService, xChainId, xTokens, address 
  * @example
  * ```tsx
  * const xService = useXService(getXChainType(xChainId));
- * const { data: balances } = useXBalances({ xService, xChainId, xTokens, address });
+ * const { data: balances } = useXBalances({ params: { xService, xChainId, xTokens, address } });
  * ```
  */
-export function useXBalances(params: UseXBalancesParams): UseQueryResult<Record<string, bigint>> {
-  return useQuery(getXBalancesQueryOptions(params));
+export function useXBalances({
+  params,
+  queryOptions,
+}: UseXBalancesParams = {}): UseQueryResult<Record<string, bigint>> {
+  return useQuery({
+    ...getXBalancesQueryOptions({
+      xService: params?.xService,
+      xChainId: params?.xChainId,
+      xTokens: params?.xTokens ?? [],
+      address: params?.address,
+    }),
+    ...queryOptions,
+  });
 }

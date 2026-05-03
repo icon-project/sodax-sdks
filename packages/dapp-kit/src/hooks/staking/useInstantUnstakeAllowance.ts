@@ -1,12 +1,15 @@
 import type { InstantUnstakeParams } from '@sodax/sdk';
 import type { SpokeChainKey } from '@sodax/sdk';
-import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { ReadHookParams } from '../shared/types.js';
 
-export type UseInstantUnstakeAllowanceProps<K extends SpokeChainKey = SpokeChainKey> = {
-  params: Omit<InstantUnstakeParams<K>, 'action'> | undefined;
-  queryOptions?: Omit<UseQueryOptions<boolean, Error>, 'queryKey' | 'queryFn' | 'enabled'>;
-};
+export type UseInstantUnstakeAllowanceParams<K extends SpokeChainKey = SpokeChainKey> = ReadHookParams<
+  boolean,
+  {
+    payload: Omit<InstantUnstakeParams<K>, 'action'> | undefined;
+  }
+>;
 
 /**
  * React hook to check whether the user has approved sufficient xSODA spending for the
@@ -16,30 +19,31 @@ export type UseInstantUnstakeAllowanceProps<K extends SpokeChainKey = SpokeChain
 export function useInstantUnstakeAllowance<K extends SpokeChainKey = SpokeChainKey>({
   params,
   queryOptions,
-}: UseInstantUnstakeAllowanceProps<K>): UseQueryResult<boolean, Error> {
+}: UseInstantUnstakeAllowanceParams<K> = {}): UseQueryResult<boolean, Error> {
   const { sodax } = useSodaxContext();
+  const payload = params?.payload;
 
   return useQuery<boolean, Error>({
     queryKey: [
       'staking',
       'allowance',
-      params?.srcChainKey,
+      payload?.srcChainKey,
       'instantUnstake',
-      params?.srcAddress,
-      params?.amount?.toString(),
+      payload?.srcAddress,
+      payload?.amount?.toString(),
     ],
     queryFn: async () => {
-      if (!params) {
+      if (!payload) {
         throw new Error('Params are required');
       }
       const result = await sodax.staking.isAllowanceValid({
-        params: { ...params, action: 'instantUnstake' },
+        params: { ...payload, action: 'instantUnstake' },
         raw: true,
       });
       if (!result.ok) throw result.error;
       return result.value;
     },
-    enabled: !!params,
+    enabled: !!payload,
     refetchInterval: 5_000,
     gcTime: 0,
     ...queryOptions,

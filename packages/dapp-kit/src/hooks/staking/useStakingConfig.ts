@@ -1,16 +1,17 @@
 import type { StakingConfig } from '@sodax/sdk';
-import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { ReadHookParams } from '../shared/types.js';
 
-export type UseStakingConfigProps = {
-  queryOptions?: Omit<UseQueryOptions<StakingConfig, Error>, 'queryKey' | 'queryFn'>;
-};
+export type UseStakingConfigParams = ReadHookParams<StakingConfig>;
 
 /**
  * React hook to fetch the global staking config (unstaking period, min unstaking period, max
  * penalty). Hub-only read; no chain context required. Throws on `!ok`.
  */
-export function useStakingConfig({ queryOptions }: UseStakingConfigProps = {}): UseQueryResult<StakingConfig, Error> {
+export function useStakingConfig({
+  queryOptions,
+}: UseStakingConfigParams = {}): UseQueryResult<StakingConfig, Error> {
   const { sodax } = useSodaxContext();
 
   return useQuery<StakingConfig, Error>({

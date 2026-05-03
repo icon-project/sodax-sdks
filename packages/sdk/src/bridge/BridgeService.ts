@@ -16,14 +16,13 @@ import {
   type SpokeIsAllowanceValidParamsEvmSpoke,
   type SpokeIsAllowanceValidParamsStellar,
   isEvmSpokeOnlyChainKeyType,
-  isSolanaChainKeyType,
   isBitcoinChainKeyType,
   isBitcoinWalletProviderType,
-  type RelayOptionalExtraData,
   isOptionalEvmWalletProviderType,
   isOptionalStellarWalletProviderType,
   type SpokeApproveParams,
 } from '../shared/index.js';
+import type { IntentTxResult, TxHashPair } from '../shared/types/types.js';
 import {
   type SpokeChainKey,
   type XToken,
@@ -35,9 +34,7 @@ import {
   type HubChainKey,
   type TxReturnType,
   type EvmContractCall,
-  type HubTxHash,
   type PartnerFee,
-  type SpokeTxHash,
   type VaultReserves,
   type StellarChainKey,
   isHubChainKey,
@@ -196,13 +193,11 @@ export class BridgeService {
           spender,
         } as const;
 
-        const result = await this.spoke.approve<HubChainKey | EvmSpokeOnlyChainKey, Raw>(
-          {
-            ...coreParams,
-            raw: _params.raw,
-            walletProvider: _params.walletProvider,
-          } as SpokeApproveParams<HubChainKey | EvmSpokeOnlyChainKey, Raw>,
-        );
+        const result = await this.spoke.approve<HubChainKey | EvmSpokeOnlyChainKey, Raw>({
+          ...coreParams,
+          raw: _params.raw,
+          walletProvider: _params.walletProvider,
+        } as SpokeApproveParams<HubChainKey | EvmSpokeOnlyChainKey, Raw>);
 
         if (!result.ok) {
           return result;
@@ -283,38 +278,34 @@ export class BridgeService {
    *   // Handle error
    * }
    *
-   * const [
-   *  spokeTxHash, // transaction hash on the source chain
-   *  hubTxHash,   // transaction hash on the hub chain
-   * ] = result.value;
-   * console.log('Bridge transaction hashes:', { spokeTxHash, hubTxHash });
+   * const { srcChainTxHash, dstChainTxHash } = result.value;
+   * console.log('Bridge transaction hashes:', { srcChainTxHash, dstChainTxHash });
    */
-  public async bridge<K extends SpokeChainKey>(
-    _params: BridgeParams<K, false>,
-  ): Promise<Result<[SpokeTxHash, HubTxHash]>> {
+  public async bridge<K extends SpokeChainKey>(_params: BridgeParams<K, false>): Promise<Result<TxHashPair>> {
     const { params, timeout } = _params;
     try {
       const txResult = await this.createBridgeIntent(_params);
       if (!txResult.ok) return txResult;
 
       const verifyTxHashResult = await this.spoke.verifyTxHash({
-        txHash: txResult.value,
+        txHash: txResult.value.tx,
         chainKey: params.srcChainKey,
       });
       if (!verifyTxHashResult.ok) return verifyTxHashResult;
 
-      const packetResult = await relayTxAndWaitPacket(
-        txResult.value,
-        isSolanaChainKeyType(params.srcChainKey) || isBitcoinChainKeyType(params.srcChainKey)
-          ? txResult.data
-          : undefined,
-        params.srcChainKey,
-        this.config.relay.relayerApiEndpoint,
+      const packetResult = await relayTxAndWaitPacket({
+        srcTxHash: txResult.value.tx,
+        data: txResult.value.relayData,
+        chainKey: params.srcChainKey,
+        relayerApiEndpoint: this.config.relay.relayerApiEndpoint,
         timeout,
-      );
+      });
       if (!packetResult.ok) return packetResult;
 
-      return { ok: true, value: [txResult.value, packetResult.value.dst_tx_hash] };
+      return {
+        ok: true,
+        value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packetResult.value.dst_tx_hash },
+      };
     } catch (error) {
       return { ok: false, error };
     }
@@ -358,7 +349,7 @@ export class BridgeService {
    */
   async createBridgeIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: BridgeParams<K, Raw>,
-  ): Promise<Result<TxReturnType<K, Raw>> & RelayOptionalExtraData> {
+  ): Promise<Result<IntentTxResult<K, Raw>>> {
     const { params, skipSimulation } = _params;
     try {
       invariant(params.amount > 0n, 'Amount must be greater than 0');
@@ -417,10 +408,9 @@ export class BridgeService {
 
       return {
         ok: true,
-        value: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
-        data: {
-          address: hubWallet,
-          payload: data,
+        value: {
+          tx: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
+          relayData: { address: hubWallet, payload: data },
         },
       };
     } catch (error) {

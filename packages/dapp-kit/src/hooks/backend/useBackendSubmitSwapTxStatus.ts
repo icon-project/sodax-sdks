@@ -1,79 +1,59 @@
-import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import type { RequestOverrideConfig, SubmitSwapTxStatusResponse } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import { unwrapResult } from './unwrapResult.js';
+import type { ReadHookParams } from '../shared/types.js';
 
-export type UseBackendSubmitSwapTxStatusParams = {
-  params: {
+export type UseBackendSubmitSwapTxStatusParams = ReadHookParams<
+  SubmitSwapTxStatusResponse | undefined,
+  {
     txHash: string | undefined;
     srcChainId?: string;
-  };
-  apiConfig?: RequestOverrideConfig;
-  queryOptions?: UseQueryOptions<SubmitSwapTxStatusResponse | undefined, Error>;
-};
+    apiConfig?: RequestOverrideConfig;
+  }
+>;
 
 /**
  * React hook for polling the processing status of a submitted swap transaction.
  *
- * @param {UseBackendSubmitSwapTxStatusParams | undefined} params - Parameters for the query:
- *   - `params.txHash`: The transaction hash of the submitted swap; query is disabled if undefined or empty.
- *   - `params.srcChainId`: Optional source chain ID to narrow the status lookup.
- *   - `queryOptions`: Optional React Query options to override default behavior (e.g., refetchInterval, retry).
- *
- * @returns {UseQueryResult<SubmitSwapTxStatusResponse | undefined, Error>} React Query result object:
- *   - `data`: The status response or undefined if unavailable.
- *   - `isLoading`: Loading state.
- *   - `error`: Error instance if the query failed.
- *   - `refetch`: Function to re-trigger the query.
- *
  * @example
- * const { data: status, isLoading, error } = useBackendSubmitSwapTxStatus({
+ * const { data: status } = useBackendSubmitSwapTxStatus({
  *   params: { txHash: '0x123...', srcChainId: '1' },
  * });
  *
- * if (status?.data.status === 'executed') {
- *   console.log('Swap completed!', status.data.result);
- * }
- *
  * @remarks
- * - Query is disabled if `params` is undefined or `txHash` is undefined/empty.
- * - Default refetch interval is 1 second for real-time status polling.
- * - Uses React Query for state management, caching, and retries.
+ * - Default refetch interval is 1 second; stops on 'executed' or 'failed' status.
  */
-export const useBackendSubmitSwapTxStatus = (
-  params: UseBackendSubmitSwapTxStatusParams | undefined,
-): UseQueryResult<SubmitSwapTxStatusResponse | undefined, Error> => {
+export const useBackendSubmitSwapTxStatus = ({
+  params,
+  queryOptions,
+}: UseBackendSubmitSwapTxStatusParams = {}): UseQueryResult<SubmitSwapTxStatusResponse | undefined, Error> => {
   const { sodax } = useSodaxContext();
+  const txHash = params?.txHash;
+  const srcChainId = params?.srcChainId;
+  const apiConfig = params?.apiConfig;
 
-  const defaultQueryOptions = {
-    queryKey: ['api', 'swaps', 'submit-tx', 'status', params?.params?.txHash, params?.params?.srcChainId],
-    enabled: !!params?.params?.txHash && params.params.txHash.length > 0,
+  return useQuery({
+    queryKey: ['api', 'swaps', 'submit-tx', 'status', txHash, srcChainId],
+    queryFn: async (): Promise<SubmitSwapTxStatusResponse | undefined> => {
+      if (!txHash) return undefined;
+      return unwrapResult(
+        await sodax.backendApi.getSubmitSwapTxStatus(
+          {
+            txHash,
+            srcChainKey: srcChainId,
+          },
+          apiConfig,
+        ),
+      );
+    },
+    enabled: !!txHash && txHash.length > 0,
     retry: 3,
-    refetchInterval: (query: { state: { data: SubmitSwapTxStatusResponse | undefined } }) => {
+    refetchInterval: query => {
       const status = query.state.data?.data?.status;
       if (status === 'executed' || status === 'failed') return false;
       return 1000;
     },
-  };
-
-  const queryOptions = {
-    ...defaultQueryOptions,
-    ...params?.queryOptions,
-  };
-
-  return useQuery({
     ...queryOptions,
-    queryFn: async (): Promise<SubmitSwapTxStatusResponse | undefined> => {
-      if (!params?.params?.txHash) {
-        return undefined;
-      }
-      return unwrapResult(await sodax.backendApi.getSubmitSwapTxStatus(
-        {
-          txHash: params.params.txHash,
-          srcChainKey: params.params.srcChainId,
-        },
-        params.apiConfig,
-      ));
-    },
   });
 };

@@ -1,4 +1,4 @@
-import { SelectChain } from '@/components/solver/SelectChain';
+import { SelectChain } from '@/components/swaps/SelectChain';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -14,11 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { parseUnits, formatUnits } from 'viem';
-import {
-  type CreateLimitOrderParams,
-  getSupportedSolverTokens,
-  type SolverIntentQuoteRequest,
-} from '@sodax/sdk';
+import { type CreateLimitOrderParams, getSupportedSolverTokens, type SolverIntentQuoteRequest } from '@sodax/sdk';
 import BigNumber from 'bignumber.js';
 import { ArrowDownUp, ArrowLeftRight } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
@@ -59,23 +55,38 @@ export default function LimitOrderCard() {
   const destWalletProvider = useWalletProvider(destChain);
   const { openWalletModal } = useAppStore();
   const { mutateAsync: createLimitOrder } = useCreateLimitOrder(sourceChain, sourceWalletProvider);
-  const [sourceToken, setSourceToken] = useState<XToken | undefined>(getSupportedSolverTokens(ChainKeys.ICON_MAINNET)[0]);
-  const [destToken, setDestToken] = useState<XToken | undefined>(getSupportedSolverTokens(ChainKeys.POLYGON_MAINNET)[0]);
+  const [sourceToken, setSourceToken] = useState<XToken | undefined>(
+    getSupportedSolverTokens(ChainKeys.ICON_MAINNET)[0],
+  );
+  const [destToken, setDestToken] = useState<XToken | undefined>(
+    getSupportedSolverTokens(ChainKeys.POLYGON_MAINNET)[0],
+  );
   const [sourceAmount, setSourceAmount] = useState<string>('');
   const [limitOrderPayload, setLimitOrderPayload] = useState<CreateLimitOrderParams | undefined>(undefined);
-  const { data: hasAllowed, isLoading: isAllowanceLoading } = useSwapAllowance(limitOrderPayload, sourceChain, sourceWalletProvider);
+  const { data: hasAllowed, isLoading: isAllowanceLoading } = useSwapAllowance({
+    params: {
+      payload: limitOrderPayload,
+      srcChainKey: sourceChain,
+      walletProvider: sourceWalletProvider,
+    },
+  });
   const { approve, isLoading: isApproving } = useSwapApprove(limitOrderPayload, sourceChain, sourceWalletProvider);
   const supportedSpokeChains = sodax.config.getSupportedSpokeChains();
   const {
     data: hasSufficientTrustline,
     isPending: isTrustlineLoading,
     error: trustlineError,
-  } = useStellarTrustlineCheck(
-    limitOrderPayload?.outputToken,
-    BigInt(limitOrderPayload?.minOutputAmount ?? 0n),
-    limitOrderPayload?.dstChainKey,
-    destChain === ChainKeys.STELLAR_MAINNET ? (destWalletProvider as IStellarWalletProvider | undefined) : undefined,
-  );
+  } = useStellarTrustlineCheck({
+    params: {
+      token: limitOrderPayload?.outputToken,
+      amount: BigInt(limitOrderPayload?.minOutputAmount ?? 0n),
+      chainId: limitOrderPayload?.dstChainKey,
+      walletProvider:
+        destChain === ChainKeys.STELLAR_MAINNET
+          ? (destWalletProvider as IStellarWalletProvider | undefined)
+          : undefined,
+    },
+  });
   if (trustlineError) {
     console.error('trustlineError', trustlineError);
   }

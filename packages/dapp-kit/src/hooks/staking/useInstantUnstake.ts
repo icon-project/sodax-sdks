@@ -1,4 +1,4 @@
-import type { HubTxHash, InstantUnstakeAction, SpokeTxHash } from '@sodax/sdk';
+import type { InstantUnstakeAction, TxHashPair } from '@sodax/sdk';
 import type { Result, SpokeChainKey } from '@sodax/sdk';
 import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
@@ -8,7 +8,7 @@ export type UseInstantUnstakeVars<K extends SpokeChainKey = SpokeChainKey> = Omi
   'raw'
 >;
 
-type InstantUnstakeResult = Result<[SpokeTxHash, HubTxHash]>;
+type InstantUnstakeResult = Result<TxHashPair>;
 
 /**
  * React hook for instant-unstaking SODA (bypassing the waiting period at a slippage cost). Pure

@@ -32,6 +32,7 @@ import {
   type GetPacketResponse,
   type GetTransactionPacketsResponse,
   type PacketData,
+  type RelayExtraData,
   relayTxAndWaitPacket,
   submitTransaction,
   type SubmitTxResponse,
@@ -53,6 +54,13 @@ const API_URL = 'https://relay.example.com/v1' as HttpUrl;
 const SPOKE_TX_HASH = '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
 const CHAIN_ID = '146'; // arbitrary; the service treats this as an opaque string
 const CONN_SN = '42';
+
+// `RelayAndWaitParams.data` is statically typed as required `RelayExtraData`,
+// but `relayTxAndWaitPacket`'s invariant only requires it for Solana/Bitcoin
+// source chains and the EVM branch never reads it. Tests for non-Solana/Bitcoin
+// chains pass `undefined` and rely on this cast — same intent-defeating mock
+// pattern the rest of the SDK test suite uses for misaligned param types.
+const NO_DATA = undefined as unknown as RelayExtraData;
 
 // Build a `fetch` response object that matches the `Response.json()` shape used
 // by `postRequest`. Only the `.json()` method is read by the service.
@@ -89,14 +97,14 @@ describe('submitTransaction', () => {
   const baseParams = { chain_id: CHAIN_ID, tx_hash: SPOKE_TX_HASH };
 
   describe('happy paths', () => {
-    it('POSTs JSON-stringified payload to apiUrl and returns the parsed body', async () => {
+    it('POSTs JSON-stringified payload to apiUrl and returns ok:true wrapping the parsed body', async () => {
       const responseBody: SubmitTxResponse = { success: true, message: 'Transaction submitted' };
       mockFetch.mockResolvedValueOnce(jsonResponse(responseBody));
 
       const payload: IntentRelayRequest<'submit'> = { action: 'submit', params: baseParams };
       const result = await submitTransaction(payload, API_URL);
 
-      expect(result).toEqual(responseBody);
+      expect(result).toEqual({ ok: true, value: responseBody });
       expect(mockFetch).toHaveBeenCalledTimes(1);
       expect(mockFetch).toHaveBeenCalledWith(API_URL, {
         method: 'POST',
@@ -105,10 +113,10 @@ describe('submitTransaction', () => {
       });
     });
 
-    it('forwards a relayer-side failure response (success: false) without throwing', async () => {
+    it('wraps a relayer-side failure (success:false) into ok:false SUBMIT_TX_FAILED with cause', async () => {
       // The HTTP request itself succeeded (200 OK) but the relayer rejected the
-      // submission. Service layer does not branch on `success` — the caller
-      // (e.g. `relayTxAndWaitPacket`) is responsible for inspecting it.
+      // submission. The service inspects `success` and surfaces a SUBMIT_TX_FAILED
+      // error whose `.cause` carries the relayer's message.
       const responseBody: SubmitTxResponse = {
         success: false,
         message: 'Invalid input parameters. must contain source_chain_id and tx_hash',
@@ -117,7 +125,10 @@ describe('submitTransaction', () => {
 
       const result = await submitTransaction({ action: 'submit', params: baseParams }, API_URL);
 
-      expect(result).toEqual(responseBody);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect((result.error as Error).message).toBe('SUBMIT_TX_FAILED');
+      expect(((result.error as Error).cause as Error).message).toBe(responseBody.message);
     });
 
     it('serializes the optional `data` field into the POST body when provided', async () => {
@@ -163,7 +174,7 @@ describe('getTransactionPackets', () => {
   const baseParams = { chain_id: CHAIN_ID, tx_hash: SPOKE_TX_HASH };
 
   describe('happy paths', () => {
-    it('POSTs and returns the parsed packets array', async () => {
+    it('POSTs and returns ok:true wrapping the parsed packets array', async () => {
       const responseBody: GetTransactionPacketsResponse = {
         success: true,
         data: [buildPacket()],
@@ -176,7 +187,7 @@ describe('getTransactionPackets', () => {
       };
       const result = await getTransactionPackets(payload, API_URL);
 
-      expect(result).toEqual(responseBody);
+      expect(result).toEqual({ ok: true, value: responseBody });
       expect(mockFetch).toHaveBeenCalledWith(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -184,7 +195,7 @@ describe('getTransactionPackets', () => {
       });
     });
 
-    it('returns success:true with an empty data array (no packets yet)', async () => {
+    it('returns ok:true wrapping success:true with an empty data array (no packets yet)', async () => {
       // The relayer returns `{ success: true, data: [] }` while the tx is still
       // pending. The service must pass this through verbatim — `waitUntilIntentExecuted`
       // depends on the exact shape to drive its polling loop.
@@ -193,7 +204,7 @@ describe('getTransactionPackets', () => {
 
       const result = await getTransactionPackets({ action: 'get_transaction_packets', params: baseParams }, API_URL);
 
-      expect(result).toEqual(responseBody);
+      expect(result).toEqual({ ok: true, value: responseBody });
     });
   });
 
@@ -228,14 +239,14 @@ describe('getPacket', () => {
   const baseParams = { chain_id: CHAIN_ID, tx_hash: SPOKE_TX_HASH, conn_sn: CONN_SN };
 
   describe('happy paths', () => {
-    it('POSTs and returns success:true with packet data', async () => {
+    it('POSTs and returns ok:true wrapping success:true with packet data', async () => {
       const responseBody: GetPacketResponse = { success: true, data: buildPacket() };
       mockFetch.mockResolvedValueOnce(jsonResponse(responseBody));
 
       const payload: IntentRelayRequest<'get_packet'> = { action: 'get_packet', params: baseParams };
       const result = await getPacket(payload, API_URL);
 
-      expect(result).toEqual(responseBody);
+      expect(result).toEqual({ ok: true, value: responseBody });
       expect(mockFetch).toHaveBeenCalledWith(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -243,15 +254,16 @@ describe('getPacket', () => {
       });
     });
 
-    it('returns success:false with a message when the relayer cannot find the packet', async () => {
+    it('returns ok:true wrapping success:false with a message when the relayer cannot find the packet', async () => {
       // GetPacketResponse is a discriminated union — the failure variant carries
-      // a `message` instead of `data`. The service forwards both verbatim.
+      // a `message` instead of `data`. The HTTP call still succeeded, so the
+      // service forwards the body verbatim inside an ok:true Result.
       const responseBody: GetPacketResponse = { success: false, message: 'packet not found' };
       mockFetch.mockResolvedValueOnce(jsonResponse(responseBody));
 
       const result = await getPacket({ action: 'get_packet', params: baseParams }, API_URL);
 
-      expect(result).toEqual(responseBody);
+      expect(result).toEqual({ ok: true, value: responseBody });
     });
   });
 
@@ -292,7 +304,7 @@ describe('getPacket', () => {
 describe('waitUntilIntentExecuted', () => {
   const baseInput = {
     intentRelayChainId: CHAIN_ID,
-    spokeTxHash: SPOKE_TX_HASH,
+    srcTxHash: SPOKE_TX_HASH,
     apiUrl: API_URL,
   };
 
@@ -321,7 +333,7 @@ describe('waitUntilIntentExecuted', () => {
         jsonResponse({ success: true, data: [packet] } satisfies GetTransactionPacketsResponse),
       );
 
-      const result = await waitUntilIntentExecuted({ ...baseInput, spokeTxHash: SPOKE_TX_HASH });
+      const result = await waitUntilIntentExecuted({ ...baseInput, srcTxHash: SPOKE_TX_HASH });
 
       expect(result).toEqual({ ok: true, value: packet });
     });
@@ -435,36 +447,28 @@ describe('waitUntilIntentExecuted', () => {
       expect(mockFetch).toHaveBeenCalledTimes(3);
     });
 
-    it('swallows getTransactionPackets errors via console.error and continues polling', async () => {
+    it('returns ok:false short-circuit when getTransactionPackets returns ok:false (network failure)', async () => {
       vi.useFakeTimers();
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      // First poll: postRequest's `retry` exhausts on a thrown fetch and the
-      // outer error is caught by the inner try/catch in waitUntilIntentExecuted.
-      // We collapse the retry by feeding `mockRejectedValue` (sticky), then a
-      // resolved value once the retry ladder concludes — `vi.advanceTimersByTimeAsync`
-      // walks the 2s back-offs in `retry` (3 attempts) plus the 2s pause
-      // between polling iterations.
+      // postRequest wraps fetch in `retry` (3 attempts, 2s back-off). After all
+      // attempts reject, `retry` rethrows, postRequest's catch returns
+      // `{ ok: false, error }`, and waitUntilIntentExecuted's
+      // `if (!txPacketsResult.ok) return txPacketsResult` short-circuits the
+      // polling loop with the underlying fetch error verbatim.
       mockFetch
         .mockRejectedValueOnce(new Error('network down'))
         .mockRejectedValueOnce(new Error('network down'))
-        .mockRejectedValueOnce(new Error('network down'))
-        .mockResolvedValueOnce(
-          jsonResponse({
-            success: true,
-            data: [buildPacket({ status: 'executed' })],
-          } satisfies GetTransactionPacketsResponse),
-        );
+        .mockRejectedValueOnce(new Error('network down'));
 
       const promise = waitUntilIntentExecuted(baseInput);
-      // 3 retries × 2s back-off + 2s polling pause = 8s.
-      await vi.advanceTimersByTimeAsync(8_000);
+      // 3 retry attempts × 2s back-off = 6s; loop exits before the 2s polling pause.
+      await vi.advanceTimersByTimeAsync(6_000);
       const result = await promise;
 
-      expect(result.ok).toBe(true);
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Error getting transaction packets', expect.any(Error));
-      // Retry made 3 attempts that all rejected, then the recovery poll succeeded.
-      expect(mockFetch).toHaveBeenCalledTimes(4);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect((result.error as Error).message).toBe('network down');
+      expect(mockFetch).toHaveBeenCalledTimes(3);
     });
   });
 
@@ -552,7 +556,13 @@ describe('relayTxAndWaitPacket', () => {
         .mockResolvedValueOnce(jsonResponse({ success: true, message: 'queued' } satisfies SubmitTxResponse))
         .mockResolvedValueOnce(jsonResponse({ success: true, data: [packet] } satisfies GetTransactionPacketsResponse));
 
-      const result = await relayTxAndWaitPacket(SPOKE_TX_HASH, undefined, ChainKeys.BSC_MAINNET, API_URL);
+      const result = await relayTxAndWaitPacket({
+        srcTxHash: SPOKE_TX_HASH,
+        data: NO_DATA,
+        chainKey: ChainKeys.BSC_MAINNET,
+        relayerApiEndpoint: API_URL,
+        timeout: undefined,
+      });
 
       expect(result).toEqual({ ok: true, value: packet });
       expect(mockFetch).toHaveBeenCalledTimes(2);
@@ -566,7 +576,13 @@ describe('relayTxAndWaitPacket', () => {
         .mockResolvedValueOnce(jsonResponse({ success: true, message: 'ok' } satisfies SubmitTxResponse))
         .mockResolvedValueOnce(jsonResponse({ success: true, data: [packet] } satisfies GetTransactionPacketsResponse));
 
-      await relayTxAndWaitPacket(SPOKE_TX_HASH, undefined, ChainKeys.BSC_MAINNET, API_URL);
+      await relayTxAndWaitPacket({
+        srcTxHash: SPOKE_TX_HASH,
+        data: NO_DATA,
+        chainKey: ChainKeys.BSC_MAINNET,
+        relayerApiEndpoint: API_URL,
+        timeout: undefined,
+      });
 
       const submitBody = JSON.parse(mockFetch.mock.calls[0]?.[1].body);
       expect(submitBody.action).toBe('submit');
@@ -582,7 +598,13 @@ describe('relayTxAndWaitPacket', () => {
         .mockResolvedValueOnce(jsonResponse({ success: true, message: 'ok' } satisfies SubmitTxResponse))
         .mockResolvedValueOnce(jsonResponse({ success: true, data: [packet] } satisfies GetTransactionPacketsResponse));
 
-      await relayTxAndWaitPacket(SPOKE_TX_HASH, data, ChainKeys.SOLANA_MAINNET, API_URL);
+      await relayTxAndWaitPacket({
+        srcTxHash: SPOKE_TX_HASH,
+        data,
+        chainKey: ChainKeys.SOLANA_MAINNET,
+        relayerApiEndpoint: API_URL,
+        timeout: undefined,
+      });
 
       const submitBody = JSON.parse(mockFetch.mock.calls[0]?.[1].body);
       expect(submitBody.params).toEqual({
@@ -599,7 +621,13 @@ describe('relayTxAndWaitPacket', () => {
         // No packet ever — force the inner loop to time out at the configured value.
         .mockResolvedValue(jsonResponse({ success: true, data: [] } satisfies GetTransactionPacketsResponse));
 
-      const promise = relayTxAndWaitPacket(SPOKE_TX_HASH, undefined, ChainKeys.BSC_MAINNET, API_URL, 1_000);
+      const promise = relayTxAndWaitPacket({
+        srcTxHash: SPOKE_TX_HASH,
+        data: NO_DATA,
+        chainKey: ChainKeys.BSC_MAINNET,
+        relayerApiEndpoint: API_URL,
+        timeout: 1_000,
+      });
       await vi.advanceTimersByTimeAsync(2_000);
       const result = await promise;
 
@@ -615,7 +643,13 @@ describe('relayTxAndWaitPacket', () => {
         jsonResponse({ success: false, message: 'invalid tx_hash' } satisfies SubmitTxResponse),
       );
 
-      const result = await relayTxAndWaitPacket(SPOKE_TX_HASH, undefined, ChainKeys.BSC_MAINNET, API_URL);
+      const result = await relayTxAndWaitPacket({
+        srcTxHash: SPOKE_TX_HASH,
+        data: NO_DATA,
+        chainKey: ChainKeys.BSC_MAINNET,
+        relayerApiEndpoint: API_URL,
+        timeout: undefined,
+      });
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
@@ -632,12 +666,41 @@ describe('relayTxAndWaitPacket', () => {
       // calling it on a key not in the map yields `undefined` and `.toString()`
       // throws synchronously. The outer try/catch in `relayTxAndWaitPacket`
       // captures this and returns ok:false with the raw error.
-      const result = await relayTxAndWaitPacket(SPOKE_TX_HASH, undefined, 'unknown_chain' as never, API_URL);
+      const result = await relayTxAndWaitPacket({
+        srcTxHash: SPOKE_TX_HASH,
+        data: NO_DATA,
+        chainKey: 'unknown_chain' as never,
+        relayerApiEndpoint: API_URL,
+        timeout: undefined,
+      });
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.error).toBeInstanceOf(Error);
       // No HTTP request issued — failure short-circuits before submitTransaction.
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('rejects on invalid inputs', () => {
+    it('returns ok:false when chainKey is Solana and data is undefined (invariant)', async () => {
+      // Solana/Bitcoin source chains use a split-tx flow where the on-chain tx
+      // carries only a verification hash — the full instruction blob must be
+      // shipped via the off-chain `data` field. Omitting `data` for these
+      // chains trips an invariant inside `relayTxAndWaitPacket`; the outer
+      // try/catch turns it into ok:false with the raw Error.
+      const result = await relayTxAndWaitPacket({
+        srcTxHash: SPOKE_TX_HASH,
+        data: NO_DATA,
+        chainKey: ChainKeys.SOLANA_MAINNET,
+        relayerApiEndpoint: API_URL,
+        timeout: undefined,
+      });
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error).toBeInstanceOf(Error);
+      expect((result.error as Error).message).toMatch(/Data is required/);
       expect(mockFetch).not.toHaveBeenCalled();
     });
   });

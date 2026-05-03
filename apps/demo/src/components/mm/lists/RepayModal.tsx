@@ -127,14 +127,18 @@ export function RepayModal({
     };
   }, [amount, sourceToken, toChainId, fromAddress, toAddress, fromChainId]);
 
-  const { data: sourceAllowed, isLoading: isSourceAllowanceLoading } = useMMAllowance({ params: sourceParams });
+  const { data: sourceAllowed, isLoading: isSourceAllowanceLoading } = useMMAllowance({
+    params: { payload: sourceParams },
+  });
 
   const xService = useXService(getXChainType(fromChainId));
   const { data: balances, isLoading: isBalancesLoading } = useXBalances({
-    xService,
-    xChainId: fromChainId,
-    xTokens: sourceToken ? [sourceToken] : [],
-    address: fromAddress,
+    params: {
+      xService,
+      xChainId: fromChainId,
+      xTokens: sourceToken ? [sourceToken] : [],
+      address: fromAddress,
+    },
   });
 
   const userBalance =

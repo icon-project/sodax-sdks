@@ -29,10 +29,14 @@ export const BitcoinSetupPanel = ({ walletProvider, onReadyChange, nativeBalance
   const { sodax } = useSodaxContext();
   const { walletAddress, isAuthed, tradingAddress, login, isLoginPending } = useRadfiSession(walletProvider);
 
-  const { data: tradingBalance, isLoading: isBalanceLoading } = useTradingWalletBalance(walletProvider, tradingAddress);
+  const { data: tradingBalance, isLoading: isBalanceLoading } = useTradingWalletBalance({
+    params: { walletProvider, tradingAddress },
+  });
 
   const { mutateAsync: fundWallet, isPending: isFunding } = useFundTradingWallet(walletProvider);
-  const { data: expiredUtxos, isLoading: isExpiredLoading } = useExpiredUtxos(walletProvider, tradingAddress);
+  const { data: expiredUtxos, isLoading: isExpiredLoading } = useExpiredUtxos({
+    params: { walletProvider, tradingAddress },
+  });
   const { mutateAsync: renewUtxos, isPending: isRenewing } = useRenewUtxos(walletProvider);
   const { mutateAsync: withdrawFromTradingWallet, isPending: isWithdrawing } = useRadfiWithdraw(walletProvider);
   const [copied, setCopied] = useState(false);

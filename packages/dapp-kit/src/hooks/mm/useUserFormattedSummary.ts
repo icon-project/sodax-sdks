@@ -1,16 +1,16 @@
 import type { FormatReserveUSDResponse, FormatUserSummaryResponse } from '@sodax/sdk';
 import type { SpokeChainKey } from '@sodax/sdk';
-import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { ReadHookParams } from '../shared/types.js';
 
-export type UseUserFormattedSummaryParams = {
-  spokeChainKey: SpokeChainKey | undefined;
-  userAddress: string | undefined;
-  queryOptions?: Omit<
-    UseQueryOptions<FormatUserSummaryResponse<FormatReserveUSDResponse>, Error>,
-    'queryKey' | 'queryFn' | 'enabled'
-  >;
-};
+export type UseUserFormattedSummaryParams = ReadHookParams<
+  FormatUserSummaryResponse<FormatReserveUSDResponse>,
+  {
+    spokeChainKey: SpokeChainKey | undefined;
+    userAddress: string | undefined;
+  }
+>;
 
 /**
  * React hook returning the user's formatted money market portfolio summary (collateral, borrows,
@@ -20,11 +20,12 @@ export type UseUserFormattedSummaryParams = {
  * → `formatUserSummary`.
  */
 export function useUserFormattedSummary({
-  spokeChainKey,
-  userAddress,
+  params,
   queryOptions,
-}: UseUserFormattedSummaryParams): UseQueryResult<FormatUserSummaryResponse<FormatReserveUSDResponse>, Error> {
+}: UseUserFormattedSummaryParams = {}): UseQueryResult<FormatUserSummaryResponse<FormatReserveUSDResponse>, Error> {
   const { sodax } = useSodaxContext();
+  const spokeChainKey = params?.spokeChainKey;
+  const userAddress = params?.userAddress;
 
   return useQuery({
     queryKey: ['mm', 'userFormattedSummary', spokeChainKey, userAddress],

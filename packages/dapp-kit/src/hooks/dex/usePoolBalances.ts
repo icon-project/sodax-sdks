@@ -1,34 +1,38 @@
 import type { PoolData, PoolKey } from '@sodax/sdk';
 import type { SpokeChainKey } from '@sodax/sdk';
-import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { erc20Abi } from 'viem';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { ReadHookParams } from '../shared/types.js';
 
 export type UsePoolBalancesResponse = {
   token0Balance: bigint;
   token1Balance: bigint;
 };
 
-export type UsePoolBalancesProps = {
-  poolData: PoolData | null;
-  poolKey: PoolKey | null;
-  spokeChainKey: SpokeChainKey | undefined;
-  userAddress: string | undefined;
-  queryOptions?: Omit<UseQueryOptions<UsePoolBalancesResponse, Error>, 'queryKey' | 'queryFn' | 'enabled'>;
-};
+export type UsePoolBalancesParams = ReadHookParams<
+  UsePoolBalancesResponse,
+  {
+    poolData: PoolData | null;
+    poolKey: PoolKey | null;
+    spokeChainKey: SpokeChainKey | undefined;
+    userAddress: string | undefined;
+  }
+>;
 
 /**
  * React hook to query the user's hub-side deposit balances for both pool tokens. Derives the hub
  * wallet once and reads both pool-token balances in parallel via the hub `publicClient`.
  */
 export function usePoolBalances({
-  poolData,
-  poolKey,
-  spokeChainKey,
-  userAddress,
+  params,
   queryOptions,
-}: UsePoolBalancesProps): UseQueryResult<UsePoolBalancesResponse, Error> {
+}: UsePoolBalancesParams = {}): UseQueryResult<UsePoolBalancesResponse, Error> {
   const { sodax } = useSodaxContext();
+  const poolData = params?.poolData ?? null;
+  const poolKey = params?.poolKey ?? null;
+  const spokeChainKey = params?.spokeChainKey;
+  const userAddress = params?.userAddress;
 
   return useQuery<UsePoolBalancesResponse, Error>({
     queryKey: ['dex', 'poolBalances', poolData?.poolId, spokeChainKey, userAddress],

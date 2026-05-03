@@ -1,81 +1,43 @@
 import type { UserIntentsResponse, Address } from '@sodax/sdk';
-// packages/dapp-kit/src/hooks/backend/useBackendUserIntents.ts
-import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
-import type { BackendPaginationParams } from './types.js';
+import { unwrapResult } from './unwrapResult.js';
+import type { ReadHookParams } from '../shared/types.js';
 
-export type GetUserIntentsParams = {
-  userAddress: Address;
-  startDate?: number;
-  endDate?: number;
-};
-
-export type UseBackendUserIntentsParams = {
-  params?: GetUserIntentsParams;
-  queryOptions?: UseQueryOptions<UserIntentsResponse | undefined, Error>;
-  pagination?: BackendPaginationParams;
-};
+export type UseBackendUserIntentsParams = ReadHookParams<
+  UserIntentsResponse | undefined,
+  {
+    userAddress: Address | undefined;
+    startDate?: number;
+    endDate?: number;
+  }
+>;
 
 /**
- * React hook for fetching user-created intents from the backend API for a given user address,
- * with optional support for a date filtering range.
- *
- * @param {UseBackendUserIntentsParams} args - Query configuration.
- *   @param {GetUserIntentsParams | undefined} args.params - User intent filter parameters.
- *     @param {Address} args.params.userAddress - The wallet address of the user (required).
- *     @param {number} [args.params.startDate] - Include intents created after this timestamp (ms).
- *     @param {number} [args.params.endDate] - Include intents created before this timestamp (ms).
- *   @param {UseQueryOptions<UserIntentsResponse | undefined, Error>} [args.queryOptions] - Optional React Query options.
- *   @param {BackendPaginationParams} [args.pagination] - (currently ignored) Pagination options.
- *
- * @returns {UseQueryResult<UserIntentsResponse | undefined, Error>} React Query result:
- *   - `data`: The user intent response, or undefined if unavailable.
- *   - `isLoading`: `true` if loading.
- *   - `error`: An Error instance if any occurred.
- *   - `refetch`: Function to refetch data.
+ * React hook for fetching user-created intents from the backend API for a given user address.
  *
  * @example
- * const { data: userIntents, isLoading, error } = useBackendUserIntents({
- *   params: { userAddress: "0x123..." }
+ * const { data: userIntents } = useBackendUserIntents({
+ *   params: { userAddress: '0x123...' },
  * });
- *
- * @example
- * const { data } = useBackendUserIntents({
- *   params: {
- *     userAddress: "0xabc...",
- *     startDate: Date.now() - 1_000_000,
- *     endDate: Date.now(),
- *   },
- * });
- *
- * @remarks
- * The query is disabled if `params` or `params.userAddress` is missing or empty. Uses React Query for
- * cache/state management and auto-retries failed requests three times by default.
  */
 export const useBackendUserIntents = ({
   params,
   queryOptions,
-}: UseBackendUserIntentsParams): UseQueryResult<UserIntentsResponse | undefined, Error> => {
+}: UseBackendUserIntentsParams = {}): UseQueryResult<UserIntentsResponse | undefined, Error> => {
   const { sodax } = useSodaxContext();
-  const defaultQueryOptions = {
-    queryKey: ['api', 'intent', 'user', params],
-    enabled: !!params && !!params.userAddress && params.userAddress.length > 0,
-    retry: 3,
-  };
-
-  queryOptions = {
-    ...defaultQueryOptions,
-    ...queryOptions, // override default query options if provided
-  };
+  const userAddress = params?.userAddress;
+  const startDate = params?.startDate;
+  const endDate = params?.endDate;
 
   return useQuery({
-    ...queryOptions,
+    queryKey: ['api', 'intent', 'user', userAddress, startDate, endDate],
     queryFn: async (): Promise<UserIntentsResponse | undefined> => {
-      if (!params?.userAddress) {
-        return undefined;
-      }
-
-      return sodax.backendApi.getUserIntents(params);
+      if (!userAddress) return undefined;
+      return unwrapResult(await sodax.backendApi.getUserIntents({ userAddress, startDate, endDate }));
     },
+    enabled: !!userAddress && userAddress.length > 0,
+    retry: 3,
+    ...queryOptions,
   });
 };

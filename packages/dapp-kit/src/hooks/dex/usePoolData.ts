@@ -1,18 +1,17 @@
 import type { PoolData, PoolKey } from '@sodax/sdk';
-import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { ReadHookParams } from '../shared/types.js';
 
-export type UsePoolDataProps = {
-  poolKey: PoolKey | null;
-  queryOptions?: Omit<UseQueryOptions<PoolData, Error>, 'queryKey' | 'queryFn' | 'enabled'>;
-};
+export type UsePoolDataParams = ReadHookParams<PoolData, { poolKey: PoolKey | null }>;
 
 /**
  * React hook to fetch on-chain pool data (sqrt price, tick, fees, token info, etc.) for a given
  * pool key. Reads via the hub `publicClient`. Disabled when `poolKey` is null.
  */
-export function usePoolData({ poolKey, queryOptions }: UsePoolDataProps): UseQueryResult<PoolData, Error> {
+export function usePoolData({ params, queryOptions }: UsePoolDataParams = {}): UseQueryResult<PoolData, Error> {
   const { sodax } = useSodaxContext();
+  const poolKey = params?.poolKey ?? null;
 
   return useQuery<PoolData, Error>({
     queryKey: ['dex', 'poolData', poolKey],
@@ -20,7 +19,9 @@ export function usePoolData({ poolKey, queryOptions }: UsePoolDataProps): UseQue
       if (!poolKey) {
         throw new Error('Pool key is required');
       }
-      return sodax.dex.clService.getPoolData(poolKey, sodax.hubProvider.publicClient);
+      const result = await sodax.dex.clService.getPoolData(poolKey, sodax.hubProvider.publicClient);
+      if (!result.ok) throw result.error;
+      return result.value;
     },
     enabled: poolKey !== null,
     staleTime: 10_000,

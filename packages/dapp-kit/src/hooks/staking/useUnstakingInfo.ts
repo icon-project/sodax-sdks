@@ -1,24 +1,28 @@
 import type { UnstakingInfo } from '@sodax/sdk';
 import type { SpokeChainKey } from '@sodax/sdk';
-import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { ReadHookParams } from '../shared/types.js';
 
-export type UseUnstakingInfoProps = {
-  srcAddress: `0x${string}` | undefined;
-  srcChainKey: SpokeChainKey | undefined;
-  queryOptions?: Omit<UseQueryOptions<UnstakingInfo, Error>, 'queryKey' | 'queryFn' | 'enabled'>;
-};
+export type UseUnstakingInfoParams = ReadHookParams<
+  UnstakingInfo,
+  {
+    srcAddress: `0x${string}` | undefined;
+    srcChainKey: SpokeChainKey | undefined;
+  }
+>;
 
 /**
  * React hook to fetch the user's pending unstake requests by deriving the hub wallet from the
  * spoke `srcAddress` + `srcChainKey`. Throws on `!ok`.
  */
 export function useUnstakingInfo({
-  srcAddress,
-  srcChainKey,
+  params,
   queryOptions,
-}: UseUnstakingInfoProps): UseQueryResult<UnstakingInfo, Error> {
+}: UseUnstakingInfoParams = {}): UseQueryResult<UnstakingInfo, Error> {
   const { sodax } = useSodaxContext();
+  const srcAddress = params?.srcAddress;
+  const srcChainKey = params?.srcChainKey;
 
   return useQuery<UnstakingInfo, Error>({
     queryKey: ['staking', 'unstakingInfo', srcChainKey, srcAddress],

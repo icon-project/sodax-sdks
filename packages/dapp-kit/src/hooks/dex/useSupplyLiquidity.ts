@@ -1,4 +1,4 @@
-import type { ClIncreaseLiquidityParams, ClSupplyParams, HubTxHash, SpokeTxHash } from '@sodax/sdk';
+import type { ClIncreaseLiquidityParams, ClSupplyParams, TxHashPair } from '@sodax/sdk';
 import type { GetWalletProviderType, Result, SpokeChainKey } from '@sodax/sdk';
 import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
@@ -17,7 +17,7 @@ export type UseSupplyLiquidityVars<K extends SpokeChainKey = SpokeChainKey> = {
   timeout?: number;
 };
 
-type SupplyLiquidityResult = Result<[SpokeTxHash, HubTxHash]>;
+type SupplyLiquidityResult = Result<TxHashPair>;
 
 /**
  * React hook for supplying liquidity to a concentrated-liquidity pool. If the input vars include a

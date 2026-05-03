@@ -1,4 +1,4 @@
-import type { DestinationParamsType, RelayOptionalExtraData } from '../shared/types/types.js';
+import type { DestinationParamsType, IntentTxResult, TxHashPair } from '../shared/types/types.js';
 import type { Address, Hex } from 'viem';
 import {
   EvmAssetManagerService,
@@ -16,8 +16,6 @@ import {
   type SpokeIsAllowanceValidParamsStellar,
   isHubChainKeyType,
   isEvmChainKeyType,
-  isSolanaChainKeyType,
-  isBitcoinChainKeyType,
   isOptionalStellarWalletProviderType,
   isEvmSpokeOnlyChainKeyType,
   isOptionalEvmWalletProviderType,
@@ -34,11 +32,9 @@ import {
   type GetWalletProviderType,
   type HttpUrl,
   type HubChainKey,
-  type HubTxHash,
   type OriginalAssetAddress,
   type Result,
   type SpokeChainKey,
-  type SpokeTxHash,
   type SpokeExecActionParams,
   type StellarChainKey,
   type TxReturnType,
@@ -293,7 +289,7 @@ export class AssetService {
    */
   public async executeDeposit<K extends SpokeChainKey, Raw extends boolean>(
     _params: AssetDepositAction<K, Raw>,
-  ): Promise<Result<TxReturnType<K, Raw>> & RelayOptionalExtraData> {
+  ): Promise<Result<IntentTxResult<K, Raw>>> {
     const { params, skipSimulation } = _params;
     try {
       invariant(params.amount > 0n, 'Amount must be greater than 0');
@@ -305,9 +301,9 @@ export class AssetService {
             this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey),
             this.hubProvider.getUserHubWalletAddress(params.dst.dstAddress, params.dst.dstChainKey),
           ])
-        : await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey).then(
-            w => [w, w] as const,
-          );
+        : await this.hubProvider
+            .getUserHubWalletAddress(params.srcAddress, params.srcChainKey)
+            .then(w => [w, w] as const);
 
       const calls = await this.getTokenWrapAction(
         params.asset,
@@ -350,10 +346,9 @@ export class AssetService {
 
       return {
         ok: true,
-        value: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
-        data: {
-          address: fromHubWallet,
-          payload: data,
+        value: {
+          tx: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
+          relayData: { address: fromHubWallet, payload: data },
         },
       };
     } catch (error) {
@@ -369,7 +364,7 @@ export class AssetService {
    */
   public async executeWithdraw<K extends SpokeChainKey, Raw extends boolean>(
     _params: AssetWithdrawAction<K, Raw>,
-  ): Promise<Result<TxReturnType<K, Raw>> & RelayOptionalExtraData> {
+  ): Promise<Result<IntentTxResult<K, Raw>>> {
     const { params, skipSimulation } = _params;
     try {
       invariant(params.amount > 0n, 'Amount must be greater than 0');
@@ -381,10 +376,7 @@ export class AssetService {
             this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey),
             this.hubProvider.getUserHubWalletAddress(params.dst.dstAddress, params.dst.dstChainKey),
           ])
-        : [
-            await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey),
-            params.srcAddress,
-          ];
+        : [await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey), params.srcAddress];
       const dstChainKey: SpokeChainKey = params.dst?.dstChainKey ?? params.srcChainKey;
 
       const calls = await this.getTokenUnwrapAction(
@@ -427,10 +419,9 @@ export class AssetService {
 
       return {
         ok: true,
-        value: txResult.value satisfies TxReturnType<K, boolean> as TxReturnType<K, Raw>,
-        data: {
-          address: recipient as `0x${string}`,
-          payload: data,
+        value: {
+          tx: txResult.value satisfies TxReturnType<K, boolean> as TxReturnType<K, Raw>,
+          relayData: { address: recipient as `0x${string}`, payload: data },
         },
       };
     } catch (error) {
@@ -503,33 +494,29 @@ export class AssetService {
    *   console.log('Deposit transaction hashes:', { spokeTxHash, hubTxHash });
    * }
    */
-  public async deposit<K extends SpokeChainKey>(
-    _params: AssetDepositAction<K, false>,
-  ): Promise<Result<[SpokeTxHash, HubTxHash]>> {
+  public async deposit<K extends SpokeChainKey>(_params: AssetDepositAction<K, false>): Promise<Result<TxHashPair>> {
     const { params, timeout } = _params;
     try {
       const txResult = await this.executeDeposit(_params);
       if (!txResult.ok) return txResult;
 
-      let intentTxHash: string | null = null;
+      let hubTxHash: string;
       if (!isHubChainKeyType(params.srcChainKey)) {
-        const packetResult = await relayTxAndWaitPacket(
-          txResult.value,
-          isSolanaChainKeyType(params.srcChainKey) || isBitcoinChainKeyType(params.srcChainKey)
-            ? txResult.data
-            : undefined,
-          params.srcChainKey,
-          this.relayerApiEndpoint,
-          timeout,
-        );
+        const packetResult = await relayTxAndWaitPacket({
+          srcTxHash: txResult.value.tx,
+          data: txResult.value.relayData,
+          chainKey: params.srcChainKey,
+          relayerApiEndpoint: this.relayerApiEndpoint,
+          timeout: timeout,
+        });
         if (!packetResult.ok) return packetResult;
 
-        intentTxHash = packetResult.value.dst_tx_hash;
+        hubTxHash = packetResult.value.dst_tx_hash;
       } else {
-        intentTxHash = txResult.value;
+        hubTxHash = txResult.value.tx;
       }
 
-      return { ok: true, value: [txResult.value, intentTxHash] };
+      return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
     } catch (error) {
       return { ok: false, error };
     }
@@ -557,33 +544,29 @@ export class AssetService {
    * const [spokeTxHash, hubTxHash] = result.value;
    * console.log('Withdraw transaction hashes:', { spokeTxHash, hubTxHash });
    */
-  public async withdraw<K extends SpokeChainKey>(
-    _params: AssetWithdrawAction<K, false>,
-  ): Promise<Result<[SpokeTxHash, HubTxHash]>> {
+  public async withdraw<K extends SpokeChainKey>(_params: AssetWithdrawAction<K, false>): Promise<Result<TxHashPair>> {
     const { params, timeout } = _params;
     try {
       const txResult = await this.executeWithdraw(_params);
       if (!txResult.ok) return txResult;
 
-      let intentTxHash: string | null = null;
+      let hubTxHash: string;
       if (!isHubChainKeyType(params.srcChainKey)) {
-        const packetResult = await relayTxAndWaitPacket(
-          txResult.value,
-          isSolanaChainKeyType(params.srcChainKey) || isBitcoinChainKeyType(params.srcChainKey)
-            ? txResult.data
-            : undefined,
-          params.srcChainKey,
-          this.relayerApiEndpoint,
-          timeout,
-        );
+        const packetResult = await relayTxAndWaitPacket({
+          srcTxHash: txResult.value.tx,
+          data: txResult.value.relayData,
+          chainKey: params.srcChainKey,
+          relayerApiEndpoint: this.relayerApiEndpoint,
+          timeout: timeout,
+        });
         if (!packetResult.ok) return packetResult;
 
-        intentTxHash = packetResult.value.dst_tx_hash;
+        hubTxHash = packetResult.value.dst_tx_hash;
       } else {
-        intentTxHash = txResult.value;
+        hubTxHash = txResult.value.tx;
       }
 
-      return { ok: true, value: [txResult.value, intentTxHash] };
+      return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
     } catch (error) {
       return { ok: false, error };
     }

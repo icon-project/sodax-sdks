@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { ChainKeys, type SpokeChainKey } from '@sodax/sdk';
 import { type Address, formatUnits, isAddress, parseUnits } from 'viem';
 import { chainIdToChainName } from '@/constants';
-import { SelectChain } from '@/components/solver/SelectChain';
+import { SelectChain } from '@/components/swaps/SelectChain';
 
 const SONIC: typeof ChainKeys.SONIC_MAINNET = ChainKeys.SONIC_MAINNET;
 
@@ -53,7 +53,7 @@ export default function PartnerFeeClaimPage() {
     data: balances,
     isFetching: isFetchingBalances,
     error: balancesError,
-  } = useFetchAssetsBalances({ queryAddress: submittedAddress });
+  } = useFetchAssetsBalances({ params: { queryAddress: submittedAddress } });
 
   const balancesArray = useMemo(() => (balances ? Array.from(balances.values()) : []), [balances]);
 
@@ -78,7 +78,7 @@ export default function PartnerFeeClaimPage() {
     [approveTokenAddress, srcAddress],
   );
 
-  const { data: isApproved } = useIsTokenApproved({ params: isApprovedParams });
+  const { data: isApproved } = useIsTokenApproved({ params: { payload: isApprovedParams } });
   const { mutateAsync: approveToken, isPending: approveLoading } = useApproveToken();
 
   const handleApproveToken = async (): Promise<void> => {
@@ -385,11 +385,7 @@ export default function PartnerFeeClaimPage() {
             <Button
               onClick={handleSetSwapPreference}
               disabled={
-                setPreferenceLoading ||
-                !srcAddress ||
-                !walletProvider ||
-                !outputToken.trim() ||
-                !dstAddress.trim()
+                setPreferenceLoading || !srcAddress || !walletProvider || !outputToken.trim() || !dstAddress.trim()
               }
             >
               {setPreferenceLoading ? 'Setting...' : 'Set Swap Preference'}

@@ -20,7 +20,9 @@ function EmptyState({ message, className = 'text-muted-foreground' }: { message:
 
 export default function LimitOrderList({ spokeChainId }: { spokeChainId: SpokeChainKey }) {
   const account = useXAccount(spokeChainId);
-  const { data: userHubAddress } = useDeriveUserWalletAddress(spokeChainId, account.address);
+  const { data: userHubAddress } = useDeriveUserWalletAddress({
+    params: { spokeChainId, spokeAddress: account.address },
+  });
 
   const {
     data: userIntents,
@@ -33,13 +35,10 @@ export default function LimitOrderList({ spokeChainId }: { spokeChainId: SpokeCh
           ? {
               params: {
                 userAddress: userHubAddress,
-                limit: '100',
-                offset: '0',
+                pagination: { limit: '100', offset: '0' },
               },
             }
-          : {
-              params: undefined,
-            },
+          : { params: { userAddress: undefined } },
       [userHubAddress],
     ),
   );

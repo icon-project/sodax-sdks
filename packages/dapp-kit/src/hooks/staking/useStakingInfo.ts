@@ -1,25 +1,29 @@
 import type { StakingInfo } from '@sodax/sdk';
 import type { SpokeChainKey } from '@sodax/sdk';
-import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { ReadHookParams } from '../shared/types.js';
 
-export type UseStakingInfoProps = {
-  srcAddress: `0x${string}` | undefined;
-  srcChainKey: SpokeChainKey | undefined;
-  queryOptions?: Omit<UseQueryOptions<StakingInfo, Error>, 'queryKey' | 'queryFn' | 'enabled'>;
-};
+export type UseStakingInfoParams = ReadHookParams<
+  StakingInfo,
+  {
+    srcAddress: `0x${string}` | undefined;
+    srcChainKey: SpokeChainKey | undefined;
+  }
+>;
 
 /**
  * React hook to fetch the user's staking info (xSODA balance, share value, underlying SODA) by
  * deriving the hub wallet from the spoke `srcAddress` + `srcChainKey`. Throws on `!ok` so React
  * Query lands in `error` state.
  */
-export function useStakingInfo({
-  srcAddress,
-  srcChainKey,
-  queryOptions,
-}: UseStakingInfoProps): UseQueryResult<StakingInfo, Error> {
+export function useStakingInfo({ params, queryOptions }: UseStakingInfoParams = {}): UseQueryResult<
+  StakingInfo,
+  Error
+> {
   const { sodax } = useSodaxContext();
+  const srcAddress = params?.srcAddress;
+  const srcChainKey = params?.srcChainKey;
 
   return useQuery<StakingInfo, Error>({
     queryKey: ['staking', 'info', srcChainKey, srcAddress],

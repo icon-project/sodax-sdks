@@ -1,4 +1,4 @@
-import type { ClLiquidityDecreaseLiquidityAction, HubTxHash, SpokeTxHash } from '@sodax/sdk';
+import type { ClLiquidityDecreaseLiquidityAction, TxHashPair } from '@sodax/sdk';
 import type { Result, SpokeChainKey } from '@sodax/sdk';
 import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
@@ -13,7 +13,7 @@ export type UseDecreaseLiquidityVars<K extends SpokeChainKey = SpokeChainKey> = 
   'raw'
 >;
 
-type DecreaseLiquidityResult = Result<[SpokeTxHash, HubTxHash]>;
+type DecreaseLiquidityResult = Result<TxHashPair>;
 
 /**
  * React hook for decreasing liquidity in an existing concentrated-liquidity position. Pure

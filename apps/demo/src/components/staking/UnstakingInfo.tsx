@@ -25,8 +25,7 @@ export function UnstakingInfo({
 }>) {
   const [claimRequestId, setClaimRequestId] = useState<string>('');
   const { data: unstakingInfoWithPenalty, isLoading: isLoadingUnstakingInfoWithPenalty } = useUnstakingInfoWithPenalty({
-    srcAddress,
-    srcChainKey,
+    params: { srcAddress, srcChainKey },
   });
   const { data: stakingConfig, isLoading: isLoadingStakingConfig } = useStakingConfig();
 

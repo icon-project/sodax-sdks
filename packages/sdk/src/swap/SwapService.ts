@@ -28,11 +28,11 @@ import {
   isStellarChainKeyType,
   isUndefinedOrValidWalletProviderForChainKey,
   relayTxAndWaitPacket,
-  isSolanaChainKeyType,
   isOptionalEvmWalletProviderType,
   isOptionalStellarWalletProviderType,
   isBitcoinWalletProviderType,
   type RelayExtraData,
+  type TxHashPair,
 } from '../shared/index.js';
 import { SolverApiService } from './SolverApiService.js';
 import { EvmSolverService } from './EvmSolverService.js';
@@ -79,27 +79,37 @@ import {
   type StellarChainKey,
   spokeChainConfig,
   type SpokeExecActionParams,
-  type WalletProviderSlot,
   type SonicChainKey,
 } from '@sodax/types';
 
 export type GetIntentSubmitTxExtraDataParams = { txHash: Hash } | { intent: Intent };
 
+export type SwapResponse = {
+  solverExecutionResponse: SolverExecutionResponse;
+  intent: Intent;
+  intentDeliveryInfo: IntentDeliveryInfo;
+};
+
+export type CreateIntentResult<K extends SpokeChainKey, Raw extends boolean> = {
+  tx: TxReturnType<K, Raw>;
+  intent: Intent & FeeAmount;
+  relayData: RelayExtraData;
+};
+
 // Exec-mode params: walletProvider is required and K-narrowed. Consumed by `createIntent`,
 // `createLimitOrder`, `createLimitOrderIntent`, `approve` — methods that send a transaction
 // and return an executed tx hash.
-export type SwapActionParams<K extends SpokeChainKey, Raw extends boolean> = SpokeExecActionParams<
+export type SwapActionParams<K extends SpokeChainKey, Raw extends boolean = false> = SpokeExecActionParams<
   K,
   Raw,
   CreateIntentParams<K>
-> & { fee?: PartnerFee };
+>;
 
-export type LimitOrderActionParams<K extends SpokeChainKey, Raw extends boolean> = Omit<
-  SwapActionParams<K, Raw>,
-  'params'
-> & {
-  params: CreateLimitOrderParams<K>;
-};
+export type LimitOrderActionParams<K extends SpokeChainKey, Raw extends boolean = false> = SpokeExecActionParams<
+  K,
+  Raw,
+  CreateLimitOrderParams<K>
+>;
 
 /**
  * Params for `cancelIntent`.
@@ -107,13 +117,18 @@ export type LimitOrderActionParams<K extends SpokeChainKey, Raw extends boolean>
  * narrow to a specific ChainKey, the user passes `srcChainKey: K` explicitly. At runtime we
  * assert that `getIntentRelayChainId(srcChainKey) === intent.srcChain` and throw if not.
  */
-export type CancelIntentParams<K extends SpokeChainKey, Raw extends boolean> = {
+export type CancelIntentParams<K extends SpokeChainKey> = {
   srcChainKey: K;
   intent: Intent;
   skipSimulation?: boolean;
-  fee?: PartnerFee;
   timeout?: number;
-} & WalletProviderSlot<K, Raw>;
+};
+
+export type CancelIntentActionParams<K extends SpokeChainKey, Raw extends boolean = false> = SpokeExecActionParams<
+  K,
+  Raw,
+  CancelIntentParams<K>
+>;
 
 export type SwapServiceConstructorParams = {
   config: ConfigService;
@@ -300,11 +315,7 @@ export class SwapService {
    */
   public async submitIntent(submitPayload: IntentRelayRequest<'submit'>): Promise<Result<GetRelayResponse<'submit'>>> {
     try {
-      const submitResult = await submitTransaction(submitPayload, this.relayerApiEndpoint);
-      if (!submitResult.success) {
-        return { ok: false, error: new Error('SUBMIT_TX_FAILED', { cause: new Error(submitResult.message) }) };
-      }
-      return { ok: true, value: submitResult };
+      return await submitTransaction(submitPayload, this.relayerApiEndpoint);
     } catch (error) {
       return { ok: false, error };
     }
@@ -354,9 +365,7 @@ export class SwapService {
    *   // handle error
    * }
    */
-  public async swap<K extends SpokeChainKey>(
-    _params: SwapActionParams<K, false>,
-  ): Promise<Result<[SolverExecutionResponse, Intent, IntentDeliveryInfo]>> {
+  public async swap<K extends SpokeChainKey>(_params: SwapActionParams<K, false>): Promise<Result<SwapResponse>> {
     const { params } = _params;
     const srcChainKey = params.srcChainKey;
     try {
@@ -364,7 +373,7 @@ export class SwapService {
       const createIntentResult = await this.createIntent(_params);
       if (!createIntentResult.ok) return createIntentResult;
 
-      const [spokeTxHash, intent, data] = createIntentResult.value;
+      const { tx: spokeTxHash, intent, relayData } = createIntentResult.value;
 
       const verifyTxHashResult = await this.spoke.verifyTxHash({
         txHash: spokeTxHash,
@@ -376,18 +385,13 @@ export class SwapService {
       if (isHubChainKeyType(srcChainKey)) {
         dstIntentTxHash = spokeTxHash;
       } else {
-        const packet = await relayTxAndWaitPacket(
-          spokeTxHash,
-          isSolanaChainKeyType(srcChainKey) || isBitcoinChainKeyType(srcChainKey)
-            ? {
-                address: intent.creator,
-                payload: data,
-              }
-            : undefined,
-          srcChainKey,
-          this.relayerApiEndpoint,
+        const packet = await relayTxAndWaitPacket({
+          srcTxHash: spokeTxHash,
+          data: relayData,
+          chainKey: srcChainKey,
+          relayerApiEndpoint: this.relayerApiEndpoint,
           timeout,
-        );
+        });
         if (!packet.ok) return packet;
         dstIntentTxHash = packet.value.dst_tx_hash;
       }
@@ -401,10 +405,10 @@ export class SwapService {
 
       return {
         ok: true,
-        value: [
-          result.value,
+        value: {
+          solverExecutionResponse: result.value,
           intent,
-          {
+          intentDeliveryInfo: {
             srcChainId: srcChainKey,
             srcTxHash: spokeTxHash,
             srcAddress: params.srcAddress,
@@ -412,7 +416,7 @@ export class SwapService {
             dstTxHash: dstIntentTxHash,
             dstAddress: params.dstAddress,
           } satisfies IntentDeliveryInfo,
-        ],
+        },
       };
     } catch (error) {
       return { ok: false, error };
@@ -605,7 +609,7 @@ export class SwapService {
    */
 
   /**
-   * Creates an intent on the user's source spoke chain.
+   * Creates a swap intent on the user's source spoke chain.
    *
    * Strongly typed: `K` narrows `walletProvider` to the chain-specific provider interface,
    * `R` decides whether a walletProvider is required at all.
@@ -617,7 +621,7 @@ export class SwapService {
    */
   public async createIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: SwapActionParams<K, Raw>,
-  ): Promise<Result<[TxReturnType<K, Raw>, Intent & FeeAmount, Hex]>> {
+  ): Promise<Result<CreateIntentResult<K, Raw>>> {
     const { params, skipSimulation } = _params;
 
     invariant(
@@ -688,11 +692,11 @@ export class SwapService {
 
         return {
           ok: true,
-          value: [
-            txResult satisfies TxReturnType<SonicChainKey, boolean> as TxReturnType<K, Raw>,
-            { ...intent, feeAmount } as Intent & FeeAmount,
-            data,
-          ],
+          value: {
+            tx: txResult satisfies TxReturnType<SonicChainKey, boolean> as TxReturnType<K, Raw>,
+            intent: { ...intent, feeAmount } as Intent & FeeAmount,
+            relayData: { address: intent.creator, payload: data },
+          },
         };
       }
 
@@ -731,17 +735,16 @@ export class SwapService {
       );
 
       if (!txResult.ok) {
-        console.error('[SwapService.createIntent] FAILED', txResult.error);
         return txResult;
       }
 
       return {
         ok: true,
-        value: [
-          txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
-          { ...intent, feeAmount } as Intent & FeeAmount,
-          data,
-        ],
+        value: {
+          tx: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
+          intent: { ...intent, feeAmount } as Intent & FeeAmount,
+          relayData: { address: intent.creator, payload: data },
+        },
       };
     } catch (error) {
       console.error('[SwapService.createIntent] FAILED', error);
@@ -797,8 +800,8 @@ export class SwapService {
    */
   public async createLimitOrder<K extends SpokeChainKey>(
     _params: LimitOrderActionParams<K, false>,
-  ): Promise<Result<[SolverExecutionResponse, Intent, IntentDeliveryInfo]>> {
-    const { fee = this.config.swaps.partnerFee, timeout = DEFAULT_RELAY_TX_TIMEOUT, skipSimulation = false } = _params;
+  ): Promise<Result<SwapResponse>> {
+    const { timeout, skipSimulation } = _params;
     // Force deadline to 0n (no deadline) for limit orders. K is preserved on the resulting
     // CreateIntentParams<K> so swap() infers the same chain narrowing.
     const params: CreateIntentParams<K> = {
@@ -809,7 +812,6 @@ export class SwapService {
     return this.swap<K>({
       ..._params,
       params,
-      fee,
       timeout,
       skipSimulation,
     });
@@ -863,7 +865,7 @@ export class SwapService {
    */
   public async createLimitOrderIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: LimitOrderActionParams<K, Raw>,
-  ): Promise<Result<[TxReturnType<K, Raw>, Intent & FeeAmount, Hex]>> {
+  ): Promise<Result<CreateIntentResult<K, Raw>>> {
     // Force deadline to 0n for limit orders. srcChain is preserved on params so K narrowing
     // flows through to createIntent unchanged.
     const limitOrderParams: CreateIntentParams<K> = {
@@ -909,23 +911,10 @@ export class SwapService {
    *   console.error('[cancelLimitOrder] error:', result.error);
    * }
    */
-  public async cancelLimitOrder<K extends SpokeChainKey>({
-    srcChainKey,
-    intent,
-    walletProvider,
-    timeout = DEFAULT_RELAY_TX_TIMEOUT,
-  }: {
-    srcChainKey: K;
-    intent: Intent;
-    walletProvider: GetWalletProviderType<K>;
-    timeout?: number;
-  }): Promise<Result<[string, string]>> {
-    return this.cancelIntent<K>({
-      srcChainKey,
-      intent,
-      walletProvider,
-      timeout,
-    });
+  public async cancelLimitOrder<K extends SpokeChainKey>(
+    params: CancelIntentActionParams<K, false>,
+  ): Promise<Result<TxHashPair>> {
+    return this.cancelIntent(params);
   }
 
   /**
@@ -937,30 +926,36 @@ export class SwapService {
    * mismatches. The generic `K` then drives `walletProvider` narrowing just like createIntent.
    */
   public async createCancelIntent<K extends SpokeChainKey, Raw extends boolean>(
-    params: CancelIntentParams<K, Raw>,
+    _params: CancelIntentActionParams<K, Raw>,
   ): Promise<Result<TxReturnType<K, Raw>>> {
-    const { intent } = params;
+    const { params } = _params;
 
     try {
-      invariant(this.config.isValidIntentRelayChainId(intent.srcChain), `Invalid intent.srcChain: ${intent.srcChain}`);
-      invariant(this.config.isValidIntentRelayChainId(intent.dstChain), `Invalid intent.dstChain: ${intent.dstChain}`);
       invariant(
-        getIntentRelayChainId(params.srcChainKey) === intent.srcChain,
-        `srcChainKey (${params.srcChainKey}) does not match intent.srcChain (${intent.srcChain}). Expected relay chain id ${getIntentRelayChainId(params.srcChainKey)}.`,
+        this.config.isValidIntentRelayChainId(params.intent.srcChain),
+        `Invalid intent.srcChain: ${params.intent.srcChain}`,
+      );
+      invariant(
+        this.config.isValidIntentRelayChainId(params.intent.dstChain),
+        `Invalid intent.dstChain: ${params.intent.dstChain}`,
+      );
+      invariant(
+        getIntentRelayChainId(params.srcChainKey) === params.intent.srcChain,
+        `srcChainKey (${params.srcChainKey}) does not match intent.srcChain (${params.intent.srcChain}). Expected relay chain id ${getIntentRelayChainId(params.srcChainKey)}.`,
       );
 
       const intentsContract = this.solver.intentsContract;
 
       const coreParams = {
         srcChainKey: params.srcChainKey,
-        srcAddress: reverseEncodeAddress(params.srcChainKey, intent.srcAddress) as GetAddressType<K>,
+        srcAddress: reverseEncodeAddress(params.srcChainKey, params.intent.srcAddress) as GetAddressType<K>,
         dstChainKey: HUB_CHAIN_KEY,
-        dstAddress: intent.creator,
-        payload: encodeContractCalls([EvmSolverService.encodeCancelIntent(intent, intentsContract)]),
+        dstAddress: params.intent.creator,
+        payload: encodeContractCalls([EvmSolverService.encodeCancelIntent(params.intent, intentsContract)]),
         skipSimulation: params.skipSimulation,
       } as const;
 
-      const sendMessageParams = params.raw
+      const sendMessageParams = _params.raw
         ? ({
             ...coreParams,
             raw: true,
@@ -968,7 +963,7 @@ export class SwapService {
         : ({
             ...coreParams,
             raw: false,
-            walletProvider: params.walletProvider,
+            walletProvider: _params.walletProvider,
           } satisfies SendMessageParams<K, false>);
 
       const txResult = await this.spoke.sendMessage(sendMessageParams);
@@ -994,38 +989,26 @@ export class SwapService {
    * @param params.walletProvider - The chain-specific wallet provider (narrowed via K).
    * @param params.timeout - Optional timeout in milliseconds (default: 60 seconds).
    */
-  public async cancelIntent<K extends SpokeChainKey>({
-    srcChainKey,
-    intent,
-    walletProvider,
-    timeout = DEFAULT_RELAY_TX_TIMEOUT,
-  }: {
-    srcChainKey: K;
-    intent: Intent;
-    walletProvider: GetWalletProviderType<K>;
-    timeout?: number;
-  }): Promise<Result<[string, string]>> {
+  public async cancelIntent<K extends SpokeChainKey>(
+    _params: CancelIntentActionParams<K, false>,
+  ): Promise<Result<TxHashPair>> {
+    const { params } = _params;
     try {
-      const cancelResult = await this.createCancelIntent<K, false>({
-        srcChainKey,
-        intent,
-        raw: false,
-        walletProvider,
-      } as CancelIntentParams<K, false>);
+      const cancelResult = await this.createCancelIntent<K, false>(_params);
       if (!cancelResult.ok) return cancelResult;
 
       const cancelTxHash = cancelResult.value;
 
       const verifyTxHashResult = await this.spoke.verifyTxHash({
         txHash: cancelTxHash,
-        chainKey: srcChainKey,
+        chainKey: params.srcChainKey,
       });
       if (!verifyTxHashResult.ok) return verifyTxHashResult;
 
       let dstIntentTxHash: string;
 
-      if (!isHubChainKey(srcChainKey)) {
-        const intentRelayChainId = intent.srcChain.toString();
+      if (!isHubChainKey(params.srcChainKey)) {
+        const intentRelayChainId = params.intent.srcChain.toString();
         const submitPayload: IntentRelayRequest<'submit'> = {
           action: 'submit',
           params: {
@@ -1039,8 +1022,8 @@ export class SwapService {
 
         const packet = await waitUntilIntentExecuted({
           intentRelayChainId,
-          spokeTxHash: cancelTxHash,
-          timeout,
+          srcTxHash: cancelTxHash,
+          timeout: _params.timeout,
           apiUrl: this.relayerApiEndpoint,
         });
         if (!packet.ok) return packet;
@@ -1049,7 +1032,7 @@ export class SwapService {
         dstIntentTxHash = cancelTxHash;
       }
 
-      return { ok: true, value: [cancelTxHash, dstIntentTxHash] };
+      return { ok: true, value: { srcChainTxHash: cancelTxHash, dstChainTxHash: dstIntentTxHash } };
     } catch (error) {
       return { ok: false, error };
     }
@@ -1131,7 +1114,7 @@ export class SwapService {
   }: { chainId: SpokeChainKey; fillTxHash: string; timeout?: number }): Promise<Result<PacketData>> {
     return waitUntilIntentExecuted({
       intentRelayChainId: getIntentRelayChainId(chainId).toString(),
-      spokeTxHash: fillTxHash,
+      srcTxHash: fillTxHash,
       timeout,
       apiUrl: this.relayerApiEndpoint,
     });

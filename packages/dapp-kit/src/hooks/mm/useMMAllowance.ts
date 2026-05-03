@@ -1,12 +1,15 @@
 import type { MoneyMarketParams } from '@sodax/sdk';
 import type { SpokeChainKey } from '@sodax/sdk';
-import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { ReadHookParams } from '../shared/types.js';
 
-export type UseMMAllowanceParams<K extends SpokeChainKey> = {
-  params: MoneyMarketParams<K> | undefined;
-  queryOptions?: Omit<UseQueryOptions<boolean, Error>, 'queryKey' | 'queryFn'>;
-};
+export type UseMMAllowanceParams<K extends SpokeChainKey> = ReadHookParams<
+  boolean,
+  {
+    payload: MoneyMarketParams<K> | undefined;
+  }
+>;
 
 /**
  * Hook for checking token allowance / trustline sufficiency for money market operations.
@@ -20,32 +23,33 @@ export type UseMMAllowanceParams<K extends SpokeChainKey> = {
  *
  * @example
  * ```tsx
- * const { data: hasAllowance } = useMMAllowance({ params: supplyParams });
+ * const { data: hasAllowance } = useMMAllowance({ params: { payload: supplyParams } });
  * ```
  */
 export function useMMAllowance<K extends SpokeChainKey>({
   params,
   queryOptions,
-}: UseMMAllowanceParams<K>): UseQueryResult<boolean, Error> {
+}: UseMMAllowanceParams<K> = {}): UseQueryResult<boolean, Error> {
   const { sodax } = useSodaxContext();
+  const payload = params?.payload;
 
   return useQuery<boolean, Error>({
-    queryKey: ['mm', 'allowance', params?.srcChainKey, params?.token, params?.action],
+    queryKey: ['mm', 'allowance', payload?.srcChainKey, payload?.token, payload?.action],
     queryFn: async () => {
-      if (!params) {
+      if (!payload) {
         throw new Error('Params are required');
       }
 
       // Borrow and withdraw don't require approval; SDK returns true instantly anyway.
-      if (params.action === 'borrow' || params.action === 'withdraw') {
+      if (payload.action === 'borrow' || payload.action === 'withdraw') {
         return true;
       }
 
-      const result = await sodax.moneyMarket.isAllowanceValid({ params });
+      const result = await sodax.moneyMarket.isAllowanceValid({ params: payload });
       if (!result.ok) throw result.error;
       return result.value;
     },
-    enabled: !!params && params.action !== 'borrow' && params.action !== 'withdraw',
+    enabled: !!payload && payload.action !== 'borrow' && payload.action !== 'withdraw',
     refetchInterval: 5000,
     gcTime: 0,
     ...queryOptions,

@@ -23,12 +23,9 @@ import {
   relayTxAndWaitPacket,
   encodeAddress,
   isIconAddress,
-  type RelayExtraData,
   waitUntilIntentExecuted,
   type HubProvider,
   isIconChainKeyType,
-  isSolanaChainKeyType,
-  isBitcoinChainKeyType,
   isEvmChainKeyType,
   isHubChainKeyType,
   isStellarChainKeyType,
@@ -67,6 +64,7 @@ import {
 } from '@sodax/types';
 import { isAddress } from 'viem';
 import type { ConfigService } from '../shared/config/ConfigService.js';
+import type { IntentTxResult, TxHashPair } from '../shared/types/types.js';
 
 export type MigrationAction = 'migrate' | 'revert';
 
@@ -480,8 +478,8 @@ export class MigrationService {
    * @param spokeProvider - The SpokeProvider instance for the source chain.
    * @param timeout - Optional timeout in milliseconds for the relay operation (default: 60 seconds).
    * @param unchecked - Optional flag to skip validation checks (default: false).
-   * @returns {Promise<Result<[string, Hex] | MigrationError<'CREATE_MIGRATION_INTENT_FAILED'> | RelayError>>}
-   *   Result containing a tuple: [spokeTxHash, hubTxHash] if successful, or an error describing the failure.
+   * @returns {Promise<Result<TxHashPair>>}
+   *   Result containing `{ spokeTxHash, hubTxHash }` if successful, or an error describing the failure.
    *
    * @example
    * // Migrate legacy bnUSD to new bnUSD
@@ -505,8 +503,7 @@ export class MigrationService {
    * }, sonicSpokeProvider);
    *
    * if (result.ok) {
-   *   // result.value is a tuple: [spokeTxHash, hubTxHash]
-   *   const [spokeTxHash, hubTxHash] = result.value;
+   *   const { spokeTxHash, hubTxHash } = result.value;
    *   console.log('[migrateBnUSD] hubTxHash', hubTxHash);
    *   console.log('[migrateBnUSD] spokeTxHash', spokeTxHash);
    * } else {
@@ -516,7 +513,7 @@ export class MigrationService {
    */
   async migratebnUSD<K extends SpokeChainKey>(
     _params: UnifiedBnUSDMigrateAction<K, false>,
-  ): Promise<Result<[string, Hex]>> {
+  ): Promise<Result<TxHashPair>> {
     const { params, timeout } = _params;
     try {
       const intentResult = await this.createMigratebnUSDIntent(_params);
@@ -528,7 +525,7 @@ export class MigrationService {
         };
       }
 
-      const [spokeTxHash, extraData] = intentResult.value;
+      const { tx: spokeTxHash, relayData: extraData } = intentResult.value;
 
       // verify the spoke tx hash exists on chain
       const verifyTxHashResult = await this.spoke.verifyTxHash({
@@ -538,13 +535,13 @@ export class MigrationService {
 
       if (!verifyTxHashResult.ok) return verifyTxHashResult;
 
-      const packetResult = await relayTxAndWaitPacket(
-        spokeTxHash,
-        isSolanaChainKeyType(params.srcChainKey) || isBitcoinChainKeyType(params.srcChainKey) ? extraData : undefined,
-        params.srcChainKey,
-        this.relayerApiEndpoint,
+      const packetResult = await relayTxAndWaitPacket({
+        srcTxHash: spokeTxHash,
+        data: extraData,
+        chainKey: params.srcChainKey,
+        relayerApiEndpoint: this.relayerApiEndpoint,
         timeout,
-      );
+      });
 
       if (!packetResult.ok) {
         return packetResult;
@@ -553,13 +550,13 @@ export class MigrationService {
       if (!(params.srcChainKey === ChainKeys.SONIC_MAINNET || params.dstChainKey === ChainKeys.SONIC_MAINNET)) {
         await waitUntilIntentExecuted({
           intentRelayChainId: getIntentRelayChainId(ChainKeys.SONIC_MAINNET).toString(),
-          spokeTxHash: packetResult.value.dst_tx_hash,
+          srcTxHash: packetResult.value.dst_tx_hash,
           timeout: timeout,
           apiUrl: this.relayerApiEndpoint,
         });
       }
 
-      return { ok: true, value: [spokeTxHash, packetResult.value.dst_tx_hash as Hex] };
+      return { ok: true, value: { srcChainTxHash: spokeTxHash, dstChainTxHash: packetResult.value.dst_tx_hash } };
     } catch (error) {
       return {
         ok: false,
@@ -575,8 +572,8 @@ export class MigrationService {
    * @param params - The parameters for the migration transaction.
    * @param spokeProvider - The spoke provider.
    * @param timeout - The timeout in milliseconds for the transaction. Default is 60 seconds.
-   * @returns {Promise<Result<[Hex, Hex] | MigrationError<'CREATE_MIGRATION_INTENT_FAILED'> | RelayError>>}
-   * Returns a Result containing a tuple of [spokeTxHash, hubTxHash] if successful,
+   * @returns {Promise<Result<TxHashPair>>}
+   * Returns a Result containing `{ spokeTxHash, hubTxHash }` if successful,
    * or an error describing why the migration or relay failed.
    *
    * @example
@@ -594,31 +591,30 @@ export class MigrationService {
    *   // Handle error
    * }
    *
-   * const [
-   *  spokeTxHash, // transaction hash on the spoke chain
-   *  hubTxHash,   // transaction hash on the hub chain (i.e. the transaction that was relayed to the hub)
-   * ] = result.value;
+   * const { spokeTxHash, hubTxHash } = result.value;
    * console.log('Migration transaction hashes:', { spokeTxHash, hubTxHash });
    */
-  async migrateIcxToSoda(_params: IcxMigrateAction<false>): Promise<Result<[Hex, Hex]>> {
+  async migrateIcxToSoda(_params: IcxMigrateAction<false>): Promise<Result<TxHashPair>> {
     const { timeout } = _params;
     try {
       const txResult = await this.createMigrateIcxToSodaIntent(_params);
       if (!txResult.ok) return txResult;
 
-      const packetResult = await relayTxAndWaitPacket(
-        txResult.value,
-        undefined,
-        _params.params.srcChainKey,
-        this.relayerApiEndpoint,
-        timeout,
-      );
+      const { tx, relayData } = txResult.value;
+
+      const packetResult = await relayTxAndWaitPacket({
+        srcTxHash: tx,
+        data: relayData,
+        chainKey: _params.params.srcChainKey,
+        relayerApiEndpoint: this.relayerApiEndpoint,
+        timeout: timeout,
+      });
 
       if (!packetResult.ok) {
         return packetResult;
       }
 
-      return { ok: true, value: [txResult.value, packetResult.value.dst_tx_hash as Hex] };
+      return { ok: true, value: { srcChainTxHash: tx, dstChainTxHash: packetResult.value.dst_tx_hash } };
     } catch (error) {
       return {
         ok: false,
@@ -633,8 +629,8 @@ export class MigrationService {
    * @param spokeProvider - The SonicSpokeProvider instance.
    * @param timeout - The timeout in milliseconds for the transaction. Default is 60 seconds.
    *
-   * @returns {Promise<Result<[Hex, Hex] | MigrationError<'CREATE_REVERT_MIGRATION_INTENT_FAILED'> | RelayError>>}
-   * Returns a Result containing a tuple of [hubTxHash, spokeTxHash] if successful,
+   * @returns {Promise<Result<TxHashPair>>}
+   * Returns a Result containing `{ spokeTxHash, hubTxHash }` if successful,
    * or an error describing why the revert migration or relay failed.
    *
    *
@@ -652,13 +648,10 @@ export class MigrationService {
    *   // Handle error
    * }
    *
-   * const [
-   *  hubTxHash,   // transaction hash on the hub chain
-   *  spokeTxHash, // transaction hash on the spoke chain (i.e. the transaction that was relayed to the spoke)
-   * ] = result.value;
-   * console.log('Revert migration transaction hashes:', { hubTxHash, spokeTxHash });
+   * const { spokeTxHash, hubTxHash } = result.value;
+   * console.log('Revert migration transaction hashes:', { spokeTxHash, hubTxHash });
    */
-  async revertMigrateSodaToIcx(_params: IcxRevertMigrationAction<false>): Promise<Result<[Hex, Hex]>> {
+  async revertMigrateSodaToIcx(_params: IcxRevertMigrationAction<false>): Promise<Result<TxHashPair>> {
     const { timeout } = _params;
     try {
       const txResult = await this.createRevertSodaToIcxMigrationIntent(_params);
@@ -667,19 +660,21 @@ export class MigrationService {
         return txResult;
       }
 
-      const packetResult = await relayTxAndWaitPacket(
-        txResult.value,
-        undefined,
-        ChainKeys.SONIC_MAINNET,
-        this.relayerApiEndpoint,
-        timeout,
-      );
+      const { tx, relayData } = txResult.value;
+
+      const packetResult = await relayTxAndWaitPacket({
+        srcTxHash: tx,
+        data: relayData,
+        chainKey: ChainKeys.SONIC_MAINNET,
+        relayerApiEndpoint: this.relayerApiEndpoint,
+        timeout: timeout,
+      });
 
       if (!packetResult.ok) {
         return packetResult;
       }
 
-      return { ok: true, value: [txResult.value, packetResult.value.dst_tx_hash as Hex] };
+      return { ok: true, value: { srcChainTxHash: tx, dstChainTxHash: packetResult.value.dst_tx_hash } };
     } catch (error) {
       return {
         ok: false,
@@ -695,8 +690,8 @@ export class MigrationService {
    * @param params - The parameters for the migration transaction.
    * @param spokeProvider - The spoke provider.
    * @param timeout - The timeout in milliseconds for the transaction. Default is 60 seconds.
-   * @returns {Promise<Result<[Hex, Hex] | MigrationError<'CREATE_MIGRATION_INTENT_FAILED'> | RelayError>>}
-   * Returns a Result containing a tuple of [spokeTxHash, hubTxHash] if successful,
+   * @returns {Promise<Result<TxHashPair>>}
+   * Returns a Result containing `{ spokeTxHash, hubTxHash }` if successful,
    * or an error describing why the migration or relay failed.
    *
    * @example
@@ -715,37 +710,31 @@ export class MigrationService {
    *   // Handle error
    * }
    *
-   * const [
-   *  spokeTxHash, // transaction hash on the spoke chain
-   *  hubTxHash,   // transaction hash on the hub chain (i.e. the transaction that was relayed to the hub)
-   * ] = result.value;
+   * const { spokeTxHash, hubTxHash } = result.value;
    * console.log('Migration transaction hashes:', { spokeTxHash, hubTxHash });
    */
-  async migrateBaln(_params: BalnMigrateAction<false>): Promise<Result<[Hex, Hex]>> {
+  async migrateBaln(_params: BalnMigrateAction<false>): Promise<Result<TxHashPair>> {
     const { timeout } = _params;
     try {
       const txResult = await this.createMigrateBalnIntent(_params);
 
-      if (!txResult.ok) {
-        return {
-          ok: false,
-          error: txResult.error,
-        };
-      }
+      if (!txResult.ok) return txResult;
 
-      const packetResult = await relayTxAndWaitPacket(
-        txResult.value,
-        undefined,
-        ChainKeys.ICON_MAINNET,
-        this.relayerApiEndpoint,
-        timeout,
-      );
+      const { tx, relayData } = txResult.value;
+
+      const packetResult = await relayTxAndWaitPacket({
+        srcTxHash: tx,
+        data: relayData,
+        chainKey: ChainKeys.ICON_MAINNET,
+        relayerApiEndpoint: this.relayerApiEndpoint,
+        timeout: timeout,
+      });
 
       if (!packetResult.ok) {
         return packetResult;
       }
 
-      return { ok: true, value: [txResult.value, packetResult.value.dst_tx_hash as Hex] };
+      return { ok: true, value: { srcChainTxHash: tx, dstChainTxHash: packetResult.value.dst_tx_hash } };
     } catch (error) {
       return {
         ok: false,
@@ -777,7 +766,7 @@ export class MigrationService {
    */
   async createMigrateBalnIntent<Raw extends boolean>(
     _params: BalnMigrateAction<Raw>,
-  ): Promise<Result<TxReturnType<IconChainKey, Raw>>> {
+  ): Promise<Result<IntentTxResult<IconChainKey, Raw>>> {
     const { params, skipSimulation } = _params;
 
     try {
@@ -816,7 +805,10 @@ export class MigrationService {
 
       return {
         ok: true,
-        value: txResult.value satisfies TxReturnType<IconChainKey, boolean> as TxReturnType<IconChainKey, Raw>,
+        value: {
+          tx: txResult.value satisfies TxReturnType<IconChainKey, boolean> as TxReturnType<IconChainKey, Raw>,
+          relayData: { address: hubWalletAddress, payload: migrationData },
+        },
       };
     } catch (error) {
       return {
@@ -871,7 +863,7 @@ export class MigrationService {
    */
   async createMigratebnUSDIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: UnifiedBnUSDMigrateAction<K, Raw>,
-  ): Promise<Result<[TxReturnType<K, Raw>, RelayExtraData]>> {
+  ): Promise<Result<IntentTxResult<K, Raw>>> {
     const { params, unchecked, skipSimulation } = _params;
     try {
       if (!unchecked) {
@@ -967,13 +959,10 @@ export class MigrationService {
 
       return {
         ok: true,
-        value: [
-          txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
-          {
-            address: hubWalletAddress,
-            payload: migrationData,
-          } satisfies RelayExtraData,
-        ],
+        value: {
+          tx: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
+          relayData: { address: hubWalletAddress, payload: migrationData },
+        },
       };
     } catch (error) {
       return {
@@ -1012,7 +1001,7 @@ export class MigrationService {
    */
   async createMigrateIcxToSodaIntent<Raw extends boolean>(
     _params: IcxMigrateAction<Raw>,
-  ): Promise<Result<TxReturnType<IconChainKey, Raw>>> {
+  ): Promise<Result<IntentTxResult<IconChainKey, Raw>>> {
     const { params, skipSimulation } = _params;
     try {
       invariant(params.amount > 0, 'Amount must be greater than 0');
@@ -1067,7 +1056,10 @@ export class MigrationService {
 
       return {
         ok: true,
-        value: txResult.value satisfies TxReturnType<IconChainKey, boolean> as TxReturnType<IconChainKey, Raw>,
+        value: {
+          tx: txResult.value satisfies TxReturnType<IconChainKey, boolean> as TxReturnType<IconChainKey, Raw>,
+          relayData: { address: hubWalletAddress, payload: coreParams.data },
+        },
       };
     } catch (error) {
       return {
@@ -1097,7 +1089,7 @@ export class MigrationService {
    */
   async createRevertSodaToIcxMigrationIntent<Raw extends boolean>(
     _params: IcxRevertMigrationAction<Raw>,
-  ): Promise<Result<TxReturnType<SonicChainKey, Raw>>> {
+  ): Promise<Result<IntentTxResult<SonicChainKey, Raw>>> {
     const { params, skipSimulation } = _params;
     try {
       const userRouter = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, ChainKeys.SONIC_MAINNET);
@@ -1137,7 +1129,10 @@ export class MigrationService {
 
       return {
         ok: true,
-        value: txResult.value satisfies TxReturnType<SonicChainKey, boolean> as TxReturnType<SonicChainKey, Raw>,
+        value: {
+          tx: txResult.value satisfies TxReturnType<SonicChainKey, boolean> as TxReturnType<SonicChainKey, Raw>,
+          relayData: { address: userRouter, payload: data },
+        },
       };
     } catch (error) {
       return {

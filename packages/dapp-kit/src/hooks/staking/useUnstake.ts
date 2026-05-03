@@ -1,11 +1,11 @@
-import type { HubTxHash, SpokeTxHash, UnstakeAction } from '@sodax/sdk';
+import type { UnstakeAction, TxHashPair } from '@sodax/sdk';
 import type { Result, SpokeChainKey } from '@sodax/sdk';
 import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 
 export type UseUnstakeVars<K extends SpokeChainKey = SpokeChainKey> = Omit<UnstakeAction<K, false>, 'raw'>;
 
-type UnstakeResult = Result<[SpokeTxHash, HubTxHash]>;
+type UnstakeResult = Result<TxHashPair>;
 
 /**
  * React hook for initiating an SODA unstake. Pure mutation: all inputs (params, walletProvider)

@@ -447,7 +447,7 @@ describe('BackendApiService.getSubmitSwapTxStatus', () => {
 });
 
 // =========================================================================
-// Solver endpoints — raw Promise<T> return (no Result wrapper); throws on HTTP error.
+// Solver endpoints — Result<T>-wrapped returns.
 // =========================================================================
 
 describe('BackendApiService.getOrderbook', () => {
@@ -455,7 +455,7 @@ describe('BackendApiService.getOrderbook', () => {
     const orderbook = { total: 0, data: [] };
     mockFetch.mockResolvedValueOnce(okResponse(orderbook));
 
-    await expect(sodax.backendApi.getOrderbook({ offset: '0', limit: '10' })).resolves.toEqual(orderbook);
+    await expect(sodax.backendApi.getOrderbook({ offset: '0', limit: '10' })).resolves.toEqual({ ok: true, value: orderbook });
 
     expect(mockFetch).toHaveBeenCalledWith(
       `${DEFAULT_BASE_URL}/solver/orderbook?offset=0&limit=10`,
@@ -474,10 +474,13 @@ describe('BackendApiService.getOrderbook', () => {
     );
   });
 
-  it('rejects with HTTP_REQUEST_FAILED on a non-2xx response (Promise<T> return — not Result-wrapped)', async () => {
+  it('resolves to ok:false with HTTP_REQUEST_FAILED on a non-2xx response', async () => {
     mockFetch.mockResolvedValueOnce(httpErrorResponse(503, 'Service Unavailable'));
 
-    await expect(sodax.backendApi.getOrderbook({ offset: '0', limit: '5' })).rejects.toThrow('HTTP_REQUEST_FAILED');
+    await expect(sodax.backendApi.getOrderbook({ offset: '0', limit: '5' })).resolves.toEqual({
+      ok: false,
+      error: expect.objectContaining({ message: 'HTTP_REQUEST_FAILED' }),
+    });
   });
 });
 
@@ -486,7 +489,7 @@ describe('BackendApiService.getUserIntents', () => {
     const userIntents = { total: 0, offset: 0, limit: 0, items: [] };
     mockFetch.mockResolvedValueOnce(okResponse(userIntents));
 
-    await expect(sodax.backendApi.getUserIntents({ userAddress: SAMPLE_USER_ADDRESS })).resolves.toEqual(userIntents);
+    await expect(sodax.backendApi.getUserIntents({ userAddress: SAMPLE_USER_ADDRESS })).resolves.toEqual({ ok: true, value: userIntents });
 
     expect(mockFetch).toHaveBeenCalledWith(
       `${DEFAULT_BASE_URL}/intent/user/${SAMPLE_USER_ADDRESS}`,
@@ -515,17 +518,18 @@ describe('BackendApiService.getUserIntents', () => {
     expect(calledUrl).toContain('offset=0');
   });
 
-  it('rejects with HTTP_REQUEST_FAILED on a non-2xx response', async () => {
+  it('resolves to ok:false with HTTP_REQUEST_FAILED on a non-2xx response', async () => {
     mockFetch.mockResolvedValueOnce(httpErrorResponse(500, 'boom'));
 
-    await expect(sodax.backendApi.getUserIntents({ userAddress: SAMPLE_USER_ADDRESS })).rejects.toThrow(
-      'HTTP_REQUEST_FAILED',
-    );
+    await expect(sodax.backendApi.getUserIntents({ userAddress: SAMPLE_USER_ADDRESS })).resolves.toEqual({
+      ok: false,
+      error: expect.objectContaining({ message: 'HTTP_REQUEST_FAILED' }),
+    });
   });
 });
 
 // =========================================================================
-// Money Market endpoints — mix of Result<T> and raw Promise<T> return shapes.
+// Money Market endpoints — all Result<T>-wrapped.
 // =========================================================================
 
 describe('BackendApiService.getMoneyMarketPosition', () => {
@@ -595,13 +599,13 @@ describe('BackendApiService.getMoneyMarketAsset', () => {
 });
 
 describe('BackendApiService.getMoneyMarketAssetBorrowers', () => {
-  it('issues GET to /moneymarket/asset/{reserveAddress}/borrowers with offset+limit query params (raw Promise return)', async () => {
+  it('issues GET to /moneymarket/asset/{reserveAddress}/borrowers with offset+limit query params', async () => {
     const borrowers = { borrowers: [], total: 0, offset: 0, limit: 10 };
     mockFetch.mockResolvedValueOnce(okResponse(borrowers));
 
     await expect(
       sodax.backendApi.getMoneyMarketAssetBorrowers(SAMPLE_RESERVE_ADDRESS, { offset: '0', limit: '10' }),
-    ).resolves.toEqual(borrowers);
+    ).resolves.toEqual({ ok: true, value: borrowers });
 
     expect(mockFetch).toHaveBeenCalledWith(
       `${DEFAULT_BASE_URL}/moneymarket/asset/${SAMPLE_RESERVE_ADDRESS}/borrowers?offset=0&limit=10`,
@@ -609,23 +613,23 @@ describe('BackendApiService.getMoneyMarketAssetBorrowers', () => {
     );
   });
 
-  it('rejects with HTTP_REQUEST_FAILED on a non-2xx response', async () => {
+  it('resolves to ok:false with HTTP_REQUEST_FAILED on a non-2xx response', async () => {
     mockFetch.mockResolvedValueOnce(httpErrorResponse(500, 'boom'));
 
     await expect(
       sodax.backendApi.getMoneyMarketAssetBorrowers(SAMPLE_RESERVE_ADDRESS, { offset: '0', limit: '10' }),
-    ).rejects.toThrow('HTTP_REQUEST_FAILED');
+    ).resolves.toEqual({ ok: false, error: expect.objectContaining({ message: 'HTTP_REQUEST_FAILED' }) });
   });
 });
 
 describe('BackendApiService.getMoneyMarketAssetSuppliers', () => {
-  it('issues GET to /moneymarket/asset/{reserveAddress}/suppliers with offset+limit query params (raw Promise return)', async () => {
+  it('issues GET to /moneymarket/asset/{reserveAddress}/suppliers with offset+limit query params', async () => {
     const suppliers = { suppliers: [], total: 0, offset: 0, limit: 10 };
     mockFetch.mockResolvedValueOnce(okResponse(suppliers));
 
     await expect(
       sodax.backendApi.getMoneyMarketAssetSuppliers(SAMPLE_RESERVE_ADDRESS, { offset: '0', limit: '10' }),
-    ).resolves.toEqual(suppliers);
+    ).resolves.toEqual({ ok: true, value: suppliers });
 
     expect(mockFetch).toHaveBeenCalledWith(
       `${DEFAULT_BASE_URL}/moneymarket/asset/${SAMPLE_RESERVE_ADDRESS}/suppliers?offset=0&limit=10`,
@@ -635,11 +639,11 @@ describe('BackendApiService.getMoneyMarketAssetSuppliers', () => {
 });
 
 describe('BackendApiService.getAllMoneyMarketBorrowers', () => {
-  it('issues GET to /moneymarket/borrowers with offset+limit query params (raw Promise return)', async () => {
+  it('issues GET to /moneymarket/borrowers with offset+limit query params', async () => {
     const borrowers = { borrowers: [], total: 0, offset: 0, limit: 10 };
     mockFetch.mockResolvedValueOnce(okResponse(borrowers));
 
-    await expect(sodax.backendApi.getAllMoneyMarketBorrowers({ offset: '0', limit: '10' })).resolves.toEqual(borrowers);
+    await expect(sodax.backendApi.getAllMoneyMarketBorrowers({ offset: '0', limit: '10' })).resolves.toEqual({ ok: true, value: borrowers });
 
     expect(mockFetch).toHaveBeenCalledWith(
       `${DEFAULT_BASE_URL}/moneymarket/borrowers?offset=0&limit=10`,
@@ -806,12 +810,13 @@ describe('BackendApiService RequestOverrideConfig', () => {
     );
   });
 
-  it('overrides timeout on a per-request basis (rejects with REQUEST_TIMEOUT)', async () => {
+  it('overrides timeout on a per-request basis (resolves ok:false with REQUEST_TIMEOUT)', async () => {
     mockFetch.mockImplementationOnce(abortFetchImpl);
 
-    await expect(sodax.backendApi.getOrderbook({ offset: '0', limit: '5' }, { timeout: 5 })).rejects.toThrow(
-      'REQUEST_TIMEOUT',
-    );
+    await expect(sodax.backendApi.getOrderbook({ offset: '0', limit: '5' }, { timeout: 5 })).resolves.toEqual({
+      ok: false,
+      error: expect.objectContaining({ message: 'REQUEST_TIMEOUT' }),
+    });
   });
 
   it('applies baseURL and custom headers together when both overrides are passed', async () => {

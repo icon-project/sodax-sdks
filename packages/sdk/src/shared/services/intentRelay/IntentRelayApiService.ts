@@ -14,6 +14,7 @@ import type {
   IntentRelayRequest,
   WaitUntilIntentExecutedPayload,
 } from '../../types/relay-types.js';
+import { isBitcoinChainKeyType, isSolanaChainKeyType } from '../../guards.js';
 
 export type { RelayAction, RelayExtraData, IntentDeliveryInfo, IntentRelayRequest, WaitUntilIntentExecutedPayload };
 
@@ -87,21 +88,33 @@ export type GetRelayResponse<T extends RelayAction> = T extends 'submit'
 
 export type IntentRelayRequestParams = SubmitTxParams | GetTransactionPacketsParams | GetPacketParams;
 
+export type RelayAndWaitParams = {
+  srcTxHash: string;
+  data: RelayExtraData;
+  chainKey: SpokeChainKey;
+  relayerApiEndpoint: HttpUrl;
+  timeout: number | undefined;
+};
+
 async function postRequest<T extends RelayAction>(
   payload: IntentRelayRequest<T>,
   apiUrl: string,
-): Promise<GetRelayResponse<T>> {
-  const response = await retry(() =>
-    fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    }),
-  );
+): Promise<Result<GetRelayResponse<T>>> {
+  try {
+    const response = await retry(() =>
+      fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      }),
+    );
 
-  return response.json();
+    return { ok: true, value: await response.json() };
+  } catch (error) {
+    return { ok: false, error };
+  }
 }
 
 /**
@@ -113,11 +126,22 @@ async function postRequest<T extends RelayAction>(
 export async function submitTransaction(
   payload: IntentRelayRequest<'submit'>,
   apiUrl: HttpUrl,
-): Promise<GetRelayResponse<'submit'>> {
+): Promise<Result<GetRelayResponse<'submit'>>> {
   invariant(payload.params.chain_id.length > 0, 'Invalid input parameters. source_chain_id empty');
   invariant(payload.params.tx_hash.length > 0, 'Invalid input parameters. tx_hash empty');
 
-  return postRequest(payload, apiUrl);
+  try {
+    const submitResult = await postRequest(payload, apiUrl);
+
+    if (!submitResult.ok) return submitResult;
+    const submitTxResponse = submitResult.value;
+    if (!submitTxResponse.success) {
+      return { ok: false, error: new Error('SUBMIT_TX_FAILED', { cause: new Error(submitTxResponse.message) }) };
+    }
+    return { ok: true, value: submitTxResponse };
+  } catch (error) {
+    return { ok: false, error };
+  }
 }
 
 /**
@@ -129,7 +153,7 @@ export async function submitTransaction(
 export async function getTransactionPackets(
   payload: IntentRelayRequest<'get_transaction_packets'>,
   apiUrl: HttpUrl,
-): Promise<GetRelayResponse<'get_transaction_packets'>> {
+): Promise<Result<GetRelayResponse<'get_transaction_packets'>>> {
   invariant(payload.params.chain_id.length > 0, 'Invalid input parameters. source_chain_id empty');
   invariant(payload.params.tx_hash.length > 0, 'Invalid input parameters. tx_hash empty');
 
@@ -145,7 +169,7 @@ export async function getTransactionPackets(
 export async function getPacket(
   payload: IntentRelayRequest<'get_packet'>,
   apiUrl: HttpUrl,
-): Promise<GetRelayResponse<'get_packet'>> {
+): Promise<Result<GetRelayResponse<'get_packet'>>> {
   invariant(payload.params.chain_id.length > 0, 'Invalid input parameters. source_chain_id empty');
   invariant(payload.params.tx_hash.length > 0, 'Invalid input parameters. tx_hash empty');
   invariant(payload.params.conn_sn.length > 0, 'Invalid input parameters. conn_sn empty');
@@ -153,29 +177,31 @@ export async function getPacket(
   return postRequest(payload, apiUrl);
 }
 
-export async function waitUntilIntentExecuted(
-  payload: WaitUntilIntentExecutedPayload,
-): Promise<Result<PacketData>> {
+export async function waitUntilIntentExecuted(payload: WaitUntilIntentExecutedPayload): Promise<Result<PacketData>> {
   try {
     const timeout = payload.timeout ?? DEFAULT_RELAY_TX_TIMEOUT;
     const startTime = Date.now();
 
     while (Date.now() - startTime < timeout) {
       try {
-        const txPackets = await getTransactionPackets(
+        const txPacketsResult = await getTransactionPackets(
           {
             action: 'get_transaction_packets',
             params: {
               chain_id: payload.intentRelayChainId,
-              tx_hash: payload.spokeTxHash,
+              tx_hash: payload.srcTxHash,
             },
           },
           payload.apiUrl,
         );
 
+        if (!txPacketsResult.ok) return txPacketsResult;
+
+        const txPackets = txPacketsResult.value;
+
         if (txPackets.success && txPackets.data.length > 0) {
           const packet = txPackets.data.find(
-            packet => packet.src_tx_hash.toLowerCase() === payload.spokeTxHash.toLowerCase(),
+            packet => packet.src_tx_hash.toLowerCase() === payload.srcTxHash.toLowerCase(),
           );
 
           if (txPackets.success && txPackets.data.length > 0 && packet && packet.status === 'executed') {
@@ -204,39 +230,37 @@ export async function waitUntilIntentExecuted(
  * @param timeout - The timeout in milliseconds for the transaction. Default is 20 seconds.
  * @returns The transaction hash.
  */
-export async function relayTxAndWaitPacket(
-  spokeTxHash: string,
-  data: RelayExtraData | undefined,
-  chainkey: SpokeChainKey,
-  relayerApiEndpoint: HttpUrl,
-  timeout = DEFAULT_RELAY_TX_TIMEOUT,
-): Promise<Result<PacketData>> {
+export async function relayTxAndWaitPacket(params: RelayAndWaitParams): Promise<Result<PacketData>> {
   try {
-    const intentRelayChainId = getIntentRelayChainId(chainkey).toString();
+    const { srcTxHash, data, chainKey, relayerApiEndpoint, timeout = DEFAULT_RELAY_TX_TIMEOUT } = params;
+    const intentRelayChainId = getIntentRelayChainId(chainKey).toString();
 
     const submitPayload: IntentRelayRequest<'submit'> = {
       action: 'submit',
-      params: data
-        ? {
-            chain_id: intentRelayChainId,
-            tx_hash: spokeTxHash,
-            data,
-          }
-        : {
-            chain_id: intentRelayChainId,
-            tx_hash: spokeTxHash,
-          },
+      params:
+        isSolanaChainKeyType(chainKey) || isBitcoinChainKeyType(chainKey)
+          ? {
+              chain_id: intentRelayChainId,
+              tx_hash: srcTxHash,
+              data,
+            }
+          : {
+              chain_id: intentRelayChainId,
+              tx_hash: srcTxHash,
+            },
     };
 
     const submitResult = await submitTransaction(submitPayload, relayerApiEndpoint);
+    if (!submitResult.ok) return submitResult;
+    const submitTxResponse = submitResult.value;
 
-    if (!submitResult.success) {
-      return { ok: false, error: new Error('SUBMIT_TX_FAILED', { cause: new Error(submitResult.message) }) };
+    if (!submitTxResponse.success) {
+      return { ok: false, error: new Error('SUBMIT_TX_FAILED', { cause: new Error(submitTxResponse.message) }) };
     }
 
     return await waitUntilIntentExecuted({
       intentRelayChainId,
-      spokeTxHash,
+      srcTxHash,
       timeout,
       apiUrl: relayerApiEndpoint,
     });

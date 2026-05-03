@@ -1,5 +1,4 @@
-import type { HttpUrl, SpokeChainKey } from '@sodax/types';
-import type { Hex } from '@sodax/types';
+import type { HttpUrl, SpokeChainKey, Hex } from '@sodax/types';
 
 export type RelayExtraData = { address: Hex; payload: Hex };
 
@@ -14,7 +13,7 @@ export type IntentDeliveryInfo = {
 
 export type WaitUntilIntentExecutedPayload = {
   intentRelayChainId: string;
-  spokeTxHash: string;
+  srcTxHash: string;
   timeout?: number;
   apiUrl: HttpUrl;
 };

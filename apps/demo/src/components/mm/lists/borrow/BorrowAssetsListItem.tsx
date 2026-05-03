@@ -58,7 +58,7 @@ export function BorrowAssetsListItem({
       ? rawATokenAddress
       : undefined;
 
-  const { data: aToken } = useAToken({ aToken: aTokenAddress });
+  const { data: aToken } = useAToken({ params: { aToken: aTokenAddress } });
 
   let availableLiquidity: string | undefined;
 

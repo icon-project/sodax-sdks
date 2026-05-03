@@ -98,10 +98,12 @@ export function ManageLiquidity({
   );
   const xService = useXService(getXChainType(selectedChainId));
   const { data: sourceBalances } = useXBalances({
-    xService,
-    xChainId: selectedChainId,
-    xTokens: [poolSpokeAssets.token0, poolSpokeAssets.token1],
-    address: xAccount.address,
+    params: {
+      xService,
+      xChainId: selectedChainId,
+      xTokens: [poolSpokeAssets.token0, poolSpokeAssets.token1],
+      address: xAccount.address,
+    },
   });
   const spokeToken0Balance = sourceBalances?.[poolSpokeAssets.token0.address ?? ''] ?? 0n;
   const spokeToken1Balance = sourceBalances?.[poolSpokeAssets.token1.address ?? ''] ?? 0n;
@@ -133,10 +135,10 @@ export function ManageLiquidity({
     : undefined;
 
   const { data: hasToken0Allowed, isLoading: isToken0AllowanceLoading } = useDexAllowance({
-    params: allowanceParams0,
+    params: { payload: allowanceParams0 },
   });
   const { data: hasToken1Allowed, isLoading: isToken1AllowanceLoading } = useDexAllowance({
-    params: allowanceParams1,
+    params: { payload: allowanceParams1 },
   });
   const { mutateAsync: approveToken0, isPending: isApprovingToken0 } = useDexApprove();
   const { mutateAsync: approveToken1, isPending: isApprovingToken1 } = useDexApprove();
