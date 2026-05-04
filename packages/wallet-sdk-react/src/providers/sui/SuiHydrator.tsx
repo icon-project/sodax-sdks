@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useCurrentAccount, useCurrentWallet, useSuiClient, useWallets } from '@mysten/dapp-kit';
 import { SuiWalletProvider } from '@sodax/wallet-sdk-core';
 import { ChainKeys } from '@sodax/types';
-import { SuiXService, SuiXConnector } from '../../xchains/sui/index.js';
-import { useXWalletStore } from '../../useXWalletStore.js';
-import { useWalletConfig } from '../../context/WalletConfigContext.js';
-import { getEntryDefaults } from '../../utils/walletRpcConfig.js';
+import { SuiXService, SuiXConnector } from '@/xchains/sui/index.js';
+import { useXWalletStore } from '@/useXWalletStore.js';
+import { useWalletConfig } from '@/context/WalletConfigContext.js';
+import { getEntryDefaults } from '@/utils/walletRpcConfig.js';
 import { assertSuiProviderShape } from '@/shared/guards.js';
 
 /**

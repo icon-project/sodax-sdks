@@ -1,8 +1,10 @@
 import { useMemo, useSyncExternalStore } from 'react';
 import { ChainTypeArr, type ChainType } from '@sodax/types';
 import type { XAccount, XConnection } from '@/types/index.js';
-import type { XConnector } from '@/core/index.js';
+import type { IXConnector } from '@/types/interfaces.js';
 import { useXWalletStore } from '@/useXWalletStore.js';
+import { useXConnections } from './useXConnections.js';
+import { useXConnectorsByChain } from './useXConnectorsByChain.js';
 import { compareChainByOrder } from '@/utils/chainOrder.js';
 
 export type ConnectedChain = {
@@ -42,7 +44,7 @@ export type UseConnectedChainsOptions = {
  */
 export function buildConnectedChains(
   xConnections: Partial<Record<ChainType, XConnection>>,
-  xConnectorsByChain: Partial<Record<ChainType, XConnector[]>>,
+  xConnectorsByChain: Partial<Record<ChainType, IXConnector[]>>,
   isReady = true,
   order?: readonly ChainType[],
 ): UseConnectedChainsResult {
@@ -101,8 +103,8 @@ function subscribeHydration(onChange: () => void): () => void {
  * const { chains } = useConnectedChains({ order: ['EVM', 'ICON', 'SOLANA'] });
  */
 export function useConnectedChains(options: UseConnectedChainsOptions = {}): UseConnectedChainsResult {
-  const xConnections = useXWalletStore(s => s.xConnections);
-  const xConnectorsByChain = useXWalletStore(s => s.xConnectorsByChain);
+  const xConnections = useXConnections();
+  const xConnectorsByChain = useXConnectorsByChain();
   const isReady = useSyncExternalStore(
     subscribeHydration,
     () => useXWalletStore.persist.hasHydrated(),

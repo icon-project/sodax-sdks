@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useConnectWallet, useDisconnectWallet, useWallets, useSignPersonalMessage } from '@mysten/dapp-kit';
-import { useXWalletStore } from '../../useXWalletStore.js';
+import { useXWalletStore } from '@/useXWalletStore.js';
 
 /**
  * Registers SUI ChainActions into the store.

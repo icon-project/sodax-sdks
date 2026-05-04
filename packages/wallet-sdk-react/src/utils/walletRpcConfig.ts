@@ -1,6 +1,6 @@
 import { getEvmChainKeyByChainId, type ChainKey, type EvmChainKey } from '@sodax/types';
 import type { EvmWalletDefaults } from '@sodax/wallet-sdk-core';
-import type { ChainEntry, EvmChainEntry, WalletDefaultsByKey } from '../types/config.js';
+import type { ChainEntry, EvmChainEntry, WalletDefaultsByKey } from '@/types/config.js';
 
 export type { ChainEntry, WalletDefaultsByKey };
 

@@ -1,6 +1,6 @@
 import type { ChainType } from '@sodax/types';
 import { useCallback } from 'react';
-import { useXWalletStore } from '../useXWalletStore.js';
+import { useXWalletStore } from '@/useXWalletStore.js';
 
 /**
  * Hook for disconnecting from a specific blockchain wallet.
@@ -16,7 +16,9 @@ export function useXDisconnect(): (xChainType: ChainType) => Promise<void> {
       if (chainActions) {
         await chainActions.disconnect();
       } else {
-        console.warn(`[useXDisconnect] No chain actions registered for "${xChainType}". Is it enabled in config.chains?`);
+        console.warn(
+          `[useXDisconnect] No chain actions registered for "${xChainType}". Is it enabled in config.chains?`,
+        );
       }
     },
     [actionsRegistry],

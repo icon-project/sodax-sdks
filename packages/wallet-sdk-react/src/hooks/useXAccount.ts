@@ -2,9 +2,9 @@ import { useMemo } from 'react';
 
 import { ChainTypeArr, type SpokeChainKey, type ChainType } from '@sodax/types';
 
-import type { XAccount } from '../types/index.js';
+import type { XAccount } from '@/types/index.js';
 import { useXConnection } from './useXConnection.js';
-import { getXChainType } from '../actions/index.js';
+import { getXChainType } from '@/actions/index.js';
 
 /**
  * Hook to get the current connected account for a specific blockchain

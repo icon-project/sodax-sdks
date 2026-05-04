@@ -5,7 +5,6 @@ export * from './core/index.js';
 export * from './utils/index.js';
 
 export * from './hooks/index.js';
-export * from './useXWalletStore.js';
 export * from './SodaxWalletProvider.js';
 
 export * from './types/index.js';

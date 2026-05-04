@@ -4,10 +4,10 @@ import {
   WalletProvider as SolanaWalletProvider,
 } from '@solana/wallet-adapter-react';
 import { ChainKeys } from '@sodax/types';
-import type { SolanaTypeConfig } from '../../types/config.js';
+import type { SolanaTypeConfig } from '@/types/config.js';
 import { SolanaHydrator } from './SolanaHydrator.js';
 import { SolanaActions } from './SolanaActions.js';
-import { SOLANA_DEFAULT_AUTO_CONNECT, SOLANA_DEFAULT_RPC_URL } from '../../constants.js';
+import { SOLANA_DEFAULT_AUTO_CONNECT, SOLANA_DEFAULT_RPC_URL } from '@/constants.js';
 
 const emptyWallets: [] = [];
 

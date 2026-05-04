@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { baseChainInfo, CHAIN_KEYS, type SpokeChainKey, type ChainType } from '@sodax/types';
 import type { XAccount, XConnection } from '@/types/index.js';
-import { useXWalletStore } from '@/useXWalletStore.js';
+import { useEnabledChains } from './useEnabledChains.js';
+import { useXConnections } from './useXConnections.js';
 import { chainRegistry, type ChainServiceFactory } from '@/chainRegistry.js';
 import { compareChainByOrder } from '@/utils/chainOrder.js';
 
@@ -84,8 +85,8 @@ export function buildChainGroups(
  * const groups = useChainGroups({ order: ['EVM', 'ICON', 'SOLANA'] });
  */
 export function useChainGroups(options: UseChainGroupsOptions = {}): ChainGroup[] {
-  const enabledChains = useXWalletStore(s => s.enabledChains);
-  const xConnections = useXWalletStore(s => s.xConnections);
+  const enabledChains = useEnabledChains();
+  const xConnections = useXConnections();
   const { order } = options;
 
   return useMemo(
