@@ -33,12 +33,16 @@ export const BitcoinSetupPanel = ({ walletProvider, onReadyChange, nativeBalance
     params: { walletProvider, tradingAddress },
   });
 
-  const { mutateAsync: fundWallet, isPending: isFunding } = useFundTradingWallet(walletProvider);
+  // Both dialogs (FundTradingWalletDialog, WithdrawTradingWalletDialog) wrap their `onFund` /
+  // `onWithdraw` callbacks in their own try/catch — using `mutateAsync` here lets the dialog's
+  // existing throw-aware contract work directly without a redundant Result→throw bounce.
+  const { mutateAsync: fundWallet, isPending: isFunding } = useFundTradingWallet();
   const { data: expiredUtxos, isLoading: isExpiredLoading } = useExpiredUtxos({
     params: { walletProvider, tradingAddress },
   });
-  const { mutateAsync: renewUtxos, isPending: isRenewing } = useRenewUtxos(walletProvider);
-  const { mutateAsync: withdrawFromTradingWallet, isPending: isWithdrawing } = useRadfiWithdraw(walletProvider);
+  // `mutateAsyncSafe` here because handleRenewUtxos branches on `.ok` to populate inline error state.
+  const { mutateAsyncSafe: renewUtxos, isPending: isRenewing } = useRenewUtxos();
+  const { mutateAsync: withdrawFromTradingWallet, isPending: isWithdrawing } = useRadfiWithdraw();
   const [copied, setCopied] = useState(false);
   const [renewError, setRenewError] = useState<string | null>(null);
   const [showFundDialog, setShowFundDialog] = useState(false);
@@ -108,13 +112,12 @@ export const BitcoinSetupPanel = ({ walletProvider, onReadyChange, nativeBalance
   const handleRenewUtxos = async () => {
     if (!expiredUtxos?.length) return;
     setRenewError(null);
-    try {
-      const txIdVouts = expiredUtxos.map(u => u.txidVout ?? `${u.txid}:${u.vout}`);
-      await renewUtxos({ txIdVouts });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to renew UTXOs';
+    const txIdVouts = expiredUtxos.map(u => u.txidVout ?? `${u.txid}:${u.vout}`);
+    const result = await renewUtxos({ txIdVouts, walletProvider });
+    if (!result.ok) {
+      const msg = result.error instanceof Error ? result.error.message : 'Failed to renew UTXOs';
       setRenewError(msg);
-      console.error('Failed to renew UTXOs', e);
+      console.error('Failed to renew UTXOs', result.error);
     }
   };
 
@@ -236,7 +239,7 @@ export const BitcoinSetupPanel = ({ walletProvider, onReadyChange, nativeBalance
                   connectorName={connectorName}
                   connectorIcon={connectorIcon}
                   onFund={async (amount) => {
-                    await fundWallet(amount);
+                    await fundWallet({ amount, walletProvider });
                   }}
                   isFunding={isFunding}
                 />
@@ -252,7 +255,12 @@ export const BitcoinSetupPanel = ({ walletProvider, onReadyChange, nativeBalance
                   connectorName={connectorName}
                   connectorIcon={connectorIcon}
                   onWithdraw={async (amount, withdrawTo) => {
-                    return withdrawFromTradingWallet({ amount, tokenId: '0:0', withdrawTo });
+                    return withdrawFromTradingWallet({
+                      amount,
+                      tokenId: '0:0',
+                      withdrawTo,
+                      walletProvider,
+                    });
                   }}
                   isWithdrawing={isWithdrawing}
                   onFetchMax={handleFetchMax}

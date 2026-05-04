@@ -116,11 +116,15 @@ function SupplyButton({ srcAddress }: { srcAddress: string }) {
 
   const handleSupply = async () => {
     if (!walletProvider) return;
-    const result = await supply({
-      params: { srcChainKey: chainKey, srcAddress, token: '0x...', amount: 1_000_000n, action: 'supply' },
-      walletProvider,
-    });
-    if (result.ok) console.log('Supplied (spoke, hub):', result.value);
+    try {
+      const txHashPair = await supply({
+        params: { srcChainKey: chainKey, srcAddress, token: '0x...', amount: 1_000_000n, action: 'supply' },
+        walletProvider,
+      });
+      console.log('Supplied (spoke, hub):', txHashPair);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   return (

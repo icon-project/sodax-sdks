@@ -1,29 +1,42 @@
-import type { FeeTokenApproveAction, TxReturnType } from '@sodax/sdk';
-import type { HubChainKey, Result } from '@sodax/sdk';
-import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
+// packages/dapp-kit/src/hooks/partner/useApproveToken.ts
+import type { FeeTokenApproveAction, HubChainKey, TxReturnType } from '@sodax/sdk';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { MutationHookParams } from '../shared/types.js';
+import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
+import { unwrapResult } from '../shared/unwrapResult.js';
 
 export type UseApproveTokenVars = Omit<FeeTokenApproveAction<HubChainKey, false>, 'raw'>;
 
-type ApproveTokenResult = Result<TxReturnType<HubChainKey, false>>;
+type ApproveTokenData = TxReturnType<HubChainKey, false>;
 
 /**
  * React hook to approve a token to the protocol-intents contract on Sonic with max allowance.
- * Pure mutation: pass `{ params, walletProvider }` to `mutate({...})`. Returns the SDK
- * `Result<T>` as-is; callers branch on `data?.ok`.
+ *
+ * Throws on SDK failure so React Query's native error model engages (`isError`, `error`,
+ * `onError`, `retry`). Returns the unwrapped tx return value on success.
  */
-export function useApproveToken(): UseMutationResult<ApproveTokenResult, Error, UseApproveTokenVars> {
+export function useApproveToken({
+  mutationOptions,
+}: MutationHookParams<ApproveTokenData, UseApproveTokenVars> = {}): SafeUseMutationResult<
+  ApproveTokenData,
+  Error,
+  UseApproveTokenVars
+> {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
 
-  return useMutation<ApproveTokenResult, Error, UseApproveTokenVars>({
-    mutationFn: async vars => {
-      return sodax.partners.feeClaim.approveToken<false>({ ...vars, raw: false });
-    },
-    onSuccess: (_data, { params }) => {
+  return useSafeMutation<ApproveTokenData, Error, UseApproveTokenVars>({
+    mutationKey: ['partner', 'approveToken'],
+    ...mutationOptions,
+    mutationFn: async vars =>
+      unwrapResult(await sodax.partners.feeClaim.approveToken<false>({ ...vars, raw: false })),
+    onSuccess: async (data, vars, ctx) => {
+      const { params } = vars;
       queryClient.invalidateQueries({
         queryKey: ['partner', 'feeClaim', 'isTokenApproved', params.srcChainKey, params.srcAddress, params.token],
       });
+      await mutationOptions?.onSuccess?.(data, vars, ctx);
     },
   });
 }

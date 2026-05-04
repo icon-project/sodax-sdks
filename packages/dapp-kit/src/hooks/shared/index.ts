@@ -1,4 +1,6 @@
 export * from './types.js';
+export * from './unwrapResult.js';
+export * from './useSafeMutation.js';
 export * from './useSodaxContext.js';
 export * from './useEstimateGas.js';
 export * from './useDeriveUserWalletAddress.js';

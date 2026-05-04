@@ -214,6 +214,20 @@ export function getReadableTxError(error: unknown): string {
   return 'Transaction failed. Please try again.';
 }
 
+/**
+ * Human-readable text from mutation failures (`mutateAsyncSafe` `result.error` or thrown values).
+ * Appends `Error.cause` when present so SDK-wrapped errors stay debuggable.
+ */
+export function formatMutationFailureMessage(error: unknown, fallback: string): string {
+  if (typeof error === 'string') return error;
+  if (error instanceof Error) {
+    const cause = (error as { cause?: unknown }).cause;
+    const causeText = cause instanceof Error ? ` — ${cause.message}` : '';
+    return `${error.message}${causeText}`;
+  }
+  return fallback;
+}
+
 export function createDexTokenIdsStorageKey(chainId: SpokeChainKey, userAddress: string): string {
   return `sodax-dex-positions-${chainId}-${userAddress}`;
 }

@@ -162,104 +162,113 @@ export default function StakingPage() {
 
   const handleApproveStake = async (): Promise<void> => {
     if (!srcAddress || !sodaToken || !stakeAmount || !walletProvider) return;
-    const result = await approveStake({
-      params: {
-        srcChainKey: selectedChainId,
-        srcAddress,
-        amount: scaleTokenAmount(stakeAmount, sodaToken.decimals),
-        minReceive: scaleTokenAmount(minStakeReceive || stakeAmount, 18),
-      },
-      walletProvider,
-    });
-    if (!result.ok) console.error('Approve stake error:', result.error);
+    try {
+      await approveStake({
+        params: {
+          srcChainKey: selectedChainId,
+          srcAddress,
+          amount: scaleTokenAmount(stakeAmount, sodaToken.decimals),
+          minReceive: scaleTokenAmount(minStakeReceive || stakeAmount, 18),
+        },
+        walletProvider,
+      });
+    } catch (error) {
+      console.error('Approve stake error:', error);
+    }
   };
 
   const handleApproveUnstake = async (): Promise<void> => {
     if (!srcAddress || !sodaToken || !unstakeAmount || !walletProvider) return;
-    const result = await approveUnstake({
-      params: {
-        srcChainKey: selectedChainId,
-        srcAddress,
-        amount: scaleTokenAmount(unstakeAmount, 18),
-      },
-      walletProvider,
-    });
-    if (!result.ok) console.error('Approve unstake error:', result.error);
+    try {
+      await approveUnstake({
+        params: {
+          srcChainKey: selectedChainId,
+          srcAddress,
+          amount: scaleTokenAmount(unstakeAmount, 18),
+        },
+        walletProvider,
+      });
+    } catch (error) {
+      console.error('Approve unstake error:', error);
+    }
   };
 
   const handleApproveInstantUnstake = async (): Promise<void> => {
     if (!srcAddress || !sodaToken || !unstakeAmount || !walletProvider) return;
-    const result = await approveInstantUnstake({
-      params: {
-        srcChainKey: selectedChainId,
-        srcAddress,
-        amount: scaleTokenAmount(unstakeAmount, 18),
-        minAmount: scaleTokenAmount(minUnstakeAmount, 18),
-      },
-      walletProvider,
-    });
-    if (!result.ok) console.error('Approve instant unstake error:', result.error);
+    try {
+      await approveInstantUnstake({
+        params: {
+          srcChainKey: selectedChainId,
+          srcAddress,
+          amount: scaleTokenAmount(unstakeAmount, 18),
+          minAmount: scaleTokenAmount(minUnstakeAmount, 18),
+        },
+        walletProvider,
+      });
+    } catch (error) {
+      console.error('Approve instant unstake error:', error);
+    }
   };
 
   const handleStake = async (): Promise<void> => {
     if (!srcAddress || !sodaToken || !stakeAmount || !minStakeReceive || !walletProvider) return;
-    const result = await stake({
-      params: {
-        srcChainKey: selectedChainId,
-        srcAddress,
-        amount: scaleTokenAmount(stakeAmount, sodaToken.decimals),
-        minReceive: scaleTokenAmount(minStakeReceive, 18),
-        action: 'stake',
-      },
-      walletProvider,
-    });
-    if (!result.ok) {
-      console.error('Stake error:', result.error);
-      return;
+    try {
+      await stake({
+        params: {
+          srcChainKey: selectedChainId,
+          srcAddress,
+          amount: scaleTokenAmount(stakeAmount, sodaToken.decimals),
+          minReceive: scaleTokenAmount(minStakeReceive, 18),
+          action: 'stake',
+        },
+        walletProvider,
+      });
+      setStakeDialogOpen(false);
+      setStakeAmount('');
+      setMinStakeReceive('');
+    } catch (error) {
+      console.error('Stake error:', error);
     }
-    setStakeDialogOpen(false);
-    setStakeAmount('');
-    setMinStakeReceive('');
   };
 
   const handleUnstake = async (): Promise<void> => {
     if (!srcAddress || !unstakeAmount || !walletProvider) return;
-    const result = await unstake({
-      params: {
-        srcChainKey: selectedChainId,
-        srcAddress,
-        amount: scaleTokenAmount(unstakeAmount, 18),
-        action: 'unstake',
-      },
-      walletProvider,
-    });
-    if (!result.ok) {
-      console.error('Unstake error:', result.error);
-      return;
+    try {
+      await unstake({
+        params: {
+          srcChainKey: selectedChainId,
+          srcAddress,
+          amount: scaleTokenAmount(unstakeAmount, 18),
+          action: 'unstake',
+        },
+        walletProvider,
+      });
+      setUnstakeDialogOpen(false);
+      setUnstakeAmount('');
+    } catch (error) {
+      console.error('Unstake error:', error);
     }
-    setUnstakeDialogOpen(false);
-    setUnstakeAmount('');
   };
 
   const handleInstantUnstake = async (): Promise<void> => {
     if (!srcAddress || !unstakeAmount || !minUnstakeAmount || !walletProvider) return;
-    const result = await instantUnstake({
-      params: {
-        srcChainKey: selectedChainId,
-        srcAddress,
-        amount: scaleTokenAmount(unstakeAmount, 18),
-        minAmount: scaleTokenAmount(minUnstakeAmount, 18),
-        action: 'instantUnstake',
-      },
-      walletProvider,
-    });
-    if (!result.ok) {
-      console.error('Instant unstake error:', result.error);
-      return;
+    try {
+      await instantUnstake({
+        params: {
+          srcChainKey: selectedChainId,
+          srcAddress,
+          amount: scaleTokenAmount(unstakeAmount, 18),
+          minAmount: scaleTokenAmount(minUnstakeAmount, 18),
+          action: 'instantUnstake',
+        },
+        walletProvider,
+      });
+      setInstantUnstakeDialogOpen(false);
+      setUnstakeAmount('');
+      setMinUnstakeAmount('');
+    } catch (error) {
+      console.error('Instant unstake error:', error);
     }
-    setInstantUnstakeDialogOpen(false);
-    setUnstakeAmount('');
-    setMinUnstakeAmount('');
   };
 
   const disconnect = useXDisconnect();

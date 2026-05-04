@@ -1,55 +1,49 @@
-import { useMutation, type UseMutationOptions, type UseMutationResult } from '@tanstack/react-query';
+// packages/dapp-kit/src/hooks/backend/useBackendSubmitSwapTx.ts
 import type { RequestOverrideConfig, SubmitSwapTxRequest, SubmitSwapTxResponse } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import { unwrapResult } from './unwrapResult.js';
+import type { MutationHookParams } from '../shared/types.js';
+import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
 
-export type UseBackendSubmitSwapTxParams = {
+/**
+ * Mutation variables for {@link useBackendSubmitSwapTx}. The per-request `apiConfig` override
+ * (e.g. base URL) belongs here rather than at the hook level — different submissions in the same
+ * component can target different endpoints without re-rendering.
+ */
+export type UseBackendSubmitSwapTxVars = {
+  request: SubmitSwapTxRequest;
   apiConfig?: RequestOverrideConfig;
-  mutationOptions?: UseMutationOptions<SubmitSwapTxResponse, Error, SubmitSwapTxRequest>;
 };
 
 /**
- * React hook for submitting a swap transaction to be processed by the backend
- * (relay, post execution to solver, etc.).
+ * React hook for submitting a swap transaction to be processed by the backend (relay, post
+ * execution to solver, etc.).
  *
- * @param {UseBackendSubmitSwapTxParams | undefined} params - Optional parameters:
- *   - `mutationOptions`: React Query mutation options to customize behavior (e.g., onSuccess, onError, retry).
- *
- * @returns {UseMutationResult<SubmitSwapTxResponse, Error, SubmitSwapTxRequest>} React Query mutation result:
- *   - `mutate` / `mutateAsync`: Functions to trigger the submission.
- *   - `data`: The submit response on success.
- *   - `isPending`: Loading state.
- *   - `error`: Error instance if the mutation failed.
+ * Pure mutation: pass `{ request, apiConfig? }` to `mutate({...})`. Default `retry: 3` is applied
+ * at the hook level — consumers can override via `mutationOptions.retry`.
  *
  * @example
  * const { mutateAsync: submitSwapTx, isPending, error } = useBackendSubmitSwapTx();
  *
  * const result = await submitSwapTx({
- *   txHash: '0x123...',
- *   srcChainId: '1',
- *   walletAddress: '0xabc...',
- *   intent: { ... },
- *   relayData: '0x...',
+ *   request: { txHash: '0x123...', srcChainId: '1', walletAddress: '0xabc...', intent: { ... }, relayData: '0x...' },
+ *   apiConfig: { baseURL: 'https://...' },
  * });
  */
-export const useBackendSubmitSwapTx = (
-  params?: UseBackendSubmitSwapTxParams,
-): UseMutationResult<SubmitSwapTxResponse, Error, SubmitSwapTxRequest> => {
+export const useBackendSubmitSwapTx = ({
+  mutationOptions,
+}: MutationHookParams<SubmitSwapTxResponse, UseBackendSubmitSwapTxVars> = {}): SafeUseMutationResult<
+  SubmitSwapTxResponse,
+  Error,
+  UseBackendSubmitSwapTxVars
+> => {
   const { sodax } = useSodaxContext();
 
-  const defaultMutationOptions = {
+  return useSafeMutation<SubmitSwapTxResponse, Error, UseBackendSubmitSwapTxVars>({
+    mutationKey: ['backend', 'submitSwapTx'],
     retry: 3,
-  };
-
-  const mutationOptions = {
-    ...defaultMutationOptions,
-    ...params?.mutationOptions,
-  };
-
-  return useMutation({
     ...mutationOptions,
-    mutationFn: async (request: SubmitSwapTxRequest): Promise<SubmitSwapTxResponse> => {
-      return unwrapResult(await sodax.backendApi.submitSwapTx(request, params?.apiConfig));
-    },
+    mutationFn: async ({ request, apiConfig }): Promise<SubmitSwapTxResponse> =>
+      unwrapResult(await sodax.backendApi.submitSwapTx(request, apiConfig)),
   });
 };

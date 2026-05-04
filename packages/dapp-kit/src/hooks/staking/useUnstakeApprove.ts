@@ -1,7 +1,10 @@
-import type { TxReturnType, UnstakeParams } from '@sodax/sdk';
-import type { GetWalletProviderType, Result, SpokeChainKey } from '@sodax/sdk';
-import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
+// packages/dapp-kit/src/hooks/staking/useUnstakeApprove.ts
+import type { GetWalletProviderType, SpokeChainKey, TxReturnType, UnstakeParams } from '@sodax/sdk';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { MutationHookParams } from '../shared/types.js';
+import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
+import { unwrapResult } from '../shared/unwrapResult.js';
 
 /**
  * Mutation variables for {@link useUnstakeApprove}. The `action` literal is injected by the hook.
@@ -11,30 +14,36 @@ export type UseUnstakeApproveVars<K extends SpokeChainKey = SpokeChainKey> = {
   walletProvider: GetWalletProviderType<K>;
 };
 
-type UnstakeApproveResult<K extends SpokeChainKey> = Result<TxReturnType<K, false>>;
-
 /**
- * React hook for approving xSODA spending on the unstake action. Pure mutation: returns the SDK
- * `Result<T>` as-is; callers branch on `data?.ok`.
+ * React hook for approving xSODA spending on the unstake action.
+ *
+ * Throws on SDK failure so React Query's native error model engages (`isError`, `error`,
+ * `onError`, `retry`). Returns the unwrapped tx return value on success.
  */
-export function useUnstakeApprove<K extends SpokeChainKey = SpokeChainKey>(): UseMutationResult<
-  UnstakeApproveResult<K>,
+export function useUnstakeApprove<K extends SpokeChainKey = SpokeChainKey>({
+  mutationOptions,
+}: MutationHookParams<TxReturnType<K, false>, UseUnstakeApproveVars<K>> = {}): SafeUseMutationResult<
+  TxReturnType<K, false>,
   Error,
   UseUnstakeApproveVars<K>
 > {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
 
-  return useMutation<UnstakeApproveResult<K>, Error, UseUnstakeApproveVars<K>>({
-    mutationFn: async ({ params, walletProvider }) => {
-      return sodax.staking.approve({
-        params: { ...params, action: 'unstake' },
-        raw: false,
-        walletProvider,
-      });
-    },
-    onSuccess: (_data, { params }) => {
-      queryClient.invalidateQueries({ queryKey: ['staking', 'allowance', params.srcChainKey, 'unstake'] });
+  return useSafeMutation<TxReturnType<K, false>, Error, UseUnstakeApproveVars<K>>({
+    mutationKey: ['staking', 'approve', 'unstake'],
+    ...mutationOptions,
+    mutationFn: async ({ params, walletProvider }) =>
+      unwrapResult(
+        await sodax.staking.approve({
+          params: { ...params, action: 'unstake' },
+          raw: false,
+          walletProvider,
+        }),
+      ),
+    onSuccess: async (data, vars, ctx) => {
+      queryClient.invalidateQueries({ queryKey: ['staking', 'allowance', vars.params.srcChainKey, 'unstake'] });
+      await mutationOptions?.onSuccess?.(data, vars, ctx);
     },
   });
 }

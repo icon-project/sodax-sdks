@@ -1,7 +1,10 @@
-import type { MoneyMarketApproveActionParams, TxReturnType } from '@sodax/sdk';
-import type { Result, SpokeChainKey } from '@sodax/sdk';
-import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
+// packages/dapp-kit/src/hooks/mm/useMMApprove.ts
+import type { MoneyMarketApproveActionParams, SpokeChainKey, TxReturnType } from '@sodax/sdk';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { MutationHookParams } from '../shared/types.js';
+import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
+import { unwrapResult } from '../shared/unwrapResult.js';
 
 /**
  * Mutation variables for {@link useMMApprove}. Generic over `K extends SpokeChainKey` (defaults
@@ -15,27 +18,32 @@ export type UseMMApproveVars<K extends SpokeChainKey = SpokeChainKey> = Omit<
 
 /**
  * React hook for approving ERC-20 token spending (or trustline establishment) for a Sodax money
- * market action. Pure mutation: all inputs (params, walletProvider) are passed to `mutate({...})`.
- * Returns the SDK `Result<T>` as-is; callers branch on `data?.ok`.
+ * market action.
  *
- * On success, invalidates the matching `['mm', 'allowance', srcChainKey, token, action]` query.
+ * Throws on SDK failure so React Query's native error model engages (`isError`, `error`,
+ * `onError`, `retry`). Returns the unwrapped tx return value on success. Invalidates the matching
+ * `['mm', 'allowance', srcChainKey, token, action]` query on confirmed success.
  */
-export function useMMApprove<K extends SpokeChainKey = SpokeChainKey>(): UseMutationResult<
-  Result<TxReturnType<K, false>>,
+export function useMMApprove<K extends SpokeChainKey = SpokeChainKey>({
+  mutationOptions,
+}: MutationHookParams<TxReturnType<K, false>, UseMMApproveVars<K>> = {}): SafeUseMutationResult<
+  TxReturnType<K, false>,
   Error,
   UseMMApproveVars<K>
 > {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
 
-  return useMutation<Result<TxReturnType<K, false>>, Error, UseMMApproveVars<K>>({
-    mutationFn: async (vars) => {
-      return sodax.moneyMarket.approve({ ...vars, raw: false });
-    },
-    onSuccess: (_data, { params }) => {
+  return useSafeMutation<TxReturnType<K, false>, Error, UseMMApproveVars<K>>({
+    mutationKey: ['mm', 'approve'],
+    ...mutationOptions,
+    mutationFn: async vars => unwrapResult(await sodax.moneyMarket.approve({ ...vars, raw: false })),
+    onSuccess: async (data, vars, ctx) => {
+      const { params } = vars;
       queryClient.invalidateQueries({
         queryKey: ['mm', 'allowance', params.srcChainKey, params.token, params.action],
       });
+      await mutationOptions?.onSuccess?.(data, vars, ctx);
     },
   });
 }

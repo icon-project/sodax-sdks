@@ -13,6 +13,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { formatMutationFailureMessage } from '@/lib/utils';
 import { parseUnits, formatUnits } from 'viem';
 import { type CreateLimitOrderParams, getSupportedSolverTokens, type SolverIntentQuoteRequest } from '@sodax/sdk';
 import BigNumber from 'bignumber.js';
@@ -54,7 +55,7 @@ export default function LimitOrderCard() {
   const destAccount = useXAccount(destChain);
   const destWalletProvider = useWalletProvider(destChain);
   const { openWalletModal } = useAppStore();
-  const { mutateAsync: createLimitOrder } = useCreateLimitOrder(sourceChain, sourceWalletProvider);
+  const { mutateAsync: createLimitOrder } = useCreateLimitOrder();
   const [sourceToken, setSourceToken] = useState<XToken | undefined>(
     getSupportedSolverTokens(ChainKeys.ICON_MAINNET)[0],
   );
@@ -70,7 +71,7 @@ export default function LimitOrderCard() {
       walletProvider: sourceWalletProvider,
     },
   });
-  const { approve, isLoading: isApproving } = useSwapApprove(limitOrderPayload, sourceChain, sourceWalletProvider);
+  const { mutateAsyncSafe: approve, isPending: isApproving } = useSwapApprove();
   const supportedSpokeChains = sodax.config.getSupportedSpokeChains();
   const {
     data: hasSufficientTrustline,
@@ -92,6 +93,7 @@ export default function LimitOrderCard() {
   }
   const { requestTrustline } = useRequestTrustline(destToken?.address);
   const [open, setOpen] = useState(false);
+  const [approveError, setApproveError] = useState<string | null>(null);
 
   const onChangeDirection = () => {
     setSourceChain(destChain);
@@ -179,13 +181,16 @@ export default function LimitOrderCard() {
   const queryClient = useQueryClient();
 
   const handleCreateLimitOrder = async (limitOrderPayload: CreateLimitOrderParams) => {
+    if (!sourceWalletProvider) {
+      console.error('sourceWalletProvider undefined');
+      return;
+    }
     setOpen(false);
-    const result = await createLimitOrder(limitOrderPayload);
-
-    if (result.ok) {
+    try {
+      await createLimitOrder({ params: limitOrderPayload, walletProvider: sourceWalletProvider });
       queryClient.invalidateQueries({ queryKey: ['backend', 'intent', 'user'] });
-    } else {
-      console.error('Error creating limit order:', result.error);
+    } catch (error) {
+      console.error('Error creating limit order:', error);
     }
   };
 
@@ -198,13 +203,18 @@ export default function LimitOrderCard() {
     disconnect(getXChainType(destChain) as ChainType);
   };
 
-  const handleApprove = async () => {
-    if (!limitOrderPayload) {
-      console.error('limitOrderPayload undefined');
+  const handleApprove = async (): Promise<void> => {
+    if (!limitOrderPayload || !sourceWalletProvider) {
+      console.error('limitOrderPayload or sourceWalletProvider undefined');
       return;
     }
 
-    await approve({ params: limitOrderPayload });
+    const result = await approve({ params: limitOrderPayload, walletProvider: sourceWalletProvider });
+    if (!result.ok) {
+      setApproveError(formatMutationFailureMessage(result.error, 'Approve failed'));
+      return;
+    }
+    setApproveError(null);
   };
 
   const handleRequestTrustline = async (limitOrderPayload: CreateLimitOrderParams | undefined) => {
@@ -349,7 +359,13 @@ export default function LimitOrderCard() {
           </div>
         </CardContent>
         <CardFooter className="flex flex-col space-y-4">
-          <Dialog open={open} onOpenChange={setOpen}>
+          <Dialog
+            open={open}
+            onOpenChange={(nextOpen): void => {
+              setOpen(nextOpen);
+              if (nextOpen) setApproveError(null);
+            }}
+          >
             <DialogTrigger asChild>
               <Button variant="outline" onClick={() => createLimitOrderPayload()}>
                 Create Limit Order
@@ -383,6 +399,7 @@ export default function LimitOrderCard() {
                   {destChain === ChainKeys.STELLAR_MAINNET && !isTrustlineLoading && !hasSufficientTrustline && (
                     <div className="text-red-500">Insufficient Stellar trustline (request trustline to proceed)</div>
                   )}
+                  {approveError ? <div className="text-red-500 text-sm">{approveError}</div> : null}
                 </div>
               </div>
               <DialogFooter>

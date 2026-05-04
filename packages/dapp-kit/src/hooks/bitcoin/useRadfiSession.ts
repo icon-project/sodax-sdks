@@ -1,6 +1,13 @@
+// packages/dapp-kit/src/hooks/bitcoin/useRadfiSession.ts
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { IBitcoinWalletProvider } from '@sodax/sdk';
-import { useRadfiAuth, loadRadfiSession, saveRadfiSession, clearRadfiSession, type RadfiSession } from './useRadfiAuth.js';
+import {
+  useRadfiAuth,
+  loadRadfiSession,
+  saveRadfiSession,
+  clearRadfiSession,
+  type RadfiSession,
+} from './useRadfiAuth.js';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 
 const REFRESH_INTERVAL = 5 * 60 * 1000;
@@ -80,13 +87,19 @@ export function useRadfiSession(walletProvider: IBitcoinWalletProvider | undefin
     return () => clearInterval(id);
   }, [walletAddress, walletProvider, silentRefresh]);
 
-  const { mutateAsync: loginMutate, isPending: isLoginPending } = useRadfiAuth(walletProvider);
+  const { mutateAsyncSafe: loginMutateSafe, isPending: isLoginPending } = useRadfiAuth();
 
   const login = useCallback(async () => {
-    const result = await loginMutate();
+    if (!walletProvider) {
+      return;
+    }
+    const result = await loginMutateSafe({ walletProvider });
+    if (!result.ok) {
+      return;
+    }
     setIsAuthed(true);
-    setTradingAddress(result.tradingAddress || undefined);
-  }, [loginMutate]);
+    setTradingAddress(result.value.tradingAddress || undefined);
+  }, [loginMutateSafe, walletProvider]);
 
   return { walletAddress, isAuthed, tradingAddress, login, isLoginPending };
 }

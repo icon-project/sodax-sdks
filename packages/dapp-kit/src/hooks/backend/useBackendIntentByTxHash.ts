@@ -28,7 +28,7 @@ export const useBackendIntentByTxHash = ({
   const txHash = params?.txHash;
 
   return useQuery({
-    queryKey: ['api', 'intent', 'txHash', txHash],
+    queryKey: ['backend', 'intent', 'txHash', txHash],
     queryFn: async (): Promise<IntentResponse | undefined> => {
       if (!txHash) return undefined;
       const result = await sodax.backendApi.getIntentByTxHash(txHash);

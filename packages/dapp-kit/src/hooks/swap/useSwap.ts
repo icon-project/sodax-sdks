@@ -1,9 +1,10 @@
+// packages/dapp-kit/src/hooks/swap/useSwap.ts
 import { useSodaxContext } from '../shared/useSodaxContext.js';
-import type { SwapActionParams, SwapResponse } from '@sodax/sdk';
-import type { Result, SpokeChainKey } from '@sodax/sdk';
-import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
-
-type SwapResult = Result<SwapResponse>;
+import type { SpokeChainKey, SwapActionParams, SwapResponse } from '@sodax/sdk';
+import { useQueryClient } from '@tanstack/react-query';
+import type { MutationHookParams } from '../shared/types.js';
+import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
+import { unwrapResult } from '../shared/unwrapResult.js';
 
 /**
  * Mutation variables for {@link useSwap}. Generic over `K extends SpokeChainKey` (defaults to the
@@ -13,25 +14,29 @@ type SwapResult = Result<SwapResponse>;
 export type UseSwapVars<K extends SpokeChainKey = SpokeChainKey> = Omit<SwapActionParams<K, false>, 'raw'>;
 
 /**
- * React hook for executing an intent-based cross-chain swap. Pure mutation: all inputs (params,
- * walletProvider) are passed to `mutate({...})`. The hook itself takes no arguments. Returns the
- * SDK `Result<T>` as-is; callers branch on `data?.ok`.
+ * React hook for executing an intent-based cross-chain swap.
+ *
+ * Throws on SDK failure so React Query's native error model engages (`isError`, `error`,
+ * `onError`, `retry`). Returns the unwrapped `SwapResponse` on success.
  */
-export function useSwap<K extends SpokeChainKey = SpokeChainKey>(): UseMutationResult<
-  SwapResult,
+export function useSwap<K extends SpokeChainKey = SpokeChainKey>({
+  mutationOptions,
+}: MutationHookParams<SwapResponse, UseSwapVars<K>> = {}): SafeUseMutationResult<
+  SwapResponse,
   Error,
   UseSwapVars<K>
 > {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
 
-  return useMutation<SwapResult, Error, UseSwapVars<K>>({
-    mutationFn: async (vars) => {
-      return sodax.swaps.swap({ ...vars});
-    },
-    onSuccess: (_data, { params }) => {
-      queryClient.invalidateQueries({ queryKey: ['xBalances', params.srcChainKey] });
-      queryClient.invalidateQueries({ queryKey: ['xBalances', params.dstChainKey] });
+  return useSafeMutation<SwapResponse, Error, UseSwapVars<K>>({
+    mutationKey: ['swap'],
+    ...mutationOptions,
+    mutationFn: async vars => unwrapResult(await sodax.swaps.swap({ ...vars, raw: false })),
+    onSuccess: async (data, vars, ctx) => {
+      queryClient.invalidateQueries({ queryKey: ['shared', 'xBalances', vars.params.srcChainKey] });
+      queryClient.invalidateQueries({ queryKey: ['shared', 'xBalances', vars.params.dstChainKey] });
+      await mutationOptions?.onSuccess?.(data, vars, ctx);
     },
   });
 }

@@ -1,6 +1,9 @@
+// packages/dapp-kit/src/hooks/swap/useCancelLimitOrder.ts
 import { useSodaxContext } from '../shared/useSodaxContext.js';
-import type { GetWalletProviderType, Result, SpokeChainKey, Intent, TxHashPair } from '@sodax/sdk';
-import { useMutation, type UseMutationResult } from '@tanstack/react-query';
+import type { GetWalletProviderType, Intent, SpokeChainKey, TxHashPair } from '@sodax/sdk';
+import type { MutationHookParams } from '../shared/types.js';
+import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
+import { unwrapResult } from '../shared/unwrapResult.js';
 
 type CancelLimitOrderParams<K extends SpokeChainKey = SpokeChainKey> = {
   srcChainKey: K;
@@ -9,13 +12,25 @@ type CancelLimitOrderParams<K extends SpokeChainKey = SpokeChainKey> = {
   timeout?: number;
 };
 
-type CancelLimitOrderResult = Result<TxHashPair>;
-
-export function useCancelLimitOrder(): UseMutationResult<CancelLimitOrderResult, Error, CancelLimitOrderParams> {
+/**
+ * React hook for cancelling a limit-order intent.
+ *
+ * Throws on SDK failure so React Query's native error model engages (`isError`, `error`,
+ * `onError`, `retry`). Returns the unwrapped `TxHashPair` on success.
+ */
+export function useCancelLimitOrder({
+  mutationOptions,
+}: MutationHookParams<TxHashPair, CancelLimitOrderParams> = {}): SafeUseMutationResult<
+  TxHashPair,
+  Error,
+  CancelLimitOrderParams
+> {
   const { sodax } = useSodaxContext();
 
-  return useMutation<CancelLimitOrderResult, Error, CancelLimitOrderParams>({
-    mutationFn: ({ srcChainKey, walletProvider, intent, timeout }) =>
-      sodax.swaps.cancelLimitOrder({ params: { srcChainKey, intent }, walletProvider, timeout }),
+  return useSafeMutation<TxHashPair, Error, CancelLimitOrderParams>({
+    mutationKey: ['swap', 'limitOrder', 'cancel'],
+    ...mutationOptions,
+    mutationFn: async ({ srcChainKey, walletProvider, intent, timeout }) =>
+      unwrapResult(await sodax.swaps.cancelLimitOrder({ params: { srcChainKey, intent }, walletProvider, timeout })),
   });
 }

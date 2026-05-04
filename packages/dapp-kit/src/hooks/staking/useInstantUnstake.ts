@@ -1,37 +1,43 @@
-import type { InstantUnstakeAction, TxHashPair } from '@sodax/sdk';
-import type { Result, SpokeChainKey } from '@sodax/sdk';
-import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
+// packages/dapp-kit/src/hooks/staking/useInstantUnstake.ts
+import type { InstantUnstakeAction, SpokeChainKey, TxHashPair } from '@sodax/sdk';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { MutationHookParams } from '../shared/types.js';
+import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
+import { unwrapResult } from '../shared/unwrapResult.js';
 
 export type UseInstantUnstakeVars<K extends SpokeChainKey = SpokeChainKey> = Omit<
   InstantUnstakeAction<K, false>,
   'raw'
 >;
 
-type InstantUnstakeResult = Result<TxHashPair>;
-
 /**
- * React hook for instant-unstaking SODA (bypassing the waiting period at a slippage cost). Pure
- * mutation: all inputs (params, walletProvider) are passed via `mutate({...})`. Returns the SDK
- * `Result<T>` as-is; callers branch on `data?.ok`.
+ * React hook for instant-unstaking SODA (bypassing the waiting period at a slippage cost).
+ *
+ * Throws on SDK failure so React Query's native error model engages (`isError`, `error`,
+ * `onError`, `retry`). Returns the unwrapped `TxHashPair` on success.
  */
-export function useInstantUnstake<K extends SpokeChainKey = SpokeChainKey>(): UseMutationResult<
-  InstantUnstakeResult,
+export function useInstantUnstake<K extends SpokeChainKey = SpokeChainKey>({
+  mutationOptions,
+}: MutationHookParams<TxHashPair, UseInstantUnstakeVars<K>> = {}): SafeUseMutationResult<
+  TxHashPair,
   Error,
   UseInstantUnstakeVars<K>
 > {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
 
-  return useMutation<InstantUnstakeResult, Error, UseInstantUnstakeVars<K>>({
-    mutationFn: async vars => {
-      return sodax.staking.instantUnstake({ ...vars, raw: false });
-    },
-    onSuccess: (_data, { params }) => {
+  return useSafeMutation<TxHashPair, Error, UseInstantUnstakeVars<K>>({
+    mutationKey: ['staking', 'instantUnstake'],
+    ...mutationOptions,
+    mutationFn: async vars => unwrapResult(await sodax.staking.instantUnstake({ ...vars, raw: false })),
+    onSuccess: async (data, vars, ctx) => {
+      const { params } = vars;
       queryClient.invalidateQueries({ queryKey: ['staking', 'info', params.srcChainKey, params.srcAddress] });
       queryClient.invalidateQueries({ queryKey: ['staking', 'instantUnstakeRatio'] });
       queryClient.invalidateQueries({ queryKey: ['staking', 'allowance', params.srcChainKey, 'instantUnstake'] });
-      queryClient.invalidateQueries({ queryKey: ['xBalances', params.srcChainKey] });
+      queryClient.invalidateQueries({ queryKey: ['shared', 'xBalances', params.srcChainKey] });
+      await mutationOptions?.onSuccess?.(data, vars, ctx);
     },
   });
 }

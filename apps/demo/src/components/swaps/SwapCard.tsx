@@ -13,7 +13,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { calculateExchangeRate } from '@/lib/utils';
+import { calculateExchangeRate, formatMutationFailureMessage } from '@/lib/utils';
 import { parseUnits, formatUnits } from 'viem';
 import { type CreateIntentParams, getSupportedSolverTokens, type SolverIntentQuoteRequest } from '@sodax/sdk';
 import type { GetWalletProviderType, SubmitSwapTxRequest, SwapIntentData } from '@sodax/sdk';
@@ -86,7 +86,7 @@ export default function SwapCard({
       walletProvider: sourceWalletProvider,
     },
   });
-  const { approve, isLoading: isApproving } = useSwapApprove(intentOrderPayload, src.chain, sourceWalletProvider);
+  const { mutateAsyncSafe: approve, isPending: isApproving } = useSwapApprove();
   const supportedSpokeChains = sodax.config.getSupportedSpokeChains();
   const {
     data: hasSufficientTrustline,
@@ -108,11 +108,10 @@ export default function SwapCard({
   }
   const { requestTrustline } = useRequestTrustline(dst.token?.address);
   const [open, setOpen] = useState(false);
+  const [approveError, setApproveError] = useState<string | null>(null);
   const [slippage, setSlippage] = useState<string>('0.5');
   const [useSubmitTxApi, setUseSubmitTxApi] = useState(false);
-  const { mutateAsync: submitSwapTx, isPending: isSubmitting } = useBackendSubmitSwapTx({
-    apiConfig: SUBMIT_TX_API_CONFIG,
-  });
+  const { mutateAsyncSafe: submitSwapTx, isPending: isSubmitting } = useBackendSubmitSwapTx();
   const [isBitcoinReady, setIsBitcoinReady] = useState(false);
   const [isDestBitcoinReady, setIsDestBitcoinReady] = useState(false);
 
@@ -342,8 +341,12 @@ export default function SwapCard({
       relayData: relayData.payload,
     };
 
-    const submitResult = await submitSwapTx(request);
-    console.log('Submit swap tx result:', submitResult);
+    const submitResult = await submitSwapTx({ request, apiConfig: SUBMIT_TX_API_CONFIG });
+    if (!submitResult.ok) {
+      console.error('Submit swap tx failed:', submitResult.error);
+      return;
+    }
+    console.log('Submit swap tx result:', submitResult.value);
 
     setOrders(prev => [
       ...prev,
@@ -366,14 +369,12 @@ export default function SwapCard({
     console.log('intentOrderPayload', intentOrderPayload);
     console.log('wallet provider', sourceWalletProvider);
     if (!sourceWalletProvider) return;
-    const result = await swap({ params: intentOrderPayload, walletProvider: sourceWalletProvider });
-
-    if (result.ok) {
-      const { solverExecutionResponse: response, intent, intentDeliveryInfo } = result.value;
-
+    try {
+      const swapResponse = await swap({ params: intentOrderPayload, walletProvider: sourceWalletProvider });
+      const { solverExecutionResponse: response, intent, intentDeliveryInfo } = swapResponse;
       setOrders(prev => [...prev, { mode: 'solver', intentHash: response.intent_hash, intent, intentDeliveryInfo }]);
-    } else {
-      console.error('Error creating and submitting intent:', result.error);
+    } catch (error) {
+      console.error('Error creating and submitting intent:', error);
     }
   };
 
@@ -386,13 +387,18 @@ export default function SwapCard({
     disconnect(getXChainType(dst.chain) as ChainType);
   };
 
-  const handleApprove = async () => {
-    if (!intentOrderPayload) {
-      console.error('intentOrderPayload undefined');
+  const handleApprove = async (): Promise<void> => {
+    if (!intentOrderPayload || !sourceWalletProvider) {
+      console.error('intentOrderPayload or sourceWalletProvider undefined');
       return;
     }
 
-    await approve({ params: intentOrderPayload });
+    const result = await approve({ params: intentOrderPayload, walletProvider: sourceWalletProvider });
+    if (!result.ok) {
+      setApproveError(formatMutationFailureMessage(result.error, 'Approve failed'));
+      return;
+    }
+    setApproveError(null);
   };
 
   const handleRequestTrustline = async (intentOrderPayload: CreateIntentParams | undefined) => {
@@ -629,7 +635,13 @@ export default function SwapCard({
           />
         </div>
 
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog
+          open={open}
+          onOpenChange={(nextOpen): void => {
+            setOpen(nextOpen);
+            if (nextOpen) setApproveError(null);
+          }}
+        >
           <DialogTrigger asChild>
             <Button variant="outline" onClick={() => createIntentOrderPayload()}>
               Swap
@@ -662,6 +674,7 @@ export default function SwapCard({
                 {dst.chain === ChainKeys.STELLAR_MAINNET && !isTrustlineLoading && !hasSufficientTrustline && (
                   <div className="text-red-500">Insufficient Stellar trustline (request trustline to proceed)</div>
                 )}
+                {approveError ? <div className="text-red-500 text-sm">{approveError}</div> : null}
               </div>
             </div>
             <DialogFooter>

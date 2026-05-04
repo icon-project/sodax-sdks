@@ -1,7 +1,10 @@
-import type { AssetWithdrawAction, TxHashPair } from '@sodax/sdk';
-import type { Result, SpokeChainKey } from '@sodax/sdk';
-import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
+// packages/dapp-kit/src/hooks/dex/useDexWithdraw.ts
+import type { AssetWithdrawAction, SpokeChainKey, TxHashPair } from '@sodax/sdk';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { MutationHookParams } from '../shared/types.js';
+import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
+import { unwrapResult } from '../shared/unwrapResult.js';
 
 /**
  * Mutation variables for {@link useDexWithdraw}. Generic over `K extends SpokeChainKey` (defaults
@@ -10,28 +13,31 @@ import { useSodaxContext } from '../shared/useSodaxContext.js';
  */
 export type UseDexWithdrawVars<K extends SpokeChainKey = SpokeChainKey> = Omit<AssetWithdrawAction<K, false>, 'raw'>;
 
-type DexWithdrawResult = Result<TxHashPair>;
-
 /**
- * React hook for withdrawing an asset from a DEX pool. Pure mutation: all inputs (params,
- * walletProvider) are passed to `mutate({...})`. Returns the SDK `Result<T>` as-is; callers branch
- * on `data?.ok`.
+ * React hook for withdrawing an asset from a DEX pool.
+ *
+ * Throws on SDK failure so React Query's native error model engages (`isError`, `error`,
+ * `onError`, `retry`). Returns the unwrapped `TxHashPair` on success.
  */
-export function useDexWithdraw<K extends SpokeChainKey = SpokeChainKey>(): UseMutationResult<
-  DexWithdrawResult,
+export function useDexWithdraw<K extends SpokeChainKey = SpokeChainKey>({
+  mutationOptions,
+}: MutationHookParams<TxHashPair, UseDexWithdrawVars<K>> = {}): SafeUseMutationResult<
+  TxHashPair,
   Error,
   UseDexWithdrawVars<K>
 > {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
 
-  return useMutation<DexWithdrawResult, Error, UseDexWithdrawVars<K>>({
-    mutationFn: async vars => {
-      return sodax.dex.assetService.withdraw({ ...vars, raw: false });
-    },
-    onSuccess: (_data, { params }) => {
+  return useSafeMutation<TxHashPair, Error, UseDexWithdrawVars<K>>({
+    mutationKey: ['dex', 'withdraw'],
+    ...mutationOptions,
+    mutationFn: async vars => unwrapResult(await sodax.dex.assetService.withdraw({ ...vars, raw: false })),
+    onSuccess: async (data, vars, ctx) => {
+      const { params } = vars;
       queryClient.invalidateQueries({ queryKey: ['dex', 'poolBalances', params.srcChainKey, params.srcAddress] });
-      queryClient.invalidateQueries({ queryKey: ['xBalances', params.srcChainKey] });
+      queryClient.invalidateQueries({ queryKey: ['shared', 'xBalances', params.srcChainKey] });
+      await mutationOptions?.onSuccess?.(data, vars, ctx);
     },
   });
 }

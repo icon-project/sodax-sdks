@@ -148,17 +148,12 @@ export function SimplePoolManager(): JSX.Element {
         isValidPosition,
       });
 
-      const result = await supplyLiquidityMutation.mutateAsync({
+      const txHashPair = await supplyLiquidityMutation.mutateAsync({
         params: { ...supplyParamsCore, srcChainKey: selectedChainId, srcAddress },
         walletProvider,
       });
 
-      if (!result.ok) {
-        setError(`Supply liquidity failed: ${result.error instanceof Error ? result.error.message : 'Unknown error'}`);
-        return;
-      }
-
-      const { dstChainTxHash } = result.value;
+      const { dstChainTxHash } = txHashPair;
       const mintPositionEventResult = await sodax.dex.clService.getMintPositionEvent(dstChainTxHash as Hash);
       if (!mintPositionEventResult.ok) {
         setError(`Failed to get position event: ${mintPositionEventResult.error instanceof Error ? mintPositionEventResult.error.message : 'Unknown error'}`);
@@ -214,17 +209,10 @@ export function SimplePoolManager(): JSX.Element {
         slippageTolerance,
       });
 
-      const result = await decreaseLiquidityMutation.mutateAsync({
+      await decreaseLiquidityMutation.mutateAsync({
         params: { ...decreaseParamsCore, srcChainKey: selectedChainId, srcAddress },
         walletProvider,
       });
-
-      if (!result.ok) {
-        setError(
-          `Decrease liquidity failed: ${result.error instanceof Error ? result.error.message : 'Unknown error'}`,
-        );
-        return;
-      }
 
       setLiquidityToken0Amount('');
       setLiquidityToken1Amount('');

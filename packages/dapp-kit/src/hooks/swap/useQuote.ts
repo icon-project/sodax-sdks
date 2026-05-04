@@ -29,7 +29,7 @@ export const useQuote = ({
   const payload = params?.payload;
 
   return useQuery({
-    queryKey: ['quote', payload && { ...payload, amount: payload.amount.toString() }],
+    queryKey: ['swap', 'quote', payload && { ...payload, amount: payload.amount.toString() }],
     queryFn: async () => {
       if (!payload) {
         return undefined;

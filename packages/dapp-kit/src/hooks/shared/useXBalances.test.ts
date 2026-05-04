@@ -32,6 +32,7 @@ describe('getXBalancesQueryOptions', () => {
     });
 
     expect(opts.queryKey).toEqual([
+      'shared',
       'xBalances',
       'sonic',
       [

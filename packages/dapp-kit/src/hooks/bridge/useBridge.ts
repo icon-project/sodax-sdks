@@ -1,8 +1,10 @@
+// packages/dapp-kit/src/hooks/bridge/useBridge.ts
 import { useSodaxContext } from '../shared/useSodaxContext.js';
-import type { BridgeParams, TxHashPair, Result, SpokeChainKey } from '@sodax/sdk';
-import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
-
-type BridgeResult = Result<TxHashPair>;
+import type { BridgeParams, SpokeChainKey, TxHashPair } from '@sodax/sdk';
+import { useQueryClient } from '@tanstack/react-query';
+import type { MutationHookParams } from '../shared/types.js';
+import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
+import { unwrapResult } from '../shared/unwrapResult.js';
 
 /**
  * Mutation variables for {@link useBridge}. Generic over `K extends SpokeChainKey` (defaults to
@@ -12,25 +14,25 @@ type BridgeResult = Result<TxHashPair>;
 export type UseBridgeVars<K extends SpokeChainKey = SpokeChainKey> = Omit<BridgeParams<K, false>, 'raw'>;
 
 /**
- * React hook for executing a cross-chain bridge transfer. Pure mutation: all inputs (params,
- * walletProvider) are passed to `mutate({...})`. The hook itself takes no arguments. Returns the
- * SDK `Result<T>` as-is; callers branch on `data?.ok`.
+ * React hook for executing a cross-chain bridge transfer.
+ *
+ * Throws on SDK failure so React Query's native error model engages (`isError`, `error`,
+ * `onError`, `retry`). Returns the unwrapped `TxHashPair` on success.
  */
-export function useBridge<K extends SpokeChainKey = SpokeChainKey>(): UseMutationResult<
-  BridgeResult,
-  Error,
-  UseBridgeVars<K>
-> {
+export function useBridge<K extends SpokeChainKey = SpokeChainKey>({
+  mutationOptions,
+}: MutationHookParams<TxHashPair, UseBridgeVars<K>> = {}): SafeUseMutationResult<TxHashPair, Error, UseBridgeVars<K>> {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
 
-  return useMutation<BridgeResult, Error, UseBridgeVars<K>>({
-    mutationFn: async (vars) => {
-      return sodax.bridge.bridge({ ...vars, raw: false });
-    },
-    onSuccess: (_data, { params }) => {
-      queryClient.invalidateQueries({ queryKey: ['xBalances', params.srcChainKey] });
-      queryClient.invalidateQueries({ queryKey: ['xBalances', params.dstChainKey] });
+  return useSafeMutation<TxHashPair, Error, UseBridgeVars<K>>({
+    mutationKey: ['bridge'],
+    ...mutationOptions,
+    mutationFn: async vars => unwrapResult(await sodax.bridge.bridge({ ...vars, raw: false })),
+    onSuccess: async (data, vars, ctx) => {
+      queryClient.invalidateQueries({ queryKey: ['shared', 'xBalances', vars.params.srcChainKey] });
+      queryClient.invalidateQueries({ queryKey: ['shared', 'xBalances', vars.params.dstChainKey] });
+      await mutationOptions?.onSuccess?.(data, vars, ctx);
     },
   });
 }

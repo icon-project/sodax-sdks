@@ -92,7 +92,7 @@ function PositionListItem({
   const handleClaimRewards = async (): Promise<void> => {
     setError('');
     try {
-      const result = await claimRewardsMutation.mutateAsync({
+      await claimRewardsMutation.mutateAsync({
         params: {
           srcChainKey: chainKey,
           srcAddress,
@@ -103,9 +103,6 @@ function PositionListItem({
         },
         walletProvider,
       });
-      if (!result.ok) {
-        setError(`Claim failed: ${result.error instanceof Error ? result.error.message : 'Unknown error'}`);
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Claim failed');
     }
@@ -165,17 +162,10 @@ function PositionListItem({
       });
 
       // NOTE: when removing 100% of liquidity unclaimed fees are supposedly included (double check)
-      const result = await decreaseLiquidityMutation.mutateAsync({
+      await decreaseLiquidityMutation.mutateAsync({
         params: { ...decreaseCore, srcChainKey: chainKey, srcAddress },
         walletProvider,
       });
-
-      if (!result.ok) {
-        setError(
-          `Decrease liquidity failed: ${result.error instanceof Error ? result.error.message : 'Unknown error'}`,
-        );
-        return;
-      }
 
       // Clear percentage to remove
       setPercentageToRemove(0);

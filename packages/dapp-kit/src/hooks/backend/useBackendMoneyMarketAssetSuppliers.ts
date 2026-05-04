@@ -30,7 +30,7 @@ export const useBackendMoneyMarketAssetSuppliers = ({
   const pagination = params?.pagination;
 
   return useQuery({
-    queryKey: ['api', 'mm', 'asset', 'suppliers', reserveAddress, pagination],
+    queryKey: ['backend', 'mm', 'asset', 'suppliers', reserveAddress, pagination],
     queryFn: async (): Promise<MoneyMarketAssetSuppliers | undefined> => {
       if (!reserveAddress || !pagination?.offset || !pagination?.limit) {
         return undefined;

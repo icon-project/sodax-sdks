@@ -73,9 +73,13 @@ function DepositToPool() {
   const { mutateAsync: deposit, isPending: isDepositing } = useDexDeposit({ spokeProvider });
 
   const handleDeposit = async () => {
-    if (!isApproved) await approve({ params: depositParams });
-    const result = await deposit({ params: depositParams });
-    if (result.ok) console.log('Deposited:', result.value);
+    try {
+      if (!isApproved) await approve({ params: depositParams });
+      const txHashPair = await deposit({ params: depositParams });
+      console.log('Deposited:', txHashPair);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   return (
@@ -101,8 +105,12 @@ function SupplyLiquidity() {
 
   return (
     <button disabled={isPending || !supplyParams} onClick={async () => {
-      const result = await supplyLiquidity({ params: supplyParams! });
-      if (result.ok) console.log('Supplied:', result.value);
+      try {
+        const txHashPair = await supplyLiquidity({ params: supplyParams! });
+        console.log('Supplied:', txHashPair);
+      } catch (e) {
+        console.error(e);
+      }
     }}>
       {isPending ? 'Supplying...' : 'Supply Liquidity'}
     </button>

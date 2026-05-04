@@ -1,6 +1,8 @@
+// packages/dapp-kit/src/hooks/bitcoin/useRadfiAuth.ts
 import type { IBitcoinWalletProvider } from '@sodax/sdk';
-import { useMutation, type UseMutationResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { MutationHookParams } from '../shared/types.js';
+import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
 
 export type RadfiSession = {
   accessToken: string;
@@ -9,13 +11,17 @@ export type RadfiSession = {
   publicKey: string;
 };
 
+export type UseRadfiAuthVars = {
+  walletProvider: IBitcoinWalletProvider;
+};
+
 type RadfiAuthResult = {
   accessToken: string;
   refreshToken: string;
   tradingAddress: string;
 };
 
-const SESSION_KEY = (address: string) => `radfi_session_${address}`;
+const SESSION_KEY = (address: string): string => `radfi_session_${address}`;
 
 export function saveRadfiSession(address: string, session: RadfiSession): void {
   try {
@@ -38,15 +44,23 @@ export function clearRadfiSession(address: string): void {
   } catch {}
 }
 
-export function useRadfiAuth(
-  walletProvider: IBitcoinWalletProvider | undefined,
-): UseMutationResult<RadfiAuthResult, Error, void> {
+/**
+ * React hook for authenticating with Radfi via BIP322-signed message. Pure mutation: pass
+ * `{ walletProvider }` to `mutate({...})`. The hook itself takes no arguments other than the
+ * structural `mutationOptions` slot.
+ */
+export function useRadfiAuth({
+  mutationOptions,
+}: MutationHookParams<RadfiAuthResult, UseRadfiAuthVars> = {}): SafeUseMutationResult<
+  RadfiAuthResult,
+  Error,
+  UseRadfiAuthVars
+> {
   const { sodax } = useSodaxContext();
-  return useMutation<RadfiAuthResult, Error, void>({
-    mutationFn: async () => {
-      if (!walletProvider) {
-        throw new Error('Bitcoin wallet provider not found');
-      }
+  return useSafeMutation<RadfiAuthResult, Error, UseRadfiAuthVars>({
+    mutationKey: ['bitcoin', 'radfiAuth'],
+    ...mutationOptions,
+    mutationFn: async ({ walletProvider }) => {
       const radfi = sodax.spokeService.bitcoinSpokeService.radfi;
       const walletAddress = await walletProvider.getWalletAddress();
       const existingSession = loadRadfiSession(walletAddress);

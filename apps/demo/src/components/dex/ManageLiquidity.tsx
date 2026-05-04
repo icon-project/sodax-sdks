@@ -155,12 +155,13 @@ export function ManageLiquidity({
       setError('Please enter a valid amount');
       return;
     }
-    const result = await approve({
-      params: { ...coreParams, srcChainKey: selectedChainId, srcAddress },
-      walletProvider,
-    });
-    if (!result.ok) {
-      setError(`Approve failed: ${result.error instanceof Error ? result.error.message : 'Unknown error'}`);
+    try {
+      await approve({
+        params: { ...coreParams, srcChainKey: selectedChainId, srcAddress },
+        walletProvider,
+      });
+    } catch (err) {
+      setError(`Approve failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
@@ -180,15 +181,10 @@ export function ManageLiquidity({
     setError('');
 
     try {
-      const result = await depositMutation.mutateAsync({
+      await depositMutation.mutateAsync({
         params: { ...coreParams, srcChainKey: selectedChainId, srcAddress },
         walletProvider,
       });
-
-      if (!result.ok) {
-        setError(`Deposit failed: ${result.error instanceof Error ? result.error.message : 'Unknown error'}`);
-        return;
-      }
 
       // Clear form
       if (tokenIndex === 0) {
@@ -226,15 +222,10 @@ export function ManageLiquidity({
         poolSpokeAssets,
       });
 
-      const result = await withdrawMutation.mutateAsync({
+      await withdrawMutation.mutateAsync({
         params: { ...withdrawCore, srcChainKey: selectedChainId, srcAddress },
         walletProvider,
       });
-
-      if (!result.ok) {
-        setError(`Withdraw failed: ${result.error instanceof Error ? result.error.message : 'Unknown error'}`);
-        return;
-      }
 
       // Clear form
       if (tokenIndex === 0) {

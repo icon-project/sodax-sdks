@@ -1,7 +1,10 @@
-import type { ClLiquidityClaimRewardsAction, TxHashPair } from '@sodax/sdk';
-import type { Result, SpokeChainKey } from '@sodax/sdk';
-import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
+// packages/dapp-kit/src/hooks/dex/useClaimRewards.ts
+import type { ClLiquidityClaimRewardsAction, SpokeChainKey, TxHashPair } from '@sodax/sdk';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { MutationHookParams } from '../shared/types.js';
+import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
+import { unwrapResult } from '../shared/unwrapResult.js';
 
 /**
  * Mutation variables for {@link useClaimRewards}. Generic over `K extends SpokeChainKey` (defaults
@@ -13,28 +16,34 @@ export type UseClaimRewardsVars<K extends SpokeChainKey = SpokeChainKey> = Omit<
   'raw'
 >;
 
-type ClaimRewardsResult = Result<TxHashPair>;
-
 /**
- * React hook for claiming accrued fees on a concentrated-liquidity position. Pure mutation: all
- * inputs (params, walletProvider) are passed to `mutate({...})`. Returns the SDK `Result<T>`
- * as-is; callers branch on `data?.ok`.
+ * React hook for claiming accrued fees on a concentrated-liquidity position.
+ *
+ * Throws on SDK failure so React Query's native error model engages (`isError`, `error`,
+ * `onError`, `retry`). Returns the unwrapped `TxHashPair` on success.
  */
-export function useClaimRewards<K extends SpokeChainKey = SpokeChainKey>(): UseMutationResult<
-  ClaimRewardsResult,
+export function useClaimRewards<K extends SpokeChainKey = SpokeChainKey>({
+  mutationOptions,
+}: MutationHookParams<TxHashPair, UseClaimRewardsVars<K>> = {}): SafeUseMutationResult<
+  TxHashPair,
   Error,
   UseClaimRewardsVars<K>
 > {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
 
-  return useMutation<ClaimRewardsResult, Error, UseClaimRewardsVars<K>>({
-    mutationFn: async vars => {
-      return sodax.dex.clService.claimRewards({ ...vars, raw: false });
-    },
-    onSuccess: (_data, { params }) => {
-      queryClient.invalidateQueries({ queryKey: ['dex', 'positionInfo', params.tokenId, params.poolKey] });
+  return useSafeMutation<TxHashPair, Error, UseClaimRewardsVars<K>>({
+    mutationKey: ['dex', 'claimRewards'],
+    ...mutationOptions,
+    mutationFn: async vars => unwrapResult(await sodax.dex.clService.claimRewards({ ...vars, raw: false })),
+    onSuccess: async (data, vars, ctx) => {
+      const { params } = vars;
+      // `usePositionInfo` keys by string tokenId — stringify the bigint to keep the structural match.
+      queryClient.invalidateQueries({
+        queryKey: ['dex', 'positionInfo', params.tokenId.toString(), params.poolKey],
+      });
       queryClient.invalidateQueries({ queryKey: ['dex', 'poolBalances', params.srcChainKey, params.srcAddress] });
+      await mutationOptions?.onSuccess?.(data, vars, ctx);
     },
   });
 }

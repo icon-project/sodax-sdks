@@ -31,15 +31,19 @@ function IcxMigration() {
   const { mutateAsync: migrate, isPending } = useMigrate({ spokeProvider });
 
   const handleMigrate = async () => {
-    const result = await migrate({
-      params: {
-        address: 'cx88fd7df7ddff82f7cc735c871dc519838cb235bb', // wICX on ICON
-        amount: 1000000000000000000n,
-        to: '0x...', // recipient on Sonic
-      },
-      type: 'migrate',
-    });
-    if (result.ok) console.log('Migrated:', result.value);
+    try {
+      const txHashPair = await migrate({
+        params: {
+          address: 'cx88fd7df7ddff82f7cc735c871dc519838cb235bb', // wICX on ICON
+          amount: 1000000000000000000n,
+          to: '0x...', // recipient on Sonic
+        },
+        type: 'migrate',
+      });
+      console.log('Migrated:', txHashPair);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   return <button onClick={handleMigrate} disabled={isPending}>{isPending ? 'Migrating...' : 'Migrate ICX to SODA'}</button>;
@@ -66,9 +70,13 @@ function RevertMigration() {
   const { mutateAsync: migrate, isPending: isMigrating } = useMigrate({ spokeProvider });
 
   const handleRevert = async () => {
-    if (!isApproved) await approve({ params: { amount: 1000000000000000000n, to: 'hx...' }, type: 'revert' });
-    const result = await migrate({ params: { amount: 1000000000000000000n, to: 'hx...' }, type: 'revert' });
-    if (result.ok) console.log('Reverted:', result.value);
+    try {
+      if (!isApproved) await approve({ params: { amount: 1000000000000000000n, to: 'hx...' }, type: 'revert' });
+      const txHashPair = await migrate({ params: { amount: 1000000000000000000n, to: 'hx...' }, type: 'revert' });
+      console.log('Reverted:', txHashPair);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   return <button onClick={handleRevert} disabled={isMigrating || isApproving}>{isApproving ? 'Approving...' : isMigrating ? 'Reverting...' : 'Revert to wICX'}</button>;

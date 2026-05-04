@@ -21,7 +21,7 @@ export function useDeriveUserWalletAddress({
   const spokeAddress = params?.spokeAddress;
 
   return useQuery<Address, Error>({
-    queryKey: ['deriveUserWalletAddress', spokeChainId, spokeAddress],
+    queryKey: ['shared', 'deriveUserWalletAddress', spokeChainId, spokeAddress],
     queryFn: async (): Promise<Address> => {
       if (!spokeChainId || !spokeAddress) {
         throw new Error('Spoke chain id and address are required');

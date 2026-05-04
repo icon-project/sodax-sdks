@@ -1,51 +1,59 @@
+// packages/dapp-kit/src/hooks/swap/useSwapApprove.ts
 import { useSodaxContext } from '../shared/useSodaxContext.js';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { CreateIntentParams, CreateLimitOrderParams } from '@sodax/sdk';
-import type { GetWalletProviderType, SpokeChainKey } from '@sodax/sdk';
+import { useQueryClient } from '@tanstack/react-query';
+import type {
+  CreateIntentParams,
+  CreateLimitOrderParams,
+  GetWalletProviderType,
+  SpokeChainKey,
+  TxReturnType,
+} from '@sodax/sdk';
+import type { MutationHookParams } from '../shared/types.js';
+import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
+import { unwrapResult } from '../shared/unwrapResult.js';
 
-interface UseApproveReturn {
-  approve: ({ params }: { params: CreateIntentParams | CreateLimitOrderParams }) => Promise<boolean>;
-  isLoading: boolean;
-  error: Error | null;
-  resetError: () => void;
-}
+/**
+ * Mutation variables for {@link useSwapApprove}. Generic over `K extends SpokeChainKey` (defaults
+ * to the full union). Sophisticated callers can lock K at the call site to narrow the
+ * `walletProvider` and `params.srcChainKey` types.
+ */
+export type UseSwapApproveVars<K extends SpokeChainKey = SpokeChainKey> = {
+  params: CreateIntentParams<K> | CreateLimitOrderParams<K>;
+  walletProvider: GetWalletProviderType<K>;
+};
 
-export function useSwapApprove<K extends SpokeChainKey>(
-  params: CreateIntentParams | CreateLimitOrderParams | undefined,
-  srcChainKey: K | undefined,
-  walletProvider: GetWalletProviderType<K> | undefined,
-): UseApproveReturn {
+/**
+ * React hook for approving ERC-20 token spending (or trustline establishment) for a swap or
+ * limit-order intent.
+ *
+ * Throws on SDK failure so React Query's native error model engages (`isError`, `error`,
+ * `onError`, `retry`). Returns the unwrapped tx return value on success. Invalidates all
+ * `['swap', 'allowance', ...]` queries so any pending allowance check refreshes.
+ */
+export function useSwapApprove<K extends SpokeChainKey = SpokeChainKey>({
+  mutationOptions,
+}: MutationHookParams<TxReturnType<K, false>, UseSwapApproveVars<K>> = {}): SafeUseMutationResult<
+  TxReturnType<K, false>,
+  Error,
+  UseSwapApproveVars<K>
+> {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
 
-  const {
-    mutateAsync: approve,
-    isPending,
-    error,
-    reset: resetError,
-  } = useMutation({
-    mutationFn: async ({ params }: { params: CreateIntentParams | CreateLimitOrderParams | undefined }) => {
-      if (!srcChainKey || !walletProvider) {
-        throw new Error('Source chain key and wallet provider are required');
-      }
-      if (!params) {
-        throw new Error('Swap Params not found');
-      }
-
-      const allowance = await sodax.swaps.approve({
-        params: params as CreateIntentParams,
-        raw: false,
-        walletProvider,
-      });
-      if (!allowance.ok) {
-        throw new Error('Failed to approve input token');
-      }
-      return allowance.ok;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['allowance', params] });
+  return useSafeMutation<TxReturnType<K, false>, Error, UseSwapApproveVars<K>>({
+    mutationKey: ['swap', 'approve'],
+    ...mutationOptions,
+    mutationFn: async ({ params, walletProvider }) =>
+      unwrapResult(
+        await sodax.swaps.approve<K, false>({
+          params: params as CreateIntentParams<K>,
+          raw: false,
+          walletProvider,
+        }),
+      ),
+    onSuccess: async (data, vars, ctx) => {
+      queryClient.invalidateQueries({ queryKey: ['swap', 'allowance'] });
+      await mutationOptions?.onSuccess?.(data, vars, ctx);
     },
   });
-
-  return { approve, isLoading: isPending, error, resetError };
 }

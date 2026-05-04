@@ -25,7 +25,7 @@ export const useBackendMoneyMarketPosition = ({
   const userAddress = params?.userAddress;
 
   return useQuery({
-    queryKey: ['api', 'mm', 'position', userAddress],
+    queryKey: ['backend', 'mm', 'position', userAddress],
     queryFn: async (): Promise<MoneyMarketPosition | undefined> => {
       if (!userAddress) return undefined;
       return unwrapResult(await sodax.backendApi.getMoneyMarketPosition(userAddress));

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -20,6 +20,7 @@ import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet
 import { ChainKeys, type ChainType, type SpokeChainKey, type XToken, type GetWalletProviderType, type IBitcoinWalletProvider, type IStellarWalletProvider } from '@sodax/sdk';
 import type { CreateBridgeIntentParams } from '@sodax/sdk';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
+import { formatMutationFailureMessage } from '@/lib/utils';
 import { ArrowLeftRight } from 'lucide-react';
 import { formatUnits } from 'viem';
 
@@ -50,6 +51,14 @@ export function BridgeDialog({
 }: BridgeDialogProps) {
   const [isFromBtcReady, setIsFromBtcReady] = useState(false);
   const [isToBtcReady, setIsToBtcReady] = useState(false);
+  const [approveError, setApproveError] = useState<string | null>(null);
+  const [bridgeError, setBridgeError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setApproveError(null);
+    setBridgeError(null);
+  }, [open]);
 
   const toAccount = useXAccount(toChainKey);
 
@@ -60,8 +69,8 @@ export function BridgeDialog({
     },
   });
 
-  const { mutateAsync: approve, isPending: isApproving } = useBridgeApprove();
-  const { mutateAsync: bridge, isPending: isBridging } = useBridge();
+  const { mutateAsyncSafe: approve, isPending: isApproving } = useBridgeApprove();
+  const { mutateAsyncSafe: bridge, isPending: isBridging } = useBridge();
 
   const { isWrongChain, handleSwitchChain } = useEvmSwitchChain(order.srcChainKey);
 
@@ -87,21 +96,23 @@ export function BridgeDialog({
   const toBtcAddress = toChainKey === ChainKeys.BITCOIN_MAINNET ? toAccount.address : undefined;
   const { data: toBtcBalance } = useBitcoinBalance({ params: { address: toBtcAddress } });
 
-  const handleApprove = async () => {
-    await approve({
-      params: order,
-      walletProvider: walletProvider as GetWalletProviderType<typeof order.srcChainKey>,
-    });
+  const handleApprove = async (): Promise<void> => {
+    const result = await approve({ params: order, walletProvider });
+    if (!result.ok) {
+      setApproveError(formatMutationFailureMessage(result.error, 'Approve failed'));
+      return;
+    }
+    setApproveError(null);
   };
 
-  const handleBridge = async () => {
-    const result = await bridge({
-      params: order,
-      walletProvider: walletProvider as GetWalletProviderType<typeof order.srcChainKey>,
-    });
-    if (result.ok) {
-      onClose();
+  const handleBridge = async (): Promise<void> => {
+    const result = await bridge({ params: order, walletProvider });
+    if (!result.ok) {
+      setBridgeError(formatMutationFailureMessage(result.error, 'Bridge failed'));
+      return;
     }
+    setBridgeError(null);
+    onClose();
   };
 
   const handleRequestTrustline = async () => {
@@ -165,6 +176,13 @@ export function BridgeDialog({
             connectorIcon={toBtcConnector?.icon}
             isDestination
           />
+        )}
+
+        {(approveError ?? bridgeError) && (
+          <div className="text-red-500 text-sm space-y-1">
+            {approveError ? <div>{approveError}</div> : null}
+            {bridgeError ? <div>{bridgeError}</div> : null}
+          </div>
         )}
 
         <DialogFooter className="flex flex-col gap-2 sm:flex-col">

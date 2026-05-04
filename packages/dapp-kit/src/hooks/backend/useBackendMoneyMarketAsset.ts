@@ -25,7 +25,7 @@ export const useBackendMoneyMarketAsset = ({
   const reserveAddress = params?.reserveAddress;
 
   return useQuery({
-    queryKey: ['api', 'mm', 'asset', reserveAddress],
+    queryKey: ['backend', 'mm', 'asset', reserveAddress],
     queryFn: async (): Promise<MoneyMarketAsset | undefined> => {
       if (!reserveAddress) return undefined;
       return unwrapResult(await sodax.backendApi.getMoneyMarketAsset(reserveAddress));

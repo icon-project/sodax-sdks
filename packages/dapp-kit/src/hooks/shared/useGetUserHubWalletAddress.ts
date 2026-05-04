@@ -39,7 +39,7 @@ export function useGetUserHubWalletAddress({
   const spokeAddress = params?.spokeAddress;
 
   return useQuery<Address, Error>({
-    queryKey: ['getUserHubWalletAddress', spokeChainId, spokeAddress],
+    queryKey: ['shared', 'userHubWalletAddress', spokeChainId, spokeAddress],
     queryFn: async (): Promise<Address> => {
       if (!spokeChainId || !spokeAddress) {
         throw new Error('Spoke chain id and address are required');

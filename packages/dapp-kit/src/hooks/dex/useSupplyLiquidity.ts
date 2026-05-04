@@ -1,8 +1,17 @@
-import type { ClIncreaseLiquidityParams, ClSupplyParams, TxHashPair } from '@sodax/sdk';
-import type { GetWalletProviderType, Result, SpokeChainKey } from '@sodax/sdk';
-import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
+// packages/dapp-kit/src/hooks/dex/useSupplyLiquidity.ts
+import type {
+  ClIncreaseLiquidityParams,
+  ClSupplyParams,
+  GetWalletProviderType,
+  SpokeChainKey,
+  TxHashPair,
+} from '@sodax/sdk';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import type { UseCreateSupplyLiquidityParamsResult } from './useCreateSupplyLiquidityParams.js';
+import type { MutationHookParams } from '../shared/types.js';
+import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
+import { unwrapResult } from '../shared/unwrapResult.js';
 
 /**
  * Mutation variables for {@link useSupplyLiquidity}. Generic over `K extends SpokeChainKey`
@@ -17,23 +26,27 @@ export type UseSupplyLiquidityVars<K extends SpokeChainKey = SpokeChainKey> = {
   timeout?: number;
 };
 
-type SupplyLiquidityResult = Result<TxHashPair>;
-
 /**
  * React hook for supplying liquidity to a concentrated-liquidity pool. If the input vars include a
  * valid `tokenId` for an existing position, the hook calls `increaseLiquidity`; otherwise it mints
- * a new position via `supplyLiquidity`. Pure mutation: returns the SDK `Result<T>` as-is; callers
- * branch on `data?.ok`.
+ * a new position via `supplyLiquidity`.
+ *
+ * Throws on SDK failure so React Query's native error model engages (`isError`, `error`,
+ * `onError`, `retry`). Returns the unwrapped `TxHashPair` on success.
  */
-export function useSupplyLiquidity<K extends SpokeChainKey = SpokeChainKey>(): UseMutationResult<
-  SupplyLiquidityResult,
+export function useSupplyLiquidity<K extends SpokeChainKey = SpokeChainKey>({
+  mutationOptions,
+}: MutationHookParams<TxHashPair, UseSupplyLiquidityVars<K>> = {}): SafeUseMutationResult<
+  TxHashPair,
   Error,
   UseSupplyLiquidityVars<K>
 > {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
 
-  return useMutation<SupplyLiquidityResult, Error, UseSupplyLiquidityVars<K>>({
+  return useSafeMutation<TxHashPair, Error, UseSupplyLiquidityVars<K>>({
+    mutationKey: ['dex', 'supplyLiquidity'],
+    ...mutationOptions,
     mutationFn: async ({ params, walletProvider, timeout }) => {
       const sharedParams = {
         srcChainKey: params.srcChainKey,
@@ -52,16 +65,32 @@ export function useSupplyLiquidity<K extends SpokeChainKey = SpokeChainKey>(): U
           ...sharedParams,
           tokenId: typeof params.tokenId === 'bigint' ? params.tokenId : BigInt(params.tokenId),
         };
-        return sodax.dex.clService.increaseLiquidity({ params: increaseParams, raw: false, walletProvider, timeout });
+        return unwrapResult(
+          await sodax.dex.clService.increaseLiquidity({ params: increaseParams, raw: false, walletProvider, timeout }),
+        );
       }
 
-      return sodax.dex.clService.supplyLiquidity({ params: sharedParams, raw: false, walletProvider, timeout });
+      return unwrapResult(
+        await sodax.dex.clService.supplyLiquidity({ params: sharedParams, raw: false, walletProvider, timeout }),
+      );
     },
-    onSuccess: (_data, { params }) => {
-      queryClient.invalidateQueries({ queryKey: ['dex', 'positionInfo'] });
+    onSuccess: async (data, vars, ctx) => {
+      const { params } = vars;
+      // Increase-liquidity branch knows the affected position — scope to it. Mint-new-position
+      // branch creates a fresh tokenId that's only known after the tx, so a bare invalidation is
+      // the right fallback (refetches all positions, including the new one once it lands).
+      if (params.tokenId !== undefined && params.isValidPosition) {
+        // `usePositionInfo` keys by string tokenId — coerce here to match its shape regardless of
+        // whether the caller passed bigint or string.
+        const tokenIdStr = String(params.tokenId);
+        queryClient.invalidateQueries({ queryKey: ['dex', 'positionInfo', tokenIdStr, params.poolKey] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['dex', 'positionInfo'] });
+      }
       queryClient.invalidateQueries({ queryKey: ['dex', 'poolData', params.poolKey] });
       queryClient.invalidateQueries({ queryKey: ['dex', 'poolBalances', params.srcChainKey, params.srcAddress] });
-      queryClient.invalidateQueries({ queryKey: ['xBalances', params.srcChainKey] });
+      queryClient.invalidateQueries({ queryKey: ['shared', 'xBalances', params.srcChainKey] });
+      await mutationOptions?.onSuccess?.(data, vars, ctx);
     },
   });
 }

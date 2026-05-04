@@ -1,7 +1,10 @@
-import type { MoneyMarketSupplyActionParams, TxHashPair } from '@sodax/sdk';
-import type { Result, SpokeChainKey } from '@sodax/sdk';
-import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
+// packages/dapp-kit/src/hooks/mm/useSupply.ts
+import type { MoneyMarketSupplyActionParams, SpokeChainKey, TxHashPair } from '@sodax/sdk';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { MutationHookParams } from '../shared/types.js';
+import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
+import { unwrapResult } from '../shared/unwrapResult.js';
 
 /**
  * Mutation variables for {@link useSupply}. Generic over `K extends SpokeChainKey` (defaults to
@@ -13,44 +16,44 @@ export type UseSupplyVars<K extends SpokeChainKey = SpokeChainKey> = Omit<
   'raw'
 >;
 
-type SupplyResult = Result<TxHashPair>;
-
 /**
  * React hook for supplying tokens to the Sodax money market protocol.
  *
- * Pure mutation: all inputs (params, walletProvider, optional skipSimulation/timeout) are passed
- * to `mutate({...})`. The hook itself takes no arguments. Returns the SDK `Result<T>` as-is;
- * callers branch on `data?.ok`.
+ * Throws on SDK failure so React Query's native error model engages (`isError`, `error`,
+ * `onError`, `retry`). Returns the unwrapped `TxHashPair` on success.
  *
  * @example
  * ```tsx
  * const walletProvider = useWalletProvider(chainKey);
- * const { mutateAsync: supply } = useSupply();
+ * const { mutateAsync: supply, isError, error } = useSupply();
  * if (!walletProvider) return;
- * const result = await supply({ params: supplyParams, walletProvider });
- * if (result.ok) { ... }
+ * try {
+ *   const { spokeTxHash, hubTxHash } = await supply({ params: supplyParams, walletProvider });
+ * } catch (e) {
+ *   // surfaced via mutation.error / onError
+ * }
  * ```
  */
-export function useSupply<K extends SpokeChainKey = SpokeChainKey>(): UseMutationResult<
-  SupplyResult,
-  Error,
-  UseSupplyVars<K>
-> {
+export function useSupply<K extends SpokeChainKey = SpokeChainKey>({
+  mutationOptions,
+}: MutationHookParams<TxHashPair, UseSupplyVars<K>> = {}): SafeUseMutationResult<TxHashPair, Error, UseSupplyVars<K>> {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
 
-  return useMutation<SupplyResult, Error, UseSupplyVars<K>>({
-    mutationFn: async (vars) => {
-      return sodax.moneyMarket.supply({ ...vars, raw: false });
-    },
-    onSuccess: (_data, { params }) => {
+  return useSafeMutation<TxHashPair, Error, UseSupplyVars<K>>({
+    mutationKey: ['mm', 'supply'],
+    ...mutationOptions,
+    mutationFn: async vars => unwrapResult(await sodax.moneyMarket.supply({ ...vars, raw: false })),
+    onSuccess: async (data, vars, ctx) => {
+      const { params } = vars;
       queryClient.invalidateQueries({ queryKey: ['mm', 'userReservesData', params.srcChainKey, params.srcAddress] });
       queryClient.invalidateQueries({
         queryKey: ['mm', 'userFormattedSummary', params.srcChainKey, params.srcAddress],
       });
       queryClient.invalidateQueries({ queryKey: ['mm', 'aTokensBalances'] });
       queryClient.invalidateQueries({ queryKey: ['mm', 'allowance', params.srcChainKey, params.token, params.action] });
-      queryClient.invalidateQueries({ queryKey: ['xBalances', params.srcChainKey] });
+      queryClient.invalidateQueries({ queryKey: ['shared', 'xBalances', params.srcChainKey] });
+      await mutationOptions?.onSuccess?.(data, vars, ctx);
     },
   });
 }

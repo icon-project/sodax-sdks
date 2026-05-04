@@ -64,19 +64,20 @@ function BridgeButton() {
   const { mutateAsync: bridge, isPending } = useBridge({ spokeProvider });
 
   const handleBridge = async () => {
-    const result = await bridge({
-      params: {
-        srcChainId: BASE_MAINNET_CHAIN_ID,
-        srcAsset: '0x...',
-        amount: 1000000000000000000n,
-        dstChainId: POLYGON_MAINNET_CHAIN_ID,
-        dstAsset: '0x...',
-        recipient: '0x...',
-      },
-    });
-    if (result.ok) {
-      const [spokeTxHash, hubTxHash] = result.value;
+    try {
+      const [spokeTxHash, hubTxHash] = await bridge({
+        params: {
+          srcChainId: BASE_MAINNET_CHAIN_ID,
+          srcAsset: '0x...',
+          amount: 1000000000000000000n,
+          dstChainId: POLYGON_MAINNET_CHAIN_ID,
+          dstAsset: '0x...',
+          recipient: '0x...',
+        },
+      });
       console.log('Bridge successful:', { spokeTxHash, hubTxHash });
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -116,9 +117,13 @@ export function BridgePage() {
 
   const handleBridge = async () => {
     if (!bridgeParams) return;
-    if (!isApproved) await approve({ params: bridgeParams });
-    const result = await bridge({ params: bridgeParams });
-    if (result.ok) alert(`Bridge complete! ${result.value[0]}`);
+    try {
+      if (!isApproved) await approve({ params: bridgeParams });
+      const [spokeTxHash] = await bridge({ params: bridgeParams });
+      alert(`Bridge complete! ${spokeTxHash}`);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Bridge failed');
+    }
   };
 
   return (

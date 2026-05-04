@@ -112,13 +112,37 @@ function MMDashboard({ userAddress }: { userAddress: string }) {
 
 ## Custom Query Options
 
-All hooks accept `queryOptions` to override defaults:
+All read hooks accept `queryOptions` to override defaults:
 
 ```tsx
 const { data } = useBackendIntentByTxHash({
   params: { txHash },
   queryOptions: { staleTime: 5000, refetchInterval: 2000, retry: 3 },
 });
+```
+
+## Submit a Swap Tx
+
+`useBackendSubmitSwapTx` is a mutation hook. Per-call config (e.g. backend base URL) flows through `mutate(vars)`; TanStack Query knobs flow through the optional `mutationOptions` slot:
+
+```tsx
+import { useBackendSubmitSwapTx } from '@sodax/dapp-kit';
+
+function SubmitButton({ swapPayload, baseURL }) {
+  const { mutateAsync: submitSwapTx, isPending } = useBackendSubmitSwapTx({
+    mutationOptions: { retry: 5 }, // overrides default retry: 3
+  });
+
+  const handleSubmit = async () => {
+    const response = await submitSwapTx({
+      request: swapPayload,
+      apiConfig: { baseURL }, // per-call backend override
+    });
+    console.log('Submitted:', response);
+  };
+
+  return <button onClick={handleSubmit} disabled={isPending}>Submit</button>;
+}
 ```
 
 ## Default Polling

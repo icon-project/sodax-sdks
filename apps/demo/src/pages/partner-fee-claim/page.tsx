@@ -87,16 +87,17 @@ export default function PartnerFeeClaimPage() {
       setApproveError('Please provide a token address and connect your wallet');
       return;
     }
-    const result = await approveToken({
-      params: {
-        srcChainKey: SONIC,
-        srcAddress,
-        token: approveTokenAddress.trim() as Address,
-      },
-      walletProvider,
-    });
-    if (!result.ok) {
-      setApproveError(formatSdkError(result.error, 'Failed to approve token'));
+    try {
+      await approveToken({
+        params: {
+          srcChainKey: SONIC,
+          srcAddress,
+          token: approveTokenAddress.trim() as Address,
+        },
+        walletProvider,
+      });
+    } catch (error) {
+      setApproveError(formatSdkError(error, 'Failed to approve token'));
     }
   };
 
@@ -115,21 +116,21 @@ export default function PartnerFeeClaimPage() {
       setSetPreferenceError('Please fill in all fields and connect your wallet');
       return;
     }
-    const result = await setSwapPreference({
-      params: {
-        srcChainKey: SONIC,
-        srcAddress,
-        outputToken: outputToken.trim() as Address,
-        dstChain,
-        dstAddress: dstAddress.trim(),
-      },
-      walletProvider,
-    });
-    if (!result.ok) {
-      setSetPreferenceError(formatSdkError(result.error, 'Failed to set swap preference'));
-      return;
+    try {
+      const txReturn = await setSwapPreference({
+        params: {
+          srcChainKey: SONIC,
+          srcAddress,
+          outputToken: outputToken.trim() as Address,
+          dstChain,
+          dstAddress: dstAddress.trim(),
+        },
+        walletProvider,
+      });
+      setSetPreferenceSuccess(`Transaction sent: ${txReturn}`);
+    } catch (error) {
+      setSetPreferenceError(formatSdkError(error, 'Failed to set swap preference'));
     }
-    setSetPreferenceSuccess(`Transaction sent: ${result.value}`);
   };
 
   // Swap state
@@ -152,20 +153,22 @@ export default function PartnerFeeClaimPage() {
       return;
     }
     const amount = parseUnits(swapAmount, token.decimal);
-    const result = await feeClaimSwap({
-      params: {
-        srcChainKey: SONIC,
-        srcAddress,
-        fromToken: swapFromToken.trim() as Address,
-        amount,
-      },
-      walletProvider,
-    });
-    if (!result.ok) {
-      setSwapError(formatSdkError(result.error, 'Failed to execute swap'));
-      return;
+    try {
+      const intentResult = await feeClaimSwap({
+        params: {
+          srcChainKey: SONIC,
+          srcAddress,
+          fromToken: swapFromToken.trim() as Address,
+          amount,
+        },
+        walletProvider,
+      });
+      setSwapSuccess(
+        `Swap executed successfully! Intent: ${intentResult.solverExecutionResponse.intent_hash || 'N/A'}`,
+      );
+    } catch (error) {
+      setSwapError(formatSdkError(error, 'Failed to execute swap'));
     }
-    setSwapSuccess(`Swap executed successfully! Intent: ${result.value.solverExecutionResponse.intent_hash || 'N/A'}`);
   };
 
   return (

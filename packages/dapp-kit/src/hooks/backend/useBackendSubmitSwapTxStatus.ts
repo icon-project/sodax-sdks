@@ -34,7 +34,7 @@ export const useBackendSubmitSwapTxStatus = ({
   const apiConfig = params?.apiConfig;
 
   return useQuery({
-    queryKey: ['api', 'swaps', 'submit-tx', 'status', txHash, srcChainId],
+    queryKey: ['backend', 'submitSwapTx', 'status', txHash, srcChainId],
     queryFn: async (): Promise<SubmitSwapTxStatusResponse | undefined> => {
       if (!txHash) return undefined;
       return unwrapResult(

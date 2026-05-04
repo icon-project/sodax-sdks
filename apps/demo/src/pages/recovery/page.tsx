@@ -68,22 +68,26 @@ export default function RecoveryPage() {
 
       setWithdrawingAssets(prev => new Set(prev).add(asset.spokeTokenAddress));
 
-      const result = await withdrawHubAsset({
-        params: {
-          srcChainKey: selectedChainId,
-          srcAddress,
-          token: asset.spokeTokenAddress,
-          amount: asset.balance,
-        },
-        walletProvider,
-      });
-
-      setWithdrawResults(prev => ({
-        ...prev,
-        [asset.spokeTokenAddress]: result.ok
-          ? { success: true, txHash: result.value as string }
-          : { success: false, error: getReadableTxError(result.error) },
-      }));
+      try {
+        const txHash = await withdrawHubAsset({
+          params: {
+            srcChainKey: selectedChainId,
+            srcAddress,
+            token: asset.spokeTokenAddress,
+            amount: asset.balance,
+          },
+          walletProvider,
+        });
+        setWithdrawResults(prev => ({
+          ...prev,
+          [asset.spokeTokenAddress]: { success: true, txHash: txHash as string },
+        }));
+      } catch (error) {
+        setWithdrawResults(prev => ({
+          ...prev,
+          [asset.spokeTokenAddress]: { success: false, error: getReadableTxError(error) },
+        }));
+      }
 
       setWithdrawingAssets(prev => {
         const next = new Set(prev);

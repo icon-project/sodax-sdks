@@ -18,7 +18,7 @@ export const useBackendAllMoneyMarketAssets = ({
   const { sodax } = useSodaxContext();
 
   return useQuery<MoneyMarketAsset[], Error>({
-    queryKey: ['api', 'mm', 'assets', 'all'],
+    queryKey: ['backend', 'mm', 'assets', 'all'],
     queryFn: async (): Promise<MoneyMarketAsset[]> => {
       return unwrapResult(await sodax.backendApi.getAllMoneyMarketAssets());
     },

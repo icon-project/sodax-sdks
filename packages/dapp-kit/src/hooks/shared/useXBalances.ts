@@ -25,7 +25,7 @@ export function getXBalancesQueryOptions({ xService, xChainId, xTokens, address 
   return {
     // Pair symbol + address: readable in devtools, unique on-chain (symbol alone
     // can collide — e.g. scam tokens copying legitimate ticker).
-    queryKey: ['xBalances', xChainId, xTokens.map(x => [x.symbol, x.address] as const), address] as const,
+    queryKey: ['shared', 'xBalances', xChainId, xTokens.map(x => [x.symbol, x.address] as const), address] as const,
     queryFn: async (): Promise<Record<string, bigint>> => {
       if (!xService) return {};
       return xService.getBalances(address, xTokens);

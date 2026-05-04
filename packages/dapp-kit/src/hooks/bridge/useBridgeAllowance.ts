@@ -20,7 +20,16 @@ export function useBridgeAllowance<K extends SpokeChainKey>({
   const walletProvider = params?.walletProvider;
 
   return useQuery<boolean, Error>({
-    queryKey: ['bridge', 'allowance', payload],
+    // Extract the (chain, owner, token, amount) tuple that actually scopes the allowance —
+    // raw-object keys break per Rule 4 (bigints) and churn on every render.
+    queryKey: [
+      'bridge',
+      'allowance',
+      payload?.srcChainKey,
+      payload?.srcAddress,
+      payload?.srcToken,
+      payload?.amount?.toString(),
+    ],
     queryFn: async () => {
       if (!payload || !walletProvider) {
         return false;

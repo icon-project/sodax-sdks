@@ -30,7 +30,7 @@ export const useBackendAllMoneyMarketBorrowers = ({
   const pagination = params?.pagination;
 
   return useQuery({
-    queryKey: ['api', 'mm', 'borrowers', 'all', pagination],
+    queryKey: ['backend', 'mm', 'borrowers', 'all', pagination],
     queryFn: async (): Promise<MoneyMarketBorrowers | undefined> => {
       if (!pagination?.offset || !pagination?.limit) {
         return undefined;

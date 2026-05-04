@@ -24,7 +24,7 @@ export const useBackendIntentByHash = ({
   const intentHash = params?.intentHash;
 
   return useQuery({
-    queryKey: ['api', 'intent', 'hash', intentHash],
+    queryKey: ['backend', 'intent', 'hash', intentHash],
     queryFn: async (): Promise<IntentResponse | undefined> => {
       if (!intentHash) return undefined;
       const result = await sodax.backendApi.getIntentByHash(intentHash);

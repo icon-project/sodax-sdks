@@ -1,23 +1,30 @@
+// packages/dapp-kit/src/hooks/bitcoin/useRenewUtxos.ts
 import { normalizePsbtToBase64, type IBitcoinWalletProvider } from '@sodax/sdk';
-import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { loadRadfiSession } from './useRadfiAuth.js';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { MutationHookParams } from '../shared/types.js';
+import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
 
-type RenewUtxosParams = {
+export type UseRenewUtxosVars = {
   txIdVouts: string[];
+  walletProvider: IBitcoinWalletProvider;
 };
 
-export function useRenewUtxos(
-  walletProvider: IBitcoinWalletProvider | undefined,
-): UseMutationResult<string, Error, RenewUtxosParams> {
+/**
+ * React hook for renewing expired UTXOs in the user's Radfi trading wallet. Pure mutation: pass
+ * `{ txIdVouts, walletProvider }` to `mutate({...})`.
+ */
+export function useRenewUtxos({
+  mutationOptions,
+}: MutationHookParams<string, UseRenewUtxosVars> = {}): SafeUseMutationResult<string, Error, UseRenewUtxosVars> {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
 
-  return useMutation<string, Error, RenewUtxosParams>({
-    mutationFn: async ({ txIdVouts }: RenewUtxosParams) => {
-      if (!walletProvider) {
-        throw new Error('Bitcoin wallet provider not found');
-      }
+  return useSafeMutation<string, Error, UseRenewUtxosVars>({
+    mutationKey: ['bitcoin', 'renewUtxos'],
+    ...mutationOptions,
+    mutationFn: async ({ txIdVouts, walletProvider }) => {
       const radfi = sodax.spokeService.bitcoinSpokeService.radfi;
 
       const userAddress = await walletProvider.getWalletAddress();
@@ -36,9 +43,10 @@ export function useRenewUtxos(
 
       return radfi.signAndBroadcastRenewUtxo({ userAddress, signedBase64Tx }, accessToken);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['expired-utxos'] });
-      queryClient.invalidateQueries({ queryKey: ['trading-wallet-balance'] });
+    onSuccess: async (data, vars, ctx) => {
+      queryClient.invalidateQueries({ queryKey: ['bitcoin', 'expiredUtxos'] });
+      queryClient.invalidateQueries({ queryKey: ['bitcoin', 'tradingWalletBalance'] });
+      await mutationOptions?.onSuccess?.(data, vars, ctx);
     },
   });
 }

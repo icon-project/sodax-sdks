@@ -24,7 +24,7 @@ export function useStellarTrustlineCheck({
   const walletProvider = params?.walletProvider;
 
   return useQuery<boolean, Error>({
-    queryKey: ['stellar-trustline-check', token],
+    queryKey: ['shared', 'stellarTrustlineCheck', token],
     queryFn: async () => {
       if (chainId !== ChainKeys.STELLAR_MAINNET) return true;
       if (!walletProvider || !token || !amount) return false;

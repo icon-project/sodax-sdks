@@ -23,7 +23,16 @@ export function useSwapAllowance<K extends SpokeChainKey>({
   const walletProvider = params?.walletProvider;
 
   return useQuery<boolean, Error>({
-    queryKey: ['swap', 'allowance', payload],
+    // Extract the (chain, owner, token, amount) tuple that actually scopes the allowance —
+    // raw-object keys break per Rule 4 (bigints) and churn on every render.
+    queryKey: [
+      'swap',
+      'allowance',
+      payload?.srcChainKey,
+      payload?.srcAddress,
+      payload?.inputToken,
+      payload?.inputAmount?.toString(),
+    ],
     queryFn: async () => {
       if (!srcChainKey || !walletProvider || !payload) {
         return false;

@@ -1,7 +1,10 @@
-import type { SetSwapPreferenceAction, TxReturnType } from '@sodax/sdk';
-import type { HubChainKey, Result, SpokeChainKey } from '@sodax/sdk';
-import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
+// packages/dapp-kit/src/hooks/partner/useSetSwapPreference.ts
+import type { HubChainKey, SetSwapPreferenceAction, SpokeChainKey, TxReturnType } from '@sodax/sdk';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { MutationHookParams } from '../shared/types.js';
+import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
+import { unwrapResult } from '../shared/unwrapResult.js';
 
 /**
  * Mutation variables for {@link useSetSwapPreference}. Generic over `K extends SpokeChainKey`
@@ -13,29 +16,32 @@ export type UseSetSwapPreferenceVars<K extends SpokeChainKey = SpokeChainKey> = 
   'raw'
 >;
 
-type SetSwapPreferenceResult<K extends SpokeChainKey> = Result<TxReturnType<K, false>>;
-
 /**
  * React hook to set the partner's auto-swap preferences (output token + destination chain +
- * destination address) on the protocol-intents contract. Pure mutation: returns the SDK
- * `Result<T>` as-is; callers branch on `data?.ok`.
+ * destination address) on the protocol-intents contract.
+ *
+ * Throws on SDK failure so React Query's native error model engages (`isError`, `error`,
+ * `onError`, `retry`). Returns the unwrapped tx return value on success.
  */
-export function useSetSwapPreference<K extends SpokeChainKey = SpokeChainKey>(): UseMutationResult<
-  SetSwapPreferenceResult<K>,
+export function useSetSwapPreference<K extends SpokeChainKey = SpokeChainKey>({
+  mutationOptions,
+}: MutationHookParams<TxReturnType<K, false>, UseSetSwapPreferenceVars<K>> = {}): SafeUseMutationResult<
+  TxReturnType<K, false>,
   Error,
   UseSetSwapPreferenceVars<K>
 > {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
 
-  return useMutation<SetSwapPreferenceResult<K>, Error, UseSetSwapPreferenceVars<K>>({
-    mutationFn: async vars => {
-      return sodax.partners.feeClaim.setSwapPreference({ ...vars, raw: false });
-    },
-    onSuccess: (_data, { params }) => {
+  return useSafeMutation<TxReturnType<K, false>, Error, UseSetSwapPreferenceVars<K>>({
+    mutationKey: ['partner', 'setSwapPreference'],
+    ...mutationOptions,
+    mutationFn: async vars => unwrapResult(await sodax.partners.feeClaim.setSwapPreference({ ...vars, raw: false })),
+    onSuccess: async (data, vars, ctx) => {
       queryClient.invalidateQueries({
-        queryKey: ['partner', 'feeClaim', 'autoSwapPreferences', (params as { srcAddress: string }).srcAddress],
+        queryKey: ['partner', 'feeClaim', 'autoSwapPreferences', (vars.params as { srcAddress: string }).srcAddress],
       });
+      await mutationOptions?.onSuccess?.(data, vars, ctx);
     },
   });
 }

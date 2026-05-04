@@ -1,12 +1,16 @@
+// packages/dapp-kit/src/hooks/bitcoin/useRadfiWithdraw.ts
 import { normalizePsbtToBase64, ChainKeys, type IBitcoinWalletProvider } from '@sodax/sdk';
-import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { loadRadfiSession } from './useRadfiAuth.js';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { MutationHookParams } from '../shared/types.js';
+import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
 
-type WithdrawToUserParams = {
+export type UseRadfiWithdrawVars = {
   amount: string;
   tokenId: string;
   withdrawTo: string;
+  walletProvider: IBitcoinWalletProvider;
 };
 
 type WithdrawResult = {
@@ -14,17 +18,25 @@ type WithdrawResult = {
   fee: number;
 };
 
-export function useRadfiWithdraw(
-  walletProvider: IBitcoinWalletProvider | undefined,
-): UseMutationResult<WithdrawResult, Error, WithdrawToUserParams> {
+/**
+ * React hook for withdrawing BTC from the user's Radfi trading wallet back to their personal
+ * Bitcoin wallet. Pure mutation: pass all inputs (including the wallet provider) to
+ * `mutate({...})`.
+ */
+export function useRadfiWithdraw({
+  mutationOptions,
+}: MutationHookParams<WithdrawResult, UseRadfiWithdrawVars> = {}): SafeUseMutationResult<
+  WithdrawResult,
+  Error,
+  UseRadfiWithdrawVars
+> {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
 
-  return useMutation<WithdrawResult, Error, WithdrawToUserParams>({
-    mutationFn: async ({ amount, tokenId, withdrawTo }: WithdrawToUserParams) => {
-      if (!walletProvider) {
-        throw new Error('Bitcoin wallet provider not found');
-      }
+  return useSafeMutation<WithdrawResult, Error, UseRadfiWithdrawVars>({
+    mutationKey: ['bitcoin', 'radfiWithdraw'],
+    ...mutationOptions,
+    mutationFn: async ({ amount, tokenId, withdrawTo, walletProvider }) => {
       const radfi = sodax.spokeService.bitcoinSpokeService.radfi;
 
       const userAddress = await walletProvider.getWalletAddress();
@@ -45,10 +57,11 @@ export function useRadfiWithdraw(
 
       return { txId, fee: buildResult.fee.totalFee };
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['trading-wallet-balance'] });
-      queryClient.invalidateQueries({ queryKey: ['btc-balance'] });
-      queryClient.invalidateQueries({ queryKey: ['xBalances', ChainKeys.BITCOIN_MAINNET] });
+    onSuccess: async (data, vars, ctx) => {
+      queryClient.invalidateQueries({ queryKey: ['bitcoin', 'tradingWalletBalance'] });
+      queryClient.invalidateQueries({ queryKey: ['bitcoin', 'balance'] });
+      queryClient.invalidateQueries({ queryKey: ['shared', 'xBalances', ChainKeys.BITCOIN_MAINNET] });
+      await mutationOptions?.onSuccess?.(data, vars, ctx);
     },
   });
 }

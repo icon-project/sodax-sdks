@@ -106,7 +106,7 @@ vi.mock('./SolverApiService.js', () => ({
     postExecution: mocks.solverPostExecution,
   },
 }));
-import { type CancelIntentParams, type CreateIntentParams, type Intent, type SwapActionParams } from './SwapService.js';
+import type { CancelIntentParams, CreateIntentParams, Intent, SwapActionParams } from './SwapService.js';
 
 // --- test fixtures --------------------------------------------------------
 //

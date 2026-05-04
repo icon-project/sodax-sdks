@@ -31,7 +31,7 @@ export const useBackendUserIntents = ({
   const endDate = params?.endDate;
 
   return useQuery({
-    queryKey: ['api', 'intent', 'user', userAddress, startDate, endDate],
+    queryKey: ['backend', 'intent', 'user', userAddress, startDate, endDate],
     queryFn: async (): Promise<UserIntentsResponse | undefined> => {
       if (!userAddress) return undefined;
       return unwrapResult(await sodax.backendApi.getUserIntents({ userAddress, startDate, endDate }));

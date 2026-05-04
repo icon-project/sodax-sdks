@@ -46,19 +46,20 @@ function SwapQuote({ inputAmount }: { inputAmount: bigint }) {
 ## Check Allowance + Approve
 
 ```tsx
-import { useSwapAllowance, useSwapApprove, useSpokeProvider } from '@sodax/dapp-kit';
-import { BSC_MAINNET_CHAIN_ID } from '@sodax/sdk';
+import { useSwapAllowance, useSwapApprove } from '@sodax/dapp-kit';
+import { useWalletProvider } from '@sodax/wallet-sdk-react';
+import { ChainKeys } from '@sodax/sdk';
 import type { CreateIntentParams } from '@sodax/sdk';
 
 function SwapApproval({ intentParams }: { intentParams: CreateIntentParams }) {
-  const spokeProvider = useSpokeProvider({ chainId: BSC_MAINNET_CHAIN_ID });
+  const walletProvider = useWalletProvider(ChainKeys.BSC_MAINNET);
 
-  const { data: isApproved } = useSwapAllowance({ params: intentParams, spokeProvider });
-  const { mutateAsync: approve, isPending } = useSwapApprove({ spokeProvider });
+  const { data: isApproved } = useSwapAllowance({ params: intentParams, walletProvider });
+  const { mutateAsync: approve, isPending } = useSwapApprove();
 
   if (isApproved?.ok && isApproved.value) return null;
   return (
-    <button onClick={() => approve({ params: intentParams })} disabled={isPending}>
+    <button onClick={() => walletProvider && approve({ params: intentParams, walletProvider })} disabled={isPending}>
       {isPending ? 'Approving...' : 'Approve Token'}
     </button>
   );
@@ -79,10 +80,14 @@ function SwapButton({ intentParams }: { intentParams: CreateIntentParams }) {
 
   const handleSwap = async () => {
     if (!walletProvider) return;
-    const result = await swap({ params: intentParams, walletProvider });
-    if (result.ok) {
-      const [executionResponse, intent, deliveryInfo] = result.value;
-      console.log('Swap successful!', executionResponse);
+    try {
+      const { solverExecutionResponse, intent, intentDeliveryInfo } = await swap({
+        params: intentParams,
+        walletProvider,
+      });
+      console.log('Swap successful!', solverExecutionResponse);
+    } catch (e) {
+      // surfaced via mutation.error / onError
     }
   };
 
@@ -150,15 +155,19 @@ export function SwapPage() {
   const { data: allowanceResult } = useSwapAllowance({ params: intentParams, spokeProvider });
   const isApproved = allowanceResult?.ok && allowanceResult.value;
 
-  // 4. Approve + Swap
-  const { mutateAsync: approve, isPending: isApproving } = useSwapApprove({ spokeProvider });
-  const { mutateAsync: swap, isPending: isSwapping } = useSwap();
+  // 4. Approve + Swap (using mutateAsyncSafe — no try/catch, no unhandled rejections)
+  const { mutateAsyncSafe: approve, isPending: isApproving } = useSwapApprove();
+  const { mutateAsyncSafe: swap, isPending: isSwapping } = useSwap();
 
   const handleSwap = async () => {
     if (!intentParams || !walletProvider) return;
-    if (!isApproved) await approve({ params: intentParams });
-    const result = await swap({ params: intentParams, walletProvider });
-    if (result.ok) alert('Swap successful!');
+    if (!isApproved) {
+      const r = await approve({ params: intentParams, walletProvider });
+      if (!r.ok) { alert(r.error instanceof Error ? r.error.message : 'Approve failed'); return; }
+    }
+    const r = await swap({ params: intentParams, walletProvider });
+    if (r.ok) alert('Swap successful!');
+    else alert(r.error instanceof Error ? r.error.message : 'Swap failed');
   };
 
   return (
@@ -177,11 +186,32 @@ export function SwapPage() {
 ## Limit Orders
 
 ```tsx
-const { mutateAsync: createLimitOrder } = useCreateLimitOrder({ spokeProvider });
-const { mutateAsync: cancelLimitOrder } = useCancelLimitOrder({ spokeProvider });
+const { mutateAsync: createLimitOrder } = useCreateLimitOrder();
+const { mutateAsync: cancelLimitOrder } = useCancelLimitOrder();
 
 // Limit orders have no deadline, must be cancelled manually
-await createLimitOrder({ params: intentParams });
+await createLimitOrder({ params: intentParams, walletProvider });
+await cancelLimitOrder({ srcChainKey, walletProvider, intent });
+```
+
+## Customize TanStack Query behavior
+
+Every mutation hook accepts an optional `mutationOptions` slot for consumers to override TanStack Query knobs (`retry`, `onError`, `mutationKey`, etc.). The hook's `mutationFn` throws on SDK failure (so `mutation.error`, `onError`, and `retry` engage natively); its own `onSuccess` invalidations run first on real success, then the consumer's `onSuccess` is awaited.
+
+```tsx
+const { mutateAsync: swap, isError, error } = useSwap({
+  mutationOptions: {
+    retry: 5,
+    onError: err => toast.error(err.message),
+    onSuccess: swapResponse => {
+      // Runs AFTER dapp-kit's xBalances invalidations — only on confirmed success.
+      trackSwap(swapResponse);
+    },
+  },
+});
+
+// Track in-flight swaps anywhere in the app via the default mutationKey
+const swapsInFlight = useIsMutating({ mutationKey: ['swap'] });
 ```
 
 ## Gotchas

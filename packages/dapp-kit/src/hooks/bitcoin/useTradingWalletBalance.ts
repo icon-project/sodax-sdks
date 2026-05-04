@@ -20,7 +20,7 @@ export function useTradingWalletBalance({
   const tradingAddress = params?.tradingAddress;
 
   return useQuery<RadfiWalletBalance, Error>({
-    queryKey: ['trading-wallet-balance', tradingAddress],
+    queryKey: ['bitcoin', 'tradingWalletBalance', tradingAddress],
     queryFn: () => {
       if (!walletProvider || !tradingAddress) {
         throw new Error('walletProvider and tradingAddress are required');

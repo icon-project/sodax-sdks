@@ -1,15 +1,21 @@
-import type { EstimateGasParams, GetEstimateGasReturnType } from '@sodax/sdk';
-import type { Result, SpokeChainKey } from '@sodax/sdk';
-import { useMutation, type UseMutationResult } from '@tanstack/react-query';
+// packages/dapp-kit/src/hooks/shared/useEstimateGas.ts
+import type { EstimateGasParams, GetEstimateGasReturnType, SpokeChainKey } from '@sodax/sdk';
 import { useSodaxContext } from './useSodaxContext.js';
+import type { MutationHookParams } from './types.js';
+import { useSafeMutation, type SafeUseMutationResult } from './useSafeMutation.js';
+import { unwrapResult } from './unwrapResult.js';
 
-export function useEstimateGas<C extends SpokeChainKey>(): UseMutationResult<
-  Result<GetEstimateGasReturnType<C>>,
+export function useEstimateGas<C extends SpokeChainKey>({
+  mutationOptions,
+}: MutationHookParams<GetEstimateGasReturnType<C>, EstimateGasParams<C>> = {}): SafeUseMutationResult<
+  GetEstimateGasReturnType<C>,
   Error,
   EstimateGasParams<C>
 > {
   const { sodax } = useSodaxContext();
-  return useMutation<Result<GetEstimateGasReturnType<C>>, Error, EstimateGasParams<C>>({
-    mutationFn: (params: EstimateGasParams<C>) => sodax.spokeService.estimateGas<C>(params),
+  return useSafeMutation<GetEstimateGasReturnType<C>, Error, EstimateGasParams<C>>({
+    mutationKey: ['shared', 'estimateGas'],
+    ...mutationOptions,
+    mutationFn: async params => unwrapResult(await sodax.spokeService.estimateGas<C>(params)),
   });
 }

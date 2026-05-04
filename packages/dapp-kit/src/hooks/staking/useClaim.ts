@@ -1,35 +1,37 @@
-import type { ClaimAction, TxHashPair } from '@sodax/sdk';
-import type { Result, SpokeChainKey } from '@sodax/sdk';
-import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
+// packages/dapp-kit/src/hooks/staking/useClaim.ts
+import type { ClaimAction, SpokeChainKey, TxHashPair } from '@sodax/sdk';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { MutationHookParams } from '../shared/types.js';
+import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
+import { unwrapResult } from '../shared/unwrapResult.js';
 
 export type UseClaimVars<K extends SpokeChainKey = SpokeChainKey> = Omit<ClaimAction<K, false>, 'raw'>;
 
-type ClaimResult = Result<TxHashPair>;
-
 /**
- * React hook for claiming an unstaked SODA request that has reached the end of its waiting
- * period. Pure mutation: all inputs (params, walletProvider) are passed via `mutate({...})`.
- * Returns the SDK `Result<T>` as-is; callers branch on `data?.ok`.
+ * React hook for claiming an unstaked SODA request that has reached the end of its waiting period.
+ *
+ * Throws on SDK failure so React Query's native error model engages (`isError`, `error`,
+ * `onError`, `retry`). Returns the unwrapped `TxHashPair` on success.
  */
-export function useClaim<K extends SpokeChainKey = SpokeChainKey>(): UseMutationResult<
-  ClaimResult,
-  Error,
-  UseClaimVars<K>
-> {
+export function useClaim<K extends SpokeChainKey = SpokeChainKey>({
+  mutationOptions,
+}: MutationHookParams<TxHashPair, UseClaimVars<K>> = {}): SafeUseMutationResult<TxHashPair, Error, UseClaimVars<K>> {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
 
-  return useMutation<ClaimResult, Error, UseClaimVars<K>>({
-    mutationFn: async vars => {
-      return sodax.staking.claim({ ...vars, raw: false });
-    },
-    onSuccess: (_data, { params }) => {
+  return useSafeMutation<TxHashPair, Error, UseClaimVars<K>>({
+    mutationKey: ['staking', 'claim'],
+    ...mutationOptions,
+    mutationFn: async vars => unwrapResult(await sodax.staking.claim({ ...vars, raw: false })),
+    onSuccess: async (data, vars, ctx) => {
+      const { params } = vars;
       queryClient.invalidateQueries({ queryKey: ['staking', 'unstakingInfo', params.srcChainKey, params.srcAddress] });
       queryClient.invalidateQueries({
         queryKey: ['staking', 'unstakingInfoWithPenalty', params.srcChainKey, params.srcAddress],
       });
-      queryClient.invalidateQueries({ queryKey: ['xBalances', params.srcChainKey] });
+      queryClient.invalidateQueries({ queryKey: ['shared', 'xBalances', params.srcChainKey] });
+      await mutationOptions?.onSuccess?.(data, vars, ctx);
     },
   });
 }

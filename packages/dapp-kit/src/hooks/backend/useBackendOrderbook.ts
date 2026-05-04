@@ -26,7 +26,7 @@ export const useBackendOrderbook = ({
   const pagination = params?.pagination;
 
   return useQuery<OrderbookResponse, Error>({
-    queryKey: ['api', 'solver', 'orderbook', pagination?.offset, pagination?.limit],
+    queryKey: ['backend', 'orderbook', pagination?.offset, pagination?.limit],
     queryFn: async (): Promise<OrderbookResponse> => {
       if (!pagination?.offset || !pagination?.limit) {
         throw new Error('Pagination offset and limit are required');

@@ -20,7 +20,7 @@ export function useExpiredUtxos({
   const tradingAddress = params?.tradingAddress;
 
   return useQuery<RadfiUtxo[], Error>({
-    queryKey: ['expired-utxos', tradingAddress],
+    queryKey: ['bitcoin', 'expiredUtxos', tradingAddress],
     queryFn: async () => {
       if (!walletProvider || !tradingAddress) {
         throw new Error('walletProvider and tradingAddress are required');

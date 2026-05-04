@@ -100,14 +100,9 @@ export default function LimitOrderItem({ intent }: LimitOrderItemProps) {
         data: intent.intent.data as `0x${string}`,
       };
 
-      const result = await cancelLimitOrder({ intent: intentData, srcChainKey: srcChainId, walletProvider });
-
-      if (result.ok) {
-        // Invalidate queries to refresh the list
-        queryClient.invalidateQueries({ queryKey: ['backend', 'intent', 'user'] });
-      } else {
-        console.error('Failed to cancel intent:', result.error);
-      }
+      await cancelLimitOrder({ intent: intentData, srcChainKey: srcChainId, walletProvider });
+      // Invalidate queries to refresh the list
+      queryClient.invalidateQueries({ queryKey: ['backend', 'intent', 'user'] });
     } catch (error) {
       console.error('Error canceling intent:', error);
     }

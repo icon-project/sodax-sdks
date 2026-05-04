@@ -83,9 +83,13 @@ function StakeForm() {
 
   const handleStake = async () => {
     if (!stakeParams) return;
-    if (!isApproved) await approve({ params: stakeParams });
-    const result = await stake({ params: stakeParams });
-    if (result.ok) console.log('Staked:', result.value);
+    try {
+      if (!isApproved) await approve({ params: stakeParams });
+      const txHashPair = await stake({ params: stakeParams });
+      console.log('Staked:', txHashPair);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   return (

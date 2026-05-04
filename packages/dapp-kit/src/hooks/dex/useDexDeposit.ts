@@ -1,7 +1,10 @@
-import type { AssetDepositAction, TxHashPair } from '@sodax/sdk';
-import type { Result, SpokeChainKey } from '@sodax/sdk';
-import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
+// packages/dapp-kit/src/hooks/dex/useDexDeposit.ts
+import type { AssetDepositAction, SpokeChainKey, TxHashPair } from '@sodax/sdk';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { MutationHookParams } from '../shared/types.js';
+import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
+import { unwrapResult } from '../shared/unwrapResult.js';
 
 /**
  * Mutation variables for {@link useDexDeposit}. Generic over `K extends SpokeChainKey` (defaults
@@ -10,39 +13,45 @@ import { useSodaxContext } from '../shared/useSodaxContext.js';
  */
 export type UseDexDepositVars<K extends SpokeChainKey = SpokeChainKey> = Omit<AssetDepositAction<K, false>, 'raw'>;
 
-type DexDepositResult = Result<TxHashPair>;
-
 /**
- * React hook for depositing an asset into a DEX pool. Pure mutation: all inputs (params,
- * walletProvider) are passed to `mutate({...})`. Returns the SDK `Result<T>` as-is; callers branch
- * on `data?.ok`.
+ * React hook for depositing an asset into a DEX pool.
+ *
+ * Throws on SDK failure so React Query's native error model engages (`isError`, `error`,
+ * `onError`, `retry`). Returns the unwrapped `TxHashPair` on success.
  *
  * @example
  * ```tsx
  * const walletProvider = useWalletProvider(chainKey);
  * const { mutateAsync: deposit } = useDexDeposit();
- * const result = await deposit({ params, walletProvider });
- * if (result.ok) { const { spokeTxHash, hubTxHash } = result.value; }
+ * try {
+ *   const { spokeTxHash, hubTxHash } = await deposit({ params, walletProvider });
+ * } catch (e) {
+ *   // surfaced via mutation.error / onError
+ * }
  * ```
  */
-export function useDexDeposit<K extends SpokeChainKey = SpokeChainKey>(): UseMutationResult<
-  DexDepositResult,
+export function useDexDeposit<K extends SpokeChainKey = SpokeChainKey>({
+  mutationOptions,
+}: MutationHookParams<TxHashPair, UseDexDepositVars<K>> = {}): SafeUseMutationResult<
+  TxHashPair,
   Error,
   UseDexDepositVars<K>
 > {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
 
-  return useMutation<DexDepositResult, Error, UseDexDepositVars<K>>({
-    mutationFn: async vars => {
-      return sodax.dex.assetService.deposit({ ...vars, raw: false });
-    },
-    onSuccess: (_data, { params }) => {
+  return useSafeMutation<TxHashPair, Error, UseDexDepositVars<K>>({
+    mutationKey: ['dex', 'deposit'],
+    ...mutationOptions,
+    mutationFn: async vars => unwrapResult(await sodax.dex.assetService.deposit({ ...vars, raw: false })),
+    onSuccess: async (data, vars, ctx) => {
+      const { params } = vars;
       queryClient.invalidateQueries({ queryKey: ['dex', 'poolBalances', params.srcChainKey, params.srcAddress] });
       queryClient.invalidateQueries({
         queryKey: ['dex', 'allowance', params.srcChainKey, params.asset, params.amount.toString()],
       });
-      queryClient.invalidateQueries({ queryKey: ['xBalances', params.srcChainKey] });
+      queryClient.invalidateQueries({ queryKey: ['shared', 'xBalances', params.srcChainKey] });
+      await mutationOptions?.onSuccess?.(data, vars, ctx);
     },
   });
 }

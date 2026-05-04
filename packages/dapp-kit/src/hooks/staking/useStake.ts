@@ -1,7 +1,10 @@
-import type { StakeAction, TxHashPair } from '@sodax/sdk';
-import type { Result, SpokeChainKey } from '@sodax/sdk';
-import { useMutation, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
+// packages/dapp-kit/src/hooks/staking/useStake.ts
+import type { SpokeChainKey, StakeAction, TxHashPair } from '@sodax/sdk';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { MutationHookParams } from '../shared/types.js';
+import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
+import { unwrapResult } from '../shared/unwrapResult.js';
 
 /**
  * Mutation variables for {@link useStake}. Generic over `K extends SpokeChainKey` (defaults to
@@ -10,30 +13,30 @@ import { useSodaxContext } from '../shared/useSodaxContext.js';
  */
 export type UseStakeVars<K extends SpokeChainKey = SpokeChainKey> = Omit<StakeAction<K, false>, 'raw'>;
 
-type StakeResult = Result<TxHashPair>;
-
 /**
- * React hook for staking SODA tokens. Pure mutation: all inputs (params, walletProvider) are
- * passed via `mutate({...})`. Returns the SDK `Result<T>` as-is; callers branch on `data?.ok`.
+ * React hook for staking SODA tokens.
+ *
+ * Throws on SDK failure so React Query's native error model engages (`isError`, `error`,
+ * `onError`, `retry`). Returns the unwrapped `TxHashPair` on success.
  */
-export function useStake<K extends SpokeChainKey = SpokeChainKey>(): UseMutationResult<
-  StakeResult,
-  Error,
-  UseStakeVars<K>
-> {
+export function useStake<K extends SpokeChainKey = SpokeChainKey>({
+  mutationOptions,
+}: MutationHookParams<TxHashPair, UseStakeVars<K>> = {}): SafeUseMutationResult<TxHashPair, Error, UseStakeVars<K>> {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
 
-  return useMutation<StakeResult, Error, UseStakeVars<K>>({
-    mutationFn: async vars => {
-      return sodax.staking.stake({ ...vars, raw: false });
-    },
-    onSuccess: (_data, { params }) => {
+  return useSafeMutation<TxHashPair, Error, UseStakeVars<K>>({
+    mutationKey: ['staking', 'stake'],
+    ...mutationOptions,
+    mutationFn: async vars => unwrapResult(await sodax.staking.stake({ ...vars, raw: false })),
+    onSuccess: async (data, vars, ctx) => {
+      const { params } = vars;
       queryClient.invalidateQueries({ queryKey: ['staking', 'info', params.srcChainKey, params.srcAddress] });
       queryClient.invalidateQueries({ queryKey: ['staking', 'allowance', params.srcChainKey, 'stake'] });
       queryClient.invalidateQueries({ queryKey: ['staking', 'stakeRatio'] });
       queryClient.invalidateQueries({ queryKey: ['staking', 'convertedAssets'] });
-      queryClient.invalidateQueries({ queryKey: ['xBalances', params.srcChainKey] });
+      queryClient.invalidateQueries({ queryKey: ['shared', 'xBalances', params.srcChainKey] });
+      await mutationOptions?.onSuccess?.(data, vars, ctx);
     },
   });
 }

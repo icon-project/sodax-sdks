@@ -26,7 +26,7 @@ export function useBitcoinBalance({
   const rpcUrl = params?.rpcUrl ?? DEFAULT_RPC_URL;
 
   return useQuery<bigint, Error>({
-    queryKey: ['btc-balance', address],
+    queryKey: ['bitcoin', 'balance', address],
     queryFn: async () => {
       if (!address) return 0n;
 

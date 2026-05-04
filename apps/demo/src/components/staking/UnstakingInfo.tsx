@@ -34,36 +34,37 @@ export function UnstakingInfo({
   const [claimDialogOpen, setClaimDialogOpen] = useState(false);
 
   const handleClaim = async (requestId: string, claimableAmount: bigint): Promise<void> => {
-    const result = await claim({
-      params: {
-        srcChainKey,
-        srcAddress,
-        requestId: BigInt(requestId),
-        amount: claimableAmount,
-        action: 'claim',
-      },
-      walletProvider,
-    });
-    if (!result.ok) {
-      console.error('Claim error:', result.error);
-      return;
+    try {
+      await claim({
+        params: {
+          srcChainKey,
+          srcAddress,
+          requestId: BigInt(requestId),
+          amount: claimableAmount,
+          action: 'claim',
+        },
+        walletProvider,
+      });
+      setClaimDialogOpen(false);
+      setClaimRequestId('');
+    } catch (error) {
+      console.error('Claim error:', error);
     }
-    setClaimDialogOpen(false);
-    setClaimRequestId('');
   };
 
   const handleCancelUnstake = async (requestId: string): Promise<void> => {
-    const result = await cancelUnstake({
-      params: {
-        srcChainKey,
-        srcAddress,
-        requestId: BigInt(requestId),
-        action: 'cancelUnstake',
-      },
-      walletProvider,
-    });
-    if (!result.ok) {
-      console.error('Cancel unstake error:', result.error);
+    try {
+      await cancelUnstake({
+        params: {
+          srcChainKey,
+          srcAddress,
+          requestId: BigInt(requestId),
+          action: 'cancelUnstake',
+        },
+        walletProvider,
+      });
+    } catch (error) {
+      console.error('Cancel unstake error:', error);
     }
   };
 

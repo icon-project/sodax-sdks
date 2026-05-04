@@ -92,16 +92,18 @@ import { useFundTradingWallet, useSpokeProvider } from '@sodax/dapp-kit';
 import { BITCOIN_MAINNET_CHAIN_ID } from '@sodax/sdk';
 
 function FundButton() {
-  const spokeProvider = useSpokeProvider({ chainId: BITCOIN_MAINNET_CHAIN_ID });
-  const { mutateAsync: fundWallet, isPending } = useFundTradingWallet(spokeProvider);
+  const walletProvider = useSpokeProvider({ chainId: BITCOIN_MAINNET_CHAIN_ID });
+  const { mutateAsyncSafe: fundWallet, isPending } = useFundTradingWallet();
 
   const handleFund = async () => {
-    const txId = await fundWallet(100_000n); // 100,000 satoshis
-    console.log('Funded:', txId);
+    if (!walletProvider) return;
+    const result = await fundWallet({ amount: 100_000n, walletProvider }); // 100,000 satoshis
+    if (result.ok) console.log('Funded:', result.value);
+    else console.error('Fund failed:', result.error);
   };
 
   return (
-    <button onClick={handleFund} disabled={isPending}>
+    <button onClick={handleFund} disabled={isPending || !walletProvider}>
       {isPending ? 'Funding...' : 'Fund Trading Wallet'}
     </button>
   );
@@ -115,20 +117,22 @@ import { useRadfiWithdraw, useSpokeProvider } from '@sodax/dapp-kit';
 import { BITCOIN_MAINNET_CHAIN_ID } from '@sodax/sdk';
 
 function WithdrawButton({ withdrawTo }: { withdrawTo: string }) {
-  const spokeProvider = useSpokeProvider({ chainId: BITCOIN_MAINNET_CHAIN_ID });
-  const { mutateAsync: withdraw, isPending } = useRadfiWithdraw(spokeProvider);
+  const walletProvider = useSpokeProvider({ chainId: BITCOIN_MAINNET_CHAIN_ID });
+  const { mutateAsync: withdraw, isPending } = useRadfiWithdraw();
 
   const handleWithdraw = async () => {
+    if (!walletProvider) return;
     const result = await withdraw({
       amount: '10000',
       tokenId: '0:0',
       withdrawTo, // user's personal BTC address
+      walletProvider,
     });
     console.log('Withdrawn:', result.txId, 'Fee:', result.fee);
   };
 
   return (
-    <button onClick={handleWithdraw} disabled={isPending}>
+    <button onClick={handleWithdraw} disabled={isPending || !walletProvider}>
       {isPending ? 'Withdrawing...' : 'Withdraw'}
     </button>
   );
@@ -144,22 +148,23 @@ import { useExpiredUtxos, useRenewUtxos, useSpokeProvider } from '@sodax/dapp-ki
 import { BITCOIN_MAINNET_CHAIN_ID } from '@sodax/sdk';
 
 function UtxoManager({ tradingAddress }: { tradingAddress: string }) {
-  const spokeProvider = useSpokeProvider({ chainId: BITCOIN_MAINNET_CHAIN_ID });
-  const { data: expiredUtxos } = useExpiredUtxos(spokeProvider, tradingAddress);
-  const { mutateAsync: renewUtxos, isPending } = useRenewUtxos(spokeProvider);
+  const walletProvider = useSpokeProvider({ chainId: BITCOIN_MAINNET_CHAIN_ID });
+  const { data: expiredUtxos } = useExpiredUtxos(walletProvider, tradingAddress);
+  const { mutateAsync: renewUtxos, isPending } = useRenewUtxos();
 
   if (!expiredUtxos?.length) return <p>No expired UTXOs</p>;
 
   const handleRenew = async () => {
+    if (!walletProvider) return;
     const txIdVouts = expiredUtxos.map((u) => u.txidVout);
-    const txId = await renewUtxos({ txIdVouts });
+    const txId = await renewUtxos({ txIdVouts, walletProvider });
     console.log('Renewed:', txId);
   };
 
   return (
     <div>
       <p>{expiredUtxos.length} expired UTXOs</p>
-      <button onClick={handleRenew} disabled={isPending}>
+      <button onClick={handleRenew} disabled={isPending || !walletProvider}>
         {isPending ? 'Renewing...' : 'Renew UTXOs'}
       </button>
     </div>
