@@ -1,10 +1,11 @@
 import { useCallback, useRef, useState } from 'react';
 import { ChainTypeArr, type ChainType } from '@sodax/types';
-import type { XConnector } from '@/core/XConnector.js';
 import type { XConnection } from '@/types/index.js';
+import type { IXConnector } from '@/types/interfaces.js';
 import { matchesConnectorIdentifier } from '@/utils/matchConnectorIdentifier.js';
-import { useXWalletStore } from '@/useXWalletStore.js';
 import { useXDisconnect } from './useXDisconnect.js';
+import { useXConnections } from './useXConnections.js';
+import { useXConnectorsByChain } from './useXConnectorsByChain.js';
 
 /**
  * Per-target event emitted by `onProgress` as the batch advances.
@@ -46,9 +47,11 @@ export type UseBatchDisconnectOptions = {
   onProgress?: (event: BatchDisconnectProgressEvent) => void;
 };
 
+export type BatchDisconnectStatus = 'idle' | 'running' | 'done';
+
 export type UseBatchDisconnectResult = {
   run: () => Promise<BatchDisconnectResult>;
-  status: 'idle' | 'running' | 'done';
+  status: BatchDisconnectStatus;
   result: BatchDisconnectResult | null;
   /**
    * Clears `status` and `result`. Calling `reset()` while `status === 'running'`
@@ -69,7 +72,7 @@ export type UseBatchDisconnectResult = {
 export function resolveDisconnectTargets(
   connectors: readonly string[] | undefined,
   xConnections: Partial<Record<ChainType, XConnection>>,
-  xConnectorsByChain: Partial<Record<ChainType, XConnector[]>>,
+  xConnectorsByChain: Partial<Record<ChainType, IXConnector[]>>,
 ): ChainType[] {
   const targets: ChainType[] = [];
   for (const chainType of ChainTypeArr) {
@@ -146,10 +149,10 @@ export async function runBatchDisconnect(
 export function useBatchDisconnect(options: UseBatchDisconnectOptions = {}): UseBatchDisconnectResult {
   const { connectors, onProgress } = options;
   const disconnect = useXDisconnect();
-  const xConnections = useXWalletStore(s => s.xConnections);
-  const xConnectorsByChain = useXWalletStore(s => s.xConnectorsByChain);
+  const xConnections = useXConnections();
+  const xConnectorsByChain = useXConnectorsByChain();
 
-  const [status, setStatus] = useState<'idle' | 'running' | 'done'>('idle');
+  const [status, setStatus] = useState<BatchDisconnectStatus>('idle');
   const [result, setResult] = useState<BatchDisconnectResult | null>(null);
   const inFlightRef = useRef<Promise<BatchDisconnectResult> | null>(null);
 

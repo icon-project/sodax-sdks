@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ChainKeys } from '@sodax/types';
 import { getEntryDefaults, getRpcUrl, resolveEvmDefaults } from './walletRpcConfig.js';
-import type { EvmChainEntry } from '../types/config.js';
+import type { EvmChainEntry } from '@/types/config.js';
 
 // ─── getEntryDefaults ───────────────────────────────────────────────────────
 

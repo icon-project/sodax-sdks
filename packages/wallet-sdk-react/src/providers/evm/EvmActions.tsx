@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useConfig, useConnect, useDisconnect, useSignMessage } from 'wagmi';
-import { useXWalletStore } from '../../useXWalletStore.js';
+import { useXWalletStore } from '@/useXWalletStore.js';
 
 /**
  * Registers EVM ChainActions into the store.

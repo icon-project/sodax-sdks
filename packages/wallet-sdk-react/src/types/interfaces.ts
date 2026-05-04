@@ -36,7 +36,7 @@ export interface IXConnector {
   /** True when the wallet extension backing this connector is installed. */
   readonly isInstalled: boolean;
   /** URL where users can install the wallet extension if missing. */
-  readonly installUrl?: string;
+  readonly installUrl: string | undefined;
 
   connect(): Promise<XAccount | undefined>;
   disconnect(): Promise<void>;

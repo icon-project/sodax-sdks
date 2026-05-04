@@ -1,7 +1,7 @@
 import type { XAccount } from '@/types/index.js';
 import { useMutation, type UseMutationResult } from '@tanstack/react-query';
-import type { IXConnector } from '../types/interfaces.js';
-import { useXWalletStore } from '../useXWalletStore.js';
+import type { IXConnector } from '@/types/interfaces.js';
+import { useXWalletStore } from '@/useXWalletStore.js';
 
 /**
  * Hook for connecting to various blockchain wallets across different chains.

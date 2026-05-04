@@ -2,11 +2,11 @@ import { type ReactNode, useMemo, useRef } from 'react';
 import { WagmiProvider } from 'wagmi';
 import { walletConnect } from 'wagmi/connectors';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { createWagmiConfig } from '../../xchains/evm/EvmXService.js';
-import type { EvmTypeConfig } from '../../types/config.js';
+import { createWagmiConfig } from '@/xchains/evm/EvmXService.js';
+import type { EvmTypeConfig } from '@/types/config.js';
 import { EvmHydrator } from './EvmHydrator.js';
 import { EvmActions } from './EvmActions.js';
-import { EVM_DEFAULT_RECONNECT_ON_MOUNT, EVM_DEFAULT_SSR } from '../../constants.js';
+import { EVM_DEFAULT_RECONNECT_ON_MOUNT, EVM_DEFAULT_SSR } from '@/constants.js';
 
 type EvmProviderProps = {
   children: ReactNode;

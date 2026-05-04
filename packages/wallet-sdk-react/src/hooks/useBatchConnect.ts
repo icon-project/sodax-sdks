@@ -1,11 +1,12 @@
 import { useCallback, useRef, useState } from 'react';
 import { ChainTypeArr, type ChainType } from '@sodax/types';
-import type { XConnector } from '@/core/XConnector.js';
 import type { XAccount } from '@/types/index.js';
+import type { IXConnector } from '@/types/interfaces.js';
 import { assert } from '@/shared/guards.js';
-import { useXWalletStore } from '@/useXWalletStore.js';
 import { matchesConnectorIdentifier } from '@/utils/matchConnectorIdentifier.js';
 import { useXConnect } from './useXConnect.js';
+import { useXConnections } from './useXConnections.js';
+import { useXConnectorsByChain } from './useXConnectorsByChain.js';
 
 /**
  * Per-target event emitted by `onProgress` as the batch advances. Lets consumers
@@ -16,6 +17,8 @@ export type BatchConnectProgressEvent =
   | { chainType: ChainType; outcome: 'success' }
   | { chainType: ChainType; outcome: 'failure'; error: Error }
   | { chainType: ChainType; outcome: 'skipped' };
+
+export type BatchConnectStatus = 'idle' | 'running' | 'done';
 
 export type BatchConnectResult = {
   /** Chain types where the connect attempt succeeded. */
@@ -54,7 +57,7 @@ export type UseBatchConnectOptions = {
 
 export type UseBatchConnectResult = {
   run: () => Promise<BatchConnectResult>;
-  status: 'idle' | 'running' | 'done';
+  status: BatchConnectStatus;
   result: BatchConnectResult | null;
   /**
    * Clears `status` and `result`. Calling `reset()` while `status === 'running'`
@@ -68,7 +71,7 @@ export type UseBatchConnectResult = {
 
 type BatchConnectTarget = {
   chainType: ChainType;
-  connector: XConnector;
+  connector: IXConnector;
 };
 
 /**
@@ -79,7 +82,7 @@ type BatchConnectTarget = {
  */
 export function resolveBatchTargets(
   connectors: readonly string[],
-  connectorsByChain: Partial<Record<ChainType, XConnector[]>>,
+  connectorsByChain: Partial<Record<ChainType, IXConnector[]>>,
 ): BatchConnectTarget[] {
   const targets: BatchConnectTarget[] = [];
   for (const chainType of ChainTypeArr) {
@@ -106,7 +109,7 @@ export function resolveBatchTargets(
 export async function runBatchConnect(
   targets: readonly BatchConnectTarget[],
   helpers: {
-    connect: (connector: XConnector) => Promise<XAccount | undefined>;
+    connect: (connector: IXConnector) => Promise<XAccount | undefined>;
     isConnected: (chainType: ChainType) => boolean;
     skipConnected: boolean;
     onProgress?: (event: BatchConnectProgressEvent) => void;
@@ -169,10 +172,10 @@ export function useBatchConnect(options: UseBatchConnectOptions): UseBatchConnec
   assert(Array.isArray(options.connectors), 'useBatchConnect: options.connectors must be an array');
   const { connectors, skipConnected = false, onProgress } = options;
   const { mutateAsync: connect } = useXConnect();
-  const xConnectorsByChain = useXWalletStore(s => s.xConnectorsByChain);
-  const xConnections = useXWalletStore(s => s.xConnections);
+  const xConnectorsByChain = useXConnectorsByChain();
+  const xConnections = useXConnections();
 
-  const [status, setStatus] = useState<'idle' | 'running' | 'done'>('idle');
+  const [status, setStatus] = useState<BatchConnectStatus>('idle');
   const [result, setResult] = useState<BatchConnectResult | null>(null);
   const inFlightRef = useRef<Promise<BatchConnectResult> | null>(null);
 

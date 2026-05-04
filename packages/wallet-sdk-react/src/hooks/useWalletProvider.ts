@@ -4,7 +4,7 @@ import {
   getChainType,
   type GetChainType,
 } from '@sodax/types';
-import { useXWalletStore, type GetWalletProviderReturnType } from '../useXWalletStore.js';
+import { useXWalletStore, type GetWalletProviderReturnType } from '@/useXWalletStore.js';
 
 const warnedChains = new Set<ChainType>();
 
