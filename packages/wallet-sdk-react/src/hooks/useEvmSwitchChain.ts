@@ -13,10 +13,14 @@ import type { EIP1193Provider } from 'viem';
 import { Wallet } from '@injectivelabs/wallet-base';
 import { assert, hasFunctionProperty, isRecord } from '@/shared/guards.js';
 
-interface UseEvmSwitchChainReturn {
+export type UseEvmSwitchChainOptions = {
+  xChainId: SpokeChainKey;
+};
+
+export type UseEvmSwitchChainReturn = {
   isWrongChain: boolean;
   handleSwitchChain: () => void;
-}
+};
 
 const EVM_DISABLED_RESULT: UseEvmSwitchChainReturn = { isWrongChain: false, handleSwitchChain: () => {} };
 
@@ -28,10 +32,6 @@ const getInjectedEthereumProvider = (): EIP1193Provider => {
   const maybeEthereum = (window as unknown as Record<string, unknown>).ethereum;
   assert(isEip1193Provider(maybeEthereum), '[useEvmSwitchChain] window.ethereum is not an EIP-1193 provider');
   return maybeEthereum;
-};
-
-const isInjectiveXService = (value: unknown): value is InjectiveXService => {
-  return typeof value === 'object' && value !== null && value instanceof InjectiveXService;
 };
 
 export const switchEthereumChain = async (): Promise<unknown> => {
@@ -68,27 +68,27 @@ export const switchEthereumChain = async (): Promise<unknown> => {
  * because `evmEnabled` is derived from config which is immutable after mount —
  * the branch never changes during the component's lifetime.
  */
-export const useEvmSwitchChain = (expectedXChainId: SpokeChainKey): UseEvmSwitchChainReturn => {
+export function useEvmSwitchChain({ xChainId }: UseEvmSwitchChainOptions): UseEvmSwitchChainReturn {
   const evmEnabled = useIsChainEnabled('EVM');
 
   if (!evmEnabled) {
     return EVM_DISABLED_RESULT;
   }
 
-  return useEvmSwitchChainInner(expectedXChainId);
-};
+  return useEvmSwitchChainInner({ xChainId });
+}
 
-const useEvmSwitchChainInner = (expectedXChainId: SpokeChainKey): UseEvmSwitchChainReturn => {
-  const xChainType = getXChainType(expectedXChainId);
-  const expectedChainId = baseChainInfo[expectedXChainId].chainId;
+function useEvmSwitchChainInner({ xChainId }: UseEvmSwitchChainOptions): UseEvmSwitchChainReturn {
+  const xChainType = getXChainType(xChainId);
+  const expectedChainId = baseChainInfo[xChainId].chainId;
   // EVM chain uses expectedChainId for switchChain(); assert it's numeric.
   // Injective uses Ethereum mainnet separately. Other chain types — hook is a no-op.
   if (xChainType === 'EVM') {
     assert(typeof expectedChainId === 'number', '[useEvmSwitchChain] EVM chain must have numeric chainId');
   }
 
-  const xService = useXService('INJECTIVE');
-  const injectiveXService = isInjectiveXService(xService) ? xService : undefined;
+  const xService = useXService({ xChainType: 'INJECTIVE' });
+  const injectiveXService = xService instanceof InjectiveXService ? xService : undefined;
   const ethereumChainId = useEthereumChainId();
 
   const { chainId } = useAccount();
@@ -119,4 +119,4 @@ const useEvmSwitchChainInner = (expectedXChainId: SpokeChainKey): UseEvmSwitchCh
     }),
     [isWrongChain, handleSwitchChain],
   );
-};
+}

@@ -55,9 +55,9 @@ export function WithdrawModal({
   const [successData, setSuccessData] = useState<ActionSuccessData | null>(null);
   const { selectedChainId } = useAppStore();
 
-  const sourceWalletProvider = useWalletProvider(selectedChainId);
-  const { address: sourceAddress } = useXAccount(selectedChainId);
-  const { address: destAddress } = useXAccount(token.chainKey);
+  const sourceWalletProvider = useWalletProvider({ xChainId: selectedChainId });
+  const { address: sourceAddress } = useXAccount({ xChainId: selectedChainId });
+  const { address: destAddress } = useXAccount({ xChainId: token.chainKey });
 
   const { mutateAsync: withdraw, isPending, error, reset: resetError } = useWithdraw();
 
@@ -87,7 +87,7 @@ export function WithdrawModal({
     reset: resetApproveError,
   } = useMMApprove();
 
-  const { isWrongChain, handleSwitchChain } = useEvmSwitchChain(selectedChainId);
+  const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: selectedChainId });
 
   const isBusy = isApproving || isPending;
   const needsApproval = false;

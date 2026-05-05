@@ -82,12 +82,12 @@ export function RepayModal({
       setFromChainId(debtChainId);
     }
   }, [open, debtChainId]);
-  const { address: fromAddress } = useXAccount(fromChainId);
-  const { address: toAddress } = useXAccount(toChainId);
+  const { address: fromAddress } = useXAccount({ xChainId: fromChainId });
+  const { address: toAddress } = useXAccount({ xChainId: toChainId });
 
   const sourceToken = getTokenOnChain(sodax, token.symbol, fromChainId);
 
-  const sourceWalletProvider = useWalletProvider(fromChainId);
+  const sourceWalletProvider = useWalletProvider({ xChainId: fromChainId });
 
   const { mutateAsync: repay, isPending } = useRepay();
   const { mutateAsync: approve, isPending: isApproving } = useMMApprove();
@@ -131,7 +131,7 @@ export function RepayModal({
     params: { payload: sourceParams },
   });
 
-  const xService = useXService(getXChainType(fromChainId));
+  const xService = useXService({ xChainType: getXChainType(fromChainId) });
   const { data: balances, isLoading: isBalancesLoading } = useXBalances({
     params: {
       xService,
@@ -154,7 +154,9 @@ export function RepayModal({
   const needsSourceApproval =
     (sourceAllowed === false || (sourceAllowed === undefined && !isSourceAllowanceLoading)) && !isApproving;
 
-  const { isWrongChain: isWrongSourceChain, handleSwitchChain: handleSwitchToSource } = useEvmSwitchChain(fromChainId);
+  const { isWrongChain: isWrongSourceChain, handleSwitchChain: handleSwitchToSource } = useEvmSwitchChain({
+    xChainId: fromChainId,
+  });
 
   const isMissingMarketChainAddress = !toAddress;
 

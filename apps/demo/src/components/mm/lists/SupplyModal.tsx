@@ -47,9 +47,9 @@ export function SupplyModal({ open, onOpenChange, token, onSuccess, maxSupply, i
   // Stores success data (amount, token, txHash) when transaction completes, for displaying success screen
   const [successData, setSuccessData] = useState<ActionSuccessData | null>(null);
   const { selectedChainId } = useAppStore();
-  const { address } = useXAccount(selectedChainId);
+  const { address } = useXAccount({ xChainId: selectedChainId });
 
-  const sourceWalletProvider = useWalletProvider(selectedChainId);
+  const sourceWalletProvider = useWalletProvider({ xChainId: selectedChainId });
 
   const { mutateAsync: supply, isPending, error, reset: resetSupply } = useSupply();
 
@@ -73,7 +73,7 @@ export function SupplyModal({ open, onOpenChange, token, onSuccess, maxSupply, i
     reset: resetApproveError,
   } = useMMApprove();
 
-  const { isWrongChain, handleSwitchChain } = useEvmSwitchChain(selectedChainId);
+  const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: selectedChainId });
 
   const handleSupply = async (): Promise<void> => {
     if (!sourceWalletProvider || !params) return;

@@ -47,7 +47,7 @@ export function BorrowAssetsList({ initialChainId }: BorrowAssetsListProps): JSX
     maxDebt: string;
   } | null>(null);
 
-  const { address } = useXAccount(selectedChainId);
+  const { address } = useXAccount({ xChainId: selectedChainId });
 
   const { data: allMoneyMarketAssets, isLoading: isAssetsLoading } = useBackendAllMoneyMarketAssets();
 
@@ -71,7 +71,7 @@ export function BorrowAssetsList({ initialChainId }: BorrowAssetsListProps): JSX
   }, [sodax, allMoneyMarketAssets, selectedChainId]);
 
   const tokensOnSelectedChain = sodax.moneyMarket.getSupportedTokensByChainId(selectedChainId);
-  const xService = useXService(getXChainType(selectedChainId));
+  const xService = useXService({ xChainType: getXChainType(selectedChainId) });
   const { data: balances } = useXBalances({
     params: {
       xService,

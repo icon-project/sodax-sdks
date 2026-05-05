@@ -19,7 +19,7 @@ function EmptyState({ message, className = 'text-muted-foreground' }: { message:
 }
 
 export default function LimitOrderList({ spokeChainId }: { spokeChainId: SpokeChainKey }) {
-  const account = useXAccount(spokeChainId);
+  const account = useXAccount({ xChainId: spokeChainId });
   const { data: userHubAddress } = useDeriveUserWalletAddress({
     params: { spokeChainId, spokeAddress: account.address },
   });

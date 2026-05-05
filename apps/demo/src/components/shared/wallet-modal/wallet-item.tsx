@@ -27,13 +27,13 @@ export function shortenAddress(address: string, chars = 7): string {
 }
 
 const WalletItem = ({ name, xChainType, onConnectionSuccess }: WalletItemProps) => {
-  const xConnection = useXConnection(xChainType);
-  const { address } = useXAccount(xChainType);
+  const xConnection = useXConnection({ xChainType });
+  const { address } = useXAccount({ xChainType });
 
   const [connectingXConnector, setConnectingXConnector] = useState<IXConnector | null>(null);
   const [wasConnecting, setWasConnecting] = useState(false);
 
-  const xConnectors = useXConnectors(xChainType);
+  const xConnectors = useXConnectors({ xChainType });
   const { mutateAsync: xConnect, isPending } = useXConnect();
   const xDisconnect = useXDisconnect();
 
@@ -69,7 +69,7 @@ const WalletItem = ({ name, xChainType, onConnectionSuccess }: WalletItemProps) 
 
   const handleDisconnect = useCallback(() => {
     setConnectingXConnector(null);
-    xDisconnect(xChainType);
+    xDisconnect({ xChainType });
   }, [xDisconnect, xChainType]);
 
   ///////////////////////////////////////////////////////////////////////////////////////////

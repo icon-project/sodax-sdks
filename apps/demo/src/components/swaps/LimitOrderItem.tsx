@@ -75,7 +75,7 @@ export default function LimitOrderItem({ intent }: LimitOrderItemProps) {
   }, [intent.intent.minOutputAmount, outputToken]);
 
   // Wallet provider for canceling (use srcChain since that's where the intent was created)
-  const walletProvider = useWalletProvider(srcChainId);
+  const walletProvider = useWalletProvider({ xChainId: srcChainId });
   const { mutateAsync: cancelLimitOrder, isPending: isCanceling } = useCancelLimitOrder();
 
   const handleCancel = async (): Promise<void> => {

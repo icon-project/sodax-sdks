@@ -30,23 +30,23 @@ export function BridgeManager() {
   const [toToken, setToToken] = useState<XToken | undefined>(undefined);
   const [fromAmount, setFromAmount] = useState('');
 
-  const fromAccount = useXAccount(fromChainKey);
-  const toAccount = useXAccount(toChainKey);
+  const fromAccount = useXAccount({ xChainId: fromChainKey });
+  const toAccount = useXAccount({ xChainId: toChainKey });
   const disconnect = useXDisconnect();
 
-  const walletProvider = useWalletProvider(fromChainKey);
+  const walletProvider = useWalletProvider({ xChainId: fromChainKey });
   const fromChainType = getXChainType(fromChainKey);
   const toChainType = getXChainType(toChainKey);
 
-  const fromBtcConnection = useXConnection(fromChainType);
-  const fromBtcService = useXService(fromChainType);
+  const fromBtcConnection = useXConnection({ xChainType: fromChainType });
+  const fromBtcService = useXService({ xChainType: fromChainType });
   const fromBtcConnector =
     fromChainType === 'BITCOIN' && fromBtcConnection?.xConnectorId && fromBtcService
       ? fromBtcService.getXConnectorById(fromBtcConnection.xConnectorId)
       : undefined;
 
-  const toBtcConnection = useXConnection(toChainType);
-  const toBtcService = useXService(toChainType);
+  const toBtcConnection = useXConnection({ xChainType: toChainType });
+  const toBtcService = useXService({ xChainType: toChainType });
   const toBtcConnector =
     toChainType === 'BITCOIN' && toBtcConnection?.xConnectorId && toBtcService
       ? toBtcService.getXConnectorById(toBtcConnection.xConnectorId)
@@ -167,7 +167,7 @@ export function BridgeManager() {
             <div className="flex items-center gap-2">
               <Input id="fromAddress" type="text" value={fromAccount.address ?? ''} disabled />
               {fromAccount.address ? (
-                <Button onClick={() => { const type = getXChainType(fromChainKey); if (type) disconnect(type); }}>Disconnect</Button>
+                <Button onClick={() => { const type = getXChainType(fromChainKey); if (type) disconnect({ xChainType: type }); }}>Disconnect</Button>
               ) : (
                 <Button onClick={openWalletModal}>Connect</Button>
               )}
@@ -231,7 +231,7 @@ export function BridgeManager() {
                 disabled
               />
               {toAccount.address ? (
-                <Button onClick={() => { const type = getXChainType(toChainKey); if (type) disconnect(type); }}>Disconnect</Button>
+                <Button onClick={() => { const type = getXChainType(toChainKey); if (type) disconnect({ xChainType: type }); }}>Disconnect</Button>
               ) : (
                 <Button onClick={openWalletModal}>Connect</Button>
               )}

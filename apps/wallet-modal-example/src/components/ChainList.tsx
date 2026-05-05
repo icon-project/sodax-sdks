@@ -26,7 +26,7 @@ export function ChainList({ onPick }: ChainListProps) {
     }
     setPendingDisconnect(chainType);
     try {
-      await disconnect(chainType);
+      await disconnect({ xChainType: chainType });
     } finally {
       setPendingDisconnect(null);
     }

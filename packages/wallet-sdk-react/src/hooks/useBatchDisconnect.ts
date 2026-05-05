@@ -3,9 +3,10 @@ import { ChainTypeArr, type ChainType } from '@sodax/types';
 import type { XConnection } from '@/types/index.js';
 import type { IXConnector } from '@/types/interfaces.js';
 import { matchesConnectorIdentifier } from '@/utils/matchConnectorIdentifier.js';
-import { useXDisconnect } from './useXDisconnect.js';
+import { useXDisconnect, type UseXDisconnectArgs } from './useXDisconnect.js';
 import { useXConnections } from './useXConnections.js';
 import { useXConnectorsByChain } from './useXConnectorsByChain.js';
+import type { BatchOperationStatus } from '@/types/batchStatus.js';
 
 /**
  * Per-target event emitted by `onProgress` as the batch advances.
@@ -47,11 +48,9 @@ export type UseBatchDisconnectOptions = {
   onProgress?: (event: BatchDisconnectProgressEvent) => void;
 };
 
-export type BatchDisconnectStatus = 'idle' | 'running' | 'done';
-
 export type UseBatchDisconnectResult = {
   run: () => Promise<BatchDisconnectResult>;
-  status: BatchDisconnectStatus;
+  status: BatchOperationStatus;
   result: BatchDisconnectResult | null;
   /**
    * Clears `status` and `result`. Calling `reset()` while `status === 'running'`
@@ -99,7 +98,7 @@ export function resolveDisconnectTargets(
  */
 export async function runBatchDisconnect(
   chainTypes: readonly ChainType[],
-  disconnect: (chainType: ChainType) => Promise<void>,
+  disconnect: (args: UseXDisconnectArgs) => Promise<void>,
   onProgress?: (event: BatchDisconnectProgressEvent) => void,
 ): Promise<BatchDisconnectResult> {
   const successful: ChainType[] = [];
@@ -116,7 +115,7 @@ export async function runBatchDisconnect(
 
   for (const chainType of chainTypes) {
     try {
-      await disconnect(chainType);
+      await disconnect({ xChainType: chainType });
       successful.push(chainType);
       emit({ chainType, outcome: 'success' });
     } catch (raw) {
@@ -146,13 +145,15 @@ export async function runBatchDisconnect(
  * Best-effort: errors are collected, not thrown. `run()` is idempotent — a
  * double-invocation while one batch is in flight returns the same promise.
  */
-export function useBatchDisconnect(options: UseBatchDisconnectOptions = {}): UseBatchDisconnectResult {
-  const { connectors, onProgress } = options;
+export function useBatchDisconnect({
+  connectors,
+  onProgress,
+}: UseBatchDisconnectOptions = {}): UseBatchDisconnectResult {
   const disconnect = useXDisconnect();
   const xConnections = useXConnections();
   const xConnectorsByChain = useXConnectorsByChain();
 
-  const [status, setStatus] = useState<BatchDisconnectStatus>('idle');
+  const [status, setStatus] = useState<BatchOperationStatus>('idle');
   const [result, setResult] = useState<BatchDisconnectResult | null>(null);
   const inFlightRef = useRef<Promise<BatchDisconnectResult> | null>(null);
 

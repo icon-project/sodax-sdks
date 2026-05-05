@@ -3,7 +3,7 @@ import type { ChainType } from '@sodax/types';
 import type { XAccount } from '@/types/index.js';
 import type { XConnector } from '@/core/XConnector.js';
 import { useXConnect } from './useXConnect.js';
-import { useXDisconnect } from './useXDisconnect.js';
+import { useXDisconnect, type UseXDisconnectArgs } from './useXDisconnect.js';
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'success' | 'error';
 
@@ -19,7 +19,7 @@ export type UseConnectionFlowResult = {
   /** Connect and return the resolved account. Errors populate `error` instead of throwing. */
   connect: (connector: XConnector) => Promise<XAccount | undefined>;
   /** Disconnect a specific chain. Matches `useXDisconnect` semantics. */
-  disconnect: (chainType: ChainType) => Promise<void>;
+  disconnect: (args: UseXDisconnectArgs) => Promise<void>;
   /** Re-runs the last attempted `connect(connector)`. No-op if no prior attempt. */
   retry: () => Promise<XAccount | undefined>;
   /** Clears `status`, `error`, and `activeConnector`. */

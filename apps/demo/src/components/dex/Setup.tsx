@@ -15,7 +15,7 @@ interface SetupProps {
   handleSwitchChain: () => void;
   xAccount: XAccount | null;
   openWalletModal: () => void;
-  disconnect: (chainType: ChainType) => void;
+  disconnect: (options: { xChainType: ChainType }) => void;
 }
 
 export function Setup({
@@ -70,9 +70,8 @@ export function Setup({
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    if (selectedChainId) {
-                      disconnect(getXChainType(selectedChainId) as ChainType);
-                    }
+                    const xChainType = selectedChainId ? getXChainType(selectedChainId) : undefined;
+                    if (xChainType) disconnect({ xChainType });
                   }}
                 >
                   Disconnect

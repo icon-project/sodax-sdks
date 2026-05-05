@@ -14,7 +14,7 @@ type WalletListProps = {
 };
 
 export function WalletList({ chainType, onPick, onBack }: WalletListProps) {
-  const connectors = useXConnectors(chainType);
+  const connectors = useXConnectors({ xChainType: chainType });
   // Hana goes first when present — same UX as apps/web today.
   const sorted = useMemo(() => sortConnectors(connectors, { preferred: ['hana'] }), [connectors]);
   const hasAnyWalletForChain = useIsWalletInstalled({ chainType });

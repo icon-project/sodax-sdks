@@ -49,11 +49,11 @@ import { useQueryClient } from '@tanstack/react-query';
 export default function LimitOrderCard() {
   const { sodax } = useSodaxContext();
   const [sourceChain, setSourceChain] = useState<SpokeChainKey>(ChainKeys.ICON_MAINNET);
-  const sourceAccount = useXAccount(sourceChain);
-  const sourceWalletProvider = useWalletProvider(sourceChain);
+  const sourceAccount = useXAccount({ xChainId: sourceChain });
+  const sourceWalletProvider = useWalletProvider({ xChainId: sourceChain });
   const [destChain, setDestChain] = useState<SpokeChainKey>(ChainKeys.POLYGON_MAINNET);
-  const destAccount = useXAccount(destChain);
-  const destWalletProvider = useWalletProvider(destChain);
+  const destAccount = useXAccount({ xChainId: destChain });
+  const destWalletProvider = useWalletProvider({ xChainId: destChain });
   const { openWalletModal } = useAppStore();
   const { mutateAsync: createLimitOrder } = useCreateLimitOrder();
   const [sourceToken, setSourceToken] = useState<XToken | undefined>(
@@ -176,7 +176,7 @@ export default function LimitOrderCard() {
     setLimitOrderPayload(limitOrderParams);
   };
 
-  const { isWrongChain, handleSwitchChain } = useEvmSwitchChain(sourceChain as SpokeChainKey);
+  const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: sourceChain as SpokeChainKey });
 
   const queryClient = useQueryClient();
 
@@ -196,11 +196,11 @@ export default function LimitOrderCard() {
 
   const disconnect = useXDisconnect();
   const handleSourceAccountDisconnect = () => {
-    disconnect(getXChainType(sourceChain) as ChainType);
+    disconnect({ xChainType: getXChainType(sourceChain) as ChainType });
   };
 
   const handleDestAccountDisconnect = () => {
-    disconnect(getXChainType(destChain) as ChainType);
+    disconnect({ xChainType: getXChainType(destChain) as ChainType });
   };
 
   const handleApprove = async (): Promise<void> => {

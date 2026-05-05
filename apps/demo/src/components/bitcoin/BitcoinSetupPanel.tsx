@@ -49,8 +49,8 @@ export const BitcoinSetupPanel = ({ walletProvider, onReadyChange, nativeBalance
   const [showWithdrawDialog, setShowWithdrawDialog] = useState(false);
 
   // Address type selector (Xverse only)
-  const xConnection = useXConnection('BITCOIN');
-  const xConnectors = useXConnectors('BITCOIN');
+  const xConnection = useXConnection({ xChainType: 'BITCOIN' });
+  const xConnectors = useXConnectors({ xChainType: 'BITCOIN' });
   const { mutateAsync: xConnect } = useXConnect();
   const xDisconnect = useXDisconnect();
   const [isSwitching, setIsSwitching] = useState(false);
@@ -68,7 +68,7 @@ export const BitcoinSetupPanel = ({ walletProvider, onReadyChange, nativeBalance
     try {
       const xverseConnector = activeConnector as XverseXConnector;
       xverseConnector.setAddressPurpose(newType);
-      xDisconnect('BITCOIN');
+      xDisconnect({ xChainType: 'BITCOIN' });
       await xConnect(xverseConnector);
     } catch (e) {
       console.error('Failed to switch address type', e);

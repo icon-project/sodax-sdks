@@ -25,10 +25,10 @@ import { saveTokenIdToLocalStorage } from '@/lib/utils';
 export function SimplePoolManager(): JSX.Element {
   const { sodax } = useSodaxContext();
   const { openWalletModal, selectedChainId, selectChainId } = useAppStore();
-  const { isWrongChain, handleSwitchChain } = useEvmSwitchChain(selectedChainId);
-  const xAccount = useXAccount(selectedChainId);
+  const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: selectedChainId });
+  const xAccount = useXAccount({ xChainId: selectedChainId });
   const disconnect = useXDisconnect();
-  const walletProvider = useWalletProvider(selectedChainId);
+  const walletProvider = useWalletProvider({ xChainId: selectedChainId });
   const srcAddress = xAccount?.address as `0x${string}` | undefined;
 
   const { data: pools = [] } = usePools();

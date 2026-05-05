@@ -15,7 +15,7 @@ import { assert, hasFunctionProperty, isRecord } from '@/shared/guards.js';
  * @returns The current Ethereum chain ID as a number, or null if not available/connected
  */
 export default function useEthereumChainId(): number | null {
-  const xService = useXService('INJECTIVE');
+  const xService = useXService({ xChainType: 'INJECTIVE' });
   const injectiveXService = xService instanceof InjectiveXService ? xService : undefined;
   const [ethereumChainId, setEthereumChainId] = useState<number | null>(null);
   useEffect(() => {

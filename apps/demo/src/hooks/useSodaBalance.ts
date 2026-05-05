@@ -10,7 +10,7 @@ import { getXChainType, useXService } from '@sodax/wallet-sdk-react';
 export function useSodaBalance(chainKey: SpokeChainKey, userAddress: string | undefined): bigint | undefined {
   const { sodax } = useSodaxContext();
   const sodaToken = sodax.config.findSupportedTokenBySymbol(chainKey, 'SODA');
-  const xService = useXService(getXChainType(chainKey));
+  const xService = useXService({ xChainType: getXChainType(chainKey) });
 
   const { data: balances } = useXBalances({
     params: {

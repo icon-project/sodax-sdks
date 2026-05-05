@@ -96,7 +96,7 @@ export function ManageLiquidity({
     () => sodax.dex.clService.getAssetsForPool(selectedChainId, pools[selectedPoolIndex]),
     [sodax, selectedChainId, pools, selectedPoolIndex],
   );
-  const xService = useXService(getXChainType(selectedChainId));
+  const xService = useXService({ xChainType: getXChainType(selectedChainId) });
   const { data: sourceBalances } = useXBalances({
     params: {
       xService,

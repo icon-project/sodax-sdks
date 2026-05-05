@@ -41,7 +41,7 @@ export function getXBalancesQueryOptions({ xService, xChainId, xTokens, address 
  *
  * @example
  * ```tsx
- * const xService = useXService(getXChainType(xChainId));
+ * const xService = useXService({ xChainType: getXChainType(xChainId) });
  * const { data: balances } = useXBalances({ params: { xService, xChainId, xTokens, address } });
  * ```
  */

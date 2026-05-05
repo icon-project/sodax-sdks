@@ -71,10 +71,10 @@ export default function SwapCard({
     chain: ChainKeys.POLYGON_MAINNET,
     token: getSupportedSolverTokens(ChainKeys.POLYGON_MAINNET)[0],
   });
-  const sourceAccount = useXAccount(src.chain);
-  const sourceWalletProvider = useWalletProvider(src.chain);
-  const destAccount = useXAccount(dst.chain);
-  const destWalletProvider = useWalletProvider(dst.chain);
+  const sourceAccount = useXAccount({ xChainId: src.chain });
+  const sourceWalletProvider = useWalletProvider({ xChainId: src.chain });
+  const destAccount = useXAccount({ xChainId: dst.chain });
+  const destWalletProvider = useWalletProvider({ xChainId: dst.chain });
   const { openWalletModal } = useAppStore();
   const { mutateAsync: swap } = useSwap();
   const [sourceAmount, setSourceAmount] = useState<string>('');
@@ -117,8 +117,8 @@ export default function SwapCard({
 
   // Bitcoin connector info for fund dialog (source)
   const sourceChainType = getXChainType(src.chain);
-  const sourceBtcConnection = useXConnection(sourceChainType);
-  const sourceBtcService = useXService(sourceChainType);
+  const sourceBtcConnection = useXConnection({ xChainType: sourceChainType });
+  const sourceBtcService = useXService({ xChainType: sourceChainType });
   const sourceBtcConnector =
     sourceChainType === 'BITCOIN' && sourceBtcConnection?.xConnectorId && sourceBtcService
       ? sourceBtcService.getXConnectorById(sourceBtcConnection.xConnectorId)
@@ -126,8 +126,8 @@ export default function SwapCard({
 
   // Bitcoin connector info (dest)
   const destChainType = getXChainType(dst.chain);
-  const destBtcConnection = useXConnection(destChainType);
-  const destBtcService = useXService(destChainType);
+  const destBtcConnection = useXConnection({ xChainType: destChainType });
+  const destBtcService = useXService({ xChainType: destChainType });
   const destBtcConnector =
     destChainType === 'BITCOIN' && destBtcConnection?.xConnectorId && destBtcService
       ? destBtcService.getXConnectorById(destBtcConnection.xConnectorId)
@@ -147,7 +147,7 @@ export default function SwapCard({
   };
 
   // Balance fetching- Fetch source token balance for the connected wallet
-  const sourceXService = useXService(getXChainType(src.chain));
+  const sourceXService = useXService({ xChainType: getXChainType(src.chain) });
   const { data: sourceBalances } = useXBalances({
     params: {
       xService: sourceXService,
@@ -159,7 +159,7 @@ export default function SwapCard({
   const sourceTokenBalance = sourceBalances?.[src.token?.address ?? ''] ?? 0n;
 
   // Fetch destination token balance for the connected wallet
-  const destXService = useXService(getXChainType(dst.chain));
+  const destXService = useXService({ xChainType: getXChainType(dst.chain) });
   const { data: destBalances } = useXBalances({
     params: {
       xService: destXService,
@@ -292,7 +292,7 @@ export default function SwapCard({
     setIntentOrderPayload(createIntentParams);
   };
 
-  const { isWrongChain, handleSwitchChain } = useEvmSwitchChain(src.chain);
+  const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: src.chain });
 
   const handleSubmitTxSwap = async (intentOrderPayload: CreateIntentParams) => {
     if (!sourceWalletProvider) {
@@ -380,11 +380,11 @@ export default function SwapCard({
 
   const disconnect = useXDisconnect();
   const handleSourceAccountDisconnect = () => {
-    disconnect(getXChainType(src.chain) as ChainType);
+    disconnect({ xChainType: getXChainType(src.chain) as ChainType });
   };
 
   const handleDestAccountDisconnect = () => {
-    disconnect(getXChainType(dst.chain) as ChainType);
+    disconnect({ xChainType: getXChainType(dst.chain) as ChainType });
   };
 
   const handleApprove = async (): Promise<void> => {

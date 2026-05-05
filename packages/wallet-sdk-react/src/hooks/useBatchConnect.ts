@@ -7,6 +7,7 @@ import { matchesConnectorIdentifier } from '@/utils/matchConnectorIdentifier.js'
 import { useXConnect } from './useXConnect.js';
 import { useXConnections } from './useXConnections.js';
 import { useXConnectorsByChain } from './useXConnectorsByChain.js';
+import type { BatchOperationStatus } from '@/types/batchStatus.js';
 
 /**
  * Per-target event emitted by `onProgress` as the batch advances. Lets consumers
@@ -17,8 +18,6 @@ export type BatchConnectProgressEvent =
   | { chainType: ChainType; outcome: 'success' }
   | { chainType: ChainType; outcome: 'failure'; error: Error }
   | { chainType: ChainType; outcome: 'skipped' };
-
-export type BatchConnectStatus = 'idle' | 'running' | 'done';
 
 export type BatchConnectResult = {
   /** Chain types where the connect attempt succeeded. */
@@ -57,7 +56,7 @@ export type UseBatchConnectOptions = {
 
 export type UseBatchConnectResult = {
   run: () => Promise<BatchConnectResult>;
-  status: BatchConnectStatus;
+  status: BatchOperationStatus;
   result: BatchConnectResult | null;
   /**
    * Clears `status` and `result`. Calling `reset()` while `status === 'running'`
@@ -168,14 +167,17 @@ export async function runBatchConnect(
  * const { run } = useBatchConnect({ connectors: ['hana'], skipConnected: true });
  * await run();
  */
-export function useBatchConnect(options: UseBatchConnectOptions): UseBatchConnectResult {
-  assert(Array.isArray(options.connectors), 'useBatchConnect: options.connectors must be an array');
-  const { connectors, skipConnected = false, onProgress } = options;
+export function useBatchConnect({
+  connectors,
+  skipConnected = false,
+  onProgress,
+}: UseBatchConnectOptions): UseBatchConnectResult {
+  assert(Array.isArray(connectors), 'useBatchConnect: connectors must be an array');
   const { mutateAsync: connect } = useXConnect();
   const xConnectorsByChain = useXConnectorsByChain();
   const xConnections = useXConnections();
 
-  const [status, setStatus] = useState<BatchConnectStatus>('idle');
+  const [status, setStatus] = useState<BatchOperationStatus>('idle');
   const [result, setResult] = useState<BatchConnectResult | null>(null);
   const inFlightRef = useRef<Promise<BatchConnectResult> | null>(null);
 

@@ -1,51 +1,26 @@
 import { useMemo } from 'react';
 
-import { ChainTypeArr, type SpokeChainKey, type ChainType } from '@sodax/types';
+import type { ChainType, SpokeChainKey } from '@sodax/types';
 
 import type { XAccount } from '@/types/index.js';
-import { useXConnection } from './useXConnection.js';
+import { assert } from '@/shared/guards.js';
 import { getXChainType } from '@/actions/index.js';
+import { useXConnection } from './useXConnection.js';
 
-/**
- * Hook to get the current connected account for a specific blockchain
- *
- * @param chainIdentifier - The blockchain identifier (either chain type like 'EVM' or chain ID like '0xa86a.avax')
- * @returns {XAccount} The current connected account, or undefined if no account is connected
- *
- * @example
- * ```ts
- * // Using ChainType (preferred)
- * const { address } = useXAccount('EVM');
- *
- * // Using SpokeChainKey
- * const { address } = useXAccount('0xa86a.avax');
- *
- * // Returns: { address: string | undefined, xChainType: ChainType | undefined }
- * ```
- */
-function isChainType(chainIdentifier: ChainType | SpokeChainKey): chainIdentifier is ChainType {
-  return ChainTypeArr.some(v => v === chainIdentifier);
-}
+export type UseXAccountOptions =
+  | { xChainId: SpokeChainKey; xChainType?: never }
+  | { xChainType: ChainType; xChainId?: never };
 
-export function useXAccount(chainIdentifier?: ChainType | SpokeChainKey): XAccount {
-  const resolvedChainType: ChainType | undefined = chainIdentifier
-    ? isChainType(chainIdentifier)
-      ? chainIdentifier
-      : getXChainType(chainIdentifier)
-    : undefined;
+/** Connected account at chain-family level. Pass `xChainId` (chain id) or `xChainType` (family), not both. */
+export function useXAccount({ xChainId, xChainType }: UseXAccountOptions): XAccount {
+  assert(!(xChainId && xChainType), '[useXAccount] pass either xChainId or xChainType, not both');
+  assert(xChainId || xChainType, '[useXAccount] pass xChainId or xChainType');
 
-  const xConnection = useXConnection(resolvedChainType);
+  const target = xChainType ?? getXChainType(xChainId);
+  const xConnection = useXConnection({ xChainType: target });
 
-  const xAccount = useMemo((): XAccount => {
-    if (!resolvedChainType) {
-      return {
-        address: undefined,
-        xChainType: undefined,
-      };
-    }
-
-    return xConnection?.xAccount || { address: undefined, xChainType: resolvedChainType };
-  }, [resolvedChainType, xConnection]);
-
-  return xAccount;
+  return useMemo(
+    (): XAccount => xConnection?.xAccount ?? { address: undefined, xChainType: target },
+    [target, xConnection],
+  );
 }

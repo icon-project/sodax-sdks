@@ -492,7 +492,7 @@ Consumer apps wire both packages side-by-side:
 import { useXService, getXChainType } from '@sodax/wallet-sdk-react';
 import { useXBalances } from '@sodax/dapp-kit';
 
-const xService = useXService(getXChainType(chainId));
+const xService = useXService({ xChainType: getXChainType(chainId) });
 const { data } = useXBalances({ xService, xChainId, xTokens, address });
 ```
 

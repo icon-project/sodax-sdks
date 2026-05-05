@@ -21,7 +21,7 @@ export type UseDexDepositVars<K extends SpokeChainKey = SpokeChainKey> = Omit<As
  *
  * @example
  * ```tsx
- * const walletProvider = useWalletProvider(chainKey);
+ * const walletProvider = useWalletProvider({ xChainId: chainKey });
  * const { mutateAsync: deposit } = useDexDeposit();
  * try {
  *   const { spokeTxHash, hubTxHash } = await deposit({ params, walletProvider });

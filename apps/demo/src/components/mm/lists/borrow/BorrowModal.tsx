@@ -78,7 +78,7 @@ export function BorrowModal({
 
   const { data: formattedReserves } = useReservesUsdFormat();
 
-  const { address: destinationAddressForReserves } = useXAccount(destinationChainId);
+  const { address: destinationAddressForReserves } = useXAccount({ xChainId: destinationChainId });
   const { data: destinationUserReserves } = useUserReservesData({
     params: { spokeChainKey: destinationChainId, userAddress: destinationAddressForReserves },
   });
@@ -149,9 +149,9 @@ export function BorrowModal({
     return truncateToDecimals(calculatedMaxBorrow * MAX_BORROW_SAFETY_MARGIN, AMOUNT_DISPLAY_DECIMALS);
   }, [userSummary, destinationMetrics.formattedReserve, aToken, initialMaxBorrow, initialPriceUSD]);
 
-  const sourceWalletProvider = useWalletProvider(sourceChainId);
-  const { address: sourceAddress } = useXAccount(sourceChainId);
-  const { address: destinationAddress } = useXAccount(destinationChainId);
+  const sourceWalletProvider = useWalletProvider({ xChainId: sourceChainId });
+  const { address: sourceAddress } = useXAccount({ xChainId: sourceChainId });
+  const { address: destinationAddress } = useXAccount({ xChainId: destinationChainId });
 
   const { mutateAsync: borrow, isPending, error, reset: resetBorrowError } = useBorrow();
 
@@ -195,7 +195,7 @@ export function BorrowModal({
     };
   }, [amount, destinationToken, sourceChainId, destinationChainId, destinationAddress, sourceAddress, maxBorrow]);
 
-  const { isWrongChain, handleSwitchChain } = useEvmSwitchChain(sourceChainId);
+  const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: sourceChainId });
 
   const isBusy = isPending;
 

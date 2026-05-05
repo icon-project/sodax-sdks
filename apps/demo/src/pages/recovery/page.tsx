@@ -24,13 +24,13 @@ type WithdrawResult = {
 
 export default function RecoveryPage() {
   const { selectedChainId, selectChainId, openWalletModal } = useAppStore();
-  const xAccount = useXAccount(selectedChainId);
-  const walletProvider = useWalletProvider(selectedChainId);
+  const xAccount = useXAccount({ xChainId: selectedChainId });
+  const walletProvider = useWalletProvider({ xChainId: selectedChainId });
   const srcAddress = xAccount?.address as Address | undefined;
   const { data: hubWalletAddress } = useGetUserHubWalletAddress({
     params: { spokeChainId: selectedChainId, spokeAddress: srcAddress },
   });
-  const { isWrongChain, handleSwitchChain } = useEvmSwitchChain(selectedChainId);
+  const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: selectedChainId });
 
   const [withdrawResults, setWithdrawResults] = useState<Record<string, WithdrawResult>>({});
   const [isWithdrawingAll, setIsWithdrawingAll] = useState(false);

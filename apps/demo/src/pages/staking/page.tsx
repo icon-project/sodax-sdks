@@ -55,15 +55,15 @@ export default function StakingPage() {
   const [minUnstakeAmount, setMinUnstakeAmount] = useState<string>('');
   const [minStakeReceive, setMinStakeReceive] = useState<string>('');
 
-  const account = useXAccount(selectedChainId);
-  const walletProvider = useWalletProvider(selectedChainId);
+  const account = useXAccount({ xChainId: selectedChainId });
+  const walletProvider = useWalletProvider({ xChainId: selectedChainId });
   const srcAddress = account?.address as `0x${string}` | undefined;
   const supportedSpokeChains = useMemo(() => sodax.config.getSupportedSpokeChains(), [sodax]);
   const { data: walletAddressOnHub } = useGetUserHubWalletAddress({
     params: { spokeChainId: selectedChainId, spokeAddress: account?.address },
   });
 
-  const { isWrongChain, handleSwitchChain } = useEvmSwitchChain(selectedChainId);
+  const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: selectedChainId });
 
   const [stakeDialogOpen, setStakeDialogOpen] = useState(false);
   const [unstakeDialogOpen, setUnstakeDialogOpen] = useState(false);
@@ -275,7 +275,7 @@ export default function StakingPage() {
   const handleDisconnect = (): void => {
     const chainType = getXChainType(selectedChainId);
     if (chainType) {
-      disconnect(chainType);
+      disconnect({ xChainType: chainType });
     }
   };
 

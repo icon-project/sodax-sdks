@@ -6,7 +6,7 @@ import { useXService } from '@/hooks/index.js';
  * Hook to return available Bitcoin wallet connectors from the globally registered xService.
  */
 export function useBitcoinXConnectors(): BitcoinXConnector[] {
-  const xService = useXService('BITCOIN');
+  const xService = useXService({ xChainType: 'BITCOIN' });
 
   return useMemo(() => {
     const connectors = xService?.getXConnectors() ?? [];

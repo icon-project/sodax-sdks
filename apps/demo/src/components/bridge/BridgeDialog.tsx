@@ -60,7 +60,7 @@ export function BridgeDialog({
     setBridgeError(null);
   }, [open]);
 
-  const toAccount = useXAccount(toChainKey);
+  const toAccount = useXAccount({ xChainId: toChainKey });
 
   const { data: hasAllowance, isLoading: isAllowanceLoading } = useBridgeAllowance({
     params: {
@@ -72,9 +72,9 @@ export function BridgeDialog({
   const { mutateAsyncSafe: approve, isPending: isApproving } = useBridgeApprove();
   const { mutateAsyncSafe: bridge, isPending: isBridging } = useBridge();
 
-  const { isWrongChain, handleSwitchChain } = useEvmSwitchChain(order.srcChainKey);
+  const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: order.srcChainKey });
 
-  const toWalletProvider = useWalletProvider(toChainKey);
+  const toWalletProvider = useWalletProvider({ xChainId: toChainKey });
 
   const fromBtcWalletProvider =
     walletProvider.chainType === 'BITCOIN' ? (walletProvider as IBitcoinWalletProvider) : undefined;

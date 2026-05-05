@@ -48,8 +48,8 @@ export function SupplyAssetsList(): ReactElement {
   const tokens = sodax.moneyMarket.getSupportedTokensByChainId(selectedChainId);
   const isIcon = selectedChainId === ChainKeys.ICON_MAINNET;
 
-  const { address } = useXAccount(selectedChainId);
-  const xService = useXService(getXChainType(selectedChainId));
+  const { address } = useXAccount({ xChainId: selectedChainId });
+  const xService = useXService({ xChainType: getXChainType(selectedChainId) });
   const {
     data: balances,
     isLoading: isBalancesLoading,

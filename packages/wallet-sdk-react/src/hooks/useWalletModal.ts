@@ -164,7 +164,10 @@ export type UseWalletModalResult = {
  *   case 'error':        return <ErrorView error={modal.state.error} onRetry={modal.retry} onBack={modal.back} />;
  * }
  */
-export function useWalletModal(options: UseWalletModalOptions = {}): UseWalletModalResult {
+export function useWalletModal({
+  onConnected,
+  hydrationTimeoutMs,
+}: UseWalletModalOptions = {}): UseWalletModalResult {
   const state = useWalletModalStore(s => s.walletModal);
   const open = useWalletModalStore(s => s.open);
   const close = useWalletModalStore(s => s.close);
@@ -175,7 +178,6 @@ export function useWalletModal(options: UseWalletModalOptions = {}): UseWalletMo
   const setError = useWalletModalStore(s => s.setError);
 
   const { mutateAsync: connect } = useXConnect();
-  const { onConnected, hydrationTimeoutMs } = options;
 
   // Dedupe concurrent `selectWallet` calls for the SAME connector. Calls with
   // a DIFFERENT connector are allowed to start a new attempt — the previous

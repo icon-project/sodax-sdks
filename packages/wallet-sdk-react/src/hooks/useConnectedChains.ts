@@ -102,7 +102,7 @@ function subscribeHydration(onChange: () => void): () => void {
  * // insertion order).
  * const { chains } = useConnectedChains({ order: ['EVM', 'ICON', 'SOLANA'] });
  */
-export function useConnectedChains(options: UseConnectedChainsOptions = {}): UseConnectedChainsResult {
+export function useConnectedChains({ order }: UseConnectedChainsOptions = {}): UseConnectedChainsResult {
   const xConnections = useXConnections();
   const xConnectorsByChain = useXConnectorsByChain();
   const isReady = useSyncExternalStore(
@@ -111,7 +111,6 @@ export function useConnectedChains(options: UseConnectedChainsOptions = {}): Use
     () => false,
   );
 
-  const { order } = options;
   return useMemo(
     () => buildConnectedChains(xConnections, xConnectorsByChain, isReady, order),
     [xConnections, xConnectorsByChain, isReady, order],

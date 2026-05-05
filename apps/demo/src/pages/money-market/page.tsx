@@ -38,7 +38,7 @@ export default function MoneyMarketPage() {
     navigate(`/money-market/${newChainId}`);
   };
 
-  const xAccount = useXAccount(chainId);
+  const xAccount = useXAccount({ xChainId: chainId });
 
   const { data: walletAddressOnHub } = useGetUserHubWalletAddress({
     params: { spokeChainId: chainId, spokeAddress: xAccount?.address },

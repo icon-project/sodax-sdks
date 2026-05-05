@@ -24,7 +24,7 @@ export type UseSupplyVars<K extends SpokeChainKey = SpokeChainKey> = Omit<
  *
  * @example
  * ```tsx
- * const walletProvider = useWalletProvider(chainKey);
+ * const walletProvider = useWalletProvider({ xChainId: chainKey });
  * const { mutateAsync: supply, isError, error } = useSupply();
  * if (!walletProvider) return;
  * try {

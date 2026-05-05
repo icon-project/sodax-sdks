@@ -18,7 +18,7 @@ export function ConnectedChains() {
   const handleDisconnect = async (chainType: ChainType) => {
     setPending(chainType);
     try {
-      await disconnect(chainType);
+      await disconnect({ xChainType: chainType });
     } finally {
       setPending(null);
     }

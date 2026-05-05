@@ -5,7 +5,7 @@ import { StellarWalletsKitXConnector, StellarXService } from './index.js';
 import type { StellarWalletType } from './StellarWalletsKitXConnector.js';
 
 export const useStellarXConnectors = (): UseQueryResult<StellarWalletsKitXConnector[] | undefined, Error | null> => {
-  const xService = useXService('STELLAR');
+  const xService = useXService({ xChainType: 'STELLAR' });
 
   return useQuery({
     queryKey: ['stellar-wallets', xService],

@@ -1,37 +1,37 @@
-import {
-  type SpokeChainKey,
-  type ChainType,
-  getChainType,
-  type GetChainType,
-} from '@sodax/types';
+import type { ChainType, GetChainType, GetWalletProviderType, IWalletProvider, SpokeChainKey } from '@sodax/types';
+import { assert } from '@/shared/guards.js';
+import { getXChainType } from '@/actions/index.js';
 import { useXWalletStore, type GetWalletProviderReturnType } from '@/useXWalletStore.js';
+
+export type UseWalletProviderOptions = {
+  xChainId?: SpokeChainKey;
+  xChainType?: ChainType;
+};
 
 const warnedChains = new Set<ChainType>();
 
-/**
- * Hook to get the appropriate wallet provider based on the chain type.
- * Reads from the centralized store — wallet providers are hydrated by per-chain providers (EVM, Solana, Sui)
- * or created on connection for non-provider chains (Bitcoin, ICON, Injective, Stellar, NEAR, Stacks).
- *
- * Logs a one-time warning per chain if the requested chain is not enabled in
- * SodaxWalletProvider config.chains. Returns undefined silently if the chain
- * is enabled but no wallet is connected yet (normal pre-connect state).
- */
-export function useWalletProvider<K extends SpokeChainKey | undefined>(
-  spokeChainId: K,
-): GetWalletProviderReturnType<GetChainType<K>> | undefined {
-  if (!spokeChainId) return undefined;
-
-  const xChainType = getChainType(spokeChainId);
+/** Wallet provider at chain-family level. Pass `xChainId` (chain id) or `xChainType` (family), not both. */
+export function useWalletProvider<S extends SpokeChainKey>(options: { xChainId: S; xChainType?: never }):
+  | GetWalletProviderType<GetChainType<S>>
+  | undefined;
+export function useWalletProvider<K extends ChainType | undefined>(options?: { xChainId?: never; xChainType?: K }):
+  | GetWalletProviderReturnType<K>
+  | undefined;
+export function useWalletProvider({
+  xChainId,
+  xChainType,
+}: UseWalletProviderOptions = {}): IWalletProvider | undefined {
+  assert(!(xChainId && xChainType), '[useWalletProvider] pass either xChainId or xChainType, not both');
+  const target = xChainType ?? (xChainId ? getXChainType(xChainId) : undefined);
 
   return useXWalletStore(state => {
-    if (!xChainType) return undefined;
-    if (!state.enabledChains.includes(xChainType) && !warnedChains.has(xChainType)) {
-      warnedChains.add(xChainType);
+    if (!target) return undefined;
+    if (!state.enabledChains.includes(target) && !warnedChains.has(target)) {
+      warnedChains.add(target);
       console.warn(
-        `[useWalletProvider] chain "${xChainType}" is not enabled in SodaxWalletProvider config.chains — returning undefined`,
+        `[useWalletProvider] chain "${target}" is not enabled in SodaxWalletProvider config.chains — returning undefined`,
       );
     }
-    return state.getWalletProvider(xChainType);
+    return state.getWalletProvider(target);
   });
 }

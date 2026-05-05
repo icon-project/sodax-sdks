@@ -7,7 +7,7 @@ import { useConnectionFlow, useXConnectors } from '@sodax/wallet-sdk-react';
  */
 export function ConnectionFlowDemo() {
   const flow = useConnectionFlow();
-  const iconConnectors = useXConnectors('ICON');
+  const iconConnectors = useXConnectors({ xChainType: 'ICON' });
   const target = iconConnectors[0];
 
   return (

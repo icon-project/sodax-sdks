@@ -5,7 +5,7 @@ import { NearXConnector } from './NearXConnector.js';
 import { NearXService } from './NearXService.js';
 
 export const useNearXConnectors = (): UseQueryResult<NearXConnector[] | undefined, Error | null> => {
-  const xService = useXService('NEAR');
+  const xService = useXService({ xChainType: 'NEAR' });
 
   return useQuery({
     queryKey: ['near-wallets'],

@@ -84,10 +84,9 @@ export function buildChainGroups(
  * // hub-first regardless of enabledChains insertion order.
  * const groups = useChainGroups({ order: ['EVM', 'ICON', 'SOLANA'] });
  */
-export function useChainGroups(options: UseChainGroupsOptions = {}): ChainGroup[] {
+export function useChainGroups({ order }: UseChainGroupsOptions = {}): ChainGroup[] {
   const enabledChains = useEnabledChains();
   const xConnections = useXConnections();
-  const { order } = options;
 
   return useMemo(
     () => buildChainGroups(enabledChains, xConnections, chainRegistry, order),

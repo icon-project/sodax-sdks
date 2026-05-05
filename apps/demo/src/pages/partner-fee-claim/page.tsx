@@ -32,8 +32,8 @@ function formatSdkError(err: unknown, fallback: string): string {
 
 export default function PartnerFeeClaimPage() {
   const { sodax } = useSodaxContext();
-  const sonicAccount = useXAccount(SONIC);
-  const walletProvider = useWalletProvider(SONIC);
+  const sonicAccount = useXAccount({ xChainId: SONIC });
+  const walletProvider = useWalletProvider({ xChainId: SONIC });
   const srcAddress = sonicAccount?.address as Address | undefined;
 
   const supportedSpokeChains = useMemo(() => sodax.config.getSupportedSpokeChains(), [sodax]);
