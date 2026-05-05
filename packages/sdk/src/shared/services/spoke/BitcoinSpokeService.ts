@@ -207,8 +207,8 @@ export class BitcoinSpokeService {
   /**
    * Send a message to the hub chain
    *
-   * @param {BitcoinChainKey} fromChainId - Source spoke chain ID
-   * @param {HubChainKey} dstChainId - Destination chain ID
+   * @param {BitcoinChainKey} srcChainKey - Source spoke chain key
+   * @param {HubChainKey} dstChainKey - Destination chain key
    * @param {HubAddress} dstAddress - Destination address on hub
    * @param {Hex} payload - Message payload
    * @param {BitcoinSpokeProviderType} spokeProvider - The Bitcoin spoke provider
@@ -364,14 +364,14 @@ export class BitcoinSpokeService {
   ): Promise<TxReturnType<BitcoinChainKey, Raw>> {
     try {
       const {
-        srcChainKey: fromChainId,
+        srcChainKey,
         srcAddress: from,
         token,
         amount,
         data = '0x',
         accessToken = this.radfi.accessToken,
       } = params;
-      const chainConfig = spokeChainConfig[fromChainId];
+      const chainConfig = spokeChainConfig[srcChainKey];
 
       const returnRawTx = (psbtBase64: string): TxReturnType<BitcoinChainKey, Raw> =>
         ({
@@ -396,7 +396,7 @@ export class BitcoinSpokeService {
           {
             token: tokenId,
             amount,
-            recipient: spokeChainConfig[fromChainId].addresses.assetManager,
+            recipient: spokeChainConfig[srcChainKey].addresses.assetManager,
             userAddress: from,
             data: hashedData,
           },
@@ -436,7 +436,7 @@ export class BitcoinSpokeService {
       const depositPsbt = await this.buildDepositPsbt(
         from,
         params.walletProvider,
-        fromChainId,
+        srcChainKey,
         token,
         amount,
         data,
@@ -459,13 +459,13 @@ export class BitcoinSpokeService {
   public async buildDepositPsbt(
     walletAddress: string,
     walletProvider: IBitcoinWalletProvider,
-    fromChainId: BitcoinChainKey,
+    srcChainKey: BitcoinChainKey,
     token: string,
     amount: bigint,
     data: string,
     utxos: BitcoinUTXO[],
   ): Promise<bitcoin.Psbt> {
-    const assetManagerAddress = spokeChainConfig[fromChainId].addresses.assetManager;
+    const assetManagerAddress = spokeChainConfig[srcChainKey].addresses.assetManager;
 
     if (token.toLocaleLowerCase() === 'btc') {
       const outputs = [
@@ -475,7 +475,7 @@ export class BitcoinSpokeService {
         },
       ];
 
-      const psbt = await this.buildBitcoinTransaction(utxos, outputs, walletAddress, fromChainId, walletProvider);
+      const psbt = await this.buildBitcoinTransaction(utxos, outputs, walletAddress, srcChainKey, walletProvider);
 
       const OP_RADFI_SODAX_DATA = 0x31;
       const payload = Buffer.concat([Buffer.from([OP_RADFI_SODAX_DATA]), Buffer.from(data.slice(2), 'hex')]);
@@ -525,8 +525,8 @@ export class BitcoinSpokeService {
   ): Promise<TxReturnType<BitcoinChainKey, Raw>> {
     const {
       srcAddress: from,
-      srcChainKey: fromChainId,
-      dstChainKey: dstChainId,
+      srcChainKey,
+      dstChainKey,
       payload: data,
       walletMode = 'TRADING',
     } = params;
@@ -542,8 +542,8 @@ export class BitcoinSpokeService {
     const payload: BtcPayload = {
       src_address: srcAddress,
       data: data,
-      src_chain_id: Number(getIntentRelayChainId(fromChainId)),
-      dst_chain_id: Number(getIntentRelayChainId(dstChainId)),
+      src_chain_id: Number(getIntentRelayChainId(srcChainKey)),
+      dst_chain_id: Number(getIntentRelayChainId(dstChainKey)),
       wallet_used: this.walletMode,
       timestamp: Date.now(),
       address_type: addressType,

@@ -36,12 +36,12 @@ type FormattedBnUSDMigrateParams = {
 };
 
 export type BnUSDRevertMigrationParams = {
-  srcChainId: SpokeChainKey; // The source chain ID where the new bnUSD token exists
+  srcChainKey: SpokeChainKey; // The source chain key where the new bnUSD token exists
   legacybnUSD: string; // The ICON address of the legacy bnUSD token to receive
   newbnUSD: string; // The ICON address of the new bnUSD token to migrate from
   amount: bigint; // The amount of new bnUSD tokens to migrate back
   dstAddress: Hex; // The spoke chain address that will receive the migrated legacy bnUSD tokens
-  dstChainKey: SpokeChainKey; // The destination chain ID for the migration
+  dstChainKey: SpokeChainKey; // The destination chain key for the migration
 };
 
 export type BnUSDMigrationServiceConstructorParams = {
@@ -134,7 +134,7 @@ export class BnUSDMigrationService {
     // Wrap new bnUSD into vault tokens
     let decimals = 18;
     if (params.newbnUSD.toLowerCase() !== bnUSDVault.toLowerCase()) {
-      const assetConfig = this.config.getSpokeTokenFromOriginalAssetAddress(params.srcChainId, params.newbnUSD);
+      const assetConfig = this.config.getSpokeTokenFromOriginalAssetAddress(params.srcChainKey, params.newbnUSD);
       invariant(assetConfig, `hub asset not found for new bnUSD token: ${params.newbnUSD}`);
       decimals = assetConfig.decimals;
       calls.push(Erc20Service.encodeApprove(assetConfig.hubAsset, bnUSDVault, params.amount));

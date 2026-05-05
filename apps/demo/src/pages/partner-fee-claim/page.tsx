@@ -122,7 +122,7 @@ export default function PartnerFeeClaimPage() {
           srcChainKey: SONIC,
           srcAddress,
           outputToken: outputToken.trim() as Address,
-          dstChain,
+          dstChainKey: dstChain,
           dstAddress: dstAddress.trim(),
         },
         walletProvider,

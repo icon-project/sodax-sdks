@@ -52,8 +52,8 @@ export class NearSpokeService {
     return this.rpcProvider.callFunction({ contractId, method, args });
   }
 
-  public async getRateLimit(token: string, fromChainId: NearChainKey): Promise<RateLimitConfig> {
-    const res = (await this.queryContract(spokeChainConfig[fromChainId].addresses.rateLimit, 'get_rate_limit', {
+  public async getRateLimit(token: string, srcChainKey: NearChainKey): Promise<RateLimitConfig> {
+    const res = (await this.queryContract(spokeChainConfig[srcChainKey].addresses.rateLimit, 'get_rate_limit', {
       token: token,
     })) as { max_available: number; available: number; rate_per_second: number } | undefined;
     if (res == null || res === undefined) {
@@ -204,7 +204,7 @@ export class NearSpokeService {
 
   /**
    * Sends a message to the hub chain.
-   * @param {bigint} dstChainId - The chain ID of the hub chain.
+   * @param {SendMessageParams} params - Includes dstChainKey, the chain key of the hub chain.
    * @param {Address} dstAddress - The address on the hub chain.
    * @param {Hex} payload - The payload to send.
    * @param {CWSpokeProvider} spokeProvider - The provider for the spoke chain.
@@ -213,7 +213,7 @@ export class NearSpokeService {
   public async sendMessage<Raw extends boolean>(
     params: SendMessageParams<NearChainKey, Raw>,
   ): Promise<TxReturnType<NearChainKey, Raw>> {
-    const dstChainId = getIntentRelayChainId(params.dstChainKey);
+    const dstRelayChainId = getIntentRelayChainId(params.dstChainKey);
 
     const tx: NearRawTransaction = {
       signerId: params.srcAddress,
@@ -222,7 +222,7 @@ export class NearSpokeService {
         method: 'send_message',
         args: {
           dst_address: Array.from(fromHex(params.dstAddress, 'bytes')),
-          dst_chain_id: Number.parseInt(dstChainId.toString()),
+          dst_chain_id: Number.parseInt(dstRelayChainId.toString()),
           payload: Array.from(fromHex(params.payload, 'bytes')),
         },
         deposit: BigInt('0'),
@@ -245,8 +245,8 @@ export class NearSpokeService {
    * @param {NearSpokeProvider} spokeProvider - The spoke provider.
    * @returns {Promise<bigint>} The max limit of the token.
    */
-  public async getLimit(token: string, fromChainId: NearChainKey): Promise<bigint> {
-    const rate_limit = await this.getRateLimit(token, fromChainId);
+  public async getLimit(token: string, srcChainKey: NearChainKey): Promise<bigint> {
+    const rate_limit = await this.getRateLimit(token, srcChainKey);
     return BigInt(rate_limit.maxAvailable);
   }
 
@@ -256,8 +256,8 @@ export class NearSpokeService {
    * @param {NearSpokeProvider} spokeProvider - The spoke provider.
    * @returns {Promise<bigint>} The available withdrawable amount of the token.
    */
-  public async getAvailable(token: string, fromChainId: NearChainKey): Promise<bigint> {
-    const rate_limit = await this.getRateLimit(token, fromChainId);
+  public async getAvailable(token: string, srcChainKey: NearChainKey): Promise<bigint> {
+    const rate_limit = await this.getRateLimit(token, srcChainKey);
     return BigInt(rate_limit.available);
   }
 

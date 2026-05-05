@@ -13,7 +13,7 @@ export type SolverOrder = {
 export type SubmitTxOrder = {
   mode: 'submit-tx';
   txHash: string;
-  srcChainId: string;
+  srcChainKey: string;
   apiBaseURL?: string;
 };
 
@@ -52,7 +52,7 @@ function SubmitTxOrderStatus({ order }: { order: SubmitTxOrder }) {
     [order.apiBaseURL],
   );
   const { data: statusResponse } = useBackendSubmitSwapTxStatus({
-    params: { txHash: order.txHash, srcChainId: order.srcChainId, apiConfig },
+    params: { txHash: order.txHash, srcChainKey: order.srcChainKey, apiConfig },
   });
 
   if (!statusResponse) {
@@ -69,7 +69,7 @@ function SubmitTxOrderStatus({ order }: { order: SubmitTxOrder }) {
   return (
     <div className="flex flex-col text-center pb-4">
       <div>Tx Hash: {order.txHash}</div>
-      <div>Src Chain ID: {order.srcChainId}</div>
+      <div>Src Chain ID: {order.srcChainKey}</div>
       <div>Status: {status}</div>
       {status === 'executed' && result?.dstIntentTxHash && <div>Dst Intent Tx Hash: {result.dstIntentTxHash}</div>}
       {status === 'executed' && result?.intent_hash && <div>Intent Hash: {result.intent_hash}</div>}

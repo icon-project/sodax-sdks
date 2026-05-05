@@ -146,7 +146,7 @@ export class InjectiveSpokeService {
   public async deposit<R extends boolean = false>(
     params: DepositParams<InjectiveChainKey, R>,
   ): Promise<TxReturnType<InjectiveChainKey, R>> {
-    const { srcChainKey: fromChainId, srcAddress: from, token, to, amount, data = '0x' } = params;
+    const { srcChainKey, srcAddress: from, token, to, amount, data = '0x' } = params;
 
     const toBytes = fromHex(to, 'bytes');
     const dataBytes = fromHex(data, 'bytes');
@@ -164,16 +164,16 @@ export class InjectiveSpokeService {
 
     if (params.raw === true) {
       return (await this.getRawTransaction(
-        spokeChainConfig[fromChainId].networkId,
+        spokeChainConfig[srcChainKey].networkId,
         from,
-        spokeChainConfig[fromChainId].addresses.assetManager,
+        spokeChainConfig[srcChainKey].addresses.assetManager,
         msg,
       )) satisfies TxReturnType<InjectiveChainKey, true> as TxReturnType<InjectiveChainKey, R>;
     }
 
     const res = await params.walletProvider.execute(
       from,
-      spokeChainConfig[fromChainId].addresses.assetManager,
+      spokeChainConfig[srcChainKey].addresses.assetManager,
       msg,
       funds,
     );
@@ -246,7 +246,7 @@ export class InjectiveSpokeService {
    * Sends a message to the hub chain.
    * @param {SendMessageParams<InjectiveChainKey, R>} params - The parameters for the call wallet, including:
    *   - {FromParams<InjectiveChainKey>} fromParams: The parameters for the from chain.
-   *   - {HubChainKey} dstChainId: The chain ID of the hub chain.
+   *   - {HubChainKey} dstChainKey: The chain key of the hub chain.
    *   - {HubAddress} dstAddress: The address on the hub chain.
    *   - {Hex} payload: The payload to send.
    *   - {boolean} raw: The return type raw or just transaction hash.
@@ -255,8 +255,8 @@ export class InjectiveSpokeService {
   async sendMessage<Raw extends boolean>(
     params: SendMessageParams<InjectiveChainKey, Raw>,
   ): Promise<TxReturnType<InjectiveChainKey, Raw>> {
-    const { srcAddress: from, srcChainKey: fromChainId, dstChainKey: dstChainId, dstAddress, payload } = params;
-    const relayId = getIntentRelayChainId(dstChainId);
+    const { srcAddress: from, srcChainKey, dstChainKey, dstAddress, payload } = params;
+    const relayId = getIntentRelayChainId(dstChainKey);
 
     const msg: ConnMsg = {
       send_message: {
@@ -268,20 +268,20 @@ export class InjectiveSpokeService {
 
     if (params.raw === true) {
       return (await this.getRawTransaction(
-        spokeChainConfig[fromChainId].networkId,
+        spokeChainConfig[srcChainKey].networkId,
         from,
-        spokeChainConfig[fromChainId].addresses.connection,
+        spokeChainConfig[srcChainKey].addresses.connection,
         msg,
       )) satisfies TxReturnType<InjectiveChainKey, true> as TxReturnType<InjectiveChainKey, Raw>;
     }
 
-    const res = await params.walletProvider.execute(from, spokeChainConfig[fromChainId].addresses.connection, msg);
+    const res = await params.walletProvider.execute(from, spokeChainConfig[srcChainKey].addresses.connection, msg);
     return res.transactionHash satisfies TxReturnType<InjectiveChainKey, false> as TxReturnType<InjectiveChainKey, Raw>;
   }
 
   async receiveMessage(
     senderAddress: string,
-    srcChainId: InjectiveChainKey,
+    srcChainKey: InjectiveChainKey,
     srcAddress: Uint8Array,
     connSn: string,
     payload: Uint8Array,
@@ -290,7 +290,7 @@ export class InjectiveSpokeService {
   ): Promise<InjectiveExecuteResponse> {
     const msg: ExecuteMsg = {
       recv_message: {
-        src_chain_id: srcChainId,
+        src_chain_id: srcChainKey,
         src_address: srcAddress,
         conn_sn: connSn,
         payload,
@@ -298,7 +298,7 @@ export class InjectiveSpokeService {
       },
     };
 
-    return await walletProvider.execute(senderAddress, spokeChainConfig[srcChainId].addresses.assetManager, msg);
+    return await walletProvider.execute(senderAddress, spokeChainConfig[srcChainKey].addresses.assetManager, msg);
   }
 
   async setRateLimit(

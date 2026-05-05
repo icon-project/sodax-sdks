@@ -3,10 +3,10 @@ import type { HttpUrl, SpokeChainKey, Hex } from '@sodax/types';
 export type RelayExtraData = { address: Hex; payload: Hex };
 
 export type IntentDeliveryInfo = {
-  srcChainId: SpokeChainKey;
+  srcChainKey: SpokeChainKey;
   srcTxHash: string;
   srcAddress: string;
-  dstChainId: SpokeChainKey;
+  dstChainKey: SpokeChainKey;
   dstTxHash: string;
   dstAddress: string;
 };

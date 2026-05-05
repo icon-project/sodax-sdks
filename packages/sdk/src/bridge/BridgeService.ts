@@ -262,10 +262,10 @@ export class BridgeService {
    * @example
    * const result = await sodax.bridge.bridge(
    *   {
-   *     srcChainId: '0x2105.base',
+   *     srcChainKey: '0x2105.base',
    *     srcAsset: '0x...', // Address of the source token
    *     amount: 1000n, // Amount to bridge (in token decimals)
-   *     dstChainId: '0x89.polygon',
+   *     dstChainKey: '0x89.polygon',
    *     dstAsset: '0x...', // Address of the destination token
    *     recipient: '0x...', // Recipient address on destination chain
    *     partnerFee: { address: '0x...', percentage: 0.1 } // Optional partner fee. Partner fees and denominated in vault token decimals (18)
@@ -329,10 +329,10 @@ export class BridgeService {
    * const bridgeService = new BridgeService(hubProvider, relayerApiEndpoint);
    * const result = await sodax.bridge.createBridgeIntent(
    *   {
-   *     srcChainId: 'ethereum',
+   *     srcChainKey: 'ethereum',
    *     srcAsset: "0x123...", // source token address
    *     amount: 1000000000000000000n, // 1 token in wei
-   *     dstChainId: 'polygon',
+   *     dstChainKey: 'polygon',
    *     dstAsset: "0x456...", // destination token address
    *     recipient: "0x789..." // recipient address
    *   },

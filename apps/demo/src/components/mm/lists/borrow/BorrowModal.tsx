@@ -181,7 +181,7 @@ export function BorrowModal({
     const isSameChain = sourceChainId === destinationChainId;
 
     const crossChainParams =
-      isSameChain || !destinationAddress ? {} : { toChainId: destinationChainId, toAddress: destinationAddress };
+      isSameChain || !destinationAddress ? {} : { dstChainKey: destinationChainId, dstAddress: destinationAddress };
 
     const parsedAmount = parseUnits(normalizedAmount, destinationToken.decimals);
 

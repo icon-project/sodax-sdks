@@ -21,10 +21,10 @@ export default function LimitOrderItem({ intent }: LimitOrderItemProps) {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
 
-  const srcChainId = sodax.config.getSpokeChainKeyFromIntentRelayChainId(
+  const srcChainKey = sodax.config.getSpokeChainKeyFromIntentRelayChainId(
     BigInt(intent.intent.srcChain) as IntentRelayChainId,
   ) as SpokeChainKey;
-  const dstChainId = sodax.config.getSpokeChainKeyFromIntentRelayChainId(
+  const dstChainKey = sodax.config.getSpokeChainKeyFromIntentRelayChainId(
     BigInt(intent.intent.dstChain) as IntentRelayChainId,
   ) as SpokeChainKey;
 
@@ -32,30 +32,30 @@ export default function LimitOrderItem({ intent }: LimitOrderItemProps) {
   const inputToken = useMemo(() => {
     // !TODO: make a util function to find token by spoke chain id and hub asset address. and simplify the code.
     const originalAssetAddress = sodax.config.getOriginalAssetAddress(
-      srcChainId,
+      srcChainKey,
       intent.intent.inputToken as `0x${string}`,
     );
     return originalAssetAddress
       ? sodax.config
           .getSupportedTokensPerChain()
-          .get(srcChainId)
+          .get(srcChainKey)
           ?.find(token => token.address.toLowerCase() === originalAssetAddress.toLowerCase())
       : undefined;
-  }, [srcChainId, intent.intent.inputToken, sodax.config]);
+  }, [srcChainKey, intent.intent.inputToken, sodax.config]);
 
   const outputToken = useMemo(() => {
     // !TODO: make a util function to find token by spoke chain id and hub asset address. and simplify the code.
     const originalAssetAddress = sodax.config.getOriginalAssetAddress(
-      dstChainId,
+      dstChainKey,
       intent.intent.outputToken as `0x${string}`,
     );
     return originalAssetAddress
       ? sodax.config
           .getSupportedTokensPerChain()
-          .get(dstChainId)
+          .get(dstChainKey)
           ?.find(token => token.address.toLowerCase() === originalAssetAddress.toLowerCase())
       : undefined;
-  }, [dstChainId, intent.intent.outputToken, sodax.config]);
+  }, [dstChainKey, intent.intent.outputToken, sodax.config]);
 
   // Format amounts
   const inputAmount = useMemo(() => {
@@ -75,7 +75,7 @@ export default function LimitOrderItem({ intent }: LimitOrderItemProps) {
   }, [intent.intent.minOutputAmount, outputToken]);
 
   // Wallet provider for canceling (use srcChain since that's where the intent was created)
-  const walletProvider = useWalletProvider({ xChainId: srcChainId });
+  const walletProvider = useWalletProvider({ xChainId: srcChainKey });
   const { mutateAsync: cancelLimitOrder, isPending: isCanceling } = useCancelLimitOrder();
 
   const handleCancel = async (): Promise<void> => {
@@ -100,7 +100,7 @@ export default function LimitOrderItem({ intent }: LimitOrderItemProps) {
         data: intent.intent.data as `0x${string}`,
       };
 
-      await cancelLimitOrder({ intent: intentData, srcChainKey: srcChainId, walletProvider });
+      await cancelLimitOrder({ intent: intentData, srcChainKey: srcChainKey, walletProvider });
       // Invalidate queries to refresh the list
       queryClient.invalidateQueries({ queryKey: ['backend', 'intent', 'user'] });
     } catch (error) {

@@ -26,7 +26,7 @@ export type UseBackendSubmitSwapTxVars = {
  * const { mutateAsync: submitSwapTx, isPending, error } = useBackendSubmitSwapTx();
  *
  * const result = await submitSwapTx({
- *   request: { txHash: '0x123...', srcChainId: '1', walletAddress: '0xabc...', intent: { ... }, relayData: '0x...' },
+ *   request: { txHash: '0x123...', srcChainKey: 'sonic', walletAddress: '0xabc...', intent: { ... }, relayData: '0x...' },
  *   apiConfig: { baseURL: 'https://...' },
  * });
  */

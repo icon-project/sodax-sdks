@@ -88,7 +88,7 @@ TypeScript errors with no runtime equivalent. Read each line below carefully:
 | Type | Old field | New field | Notes |
 |---|---|---|---|
 | \`XToken\` | \`xChainId\` | \`chainKey\` | Plus \`hubAsset\` and \`vault\` are now baked in. |
-| \`MoneyMarketSupplyParams\` (request) | \`{ token, amount, action }\` | \`{ srcChainKey, srcAddress, token, amount, action, toChainId?, toAddress? }\` | Same for withdraw / repay; borrow adds \`fromChainId?\` / \`fromAddress?\`. |
+| \`MoneyMarketSupplyParams\` (request) | \`{ token, amount, action }\` | \`{ srcChainKey, srcAddress, token, amount, action, dstChainKey?, dstAddress? }\` | Same shape for borrow / withdraw / repay. |
 | \`MoneyMarketAllowanceParams\` (input to \`useMMAllowance\`) | \`{ params, spokeProvider }\` | \`{ params }\` | Allowance is read-only; no provider needed. |
 | \`useUserReservesData\` props | \`{ spokeProvider, address }\` | \`{ spokeChainKey, userAddress }\` | Same rename for \`useUserFormattedSummary\`. |
 | \`useATokensBalances\` props | \`{ aTokens, spokeProvider, userAddress }\` | \`{ aTokens, spokeChainKey, userAddress }\` | Hub wallet derived inside the hook via \`HubService.getUserHubWalletAddress\`. |
@@ -191,7 +191,7 @@ Link to source rather than transcribe so this doc doesn't drift:
   \`Result<[SpokeTxHash, HubTxHash]>\`. \`onSuccess\` invalidates user reserves / formatted summary /
   aTokensBalances / allowance / xBalances keyed by \`params.srcChainKey\`.
 - \`packages/dapp-kit/src/hooks/mm/useBorrow.ts\` — same shape; also invalidates
-  \`['xBalances', toChainId ?? srcChainKey]\` for cross-chain delivery.
+  \`['xBalances', dstChainKey ?? srcChainKey]\` for cross-chain delivery.
 - \`packages/dapp-kit/src/hooks/mm/useWithdraw.ts\` — same shape.
 - \`packages/dapp-kit/src/hooks/mm/useRepay.ts\` — same shape.
 - \`packages/dapp-kit/src/hooks/mm/useMMApprove.ts\` — generic \`<K>\`, \`(srcChainKey, walletProvider)\`,
@@ -346,7 +346,7 @@ These are the actual edits that landed during the migration, not the planned one
 ### Pattern: Two-axis chain identification on borrow
 
 A borrow has two distinct chain keys: **\`srcChainKey\`** (collateral chain — drives the wallet
-provider, signs the tx, where the debt is recorded) and **\`toChainId\`** (delivery chain — where
+provider, signs the tx, where the debt is recorded) and **\`dstChainKey\`** (delivery chain — where
 the borrowed funds land). Cross-chain borrow:
 
 \`\`\`tsx
@@ -359,13 +359,13 @@ await borrow({
     token: destinationToken.address,
     amount,
     action: 'borrow',
-    toChainId: destinationChainId,
-    toAddress: destinationAddress,
+    dstChainKey: destinationChainId,
+    dstAddress: destinationAddress,
   },
 });
 \`\`\`
 
-Same-chain borrow: omit \`toChainId\` / \`toAddress\` (they default to the source).
+Same-chain borrow: omit \`dstChainKey\` / \`dstAddress\` (they default to the source).
 
 ### Pattern: Repay can come from a different chain than the debt
 
@@ -382,8 +382,8 @@ await repay({
     token: sourceToken.address,
     amount,
     action: 'repay',
-    toChainId: debtChainId,    // where the debt lives
-    toAddress: debtAddress,    // hub-derived address for the debt
+    dstChainKey: debtChainId,   // where the debt lives
+    dstAddress: debtAddress,    // hub-derived address for the debt
   },
 });
 \`\`\`
@@ -412,7 +412,7 @@ redundant. Every v2 mutation hook invalidates the canonical key set in its own \
 - \`['mm', 'userFormattedSummary', srcChainKey, srcAddress]\`
 - \`['mm', 'aTokensBalances']\`
 - \`['mm', 'allowance', srcChainKey, token, action]\` (supply / repay / approve only)
-- \`['xBalances', srcChainKey]\` (and \`['xBalances', toChainId]\` for borrow)
+- \`['xBalances', srcChainKey]\` (and \`['xBalances', dstChainKey]\` for borrow)
 
 Don't reintroduce per-modal invalidations unless there's a query key the hook doesn't already
 handle.

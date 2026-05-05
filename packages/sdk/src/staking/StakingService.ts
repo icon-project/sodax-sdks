@@ -722,14 +722,14 @@ export class StakingService {
   /**
    * Build instant unstake data for instantly unstaking xSoda shares
    * @param sodaAsset - The SODA asset information
-   * @param dstChainId - The destination chain ID
+   * @param dstChainKey - The destination chain key
    * @param dstWallet - The destination wallet address
    * @param params - The instant unstake parameters
    * @returns The encoded contract call data
    */
   public buildInstantUnstakeData<K extends SpokeChainKey>(
     sodaAsset: XToken,
-    dstChainId: SpokeChainKey,
+    dstChainKey: SpokeChainKey,
     dstWallet: Hex,
     params: InstantUnstakeParams<K>,
   ): Hex {
@@ -745,7 +745,7 @@ export class StakingService {
         params.amount,
         params.minAmount,
         sodaAsset.hubAsset,
-        getIntentRelayChainId(dstChainId),
+        getIntentRelayChainId(dstChainKey),
         dstWallet,
       ),
     );
@@ -867,14 +867,14 @@ export class StakingService {
   /**
    * Build claim data for claiming unstaked tokens
    * @param sodaAsset - The SODA asset information
-   * @param dstChainId - The destination chain ID
+   * @param dstChainKey - The destination chain key
    * @param dstWallet - The destination wallet address
    * @param params - The claim parameters
    * @returns The encoded contract call data
    */
   public buildClaimData<K extends SpokeChainKey>(
     sodaAsset: XToken,
-    dstChainId: SpokeChainKey,
+    dstChainKey: SpokeChainKey,
     dstWallet: Hex,
     params: ClaimParams<K>,
   ): Hex {
@@ -887,7 +887,7 @@ export class StakingService {
     calls.push(EvmVaultTokenService.encodeWithdraw(sodaVault, sodaAsset.hubAsset, params.amount));
     const translatedAmountOut = EvmVaultTokenService.translateOutgoingDecimals(sodaAsset.decimals, params.amount);
 
-    if (dstChainId === this.hubProvider.chainConfig.chain.key) {
+    if (dstChainKey === this.hubProvider.chainConfig.chain.key) {
       calls.push(Erc20Service.encodeTransfer(sodaAsset.hubAsset, dstWallet, translatedAmountOut));
     } else {
       calls.push(

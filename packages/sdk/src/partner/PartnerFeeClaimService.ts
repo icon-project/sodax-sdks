@@ -41,7 +41,7 @@ export type PartnerFeeClaimAssetBalance = {
 
 export type AutoSwapPreferences = {
   outputToken: Address;
-  dstChain: SpokeChainKey | 'not configured';
+  dstChainKey: SpokeChainKey | 'not configured';
   dstAddress: Hex;
 };
 
@@ -49,7 +49,7 @@ export type SetSwapPreferenceParams = {
   srcChainKey: HubChainKey;
   srcAddress: Address;
   outputToken: Address;
-  dstChain: SpokeChainKey;
+  dstChainKey: SpokeChainKey;
   dstAddress: string;
 };
 
@@ -249,7 +249,7 @@ export class PartnerFeeClaimService {
       });
 
       // If dstChain is 0 (not configured), return "not configured" without conversion
-      const dstChain =
+      const dstChainKey =
         autoSwapPreferences.dstChain === 0n
           ? ('not configured' as const)
           : this.config.getSpokeChainKeyFromIntentRelayChainId(autoSwapPreferences.dstChain as IntentRelayChainId);
@@ -258,7 +258,7 @@ export class PartnerFeeClaimService {
         ok: true,
         value: {
           outputToken: autoSwapPreferences.outputToken,
-          dstChain,
+          dstChainKey,
           dstAddress: autoSwapPreferences.dstAddress,
         },
       };
@@ -293,13 +293,13 @@ export class PartnerFeeClaimService {
       invariant(this.protocolIntentsContract, 'protocolIntentsContract is not configured in solver config');
 
       const outputToken =
-        params.dstChain !== this.hubProvider.chainConfig.chain.key
-          ? this.hubProvider.config.getSpokeTokenFromOriginalAssetAddress(params.dstChain, params.outputToken)?.hubAsset
+        params.dstChainKey !== this.hubProvider.chainConfig.chain.key
+          ? this.hubProvider.config.getSpokeTokenFromOriginalAssetAddress(params.dstChainKey, params.outputToken)?.hubAsset
           : params.outputToken;
 
       invariant(
         outputToken,
-        `hub asset not found for spoke chain token (params.outputToken): ${params.outputToken} with chain id: ${params.dstChain}`,
+        `hub asset not found for spoke chain token (params.outputToken): ${params.outputToken} with chain key: ${params.dstChainKey}`,
       );
 
       const rawTx = {
@@ -311,8 +311,8 @@ export class PartnerFeeClaimService {
           functionName: 'setAutoSwapPreferences',
           args: [
             outputToken,
-            BigInt(getIntentRelayChainId(params.dstChain)),
-            encodeAddress(params.dstChain, params.dstAddress),
+            BigInt(getIntentRelayChainId(params.dstChainKey)),
+            encodeAddress(params.dstChainKey, params.dstAddress),
           ],
         }),
       } satisfies TxReturnType<HubChainKey, true>;

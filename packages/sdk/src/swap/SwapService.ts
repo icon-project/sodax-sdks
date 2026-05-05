@@ -409,10 +409,10 @@ export class SwapService {
           solverExecutionResponse: result.value,
           intent,
           intentDeliveryInfo: {
-            srcChainId: srcChainKey,
+            srcChainKey,
             srcTxHash: spokeTxHash,
             srcAddress: params.srcAddress,
-            dstChainId: params.dstChainKey,
+            dstChainKey: params.dstChainKey,
             dstTxHash: dstIntentTxHash,
             dstAddress: params.dstAddress,
           } satisfies IntentDeliveryInfo,

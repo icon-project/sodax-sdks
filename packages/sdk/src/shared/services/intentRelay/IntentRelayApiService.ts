@@ -235,19 +235,21 @@ export async function relayTxAndWaitPacket(params: RelayAndWaitParams): Promise<
     const { srcTxHash, data, chainKey, relayerApiEndpoint, timeout = DEFAULT_RELAY_TX_TIMEOUT } = params;
     const intentRelayChainId = getIntentRelayChainId(chainKey).toString();
 
+    const isSplitTxChain = isSolanaChainKeyType(chainKey) || isBitcoinChainKeyType(chainKey);
+    invariant(!isSplitTxChain || data !== undefined, 'Data is required for Solana and Bitcoin chain keys');
+
     const submitPayload: IntentRelayRequest<'submit'> = {
       action: 'submit',
-      params:
-        isSolanaChainKeyType(chainKey) || isBitcoinChainKeyType(chainKey)
-          ? {
-              chain_id: intentRelayChainId,
-              tx_hash: srcTxHash,
-              data,
-            }
-          : {
-              chain_id: intentRelayChainId,
-              tx_hash: srcTxHash,
-            },
+      params: isSplitTxChain
+        ? {
+            chain_id: intentRelayChainId,
+            tx_hash: srcTxHash,
+            data,
+          }
+        : {
+            chain_id: intentRelayChainId,
+            tx_hash: srcTxHash,
+          },
     };
 
     const submitResult = await submitTransaction(submitPayload, relayerApiEndpoint);

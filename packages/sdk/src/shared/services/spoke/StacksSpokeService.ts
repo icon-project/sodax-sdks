@@ -178,7 +178,7 @@ export class StacksSpokeService {
   public async sendMessage<Raw extends boolean>(
     params: SendMessageParams<StacksChainKey, Raw>,
   ): Promise<TxReturnType<StacksChainKey, Raw>> {
-    const dstChainId = getIntentRelayChainId(params.dstChainKey);
+    const dstRelayChainId = getIntentRelayChainId(params.dstChainKey);
     const [connectionAddress, connectionName] = parseContractId(
       spokeChainConfig[params.srcChainKey].addresses.connection as ContractIdString,
     );
@@ -186,7 +186,7 @@ export class StacksSpokeService {
       contractAddress: connectionAddress as string,
       contractName: connectionName as string,
       functionName: 'send-message',
-      functionArgs: [uintCV(dstChainId), Cl.bufferFromHex(params.dstAddress), Cl.bufferFromHex(params.payload)],
+      functionArgs: [uintCV(dstRelayChainId), Cl.bufferFromHex(params.dstAddress), Cl.bufferFromHex(params.payload)],
       postConditionMode: PostConditionMode.Allow,
     };
 

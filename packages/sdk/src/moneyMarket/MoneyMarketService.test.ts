@@ -495,29 +495,29 @@ describe('MoneyMarketService.isAllowanceValid', () => {
       );
     });
 
-    it('withdraw: short-circuits to true with no spoke call AND validates the token on toChainId (distinct from src)', async () => {
+    it('withdraw: short-circuits to true with no spoke call AND validates the token on dstChainKey (distinct from src)', async () => {
       const spy = vi.spyOn(sodax.spokeService, 'isAllowanceValid');
       const supportedTokenSpy = vi.spyOn(sodax.config, 'isMoneyMarketSupportedToken');
-      // Use a distinct toChainId so a mutant flipping `params.action === 'withdraw' || 'borrow'`
+      // Use a distinct dstChainKey so a mutant flipping `params.action === 'withdraw' || 'borrow'`
       // would cause the wrong-chain branch to be taken (spying for assertion below).
       const result = await sodax.moneyMarket.isAllowanceValid({
-        params: { ...withdrawParams(ChainKeys.BSC_MAINNET), toChainId: ChainKeys.SONIC_MAINNET },
+        params: { ...withdrawParams(ChainKeys.BSC_MAINNET), dstChainKey: ChainKeys.SONIC_MAINNET },
       });
 
       expect(result).toEqual({ ok: true, value: true });
       expect(spy).not.toHaveBeenCalled();
-      // The withdraw/borrow branch validates on `toChainId`. If the action discriminant flips,
+      // The withdraw/borrow branch validates on `dstChainKey`. If the action discriminant flips,
       // the else branch fires and validates on srcChainKey (BSC) instead. Pinning the chain arg
       // kills the StringLiteral mutants on `'withdraw' || 'borrow'`.
       expect(supportedTokenSpy).toHaveBeenCalledWith(ChainKeys.SONIC_MAINNET, SAMPLE_EVM_TOKEN);
     });
 
-    it('borrow: short-circuits to true with no spoke call AND validates the token on toChainId (distinct from src)', async () => {
+    it('borrow: short-circuits to true with no spoke call AND validates the token on dstChainKey (distinct from src)', async () => {
       const spy = vi.spyOn(sodax.spokeService, 'isAllowanceValid');
       const supportedTokenSpy = vi.spyOn(sodax.config, 'isMoneyMarketSupportedToken');
 
       const result = await sodax.moneyMarket.isAllowanceValid({
-        params: { ...borrowParams(ChainKeys.BSC_MAINNET), toChainId: ChainKeys.SONIC_MAINNET },
+        params: { ...borrowParams(ChainKeys.BSC_MAINNET), dstChainKey: ChainKeys.SONIC_MAINNET },
       });
 
       expect(result).toEqual({ ok: true, value: true });
@@ -558,8 +558,8 @@ describe('MoneyMarketService.isAllowanceValid', () => {
       const result = await sodax.moneyMarket.isAllowanceValid({
         params: {
           ...supplyParams(ChainKeys.BSC_MAINNET),
-          toChainId: ChainKeys.STELLAR_MAINNET,
-          toAddress: SAMPLE_DST_ADDRESS,
+          dstChainKey: ChainKeys.STELLAR_MAINNET,
+          dstAddress: SAMPLE_DST_ADDRESS,
         },
       });
 
@@ -584,8 +584,8 @@ describe('MoneyMarketService.isAllowanceValid', () => {
       const result = await sodax.moneyMarket.isAllowanceValid({
         params: {
           ...supplyParams(ChainKeys.STELLAR_MAINNET),
-          toChainId: ChainKeys.STELLAR_MAINNET,
-          toAddress: SAMPLE_DST_ADDRESS,
+          dstChainKey: ChainKeys.STELLAR_MAINNET,
+          dstAddress: SAMPLE_DST_ADDRESS,
         },
       });
 
@@ -601,8 +601,8 @@ describe('MoneyMarketService.isAllowanceValid', () => {
       const result = await sodax.moneyMarket.isAllowanceValid({
         params: {
           ...supplyParams(ChainKeys.STELLAR_MAINNET),
-          toChainId: ChainKeys.STELLAR_MAINNET,
-          toAddress: SAMPLE_DST_ADDRESS,
+          dstChainKey: ChainKeys.STELLAR_MAINNET,
+          dstAddress: SAMPLE_DST_ADDRESS,
         },
       });
 
@@ -638,7 +638,7 @@ describe('MoneyMarketService.isAllowanceValid', () => {
       if (!result.ok) expect(String(result.error)).toMatch(/Unsupported spoke chain/);
     });
 
-    it('rejects withdraw when token is unsupported on toChainId (default = srcChain)', async () => {
+    it('rejects withdraw when token is unsupported on dstChainKey (default = srcChain)', async () => {
       vi.spyOn(sodax.config, 'isMoneyMarketSupportedToken').mockReturnValueOnce(false);
 
       const result = await sodax.moneyMarket.isAllowanceValid({
@@ -696,8 +696,8 @@ describe('MoneyMarketService.isAllowanceValid', () => {
       const result = await sodax.moneyMarket.isAllowanceValid({
         params: {
           ...supplyParams(ChainKeys.STELLAR_MAINNET),
-          toChainId: ChainKeys.STELLAR_MAINNET,
-          toAddress: SAMPLE_DST_ADDRESS,
+          dstChainKey: ChainKeys.STELLAR_MAINNET,
+          dstAddress: SAMPLE_DST_ADDRESS,
         },
       });
 
@@ -1009,7 +1009,7 @@ describe('MoneyMarketService.createSupplyIntent', () => {
       }
     });
 
-    it('uses toAddress + toChainId when supplied (separate hub-wallet for recipient)', async () => {
+    it('uses dstAddress + dstChainKey when supplied (separate hub-wallet for recipient)', async () => {
       mocks.getUserHubWalletAddress
         .mockResolvedValueOnce(HUB_WALLET) // src lookup
         .mockResolvedValueOnce(TO_HUB_WALLET); // dst lookup
@@ -1020,8 +1020,8 @@ describe('MoneyMarketService.createSupplyIntent', () => {
         raw: false,
         params: {
           ...supplyParams(ChainKeys.BSC_MAINNET),
-          toChainId: ChainKeys.SONIC_MAINNET,
-          toAddress: SAMPLE_DST_ADDRESS,
+          dstChainKey: ChainKeys.SONIC_MAINNET,
+          dstAddress: SAMPLE_DST_ADDRESS,
         },
         walletProvider: mockEvmProvider,
       });
@@ -1366,7 +1366,7 @@ describe('MoneyMarketService.supply', () => {
 // =========================================================================
 //
 // Borrow uses `spokeService.sendMessage` (not deposit). It also has a richer set of
-// optional params (fromChainId / fromAddress / toChainId / toAddress) and a unique
+// optional params (dstChainKey / dstAddress) and a unique
 // `needsRelay` calculation: relay is only skipped when both src AND target are the hub.
 
 describe('MoneyMarketService.createBorrowIntent', () => {
@@ -1419,25 +1419,6 @@ describe('MoneyMarketService.createBorrowIntent', () => {
       expect(result.ok).toBe(true);
     });
 
-    it('uses fromChainId / fromAddress when supplied (separate "borrower" hub-wallet)', async () => {
-      mocks.getUserHubWalletAddress.mockReset();
-      mocks.getUserHubWalletAddress.mockResolvedValueOnce(TO_HUB_WALLET); // fromChainId-based lookup
-      const buildSpy = vi.spyOn(sodax.moneyMarket, 'buildBorrowData').mockReturnValueOnce('0xborrow-data');
-      vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xsend-hash' });
-
-      await sodax.moneyMarket.createBorrowIntent({
-        raw: false,
-        params: {
-          ...borrowParams(ChainKeys.BSC_MAINNET),
-          fromChainId: ChainKeys.SONIC_MAINNET,
-          fromAddress: SAMPLE_DST_ADDRESS,
-        },
-        walletProvider: mockEvmProvider,
-      });
-
-      // First arg of buildBorrowData is the resolved fromHubWallet — should be the override.
-      expect(buildSpy.mock.calls[0]?.[0]).toBe(TO_HUB_WALLET);
-    });
   });
 
   describe('rejects on invalid inputs', () => {
@@ -1661,8 +1642,8 @@ describe('MoneyMarketService.borrow', () => {
         raw: false,
         params: {
           ...borrowParams(ChainKeys.SONIC_MAINNET),
-          toChainId: ChainKeys.BSC_MAINNET,
-          toAddress: SAMPLE_DST_ADDRESS,
+          dstChainKey: ChainKeys.BSC_MAINNET,
+          dstAddress: SAMPLE_DST_ADDRESS,
         },
         walletProvider: mockEvmProvider,
       });
@@ -1778,7 +1759,7 @@ describe('MoneyMarketService.borrow', () => {
 // withdraw / createWithdrawIntent
 // =========================================================================
 //
-// Withdraw also uses `sendMessage` and validates the token on `toChainId`. The
+// Withdraw also uses `sendMessage` and validates the token on `dstChainKey`. The
 // `needsRelay` calculation has the walletRouter exemption: skip relay only when src is
 // hub AND target is hub AND target ≠ walletRouter.
 
@@ -1830,7 +1811,7 @@ describe('MoneyMarketService.createWithdrawIntent', () => {
       if (!result.ok) expect(String(result.error)).toMatch(/Invalid wallet provider for chain key/);
     });
 
-    it('rejects when token is unsupported on toChainId (default = srcChain)', async () => {
+    it('rejects when token is unsupported on dstChainKey (default = srcChain)', async () => {
       vi.spyOn(sodax.config, 'isMoneyMarketSupportedToken').mockReturnValueOnce(false);
 
       const result = await sodax.moneyMarket.createWithdrawIntent({
@@ -2003,8 +1984,8 @@ describe('MoneyMarketService.withdraw', () => {
         raw: false,
         params: {
           ...withdrawParams(ChainKeys.SONIC_MAINNET),
-          toChainId: ChainKeys.BSC_MAINNET,
-          toAddress: SAMPLE_DST_ADDRESS,
+          dstChainKey: ChainKeys.BSC_MAINNET,
+          dstAddress: SAMPLE_DST_ADDRESS,
         },
         walletProvider: mockEvmProvider,
       });
@@ -2056,8 +2037,8 @@ describe('MoneyMarketService.withdraw', () => {
         raw: false,
         params: {
           ...withdrawParams(ChainKeys.SONIC_MAINNET),
-          toChainId: ChainKeys.SONIC_MAINNET,
-          toAddress: walletRouter,
+          dstChainKey: ChainKeys.SONIC_MAINNET,
+          dstAddress: walletRouter,
         },
         walletProvider: mockEvmProvider,
       });

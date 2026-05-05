@@ -127,11 +127,11 @@ export class EvmSpokeService {
   public async deposit<Raw extends boolean = false>(
     params: DepositParams<EvmSpokeOnlyChainKey, Raw>,
   ): Promise<TxReturnType<EvmSpokeOnlyChainKey, Raw>> {
-    const { srcChainKey: fromChainId, srcAddress: from, token, to, amount, data = '0x' } = params;
+    const { srcChainKey, srcAddress: from, token, to, amount, data = '0x' } = params;
     const rawTx: EvmReturnType<true> = {
       from: from,
-      to: spokeChainConfig[fromChainId].addresses.assetManager,
-      value: token.toLowerCase() === spokeChainConfig[fromChainId].nativeToken.toLowerCase() ? amount : 0n,
+      to: spokeChainConfig[srcChainKey].addresses.assetManager,
+      value: token.toLowerCase() === spokeChainConfig[srcChainKey].nativeToken.toLowerCase() ? amount : 0n,
       data: encodeFunctionData({
         abi: spokeAssetManagerAbi,
         functionName: 'transfer',
@@ -164,7 +164,7 @@ export class EvmSpokeService {
 
   /**
    * Sends a message to the hub chain.
-   * @param {bigint} dstChainId - The chain ID of the hub chain.
+   * @param {SendMessageParams} params - Includes dstChainKey, the chain key of the hub chain.
    * @param {Address} dstAddress - The address on the hub chain.
    * @param {Hex} payload - The payload to send.
    * @param {EvmSpokeProviderType} spokeProvider - The provider for the spoke chain.
@@ -174,11 +174,11 @@ export class EvmSpokeService {
   public async sendMessage<Raw extends boolean>(
     params: SendMessageParams<EvmSpokeOnlyChainKey, Raw>,
   ): Promise<TxReturnType<EvmSpokeOnlyChainKey, Raw>> {
-    const { srcAddress: from, srcChainKey: fromChainId, dstChainKey: dstChainId, dstAddress, payload } = params;
-    const relayId = getIntentRelayChainId(dstChainId);
+    const { srcAddress: from, srcChainKey, dstChainKey, dstAddress, payload } = params;
+    const relayId = getIntentRelayChainId(dstChainKey);
     const rawTx: EvmReturnType<true> = {
       from: from,
-      to: spokeChainConfig[fromChainId].addresses.connection satisfies Address,
+      to: spokeChainConfig[srcChainKey].addresses.connection satisfies Address,
       value: 0n,
       data: encodeFunctionData({
         abi: connectionAbi,
