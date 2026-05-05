@@ -70,13 +70,19 @@ export type BridgeServiceConstructorParams = {
 };
 
 /**
- * BridgeService is a service that allows you to bridge tokens between chains
- * Birdge action can be between to spokes chains but can also be used to withdraw and deposit into soda tokens on the HUB.
- * By using soda tokens as src or destinatin address.
- * @param hubProvider - The hub provider
- * @param relayerApiEndpoint - The relayer API endpoint
+ * Orchestrates cross-chain token transfers within the SODAX hub-and-spoke architecture.
  *
- * @namespace SodaxFeatures
+ * Bridging works by depositing tokens into a spoke vault on the source chain, which triggers
+ * a cross-chain message relayed to the Sonic hub. The hub then performs vault transformations
+ * (deposit/withdraw) and forwards the tokens to the destination chain via the asset manager.
+ *
+ * Supports three transfer directions:
+ * - Spoke → Hub (deposit into hub vault)
+ * - Hub → Spoke (withdrawal from hub vault)
+ * - Spoke → Spoke (deposit on source + withdraw on destination)
+ *
+ * The high-level `bridge()` method handles the full lifecycle. For fine-grained control,
+ * `createBridgeIntent()` executes only the spoke-side deposit, leaving relay to the caller.
  */
 export class BridgeService {
   public readonly hubProvider: HubProvider;
@@ -90,13 +96,13 @@ export class BridgeService {
   }
 
   /**
-   * Get the fee for a given input amount
-   * @param {bigint} inputAmount - The amount of input tokens
-   * @returns {Promise<bigint>} The fee amount (denominated in input tokens)
+   * Calculates the partner fee deducted from a given bridge input amount.
    *
-   * @example
-   * const fee: bigint = await sodax.bridge.getFee(1000000000000000n);
-   * console.log('Fee:', fee);
+   * Returns `0n` when no partner fee is configured. The fee is denominated in the
+   * same units as `inputAmount` (vault token decimals, 18 dp).
+   *
+   * @param inputAmount - Gross amount being bridged, in vault token base units.
+   * @returns Fee amount to be deducted, in the same units as `inputAmount`.
    */
   public getFee(inputAmount: bigint): bigint {
     if (!this.config.bridge.partnerFee) {
@@ -107,10 +113,16 @@ export class BridgeService {
   }
 
   /**
-   * Check if allowance is valid for the bridge transaction
-   * @param params - The bridge parameters
-   * @param spokeProvider - The spoke provider
-   * @returns {Promise<Result<boolean>>}
+   * Checks whether the caller has sufficient token allowance to execute the bridge.
+   *
+   * The required spender varies by chain type:
+   * - Hub (Sonic): the caller's hub wallet router contract
+   * - EVM spoke: the spoke chain's asset manager contract
+   * - Stellar: validated by the Stellar spoke service (no explicit spender needed)
+   * - All other chain types (e.g. Solana, NEAR, Bitcoin): returns `true` — approvals are not applicable.
+   *
+   * @param _params - Bridge parameters containing source chain, token, amount, and sender address.
+   * @returns `Result<boolean>` — `true` if the allowance covers the bridge amount, `false` otherwise.
    */
   public async isAllowanceValid<S extends SpokeChainKey, Raw extends boolean>(
     _params: BridgeParams<S, Raw>,
@@ -162,11 +174,19 @@ export class BridgeService {
   }
 
   /**
-   * Approve token spending for the bridge transaction
-   * @param params - The bridge parameters
-   * @param spokeProvider - The spoke provider
-   * @param raw - Whether to return raw transaction data
-   * @returns Promise<Result<TxReturnType<S, R>, BridgeError<'APPROVAL_FAILED'>>>
+   * Grants token spending approval required before executing a bridge.
+   *
+   * Approval targets differ by chain:
+   * - Hub (Sonic): approves the caller's hub wallet router contract.
+   * - EVM spoke: approves the spoke chain's asset manager contract.
+   * - Stellar: delegates to the Stellar spoke service for trustline/allowance handling.
+   * - All other chain types: returns an error — approvals are not supported.
+   *
+   * When `raw` is `true` the encoded transaction is returned without broadcasting.
+   * When `raw` is `false` the transaction is signed and submitted via the provided wallet provider.
+   *
+   * @param _params - Bridge parameters including source chain, token, amount, wallet provider, and `raw` flag.
+   * @returns `Result<TxReturnType<K, Raw>>` — encoded transaction data (raw) or submitted transaction hash.
    */
   public async approve<K extends SpokeChainKey, Raw extends boolean>(
     _params: BridgeParams<K, Raw>,
@@ -253,33 +273,39 @@ export class BridgeService {
   }
 
   /**
-   * Execute a bridge transaction to transfer tokens from one chain to another
-   * @param params - The bridge parameters including source/destination chains, assets, and recipient
-   * @param spokeProvider - The spoke provider for the source chain
-   * @param timeout - The timeout in milliseconds for the transaction. Default is 60 seconds.
-   * @returns {Promise<Result<[SpokeTxHash, HubTxHash]>>} - Returns the transaction hashes for both spoke and hub chains or error
+   * Executes a full end-to-end bridge transfer: spoke deposit → relay → hub settlement.
+   *
+   * Internally calls `createBridgeIntent()` to submit the spoke-side deposit transaction,
+   * then waits for the cross-chain relay packet to be confirmed on the hub (Sonic).
+   * Use this method for the typical "fire and wait" bridge UX.
+   *
+   * For manual relay control (e.g. monitoring or batching), use `createBridgeIntent()` directly
+   * and handle the relay step yourself.
+   *
+   * @param _params - Bridge parameters including source/destination chain keys, token addresses,
+   *   amount, recipient address, wallet provider, and optional timeout.
+   * @returns `Result<TxHashPair>` — `{ srcChainTxHash, dstChainTxHash }` on success,
+   *   where `srcChainTxHash` is the spoke deposit tx and `dstChainTxHash` is the hub settlement tx.
    *
    * @example
-   * const result = await sodax.bridge.bridge(
-   *   {
+   * const result = await sodax.bridge.bridge({
+   *   params: {
    *     srcChainKey: '0x2105.base',
-   *     srcAsset: '0x...', // Address of the source token
-   *     amount: 1000n, // Amount to bridge (in token decimals)
+   *     srcAddress: '0x...',
+   *     srcToken: '0x...', // source token address on Base
+   *     amount: 1000n,
    *     dstChainKey: '0x89.polygon',
-   *     dstAsset: '0x...', // Address of the destination token
-   *     recipient: '0x...', // Recipient address on destination chain
-   *     partnerFee: { address: '0x...', percentage: 0.1 } // Optional partner fee. Partner fees and denominated in vault token decimals (18)
+   *     dstToken: '0x...', // destination token address on Polygon
+   *     recipient: '0x...',
    *   },
-   *   spokeProvider,
-   *   30000 // Optional timeout in milliseconds (default: 60000, i.e. 60 seconds)
-   * );
+   *   raw: false,
+   *   walletProvider: evmWalletProvider,
+   *   timeout: 30_000, // optional, defaults to 120 000 ms
+   * });
    *
-   * if (!result.ok) {
-   *   // Handle error
+   * if (result.ok) {
+   *   const { srcChainTxHash, dstChainTxHash } = result.value;
    * }
-   *
-   * const { srcChainTxHash, dstChainTxHash } = result.value;
-   * console.log('Bridge transaction hashes:', { srcChainTxHash, dstChainTxHash });
    */
   public async bridge<K extends SpokeChainKey>(_params: BridgeParams<K, false>): Promise<Result<TxHashPair>> {
     const { params, timeout } = _params;
@@ -312,40 +338,26 @@ export class BridgeService {
   }
 
   /**
-   * Create bridge intent only (without relaying to hub)
-   * NOTE: This method only executes the transaction on the spoke chain and creates the bridge intent
-   * In order to successfully bridge tokens, you need to:
-   * 1. Check if the allowance is sufficient using isAllowanceValid
-   * 2. Approve the appropriate contract to spend the tokens using approve
-   * 3. Create the bridge intent using this method
-   * 4. Relay the transaction to the hub and await completion using the bridge method
+   * Submits the spoke-side deposit transaction that initiates a bridge transfer,
+   * without waiting for the cross-chain relay to complete.
    *
-   * @param params - The bridge parameters including source/destination chains, assets, and recipient
-   * @param spokeProvider - The spoke provider for the source chain
-   * @param raw - Whether to return the raw transaction data
-   * @returns {Promise<Result<TxReturnType<S, R>, BridgeError<BridgeErrorCode>>>} - Returns the transaction result
+   * This is the first step of a bridge operation. After this call succeeds, you must
+   * relay the returned `relayData` to the hub (Sonic) via `relayTxAndWaitPacket` or
+   * the intent relay API to complete the transfer. The higher-level `bridge()` method
+   * does this automatically — use `createBridgeIntent()` only when you need manual relay control.
    *
-   * @example
-   * const bridgeService = new BridgeService(hubProvider, relayerApiEndpoint);
-   * const result = await sodax.bridge.createBridgeIntent(
-   *   {
-   *     srcChainKey: 'ethereum',
-   *     srcAsset: "0x123...", // source token address
-   *     amount: 1000000000000000000n, // 1 token in wei
-   *     dstChainKey: 'polygon',
-   *     dstAsset: "0x456...", // destination token address
-   *     recipient: "0x789..." // recipient address
-   *   },
-   *   spokeProvider,
-   *   raw // Optional: true = return the raw transaction data, false = execute and return the transaction hash (default: false)
-   * );
+   * When `raw` is `true`, returns the encoded transaction without broadcasting (useful for
+   * transaction simulation or batching). When `raw` is `false`, signs and submits the deposit
+   * transaction via the provided wallet provider.
    *
-   * if (result.ok) {
-   *   const txHash = result.value;
-   *   console.log('Bridge intent transaction hash:', txHash);
-   * } else {
-   *   console.error('Bridge intent creation failed:', result.error);
-   * }
+   * Bitcoin is only supported with `raw: false` because it requires the RadFi trading wallet
+   * derivation flow.
+   *
+   * @param _params - Bridge parameters including source/destination chain keys, token addresses,
+   *   amount, recipient, wallet provider, `raw` flag, and optional simulation skip flag.
+   * @returns `Result<IntentTxResult<K, Raw>>` — on success, `{ tx, relayData }` where
+   *   `tx` is the spoke deposit tx hash (or encoded call data when raw), and `relayData`
+   *   contains the hub wallet address and encoded hub execution payload needed for relay.
    */
   async createBridgeIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: BridgeParams<K, Raw>,
@@ -420,11 +432,25 @@ export class BridgeService {
   }
 
   /**
-   * Build the bridge transaction data for executing the bridge operation on the hub
-   * @param params - The create bridge intent parameters
-   * @param srcAssetInfo - The source asset information
-   * @param dstAssetInfo - The destination asset information
-   * @returns Hex - The encoded contract calls for the bridge operation
+   * Encodes the hub-side execution payload for a bridge operation.
+   *
+   * Produces an ABI-encoded sequence of contract calls that the hub wallet router
+   * will execute on Sonic after receiving the cross-chain message. The sequence is:
+   * 1. (if src is not a vault token) `approve` + `deposit` into the source vault → vault shares
+   * 2. (if partner fee configured) `transfer` fee shares to the partner address
+   * 3. (if dst is not a vault token) `withdraw` from the destination vault → underlying tokens
+   * 4. Transfer to the destination: direct ERC-20 transfer (hub destination) or
+   *    asset manager cross-chain transfer (spoke destination), or native S unwrap via `withdrawTo`
+   *    when the destination token is the Sonic native token.
+   *
+   * @param params - Intent parameters carrying source/destination chain keys, token addresses,
+   *   amount, and recipient.
+   * @param srcToken - Resolved source `XToken` with hub asset and vault addresses.
+   * @param dstToken - Resolved destination `XToken` with hub asset and vault addresses.
+   * @param partnerFee - Optional partner fee config; if present and non-zero, a fee transfer
+   *   call is prepended before the withdrawal step.
+   * @returns ABI-encoded `Hex` string representing the ordered call batch for the hub router.
+   * @throws When `dstToken` cannot be resolved for the destination chain (invariant).
    */
   buildBridgeData(
     params: CreateBridgeIntentParams,
@@ -489,13 +515,24 @@ export class BridgeService {
   }
 
   /**
-   * Retrieves the deposited token balance held by the asset manager on a spoke chain.
-   * This balance represents the available liquidity for bridging operations and is used to verify
-   * that the target chain has sufficient funds to complete a bridge transaction.
+   * Returns the maximum amount that can currently be bridged between two tokens,
+   * taking into account both deposit capacity on the source side and withdrawal liquidity
+   * on the destination side.
    *
-   * @param spokeProvider - The spoke provider instance
-   * @param token - The token address to query the balance for
-   * @returns {Promise<BridgeLimit>} - The max bridgeable amount with corresponding decimals
+   * The limit type depends on the transfer direction:
+   * - Spoke → Hub: constrained by the source vault's remaining deposit capacity (`DEPOSIT_LIMIT`).
+   * - Hub → Spoke: constrained by the asset manager balance on the destination spoke (`WITHDRAWAL_LIMIT`).
+   * - Spoke → Spoke: the minimum of the deposit capacity (source) and the asset manager balance
+   *   (destination), normalised to a common unit for comparison. The returned `type` indicates
+   *   which side is the binding constraint.
+   *
+   * Returns `{ amount: 0n, type: 'DEPOSIT_LIMIT' }` when the source token is not yet supported
+   * by the vault (i.e. `isSupported` is false on a non-hub source chain).
+   *
+   * @param from - Source `XToken` (chain key + address) to bridge from.
+   * @param to - Destination `XToken` (chain key + address) to bridge to.
+   * @returns `Result<BridgeLimit>` — `{ amount, decimals, type }` where `amount` is the maximum
+   *   bridgeable quantity in the token's native base units and `decimals` is its decimal precision.
    */
   public async getBridgeableAmount(from: XToken, to: XToken): Promise<Result<BridgeLimit>> {
     try {
@@ -584,12 +621,19 @@ export class BridgeService {
   }
 
   /**
-   * Check if two assets on different chains are bridgeable
-   * Two assets are bridgeable if they share the same vault on the hub chain
-   * @param from - The source X token
-   * @param to - The destination X token
-   * @param unchecked - Whether to skip the chain ID validation
-   * @returns boolean - true if assets are bridgeable, false otherwise
+   * Determines whether two tokens (potentially on different chains) can be bridged to each other.
+   *
+   * Two tokens are bridgeable if they resolve to the same vault address on the Sonic hub,
+   * meaning they represent the same underlying asset across chains (e.g. USDC on Base and
+   * USDC on Arbitrum both map to the same hub vault).
+   *
+   * Returns `false` — rather than throwing — on any resolution or validation error.
+   *
+   * @param from - Source `XToken` to bridge from.
+   * @param to - Destination `XToken` to bridge to.
+   * @param unchecked - When `true`, skips the `isValidSpokeChainKey` guard. Useful for
+   *   checking theoretical bridgeability without requiring both chains to be in the active config.
+   * @returns `true` if the tokens share the same hub vault; `false` otherwise.
    */
   public isBridgeable({
     from,
@@ -625,11 +669,16 @@ export class BridgeService {
   }
 
   /**
-   * Get all bridgeable tokens from a source token to a destination chain
-   * @param from - The source chain ID
-   * @param to - The destination chain ID
-   * @param token - The source token address
-   * @returns XToken[] - Array of bridgeable tokens on the destination chain
+   * Returns all tokens on the destination chain that can receive a bridge from the given source token.
+   *
+   * Filters the destination chain's supported tokens to those that share the same hub vault
+   * as the source token, which means they represent the same underlying asset.
+   *
+   * @param from - Source chain key.
+   * @param to - Destination chain key whose supported tokens are searched.
+   * @param token - Source token address on `from`.
+   * @returns `Result<XToken[]>` — array of destination-chain tokens bridgeable from the source token.
+   *   Returns an error result if the source token is not found in the config.
    */
   public getBridgeableTokens(from: SpokeChainKey, to: SpokeChainKey, token: string): Result<XToken[]> {
     try {
@@ -648,6 +697,18 @@ export class BridgeService {
     }
   }
 
+  /**
+   * Filters a token map to those that share the same hub vault as `srcToken`.
+   *
+   * Used by `getBridgeableTokens()` to narrow the destination chain's full token list to only
+   * the tokens that are bridgeable from the given source. Each matching token is returned with
+   * its `chainKey` set to `to`.
+   *
+   * @param tokens - Map of raw token entries from the destination chain's config.
+   * @param to - Destination chain key; applied to each returned token's `chainKey`.
+   * @param srcToken - Resolved source `XToken` to match vaults against. Returns empty array when `undefined`.
+   * @returns Array of destination-chain `XToken` instances whose vault matches `srcToken.vault`.
+   */
   public filterTokensWithSameVault(
     tokens: Record<string, XToken>,
     to: SpokeChainKey,
@@ -670,6 +731,19 @@ export class BridgeService {
     return bridgeableTokens;
   }
 
+  /**
+   * Looks up a token's balance within a vault's reserve snapshot.
+   *
+   * Resolves the token to its hub asset address via config, then finds the matching index
+   * in `reserves.tokens` (case-insensitive) and returns the corresponding balance from
+   * `reserves.balances`. Used by `getBridgeableAmount()` to determine deposit capacity
+   * and asset manager withdrawal liquidity.
+   *
+   * @param reserves - Vault reserve snapshot containing parallel `tokens` and `balances` arrays.
+   * @param token - `XToken` whose on-chain balance should be retrieved from the reserves.
+   * @returns The token balance held in the vault, in the token's native base units.
+   * @throws When the token is not found in config or not present in the reserves snapshot.
+   */
   public findTokenBalanceInReserves(reserves: VaultReserves, token: XToken): bigint {
     const hubAsset = this.config.getSpokeTokenFromOriginalAssetAddress(token.chainKey, token.address);
     invariant(hubAsset, `Token not found for token ${token.address} on chain ${token.chainKey}`);

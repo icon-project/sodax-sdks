@@ -9,23 +9,33 @@ SDK includes predefined configurations of supported chains, tokens and other rel
 ```typescript
 import { 
   ChainKeys,
-  type HubChainId,
-  type SpokeChainId 
+  type HubChainKey,
+  type SpokeChainKey,
 } from "@sodax/sdk"
 
 // Supported migration chains
-const hubChainId: HubChainId = ChainKeys.SONIC_MAINNET;
-const iconChainId: SpokeChainId = ChainKeys.ICON_MAINNET;
+const hubChainKey: HubChainKey = ChainKeys.SONIC_MAINNET;
+const iconChainKey: SpokeChainKey = ChainKeys.ICON_MAINNET;
 
 // Migration tokens
 const migrationTokens = ['ICX', 'bnUSD', 'BALN'] as const;
 ```
 
-Please refer to [SDK constants.ts](https://github.com/icon-project/sodax-frontend/blob/main/packages/types/src/constants/index.ts) for more.
+Please refer to [SDK ChainKeys](https://github.com/icon-project/sodax-frontend/blob/main/packages/types/src/constants/index.ts) for more. For a direct mapping from old `*_CHAIN_ID` constants to `ChainKeys.*` see `packages/sdk/CHAIN_ID_MIGRATION.md`.
 
-### Initialising Providers
+### Wallet Providers
 
-Refer to [Initialising Spoke Provider](https://docs.sodax.com/developers/how-to/how_to_create_a_spoke_provider) section to see how IconSpokeProvider and SonicSpokeProvider can be created.
+All execution methods accept a `walletProvider` inside the action params object — no spoke provider classes need to be constructed by callers. The wallet provider type is chain-narrowed from the `srcChainKey` in the params.
+
+```typescript
+import { EvmWalletProvider, IconWalletProvider } from '@sodax/wallet-sdk-core';
+
+// ICON wallet provider (for ICX / BALN / legacy bnUSD migrations originating on ICON)
+const iconWalletProvider = new IconWalletProvider({ privateKey: '...', rpcUrl: '...' });
+
+// Sonic wallet provider (for reverse ICX migration originating on Sonic)
+const sonicWalletProvider = new EvmWalletProvider({ privateKey: '...', rpcUrl: '...' });
+```
 
 ## Migration Types
 
@@ -36,11 +46,34 @@ The MigrationService supports multiple types of migrations:
 3. **bnUSD Legacy ↔ New bnUSD**: Unified migration between legacy and new bnUSD tokens across supported chains
 4. **BALN → SODA**: Migrate BALN tokens to SODA tokens on the hub chain
 
+## Calling Convention
+
+All exec methods on `MigrationService` follow the `SpokeExecActionParams` wrapper pattern. The wrapper carries the migration params, the wallet provider, and optional flags:
+
+```typescript
+// Signed execution (raw: false, walletProvider required)
+const result = await sodax.migration.migrateIcxToSoda({
+  params: { srcChainKey: ChainKeys.ICON_MAINNET, /* ... */ },
+  raw: false,
+  walletProvider: iconWalletProvider,
+  timeout: 30000,       // optional, ms; default 60000
+  skipSimulation: false, // optional
+});
+
+// Raw transaction (raw: true, walletProvider forbidden)
+const rawResult = await sodax.migration.createMigrateIcxToSodaIntent({
+  params: { srcChainKey: ChainKeys.ICON_MAINNET, /* ... */ },
+  raw: true,
+});
+```
+
+TypeScript enforces the pairing: `walletProvider` when `raw: true` is a compile error; omitting it when `raw: false` is also a compile error.
+
 ## Common Operations
 
 ### Check Allowance
 
-Before creating migration intents, you should check if the allowance is valid. For forward migrations (ICX/wICX, bnUSD, BALN), no allowance is required as these tokens do not require approval.
+Before creating migration intents, you should check if the allowance is valid. For forward migrations (ICX/wICX, bnUSD from ICON, BALN), no allowance is required as these tokens do not require approval.
 
 **Note**: For Stellar-based operations, the allowance system works differently:
 - **Source Chain (Stellar)**: The standard `isAllowanceValid` method works as expected for EVM chains, but for Stellar as the source chain, this method checks and establishes trustlines instead.
@@ -49,19 +82,16 @@ Before creating migration intents, you should check if the allowance is valid. F
 ```typescript
 const sodax = new Sodax();
 
-// For forward migration (no allowance required)
-const migrationParams = {
+// For forward ICX/BALN migration (no allowance required — returns true immediately for ICON source)
+const migrationParams: IcxMigrateParams = {
+  srcChainKey: ChainKeys.ICON_MAINNET,
+  srcAddress: 'hx...',
   address: 'cx88fd7df7ddff82f7cc735c871dc519838cb235bb', // wICX address
   amount: BigInt(1000000000000000000), // 1 ICX (18 decimals)
-  to: '0x1234567890123456789012345678901234567890', // Recipient address on hub chain
-} satisfies MigrationParams;
+  dstAddress: '0x1234567890123456789012345678901234567890', // Recipient address on hub chain
+};
 
-// Check if allowance is valid (always returns true for forward migrations)
-const isAllowed = await sodax.migration.isAllowanceValid(
-  migrationParams,
-  'migrate',
-  iconSpokeProvider
-);
+const isAllowed = await sodax.migration.isAllowanceValid(migrationParams, 'migrate');
 
 if (!isAllowed.ok) {
   console.error('Failed to check allowance:', isAllowed.error);
@@ -69,18 +99,15 @@ if (!isAllowed.ok) {
   console.log('Allowance is valid:', isAllowed.value);
 }
 
-// For reverse migration (SODA tokens require allowance check)
-const revertParams = {
+// For reverse ICX migration (SODA tokens require allowance check — source chain is Sonic)
+const revertParams: IcxCreateRevertMigrationParams = {
+  srcChainKey: ChainKeys.SONIC_MAINNET,
+  srcAddress: '0xabc...', // Sonic address
   amount: BigInt(1000000000000000000), // 1 SODA token (18 decimals)
-  to: 'hx1234567890123456789012345678901234567890', // Icon address to receive wICX
-} satisfies MigrationRevertParams;
+  dstAddress: 'hx1234567890123456789012345678901234567890', // ICON address to receive wICX
+};
 
-// Check if allowance is valid for SODA tokens
-const isAllowedRevert = await sodax.migration.isAllowanceValid(
-  revertParams,
-  'revert',
-  sonicSpokeProvider
-);
+const isAllowedRevert = await sodax.migration.isAllowanceValid(revertParams, 'revert');
 
 if (!isAllowedRevert.ok) {
   console.error('Failed to check allowance:', isAllowedRevert.error);
@@ -102,23 +129,27 @@ For reverse migrations, if the allowance check returns false, you need to approv
 ```typescript
 const sodax = new Sodax();
 
-const revertParams = {
+const revertParams: IcxCreateRevertMigrationParams = {
+  srcChainKey: ChainKeys.SONIC_MAINNET,
+  srcAddress: '0xabc...',
   amount: BigInt(1000000000000000000),
-  to: 'hx1234567890123456789012345678901234567890',
-} satisfies MigrationRevertParams;
+  dstAddress: 'hx1234567890123456789012345678901234567890',
+};
 
 // Approve SODA tokens for reverse migration
 const approveResult = await sodax.migration.approve(
-  revertParams,
+  {
+    params: revertParams,
+    raw: false,
+    walletProvider: sonicWalletProvider,
+  },
   'revert',
-  sonicSpokeProvider,
-  false // Optional raw flag
 );
 
 if (approveResult.ok) {
   console.log('Approval transaction hash:', approveResult.value);
   // Wait for approval transaction to be mined
-  const approveTxResult = await sonicSpokeProvider.walletProvider.waitForTransactionReceipt(approveResult.value);
+  const approveTxResult = await sonicWalletProvider.waitForTransactionReceipt(approveResult.value);
   console.log('Approval transaction confirmed:', approveTxResult);
 } else {
   console.error('Failed to approve tokens:', approveResult.error);
@@ -138,18 +169,21 @@ Migrate ICX or wICX tokens to SODA tokens on the hub chain.
 ```typescript
 const sodax = new Sodax();
 
-const migrationParams = {
+const migrationParams: IcxMigrateParams = {
+  srcChainKey: ChainKeys.ICON_MAINNET,
+  srcAddress: 'hx...', // ICON wallet address
   address: 'cx88fd7df7ddff82f7cc735c871dc519838cb235bb', // wICX address
   amount: BigInt(1000000000000000000), // 1 ICX (18 decimals)
-  to: '0x1234567890123456789012345678901234567890', // Recipient address on hub chain
-} satisfies IcxMigrateParams;
+  dstAddress: '0x1234567890123456789012345678901234567890', // Recipient address on hub chain
+};
 
 // Migrate ICX to SODA
-const result = await sodax.migration.migrateIcxToSoda(
-  migrationParams,
-  iconSpokeProvider,
-  30000 // Optional timeout in milliseconds (default: 60000)
-);
+const result = await sodax.migration.migrateIcxToSoda({
+  params: migrationParams,
+  raw: false,
+  walletProvider: iconWalletProvider,
+  timeout: 30000, // Optional timeout in milliseconds (default: 60000)
+});
 
 if (result.ok) {
   const { srcChainTxHash, dstChainTxHash } = result.value;
@@ -165,28 +199,31 @@ if (result.ok) {
 
 ### Revert SODA to ICX
 
-Revert SODA tokens back to wICX tokens on ICON.
+Revert SODA tokens back to wICX tokens on ICON. A SODA approval from the caller to their hub wallet must be set before calling this method (use `isAllowanceValid` to check and `approve` to set it).
 
 ```typescript
 const sodax = new Sodax();
 
-const revertParams = {
+const revertParams: IcxCreateRevertMigrationParams = {
+  srcChainKey: ChainKeys.SONIC_MAINNET,
+  srcAddress: '0xabc...', // Sonic wallet address
   amount: BigInt(1000000000000000000), // 1 SODA token (18 decimals)
-  to: 'hx1234567890123456789012345678901234567890', // Icon address to receive wICX
-} satisfies IcxCreateRevertMigrationParams;
+  dstAddress: 'hx1234567890123456789012345678901234567890', // ICON address to receive wICX
+};
 
 // Revert SODA to ICX
-const result = await sodax.migration.revertMigrateSodaToIcx(
-  revertParams,
-  sonicSpokeProvider,
-  30000 // Optional timeout in milliseconds (default: 60000)
-);
+const result = await sodax.migration.revertMigrateSodaToIcx({
+  params: revertParams,
+  raw: false,
+  walletProvider: sonicWalletProvider,
+  timeout: 30000, // Optional timeout in milliseconds (default: 60000)
+});
 
 if (result.ok) {
   const { srcChainTxHash, dstChainTxHash } = result.value;
   console.log('SODA to ICX revert successful!');
-  console.log('Hub transaction hash:', dstChainTxHash);
-  console.log('Spoke transaction hash:', srcChainTxHash);
+  console.log('Sonic transaction hash:', srcChainTxHash);
+  console.log('Hub packet receipt:', dstChainTxHash);
 } else {
   console.error('SODA to ICX revert failed:', result.error);
 }
@@ -221,55 +258,41 @@ console.log('Legacy bnUSD chains:', bnUSDLegacySpokeChainIds);
 console.log('New bnUSD chains:', newbnUSDSpokeChainIds);
 // Output: ['sonic', 'arbitrum', 'base', 'polygon', ...] (all chains except Icon)
 
-// Get all legacy bnUSD token configurations
-console.log('Legacy bnUSD tokens:', bnUSDLegacyTokens);
-// Output: Array of token objects with address, symbol, name, decimals
-
-// Get all new bnUSD token configurations
-console.log('New bnUSD tokens:', bnUSDNewTokens);
-// Output: Array of token objects with address, symbol, name, decimals
-
 // Check if a chain supports legacy bnUSD
-const isLegacyChain = isLegacybnUSDChainId('0x1.icon'); // true
-const isNewChain = isNewbnUSDChainId('sonic'); // true
+const isLegacyChain = isLegacybnUSDChainId(ChainKeys.ICON_MAINNET); // true
+const isNewChain = isNewbnUSDChainId(ChainKeys.SONIC_MAINNET); // true
 
 // Check if a token address is legacy bnUSD
 const isLegacyToken = isLegacybnUSDToken('cx88fd7df7ddff82f7cc735c871dc519838cb235bb'); // true
 const isNewToken = isNewbnUSDToken('0xE801CA34E19aBCbFeA12025378D19c4FBE250131'); // true
-
-// Get all legacy bnUSD tokens with their chain information
-const allLegacyTokens = getAllLegacybnUSDTokens();
-// Output: [
-//   { token: { address: 'cx88fd7df7ddff82f7cc735c871dc519838cb235bb', ... }, chainId: '0x1.icon' },
-//   { token: { address: '0x...', ... }, chainId: 'sui' },
-//   { token: { address: '0x...', ... }, chainId: 'stellar' }
-// ]
 ```
 
 ### Migrate Legacy bnUSD to New bnUSD
 
-Migrate legacy bnUSD tokens to new bnUSD tokens on any spoke chain (besides Icon - which has only legacy bnUSD).
+Migrate legacy bnUSD tokens to new bnUSD tokens on any spoke chain (besides Icon — which has only legacy bnUSD).
 
 **Note**: When migrating to Stellar as the destination chain, ensure you have established the necessary trustlines using `StellarSpokeService.hasSufficientTrustline` and `StellarSpokeService.requestTrustline` before executing the migration.
 
 ```typescript
 const sodax = new Sodax();
 
-const migrationParams = {
-  srcChainId: '0x1.icon', // Source chain ID (ICON)
-  dstChainId: 'sonic', // Destination chain ID (spoke chain)
-  srcbnUSD: 'cx88fd7df7ddff82f7cc735c871dc519838cb235bb', // Legacy bnUSD address
-  dstbnUSD: '0xE801CA34E19aBCbFeA12025378D19c4FBE250131', // New bnUSD address
+const migrationParams: UnifiedBnUSDMigrateParams<typeof ChainKeys.ICON_MAINNET> = {
+  srcChainKey: ChainKeys.ICON_MAINNET,
+  srcAddress: 'hx...', // ICON wallet address
+  dstChainKey: ChainKeys.SONIC_MAINNET,
+  srcbnUSD: 'cx88fd7df7ddff82f7cc735c871dc519838cb235bb', // Legacy bnUSD address on ICON
+  dstbnUSD: '0xE801CA34E19aBCbFeA12025378D19c4FBE250131', // New bnUSD address on Sonic
   amount: BigInt(1000000000000000000), // 1 bnUSD (18 decimals)
-  to: '0x1234567890123456789012345678901234567890', // Recipient address on hub chain
-} satisfies UnifiedBnUSDMigrateParams;
+  dstAddress: '0x1234567890123456789012345678901234567890', // Recipient address on Sonic
+};
 
 // Migrate legacy bnUSD to new bnUSD
-const result = await sodax.migration.migratebnUSD(
-  migrationParams,
-  iconSpokeProvider,
-  30000 // Optional timeout in milliseconds (default: 60000)
-);
+const result = await sodax.migration.migratebnUSD({
+  params: migrationParams,
+  raw: false,
+  walletProvider: iconWalletProvider,
+  timeout: 30000, // Optional timeout in milliseconds (default: 60000)
+});
 
 if (result.ok) {
   const { srcChainTxHash, dstChainTxHash } = result.value;
@@ -290,36 +313,36 @@ Revert new bnUSD tokens back to legacy bnUSD tokens. Legacy bnUSD exists on Icon
 ```typescript
 const sodax = new Sodax();
 
-const revertParams = {
-  srcChainId: 'sonic', // Source chain ID (any spoke chain besides Icon)
-  dstChainId: '0x1.icon', // Destination chain ID (ICON) where legacy bnUSD exists (Sui, Stellar or Icon)
-  srcbnUSD: '0xE801CA34E19aBCbFeA12025378D19c4FBE250131', // New bnUSD address
-  dstbnUSD: 'cx88fd7df7ddff82f7cc735c871dc519838cb235bb', // Legacy bnUSD address
+const revertParams: UnifiedBnUSDMigrateParams<typeof ChainKeys.SONIC_MAINNET> = {
+  srcChainKey: ChainKeys.SONIC_MAINNET,
+  srcAddress: '0xabc...', // Sonic wallet address
+  dstChainKey: ChainKeys.ICON_MAINNET,
+  srcbnUSD: '0xE801CA34E19aBCbFeA12025378D19c4FBE250131', // New bnUSD address on Sonic
+  dstbnUSD: 'cx88fd7df7ddff82f7cc735c871dc519838cb235bb', // Legacy bnUSD address on ICON
   amount: BigInt(1000000000000000000), // 1 new bnUSD (18 decimals)
-  to: 'hx1234567890123456789012345678901234567890', // Recipient address on spoke chain
-} satisfies UnifiedBnUSDMigrateParams;
+  dstAddress: 'hx1234567890123456789012345678901234567890', // Recipient address on ICON
+};
 
 // Check allowance for reverse migration
-const isAllowed = await sodax.migration.isAllowanceValid(
-  revertParams,
-  'revert',
-  sonicSpokeProvider
-);
+const isAllowed = await sodax.migration.isAllowanceValid(revertParams, 'revert');
 
 if (!isAllowed.ok) {
   console.error('Failed to check allowance:', isAllowed.error);
 } else if (!isAllowed.value) {
   // Approve if needed
   const approveResult = await sodax.migration.approve(
-    revertParams,
+    {
+      params: revertParams,
+      raw: false,
+      walletProvider: sonicWalletProvider,
+    },
     'revert',
-    sonicSpokeProvider
   );
-  
+
   if (approveResult.ok) {
     console.log('Approval transaction hash:', approveResult.value);
     // Wait for approval transaction to be mined
-    await sonicSpokeProvider.walletProvider.waitForTransactionReceipt(approveResult.value);
+    await sonicWalletProvider.waitForTransactionReceipt(approveResult.value);
   } else {
     console.error('Failed to approve tokens:', approveResult.error);
     return;
@@ -327,17 +350,18 @@ if (!isAllowed.ok) {
 }
 
 // Reverse migrate new bnUSD to legacy bnUSD
-const result = await sodax.migration.migratebnUSD(
-  revertParams,
-  sonicSpokeProvider,
-  30000 // Optional timeout in milliseconds (default: 60000)
-);
+const result = await sodax.migration.migratebnUSD({
+  params: revertParams,
+  raw: false,
+  walletProvider: sonicWalletProvider,
+  timeout: 30000, // Optional timeout in milliseconds (default: 60000)
+});
 
 if (result.ok) {
   const { srcChainTxHash, dstChainTxHash } = result.value;
   console.log('bnUSD reverse migration successful!');
-  console.log('Hub transaction hash:', dstChainTxHash);
-  console.log('Spoke transaction hash:', srcChainTxHash);
+  console.log('Sonic transaction hash:', srcChainTxHash);
+  console.log('Hub packet receipt:', dstChainTxHash);
 } else {
   console.error('bnUSD reverse migration failed:', result.error);
 }
@@ -347,24 +371,29 @@ if (result.ok) {
 
 ### Migrate BALN to SODA
 
-Migrate BALN tokens to SODA tokens on the hub chain.
+Migrate BALN tokens to SODA tokens on the hub chain. Use `LockupPeriod` enum values for the `lockupPeriod` field — longer lock-ups yield higher SODA multipliers (0.5×–1.5×).
 
 ```typescript
+import { LockupPeriod } from '@sodax/sdk';
+
 const sodax = new Sodax();
 
-const migrationParams = {
+const migrationParams: BalnMigrateParams = {
+  srcChainKey: ChainKeys.ICON_MAINNET,
+  srcAddress: 'hx...', // ICON wallet address
   amount: BigInt(1000000000000000000), // 1 BALN (18 decimals)
-  lockupPeriod: 'SIX_MONTHS', // Lockup period for the swap
-  to: '0x1234567890123456789012345678901234567890', // Recipient address on hub chain
-  stake: true, // Whether to stake the SODA tokens
-} satisfies BalnMigrateParams;
+  lockupPeriod: LockupPeriod.SIX_MONTHS, // 0.75x multiplier; use LockupPeriod enum
+  dstAddress: '0x1234567890123456789012345678901234567890', // Recipient address on hub chain
+  stake: true, // Whether to immediately stake the received SODA tokens
+};
 
 // Migrate BALN to SODA
-const result = await sodax.migration.migrateBaln(
-  migrationParams,
-  iconSpokeProvider,
-  30000 // Optional timeout in milliseconds (default: 60000)
-);
+const result = await sodax.migration.migrateBaln({
+  params: migrationParams,
+  raw: false,
+  walletProvider: iconWalletProvider,
+  timeout: 30000, // Optional timeout in milliseconds (default: 60000)
+});
 
 if (result.ok) {
   const { srcChainTxHash, dstChainTxHash } = result.value;
@@ -376,21 +405,70 @@ if (result.ok) {
 }
 ```
 
+### BALN Lock Periods and Multipliers
+
+| Lock Period | Enum Value | Multiplier |
+|---|---|---|
+| No lock | `LockupPeriod.NO_LOCKUP` | 0.5× |
+| 6 months | `LockupPeriod.SIX_MONTHS` | 0.75× |
+| 12 months | `LockupPeriod.TWELVE_MONTHS` | 1.0× |
+| 18 months | `LockupPeriod.EIGHTEEN_MONTHS` | 1.25× |
+| 24 months | `LockupPeriod.TWENTY_FOUR_MONTHS` | 1.5× |
+
+### BALN Lock Management
+
+After migrating BALN, the resulting SODA (or xSoda) is held in locks managed by `sodax.migration.balnSwapService`. These methods act directly on the hub chain:
+
+```typescript
+const { balnSwapService } = sodax.migration;
+
+const lockId = 1n;
+
+// Claim unlocked SODA tokens from a completed lock
+await balnSwapService.claim(userAddress, { lockId }, { raw: false, walletProvider: sonicWalletProvider });
+
+// Initiate unstaking of xSoda tokens from a lock
+await balnSwapService.unstake(userAddress, { lockId }, { raw: false, walletProvider: sonicWalletProvider });
+
+// Claim tokens after the unstaking waiting period expires
+await balnSwapService.claimUnstaked(userAddress, { lockId }, { raw: false, walletProvider: sonicWalletProvider });
+
+// Cancel a pending unstake request
+await balnSwapService.cancelUnstake(userAddress, { lockId }, { raw: false, walletProvider: sonicWalletProvider });
+
+// Stake SODA tokens held in a lock into the xSoda vault
+await balnSwapService.stake(userAddress, { lockId }, { raw: false, walletProvider: sonicWalletProvider });
+
+// Read all locks for a user
+const locks = await balnSwapService.getDetailedUserLocks(publicClient, userAddress);
+```
+
 ## Complete Examples
 
 ### ICX Migration Example
 
 ```typescript
+import { Sodax, ChainKeys, type IcxMigrateParams } from '@sodax/sdk';
+import { IconWalletProvider } from '@sodax/wallet-sdk-core';
+import type { Address } from 'viem';
+
 const sodax = new Sodax();
+const iconWalletProvider = new IconWalletProvider({ privateKey: '...', rpcUrl: '...' });
 
 async function migrateIcx(amount: bigint, recipient: Address): Promise<void> {
-  const params = {
-    address: iconSpokeProvider.chainConfig.addresses.wICX,
+  const params: IcxMigrateParams = {
+    srcChainKey: ChainKeys.ICON_MAINNET,
+    srcAddress: await iconWalletProvider.getWalletAddress(),
+    address: '0x0000000000000000000000000000000000000000', // wICX or native ICX token address
     amount,
-    to: recipient,
-  } satisfies IcxMigrateParams;
+    dstAddress: recipient,
+  };
 
-  const result = await sodax.migration.migrateIcxToSoda(params, iconSpokeProvider);
+  const result = await sodax.migration.migrateIcxToSoda({
+    params,
+    raw: false,
+    walletProvider: iconWalletProvider,
+  });
 
   if (result.ok) {
     const { srcChainTxHash, dstChainTxHash } = result.value;
@@ -409,16 +487,25 @@ await migrateIcx(BigInt(1000000000000000000), '0x1234567890123456789012345678901
 ### Reverse ICX Migration Example
 
 ```typescript
+import { Sodax, ChainKeys, type IcxCreateRevertMigrationParams } from '@sodax/sdk';
+import { EvmWalletProvider } from '@sodax/wallet-sdk-core';
+import type { IconEoaAddress } from '@sodax/sdk';
+
 const sodax = new Sodax();
+const sonicWalletProvider = new EvmWalletProvider({ privateKey: '...', rpcUrl: '...' });
 
 async function reverseMigrateIcx(amount: bigint, to: IconEoaAddress): Promise<void> {
-  const params = {
+  const srcAddress = await sonicWalletProvider.getWalletAddress();
+
+  const params: IcxCreateRevertMigrationParams = {
+    srcChainKey: ChainKeys.SONIC_MAINNET,
+    srcAddress,
     amount,
-    to,
-  } satisfies IcxCreateRevertMigrationParams;
+    dstAddress: to,
+  };
 
   // Check allowance
-  const isAllowed = await sodax.migration.isAllowanceValid(params, 'revert', sonicSpokeProvider);
+  const isAllowed = await sodax.migration.isAllowanceValid(params, 'revert');
 
   if (!isAllowed.ok) {
     console.error('[reverseMigrateIcx] Allowance check failed:', isAllowed.error);
@@ -427,11 +514,13 @@ async function reverseMigrateIcx(amount: bigint, to: IconEoaAddress): Promise<vo
 
   if (!isAllowed.value) {
     // Approve if needed
-    const approveResult = await sodax.migration.approve(params, 'revert', sonicSpokeProvider);
+    const approveResult = await sodax.migration.approve(
+      { params, raw: false, walletProvider: sonicWalletProvider },
+      'revert',
+    );
     if (approveResult.ok) {
       console.log('[reverseMigrateIcx] Approval hash:', approveResult.value);
-      const approveTxResult = await sonicSpokeProvider.walletProvider.waitForTransactionReceipt(approveResult.value);
-      console.log('[reverseMigrateIcx] Approval confirmed:', approveTxResult);
+      await sonicWalletProvider.waitForTransactionReceipt(approveResult.value);
     } else {
       console.error('[reverseMigrateIcx] Approval failed:', approveResult.error);
       return;
@@ -439,13 +528,17 @@ async function reverseMigrateIcx(amount: bigint, to: IconEoaAddress): Promise<vo
   }
 
   // Create and submit revert migration intent
-  const result = await sodax.migration.revertMigrateSodaToIcx(params, sonicSpokeProvider);
+  const result = await sodax.migration.revertMigrateSodaToIcx({
+    params,
+    raw: false,
+    walletProvider: sonicWalletProvider,
+  });
 
   if (result.ok) {
     const { srcChainTxHash, dstChainTxHash } = result.value;
     console.log('[reverseMigrateIcx] Revert migration successful!');
-    console.log('[reverseMigrateIcx] Hub transaction hash:', dstChainTxHash);
-    console.log('[reverseMigrateIcx] Spoke transaction hash:', srcChainTxHash);
+    console.log('[reverseMigrateIcx] Sonic transaction hash:', srcChainTxHash);
+    console.log('[reverseMigrateIcx] Hub packet receipt:', dstChainTxHash);
   } else {
     console.error('[reverseMigrateIcx] Revert migration failed:', result.error);
   }
@@ -458,25 +551,35 @@ await reverseMigrateIcx(BigInt(1000000000000000000), 'hx123456789012345678901234
 ### bnUSD Migration Example
 
 ```typescript
+import { Sodax, ChainKeys, type UnifiedBnUSDMigrateParams, type SpokeChainKey } from '@sodax/sdk';
+import { IconWalletProvider } from '@sodax/wallet-sdk-core';
+import type { Address } from 'viem';
+
 const sodax = new Sodax();
+const iconWalletProvider = new IconWalletProvider({ privateKey: '...', rpcUrl: '...' });
 
 async function migrateBnUSD(
-  amount: bigint, 
-  recipient: Address, 
-  legacybnUSD: string, 
-  newbnUSD: string, 
-  dstChainId: SpokeChainId
+  amount: bigint,
+  recipient: Address,
+  legacybnUSD: string,
+  newbnUSD: string,
+  dstChainKey: SpokeChainKey,
 ): Promise<void> {
-  const params = {
-    srcChainId: '0x1.icon', // Source chain ID (ICON)
-    dstChainId: dstChainId,
-    srcbnUSD: legacybnUSD, // Legacy bnUSD address
-    dstbnUSD: newbnUSD, // New bnUSD address
+  const params: UnifiedBnUSDMigrateParams<typeof ChainKeys.ICON_MAINNET> = {
+    srcChainKey: ChainKeys.ICON_MAINNET,
+    srcAddress: await iconWalletProvider.getWalletAddress(),
+    dstChainKey,
+    srcbnUSD: legacybnUSD,
+    dstbnUSD: newbnUSD,
     amount,
-    to: recipient,
-  } satisfies UnifiedBnUSDMigrateParams;
+    dstAddress: recipient,
+  };
 
-  const result = await sodax.migration.migratebnUSD(params, iconSpokeProvider);
+  const result = await sodax.migration.migratebnUSD({
+    params,
+    raw: false,
+    walletProvider: iconWalletProvider,
+  });
 
   if (result.ok) {
     const { srcChainTxHash, dstChainTxHash } = result.value;
@@ -488,39 +591,41 @@ async function migrateBnUSD(
   }
 }
 
-// Usage - Forward migration (legacy to new)
+// Usage — forward migration (legacy to new)
 await migrateBnUSD(
-  BigInt(1000000000000000000), 
+  BigInt(1000000000000000000),
   '0x1234567890123456789012345678901234567890',
-  'cx88fd7df7ddff82f7cc735c871dc519838cb235bb', // Legacy bnUSD
-  '0xE801CA34E19aBCbFeA12025378D19c4FBE250131', // New bnUSD
-  'sonic' // Destination chain
-);
-
-// Usage - Reverse migration (new to legacy)
-await migrateBnUSD(
-  BigInt(1000000000000000000), 
-  'hx1234567890123456789012345678901234567890',
-  '0xE801CA34E19aBCbFeA12025378D19c4FBE250131', // New bnUSD
-  'cx88fd7df7ddff82f7cc735c871dc519838cb235bb', // Legacy bnUSD
-  '0x1.icon' // Destination chain
+  'cx88fd7df7ddff82f7cc735c871dc519838cb235bb', // Legacy bnUSD on ICON
+  '0xE801CA34E19aBCbFeA12025378D19c4FBE250131', // New bnUSD on Sonic
+  ChainKeys.SONIC_MAINNET,
 );
 ```
 
 ### BALN Migration Example
 
 ```typescript
+import { Sodax, ChainKeys, LockupPeriod, type BalnMigrateParams } from '@sodax/sdk';
+import { IconWalletProvider } from '@sodax/wallet-sdk-core';
+import type { Address } from 'viem';
+
 const sodax = new Sodax();
+const iconWalletProvider = new IconWalletProvider({ privateKey: '...', rpcUrl: '...' });
 
 async function migrateBaln(amount: bigint, recipient: Address): Promise<void> {
-  const params = {
+  const params: BalnMigrateParams = {
+    srcChainKey: ChainKeys.ICON_MAINNET,
+    srcAddress: await iconWalletProvider.getWalletAddress(),
     amount,
-    lockupPeriod: 'SIX_MONTHS',
-    to: recipient,
+    lockupPeriod: LockupPeriod.SIX_MONTHS, // 0.75x multiplier
+    dstAddress: recipient,
     stake: true,
-  } satisfies BalnMigrateParams;
+  };
 
-  const result = await sodax.migration.migrateBaln(params, iconSpokeProvider);
+  const result = await sodax.migration.migrateBaln({
+    params,
+    raw: false,
+    walletProvider: iconWalletProvider,
+  });
 
   if (result.ok) {
     const { srcChainTxHash, dstChainTxHash } = result.value;
@@ -538,28 +643,49 @@ await migrateBaln(BigInt(1000000000000000000), '0x123456789012345678901234567890
 
 ## Error Handling
 
-The MigrationService returns `Result` types that can contain various error codes:
+All `MigrationService` methods return `Promise<Result<T>>`. There are no typed error discriminator classes — instead branch on `error.message` (CODE form) or check `error.cause` for the underlying error:
 
-- `MIGRATION_FAILED`: General migration failure
-- `CREATE_MIGRATION_INTENT_FAILED`: Failed to create migration intent
-- `CREATE_REVERT_MIGRATION_INTENT_FAILED`: Failed to create revert migration intent
-- `REVERT_MIGRATION_FAILED`: General revert migration failure
-- `RelayError`: Errors from the relay service
+```typescript
+const result = await sodax.migration.migrateIcxToSoda({ /* ... */ });
 
-Each error includes the original parameters and the underlying error for debugging purposes.
+if (!result.ok) {
+  const { error } = result;
+  if (error instanceof Error) {
+    // CODE-form errors tag the failed phase (SCREAMING_SNAKE_CASE ending in _FAILED or _TIMEOUT)
+    if (error.message === 'RELAY_TIMEOUT') {
+      console.error('Relay timed out. Retry or check the relay API endpoint.');
+    } else {
+      // Prose-form errors describe precondition violations
+      console.error('Migration failed:', error.message, 'cause:', error.cause);
+    }
+  } else {
+    console.error('Unknown error:', error);
+  }
+}
+```
+
+Common error messages you may encounter:
+- `'RELAY_TIMEOUT'` — the cross-chain relay did not confirm within the timeout window
+- `'Insufficient liquidity. Available: …, Requested: …'` — ICX migration blocked by low SODA balance in migration contract
+- `'Token must be wICX or native ICX token'` — invalid token address passed to ICX migration
+- `'Invalid spoke source chain key'` / `'Invalid spoke destination chain key'` — chain key not registered in `ConfigService`
 
 ## Configuration
 
-The MigrationService can be configured with custom relay API endpoints and timeouts:
+The MigrationService is wired internally by the `Sodax` facade. Custom relay endpoints are passed via the `Sodax` constructor config:
 
 ```typescript
-import { MigrationService, DEFAULT_RELAYER_API_ENDPOINT } from '@sodax/sdk';
+import { Sodax } from '@sodax/sdk';
 
-const migrationService = new MigrationService(hubProvider, {
-  relayerApiEndpoint: 'https://custom-relay-api.example.com',
+const sodax = new Sodax({
+  relay: {
+    relayerApiEndpoint: 'https://custom-relay-api.example.com',
+  },
 });
+
+await sodax.config.initialize(); // optional: fetch dynamic chain config from backend
 ```
 
 Default configuration:
 - `relayerApiEndpoint`: `https://relay.soniclabs.com`
-- `timeout`: 60000ms (60 seconds)
+- `timeout`: 60000 ms (60 seconds) — overridable per call via the `timeout` field in action params

@@ -43,16 +43,41 @@ export type IntentFilledEventLog = GetLogsReturnType<typeof IntentFilledEventAbi
 export const MintPositionEventAbi = getAbiItem({ abi: CLPositionManagerAbi, name: 'MintPosition' });
 export type MintPositionEventLog = GetLogsReturnType<typeof MintPositionEventAbi>[number];
 
+/**
+ * Stateless utility class for EVM-level intent operations on the SODAX hub chain (Sonic).
+ *
+ * All methods are `static` — this class is never instantiated and holds no mutable state.
+ * It handles the low-level on-chain concerns for the swap feature:
+ * - Constructing and ABI-encoding intent creation/cancellation contract calls
+ * - Encoding partner fee data into the intent's `data` field
+ * - Reading back `Intent` and `IntentState` structs from hub-chain transaction receipts
+ * - Computing the keccak256 intent hash used as the on-chain intent ID
+ *
+ * `SwapService` and `SonicSpokeService` delegate all EVM encoding and decoding to this class.
+ */
 export class EvmSolverService {
   private constructor() {}
 
   /**
-   * Constructs the create intent data for EVM Hub chain
-   * @param {CreateIntentParams} createIntentParams - The create intent parameters
-   * @param {Address} creatorHubWalletAddress - The creator hub wallet address
-   * @param {SolverConfig} solverConfig - The intent configuration
-   * @param {PartnerFee} fee - The partner fee configuration
-   * @returns {Promise<[Hex, Intent, bigint]>} The encoded contract call, intent and fee amount
+   * Builds the complete calldata and `Intent` struct for registering a swap intent on the hub chain.
+   *
+   * Performs three steps:
+   * 1. Resolves spoke-chain token addresses to their hub (Sonic) equivalents via `ConfigService`.
+   * 2. Computes partner fee data and deducts the fee from `inputAmount`.
+   * 3. ABI-encodes a multicall payload: `[ERC-20.approve(intentsContract, inputAmount), intents.createIntent(intent)]`.
+   *
+   * The returned `Hex` payload is passed as the `data` field in a spoke deposit, so the hub
+   * wallet abstraction executes both the approval and the intent creation atomically.
+   *
+   * @param createIntentParams - Source/destination tokens, amounts, chain keys, addresses, and optional solver.
+   * @param creatorHubWalletAddress - The hub chain wallet address derived from the user's spoke address.
+   * @param config - Used to resolve hub asset addresses and the intents contract address.
+   * @param fee - Optional partner fee configuration (fixed amount or percentage).
+   * @returns A tuple `[encodedPayload, intent, feeAmount]`:
+   *   - `encodedPayload` — ABI-encoded multicall data to send to the hub wallet abstraction.
+   *   - `intent` — The fully constructed `Intent` struct (with fee deducted from `inputAmount`).
+   *   - `feeAmount` — The actual fee deducted, in the input token's smallest unit (`0n` if no fee).
+   * @throws Invariant errors if hub asset addresses cannot be resolved for either token.
    */
   public static constructCreateIntentData(
     createIntentParams: CreateIntentParams,
@@ -106,10 +131,22 @@ export class EvmSolverService {
   }
 
   /**
-   * Creates encoded fee data for an intent
-   * @param fee The partner fee configuration
-   * @param inputAmount The input amount to calculate percentage-based fee from
-   * @returns A tuple containing [encoded fee data, fee amount]. Fee amount will be 0n if no fee.
+   * Encodes partner fee configuration into the `data` field of an intent.
+   *
+   * When a fee is configured, encodes a `FeeData` struct (`{ fee, receiver }`) and wraps it
+   * in an `IntentData` envelope (`{ type: IntentDataType.FEE, data: encodedFeeData }`).
+   * The intents contract reads this on-chain and routes the fee to the partner address.
+   *
+   * Supports two fee modes:
+   * - `PartnerFeeAmount` — fixed bigint amount deducted from `inputAmount`.
+   * - `PartnerFeePercentage` — percentage in basis points (validated: 0 – `FEE_PERCENTAGE_SCALE`).
+   *
+   * @param fee - Partner fee config, or `undefined` for no fee.
+   * @param inputAmount - The gross input amount (used to calculate percentage-based fees). Must be > 0.
+   * @returns A tuple `[encodedFeeHex, feeAmount]`:
+   *   - `encodedFeeHex` — packed ABI encoding of the fee data to embed in `Intent.data` (`'0x'` if no fee).
+   *   - `feeAmount` — the fee in input token units (`0n` if no fee).
+   * @throws Invariant error if `inputAmount` is `0n` or if the fee percentage is out of range.
    */
   public static createIntentFeeData(fee: PartnerFee | undefined, inputAmount: bigint): [Hex, bigint] {
     invariant(inputAmount > 0n, 'Input amount must be greater than 0');
@@ -157,11 +194,18 @@ export class EvmSolverService {
   }
 
   /**
-   * Gets an intent from a transaction hash
-   * @param {Hash} txHash - The transaction hash
-   * @param {SolverConfig} solverConfig - The solver configuration
-   * @param {PublicClient} publicClient - The hub chain public client
-   * @returns {Promise<Intent>} The intent
+   * Reads an `Intent` struct from a hub-chain transaction receipt.
+   *
+   * Waits for the transaction to be mined, then parses the `IntentCreated` event logs,
+   * matching against the configured intents contract address. Validates that the intent's
+   * source and destination chain IDs are recognized by the active config.
+   *
+   * @param txHash - The hub-chain (Sonic) transaction hash of the intent creation.
+   * @param config - Used to identify the intents contract and validate relay chain IDs.
+   * @param publicClient - Viem public client connected to the hub chain.
+   * @returns The `Intent` struct extracted from the matching event log.
+   * @throws If the transaction contains no matching `IntentCreated` event, or if the
+   *   intent's chain IDs are not recognized.
    */
   public static async getIntent(
     txHash: Hash,
@@ -212,11 +256,16 @@ export class EvmSolverService {
   }
 
   /**
-   * Gets a filled intent from a transaction hash
-   * @param {Hash} txHash - The transaction hash
-   * @param {SolverConfig} solverConfig - The solver configuration
-   * @param {PublicClient} publicClient - The hub chain public client
-   * @returns {Promise<IntentState>} The intent state
+   * Reads an `IntentState` struct from a hub-chain fill transaction receipt.
+   *
+   * Waits for the transaction to be mined, then parses the `IntentFilled` event logs,
+   * matching against the configured intents contract address.
+   *
+   * @param txHash - The hub-chain (Sonic) transaction hash of the solver's fill transaction.
+   * @param solverConfig - Used to identify the intents contract address.
+   * @param publicClient - Viem public client connected to the hub chain.
+   * @returns `IntentState`: `{ exists, remainingInput, receivedOutput, pendingPayment }`.
+   * @throws If the transaction contains no matching `IntentFilled` event.
    */
   public static async getFilledIntent(
     txHash: Hash,
@@ -250,19 +299,24 @@ export class EvmSolverService {
   }
 
   /**
-   * Gets the keccak256 hash of an intent. Hash serves as the intent id on Hub chain.
-   * @param {Intent} intent - The intent
-   * @returns {Hex} The keccak256 hash of the intent
+   * Computes the keccak256 hash of an intent struct, which serves as its unique ID on the hub chain.
+   *
+   * Uses the same ABI encoding as the `createIntent` function signature so the result matches
+   * what the on-chain intents contract stores.
+   *
+   * @param intent - The intent to hash.
+   * @returns The `0x`-prefixed keccak256 digest of the ABI-encoded intent.
    */
   public static getIntentHash(intent: Intent): Hex {
     return keccak256(encodeAbiParameters(getAbiItem({ abi: IntentsAbi, name: 'createIntent' }).inputs, [intent]));
   }
 
   /**
-   * Encodes a createIntent transaction
-   * @param {Intent} intent - The intent to create
-   * @param {Address} intentsContract - The address of the intents contract
-   * @returns {EvmContractCall} The encoded contract call
+   * ABI-encodes a `createIntent(Intent)` call for the hub intents contract.
+   *
+   * @param intent - The fully constructed intent struct to register.
+   * @param intentsContract - The hub-chain address of the intents contract.
+   * @returns An `EvmContractCall` with `address`, `value: 0n`, and ABI-encoded `data`.
    */
   public static encodeCreateIntent(intent: Intent, intentsContract: Address): EvmContractCall {
     return {
@@ -277,10 +331,11 @@ export class EvmSolverService {
   }
 
   /**
-   * Encodes a cancelIntent transaction
-   * @param {Intent} intent - The intent to cancel
-   * @param {Address} intentsContract - The address of the intents contract
-   * @returns {EvmContractCall} The encoded contract call
+   * ABI-encodes a `cancelIntent(Intent)` call for the hub intents contract.
+   *
+   * @param intent - The intent to cancel. Must match the on-chain intent exactly (same `intentId`).
+   * @param intentsContract - The hub-chain address of the intents contract.
+   * @returns An `EvmContractCall` with `address`, `value: 0n`, and ABI-encoded `data`.
    */
   public static encodeCancelIntent(intent: Intent, intentsContract: Address): EvmContractCall {
     return {

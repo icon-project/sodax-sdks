@@ -50,8 +50,15 @@ export type RecoveryServiceConstructorParams = {
 };
 
 /**
- * RecoveryService lets a user reconcile and withdraw assets that ended up stuck in their hub
- * wallet (e.g. due to a relay or downstream failure) back to a connected spoke chain wallet.
+ * Handles recovery of assets stranded in a user's hub wallet on the Sonic hub chain.
+ *
+ * Cross-chain operations (swaps, bridges, money market) occasionally fail mid-flight — after
+ * the spoke-side deposit succeeds but before the hub-side execution completes — leaving tokens
+ * locked in the user's wallet abstraction contract on Sonic. `RecoveryService` provides two
+ * operations to resolve this:
+ *   1. `fetchHubAssetBalances` — inspect which hub-side assets the user holds, and
+ *   2. `withdrawHubAsset` — relay a withdrawal back to the user's spoke chain address.
+ *
  * @namespace SodaxFeatures
  */
 export class RecoveryService {
@@ -66,11 +73,21 @@ export class RecoveryService {
   }
 
   /**
-   * Fetches the user's hub-side `balanceOf` for every supported token on the given spoke chain.
-   * Iterates `config.spokeChainConfig[chainKey].supportedTokens`, skips placeholder hubAssets
-   * (e.g. `'0x'` for not-yet-deployed tokens), derives the user's hub wallet abstraction from
-   * `srcAddress` + `chainKey`, multicalls `balanceOf(hubWallet)` on the hub chain, and returns
-   * the entries with non-zero balance. Per-asset failures are isolated via `allowFailure: true`.
+   * Returns all hub-side token balances held by the user's hub wallet for a given spoke chain.
+   *
+   * Iterates every entry in `config.spokeChainConfig[chainKey].supportedTokens`, skips tokens
+   * whose `hubAsset` is not a valid address (e.g. placeholder `'0x'` for not-yet-deployed
+   * tokens), derives the user's hub wallet abstraction address from `srcAddress` + `chainKey`,
+   * then issues a single multicall (`allowFailure: true`) to read `balanceOf(hubWallet)` on the
+   * hub chain for every candidate asset. Only entries with a non-zero balance are included in
+   * the result.
+   *
+   * @param chainKey - The spoke chain whose token list is used to enumerate hub assets.
+   * @param srcAddress - The user's address on the spoke chain; the service derives the
+   *   corresponding hub wallet abstraction address internally.
+   * @returns A `Result` wrapping an array of {@link HubAssetBalance} entries — one per hub-side
+   *   token with a positive balance. Returns an empty array when no balances are found or when
+   *   the chain has no supported tokens with valid hub-asset addresses.
    */
   public async fetchHubAssetBalances({
     chainKey,
@@ -123,10 +140,29 @@ export class RecoveryService {
   }
 
   /**
-   * Withdraws a stuck hub-side asset back to the user's spoke chain wallet. Derives the user's
-   * hub wallet abstraction from `srcAddress` + `srcChainKey`, builds the encoded transfer
-   * payload via `EvmAssetManagerService.withdrawAssetData`, then relays it through the spoke
-   * chain via `SpokeService.sendMessage` so the hub wallet executes the call.
+   * Withdraws a stuck hub-side asset back to the user's spoke chain address.
+   *
+   * Derives the user's hub wallet abstraction address from `params.srcAddress` +
+   * `params.srcChainKey`, encodes a `transfer` call on the asset manager contract via
+   * `EvmAssetManagerService.withdrawAssetData` (encoding the spoke destination address in
+   * chain-specific format via `encodeAddress`), then relays the payload through the spoke chain
+   * via `SpokeService.sendMessage` so the hub wallet executes the asset transfer on Sonic.
+   *
+   * When `raw: true` the method returns the unsigned spoke transaction (no `walletProvider`
+   * required). When `raw: false` (or omitted) a `walletProvider` must be supplied and the
+   * transaction is signed and broadcast, returning the chain-specific transaction hash.
+   *
+   * @param _params - Execution wrapper containing the action params, the `raw` flag, and —
+   *   when `raw: false` — a `walletProvider` for signing.
+   * @param _params.params.srcChainKey - The spoke chain the user is withdrawing back to.
+   * @param _params.params.srcAddress - The user's address on the spoke chain; also the
+   *   withdrawal destination after chain-specific encoding.
+   * @param _params.params.token - The original spoke-side token address used to look up the
+   *   corresponding hub asset in the SDK config.
+   * @param _params.params.amount - Amount to withdraw, denominated in the hub-side asset's
+   *   native precision (i.e. the same unit returned by {@link fetchHubAssetBalances}).
+   * @returns A `Result` wrapping the chain-specific transaction return value: a raw unsigned
+   *   transaction object when `raw: true`, or the broadcast transaction hash when `raw: false`.
    */
   public async withdrawHubAsset<K extends SpokeChainKey, Raw extends boolean>(
     _params: WithdrawHubAssetAction<K, Raw>,

@@ -40,41 +40,47 @@ This package requires the following peer dependencies:
 ```json
 {
   "react": ">=19",
-  "@tanstack/react-query": "latest"
+  "@tanstack/react-query": "5.x"
 }
 ```
 
 ## Quick Start
 
 ```typescript
-import { SodaxWalletProvider, useXConnectors, useXConnect, useXAccount } from '@sodax/wallet-sdk-react';
+import {
+  SodaxWalletProvider,
+  type SodaxWalletConfig,
+  useXAccount,
+  useXConnect,
+  useXConnectors,
+} from '@sodax/wallet-sdk-react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { RpcConfig } from '@sodax/types';
+import { ChainKeys } from '@sodax/types';
 
 // Create a QueryClient instance
 const queryClient = new QueryClient();
 
-const rpcConfig: RpcConfig = {
-  // EVM chains
-  sonic: 'https://rpc.soniclabs.com',
-  '0xa86a.avax': 'https://api.avax.network/ext/bc/C/rpc',
-  '0xa4b1.arbitrum': 'https://arb1.arbitrum.io/rpc',
-  '0x2105.base': 'https://mainnet.base.org',
-  '0x38.bsc': 'https://bsc-dataseed1.binance.org',
-  '0xa.optimism': 'https://mainnet.optimism.io',
-  '0x89.polygon': 'https://polygon-rpc.com',
-  
-  // Other chains
-  '0x1.icon': 'https://ctz.solidwallet.io/api/v3',
-  solana: 'https://solana-mainnet.g.alchemy.com/v2/your-api-key',
-  sui: 'https://fullnode.mainnet.sui.io',
-  'injective-1': 'https://sentry.tm.injective.network:26657',
+const config: SodaxWalletConfig = {
+  EVM: {
+    ssr: true,
+    chains: {
+      [ChainKeys.SONIC_MAINNET]: { rpcUrl: 'https://rpc.soniclabs.com' },
+      [ChainKeys.ETHEREUM_MAINNET]: { rpcUrl: 'https://ethereum-rpc.publicnode.com' },
+    },
+    // Optional: add WalletConnect support (requires wc projectId)
+    // walletConnect: { projectId: '...' },
+  },
+  ICON: {
+    chains: {
+      [ChainKeys.ICON_MAINNET]: { rpcUrl: 'https://ctz.solidwallet.io/api/v3' },
+    },
+  },
 };
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <SodaxWalletProvider rpcConfig={rpcConfig}>
+      <SodaxWalletProvider config={config}>
         <WalletConnect />
       </SodaxWalletProvider>
     </QueryClientProvider>
@@ -144,64 +150,78 @@ This example demonstrates:
 
 ### Components
 
-- [`SodaxWalletProvider`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/SodaxWalletProvider.tsx) - Main provider component for wallet connectivity
+- [`SodaxWalletProvider`](src/SodaxWalletProvider.tsx) - Main provider component for wallet connectivity
 
 ### Hooks
 
 #### Core Wallet Hooks
-- [`useXConnectors`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/hooks/useXConnectors.ts) - Get available wallet connectors
-- [`useXConnect`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/hooks/useXConnect.ts) - Connect to a wallet
-- [`useXAccount`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/hooks/useXAccount.ts) - Get account information
-- [`useXDisconnect`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/hooks/useXDisconnect.ts) - Disconnect from a wallet
+- [`useXConnectors`](src/hooks/useXConnectors.ts) - Get available wallet connectors
+- [`useXConnectorsByChain`](src/hooks/useXConnectorsByChain.ts) - Get connectors for all enabled chain types
+- [`useXConnect`](src/hooks/useXConnect.ts) - Connect to a wallet
+- [`useXAccount`](src/hooks/useXAccount.ts) - Get account information
+- [`useXDisconnect`](src/hooks/useXDisconnect.ts) - Disconnect from a wallet
+- [`useXConnection`](src/hooks/useXConnection.ts) - Read the active connection for a chain type
+- [`useXConnections`](src/hooks/useXConnections.ts) - Read all active connections
+- [`useXAccounts`](src/hooks/useXAccounts.ts) - Read all connected accounts
 
 #### Chain-Specific Hooks
-- [`useEvmSwitchChain`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/hooks/evm/useEvmSwitchChain.ts) - Switch between EVM chains
+- [`useEvmSwitchChain`](src/hooks/useEvmSwitchChain.ts) - Switch between EVM chains
 
-#### Balance Hooks
-- [`useXBalances`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/hooks/useXBalances.ts) - Fetch token balances
+#### Signing Hooks
+- [`useXSignMessage`](src/hooks/useXSignMessage.ts) - Cross-chain message signing
+
+#### Config / Feature Hooks
+- [`useEnabledChains`](src/hooks/useEnabledChains.ts) - Read enabled chain types from provider config
 
 #### Service Hooks
-- [`useXService`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/hooks/useXService.ts) - Access chain-specific service
+- [`useXService`](src/hooks/useXService.ts) - Access chain-specific service
+- [`useXServices`](src/hooks/useXServices.ts) - Access all chain services for enabled chain types
+- [`useWalletProvider`](src/hooks/useWalletProvider.ts) - Get a typed wallet provider for a spoke chain id (bridge to `@sodax/wallet-sdk-core`)
 
 #### Modal Flow Hooks
-- [`useWalletModal`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/hooks/useWalletModal.ts) - Headless modal state machine (chainSelect → walletSelect → connecting → success | error)
-- [`useConnectionFlow`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/hooks/useConnectionFlow.ts) - Standalone connect with status + retry (no modal)
+- [`useWalletModal`](src/hooks/useWalletModal.ts) - Headless modal state machine (chainSelect → walletSelect → connecting → success | error)
+- [`useConnectionFlow`](src/hooks/useConnectionFlow.ts) - Standalone connect with status + retry (no modal)
 
 #### Batch Hooks
-- [`useBatchConnect`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/hooks/useBatchConnect.ts) - Sequential multi-chain connect by wallet identifier
-- [`useBatchDisconnect`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/hooks/useBatchDisconnect.ts) - Sequential multi-chain disconnect
+- [`useBatchConnect`](src/hooks/useBatchConnect.ts) - Sequential multi-chain connect by wallet identifier
+- [`useBatchDisconnect`](src/hooks/useBatchDisconnect.ts) - Sequential multi-chain disconnect
 
 #### Aggregate / Detection Hooks
-- [`useChainGroups`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/hooks/useChainGroups.ts) - One entry per enabled chain type (EVM collapses to one group)
-- [`useConnectedChains`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/hooks/useConnectedChains.ts) - Aggregate view of connected chains + hydration status
-- [`useIsWalletInstalled`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/hooks/useIsWalletInstalled.ts) - Cross-chain wallet install detection
+- [`useChainGroups`](src/hooks/useChainGroups.ts) - One entry per enabled chain type (EVM collapses to one group)
+- [`useConnectedChains`](src/hooks/useConnectedChains.ts) - Aggregate view of connected chains + hydration status
+- [`useIsWalletInstalled`](src/hooks/useIsWalletInstalled.ts) - Cross-chain wallet install detection
 
 ### Utilities
-- [`sortConnectors`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/utils/sortConnectors.ts) - Preferred first, then installed, then original order
+- [`sortConnectors`](src/utils/sortConnectors.ts) - Preferred first, then installed, then original order
+- [`isNativeToken`](src/utils/index.ts) - Checks if an `XToken` is native for its chain
+- [`getRpcUrl`](src/utils/walletRpcConfig.ts) - Resolve the per-chain RPC URL from `SodaxWalletConfig`
 
 ### Types
 
 #### Core Types
-- [`XAccount`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/types/index.ts) - Wallet account type
-- [`XConnection`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/types/index.ts) - Wallet connection type
-- [`XConnector`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/types/index.ts) - Wallet connector type
-- [`XToken`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/types/index.ts) - Cross-chain token type
+- [`SodaxWalletConfig`](src/types/config.ts) - Provider config type for enabled chain types + per-chain RPC/defaults
+- [`IXConnector`](src/types/interfaces.ts) - Public connector interface (what hooks consume)
+- [`IXService`](src/types/interfaces.ts) - Public service interface (what hooks return)
+- [`XAccount`](src/types/index.ts) - Wallet account type
+- [`XConnection`](src/types/index.ts) - Wallet connection type
+- [`BatchOperationStatus`](src/types/batchStatus.ts) - Batch connect/disconnect status union
 
 ### Classes
 
-#### XConnector
-- [`XConnector`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/core/XConnector.ts) - Base class for wallet connectors
-- [`EvmXConnector`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/xchains/evm/EvmXConnector.ts) - EVM wallet connector
-- [`SolanaXConnector`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/xchains/solana/SolanaXConnector.ts) - Solana wallet connector
-- [`SuiXConnector`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/xchains/sui/SuiXConnector.ts) - Sui wallet connector
-- [`StellarXConnector`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/xchains/stellar/StellarWalletsKitXConnector.ts) - Stellar wallet connector
-- [`InjectiveMetamaskXConnector`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/xchains/injective/InjectiveMetamaskXConnector.ts) - Injective MetaMask connector
-- [`InjectiveKelprXConnector`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/xchains/injective/InjectiveKelprXConnector.ts) - Injective Keplr connector
-- [`IconXConnector`](https://github.com/icon-project/sodax-frontend/tree/main/packages/wallet-sdk-react/src/xchains/icon/IconHanaXConnector.ts) - ICON wallet connector
+Concrete connector/service classes are available via deep imports (sub-path exports):
+
+```ts
+import { InjectiveXConnector } from '@sodax/wallet-sdk-react/xchains/injective';
+```
+
+- Base abstract class: [`XConnector`](src/core/XConnector.ts)
+- Example deep exports:
+  - Injective: `@sodax/wallet-sdk-react/xchains/injective` → [`InjectiveXConnector`](src/xchains/injective/InjectiveXConnector.ts)
+  - ICON: `@sodax/wallet-sdk-react/xchains/icon` → [`IconHanaXConnector`](src/xchains/icon/IconHanaXConnector.ts)
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+We welcome contributions! Please see the repo [Contributing Guide](../../CONTRIBUTING.md) for details.
 
 ## Development
 

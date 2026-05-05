@@ -277,8 +277,27 @@ export type ClServiceConstructorParams = {
 };
 
 /**
- * Concetration Liquidity Service provides a high-level interface for concentrated liquidity operations
- * including supply liquidity, increase liquidity, decrease liquidit position.
+ * Service for concentrated-liquidity pool operations on the SODAX DEX (PancakeSwap Infinity / Uniswap V3-style).
+ *
+ * All pools live on the Sonic hub chain. Cross-chain users submit a signed message on
+ * their spoke chain; the relayer delivers it to the hub where the position manager
+ * contract executes the action inside the user's hub wallet abstraction.
+ *
+ * Responsibilities:
+ * - Open new positions (`executeSupplyLiquidity` / `supplyLiquidity`)
+ * - Add to existing positions (`executeIncreaseLiquidity` / `increaseLiquidity`)
+ * - Remove from positions (`executeDecreaseLiquidity` / `decreaseLiquidity`)
+ * - Harvest hook rewards (`executeClaimRewards` / `claimRewards`)
+ * - Read pool state and position data (`getPoolData`, `getPositionInfo`, `getPools`)
+ * - Uniswap V3 tick/liquidity math helpers (`calculateLiquidityFromAmounts`,
+ *   `calculateAmount0FromAmount1`, `calculateAmount1FromAmount0`,
+ *   `calculateMaxAmountsForSlippage`, `priceToTick`)
+ *
+ * The `execute*` variants return an `IntentTxResult` (spoke tx + relay data) so
+ * callers can relay manually. The non-prefixed variants (`supplyLiquidity`, etc.)
+ * additionally wait for the cross-chain packet to arrive at the hub and return a
+ * `TxHashPair` (spoke tx hash + hub tx hash).
+ *
  * @namespace SodaxFeatures
  */
 export class ClService {
@@ -294,6 +313,18 @@ export class ClService {
     this.relayerApiEndpoint = config.relay.relayerApiEndpoint;
   }
 
+  /**
+   * Resolve the spoke-chain `XToken` descriptors for both sides of a pool.
+   *
+   * Translates hub-side pool currency addresses (which are StatAToken / vault-token
+   * addresses) back to their original spoke-chain asset representations using the
+   * SDK config, so UI layers can display recognisable token symbols and logos.
+   *
+   * @param srcChainKey - The spoke chain the caller is operating from.
+   * @param poolKey - The on-chain pool key identifying the concentrated-liquidity pool.
+   * @returns An object with `token0` and `token1` as `XToken` descriptors on the spoke chain.
+   * @throws If either currency address cannot be resolved to a known spoke-chain token.
+   */
   public getAssetsForPool(srcChainKey: SpokeChainKey, poolKey: PoolKey): PoolSpokeAssets {
     const token0SpokeAddress = this.config.getOriginalAssetAddressFromStakedATokenAddress(
       srcChainKey,
@@ -319,7 +350,20 @@ export class ClService {
   }
 
   /**
-   * Execute supply liquidity action - creates a new concentrated liquidity position
+   * Build and submit the spoke-side transaction that opens a new concentrated-liquidity position.
+   *
+   * The method encodes Permit2 approvals for both pool tokens, then encodes a
+   * `CLPositionManager.mint` call into a single batched payload. The payload is
+   * sent from the spoke chain to the user's hub wallet via `SpokeService.sendMessage`.
+   *
+   * When `raw` is `true` the signed transaction bytes are returned without broadcasting;
+   * when `false` the transaction is broadcast and its hash is returned.
+   *
+   * @param _params - Action parameters including pool key, tick range, desired liquidity,
+   *   maximum token amounts, and current `sqrtPriceX96`.
+   * @returns `Result<IntentTxResult<K, Raw>>` — on success, contains the spoke-chain tx
+   *   (hash or raw bytes depending on `raw`) and the relay data needed to track the
+   *   cross-chain packet.
    */
   public async executeSupplyLiquidity<K extends SpokeChainKey, Raw extends boolean>(
     _params: ClSupplyAction<K, Raw>,
@@ -413,9 +457,15 @@ export class ClService {
   }
 
   /**
-   * Get the mint position event log from the hub transaction hash
-   * @param hubTxHash - The hub transaction hash
-   * @returns The mint position event log
+   * Parse the `MintPosition` event emitted by the hub's `CLPositionManager` contract.
+   *
+   * After a `supplyLiquidity` call lands on the hub chain, callers need the NFT
+   * `tokenId` that was assigned to the new position. This method waits for the hub
+   * transaction receipt and extracts that id from the event log.
+   *
+   * @param hubTxHash - The transaction hash on the hub chain (Sonic) where the mint was executed.
+   * @returns `Result<ClMintPositionEventLog>` — on success, contains `{ tokenId }` (the NFT
+   *   token ID of the newly minted position).
    */
   public async getMintPositionEvent(hubTxHash: Hash): Promise<Result<ClMintPositionEventLog>> {
     try {
@@ -442,6 +492,18 @@ export class ClService {
     }
   }
 
+  /**
+   * Build and submit the spoke-side transaction that adds liquidity to an existing position.
+   *
+   * Encodes a `CLPositionManager.increaseLiquidity` call for the given NFT `tokenId` and
+   * delivers it to the hub via `SpokeService.sendMessage`. No Permit2 approvals are
+   * re-encoded here — tokens should already be approved from the initial mint.
+   *
+   * @param _params - Action parameters including the NFT `tokenId`, pool key, tick range,
+   *   additional liquidity amount, and maximum token amounts.
+   * @returns `Result<IntentTxResult<K, Raw>>` — on success, contains the spoke-chain tx
+   *   and relay data for cross-chain packet tracking.
+   */
   public async executeIncreaseLiquidity<K extends SpokeChainKey, Raw extends boolean>(
     _params: ClLiquidityIncreaseLiquidityAction<K, Raw>,
   ): Promise<Result<IntentTxResult<K, Raw>>> {
@@ -523,6 +585,19 @@ export class ClService {
     }
   }
 
+  /**
+   * Build and submit the spoke-side transaction that removes liquidity from an existing position.
+   *
+   * Encodes a `CLPositionManager.decreaseLiquidity` call for the given NFT `tokenId` and
+   * delivers it to the hub via `SpokeService.sendMessage`. Fees accumulated in the
+   * position are automatically collected as part of the decrease operation by the
+   * position manager contract.
+   *
+   * @param _params - Action parameters including the NFT `tokenId`, pool key, liquidity to
+   *   remove, and minimum token amounts (slippage protection).
+   * @returns `Result<IntentTxResult<K, Raw>>` — on success, contains the spoke-chain tx
+   *   and relay data for cross-chain packet tracking.
+   */
   public async executeDecreaseLiquidity<K extends SpokeChainKey, Raw extends boolean>(
     _params: ClLiquidityDecreaseLiquidityAction<K, Raw>,
   ): Promise<Result<IntentTxResult<K, Raw>>> {
@@ -596,6 +671,20 @@ export class ClService {
     }
   }
 
+  /**
+   * Encode the two on-chain calls required to grant a contract Permit2-gated access to a token.
+   *
+   * The position manager uses Permit2 for token pulls. Before minting, the hub wallet must:
+   * 1. Grant the position manager a Permit2 allowance (amount + expiry) via the Permit2 singleton.
+   * 2. Approve the Permit2 singleton contract to spend the ERC-20 token (standard `approve`).
+   *
+   * Both calls are returned as `EvmContractCall` objects ready to be batched with
+   * `encodeContractCalls` into a single multicall payload.
+   *
+   * @param token - The ERC-20 token address to approve.
+   * @param contract - The contract (typically the CL position manager) to whitelist via Permit2.
+   * @returns An array of two `EvmContractCall` entries: `[permit2Approve, erc20Approve]`.
+   */
   public permit2Approve(token: Address, contract: Address): EvmContractCall[] {
     const calls: EvmContractCall[] = [];
 
@@ -619,8 +708,16 @@ export class ClService {
   }
 
   /**
-   * Supply liquidity and wait for the transaction to be relayed to the hub
-   * This method wraps executeSupplyLiquidity and relays the transaction to the hub
+   * Open a new concentrated-liquidity position and wait for the cross-chain relay to complete.
+   *
+   * Calls `executeSupplyLiquidity` to broadcast on the spoke chain, then blocks until
+   * the relayer delivers the packet to the hub (or the optional timeout elapses).
+   * When the source is the hub chain itself the relay step is skipped.
+   *
+   * @param _params - Action parameters including pool key, tick range, liquidity, max amounts,
+   *   and an optional `timeout` (ms) for the relay wait.
+   * @returns `Result<TxHashPair>` — on success, contains `srcChainTxHash` (spoke) and
+   *   `dstChainTxHash` (hub) once the packet has been confirmed.
    */
   public async supplyLiquidity<K extends SpokeChainKey>(
     _params: ClSupplyAction<K, false>,
@@ -661,8 +758,16 @@ export class ClService {
   }
 
   /**
-   * Increase liquidity and wait for the transaction to be relayed to the hub
-   * This method wraps executeIncreaseLiquidity and relays the transaction to the hub
+   * Add liquidity to an existing position and wait for the cross-chain relay to complete.
+   *
+   * Calls `executeIncreaseLiquidity` to broadcast on the spoke chain, then blocks until
+   * the relayer delivers the packet to the hub (or the optional timeout elapses).
+   * When the source is the hub chain itself the relay step is skipped.
+   *
+   * @param _params - Action parameters including the NFT `tokenId`, pool key, tick range,
+   *   additional liquidity, max token amounts, and an optional `timeout` (ms).
+   * @returns `Result<TxHashPair>` — on success, contains `srcChainTxHash` (spoke) and
+   *   `dstChainTxHash` (hub) once the packet has been confirmed.
    */
   public async increaseLiquidity<K extends SpokeChainKey>(
     _params: ClLiquidityIncreaseLiquidityAction<K, false>,
@@ -702,8 +807,16 @@ export class ClService {
   }
 
   /**
-   * Decrease liquidity and wait for the transaction to be relayed to the hub
-   * This method wraps executeDecreaseLiquidity and relays the transaction to the hub
+   * Remove liquidity from an existing position and wait for the cross-chain relay to complete.
+   *
+   * Calls `executeDecreaseLiquidity` to broadcast on the spoke chain, then blocks until
+   * the relayer delivers the packet to the hub (or the optional timeout elapses).
+   * When the source is the hub chain itself the relay step is skipped.
+   *
+   * @param _params - Action parameters including the NFT `tokenId`, pool key, liquidity to
+   *   remove, minimum token amounts, and an optional `timeout` (ms).
+   * @returns `Result<TxHashPair>` — on success, contains `srcChainTxHash` (spoke) and
+   *   `dstChainTxHash` (hub) once the packet has been confirmed.
    */
   public async decreaseLiquidity<K extends SpokeChainKey>(
     _params: ClLiquidityDecreaseLiquidityAction<K, false>,
@@ -743,10 +856,17 @@ export class ClService {
   }
 
   /**
-   * Fetch pool reward configuration from the hook contract
-   * @param poolKey - The pool key containing the hook address
-   * @param publicClient - The viem public client for reading from the chain
-   * @returns The pool reward configuration
+   * Fetch the reward configuration stored in the pool's hook contract.
+   *
+   * Pools that use a reward hook expose a `poolRewardConfigs(bytes32)` mapping.
+   * This method reads that mapping and returns the rate and token used for
+   * liquidity-mining rewards. Returns an error result if the pool has no hook
+   * or the hook does not expose the expected interface.
+   *
+   * @param poolKey - The pool key; its `hooks` field must be a non-zero address.
+   * @param publicClient - A viem public client connected to the hub chain (Sonic).
+   * @returns `Result<PoolRewardConfig>` — on success, contains the reward token address,
+   *   reward rate per second, and the timestamp of the last position-affecting action.
    */
   public async getPoolRewardConfig(
     poolKey: PoolKey,
@@ -800,7 +920,16 @@ export class ClService {
   }
 
   /**
-   * Execute claim rewards action - triggers reward distribution by calling decrease liquidity with 0 value
+   * Build and submit the spoke-side transaction that harvests hook rewards for a position.
+   *
+   * The PancakeSwap Infinity hook distributes rewards whenever a position-affecting call
+   * is made. To harvest without changing the position size this method encodes a
+   * `decreaseLiquidity` call with `liquidity = 0`, which triggers reward accounting
+   * without actually removing any liquidity.
+   *
+   * @param _params - Action parameters including the NFT `tokenId`, pool key, and tick range.
+   * @returns `Result<IntentTxResult<K, Raw>>` — on success, contains the spoke-chain tx
+   *   and relay data for cross-chain packet tracking.
    */
   public async executeClaimRewards<K extends SpokeChainKey, Raw extends boolean>(
     _params: ClLiquidityClaimRewardsAction<K, Raw>,
@@ -879,8 +1008,16 @@ export class ClService {
   }
 
   /**
-   * Claim rewards and wait for the transaction to be relayed to the hub
-   * This method wraps executeClaimRewards and relays the transaction to the hub
+   * Harvest hook rewards for a position and wait for the cross-chain relay to complete.
+   *
+   * Calls `executeClaimRewards` to broadcast on the spoke chain, then blocks until
+   * the relayer delivers the packet to the hub (or the optional timeout elapses).
+   * When the source is the hub chain itself the relay step is skipped.
+   *
+   * @param _params - Action parameters including the NFT `tokenId`, pool key, tick range,
+   *   and an optional `timeout` (ms) for the relay wait.
+   * @returns `Result<TxHashPair>` — on success, contains `srcChainTxHash` (spoke) and
+   *   `dstChainTxHash` (hub) once the packet has been confirmed.
    */
   public async claimRewards<K extends SpokeChainKey>(
     _params: ClLiquidityClaimRewardsAction<K, false>,
@@ -920,6 +1057,15 @@ export class ClService {
     }
   }
 
+  /**
+   * Return the list of configured concentrated-liquidity pool keys for the SODAX DEX.
+   *
+   * Pool keys are sourced from the SDK's `ConfigService` (fetched from the backend API
+   * or falling back to static defaults). Each `PoolKey` uniquely identifies a pool by
+   * its two currencies, fee tier, hook address, and pool manager address.
+   *
+   * @returns An array of `PoolKey` objects, one per configured DEX pool.
+   */
   public getPools(): PoolKey[] {
     return this.config.getDexPools();
   }
@@ -1048,17 +1194,19 @@ export class ClService {
   }
 
   /**
-   * Fetch comprehensive pool data including real-time state
-   * This method provides all the data the UI needs in a single call
+   * Fetch comprehensive real-time state for a concentrated-liquidity pool.
    *
-   * @example
-   * ```typescript
-   * const poolData = await concentratedLiquidityService.getPoolData(
-   *   poolKey,
-   *   publicClient
-   * );g
-
-   * ```
+   * Makes several `eth_call` reads against the hub chain in parallel:
+   * `slot0` (price / tick / fees), token metadata, total liquidity, and — when the
+   * pool has a hook — the reward configuration. For tokens that are StatATokens
+   * (ERC-4626 interest-bearing wrappers), the method also fetches the current
+   * conversion rate and underlying token info so UIs can display human-readable values.
+   *
+   * @param poolKey - The pool key identifying the CL pool on the hub chain.
+   * @param publicClient - A viem public client connected to the hub chain (Sonic).
+   * @returns `Result<PoolData>` — on success, contains current price, tick, liquidity,
+   *   fee tiers, token metadata with optional StatAToken enrichment, and optional
+   *   reward configuration. `isActive` is `true` when `sqrtPriceX96 > 0`.
    */
   public async getPoolData(
     poolKey: PoolKey<'CL'>,
@@ -1175,22 +1323,20 @@ export class ClService {
   }
 
   /**
-   * Get position information for a given token ID
+   * Fetch full details for a concentrated-liquidity position NFT.
    *
-   * @example
-   * ```typescript
-   * const positionInfo = await concentratedLiquidityService.getPositionInfo(
-   *   tokenId,
-   *   publicClient
-   * );
+   * Reads position data from the `CLPositionManager`, fetches current pool state
+   * via `getPoolData`, and then computes:
+   * - Token amounts currently held by the position (via `PositionMath`)
+   * - Unclaimed fees using the Uniswap V3 fee-growth accounting formula
+   * - If either token is a StatAToken, the equivalent underlying asset amounts
+   *   and fees (converted via the ERC-4626 share rate)
    *
-   * console.log('Position data:', {
-   *   poolKey: positionInfo.poolKey,
-   *   tickRange: `${positionInfo.tickLower} to ${positionInfo.tickUpper}`,
-   *   liquidity: positionInfo.liquidity.toString(),
-   *   unclaimedFees: `${positionInfo.unclaimedFees0.toString()} / ${positionInfo.unclaimedFees1.toString()}`,
-   * });
-   * ```
+   * @param tokenId - The NFT token ID assigned to the position at mint time.
+   * @param publicClient - A viem public client connected to the hub chain (Sonic).
+   * @returns `Result<ClPositionInfo>` — on success, contains tick range, liquidity,
+   *   current token amounts, tick-boundary prices, unclaimed fees, and optional
+   *   underlying amounts for StatAToken pools.
    */
   public async getPositionInfo(
     tokenId: bigint,
@@ -1353,13 +1499,19 @@ export class ClService {
   }
 
   /**
-   * Helper: Calculate liquidity from token amounts
-   * @param amount0 - Amount of token0
-   * @param amount1 - Amount of token1
-   * @param tickLower - Lower tick
-   * @param tickUpper - Upper tick
-   * @param currentTick - Current pool tick
-   * @returns The liquidity value
+   * Compute the maximum liquidity achievable given both token input amounts.
+   *
+   * Applies Uniswap V3 math: when only one token amount is non-zero the
+   * single-sided formula is used; otherwise `maxLiquidityForAmounts` selects
+   * the binding constraint. Intended for UI: call this to obtain the `liquidity`
+   * value required by `executeSupplyLiquidity` / `executeIncreaseLiquidity`.
+   *
+   * @param amount0 - Available amount of token0 (in token0's raw decimals).
+   * @param amount1 - Available amount of token1 (in token1's raw decimals).
+   * @param tickLower - Lower tick boundary of the target position.
+   * @param tickUpper - Upper tick boundary of the target position.
+   * @param currentTick - Current active tick of the pool.
+   * @returns The liquidity `bigint` that can be minted with the given amounts.
    */
   public static calculateLiquidityFromAmounts(
     amount0: bigint,
@@ -1381,12 +1533,19 @@ export class ClService {
   }
 
   /**
-   * Helper: Calculate token1 amount needed given token0 amount and price range
-   * @param amount0 - Amount of token0
-   * @param tickLower - Lower tick
-   * @param tickUpper - Upper tick
-   * @param currentTick - Current pool tick
-   * @returns The required amount of token1
+   * Compute the token1 amount paired with a given token0 amount for a position.
+   *
+   * Derives the required liquidity from `amount0` alone (treating token1 as
+   * unconstrained), then applies `PositionMath.getToken1Amount` to find how much
+   * token1 that liquidity requires at the current price. Useful for "lock token0,
+   * derive token1" UX flows.
+   *
+   * @param amount0 - Desired token0 input amount.
+   * @param tickLower - Lower tick boundary of the position.
+   * @param tickUpper - Upper tick boundary of the position.
+   * @param currentTick - Current active tick of the pool.
+   * @param sqrtPriceX96 - Current `sqrtPriceX96` of the pool (Q64.96 fixed-point).
+   * @returns The token1 amount required to pair with `amount0` at the current price.
    */
   public static calculateAmount1FromAmount0(
     amount0: bigint,
@@ -1423,12 +1582,18 @@ export class ClService {
   }
 
   /**
-   * Helper: Calculate token0 amount needed given token1 amount and price range
-   * @param amount1 - Amount of token1
-   * @param tickLower - Lower tick
-   * @param tickUpper - Upper tick
-   * @param currentTick - Current pool tick
-   * @returns The required amount of token0
+   * Compute the token0 amount paired with a given token1 amount for a position.
+   *
+   * Mirror of `calculateAmount1FromAmount0`: derives liquidity from `amount1` alone
+   * (treating token0 as unconstrained), then applies `PositionMath.getToken0Amount`.
+   * Useful for "lock token1, derive token0" UX flows.
+   *
+   * @param amount1 - Desired token1 input amount.
+   * @param tickLower - Lower tick boundary of the position.
+   * @param tickUpper - Upper tick boundary of the position.
+   * @param currentTick - Current active tick of the pool.
+   * @param sqrtPriceX96 - Current `sqrtPriceX96` of the pool (Q64.96 fixed-point).
+   * @returns The token0 amount required to pair with `amount1` at the current price.
    */
   public static calculateAmount0FromAmount1(
     amount1: bigint,
@@ -1465,9 +1630,24 @@ export class ClService {
   }
 
   /**
-   * Calculate amount0Max and amount1Max for a given liquidity and slippage tolerance.
-   * For concentrated liquidity, a price drop increases the amount0 needed and a price rise increases the amount1 needed.
-   * This calculates the worst-case amounts for each token independently.
+   * Compute worst-case `amount0Max` and `amount1Max` for a given liquidity and slippage tolerance.
+   *
+   * For concentrated liquidity a price drop increases the token0 requirement while a
+   * price rise increases the token1 requirement. This helper applies the slippage
+   * percentage to `sqrtPriceX96` in both directions (using integer square-root math to
+   * preserve all 160 bits of precision) and returns the maximum of the current and
+   * slipped amounts for each token independently.
+   *
+   * Pass the returned values directly as `amount0Max` / `amount1Max` in
+   * `ClSupplyParams` or `ClIncreaseLiquidityParams`.
+   *
+   * @param liquidity - The liquidity amount for which to compute max token inputs.
+   * @param tickLower - Lower tick boundary of the position.
+   * @param tickUpper - Upper tick boundary of the position.
+   * @param currentTick - Current active tick of the pool.
+   * @param sqrtPriceX96 - Current `sqrtPriceX96` of the pool (Q64.96 fixed-point).
+   * @param slippagePercent - Slippage tolerance as a percentage (e.g. `0.5` for 0.5 %).
+   * @returns `{ amount0Max, amount1Max }` — worst-case token inputs after applying slippage.
    */
   public static calculateMaxAmountsForSlippage(
     liquidity: bigint,
@@ -1546,12 +1726,18 @@ export class ClService {
   }
 
   /**
-   * Helper: Convert price to nearest valid tick
-   * @param price - The price as a number
-   * @param token0 - The base token
-   * @param token1 - The quote token
-   * @param tickSpacing - The tick spacing for the pool
-   * @returns The nearest valid tick
+   * Convert a human-readable price to the nearest initializable tick for a pool.
+   *
+   * Constructs a `Price` object from `price` (expressed as "how many token1 per token0"),
+   * derives the corresponding `sqrtPriceX96`, calculates the raw tick via the
+   * log-base-1.0001 formula, and rounds to the nearest multiple of `tickSpacing`
+   * so the tick is actually initializable in the pool.
+   *
+   * @param price - The price of token0 denominated in token1 (e.g. `1800` for 1 ETH = 1800 USDC).
+   * @param token0 - The base token (token0 in the pool).
+   * @param token1 - The quote token (token1 in the pool).
+   * @param tickSpacing - The pool's tick spacing; the result is rounded to a multiple of this.
+   * @returns The nearest initializable tick as a `bigint`.
    */
   public static priceToTick(price: number, token0: Token, token1: Token, tickSpacing: number): bigint {
     // Convert price to Price object

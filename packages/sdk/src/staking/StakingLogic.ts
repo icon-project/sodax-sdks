@@ -4,15 +4,26 @@ import { stakedSodaAbi } from '../shared/abis/stakedSoda.abi.js';
 import { stakingRouterAbi } from '../shared/abis/stakingRouter.abi.js';
 import type { EvmContractCall, UserUnstakeInfo } from '@sodax/types';
 
+/**
+ * Pure utility class for staking contract interactions on the Sonic hub chain.
+ *
+ * Contains two categories of static helpers:
+ * - **On-chain reads** (async) — query the xSoda ERC-4626 vault and StakingRouter for balances,
+ *   conversion rates, preview amounts, and pending unstake requests.
+ * - **Call encoders** (sync) — produce `EvmContractCall` objects for inclusion in a multicall
+ *   batch payload sent to the hub via `encodeContractCalls`.
+ *
+ * This class is not instantiable; all methods are static and have no side effects.
+ */
 export class StakingLogic {
   private constructor() {}
 
   /**
-   * Retrieves all unstake requests for a specific user.
+   * Retrieves all pending unstake requests for a user from the StakedSoda contract.
    * @param stakedSoda - The address of the StakedSoda contract.
-   * @param user - The address of the user.
-   * @param publicClient - PublicClient<HttpTransport>
-   * @returns Array of user unstake info for the user.
+   * @param user - The hub wallet address to query.
+   * @param publicClient - Viem public client connected to the hub chain.
+   * @returns Array of `UserUnstakeInfo` records for all active unstake requests.
    */
   public static async getUnstakeSodaRequests(
     stakedSoda: Address,
@@ -87,7 +98,7 @@ export class StakingLogic {
   }
 
   /**
-   * Encodes the cancelUnstakeSodaRequest transaction data.
+   * Encodes the `cancelUnstakeRequest` call on the StakedSoda contract.
    * @param stakedSoda - The address of the StakedSoda contract.
    * @param requestId - The ID of the unstake request to cancel.
    * @returns The encoded contract call data.
@@ -105,7 +116,7 @@ export class StakingLogic {
   }
 
   /**
-   * Encodes the cancelUnstakeRequest transaction data (alias for encodeCancelUnstakeSodaRequest).
+   * Convenience alias for `encodeCancelUnstakeSodaRequest`.
    * @param stakedSoda - The address of the StakedSoda contract.
    * @param requestId - The ID of the unstake request to cancel.
    * @returns The encoded contract call data.
@@ -135,10 +146,10 @@ export class StakingLogic {
   // xSoda ERC4626 Read Methods
 
   /**
-   * Returns the total amount of SODA assets held by the xSoda vault.
-   * @param xSoda - The address of the xSoda token contract.
-   * @param publicClient - PublicClient<HttpTransport>
-   * @returns The total amount of SODA assets.
+   * Returns the total amount of SODA assets held by the xSoda vault (`totalAssets`).
+   * @param xSoda - The address of the xSoda ERC-4626 vault contract.
+   * @param publicClient - Viem public client connected to the hub chain.
+   * @returns Total SODA deposited across all stakers.
    */
   public static async getXSodaTotalAssets(xSoda: Address, publicClient: PublicClient<HttpTransport>): Promise<bigint> {
     return publicClient.readContract({
@@ -150,11 +161,11 @@ export class StakingLogic {
   }
 
   /**
-   * Calculates the number of xSoda shares equivalent to a given amount of SODA assets.
-   * @param xSoda - The address of the xSoda token contract.
-   * @param assets - The amount of SODA assets to convert.
-   * @param publicClient - PublicClient<HttpTransport>
-   * @returns The number of xSoda shares.
+   * Calculates the number of xSoda shares equivalent to a given amount of SODA assets (`convertToShares`).
+   * @param xSoda - The address of the xSoda ERC-4626 vault contract.
+   * @param assets - The SODA asset amount to convert.
+   * @param publicClient - Viem public client connected to the hub chain.
+   * @returns The xSoda share count equivalent to `assets` at the current exchange rate.
    */
   public static async convertSodaToXSodaShares(
     xSoda: Address,
@@ -170,11 +181,11 @@ export class StakingLogic {
   }
 
   /**
-   * Calculates the amount of SODA assets corresponding to a specific number of xSoda shares.
-   * @param xSoda - The address of the xSoda token contract.
-   * @param shares - The number of xSoda shares to convert.
-   * @param publicClient - PublicClient<HttpTransport>
-   * @returns The amount of SODA assets.
+   * Calculates the SODA asset amount corresponding to a given number of xSoda shares (`convertToAssets`).
+   * @param xSoda - The address of the xSoda ERC-4626 vault contract.
+   * @param shares - The xSoda share count to convert.
+   * @param publicClient - Viem public client connected to the hub chain.
+   * @returns The SODA asset amount equivalent to `shares` at the current exchange rate.
    */
   public static async convertXSodaSharesToSoda(
     xSoda: Address,
@@ -190,11 +201,11 @@ export class StakingLogic {
   }
 
   /**
-   * Simulates the effects of depositing SODA into xSoda without executing it.
-   * @param xSoda - The address of the xSoda token contract.
-   * @param assets - The amount of SODA assets to deposit.
-   * @param publicClient - PublicClient<HttpTransport>
-   * @returns The number of xSoda shares that would be minted.
+   * Simulates a SODA deposit into the xSoda vault (`previewDeposit`) without executing it.
+   * @param xSoda - The address of the xSoda ERC-4626 vault contract.
+   * @param assets - The SODA amount to preview depositing.
+   * @param publicClient - Viem public client connected to the hub chain.
+   * @returns The xSoda shares that would be minted for `assets`.
    */
   public static async previewXSodaDeposit(
     xSoda: Address,
@@ -210,11 +221,11 @@ export class StakingLogic {
   }
 
   /**
-   * Simulates the effects of minting xSoda shares without executing it.
-   * @param xSoda - The address of the xSoda token contract.
-   * @param shares - The number of xSoda shares to mint.
-   * @param publicClient - PublicClient<HttpTransport>
-   * @returns The amount of SODA assets that would be deposited.
+   * Simulates minting a specific number of xSoda shares (`previewMint`) without executing it.
+   * @param xSoda - The address of the xSoda ERC-4626 vault contract.
+   * @param shares - The xSoda share count to preview minting.
+   * @param publicClient - Viem public client connected to the hub chain.
+   * @returns The SODA assets that would need to be deposited to mint `shares`.
    */
   public static async previewXSodaMint(
     xSoda: Address,
@@ -230,11 +241,11 @@ export class StakingLogic {
   }
 
   /**
-   * Simulates the effects of withdrawing SODA from xSoda without executing it.
-   * @param xSoda - The address of the xSoda token contract.
-   * @param assets - The amount of SODA assets to withdraw.
-   * @param publicClient - PublicClient<HttpTransport>
-   * @returns The number of xSoda shares that would be burned.
+   * Simulates withdrawing a specific SODA amount from the xSoda vault (`previewWithdraw`) without executing it.
+   * @param xSoda - The address of the xSoda ERC-4626 vault contract.
+   * @param assets - The SODA amount to preview withdrawing.
+   * @param publicClient - Viem public client connected to the hub chain.
+   * @returns The xSoda shares that would be burned to withdraw `assets`.
    */
   public static async previewXSodaWithdraw(
     xSoda: Address,
@@ -250,11 +261,11 @@ export class StakingLogic {
   }
 
   /**
-   * Simulates the effects of redeeming xSoda shares without executing it.
-   * @param xSoda - The address of the xSoda token contract.
-   * @param shares - The number of xSoda shares to redeem.
-   * @param publicClient - PublicClient<HttpTransport>
-   * @returns The amount of SODA assets that would be withdrawn.
+   * Simulates redeeming a specific number of xSoda shares (`previewRedeem`) without executing it.
+   * @param xSoda - The address of the xSoda ERC-4626 vault contract.
+   * @param shares - The xSoda share count to preview redeeming.
+   * @param publicClient - Viem public client connected to the hub chain.
+   * @returns The SODA assets that would be withdrawn for `shares`.
    */
   public static async previewXSodaRedeem(
     xSoda: Address,
@@ -354,7 +365,7 @@ export class StakingLogic {
   /**
    * Encodes the StakingRouter stake transaction data.
    * @param stakingRouter - The address of the StakingRouter contract.
-   * @param amount - The amount of SODA to stake.
+   * @param amount - The xSoda vault token amount to stake (translated to 18 decimals).
    * @param to - The address to receive the staked tokens.
    * @param minReceive - The minimum amount to receive.
    * @returns The encoded contract call data.
@@ -408,11 +419,15 @@ export class StakingLogic {
   // Estimation Methods
 
   /**
-   * Estimates the xSoda amount and preview deposit for a given SODA amount.
+   * Estimates the xSoda shares and preview-deposit amount for staking a given SODA amount.
+   *
+   * Delegates to `StakingRouter.estimateXSodaAmount`, which accounts for the current vault
+   * exchange rate. Use this to display expected output before executing a stake transaction.
+   *
    * @param stakingRouter - The address of the StakingRouter contract.
-   * @param amount - The amount of SODA to estimate.
-   * @param publicClient - PublicClient<HttpTransport>
-   * @returns Tuple containing [xSodaAmount, previewDepositAmount].
+   * @param amount - The SODA amount to estimate.
+   * @param publicClient - Viem public client connected to the hub chain.
+   * @returns Tuple `[xSodaAmount, previewDepositAmount]` — estimated shares and vault preview figure.
    */
   public static async estimateXSodaAmount(
     stakingRouter: Address,
@@ -428,11 +443,16 @@ export class StakingLogic {
   }
 
   /**
-   * Estimates the instant unstake amount for a given xSoda amount.
+   * Estimates the SODA output for instantly unstaking a given xSoda amount.
+   *
+   * Delegates to `StakingRouter.estimateInstantUnstake`. The result reflects current
+   * liquidity conditions and may differ from the actual output at execution time.
+   * Use this to set an appropriate `minAmount` slippage guard before calling `instantUnstake`.
+   *
    * @param stakingRouter - The address of the StakingRouter contract.
-   * @param amount - The amount of xSoda to estimate unstake for.
-   * @param publicClient - PublicClient<HttpTransport>
-   * @returns The estimated SODA amount from instant unstake.
+   * @param amount - The xSoda share amount to estimate.
+   * @param publicClient - Viem public client connected to the hub chain.
+   * @returns The estimated SODA output for the instant unstake.
    */
   public static async estimateInstantUnstake(
     stakingRouter: Address,

@@ -2,7 +2,7 @@
 
 Core SDK implementing all SODAX DeFi operations. Entry point: the `Sodax` class in `src/shared/entities/Sodax.ts`.
 
-**This package works standalone** — no React, no wallet-sdk, no dapp-kit required. Backend partners (API servers, bots, scripts) use `@sodax/sdk` directly with a private key to initialize spoke providers and call services. Frontend partners use `@sodax/dapp-kit` which wraps this SDK in React hooks — see `packages/dapp-kit/skills/` for frontend scaffolding guides.
+**This package works standalone** — no React, no wallet-sdk, no dapp-kit required. Backend partners (API servers, bots, scripts) use `@sodax/sdk` directly with a private-key wallet provider and call services. Frontend partners use `@sodax/dapp-kit` which wraps this SDK in React hooks — see `packages/dapp-kit/skills/` for frontend scaffolding guides.
 
 ## Architecture
 
@@ -10,8 +10,8 @@ Core SDK implementing all SODAX DeFi operations. Entry point: the `Sodax` class 
 
 Sonic is the hub chain. All cross-chain operations flow through it.
 
-- `EvmHubProvider` (`src/shared/entities/Providers.ts`) — interacts with hub contracts (vault tokens, asset manager, wallet abstraction)
-- Per-chain `*SpokeProvider` (`src/shared/entities/<chain>/`) — chain-specific contract interactions that relay to/from hub
+- `EvmHubProvider` (`src/shared/entities/EvmHubProvider.ts`) — interacts with hub contracts (vault tokens, asset manager, wallet abstraction)
+- `SpokeService` (`src/shared/services/spoke/SpokeService.ts`) — routing facade that owns one per-chain-family service (`EvmSpokeService`, `SolanaSpokeService`, …) and exposes a typed `getSpokeService(chainKey)` router
 - `IntentRelayApiService` (`src/shared/services/intentRelay/`) — relays user actions between hub and spoke chains
 
 ### Sodax Facade
@@ -27,12 +27,14 @@ Sodax
  ├── dex: DexService             (concentrated liquidity, AMM)
  ├── migration: MigrationService (ICX/bnUSD/BALN migration)
  ├── partners: PartnerService    (partner fee claiming)
+ ├── recovery: RecoveryService   (withdraw stuck hub-wallet assets back to a spoke chain)
  ├── backendApi: BackendApiService
  ├── config: ConfigService       (dynamic config from backend API, falls back to defaults)
- └── hubProvider: EvmHubProvider
+ ├── hubProvider: EvmHubProvider
+ └── spokeService: SpokeService
 ```
 
-All services receive `hubProvider`, `relayerApiEndpoint`, and `configService` via constructor injection.
+All feature services receive `{ hubProvider, config, spoke }` via constructor injection.
 
 ### Configuration
 
@@ -44,18 +46,14 @@ All services receive `hubProvider`, `relayerApiEndpoint`, and `configService` vi
 src/
 ├── index.ts                 # Barrel export (re-exports all modules + @sodax/types)
 ├── shared/                  # Core foundation
-│   ├── entities/            # Sodax class + per-chain SpokeProviders
+│   ├── entities/            # Sodax class + hub provider + chain-specific utilities
 │   │   ├── Sodax.ts         # Main SDK facade
-│   │   ├── Providers.ts     # EVM hub/spoke provider abstractions
-│   │   ├── evm/             # (EVM spoke providers defined in Providers.ts)
-│   │   ├── solana/          # SolanaSpokeProvider + PDA utilities
-│   │   ├── sui/             # SuiSpokeProvider
-│   │   ├── stellar/         # StellarSpokeProvider + CustomSorobanServer
-│   │   ├── icon/            # IconSpokeProvider + HanaWalletConnector
-│   │   ├── injective/       # InjectiveSpokeProvider + Injective20Token
-│   │   ├── near/            # NearSpokeProvider
-│   │   ├── stacks/          # StacksSpokeProvider
-│   │   └── btc/             # BitcoinSpokeProvider + RadfiProvider
+│   │   ├── EvmHubProvider.ts
+│   │   ├── solana/          # PDA utilities, address derivation
+│   │   ├── stellar/         # CustomSorobanServer
+│   │   ├── icon/            # HanaWalletConnector (browser extension helper)
+│   │   ├── injective/       # Injective20Token helper
+│   │   └── btc/             # RadfiProvider + btc-utils
 │   ├── services/
 │   │   ├── hub/             # Hub chain services (asset manager, vault tokens, wallet abstraction)
 │   │   ├── spoke/           # Per-chain spoke services (EvmSpokeService, SolanaSpokeService, etc.)
@@ -66,7 +64,11 @@ src/
 │   ├── abis/                # 26 contract ABI files
 │   ├── config/              # ConfigService + ConfigMapper
 │   ├── constants.ts         # SDK-wide constants (chain mappings, DEX pools, defaults)
-│   ├── types.ts             # SDK type definitions (service configs, provider types)
+│   ├── types/
+│   │   ├── types.ts         # Core HubProvider type
+│   │   ├── spoke-types.ts   # DepositParams, SendMessageParams, SpokeApproveParams, tx-receipt helpers
+│   │   ├── relay-types.ts   # IntentRelay types
+│   │   └── intent-types.ts  # Intent/order shapes
 │   ├── guards.ts            # Type guards for chain/provider detection
 │   └── utils/               # Shared utilities (fee calc, address derivation, chain-specific helpers)
 ├── swap/                    # Intent-based swap via solver
@@ -76,6 +78,7 @@ src/
 ├── dex/                     # DEX operations (concentrated liquidity, asset management)
 ├── migration/               # Token migration (ICX, bnUSD, BALN)
 ├── partner/                 # Partner fee operations
+├── recovery/                # Hub-wallet asset recovery
 ├── backendApi/              # Backend API service
 └── e2e-tests/               # End-to-end tests
 ```
@@ -87,19 +90,17 @@ src/
 Every module follows a consistent service-based pattern:
 
 1. A `*Service` class with constructor-based dependency injection
-2. Constructor receives `{ hubProvider, relayerApiEndpoint, configService, config? }`
+2. Constructor receives `{ hubProvider, config, spoke }` (`spoke` is a `SpokeService` instance)
 3. Public methods for core operations
 4. `Result<T>` return type for operations that can fail
 
-### SpokeProvider Pattern
+### SpokeService Pattern
 
-Each chain has a `*SpokeProvider` class in `src/shared/entities/<chain>/`:
+Chain-specific logic lives in per-chain-family spoke services (`EvmSpokeService`, `SolanaSpokeService`, `SuiSpokeService`, `IconSpokeService`, `InjectiveSpokeService`, `StellarSpokeService`, `StacksSpokeService`, `NearSpokeService`, `BitcoinSpokeService`, `SonicSpokeService`) all owned by the single `SpokeService` router.
 
-- Wraps a `WalletAddressProvider` (from wallet-sdk-core or custom)
-- Implements chain-specific contract calls (deposits, approvals, balance checks)
-- Provides methods used by spoke services to interact with chain contracts
+Feature services call into spoke logic by calling `this.spoke.getSpokeService(chainKey)`, which returns the correct service instance for that chain. This replaces the old pattern of constructing per-chain `*SpokeProvider` objects.
 
-When adding a new chain, follow an existing implementation (e.g., `SolanaSpokeProvider` for non-EVM, `EvmSpokeProvider` for EVM).
+The chain key in the request payload (e.g. `srcChainKey`) drives both TypeScript narrowing (via `GetWalletProviderType<K>`) and runtime routing (via `getChainType(chainKey)` in `@sodax/types`).
 
 ### Type Guards
 
@@ -222,9 +223,9 @@ Concentrated liquidity (similar to Uniswap V3/PancakeSwap V3):
 
 Detailed feature docs are in `docs/`:
 - `SWAPS.md`, `MONEY_MARKET.md`, `STAKING.md`, `BRIDGE.md`, `DEX.md`, `MIGRATION.md`
-- `HOW_TO_CREATE_A_SPOKE_PROVIDER.md` — guide for adding new chain support
 - `CONFIGURE_SDK.md` — SDK initialization patterns
 - `WALLET_PROVIDERS.md` — wallet integration patterns
+- `ARCHITECTURE_REFACTOR_SUMMARY.md` — full architecture reference (spoke services, raw tx handling, Result\<T\>, error convention, wallet-sdk patterns)
 
 Read these when working on a specific feature for detailed flow documentation.
 

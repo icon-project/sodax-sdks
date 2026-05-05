@@ -1,6 +1,6 @@
 # Skill: Migration
 
-Legacy token migration (ICX, bnUSD, BALN).
+Legacy token migration (ICX, bnUSD, BALN) from the ICON ecosystem to SODAX.
 
 **Depends on:** [setup.md](setup.md), [wallet-connectivity.md](wallet-connectivity.md)
 
@@ -8,37 +8,44 @@ Legacy token migration (ICX, bnUSD, BALN).
 
 | Hook | Type | Purpose |
 |------|------|---------|
-| `useMigrate` | Mutation | Execute migration or revert |
+| `useMigrateIcxToSoda` | Mutation | ICX/wICX (ICON) → SODA (Sonic) |
+| `useRevertMigrateSodaToIcx` | Mutation | SODA (Sonic) → wICX (ICON) |
+| `useMigratebnUSD` | Mutation | Legacy bnUSD ↔ new bnUSD (bidirectional, any spoke chain) |
+| `useMigrateBaln` | Mutation | BALN (ICON) → SODA (Sonic) with optional lock period |
+| `useMigrationApprove` | Mutation | Approve token spending before migration |
 | `useMigrationAllowance` | Query | Check if approval is needed |
-| `useMigrationApprove` | Mutation | Approve tokens |
 
 ## Migration Paths
 
-| From | To | Reversible |
-|------|----|-----------|
-| ICX/wICX (ICON) | SODA (Sonic) | Yes |
-| Legacy bnUSD (ICON/Sui/Stellar) | New bnUSD (EVM) | Yes |
-| BALN (ICON) | SODA (Sonic) | No (with lock periods) |
+| From | To | Reversible | Approval needed |
+|------|----|-----------|----------------|
+| ICX/wICX (ICON) | SODA (Sonic) | Yes (use `useRevertMigrateSodaToIcx`) | No (ICON has no ERC-20 allowance) |
+| BALN (ICON) | SODA (Sonic) | No | No |
+| Legacy bnUSD (EVM/Stellar/ICON) | New bnUSD | Yes (same hook, swap src/dst) | Yes (EVM/Stellar sources) |
 
 ## ICX to SODA
 
 ```tsx
-import { useMigrate, useSpokeProvider } from '@sodax/dapp-kit';
-import { ICON_MAINNET_CHAIN_ID } from '@sodax/sdk';
+import { useMigrateIcxToSoda } from '@sodax/dapp-kit';
+import { useWalletProvider } from '@sodax/wallet-sdk-react';
+import { ChainKeys, ICON_MAINNET_CHAIN_ID } from '@sodax/sdk';
 
-function IcxMigration() {
-  const spokeProvider = useSpokeProvider({ chainId: ICON_MAINNET_CHAIN_ID });
-  const { mutateAsync: migrate, isPending } = useMigrate({ spokeProvider });
+function IcxMigration({ srcAddress, dstAddress }: { srcAddress: string; dstAddress: `0x${string}` }) {
+  const walletProvider = useWalletProvider(ChainKeys.ICON_MAINNET);
+  const { mutateAsync: migrate, isPending } = useMigrateIcxToSoda();
 
   const handleMigrate = async () => {
+    if (!walletProvider) return;
     try {
       const txHashPair = await migrate({
         params: {
-          address: 'cx88fd7df7ddff82f7cc735c871dc519838cb235bb', // wICX on ICON
-          amount: 1000000000000000000n,
-          to: '0x...', // recipient on Sonic
+          srcChainKey: ChainKeys.ICON_MAINNET,
+          srcAddress,
+          address: 'cx88fd7df7ddff82f7cc735c871dc519838cb235bb', // wICX token on ICON
+          amount: 1_000_000_000_000_000_000n,
+          dstAddress, // Sonic recipient address
         },
-        type: 'migrate',
+        walletProvider,
       });
       console.log('Migrated:', txHashPair);
     } catch (e) {
@@ -46,61 +53,154 @@ function IcxMigration() {
     }
   };
 
-  return <button onClick={handleMigrate} disabled={isPending}>{isPending ? 'Migrating...' : 'Migrate ICX to SODA'}</button>;
+  return (
+    <button onClick={handleMigrate} disabled={isPending || !walletProvider}>
+      {isPending ? 'Migrating...' : 'Migrate ICX to SODA'}
+    </button>
+  );
 }
 ```
 
-## Revert (SODA back to wICX)
+## Revert SODA → wICX
+
+Requires approval — SODA is an EVM token on Sonic.
 
 ```tsx
-import { useMigrate, useMigrationAllowance, useMigrationApprove, useSpokeProvider } from '@sodax/dapp-kit';
-import { SONIC_MAINNET_CHAIN_ID } from '@sodax/sdk';
+import { useMigrationAllowance, useMigrationApprove, useRevertMigrateSodaToIcx } from '@sodax/dapp-kit';
+import { useWalletProvider } from '@sodax/wallet-sdk-react';
+import { ChainKeys } from '@sodax/sdk';
+import type { IcxCreateRevertMigrationParams } from '@sodax/sdk';
 
-function RevertMigration() {
-  const spokeProvider = useSpokeProvider({ chainId: SONIC_MAINNET_CHAIN_ID });
+function RevertMigration({ srcAddress }: { srcAddress: `0x${string}` }) {
+  const walletProvider = useWalletProvider(ChainKeys.SONIC_MAINNET);
 
-  const { data: allowance } = useMigrationAllowance({
-    params: { amount: 1000000000000000000n, to: 'hx...' },
-    type: 'revert',
-    spokeProvider,
+  const revertParams: IcxCreateRevertMigrationParams = {
+    srcChainKey: ChainKeys.SONIC_MAINNET,
+    srcAddress,
+    amount: 1_000_000_000_000_000_000n,
+    dstAddress: 'hx...', // ICON recipient address
+  };
+
+  const { data: isApproved } = useMigrationAllowance({
+    params: { params: revertParams, action: 'revert' },
   });
-  const isApproved = allowance?.ok && allowance.value;
-
-  const { mutateAsync: approve, isPending: isApproving } = useMigrationApprove({ spokeProvider });
-  const { mutateAsync: migrate, isPending: isMigrating } = useMigrate({ spokeProvider });
+  const { mutateAsync: approve, isPending: isApproving } = useMigrationApprove();
+  const { mutateAsync: revert, isPending: isReverting } = useRevertMigrateSodaToIcx();
 
   const handleRevert = async () => {
+    if (!walletProvider) return;
     try {
-      if (!isApproved) await approve({ params: { amount: 1000000000000000000n, to: 'hx...' }, type: 'revert' });
-      const txHashPair = await migrate({ params: { amount: 1000000000000000000n, to: 'hx...' }, type: 'revert' });
+      if (!isApproved) {
+        await approve({ params: revertParams, walletProvider, action: 'revert' });
+      }
+      const txHashPair = await revert({ params: revertParams, walletProvider });
       console.log('Reverted:', txHashPair);
     } catch (e) {
       console.error(e);
     }
   };
 
-  return <button onClick={handleRevert} disabled={isMigrating || isApproving}>{isApproving ? 'Approving...' : isMigrating ? 'Reverting...' : 'Revert to wICX'}</button>;
+  return (
+    <button onClick={handleRevert} disabled={isReverting || isApproving || !walletProvider}>
+      {isApproving ? 'Approving...' : isReverting ? 'Reverting...' : 'Revert to wICX'}
+    </button>
+  );
 }
 ```
 
-## BALN Swap (with Lock)
+## BALN to SODA (with optional lock period)
+
+BALN migration does not require approval (ICON chain, no ERC-20 allowance). Longer lock period = higher SODA reward multiplier.
 
 ```tsx
-const { mutateAsync: migrate } = useMigrate({ spokeProvider });
+import { useMigrateBaln } from '@sodax/dapp-kit';
+import { useWalletProvider } from '@sodax/wallet-sdk-react';
+import { ChainKeys } from '@sodax/sdk';
 
-await migrate({
-  params: {
-    address: 'cxf61cd5a45dc9f91c15aa65831a30a90d59a09619', // BALN on ICON
-    amount: 100000000000000000000n,
-    to: '0x...',
-    lockPeriod: 12, // months (0=0.5x, 6=0.75x, 12=1.0x, 24=1.5x)
-  },
-  type: 'migrate',
-});
+function BalnMigration({ srcAddress, dstAddress }: { srcAddress: string; dstAddress: `0x${string}` }) {
+  const walletProvider = useWalletProvider(ChainKeys.ICON_MAINNET);
+  const { mutateAsync: migrateBaln, isPending } = useMigrateBaln();
+
+  const handleMigrate = async () => {
+    if (!walletProvider) return;
+    try {
+      const txHashPair = await migrateBaln({
+        params: {
+          srcChainKey: ChainKeys.ICON_MAINNET,
+          srcAddress,
+          amount: 100_000_000_000_000_000_000n,
+          lockupPeriod: 12, // months: 0=0.5x, 6=0.75x, 12=1.0x, 24=1.5x
+          dstAddress,
+        },
+        walletProvider,
+      });
+      console.log('BALN migrated:', txHashPair);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  return (
+    <button onClick={handleMigrate} disabled={isPending || !walletProvider}>
+      {isPending ? 'Migrating...' : 'Migrate BALN to SODA'}
+    </button>
+  );
+}
+```
+
+## bnUSD Migration (bidirectional)
+
+Works for legacy ↔ new bnUSD across spoke chains. May require approval on EVM/Stellar sources.
+
+```tsx
+import { useMigratebnUSD, useMigrationAllowance, useMigrationApprove } from '@sodax/dapp-kit';
+import { useWalletProvider } from '@sodax/wallet-sdk-react';
+import { ChainKeys } from '@sodax/sdk';
+import type { UnifiedBnUSDMigrateParams } from '@sodax/sdk';
+
+function BnUSDMigration({ srcAddress }: { srcAddress: string }) {
+  const walletProvider = useWalletProvider(ChainKeys.BASE_MAINNET);
+
+  const bnUSDParams: UnifiedBnUSDMigrateParams<typeof ChainKeys.BASE_MAINNET> = {
+    srcChainKey: ChainKeys.BASE_MAINNET,
+    srcAddress,
+    srcbnUSD: '0x...', // legacy bnUSD address on Base
+    dstChainKey: ChainKeys.ARBITRUM_MAINNET,
+    dstbnUSD: '0x...', // new bnUSD address on Arbitrum
+    amount: 1_000_000n, // 6 decimals
+    dstAddress: srcAddress,
+  };
+
+  const { data: isApproved } = useMigrationAllowance({
+    params: { params: bnUSDParams, action: 'migrate' },
+  });
+  const { mutateAsync: approve, isPending: isApproving } = useMigrationApprove();
+  const { mutateAsync: migratebnUSD, isPending: isMigrating } = useMigratebnUSD();
+
+  const handleMigrate = async () => {
+    if (!walletProvider) return;
+    try {
+      if (!isApproved) {
+        await approve({ params: bnUSDParams, walletProvider, action: 'migrate' });
+      }
+      const txHashPair = await migratebnUSD({ params: bnUSDParams, walletProvider });
+      console.log('bnUSD migrated:', txHashPair);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  return (
+    <button onClick={handleMigrate} disabled={isMigrating || isApproving || !walletProvider}>
+      {isApproving ? 'Approving...' : isMigrating ? 'Migrating...' : 'Migrate bnUSD'}
+    </button>
+  );
+}
 ```
 
 ## Notes
 
-- **Forward migrations** (ICX, bnUSD, BALN): no approval needed.
-- **Reverse migrations** (SODA to wICX): approval required.
-- **BALN locks**: longer lock = higher reward multiplier.
+- **ICX and BALN forward migrations** don't require approval — ICON has no ERC-20 allowance mechanism.
+- **SODA → ICX revert** and **EVM/Stellar bnUSD sources** require approval before migrating.
+- **BALN lock periods**: `0` = 0.5x reward, `6` = 0.75x, `12` = 1.0x, `24` = 1.5x (months).
+- `useMigratebnUSD` is bidirectional — swap `srcbnUSD`/`dstbnUSD` and `srcChainKey`/`dstChainKey` to go the other direction.

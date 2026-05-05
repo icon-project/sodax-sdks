@@ -105,8 +105,22 @@ export type IntentAutoSwapResult = {
 };
 
 /**
- * PartnerFeeClaimService is a service that allows you to claim partner fees for a given address or provider.
- * @namespace SodaxFeatures
+ * Handles on-chain fee claiming for SODAX partners on the hub chain (Sonic).
+ *
+ * Partners accrue fee balances as wrapped hub-chain ERC-20 tokens whenever they
+ * facilitate swap or bridge operations. This service provides the full lifecycle
+ * for retrieving and converting those balances:
+ *
+ * 1. Query accrued balances across all supported tokens (`fetchAssetsBalances`).
+ * 2. Inspect or configure automatic swap-and-bridge preferences (`getAutoSwapPreferences`,
+ *    `setSwapPreference`) so that claimed fees are forwarded to a destination chain.
+ * 3. Approve a hub-chain token for spending by the ProtocolIntents contract (`approveToken`,
+ *    `isTokenApproved`).
+ * 4. Trigger the swap on-chain and optionally wait for solver execution (`createIntentAutoSwap`,
+ *    `swap`).
+ *
+ * All write operations target the `protocolIntentsContract` on the Sonic hub chain and require
+ * an EVM-compatible wallet provider scoped to that chain.
  */
 export class PartnerFeeClaimService {
   private readonly hubProvider: HubProvider;
@@ -122,13 +136,23 @@ export class PartnerFeeClaimService {
   }
 
   /**
-   * Util methods for dealing with tokens and hub assets
+   * Returns the original spoke-chain address of a wrapped hub asset, if known.
+   *
+   * @param chainId - The spoke chain whose token mapping to look up.
+   * @param hubAsset - The wrapped ERC-20 address on the Sonic hub chain.
+   * @returns The original token address on the spoke chain, or `undefined` if the mapping is not found.
    */
-
   public getOriginalAssetAddress(chainId: SpokeChainKey, hubAsset: Address): OriginalAssetAddress | undefined {
     return this.config.getOriginalAssetAddress(chainId, hubAsset);
   }
 
+  /**
+   * Returns the spoke-chain token descriptor for a given original asset address.
+   *
+   * @param chainId - The spoke chain to search.
+   * @param originalAssetAddress - The token's native address on the spoke chain.
+   * @returns The `XToken` descriptor (symbol, decimals, hub asset address, etc.), or `undefined` if not found.
+   */
   public getSpokeTokenFromOriginalAssetAddress(
     chainId: SpokeChainKey,
     originalAssetAddress: OriginalAssetAddress,
@@ -137,13 +161,15 @@ export class PartnerFeeClaimService {
   }
 
   /**
-   * Fetches balances for all hub assets across all chains on Sonic for a given address or provider.
+   * Fetches non-zero fee balances for all supported hub assets held by a partner address on Sonic.
    *
-   * @param params - Either an EVM address (as a string) or a SonicSpokeProviderType.
-   *   If an address, queries balances for that address.
-   *   If a SonicSpokeProviderType, uses the connected wallet's address.
-   * @returns A promise resolving to a Result containing a Map from wrapped asset address (on Sonic)
-   *   to PartnerFeeClaimAssetBalance, or an Error on failure.
+   * Iterates every spoke chain's token list, deduplicates by wrapped hub-asset address, then
+   * issues a single multicall to the hub chain to read all ERC-20 balances in one round-trip.
+   * Only tokens with a balance greater than zero are included in the result map.
+   *
+   * @param queryAddress - The EVM address (on the Sonic hub chain) to query balances for.
+   * @returns A `Result` containing a `Map<wrappedAssetAddress, PartnerFeeClaimAssetBalance>` on
+   *   success, or an `Error` tagged `FETCH_ASSETS_BALANCES_FAILED` on failure.
    */
   public async fetchAssetsBalances(
     queryAddress: string,
@@ -188,10 +214,11 @@ export class PartnerFeeClaimService {
 
       uniqueAssetEntries.forEach((entry, index) => {
         const balanceResult = balanceResults[index];
-        // When allowFailure: true, results have status and result properties
+        // With allowFailure: false (used above), Viem returns raw result values directly —
+        // not wrapped in { status, result } objects. Each entry is the unwrapped return
+        // value of the ABI call, so balanceOf results are plain bigints.
         let balance: bigint;
         if (typeof balanceResult === 'bigint') {
-          // Fallback: if result is directly a bigint (shouldn't happen with allowFailure: true)
           balance = balanceResult;
         } else {
           console.warn(
@@ -229,13 +256,16 @@ export class PartnerFeeClaimService {
   }
 
   /**
-   * Gets the auto swap preferences for a user.
+   * Reads the on-chain auto-swap preferences configured for a partner address.
    *
-   * @param params - Either an EVM address (as a string) or a SonicSpokeProviderType.
-   *   If an address, queries preferences for that address.
-   *   If a SonicSpokeProviderType, uses the connected wallet's address.
-   * @returns A promise resolving to a Result containing the auto swap preferences, or an Error on failure.
-   *   The auto swap preferences include the output token, destination chain, and destination address.
+   * Auto-swap preferences tell the ProtocolIntents contract where to send claimed fee tokens
+   * after they have been swapped: which output token to target, which destination chain to
+   * bridge to, and which address to deliver the proceeds to.
+   *
+   * @param queryAddress - The EVM address (on the Sonic hub chain) whose preferences to read.
+   * @returns A `Result` containing `AutoSwapPreferences` on success — including `outputToken`
+   *   (hub-chain address), `dstChainKey` (`'not configured'` when the destination chain is unset),
+   *   and `dstAddress`. Returns an `Error` tagged `GET_AUTO_SWAP_PREFERENCES_FAILED` on failure.
    */
   public async getAutoSwapPreferences(queryAddress: string): Promise<Result<AutoSwapPreferences, Error>> {
     try {
@@ -271,18 +301,23 @@ export class PartnerFeeClaimService {
   }
 
   /**
-   * Sets the auto swap preferences for a user.
+   * Writes auto-swap preferences to the ProtocolIntents contract on the Sonic hub chain.
    *
-   * @template S - Type of the Sonic spoke provider
-   * @template Raw - Whether to return raw transaction data (default: false)
-   * @param {Object} args - The argument object
-   * @param {SetSwapPreferenceParams} args.params - The swap preference parameters
-   * @param {S} args.spokeProvider - The Sonic spoke provider
-   * @param {Raw} [args.raw] - If true, the raw transaction data will be returned
-   * @returns {Promise<Result<TxReturnType<S, Raw>>>}
-   *   - If `raw` is true or the provider is a raw provider, returns the raw transaction object.
-   *   - Otherwise, returns the transaction hash of the submitted transaction.
-   *   - If failed, returns an error object with code 'SET_SWAP_PREFERENCE_FAILED'.
+   * Preferences determine how future `createIntentAutoSwap` calls route claimed fees:
+   * the desired output token, the destination chain, and the recipient address on that chain.
+   * The `outputToken` parameter is resolved to its hub-chain (wrapped) address automatically
+   * when a spoke-chain address is supplied.
+   *
+   * @param _params - Action descriptor containing:
+   *   - `params.srcChainKey` — must be the hub chain key (Sonic).
+   *   - `params.srcAddress` — partner's EVM address on Sonic.
+   *   - `params.outputToken` — desired output token address (spoke-chain or hub-chain).
+   *   - `params.dstChainKey` — spoke chain to receive the swapped proceeds.
+   *   - `params.dstAddress` — recipient address on `dstChainKey`.
+   *   - `raw` — when `true`, returns the unsigned transaction object instead of submitting it.
+   *   - `walletProvider` — required when `raw` is `false`; must be an EVM wallet provider.
+   * @returns A `Result` containing either the submitted transaction hash (`raw: false`) or the
+   *   unsigned raw transaction (`raw: true`). Returns an error on failure.
    */
   public async setSwapPreference<K extends SpokeChainKey, Raw extends boolean>(
     _params: SetSwapPreferenceAction<K, Raw>,
@@ -344,13 +379,16 @@ export class PartnerFeeClaimService {
   }
 
   /**
-   * Checks if a token is already approved to the protocol intents contract for a given address or the connected wallet.
+   * Checks whether a hub-chain ERC-20 token is already approved for the ProtocolIntents contract.
    *
-   * @param params - Object containing:
-   *   - token: The ERC20 token address to check.
-   *   - spokeProvider: The SonicSpokeProviderType instance.
-   *   - address (optional): The address to check allowance for. If not provided, uses the currently connected wallet.
-   * @returns Promise resolving to a Result. Value is true if token is approved (has max or sufficient allowance), false otherwise. Returns an error if the check fails.
+   * Native tokens are considered pre-approved and always return `true`. For ERC-20 tokens,
+   * the allowance is compared against `MaxUint256 - 1000` to account for minor rounding
+   * differences from contracts that decrement exact allowances.
+   *
+   * @param token - Hub-chain ERC-20 address to check (or the chain's native token address).
+   * @param srcAddress - The token owner whose allowance is queried.
+   * @returns A `Result` where `value` is `true` if the allowance is effectively max, `false`
+   *   if approval is needed. Returns an `Error` tagged `IS_TOKEN_APPROVED_FAILED` on failure.
    */
   public async isTokenApproved({ token, srcAddress }: FeeTokenApproveParams): Promise<Result<boolean, Error>> {
     try {
@@ -387,11 +425,19 @@ export class PartnerFeeClaimService {
   }
 
   /**
-   * Approves a token to the protocol intents contract with maximum allowance
-   * @param {Address} token - The token address to approve
-   * @param {SonicSpokeProviderType} spokeProvider - The Sonic spoke provider
-   * @param {boolean} raw - Whether to return raw transaction data
-   * @returns {Promise<Result<TxReturnType<SonicSpokeProviderType, R>, Error>>} Transaction hash or raw transaction
+   * Approves a hub-chain ERC-20 token for the ProtocolIntents contract with maximum (`MaxUint256`) allowance.
+   *
+   * Must be called before `createIntentAutoSwap` or `swap` if `isTokenApproved` returns `false`.
+   * Only hub chain keys (`srcChainKey`) and EVM wallet providers are accepted.
+   *
+   * @param _params - Action descriptor containing:
+   *   - `params.srcChainKey` — must be the hub chain key (Sonic).
+   *   - `params.srcAddress` — token owner address on Sonic.
+   *   - `params.token` — ERC-20 contract address to approve.
+   *   - `raw` — when `true`, returns the unsigned transaction object instead of submitting it.
+   *   - `walletProvider` — required when `raw` is `false`; must be an EVM wallet provider.
+   * @returns A `Result` containing the submitted transaction hash (`raw: false`) or the unsigned
+   *   raw transaction (`raw: true`). Returns an `Error` tagged `APPROVE_TOKEN_FAILED` on failure.
    */
   public async approveToken<Raw extends boolean>(
     _params: FeeTokenApproveAction<HubChainKey, Raw>,
@@ -447,11 +493,25 @@ export class PartnerFeeClaimService {
   }
 
   /**
-   * Creates an intent to auto swap tokens using the protocol intents contract
-   * @param {PartnerFeeClaimSwapParams} params - The swap parameters
-   * @param {SonicSpokeProviderType} spokeProvider - The Sonic spoke provider
-   * @param {boolean} raw - Whether to return raw transaction data
-   * @returns {Promise<TxReturnType<SonicSpokeProviderType, R>>} Transaction hash or raw transaction
+   * Submits a `createIntentAutoSwap` transaction to the ProtocolIntents contract on Sonic.
+   *
+   * This encodes an on-chain intent for the SODAX solver to swap the specified fee token into
+   * the partner's preferred output token (as configured via `setSwapPreference`). The solver
+   * fills the swap at best price with no minimum output enforced (`minOutputAmount = 0`).
+   *
+   * This is the low-level building block. Use `swap` for the full flow that also waits for
+   * the solver to execute the intent.
+   *
+   * @param _params - Action descriptor containing:
+   *   - `params.srcChainKey` — must be the hub chain key (Sonic).
+   *   - `params.srcAddress` — partner's EVM address; also used as the intent creator.
+   *   - `params.fromToken` — hub-chain ERC-20 address of the token to swap.
+   *   - `params.amount` — token amount to swap (in the token's native decimals, as `bigint`).
+   *   - `params.timeout` — optional timeout in milliseconds for transaction confirmation.
+   *   - `raw` — when `true`, returns the unsigned transaction object instead of submitting it.
+   *   - `walletProvider` — required when `raw` is `false`; must be an EVM wallet provider.
+   * @returns A `Result` containing the submitted transaction hash (`raw: false`) or the unsigned
+   *   raw transaction (`raw: true`). Returns an error on failure.
    */
   public async createIntentAutoSwap<Raw extends boolean>(
     _params: PartnerFeeClaimSwapAction<HubChainKey, Raw>,
@@ -506,10 +566,25 @@ export class PartnerFeeClaimService {
   }
 
   /**
-   * Creates an intent auto swap and handles post-execution
-   * @param {PartnerFeeClaimSwapParams} params - The swap parameters
-   * @param {SonicSpokeProviderType} spokeProvider - The Sonic spoke provider
-   * @returns {Promise<Result<IntentAutoSwapResult>>} Intent auto-swap result. On failure, the `.error` is an `Error` tagged with a CODE (`WAIT_INTENT_AUTO_SWAP_FAILED`, `CREATE_INTENT_AUTO_SWAP_FAILED`); the underlying cause is on `.cause`.
+   * End-to-end fee claim: submits the auto-swap intent on-chain and notifies the solver to execute it.
+   *
+   * Internally calls `createIntentAutoSwap`, waits for the transaction receipt, then posts the
+   * intent transaction hash to the solver API (`SolverApiService.postExecution`) so the solver
+   * fills the swap and bridges the output to the configured destination chain.
+   *
+   * Prerequisite: the `fromToken` must already be approved (`isTokenApproved` → `approveToken`)
+   * and auto-swap preferences must be configured (`setSwapPreference`).
+   *
+   * @param _params - Action descriptor (same shape as `createIntentAutoSwap`, `raw` must be `false`).
+   * @returns A `Result` containing `IntentAutoSwapResult` on success:
+   *   - `srcTxHash` — transaction hash of the submitted intent on Sonic.
+   *   - `intentTxHash` — confirmed transaction hash from the receipt.
+   *   - `solverExecutionResponse` — the solver's acknowledgement response.
+   *
+   *   On failure the `error` is tagged:
+   *   - `WAIT_INTENT_AUTO_SWAP_FAILED` — transaction was submitted but receipt polling failed.
+   *   - Error from `createIntentAutoSwap` — if the initial submission failed.
+   *   - Error from `SolverApiService.postExecution` — if the solver notification failed.
    */
   public async swap(
     _params: PartnerFeeClaimSwapAction<HubChainKey, false>,

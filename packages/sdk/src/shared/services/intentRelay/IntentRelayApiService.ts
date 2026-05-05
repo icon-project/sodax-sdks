@@ -221,14 +221,22 @@ export async function waitUntilIntentExecuted(payload: WaitUntilIntentExecutedPa
 }
 
 /**
- * Submit the transaction to the Solver API and wait for it to be executed
+ * Submit the transaction to the Solver API and wait for it to be executed.
  * @param spokeTxHash - The transaction hash to submit.
- * @param data - The additional data to submit when relaying the transaction on Solana. Due to Solana's 1232 byte transaction
- *               size limit, Solana transactions are split: the on-chain tx contains only a verification hash, while the full
- *               data is submitted off-chain via the relayer. Contains the to address on Hub chain and instruction data.
- * @param chainkey - The chain ID of the transaction.
- * @param timeout - The timeout in milliseconds for the transaction. Default is 20 seconds.
- * @returns The transaction hash.
+ * @param data - The additional data to submit when relaying the transaction on Solana or Bitcoin.
+ *               These chains use split transactions: the on-chain tx contains only a verification hash,
+ *               while the full call data is submitted off-chain via the relayer. Contains the destination
+ *               address on the Hub chain and the instruction payload. Required for Solana and Bitcoin;
+ *               ignored for all other chains.
+ * @param chainKey - The chain key identifying the source chain of the transaction.
+ * @param timeout - The timeout in milliseconds to wait for the relay packet. Defaults to
+ *   `DEFAULT_RELAY_TX_TIMEOUT` (120,000 ms / 120 seconds).
+ * @returns A `Result<PacketData>` where `PacketData` contains the relay packet details:
+ *   `src_chain_id`, `src_tx_hash`, `src_address`, `dst_chain_id`, `dst_tx_hash`, `dst_address`,
+ *   `conn_sn`, `status` (`'executed'` when complete), `payload`, and `signatures`.
+ *   Use `dst_tx_hash` as the hub-chain transaction hash for subsequent solver interactions.
+ *   Returns `{ ok: false, error: new Error('RELAY_TIMEOUT') }` if the packet does not arrive
+ *   within `timeout`.
  */
 export async function relayTxAndWaitPacket(params: RelayAndWaitParams): Promise<Result<PacketData>> {
   try {

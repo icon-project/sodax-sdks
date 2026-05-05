@@ -19,12 +19,14 @@ export type IconWalletDefaults = {
   jsonRpcId?: number;
 };
 
+/** Configuration for constructing an `IconWalletProvider` backed by a raw private key. */
 export type PrivateKeyIconWalletConfig = {
   privateKey: `0x${string}`;
   rpcUrl: `http${string}`;
   defaults?: IconWalletDefaults;
 };
 
+/** Configuration for constructing an `IconWalletProvider` backed by a browser-extension wallet (Hana Wallet). */
 export type BrowserExtensionIconWalletConfig = {
   walletAddress?: IconEoaAddress;
   rpcUrl: `http${string}`;

@@ -9,12 +9,17 @@ These skills are for **frontend (React) integration** — wallet connection, Rea
 **If you're building a backend** (API server, bot, script), you don't need `@sodax/dapp-kit` or `@sodax/wallet-sdk-react` at all. Use `@sodax/sdk` directly with a private key:
 
 ```ts
-import { Sodax, EvmSpokeProvider } from '@sodax/sdk';
+import { Sodax, ChainKeys } from '@sodax/sdk';
+import { EvmWalletProvider } from '@sodax/wallet-sdk-core';
 
-const sodax = new Sodax({ rpcConfig: { /* ... */ } });
-const spokeProvider = new EvmSpokeProvider({ privateKey: '0x...' });
+const sodax = new Sodax({ chains: { [ChainKeys.BSC_MAINNET]: { rpcUrl: 'https://bsc-dataseed.binance.org' } } });
+const walletProvider = new EvmWalletProvider({
+  privateKey: '0x...',
+  chainId: ChainKeys.BSC_MAINNET,
+  rpcUrl: 'https://bsc-dataseed.binance.org',
+});
 const quote = await sodax.swaps.getQuote({ /* ... */ });
-const result = await sodax.swaps.swap({ intentParams, spokeProvider });
+const result = await sodax.swaps.swap({ params: { /* ... */ }, raw: false, walletProvider });
 ```
 
 No React, no wallet connection, no hooks. See `packages/sdk/CLAUDE.md` for SDK-only usage.
@@ -73,12 +78,12 @@ setup
 | Skill | File | Description | Depends On |
 |-------|------|-------------|------------|
 | Setup | [setup.md](setup.md) | Install packages, wire `SodaxProvider` + `QueryClientProvider` | None |
-| Wallet Connectivity | [wallet-connectivity.md](wallet-connectivity.md) | `useSpokeProvider` and wallet connection hooks | `setup` |
+| Wallet Connectivity | [wallet-connectivity.md](wallet-connectivity.md) | `useWalletProvider`, balance hooks, wallet connection | `setup` |
 | Swap | [swap.md](swap.md) | `useQuote`, `useSwap`, `useSwapAllowance`, `useSwapApprove`, limit orders | `setup`, `wallet-connectivity` |
 | Bridge | [bridge.md](bridge.md) | `useBridge`, `useBridgeAllowance`, `useBridgeApprove`, bridgeable tokens | `setup`, `wallet-connectivity` |
 | Money Market | [money-market.md](money-market.md) | `useSupply`, `useBorrow`, `useWithdraw`, `useRepay`, reserves data | `setup`, `wallet-connectivity` |
 | Staking | [staking.md](staking.md) | `useStake`, `useUnstake`, `useClaim`, staking info, ratios | `setup`, `wallet-connectivity` |
-| Migration | [migration.md](migration.md) | `useMigrate`, `useMigrationAllowance`, ICX/bnUSD/BALN migration | `setup`, `wallet-connectivity` |
+| Migration | [migration.md](migration.md) | `useMigrateIcxToSoda`, `useRevertMigrateSodaToIcx`, `useMigratebnUSD`, `useMigrateBaln` | `setup`, `wallet-connectivity` |
 | DEX | [dex.md](dex.md) | `useDexDeposit`, `useSupplyLiquidity`, positions, pools | `setup`, `wallet-connectivity` |
 | Bitcoin | [bitcoin.md](bitcoin.md) | `useRadfiSession`, `useFundTradingWallet`, `useRadfiWithdraw`, UTXO management | `setup`, `wallet-connectivity` |
 | Backend Queries | [backend-queries.md](backend-queries.md) | `useBackendIntentByTxHash`, `useBackendOrderbook`, money market data | `setup` |
@@ -87,15 +92,26 @@ setup
 
 ### Single Object Parameter
 
-Every hook accepts one object. Never positional args.
+Every hook accepts one object. Mutation hooks take only `{ mutationOptions }` at initialization — all domain inputs flow through `mutate(vars)`:
 
 ```tsx
-// Query hooks
-const { data } = useSwapAllowance({ params, spokeProvider, queryOptions });
+// Query hooks — { params, queryOptions }
+const { data } = useSwapAllowance({ params: intentParams, walletProvider });
 
-// Mutation hooks
-const { mutateAsync: swap } = useSwap({ spokeProvider });
-await swap({ params: intentParams });
+// Mutation hooks — hook takes only mutationOptions, all domain inputs in mutate(vars)
+const { mutateAsync: swap } = useSwap();
+await swap({ params: intentParams, walletProvider });
+```
+
+### mutateAsyncSafe
+
+Every mutation hook returns three call shapes. `mutateAsyncSafe` is the recommended default for sequenced flows — it returns `Promise<Result<TData>>` and never rejects:
+
+```tsx
+const { mutateAsyncSafe: swap } = useSwap();
+const result = await swap({ params: intentParams, walletProvider });
+if (!result.ok) { toast(result.error.message); return; }
+const { intent } = result.value;
 ```
 
 ### queryOptions
@@ -109,15 +125,16 @@ const { data } = useQuote({
 });
 ```
 
-### Result Type
+### Result<T> in Query Hooks
 
-SDK methods return `Result<T, E>`. Always check `.ok` before accessing `.value`:
+Some query hooks return `Result<T>` as their data (SDK methods that can fail return this). Always check `.ok` before accessing `.value`:
 
 ```tsx
-if (result.ok) {
-  const data = result.value;
+const { data: quoteResult } = useQuote({ params });
+if (quoteResult?.ok) {
+  const quote = quoteResult.value;
 } else {
-  console.error(result.error);
+  console.error(quoteResult?.error);
 }
 ```
 

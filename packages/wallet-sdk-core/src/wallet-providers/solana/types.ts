@@ -18,12 +18,14 @@ export type SolanaWalletDefaults = {
   confirmCommitment?: Commitment;
 };
 
+/** Configuration for constructing a `SolanaWalletProvider` backed by a raw private key. */
 export type PrivateKeySolanaWalletConfig = {
   privateKey: Uint8Array;
   endpoint: string;
   defaults?: SolanaWalletDefaults;
 };
 
+/** Configuration for constructing a `SolanaWalletProvider` backed by a browser-extension wallet adapter. */
 export type BrowserExtensionSolanaWalletConfig = {
   wallet: WalletContextState;
   endpoint: string;

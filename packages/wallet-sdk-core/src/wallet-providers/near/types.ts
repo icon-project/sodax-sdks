@@ -20,6 +20,7 @@ export type NearWalletDefaults = {
   depositDefault?: bigint;
 };
 
+/** Configuration for constructing a `NearWalletProvider` backed by a raw private key. */
 export type PrivateKeyNearWalletConfig = {
   rpcUrl: string;
   accountId: string;
@@ -27,6 +28,7 @@ export type PrivateKeyNearWalletConfig = {
   defaults?: NearWalletDefaults;
 };
 
+/** Configuration for constructing a `NearWalletProvider` backed by a browser-extension wallet. */
 export type BrowserExtensionNearWalletConfig = {
   wallet: NearConnector;
   defaults?: NearWalletDefaults;

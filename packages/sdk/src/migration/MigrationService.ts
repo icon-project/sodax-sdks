@@ -86,7 +86,18 @@ export type MigrationServiceConstructorParams = {
 };
 
 /**
- * MigrationService is a service that provides functionalities for migrating tokens between spoke chains.
+ * Facade service for all legacy ICON ecosystem token migrations in the SODAX SDK.
+ *
+ * Delegates to three focused sub-services:
+ * - `IcxMigrationService` — ICX/wICX ↔ SODA (hub chain) swaps
+ * - `BnUSDMigrationService` — legacy bnUSD (ICON/Sui/Stellar) ↔ new bnUSD (EVM chains)
+ * - `BalnSwapService` — BALN → SODA with optional lock-up periods
+ *
+ * All full-execution methods (`migrateIcxToSoda`, `migrateBaln`, `migratebnUSD`,
+ * `revertMigrateSodaToIcx`) handle the complete flow: spoke deposit → cross-chain relay
+ * → hub contract execution. The corresponding `createMigrate*Intent` methods only
+ * perform the spoke-side deposit and return relay data for manual relay control.
+ *
  * @namespace SodaxFeatures
  */
 export class MigrationService {
@@ -109,23 +120,16 @@ export class MigrationService {
   }
 
   /**
-   * Checks if the allowance is valid for the migration transaction.
-   * @param params - The parameters for the migration transaction.
-   * @param spokeProvider - The spoke provider.
-   * @returns {Promise<Result<boolean>>} - Returns the result of the allowance check or error
+   * Checks whether the caller has sufficient token allowance for a migration or revert-migration transaction.
    *
-   * @example
-   * const result = await migrationService.isAllowanceValid(
-   *   {
-   *     token: 'ICX', // Token to migrate
-   *     icx: 'cx...', // Address of the ICX or wICX token to migrate
-   *     amount: 1000n, // Amount to migrate (in ICX decimals, usually 18)
-   *     to: '0x...', // Address to receive the migrated SODA tokens
-   *   },
-   *   'migrate',
-   *   spokeProvider, // IconSpokeProvider instance
-   * );
+   * ICX and BALN migrations originate on ICON and do not require a pre-approval step — this
+   * method returns `true` immediately for those cases. For EVM-spoke bnUSD migrations the
+   * spender is the chain's `assetManager`. For hub-chain bnUSD reverts the spender is the
+   * user's router contract. For hub-chain ICX reverts the spender is the user's hub wallet.
    *
+   * @param params - Migration or revert-migration parameters (ICX, bnUSD, or BALN).
+   * @param action - Either `'migrate'` (legacy → new) or `'revert'` (new → legacy).
+   * @returns `true` if the current allowance covers `params.amount`; `false` otherwise.
    */
   public async isAllowanceValid<K extends SpokeChainKey>(
     params: MigrationParams<K> | MigrationRevertParams<K>,
@@ -233,23 +237,17 @@ export class MigrationService {
   }
 
   /**
-   * Approves the amount spending for the revert migration transaction.
-   * @param params - The parameters for the revert migration transaction.
-   * @param spokeProvider - The spoke provider.
-   * @param raw - Whether to return the raw transaction hash instead of the transaction receipt
-   * @returns {Promise<Result<TxReturnType<S, R>>>} - Returns the raw transaction payload or transaction hash
+   * Submits a token approval transaction required before executing a migration or revert-migration.
    *
-   * @example
-   * const result = await migrationService.approve(
-   *   {
-   *     amount: 1000n, // Amount of SODA tokens to revert
-   *     to: 'hx...', // Icon Address to receive the reverted SODA tokens as ICX
-   *   },
-   *   'revert',
-   *   spokeProvider, // SonicSpokeProvider instance
-   *   true // Optional raw flag to return the raw transaction hash instead of the transaction receipt
-   * );
+   * For `'migrate'` action the approved spender is the chain's `assetManager` (EVM spokes)
+   * or the Stellar trustline mechanism. For `'revert'` action the approved spender is either
+   * the user's router (hub EVM), the chain's `assetManager` (EVM spokes), or the Stellar
+   * trustline. ICX and BALN migrations do not require approval and are not handled here.
    *
+   * @param _params - Action params wrapping the migration parameters, wallet provider, and raw flag.
+   * @param action - Either `'migrate'` (legacy → new) or `'revert'` (new → legacy).
+   * @returns The submitted transaction hash (`Raw extends false`) or the unsigned transaction
+   *   object (`Raw extends true`) for the approval call, wrapped in a `Result`.
    */
   public async approve<K extends SpokeChainKey, Raw extends boolean>(
     _params: IcxRevertMigrationAction<Raw> | UnifiedBnUSDMigrateAction<K, Raw>,
@@ -471,44 +469,39 @@ export class MigrationService {
   }
 
   /**
-   * Migrates bnUSD tokens between legacy and new formats across supported spoke chains via the hub chain (sonic).
-   * Handles both legacy-to-new and new-to-legacy bnUSD migrations, enforcing validation and relaying the transaction.
+   * Executes a full bnUSD migration (legacy ↔ new) including cross-chain relay.
    *
-   * @param params - Migration parameters, including source/destination chain IDs, token addresses, amount, and recipient.
-   * @param spokeProvider - The SpokeProvider instance for the source chain.
-   * @param timeout - Optional timeout in milliseconds for the relay operation (default: 60 seconds).
-   * @param unchecked - Optional flag to skip validation checks (default: false).
-   * @returns {Promise<Result<TxHashPair>>}
-   *   Result containing `{ spokeTxHash, hubTxHash }` if successful, or an error describing the failure.
+   * Supports both directions:
+   * - Legacy bnUSD (ICON/Sui/Stellar) → new bnUSD (any EVM spoke) when `srcbnUSD` is a legacy token.
+   * - New bnUSD (any EVM spoke) → legacy bnUSD (ICON/Sui/Stellar) when `dstbnUSD` is a legacy token.
+   *
+   * The method deposits on the source spoke, relays to the hub via the intent relay API, and
+   * waits for the hub packet to land. When neither endpoint is Sonic mainnet it also waits for
+   * the secondary cross-chain intent to execute.
+   *
+   * @param _params - Action params including `UnifiedBnUSDMigrateParams`, wallet provider,
+   *   optional `timeout` (ms, default 60 s), and optional `unchecked` flag to skip validation.
+   * @returns `{ srcChainTxHash, dstChainTxHash }` on success, where `srcChainTxHash` is the
+   *   spoke deposit transaction and `dstChainTxHash` is the hub-side receipt.
    *
    * @example
-   * // Migrate legacy bnUSD to new bnUSD
+   * // Migrate legacy bnUSD (ICON) to new bnUSD (Sonic)
    * const result = await sodax.migration.migratebnUSD({
-   *   srcChainKey: '0x1.icon', // Source chain key (legacy)
-   *   dstChainKey: 'sonic',    // Destination chain key (new)
-   *   srcbnUSD: 'cx...',       // Legacy bnUSD token address
-   *   dstbnUSD: '0x...',       // New bnUSD token address
-   *   amount: 1000n,           // Amount to migrate
-   *   to: '0x...',             // Recipient address on destination chain
-   * }, iconSpokeProvider);
-   *
-   * // Reverse migration: new bnUSD to legacy bnUSD
-   * const result = await sodax.migration.migratebnUSD({
-   *   srcChainKey: 'sonic',    // Source chain key (new)
-   *   dstChainKey: '0x1.icon', // Destination chain key (legacy)
-   *   srcbnUSD: '0x...',       // New bnUSD token address
-   *   dstbnUSD: 'cx...',       // Legacy bnUSD token address
-   *   amount: 1000n,           // Amount to migrate
-   *   to: 'hx...',             // Recipient address on destination chain
-   * }, sonicSpokeProvider);
+   *   params: {
+   *     srcChainKey: '0x1.icon',
+   *     dstChainKey: 'sonic',
+   *     srcbnUSD: 'cx...',
+   *     dstbnUSD: '0x...',
+   *     amount: 1000n,
+   *     srcAddress: 'hx...',
+   *     dstAddress: '0x...',
+   *   },
+   *   raw: false,
+   *   walletProvider: iconWalletProvider,
+   * });
    *
    * if (result.ok) {
-   *   const { spokeTxHash, hubTxHash } = result.value;
-   *   console.log('[migrateBnUSD] hubTxHash', hubTxHash);
-   *   console.log('[migrateBnUSD] spokeTxHash', spokeTxHash);
-   * } else {
-   *   // Handle migration error
-   *   console.error('[migrateBnUSD] error', result.error);
+   *   const { srcChainTxHash, dstChainTxHash } = result.value;
    * }
    */
   async migratebnUSD<K extends SpokeChainKey>(
@@ -566,33 +559,16 @@ export class MigrationService {
   }
 
   /**
-   * Migrates ICX tokens to SODA tokens on the hub chain (sonic).
-   * This function handles the migration of ICX tokens to SODA tokens.
+   * Migrates ICX or wICX tokens from ICON to SODA on the hub chain (Sonic), including relay.
    *
-   * @param params - The parameters for the migration transaction.
-   * @param spokeProvider - The spoke provider.
-   * @param timeout - The timeout in milliseconds for the transaction. Default is 60 seconds.
-   * @returns {Promise<Result<TxHashPair>>}
-   * Returns a Result containing `{ spokeTxHash, hubTxHash }` if successful,
-   * or an error describing why the migration or relay failed.
+   * Validates the requested amount against available SODA liquidity in the migration contract
+   * before submitting. After the spoke deposit succeeds the transaction is relayed to the hub
+   * and the method waits for the hub packet confirmation before returning.
    *
-   * @example
-   * const result = await migrationService.migrateIcxToSoda(
-   *   {
-   *     address: 'cx...', // Address of the ICX or wICX token to migrate
-   *     amount: 1000n, // Amount to migrate (in ICX decimals, usually 18)
-   *     to: '0x...', // Address to receive the migrated SODA tokens (i.e. the hub chain address)
-   *   },
-   *   spokeProvider, // IconSpokeProvider instance
-   *   30000 // Optional timeout in milliseconds (default: 60000, i.e. 60 seconds)
-   * );
-   *
-   * if (!result.ok) {
-   *   // Handle error
-   * }
-   *
-   * const { spokeTxHash, hubTxHash } = result.value;
-   * console.log('Migration transaction hashes:', { spokeTxHash, hubTxHash });
+   * @param _params - Action params including `IcxMigrateParams` (source ICON address, token
+   *   address, amount, and EVM destination address), wallet provider, and optional `timeout` (ms).
+   * @returns `{ srcChainTxHash, dstChainTxHash }` on success; an error result if the liquidity
+   *   check fails, the deposit reverts, or the relay times out.
    */
   async migrateIcxToSoda(_params: IcxMigrateAction<false>): Promise<Result<TxHashPair>> {
     const { timeout } = _params;
@@ -624,32 +600,19 @@ export class MigrationService {
   }
 
   /**
-   * Creates a revert migration (SODA to ICX) intent and submits (relays) it to the spoke chain.
-   * @param params - The parameters for the revert migration transaction.
-   * @param spokeProvider - The SonicSpokeProvider instance.
-   * @param timeout - The timeout in milliseconds for the transaction. Default is 60 seconds.
+   * Reverts a previous ICX→SODA migration by swapping SODA back to wICX on the hub and
+   * bridging it to the ICON destination address, including cross-chain relay.
    *
-   * @returns {Promise<Result<TxHashPair>>}
-   * Returns a Result containing `{ spokeTxHash, hubTxHash }` if successful,
-   * or an error describing why the revert migration or relay failed.
+   * The SODA tokens are deposited into the user's hub wallet via the Sonic spoke, then the
+   * hub executes a reverse swap through the ICX migration contract and transfers the resulting
+   * wICX back to the specified ICON EOA address. The method waits for relay confirmation
+   * before returning.
    *
-   *
-   * @example
-   * const result = await migrationService.revertMigrateSodaToIcx(
-   *   {
-   *     amount: 1000n, // Amount of SODA tokens to revert
-   *     to: 'hx...', // Icon Address to receive the reverted SODA tokens as ICX
-   *   },
-   *   spokeProvider, // SonicSpokeProvider instance
-   *   30000 // Optional timeout in milliseconds (default: 60000, i.e. 60 seconds)
-   * );
-   *
-   * if (!result.ok) {
-   *   // Handle error
-   * }
-   *
-   * const { spokeTxHash, hubTxHash } = result.value;
-   * console.log('Revert migration transaction hashes:', { spokeTxHash, hubTxHash });
+   * @param _params - Action params including `IcxCreateRevertMigrationParams` (Sonic source
+   *   address, amount of SODA, and ICON destination EOA address), wallet provider, and optional
+   *   `timeout` (ms).
+   * @returns `{ srcChainTxHash, dstChainTxHash }` on success, where `srcChainTxHash` is the
+   *   Sonic deposit transaction and `dstChainTxHash` is the hub-side packet receipt.
    */
   async revertMigrateSodaToIcx(_params: IcxRevertMigrationAction<false>): Promise<Result<TxHashPair>> {
     const { timeout } = _params;
@@ -684,34 +647,18 @@ export class MigrationService {
   }
 
   /**
-   * Migrates BALN tokens to SODA tokens on the hub chain (sonic).
-   * This function handles the migration of BALN tokens to SODA tokens.
+   * Migrates BALN tokens from ICON to SODA on the hub chain (Sonic), including relay.
    *
-   * @param params - The parameters for the migration transaction.
-   * @param spokeProvider - The spoke provider.
-   * @param timeout - The timeout in milliseconds for the transaction. Default is 60 seconds.
-   * @returns {Promise<Result<TxHashPair>>}
-   * Returns a Result containing `{ spokeTxHash, hubTxHash }` if successful,
-   * or an error describing why the migration or relay failed.
+   * BALN tokens are deposited into the user's hub wallet via the ICON spoke. On the hub, the
+   * BALN swap contract swaps them to SODA at a rate determined by the chosen `lockupPeriod`
+   * (0–24 months). Longer lock-ups yield higher multipliers (0.5×–1.5×). The method waits
+   * for relay confirmation before returning.
    *
-   * @example
-   * const result = await migrationService.migrateBaln(
-   *   {
-   *     amount: 1000n,        // The amount of BALN tokens to swap
-   *     lockupPeriod: SIX_MONTHS,      // The lockup period for the swap (see LockupPeriod type)
-   *     to: '0x...',          // The hub (sonic) chain address that will receive the swapped BALN tokens
-   *     stake: true,         // Whether to stake the BALN tokens
-   *   },
-   *   spokeProvider, // IconSpokeProvider instance
-   *   30000 // Optional timeout in milliseconds (default: 60000, i.e. 60 seconds)
-   * );
-   *
-   * if (!result.ok) {
-   *   // Handle error
-   * }
-   *
-   * const { spokeTxHash, hubTxHash } = result.value;
-   * console.log('Migration transaction hashes:', { spokeTxHash, hubTxHash });
+   * @param _params - Action params including `BalnMigrateParams` (ICON source address, amount,
+   *   `lockupPeriod`, EVM destination address, and `stake` flag), wallet provider, and optional
+   *   `timeout` (ms).
+   * @returns `{ srcChainTxHash, dstChainTxHash }` on success, where `srcChainTxHash` is the
+   *   ICON deposit transaction and `dstChainTxHash` is the hub-side packet receipt.
    */
   async migrateBaln(_params: BalnMigrateAction<false>): Promise<Result<TxHashPair>> {
     const { timeout } = _params;
@@ -744,25 +691,17 @@ export class MigrationService {
   }
 
   /**
-   * Creates a BALN migration intent on spoke chain (icon).
+   * Builds and submits the spoke-side deposit for a BALN→SODA migration without relaying.
    *
-   * @param params - The parameters for the BALN migration transaction.
-   * @param spokeProvider - The spoke provider.
-   * @param raw - Whether to return the raw transaction hash instead of the transaction receipt
-   * @returns {Promise<Result<TxReturnType<IconSpokeProvider, R>>> } - Returns the raw transaction payload or transaction hash
+   * Encodes the BALN swap calldata (approve + swap with lock-up) and deposits the BALN tokens
+   * into the user's hub wallet on the ICON spoke. Returns both the ICON transaction result and
+   * the relay data needed to complete the cross-chain relay separately.
    *
-   * @example
-   * const result = await migrationService.createMigrateBalnIntent(
-   *   {
-   *     amount: 1000n,        // The amount of BALN tokens to swap
-   *     lockupPeriod: SIX_MONTHS,      // The lockup period for the swap (see LockupPeriod type)
-   *     to: '0x...',          // The hub (sonic) chain address that will receive the swapped BALN tokens
-   *     stake: true,         // Whether to stake the BALN tokens
-   *   },
-   *   spokeProvider, // IconSpokeProvider instance
-   *   true // Optional raw flag to return the raw transaction hash instead of the transaction receipt
-   * );
-   *
+   * @param _params - Action params including `BalnMigrateParams`, optional wallet provider
+   *   (`raw: false` only), `raw` flag, and optional `skipSimulation`.
+   * @returns `{ tx, relayData }` where `tx` is the ICON transaction hash or unsigned tx object
+   *   (depending on `raw`), and `relayData` contains the hub wallet address and encoded payload
+   *   for relay.
    */
   async createMigrateBalnIntent<Raw extends boolean>(
     _params: BalnMigrateAction<Raw>,
@@ -819,47 +758,21 @@ export class MigrationService {
   }
 
   /**
-   * Creates a bnUSD migration or reverse migration (legacy bnUSD to new bnUSD or vice versa) intent on a spoke chain.
+   * Builds and submits the spoke-side deposit for a bnUSD migration (legacy ↔ new) without relaying.
    *
-   * This function prepares the transaction data for migrating legacy bnUSD to new bnUSD,
-   * or for reverting (migrating new bnUSD back to legacy bnUSD), depending on the provided parameters.
-   * It performs validation on chain IDs and token addresses unless `unchecked` is set to true.
+   * Determines the migration direction from the token addresses:
+   * - `srcbnUSD` is a legacy token → encode a forward migration (legacy → new).
+   * - `dstbnUSD` is a legacy token → encode a reverse migration (new → legacy).
    *
-   * @param params - The parameters for the bnUSD migration or reverse migration transaction.
-   * @param spokeProvider - The spoke provider instance for the source chain.
-   * @param unchecked - If true, skips input validation (use with caution).
-   * @param raw - If true, returns the raw transaction hash instead of the transaction receipt.
-   * @returns {Promise<Result<TxReturnType<S, R>>>}
-   *   Returns a Result containing the transaction payload or hash, or an error if creation failed.
+   * Validates chain keys and token addresses unless `unchecked` is set to `true`. Returns both
+   * the spoke transaction result and relay data for manual relay control.
    *
-   * @example
-   * // Migrate legacy bnUSD to new bnUSD
-   * const result = await migrationService.createMigratebnUSDIntent(
-   *   {
-   *     srcChainKey: '0x1.icon', // Source chain key (legacy bnUSD chain)
-   *     dstChainKey: 'sonic',    // Destination chain key (new bnUSD chain)
-   *     srcbnUSD: 'cx...',       // Legacy bnUSD token address
-   *     dstbnUSD: '0x...',       // New bnUSD token address
-   *     amount: 1000n,           // Amount to migrate
-   *     to: '0x...',             // Recipient address on destination chain
-   *   } satisfies UnifiedBnUSDMigrateParams,
-   *   spokeProvider, // SpokeProvider instance
-   *   false,         // Optional unchecked flag (validation is skipped)
-   *   true           // Optional raw flag
-   * );
-   *
-   * // Reverse migration: new bnUSD to legacy bnUSD
-   * const result = await migrationService.createMigratebnUSDIntent(
-   *   {
-   *     srcChainKey: 'sonic',    // Source chain key (new bnUSD chain)
-   *     dstChainKey: '0x1.icon', // Destination chain key (legacy bnUSD chain)
-   *     srcbnUSD: '0x...',       // New bnUSD token address
-   *     dstbnUSD: 'cx...',       // Legacy bnUSD token address
-   *     amount: 1000n,           // Amount to migrate
-   *     to: 'hx...',             // Recipient address on destination chain
-   *   } satisfies UnifiedBnUSDMigrateParams,
-   *   spokeProvider
-   * );
+   * @param _params - Action params including `UnifiedBnUSDMigrateParams`, optional wallet
+   *   provider (`raw: false` only), `raw` flag, optional `unchecked` flag to bypass validation,
+   *   and optional `skipSimulation`.
+   * @returns `{ tx, relayData }` where `tx` is the source-chain transaction hash or unsigned tx
+   *   object (depending on `raw`), and `relayData` contains the hub wallet address and encoded
+   *   payload for relay.
    */
   async createMigratebnUSDIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: UnifiedBnUSDMigrateAction<K, Raw>,
@@ -973,31 +886,21 @@ export class MigrationService {
   }
 
   /**
-   * Creates a migration of ICX to SODA intent on spoke chain (icon).
-   * This function handles the migration of ICX or wICX tokens to SODA tokens on the hub chain.
-   * Note: This function does not relay the transaction to the spoke chain.
-   * You should call the `isAllowanceValid` function before calling this function to check if the allowance is valid.
-   * You should call the `relayTxAndWaitPacket` function after calling this function to relay the transaction to the spoke chain.
+   * Builds and submits the spoke-side deposit for an ICX/wICX → SODA migration without relaying.
    *
-   * @param {MigrationParams} params - The parameters for the migration transaction.
-   * @param {IconSpokeProvider} spokeProvider - The spoke provider.
-   * @param {boolean} raw - Whether to return the raw transaction hash instead of the transaction receipt
-   * @returns {Promise<Result<TxReturnType<IconSpokeProvider, R>>>} - Returns the raw transaction payload or transaction hash
+   * Validates that the token is either native ICX or wICX for ICON mainnet, then checks
+   * available SODA liquidity in the migration contract before depositing. Returns relay data
+   * so the caller can invoke `relayTxAndWaitPacket` independently.
    *
-   * @example
-   * const result = await migrationService.createMigrateIcxToSodaIntent(
-   *   {
-   *     icx: 'cx...', // Address of the ICX or wICX token to migrate
-   *     amount: 1000n, // Amount to migrate (in ICX decimals, usually 18)
-   *     to: '0x...', // Address to receive the migrated SODA tokens
-   *   },
-   *   spokeProvider, // IconSpokeProvider instance
-   *   true // Optional raw flag to return the raw transaction hash instead of the transaction receipt
-   * );
+   * Note: ICX migrations do not require a prior approval step (`isAllowanceValid` returns
+   * `true` immediately for ICON chains).
    *
-   * if (!result.ok) {
-   *   // Handle error
-   * }
+   * @param _params - Action params including `IcxMigrateParams` (ICON source address, ICX/wICX
+   *   token address, amount, and EVM destination address), optional wallet provider (`raw: false`
+   *   only), `raw` flag, and optional `skipSimulation`.
+   * @returns `{ tx, relayData }` where `tx` is the ICON transaction hash or unsigned tx object
+   *   (depending on `raw`), and `relayData` contains the hub wallet address and encoded payload
+   *   for relay.
    */
   async createMigrateIcxToSodaIntent<Raw extends boolean>(
     _params: IcxMigrateAction<Raw>,
@@ -1070,22 +973,22 @@ export class MigrationService {
   }
 
   /**
-   * Creates a revert migration intent transaction on the hub chain.
-   * Note: This function does not relay the transaction to the spoke chain.
-   * You should call the `isAllowanceValid` function before calling this function to check if the allowance is valid.
-   * You should call the `relayTxAndWaitPacket` function after calling this function to relay the transaction to the spoke chain.
-   * @param {IcxCreateRevertMigrationParams} - The parameters for the revert migration transaction.
-   * @param {SonicSpokeProvider} spokeProvider - The spoke provider.
-   * @param {boolean} raw - Whether to return the raw transaction hash instead of the transaction receipt
-   * @returns {Promise<Result<TxReturnType<SonicSpokeProvider, R>>>} - Returns the transaction hash or error
+   * Builds and submits the hub-side deposit for a SODA → wICX (ICX revert) migration without relaying.
    *
-   * @example
-   * const result = await migrationService.createRevertSodaToIcxMigrationIntent(
-   *   {
-   *     amount: 1000n, // Amount of SODA tokens to revert
-   *     to: 'hx...', // Icon Address to receive the reverted SODA tokens as ICX
-   *     action: 'revert',
-   *   },
+   * Encodes the full hub execution sequence: approve SODA to the ICX migration contract,
+   * reverse-swap SODA → wICX, and transfer wICX back to the ICON destination address via
+   * the asset manager. Deposits SODA from the Sonic spoke into the user's hub wallet, which
+   * then executes the encoded calls.
+   *
+   * Note: A SODA approval from the caller to their hub wallet must be set before calling this
+   * method. Use `isAllowanceValid` to check and `approve` to set it.
+   *
+   * @param _params - Action params including `IcxCreateRevertMigrationParams` (Sonic source
+   *   address, SODA amount, and ICON EOA destination address), optional wallet provider
+   *   (`raw: false` only), `raw` flag, and optional `skipSimulation`.
+   * @returns `{ tx, relayData }` where `tx` is the Sonic transaction hash or unsigned tx object
+   *   (depending on `raw`), and `relayData` contains the hub wallet address and encoded payload
+   *   for relay.
    */
   async createRevertSodaToIcxMigrationIntent<Raw extends boolean>(
     _params: IcxRevertMigrationAction<Raw>,

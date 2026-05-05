@@ -1,142 +1,123 @@
-## Executive Summary
-This branch refactors the SDK around a simpler principle: **the request payload’s “source chain key” is the main input that drives everything** (which chain code runs, and what types TypeScript expects).
+# SDK Architecture Reference
 
-See [`packages/sdk/CHAIN_ID_MIGRATION.md`](../CHAIN_ID_MIGRATION.md) for the chain-constants rename table and [`packages/sdk/CLAUDE.md`](../CLAUDE.md) for the per-service rules and error-handling convention referenced below.
+The SODAX SDK is organized around a single principle: **the request payload's "source chain key" is the main input that drives everything** — which chain code runs, and what types TypeScript expects.
 
-- **Spoke providers are eliminated**: the SDK no longer requires per-chain `*SpokeProvider` classes to carry logic or enable typing.
-- **Spoke logic is consolidated into services**: spoke-specific behavior now lives in per-chain spoke services, owned by a single `SpokeService` instance.
-- **Raw transaction flows are clarified**: “raw vs signed” is now a discriminated union on the params — `raw: true` vs `raw: false` — paired with a chain-narrowed `walletProvider` slot that TypeScript forbids when `raw: true` and requires when `raw: false`.
-- **Chain IDs are unified**: consumers migrate from many `*_CHAIN_ID` constants to a single `ChainKeys.*` namespace.
-- **All async SDK methods return `Result<T>`**: every public async method on `SpokeService`, `BackendApiService`, and every feature service (`SwapService`, `BridgeService`, `MoneyMarketService`, `StakingService`, `MigrationService`, `AssetService`, `ConcentratedLiquidityService`, `PartnerFeeClaimService`) now returns `Promise<Result<T>>`. Module-specific error unions (`MoneyMarketError<Code>`, `IntentError<Code>`, `StakingError<Code>`, `BridgeError<Code>`, `MigrationError<Code>`, `AssetServiceError<Code>`, `ConcentratedLiquidityError<Code>`, `RelayError`, and five Partner error types) are deleted along with their type-guard helpers; the underlying error message (`result.error.message`) and `.cause` are the new contract.
+Key design points:
 
-The most significant breaking changes are in `@sodax/types` (exports/layout and chain constants) and in SDK integration points that previously passed “spoke providers” rather than “(payload + chain key + wallet-provider slot)”.
+- [Concept 1: Spoke Services](#concept-1-spoke-services-no-spoke-providers) — The SDK routes by chain key; no per-chain `*SpokeProvider` classes are required.
+- [Concept 2: Sodax Facade & Stateful Services](#concept-2-sodax-facade--stateful-services) — A single `Sodax` instance owns the full service graph.
+- [Concept 3: Raw Transaction Handling](#concept-3-raw-transaction-handling) — `raw: true / false` is a discriminated union that enforces wallet-provider rules at compile time.
+- [Concept 4: Chain Keys](#concept-4-chain-keys) — All chain constants live under a single `ChainKeys.*` namespace.
+- [Concept 5: Result\<T\>](#concept-5-resultt) — Every public async method returns `Promise<Result<T>>` — no throws across service boundaries.
+- [Concept 6: Error-message convention](#concept-6-error-message-convention) — CODE form for catch blocks, prose form for precondition guards.
+
+For a direct mapping of old `*_CHAIN_ID` constants to `ChainKeys.*`, see [`packages/sdk/CHAIN_ID_MIGRATION.md`](../CHAIN_ID_MIGRATION.md).
 
 ---
-## Old vs New (quick examples)
-These examples are short and focused on integration shape.
 
-### Example A: “Pick a chain” (routing)
-**Old approach**: select the chain by constructing a chain-specific spoke provider (for example an EVM vs Solana vs Sui provider) and pass that provider into feature methods.
+## Integration Patterns
 
-**New approach**: select the chain by setting `srcChain` / `srcChainKey` in the payload (typically using `ChainKeys.*`). The SDK routes to the correct spoke service internally.
+### Example A: Selecting a chain (routing)
 
-### Example B: Signed tx vs raw tx (wallet provider rules)
-**Old approach**: use an optional `raw?: boolean` flag to switch between "build raw tx" and "execute signed tx". This shape makes it difficult for TypeScript to enforce when a `walletProvider` is required or forbidden.
+Select the chain by setting `srcChainKey` in the payload (using `ChainKeys.*`). The SDK routes to the correct spoke service internally.
 
-**New approach**: the `raw` tag and the `walletProvider` slot are a single discriminated union. `raw: true` forbids `walletProvider` (compile error if passed); `raw: false` requires it and narrows its type to the chain-appropriate provider interface:
+```ts
+// The chain key in the payload is all the SDK needs.
+sodax.swaps.createIntent({ params: { srcChainKey: ChainKeys.ETHEREUM_MAINNET, … }, raw: false, walletProvider });
+```
 
-- **Signed execution**: `{ raw: false, walletProvider: <chain-correct provider> }` → SDK signs/executes, returns a tx hash
-- **Raw transaction**: `{ raw: true }` → SDK returns an unsigned transaction payload
+### Example B: Signed tx vs raw tx
 
-Chain-specific narrowing of `walletProvider` still flows from `srcChain` / `srcChainKey`. See Concept 3 for the mechanism (`WalletProviderSlot<K, Raw>`).
+- **Signed execution**: `{ raw: false, walletProvider: <chain-correct provider> }` → SDK signs/executes, returns a tx hash.
+- **Raw transaction**: `{ raw: true }` → SDK returns an unsigned transaction payload.
+
+TypeScript enforces the pairing: passing `walletProvider` when `raw: true` is a compile error; omitting it when `raw: false` is also a compile error. Chain-specific narrowing of `walletProvider` flows from `srcChainKey`. See [Concept 3](#concept-3-raw-transaction-handling) for the mechanism.
 
 ### Example C: Chain constants
-**Old approach**: import and use individual chain ID constants (`SONIC_MAINNET_CHAIN_ID`, `ARBITRUM_MAINNET_CHAIN_ID`, …).
 
-**New approach**: import and use `ChainKeys` (`ChainKeys.SONIC_MAINNET`, `ChainKeys.ARBITRUM_MAINNET`, …).
+Import and use `ChainKeys`:
 
-For a direct mapping, see `packages/sdk/CHAIN_ID_MIGRATION.md`.
+```ts
+import { ChainKeys } from '@sodax/types';
 
-## Concept 1: Elimination of Spoke Providers
-### What changed
-All chain-specific `*SpokeProvider` classes were removed from the SDK’s core architecture. Previously, a spoke provider acted as a container that bundled:
+ChainKeys.SONIC_MAINNET       // was: SONIC_MAINNET_CHAIN_ID
+ChainKeys.ARBITRUM_MAINNET    // was: ARBITRUM_MAINNET_CHAIN_ID
+```
 
-- a wallet provider implementation
-- a chain configuration
-- chain-specific helper logic (and often type narrowing by class type)
+For a direct rename mapping see `packages/sdk/CHAIN_ID_MIGRATION.md`.
 
-This abstraction is gone. The SDK no longer expects callers to construct or pass spoke provider instances to drive the flow.
+---
 
-### How it works now (implementation)
-The SDK now relies on two simple building blocks:
+## Concept 1: Spoke Services (no spoke providers)
 
-- **Source chain keys in payloads**:
-  - swaps use `params.srcChain`
-  - spoke helpers use `srcChainKey`
-- **Typed wallet-provider slots** (`WalletProviderSlot<K, Raw>`):
-  - for signed execution (`raw: false`), a chain-specific `walletProvider` is required
-  - for raw transaction building (`raw: true`), `walletProvider` is forbidden
+### How it works
 
-At runtime, the SDK routes actions by chain key using `getChainType(chainKey)` (from `@sodax/types`) and dispatches into the correct per-chain spoke service.
+The SDK does not require callers to construct per-chain `*SpokeProvider` objects. Instead:
 
-### How exactly do source chain keys allow us to narrow down the chain type now that spoke providers are gone?
-The short version: **if you pass a specific chain key, TypeScript can “figure out the rest”.**
+- **Source chain keys in payloads**: swaps use `params.srcChainKey`; spoke helpers use `srcChainKey`.
+- **Typed wallet-provider slots** (`WalletProviderSlot<K, Raw>`): for signed execution (`raw: false`), a chain-specific `walletProvider` is required and chain-narrowed; for raw transaction building (`raw: true`), `walletProvider` is forbidden.
 
-In the swap flow:
+At runtime, the SDK routes actions by chain key using `getChainType(chainKey)` (from `@sodax/types`) and dispatches into the correct per-chain spoke service via `SpokeService`.
 
-- `CreateIntentParams<K extends SpokeChainKey>` includes `srcChain: K`.
-- That same `K` is used to determine what wallet provider type is expected, and what transaction type comes back.
+`SpokeService` owns one per-chain-family service instance (EVM, Sonic/hub, ICON, Sui, Solana, Stellar, Injective, Near, Stacks, Bitcoin) and provides a typed `getSpokeService(chainKey)` router.
 
-When a caller supplies a literal chain key (for example `ChainKeys.ETHEREUM_MAINNET`), TypeScript keeps it as a specific value type (not just “some string”). From that one piece of information, the types can narrow:
+### How chain keys narrow types
 
-- the chain family via `GetChainType<K>` (EVM vs ICON vs SOLANA vs …)
+When a caller supplies a literal chain key (e.g. `ChainKeys.ETHEREUM_MAINNET`), TypeScript preserves it as a specific value type. From that one value the type system derives:
+
+- the chain family via `GetChainType<K>` (EVM, ICON, SOLANA, …)
 - the correct wallet provider interface via `GetWalletProviderType<K>`
 - the correct raw transaction return shape via `TxReturnType<K, true>`
 
-So instead of “the provider class tells us what chain we’re on”, it’s now “the payload’s chain key tells us what chain we’re on”.
+So instead of "the provider class tells us the chain", it's "the payload's chain key tells us the chain".
 
 ---
 
-## Concept 2: Stateful Spoke Services
-### What changed
-Logic that used to live inside spoke providers has been moved into spoke services. These services are now treated as **long-lived instances** owned by a single SDK “agent” (`Sodax`) instead of being little helper objects created around each call.
+## Concept 2: Sodax Facade & Stateful Services
 
-### How it’s implemented
-The SDK now constructs and wires dependencies once, then reuses them:
+### The service graph
 
-- `Sodax` creates:
-  - `BackendApiService` (for config fetches and backend endpoints)
-  - `ConfigService` (runtime config + cached lookup tables)
-  - `EvmHubProvider` (hub chain access)
-  - `SpokeService` (routing facade + per-chain spoke services)
-- Feature services (swap / bridge / money market / staking / dex / partner / migration) depend on `SpokeService` + `ConfigService` rather than on spoke providers.
+`Sodax` constructs and wires all dependencies once at construction time, then reuses them across calls:
 
-`SpokeService` itself owns one per-chain-family service instance (EVM, Sonic/hub, ICON, Sui, Solana, Stellar, Injective, Near, Stacks, Bitcoin) and provides a typed router (`getSpokeService`) that selects the appropriate instance based on chain key.
+```
+Sodax
+ ├── swaps: SwapService          (intent-based swaps via solver)
+ ├── moneyMarket: MoneyMarketService  (cross-chain lending/borrowing)
+ ├── bridge: BridgeService       (cross-chain token transfers)
+ ├── staking: StakingService     (SODA token staking)
+ ├── dex: DexService             (concentrated liquidity, AMM)
+ ├── migration: MigrationService (ICX/bnUSD/BALN migration)
+ ├── partners: PartnerService    (partner fee claiming)
+ ├── recovery: RecoveryService   (withdraw stuck hub-wallet assets to a spoke chain)
+ ├── backendApi: BackendApiService
+ ├── config: ConfigService
+ ├── hubProvider: EvmHubProvider
+ └── spokeService: SpokeService
+```
 
-### What specific configurations are required when initializing the new spoke service instances?
-At the architectural level, “initializing spoke services” is now a responsibility of `Sodax` (or of an integrator constructing equivalent components). The required configuration is therefore the set of dependencies `Sodax` builds and shares:
+`RecoveryService` withdraws assets stuck in a user's hub wallet abstraction back to a spoke chain. This is useful when a cross-chain operation deposited to the hub but the destination step failed.
 
-- **`SodaxConfig` (base + overrides)**:
-  - provides defaults for hub addresses, relay/solver endpoints, supported chains/tokens, etc.
-  - can be deep-merged with overrides at construction time
-- **`BackendApiService` configuration**:
-  - drives dynamic configuration via `getAllConfig()` and related endpoints
-- **`ConfigService`** (constructed from the above):
-  - validates chain keys and token addresses at runtime
-  - provides chain/token lookup structures (supported tokens per chain, relay chain-id maps, etc.)
-- **Hub provider configuration**:
-  - required to derive hub wallet abstraction addresses and interact with hub contracts
+### Initialization
 
-Per-chain spoke services are then created either:
+```ts
+const sodax = new Sodax(optionalConfigOverride);
+await sodax.config.initialize(); // fetch dynamic config from backend; falls back to packaged defaults
+```
 
-- **Config-backed** (they receive `ConfigService` because they need addresses/tokens/relay mappings), or
-- **Lightweight** (they don’t need config lookups)
+### ConfigService as source of truth
 
-Net effect: instead of “a provider object per user per chain”, the SDK favors “one `Sodax` instance that owns the whole service graph”, configured once and reused.
-
-### Note on the “hubAssets / constants” cleanup
-Part of this refactor is removing older “static tables” (for example, the old `hubAssets`-style structures that lived under `@sodax/types` constants).
-
-**What you do now** is rely on `ConfigService` as the central source of truth:
-
-- it can load a newer config from the backend (`initialize()`), with a safe fallback to the packaged defaults
-- it exposes “is this token supported / is this chain key valid?” checks and lookup helpers
-- feature flows use those lookups instead of reaching into old global constant maps
+`ConfigService` replaces older static lookup tables:
+- Loads current chain/token config from the backend (`initialize()`), with a safe fallback to the packaged defaults in `@sodax/types`
+- Exposes "is this token supported / is this chain key valid?" checks and lookup helpers
+- Feature flows use `ConfigService` lookups instead of reaching into old global constant maps
 
 ---
 
 ## Concept 3: Raw Transaction Handling
-### What changed
-The old API style used an optional `raw?: boolean` flag in many places, which made it hard to model “raw vs signed” as distinct call shapes and hard for TypeScript to enforce the rule that a signed call needs a `walletProvider` while a raw call must not receive one.
 
-The branch ships a concrete **discriminated union** that pairs the `raw` tag with a chain-narrowed `walletProvider` slot. The mode is still declared by the `raw` field, but the pairing with `walletProvider` is now enforced by the type system at the call site — no runtime checks required.
+### The discriminated union: `WalletProviderSlot<K, Raw>`
 
-### Why the old approach was ambiguous
-When the mode is controlled by an optional boolean and `walletProvider` is always optional, TypeScript ends up with a single “maybe raw, maybe signed” call shape. That ambiguity makes it difficult to enforce “walletProvider required vs forbidden” without runtime validation or unsafe casts.
-
-### How it works today: `WalletProviderSlot<K, Raw>`
-
-The discriminated union lives in [`packages/types/src/common/common.ts`](../../types/src/common/common.ts) (search `WalletProviderSlot`):
+The discriminated union lives in [`packages/types/src/common/common.ts`](../../types/src/common/common.ts):
 
 ```ts
 export type WalletProviderSlot<K extends SpokeChainKey | ChainType, Raw extends boolean> =
@@ -145,13 +126,13 @@ export type WalletProviderSlot<K extends SpokeChainKey | ChainType, Raw extends 
     : { raw: false; walletProvider: GetWalletProviderType<K> };
 ```
 
-Three rules this enforces at compile time:
+Three rules enforced at compile time:
 
-1. **`raw: true`** → `walletProvider` is **forbidden** (TypeScript’s `?: never` rejects any value). The method returns a raw transaction payload — `TxReturnType<K, true>`, e.g. `EvmRawTransaction`, `IconRawTransaction`, `SolanaRawTransaction`.
-2. **`raw: false`** → `walletProvider` is **required**, and its type is narrowed to the chain-appropriate provider interface via `GetWalletProviderType<K>` (e.g. `IEvmWalletProvider` for `ChainKeys.ETHEREUM_MAINNET`, `ISolanaWalletProvider` for `ChainKeys.SOLANA_MAINNET`). The method signs/broadcasts and returns a transaction hash — `TxReturnType<K, false>`.
-3. **Chain narrowing flows from `K`** — when the caller passes a literal chain key (like `ChainKeys.SOLANA_MAINNET`), `K` is preserved as the specific literal, so `GetWalletProviderType<K>` resolves to the exact chain interface (`ISolanaWalletProvider`), not a broad union.
+1. **`raw: true`** → `walletProvider` is **forbidden** (`?: never` rejects any value). Returns a raw tx payload — `TxReturnType<K, true>`, e.g. `EvmRawTransaction`, `SolanaRawTransaction`.
+2. **`raw: false`** → `walletProvider` is **required**, chain-narrowed via `GetWalletProviderType<K>` (e.g. `IEvmWalletProvider` for `ChainKeys.ETHEREUM_MAINNET`). Signs/broadcasts, returns a tx hash — `TxReturnType<K, false>`.
+3. **Chain narrowing flows from `K`** — when the caller passes a literal chain key, `K` is preserved so `GetWalletProviderType<K>` resolves to the exact interface, not a broad union.
 
-Service methods pick up this slot by intersecting it with their action params, e.g.:
+Service methods include this slot via intersection, e.g.:
 
 ```ts
 export type SwapActionParams<K extends SpokeChainKey, Raw extends boolean> = {
@@ -162,17 +143,19 @@ export type SwapActionParams<K extends SpokeChainKey, Raw extends boolean> = {
 } & WalletProviderSlot<K, Raw>;
 ```
 
-Generic inference does the rest: callers write
+### Calling convention
 
 ```ts
 // Raw — walletProvider is a compile error if passed
-sodax.swap.createIntent({ params, raw: true });
+sodax.swaps.createIntent({ params, raw: true });
 
 // Signed — walletProvider is required and chain-narrowed
-sodax.swap.createIntent({ params, raw: false, walletProvider: evmWp });
+sodax.swaps.createIntent({ params, raw: false, walletProvider: evmWp });
 ```
 
-Return shape follows symmetrically — `TxReturnType<C extends SpokeChainKey | ChainType, Raw extends boolean>` (defined in the same file) is chain-family-conditional: EVM chains yield `EvmReturnType<Raw>`, Solana yields `SolanaReturnType<Raw>`, etc. Wrapped in `Promise<Result<TxReturnType<K, Raw>>>`, the final caller gets:
+### Return types
+
+`TxReturnType<C extends SpokeChainKey | ChainType, Raw extends boolean>` is chain-family-conditional: EVM chains yield `EvmReturnType<Raw>`, Solana yields `SolanaReturnType<Raw>`, etc. Wrapped in `Promise<Result<TxReturnType<K, Raw>>>`:
 
 ```ts
 // raw: true + ChainKeys.ETHEREUM_MAINNET
@@ -182,38 +165,24 @@ Promise<Result<EvmRawTransaction>>
 Promise<Result<Hash>>  // `0x…` tx hash
 ```
 
-This is the shipped shape, not a direction. A further simplification — dropping the `raw` flag entirely and inferring mode purely from `walletProvider` presence/absence — remains possible as a follow-up; because the discriminant is already a union, that change would be type-only with no runtime impact.
-
 ---
 
-## Concept 4: Chain Keys Migration
-### What changed
-The previous pattern exported many individual constants like `SONIC_MAINNET_CHAIN_ID`, `ARBITRUM_MAINNET_CHAIN_ID`, etc. This was simplified into a single namespace object:
+## Concept 4: Chain Keys
 
-- `ChainKeys.SONIC_MAINNET`
-- `ChainKeys.ARBITRUM_MAINNET`
-- …
-
-### How it’s implemented
 `@sodax/types` defines:
-
 - `ChainKeys` as a `const` object of string chain keys
 - `ChainKey` as the union of `ChainKeys` values
 
-The SDK (and integrators) import `ChainKeys` and use its members rather than importing dozens of separate constants. A dedicated reference mapping exists in `packages/sdk/CHAIN_ID_MIGRATION.md`.
+The SDK and integrators import `ChainKeys` and use its members rather than importing dozens of separate constants. Extension requires a single addition to `ChainKeys`.
 
-### Why this change was necessary
-- **Smaller, more maintainable export surface**: fewer top-level constants, less churn.
-- **Better typing**: `ChainKey` is derived from the single source of truth.
-- **Simpler extension**: adding a chain becomes a single addition to `ChainKeys` rather than multiple scattered exports.
+See `packages/sdk/CHAIN_ID_MIGRATION.md` for the full rename mapping.
 
 ---
 
-## Concept 5: `Result<T>` propagation
-### What changed
-Every public async method across the SDK now returns `Promise<Result<T>>`. Functions no longer throw across the service boundary; the result is a tagged success/failure envelope.
+## Concept 5: `Result<T>`
 
 ### Shape
+
 `Result<T, E = Error | unknown>` is defined in `packages/types/src/common/common.ts`:
 
 ```ts
@@ -223,27 +192,30 @@ export type Result<T, E = Error | unknown> =
 ```
 
 ### Where it applies
-Every async public method on `SpokeService`, `BackendApiService`, and every feature service (`SwapService`, `BridgeService`, `MoneyMarketService`, `StakingService`, `MigrationService`, `AssetService`, `ConcentratedLiquidityService`, `PartnerFeeClaimService`). Private helpers may still throw; the outer `try/catch` at each method’s boundary absorbs those and converts them to `{ ok: false, error }`.
+
+Every async public method on `SpokeService`, `BackendApiService`, and every feature service: `SwapService`, `BridgeService`, `MoneyMarketService`, `StakingService`, `MigrationService`, `AssetService`, `ConcentratedLiquidityService`, `PartnerFeeClaimService`, `RecoveryService`.
+
+Private helpers may still throw; the outer `try/catch` at each method's boundary absorbs those and converts them to `{ ok: false, error }`.
 
 ### Propagation pattern
-The SDK uses one idiom throughout:
-
-- Forwarding a sub-Result without re-wrapping: `if (!sub.ok) return sub;`
-- Success: `return { ok: true, value: … };`
-- Outer catch at every method’s boundary: `catch (error) { return { ok: false, error }; }`
-- Inner catches that tag a specific phase wrap the underlying error via `new Error('PHASE_FAILED', { cause: error })` — see Concept 6 for the CODE/prose rule.
-
-There is no `toResult` / `tryCatch` / `safeCall` helper. Explicit `try/catch` is deliberate — it keeps the error origin visible at the call site and matches the pattern set by `SpokeService`.
-
-### What replaces module error types
-Code that used to branch on a typed discriminator:
 
 ```ts
-// Before
-if (!result.ok && result.error.code === 'CREATE_SUPPLY_INTENT_FAILED') { … }
+// Forward a sub-Result without re-wrapping
+const sub = await this.subOperation();
+if (!sub.ok) return sub;
+
+// Success
+return { ok: true, value: … };
+
+// Outer catch at every method's boundary
+catch (error) { return { ok: false, error }; }
 ```
 
-now reads the Error message (and/or the `.cause`):
+There is no `toResult` / `tryCatch` / `safeCall` helper. Explicit `try/catch` is deliberate.
+
+### Branching on errors
+
+Module-specific typed error unions (e.g. `MoneyMarketError<Code>`, `IntentError<Code>`) are deleted. Branch on the error message (and/or `.cause`):
 
 ```ts
 // After
@@ -251,74 +223,200 @@ if (!result.ok && result.error instanceof Error &&
     result.error.message === 'CREATE_SUPPLY_INTENT_FAILED') { … }
 ```
 
-The CODE is still present — it has moved from a typed discriminator on `error.code` to the `Error` message string (see Concept 6).
-
 ---
 
 ## Concept 6: Error-message convention
-### What changed
-With module error unions gone, the SDK needed a predictable way to tell phase failures apart from precondition failures. Two forms of `new Error(…)` are now the convention.
 
-### Two forms, one rule
-**CODE form — `new Error('PHASE_FAILED', { cause: underlying })`**
-Use for **phase tags** — errors that originate in a `catch` block and wrap a lower-level failure. `PHASE` is `SCREAMING_SNAKE_CASE`, ending in `_FAILED` or `_TIMEOUT`. Examples: `SUBMIT_TX_FAILED`, `POST_EXECUTION_FAILED`, `SIMULATION_FAILED`, `RELAY_TIMEOUT`, `HTTP_REQUEST_FAILED`, `GET_POOL_REWARD_CONFIG_FAILED`.
+Two forms of `new Error(…)` coexist. **Rule of thumb: if the error comes from a `catch` block, it's CODE form. If it comes from an `invariant`-style guard before any async call, it's prose.**
+
+### CODE form — `new Error('PHASE_FAILED', { cause?: underlying })`
+
+For **phase tags** — errors that originate in a `catch` block and wrap a lower-level failure. `PHASE` is `SCREAMING_SNAKE_CASE`, ending in `_FAILED` or `_TIMEOUT`.
 
 ```ts
-try {
-  const v = await this.doWork();
-  return { ok: true, value: v };
-} catch (error) {
-  return { ok: false, error: new Error('DO_WORK_FAILED', { cause: error }) };
-}
+// With cause (a lower-level error was caught and re-wrapped)
+return { ok: false, error: new Error('POST_EXECUTION_FAILED', { cause: result.error }) };
+return { ok: false, error: new Error('HTTP_REQUEST_FAILED', { cause: new Error(`HTTP ${status}: ${text}`) }) };
+
+// Without cause (operation reported failure via boolean/status, not an exception)
+return { ok: false, error: new Error('SIMULATION_FAILED') };
+return { ok: false, error: new Error('RELAY_TIMEOUT') };
 ```
 
-**Prose form — `new Error('<human sentence>')`**
-Use for **preconditions / invariants** — input validation, unsupported chain type, config lookup failures. Typically paired with `invariant()` or an early-return guard before any async call. There is no underlying error to wrap — the prose *is* the information.
+### Prose form — `new Error('<human sentence>')`
+
+For **preconditions / invariants** — input validation, unsupported chain type, config lookup failures. No underlying error to wrap — the prose is the information.
 
 ```ts
 invariant(params.amount > 0n, 'Amount must be greater than 0');
 return { ok: false, error: new Error('Approve only supported for EVM/Stellar spoke chains') };
 ```
 
-### Rule of thumb
-If the error comes from a `catch` block, it is CODE form. If it comes from an `invariant`-style guard before any async call, it is prose.
-
 ### `Error.cause`
-ES2022 `Error.cause` is used whenever a lower-level error exists (most CODE-form sites). Attach it always — it preserves the original stack and structure. Omit it only when the failure condition is boolean/status-derived with no wrapped throw (`SIMULATION_FAILED` from a `value === false` check, `RELAY_TIMEOUT` from a polling-loop giveup, `TRANSACTION_VERIFICATION_FAILED` from a non-`success` status).
+
+Attach `cause` whenever a lower-level error exists (most CODE-form sites). Omit only when the failure is boolean/status-derived with no wrapped throw.
 
 See [`packages/sdk/CLAUDE.md`](../CLAUDE.md) for the full convention with worked examples.
 
 ---
 
-## Types package: most significant breaking changes
-Integrators upgrading `@sodax/types` should expect these breaking changes to impact imports and type usage:
+## Wallet-SDK Core: Configurable Wallet Providers
 
-- **Removal of the old constants index**:
-  - the previous `packages/types/src/constants/index.ts` export surface was deleted
-  - code importing `*_CHAIN_ID` (or other “constants index” exports) must migrate to `ChainKeys.*` and to the new chain/token modules
-- **Re-organization into domain modules**:
-  - chain keys, chain metadata, and token catalogs now live under clearer modules (not a single giant “constants” barrel)
-  - imports may need to be updated to new entrypoints
-- **Renames / new entrypoints you may have relied on implicitly**:
-  - several domains are now available as explicit modules (e.g. `chains`, `swap`, `wallet`, etc.)
-  - Bitcoin types are exposed under `bitcoin` (not `btc`)
-- **Chain-key-driven wallet typing**:
-  - the recommended way to express “wallet provider for chain X” is `GetWalletProviderType<ChainKey>`
-  - when you pass a specific `srcChain`/`srcChainKey`, TypeScript can infer the correct provider interface automatically
-- **`ChainId` type renamed to `SpokeChainKey`** — same value union (chain-key strings), exported from `@sodax/types`. Consumers that typed params as `ChainId` must switch.
-- **`XToken.xChainId` → `XToken.chainKey`** — the field on tokens now matches the `ChainKey` vocabulary used across the SDK.
-- **`AddressType` renamed to `BtcAddressType`** — Bitcoin-specific address-type union (`'P2PKH' | 'P2SH' | 'P2WPKH' | 'P2TR'`). The generic `AddressType` name is no longer exported; Bitcoin wallet-provider implementations must import the new name.
-- **Wallet-provider `chainType` discriminants** — every `I*WalletProvider` now declares `readonly chainType: '<CHAIN>'` as a literal field (`'EVM'`, `'BITCOIN'`, `'SOLANA'`, `'STELLAR'`, `'SUI'`, `'ICON'`, `'INJECTIVE'`, `'STACKS'`, `'NEAR'`). Consumers can discriminate at runtime without `instanceof`. Custom implementations must add the field.
-- **`RpcConfig` shape** — previously had chain-name properties (`.bitcoin`, `.stellar`, `.solana`, `.sui`, `.stacks`) and permissive string indexing. Now a mapped type keyed by `ChainKey` **values** (so `rpcConfig[ChainKeys.SONIC_MAINNET]`), with `BitcoinRpcConfig` for Bitcoin, `StellarRpcConfig` for Stellar, and `string` (the RPC URL) for every other chain. A latent typing bug in the old definition — where conditional branches silently collapsed to `string` because the mapped-type iterated property names instead of value literals — is fixed in the new shape.
-- **`IConfigApi` now returns `Promise<Result<T>>`** — every method on the backend-API contract (`getChains`, `getSwapTokens`, `getSwapTokensByChainId`, `getMoneyMarketTokens`, `getMoneyMarketTokensByChainId`). Any external implementer must update its method signatures to match.
-- **Module error types deleted** — `MoneyMarketError<Code>`, `IntentError<Code>`, `StakingError<Code>`, `BridgeError<Code>`, `MigrationError<Code>`, `AssetServiceError<Code>`, `ConcentratedLiquidityError<Code>`, `RelayError`, plus five Partner error types and their type-guard helpers (`isIntentCreationFailedError`, `isIntentSubmitTxFailedError`, `isIntentPostExecutionFailedError`, `isWaitUntilIntentExecutedFailed`, `isIntentCreationUnknownError`, `isSetSwapPreferenceError`, `isCreateIntentAutoSwapError`, `isWaitIntentAutoSwapError`, `isUnknownIntentAutoSwapError`). See Concept 5 for the `Result<T>` replacement and Concept 6 for how the error CODE now appears on `error.message`.
+`packages/wallet-sdk-core` implements all chain-specific signing and broadcasting. It is dependency-free from React and can be used directly in Node.js scripts or bots.
 
-If you maintain wrappers/enums around chain identifiers, they should now accept/emit the **string keys from `ChainKeys`**.
+### Folder-per-provider layout
+
+Each chain lives in `src/wallet-providers/<chain>/` with co-located files:
+
+```
+wallet-providers/
+├── BaseWalletProvider.ts      # Abstract base
+├── evm/
+│   ├── EvmWalletProvider.ts
+│   ├── types.ts
+│   ├── EvmWalletProvider.test.ts
+│   └── index.ts
+├── solana/ …
+├── sui/ …
+├── icon/ …
+├── injective/ …
+├── stellar/ …
+├── stacks/ …
+├── bitcoin/ …
+└── near/ …
+```
+
+### `BaseWalletProvider<TDefaults>`
+
+Abstract generic base class shared by all nine providers:
+
+```ts
+abstract class BaseWalletProvider<TDefaults extends object> {
+  protected readonly defaults: TDefaults;
+
+  abstract getWalletAddress(): Promise<string>;
+
+  // Merge per-call options over defaults[key] (for per-method defaults objects, e.g. EVM)
+  protected mergePolicy<K extends keyof TDefaults>(key: K, options?: …): TDefaults[K]
+
+  // Merge per-call options over the entire defaults object (for flat defaults, e.g. ICON)
+  protected mergeDefaults(options?: Partial<TDefaults>): TDefaults
+}
+```
+
+Subclasses call `super(config.defaults)` in their constructor and use `mergePolicy` / `mergeDefaults` to apply per-call overrides.
+
+### Dual config variants
+
+Every provider supports two runtime modes, discriminated by field presence (EVM, ICON, Solana, Sui, Stellar, Stacks, Injective, NEAR) or by an explicit `type` field (Bitcoin):
+
+| Mode | When to use | Key fields |
+|------|-------------|------------|
+| **Private key** | Node.js scripts, bots, E2E tests | `privateKey`, `rpcUrl` |
+| **Browser extension** | dApps (wallet SDK React layer hands pre-built clients in) | `walletClient` / `walletAddress` (chain-specific) |
+
+### `chainType` discriminant
+
+Every `I*WalletProvider` interface declares a `readonly chainType: '<CHAIN>'` literal:
+
+```ts
+// Discriminate at runtime without instanceof
+if (walletProvider.chainType === 'EVM') { … }
+if (walletProvider.chainType === 'SOLANA') { … }
+```
+
+Supported values: `'EVM'`, `'BITCOIN'`, `'SOLANA'`, `'STELLAR'`, `'SUI'`, `'ICON'`, `'INJECTIVE'`, `'STACKS'`, `'NEAR'`.
+
+### Supported chains
+
+| Chain | Provider class | Native SDK |
+|-------|----------------|------------|
+| EVM (12 chains) | `EvmWalletProvider` | viem |
+| Solana | `SolanaWalletProvider` | @solana/web3.js |
+| Sui | `SuiWalletProvider` | @mysten/sui |
+| ICON | `IconWalletProvider` | icon-sdk-js |
+| Injective | `InjectiveWalletProvider` | @injectivelabs/sdk-ts |
+| Stellar | `StellarWalletProvider` | @stellar/stellar-sdk |
+| Stacks | `StacksWalletProvider` | @stacks/transactions |
+| Bitcoin | `BTCWalletProvider` | bitcoinjs-lib (PSBT) |
+| NEAR | `NearWalletProvider` | near-api-js |
 
 ---
 
-## This PR is a preview (expect follow-ups)
-This branch represents a big direction change, but it’s still a draft of the final SDK v2 shape.
+## Wallet-SDK React: Chain Registry & XService/XConnector
 
-- Expect more polishing and follow-up PRs as the API settles.
-- Longer-term, the direction is that the SDK becomes more “self-contained” (with `Sodax` owning the service graph and config), and the split between `@sodax/sdk` and `@sodax/types` may continue to evolve.
+`packages/wallet-sdk-react` is the React layer over wallet-sdk-core. It manages wallet connections, connector discovery, and exposes typed wallet providers to the SDK layer via a single hook.
+
+### Core abstractions
+
+- **`XService`** — per-chain service singleton. Manages the live connection, provides signing, and exposes a typed `walletProvider` (implements the SDK's `I*WalletProvider` interface).
+- **`XConnector`** — wallet connector adapter. Represents one installable wallet (MetaMask, Phantom, Hana, etc.) and knows how to initiate a connection to an `XService`.
+
+### Chain registry (`chainRegistry.ts`)
+
+Central dispatch that registers all nine chains. Each chain provides a `ChainServiceFactory`:
+
+```ts
+type ChainServiceFactory = {
+  createService(walletConfig?: SodaxWalletConfig): XService;
+  defaultConnectors(walletConfig?: SodaxWalletConfig): XConnector[];
+  displayName: string;
+  iconUrl?: string;
+  providerManaged: boolean;                                         // true → needs a React context provider
+  createActions?(service, getStore): ChainActions;
+  createWalletProvider?(service, getStore): IWalletProvider | undefined;
+  discoverConnectors?(service, getStore): Promise<void>;
+};
+```
+
+`createChainServices()` iterates the registry, instantiates services and connectors, registers `ChainActions` for non-provider chains, and triggers async connector discovery (Stellar, NEAR, Bitcoin, Stacks).
+
+### Provider-managed vs non-provider chains
+
+**Provider-managed (EVM, Solana, Sui)** — require a React context wrapper (wagmi, wallet-adapter, dapp-kit). Each has three components:
+
+- **Provider** — wraps the chain's native SDK provider (e.g. wagmi's `WagmiProvider`)
+- **Hydrator** — syncs native SDK state → Zustand store. Only this component writes connection state (single-writer rule).
+- **Actions** — registers `ChainActions` without writing state directly.
+
+**Non-provider (Bitcoin, ICON, Injective, Stellar, NEAR, Stacks)** — use direct browser extension APIs. No React context required; `ChainActions` are registered directly by the chain registry.
+
+### Zustand store
+
+`useXWalletStore` is the centralized connection state:
+- Middleware stack: `devtools → persist → immer`
+- Only `xConnections` is persisted (localStorage key: `'xwagmi-store'`)
+- `cleanupDisabledConnections()` removes stale persisted connections on startup
+
+### Bridge to the SDK: `useWalletProvider`
+
+```ts
+const walletProvider = useWalletProvider({ xChainId: ChainKeys.ETHEREUM_MAINNET });
+// walletProvider is typed as IEvmWalletProvider — ready to pass as `walletProvider` in SDK calls
+
+await sodax.swaps.createIntent({ params, raw: false, walletProvider });
+```
+
+This is the primary integration point between the React wallet layer and the SDK's typed `walletProvider` slots.
+
+---
+
+## @sodax/types: Breaking Changes from v1
+
+Integrators upgrading from v1 will encounter these breaking changes:
+
+- **Removal of the old constants index**: the previous `packages/types/src/constants/index.ts` export surface was deleted. Code importing `*_CHAIN_ID` (or other "constants index" exports) must migrate to `ChainKeys.*` and to the new chain/token modules.
+- **Re-organization into domain modules**: chain keys, chain metadata, and token catalogs now live under clearer modules (not a single giant "constants" barrel). Imports may need updating to new entrypoints.
+- **Renames / new entrypoints**:
+  - Bitcoin types are exposed under `bitcoin` (not `btc`)
+  - Several domains available as explicit modules (e.g. `chains`, `swap`, `wallet`)
+- **Chain-key-driven wallet typing**: the recommended way to express "wallet provider for chain X" is `GetWalletProviderType<ChainKey>`. When you pass a specific `srcChainKey`, TypeScript infers the correct provider interface automatically.
+- **`ChainId` type renamed to `SpokeChainKey`** — same value union (chain-key strings). Consumers that typed params as `ChainId` must switch.
+- **`XToken.xChainId` → `XToken.chainKey`** — the field on tokens now matches the `ChainKey` vocabulary.
+- **`AddressType` renamed to `BtcAddressType`** — Bitcoin-specific address-type union (`'P2PKH' | 'P2SH' | 'P2WPKH' | 'P2TR'`). Bitcoin wallet-provider implementations must import the new name.
+- **Wallet-provider `chainType` discriminants** — every `I*WalletProvider` now declares `readonly chainType: '<CHAIN>'` as a literal field. Custom implementations must add the field.
+- **`RpcConfig` shape** — now a mapped type keyed by `ChainKey` **values** (`rpcConfig[ChainKeys.SONIC_MAINNET]`), with `BitcoinRpcConfig` for Bitcoin, `StellarRpcConfig` for Stellar, and `string` (the RPC URL) for every other chain.
+- **`IConfigApi` now returns `Promise<Result<T>>`** — every method on the backend-API contract (`getChains`, `getSwapTokens`, `getSwapTokensByChainId`, `getMoneyMarketTokens`, `getMoneyMarketTokensByChainId`). External implementers must update method signatures.
+- **Module error types deleted** — `MoneyMarketError<Code>`, `IntentError<Code>`, `StakingError<Code>`, `BridgeError<Code>`, `MigrationError<Code>`, `AssetServiceError<Code>`, `ConcentratedLiquidityError<Code>`, `RelayError`, plus five Partner error types and their type-guard helpers. See [Concept 5](#concept-5-resultt) for the `Result<T>` replacement and [Concept 6](#concept-6-error-message-convention) for how error CODEs appear on `error.message`.
+
+If you maintain wrappers/enums around chain identifiers, they should now accept/emit the **string keys from `ChainKeys`**.
