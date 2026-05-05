@@ -47,31 +47,42 @@ Each provider:
 - `mergePolicy(key, options)` — merge over a slice of defaults keyed by method (e.g. `defaults.sendTransaction`)
 - `mergeDefaults(options)` — merge over a flat defaults object
 
-Merging is **shallow** (top-level only) via `utils/shallowMerge`. Nested objects are replaced wholesale, not deep-merged — see JSDoc on `shallowMerge`.
+Merging is **shallow** (top-level only) via `shallowMerge` in `src/utils/merge.ts` (imported internally through `src/utils/index.ts`).
+Nested objects are replaced wholesale, not deep-merged — see JSDoc on `shallowMerge`.
 
 Example interfaces:
 - `IEvmWalletProvider`: `sendTransaction()`, `waitForTransactionReceipt()`
 - `ISolanaWalletProvider`: `sendTransaction()`, `buildV0Txn()`, `getAssociatedTokenAddress()`
 - `IBitcoinWalletProvider`: `signTransaction()`, `signEcdsaMessage()`, `signBip322Message()`
 
-### Dual Config Pattern
+### Config variants (discriminants)
 
-Every provider supports two modes:
+Every provider supports two modes (private-key vs browser/extension), but **the config union discriminant is provider-specific**:
 
 ```typescript
-// For scripts, testing, CI
-const provider = new EvmWalletProvider({
-  type: 'privateKey',
-  privateKey: '0x...',
-  chainId: SONIC_MAINNET_CHAIN_ID,
-  rpcUrl: 'https://...',
+// EVM: discriminates by field presence (NO `type` field)
+new EvmWalletProvider({
+  privateKey: '0x…',
+  chainId: ChainKeys.SONIC_MAINNET, // from '@sodax/types'
+  rpcUrl: 'https://…',
 });
 
-// For browser dApps (uses injected wallet)
-const provider = new EvmWalletProvider({
-  type: 'browserExtension',
+new EvmWalletProvider({
   walletClient: viemWalletClient,
   publicClient: viemPublicClient,
+});
+
+// Bitcoin: discriminates by explicit uppercase `type`
+new BitcoinWalletProvider({
+  type: 'PRIVATE_KEY',
+  privateKey: '0x…',
+  network: 'TESTNET',
+});
+
+new BitcoinWalletProvider({
+  type: 'BROWSER_EXTENSION',
+  walletsKit: myWalletsKit,
+  network: 'TESTNET',
 });
 ```
 
@@ -79,7 +90,7 @@ const provider = new EvmWalletProvider({
 
 Follow an existing implementation (e.g. `evm/`):
 1. Create folder `src/wallet-providers/<chain>/`
-2. In `<chain>/types.ts`: define `PrivateKey<Chain>WalletConfig`, `BrowserExtension<Chain>WalletConfig`, the `<Chain>WalletConfig` discriminated union, the `<Chain>Defaults` shape, and the provider interface `I<Chain>WalletProvider` extending `WalletAddressProvider`
+2. In `<chain>/types.ts`: define `PrivateKey<Chain>WalletConfig`, `BrowserExtension<Chain>WalletConfig`, the `<Chain>WalletConfig` discriminated union, the `<Chain>Defaults` shape, and the provider interface `I<Chain>WalletProvider` extending `WalletAddressProvider`. **Exception:** when the credential is not a plain private key (e.g. the config supports both `privateKey` and `mnemonics`), use a descriptive name and a nested credential object instead of the `PrivateKey*` literal pattern — see `SecretInjectiveWalletConfig` (with `secret: { privateKey } | { mnemonics }`) as the canonical example.
 3. In `<chain>/<Chain>WalletProvider.ts`: implement the class extending `BaseWalletProvider<<Chain>Defaults>`, calling `super(walletConfig.defaults)` and discriminating on config type
 4. Add `<chain>/<Chain>WalletProvider.test.ts` covering constructor variants, defaults merge, and core methods
 5. Add `<chain>/index.ts` barrel: `export * from './types.js'; export * from './<Chain>WalletProvider.js';`
@@ -88,11 +99,13 @@ Follow an existing implementation (e.g. `evm/`):
 ## Biome Overrides (Tech Debt)
 
 This package has a local `biome.json` that relaxes several root rules:
-- `noNonNullAssertion: off`
-- `noExplicitAny: off`
-- `noStaticOnlyClass: off`
+- `noNonNullAssertion: off` (style)
+- `noUselessElse: off` (style)
+- `noExplicitAny: off` (suspicious)
+- `noStaticOnlyClass: off` (complexity)
+- `noUnusedFunctionParameters: off` (correctness)
 
-These are tech debt. When modifying code in this package, fix non-null assertions and `any` types where possible rather than relying on these overrides.
+These are tech debt. When modifying code in this package, fix non-null assertions, `any` types, useless `else` branches, and unused parameters where possible rather than relying on these overrides.
 
 ## Build
 

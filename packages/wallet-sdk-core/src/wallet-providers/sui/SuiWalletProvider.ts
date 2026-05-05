@@ -44,10 +44,6 @@ export function isBrowserExtensionSuiWallet(wallet: SuiWallet): wallet is Browse
   return 'wallet' in wallet && 'account' in wallet;
 }
 
-export function isSuiWallet(wallet: SuiWallet): wallet is SuiWallet {
-  return isPkSuiWallet(wallet) || isBrowserExtensionSuiWallet(wallet);
-}
-
 /**
  * Bridge the deliberately-narrow SuiTransaction interface (which only guarantees `toJSON()`)
  * to a concrete Transaction instance. Returns the input directly when it's already a

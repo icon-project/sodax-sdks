@@ -125,6 +125,10 @@ export class StellarWalletProvider extends BaseWalletProvider<StellarWalletDefau
     }
   }
 
+  /**
+   * Signs the given XDR-encoded transaction and returns the signed XDR.
+   * @throws {StellarWalletError} with code `SIGN_TX_ERROR` if signing fails.
+   */
   public async signTransaction(tx: XDR): Promise<XDR> {
     try {
       if (isStellarPkWallet(this.wallet)) {
@@ -146,6 +150,10 @@ export class StellarWalletProvider extends BaseWalletProvider<StellarWalletDefau
     }
   }
 
+  /**
+   * Polls the Horizon server until the transaction is confirmed or the timeout is reached.
+   * @throws {StellarWalletError} with code `TX_RECEIPT_TIMEOUT` if the transaction is not found within `pollTimeout` ms.
+   */
   public async waitForTransactionReceipt(
     txHash: string,
     options?: Pick<StellarWalletDefaults, 'pollInterval' | 'pollTimeout'>,

@@ -16,31 +16,29 @@ pnpm add @sodax/wallet-sdk-react
 
 ## Wire Providers
 
+RPC URLs are injected via `config.chains` — each chain entry takes `{ rpcUrl: string }`.
+
 ```tsx
 // providers.tsx
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { SodaxProvider } from '@sodax/dapp-kit';
-import type { SodaxConfig } from '@sodax/sdk';
-import type { RpcConfig } from '@sodax/sdk';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { SodaxProvider, createSodaxQueryClient } from '@sodax/dapp-kit';
+import { ChainKeys, type DeepPartial, type SodaxConfig } from '@sodax/sdk';
 
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { staleTime: 5_000, retry: 2 } },
-});
+const queryClient = createSodaxQueryClient();
 
-const rpcConfig: RpcConfig = {
-  '0xa4b1.arbitrum': 'https://arb1.arbitrum.io/rpc',
-  '0x2105.base': 'https://mainnet.base.org',
-  '0x38.bsc': 'https://bsc-dataseed.binance.org',
-  '0x89.polygon': 'https://polygon-rpc.com',
-  // Add chains your dApp needs
+const sodaxConfig: DeepPartial<SodaxConfig> = {
+  chains: {
+    [ChainKeys.ARBITRUM_MAINNET]: { rpcUrl: 'https://arb1.arbitrum.io/rpc' },
+    [ChainKeys.BASE_MAINNET]: { rpcUrl: 'https://mainnet.base.org' },
+    [ChainKeys.BSC_MAINNET]: { rpcUrl: 'https://bsc-dataseed.binance.org' },
+    [ChainKeys.POLYGON_MAINNET]: { rpcUrl: 'https://polygon-rpc.com' },
+    // Add chains your dApp needs
+  },
 };
-
-// Optional SDK config (partner fees, custom endpoints)
-const sdkConfig: SodaxConfig = {};
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <SodaxProvider config={sdkConfig} rpcConfig={rpcConfig}>
+    <SodaxProvider config={sodaxConfig}>
       <QueryClientProvider client={queryClient}>
         {children}
       </QueryClientProvider>
@@ -51,20 +49,50 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
 ### Optional: Add Wallet Provider
 
-If you want to use `@sodax/dapp-kit` wallet helpers like `useSpokeProvider`, install and wrap `SodaxWalletProvider`:
+If you want to use `@sodax/wallet-sdk-react` for wallet connectivity, wrap `SodaxWalletProvider` inside `QueryClientProvider`:
 
 ```tsx
-import { SodaxWalletProvider } from '@sodax/wallet-sdk-react';
+import { SodaxWalletProvider, type SodaxWalletConfig } from '@sodax/wallet-sdk-react';
+
+const walletConfig: SodaxWalletConfig = {
+  EVM: {
+    chains: {
+      [ChainKeys.BSC_MAINNET]: { rpcUrl: 'https://bsc-dataseed.binance.org' },
+      [ChainKeys.BASE_MAINNET]: { rpcUrl: 'https://mainnet.base.org' },
+    },
+  },
+};
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <SodaxProvider config={sdkConfig} rpcConfig={rpcConfig}>
+    <SodaxProvider config={sodaxConfig}>
       <QueryClientProvider client={queryClient}>
-        <SodaxWalletProvider>{children}</SodaxWalletProvider>
+        <SodaxWalletProvider config={walletConfig}>{children}</SodaxWalletProvider>
       </QueryClientProvider>
     </SodaxProvider>
   );
 }
+```
+
+## `createSodaxQueryClient` (optional)
+
+`createSodaxQueryClient` returns a `QueryClient` pre-wired with a `MutationCache.onError` hook for global mutation observability. Use it instead of `new QueryClient()`:
+
+```tsx
+import { createSodaxQueryClient } from '@sodax/dapp-kit';
+
+// Default: logs every mutation failure as `[sodax] Mutation error: <error>`
+const queryClient = createSodaxQueryClient();
+
+// Wire to your own logger
+const queryClient = createSodaxQueryClient({
+  onMutationError: (e) => Sentry.captureException(e),
+});
+
+// Silence a specific mutation locally via meta.silent
+const swap = useSwap({
+  mutationOptions: { meta: { silent: true }, onError: (e) => toast.error(e.message) },
+});
 ```
 
 ## Initialize SDK (Optional)
@@ -86,10 +114,12 @@ export function useInitializeSodax() {
 }
 ```
 
-## Chain ID Constants
+## Chain Key Constants
 
 ```tsx
 import {
+  ChainKeys,
+  // or individual constants:
   SONIC_MAINNET_CHAIN_ID,      // '0x92.sonic' (hub)
   ARBITRUM_MAINNET_CHAIN_ID,   // '0xa4b1.arbitrum'
   BASE_MAINNET_CHAIN_ID,       // '0x2105.base'

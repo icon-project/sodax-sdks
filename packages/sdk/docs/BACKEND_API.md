@@ -1,27 +1,34 @@
 # Backend API Service Documentation
 
-The BackendApiService provides a comprehensive interface to interact with the Sodax Backend API, offering access to Intent, Solver, and Money Market data. This service is automatically initialized when creating a Sodax instance and can be accessed through the `backendApiService` property.
+The `BackendApiService` provides a comprehensive HTTP client for the SODAX backend API, covering intent lookup, swap submission, solver orderbook, money market data, and runtime configuration. It implements `IConfigApi` so that `ConfigService` and other services can fetch dynamic chain/token configuration without coupling to a concrete HTTP implementation.
+
+The service is automatically instantiated when you create a `Sodax` instance and is available as `sodax.backendApi`.
+
+All public methods return `Promise<Result<T>>` — they never throw. On network failure, timeout, or a non-2xx HTTP response the returned `Result` has `ok: false` with a descriptive `Error` in the `error` field.
 
 ## Table of Contents
 
 - [Initialization](#initialization)
 - [Configuration](#configuration)
+- [Result\<T\> and Error Handling](#resultt-and-error-handling)
 - [Intent Endpoints](#intent-endpoints)
+- [Swap Endpoints](#swap-endpoints)
 - [Solver Endpoints](#solver-endpoints)
 - [Money Market Endpoints](#money-market-endpoints)
-- [Error Handling](#error-handling)
-- [Examples](#examples)
+- [Config Endpoints](#config-endpoints)
+- [Utility Methods](#utility-methods)
+- [Complete Example](#complete-example)
+- [Notes](#notes)
 
 ## Initialization
 
-The BackendApiService is automatically initialized when creating a Sodax instance. You can configure it by passing a `backendApiConfig` in the Sodax constructor.
+`BackendApiService` is automatically created when you construct a `Sodax` instance. Access it via `sodax.backendApi`.
 
 ### Basic Initialization
 
 ```typescript
 import { Sodax } from '@sodax/sdk';
 
-// Initialize with default configuration
 const sodax = new Sodax();
 const backendApi = sodax.backendApi;
 ```
@@ -37,24 +44,48 @@ const sodax = new Sodax({
     timeout: 60000, // 60 seconds
     headers: {
       'Authorization': 'Bearer your-token',
-      'X-Custom-Header': 'custom-value'
-    }
-  }
+      'X-Custom-Header': 'custom-value',
+    },
+  },
 });
 
 const backendApi = sodax.backendApi;
 ```
 
-## Configuration
+### Initialization with `sodax.config`
 
-### BackendApiConfig Type
+If you need dynamic chain/token config fetched from the backend, call `initialize()` on `ConfigService` after construction. `BackendApiService` is the underlying HTTP transport that `ConfigService` uses.
 
 ```typescript
-type BackendApiConfig = {
-  baseURL?: HttpUrl;           // API endpoint URL (default: 'https://api.sodax.com/v1/be')
-  timeout?: number;            // Request timeout in milliseconds (default: 30000)
-  headers?: Record<string, string>; // Custom headers (default: Content-Type and Accept)
+const sodax = new Sodax();
+const result = await sodax.config.initialize();
+if (!result.ok) {
+  console.error('Config initialization failed:', result.error);
 }
+```
+
+## Configuration
+
+### `ApiConfig` Type
+
+```typescript
+type ApiConfig = {
+  baseURL: string;                    // API endpoint URL (default: 'https://api.sodax.com/v1/be')
+  timeout: number;                    // Request timeout in milliseconds (default: 30000)
+  headers?: Record<string, string>;   // Custom headers (default: Content-Type and Accept)
+};
+```
+
+### `RequestOverrideConfig` Type
+
+Every public method accepts an optional `RequestOverrideConfig` as its last argument. These per-call overrides take precedence over the `ApiConfig` the service was constructed with.
+
+```typescript
+type RequestOverrideConfig = {
+  baseURL?: string;
+  timeout?: number;
+  headers?: Record<string, string>;
+};
 ```
 
 ### Default Configuration
@@ -68,22 +99,66 @@ const DEFAULT_BACKEND_API_HEADERS = {
 };
 ```
 
+## Result\<T\> and Error Handling
+
+All public methods return `Promise<Result<T>>`, defined as:
+
+```typescript
+type Result<T, E = Error | unknown> =
+  | { ok: true; value: T }
+  | { ok: false; error: E };
+```
+
+**Never use `try/catch` around `backendApi` calls** — errors are always captured in the `Result`.
+
+### Checking results
+
+```typescript
+const result = await sodax.backendApi.getOrderbook({ offset: '0', limit: '10' });
+if (!result.ok) {
+  // result.error is an Error instance
+  console.error(result.error.message); // e.g. 'HTTP_REQUEST_FAILED', 'REQUEST_TIMEOUT'
+  if (result.error instanceof Error && result.error.cause) {
+    console.error('Underlying cause:', result.error.cause);
+  }
+  return;
+}
+console.log(result.value); // OrderbookResponse
+```
+
+### Error codes on `error.message`
+
+| `error.message` | Meaning |
+|---|---|
+| `'HTTP_REQUEST_FAILED'` | Non-2xx HTTP response. Check `error.cause` for `HTTP <status>: <body>`. |
+| `'REQUEST_TIMEOUT'` | Request exceeded the configured timeout. Check `error.cause` for the timeout duration. |
+| `'UNKNOWN_REQUEST_ERROR'` | Any other unexpected failure. |
+
 ## Intent Endpoints
 
 ### Get Intent by Transaction Hash
 
-Retrieves intent details using a transaction hash.
+Retrieves swap intent details using a hub-chain transaction hash.
 
 ```typescript
-const intent = await sodax.backendApi.getIntentByTxHash('0x123...abc');
+const result = await sodax.backendApi.getIntentByTxHash('0x123...abc');
+if (result.ok) {
+  console.log(result.value); // IntentResponse
+}
 ```
 
-**Request:**
+**Signature:**
+```typescript
+getIntentByTxHash(
+  txHash: string,
+  config?: RequestOverrideConfig,
+): Promise<Result<IntentResponse>>
+```
+
 - **Method:** GET
 - **Endpoint:** `/intent/tx/{txHash}`
-- **Parameters:** `txHash` (string) - The transaction hash
 
-**Response:**
+**Response type:**
 ```typescript
 interface IntentResponse {
   intentHash: string;
@@ -95,16 +170,16 @@ interface IntentResponse {
   intent: {
     intentId: string;
     creator: string;
-    inputToken: string;
-    outputToken: string;
+    inputToken: `0x${string}`;
+    outputToken: `0x${string}`;
     inputAmount: string;
     minOutputAmount: string;
     deadline: string;
     allowPartialFill: boolean;
     srcChain: number;
     dstChain: number;
-    srcAddress: string;
-    dstAddress: string;
+    srcAddress: `0x${string}`;
+    dstAddress: `0x${string}`;
     solver: string;
     data: string;
   };
@@ -112,71 +187,150 @@ interface IntentResponse {
 }
 ```
 
-**Example Response:**
-```json
-{
-  "intentHash": "0x456...def",
-  "txHash": "0x123...abc",
-  "logIndex": 0,
-  "chainId": 146,
-  "blockNumber": 12345678,
-  "open": true,
-  "intent": {
-    "intentId": "intent_123",
-    "creator": "0x789...ghi",
-    "inputToken": "0xabc...123",
-    "outputToken": "0xdef...456",
-    "inputAmount": "1000000000000000000",
-    "minOutputAmount": "950000000000000000",
-    "deadline": "1700000000",
-    "allowPartialFill": true,
-    "srcChain": 146,
-    "dstChain": 1,
-    "srcAddress": "0x789...ghi",
-    "dstAddress": "0x789...ghi",
-    "solver": "0x000...000",
-    "data": "0x"
+### Get Intent by Intent Hash
+
+Retrieves swap intent details using a canonical intent hash.
+
+```typescript
+const result = await sodax.backendApi.getIntentByHash('0x456...def');
+```
+
+**Signature:**
+```typescript
+getIntentByHash(
+  intentHash: string,
+  config?: RequestOverrideConfig,
+): Promise<Result<IntentResponse>>
+```
+
+- **Method:** GET
+- **Endpoint:** `/intent/{intentHash}`
+
+**Response:** Same as `IntentResponse` above.
+
+### Get User Intents
+
+Retrieves a paginated list of all swap intents created by a specific wallet address, with optional date-range filtering.
+
+`startDate` and `endDate` are Unix timestamps in **milliseconds**.
+
+```typescript
+const result = await sodax.backendApi.getUserIntents({
+  userAddress: '0x789...ghi',
+  startDate: Date.now() - 7 * 24 * 60 * 60 * 1000, // 7 days ago
+  endDate: Date.now(),
+  limit: '20',
+  offset: '0',
+});
+```
+
+**Signature:**
+```typescript
+getUserIntents(
+  params: {
+    userAddress: Address;
+    startDate?: number;
+    endDate?: number;
+    limit?: string;
+    offset?: string;
   },
-  "events": []
+  config?: RequestOverrideConfig,
+): Promise<Result<UserIntentsResponse>>
+```
+
+- **Method:** GET
+- **Endpoint:** `/intent/user/{userAddress}?startDate=…&endDate=…&limit=…&offset=…`
+
+**Response type:**
+```typescript
+interface UserIntentsResponse {
+  total: number;
+  offset: number;
+  limit: number;
+  items: IntentResponse[];
 }
 ```
 
-### Get Intent by Intent Hash
+## Swap Endpoints
 
-Retrieves intent details using an intent hash.
+### Submit Swap Transaction
+
+Submits a signed spoke-chain swap transaction to the backend for relay processing. The backend relays the transaction to the hub chain, posts execution data to the solver, and advances the intent through its lifecycle.
 
 ```typescript
-const intent = await sodax.backendApi.getIntentByHash('0x456...def');
+const result = await sodax.backendApi.submitSwapTx({
+  txHash: '0x123...abc',
+  srcChainKey: 'arbitrum',
+  // ... other SubmitSwapTxRequest fields
+});
+if (result.ok) {
+  console.log(result.value.success, result.value.message);
+}
 ```
 
-**Request:**
-- **Method:** GET
-- **Endpoint:** `/intent/{intentHash}`
-- **Parameters:** `intentHash` (string) - The intent hash
+**Signature:**
+```typescript
+submitSwapTx(
+  params: SubmitSwapTxRequest,
+  config?: RequestOverrideConfig,
+): Promise<Result<SubmitSwapTxResponse>>
+```
 
-**Response:** Same as `getIntentByTxHash`
+- **Method:** POST
+- **Endpoint:** `/swaps/submit-tx`
+
+### Get Submit Swap Transaction Status
+
+Polls the backend relay pipeline for the current status of a previously submitted swap transaction.
+
+Status progresses through: `pending` → `verifying` → `verified` → `relaying` → `relayed` → `posting_execution` → `executed` (or `failed`).
+
+```typescript
+const result = await sodax.backendApi.getSubmitSwapTxStatus({
+  txHash: '0x123...abc',
+  srcChainKey: 'arbitrum',
+});
+if (result.ok) {
+  console.log(result.value.status, result.value.failureReason, result.value.dstIntentTxHash);
+}
+```
+
+**Signature:**
+```typescript
+getSubmitSwapTxStatus(
+  params: GetSubmitSwapTxStatusParams,
+  config?: RequestOverrideConfig,
+): Promise<Result<SubmitSwapTxStatusResponse>>
+```
+
+- **Method:** GET
+- **Endpoint:** `/swaps/submit-tx/status?txHash=…&srcChainKey=…`
 
 ## Solver Endpoints
 
 ### Get Orderbook
 
-Retrieves the solver orderbook with pagination support.
+Retrieves a paginated snapshot of the solver orderbook — open swap intents waiting to be filled.
 
 ```typescript
-const orderbook = await sodax.backendApi.getOrderbook({
-  offset: '0',
-  limit: '10'
-});
+const result = await sodax.backendApi.getOrderbook({ offset: '0', limit: '10' });
+if (result.ok) {
+  console.log(result.value.total, result.value.data);
+}
 ```
 
-**Request:**
+**Signature:**
+```typescript
+getOrderbook(
+  params: { offset: string; limit: string },
+  config?: RequestOverrideConfig,
+): Promise<Result<OrderbookResponse>>
+```
+
 - **Method:** GET
 - **Endpoint:** `/solver/orderbook?offset={offset}&limit={limit}`
-- **Parameters:**
-  - `offset` (string) - Starting position for pagination
-  - `limit` (string) - Maximum number of items to return
 
-**Response:**
+**Response type:**
 ```typescript
 interface OrderbookResponse {
   total: number;
@@ -210,58 +364,31 @@ interface OrderbookResponse {
 }
 ```
 
-**Example Response:**
-```json
-{
-  "total": 25,
-  "data": [
-    {
-      "intentState": {
-        "exists": true,
-        "remainingInput": "1000000000000000000",
-        "receivedOutput": "0",
-        "pendingPayment": false
-      },
-      "intentData": {
-        "intentId": "intent_123",
-        "creator": "0x789...ghi",
-        "inputToken": "0xabc...123",
-        "outputToken": "0xdef...456",
-        "inputAmount": "1000000000000000000",
-        "minOutputAmount": "950000000000000000",
-        "deadline": "1700000000",
-        "allowPartialFill": true,
-        "srcChain": 146,
-        "dstChain": 1,
-        "srcAddress": "0x789...ghi",
-        "dstAddress": "0x789...ghi",
-        "solver": "0x000...000",
-        "data": "0x",
-        "intentHash": "0x456...def",
-        "txHash": "0x123...abc",
-        "blockNumber": 12345678
-      }
-    }
-  ]
-}
-```
-
 ## Money Market Endpoints
 
 ### Get User Position
 
-Retrieves money market position for a specific user.
+Retrieves the current money market position for a wallet address — all reserves where the user holds aTokens (supplied collateral) or variable-debt tokens (outstanding borrows).
 
 ```typescript
-const position = await sodax.backendApi.getMoneyMarketPosition('0x789...ghi');
+const result = await sodax.backendApi.getMoneyMarketPosition('0x789...ghi');
+if (result.ok) {
+  console.log(result.value.positions);
+}
 ```
 
-**Request:**
+**Signature:**
+```typescript
+getMoneyMarketPosition(
+  userAddress: string,
+  config?: RequestOverrideConfig,
+): Promise<Result<MoneyMarketPosition>>
+```
+
 - **Method:** GET
 - **Endpoint:** `/moneymarket/position/{userAddress}`
-- **Parameters:** `userAddress` (string) - User's wallet address
 
-**Response:**
+**Response type:**
 ```typescript
 interface MoneyMarketPosition {
   userAddress: string;
@@ -276,36 +403,28 @@ interface MoneyMarketPosition {
 }
 ```
 
-**Example Response:**
-```json
-{
-  "userAddress": "0x789...ghi",
-  "positions": [
-    {
-      "reserveAddress": "0xabc...123",
-      "aTokenAddress": "0xdef...456",
-      "variableDebtTokenAddress": "0xghi...789",
-      "aTokenBalance": "5000000000000000000",
-      "variableDebtTokenBalance": "1000000000000000000",
-      "blockNumber": 12345678
-    }
-  ]
+### Get All Money Market Assets
+
+Retrieves on-chain state snapshots for every active money market reserve asset.
+
+```typescript
+const result = await sodax.backendApi.getAllMoneyMarketAssets();
+if (result.ok) {
+  console.log(result.value); // MoneyMarketAsset[]
 }
 ```
 
-### Get All Money Market Assets
-
-Retrieves all available money market assets.
-
+**Signature:**
 ```typescript
-const assets = await sodax.backendApi.getAllMoneyMarketAssets();
+getAllMoneyMarketAssets(
+  config?: RequestOverrideConfig,
+): Promise<Result<MoneyMarketAsset[]>>
 ```
 
-**Request:**
 - **Method:** GET
 - **Endpoint:** `/moneymarket/asset/all`
 
-**Response:**
+**Response type:**
 ```typescript
 interface MoneyMarketAsset {
   reserveAddress: string;
@@ -325,63 +444,51 @@ interface MoneyMarketAsset {
 }
 ```
 
-**Example Response:**
-```json
-[
-  {
-    "reserveAddress": "0xabc...123",
-    "aTokenAddress": "0xdef...456",
-    "totalATokenBalance": "1000000000000000000000",
-    "variableDebtTokenAddress": "0xghi...789",
-    "totalVariableDebtTokenBalance": "500000000000000000000",
-    "liquidityRate": "500000000000000000",
-    "symbol": "USDC",
-    "totalSuppliers": 150,
-    "totalBorrowers": 75,
-    "variableBorrowRate": "800000000000000000",
-    "stableBorrowRate": "600000000000000000",
-    "liquidityIndex": "1000000000000000000000000000",
-    "variableBorrowIndex": "1000000000000000000000000000",
-    "blockNumber": 12345678
-  }
-]
-```
-
 ### Get Specific Money Market Asset
 
-Retrieves details for a specific money market asset.
+Retrieves the on-chain state snapshot for a single money market reserve asset.
 
 ```typescript
-const asset = await sodax.backendApi.getMoneyMarketAsset('0xabc...123');
+const result = await sodax.backendApi.getMoneyMarketAsset('0xabc...123');
 ```
 
-**Request:**
+**Signature:**
+```typescript
+getMoneyMarketAsset(
+  reserveAddress: string,
+  config?: RequestOverrideConfig,
+): Promise<Result<MoneyMarketAsset>>
+```
+
 - **Method:** GET
 - **Endpoint:** `/moneymarket/asset/{reserveAddress}`
-- **Parameters:** `reserveAddress` (string) - Reserve contract address
 
-**Response:** Same as `MoneyMarketAsset` interface
+**Response:** `MoneyMarketAsset` (same interface as above).
 
 ### Get Asset Borrowers
 
-Retrieves borrowers for a specific money market asset with pagination.
+Retrieves a paginated list of wallets with an outstanding borrow against a specific reserve.
 
 ```typescript
-const borrowers = await sodax.backendApi.getMoneyMarketAssetBorrowers(
+const result = await sodax.backendApi.getMoneyMarketAssetBorrowers(
   '0xabc...123',
-  { offset: '0', limit: '10' }
+  { offset: '0', limit: '10' },
 );
 ```
 
-**Request:**
+**Signature:**
+```typescript
+getMoneyMarketAssetBorrowers(
+  reserveAddress: string,
+  params: { offset: string; limit: string },
+  config?: RequestOverrideConfig,
+): Promise<Result<MoneyMarketAssetBorrowers>>
+```
+
 - **Method:** GET
 - **Endpoint:** `/moneymarket/asset/{reserveAddress}/borrowers?offset={offset}&limit={limit}`
-- **Parameters:**
-  - `reserveAddress` (string) - Reserve contract address
-  - `offset` (string) - Starting position for pagination
-  - `limit` (string) - Maximum number of items to return
 
-**Response:**
+**Response type:**
 ```typescript
 interface MoneyMarketAssetBorrowers {
   borrowers: string[];
@@ -391,40 +498,30 @@ interface MoneyMarketAssetBorrowers {
 }
 ```
 
-**Example Response:**
-```json
-{
-  "borrowers": [
-    "0x789...ghi",
-    "0xabc...def",
-    "0x123...456"
-  ],
-  "total": 75,
-  "offset": 0,
-  "limit": 10
-}
-```
-
 ### Get Asset Suppliers
 
-Retrieves suppliers for a specific money market asset with pagination.
+Retrieves a paginated list of wallets with an active supply (aToken balance) in a specific reserve.
 
 ```typescript
-const suppliers = await sodax.backendApi.getMoneyMarketAssetSuppliers(
+const result = await sodax.backendApi.getMoneyMarketAssetSuppliers(
   '0xabc...123',
-  { offset: '0', limit: '10' }
+  { offset: '0', limit: '10' },
 );
 ```
 
-**Request:**
+**Signature:**
+```typescript
+getMoneyMarketAssetSuppliers(
+  reserveAddress: string,
+  params: { offset: string; limit: string },
+  config?: RequestOverrideConfig,
+): Promise<Result<MoneyMarketAssetSuppliers>>
+```
+
 - **Method:** GET
 - **Endpoint:** `/moneymarket/asset/{reserveAddress}/suppliers?offset={offset}&limit={limit}`
-- **Parameters:**
-  - `reserveAddress` (string) - Reserve contract address
-  - `offset` (string) - Starting position for pagination
-  - `limit` (string) - Maximum number of items to return
 
-**Response:**
+**Response type:**
 ```typescript
 interface MoneyMarketAssetSuppliers {
   suppliers: string[];
@@ -434,39 +531,29 @@ interface MoneyMarketAssetSuppliers {
 }
 ```
 
-**Example Response:**
-```json
-{
-  "suppliers": [
-    "0x789...ghi",
-    "0xabc...def",
-    "0x123...456"
-  ],
-  "total": 150,
-  "offset": 0,
-  "limit": 10
-}
-```
-
 ### Get All Money Market Borrowers
 
-Retrieves all money market borrowers with pagination.
+Retrieves a paginated list of all wallet addresses that hold an active borrow position across any reserve.
 
 ```typescript
-const allBorrowers = await sodax.backendApi.getAllMoneyMarketBorrowers({
+const result = await sodax.backendApi.getAllMoneyMarketBorrowers({
   offset: '0',
-  limit: '10'
+  limit: '10',
 });
 ```
 
-**Request:**
+**Signature:**
+```typescript
+getAllMoneyMarketBorrowers(
+  params: { offset: string; limit: string },
+  config?: RequestOverrideConfig,
+): Promise<Result<MoneyMarketBorrowers>>
+```
+
 - **Method:** GET
 - **Endpoint:** `/moneymarket/borrowers?offset={offset}&limit={limit}`
-- **Parameters:**
-  - `offset` (string) - Starting position for pagination
-  - `limit` (string) - Maximum number of items to return
 
-**Response:**
+**Response type:**
 ```typescript
 interface MoneyMarketBorrowers {
   borrowers: string[];
@@ -476,59 +563,40 @@ interface MoneyMarketBorrowers {
 }
 ```
 
-## Error Handling
+## Config Endpoints
 
-The BackendApiService includes comprehensive error handling for various scenarios:
+These methods implement `IConfigApi` and are consumed internally by `ConfigService`. You generally do not call them directly — use `sodax.config` instead. They are documented here for completeness and for custom `IConfigApi` implementations.
 
-### Timeout Errors
-```typescript
-try {
-  const result = await sodax.backendApi.getOrderbook({ offset: '0', limit: '10' });
-} catch (error) {
-  if (error.message.includes('timeout')) {
-    console.error('Request timed out after 30 seconds');
-  }
-}
-```
+| Method | Endpoint | Returns |
+|---|---|---|
+| `getAllConfig()` | `GET /config/all` | `GetAllConfigApiResponse` — full `SodaxConfig` bundle |
+| `getChains()` | `GET /config/spoke/chains` | `GetChainsApiResponse` — array of supported `SpokeChainKey` strings |
+| `getSwapTokens()` | `GET /config/swap/tokens` | `GetSwapTokensApiResponse` — `Record<SpokeChainKey, readonly XToken[]>` |
+| `getSwapTokensByChainId(chainKey)` | `GET /config/swap/{chainKey}/tokens` | `GetSwapTokensByChainIdApiResponse` |
+| `getMoneyMarketTokens()` | `GET /config/money-market/tokens` | `GetMoneyMarketTokensApiResponse` |
+| `getMoneyMarketTokensByChainId(chainKey)` | `GET /config/money-market/{chainKey}/tokens` | `GetMoneyMarketTokensByChainIdApiResponse` |
+| `getMoneyMarketReserveAssets()` | `GET /config/money-market/reserve-assets` | `GetMoneyMarketReserveAssetsApiResponse` — array of reserve `Address` strings |
+| `getRelayChainIdMap()` | `GET /config/relay/chain-id-map` | `GetRelayChainIdMapApiResponse` — `SpokeChainKey → relay chain ID` map |
+| `getSpokeChainConfig()` | `GET /config/spoke/all-chains-configs` | `GetSpokeChainConfigApiResponse` — full `SpokeChainConfigMap` |
 
-### HTTP Errors
-```typescript
-try {
-  const result = await sodax.backendApi.getIntentByTxHash('invalid-hash');
-} catch (error) {
-  if (error.message.includes('HTTP 404')) {
-    console.error('Intent not found');
-  } else if (error.message.includes('HTTP 500')) {
-    console.error('Server error');
-  }
-}
-```
-
-### Network Errors
-```typescript
-try {
-  const result = await sodax.backendApi.getAllMoneyMarketAssets();
-} catch (error) {
-  console.error('Network error:', error.message);
-}
-```
+All methods accept an optional `RequestOverrideConfig` as their last argument and return `Promise<Result<T>>`.
 
 ## Utility Methods
 
 ### Set Custom Headers
 
-You can dynamically set custom headers for API requests:
+Merges additional headers into the service's default header set. Useful for injecting authentication tokens or tracing headers at runtime without constructing a new service instance.
 
 ```typescript
 sodax.backendApi.setHeaders({
   'Authorization': 'Bearer new-token',
-  'X-Custom-Header': 'custom-value'
+  'X-Trace-Id': 'req-abc123',
 });
 ```
 
 ### Get Base URL
 
-Retrieve the current base URL being used:
+Returns the base URL the service is currently pointing at.
 
 ```typescript
 const baseURL = sodax.backendApi.getBaseURL();
@@ -537,48 +605,54 @@ console.log('API Base URL:', baseURL);
 
 ## Complete Example
 
-Here's a complete example showing how to use the BackendApiService:
-
 ```typescript
 import { Sodax } from '@sodax/sdk';
 
 async function example() {
-  // Initialize Sodax with custom backend API configuration
   const sodax = new Sodax({
     backendApiConfig: {
       baseURL: 'https://api.sodax.com/v1/be',
       timeout: 60000,
       headers: {
-        'Authorization': 'Bearer your-api-token'
-      }
-    }
+        'Authorization': 'Bearer your-api-token',
+      },
+    },
   });
 
-  try {
-    // Get solver orderbook
-    const orderbook = await sodax.backendApi.getOrderbook({
-      offset: '0',
-      limit: '5'
-    });
-    console.log('Orderbook:', orderbook);
-
-    // Get user's money market position
-    const userAddress = '0x789...ghi';
-    const position = await sodax.backendApi.getMoneyMarketPosition(userAddress);
-    console.log('User Position:', position);
-
-    // Get all money market assets
-    const assets = await sodax.backendApi.getAllMoneyMarketAssets();
-    console.log('Available Assets:', assets);
-
-    // Get intent by transaction hash
-    const txHash = '0x123...abc';
-    const intent = await sodax.backendApi.getIntentByTxHash(txHash);
-    console.log('Intent Details:', intent);
-
-  } catch (error) {
-    console.error('API Error:', error.message);
+  // Get solver orderbook
+  const orderbookResult = await sodax.backendApi.getOrderbook({ offset: '0', limit: '5' });
+  if (!orderbookResult.ok) {
+    console.error('Orderbook error:', orderbookResult.error.message);
+    return;
   }
+  console.log('Orderbook:', orderbookResult.value);
+
+  // Get user's money market position
+  const positionResult = await sodax.backendApi.getMoneyMarketPosition('0x789...ghi');
+  if (!positionResult.ok) {
+    console.error('Position error:', positionResult.error.message);
+    return;
+  }
+  console.log('User Position:', positionResult.value);
+
+  // Get all money market assets
+  const assetsResult = await sodax.backendApi.getAllMoneyMarketAssets();
+  if (!assetsResult.ok) {
+    console.error('Assets error:', assetsResult.error.message);
+    return;
+  }
+  console.log('Available Assets:', assetsResult.value);
+
+  // Get intent by transaction hash
+  const intentResult = await sodax.backendApi.getIntentByTxHash('0x123...abc');
+  if (!intentResult.ok) {
+    console.error('Intent error:', intentResult.error.message);
+    if (intentResult.error instanceof Error && intentResult.error.cause) {
+      console.error('Cause:', intentResult.error.cause);
+    }
+    return;
+  }
+  console.log('Intent Details:', intentResult.value);
 }
 
 example();
@@ -586,8 +660,9 @@ example();
 
 ## Notes
 
-- All string amounts in responses are in wei format (18 decimals)
-- Pagination parameters (`offset` and `limit`) are strings, not numbers
-- The service automatically handles request timeouts and retries
-- All endpoints return JSON responses
-- Error messages include HTTP status codes for better debugging
+- All string amounts in responses are in wei format (18 decimals) unless the specific field description says otherwise.
+- Pagination parameters (`offset` and `limit`) are strings, not numbers.
+- All endpoints return JSON responses.
+- Error messages follow the CODE form (`SCREAMING_SNAKE_CASE`) for transport failures (`HTTP_REQUEST_FAILED`, `REQUEST_TIMEOUT`). Check `error.cause` for the underlying detail.
+- `XToken.chainKey` is the field used on token objects to identify the chain (not `xChainId`).
+- Chain constants are accessed via `ChainKeys.*` (e.g. `ChainKeys.ETHEREUM_MAINNET`), not legacy `*_CHAIN_ID` constants.

@@ -70,7 +70,7 @@ export class BitcoinWalletProvider extends BaseWalletProvider<BitcoinWalletDefau
     if (isPkWallet(this.wallet)) {
       const payment = this.getPayment(
         this.wallet.keyPair,
-        this.wallet.addressType, // optional if you already pass type
+        this.wallet.addressType,
       );
 
       if (!payment.address) {
@@ -89,6 +89,12 @@ export class BitcoinWalletProvider extends BaseWalletProvider<BitcoinWalletDefau
     return address;
   }
 
+  /**
+   * Returns the public key as a hex string.
+   * Private-key mode: returns the 32-byte x-only pubkey for P2TR addresses, or the full
+   * 33-byte compressed pubkey for all other address types.
+   * Browser-extension mode: delegates to the wallet kit's `getPublicKey()`.
+   */
   async getPublicKey(): Promise<string> {
     if (isPkWallet(this.wallet)) {
       if (this.wallet.addressType === 'P2TR') {
@@ -140,8 +146,9 @@ export class BitcoinWalletProvider extends BaseWalletProvider<BitcoinWalletDefau
   }
 
   /**
-   * Sign arbitrary message using ECDSA
-   * Used for withdrawals
+   * Sign arbitrary message using ECDSA over keccak256(message).
+   * Note: uses keccak256 (Ethereum-style) rather than Bitcoin's double-SHA256 standard,
+   * making this non-standard for typical Bitcoin message signing. Used for cross-chain withdrawals.
    */
   async signEcdsaMessage(message: string): Promise<string> {
     if (isPkWallet(this.wallet)) {

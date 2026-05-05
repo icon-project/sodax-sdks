@@ -26,13 +26,13 @@ Accessed via `useSodaxContext()` hook — all other hooks use this internally.
 **Recommended provider stack ordering:**
 
 ```tsx
-<QueryClientProvider client={queryClient}>     {/* prefer createSodaxQueryClient() */}
-  <SodaxProvider config={sodaxConfig}>          {/* SDK instance + RPC config */}
+<SodaxProvider config={sodaxConfig}>            {/* SDK instance + RPC config */}
+  <QueryClientProvider client={queryClient}>   {/* prefer createSodaxQueryClient() */}
     <SodaxWalletProvider config={walletConfig}> {/* from @sodax/wallet-sdk-react */}
       <YourApp />
     </SodaxWalletProvider>
-  </SodaxProvider>
-</QueryClientProvider>
+  </QueryClientProvider>
+</SodaxProvider>
 ```
 
 `SodaxProvider` does NOT depend on `@sodax/wallet-sdk-react` — wallet state is wired side-by-side. See *Decoupling from wallet-sdk-react* below.

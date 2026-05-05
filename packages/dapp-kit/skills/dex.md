@@ -60,22 +60,24 @@ function PoolsList() {
 ## Deposit Assets
 
 ```tsx
-import { useDexDeposit, useDexAllowance, useDexApprove, useSpokeProvider } from '@sodax/dapp-kit';
-import { BASE_MAINNET_CHAIN_ID } from '@sodax/sdk';
+import { useDexDeposit, useDexAllowance, useDexApprove } from '@sodax/dapp-kit';
+import { useWalletProvider } from '@sodax/wallet-sdk-react';
+import { ChainKeys } from '@sodax/sdk';
 
 function DepositToPool() {
-  const spokeProvider = useSpokeProvider({ chainId: BASE_MAINNET_CHAIN_ID });
-  const depositParams = { asset: '0x...', amount: 1000000000000000000n, poolToken: '0x...' };
+  const walletProvider = useWalletProvider(ChainKeys.BASE_MAINNET);
+  const depositParams = { srcChainKey: ChainKeys.BASE_MAINNET, asset: '0x...', amount: 1_000_000_000_000_000_000n, poolToken: '0x...' };
 
-  const { data: allowance } = useDexAllowance({ params: depositParams, spokeProvider });
+  const { data: allowance } = useDexAllowance({ params: depositParams, walletProvider });
   const isApproved = allowance?.ok && allowance.value;
-  const { mutateAsync: approve, isPending: isApproving } = useDexApprove({ spokeProvider });
-  const { mutateAsync: deposit, isPending: isDepositing } = useDexDeposit({ spokeProvider });
+  const { mutateAsync: approve, isPending: isApproving } = useDexApprove();
+  const { mutateAsync: deposit, isPending: isDepositing } = useDexDeposit();
 
   const handleDeposit = async () => {
+    if (!walletProvider) return;
     try {
-      if (!isApproved) await approve({ params: depositParams });
-      const txHashPair = await deposit({ params: depositParams });
+      if (!isApproved) await approve({ params: depositParams, walletProvider });
+      const txHashPair = await deposit({ params: depositParams, walletProvider });
       console.log('Deposited:', txHashPair);
     } catch (e) {
       console.error(e);
@@ -83,7 +85,7 @@ function DepositToPool() {
   };
 
   return (
-    <button onClick={handleDeposit} disabled={isDepositing || isApproving}>
+    <button onClick={handleDeposit} disabled={isDepositing || isApproving || !walletProvider}>
       {isApproving ? 'Approving...' : isDepositing ? 'Depositing...' : 'Deposit'}
     </button>
   );
@@ -93,25 +95,36 @@ function DepositToPool() {
 ## Supply Liquidity
 
 ```tsx
-import { useSupplyLiquidity, useCreateSupplyLiquidityParams, useSpokeProvider } from '@sodax/dapp-kit';
-import { BASE_MAINNET_CHAIN_ID } from '@sodax/sdk';
+import { useSupplyLiquidity, useCreateSupplyLiquidityParams } from '@sodax/dapp-kit';
+import { useWalletProvider } from '@sodax/wallet-sdk-react';
+import { ChainKeys } from '@sodax/sdk';
 
 function SupplyLiquidity() {
-  const spokeProvider = useSpokeProvider({ chainId: BASE_MAINNET_CHAIN_ID });
+  const walletProvider = useWalletProvider(ChainKeys.BASE_MAINNET);
   const supplyParams = useCreateSupplyLiquidityParams({
-    params: { poolKey: { /* ... */ }, tickLower: -60000n, tickUpper: 60000n, amount0: 1000000000000000000n, amount1: 1000000000000000000n },
+    params: {
+      poolKey: { /* ... */ },
+      tickLower: -60000n,
+      tickUpper: 60000n,
+      amount0: 1_000_000_000_000_000_000n,
+      amount1: 1_000_000_000_000_000_000n,
+    },
   });
-  const { mutateAsync: supplyLiquidity, isPending } = useSupplyLiquidity({ spokeProvider });
+  const { mutateAsync: supplyLiquidity, isPending } = useSupplyLiquidity();
 
   return (
-    <button disabled={isPending || !supplyParams} onClick={async () => {
-      try {
-        const txHashPair = await supplyLiquidity({ params: supplyParams! });
-        console.log('Supplied:', txHashPair);
-      } catch (e) {
-        console.error(e);
-      }
-    }}>
+    <button
+      disabled={isPending || !supplyParams || !walletProvider}
+      onClick={async () => {
+        if (!supplyParams || !walletProvider) return;
+        try {
+          const txHashPair = await supplyLiquidity({ params: supplyParams, walletProvider });
+          console.log('Supplied:', txHashPair);
+        } catch (e) {
+          console.error(e);
+        }
+      }}
+    >
       {isPending ? 'Supplying...' : 'Supply Liquidity'}
     </button>
   );
@@ -121,20 +134,27 @@ function SupplyLiquidity() {
 ## Position + Claim Rewards
 
 ```tsx
-import { usePositionInfo, useClaimRewards, useSpokeProvider } from '@sodax/dapp-kit';
-import { BASE_MAINNET_CHAIN_ID } from '@sodax/sdk';
+import { usePositionInfo, useClaimRewards } from '@sodax/dapp-kit';
+import { useWalletProvider } from '@sodax/wallet-sdk-react';
+import { ChainKeys } from '@sodax/sdk';
+import type { PoolKey } from '@sodax/sdk';
 
 function Position({ positionId, poolKey }: { positionId: bigint; poolKey: PoolKey }) {
-  const spokeProvider = useSpokeProvider({ chainId: BASE_MAINNET_CHAIN_ID });
+  const walletProvider = useWalletProvider(ChainKeys.BASE_MAINNET);
   const { data: position } = usePositionInfo({ params: { tokenId: positionId, poolKey } });
-  const { mutateAsync: claimRewards, isPending } = useClaimRewards({ spokeProvider });
+  const { mutateAsync: claimRewards, isPending } = useClaimRewards();
 
   if (!position) return null;
   return (
     <div>
       <p>Liquidity: {position.liquidity.toString()}</p>
       <p>Range: [{position.tickLower}, {position.tickUpper}]</p>
-      <button onClick={() => claimRewards({ params: { positionId } })} disabled={isPending}>Claim Fees</button>
+      <button
+        onClick={() => walletProvider && claimRewards({ params: { srcChainKey: ChainKeys.BASE_MAINNET, positionId }, walletProvider })}
+        disabled={isPending || !walletProvider}
+      >
+        Claim Fees
+      </button>
     </div>
   );
 }
@@ -143,14 +163,17 @@ function Position({ positionId, poolKey }: { positionId: bigint; poolKey: PoolKe
 ## Remove Liquidity
 
 ```tsx
-const { mutateAsync: decreaseLiquidity } = useDecreaseLiquidity({ spokeProvider });
+const walletProvider = useWalletProvider(ChainKeys.BASE_MAINNET);
+const { mutateAsync: decreaseLiquidity } = useDecreaseLiquidity();
+
 await decreaseLiquidity({
-  params: { positionId, liquidity: 500000n, amount0Min: 0n, amount1Min: 0n },
+  params: { srcChainKey: ChainKeys.BASE_MAINNET, positionId, liquidity: 500_000n, amount0Min: 0n, amount1Min: 0n },
+  walletProvider,
 });
 ```
 
 ## Notes
 
-- **Two-step flow**: deposit assets (spoke -> hub pool tokens) then supply liquidity (pool tokens -> position).
+- **Two-step flow**: deposit assets (spoke → hub pool tokens) then supply liquidity (pool tokens → position).
 - **Ticks**: logarithmic price units (like Uniswap V3). Wider range = more trades, less capital efficiency.
 - **ERC-4626**: pool tokens are vault shares. Use `useCreateDepositParams` to handle the conversion.

@@ -31,6 +31,7 @@ export type EvmWalletDefaults = {
   waitForTransactionReceipt?: EvmWaitForTransactionReceiptPolicy;
 };
 
+/** Configuration for constructing an `EvmWalletProvider` backed by a raw private key. */
 export type PrivateKeyEvmWalletConfig = {
   privateKey: `0x${string}`;
   chainId: EvmChainKey;
@@ -38,6 +39,7 @@ export type PrivateKeyEvmWalletConfig = {
   defaults?: EvmWalletDefaults;
 };
 
+/** Configuration for constructing an `EvmWalletProvider` backed by a browser-extension wallet (viem clients). */
 export type BrowserExtensionEvmWalletConfig = {
   walletClient: WalletClient<Transport, Chain, Account>;
   publicClient: PublicClient;

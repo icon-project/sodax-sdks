@@ -103,8 +103,17 @@ export type BalnSwapServiceConstructorParams = {
 };
 
 /**
- * Service for handling BALN swap operations on the hub chain.
- * Provides functionality to interact directly with the BALN swap contract.
+ * Low-level service for encoding and executing BALN→SODA swap operations on the hub chain (Sonic).
+ *
+ * This service is used internally by `MigrationService` and can also be called directly for
+ * post-migration lock management. It covers:
+ * - Encoding the BALN deposit calldata with lock-up period selection (`swapData`)
+ * - Lock lifecycle management: `claim`, `claimUnstaked`, `stake`, `unstake`, `cancelUnstake`
+ * - Reading lock details (`getDetailedUserLocks`)
+ * - Calculating the SODA output amount offline (`calculateSodaAmount`)
+ *
+ * Lock-up periods (0–24 months) determine a reward multiplier (0.5×–1.5×) applied to the
+ * SODA amount received in exchange for BALN tokens.
  */
 export class BalnSwapService {
   private readonly hubProvider: HubProvider;
@@ -114,9 +123,11 @@ export class BalnSwapService {
   }
 
   /**
-   * Gets the multiplier for a given lockup period.
-   * @param lockupPeriod - The lockup period
-   * @returns The multiplier in basis points
+   * Returns the reward multiplier (in basis points, where 10 000 = 1.0×) for a given lock-up period.
+   *
+   * @param lockupPeriod - One of the `LockupPeriod` enum values.
+   * @returns The multiplier as a `bigint` (e.g. `5000n` for 0.5×, `15000n` for 1.5×).
+   * @throws If `lockupPeriod` does not match any `LockupPeriod` enum variant.
    */
   getMultiplierForPeriod(lockupPeriod: LockupPeriod): bigint {
     switch (lockupPeriod) {
@@ -136,10 +147,14 @@ export class BalnSwapService {
   }
 
   /**
-   * Calculates the SODA amount for a given BALN amount and lockup period without calling the contract.
-   * @param balnAmount - The amount of BALN tokens
-   * @param lockupPeriod - The lockup period
-   * @returns The calculated SODA amount
+   * Calculates the SODA amount that would be received for a given BALN amount and lock-up period,
+   * using the fixed on-chain multiplier table — no contract call required.
+   *
+   * Formula: `sodaAmount = balnAmount * multiplier / 10_000`
+   *
+   * @param balnAmount - The amount of BALN tokens to swap (in BALN wei).
+   * @param lockupPeriod - The desired lock-up period.
+   * @returns The expected SODA amount (in SODA wei) before any on-chain rounding.
    */
   calculateSodaAmount(balnAmount: bigint, lockupPeriod: LockupPeriod): bigint {
     const multiplier = this.getMultiplierForPeriod(lockupPeriod);
@@ -150,15 +165,20 @@ export class BalnSwapService {
   }
 
   /**
-   * Generates transaction data for swapping BALN tokens to SODA tokens.
-   * This method creates the necessary contract calls to:
-   * 1. Approve the BALN swap contract to spend the BALN tokens
-   * 2. Execute the BALN swap with lockup period
+   * Encodes the hub execution calldata for a BALN → SODA swap.
    *
-   * @param balnToken - The address of the BALN token
-   * @param params - The BALN swap parameters including amount, lockup period, and recipient
-   * @param configService - The config service
-   * @returns Encoded transaction data for the BALN swap operation
+   * Produces a batched contract call sequence:
+   * 1. Approve the BALN hub-asset token to the BALN swap contract.
+   * 2. Call `swap(amount, lockupPeriod, dstAddress, stake)` on the BALN swap contract.
+   *
+   * The returned hex is intended to be passed as `data` in a spoke `deposit` call so the
+   * user's hub wallet executes it atomically on arrival.
+   *
+   * @param balnToken - The ICON contract address of the BALN token on ICON mainnet.
+   * @param params - Swap parameters: amount, lock-up period, destination EVM address, and stake flag.
+   * @param configService - `ConfigService` instance used to look up the BALN hub-asset address.
+   * @returns ABI-encoded batch of contract calls ready for hub execution.
+   * @throws If the hub asset configuration for the given BALN token is not found in `ConfigService`.
    */
   swapData(balnToken: IconContractAddress, params: BalnMigrateParams, configService: ConfigService): Hex {
     const assetConfig = configService.getSpokeTokenFromOriginalAssetAddress(ChainKeys.ICON_MAINNET, balnToken);
@@ -176,11 +196,14 @@ export class BalnSwapService {
   }
 
   /**
-   * Executes a claim operation directly through the wallet provider.
-   * @param params - The lock parameters including lock ID
-   * @param spokeProvider - The Sonic spoke provider
-   * @param raw - Whether to return raw transaction data
-   * @returns The transaction hash or raw transaction data
+   * Claims unlocked SODA tokens from a completed BALN swap lock on the hub chain.
+   *
+   * @param user - The EVM address of the lock owner on the Sonic hub.
+   * @param params - Lock parameters containing the `lockId` to claim from.
+   * @param walletProviderSlot - Wallet provider slot controlling `raw` mode and the Sonic
+   *   wallet provider used to sign and broadcast the transaction.
+   * @returns The Sonic transaction hash (`R extends false`) or the unsigned transaction
+   *   object (`R extends true`).
    */
   async claim<R extends boolean = false>(
     user: Address,
@@ -192,11 +215,14 @@ export class BalnSwapService {
   }
 
   /**
-   * Executes a claim unstaked operation directly through the wallet provider.
-   * @param params - The lock parameters including lock ID
-   * @param spokeProvider - The Sonic spoke provider
-   * @param raw - Whether to return raw transaction data
-   * @returns The transaction hash or raw transaction data
+   * Claims SODA tokens from a completed unstaking request on a BALN swap lock.
+   *
+   * @param user - The EVM address of the lock owner on the Sonic hub.
+   * @param params - Lock parameters containing the `lockId` to claim unstaked tokens from.
+   * @param walletProviderSlot - Wallet provider slot controlling `raw` mode and the Sonic
+   *   wallet provider used to sign and broadcast the transaction.
+   * @returns The Sonic transaction hash (`R extends false`) or the unsigned transaction
+   *   object (`R extends true`).
    */
   async claimUnstaked<R extends boolean = false>(
     user: Address,
@@ -208,11 +234,14 @@ export class BalnSwapService {
   }
 
   /**
-   * Executes a stake operation directly through the wallet provider.
-   * @param params - The lock parameters including lock ID
-   * @param spokeProvider - The Sonic spoke provider
-   * @param raw - Whether to return raw transaction data
-   * @returns The transaction hash or raw transaction data
+   * Stakes SODA tokens held in a BALN swap lock into the xSoda vault.
+   *
+   * @param user - The EVM address of the lock owner on the Sonic hub.
+   * @param params - Lock parameters containing the `lockId` to stake.
+   * @param walletProviderSlot - Wallet provider slot controlling `raw` mode and the Sonic
+   *   wallet provider used to sign and broadcast the transaction.
+   * @returns The Sonic transaction hash (`R extends false`) or the unsigned transaction
+   *   object (`R extends true`).
    */
   async stake<R extends boolean = false>(
     user: Address,
@@ -224,11 +253,14 @@ export class BalnSwapService {
   }
 
   /**
-   * Executes an unstake operation directly through the wallet provider.
-   * @param params - The lock parameters including lock ID
-   * @param spokeProvider - The Sonic spoke provider
-   * @param raw - Whether to return raw transaction data
-   * @returns The transaction hash or raw transaction data
+   * Initiates unstaking of xSoda tokens associated with a BALN swap lock.
+   *
+   * @param user - The EVM address of the lock owner on the Sonic hub.
+   * @param params - Lock parameters containing the `lockId` to unstake.
+   * @param walletProviderSlot - Wallet provider slot controlling `raw` mode and the Sonic
+   *   wallet provider used to sign and broadcast the transaction.
+   * @returns The Sonic transaction hash (`R extends false`) or the unsigned transaction
+   *   object (`R extends true`).
    */
   async unstake<R extends boolean = false>(
     user: Address,
@@ -240,11 +272,15 @@ export class BalnSwapService {
   }
 
   /**
-   * Executes a cancel unstake operation directly through the wallet provider.
-   * @param params - The lock parameters including lock ID
-   * @param spokeProvider - The Sonic spoke provider
-   * @param raw - Whether to return raw transaction data
-   * @returns The transaction hash or raw transaction data
+   * Cancels a pending unstake request for a BALN swap lock, returning the xSoda tokens to
+   * the staked state.
+   *
+   * @param user - The EVM address of the lock owner on the Sonic hub.
+   * @param params - Lock parameters containing the `lockId` whose unstake request to cancel.
+   * @param walletProviderSlot - Wallet provider slot controlling `raw` mode and the Sonic
+   *   wallet provider used to sign and broadcast the transaction.
+   * @returns The Sonic transaction hash (`R extends false`) or the unsigned transaction
+   *   object (`R extends true`).
    */
   async cancelUnstake<R extends boolean = false>(
     user: Address,
@@ -256,11 +292,12 @@ export class BalnSwapService {
   }
 
   /**
-   * Gets detailed locks for a specific user including unstake requests and staked amounts.
+   * Reads all BALN swap locks for a user, including SODA/xSoda balances and any pending
+   * unstake requests.
    *
-   * @param publicClient - The public client for reading contract state
-   * @param user - The user address
-   * @returns Array of detailed lock information for the user
+   * @param publicClient - A viem `PublicClient` connected to the Sonic hub chain.
+   * @param user - The EVM address of the user to query locks for.
+   * @returns An immutable array of `DetailedLock` objects, one per active lock.
    */
   async getDetailedUserLocks(
     publicClient: PublicClient<HttpTransport>,
@@ -277,13 +314,13 @@ export class BalnSwapService {
   // ===== ENCODING METHODS =====
 
   /**
-   * Encodes a swap transaction for the BALN swap contract.
+   * Encodes a single `swap` call on the BALN swap contract.
    *
-   * @param amount - The amount of BALN tokens to swap
-   * @param lockupPeriod - The lockup period for the swap
-   * @param to - The address that will receive the swapped SODA tokens
-   * @param stake - Whether to stake the SODA tokens
-   * @returns The encoded contract call for the swap operation
+   * @param amount - The amount of BALN hub-asset tokens to swap.
+   * @param lockupPeriod - The lock-up duration that determines the SODA multiplier.
+   * @param to - The EVM address that will receive the resulting SODA (or xSoda if `stake` is `true`).
+   * @param stake - If `true`, the received SODA tokens are immediately staked into xSoda.
+   * @returns A single `EvmContractCall` targeting the BALN swap contract.
    */
   encodeSwap(amount: bigint, lockupPeriod: LockupPeriod, to: Address, stake: boolean): EvmContractCall {
     return {
@@ -298,10 +335,10 @@ export class BalnSwapService {
   }
 
   /**
-   * Encodes a claim transaction for the BALN swap contract.
+   * Encodes a single `claim` call on the BALN swap contract.
    *
-   * @param lockId - The lock ID to claim from
-   * @returns The encoded contract call for the claim operation
+   * @param lockId - The ID of the lock to claim SODA tokens from.
+   * @returns A single `EvmContractCall` targeting the BALN swap contract.
    */
   encodeClaim(lockId: bigint): EvmContractCall {
     return {
@@ -316,10 +353,10 @@ export class BalnSwapService {
   }
 
   /**
-   * Encodes a claim unstaked transaction for the BALN swap contract.
+   * Encodes a single `claimUnstaked` call on the BALN swap contract.
    *
-   * @param lockId - The lock ID to claim unstaked tokens from
-   * @returns The encoded contract call for the claim unstaked operation
+   * @param lockId - The ID of the lock to claim tokens from after the unstaking period expires.
+   * @returns A single `EvmContractCall` targeting the BALN swap contract.
    */
   encodeClaimUnstaked(lockId: bigint): EvmContractCall {
     return {
@@ -334,10 +371,10 @@ export class BalnSwapService {
   }
 
   /**
-   * Encodes a stake transaction for the BALN swap contract.
+   * Encodes a single `stake` call on the BALN swap contract.
    *
-   * @param lockId - The lock ID to stake
-   * @returns The encoded contract call for the stake operation
+   * @param lockId - The ID of the lock whose SODA tokens should be staked into xSoda.
+   * @returns A single `EvmContractCall` targeting the BALN swap contract.
    */
   encodeStake(lockId: bigint): EvmContractCall {
     return {
@@ -352,10 +389,10 @@ export class BalnSwapService {
   }
 
   /**
-   * Encodes an unstake transaction for the BALN swap contract.
+   * Encodes a single `unstake` call on the BALN swap contract.
    *
-   * @param lockId - The lock ID to unstake
-   * @returns The encoded contract call for the unstake operation
+   * @param lockId - The ID of the lock whose xSoda tokens should be unstaked.
+   * @returns A single `EvmContractCall` targeting the BALN swap contract.
    */
   encodeUnstake(lockId: bigint): EvmContractCall {
     return {
@@ -370,10 +407,10 @@ export class BalnSwapService {
   }
 
   /**
-   * Encodes a cancel unstake transaction for the BALN swap contract.
+   * Encodes a single `cancelUnstake` call on the BALN swap contract.
    *
-   * @param lockId - The lock ID to cancel unstake for
-   * @returns The encoded contract call for the cancel unstake operation
+   * @param lockId - The ID of the lock whose pending unstake request should be cancelled.
+   * @returns A single `EvmContractCall` targeting the BALN swap contract.
    */
   encodeCancelUnstake(lockId: bigint): EvmContractCall {
     return {
@@ -390,11 +427,18 @@ export class BalnSwapService {
   // ===== PRIVATE HELPER METHODS =====
 
   /**
-   * Executes a contract call through the Sonic wallet provider.
-   * @param spokeProvider - The Sonic spoke provider
-   * @param rawTx - The raw contract call to execute
-   * @param raw - Whether to return raw transaction data
-   * @returns The transaction hash or raw transaction data
+   * Executes a single pre-encoded contract call on the Sonic hub chain.
+   *
+   * When `walletProviderSlot.raw` is `true` the unsigned transaction object is returned
+   * immediately without broadcasting. Otherwise the call is signed and broadcast via the
+   * provided wallet provider.
+   *
+   * @param srcAddress - The `from` address for the transaction.
+   * @param rawTx - The pre-encoded contract call to execute.
+   * @param walletProviderSlot - Wallet provider slot that controls `raw` mode and holds the
+   *   Sonic wallet provider.
+   * @returns The Sonic transaction hash (`R extends false`) or the unsigned transaction
+   *   object (`R extends true`).
    */
   async call<R extends boolean = false>(
     srcAddress: Address,

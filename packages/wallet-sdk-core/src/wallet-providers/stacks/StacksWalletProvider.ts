@@ -152,6 +152,11 @@ export class StacksWalletProvider extends BaseWalletProvider<StacksWalletDefault
     throw new Error('getPublicKey is only supported for private key wallet configuration');
   }
 
+  /**
+   * Returns the STX balance for the given address in micro-STX.
+   * @warning Network and fetch errors are silently swallowed — `0n` is returned on failure.
+   * Callers cannot distinguish "zero balance" from "fetch failed"; treat `0n` accordingly.
+   */
   async getBalance(address: string): Promise<bigint> {
     const url = `${this.network.client.baseUrl}/extended/v1/address/${address}/balances`;
     try {

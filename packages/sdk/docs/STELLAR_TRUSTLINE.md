@@ -11,287 +11,285 @@ In Stellar, trustlines are required to:
 
 The SDK handles trustlines differently depending on whether Stellar is used as the source chain or destination chain:
 
-- **Source Chain (Stellar)**: The SDK automatically handles trustlines through the standard `isAllowanceValid` and `approve` methods
-- **Destination Chain (Stellar)**: You must manually check and establish trustlines before executing operations
+- **Source Chain (Stellar)**: The SDK automatically handles trustlines through the standard `isAllowanceValid` and `approve` methods on each feature service (e.g. `sodax.swaps.isAllowanceValid`, `sodax.bridge.isAllowanceValid`).
+- **Destination Chain (Stellar)**: You must manually check and establish trustlines before executing operations.
+
+## Architecture
+
+In the v2 SDK there are no caller-constructed spoke provider objects. The `Sodax` facade exposes a `spokeService` property of type `SpokeService`, which owns a `stellarSpokeService: StellarSpokeService` instance. All Stellar-specific logic is accessed through that path.
+
+The Stellar wallet provider is `IStellarWalletProvider` (from `@sodax/wallet-sdk-core`). When calling methods with `raw: false`, the chain-narrowed provider type is resolved from the `srcChainKey` via `GetWalletProviderType<ChainKeys.STELLAR_MAINNET>` — there is no manual spoke provider construction.
 
 ## StellarSpokeService Methods
 
-The SDK provides three methods for managing Stellar trustlines:
+`StellarSpokeService` (accessed via `sodax.spokeService.stellarSpokeService`) provides three methods for managing Stellar trustlines.
 
 ### hasSufficientTrustline
 
-Checks if a sufficient trustline exists for a given token and amount.
+Checks if a sufficient trustline exists for a given token and wallet address.
 
 ```typescript
-import { StellarSpokeService } from "@sodax/sdk";
+import { ChainKeys } from '@sodax/sdk';
 
-const hasTrustline = await StellarSpokeService.hasSufficientTrustline(
-  tokenAddress,    // The Stellar token address
-  amount,          // The amount you need to receive
-  stellarSpokeProvider
-);
-```
-
-**Returns:** `Promise<boolean>` - `true` if trustline exists and has sufficient limit, `false` otherwise
-
-### walletHasSufficientTrustline
-
-Checks if a specific Stellar wallet has a sufficient trustline for a given token and amount without requiring a `StellarSpokeProvider`.
-
-```typescript
-import { StellarSpokeService } from "@sodax/sdk";
-
-const hasTrustline = await StellarSpokeService.walletHasSufficientTrustline(
-  tokenAddress,    // The Stellar token address
-  amount,          // The amount you need to receive
+const hasTrustline = await sodax.spokeService.stellarSpokeService.hasSufficientTrustline(
+  tokenAddress,    // The Stellar token contract ID
+  amount,          // The amount you need to receive (bigint, in stroops)
   walletAddress,   // The Stellar wallet address to check
-  horizonRpcUrl    // Horizon RPC URL to query account balances
 );
 ```
 
-**Returns:** `Promise<boolean>` - `true` if trustline exists and has sufficient limit, `false` otherwise
+**Returns:** `Promise<boolean>` — `true` if the trustline exists and has sufficient available limit, `false` otherwise. Native XLM and legacy bnUSD always return `true` (no trustline required).
 
 ### requestTrustline
 
-Establishes a trustline for a given token.
+Establishes (or increases) a trustline for a given token. Accepts `RequestTrustlineParams<StellarChainKey, Raw>`:
 
 ```typescript
-import { StellarSpokeService } from "@sodax/sdk";
+import { ChainKeys } from '@sodax/sdk';
+import type { IStellarWalletProvider } from '@sodax/wallet-sdk-core';
 
-const trustlineResult = await StellarSpokeService.requestTrustline(
-  tokenAddress,    // The Stellar token address
-  amount,          // The amount you need to receive (sets trustline limit)
-  stellarSpokeProvider,
-  false            // false = execute transaction, true = return raw transaction
-);
+// Executed mode (raw: false) — signs and broadcasts immediately
+const txHash = await sodax.spokeService.stellarSpokeService.requestTrustline({
+  srcChainKey: ChainKeys.STELLAR_MAINNET,
+  srcAddress: walletAddress,
+  token: tokenAddress,
+  amount: amount,
+  raw: false,
+  walletProvider: stellarWalletProvider, // IStellarWalletProvider
+});
+
+// Raw mode (raw: true) — returns unsigned transaction XDR; walletProvider must be omitted
+const rawTx = await sodax.spokeService.stellarSpokeService.requestTrustline({
+  srcChainKey: ChainKeys.STELLAR_MAINNET,
+  srcAddress: walletAddress,
+  token: tokenAddress,
+  amount: amount,
+  raw: true,
+});
 ```
 
-**Returns:** Transaction hash or raw transaction data depending on the `raw` parameter
+**Returns:** `Promise<TxReturnType<StellarChainKey, Raw>>`
+- `raw: false` → transaction hash (`string`)
+- `raw: true` → `{ from, to, value, data }` where `data` is the unsigned transaction XDR string
+
+## Source-Chain Trustline Flow (Automated)
+
+When Stellar is the **source chain**, `isAllowanceValid` delegates to `hasSufficientTrustline` and `approve` delegates to `requestTrustline` internally. The exact signatures for swaps and bridge are shown below.
+
+### SwapService
+
+```typescript
+import { ChainKeys } from '@sodax/sdk';
+
+// Check if the trustline covers the input amount
+const allowanceResult = await sodax.swaps.isAllowanceValid({
+  params: {
+    srcChainKey: ChainKeys.STELLAR_MAINNET,
+    inputToken: tokenAddress,
+    inputAmount: amount,
+    srcAddress: walletAddress,
+    // … other CreateIntentParams fields
+  },
+  raw: false,
+  walletProvider: stellarWalletProvider,
+});
+
+if (allowanceResult.ok && !allowanceResult.value) {
+  // Establish the trustline
+  const approveResult = await sodax.swaps.approve({
+    params: {
+      srcChainKey: ChainKeys.STELLAR_MAINNET,
+      inputToken: tokenAddress,
+      inputAmount: amount,
+      srcAddress: walletAddress,
+      // … other CreateIntentParams fields
+    },
+    raw: false,
+    walletProvider: stellarWalletProvider,
+  });
+
+  if (!approveResult.ok) {
+    console.error('Trustline establishment failed:', approveResult.error.message);
+  }
+}
+```
+
+### BridgeService
+
+```typescript
+import { ChainKeys } from '@sodax/sdk';
+
+// Check if the trustline covers the bridge amount
+const allowanceResult = await sodax.bridge.isAllowanceValid({
+  params: {
+    srcChainKey: ChainKeys.STELLAR_MAINNET,
+    srcToken: tokenAddress,
+    amount: amount,
+    srcAddress: walletAddress,
+    // … other CreateBridgeIntentParams fields
+  },
+  raw: false,
+  walletProvider: stellarWalletProvider,
+});
+
+if (allowanceResult.ok && !allowanceResult.value) {
+  const approveResult = await sodax.bridge.approve({
+    params: {
+      srcChainKey: ChainKeys.STELLAR_MAINNET,
+      srcToken: tokenAddress,
+      amount: amount,
+      srcAddress: walletAddress,
+      // … other CreateBridgeIntentParams fields
+    },
+    raw: false,
+    walletProvider: stellarWalletProvider,
+  });
+
+  if (!approveResult.ok) {
+    console.error('Trustline establishment failed:', approveResult.error.message);
+  }
+}
+```
+
+## Destination-Chain Trustline Flow (Manual)
+
+When Stellar is the **destination chain**, the SDK cannot establish a trustline on your behalf — you must check and establish it before executing any operation that delivers tokens to a Stellar address.
+
+```typescript
+import { ChainKeys } from '@sodax/sdk';
+
+async function ensureTrustline(
+  tokenAddress: string,
+  amount: bigint,
+  walletAddress: string,
+  stellarWalletProvider: IStellarWalletProvider,
+): Promise<void> {
+  const hasTrustline = await sodax.spokeService.stellarSpokeService.hasSufficientTrustline(
+    tokenAddress,
+    amount,
+    walletAddress,
+  );
+
+  if (!hasTrustline) {
+    const txHash = await sodax.spokeService.stellarSpokeService.requestTrustline({
+      srcChainKey: ChainKeys.STELLAR_MAINNET,
+      srcAddress: walletAddress,
+      token: tokenAddress,
+      amount: amount,
+      raw: false,
+      walletProvider: stellarWalletProvider,
+    });
+
+    // Wait for the trustline transaction to be confirmed before proceeding
+    const receipt = await sodax.spokeService.stellarSpokeService.waitForTransactionReceipt({
+      txHash,
+      chainKey: ChainKeys.STELLAR_MAINNET,
+    });
+
+    if (!receipt.ok || receipt.value.status !== 'success') {
+      throw new Error('Trustline transaction failed or timed out');
+    }
+  }
+}
+```
 
 ## Usage by Operation Type
 
 ### Swaps
 
-For Stellar-based swap operations:
-
-- **Source Chain (Stellar)**: Trustlines are automatically handled by `isAllowanceValid` and `approve` methods
-- **Destination Chain (Stellar)**: You must manually establish trustlines before executing swaps
-
-```typescript
-import { StellarSpokeService } from "@sodax/sdk";
-
-// When Stellar is the destination chain, check and establish trustlines
-if (isStellarDestination) {
-  // Check if sufficient trustline exists for the destination token
-  const hasTrustline = await StellarSpokeService.hasSufficientTrustline(
-    destinationTokenAddress,
-    amount,
-    stellarSpokeProvider
-  );
-
-  if (!hasTrustline) {
-    // Request trustline for the destination token
-    const trustlineResult = await StellarSpokeService.requestTrustline(
-      destinationTokenAddress,
-      amount,
-      stellarSpokeProvider,
-      false // false = execute transaction, true = return raw transaction
-    );
-    
-    // Wait for trustline transaction to be confirmed before proceeding
-    console.log('Trustline established:', trustlineResult);
-  }
-}
-```
+- **Source Chain (Stellar)**: Trustlines are automatically handled by `sodax.swaps.isAllowanceValid` and `sodax.swaps.approve`.
+- **Destination Chain (Stellar)**: Call `ensureTrustline` (above) for the destination token before calling `sodax.swaps.swap`.
 
 ### Money Market
 
-For Stellar-based money market operations:
-
-- **Source Chain (Stellar)**: Trustlines are automatically handled by `isAllowanceValid` and `approve` methods
-- **Destination Chain (Stellar)**: You must manually establish trustlines before executing money market actions
-
-```typescript
-import { StellarSpokeService } from "@sodax/sdk";
-
-// When Stellar is the destination chain, check and establish trustlines
-if (isStellarDestination) {
-  // Check if sufficient trustline exists for the destination token
-  const hasTrustline = await StellarSpokeService.hasSufficientTrustline(
-    destinationTokenAddress,
-    amount,
-    stellarSpokeProvider
-  );
-
-  if (!hasTrustline) {
-    // Request trustline for the destination token
-    const trustlineResult = await StellarSpokeService.requestTrustline(
-      destinationTokenAddress,
-      amount,
-      stellarSpokeProvider,
-      false // false = execute transaction, true = return raw transaction
-    );
-    
-    // Wait for trustline transaction to be confirmed before proceeding
-    console.log('Trustline established:', trustlineResult);
-  }
-}
-```
+- **Source Chain (Stellar)**: Trustlines are automatically handled by `sodax.moneyMarket.isAllowanceValid` and `sodax.moneyMarket.approve`.
+- **Destination Chain (Stellar)**: Call `ensureTrustline` for the destination token before executing money market actions.
 
 ### Bridge
 
-For Stellar-based bridge operations:
-
-- **Source Chain (Stellar)**: Trustlines are automatically handled by `isAllowanceValid` and `approve` methods
-- **Destination Chain (Stellar)**: You must manually establish trustlines before executing bridge operations
-
-```typescript
-import { StellarSpokeService } from "@sodax/sdk";
-
-// When Stellar is the destination chain, check and establish trustlines
-if (isStellarDestination) {
-  // Check if sufficient trustline exists for the destination token
-  const hasTrustline = await StellarSpokeService.hasSufficientTrustline(
-    destinationTokenAddress,
-    amount,
-    stellarSpokeProvider
-  );
-
-  if (!hasTrustline) {
-    // Request trustline for the destination token
-    const trustlineResult = await StellarSpokeService.requestTrustline(
-      destinationTokenAddress,
-      amount,
-      stellarSpokeProvider,
-      false // false = execute transaction, true = return raw transaction
-    );
-    
-    // Wait for trustline transaction to be confirmed before proceeding
-    console.log('Trustline established:', trustlineResult);
-  }
-}
-```
+- **Source Chain (Stellar)**: Trustlines are automatically handled by `sodax.bridge.isAllowanceValid` and `sodax.bridge.approve`.
+- **Destination Chain (Stellar)**: Call `ensureTrustline` for the destination token before calling `sodax.bridge.bridge`.
 
 ### Migration
 
-For Stellar-based migration operations:
-
-- **Source Chain (Stellar)**: Trustlines are automatically handled by `isAllowanceValid` and `approve` methods
-- **Destination Chain (Stellar)**: You must manually establish trustlines before executing migration operations
-
-```typescript
-import { StellarSpokeService } from "@sodax/sdk";
-
-// When Stellar is the destination chain, check and establish trustlines
-if (isStellarDestination) {
-  // Check if sufficient trustline exists for the destination token
-  const hasTrustline = await StellarSpokeService.hasSufficientTrustline(
-    destinationTokenAddress,
-    amount,
-    stellarSpokeProvider
-  );
-
-  if (!hasTrustline) {
-    // Request trustline for the destination token
-    const trustlineResult = await StellarSpokeService.requestTrustline(
-      destinationTokenAddress,
-      amount,
-      stellarSpokeProvider,
-      false // false = execute transaction, true = return raw transaction
-    );
-    
-    // Wait for trustline transaction to be confirmed before proceeding
-    console.log('Trustline established:', trustlineResult);
-  }
-}
-```
+- **Source Chain (Stellar)**: Trustlines are automatically handled by the migration service's allowance/approve methods.
+- **Destination Chain (Stellar)**: Call `ensureTrustline` for the destination token before executing migration operations.
 
 ### Staking
 
-For Stellar-based staking operations:
-
-- **Source Chain (Stellar)**: Trustlines are automatically handled by `isAllowanceValid` and `approve` methods
-- **Note**: Staking operations always flow from spoke chains (including Stellar) to the hub chain (Sonic), so Stellar is only used as a source chain for staking operations
-
-```typescript
-import { StellarSpokeService } from "@sodax/sdk";
-
-// When Stellar is the source chain, check and establish trustlines
-if (isStellarSource) {
-  // Check if sufficient trustline exists for the SODA token
-  const hasTrustline = await StellarSpokeService.hasSufficientTrustline(
-    sodaTokenAddress,
-    amount,
-    stellarSpokeProvider
-  );
-
-  if (!hasTrustline) {
-    // Request trustline for the SODA token
-    const trustlineResult = await StellarSpokeService.requestTrustline(
-      sodaTokenAddress,
-      amount,
-      stellarSpokeProvider,
-      false // false = execute transaction, true = return raw transaction
-    );
-    
-    // Wait for trustline transaction to be confirmed before proceeding
-    console.log('Trustline established:', trustlineResult);
-  }
-}
-```
+- **Source Chain (Stellar)**: Trustlines are automatically handled by `sodax.staking.isAllowanceValid` and `sodax.staking.approve`.
+- **Note**: Staking operations always flow from spoke chains (including Stellar) to the hub chain (Sonic), so Stellar is only ever the source chain for staking.
 
 ## Best Practices
 
-1. **Always check trustlines before operations**: Use `hasSufficientTrustline` to verify trustline status before executing any operation where Stellar is the destination chain
+1. **Always check trustlines before operations**: Use `hasSufficientTrustline` to verify trustline status before any operation where Stellar is the destination chain.
 
-2. **Set appropriate trustline limits**: When establishing a trustline, set the limit to at least the amount you expect to receive, with some buffer for safety
+2. **Set appropriate trustline limits**: When establishing a trustline via `requestTrustline`, the limit is set to the Stellar maximum by default (`Operation.changeTrust` without an explicit limit). Ensure the wallet has sufficient XLM for the transaction fee.
 
-3. **Wait for confirmation**: Always wait for the trustline transaction to be confirmed before proceeding with the main operation
+3. **Wait for confirmation**: Always wait for the trustline transaction to be confirmed (use `waitForTransactionReceipt`) before proceeding with the main operation.
 
-4. **Handle errors gracefully**: Trustline establishment can fail due to network issues or insufficient XLM balance (required for transaction fees)
+4. **Handle errors via `Result<T>`**: All public service methods return `Promise<Result<T>>`. Check `result.ok` before using `result.value`. On failure, inspect `result.error.message` and `result.error.cause`.
 
-5. **Reuse trustlines**: Once established, trustlines persist, so you don't need to recreate them for subsequent operations with the same token
+5. **Reuse trustlines**: Once established, trustlines persist on the Stellar ledger. You do not need to recreate them for subsequent operations with the same token.
 
 ## Common Patterns
 
 ### Complete Example: Swap with Stellar Destination
 
 ```typescript
-import { StellarSpokeService } from "@sodax/sdk";
+import { ChainKeys } from '@sodax/sdk';
+import type { IStellarWalletProvider } from '@sodax/wallet-sdk-core';
 
 async function swapWithStellarDestination(
-  swapParams: CreateIntentParams,
-  stellarSpokeProvider: StellarSpokeProvider
+  swapParams: CreateIntentParams<typeof ChainKeys.SOLANA_MAINNET>,
+  srcWalletProvider: ISolanaWalletProvider,
+  stellarWalletProvider: IStellarWalletProvider,
 ): Promise<void> {
+  const destinationTokenAddress = swapParams.outputToken;
+  const minOutputAmount = swapParams.minOutputAmount;
+  const dstAddress = swapParams.dstAddress; // Stellar wallet address
+
   // Step 1: Check and establish trustline if needed
-  const hasTrustline = await StellarSpokeService.hasSufficientTrustline(
-    swapParams.outputToken,
-    swapParams.minOutputAmount,
-    stellarSpokeProvider
+  const hasTrustline = await sodax.spokeService.stellarSpokeService.hasSufficientTrustline(
+    destinationTokenAddress,
+    minOutputAmount,
+    dstAddress,
   );
 
   if (!hasTrustline) {
     console.log('Establishing trustline...');
-    const trustlineResult = await StellarSpokeService.requestTrustline(
-      swapParams.outputToken,
-      swapParams.minOutputAmount,
-      stellarSpokeProvider,
-      false
-    );
-    
-    // Wait for confirmation
-    await stellarSpokeProvider.walletProvider.waitForTransactionReceipt(trustlineResult);
+    const txHash = await sodax.spokeService.stellarSpokeService.requestTrustline({
+      srcChainKey: ChainKeys.STELLAR_MAINNET,
+      srcAddress: dstAddress,
+      token: destinationTokenAddress,
+      amount: minOutputAmount,
+      raw: false,
+      walletProvider: stellarWalletProvider,
+    });
+
+    const receipt = await sodax.spokeService.stellarSpokeService.waitForTransactionReceipt({
+      txHash,
+      chainKey: ChainKeys.STELLAR_MAINNET,
+    });
+
+    if (!receipt.ok || receipt.value.status !== 'success') {
+      throw new Error('Trustline transaction failed');
+    }
+
     console.log('Trustline established successfully');
   }
 
-  // Step 2: Proceed with swap operation
+  // Step 2: Proceed with the swap
   const swapResult = await sodax.swaps.swap({
-    intentParams: swapParams,
-    spokeProvider: sourceSpokeProvider,
+    params: swapParams,
+    raw: false,
+    walletProvider: srcWalletProvider,
   });
 
   if (swapResult.ok) {
-    console.log('Swap completed successfully');
+    console.log('Swap completed:', swapResult.value.intentDeliveryInfo);
+  } else {
+    console.error('Swap failed:', swapResult.error);
   }
 }
 ```
@@ -303,3 +301,4 @@ async function swapWithStellarDestination(
 - [Bridge](https://github.com/icon-project/sodax-frontend/blob/main/packages/sdk/docs/BRIDGE.md) - Cross-chain token bridging
 - [Migration](https://github.com/icon-project/sodax-frontend/blob/main/packages/sdk/docs/MIGRATION.md) - Token migration
 - [Staking](https://github.com/icon-project/sodax-frontend/blob/main/packages/sdk/docs/STAKING.md) - SODA token staking
+- [Architecture Reference](https://github.com/icon-project/sodax-frontend/blob/main/packages/sdk/docs/ARCHITECTURE_REFACTOR_SUMMARY.md) - Full v2 architecture reference

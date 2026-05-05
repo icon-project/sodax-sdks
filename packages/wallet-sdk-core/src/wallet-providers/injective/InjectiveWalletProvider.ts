@@ -80,6 +80,19 @@ export class InjectiveWalletProvider
     throw new Error('Invalid Injective wallet config');
   }
 
+  /**
+   * Builds a signed-but-unbroadcast Injective transaction for a CosmWasm contract call.
+   *
+   * @param chainId - Injective chain ID (e.g. `"injective-1"`).
+   * @param _ - Unused positional parameter retained for interface-compat with other spoke
+   *   providers that accept a signer public key at this position. Injective derives the
+   *   public key internally via {@link getWalletPubKey}; pass an empty string `""` here.
+   * @param senderAddress - Bech32 address of the transaction sender.
+   * @param contractAddress - CosmWasm contract address to call.
+   * @param msg - JSON execute message sent to the contract.
+   * @param memo - Optional transaction memo; falls back to `defaults.defaultMemo` then `""`.
+   * @param options - Per-call overrides for defaults (funds, memo, sequence, accountNumber).
+   */
   async getRawTransaction(
     chainId: string,
     _: string,

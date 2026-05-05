@@ -35,18 +35,19 @@ function BridgeableTokensList() {
 ## Check Allowance + Approve
 
 ```tsx
-import { useBridgeAllowance, useBridgeApprove, useSpokeProvider } from '@sodax/dapp-kit';
-import { BASE_MAINNET_CHAIN_ID } from '@sodax/sdk';
+import { useBridgeAllowance, useBridgeApprove } from '@sodax/dapp-kit';
+import { useWalletProvider } from '@sodax/wallet-sdk-react';
+import { ChainKeys } from '@sodax/sdk';
 import type { CreateBridgeIntentParams } from '@sodax/sdk';
 
 function BridgeApproval({ params }: { params: CreateBridgeIntentParams }) {
-  const spokeProvider = useSpokeProvider({ chainId: BASE_MAINNET_CHAIN_ID });
-  const { data: isApproved } = useBridgeAllowance({ params, spokeProvider });
-  const { mutateAsync: approve, isPending } = useBridgeApprove({ spokeProvider });
+  const walletProvider = useWalletProvider(ChainKeys.BASE_MAINNET);
+  const { data: isApproved } = useBridgeAllowance({ params, walletProvider });
+  const { mutateAsync: approve, isPending } = useBridgeApprove();
 
   if (isApproved?.ok && isApproved.value) return null;
   return (
-    <button onClick={() => approve({ params })} disabled={isPending}>
+    <button onClick={() => walletProvider && approve({ params, walletProvider })} disabled={isPending}>
       {isPending ? 'Approving...' : 'Approve for Bridge'}
     </button>
   );
@@ -56,14 +57,16 @@ function BridgeApproval({ params }: { params: CreateBridgeIntentParams }) {
 ## Execute Bridge
 
 ```tsx
-import { useBridge, useSpokeProvider } from '@sodax/dapp-kit';
-import { BASE_MAINNET_CHAIN_ID, POLYGON_MAINNET_CHAIN_ID } from '@sodax/sdk';
+import { useBridge } from '@sodax/dapp-kit';
+import { useWalletProvider } from '@sodax/wallet-sdk-react';
+import { ChainKeys, BASE_MAINNET_CHAIN_ID, POLYGON_MAINNET_CHAIN_ID } from '@sodax/sdk';
 
 function BridgeButton() {
-  const spokeProvider = useSpokeProvider({ chainId: BASE_MAINNET_CHAIN_ID });
-  const { mutateAsync: bridge, isPending } = useBridge({ spokeProvider });
+  const walletProvider = useWalletProvider(ChainKeys.BASE_MAINNET);
+  const { mutateAsync: bridge, isPending } = useBridge();
 
   const handleBridge = async () => {
+    if (!walletProvider) return;
     try {
       const [spokeTxHash, hubTxHash] = await bridge({
         params: {
@@ -74,6 +77,7 @@ function BridgeButton() {
           dstAsset: '0x...',
           recipient: '0x...',
         },
+        walletProvider,
       });
       console.log('Bridge successful:', { spokeTxHash, hubTxHash });
     } catch (e) {
@@ -93,14 +97,15 @@ function BridgeButton() {
 
 ```tsx
 import { useState } from 'react';
-import { useBridge, useBridgeAllowance, useBridgeApprove, useGetBridgeableAmount, useSpokeProvider } from '@sodax/dapp-kit';
-import { BASE_MAINNET_CHAIN_ID, POLYGON_MAINNET_CHAIN_ID } from '@sodax/sdk';
+import { useBridge, useBridgeAllowance, useBridgeApprove, useGetBridgeableAmount } from '@sodax/dapp-kit';
+import { useWalletProvider } from '@sodax/wallet-sdk-react';
+import { ChainKeys, BASE_MAINNET_CHAIN_ID, POLYGON_MAINNET_CHAIN_ID } from '@sodax/sdk';
 import type { CreateBridgeIntentParams } from '@sodax/sdk';
 import { parseUnits, formatUnits } from 'viem';
 
 export function BridgePage() {
   const [amount, setAmount] = useState('');
-  const spokeProvider = useSpokeProvider({ chainId: BASE_MAINNET_CHAIN_ID });
+  const walletProvider = useWalletProvider(ChainKeys.BASE_MAINNET);
   const parsedAmount = amount ? parseUnits(amount, 6) : 0n;
 
   const bridgeParams: CreateBridgeIntentParams | undefined = parsedAmount > 0n
@@ -110,27 +115,27 @@ export function BridgePage() {
   const { data: bridgeableAmount } = useGetBridgeableAmount({
     params: { srcChainId: BASE_MAINNET_CHAIN_ID, srcAsset: '0x...', dstChainId: POLYGON_MAINNET_CHAIN_ID, dstAsset: '0x...' },
   });
-  const { data: allowanceResult } = useBridgeAllowance({ params: bridgeParams, spokeProvider });
+  const { data: allowanceResult } = useBridgeAllowance({ params: bridgeParams, walletProvider });
   const isApproved = allowanceResult?.ok && allowanceResult.value;
-  const { mutateAsync: approve, isPending: isApproving } = useBridgeApprove({ spokeProvider });
-  const { mutateAsync: bridge, isPending: isBridging } = useBridge({ spokeProvider });
+  const { mutateAsyncSafe: approve, isPending: isApproving } = useBridgeApprove();
+  const { mutateAsyncSafe: bridge, isPending: isBridging } = useBridge();
 
   const handleBridge = async () => {
-    if (!bridgeParams) return;
-    try {
-      if (!isApproved) await approve({ params: bridgeParams });
-      const [spokeTxHash] = await bridge({ params: bridgeParams });
-      alert(`Bridge complete! ${spokeTxHash}`);
-    } catch (e) {
-      alert(e instanceof Error ? e.message : 'Bridge failed');
+    if (!bridgeParams || !walletProvider) return;
+    if (!isApproved) {
+      const r = await approve({ params: bridgeParams, walletProvider });
+      if (!r.ok) { alert(r.error instanceof Error ? r.error.message : 'Approve failed'); return; }
     }
+    const r = await bridge({ params: bridgeParams, walletProvider });
+    if (r.ok) alert(`Bridge complete! ${r.value[0]}`);
+    else alert(r.error instanceof Error ? r.error.message : 'Bridge failed');
   };
 
   return (
     <div>
       <input placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
       {bridgeableAmount?.ok && <p>Max: {formatUnits(bridgeableAmount.value, 6)}</p>}
-      <button onClick={handleBridge} disabled={isBridging || isApproving || !bridgeParams}>
+      <button onClick={handleBridge} disabled={isBridging || isApproving || !bridgeParams || !walletProvider}>
         {isApproving ? 'Approving...' : isBridging ? 'Bridging...' : 'Bridge'}
       </button>
     </div>

@@ -31,7 +31,13 @@ import {
   lightlinkPhoenix,
 } from 'viem/chains';
 
-// HyperEVM is not in viem/chains; define manually.
+/**
+ * Manually defined viem chain config for HyperEVM.
+ *
+ * HyperEVM is absent from the `viem/chains` package, so the chain is defined
+ * here using `defineChain` with the canonical RPC, block-explorer, and Multicall3
+ * contract address.
+ */
 export const hyper = /*#__PURE__*/ defineChain({
   id: 999,
   name: 'HyperEVM',
@@ -41,6 +47,13 @@ export const hyper = /*#__PURE__*/ defineChain({
   contracts: { multicall3: { address: '0xcA11bde05977b3631167028862bE2a173976CA11', blockCreated: 13051 } },
 });
 
+/**
+ * Returns the viem `Chain` config for the given EVM chain key.
+ *
+ * @param key - An `EvmChainKey` constant (e.g. `ChainKeys.SONIC_MAINNET`).
+ * @returns The corresponding viem chain object.
+ * @throws {Error} If `key` is not a recognised EVM chain key.
+ */
 export function getEvmViemChain(key: EvmChainKey): Chain {
   switch (key) {
     case ChainKeys.SONIC_MAINNET:
@@ -75,14 +88,30 @@ export function getEvmViemChain(key: EvmChainKey): Chain {
   }
 }
 
+/** Returns `true` when `config` carries a hex private key (server-side / script usage). */
 export function isPrivateKeyEvmWalletConfig(config: EvmWalletConfig): config is PrivateKeyEvmWalletConfig {
   return 'privateKey' in config && config.privateKey.startsWith('0x');
 }
 
+/** Returns `true` when `config` carries pre-built viem wallet and public clients (browser extension / dApp usage). */
 export function isBrowserExtensionEvmWalletConfig(config: EvmWalletConfig): config is BrowserExtensionEvmWalletConfig {
   return 'walletClient' in config && 'publicClient' in config;
 }
 
+/**
+ * EVM wallet provider backed by [viem](https://viem.sh).
+ *
+ * Supports two modes selected by config shape:
+ * - **Private-key** (`PrivateKeyEvmWalletConfig`): creates its own viem wallet and public
+ *   clients from the supplied private key, chain ID, and optional RPC URL. Intended for
+ *   Node scripts and server-side testing.
+ * - **Browser-extension** (`BrowserExtensionEvmWalletConfig`): accepts pre-built viem clients
+ *   injected by the dApp's wallet adapter (e.g. wagmi). Transport/client defaults are ignored
+ *   in this mode.
+ *
+ * All 12 supported EVM chains are covered via {@link getEvmViemChain}; HyperEVM is defined
+ * locally as {@link hyper} because it is absent from `viem/chains`.
+ */
 export class EvmWalletProvider extends BaseWalletProvider<EvmWalletDefaults> implements IEvmWalletProvider {
   public readonly chainType = 'EVM' as const;
   public readonly publicClient: PublicClient;
@@ -122,12 +151,17 @@ export class EvmWalletProvider extends BaseWalletProvider<EvmWalletDefaults> imp
     return this.walletClient.account.address;
   }
 
+  /** Submits a signed transaction to the network and returns the transaction hash. */
   async sendTransaction(txData: EvmRawTransaction, options?: EvmSendTransactionPolicy): Promise<Hash> {
     const policy = this.mergePolicy('sendTransaction', options);
     const tx = { ...policy, ...txData } as Parameters<typeof this.walletClient.sendTransaction>[0];
     return this.walletClient.sendTransaction(tx);
   }
 
+  /**
+   * Polls until the transaction is included in a block and returns the serialised receipt.
+   * All `bigint` fields are converted to strings to allow safe JSON serialisation.
+   */
   async waitForTransactionReceipt(
     txHash: Hash,
     options?: EvmWaitForTransactionReceiptPolicy,

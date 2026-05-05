@@ -15,20 +15,34 @@ import {
   type SolverIntentStatusResponse,
 } from '@sodax/types';
 
+/**
+ * Stateless HTTP client for the SODAX solver API.
+ *
+ * All methods are `static` — this class is never instantiated and holds no state.
+ * It encapsulates the three solver API endpoints:
+ * - `/quote`    — get a price quote for a token swap
+ * - `/execute`  — notify the solver that an intent is live on the hub chain
+ * - `/status`   — poll the execution status of a submitted intent
+ *
+ * `SwapService` delegates all solver API communication to this class. External callers
+ * should use `SwapService` rather than calling `SolverApiService` directly.
+ */
 export class SolverApiService {
   private constructor() {}
 
   /**
-   * Request a quote from the solver API
-   * @example
-   * {
-   *     "token_src":"0x13b70564b1ec12876b20fab5d1bb630311312f4f", // Asset BSC
-   *     "token_dst":"0xdcd9578b51ef55239b6e68629d822a8d97c95b86", // Asset ETH Arbitrum
-   *     "token_src_blockchain_id":"56",
-   *     "token_dst_blockchain_id":"42161",
-   *     "amount":1000000000000000n,
-   *     "quote_type": "exact_input"
-   * }
+   * Requests a price quote from the solver API (`POST /quote`).
+   *
+   * Validates that both tokens are supported by the active config, translates spoke-chain token
+   * addresses to their hub (Sonic) equivalents, then forwards the request to the solver.
+   * The returned `quoted_amount` is in the destination token's smallest unit.
+   *
+   * @param payload - Quote request with source/destination tokens, chain IDs, amount, and quote type.
+   * @param config - Solver endpoint and contract configuration.
+   * @param configService - Used to validate tokens and resolve hub asset addresses.
+   * @returns A `Result` containing `{ quoted_amount: bigint }` on success, or a
+   *   `SolverErrorResponse` (with a `SolverIntentErrorCode`) on failure.
+   * @throws Invariant errors for empty fields or unsupported token addresses (thrown before the async request).
    */
   public static async getQuote(
     payload: SolverIntentQuoteRequest,
@@ -105,24 +119,15 @@ export class SolverApiService {
   }
 
   /**
-   * Post execution of intent order to Solver API
-   * @example
-   * // request
-   * {
-   *     "intent_tx_hash": "0xba3dce19347264db32ced212ff1a2036f20d9d2c7493d06af15027970be061af",
-   *     "quote_uuid": "a0dd7652-b360-4123-ab2d-78cfbcd20c6b"
-   * }
+   * Notifies the solver that an intent is live on the hub chain (`POST /execute`).
    *
-   * // response
-   * {
-   *   "ok": true,
-   *   "value": {
-   *      "output": {
-   *        "answer":"OK",
-   *        "task_id":"a0dd7652-b360-4123-ab2d-78cfbcd20c6b"
-   *      }
-   *   }
-   * }
+   * The request body contains only `intent_tx_hash` — the hub-chain transaction hash where
+   * the intent was registered. The solver uses this to locate and start filling the intent.
+   * The request is retried automatically on transient network failures.
+   *
+   * @param request - Object containing `intent_tx_hash` (the hub-chain tx hash of the created intent).
+   * @param config - Solver endpoint configuration.
+   * @returns A `Result` containing `{ answer: 'OK', intent_hash: Hex }` on success.
    */
   public static async postExecution(
     request: SolverExecutionRequest,
@@ -164,6 +169,15 @@ export class SolverApiService {
     }
   }
 
+  /**
+   * Polls the solver API for the current execution status of an intent (`POST /status`).
+   *
+   * @param request - Object containing `intent_tx_hash` — the hub-chain tx hash of the intent.
+   * @param config - Solver endpoint configuration.
+   * @returns A `Result` containing `{ status: SolverIntentStatusCode, fill_tx_hash?: string }`.
+   *   `fill_tx_hash` is set only when `status === SolverIntentStatusCode.SOLVED (3)`.
+   * @throws Invariant error if `intent_tx_hash` is empty (thrown before the async request).
+   */
   public static async getStatus(
     request: SolverIntentStatusRequest,
     config: SolverConfig,

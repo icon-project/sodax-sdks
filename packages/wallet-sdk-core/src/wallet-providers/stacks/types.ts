@@ -9,12 +9,14 @@ export type StacksWalletDefaults = {
   postConditionMode?: PostConditionMode;
 };
 
+/** Configuration for constructing a `StacksWalletProvider` backed by a raw private key. */
 export type PrivateKeyStacksWalletConfig = {
   privateKey: string;
   endpoint?: string;
   defaults?: StacksWalletDefaults;
 };
 
+/** Configuration for constructing a `StacksWalletProvider` backed by a browser-extension wallet. */
 export type BrowserExtensionStacksWalletConfig = {
   address: string;
   endpoint?: string;

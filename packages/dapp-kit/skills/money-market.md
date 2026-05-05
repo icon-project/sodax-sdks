@@ -23,14 +23,16 @@ Cross-chain lending (supply) and borrowing.
 | `useAToken` | Query | aToken metadata |
 | `useATokensBalances` | Query | aToken balances |
 
-## v2 patterns
+## Hook shape
 
-The mutation hooks follow the same shape as `useSwap`:
+All mutation hooks follow the **zero-domain-param** policy — the hook itself takes only an optional `mutationOptions` slot; ALL domain inputs (`params`, `walletProvider`, etc.) flow through `mutate(vars)`:
 
-- Pure mutations: the hook itself takes no arguments. All inputs (params, walletProvider, optional skipSimulation/timeout) are passed to `mutate({...})`.
-- Generic over the source chain key `K extends SpokeChainKey` (defaults to the full union); sophisticated callers can lock K at the hook call site to narrow the `walletProvider` and `params.srcChainKey` types.
-- `mutationFn` returns the SDK `Result<T>` as-is — branch on `data?.ok` at the call site (no thrown errors for SDK failures).
-- `params` always carry `srcChainKey`, `srcAddress`, `token`, `amount`, `action`.
+```ts
+const { mutateAsync: supply } = useSupply();
+await supply({ params: { srcChainKey, srcAddress, token, amount, action: 'supply' }, walletProvider });
+```
+
+On SDK failure, `mutationFn` throws — `mutation.error` and `onError` engage natively. Use `mutateAsyncSafe` to get `Promise<Result<T>>` that never rejects.
 
 ## Display Reserves
 
@@ -65,7 +67,7 @@ import { useUserFormattedSummary } from '@sodax/dapp-kit';
 import type { SpokeChainKey } from '@sodax/sdk';
 
 function UserPosition({ spokeChainKey, userAddress }: { spokeChainKey: SpokeChainKey; userAddress: string }) {
-  const { data: summary } = useUserFormattedSummary({ spokeChainKey, userAddress });
+  const { data: summary } = useUserFormattedSummary({ params: { spokeChainKey, userAddress } });
   if (!summary) return null;
   return (
     <div>
@@ -145,7 +147,6 @@ import { ChainKeys } from '@sodax/sdk';
 const chainKey = ChainKeys.BASE_MAINNET;
 const walletProvider = useWalletProvider(chainKey);
 
-// Each hook takes no arguments; pass walletProvider into the mutate call after gating on its presence.
 if (!walletProvider) return;
 
 // Borrow
@@ -188,7 +189,7 @@ type MoneyMarketSupplyParams<K extends SpokeChainKey = SpokeChainKey> = {
 
 ## Notes
 
-- **Borrow/withdraw skip approval** — `useMMAllowance` returns `true` automatically and avoids the RPC call entirely.
+- **Borrow/withdraw skip approval** — `useMMAllowance` returns `true` automatically for these actions.
 - **Health factor < 1.0** means liquidation risk.
 - All operations support optional `toChainId` / `toAddress` (and `fromChainId` / `fromAddress` on borrow) for cross-chain delivery.
-- Mutations return the SDK `Result<T>` as the React Query `data`. The mutation never throws on SDK errors — branch on `data?.ok` to handle success vs failure.
+- Mutations throw on SDK failure — use `mutateAsyncSafe` for `Result<T>` ergonomics without `try/catch`.

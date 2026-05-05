@@ -19,6 +19,7 @@ export type BitcoinWalletDefaults = {
   defaultFinalize?: boolean;
 };
 
+/** Configuration for constructing a `BitcoinWalletProvider` backed by a raw private key. */
 export type PrivateKeyBitcoinWalletConfig = {
   type: 'PRIVATE_KEY';
   privateKey: Hex;
@@ -27,6 +28,7 @@ export type PrivateKeyBitcoinWalletConfig = {
   defaults?: BitcoinWalletDefaults;
 };
 
+/** Configuration for constructing a `BitcoinWalletProvider` backed by a browser-extension wallet. */
 export type BrowserExtensionBitcoinWalletConfig = {
   type: 'BROWSER_EXTENSION';
   walletsKit: BitcoinWalletsKit;

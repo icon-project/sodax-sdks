@@ -100,14 +100,14 @@ Fetches a user's money market position. The query is disabled if `userAddress` i
 import { useBackendMoneyMarketPosition } from '@sodax/dapp-kit';
 
 const { data: position, isLoading, error } = useBackendMoneyMarketPosition({
-  userAddress: '0x123...',
+  params: { userAddress: '0x123...' },
   queryOptions: { staleTime: 60000 }, // optional
 });
 ```
 
 **Parameters:**
 
-- `params.userAddress` (string | undefined): The user's wallet address to fetch positions for
+- `params.params.userAddress` (string | undefined): The user's wallet address to fetch positions for
 - `params.queryOptions` (optional): React Query options to customize behavior
 
 #### `useBackendAllMoneyMarketAssets(params)`

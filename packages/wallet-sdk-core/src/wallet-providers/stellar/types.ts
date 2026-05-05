@@ -20,6 +20,7 @@ export type StellarWalletDefaults = {
   networkPassphrase?: string;
 };
 
+/** Configuration for constructing a `StellarWalletProvider` backed by a raw private key. */
 export type PrivateKeyStellarWalletConfig = {
   type: 'PRIVATE_KEY';
   privateKey: Hex;
@@ -28,6 +29,7 @@ export type PrivateKeyStellarWalletConfig = {
   defaults?: StellarWalletDefaults;
 };
 
+/** Configuration for constructing a `StellarWalletProvider` backed by a browser-extension wallet. */
 export type BrowserExtensionStellarWalletConfig = {
   type: 'BROWSER_EXTENSION';
   walletsKit: StellarWalletsKit;

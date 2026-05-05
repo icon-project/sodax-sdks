@@ -23,12 +23,14 @@ export type SuiWalletDefaults = {
   getCoins?: SuiGetCoinsPolicy;
 };
 
+/** Configuration for constructing a `SuiWalletProvider` backed by a mnemonic-derived private key. */
 export type PrivateKeySuiWalletConfig = {
   rpcUrl: string;
   mnemonics: string;
   defaults?: SuiWalletDefaults;
 };
 
+/** Configuration for constructing a `SuiWalletProvider` backed by a browser-extension wallet. */
 export type BrowserExtensionSuiWalletConfig = {
   client: SuiClient;
   wallet: WalletWithFeatures<Partial<SuiWalletFeatures>>;
