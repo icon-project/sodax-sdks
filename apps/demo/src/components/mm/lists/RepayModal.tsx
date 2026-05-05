@@ -41,7 +41,7 @@ interface RepayModalProps {
   onOpenChange: (open: boolean) => void;
   token: XToken;
   maxDebt: string;
-  /** Chain where the debt lives (market/collateral chain). Used for toChainId and initial fromChainId. */
+  /** Chain where the debt lives (market/collateral chain). Used for dstChainKey and initial fromChainId. */
   debtChainId?: SpokeChainKey;
   // If true, shows success screen inline instead of closing and calling onSuccess.
   inlineSuccess?: boolean; // Called on success. Only used when inlineSuccess is false.
@@ -122,8 +122,8 @@ export function RepayModal({
       token: sourceToken.address,
       amount: parseUnits(normalizedAmount, sourceToken.decimals),
       action: 'repay',
-      toChainId: toChainId,
-      toAddress: toAddress,
+      dstChainKey: toChainId,
+      dstAddress: toAddress,
     };
   }, [amount, sourceToken, toChainId, fromAddress, toAddress, fromChainId]);
 

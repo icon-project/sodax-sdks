@@ -1084,10 +1084,10 @@ describe('SwapService.createLimitOrder and createLimitOrderIntent', () => {
         solverExecutionResponse: { answer: 'OK', intent_hash: '0xhash' },
         intent: fakeIntent,
         intentDeliveryInfo: {
-          srcChainId: ChainKeys.BSC_MAINNET,
+          srcChainKey: ChainKeys.BSC_MAINNET,
           srcTxHash: '0xsrc',
           srcAddress: baseInput.srcAddress,
-          dstChainId: ChainKeys.ARBITRUM_MAINNET,
+          dstChainKey: ChainKeys.ARBITRUM_MAINNET,
           dstTxHash: '0xdst',
           dstAddress: baseInput.dstAddress,
         },
@@ -1860,10 +1860,10 @@ describe('SwapService.swap', () => {
     if (result.ok) {
       const { intentDeliveryInfo } = result.value;
       expect(intentDeliveryInfo).toEqual({
-        srcChainId: ChainKeys.BSC_MAINNET,
+        srcChainKey: ChainKeys.BSC_MAINNET,
         srcTxHash: '0xbscTx',
         srcAddress: params.srcAddress,
-        dstChainId: params.dstChainKey,
+        dstChainKey: params.dstChainKey,
         dstTxHash: '0xdstTx',
         dstAddress: params.dstAddress,
       });

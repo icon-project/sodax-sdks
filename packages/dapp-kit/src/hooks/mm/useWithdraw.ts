@@ -39,7 +39,7 @@ export function useWithdraw<K extends SpokeChainKey = SpokeChainKey>({
         queryKey: ['mm', 'userFormattedSummary', params.srcChainKey, params.srcAddress],
       });
       queryClient.invalidateQueries({ queryKey: ['mm', 'aTokensBalances'] });
-      const balanceChains = new Set([params.srcChainKey, params.toChainId ?? params.srcChainKey]);
+      const balanceChains = new Set([params.srcChainKey, params.dstChainKey ?? params.srcChainKey]);
       for (const chainKey of balanceChains) {
         queryClient.invalidateQueries({ queryKey: ['shared', 'xBalances', chainKey] });
       }

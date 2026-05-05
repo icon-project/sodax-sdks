@@ -214,7 +214,7 @@ export class SolanaSpokeService {
 
   /**
    * Sends a message to the hub chain.
-   * @param dstChainId - The chain ID of the hub chain.
+   * @param dstChainKey - The chain key of the hub chain.
    * @param dstAddress - The address on the hub chain.
    * @param payload - The payload to send.
    * @param spokeProvider - The spoke provider.
@@ -224,7 +224,7 @@ export class SolanaSpokeService {
   public async sendMessage<Raw extends boolean>(
     params: SendMessageParams<SolanaChainKey, Raw>,
   ): Promise<TxReturnType<SolanaChainKey, Raw>> {
-    const dstChainId = getIntentRelayChainId(params.dstChainKey);
+    const dstRelayChainId = getIntentRelayChainId(params.dstChainKey);
     const payload = keccak256(params.payload);
     const chainConfig = spokeChainConfig[params.srcChainKey];
     const { rpcUrl, addresses } = chainConfig;
@@ -235,7 +235,7 @@ export class SolanaSpokeService {
 
     const sendMessageInstruction = await connectionProgram.methods
       .sendMessage(
-        new BN(dstChainId.toString()),
+        new BN(dstRelayChainId.toString()),
         Buffer.from(params.dstAddress.slice(2), 'hex'),
         Buffer.from(payload.slice(2), 'hex'),
       )

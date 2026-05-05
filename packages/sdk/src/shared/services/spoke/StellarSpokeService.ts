@@ -231,7 +231,7 @@ export class StellarSpokeService {
     params: SendMessageParams<StellarChainKey, Raw>,
   ): Promise<TxReturnType<StellarChainKey, Raw>> {
     try {
-      const { srcAddress: from, srcChainKey: fromChainId } = params;
+      const { srcAddress: from, srcChainKey } = params;
       const [network, accountResponse] = await Promise.all([
         this.sorobanServer.getNetwork(),
         this.server.loadAccount(from),
@@ -253,7 +253,7 @@ export class StellarSpokeService {
 
         return {
           from: from,
-          to: spokeChainConfig[fromChainId].addresses.assetManager,
+          to: spokeChainConfig[srcChainKey].addresses.assetManager,
           value: 0n,
           data: transactionXdr,
         } satisfies TxReturnType<StellarChainKey, true> as TxReturnType<StellarChainKey, Raw>;
@@ -407,7 +407,7 @@ export class StellarSpokeService {
     params: DepositParams<StellarChainKey, R>,
   ): Promise<TxReturnType<StellarChainKey, R>> {
     try {
-      const { srcAddress: from, srcChainKey: fromChainId, amount } = params;
+      const { srcAddress: from, srcChainKey, amount } = params;
       const network = await this.sorobanServer.getNetwork();
 
       const accountResponse = await this.server.loadAccount(from);
@@ -427,7 +427,7 @@ export class StellarSpokeService {
 
         return {
           from: from,
-          to: spokeChainConfig[fromChainId].addresses.assetManager,
+          to: spokeChainConfig[srcChainKey].addresses.assetManager,
           value: BigInt(amount),
           data: transactionXdr,
         } satisfies TxReturnType<StellarChainKey, true> as TxReturnType<StellarChainKey, R>;
@@ -511,8 +511,8 @@ export class StellarSpokeService {
     params: RequestTrustlineParams<StellarChainKey, Raw>,
   ): Promise<TxReturnType<StellarChainKey, Raw>> {
     try {
-      const { srcAddress: from, srcChainKey: fromChainId, token, amount } = params;
-      const asset = spokeChainConfig[fromChainId].trustlineConfigs.find(
+      const { srcAddress: from, srcChainKey, token, amount } = params;
+      const asset = spokeChainConfig[srcChainKey].trustlineConfigs.find(
         t => t.contractId.toLowerCase() === token.toLowerCase(),
       );
 
@@ -544,7 +544,7 @@ export class StellarSpokeService {
 
         return {
           from: from,
-          to: spokeChainConfig[fromChainId].addresses.assetManager,
+          to: spokeChainConfig[srcChainKey].addresses.assetManager,
           value: amount,
           data: transactionXdr,
         } satisfies TxReturnType<StellarChainKey, true> as TxReturnType<StellarChainKey, Raw>;

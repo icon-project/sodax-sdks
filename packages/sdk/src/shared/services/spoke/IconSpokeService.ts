@@ -35,7 +35,7 @@ import { estimateStepCost } from '../../utils/icon-utils.js';
 
 export type IconSpokeDepositParams = {
   from: IconAddress; // The address of the user on the spoke chain
-  srcChain: IconChainKey; // The chain ID of the source spoke chain
+  srcChainKey: IconChainKey; // The chain key of the source spoke chain
   to?: HubAddress; // The address of the user on the hub chain (wallet abstraction address)
   token: string; // The address of the token to deposit
   amount: bigint; // The amount of tokens to deposit
@@ -52,7 +52,7 @@ export type IconTransferToHubParams = {
 export type IconCallParams<Raw extends boolean> = {
   srcChainKey: IconChainKey;
   srcAddress: GetAddressType<IconChainKey>;
-  dstChainId: HubChainKey;
+  dstChainKey: HubChainKey;
   dstAddress: HubAddress;
   payload: Hex;
 } & WalletProviderSlot<IconChainKey, Raw>;
@@ -87,27 +87,27 @@ export class IconSpokeService {
   public async deposit<R extends boolean = false>(
     params: DepositParams<IconChainKey, R>,
   ): Promise<TxReturnType<IconChainKey, R>> {
-    const { srcAddress: from, srcChainKey: fromChainId, to: recipient, token, amount, data } = params;
+    const { srcAddress: from, srcChainKey, to: recipient, token, amount, data } = params;
 
     const rlpInput: rlp.Input = [data, recipient];
     const rlpEncodedData = rlp.encode(rlpInput);
     const hexData = `0x${Buffer.from(rlpEncodedData).toString('hex')}`;
     const txParams = {
-      _to: spokeChainConfig[fromChainId].addresses.assetManager,
+      _to: spokeChainConfig[srcChainKey].addresses.assetManager,
       _value: BigIntToHex(amount),
       _data: hexData,
     };
 
-    const isNative = isNativeToken(fromChainId, token);
+    const isNative = isNativeToken(srcChainKey, token);
     const value: Hex = isNative ? BigIntToHex(amount) : '0x0';
-    const to = isNative ? spokeChainConfig[fromChainId].addresses.wICX : token;
+    const to = isNative ? spokeChainConfig[srcChainKey].addresses.wICX : token;
 
     const rawTransaction = Converter.toRawTransaction(
       new CallTransactionBuilder()
         .from(from)
         .to(to)
         .stepLimit(Converter.toBigNumber('2000000'))
-        .nid(spokeChainConfig[fromChainId].nid)
+        .nid(spokeChainConfig[srcChainKey].nid)
         .version('0x3')
         .timestamp(new Date().getTime() * 1000)
         .value(value)
@@ -124,7 +124,7 @@ export class IconSpokeService {
       from: from,
       to: to,
       value: value,
-      nid: spokeChainConfig[fromChainId].nid,
+      nid: spokeChainConfig[srcChainKey].nid,
       method: 'transfer',
       params: txParams,
     }) satisfies Promise<TxReturnType<IconChainKey, false>> as Promise<TxReturnType<IconChainKey, R>>;
@@ -137,11 +137,11 @@ export class IconSpokeService {
    * @returns {Promise<bigint>} The balance of the token
    */
   public async getDeposit(params: GetDepositParams<IconChainKey>): Promise<bigint> {
-    const { token, srcChainKey: fromChainId } = params;
+    const { token, srcChainKey } = params;
     const transaction = new CallBuilder()
       .to(token)
       .method('balanceOf')
-      .params({ _owner: spokeChainConfig[fromChainId].addresses.assetManager })
+      .params({ _owner: spokeChainConfig[srcChainKey].addresses.assetManager })
       .build();
     const result = await this.iconService.call(transaction).execute();
     return BigInt(result.value);
@@ -149,13 +149,13 @@ export class IconSpokeService {
 
   /**
    * Sends a message to the hub chain.
-   * @param {bigint} dstChainId - The chain ID of the destination chain.
+   * @param {SendMessageParams} params - Includes dstChainKey, the chain key of the destination chain.
    */
   public async sendMessage<Raw extends boolean>(
     params: SendMessageParams<IconChainKey, Raw>,
   ): Promise<TxReturnType<IconChainKey, Raw>> {
-    const { srcAddress: from, srcChainKey: fromChainId, dstChainKey: dstChainId, dstAddress, payload } = params;
-    const relayId = getIntentRelayChainId(dstChainId);
+    const { srcAddress: from, srcChainKey, dstChainKey, dstAddress, payload } = params;
+    const relayId = getIntentRelayChainId(dstChainKey);
 
     const txParams = {
       dstChainId: relayId,
@@ -165,9 +165,9 @@ export class IconSpokeService {
 
     const transaction = new CallTransactionBuilder()
       .from(from)
-      .to(spokeChainConfig[fromChainId].addresses.connection)
+      .to(spokeChainConfig[srcChainKey].addresses.connection)
       .stepLimit(Converter.toBigNumber('2000000'))
-      .nid(spokeChainConfig[fromChainId].nid)
+      .nid(spokeChainConfig[srcChainKey].nid)
       .version('0x3')
       .timestamp(new Date().getTime() * 1000)
       .method('sendMessage')
@@ -183,8 +183,8 @@ export class IconSpokeService {
 
     return params.walletProvider.sendTransaction({
       from: from,
-      to: spokeChainConfig[fromChainId].addresses.connection,
-      nid: spokeChainConfig[fromChainId].nid,
+      to: spokeChainConfig[srcChainKey].addresses.connection,
+      nid: spokeChainConfig[srcChainKey].nid,
       value: '0x0',
       method: 'sendMessage',
       params: txParams,

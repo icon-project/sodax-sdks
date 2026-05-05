@@ -162,14 +162,14 @@ export class SuiSpokeService {
   async deposit<R extends boolean = false>(
     params: DepositParams<SuiChainKey, R>,
   ): Promise<TxReturnType<SuiChainKey, R>> {
-    const { srcAddress: from, srcChainKey: fromChainId, token, to, amount, data = '0x' } = params;
-    const isNative = isNativeToken(fromChainId, token);
+    const { srcAddress: from, srcChainKey, token, to, amount, data = '0x' } = params;
+    const isNative = isNativeToken(srcChainKey, token);
     const tx = new Transaction();
     const coin: TransactionResult | SuiNativeCoinResult | SuiTxObject = isNative
       ? await this.getNativeCoin(tx, amount)
       : await this.getCoin(tx, token, amount, from);
-    const connection = this.splitAddress(spokeChainConfig[fromChainId].addresses.connection);
-    const assetManager = this.splitAddress(await this.getAssetManagerAddress(fromChainId));
+    const connection = this.splitAddress(spokeChainConfig[srcChainKey].addresses.connection);
+    const assetManager = this.splitAddress(await this.getAssetManagerAddress(srcChainKey));
 
     // Call transfer function
     tx.moveCall({
@@ -209,12 +209,12 @@ export class SuiSpokeService {
   public async sendMessage<Raw extends boolean>(
     params: SendMessageParams<SuiChainKey, Raw>,
   ): Promise<TxReturnType<SuiChainKey, Raw>> {
-    const { srcAddress: from, srcChainKey: fromChainId, dstChainKey: dstChainId, dstAddress, payload } = params;
+    const { srcAddress: from, srcChainKey, dstChainKey, dstAddress, payload } = params;
 
     const txb = new Transaction();
-    const connection = this.splitAddress(spokeChainConfig[fromChainId].addresses.connection);
+    const connection = this.splitAddress(spokeChainConfig[srcChainKey].addresses.connection);
 
-    const relayId = getIntentRelayChainId(dstChainId);
+    const relayId = getIntentRelayChainId(dstChainKey);
     // Perform send message transaction
     txb.moveCall({
       target: `${connection.packageId}::${connection.moduleId}::send_message_ua`,

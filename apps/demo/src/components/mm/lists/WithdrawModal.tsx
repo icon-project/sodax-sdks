@@ -73,8 +73,8 @@ export function WithdrawModal({
       token: token.address,
       amount: parsedAmount,
       action: 'withdraw' as const,
-      toChainId: token.chainKey,
-      ...(toAddress ? { toAddress } : {}),
+      dstChainKey: token.chainKey,
+      ...(toAddress ? { dstAddress: toAddress } : {}),
     };
   }, [token.address, token.decimals, token.chainKey, amount, destAddress, sourceAddress, selectedChainId]);
 

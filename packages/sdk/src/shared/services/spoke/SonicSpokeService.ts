@@ -91,7 +91,6 @@ export type ApproveSonicWithdrawParams<Raw extends boolean> = {
   srcAddress: Address;
   srcChainKey: SonicChainKey;
   from: Address;
-  fromChainId: SonicChainKey;
   withdrawInfo: WithdrawInfo;
 } & WalletProviderSlot<SonicChainKey, Raw>;
 

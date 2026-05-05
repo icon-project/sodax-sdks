@@ -241,7 +241,7 @@ export function isSubmitSwapTxStatusResponse(value: unknown): value is SubmitSwa
   if (typeof obj.data !== 'object' || obj.data === null) return false;
   const data = obj.data as Record<string, unknown>;
   if (typeof data.txHash !== 'string') return false;
-  if (typeof data.srcChainId !== 'string') return false;
+  if (typeof data.srcChainKey !== 'string') return false;
   if (typeof data.status !== 'string') return false;
   if (typeof data.failedAttempts !== 'number') return false;
   if (data.result !== undefined) {

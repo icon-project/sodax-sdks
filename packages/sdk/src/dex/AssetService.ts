@@ -614,20 +614,20 @@ export class AssetService {
   /**
    * Get the token unwrap action for a given asset
    * @param address - The address of the asset
-   * @param dstChainId - The destination spoke chain id
+   * @param dstChainKey - The destination spoke chain key
    * @param amount - The amount of the wrapped assets
    * @param userAddress - The address of the user wallet
    * @param recipient - The address of the recipient
    * @returns The token unwrap action
    */
   public async getTokenUnwrapAction(
-    dstChainId: SpokeChainKey,
+    dstChainKey: SpokeChainKey,
     address: OriginalAssetAddress,
     amount: bigint,
     userAddress: Address,
     recipient: Hex,
   ): Promise<EvmContractCall[]> {
-    const assetConfig = this.config.getSpokeTokenFromOriginalAssetAddress(dstChainId, address);
+    const assetConfig = this.config.getSpokeTokenFromOriginalAssetAddress(dstChainKey, address);
     if (!assetConfig) {
       throw new Error('[withdrawData] Hub asset not found');
     }
@@ -658,10 +658,10 @@ export class AssetService {
     calls.push(EvmVaultTokenService.encodeWithdraw(assetConfig.vault, assetConfig.hubAsset, vaultAmount));
     const translatedAmount = EvmVaultTokenService.translateIncomingDecimals(assetConfig.decimals, vaultAmount);
 
-    if (dstChainId === this.hubProvider.chainConfig.chain.key) {
+    if (dstChainKey === this.hubProvider.chainConfig.chain.key) {
       if (
         assetConfig.hubAsset.toLowerCase() ===
-        this.config.spokeChainConfig[dstChainId].addresses.wrappedSonic.toLowerCase()
+        this.config.spokeChainConfig[dstChainKey].addresses.wrappedSonic.toLowerCase()
       ) {
         const withdrawToCall = {
           address: assetConfig.hubAsset,

@@ -484,22 +484,22 @@ export class MigrationService {
    * @example
    * // Migrate legacy bnUSD to new bnUSD
    * const result = await sodax.migration.migratebnUSD({
-   *   srcChainId: '0x1.icon', // Source chain ID (legacy)
-   *   dstChainId: 'sonic',    // Destination chain ID (new)
-   *   srcbnUSD: 'cx...',      // Legacy bnUSD token address
-   *   dstbnUSD: '0x...',      // New bnUSD token address
-   *   amount: 1000n,          // Amount to migrate
-   *   to: '0x...',            // Recipient address on destination chain
+   *   srcChainKey: '0x1.icon', // Source chain key (legacy)
+   *   dstChainKey: 'sonic',    // Destination chain key (new)
+   *   srcbnUSD: 'cx...',       // Legacy bnUSD token address
+   *   dstbnUSD: '0x...',       // New bnUSD token address
+   *   amount: 1000n,           // Amount to migrate
+   *   to: '0x...',             // Recipient address on destination chain
    * }, iconSpokeProvider);
    *
    * // Reverse migration: new bnUSD to legacy bnUSD
    * const result = await sodax.migration.migratebnUSD({
-   *   srcChainId: 'sonic',    // Source chain ID (new)
-   *   dstChainId: '0x1.icon', // Destination chain ID (legacy)
-   *   srcbnUSD: '0x...',      // New bnUSD token address
-   *   dstbnUSD: 'cx...',      // Legacy bnUSD token address
-   *   amount: 1000n,          // Amount to migrate
-   *   to: 'hx...',            // Recipient address on destination chain
+   *   srcChainKey: 'sonic',    // Source chain key (new)
+   *   dstChainKey: '0x1.icon', // Destination chain key (legacy)
+   *   srcbnUSD: '0x...',       // New bnUSD token address
+   *   dstbnUSD: 'cx...',       // Legacy bnUSD token address
+   *   amount: 1000n,           // Amount to migrate
+   *   to: 'hx...',             // Recipient address on destination chain
    * }, sonicSpokeProvider);
    *
    * if (result.ok) {
@@ -836,12 +836,12 @@ export class MigrationService {
    * // Migrate legacy bnUSD to new bnUSD
    * const result = await migrationService.createMigratebnUSDIntent(
    *   {
-   *     srcChainId: '0x1.icon', // Source chain ID (legacy bnUSD chain)
-   *     dstChainId: 'sonic',    // Destination chain ID (new bnUSD chain)
-   *     srcbnUSD: 'cx...',      // Legacy bnUSD token address
-   *     dstbnUSD: '0x...',      // New bnUSD token address
-   *     amount: 1000n,          // Amount to migrate
-   *     to: '0x...',            // Recipient address on destination chain
+   *     srcChainKey: '0x1.icon', // Source chain key (legacy bnUSD chain)
+   *     dstChainKey: 'sonic',    // Destination chain key (new bnUSD chain)
+   *     srcbnUSD: 'cx...',       // Legacy bnUSD token address
+   *     dstbnUSD: '0x...',       // New bnUSD token address
+   *     amount: 1000n,           // Amount to migrate
+   *     to: '0x...',             // Recipient address on destination chain
    *   } satisfies UnifiedBnUSDMigrateParams,
    *   spokeProvider, // SpokeProvider instance
    *   false,         // Optional unchecked flag (validation is skipped)
@@ -851,12 +851,12 @@ export class MigrationService {
    * // Reverse migration: new bnUSD to legacy bnUSD
    * const result = await migrationService.createMigratebnUSDIntent(
    *   {
-   *     srcChainId: 'sonic',    // Source chain ID (new bnUSD chain)
-   *     dstChainId: '0x1.icon', // Destination chain ID (legacy bnUSD chain)
-   *     srcbnUSD: '0x...',      // New bnUSD token address
-   *     dstbnUSD: 'cx...',      // Legacy bnUSD token address
-   *     amount: 1000n,          // Amount to migrate
-   *     to: 'hx...',            // Recipient address on destination chain
+   *     srcChainKey: 'sonic',    // Source chain key (new bnUSD chain)
+   *     dstChainKey: '0x1.icon', // Destination chain key (legacy bnUSD chain)
+   *     srcbnUSD: '0x...',       // New bnUSD token address
+   *     dstbnUSD: 'cx...',       // Legacy bnUSD token address
+   *     amount: 1000n,           // Amount to migrate
+   *     to: 'hx...',             // Recipient address on destination chain
    *   } satisfies UnifiedBnUSDMigrateParams,
    *   spokeProvider
    * );
@@ -885,11 +885,11 @@ export class MigrationService {
         if (!unchecked) {
           invariant(
             isLegacybnUSDChainId(params.srcChainKey),
-            'srcChainId must be a legacy bnUSD chain (icon, sui, stellar) if srcbnUSD is a legacy bnUSD token',
+            'srcChainKey must be a legacy bnUSD chain (icon, sui, stellar) if srcbnUSD is a legacy bnUSD token',
           );
           invariant(
             isNewbnUSDChainId(params.dstChainKey),
-            'dstChainId must be a new bnUSD chain (all spoke chains besides Icon) if dstbnUSD is a legacy bnUSD token',
+            'dstChainKey must be a new bnUSD chain (all spoke chains besides Icon) if dstbnUSD is a legacy bnUSD token',
           );
         }
 
@@ -906,7 +906,7 @@ export class MigrationService {
         if (!unchecked) {
           invariant(
             isLegacybnUSDChainId(params.dstChainKey),
-            'dstChainId must be a legacy bnUSD chain (sui, stellar, icon) if dstbnUSD is a legacy bnUSD token',
+            'dstChainKey must be a legacy bnUSD chain (sui, stellar, icon) if dstbnUSD is a legacy bnUSD token',
           );
           invariant(
             isNewbnUSDToken(params.srcbnUSD),
@@ -914,12 +914,12 @@ export class MigrationService {
           );
           invariant(
             isNewbnUSDChainId(params.srcChainKey),
-            'srcChainId must be a new bnUSD chain (all spoke chains besides Icon) if srcbnUSD is a new bnUSD token',
+            'srcChainKey must be a new bnUSD chain (all spoke chains besides Icon) if srcbnUSD is a new bnUSD token',
           );
         }
 
         migrationData = this.bnUSDMigrationService.revertMigrationData({
-          srcChainId: params.srcChainKey,
+          srcChainKey: params.srcChainKey,
           legacybnUSD: params.dstbnUSD,
           newbnUSD: params.srcbnUSD,
           dstChainKey: params.dstChainKey,

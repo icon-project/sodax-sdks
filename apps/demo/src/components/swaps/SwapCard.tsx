@@ -353,7 +353,7 @@ export default function SwapCard({
       {
         mode: 'submit-tx',
         txHash: spokeTxHash as string,
-        srcChainId: src.chain,
+        srcChainKey: src.chain,
         apiBaseURL: SUBMIT_TX_API_CONFIG.baseURL,
       },
     ]);

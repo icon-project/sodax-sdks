@@ -98,8 +98,8 @@ export type MoneyMarketSupplyParams<K extends SpokeChainKey = SpokeChainKey> = {
   token: string;
   amount: bigint;
   action: 'supply';
-  toChainId?: SpokeChainKey;
-  toAddress?: string;
+  dstChainKey?: SpokeChainKey;
+  dstAddress?: string;
 };
 
 export type MoneyMarketBorrowParams<K extends SpokeChainKey = SpokeChainKey> = {
@@ -108,10 +108,8 @@ export type MoneyMarketBorrowParams<K extends SpokeChainKey = SpokeChainKey> = {
   token: string;
   amount: bigint;
   action: 'borrow';
-  fromChainId?: SpokeChainKey;
-  fromAddress?: string;
-  toChainId?: SpokeChainKey;
-  toAddress?: string;
+  dstChainKey?: SpokeChainKey;
+  dstAddress?: string;
 };
 
 export type MoneyMarketWithdrawParams<K extends SpokeChainKey = SpokeChainKey> = {
@@ -120,8 +118,8 @@ export type MoneyMarketWithdrawParams<K extends SpokeChainKey = SpokeChainKey> =
   token: string;
   amount: bigint;
   action: 'withdraw';
-  toChainId?: SpokeChainKey;
-  toAddress?: string;
+  dstChainKey?: SpokeChainKey;
+  dstAddress?: string;
 };
 
 export type MoneyMarketRepayParams<K extends SpokeChainKey = SpokeChainKey> = {
@@ -130,8 +128,8 @@ export type MoneyMarketRepayParams<K extends SpokeChainKey = SpokeChainKey> = {
   token: string;
   amount: bigint;
   action: 'repay';
-  toChainId?: SpokeChainKey;
-  toAddress?: string;
+  dstChainKey?: SpokeChainKey;
+  dstAddress?: string;
 };
 
 export type MoneyMarketParams<K extends SpokeChainKey = SpokeChainKey> =
@@ -239,10 +237,10 @@ export class MoneyMarketService {
       invariant(params.token.length > 0, 'Token is required');
 
       if (params.action === 'withdraw' || params.action === 'borrow') {
-        const toChainId = params.toChainId ?? srcChainKey;
+        const dstChainKey = params.dstChainKey ?? srcChainKey;
         invariant(
-          this.config.isMoneyMarketSupportedToken(toChainId, params.token),
-          `Unsupported spoke chain (${toChainId}) token: ${params.token}`,
+          this.config.isMoneyMarketSupportedToken(dstChainKey, params.token),
+          `Unsupported spoke chain (${dstChainKey}) token: ${params.token}`,
         );
       } else {
         invariant(
@@ -253,12 +251,12 @@ export class MoneyMarketService {
 
       // Target chain is Stellar with a specific recipient: both recipient and (if src is Stellar) sender
       // must have sufficient trustline for the token.
-      if (params.toChainId && isStellarChainKeyType(params.toChainId) && params.toAddress) {
+      if (params.dstChainKey && isStellarChainKeyType(params.dstChainKey) && params.dstAddress) {
         const targetHasTrustline = (await this.spoke.isAllowanceValid({
-          srcChainKey: params.toChainId,
+          srcChainKey: params.dstChainKey,
           token: params.token,
           amount: params.amount,
-          owner: params.toAddress,
+          owner: params.dstAddress,
         } satisfies SpokeIsAllowanceValidParamsStellar)) satisfies Result<boolean>;
 
         let srcHasTrustline = true;
@@ -483,12 +481,12 @@ export class MoneyMarketService {
         `Unsupported spoke chain (${srcChainKey}) token: ${params.token}`,
       );
 
-      const toChainId = params.toChainId ?? srcChainKey;
-      const toAddress = params.toAddress ?? params.srcAddress;
+      const dstChainKey = params.dstChainKey ?? srcChainKey;
+      const dstAddress = params.dstAddress ?? params.srcAddress;
 
       const [fromHubWallet, toHubWallet] = await Promise.all([
         this.hubProvider.getUserHubWalletAddress(params.srcAddress, srcChainKey),
-        this.hubProvider.getUserHubWalletAddress(toAddress, toChainId),
+        this.hubProvider.getUserHubWalletAddress(dstAddress, dstChainKey),
       ]);
 
       const data: Hex = this.buildSupplyData(srcChainKey, params.token, params.amount, toHubWallet);
@@ -550,7 +548,7 @@ export class MoneyMarketService {
       // (Borrow from hub to a different target chain still needs the relay to deliver tokens.)
       const needsRelay =
         srcChainKey !== hubChainId ||
-        (params.toChainId != null && params.toAddress != null && params.toChainId !== hubChainId);
+        (params.dstChainKey != null && params.dstAddress != null && params.dstChainKey !== hubChainId);
 
       if (!needsRelay) {
         return {
@@ -591,23 +589,21 @@ export class MoneyMarketService {
         `Invalid wallet provider for chain key: ${srcChainKey}, walletProvider.chainType: ${walletProvider?.chainType}`,
       );
 
-      const fromChainId = params.fromChainId ?? srcChainKey;
-      const fromAddress = params.fromAddress ?? params.srcAddress;
-      const toChainId = params.toChainId ?? fromChainId;
-      const toAddress = params.toAddress ?? fromAddress;
-      const dstToken = this.config.getMoneyMarketToken(toChainId, params.token);
+      const dstChainKey = params.dstChainKey ?? srcChainKey;
+      const dstAddress = params.dstAddress ?? params.srcAddress;
+      const dstToken = this.config.getMoneyMarketToken(dstChainKey, params.token);
 
-      invariant(dstToken, `Money market token not found for spoke chain (${toChainId}) token: ${params.token}`);
+      invariant(dstToken, `Money market token not found for spoke chain (${dstChainKey}) token: ${params.token}`);
 
-      const encodedToAddress = encodeAddress(toChainId, toAddress);
-      const fromHubWallet = await this.hubProvider.getUserHubWalletAddress(fromAddress, fromChainId);
+      const encodedDstAddress = encodeAddress(dstChainKey, dstAddress);
+      const fromHubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, srcChainKey);
 
       const payload: Hex = this.buildBorrowData(
         fromHubWallet,
-        encodedToAddress,
+        encodedDstAddress,
         dstToken.address,
         params.amount,
-        toChainId,
+        dstChainKey,
       );
 
       const coreParams = {
@@ -666,10 +662,10 @@ export class MoneyMarketService {
       // Relay is not required only when: source is hub AND target is hub AND target is not the walletRouter.
       const needsRelay =
         srcChainKey !== hubChainId ||
-        (params.toChainId != null &&
-          params.toAddress != null &&
-          params.toChainId !== hubChainId &&
-          params.toAddress !== walletRouter);
+        (params.dstChainKey != null &&
+          params.dstAddress != null &&
+          params.dstChainKey !== hubChainId &&
+          params.dstAddress !== walletRouter);
 
       if (!needsRelay) {
         return {
@@ -710,23 +706,23 @@ export class MoneyMarketService {
         `Invalid wallet provider for chain key: ${srcChainKey}, walletProvider.chainType: ${walletProvider?.chainType}`,
       );
 
-      const toChainId = params.toChainId ?? srcChainKey;
-      const toAddress = params.toAddress ?? params.srcAddress;
+      const dstChainKey = params.dstChainKey ?? srcChainKey;
+      const dstAddress = params.dstAddress ?? params.srcAddress;
 
       invariant(
-        this.config.isMoneyMarketSupportedToken(toChainId, params.token),
-        `Unsupported spoke chain (${toChainId}) token: ${params.token}`,
+        this.config.isMoneyMarketSupportedToken(dstChainKey, params.token),
+        `Unsupported spoke chain (${dstChainKey}) token: ${params.token}`,
       );
 
-      const encodedToAddress = encodeAddress(toChainId, toAddress);
+      const encodedDstAddress = encodeAddress(dstChainKey, dstAddress);
       const fromHubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, srcChainKey);
 
       const payload: Hex = this.buildWithdrawData(
         fromHubWallet,
-        encodedToAddress,
+        encodedDstAddress,
         params.token,
         params.amount,
-        toChainId,
+        dstChainKey,
       );
 
       const coreParams = {
@@ -824,12 +820,12 @@ export class MoneyMarketService {
         `Unsupported spoke chain (${srcChainKey}) token: ${params.token}`,
       );
 
-      const toChainId = params.toChainId ?? srcChainKey;
-      const toAddress = params.toAddress ?? params.srcAddress;
+      const dstChainKey = params.dstChainKey ?? srcChainKey;
+      const dstAddress = params.dstAddress ?? params.srcAddress;
 
       const [fromHubWallet, toHubWallet] = await Promise.all([
         this.hubProvider.getUserHubWalletAddress(params.srcAddress, srcChainKey),
-        this.hubProvider.getUserHubWalletAddress(toAddress, toChainId),
+        this.hubProvider.getUserHubWalletAddress(dstAddress, dstChainKey),
       ]);
 
       const data: Hex = this.buildRepayData(srcChainKey, params.token, params.amount, toHubWallet);
@@ -876,10 +872,10 @@ export class MoneyMarketService {
   /**
    * Build transaction data for supplying to the money market pool.
    */
-  public buildSupplyData(fromChainId: SpokeChainKey, fromToken: string, amount: bigint, toHubAddress: Address): Hex {
+  public buildSupplyData(srcChainKey: SpokeChainKey, fromToken: string, amount: bigint, toHubAddress: Address): Hex {
     const calls: EvmContractCall[] = [];
 
-    const fromHubAsset = this.config.getSpokeTokenFromOriginalAssetAddress(fromChainId, fromToken);
+    const fromHubAsset = this.config.getSpokeTokenFromOriginalAssetAddress(srcChainKey, fromToken);
     invariant(fromHubAsset, `hub asset not found for source chain token (token): ${fromToken}`);
 
     const lendingPool = this.config.moneyMarket.lendingPool;
@@ -907,15 +903,15 @@ export class MoneyMarketService {
    */
   public buildBorrowData(
     fromHubAddress: Address,
-    toAddress: Address,
+    dstAddress: Address,
     toToken: string,
     amount: bigint,
-    toChainId: SpokeChainKey,
+    dstChainKey: SpokeChainKey,
   ): Hex {
-    const toHubAsset = this.config.getSpokeTokenFromOriginalAssetAddress(toChainId, toToken);
-    const dstToken = this.config.getMoneyMarketToken(toChainId, toToken);
+    const toHubAsset = this.config.getSpokeTokenFromOriginalAssetAddress(dstChainKey, toToken);
+    const dstToken = this.config.getMoneyMarketToken(dstChainKey, toToken);
     invariant(toHubAsset, `hub asset not found for target chain token (toToken): ${toToken}`);
-    invariant(dstToken, `Money market token not found for spoke chain (${toChainId}) token: ${toToken}`);
+    invariant(dstToken, `Money market token not found for spoke chain (${dstChainKey}) token: ${toToken}`);
 
     const assetAddress = toHubAsset.hubAsset;
     const vaultAddress = toHubAsset.vault;
@@ -983,27 +979,27 @@ export class MoneyMarketService {
       );
     }
 
-    if (toChainId === this.hubProvider.chainConfig.chain.key) {
-      if (assetAddress.toLowerCase() === this.config.spokeChainConfig[toChainId].addresses.wrappedSonic.toLowerCase()) {
+    if (dstChainKey === this.hubProvider.chainConfig.chain.key) {
+      if (assetAddress.toLowerCase() === this.config.spokeChainConfig[dstChainKey].addresses.wrappedSonic.toLowerCase()) {
         const withdrawToCall = {
           address: assetAddress,
           value: 0n,
           data: encodeFunctionData({
             abi: wrappedSonicAbi,
             functionName: 'withdrawTo',
-            args: [toAddress, translatedAmountOut],
+            args: [dstAddress, translatedAmountOut],
           }),
         };
 
         calls.push(withdrawToCall);
       } else {
-        calls.push(Erc20Service.encodeTransfer(assetAddress, toAddress, translatedAmountOut));
+        calls.push(Erc20Service.encodeTransfer(assetAddress, dstAddress, translatedAmountOut));
       }
     } else {
       calls.push(
         EvmAssetManagerService.encodeTransfer(
           assetAddress,
-          toAddress,
+          dstAddress,
           translatedAmountOut,
           this.hubProvider.chainConfig.addresses.assetManager,
         ),
@@ -1018,17 +1014,17 @@ export class MoneyMarketService {
    */
   public buildWithdrawData(
     fromHubAddress: Address,
-    toAddress: Address,
+    dstAddress: Address,
     toToken: string,
     amount: bigint,
-    toChainId: SpokeChainKey,
+    dstChainKey: SpokeChainKey,
   ): Hex {
     const calls: EvmContractCall[] = [];
 
-    const toHubAsset = this.config.getSpokeTokenFromOriginalAssetAddress(toChainId, toToken);
-    const dstToken = this.config.getMoneyMarketToken(toChainId, toToken);
+    const toHubAsset = this.config.getSpokeTokenFromOriginalAssetAddress(dstChainKey, toToken);
+    const dstToken = this.config.getMoneyMarketToken(dstChainKey, toToken);
     invariant(toHubAsset, `hub asset not found for target chain token (toToken): ${toToken}`);
-    invariant(dstToken, `Money market token not found for spoke chain (${toChainId}) token: ${toToken}`);
+    invariant(dstToken, `Money market token not found for spoke chain (${dstChainKey}) token: ${toToken}`);
 
     const assetAddress = toHubAsset.hubAsset;
     const vaultAddress = toHubAsset.vault;
@@ -1055,26 +1051,26 @@ export class MoneyMarketService {
       translatedAmountOut = EvmVaultTokenService.translateOutgoingDecimals(dstToken.decimals, translatedInAmount);
     }
 
-    if (toChainId === this.hubProvider.chainConfig.chain.key) {
-      if (assetAddress.toLowerCase() === this.config.spokeChainConfig[toChainId].addresses.wrappedSonic.toLowerCase()) {
+    if (dstChainKey === this.hubProvider.chainConfig.chain.key) {
+      if (assetAddress.toLowerCase() === this.config.spokeChainConfig[dstChainKey].addresses.wrappedSonic.toLowerCase()) {
         const withdrawToCall = {
           address: assetAddress,
           value: 0n,
           data: encodeFunctionData({
             abi: wrappedSonicAbi,
             functionName: 'withdrawTo',
-            args: [toAddress, translatedAmountOut],
+            args: [dstAddress, translatedAmountOut],
           }),
         };
         calls.push(withdrawToCall);
       } else {
-        calls.push(Erc20Service.encodeTransfer(assetAddress, toAddress, translatedAmountOut));
+        calls.push(Erc20Service.encodeTransfer(assetAddress, dstAddress, translatedAmountOut));
       }
     } else {
       calls.push(
         EvmAssetManagerService.encodeTransfer(
           assetAddress,
-          toAddress,
+          dstAddress,
           translatedAmountOut,
           this.hubProvider.chainConfig.addresses.assetManager,
         ),
@@ -1087,10 +1083,10 @@ export class MoneyMarketService {
   /**
    * Build transaction data for repaying to the money market pool.
    */
-  public buildRepayData(fromChainId: SpokeChainKey, fromToken: string, amount: bigint, toHubAddress: Address): Hex {
+  public buildRepayData(srcChainKey: SpokeChainKey, fromToken: string, amount: bigint, toHubAddress: Address): Hex {
     const calls: EvmContractCall[] = [];
 
-    const fromHubAsset = this.config.getSpokeTokenFromOriginalAssetAddress(fromChainId, fromToken);
+    const fromHubAsset = this.config.getSpokeTokenFromOriginalAssetAddress(srcChainKey, fromToken);
     invariant(fromHubAsset, `hub asset not found for source chain token (fromToken): ${fromToken}`);
 
     const assetAddress = fromHubAsset.hubAsset;

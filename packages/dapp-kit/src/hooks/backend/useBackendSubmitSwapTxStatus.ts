@@ -8,7 +8,7 @@ export type UseBackendSubmitSwapTxStatusParams = ReadHookParams<
   SubmitSwapTxStatusResponse | undefined,
   {
     txHash: string | undefined;
-    srcChainId?: string;
+    srcChainKey?: string;
     apiConfig?: RequestOverrideConfig;
   }
 >;
@@ -18,7 +18,7 @@ export type UseBackendSubmitSwapTxStatusParams = ReadHookParams<
  *
  * @example
  * const { data: status } = useBackendSubmitSwapTxStatus({
- *   params: { txHash: '0x123...', srcChainId: '1' },
+ *   params: { txHash: '0x123...', srcChainKey: 'sonic' },
  * });
  *
  * @remarks
@@ -30,18 +30,18 @@ export const useBackendSubmitSwapTxStatus = ({
 }: UseBackendSubmitSwapTxStatusParams = {}): UseQueryResult<SubmitSwapTxStatusResponse | undefined, Error> => {
   const { sodax } = useSodaxContext();
   const txHash = params?.txHash;
-  const srcChainId = params?.srcChainId;
+  const srcChainKey = params?.srcChainKey;
   const apiConfig = params?.apiConfig;
 
   return useQuery({
-    queryKey: ['backend', 'submitSwapTx', 'status', txHash, srcChainId],
+    queryKey: ['backend', 'submitSwapTx', 'status', txHash, srcChainKey],
     queryFn: async (): Promise<SubmitSwapTxStatusResponse | undefined> => {
       if (!txHash) return undefined;
       return unwrapResult(
         await sodax.backendApi.getSubmitSwapTxStatus(
           {
             txHash,
-            srcChainKey: srcChainId,
+            srcChainKey,
           },
           apiConfig,
         ),
