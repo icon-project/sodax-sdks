@@ -102,7 +102,6 @@ TypeScript enforces this at compile time via the `WalletProviderSlot<K, Raw>` di
 // Signed execution — walletProvider required, chain-narrowed by srcChainKey
 await sodax.swaps.createIntent({
   params: { srcChainKey: ChainKeys.BSC_MAINNET, ...otherParams },
-  raw: false,
   walletProvider: evmWalletProvider, // must be IEvmWalletProvider for BSC
 });
 
@@ -228,7 +227,7 @@ const createIntentParams = {
   dstChainKey: ChainKeys.ARBITRUM_MAINNET,  // Destination chain key
   srcAddress: '0x...',           // User's address on the source chain
   dstAddress: '0x...',           // Recipient address on the destination chain
-  solver: '0x0000000000000000000000000000000000000000', // Specific solver (address(0) = any)
+  solver: '0x0000000000000000000000000000000000000000', // Optional: Specific solver (address(0) = any)
   data: '0x',                    // Additional arbitrary data
 } satisfies CreateIntentParams<typeof ChainKeys.BSC_MAINNET>;
 ```
@@ -251,7 +250,7 @@ const limitOrderParams = {
   dstChainKey: ChainKeys.ARBITRUM_MAINNET,
   srcAddress: '0x...',
   dstAddress: '0x...',
-  solver: '0x0000000000000000000000000000000000000000',
+  solver: '0x0000000000000000000000000000000000000000', // optional solver address
   data: '0x',
 } satisfies CreateLimitOrderParams<typeof ChainKeys.BSC_MAINNET>;
 ```
@@ -438,7 +437,7 @@ const swapResult = await sodax.swaps.swap({
     dstChainKey: ChainKeys.ARBITRUM_MAINNET,
     srcAddress: await evmWalletProvider.getWalletAddress(),
     dstAddress: '0x...',
-    solver: '0x0000000000000000000000000000000000000000',
+    solver: '0x0000000000000000000000000000000000000000', // optional
     data: '0x',
   },
   walletProvider: evmWalletProvider,
@@ -521,7 +520,7 @@ const limitOrderResult = await sodax.swaps.createLimitOrder({
     dstChainKey: ChainKeys.ARBITRUM_MAINNET,
     srcAddress: '0x...',
     dstAddress: '0x...',
-    solver: '0x0000000000000000000000000000000000000000',
+    solver: '0x0000000000000000000000000000000000000000', // optional
     data: '0x',
   },
   walletProvider: evmWalletProvider,

@@ -18,7 +18,6 @@ const supplyResult = await sodax.moneyMarket.supply({
     amount: 1000n,
     action: 'supply',
   },
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 ```
@@ -186,7 +185,6 @@ if (!isAllowanceValid.value) {
   // Approve — signed execution (raw: false or omitted)
   const approveResult = await sodax.moneyMarket.approve({
     params: supplyParams,
-    raw: false,
     walletProvider: evmWalletProvider,
   });
 
@@ -264,7 +262,6 @@ if (!allowanceCheck.value) {
 
   const approveResult = await sodax.moneyMarket.approve({
     params: supplyParams,
-    raw: false,
     walletProvider: evmWalletProvider,
   });
 
@@ -279,7 +276,6 @@ if (!allowanceCheck.value) {
 // Step 3: Now you can proceed with supply
 const supplyResult = await sodax.moneyMarket.supply({
   params: supplyParams,
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 
@@ -347,7 +343,6 @@ if (!isAllowanceValid.ok) {
 if (!isAllowanceValid.value) {
   const approveResult = await sodax.moneyMarket.approve({
     params: supplyParams,
-    raw: false,
     walletProvider: evmWalletProvider,
   });
 
@@ -362,7 +357,6 @@ if (!isAllowanceValid.value) {
 // Supply and relay (complete operation)
 const supplyAndSubmitResult = await sodax.moneyMarket.supply({
   params: supplyParams,
-  raw: false,
   walletProvider: evmWalletProvider,
   timeout: DEFAULT_RELAY_TX_TIMEOUT, // Optional: timeout in milliseconds (default: 60 seconds)
 });
@@ -377,7 +371,6 @@ if (supplyAndSubmitResult.ok) {
 // Create supply intent only (no relay wait)
 const supplyIntentResult = await sodax.moneyMarket.createSupplyIntent({
   params: supplyParams,
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 
@@ -424,7 +417,6 @@ const borrowParams: MoneyMarketBorrowParams = {
 // Borrow and relay (complete operation)
 const borrowAndSubmitResult = await sodax.moneyMarket.borrow({
   params: borrowParams,
-  raw: false,
   walletProvider: evmWalletProvider,
   timeout: DEFAULT_RELAY_TX_TIMEOUT,
 });
@@ -439,7 +431,6 @@ if (borrowAndSubmitResult.ok) {
 // Create borrow intent only (no relay wait)
 const borrowIntentResult = await sodax.moneyMarket.createBorrowIntent({
   params: borrowParams,
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 
@@ -472,7 +463,6 @@ const withdrawParams: MoneyMarketWithdrawParams = {
 // Withdraw and relay (complete operation)
 const withdrawAndSubmitResult = await sodax.moneyMarket.withdraw({
   params: withdrawParams,
-  raw: false,
   walletProvider: evmWalletProvider,
   timeout: DEFAULT_RELAY_TX_TIMEOUT,
 });
@@ -487,7 +477,6 @@ if (withdrawAndSubmitResult.ok) {
 // Create withdraw intent only (no relay wait)
 const withdrawIntentResult = await sodax.moneyMarket.createWithdrawIntent({
   params: withdrawParams,
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 
@@ -528,7 +517,6 @@ if (!isAllowanceValid.ok) {
 if (!isAllowanceValid.value) {
   const approveResult = await sodax.moneyMarket.approve({
     params: repayParams,
-    raw: false,
     walletProvider: evmWalletProvider,
   });
 
@@ -543,7 +531,6 @@ if (!isAllowanceValid.value) {
 // Repay and relay (complete operation)
 const repayAndSubmitResult = await sodax.moneyMarket.repay({
   params: repayParams,
-  raw: false,
   walletProvider: evmWalletProvider,
   timeout: DEFAULT_RELAY_TX_TIMEOUT,
 });
@@ -558,7 +545,6 @@ if (repayAndSubmitResult.ok) {
 // Create repay intent only (no relay wait)
 const repayIntentResult = await sodax.moneyMarket.createRepayIntent({
   params: repayParams,
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 
@@ -609,7 +595,6 @@ Check `result.error.message` for CODE-form errors. There are no typed error disc
 ```typescript
 const result = await sodax.moneyMarket.supply({
   params: supplyParams,
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 
@@ -644,7 +629,6 @@ if (!result.ok) {
 ```typescript
 const createIntentResult = await sodax.moneyMarket.createSupplyIntent({
   params: supplyParams,
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 
@@ -678,7 +662,6 @@ if (!allowanceCheck.ok) {
 if (!allowanceCheck.value) {
   const approveResult = await sodax.moneyMarket.approve({
     params: supplyParams,
-    raw: false,
     walletProvider: evmWalletProvider,
   });
 

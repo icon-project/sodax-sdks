@@ -43,9 +43,12 @@ For most use cases, call `relayTxAndWaitPacket` rather than invoking `submitTran
 import { relayTxAndWaitPacket } from '@sodax/sdk';
 import { ChainKeys } from '@sodax/sdk';
 
+// relayData ({ address, payload }) comes from the preceding spoke operation,
+// e.g. createIntent() or createBridgeIntent() returns { tx, relayData }.
+// It is always required — pass it through even for non-Solana/Bitcoin chains.
 const result = await relayTxAndWaitPacket({
   srcTxHash: '0x123...',
-  data: undefined,          // required only for Solana and Bitcoin (split-tx chains)
+  data: relayData,          // RelayExtraData from the preceding spoke operation
   chainKey: ChainKeys.ETHEREUM_MAINNET,
   relayerApiEndpoint: 'https://api.example.com/relay' as HttpUrl,
   timeout: 120_000,         // optional; defaults to DEFAULT_RELAY_TX_TIMEOUT (120 s)
@@ -227,7 +230,7 @@ export type GetPacketResponse =
 
 export type RelayAndWaitParams = {
   srcTxHash: string;
-  data: RelayExtraData | undefined;
+  data: RelayExtraData;         // always required; only used in submit payload for Solana/Bitcoin
   chainKey: SpokeChainKey;
   relayerApiEndpoint: HttpUrl;
   timeout: number | undefined;

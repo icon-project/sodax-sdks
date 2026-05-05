@@ -185,7 +185,6 @@ const createIntentParams: CreateIntentParams<typeof ChainKeys.ARBITRUM_MAINNET> 
 // isAllowanceValid accepts the same SwapActionParams shape as swap() / createIntent().
 const allowanceResult = await sodax.swaps.isAllowanceValid({
   params: createIntentParams,
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 
@@ -213,7 +212,6 @@ if (!allowanceResult.value) {
 
   const approveResult = await sodax.swaps.approve({
     params: createIntentParams,
-    raw: false,
     walletProvider: evmWalletProvider,
   });
 
@@ -292,7 +290,6 @@ Now you're ready to execute the swap. The `swap` method orchestrates the complet
 ```typescript
 const swapResult = await sodax.swaps.swap({
   params: createIntentParams,
-  raw: false,
   walletProvider: evmWalletProvider,
   // Optional parameters:
   // timeout: 120000, // Timeout in milliseconds waiting for hub relay (default: 60 s)
@@ -559,7 +556,6 @@ async function executeSwap(
     console.log('Step 4: Checking allowance...');
     const allowanceResult = await sodax.swaps.isAllowanceValid({
       params: createIntentParams,
-      raw: false,
       walletProvider: evmWalletProvider,
     });
 
@@ -573,7 +569,6 @@ async function executeSwap(
       console.log('Step 5: Approving tokens...');
       const approveResult = await sodax.swaps.approve({
         params: createIntentParams,
-        raw: false,
         walletProvider: evmWalletProvider,
       });
 
@@ -596,7 +591,6 @@ async function executeSwap(
     console.log('Step 6: Executing swap...');
     const swapResult = await sodax.swaps.swap({
       params: createIntentParams,
-      raw: false,
       walletProvider: evmWalletProvider,
     });
 

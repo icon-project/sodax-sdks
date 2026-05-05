@@ -32,7 +32,6 @@ Every mutating method takes a single argument that follows the `SpokeExecActionP
 // Signed execution — walletProvider is required and chain-narrowed
 await sodax.dex.assetService.deposit({
   params: { srcChainKey: ChainKeys.ETHEREUM_MAINNET, srcAddress: "0xabc...", ... },
-  raw: false,
   walletProvider: evmWalletProvider, // IEvmWalletProvider
   timeout: 30_000,
 });
@@ -96,7 +95,6 @@ const result = await sodax.dex.assetService.isAllowanceValid({
     amount: 1000000000000000000n,
     poolToken: "0xabcd...",
   },
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 
@@ -129,7 +127,6 @@ const result = await sodax.dex.assetService.approve({
     amount: 1000000000000000000n,
     poolToken: "0xabcd...",
   },
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 
@@ -156,7 +153,6 @@ const result = await sodax.dex.assetService.executeDeposit({
     amount: 1000000000000000000n,
     poolToken: "0xabcd...",
   },
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 
@@ -184,7 +180,6 @@ const result = await sodax.dex.assetService.deposit({
     amount: 1000000000000000000n,
     poolToken: "0xabcd...",
   },
-  raw: false,
   walletProvider: evmWalletProvider,
   timeout: 30_000,
 });
@@ -221,7 +216,6 @@ const result = await sodax.dex.assetService.withdraw({
     asset: "0x1234...",
     amount: 500000000000000000n,
   },
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 
@@ -343,7 +337,6 @@ const result = await sodax.dex.clService.supplyLiquidity({
     amount1Max: 1000000000000000000n,
     sqrtPriceX96,
   },
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 
@@ -388,7 +381,6 @@ const result = await sodax.dex.clService.increaseLiquidity({
     amount1Max: 500000000000000000n,
     sqrtPriceX96,
   },
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 ```
@@ -412,7 +404,6 @@ const result = await sodax.dex.clService.decreaseLiquidity({
     amount0Min: 0n,
     amount1Min: 0n,
   },
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 ```
@@ -435,7 +426,6 @@ const result = await sodax.dex.clService.claimRewards({
     tickLower: -60000n,
     tickUpper: 60000n,
   },
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 ```

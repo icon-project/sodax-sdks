@@ -213,7 +213,6 @@ const swapResult = await sodax.swaps.swap({
     deadline: await sodax.swaps.getSwapDeadline(),
     allowPartialFill: false,
   },
-  raw: false,
   walletProvider: evmWalletProvider,  // IEvmWalletProvider — narrows from srcChainKey
 });
 

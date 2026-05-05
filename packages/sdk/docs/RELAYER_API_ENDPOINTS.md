@@ -211,9 +211,12 @@ Example:
 import { relayTxAndWaitPacket, getIntentRelayChainId } from '@sodax/sdk';
 import { ChainKeys, DEFAULT_RELAY_TX_TIMEOUT } from '@sodax/sdk';
 
+// relayData comes from the preceding spoke operation (createIntent / createBridgeIntent).
+// It is always required — for non-Solana/Bitcoin chains it is accepted but not forwarded
+// to the relay submit payload.
 const result = await relayTxAndWaitPacket({
   srcTxHash: '0x...',
-  data: undefined,  // not a Solana/Bitcoin tx
+  data: relayData,  // RelayExtraData from the preceding spoke operation
   chainKey: ChainKeys.ETHEREUM_MAINNET,
   relayerApiEndpoint: 'https://xcall-relay.nw.iconblockchain.xyz',
   timeout: DEFAULT_RELAY_TX_TIMEOUT,
