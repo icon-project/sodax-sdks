@@ -16,14 +16,12 @@ import {
   Contract,
   Address,
   FeeBumpTransaction,
-  rpc as StellarRpc,
   nativeToScVal,
   TimeoutInfinite,
   scValToBigInt,
   Horizon,
   Account,
   Operation,
-  SorobanRpc,
   type xdr,
   type Transaction,
   TransactionBuilder,
@@ -151,7 +149,8 @@ export class StellarSpokeService {
 
     const result = await this.sorobanServer.simulateTransaction(tx);
 
-    if (StellarRpc.Api.isSimulationError(result)) {
+    // Also throws on restore responses — invalid for read-only balance simulation
+    if (!rpc.Api.isSimulationSuccess(result)) {
       throw new Error('Failed to simulate transaction');
     }
 
@@ -166,9 +165,9 @@ export class StellarSpokeService {
 
   public async buildPriorityStellarTransaction(
     account: CustomStellarAccount,
-    network: StellarRpc.Api.GetNetworkResponse,
+    network: rpc.Api.GetNetworkResponse,
     operation: xdr.Operation<Operation.InvokeHostFunction>,
-  ): Promise<[Transaction, StellarRpc.Api.SimulateTransactionResponse]> {
+  ): Promise<[Transaction, rpc.Api.SimulateTransactionResponse]> {
     const simulationForFee = await this.sorobanServer.simulateTransaction(
       new TransactionBuilder(account.getAccountClone(), {
         fee: this.baseFee,
@@ -179,7 +178,7 @@ export class StellarSpokeService {
         .build(),
     );
 
-    if (!StellarRpc.Api.isSimulationSuccess(simulationForFee)) {
+    if (!rpc.Api.isSimulationSuccess(simulationForFee)) {
       throw new Error(`Simulation error: ${JSON.stringify(simulationForFee)}`);
     }
 
@@ -246,7 +245,7 @@ export class StellarSpokeService {
         sendMessageCall,
       );
 
-      const assembledPriorityTx = SorobanRpc.assembleTransaction(rawPriorityTx, simulation).build();
+      const assembledPriorityTx = rpc.assembleTransaction(rawPriorityTx, simulation).build();
 
       if (params.raw) {
         const transactionXdr = rawPriorityTx.toXDR();
@@ -277,8 +276,8 @@ export class StellarSpokeService {
   }
 
   private handleSendTransactionError(
-    response: SorobanRpc.Api.SendTransactionResponse,
-  ): SorobanRpc.Api.SendTransactionResponse {
+    response: rpc.Api.SendTransactionResponse,
+  ): rpc.Api.SendTransactionResponse {
     if (response.status === 'ERROR') {
       console.error(JSON.stringify(response, null, 2));
       throw new Error(JSON.stringify(response, null, 2));
@@ -315,14 +314,14 @@ export class StellarSpokeService {
   public async submitOrRestoreAndRetry(
     walletProvider: IStellarWalletProvider,
     account: CustomStellarAccount,
-    network: StellarRpc.Api.GetNetworkResponse,
+    network: rpc.Api.GetNetworkResponse,
     tx: Transaction,
     operation: xdr.Operation<Operation.InvokeHostFunction>,
-    simulation?: StellarRpc.Api.SimulateTransactionResponse,
+    simulation?: rpc.Api.SimulateTransactionResponse,
   ): Promise<string> {
     const initialSimulation = simulation ?? (await this.sorobanServer.simulateTransaction(tx));
 
-    if (!StellarRpc.Api.isSimulationSuccess(initialSimulation)) {
+    if (!rpc.Api.isSimulationSuccess(initialSimulation)) {
       throw new Error(
         `[StellarSpokeProvider.submitOrRestoreAndRetry] Simulation Failed: ${JSON.stringify(initialSimulation)}`,
       );
@@ -330,7 +329,7 @@ export class StellarSpokeService {
 
     // check if restore is needed
     let restored = false;
-    if (StellarRpc.Api.isSimulationRestore(initialSimulation)) {
+    if (rpc.Api.isSimulationRestore(initialSimulation)) {
       try {
         await this.handleSimulationRestore(
           walletProvider,
@@ -373,7 +372,7 @@ export class StellarSpokeService {
     minResourceFee: string,
     transactionData: xdr.SorobanTransactionData,
     account: CustomStellarAccount,
-    network: StellarRpc.Api.GetNetworkResponse,
+    network: rpc.Api.GetNetworkResponse,
   ): Promise<string> {
     // Build the restoration operation using the RPC server's hints.
     const totalFee = (BigInt(this.baseFee) + BigInt(this.priorityFee) + BigInt(minResourceFee)).toString();
@@ -420,7 +419,7 @@ export class StellarSpokeService {
         depositCall,
       );
 
-      const assembledPriorityTx = SorobanRpc.assembleTransaction(rawPriorityTx, simulation).build();
+      const assembledPriorityTx = rpc.assembleTransaction(rawPriorityTx, simulation).build();
 
       if (params.raw) {
         const transactionXdr = rawPriorityTx.toXDR();

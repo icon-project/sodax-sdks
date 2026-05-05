@@ -1,14 +1,13 @@
 import {
-  type rpc as StellarRpc,
   type FeeBumpTransaction,
   type Memo,
   type MemoType,
   type Operation,
-  SorobanRpc,
+  rpc,
   type Transaction,
 } from '@stellar/stellar-sdk';
 
-export class CustomSorobanServer extends SorobanRpc.Server {
+export class CustomSorobanServer extends rpc.Server {
   private customHeaders: Record<string, string>;
 
   constructor(serverUrl: string, customHeaders: Record<string, string>) {
@@ -18,7 +17,7 @@ export class CustomSorobanServer extends SorobanRpc.Server {
     this.customHeaders = customHeaders;
   }
 
-  override async getNetwork(): Promise<StellarRpc.Api.GetNetworkResponse> {
+  override async getNetwork(): Promise<rpc.Api.GetNetworkResponse> {
     const requestOptions = {
       method: 'POST',
       headers: {
@@ -42,7 +41,7 @@ export class CustomSorobanServer extends SorobanRpc.Server {
 
   override async simulateTransaction(
     tx: Transaction<Memo<MemoType>, Operation[]>,
-  ): Promise<SorobanRpc.Api.SimulateTransactionResponse> {
+  ): Promise<rpc.Api.SimulateTransactionResponse> {
     const requestOptions = {
       method: 'POST',
       headers: {
@@ -64,12 +63,13 @@ export class CustomSorobanServer extends SorobanRpc.Server {
       throw new Error(`HTTP error simulating TX! status: ${response.status}`);
     }
 
-    return response.json().then(json => json.result);
+    // Parse raw JSON-RPC payload into the discriminated union expected by callers
+    return response.json().then(json => rpc.parseRawSimulation(json.result));
   }
 
   override async sendTransaction(
     tx: Transaction | FeeBumpTransaction,
-  ): Promise<SorobanRpc.Api.SendTransactionResponse> {
+  ): Promise<rpc.Api.SendTransactionResponse> {
     const requestOptions = {
       method: 'POST',
       headers: {
@@ -93,7 +93,7 @@ export class CustomSorobanServer extends SorobanRpc.Server {
     return response.json().then(json => json.result);
   }
 
-  override async getTransaction(hash: string): Promise<SorobanRpc.Api.GetTransactionResponse> {
+  override async getTransaction(hash: string): Promise<rpc.Api.GetTransactionResponse> {
     const requestOptions = {
       method: 'POST',
       headers: {
