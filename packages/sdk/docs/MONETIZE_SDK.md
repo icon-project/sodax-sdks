@@ -3,7 +3,7 @@
 Learn how to configure fees and monetize your Sodax SDK integration.
 
 When using the SODAX SDK, you can monetize your integration by collecting fees from the transactions processed through your application.
-The SDK supports fee configuration in two ways: globally when creating the SDK config, or per-request.
+Fees are configured globally per feature when creating the `Sodax` instance — there is no per-request override for `getQuote()` or `swap()`.
 
 ## Defining Fee
 
@@ -35,7 +35,7 @@ import { Sodax, PartnerFee } from '@sodax/sdk';
 
 // apply fee to swap feature
 const sodaxWithSwapFees = new Sodax({
-  swap: { partnerFee: partnerFeePercentage },
+  swaps: { partnerFee: partnerFeePercentage },
 });
 
 // apply fee to money market feature
@@ -43,21 +43,26 @@ const sodaxWithMoneyMarketFees = new Sodax({
   moneyMarket: { partnerFee: partnerFeePercentage },
 });
 
-// apply fee to swap and money market feature
+// apply fee to bridge feature
+const sodaxWithBridgeFees = new Sodax({
+  bridge: { partnerFee: partnerFeePercentage },
+});
+
+// apply fee to multiple features
 const sodaxWithFees = new Sodax({
-  swap: { partnerFee: partnerFeePercentage },
+  swaps: { partnerFee: partnerFeePercentage },
   moneyMarket: { partnerFee: partnerFeePercentage },
+  bridge: { partnerFee: partnerFeePercentage },
 });
 ```
 
 ## Per-request fee configuration
 
-Alternatively, you can configure fees on a per-request basis.
-This is useful when you need different fee rates for different types of transactions or users.
-The fee parameter can be added to the params object when requesting quotes or executing swaps.
-All fee-enabled features contain similar logic (e.g. money market, etc..).
+There is no per-request fee override for `getQuote()` or `swap()`. Fees are always taken from the global config set on `new Sodax({ swaps: { partnerFee } })`. Configure different fee rates by creating separate `Sodax` instances.
 
-### Quote request with fees
+### Quote request
+
+`SwapService.getQuote()` automatically deducts the configured `swaps.partnerFee` from the `amount` before forwarding to the solver. No fee field appears in the request payload.
 
 ```typescript
 import {
@@ -71,7 +76,6 @@ const result = await sodax.swaps.getQuote({
   token_dst_blockchain_id: ChainKeys.ARBITRUM_MAINNET, // Destination chain key (e.g. Arbitrum)
   amount: 1000000000000000n, // token amount in scaled token decimal precision (e.g. 1 ETH = 1e18)
   quote_type: 'exact_input', // type of quote
-  fee: fee, // optional, uses global partner fee if not provided
 } satisfies SolverIntentQuoteRequest);
 
 if (result.ok) {
@@ -83,7 +87,9 @@ if (result.ok) {
 }
 ```
 
-### Swap request with fees
+### Swap request
+
+The configured `swaps.partnerFee` is applied automatically by the service. No fee field appears in the call.
 
 ```typescript
 const swapResult = await sodax.swaps.swap({
@@ -101,9 +107,7 @@ const swapResult = await sodax.swaps.swap({
     solver: '0x0000000000000000000000000000000000000000', // Optional: specific solver, address(0) means any solver
     data: '0x', // Arbitrary additional data
   },
-  raw: false,
   walletProvider, // chain-narrowed wallet provider for the source chain
-  fee, // optional, uses global partner fee if not provided
   timeout, // optional, request timeout in ms if needed
   skipSimulation, // optional - whether to skip transaction simulation (default: false)
 });
@@ -172,7 +176,6 @@ const setResult = await sodax.partners.feeClaim.setSwapPreference({
     dstChainKey: ChainKeys.ARBITRUM_MAINNET,   // chain to receive proceeds
     dstAddress: '0xYourArbitrumAddress',
   },
-  raw: false,
   walletProvider, // EVM wallet provider for Sonic
 });
 
@@ -205,7 +208,6 @@ if (approvedResult.ok && !approvedResult.value) {
       srcAddress: '0xYourSonicAddress',
       token: '0xFeeTokenHubAddress',
     },
-    raw: false,
     walletProvider, // EVM wallet provider for Sonic
   });
 
@@ -230,7 +232,6 @@ const claimResult = await sodax.partners.feeClaim.swap({
     amount: 1_000_000_000_000_000_000n, // amount in token's native decimals
     timeout: 30_000, // optional, ms to wait for tx confirmation
   },
-  raw: false,
   walletProvider, // EVM wallet provider for Sonic
 });
 

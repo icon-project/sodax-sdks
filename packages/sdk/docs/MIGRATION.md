@@ -54,7 +54,6 @@ All exec methods on `MigrationService` follow the `SpokeExecActionParams` wrappe
 // Signed execution (raw: false, walletProvider required)
 const result = await sodax.migration.migrateIcxToSoda({
   params: { srcChainKey: ChainKeys.ICON_MAINNET, /* ... */ },
-  raw: false,
   walletProvider: iconWalletProvider,
   timeout: 30000,       // optional, ms; default 60000
   skipSimulation: false, // optional
@@ -140,7 +139,6 @@ const revertParams: IcxCreateRevertMigrationParams = {
 const approveResult = await sodax.migration.approve(
   {
     params: revertParams,
-    raw: false,
     walletProvider: sonicWalletProvider,
   },
   'revert',
@@ -180,7 +178,6 @@ const migrationParams: IcxMigrateParams = {
 // Migrate ICX to SODA
 const result = await sodax.migration.migrateIcxToSoda({
   params: migrationParams,
-  raw: false,
   walletProvider: iconWalletProvider,
   timeout: 30000, // Optional timeout in milliseconds (default: 60000)
 });
@@ -214,7 +211,6 @@ const revertParams: IcxCreateRevertMigrationParams = {
 // Revert SODA to ICX
 const result = await sodax.migration.revertMigrateSodaToIcx({
   params: revertParams,
-  raw: false,
   walletProvider: sonicWalletProvider,
   timeout: 30000, // Optional timeout in milliseconds (default: 60000)
 });
@@ -289,7 +285,6 @@ const migrationParams: UnifiedBnUSDMigrateParams<typeof ChainKeys.ICON_MAINNET> 
 // Migrate legacy bnUSD to new bnUSD
 const result = await sodax.migration.migratebnUSD({
   params: migrationParams,
-  raw: false,
   walletProvider: iconWalletProvider,
   timeout: 30000, // Optional timeout in milliseconds (default: 60000)
 });
@@ -333,7 +328,6 @@ if (!isAllowed.ok) {
   const approveResult = await sodax.migration.approve(
     {
       params: revertParams,
-      raw: false,
       walletProvider: sonicWalletProvider,
     },
     'revert',
@@ -352,7 +346,6 @@ if (!isAllowed.ok) {
 // Reverse migrate new bnUSD to legacy bnUSD
 const result = await sodax.migration.migratebnUSD({
   params: revertParams,
-  raw: false,
   walletProvider: sonicWalletProvider,
   timeout: 30000, // Optional timeout in milliseconds (default: 60000)
 });
@@ -390,7 +383,6 @@ const migrationParams: BalnMigrateParams = {
 // Migrate BALN to SODA
 const result = await sodax.migration.migrateBaln({
   params: migrationParams,
-  raw: false,
   walletProvider: iconWalletProvider,
   timeout: 30000, // Optional timeout in milliseconds (default: 60000)
 });
@@ -425,19 +417,19 @@ const { balnSwapService } = sodax.migration;
 const lockId = 1n;
 
 // Claim unlocked SODA tokens from a completed lock
-await balnSwapService.claim(userAddress, { lockId }, { raw: false, walletProvider: sonicWalletProvider });
+await balnSwapService.claim(userAddress, { lockId }, { walletProvider: sonicWalletProvider });
 
 // Initiate unstaking of xSoda tokens from a lock
-await balnSwapService.unstake(userAddress, { lockId }, { raw: false, walletProvider: sonicWalletProvider });
+await balnSwapService.unstake(userAddress, { lockId }, { walletProvider: sonicWalletProvider });
 
 // Claim tokens after the unstaking waiting period expires
-await balnSwapService.claimUnstaked(userAddress, { lockId }, { raw: false, walletProvider: sonicWalletProvider });
+await balnSwapService.claimUnstaked(userAddress, { lockId }, { walletProvider: sonicWalletProvider });
 
 // Cancel a pending unstake request
-await balnSwapService.cancelUnstake(userAddress, { lockId }, { raw: false, walletProvider: sonicWalletProvider });
+await balnSwapService.cancelUnstake(userAddress, { lockId }, { walletProvider: sonicWalletProvider });
 
 // Stake SODA tokens held in a lock into the xSoda vault
-await balnSwapService.stake(userAddress, { lockId }, { raw: false, walletProvider: sonicWalletProvider });
+await balnSwapService.stake(userAddress, { lockId }, { walletProvider: sonicWalletProvider });
 
 // Read all locks for a user
 const locks = await balnSwapService.getDetailedUserLocks(publicClient, userAddress);
@@ -466,7 +458,6 @@ async function migrateIcx(amount: bigint, recipient: Address): Promise<void> {
 
   const result = await sodax.migration.migrateIcxToSoda({
     params,
-    raw: false,
     walletProvider: iconWalletProvider,
   });
 
@@ -515,7 +506,7 @@ async function reverseMigrateIcx(amount: bigint, to: IconEoaAddress): Promise<vo
   if (!isAllowed.value) {
     // Approve if needed
     const approveResult = await sodax.migration.approve(
-      { params, raw: false, walletProvider: sonicWalletProvider },
+      { params, walletProvider: sonicWalletProvider },
       'revert',
     );
     if (approveResult.ok) {
@@ -530,7 +521,6 @@ async function reverseMigrateIcx(amount: bigint, to: IconEoaAddress): Promise<vo
   // Create and submit revert migration intent
   const result = await sodax.migration.revertMigrateSodaToIcx({
     params,
-    raw: false,
     walletProvider: sonicWalletProvider,
   });
 
@@ -577,7 +567,6 @@ async function migrateBnUSD(
 
   const result = await sodax.migration.migratebnUSD({
     params,
-    raw: false,
     walletProvider: iconWalletProvider,
   });
 
@@ -623,7 +612,6 @@ async function migrateBaln(amount: bigint, recipient: Address): Promise<void> {
 
   const result = await sodax.migration.migrateBaln({
     params,
-    raw: false,
     walletProvider: iconWalletProvider,
   });
 

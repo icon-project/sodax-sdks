@@ -44,7 +44,6 @@ const result = await sodax.bridge.isAllowanceValid({
     dstToken: '0xabcdef1234567890...',
     recipient: '0x9876543210fedcba...',
   },
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 
@@ -91,7 +90,6 @@ const result = await sodax.bridge.approve({
     dstToken: '0xabcdef1234567890...',
     recipient: '0x9876543210fedcba...',
   },
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 
@@ -142,7 +140,6 @@ const result = await sodax.bridge.bridge({
     dstToken: '0xabcdef1234567890...',
     recipient: '0x9876543210fedcba...',
   },
-  raw: false,
   walletProvider: evmWalletProvider,
   timeout: 30_000, // optional, defaults to 120 000 ms
 });
@@ -184,7 +181,6 @@ const result = await sodax.bridge.createBridgeIntent({
     dstToken: '0xabcdef1234567890...',
     recipient: '0x9876543210fedcba...',
   },
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 

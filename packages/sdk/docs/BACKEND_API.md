@@ -39,11 +39,12 @@ const backendApi = sodax.backendApi;
 import { Sodax } from '@sodax/sdk';
 
 const sodax = new Sodax({
-  backendApiConfig: {
+  api: {
     baseURL: 'https://your-custom-api-endpoint.com',
     timeout: 60000, // 60 seconds
     headers: {
-      'Authorization': 'Bearer your-token',
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
       'X-Custom-Header': 'custom-value',
     },
   },
@@ -70,9 +71,9 @@ if (!result.ok) {
 
 ```typescript
 type ApiConfig = {
-  baseURL: string;                    // API endpoint URL (default: 'https://api.sodax.com/v1/be')
-  timeout: number;                    // Request timeout in milliseconds (default: 30000)
-  headers?: Record<string, string>;   // Custom headers (default: Content-Type and Accept)
+  baseURL: string;                   // API endpoint URL (default: 'https://api.sodax.com/v1/be')
+  timeout: number;                   // Request timeout in milliseconds (default: 30000)
+  headers: Record<string, string>;   // Request headers (default: Content-Type and Accept)
 };
 ```
 
@@ -610,10 +611,12 @@ import { Sodax } from '@sodax/sdk';
 
 async function example() {
   const sodax = new Sodax({
-    backendApiConfig: {
+    api: {
       baseURL: 'https://api.sodax.com/v1/be',
       timeout: 60000,
       headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
         'Authorization': 'Bearer your-api-token',
       },
     },

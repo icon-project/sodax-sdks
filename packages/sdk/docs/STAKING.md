@@ -62,7 +62,6 @@ const result = await sodax.staking.isAllowanceValid({
     minReceive: 950000000000000000n,
     action: 'stake',
   },
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 
@@ -104,7 +103,6 @@ const result = await sodax.staking.approve({
     minReceive: 950000000000000000n,
     action: 'stake',
   },
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 
@@ -167,7 +165,6 @@ const result = await sodax.staking.stake({
     minReceive: 950000000000000000n, // 0.95 xSODA minimum
     action: 'stake',
   },
-  raw: false,
   walletProvider: evmWalletProvider,
   timeout: 30000,
 });
@@ -204,7 +201,6 @@ const result = await sodax.staking.createStakeIntent({
     minReceive: 950000000000000000n,
     action: 'stake',
   },
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 
@@ -246,7 +242,6 @@ const result = await sodax.staking.unstake({
     amount: 1000000000000000000n, // 1 xSODA
     action: 'unstake',
   },
-  raw: false,
   walletProvider: evmWalletProvider,
   timeout: 30000,
 });
@@ -279,7 +274,6 @@ const result = await sodax.staking.createUnstakeIntent({
     amount: 1000000000000000000n,
     action: 'unstake',
   },
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 
@@ -314,7 +308,6 @@ const result = await sodax.staking.instantUnstake({
     minAmount: 950000000000000000n, // 0.95 SODA minimum
     action: 'instantUnstake',
   },
-  raw: false,
   walletProvider: evmWalletProvider,
   timeout: 30000,
 });
@@ -348,7 +341,6 @@ const result = await sodax.staking.createInstantUnstakeIntent({
     minAmount: 950000000000000000n,
     action: 'instantUnstake',
   },
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 ```
@@ -377,7 +369,6 @@ const result = await sodax.staking.claim({
     amount: 950000000000000000n, // claimable amount after penalty
     action: 'claim',
   },
-  raw: false,
   walletProvider: evmWalletProvider,
   timeout: 30000,
 });
@@ -411,7 +402,6 @@ const result = await sodax.staking.createClaimIntent({
     amount: 950000000000000000n,
     action: 'claim',
   },
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 ```
@@ -438,7 +428,6 @@ const result = await sodax.staking.cancelUnstake({
     requestId: 1n,
     action: 'cancelUnstake',
   },
-  raw: false,
   walletProvider: evmWalletProvider,
   timeout: 30000,
 });
@@ -471,7 +460,6 @@ const result = await sodax.staking.createCancelUnstakeIntent({
     requestId: 1n,
     action: 'cancelUnstake',
   },
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 ```
@@ -848,7 +836,6 @@ Common error messages:
 // 1. Check allowance
 const allowanceResult = await sodax.staking.isAllowanceValid({
   params: { srcChainKey: ChainKeys.BASE_MAINNET, srcAddress, amount, minReceive, action: 'stake' },
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 if (!allowanceResult.ok) throw allowanceResult.error;
@@ -857,7 +844,6 @@ if (!allowanceResult.ok) throw allowanceResult.error;
 if (!allowanceResult.value) {
   const approveResult = await sodax.staking.approve({
     params: { srcChainKey: ChainKeys.BASE_MAINNET, srcAddress, amount, minReceive, action: 'stake' },
-    raw: false,
     walletProvider: evmWalletProvider,
   });
   if (!approveResult.ok) throw approveResult.error;
@@ -866,7 +852,6 @@ if (!allowanceResult.value) {
 // 3. Stake (spoke tx + relay + hub confirmation)
 const stakeResult = await sodax.staking.stake({
   params: { srcChainKey: ChainKeys.BASE_MAINNET, srcAddress, amount, minReceive, action: 'stake' },
-  raw: false,
   walletProvider: evmWalletProvider,
   timeout: 60000,
 });
@@ -881,7 +866,6 @@ const { srcChainTxHash, dstChainTxHash } = stakeResult.value;
 // Unstake (starts waiting period)
 const unstakeResult = await sodax.staking.unstake({
   params: { srcChainKey: ChainKeys.BASE_MAINNET, srcAddress, amount, action: 'unstake' },
-  raw: false,
   walletProvider: evmWalletProvider,
 });
 
@@ -900,7 +884,6 @@ if (penaltyResult.ok) {
         amount: req.claimableAmount,
         action: 'claim',
       },
-      raw: false,
       walletProvider: evmWalletProvider,
     });
   }
