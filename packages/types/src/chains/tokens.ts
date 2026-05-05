@@ -732,9 +732,9 @@ export const arbitrumSupportedTokens = {
     symbol: 'SODA',
     name: 'SODAX',
     decimals: 18,
-    address: '0x6958a4CBFe11406E2a1c1d3a71A1971aD8B3b92F',
+    address: '0x5bda87f18109CA85fa7ADDf1D48B97734e9dc6F5',
     chainKey: ChainKeys.ARBITRUM_MAINNET,
-    hubAsset: '0x93a367E5B37a1B9E8D04ef25a6Af40d181a3DfFF',
+    hubAsset: '0x66be65dd6d2401c179a2f7ab2d5cdfb040567727',
     vault: SodaTokens.sodaSODA.address,
   },
   sUSDS: {
