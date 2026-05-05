@@ -81,33 +81,33 @@ export class EvmVaultTokenService {
     };
   }
 
-  /**
+    /**
    * Retrieves all token information for the vault.
    * @param vault - The address of the vault.
    * @param publicClient - PublicClient<HttpTransport>
    * @returns A promise that resolves to an object containing tokens, their infos, and reserves.
    */
-  async getAllTokenInfo(
-    vault: Address,
-    publicClient: PublicClient<HttpTransport>,
-  ): Promise<{
-    tokens: readonly Address[];
-    infos: readonly TokenInfo[];
-    reserves: readonly bigint[];
-  }> {
-    const [tokens, infos, reserves] = await publicClient.readContract({
-      address: vault,
-      abi: vaultTokenAbi,
-      functionName: 'getAllTokenInfo',
-      args: [],
-    });
+    public static async getAllTokenInfo(
+      vault: Address,
+      publicClient: PublicClient<HttpTransport>,
+    ): Promise<{
+      tokens: readonly Address[];
+      infos: readonly TokenInfo[];
+      reserves: readonly bigint[];
+    }> {
+      const [tokens, infos, reserves] = await publicClient.readContract({
+        address: vault,
+        abi: vaultTokenAbi,
+        functionName: 'getAllTokenInfo',
+        args: [],
+      });
 
-    return {
-      tokens,
-      infos,
-      reserves,
-    };
-  }
+      return {
+        tokens,
+        infos,
+        reserves,
+      };
+    }
 
   /**
    * Deposits a specified amount of a token into the vault.
