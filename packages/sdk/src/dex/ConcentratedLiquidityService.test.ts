@@ -281,7 +281,7 @@ describe('ClService.getAssetsForPool', () => {
 
 describe('ClService.executeSupplyLiquidity', () => {
   it('on an EVM spoke (raw=false), forwards walletProvider and returns the IntentTxResult', async () => {
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
 
     const result = await cl.executeSupplyLiquidity({
       params: supplyParams(ChainKeys.BSC_MAINNET),
@@ -294,7 +294,7 @@ describe('ClService.executeSupplyLiquidity', () => {
       expect(result.value.tx).toBe('0xspokeTx');
       expect(result.value.relayData).toEqual({ address: HUB_WALLET, payload: expect.any(String) });
     }
-    const sendArg = (sodax.spokeService.sendMessage as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    const sendArg = (sodax.spoke.sendMessage as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
     expect(sendArg.raw).toBe(false);
     expect(sendArg.walletProvider).toBe(mockEvmProvider);
     expect(sendArg.srcChainKey).toBe(ChainKeys.BSC_MAINNET);
@@ -304,7 +304,7 @@ describe('ClService.executeSupplyLiquidity', () => {
 
   it('with raw=true, omits walletProvider and returns the raw spoke tx', async () => {
     const rawTx = { from: '0x1', to: '0x2', data: '0x', value: 0n };
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: true, value: rawTx as never });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: rawTx as never });
 
     const result = await cl.executeSupplyLiquidity({
       params: supplyParams(ChainKeys.BSC_MAINNET),
@@ -312,14 +312,14 @@ describe('ClService.executeSupplyLiquidity', () => {
     } satisfies ClSupplyAction<'0x38.bsc', true>);
 
     expect(result.ok).toBe(true);
-    const sendArg = (sodax.spokeService.sendMessage as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    const sendArg = (sodax.spoke.sendMessage as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
     expect(sendArg.raw).toBe(true);
     expect(sendArg).not.toHaveProperty('walletProvider');
   });
 
   it('forwards a failure Result from SpokeService.sendMessage', async () => {
     const sendError = new Error('SEND_REJECTED');
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
 
     const result = await cl.executeSupplyLiquidity({
       params: supplyParams(ChainKeys.BSC_MAINNET),
@@ -346,7 +346,7 @@ describe('ClService.executeSupplyLiquidity', () => {
 
 describe('ClService.executeIncreaseLiquidity', () => {
   it('on an EVM spoke (raw=false), encodes increase calldata and forwards to sendMessage', async () => {
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
 
     const result = await cl.executeIncreaseLiquidity({
       params: increaseParams(ChainKeys.BSC_MAINNET),
@@ -360,21 +360,21 @@ describe('ClService.executeIncreaseLiquidity', () => {
   });
 
   it('with raw=true, sets raw flag and omits walletProvider', async () => {
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xrawTx' as never });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xrawTx' as never });
 
     await cl.executeIncreaseLiquidity({
       params: increaseParams(ChainKeys.BSC_MAINNET),
       raw: true,
     } satisfies ClLiquidityIncreaseLiquidityAction<'0x38.bsc', true>);
 
-    const sendArg = (sodax.spokeService.sendMessage as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    const sendArg = (sodax.spoke.sendMessage as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
     expect(sendArg.raw).toBe(true);
     expect(sendArg).not.toHaveProperty('walletProvider');
   });
 
   it('forwards sendMessage failure as-is', async () => {
     const sendError = new Error('SEND_REJECTED');
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
 
     const result = await cl.executeIncreaseLiquidity({
       params: increaseParams(ChainKeys.BSC_MAINNET),
@@ -401,7 +401,7 @@ describe('ClService.executeIncreaseLiquidity', () => {
 
 describe('ClService.executeDecreaseLiquidity', () => {
   it('on an EVM spoke (raw=false), encodes decrease calldata and forwards to sendMessage', async () => {
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
 
     const result = await cl.executeDecreaseLiquidity({
       params: decreaseParams(ChainKeys.BSC_MAINNET),
@@ -419,21 +419,21 @@ describe('ClService.executeDecreaseLiquidity', () => {
   });
 
   it('with raw=true, sets raw flag and omits walletProvider', async () => {
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xrawTx' as never });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xrawTx' as never });
 
     await cl.executeDecreaseLiquidity({
       params: decreaseParams(ChainKeys.BSC_MAINNET),
       raw: true,
     } satisfies ClLiquidityDecreaseLiquidityAction<'0x38.bsc', true>);
 
-    const sendArg = (sodax.spokeService.sendMessage as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    const sendArg = (sodax.spoke.sendMessage as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
     expect(sendArg.raw).toBe(true);
     expect(sendArg).not.toHaveProperty('walletProvider');
   });
 
   it('forwards sendMessage failure as-is', async () => {
     const sendError = new Error('SEND_REJECTED');
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
 
     const result = await cl.executeDecreaseLiquidity({
       params: decreaseParams(ChainKeys.BSC_MAINNET),
@@ -460,7 +460,7 @@ describe('ClService.executeDecreaseLiquidity', () => {
 
 describe('ClService.executeClaimRewards', () => {
   it('encodes a 0-liquidity decrease call (the harvest trick) and forwards to sendMessage', async () => {
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
 
     const result = await cl.executeClaimRewards({
       params: claimParams(ChainKeys.BSC_MAINNET),
@@ -476,21 +476,21 @@ describe('ClService.executeClaimRewards', () => {
   });
 
   it('with raw=true, omits walletProvider', async () => {
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xrawTx' as never });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xrawTx' as never });
 
     await cl.executeClaimRewards({
       params: claimParams(ChainKeys.BSC_MAINNET),
       raw: true,
     } satisfies ClLiquidityClaimRewardsAction<'0x38.bsc', true>);
 
-    const sendArg = (sodax.spokeService.sendMessage as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    const sendArg = (sodax.spoke.sendMessage as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
     expect(sendArg.raw).toBe(true);
     expect(sendArg).not.toHaveProperty('walletProvider');
   });
 
   it('forwards sendMessage failure as-is', async () => {
     const sendError = new Error('SEND_REJECTED');
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
 
     const result = await cl.executeClaimRewards({
       params: claimParams(ChainKeys.BSC_MAINNET),
@@ -521,7 +521,7 @@ describe('ClService.executeClaimRewards', () => {
 
 describe('ClService.supplyLiquidity', () => {
   it('on a non-hub spoke, relays the spoke tx and returns both src and dst tx hashes', async () => {
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xhubTx' } });
 
     const result = await cl.supplyLiquidity({
@@ -535,7 +535,7 @@ describe('ClService.supplyLiquidity', () => {
   });
 
   it('on the hub chain (Sonic), skips the relay and reuses the spoke tx hash for both', async () => {
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xsonicTx' });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xsonicTx' });
 
     const result = await cl.supplyLiquidity({
       params: supplyParams(ChainKeys.SONIC_MAINNET),
@@ -549,7 +549,7 @@ describe('ClService.supplyLiquidity', () => {
 
   it('returns the failure Result from executeSupplyLiquidity unchanged', async () => {
     const sendError = new Error('SEND_REJECTED');
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
 
     const result = await cl.supplyLiquidity({
       params: supplyParams(ChainKeys.BSC_MAINNET),
@@ -561,7 +561,7 @@ describe('ClService.supplyLiquidity', () => {
   });
 
   it('returns the failure Result from relayTxAndWaitPacket unchanged', async () => {
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
     const relayError = new Error('RELAY_TIMEOUT');
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: false, error: relayError });
 
@@ -576,7 +576,7 @@ describe('ClService.supplyLiquidity', () => {
 
   it('returns ok:false when sendMessage throws', async () => {
     const thrown = new Error('SEND_THREW');
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockRejectedValueOnce(thrown);
+    vi.spyOn(sodax.spoke, 'sendMessage').mockRejectedValueOnce(thrown);
 
     const result = await cl.supplyLiquidity({
       params: supplyParams(ChainKeys.BSC_MAINNET),
@@ -590,7 +590,7 @@ describe('ClService.supplyLiquidity', () => {
 
 describe('ClService.increaseLiquidity', () => {
   it('on a non-hub spoke, relays and returns both src and dst tx hashes', async () => {
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xhubTx' } });
 
     const result = await cl.increaseLiquidity({
@@ -603,7 +603,7 @@ describe('ClService.increaseLiquidity', () => {
   });
 
   it('on the hub chain, skips the relay', async () => {
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xsonicTx' });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xsonicTx' });
 
     const result = await cl.increaseLiquidity({
       params: increaseParams(ChainKeys.SONIC_MAINNET),
@@ -617,7 +617,7 @@ describe('ClService.increaseLiquidity', () => {
 
   it('forwards the failure from executeIncreaseLiquidity', async () => {
     const sendError = new Error('SEND_REJECTED');
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
 
     const result = await cl.increaseLiquidity({
       params: increaseParams(ChainKeys.BSC_MAINNET),
@@ -629,7 +629,7 @@ describe('ClService.increaseLiquidity', () => {
   });
 
   it('forwards the failure from relayTxAndWaitPacket', async () => {
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
     const relayError = new Error('RELAY_TIMEOUT');
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: false, error: relayError });
 
@@ -645,7 +645,7 @@ describe('ClService.increaseLiquidity', () => {
 
 describe('ClService.decreaseLiquidity', () => {
   it('on a non-hub spoke, relays and returns both src and dst tx hashes', async () => {
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xhubTx' } });
 
     const result = await cl.decreaseLiquidity({
@@ -658,7 +658,7 @@ describe('ClService.decreaseLiquidity', () => {
   });
 
   it('on the hub chain, skips the relay', async () => {
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xsonicTx' });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xsonicTx' });
 
     const result = await cl.decreaseLiquidity({
       params: decreaseParams(ChainKeys.SONIC_MAINNET),
@@ -672,7 +672,7 @@ describe('ClService.decreaseLiquidity', () => {
 
   it('forwards the failure from executeDecreaseLiquidity', async () => {
     const sendError = new Error('SEND_REJECTED');
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
 
     const result = await cl.decreaseLiquidity({
       params: decreaseParams(ChainKeys.BSC_MAINNET),
@@ -684,7 +684,7 @@ describe('ClService.decreaseLiquidity', () => {
   });
 
   it('forwards the failure from relayTxAndWaitPacket', async () => {
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
     const relayError = new Error('RELAY_TIMEOUT');
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: false, error: relayError });
 
@@ -700,7 +700,7 @@ describe('ClService.decreaseLiquidity', () => {
 
 describe('ClService.claimRewards', () => {
   it('on a non-hub spoke, relays and returns both src and dst tx hashes', async () => {
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xhubTx' } });
 
     const result = await cl.claimRewards({
@@ -713,7 +713,7 @@ describe('ClService.claimRewards', () => {
   });
 
   it('on the hub chain, skips the relay', async () => {
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xsonicTx' });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xsonicTx' });
 
     const result = await cl.claimRewards({
       params: claimParams(ChainKeys.SONIC_MAINNET),
@@ -727,7 +727,7 @@ describe('ClService.claimRewards', () => {
 
   it('forwards the failure from executeClaimRewards', async () => {
     const sendError = new Error('SEND_REJECTED');
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
 
     const result = await cl.claimRewards({
       params: claimParams(ChainKeys.BSC_MAINNET),
@@ -739,7 +739,7 @@ describe('ClService.claimRewards', () => {
   });
 
   it('forwards the failure from relayTxAndWaitPacket', async () => {
-    vi.spyOn(sodax.spokeService, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
     const relayError = new Error('RELAY_TIMEOUT');
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: false, error: relayError });
 
