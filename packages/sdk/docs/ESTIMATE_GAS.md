@@ -9,7 +9,7 @@
 
 - `sodax.swaps.estimateGas(params)` — for swap / intent transactions
 - `sodax.moneyMarket.estimateGas(params)` — for money market transactions
-- `sodax.spokeService.estimateGas(params)` — for any raw spoke transaction (approvals, deposits, etc.)
+- `sodax.spoke.estimateGas(params)` — for any raw spoke transaction (approvals, deposits, etc.)
 
 ---
 
@@ -185,8 +185,8 @@ const approveResult = await sodax.swaps.approve({
 });
 
 if (approveResult.ok) {
-  // Step 2: Estimate gas via spokeService directly
-  const gasResult = await sodax.spokeService.estimateGas({
+  // Step 2: Estimate gas via spoke directly
+  const gasResult = await sodax.spoke.estimateGas({
     tx: approveResult.value,
     chainKey: ChainKeys.BSC_MAINNET,
   });

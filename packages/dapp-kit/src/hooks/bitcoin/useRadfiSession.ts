@@ -39,7 +39,7 @@ export function useRadfiSession(walletProvider: IBitcoinWalletProvider | undefin
           return;
         }
 
-        const radfi = sodax.spokeService.bitcoinSpokeService.radfi;
+        const radfi = sodax.spoke.bitcoin.radfi;
         const { accessToken, refreshToken } = await radfi.refreshAccessToken(session.refreshToken);
         const updated: RadfiSession = { ...session, accessToken, refreshToken };
 
@@ -49,7 +49,7 @@ export function useRadfiSession(walletProvider: IBitcoinWalletProvider | undefin
         setTradingAddress(updated.tradingAddress || undefined);
       } catch {
         clearRadfiSession(address);
-        sodax.spokeService.bitcoinSpokeService.radfi.setRadfiAccessToken('', '');
+        sodax.spoke.bitcoin.radfi.setRadfiAccessToken('', '');
         setIsAuthed(false);
         setTradingAddress(undefined);
       } finally {

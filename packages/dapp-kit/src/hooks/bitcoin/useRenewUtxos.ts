@@ -25,7 +25,7 @@ export function useRenewUtxos({
     mutationKey: ['bitcoin', 'renewUtxos'],
     ...mutationOptions,
     mutationFn: async ({ txIdVouts, walletProvider }) => {
-      const radfi = sodax.spokeService.bitcoinSpokeService.radfi;
+      const radfi = sodax.spoke.bitcoin.radfi;
 
       const userAddress = await walletProvider.getWalletAddress();
       const session = loadRadfiSession(userAddress);

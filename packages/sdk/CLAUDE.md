@@ -31,7 +31,7 @@ Sodax
  ├── backendApi: BackendApiService
  ├── config: ConfigService       (dynamic config from backend API, falls back to defaults)
  ├── hubProvider: EvmHubProvider
- └── spokeService: SpokeService
+ └── spoke: SpokeService
 ```
 
 All feature services receive `{ hubProvider, config, spoke }` via constructor injection.

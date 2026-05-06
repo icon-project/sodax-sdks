@@ -120,66 +120,66 @@ export class SpokeService {
   private readonly hubProvider: EvmHubProvider;
   private readonly config: ConfigService;
 
-  public readonly evmSpokeService: EvmSpokeService;
-  public readonly sonicSpokeService: SonicSpokeService;
-  public readonly injectiveSpokeService: InjectiveSpokeService;
-  public readonly iconSpokeService: IconSpokeService;
-  public readonly suiSpokeService: SuiSpokeService;
-  public readonly solanaSpokeService: SolanaSpokeService;
-  public readonly stellarSpokeService: StellarSpokeService;
-  public readonly bitcoinSpokeService: BitcoinSpokeService;
-  public readonly nearSpokeService: NearSpokeService;
-  public readonly stacksSpokeService: StacksSpokeService;
+  public readonly evm: EvmSpokeService; // EVM spoke chains only — use `sonic` for the hub
+  public readonly sonic: SonicSpokeService;
+  public readonly injective: InjectiveSpokeService;
+  public readonly icon: IconSpokeService;
+  public readonly sui: SuiSpokeService;
+  public readonly solana: SolanaSpokeService;
+  public readonly stellar: StellarSpokeService;
+  public readonly bitcoin: BitcoinSpokeService;
+  public readonly near: NearSpokeService;
+  public readonly stacks: StacksSpokeService;
 
   public constructor({ config, hubProvider }: SpokeServiceConstructorParams) {
     this.config = config;
     this.hubProvider = hubProvider;
-    this.evmSpokeService = new EvmSpokeService();
-    this.sonicSpokeService = new SonicSpokeService(this.config);
-    this.injectiveSpokeService = new InjectiveSpokeService(this.config);
-    this.iconSpokeService = new IconSpokeService(this.config);
-    this.suiSpokeService = new SuiSpokeService(this.config);
-    this.solanaSpokeService = new SolanaSpokeService(this.config);
-    this.stellarSpokeService = new StellarSpokeService(this.config);
-    this.bitcoinSpokeService = new BitcoinSpokeService(this.config);
-    this.nearSpokeService = new NearSpokeService(this.config);
-    this.stacksSpokeService = new StacksSpokeService(this.config);
+    this.evm = new EvmSpokeService();
+    this.sonic = new SonicSpokeService(this.config);
+    this.injective = new InjectiveSpokeService(this.config);
+    this.icon = new IconSpokeService(this.config);
+    this.sui = new SuiSpokeService(this.config);
+    this.solana = new SolanaSpokeService(this.config);
+    this.stellar = new StellarSpokeService(this.config);
+    this.bitcoin = new BitcoinSpokeService(this.config);
+    this.near = new NearSpokeService(this.config);
+    this.stacks = new StacksSpokeService(this.config);
   }
 
   public getSpokeService<C extends SpokeChainKey>(chainKey: C): GetSpokeServiceType<C> {
     if (isHubChainKeyType(chainKey)) {
       // handle hub chain id first (since it is evm type, it is also included in evm chain id set)
-      return this.sonicSpokeService satisfies GetSpokeServiceType<SonicChainKey> as GetSpokeServiceType<C>;
+      return this.sonic satisfies GetSpokeServiceType<SonicChainKey> as GetSpokeServiceType<C>;
     }
 
     const chainType = getChainType(chainKey);
     switch (chainType) {
       case 'EVM': {
-        return this.evmSpokeService satisfies GetSpokeServiceType<EvmSpokeOnlyChainKey> as GetSpokeServiceType<C>;
+        return this.evm satisfies GetSpokeServiceType<EvmSpokeOnlyChainKey> as GetSpokeServiceType<C>;
       }
       case 'INJECTIVE': {
-        return this.injectiveSpokeService satisfies GetSpokeServiceType<InjectiveChainKey> as GetSpokeServiceType<C>;
+        return this.injective satisfies GetSpokeServiceType<InjectiveChainKey> as GetSpokeServiceType<C>;
       }
       case 'ICON': {
-        return this.iconSpokeService satisfies GetSpokeServiceType<IconChainKey> as GetSpokeServiceType<C>;
+        return this.icon satisfies GetSpokeServiceType<IconChainKey> as GetSpokeServiceType<C>;
       }
       case 'SUI': {
-        return this.suiSpokeService satisfies GetSpokeServiceType<SuiChainKey> as GetSpokeServiceType<C>;
+        return this.sui satisfies GetSpokeServiceType<SuiChainKey> as GetSpokeServiceType<C>;
       }
       case 'SOLANA': {
-        return this.solanaSpokeService satisfies GetSpokeServiceType<SolanaChainKey> as GetSpokeServiceType<C>;
+        return this.solana satisfies GetSpokeServiceType<SolanaChainKey> as GetSpokeServiceType<C>;
       }
       case 'STELLAR': {
-        return this.stellarSpokeService satisfies GetSpokeServiceType<StellarChainKey> as GetSpokeServiceType<C>;
+        return this.stellar satisfies GetSpokeServiceType<StellarChainKey> as GetSpokeServiceType<C>;
       }
       case 'STACKS': {
-        return this.stacksSpokeService satisfies GetSpokeServiceType<StacksChainKey> as GetSpokeServiceType<C>;
+        return this.stacks satisfies GetSpokeServiceType<StacksChainKey> as GetSpokeServiceType<C>;
       }
       case 'BITCOIN': {
-        return this.bitcoinSpokeService satisfies GetSpokeServiceType<BitcoinChainKey> as GetSpokeServiceType<C>;
+        return this.bitcoin satisfies GetSpokeServiceType<BitcoinChainKey> as GetSpokeServiceType<C>;
       }
       case 'NEAR': {
-        return this.nearSpokeService satisfies GetSpokeServiceType<NearChainKey> as GetSpokeServiceType<C>;
+        return this.near satisfies GetSpokeServiceType<NearChainKey> as GetSpokeServiceType<C>;
       }
       default: {
         const exhaustiveCheck: never = chainType; // The never type is used to ensure that the default case is exhaustive
@@ -197,7 +197,7 @@ export class SpokeService {
     try {
       if (isSpokeIsAllowanceValidParamsHub(params)) {
         const { srcChainKey, token, amount, owner, spender } = params;
-        return await this.sonicSpokeService.isAllowanceValid({
+        return await this.sonic.isAllowanceValid({
           token: token as Address,
           amount,
           owner: owner as Address,
@@ -209,7 +209,7 @@ export class SpokeService {
       if (isSpokeIsAllowanceValidParamsEvmSpoke(params)) {
         const { srcChainKey, token, amount, owner } = params;
         const spender = params.spender ?? spokeChainConfig[srcChainKey].addresses.assetManager;
-        return await this.evmSpokeService.isAllowanceValid({
+        return await this.evm.isAllowanceValid({
           token: token as Address,
           amount,
           owner: owner as Address,
@@ -222,7 +222,7 @@ export class SpokeService {
         const { token, amount, owner } = params;
         return {
           ok: true,
-          value: await this.stellarSpokeService.hasSufficientTrustline(token, amount, owner),
+          value: await this.stellar.hasSufficientTrustline(token, amount, owner),
         };
       }
 
@@ -275,7 +275,7 @@ export class SpokeService {
       }
 
       if (isSpokeApproveParamsStellar(params)) {
-        const result = await this.stellarSpokeService.requestTrustline<Raw>({
+        const result = await this.stellar.requestTrustline<Raw>({
           ...params,
           srcAddress: params.owner,
           srcChainKey: params.srcChainKey,
@@ -319,55 +319,55 @@ export class SpokeService {
 
       switch (chainType) {
         case 'EVM': {
-          const value = (await this.evmSpokeService.estimateGas(
+          const value = (await this.evm.estimateGas(
             params as EstimateGasParams<EvmSpokeOnlyChainKey>,
           )) satisfies GetEstimateGasReturnType<EvmChainKey> as GetEstimateGasReturnType<C>;
           return { ok: true, value };
         }
         case 'INJECTIVE': {
-          const value = (await this.injectiveSpokeService.estimateGas(
+          const value = (await this.injective.estimateGas(
             params as EstimateGasParams<InjectiveChainKey>,
           )) satisfies GetEstimateGasReturnType<InjectiveChainKey> as GetEstimateGasReturnType<C>;
           return { ok: true, value };
         }
         case 'ICON': {
-          const value = (await this.iconSpokeService.estimateGas(
+          const value = (await this.icon.estimateGas(
             params as EstimateGasParams<IconChainKey>,
           )) satisfies GetEstimateGasReturnType<IconChainKey> as GetEstimateGasReturnType<C>;
           return { ok: true, value };
         }
         case 'SUI': {
-          const value = (await this.suiSpokeService.estimateGas(
+          const value = (await this.sui.estimateGas(
             params as EstimateGasParams<SuiChainKey>,
           )) satisfies GetEstimateGasReturnType<SuiChainKey> as GetEstimateGasReturnType<C>;
           return { ok: true, value };
         }
         case 'SOLANA': {
-          const value = (await this.solanaSpokeService.estimateGas(
+          const value = (await this.solana.estimateGas(
             params as EstimateGasParams<SolanaChainKey>,
           )) satisfies GetEstimateGasReturnType<SolanaChainKey> as GetEstimateGasReturnType<C>;
           return { ok: true, value };
         }
         case 'STELLAR': {
-          const value = (await this.stellarSpokeService.estimateGas(
+          const value = (await this.stellar.estimateGas(
             params as EstimateGasParams<StellarChainKey>,
           )) satisfies GetEstimateGasReturnType<StellarChainKey> as GetEstimateGasReturnType<C>;
           return { ok: true, value };
         }
         case 'STACKS': {
-          const value = (await this.stacksSpokeService.estimateGas(
+          const value = (await this.stacks.estimateGas(
             params as EstimateGasParams<StacksChainKey>,
           )) satisfies GetEstimateGasReturnType<StacksChainKey> as GetEstimateGasReturnType<C>;
           return { ok: true, value };
         }
         case 'BITCOIN': {
-          const value = (await this.bitcoinSpokeService.estimateGas(
+          const value = (await this.bitcoin.estimateGas(
             params as EstimateGasParams<BitcoinChainKey>,
           )) satisfies GetEstimateGasReturnType<BitcoinChainKey> as GetEstimateGasReturnType<C>;
           return { ok: true, value };
         }
         case 'NEAR': {
-          const value = (await this.nearSpokeService.estimateGas(
+          const value = (await this.near.estimateGas(
             params as EstimateGasParams<NearChainKey>,
           )) satisfies GetEstimateGasReturnType<NearChainKey> as GetEstimateGasReturnType<C>;
           return { ok: true, value };
@@ -448,9 +448,9 @@ export class SpokeService {
     const assetManager = spokeChainConfig[srcChainKey].addresses.assetManager;
     switch (getChainType(srcChainKey)) {
       case 'ICON':
-        return this.iconSpokeService.encodeSimulationParams(token, assetManager);
+        return this.icon.encodeSimulationParams(token, assetManager);
       case 'SUI':
-        return this.suiSpokeService.encodeSimulationParams(token, assetManager);
+        return this.sui.encodeSimulationParams(token, assetManager);
       default:
         return {
           encodedToken: encodeAddress(srcChainKey, token),
@@ -532,7 +532,7 @@ export class SpokeService {
         case 'EVM': {
           const verify = await this.verifyDepositSimulation(params);
           if (!verify.ok) return verify;
-          const value = (await this.evmSpokeService.deposit(
+          const value = (await this.evm.deposit(
             params as DepositParams<EvmSpokeOnlyChainKey, R>,
           )) satisfies TxReturnType<EvmChainKey, R> as TxReturnType<K, R>;
           return { ok: true, value };
@@ -540,7 +540,7 @@ export class SpokeService {
         case 'INJECTIVE': {
           const verify = await this.verifyDepositSimulation(params);
           if (!verify.ok) return verify;
-          const value = (await this.injectiveSpokeService.deposit(
+          const value = (await this.injective.deposit(
             params as DepositParams<InjectiveChainKey, R>,
           )) satisfies TxReturnType<InjectiveChainKey, R> as TxReturnType<K, R>;
           return { ok: true, value };
@@ -548,7 +548,7 @@ export class SpokeService {
         case 'STELLAR': {
           const verify = await this.verifyDepositSimulation(params);
           if (!verify.ok) return verify;
-          const value = (await this.stellarSpokeService.deposit(
+          const value = (await this.stellar.deposit(
             params as DepositParams<StellarChainKey, R>,
           )) satisfies TxReturnType<StellarChainKey, R> as TxReturnType<K, R>;
           return { ok: true, value };
@@ -556,39 +556,43 @@ export class SpokeService {
         case 'SUI': {
           const verify = await this.verifyDepositSimulation(params);
           if (!verify.ok) return verify;
-          const value = (await this.suiSpokeService.deposit(
-            params as DepositParams<SuiChainKey, R>,
-          )) satisfies TxReturnType<SuiChainKey, R> as TxReturnType<K, R>;
+          const value = (await this.sui.deposit(params as DepositParams<SuiChainKey, R>)) satisfies TxReturnType<
+            SuiChainKey,
+            R
+          > as TxReturnType<K, R>;
           return { ok: true, value };
         }
         case 'ICON': {
           const verify = await this.verifyDepositSimulation(params);
           if (!verify.ok) return verify;
-          const value = (await this.iconSpokeService.deposit(
-            params as DepositParams<IconChainKey, R>,
-          )) satisfies TxReturnType<IconChainKey, R> as TxReturnType<K, R>;
+          const value = (await this.icon.deposit(params as DepositParams<IconChainKey, R>)) satisfies TxReturnType<
+            IconChainKey,
+            R
+          > as TxReturnType<K, R>;
           return { ok: true, value };
         }
         case 'SOLANA': {
           const verify = await this.verifyDepositSimulation(params);
           if (!verify.ok) return verify;
-          const value = (await this.solanaSpokeService.deposit(
-            params as DepositParams<SolanaChainKey, R>,
-          )) satisfies TxReturnType<SolanaChainKey, R> as TxReturnType<K, R>;
+          const value = (await this.solana.deposit(params as DepositParams<SolanaChainKey, R>)) satisfies TxReturnType<
+            SolanaChainKey,
+            R
+          > as TxReturnType<K, R>;
           return { ok: true, value };
         }
         case 'STACKS': {
           const verify = await this.verifyDepositSimulation(params);
           if (!verify.ok) return verify;
-          const value = (await this.stacksSpokeService.deposit(
-            params as DepositParams<StacksChainKey, R>,
-          )) satisfies TxReturnType<StacksChainKey, R> as TxReturnType<K, R>;
+          const value = (await this.stacks.deposit(params as DepositParams<StacksChainKey, R>)) satisfies TxReturnType<
+            StacksChainKey,
+            R
+          > as TxReturnType<K, R>;
           return { ok: true, value };
         }
         case 'BITCOIN': {
           const verify = await this.verifyDepositSimulation(params);
           if (!verify.ok) return verify;
-          const value = (await this.bitcoinSpokeService.deposit(
+          const value = (await this.bitcoin.deposit(
             params as DepositParams<BitcoinChainKey, R> & { accessToken?: string },
           )) satisfies TxReturnType<BitcoinChainKey, R> as TxReturnType<K, R>;
           return { ok: true, value };
@@ -596,9 +600,10 @@ export class SpokeService {
         case 'NEAR': {
           const verify = await this.verifyDepositSimulation(params);
           if (!verify.ok) return verify;
-          const value = (await this.nearSpokeService.deposit(
-            params as DepositParams<NearChainKey, R>,
-          )) satisfies TxReturnType<NearChainKey, R> as TxReturnType<K, R>;
+          const value = (await this.near.deposit(params as DepositParams<NearChainKey, R>)) satisfies TxReturnType<
+            NearChainKey,
+            R
+          > as TxReturnType<K, R>;
           return { ok: true, value };
         }
         default: {
@@ -641,46 +646,46 @@ export class SpokeService {
   public async getDeposit<C extends SpokeChainKey>(params: GetDepositParams<C>): Promise<Result<bigint>> {
     try {
       if (isHubChainKeyType(params.srcChainKey)) {
-        const value = await this.sonicSpokeService.getDeposit(params as GetDepositParams<SonicChainKey>);
+        const value = await this.sonic.getDeposit(params as GetDepositParams<SonicChainKey>);
         return { ok: true, value };
       }
 
       const chainType = getChainType(params.srcChainKey);
       switch (chainType) {
         case 'EVM': {
-          const value = await this.evmSpokeService.getDeposit(params as GetDepositParams<EvmSpokeOnlyChainKey>);
+          const value = await this.evm.getDeposit(params as GetDepositParams<EvmSpokeOnlyChainKey>);
           return { ok: true, value };
         }
         case 'INJECTIVE': {
-          const value = await this.injectiveSpokeService.getDeposit(params as GetDepositParams<InjectiveChainKey>);
+          const value = await this.injective.getDeposit(params as GetDepositParams<InjectiveChainKey>);
           return { ok: true, value };
         }
         case 'STELLAR': {
-          const value = await this.stellarSpokeService.getDeposit(params as GetDepositParams<StellarChainKey>);
+          const value = await this.stellar.getDeposit(params as GetDepositParams<StellarChainKey>);
           return { ok: true, value };
         }
         case 'SUI': {
-          const value = await this.suiSpokeService.getDeposit(params as GetDepositParams<SuiChainKey>);
+          const value = await this.sui.getDeposit(params as GetDepositParams<SuiChainKey>);
           return { ok: true, value };
         }
         case 'ICON': {
-          const value = await this.iconSpokeService.getDeposit(params as GetDepositParams<IconChainKey>);
+          const value = await this.icon.getDeposit(params as GetDepositParams<IconChainKey>);
           return { ok: true, value };
         }
         case 'SOLANA': {
-          const value = await this.solanaSpokeService.getDeposit(params as GetDepositParams<SolanaChainKey>);
+          const value = await this.solana.getDeposit(params as GetDepositParams<SolanaChainKey>);
           return { ok: true, value };
         }
         case 'STACKS': {
-          const value = await this.stacksSpokeService.getDeposit(params as GetDepositParams<StacksChainKey>);
+          const value = await this.stacks.getDeposit(params as GetDepositParams<StacksChainKey>);
           return { ok: true, value };
         }
         case 'BITCOIN': {
-          const value = await this.bitcoinSpokeService.getDeposit(params as GetDepositParams<BitcoinChainKey>);
+          const value = await this.bitcoin.getDeposit(params as GetDepositParams<BitcoinChainKey>);
           return { ok: true, value };
         }
         case 'NEAR': {
-          const value = await this.nearSpokeService.getDeposit(params as GetDepositParams<NearChainKey>);
+          const value = await this.near.getDeposit(params as GetDepositParams<NearChainKey>);
           return { ok: true, value };
         }
         default: {
@@ -710,14 +715,15 @@ export class SpokeService {
   ): Promise<Result<TxReturnType<K, Raw>>> {
     try {
       if (isHubChainKeyType(params.srcChainKey)) {
-        const value = (await this.sonicSpokeService.sendMessage(
-          params as SendMessageParams<SonicChainKey, Raw>,
-        )) as TxReturnType<K, Raw>;
+        const value = (await this.sonic.sendMessage(params as SendMessageParams<SonicChainKey, Raw>)) as TxReturnType<
+          K,
+          Raw
+        >;
         return { ok: true, value };
       }
 
       const effectiveAddress = isBitcoinChainKey(params.srcChainKey)
-        ? await this.bitcoinSpokeService.getEffectiveWalletAddress(params.srcAddress)
+        ? await this.bitcoin.getEffectiveWalletAddress(params.srcAddress)
         : params.srcAddress;
       const srcAddress = encodeAddress(params.srcChainKey, effectiveAddress);
 
@@ -739,7 +745,7 @@ export class SpokeService {
         case 'EVM': {
           const verify = await this.verifySimulation(params);
           if (!verify.ok) return verify;
-          const value = (await this.evmSpokeService.sendMessage(
+          const value = (await this.evm.sendMessage(
             params as SendMessageParams<EvmSpokeOnlyChainKey, Raw>,
           )) as TxReturnType<EvmSpokeOnlyChainKey, Raw> as TxReturnType<K, Raw>;
           return { ok: true, value };
@@ -747,7 +753,7 @@ export class SpokeService {
         case 'INJECTIVE': {
           const verify = await this.verifySimulation(params);
           if (!verify.ok) return verify;
-          const value = (await this.injectiveSpokeService.sendMessage(
+          const value = (await this.injective.sendMessage(
             params as SendMessageParams<InjectiveChainKey, Raw>,
           )) as TxReturnType<InjectiveChainKey, Raw> as TxReturnType<K, Raw>;
           return { ok: true, value };
@@ -755,23 +761,25 @@ export class SpokeService {
         case 'ICON': {
           const verify = await this.verifySimulation(params);
           if (!verify.ok) return verify;
-          const value = (await this.iconSpokeService.sendMessage(
-            params as SendMessageParams<IconChainKey, Raw>,
-          )) as TxReturnType<IconChainKey, Raw> as TxReturnType<K, Raw>;
+          const value = (await this.icon.sendMessage(params as SendMessageParams<IconChainKey, Raw>)) as TxReturnType<
+            IconChainKey,
+            Raw
+          > as TxReturnType<K, Raw>;
           return { ok: true, value };
         }
         case 'SUI': {
           const verify = await this.verifySimulation(params);
           if (!verify.ok) return verify;
-          const value = (await this.suiSpokeService.sendMessage(
-            params as SendMessageParams<SuiChainKey, Raw>,
-          )) as TxReturnType<SuiChainKey, Raw> as TxReturnType<K, Raw>;
+          const value = (await this.sui.sendMessage(params as SendMessageParams<SuiChainKey, Raw>)) as TxReturnType<
+            SuiChainKey,
+            Raw
+          > as TxReturnType<K, Raw>;
           return { ok: true, value };
         }
         case 'SOLANA': {
           const verify = await this.verifySimulation(params);
           if (!verify.ok) return verify;
-          const value = (await this.solanaSpokeService.sendMessage(
+          const value = (await this.solana.sendMessage(
             params as SendMessageParams<SolanaChainKey, Raw>,
           )) as TxReturnType<SolanaChainKey, Raw> as TxReturnType<K, Raw>;
           return { ok: true, value };
@@ -779,7 +787,7 @@ export class SpokeService {
         case 'STELLAR': {
           const verify = await this.verifySimulation(params);
           if (!verify.ok) return verify;
-          const value = (await this.stellarSpokeService.sendMessage(
+          const value = (await this.stellar.sendMessage(
             params as SendMessageParams<StellarChainKey, Raw>,
           )) as TxReturnType<StellarChainKey, Raw> as TxReturnType<K, Raw>;
           return { ok: true, value };
@@ -787,7 +795,7 @@ export class SpokeService {
         case 'STACKS': {
           const verify = await this.verifySimulation(params);
           if (!verify.ok) return verify;
-          const value = (await this.stacksSpokeService.sendMessage(
+          const value = (await this.stacks.sendMessage(
             params as SendMessageParams<StacksChainKey, Raw>,
           )) as TxReturnType<StacksChainKey, Raw> as TxReturnType<K, Raw>;
           return { ok: true, value };
@@ -795,7 +803,7 @@ export class SpokeService {
         case 'BITCOIN': {
           const verify = await this.verifySimulation(params);
           if (!verify.ok) return verify;
-          const value = (await this.bitcoinSpokeService.sendMessage(
+          const value = (await this.bitcoin.sendMessage(
             params as SendMessageParams<BitcoinChainKey, Raw> & { walletMode?: WalletMode },
           )) as TxReturnType<BitcoinChainKey, Raw> as TxReturnType<K, Raw>;
           return { ok: true, value };
@@ -803,9 +811,10 @@ export class SpokeService {
         case 'NEAR': {
           const verify = await this.verifySimulation(params);
           if (!verify.ok) return verify;
-          const value = (await this.nearSpokeService.sendMessage(
-            params as SendMessageParams<NearChainKey, Raw>,
-          )) as TxReturnType<NearChainKey, Raw> as TxReturnType<K, Raw>;
+          const value = (await this.near.sendMessage(params as SendMessageParams<NearChainKey, Raw>)) as TxReturnType<
+            NearChainKey,
+            Raw
+          > as TxReturnType<K, Raw>;
           return { ok: true, value };
         }
         default: {
@@ -828,7 +837,7 @@ export class SpokeService {
     try {
       if (!params.skipSimulation) {
         const effectiveAddr = isBitcoinChainKey(params.srcChainKey)
-          ? await this.bitcoinSpokeService.getEffectiveWalletAddress(params.srcAddress)
+          ? await this.bitcoin.getEffectiveWalletAddress(params.srcAddress)
           : params.srcAddress;
         const srcAddress = encodeAddress(params.srcChainKey, effectiveAddr);
 
@@ -858,7 +867,7 @@ export class SpokeService {
   public async getLimit(token: string, chainId: SpokeChainKey): Promise<Result<bigint>> {
     try {
       if (isNearChainKeyType(chainId)) {
-        const value = await this.nearSpokeService.getLimit(token, chainId);
+        const value = await this.near.getLimit(token, chainId);
         return { ok: true, value };
       }
       return { ok: false, error: new Error(`getLimit not supported for ${chainId} chain`) };
@@ -876,7 +885,7 @@ export class SpokeService {
   public async getAvailable(token: string, chainId: SpokeChainKey): Promise<Result<bigint>> {
     try {
       if (isNearChainKeyType(chainId)) {
-        const value = await this.nearSpokeService.getAvailable(token, chainId);
+        const value = await this.near.getAvailable(token, chainId);
         return { ok: true, value };
       }
       return { ok: false, error: new Error(`getAvailable not supported for ${chainId} chain`) };
@@ -896,7 +905,7 @@ export class SpokeService {
       const { txHash, chainKey } = params;
 
       if (isSolanaChainKeyType(chainKey)) {
-        const result = await this.solanaSpokeService.waitForTransactionReceipt({ txHash, chainKey });
+        const result = await this.solana.waitForTransactionReceipt({ txHash, chainKey });
 
         if (!result.ok || result.value.status !== 'success') {
           console.warn(
@@ -909,21 +918,21 @@ export class SpokeService {
         return { ok: true, value: true };
       }
       if (isNearChainKeyType(chainKey)) {
-        const result = await this.nearSpokeService.waitForTransactionReceipt({ txHash, chainKey });
+        const result = await this.near.waitForTransactionReceipt({ txHash, chainKey });
         if (result.ok && result.value.status === 'success') {
           return { ok: true, value: true };
         }
         return { ok: false, error: new Error('TRANSACTION_VERIFICATION_FAILED') };
       }
       if (isStellarChainKeyType(chainKey)) {
-        const result = await this.stellarSpokeService.waitForTransactionReceipt({ txHash, chainKey });
+        const result = await this.stellar.waitForTransactionReceipt({ txHash, chainKey });
         if (result.ok && result.value.status === 'success') {
           return { ok: true, value: true };
         }
         return { ok: false, error: new Error('TRANSACTION_VERIFICATION_FAILED') };
       }
       if (isSuiChainKeyType(chainKey)) {
-        const result = await this.suiSpokeService.waitForTransactionReceipt({ txHash, chainKey });
+        const result = await this.sui.waitForTransactionReceipt({ txHash, chainKey });
         if (result.ok && result.value.status === 'success') {
           return { ok: true, value: true };
         }
@@ -947,7 +956,7 @@ export class SpokeService {
       };
 
       if (isHubChainKeyType(params.chainKey)) {
-        return (await this.sonicSpokeService.waitForTransactionReceipt(
+        return (await this.sonic.waitForTransactionReceipt(
           effectiveParams as WaitForTxReceiptParams<SonicChainKey>,
         )) satisfies Result<WaitForTxReceiptReturnType<SonicChainKey>> as Result<WaitForTxReceiptReturnType<C>>;
       }
@@ -955,49 +964,49 @@ export class SpokeService {
       const chainType = getChainType(params.chainKey);
       switch (chainType) {
         case 'EVM': {
-          return (await this.evmSpokeService.waitForTransactionReceipt(
+          return (await this.evm.waitForTransactionReceipt(
             effectiveParams as WaitForTxReceiptParams<EvmSpokeOnlyChainKey>,
           )) satisfies Result<WaitForTxReceiptReturnType<EvmSpokeOnlyChainKey>> as Result<
             WaitForTxReceiptReturnType<C>
           >;
         }
         case 'INJECTIVE': {
-          return (await this.injectiveSpokeService.waitForTransactionReceipt(
+          return (await this.injective.waitForTransactionReceipt(
             effectiveParams as WaitForTxReceiptParams<InjectiveChainKey>,
           )) satisfies Result<WaitForTxReceiptReturnType<InjectiveChainKey>> as Result<WaitForTxReceiptReturnType<C>>;
         }
         case 'ICON': {
-          return (await this.iconSpokeService.waitForTransactionReceipt(
+          return (await this.icon.waitForTransactionReceipt(
             effectiveParams as WaitForTxReceiptParams<IconChainKey>,
           )) satisfies Result<WaitForTxReceiptReturnType<IconChainKey>> as Result<WaitForTxReceiptReturnType<C>>;
         }
         case 'SUI': {
-          return (await this.suiSpokeService.waitForTransactionReceipt(
+          return (await this.sui.waitForTransactionReceipt(
             effectiveParams as WaitForTxReceiptParams<SuiChainKey>,
           )) satisfies Result<WaitForTxReceiptReturnType<SuiChainKey>> as Result<WaitForTxReceiptReturnType<C>>;
         }
         case 'SOLANA': {
-          return (await this.solanaSpokeService.waitForTransactionReceipt(
+          return (await this.solana.waitForTransactionReceipt(
             effectiveParams as WaitForTxReceiptParams<SolanaChainKey>,
           )) satisfies Result<WaitForTxReceiptReturnType<SolanaChainKey>> as Result<WaitForTxReceiptReturnType<C>>;
         }
         case 'STELLAR': {
-          return (await this.stellarSpokeService.waitForTransactionReceipt(
+          return (await this.stellar.waitForTransactionReceipt(
             effectiveParams as WaitForTxReceiptParams<StellarChainKey>,
           )) satisfies Result<WaitForTxReceiptReturnType<StellarChainKey>> as Result<WaitForTxReceiptReturnType<C>>;
         }
         case 'STACKS': {
-          return (await this.stacksSpokeService.waitForTransactionReceipt(
+          return (await this.stacks.waitForTransactionReceipt(
             effectiveParams as WaitForTxReceiptParams<StacksChainKey>,
           )) satisfies Result<WaitForTxReceiptReturnType<StacksChainKey>> as Result<WaitForTxReceiptReturnType<C>>;
         }
         case 'BITCOIN': {
-          return (await this.bitcoinSpokeService.waitForTransactionReceipt(
+          return (await this.bitcoin.waitForTransactionReceipt(
             effectiveParams as WaitForTxReceiptParams<BitcoinChainKey>,
           )) satisfies Result<WaitForTxReceiptReturnType<BitcoinChainKey>> as Result<WaitForTxReceiptReturnType<C>>;
         }
         case 'NEAR': {
-          return (await this.nearSpokeService.waitForTransactionReceipt(
+          return (await this.near.waitForTransactionReceipt(
             effectiveParams as WaitForTxReceiptParams<NearChainKey>,
           )) satisfies Result<WaitForTxReceiptReturnType<NearChainKey>> as Result<WaitForTxReceiptReturnType<C>>;
         }

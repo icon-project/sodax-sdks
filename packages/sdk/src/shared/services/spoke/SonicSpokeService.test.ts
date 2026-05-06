@@ -3,7 +3,7 @@
  *
  * Mirrors the pattern from SwapService.test.ts (PR #1174):
  *   1. A single `new Sodax()` instance backs every test. Instance methods are exercised on
- *      `sodax.spokeService.sonicSpokeService`; the publicClient lives there and is spied per-test.
+ *      `sodax.spoke.sonic`; the publicClient lives there and is spied per-test.
  *   2. Static collaborators (`Erc20Service`, `EvmSolverService`, `randomUint256`) are mocked at
  *      their source paths via `vi.mock` + `vi.hoisted`, since SwapService-style barrel re-exports
  *      otherwise produce a different module instance than the test-side import.
@@ -91,7 +91,7 @@ import type { DepositParams, SendMessageParams } from '../../types/spoke-types.j
 // --- fixtures -------------------------------------------------------------
 
 const sodax = new Sodax();
-const sonicSpoke = sodax.spokeService.sonicSpokeService;
+const sonicSpoke = sodax.spoke.sonic;
 
 // Helper: encode an empty calls tuple as the `data` field. SonicSpokeService.deposit and
 // .sendMessage both `decodeAbiParameters([{ type: 'tuple[]', components: [...] }], data)` to

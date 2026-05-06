@@ -34,7 +34,7 @@ export class Sodax {
   public readonly config: ConfigService; // Config service enabling configuration data fetching from the backend API or fallbacking to default values
 
   public readonly hubProvider: HubProvider; // hub provider for the hub chain (e.g. Sonic mainnet)
-  public readonly spokeService: SpokeService; // spoke service enabling spoke chain operations
+  public readonly spoke: SpokeService; // spoke service enabling spoke chain operations
 
   constructor(config?: DeepPartial<SodaxConfig>) {
     this.instanceConfig = config ? deepMerge<SodaxConfig>(sodaxConfig, config) : sodaxConfig;
@@ -42,41 +42,41 @@ export class Sodax {
     this.config = new ConfigService({ api: this.backendApi, config: this.instanceConfig });
 
     this.hubProvider = new EvmHubProvider({ config: this.config }); // default to Sonic mainnet
-    this.spokeService = new SpokeService({ config: this.config, hubProvider: this.hubProvider });
+    this.spoke = new SpokeService({ config: this.config, hubProvider: this.hubProvider });
     this.swaps = new SwapService({
       config: this.config,
       hubProvider: this.hubProvider,
-      spoke: this.spokeService,
+      spoke: this.spoke,
     });
 
     this.moneyMarket = new MoneyMarketService({
       config: this.config,
       hubProvider: this.hubProvider,
-      spoke: this.spokeService,
+      spoke: this.spoke,
     });
 
     this.dex = new DexService({
       config: this.config,
       hubProvider: this.hubProvider,
-      spoke: this.spokeService,
+      spoke: this.spoke,
     });
 
     this.migration = new MigrationService({
       hubProvider: this.hubProvider,
       config: this.config,
-      spoke: this.spokeService,
+      spoke: this.spoke,
     });
-    this.bridge = new BridgeService({ hubProvider: this.hubProvider, config: this.config, spoke: this.spokeService });
-    this.staking = new StakingService({ hubProvider: this.hubProvider, config: this.config, spoke: this.spokeService });
+    this.bridge = new BridgeService({ hubProvider: this.hubProvider, config: this.config, spoke: this.spoke });
+    this.staking = new StakingService({ hubProvider: this.hubProvider, config: this.config, spoke: this.spoke });
     this.partners = new PartnerService({
       hubProvider: this.hubProvider,
       config: this.config,
-      spoke: this.spokeService,
+      spoke: this.spoke,
     });
     this.recovery = new RecoveryService({
       hubProvider: this.hubProvider,
       config: this.config,
-      spoke: this.spokeService,
+      spoke: this.spoke,
     });
   }
 

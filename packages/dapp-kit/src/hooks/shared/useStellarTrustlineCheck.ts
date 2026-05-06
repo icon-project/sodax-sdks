@@ -29,7 +29,7 @@ export function useStellarTrustlineCheck({
       if (chainId !== ChainKeys.STELLAR_MAINNET) return true;
       if (!walletProvider || !token || !amount) return false;
       const walletAddress = await walletProvider.getWalletAddress();
-      return sodax.spokeService.stellarSpokeService.hasSufficientTrustline(token, amount, walletAddress);
+      return sodax.spoke.stellar.hasSufficientTrustline(token, amount, walletAddress);
     },
     enabled: !!walletProvider && !!token && !!amount,
     ...queryOptions,

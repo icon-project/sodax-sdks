@@ -37,7 +37,7 @@ export function useRadfiWithdraw({
     mutationKey: ['bitcoin', 'radfiWithdraw'],
     ...mutationOptions,
     mutationFn: async ({ amount, tokenId, withdrawTo, walletProvider }) => {
-      const radfi = sodax.spokeService.bitcoinSpokeService.radfi;
+      const radfi = sodax.spoke.bitcoin.radfi;
 
       const userAddress = await walletProvider.getWalletAddress();
       const session = loadRadfiSession(userAddress);

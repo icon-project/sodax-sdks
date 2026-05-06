@@ -109,14 +109,14 @@ export class MigrationService {
   readonly config: ConfigService;
   readonly spoke: SpokeService;
 
-  constructor({ hubProvider, config, spoke: spokeService }: MigrationServiceConstructorParams) {
+  constructor({ hubProvider, config, spoke }: MigrationServiceConstructorParams) {
     this.hubProvider = hubProvider;
     this.icxMigration = new IcxMigrationService({ hubProvider, config });
     this.bnUSDMigrationService = new BnUSDMigrationService({ hubProvider, config });
     this.balnSwapService = new BalnSwapService({ hubProvider });
     this.relayerApiEndpoint = config.relay.relayerApiEndpoint;
     this.config = config;
-    this.spoke = spokeService;
+    this.spoke = spoke;
   }
 
   /**

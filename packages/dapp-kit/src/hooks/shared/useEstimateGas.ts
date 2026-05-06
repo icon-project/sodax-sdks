@@ -16,6 +16,6 @@ export function useEstimateGas<C extends SpokeChainKey>({
   return useSafeMutation<GetEstimateGasReturnType<C>, Error, EstimateGasParams<C>>({
     mutationKey: ['shared', 'estimateGas'],
     ...mutationOptions,
-    mutationFn: async params => unwrapResult(await sodax.spokeService.estimateGas<C>(params)),
+    mutationFn: async params => unwrapResult(await sodax.spoke.estimateGas<C>(params)),
   });
 }

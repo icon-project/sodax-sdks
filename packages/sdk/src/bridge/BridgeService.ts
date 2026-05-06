@@ -382,8 +382,8 @@ export class BridgeService {
           isBitcoinWalletProviderType(_params.walletProvider),
           `Invalid wallet provider for chain key: ${params.srcChainKey}. Expected bitcoin wallet provider.`,
         );
-        walletAddress = await this.spoke.bitcoinSpokeService.getEffectiveWalletAddress(personalAddress);
-        await this.spoke.bitcoinSpokeService.radfi.ensureRadfiAccessToken(_params.walletProvider);
+        walletAddress = await this.spoke.bitcoin.getEffectiveWalletAddress(personalAddress);
+        await this.spoke.bitcoin.radfi.ensureRadfiAccessToken(_params.walletProvider);
       }
 
       const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);

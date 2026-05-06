@@ -264,7 +264,7 @@ After construction, the `Sodax` instance exposes the following read-only service
 | `sodax.backendApi` | `BackendApiService` | Raw backend API access |
 | `sodax.config` | `ConfigService` | Chain/token config and lookup helpers |
 | `sodax.hubProvider` | `EvmHubProvider` | Hub chain (Sonic) contract interactions |
-| `sodax.spokeService` | `SpokeService` | Spoke chain routing facade |
+| `sodax.spoke` | `SpokeService` | Spoke chain routing facade |
 | `sodax.instanceConfig` | `SodaxConfig` | Resolved config after merging with defaults |
 
 ## Chain Keys
