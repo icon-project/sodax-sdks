@@ -95,7 +95,7 @@ export class StacksSpokeService {
     return result.value.value as bigint;
   }
 
-  async getImplContractAddress(from: string, stateContract: string): Promise<string> {
+  async getImplContractAddress(stateContract: string): Promise<string> {
     const [contractAddress, contractName] = parseContractId(stateContract as ContractIdString);
     const txParams = {
       contractAddress: contractAddress as string,
@@ -104,7 +104,7 @@ export class StacksSpokeService {
       functionArgs: [],
     };
 
-    return ((await this.readContract(from, txParams)) as ContractPrincipalCV).value;
+    return ((await this.readContract(contractAddress as string, txParams)) as ContractPrincipalCV).value;
   }
 
   /**
@@ -118,7 +118,6 @@ export class StacksSpokeService {
     params: DepositParams<StacksChainKey, R>,
   ): Promise<TxReturnType<StacksChainKey, R>> {
     const assetManagerImpl = await this.getImplContractAddress(
-      params.srcChainKey,
       spokeChainConfig[params.srcChainKey].addresses.assetManager,
     );
     const [implAddress, implName] = parseContractId(assetManagerImpl as ContractIdString);

@@ -47,6 +47,7 @@ import {
   isSpokeApproveParamsHub,
   isSpokeApproveParamsEvmSpoke,
   isSpokeApproveParamsStellar,
+  isStacksChainKeyType,
   isSuiChainKeyType,
   isUndefinedOrValidWalletProviderForChainKey,
 } from '../../guards.js';
@@ -918,31 +919,31 @@ export class SpokeService {
         return { ok: true, value: true };
       }
       if (isNearChainKeyType(chainKey)) {
-        const result = await this.near.waitForTransactionReceipt({ txHash, chainKey });
-        if (result.ok && result.value.status === 'success') {
-          return { ok: true, value: true };
-        }
-        return { ok: false, error: new Error('TRANSACTION_VERIFICATION_FAILED') };
+        return this.verifyReceiptStatus(this.near.waitForTransactionReceipt({ txHash, chainKey }));
       }
       if (isStellarChainKeyType(chainKey)) {
-        const result = await this.stellar.waitForTransactionReceipt({ txHash, chainKey });
-        if (result.ok && result.value.status === 'success') {
-          return { ok: true, value: true };
-        }
-        return { ok: false, error: new Error('TRANSACTION_VERIFICATION_FAILED') };
+        return this.verifyReceiptStatus(this.stellar.waitForTransactionReceipt({ txHash, chainKey }));
       }
       if (isSuiChainKeyType(chainKey)) {
-        const result = await this.sui.waitForTransactionReceipt({ txHash, chainKey });
-        if (result.ok && result.value.status === 'success') {
-          return { ok: true, value: true };
-        }
-        return { ok: false, error: new Error('TRANSACTION_VERIFICATION_FAILED') };
+        return this.verifyReceiptStatus(this.sui.waitForTransactionReceipt({ txHash, chainKey }));
+      }
+      if (isStacksChainKeyType(chainKey)) {
+        return this.verifyReceiptStatus(this.stacks.waitForTransactionReceipt({ txHash, chainKey }));
       }
 
       return { ok: true, value: true };
     } catch (error) {
       return { ok: false, error };
     }
+  }
+
+  private async verifyReceiptStatus(
+    receiptPromise: Promise<Result<{ status: string }>>,
+  ): Promise<Result<boolean>> {
+    const result = await receiptPromise;
+    return result.ok && result.value.status === 'success'
+      ? { ok: true, value: true }
+      : { ok: false, error: new Error('TRANSACTION_VERIFICATION_FAILED') };
   }
 
   public async waitForTxReceipt<C extends SpokeChainKey = SpokeChainKey>(
