@@ -26,7 +26,7 @@ interface SupplyAssetsListItemProps {
   aTokenBalancesMap?: Map<Address, bigint>;
   onRefreshReserves?: () => void;
   onWithdrawClick: (token: XToken, maxWithdraw: string, isHfLimited: boolean) => void;
-  onSupplyClick: (token: XToken, maxSupply: string) => void;
+  onSupplyClick: (token: XToken) => void;
   /** Hub portfolio summary for HF-aware max withdrawal calculation. */
   mmPortfolio?: MmPortfolioSummary;
 }
@@ -179,7 +179,7 @@ export function SupplyAssetsListItem({
           <Button
             variant="cherry"
             size="sm"
-            onClick={() => onSupplyClick(token, walletBalance ?? '0')}
+            onClick={() => onSupplyClick(token)}
             disabled={
               // Disable if wallet balance is not available ('-'), empty, zero/negative, or invalid number
               // Note: We show "0.0000" when loading, so we check for <= 0 to disable during loading too

@@ -42,7 +42,6 @@ export function SupplyAssetsList(): ReactElement {
   } | null>(null);
   const [supplyData, setSupplyData] = useState<{
     token: XToken;
-    maxSupply: string;
   } | null>(null);
 
   const tokens = sodax.moneyMarket.getSupportedTokensByChainId(selectedChainId);
@@ -329,8 +328,8 @@ export function SupplyAssetsList(): ReactElement {
                           onWithdrawClick={(token, maxWithdraw, isHfLimited) => {
                             setWithdrawData({ token, maxWithdraw, isHfLimited });
                           }}
-                          onSupplyClick={(token, maxSupply) => {
-                            setSupplyData({ token, maxSupply });
+                          onSupplyClick={token => {
+                            setSupplyData({ token });
                           }}
                         />
                       ))
@@ -346,7 +345,6 @@ export function SupplyAssetsList(): ReactElement {
         <SupplyModal
           open={true}
           token={supplyData.token}
-          maxSupply={supplyData.maxSupply}
           inlineSuccess={true}
           onOpenChange={open => {
             if (!open) setSupplyData(null);
