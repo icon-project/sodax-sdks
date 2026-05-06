@@ -61,7 +61,7 @@ export function useRadfiAuth({
     mutationKey: ['bitcoin', 'radfiAuth'],
     ...mutationOptions,
     mutationFn: async ({ walletProvider }) => {
-      const radfi = sodax.spokeService.bitcoinSpokeService.radfi;
+      const radfi = sodax.spoke.bitcoin.radfi;
       const walletAddress = await walletProvider.getWalletAddress();
       const existingSession = loadRadfiSession(walletAddress);
       const cachedPublicKey = existingSession?.publicKey;

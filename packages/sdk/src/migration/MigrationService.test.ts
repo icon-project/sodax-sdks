@@ -9,7 +9,7 @@
  *      produce a different module instance than the test-side import. `getUserHubWalletAddress`
  *      and `getUserRouter` are now instance methods on `sodax.hubProvider` and are bound via
  *      `vi.spyOn` in `beforeEach`.
- *   3. Instance methods on `sodax.spokeService` and on the sub-services (icxMigration,
+ *   3. Instance methods on `sodax.spoke` and on the sub-services (icxMigration,
  *      bnUSDMigrationService, balnSwapService) are stubbed per-test via `vi.spyOn`.
  *   4. Each public method has a top-level `describe` with branch-level coverage:
  *      happy paths, invariant failures (rejected via Result), and error propagation
@@ -223,7 +223,7 @@ beforeEach(() => {
 
   // verifyTxHash is invoked by migratebnUSD; default to ok so each happy-path test
   // doesn't need to re-stub it.
-  vi.spyOn(sodax.spokeService, 'verifyTxHash').mockResolvedValue({ ok: true, value: true });
+  vi.spyOn(sodax.spoke, 'verifyTxHash').mockResolvedValue({ ok: true, value: true });
 });
 
 afterEach(() => {
@@ -247,7 +247,7 @@ describe('MigrationService constructor', () => {
     expect(svc.bnUSDMigrationService).toBeDefined();
     expect(svc.balnSwapService).toBeDefined();
     expect(svc.hubProvider).toBe(sodax.hubProvider);
-    expect(svc.spoke).toBe(sodax.spokeService);
+    expect(svc.spoke).toBe(sodax.spoke);
     expect(svc.relayerApiEndpoint).toBe(sodax.config.relay.relayerApiEndpoint);
   });
 });
@@ -258,7 +258,7 @@ describe('MigrationService constructor', () => {
 
 describe('MigrationService.isAllowanceValid — migrate', () => {
   it('returns ok:true (no allowance check) for ICX migration on Icon', async () => {
-    const isAllowanceValidSpy = vi.spyOn(sodax.spokeService, 'isAllowanceValid');
+    const isAllowanceValidSpy = vi.spyOn(sodax.spoke, 'isAllowanceValid');
     const result = await sodax.migration.isAllowanceValid(icxMigrateParams(), 'migrate');
     expect(result).toEqual({ ok: true, value: true });
     // ICX/BALN-from-Icon migrations don't require an allowance check — the spoke service
@@ -267,7 +267,7 @@ describe('MigrationService.isAllowanceValid — migrate', () => {
   });
 
   it('returns ok:true (no allowance check) for BALN migration on Icon', async () => {
-    const isAllowanceValidSpy = vi.spyOn(sodax.spokeService, 'isAllowanceValid');
+    const isAllowanceValidSpy = vi.spyOn(sodax.spoke, 'isAllowanceValid');
     const result = await sodax.migration.isAllowanceValid(balnMigrateParams(), 'migrate');
     expect(result).toEqual({ ok: true, value: true });
     expect(isAllowanceValidSpy).not.toHaveBeenCalled();
@@ -275,7 +275,7 @@ describe('MigrationService.isAllowanceValid — migrate', () => {
 
   it('delegates to spoke.isAllowanceValid for bnUSD migration on EVM spoke', async () => {
     const params = bnUSDEvmSpokeParams();
-    const spy = vi.spyOn(sodax.spokeService, 'isAllowanceValid').mockResolvedValueOnce({ ok: true, value: true });
+    const spy = vi.spyOn(sodax.spoke, 'isAllowanceValid').mockResolvedValueOnce({ ok: true, value: true });
 
     const result = await sodax.migration.isAllowanceValid(params, 'migrate');
 
@@ -296,7 +296,7 @@ describe('MigrationService.isAllowanceValid — migrate', () => {
     const params: UnifiedBnUSDMigrateParams<typeof ChainKeys.SONIC_MAINNET> = {
       ...bnUSDNewToLegacyParams(),
     };
-    const spy = vi.spyOn(sodax.spokeService, 'isAllowanceValid').mockResolvedValueOnce({ ok: true, value: true });
+    const spy = vi.spyOn(sodax.spoke, 'isAllowanceValid').mockResolvedValueOnce({ ok: true, value: true });
 
     const result = await sodax.migration.isAllowanceValid(params, 'migrate');
 
@@ -312,7 +312,7 @@ describe('MigrationService.isAllowanceValid — migrate', () => {
 
   it('delegates to spoke.isAllowanceValid for bnUSD migration on Stellar (no spender)', async () => {
     const params = bnUSDStellarParams();
-    const spy = vi.spyOn(sodax.spokeService, 'isAllowanceValid').mockResolvedValueOnce({ ok: true, value: true });
+    const spy = vi.spyOn(sodax.spoke, 'isAllowanceValid').mockResolvedValueOnce({ ok: true, value: true });
 
     const result = await sodax.migration.isAllowanceValid(params, 'migrate');
 
@@ -340,7 +340,7 @@ describe('MigrationService.isAllowanceValid — migrate', () => {
       amount: 1n,
       dstAddress: evmAddress,
     };
-    const isAllowanceValidSpy = vi.spyOn(sodax.spokeService, 'isAllowanceValid');
+    const isAllowanceValidSpy = vi.spyOn(sodax.spoke, 'isAllowanceValid');
     const result = await sodax.migration.isAllowanceValid(params, 'migrate');
     expect(result).toEqual({ ok: true, value: true });
     expect(isAllowanceValidSpy).not.toHaveBeenCalled();
@@ -370,7 +370,7 @@ describe('MigrationService.isAllowanceValid — revert', () => {
   it('delegates to spoke.isAllowanceValid for ICX revert on Sonic (hub)', async () => {
     const params = icxRevertParams();
     mocks.getUserHubWalletAddress.mockResolvedValueOnce(userRouterAddress);
-    const spy = vi.spyOn(sodax.spokeService, 'isAllowanceValid').mockResolvedValueOnce({ ok: true, value: true });
+    const spy = vi.spyOn(sodax.spoke, 'isAllowanceValid').mockResolvedValueOnce({ ok: true, value: true });
 
     const result = await sodax.migration.isAllowanceValid(params, 'revert');
 
@@ -389,7 +389,7 @@ describe('MigrationService.isAllowanceValid — revert', () => {
     // Reuse the bnUSD new-to-legacy fixture (Sonic→Icon revert). srcChainKey is hub.
     const params = bnUSDNewToLegacyParams();
     mocks.getUserRouter.mockResolvedValueOnce(userRouterAddress);
-    const spy = vi.spyOn(sodax.spokeService, 'isAllowanceValid').mockResolvedValueOnce({ ok: true, value: true });
+    const spy = vi.spyOn(sodax.spoke, 'isAllowanceValid').mockResolvedValueOnce({ ok: true, value: true });
 
     const result = await sodax.migration.isAllowanceValid(params, 'revert');
 
@@ -402,7 +402,7 @@ describe('MigrationService.isAllowanceValid — revert', () => {
 
   it('uses assetManager as spender for bnUSD revert on EVM spoke (non-hub)', async () => {
     const params = bnUSDEvmSpokeParams();
-    const spy = vi.spyOn(sodax.spokeService, 'isAllowanceValid').mockResolvedValueOnce({ ok: true, value: true });
+    const spy = vi.spyOn(sodax.spoke, 'isAllowanceValid').mockResolvedValueOnce({ ok: true, value: true });
 
     const result = await sodax.migration.isAllowanceValid(params, 'revert');
 
@@ -414,7 +414,7 @@ describe('MigrationService.isAllowanceValid — revert', () => {
 
   it('delegates to spoke.isAllowanceValid for bnUSD revert on Stellar', async () => {
     const params = bnUSDStellarParams();
-    const spy = vi.spyOn(sodax.spokeService, 'isAllowanceValid').mockResolvedValueOnce({ ok: true, value: true });
+    const spy = vi.spyOn(sodax.spoke, 'isAllowanceValid').mockResolvedValueOnce({ ok: true, value: true });
 
     const result = await sodax.migration.isAllowanceValid(params, 'revert');
 
@@ -450,7 +450,7 @@ describe('MigrationService.isAllowanceValid — invalid action', () => {
 
   it('forwards a thrown error from spoke.isAllowanceValid as-is', async () => {
     const spokeError = new Error('SPOKE_RPC_DOWN');
-    vi.spyOn(sodax.spokeService, 'isAllowanceValid').mockRejectedValueOnce(spokeError);
+    vi.spyOn(sodax.spoke, 'isAllowanceValid').mockRejectedValueOnce(spokeError);
 
     const result = await sodax.migration.isAllowanceValid(bnUSDEvmSpokeParams(), 'migrate');
 
@@ -465,7 +465,7 @@ describe('MigrationService.isAllowanceValid — invalid action', () => {
 describe('MigrationService.approve — migrate', () => {
   it('approves bnUSD on EVM spoke (raw=false) — forwards walletProvider', async () => {
     const params = bnUSDEvmSpokeParams();
-    const approveSpy = vi.spyOn(sodax.spokeService, 'approve').mockResolvedValueOnce({ ok: true, value: '0xapprove' });
+    const approveSpy = vi.spyOn(sodax.spoke, 'approve').mockResolvedValueOnce({ ok: true, value: '0xapprove' });
 
     const result = await sodax.migration.approve({ params, raw: false, walletProvider: mockEvmProvider }, 'migrate');
 
@@ -485,7 +485,7 @@ describe('MigrationService.approve — migrate', () => {
   it('approves bnUSD on EVM spoke (raw=true) — does not include walletProvider', async () => {
     const params = bnUSDEvmSpokeParams();
     const rawTx = { from: '0x1', to: '0x2', value: 0n, data: '0x' };
-    const approveSpy = vi.spyOn(sodax.spokeService, 'approve').mockResolvedValueOnce({ ok: true, value: rawTx });
+    const approveSpy = vi.spyOn(sodax.spoke, 'approve').mockResolvedValueOnce({ ok: true, value: rawTx });
 
     const result = await sodax.migration.approve({ params, raw: true }, 'migrate');
 
@@ -498,7 +498,7 @@ describe('MigrationService.approve — migrate', () => {
   it('approves bnUSD on Stellar (raw=false) — forwards Stellar walletProvider', async () => {
     const params = bnUSDStellarParams();
     const approveSpy = vi
-      .spyOn(sodax.spokeService, 'approve')
+      .spyOn(sodax.spoke, 'approve')
       .mockResolvedValueOnce({ ok: true, value: '0xstellar-approve' });
 
     const result = await sodax.migration.approve(
@@ -521,7 +521,7 @@ describe('MigrationService.approve — migrate', () => {
   it('approves bnUSD on Stellar (raw=true) — no walletProvider in the spoke call', async () => {
     const params = bnUSDStellarParams();
     const rawTx = { from: 'stellar1', to: 'stellar2', value: 0n, data: '0x' };
-    const approveSpy = vi.spyOn(sodax.spokeService, 'approve').mockResolvedValueOnce({ ok: true, value: rawTx });
+    const approveSpy = vi.spyOn(sodax.spoke, 'approve').mockResolvedValueOnce({ ok: true, value: rawTx });
 
     const result = await sodax.migration.approve({ params, raw: true }, 'migrate');
 
@@ -590,7 +590,7 @@ describe('MigrationService.approve — migrate', () => {
 
   it('forwards a failure Result from spoke.approve unchanged', async () => {
     const approveError = new Error('APPROVE_REJECTED');
-    vi.spyOn(sodax.spokeService, 'approve').mockResolvedValueOnce({ ok: false, error: approveError });
+    vi.spyOn(sodax.spoke, 'approve').mockResolvedValueOnce({ ok: false, error: approveError });
 
     const result = await sodax.migration.approve(
       { params: bnUSDEvmSpokeParams(), raw: false, walletProvider: mockEvmProvider },
@@ -605,7 +605,7 @@ describe('MigrationService.approve — revert', () => {
   it('approves bnUSD revert on EVM spoke — uses assetManager as spender', async () => {
     const params = bnUSDEvmSpokeParams();
     const approveSpy = vi
-      .spyOn(sodax.spokeService, 'approve')
+      .spyOn(sodax.spoke, 'approve')
       .mockResolvedValueOnce({ ok: true, value: '0xrevert-approve' });
 
     const result = await sodax.migration.approve({ params, raw: false, walletProvider: mockEvmProvider }, 'revert');
@@ -634,7 +634,7 @@ describe('MigrationService.approve — revert', () => {
     const params = icxRevertParams();
     mocks.getUserHubWalletAddress.mockResolvedValueOnce(userRouterAddress);
     const approveSpy = vi
-      .spyOn(sodax.spokeService, 'approve')
+      .spyOn(sodax.spoke, 'approve')
       .mockResolvedValueOnce({ ok: true, value: '0xicx-revert-approve' });
 
     const result = await sodax.migration.approve({ params, raw: false, walletProvider: mockEvmProvider }, 'revert');
@@ -655,7 +655,7 @@ describe('MigrationService.approve — revert', () => {
   it('approves ICX revert on Sonic with raw=true — no walletProvider in the spoke call', async () => {
     const params = icxRevertParams();
     const rawTx = { from: '0x1', to: '0x2', value: 0n, data: '0x' };
-    const approveSpy = vi.spyOn(sodax.spokeService, 'approve').mockResolvedValueOnce({ ok: true, value: rawTx });
+    const approveSpy = vi.spyOn(sodax.spoke, 'approve').mockResolvedValueOnce({ ok: true, value: rawTx });
 
     const result = await sodax.migration.approve({ params, raw: true }, 'revert');
 
@@ -668,7 +668,7 @@ describe('MigrationService.approve — revert', () => {
   it('approves bnUSD revert on Stellar (raw=false)', async () => {
     const params = bnUSDStellarParams();
     const approveSpy = vi
-      .spyOn(sodax.spokeService, 'approve')
+      .spyOn(sodax.spoke, 'approve')
       .mockResolvedValueOnce({ ok: true, value: '0xrevert-stellar' });
 
     const result = await sodax.migration.approve({ params, raw: false, walletProvider: mockStellarProvider }, 'revert');
@@ -682,7 +682,7 @@ describe('MigrationService.approve — revert', () => {
   it('approves bnUSD revert on EVM spoke (raw=true) — no walletProvider in the spoke call', async () => {
     const params = bnUSDEvmSpokeParams();
     const rawTx = { from: '0x1', to: '0x2', value: 0n, data: '0x' };
-    const approveSpy = vi.spyOn(sodax.spokeService, 'approve').mockResolvedValueOnce({ ok: true, value: rawTx });
+    const approveSpy = vi.spyOn(sodax.spoke, 'approve').mockResolvedValueOnce({ ok: true, value: rawTx });
 
     const result = await sodax.migration.approve({ params, raw: true }, 'revert');
 
@@ -695,7 +695,7 @@ describe('MigrationService.approve — revert', () => {
   it('approves bnUSD revert on Stellar (raw=true) — no walletProvider in the spoke call', async () => {
     const params = bnUSDStellarParams();
     const rawTx = { from: 'stellar1', to: 'stellar2', value: 0n, data: '0x' };
-    const approveSpy = vi.spyOn(sodax.spokeService, 'approve').mockResolvedValueOnce({ ok: true, value: rawTx });
+    const approveSpy = vi.spyOn(sodax.spoke, 'approve').mockResolvedValueOnce({ ok: true, value: rawTx });
 
     const result = await sodax.migration.approve({ params, raw: true }, 'revert');
 
@@ -726,7 +726,7 @@ describe('MigrationService.approve — revert', () => {
 
   it('forwards a thrown error from spoke.approve as a Result.error', async () => {
     const approveError = new Error('SPOKE_APPROVE_THROWS');
-    vi.spyOn(sodax.spokeService, 'approve').mockRejectedValueOnce(approveError);
+    vi.spyOn(sodax.spoke, 'approve').mockRejectedValueOnce(approveError);
 
     const result = await sodax.migration.approve(
       { params: bnUSDEvmSpokeParams(), raw: false, walletProvider: mockEvmProvider },
@@ -861,7 +861,7 @@ describe('MigrationService.migratebnUSD', () => {
       value: { tx: spokeTxHash, relayData: { address: hubWalletAddress, payload: '0xp' } },
     });
     const verifyError = new Error('TX_NOT_FOUND');
-    vi.spyOn(sodax.spokeService, 'verifyTxHash').mockResolvedValueOnce({ ok: false, error: verifyError });
+    vi.spyOn(sodax.spoke, 'verifyTxHash').mockResolvedValueOnce({ ok: false, error: verifyError });
 
     const result = await sodax.migration.migratebnUSD({
       params: bnUSDLegacyToNewParams(),
@@ -1124,7 +1124,7 @@ describe('MigrationService.migrateBaln', () => {
 describe('MigrationService.createMigrateBalnIntent', () => {
   it('forwards balnSwapService.swapData output to spoke.deposit (raw=false)', async () => {
     const swapDataSpy = vi.spyOn(sodax.migration.balnSwapService, 'swapData').mockReturnValueOnce('0xbaln-data');
-    const depositSpy = vi.spyOn(sodax.spokeService, 'deposit').mockResolvedValueOnce({ ok: true, value: spokeTxHash });
+    const depositSpy = vi.spyOn(sodax.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: spokeTxHash });
 
     const result = await sodax.migration.createMigrateBalnIntent({
       params: balnMigrateParams(),
@@ -1153,7 +1153,7 @@ describe('MigrationService.createMigrateBalnIntent', () => {
   it('builds raw deposit params (no walletProvider) when raw=true', async () => {
     vi.spyOn(sodax.migration.balnSwapService, 'swapData').mockReturnValueOnce('0xbaln-data');
     const rawTx = { from: 'cx1', to: 'cx2', value: 0n, data: '0x' };
-    const depositSpy = vi.spyOn(sodax.spokeService, 'deposit').mockResolvedValueOnce({ ok: true, value: rawTx });
+    const depositSpy = vi.spyOn(sodax.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: rawTx });
 
     const result = await sodax.migration.createMigrateBalnIntent({ params: balnMigrateParams(), raw: true });
 
@@ -1166,7 +1166,7 @@ describe('MigrationService.createMigrateBalnIntent', () => {
   it('forwards a deposit failure as Result.error', async () => {
     vi.spyOn(sodax.migration.balnSwapService, 'swapData').mockReturnValueOnce('0xbaln-data');
     const depositError = new Error('DEPOSIT_REJECTED');
-    vi.spyOn(sodax.spokeService, 'deposit').mockResolvedValueOnce({ ok: false, error: depositError });
+    vi.spyOn(sodax.spoke, 'deposit').mockResolvedValueOnce({ ok: false, error: depositError });
 
     const result = await sodax.migration.createMigrateBalnIntent({
       params: balnMigrateParams(),
@@ -1217,7 +1217,7 @@ describe('MigrationService.createMigratebnUSDIntent — happy paths', () => {
     const migrateDataSpy = vi
       .spyOn(sodax.migration.bnUSDMigrationService, 'migrateData')
       .mockReturnValueOnce('0xbnusd-migrate-data');
-    const depositSpy = vi.spyOn(sodax.spokeService, 'deposit').mockResolvedValueOnce({ ok: true, value: spokeTxHash });
+    const depositSpy = vi.spyOn(sodax.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: spokeTxHash });
 
     const result = await sodax.migration.createMigratebnUSDIntent({
       params,
@@ -1248,7 +1248,7 @@ describe('MigrationService.createMigratebnUSDIntent — happy paths', () => {
     const revertDataSpy = vi
       .spyOn(sodax.migration.bnUSDMigrationService, 'revertMigrationData')
       .mockReturnValueOnce('0xbnusd-revert-data');
-    vi.spyOn(sodax.spokeService, 'deposit').mockResolvedValueOnce({ ok: true, value: spokeTxHash });
+    vi.spyOn(sodax.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: spokeTxHash });
 
     const result = await sodax.migration.createMigratebnUSDIntent({
       params,
@@ -1263,7 +1263,7 @@ describe('MigrationService.createMigratebnUSDIntent — happy paths', () => {
   it('builds raw deposit params when raw=true', async () => {
     vi.spyOn(sodax.migration.bnUSDMigrationService, 'migrateData').mockReturnValueOnce('0xdata');
     const rawTx = { from: 'hx1', to: 'cx2', value: 0n, data: '0x' };
-    const depositSpy = vi.spyOn(sodax.spokeService, 'deposit').mockResolvedValueOnce({ ok: true, value: rawTx });
+    const depositSpy = vi.spyOn(sodax.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: rawTx });
 
     const result = await sodax.migration.createMigratebnUSDIntent({
       params: bnUSDLegacyToNewParams(),
@@ -1281,7 +1281,7 @@ describe('MigrationService.createMigratebnUSDIntent — happy paths', () => {
     // should still succeed because invariants are bypassed.
     vi.spyOn(sodax.config, 'isValidSpokeChainKey').mockReturnValue(false);
     vi.spyOn(sodax.migration.bnUSDMigrationService, 'migrateData').mockReturnValueOnce('0xdata');
-    vi.spyOn(sodax.spokeService, 'deposit').mockResolvedValueOnce({ ok: true, value: spokeTxHash });
+    vi.spyOn(sodax.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: spokeTxHash });
 
     const result = await sodax.migration.createMigratebnUSDIntent({
       params: bnUSDLegacyToNewParams(),
@@ -1423,7 +1423,7 @@ describe('MigrationService.createMigratebnUSDIntent — error propagation', () =
   it('forwards a deposit failure as Result.error', async () => {
     vi.spyOn(sodax.migration.bnUSDMigrationService, 'migrateData').mockReturnValueOnce('0xdata');
     const depositError = new Error('DEPOSIT_FAILED');
-    vi.spyOn(sodax.spokeService, 'deposit').mockResolvedValueOnce({ ok: false, error: depositError });
+    vi.spyOn(sodax.spoke, 'deposit').mockResolvedValueOnce({ ok: false, error: depositError });
 
     const result = await sodax.migration.createMigratebnUSDIntent({
       params: bnUSDLegacyToNewParams(),
@@ -1461,7 +1461,7 @@ describe('MigrationService.createMigrateIcxToSodaIntent — happy paths', () => 
       value: 10_000_000_000_000_000_000n,
     });
     vi.spyOn(sodax.migration.icxMigration, 'migrateData').mockReturnValueOnce('0xicx-migrate-data');
-    const depositSpy = vi.spyOn(sodax.spokeService, 'deposit').mockResolvedValueOnce({ ok: true, value: spokeTxHash });
+    const depositSpy = vi.spyOn(sodax.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: spokeTxHash });
 
     const result = await sodax.migration.createMigrateIcxToSodaIntent({
       params: icxMigrateParams(),
@@ -1489,7 +1489,7 @@ describe('MigrationService.createMigrateIcxToSodaIntent — happy paths', () => 
     });
     vi.spyOn(sodax.migration.icxMigration, 'migrateData').mockReturnValueOnce('0xicx-migrate-data');
     const rawTx = { from: 'hx1', to: 'cx2', value: 0n, data: '0x' };
-    const depositSpy = vi.spyOn(sodax.spokeService, 'deposit').mockResolvedValueOnce({ ok: true, value: rawTx });
+    const depositSpy = vi.spyOn(sodax.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: rawTx });
 
     const result = await sodax.migration.createMigrateIcxToSodaIntent({ params: icxMigrateParams(), raw: true });
 
@@ -1596,7 +1596,7 @@ describe('MigrationService.createMigrateIcxToSodaIntent — error propagation', 
     });
     vi.spyOn(sodax.migration.icxMigration, 'migrateData').mockReturnValueOnce('0xicx-data');
     const depositError = new Error('DEPOSIT_FAILED');
-    vi.spyOn(sodax.spokeService, 'deposit').mockResolvedValueOnce({ ok: false, error: depositError });
+    vi.spyOn(sodax.spoke, 'deposit').mockResolvedValueOnce({ ok: false, error: depositError });
 
     const result = await sodax.migration.createMigrateIcxToSodaIntent({
       params: icxMigrateParams(),
@@ -1634,7 +1634,7 @@ describe('MigrationService.createRevertSodaToIcxMigrationIntent', () => {
     const revertMigrationSpy = vi
       .spyOn(sodax.migration.icxMigration, 'revertMigration')
       .mockReturnValueOnce('0xrevert-data');
-    const depositSpy = vi.spyOn(sodax.spokeService, 'deposit').mockResolvedValueOnce({ ok: true, value: spokeTxHash });
+    const depositSpy = vi.spyOn(sodax.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: spokeTxHash });
 
     const result = await sodax.migration.createRevertSodaToIcxMigrationIntent({
       params: icxRevertParams(),
@@ -1666,7 +1666,7 @@ describe('MigrationService.createRevertSodaToIcxMigrationIntent', () => {
   it('builds raw deposit params when raw=true', async () => {
     vi.spyOn(sodax.migration.icxMigration, 'revertMigration').mockReturnValueOnce('0xrevert-data');
     const rawTx = { from: '0x1', to: '0x2', value: 0n, data: '0x' };
-    const depositSpy = vi.spyOn(sodax.spokeService, 'deposit').mockResolvedValueOnce({ ok: true, value: rawTx });
+    const depositSpy = vi.spyOn(sodax.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: rawTx });
 
     const result = await sodax.migration.createRevertSodaToIcxMigrationIntent({
       params: icxRevertParams(),
@@ -1710,7 +1710,7 @@ describe('MigrationService.createRevertSodaToIcxMigrationIntent', () => {
   it('forwards a deposit failure as Result.error', async () => {
     vi.spyOn(sodax.migration.icxMigration, 'revertMigration').mockReturnValueOnce('0xrevert-data');
     const depositError = new Error('DEPOSIT_FAILED');
-    vi.spyOn(sodax.spokeService, 'deposit').mockResolvedValueOnce({ ok: false, error: depositError });
+    vi.spyOn(sodax.spoke, 'deposit').mockResolvedValueOnce({ ok: false, error: depositError });
 
     const result = await sodax.migration.createRevertSodaToIcxMigrationIntent({
       params: icxRevertParams(),

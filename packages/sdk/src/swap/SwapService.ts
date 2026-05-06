@@ -538,8 +538,10 @@ export class SwapService {
    *   - `tx` — chain-specific tx hash (executed) or raw tx data (raw mode).
    *   - `intent` — the fully constructed `Intent` object augmented with `feeAmount`.
    *   - `relayData` — `{ address, payload }` needed to submit the intent to the relayer.
-   * @throws Invariant errors for unsupported tokens, mismatched chain keys, or insufficient
-   *   Bitcoin dust output (< 546 sats) — thrown before the async try block, not wrapped in `Result`.
+   *
+   * Invariant violations (unsupported tokens, mismatched chain keys, insufficient Bitcoin dust
+   * output below 546 sats) are caught inside this method and returned as `{ ok: false, error }`,
+   * not thrown from the async API boundary.
    */
   public async createIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: SwapActionParams<K, Raw>,
@@ -584,8 +586,8 @@ export class SwapService {
           isBitcoinWalletProviderType(_params.walletProvider),
           `Invalid wallet provider for chain key: ${params.srcChainKey}`,
         );
-        walletAddress = await this.spoke.bitcoinSpokeService.getEffectiveWalletAddress(personalAddress);
-        await this.spoke.bitcoinSpokeService.radfi.ensureRadfiAccessToken(_params.walletProvider);
+        walletAddress = await this.spoke.bitcoin.getEffectiveWalletAddress(personalAddress);
+        await this.spoke.bitcoin.radfi.ensureRadfiAccessToken(_params.walletProvider);
       }
 
       // derive users hub wallet address

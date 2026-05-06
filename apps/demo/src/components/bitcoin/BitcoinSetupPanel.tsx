@@ -103,7 +103,7 @@ export const BitcoinSetupPanel = ({ walletProvider, onReadyChange, nativeBalance
     if (!accessToken) return undefined;
     const balance = tradingBalance?.btcSatoshi ?? 0n;
     if (balance <= 0n) return undefined;
-    return sodax.spokeService.bitcoinSpokeService.radfi.getMaxWithdrawable(
+    return sodax.spoke.bitcoin.radfi.getMaxWithdrawable(
       { userAddress: walletAddress, amount: balance.toString(), tokenId: '0:0', withdrawTo },
       accessToken,
     );

@@ -92,7 +92,7 @@ Sodax
  ├── backendApi: BackendApiService
  ├── config: ConfigService
  ├── hubProvider: EvmHubProvider
- └── spokeService: SpokeService
+ └── spoke: SpokeService
 ```
 
 `RecoveryService` withdraws assets stuck in a user's hub wallet abstraction back to a spoke chain. This is useful when a cross-chain operation deposited to the hub but the destination step failed.

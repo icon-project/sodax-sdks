@@ -34,7 +34,7 @@ const helpers = vi.hoisted(() => {
     backendApi: [] as unknown[],
     config: [] as unknown[],
     evmHub: [] as unknown[],
-    spokeService: [] as unknown[],
+    spoke: [] as unknown[],
     swap: [] as unknown[],
     moneyMarket: [] as unknown[],
     dex: [] as unknown[],
@@ -87,7 +87,7 @@ vi.mock('./EvmHubProvider.js', () => ({
 }));
 
 vi.mock('../services/spoke/SpokeService.js', () => ({
-  SpokeService: helpers.makeFakeService('SpokeService', helpers.captured.spokeService),
+  SpokeService: helpers.makeFakeService('SpokeService', helpers.captured.spoke),
 }));
 
 vi.mock('../../swap/SwapService.js', () => ({
@@ -135,7 +135,7 @@ const SINK_KEYS = [
   'backendApi',
   'config',
   'evmHub',
-  'spokeService',
+  'spoke',
   'swap',
   'moneyMarket',
   'dex',
@@ -231,7 +231,7 @@ describe('Sodax constructor — sub-services are instantiated as the correct cla
     ['backendApi', 'BackendApiService'],
     ['config', 'ConfigService'],
     ['hubProvider', 'EvmHubProvider'],
-    ['spokeService', 'SpokeService'],
+    ['spoke', 'SpokeService'],
     ['swaps', 'SwapService'],
     ['moneyMarket', 'MoneyMarketService'],
     ['dex', 'DexService'],
@@ -280,8 +280,8 @@ describe('Sodax constructor — dependency wiring', () => {
 
   it('SpokeService receives { config, hubProvider } pointing at the same Sodax-owned instances', () => {
     const sodax = new Sodax();
-    expect(helpers.captured.spokeService).toHaveLength(1);
-    const args = helpers.captured.spokeService[0] as { config: unknown; hubProvider: unknown };
+    expect(helpers.captured.spoke).toHaveLength(1);
+    const args = helpers.captured.spoke[0] as { config: unknown; hubProvider: unknown };
     expect(args.config).toBe(sodax.config);
     expect(args.hubProvider).toBe(sodax.hubProvider);
   });
@@ -309,7 +309,7 @@ describe('Sodax constructor — dependency wiring', () => {
       const args = sink[0] as { config: unknown; hubProvider: unknown; spoke: unknown };
       expect(args.config).toBe(sodax.config);
       expect(args.hubProvider).toBe(sodax.hubProvider);
-      expect(args.spoke).toBe(sodax.spokeService);
+      expect(args.spoke).toBe(sodax.spoke);
       // Defensive: also pin that the field-name → sink-name mapping is correct so a mutation
       // that swaps `this.swaps = new SwapService(...)` and `this.moneyMarket = new MoneyMarket(...)`
       // gets caught.
@@ -321,7 +321,7 @@ describe('Sodax constructor — dependency wiring', () => {
     const sodax = new Sodax();
     const allConfigArgs = [
       (helpers.captured.evmHub[0] as { config: unknown }).config,
-      (helpers.captured.spokeService[0] as { config: unknown }).config,
+      (helpers.captured.spoke[0] as { config: unknown }).config,
       (helpers.captured.swap[0] as { config: unknown }).config,
       (helpers.captured.moneyMarket[0] as { config: unknown }).config,
       (helpers.captured.dex[0] as { config: unknown }).config,
@@ -337,7 +337,7 @@ describe('Sodax constructor — dependency wiring', () => {
   it('shares ONE hubProvider instance across every service that needs it', () => {
     const sodax = new Sodax();
     const allHubArgs = [
-      (helpers.captured.spokeService[0] as { hubProvider: unknown }).hubProvider,
+      (helpers.captured.spoke[0] as { hubProvider: unknown }).hubProvider,
       (helpers.captured.swap[0] as { hubProvider: unknown }).hubProvider,
       (helpers.captured.moneyMarket[0] as { hubProvider: unknown }).hubProvider,
       (helpers.captured.dex[0] as { hubProvider: unknown }).hubProvider,
@@ -350,7 +350,7 @@ describe('Sodax constructor — dependency wiring', () => {
     for (const hub of allHubArgs) expect(hub).toBe(sodax.hubProvider);
   });
 
-  it('shares ONE spokeService instance across every service that needs it', () => {
+  it('shares ONE spoke instance across every service that needs it', () => {
     const sodax = new Sodax();
     const allSpokeArgs = [
       (helpers.captured.swap[0] as { spoke: unknown }).spoke,
@@ -362,7 +362,7 @@ describe('Sodax constructor — dependency wiring', () => {
       (helpers.captured.partner[0] as { spoke: unknown }).spoke,
       (helpers.captured.recovery[0] as { spoke: unknown }).spoke,
     ];
-    for (const spoke of allSpokeArgs) expect(spoke).toBe(sodax.spokeService);
+    for (const spoke of allSpokeArgs) expect(spoke).toBe(sodax.spoke);
   });
 });
 
@@ -446,7 +446,7 @@ describe('Sodax — multiple instances', () => {
     expect(a).not.toBe(b);
     expect(a.config).not.toBe(b.config);
     expect(a.hubProvider).not.toBe(b.hubProvider);
-    expect(a.spokeService).not.toBe(b.spokeService);
+    expect(a.spoke).not.toBe(b.spoke);
     expect(a.swaps).not.toBe(b.swaps);
   });
 

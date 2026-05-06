@@ -30,7 +30,7 @@ export function useFundTradingWallet({
     ...mutationOptions,
     mutationFn: async ({ amount, walletProvider }) => {
       const walletAddress = await walletProvider.getWalletAddress();
-      return sodax.spokeService.bitcoinSpokeService.fundTradingWallet(amount, walletAddress, walletProvider);
+      return sodax.spoke.bitcoin.fundTradingWallet(amount, walletAddress, walletProvider);
     },
     onSuccess: async (data, vars, ctx) => {
       queryClient.invalidateQueries({ queryKey: ['bitcoin', 'balance'] });

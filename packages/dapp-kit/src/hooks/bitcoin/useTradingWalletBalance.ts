@@ -25,7 +25,7 @@ export function useTradingWalletBalance({
       if (!walletProvider || !tradingAddress) {
         throw new Error('walletProvider and tradingAddress are required');
       }
-      return sodax.spokeService.bitcoinSpokeService.radfi.getBalance(tradingAddress);
+      return sodax.spoke.bitcoin.radfi.getBalance(tradingAddress);
     },
     enabled: !!walletProvider && !!tradingAddress,
     ...queryOptions,

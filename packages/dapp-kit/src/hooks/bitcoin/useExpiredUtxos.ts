@@ -25,7 +25,7 @@ export function useExpiredUtxos({
       if (!walletProvider || !tradingAddress) {
         throw new Error('walletProvider and tradingAddress are required');
       }
-      const result = await sodax.spokeService.bitcoinSpokeService.radfi.getExpiredUtxos(tradingAddress);
+      const result = await sodax.spoke.bitcoin.radfi.getExpiredUtxos(tradingAddress);
       return result.data;
     },
     enabled: !!walletProvider && !!tradingAddress,

@@ -43,7 +43,7 @@ export function useRequestTrustline(token: string | undefined): {
       setError(null);
       try {
         const srcAddress = await walletProvider.getWalletAddress();
-        const result = await sodax.spokeService.stellarSpokeService.requestTrustline<false>({
+        const result = await sodax.spoke.stellar.requestTrustline<false>({
           raw: false,
           srcChainKey,
           srcAddress,

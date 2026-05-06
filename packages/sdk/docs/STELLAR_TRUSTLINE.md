@@ -16,13 +16,13 @@ The SDK handles trustlines differently depending on whether Stellar is used as t
 
 ## Architecture
 
-In the v2 SDK there are no caller-constructed spoke provider objects. The `Sodax` facade exposes a `spokeService` property of type `SpokeService`, which owns a `stellarSpokeService: StellarSpokeService` instance. All Stellar-specific logic is accessed through that path.
+In the v2 SDK there are no caller-constructed spoke provider objects. The `Sodax` facade exposes a `spoke` property of type `SpokeService`, which owns a `stellar: StellarSpokeService` instance. All Stellar-specific logic is accessed through that path.
 
 The Stellar wallet provider is `IStellarWalletProvider` (from `@sodax/wallet-sdk-core`). When calling methods with `raw: false`, the chain-narrowed provider type is resolved from the `srcChainKey` via `GetWalletProviderType<ChainKeys.STELLAR_MAINNET>` — there is no manual spoke provider construction.
 
 ## StellarSpokeService Methods
 
-`StellarSpokeService` (accessed via `sodax.spokeService.stellarSpokeService`) provides three methods for managing Stellar trustlines.
+`StellarSpokeService` (accessed via `sodax.spoke.stellar`) provides three methods for managing Stellar trustlines.
 
 ### hasSufficientTrustline
 
@@ -31,7 +31,7 @@ Checks if a sufficient trustline exists for a given token and wallet address.
 ```typescript
 import { ChainKeys } from '@sodax/sdk';
 
-const hasTrustline = await sodax.spokeService.stellarSpokeService.hasSufficientTrustline(
+const hasTrustline = await sodax.spoke.stellar.hasSufficientTrustline(
   tokenAddress,    // The Stellar token contract ID
   amount,          // The amount you need to receive (bigint, in stroops)
   walletAddress,   // The Stellar wallet address to check
@@ -49,7 +49,7 @@ import { ChainKeys } from '@sodax/sdk';
 import type { IStellarWalletProvider } from '@sodax/wallet-sdk-core';
 
 // Executed mode (raw: false) — signs and broadcasts immediately
-const txHash = await sodax.spokeService.stellarSpokeService.requestTrustline({
+const txHash = await sodax.spoke.stellar.requestTrustline({
   srcChainKey: ChainKeys.STELLAR_MAINNET,
   srcAddress: walletAddress,
   token: tokenAddress,
@@ -59,7 +59,7 @@ const txHash = await sodax.spokeService.stellarSpokeService.requestTrustline({
 });
 
 // Raw mode (raw: true) — returns unsigned transaction XDR; walletProvider must be omitted
-const rawTx = await sodax.spokeService.stellarSpokeService.requestTrustline({
+const rawTx = await sodax.spoke.stellar.requestTrustline({
   srcChainKey: ChainKeys.STELLAR_MAINNET,
   srcAddress: walletAddress,
   token: tokenAddress,
@@ -164,14 +164,14 @@ async function ensureTrustline(
   walletAddress: string,
   stellarWalletProvider: IStellarWalletProvider,
 ): Promise<void> {
-  const hasTrustline = await sodax.spokeService.stellarSpokeService.hasSufficientTrustline(
+  const hasTrustline = await sodax.spoke.stellar.hasSufficientTrustline(
     tokenAddress,
     amount,
     walletAddress,
   );
 
   if (!hasTrustline) {
-    const txHash = await sodax.spokeService.stellarSpokeService.requestTrustline({
+    const txHash = await sodax.spoke.stellar.requestTrustline({
       srcChainKey: ChainKeys.STELLAR_MAINNET,
       srcAddress: walletAddress,
       token: tokenAddress,
@@ -181,7 +181,7 @@ async function ensureTrustline(
     });
 
     // Wait for the trustline transaction to be confirmed before proceeding
-    const receipt = await sodax.spokeService.stellarSpokeService.waitForTransactionReceipt({
+    const receipt = await sodax.spoke.stellar.waitForTransactionReceipt({
       txHash,
       chainKey: ChainKeys.STELLAR_MAINNET,
     });
@@ -250,7 +250,7 @@ async function swapWithStellarDestination(
   const dstAddress = swapParams.dstAddress; // Stellar wallet address
 
   // Step 1: Check and establish trustline if needed
-  const hasTrustline = await sodax.spokeService.stellarSpokeService.hasSufficientTrustline(
+  const hasTrustline = await sodax.spoke.stellar.hasSufficientTrustline(
     destinationTokenAddress,
     minOutputAmount,
     dstAddress,
@@ -258,7 +258,7 @@ async function swapWithStellarDestination(
 
   if (!hasTrustline) {
     console.log('Establishing trustline...');
-    const txHash = await sodax.spokeService.stellarSpokeService.requestTrustline({
+    const txHash = await sodax.spoke.stellar.requestTrustline({
       srcChainKey: ChainKeys.STELLAR_MAINNET,
       srcAddress: dstAddress,
       token: destinationTokenAddress,
@@ -267,7 +267,7 @@ async function swapWithStellarDestination(
       walletProvider: stellarWalletProvider,
     });
 
-    const receipt = await sodax.spokeService.stellarSpokeService.waitForTransactionReceipt({
+    const receipt = await sodax.spoke.stellar.waitForTransactionReceipt({
       txHash,
       chainKey: ChainKeys.STELLAR_MAINNET,
     });
