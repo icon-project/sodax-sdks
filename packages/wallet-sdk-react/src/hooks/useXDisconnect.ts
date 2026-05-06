@@ -7,9 +7,18 @@ export type UseXDisconnectArgs = {
 };
 
 /**
- * Hook for disconnecting from a specific blockchain wallet.
+ * Returns a callback that disconnects the wallet for a given chain type.
  *
- * All chains delegate to ChainActions registered in the store.
+ * The callback delegates to the chain's `ChainActions.disconnect()` — provider-managed
+ * chains (EVM/Solana/Sui) trigger native SDK disconnect and let the Hydrator clear the
+ * store; non-provider chains call `unsetXConnection` directly.
+ *
+ * **Never throws.** When no `ChainActions` are registered (chain not enabled in
+ * `SodaxWalletProvider` config), the callback logs a warning and resolves silently.
+ * Even if the wallet's native disconnect throws, the store is cleared — the UI never
+ * gets stuck on "connected" state.
+ *
+ * @see {@link https://github.com/icon-project/sodax-frontend/blob/main/packages/wallet-sdk-react/docs/CONNECT_FLOW.md#disconnect | Connect Flow — Disconnect}
  */
 export function useXDisconnect(): (args: UseXDisconnectArgs) => Promise<void> {
   const actionsRegistry = useXWalletStore(state => state.chainActions);

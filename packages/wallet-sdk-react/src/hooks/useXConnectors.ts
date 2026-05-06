@@ -9,13 +9,22 @@ export type UseXConnectorsOptions = {
 const warnedChains = new Set<ChainType>();
 
 /**
- * Hook to retrieve available wallet connectors for a specific blockchain type,
- * with enriched metadata (isInstalled, installUrl, icon).
+ * Returns available wallet connectors for a specific chain type, with enriched
+ * metadata (`isInstalled`, `installUrl`, `icon`).
  *
- * `connector.isInstalled` reads current `window` state at render time.
+ * Each `connector.isInstalled` reads `window.*` at access time — no extra subscription
+ * is installed. Components receive fresh values through normal React render triggers
+ * (store updates, parent re-renders).
  *
- * Logs a one-time warning per chain if the requested chain is not enabled in
- * SodaxWalletProvider config.chains, to help debug missing connector lists.
+ * Returns `[]` when the chain isn't enabled in `SodaxWalletProvider` config and logs a
+ * one-time warning per chain to help debug missing connector lists. For multi-chain
+ * pickers, prefer `useXConnectorsByChain` which avoids the warning per chain.
+ *
+ * Pair with `sortConnectors(connectors, { preferred })` to rank installed/preferred wallets
+ * first. `preferred` matches by exact `connector.id` — for substring/case-insensitive matching,
+ * use `useIsWalletInstalled`.
+ *
+ * @see {@link https://github.com/icon-project/sodax-frontend/blob/main/packages/wallet-sdk-react/docs/CONNECT_FLOW.md#discover-connectors | Connect Flow — Discover}
  */
 export function useXConnectors({ xChainType }: UseXConnectorsOptions = {}): IXConnector[] {
   return useXWalletStore(state => {

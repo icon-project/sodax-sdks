@@ -5,9 +5,17 @@ import { useEnabledChains } from './useEnabledChains.js';
 import { useXConnections } from './useXConnections.js';
 
 /**
- * Hook to get all connected accounts across enabled chains.
+ * Returns connected accounts for every enabled chain type, keyed by `ChainType`.
  *
- * Reads from store only (single source of truth). Providers hydrate connection state into store.
+ * Each entry is always populated — disconnected chains have `address: undefined`,
+ * mirroring `useXAccount`'s shape. Iterates `enabledChains` so the result reflects
+ * exactly the slots present in `SodaxWalletProvider` config.
+ *
+ * Useful for "manage connections" panels and multi-chain status badges. For an
+ * enriched view with connector metadata (name, icon), use `useConnectedChains` —
+ * which also exposes a hydration `status` flag to gate first-paint UI.
+ *
+ * @see {@link https://github.com/icon-project/sodax-frontend/blob/main/packages/wallet-sdk-react/docs/CONNECT_FLOW.md#read-connected-account-state | Connect Flow — Read state}
  */
 export function useXAccounts() {
   const enabledChains = useEnabledChains();

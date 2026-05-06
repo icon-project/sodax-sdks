@@ -10,9 +10,22 @@ export type XSignMessageVariables = {
 };
 
 /**
- * Hook for signing messages across different chains.
+ * React Query mutation that delegates message signing to the connected wallet via
+ * `ChainActions.signMessage` — registered per chain by the `chainRegistry` (non-provider
+ * chains) or by the `<Chain>Actions` component (provider-managed chains).
  *
- * All chains delegate to ChainActions.signMessage registered in the store.
+ * The signature shape varies by chain: hex `\`0x${string}\`` for EVM, `Uint8Array` for
+ * Solana, base64 `string` for Stellar/Sui, etc. Branch on `xChainType` when consuming.
+ *
+ * **Bitcoin auto-selects** between BIP-322 (P2WPKH/P2TR) and ECDSA (P2SH/P2PKH) based
+ * on the connected address type — same dispatch logic as the SDK's
+ * `BitcoinSpokeProvider.authenticateWithWallet`.
+ *
+ * **Returns `undefined`** when the chain doesn't implement `signMessage` — currently
+ * only ICON (Hana wallet exposes no signing API). A one-time `console.warn` accompanies
+ * the `undefined`.
+ *
+ * @see {@link https://github.com/icon-project/sodax-frontend/blob/main/packages/wallet-sdk-react/docs/SIGN_MESSAGE.md | Sign Message}
  */
 export function useXSignMessage(): UseMutationResult<
   SignMessageReturnType,
