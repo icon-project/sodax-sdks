@@ -295,7 +295,7 @@ export function getTokenOnChain(sodax: Sodax, symbol: string, chainId: SpokeChai
 export const getChainExplorerTxUrl = (chainId: string, txHash: string): string | undefined => {
   const chain = baseChainInfo[chainId as ChainKey];
   if (!chain) return undefined;
-  return `${chain.explorerTxUrl}${txHash}`;
+  return `${chain.explorer.txUrl}${txHash}`;
 };
 export function formatCurrencyCompact(value: number): string {
   const abs = Math.abs(value);
