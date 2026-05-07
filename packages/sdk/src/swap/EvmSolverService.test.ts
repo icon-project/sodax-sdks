@@ -39,11 +39,13 @@ import {
   keccak256,
   toHex,
 } from 'viem';
-import { FEE_PERCENTAGE_SCALE, type PartnerFee, type SolverConfig, type XToken } from '@sodax/types';
-// `@sodax/types` is consumed from `dist/` in vitest; the generated dist entry is stale for some
-// exports. Pull `ChainKeys` from source — same workaround the SonicSpokeService and
-// IntentRelayApiService tests use.
-import { ChainKeys } from '../../../types/src/chains/chain-keys.js';
+import {
+  ChainKeys,
+  FEE_PERCENTAGE_SCALE,
+  type PartnerFee,
+  type SolverConfig,
+  type XToken,
+} from '@sodax/types';
 import { IntentsAbi } from '../shared/abis/intents.abi.js';
 import type { ConfigService } from '../shared/config/ConfigService.js';
 import { IntentDataType, type CreateIntentParams, type Intent } from '../shared/types/intent-types.js';

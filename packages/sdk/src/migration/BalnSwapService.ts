@@ -14,7 +14,7 @@ import { type Address, type Hex, type HttpTransport, type PublicClient, encodeFu
 import { balnSwapAbi } from '../shared/abis/balnSwap.abi.js';
 import type { HubProvider } from '../shared/types/types.js';
 import { encodeContractCalls, Erc20Service } from '../shared/index.js';
-import invariant from 'tiny-invariant';
+import { invariant } from '../shared/utils/tiny-invariant.js';
 import type { ConfigService } from '../shared/config/ConfigService.js';
 
 /**

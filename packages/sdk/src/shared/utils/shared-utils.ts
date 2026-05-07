@@ -1,4 +1,4 @@
-import invariant from 'tiny-invariant';
+import { invariant } from './tiny-invariant.js';
 import { isPartnerFeeAmount, isPartnerFeePercentage } from '../guards.js';
 import {
   type SpokeChainKey,

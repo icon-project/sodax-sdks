@@ -133,7 +133,7 @@ ChainKeys.SONIC_MAINNET       // 'sonic'  (hub chain)
 
 ### `Result<T>` — No Throws Across Service Boundaries
 
-Every public async method returns `Promise<Result<T>>`:
+Every public async method returns `Promise<Result<T, E>>`:
 
 ```typescript
 type Result<T, E = Error | unknown> =
@@ -141,31 +141,150 @@ type Result<T, E = Error | unknown> =
   | { ok: false; error: E };
 ```
 
-Check `result.ok` before accessing `result.value` or `result.error`. Some methods return `Result<T, SolverErrorResponse>` for solver-specific failures (e.g. `getQuote`, `getStatus`, `postExecution`).
+Check `result.ok` before accessing `result.value` or `result.error`. **For the swap module's user-facing methods**, the error type is narrowed to `SodaxError<NarrowCode>` per method — see "Error Handling" below.
 
 ### Error Handling
 
-There are no module-specific typed error unions (`IntentError<Code>`, etc.) — these were removed in v2. Errors fall into two categories:
+The swap module's three core methods (`swap`, `createIntent`, `postExecution`) return a deterministic, narrow `SodaxError` union. `createLimitOrder` / `createLimitOrderIntent` inherit the same shape because they delegate.
 
-1. **CODE form** (from `catch` blocks, multi-step operations): `result.error instanceof Error && result.error.message === 'PHASE_CODE'`. The underlying error is on `.cause`:
+#### The canonical error: `SodaxError<C>`
 
-   ```typescript
-   if (!result.ok && result.error instanceof Error) {
-     switch (result.error.message) {
-       case 'POST_EXECUTION_FAILED':
-         // Solver notify step failed; check result.error.cause for the underlying error
-         break;
-       case 'RELAY_TIMEOUT':
-         // Relay didn't confirm within the timeout
-         break;
-       case 'SUBMIT_TX_FAILED':
-         // Relay submission failed — store the payload and retry
-         break;
-     }
-   }
-   ```
+All swap-module errors are instances of `SodaxError`, exported from `@sodax/sdk`:
 
-2. **Prose form** (from precondition guards): a human-readable message in `result.error.message` describing the validation failure (e.g. `'Unsupported spoke chain token'`, `'Approve only supported for hub (Sonic), EVM spokes, and Stellar'`).
+```typescript
+import { SodaxError, isSodaxError } from '@sodax/sdk';
+
+class SodaxError<C extends string = string> extends Error {
+  readonly code: C;                  // string-literal discriminator
+  readonly cause?: unknown;          // ES2022 cause chain
+  readonly context?: Record<string, unknown>;
+  toJSON(): { name, code, message, stack, context, cause };
+}
+
+function isSodaxError(e: unknown): e is SodaxError;
+```
+
+**Rules:**
+
+- Discriminate on `error.code` — never on `error.message` (the message is a human-readable explanation, not a stable contract).
+- `error.cause` walks the underlying error chain (ES2022). Loggers like Sentry/Pino/Datadog walk this automatically.
+- `error.context` carries structured metadata: `srcChainKey`, `dstChainKey`, `phase`, plus per-code extras (`solverCode`, `relayCode`, `field`, …).
+- `error.toJSON()` is the canonical logger surface: `JSON.stringify(error)` invokes it automatically and produces a logger-safe payload (bigints in `context` are coerced to strings, cause walked depth-3, no circular hazards).
+- Use `isSodaxError(e)` instead of `instanceof SodaxError` in dapp/app code — it survives duplicate-bundle and dual-package scenarios.
+
+#### Per-method error code unions
+
+| Method | Error type | Codes |
+|---|---|---|
+| `swap` | `SwapError` | `SWAP_VALIDATION_FAILED`, `SWAP_INTENT_CREATION_FAILED`, `SWAP_VERIFY_FAILED`, `SWAP_SUBMIT_TX_FAILED`, `SWAP_RELAY_TIMEOUT`, `SWAP_RELAY_FAILED`, `SWAP_POST_EXECUTION_FAILED`, `SWAP_SOLVER_API_ERROR`, `SWAP_UNKNOWN` |
+| `createIntent` / `createLimitOrderIntent` | `CreateIntentError` | `SWAP_VALIDATION_FAILED`, `SWAP_INTENT_CREATION_FAILED`, `SWAP_UNKNOWN` |
+| `postExecution` | `PostExecutionError` | `SWAP_POST_EXECUTION_FAILED`, `SWAP_SOLVER_API_ERROR`, `SWAP_UNKNOWN` |
+| `createLimitOrder` | `SwapError` | (same as `swap`) |
+
+**Important:** `postExecution` alone never emits relay/verify codes — those appear only on `swap` because only `swap` orchestrates verify + relay. Don't write a unified switch that handles both with the same union.
+
+#### Standard `context` fields
+
+```typescript
+{
+  srcChainKey?: SpokeChainKey;
+  dstChainKey?: SpokeChainKey;
+  phase?: 'validate' | 'createIntent' | 'verify' | 'submit' | 'relay' | 'postExecution';
+  // Only on SWAP_SOLVER_API_ERROR:
+  solverCode?: SolverIntentErrorCode;
+  solverDetail?: SolverErrorResponse['detail'];
+  // Only on SWAP_RELAY_TIMEOUT / SWAP_SUBMIT_TX_FAILED / SWAP_RELAY_FAILED:
+  relayCode?: 'SUBMIT_TX_FAILED' | 'RELAY_TIMEOUT' | 'RELAY_POLLING_FAILED' | 'UNKNOWN';
+  // Only on SWAP_VALIDATION_FAILED:
+  field?: string;
+  reason?: string;
+}
+```
+
+#### Discrimination example
+
+```typescript
+import { isSodaxError, SolverIntentErrorCode, type SwapError } from '@sodax/sdk';
+
+const result = await sodax.swaps.swap({ params, walletProvider });
+
+if (!result.ok) {
+  const err: SwapError = result.error;
+
+  switch (err.code) {
+    case 'SWAP_VALIDATION_FAILED':
+      // Human-readable reason in err.message; structured details in err.context.
+      console.error('Bad input:', err.message);
+      break;
+
+    case 'SWAP_INTENT_CREATION_FAILED':
+      // Spoke deposit / intent construction failed.
+      console.error('Intent creation failed:', err.cause);
+      break;
+
+    case 'SWAP_VERIFY_FAILED':
+      // Spoke tx could not be verified on-chain.
+      break;
+
+    case 'SWAP_SUBMIT_TX_FAILED':
+      // CRITICAL: spoke tx landed but relay submission failed. Persist the spoke tx hash
+      // and retry submission — funds may otherwise be inaccessible.
+      console.error('Relay submit failed; retry needed:', err.context?.relayCode);
+      break;
+
+    case 'SWAP_RELAY_TIMEOUT':
+      // Relay packet didn't confirm in time. Check intent status and retry with longer timeout.
+      break;
+
+    case 'SWAP_RELAY_FAILED':
+      // Polling-side failure or unrecognised relay error. Distinguish via err.context.relayCode:
+      //   - 'RELAY_POLLING_FAILED' — the polling endpoint failed (network down, malformed
+      //     response). The packet's actual status is unknown; query the hub directly to confirm.
+      //   - 'UNKNOWN' — forward-compat fallback for new relay error codes.
+      break;
+
+    case 'SWAP_POST_EXECUTION_FAILED':
+      // Solver notify failed at the transport layer (network down, etc.).
+      break;
+
+    case 'SWAP_SOLVER_API_ERROR': {
+      // Solver returned a typed error. Original SolverIntentErrorCode is in context.
+      const solverCode = err.context?.solverCode as SolverIntentErrorCode | undefined;
+      if (solverCode === SolverIntentErrorCode.NO_PATH_FOUND) {
+        // …
+      }
+      break;
+    }
+
+    case 'SWAP_UNKNOWN':
+      console.error('Unexpected error:', err.cause);
+      break;
+  }
+}
+```
+
+#### Relay-layer contract
+
+The lower-level relay helpers `relayTxAndWaitPacket` and `submitTransaction` (in `packages/sdk/src/shared/services/intentRelay/IntentRelayApiService.ts`) emit two stable error message strings on failure: `'SUBMIT_TX_FAILED'` and `'RELAY_TIMEOUT'`. These are exported as `RELAY_ERROR_CODES` and form a public contract that other modules (moneyMarket, bridge, dex, migration, staking) still rely on directly.
+
+The swap module wraps these into `SWAP_*` codes via `mapRelayFailureToSwapError`, surfacing the original code on `error.context.relayCode` so swap callers don't need to inspect `error.cause.message`.
+
+#### Migration from pre-`SodaxError` (breaking)
+
+If you were on the previous `Error.message`-based pattern:
+
+| Before | After |
+|---|---|
+| `result.error instanceof Error && result.error.message === 'POST_EXECUTION_FAILED'` | `result.error.code === 'SWAP_POST_EXECUTION_FAILED'` |
+| `result.error.message === 'RELAY_TIMEOUT'` | `result.error.code === 'SWAP_RELAY_TIMEOUT'` |
+| `result.error.message === 'SUBMIT_TX_FAILED'` | `result.error.code === 'SWAP_SUBMIT_TX_FAILED'` |
+| `(result.error as SolverErrorResponse).detail.code` (from `postExecution`) | `result.error.context?.solverCode` |
+| `(result.error as SolverErrorResponse).detail` | `result.error.context?.solverDetail` |
+| Prose `error.message` for invariants | `error.code === 'SWAP_VALIDATION_FAILED'`; the prose stays on `error.message` |
+
+The full `SolverErrorResponse` payload is preserved on `error.context.solverDetail`, so anything you read from `.detail.*` previously is still reachable.
+
+Other swap methods (`getQuote`, `getStatus`, `submitIntent`, `cancelIntent`, etc.) and other modules (`moneyMarket`, `bridge`, `dex`, …) **remain unchanged in this release** — they still use the legacy `Error | unknown` / `SolverErrorResponse` patterns documented per-module.
 
 ---
 
@@ -778,7 +897,9 @@ if (statusResult.ok && statusResult.value.status === SolverIntentStatusCode.SOLV
       console.log('Dst chain tx hash:', packet.dst_tx_hash);
       console.log('Status:', packet.status);
     } else {
-      // result.error.message === 'RELAY_TIMEOUT' if the packet didn't arrive in time
+      // packetResult.error is a plain Error from the relay layer (this method does NOT
+      // adopt the SodaxError shape). error.message === 'RELAY_TIMEOUT' if the packet
+      // didn't arrive in time. Discriminate via RELAY_ERROR_CODES.
       console.error('Packet not delivered:', packetResult.error);
     }
   }
@@ -800,53 +921,75 @@ console.log('Intent hash:', intentHash);
 
 ---
 
-## Error Handling
+## Error Handling Examples
+
+The full reference is in **[Error Handling](#error-handling)** above. The examples below show the common discrimination patterns end-to-end.
 
 ### Handling `swap` / `createLimitOrder` Errors
 
-These methods perform multiple operations in sequence. On failure, `result.error` is an `Error` instance whose `message` identifies the failing phase:
+These methods perform multiple operations in sequence. On failure, `result.error` is a `SodaxError<SwapErrorCode>` — discriminate on `result.error.code`:
 
 ```typescript
+import { isSodaxError } from '@sodax/sdk';
+
 const swapResult = await sodax.swaps.swap({
   params: createIntentParams,
   walletProvider: evmWalletProvider,
 });
 
 if (!swapResult.ok) {
-  const error = swapResult.error;
+  const error = swapResult.error; // SwapError = SodaxError<SwapErrorCode>
 
-  if (error instanceof Error) {
-    switch (error.message) {
-      case 'POST_EXECUTION_FAILED':
-        // Solver notification failed — the intent may have been created and relayed
-        // successfully. Check intent status manually, then retry postExecution.
-        console.error('Underlying cause:', error.cause);
-        break;
+  switch (error.code) {
+    case 'SWAP_POST_EXECUTION_FAILED':
+      // Solver notification failed — the intent may have been created and relayed
+      // successfully. Check intent status manually, then retry postExecution.
+      console.error('Underlying cause:', error.cause);
+      break;
 
-      case 'RELAY_TIMEOUT':
-        // Relay didn't confirm within the timeout. Check the intent status and,
-        // if needed, resubmit with a longer timeout.
-        console.error('Underlying cause:', error.cause);
-        break;
+    case 'SWAP_RELAY_TIMEOUT':
+      // Relay didn't confirm within the timeout. Check intent status; resubmit with longer timeout.
+      console.error('Underlying cause:', error.cause);
+      break;
 
-      case 'SUBMIT_TX_FAILED':
-        // CRITICAL: The spoke tx landed but relay submission failed.
-        // Store spokeTxHash + submitPayload in local storage and retry promptly.
-        // If the user leaves before re-submission, funds may become inaccessible.
-        console.error('Underlying cause:', error.cause);
-        break;
+    case 'SWAP_SUBMIT_TX_FAILED':
+      // CRITICAL: spoke tx landed but relay submission failed.
+      // Store spokeTxHash + submitPayload in local storage and retry promptly.
+      console.error('Underlying cause:', error.cause);
+      break;
 
-      default:
-        // Precondition / validation error — human-readable prose in error.message
-        console.error('Error:', error.message);
-    }
+    case 'SWAP_RELAY_FAILED':
+      // Other relay failure. error.context.relayCode === 'UNKNOWN'.
+      break;
+
+    case 'SWAP_VERIFY_FAILED':
+      // Spoke tx could not be verified.
+      break;
+
+    case 'SWAP_INTENT_CREATION_FAILED':
+      // Spoke deposit / intent creation failed.
+      break;
+
+    case 'SWAP_VALIDATION_FAILED':
+      // Precondition failure — human-readable prose in error.message; details in error.context.
+      console.error('Bad input:', error.message);
+      break;
+
+    case 'SWAP_SOLVER_API_ERROR':
+      // Solver returned a typed error. error.context.solverCode is the SolverIntentErrorCode.
+      console.error('Solver code:', error.context?.solverCode);
+      break;
+
+    case 'SWAP_UNKNOWN':
+      console.error('Unexpected:', error.cause);
+      break;
   }
 }
 ```
 
 ### Handling `createIntent` Errors
 
-`createIntent` errors are either validation failures (prose form) or transaction failures (CODE form from the catch):
+`createIntent` returns `Result<CreateIntentResult, CreateIntentError>`. The narrow union is `'SWAP_VALIDATION_FAILED' | 'SWAP_INTENT_CREATION_FAILED' | 'SWAP_UNKNOWN'`:
 
 ```typescript
 const createIntentResult = await sodax.swaps.createIntent({
@@ -856,18 +999,39 @@ const createIntentResult = await sodax.swaps.createIntent({
 
 if (!createIntentResult.ok) {
   const error = createIntentResult.error;
-  // Common causes:
-  // - Insufficient token balance
-  // - Unsupported token address (invariant prose error)
-  // - Invalid chain key (invariant prose error)
-  // - Network issues on the spoke chain
-  console.error('Intent creation failed:', error);
+  switch (error.code) {
+    case 'SWAP_VALIDATION_FAILED':
+      // Unsupported token / invalid chain key / Bitcoin dust below 546 sats / wallet provider mismatch
+      console.error('Validation failed:', error.message);
+      break;
+    case 'SWAP_INTENT_CREATION_FAILED':
+      // Spoke deposit failed (insufficient balance, network issues, simulation failure).
+      console.error('Intent creation failed:', error.cause);
+      break;
+    case 'SWAP_UNKNOWN':
+      console.error('Unexpected:', error.cause);
+      break;
+  }
 }
 ```
 
 ### Solver API Errors
 
-Methods that return `Result<T, SolverErrorResponse>` (e.g. `getQuote`, `getStatus`, `postExecution`) include a `SolverIntentErrorCode` in the error:
+`postExecution` errors are wrapped as `SodaxError<PostExecutionErrorCode>` (`SWAP_POST_EXECUTION_FAILED | SWAP_SOLVER_API_ERROR | SWAP_UNKNOWN`). The original `SolverErrorResponse.detail` is preserved on `error.context.solverDetail`:
+
+```typescript
+import { SolverIntentErrorCode } from '@sodax/sdk';
+
+const postExecResult = await sodax.swaps.postExecution({ intent_tx_hash: hubTxHash });
+if (!postExecResult.ok && postExecResult.error.code === 'SWAP_SOLVER_API_ERROR') {
+  const solverCode = postExecResult.error.context?.solverCode as SolverIntentErrorCode | undefined;
+  if (solverCode === SolverIntentErrorCode.QUOTE_EXPIRED) {
+    // refresh quote and retry
+  }
+}
+```
+
+`getQuote` and `getStatus` are **unchanged in this release** — they still return `Result<T, SolverErrorResponse>`:
 
 ```typescript
 import { SolverIntentErrorCode } from '@sodax/sdk';

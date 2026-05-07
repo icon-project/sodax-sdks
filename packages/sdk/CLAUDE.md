@@ -131,9 +131,44 @@ try {
 }
 ```
 
-Do not re-wrap with module-specific error codes. There is no `MoneyMarketError<Code>` / `SwapError<Code>` taxonomy — callers branch on the error message or `.cause`, not a typed discriminator.
+For modules that have **not yet adopted `SodaxError`**, do not invent ad-hoc taxonomies — keep the legacy CODE/prose pattern documented below. For modules **on `SodaxError`** (currently swap-only), follow the canonical shape — see `#### Canonical error shape (SodaxError<C>)` below and `docs/SWAPS.md`.
 
-#### Error message convention
+#### Canonical error shape (`SodaxError<C>`)
+
+The canonical, logger-friendly error shape used by modules adopting predictable error codes is `SodaxError<C extends string>`, exported from `@sodax/sdk` (defined in `packages/sdk/src/errors/SodaxError.ts`).
+
+```ts
+import { SodaxError, isSodaxError } from '@sodax/sdk';
+
+class SodaxError<C extends string> extends Error {
+  readonly code: C;                  // string-literal discriminator
+  readonly cause?: unknown;          // ES2022 cause chain
+  readonly context?: Record<string, unknown>;
+  toJSON(): { name, code, message, stack, context, cause };
+}
+
+function isSodaxError(e: unknown): e is SodaxError;
+```
+
+Rules:
+
+- Discriminate on `error.code` — never on `error.message`.
+- Use `isSodaxError(e)` instead of bare `instanceof SodaxError` in cross-bundle code.
+- Codes are **module-prefixed SCREAMING_SNAKE_CASE** (e.g. `SWAP_RELAY_TIMEOUT`).
+- Each public method declares a **narrow per-method union** as its `Result<T, SodaxError<NarrowCode>>` so callers can switch exhaustively.
+- `error.toJSON()` is the canonical logger-integration surface (Sentry/Pino/Datadog) — `JSON.stringify(error)` invokes it automatically. Bigints in `context` are coerced to strings; cause walked depth-3.
+
+##### Per-module adoption status
+
+- **swap** → uses `SodaxError<SwapErrorCode>` with per-method narrow unions on `swap`, `createIntent`, `postExecution`, `createLimitOrder`, `createLimitOrderIntent`. Other swap methods (`getQuote`, `getStatus`, `submitIntent`, `cancelIntent`, …) still on the legacy pattern. See `docs/SWAPS.md` Error Handling.
+- **moneyMarket** → uses `SodaxError<MoneyMarketErrorCode>` with per-method narrow unions on all 11 public methods (`supply`/`borrow`/`withdraw`/`repay`, the 4 `create*Intent` variants, `approve`, `isAllowanceValid`, `estimateGas`). Per-op codes (`MM_SUPPLY_FAILED`, etc.) mirror the historical pre-v2 taxonomy. See `docs/MONEY_MARKET.md` Error Handling.
+- **bridge** → uses `SodaxError<BridgeErrorCode>` with per-method narrow unions on all 6 async public methods (`bridge`, `createBridgeIntent`, `approve`, `isAllowanceValid`, `getBridgeableAmount`, `getBridgeableTokens`). See `docs/BRIDGE.md` Error Handling.
+- **staking** → uses `SodaxError<StakingErrorCode>` with per-method narrow unions on all 20 async public methods (5 orchestrators `stake`/`unstake`/`instantUnstake`/`claim`/`cancelUnstake`, 5 `create*Intent` variants, `approve`, `isAllowanceValid`, and 8 read-only info methods). Per-op codes (`STAKING_STAKE_FAILED`, etc.) mirror the historical pre-v2 taxonomy. See `docs/STAKING.md` Error Handling.
+- **migration** → uses `SodaxError<MigrationErrorCode>` with per-method narrow unions on all 11 async public methods on `MigrationService` (4 orchestrators `migratebnUSD`/`migrateIcxToSoda`/`revertMigrateSodaToIcx`/`migrateBaln`, 4 `create*Intent` variants, `approve`, `isAllowanceValid`) plus `IcxMigrationService.getAvailableAmount`. Migrate/revert split (`MIGRATION_FAILED` / `MIGRATION_REVERT_FAILED`) mirrors v1; `context.action` discriminates the 4 ops. See `docs/MIGRATION.md` Error Handling.
+- **dex / partner / recovery** → still on the legacy CODE/prose pattern documented below. Migrating to `SodaxError` is a future per-module task; until then keep current `if (!sub.ok) return sub` propagation.
+- **Shared relay layer** (`relayTxAndWaitPacket`, `submitTransaction` in `IntentRelayApiService.ts`) — keeps the legacy CODE form. The two stable strings `'SUBMIT_TX_FAILED'` and `'RELAY_TIMEOUT'` are now also exported as `RELAY_ERROR_CODES` and form a public relay-layer contract.
+
+#### Error message convention (legacy — for modules not yet on SodaxError)
 
 Two forms coexist, each with a specific use. **The rule of thumb: if the error comes from a `catch` block, it's CODE form. If it comes from an `invariant`-style guard before any async call, it's prose.**
 
@@ -172,6 +207,7 @@ The most complex module. `moneyMarket/math-utils/` contains financial calculatio
 - Compounded interest calculations
 - Reserve incentive and user position formatting
 - These are ported from Aave's math libraries — do not simplify the precision handling
+- **Errors**: All 11 public methods follow the canonical `SodaxError<MoneyMarketErrorCode>` shape with per-method narrow unions. Per-op codes (`MM_SUPPLY_FAILED`, `MM_BORROW_FAILED`, etc.) mirror the historical pre-v2 taxonomy. Helper `mapRelayFailureToMoneyMarketError` translates relay-layer codes (`SUBMIT_TX_FAILED`, `RELAY_TIMEOUT`, `RELAY_POLLING_FAILED`) into MM-prefixed codes with `context.action` and `context.relayCode`. See `docs/MONEY_MARKET.md` Error Handling.
 
 ### swap
 
@@ -180,6 +216,7 @@ Intent-based architecture:
 - `SolverApiService` communicates with the solver to get quotes and submit intents
 - `EvmSolverService` handles on-chain solver interactions
 - Supports both market orders and limit orders
+- **Errors**: `swap`, `createIntent`, `postExecution`, `createLimitOrder`, and `createLimitOrderIntent` follow the canonical `SodaxError<SwapErrorCode>` shape with per-method narrow unions. Helper `mapRelayFailureToSwapError` translates relay-layer codes (`SUBMIT_TX_FAILED`, `RELAY_TIMEOUT`) into swap-prefixed codes with `context.relayCode`. See `docs/SWAPS.md` Error Handling.
 
 ### bridge
 
@@ -190,6 +227,7 @@ Cross-chain token transfers via hub-and-spoke vault architecture:
 - `createBridgeIntent()` only executes on spoke (no relay) — useful when you need manual relay control
 - `getBridgeableAmount()` respects vault deposit limits (spoke→hub) and asset manager balances (hub→spoke)
 - Tokens are bridgeable if they share the same vault on the hub
+- **Errors**: All 6 async public methods follow the canonical `SodaxError<BridgeErrorCode>` shape with per-method narrow unions. Helper `mapRelayFailureToBridgeError` translates relay-layer codes (`SUBMIT_TX_FAILED`, `RELAY_TIMEOUT`, `RELAY_POLLING_FAILED`) into bridge-prefixed codes with `context.relayCode`. See `docs/BRIDGE.md` Error Handling.
 
 ### staking
 
@@ -201,6 +239,7 @@ SODA token staking via ERC-4626 vault (xSoda):
 - **Instant unstake** bypasses the waiting period but pays slippage (via StakingRouter)
 - **Claim** redeems SODA after the unstaking period expires
 - Info methods: `getStakingInfo()`, `getUnstakingInfo()`, `getStakingConfig()`, `getStakeRatio()`, `getInstantUnstakeRatio()`
+- **Errors**: All 20 async public methods follow the canonical `SodaxError<StakingErrorCode>` shape with per-method narrow unions. Per-op codes (`STAKING_STAKE_FAILED`, `STAKING_UNSTAKE_FAILED`, …) mirror the historical pre-v2 taxonomy. Helper `mapRelayFailureToStakingError` translates relay-layer codes (`SUBMIT_TX_FAILED`, `RELAY_TIMEOUT`, `RELAY_POLLING_FAILED`) into staking-prefixed codes with `context.action` (one of `'stake' | 'unstake' | 'instantUnstake' | 'claim' | 'cancelUnstake'`) and `context.relayCode`. The 8 read-only info methods collapse to a single `STAKING_INFO_FETCH_FAILED` code partitioned by `context.method`. `STAKING_VERIFY_FAILED` only appears in `StakeErrorCode` (the only orchestrator that calls `spoke.verifyTxHash`). `StakingLogic` keeps its throw-on-error contract — wrapping happens only in `StakingService` public methods. See `docs/STAKING.md` Error Handling.
 
 ### migration
 
@@ -211,6 +250,7 @@ Token migration for legacy ICON ecosystem tokens:
 - `BalnSwapService` — BALN → SODA with lockup periods (0–24 months) that multiply rewards (0.5x–1.5x)
 - All migrations follow the same pattern: spoke deposit → relay to hub → hub contract execution
 - BALN has lock management: `claim()`, `claimUnstaked()`, `stake()`, `unstake()`, `cancelUnstake()`
+- **Errors**: All 11 async public methods on `MigrationService` (4 orchestrators, 4 intent creators, `approve`, `isAllowanceValid`) plus `IcxMigrationService.getAvailableAmount` follow the canonical `SodaxError<MigrationErrorCode>` shape with per-method narrow unions. Migrate/revert split codes (`MIGRATION_FAILED` / `MIGRATION_INTENT_CREATION_FAILED` / `MIGRATION_REVERT_FAILED` / `MIGRATION_REVERT_INTENT_CREATION_FAILED`) mirror the historical pre-v2 taxonomy; `context.action` (one of `'migratebnUSD' | 'migrateIcxToSoda' | 'revertMigrateSodaToIcx' | 'migrateBaln'`) discriminates the 4 ops. `migratebnUSD` carries `context.direction` (`'forward' | 'reverse'`) since it dynamically detects direction from token addresses. Helper `mapRelayFailureToMigrationError` translates relay-layer codes (`SUBMIT_TX_FAILED`, `RELAY_TIMEOUT`, `RELAY_POLLING_FAILED`) into migration-prefixed codes; it accepts an optional `phase: 'destinationExecution'` override for `migratebnUSD`'s secondary `waitUntilIntentExecuted` watcher (vs. the default `'relay'` for primary `relayTxAndWaitPacket`). `MIGRATION_VERIFY_FAILED` only appears in the forward-orchestrator union (only `migratebnUSD` calls `spoke.verifyTxHash`). `BalnSwapService` lock methods (`claim`/`claimUnstaked`/`stake`/`unstake`/`cancelUnstake`) and `getDetailedUserLocks` still return `Promise<TxReturnType>` raw (throw on error) — converting them to `Result<T>` is a future cleanup (breaking API change). See `docs/MIGRATION.md` Error Handling.
 
 ### dex
 

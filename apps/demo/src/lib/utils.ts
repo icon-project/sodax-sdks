@@ -423,85 +423,93 @@ function formatHubSimulationFailureMessage(action: string, errorCode: string, da
 export function getMmErrorText(error: unknown): string {
   if (typeof error === 'string') return error;
 
-  // Normalize both shapes into { code, data: { error } } so the branch logic below works for v1 and v2.
-  // v2 (post-refactor): plain Error with CODE on .message and underlying on .cause.
-  // v1 (legacy MoneyMarketError): object with { code, data: { payload, error } }.
-  let sdkError: { message?: string; code?: string; data?: { payload?: unknown; error?: unknown } } | null = null;
+  // Money Market errors are now SodaxError<MoneyMarketErrorCode> from the SDK. Discriminate
+  // on `error.code` (canonical, exposed as a string literal). The original lower-level
+  // failure is preserved on `error.cause` (e.g. a viem revert, a fetch error, etc.).
+  // Legacy fallback: if a plain Error reaches here (from non-canonical paths like a stray
+  // throw outside SodaxError), use `error.message` as the code surrogate so older flows
+  // still produce useful copy.
+  let code: string | undefined;
+  let causeError: unknown;
+  let topLevelMessage: string | undefined;
+
   if (error instanceof Error) {
-    sdkError = { message: error.message, code: error.message, data: { error: (error as { cause?: unknown }).cause } };
+    const sodaxLike = error as { code?: unknown; cause?: unknown };
+    code = typeof sodaxLike.code === 'string' ? sodaxLike.code : error.message;
+    causeError = sodaxLike.cause;
+    topLevelMessage = error.message;
   } else if (error && typeof error === 'object') {
-    sdkError = error as { message?: string; code?: string; data?: { payload?: unknown; error?: unknown } };
+    const obj = error as { code?: unknown; message?: unknown };
+    code = typeof obj.code === 'string' ? obj.code : undefined;
+    topLevelMessage = typeof obj.message === 'string' ? obj.message : undefined;
   }
 
-  if (sdkError) {
-    const searchableText = getMmDataErrorSearchableText(sdkError.data?.error);
-    const innerMsg = extractInnerErrorMessage(sdkError.data?.error);
+  const searchableText = getMmDataErrorSearchableText(causeError);
+  const innerMsg = extractInnerErrorMessage(causeError);
 
-    // ── Relay errors ──
-    if (sdkError.code === 'RELAY_TIMEOUT') {
-      const txHash = sdkError.data?.payload;
-      if (txHash && typeof txHash === 'string') {
-        return `Transaction timed out while waiting for relay. The transaction may still be processing.\n\nTransaction hash: ${txHash}\n\nPlease check the transaction status on the explorer.`;
-      }
-      return 'Transaction timed out while waiting for relay. The transaction may still be processing. Please check the transaction status on the explorer.';
-    }
-
-    if (sdkError.code === 'SUBMIT_TX_FAILED') {
-      return 'Failed to submit transaction to relay. Please try again.';
-    }
-
-    // ── Intent creation failures (simulation reverts) ──
-    if (
-      sdkError.code === 'CREATE_WITHDRAW_INTENT_FAILED' ||
-      sdkError.code === 'CREATE_SUPPLY_INTENT_FAILED' ||
-      sdkError.code === 'CREATE_BORROW_INTENT_FAILED' ||
-      sdkError.code === 'CREATE_REPAY_INTENT_FAILED'
-    ) {
-      const action = sdkError.code.replace('CREATE_', '').replace('_INTENT_FAILED', '').toLowerCase();
-
-      if (innerErrorIncludes(searchableText, 'insufficient funds for gas', 'exceeds the balance of the account')) {
-        return `Not enough native token to cover gas fees for the ${action} transaction. Please top up your wallet.`;
-      }
-      if (innerErrorIncludes(searchableText, 'External call failed', 'Simulation failed', 'Execution reverted')) {
-        return formatHubSimulationFailureMessage(action, sdkError.code, sdkError.data?.error);
-      }
-      if (innerErrorIncludes(searchableText, 'user rejected', 'User denied', 'user cancelled')) {
-        return 'Transaction was rejected in your wallet.';
-      }
-      return (
-        searchableText ||
-        innerMsg ||
-        `${capitalize(action)} transaction could not be created. (SDK code: ${sdkError.code})`
-      );
-    }
-
-    // ── Unknown / catch-all errors per action ──
-    if (
-      sdkError.code === 'WITHDRAW_UNKNOWN_ERROR' ||
-      sdkError.code === 'SUPPLY_UNKNOWN_ERROR' ||
-      sdkError.code === 'BORROW_UNKNOWN_ERROR' ||
-      sdkError.code === 'REPAY_UNKNOWN_ERROR'
-    ) {
-      const action = sdkError.code.replace('_UNKNOWN_ERROR', '').toLowerCase();
-
-      if (innerErrorIncludes(searchableText, 'insufficient funds for gas', 'exceeds the balance of the account')) {
-        return `Not enough native token to cover gas fees for the ${action} transaction. Please top up your wallet.`;
-      }
-      if (innerErrorIncludes(searchableText, 'External call failed', 'Simulation failed', 'Execution reverted')) {
-        return formatHubSimulationFailureMessage(action, sdkError.code, sdkError.data?.error);
-      }
-      if (innerErrorIncludes(searchableText, 'user rejected', 'User denied', 'user cancelled')) {
-        return 'Transaction was rejected in your wallet.';
-      }
-      return (
-        searchableText || innerMsg || `${capitalize(action)} failed unexpectedly. (SDK code: ${sdkError.code})`
-      );
-    }
-
-    const part = sdkError.message ?? sdkError.code;
-    if (typeof part === 'string') return part;
+  // ── Relay errors ──
+  if (code === 'MM_RELAY_TIMEOUT') {
+    return 'Transaction timed out while waiting for relay. The transaction may still be processing. Please check the transaction status on the explorer.';
   }
-  return String(error);
+  if (code === 'MM_SUBMIT_TX_FAILED') {
+    return 'Failed to submit transaction to relay. Please try again.';
+  }
+  if (code === 'MM_RELAY_FAILED') {
+    return 'Relay failed; cannot determine packet status. Please verify the transaction status on the explorer before retrying.';
+  }
+  if (code === 'MM_VERIFY_FAILED') {
+    return 'Could not verify the transaction on the source chain. Please retry shortly.';
+  }
+
+  // ── Intent creation failures (simulation reverts) ──
+  if (
+    code === 'MM_SUPPLY_INTENT_CREATION_FAILED' ||
+    code === 'MM_BORROW_INTENT_CREATION_FAILED' ||
+    code === 'MM_WITHDRAW_INTENT_CREATION_FAILED' ||
+    code === 'MM_REPAY_INTENT_CREATION_FAILED'
+  ) {
+    const action = code.replace('MM_', '').replace('_INTENT_CREATION_FAILED', '').toLowerCase();
+
+    if (innerErrorIncludes(searchableText, 'insufficient funds for gas', 'exceeds the balance of the account')) {
+      return `Not enough native token to cover gas fees for the ${action} transaction. Please top up your wallet.`;
+    }
+    if (innerErrorIncludes(searchableText, 'External call failed', 'Simulation failed', 'Execution reverted')) {
+      return formatHubSimulationFailureMessage(action, code, causeError);
+    }
+    if (innerErrorIncludes(searchableText, 'user rejected', 'User denied', 'user cancelled')) {
+      return 'Transaction was rejected in your wallet.';
+    }
+    return searchableText || innerMsg || `${capitalize(action)} transaction could not be created. (SDK code: ${code})`;
+  }
+
+  // ── Per-op catch-all errors ──
+  if (
+    code === 'MM_SUPPLY_FAILED' ||
+    code === 'MM_BORROW_FAILED' ||
+    code === 'MM_WITHDRAW_FAILED' ||
+    code === 'MM_REPAY_FAILED'
+  ) {
+    const action = code.replace('MM_', '').replace('_FAILED', '').toLowerCase();
+
+    if (innerErrorIncludes(searchableText, 'insufficient funds for gas', 'exceeds the balance of the account')) {
+      return `Not enough native token to cover gas fees for the ${action} transaction. Please top up your wallet.`;
+    }
+    if (innerErrorIncludes(searchableText, 'External call failed', 'Simulation failed', 'Execution reverted')) {
+      return formatHubSimulationFailureMessage(action, code, causeError);
+    }
+    if (innerErrorIncludes(searchableText, 'user rejected', 'User denied', 'user cancelled')) {
+      return 'Transaction was rejected in your wallet.';
+    }
+    return searchableText || innerMsg || `${capitalize(action)} failed unexpectedly. (SDK code: ${code})`;
+  }
+
+  // ── Validation / approve / allowance / gas ──
+  if (code === 'MM_VALIDATION_FAILED') return topLevelMessage ?? 'Invalid input.';
+  if (code === 'MM_APPROVE_FAILED') return topLevelMessage ?? 'Approval failed. Please try again.';
+  if (code === 'MM_ALLOWANCE_CHECK_FAILED') return topLevelMessage ?? 'Failed to check allowance. Please try again.';
+  if (code === 'MM_GAS_ESTIMATION_FAILED') return topLevelMessage ?? 'Gas estimation failed.';
+
+  return topLevelMessage ?? code ?? String(error);
 }
 
 /**

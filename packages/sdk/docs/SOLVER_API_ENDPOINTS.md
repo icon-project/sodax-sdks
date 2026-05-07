@@ -1,5 +1,7 @@
 # Solver API endpoints
 
+> **Error handling conventions:** Direct callers of `SolverApiService` (used by lower-level scripts and tests) still receive `SolverErrorResponse` with `detail.code` / `detail.message`. The **swap module's** `postExecution` wraps these into `SodaxError` with code `SWAP_SOLVER_API_ERROR`; the original `SolverIntentErrorCode` is on `result.error.context.solverCode` and the full `detail` is on `result.error.context.solverDetail` — see [SWAPS.md](./SWAPS.md) Error Handling.
+
 ## Mainnet production
 
 URL: [https://api.sodax.com/v1/intent](https://api.sodax.com/v1/intent)

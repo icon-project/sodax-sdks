@@ -1,5 +1,31 @@
-import invariant from 'tiny-invariant';
 import { encodeFunctionData, isAddress } from 'viem';
+import { SodaxError } from '../errors/SodaxError.js';
+import {
+  type MoneyMarketAllowanceCheckError,
+  type MoneyMarketApproveError,
+  type BorrowError,
+  type CreateBorrowIntentError,
+  type CreateRepayIntentError,
+  type CreateSupplyIntentError,
+  type CreateWithdrawIntentError,
+  type MoneyMarketGasEstimationError,
+  type RepayError,
+  type SupplyError,
+  type WithdrawError,
+  isMoneyMarketAllowanceCheckError,
+  isMoneyMarketApproveError,
+  isBorrowError,
+  isCreateBorrowIntentError,
+  isCreateRepayIntentError,
+  isCreateSupplyIntentError,
+  isCreateWithdrawIntentError,
+  isMoneyMarketGasEstimationError,
+  isRepayError,
+  isSupplyError,
+  isWithdrawError,
+  mmInvariant,
+} from './error-types.js';
+import { mapRelayFailureToMoneyMarketError } from './relay-error-mapping.js';
 import { poolAbi } from '../shared/abis/pool.abi.js';
 import {
   type SpokeService,
@@ -83,8 +109,6 @@ export type MoneyMarketEncodeRepayWithATokensParams = {
   amount: bigint; // The amount of the asset to repay.
   interestRateMode: bigint; // The interest rate mode (2 for Variable).
 };
-
-export type MoneyMarketAction = 'supply' | 'borrow' | 'withdraw' | 'repay';
 
 /**
  * Parameters for a Money Market supply operation.
@@ -228,8 +252,25 @@ export class MoneyMarketService {
    */
   public async estimateGas<K extends SpokeChainKey>(
     params: EstimateGasParams<K>,
-  ): Promise<Result<GetEstimateGasReturnType<K>>> {
-    return this.spoke.estimateGas(params) as Promise<Result<GetEstimateGasReturnType<K>>>;
+  ): Promise<Result<GetEstimateGasReturnType<K>, MoneyMarketGasEstimationError>> {
+    try {
+      const result = (await this.spoke.estimateGas(params)) as Result<GetEstimateGasReturnType<K>>;
+      if (result.ok) return result;
+      return {
+        ok: false,
+        error: new SodaxError('MM_GAS_ESTIMATION_FAILED',
+          result.error instanceof Error ? result.error.message : 'Gas estimation failed',
+          { cause: result.error, context: { phase: 'gasEstimation' } }),
+      };
+    } catch (error) {
+      if (isMoneyMarketGasEstimationError(error)) return { ok: false, error };
+      return {
+        ok: false,
+        error: new SodaxError('MM_GAS_ESTIMATION_FAILED',
+          error instanceof Error ? error.message : 'Gas estimation failed',
+          { cause: error, context: { phase: 'gasEstimation' } }),
+      };
+    }
   }
 
   /**
@@ -248,78 +289,86 @@ export class MoneyMarketService {
    */
   public async isAllowanceValid<K extends SpokeChainKey>(
     _params: MoneyMarketAllowanceParams<K>,
-  ): Promise<Result<boolean>> {
-    try {
-      const { params } = _params;
-      const srcChainKey = params.srcChainKey;
+  ): Promise<Result<boolean, MoneyMarketAllowanceCheckError>> {
+    const { params } = _params;
+    const srcChainKey = params.srcChainKey;
+    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: params.action };
 
-      invariant(params.amount > 0n, 'Amount must be greater than 0');
-      invariant(params.token.length > 0, 'Token is required');
+    try {
+      mmInvariant(params.amount > 0n, 'Amount must be greater than 0', { ...baseCtx, field: 'amount' });
+      mmInvariant(params.token.length > 0, 'Token is required', { ...baseCtx, field: 'token' });
 
       if (params.action === 'withdraw' || params.action === 'borrow') {
         const dstChainKey = params.dstChainKey ?? srcChainKey;
-        invariant(
+        mmInvariant(
           this.config.isMoneyMarketSupportedToken(dstChainKey, params.token),
           `Unsupported spoke chain (${dstChainKey}) token: ${params.token}`,
+          { ...baseCtx, field: 'token' },
         );
       } else {
-        invariant(
+        mmInvariant(
           this.config.isMoneyMarketSupportedToken(srcChainKey, params.token),
           `Unsupported spoke chain (${srcChainKey}) token: ${params.token}`,
+          { ...baseCtx, field: 'token' },
         );
       }
+
+      // Compute the underlying Result<boolean> across the various chain-type paths, then wrap
+      // any spoke-layer failure as MM_ALLOWANCE_CHECK_FAILED at the single return point below.
+      let inner: Result<boolean> = { ok: true, value: true };
 
       // Target chain is Stellar with a specific recipient: both recipient and (if src is Stellar) sender
       // must have sufficient trustline for the token.
       if (params.dstChainKey && isStellarChainKeyType(params.dstChainKey) && params.dstAddress) {
-        const targetHasTrustline = (await this.spoke.isAllowanceValid({
+        const targetResult = await this.spoke.isAllowanceValid({
           srcChainKey: params.dstChainKey,
           token: params.token,
           amount: params.amount,
           owner: params.dstAddress,
-        } satisfies SpokeIsAllowanceValidParamsStellar)) satisfies Result<boolean>;
+        } satisfies SpokeIsAllowanceValidParamsStellar);
 
-        let srcHasTrustline = true;
-        if (isStellarChainKeyType(srcChainKey)) {
-          const allowanceResult = await this.spoke.isAllowanceValid({
-            srcChainKey,
-            token: params.token,
-            amount: params.amount,
-            owner: params.srcAddress,
-          } satisfies SpokeIsAllowanceValidParamsStellar);
+        if (!targetResult.ok) {
+          inner = targetResult;
+        } else {
+          let srcHasTrustline = true;
+          if (isStellarChainKeyType(srcChainKey)) {
+            const allowanceResult = await this.spoke.isAllowanceValid({
+              srcChainKey,
+              token: params.token,
+              amount: params.amount,
+              owner: params.srcAddress,
+            } satisfies SpokeIsAllowanceValidParamsStellar);
 
-          if (!allowanceResult.ok) return allowanceResult;
-
-          srcHasTrustline = allowanceResult.value;
+            if (!allowanceResult.ok) {
+              inner = allowanceResult;
+            } else {
+              srcHasTrustline = allowanceResult.value;
+              inner = { ok: true, value: targetResult.value && srcHasTrustline };
+            }
+          } else {
+            inner = { ok: true, value: targetResult.value };
+          }
         }
-
-        return { ok: true, value: targetHasTrustline && srcHasTrustline };
-      }
-
-      if (isStellarChainKeyType(srcChainKey)) {
-        return await this.spoke.isAllowanceValid({
+      } else if (isStellarChainKeyType(srcChainKey)) {
+        inner = await this.spoke.isAllowanceValid({
           srcChainKey,
           token: params.token,
           amount: params.amount,
           owner: params.srcAddress,
         } satisfies SpokeIsAllowanceValidParamsStellar);
-      }
-
-      // Allowance on EVM (hub or spoke) is required only for supply / repay.
-      if (params.action === 'supply' || params.action === 'repay') {
+      } else if (params.action === 'supply' || params.action === 'repay') {
+        // Allowance on EVM (hub or spoke) is required only for supply / repay.
         if (isHubChainKeyType(srcChainKey)) {
           const spender = await this.hubProvider.getUserRouter(params.srcAddress as Address);
-          return await this.spoke.isAllowanceValid({
+          inner = await this.spoke.isAllowanceValid({
             srcChainKey,
             token: params.token,
             amount: params.amount,
             owner: params.srcAddress,
             spender,
           } satisfies SpokeIsAllowanceValidParamsHub);
-        }
-
-        if (isEvmSpokeOnlyChainKeyType(srcChainKey)) {
-          return await this.spoke.isAllowanceValid({
+        } else if (isEvmSpokeOnlyChainKeyType(srcChainKey)) {
+          inner = await this.spoke.isAllowanceValid({
             srcChainKey,
             token: params.token,
             amount: params.amount,
@@ -329,9 +378,21 @@ export class MoneyMarketService {
         }
       }
 
-      return { ok: true, value: true };
+      if (inner.ok) return inner;
+      return {
+        ok: false,
+        error: new SodaxError('MM_ALLOWANCE_CHECK_FAILED',
+          inner.error instanceof Error ? inner.error.message : 'Allowance check failed',
+          { cause: inner.error, context: { ...baseCtx, phase: 'allowanceCheck' } }),
+      };
     } catch (error) {
-      return { ok: false, error };
+      if (isMoneyMarketAllowanceCheckError(error)) return { ok: false, error };
+      return {
+        ok: false,
+        error: new SodaxError('MM_ALLOWANCE_CHECK_FAILED',
+          error instanceof Error ? error.message : 'Allowance check failed',
+          { cause: error, context: { ...baseCtx, phase: 'allowanceCheck' } }),
+      };
     }
   }
 
@@ -353,21 +414,29 @@ export class MoneyMarketService {
    */
   public async approve<K extends SpokeChainKey, Raw extends boolean>(
     _params: MoneyMarketApproveActionParams<K, Raw>,
-  ): Promise<Result<TxReturnType<K, Raw>>> {
-    try {
-      const { params, walletProvider } = _params;
+  ): Promise<Result<TxReturnType<K, Raw>, MoneyMarketApproveError>> {
+    const { params, walletProvider } = _params;
+    const baseCtx = { srcChainKey: params.srcChainKey, action: params.action };
 
-      invariant(params.amount > 0n, 'Amount must be greater than 0');
-      invariant(params.token.length > 0, 'Token is required');
-      invariant(
+    const wrapApproveFailure = (cause: unknown): MoneyMarketApproveError =>
+      new SodaxError('MM_APPROVE_FAILED',
+        cause instanceof Error ? cause.message : 'Approve failed',
+        { cause, context: { ...baseCtx, phase: 'approve' } });
+
+    try {
+      mmInvariant(params.amount > 0n, 'Amount must be greater than 0', { ...baseCtx, field: 'amount' });
+      mmInvariant(params.token.length > 0, 'Token is required', { ...baseCtx, field: 'token' });
+      mmInvariant(
         isUndefinedOrValidWalletProviderForChainKey(params.srcChainKey, walletProvider),
         `Invalid wallet provider for chain key: ${params.srcChainKey}, walletProvider.chainType: ${walletProvider?.chainType}`,
+        { ...baseCtx, field: 'walletProvider' },
       );
 
       if (isStellarChainKeyType(params.srcChainKey)) {
-        invariant(
+        mmInvariant(
           isOptionalStellarWalletProviderType(_params.walletProvider),
           'Invalid wallet provider. Expected Stellar wallet provider.',
+          { ...baseCtx, field: 'walletProvider' },
         );
 
         const coreParams = {
@@ -390,7 +459,7 @@ export class MoneyMarketService {
               },
         );
 
-        if (!result.ok) return result;
+        if (!result.ok) return { ok: false, error: wrapApproveFailure(result.error) };
 
         return {
           ok: true,
@@ -398,17 +467,19 @@ export class MoneyMarketService {
         };
       }
 
-      invariant(
+      mmInvariant(
         params.action === 'supply' || params.action === 'repay',
         'Invalid action (only supply and repay require approval on EVM)',
+        { ...baseCtx, field: 'action' },
       );
 
       if (isHubChainKeyType(params.srcChainKey) || isEvmSpokeOnlyChainKeyType(params.srcChainKey)) {
-        invariant(isAddress(params.token), 'Invalid token address');
+        mmInvariant(isAddress(params.token), 'Invalid token address', { ...baseCtx, field: 'token' });
 
-        invariant(
+        mmInvariant(
           isOptionalEvmWalletProviderType(_params.walletProvider),
           'Invalid wallet provider. Expected Evm wallet provider.',
+          { ...baseCtx, field: 'walletProvider' },
         );
 
         const spender = isHubChainKeyType(params.srcChainKey)
@@ -429,9 +500,7 @@ export class MoneyMarketService {
           walletProvider: _params.walletProvider,
         });
 
-        if (!result.ok) {
-          return result;
-        }
+        if (!result.ok) return { ok: false, error: wrapApproveFailure(result.error) };
 
         return {
           ok: true,
@@ -439,12 +508,24 @@ export class MoneyMarketService {
         };
       }
 
-      return {
-        ok: false,
-        error: new Error('Approve only supported for hub (Sonic), EVM spokes, and Stellar'),
-      };
+      // Reached only for chains that don't support approval (Solana, NEAR, etc.). Surface as
+      // a validation failure rather than a generic Error so consumers can discriminate.
+      mmInvariant(
+        false,
+        'Approve only supported for hub (Sonic), EVM spokes, and Stellar',
+        { ...baseCtx, field: 'srcChainKey' },
+      );
+      // Belt-and-braces: `mmInvariant(false, ...)` always throws via its `asserts cond`
+      // signature, so this sentinel is unreachable today. It defends against a future
+      // maintainer dropping the `asserts cond` annotation on `mmInvariant` — without it,
+      // TypeScript would silently infer this method as returning `Promise<undefined>` and
+      // the public contract would be violated. The throw is not a SodaxError because the
+      // outer catch's `isMoneyMarketApproveError` short-circuit must NOT swallow it (we want the
+      // bug to surface loudly during testing).
+      throw new Error('unreachable: mmInvariant(false, ...) above must throw');
     } catch (error) {
-      return { ok: false, error };
+      if (isMoneyMarketApproveError(error)) return { ok: false, error };
+      return { ok: false, error: wrapApproveFailure(error) };
     }
   }
 
@@ -462,16 +543,26 @@ export class MoneyMarketService {
    */
   public async supply<K extends SpokeChainKey>(
     _params: MoneyMarketSupplyActionParams<K, false>,
-  ): Promise<Result<TxHashPair>> {
+  ): Promise<Result<TxHashPair, SupplyError>> {
     const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;
     const srcChainKey = params.srcChainKey;
+    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'supply' as const };
 
     try {
       const txResult = await this.createSupplyIntent(_params);
-      if (!txResult.ok) return txResult;
+      // CreateSupplyIntentErrorCode ⊂ SupplyErrorCode, so the SodaxError narrows correctly.
+      if (!txResult.ok) return { ok: false, error: txResult.error };
 
       const verify = await this.spoke.verifyTxHash({ txHash: txResult.value.tx, chainKey: srcChainKey });
-      if (!verify.ok) return verify;
+      if (!verify.ok) {
+        return {
+          ok: false,
+          error: new SodaxError('MM_VERIFY_FAILED', 'Spoke transaction verification failed', {
+            cause: verify.error,
+            context: { ...baseCtx, phase: 'verify' },
+          }),
+        };
+      }
 
       // Relay skipped only when source chain is the hub.
       if (isHubChainKeyType(srcChainKey)) {
@@ -489,11 +580,17 @@ export class MoneyMarketService {
         timeout,
       });
 
-      if (!packet.ok) return packet;
+      if (!packet.ok) return { ok: false, error: mapRelayFailureToMoneyMarketError(packet.error, baseCtx) };
 
       return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packet.value.dst_tx_hash } };
     } catch (error) {
-      return { ok: false, error };
+      if (isSupplyError(error)) return { ok: false, error };
+      return {
+        ok: false,
+        error: new SodaxError('MM_SUPPLY_FAILED',
+          error instanceof Error ? error.message : 'supply failed',
+          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } }),
+      };
     }
   }
 
@@ -510,22 +607,25 @@ export class MoneyMarketService {
    */
   public async createSupplyIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: MoneyMarketSupplyActionParams<K, Raw>,
-  ): Promise<Result<IntentTxResult<K, Raw>>> {
+  ): Promise<Result<IntentTxResult<K, Raw>, CreateSupplyIntentError>> {
     const { params, walletProvider } = _params;
     const srcChainKey = params.srcChainKey;
     const skipSimulation = _params.skipSimulation ?? false;
+    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'supply' as const };
 
     try {
-      invariant(params.action === 'supply', 'Invalid action');
-      invariant(params.token.length > 0, 'Token is required');
-      invariant(params.amount > 0n, 'Amount must be greater than 0');
-      invariant(
+      mmInvariant(params.action === 'supply', 'Invalid action', { ...baseCtx, field: 'action' });
+      mmInvariant(params.token.length > 0, 'Token is required', { ...baseCtx, field: 'token' });
+      mmInvariant(params.amount > 0n, 'Amount must be greater than 0', { ...baseCtx, field: 'amount' });
+      mmInvariant(
         isUndefinedOrValidWalletProviderForChainKey(srcChainKey, walletProvider),
         `Invalid wallet provider for chain key: ${srcChainKey}, walletProvider.chainType: ${walletProvider?.chainType}`,
+        { ...baseCtx, field: 'walletProvider' },
       );
-      invariant(
+      mmInvariant(
         this.config.isMoneyMarketSupportedToken(srcChainKey, params.token),
         `Unsupported spoke chain (${srcChainKey}) token: ${params.token}`,
+        { ...baseCtx, field: 'token' },
       );
 
       const dstChainKey = params.dstChainKey ?? srcChainKey;
@@ -561,7 +661,15 @@ export class MoneyMarketService {
             },
       );
 
-      if (!txResult.ok) return txResult;
+      if (!txResult.ok) {
+        if (isCreateSupplyIntentError(txResult.error)) return { ok: false, error: txResult.error };
+        return {
+          ok: false,
+          error: new SodaxError('MM_SUPPLY_INTENT_CREATION_FAILED',
+            txResult.error instanceof Error ? txResult.error.message : 'Spoke deposit failed',
+            { cause: txResult.error, context: { ...baseCtx, phase: 'intentCreation' } }),
+        };
+      }
 
       return {
         ok: true,
@@ -571,7 +679,13 @@ export class MoneyMarketService {
         },
       };
     } catch (error) {
-      return { ok: false, error };
+      if (isCreateSupplyIntentError(error)) return { ok: false, error };
+      return {
+        ok: false,
+        error: new SodaxError('MM_SUPPLY_INTENT_CREATION_FAILED',
+          error instanceof Error ? error.message : 'createSupplyIntent failed',
+          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } }),
+      };
     }
   }
 
@@ -592,17 +706,26 @@ export class MoneyMarketService {
    */
   public async borrow<K extends SpokeChainKey>(
     _params: MoneyMarketBorrowActionParams<K, false>,
-  ): Promise<Result<TxHashPair>> {
+  ): Promise<Result<TxHashPair, BorrowError>> {
     const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;
     const srcChainKey = params.srcChainKey;
     const hubChainId = this.hubProvider.chainConfig.chain.key;
+    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'borrow' as const };
 
     try {
       const txResult = await this.createBorrowIntent(_params);
-      if (!txResult.ok) return txResult;
+      if (!txResult.ok) return { ok: false, error: txResult.error };
 
       const verify = await this.spoke.verifyTxHash({ txHash: txResult.value.tx, chainKey: srcChainKey });
-      if (!verify.ok) return verify;
+      if (!verify.ok) {
+        return {
+          ok: false,
+          error: new SodaxError('MM_VERIFY_FAILED', 'Spoke transaction verification failed', {
+            cause: verify.error,
+            context: { ...baseCtx, phase: 'verify' },
+          }),
+        };
+      }
 
       // Relay is not required when the borrow is executed on hub AND the target is also hub.
       // (Borrow from hub to a different target chain still needs the relay to deliver tokens.)
@@ -625,11 +748,17 @@ export class MoneyMarketService {
         timeout,
       });
 
-      if (!packet.ok) return packet;
+      if (!packet.ok) return { ok: false, error: mapRelayFailureToMoneyMarketError(packet.error, baseCtx) };
 
       return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packet.value.dst_tx_hash } };
     } catch (error) {
-      return { ok: false, error };
+      if (isBorrowError(error)) return { ok: false, error };
+      return {
+        ok: false,
+        error: new SodaxError('MM_BORROW_FAILED',
+          error instanceof Error ? error.message : 'borrow failed',
+          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } }),
+      };
     }
   }
 
@@ -646,25 +775,28 @@ export class MoneyMarketService {
    */
   public async createBorrowIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: MoneyMarketBorrowActionParams<K, Raw>,
-  ): Promise<Result<IntentTxResult<K, Raw>>> {
+  ): Promise<Result<IntentTxResult<K, Raw>, CreateBorrowIntentError>> {
     const { params, walletProvider } = _params;
     const srcChainKey = params.srcChainKey;
     const skipSimulation = _params.skipSimulation ?? false;
+    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'borrow' as const };
 
     try {
-      invariant(params.action === 'borrow', 'Invalid action');
-      invariant(params.token.length > 0, 'Token is required');
-      invariant(params.amount > 0n, 'Amount must be greater than 0');
-      invariant(
+      mmInvariant(params.action === 'borrow', 'Invalid action', { ...baseCtx, field: 'action' });
+      mmInvariant(params.token.length > 0, 'Token is required', { ...baseCtx, field: 'token' });
+      mmInvariant(params.amount > 0n, 'Amount must be greater than 0', { ...baseCtx, field: 'amount' });
+      mmInvariant(
         isUndefinedOrValidWalletProviderForChainKey(srcChainKey, walletProvider),
         `Invalid wallet provider for chain key: ${srcChainKey}, walletProvider.chainType: ${walletProvider?.chainType}`,
+        { ...baseCtx, field: 'walletProvider' },
       );
 
       const dstChainKey = params.dstChainKey ?? srcChainKey;
       const dstAddress = params.dstAddress ?? params.srcAddress;
       const dstToken = this.config.getMoneyMarketToken(dstChainKey, params.token);
 
-      invariant(dstToken, `Money market token not found for spoke chain (${dstChainKey}) token: ${params.token}`);
+      mmInvariant(dstToken, `Money market token not found for spoke chain (${dstChainKey}) token: ${params.token}`,
+        { ...baseCtx, field: 'token' });
 
       const encodedDstAddress = encodeAddress(dstChainKey, dstAddress);
       const fromHubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, srcChainKey);
@@ -699,7 +831,15 @@ export class MoneyMarketService {
 
       const txResult = await this.spoke.sendMessage(sendMessageParams);
 
-      if (!txResult.ok) return txResult;
+      if (!txResult.ok) {
+        if (isCreateBorrowIntentError(txResult.error)) return { ok: false, error: txResult.error };
+        return {
+          ok: false,
+          error: new SodaxError('MM_BORROW_INTENT_CREATION_FAILED',
+            txResult.error instanceof Error ? txResult.error.message : 'Spoke sendMessage failed',
+            { cause: txResult.error, context: { ...baseCtx, phase: 'intentCreation' } }),
+        };
+      }
 
       return {
         ok: true,
@@ -709,7 +849,13 @@ export class MoneyMarketService {
         },
       };
     } catch (error) {
-      return { ok: false, error };
+      if (isCreateBorrowIntentError(error)) return { ok: false, error };
+      return {
+        ok: false,
+        error: new SodaxError('MM_BORROW_INTENT_CREATION_FAILED',
+          error instanceof Error ? error.message : 'createBorrowIntent failed',
+          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } }),
+      };
     }
   }
 
@@ -730,18 +876,27 @@ export class MoneyMarketService {
    */
   public async withdraw<K extends SpokeChainKey>(
     _params: MoneyMarketWithdrawActionParams<K, false>,
-  ): Promise<Result<TxHashPair>> {
+  ): Promise<Result<TxHashPair, WithdrawError>> {
     const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;
     const srcChainKey = params.srcChainKey;
     const hubChainId = this.hubProvider.chainConfig.chain.key;
     const walletRouter = this.hubProvider.chainConfig.addresses.walletRouter;
+    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'withdraw' as const };
 
     try {
       const txResult = await this.createWithdrawIntent(_params);
-      if (!txResult.ok) return txResult;
+      if (!txResult.ok) return { ok: false, error: txResult.error };
 
       const verify = await this.spoke.verifyTxHash({ txHash: txResult.value.tx, chainKey: srcChainKey });
-      if (!verify.ok) return verify;
+      if (!verify.ok) {
+        return {
+          ok: false,
+          error: new SodaxError('MM_VERIFY_FAILED', 'Spoke transaction verification failed', {
+            cause: verify.error,
+            context: { ...baseCtx, phase: 'verify' },
+          }),
+        };
+      }
 
       // Relay is not required only when: source is hub AND target is hub AND target is not the walletRouter.
       const needsRelay =
@@ -766,11 +921,17 @@ export class MoneyMarketService {
         timeout,
       });
 
-      if (!packet.ok) return packet;
+      if (!packet.ok) return { ok: false, error: mapRelayFailureToMoneyMarketError(packet.error, baseCtx) };
 
       return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packet.value.dst_tx_hash } };
     } catch (error) {
-      return { ok: false, error };
+      if (isWithdrawError(error)) return { ok: false, error };
+      return {
+        ok: false,
+        error: new SodaxError('MM_WITHDRAW_FAILED',
+          error instanceof Error ? error.message : 'withdraw failed',
+          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } }),
+      };
     }
   }
 
@@ -787,26 +948,29 @@ export class MoneyMarketService {
    */
   public async createWithdrawIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: MoneyMarketWithdrawActionParams<K, Raw>,
-  ): Promise<Result<IntentTxResult<K, Raw>>> {
+  ): Promise<Result<IntentTxResult<K, Raw>, CreateWithdrawIntentError>> {
     const { params, walletProvider } = _params;
     const srcChainKey = params.srcChainKey;
     const skipSimulation = _params.skipSimulation ?? false;
+    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'withdraw' as const };
 
     try {
-      invariant(params.action === 'withdraw', 'Invalid action');
-      invariant(params.token.length > 0, 'Token is required');
-      invariant(params.amount > 0n, 'Amount must be greater than 0');
-      invariant(
+      mmInvariant(params.action === 'withdraw', 'Invalid action', { ...baseCtx, field: 'action' });
+      mmInvariant(params.token.length > 0, 'Token is required', { ...baseCtx, field: 'token' });
+      mmInvariant(params.amount > 0n, 'Amount must be greater than 0', { ...baseCtx, field: 'amount' });
+      mmInvariant(
         isUndefinedOrValidWalletProviderForChainKey(srcChainKey, walletProvider),
         `Invalid wallet provider for chain key: ${srcChainKey}, walletProvider.chainType: ${walletProvider?.chainType}`,
+        { ...baseCtx, field: 'walletProvider' },
       );
 
       const dstChainKey = params.dstChainKey ?? srcChainKey;
       const dstAddress = params.dstAddress ?? params.srcAddress;
 
-      invariant(
+      mmInvariant(
         this.config.isMoneyMarketSupportedToken(dstChainKey, params.token),
         `Unsupported spoke chain (${dstChainKey}) token: ${params.token}`,
+        { ...baseCtx, field: 'token' },
       );
 
       const encodedDstAddress = encodeAddress(dstChainKey, dstAddress);
@@ -842,7 +1006,15 @@ export class MoneyMarketService {
 
       const txResult = await this.spoke.sendMessage(sendMessageParams);
 
-      if (!txResult.ok) return txResult;
+      if (!txResult.ok) {
+        if (isCreateWithdrawIntentError(txResult.error)) return { ok: false, error: txResult.error };
+        return {
+          ok: false,
+          error: new SodaxError('MM_WITHDRAW_INTENT_CREATION_FAILED',
+            txResult.error instanceof Error ? txResult.error.message : 'Spoke sendMessage failed',
+            { cause: txResult.error, context: { ...baseCtx, phase: 'intentCreation' } }),
+        };
+      }
 
       return {
         ok: true,
@@ -852,7 +1024,13 @@ export class MoneyMarketService {
         },
       };
     } catch (error) {
-      return { ok: false, error };
+      if (isCreateWithdrawIntentError(error)) return { ok: false, error };
+      return {
+        ok: false,
+        error: new SodaxError('MM_WITHDRAW_INTENT_CREATION_FAILED',
+          error instanceof Error ? error.message : 'createWithdrawIntent failed',
+          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } }),
+      };
     }
   }
 
@@ -871,16 +1049,25 @@ export class MoneyMarketService {
    */
   public async repay<K extends SpokeChainKey>(
     _params: MoneyMarketRepayActionParams<K, false>,
-  ): Promise<Result<TxHashPair>> {
+  ): Promise<Result<TxHashPair, RepayError>> {
     const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;
     const srcChainKey = params.srcChainKey;
+    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'repay' as const };
 
     try {
       const txResult = await this.createRepayIntent(_params);
-      if (!txResult.ok) return txResult;
+      if (!txResult.ok) return { ok: false, error: txResult.error };
 
       const verify = await this.spoke.verifyTxHash({ txHash: txResult.value.tx, chainKey: srcChainKey });
-      if (!verify.ok) return verify;
+      if (!verify.ok) {
+        return {
+          ok: false,
+          error: new SodaxError('MM_VERIFY_FAILED', 'Spoke transaction verification failed', {
+            cause: verify.error,
+            context: { ...baseCtx, phase: 'verify' },
+          }),
+        };
+      }
 
       // Relay skipped only when source chain is the hub.
       if (isHubChainKeyType(srcChainKey)) {
@@ -898,11 +1085,17 @@ export class MoneyMarketService {
         timeout,
       });
 
-      if (!packet.ok) return packet;
+      if (!packet.ok) return { ok: false, error: mapRelayFailureToMoneyMarketError(packet.error, baseCtx) };
 
       return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packet.value.dst_tx_hash } };
     } catch (error) {
-      return { ok: false, error };
+      if (isRepayError(error)) return { ok: false, error };
+      return {
+        ok: false,
+        error: new SodaxError('MM_REPAY_FAILED',
+          error instanceof Error ? error.message : 'repay failed',
+          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } }),
+      };
     }
   }
 
@@ -919,22 +1112,25 @@ export class MoneyMarketService {
    */
   public async createRepayIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: MoneyMarketRepayActionParams<K, Raw>,
-  ): Promise<Result<IntentTxResult<K, Raw>>> {
+  ): Promise<Result<IntentTxResult<K, Raw>, CreateRepayIntentError>> {
     const { params, walletProvider } = _params;
     const srcChainKey = params.srcChainKey;
     const skipSimulation = _params.skipSimulation ?? false;
+    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'repay' as const };
 
     try {
-      invariant(params.action === 'repay', 'Invalid action');
-      invariant(params.token.length > 0, 'Token is required');
-      invariant(params.amount > 0n, 'Amount must be greater than 0');
-      invariant(
+      mmInvariant(params.action === 'repay', 'Invalid action', { ...baseCtx, field: 'action' });
+      mmInvariant(params.token.length > 0, 'Token is required', { ...baseCtx, field: 'token' });
+      mmInvariant(params.amount > 0n, 'Amount must be greater than 0', { ...baseCtx, field: 'amount' });
+      mmInvariant(
         isUndefinedOrValidWalletProviderForChainKey(srcChainKey, walletProvider),
         `Invalid wallet provider for chain key: ${srcChainKey}, walletProvider.chainType: ${walletProvider?.chainType}`,
+        { ...baseCtx, field: 'walletProvider' },
       );
-      invariant(
+      mmInvariant(
         this.config.isMoneyMarketSupportedToken(srcChainKey, params.token),
         `Unsupported spoke chain (${srcChainKey}) token: ${params.token}`,
+        { ...baseCtx, field: 'token' },
       );
 
       const dstChainKey = params.dstChainKey ?? srcChainKey;
@@ -970,7 +1166,15 @@ export class MoneyMarketService {
             },
       );
 
-      if (!txResult.ok) return txResult;
+      if (!txResult.ok) {
+        if (isCreateRepayIntentError(txResult.error)) return { ok: false, error: txResult.error };
+        return {
+          ok: false,
+          error: new SodaxError('MM_REPAY_INTENT_CREATION_FAILED',
+            txResult.error instanceof Error ? txResult.error.message : 'Spoke deposit failed',
+            { cause: txResult.error, context: { ...baseCtx, phase: 'intentCreation' } }),
+        };
+      }
 
       return {
         ok: true,
@@ -980,7 +1184,13 @@ export class MoneyMarketService {
         },
       };
     } catch (error) {
-      return { ok: false, error };
+      if (isCreateRepayIntentError(error)) return { ok: false, error };
+      return {
+        ok: false,
+        error: new SodaxError('MM_REPAY_INTENT_CREATION_FAILED',
+          error instanceof Error ? error.message : 'createRepayIntent failed',
+          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } }),
+      };
     }
   }
 
@@ -1003,7 +1213,8 @@ export class MoneyMarketService {
     const calls: EvmContractCall[] = [];
 
     const fromHubAsset = this.config.getSpokeTokenFromOriginalAssetAddress(srcChainKey, fromToken);
-    invariant(fromHubAsset, `hub asset not found for source chain token (token): ${fromToken}`);
+    mmInvariant(fromHubAsset, `hub asset not found for source chain token (token): ${fromToken}`,
+      { srcChainKey, field: 'token' });
 
     const lendingPool = this.config.moneyMarket.lendingPool;
 
@@ -1053,8 +1264,10 @@ export class MoneyMarketService {
   ): Hex {
     const toHubAsset = this.config.getSpokeTokenFromOriginalAssetAddress(dstChainKey, toToken);
     const dstToken = this.config.getMoneyMarketToken(dstChainKey, toToken);
-    invariant(toHubAsset, `hub asset not found for target chain token (toToken): ${toToken}`);
-    invariant(dstToken, `Money market token not found for spoke chain (${dstChainKey}) token: ${toToken}`);
+    mmInvariant(toHubAsset, `hub asset not found for target chain token (toToken): ${toToken}`,
+      { dstChainKey, field: 'token' });
+    mmInvariant(dstToken, `Money market token not found for spoke chain (${dstChainKey}) token: ${toToken}`,
+      { dstChainKey, field: 'token' });
 
     const assetAddress = toHubAsset.hubAsset;
     const vaultAddress = toHubAsset.vault;
@@ -1123,7 +1336,9 @@ export class MoneyMarketService {
     }
 
     if (dstChainKey === this.hubProvider.chainConfig.chain.key) {
-      if (assetAddress.toLowerCase() === this.config.spokeChainConfig[dstChainKey].addresses.wrappedSonic.toLowerCase()) {
+      if (
+        assetAddress.toLowerCase() === this.config.spokeChainConfig[dstChainKey].addresses.wrappedSonic.toLowerCase()
+      ) {
         const withdrawToCall = {
           address: assetAddress,
           value: 0n,
@@ -1178,8 +1393,10 @@ export class MoneyMarketService {
 
     const toHubAsset = this.config.getSpokeTokenFromOriginalAssetAddress(dstChainKey, toToken);
     const dstToken = this.config.getMoneyMarketToken(dstChainKey, toToken);
-    invariant(toHubAsset, `hub asset not found for target chain token (toToken): ${toToken}`);
-    invariant(dstToken, `Money market token not found for spoke chain (${dstChainKey}) token: ${toToken}`);
+    mmInvariant(toHubAsset, `hub asset not found for target chain token (toToken): ${toToken}`,
+      { dstChainKey, field: 'token' });
+    mmInvariant(dstToken, `Money market token not found for spoke chain (${dstChainKey}) token: ${toToken}`,
+      { dstChainKey, field: 'token' });
 
     const assetAddress = toHubAsset.hubAsset;
     const vaultAddress = toHubAsset.vault;
@@ -1207,7 +1424,9 @@ export class MoneyMarketService {
     }
 
     if (dstChainKey === this.hubProvider.chainConfig.chain.key) {
-      if (assetAddress.toLowerCase() === this.config.spokeChainConfig[dstChainKey].addresses.wrappedSonic.toLowerCase()) {
+      if (
+        assetAddress.toLowerCase() === this.config.spokeChainConfig[dstChainKey].addresses.wrappedSonic.toLowerCase()
+      ) {
         const withdrawToCall = {
           address: assetAddress,
           value: 0n,
@@ -1263,7 +1482,8 @@ export class MoneyMarketService {
     const calls: EvmContractCall[] = [];
 
     const fromHubAsset = this.config.getSpokeTokenFromOriginalAssetAddress(srcChainKey, fromToken);
-    invariant(fromHubAsset, `hub asset not found for source chain token (fromToken): ${fromToken}`);
+    mmInvariant(fromHubAsset, `hub asset not found for source chain token (fromToken): ${fromToken}`,
+      { srcChainKey, field: 'token' });
 
     const assetAddress = fromHubAsset.hubAsset;
     const vaultAddress = fromHubAsset.vault;

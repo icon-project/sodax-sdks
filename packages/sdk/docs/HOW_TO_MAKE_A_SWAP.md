@@ -1,5 +1,7 @@
 # How to Make a Swap
 
+> **Error handling conventions:** The swap module returns `SodaxError<SwapErrorCode>` from `swap`, `createIntent`, `postExecution`, `createLimitOrder`, and `createLimitOrderIntent`. Discriminate on `result.error.code` (e.g. `'SWAP_RELAY_TIMEOUT'`) — not `result.error.message`. Inline error-handling examples below may show the legacy `error.message` pattern; if so, prefer the canonical examples in [SWAPS.md](./SWAPS.md) Error Handling. The lower-level methods (`getQuote`, `getStatus`, `submitIntent`, `getSolvedIntentPacket`, `cancelIntent`, …) are unchanged and still return `Result<T, SolverErrorResponse>` or relay-contract errors.
+
 This guide provides a step-by-step walkthrough for executing a cross-chain swap using the Sodax SDK. It covers everything from initializing the SDK to handling errors during the swap process.
 
 For detailed API reference, see [SWAPS.md](https://github.com/icon-project/sodax-frontend/blob/main/packages/sdk/docs/SWAPS.md).

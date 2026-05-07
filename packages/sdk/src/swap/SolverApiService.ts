@@ -1,4 +1,4 @@
-import invariant from 'tiny-invariant';
+import { invariant } from '../shared/utils/tiny-invariant.js';
 import { retry } from '../shared/utils/shared-utils.js';
 import type { ConfigService } from '../shared/config/ConfigService.js';
 import {

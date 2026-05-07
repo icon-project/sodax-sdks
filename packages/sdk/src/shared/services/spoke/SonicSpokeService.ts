@@ -26,7 +26,7 @@ import {
   type EvmReturnType,
   type HubConfig,
 } from '@sodax/types';
-import invariant from 'tiny-invariant';
+import { invariant } from '../../utils/tiny-invariant.js';
 import { encodeAddress, randomUint256 } from '../../utils/shared-utils.js';
 import { getEvmViemChain } from '../../utils/constant-utils.js';
 import { Erc20Service, type Erc20IsAllowanceParams } from '../erc-20/Erc20Service.js';

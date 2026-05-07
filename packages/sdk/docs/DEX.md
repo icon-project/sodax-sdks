@@ -1,6 +1,8 @@
 <!-- packages/sdk/docs/DEX.md -->
 # DEX (Concentrated Liquidity)
 
+> **Error handling conventions:** This module uses the **relay-layer contract** — discriminate on `error.message === 'RELAY_TIMEOUT'` / `'SUBMIT_TX_FAILED'` (also exported as `RELAY_ERROR_CODES` from `@sodax/sdk`). The **swap module** uses a different convention (`SodaxError<SwapErrorCode>` — see [SWAPS.md](./SWAPS.md) Error Handling). Both conventions coexist during the swap-first migration; the legacy pattern documented below is unchanged for DEX.
+
 The DEX portion of the SDK provides helpers for asset wrapping/deposits and concentrated liquidity (CL) operations.
 All DEX features are accessible through the `dex` property of a `Sodax` instance.
 

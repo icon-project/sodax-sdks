@@ -14,8 +14,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PositionMath, TickMath } from '@pancakeswap/v3-sdk';
 import { Token } from '@pancakeswap/swap-sdk-core';
-import type { Address, PoolKey, SpokeChainKey } from '@sodax/types';
-import { ChainKeys } from '../../../types/src/chains/chain-keys.js';
+import { ChainKeys, type Address, type PoolKey, type SpokeChainKey } from '@sodax/types';
 import { Sodax } from '../shared/entities/Sodax.js';
 import type {
   ClSupplyAction,

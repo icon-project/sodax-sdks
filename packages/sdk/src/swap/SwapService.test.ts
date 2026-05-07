@@ -14,7 +14,9 @@
  */
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import {
+  ChainKeys,
   getIntentRelayChainId,
+  spokeChainConfig,
   type IBitcoinWalletProvider,
   type IEvmWalletProvider,
   type ISolanaWalletProvider,
@@ -23,17 +25,13 @@ import {
   type Result,
   type SpokeChainKey,
 } from '@sodax/types';
-// NOTE: `@sodax/types` is consumed from `dist/` in vitest. In this branch the generated dist entry
-// is stale/missing many exports (including ChainKeys/spokeChainConfig), so we import those from
-// source to make SDK unit tests runnable.
-import { ChainKeys } from '../../../types/src/chains/chain-keys.js';
-import { spokeChainConfig } from '../../../types/src/chains/chains.js';
 import type {
   SpokeIsAllowanceValidParamsEvmSpoke,
   SpokeIsAllowanceValidParamsHub,
   WalletProviderSlot,
 } from '../index.js';
 import { Sodax } from '../shared/entities/Sodax.js';
+import { isSodaxError, SodaxError } from '../errors/SodaxError.js';
 
 // SwapService imports SonicSpokeService, EvmSolverService, etc. via the SDK barrel
 // (`../index.js`). Under Vitest's module graph the barrel's re-export ordering makes a direct
@@ -924,7 +922,9 @@ describe('SwapService.createIntent', () => {
   });
 
   // Preflight `invariant()` checks run inside `createIntent`'s try/catch; failures resolve to
-  // `{ ok: false, error }` where `error` is the thrown Error (`Invariant failed: …` prefix).
+  // `{ ok: false, error }` where `error` is a SodaxError with code `SWAP_VALIDATION_FAILED`.
+  // The original invariant prose lives on `error.message` (the `Invariant failed: ` prefix is
+  // stripped); `error.cause` preserves the original tiny-invariant Error.
   describe('rejects on invalid inputs', () => {
     it('rejects when walletProvider chainType does not match srcChain', async () => {
       const result = await sodax.swaps.createIntent({
@@ -939,11 +939,10 @@ describe('SwapService.createIntent', () => {
       expect(result.ok).toBe(false);
       if (!result.ok) {
         const caughtError = result.error;
-        expect(caughtError).toBeInstanceOf(Error);
-        if (!(caughtError instanceof Error)) {
-          throw new Error('expected invariant failure Error');
-        }
-        expect(caughtError.message).toBe('Invariant failed: Invalid wallet provider for chain key: 0x38.bsc');
+        expect(isSodaxError(caughtError)).toBe(true);
+        expect(caughtError.code).toBe('SWAP_VALIDATION_FAILED');
+        expect(caughtError.message).toBe('Invalid wallet provider for chain key: 0x38.bsc');
+        expect(caughtError.context?.phase).toBe('validate');
       }
     });
 
@@ -961,10 +960,8 @@ describe('SwapService.createIntent', () => {
       expect(result.ok).toBe(false);
       if (!result.ok) {
         const caughtError = result.error;
-        expect(caughtError).toBeInstanceOf(Error);
-        if (!(caughtError instanceof Error)) {
-          throw new Error('expected invariant failure Error');
-        }
+        expect(isSodaxError(caughtError)).toBe(true);
+        expect(caughtError.code).toBe('SWAP_VALIDATION_FAILED');
         expect(caughtError.message).toContain('Unsupported spoke chain token (srcChainKey)');
       }
     });
@@ -982,10 +979,8 @@ describe('SwapService.createIntent', () => {
       expect(result.ok).toBe(false);
       if (!result.ok) {
         const caughtError = result.error;
-        expect(caughtError).toBeInstanceOf(Error);
-        if (!(caughtError instanceof Error)) {
-          throw new Error('expected invariant failure Error');
-        }
+        expect(isSodaxError(caughtError)).toBe(true);
+        expect(caughtError.code).toBe('SWAP_VALIDATION_FAILED');
         expect(caughtError.message).toContain('Unsupported spoke chain token (params.dstChain)');
       }
     });
@@ -1002,10 +997,8 @@ describe('SwapService.createIntent', () => {
       expect(result.ok).toBe(false);
       if (!result.ok) {
         const caughtError = result.error;
-        expect(caughtError).toBeInstanceOf(Error);
-        if (!(caughtError instanceof Error)) {
-          throw new Error('expected invariant failure Error');
-        }
+        expect(isSodaxError(caughtError)).toBe(true);
+        expect(caughtError.code).toBe('SWAP_VALIDATION_FAILED');
         expect(caughtError.message).toContain('Invalid spoke chain (srcChainKey)');
       }
     });
@@ -1022,10 +1015,8 @@ describe('SwapService.createIntent', () => {
       expect(result.ok).toBe(false);
       if (!result.ok) {
         const caughtError = result.error;
-        expect(caughtError).toBeInstanceOf(Error);
-        if (!(caughtError instanceof Error)) {
-          throw new Error('expected invariant failure Error');
-        }
+        expect(isSodaxError(caughtError)).toBe(true);
+        expect(caughtError.code).toBe('SWAP_VALIDATION_FAILED');
         expect(caughtError.message).toContain('Invalid spoke chain (params.dstChain)');
       }
     });
@@ -1047,10 +1038,8 @@ describe('SwapService.createIntent', () => {
       expect(result.ok).toBe(false);
       if (!result.ok) {
         const caughtError = result.error;
-        expect(caughtError).toBeInstanceOf(Error);
-        if (!(caughtError instanceof Error)) {
-          throw new Error('expected invariant failure Error');
-        }
+        expect(isSodaxError(caughtError)).toBe(true);
+        expect(caughtError.code).toBe('SWAP_VALIDATION_FAILED');
         expect(caughtError.message).toContain('Invalid minOutputAmount');
       }
     });
@@ -1060,7 +1049,15 @@ describe('SwapService.createIntent', () => {
   // as `{ok:false, error}`, not as a thrown rejection. Covers each internal call that can
   // fail: hubProvider.getUserHubWalletAddress, SonicSpokeService, EvmSolverService, and SpokeService.deposit.
   describe('propagates internal errors as Result.error', () => {
-    it('returns ok:false when hubProvider.getUserHubWalletAddress rejects', async () => {
+    // Each of these tests previously asserted `toEqual({ ok: false, error: <rawError> })` against
+    // the old pass-through semantics. After the SodaxError refactor, every caught non-SodaxError
+    // is wrapped via `classifyCreateIntentError` into `SodaxError('SWAP_INTENT_CREATION_FAILED',
+    // …, { cause: rawError })`. The old assertions silently kept passing because vitest's
+    // `toEqual` treats an Error and a SodaxError as equal when they share `name`+`message`
+    // (it ignores the new `code`/`context`/`cause` fields). The assertions now pin the real
+    // contract: same SodaxError code, same cause, same phase.
+
+    it('wraps a hubProvider.getUserHubWalletAddress rejection as SWAP_INTENT_CREATION_FAILED', async () => {
       const hubError = new Error('HUB_WALLET_LOOKUP_FAILED');
       mocks.getUserHubWalletAddress.mockRejectedValueOnce(hubError);
 
@@ -1070,10 +1067,15 @@ describe('SwapService.createIntent', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: hubError });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(isSodaxError(result.error)).toBe(true);
+      expect(result.error.code).toBe('SWAP_INTENT_CREATION_FAILED');
+      expect(result.error.cause).toBe(hubError);
+      expect(result.error.context?.phase).toBe('createIntent');
     });
 
-    it('returns ok:false when SonicSpokeService.createSwapIntent rejects (Sonic path)', async () => {
+    it('wraps a SonicSpokeService.createSwapIntent rejection as SWAP_INTENT_CREATION_FAILED (Sonic path)', async () => {
       const sonicError = new Error('SONIC_CREATE_FAILED');
       mocks.getUserHubWalletAddress.mockResolvedValueOnce('0xhubwallet');
       mocks.sonicCreateSwapIntent.mockRejectedValueOnce(sonicError);
@@ -1084,10 +1086,13 @@ describe('SwapService.createIntent', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: sonicError });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.code).toBe('SWAP_INTENT_CREATION_FAILED');
+      expect(result.error.cause).toBe(sonicError);
     });
 
-    it('returns ok:false when EvmSolverService.constructCreateIntentData throws (EVM spoke path)', async () => {
+    it('wraps an EvmSolverService.constructCreateIntentData throw as SWAP_INTENT_CREATION_FAILED (EVM spoke path)', async () => {
       const constructError = new Error('CONSTRUCT_INTENT_DATA_FAILED');
       mocks.getUserHubWalletAddress.mockResolvedValueOnce('0xhubwallet');
       mocks.constructCreateIntentData.mockImplementationOnce(() => {
@@ -1100,10 +1105,13 @@ describe('SwapService.createIntent', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: constructError });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.code).toBe('SWAP_INTENT_CREATION_FAILED');
+      expect(result.error.cause).toBe(constructError);
     });
 
-    it('forwards SpokeService.deposit failure as-is (early return, not re-wrapped)', async () => {
+    it('wraps a SpokeService.deposit returned failure as SWAP_INTENT_CREATION_FAILED (early return, then wrap)', async () => {
       const depositError = new Error('DEPOSIT_REJECTED_BY_RPC');
       mocks.getUserHubWalletAddress.mockResolvedValueOnce('0xhubwallet');
       mocks.constructCreateIntentData.mockReturnValueOnce(['0xintentdata', makeIntent(ChainKeys.BSC_MAINNET), 0n]);
@@ -1115,10 +1123,14 @@ describe('SwapService.createIntent', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: depositError });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.code).toBe('SWAP_INTENT_CREATION_FAILED');
+      expect(result.error.cause).toBe(depositError);
+      expect(result.error.context?.phase).toBe('createIntent');
     });
 
-    it('returns ok:false when SpokeService.deposit rejects (thrown, not returned failure)', async () => {
+    it('wraps a SpokeService.deposit rejection (thrown) as SWAP_INTENT_CREATION_FAILED', async () => {
       const depositThrown = new Error('DEPOSIT_THROWS');
       mocks.getUserHubWalletAddress.mockResolvedValueOnce('0xhubwallet');
       mocks.constructCreateIntentData.mockReturnValueOnce(['0xintentdata', makeIntent(ChainKeys.BSC_MAINNET), 0n]);
@@ -1130,7 +1142,10 @@ describe('SwapService.createIntent', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: depositThrown });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.code).toBe('SWAP_INTENT_CREATION_FAILED');
+      expect(result.error.cause).toBe(depositThrown);
     });
   });
 });
@@ -1531,7 +1546,7 @@ describe('SwapService.getStatus', () => {
 });
 
 describe('SwapService.postExecution', () => {
-  it('delegates to SolverApiService.postExecution and returns the Result', async () => {
+  it('delegates to SolverApiService.postExecution and returns the Result on success', async () => {
     const execResult = { ok: true as const, value: { answer: 'OK', intent_hash: '0xhash' } as never };
     mocks.solverPostExecution.mockResolvedValueOnce(execResult);
     const request = { intent_tx_hash: '0xsome' } as never;
@@ -1542,13 +1557,79 @@ describe('SwapService.postExecution', () => {
     expect(mocks.solverPostExecution).toHaveBeenCalledWith(request, sodax.swaps.solver);
   });
 
-  it('forwards a failure Result from SolverApiService.postExecution', async () => {
-    const failure = { ok: false, error: { code: 'POST_EXEC_REJECTED' } } as never;
-    mocks.solverPostExecution.mockResolvedValueOnce(failure);
+  it('wraps a SolverErrorResponse failure as SWAP_SOLVER_API_ERROR with solver code on context', async () => {
+    const detail = { code: -8, message: 'quote not found' };
+    mocks.solverPostExecution.mockResolvedValueOnce({ ok: false, error: { detail } } as never);
 
     const result = await sodax.swaps.postExecution({ intent_tx_hash: '0xsome' } as never);
 
-    expect(result).toBe(failure);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(isSodaxError(result.error)).toBe(true);
+      expect(result.error.code).toBe('SWAP_SOLVER_API_ERROR');
+      expect(result.error.message).toBe('quote not found');
+      expect(result.error.context?.phase).toBe('postExecution');
+      expect(result.error.context?.solverCode).toBe(-8);
+      expect(result.error.context?.solverDetail).toEqual(detail);
+    }
+  });
+
+  it('wraps a thrown exception as SWAP_POST_EXECUTION_FAILED with cause', async () => {
+    const thrown = new Error('network down');
+    mocks.solverPostExecution.mockRejectedValueOnce(thrown);
+
+    const result = await sodax.swaps.postExecution({ intent_tx_hash: '0xsome' } as never);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('SWAP_POST_EXECUTION_FAILED');
+      expect(result.error.cause).toBe(thrown);
+    }
+  });
+
+  it('preserves an inner SodaxError thrown from SolverApiService (does not re-wrap)', async () => {
+    const inner = new SodaxError('SWAP_SOLVER_API_ERROR', 'pre-wrapped', {
+      context: { phase: 'postExecution', solverCode: -8 },
+    });
+    mocks.solverPostExecution.mockRejectedValueOnce(inner);
+
+    const result = await sodax.swaps.postExecution({ intent_tx_hash: '0xsome' } as never);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe(inner);
+  });
+
+  it('wraps a SodaxError with an out-of-union code as SWAP_POST_EXECUTION_FAILED (typed contract preserved)', async () => {
+    // postExecution's narrow union is { POST_EXECUTION_FAILED, SOLVER_API_ERROR, UNKNOWN }.
+    // If a future code path threw a SodaxError with e.g. SWAP_RELAY_TIMEOUT (valid SwapError
+    // but NOT a PostExecutionError), the previous `as PostExecutionError` cast would have
+    // silently widened the contract. The narrow guard now wraps it as the method's own code.
+    const outOfUnion = new SodaxError('SWAP_RELAY_TIMEOUT', 'unexpected', {
+      context: { phase: 'relay' },
+    });
+    mocks.solverPostExecution.mockRejectedValueOnce(outOfUnion);
+
+    const result = await sodax.swaps.postExecution({ intent_tx_hash: '0xsome' } as never);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('SWAP_POST_EXECUTION_FAILED');
+      expect(result.error.cause).toBe(outOfUnion);
+    }
+  });
+
+  it('falls back to a synthetic detail when SolverApiService returns a malformed error', async () => {
+    // Simulate an upstream contract violation — error without a `detail` field.
+    mocks.solverPostExecution.mockResolvedValueOnce({ ok: false, error: {} } as never);
+
+    const result = await sodax.swaps.postExecution({ intent_tx_hash: '0xsome' } as never);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('SWAP_SOLVER_API_ERROR');
+      expect(result.error.message).toBe('Solver returned malformed error response');
+      expect(result.error.context?.solverCode).toBe(-999);
+    }
   });
 });
 
@@ -1849,7 +1930,7 @@ describe('SwapService.swap', () => {
     expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
   });
 
-  it('returns the failure from verifyTxHash when it fails', async () => {
+  it('wraps a verifyTxHash failure in SWAP_VERIFY_FAILED with cause', async () => {
     stubCreateIntentOk(ChainKeys.BSC_MAINNET);
     const verifyError = new Error('VERIFY_FAILED');
     vi.spyOn(sodax.spoke, 'verifyTxHash').mockResolvedValueOnce({ ok: false, error: verifyError });
@@ -1860,11 +1941,16 @@ describe('SwapService.swap', () => {
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: verifyError });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('SWAP_VERIFY_FAILED');
+      expect(result.error.cause).toBe(verifyError);
+      expect(result.error.context?.phase).toBe('verify');
+    }
     expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
   });
 
-  it('returns the failure from relayTxAndWaitPacket when it fails', async () => {
+  it('wraps a RELAY_TIMEOUT relay failure in SWAP_RELAY_TIMEOUT with relayCode in context', async () => {
     stubCreateIntentOk(ChainKeys.BSC_MAINNET);
     const relayError = new Error('RELAY_TIMEOUT');
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: false, error: relayError });
@@ -1875,14 +1961,57 @@ describe('SwapService.swap', () => {
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: relayError });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('SWAP_RELAY_TIMEOUT');
+      expect(result.error.context?.relayCode).toBe('RELAY_TIMEOUT');
+      expect(result.error.context?.phase).toBe('relay');
+      expect(result.error.cause).toBe(relayError);
+    }
     expect(mocks.solverPostExecution).not.toHaveBeenCalled();
   });
 
-  it('wraps a postExecution failure in Error("POST_EXECUTION_FAILED") with the underlying error on .cause', async () => {
+  it('wraps a SUBMIT_TX_FAILED relay failure in SWAP_SUBMIT_TX_FAILED', async () => {
+    stubCreateIntentOk(ChainKeys.BSC_MAINNET);
+    const submitError = new Error('SUBMIT_TX_FAILED');
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: false, error: submitError });
+
+    const result = await sodax.swaps.swap({
+      params: intentInput(ChainKeys.BSC_MAINNET),
+      raw: false,
+      walletProvider: mockEvmProvider,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('SWAP_SUBMIT_TX_FAILED');
+      expect(result.error.context?.relayCode).toBe('SUBMIT_TX_FAILED');
+      expect(result.error.context?.phase).toBe('submit');
+    }
+  });
+
+  it('wraps an unknown relay failure in SWAP_RELAY_FAILED with relayCode UNKNOWN', async () => {
+    stubCreateIntentOk(ChainKeys.BSC_MAINNET);
+    const relayError = new Error('NEW_FUTURE_RELAY_CODE');
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: false, error: relayError });
+
+    const result = await sodax.swaps.swap({
+      params: intentInput(ChainKeys.BSC_MAINNET),
+      raw: false,
+      walletProvider: mockEvmProvider,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('SWAP_RELAY_FAILED');
+      expect(result.error.context?.relayCode).toBe('UNKNOWN');
+    }
+  });
+
+  it('propagates a postExecution SolverErrorResponse as SWAP_SOLVER_API_ERROR through swap', async () => {
     stubCreateIntentOk(ChainKeys.SONIC_MAINNET);
-    const postExecError = new Error('SOLVER_UNAVAILABLE');
-    mocks.solverPostExecution.mockResolvedValueOnce({ ok: false, error: postExecError });
+    const detail = { code: -7, message: 'no execution module found' };
+    mocks.solverPostExecution.mockResolvedValueOnce({ ok: false, error: { detail } } as never);
 
     const result = await sodax.swaps.swap({
       params: intentInput(ChainKeys.SONIC_MAINNET),
@@ -1892,12 +2021,12 @@ describe('SwapService.swap', () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect((result.error as Error).message).toBe('POST_EXECUTION_FAILED');
-      expect((result.error as Error).cause).toBe(postExecError);
+      expect(result.error.code).toBe('SWAP_SOLVER_API_ERROR');
+      expect(result.error.context?.solverCode).toBe(-7);
     }
   });
 
-  it('returns ok:false when createIntent rejects (thrown, not Result failure)', async () => {
+  it('wraps a thrown error from createIntent in SWAP_UNKNOWN with cause', async () => {
     const thrownError = new Error('CREATE_THROWS');
     vi.spyOn(sodax.swaps, 'createIntent').mockRejectedValueOnce(thrownError);
 
@@ -1907,7 +2036,49 @@ describe('SwapService.swap', () => {
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: thrownError });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('SWAP_UNKNOWN');
+      expect(result.error.cause).toBe(thrownError);
+    }
+  });
+
+  it("preserves an inner SodaxError when createIntent throws one (does not re-wrap as SWAP_UNKNOWN)", async () => {
+    const inner = new SodaxError('SWAP_VALIDATION_FAILED', 'my validation', {
+      context: { phase: 'validate' },
+    });
+    vi.spyOn(sodax.swaps, 'createIntent').mockRejectedValueOnce(inner);
+
+    const result = await sodax.swaps.swap({
+      params: intentInput(ChainKeys.BSC_MAINNET),
+      raw: false,
+      walletProvider: mockEvmProvider,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toBe(inner);
+    }
+  });
+
+  it('wraps a SodaxError with a non-swap code as SWAP_UNKNOWN (typed contract preserved)', async () => {
+    // The narrow `isSwapError` guard rejects codes outside SwapErrorCode (e.g. an accidental
+    // SodaxError with a moneyMarket-prefixed code thrown from inside swap orchestration).
+    // The previous `as SwapError` cast would have silently leaked it through. Now wrapped.
+    const outOfUnion = new SodaxError('SOMEMODULE_FOO_FAILED' as never, 'unexpected');
+    vi.spyOn(sodax.swaps, 'createIntent').mockRejectedValueOnce(outOfUnion);
+
+    const result = await sodax.swaps.swap({
+      params: intentInput(ChainKeys.BSC_MAINNET),
+      raw: false,
+      walletProvider: mockEvmProvider,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('SWAP_UNKNOWN');
+      expect(result.error.cause).toBe(outOfUnion);
+    }
   });
 
   it('returns the IntentDeliveryInfo tuple with src/dst chain + tx info on success', async () => {

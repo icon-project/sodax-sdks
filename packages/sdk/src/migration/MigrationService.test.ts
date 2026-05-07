@@ -30,6 +30,7 @@ import {
   type IStellarWalletProvider,
   type ISolanaWalletProvider,
 } from '@sodax/types';
+import { SodaxError } from '../errors/SodaxError.js';
 
 const mocks = vi.hoisted(() => ({
   // EvmHubProvider instance methods — `getUserHubWalletAddress` (used by every create-intent
@@ -855,7 +856,7 @@ describe('MigrationService.migratebnUSD', () => {
     expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
   });
 
-  it('forwards a verifyTxHash failure as Result.error', async () => {
+  it('wraps a verifyTxHash failure as MIGRATION_VERIFY_FAILED with cause + phase + action', async () => {
     vi.spyOn(sodax.migration, 'createMigratebnUSDIntent').mockResolvedValueOnce({
       ok: true,
       value: { tx: spokeTxHash, relayData: { address: hubWalletAddress, payload: '0xp' } },
@@ -869,11 +870,16 @@ describe('MigrationService.migratebnUSD', () => {
       walletProvider: mockIconProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: verifyError });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('MIGRATION_VERIFY_FAILED');
+    expect(result.error.cause).toBe(verifyError);
+    expect(result.error.context?.phase).toBe('verify');
+    expect(result.error.context?.action).toBe('migratebnUSD');
     expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
   });
 
-  it('forwards a relayTxAndWaitPacket failure as Result.error', async () => {
+  it('wraps a relayTxAndWaitPacket failure via mapRelayFailureToMigrationError', async () => {
     vi.spyOn(sodax.migration, 'createMigratebnUSDIntent').mockResolvedValueOnce({
       ok: true,
       value: { tx: spokeTxHash, relayData: { address: hubWalletAddress, payload: '0xp' } },
@@ -887,7 +893,12 @@ describe('MigrationService.migratebnUSD', () => {
       walletProvider: mockIconProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: relayError });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('MIGRATION_RELAY_TIMEOUT');
+    expect(result.error.cause).toBe(relayError);
+    expect(result.error.context?.action).toBe('migratebnUSD');
+    expect(result.error.context?.relayCode).toBe('RELAY_TIMEOUT');
   });
 
   it('returns ok:false when an internal call throws', async () => {
@@ -944,7 +955,7 @@ describe('MigrationService.migrateIcxToSoda', () => {
     expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
   });
 
-  it('forwards a relayTxAndWaitPacket failure as Result.error', async () => {
+  it('wraps a relayTxAndWaitPacket failure via mapRelayFailureToMigrationError', async () => {
     vi.spyOn(sodax.migration, 'createMigrateIcxToSodaIntent').mockResolvedValueOnce({
       ok: true,
       value: { tx: spokeTxHash, relayData: { address: hubWalletAddress, payload: '0xp' } },
@@ -958,7 +969,11 @@ describe('MigrationService.migrateIcxToSoda', () => {
       walletProvider: mockIconProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: relayError });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('MIGRATION_RELAY_TIMEOUT');
+    expect(result.error.cause).toBe(relayError);
+    expect(result.error.context?.action).toBe('migrateIcxToSoda');
   });
 
   it('returns ok:false when an internal call throws', async () => {
@@ -1015,7 +1030,7 @@ describe('MigrationService.revertMigrateSodaToIcx', () => {
     expect(result).toEqual({ ok: false, error: intentError });
   });
 
-  it('forwards a relay failure as Result.error', async () => {
+  it('wraps a relay failure via mapRelayFailureToMigrationError', async () => {
     vi.spyOn(sodax.migration, 'createRevertSodaToIcxMigrationIntent').mockResolvedValueOnce({
       ok: true,
       value: { tx: spokeTxHash, relayData: { address: hubWalletAddress, payload: '0xp' } },
@@ -1029,7 +1044,11 @@ describe('MigrationService.revertMigrateSodaToIcx', () => {
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: relayError });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('MIGRATION_RELAY_TIMEOUT');
+    expect(result.error.cause).toBe(relayError);
+    expect(result.error.context?.action).toBe('revertMigrateSodaToIcx');
   });
 
   it('returns ok:false when an internal call throws', async () => {
@@ -1086,7 +1105,7 @@ describe('MigrationService.migrateBaln', () => {
     expect(result).toEqual({ ok: false, error: intentError });
   });
 
-  it('forwards a relay failure as Result.error', async () => {
+  it('wraps a relay failure via mapRelayFailureToMigrationError', async () => {
     vi.spyOn(sodax.migration, 'createMigrateBalnIntent').mockResolvedValueOnce({
       ok: true,
       value: { tx: spokeTxHash, relayData: { address: hubWalletAddress, payload: '0xp' } },
@@ -1100,7 +1119,11 @@ describe('MigrationService.migrateBaln', () => {
       walletProvider: mockIconProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: relayError });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('MIGRATION_RELAY_TIMEOUT');
+    expect(result.error.cause).toBe(relayError);
+    expect(result.error.context?.action).toBe('migrateBaln');
   });
 
   it('returns ok:false when an internal call throws', async () => {
@@ -1573,11 +1596,14 @@ describe('MigrationService.createMigrateIcxToSodaIntent — invariant failures',
 });
 
 describe('MigrationService.createMigrateIcxToSodaIntent — error propagation', () => {
-  it('forwards a getAvailableAmount failure as Result.error', async () => {
+  it('wraps a getAvailableAmount failure as MIGRATION_INTENT_CREATION_FAILED with cause', async () => {
+    // The mock returns a plain Error here for simplicity; in practice getAvailableAmount now
+    // returns a typed MigrationLookupError. createMigrateIcxToSodaIntent wraps it as
+    // MIGRATION_INTENT_CREATION_FAILED (Lookup ⊄ Create-narrow union, so it can't subset-narrow).
     const liquidityError = new Error('LIQUIDITY_LOOKUP_FAILED');
     vi.spyOn(sodax.migration.icxMigration, 'getAvailableAmount').mockResolvedValueOnce({
       ok: false,
-      error: liquidityError,
+      error: liquidityError as never,
     });
 
     const result = await sodax.migration.createMigrateIcxToSodaIntent({
@@ -1586,7 +1612,12 @@ describe('MigrationService.createMigrateIcxToSodaIntent — error propagation', 
       walletProvider: mockIconProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: liquidityError });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('MIGRATION_INTENT_CREATION_FAILED');
+    expect(result.error.cause).toBe(liquidityError);
+    expect(result.error.context?.phase).toBe('intentCreation');
+    expect(result.error.context?.action).toBe('migrateIcxToSoda');
   });
 
   it('forwards a deposit failure as Result.error', async () => {
@@ -1719,5 +1750,149 @@ describe('MigrationService.createRevertSodaToIcxMigrationIntent', () => {
     });
 
     expect(result).toEqual({ ok: false, error: depositError });
+  });
+});
+
+// =========================================================================
+// SodaxError wrap-path integration tests
+//
+// Full coverage on `migratebnUSD` (the most complex orchestrator — only one with both
+// `verifyTxHash` AND the secondary `waitUntilIntentExecuted` watcher) + smoke wrap-path
+// tests for the other 3 orchestrators. Mirrors the staking/StakingService.test.ts pattern.
+// =========================================================================
+
+describe('MigrationService.migratebnUSD — SodaxError wrap-path coverage', () => {
+  it('propagates a CreateMigrateIntentError from createMigratebnUSDIntent (subset narrowing, identity)', async () => {
+    // CreateMigrateIntentErrorCode ⊂ MigrateOrchestrationErrorCode, so `migratebnUSD` returns
+    // the same SodaxError instance unchanged — no extra wrap.
+    const intentError = new SodaxError('MIGRATION_INTENT_CREATION_FAILED', 'spoke deposit reverted', {
+      context: { srcChainKey: ChainKeys.ICON_MAINNET, action: 'migratebnUSD', phase: 'intentCreation' },
+    });
+    vi.spyOn(sodax.migration, 'createMigratebnUSDIntent').mockResolvedValueOnce({ ok: false, error: intentError });
+
+    const result = await sodax.migration.migratebnUSD({
+      params: bnUSDLegacyToNewParams(),
+      raw: false,
+      walletProvider: mockIconProvider,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    // Identity check — same SodaxError instance, not re-wrapped.
+    expect(result.error).toBe(intentError);
+    expect(result.error.code).toBe('MIGRATION_INTENT_CREATION_FAILED');
+    expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
+  });
+
+  it('wraps a waitUntilIntentExecuted failure as MIGRATION_RELAY_TIMEOUT with phase="destinationExecution"', async () => {
+    // The secondary watcher fires only when NEITHER src NOR dst is Sonic. Override the default
+    // ICON→SONIC fixture to ICON→SUI so the watcher branch executes.
+    const iconToSuiParams = {
+      ...bnUSDLegacyToNewParams(),
+      dstChainKey: ChainKeys.SUI_MAINNET,
+    } as ReturnType<typeof bnUSDLegacyToNewParams>;
+
+    vi.spyOn(sodax.migration, 'createMigratebnUSDIntent').mockResolvedValueOnce({
+      ok: true,
+      value: { tx: spokeTxHash, relayData: { address: hubWalletAddress, payload: '0xp' } },
+    });
+    vi.spyOn(sodax.spoke, 'verifyTxHash').mockResolvedValueOnce({ ok: true, value: undefined });
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: okPacket });
+    const execError = new Error('RELAY_TIMEOUT');
+    mocks.waitUntilIntentExecuted.mockResolvedValueOnce({ ok: false, error: execError });
+
+    const result = await sodax.migration.migratebnUSD({
+      params: iconToSuiParams,
+      raw: false,
+      walletProvider: mockIconProvider,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('MIGRATION_RELAY_TIMEOUT');
+    expect(result.error.cause).toBe(execError);
+    // Critical: the destination-watcher path must be tagged with `phase: 'destinationExecution'`,
+    // not the default `'relay'`. This lets logger filters distinguish primary-relay timeouts
+    // from secondary-watcher timeouts while reusing the same code.
+    expect(result.error.context?.phase).toBe('destinationExecution');
+    expect(result.error.context?.action).toBe('migratebnUSD');
+    expect(result.error.context?.relayCode).toBe('RELAY_TIMEOUT');
+  });
+
+  it('wraps an out-of-union SodaxError thrown from createMigratebnUSDIntent as MIGRATION_FAILED', async () => {
+    // The `isMigrateOrchestrationError` guard rejects codes outside the forward-orchestrator
+    // union. Pinning the wrap path here so a future regression that widens the guard surfaces
+    // immediately.
+    const outOfUnion = new SodaxError('SWAP_RELAY_TIMEOUT' as never, 'foreign code thrown into migration');
+    vi.spyOn(sodax.migration, 'createMigratebnUSDIntent').mockRejectedValueOnce(outOfUnion);
+
+    const result = await sodax.migration.migratebnUSD({
+      params: bnUSDLegacyToNewParams(),
+      raw: false,
+      walletProvider: mockIconProvider,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('MIGRATION_FAILED');
+    expect(result.error.cause).toBe(outOfUnion);
+    expect(result.error.context?.action).toBe('migratebnUSD');
+  });
+});
+
+// Smoke tests — confirm every other orchestrator wraps a thrown out-of-union SodaxError
+// to its catch-all (MIGRATION_FAILED for forward orchestrators, MIGRATION_REVERT_FAILED for
+// the reverse one). Pins the wrap machinery on every orchestrator without ballooning the suite.
+
+describe('MigrationService — out-of-union wrap-path smoke for non-bnUSD orchestrators', () => {
+  it('migrateIcxToSoda wraps as MIGRATION_FAILED', async () => {
+    const outOfUnion = new SodaxError('BRIDGE_FAILED' as never, 'foreign code thrown into migration');
+    vi.spyOn(sodax.migration, 'createMigrateIcxToSodaIntent').mockRejectedValueOnce(outOfUnion);
+
+    const result = await sodax.migration.migrateIcxToSoda({
+      params: icxMigrateParams(),
+      raw: false,
+      walletProvider: mockIconProvider,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('MIGRATION_FAILED');
+    expect(result.error.cause).toBe(outOfUnion);
+    expect(result.error.context?.action).toBe('migrateIcxToSoda');
+  });
+
+  it('revertMigrateSodaToIcx wraps as MIGRATION_REVERT_FAILED', async () => {
+    const outOfUnion = new SodaxError('STAKING_STAKE_FAILED' as never, 'foreign code thrown into migration');
+    vi.spyOn(sodax.migration, 'createRevertSodaToIcxMigrationIntent').mockRejectedValueOnce(outOfUnion);
+
+    const result = await sodax.migration.revertMigrateSodaToIcx({
+      params: icxRevertParams(),
+      raw: false,
+      walletProvider: mockEvmProvider,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('MIGRATION_REVERT_FAILED');
+    expect(result.error.cause).toBe(outOfUnion);
+    expect(result.error.context?.action).toBe('revertMigrateSodaToIcx');
+  });
+
+  it('migrateBaln wraps as MIGRATION_FAILED', async () => {
+    const outOfUnion = new SodaxError('MM_SUPPLY_FAILED' as never, 'foreign code thrown into migration');
+    vi.spyOn(sodax.migration, 'createMigrateBalnIntent').mockRejectedValueOnce(outOfUnion);
+
+    const result = await sodax.migration.migrateBaln({
+      params: balnMigrateParams(),
+      raw: false,
+      walletProvider: mockIconProvider,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('MIGRATION_FAILED');
+    expect(result.error.cause).toBe(outOfUnion);
+    expect(result.error.context?.action).toBe('migrateBaln');
   });
 });

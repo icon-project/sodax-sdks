@@ -19,11 +19,13 @@
  *      / `.rejects` — matching the runtime contract of each method.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Address, ApiConfig, SubmitSwapTxRequest, SubmitSwapTxStatusResponse } from '@sodax/types';
-// `@sodax/types` is consumed from `dist/` in vitest; in this branch the generated dist entry
-// is stale for some exports. Import ChainKeys directly from source so the SDK unit tests
-// stay runnable.
-import { ChainKeys } from '../../../types/src/chains/chain-keys.js';
+import {
+  ChainKeys,
+  type Address,
+  type ApiConfig,
+  type SubmitSwapTxRequest,
+  type SubmitSwapTxStatusResponse,
+} from '@sodax/types';
 import { Sodax } from '../shared/entities/Sodax.js';
 import { BackendApiService } from './BackendApiService.js';
 

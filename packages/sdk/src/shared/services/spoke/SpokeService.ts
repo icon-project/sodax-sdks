@@ -69,7 +69,7 @@ import type {
 import { Erc20Service, type Erc20ApproveParams } from '../erc-20/Erc20Service.js';
 import type { RequestTrustlineParams } from './StellarSpokeService.js';
 import type { WalletMode } from './BitcoinSpokeService.js';
-import invariant from 'tiny-invariant';
+import { invariant } from '../../utils/tiny-invariant.js';
 
 export type SpokeServiceType =
   | EvmSpokeService

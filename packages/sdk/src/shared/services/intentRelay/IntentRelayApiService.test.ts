@@ -20,11 +20,7 @@
  *      that drops the `.toString()` or swaps the chain key surfaces here.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_RELAY_TX_TIMEOUT, type Hex, type HttpUrl } from '@sodax/types';
-// `@sodax/types` is consumed from `dist/` in vitest; the generated dist entry is
-// stale for some exports. Pull `ChainKeys` from source — same workaround the
-// SonicSpokeService and BackendApiService tests use.
-import { ChainKeys } from '../../../../../types/src/chains/chain-keys.js';
+import { ChainKeys, DEFAULT_RELAY_TX_TIMEOUT, type Hex, type HttpUrl } from '@sodax/types';
 import {
   getPacket,
   getTransactionPackets,
@@ -62,9 +58,24 @@ const CONN_SN = '42';
 // pattern the rest of the SDK test suite uses for misaligned param types.
 const NO_DATA = undefined as unknown as RelayExtraData;
 
-// Build a `fetch` response object that matches the `Response.json()` shape used
-// by `postRequest`. Only the `.json()` method is read by the service.
-const jsonResponse = <T>(body: T) => ({ json: vi.fn().mockResolvedValue(body) });
+// Build a `fetch` response stub matching the subset of `Response` that `postRequest` reads:
+// `ok`/`status`/`statusText` for the HTTP-level success check, and `json()` for the body.
+const jsonResponse = <T>(body: T) => ({
+  ok: true,
+  status: 200,
+  statusText: 'OK',
+  json: vi.fn().mockResolvedValue(body),
+});
+
+// HTTP-error response: `postRequest` short-circuits before calling `json()`, but reads
+// `text()` for diagnostic body context.
+const httpErrorResponse = (status: number, statusText: string, body = '') => ({
+  ok: false,
+  status,
+  statusText,
+  json: vi.fn(),
+  text: vi.fn().mockResolvedValue(body),
+});
 
 const buildPacket = (overrides: Partial<PacketData> = {}): PacketData => ({
   src_chain_id: 4,
@@ -111,6 +122,44 @@ describe('submitTransaction', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
+    });
+
+    it('wraps an HTTP 5xx response as SUBMIT_TX_FAILED with the HTTP detail on .cause', async () => {
+      // Asymmetry the SDK previously had: SolverApiService checked response.ok, the relay
+      // layer didn't. A 5xx that returned `{ success: true }` body would be silently
+      // accepted. postRequest now short-circuits on !response.ok; submitTransaction wraps
+      // any postRequest failure as SUBMIT_TX_FAILED so the canonical contract holds.
+      mockFetch.mockResolvedValueOnce(httpErrorResponse(500, 'Internal Server Error', 'gateway exploded'));
+
+      const result = await submitTransaction({ action: 'submit', params: baseParams }, API_URL);
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect((result.error as Error).message).toBe('SUBMIT_TX_FAILED');
+      const cause = (result.error as Error).cause as Error;
+      expect(cause).toBeInstanceOf(Error);
+      expect(cause.message).toContain('HTTP 500');
+      expect(cause.message).toContain('Internal Server Error');
+      expect(cause.message).toContain('gateway exploded');
+    });
+
+    it('wraps a network failure (fetch rejects after retries) as SUBMIT_TX_FAILED with cause', async () => {
+      // Persistent fetch rejection: retry() exhausts attempts and rethrows; postRequest's
+      // catch returns ok:false; submitTransaction now wraps as SUBMIT_TX_FAILED rather than
+      // propagating raw (so swap's mapper sees the canonical code, not relayCode: 'UNKNOWN').
+      vi.useFakeTimers();
+      const networkError = new Error('socket hang up');
+      mockFetch.mockRejectedValue(networkError);
+
+      const promise = submitTransaction({ action: 'submit', params: baseParams }, API_URL);
+      // retry() does 3 attempts × 2s back-off = 6s total before rethrowing.
+      await vi.advanceTimersByTimeAsync(6_000);
+      const result = await promise;
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect((result.error as Error).message).toBe('SUBMIT_TX_FAILED');
+      expect((result.error as Error).cause).toBe(networkError);
     });
 
     it('wraps a relayer-side failure (success:false) into ok:false SUBMIT_TX_FAILED with cause', async () => {
@@ -447,18 +496,76 @@ describe('waitUntilIntentExecuted', () => {
       expect(mockFetch).toHaveBeenCalledTimes(3);
     });
 
-    it('returns ok:false short-circuit when getTransactionPackets returns ok:false (network failure)', async () => {
+    it('emits RELAY_POLLING_FAILED with the sync exception on .cause when the loop body throws', async () => {
+      // Sync exceptions inside the inner try/catch (formerly swallowed via console.error)
+      // would surface a misleading RELAY_TIMEOUT after the wall-clock fired. We now capture
+      // the last sync exception and surface it as RELAY_POLLING_FAILED.
+      //
+      // To exercise the inner-catch path specifically (not the !ok short-circuit), we feed
+      // a malformed packet whose src_tx_hash is null — the predicate inside `data.find(...)`
+      // throws when it calls `.toLowerCase()` on null. That throw bubbles up the loop body
+      // and lands in the inner catch block.
+      vi.useFakeTimers();
+      mockFetch
+        .mockResolvedValueOnce(
+          jsonResponse({
+            success: true,
+            data: [{ ...buildPacket({ status: 'executed' }), src_tx_hash: null as unknown as string }],
+          }),
+        )
+        .mockResolvedValueOnce(
+          jsonResponse({
+            success: true,
+            data: [{ ...buildPacket({ status: 'executed' }), src_tx_hash: null as unknown as string }],
+          }),
+        );
+
+      const promise = waitUntilIntentExecuted({ ...baseInput, timeout: 1_000 });
+      // 1 poll (sync throw caught) → 2s setTimeout → loop check 2s ≥ 1s → exit via POLLING_FAILED.
+      await vi.advanceTimersByTimeAsync(2_000);
+      const result = await promise;
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect((result.error as Error).message).toBe('RELAY_POLLING_FAILED');
+      // The captured sync exception is a TypeError from .toLowerCase() on null.
+      const cause = (result.error as Error).cause;
+      expect(cause).toBeInstanceOf(TypeError);
+    });
+
+    it('emits RELAY_POLLING_FAILED when getTransactionPackets HTTP-errors (postRequest checks response.ok)', async () => {
+      // The previous code path was silent: a 5xx response with a JSON body would have been
+      // accepted as a successful poll. postRequest now short-circuits on !response.ok, and
+      // waitUntilIntentExecuted records the HTTP error as lastPollingError → RELAY_POLLING_FAILED.
+      vi.useFakeTimers();
+      mockFetch.mockResolvedValue(httpErrorResponse(503, 'Service Unavailable', 'upstream is down'));
+
+      const promise = waitUntilIntentExecuted({ ...baseInput, timeout: 1_000 });
+      // First poll HTTP-errors → break → POLLING_FAILED.
+      await vi.advanceTimersByTimeAsync(2_000);
+      const result = await promise;
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect((result.error as Error).message).toBe('RELAY_POLLING_FAILED');
+      const cause = (result.error as Error).cause as Error;
+      expect(cause.message).toContain('HTTP 503');
+      expect(cause.message).toContain('upstream is down');
+    });
+
+    it('emits RELAY_POLLING_FAILED with the underlying error on .cause when getTransactionPackets returns ok:false', async () => {
       vi.useFakeTimers();
 
       // postRequest wraps fetch in `retry` (3 attempts, 2s back-off). After all
       // attempts reject, `retry` rethrows, postRequest's catch returns
-      // `{ ok: false, error }`, and waitUntilIntentExecuted's
-      // `if (!txPacketsResult.ok) return txPacketsResult` short-circuits the
-      // polling loop with the underlying fetch error verbatim.
+      // `{ ok: false, error }`, and waitUntilIntentExecuted breaks the polling
+      // loop and surfaces RELAY_POLLING_FAILED so operators can distinguish
+      // "polling endpoint outage" from "packet never delivered" (RELAY_TIMEOUT).
+      const networkError = new Error('network down');
       mockFetch
-        .mockRejectedValueOnce(new Error('network down'))
-        .mockRejectedValueOnce(new Error('network down'))
-        .mockRejectedValueOnce(new Error('network down'));
+        .mockRejectedValueOnce(networkError)
+        .mockRejectedValueOnce(networkError)
+        .mockRejectedValueOnce(networkError);
 
       const promise = waitUntilIntentExecuted(baseInput);
       // 3 retry attempts × 2s back-off = 6s; loop exits before the 2s polling pause.
@@ -467,7 +574,8 @@ describe('waitUntilIntentExecuted', () => {
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect((result.error as Error).message).toBe('network down');
+      expect((result.error as Error).message).toBe('RELAY_POLLING_FAILED');
+      expect((result.error as Error).cause).toBe(networkError);
       expect(mockFetch).toHaveBeenCalledTimes(3);
     });
   });

@@ -1,4 +1,4 @@
-import invariant from 'tiny-invariant';
+import { invariant } from '../shared/utils/tiny-invariant.js';
 import {
   submitTransaction,
   waitUntilIntentExecuted,
@@ -35,6 +35,17 @@ import {
 } from '../shared/index.js';
 import { SolverApiService } from './SolverApiService.js';
 import { EvmSolverService } from './EvmSolverService.js';
+import { SodaxError } from '../errors/SodaxError.js';
+import {
+  type CreateIntentError,
+  type PostExecutionError,
+  type SwapError,
+  isCreateIntentError,
+  isPostExecutionError,
+  isSwapError,
+  swapInvariant,
+} from './error-types.js';
+import { mapRelayFailureToSwapError } from './relay-error-mapping.js';
 export type {
   CreateIntentParams,
   CreateLimitOrderParams,
@@ -265,12 +276,59 @@ export class SwapService {
    * only need to call this manually when orchestrating the swap steps yourself.
    *
    * @param request - Object containing `intent_tx_hash` — the hub-chain tx where the intent was created.
-   * @returns A `Result` containing `{ answer: 'OK', intent_hash: Hex }` on success.
+   * @returns A `Result<SolverExecutionResponse, PostExecutionError>`. On failure `result.error` is a
+   *   {@link SodaxError} with one of:
+   *   - `SWAP_SOLVER_API_ERROR` — solver returned a typed error response. The original
+   *     `SolverIntentErrorCode` is on `result.error.context.solverCode`; the full
+   *     `SolverErrorResponse.detail` is on `result.error.context.solverDetail`.
+   *   - `SWAP_POST_EXECUTION_FAILED` — network/transport-level failure (the solver call threw).
+   *   - `SWAP_UNKNOWN` — defensive fallback; should not normally hit.
+   *
+   *   By design, `postExecution` alone never emits relay/verify codes — those appear only on
+   *   `swap` because only `swap` orchestrates verify + relay.
    */
   public async postExecution(
     request: SolverExecutionRequest,
-  ): Promise<Result<SolverExecutionResponse, SolverErrorResponse>> {
-    return SolverApiService.postExecution(request, this.solver);
+  ): Promise<Result<SolverExecutionResponse, PostExecutionError>> {
+    try {
+      const result = await SolverApiService.postExecution(request, this.solver);
+      if (result.ok) return result;
+
+      // Defensive: SolverApiService is contractually typed to return SolverErrorResponse,
+      // but a malformed upstream payload would otherwise surface as a cryptic
+      // "Cannot read properties of undefined" caught below. Fall back to a synthetic detail
+      // so the canonical SodaxError carries enough context for forensics.
+      const detail = result.error?.detail ?? {
+        code: -999, // SolverIntentErrorCode.UNKNOWN
+        message: 'Solver returned malformed error response',
+      };
+      return {
+        ok: false,
+        error: new SodaxError('SWAP_SOLVER_API_ERROR', detail.message, {
+          context: {
+            phase: 'postExecution',
+            solverCode: detail.code,
+            solverDetail: detail,
+          },
+        }),
+      };
+    } catch (error) {
+      // Narrow guard: only preserve SodaxErrors whose code is in postExecution's union.
+      // A SodaxError with an out-of-union code (e.g. SWAP_RELAY_TIMEOUT) is wrapped below
+      // as SWAP_POST_EXECUTION_FAILED so the typed contract holds at runtime.
+      if (isPostExecutionError(error)) return { ok: false, error };
+      return {
+        ok: false,
+        error: new SodaxError(
+          'SWAP_POST_EXECUTION_FAILED',
+          error instanceof Error ? error.message : 'postExecution failed',
+          {
+            cause: error,
+            context: { phase: 'postExecution' },
+          },
+        ),
+      };
+    }
   }
 
   /**
@@ -300,22 +358,40 @@ export class SwapService {
    *    relay packet to land on the hub (Sonic). Skipped when `srcChainKey` is the hub.
    * 4. Calls `postExecution` to notify the solver, triggering it to fill the intent.
    *
-   * On failure, `result.error` is an `Error` whose message is a phase tag:
-   * `'POST_EXECUTION_FAILED'` or `'RELAY_TIMEOUT'`; the underlying cause is on `.cause`.
-   *
    * @param _params - Swap action params including intent parameters, wallet provider, and optional timeout.
-   * @returns A `Result` containing `SwapResponse` on success:
+   * @returns A `Result<SwapResponse, SwapError>`. On success:
    *   - `solverExecutionResponse` — solver acknowledgement (`{ answer: 'OK', intent_hash }`).
    *   - `intent` — the on-chain intent object that was created.
    *   - `intentDeliveryInfo` — source/destination chain keys, tx hashes, and user addresses.
+   *
+   *   On failure `result.error` is a {@link SodaxError} with one of:
+   *   - `SWAP_VALIDATION_FAILED` — input validation failed (propagated from `createIntent`).
+   *   - `SWAP_INTENT_CREATION_FAILED` — spoke-side intent creation/deposit failed.
+   *   - `SWAP_VERIFY_FAILED` — the spoke tx could not be verified on-chain.
+   *   - `SWAP_SUBMIT_TX_FAILED` — relay submission failed after the spoke tx landed
+   *     (`context.relayCode === 'SUBMIT_TX_FAILED'`).
+   *   - `SWAP_RELAY_TIMEOUT` — relay packet did not arrive in time
+   *     (`context.relayCode === 'RELAY_TIMEOUT'`).
+   *   - `SWAP_RELAY_FAILED` — other relay failure (`context.relayCode === 'UNKNOWN'`).
+   *   - `SWAP_POST_EXECUTION_FAILED` — solver notify call failed.
+   *   - `SWAP_SOLVER_API_ERROR` — solver returned a typed error
+   *     (`context.solverCode` carries the original `SolverIntentErrorCode`).
+   *   - `SWAP_UNKNOWN` — uncategorized fallback.
    */
-  public async swap<K extends SpokeChainKey>(_params: SwapActionParams<K, false>): Promise<Result<SwapResponse>> {
+  public async swap<K extends SpokeChainKey>(
+    _params: SwapActionParams<K, false>,
+  ): Promise<Result<SwapResponse, SwapError>> {
     const { params } = _params;
     const srcChainKey = params.srcChainKey;
+    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey };
     try {
       const timeout = _params.timeout;
       const createIntentResult = await this.createIntent(_params);
-      if (!createIntentResult.ok) return createIntentResult;
+      if (!createIntentResult.ok) {
+        // CreateIntentErrorCode ⊂ SwapErrorCode by definition; the cast is structural, not a
+        // contract widening. (Verified at design time via the type alias relationship.)
+        return { ok: false, error: createIntentResult.error };
+      }
 
       const { tx: spokeTxHash, intent, relayData } = createIntentResult.value;
 
@@ -323,7 +399,15 @@ export class SwapService {
         txHash: spokeTxHash,
         chainKey: srcChainKey,
       });
-      if (!verifyTxHashResult.ok) return verifyTxHashResult;
+      if (!verifyTxHashResult.ok) {
+        return {
+          ok: false,
+          error: new SodaxError('SWAP_VERIFY_FAILED', 'Spoke transaction verification failed', {
+            cause: verifyTxHashResult.error,
+            context: { ...baseCtx, phase: 'verify' },
+          }),
+        };
+      }
 
       let dstIntentTxHash: string;
       if (isHubChainKeyType(srcChainKey)) {
@@ -336,21 +420,24 @@ export class SwapService {
           relayerApiEndpoint: this.relayerApiEndpoint,
           timeout,
         });
-        if (!packet.ok) return packet;
+        if (!packet.ok) {
+          return { ok: false, error: mapRelayFailureToSwapError(packet.error, baseCtx) };
+        }
         dstIntentTxHash = packet.value.dst_tx_hash;
       }
 
-      const result = await this.postExecution({
+      const postExecResult = await this.postExecution({
         intent_tx_hash: dstIntentTxHash as `0x${string}`,
       });
-      if (!result.ok) {
-        return { ok: false, error: new Error('POST_EXECUTION_FAILED', { cause: result.error }) };
+      if (!postExecResult.ok) {
+        // PostExecutionErrorCode ⊂ SwapErrorCode by definition.
+        return { ok: false, error: postExecResult.error };
       }
 
       return {
         ok: true,
         value: {
-          solverExecutionResponse: result.value,
+          solverExecutionResponse: postExecResult.value,
           intent,
           intentDeliveryInfo: {
             srcChainKey,
@@ -363,7 +450,16 @@ export class SwapService {
         },
       };
     } catch (error) {
-      return { ok: false, error };
+      // Narrow guard: preserve SodaxErrors whose code is in the swap union; wrap unknown
+      // codes (e.g. an accidental moneyMarket-prefixed code) as SWAP_UNKNOWN.
+      if (isSwapError(error)) return { ok: false, error };
+      return {
+        ok: false,
+        error: new SodaxError('SWAP_UNKNOWN', error instanceof Error ? error.message : 'Unknown swap failure', {
+          cause: error,
+          context: baseCtx,
+        }),
+      };
     }
   }
 
@@ -534,46 +630,56 @@ export class SwapService {
    *
    * @param _params - Intent parameters, source chain key, wallet provider (when `raw: false`),
    *   and optional `skipSimulation` flag.
-   * @returns A `Result` containing `CreateIntentResult<K, Raw>`:
+   * @returns A `Result<CreateIntentResult<K, Raw>, CreateIntentError>`. On success contains:
    *   - `tx` — chain-specific tx hash (executed) or raw tx data (raw mode).
    *   - `intent` — the fully constructed `Intent` object augmented with `feeAmount`.
    *   - `relayData` — `{ address, payload }` needed to submit the intent to the relayer.
    *
-   * Invariant violations (unsupported tokens, mismatched chain keys, insufficient Bitcoin dust
-   * output below 546 sats) are caught inside this method and returned as `{ ok: false, error }`,
-   * not thrown from the async API boundary.
+   *   On failure `result.error` is a {@link SodaxError} with one of:
+   *   - `SWAP_VALIDATION_FAILED` — invariant precondition failed (unsupported tokens,
+   *     invalid chain key, Bitcoin dust output below 546 sats, invalid wallet provider).
+   *     The original prose is on `result.error.message`; phase is `'validate'`.
+   *   - `SWAP_INTENT_CREATION_FAILED` — spoke-side intent creation/deposit failed.
+   *   - `SWAP_UNKNOWN` — defensive fallback.
    */
   public async createIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: SwapActionParams<K, Raw>,
-  ): Promise<Result<CreateIntentResult<K, Raw>>> {
+  ): Promise<Result<CreateIntentResult<K, Raw>, CreateIntentError>> {
     const { params, skipSimulation } = _params;
+    const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
 
     try {
-      invariant(
+      swapInvariant(
         isUndefinedOrValidWalletProviderForChainKey(params.srcChainKey, _params.walletProvider),
         `Invalid wallet provider for chain key: ${params.srcChainKey}`,
+        baseCtx,
       );
-      invariant(
+      swapInvariant(
         this.config.isValidOriginalAssetAddress(params.srcChainKey, params.inputToken),
         `Unsupported spoke chain token (srcChainKey): ${params.srcChainKey}, params.inputToken): ${params.inputToken}`,
+        { ...baseCtx, field: 'inputToken' },
       );
-      invariant(
+      swapInvariant(
         this.config.isValidOriginalAssetAddress(params.dstChainKey, params.outputToken),
         `Unsupported spoke chain token (params.dstChain): ${params.dstChainKey}, params.outputToken): ${params.outputToken}`,
+        { ...baseCtx, field: 'outputToken' },
       );
-      invariant(
+      swapInvariant(
         this.config.isValidSpokeChainKey(params.srcChainKey),
         `Invalid spoke chain (srcChainKey): ${params.srcChainKey}`,
+        { ...baseCtx, field: 'srcChainKey' },
       );
-      invariant(
+      swapInvariant(
         this.config.isValidSpokeChainKey(params.dstChainKey),
         `Invalid spoke chain (params.dstChain): ${params.dstChainKey}`,
+        { ...baseCtx, field: 'dstChainKey' },
       );
       //if dstChain is Bitcoin and token is BTC, check minOutputToken should be higher than 546 sats
       if (isBitcoinChainKey(params.dstChainKey) && params.outputToken === 'BTC') {
-        invariant(
+        swapInvariant(
           params.minOutputAmount >= 546n,
           `Invalid minOutputAmount (params.minOutputAmount): ${params.minOutputAmount}`,
+          { ...baseCtx, field: 'minOutputAmount' },
         );
       }
       const personalAddress = params.srcAddress;
@@ -582,9 +688,10 @@ export class SwapService {
       // NOTE: bitcoin is only enabled in non-raw execution mode == walletProvider is required
       let walletAddress: string = personalAddress;
       if (isBitcoinChainKeyType(params.srcChainKey) && _params.raw === false) {
-        invariant(
+        swapInvariant(
           isBitcoinWalletProviderType(_params.walletProvider),
           `Invalid wallet provider for chain key: ${params.srcChainKey}`,
+          baseCtx,
         );
         walletAddress = await this.spoke.bitcoin.getEffectiveWalletAddress(personalAddress);
         await this.spoke.bitcoin.radfi.ensureRadfiAccessToken(_params.walletProvider);
@@ -658,7 +765,20 @@ export class SwapService {
       );
 
       if (!txResult.ok) {
-        return txResult;
+        if (isCreateIntentError(txResult.error)) {
+          return { ok: false, error: txResult.error };
+        }
+        return {
+          ok: false,
+          error: new SodaxError(
+            'SWAP_INTENT_CREATION_FAILED',
+            txResult.error instanceof Error ? txResult.error.message : 'Spoke deposit failed',
+            {
+              cause: txResult.error,
+              context: { ...baseCtx, phase: 'createIntent' },
+            },
+          ),
+        };
       }
 
       return {
@@ -670,8 +790,19 @@ export class SwapService {
         },
       };
     } catch (error) {
-      console.error('[SwapService.createIntent] FAILED', error);
-      return { ok: false, error };
+      // swapInvariant() throws SodaxError<'SWAP_VALIDATION_FAILED'> directly, so the guard
+      // catches validation failures with no prefix detection. Anything else (a hubProvider
+      // rejection, deposit throw, etc.) gets wrapped as SWAP_INTENT_CREATION_FAILED with
+      // the original on cause.
+      if (isCreateIntentError(error)) return { ok: false, error };
+      return {
+        ok: false,
+        error: new SodaxError(
+          'SWAP_INTENT_CREATION_FAILED',
+          error instanceof Error ? error.message : 'createIntent failed',
+          { cause: error, context: { ...baseCtx, phase: 'createIntent' } },
+        ),
+      };
     }
   }
 
@@ -690,7 +821,7 @@ export class SwapService {
    */
   public async createLimitOrder<K extends SpokeChainKey>(
     _params: LimitOrderActionParams<K, false>,
-  ): Promise<Result<SwapResponse>> {
+  ): Promise<Result<SwapResponse, SwapError>> {
     const { timeout, skipSimulation } = _params;
     // Force deadline to 0n (no deadline) for limit orders. K is preserved on the resulting
     // CreateIntentParams<K> so swap() infers the same chain narrowing.
@@ -721,7 +852,7 @@ export class SwapService {
    */
   public async createLimitOrderIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: LimitOrderActionParams<K, Raw>,
-  ): Promise<Result<CreateIntentResult<K, Raw>>> {
+  ): Promise<Result<CreateIntentResult<K, Raw>, CreateIntentError>> {
     // Force deadline to 0n for limit orders. srcChain is preserved on params so K narrowing
     // flows through to createIntent unchanged.
     const limitOrderParams: CreateIntentParams<K> = {
@@ -1040,3 +1171,4 @@ export class SwapService {
     return this.config.getSupportedSwapTokens();
   }
 }
+

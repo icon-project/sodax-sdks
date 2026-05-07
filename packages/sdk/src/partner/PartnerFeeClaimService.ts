@@ -1,5 +1,5 @@
 // packages/sdk/src/partner/PartnerFeeClaimService.ts
-import invariant from 'tiny-invariant';
+import { invariant } from '../shared/utils/tiny-invariant.js';
 import { erc20Abi, encodeFunctionData, isAddress, type Address } from 'viem';
 import type { ConfigService } from '../shared/config/ConfigService.js';
 import type { HubProvider } from '../shared/types/types.js';

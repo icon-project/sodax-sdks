@@ -1,5 +1,7 @@
 ## Intent Relay API Service
 
+> **Error handling conventions:** Failures from `submitTransaction` / `relayTxAndWaitPacket` follow the **relay-layer contract**: `error.message` is one of the literal strings exported as `RELAY_ERROR_CODES` (`'SUBMIT_TX_FAILED'`, `'RELAY_TIMEOUT'`). Modules other than swap (moneyMarket, bridge, dex, migration, staking) propagate these errors raw. The **swap module** wraps them into `SodaxError<SwapErrorCode>` with `context.relayCode` (see [SWAPS.md](./SWAPS.md) Error Handling).
+
 The Intent Relay API Service provides functionality for submitting transactions and retrieving transaction packets across different chains. This service is part of the cross-chain communication infrastructure.
 
 Source: `packages/sdk/src/shared/services/intentRelay/IntentRelayApiService.ts`

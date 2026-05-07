@@ -15,20 +15,17 @@
  * NOTE: a suspected v1 regression in `getDeposit` is flagged inline — see that describe block.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type {
-  Address,
-  Hex,
-  IEvmWalletProvider,
-  PartnerFee,
-  SolverConfig,
-  SonicChainKey,
-  SpokeChainKey,
+import {
+  ChainKeys,
+  spokeChainConfig,
+  type Address,
+  type Hex,
+  type IEvmWalletProvider,
+  type PartnerFee,
+  type SolverConfig,
+  type SonicChainKey,
+  type SpokeChainKey,
 } from '@sodax/types';
-// `@sodax/types` is consumed from `dist/` in vitest. The generated dist entry is stale/missing
-// many runtime exports (ChainKeys, spokeChainConfig). Import them from source — same pragma the
-// SwapService test uses.
-import { ChainKeys } from '../../../../../types/src/chains/chain-keys.js';
-import { spokeChainConfig } from '../../../../../types/src/chains/chains.js';
 import { encodeAbiParameters, encodeFunctionData } from 'viem';
 import { wrappedSonicAbi, sonicWalletFactoryAbi } from '../../abis/index.js';
 

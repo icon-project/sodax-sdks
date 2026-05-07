@@ -1,5 +1,5 @@
 import { IntentsAbi } from '../shared/abis/intents.abi.js';
-import invariant from 'tiny-invariant';
+import { invariant } from '../shared/utils/tiny-invariant.js';
 import {
   type Address,
   type GetLogsReturnType,

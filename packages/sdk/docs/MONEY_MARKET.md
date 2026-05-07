@@ -1,5 +1,7 @@
 # Money Market
 
+> **Error handling conventions:** This module uses the canonical `SodaxError<MoneyMarketErrorCode>` shape (same family as the swap module). Discriminate on `result.error.code` (e.g. `'MM_RELAY_TIMEOUT'`, `'MM_SUPPLY_FAILED'`); structured details live on `result.error.context` (`action`, `phase`, `relayCode`, `field`). See the **Error Handling** section below for the full per-method code table and migration notes from the legacy `error.message`-based pattern.
+
 Money Market part of SDK provides abstractions to assist you with interacting with the cross-chain Money Market Smart Contracts.
 
 All money market operations are accessed through the `moneyMarket` property of a `Sodax` instance:
@@ -558,135 +560,180 @@ if (repayIntentResult.ok) {
 
 ## Error Handling
 
-All money market methods return `Promise<Result<T>>` — never throws across service boundaries:
+The Money Market module's user-facing methods return `Promise<Result<T, SodaxError<NarrowCode>>>`. Discriminate on `result.error.code` (a string literal) — never on `result.error.message`. This is the same canonical shape used by the swap module.
+
+### The canonical error: `SodaxError<C>`
+
+All MM-module errors are instances of `SodaxError`, exported from `@sodax/sdk`:
 
 ```typescript
-type Result<T> =
-  | { ok: true; value: T }
-  | { ok: false; error: Error | unknown };
+import { SodaxError, isSodaxError } from '@sodax/sdk';
+
+class SodaxError<C extends string = string> extends Error {
+  readonly code: C;                         // string-literal discriminator
+  readonly cause?: unknown;                 // ES2022 cause chain
+  readonly context?: Record<string, unknown>;
+  toJSON(): { name, code, message, stack, context, cause };
+}
 ```
 
-### Error Message Convention
+**Rules:**
 
-Errors take one of two forms:
+- Discriminate on `error.code` — never on `error.message` (which is human-readable, may change).
+- `error.cause` walks the underlying error chain (loggers like Sentry/Pino/Datadog walk this automatically).
+- `error.context` carries structured metadata: `srcChainKey`, `dstChainKey`, `action`, `phase`, plus per-code extras (`relayCode`, `field`, …).
+- `error.toJSON()` is the canonical logger surface; `JSON.stringify(error)` invokes it automatically and produces a logger-safe payload (bigints in `context` are coerced to strings, cause walked depth-3, no circular hazards).
+- Use `isMoneyMarketError(e)` / `is<Op>Error(e)` from `@sodax/sdk` instead of `instanceof SodaxError` in dapp/app code (bundle-safe).
 
-**CODE form** — for errors originating inside a `catch` block (phase failures):
+### Per-method error code unions
 
-```
-'CREATE_SUPPLY_INTENT_FAILED'
-'SUBMIT_TX_FAILED'
-'RELAY_TIMEOUT'
-```
+| Method | Codes |
+|---|---|
+| `supply` | `MM_VALIDATION_FAILED`, `MM_SUPPLY_INTENT_CREATION_FAILED`, `MM_VERIFY_FAILED`, `MM_SUBMIT_TX_FAILED`, `MM_RELAY_TIMEOUT`, `MM_RELAY_FAILED`, `MM_SUPPLY_FAILED`, `MM_UNKNOWN` |
+| `borrow` | same shape, `MM_BORROW_*` codes |
+| `withdraw` | same shape, `MM_WITHDRAW_*` codes |
+| `repay` | same shape, `MM_REPAY_*` codes |
+| `createSupplyIntent` | `MM_VALIDATION_FAILED`, `MM_SUPPLY_INTENT_CREATION_FAILED`, `MM_UNKNOWN` |
+| `createBorrowIntent` / `createWithdrawIntent` / `createRepayIntent` | same, per-op intent-creation code |
+| `approve` | `MM_VALIDATION_FAILED`, `MM_APPROVE_FAILED`, `MM_UNKNOWN` |
+| `isAllowanceValid` | `MM_VALIDATION_FAILED`, `MM_ALLOWANCE_CHECK_FAILED`, `MM_UNKNOWN` |
+| `estimateGas` | `MM_VALIDATION_FAILED`, `MM_GAS_ESTIMATION_FAILED`, `MM_UNKNOWN` |
 
-These are `Error` instances whose `.message` is a `SCREAMING_SNAKE_CASE` code and whose `.cause` (when present) holds the underlying error.
+Each method's narrow type alias is exported (`SupplyError`, `BorrowError`, `CreateSupplyIntentError`, etc.) along with a matching `is<Op>Error` type guard.
 
-**Prose form** — for precondition/invariant failures (bad params, unsupported chain, etc.):
-
-```
-'Amount must be greater than 0'
-'Approve only supported for hub (Sonic), EVM spokes, and Stellar'
-'Unsupported spoke chain (...) token: ...'
-```
-
-### Branching on Errors
-
-Check `result.error.message` for CODE-form errors. There are no typed error discriminators (`MoneyMarketError<Code>`, `isMoneyMarketSubmitTxFailedError`, etc.) — those have been removed in v2.
+### Standard `context` fields
 
 ```typescript
+{
+  srcChainKey?: SpokeChainKey;
+  dstChainKey?: SpokeChainKey;
+  action?: 'supply' | 'borrow' | 'withdraw' | 'repay';  // on relay/verify codes
+  phase?: 'validate' | 'intentCreation' | 'verify' | 'submit' | 'relay' |
+          'approve' | 'allowanceCheck' | 'gasEstimation';
+  relayCode?: 'SUBMIT_TX_FAILED' | 'RELAY_TIMEOUT' | 'RELAY_POLLING_FAILED' | 'UNKNOWN';
+  field?: string;     // on MM_VALIDATION_FAILED
+  reason?: string;
+}
+```
+
+### Discrimination example
+
+```typescript
+import { isMoneyMarketError, isSupplyError } from '@sodax/sdk';
+
 const result = await sodax.moneyMarket.supply({
   params: supplyParams,
   walletProvider: evmWalletProvider,
 });
 
 if (!result.ok) {
-  const error = result.error;
+  // result.error is SupplyError = SodaxError<SupplyErrorCode>
+  switch (result.error.code) {
+    case 'MM_VALIDATION_FAILED':
+      // Bad input — error.message is human-readable; error.context.field tells you which.
+      console.error('Bad input:', result.error.message);
+      break;
 
-  if (error instanceof Error) {
-    if (error.message === 'SUBMIT_TX_FAILED') {
-      // Failed to submit the spoke chain transaction to the relay API.
-      // IMPORTANT: This is a critical event. Store the relevant payload
-      // (transaction hash) locally and retry submission — if the user
-      // leaves the session without re-submitting, funds may get stuck.
-      console.error('Submit transaction failed:', error.cause);
-    } else if (error.message === 'RELAY_TIMEOUT') {
-      // The transaction was submitted but the hub did not confirm in time.
-      // Check the transaction status on-chain and retry with a longer timeout.
-      console.error('Relay timed out:', error.cause);
-    } else {
-      // Precondition failure or unexpected error
-      console.error('Supply failed:', error.message);
-    }
-  } else {
-    console.error('Unexpected error:', error);
+    case 'MM_SUPPLY_INTENT_CREATION_FAILED':
+      // Spoke deposit failed.
+      console.error('Intent creation failed:', result.error.cause);
+      break;
+
+    case 'MM_VERIFY_FAILED':
+      // Spoke tx couldn't be verified on-chain.
+      break;
+
+    case 'MM_SUBMIT_TX_FAILED':
+      // CRITICAL: spoke tx landed but the relay submission failed. Funds may be in flight.
+      // Persist the original supply params (or just the spoke tx hash) and retry submission.
+      console.error('Relay submit failed; retry needed:', result.error.context?.relayCode);
+      break;
+
+    case 'MM_RELAY_TIMEOUT':
+      // Relay packet didn't confirm in time. Check intent status and retry with longer timeout.
+      break;
+
+    case 'MM_RELAY_FAILED':
+      // Other relay failure. error.context.relayCode disambiguates:
+      //   'RELAY_POLLING_FAILED' — polling endpoint outage; query hub directly to confirm packet status.
+      //   'UNKNOWN' — forward-compat fallback for new relay error codes.
+      break;
+
+    case 'MM_SUPPLY_FAILED':
+      // Catch-all for the supply orchestration; cause has the original.
+      console.error('Supply failed:', result.error.cause);
+      break;
+
+    case 'MM_UNKNOWN':
+      console.error('Unexpected:', result.error.cause);
+      break;
   }
 }
 ```
 
-### Handling Create Intent Errors
+### Handling create-intent errors
 
-`create*Intent` methods cover only the spoke-side transaction and can fail with a corresponding intent-creation code:
+`create*Intent` methods only cover the spoke-side transaction. Their narrow union excludes relay/verify codes:
 
 ```typescript
-const createIntentResult = await sodax.moneyMarket.createSupplyIntent({
+const r = await sodax.moneyMarket.createSupplyIntent({
   params: supplyParams,
   walletProvider: evmWalletProvider,
 });
 
-if (!createIntentResult.ok) {
-  const error = createIntentResult.error;
-
-  if (error instanceof Error) {
-    // Common codes: 'CREATE_SUPPLY_INTENT_FAILED', 'CREATE_BORROW_INTENT_FAILED',
-    //               'CREATE_WITHDRAW_INTENT_FAILED', 'CREATE_REPAY_INTENT_FAILED'
-    console.error('Intent creation failed with:', error.message, error.cause);
-
-    // Common causes:
-    // - Insufficient token balance
-    // - Invalid token address or unsupported chain
-    // - Network issues on the spoke chain
-    // - Invalid wallet address or permissions
+if (!r.ok) {
+  switch (r.error.code) {
+    case 'MM_VALIDATION_FAILED':
+      // Input validation: bad amount, unsupported token, wrong wallet provider type.
+      break;
+    case 'MM_SUPPLY_INTENT_CREATION_FAILED':
+      // Spoke deposit failed (insufficient balance, network issues, simulation revert).
+      break;
+    case 'MM_UNKNOWN':
+      break;
   }
 }
 ```
 
-### Handling Allowance and Approval Errors
+### Handling allowance + approval errors
 
 ```typescript
-const allowanceCheck = await sodax.moneyMarket.isAllowanceValid({ params: supplyParams });
-
-if (!allowanceCheck.ok) {
-  console.error('Allowance check failed:', allowanceCheck.error);
-  // Could be: network issues, invalid params, unsupported token
+const a = await sodax.moneyMarket.isAllowanceValid({ params: supplyParams });
+if (!a.ok && a.error.code === 'MM_ALLOWANCE_CHECK_FAILED') {
+  // Network / RPC issue; surface to user, retry.
 }
 
-if (!allowanceCheck.value) {
-  const approveResult = await sodax.moneyMarket.approve({
-    params: supplyParams,
-    walletProvider: evmWalletProvider,
-  });
-
-  if (!approveResult.ok) {
-    console.error('Approval failed:', approveResult.error);
-    // Could be: insufficient balance, network issues, wrong wallet provider
+if (a.ok && !a.value) {
+  const ap = await sodax.moneyMarket.approve({ params: supplyParams, walletProvider: evmWalletProvider });
+  if (!ap.ok && ap.error.code === 'MM_APPROVE_FAILED') {
+    // Approval transaction failed.
   }
 }
 ```
 
-### Best Practices for Error Handling
+### Migration from the legacy `error.message`-based pattern
 
-1. **Always handle `SUBMIT_TX_FAILED`**: These are critical — funds can get stuck if the spoke transaction is not successfully relayed. Store the transaction hash and retry submission.
+If you were on the previous CODE-string-on-`error.message` pattern (or the older `MoneyMarketError<Code>` typed shape that the public docs at <https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/money_market#error-handling> document), here are the mappings:
 
-2. **Handle `RELAY_TIMEOUT` gracefully**: The spoke transaction may have succeeded even if the timeout fires. Check on-chain status before retrying.
+| Before | After |
+|---|---|
+| `error.message === 'SUBMIT_TX_FAILED'` | `error.code === 'MM_SUBMIT_TX_FAILED'` |
+| `error.message === 'RELAY_TIMEOUT'` | `error.code === 'MM_RELAY_TIMEOUT'` |
+| `error.message === 'CREATE_SUPPLY_INTENT_FAILED'` | `error.code === 'MM_SUPPLY_INTENT_CREATION_FAILED'` |
+| `error.message === 'CREATE_BORROW_INTENT_FAILED'` etc. | `error.code === 'MM_BORROW_INTENT_CREATION_FAILED'` etc. |
+| `error.message === 'SUPPLY_UNKNOWN_ERROR'` etc. | `error.code === 'MM_SUPPLY_FAILED'` etc. (with cause) |
+| `isMoneyMarketSubmitTxFailedError(e)` | `e.code === 'MM_SUBMIT_TX_FAILED'` (after `isSupplyError(e)` etc.) |
+| Prose `error.message` for invariants | `error.code === 'MM_VALIDATION_FAILED'`; the prose stays on `error.message` |
+| `error.data.payload` (historical) | **Not preserved.** Capture input params before calling if you need them for retry; this is the one departure from the historical published guidance. |
 
-3. **Branch on `error.message`**: Use `instanceof Error && error.message === '<CODE>'` to branch on CODE-form errors. For cause details, access `error.cause`.
+### Best practices
 
-4. **Check `error.cause`**: CODE-form errors attach `{ cause: underlyingError }` (ES2022 `Error.cause`) when a lower-level error is available.
-
-5. **Implement retry logic**: For network-related errors, use exponential back-off.
-
-6. **Provide user feedback**: Give users clear, actionable error messages based on the error type.
-
-7. **Monitor timeouts**: Use appropriate timeout values and inform users when operations take longer than expected.
+1. **Always handle `MM_SUBMIT_TX_FAILED`**. Critical — the spoke tx landed but the relay submission failed. Funds may be in flight; persist the user's input and retry.
+2. **Handle `MM_RELAY_TIMEOUT` gracefully**. The spoke tx succeeded; the relay just didn't deliver in time. Check on-chain status before retrying.
+3. **Discriminate `MM_RELAY_FAILED` via `context.relayCode`**. `'RELAY_POLLING_FAILED'` (polling outage — packet status unknown) needs different UX from generic `'UNKNOWN'`.
+4. **Use `error.cause` for forensics**. Every wrapped error preserves the original on `cause`. Loggers walk it automatically.
+5. **Use `JSON.stringify(error)` for logging**. The `toJSON()` method handles bigint coercion + cause-chain truncation safely.
+6. **Type-guard, don't `as`-cast**. Use `is<Op>Error(error)` to narrow; an `as <Op>Error` cast after a generic `isSodaxError` check would silently widen the contract.
 
 ## Data Retrieval and Formatting
 

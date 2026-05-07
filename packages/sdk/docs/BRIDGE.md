@@ -1,5 +1,7 @@
 # Bridge Documentation
 
+> **Error handling conventions:** This module uses the canonical `SodaxError<BridgeErrorCode>` shape (same family as the swap and money market modules). Discriminate on `result.error.code` (e.g. `'BRIDGE_RELAY_TIMEOUT'`, `'BRIDGE_INTENT_CREATION_FAILED'`); structured details live on `result.error.context` (`srcChainKey`, `dstChainKey`, `phase`, `relayCode`, `field`). See the **Error Handling** section below for the full per-method code table and migration notes from the legacy `error.message`-based pattern.
+
 The `BridgeService` class, reachable via `sodax.bridge`, orchestrates cross-chain token transfers within the SODAX hub-and-spoke architecture.
 
 Bridging works by depositing tokens into a spoke vault on the source chain, which triggers a cross-chain message relayed to the Sonic hub. The hub then performs vault transformations (deposit/withdraw) and forwards the tokens to the destination chain via the asset manager.
@@ -391,36 +393,135 @@ type PartnerFee = {
 
 ## Error Handling
 
-All async public methods return `Promise<Result<T>>`:
+The Bridge module's user-facing methods return `Promise<Result<T, SodaxError<NarrowCode>>>`. Discriminate on `result.error.code` (a string literal) — never on `result.error.message`. Same canonical shape used by swap and money market.
+
+### The canonical error: `SodaxError<C>`
+
+All bridge-module errors are instances of `SodaxError`, exported from `@sodax/sdk`:
 
 ```typescript
-type Result<T, E = Error | unknown> =
-  | { ok: true; value: T }
-  | { ok: false; error: E };
+import { SodaxError, isSodaxError } from '@sodax/sdk';
+
+class SodaxError<C extends string = string> extends Error {
+  readonly code: C;                         // string-literal discriminator
+  readonly cause?: unknown;                 // ES2022 cause chain
+  readonly context?: Record<string, unknown>;
+  toJSON(): { name, code, message, stack, context, cause };
+}
 ```
 
-No typed error discriminators (`BridgeError<Code>`, etc.) exist in v2. Branch on the error message or `.cause`:
+**Rules:**
+
+- Discriminate on `error.code` — never on `error.message` (which is human-readable, may change).
+- `error.cause` walks the underlying error chain (loggers like Sentry/Pino/Datadog walk this automatically).
+- `error.context` carries structured metadata: `srcChainKey`, `dstChainKey`, `phase`, plus per-code extras (`relayCode`, `field`).
+- `error.toJSON()` is the canonical logger surface; `JSON.stringify(error)` invokes it automatically and produces a logger-safe payload (bigints in `context` are coerced to strings, cause walked depth-3, no circular hazards).
+- Use `isBridgeError(e)` / `is<Op>Error(e)` from `@sodax/sdk` instead of `instanceof SodaxError` in dapp/app code (bundle-safe).
+
+### Per-method error code unions
+
+| Method | Codes |
+|---|---|
+| `bridge` | `BRIDGE_VALIDATION_FAILED`, `BRIDGE_INTENT_CREATION_FAILED`, `BRIDGE_VERIFY_FAILED`, `BRIDGE_SUBMIT_TX_FAILED`, `BRIDGE_RELAY_TIMEOUT`, `BRIDGE_RELAY_FAILED`, `BRIDGE_FAILED`, `BRIDGE_UNKNOWN` |
+| `createBridgeIntent` | `BRIDGE_VALIDATION_FAILED`, `BRIDGE_INTENT_CREATION_FAILED`, `BRIDGE_UNKNOWN` |
+| `approve` | `BRIDGE_VALIDATION_FAILED`, `BRIDGE_APPROVE_FAILED`, `BRIDGE_UNKNOWN` |
+| `isAllowanceValid` | `BRIDGE_VALIDATION_FAILED`, `BRIDGE_ALLOWANCE_CHECK_FAILED`, `BRIDGE_UNKNOWN` |
+| `getBridgeableAmount` | `BRIDGE_VALIDATION_FAILED`, `BRIDGE_GET_BRIDGEABLE_AMOUNT_FAILED`, `BRIDGE_UNKNOWN` |
+| `getBridgeableTokens` | `BRIDGE_VALIDATION_FAILED`, `BRIDGE_GET_BRIDGEABLE_TOKENS_FAILED`, `BRIDGE_UNKNOWN` |
+
+Each method's narrow type alias is exported (`BridgeOrchestrationError`, `CreateBridgeIntentError`, `BridgeApproveError`, `BridgeAllowanceCheckError`, `GetBridgeableAmountError`, `GetBridgeableTokensError`) along with a matching `is<Op>Error` type guard.
+
+### Standard `context` fields
 
 ```typescript
+{
+  srcChainKey?: SpokeChainKey;
+  dstChainKey?: SpokeChainKey;
+  phase?: 'validate' | 'intentCreation' | 'verify' | 'submit' | 'relay'
+        | 'approve' | 'allowanceCheck' | 'lookup';
+  relayCode?: 'SUBMIT_TX_FAILED' | 'RELAY_TIMEOUT' | 'RELAY_POLLING_FAILED' | 'UNKNOWN';
+  field?: string;     // on BRIDGE_VALIDATION_FAILED
+  reason?: string;
+}
+```
+
+### Discrimination example
+
+```typescript
+import { isBridgeOrchestrationError } from '@sodax/sdk';
+
+const result = await sodax.bridge.bridge({
+  params: { /* ... */ },
+  raw: false,
+  walletProvider: evmWalletProvider,
+});
+
 if (!result.ok) {
-  const error = result.error;
-  if (error instanceof Error) {
-    // CODE-form errors from catch blocks, e.g. 'CREATE_BRIDGE_INTENT_FAILED'
-    console.error('Code:', error.message);
-    // Underlying cause, if present
-    console.error('Cause:', error.cause);
+  // result.error is BridgeOrchestrationError = SodaxError<BridgeOrchestrationErrorCode>
+  switch (result.error.code) {
+    case 'BRIDGE_VALIDATION_FAILED':
+      // Bad input — error.message is human-readable; error.context.field tells you which.
+      console.error('Bad input:', result.error.message);
+      break;
+
+    case 'BRIDGE_INTENT_CREATION_FAILED':
+      // Spoke deposit failed.
+      console.error('Intent creation failed:', result.error.cause);
+      break;
+
+    case 'BRIDGE_VERIFY_FAILED':
+      // Spoke tx couldn't be verified on-chain.
+      break;
+
+    case 'BRIDGE_SUBMIT_TX_FAILED':
+      // CRITICAL: spoke tx landed but the relay submission failed. Funds may be in flight.
+      // Persist the input params and retry submission.
+      break;
+
+    case 'BRIDGE_RELAY_TIMEOUT':
+      // Relay packet didn't confirm in time. Check intent status and retry with longer timeout.
+      break;
+
+    case 'BRIDGE_RELAY_FAILED':
+      // Other relay failure. error.context.relayCode disambiguates:
+      //   'RELAY_POLLING_FAILED' — polling endpoint outage; query hub directly to confirm packet status.
+      //   'UNKNOWN' — forward-compat fallback for new relay error codes.
+      break;
+
+    case 'BRIDGE_FAILED':
+      // Catch-all for the bridge orchestration; cause has the original.
+      console.error('Bridge failed:', result.error.cause);
+      break;
+
+    case 'BRIDGE_UNKNOWN':
+      console.error('Unexpected:', result.error.cause);
+      break;
   }
 }
 ```
 
-Common error message codes (CODE form, from `catch` blocks):
-- `'RELAY_TIMEOUT'` — hub relay did not confirm within the timeout
-- `'HTTP_REQUEST_FAILED'` — a network call to the relay API failed
+### Migration from the legacy pattern
 
-Common prose errors (from precondition guards):
-- `'Amount must be greater than 0'`
-- `'Source asset is required'`
-- `'Approval only supported for EVM spoke chains and Stellar'`
+If you were on the previous CODE-on-`error.message` pattern (or the older `BridgeError<Code>` typed shape that the published docs at <https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/bridge#error-handling> document), here are the mappings:
+
+| Before | After |
+|---|---|
+| `error.message === 'RELAY_TIMEOUT'` | `error.code === 'BRIDGE_RELAY_TIMEOUT'` |
+| `error.message === 'SUBMIT_TX_FAILED'` | `error.code === 'BRIDGE_SUBMIT_TX_FAILED'` |
+| `error.message === 'CREATE_BRIDGE_INTENT_FAILED'` | `error.code === 'BRIDGE_INTENT_CREATION_FAILED'` |
+| `error.message === 'BRIDGE_FAILED'` | `error.code === 'BRIDGE_FAILED'` (now narrow-typed) |
+| `error.message === 'ALLOWANCE_CHECK_FAILED'` | `error.code === 'BRIDGE_ALLOWANCE_CHECK_FAILED'` |
+| `error.message === 'APPROVAL_FAILED'` | `error.code === 'BRIDGE_APPROVE_FAILED'` |
+| Prose `error.message` for invariants | `error.code === 'BRIDGE_VALIDATION_FAILED'`; the prose stays on `error.message` |
+
+### Best practices
+
+1. **Always handle `BRIDGE_SUBMIT_TX_FAILED`**. Critical — the spoke tx landed but the relay submission failed. Funds may be in flight; persist the user's input and retry.
+2. **Handle `BRIDGE_RELAY_TIMEOUT` gracefully**. The spoke tx succeeded; the relay just didn't deliver in time. Check on-chain status before retrying.
+3. **Discriminate `BRIDGE_RELAY_FAILED` via `context.relayCode`**. `'RELAY_POLLING_FAILED'` (polling outage — packet status unknown) needs different UX from generic `'UNKNOWN'`.
+4. **Use `error.cause` for forensics**. Every wrapped error preserves the original on `cause`. Loggers walk it automatically.
+5. **Use `JSON.stringify(error)` for logging**. The `toJSON()` method handles bigint coercion + cause-chain truncation safely.
+6. **Type-guard, don't `as`-cast**. Use `is<Op>Error(error)` to narrow; an `as <Op>Error` cast after a generic `isSodaxError` check would silently widen the contract.
 
 ## Usage Flow
 

@@ -2,7 +2,9 @@ import { type Address, type Hex, encodeFunctionData } from 'viem';
 import { erc20Abi } from '../shared/abis/index.js';
 import { encodeContractCalls, Erc20Service, EvmAssetManagerService, type HubProvider } from '../shared/index.js';
 import { icxSwapAbi } from '../shared/abis/icxSwap.abi.js';
-import invariant from 'tiny-invariant';
+import { invariant } from '../shared/utils/tiny-invariant.js';
+import { SodaxError } from '../errors/SodaxError.js';
+import { type MigrationLookupError, isMigrationLookupError } from './error-types.js';
 import {
   ChainKeys,
   type IconEoaAddress,
@@ -81,7 +83,7 @@ export class IcxMigrationService {
    * @returns The SODA balance (in wei) of the ICX migration contract, or an error result if
    *   the on-chain read fails.
    */
-  public async getAvailableAmount(): Promise<Result<bigint>> {
+  public async getAvailableAmount(): Promise<Result<bigint, MigrationLookupError>> {
     try {
       const value = await this.hubProvider.publicClient.readContract({
         address: this.hubProvider.chainConfig.addresses.sodaToken,
@@ -91,7 +93,15 @@ export class IcxMigrationService {
       });
       return { ok: true, value };
     } catch (error) {
-      return { ok: false, error };
+      if (isMigrationLookupError(error)) return { ok: false, error };
+      return {
+        ok: false,
+        error: new SodaxError(
+          'MIGRATION_LOOKUP_FAILED',
+          error instanceof Error ? error.message : 'getAvailableAmount failed',
+          { cause: error, context: { phase: 'lookup', method: 'getAvailableAmount' } },
+        ),
+      };
     }
   }
 

@@ -13,21 +13,19 @@
  *      per-test with `vi.spyOn(...).mockResolvedValueOnce(...)`.
  */
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
-import type {
-  Address,
-  IBitcoinWalletProvider,
-  IEvmWalletProvider,
-  ISolanaWalletProvider,
-  IStellarWalletProvider,
-  Result,
-  SpokeChainKey,
+import {
+  ChainKeys,
+  spokeChainConfig,
+  type Address,
+  type IBitcoinWalletProvider,
+  type IEvmWalletProvider,
+  type ISolanaWalletProvider,
+  type IStellarWalletProvider,
+  type Result,
+  type SpokeChainKey,
 } from '@sodax/types';
-// `@sodax/types` is consumed from `dist/` in vitest; in this branch the generated dist entry
-// is stale for some exports. Import ChainKeys / spokeChainConfig directly from source so the
-// SDK unit tests stay runnable.
-import { ChainKeys } from '../../../types/src/chains/chain-keys.js';
-import { spokeChainConfig } from '../../../types/src/chains/chains.js';
 import { Sodax } from '../shared/entities/Sodax.js';
+import { SodaxError } from '../errors/SodaxError.js';
 import { decodeFunctionData } from 'viem';
 import { poolAbi } from '../shared/abis/pool.abi.js';
 
@@ -350,13 +348,17 @@ describe('MoneyMarketService.estimateGas', () => {
     expect(spy).toHaveBeenCalledWith(params);
   });
 
-  it('forwards a failure Result unchanged', async () => {
-    const failure = { ok: false as const, error: new Error('GAS_FAILED') };
-    vi.spyOn(sodax.spoke, 'estimateGas').mockResolvedValueOnce(failure);
+  it('wraps a failure Result as MM_GAS_ESTIMATION_FAILED with cause', async () => {
+    const inner = new Error('GAS_FAILED');
+    vi.spyOn(sodax.spoke, 'estimateGas').mockResolvedValueOnce({ ok: false, error: inner });
 
     const result = await sodax.moneyMarket.estimateGas({ chainKey: ChainKeys.BSC_MAINNET } as never);
 
-    expect(result).toBe(failure);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('MM_GAS_ESTIMATION_FAILED');
+    expect(result.error.cause).toBe(inner);
+    expect(result.error.context?.phase).toBe('gasEstimation');
   });
 });
 
@@ -1305,7 +1307,7 @@ describe('MoneyMarketService.supply', () => {
       expect(result).toEqual({ ok: false, error: intentError });
     });
 
-    it('forwards a failure Result from spoke.verifyTxHash', async () => {
+    it('wraps a verifyTxHash failure as MM_VERIFY_FAILED with cause', async () => {
       vi.spyOn(sodax.moneyMarket, 'createSupplyIntent').mockResolvedValueOnce({
         ok: true,
         value: {
@@ -1322,10 +1324,15 @@ describe('MoneyMarketService.supply', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: verifyError });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.code).toBe('MM_VERIFY_FAILED');
+      expect(result.error.cause).toBe(verifyError);
+      expect(result.error.context?.phase).toBe('verify');
+      expect(result.error.context?.action).toBe('supply');
     });
 
-    it('forwards a failure Result from relayTxAndWaitPacket', async () => {
+    it('wraps a RELAY_TIMEOUT relay failure as MM_RELAY_TIMEOUT with relayCode + action context', async () => {
       vi.spyOn(sodax.moneyMarket, 'createSupplyIntent').mockResolvedValueOnce({
         ok: true,
         value: {
@@ -1343,7 +1350,12 @@ describe('MoneyMarketService.supply', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: relayError });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.code).toBe('MM_RELAY_TIMEOUT');
+      expect(result.error.cause).toBe(relayError);
+      expect(result.error.context?.relayCode).toBe('RELAY_TIMEOUT');
+      expect(result.error.context?.action).toBe('supply');
     });
 
     it('returns ok:false when createSupplyIntent throws (outer catch)', async () => {
@@ -1357,6 +1369,30 @@ describe('MoneyMarketService.supply', () => {
       });
 
       expect(result).toEqual({ ok: false, error: thrown });
+    });
+
+    it('wraps a SodaxError with a non-supply code as MM_SUPPLY_FAILED (typed contract preserved)', async () => {
+      // The narrow `isSupplyError` guard rejects codes outside SupplyErrorCode (e.g. an
+      // accidental SodaxError with a swap-prefixed code thrown from somewhere inside the
+      // supply orchestration). Without the guard's runtime check, an `as SupplyError` cast
+      // would silently leak the wrong-coded SodaxError through. The else-branch wraps it
+      // as MM_SUPPLY_FAILED with the original on cause — pinning that path here so a
+      // future regression that widens isSupplyError surfaces immediately.
+      const outOfUnion = new SodaxError('SWAP_RELAY_TIMEOUT' as never, 'foreign code');
+      vi.spyOn(sodax.moneyMarket, 'createSupplyIntent').mockRejectedValueOnce(outOfUnion);
+
+      const result = await sodax.moneyMarket.supply({
+        raw: false,
+        params: supplyParams(ChainKeys.BSC_MAINNET),
+        walletProvider: mockEvmProvider,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('MM_SUPPLY_FAILED');
+        expect(result.error.cause).toBe(outOfUnion);
+        expect(result.error.context?.action).toBe('supply');
+      }
     });
   });
 });
@@ -1699,7 +1735,7 @@ describe('MoneyMarketService.borrow', () => {
       expect(result).toEqual({ ok: false, error: intentError });
     });
 
-    it('forwards verifyTxHash failure', async () => {
+    it('wraps verifyTxHash failure as MM_VERIFY_FAILED with cause + action="borrow"', async () => {
       vi.spyOn(sodax.moneyMarket, 'createBorrowIntent').mockResolvedValueOnce({
         ok: true,
         value: {
@@ -1716,10 +1752,14 @@ describe('MoneyMarketService.borrow', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: verifyError });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.code).toBe('MM_VERIFY_FAILED');
+      expect(result.error.cause).toBe(verifyError);
+      expect(result.error.context?.action).toBe('borrow');
     });
 
-    it('forwards relayTxAndWaitPacket failure', async () => {
+    it('wraps RELAY_TIMEOUT as MM_RELAY_TIMEOUT with action="borrow"', async () => {
       vi.spyOn(sodax.moneyMarket, 'createBorrowIntent').mockResolvedValueOnce({
         ok: true,
         value: {
@@ -1737,7 +1777,11 @@ describe('MoneyMarketService.borrow', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: relayError });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.code).toBe('MM_RELAY_TIMEOUT');
+      expect(result.error.cause).toBe(relayError);
+      expect(result.error.context?.action).toBe('borrow');
     });
 
     it('returns ok:false when createBorrowIntent throws (outer catch)', async () => {
@@ -1751,6 +1795,24 @@ describe('MoneyMarketService.borrow', () => {
       });
 
       expect(result).toEqual({ ok: false, error: thrown });
+    });
+
+    it('wraps a SodaxError with a non-borrow code as MM_BORROW_FAILED', async () => {
+      const outOfUnion = new SodaxError('SWAP_VALIDATION_FAILED' as never, 'foreign code');
+      vi.spyOn(sodax.moneyMarket, 'createBorrowIntent').mockRejectedValueOnce(outOfUnion);
+
+      const result = await sodax.moneyMarket.borrow({
+        raw: false,
+        params: borrowParams(ChainKeys.BSC_MAINNET),
+        walletProvider: mockEvmProvider,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('MM_BORROW_FAILED');
+        expect(result.error.cause).toBe(outOfUnion);
+        expect(result.error.context?.action).toBe('borrow');
+      }
     });
   });
 });
@@ -2065,7 +2127,7 @@ describe('MoneyMarketService.withdraw', () => {
       expect(result).toEqual({ ok: false, error: intentError });
     });
 
-    it('forwards verifyTxHash failure', async () => {
+    it('wraps verifyTxHash failure as MM_VERIFY_FAILED with action="withdraw"', async () => {
       vi.spyOn(sodax.moneyMarket, 'createWithdrawIntent').mockResolvedValueOnce({
         ok: true,
         value: {
@@ -2082,10 +2144,14 @@ describe('MoneyMarketService.withdraw', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: verifyError });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.code).toBe('MM_VERIFY_FAILED');
+      expect(result.error.cause).toBe(verifyError);
+      expect(result.error.context?.action).toBe('withdraw');
     });
 
-    it('forwards relayTxAndWaitPacket failure', async () => {
+    it('wraps RELAY_TIMEOUT as MM_RELAY_TIMEOUT with action="withdraw"', async () => {
       vi.spyOn(sodax.moneyMarket, 'createWithdrawIntent').mockResolvedValueOnce({
         ok: true,
         value: {
@@ -2103,7 +2169,11 @@ describe('MoneyMarketService.withdraw', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: relayError });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.code).toBe('MM_RELAY_TIMEOUT');
+      expect(result.error.cause).toBe(relayError);
+      expect(result.error.context?.action).toBe('withdraw');
     });
 
     it('returns ok:false when createWithdrawIntent throws', async () => {
@@ -2117,6 +2187,24 @@ describe('MoneyMarketService.withdraw', () => {
       });
 
       expect(result).toEqual({ ok: false, error: thrown });
+    });
+
+    it('wraps a SodaxError with a non-withdraw code as MM_WITHDRAW_FAILED', async () => {
+      const outOfUnion = new SodaxError('MM_SUPPLY_FAILED' as never, 'wrong-op MM code');
+      vi.spyOn(sodax.moneyMarket, 'createWithdrawIntent').mockRejectedValueOnce(outOfUnion);
+
+      const result = await sodax.moneyMarket.withdraw({
+        raw: false,
+        params: withdrawParams(ChainKeys.BSC_MAINNET),
+        walletProvider: mockEvmProvider,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('MM_WITHDRAW_FAILED');
+        expect(result.error.cause).toBe(outOfUnion);
+        expect(result.error.context?.action).toBe('withdraw');
+      }
     });
   });
 });
@@ -2406,7 +2494,7 @@ describe('MoneyMarketService.repay', () => {
       expect(result).toEqual({ ok: false, error: intentError });
     });
 
-    it('forwards verifyTxHash failure', async () => {
+    it('wraps verifyTxHash failure as MM_VERIFY_FAILED with action="repay"', async () => {
       vi.spyOn(sodax.moneyMarket, 'createRepayIntent').mockResolvedValueOnce({
         ok: true,
         value: {
@@ -2423,10 +2511,14 @@ describe('MoneyMarketService.repay', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: verifyError });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.code).toBe('MM_VERIFY_FAILED');
+      expect(result.error.cause).toBe(verifyError);
+      expect(result.error.context?.action).toBe('repay');
     });
 
-    it('forwards relayTxAndWaitPacket failure', async () => {
+    it('wraps RELAY_TIMEOUT as MM_RELAY_TIMEOUT with action="repay"', async () => {
       vi.spyOn(sodax.moneyMarket, 'createRepayIntent').mockResolvedValueOnce({
         ok: true,
         value: {
@@ -2444,7 +2536,11 @@ describe('MoneyMarketService.repay', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: relayError });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.code).toBe('MM_RELAY_TIMEOUT');
+      expect(result.error.cause).toBe(relayError);
+      expect(result.error.context?.action).toBe('repay');
     });
 
     it('returns ok:false when createRepayIntent throws (outer catch)', async () => {
@@ -2458,6 +2554,24 @@ describe('MoneyMarketService.repay', () => {
       });
 
       expect(result).toEqual({ ok: false, error: thrown });
+    });
+
+    it('wraps a SodaxError with a non-repay code as MM_REPAY_FAILED', async () => {
+      const outOfUnion = new SodaxError('SOMEMODULE_FOO' as never, 'foreign code');
+      vi.spyOn(sodax.moneyMarket, 'createRepayIntent').mockRejectedValueOnce(outOfUnion);
+
+      const result = await sodax.moneyMarket.repay({
+        raw: false,
+        params: repayParams(ChainKeys.BSC_MAINNET),
+        walletProvider: mockEvmProvider,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('MM_REPAY_FAILED');
+        expect(result.error.cause).toBe(outOfUnion);
+        expect(result.error.context?.action).toBe('repay');
+      }
     });
   });
 });

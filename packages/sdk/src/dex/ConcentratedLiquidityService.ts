@@ -49,7 +49,7 @@ import {
   TickMath,
   tickToPrice,
 } from '@pancakeswap/v3-sdk';
-import invariant from 'tiny-invariant';
+import { invariant } from '../shared/utils/tiny-invariant.js';
 
 export type ClMintPositionEventLog = {
   tokenId: bigint;
