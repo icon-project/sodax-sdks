@@ -4,5 +4,4 @@ export * from './MoneyMarketDataService.js';
 export * from './LendingPoolService.js';
 export * from './UiPoolDataProviderService.js';
 export * from './math-utils/index.js';
-export * from './error-types.js';
-export * from './relay-error-mapping.js';
+export * from './errors.js';

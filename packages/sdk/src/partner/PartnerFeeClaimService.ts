@@ -3,6 +3,8 @@ import { invariant } from '../shared/utils/tiny-invariant.js';
 import { erc20Abi, encodeFunctionData, isAddress, type Address } from 'viem';
 import type { ConfigService } from '../shared/config/ConfigService.js';
 import type { HubProvider } from '../shared/types/types.js';
+import { SodaxError } from '../errors/SodaxError.js';
+import { lookupFailed } from '../errors/wrappers.js';
 import { SolverApiService } from '../swap/SolverApiService.js';
 import { ProtocolIntentsAbi } from '../shared/abis/protocolIntents.abi.js';
 import {
@@ -250,7 +252,7 @@ export class PartnerFeeClaimService {
     } catch (error) {
       return {
         ok: false,
-        error: new Error('FETCH_ASSETS_BALANCES_FAILED', { cause: error }),
+        error: lookupFailed('partner', 'fetchAssetsBalances', error),
       };
     }
   }
@@ -295,7 +297,7 @@ export class PartnerFeeClaimService {
     } catch (error) {
       return {
         ok: false,
-        error: new Error('GET_AUTO_SWAP_PREFERENCES_FAILED', { cause: error }),
+        error: lookupFailed('partner', 'getAutoSwapPreferences', error),
       };
     }
   }
@@ -419,7 +421,7 @@ export class PartnerFeeClaimService {
     } catch (error) {
       return {
         ok: false,
-        error: new Error('IS_TOKEN_APPROVED_FAILED', { cause: error }),
+        error: lookupFailed('partner', 'isTokenApproved', error),
       };
     }
   }
@@ -487,7 +489,7 @@ export class PartnerFeeClaimService {
     } catch (error) {
       return {
         ok: false,
-        error: new Error('APPROVE_TOKEN_FAILED', { cause: error }),
+        error: new SodaxError('APPROVE_FAILED', error instanceof Error ? error.message : 'approveToken failed', { feature: 'partner', cause: error, context: { phase: 'approve' } }),
       };
     }
   }
@@ -601,7 +603,7 @@ export class PartnerFeeClaimService {
         const receipt = await this.hubProvider.publicClient.waitForTransactionReceipt({ hash: txHash.value });
         intentTxHash = receipt.transactionHash;
       } catch (error) {
-        return { ok: false, error: new Error('WAIT_INTENT_AUTO_SWAP_FAILED', { cause: error }) };
+        return { ok: false, error: new SodaxError('EXECUTION_FAILED', error instanceof Error ? error.message : 'waitIntentAutoSwap failed', { feature: 'partner', cause: error, context: { action: 'waitAutoSwap', phase: 'execution' } }) };
       }
 
       const solverExecutionResponse = await SolverApiService.postExecution(

@@ -1,31 +1,19 @@
 import { encodeFunctionData, isAddress } from 'viem';
-import { SodaxError } from '../errors/SodaxError.js';
+import { mapRelayFailure } from '../errors/relay-error-mapping.js';
+import {  verifyFailed, intentCreationFailed, executionFailed, approveFailed, allowanceCheckFailed, gasEstimationFailed } from '../errors/wrappers.js';
 import {
   type MoneyMarketAllowanceCheckError,
   type MoneyMarketApproveError,
-  type BorrowError,
-  type CreateBorrowIntentError,
-  type CreateRepayIntentError,
-  type CreateSupplyIntentError,
-  type CreateWithdrawIntentError,
+  type MoneyMarketCreateIntentError,
   type MoneyMarketGasEstimationError,
-  type RepayError,
-  type SupplyError,
-  type WithdrawError,
+  type MoneyMarketOrchestrationError,
   isMoneyMarketAllowanceCheckError,
   isMoneyMarketApproveError,
-  isBorrowError,
-  isCreateBorrowIntentError,
-  isCreateRepayIntentError,
-  isCreateSupplyIntentError,
-  isCreateWithdrawIntentError,
+  isMoneyMarketCreateIntentError,
   isMoneyMarketGasEstimationError,
-  isRepayError,
-  isSupplyError,
-  isWithdrawError,
+  isMoneyMarketOrchestrationError,
   mmInvariant,
-} from './error-types.js';
-import { mapRelayFailureToMoneyMarketError } from './relay-error-mapping.js';
+} from './errors.js';
 import { poolAbi } from '../shared/abis/pool.abi.js';
 import {
   type SpokeService,
@@ -258,17 +246,13 @@ export class MoneyMarketService {
       if (result.ok) return result;
       return {
         ok: false,
-        error: new SodaxError('MM_GAS_ESTIMATION_FAILED',
-          result.error instanceof Error ? result.error.message : 'Gas estimation failed',
-          { cause: result.error, context: { phase: 'gasEstimation' } }),
+        error: gasEstimationFailed('moneyMarket', result.error),
       };
     } catch (error) {
       if (isMoneyMarketGasEstimationError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError('MM_GAS_ESTIMATION_FAILED',
-          error instanceof Error ? error.message : 'Gas estimation failed',
-          { cause: error, context: { phase: 'gasEstimation' } }),
+        error: gasEstimationFailed('moneyMarket', error),
       };
     }
   }
@@ -381,17 +365,13 @@ export class MoneyMarketService {
       if (inner.ok) return inner;
       return {
         ok: false,
-        error: new SodaxError('MM_ALLOWANCE_CHECK_FAILED',
-          inner.error instanceof Error ? inner.error.message : 'Allowance check failed',
-          { cause: inner.error, context: { ...baseCtx, phase: 'allowanceCheck' } }),
+        error: allowanceCheckFailed('moneyMarket', inner.error, baseCtx),
       };
     } catch (error) {
       if (isMoneyMarketAllowanceCheckError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError('MM_ALLOWANCE_CHECK_FAILED',
-          error instanceof Error ? error.message : 'Allowance check failed',
-          { cause: error, context: { ...baseCtx, phase: 'allowanceCheck' } }),
+        error: allowanceCheckFailed('moneyMarket', error, baseCtx),
       };
     }
   }
@@ -418,10 +398,7 @@ export class MoneyMarketService {
     const { params, walletProvider } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, action: params.action };
 
-    const wrapApproveFailure = (cause: unknown): MoneyMarketApproveError =>
-      new SodaxError('MM_APPROVE_FAILED',
-        cause instanceof Error ? cause.message : 'Approve failed',
-        { cause, context: { ...baseCtx, phase: 'approve' } });
+    const wrapApproveFailure = (cause: unknown) => approveFailed('moneyMarket', cause, baseCtx);
 
     try {
       mmInvariant(params.amount > 0n, 'Amount must be greater than 0', { ...baseCtx, field: 'amount' });
@@ -510,19 +487,10 @@ export class MoneyMarketService {
 
       // Reached only for chains that don't support approval (Solana, NEAR, etc.). Surface as
       // a validation failure rather than a generic Error so consumers can discriminate.
-      mmInvariant(
-        false,
-        'Approve only supported for hub (Sonic), EVM spokes, and Stellar',
-        { ...baseCtx, field: 'srcChainKey' },
-      );
-      // Belt-and-braces: `mmInvariant(false, ...)` always throws via its `asserts cond`
-      // signature, so this sentinel is unreachable today. It defends against a future
-      // maintainer dropping the `asserts cond` annotation on `mmInvariant` — without it,
-      // TypeScript would silently infer this method as returning `Promise<undefined>` and
-      // the public contract would be violated. The throw is not a SodaxError because the
-      // outer catch's `isMoneyMarketApproveError` short-circuit must NOT swallow it (we want the
-      // bug to surface loudly during testing).
-      throw new Error('unreachable: mmInvariant(false, ...) above must throw');
+      mmInvariant(false, 'Approve only supported for hub (Sonic), EVM spokes, and Stellar', {
+        ...baseCtx,
+        field: 'srcChainKey',
+      });
     } catch (error) {
       if (isMoneyMarketApproveError(error)) return { ok: false, error };
       return { ok: false, error: wrapApproveFailure(error) };
@@ -543,7 +511,7 @@ export class MoneyMarketService {
    */
   public async supply<K extends SpokeChainKey>(
     _params: MoneyMarketSupplyActionParams<K, false>,
-  ): Promise<Result<TxHashPair, SupplyError>> {
+  ): Promise<Result<TxHashPair, MoneyMarketOrchestrationError>> {
     const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;
     const srcChainKey = params.srcChainKey;
     const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'supply' as const };
@@ -557,10 +525,7 @@ export class MoneyMarketService {
       if (!verify.ok) {
         return {
           ok: false,
-          error: new SodaxError('MM_VERIFY_FAILED', 'Spoke transaction verification failed', {
-            cause: verify.error,
-            context: { ...baseCtx, phase: 'verify' },
-          }),
+          error: verifyFailed('moneyMarket', verify.error, baseCtx),
         };
       }
 
@@ -580,16 +545,14 @@ export class MoneyMarketService {
         timeout,
       });
 
-      if (!packet.ok) return { ok: false, error: mapRelayFailureToMoneyMarketError(packet.error, baseCtx) };
+      if (!packet.ok) return { ok: false, error: mapRelayFailure(packet.error, { feature: 'moneyMarket', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey, dstChainKey: baseCtx.dstChainKey }) };
 
       return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packet.value.dst_tx_hash } };
     } catch (error) {
-      if (isSupplyError(error)) return { ok: false, error };
+      if (isMoneyMarketOrchestrationError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError('MM_SUPPLY_FAILED',
-          error instanceof Error ? error.message : 'supply failed',
-          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } }),
+        error: executionFailed('moneyMarket', error, { ...baseCtx, phase: 'intentCreation' }),
       };
     }
   }
@@ -607,7 +570,7 @@ export class MoneyMarketService {
    */
   public async createSupplyIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: MoneyMarketSupplyActionParams<K, Raw>,
-  ): Promise<Result<IntentTxResult<K, Raw>, CreateSupplyIntentError>> {
+  ): Promise<Result<IntentTxResult<K, Raw>, MoneyMarketCreateIntentError>> {
     const { params, walletProvider } = _params;
     const srcChainKey = params.srcChainKey;
     const skipSimulation = _params.skipSimulation ?? false;
@@ -662,12 +625,10 @@ export class MoneyMarketService {
       );
 
       if (!txResult.ok) {
-        if (isCreateSupplyIntentError(txResult.error)) return { ok: false, error: txResult.error };
+        if (isMoneyMarketCreateIntentError(txResult.error)) return { ok: false, error: txResult.error };
         return {
           ok: false,
-          error: new SodaxError('MM_SUPPLY_INTENT_CREATION_FAILED',
-            txResult.error instanceof Error ? txResult.error.message : 'Spoke deposit failed',
-            { cause: txResult.error, context: { ...baseCtx, phase: 'intentCreation' } }),
+          error: intentCreationFailed('moneyMarket', txResult.error, baseCtx),
         };
       }
 
@@ -679,12 +640,10 @@ export class MoneyMarketService {
         },
       };
     } catch (error) {
-      if (isCreateSupplyIntentError(error)) return { ok: false, error };
+      if (isMoneyMarketCreateIntentError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError('MM_SUPPLY_INTENT_CREATION_FAILED',
-          error instanceof Error ? error.message : 'createSupplyIntent failed',
-          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } }),
+        error: intentCreationFailed('moneyMarket', error, baseCtx),
       };
     }
   }
@@ -706,7 +665,7 @@ export class MoneyMarketService {
    */
   public async borrow<K extends SpokeChainKey>(
     _params: MoneyMarketBorrowActionParams<K, false>,
-  ): Promise<Result<TxHashPair, BorrowError>> {
+  ): Promise<Result<TxHashPair, MoneyMarketOrchestrationError>> {
     const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;
     const srcChainKey = params.srcChainKey;
     const hubChainId = this.hubProvider.chainConfig.chain.key;
@@ -720,10 +679,7 @@ export class MoneyMarketService {
       if (!verify.ok) {
         return {
           ok: false,
-          error: new SodaxError('MM_VERIFY_FAILED', 'Spoke transaction verification failed', {
-            cause: verify.error,
-            context: { ...baseCtx, phase: 'verify' },
-          }),
+          error: verifyFailed('moneyMarket', verify.error, baseCtx),
         };
       }
 
@@ -748,16 +704,14 @@ export class MoneyMarketService {
         timeout,
       });
 
-      if (!packet.ok) return { ok: false, error: mapRelayFailureToMoneyMarketError(packet.error, baseCtx) };
+      if (!packet.ok) return { ok: false, error: mapRelayFailure(packet.error, { feature: 'moneyMarket', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey, dstChainKey: baseCtx.dstChainKey }) };
 
       return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packet.value.dst_tx_hash } };
     } catch (error) {
-      if (isBorrowError(error)) return { ok: false, error };
+      if (isMoneyMarketOrchestrationError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError('MM_BORROW_FAILED',
-          error instanceof Error ? error.message : 'borrow failed',
-          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } }),
+        error: executionFailed('moneyMarket', error, { ...baseCtx, phase: 'intentCreation' }),
       };
     }
   }
@@ -775,7 +729,7 @@ export class MoneyMarketService {
    */
   public async createBorrowIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: MoneyMarketBorrowActionParams<K, Raw>,
-  ): Promise<Result<IntentTxResult<K, Raw>, CreateBorrowIntentError>> {
+  ): Promise<Result<IntentTxResult<K, Raw>, MoneyMarketCreateIntentError>> {
     const { params, walletProvider } = _params;
     const srcChainKey = params.srcChainKey;
     const skipSimulation = _params.skipSimulation ?? false;
@@ -832,12 +786,10 @@ export class MoneyMarketService {
       const txResult = await this.spoke.sendMessage(sendMessageParams);
 
       if (!txResult.ok) {
-        if (isCreateBorrowIntentError(txResult.error)) return { ok: false, error: txResult.error };
+        if (isMoneyMarketCreateIntentError(txResult.error)) return { ok: false, error: txResult.error };
         return {
           ok: false,
-          error: new SodaxError('MM_BORROW_INTENT_CREATION_FAILED',
-            txResult.error instanceof Error ? txResult.error.message : 'Spoke sendMessage failed',
-            { cause: txResult.error, context: { ...baseCtx, phase: 'intentCreation' } }),
+          error: intentCreationFailed('moneyMarket', txResult.error, baseCtx),
         };
       }
 
@@ -849,12 +801,10 @@ export class MoneyMarketService {
         },
       };
     } catch (error) {
-      if (isCreateBorrowIntentError(error)) return { ok: false, error };
+      if (isMoneyMarketCreateIntentError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError('MM_BORROW_INTENT_CREATION_FAILED',
-          error instanceof Error ? error.message : 'createBorrowIntent failed',
-          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } }),
+        error: intentCreationFailed('moneyMarket', error, baseCtx),
       };
     }
   }
@@ -876,7 +826,7 @@ export class MoneyMarketService {
    */
   public async withdraw<K extends SpokeChainKey>(
     _params: MoneyMarketWithdrawActionParams<K, false>,
-  ): Promise<Result<TxHashPair, WithdrawError>> {
+  ): Promise<Result<TxHashPair, MoneyMarketOrchestrationError>> {
     const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;
     const srcChainKey = params.srcChainKey;
     const hubChainId = this.hubProvider.chainConfig.chain.key;
@@ -891,10 +841,7 @@ export class MoneyMarketService {
       if (!verify.ok) {
         return {
           ok: false,
-          error: new SodaxError('MM_VERIFY_FAILED', 'Spoke transaction verification failed', {
-            cause: verify.error,
-            context: { ...baseCtx, phase: 'verify' },
-          }),
+          error: verifyFailed('moneyMarket', verify.error, baseCtx),
         };
       }
 
@@ -921,16 +868,14 @@ export class MoneyMarketService {
         timeout,
       });
 
-      if (!packet.ok) return { ok: false, error: mapRelayFailureToMoneyMarketError(packet.error, baseCtx) };
+      if (!packet.ok) return { ok: false, error: mapRelayFailure(packet.error, { feature: 'moneyMarket', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey, dstChainKey: baseCtx.dstChainKey }) };
 
       return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packet.value.dst_tx_hash } };
     } catch (error) {
-      if (isWithdrawError(error)) return { ok: false, error };
+      if (isMoneyMarketOrchestrationError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError('MM_WITHDRAW_FAILED',
-          error instanceof Error ? error.message : 'withdraw failed',
-          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } }),
+        error: executionFailed('moneyMarket', error, { ...baseCtx, phase: 'intentCreation' }),
       };
     }
   }
@@ -948,7 +893,7 @@ export class MoneyMarketService {
    */
   public async createWithdrawIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: MoneyMarketWithdrawActionParams<K, Raw>,
-  ): Promise<Result<IntentTxResult<K, Raw>, CreateWithdrawIntentError>> {
+  ): Promise<Result<IntentTxResult<K, Raw>, MoneyMarketCreateIntentError>> {
     const { params, walletProvider } = _params;
     const srcChainKey = params.srcChainKey;
     const skipSimulation = _params.skipSimulation ?? false;
@@ -1007,12 +952,10 @@ export class MoneyMarketService {
       const txResult = await this.spoke.sendMessage(sendMessageParams);
 
       if (!txResult.ok) {
-        if (isCreateWithdrawIntentError(txResult.error)) return { ok: false, error: txResult.error };
+        if (isMoneyMarketCreateIntentError(txResult.error)) return { ok: false, error: txResult.error };
         return {
           ok: false,
-          error: new SodaxError('MM_WITHDRAW_INTENT_CREATION_FAILED',
-            txResult.error instanceof Error ? txResult.error.message : 'Spoke sendMessage failed',
-            { cause: txResult.error, context: { ...baseCtx, phase: 'intentCreation' } }),
+          error: intentCreationFailed('moneyMarket', txResult.error, baseCtx),
         };
       }
 
@@ -1024,12 +967,10 @@ export class MoneyMarketService {
         },
       };
     } catch (error) {
-      if (isCreateWithdrawIntentError(error)) return { ok: false, error };
+      if (isMoneyMarketCreateIntentError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError('MM_WITHDRAW_INTENT_CREATION_FAILED',
-          error instanceof Error ? error.message : 'createWithdrawIntent failed',
-          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } }),
+        error: intentCreationFailed('moneyMarket', error, baseCtx),
       };
     }
   }
@@ -1049,7 +990,7 @@ export class MoneyMarketService {
    */
   public async repay<K extends SpokeChainKey>(
     _params: MoneyMarketRepayActionParams<K, false>,
-  ): Promise<Result<TxHashPair, RepayError>> {
+  ): Promise<Result<TxHashPair, MoneyMarketOrchestrationError>> {
     const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;
     const srcChainKey = params.srcChainKey;
     const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'repay' as const };
@@ -1062,10 +1003,7 @@ export class MoneyMarketService {
       if (!verify.ok) {
         return {
           ok: false,
-          error: new SodaxError('MM_VERIFY_FAILED', 'Spoke transaction verification failed', {
-            cause: verify.error,
-            context: { ...baseCtx, phase: 'verify' },
-          }),
+          error: verifyFailed('moneyMarket', verify.error, baseCtx),
         };
       }
 
@@ -1085,16 +1023,14 @@ export class MoneyMarketService {
         timeout,
       });
 
-      if (!packet.ok) return { ok: false, error: mapRelayFailureToMoneyMarketError(packet.error, baseCtx) };
+      if (!packet.ok) return { ok: false, error: mapRelayFailure(packet.error, { feature: 'moneyMarket', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey, dstChainKey: baseCtx.dstChainKey }) };
 
       return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packet.value.dst_tx_hash } };
     } catch (error) {
-      if (isRepayError(error)) return { ok: false, error };
+      if (isMoneyMarketOrchestrationError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError('MM_REPAY_FAILED',
-          error instanceof Error ? error.message : 'repay failed',
-          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } }),
+        error: executionFailed('moneyMarket', error, { ...baseCtx, phase: 'intentCreation' }),
       };
     }
   }
@@ -1112,7 +1048,7 @@ export class MoneyMarketService {
    */
   public async createRepayIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: MoneyMarketRepayActionParams<K, Raw>,
-  ): Promise<Result<IntentTxResult<K, Raw>, CreateRepayIntentError>> {
+  ): Promise<Result<IntentTxResult<K, Raw>, MoneyMarketCreateIntentError>> {
     const { params, walletProvider } = _params;
     const srcChainKey = params.srcChainKey;
     const skipSimulation = _params.skipSimulation ?? false;
@@ -1167,12 +1103,10 @@ export class MoneyMarketService {
       );
 
       if (!txResult.ok) {
-        if (isCreateRepayIntentError(txResult.error)) return { ok: false, error: txResult.error };
+        if (isMoneyMarketCreateIntentError(txResult.error)) return { ok: false, error: txResult.error };
         return {
           ok: false,
-          error: new SodaxError('MM_REPAY_INTENT_CREATION_FAILED',
-            txResult.error instanceof Error ? txResult.error.message : 'Spoke deposit failed',
-            { cause: txResult.error, context: { ...baseCtx, phase: 'intentCreation' } }),
+          error: intentCreationFailed('moneyMarket', txResult.error, baseCtx),
         };
       }
 
@@ -1184,12 +1118,10 @@ export class MoneyMarketService {
         },
       };
     } catch (error) {
-      if (isCreateRepayIntentError(error)) return { ok: false, error };
+      if (isMoneyMarketCreateIntentError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError('MM_REPAY_INTENT_CREATION_FAILED',
-          error instanceof Error ? error.message : 'createRepayIntent failed',
-          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } }),
+        error: intentCreationFailed('moneyMarket', error, baseCtx),
       };
     }
   }

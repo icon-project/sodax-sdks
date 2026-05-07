@@ -1,6 +1,6 @@
 # Bridge Documentation
 
-> **Error handling conventions:** This module uses the canonical `SodaxError<BridgeErrorCode>` shape (same family as the swap and money market modules). Discriminate on `result.error.code` (e.g. `'BRIDGE_RELAY_TIMEOUT'`, `'BRIDGE_INTENT_CREATION_FAILED'`); structured details live on `result.error.context` (`srcChainKey`, `dstChainKey`, `phase`, `relayCode`, `field`). See the **Error Handling** section below for the full per-method code table and migration notes from the legacy `error.message`-based pattern.
+> **Error handling conventions:** This module uses the canonical `SodaxError<BridgeErrorCode>` shape (same family as the swap and money market modules). Discriminate on `result.error.code` (e.g. `'RELAY_TIMEOUT'`, `'INTENT_CREATION_FAILED'`); structured details live on `result.error.context` (`srcChainKey`, `dstChainKey`, `phase`, `relayCode`, `field`). See the **Error Handling** section below for the full per-method code table and migration notes from the legacy `error.message`-based pattern.
 
 The `BridgeService` class, reachable via `sodax.bridge`, orchestrates cross-chain token transfers within the SODAX hub-and-spoke architecture.
 
@@ -422,12 +422,12 @@ class SodaxError<C extends string = string> extends Error {
 
 | Method | Codes |
 |---|---|
-| `bridge` | `BRIDGE_VALIDATION_FAILED`, `BRIDGE_INTENT_CREATION_FAILED`, `BRIDGE_VERIFY_FAILED`, `BRIDGE_SUBMIT_TX_FAILED`, `BRIDGE_RELAY_TIMEOUT`, `BRIDGE_RELAY_FAILED`, `BRIDGE_FAILED`, `BRIDGE_UNKNOWN` |
-| `createBridgeIntent` | `BRIDGE_VALIDATION_FAILED`, `BRIDGE_INTENT_CREATION_FAILED`, `BRIDGE_UNKNOWN` |
-| `approve` | `BRIDGE_VALIDATION_FAILED`, `BRIDGE_APPROVE_FAILED`, `BRIDGE_UNKNOWN` |
-| `isAllowanceValid` | `BRIDGE_VALIDATION_FAILED`, `BRIDGE_ALLOWANCE_CHECK_FAILED`, `BRIDGE_UNKNOWN` |
-| `getBridgeableAmount` | `BRIDGE_VALIDATION_FAILED`, `BRIDGE_GET_BRIDGEABLE_AMOUNT_FAILED`, `BRIDGE_UNKNOWN` |
-| `getBridgeableTokens` | `BRIDGE_VALIDATION_FAILED`, `BRIDGE_GET_BRIDGEABLE_TOKENS_FAILED`, `BRIDGE_UNKNOWN` |
+| `bridge` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `UNKNOWN` |
+| `createBridgeIntent` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
+| `approve` | `VALIDATION_FAILED`, `APPROVE_FAILED`, `UNKNOWN` |
+| `isAllowanceValid` | `VALIDATION_FAILED`, `ALLOWANCE_CHECK_FAILED`, `UNKNOWN` |
+| `getBridgeableAmount` | `VALIDATION_FAILED`, `LOOKUP_FAILED`, `UNKNOWN` |
+| `getBridgeableTokens` | `VALIDATION_FAILED`, `LOOKUP_FAILED`, `UNKNOWN` |
 
 Each method's narrow type alias is exported (`BridgeOrchestrationError`, `CreateBridgeIntentError`, `BridgeApproveError`, `BridgeAllowanceCheckError`, `GetBridgeableAmountError`, `GetBridgeableTokensError`) along with a matching `is<Op>Error` type guard.
 
@@ -440,7 +440,7 @@ Each method's narrow type alias is exported (`BridgeOrchestrationError`, `Create
   phase?: 'validate' | 'intentCreation' | 'verify' | 'submit' | 'relay'
         | 'approve' | 'allowanceCheck' | 'lookup';
   relayCode?: 'SUBMIT_TX_FAILED' | 'RELAY_TIMEOUT' | 'RELAY_POLLING_FAILED' | 'UNKNOWN';
-  field?: string;     // on BRIDGE_VALIDATION_FAILED
+  field?: string;     // on VALIDATION_FAILED
   reason?: string;
 }
 ```
@@ -459,41 +459,41 @@ const result = await sodax.bridge.bridge({
 if (!result.ok) {
   // result.error is BridgeOrchestrationError = SodaxError<BridgeOrchestrationErrorCode>
   switch (result.error.code) {
-    case 'BRIDGE_VALIDATION_FAILED':
+    case 'VALIDATION_FAILED':
       // Bad input — error.message is human-readable; error.context.field tells you which.
       console.error('Bad input:', result.error.message);
       break;
 
-    case 'BRIDGE_INTENT_CREATION_FAILED':
+    case 'INTENT_CREATION_FAILED':
       // Spoke deposit failed.
       console.error('Intent creation failed:', result.error.cause);
       break;
 
-    case 'BRIDGE_VERIFY_FAILED':
+    case 'TX_VERIFICATION_FAILED':
       // Spoke tx couldn't be verified on-chain.
       break;
 
-    case 'BRIDGE_SUBMIT_TX_FAILED':
+    case 'TX_SUBMIT_FAILED':
       // CRITICAL: spoke tx landed but the relay submission failed. Funds may be in flight.
       // Persist the input params and retry submission.
       break;
 
-    case 'BRIDGE_RELAY_TIMEOUT':
+    case 'RELAY_TIMEOUT':
       // Relay packet didn't confirm in time. Check intent status and retry with longer timeout.
       break;
 
-    case 'BRIDGE_RELAY_FAILED':
+    case 'RELAY_FAILED':
       // Other relay failure. error.context.relayCode disambiguates:
       //   'RELAY_POLLING_FAILED' — polling endpoint outage; query hub directly to confirm packet status.
       //   'UNKNOWN' — forward-compat fallback for new relay error codes.
       break;
 
-    case 'BRIDGE_FAILED':
+    case 'EXECUTION_FAILED':
       // Catch-all for the bridge orchestration; cause has the original.
       console.error('Bridge failed:', result.error.cause);
       break;
 
-    case 'BRIDGE_UNKNOWN':
+    case 'UNKNOWN':
       console.error('Unexpected:', result.error.cause);
       break;
   }
@@ -506,19 +506,19 @@ If you were on the previous CODE-on-`error.message` pattern (or the older `Bridg
 
 | Before | After |
 |---|---|
-| `error.message === 'RELAY_TIMEOUT'` | `error.code === 'BRIDGE_RELAY_TIMEOUT'` |
-| `error.message === 'SUBMIT_TX_FAILED'` | `error.code === 'BRIDGE_SUBMIT_TX_FAILED'` |
-| `error.message === 'CREATE_BRIDGE_INTENT_FAILED'` | `error.code === 'BRIDGE_INTENT_CREATION_FAILED'` |
-| `error.message === 'BRIDGE_FAILED'` | `error.code === 'BRIDGE_FAILED'` (now narrow-typed) |
-| `error.message === 'ALLOWANCE_CHECK_FAILED'` | `error.code === 'BRIDGE_ALLOWANCE_CHECK_FAILED'` |
-| `error.message === 'APPROVAL_FAILED'` | `error.code === 'BRIDGE_APPROVE_FAILED'` |
-| Prose `error.message` for invariants | `error.code === 'BRIDGE_VALIDATION_FAILED'`; the prose stays on `error.message` |
+| `error.message === 'RELAY_TIMEOUT'` | `error.code === 'RELAY_TIMEOUT'` |
+| `error.message === 'SUBMIT_TX_FAILED'` | `error.code === 'TX_SUBMIT_FAILED'` |
+| `error.message === 'CREATE_BRIDGE_INTENT_FAILED'` | `error.code === 'INTENT_CREATION_FAILED'` |
+| `error.message === 'EXECUTION_FAILED'` | `error.code === 'EXECUTION_FAILED'` (now narrow-typed) |
+| `error.message === 'ALLOWANCE_CHECK_FAILED'` | `error.code === 'ALLOWANCE_CHECK_FAILED'` |
+| `error.message === 'APPROVAL_FAILED'` | `error.code === 'APPROVE_FAILED'` |
+| Prose `error.message` for invariants | `error.code === 'VALIDATION_FAILED'`; the prose stays on `error.message` |
 
 ### Best practices
 
-1. **Always handle `BRIDGE_SUBMIT_TX_FAILED`**. Critical — the spoke tx landed but the relay submission failed. Funds may be in flight; persist the user's input and retry.
-2. **Handle `BRIDGE_RELAY_TIMEOUT` gracefully**. The spoke tx succeeded; the relay just didn't deliver in time. Check on-chain status before retrying.
-3. **Discriminate `BRIDGE_RELAY_FAILED` via `context.relayCode`**. `'RELAY_POLLING_FAILED'` (polling outage — packet status unknown) needs different UX from generic `'UNKNOWN'`.
+1. **Always handle `TX_SUBMIT_FAILED`**. Critical — the spoke tx landed but the relay submission failed. Funds may be in flight; persist the user's input and retry.
+2. **Handle `RELAY_TIMEOUT` gracefully**. The spoke tx succeeded; the relay just didn't deliver in time. Check on-chain status before retrying.
+3. **Discriminate `RELAY_FAILED` via `context.relayCode`**. `'RELAY_POLLING_FAILED'` (polling outage — packet status unknown) needs different UX from generic `'UNKNOWN'`.
 4. **Use `error.cause` for forensics**. Every wrapped error preserves the original on `cause`. Loggers walk it automatically.
 5. **Use `JSON.stringify(error)` for logging**. The `toJSON()` method handles bigint coercion + cause-chain truncation safely.
 6. **Type-guard, don't `as`-cast**. Use `is<Op>Error(error)` to narrow; an `as <Op>Error` cast after a generic `isSodaxError` check would silently widen the contract.

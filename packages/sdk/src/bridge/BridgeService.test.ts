@@ -82,12 +82,12 @@ afterEach(() => {
 });
 
 describe('BridgeService.bridge — integration error-path coverage', () => {
-  it('propagates a CreateBridgeIntentError from createBridgeIntent (subset narrowing)', async () => {
+  it('propagates a BridgeCreateIntentError from createBridgeIntent (subset narrowing)', async () => {
     // `bridge()` first calls `createBridgeIntent`. When that returns `{ ok: false, error }`,
     // the error code should be in CreateBridgeIntentErrorCode (a subset of
     // BridgeOrchestrationErrorCode), so `bridge()` returns the same SodaxError unchanged —
     // no extra wrap, no code rewrite.
-    const intentError = new SodaxError('BRIDGE_INTENT_CREATION_FAILED', 'spoke deposit reverted', {
+    const intentError = new SodaxError('INTENT_CREATION_FAILED', 'spoke deposit reverted', {
       context: { srcChainKey: BSC, phase: 'intentCreation' },
     });
     vi.spyOn(sodax.bridge, 'createBridgeIntent').mockResolvedValueOnce({ ok: false, error: intentError });
@@ -98,7 +98,7 @@ describe('BridgeService.bridge — integration error-path coverage', () => {
     if (result.ok) return;
     // Identity check — the SodaxError must be the *same* instance, not a re-wrapped clone.
     expect(result.error).toBe(intentError);
-    expect(result.error.code).toBe('BRIDGE_INTENT_CREATION_FAILED');
+    expect(result.error.code).toBe('INTENT_CREATION_FAILED');
     // verifyTxHash and relayTxAndWaitPacket must not have been called.
     expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
   });
@@ -121,7 +121,7 @@ describe('BridgeService.bridge — integration error-path coverage', () => {
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.code).toBe('BRIDGE_VERIFY_FAILED');
+    expect(result.error.code).toBe('TX_VERIFICATION_FAILED');
     // Identity check on cause — the original error is reachable for forensics.
     expect(result.error.cause).toBe(verifyError);
     expect(result.error.context?.phase).toBe('verify');
@@ -152,7 +152,7 @@ describe('BridgeService.bridge — integration error-path coverage', () => {
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.code).toBe('BRIDGE_RELAY_TIMEOUT');
+    expect(result.error.code).toBe('RELAY_TIMEOUT');
     // Identity check on cause — the original Error is reachable for forensics.
     expect(result.error.cause).toBe(relayError);
     expect(result.error.context?.relayCode).toBe('RELAY_TIMEOUT');
@@ -168,14 +168,14 @@ describe('BridgeService.bridge — integration error-path coverage', () => {
     // pinning that path here so a future regression that widens isBridgeOrchestrationError
     // (or accidentally narrows the catch behavior) surfaces immediately. Mirrors the 4 MM
     // out-of-union wrap-tests added in the previous review.
-    const outOfUnion = new SodaxError('SWAP_RELAY_TIMEOUT' as never, 'foreign code thrown into bridge');
+    const outOfUnion = new SodaxError('SWAP_RELAY_TIMEOUT' as never, 'foreign code thrown into bridge', { feature: 'bridge' });
     vi.spyOn(sodax.bridge, 'createBridgeIntent').mockRejectedValueOnce(outOfUnion);
 
     const result = await sodax.bridge.bridge(bridgeInput(BSC, ARBITRUM));
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.code).toBe('BRIDGE_FAILED');
+    expect(result.error.code).toBe('EXECUTION_FAILED');
     expect(result.error.cause).toBe(outOfUnion);
     expect(result.error.context?.srcChainKey).toBe(BSC);
     expect(result.error.context?.dstChainKey).toBe(ARBITRUM);

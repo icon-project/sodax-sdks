@@ -1,6 +1,6 @@
 # Money Market
 
-> **Error handling conventions:** This module uses the canonical `SodaxError<MoneyMarketErrorCode>` shape (same family as the swap module). Discriminate on `result.error.code` (e.g. `'MM_RELAY_TIMEOUT'`, `'MM_SUPPLY_FAILED'`); structured details live on `result.error.context` (`action`, `phase`, `relayCode`, `field`). See the **Error Handling** section below for the full per-method code table and migration notes from the legacy `error.message`-based pattern.
+> **Error handling conventions:** This module uses the canonical `SodaxError<MoneyMarketErrorCode>` shape (same family as the swap module). Discriminate on `result.error.code` (e.g. `'RELAY_TIMEOUT'`, `'EXECUTION_FAILED'`); structured details live on `result.error.context` (`action`, `phase`, `relayCode`, `field`). See the **Error Handling** section below for the full per-method code table and migration notes from the legacy `error.message`-based pattern.
 
 Money Market part of SDK provides abstractions to assist you with interacting with the cross-chain Money Market Smart Contracts.
 
@@ -589,15 +589,15 @@ class SodaxError<C extends string = string> extends Error {
 
 | Method | Codes |
 |---|---|
-| `supply` | `MM_VALIDATION_FAILED`, `MM_SUPPLY_INTENT_CREATION_FAILED`, `MM_VERIFY_FAILED`, `MM_SUBMIT_TX_FAILED`, `MM_RELAY_TIMEOUT`, `MM_RELAY_FAILED`, `MM_SUPPLY_FAILED`, `MM_UNKNOWN` |
-| `borrow` | same shape, `MM_BORROW_*` codes |
-| `withdraw` | same shape, `MM_WITHDRAW_*` codes |
-| `repay` | same shape, `MM_REPAY_*` codes |
-| `createSupplyIntent` | `MM_VALIDATION_FAILED`, `MM_SUPPLY_INTENT_CREATION_FAILED`, `MM_UNKNOWN` |
+| `supply` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `UNKNOWN` |
+| `borrow` | same shape, `OrchestrationErrorCode` with `context.action: 'borrow'` |
+| `withdraw` | same shape, `OrchestrationErrorCode` with `context.action: 'withdraw'` |
+| `repay` | same shape, `OrchestrationErrorCode` with `context.action: 'repay'` |
+| `createSupplyIntent` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
 | `createBorrowIntent` / `createWithdrawIntent` / `createRepayIntent` | same, per-op intent-creation code |
-| `approve` | `MM_VALIDATION_FAILED`, `MM_APPROVE_FAILED`, `MM_UNKNOWN` |
-| `isAllowanceValid` | `MM_VALIDATION_FAILED`, `MM_ALLOWANCE_CHECK_FAILED`, `MM_UNKNOWN` |
-| `estimateGas` | `MM_VALIDATION_FAILED`, `MM_GAS_ESTIMATION_FAILED`, `MM_UNKNOWN` |
+| `approve` | `VALIDATION_FAILED`, `APPROVE_FAILED`, `UNKNOWN` |
+| `isAllowanceValid` | `VALIDATION_FAILED`, `ALLOWANCE_CHECK_FAILED`, `UNKNOWN` |
+| `estimateGas` | `VALIDATION_FAILED`, `GAS_ESTIMATION_FAILED`, `UNKNOWN` |
 
 Each method's narrow type alias is exported (`SupplyError`, `BorrowError`, `CreateSupplyIntentError`, etc.) along with a matching `is<Op>Error` type guard.
 
@@ -611,7 +611,7 @@ Each method's narrow type alias is exported (`SupplyError`, `BorrowError`, `Crea
   phase?: 'validate' | 'intentCreation' | 'verify' | 'submit' | 'relay' |
           'approve' | 'allowanceCheck' | 'gasEstimation';
   relayCode?: 'SUBMIT_TX_FAILED' | 'RELAY_TIMEOUT' | 'RELAY_POLLING_FAILED' | 'UNKNOWN';
-  field?: string;     // on MM_VALIDATION_FAILED
+  field?: string;     // on VALIDATION_FAILED
   reason?: string;
 }
 ```
@@ -629,42 +629,42 @@ const result = await sodax.moneyMarket.supply({
 if (!result.ok) {
   // result.error is SupplyError = SodaxError<SupplyErrorCode>
   switch (result.error.code) {
-    case 'MM_VALIDATION_FAILED':
+    case 'VALIDATION_FAILED':
       // Bad input — error.message is human-readable; error.context.field tells you which.
       console.error('Bad input:', result.error.message);
       break;
 
-    case 'MM_SUPPLY_INTENT_CREATION_FAILED':
+    case 'INTENT_CREATION_FAILED':
       // Spoke deposit failed.
       console.error('Intent creation failed:', result.error.cause);
       break;
 
-    case 'MM_VERIFY_FAILED':
+    case 'TX_VERIFICATION_FAILED':
       // Spoke tx couldn't be verified on-chain.
       break;
 
-    case 'MM_SUBMIT_TX_FAILED':
+    case 'TX_SUBMIT_FAILED':
       // CRITICAL: spoke tx landed but the relay submission failed. Funds may be in flight.
       // Persist the original supply params (or just the spoke tx hash) and retry submission.
       console.error('Relay submit failed; retry needed:', result.error.context?.relayCode);
       break;
 
-    case 'MM_RELAY_TIMEOUT':
+    case 'RELAY_TIMEOUT':
       // Relay packet didn't confirm in time. Check intent status and retry with longer timeout.
       break;
 
-    case 'MM_RELAY_FAILED':
+    case 'RELAY_FAILED':
       // Other relay failure. error.context.relayCode disambiguates:
       //   'RELAY_POLLING_FAILED' — polling endpoint outage; query hub directly to confirm packet status.
       //   'UNKNOWN' — forward-compat fallback for new relay error codes.
       break;
 
-    case 'MM_SUPPLY_FAILED':
+    case 'EXECUTION_FAILED':
       // Catch-all for the supply orchestration; cause has the original.
       console.error('Supply failed:', result.error.cause);
       break;
 
-    case 'MM_UNKNOWN':
+    case 'UNKNOWN':
       console.error('Unexpected:', result.error.cause);
       break;
   }
@@ -683,13 +683,13 @@ const r = await sodax.moneyMarket.createSupplyIntent({
 
 if (!r.ok) {
   switch (r.error.code) {
-    case 'MM_VALIDATION_FAILED':
+    case 'VALIDATION_FAILED':
       // Input validation: bad amount, unsupported token, wrong wallet provider type.
       break;
-    case 'MM_SUPPLY_INTENT_CREATION_FAILED':
+    case 'INTENT_CREATION_FAILED':
       // Spoke deposit failed (insufficient balance, network issues, simulation revert).
       break;
-    case 'MM_UNKNOWN':
+    case 'UNKNOWN':
       break;
   }
 }
@@ -699,13 +699,13 @@ if (!r.ok) {
 
 ```typescript
 const a = await sodax.moneyMarket.isAllowanceValid({ params: supplyParams });
-if (!a.ok && a.error.code === 'MM_ALLOWANCE_CHECK_FAILED') {
+if (!a.ok && a.error.code === 'ALLOWANCE_CHECK_FAILED') {
   // Network / RPC issue; surface to user, retry.
 }
 
 if (a.ok && !a.value) {
   const ap = await sodax.moneyMarket.approve({ params: supplyParams, walletProvider: evmWalletProvider });
-  if (!ap.ok && ap.error.code === 'MM_APPROVE_FAILED') {
+  if (!ap.ok && ap.error.code === 'APPROVE_FAILED') {
     // Approval transaction failed.
   }
 }
@@ -717,20 +717,20 @@ If you were on the previous CODE-string-on-`error.message` pattern (or the older
 
 | Before | After |
 |---|---|
-| `error.message === 'SUBMIT_TX_FAILED'` | `error.code === 'MM_SUBMIT_TX_FAILED'` |
-| `error.message === 'RELAY_TIMEOUT'` | `error.code === 'MM_RELAY_TIMEOUT'` |
-| `error.message === 'CREATE_SUPPLY_INTENT_FAILED'` | `error.code === 'MM_SUPPLY_INTENT_CREATION_FAILED'` |
-| `error.message === 'CREATE_BORROW_INTENT_FAILED'` etc. | `error.code === 'MM_BORROW_INTENT_CREATION_FAILED'` etc. |
-| `error.message === 'SUPPLY_UNKNOWN_ERROR'` etc. | `error.code === 'MM_SUPPLY_FAILED'` etc. (with cause) |
-| `isMoneyMarketSubmitTxFailedError(e)` | `e.code === 'MM_SUBMIT_TX_FAILED'` (after `isSupplyError(e)` etc.) |
-| Prose `error.message` for invariants | `error.code === 'MM_VALIDATION_FAILED'`; the prose stays on `error.message` |
+| `error.message === 'SUBMIT_TX_FAILED'` | `error.code === 'TX_SUBMIT_FAILED'` |
+| `error.message === 'RELAY_TIMEOUT'` | `error.code === 'RELAY_TIMEOUT'` |
+| `error.message === 'CREATE_SUPPLY_INTENT_FAILED'` | `error.code === 'INTENT_CREATION_FAILED'` |
+| `error.message === 'CREATE_BORROW_INTENT_FAILED'` etc. | `error.code === 'INTENT_CREATION_FAILED'` etc. |
+| `error.message === 'SUPPLY_UNKNOWN_ERROR'` etc. | `error.code === 'EXECUTION_FAILED'` etc. (with cause) |
+| `isMoneyMarketSubmitTxFailedError(e)` | `e.code === 'TX_SUBMIT_FAILED'` (after `isSupplyError(e)` etc.) |
+| Prose `error.message` for invariants | `error.code === 'VALIDATION_FAILED'`; the prose stays on `error.message` |
 | `error.data.payload` (historical) | **Not preserved.** Capture input params before calling if you need them for retry; this is the one departure from the historical published guidance. |
 
 ### Best practices
 
-1. **Always handle `MM_SUBMIT_TX_FAILED`**. Critical — the spoke tx landed but the relay submission failed. Funds may be in flight; persist the user's input and retry.
-2. **Handle `MM_RELAY_TIMEOUT` gracefully**. The spoke tx succeeded; the relay just didn't deliver in time. Check on-chain status before retrying.
-3. **Discriminate `MM_RELAY_FAILED` via `context.relayCode`**. `'RELAY_POLLING_FAILED'` (polling outage — packet status unknown) needs different UX from generic `'UNKNOWN'`.
+1. **Always handle `TX_SUBMIT_FAILED`**. Critical — the spoke tx landed but the relay submission failed. Funds may be in flight; persist the user's input and retry.
+2. **Handle `RELAY_TIMEOUT` gracefully**. The spoke tx succeeded; the relay just didn't deliver in time. Check on-chain status before retrying.
+3. **Discriminate `RELAY_FAILED` via `context.relayCode`**. `'RELAY_POLLING_FAILED'` (polling outage — packet status unknown) needs different UX from generic `'UNKNOWN'`.
 4. **Use `error.cause` for forensics**. Every wrapped error preserves the original on `cause`. Loggers walk it automatically.
 5. **Use `JSON.stringify(error)` for logging**. The `toJSON()` method handles bigint coercion + cause-chain truncation safely.
 6. **Type-guard, don't `as`-cast**. Use `is<Op>Error(error)` to narrow; an `as <Op>Error` cast after a generic `isSodaxError` check would silently widen the contract.

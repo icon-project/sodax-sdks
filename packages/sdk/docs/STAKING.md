@@ -811,14 +811,14 @@ const result = await sodax.staking.stake({ /* params */ });
 if (!result.ok) {
   // result.error is typed as `StakeError = SodaxError<StakeErrorCode>`
   switch (result.error.code) {
-    case 'STAKING_VALIDATION_FAILED':       // precondition tripped (see context.field)
-    case 'STAKING_STAKE_INTENT_CREATION_FAILED':
-    case 'STAKING_VERIFY_FAILED':           // spoke tx not verifiable on-chain
-    case 'STAKING_SUBMIT_TX_FAILED':        // relay submit failed
-    case 'STAKING_RELAY_TIMEOUT':           // relay packet did not arrive within timeout
-    case 'STAKING_RELAY_FAILED':            // relay polling failure / unknown relay error
-    case 'STAKING_STAKE_FAILED':            // generic catch-all (see error.cause)
-    case 'STAKING_UNKNOWN':
+    case 'VALIDATION_FAILED':       // precondition tripped (see context.field)
+    case 'INTENT_CREATION_FAILED':
+    case 'TX_VERIFICATION_FAILED':           // spoke tx not verifiable on-chain
+    case 'TX_SUBMIT_FAILED':        // relay submit failed
+    case 'RELAY_TIMEOUT':           // relay packet did not arrive within timeout
+    case 'RELAY_FAILED':            // relay polling failure / unknown relay error
+    case 'EXECUTION_FAILED':            // generic catch-all (see error.cause)
+    case 'UNKNOWN':
       handleStakeError(result.error);
       break;
   }
@@ -829,17 +829,17 @@ if (!result.ok) {
 
 | Method | Codes |
 |---|---|
-| `stake` | `STAKING_VALIDATION_FAILED`, `STAKING_STAKE_INTENT_CREATION_FAILED`, `STAKING_VERIFY_FAILED`, `STAKING_SUBMIT_TX_FAILED`, `STAKING_RELAY_TIMEOUT`, `STAKING_RELAY_FAILED`, `STAKING_STAKE_FAILED`, `STAKING_UNKNOWN` |
-| `unstake` | `STAKING_VALIDATION_FAILED`, `STAKING_UNSTAKE_INTENT_CREATION_FAILED`, `STAKING_SUBMIT_TX_FAILED`, `STAKING_RELAY_TIMEOUT`, `STAKING_RELAY_FAILED`, `STAKING_UNSTAKE_FAILED`, `STAKING_UNKNOWN` |
-| `instantUnstake` | `STAKING_VALIDATION_FAILED`, `STAKING_INSTANT_UNSTAKE_INTENT_CREATION_FAILED`, `STAKING_SUBMIT_TX_FAILED`, `STAKING_RELAY_TIMEOUT`, `STAKING_RELAY_FAILED`, `STAKING_INSTANT_UNSTAKE_FAILED`, `STAKING_UNKNOWN` |
-| `claim` | `STAKING_VALIDATION_FAILED`, `STAKING_CLAIM_INTENT_CREATION_FAILED`, `STAKING_SUBMIT_TX_FAILED`, `STAKING_RELAY_TIMEOUT`, `STAKING_RELAY_FAILED`, `STAKING_CLAIM_FAILED`, `STAKING_UNKNOWN` |
-| `cancelUnstake` | `STAKING_VALIDATION_FAILED`, `STAKING_CANCEL_UNSTAKE_INTENT_CREATION_FAILED`, `STAKING_SUBMIT_TX_FAILED`, `STAKING_RELAY_TIMEOUT`, `STAKING_RELAY_FAILED`, `STAKING_CANCEL_UNSTAKE_FAILED`, `STAKING_UNKNOWN` |
-| `create<Op>Intent` | `STAKING_VALIDATION_FAILED`, `STAKING_<OP>_INTENT_CREATION_FAILED`, `STAKING_UNKNOWN` |
-| `approve` | `STAKING_VALIDATION_FAILED`, `STAKING_APPROVE_FAILED`, `STAKING_UNKNOWN` |
-| `isAllowanceValid` | `STAKING_VALIDATION_FAILED`, `STAKING_ALLOWANCE_CHECK_FAILED`, `STAKING_UNKNOWN` |
-| `getStakingInfo*` / `getUnstakingInfo*` / `getStakingConfig` / `getInstantUnstakeRatio` / `getConvertedAssets` / `getStakeRatio` | `STAKING_VALIDATION_FAILED`, `STAKING_INFO_FETCH_FAILED`, `STAKING_UNKNOWN` |
+| `stake` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `UNKNOWN` |
+| `unstake` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `UNKNOWN` |
+| `instantUnstake` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `UNKNOWN` |
+| `claim` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `UNKNOWN` |
+| `cancelUnstake` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `UNKNOWN` |
+| `create<Op>Intent` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
+| `approve` | `VALIDATION_FAILED`, `APPROVE_FAILED`, `UNKNOWN` |
+| `isAllowanceValid` | `VALIDATION_FAILED`, `ALLOWANCE_CHECK_FAILED`, `UNKNOWN` |
+| `getStakingInfo*` / `getUnstakingInfo*` / `getStakingConfig` / `getInstantUnstakeRatio` / `getConvertedAssets` / `getStakeRatio` | `VALIDATION_FAILED`, `LOOKUP_FAILED`, `UNKNOWN` |
 
-Note: `STAKING_VERIFY_FAILED` only appears in `StakeErrorCode` because `stake` is the only orchestrator
+Note: `TX_VERIFICATION_FAILED` only appears in `StakeErrorCode` because `stake` is the only orchestrator
 that calls `spoke.verifyTxHash`.
 
 ### Structured `context`
@@ -851,9 +851,9 @@ Every staking error carries an `error.context` payload. Fields vary by code:
 | `srcChainKey` | all orchestrator + intent codes | low-cardinality — suitable as a logger / Sentry tag |
 | `action` | all orchestrator + intent codes | one of `'stake' \| 'unstake' \| 'instantUnstake' \| 'claim' \| 'cancelUnstake'` |
 | `phase` | most codes | `'validate' \| 'intentCreation' \| 'verify' \| 'submit' \| 'relay' \| 'approve' \| 'allowanceCheck' \| 'infoFetch'` |
-| `relayCode` | `STAKING_RELAY_TIMEOUT` / `STAKING_SUBMIT_TX_FAILED` / `STAKING_RELAY_FAILED` | mirrors the relay-layer `RELAY_ERROR_CODES` contract; carries `'RELAY_POLLING_FAILED'` so polling outage is distinguishable from generic failure |
-| `field` / `reason` | `STAKING_VALIDATION_FAILED` | which precondition tripped |
-| `method` | `STAKING_INFO_FETCH_FAILED` | the read-only method name (`'getStakingInfo'`, `'getUnstakingInfo'`, `'getStakingConfig'`, …) — partitions the 8 readers without per-method codes |
+| `relayCode` | `RELAY_TIMEOUT` / `TX_SUBMIT_FAILED` / `RELAY_FAILED` | mirrors the relay-layer `RELAY_ERROR_CODES` contract; carries `'RELAY_POLLING_FAILED'` so polling outage is distinguishable from generic failure |
+| `field` / `reason` | `VALIDATION_FAILED` | which precondition tripped |
+| `method` | `LOOKUP_FAILED` | the read-only method name (`'getStakingInfo'`, `'getUnstakingInfo'`, `'getStakingConfig'`, …) — partitions the 8 readers without per-method codes |
 
 ### Type guards
 
@@ -879,7 +879,7 @@ Available guards: `isStakingError` (broad), `isStakeError` / `isUnstakeError` / 
 
 ### Validation invariant
 
-Precondition failures throw a typed `STAKING_VALIDATION_FAILED` from inside the public method's
+Precondition failures throw a typed `VALIDATION_FAILED` from inside the public method's
 `try/catch`, surfacing as a typed `Result.error` rather than a generic prose `Error`. This means
 consumers can discriminate validation failures the same way as any other code.
 
@@ -898,19 +898,19 @@ cause-preservation:
 
 | v1 code | v2 code | Notes |
 |---|---|---|
-| `STAKE_FAILED` | `STAKING_STAKE_FAILED` | Generic stake catch-all. Underlying cause on `error.cause`. |
-| `UNSTAKE_FAILED` | `STAKING_UNSTAKE_FAILED` | Generic unstake catch-all. |
-| `INSTANT_UNSTAKE_FAILED` | `STAKING_INSTANT_UNSTAKE_FAILED` | Generic instant-unstake catch-all. |
-| `CLAIM_FAILED` | `STAKING_CLAIM_FAILED` | Generic claim catch-all. |
-| `CANCEL_UNSTAKE_FAILED` | `STAKING_CANCEL_UNSTAKE_FAILED` | Generic cancel-unstake catch-all. |
-| `INFO_FETCH_FAILED` | `STAKING_INFO_FETCH_FAILED` | Shared by all 8 read-only methods; partition via `context.method`. |
-| `ALLOWANCE_CHECK_FAILED` | `STAKING_ALLOWANCE_CHECK_FAILED` | Allowance check failed at the spoke layer. |
-| `APPROVAL_FAILED` | `STAKING_APPROVE_FAILED` | Approve operation failed. |
-| (none) | `STAKING_VALIDATION_FAILED` | New: typed precondition failures (replaces prose `Error` throws from `invariant`). |
-| (none) | `STAKING_<OP>_INTENT_CREATION_FAILED` | New: per-op intent-creation phase tag (e.g. spoke deposit revert). |
-| (none) | `STAKING_VERIFY_FAILED` | New: spoke tx verification phase tag (only set by `stake`). |
-| (none) | `STAKING_SUBMIT_TX_FAILED` / `STAKING_RELAY_TIMEOUT` / `STAKING_RELAY_FAILED` | New: typed relay-phase codes mapped from the shared `RELAY_ERROR_CODES` contract. |
-| (none) | `STAKING_UNKNOWN` | Reserved fallback for never-classified errors. |
+| `STAKE_FAILED` | `EXECUTION_FAILED` | Generic stake catch-all. Underlying cause on `error.cause`. |
+| `UNSTAKE_FAILED` | `EXECUTION_FAILED` | Generic unstake catch-all. |
+| `INSTANT_UNSTAKE_FAILED` | `EXECUTION_FAILED` | Generic instant-unstake catch-all. |
+| `CLAIM_FAILED` | `EXECUTION_FAILED` | Generic claim catch-all. |
+| `CANCEL_UNSTAKE_FAILED` | `EXECUTION_FAILED` | Generic cancel-unstake catch-all. |
+| `INFO_FETCH_FAILED` | `LOOKUP_FAILED` | Shared by all 8 read-only methods; partition via `context.method`. |
+| `ALLOWANCE_CHECK_FAILED` | `ALLOWANCE_CHECK_FAILED` | Allowance check failed at the spoke layer. |
+| `APPROVAL_FAILED` | `APPROVE_FAILED` | Approve operation failed. |
+| (none) | `VALIDATION_FAILED` | New: typed precondition failures (replaces prose `Error` throws from `invariant`). |
+| (none) | `INTENT_CREATION_FAILED` | New: per-op intent-creation phase tag (e.g. spoke deposit revert). |
+| (none) | `TX_VERIFICATION_FAILED` | New: spoke tx verification phase tag (only set by `stake`). |
+| (none) | `TX_SUBMIT_FAILED` / `RELAY_TIMEOUT` / `RELAY_FAILED` | New: typed relay-phase codes mapped from the shared `RELAY_ERROR_CODES` contract. |
+| (none) | `UNKNOWN` | Reserved fallback for never-classified errors. |
 
 ## Usage Flow
 

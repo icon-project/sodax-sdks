@@ -3,8 +3,8 @@ import { erc20Abi } from '../shared/abis/index.js';
 import { encodeContractCalls, Erc20Service, EvmAssetManagerService, type HubProvider } from '../shared/index.js';
 import { icxSwapAbi } from '../shared/abis/icxSwap.abi.js';
 import { invariant } from '../shared/utils/tiny-invariant.js';
-import { SodaxError } from '../errors/SodaxError.js';
-import { type MigrationLookupError, isMigrationLookupError } from './error-types.js';
+import { lookupFailed } from '../errors/wrappers.js';
+import { type MigrationLookupError, isMigrationLookupError } from './errors.js';
 import {
   ChainKeys,
   type IconEoaAddress,
@@ -96,11 +96,7 @@ export class IcxMigrationService {
       if (isMigrationLookupError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError(
-          'MIGRATION_LOOKUP_FAILED',
-          error instanceof Error ? error.message : 'getAvailableAmount failed',
-          { cause: error, context: { phase: 'lookup', method: 'getAvailableAmount' } },
-        ),
+        error: lookupFailed('migration', 'getAvailableAmount', error),
       };
     }
   }

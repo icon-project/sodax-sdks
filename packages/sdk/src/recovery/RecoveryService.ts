@@ -6,6 +6,9 @@ import type { SpokeService } from '../shared/services/spoke/SpokeService.js';
 import { EvmAssetManagerService } from '../shared/services/hub/EvmAssetManagerService.js';
 import type { SendMessageParams } from '../shared/types/spoke-types.js';
 import { encodeAddress } from '../shared/index.js';
+import { SodaxError } from '../errors/SodaxError.js';
+import { lookupFailed } from '../errors/wrappers.js';
+import { recoveryInvariant } from './errors.js';
 
 export type HubAssetBalance = {
   /** The original token address on the spoke chain (key for the SDK's spoke→hub asset map). */
@@ -95,9 +98,10 @@ export class RecoveryService {
   }: FetchHubAssetBalancesParams): Promise<Result<HubAssetBalance[]>> {
     try {
       const chainConfig = this.config.spokeChainConfig[chainKey];
-      if (!chainConfig) {
-        return { ok: false, error: new Error(`Unknown spoke chain key: ${chainKey}`) };
-      }
+      recoveryInvariant(chainConfig, `Unknown spoke chain key: ${chainKey}`, {
+        srcChainKey: chainKey,
+        field: 'chainKey',
+      });
 
       const entries = Object.values(chainConfig.supportedTokens).filter(token => isAddress(token.hubAsset));
 
@@ -135,7 +139,10 @@ export class RecoveryService {
 
       return { ok: true, value: balances };
     } catch (error) {
-      return { ok: false, error: new Error('FETCH_HUB_ASSET_BALANCES_FAILED', { cause: error }) };
+      return {
+        ok: false,
+        error: lookupFailed('recovery', 'fetchHubAssetBalances', error),
+      };
     }
   }
 
@@ -200,7 +207,14 @@ export class RecoveryService {
         value: txResult.value satisfies TxReturnType<K, boolean> as TxReturnType<K, Raw>,
       };
     } catch (error) {
-      return { ok: false, error: new Error('WITHDRAW_HUB_ASSET_FAILED', { cause: error }) };
+      return {
+        ok: false,
+        error: new SodaxError(
+          'EXECUTION_FAILED',
+          error instanceof Error ? error.message : 'withdrawHubAsset failed',
+          { feature: 'recovery', cause: error, context: { action: 'withdrawHubAsset', phase: 'execution' } },
+        ),
+      };
     }
   }
 }

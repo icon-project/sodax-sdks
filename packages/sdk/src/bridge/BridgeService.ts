@@ -45,23 +45,21 @@ import {
 import { encodeFunctionData } from 'viem';
 import type { ConfigService } from '../shared/config/ConfigService.js';
 import BigNumber from 'bignumber.js';
-import { SodaxError } from '../errors/SodaxError.js';
+import { lookupFailed, verifyFailed, intentCreationFailed, executionFailed, approveFailed, allowanceCheckFailed } from '../errors/wrappers.js';
+import { mapRelayFailure } from '../errors/relay-error-mapping.js';
 import {
   type BridgeAllowanceCheckError,
   type BridgeApproveError,
+  type BridgeCreateIntentError,
+  type BridgeLookupError,
   type BridgeOrchestrationError,
-  type CreateBridgeIntentError,
-  type GetBridgeableAmountError,
-  type GetBridgeableTokensError,
   bridgeInvariant,
   isBridgeAllowanceCheckError,
   isBridgeApproveError,
+  isBridgeCreateIntentError,
+  isBridgeLookupError,
   isBridgeOrchestrationError,
-  isCreateBridgeIntentError,
-  isGetBridgeableAmountError,
-  isGetBridgeableTokensError,
-} from './error-types.js';
-import { mapRelayFailureToBridgeError } from './relay-error-mapping.js';
+} from './errors.js';
 
 export type CreateBridgeIntentParams<K extends SpokeChainKey = SpokeChainKey> = {
   srcAddress: string;
@@ -184,17 +182,13 @@ export class BridgeService {
       if (inner.ok) return inner;
       return {
         ok: false,
-        error: new SodaxError('BRIDGE_ALLOWANCE_CHECK_FAILED',
-          inner.error instanceof Error ? inner.error.message : 'Allowance check failed',
-          { cause: inner.error, context: { ...baseCtx, phase: 'allowanceCheck' } }),
+        error: allowanceCheckFailed('bridge', inner.error, baseCtx),
       };
     } catch (error) {
       if (isBridgeAllowanceCheckError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError('BRIDGE_ALLOWANCE_CHECK_FAILED',
-          error instanceof Error ? error.message : 'Allowance check failed',
-          { cause: error, context: { ...baseCtx, phase: 'allowanceCheck' } }),
+        error: allowanceCheckFailed('bridge', error, baseCtx),
       };
     }
   }
@@ -220,10 +214,7 @@ export class BridgeService {
     const { params } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey };
 
-    const wrapApproveFailure = (cause: unknown): BridgeApproveError =>
-      new SodaxError('BRIDGE_APPROVE_FAILED',
-        cause instanceof Error ? cause.message : 'Approve failed',
-        { cause, context: { ...baseCtx, phase: 'approve' } });
+    const wrapApproveFailure = (cause: unknown) => approveFailed('bridge', cause, baseCtx);
 
     try {
       bridgeInvariant(params.amount > 0n, 'Amount must be greater than 0', { ...baseCtx, field: 'amount' });
@@ -302,14 +293,6 @@ export class BridgeService {
         'Approval only supported for EVM spoke chains and Stellar',
         { ...baseCtx, field: 'srcChainKey' },
       );
-      // Belt-and-braces: `bridgeInvariant(false, ...)` always throws via its `asserts cond`
-      // signature, so this sentinel is unreachable today. It defends against a future
-      // maintainer dropping the `asserts cond` annotation on `bridgeInvariant` — without it,
-      // TypeScript would silently infer this method as returning `Promise<undefined>` and
-      // the public contract would be violated. Plain Error (not SodaxError) so it falls
-      // through `isBridgeApproveError` and surfaces with the literal 'unreachable: ...'
-      // message on `error.cause` — visible to anyone debugging.
-      throw new Error('unreachable: bridgeInvariant(false, ...) above must throw');
     } catch (error) {
       if (isBridgeApproveError(error)) return { ok: false, error };
       return { ok: false, error: wrapApproveFailure(error) };
@@ -368,10 +351,7 @@ export class BridgeService {
       if (!verifyTxHashResult.ok) {
         return {
           ok: false,
-          error: new SodaxError('BRIDGE_VERIFY_FAILED', 'Spoke transaction verification failed', {
-            cause: verifyTxHashResult.error,
-            context: { ...baseCtx, phase: 'verify' },
-          }),
+          error: verifyFailed('bridge', verifyTxHashResult.error, baseCtx),
         };
       }
 
@@ -382,7 +362,7 @@ export class BridgeService {
         relayerApiEndpoint: this.config.relay.relayerApiEndpoint,
         timeout,
       });
-      if (!packetResult.ok) return { ok: false, error: mapRelayFailureToBridgeError(packetResult.error, baseCtx) };
+      if (!packetResult.ok) return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'bridge', action: 'bridge', srcChainKey: baseCtx.srcChainKey, dstChainKey: baseCtx.dstChainKey }) };
 
       return {
         ok: true,
@@ -392,9 +372,7 @@ export class BridgeService {
       if (isBridgeOrchestrationError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError('BRIDGE_FAILED',
-          error instanceof Error ? error.message : 'bridge failed',
-          { cause: error, context: baseCtx }),
+        error: executionFailed('bridge', error, baseCtx),
       };
     }
   }
@@ -423,7 +401,7 @@ export class BridgeService {
    */
   async createBridgeIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: BridgeParams<K, Raw>,
-  ): Promise<Result<IntentTxResult<K, Raw>, CreateBridgeIntentError>> {
+  ): Promise<Result<IntentTxResult<K, Raw>, BridgeCreateIntentError>> {
     const { params, skipSimulation } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
     try {
@@ -481,12 +459,10 @@ export class BridgeService {
 
       if (!txResult.ok) {
         console.error(txResult.error);
-        if (isCreateBridgeIntentError(txResult.error)) return { ok: false, error: txResult.error };
+        if (isBridgeCreateIntentError(txResult.error)) return { ok: false, error: txResult.error };
         return {
           ok: false,
-          error: new SodaxError('BRIDGE_INTENT_CREATION_FAILED',
-            txResult.error instanceof Error ? txResult.error.message : 'Spoke deposit failed',
-            { cause: txResult.error, context: { ...baseCtx, phase: 'intentCreation' } }),
+          error: intentCreationFailed('bridge', txResult.error, baseCtx),
         };
       }
 
@@ -499,12 +475,10 @@ export class BridgeService {
       };
     } catch (error) {
       console.error(error);
-      if (isCreateBridgeIntentError(error)) return { ok: false, error };
+      if (isBridgeCreateIntentError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError('BRIDGE_INTENT_CREATION_FAILED',
-          error instanceof Error ? error.message : 'createBridgeIntent failed',
-          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } }),
+        error: intentCreationFailed('bridge', error, baseCtx),
       };
     }
   }
@@ -613,7 +587,7 @@ export class BridgeService {
    * @returns `Result<BridgeLimit>` — `{ amount, decimals, type }` where `amount` is the maximum
    *   bridgeable quantity in the token's native base units and `decimals` is its decimal precision.
    */
-  public async getBridgeableAmount(from: XToken, to: XToken): Promise<Result<BridgeLimit, GetBridgeableAmountError>> {
+  public async getBridgeableAmount(from: XToken, to: XToken): Promise<Result<BridgeLimit, BridgeLookupError>> {
     const baseCtx = { srcChainKey: from.chainKey, dstChainKey: to.chainKey };
     try {
       const fromToken = this.config.getSpokeTokenFromOriginalAssetAddress(from.chainKey, from.address);
@@ -696,12 +670,10 @@ export class BridgeService {
       };
     } catch (error) {
       console.error(error);
-      if (isGetBridgeableAmountError(error)) return { ok: false, error };
+      if (isBridgeLookupError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError('BRIDGE_GET_BRIDGEABLE_AMOUNT_FAILED',
-          error instanceof Error ? error.message : 'getBridgeableAmount failed',
-          { cause: error, context: { ...baseCtx, phase: 'lookup' } }),
+        error: lookupFailed('bridge', 'getBridgeableAmount', error, baseCtx),
       };
     }
   }
@@ -774,7 +746,7 @@ export class BridgeService {
     from: SpokeChainKey,
     to: SpokeChainKey,
     token: string,
-  ): Result<XToken[], GetBridgeableTokensError> {
+  ): Result<XToken[], BridgeLookupError> {
     const baseCtx = { srcChainKey: from, dstChainKey: to };
     try {
       const srcToken = this.config.getSpokeTokenFromOriginalAssetAddress(from, token);
@@ -786,12 +758,10 @@ export class BridgeService {
         value: this.filterTokensWithSameVault(this.config.spokeChainConfig[to].supportedTokens, to, srcToken),
       };
     } catch (error) {
-      if (isGetBridgeableTokensError(error)) return { ok: false, error };
+      if (isBridgeLookupError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError('BRIDGE_GET_BRIDGEABLE_TOKENS_FAILED',
-          error instanceof Error ? error.message : 'getBridgeableTokens failed',
-          { cause: error, context: { ...baseCtx, phase: 'lookup' } }),
+        error: lookupFailed('bridge', 'getBridgeableTokens', error, baseCtx),
       };
     }
   }

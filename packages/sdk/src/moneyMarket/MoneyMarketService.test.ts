@@ -356,7 +356,7 @@ describe('MoneyMarketService.estimateGas', () => {
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.code).toBe('MM_GAS_ESTIMATION_FAILED');
+    expect(result.error.code).toBe('GAS_ESTIMATION_FAILED');
     expect(result.error.cause).toBe(inner);
     expect(result.error.context?.phase).toBe('gasEstimation');
   });
@@ -1326,7 +1326,7 @@ describe('MoneyMarketService.supply', () => {
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(result.error.code).toBe('MM_VERIFY_FAILED');
+      expect(result.error.code).toBe('TX_VERIFICATION_FAILED');
       expect(result.error.cause).toBe(verifyError);
       expect(result.error.context?.phase).toBe('verify');
       expect(result.error.context?.action).toBe('supply');
@@ -1352,7 +1352,7 @@ describe('MoneyMarketService.supply', () => {
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(result.error.code).toBe('MM_RELAY_TIMEOUT');
+      expect(result.error.code).toBe('RELAY_TIMEOUT');
       expect(result.error.cause).toBe(relayError);
       expect(result.error.context?.relayCode).toBe('RELAY_TIMEOUT');
       expect(result.error.context?.action).toBe('supply');
@@ -1372,13 +1372,13 @@ describe('MoneyMarketService.supply', () => {
     });
 
     it('wraps a SodaxError with a non-supply code as MM_SUPPLY_FAILED (typed contract preserved)', async () => {
-      // The narrow `isSupplyError` guard rejects codes outside SupplyErrorCode (e.g. an
+      // The narrow `isMoneyMarketOrchestrationError` guard rejects codes outside SupplyErrorCode (e.g. an
       // accidental SodaxError with a swap-prefixed code thrown from somewhere inside the
-      // supply orchestration). Without the guard's runtime check, an `as SupplyError` cast
+      // supply orchestration). Without the guard's runtime check, an `as MoneyMarketOrchestrationError` cast
       // would silently leak the wrong-coded SodaxError through. The else-branch wraps it
       // as MM_SUPPLY_FAILED with the original on cause — pinning that path here so a
-      // future regression that widens isSupplyError surfaces immediately.
-      const outOfUnion = new SodaxError('SWAP_RELAY_TIMEOUT' as never, 'foreign code');
+      // future regression that widens isMoneyMarketOrchestrationError surfaces immediately.
+      const outOfUnion = new SodaxError('SWAP_RELAY_TIMEOUT' as never, 'foreign code', { feature: 'moneyMarket' });
       vi.spyOn(sodax.moneyMarket, 'createSupplyIntent').mockRejectedValueOnce(outOfUnion);
 
       const result = await sodax.moneyMarket.supply({
@@ -1389,7 +1389,7 @@ describe('MoneyMarketService.supply', () => {
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.error.code).toBe('MM_SUPPLY_FAILED');
+        expect(result.error.code).toBe('EXECUTION_FAILED');
         expect(result.error.cause).toBe(outOfUnion);
         expect(result.error.context?.action).toBe('supply');
       }
@@ -1754,7 +1754,7 @@ describe('MoneyMarketService.borrow', () => {
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(result.error.code).toBe('MM_VERIFY_FAILED');
+      expect(result.error.code).toBe('TX_VERIFICATION_FAILED');
       expect(result.error.cause).toBe(verifyError);
       expect(result.error.context?.action).toBe('borrow');
     });
@@ -1779,7 +1779,7 @@ describe('MoneyMarketService.borrow', () => {
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(result.error.code).toBe('MM_RELAY_TIMEOUT');
+      expect(result.error.code).toBe('RELAY_TIMEOUT');
       expect(result.error.cause).toBe(relayError);
       expect(result.error.context?.action).toBe('borrow');
     });
@@ -1798,7 +1798,7 @@ describe('MoneyMarketService.borrow', () => {
     });
 
     it('wraps a SodaxError with a non-borrow code as MM_BORROW_FAILED', async () => {
-      const outOfUnion = new SodaxError('SWAP_VALIDATION_FAILED' as never, 'foreign code');
+      const outOfUnion = new SodaxError('SWAP_VALIDATION_FAILED' as never, 'foreign code', { feature: 'moneyMarket' });
       vi.spyOn(sodax.moneyMarket, 'createBorrowIntent').mockRejectedValueOnce(outOfUnion);
 
       const result = await sodax.moneyMarket.borrow({
@@ -1809,7 +1809,7 @@ describe('MoneyMarketService.borrow', () => {
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.error.code).toBe('MM_BORROW_FAILED');
+        expect(result.error.code).toBe('EXECUTION_FAILED');
         expect(result.error.cause).toBe(outOfUnion);
         expect(result.error.context?.action).toBe('borrow');
       }
@@ -2146,7 +2146,7 @@ describe('MoneyMarketService.withdraw', () => {
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(result.error.code).toBe('MM_VERIFY_FAILED');
+      expect(result.error.code).toBe('TX_VERIFICATION_FAILED');
       expect(result.error.cause).toBe(verifyError);
       expect(result.error.context?.action).toBe('withdraw');
     });
@@ -2171,7 +2171,7 @@ describe('MoneyMarketService.withdraw', () => {
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(result.error.code).toBe('MM_RELAY_TIMEOUT');
+      expect(result.error.code).toBe('RELAY_TIMEOUT');
       expect(result.error.cause).toBe(relayError);
       expect(result.error.context?.action).toBe('withdraw');
     });
@@ -2189,8 +2189,11 @@ describe('MoneyMarketService.withdraw', () => {
       expect(result).toEqual({ ok: false, error: thrown });
     });
 
-    it('wraps a SodaxError with a non-withdraw code as MM_WITHDRAW_FAILED', async () => {
-      const outOfUnion = new SodaxError('MM_SUPPLY_FAILED' as never, 'wrong-op MM code');
+    it('wraps a SodaxError with a code outside the withdraw orchestration union as EXECUTION_FAILED', async () => {
+      // APPROVE_FAILED is a valid moneyMarket code but not part of WithdrawErrorCode (which is
+      // the orchestration-only union). The narrow `isMoneyMarketOrchestrationError` guard rejects it, so the
+      // outer catch wraps it as EXECUTION_FAILED and preserves the typed contract.
+      const outOfUnion = new SodaxError('APPROVE_FAILED' as never, 'wrong-phase code', { feature: 'moneyMarket' });
       vi.spyOn(sodax.moneyMarket, 'createWithdrawIntent').mockRejectedValueOnce(outOfUnion);
 
       const result = await sodax.moneyMarket.withdraw({
@@ -2201,7 +2204,7 @@ describe('MoneyMarketService.withdraw', () => {
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.error.code).toBe('MM_WITHDRAW_FAILED');
+        expect(result.error.code).toBe('EXECUTION_FAILED');
         expect(result.error.cause).toBe(outOfUnion);
         expect(result.error.context?.action).toBe('withdraw');
       }
@@ -2513,7 +2516,7 @@ describe('MoneyMarketService.repay', () => {
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(result.error.code).toBe('MM_VERIFY_FAILED');
+      expect(result.error.code).toBe('TX_VERIFICATION_FAILED');
       expect(result.error.cause).toBe(verifyError);
       expect(result.error.context?.action).toBe('repay');
     });
@@ -2538,7 +2541,7 @@ describe('MoneyMarketService.repay', () => {
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(result.error.code).toBe('MM_RELAY_TIMEOUT');
+      expect(result.error.code).toBe('RELAY_TIMEOUT');
       expect(result.error.cause).toBe(relayError);
       expect(result.error.context?.action).toBe('repay');
     });
@@ -2557,7 +2560,7 @@ describe('MoneyMarketService.repay', () => {
     });
 
     it('wraps a SodaxError with a non-repay code as MM_REPAY_FAILED', async () => {
-      const outOfUnion = new SodaxError('SOMEMODULE_FOO' as never, 'foreign code');
+      const outOfUnion = new SodaxError('SOMEMODULE_FOO' as never, 'foreign code', { feature: 'moneyMarket' });
       vi.spyOn(sodax.moneyMarket, 'createRepayIntent').mockRejectedValueOnce(outOfUnion);
 
       const result = await sodax.moneyMarket.repay({
@@ -2568,7 +2571,7 @@ describe('MoneyMarketService.repay', () => {
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.error.code).toBe('MM_REPAY_FAILED');
+        expect(result.error.code).toBe('EXECUTION_FAILED');
         expect(result.error.cause).toBe(outOfUnion);
         expect(result.error.context?.action).toBe('repay');
       }

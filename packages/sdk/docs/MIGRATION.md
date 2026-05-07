@@ -642,14 +642,14 @@ const result = await sodax.migration.migrateIcxToSoda({ /* params */ });
 if (!result.ok) {
   // result.error is typed as `MigrateOrchestrationError = SodaxError<MigrateOrchestrationErrorCode>`
   switch (result.error.code) {
-    case 'MIGRATION_VALIDATION_FAILED':       // precondition tripped (see context.field)
-    case 'MIGRATION_INTENT_CREATION_FAILED':  // spoke-side intent creation failed
-    case 'MIGRATION_VERIFY_FAILED':           // spoke tx not verifiable on-chain (only migratebnUSD calls verifyTxHash)
-    case 'MIGRATION_SUBMIT_TX_FAILED':        // relay submit failed
-    case 'MIGRATION_RELAY_TIMEOUT':           // relay packet did not arrive within timeout
-    case 'MIGRATION_RELAY_FAILED':            // relay polling failure / unknown relay error
-    case 'MIGRATION_FAILED':                  // generic forward-orchestrator catch-all (see error.cause)
-    case 'MIGRATION_UNKNOWN':
+    case 'VALIDATION_FAILED':       // precondition tripped (see context.field)
+    case 'INTENT_CREATION_FAILED':  // spoke-side intent creation failed
+    case 'TX_VERIFICATION_FAILED':           // spoke tx not verifiable on-chain (only migratebnUSD calls verifyTxHash)
+    case 'TX_SUBMIT_FAILED':        // relay submit failed
+    case 'RELAY_TIMEOUT':           // relay packet did not arrive within timeout
+    case 'RELAY_FAILED':            // relay polling failure / unknown relay error
+    case 'EXECUTION_FAILED':                  // generic forward-orchestrator catch-all (see error.cause)
+    case 'UNKNOWN':
       handleMigrationError(result.error);
       break;
   }
@@ -660,15 +660,15 @@ if (!result.ok) {
 
 | Method | Codes |
 |---|---|
-| `migratebnUSD` / `migrateIcxToSoda` / `migrateBaln` (forward orchestrators) | `MIGRATION_VALIDATION_FAILED`, `MIGRATION_INTENT_CREATION_FAILED`, `MIGRATION_VERIFY_FAILED`, `MIGRATION_SUBMIT_TX_FAILED`, `MIGRATION_RELAY_TIMEOUT`, `MIGRATION_RELAY_FAILED`, `MIGRATION_FAILED`, `MIGRATION_UNKNOWN` |
-| `revertMigrateSodaToIcx` (reverse orchestrator) | `MIGRATION_VALIDATION_FAILED`, `MIGRATION_REVERT_INTENT_CREATION_FAILED`, `MIGRATION_SUBMIT_TX_FAILED`, `MIGRATION_RELAY_TIMEOUT`, `MIGRATION_RELAY_FAILED`, `MIGRATION_REVERT_FAILED`, `MIGRATION_UNKNOWN` |
-| `createMigratebnUSDIntent` / `createMigrateIcxToSodaIntent` / `createMigrateBalnIntent` (forward intent creators) | `MIGRATION_VALIDATION_FAILED`, `MIGRATION_INTENT_CREATION_FAILED`, `MIGRATION_UNKNOWN` |
-| `createRevertSodaToIcxMigrationIntent` (reverse intent creator) | `MIGRATION_VALIDATION_FAILED`, `MIGRATION_REVERT_INTENT_CREATION_FAILED`, `MIGRATION_UNKNOWN` |
-| `approve` | `MIGRATION_VALIDATION_FAILED`, `MIGRATION_APPROVE_FAILED`, `MIGRATION_UNKNOWN` |
-| `isAllowanceValid` | `MIGRATION_VALIDATION_FAILED`, `MIGRATION_ALLOWANCE_CHECK_FAILED`, `MIGRATION_UNKNOWN` |
-| `IcxMigrationService.getAvailableAmount` | `MIGRATION_VALIDATION_FAILED`, `MIGRATION_LOOKUP_FAILED`, `MIGRATION_UNKNOWN` |
+| `migratebnUSD` / `migrateIcxToSoda` / `migrateBaln` (forward orchestrators) | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `UNKNOWN` |
+| `revertMigrateSodaToIcx` (reverse orchestrator) | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `UNKNOWN` |
+| `createMigratebnUSDIntent` / `createMigrateIcxToSodaIntent` / `createMigrateBalnIntent` (forward intent creators) | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
+| `createRevertSodaToIcxMigrationIntent` (reverse intent creator) | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
+| `approve` | `VALIDATION_FAILED`, `APPROVE_FAILED`, `UNKNOWN` |
+| `isAllowanceValid` | `VALIDATION_FAILED`, `ALLOWANCE_CHECK_FAILED`, `UNKNOWN` |
+| `IcxMigrationService.getAvailableAmount` | `VALIDATION_FAILED`, `LOOKUP_FAILED`, `UNKNOWN` |
 
-Note: `MIGRATION_VERIFY_FAILED` only appears in the forward-orchestrator union because `migratebnUSD` is the only orchestrator that calls `spoke.verifyTxHash`. The other forward orchestrators technically can't produce it, but the shared narrow union keeps callers working symmetrically across the three "migrate" methods.
+Note: `TX_VERIFICATION_FAILED` only appears in the forward-orchestrator union because `migratebnUSD` is the only orchestrator that calls `spoke.verifyTxHash`. The other forward orchestrators technically can't produce it, but the shared narrow union keeps callers working symmetrically across the three "migrate" methods.
 
 ### Structured `context`
 
@@ -679,10 +679,10 @@ Every migration error carries an `error.context` payload. Fields vary by code:
 | `srcChainKey` | all orchestrator + intent + approve + allowance codes | low-cardinality — suitable as a logger / Sentry tag |
 | `dstChainKey` | `migratebnUSD` orchestrator + intent codes | bnUSD-only (the other orchestrators have a fixed destination) |
 | `action` | all orchestrator + intent codes | one of `'migratebnUSD' \| 'migrateIcxToSoda' \| 'revertMigrateSodaToIcx' \| 'migrateBaln'` |
-| `direction` | only on `migratebnUSD` errors | `'forward'` (legacy → new) or `'reverse'` (new → legacy). The error code stays `MIGRATION_FAILED` regardless — this is purely a forensics hint |
-| `phase` | most codes | `'validate' \| 'intentCreation' \| 'verify' \| 'submit' \| 'relay' \| 'destinationExecution' \| 'approve' \| 'allowanceCheck' \| 'lookup'`. `'destinationExecution'` is set on `MIGRATION_RELAY_*` errors that originate from `migratebnUSD`'s secondary `waitUntilIntentExecuted` watcher (vs. `'relay'` for the primary `relayTxAndWaitPacket` call) |
-| `relayCode` | `MIGRATION_RELAY_TIMEOUT` / `MIGRATION_SUBMIT_TX_FAILED` / `MIGRATION_RELAY_FAILED` | mirrors the relay-layer `RELAY_ERROR_CODES` contract; carries `'RELAY_POLLING_FAILED'` so polling outage is distinguishable from generic failure |
-| `field` / `reason` | `MIGRATION_VALIDATION_FAILED` | which precondition tripped |
+| `direction` | only on `migratebnUSD` errors | `'forward'` (legacy → new) or `'reverse'` (new → legacy). The error code stays `EXECUTION_FAILED` regardless — this is purely a forensics hint |
+| `phase` | most codes | `'validate' \| 'intentCreation' \| 'verify' \| 'submit' \| 'relay' \| 'destinationExecution' \| 'approve' \| 'allowanceCheck' \| 'lookup'`. `'destinationExecution'` is set on `RELAY_TIMEOUT / RELAY_FAILED / TX_SUBMIT_FAILED` errors that originate from `migratebnUSD`'s secondary `waitUntilIntentExecuted` watcher (vs. `'relay'` for the primary `relayTxAndWaitPacket` call) |
+| `relayCode` | `RELAY_TIMEOUT` / `TX_SUBMIT_FAILED` / `RELAY_FAILED` | mirrors the relay-layer `RELAY_ERROR_CODES` contract; carries `'RELAY_POLLING_FAILED'` so polling outage is distinguishable from generic failure |
+| `field` / `reason` | `VALIDATION_FAILED` | which precondition tripped |
 
 ### Type guards
 
@@ -704,7 +704,7 @@ Available guards: `isMigrationError` (broad), `isMigrateOrchestrationError`, `is
 
 ### Validation invariant
 
-Precondition failures throw a typed `MIGRATION_VALIDATION_FAILED` from inside the public method's `try/catch`, surfacing as a typed `Result.error` rather than a generic prose `Error`. Consumers discriminate validation failures the same way as any other code.
+Precondition failures throw a typed `VALIDATION_FAILED` from inside the public method's `try/catch`, surfacing as a typed `Result.error` rather than a generic prose `Error`. Consumers discriminate validation failures the same way as any other code.
 
 ```typescript
 import { migrationInvariant } from '@sodax/sdk';
@@ -714,19 +714,19 @@ migrationInvariant(amount > 0n, 'Amount must be greater than 0', { field: 'amoun
 
 ### Migration from the pre-v2 taxonomy
 
-The published v1 4-code shape (`MIGRATION_FAILED`, `CREATE_MIGRATION_INTENT_FAILED`, `REVERT_MIGRATION_FAILED`, `CREATE_REVERT_MIGRATION_INTENT_FAILED`) is restored here with module-prefixed names and cause-preservation. Sub-modules (ICX, bnUSD, BALN) remain undifferentiated at the code level — fine-grained partitioning is delegated to `context.action`, faithful to v1 which also did not distinguish them.
+The published v1 4-code shape (`EXECUTION_FAILED`, `CREATE_MIGRATION_INTENT_FAILED`, `REVERT_MIGRATION_FAILED`, `CREATE_REVERT_MIGRATION_INTENT_FAILED`) is restored here with module-prefixed names and cause-preservation. Sub-modules (ICX, bnUSD, BALN) remain undifferentiated at the code level — fine-grained partitioning is delegated to `context.action`, faithful to v1 which also did not distinguish them.
 
 | v1 code | v2 code | Notes |
 |---|---|---|
-| `MIGRATION_FAILED` | `MIGRATION_FAILED` | Forward-orchestrator catch-all (`migratebnUSD`/`migrateIcxToSoda`/`migrateBaln`). Use `context.action` to discriminate. |
-| `CREATE_MIGRATION_INTENT_FAILED` | `MIGRATION_INTENT_CREATION_FAILED` | Forward intent-creation phase. |
-| `REVERT_MIGRATION_FAILED` | `MIGRATION_REVERT_FAILED` | Reverse-orchestrator catch-all (`revertMigrateSodaToIcx`). |
-| `CREATE_REVERT_MIGRATION_INTENT_FAILED` | `MIGRATION_REVERT_INTENT_CREATION_FAILED` | Reverse intent-creation phase. |
-| (none) | `MIGRATION_VALIDATION_FAILED` | New: typed precondition failures (replaces prose `Error` throws from `invariant`). |
-| (none) | `MIGRATION_VERIFY_FAILED` | New: spoke tx verification phase tag (only set by `migratebnUSD`, the only orchestrator that calls `verifyTxHash`). |
-| (none) | `MIGRATION_SUBMIT_TX_FAILED` / `MIGRATION_RELAY_TIMEOUT` / `MIGRATION_RELAY_FAILED` | New: typed relay-phase codes mapped from the shared `RELAY_ERROR_CODES` contract. |
-| (none) | `MIGRATION_APPROVE_FAILED` / `MIGRATION_ALLOWANCE_CHECK_FAILED` / `MIGRATION_LOOKUP_FAILED` | New: typed phase codes for `approve` / `isAllowanceValid` / `IcxMigrationService.getAvailableAmount`. |
-| (none) | `MIGRATION_UNKNOWN` | Reserved fallback for never-classified errors. |
+| `EXECUTION_FAILED` | `EXECUTION_FAILED` | Forward-orchestrator catch-all (`migratebnUSD`/`migrateIcxToSoda`/`migrateBaln`). Use `context.action` to discriminate. |
+| `CREATE_MIGRATION_INTENT_FAILED` | `INTENT_CREATION_FAILED` | Forward intent-creation phase. |
+| `REVERT_MIGRATION_FAILED` | `EXECUTION_FAILED` | Reverse-orchestrator catch-all (`revertMigrateSodaToIcx`). |
+| `CREATE_REVERT_MIGRATION_INTENT_FAILED` | `INTENT_CREATION_FAILED` | Reverse intent-creation phase. |
+| (none) | `VALIDATION_FAILED` | New: typed precondition failures (replaces prose `Error` throws from `invariant`). |
+| (none) | `TX_VERIFICATION_FAILED` | New: spoke tx verification phase tag (only set by `migratebnUSD`, the only orchestrator that calls `verifyTxHash`). |
+| (none) | `TX_SUBMIT_FAILED` / `RELAY_TIMEOUT` / `RELAY_FAILED` | New: typed relay-phase codes mapped from the shared `RELAY_ERROR_CODES` contract. |
+| (none) | `APPROVE_FAILED` / `ALLOWANCE_CHECK_FAILED` / `LOOKUP_FAILED` | New: typed phase codes for `approve` / `isAllowanceValid` / `IcxMigrationService.getAvailableAmount`. |
+| (none) | `UNKNOWN` | Reserved fallback for never-classified errors. |
 
 ## Configuration
 

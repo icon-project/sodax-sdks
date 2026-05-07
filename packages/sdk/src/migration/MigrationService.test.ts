@@ -872,7 +872,7 @@ describe('MigrationService.migratebnUSD', () => {
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.code).toBe('MIGRATION_VERIFY_FAILED');
+    expect(result.error.code).toBe('TX_VERIFICATION_FAILED');
     expect(result.error.cause).toBe(verifyError);
     expect(result.error.context?.phase).toBe('verify');
     expect(result.error.context?.action).toBe('migratebnUSD');
@@ -895,7 +895,7 @@ describe('MigrationService.migratebnUSD', () => {
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.code).toBe('MIGRATION_RELAY_TIMEOUT');
+    expect(result.error.code).toBe('RELAY_TIMEOUT');
     expect(result.error.cause).toBe(relayError);
     expect(result.error.context?.action).toBe('migratebnUSD');
     expect(result.error.context?.relayCode).toBe('RELAY_TIMEOUT');
@@ -971,7 +971,7 @@ describe('MigrationService.migrateIcxToSoda', () => {
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.code).toBe('MIGRATION_RELAY_TIMEOUT');
+    expect(result.error.code).toBe('RELAY_TIMEOUT');
     expect(result.error.cause).toBe(relayError);
     expect(result.error.context?.action).toBe('migrateIcxToSoda');
   });
@@ -1046,7 +1046,7 @@ describe('MigrationService.revertMigrateSodaToIcx', () => {
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.code).toBe('MIGRATION_RELAY_TIMEOUT');
+    expect(result.error.code).toBe('RELAY_TIMEOUT');
     expect(result.error.cause).toBe(relayError);
     expect(result.error.context?.action).toBe('revertMigrateSodaToIcx');
   });
@@ -1121,7 +1121,7 @@ describe('MigrationService.migrateBaln', () => {
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.code).toBe('MIGRATION_RELAY_TIMEOUT');
+    expect(result.error.code).toBe('RELAY_TIMEOUT');
     expect(result.error.cause).toBe(relayError);
     expect(result.error.context?.action).toBe('migrateBaln');
   });
@@ -1614,7 +1614,7 @@ describe('MigrationService.createMigrateIcxToSodaIntent — error propagation', 
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.code).toBe('MIGRATION_INTENT_CREATION_FAILED');
+    expect(result.error.code).toBe('INTENT_CREATION_FAILED');
     expect(result.error.cause).toBe(liquidityError);
     expect(result.error.context?.phase).toBe('intentCreation');
     expect(result.error.context?.action).toBe('migrateIcxToSoda');
@@ -1762,10 +1762,10 @@ describe('MigrationService.createRevertSodaToIcxMigrationIntent', () => {
 // =========================================================================
 
 describe('MigrationService.migratebnUSD — SodaxError wrap-path coverage', () => {
-  it('propagates a CreateMigrateIntentError from createMigratebnUSDIntent (subset narrowing, identity)', async () => {
+  it('propagates a MigrationCreateIntentError from createMigratebnUSDIntent (subset narrowing, identity)', async () => {
     // CreateMigrateIntentErrorCode ⊂ MigrateOrchestrationErrorCode, so `migratebnUSD` returns
     // the same SodaxError instance unchanged — no extra wrap.
-    const intentError = new SodaxError('MIGRATION_INTENT_CREATION_FAILED', 'spoke deposit reverted', {
+    const intentError = new SodaxError('INTENT_CREATION_FAILED', 'spoke deposit reverted', {
       context: { srcChainKey: ChainKeys.ICON_MAINNET, action: 'migratebnUSD', phase: 'intentCreation' },
     });
     vi.spyOn(sodax.migration, 'createMigratebnUSDIntent').mockResolvedValueOnce({ ok: false, error: intentError });
@@ -1780,7 +1780,7 @@ describe('MigrationService.migratebnUSD — SodaxError wrap-path coverage', () =
     if (result.ok) return;
     // Identity check — same SodaxError instance, not re-wrapped.
     expect(result.error).toBe(intentError);
-    expect(result.error.code).toBe('MIGRATION_INTENT_CREATION_FAILED');
+    expect(result.error.code).toBe('INTENT_CREATION_FAILED');
     expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
   });
 
@@ -1809,7 +1809,7 @@ describe('MigrationService.migratebnUSD — SodaxError wrap-path coverage', () =
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.code).toBe('MIGRATION_RELAY_TIMEOUT');
+    expect(result.error.code).toBe('RELAY_TIMEOUT');
     expect(result.error.cause).toBe(execError);
     // Critical: the destination-watcher path must be tagged with `phase: 'destinationExecution'`,
     // not the default `'relay'`. This lets logger filters distinguish primary-relay timeouts
@@ -1823,7 +1823,7 @@ describe('MigrationService.migratebnUSD — SodaxError wrap-path coverage', () =
     // The `isMigrateOrchestrationError` guard rejects codes outside the forward-orchestrator
     // union. Pinning the wrap path here so a future regression that widens the guard surfaces
     // immediately.
-    const outOfUnion = new SodaxError('SWAP_RELAY_TIMEOUT' as never, 'foreign code thrown into migration');
+    const outOfUnion = new SodaxError('SWAP_RELAY_TIMEOUT' as never, 'foreign code thrown into migration', { feature: 'migration' });
     vi.spyOn(sodax.migration, 'createMigratebnUSDIntent').mockRejectedValueOnce(outOfUnion);
 
     const result = await sodax.migration.migratebnUSD({
@@ -1834,7 +1834,7 @@ describe('MigrationService.migratebnUSD — SodaxError wrap-path coverage', () =
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.code).toBe('MIGRATION_FAILED');
+    expect(result.error.code).toBe('EXECUTION_FAILED');
     expect(result.error.cause).toBe(outOfUnion);
     expect(result.error.context?.action).toBe('migratebnUSD');
   });
@@ -1846,7 +1846,7 @@ describe('MigrationService.migratebnUSD — SodaxError wrap-path coverage', () =
 
 describe('MigrationService — out-of-union wrap-path smoke for non-bnUSD orchestrators', () => {
   it('migrateIcxToSoda wraps as MIGRATION_FAILED', async () => {
-    const outOfUnion = new SodaxError('BRIDGE_FAILED' as never, 'foreign code thrown into migration');
+    const outOfUnion = new SodaxError('BRIDGE_FAILED' as never, 'foreign code thrown into migration', { feature: 'migration' });
     vi.spyOn(sodax.migration, 'createMigrateIcxToSodaIntent').mockRejectedValueOnce(outOfUnion);
 
     const result = await sodax.migration.migrateIcxToSoda({
@@ -1857,13 +1857,13 @@ describe('MigrationService — out-of-union wrap-path smoke for non-bnUSD orches
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.code).toBe('MIGRATION_FAILED');
+    expect(result.error.code).toBe('EXECUTION_FAILED');
     expect(result.error.cause).toBe(outOfUnion);
     expect(result.error.context?.action).toBe('migrateIcxToSoda');
   });
 
   it('revertMigrateSodaToIcx wraps as MIGRATION_REVERT_FAILED', async () => {
-    const outOfUnion = new SodaxError('STAKING_STAKE_FAILED' as never, 'foreign code thrown into migration');
+    const outOfUnion = new SodaxError('STAKING_STAKE_FAILED' as never, 'foreign code thrown into migration', { feature: 'migration' });
     vi.spyOn(sodax.migration, 'createRevertSodaToIcxMigrationIntent').mockRejectedValueOnce(outOfUnion);
 
     const result = await sodax.migration.revertMigrateSodaToIcx({
@@ -1874,13 +1874,13 @@ describe('MigrationService — out-of-union wrap-path smoke for non-bnUSD orches
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.code).toBe('MIGRATION_REVERT_FAILED');
+    expect(result.error.code).toBe('EXECUTION_FAILED');
     expect(result.error.cause).toBe(outOfUnion);
     expect(result.error.context?.action).toBe('revertMigrateSodaToIcx');
   });
 
   it('migrateBaln wraps as MIGRATION_FAILED', async () => {
-    const outOfUnion = new SodaxError('MM_SUPPLY_FAILED' as never, 'foreign code thrown into migration');
+    const outOfUnion = new SodaxError('MM_SUPPLY_FAILED' as never, 'foreign code thrown into migration', { feature: 'migration' });
     vi.spyOn(sodax.migration, 'createMigrateBalnIntent').mockRejectedValueOnce(outOfUnion);
 
     const result = await sodax.migration.migrateBaln({
@@ -1891,7 +1891,7 @@ describe('MigrationService — out-of-union wrap-path smoke for non-bnUSD orches
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.code).toBe('MIGRATION_FAILED');
+    expect(result.error.code).toBe('EXECUTION_FAILED');
     expect(result.error.cause).toBe(outOfUnion);
     expect(result.error.context?.action).toBe('migrateBaln');
   });

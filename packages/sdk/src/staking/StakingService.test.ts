@@ -138,11 +138,11 @@ afterEach(() => {
 });
 
 describe('StakingService.stake — integration error-path coverage', () => {
-  it('propagates a CreateStakeIntentError from createStakeIntent (subset narrowing, identity)', async () => {
+  it('propagates a StakingCreateIntentError from createStakeIntent (subset narrowing, identity)', async () => {
     // `stake()` first calls `createStakeIntent`. When that returns `{ ok: false, error }`,
     // the error code is in CreateStakeIntentErrorCode (a subset of StakeErrorCode), so
     // `stake()` returns the same SodaxError unchanged — no extra wrap, no code rewrite.
-    const intentError = new SodaxError('STAKING_STAKE_INTENT_CREATION_FAILED', 'spoke deposit reverted', {
+    const intentError = new SodaxError('INTENT_CREATION_FAILED', 'spoke deposit reverted', {
       context: { srcChainKey: BSC, action: 'stake', phase: 'intentCreation' },
     });
     vi.spyOn(sodax.staking, 'createStakeIntent').mockResolvedValueOnce({ ok: false, error: intentError });
@@ -153,7 +153,7 @@ describe('StakingService.stake — integration error-path coverage', () => {
     if (result.ok) return;
     // Identity check — the SodaxError must be the *same* instance, not a re-wrapped clone.
     expect(result.error).toBe(intentError);
-    expect(result.error.code).toBe('STAKING_STAKE_INTENT_CREATION_FAILED');
+    expect(result.error.code).toBe('INTENT_CREATION_FAILED');
     // verifyTxHash and relayTxAndWaitPacket must not have been called.
     expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
   });
@@ -170,7 +170,7 @@ describe('StakingService.stake — integration error-path coverage', () => {
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.code).toBe('STAKING_VERIFY_FAILED');
+    expect(result.error.code).toBe('TX_VERIFICATION_FAILED');
     // Identity check on cause — the original error is reachable for forensics.
     expect(result.error.cause).toBe(verifyError);
     expect(result.error.context?.phase).toBe('verify');
@@ -190,26 +190,26 @@ describe('StakingService.stake — integration error-path coverage', () => {
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.code).toBe('STAKING_RELAY_TIMEOUT');
+    expect(result.error.code).toBe('RELAY_TIMEOUT');
     expect(result.error.cause).toBe(relayError);
     expect(result.error.context?.action).toBe('stake');
     expect(result.error.context?.relayCode).toBe('RELAY_TIMEOUT');
   });
 
   it('wraps an out-of-union SodaxError thrown from createStakeIntent as STAKING_STAKE_FAILED', async () => {
-    // The `isStakeError` guard rejects codes outside StakeErrorCode (e.g. an accidental
+    // The `isStakeOrchestrationError` guard rejects codes outside StakeErrorCode (e.g. an accidental
     // SWAP_RELAY_TIMEOUT thrown from somewhere inside the stake orchestration). The
     // else-branch wraps it as STAKING_STAKE_FAILED with the original on cause —
-    // pinning that path here so a future regression that widens isStakeError surfaces
+    // pinning that path here so a future regression that widens isStakeOrchestrationError surfaces
     // immediately. Mirrors the bridge & MM out-of-union wrap-tests.
-    const outOfUnion = new SodaxError('SWAP_RELAY_TIMEOUT' as never, 'foreign code thrown into staking');
+    const outOfUnion = new SodaxError('SWAP_RELAY_TIMEOUT' as never, 'foreign code thrown into staking', { feature: 'staking' });
     vi.spyOn(sodax.staking, 'createStakeIntent').mockRejectedValueOnce(outOfUnion);
 
     const result = await sodax.staking.stake(stakeInput());
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.code).toBe('STAKING_STAKE_FAILED');
+    expect(result.error.code).toBe('EXECUTION_FAILED');
     expect(result.error.cause).toBe(outOfUnion);
     expect(result.error.context?.srcChainKey).toBe(BSC);
     expect(result.error.context?.action).toBe('stake');
@@ -222,53 +222,53 @@ describe('StakingService.stake — integration error-path coverage', () => {
 
 describe('StakingService — out-of-union wrap-path smoke for non-stake orchestrators', () => {
   it('unstake wraps as STAKING_UNSTAKE_FAILED', async () => {
-    const outOfUnion = new SodaxError('BRIDGE_FAILED' as never, 'foreign code thrown into staking');
+    const outOfUnion = new SodaxError('BRIDGE_FAILED' as never, 'foreign code thrown into staking', { feature: 'staking' });
     vi.spyOn(sodax.staking, 'createUnstakeIntent').mockRejectedValueOnce(outOfUnion);
 
     const result = await sodax.staking.unstake(unstakeInput());
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.code).toBe('STAKING_UNSTAKE_FAILED');
+    expect(result.error.code).toBe('EXECUTION_FAILED');
     expect(result.error.cause).toBe(outOfUnion);
     expect(result.error.context?.action).toBe('unstake');
   });
 
   it('instantUnstake wraps as STAKING_INSTANT_UNSTAKE_FAILED', async () => {
-    const outOfUnion = new SodaxError('MM_SUPPLY_FAILED' as never, 'foreign code thrown into staking');
+    const outOfUnion = new SodaxError('MM_SUPPLY_FAILED' as never, 'foreign code thrown into staking', { feature: 'staking' });
     vi.spyOn(sodax.staking, 'createInstantUnstakeIntent').mockRejectedValueOnce(outOfUnion);
 
     const result = await sodax.staking.instantUnstake(instantUnstakeInput());
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.code).toBe('STAKING_INSTANT_UNSTAKE_FAILED');
+    expect(result.error.code).toBe('EXECUTION_FAILED');
     expect(result.error.cause).toBe(outOfUnion);
     expect(result.error.context?.action).toBe('instantUnstake');
   });
 
   it('claim wraps as STAKING_CLAIM_FAILED', async () => {
-    const outOfUnion = new SodaxError('SWAP_FAILED' as never, 'foreign code thrown into staking');
+    const outOfUnion = new SodaxError('SWAP_FAILED' as never, 'foreign code thrown into staking', { feature: 'staking' });
     vi.spyOn(sodax.staking, 'createClaimIntent').mockRejectedValueOnce(outOfUnion);
 
     const result = await sodax.staking.claim(claimInput());
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.code).toBe('STAKING_CLAIM_FAILED');
+    expect(result.error.code).toBe('EXECUTION_FAILED');
     expect(result.error.cause).toBe(outOfUnion);
     expect(result.error.context?.action).toBe('claim');
   });
 
   it('cancelUnstake wraps as STAKING_CANCEL_UNSTAKE_FAILED', async () => {
-    const outOfUnion = new SodaxError('MM_BORROW_FAILED' as never, 'foreign code thrown into staking');
+    const outOfUnion = new SodaxError('MM_BORROW_FAILED' as never, 'foreign code thrown into staking', { feature: 'staking' });
     vi.spyOn(sodax.staking, 'createCancelUnstakeIntent').mockRejectedValueOnce(outOfUnion);
 
     const result = await sodax.staking.cancelUnstake(cancelUnstakeInput());
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.code).toBe('STAKING_CANCEL_UNSTAKE_FAILED');
+    expect(result.error.code).toBe('EXECUTION_FAILED');
     expect(result.error.cause).toBe(outOfUnion);
     expect(result.error.context?.action).toBe('cancelUnstake');
   });

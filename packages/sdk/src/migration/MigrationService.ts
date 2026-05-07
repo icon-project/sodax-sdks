@@ -1,20 +1,19 @@
 import { SodaxError } from '../errors/SodaxError.js';
+import { mapRelayFailure } from '../errors/relay-error-mapping.js';
+import {  verifyFailed, intentCreationFailed, executionFailed, approveFailed, allowanceCheckFailed } from '../errors/wrappers.js';
 import {
-  type CreateMigrateIntentError,
-  type CreateRevertMigrationIntentError,
   type MigrateOrchestrationError,
   type MigrationAllowanceCheckError,
   type MigrationApproveError,
+  type MigrationCreateIntentError,
   type RevertMigrationOrchestrationError,
-  isCreateMigrateIntentError,
-  isCreateRevertMigrationIntentError,
   isMigrateOrchestrationError,
   isMigrationAllowanceCheckError,
   isMigrationApproveError,
+  isMigrationCreateIntentError,
   isRevertMigrationOrchestrationError,
   migrationInvariant,
-} from './error-types.js';
-import { mapRelayFailureToMigrationError } from './relay-error-mapping.js';
+} from './errors.js';
 import {
   IcxMigrationService,
   type IcxMigrateParams,
@@ -245,21 +244,13 @@ export class MigrationService {
       if (inner.ok) return inner;
       return {
         ok: false,
-        error: new SodaxError(
-          'MIGRATION_ALLOWANCE_CHECK_FAILED',
-          inner.error instanceof Error ? inner.error.message : 'Allowance check failed',
-          { cause: inner.error, context: { ...baseCtx, phase: 'allowanceCheck' } },
-        ),
+        error: allowanceCheckFailed('migration', inner.error, baseCtx),
       };
     } catch (error) {
       if (isMigrationAllowanceCheckError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError(
-          'MIGRATION_ALLOWANCE_CHECK_FAILED',
-          error instanceof Error ? error.message : 'Allowance check failed',
-          { cause: error, context: { ...baseCtx, phase: 'allowanceCheck' } },
-        ),
+        error: allowanceCheckFailed('migration', error, baseCtx),
       };
     }
   }
@@ -284,11 +275,7 @@ export class MigrationService {
     const { params } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey };
 
-    const wrapApproveFailure = (cause: unknown): MigrationApproveError =>
-      new SodaxError('MIGRATION_APPROVE_FAILED', cause instanceof Error ? cause.message : 'Approve failed', {
-        cause,
-        context: { ...baseCtx, phase: 'approve' },
-      });
+    const wrapApproveFailure = (cause: unknown) => approveFailed('migration', cause, baseCtx);
 
     try {
       migrationInvariant(action === 'migrate' || action === 'revert', 'Invalid action', { ...baseCtx, field: 'action' });
@@ -365,10 +352,6 @@ export class MigrationService {
 
         // Reached when params is bnUSD-shaped but srcChainKey is neither EVM-spoke nor Stellar.
         migrationInvariant(false, 'Invalid params for migrate action', { ...baseCtx, field: 'srcChainKey' });
-        // Belt-and-braces sentinel — unreachable today via `asserts cond`, defends against future
-        // removal of the assertion. Plain Error so the catch's `isMigrationApproveError`
-        // short-circuit can't swallow it.
-        throw new Error('unreachable: migrationInvariant(false, ...) above must throw');
       }
 
       // action === 'revert'
@@ -486,8 +469,6 @@ export class MigrationService {
 
       // No matching revert path.
       migrationInvariant(false, 'Invalid params or chain type for revert action', { ...baseCtx, field: 'srcChainKey' });
-      // Belt-and-braces sentinel — see comment in migrate branch above.
-      throw new Error('unreachable: migrationInvariant(false, ...) above must throw');
     } catch (error) {
       if (isMigrationApproveError(error)) return { ok: false, error };
       return { ok: false, error: wrapApproveFailure(error) };
@@ -555,10 +536,7 @@ export class MigrationService {
       if (!verifyTxHashResult.ok) {
         return {
           ok: false,
-          error: new SodaxError('MIGRATION_VERIFY_FAILED', 'Spoke transaction verification failed', {
-            cause: verifyTxHashResult.error,
-            context: { ...baseCtx, phase: 'verify' },
-          }),
+          error: verifyFailed('migration', verifyTxHashResult.error, baseCtx),
         };
       }
 
@@ -571,7 +549,15 @@ export class MigrationService {
       });
 
       if (!packetResult.ok) {
-        return { ok: false, error: mapRelayFailureToMigrationError(packetResult.error, baseCtx) };
+        return {
+          ok: false,
+          error: mapRelayFailure(packetResult.error, {
+            feature: 'migration',
+            action: baseCtx.action,
+            srcChainKey: baseCtx.srcChainKey,
+            dstChainKey: baseCtx.dstChainKey,
+          }),
+        };
       }
 
       // Secondary destination-spoke watcher — fires when bnUSD's destination is not Sonic
@@ -587,7 +573,13 @@ export class MigrationService {
         if (!execResult.ok) {
           return {
             ok: false,
-            error: mapRelayFailureToMigrationError(execResult.error, { ...baseCtx, phase: 'destinationExecution' }),
+            error: mapRelayFailure(execResult.error, {
+              feature: 'migration',
+              action: baseCtx.action,
+              srcChainKey: baseCtx.srcChainKey,
+              dstChainKey: baseCtx.dstChainKey,
+              phase: 'destinationExecution',
+            }),
           };
         }
       }
@@ -597,10 +589,7 @@ export class MigrationService {
       if (isMigrateOrchestrationError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError('MIGRATION_FAILED', error instanceof Error ? error.message : 'migratebnUSD failed', {
-          cause: error,
-          context: baseCtx,
-        }),
+        error: executionFailed('migration', error, baseCtx),
       };
     }
   }
@@ -636,7 +625,7 @@ export class MigrationService {
       });
 
       if (!packetResult.ok) {
-        return { ok: false, error: mapRelayFailureToMigrationError(packetResult.error, baseCtx) };
+        return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'migration', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey }) };
       }
 
       return { ok: true, value: { srcChainTxHash: tx, dstChainTxHash: packetResult.value.dst_tx_hash } };
@@ -644,10 +633,7 @@ export class MigrationService {
       if (isMigrateOrchestrationError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError('MIGRATION_FAILED', error instanceof Error ? error.message : 'migrateIcxToSoda failed', {
-          cause: error,
-          context: baseCtx,
-        }),
+        error: executionFailed('migration', error, baseCtx),
       };
     }
   }
@@ -688,7 +674,7 @@ export class MigrationService {
       });
 
       if (!packetResult.ok) {
-        return { ok: false, error: mapRelayFailureToMigrationError(packetResult.error, baseCtx) };
+        return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'migration', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey }) };
       }
 
       return { ok: true, value: { srcChainTxHash: tx, dstChainTxHash: packetResult.value.dst_tx_hash } };
@@ -696,11 +682,7 @@ export class MigrationService {
       if (isRevertMigrationOrchestrationError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError(
-          'MIGRATION_REVERT_FAILED',
-          error instanceof Error ? error.message : 'revertMigrateSodaToIcx failed',
-          { cause: error, context: baseCtx },
-        ),
+        error: executionFailed('migration', error, baseCtx),
       };
     }
   }
@@ -738,7 +720,7 @@ export class MigrationService {
       });
 
       if (!packetResult.ok) {
-        return { ok: false, error: mapRelayFailureToMigrationError(packetResult.error, baseCtx) };
+        return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'migration', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey }) };
       }
 
       return { ok: true, value: { srcChainTxHash: tx, dstChainTxHash: packetResult.value.dst_tx_hash } };
@@ -746,10 +728,7 @@ export class MigrationService {
       if (isMigrateOrchestrationError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError('MIGRATION_FAILED', error instanceof Error ? error.message : 'migrateBaln failed', {
-          cause: error,
-          context: baseCtx,
-        }),
+        error: executionFailed('migration', error, baseCtx),
       };
     }
   }
@@ -769,7 +748,7 @@ export class MigrationService {
    */
   async createMigrateBalnIntent<Raw extends boolean>(
     _params: BalnMigrateAction<Raw>,
-  ): Promise<Result<IntentTxResult<IconChainKey, Raw>, CreateMigrateIntentError>> {
+  ): Promise<Result<IntentTxResult<IconChainKey, Raw>, MigrationCreateIntentError>> {
     const { params, skipSimulation } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, action: 'migrateBaln' as const };
 
@@ -806,14 +785,10 @@ export class MigrationService {
       );
 
       if (!txResult.ok) {
-        if (isCreateMigrateIntentError(txResult.error)) return { ok: false, error: txResult.error };
+        if (isMigrationCreateIntentError(txResult.error)) return { ok: false, error: txResult.error };
         return {
           ok: false,
-          error: new SodaxError(
-            'MIGRATION_INTENT_CREATION_FAILED',
-            txResult.error instanceof Error ? txResult.error.message : 'Spoke deposit failed',
-            { cause: txResult.error, context: { ...baseCtx, phase: 'intentCreation' } },
-          ),
+          error: intentCreationFailed('migration', txResult.error, baseCtx),
         };
       }
 
@@ -825,14 +800,10 @@ export class MigrationService {
         },
       };
     } catch (error) {
-      if (isCreateMigrateIntentError(error)) return { ok: false, error };
+      if (isMigrationCreateIntentError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError(
-          'MIGRATION_INTENT_CREATION_FAILED',
-          error instanceof Error ? error.message : 'createMigrateBalnIntent failed',
-          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } },
-        ),
+        error: intentCreationFailed('migration', error, baseCtx),
       };
     }
   }
@@ -856,7 +827,7 @@ export class MigrationService {
    */
   async createMigratebnUSDIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: UnifiedBnUSDMigrateAction<K, Raw>,
-  ): Promise<Result<IntentTxResult<K, Raw>, CreateMigrateIntentError>> {
+  ): Promise<Result<IntentTxResult<K, Raw>, MigrationCreateIntentError>> {
     const { params, unchecked, skipSimulation } = _params;
     const baseCtx = {
       srcChainKey: params.srcChainKey,
@@ -955,8 +926,6 @@ export class MigrationService {
           ...baseCtx,
           field: 'tokens',
         });
-        // Belt-and-braces sentinel — unreachable today via `asserts cond`.
-        throw new Error('unreachable: migrationInvariant(false, ...) above must throw');
       }
 
       const hubWalletAddress = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
@@ -985,14 +954,10 @@ export class MigrationService {
       );
 
       if (!txResult.ok) {
-        if (isCreateMigrateIntentError(txResult.error)) return { ok: false, error: txResult.error };
+        if (isMigrationCreateIntentError(txResult.error)) return { ok: false, error: txResult.error };
         return {
           ok: false,
-          error: new SodaxError(
-            'MIGRATION_INTENT_CREATION_FAILED',
-            txResult.error instanceof Error ? txResult.error.message : 'Spoke deposit failed',
-            { cause: txResult.error, context: { ...baseCtx, direction, phase: 'intentCreation' } },
-          ),
+          error: intentCreationFailed('migration', txResult.error, { ...baseCtx, direction }),
         };
       }
 
@@ -1004,14 +969,10 @@ export class MigrationService {
         },
       };
     } catch (error) {
-      if (isCreateMigrateIntentError(error)) return { ok: false, error };
+      if (isMigrationCreateIntentError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError(
-          'MIGRATION_INTENT_CREATION_FAILED',
-          error instanceof Error ? error.message : 'createMigratebnUSDIntent failed',
-          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } },
-        ),
+        error: intentCreationFailed('migration', error, baseCtx),
       };
     }
   }
@@ -1035,7 +996,7 @@ export class MigrationService {
    */
   async createMigrateIcxToSodaIntent<Raw extends boolean>(
     _params: IcxMigrateAction<Raw>,
-  ): Promise<Result<IntentTxResult<IconChainKey, Raw>, CreateMigrateIntentError>> {
+  ): Promise<Result<IntentTxResult<IconChainKey, Raw>, MigrationCreateIntentError>> {
     const { params, skipSimulation } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, action: 'migrateIcxToSoda' as const };
     try {
@@ -1063,8 +1024,7 @@ export class MigrationService {
         // MigrationLookupError on `cause` (subset narrowing doesn't apply — Lookup ⊄ Create).
         return {
           ok: false,
-          error: new SodaxError('MIGRATION_INTENT_CREATION_FAILED', 'Failed to read ICX migration liquidity', {
-            cause: availableAmount.error,
+          error: new SodaxError('INTENT_CREATION_FAILED', 'Failed to read ICX migration liquidity', { feature: 'migration', cause: availableAmount.error,
             context: { ...baseCtx, phase: 'intentCreation' },
           }),
         };
@@ -1105,14 +1065,10 @@ export class MigrationService {
       );
 
       if (!txResult.ok) {
-        if (isCreateMigrateIntentError(txResult.error)) return { ok: false, error: txResult.error };
+        if (isMigrationCreateIntentError(txResult.error)) return { ok: false, error: txResult.error };
         return {
           ok: false,
-          error: new SodaxError(
-            'MIGRATION_INTENT_CREATION_FAILED',
-            txResult.error instanceof Error ? txResult.error.message : 'Spoke deposit failed',
-            { cause: txResult.error, context: { ...baseCtx, phase: 'intentCreation' } },
-          ),
+          error: intentCreationFailed('migration', txResult.error, baseCtx),
         };
       }
 
@@ -1124,14 +1080,10 @@ export class MigrationService {
         },
       };
     } catch (error) {
-      if (isCreateMigrateIntentError(error)) return { ok: false, error };
+      if (isMigrationCreateIntentError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError(
-          'MIGRATION_INTENT_CREATION_FAILED',
-          error instanceof Error ? error.message : 'createMigrateIcxToSodaIntent failed',
-          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } },
-        ),
+        error: intentCreationFailed('migration', error, baseCtx),
       };
     }
   }
@@ -1156,7 +1108,7 @@ export class MigrationService {
    */
   async createRevertSodaToIcxMigrationIntent<Raw extends boolean>(
     _params: IcxRevertMigrationAction<Raw>,
-  ): Promise<Result<IntentTxResult<SonicChainKey, Raw>, CreateRevertMigrationIntentError>> {
+  ): Promise<Result<IntentTxResult<SonicChainKey, Raw>, MigrationCreateIntentError>> {
     const { params, skipSimulation } = _params;
     const baseCtx = { srcChainKey: ChainKeys.SONIC_MAINNET, action: 'revertMigrateSodaToIcx' as const };
     try {
@@ -1194,14 +1146,10 @@ export class MigrationService {
       );
 
       if (!txResult.ok) {
-        if (isCreateRevertMigrationIntentError(txResult.error)) return { ok: false, error: txResult.error };
+        if (isMigrationCreateIntentError(txResult.error)) return { ok: false, error: txResult.error };
         return {
           ok: false,
-          error: new SodaxError(
-            'MIGRATION_REVERT_INTENT_CREATION_FAILED',
-            txResult.error instanceof Error ? txResult.error.message : 'Spoke deposit failed',
-            { cause: txResult.error, context: { ...baseCtx, phase: 'intentCreation' } },
-          ),
+          error: intentCreationFailed('migration', txResult.error, baseCtx),
         };
       }
 
@@ -1213,14 +1161,10 @@ export class MigrationService {
         },
       };
     } catch (error) {
-      if (isCreateRevertMigrationIntentError(error)) return { ok: false, error };
+      if (isMigrationCreateIntentError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError(
-          'MIGRATION_REVERT_INTENT_CREATION_FAILED',
-          error instanceof Error ? error.message : 'createRevertSodaToIcxMigrationIntent failed',
-          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } },
-        ),
+        error: intentCreationFailed('migration', error, baseCtx),
       };
     }
   }
