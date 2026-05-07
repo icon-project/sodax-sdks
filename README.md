@@ -1,9 +1,9 @@
 [![CI](https://github.com/icon-project/sodax-sdks/actions/workflows/ci.yml/badge.svg)](https://github.com/icon-project/sodax-sdks/actions/workflows/ci.yml)
 [![Security](https://github.com/icon-project/sodax-sdks/actions/workflows/security.yml/badge.svg)](https://github.com/icon-project/sodax-sdks/actions/workflows/security.yml)
 
-# Sodax Frontend
+# Sodax SDKs
 
-This repository contains the frontend and libraries implementation for the Sodax project, built with a modern tech stack and monorepo architecture.
+This repository contains the demo/example apps and SDK libraries implementation for the Sodax project, built with a modern tech stack and monorepo architecture.
 
 If you want to contribute, please refer to the [contributing guidelines](./CONTRIBUTING.md) of this project.
 
@@ -12,8 +12,6 @@ If you want to contribute, please refer to the [contributing guidelines](./CONTR
 ### Apps (`/apps`)
 
 The `apps` directory contains various frontend applications:
-
-- **web** (`/apps/web`): Main Next.js web application
 - **demo** (`/apps/demo`): Demo application showcasing features
 - **node** (`/apps/node`): Node.js specific implementation
 - **react-solver-example** (`/apps/react-solver-example`): Example implementation of the solver
@@ -29,24 +27,6 @@ The `packages` directory contains a sdk's and libraries:
 ### Publishing SDK's
 
 Instruction on how to release new packages can be found in [RELEASE_INSTRUCTIONS.md](./packages/RELEASE_INSTRUCTIONS.md)
-
-### Git Flow Frontend
-
-branches: `main`, `staging`, `production`:
-- `main` - https://sodax-web-dev.vercel.app/
-- `staging` - https://sodax-web-staging.vercel.app/
-- `production` - https://sodax.com/
-
-for normal task:
-1. create a branch from main
-2. create a PR from the branch to main, the PR is merged into main by the reviewer
-3. after testing sodax-web-dev.vercel.app by the QA, main merged into staging
-4. after testing sodax-web-staging.vercel.app by the QA, staging merged into production
-
-for urgent task:
-1. create a new branch from production
-2. create a PR from the branch to production, after testing by the QA or dev, the PR is merged into production
-3. make a PR from production to main to sync the latest changes between production and main
 
 rules for merging:
 1. when merge feature branches to main, use squash merge
