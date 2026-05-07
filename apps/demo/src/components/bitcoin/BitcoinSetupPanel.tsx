@@ -192,7 +192,7 @@ export const BitcoinSetupPanel = ({ walletProvider, onReadyChange, nativeBalance
                 <button type="button" onClick={copyAddress} className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors" title="Copy address">
                   {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
                 </button>
-                <a href={`${baseChainInfo[ChainKeys.BITCOIN_MAINNET].explorerAddressUrl}${tradingAddress}`} target="_blank" rel="noopener noreferrer" className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors" title="View on mempool.space">
+                <a href={`${baseChainInfo[ChainKeys.BITCOIN_MAINNET].explorer.addressUrl}${tradingAddress}`} target="_blank" rel="noopener noreferrer" className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors" title="View on mempool.space">
                   <ExternalLink className="h-3 w-3" />
                 </a>
               </div>
