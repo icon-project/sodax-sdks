@@ -8,8 +8,9 @@ import {
   spokeChainConfig,
   type XToken,
   type SpokeChainKey,
+  type ChainKey,
+  baseChainInfo,
 } from '@sodax/sdk';
-import { getChainUI } from './chains';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -292,8 +293,8 @@ export function getTokenOnChain(sodax: Sodax, symbol: string, chainId: SpokeChai
 }
 
 export const getChainExplorerTxUrl = (chainId: string, txHash: string): string | undefined => {
-  const chain = getChainUI(chainId);
-  if (!chain?.explorerTxUrl) return undefined;
+  const chain = baseChainInfo[chainId as ChainKey];
+  if (!chain) return undefined;
   return `${chain.explorerTxUrl}${txHash}`;
 };
 export function formatCurrencyCompact(value: number): string {

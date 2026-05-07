@@ -69,6 +69,10 @@ export const baseChainInfo = {
     type: 'EVM',
     chainId: 146,
     mainnet: true,
+    explorerUrl: 'https://sonicscan.org/',
+    explorerTxUrl: 'https://sonicscan.org/tx/',
+    explorerAddressUrl: 'https://sonicscan.org/address/',
+    explorerContractUrl: 'https://sonicscan.org/address/',
   },
   [ChainKeys.SOLANA_MAINNET]: {
     name: 'Solana',
@@ -76,6 +80,10 @@ export const baseChainInfo = {
     type: 'SOLANA',
     chainId: 'solana',
     mainnet: true,
+    explorerUrl: 'https://solscan.io/',
+    explorerTxUrl: 'https://solscan.io/tx/',
+    explorerAddressUrl: 'https://solscan.io/account/',
+    explorerContractUrl: 'https://solscan.io/account/',
   },
   [ChainKeys.AVALANCHE_MAINNET]: {
     name: 'Avalanche',
@@ -83,6 +91,10 @@ export const baseChainInfo = {
     type: 'EVM',
     chainId: 43_114,
     mainnet: true,
+    explorerUrl: 'https://snowtrace.io/',
+    explorerTxUrl: 'https://snowtrace.io/tx/',
+    explorerAddressUrl: 'https://snowtrace.io/address/',
+    explorerContractUrl: 'https://snowtrace.io/address/',
   },
   [ChainKeys.ARBITRUM_MAINNET]: {
     name: 'Arbitrum',
@@ -90,6 +102,10 @@ export const baseChainInfo = {
     type: 'EVM',
     chainId: 42_161,
     mainnet: true,
+    explorerUrl: 'https://arbiscan.io/',
+    explorerTxUrl: 'https://arbiscan.io/tx/',
+    explorerAddressUrl: 'https://arbiscan.io/address/',
+    explorerContractUrl: 'https://arbiscan.io/address/',
   },
   [ChainKeys.BASE_MAINNET]: {
     name: 'Base',
@@ -97,6 +113,10 @@ export const baseChainInfo = {
     type: 'EVM',
     chainId: 8453,
     mainnet: true,
+    explorerUrl: 'https://basescan.org/',
+    explorerTxUrl: 'https://basescan.org/tx/',
+    explorerAddressUrl: 'https://basescan.org/address/',
+    explorerContractUrl: 'https://basescan.org/address/',
   },
   [ChainKeys.OPTIMISM_MAINNET]: {
     name: 'Optimism',
@@ -104,6 +124,10 @@ export const baseChainInfo = {
     type: 'EVM',
     chainId: 10,
     mainnet: true,
+    explorerUrl: 'https://optimistic.etherscan.io/',
+    explorerTxUrl: 'https://optimistic.etherscan.io/tx/',
+    explorerAddressUrl: 'https://optimistic.etherscan.io/address/',
+    explorerContractUrl: 'https://optimistic.etherscan.io/address/',
   },
   [ChainKeys.BSC_MAINNET]: {
     name: 'BNB Chain',
@@ -111,6 +135,10 @@ export const baseChainInfo = {
     type: 'EVM',
     chainId: 56,
     mainnet: true,
+    explorerUrl: 'https://bscscan.com/',
+    explorerTxUrl: 'https://bscscan.com/tx/',
+    explorerAddressUrl: 'https://bscscan.com/address/',
+    explorerContractUrl: 'https://bscscan.com/address/',
   },
   [ChainKeys.POLYGON_MAINNET]: {
     name: 'Polygon',
@@ -118,6 +146,10 @@ export const baseChainInfo = {
     type: 'EVM',
     chainId: 137,
     mainnet: true,
+    explorerUrl: 'https://polygonscan.com/',
+    explorerTxUrl: 'https://polygonscan.com/tx/',
+    explorerAddressUrl: 'https://polygonscan.com/address/',
+    explorerContractUrl: 'https://polygonscan.com/address/',
   },
   [ChainKeys.HYPEREVM_MAINNET]: {
     name: 'Hyper',
@@ -125,6 +157,10 @@ export const baseChainInfo = {
     type: 'EVM',
     chainId: 999,
     mainnet: true,
+    explorerUrl: 'https://hyperevmscan.io/',
+    explorerTxUrl: 'https://hyperevmscan.io/tx/',
+    explorerAddressUrl: 'https://hyperevmscan.io/address/',
+    explorerContractUrl: 'https://hyperevmscan.io/address/',
   },
   [ChainKeys.LIGHTLINK_MAINNET]: {
     name: 'LightLink',
@@ -132,6 +168,10 @@ export const baseChainInfo = {
     type: 'EVM',
     chainId: 1890,
     mainnet: true,
+    explorerUrl: 'https://phoenix.lightlink.io/',
+    explorerTxUrl: 'https://phoenix.lightlink.io/tx/',
+    explorerAddressUrl: 'https://phoenix.lightlink.io/address/',
+    explorerContractUrl: 'https://phoenix.lightlink.io/address/',
   },
   [ChainKeys.INJECTIVE_MAINNET]: {
     name: 'Injective',
@@ -139,6 +179,10 @@ export const baseChainInfo = {
     type: 'INJECTIVE',
     chainId: 'injective-1',
     mainnet: true,
+    explorerUrl: 'https://www.mintscan.io/injective/',
+    explorerTxUrl: 'https://www.mintscan.io/injective/tx/',
+    explorerAddressUrl: 'https://www.mintscan.io/injective/address/',
+    explorerContractUrl: 'https://www.mintscan.io/injective/wasm/contract/',
   },
   [ChainKeys.STELLAR_MAINNET]: {
     name: 'Stellar',
@@ -146,6 +190,10 @@ export const baseChainInfo = {
     type: 'STELLAR',
     chainId: 'stellar',
     mainnet: true,
+    explorerUrl: 'https://stellar.expert/explorer/public/',
+    explorerTxUrl: 'https://stellar.expert/explorer/public/tx/',
+    explorerAddressUrl: 'https://stellar.expert/explorer/public/account/',
+    explorerContractUrl: 'https://stellar.expert/explorer/public/contract/',
   },
   [ChainKeys.SUI_MAINNET]: {
     name: 'SUI',
@@ -153,6 +201,10 @@ export const baseChainInfo = {
     type: 'SUI',
     chainId: 'sui',
     mainnet: true,
+    explorerUrl: 'https://suivision.xyz/',
+    explorerTxUrl: 'https://suivision.xyz/txblock/',
+    explorerAddressUrl: 'https://suivision.xyz/account/',
+    explorerContractUrl: 'https://suivision.xyz/package/',
   },
   [ChainKeys.ICON_MAINNET]: {
     name: 'ICON',
@@ -160,6 +212,10 @@ export const baseChainInfo = {
     type: 'ICON',
     chainId: '0x1.icon',
     mainnet: true,
+    explorerUrl: 'https://tracker.icon.community/',
+    explorerTxUrl: 'https://tracker.icon.community/transaction/',
+    explorerAddressUrl: 'https://tracker.icon.community/address/',
+    explorerContractUrl: 'https://tracker.icon.community/contract/',
   },
   [ChainKeys.NEAR_MAINNET]: {
     name: 'Near',
@@ -167,6 +223,10 @@ export const baseChainInfo = {
     type: 'NEAR',
     chainId: 'near',
     mainnet: true,
+    explorerUrl: 'https://nearblocks.io/',
+    explorerTxUrl: 'https://nearblocks.io/txns/',
+    explorerAddressUrl: 'https://nearblocks.io/address/',
+    explorerContractUrl: 'https://nearblocks.io/address/',
   },
   [ChainKeys.ETHEREUM_MAINNET]: {
     name: 'Ethereum',
@@ -174,6 +234,10 @@ export const baseChainInfo = {
     type: 'EVM',
     chainId: 1,
     mainnet: true,
+    explorerUrl: 'https://etherscan.io/',
+    explorerTxUrl: 'https://etherscan.io/tx/',
+    explorerAddressUrl: 'https://etherscan.io/address/',
+    explorerContractUrl: 'https://etherscan.io/address/',
   },
   [ChainKeys.BITCOIN_MAINNET]: {
     name: 'Bitcoin',
@@ -181,6 +245,10 @@ export const baseChainInfo = {
     type: 'BITCOIN',
     chainId: 'bitcoin',
     mainnet: true,
+    explorerUrl: 'https://mempool.space/',
+    explorerTxUrl: 'https://mempool.space/tx/',
+    explorerAddressUrl: 'https://mempool.space/address/',
+    explorerContractUrl: 'https://mempool.space/address/',
   },
   [ChainKeys.REDBELLY_MAINNET]: {
     name: 'Redbelly',
@@ -188,6 +256,10 @@ export const baseChainInfo = {
     type: 'EVM',
     chainId: 151,
     mainnet: true,
+    explorerUrl: 'https://redbelly.routescan.io/',
+    explorerTxUrl: 'https://redbelly.routescan.io/tx/',
+    explorerAddressUrl: 'https://redbelly.routescan.io/address/',
+    explorerContractUrl: 'https://redbelly.routescan.io/address/',
   },
   [ChainKeys.KAIA_MAINNET]: {
     name: 'Kaia',
@@ -195,6 +267,10 @@ export const baseChainInfo = {
     type: 'EVM',
     chainId: 8217,
     mainnet: true,
+    explorerUrl: 'https://klaytnfinder.io/',
+    explorerTxUrl: 'https://klaytnfinder.io/tx/',
+    explorerAddressUrl: 'https://klaytnfinder.io/account/',
+    explorerContractUrl: 'https://klaytnfinder.io/account/',
   },
   [ChainKeys.STACKS_MAINNET]: {
     name: 'Stacks',
@@ -202,6 +278,10 @@ export const baseChainInfo = {
     type: 'STACKS',
     chainId: 'stacks',
     mainnet: true,
+    explorerUrl: 'https://explorer.hiro.so/',
+    explorerTxUrl: 'https://explorer.hiro.so/txid/',
+    explorerAddressUrl: 'https://explorer.hiro.so/address/',
+    explorerContractUrl: 'https://explorer.hiro.so/txid/',
   },
 } as const satisfies Record<ChainKey, BaseChainInfo<ChainType>>;
 
@@ -273,6 +353,10 @@ export type BaseChainInfo<T extends ChainType> = {
   chainId: string | number;
   type: T;
   mainnet: boolean;
+  explorerUrl: string;
+  explorerTxUrl: string;
+  explorerAddressUrl: string;
+  explorerContractUrl: string;
 };
 
 export type HubConfig = {
