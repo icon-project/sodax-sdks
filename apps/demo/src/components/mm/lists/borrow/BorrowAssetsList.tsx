@@ -13,12 +13,13 @@ import { getXChainType, useXAccount, useXService } from '@sodax/wallet-sdk-react
 import { BorrowAssetsListItem } from './BorrowAssetsListItem';
 import { formatUnits } from 'viem';
 import { getBorrowableAssetsWithMarketData } from '@/lib/borrowUtils';
-import { BorrowModal } from './BorrowModal';
+import { BorrowModal } from '../BorrowModal';
 import { ChainKeys, type SpokeChainKey, type XToken } from '@sodax/sdk';
 import { ChainSelector } from '@/components/shared/ChainSelector';
 import { RepayModal } from '../RepayModal';
 import { Info } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { useAppStore } from '@/zustand/useAppStore';
 
 const TABLE_HEADERS = [
   'Asset',
@@ -51,14 +52,16 @@ export function BorrowAssetsList({ initialChainId }: BorrowAssetsListProps): JSX
 
   const { data: allMoneyMarketAssets, isLoading: isAssetsLoading } = useBackendAllMoneyMarketAssets();
 
+  const { selectedChainId: selectedPositionChainId } = useAppStore();
+  const { address: positionAddress } = useXAccount({ xChainId: selectedPositionChainId });
   const { data: userReserves, isLoading: isUserReservesLoading } = useUserReservesData({
-    params: { spokeChainKey: selectedChainId, userAddress: address },
+    params: { spokeChainKey: selectedPositionChainId, userAddress: positionAddress },
   });
-
   const { data: formattedReserves, isLoading: isFormattedReservesLoading } = useReservesUsdFormat();
   const { data: userSummary } = useUserFormattedSummary({
-    params: { spokeChainKey: selectedChainId, userAddress: address },
+    params: { spokeChainKey: selectedPositionChainId, userAddress: positionAddress },
   });
+
   const borrowableAssets = useMemo(() => {
     if (!allMoneyMarketAssets) return [];
     const allBorrowableAssets = getBorrowableAssetsWithMarketData(sodax, allMoneyMarketAssets);
@@ -80,6 +83,7 @@ export function BorrowAssetsList({ initialChainId }: BorrowAssetsListProps): JSX
       address,
     },
   });
+
   const hasCollateral = !!userReserves?.[0]?.some(reserve => reserve.scaledATokenBalance > 0n);
 
   const isLoading = isUserReservesLoading || isFormattedReservesLoading || isAssetsLoading;
@@ -98,12 +102,14 @@ export function BorrowAssetsList({ initialChainId }: BorrowAssetsListProps): JSX
           </div>
         )}
       </CardHeader>
+
       <div className="py-2 mx-2 my-1">
         <div className="flex items-center gap-3 mx-6 pb-2">
           <span className="text-sm font-medium text-clay">Chain:</span>
           <ChainSelector selectedChainId={selectedChainId} selectChainId={selectChainId} />
         </div>
       </div>
+
       <CardContent className="p-0">
         <div className="overflow-hidden">
           <div className="max-h-[500px] overflow-y-auto">
@@ -222,7 +228,6 @@ export function BorrowAssetsList({ initialChainId }: BorrowAssetsListProps): JSX
                     <BorrowAssetsListItem
                       key={`${asset.chainId}-${asset.address}-${index}`}
                       token={asset.token}
-                      asset={asset}
                       disabled={!hasCollateral}
                       walletBalance={
                         asset.token?.chainKey === selectedChainId && balances?.[asset.token.address]
@@ -264,7 +269,7 @@ export function BorrowAssetsList({ initialChainId }: BorrowAssetsListProps): JSX
           open={true}
           token={repayData.token}
           maxDebt={repayData.maxDebt}
-          debtChainId={selectedChainId}
+          srcChainId={selectedChainId}
           inlineSuccess={true}
           onOpenChange={open => {
             if (!open) setRepayData(null);

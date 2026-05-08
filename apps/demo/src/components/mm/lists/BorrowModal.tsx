@@ -1,21 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ChainSelector } from '@/components/shared/ChainSelector';
 import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
 import { parseUnits, formatUnits } from 'viem';
-import type { FormatUserSummaryResponse, MoneyMarketBorrowParams } from '@sodax/sdk';
+import type { FormatUserSummaryResponse, MoneyMarketBorrowParams, SpokeChainKey, XToken } from '@sodax/sdk';
 import { useBorrow, useReservesUsdFormat, useAToken, useUserReservesData, useSodaxContext } from '@sodax/dapp-kit';
-import type { SpokeChainKey, XToken } from '@sodax/sdk';
 import { useAppStore } from '@/zustand/useAppStore';
 import {
   getChainsWithThisToken,
@@ -28,20 +20,19 @@ import {
 } from '@/lib/utils';
 import { logger } from '@/lib/logger';
 import { useReserveMetrics } from '@/hooks/useReserveMetrics';
-import { MAX_BORROW_SAFETY_MARGIN, ZERO_ADDRESS, AMOUNT_DISPLAY_DECIMALS } from '../../constants';
-import { isUserReserveDataArray, isValidEvmAddress } from '../../typeGuards';
+import { MAX_BORROW_SAFETY_MARGIN, ZERO_ADDRESS, AMOUNT_DISPLAY_DECIMALS } from '../constants';
+import { isUserReserveDataArray, isValidEvmAddress } from '../typeGuards';
 import { extractTxHash } from '@/lib/extractTxHash';
-import { ErrorAlert } from '../../ErrorAlert';
+import { ErrorAlert } from '../ErrorAlert';
 import { getChainName } from '@/constants';
-import { ActionSuccessContent, type ActionSuccessData } from '../ActionSuccessContent';
+import { ActionSuccessContent, type ActionSuccessData } from './ActionSuccessContent';
 import { Loader2 } from 'lucide-react';
 
 interface BorrowModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   token: XToken;
-  // If true, shows success screen inline instead of closing and calling onSuccess.
-  inlineSuccess?: boolean; // Called on success. Only used when inlineSuccess is false.
+  inlineSuccess?: boolean;
   onSuccess?: (data: {
     amount: string;
     token: XToken;
@@ -50,7 +41,8 @@ interface BorrowModalProps {
     txHash?: `0x${string}`;
   }) => void;
   maxBorrow: string;
-  priceUSD: number; // User summary from the market chain (where collateral is). Used to recalculate max borrow based on user's borrowing capacity.
+  priceUSD: number;
+  /** User summary from the market chain (where collateral is). Used to recalculate max borrow. */
   userSummary?: FormatUserSummaryResponse;
 }
 
@@ -70,17 +62,21 @@ export function BorrowModal({
   const { selectedChainId, openWalletModal, isWalletModalOpen } = useAppStore();
   const { sodax } = useSodaxContext();
 
-  const sourceChainId = selectedChainId;
-  const [destinationChainId, setDestinationChainId] = useState<SpokeChainKey>(token.chainKey);
+  const srcChainKey = selectedChainId;
+  const [dstChainKey, setDstChainKey] = useState<SpokeChainKey>(token.chainKey);
 
-  const destinationToken = getTokenOnChain(sodax, token.symbol, destinationChainId);
-  const supportedChains = getChainsWithThisToken(sodax, token);
+  const supportedDestinationChains = getChainsWithThisToken(sodax, token);
+  const destinationToken = getTokenOnChain(sodax, token.symbol, dstChainKey);
+
+  const sourceWalletProvider = useWalletProvider({ xChainId: srcChainKey });
+  const { address: srcAddress } = useXAccount({ xChainId: srcChainKey });
+  const { address: dstAddress } = useXAccount({ xChainId: dstChainKey });
+
+  const isSameChain = srcChainKey === dstChainKey;
 
   const { data: formattedReserves } = useReservesUsdFormat();
-
-  const { address: destinationAddressForReserves } = useXAccount({ xChainId: destinationChainId });
   const { data: destinationUserReserves } = useUserReservesData({
-    params: { spokeChainKey: destinationChainId, userAddress: destinationAddressForReserves },
+    params: { spokeChainKey: dstChainKey, userAddress: dstAddress },
   });
 
   const tokenForMetrics = destinationToken ?? token;
@@ -149,55 +145,56 @@ export function BorrowModal({
     return truncateToDecimals(calculatedMaxBorrow * MAX_BORROW_SAFETY_MARGIN, AMOUNT_DISPLAY_DECIMALS);
   }, [userSummary, destinationMetrics.formattedReserve, aToken, initialMaxBorrow, initialPriceUSD]);
 
-  const sourceWalletProvider = useWalletProvider({ xChainId: sourceChainId });
-  const { address: sourceAddress } = useXAccount({ xChainId: sourceChainId });
-  const { address: destinationAddress } = useXAccount({ xChainId: destinationChainId });
+  const isMaxBorrowEffectivelyZero = useMemo(() => {
+    if (!maxBorrow || maxBorrow === '0') return true;
+    const maxBorrowNum = Number.parseFloat(maxBorrow);
+    return maxBorrowNum <= 0 || Number.isNaN(maxBorrowNum);
+  }, [maxBorrow]);
+
+  const parsedAmount: number | undefined = useMemo(() => {
+    const raw = Number.parseFloat(amount.replace(',', '.'));
+    if (Number.isNaN(raw) || raw <= 0) return undefined;
+    return raw;
+  }, [amount]);
+
+  const parsedMaxAmount: number | undefined = useMemo(() => {
+    if (!maxBorrow) return undefined;
+    const num = Number.parseFloat(maxBorrow);
+    if (!Number.isFinite(num) || num <= 0) return undefined;
+    return num;
+  }, [maxBorrow]);
+
+  const exceedsMaxBorrow =
+    parsedAmount !== undefined && parsedMaxAmount !== undefined && parsedAmount > parsedMaxAmount;
 
   const { mutateAsync: borrow, isPending, error, reset: resetBorrowError } = useBorrow();
 
   const params: MoneyMarketBorrowParams | undefined = useMemo(() => {
-    if (!amount || !destinationToken || !sourceAddress) {
-      return undefined;
-    }
+    if (!parsedAmount || exceedsMaxBorrow || !destinationToken || !srcAddress) return undefined;
 
-    const normalizedAmount = amount.replace(',', '.');
-    const amountNum = Number.parseFloat(normalizedAmount);
-
-    if (amountNum <= 0 || Number.isNaN(amountNum)) {
-      return undefined;
-    }
-
-    const maxBorrowNum = maxBorrow ? Number.parseFloat(maxBorrow) : 0;
-    const isMaxBorrowEffectivelyZero = maxBorrowNum <= 0 || Number.isNaN(maxBorrowNum);
-
-    if (isMaxBorrowEffectivelyZero) {
-      return undefined;
-    }
-
-    if (amountNum > maxBorrowNum) {
-      return undefined;
-    }
-
-    const isSameChain = sourceChainId === destinationChainId;
-
-    const crossChainParams =
-      isSameChain || !destinationAddress ? {} : { dstChainKey: destinationChainId, dstAddress: destinationAddress };
-
-    const parsedAmount = parseUnits(normalizedAmount, destinationToken.decimals);
+    const crossChainParams = isSameChain ? {} : { dstChainKey, dstAddress };
 
     return {
-      srcChainKey: sourceChainId,
-      srcAddress: sourceAddress,
+      srcChainKey,
+      srcAddress,
       token: destinationToken.address,
-      amount: parsedAmount,
+      amount: parseUnits(amount, destinationToken.decimals),
       action: 'borrow',
       ...crossChainParams,
     };
-  }, [amount, destinationToken, sourceChainId, destinationChainId, destinationAddress, sourceAddress, maxBorrow]);
+  }, [
+    amount,
+    parsedAmount,
+    exceedsMaxBorrow,
+    destinationToken,
+    srcChainKey,
+    dstChainKey,
+    dstAddress,
+    srcAddress,
+    isSameChain,
+  ]);
 
-  const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: sourceChainId });
-
-  const isBusy = isPending;
+  const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: srcChainKey });
 
   const handleBorrow = async (): Promise<void> => {
     if (!sourceWalletProvider || !params) return;
@@ -209,8 +206,8 @@ export function BorrowModal({
       const nextSuccessData: ActionSuccessData = {
         amount: normalizedAmount,
         token,
-        sourceChainId,
-        destinationChainId,
+        sourceChainId: srcChainKey,
+        destinationChainId: dstChainKey,
         txHash: extractTxHash(result),
       };
 
@@ -223,24 +220,13 @@ export function BorrowModal({
       }
     } catch (err) {
       logger.error('Borrow failed', err);
-      if (err && typeof err === 'object' && 'data' in err) {
-        logger.error('Borrow error details', (err as { data: unknown }).data);
-      }
     }
   };
 
   const handleMaxClick = (): void => {
-    const maxBorrowNum = Number.parseFloat(maxBorrow);
-    if (maxBorrowNum > 0 && !Number.isNaN(maxBorrowNum)) {
-      setAmount(getSafeMaxAmountForInput(maxBorrow));
-    }
+    if (isMaxBorrowEffectivelyZero) return;
+    setAmount(getSafeMaxAmountForInput(maxBorrow));
   };
-
-  const isMaxBorrowEffectivelyZero = useMemo(() => {
-    if (!maxBorrow || maxBorrow === '0') return true;
-    const maxBorrowNum = Number.parseFloat(maxBorrow);
-    return maxBorrowNum <= 0 || Number.isNaN(maxBorrowNum);
-  }, [maxBorrow]);
 
   const handleOpenChangeInternal = (nextOpen: boolean) => {
     if (!nextOpen && isWalletModalOpen) {
@@ -251,13 +237,10 @@ export function BorrowModal({
       setAmount('');
       setStep('form');
       setSuccessData(null);
-      setDestinationChainId(token.chainKey);
+      setDstChainKey(token.chainKey);
       resetBorrowError?.();
     }
   };
-
-  const isSameChain = sourceChainId === destinationChainId;
-  const isCrossChainMissingDestinationAddress = !isSameChain && !destinationAddress;
 
   if (inlineSuccess && step === 'success' && successData) {
     return (
@@ -271,39 +254,44 @@ export function BorrowModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChangeInternal} modal={!isWalletModalOpen}>
-      <DialogContent className="sm:max-w-md border-cherry-grey/20">
+      <DialogContent className="min-w-0 max-w-[calc(100vw-2rem)] overflow-x-hidden sm:max-w-md border-cherry-grey/20">
         <DialogHeader>
           <DialogTitle className="text-center text-cherry-dark">Borrow {token.symbol}</DialogTitle>
-          <DialogDescription className="text-center">
-            {isSameChain ? 'Borrow funds on the same chain' : 'Borrow funds and deliver to another chain'}
-          </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Borrow from (collateral chain)</Label>
-            <div className="p-2 bg-muted rounded-md">
-              <p className="text-xs text-muted-foreground">
-                Debt will be created on{' '}
-                <span className="text-sm font-medium">{getChainName(sourceChainId) || sourceChainId}</span>
-              </p>
-            </div>
-          </div>
-
+        <div className="min-w-0 space-y-4">
           <div className="space-y-2">
             <Label>Deliver funds to</Label>
             <ChainSelector
-              selectedChainId={destinationChainId}
-              selectChainId={setDestinationChainId}
-              allowedChains={supportedChains}
+              selectedChainId={dstChainKey}
+              selectChainId={setDstChainKey}
+              allowedChains={supportedDestinationChains}
             />
-            <p className="text-xs text-muted-foreground">
-              {isSameChain
-                ? 'Same-chain borrow'
-                : `Cross-chain: Collateral on ${getChainName(sourceChainId) || sourceChainId}, funds on ${
-                    getChainName(destinationChainId) || destinationChainId
-                  }`}
-            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-medium px-2 py-0.5 rounded bg-muted text-cherry-dark">
+                {isSameChain ? 'Same-chain' : 'Cross-chain'}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {isSameChain
+                  ? `Borrow ${token.symbol} on ${getChainName(srcChainKey) || srcChainKey}`
+                  : `Borrow ${token.symbol} against your collateral on ${getChainName(srcChainKey) || srcChainKey} to ${
+                      getChainName(dstChainKey) || dstChainKey
+                    }`}
+              </span>
+            </div>
+            {!isSameChain && !dstAddress && (
+              <p className="text-xs text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-lg border border-amber-200 dark:border-amber-800">
+                Connect a wallet on <strong>{getChainName(dstChainKey) || dstChainKey}</strong> to receive the borrowed
+                funds there.{' '}
+                <button
+                  type="button"
+                  className="underline underline-offset-2 hover:text-amber-700"
+                  onClick={openWalletModal}
+                >
+                  Open wallet menu
+                </button>
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -314,7 +302,7 @@ export function BorrowModal({
                 type="number"
                 value={amount}
                 onChange={e => setAmount(e.target.value)}
-                disabled={isBusy}
+                disabled={isPending}
               />
               <span>{token.symbol}</span>
               <Button
@@ -322,7 +310,7 @@ export function BorrowModal({
                 variant="outline"
                 size="sm"
                 onClick={handleMaxClick}
-                disabled={isBusy || isMaxBorrowEffectivelyZero}
+                disabled={isPending || isMaxBorrowEffectivelyZero}
               >
                 Max
               </Button>
@@ -334,65 +322,39 @@ export function BorrowModal({
                   Max borrow: {formatDecimalForDisplay(maxBorrow, 4)} {token.symbol}
                 </p>
               )}
-              {amount &&
-                (() => {
-                  const inputAmountNum = Number.parseFloat(amount.replace(',', '.'));
-                  if (Number.isNaN(inputAmountNum) || inputAmountNum <= 0) return null;
-
-                  if (isMaxBorrowEffectivelyZero && !isBusy) {
-                    return (
-                      <ErrorAlert
-                        text="Insufficient collateral to borrow this asset. Supply more collateral to borrow."
-                        variant="compact"
-                      />
-                    );
-                  }
-
-                  const maxBorrowNum = Number.parseFloat(maxBorrow);
-                  if (!Number.isNaN(maxBorrowNum) && inputAmountNum > maxBorrowNum && !isBusy) {
-                    return (
-                      <ErrorAlert
-                        text={`Amount exceeds maximum borrowable: ${formatDecimalForDisplay(maxBorrow, 4)} ${token.symbol}`}
-                        variant="compact"
-                      />
-                    );
-                  }
-
-                  return null;
-                })()}
+              {parsedAmount !== undefined && isMaxBorrowEffectivelyZero && !isPending && (
+                <ErrorAlert
+                  text="Insufficient collateral to borrow this asset. Supply more collateral to borrow."
+                  variant="compact"
+                />
+              )}
+              {exceedsMaxBorrow && !isPending && parsedMaxAmount !== undefined && (
+                <ErrorAlert
+                  text={`Amount exceeds maximum borrowable: ${formatDecimalForDisplay(maxBorrow, 4)} ${token.symbol}`}
+                  variant="compact"
+                />
+              )}
             </div>
           </div>
         </div>
 
-        {error && <ErrorAlert text={getMmErrorText(error)} />}
+        {error && (
+          <div className="min-w-0 w-full">
+            <ErrorAlert text={getMmErrorText(error)} />
+          </div>
+        )}
 
-        {!isWrongChain &&
-          !isCrossChainMissingDestinationAddress &&
-          amount &&
-          !isMaxBorrowEffectivelyZero &&
-          (() => {
-            const inputAmountNum = Number.parseFloat(amount.replace(',', '.'));
-            const maxBorrowNum = Number.parseFloat(maxBorrow);
-            return (
-              !Number.isNaN(inputAmountNum) &&
-              inputAmountNum > 0 &&
-              (Number.isNaN(maxBorrowNum) || inputAmountNum <= maxBorrowNum)
-            );
-          })() && (
-            <p className="text-xs text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-lg border border-amber-200 dark:border-amber-800">
-              Make sure you have enough <strong>{getNativeTokenSymbol(sourceChainId)}</strong> on{' '}
-              <strong>{getChainName(sourceChainId) || sourceChainId}</strong> to cover gas fees for this transaction.
-            </p>
-          )}
+        {!isWrongChain && !!srcAddress && !!parsedAmount && (
+          <p className="text-xs text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-lg border border-amber-200 dark:border-amber-800">
+            Make sure you have enough <strong>{getNativeTokenSymbol(srcChainKey)}</strong> on{' '}
+            <strong>{getChainName(srcChainKey) || srcChainKey}</strong> to cover gas fees for this transaction.
+          </p>
+        )}
 
-        <DialogFooter className="sm:justify-start flex-col gap-2">
+        <DialogFooter className="w-full min-w-0 flex-col gap-2 sm:justify-start">
           {isWrongChain ? (
-            <Button className="w-full" variant="cherry" onClick={handleSwitchChain} disabled={isBusy}>
-              Switch to {getChainName(sourceChainId) || sourceChainId}
-            </Button>
-          ) : isCrossChainMissingDestinationAddress ? (
-            <Button className="w-full" variant="cherry" onClick={openWalletModal}>
-              Connect Wallet on {getChainName(destinationChainId) || destinationChainId}
+            <Button className="w-full" variant="cherry" onClick={handleSwitchChain} disabled={isPending}>
+              Switch Chain
             </Button>
           ) : isPending ? (
             <Button className="w-full" disabled>
@@ -405,7 +367,7 @@ export function BorrowModal({
               type="button"
               variant="default"
               onClick={handleBorrow}
-              disabled={!params || !amount || isBusy}
+              disabled={!params || !sourceWalletProvider}
             >
               Borrow {token.symbol}
             </Button>

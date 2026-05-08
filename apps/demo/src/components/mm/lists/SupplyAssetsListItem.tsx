@@ -5,7 +5,13 @@ import { formatUnits } from 'viem';
 import type { FormatReserveUSDResponse, UserReserveData } from '@sodax/sdk';
 import { useReserveMetrics } from '@/hooks/useReserveMetrics';
 import { Button } from '@/components/ui/button';
-import { DUST_THRESHOLD, ATOKEN_DECIMALS, MAX_WITHDRAW_SAFETY_MARGIN, HF_LIMITED_THRESHOLD, BALANCE_DISPLAY_DECIMALS } from '../constants';
+import {
+  DUST_THRESHOLD,
+  ATOKEN_DECIMALS,
+  MAX_WITHDRAW_SAFETY_MARGIN,
+  HF_LIMITED_THRESHOLD,
+  BALANCE_DISPLAY_DECIMALS,
+} from '../constants';
 import { isUserReserveDataArray, isValidAddress } from '../typeGuards';
 import { truncateToDecimals } from '@/lib/utils';
 
@@ -63,7 +69,9 @@ export function SupplyAssetsListItem({
 
   // ALWAYS USE ATOKEN_DECIMALS (18) FOR aTOKENS
   const formattedBalance =
-    aTokenBalance !== undefined ? truncateToDecimals(Number(formatUnits(aTokenBalance, ATOKEN_DECIMALS)), BALANCE_DISPLAY_DECIMALS) : '-';
+    aTokenBalance !== undefined
+      ? truncateToDecimals(Number(formatUnits(aTokenBalance, ATOKEN_DECIMALS)), BALANCE_DISPLAY_DECIMALS)
+      : '-';
 
   /**
    * Health-factor-aware max withdrawal — Aave V3 formula.
@@ -176,20 +184,7 @@ export function SupplyAssetsListItem({
       {/* Actions */}
       <TableCell className="px-6 py-5">
         <div className="flex items-center gap-2">
-          <Button
-            variant="cherry"
-            size="sm"
-            onClick={() => onSupplyClick(token)}
-            disabled={
-              // Disable if wallet balance is not available ('-'), empty, zero/negative, or invalid number
-              // Note: We show "0.0000" when loading, so we check for <= 0 to disable during loading too
-              !walletBalance ||
-              walletBalance === '-' ||
-              Number.parseFloat(walletBalance) <= 0 ||
-              Number.isNaN(Number.parseFloat(walletBalance))
-            }
-            className="flex-1 min-w-[85px]"
-          >
+          <Button variant="cherry" size="sm" onClick={() => onSupplyClick(token)} className="flex-1 min-w-[85px]">
             Supply
           </Button>
           <Button
