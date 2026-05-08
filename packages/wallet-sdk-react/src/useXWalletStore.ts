@@ -17,7 +17,7 @@ export type GetWalletProviderReturnType<K extends ChainType | undefined> = K ext
 
 type XWalletStore = {
   xServices: Partial<Record<ChainType, XService>>;
-  /** Active wallet connections. Only field persisted to localStorage. */
+  /** Active wallet connections. Persisted to localStorage. */
   xConnections: Partial<Record<ChainType, XConnection>>;
   xConnectorsByChain: Partial<Record<ChainType, XConnector[]>>;
   enabledChains: ChainType[];
@@ -31,6 +31,8 @@ type XWalletStore = {
    * read from `WalletConfigContext` directly via Hydrators.
    */
   walletConfig: SodaxWalletConfig | undefined;
+  /** Persisted user-disconnect intent. Hydrators suppress writes when set so ghost auto-reconnects don't override. Cleared by `<Chain>Actions.connect`. */
+  userDisconnected: Partial<Record<ChainType, boolean>>;
 
   setXConnection: (xChainType: ChainType, xConnection: XConnection) => void;
   unsetXConnection: (xChainType: ChainType) => void;
@@ -42,6 +44,8 @@ type XWalletStore = {
   initChainServices: (walletConfig: SodaxWalletConfig) => void;
   /** Remove persisted connections for chains not in enabledChains. Called after persist hydration. */
   cleanupDisabledConnections: () => void;
+  markUserDisconnected: (xChainType: ChainType) => void;
+  clearUserDisconnected: (xChainType: ChainType) => void;
 };
 
 export const useXWalletStore = create<XWalletStore>()(
@@ -55,6 +59,7 @@ export const useXWalletStore = create<XWalletStore>()(
         chainActions: {},
         walletProviders: {},
         walletConfig: undefined,
+        userDisconnected: {},
 
         setXConnection: (xChainType: ChainType, xConnection: XConnection) => {
           set(state => {
@@ -132,12 +137,27 @@ export const useXWalletStore = create<XWalletStore>()(
             }
           });
         },
+
+        markUserDisconnected: (xChainType: ChainType) => {
+          set(state => {
+            state.userDisconnected[xChainType] = true;
+          });
+        },
+
+        clearUserDisconnected: (xChainType: ChainType) => {
+          set(state => {
+            delete state.userDisconnected[xChainType];
+          });
+        },
       })),
       {
         // key kept as 'xwagmi-store' for backward compat — existing users won't lose persisted connections on upgrade
         name: 'xwagmi-store',
         storage: createJSONStorage(() => localStorage),
-        partialize: state => ({ xConnections: state.xConnections }),
+        partialize: state => ({
+          xConnections: state.xConnections,
+          userDisconnected: state.userDisconnected,
+        }),
       },
     ),
     { name: 'xwagmi-store' },

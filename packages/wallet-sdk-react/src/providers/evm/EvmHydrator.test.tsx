@@ -26,12 +26,14 @@ const wagmiState: {
   walletClient: undefined,
 };
 
+const reconnectFn = vi.fn();
 vi.mock('wagmi', () => ({
   useConfig: () => wagmiState.config,
   useConnectors: () => wagmiState.connectors,
   useAccount: () => wagmiState.account,
   usePublicClient: () => wagmiState.publicClient,
   useWalletClient: () => ({ data: wagmiState.walletClient }),
+  useReconnect: () => ({ reconnect: reconnectFn }),
 }));
 
 const evmCtor = vi.fn();
@@ -54,10 +56,19 @@ const setters = {
   unsetXConnection: vi.fn(),
   setWalletProvider: vi.fn(),
   setXConnectors: vi.fn(),
+  userDisconnected: {} as Partial<Record<'EVM', boolean>>,
 };
 vi.mock('@/useXWalletStore.js', () => ({
   useXWalletStore: Object.assign((s: (st: unknown) => unknown) => s(setters), {
-    getState: () => ({ setXConnectors: setters.setXConnectors }),
+    getState: () => ({
+      setXConnectors: setters.setXConnectors,
+      xConnections: {},
+      userDisconnected: setters.userDisconnected,
+    }),
+    persist: {
+      hasHydrated: () => true,
+      onFinishHydration: () => () => {},
+    },
   }),
 }));
 
@@ -172,7 +183,8 @@ describe('EvmHydrator → EvmWalletProvider', () => {
       },
     );
 
-    it('calls setXConnection on connected', () => {
+    it('calls setXConnection on connected once walletClient is ready', () => {
+      wagmiState.walletClient = wallet(42161);
       wagmiState.account = { address: fakeAddress, status: 'connected', connector: fakeConnector };
       renderWith({ EVM: {} });
       expect(setters.setXConnection).toHaveBeenCalledWith('EVM', {
@@ -182,15 +194,54 @@ describe('EvmHydrator → EvmWalletProvider', () => {
       expect(setters.unsetXConnection).not.toHaveBeenCalled();
     });
 
-    it('calls unsetXConnection on disconnected', () => {
+    it('does not call setXConnection on connected while walletClient is still loading', () => {
+      wagmiState.walletClient = undefined;
+      wagmiState.account = { address: fakeAddress, status: 'connected', connector: fakeConnector };
+      renderWith({ EVM: {} });
+      expect(setters.setXConnection).not.toHaveBeenCalled();
+      expect(setters.unsetXConnection).not.toHaveBeenCalled();
+    });
+
+    it('does not call unsetXConnection on initial disconnected (preserves persisted state)', () => {
       wagmiState.account = { address: undefined, status: 'disconnected', connector: undefined };
       renderWith({ EVM: {} });
-      expect(setters.unsetXConnection).toHaveBeenCalledWith('EVM');
+      expect(setters.unsetXConnection).not.toHaveBeenCalled();
       expect(setters.setXConnection).not.toHaveBeenCalled();
+    });
+
+    it('calls unsetXConnection on disconnected after observing connected in this session', () => {
+      wagmiState.walletClient = wallet(42161);
+      wagmiState.account = { address: fakeAddress, status: 'connected', connector: fakeConnector };
+      const { rerender } = renderWith({ EVM: {} });
+      expect(setters.setXConnection).toHaveBeenCalledWith('EVM', {
+        xAccount: { address: fakeAddress, xChainType: 'EVM' },
+        xConnectorId: fakeConnector.id,
+      });
+
+      wagmiState.walletClient = undefined;
+      wagmiState.account = { address: undefined, status: 'disconnected', connector: undefined };
+      rerender(
+        <WalletConfigProvider value={{ EVM: {} }}>
+          <EvmHydrator />
+        </WalletConfigProvider>,
+      );
+      expect(setters.unsetXConnection).toHaveBeenCalledWith('EVM');
+    });
+
+    it('does not call setXConnection when userDisconnected.EVM is true (ghost reconnect)', () => {
+      setters.userDisconnected = { EVM: true };
+      wagmiState.walletClient = wallet(42161);
+      wagmiState.account = { address: fakeAddress, status: 'connected', connector: fakeConnector };
+      renderWith({ EVM: {} });
+      expect(setters.setXConnection).not.toHaveBeenCalled();
+      // walletProvider must also stay undefined to keep xConnection/walletProvider in sync
+      const providerCalls = setters.setWalletProvider.mock.calls;
+      expect(providerCalls.every(([, p]) => p === undefined)).toBe(true);
     });
 
     afterEach(() => {
       wagmiState.account = { address: undefined, status: 'disconnected', connector: undefined };
+      setters.userDisconnected = {};
     });
   });
 });
