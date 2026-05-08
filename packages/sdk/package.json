@@ -30,19 +30,20 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "files": ["dist"],
+  "files": ["dist", "ai-exported"],
   "scripts": {
     "build": "tsup",
     "test": "vitest run --exclude ./src/e2e-tests",
     "test-e2e": "vitest run ./src/e2e-tests",
     "coverage": "vitest run --coverage",
     "dev": "tsup --watch",
-    "ci": "pnpm run pretty && pnpm run build && pnpm run test",
+    "ci": "pnpm run pretty && pnpm run build && pnpm run test && pnpm run check:ai-exported",
     "checkTs": "tsc --noEmit",
     "pretty": "biome format . --write",
     "lint": "biome lint . --write",
     "check-exports": "attw $(pnpm pack) --ignore-rules=cjs-resolves-to-esm",
     "check:circular-deps": "madge --circular --exclude 'types/dist' $(find ./src -name '*.ts')",
+    "check:ai-exported": "bash ./scripts/check-ai-exported.sh",
     "prepublishOnly": "pnpm run ci",
     "local-release": "changeset version && changeset publish",
     "clean": "rm -rf node_modules && rm -rf dist && rm -rf .turbo"
