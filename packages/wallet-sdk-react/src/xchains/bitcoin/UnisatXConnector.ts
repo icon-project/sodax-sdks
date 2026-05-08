@@ -22,14 +22,19 @@ declare global {
 
 class UnisatWalletProvider implements IBitcoinWalletProvider {
   readonly chainType = 'BITCOIN' as const;
-  private unisat: UnisatWallet;
   private cachedAddress: string;
   private readonly defaults: BitcoinWalletDefaults | undefined;
 
-  constructor(unisat: UnisatWallet, address: string, defaults?: BitcoinWalletDefaults) {
-    this.unisat = unisat;
+  constructor(address: string, defaults?: BitcoinWalletDefaults) {
     this.cachedAddress = address;
     this.defaults = defaults;
+  }
+
+  // Lazy resolve so the provider can be constructed before the extension finishes injecting `window.unisat` (post-refresh rehydrate path).
+  private get unisat(): UnisatWallet {
+    const u = window.unisat;
+    if (!u) throw new Error('Unisat wallet not available');
+    return u;
   }
 
   async getWalletAddress(): Promise<string> {
@@ -111,7 +116,7 @@ export class UnisatXConnector extends BitcoinXConnector {
       return undefined;
     }
 
-    this.walletProvider = new UnisatWalletProvider(window.unisat, address, this.defaults);
+    this.walletProvider = new UnisatWalletProvider(address, this.defaults);
 
     return {
       address,
@@ -128,7 +133,7 @@ export class UnisatXConnector extends BitcoinXConnector {
   }
 
   recreateWalletProvider(xAccount: XAccount): IBitcoinWalletProvider | undefined {
-    if (!window.unisat || !xAccount.address) return undefined;
-    return new UnisatWalletProvider(window.unisat, xAccount.address, this.defaults);
+    if (!xAccount.address) return undefined;
+    return new UnisatWalletProvider(xAccount.address, this.defaults);
   }
 }
