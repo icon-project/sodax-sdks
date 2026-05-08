@@ -48,7 +48,7 @@ export function invariant(
  * fires when the assertion fails — no overhead on the happy path.
  *
  * @example
- *   assertOk(supported, () => new SodaxError('SWAP_VALIDATION_FAILED', 'Unsupported token'));
+ *   assertOk(supported, () => new SodaxError('VALIDATION_FAILED', 'Unsupported token', { feature: 'swap' }));
  */
 export function assertOk<E extends Error>(
   // biome-ignore lint/suspicious/noExplicitAny: any required for type inference

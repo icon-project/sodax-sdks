@@ -40,37 +40,23 @@ import {
   type SpokeExecActionParams,
   type EvmSpokeOnlyChainKey,
 } from '@sodax/types';
-import { SodaxError } from '../errors/SodaxError.js';
+import { lookupFailed, verifyFailed, intentCreationFailed, executionFailed, approveFailed, allowanceCheckFailed } from '../errors/wrappers.js';
 import {
-  type CancelUnstakeError,
-  type ClaimError,
-  type CreateCancelUnstakeIntentError,
-  type CreateClaimIntentError,
-  type CreateInstantUnstakeIntentError,
-  type CreateStakeIntentError,
-  type CreateUnstakeIntentError,
-  type InstantUnstakeError,
-  type StakeError,
+  type StakeOrchestrationError,
   type StakingAllowanceCheckError,
   type StakingApproveError,
+  type StakingCreateIntentError,
   type StakingInfoFetchError,
-  type UnstakeError,
-  isCancelUnstakeError,
-  isClaimError,
-  isCreateCancelUnstakeIntentError,
-  isCreateClaimIntentError,
-  isCreateInstantUnstakeIntentError,
-  isCreateStakeIntentError,
-  isCreateUnstakeIntentError,
-  isInstantUnstakeError,
-  isStakeError,
+  type StakingOrchestrationError,
+  isStakeOrchestrationError,
   isStakingAllowanceCheckError,
   isStakingApproveError,
+  isStakingCreateIntentError,
   isStakingInfoFetchError,
-  isUnstakeError,
+  isStakingOrchestrationError,
   stakingInvariant,
-} from './error-types.js';
-import { mapRelayFailureToStakingError } from './relay-error-mapping.js';
+} from './errors.js';
+import { mapRelayFailure } from '../errors/relay-error-mapping.js';
 
 export type StakeParams<K extends SpokeChainKey> = {
   srcChainKey: K; // chain key of the spoke chain to stake from
@@ -263,21 +249,13 @@ export class StakingService {
       if (inner.ok) return inner;
       return {
         ok: false,
-        error: new SodaxError(
-          'STAKING_ALLOWANCE_CHECK_FAILED',
-          inner.error instanceof Error ? inner.error.message : 'Allowance check failed',
-          { cause: inner.error, context: { ...baseCtx, phase: 'allowanceCheck' } },
-        ),
+        error: allowanceCheckFailed('staking', inner.error, baseCtx),
       };
     } catch (error) {
       if (isStakingAllowanceCheckError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError(
-          'STAKING_ALLOWANCE_CHECK_FAILED',
-          error instanceof Error ? error.message : 'Allowance check failed',
-          { cause: error, context: { ...baseCtx, phase: 'allowanceCheck' } },
-        ),
+        error: allowanceCheckFailed('staking', error, baseCtx),
       };
     }
   }
@@ -301,11 +279,7 @@ export class StakingService {
     const { params } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, action: params.action };
 
-    const wrapApproveFailure = (cause: unknown): StakingApproveError =>
-      new SodaxError('STAKING_APPROVE_FAILED', cause instanceof Error ? cause.message : 'Approve failed', {
-        cause,
-        context: { ...baseCtx, phase: 'approve' },
-      });
+    const wrapApproveFailure = (cause: unknown) => approveFailed('staking', cause, baseCtx);
 
     try {
       stakingInvariant(
@@ -397,14 +371,6 @@ export class StakingService {
         ...baseCtx,
         field: 'srcChainKey',
       });
-      // Belt-and-braces: `stakingInvariant(false, ...)` always throws via its `asserts cond`
-      // signature, so this sentinel is unreachable today. It defends against a future
-      // maintainer dropping the `asserts cond` annotation on `stakingInvariant` — without it,
-      // TypeScript would silently infer this method as returning `Promise<undefined>` and
-      // the public contract would be violated. Plain Error (not SodaxError) so it falls
-      // through `isStakingApproveError` and surfaces with the literal 'unreachable: ...'
-      // message on `error.cause` — visible to anyone debugging.
-      throw new Error('unreachable: stakingInvariant(false, ...) above must throw');
     } catch (error) {
       if (isStakingApproveError(error)) return { ok: false, error };
       return { ok: false, error: wrapApproveFailure(error) };
@@ -424,7 +390,7 @@ export class StakingService {
    */
   public async stake<K extends SpokeChainKey>(
     _params: StakeAction<K, false>,
-  ): Promise<Result<TxHashPair, StakeError>> {
+  ): Promise<Result<TxHashPair, StakeOrchestrationError>> {
     const { params, timeout } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, action: 'stake' as const };
     try {
@@ -441,10 +407,7 @@ export class StakingService {
       if (!verifyTxHashResult.ok) {
         return {
           ok: false,
-          error: new SodaxError('STAKING_VERIFY_FAILED', 'Spoke transaction verification failed', {
-            cause: verifyTxHashResult.error,
-            context: { ...baseCtx, phase: 'verify' },
-          }),
+          error: verifyFailed('staking', verifyTxHashResult.error, baseCtx),
         };
       }
 
@@ -458,7 +421,7 @@ export class StakingService {
           timeout,
         });
         if (!packetResult.ok) {
-          return { ok: false, error: mapRelayFailureToStakingError(packetResult.error, baseCtx) };
+          return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'staking', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey }) };
         }
         hubTxHash = packetResult.value.dst_tx_hash;
       } else {
@@ -467,13 +430,10 @@ export class StakingService {
 
       return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
     } catch (error) {
-      if (isStakeError(error)) return { ok: false, error };
+      if (isStakeOrchestrationError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError('STAKING_STAKE_FAILED', error instanceof Error ? error.message : 'stake failed', {
-          cause: error,
-          context: baseCtx,
-        }),
+        error: executionFailed('staking', error, baseCtx),
       };
     }
   }
@@ -493,7 +453,7 @@ export class StakingService {
    */
   async createStakeIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: StakeAction<K, Raw>,
-  ): Promise<Result<IntentTxResult<K, Raw>, CreateStakeIntentError>> {
+  ): Promise<Result<IntentTxResult<K, Raw>, StakingCreateIntentError>> {
     const { params, skipSimulation } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, action: 'stake' as const };
     try {
@@ -530,14 +490,10 @@ export class StakingService {
       );
 
       if (!txResult.ok) {
-        if (isCreateStakeIntentError(txResult.error)) return { ok: false, error: txResult.error };
+        if (isStakingCreateIntentError(txResult.error)) return { ok: false, error: txResult.error };
         return {
           ok: false,
-          error: new SodaxError(
-            'STAKING_STAKE_INTENT_CREATION_FAILED',
-            txResult.error instanceof Error ? txResult.error.message : 'Spoke deposit failed',
-            { cause: txResult.error, context: { ...baseCtx, phase: 'intentCreation' } },
-          ),
+          error: intentCreationFailed('staking', txResult.error, baseCtx),
         };
       }
 
@@ -549,14 +505,10 @@ export class StakingService {
         },
       };
     } catch (error) {
-      if (isCreateStakeIntentError(error)) return { ok: false, error };
+      if (isStakingCreateIntentError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError(
-          'STAKING_STAKE_INTENT_CREATION_FAILED',
-          error instanceof Error ? error.message : 'createStakeIntent failed',
-          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } },
-        ),
+        error: intentCreationFailed('staking', error, baseCtx),
       };
     }
   }
@@ -603,7 +555,7 @@ export class StakingService {
    */
   public async unstake<K extends SpokeChainKey>(
     _params: UnstakeAction<K, false>,
-  ): Promise<Result<TxHashPair, UnstakeError>> {
+  ): Promise<Result<TxHashPair, StakingOrchestrationError>> {
     const { params, timeout } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, action: 'unstake' as const };
     try {
@@ -621,7 +573,7 @@ export class StakingService {
           timeout,
         });
         if (!packetResult.ok) {
-          return { ok: false, error: mapRelayFailureToStakingError(packetResult.error, baseCtx) };
+          return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'staking', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey }) };
         }
         hubTxHash = packetResult.value.dst_tx_hash;
       } else {
@@ -630,13 +582,10 @@ export class StakingService {
 
       return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
     } catch (error) {
-      if (isUnstakeError(error)) return { ok: false, error };
+      if (isStakingOrchestrationError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError('STAKING_UNSTAKE_FAILED', error instanceof Error ? error.message : 'unstake failed', {
-          cause: error,
-          context: baseCtx,
-        }),
+        error: executionFailed('staking', error, baseCtx),
       };
     }
   }
@@ -654,7 +603,7 @@ export class StakingService {
    */
   async createUnstakeIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: UnstakeAction<K, Raw>,
-  ): Promise<Result<IntentTxResult<K, Raw>, CreateUnstakeIntentError>> {
+  ): Promise<Result<IntentTxResult<K, Raw>, StakingCreateIntentError>> {
     const { params } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, action: 'unstake' as const };
     try {
@@ -687,14 +636,10 @@ export class StakingService {
       );
 
       if (!txResult.ok) {
-        if (isCreateUnstakeIntentError(txResult.error)) return { ok: false, error: txResult.error };
+        if (isStakingCreateIntentError(txResult.error)) return { ok: false, error: txResult.error };
         return {
           ok: false,
-          error: new SodaxError(
-            'STAKING_UNSTAKE_INTENT_CREATION_FAILED',
-            txResult.error instanceof Error ? txResult.error.message : 'Spoke sendMessage failed',
-            { cause: txResult.error, context: { ...baseCtx, phase: 'intentCreation' } },
-          ),
+          error: intentCreationFailed('staking', txResult.error, baseCtx),
         };
       }
 
@@ -706,14 +651,10 @@ export class StakingService {
         },
       };
     } catch (error) {
-      if (isCreateUnstakeIntentError(error)) return { ok: false, error };
+      if (isStakingCreateIntentError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError(
-          'STAKING_UNSTAKE_INTENT_CREATION_FAILED',
-          error instanceof Error ? error.message : 'createUnstakeIntent failed',
-          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } },
-        ),
+        error: intentCreationFailed('staking', error, baseCtx),
       };
     }
   }
@@ -759,7 +700,7 @@ export class StakingService {
    */
   public async instantUnstake<K extends SpokeChainKey>(
     _params: InstantUnstakeAction<K, false>,
-  ): Promise<Result<TxHashPair, InstantUnstakeError>> {
+  ): Promise<Result<TxHashPair, StakingOrchestrationError>> {
     const { params, timeout } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, action: 'instantUnstake' as const };
     try {
@@ -777,7 +718,7 @@ export class StakingService {
           timeout,
         });
         if (!packetResult.ok) {
-          return { ok: false, error: mapRelayFailureToStakingError(packetResult.error, baseCtx) };
+          return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'staking', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey }) };
         }
         hubTxHash = packetResult.value.dst_tx_hash;
       } else {
@@ -786,14 +727,10 @@ export class StakingService {
 
       return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
     } catch (error) {
-      if (isInstantUnstakeError(error)) return { ok: false, error };
+      if (isStakingOrchestrationError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError(
-          'STAKING_INSTANT_UNSTAKE_FAILED',
-          error instanceof Error ? error.message : 'instantUnstake failed',
-          { cause: error, context: baseCtx },
-        ),
+        error: executionFailed('staking', error, baseCtx),
       };
     }
   }
@@ -812,7 +749,7 @@ export class StakingService {
    */
   async createInstantUnstakeIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: InstantUnstakeAction<K, Raw>,
-  ): Promise<Result<IntentTxResult<K, Raw>, CreateInstantUnstakeIntentError>> {
+  ): Promise<Result<IntentTxResult<K, Raw>, StakingCreateIntentError>> {
     const { params } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, action: 'instantUnstake' as const };
     try {
@@ -852,14 +789,10 @@ export class StakingService {
       const txResult = await this.spoke.sendMessage(sendMessageParams);
 
       if (!txResult.ok) {
-        if (isCreateInstantUnstakeIntentError(txResult.error)) return { ok: false, error: txResult.error };
+        if (isStakingCreateIntentError(txResult.error)) return { ok: false, error: txResult.error };
         return {
           ok: false,
-          error: new SodaxError(
-            'STAKING_INSTANT_UNSTAKE_INTENT_CREATION_FAILED',
-            txResult.error instanceof Error ? txResult.error.message : 'Spoke sendMessage failed',
-            { cause: txResult.error, context: { ...baseCtx, phase: 'intentCreation' } },
-          ),
+          error: intentCreationFailed('staking', txResult.error, baseCtx),
         };
       }
 
@@ -871,14 +804,10 @@ export class StakingService {
         },
       };
     } catch (error) {
-      if (isCreateInstantUnstakeIntentError(error)) return { ok: false, error };
+      if (isStakingCreateIntentError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError(
-          'STAKING_INSTANT_UNSTAKE_INTENT_CREATION_FAILED',
-          error instanceof Error ? error.message : 'createInstantUnstakeIntent failed',
-          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } },
-        ),
+        error: intentCreationFailed('staking', error, baseCtx),
       };
     }
   }
@@ -933,7 +862,7 @@ export class StakingService {
    */
   public async claim<K extends SpokeChainKey>(
     _params: ClaimAction<K, false>,
-  ): Promise<Result<TxHashPair, ClaimError>> {
+  ): Promise<Result<TxHashPair, StakingOrchestrationError>> {
     const { params, timeout } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, action: 'claim' as const };
     try {
@@ -951,7 +880,7 @@ export class StakingService {
           timeout,
         });
         if (!packetResult.ok) {
-          return { ok: false, error: mapRelayFailureToStakingError(packetResult.error, baseCtx) };
+          return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'staking', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey }) };
         }
         hubTxHash = packetResult.value.dst_tx_hash;
       } else {
@@ -960,13 +889,10 @@ export class StakingService {
 
       return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
     } catch (error) {
-      if (isClaimError(error)) return { ok: false, error };
+      if (isStakingOrchestrationError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError('STAKING_CLAIM_FAILED', error instanceof Error ? error.message : 'claim failed', {
-          cause: error,
-          context: baseCtx,
-        }),
+        error: executionFailed('staking', error, baseCtx),
       };
     }
   }
@@ -984,7 +910,7 @@ export class StakingService {
    */
   async createClaimIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: ClaimAction<K, Raw>,
-  ): Promise<Result<IntentTxResult<K, Raw>, CreateClaimIntentError>> {
+  ): Promise<Result<IntentTxResult<K, Raw>, StakingCreateIntentError>> {
     const { params } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, action: 'claim' as const };
     try {
@@ -1024,14 +950,10 @@ export class StakingService {
       const txResult = await this.spoke.sendMessage(sendMessageParams);
 
       if (!txResult.ok) {
-        if (isCreateClaimIntentError(txResult.error)) return { ok: false, error: txResult.error };
+        if (isStakingCreateIntentError(txResult.error)) return { ok: false, error: txResult.error };
         return {
           ok: false,
-          error: new SodaxError(
-            'STAKING_CLAIM_INTENT_CREATION_FAILED',
-            txResult.error instanceof Error ? txResult.error.message : 'Spoke sendMessage failed',
-            { cause: txResult.error, context: { ...baseCtx, phase: 'intentCreation' } },
-          ),
+          error: intentCreationFailed('staking', txResult.error, baseCtx),
         };
       }
 
@@ -1043,14 +965,10 @@ export class StakingService {
         },
       };
     } catch (error) {
-      if (isCreateClaimIntentError(error)) return { ok: false, error };
+      if (isStakingCreateIntentError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError(
-          'STAKING_CLAIM_INTENT_CREATION_FAILED',
-          error instanceof Error ? error.message : 'createClaimIntent failed',
-          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } },
-        ),
+        error: intentCreationFailed('staking', error, baseCtx),
       };
     }
   }
@@ -1113,7 +1031,7 @@ export class StakingService {
    */
   public async cancelUnstake<K extends SpokeChainKey>(
     _params: CancelUnstakeAction<K, false>,
-  ): Promise<Result<TxHashPair, CancelUnstakeError>> {
+  ): Promise<Result<TxHashPair, StakingOrchestrationError>> {
     const { params, timeout } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, action: 'cancelUnstake' as const };
     try {
@@ -1131,7 +1049,7 @@ export class StakingService {
           timeout,
         });
         if (!packetResult.ok) {
-          return { ok: false, error: mapRelayFailureToStakingError(packetResult.error, baseCtx) };
+          return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'staking', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey }) };
         }
         hubTxHash = packetResult.value.dst_tx_hash;
       } else {
@@ -1140,14 +1058,10 @@ export class StakingService {
 
       return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
     } catch (error) {
-      if (isCancelUnstakeError(error)) return { ok: false, error };
+      if (isStakingOrchestrationError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError(
-          'STAKING_CANCEL_UNSTAKE_FAILED',
-          error instanceof Error ? error.message : 'cancelUnstake failed',
-          { cause: error, context: baseCtx },
-        ),
+        error: executionFailed('staking', error, baseCtx),
       };
     }
   }
@@ -1165,7 +1079,7 @@ export class StakingService {
    */
   async createCancelUnstakeIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: CancelUnstakeAction<K, Raw>,
-  ): Promise<Result<IntentTxResult<K, Raw>, CreateCancelUnstakeIntentError>> {
+  ): Promise<Result<IntentTxResult<K, Raw>, StakingCreateIntentError>> {
     const { params } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, action: 'cancelUnstake' as const };
     try {
@@ -1195,14 +1109,10 @@ export class StakingService {
       const txResult = await this.spoke.sendMessage(sendMessageParams);
 
       if (!txResult.ok) {
-        if (isCreateCancelUnstakeIntentError(txResult.error)) return { ok: false, error: txResult.error };
+        if (isStakingCreateIntentError(txResult.error)) return { ok: false, error: txResult.error };
         return {
           ok: false,
-          error: new SodaxError(
-            'STAKING_CANCEL_UNSTAKE_INTENT_CREATION_FAILED',
-            txResult.error instanceof Error ? txResult.error.message : 'Spoke sendMessage failed',
-            { cause: txResult.error, context: { ...baseCtx, phase: 'intentCreation' } },
-          ),
+          error: intentCreationFailed('staking', txResult.error, baseCtx),
         };
       }
 
@@ -1214,14 +1124,10 @@ export class StakingService {
         },
       };
     } catch (error) {
-      if (isCreateCancelUnstakeIntentError(error)) return { ok: false, error };
+      if (isStakingCreateIntentError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError(
-          'STAKING_CANCEL_UNSTAKE_INTENT_CREATION_FAILED',
-          error instanceof Error ? error.message : 'createCancelUnstakeIntent failed',
-          { cause: error, context: { ...baseCtx, phase: 'intentCreation' } },
-        ),
+        error: intentCreationFailed('staking', error, baseCtx),
       };
     }
   }
@@ -1289,11 +1195,7 @@ export class StakingService {
       if (isStakingInfoFetchError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError(
-          'STAKING_INFO_FETCH_FAILED',
-          error instanceof Error ? error.message : 'getStakingInfoFromSpoke failed',
-          { cause: error, context: { srcChainKey, phase: 'infoFetch', method: 'getStakingInfoFromSpoke' } },
-        ),
+        error: lookupFailed('staking', 'getStakingInfoFromSpoke', error, { srcChainKey }),
       };
     }
   }
@@ -1343,11 +1245,7 @@ export class StakingService {
       if (isStakingInfoFetchError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError(
-          'STAKING_INFO_FETCH_FAILED',
-          error instanceof Error ? error.message : 'getStakingInfo failed',
-          { cause: error, context: { phase: 'infoFetch', method: 'getStakingInfo' } },
-        ),
+        error: lookupFailed('staking', 'getStakingInfo', error),
       };
     }
   }
@@ -1393,11 +1291,7 @@ export class StakingService {
       if (isStakingInfoFetchError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError(
-          'STAKING_INFO_FETCH_FAILED',
-          error instanceof Error ? error.message : 'getUnstakingInfo failed',
-          { cause: error, context: { srcChainKey, phase: 'infoFetch', method: 'getUnstakingInfo' } },
-        ),
+        error: lookupFailed('staking', 'getUnstakingInfo', error, { srcChainKey }),
       };
     }
   }
@@ -1436,11 +1330,7 @@ export class StakingService {
       if (isStakingInfoFetchError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError(
-          'STAKING_INFO_FETCH_FAILED',
-          error instanceof Error ? error.message : 'getStakingConfig failed',
-          { cause: error, context: { phase: 'infoFetch', method: 'getStakingConfig' } },
-        ),
+        error: lookupFailed('staking', 'getStakingConfig', error),
       };
     }
   }
@@ -1542,11 +1432,7 @@ export class StakingService {
       if (isStakingInfoFetchError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError(
-          'STAKING_INFO_FETCH_FAILED',
-          error instanceof Error ? error.message : 'getUnstakingInfoWithPenalty failed',
-          { cause: error, context: { srcChainKey, phase: 'infoFetch', method: 'getUnstakingInfoWithPenalty' } },
-        ),
+        error: lookupFailed('staking', 'getUnstakingInfoWithPenalty', error, { srcChainKey }),
       };
     }
   }
@@ -1575,11 +1461,7 @@ export class StakingService {
       if (isStakingInfoFetchError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError(
-          'STAKING_INFO_FETCH_FAILED',
-          error instanceof Error ? error.message : 'getInstantUnstakeRatio failed',
-          { cause: error, context: { phase: 'infoFetch', method: 'getInstantUnstakeRatio' } },
-        ),
+        error: lookupFailed('staking', 'getInstantUnstakeRatio', error),
       };
     }
   }
@@ -1608,11 +1490,7 @@ export class StakingService {
       if (isStakingInfoFetchError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError(
-          'STAKING_INFO_FETCH_FAILED',
-          error instanceof Error ? error.message : 'getConvertedAssets failed',
-          { cause: error, context: { phase: 'infoFetch', method: 'getConvertedAssets' } },
-        ),
+        error: lookupFailed('staking', 'getConvertedAssets', error),
       };
     }
   }
@@ -1647,11 +1525,7 @@ export class StakingService {
       if (isStakingInfoFetchError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: new SodaxError(
-          'STAKING_INFO_FETCH_FAILED',
-          error instanceof Error ? error.message : 'getStakeRatio failed',
-          { cause: error, context: { phase: 'infoFetch', method: 'getStakeRatio' } },
-        ),
+        error: lookupFailed('staking', 'getStakeRatio', error),
       };
     }
   }

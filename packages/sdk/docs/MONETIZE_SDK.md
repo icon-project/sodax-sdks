@@ -242,7 +242,7 @@ if (claimResult.ok) {
   console.log('Solver response:', solverExecutionResponse);
 } else {
   // error.message may be:
-  //   'WAIT_INTENT_AUTO_SWAP_FAILED' — receipt polling failed after submission
+  //   'EXECUTION_FAILED' (action: 'waitAutoSwap') — receipt polling failed after submission
   //   error from createIntentAutoSwap — if the initial tx failed
   //   error from SolverApiService.postExecution — if solver notification failed
   console.error('Claim failed:', claimResult.error.message, claimResult.error.cause);
@@ -266,10 +266,10 @@ if (!result.ok) {
 
   // CODE-form tags used by feeClaim methods:
   // 'FETCH_ASSETS_BALANCES_FAILED'
-  // 'GET_AUTO_SWAP_PREFERENCES_FAILED'
+  // 'LOOKUP_FAILED' (method: 'getAutoSwapPreferences')
   // 'APPROVE_TOKEN_FAILED'
   // 'IS_TOKEN_APPROVED_FAILED'
-  // 'WAIT_INTENT_AUTO_SWAP_FAILED'
+  // 'EXECUTION_FAILED' (action: 'waitAutoSwap')
   console.error(`[${message}]`, cause);
 }
 ```

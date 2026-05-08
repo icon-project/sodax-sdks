@@ -797,7 +797,7 @@ describe('ClService.getMintPositionEvent', () => {
     if (!result.ok) expect(String(result.error)).toMatch(/No tokenId found/);
   });
 
-  it('wraps thrown errors as Error("GET_MINT_POSITION_EVENT_FAILED") with .cause', async () => {
+  it('wraps thrown errors as SodaxError(LOOKUP_FAILED, dex) with .cause', async () => {
     const rpcError = new Error('RPC_DOWN');
     vi.spyOn(sodax.hubProvider.publicClient, 'waitForTransactionReceipt').mockRejectedValueOnce(rpcError);
 
@@ -805,7 +805,7 @@ describe('ClService.getMintPositionEvent', () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect((result.error as Error).message).toBe('GET_MINT_POSITION_EVENT_FAILED');
+      expect((result.error as { code: string }).code).toBe('LOOKUP_FAILED');
       expect((result.error as Error).cause).toBe(rpcError);
     }
   });
@@ -837,7 +837,7 @@ describe('ClService.getPoolRewardConfig', () => {
     if (!result.ok) expect(String(result.error)).toMatch(/Pool has no hook configured/);
   });
 
-  it('wraps thrown errors as Error("GET_POOL_REWARD_CONFIG_FAILED") with .cause', async () => {
+  it('wraps thrown errors as SodaxError(LOOKUP_FAILED, dex) with .cause', async () => {
     const client = createMockClient({
       poolRewardConfigs: () => {
         throw new Error('REVERT');
@@ -848,7 +848,7 @@ describe('ClService.getPoolRewardConfig', () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect((result.error as Error).message).toBe('GET_POOL_REWARD_CONFIG_FAILED');
+      expect((result.error as { code: string }).code).toBe('LOOKUP_FAILED');
       expect(((result.error as Error).cause as Error).message).toBe('REVERT');
     }
   });
@@ -909,7 +909,7 @@ describe('ClService.getPoolData', () => {
     if (result.ok) expect(result.value.rewardConfig).toBeUndefined();
   });
 
-  it('wraps thrown errors as Error("GET_POOL_DATA_FAILED") with .cause', async () => {
+  it('wraps thrown errors as SodaxError(LOOKUP_FAILED, dex) with .cause', async () => {
     const client = createMockClient({
       getSlot0: () => {
         throw new Error('REVERT');
@@ -920,7 +920,7 @@ describe('ClService.getPoolData', () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect((result.error as Error).message).toBe('GET_POOL_DATA_FAILED');
+      expect((result.error as { code: string }).code).toBe('LOOKUP_FAILED');
       expect(((result.error as Error).cause as Error).message).toBe('REVERT');
     }
   });
@@ -1011,10 +1011,10 @@ describe('ClService.getPositionInfo', () => {
     const result = await cl.getPositionInfo(7n, client);
 
     expect(result.ok).toBe(false);
-    if (!result.ok) expect((result.error as Error).message).toBe('GET_POOL_DATA_FAILED');
+    if (!result.ok) expect((result.error as { code: string }).code).toBe('LOOKUP_FAILED');
   });
 
-  it('wraps thrown errors as Error("GET_POSITION_INFO_FAILED") with .cause', async () => {
+  it('wraps thrown errors as SodaxError(LOOKUP_FAILED, dex) with .cause', async () => {
     const client = createMockClient({
       positions: () => {
         throw new Error('REVERT');
@@ -1025,7 +1025,7 @@ describe('ClService.getPositionInfo', () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect((result.error as Error).message).toBe('GET_POSITION_INFO_FAILED');
+      expect((result.error as { code: string }).code).toBe('LOOKUP_FAILED');
       expect(((result.error as Error).cause as Error).message).toBe('REVERT');
     }
   });

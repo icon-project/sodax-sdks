@@ -11,6 +11,9 @@ import {
   isHubChainKeyType,
   type SendMessageParams,
 } from '../shared/index.js';
+import { SodaxError } from '../errors/SodaxError.js';
+import { lookupFailed } from '../errors/wrappers.js';
+import { dexInvariant } from './errors.js';
 import type { MintPositionEventLog } from '../swap/EvmSolverService.js';
 import type {
   Address,
@@ -337,12 +340,8 @@ export class ClService {
     const token0 = this.config.findTokenByOriginalAddress(token0SpokeAddress, srcChainKey);
     const token1 = this.config.findTokenByOriginalAddress(token1SpokeAddress, srcChainKey);
 
-    if (!token0) {
-      throw new Error(`[getAssetsForPool] Token0 ${token0SpokeAddress} not found`);
-    }
-    if (!token1) {
-      throw new Error(`[getAssetsForPool] Token1 ${token1SpokeAddress} not found`);
-    }
+    dexInvariant(token0, `[getAssetsForPool] Token0 ${token0SpokeAddress} not found`);
+    dexInvariant(token1, `[getAssetsForPool] Token1 ${token1SpokeAddress} not found`);
     return {
       token0,
       token1,
@@ -479,16 +478,31 @@ export class ClService {
 
       const eventLog = logs[0];
       if (!eventLog) {
-        return { ok: false, error: new Error(`No mint position event found for ${hubTxHash}`) };
+        return {
+          ok: false,
+          error: new SodaxError('LOOKUP_FAILED', `No mint position event found for ${hubTxHash}`, {
+            feature: 'dex',
+            context: { phase: 'lookup', method: 'getMintPositionEvent' },
+          }),
+        };
       }
 
       if (!eventLog.args.tokenId) {
-        return { ok: false, error: new Error(`No tokenId found for ${hubTxHash}`) };
+        return {
+          ok: false,
+          error: new SodaxError('LOOKUP_FAILED', `No tokenId found for ${hubTxHash}`, {
+            feature: 'dex',
+            context: { phase: 'lookup', method: 'getMintPositionEvent' },
+          }),
+        };
       }
 
       return { ok: true, value: { tokenId: eventLog.args.tokenId } };
     } catch (error) {
-      return { ok: false, error: new Error('GET_MINT_POSITION_EVENT_FAILED', { cause: error }) };
+      return {
+        ok: false,
+        error: lookupFailed('dex', 'getMintPositionEvent', error),
+      };
     }
   }
 
@@ -876,7 +890,13 @@ export class ClService {
       const hookAddress = poolKey.hooks;
 
       if (!hookAddress || hookAddress === '0x' || hookAddress === '0x0000000000000000000000000000000000000000') {
-        return { ok: false, error: new Error('Pool has no hook configured') };
+        return {
+          ok: false,
+          error: new SodaxError('VALIDATION_FAILED', 'Pool has no hook configured', {
+            feature: 'dex',
+            context: { phase: 'validate', field: 'poolKey.hooks' },
+          }),
+        };
       }
 
       const poolId = getPoolId(poolKey);
@@ -915,7 +935,10 @@ export class ClService {
       };
     } catch (error) {
       console.error('getPoolRewardConfig error:', error);
-      return { ok: false, error: new Error('GET_POOL_REWARD_CONFIG_FAILED', { cause: error }) };
+      return {
+        ok: false,
+        error: lookupFailed('dex', 'getPoolRewardConfig', error),
+      };
     }
   }
 
@@ -1318,7 +1341,10 @@ export class ClService {
       };
     } catch (error) {
       console.error('Failed to fetch pool data:', error);
-      return { ok: false, error: new Error('GET_POOL_DATA_FAILED', { cause: error }) };
+      return {
+        ok: false,
+        error: lookupFailed('dex', 'getPoolData', error),
+      };
     }
   }
 
@@ -1494,7 +1520,10 @@ export class ClService {
         },
       };
     } catch (error) {
-      return { ok: false, error: new Error('GET_POSITION_INFO_FAILED', { cause: error }) };
+      return {
+        ok: false,
+        error: lookupFailed('dex', 'getPositionInfo', error),
+      };
     }
   }
 

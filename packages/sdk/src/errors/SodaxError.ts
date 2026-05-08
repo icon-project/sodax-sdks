@@ -6,13 +6,18 @@
  * error consistently via {@link SodaxError.toJSON}.
  *
  * @see {@link isSodaxError} for a bundle-safe type guard.
+ * @see {@link ./codes | codes} for the unified `SodaxErrorCode`, `SodaxFeature`, `SodaxPhase`
+ *   vocabulary.
  */
 
-export type SodaxErrorContext = Record<string, unknown>;
+import type { SodaxErrorCode, SodaxErrorContext, SodaxFeature } from './codes.js';
 
-export type SodaxErrorJSON<C extends string = string> = {
+export type { SodaxErrorContext } from './codes.js';
+
+export type SodaxErrorJSON<C extends SodaxErrorCode = SodaxErrorCode> = {
   name: string;
   code: C;
+  feature: SodaxFeature;
   message: string;
   stack?: string;
   context?: SodaxErrorContext;
@@ -21,21 +26,26 @@ export type SodaxErrorJSON<C extends string = string> = {
 
 const MAX_CAUSE_DEPTH = 3;
 const MAX_SANITIZE_DEPTH = 5;
+const captureStackTrace = (Error as { captureStackTrace?: (target: object, ctor: unknown) => void }).captureStackTrace;
 
-export class SodaxError<C extends string = string> extends Error {
+export class SodaxError<C extends SodaxErrorCode = SodaxErrorCode> extends Error {
   readonly code: C;
+  readonly feature: SodaxFeature;
   override readonly cause?: unknown;
   readonly context?: SodaxErrorContext;
 
-  constructor(code: C, message: string, options?: { cause?: unknown; context?: SodaxErrorContext }) {
+  constructor(
+    code: C,
+    message: string,
+    options: { feature: SodaxFeature; cause?: unknown; context?: SodaxErrorContext },
+  ) {
     super(message);
     this.name = 'SodaxError';
     this.code = code;
-    this.cause = options?.cause;
-    this.context = options?.context;
-    if (typeof (Error as { captureStackTrace?: unknown }).captureStackTrace === 'function') {
-      (Error as { captureStackTrace: (target: object, ctor: unknown) => void }).captureStackTrace(this, SodaxError);
-    }
+    this.feature = options.feature;
+    this.cause = options.cause;
+    this.context = options.context;
+    captureStackTrace?.(this, SodaxError);
   }
 
   /**
@@ -52,6 +62,7 @@ export class SodaxError<C extends string = string> extends Error {
     return {
       name: this.name,
       code: this.code,
+      feature: this.feature,
       message: this.message,
       stack: this.stack,
       context: this.context ? sanitizeContext(this.context, 0) : undefined,
@@ -71,6 +82,7 @@ export function isSodaxError(e: unknown): e is SodaxError {
   return (
     e instanceof Error &&
     typeof (e as { code?: unknown }).code === 'string' &&
+    typeof (e as { feature?: unknown }).feature === 'string' &&
     (e as { name?: unknown }).name === 'SodaxError'
   );
 }
@@ -82,6 +94,7 @@ function serializeCause(cause: unknown, depth: number): unknown {
     return {
       name: cause.name,
       code: cause.code,
+      feature: cause.feature,
       message: cause.message,
       stack: cause.stack,
       context: cause.context ? sanitizeContext(cause.context, 0) : undefined,
