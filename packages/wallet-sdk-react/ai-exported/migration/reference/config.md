@@ -146,19 +146,26 @@ SUI: {
 
 ---
 
-## v1 `initialState` → v2 (removed)
+## v1 `initialState` → v2 `EVM.initialState`
 
-v1 accepted a `WagmiState` for SSR hydration. v2 does not have a top-level `initialState` prop. SSR hydration is handled internally when `EVM.ssr: true`.
+v1 accepted a top-level `initialState` prop (`WagmiState`) for SSR hydration. v2 still accepts the same value — it just lives **inside the `EVM` slot** of the `config` prop.
 
 ```ts
 // v1 ❌
 <SodaxWalletProvider rpcConfig={...} options={...} initialState={wagmiState}>
 
 // v2 ✅
-<SodaxWalletProvider config={{ EVM: { ssr: true, chains: {...} }, /* ... */ }}>
+<SodaxWalletProvider config={{
+  EVM: {
+    ssr: true,
+    initialState: wagmiState,
+    chains: {...},
+  },
+  /* ... */
+}}>
 ```
 
-If you previously passed `initialState` from a server render, drop it — v2's wagmi config is built with `ssr: true` so cookies-based hydration works without explicit state plumbing.
+If you previously derived `initialState` via `cookieToInitialState(...)` in a server component, keep that logic — just pass the result into `EVM.initialState` instead of the top-level prop. See [`../recipes/ssr-setup.md`](../recipes/ssr-setup.md) for a full Next.js example.
 
 ---
 

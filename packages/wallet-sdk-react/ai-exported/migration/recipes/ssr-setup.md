@@ -1,6 +1,6 @@
 # Recipe: Migrate Next.js SSR Setup
 
-Migrates the SSR-specific provider setup. Most of the change here is **dropping the `initialState` plumbing** that v1 needed and using v2's `EVM.ssr: true` flag instead. Self-contained — apply this recipe without reading other files.
+Migrates the SSR-specific provider setup. Both `initialState` and `reconnectOnMount` move **into the `EVM` slot** of the new `config` prop — they are not removed in v2. Self-contained — apply this recipe without reading other files.
 
 ---
 
@@ -10,9 +10,9 @@ Apply when the user's v1 code:
 
 - Passes `initialState={...}` to `SodaxWalletProvider`
 - Has a server component or page that calls `cookieToInitialState` (wagmi)
-- Sets `options.wagmi.ssr: true`
+- Sets `options.wagmi.ssr: true` and/or `options.wagmi.reconnectOnMount`
 
-If the project is **not** Next.js (Vite, CRA), only the `options.wagmi.ssr` → `EVM.ssr` rename applies.
+If the project is **not** Next.js (Vite, CRA), only the prop-shape rewrite applies; `initialState` plumbing is not needed.
 
 ---
 
@@ -43,7 +43,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body>
         <SodaxWalletProvider
           rpcConfig={rpcConfig}
-          options={{ wagmi: { ssr: true, reconnectOnMount: false } }}
+          options={{ wagmi: { ssr: true, reconnectOnMount: true } }}
           initialState={initialState}
         >
           {children}
@@ -60,13 +60,20 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
 ```tsx
 // app/layout.tsx — v2 ✅
+import { headers } from 'next/headers';
+import { cookieToInitialState } from 'wagmi';
 import { ChainKeys } from '@sodax/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { SodaxWalletProvider, type SodaxWalletConfig } from '@sodax/wallet-sdk-react';
+import {
+  SodaxWalletProvider,
+  type SodaxWalletConfig,
+  createWagmiConfig,
+} from '@sodax/wallet-sdk-react/xchains/evm';
 
 const walletConfig: SodaxWalletConfig = {
   EVM: {
     ssr: true,
+    reconnectOnMount: true,
     chains: {
       [ChainKeys.SONIC_MAINNET]: { rpcUrl: 'https://rpc.soniclabs.com' },
       [ChainKeys.ETHEREUM_MAINNET]: { rpcUrl: 'https://ethereum-rpc.publicnode.com' },
@@ -77,18 +84,28 @@ const walletConfig: SodaxWalletConfig = {
 
 const queryClient = new QueryClient();
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const cookie = (await headers()).get('cookie');
+  // Re-derive initialState from cookies to avoid disconnect-flash on first render.
+  const wagmiConfig = createWagmiConfig(walletConfig.EVM!);
+  const initialState = cookieToInitialState(wagmiConfig, cookie);
+
+  const evmConfig = { ...walletConfig.EVM!, initialState };
+  const config: SodaxWalletConfig = { ...walletConfig, EVM: evmConfig };
+
   return (
     <html>
       <body>
         <QueryClientProvider client={queryClient}>
-          <SodaxWalletProvider config={walletConfig}>{children}</SodaxWalletProvider>
+          <SodaxWalletProvider config={config}>{children}</SodaxWalletProvider>
         </QueryClientProvider>
       </body>
     </html>
   );
 }
 ```
+
+If you don't need to avoid the first-render disconnect flash, drop the cookie / `initialState` plumbing entirely — `EVM.ssr: true` alone is enough for the typical SSR app.
 
 ---
 
@@ -98,19 +115,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 |---|---|---|
 | `rpcConfig` flat dict | top-level prop | nested under `EVM.chains[<ChainKey>].rpcUrl` |
 | `options.wagmi.ssr` | nested under `options.wagmi` | `EVM.ssr: true` |
-| `options.wagmi.reconnectOnMount` | option flag | removed (wagmi default applies) |
-| `initialState` | top-level prop, derived from cookies in a server component | **removed** — v2 handles SSR hydration internally when `EVM.ssr: true` |
+| `options.wagmi.reconnectOnMount` | nested under `options.wagmi` | `EVM.reconnectOnMount` (still supported, default `false`) |
+| `initialState` | top-level prop | `EVM.initialState` (still supported — pass `cookieToInitialState(...)` for Next.js cookie hydration) |
 | `QueryClient` | created internally by `SodaxWalletProvider` | created by caller, wrapped with `QueryClientProvider` |
-| Server component required | yes (to read cookies) | not needed for wallet hydration |
-| `'use client'` on layout | depends on app | not needed at layout level — but consumers of hooks must be `'use client'` |
 
 ---
 
 ## Migration steps
 
-1. **Drop the cookie-reading server logic.** Remove `headers()`, `cookieToInitialState`, `createWagmiConfig` calls. The layout can be a plain (non-async) component.
-2. **Remove `initialState` prop.** v2 `SodaxWalletProvider` doesn't accept it.
-3. **Build `walletConfig`.** Move `rpcConfig` URLs into `EVM.chains[<ChainKey>].rpcUrl`. Set `EVM.ssr: true`.
+1. **Move per-chain RPC URLs.** Move `rpcConfig['sonic']` etc. into `EVM.chains[ChainKeys.SONIC_MAINNET].rpcUrl`. Use `ChainKeys` constants from `@sodax/types`.
+2. **Collapse `options.wagmi.*` into `EVM.*`.** `options.wagmi.ssr` → `EVM.ssr`, `options.wagmi.reconnectOnMount` → `EVM.reconnectOnMount`.
+3. **Move `initialState` into `EVM.initialState`.** v2 still accepts wagmi cookie state; the prop name and location changed, not the feature.
 4. **Add `QueryClientProvider`.** Create a `QueryClient` (top-level module constant — singleton across renders) and wrap `SodaxWalletProvider` with `<QueryClientProvider>`.
 5. **Make sure `@tanstack/react-query` is a direct dep.** Add it if missing:
    ```bash
@@ -126,8 +141,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 # 1. Type check
 pnpm checkTs
 
-# 2. No initialState prop remains
-grep -rnE "initialState\s*=" <user-src> | grep -i "wallet\|wagmi"
+# 2. No top-level v1 props remain on SodaxWalletProvider
+grep -rnE "SodaxWalletProvider[^>]*\b(rpcConfig|options|initialState)\s*=" <user-src>
 # expect empty
 
 # 3. EVM.ssr: true is set
