@@ -8,9 +8,6 @@ export const EvmActions = () => {
   const { disconnectAsync } = useDisconnect();
   const { signMessageAsync } = useSignMessage();
   const registerChainActions = useXWalletStore(state => state.registerChainActions);
-  const unsetXConnection = useXWalletStore(state => state.unsetXConnection);
-  const markUserDisconnected = useXWalletStore(state => state.markUserDisconnected);
-  const clearUserDisconnected = useXWalletStore(state => state.clearUserDisconnected);
 
   const connectRef = useRef(connectAsync);
   const disconnectRef = useRef(disconnectAsync);
@@ -37,7 +34,7 @@ export const EvmActions = () => {
         }
         // Clear flag before awaiting — flips re-fire EvmHydrator's effects, surfacing
         // any pre-existing wagmi connection (ghost auto-reconnect).
-        clearUserDisconnected('EVM');
+        useXWalletStore.getState().clearUserDisconnected('EVM');
         try {
           await connectRef.current({ connector });
         } catch (error) {
@@ -51,8 +48,9 @@ export const EvmActions = () => {
       disconnect: async () => {
         // Clear zustand + flag synchronously so UI is consistent regardless of whether
         // wagmi.disconnect() throws (Hana 4200), hangs (WC relay), or succeeds.
-        unsetXConnection('EVM');
-        markUserDisconnected('EVM');
+        const store = useXWalletStore.getState();
+        store.unsetXConnection('EVM');
+        store.markUserDisconnected('EVM');
         try {
           await disconnectRef.current();
         } catch (error) {
