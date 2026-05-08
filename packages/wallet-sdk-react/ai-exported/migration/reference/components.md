@@ -59,22 +59,6 @@ These are mounted **inside** `SodaxWalletProvider` and are not part of the publi
 
 ---
 
-## Internal architecture (informational, only for SODAX maintainers)
-
-v2 introduces a **Provider/Hydrator/Actions** trio per provider-managed chain (EVM, Solana, Sui):
-
-| Component | Role |
-|---|---|
-| `<Chain>Provider` | Wraps native SDK providers (wagmi, wallet-adapter, dapp-kit) |
-| `<Chain>Hydrator` | Reads native SDK hooks → writes connection state + wallet providers to store (single writer) |
-| `<Chain>Actions` | Registers `ChainActions` referencing native SDK hooks. Triggers SDK operations only |
-
-Non-provider chains (Bitcoin, ICON, Injective, Stellar, NEAR, Stacks) use direct browser-extension APIs and don't have this trio. If you are not modifying the package internals, you don't need to think about this.
-
-For full architecture context, see `packages/wallet-sdk-react/CLAUDE.md`.
-
----
-
 ## `XService` and `XConnector` abstract classes
 
 | | v1 | v2 |
