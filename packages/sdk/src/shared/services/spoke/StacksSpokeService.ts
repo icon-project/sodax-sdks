@@ -15,7 +15,7 @@ import {
   validateStacksAddress,
   serializePayloadBytes,
 } from '@stacks/transactions';
-import { getIntentRelayChainId, isNativeToken, spokeChainConfig, ChainKeys } from '@sodax/types';
+import { getIntentRelayChainId, isNativeToken, ChainKeys } from '@sodax/types';
 import type {
   FeeEstimateTransaction,
   Result,
@@ -39,11 +39,13 @@ import { type StacksNetwork, createNetwork } from '@stacks/network';
 import { bytesToHex } from 'viem';
 
 export class StacksSpokeService {
+  private readonly config: ConfigService;
   protected network: StacksNetwork;
   private readonly pollingIntervalMs: number;
   private readonly maxTimeoutMs: number;
 
   constructor(config: ConfigService) {
+    this.config = config;
     // since we only support mainnet for now, we can hardcode the single stacks chain config
     const chainConfig = config.getChainConfig(ChainKeys.STACKS_MAINNET);
     this.network = createNetwork({ network: 'mainnet', client: { baseUrl: chainConfig.rpcUrl } });
@@ -117,12 +119,13 @@ export class StacksSpokeService {
   public async deposit<R extends boolean = false>(
     params: DepositParams<StacksChainKey, R>,
   ): Promise<TxReturnType<StacksChainKey, R>> {
+    const chainConfig = this.config.getChainConfig(params.srcChainKey);
     const assetManagerImpl = await this.getImplContractAddress(
-      spokeChainConfig[params.srcChainKey].addresses.assetManager,
+      chainConfig.addresses.assetManager,
     );
     const [implAddress, implName] = parseContractId(assetManagerImpl as ContractIdString);
     const [connectionAddress, connectionName] = parseContractId(
-      spokeChainConfig[params.srcChainKey].addresses.connection as ContractIdString,
+      chainConfig.addresses.connection as ContractIdString,
     );
     const reqData = {
       contractAddress: implAddress as string,
@@ -164,7 +167,7 @@ export class StacksSpokeService {
    * @returns {Promise<bigint>} The balance of the token.
    */
   public async getDeposit(params: GetDepositParams<StacksChainKey>): Promise<bigint> {
-    const assetManager = spokeChainConfig[params.srcChainKey].addresses.assetManager;
+    const assetManager = this.config.getChainConfig(params.srcChainKey).addresses.assetManager;
     if (isNativeToken(params.srcChainKey, params.token)) {
       return this.getSTXBalance(params.srcAddress);
     }
@@ -179,7 +182,7 @@ export class StacksSpokeService {
   ): Promise<TxReturnType<StacksChainKey, Raw>> {
     const dstRelayChainId = getIntentRelayChainId(params.dstChainKey);
     const [connectionAddress, connectionName] = parseContractId(
-      spokeChainConfig[params.srcChainKey].addresses.connection as ContractIdString,
+      this.config.getChainConfig(params.srcChainKey).addresses.connection as ContractIdString,
     );
     const reqData: StacksTransactionParams = {
       contractAddress: connectionAddress as string,

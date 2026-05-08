@@ -29,7 +29,6 @@ import {
 import {
   ChainKeys,
   getIntentRelayChainId,
-  spokeChainConfig,
   type HubAddress,
   type IStellarWalletProvider,
   type Result,
@@ -110,6 +109,7 @@ export type RequestTrustlineParams<S extends StellarChainKey, Raw extends boolea
 } & WalletProviderSlot<S, Raw>;
 
 export class StellarSpokeService {
+  private readonly config: ConfigService;
   private readonly chainConfig: StellarSpokeChainConfig;
   public readonly server: Horizon.Server;
   public readonly sorobanServer: CustomSorobanServer;
@@ -119,6 +119,7 @@ export class StellarSpokeService {
   private readonly baseFee: string;
 
   constructor(config: ConfigService) {
+    this.config = config;
     this.chainConfig = config.getChainConfig(ChainKeys.STELLAR_MAINNET);
 
     // since we only support mainnet for now, we can hardcode the single stellar chain config
@@ -133,7 +134,7 @@ export class StellarSpokeService {
   }
 
   public async getBalance(params: GetDepositParams<StellarChainKey>): Promise<number> {
-    const contract = new Contract(spokeChainConfig[params.srcChainKey].addresses.assetManager);
+    const contract = new Contract(this.config.getChainConfig(params.srcChainKey).addresses.assetManager);
     const [network, sourceAccount] = await Promise.all([
       this.sorobanServer.getNetwork(),
       this.sorobanServer.getAccount(params.srcAddress),
@@ -199,7 +200,7 @@ export class StellarSpokeService {
   public buildDepositCall<Raw extends boolean>(
     params: DepositParams<StellarChainKey, Raw>,
   ): xdr.Operation<Operation.InvokeHostFunction> {
-    const contract = new Contract(spokeChainConfig[params.srcChainKey].addresses.assetManager);
+    const contract = new Contract(this.config.getChainConfig(params.srcChainKey).addresses.assetManager);
     return contract.call(
       'transfer',
       nativeToScVal(Address.fromString(params.srcAddress), { type: 'address' }),
@@ -252,7 +253,7 @@ export class StellarSpokeService {
 
         return {
           from: from,
-          to: spokeChainConfig[srcChainKey].addresses.assetManager,
+          to: this.config.getChainConfig(srcChainKey).addresses.assetManager,
           value: 0n,
           data: transactionXdr,
         } satisfies TxReturnType<StellarChainKey, true> as TxReturnType<StellarChainKey, Raw>;
@@ -426,7 +427,7 @@ export class StellarSpokeService {
 
         return {
           from: from,
-          to: spokeChainConfig[srcChainKey].addresses.assetManager,
+          to: this.config.getChainConfig(srcChainKey).addresses.assetManager,
           value: BigInt(amount),
           data: transactionXdr,
         } satisfies TxReturnType<StellarChainKey, true> as TxReturnType<StellarChainKey, R>;
@@ -457,11 +458,12 @@ export class StellarSpokeService {
    * @returns True if the user has sufficient trustline established for the token, false otherwise.
    */
   public async hasSufficientTrustline(token: string, amount: bigint, walletAddress: string): Promise<boolean> {
-    const stellarChainConfig = spokeChainConfig[ChainKeys.STELLAR_MAINNET];
+    const stellarChainConfig = this.chainConfig;
     // native token and legacy bnUSD do not require trustline
+    const legacyBnUSD = stellarChainConfig.supportedTokens.legacybnUSD;
     if (
       token.toLowerCase() === stellarChainConfig.nativeToken.toLowerCase() ||
-      token.toLowerCase() === stellarChainConfig.supportedTokens.legacybnUSD.address.toLowerCase()
+      (legacyBnUSD !== undefined && token.toLowerCase() === legacyBnUSD.address.toLowerCase())
     ) {
       return true;
     }
@@ -511,7 +513,7 @@ export class StellarSpokeService {
   ): Promise<TxReturnType<StellarChainKey, Raw>> {
     try {
       const { srcAddress: from, srcChainKey, token, amount } = params;
-      const asset = spokeChainConfig[srcChainKey].trustlineConfigs.find(
+      const asset = this.config.getChainConfig(srcChainKey).trustlineConfigs.find(
         t => t.contractId.toLowerCase() === token.toLowerCase(),
       );
 
@@ -543,7 +545,7 @@ export class StellarSpokeService {
 
         return {
           from: from,
-          to: spokeChainConfig[srcChainKey].addresses.assetManager,
+          to: this.config.getChainConfig(srcChainKey).addresses.assetManager,
           value: amount,
           data: transactionXdr,
         } satisfies TxReturnType<StellarChainKey, true> as TxReturnType<StellarChainKey, Raw>;

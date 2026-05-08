@@ -21,7 +21,6 @@ import {
   type NearRawTransactionReceipt,
   type Result,
   type TxReturnType,
-  spokeChainConfig,
   isNativeToken,
 } from '@sodax/types';
 import { JsonRpcProvider } from 'near-api-js';
@@ -32,11 +31,13 @@ export type CallResponse = string | number | object | bigint | boolean;
 export const NEAR_DEFAULT_GAS = BigInt('300000000000000'); // 30 TGas derived from near documentation as max limit
 
 export class NearSpokeService {
+  private readonly config: ConfigService;
   public readonly rpcProvider: JsonRpcProvider;
   private readonly pollingIntervalMs: number;
   private readonly maxTimeoutMs: number;
 
   public constructor(config: ConfigService) {
+    this.config = config;
     // since we only support mainnet for now, we can hardcode the single near chain config
     const chainConfig = config.getChainConfig(ChainKeys.NEAR_MAINNET);
     this.rpcProvider = new JsonRpcProvider({ url: chainConfig.rpcUrl });
@@ -53,7 +54,7 @@ export class NearSpokeService {
   }
 
   public async getRateLimit(token: string, srcChainKey: NearChainKey): Promise<RateLimitConfig> {
-    const res = (await this.queryContract(spokeChainConfig[srcChainKey].addresses.rateLimit, 'get_rate_limit', {
+    const res = (await this.queryContract(this.config.getChainConfig(srcChainKey).addresses.rateLimit, 'get_rate_limit', {
       token: token,
     })) as { max_available: number; available: number; rate_per_second: number } | undefined;
     if (res == null || res === undefined) {
@@ -90,12 +91,13 @@ export class NearSpokeService {
     deposit: bigint = BigInt('0'),
     gas: bigint = BigInt('300000000000000'),
   ): Promise<NearRawTransaction> {
+    const intentFiller = this.config.getChainConfig(fromInfo.srcChainKey).addresses.intentFiller;
     if (isNativeToken(fromInfo.srcChainKey, fillData.token)) {
       deposit = BigInt(fillData.amount);
       return {
         signerId: fromInfo.srcAddress,
         params: {
-          contractId: spokeChainConfig[fromInfo.srcChainKey].addresses.intentFiller,
+          contractId: intentFiller,
           method: 'fill_intent',
           args: { fill: this.toFillIntent(fillData) },
           deposit: deposit,
@@ -109,7 +111,7 @@ export class NearSpokeService {
         contractId: fillData.token,
         method: 'ft_transfer_call',
         args: {
-          receiver_id: spokeChainConfig[fromInfo.srcChainKey].addresses.intentFiller,
+          receiver_id: intentFiller,
           amount: fillData.amount.toString(),
           memo: '',
           msg: JSON.stringify(this.toFillIntent(fillData)),
@@ -138,12 +140,13 @@ export class NearSpokeService {
       data: Array.from(fromHex(params.data, 'bytes')),
     };
 
+    const assetManager = this.config.getChainConfig(params.srcChainKey).addresses.assetManager;
     let tx: NearRawTransaction;
     if (isNativeToken(params.srcChainKey, params.token)) {
       tx = {
         signerId: params.srcAddress,
         params: {
-          contractId: spokeChainConfig[params.srcChainKey].addresses.assetManager,
+          contractId: assetManager,
           method: 'transfer',
           args: { to: inputParams.to, amount: inputParams.amount, data: inputParams.data },
           deposit: BigInt(inputParams.amount),
@@ -157,7 +160,7 @@ export class NearSpokeService {
           contractId: inputParams.token,
           method: 'ft_transfer_call',
           args: {
-            receiver_id: spokeChainConfig[params.srcChainKey].addresses.assetManager,
+            receiver_id: assetManager,
             amount: inputParams.amount.toString(),
             memo: '',
             msg: JSON.stringify({
@@ -186,12 +189,13 @@ export class NearSpokeService {
    * @returns {Promise<bigint>} The balance of the token.
    */
   public async getDeposit(params: GetDepositParams<NearChainKey>): Promise<bigint> {
+    const assetManager = this.config.getChainConfig(params.srcChainKey).addresses.assetManager;
     let bal: unknown;
     if (isNativeToken(params.srcChainKey, params.token)) {
-      bal = await this.queryContract(spokeChainConfig[params.srcChainKey].addresses.assetManager, 'get_balance', {});
+      bal = await this.queryContract(assetManager, 'get_balance', {});
     } else {
       bal = await this.queryContract(params.token, 'ft_balance_of', {
-        account_id: spokeChainConfig[params.srcChainKey].addresses.assetManager,
+        account_id: assetManager,
       });
     }
 
@@ -218,7 +222,7 @@ export class NearSpokeService {
     const tx: NearRawTransaction = {
       signerId: params.srcAddress,
       params: {
-        contractId: spokeChainConfig[params.srcChainKey].addresses.connection,
+        contractId: this.config.getChainConfig(params.srcChainKey).addresses.connection,
         method: 'send_message',
         args: {
           dst_address: Array.from(fromHex(params.dstAddress, 'bytes')),
@@ -265,7 +269,7 @@ export class NearSpokeService {
     params: WaitForTxReceiptParams<NearChainKey>,
   ): Promise<Result<WaitForTxReceiptReturnType<NearChainKey>>> {
     const { txHash, pollingIntervalMs = this.pollingIntervalMs, maxTimeoutMs = this.maxTimeoutMs } = params;
-    const accountId = spokeChainConfig[params.chainKey].addresses.assetManager;
+    const accountId = this.config.getChainConfig(params.chainKey).addresses.assetManager;
     const maxRetries = Math.round(maxTimeoutMs / pollingIntervalMs);
 
     for (let retry = 0; retry <= maxRetries; retry++) {

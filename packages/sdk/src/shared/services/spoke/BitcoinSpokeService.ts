@@ -9,7 +9,7 @@ import type {
   Result,
   TxReturnType,
 } from '@sodax/types';
-import { ChainKeys, detectBitcoinAddressType, getIntentRelayChainId, spokeChainConfig } from '@sodax/types';
+import { ChainKeys, detectBitcoinAddressType, getIntentRelayChainId } from '@sodax/types';
 import * as ecc from '@bitcoinerlab/secp256k1';
 import { keccak256 } from 'viem';
 import type {
@@ -75,6 +75,7 @@ const BITCOIN_DEFAULT_FEE_RATE = 3;
 const DUST_THRESHOLD = 546;
 
 export class BitcoinSpokeService {
+  private readonly config: ConfigService;
   public readonly rpcUrl: string;
   public readonly radfi: RadfiProvider;
   public readonly walletMode: WalletMode;
@@ -82,6 +83,7 @@ export class BitcoinSpokeService {
   private readonly maxTimeoutMs: number;
 
   constructor(config: ConfigService) {
+    this.config = config;
     // since we only support mainnet for now, we can hardcode the single bitcoin chain config
     const chainConfig = config.getChainConfig(ChainKeys.BITCOIN_MAINNET);
     this.rpcUrl = chainConfig.rpcUrl;
@@ -91,8 +93,8 @@ export class BitcoinSpokeService {
     this.maxTimeoutMs = chainConfig.pollingConfig.maxTimeoutMs;
   }
 
-  public static getBtcNetwork(chainId: BitcoinChainKey): bitcoin.networks.Network {
-    return spokeChainConfig[chainId].network === 'MAINNET' ? bitcoin.networks.bitcoin : bitcoin.networks.testnet;
+  public getBtcNetwork(chainId: BitcoinChainKey): bitcoin.networks.Network {
+    return this.config.getChainConfig(chainId).network === 'MAINNET' ? bitcoin.networks.bitcoin : bitcoin.networks.testnet;
   }
 
   public async getBalance(tokenAddress: string, walletAddress: string): Promise<bigint> {
@@ -180,7 +182,7 @@ export class BitcoinSpokeService {
    * @returns {Promise<bigint>} Balance in satoshis
    */
   public async getDeposit(params: GetDepositParams<BitcoinChainKey>): Promise<bigint> {
-    const assetManagerAddress = spokeChainConfig[params.srcChainKey].addresses.assetManager;
+    const assetManagerAddress = this.config.getChainConfig(params.srcChainKey).addresses.assetManager;
     const utxos = await this.fetchUTXOs(assetManagerAddress);
     const totalBalance = utxos.reduce((sum, utxo) => sum + utxo.value, 0);
 
@@ -232,7 +234,7 @@ export class BitcoinSpokeService {
     walletProvider: IBitcoinWalletProvider,
     feeRate?: number,
   ): Promise<bitcoin.Psbt> {
-    const psbt = new bitcoin.Psbt({ network: BitcoinSpokeService.getBtcNetwork(chainId) });
+    const psbt = new bitcoin.Psbt({ network: this.getBtcNetwork(chainId) });
     const effectiveFeeRate = feeRate ?? (await this.getFeeRateEstimate());
     const walletAddress = await walletProvider.getWalletAddress();
     const addressType = detectBitcoinAddressType(walletAddress);
@@ -271,7 +273,7 @@ export class BitcoinSpokeService {
         const pubKeyHex = await walletProvider.getPublicKey();
         const redeemScript = bitcoin.payments.p2wpkh({
           pubkey: Buffer.from(pubKeyHex, 'hex'),
-          network: BitcoinSpokeService.getBtcNetwork(chainId),
+          network: this.getBtcNetwork(chainId),
         }).output;
         psbt.addInput({
           hash: utxo.txid,
@@ -371,7 +373,7 @@ export class BitcoinSpokeService {
         data = '0x',
         accessToken = this.radfi.accessToken,
       } = params;
-      const chainConfig = spokeChainConfig[srcChainKey];
+      const chainConfig = this.config.getChainConfig(srcChainKey);
 
       const returnRawTx = (psbtBase64: string): TxReturnType<BitcoinChainKey, Raw> =>
         ({
@@ -396,7 +398,7 @@ export class BitcoinSpokeService {
           {
             token: tokenId,
             amount,
-            recipient: spokeChainConfig[srcChainKey].addresses.assetManager,
+            recipient: chainConfig.addresses.assetManager,
             userAddress: from,
             data: hashedData,
           },
@@ -465,7 +467,7 @@ export class BitcoinSpokeService {
     data: string,
     utxos: BitcoinUTXO[],
   ): Promise<bitcoin.Psbt> {
-    const assetManagerAddress = spokeChainConfig[srcChainKey].addresses.assetManager;
+    const assetManagerAddress = this.config.getChainConfig(srcChainKey).addresses.assetManager;
 
     if (token.toLocaleLowerCase() === 'btc') {
       const outputs = [

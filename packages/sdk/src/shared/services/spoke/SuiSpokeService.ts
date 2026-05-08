@@ -9,7 +9,6 @@ import {
   type SuiExecutionResult,
   type SuiRawTransactionReceipt,
   type SuiChainKey,
-  spokeChainConfig,
   ChainKeys,
   isNativeToken,
   type TxReturnType,
@@ -30,12 +29,14 @@ export type SuiNativeCoinResult = { $kind: 'NestedResult'; NestedResult: [number
 export type SuiTxObject = { $kind: 'Input'; Input: number; type?: 'object' | undefined };
 
 export class SuiSpokeService {
+  private readonly config: ConfigService;
   public readonly publicClient: SuiClient;
   public assetManagerAddress: string | undefined;
   private readonly pollingIntervalMs: number;
   private readonly maxTimeoutMs: number;
 
   public constructor(config: ConfigService) {
+    this.config = config;
     // since we only support mainnet for now, we can hardcode the single sui chain config
     const chainConfig = config.getChainConfig(ChainKeys.SUI_MAINNET);
     this.publicClient = new SuiClient({ url: chainConfig.rpc_url });
@@ -168,7 +169,7 @@ export class SuiSpokeService {
     const coin: TransactionResult | SuiNativeCoinResult | SuiTxObject = isNative
       ? await this.getNativeCoin(tx, amount)
       : await this.getCoin(tx, token, amount, from);
-    const connection = this.splitAddress(spokeChainConfig[srcChainKey].addresses.connection);
+    const connection = this.splitAddress(this.config.getChainConfig(srcChainKey).addresses.connection);
     const assetManager = this.splitAddress(await this.getAssetManagerAddress(srcChainKey));
 
     // Call transfer function
@@ -212,7 +213,7 @@ export class SuiSpokeService {
     const { srcAddress: from, srcChainKey, dstChainKey, dstAddress, payload } = params;
 
     const txb = new Transaction();
-    const connection = this.splitAddress(spokeChainConfig[srcChainKey].addresses.connection);
+    const connection = this.splitAddress(this.config.getChainConfig(srcChainKey).addresses.connection);
 
     const relayId = getIntentRelayChainId(dstChainKey);
     // Perform send message transaction
@@ -300,7 +301,7 @@ export class SuiSpokeService {
   public async fetchAssetManagerAddress(chainId: SuiChainKey): Promise<string> {
     const latestPackageId = await this.fetchLatestAssetManagerPackageId(chainId);
 
-    return `${latestPackageId}::asset_manager::${spokeChainConfig[chainId].addresses.assetManagerConfigId}`;
+    return `${latestPackageId}::asset_manager::${this.config.getChainConfig(chainId).addresses.assetManagerConfigId}`;
   }
 
   /**
@@ -310,7 +311,7 @@ export class SuiSpokeService {
    */
   public async fetchLatestAssetManagerPackageId(chainId: SuiChainKey): Promise<string> {
     const configData = await this.publicClient.getObject({
-      id: spokeChainConfig[chainId].addresses.assetManagerConfigId,
+      id: this.config.getChainConfig(chainId).addresses.assetManagerConfigId,
       options: {
         showContent: true,
       },

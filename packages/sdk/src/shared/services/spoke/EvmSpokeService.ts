@@ -17,12 +17,12 @@ import type {
   WaitForTxReceiptReturnType,
 } from '../../types/spoke-types.js';
 import { Erc20Service, type Erc20IsAllowanceParams } from '../erc-20/Erc20Service.js';
+import type { ConfigService } from '../../config/ConfigService.js';
 import {
   type EvmSpokeOnlyChainKey,
   type Result,
   type TxReturnType,
   getIntentRelayChainId,
-  spokeChainConfig,
   type EvmReturnType,
 } from '@sodax/types';
 
@@ -32,27 +32,26 @@ export type CreateViemPublicClientParams = {
 };
 
 export class EvmSpokeService {
+  private readonly config: ConfigService;
   // map containing the public clients for each evm spoke chain, lazy loaded on demand
   private readonly publicClients: Map<EvmSpokeOnlyChainKey, PublicClient<HttpTransport>> = new Map();
+
+  public constructor(config: ConfigService) {
+    this.config = config;
+  }
 
   getPublicClient(chainId: EvmSpokeOnlyChainKey): PublicClient<HttpTransport> {
     return (
       this.publicClients.get(chainId) ??
-      this.constructPublicClient({ chainId, rpcUrl: spokeChainConfig[chainId].rpcUrl })
+      this.constructPublicClient({ chainId, rpcUrl: this.config.getChainConfig(chainId).rpcUrl })
     );
   }
 
   public constructPublicClient({ chainId, rpcUrl }: CreateViemPublicClientParams): PublicClient<HttpTransport> {
-    let publicClient: PublicClient<HttpTransport>;
-    if (rpcUrl) {
-      publicClient = createPublicClient({
-        transport: http(rpcUrl),
-        chain: getEvmViemChain(chainId),
-      });
-    }
-    publicClient = createPublicClient({
-      transport: http(getEvmViemChain(chainId).rpcUrls.default.http[0]),
-      chain: getEvmViemChain(chainId),
+    const chain = getEvmViemChain(chainId);
+    const publicClient = createPublicClient({
+      transport: http(rpcUrl ?? chain.rpcUrls.default.http[0]),
+      chain,
     });
     this.publicClients.set(chainId, publicClient);
     return publicClient;
@@ -101,10 +100,14 @@ export class EvmSpokeService {
    * @return - True if spender is allowed to spend amount on behalf of owner
    */
   public async isAllowanceValid(
-    params: Omit<Erc20IsAllowanceParams<EvmSpokeOnlyChainKey>, 'publicClient'>,
+    params: Omit<Erc20IsAllowanceParams<EvmSpokeOnlyChainKey>, 'publicClient' | 'nativeToken'>,
   ): Promise<Result<boolean>> {
     try {
-      return await Erc20Service.isAllowanceValid({ ...params, publicClient: this.getPublicClient(params.chainKey) });
+      return await Erc20Service.isAllowanceValid({
+        ...params,
+        publicClient: this.getPublicClient(params.chainKey),
+        nativeToken: this.config.getChainConfig(params.chainKey).nativeToken as Address,
+      });
     } catch (e) {
       return {
         ok: false,
@@ -128,10 +131,11 @@ export class EvmSpokeService {
     params: DepositParams<EvmSpokeOnlyChainKey, Raw>,
   ): Promise<TxReturnType<EvmSpokeOnlyChainKey, Raw>> {
     const { srcChainKey, srcAddress: from, token, to, amount, data = '0x' } = params;
+    const chainConfig = this.config.getChainConfig(srcChainKey);
     const rawTx: EvmReturnType<true> = {
       from: from,
-      to: spokeChainConfig[srcChainKey].addresses.assetManager,
-      value: token.toLowerCase() === spokeChainConfig[srcChainKey].nativeToken.toLowerCase() ? amount : 0n,
+      to: chainConfig.addresses.assetManager,
+      value: token.toLowerCase() === chainConfig.nativeToken.toLowerCase() ? amount : 0n,
       data: encodeFunctionData({
         abi: spokeAssetManagerAbi,
         functionName: 'transfer',
@@ -158,7 +162,7 @@ export class EvmSpokeService {
       address: params.token,
       abi: erc20Abi,
       functionName: 'balanceOf',
-      args: [spokeChainConfig[params.srcChainKey].addresses.assetManager],
+      args: [this.config.getChainConfig(params.srcChainKey).addresses.assetManager],
     });
   }
 
@@ -178,7 +182,7 @@ export class EvmSpokeService {
     const relayId = getIntentRelayChainId(dstChainKey);
     const rawTx: EvmReturnType<true> = {
       from: from,
-      to: spokeChainConfig[srcChainKey].addresses.connection satisfies Address,
+      to: this.config.getChainConfig(srcChainKey).addresses.connection satisfies Address,
       value: 0n,
       data: encodeFunctionData({
         abi: connectionAbi,

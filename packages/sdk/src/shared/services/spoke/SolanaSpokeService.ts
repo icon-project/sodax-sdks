@@ -29,7 +29,6 @@ import { sleep } from '../../utils/shared-utils.js';
 import {
   getIntentRelayChainId,
   ChainKeys,
-  spokeChainConfig,
   type HubAddress,
   type SolanaAccountMeta,
   type SolanaBase58PublicKey,
@@ -62,12 +61,14 @@ export type SolanaTransferToHubParams = {
 };
 
 export class SolanaSpokeService {
+  private readonly config: ConfigService;
   private readonly rpcUrl: string;
   public readonly connection: Connection;
   private readonly pollingIntervalMs: number;
   private readonly maxTimeoutMs: number;
 
   public constructor(config: ConfigService) {
+    this.config = config;
     const chainConfig = config.getChainConfig(ChainKeys.SOLANA_MAINNET);
     this.rpcUrl = chainConfig.rpcUrl;
     this.connection = new Connection(this.rpcUrl, 'confirmed');
@@ -111,7 +112,7 @@ export class SolanaSpokeService {
 
     let depositInstruction: TransactionInstruction;
     const amountBN = new BN(amount);
-    const chainConfig = spokeChainConfig[params.srcChainKey];
+    const chainConfig = this.config.getChainConfig(params.srcChainKey);
     const { rpcUrl, addresses } = chainConfig;
     const walletAddress = params.srcAddress;
     const walletPublicKey = new PublicKey(walletAddress);
@@ -197,7 +198,7 @@ export class SolanaSpokeService {
   }
 
   public async getDeposit(params: GetDepositParams<SolanaChainKey>): Promise<bigint> {
-    const assetManagerProgramId = new PublicKey(spokeChainConfig[params.srcChainKey].addresses.assetManager);
+    const assetManagerProgramId = new PublicKey(this.config.getChainConfig(params.srcChainKey).addresses.assetManager);
     const solToken = new PublicKey(params.token);
 
     if (isSolanaNativeToken(new PublicKey(solToken))) {
@@ -226,7 +227,7 @@ export class SolanaSpokeService {
   ): Promise<TxReturnType<SolanaChainKey, Raw>> {
     const dstRelayChainId = getIntentRelayChainId(params.dstChainKey);
     const payload = keccak256(params.payload);
-    const chainConfig = spokeChainConfig[params.srcChainKey];
+    const chainConfig = this.config.getChainConfig(params.srcChainKey);
     const { rpcUrl, addresses } = chainConfig;
     const walletAddress = params.srcAddress;
     const walletPublicKey = new PublicKey(walletAddress);
