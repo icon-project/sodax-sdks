@@ -4,6 +4,8 @@ Pass the user's connected wallet to `@sodax/sdk` calls — `useWalletProvider` r
 
 **Depends on:** [`setup.md`](./setup.md), one of [`connect-button.md`](./connect-button.md) / [`multi-chain-modal.md`](./multi-chain-modal.md)
 
+**Requires also:** `pnpm add @sodax/sdk` — this package does not depend on `@sodax/sdk`. Install it separately in the consumer app.
+
 ---
 
 ## Hooks used

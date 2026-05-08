@@ -75,7 +75,7 @@ export function ChainPicker({ onPick }: { onPick: (c: ChainType) => void }) {
 | `chainIds` | `readonly SpokeChainKey[]` | All chain keys sharing this `chainType` (e.g. all 12 EVM `ChainKeys.*` for `'EVM'`) |
 | `displayName` | `string` | Default per-chain display name |
 | `iconUrl` | `string \| undefined` | `undefined` = SDK doesn't ship one — provide your own |
-| `isConnected` | `boolean` | `true` when `xConnections[chainType].xAccount.address` is set |
+| `isConnected` | `boolean` | `true` when an account is connected for this chain |
 | `account` | `XAccount \| undefined` | Connected account |
 | `connectorId` | `string \| undefined` | Active connector id when connected |
 
@@ -184,7 +184,7 @@ Both `useChainGroups` and `useConnectedChains` accept an `order?: readonly Chain
 1. Chains in the array render in array order.
 2. Chains **not** in the array fall to the bottom, sorted alphabetically.
 3. Without `order`:
-   - `useChainGroups` follows `enabledChains` insertion order (config object key order).
+   - `useChainGroups` follows the order of slots in `walletConfig` (config object key order).
    - `useConnectedChains` follows `ChainTypeArr` from `@sodax/types` — stable across reloads.
 
 ```typescript
