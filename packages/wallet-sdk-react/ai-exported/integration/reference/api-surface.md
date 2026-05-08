@@ -147,79 +147,35 @@ Each hook export pair (`useFoo` + `UseFooOptions` / `UseFooResult`) lives in its
 
 Concrete chain classes live behind sub-paths. Default to barrel imports; opt into these only when you need `instanceof`, want to extend a class, or are wiring a custom connector list via `ChainTypeConfig.connectors`.
 
-### `/xchains/bitcoin`
+### Default pattern (most chains)
 
-| Symbol | Kind |
+`/xchains/{evm, icon, injective, near, solana, sui}` re-export the chain's `XService` + `XConnector` classes — `EvmXService`/`EvmXConnector`, `SolanaXService`/`SolanaXConnector`, etc. Icon also exports `IconHanaXConnector` (the connector for the Hana wallet).
+
+```ts
+import { EvmXService, EvmXConnector } from '@sodax/wallet-sdk-react/xchains/evm';
+import { IconHanaXConnector } from '@sodax/wallet-sdk-react/xchains/icon';
+```
+
+### Chains with extra exports
+
+| Sub-path | Beyond `XService`/`XConnector` |
 |---|---|
-| `BitcoinXService` | class |
-| `BitcoinXConnector` | class |
-| `UnisatXConnector` | class |
-| `XverseXConnector` | class |
-| `OKXXConnector` | class |
-| `useBitcoinXConnectors` | hook |
-| `BtcWalletAddressType` | type re-export from `@sodax/types` |
+| `/xchains/bitcoin` | `XverseXConnector`, `UnisatXConnector`, `OKXXConnector` (3 wallet connectors), hook `useBitcoinXConnectors`, type `BtcWalletAddressType` |
+| `/xchains/evm` | `createWagmiConfig` (function — also exported as alias `createWagmi`) |
+| `/xchains/icon` | `CHAIN_INFO` (value), `SupportedChainId` (enum) |
+| `/xchains/stacks` | `STACKS_PROVIDERS` (value), hook `useStacksXConnectors`, type `StacksProviderConfig` |
 
-### `/xchains/evm`
+### Special case
 
-| Symbol | Kind |
+| Sub-path | Notes |
 |---|---|
-| `EvmXService` | class |
-| `EvmXConnector` | class |
-| `createWagmiConfig` | function |
-| `createWagmi` | function (alias of `createWagmiConfig`) |
+| `/xchains/stellar` | **No concrete classes re-exported.** Stellar uses `@creit.tech/stellar-wallets-kit` directly via an `XConnector` registered through the chain registry — no public class to `instanceof`-check. |
 
-### `/xchains/icon`
+If unsure what a sub-path exports, check the published `dist/`:
 
-| Symbol | Kind |
-|---|---|
-| `IconXService` | class |
-| `IconHanaXConnector` | class |
-| `CHAIN_INFO` | value |
-| `SupportedChainId` | enum/type |
-
-### `/xchains/injective`
-
-| Symbol | Kind |
-|---|---|
-| `InjectiveXService` | class |
-| `InjectiveXConnector` | class |
-
-### `/xchains/near`
-
-| Symbol | Kind |
-|---|---|
-| `NearXService` | class |
-| `NearXConnector` | class |
-
-### `/xchains/solana`
-
-| Symbol | Kind |
-|---|---|
-| `SolanaXService` | class |
-| `SolanaXConnector` | class |
-
-### `/xchains/stacks`
-
-| Symbol | Kind |
-|---|---|
-| `StacksXService` | class |
-| `StacksXConnector` | class |
-| `StacksProviderConfig` | type |
-| `STACKS_PROVIDERS` | value |
-| `useStacksXConnectors` | hook |
-
-### `/xchains/stellar`
-
-| Symbol | Kind |
-|---|---|
-| _(no concrete classes re-exported — Stellar uses `@creit.tech/stellar-wallets-kit` directly via `XConnector` registered through the chain registry)_ | — |
-
-### `/xchains/sui`
-
-| Symbol | Kind |
-|---|---|
-| `SuiXService` | class |
-| `SuiXConnector` | class |
+```bash
+grep -E '^export' node_modules/@sodax/wallet-sdk-react/dist/xchains/<chain>/index.d.ts
+```
 
 ---
 
