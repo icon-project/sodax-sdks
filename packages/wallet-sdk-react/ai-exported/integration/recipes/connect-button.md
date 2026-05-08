@@ -93,7 +93,7 @@ export function EvmConnectButton() {
 
 ## Caveat — provider-managed chains resolve with `undefined`
 
-For EVM, Solana, and Sui, `connect(connector)` resolves with `undefined` because connection state is set by the chain's Hydrator after the native SDK reports `connected`. Always read the account via `useXAccount`, not the mutation's return value:
+For EVM, Solana, and Sui, `connect(connector)` resolves with `undefined` because connection state is set asynchronously after the native SDK adapter reports `connected`. Always read the account via `useXAccount`, not the mutation's return value:
 
 ```typescript
 const { mutateAsync: connect } = useXConnect();

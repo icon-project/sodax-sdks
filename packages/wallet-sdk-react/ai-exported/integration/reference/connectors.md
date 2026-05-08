@@ -27,23 +27,16 @@ Consumer code should depend on **`IXConnector`** (the interface), not the concre
 
 ---
 
-## Per-chain connector classes
+## Listing connectors at runtime
 
-| Chain | Connector class(es) |
-|---|---|
-| EVM | `EvmXConnector` (one connector per EIP-6963-discovered wallet) |
-| Solana | `SolanaXConnector` (one per `@solana/wallet-adapter` standard wallet) |
-| Sui | `SuiXConnector` (one per `@mysten/dapp-kit` registered wallet) |
-| Stellar | `StellarWalletsKitXConnector` (async-discovered via `walletsKit.getSupportedWallets()`) |
-| Injective | `InjectiveXConnector` × 3 — MetaMask, Keplr, Leap |
-| ICON | `IconHanaXConnector` (Hana wallet) |
-| Bitcoin | `UnisatXConnector`, `XverseXConnector`, `OKXXConnector` (all extend abstract `BitcoinXConnector`) |
-| NEAR | `NearXConnector` |
-| Stacks | `StacksXConnector` × N (one per registered provider) |
+Don't import concrete classes to discover what's available — use the hook:
 
-`BitcoinXConnector` is an abstract base — concrete subclasses implement `signEcdsaMessage` / `signBip322Message` per wallet's API. See [`sign-message.md`](../recipes/sign-message.md) for the dispatch logic.
+```ts
+const connectors = useXConnectors({ xChainType: 'EVM' });
+// IXConnector[] — already filtered to enabled chain
+```
 
-For `instanceof` checks against a concrete class, use the sub-path import — see [`../recipes/sub-path-imports.md`](../recipes/sub-path-imports.md).
+For the per-chain class names (only needed for `instanceof` or custom-connector-list use cases), see [`api-surface.md`](./api-surface.md) § "Sub-path exports" and the worked example in [`../recipes/sub-path-imports.md`](../recipes/sub-path-imports.md). Bitcoin's `BitcoinXConnector` is the only abstract base — its concrete subclasses (Unisat, Xverse, OKX) override per-wallet signing methods (see [`sign-message.md`](../recipes/sign-message.md)).
 
 ---
 
@@ -78,4 +71,4 @@ Two ways to plug in a wallet the SDK doesn't ship:
 1. **Extend `XConnector`** (abstract base, exported from the barrel) — implement `connect()` / `disconnect()` / `isInstalled` / `installUrl`. Pass via `SodaxWalletConfig.<CHAIN>.connectors` to replace the registry defaults for that chain.
 2. **Implement `IXConnector` directly** — skip the abstract base. The SDK never does `instanceof XConnector` on user-supplied connectors; it only relies on the interface.
 
-For a worked example with code, see [`../recipes/sub-path-imports.md`](../recipes/sub-path-imports.md) § "Custom connector list". For chains with extra signing methods (Bitcoin's `signBip322Message`, Injective specifics), implement the chain-specific extras — `chainRegistry` checks for them via type guards at dispatch time.
+For a worked example with code, see [`../recipes/sub-path-imports.md`](../recipes/sub-path-imports.md) § "Custom connector list". For chains with extra signing methods (Bitcoin's `signBip322Message`, Injective specifics), implement the chain-specific extras — the SDK detects them via type guards at dispatch time.
