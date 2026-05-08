@@ -7,7 +7,7 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
-  "files": ["dist", "src"],
+  "files": ["dist", "README.md", "docs", "skills", "ai-export"],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -18,7 +18,8 @@
       "types": "./dist/xchains/*/index.d.ts",
       "import": "./dist/xchains/*/index.mjs",
       "require": "./dist/xchains/*/index.cjs"
-    }
+    },
+    "./ai-export/*": "./ai-export/*"
   },
   "typesVersions": {
     "*": {
