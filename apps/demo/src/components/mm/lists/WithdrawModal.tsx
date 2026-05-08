@@ -36,7 +36,7 @@ interface WithdrawModalProps {
     token: XToken;
     sourceChainId: SpokeChainKey;
     destinationChainId: SpokeChainKey;
-    txHash?: `0x${string}`;
+    txHash?: string;
   }) => void;
   maxWithdraw: string;
   /** True when max withdrawal is reduced due to health factor constraints. */

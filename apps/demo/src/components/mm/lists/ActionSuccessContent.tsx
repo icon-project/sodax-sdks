@@ -18,7 +18,7 @@ export type ActionSuccessData = {
   token: XToken;
   sourceChainId: SpokeChainKey;
   destinationChainId: SpokeChainKey;
-  txHash?: `0x${string}`;
+  txHash?: string;
 };
 
 interface ActionSuccessContentProps {

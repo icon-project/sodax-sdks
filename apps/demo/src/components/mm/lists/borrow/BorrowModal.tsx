@@ -47,7 +47,7 @@ interface BorrowModalProps {
     token: XToken;
     sourceChainId: SpokeChainKey;
     destinationChainId: SpokeChainKey;
-    txHash?: `0x${string}`;
+    txHash?: string;
   }) => void;
   maxBorrow: string;
   priceUSD: number; // User summary from the market chain (where collateral is). Used to recalculate max borrow based on user's borrowing capacity.
