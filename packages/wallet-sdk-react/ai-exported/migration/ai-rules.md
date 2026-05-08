@@ -96,7 +96,7 @@ Stop and ask the user before continuing if you encounter any of the following. T
 |---|---|
 | Custom `XConnector` subclass in user code | v1 and v2 have different abstract method signatures. User must port manually. |
 | Custom `XService` subclass in user code | Same as above. |
-| User reads from `useXWagmiStore` with a selector touching fields **outside the v1 surface** (`xServices`, `xConnections`, `setXConnection`, `unsetXConnection`) | These fields are v2-internal, not part of v1 contract — agent shouldn't migrate without user intent. Selectors that touch only the 4 v1 fields are safe to mechanically rename to `useXWalletStore` (shapes preserved identically). |
+| User reads from `useXWagmiStore` with a selector touching `setXConnection`, `unsetXConnection`, or any v2-internal field (`enabledChains`, `walletProviders`, `chainActions`, …) | These are not part of the v2 public API. Agent must replace direct store reads with public hooks (`useXServices`, `useXConnections`, etc. — see [`reference/imports.md`](./reference/imports.md) § "Store hook removed"). For mutations the user must adopt `useXConnect` / `useXDisconnect` — confirm before substituting. |
 | User passes `rpcConfig`, `options`, or `initialState` to the v1 provider | These are removed in v2. Migration target is the new `config` object. Verify what behavior the user wants preserved. |
 | Test files that mock `XService` or `XConnector` | Mock surface differs. Tests must be updated by hand with the user's intent in mind. |
 | `apps/wallet-modal-example` is referenced | This is internal SODAX scaffolding, not for end users. |
@@ -113,7 +113,7 @@ When stopping, **quote the file/line** of the offending code and present the use
 pnpm checkTs
 
 # 2. Verify no v1 patterns remain
-grep -rn "useXWagmiStore" <user-src>                          # expect empty (the v2 barrel doesn't export this name — all call sites must be renamed)
+grep -rn "useXWagmiStore\|useXWalletStore" <user-src>         # expect empty (v2 barrel doesn't export the store hook under either name — all call sites must use public hooks)
 grep -rnE "SodaxWalletProvider[^>]*\b(rpcConfig|initialState|options)\s*=" <user-src>  # expect empty
 grep -rnE "useXAccount\(['\"]" <user-src>                     # expect empty
 grep -rnE "useXConnectors\(['\"]" <user-src>                  # expect empty
@@ -135,7 +135,7 @@ If all four pass and the [`checklist.md`](./checklist.md) is complete, the migra
 The migration is complete when:
 
 - [ ] `pnpm checkTs` exits clean.
-- [ ] No `useXWagmiStore` imports remain (the v2 barrel doesn't export this name — every call site must be renamed to `useXWalletStore`).
+- [ ] No `useXWagmiStore` or `useXWalletStore` imports remain (v2 does not export the store hook — every call site must use public hooks like `useXServices` / `useXConnections`).
 - [ ] No positional hook args remain (`useXAccount('EVM')` etc).
 - [ ] `SodaxWalletProvider` is mounted with a v2-shaped `config` prop, wrapped by `QueryClientProvider`.
 - [ ] All items in [`checklist.md`](./checklist.md) are checked.

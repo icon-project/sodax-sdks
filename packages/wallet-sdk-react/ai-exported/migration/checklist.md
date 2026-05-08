@@ -35,17 +35,19 @@ Run these checks after every code change and at the end of the migration. Each i
 
 ## Store migration
 
-- [ ] No `useXWagmiStore` imports remain (renamed to `useXWalletStore` — the symbol is no longer exported by v2, so leftover usage is a hard error).
+- [ ] No `useXWagmiStore` imports remain (the v2 barrel removed the store hook entirely — every call site must be replaced with a public hook).
   ```bash
   grep -rn "useXWagmiStore" <user-src>
   # expect empty
   ```
 
-- [ ] If user code reads from the store, `useXWalletStore` is used. Selectors reading only v1-surface fields (`xServices`, `xConnections`, `setXConnection`, `unsetXConnection`) are mechanically valid — shapes preserved identically. Selectors reading any other field were flagged as stop conditions and should already be resolved with the user.
+- [ ] No `useXWalletStore` imports were introduced (v2 does not export the store hook under either name).
   ```bash
   grep -rn "useXWalletStore" <user-src>
-  # for each match, confirm selector reads only v1-surface fields OR was explicitly user-approved
+  # expect empty
   ```
+
+- [ ] Every former store read uses a public hook (`useXService` / `useXServices` / `useXConnection` / `useXConnections` / `useEnabledChains` / `useWalletProvider`). See [`reference/imports.md`](./reference/imports.md) § "Store hook removed" for the field-to-hook map.
 
 ---
 

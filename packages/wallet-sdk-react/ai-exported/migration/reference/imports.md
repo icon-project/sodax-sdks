@@ -4,87 +4,59 @@ Mechanical import-path replacements for v1 → v2. The package name (`@sodax/wal
 
 ---
 
-## Store rename + shape preservation
+## Store hook removed from the public API
 
-| v1 | v2 |
+v1 exported the Zustand store hook (`useXWagmiStore`) from the package barrel. **v2 does not export the store hook at all** — direct store access is no longer supported. The localStorage key (`xwagmi-store`) is unchanged, so user connections survive the upgrade.
+
+For each `useXWagmiStore(state => state.X)` selector, replace with the equivalent public hook below. **Do not rename to `useXWalletStore`** — the v2 barrel does not export it.
+
+### Field-to-hook map
+
+| v1 selector | v2 replacement |
 |---|---|
-| `useXWagmiStore` | `useXWalletStore` |
+| `state.xServices` (whole map) | `useXServices()` |
+| `state.xServices[chainType]` (per chain) | `useXService({ xChainType })` |
+| `state.xConnections` (whole map) | `useXConnections()` |
+| `state.xConnections[chainType]` (per chain) | `useXConnection({ xChainType })` |
+| `state.setXConnection` | not a public mutation — use `useXConnect()` (mutation hook) |
+| `state.unsetXConnection` | not a public mutation — use `useXDisconnect()` |
 
 ```ts
 // v1 ❌
 import { useXWagmiStore } from '@sodax/wallet-sdk-react';
-
-// v2 ✅
-import { useXWalletStore } from '@sodax/wallet-sdk-react';
-```
-
-The localStorage key (`xwagmi-store`) is unchanged — user connections survive the upgrade.
-
-### v1 surface preserved identically in v2
-
-The 4 fields v1 exposed are kept in v2 with identical types — selectors reading only these fields can be mechanically renamed without behavior change:
-
-| Field | v1 type | v2 type | Status |
-|---|---|---|---|
-| `xServices` | `Partial<Record<ChainType, XService>>` | same | ✅ identical |
-| `xConnections` | `Partial<Record<ChainType, XConnection>>` | same | ✅ identical |
-| `setXConnection` | `(xChainType: ChainType, xConnection: XConnection) => void` | same | ✅ identical |
-| `unsetXConnection` | `(xChainType: ChainType) => void` | same | ✅ identical |
-
-```ts
-// v1 ❌
 const xServices = useXWagmiStore(state => state.xServices);
 
-// v2 ✅ — mechanical rename only, no shape change
-const xServices = useXWalletStore(state => state.xServices);
+// v2 ✅ — public hook, no store access
+import { useXServices } from '@sodax/wallet-sdk-react';
+const xServices = useXServices();
 ```
-
-### v2-only additions (stop and ask if a selector reads these)
-
-These fields are new in v2 — internal helpers that v1 code by definition cannot reference. If you find a selector reading any of these, the file is already partially migrated by hand, copied from v2 example code, or is poking at internal API — defer to the user:
-
-| v2-only field | Type | Suggested public hook |
-|---|---|---|
-| `xConnectorsByChain` | `Partial<Record<ChainType, XConnector[]>>` | `useXConnectorsByChain()` |
-| `enabledChains` | `ChainType[]` | `useEnabledChains()` |
-| `chainActions` | `Partial<Record<ChainType, ChainActions>>` | (no public hook — internal) |
-| `walletProviders` | `Partial<Record<ChainType, IWalletProvider>>` | `useWalletProvider({ xChainType })` |
-| `getWalletProvider<K>` | `(xChainType: K) => GetWalletProviderReturnType<K>` | `useWalletProvider({ xChainType })` |
 
 ### Decision tree — `useXWagmiStore` selector handling
 
 For each occurrence of `useXWagmiStore(state => state.X)`:
 
-1. **Is `X` one of `xServices` / `xConnections` / `setXConnection` / `unsetXConnection`?**
-   → mechanical rename: `useXWagmiStore` → `useXWalletStore`, no other changes. Done.
-2. **Is `X` one of the v2-only fields above (e.g. `enabledChains`, `walletProviders`)?**
-   → STOP. The file's history is suspicious (cannot have been valid v1). Quote the file/line to the user and ask:
-   - Was this hand-edited mid-migration? Revert and re-do.
-   - Is the user intentionally reading internal state? Suggest the public hook from the table above.
-3. **Anything else (typo, removed v1 field)?**
-   → STOP. The original v1 file may have had a custom internal field that was tree-shaken or renamed. Ask user.
+1. **Is `X` a public-hook-equivalent read** (`xServices`, `xConnections`, or per-chain access of either)?
+   → Replace with the public hook from the table. Drop the `useXWagmiStore` import.
+2. **Is `X` a mutation** (`setXConnection`, `unsetXConnection`) **or a v2-internal field** (`enabledChains`, `chainActions`, `walletProviders`, `xConnectorsByChain`)?
+   → STOP. The user's code is poking at internal API or was hand-edited mid-migration. Ask the user before changing.
+3. **Anything else** (typo, removed v1 field)?
+   → STOP. Ask user.
 
-### Worked example — when to rename, when to stop
+### Worked example
 
 ```ts
-// ✅ MECHANICAL RENAME — selector reads v1 surface
-// v1
+// v1 ❌ — direct store read
 const xServices = useXWagmiStore(state => state.xServices);
-// v2 (after rename only)
-const xServices = useXWalletStore(state => state.xServices);
 
-// 🛑 STOP — selector reads v2-only field; file history is suspicious
-const enabled = useXWagmiStore(state => state.enabledChains);
-//                                            ^^^^^^^^^^^^^^
-// `enabledChains` did not exist in v1. If this code "worked" before,
-// either v1 patched the type, or this file was already partially edited.
-// → Ask user. Suggested fix: replace with the public hook.
-//
-// Suggested replacement (let user confirm):
-const enabled = useEnabledChains();
+// v2 ✅ — public hook (no store access)
+const xServices = useXServices();
+
+// 🛑 STOP — mutation through store; v2 does not expose this on a hook
+const setConn = useXWagmiStore(state => state.setXConnection);
+// → Ask user. Likely they want useXConnect()'s mutation instead.
 ```
 
-Always prefer the public hooks (`useXServices`, `useEnabledChains`, `useWalletProvider`) over reading internal store fields — see [`../../integration/reference/hooks.md`](../../integration/reference/hooks.md).
+Always prefer public hooks (`useXService`, `useXServices`, `useXConnection`, `useXConnections`, `useEnabledChains`, `useWalletProvider`) over store reads — see [`../../integration/reference/hooks.md`](../../integration/reference/hooks.md).
 
 ---
 

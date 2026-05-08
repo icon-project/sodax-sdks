@@ -7,7 +7,7 @@ This is the **single source of truth** for behavior and API changes between v1 a
 1. [`SodaxWalletProvider` props (largest change)](#1-sodaxwalletprovider-props-largest-change)
 2. [`QueryClientProvider` is no longer mounted internally](#2-queryclientprovider-is-no-longer-mounted-internally)
 3. [Hooks now take an options object, not positional args](#3-hooks-now-take-an-options-object-not-positional-args)
-4. [Store rename: `useXWagmiStore` → `useXWalletStore`](#4-store-rename-usexwagmistore--usexwalletstore)
+4. [Store hook removed from the public API](#4-store-hook-removed-from-the-public-api)
 5. [Concrete chain classes moved behind sub-path imports](#5-concrete-chain-classes-moved-behind-sub-path-imports)
 6. [Chain-type opt-in (mounting behavior)](#6-chain-type-opt-in-mounting-behavior)
 7. [EVM = single connection across every configured EVM network](#7-evm--single-connection-across-every-configured-evm-network)
@@ -88,20 +88,20 @@ See [`reference/hooks.md`](./reference/hooks.md) for the per-hook signature map.
 
 ---
 
-## 4. Store rename: `useXWagmiStore` → `useXWalletStore`
+## 4. Store hook removed from the public API
 
 ### What changed
 
-The Zustand store hook is renamed. The localStorage **persistence key is unchanged** (`xwagmi-store`) so existing user connections survive the upgrade.
+v1 exported the Zustand store hook as `useXWagmiStore` from the package barrel. v2 **does not export the store hook at all** — direct store access is no longer part of the public API. The localStorage **persistence key is unchanged** (`xwagmi-store`) so existing user connections survive the upgrade.
 
 ### Why
 
-- **Naming accuracy.** v1 called the store `xwagmi` because EVM (wagmi) was the primary chain. v2 supports 9 chain types — a wagmi-flavored name is misleading.
-- **localStorage compatibility.** Renaming the persistence key would log every user out on upgrade. We renamed the export but kept the key.
+- **Public surface should be the hook layer.** Reading store state directly couples consumers to internal field shapes that change between minor versions. v2 provides one public hook per consumer concern (`useXService`, `useXConnection`, `useXConnectors`, …) so internal store renames don't break consumers.
+- **localStorage compatibility.** Renaming the persistence key would log every user out on upgrade. The internal store rename (which v2 also did) keeps the localStorage key intact.
 
 ### How to migrate
 
-Rename the import. The store **shape is also different** — see [`reference/imports.md`](./reference/imports.md) and the stop conditions in [`ai-rules.md`](./ai-rules.md) for custom selector handling.
+For each `useXWagmiStore(state => state.X)` selector, replace with the equivalent public hook. There is no `useXWalletStore` import to rename to. See [`reference/imports.md`](./reference/imports.md) § "Store hook removed" for the field-to-hook map.
 
 ---
 

@@ -170,6 +170,6 @@ For migration context only — these were on v1's barrel:
 - All concrete `XService` / `XConnector` classes (now sub-path imports)
 - `useXBalances` (moved to `@sodax/dapp-kit` with a new signature — see `migration/breaking-changes.md` § 10)
 - `XWagmiProviders` (renamed to `SodaxWalletProvider`)
-- `useXWagmiStore` (renamed to `useXWalletStore` — also no longer publicly exported in v2)
+- `useXWagmiStore` (the store hook — v2 doesn't export the store hook under any name; use public hooks like `useXServices` / `useXConnections` instead)
 
 See [`../../migration/reference/imports.md`](../../migration/reference/imports.md) for the full v1→v2 import map.

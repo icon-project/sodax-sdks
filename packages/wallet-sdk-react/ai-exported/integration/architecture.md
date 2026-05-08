@@ -64,15 +64,14 @@ This is the only supported way to change config — there is no `setConfig` API.
 
 ## State: Zustand store + adapter sync
 
-`useXWalletStore` is a Zustand store keyed by `ChainType`:
+The package keeps connection state in a Zustand store keyed by `ChainType`. The store hook **is not exported** — consumers read state through public hooks (`useXAccount`, `useXService`, `useWalletProvider`, …), each of which subscribes to the relevant slice internally. The shape below is informational only:
 
 ```ts
-// shape (informational — internal)
+// internal shape — do NOT import
 {
   xServices:     Partial<Record<ChainType, IXService>>,
   xConnections:  Partial<Record<ChainType, XConnection>>,
-  setXConnection,
-  unsetXConnection,
+  // …plus internal mutations
 }
 ```
 
@@ -81,7 +80,7 @@ Two things matter to consumers:
 1. **Provider-managed chains sync state from the adapter.** EVM/Solana/Sui each have a `<Hydrator>` that watches its native adapter (wagmi `useAccount`, etc.) and writes the active connection into `xConnections`. Hooks read from the Zustand store, so they see one consistent view across all chains.
 2. **Persistence: `xwagmi-store` localStorage key, kept stable from v1.** Renaming would log out every existing user. Hydration runs lazily — the first render after refresh has `xConnections = {}` even if storage has data. Hooks expose this via `useConnectedChains().status === 'ready'` — gate UI on that to avoid hydration flicker on Next.js.
 
-You should **not** read the store directly. Use the public hooks. The four v1-surface fields (`xServices`, `xConnections`, `setXConnection`, `unsetXConnection`) are stable; everything else is internal and may change between minor versions.
+You should **not** read the store directly. Use the public hooks. The store hook itself is not exported from v2 — see [`reference/api-surface.md`](./reference/api-surface.md) § "Not exported".
 
 ---
 
