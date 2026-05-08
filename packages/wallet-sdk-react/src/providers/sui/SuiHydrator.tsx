@@ -46,7 +46,8 @@ export const SuiHydrator = (): null => {
       wasConnectedRef.current = true;
       setXConnection('SUI', {
         xAccount: { address: suiAccount.address, xChainType: 'SUI' },
-        xConnectorId: currentWallet.name,
+        // Match SuiXConnector.id derivation: prefer Wallet Standard `id`, fall back to `name`.
+        xConnectorId: currentWallet.id ?? currentWallet.name,
       });
     } else if (wasConnectedRef.current) {
       wasConnectedRef.current = false;

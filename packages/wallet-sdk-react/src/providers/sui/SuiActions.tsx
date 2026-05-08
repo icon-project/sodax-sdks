@@ -25,7 +25,8 @@ export const SuiActions = () => {
   useEffect(() => {
     registerChainActions('SUI', {
       connect: async (xConnectorId: string) => {
-        const wallet = walletsRef.current.find(w => w.name === xConnectorId);
+        // Match SuiXConnector.id derivation: prefer Wallet Standard `id`, fall back to `name`.
+        const wallet = walletsRef.current.find(w => (w.id ?? w.name) === xConnectorId);
         if (!wallet) {
           console.warn(
             `[SuiActions] connect: wallet "${xConnectorId}" not found in adapter list`,
