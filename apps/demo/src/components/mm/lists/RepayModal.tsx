@@ -1,48 +1,38 @@
-import { useAppStore } from '@/zustand/useAppStore';
-import { useMMAllowance, useMMApprove, useRepay, useSodaxContext, useXBalances } from '@sodax/dapp-kit';
-import type { MoneyMarketRepayParams } from '@sodax/sdk';
-import { type SpokeChainKey, type XToken, baseChainInfo } from '@sodax/sdk';
-import { useEvmSwitchChain, useWalletProvider } from '@sodax/wallet-sdk-react';
-import React, { useMemo, useState, useEffect } from 'react';
-import { formatUnits, parseUnits } from 'viem';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
+import React, { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { ChainSelector } from '@/components/shared/ChainSelector';
+import { Skeleton } from '@/components/ui/skeleton';
+
+import { getXChainType, useEvmSwitchChain, useWalletProvider, useXAccount, useXService } from '@sodax/wallet-sdk-react';
+import { formatUnits, parseUnits } from 'viem';
+import { useMMAllowance, useMMApprove, useRepay, useSodaxContext, useXBalances } from '@sodax/dapp-kit';
+import type { MoneyMarketRepayParams, SpokeChainKey, XToken } from '@sodax/sdk';
+import { useAppStore } from '@/zustand/useAppStore';
 import {
-  getChainsWithThisToken,
-  getTokenOnChain,
-  getNativeTokenSymbol,
   formatDecimalForDisplay,
+  getChainsWithThisToken,
+  getMmErrorText,
+  getNativeTokenSymbol,
   getSafeMaxAmountForInput,
-  truncateToDecimals,
+  getTokenOnChain,
 } from '@/lib/utils';
-import { AMOUNT_DISPLAY_DECIMALS } from '../constants';
 import { logger } from '@/lib/logger';
-import { getXChainType, useXAccount, useXService } from '@sodax/wallet-sdk-react';
-import { getChainName } from '@/constants';
+import { ErrorAlert } from '../ErrorAlert';
 import { extractTxHash } from '@/lib/extractTxHash';
+import { getChainName } from '@/constants';
 import { ActionSuccessContent, type ActionSuccessData } from './ActionSuccessContent';
 import { Loader2 } from 'lucide-react';
-import { isValidEvmAddress } from '../typeGuards';
-import { ErrorAlert } from '../ErrorAlert';
-import { getMmErrorText } from '@/lib/utils';
 
 interface RepayModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   token: XToken;
   maxDebt: string;
-  /** Chain where the debt lives (market/collateral chain). Used for dstChainKey and initial fromChainId. */
-  debtChainId?: SpokeChainKey;
+  srcChainId: SpokeChainKey;
+
   // If true, shows success screen inline instead of closing and calling onSuccess.
   inlineSuccess?: boolean; // Called on success. Only used when inlineSuccess is false.
   onSuccess?: (data: {
@@ -59,125 +49,112 @@ export function RepayModal({
   onOpenChange,
   token,
   maxDebt,
-  debtChainId: debtChainIdProp,
   onSuccess,
   inlineSuccess,
+  srcChainId,
 }: RepayModalProps) {
   const [amount, setAmount] = useState('');
-  const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<'form' | 'success'>('form');
   const [successData, setSuccessData] = useState<ActionSuccessData | null>(null);
-  const { selectedChainId: selectedMarketChainId, openWalletModal } = useAppStore();
+  const { selectedChainId, openWalletModal, isWalletModalOpen } = useAppStore();
   const { sodax } = useSodaxContext();
 
-  const debtChainId = debtChainIdProp ?? token.chainKey ?? selectedMarketChainId;
-  const [fromChainId, setFromChainId] = useState<SpokeChainKey>(debtChainId);
-  const toChainId = debtChainId;
+  const [srcChainKey, setSrcChainKey] = useState<SpokeChainKey>(srcChainId);
+  const dstChainKey: SpokeChainKey = selectedChainId;
 
-  const prevOpenRef = React.useRef(false);
-  useEffect(() => {
-    const justOpened = open && !prevOpenRef.current;
-    prevOpenRef.current = open;
-    if (justOpened) {
-      setFromChainId(debtChainId);
-    }
-  }, [open, debtChainId]);
-  const { address: fromAddress } = useXAccount({ xChainId: fromChainId });
-  const { address: toAddress } = useXAccount({ xChainId: toChainId });
+  const supportedSourceChains = getChainsWithThisToken(sodax, token);
+  const sourceToken = getTokenOnChain(sodax, token.symbol, srcChainKey) ?? token;
 
-  const sourceToken = getTokenOnChain(sodax, token.symbol, fromChainId);
+  const { address: srcAddress } = useXAccount({ xChainId: srcChainKey });
+  const { address: dstAddress } = useXAccount({ xChainId: dstChainKey });
 
-  const sourceWalletProvider = useWalletProvider({ xChainId: fromChainId });
+  const sourceWalletProvider = useWalletProvider({ xChainId: srcChainKey });
 
-  const { mutateAsync: repay, isPending } = useRepay();
-  const { mutateAsync: approve, isPending: isApproving } = useMMApprove();
+  const xService = useXService({ xChainType: getXChainType(srcChainKey) });
+  const { data: sourceBalances, isLoading: isBalanceLoading } = useXBalances({
+    params: { xService, xChainId: srcChainKey, xTokens: [sourceToken], address: srcAddress },
+  });
 
-  const repayableChains = getChainsWithThisToken(sodax, token);
+  const { mutateAsync: repay, isPending, error, reset: resetRepay } = useRepay();
 
-  const sourceParams: MoneyMarketRepayParams | undefined = useMemo(() => {
-    if (!amount || !sourceToken) return undefined;
+  const isSameChain = srcChainKey === dstChainKey;
 
-    if (!fromAddress || !toAddress) {
-      return undefined;
-    }
+  const parsedAmount: number | undefined = useMemo(() => {
+    const rawParsedAmount = Number.parseFloat(amount);
+    if (Number.isNaN(rawParsedAmount) || rawParsedAmount < 0) return undefined;
+    return rawParsedAmount;
+  }, [amount]);
 
-    const fromChainInfo = baseChainInfo[fromChainId as keyof typeof baseChainInfo];
-    if (fromChainInfo?.type === 'EVM' && !isValidEvmAddress(fromAddress)) {
-      throw new Error(
-        `Invalid type of variable fromAddress in RepayModal: expected valid EVM address, got ${typeof fromAddress}`,
-      );
-    }
+  const parsedMaxBalance: number | undefined = useMemo(() => {
+    if (!sourceToken || !sourceBalances) return undefined;
+    const raw = sourceBalances[sourceToken.address] ?? 0n;
+    const num = Number(formatUnits(raw, sourceToken.decimals));
+    if (!Number.isFinite(num) || num < 0) return undefined;
+    return num;
+  }, [sourceBalances, sourceToken]);
 
-    const toChainInfo = baseChainInfo[toChainId as keyof typeof baseChainInfo];
-    if (toChainInfo?.type === 'EVM' && !isValidEvmAddress(toAddress)) {
-      throw new Error(
-        `Invalid type of variable toAddress in RepayModal: expected valid EVM address, got ${typeof toAddress}`,
-      );
-    }
+  const parsedMaxDebt: number | undefined = useMemo(() => {
+    if (!maxDebt) return undefined;
+    const num = Number.parseFloat(maxDebt);
+    if (!Number.isFinite(num) || num < 0) return undefined;
+    return num;
+  }, [maxDebt]);
 
-    const normalizedAmount = amount.replace(',', '.');
+  const hasDebt = parsedMaxDebt !== undefined && parsedMaxDebt > 0;
+
+  const exceedsMaxDebt = parsedAmount !== undefined && parsedMaxDebt !== undefined && parsedAmount > parsedMaxDebt;
+
+  const insufficientBalance =
+    parsedAmount !== undefined && parsedMaxBalance !== undefined && parsedAmount > parsedMaxBalance;
+
+  const params: MoneyMarketRepayParams | undefined = useMemo(() => {
+    if (!parsedAmount || exceedsMaxDebt || insufficientBalance || !srcAddress || !sourceToken) return undefined;
+    if (!isSameChain && !dstAddress) return undefined;
+
+    const crossChainParams = isSameChain ? {} : { dstChainKey, dstAddress };
+
     return {
-      srcChainKey: fromChainId,
-      srcAddress: fromAddress,
+      srcChainKey,
+      srcAddress,
       token: sourceToken.address,
-      amount: parseUnits(normalizedAmount, sourceToken.decimals),
+      amount: parseUnits(amount, sourceToken.decimals),
       action: 'repay',
-      dstChainKey: toChainId,
-      dstAddress: toAddress,
+      ...crossChainParams,
     };
-  }, [amount, sourceToken, toChainId, fromAddress, toAddress, fromChainId]);
+  }, [
+    amount,
+    parsedAmount,
+    exceedsMaxDebt,
+    insufficientBalance,
+    srcAddress,
+    sourceToken,
+    srcChainKey,
+    dstChainKey,
+    dstAddress,
+    isSameChain,
+  ]);
 
-  const { data: sourceAllowed, isLoading: isSourceAllowanceLoading } = useMMAllowance({
-    params: { payload: sourceParams },
-  });
+  const { data: hasAllowed, isLoading: isAllowanceLoading } = useMMAllowance({ params: { payload: params } });
+  const {
+    mutateAsync: approve,
+    isPending: isApproving,
+    error: approveError,
+    reset: resetApproveError,
+  } = useMMApprove();
 
-  const xService = useXService({ xChainType: getXChainType(fromChainId) });
-  const { data: balances, isLoading: isBalancesLoading } = useXBalances({
-    params: {
-      xService,
-      xChainId: fromChainId,
-      xTokens: sourceToken ? [sourceToken] : [],
-      address: fromAddress,
-    },
-  });
-
-  const userBalance =
-    sourceToken && balances?.[sourceToken.address] !== undefined
-      ? Number(formatUnits(balances[sourceToken.address] ?? 0n, sourceToken.decimals))
-      : undefined;
-
-  const amountNum = Number(amount.replace(',', '.') || 0);
-  const insufficientBalance = userBalance !== undefined && amountNum > userBalance;
-
-  const hasSourceAllowance = sourceAllowed === true;
-
-  const needsSourceApproval =
-    (sourceAllowed === false || (sourceAllowed === undefined && !isSourceAllowanceLoading)) && !isApproving;
-
-  const { isWrongChain: isWrongSourceChain, handleSwitchChain: handleSwitchToSource } = useEvmSwitchChain({
-    xChainId: fromChainId,
-  });
-
-  const isMissingMarketChainAddress = !toAddress;
+  const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: srcChainKey });
 
   const handleRepay = async (): Promise<void> => {
-    setError(null);
-
-    if (!sourceWalletProvider || !sourceParams) {
-      setError('Missing wallet provider or params');
-      return;
-    }
-
-    const normalizedAmount = amount.replace(',', '.');
+    if (!sourceWalletProvider || !params) return;
 
     try {
-      const result = await repay({ params: sourceParams, walletProvider: sourceWalletProvider });
+      const result = await repay({ params, walletProvider: sourceWalletProvider });
 
       const nextSuccessData: ActionSuccessData = {
-        amount: normalizedAmount,
+        amount,
         token,
-        sourceChainId: fromChainId,
-        destinationChainId: toChainId,
+        sourceChainId: srcChainKey,
+        destinationChainId: dstChainKey,
         txHash: extractTxHash(result),
       };
 
@@ -188,50 +165,55 @@ export function RepayModal({
         onSuccess?.(nextSuccessData);
         onOpenChange(false);
       }
-    } catch (err: unknown) {
+    } catch (err) {
       logger.error('Repay failed', err);
-      setError(getMmErrorText(err) || 'Transaction failed. Please try again.');
     }
   };
 
-  const handleApproveSource = async (): Promise<void> => {
-    setError(null);
-    if (!sourceWalletProvider || !sourceParams) return;
+  const handleApprove = async (): Promise<void> => {
+    if (!sourceWalletProvider || !params) return;
 
     try {
-      await approve({ params: sourceParams, walletProvider: sourceWalletProvider });
-    } catch (err: unknown) {
-      logger.error('Source approval failed', err);
-      setError(getMmErrorText(err) || 'Approval failed');
+      await approve({ params, walletProvider: sourceWalletProvider });
+    } catch (err) {
+      logger.error('Approve failed', err);
     }
   };
 
-  const handleMax = () => {
-    const maxDebtNum = Number.parseFloat(maxDebt);
-    if (!Number.isNaN(maxDebtNum) && maxDebtNum > 0) {
-      setAmount(getSafeMaxAmountForInput(maxDebt));
-    }
+  const handleMaxClick = (): void => {
+    if (!hasDebt || parsedMaxDebt === undefined) return;
+    const cap = parsedMaxBalance !== undefined ? Math.min(parsedMaxDebt, parsedMaxBalance) : parsedMaxDebt;
+    setAmount(getSafeMaxAmountForInput(cap.toString()));
   };
 
-  const isBusy = isPending || isApproving;
-  const isBalanceUnknown = isBalancesLoading || userBalance === undefined;
-
-  const maxDebtNum = maxDebt ? Number.parseFloat(maxDebt) : 0;
-  const hasDebt = !Number.isNaN(maxDebtNum) && maxDebtNum > 0;
-
-  const handleOpenChangeInternal = (nextOpen: boolean): void => {
+  const handleOpenChangeInternal = (nextOpen: boolean) => {
+    if (!nextOpen && isWalletModalOpen) {
+      return;
+    }
     onOpenChange(nextOpen);
     if (!nextOpen) {
       setAmount('');
-      setError(null);
       setStep('form');
       setSuccessData(null);
+      setSrcChainKey(dstChainKey);
+      resetRepay?.();
+      resetApproveError?.();
     }
   };
 
+  // Button state machine: prioritize pending states to prevent flickering
+  // When a transaction is pending, show that state regardless of allowance checks
+  const isBusy = isApproving || isPending;
+
+  // Only check allowance when not busy (prevents flickering during transactions)
+  // If allowance is unknown/loading and not busy, assume approval is needed
+  const needsApproval = !isBusy && (hasAllowed === false || hasAllowed === undefined || isAllowanceLoading);
+  const hasAllowance = !isBusy && hasAllowed === true;
+
+  // Show success screen instead of form when transaction completes and inlineSuccess is enabled
   if (inlineSuccess && step === 'success' && successData) {
     return (
-      <Dialog open={open} onOpenChange={handleOpenChangeInternal}>
+      <Dialog open={open} onOpenChange={handleOpenChangeInternal} modal={!isWalletModalOpen}>
         <DialogContent className="sm:max-w-sm border-cherry-grey/20">
           <ActionSuccessContent action="repay" data={successData} onClose={() => onOpenChange(false)} />
         </DialogContent>
@@ -240,30 +222,48 @@ export function RepayModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChangeInternal}>
+    <Dialog open={open} onOpenChange={handleOpenChangeInternal} modal={!isWalletModalOpen}>
       <DialogContent className="sm:max-w-md border-cherry-grey/20">
         <DialogHeader>
           <DialogTitle className="text-center text-cherry-dark">Repay {token.symbol}</DialogTitle>
-          <DialogDescription className="text-center">Repay debt from your collateral chain</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>Repay from chain</Label>
+            <Label>Repay from</Label>
             <ChainSelector
-              selectedChainId={fromChainId}
-              selectChainId={setFromChainId}
-              allowedChains={repayableChains}
+              selectedChainId={srcChainKey}
+              selectChainId={setSrcChainKey}
+              allowedChains={supportedSourceChains}
             />
-            <p className="text-xs text-muted-foreground">
-              Debt lives on: <strong>{getChainName(toChainId)}</strong> (cannot be changed)
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Your balance: {isBalanceUnknown ? '—' : truncateToDecimals(userBalance, AMOUNT_DISPLAY_DECIMALS)}{' '}
-              {sourceToken?.symbol || token.symbol}
-            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-medium px-2 py-0.5 rounded bg-muted text-cherry-dark">
+                {isSameChain ? 'Same-chain' : 'Cross-chain'}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {isSameChain
+                  ? `Repay ${token.symbol} on ${getChainName(srcChainKey) || srcChainKey}`
+                  : `Repay ${token.symbol} from ${getChainName(srcChainKey) || srcChainKey} to your debt on ${
+                      getChainName(dstChainKey) || dstChainKey
+                    }`}
+              </span>
+            </div>
+            {!isSameChain && !dstAddress && (
+              <p className="text-xs text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-lg border border-amber-200 dark:border-amber-800">
+                Connect a wallet on <strong>{getChainName(dstChainKey) || dstChainKey}</strong> so we can identify your
+                debt position there.{' '}
+                <button
+                  type="button"
+                  className="underline underline-offset-2 hover:text-amber-700"
+                  onClick={openWalletModal}
+                >
+                  Open wallet menu
+                </button>
+              </p>
+            )}
           </div>
 
+          {/* Amount Input */}
           <div className="space-y-2">
             <Label htmlFor="amount">Amount</Label>
             <div className="flex items-center gap-2">
@@ -272,125 +272,111 @@ export function RepayModal({
                 type="number"
                 value={amount}
                 onChange={e => setAmount(e.target.value)}
-                className={!isBusy && insufficientBalance ? 'border-red-500' : ''}
-                placeholder="0.0"
                 disabled={isBusy}
               />
               <span>{token.symbol}</span>
-              <Button type="button" variant="outline" size="sm" onClick={handleMax} disabled={isBusy || !hasDebt}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleMaxClick}
+                disabled={isBusy || !hasDebt || parsedMaxBalance === undefined}
+              >
                 Max
               </Button>
             </div>
 
             <div className="space-y-1">
-              {hasDebt && (
+              {hasDebt && parsedMaxDebt !== undefined && (
                 <p className="text-xs text-muted-foreground">
-                  Max debt: {formatDecimalForDisplay(maxDebt, 4)} {token.symbol}
+                  Max debt: {formatDecimalForDisplay(parsedMaxDebt.toString(), 4)} {token.symbol}
                 </p>
               )}
-              {amount &&
-                (() => {
-                  const inputAmountNum = Number.parseFloat(amount.replace(',', '.'));
-                  if (Number.isNaN(inputAmountNum) || inputAmountNum <= 0) return null;
-
-                  if (!hasDebt) {
-                    return <ErrorAlert text="No debt to repay" variant="compact" />;
-                  }
-
-                  if (!isBalanceUnknown && insufficientBalance && !isBusy) {
-                    return (
-                      <ErrorAlert
-                        text={`Insufficient balance. You have ${truncateToDecimals(userBalance ?? 0, AMOUNT_DISPLAY_DECIMALS)} ${sourceToken?.symbol || token.symbol}, but need ${truncateToDecimals(inputAmountNum, AMOUNT_DISPLAY_DECIMALS)} ${sourceToken?.symbol || token.symbol}`}
-                        variant="compact"
-                      />
-                    );
-                  }
-
-                  if (!Number.isNaN(maxDebtNum) && inputAmountNum > maxDebtNum) {
-                    return (
-                      <ErrorAlert
-                        text={`Amount exceeds maximum debt: ${formatDecimalForDisplay(maxDebt, 6)} ${token.symbol}`}
-                        variant="compact"
-                      />
-                    );
-                  }
-
-                  return null;
-                })()}
+              {isBalanceLoading ? (
+                <Skeleton className="h-4 w-40" />
+              ) : (
+                parsedMaxBalance !== undefined && (
+                  <p className="text-xs text-muted-foreground">
+                    Wallet balance: {formatDecimalForDisplay(parsedMaxBalance.toString(), 4)}{' '}
+                    {sourceToken.symbol || token.symbol}
+                  </p>
+                )
+              )}
+              {!hasDebt && parsedAmount !== undefined && parsedAmount > 0 && !isBusy && (
+                <ErrorAlert text="No debt to repay" variant="compact" />
+              )}
+              {hasDebt && exceedsMaxDebt && !isBusy && parsedMaxDebt !== undefined && (
+                <ErrorAlert
+                  text={`Amount exceeds maximum debt: ${formatDecimalForDisplay(parsedMaxDebt.toString(), 4)} ${token.symbol}`}
+                  variant="compact"
+                />
+              )}
+              {hasDebt && !exceedsMaxDebt && insufficientBalance && !isBusy && parsedMaxBalance !== undefined && (
+                <ErrorAlert
+                  text={`Insufficient balance on ${getChainName(srcChainKey) || srcChainKey}: ${formatDecimalForDisplay(parsedMaxBalance.toString(), 4)} ${sourceToken.symbol || token.symbol}`}
+                  variant="compact"
+                />
+              )}
             </div>
           </div>
         </div>
 
-        {error && <ErrorAlert text={error} />}
+        {error && <ErrorAlert text={getMmErrorText(error)} />}
+        {approveError && <ErrorAlert text={getMmErrorText(approveError)} />}
 
-        {!isWrongSourceChain &&
-          amount &&
-          !insufficientBalance &&
-          hasDebt &&
-          (() => {
-            const inputAmountNum = Number.parseFloat(amount.replace(',', '.'));
-            return (
-              !Number.isNaN(inputAmountNum) &&
-              inputAmountNum > 0 &&
-              (Number.isNaN(maxDebtNum) || inputAmountNum <= maxDebtNum)
-            );
-          })() && (
-            <p className="text-xs text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-lg border border-amber-200 dark:border-amber-800">
-              Make sure you have enough <strong>{getNativeTokenSymbol(fromChainId)}</strong> on{' '}
-              <strong>{getChainName(fromChainId)}</strong> to cover gas fees for this transaction.
-            </p>
-          )}
+        {!isWrongChain && !!srcAddress && !!parsedAmount && (
+          <p className="text-xs text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-lg border border-amber-200 dark:border-amber-800">
+            Make sure you have enough <strong>{getNativeTokenSymbol(srcChainKey)}</strong> on{' '}
+            <strong>{getChainName(srcChainKey) || srcChainKey}</strong> to cover gas fees for this transaction.
+          </p>
+        )}
 
         <DialogFooter className="sm:justify-start flex-col gap-2">
-          {isPending ? (
+          {isWrongChain ? (
+            <Button className="w-full" variant="cherry" onClick={handleSwitchChain} disabled={isBusy}>
+              Switch to {getChainName(srcChainKey) || srcChainKey}
+            </Button>
+          ) : !srcAddress ? (
+            <Button className="w-full" variant="cherry" onClick={openWalletModal}>
+              Connect Wallet on {getChainName(srcChainKey) || srcChainKey}
+            </Button>
+          ) : isPending ? (
+            // Always show "Repaying..." when repay transaction is pending (prevents flickering)
             <Button className="w-full" disabled>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Repaying…
+              Repaying...
             </Button>
           ) : isApproving ? (
+            // Show "Approving..." when approval transaction is pending
             <Button className="w-full" disabled>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Approving…
-            </Button>
-          ) : isWrongSourceChain ? (
-            <Button className="w-full" variant="cherry" onClick={handleSwitchToSource} disabled={isBusy}>
-              Switch to {getChainName(fromChainId)}
-            </Button>
-          ) : isMissingMarketChainAddress ? (
-            <Button className="w-full" variant="cherry" onClick={openWalletModal}>
-              Connect Wallet on {getChainName(toChainId)}
+              Approving...
             </Button>
           ) : !hasDebt ? (
             <Button className="w-full" variant="default" disabled>
               No debt to repay
             </Button>
-          ) : needsSourceApproval || (isSourceAllowanceLoading && !hasSourceAllowance) ? (
+          ) : needsApproval ? (
             <Button
               className="w-full"
-              variant="cherry"
-              onClick={handleApproveSource}
-              disabled={!sourceParams || isBusy || (isSourceAllowanceLoading && !isApproving)}
+              type="button"
+              variant="cherrySoda"
+              onClick={handleApprove}
+              disabled={!params || !sourceWalletProvider}
             >
-              {isSourceAllowanceLoading && !hasSourceAllowance && !isApproving ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Checking approval…
-                </>
-              ) : (
-                `Approve ${sourceToken?.symbol || token.symbol} on ${getChainName(fromChainId)}`
-              )}
+              Approve
             </Button>
-          ) : (
+          ) : hasAllowance ? (
             <Button
               className="w-full"
               type="button"
               variant="default"
               onClick={handleRepay}
-              disabled={!sourceParams || !hasSourceAllowance || isBalanceUnknown || !amount || isBusy || !hasDebt}
+              disabled={!params || !sourceWalletProvider || !amount}
             >
               Repay {token.symbol}
             </Button>
-          )}
+          ) : null}
         </DialogFooter>
       </DialogContent>
     </Dialog>
