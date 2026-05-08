@@ -156,3 +156,5 @@ These are new exports — no v1 import to replace, but knowing they exist may le
 | `useXConnectorsByChain` | `@sodax/wallet-sdk-react` | Multi-chain connector list (no per-chain warnings) |
 | `useXServices` | `@sodax/wallet-sdk-react` | All services (plural) |
 | `sortConnectors` | `@sodax/wallet-sdk-react` | Helper: preferred → installed → original |
+| `getXChainType` | `@sodax/wallet-sdk-react` | Imperative: map a `SpokeChainKey` to its `ChainType` family. Common pattern: `useXService({ xChainType: getXChainType(srcChainKey) })` when you only have a chain key on hand. |
+| `getXService` | `@sodax/wallet-sdk-react` | Imperative variant of `useXService` for non-React call sites (e.g. inside event handlers that don't re-render). Prefer `useXService` in component bodies. |
