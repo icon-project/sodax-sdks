@@ -152,12 +152,29 @@ No change.
 ## `useXAccounts`
 
 ```ts
-// v1 ✅ AND v2 ✅
+// v1
 const accounts = useXAccounts();
-// → Record<ChainType, XAccount | undefined>
+
+// v2 — return type is now strictly typed
+const accounts = useXAccounts();
+// → Partial<Record<ChainType, XAccount>>
 ```
 
-No change.
+Call signature unchanged. **Indexing tightened**: `accounts[chainType]` returns `XAccount | undefined`. The index variable must be typed as `ChainType` (not `string` or `any`) — otherwise you'll see `TS7053: Element implicitly has an 'any' type`.
+
+```ts
+// ❌ FAILS — chainType is `string`, can't index Partial<Record<ChainType, ...>>
+const chainType = someStringFromConfig;
+const account = accounts[chainType];
+
+// ✅ FIX 1 — narrow with getXChainType (returns ChainType | undefined)
+import { getXChainType } from '@sodax/wallet-sdk-react';
+const chainType = getXChainType(chainId);
+const account = chainType ? accounts[chainType] : undefined;
+
+// ✅ FIX 2 — call useXAccount per-chain instead of indexing
+const account = useXAccount({ xChainType: 'EVM' });
+```
 
 ---
 
