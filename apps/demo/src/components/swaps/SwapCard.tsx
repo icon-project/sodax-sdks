@@ -622,7 +622,7 @@ export default function SwapCard({
           {quoteQuery.data?.ok === false && <div className="text-red-500">{quoteQuery.data.error.detail.message}</div>}
         </div>
 
-        <div className="flex items-center gap-2 w-full">
+        {/* TODO uncomment when v2 api is up <div className="flex items-center gap-2 w-full">
           <label htmlFor="submit-tx-toggle" className="text-sm font-medium cursor-pointer">
             Submit tx to API
           </label>
@@ -633,7 +633,7 @@ export default function SwapCard({
             onChange={e => setUseSubmitTxApi(e.target.checked)}
             className="h-4 w-4 cursor-pointer"
           />
-        </div>
+        </div> */}
 
         <Dialog
           open={open}
