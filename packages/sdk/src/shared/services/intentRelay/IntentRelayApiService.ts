@@ -48,6 +48,22 @@ export const RELAY_ERROR_CODES = {
 
 export type RelayErrorCode = (typeof RELAY_ERROR_CODES)[keyof typeof RELAY_ERROR_CODES];
 
+/**
+ * Structured HTTP error from a relay-layer fetch. Exposes the numeric `status` so
+ * callers can discriminate transient/expected statuses (e.g. 404 during polling, where
+ * the relayer hasn't indexed the spoke tx yet) from genuine outages without parsing
+ * the message string.
+ */
+export class HttpRelayError extends Error {
+  readonly status: number;
+  constructor(status: number, statusText: string, body: string) {
+    const detail = body ? `${statusText}: ${body.slice(0, 200)}` : statusText;
+    super(`HTTP ${status}: ${detail}`);
+    this.name = 'HttpRelayError';
+    this.status = status;
+  }
+}
+
 export type SubmitTxParams = {
   chain_id: string;
   tx_hash: string;
@@ -150,8 +166,7 @@ async function postRequest<T extends RelayAction>(
       } catch {
         // Body read failures are non-fatal — preserve the status info even without it.
       }
-      const detail = body ? `${statusText}: ${body.slice(0, 200)}` : statusText;
-      return { ok: false, error: new Error(`HTTP ${response.status}: ${detail}`) };
+      return { ok: false, error: new HttpRelayError(response.status, statusText, body) };
     }
 
     return { ok: true, value: await response.json() };
@@ -243,6 +258,55 @@ export async function getPacket(
   return postRequest(payload, apiUrl);
 }
 
+/**
+ * Outcome of a single poll attempt inside {@link waitUntilIntentExecuted}.
+ *
+ * - `found`: the destination packet reached `status: 'executed'` — return success.
+ * - `continue`: nothing fatal happened; sleep and re-poll. Includes HTTP 404 (relayer
+ *   hasn't yet indexed the spoke tx) and packets that exist but aren't `executed` yet.
+ * - `hardError`: persistent HTTP/transport failure (5xx, network errors after retries) —
+ *   stop polling and surface RELAY_POLLING_FAILED with `error` as cause.
+ */
+type PollOutcome =
+  | { kind: 'found'; packet: PacketData }
+  | { kind: 'continue' }
+  | { kind: 'hardError'; error: unknown };
+
+async function pollForExecutedPacket(payload: WaitUntilIntentExecutedPayload): Promise<PollOutcome> {
+  const txPacketsResult = await getTransactionPackets(
+    {
+      action: 'get_transaction_packets',
+      params: {
+        chain_id: payload.intentRelayChainId,
+        tx_hash: payload.srcTxHash,
+      },
+    },
+    payload.apiUrl,
+  );
+
+  if (!txPacketsResult.ok) {
+    // HTTP 404 is the relayer's normal "spoke tx not yet indexed" response — exactly
+    // the condition we are polling to outlast. Keep polling until either the packet
+    // appears or the wall-clock timeout fires (→ RELAY_TIMEOUT). 5xx, transport
+    // errors, and parse failures fall through to hardError → RELAY_POLLING_FAILED.
+    if (txPacketsResult.error instanceof HttpRelayError && txPacketsResult.error.status === 404) {
+      return { kind: 'continue' };
+    }
+    return { kind: 'hardError', error: txPacketsResult.error };
+  }
+
+  const txPackets = txPacketsResult.value;
+  if (txPackets.success && txPackets.data.length > 0) {
+    const packet = txPackets.data.find(
+      packet => packet.src_tx_hash.toLowerCase() === payload.srcTxHash.toLowerCase(),
+    );
+    if (packet?.status === 'executed') {
+      return { kind: 'found', packet };
+    }
+  }
+  return { kind: 'continue' };
+}
+
 export async function waitUntilIntentExecuted(payload: WaitUntilIntentExecutedPayload): Promise<Result<PacketData>> {
   try {
     const timeout = payload.timeout ?? DEFAULT_RELAY_TX_TIMEOUT;
@@ -254,35 +318,13 @@ export async function waitUntilIntentExecuted(payload: WaitUntilIntentExecutedPa
 
     while (Date.now() - startTime < timeout) {
       try {
-        const txPacketsResult = await getTransactionPackets(
-          {
-            action: 'get_transaction_packets',
-            params: {
-              chain_id: payload.intentRelayChainId,
-              tx_hash: payload.srcTxHash,
-            },
-          },
-          payload.apiUrl,
-        );
-
-        if (!txPacketsResult.ok) {
-          // postRequest already retried (3 attempts). Persistent failure — stop polling and
-          // surface as RELAY_POLLING_FAILED in the post-loop block, with the underlying
-          // network/parse error preserved as `cause`.
-          lastPollingError = txPacketsResult.error;
-          break;
+        const outcome = await pollForExecutedPacket(payload);
+        if (outcome.kind === 'found') {
+          return { ok: true, value: outcome.packet };
         }
-
-        const txPackets = txPacketsResult.value;
-
-        if (txPackets.success && txPackets.data.length > 0) {
-          const packet = txPackets.data.find(
-            packet => packet.src_tx_hash.toLowerCase() === payload.srcTxHash.toLowerCase(),
-          );
-
-          if (packet?.status === 'executed') {
-            return { ok: true, value: packet };
-          }
+        if (outcome.kind === 'hardError') {
+          lastPollingError = outcome.error;
+          break;
         }
       } catch (e) {
         // Sync exceptions inside the loop body (e.g. invariant fires on bad payload, or a

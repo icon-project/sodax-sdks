@@ -578,6 +578,77 @@ describe('waitUntilIntentExecuted', () => {
       expect((result.error as Error).cause).toBe(networkError);
       expect(mockFetch).toHaveBeenCalledTimes(3);
     });
+
+    it('continues polling on HTTP 404 ("packet not found") and returns the packet once it lands', async () => {
+      // The relayer returns HTTP 404 with `{success: false, message: "requested packet not found"}`
+      // while the spoke tx hasn't yet been indexed — exactly the condition we are polling to outlast.
+      // A 404 must NOT short-circuit the loop into RELAY_POLLING_FAILED; we must keep polling until
+      // either the packet appears or the wall-clock timeout fires.
+      vi.useFakeTimers();
+      const packet = buildPacket({ status: 'executed' });
+      mockFetch
+        .mockResolvedValueOnce(
+          httpErrorResponse(404, 'Not Found', '{"success":false,"message":"requested packet not found"}'),
+        )
+        .mockResolvedValueOnce(
+          jsonResponse({ success: true, data: [packet] } satisfies GetTransactionPacketsResponse),
+        );
+
+      const promise = waitUntilIntentExecuted(baseInput);
+      // First poll = 404 → continue → 2s sleep → second poll succeeds.
+      await vi.advanceTimersByTimeAsync(2_000);
+      const result = await promise;
+
+      expect(result).toEqual({ ok: true, value: packet });
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('emits RELAY_TIMEOUT (not RELAY_POLLING_FAILED) when every poll returns HTTP 404 until the timeout fires', async () => {
+      // 404 spam alone is not a polling outage — it just means the packet was never indexed.
+      // After the timeout window, the post-loop branch must fall through to RELAY_TIMEOUT with
+      // no cause, NOT RELAY_POLLING_FAILED. This pins the "404 does not set lastPollingError"
+      // contract so a regression that re-classifies 404 as fatal would surface here.
+      vi.useFakeTimers();
+      mockFetch.mockResolvedValue(
+        httpErrorResponse(404, 'Not Found', '{"success":false,"message":"requested packet not found"}'),
+      );
+
+      const promise = waitUntilIntentExecuted({ ...baseInput, timeout: 1_000 });
+      // First poll = 404 → continue → 2s sleep → loop check 2s ≥ 1s → exit via TIMEOUT.
+      await vi.advanceTimersByTimeAsync(2_000);
+      const result = await promise;
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect((result.error as Error).message).toBe('RELAY_TIMEOUT');
+      // Crucial: no `cause` — 404s must not have been recorded as a polling error.
+      expect((result.error as Error).cause).toBeUndefined();
+    });
+
+    it('emits RELAY_POLLING_FAILED with the 5xx cause when a 404 is followed by a real outage (5xx)', async () => {
+      // Confirms the 404-tolerance does not mask genuine outages: if 404 polling is followed
+      // by a 5xx, the 5xx still breaks the loop and is the recorded cause. Without this, a
+      // regression that swallowed all HTTP errors would silently mask relayer downtime.
+      vi.useFakeTimers();
+      mockFetch
+        .mockResolvedValueOnce(
+          httpErrorResponse(404, 'Not Found', '{"success":false,"message":"requested packet not found"}'),
+        )
+        .mockResolvedValueOnce(httpErrorResponse(503, 'Service Unavailable', 'upstream is down'));
+
+      const promise = waitUntilIntentExecuted(baseInput);
+      // First poll = 404 → continue → 2s sleep → second poll = 503 → break.
+      await vi.advanceTimersByTimeAsync(2_000);
+      const result = await promise;
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect((result.error as Error).message).toBe('RELAY_POLLING_FAILED');
+      const cause = (result.error as Error).cause as Error;
+      expect(cause.message).toContain('HTTP 503');
+      expect(cause.message).toContain('upstream is down');
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe('timeout', () => {
