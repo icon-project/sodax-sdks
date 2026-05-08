@@ -115,6 +115,19 @@ The full guide lives in [`docs/`](docs/). Start with the topic that matches what
 | [Architecture](docs/ARCHITECTURE.md) | Zustand store, Provider/Hydrator/Actions trio, persist hydration caveat |
 | [Adding a New Chain](docs/ADDING_A_NEW_CHAIN.md) | `ChainMeta` extension, chain registry, sub-path export wiring |
 
+## AI agent docs
+
+This package ships with AI-consumable integration & migration docs at `node_modules/@sodax/wallet-sdk-react/ai-exported/`. Point your AI coding agent at [`ai-exported/AGENTS.md`](ai-exported/AGENTS.md) to start — it routes to integration recipes (new consumers), migration recipes (v1 → v2), and reference tables.
+
+```
+> Read node_modules/@sodax/wallet-sdk-react/ai-exported/AGENTS.md and integrate
+> SODAX wallet connectivity into my Next.js app.
+```
+
+The CI guard `scripts/check-ai-exported.sh` validates that every hook reference and sub-path in those docs resolves to a real export.
+
+---
+
 ## Sub-path exports
 
 Concrete connector / service classes are **not** exported from the package barrel — they live behind sub-path imports to prevent accidental coupling to internals:

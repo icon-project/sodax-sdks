@@ -30,8 +30,9 @@ If this is your first time using the package:
 5. [`recipes/switch-chain.md`](./recipes/switch-chain.md) — switch the active EVM network when source chain doesn't match.
 6. [`recipes/chain-detection.md`](./recipes/chain-detection.md) — list enabled chains, render connected list with hydration gate, install detection.
 7. Add advanced features as needed:
-   - [`recipes/walletconnect-setup.md`](./recipes/walletconnect-setup.md) — enable WalletConnect for Fireblocks / Ledger / mobile-only wallets.
+   - [`recipes/walletconnect-setup.md`](./recipes/walletconnect-setup.md) — enable WalletConnect for enterprise-custody / mobile-only wallets.
    - [`recipes/batch-operations.md`](./recipes/batch-operations.md) — batch connect / disconnect across multiple chains.
+   - [`recipes/sub-path-imports.md`](./recipes/sub-path-imports.md) — deep imports from `xchains/<chain>` for `instanceof` checks or custom connector lists.
 8. Reference docs (lookup as needed):
    - [`reference/hooks.md`](./reference/hooks.md) — full hook surface with signatures.
    - [`reference/connectors.md`](./reference/connectors.md) — available wallet connectors per chain.
