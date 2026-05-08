@@ -79,19 +79,7 @@ Use sparingly — the default lists are tuned per chain. Override only when you 
 
 ## Available sub-paths
 
-| Sub-path | Concrete classes |
-|---|---|
-| `@sodax/wallet-sdk-react/xchains/bitcoin` | `BitcoinXService`, `XverseXConnector`, `UnisatXConnector`, `OKXXConnector` |
-| `@sodax/wallet-sdk-react/xchains/evm` | `EvmXService`, `EvmXConnector`, `createWagmiConfig` |
-| `@sodax/wallet-sdk-react/xchains/solana` | `SolanaXService`, `SolanaXConnector` |
-| `@sodax/wallet-sdk-react/xchains/sui` | `SuiXService`, `SuiXConnector` |
-| `@sodax/wallet-sdk-react/xchains/icon` | `IconXService`, `IconHanaXConnector` |
-| `@sodax/wallet-sdk-react/xchains/injective` | `InjectiveXService`, `InjectiveXConnector` |
-| `@sodax/wallet-sdk-react/xchains/near` | `NearXService`, `NearXConnector` |
-| `@sodax/wallet-sdk-react/xchains/stacks` | `StacksXService`, `StacksXConnector`, `STACKS_PROVIDERS` |
-| `@sodax/wallet-sdk-react/xchains/stellar` | _(no concrete re-exports — Stellar uses `@creit.tech/stellar-wallets-kit` directly)_ |
-
-For the full per-chain export list, see [`../reference/api-surface.md`](../reference/api-surface.md) § "Sub-path exports".
+For the per-chain symbol list, see [`../reference/api-surface.md`](../reference/api-surface.md) § "Sub-path exports". That table is the single source of truth — `scripts/check-ai-exported.sh` validates it stays in sync with `src/xchains/`.
 
 ---
 

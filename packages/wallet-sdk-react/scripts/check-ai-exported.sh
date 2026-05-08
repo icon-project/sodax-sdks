@@ -5,12 +5,16 @@
 # referenced in `ai-exported/**/*.md` or `**/*.tsx` example files must point at
 # something real in this package.
 #
-# Two checks:
+# Three checks:
 #   1. Hook calls           — every `useFoo(` in docs must be a hook exported
-#                             from `src/hooks/index.ts`, or in the EXCLUDED list
-#                             of known external / intentional-mention names.
+#                             from `src/hooks/index.ts` or `src/xchains/*/index.ts`,
+#                             or in the EXCLUDED list of known external /
+#                             intentional-mention names.
 #   2. Sub-path xchains     — every `@sodax/wallet-sdk-react/xchains/<chain>`
 #                             reference must resolve to `src/xchains/<chain>/`.
+#   3. Chain coverage       — every `src/xchains/<chain>/` folder must be
+#                             referenced somewhere in docs. Catches chains
+#                             added to source without doc updates.
 #
 # Why this matters: AI agents read these docs and generate code. A renamed hook
 # in source + forgotten doc update = AI generates a non-existent import = user
@@ -141,6 +145,27 @@ if [ -n "$BAD_XCHAINS" ]; then
     echo >&2
   done <<< "$BAD_XCHAINS"
   echo "  Available chains: $(echo "$ALLOWED_XCHAINS" | tr '\n' ' ')" >&2
+  exit 1
+fi
+
+# ────────────────────────────────────────────────────────────────────────────
+# Check 3 — every chain folder is documented somewhere in ai-exported/
+#
+# Catches the reverse: a new chain folder added to src/xchains/ but never
+# mentioned in the docs (api-surface.md, sub-path-imports.md, …).
+# ────────────────────────────────────────────────────────────────────────────
+
+UNDOCUMENTED_XCHAINS=$(comm -23 <(echo "$ALLOWED_XCHAINS") <(echo "$USED_XCHAINS") || true)
+
+if [ -n "$UNDOCUMENTED_XCHAINS" ]; then
+  echo "FAIL: $XCHAINS_DIR/ contains chain(s) that are not documented anywhere in $DOCS_DIR/:" >&2
+  echo >&2
+  while IFS= read -r chain; do
+    [ -z "$chain" ] && continue
+    echo "  src/xchains/$chain/  (no '@sodax/wallet-sdk-react/xchains/$chain' reference found in any doc)" >&2
+  done <<< "$UNDOCUMENTED_XCHAINS"
+  echo >&2
+  echo "  Add an entry to integration/reference/api-surface.md § \"Sub-path exports\"." >&2
   exit 1
 fi
 
