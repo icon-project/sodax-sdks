@@ -272,12 +272,27 @@ export const chainRegistry: Record<string, ChainServiceFactory> = {
     defaultConnectors: () => [],
     providerManaged: false,
     discoverConnectors: async (service, getStore) => {
-      const wallets = await service.walletsKit.getSupportedWallets();
-      const connectors = wallets
-        .filter((w: StellarWalletType) => w.isAvailable)
-        .map((w: StellarWalletType) => new StellarWalletsKitXConnector(w));
-      service.setXConnectors(connectors);
-      getStore().setXConnectors('STELLAR', connectors);
+      // Hana Stellar injects window.hanaWallet.stellar lazily (sometimes after init).
+      // The kit has no event API, so poll a few times with backoff so the connector
+      // list catches up without forcing a refresh. Stop early once the id set stays
+      // stable across consecutive iterations.
+      const STELLAR_DISCOVER_DELAYS_MS = [0, 100, 500] as const;
+      let lastIds = '';
+      for (const delay of STELLAR_DISCOVER_DELAYS_MS) {
+        if (delay) await new Promise(r => setTimeout(r, delay));
+        const wallets = await service.walletsKit.getSupportedWallets();
+        const connectors = wallets
+          .filter((w: StellarWalletType) => w.isAvailable)
+          .map((w: StellarWalletType) => new StellarWalletsKitXConnector(w));
+        const ids = connectors
+          .map(c => c.id)
+          .sort()
+          .join(',');
+        if (ids === lastIds) break; // list stable — no new wallet inject
+        lastIds = ids;
+        service.setXConnectors(connectors);
+        getStore().setXConnectors('STELLAR', connectors);
+      }
     },
     createActions: (service, getStore) => ({
       ...createDefaultActions('STELLAR', service, getStore),
