@@ -7,7 +7,7 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
-  "files": ["dist", "README.md", "docs", "skills", "ai-export"],
+  "files": ["dist", "README.md", "docs", "skills", "ai-exported"],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -19,7 +19,7 @@
       "import": "./dist/xchains/*/index.mjs",
       "require": "./dist/xchains/*/index.cjs"
     },
-    "./ai-export/*": "./ai-export/*"
+    "./ai-exported/*": "./ai-exported/*"
   },
   "typesVersions": {
     "*": {
@@ -39,7 +39,8 @@
     "checkTs": "tsc --noEmit",
     "test": "vitest run",
     "knip": "knip",
-    "lint": "biome lint . --write"
+    "lint": "biome lint . --write",
+    "check:ai-exported": "bash ./scripts/check-ai-exported.sh"
   },
   "dependencies": {
     "@stacks/connect": "catalog:",
