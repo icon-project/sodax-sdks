@@ -2,6 +2,23 @@
 
 This is the **single source of truth** for behavior and API changes between v1 and v2 of `@sodax/wallet-sdk-react`. The reference files (`imports.md`, `hooks.md`, `config.md`, `components.md`) are **lookup tables** derived from the changes here — they do not duplicate the prose.
 
+## Table of contents
+
+1. [`SodaxWalletProvider` props (largest change)](#1-sodaxwalletprovider-props-largest-change)
+2. [`QueryClientProvider` is no longer mounted internally](#2-queryclientprovider-is-no-longer-mounted-internally)
+3. [Hooks now take an options object, not positional args](#3-hooks-now-take-an-options-object-not-positional-args)
+4. [Store rename: `useXWagmiStore` → `useXWalletStore`](#4-store-rename-usexwagmistore--usexwalletstore)
+5. [Concrete chain classes moved behind sub-path imports](#5-concrete-chain-classes-moved-behind-sub-path-imports)
+6. [Chain-type opt-in (mounting behavior)](#6-chain-type-opt-in-mounting-behavior)
+7. [EVM = single connection across every configured EVM network](#7-evm--single-connection-across-every-configured-evm-network)
+8. [New: WalletConnect support for EVM](#8-new-walletconnect-support-for-evm)
+9. [New: headless wallet modal primitives](#9-new-headless-wallet-modal-primitives)
+10. [Removed: `useXBalances`](#10-removed-usexbalances)
+11. [`useEvmSwitchChain` reshaped](#11-useevmswitchchain-reshaped)
+12. [`SodaxWalletProvider` freezes config on first render](#12-sodaxwalletprovider-freezes-config-on-first-render)
+
+What did NOT change → [bottom of file](#what-did-not-change).
+
 ---
 
 ## 1. `SodaxWalletProvider` props (largest change)

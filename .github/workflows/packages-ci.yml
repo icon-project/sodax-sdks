@@ -52,6 +52,9 @@ jobs:
       - name: Build Check
         run: pnpm checkTs:packages
 
+      - name: Check ai-exported docs reference real exports (wallet-sdk-react)
+        run: pnpm -C packages/wallet-sdk-react run check:ai-exported
+
       - name: Build
         run: pnpm build:packages
 

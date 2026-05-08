@@ -2,6 +2,29 @@
 
 Full hook surface of `@sodax/wallet-sdk-react` v2. All hooks accept an options object — never positional args. Pair this with [`connectors.md`](./connectors.md) for connector shape and [`chain-support.md`](./chain-support.md) for chain identifiers.
 
+> **All hooks are client-only.** They depend on `<SodaxWalletProvider>` and `<QueryClientProvider>`, which only mount on the client. Next.js App Router consumers must mark every file calling these hooks with `'use client'`. Server Components cannot read connection state directly — pass it down from a client boundary.
+
+---
+
+## Behavior when the chain slot is not in `walletConfig`
+
+Hooks do **not** throw when their chain isn't enabled — each picks its own no-op fallback. UI code can call them unconditionally and branch on the return value.
+
+| Hook | Behavior when chain absent |
+|---|---|
+| `useXAccount`, `useXAccounts` | Returns shape with `address: undefined` |
+| `useXConnection`, `useXConnections` | Returns `undefined` / empty record |
+| `useXConnectors` | Returns `[]`. **One-time `console.warn`** per chain type to surface config mistakes. |
+| `useXConnectorsByChain` | Returns empty record. No warning. |
+| `useWalletProvider` | Returns `undefined` |
+| `useXService`, `useXServices` | Returns `undefined` / empty record |
+| `useEvmSwitchChain` | Returns `{ isWrongChain: false, handleSwitchChain: () => {} }` (no-op) |
+| `useEnabledChains` | Returns the list of slots actually present (does not include the disabled one) |
+| `useChainGroups`, `useConnectedChains` | Excludes the chain from output |
+| `useXConnect`, `useXDisconnect`, `useXSignMessage` | Mutation rejects when invoked with an unsupported `xChainType` |
+
+Rule of thumb: read-hooks degrade silently to "empty"; mutation-hooks reject. Both cases are safe to call unconditionally.
+
 ---
 
 ## Connect / disconnect

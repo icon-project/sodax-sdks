@@ -36,7 +36,7 @@ If you are letting a coding agent drive the migration, point it at [`ai-rules.md
 
 ## What is NOT covered here
 
-- **Other SODAX packages** (`@sodax/sdk`, `@sodax/dapp-kit`). They have their own migration docs in their respective `ai-export/` folders.
+- **Other SODAX packages** (`@sodax/sdk`, `@sodax/dapp-kit`). They have their own migration docs in their respective `ai-exported/` folders.
 - **Behavioral migration of business logic** that isn't tied to wallet hooks — out of scope.
 - **App framework upgrades** (Next.js, Vite versions) — out of scope.
 

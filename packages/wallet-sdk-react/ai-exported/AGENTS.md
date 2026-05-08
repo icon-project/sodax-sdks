@@ -2,7 +2,7 @@
 
 You are a coding agent helping a developer **integrate** or **migrate** the `@sodax/wallet-sdk-react` package. This document is your entry point. Read this first, then route to the right sub-folder.
 
-The files in this `ai-export/` directory are designed for AI consumption: short, table-heavy, self-contained recipes, and machine-checkable checklists. Human-readable narrative lives in each folder's `README.md`.
+The files in this `ai-exported/` directory are designed for AI consumption: short, table-heavy, self-contained recipes, and machine-checkable checklists. Human-readable narrative lives in each folder's `README.md`.
 
 ---
 
@@ -40,19 +40,19 @@ If both signals appear (project has v1 patterns AND wants new features), **migra
 
 ---
 
-## Step 3 — Stop conditions (HARD STOP — ask the user)
+## Step 3 — Honor flow-specific stop conditions
 
-Do **not** proceed without explicit user confirmation if any of these are true:
+Each flow has its own list of conditions that **HARD STOP** code generation and require asking the user:
 
-- Custom `XConnector` or `XService` subclass exists in user code — manual decision needed; v1 and v2 abstract contracts differ.
-- User has tests that mock `XService` / `useXWagmiStore` — verify mock contract matches v2 before changing call sites.
-- Custom selectors on `useXWagmiStore` reading fields **outside the v1 surface** (`xServices`, `xConnections`, `setXConnection`, `unsetXConnection`) — these are v2-internal additions, not part of v1 contract. Selectors that read only the 4 v1 fields are safe to mechanically rename to `useXWalletStore` (shapes preserved identically). See `migration/reference/imports.md` § Store rename + shape preservation.
-- `SodaxWalletProvider` in user code is passed `rpcConfig`, `options`, or `initialState` props (v1 shape) — config is a breaking change, see `migration/reference/config.md`.
-- User passes hooks positional args (e.g. `useXAccount('EVM')`) — v2 hooks take an options object. See `migration/reference/hooks.md`.
-- User imports concrete chain classes from the barrel (e.g. `import { XverseXConnector } from '@sodax/wallet-sdk-react'`) — v2 moves these behind sub-path imports.
-- User asks to "preserve v1 behavior exactly" — v2 has intentional behavior changes (e.g. EVM = single connection across all networks). Confirm which behaviors to preserve.
+- Migration stops → [`migration/ai-rules.md`](./migration/ai-rules.md) § "Stop conditions"
+- Integration stops → [`integration/ai-rules.md`](./integration/ai-rules.md) § "Stop conditions"
 
-When stopping, quote the offending file/line and ask the user how to proceed. Do **not** guess.
+Read the relevant list **before** applying any change. When stopping, quote the offending file/line and present the user with concrete options. Do **not** guess.
+
+Cross-flow signals (true regardless of flow):
+
+- User explicitly requests a behavior that v2 does not support (custom chain not in [`integration/reference/chain-support.md`](./integration/reference/chain-support.md), custom `XService` / `XConnector` subclass with non-trivial logic).
+- User mixes both v1 and v2 patterns in new code being written — do migration first, then integration.
 
 ---
 

@@ -37,7 +37,7 @@ const queryClient = new QueryClient();
 
 const walletConfig: SodaxWalletConfig = {
   EVM: {
-    ssr: true, // Next.js — keep true for SSR-safe hydration
+    ssr: true, // Next.js — keep true for SSR-safe hydration. Drop for Vite/CRA.
     chains: {
       [ChainKeys.SONIC_MAINNET]: { rpcUrl: 'https://rpc.soniclabs.com' },
       [ChainKeys.ETHEREUM_MAINNET]: { rpcUrl: 'https://ethereum-rpc.publicnode.com' },
@@ -60,25 +60,50 @@ export function Providers({ children }: { children: React.ReactNode }) {
 }
 ```
 
-Use `Providers` at the app root (e.g. `app/layout.tsx` for Next.js, `main.tsx` for Vite).
+---
+
+## Mount point per framework
+
+| Framework | Where to mount `<Providers>` | `EVM.ssr` |
+|---|---|---|
+| Next.js (App Router) | `app/layout.tsx`, inside `<body>`. Mark the providers file `'use client'`. Pair with [`recipes/ssr-setup.md`](../../migration/recipes/ssr-setup.md) if you need wagmi cookie hydration. | `true` |
+| Vite + React | `main.tsx`, wrap `<App />` directly. | omit (defaults `false`) |
+| Create React App | `index.tsx`, wrap `<App />` directly. | omit |
+| Remix / Tanstack Start | Root route component, marked client-only. Same as Next.js. | `true` |
 
 ---
 
 ## Chain-type slots
 
-| Slot | Mounts | When to include |
-|------|--------|-----------------|
-| `EVM` | wagmi (12 EVM chains) | Sonic, Ethereum, Arbitrum, Base, BSC, etc. |
-| `SOLANA` | `@solana/wallet-adapter-react` | Solana support |
-| `SUI` | `@mysten/dapp-kit` | Sui support |
-| `BITCOIN` | (no React adapter) | Bitcoin support |
-| `STELLAR` | (no React adapter) | Stellar support |
-| `ICON` | (no React adapter) | ICON support |
-| `INJECTIVE` | (no React adapter) | Injective support |
-| `NEAR` | (no React adapter) | NEAR support |
-| `STACKS` | (no React adapter) | Stacks support |
+| Slot | React adapter mounted? | Notes |
+|---|---|---|
+| `EVM` | ✅ wagmi | One connection across every configured EVM chain. WalletConnect opt-in via `EVM.walletConnect.projectId`. |
+| `SOLANA` | ✅ `@solana/wallet-adapter-react` | `autoConnect` defaults to `true`. |
+| `SUI` | ✅ `@mysten/dapp-kit` | `network` defaults to `'mainnet'`. |
+| `BITCOIN` / `STELLAR` / `ICON` / `INJECTIVE` / `NEAR` / `STACKS` | ❌ no React adapter | Service registered at mount via `useInitChainServices`. Connector list shipped per chain. |
 
-For the full chain list and ChainKey constants, see [`../reference/chain-support.md`](../reference/chain-support.md).
+For chain key constants and per-chain entry shapes, see [`../reference/chain-support.md`](../reference/chain-support.md).
+
+---
+
+## Enable WalletConnect (optional)
+
+Add WalletConnect support for Fireblocks / Ledger Live / mobile-only EVM wallets by setting `EVM.walletConnect.projectId`:
+
+```tsx
+const walletConfig: SodaxWalletConfig = {
+  EVM: {
+    ssr: true,
+    walletConnect: {
+      projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
+      // Optional: showQrModal, metadata, qrModalOptions — see WalletConnectParameters
+    },
+    chains: { /* ... */ },
+  },
+};
+```
+
+Get a project ID from [cloud.walletconnect.com](https://cloud.walletconnect.com). Omit `walletConnect` entirely to disable — v2 falls back to EIP-6963 injected wallets only. Full pattern in [`walletconnect-setup.md`](./walletconnect-setup.md).
 
 ---
 
