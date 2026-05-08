@@ -21,7 +21,6 @@ import {
   type IconTransactionResult,
   type Result,
   getIntentRelayChainId,
-  spokeChainConfig,
   isNativeToken,
   ChainKeys,
   type Hex,
@@ -58,12 +57,14 @@ export type IconCallParams<Raw extends boolean> = {
 } & WalletProviderSlot<IconChainKey, Raw>;
 
 export class IconSpokeService {
+  private readonly config: ConfigService;
   public readonly iconService: IconService;
   public readonly debugRpcUrl: string;
   private readonly pollingIntervalMs: number;
   private readonly maxTimeoutMs: number;
 
   constructor(config: ConfigService) {
+    this.config = config;
     // since we only support mainnet for now, we can hardcode the single icon chain config
     const chainConfig = config.getChainConfig(ChainKeys.ICON_MAINNET);
     this.iconService = new IconSdk.IconService(new IconSdk.IconService.HttpProvider(chainConfig.rpcUrl));
@@ -88,26 +89,27 @@ export class IconSpokeService {
     params: DepositParams<IconChainKey, R>,
   ): Promise<TxReturnType<IconChainKey, R>> {
     const { srcAddress: from, srcChainKey, to: recipient, token, amount, data } = params;
+    const chainConfig = this.config.getChainConfig(srcChainKey);
 
     const rlpInput: rlp.Input = [data, recipient];
     const rlpEncodedData = rlp.encode(rlpInput);
     const hexData = `0x${Buffer.from(rlpEncodedData).toString('hex')}`;
     const txParams = {
-      _to: spokeChainConfig[srcChainKey].addresses.assetManager,
+      _to: chainConfig.addresses.assetManager,
       _value: BigIntToHex(amount),
       _data: hexData,
     };
 
     const isNative = isNativeToken(srcChainKey, token);
     const value: Hex = isNative ? BigIntToHex(amount) : '0x0';
-    const to = isNative ? spokeChainConfig[srcChainKey].addresses.wICX : token;
+    const to = isNative ? chainConfig.addresses.wICX : token;
 
     const rawTransaction = Converter.toRawTransaction(
       new CallTransactionBuilder()
         .from(from)
         .to(to)
         .stepLimit(Converter.toBigNumber('2000000'))
-        .nid(spokeChainConfig[srcChainKey].nid)
+        .nid(chainConfig.nid)
         .version('0x3')
         .timestamp(new Date().getTime() * 1000)
         .value(value)
@@ -124,7 +126,7 @@ export class IconSpokeService {
       from: from,
       to: to,
       value: value,
-      nid: spokeChainConfig[srcChainKey].nid,
+      nid: chainConfig.nid,
       method: 'transfer',
       params: txParams,
     }) satisfies Promise<TxReturnType<IconChainKey, false>> as Promise<TxReturnType<IconChainKey, R>>;
@@ -141,7 +143,7 @@ export class IconSpokeService {
     const transaction = new CallBuilder()
       .to(token)
       .method('balanceOf')
-      .params({ _owner: spokeChainConfig[srcChainKey].addresses.assetManager })
+      .params({ _owner: this.config.getChainConfig(srcChainKey).addresses.assetManager })
       .build();
     const result = await this.iconService.call(transaction).execute();
     return BigInt(result.value);
@@ -156,6 +158,7 @@ export class IconSpokeService {
   ): Promise<TxReturnType<IconChainKey, Raw>> {
     const { srcAddress: from, srcChainKey, dstChainKey, dstAddress, payload } = params;
     const relayId = getIntentRelayChainId(dstChainKey);
+    const chainConfig = this.config.getChainConfig(srcChainKey);
 
     const txParams = {
       dstChainId: relayId,
@@ -165,9 +168,9 @@ export class IconSpokeService {
 
     const transaction = new CallTransactionBuilder()
       .from(from)
-      .to(spokeChainConfig[srcChainKey].addresses.connection)
+      .to(chainConfig.addresses.connection)
       .stepLimit(Converter.toBigNumber('2000000'))
-      .nid(spokeChainConfig[srcChainKey].nid)
+      .nid(chainConfig.nid)
       .version('0x3')
       .timestamp(new Date().getTime() * 1000)
       .method('sendMessage')
@@ -183,8 +186,8 @@ export class IconSpokeService {
 
     return params.walletProvider.sendTransaction({
       from: from,
-      to: spokeChainConfig[srcChainKey].addresses.connection,
-      nid: spokeChainConfig[srcChainKey].nid,
+      to: chainConfig.addresses.connection,
+      nid: chainConfig.nid,
       value: '0x0',
       method: 'sendMessage',
       params: txParams,
@@ -195,7 +198,7 @@ export class IconSpokeService {
     // Native ICX must be substituted with wICX — the wrapped form registered in the hub's asset manager.
     // The deposit() method performs the same substitution when sending the real transaction.
     const resolvedToken = isNativeToken(ChainKeys.ICON_MAINNET, token)
-      ? spokeChainConfig[ChainKeys.ICON_MAINNET].addresses.wICX
+      ? this.config.getChainConfig(ChainKeys.ICON_MAINNET).addresses.wICX
       : token;
     return {
       encodedToken: encodeAddress(ChainKeys.ICON_MAINNET, resolvedToken),

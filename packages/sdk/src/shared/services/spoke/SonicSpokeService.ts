@@ -15,7 +15,6 @@ import {
   type SolverConfig,
   getIntentRelayChainId,
   type SonicChainKey,
-  spokeChainConfig,
   type EvmRawTransactionReceipt,
   ChainKeys,
   type PartnerFee,
@@ -95,12 +94,14 @@ export type ApproveSonicWithdrawParams<Raw extends boolean> = {
 } & WalletProviderSlot<SonicChainKey, Raw>;
 
 export class SonicSpokeService {
+  private readonly config: ConfigService;
   // since sonic is sole hub chain we only need one public client
   public readonly publicClient: PublicClient<HttpTransport>;
   private readonly pollingIntervalMs: number;
   private readonly maxTimeoutMs: number;
 
   public constructor(config: ConfigService) {
+    this.config = config;
     const chainConfig = config.getChainConfig(ChainKeys.SONIC_MAINNET);
     this.publicClient = createPublicClient({
       transport: http(chainConfig.rpcUrl),
@@ -114,10 +115,14 @@ export class SonicSpokeService {
    * Check ERC-20 allowance on Sonic (hub) for a given spender (e.g. intents contract).
    */
   public async isAllowanceValid(
-    params: Omit<Erc20IsAllowanceParams<SonicChainKey>, 'publicClient'>,
+    params: Omit<Erc20IsAllowanceParams<SonicChainKey>, 'publicClient' | 'nativeToken'>,
   ): Promise<Result<boolean>> {
     try {
-      return await Erc20Service.isAllowanceValid({ ...params, publicClient: this.publicClient });
+      return await Erc20Service.isAllowanceValid({
+        ...params,
+        publicClient: this.publicClient,
+        nativeToken: this.config.getChainConfig(params.chainKey).nativeToken as Address,
+      });
     } catch (e) {
       return {
         ok: false,
@@ -209,7 +214,7 @@ export class SonicSpokeService {
    */
   public async getUserRouter(params: GetUserRouterParams): Promise<HubAddress> {
     return this.publicClient.readContract({
-      address: spokeChainConfig[params.chainId].addresses.walletRouter,
+      address: this.config.getChainConfig(params.chainId).addresses.walletRouter,
       abi: sonicWalletFactoryAbi,
       functionName: 'getDeployedAddress',
       args: [params.address],
@@ -221,10 +226,12 @@ export class SonicSpokeService {
    * @param {SonicSpokeDepositParams<Raw>} params - The parameters for the deposit
    * @returns {Promise<TxReturnType<SonicChainKey, Raw>>} A promise that resolves to the transaction hash
    */
-  public static async deposit<Raw extends boolean>(
+  public async deposit<Raw extends boolean>(
     params: DepositParams<SonicChainKey, Raw>,
   ): Promise<TxReturnType<SonicChainKey, Raw>> {
     invariant(isSonicChainKeyType(params.srcChainKey), '[SonicSpokeService] invalid spoke provider');
+
+    const chainConfig = this.config.getChainConfig(params.srcChainKey);
 
     // Decode the data field which contains the encoded calls array
     const calls = Array.from(
@@ -244,10 +251,10 @@ export class SonicSpokeService {
       )[0] satisfies readonly EvmContractCall[],
     );
 
-    if (params.token.toLowerCase() === spokeChainConfig[params.srcChainKey].nativeToken.toLowerCase()) {
+    if (params.token.toLowerCase() === chainConfig.nativeToken.toLowerCase()) {
       // Add a call to wrap the native token
       const wrapCall = {
-        address: spokeChainConfig[params.srcChainKey].addresses.wrappedSonic,
+        address: chainConfig.addresses.wrappedSonic,
         value: params.amount,
         data: encodeFunctionData({
           abi: wrappedSonicAbi,
@@ -279,10 +286,10 @@ export class SonicSpokeService {
 
     const rawTx: TxReturnType<SonicChainKey, true> = {
       from: params.srcAddress,
-      to: spokeChainConfig[params.srcChainKey].addresses.walletRouter,
+      to: chainConfig.addresses.walletRouter,
       data: txData,
       value:
-        params.token.toLowerCase() === spokeChainConfig[params.srcChainKey].nativeToken.toLowerCase()
+        params.token.toLowerCase() === chainConfig.nativeToken.toLowerCase()
           ? params.amount
           : 0n,
     };
@@ -421,7 +428,7 @@ export class SonicSpokeService {
 
     const rawTx: EvmReturnType<true> = {
       from: params.srcAddress,
-      to: spokeChainConfig[params.srcChainKey].addresses.walletRouter,
+      to: this.config.getChainConfig(params.srcChainKey).addresses.walletRouter,
       data: txData,
       value: 0n,
     };

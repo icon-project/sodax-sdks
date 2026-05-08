@@ -59,7 +59,6 @@ import {
   type GetMoneyMarketTokensApiResponse,
   DEFAULT_RELAY_TX_TIMEOUT,
   HUB_CHAIN_KEY,
-  spokeChainConfig,
   type SpokeExecActionParams,
 } from '@sodax/types';
 import { MoneyMarketDataService } from './MoneyMarketDataService.js';
@@ -357,7 +356,7 @@ export class MoneyMarketService {
             token: params.token,
             amount: params.amount,
             owner: params.srcAddress,
-            spender: spokeChainConfig[srcChainKey].addresses.assetManager,
+            spender: this.config.getChainConfig(srcChainKey).addresses.assetManager,
           } satisfies SpokeIsAllowanceValidParamsEvmSpoke);
         }
       }
@@ -461,7 +460,7 @@ export class MoneyMarketService {
 
         const spender = isHubChainKeyType(params.srcChainKey)
           ? await this.hubProvider.getUserRouter(params.srcAddress as Address)
-          : spokeChainConfig[params.srcChainKey].addresses.assetManager;
+          : this.config.getChainConfig(params.srcChainKey).addresses.assetManager;
 
         const coreParams = {
           srcChainKey: params.srcChainKey,

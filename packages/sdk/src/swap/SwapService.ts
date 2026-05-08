@@ -88,7 +88,6 @@ import {
   type HubChainKey,
   type EvmSpokeOnlyChainKey,
   type StellarChainKey,
-  spokeChainConfig,
   type SpokeExecActionParams,
   type SonicChainKey,
 } from '@sodax/types';
@@ -484,7 +483,7 @@ export class SwapService {
           token: params.inputToken,
           amount: params.inputAmount,
           owner: params.srcAddress,
-          spender: spokeChainConfig[srcChainKey].addresses.assetManager,
+          spender: this.config.getChainConfig(srcChainKey).addresses.assetManager,
         } satisfies SpokeIsAllowanceValidParamsEvmSpoke);
       }
 
@@ -531,7 +530,7 @@ export class SwapService {
         );
         const spender = isHubChainKeyType(params.srcChainKey)
           ? this.solver.intentsContract
-          : spokeChainConfig[params.srcChainKey].addresses.assetManager;
+          : this.config.getChainConfig(params.srcChainKey).addresses.assetManager;
         const coreParams = {
           srcChainKey: params.srcChainKey,
           owner: params.srcAddress as GetAddressType<HubChainKey | EvmSpokeOnlyChainKey>,

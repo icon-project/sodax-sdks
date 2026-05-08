@@ -19,7 +19,6 @@ import {
   ChainTypeArr,
   type GetEstimateGasReturnType,
   type EvmChainKey,
-  spokeChainConfig,
   getIntentRelayChainId,
   type TxReturnType,
   isBitcoinChainKey,
@@ -135,7 +134,7 @@ export class SpokeService {
   public constructor({ config, hubProvider }: SpokeServiceConstructorParams) {
     this.config = config;
     this.hubProvider = hubProvider;
-    this.evm = new EvmSpokeService();
+    this.evm = new EvmSpokeService(this.config);
     this.sonic = new SonicSpokeService(this.config);
     this.injective = new InjectiveSpokeService(this.config);
     this.icon = new IconSpokeService(this.config);
@@ -209,7 +208,7 @@ export class SpokeService {
 
       if (isSpokeIsAllowanceValidParamsEvmSpoke(params)) {
         const { srcChainKey, token, amount, owner } = params;
-        const spender = params.spender ?? spokeChainConfig[srcChainKey].addresses.assetManager;
+        const spender = params.spender ?? this.config.getChainConfig(srcChainKey).addresses.assetManager;
         return await this.evm.isAllowanceValid({
           token: token as Address,
           amount,
@@ -446,7 +445,7 @@ export class SpokeService {
     srcChainKey: Exclude<SpokeChainKey, HubChainKey>,
     token: string,
   ): { encodedToken: Hex; encodedSrcAddress: Hex } {
-    const assetManager = spokeChainConfig[srcChainKey].addresses.assetManager;
+    const assetManager = this.config.getChainConfig(srcChainKey).addresses.assetManager;
     switch (getChainType(srcChainKey)) {
       case 'ICON':
         return this.icon.encodeSimulationParams(token, assetManager);
@@ -522,7 +521,7 @@ export class SpokeService {
   ): Promise<Result<TxReturnType<K, R>>> {
     try {
       if (isHubChainKeyType(params.srcChainKey)) {
-        const value = (await SonicSpokeService.deposit(
+        const value = (await this.sonic.deposit(
           params as DepositParams<SonicChainKey, R>,
         )) satisfies TxReturnType<SonicChainKey, R> as TxReturnType<K, R>;
         return { ok: true, value };

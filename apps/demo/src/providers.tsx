@@ -19,7 +19,7 @@ const rpcConfig: RpcConfig = {
   [ChainKeys.ETHEREUM_MAINNET]: process.env.ETHEREUM_RPC_URL ?? 'https://ethereum-rpc.publicnode.com',
   [ChainKeys.HYPEREVM_MAINNET]: process.env.HYPEREVM_RPC_URL ?? 'https://rpc.hyperliquid.xyz/evm',
   [ChainKeys.SOLANA_MAINNET]:
-    process.env.SOLANA_RPC_URL ?? process.env.VITE_SOLANA_RPC_URL ?? 'https://solana-rpc.publicnode.com',
+    process.env.SOLANA_RPC_URL ?? 'https://solana-rpc.publicnode.com',
   [ChainKeys.STELLAR_MAINNET]: {
     horizonRpcUrl: process.env.STELLAR_HORIZON_RPC_URL ?? 'https://horizon.stellar.org',
     sorobanRpcUrl:

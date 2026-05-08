@@ -29,7 +29,6 @@ import {
   type BridgeLimit,
   type GetAddressType,
   type Result,
-  spokeChainConfig,
   type HubChainKey,
   type TxReturnType,
   type EvmContractCall,
@@ -168,7 +167,7 @@ export class BridgeService {
           token: params.srcToken,
           amount: params.amount,
           owner: params.srcAddress,
-          spender: spokeChainConfig[params.srcChainKey].addresses.assetManager,
+          spender: this.config.getChainConfig(params.srcChainKey).addresses.assetManager,
         } satisfies SpokeIsAllowanceValidParamsEvmSpoke);
       } else if (isStellarChainKeyType(params.srcChainKey)) {
         inner = await this.spoke.isAllowanceValid({

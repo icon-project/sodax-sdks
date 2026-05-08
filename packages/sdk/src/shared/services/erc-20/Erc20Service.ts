@@ -1,12 +1,11 @@
 import { encodeFunctionData, erc20Abi, type Address, type PublicClient } from 'viem';
-import {
-  spokeChainConfig,
-  type EvmChainKey,
-  type EvmContractCall,
-  type EvmReturnType,
-  type Result,
-  type TxReturnType,
-  type WalletProviderSlot,
+import type {
+  EvmChainKey,
+  EvmContractCall,
+  EvmReturnType,
+  Result,
+  TxReturnType,
+  WalletProviderSlot,
 } from '@sodax/types';
 
 export type Erc20ApproveParams<Raw extends boolean> = {
@@ -22,6 +21,7 @@ export type Erc20IsAllowanceParams<ChainKey extends EvmChainKey> = {
   owner: Address;
   spender: Address;
   chainKey: ChainKey;
+  nativeToken: Address;
   publicClient: PublicClient;
 };
 
@@ -75,7 +75,7 @@ export class Erc20Service {
     params: Erc20IsAllowanceParams<ChainKey>,
   ): Promise<Result<boolean>> {
     try {
-      if (params.token.toLowerCase() === spokeChainConfig[params.chainKey].nativeToken.toLowerCase()) {
+      if (params.token.toLowerCase() === params.nativeToken.toLowerCase()) {
         return {
           ok: true,
           value: true,

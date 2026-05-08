@@ -26,7 +26,6 @@ import {
   type InjectiveChainKey,
   type InjectiveRawTransaction,
   type Result,
-  spokeChainConfig,
   type JsonObject,
   type InjectiveExecuteResponse,
   type IInjectiveWalletProvider,
@@ -162,21 +161,18 @@ export class InjectiveSpokeService {
 
     const funds = [{ amount: amount.toString(), denom: token }];
 
+    const chainConfig = this.config.getChainConfig(srcChainKey);
+
     if (params.raw === true) {
       return (await this.getRawTransaction(
-        spokeChainConfig[srcChainKey].networkId,
+        chainConfig.networkId,
         from,
-        spokeChainConfig[srcChainKey].addresses.assetManager,
+        chainConfig.addresses.assetManager,
         msg,
       )) satisfies TxReturnType<InjectiveChainKey, true> as TxReturnType<InjectiveChainKey, R>;
     }
 
-    const res = await params.walletProvider.execute(
-      from,
-      spokeChainConfig[srcChainKey].addresses.assetManager,
-      msg,
-      funds,
-    );
+    const res = await params.walletProvider.execute(from, chainConfig.addresses.assetManager, msg, funds);
     return res.transactionHash satisfies TxReturnType<InjectiveChainKey, false> as TxReturnType<InjectiveChainKey, R>;
   }
 
@@ -188,7 +184,7 @@ export class InjectiveSpokeService {
    */
   public async getDeposit(params: GetDepositParams<InjectiveChainKey>): Promise<bigint> {
     const response = await this.chainGrpcWasmApi.fetchSmartContractState(
-      this.config.sodaxConfig.chains[params.srcChainKey].addresses.assetManager,
+      this.config.getChainConfig(params.srcChainKey).addresses.assetManager,
       toBase64({
         get_balance: { denom: params.token },
       }),
@@ -235,7 +231,7 @@ export class InjectiveSpokeService {
   // Query Methods
   async getState(chainId: InjectiveChainKey): Promise<State> {
     return this.chainGrpcWasmApi.fetchSmartContractState(
-      spokeChainConfig[chainId].addresses.assetManager,
+      this.config.getChainConfig(chainId).addresses.assetManager,
       toBase64({
         get_state: {},
       }),
@@ -266,16 +262,18 @@ export class InjectiveSpokeService {
       },
     };
 
+    const chainConfig = this.config.getChainConfig(srcChainKey);
+
     if (params.raw === true) {
       return (await this.getRawTransaction(
-        spokeChainConfig[srcChainKey].networkId,
+        chainConfig.networkId,
         from,
-        spokeChainConfig[srcChainKey].addresses.connection,
+        chainConfig.addresses.connection,
         msg,
       )) satisfies TxReturnType<InjectiveChainKey, true> as TxReturnType<InjectiveChainKey, Raw>;
     }
 
-    const res = await params.walletProvider.execute(from, spokeChainConfig[srcChainKey].addresses.connection, msg);
+    const res = await params.walletProvider.execute(from, chainConfig.addresses.connection, msg);
     return res.transactionHash satisfies TxReturnType<InjectiveChainKey, false> as TxReturnType<InjectiveChainKey, Raw>;
   }
 
@@ -298,7 +296,11 @@ export class InjectiveSpokeService {
       },
     };
 
-    return await walletProvider.execute(senderAddress, spokeChainConfig[srcChainKey].addresses.assetManager, msg);
+    return await walletProvider.execute(
+      senderAddress,
+      this.config.getChainConfig(srcChainKey).addresses.assetManager,
+      msg,
+    );
   }
 
   async setRateLimit(
@@ -313,7 +315,7 @@ export class InjectiveSpokeService {
       },
     };
 
-    return await walletProvider.execute(senderAddress, spokeChainConfig[chainId].addresses.assetManager, msg);
+    return await walletProvider.execute(senderAddress, this.config.getChainConfig(chainId).addresses.assetManager, msg);
   }
 
   async setConnection(
@@ -328,7 +330,7 @@ export class InjectiveSpokeService {
       },
     };
 
-    return await walletProvider.execute(senderAddress, spokeChainConfig[chainId].addresses.assetManager, msg);
+    return await walletProvider.execute(senderAddress, this.config.getChainConfig(chainId).addresses.assetManager, msg);
   }
 
   async setOwner(
@@ -343,7 +345,7 @@ export class InjectiveSpokeService {
       },
     };
 
-    return await walletProvider.execute(senderAddress, spokeChainConfig[chainId].addresses.assetManager, msg);
+    return await walletProvider.execute(senderAddress, this.config.getChainConfig(chainId).addresses.assetManager, msg);
   }
 
   public async waitForTransactionReceipt(

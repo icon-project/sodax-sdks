@@ -29,7 +29,6 @@ import { sleep } from '../../utils/shared-utils.js';
 import {
   getIntentRelayChainId,
   ChainKeys,
-  spokeChainConfig,
   type HubAddress,
   type SolanaAccountMeta,
   type SolanaBase58PublicKey,
@@ -62,12 +61,14 @@ export type SolanaTransferToHubParams = {
 };
 
 export class SolanaSpokeService {
+  private readonly config: ConfigService;
   private readonly rpcUrl: string;
   public readonly connection: Connection;
   private readonly pollingIntervalMs: number;
   private readonly maxTimeoutMs: number;
 
   public constructor(config: ConfigService) {
+    this.config = config;
     const chainConfig = config.getChainConfig(ChainKeys.SOLANA_MAINNET);
     this.rpcUrl = chainConfig.rpcUrl;
     this.connection = new Connection(this.rpcUrl, 'confirmed');
@@ -111,7 +112,7 @@ export class SolanaSpokeService {
 
     let depositInstruction: TransactionInstruction;
     const amountBN = new BN(amount);
-    const chainConfig = spokeChainConfig[params.srcChainKey];
+    const chainConfig = this.config.getChainConfig(params.srcChainKey);
     const { rpcUrl, addresses } = chainConfig;
     const walletAddress = params.srcAddress;
     const walletPublicKey = new PublicKey(walletAddress);
@@ -176,28 +177,30 @@ export class SolanaSpokeService {
       microLamports: 0,
     });
 
-    const serializedTransaction = await this.buildV0Txn(walletAddress, [
+    const rawInstructions = [
       convertTransactionInstructionToRaw(modifyComputeUnits),
       convertTransactionInstructionToRaw(addPriorityFee),
       convertTransactionInstructionToRaw(depositInstruction),
-    ]);
+    ];
 
     if (params.raw === true) {
+      const unsignedTx = await this.buildV0Txn(walletAddress, rawInstructions);
       return {
         from: walletPublicKey.toBase58(),
         to: assetManagerProgram.programId.toBase58(),
         value: BigInt(amountBN.toString()),
-        data: Buffer.from(serializedTransaction).toString('base64'),
+        data: Buffer.from(unsignedTx).toString('base64'),
       } satisfies TxReturnType<SolanaChainKey, true> as TxReturnType<SolanaChainKey, R>;
     }
 
-    return params.walletProvider.sendTransaction(serializedTransaction) satisfies Promise<
+    const signedTx = await params.walletProvider.buildV0Txn(rawInstructions);
+    return params.walletProvider.sendTransaction(signedTx) satisfies Promise<
       TxReturnType<SolanaChainKey, false>
     > as Promise<TxReturnType<SolanaChainKey, R>>;
   }
 
   public async getDeposit(params: GetDepositParams<SolanaChainKey>): Promise<bigint> {
-    const assetManagerProgramId = new PublicKey(spokeChainConfig[params.srcChainKey].addresses.assetManager);
+    const assetManagerProgramId = new PublicKey(this.config.getChainConfig(params.srcChainKey).addresses.assetManager);
     const solToken = new PublicKey(params.token);
 
     if (isSolanaNativeToken(new PublicKey(solToken))) {
@@ -226,7 +229,7 @@ export class SolanaSpokeService {
   ): Promise<TxReturnType<SolanaChainKey, Raw>> {
     const dstRelayChainId = getIntentRelayChainId(params.dstChainKey);
     const payload = keccak256(params.payload);
-    const chainConfig = spokeChainConfig[params.srcChainKey];
+    const chainConfig = this.config.getChainConfig(params.srcChainKey);
     const { rpcUrl, addresses } = chainConfig;
     const walletAddress = params.srcAddress;
     const walletPublicKey = new PublicKey(walletAddress);
@@ -255,26 +258,30 @@ export class SolanaSpokeService {
       microLamports: 0,
     });
 
-    const serializedTransaction = await this.buildV0Txn(walletAddress, [
+    const rawInstructions = [
       convertTransactionInstructionToRaw(modifyComputeUnits),
       convertTransactionInstructionToRaw(addPriorityFee),
       convertTransactionInstructionToRaw(sendMessageInstruction),
-    ]);
+    ];
 
     if (params.raw === true) {
+      const unsignedTx = await this.buildV0Txn(walletAddress, rawInstructions);
       return {
         from: walletPublicKey.toBase58(),
         to: connectionProgram.programId.toBase58(),
         value: 0n,
-        data: Buffer.from(serializedTransaction).toString('base64'),
+        data: Buffer.from(unsignedTx).toString('base64'),
       } satisfies TxReturnType<SolanaChainKey, true> as TxReturnType<SolanaChainKey, Raw>;
     }
-    return params.walletProvider.sendTransaction(serializedTransaction) satisfies Promise<
+
+    const signedTx = await params.walletProvider.buildV0Txn(rawInstructions);
+    return params.walletProvider.sendTransaction(signedTx) satisfies Promise<
       TxReturnType<SolanaChainKey, false>
     > as Promise<TxReturnType<SolanaChainKey, Raw>>;
   }
 
-  // NOTE: this is method returns unsigned transaction data
+  // Builds an unsigned, serialized v0 transaction for raw-mode callers who will sign and broadcast it themselves.
+  // The non-raw path uses walletProvider.buildV0Txn(...) instead, which signs the tx (prompting the user in adapter mode).
   public async buildV0Txn(
     from: SolanaBase58PublicKey,
     rawInstructions: SolanaRawTransactionInstruction[],
