@@ -51,14 +51,11 @@ See [`hooks.md`](./hooks.md) for full signatures. Names only:
 
 ### Utilities
 
-| Symbol | Kind | Source |
-|---|---|---|
-| `sortConnectors` | function | `utils/sortConnectors` |
-| `getEntryDefaults` | function | `utils/walletRpcConfig` |
-| `getRpcUrl` | function | `utils/walletRpcConfig` |
-| `resolveEvmDefaults` | function | `utils/walletRpcConfig` |
-| `isNativeToken` | function | `utils/index` |
-| `getWagmiChainId` | function | `utils/index` |
+| Symbol | Notes |
+|---|---|
+| `sortConnectors` | Stable-sort connectors by `preferred[]` then install state. See [`connectors.md`](./connectors.md). |
+| `getEntryDefaults`, `getRpcUrl`, `resolveEvmDefaults` | Read defaults / RPC URL out of `SodaxWalletConfig` (advanced — for custom Hydrator-like code). |
+| `isNativeToken`, `getWagmiChainId` | Small helpers — native-token check and `ChainKey` → wagmi numeric chain id. |
 
 ### Public interfaces
 
@@ -88,35 +85,14 @@ Top-level:
 | `ChainTypeOf<K>` | generic type |
 | `WalletDefaultsByKey<K>` | generic type |
 
-Per-chain-type slot aliases:
+Per-chain aliases follow two naming patterns — one alias per chain family (9 each):
 
-| Symbol | Kind |
-|---|---|
-| `EvmTypeConfig` | type |
-| `SolanaTypeConfig` | type |
-| `SuiTypeConfig` | type |
-| `BitcoinTypeConfig` | type |
-| `StellarTypeConfig` | type |
-| `InjectiveTypeConfig` | type |
-| `IconTypeConfig` | type |
-| `NearTypeConfig` | type |
-| `StacksTypeConfig` | type |
+- `<Chain>TypeConfig` — per-slot config (e.g. `EvmTypeConfig`, `SolanaTypeConfig`)
+- `<Chain>ChainEntry` — per-chain-key entry (e.g. `EvmChainEntry`, `BitcoinChainEntry`)
 
-Per-chain entry types:
+Replace `<Chain>` with `Evm | Solana | Sui | Bitcoin | Stellar | Injective | Icon | Near | Stacks`. Most consumers can derive these from `ChainTypeConfig<T>` / `ChainEntry<K>` instead of importing the per-chain alias directly.
 
-| Symbol | Kind |
-|---|---|
-| `EvmChainEntry` | type |
-| `SolanaChainEntry` | type |
-| `SuiChainEntry` | type |
-| `IconChainEntry` | type |
-| `NearChainEntry` | type |
-| `BitcoinChainEntry` | type |
-| `StellarChainEntry` | type |
-| `InjectiveChainEntry` | type |
-| `StacksChainEntry` | type |
-
-Adapter-field types:
+Adapter-field types (only chains with React adapters):
 
 | Symbol | Kind |
 |---|---|
@@ -124,22 +100,9 @@ Adapter-field types:
 | `SolanaAdapterFields` | type |
 | `SuiAdapterFields` | type |
 
-### Hook option / result types (selected)
+### Hook option / result types
 
-Each hook export pair (`useFoo` + `UseFooOptions` / `UseFooResult`) lives in its source file. See [`hooks.md`](./hooks.md) for which option types pair with which hook. Common ones:
-
-- `UseXAccountOptions`, `UseXConnectionOptions`, `UseXConnectorsOptions`
-- `UseConnectedChainsOptions`, `UseConnectedChainsResult`
-- `UseConnectionFlowResult`, `ConnectionStatus`
-- `UseBatchConnectOptions`, `UseBatchConnectResult`, `BatchConnectResult`, `BatchConnectProgressEvent`
-- `UseBatchDisconnectOptions`, `UseBatchDisconnectResult`, `BatchDisconnectResult`, `BatchDisconnectProgressEvent`
-- `UseWalletModalOptions`, `UseWalletModalResult`, `WalletModalState`
-- `UseChainGroupsOptions`, `ChainGroup`
-- `ConnectedChain`, `BatchOperationStatus`
-- `UseEvmSwitchChainOptions`, `UseEvmSwitchChainReturn`
-- `UseWalletProviderOptions`, `UseXServiceOptions`, `UseIsWalletInstalledOptions`
-- `UseXDisconnectArgs`, `XSignMessageVariables`
-- `SortConnectorsOptions`
+Every hook also exports its options / result types alongside it. Naming pattern is `Use<Name>Options`, `Use<Name>Result` (or `Use<Name>Return`), and any inline value types in `PascalCase` (e.g. `ChainGroup`, `ConnectedChain`, `WalletModalState`, `ConnectionStatus`). See [`hooks.md`](./hooks.md) for the signature each pair belongs to.
 
 ---
 
