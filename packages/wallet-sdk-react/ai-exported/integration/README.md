@@ -37,7 +37,7 @@ If this is your first time using the package:
    - [`reference/connectors.md`](./reference/connectors.md) — available wallet connectors per chain.
    - [`reference/chain-support.md`](./reference/chain-support.md) — supported chains, slots, and adapter notes.
 9. Copy-paste examples (runnable code, minimal narrative):
-   - [`examples/`](./examples/) — 5 self-contained `.tsx` files: minimal EVM setup, multi-chain modal, Next.js App Router, WalletConnect/Fireblocks, full SDK swap flow.
+   - [`examples/`](./examples/) — 4 self-contained `.tsx` files: minimal EVM setup, multi-chain modal, Next.js App Router, WalletConnect setup.
 
 ---
 

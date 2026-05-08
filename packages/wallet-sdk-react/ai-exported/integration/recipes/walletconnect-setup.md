@@ -11,7 +11,7 @@ Enable WalletConnect protocol on the EVM slot for partners using enterprise cust
 | Scenario | Need WalletConnect? |
 |----------|---------------------|
 | MetaMask / Hana / Rabby browser extension | ❌ — EIP-6963 covers them |
-| Fireblocks workspace | ✅ |
+| Enterprise custody wallets (e.g. Fireblocks, Safe) | ✅ |
 | Ledger Live | ✅ |
 | MetaMask Mobile / Trust / Rainbow (paired via QR) | ✅ |
 | Coinbase Smart Wallet | ✅ (fallback path) |
@@ -55,9 +55,9 @@ A WalletConnect connector now surfaces alongside EIP-6963 wallets. `useXConnecto
 
 ---
 
-## 3. Restrict the QR modal — Fireblocks-only
+## 3. Restrict the QR modal to a specific wallet (optional)
 
-To show **only** Fireblocks (no Trust / Rainbow / etc. clutter), filter the WalletConnect Explorer list:
+To show **only** one wallet in the WalletConnect modal (e.g. when integrating with a single enterprise custody provider), filter the WalletConnect Explorer list:
 
 ```typescript
 const walletConfig: SodaxWalletConfig = {
@@ -66,7 +66,7 @@ const walletConfig: SodaxWalletConfig = {
       projectId: process.env.NEXT_PUBLIC_WC_PROJECT_ID!,
       qrModalOptions: {
         explorerRecommendedWalletIds: [
-          '225affb176778569276e484e1b92637ad061b01e13a048b35a9d280c3b58970f', // Fireblocks
+          '<target-wallet-id>', // hex from WalletConnect Explorer
         ],
         explorerExcludedWalletIds: 'ALL', // hide everything except recommended
       },
@@ -75,7 +75,7 @@ const walletConfig: SodaxWalletConfig = {
 };
 ```
 
-Find wallet IDs at the [WalletConnect Explorer](https://walletconnect.com/explorer) — they're the long hex strings in URLs, not the human names.
+Find wallet IDs at the [WalletConnect Explorer](https://walletconnect.com/explorer) — they're the long hex strings in the URL, not the human names. Default (no `qrModalOptions`) shows the full WalletConnect wallet list.
 
 ---
 

@@ -105,16 +105,16 @@ The WalletConnect connector is added to wagmi automatically. `useXConnectors({ x
 
 ---
 
-## Restricting the modal to specific wallets (e.g. Fireblocks only)
+## Restricting the modal to specific wallets
 
-`EVM.walletConnect` extends wagmi's `WalletConnectParameters` — full options available. To show only Fireblocks (and hide all other WalletConnect wallets):
+`EVM.walletConnect` extends wagmi's `WalletConnectParameters` — full options available. To show only one specific wallet (e.g. when integrating with a single enterprise custody provider) and hide the rest:
 
 ```tsx
 EVM: {
   walletConnect: {
     projectId: 'wc-cloud-project-id',
     qrModalOptions: {
-      explorerRecommendedWalletIds: ['<fireblocks-wallet-id>'],
+      explorerRecommendedWalletIds: ['<target-wallet-id>'],
       explorerExcludedWalletIds: 'ALL',
     },
   },

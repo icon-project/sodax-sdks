@@ -9,8 +9,7 @@ For narrative + step-by-step explanation, see [`../recipes/`](../recipes/). Exam
 | [`01-minimal-evm.tsx`](./01-minimal-evm.tsx) | Smallest working setup — provider + 1 connect button | ~50 |
 | [`02-multi-chain-modal.tsx`](./02-multi-chain-modal.tsx) | Headless wallet modal with chain → connector → connecting flow | ~120 |
 | [`03-nextjs-app-router.tsx`](./03-nextjs-app-router.tsx) | Next.js 15 App Router setup (SSR + `'use client'`) | ~60 |
-| [`04-walletconnect-fireblocks.tsx`](./04-walletconnect-fireblocks.tsx) | WalletConnect filtered to Fireblocks only | ~50 |
-| [`05-bridge-to-sdk.tsx`](./05-bridge-to-sdk.tsx) | Full SDK swap flow — connect → switch chain → swap | ~80 |
+| [`04-walletconnect-setup.tsx`](./04-walletconnect-setup.tsx) | WalletConnect connector setup (with optional single-wallet filter) | ~50 |
 
 ## Conventions
 

@@ -61,8 +61,7 @@ If the user wants a full working starter file rather than narrative steps, point
 - `01-minimal-evm.tsx` — provider + 1 connect button
 - `02-multi-chain-modal.tsx` — full headless modal
 - `03-nextjs-app-router.tsx` — Next.js 15 SSR setup
-- `04-walletconnect-fireblocks.tsx` — Fireblocks-only WalletConnect
-- `05-bridge-to-sdk.tsx` — connect → switch chain → SDK swap
+- `04-walletconnect-setup.tsx` — WalletConnect setup (optional single-wallet filter)
 
 Always combine with the narrative recipe — examples are skeletons, recipes explain why each piece exists.
 

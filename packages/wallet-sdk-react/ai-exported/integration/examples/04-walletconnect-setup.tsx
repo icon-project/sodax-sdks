@@ -1,9 +1,13 @@
 /**
- * WalletConnect setup filtered to Fireblocks only.
- * For dApps that target enterprise custody users.
+ * WalletConnect setup — adds the WalletConnect connector to the EVM modal.
+ * For dApps that target users on mobile-only or enterprise custody wallets
+ * (Ledger Live, Safe, Fireblocks, ...) which cannot install browser extensions.
  *
  * Get a projectId at https://cloud.walletconnect.com
- * Find Fireblocks wallet id at https://walletconnect.com/explorer
+ *
+ * To narrow the WalletConnect modal to ONE specific wallet (e.g. an enterprise
+ * custody integration), see the commented `qrModalOptions` block below — fill
+ * in the target wallet id from https://walletconnect.com/explorer.
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -19,9 +23,6 @@ import { ChainKeys } from '@sodax/types';
 
 const queryClient = new QueryClient();
 
-// Fireblocks wallet id from https://walletconnect.com/explorer
-const FIREBLOCKS_WALLET_ID = '225affb176778569276e484e1b92637ad061b01e13a048b35a9d280c3b58970f';
-
 const walletConfig: SodaxWalletConfig = {
   EVM: {
     ssr: true,
@@ -32,10 +33,12 @@ const walletConfig: SodaxWalletConfig = {
     },
     walletConnect: {
       projectId: process.env.NEXT_PUBLIC_WC_PROJECT_ID ?? '',
-      qrModalOptions: {
-        explorerRecommendedWalletIds: [FIREBLOCKS_WALLET_ID],
-        explorerExcludedWalletIds: 'ALL', // hide everything except recommended
-      },
+      // Optional — restrict the WalletConnect QR modal to a specific wallet:
+      //
+      // qrModalOptions: {
+      //   explorerRecommendedWalletIds: ['<target-wallet-id-from-walletconnect-explorer>'],
+      //   explorerExcludedWalletIds: 'ALL', // hide everything except recommended
+      // },
     },
   },
 };
@@ -44,13 +47,13 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <SodaxWalletProvider config={walletConfig}>
-        <ConnectFireblocks />
+        <ConnectWithWalletConnect />
       </SodaxWalletProvider>
     </QueryClientProvider>
   );
 }
 
-function ConnectFireblocks() {
+function ConnectWithWalletConnect() {
   const modal = useWalletModal();
   const connectors = useXConnectors({ xChainType: 'EVM' });
   const account = useXAccount({ xChainType: 'EVM' });
@@ -80,7 +83,7 @@ function ConnectFireblocks() {
 
   return (
     <button type="button" onClick={() => modal.selectWallet(wcConnector)}>
-      Connect with Fireblocks
+      Connect via WalletConnect
     </button>
   );
 }
