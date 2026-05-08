@@ -24,14 +24,19 @@ declare global {
 
 class OKXWalletProvider implements IBitcoinWalletProvider {
   readonly chainType = 'BITCOIN' as const;
-  private okx: OKXBitcoinWallet;
   private cachedAddress: string;
   private readonly defaults: BitcoinWalletDefaults | undefined;
 
-  constructor(okx: OKXBitcoinWallet, address: string, defaults?: BitcoinWalletDefaults) {
-    this.okx = okx;
+  constructor(address: string, defaults?: BitcoinWalletDefaults) {
     this.cachedAddress = address;
     this.defaults = defaults;
+  }
+
+  // Lazy resolve so the provider can be constructed before the extension finishes injecting `window.okxwallet` (post-refresh rehydrate path).
+  private get okx(): OKXBitcoinWallet {
+    const o = window.okxwallet?.bitcoin;
+    if (!o) throw new Error('OKX wallet not available');
+    return o;
   }
 
   async getWalletAddress(): Promise<string> {
@@ -110,7 +115,7 @@ export class OKXXConnector extends BitcoinXConnector {
       return undefined;
     }
 
-    this.walletProvider = new OKXWalletProvider(okx, address, this.defaults);
+    this.walletProvider = new OKXWalletProvider(address, this.defaults);
 
     return {
       address,
@@ -127,8 +132,7 @@ export class OKXXConnector extends BitcoinXConnector {
   }
 
   recreateWalletProvider(xAccount: XAccount): IBitcoinWalletProvider | undefined {
-    const okx = window.okxwallet?.bitcoin;
-    if (!okx || !xAccount.address) return undefined;
-    return new OKXWalletProvider(okx, xAccount.address, this.defaults);
+    if (!xAccount.address) return undefined;
+    return new OKXWalletProvider(xAccount.address, this.defaults);
   }
 }

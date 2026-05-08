@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2, Copy, Check, ArrowRight, Info } from 'lucide-react';
 import { formatUnits, parseUnits } from 'viem';
+import { getReadableTxError } from '@/lib/utils';
 
 interface FundTradingWalletDialogProps {
   open: boolean;
@@ -43,6 +44,7 @@ export const FundTradingWalletDialog = ({
   const [amount, setAmount] = useState('');
   const [copied, setCopied] = useState(false);
   const [fundSuccess, setFundSuccess] = useState(false);
+  const [fundError, setFundError] = useState<string | null>(null);
 
   const copyAddress = () => {
     navigator.clipboard.writeText(tradingAddress);
@@ -52,13 +54,14 @@ export const FundTradingWalletDialog = ({
 
   const handleFund = async () => {
     if (!amount || Number.isNaN(Number(amount)) || Number(amount) <= 0) return;
+    setFundError(null);
     try {
       await onFund(parseUnits(amount, 8));
       setAmount('');
       setFundSuccess(true);
       setTimeout(() => setFundSuccess(false), 3000);
-    } catch {
-      // error handled by parent
+    } catch (err) {
+      setFundError(getReadableTxError(err));
     }
   };
 
@@ -133,7 +136,10 @@ export const FundTradingWalletDialog = ({
             type="number"
             placeholder="Amount in BTC (e.g. 0.001)"
             value={amount}
-            onChange={e => setAmount(e.target.value)}
+            onChange={e => {
+              setAmount(e.target.value);
+              setFundError(null);
+            }}
             className="h-9 text-sm"
           />
           <Button size="sm" onClick={handleFund} disabled={isFunding || !amount} className="shrink-0">
@@ -144,6 +150,10 @@ export const FundTradingWalletDialog = ({
 
         {fundSuccess && (
           <p className="text-xs text-green-500 text-center">Transaction submitted successfully!</p>
+        )}
+
+        {fundError && (
+          <p className="text-xs text-red-500 text-center break-words">{fundError}</p>
         )}
 
         {/* Info */}
