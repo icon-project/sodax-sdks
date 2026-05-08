@@ -1,11 +1,11 @@
 import { encodeFunctionData, erc20Abi, type Address, type PublicClient } from 'viem';
-import {
-  type EvmChainKey,
-  type EvmContractCall,
-  type EvmReturnType,
-  type Result,
-  type TxReturnType,
-  type WalletProviderSlot,
+import type {
+  EvmChainKey,
+  EvmContractCall,
+  EvmReturnType,
+  Result,
+  TxReturnType,
+  WalletProviderSlot,
 } from '@sodax/types';
 
 export type Erc20ApproveParams<Raw extends boolean> = {
