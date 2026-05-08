@@ -55,7 +55,11 @@ function WalletModalRoot() {
 
   switch (modal.state.kind) {
     case 'closed':
-      return <button onClick={modal.open}>Connect Wallet</button>;
+      return (
+        <button type="button" onClick={modal.open}>
+          Connect Wallet
+        </button>
+      );
 
     case 'chainSelect':
       return <ChainPicker onPick={modal.selectChain} onClose={modal.close} />;
@@ -77,7 +81,9 @@ function WalletModalRoot() {
       return (
         <Dialog onClose={modal.close}>
           <p>Approve in {modal.state.connector.name}…</p>
-          <button onClick={modal.back}>Cancel</button>
+          <button type="button" onClick={modal.back}>
+            Cancel
+          </button>
         </Dialog>
       );
 
@@ -90,8 +96,12 @@ function WalletModalRoot() {
               Install {modal.state.connector.name}
             </a>
           )}
-          <button onClick={modal.retry}>Retry</button>
-          <button onClick={modal.back}>Pick another wallet</button>
+          <button type="button" onClick={modal.retry}>
+            Retry
+          </button>
+          <button type="button" onClick={modal.back}>
+            Pick another wallet
+          </button>
         </Dialog>
       );
 
@@ -111,7 +121,7 @@ function ChainPicker({ onPick, onClose }: { onPick: (c: ChainType) => void; onCl
     <Dialog onClose={onClose}>
       <h2>Select a chain</h2>
       {groups.map((group) => (
-        <button key={group.chainType} onClick={() => onPick(group.chainType)}>
+        <button type="button" key={group.chainType} onClick={() => onPick(group.chainType)}>
           <span>{group.displayName}</span>
           {group.isConnected && ' ✓'}
         </button>
@@ -138,10 +148,13 @@ function WalletPicker({
   const connectors = sortConnectors(rawConnectors, { preferred: PREFERRED });
   return (
     <Dialog onClose={onClose}>
-      <button onClick={onBack}>← Back</button>
+      <button type="button" onClick={onBack}>
+        ← Back
+      </button>
       <h2>Connect to {chainType}</h2>
       {connectors.map((connector) => (
         <button
+          type="button"
           key={connector.id}
           onClick={() => onPick(connector)}
           disabled={!connector.isInstalled}

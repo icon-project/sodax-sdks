@@ -67,7 +67,9 @@ function ConnectFireblocks() {
     return (
       <div>
         <code>{account.address}</code>
-        <button onClick={() => disconnect({ xChainType: 'EVM' })}>Disconnect</button>
+        <button type="button" onClick={() => disconnect({ xChainType: 'EVM' })}>
+          Disconnect
+        </button>
       </div>
     );
   }
@@ -76,5 +78,9 @@ function ConnectFireblocks() {
     return <p>WalletConnect not configured — set NEXT_PUBLIC_WC_PROJECT_ID</p>;
   }
 
-  return <button onClick={() => modal.selectWallet(wcConnector)}>Connect with Fireblocks</button>;
+  return (
+    <button type="button" onClick={() => modal.selectWallet(wcConnector)}>
+      Connect with Fireblocks
+    </button>
+  );
 }

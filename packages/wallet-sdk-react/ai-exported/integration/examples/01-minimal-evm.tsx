@@ -50,7 +50,9 @@ function ConnectButton() {
     return (
       <div>
         <code>{account.address}</code>
-        <button onClick={() => disconnect({ xChainType: 'EVM' })}>Disconnect</button>
+        <button type="button" onClick={() => disconnect({ xChainType: 'EVM' })}>
+          Disconnect
+        </button>
       </div>
     );
   }
@@ -59,6 +61,7 @@ function ConnectButton() {
     <div>
       {connectors.map((connector) => (
         <button
+          type="button"
           key={connector.id}
           onClick={() => connect(connector).catch(() => {})}
           disabled={isPending || !connector.isInstalled}

@@ -55,7 +55,11 @@ function SwapFlow() {
 
   // 2. Connected but wrong network → show switch CTA
   if (isWrongChain) {
-    return <button onClick={handleSwitchChain}>Switch to BSC</button>;
+    return (
+      <button type="button" onClick={handleSwitchChain}>
+        Switch to BSC
+      </button>
+    );
   }
 
   // 3. Ready to swap
@@ -82,7 +86,11 @@ function SwapButton({ walletProvider }: { walletProvider: ReturnType<typeof useW
     console.log('swap submitted:', result.value);
   };
 
-  return <button onClick={handleSwap}>Swap on BSC</button>;
+  return (
+    <button type="button" onClick={handleSwap}>
+      Swap on BSC
+    </button>
+  );
 }
 
 function ConnectButton() {
@@ -95,7 +103,9 @@ function ConnectButton() {
     return (
       <div>
         <code>{account.address}</code>
-        <button onClick={() => disconnect({ xChainType: 'EVM' })}>Disconnect</button>
+        <button type="button" onClick={() => disconnect({ xChainType: 'EVM' })}>
+          Disconnect
+        </button>
       </div>
     );
   }
@@ -104,6 +114,7 @@ function ConnectButton() {
     <div>
       {connectors.map((connector) => (
         <button
+          type="button"
           key={connector.id}
           onClick={() => connect(connector).catch(() => {})}
           disabled={isPending || !connector.isInstalled}
