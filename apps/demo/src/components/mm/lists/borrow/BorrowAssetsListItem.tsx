@@ -1,8 +1,7 @@
 import React from 'react';
 import { TableCell, TableRow } from '@/components/ui/table';
 import { formatUnits } from 'viem';
-import type { SpokeChainKey, XToken } from '@sodax/sdk';
-import { BorrowButton } from '../BorrowButton';
+import type { XToken } from '@sodax/sdk';
 import { formatDecimalForDisplay, truncateToDecimals } from '@/lib/utils';
 import { useReserveMetrics } from '@/hooks/useReserveMetrics';
 import type { FormatReserveUSDResponse, FormatUserSummaryResponse, UserReserveData } from '@sodax/sdk';
@@ -14,13 +13,6 @@ import { isUserReserveDataArray, isValidEvmAddress } from '../../typeGuards';
 interface BorrowAssetsListItemProps {
   token: XToken;
   walletBalance: string;
-  asset: {
-    symbol: string;
-    decimals: number;
-    address: string;
-    chainId: SpokeChainKey;
-    vault: string;
-  };
   disabled?: boolean;
   formattedReserves: FormatReserveUSDResponse[];
   userReserves: readonly UserReserveData[];
@@ -32,7 +24,6 @@ interface BorrowAssetsListItemProps {
 export function BorrowAssetsListItem({
   token,
   walletBalance,
-  asset,
   disabled = false,
   formattedReserves,
   userReserves,
@@ -135,7 +126,6 @@ export function BorrowAssetsListItem({
       <TableCell className="px-6 py-5">
         <div className="flex items-center gap-3">
           <div className="flex flex-col">
-            {/* Use token.symbol (current symbol like "POL") instead of asset.symbol (legacy like "MATIC") */}
             <span className="font-bold text-cherry-dark">{token.symbol}</span>
           </div>
         </div>
@@ -174,14 +164,18 @@ export function BorrowAssetsListItem({
       {/* Actions */}
       <TableCell className="px-6 py-5">
         <div className="flex items-center gap-2">
-          <BorrowButton
-            token={token}
-            disabled={disabled || !canBorrow}
+          <Button
+            variant="cherry"
+            size="sm"
             onClick={() => {
               const priceUSD = metrics.formattedReserve ? Number(metrics.formattedReserve.priceInUSD) : 0;
               onBorrowClick(token, maxBorrow, priceUSD);
             }}
-          />
+            disabled={disabled || !canBorrow}
+            className="flex-1 min-w-[85px]"
+          >
+            Borrow
+          </Button>
           <Button
             variant="cherry"
             size="sm"

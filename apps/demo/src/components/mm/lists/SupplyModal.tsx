@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ChainSelector } from '@/components/shared/ChainSelector';
+import { Skeleton } from '@/components/ui/skeleton';
 
 import { getXChainType, useEvmSwitchChain, useWalletProvider, useXAccount, useXService } from '@sodax/wallet-sdk-react';
 import { formatUnits, parseUnits } from 'viem';
@@ -62,7 +63,7 @@ export function SupplyModal({ open, onOpenChange, token, onSuccess, inlineSucces
   const sourceWalletProvider = useWalletProvider({ xChainId: srcChainKey });
 
   const xService = useXService({ xChainType: getXChainType(srcChainKey) });
-  const { data: sourceBalances } = useXBalances({
+  const { data: sourceBalances, isLoading: isBalanceLoading } = useXBalances({
     params: { xService, xChainId: srcChainKey, xTokens: [sourceToken], address: srcAddress },
   });
 
@@ -80,7 +81,7 @@ export function SupplyModal({ open, onOpenChange, token, onSuccess, inlineSucces
     if (!sourceToken || !sourceBalances) return undefined;
     const raw = sourceBalances[sourceToken.address] ?? 0n;
     const num = Number(formatUnits(raw, sourceToken.decimals));
-    if (!Number.isFinite(num) || num <= 0) return undefined;
+    if (!Number.isFinite(num) || num < 0) return undefined;
     return num;
   }, [sourceBalances, sourceToken]);
 
@@ -251,10 +252,14 @@ export function SupplyModal({ open, onOpenChange, token, onSuccess, inlineSucces
             </div>
 
             <div className="space-y-1">
-              {parsedMaxAmount !== undefined && (
-                <p className="text-xs text-muted-foreground">
-                  Max supply: {formatDecimalForDisplay(parsedMaxAmount.toString(), 4)} {token.symbol}
-                </p>
+              {isBalanceLoading ? (
+                <Skeleton className="h-4 w-40" />
+              ) : (
+                parsedMaxAmount !== undefined && (
+                  <p className="text-xs text-muted-foreground">
+                    Max supply: {formatDecimalForDisplay(parsedMaxAmount.toString(), 4)} {token.symbol}
+                  </p>
+                )
               )}
               {exceedsMaxSupply && !isBusy && parsedMaxAmount !== undefined && (
                 <ErrorAlert
