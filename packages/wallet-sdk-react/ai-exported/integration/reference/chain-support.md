@@ -1,6 +1,6 @@
 # Reference: Chain Support
 
-Chains supported by `@sodax/wallet-sdk-react` v2 — their `ChainType` family, `ChainKey` constants, native SDK, and per-slot config shape. Use this when picking which slots to include in `walletConfig`.
+Chains supported by `@sodax/wallet-sdk-react` v2 — their `ChainType` family and per-slot config shape. Use this when picking which slots to include in `walletConfig`.
 
 ---
 
@@ -8,19 +8,19 @@ Chains supported by `@sodax/wallet-sdk-react` v2 — their `ChainType` family, `
 
 9 chain families. Each is a top-level slot on `SodaxWalletConfig`:
 
-| ChainType | Networks (examples) | React adapter mounted | Native SDK |
-|---|---|---|---|
-| `EVM` | Sonic, Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia | wagmi | `wagmi` + `viem` |
-| `SOLANA` | Solana mainnet | `@solana/wallet-adapter-react` | `@solana/web3.js` |
-| `SUI` | Sui mainnet/testnet | `@mysten/dapp-kit` | `@mysten/sui` |
-| `BITCOIN` | Bitcoin mainnet | (no React adapter — direct `window.*` probes) | `sats-connect` (Xverse) |
-| `STELLAR` | Stellar mainnet | (no React adapter) | `@creit.tech/stellar-wallets-kit` |
-| `ICON` | ICON mainnet | (no React adapter) | `icon-sdk-js` |
-| `INJECTIVE` | Injective mainnet | (no React adapter) | `@injectivelabs/sdk-ts` |
-| `NEAR` | NEAR mainnet | (no React adapter) | `near-api-js` |
-| `STACKS` | Stacks mainnet | (no React adapter) | `@stacks/connect` |
+| ChainType | Networks (examples) | React adapter mounted |
+|---|---|---|
+| `EVM` | Sonic, Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia | wagmi |
+| `SOLANA` | Solana mainnet | `@solana/wallet-adapter-react` |
+| `SUI` | Sui mainnet/testnet | `@mysten/dapp-kit` |
+| `BITCOIN` | Bitcoin mainnet | (none — direct extension probes) |
+| `STELLAR` | Stellar mainnet | (none) |
+| `ICON` | ICON mainnet | (none) |
+| `INJECTIVE` | Injective mainnet | (none) |
+| `NEAR` | NEAR mainnet | (none) |
+| `STACKS` | Stacks mainnet | (none) |
 
-EVM is the only family with multiple networks under one connection — wagmi maintains a single connection that spans every configured EVM network.
+EVM is the only family with multiple networks under one connection — wagmi maintains a single connection that spans every configured EVM network. See [`../architecture.md`](../architecture.md) § "EVM is one connection".
 
 ---
 
@@ -49,30 +49,14 @@ The single source of truth for the per-chain shape is `ChainMeta` in `src/types/
 ```ts
 import { ChainKeys } from '@sodax/types';
 
-ChainKeys.SONIC_MAINNET
-ChainKeys.ETHEREUM_MAINNET
-ChainKeys.ARBITRUM_MAINNET
-ChainKeys.BASE_MAINNET
-ChainKeys.BSC_MAINNET
-ChainKeys.OPTIMISM_MAINNET
-ChainKeys.POLYGON_MAINNET
-ChainKeys.AVALANCHE_MAINNET
-ChainKeys.HYPER_EVM_MAINNET
-ChainKeys.LIGHTLINK_MAINNET
-ChainKeys.REDBELLY_MAINNET
-ChainKeys.KAIA_MAINNET
-
-ChainKeys.SOLANA_MAINNET
-ChainKeys.SUI_MAINNET
-ChainKeys.BITCOIN_MAINNET
-ChainKeys.STELLAR_MAINNET
-ChainKeys.ICON_MAINNET
-ChainKeys.INJECTIVE_MAINNET
-ChainKeys.NEAR_MAINNET
-ChainKeys.STACKS_MAINNET
+ChainKeys.SONIC_MAINNET;       // EVM
+ChainKeys.ETHEREUM_MAINNET;    // EVM
+ChainKeys.SOLANA_MAINNET;      // SOLANA
+ChainKeys.BITCOIN_MAINNET;     // BITCOIN
+// …etc
 ```
 
-The ChainKey enum is the single source of truth for chain identifiers — rely on it instead of hardcoded strings. Inspect `@sodax/types` for the current full list.
+Naming pattern: `<NETWORK>_MAINNET`. EVM has 12 entries (Sonic, Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia); the other 8 families each have one. Inspect `@sodax/types` for the authoritative list.
 
 ---
 
@@ -91,26 +75,4 @@ const walletConfig: SodaxWalletConfig = {
 };
 ```
 
----
-
-## EVM = single connection across all networks
-
-A connect to Hana / MetaMask / etc. on `ChainKeys.BSC_MAINNET` also gives you the same connection on `ChainKeys.ETHEREUM_MAINNET`, `ARBITRUM_MAINNET`, etc. — wagmi treats it as one session.
-
-- `useChainGroups` returns **one row** for EVM (collapsed), not one per network.
-- `useWalletProvider({ xChainId: ChainKeys.BSC_MAINNET })` and `useWalletProvider({ xChainId: ChainKeys.ARBITRUM_MAINNET })` return **the same** `EvmWalletProvider` instance.
-- To change the **active** network, use `useEvmSwitchChain` — see [`bridge-to-sdk.md`](../recipes/bridge-to-sdk.md).
-
----
-
-## When a chain isn't enabled
-
-Hooks return safe defaults when called for a chain not in `walletConfig`:
-
-| Hook | Returned for disabled chain |
-|---|---|
-| `useXConnectors` | `[]` + one-time `console.warn` |
-| `useXAccount` | `{ address: undefined, xChainType }` |
-| `useXConnection` | `undefined` |
-| `useWalletProvider` | `undefined` + one-time `console.warn` |
-| `useXService` | `undefined` |
+For per-hook fallback behavior when a slot is omitted, see [`hooks.md`](./hooks.md) § "Behavior when the chain slot is not in walletConfig".
