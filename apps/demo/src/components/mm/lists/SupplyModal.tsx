@@ -38,7 +38,7 @@ interface SupplyModalProps {
     token: XToken;
     sourceChainId: SpokeChainKey;
     destinationChainId: SpokeChainKey;
-    txHash?: `0x${string}`;
+    txHash?: string;
   }) => void;
 }
 

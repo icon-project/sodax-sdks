@@ -33,7 +33,6 @@ export interface ChainUI {
   id: string;
   name: string;
   icon: string;
-  explorerTxUrl?: string;
 }
 
 export const EVM_CHAIN_ICONS = [
@@ -56,52 +55,20 @@ export const EVM_CHAIN_ICONS = [
  * Maps SPOKE_CHAIN_IDS to human-readable names and icon paths
  */
 export const availableChains: ChainUI[] = [
-  {
-    id: ChainKeys.SONIC_MAINNET,
-    name: 'Sonic',
-    icon: '/chain/sonic.png',
-    explorerTxUrl: 'https://sonicscan.org/tx/',
-  },
+  { id: ChainKeys.SONIC_MAINNET, name: 'Sonic', icon: '/chain/sonic.png' },
   { id: ChainKeys.ETHEREUM_MAINNET, name: 'Ethereum', icon: '/chain/ethereum.png' },
   { id: ChainKeys.SOLANA_MAINNET, name: 'Solana', icon: '/chain/solana.png' },
   { id: ChainKeys.BASE_MAINNET, name: 'Base', icon: '/chain/0x2105.base.png' },
-  {
-    id: ChainKeys.ARBITRUM_MAINNET,
-    name: 'Arbitrum',
-    icon: '/chain/0xa4b1.arbitrum.png',
-  },
+  { id: ChainKeys.ARBITRUM_MAINNET, name: 'Arbitrum', icon: '/chain/0xa4b1.arbitrum.png' },
   { id: ChainKeys.SUI_MAINNET, name: 'Sui', icon: '/chain/sui.png' },
   { id: ChainKeys.BSC_MAINNET, name: 'BNB Chain', icon: '/chain/0x38.bsc.png' },
-  {
-    id: ChainKeys.POLYGON_MAINNET,
-    name: 'Polygon',
-    icon: '/chain/0x89.polygon.png',
-  },
-  {
-    id: ChainKeys.AVALANCHE_MAINNET,
-    name: 'Avalanche',
-    icon: '/chain/0xa86a.avax.png',
-    explorerTxUrl: 'https://snowtrace.io/tx/',
-  },
-  {
-    id: ChainKeys.OPTIMISM_MAINNET,
-    name: 'Optimism',
-    icon: '/chain/0xa.optimism.png',
-  },
+  { id: ChainKeys.POLYGON_MAINNET, name: 'Polygon', icon: '/chain/0x89.polygon.png' },
+  { id: ChainKeys.AVALANCHE_MAINNET, name: 'Avalanche', icon: '/chain/0xa86a.avax.png' },
+  { id: ChainKeys.OPTIMISM_MAINNET, name: 'Optimism', icon: '/chain/0xa.optimism.png' },
   { id: ChainKeys.STELLAR_MAINNET, name: 'Stellar', icon: '/chain/stellar.png' },
   { id: ChainKeys.ICON_MAINNET, name: 'ICON', icon: '/chain/0x1.icon.png' },
-  {
-    id: ChainKeys.LIGHTLINK_MAINNET,
-    name: 'LightLink',
-    icon: '/chain/lightlink.png',
-    explorerTxUrl: 'https://phoenix.lightlink.io/tx/',
-  },
-  {
-    id: ChainKeys.HYPEREVM_MAINNET,
-    name: 'Hyper',
-    icon: '/chain/hyper.png',
-    explorerTxUrl: 'https://explorer.hyperchain.io/tx/',
-  },
+  { id: ChainKeys.LIGHTLINK_MAINNET, name: 'LightLink', icon: '/chain/lightlink.png' },
+  { id: ChainKeys.HYPEREVM_MAINNET, name: 'Hyper', icon: '/chain/hyper.png' },
   { id: ChainKeys.KAIA_MAINNET, name: 'Kaia', icon: '/chain/0x2019.kaia.png' },
   { id: ChainKeys.REDBELLY_MAINNET, name: 'Redbelly', icon: '/chain/redbelly.png' },
 ];
