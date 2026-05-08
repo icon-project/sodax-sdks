@@ -202,7 +202,8 @@ export function getReadableTxError(error: unknown): string {
     return 'Something went wrong. Please try again.';
   }
 
-  const message = (error as Record<string, string>)?.shortMessage || (error as Record<string, string>)?.message || '';
+  const e = error as Record<string, string>;
+  const message = e?.shortMessage || e?.details || e?.message || '';
 
   if (message.includes('gas price below minimum')) {
     return 'Network gas fee is too low. Please try again in a moment.';
@@ -212,7 +213,7 @@ export function getReadableTxError(error: unknown): string {
     return 'Transaction was rejected in your wallet.';
   }
 
-  return 'Transaction failed. Please try again.';
+  return message || 'Transaction failed. Please try again.';
 }
 
 /**
