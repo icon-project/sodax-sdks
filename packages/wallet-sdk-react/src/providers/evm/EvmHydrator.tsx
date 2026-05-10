@@ -53,15 +53,17 @@ export const EvmHydrator = () => {
     reconnect();
   }, [hydrated, connectors, status, reconnect]);
 
-  // wasConnectedRef: ignore the initial 'disconnected' tick before wagmi reconnects.
-  // evmWalletClient gate: status flips sync but walletClient is async — wait so
-  // xConnection and walletProvider stay in sync.
-  // userDisconnectedEvm gate: ignore ghost reconnects when a wallet refuses
-  // `wallet_revokePermissions`.
+  // wasConnectedRef: skip the initial 'disconnected' tick before wagmi reconnects.
+  // userDisconnectedEvm: skip ghost reconnects when a wallet ignores `wallet_revokePermissions`.
+  // Don't gate on walletClient — wagmi still reports 'connected' when the active chain
+  // is outside wagmiConfig.chains (e.g. Injective EVM 1776), so useWalletClient() never
+  // resolves and the connection would be hidden. xConnections.EVM tracks intent;
+  // walletProviders.EVM stays undefined until walletClient resolves, and callers
+  // prompt switchChain before signing.
   const wasConnectedRef = useRef(false);
   useEffect(() => {
     if (status === 'connecting' || status === 'reconnecting') return;
-    if (status === 'connected' && address && connector && evmWalletClient) {
+    if (status === 'connected' && address && connector) {
       if (userDisconnectedEvm) return;
       wasConnectedRef.current = true;
       setXConnection('EVM', {
@@ -72,7 +74,7 @@ export const EvmHydrator = () => {
       wasConnectedRef.current = false;
       unsetXConnection('EVM');
     }
-  }, [address, status, connector, evmWalletClient, userDisconnectedEvm, setXConnection, unsetXConnection]);
+  }, [address, status, connector, userDisconnectedEvm, setXConnection, unsetXConnection]);
 
   const walletProvider = useMemo(() => {
     if (!evmPublicClient || !evmWalletClient) return undefined;
