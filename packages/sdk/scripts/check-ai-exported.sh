@@ -46,10 +46,17 @@ if [ -z "$USED_LINES" ]; then
   exit 0
 fi
 
+# Require the char before `sodax` to be either start-of-line or not part of
+# an identifier- or hostname-like token. The `[^A-Za-z0-9_.-]` exclusion list
+# keeps three classes of false-positives out:
+#   - filename slugs:  `initialize-sodax.md`  (hyphen)
+#   - URL hostnames:   `api.sodax.com`         (dot)
+#   - chained idents:  `foo_sodax.bar`         (underscore / alphanumerics)
+# A future Sodax member named `md` / `com` / etc. is still checked normally.
 USED_UNIQUE=$(
   echo "$USED_LINES" \
-    | grep -oE '\bsodax\.[a-zA-Z_][a-zA-Z0-9_]*' \
-    | sed -E 's/^sodax\.//' \
+    | grep -oE '(^|[^A-Za-z0-9_.-])sodax\.[a-zA-Z_][a-zA-Z0-9_]*' \
+    | sed -E 's/.*sodax\.//' \
     | sort -u
 )
 

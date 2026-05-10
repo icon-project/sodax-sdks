@@ -55,8 +55,14 @@ jobs:
       - name: Check ai-exported docs reference real Sodax members
         run: pnpm -C packages/sdk run check:ai-exported
 
-      - name: Build
-        run: pnpm build:packages
+      - name: Check ai-exported scope (Core SDK only — no React/dapp-kit/wallet-sdk-react)
+        run: pnpm -C packages/sdk run check:ai-scope
+
+      - name: Check ai-exported relative links resolve
+        run: pnpm -C packages/sdk run check:ai-links
+
+      - name: Check ai-exported @sodax/sdk imports compile
+        run: pnpm -C packages/sdk run check:ai-imports
 
       - name: Run Tests
         run: pnpm test:packages

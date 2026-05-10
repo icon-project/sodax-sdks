@@ -25,18 +25,18 @@ To increase / decrease / claim:
 
 ```ts
 // AssetService
-sodax.dex.assetService.deposit<K>(action: AssetDepositAction<K, false>): Promise<Result<[SpokeTxHash, HubTxHash], SodaxError>>;
-sodax.dex.assetService.withdraw<K>(action: AssetWithdrawAction<K, false>): Promise<Result<[SpokeTxHash, HubTxHash], SodaxError>>;
+sodax.dex.assetService.deposit<K>(action: AssetDepositAction<K, false>): Promise<Result<TxHashPair, SodaxError>>;
+sodax.dex.assetService.withdraw<K>(action: AssetWithdrawAction<K, false>): Promise<Result<TxHashPair, SodaxError>>;
 sodax.dex.assetService.approve<K, Raw>(args): Promise<Result<TxReturnType<K, Raw>, SodaxError>>;
 sodax.dex.assetService.isAllowanceValid<K, Raw>(args): Promise<Result<boolean, SodaxError>>;
 sodax.dex.assetService.getDeposit(poolToken, walletAddress, chainKey): Promise<Result<bigint, SodaxError>>;
 sodax.dex.assetService.executeDeposit<K, Raw>(args): /* spoke-only deposit; no relay */;
 
 // ClService (concentrated liquidity)
-sodax.dex.clService.supplyLiquidity<K>(action): Promise<Result<[SpokeTxHash, HubTxHash], SodaxError>>;
-sodax.dex.clService.increaseLiquidity<K>(action): Promise<Result<[SpokeTxHash, HubTxHash], SodaxError>>;
-sodax.dex.clService.decreaseLiquidity<K>(action): Promise<Result<[SpokeTxHash, HubTxHash], SodaxError>>;
-sodax.dex.clService.claimRewards<K>(action): Promise<Result<[SpokeTxHash, HubTxHash], SodaxError>>;
+sodax.dex.clService.supplyLiquidity<K>(action): Promise<Result<TxHashPair, SodaxError>>;
+sodax.dex.clService.increaseLiquidity<K>(action): Promise<Result<TxHashPair, SodaxError>>;
+sodax.dex.clService.decreaseLiquidity<K>(action): Promise<Result<TxHashPair, SodaxError>>;
+sodax.dex.clService.claimRewards<K>(action): Promise<Result<TxHashPair, SodaxError>>;
 
 sodax.dex.clService.getPools(): PoolKey[];                 // synchronous in v2
 sodax.dex.clService.getPoolData(poolKey, publicClient): Promise<Result<PoolData, SodaxError>>;
@@ -106,7 +106,7 @@ const result = await sodax.dex.assetService.deposit({
 });
 
 if (!result.ok) return;
-const [spokeHash, hubHash] = result.value;
+const { srcChainTxHash, dstChainTxHash } = result.value;
 ```
 
 ### Mint a new concentrated-liquidity position
@@ -154,7 +154,7 @@ The underlying read does not consult the wallet provider; pass `raw: true` to sa
 
 | Method | Success type |
 |---|---|
-| `deposit`, `withdraw`, `supplyLiquidity`, `increaseLiquidity`, `decreaseLiquidity`, `claimRewards` | `[SpokeTxHash, HubTxHash]` |
+| `deposit`, `withdraw`, `supplyLiquidity`, `increaseLiquidity`, `decreaseLiquidity`, `claimRewards` | `TxHashPair` |
 | `approve` | `TxReturnType<K, Raw>` |
 | `isAllowanceValid` | `boolean` |
 | `getDeposit` | `bigint` (user's balance in the pool's hub wallet) |

@@ -11,7 +11,7 @@ Pair: [`../../integration/features/dex.md`](../../integration/features/dex.md).
 3. **`getPools()` is synchronous in v2.** Was `Promise<PoolKey[]>`; now plain `PoolKey[]`. `.then(...)` is a runtime error.
 4. **`getAssetsForPool` is chain-key-first.** Was `getAssetsForPool(spokeProvider, poolKey)`; now `getAssetsForPool(srcChainKey, poolKey)`.
 5. **`getDeposit` is `Result`-wrapped.** Was `(token, spokeProvider) => Promise<bigint>`; now `(poolToken, walletAddress, chainKey) => Promise<Result<bigint>>`.
-6. **`useDexAllowance` and equivalent passes `raw: true`.** Read-only; no walletProvider needed.
+6. **Read-only allowance checks pass `raw: true`.** `assetService.isAllowanceValid` requires the `WalletProviderSlot<K, Raw>` discriminator; the read doesn't actually consult the wallet provider, so `raw: true` is the contract for read-only access.
 7. **`getPoolData` and `getPositionInfo` use the hub publicClient.** Consumers can pass `sodax.hubProvider.publicClient` when needed.
 8. **Errors → `SodaxError` + `Result<T>`.** v1's `ConcentratedLiquidityError`, `AssetServiceError` and their type guards are gone.
 
@@ -33,7 +33,6 @@ Pair: [`../../integration/features/dex.md`](../../integration/features/dex.md).
 
 ### Deleted symbols
 
-- `useSpokeProvider` (React) — gone.
 - `ConcentratedLiquidityError<ConcentratedLiquidityErrorCode>` and `AssetServiceError<AssetServiceErrorCode>` plus their type guards — replaced by `SodaxError<C>` + `feature: 'dex'`.
 - v1 `getDeposit(token, spokeProvider)` overload — replaced by the chain-key-first signature.
 
@@ -62,7 +61,7 @@ Pair: [`../../integration/features/dex.md`](../../integration/features/dex.md).
 +   walletProvider,
 + });
 + if (!result.ok) return;
-+ const [spokeHash, hubHash] = result.value;
++ const { srcChainTxHash, dstChainTxHash } = result.value;
 ```
 
 ### `supplyLiquidity` (mint new) and `increaseLiquidity` (existing)
@@ -71,12 +70,13 @@ The pure-helper `createSupplyLiquidityParamsProps` returns the helper-relevant s
 
 ```diff
 - const params = createSupplyLiquidityParamsProps({ /* … */ });
-- await supplyMutation.mutateAsync({ params, spokeProvider });
+- await sodax.dex.clService.supplyLiquidity({ params, spokeProvider });
 + const helperOutput = createSupplyLiquidityParamsProps({ /* … */ });
-+ const params = { ...helperOutput, srcChainKey, srcAddress: xAccount.address as `0x${string}` };
++ const srcAddress = (await walletProvider.getWalletAddress()) as `0x${string}`;
++ const params = { ...helperOutput, srcChainKey, srcAddress };
 + const result = await sodax.dex.clService.supplyLiquidity({ params, raw: false, walletProvider });
 + if (!result.ok) return;
-+ const [, hubHash] = result.value;
++ const { dstChainTxHash } = result.value;
 ```
 
 ### `getAssetsForPool`
@@ -115,13 +115,15 @@ The `await` form still compiles (TS allows `await` on non-promises) but `.then(.
 
 ## Pitfalls
 
+Cross-cutting traps (Result destructuring, error-model migration, srcChain/dstChain renames, etc.) live in [`../ai-rules.md`](../ai-rules.md). The list below is feature-specific — typecheck fingerprints, return-shape diffs, and gotchas unique to this feature.
+
 1. **Forgetting `raw: true` on `isAllowanceValid`.** TypeScript error: `Property 'walletProvider' is missing`.
 2. **Passing `spokeProvider` to `getAssetsForPool`.** Type error — pass `srcChainKey` instead.
 3. **`getPools().then(...)` runtime error** — sync now.
 4. **Reading `spokeProvider.chainConfig.chain.name` for display.** Gone. Use `baseChainInfo[chainKey]?.name` from `@sodax/sdk`.
 5. **Reading `spokeProvider.walletProvider.getWalletAddress()`.** Gone. The wallet provider you passed is the same one you read from — call its `.getWalletAddress()` directly.
-6. **`xAccount.address` is typed `string`, not `Address`.** SDK params want `GetAddressType<K>` which for EVM resolves to `` `0x${string}` ``. Cast at the boundary: `xAccount.address as \`0x${string}\``.
-7. **`useSupplyLiquidity` mint vs increase routing.** If `params.tokenId && params.isValidPosition` are both truthy, it routes to `increaseLiquidity`; else mints a new position via `supplyLiquidity`. Don't accidentally drop these fields when migrating — they'll silently route to the wrong path.
+6. **`walletProvider.getWalletAddress()` returns `Promise<string>`, not the EVM-branded `` `0x${string}` ``.** SDK params want `GetAddressType<K>`, which for EVM resolves to `` `0x${string}` ``. Cast at the boundary: `(await walletProvider.getWalletAddress()) as \`0x${string}\``.
+7. **Mint-new vs increase-existing are two distinct SDK methods.** v2 has `clService.supplyLiquidity` (mint) and `clService.increaseLiquidity` (existing tokenId). Pick the right one at the call site based on whether you have an existing position id.
 8. **`assetService.deposit` and `withdraw` always relay to hub.** If you need spoke-only execution (custom orchestration), use `assetService.executeDeposit` directly — but it's not surfaced through the higher-level wrappers.
 
 ## Verification

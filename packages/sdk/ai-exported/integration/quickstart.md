@@ -1,13 +1,18 @@
 # Quickstart — `@sodax/sdk` v2
 
-Get a `Sodax` instance running in your project.
+Get a `Sodax` instance running in your project. This guide is **`@sodax/sdk`-only**: no other SODAX packages are imported. Where the SDK needs an `I*WalletProvider` instance, examples use a TypeScript `declare` placeholder so the surface stays Core-SDK-clean.
 
 ## Section index
 
 1. [Installation](#1-installation)
-2. [Node-server setup (private key)](#2-node-server-setup-private-key)
-3. [Next.js / browser dApp setup](#3-nextjs--browser-dapp-setup)
-4. [First-time troubleshooting](#4-first-time-troubleshooting)
+2. [TypeScript](#2-typescript)
+3. [The wallet-provider contract](#3-the-wallet-provider-contract)
+4. [Where to get wallet-provider implementations](#4-where-to-get-wallet-provider-implementations)
+5. [Construct + initialize](#5-construct--initialize)
+6. [Reads without a wallet](#6-reads-without-a-wallet)
+7. [Build raw transactions (no wallet)](#7-build-raw-transactions-no-wallet)
+8. [Calling methods that sign](#8-calling-methods-that-sign)
+9. [First-time troubleshooting](#9-first-time-troubleshooting)
 
 ---
 
@@ -23,163 +28,138 @@ yarn add @sodax/sdk
 
 **Don't add `@sodax/types` separately.** `@sodax/sdk` re-exports the entire types surface from its barrel. Adding `@sodax/types` as a direct dependency invites version skew on the next minor bump.
 
-For browser / React apps, you'll also want a wallet layer:
-
-```bash
-pnpm add @sodax/wallet-sdk-core @sodax/wallet-sdk-react
-```
-
-For Node bots / scripts, `@sodax/wallet-sdk-core` alone is enough.
-
-### TypeScript
+## 2. TypeScript
 
 Targets Node 18+ and modern browsers. The package ships dual ESM (`.mjs`) + CJS (`.cjs`) + DTS, with `"type": "module"`. No additional TypeScript config needed — the package's `exports` field handles resolution for both `tsc` and `bundler` `moduleResolution` modes.
 
 If you're on `moduleResolution: 'node'` (legacy), upgrade to `'bundler'` or `'node16'` / `'nodenext'` — `'node'` doesn't read the `exports` field and will fall back to `main` / `module` (which still work, but you may see resolution warnings).
 
----
+## 3. The wallet-provider contract
 
-## 2. Node-server setup (private key)
+Methods that sign and broadcast take a `walletProvider` parameter typed as the chain-specific `I*WalletProvider` interface (`IEvmWalletProvider`, `ISolanaWalletProvider`, `ISuiWalletProvider`, `IStellarWalletProvider`, `IIconWalletProvider`, `IInjectiveWalletProvider`, `IStacksWalletProvider`, `INearWalletProvider`, `IBitcoinWalletProvider`). All nine interfaces are exported from `@sodax/sdk`.
 
-Backend partner pattern. No browser extension; the wallet is a private key in environment.
+`@sodax/sdk` does **not** ship implementations of these interfaces. Read methods (`sodax.config.*`, `sodax.bridge.getBridgeableAmount`, `sodax.staking.getStakingConfig`, etc.) and `raw: true` flows do not require a `walletProvider`.
+
+## 4. Where to get wallet-provider implementations
+
+Two options:
+
+1. **Implement the interface yourself.** Each `I*WalletProvider` is a small set of methods (`getWalletAddress`, plus chain-specific signing / broadcasting). Wrap whatever wallet abstraction your app already owns (`viem`'s `WalletClient` for EVM, `@solana/web3.js` keypairs for Solana, `@stellar/stellar-sdk` for Stellar, etc.) in an object literal that satisfies the interface.
+2. **Use `@sodax/wallet-sdk-core`** — a separate SODAX package (not part of `@sodax/sdk`, not a transitive dependency — install it separately) that ships ready-made `I*WalletProvider` implementations for all 9 chain families with both private-key (Node / scripts) and browser-extension (dApp) modes. Refer to that package's own documentation for usage.
+
+Examples in this guide use TypeScript `declare const` placeholders so the surface stays Core-SDK-only — substitute your own object regardless of which option you chose.
+
+## 5. Construct + initialize
 
 ```ts
-// src/index.ts
+import { Sodax } from '@sodax/sdk';
+
+const sodax = new Sodax();
+await sodax.config.initialize();   // load fresh config from backend; falls back to packaged defaults
+
+// All feature services are wired and ready:
+//   sodax.swaps, sodax.moneyMarket, sodax.bridge, sodax.staking,
+//   sodax.dex, sodax.migration, sodax.partners, sodax.recovery,
+//   sodax.config, sodax.backendApi, sodax.hubProvider, sodax.spoke
+```
+
+`new Sodax()` accepts an optional `DeepPartial<SodaxConfig>` for custom RPC endpoints, solver / backend URLs, etc. — see [`recipes/`](recipes/) § "Initialize Sodax". `initialize()` is idempotent.
+
+## 6. Reads without a wallet
+
+Many SDK calls are pure reads — no wallet provider, no signing. They're the cheapest path to verifying an integration:
+
+```ts
 import { Sodax, ChainKeys } from '@sodax/sdk';
-import { EvmWalletProvider } from '@sodax/wallet-sdk-core';
 
-async function main() {
-  // 1. Construct the wallet provider for your source chain.
-  const evmWallet = new EvmWalletProvider({
-    privateKey: process.env.PRIVATE_KEY as `0x${string}`,
-    rpcUrl: process.env.ARBITRUM_RPC_URL!,
-  });
+const sodax = new Sodax();
+await sodax.config.initialize();
 
-  // 2. Construct Sodax. Pass RPC URLs you want to override; defaults work otherwise.
-  const sodax = new Sodax({
-    rpcConfig: {
-      [ChainKeys.ARBITRUM_MAINNET]: process.env.ARBITRUM_RPC_URL!,
-      [ChainKeys.SONIC_MAINNET]: process.env.SONIC_RPC_URL!,
-    },
-  });
+// Config / token lookups
+const usdc = sodax.config.findSupportedTokenBySymbol(ChainKeys.ARBITRUM_MAINNET, 'USDC');
+const isValid = sodax.config.isValidSpokeChainKey(ChainKeys.ARBITRUM_MAINNET);
 
-  // 3. Initialize config (loads from backend; falls back to packaged defaults).
-  await sodax.config.initialize();
+// Money market
+const supplyTokens = sodax.moneyMarket.getSupportedTokensByChainId(ChainKeys.ARBITRUM_MAINNET);
 
-  // 4. Use it.
-  const result = await sodax.swaps.createIntent({
-    params: {
-      srcChainKey: ChainKeys.ARBITRUM_MAINNET,
-      dstChainKey: ChainKeys.STELLAR_MAINNET,
-      srcAddress: await evmWallet.getWalletAddress(),
-      /* … rest of params */
-    },
-    raw: false,
-    walletProvider: evmWallet,
-  });
+// Bridge
+const limit = await sodax.bridge.getBridgeableAmount(USDC_ARBITRUM, USDC_STELLAR);
+//   limit.value: BridgeLimit = { amount, decimals, type }
 
-  if (!result.ok) {
-    console.error(result.error.message, result.error.toJSON());
-    process.exit(1);
-  }
+// Staking (hub-only reads — no chain context needed)
+const stakingConfig = await sodax.staking.getStakingConfig();
 
-  console.log('intent created:', result.value.tx);
+// DEX
+const pools = sodax.dex.clService.getPools();   // synchronous in v2
+```
+
+## 7. Build raw transactions (no wallet)
+
+For sign-elsewhere flows (gnosis safe, hardware wallet, custom multi-sig), use `raw: true`. The SDK builds the unsigned payload; your application signs and broadcasts:
+
+```ts
+import { Sodax, ChainKeys } from '@sodax/sdk';
+
+const sodax = new Sodax();
+await sodax.config.initialize();
+
+const result = await sodax.swaps.createIntent({
+  params: {
+    srcChainKey: ChainKeys.ARBITRUM_MAINNET,
+    dstChainKey: ChainKeys.STELLAR_MAINNET,
+    /* … rest of intent params */
+  },
+  raw: true,
+  // walletProvider is FORBIDDEN when raw: true — TypeScript rejects it.
+});
+
+if (!result.ok) {
+  console.error(result.error.toJSON());
+  return;
+}
+const { tx, intent, relayData } = result.value;
+// tx: chain-specific raw-tx payload (EvmRawTransaction, SolanaRawTransaction, …)
+// Sign and broadcast `tx` with whatever signer your application owns.
+```
+
+## 8. Calling methods that sign
+
+For signed flows, supply an `I*WalletProvider`. The example uses a TypeScript `declare` placeholder — at runtime, substitute an object your application owns (one you implemented to satisfy the interface, or one constructed via `@sodax/wallet-sdk-core`).
+
+```ts
+import { Sodax, ChainKeys, type IEvmWalletProvider } from '@sodax/sdk';
+
+declare const evmWallet: IEvmWalletProvider;
+//   ↑ At runtime, replace with your application's wallet-provider object.
+//     Any object that satisfies IEvmWalletProvider works.
+
+const sodax = new Sodax();
+await sodax.config.initialize();
+
+const result = await sodax.swaps.createIntent({
+  params: {
+    srcChainKey: ChainKeys.ARBITRUM_MAINNET,
+    dstChainKey: ChainKeys.STELLAR_MAINNET,
+    srcAddress: (await evmWallet.getWalletAddress()) as `0x${string}`,
+    /* … rest of intent params */
+  },
+  raw: false,
+  walletProvider: evmWallet,
+});
+
+if (!result.ok) {
+  console.error(result.error.toJSON());
+  return;
 }
 
-main();
+console.log('intent created:', result.value.tx);
 ```
 
-Run with:
+The chain key on the payload (`ChainKeys.ARBITRUM_MAINNET`) is what TypeScript narrows the wallet-provider parameter against — passing a Solana wallet would be a compile-time error. See [`architecture.md`](architecture.md) § 6 for the `WalletProviderSlot<K, Raw>` mechanism.
 
-```bash
-PRIVATE_KEY=0x… ARBITRUM_RPC_URL=https://… SONIC_RPC_URL=https://… node --import tsx src/index.ts
-```
+## 9. First-time troubleshooting
 
-### Multi-chain bots
-
-Construct one wallet provider per chain family at startup; pick the right one at call time. See [`recipes.md`](recipes.md) § "Backend-server initialization".
-
----
-
-## 3. Next.js / browser dApp setup
-
-For React apps, use `@sodax/wallet-sdk-react`'s `SodaxWalletProvider` and `useWalletProvider` hook. The integration boundary between React and the SDK is one hook call.
-
-### Install
-
-```bash
-pnpm add @sodax/sdk @sodax/wallet-sdk-react @tanstack/react-query
-```
-
-### Provider stack (`app/providers.tsx`)
-
-```tsx
-'use client';
-
-import { SodaxProvider } from '@sodax/dapp-kit';
-import { SodaxWalletProvider } from '@sodax/wallet-sdk-react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useState } from 'react';
-
-export function Providers({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(() => new QueryClient());
-
-  return (
-    <SodaxProvider config={{ /* DeepPartial<SodaxConfig> */ }}>
-      <QueryClientProvider client={queryClient}>
-        <SodaxWalletProvider>
-          {children}
-        </SodaxWalletProvider>
-      </QueryClientProvider>
-    </SodaxProvider>
-  );
-}
-```
-
-### Use in a component
-
-```tsx
-'use client';
-
-import { useWalletProvider } from '@sodax/wallet-sdk-react';
-import { useSodaxContext } from '@sodax/dapp-kit';
-import { ChainKeys } from '@sodax/sdk';
-
-export function SwapButton() {
-  const { sodax } = useSodaxContext();
-  const walletProvider = useWalletProvider({ xChainId: ChainKeys.ARBITRUM_MAINNET });
-
-  async function handleSwap() {
-    if (!walletProvider) return;
-    const result = await sodax.swaps.createIntent({
-      params: {
-        srcChainKey: ChainKeys.ARBITRUM_MAINNET,
-        srcAddress: await walletProvider.getWalletAddress() as `0x${string}`,
-        /* … */
-      },
-      raw: false,
-      walletProvider,
-    });
-    if (!result.ok) console.error(result.error);
-  }
-
-  return <button onClick={handleSwap}>Swap</button>;
-}
-```
-
-> The `xChainId` parameter name on `useWalletProvider` is **not** a v2 typo — it's preserved from v1 for backwards compatibility. Don't grep-replace it to `chainKey`.
-
-### App-router specifics
-
-- `SodaxProvider` and `SodaxWalletProvider` are client components. Keep them in a `'use client'` boundary.
-- `useWalletProvider`, `useSodaxContext`, and the dapp-kit hooks (`useSwap`, `useSupply`, …) are all client-only.
-- For server-side rendering, you can render placeholder UI and hydrate the wallet state on the client.
-
----
-
-## 4. First-time troubleshooting
-
-The 10 errors most likely on a fresh install.
+The errors most likely to hit on a fresh install or first port.
 
 ### "Cannot find module '@sodax/sdk' or its corresponding type declarations"
 
@@ -192,13 +172,11 @@ The 10 errors most likely on a fresh install.
 
 ### "Object literal may only specify known properties, and 'walletProvider' does not exist in type ..."
 
-- Forgot `raw: false` (or `raw: true`) discriminator on the call. Add it.
-- See [`architecture.md`](architecture.md) § 6.
+- Forgot `raw: false` (or `raw: true`) discriminator on the call. Add it. See [`architecture.md`](architecture.md) § 6.
 
 ### "Property 'tx' does not exist on type 'SwapResponse'" or similar
 
-- You're treating the return as the success value directly instead of unpacking `result.value`. v2 returns `Promise<Result<T>>` — branch on `result.ok` first.
-- See [`architecture.md`](architecture.md) § 7.
+- You're treating the return as the success value directly instead of unpacking `result.value`. v2 returns `Promise<Result<T>>` — branch on `result.ok` first. See [`architecture.md`](architecture.md) § 7.
 
 ### `sodax.config.findSupportedTokenBySymbol` returns `undefined`
 
@@ -214,8 +192,7 @@ The 10 errors most likely on a fresh install.
 
 ### "Argument of type 'string' is not assignable to parameter of type 'GetAddressType<K>'"
 
-- For EVM chains, `GetAddressType<K>` is `` `0x${string}` ``. Cast at the boundary: `address as \`0x${string}\``.
-- See [`recipes.md`](recipes.md) § "Chain-key narrowing".
+- For EVM chains, `GetAddressType<K>` is `` `0x${string}` ``. Cast at the boundary: `(await walletProvider.getWalletAddress()) as \`0x${string}\``. See [`recipes/`](recipes/) § "Chain-key narrowing".
 
 ### `sodax.config.initialize()` hangs / errors
 
@@ -230,7 +207,7 @@ The 10 errors most likely on a fresh install.
 ## Cross-references
 
 - v2 architecture: [`architecture.md`](architecture.md).
-- Recipes for common patterns: [`recipes.md`](recipes.md).
+- Recipes for common patterns: [`recipes/`](recipes/).
 - Per-feature usage: [`features/`](features/).
-- Lookup tables (chain keys, error codes, public API): [`reference.md`](reference.md).
+- Lookup tables (chain keys, error codes, public API): [`reference/`](reference/).
 - v1 → v2 porting: [`../migration/README.md`](../migration/README.md).

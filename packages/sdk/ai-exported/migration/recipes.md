@@ -187,7 +187,7 @@ function getMmErrorText(error: unknown): string {
 }
 ```
 
-See [`breaking-changes/result-and-errors.md`](breaking-changes/result-and-errors.md) § 4 for the full v1 → v2 code crosswalk and § 7 for the discrimination patterns this snippet uses.
+See [`reference/error-code-crosswalk.md`](reference/error-code-crosswalk.md) for the full v1 → v2 code crosswalk and [`breaking-changes/result-and-errors.md`](breaking-changes/result-and-errors.md) § 6 for the discrimination patterns this snippet uses.
 
 ---
 
@@ -285,4 +285,4 @@ Don't leave the `try/catch` in place expecting it to catch SDK-level failures �
 
 - The breaking changes that motivate these recipes: [`breaking-changes/type-system.md`](breaking-changes/type-system.md), [`breaking-changes/architecture.md`](breaking-changes/architecture.md), [`breaking-changes/result-and-errors.md`](breaking-changes/result-and-errors.md).
 - Per-feature playbooks (which assume these recipes are in your toolkit): [`features/`](features/).
-- v2 design context (the patterns you're migrating *to*): [`../integration/recipes.md`](../integration/recipes.md).
+- v2 design context (the patterns you're migrating *to*): [`../integration/recipes/`](../integration/recipes/).

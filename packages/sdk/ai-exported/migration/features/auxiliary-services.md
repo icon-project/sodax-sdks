@@ -78,13 +78,16 @@ The load-bearing v1 → v2 change here is **`Result`-wrapping every method**.
 
 | Method | v1 return | v2 return |
 |---|---|---|
-| `submitSwapTx` | `Promise<SubmitSwapTxResponse>` | `Promise<Result<SubmitSwapTxResponse, SodaxError>>` |
-| `getIntentByHash` | `Promise<IntentResponse>` | `Promise<Result<IntentResponse, SodaxError>>` |
-| `getChains` | `Promise<ChainConfig[]>` | `Promise<Result<ChainConfig[], SodaxError>>` |
-| `getSwapTokens` | `Promise<SwapTokenConfig>` | `Promise<Result<SwapTokenConfig, SodaxError>>` |
-| `getSwapTokensByChainId` | `Promise<XToken[]>` | `Promise<Result<XToken[], SodaxError>>` |
-| `getMoneyMarketTokens` | `Promise<MMTokenConfig>` | `Promise<Result<MMTokenConfig, SodaxError>>` |
-| `getMoneyMarketTokensByChainId` | `Promise<XToken[]>` | `Promise<Result<XToken[], SodaxError>>` |
+| `submitSwapTx` | `Promise<SubmitSwapTxResponse>` | `Promise<Result<SubmitSwapTxResponse>>` |
+| `getIntentByHash` | `Promise<IntentResponse>` | `Promise<Result<IntentResponse>>` |
+| `getIntentByTxHash` | (n/a in v1) | `Promise<Result<IntentResponse>>` (v2-new) |
+| `getOrderbook` (was `getSolverOrderbook`) | `Promise<OrderbookEntry[]>` | `Promise<Result<OrderbookEntry[]>>` |
+| `getUserIntents` (was `getUserSwapHistory`) | `Promise<IntentResponse[]>` | `Promise<Result<IntentResponse[]>>` |
+| `getChains` | `Promise<ChainConfig[]>` | `Promise<Result<GetChainsApiResponse>>` |
+| `getSwapTokens` | `Promise<SwapTokenConfig>` | `Promise<Result<GetSwapTokensApiResponse>>` |
+| `getSwapTokensByChainId` | `Promise<XToken[]>` | `Promise<Result<XToken[]>>` |
+| `getMoneyMarketTokens` | `Promise<MMTokenConfig>` | `Promise<Result<GetMoneyMarketTokensApiResponse>>` |
+| `getMoneyMarketTokensByChainId` | `Promise<XToken[]>` | `Promise<Result<XToken[]>>` |
 | `SubmitSwapTxRequest.srcChainId` | numeric chain id | renamed → `srcChainKey: SpokeChainKey` |
 | `SubmitSwapTxRequest.relayData` | `RelayExtraData` object | now `string` (use `relayData.payload`) |
 

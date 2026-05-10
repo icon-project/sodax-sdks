@@ -15,11 +15,11 @@ Access: `sodax.staking`. Service class: `StakingService`. Feature tag for errors
 ## Public methods
 
 ```ts
-sodax.staking.stake<K>(action: StakeAction<K, false>): Promise<Result<[SpokeTxHash, HubTxHash], SodaxError>>;
-sodax.staking.unstake<K>(action: UnstakeAction<K, false>): Promise<Result<[SpokeTxHash, HubTxHash], SodaxError>>;
-sodax.staking.instantUnstake<K>(action: InstantUnstakeAction<K, false>): Promise<Result<[SpokeTxHash, HubTxHash], SodaxError>>;
-sodax.staking.claim<K>(action: ClaimAction<K, false>): Promise<Result<[SpokeTxHash, HubTxHash], SodaxError>>;
-sodax.staking.cancelUnstake<K>(action: CancelUnstakeAction<K, false>): Promise<Result<[SpokeTxHash, HubTxHash], SodaxError>>;
+sodax.staking.stake<K>(action: StakeAction<K, false>): Promise<Result<TxHashPair, SodaxError>>;
+sodax.staking.unstake<K>(action: UnstakeAction<K, false>): Promise<Result<TxHashPair, SodaxError>>;
+sodax.staking.instantUnstake<K>(action: InstantUnstakeAction<K, false>): Promise<Result<TxHashPair, SodaxError>>;
+sodax.staking.claim<K>(action: ClaimAction<K, false>): Promise<Result<TxHashPair, SodaxError>>;
+sodax.staking.cancelUnstake<K>(action: CancelUnstakeAction<K, false>): Promise<Result<TxHashPair, SodaxError>>;
 
 sodax.staking.createStakeIntent<K, Raw>(...): Promise<Result<...>>;
 // + the 4 other createXxxIntent methods
@@ -29,14 +29,17 @@ sodax.staking.isAllowanceValid<K, Raw>(args): Promise<Result<boolean, SodaxError
 
 // Reads (hub-only — no chain context needed):
 sodax.staking.getStakingConfig(): Promise<Result<StakingConfig, SodaxError>>;
-sodax.staking.getStakeRatio(amount): Promise<Result<bigint, SodaxError>>;
+sodax.staking.getStakeRatio(amount): Promise<Result<[bigint, bigint], SodaxError>>;
+//   value: [xSodaAmount, previewDepositAmount]
 sodax.staking.getInstantUnstakeRatio(amount): Promise<Result<bigint, SodaxError>>;
 sodax.staking.getConvertedAssets(amount): Promise<Result<bigint, SodaxError>>;
 
 // Reads (cross-chain — derive hub wallet from src chain):
 sodax.staking.getStakingInfoFromSpoke(srcAddress, srcChainKey): Promise<Result<StakingInfo, SodaxError>>;
-sodax.staking.getUnstakingInfo(srcAddress, srcChainKey): Promise<Result<UserUnstakeInfo[], SodaxError>>;
-sodax.staking.getUnstakingInfoWithPenalty(srcAddress, srcChainKey): Promise<Result<UnstakeRequestWithPenalty[], SodaxError>>;
+sodax.staking.getUnstakingInfo(srcAddress, srcChainKey): Promise<Result<UnstakingInfo, SodaxError>>;
+//   value: { userUnstakeSodaRequests: UserUnstakeInfo[]; totalUnstaking: bigint }
+sodax.staking.getUnstakingInfoWithPenalty(srcAddress, srcChainKey): Promise<Result<UnstakingInfo & { requestsWithPenalty: UnstakeRequestWithPenalty[] }, SodaxError>>;
+//   each request adds penalty, penaltyPercentage, claimableAmount
 ```
 
 ## Action params shape
@@ -76,7 +79,7 @@ const result = await sodax.staking.stake({
 });
 
 if (!result.ok) return;
-const [spokeTxHash, hubTxHash] = result.value;
+const { srcChainTxHash, dstChainTxHash } = result.value;
 ```
 
 ### Unstake (with penalty curve)
@@ -129,19 +132,19 @@ const allowed = await sodax.staking.isAllowanceValid({
 
 | Method | Success type |
 |---|---|
-| `stake`, `unstake`, `instantUnstake`, `claim`, `cancelUnstake` | `[SpokeTxHash, HubTxHash]` |
+| `stake`, `unstake`, `instantUnstake`, `claim`, `cancelUnstake` | `TxHashPair` |
 | `create*Intent` | `CreateIntentResult<K, Raw>` |
 | `approve` | `TxReturnType<K, Raw>` |
 | `isAllowanceValid` | `boolean` |
 | `getStakingConfig` | `{ unstakingPeriod, maxPenalty, minPenalty, /* … */ }` |
-| `getStakeRatio` | `bigint` (xSoda per SODA, RAY-precision) |
+| `getStakeRatio` | `[xSodaAmount: bigint, previewDepositAmount: bigint]` (estimated xSoda shares + vault's `previewDeposit` preview) |
 | `getInstantUnstakeRatio` | `bigint` |
 | `getConvertedAssets` | `bigint` (SODA per xSoda) |
 | `getStakingInfoFromSpoke` | `StakingInfo` (xSoda balance, accrued, etc.) |
-| `getUnstakingInfo` | `UserUnstakeInfo[]` (one entry per pending request) |
-| `getUnstakingInfoWithPenalty` | `UnstakeRequestWithPenalty[]` = `UserUnstakeInfo & { penalty, penaltyPercentage, claimableAmount }` |
+| `getUnstakingInfo` | `UnstakingInfo` (object; carries `userUnstakeSodaRequests` array + aggregate amount) |
+| `getUnstakingInfoWithPenalty` | `UnstakingInfo & { requestsWithPenalty: UnstakeRequestWithPenalty[] }` (each entry adds `penalty`, `penaltyPercentage`, `claimableAmount`) |
 
-> All 5 mutation methods return tx-pair `[SpokeTxHash, HubTxHash]` because the SDK relays spoke→hub internally. When the user is already on the hub, both elements are the same hash.
+> All 5 mutation methods return `TxHashPair = { srcChainTxHash, dstChainTxHash }` because the SDK relays spoke→hub internally. When the user is already on the hub, both fields hold the same hash.
 
 ## Error codes
 

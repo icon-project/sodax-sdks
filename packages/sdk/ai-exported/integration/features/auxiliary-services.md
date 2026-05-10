@@ -109,21 +109,39 @@ Recovery is a workaround for failed cross-chain operations. Best used **after** 
 
 ## `BackendApiService` — `sodax.backendApi`
 
-HTTP client for backend services. Provides intent lookup, swap-tx submission, solver orderbook queries, and (internally) config fetching. Most consumer-side code uses just `submitSwapTx` and `getIntentByHash`.
+HTTP client for backend services. Provides intent lookup, swap-tx submission, solver orderbook queries, money-market position/reserve reads, and (internally) config fetching. Most consumer-side code uses just `submitSwapTx`, `getIntentByHash` / `getIntentByTxHash`, and the money-market read methods.
 
 **Feature tag for errors:** appears under multiple features depending on the call site (`'swap'` for `submitSwapTx`); errors carry `error.context.api: 'backend'`.
 
 ### Methods
 
 ```ts
-sodax.backendApi.submitSwapTx(request: SubmitSwapTxRequest): Promise<Result<SubmitSwapTxResponse, SodaxError>>;
-sodax.backendApi.getIntentByHash(txHash, chainKey): Promise<Result<IntentResponse, SodaxError>>;
-sodax.backendApi.getSolverOrderbook(): Promise<Result<OrderbookEntry[], SodaxError>>;
-sodax.backendApi.getUserSwapHistory(walletAddress, chainKey): Promise<Result<SwapHistoryEntry[], SodaxError>>;
-// + config-API methods (used internally by ConfigService):
-sodax.backendApi.getChains(): Promise<Result<ChainConfig[], SodaxError>>;
-sodax.backendApi.getSwapTokens(): Promise<Result<SwapTokenConfig, SodaxError>>;
-// …
+// Swap-related
+sodax.backendApi.submitSwapTx(request, config?): Promise<Result<SubmitSwapTxResponse>>;
+sodax.backendApi.getSubmitSwapTxStatus(...): Promise<Result<...>>;
+sodax.backendApi.getOrderbook(...): Promise<Result<OrderbookEntry[]>>;
+sodax.backendApi.getIntentByHash(intentHash, config?): Promise<Result<IntentResponse>>;
+sodax.backendApi.getIntentByTxHash(txHash, config?): Promise<Result<IntentResponse>>;
+sodax.backendApi.getUserIntents(...): Promise<Result<IntentResponse[]>>;
+
+// Money-market reads (these are the canonical reads for MM positions/reserves;
+// MoneyMarketService does NOT expose getReservesData / getUserReservesData / etc.)
+sodax.backendApi.getMoneyMarketPosition(...): Promise<Result<...>>;
+sodax.backendApi.getAllMoneyMarketAssets(config?): Promise<Result<MoneyMarketAsset[]>>;
+sodax.backendApi.getMoneyMarketAsset(reserveAddress, config?): Promise<Result<MoneyMarketAsset>>;
+sodax.backendApi.getMoneyMarketAssetBorrowers(...): Promise<Result<...>>;
+sodax.backendApi.getMoneyMarketAssetSuppliers(...): Promise<Result<...>>;
+sodax.backendApi.getAllMoneyMarketBorrowers(...): Promise<Result<...>>;
+
+// Config-API methods (used internally by ConfigService — implements `IConfigApi`)
+sodax.backendApi.getAllConfig(config?): Promise<Result<GetAllConfigApiResponse>>;
+sodax.backendApi.getChains(config?): Promise<Result<GetChainsApiResponse>>;
+sodax.backendApi.getSwapTokens(config?): Promise<Result<GetSwapTokensApiResponse>>;
+sodax.backendApi.getSwapTokensByChainId(...): Promise<Result<XToken[]>>;
+sodax.backendApi.getMoneyMarketTokens(config?): Promise<Result<GetMoneyMarketTokensApiResponse>>;
+sodax.backendApi.getMoneyMarketReserveAssets(...): Promise<Result<...>>;
+sodax.backendApi.getMoneyMarketTokensByChainId(...): Promise<Result<XToken[]>>;
+sodax.backendApi.getRelayChainIdMap(config?): Promise<Result<GetRelayChainIdMapApiResponse>>;
 ```
 
 All methods return `Result<T, SodaxError>` where the error carries `feature: 'swap' | …` (depending on call site) and `error.context.api === 'backend'`.
@@ -168,4 +186,4 @@ Every method on `IConfigApi` returns `Promise<Result<T>>` in v2.
 
 - v1 → v2 migration of these auxiliary services: [`../../migration/features/auxiliary-services.md`](../../migration/features/auxiliary-services.md).
 - The full `submitSwapTx` flow with `createIntent` upstream: [`./swap.md`](swap.md) § "Backend submit-tx flow".
-- Error model context fields (`error.context.api`, `error.context.method`): [`../reference.md`](../reference.md) § 3.
+- Error model context fields (`error.context.api`, `error.context.method`): [`../reference/`](../reference/) § 3.

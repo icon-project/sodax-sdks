@@ -8,11 +8,11 @@ Pair: [`../../integration/features/staking.md`](../../integration/features/staki
 
 1. **Drop `spokeProvider` from every params object.** Pass `walletProvider` directly into the SDK call.
 2. **Add `srcChainKey` + `srcAddress` to every `*Params<K>`.** `account` field is renamed to `srcAddress`.
-3. **All 5 staking actions are cross-chain.** Even though staking writes happen on the hub, every SDK method (`stake`, `unstake`, `instantUnstake`, `claim`, `cancelUnstake`) accepts `srcChainKey: K extends SpokeChainKey` and relays spoke→hub via `relayTxAndWaitPacket`. **Return shape is always `Result<[SpokeTxHash, HubTxHash]>`.**
+3. **All 5 staking actions are cross-chain.** Even though staking writes happen on the hub, every SDK method (`stake`, `unstake`, `instantUnstake`, `claim`, `cancelUnstake`) accepts `srcChainKey: K extends SpokeChainKey` and relays spoke→hub via `relayTxAndWaitPacket`. **Return shape is always `Result<TxHashPair>`.**
 4. **`approve` is an exception — it returns `Result<TxReturnType<K, false>>` (single hash).** Approve is spoke-only (no relay) — it just spends ERC20 allowance on the source chain.
 5. **Approve and allowance are action-discriminated.** `staking.approve` and `staking.isAllowanceValid` take a `StakingParamsUnion` discriminated by `params.action`. `'stake'` approves SODA; `'unstake'` and `'instantUnstake'` approve xSoda.
 6. **Info getter signatures changed.** v1 took `spokeProvider`; v2 takes `(srcAddress, srcChainKey)`. The SDK derives the hub wallet internally.
-7. **Hub-only / amount-only reads have no chain context.** `getStakingConfig()`, `getStakeRatio({ amount })`, `getInstantUnstakeRatio({ amount })`, `getConvertedAssets({ amount })` — none accept `srcChainKey`.
+7. **Hub-only / amount-only reads have no chain context.** `getStakingConfig()`, `getStakeRatio(amount)`, `getInstantUnstakeRatio(amount)`, `getConvertedAssets(amount)` — none accept `srcChainKey`. (Take `bigint` amount directly, not an object.) `getStakeRatio` returns `Result<[xSodaAmount, previewDepositAmount]>` (a tuple — both are bigints).
 8. **Errors → `SodaxError` + `Result<T>`.** v1's `StakingError<StakingErrorCode>` is gone.
 
 ## Type / symbol cheat sheet
@@ -28,13 +28,12 @@ Pair: [`../../integration/features/staking.md`](../../integration/features/staki
 | `CancelUnstakeParams` | `{ requestId, action: 'cancelUnstake' }` | `{ srcChainKey, srcAddress, requestId, action: 'cancelUnstake' }` | Adds chain context. |
 | `getStakingInfo` (read) | `(spokeProvider) => Promise<StakingInfo>` | `(srcAddress, srcChainKey) => Promise<Result<StakingInfo>>` | Renamed to `getStakingInfoFromSpoke` (the v1 `getStakingInfo` was hub-only and is not surfaced now). |
 | `getUnstakingInfo` (read) | `(userAddress, spokeProvider)` | `(srcAddress, srcChainKey)` | v1 ignored `userAddress`; v2 reads it for real. |
-| `getUnstakingInfoWithPenalty` (read) | new (v2) | `(srcAddress, srcChainKey)` returns `UnstakeRequestWithPenalty[]` | |
+| `getUnstakingInfoWithPenalty` (read) | new (v2) | `(srcAddress, srcChainKey) => Promise<Result<UnstakingInfo & { requestsWithPenalty: UnstakeRequestWithPenalty[] }>>` | Wraps `getUnstakingInfo`'s base shape with a penalty-augmented request list. |
 
 ### Deleted symbols
 
-- `useSpokeProvider` (React) — gone. Pass `walletProvider`.
 - `StakingError<StakingErrorCode>` and `isStakingError` — replaced by `SodaxError<C>` + `feature: 'staking'`.
-- v1 `getStakingInfo(hubAddress, …)` — not surfaced via dapp-kit. Use `getStakingInfoFromSpoke(srcAddress, srcChainKey)`; the SDK derives the hub wallet via `HubService.getUserHubWalletAddress` internally.
+- v1 `getStakingInfo(hubAddress, …)` — not exposed as a public method in v2. Use `getStakingInfoFromSpoke(srcAddress, srcChainKey)`; the SDK derives the hub wallet via `HubService.getUserHubWalletAddress` internally.
 - `spokeProvider instanceof SonicSpokeProvider` runtime checks — replace with `isHubChainKeyType(chainKey)` from `@sodax/sdk`.
 
 ### v1 → v2 error code crosswalk (staking-specific)
@@ -56,7 +55,7 @@ Pair: [`../../integration/features/staking.md`](../../integration/features/staki
 ### `stake`
 
 ```diff
-- await sodax.staking.stake({ amount, account, minReceive, action: 'stake' /* and spokeProvider implicitly via the hook */ });
+- await sodax.staking.stake({ amount, account, minReceive, action: 'stake' }, spokeProvider);
 + const result = await sodax.staking.stake({
 +   params: {
 +     srcChainKey: ChainKeys.ARBITRUM_MAINNET,
@@ -68,7 +67,7 @@ Pair: [`../../integration/features/staking.md`](../../integration/features/staki
 +   walletProvider,
 + });
 + if (!result.ok) return;
-+ const [spokeTxHash, hubTxHash] = result.value;
++ const { srcChainTxHash, dstChainTxHash } = result.value;
 ```
 
 ### `unstake` / `instantUnstake` / `claim` / `cancelUnstake`
@@ -107,15 +106,20 @@ const result = await sodax.staking.isAllowanceValid({
 For amount-only reads (no chain context):
 
 ```ts
-const result = await sodax.staking.getStakeRatio({ amount: parseUnits('100', 18) });
+const result = await sodax.staking.getStakeRatio(parseUnits('100', 18));
+if (result.ok) {
+  const [xSodaAmount, previewDepositAmount] = result.value;
+}
 ```
 
 ## Pitfalls
 
-1. **Wrong return shape for actions.** Treating `stake/unstake/etc.` as returning `Result<TxReturnType<K, false>>` (single hash) is **wrong** — they return `Result<[SpokeTxHash, HubTxHash]>` because they always relay spoke→hub. Only `approve` returns a single hash.
+Cross-cutting traps (Result destructuring, error-model migration, srcChain/dstChain renames, etc.) live in [`../ai-rules.md`](../ai-rules.md). The list below is feature-specific — typecheck fingerprints, return-shape diffs, and gotchas unique to this feature.
+
+1. **Wrong return shape for actions.** Treating `stake/unstake/etc.` as returning `Result<TxReturnType<K, false>>` (single hash) is **wrong** — they return `Result<TxHashPair>` because they always relay spoke→hub. Only `approve` returns a single hash.
 2. **Forgetting `raw: true` on the allowance query.** TypeScript error: `Property 'walletProvider' is missing`. `isAllowanceValid` requires `WalletProviderSlot<K, Raw>`; `raw: false` would force a wallet provider. Use `raw: true` for read-only.
 3. **Forgetting to remove the v1 `account` field from params.** v2 uses `srcAddress`. If both are set, TypeScript rejects the literal.
-4. **`getStakingInfo` does not exist in v2 dapp-kit.** v1 had `getStakingInfo(hubAddress)` for direct hub queries. v2 has `getStakingInfoFromSpoke(srcAddress, srcChainKey)` which derives the hub wallet internally. Use the spoke variant.
+4. **`getStakingInfo(hubAddress)` is not a public method in v2.** v1 had it for direct hub queries. v2 has `getStakingInfoFromSpoke(srcAddress, srcChainKey)` which derives the hub wallet internally. Use the spoke variant.
 5. **`UnstakingInfo` no longer accepts `userAddress` separately.** v1 took both `spokeProvider` and `userAddress` props but ignored `userAddress` inside. v2 takes `srcAddress` and uses it.
 
 ## Verification

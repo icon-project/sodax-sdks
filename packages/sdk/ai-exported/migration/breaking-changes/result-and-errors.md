@@ -11,10 +11,9 @@ Read after [`type-system.md`](type-system.md) and [`architecture.md`](architectu
 1. [`Result<T>` — the new return contract](#1-resultt--the-new-return-contract)
 2. [`SodaxError<C>` — the canonical error class](#2-sodaxerrorc--the-canonical-error-class)
 3. [The 13-code vocabulary](#3-the-13-code-vocabulary)
-4. [v1 ↔ v2 code crosswalk](#4-v1--v2-code-crosswalk)
-5. [Return-shape diffs per method](#5-return-shape-diffs-per-method)
-6. [Carve-out: `BalnSwapService` still throws](#6-carve-out-balnswapservice-still-throws)
-7. [Migration patterns](#7-migration-patterns)
+4. [Reference tables — moved](#4-reference-tables--moved) (v1 ↔ v2 code crosswalk and per-method return-shape diffs)
+5. [Carve-out: `BalnSwapService` still throws](#5-carve-out-balnswapservice-still-throws)
+6. [Migration patterns](#6-migration-patterns)
 
 ---
 
@@ -39,8 +38,8 @@ The **complete list** of services whose public methods return `Result<T>`:
 - `SwapService` (every async method)
 - `MoneyMarketService` (every async method)
 - `BridgeService` (every async method)
-- `StakingService` (every async method except `StakingLogic.*` static helpers — see § 6)
-- `MigrationService` (every async method except `BalnSwapService` lock-management methods — see § 6)
+- `StakingService` (every async method except `StakingLogic.*` static helpers — see § 5)
+- `MigrationService` (every async method except `BalnSwapService` lock-management methods — see § 5)
 - `DexService` / `ClService` / `AssetService` (every async method)
 - `PartnerService`
 - `RecoveryService`
@@ -111,7 +110,7 @@ const { tx, intent, relayData } = result.value;
 +   if (isSodaxError(result.error) && result.error.code === 'INTENT_CREATION_FAILED') { /* … */ }
 +   return;
 + }
-+ const { tx: spokeTxHash, intent, relayData } = result.value;  // object, not tuple — see § 5
++ const { tx: spokeTxHash, intent, relayData } = result.value;  // object, not tuple — see ../reference/return-shapes.md
 ```
 
 ### Pitfall
@@ -149,7 +148,7 @@ if (isSodaxError(e)) {
 }
 ```
 
-`isSodaxError` walks `e.name === 'SodaxError'` + a `code: string` + `feature: string` shape check. Prefer it over bare `instanceof SodaxError` — `instanceof` returns `false` when `@sodax/sdk` is loaded twice in the same bundle (a real-world hazard with monorepos and dual ESM/CJS, especially in Next.js apps with mixed package resolution).
+`isSodaxError` walks `e.name === 'SodaxError'` + a `code: string` + `feature: string` shape check. Prefer it over bare `instanceof SodaxError` — `instanceof` returns `false` when `@sodax/sdk` is loaded twice in the same bundle (a real-world hazard with monorepos and dual ESM/CJS, especially in apps with mixed package resolution).
 
 ### `error.context`
 
@@ -231,7 +230,7 @@ if (!result.ok) {
 }
 ```
 
-The narrow unions are exported from each feature's `errors.ts` (e.g. `@sodax/sdk` re-exports `SupplyErrorCode`, `BorrowErrorCode`, `BridgeErrorCode`, `StakeErrorCode`, etc.). See [`../../integration/reference.md`](../../integration/reference.md) § "Error codes" for the full catalogue.
+The narrow unions are exported from each feature's `errors.ts` (e.g. `@sodax/sdk` re-exports `SupplyErrorCode`, `BorrowErrorCode`, `BridgeErrorCode`, `StakeErrorCode`, etc.). See [`../../integration/reference/`](../../integration/reference/) § "Error codes" for the full catalogue.
 
 ### Read-method partition
 
@@ -251,148 +250,16 @@ This avoids inflating the global code count (`getStakingInfoFailed`, `getBridgea
 
 ---
 
-## 4. v1 ↔ v2 code crosswalk
+## 4. Reference tables — moved
 
-The widest-impact migration table in this file. v1 had per-module `*ErrorCode` unions; v2 reuses the 13 unified codes plus `feature` discrimination. **Match by intent, not by name** — the v1 `CREATE_SUPPLY_INTENT_FAILED` code is now `INTENT_CREATION_FAILED` with `feature: 'moneyMarket'` and `context.action: 'supply'`.
+The two reference-grade tables that used to live in this file (the **v1 ↔ v2 code crosswalk** and the **per-method return-shape diffs**) have moved into `../reference/`:
 
-### Money Market (`MoneyMarketErrorCode` → `feature: 'moneyMarket'`)
+- [`../reference/error-code-crosswalk.md`](../reference/error-code-crosswalk.md) — every v1 module-error code → v2 `(feature, code, context)` mapping, per feature.
+- [`../reference/return-shapes.md`](../reference/return-shapes.md) — per-method return-shape diffs (`CreateIntentResult` tuple → object, every cross-chain mutation now returns `TxHashPair`, `getBridgeableAmount` returns `BridgeLimit`, `getStakeRatio` returns a tuple, etc.).
 
-| v1 code | v2 code | v2 context |
-|---|---|---|
-| `CREATE_SUPPLY_INTENT_FAILED` | `INTENT_CREATION_FAILED` | `action: 'supply'` |
-| `CREATE_BORROW_INTENT_FAILED` | `INTENT_CREATION_FAILED` | `action: 'borrow'` |
-| `CREATE_WITHDRAW_INTENT_FAILED` | `INTENT_CREATION_FAILED` | `action: 'withdraw'` |
-| `CREATE_REPAY_INTENT_FAILED` | `INTENT_CREATION_FAILED` | `action: 'repay'` |
-| `SUPPLY_FAILED` | `EXECUTION_FAILED` | `action: 'supply'` |
-| `BORROW_FAILED` | `EXECUTION_FAILED` | `action: 'borrow'` |
-| `WITHDRAW_FAILED` | `EXECUTION_FAILED` | `action: 'withdraw'` |
-| `REPAY_FAILED` | `EXECUTION_FAILED` | `action: 'repay'` |
-| `ALLOWANCE_CHECK_FAILED` | `ALLOWANCE_CHECK_FAILED` | (unchanged) |
-| `APPROVE_FAILED` | `APPROVE_FAILED` | (unchanged) |
-| `GAS_ESTIMATION_FAILED` | `GAS_ESTIMATION_FAILED` | (unchanged) |
+The prose on shape semantics stays here; the lookup tables live in `../reference/`.
 
-### Swap (`IntentErrorCode` → `feature: 'swap'`)
-
-| v1 code | v2 code | v2 context |
-|---|---|---|
-| `CREATE_INTENT_FAILED` | `INTENT_CREATION_FAILED` | `action: 'createIntent'` |
-| `CREATE_LIMIT_ORDER_FAILED` | `INTENT_CREATION_FAILED` | `action: 'createLimitOrder'` |
-| `POST_EXECUTION_FAILED` | `EXECUTION_FAILED` | `action: 'swap'`, `phase: 'postExecution'` |
-| `SOLVER_API_ERROR` | `EXTERNAL_API_ERROR` | `api: 'solver'`, `solverCode`/`solverDetail` on context |
-| `SIMULATION_FAILED` | `EXECUTION_FAILED` | `phase: 'execution'` |
-
-### Staking (`StakingErrorCode` → `feature: 'staking'`)
-
-| v1 code | v2 code | v2 context |
-|---|---|---|
-| `STAKE_FAILED` | `EXECUTION_FAILED` | `action: 'stake'` |
-| `UNSTAKE_FAILED` | `EXECUTION_FAILED` | `action: 'unstake'` |
-| `INSTANT_UNSTAKE_FAILED` | `EXECUTION_FAILED` | `action: 'instantUnstake'` |
-| `CLAIM_FAILED` | `EXECUTION_FAILED` | `action: 'claim'` |
-| `CANCEL_UNSTAKE_FAILED` | `EXECUTION_FAILED` | `action: 'cancelUnstake'` |
-| `GET_STAKING_INFO_FAILED` | `LOOKUP_FAILED` | `method: 'getStakingInfo'` |
-| `GET_UNSTAKING_INFO_FAILED` | `LOOKUP_FAILED` | `method: 'getUnstakingInfo'` |
-| `GET_STAKING_CONFIG_FAILED` | `LOOKUP_FAILED` | `method: 'getStakingConfig'` |
-| `GET_STAKE_RATIO_FAILED` | `LOOKUP_FAILED` | `method: 'getStakeRatio'` |
-
-### Bridge (`BridgeErrorCode` → `feature: 'bridge'`)
-
-| v1 code | v2 code | v2 context |
-|---|---|---|
-| `BRIDGE_FAILED` | `EXECUTION_FAILED` | `action: 'bridge'` |
-| `CREATE_BRIDGE_INTENT_FAILED` | `INTENT_CREATION_FAILED` | `action: 'bridge'` |
-| `GET_BRIDGEABLE_AMOUNT_FAILED` | `LOOKUP_FAILED` | `method: 'getBridgeableAmount'` |
-| `GET_BRIDGEABLE_TOKENS_FAILED` | `LOOKUP_FAILED` | `method: 'getBridgeableTokens'` |
-
-### Migration (`MigrationErrorCode` → `feature: 'migration'`)
-
-| v1 code | v2 code | v2 context |
-|---|---|---|
-| `MIGRATE_BNUSD_FORWARD_FAILED` | `EXECUTION_FAILED` | `action: 'migratebnUSD'`, `direction: 'forward'` |
-| `MIGRATE_BNUSD_REVERSE_FAILED` | `EXECUTION_FAILED` | `action: 'migratebnUSD'`, `direction: 'reverse'` |
-| `MIGRATE_ICX_TO_SODA_FAILED` | `EXECUTION_FAILED` | `action: 'migrateIcxToSoda'` |
-| `REVERT_MIGRATE_SODA_TO_ICX_FAILED` | `EXECUTION_FAILED` | `action: 'revertMigrateSodaToIcx'` |
-| `MIGRATE_BALN_FAILED` | `EXECUTION_FAILED` | `action: 'migrateBaln'` |
-| `GET_AVAILABLE_AMOUNT_FAILED` | `LOOKUP_FAILED` | `method: 'getAvailableAmount'` |
-
-### DEX (`AssetServiceErrorCode` + `ConcentratedLiquidityErrorCode` → `feature: 'dex'`)
-
-| v1 code | v2 code | v2 context |
-|---|---|---|
-| `DEPOSIT_FAILED` | `EXECUTION_FAILED` | `action: 'deposit'` |
-| `WITHDRAW_FAILED` | `EXECUTION_FAILED` | `action: 'withdraw'` |
-| `SUPPLY_LIQUIDITY_FAILED` | `EXECUTION_FAILED` | `action: 'supplyLiquidity'` |
-| `INCREASE_LIQUIDITY_FAILED` | `EXECUTION_FAILED` | `action: 'increaseLiquidity'` |
-| `DECREASE_LIQUIDITY_FAILED` | `EXECUTION_FAILED` | `action: 'decreaseLiquidity'` |
-| `CLAIM_REWARDS_FAILED` | `EXECUTION_FAILED` | `action: 'claimRewards'` |
-| `GET_POOL_DATA_FAILED` | `LOOKUP_FAILED` | `method: 'getPoolData'` |
-| `GET_POSITION_INFO_FAILED` | `LOOKUP_FAILED` | `method: 'getPositionInfo'` |
-
-### Relay (`RelayErrorCode` → typically still on `context.relayCode`)
-
-The relay-layer code strings are kept on `context.relayCode` of the surfaced `SodaxError`. They are also a stable public contract used by lower-level relay code:
-
-| v1 code | v2 code on `error.code` | v2 `context.relayCode` |
-|---|---|---|
-| `SUBMIT_TX_FAILED` | `TX_SUBMIT_FAILED` | `'SUBMIT_TX_FAILED'` |
-| `RELAY_TIMEOUT` | `RELAY_TIMEOUT` | `'RELAY_TIMEOUT'` |
-| `RELAY_POLLING_FAILED` | `RELAY_FAILED` | `'RELAY_POLLING_FAILED'` |
-| (any unrecognised) | `RELAY_FAILED` | `'UNKNOWN'` |
-
-### Partner (5 typed errors → `feature: 'partner'`)
-
-All partner typed errors collapse to `EXECUTION_FAILED` with `action` discriminating between the 5 v1 operations.
-
-### Recovery (no v1 typed errors — module is v2-new) → `feature: 'recovery'`
-
-`EXECUTION_FAILED` for the recovery action; `LOOKUP_FAILED` for read methods.
-
----
-
-## 5. Return-shape diffs per method
-
-### `SwapService.createIntent`
-
-```diff
-- const [spokeTxHash, intent, relayData] = result;
-+ const { tx, intent, relayData } = result.value;
-```
-
-v1 returned a tuple. v2 returns an object: `{ tx, intent, relayData }` where:
-- `tx` is `TxReturnType<K, false>` (the spoke tx hash for `raw: false`, or the raw tx payload for `raw: true`).
-- `intent` is the intent struct.
-- `relayData` is `RelayExtraData` (`{ payload: string; ... }`).
-
-If you use the backend submit-swap-tx API, the v1 `relayData` field on the request expects the **string**, not the object — pass `relayData.payload`.
-
-### `BridgeService.bridge` and similar full-execution methods
-
-```diff
-- const txHash: string = await sodax.bridge.bridge(...);
-+ const result = await sodax.bridge.bridge({ params, raw: false, walletProvider });
-+ if (!result.ok) return;
-+ const [spokeTxHash, hubTxHash] = result.value;
-```
-
-v2 cross-chain mutation methods return `[SpokeTxHash, HubTxHash]` so the consumer has both legs of the relay. The same shape applies to `staking.stake`, `staking.unstake`, `staking.instantUnstake`, `staking.claim`, `staking.cancelUnstake`, `dex.deposit`, `dex.withdraw`, `dex.supplyLiquidity`, `dex.increaseLiquidity`, `dex.decreaseLiquidity`, `dex.claimRewards`. Consumers on the hub chain still get `[hubTxHash, hubTxHash]` for shape consistency.
-
-### `MoneyMarketService.{supply, borrow, withdraw, repay}`
-
-```diff
-- const txHash = await sodax.moneyMarket.supply(...);
-+ const result = await sodax.moneyMarket.supply({ params, raw: false, walletProvider });
-+ const { srcChainTxHash, dstChainTxHash } = result.value;
-```
-
-v2 returns a `TxHashPair` object: `{ srcChainTxHash, dstChainTxHash }`. The names differ from staking/dex/bridge (which use the array form) — this is a stylistic carve-out that's preserved from v1.
-
-### Everything else
-
-If a v1 method returned a single `string` tx hash, the v2 return is `Result<TxReturnType<K, false>>` — destructure as `result.value` (which is the hash for `raw: false`, or the chain-specific raw tx payload for `raw: true`).
-
----
-
-## 6. Carve-out: `BalnSwapService` still throws
+## 5. Carve-out: `BalnSwapService` still throws
 
 The lock-management methods on `BalnSwapService` (a sub-service of `MigrationService`) **do not** return `Result<T>` in v2. They keep the v1 throw-on-error contract:
 
@@ -407,7 +274,7 @@ This is **technical debt**, marked for cleanup in a future release. Until then, 
 
 ---
 
-## 7. Migration patterns
+## 6. Migration patterns
 
 ### Convert one call site (the typical pattern)
 
@@ -432,7 +299,7 @@ This is **technical debt**, marked for cleanup in a future release. Until then, 
 If your v1 code has a helper that branches on `error.code`, the minimal change is to map v2 shape onto the v1 shape at the boundary:
 
 ```ts
-// Helper at component scope
+// Module-scope helper
 function adaptToV1Shape(error: unknown): { code?: string; message?: string; data?: { error?: unknown } } | null {
   if (!error) return null;
   if (isSodaxError(error)) {
@@ -448,7 +315,7 @@ function adaptToV1Shape(error: unknown): { code?: string; message?: string; data
 }
 
 // Existing branches (sdkError.code === 'SUPPLY_FAILED') keep working — until you migrate
-// them properly to (feature, code) tuples per § 4.
+// them properly to (feature, code) tuples per ../reference/error-code-crosswalk.md.
 ```
 
 ### Use the per-feature guard factory for routing
@@ -491,6 +358,6 @@ This is **transitional**. Once your error-handling tree is updated, remove `thro
 
 - Type-level renames (deleted error types, return-type renames): [`type-system.md`](type-system.md) §§ 6, 10.
 - Architecture reshape (relay layer, mapRelayFailure, sodaxInvariant, isSodaxError): [`architecture.md`](architecture.md) §§ 3, 4.
-- v2 design context (Result propagation, error model): [`../../integration/architecture.md`](../../integration/architecture.md) and [`../../integration/recipes.md`](../../integration/recipes.md) § "Result handling".
-- Per-feature narrow code unions: [`../../integration/reference.md`](../../integration/reference.md) § "Error codes".
+- v2 design context (Result propagation, error model): [`../../integration/architecture.md`](../../integration/architecture.md) and [`../../integration/recipes/`](../../integration/recipes/) § "Result handling".
+- Per-feature narrow code unions: [`../../integration/reference/`](../../integration/reference/) § "Error codes".
 - Per-feature playbooks (with `getXxxErrorText` adapters in context): [`../features/`](../features/).

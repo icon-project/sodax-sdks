@@ -203,5 +203,5 @@ Solver-specific context on `EXTERNAL_API_ERROR`:
 ## Cross-references
 
 - v1 → v2 swap migration: [`../../migration/features/swap.md`](../../migration/features/swap.md).
-- Error model: [`../architecture.md`](../architecture.md) § 8 and [`../reference.md`](../reference.md) § 3.
+- Error model: [`../architecture.md`](../architecture.md) § 8 and [`../reference/`](../reference/) § 3.
 - Stellar destinations require a trustline first: [`../chain-specifics.md`](../chain-specifics.md) § "Stellar trustline".

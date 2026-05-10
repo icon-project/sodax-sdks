@@ -18,61 +18,14 @@ The remainder is per-feature (return shape diffs, field renames, new required pa
 
 Read in this order. Each step builds on the last.
 
-1. **This file.** Cross-cutting glossary + checklist below.
-2. **[`breaking-changes/type-system.md`](breaking-changes/type-system.md)** — fix every import + type-level error first. Once your imports compile, the rest is tractable.
-3. **[`breaking-changes/architecture.md`](breaking-changes/architecture.md)** — `*SpokeProvider` deletion, `ConfigService` replacing static lookups, relay-flow reshape, `sodaxInvariant` + per-feature aliases.
-4. **[`breaking-changes/result-and-errors.md`](breaking-changes/result-and-errors.md)** — convert call-site error handling, then run the v1↔v2 error-code crosswalk.
-5. **[`features/<x>.md`](features/)** — port the call sites for each feature you use. Pair with [`../integration/features/<x>.md`](../integration/features/) (same filename) when you need the v2 design context.
-6. **[`recipes.md`](recipes.md)** — codemods and adapters when full conversion in one pass isn't realistic.
-
-## Cross-cutting migration checklist
-
-Work this top-down. Each step is independent enough to land as its own commit; the order minimizes typecheck noise.
-
-```
-[ ] 1.  Replace every *_MAINNET_CHAIN_ID constant with ChainKeys.* (mechanical).
-        See breaking-changes/type-system.md § "Chain IDs".
-[ ] 2.  Replace every SpokeChainId / ChainId type alias with SpokeChainKey.
-        Mechanical rename. Same value union.
-[ ] 3.  Rename XToken.xChainId → XToken.chainKey. Same for any consumer types
-        that mirrored that field.
-[ ] 4.  Remove any direct dependency on @sodax/types from package.json.
-        v2 @sodax/sdk barrel re-exports the entire types surface.
-[ ] 5.  Delete every useSpokeProvider call (React) or *SpokeProvider class
-        instantiation (Node). Replace with passing walletProvider directly
-        into SDK call payloads.
-[ ] 6.  Replace every isXxxSpokeProvider(provider) guard with a chain-key
-        compare: chainKey === ChainKeys.<X>_MAINNET, or use
-        is<Family>ChainKeyType(chainKey) from @sodax/types.
-[ ] 7.  Add { raw: false } discriminator to every signed call shape that
-        previously took a positional spoke provider:
-            { intentParams, spokeProvider }   →   { params, raw: false, walletProvider }
-[ ] 8.  Add srcChainKey + srcAddress to every action params object that didn't
-        carry them in v1 (most MM, staking, dex, bridge, migration param shapes).
-[ ] 9.  Convert every await sodax.<service>.<method>(...) call site that previously
-        threw to branch on result.ok / result.error. Use isSodaxError(e) for type
-        narrowing.
-[ ] 10. Delete imports of MoneyMarketError, IntentError, StakingError, BridgeError,
-        MigrationError, AssetServiceError, ConcentratedLiquidityError, RelayError,
-        plus the five Partner error types and their type-guard helpers.
-[ ] 11. Replace any walked global lookup (hubAssets[chainId][address], 
-        moneyMarketSupportedTokens[chainId], SodaTokens[...]) with the equivalent
-        sodax.config.* / sodax.moneyMarket.getSupportedTokens*() calls.
-[ ] 12. Initialize ConfigService at app startup: await sodax.config.initialize().
-        Falls back to packaged defaults if the backend is unreachable.
-[ ] 13. Add { raw: true } to any read-only allowance check that previously took
-        a spoke provider but didn't actually consult it (the underlying SDK
-        method now requires WalletProviderSlot).
-[ ] 14. For every CreateIntentResult consumer: stop destructuring as a tuple;
-        the v2 shape is { tx, intent, relayData }.
-[ ] 15. For every backend-API call site: every method on IConfigApi now returns
-        Promise<Result<T>>. Wrap or unwrap accordingly.
-[ ] 16. (Optional) Adopt isSodaxError(e) over instanceof SodaxError in cross-bundle
-        / cross-realm contexts.
-[ ] 17. Run pnpm checkTs and start crossing items off the typecheck output. Use
-        each remaining error category to navigate to the relevant per-feature
-        migration file.
-```
+1. **[`ai-rules.md`](ai-rules.md)** — DO / DO NOT / workflow / stop-conditions. Read first, then dive in.
+2. **This file.** Cross-cutting glossary below + reference list of breaking-changes / features / checklist.
+3. **[`checklist.md`](checklist.md)** — the 17-step cross-cutting migration checklist. Walk top-down, mark items off as you go.
+4. **[`breaking-changes/type-system.md`](breaking-changes/type-system.md)** — fix every import + type-level error first. Once your imports compile, the rest is tractable.
+5. **[`breaking-changes/architecture.md`](breaking-changes/architecture.md)** — `*SpokeProvider` deletion, `ConfigService` replacing static lookups, relay-flow reshape, `sodaxInvariant` + per-feature aliases.
+6. **[`breaking-changes/result-and-errors.md`](breaking-changes/result-and-errors.md)** — convert call-site error handling, then run the v1↔v2 error-code crosswalk.
+7. **[`features/<x>.md`](features/)** — port the call sites for each feature you use. Pair with [`../integration/features/<x>.md`](../integration/features/) (same filename) when you need the v2 design context.
+8. **[`recipes.md`](recipes.md)** — codemods and adapters when full conversion in one pass isn't realistic.
 
 ## v1 ↔ v2 glossary (terms that changed meaning)
 
@@ -96,9 +49,9 @@ Same word, different concept across versions. Skim before reading the breaking-c
 
 Every breaking-change file in this tree has a v2-design counterpart in `../integration/`. Follow the link when "what does v2 expect instead?" comes up:
 
-- [`breaking-changes/type-system.md`](breaking-changes/type-system.md) ↔ [`../integration/architecture.md`](../integration/architecture.md) (§ ChainKeys, WalletProviderSlot, Result, SodaxError) and [`../integration/reference.md`](../integration/reference.md) (chain-key + error-code tables).
+- [`breaking-changes/type-system.md`](breaking-changes/type-system.md) ↔ [`../integration/architecture.md`](../integration/architecture.md) (§ ChainKeys, WalletProviderSlot, Result, SodaxError) and [`../integration/reference/`](../integration/reference/) (chain-key + error-code tables).
 - [`breaking-changes/architecture.md`](breaking-changes/architecture.md) ↔ [`../integration/architecture.md`](../integration/architecture.md) (§ SpokeService, Sodax facade, ConfigService, relay layer).
-- [`breaking-changes/result-and-errors.md`](breaking-changes/result-and-errors.md) ↔ [`../integration/recipes.md`](../integration/recipes.md) (§ Result handling, error discrimination).
+- [`breaking-changes/result-and-errors.md`](breaking-changes/result-and-errors.md) ↔ [`../integration/recipes/`](../integration/recipes/) (§ Result handling, error discrimination).
 - [`features/<x>.md`](features/) ↔ [`../integration/features/<x>.md`](../integration/features/) (same filename).
 - [`recipes.md`](recipes.md) ↔ no integration counterpart (migration-only patterns).
 

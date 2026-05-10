@@ -26,10 +26,10 @@ All three sub-services follow the same pattern: deposit on a spoke chain → rel
 ## Public methods
 
 ```ts
-sodax.migration.migratebnUSD<K>(action): Promise<Result<[SpokeTxHash, HubTxHash], SodaxError>>;
-sodax.migration.migrateIcxToSoda<K>(action): Promise<Result<[SpokeTxHash, HubTxHash], SodaxError>>;
-sodax.migration.revertMigrateSodaToIcx<K>(action): Promise<Result<[SpokeTxHash, HubTxHash], SodaxError>>;
-sodax.migration.migrateBaln<K>(action): Promise<Result<[SpokeTxHash, HubTxHash], SodaxError>>;
+sodax.migration.migratebnUSD<K>(action): Promise<Result<TxHashPair, SodaxError>>;
+sodax.migration.migrateIcxToSoda<K>(action): Promise<Result<TxHashPair, SodaxError>>;
+sodax.migration.revertMigrateSodaToIcx<K>(action): Promise<Result<TxHashPair, SodaxError>>;
+sodax.migration.migrateBaln<K>(action): Promise<Result<TxHashPair, SodaxError>>;
 
 sodax.migration.createMigrateBnUSDIntent<K, Raw>(...): Promise<Result<...>>;
 // + 3 other createXxxIntent methods
@@ -89,7 +89,7 @@ const result = await sodax.migration.migratebnUSD({
 });
 
 if (!result.ok) return;
-const [spokeHash, hubHash] = result.value;
+const { srcChainTxHash, dstChainTxHash } = result.value;
 ```
 
 The SDK auto-detects direction from `(srcToken, dstToken)` addresses; the `direction` field surfaces on `error.context` if it fails (`'forward' | 'reverse'`).
@@ -153,7 +153,7 @@ try {
 
 | Method | Success type |
 |---|---|
-| 4 orchestrators (`migratebnUSD`, `migrateIcxToSoda`, `revertMigrateSodaToIcx`, `migrateBaln`) | `[SpokeTxHash, HubTxHash]` |
+| 4 orchestrators (`migratebnUSD`, `migrateIcxToSoda`, `revertMigrateSodaToIcx`, `migrateBaln`) | `TxHashPair` |
 | 4 intent creators | `CreateIntentResult<K, Raw>` |
 | `approve` | `TxReturnType<K, Raw>` |
 | `isAllowanceValid` | `boolean` |

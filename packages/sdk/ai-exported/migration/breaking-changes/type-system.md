@@ -163,7 +163,7 @@ For raw-tx building:
 
 ### Pitfall
 
-If your wallet provider variable is typed as the broad `IWalletProvider | undefined` union (the typical return of a runtime-keyed `useWalletProvider(chainKey)` hook), v2 still accepts it — `K` defaults to the broad `SpokeChainKey` union, so `GetWalletProviderType<K>` resolves to the `IWalletProvider` union. For tighter narrowing on a literal chain branch, see [`../recipes.md`](../recipes.md) § "Cast-at-boundary".
+If your wallet provider variable is typed as the broad `IWalletProvider | undefined` union (the typical case when the variable is keyed by a runtime chain-key value rather than a literal), v2 still accepts it — `K` defaults to the broad `SpokeChainKey` union, so `GetWalletProviderType<K>` resolves to the `IWalletProvider` union. For tighter narrowing on a literal chain branch, see [`../recipes.md`](../recipes.md) § "Cast-at-boundary".
 
 ---
 
@@ -230,11 +230,12 @@ Every method on the `IConfigApi` contract changed signature in v2. v1 returned p
 
 | Method | v1 return | v2 return |
 |---|---|---|
-| `getChains` | `Promise<ChainConfig[]>` | `Promise<Result<ChainConfig[]>>` |
-| `getSwapTokens` | `Promise<SwapTokenConfig>` | `Promise<Result<SwapTokenConfig>>` |
+| `getChains` | `Promise<ChainConfig[]>` | `Promise<Result<GetChainsApiResponse>>` |
+| `getSwapTokens` | `Promise<SwapTokenConfig>` | `Promise<Result<GetSwapTokensApiResponse>>` |
 | `getSwapTokensByChainId` | `Promise<XToken[]>` | `Promise<Result<XToken[]>>` |
-| `getMoneyMarketTokens` | `Promise<MMTokenConfig>` | `Promise<Result<MMTokenConfig>>` |
+| `getMoneyMarketTokens` | `Promise<MMTokenConfig>` | `Promise<Result<GetMoneyMarketTokensApiResponse>>` |
 | `getMoneyMarketTokensByChainId` | `Promise<XToken[]>` | `Promise<Result<XToken[]>>` |
+| `getRelayChainIdMap` | (n/a in v1) | `Promise<Result<GetRelayChainIdMapApiResponse>>` (v2-new) |
 
 If you implemented a custom `IConfigApi` (e.g. for a sandbox or test fixture), update every method signature. If you only consumed the default implementation through `Sodax.config`, the SDK already uses `Result` internally — your consumer-side code doesn't see the wrapping.
 
@@ -317,4 +318,4 @@ The full v1 → v2 code crosswalk lives in [`result-and-errors.md`](result-and-e
 - Architectural changes (spoke-provider deletion, ConfigService, relay flow): [`architecture.md`](architecture.md).
 - Result/error model details (propagation patterns, code crosswalk, return shapes): [`result-and-errors.md`](result-and-errors.md).
 - v2 design context (what to use instead of each deleted symbol): [`../../integration/architecture.md`](../../integration/architecture.md).
-- Lookup tables (full chain-key list, `I*WalletProvider` interfaces, public API surface): [`../../integration/reference.md`](../../integration/reference.md).
+- Lookup tables (full chain-key list, `I*WalletProvider` interfaces, public API surface): [`../../integration/reference/`](../../integration/reference/).

@@ -8,9 +8,9 @@ Pair: [`../../integration/features/bridge.md`](../../integration/features/bridge
 
 1. **Drop `spokeProvider`. Pass `walletProvider` directly.**
 2. **Add `srcChainKey` + `srcAddress` to `CreateBridgeParams<K>`.** Generic added.
-3. **`bridge()` returns `Result<[SpokeTxHash, HubTxHash]>`.** v1 returned a single `string` tx hash; v2 returns the tx-pair tuple wrapped in `Result`.
+3. **`bridge()` returns `Result<TxHashPair>`.** v1 returned a single `string` tx hash; v2 returns `{ srcChainTxHash, dstChainTxHash }` (the spoke + hub tx hashes) wrapped in `Result`.
 4. **`createBridgeIntent()` is spoke-only — no relay.** Same shape as the swap `createIntent`: returns `{ tx, intent, relayData }` for the spoke transaction. Useful when you need manual relay control.
-5. **Read methods are `Result<T>`-wrapped.** `getBridgeableAmount` and `getBridgeableTokens` return `Promise<Result<...>>`.
+5. **Read methods reshaped.** `getBridgeableAmount` returns `Promise<Result<BridgeLimit>>` (was `Promise<bigint>`) and now takes two `XToken` objects. `getBridgeableTokens` is synchronous (was async) and takes `(from, to, token)`.
 6. **Errors → `SodaxError` + `Result<T>`.** v1's `BridgeError<BridgeErrorCode>` is gone.
 
 ## Type / symbol cheat sheet
@@ -21,14 +21,13 @@ Pair: [`../../integration/features/bridge.md`](../../integration/features/bridge
 |---|---|---|---|
 | `CreateBridgeParams` | `{ srcAsset, amount, dstChainId, dstAddress, dstAsset }` | `{ srcChainKey, srcAddress, srcAsset, amount, dstChainKey, dstAddress, dstAsset }` | Now generic `<K>`. `srcChainId`/`dstChainId` (where they appeared) → `srcChainKey`/`dstChainKey`. |
 | Bridge action wrapper | `{ params, spokeProvider }` | `{ params, raw: false, walletProvider }` | Same as every feature. |
-| `bridge` return | `Promise<string>` (tx hash, throws on error) | `Promise<Result<[SpokeTxHash, HubTxHash], SodaxError>>` | Tx-pair + Result. |
-| `getBridgeableAmount` | `Promise<bigint>` | `Promise<Result<bigint, SodaxError>>` | Result-wrapped. |
-| `getBridgeableTokens` | `Promise<XToken[]>` | `Promise<Result<XToken[], SodaxError>>` | Result-wrapped. |
+| `bridge` return | `Promise<string>` (tx hash, throws on error) | `Promise<Result<TxHashPair, SodaxError>>` | Tx-pair + Result. |
+| `getBridgeableAmount` | `Promise<bigint>` | `Promise<Result<BridgeLimit, SodaxError>>` where `BridgeLimit = { amount, decimals, type }` | Result-wrapped + richer return shape. Now takes `(from: XToken, to: XToken)` (was `(srcChainId, srcToken, dstChainId, dstToken)`). |
+| `getBridgeableTokens` | `Promise<XToken[]>` | `Result<XToken[], SodaxError>` (synchronous) | Sync now (config-derived). Takes `(from: SpokeChainKey, to: SpokeChainKey, token: string)` — was `(srcToken: XToken)`. |
 
 ### Deleted symbols
 
 - `BridgeError<BridgeErrorCode>` and `isBridgeError` — replaced by `SodaxError<C>` + `feature: 'bridge'`.
-- `useSpokeProvider` (React) — gone.
 
 ### v1 → v2 error code crosswalk (bridge-specific)
 
@@ -61,7 +60,7 @@ Pair: [`../../integration/features/bridge.md`](../../integration/features/bridge
 +   walletProvider,
 + });
 + if (!result.ok) return;
-+ const [spokeHash, hubHash] = result.value;
++ const { srcChainTxHash, dstChainTxHash } = result.value;
 ```
 
 ### `createBridgeIntent`
@@ -77,8 +76,9 @@ Pair: [`../../integration/features/bridge.md`](../../integration/features/bridge
 ### `getBridgeableAmount` / `getBridgeableTokens`
 
 ```diff
-- const amount: bigint = await sodax.bridge.getBridgeableAmount(srcChainId, srcToken, dstChainId, dstToken);
-+ const result = await sodax.bridge.getBridgeableAmount(srcChainKey, srcToken, dstChainKey, dstToken);
+- const amount: bigint = await sodax.bridge.getBridgeableAmount(srcChainId, srcToken.address, dstChainId, dstToken.address);
++ const result = await sodax.bridge.getBridgeableAmount(srcToken, dstToken);   // both are XToken objects (each carries chainKey)
++ // result.value is BridgeLimit = { amount, decimals, type }, not a raw bigint.
 + if (!result.ok) return 0n;
 + const amount = result.value;
 ```
@@ -102,9 +102,12 @@ const allowed = await sodax.bridge.isAllowanceValid({
 
 ## Pitfalls
 
-1. **Treating `bridge` return as a string.** v2 returns `Result<[SpokeTxHash, HubTxHash]>`. Destructure both elements; cast to string at the boundary if your downstream API expects a string.
-2. **Forgetting to handle the read-side `Result` wrapping.** `getBridgeableAmount` no longer resolves to `bigint` — it resolves to `Result<bigint>`. UI code that displayed the amount directly needs an `if (result.ok)` branch.
-3. **Tokens are bridgeable iff they share the same vault.** Same chain pair, same underlying — but if you bridge USDC.e on chain A and the destination's USDC has a different vault, the call rejects with `VALIDATION_FAILED`. Use `getBridgeableTokens(srcChainKey, srcAsset)` to enumerate compatible destinations.
+Cross-cutting traps (Result destructuring, error-model migration, srcChain/dstChain renames, etc.) live in [`../ai-rules.md`](../ai-rules.md). The list below is feature-specific — typecheck fingerprints, return-shape diffs, and gotchas unique to this feature.
+
+1. **Treating `bridge` return as a string.** v2 returns `Result<TxHashPair>`. Destructure both elements; cast to string at the boundary if your downstream API expects a string.
+2. **`getBridgeableAmount` reshaped.** Resolves to `Result<BridgeLimit, SodaxError>` (with `BridgeLimit = { amount, decimals, type }`), not raw `Result<bigint>`. UI code that displayed the bigint directly needs `result.value.amount`.
+3. **`getBridgeableTokens` is synchronous now.** It returns `Result<XToken[]>` directly (no `await`). v1 was a `Promise`. `await` still typechecks but `.then(...)` is a runtime error.
+4. **Tokens are bridgeable iff they share the same vault.** Same chain pair, same underlying — but if you bridge USDC.e on chain A and the destination's USDC has a different vault, the call rejects with `VALIDATION_FAILED`. Use `getBridgeableTokens(srcChainKey, dstChainKey, srcAsset.address)` to enumerate compatible destinations.
 4. **`createBridgeIntent` is spoke-only — no relay.** If you call it expecting a finished bridge, you'll have a pending hub-side transfer that never executes. Either use `bridge()` for the full flow, or call the relay layer manually after `createBridgeIntent`.
 
 ## Verification

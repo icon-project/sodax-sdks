@@ -31,7 +31,7 @@ Pair: [`../../integration/features/swap.md`](../../integration/features/swap.md)
 
 ### Deleted symbols
 
-- `useSpokeProvider` (React hook) and the `SpokeProvider` union — v1 wrapped wallet provider in a per-chain class. v2: pass `walletProvider` directly. See [`../breaking-changes/architecture.md`](../breaking-changes/architecture.md) § 1.
+- The `SpokeProvider` union and per-chain `*SpokeProvider` classes — gone. v2 takes `walletProvider` directly. See [`../breaking-changes/architecture.md`](../breaking-changes/architecture.md) § 1.
 - `IntentError<IntentErrorCode>` and `isIntentError` / `isIntentPostExecutionFailedError` / `isIntentSubmitTxFailedError` type guards. Replaced by `isSodaxError` + feature/code discrimination.
 - `CustomProvider` (Hana wallet window typedecl) — declare `unknown` or import directly from the wallet vendor.
 - `hubAssets` global — gone. `XToken.vault` and `XToken.hubAsset` baked in.
@@ -167,6 +167,8 @@ The underlying read doesn't consult the wallet provider; `raw: true` is the cont
 ```
 
 ## Pitfalls
+
+Cross-cutting traps (Result destructuring, error-model migration, srcChain/dstChain renames, etc.) live in [`../ai-rules.md`](../ai-rules.md). The list below is feature-specific — typecheck fingerprints, return-shape diffs, and gotchas unique to this feature.
 
 1. **Over-broad regex on `srcChain` / `dstChain`.** Request types renamed; `Intent` (read shape) didn't. Distinguish "I'm building a request" from "I'm reading an intent."
 2. **`createIntent` success shape changed from tuple to object.** `{ tx, intent, relayData }`, not `[spokeTxHash, intent, relayData]`.

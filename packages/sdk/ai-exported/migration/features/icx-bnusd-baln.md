@@ -8,7 +8,7 @@ Pair: [`../../integration/features/icx-bnusd-baln.md`](../../integration/feature
 
 1. **Drop `spokeProvider`. Pass `walletProvider` directly.**
 2. **Add `srcChainKey` + `srcAddress` to every action params.** All migration param types (`MigrationParams<K>`, `UnifiedBnUSDMigrateParams<K>`, `IcxToSodaMigrateParams<K>`, `RevertSodaToIcxParams<K>`, `BalnSwapParams<K>`) gained both fields and a `<K>` generic.
-3. **All 4 orchestrator methods return `Result<[SpokeTxHash, HubTxHash]>`.** v1 returned a string tx hash and threw on error.
+3. **All 4 orchestrator methods return `Result<TxHashPair>`.** v1 returned a string tx hash and threw on error.
 4. **`migratebnUSD` carries `direction` on error context** — `'forward'` (legacy → new) or `'reverse'` (new → legacy). The SDK detects direction from `(srcToken, dstToken)` addresses.
 5. **`BalnSwapService` lock-management methods STILL THROW.** `claim`, `claimUnstaked`, `stake`, `unstake`, `cancelUnstake`, `getDetailedUserLocks` — these 6 methods preserve the v1 throw-on-error contract. Wrap in `try/catch` until a future cleanup release converts them to `Result`.
 6. **Errors → `SodaxError` + `Result<T>`.** v1's `MigrationError<MigrationErrorCode>` is gone.
@@ -26,7 +26,6 @@ Pair: [`../../integration/features/icx-bnusd-baln.md`](../../integration/feature
 ### Deleted symbols
 
 - `MigrationError<MigrationErrorCode>` and `isMigrationError` — replaced by `SodaxError<C>` + `feature: 'migration'`.
-- `useSpokeProvider` (React) — gone.
 - The 6 v1 separate-method-per-direction names (`migrateBnUSDForward`, `migrateBnUSDReverse`, …) — collapsed into `migratebnUSD` with auto-direction detection on `error.context.direction`.
 
 ### v1 → v2 error code crosswalk
@@ -81,7 +80,7 @@ Standard pattern:
 +   walletProvider: iconWp,
 + });
 + if (!result.ok) return;
-+ const [spokeHash, hubHash] = result.value;
++ const { srcChainTxHash, dstChainTxHash } = result.value;
 ```
 
 `migrateBaln` adds `lockPeriodMonths: 0 | 1 | 2 | 3 | 6 | 12 | 18 | 24` to the params. Reward multiplier ranges 0.5x (0 months) – 1.5x (24 months).
@@ -129,6 +128,8 @@ const allowed = await sodax.migration.isAllowanceValid({
 `claim`, `claimUnstaked`, `unstake`, `cancelUnstake`, `getDetailedUserLocks` follow the same pattern. They preserve the throw-on-error contract for now — future cleanup will Result-wrap them.
 
 ## Pitfalls
+
+Cross-cutting traps (Result destructuring, error-model migration, srcChain/dstChain renames, etc.) live in [`../ai-rules.md`](../ai-rules.md). The list below is feature-specific — typecheck fingerprints, return-shape diffs, and gotchas unique to this feature.
 
 1. **`migratebnUSD` direction detection.** v1 had explicit forward/reverse methods; v2 detects from `(srcToken, dstToken)`. If both are on the same side (both legacy or both new), the SDK rejects with `VALIDATION_FAILED`. Use the `direction` field on `error.context` to disambiguate in error messaging.
 2. **BALN lock methods don't return `Result`.** Be careful migrating wrappers — if your wrapper assumes Result-shape, lock methods will produce `undefined.ok` runtime errors. Keep the `try/catch` shape.

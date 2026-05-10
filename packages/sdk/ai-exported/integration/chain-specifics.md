@@ -7,7 +7,7 @@ EVM chains (12 of them) work uniformly through `IEvmWalletProvider`. Non-EVM cha
 1. [Stellar trustline](#1-stellar-trustline) — `STELLAR_MAINNET`. Required before receiving any non-XLM asset.
 2. [Bitcoin PSBT and Radfi](#2-bitcoin-psbt-and-radfi) — `BITCOIN_MAINNET`. PSBT signing; trading wallet; Radfi auth/session.
 3. [Solana PDA derivation](#3-solana-pda-derivation) — `SOLANA_MAINNET`. Deterministic addresses; one-time setup utilities.
-4. [ICON Hana wallet](#4-icon-hana-wallet) — `ICON_MAINNET`. `HanaWalletConnector`; chain key string vs numeric ID.
+4. [ICON Hana wallet](#4-icon-hana-wallet) — `ICON_MAINNET`. Low-level Hana-extension helpers; chain key string vs numeric ID.
 5. [NEAR connector discovery](#5-near-connector-discovery) — `NEAR_MAINNET`. Account-id semantics; multiple wallet variants.
 
 ---
@@ -115,26 +115,18 @@ Solana addresses are base58 PublicKey strings, not `0x…` hex. `GetAddressType<
 
 ## 4. ICON Hana wallet
 
-ICON uses the Hana browser-extension wallet for dApp signing. SODAX provides a connector helper.
+ICON uses the Hana browser-extension wallet for dApp signing. The SDK ships low-level helper functions (file: `HanaWalletConnector.ts`) that wrap the Hana extension's JSON-RPC interface; consumers compose them into an `IIconWalletProvider` implementation.
 
 ```ts
-import { HanaWalletConnector } from '@sodax/sdk';
+import { requestAddress, requestSigning, requestJsonRpc } from '@sodax/sdk';
 
-const connector = new HanaWalletConnector();
-await connector.connect();
-const address = connector.getWalletAddress();   // 'hx…'
+const result = await requestAddress();   // returns Result<IconAddress>
+if (result.ok) {
+  const address = result.value;          // 'hx…'
+}
 ```
 
-For Node scripts, use `IconWalletProvider` with a private key:
-
-```ts
-import { IconWalletProvider } from '@sodax/wallet-sdk-core';
-
-const iconWp = new IconWalletProvider({
-  privateKey: process.env.ICON_PRIVATE_KEY!,
-  rpcUrl: 'https://ctz.solidwallet.io/api/v3',
-});
-```
+ICON spoke calls require an `IIconWalletProvider`. Implementations either compose the helper functions above into a class your app owns, or use the reference implementation that ships in `@sodax/wallet-sdk-core` (separate package, install separately).
 
 ### `ChainKeys.ICON_MAINNET` is a string `'0x1.icon'`
 
@@ -161,21 +153,7 @@ Injective is a separate chain family but uses a similar wallet-extension model. 
 
 ## 5. NEAR connector discovery
 
-NEAR has multiple wallet variants (NEAR Wallet, MyNearWallet, Meteor, Sender, …). The SDK uses a connector-discovery pattern: at app startup, the wallet-sdk-react layer enumerates available extensions and registers `XConnector` instances for each.
-
-```ts
-import { NearWalletProvider } from '@sodax/wallet-sdk-core';
-
-// For Node scripts:
-const nearWp = new NearWalletProvider({
-  privateKey: process.env.NEAR_PRIVATE_KEY!,
-  accountId: 'alice.near',
-  rpcUrl: 'https://rpc.mainnet.near.org',
-});
-
-// In React (wallet-sdk-react auto-discovers):
-const nearWp = useWalletProvider({ xChainId: ChainKeys.NEAR_MAINNET });
-```
+NEAR has multiple wallet variants (NEAR Wallet, MyNearWallet, Meteor, Sender, …). NEAR spoke calls require an `INearWalletProvider`. The interface is exported from `@sodax/sdk`; consumers supply an object satisfying it. A reference implementation ships in `@sodax/wallet-sdk-core` (separate package — install separately); browser-side connector discovery for the multiple NEAR wallet variants happens there, not in `@sodax/sdk` itself.
 
 ### Account ID semantics
 
@@ -207,5 +185,5 @@ Each has its own `I*WalletProvider` interface with chain-specific signing method
 ## Cross-references
 
 - `WalletProviderSlot` and chain narrowing: [`architecture.md`](architecture.md) §§ 5, 6.
-- Per-chain wallet provider interfaces: [`reference.md`](reference.md) § 2.
-- Cast-at-boundary pattern for chain-narrowed providers: [`recipes.md`](recipes.md) § 5.
+- Per-chain wallet provider interfaces: [`reference/`](reference/) § 2.
+- Cast-at-boundary pattern for chain-narrowed providers: [`recipes/`](recipes/) § 5.

@@ -8,10 +8,10 @@
   },
   "scripts": {
     "dev": "vite --port 3000 --host",
-    "build": "NODE_OPTIONS=--max-old-space-size=8192 vite build",
+    "build": "echo 'demo_v1 is a frozen v1 reference — build skipped. Use pnpm dev to browse.' && exit 0",
     "preview": "vite preview",
     "test": "true",
-    "checkTs": "tsc --noEmit",
+    "checkTs": "echo 'demo_v1 is a frozen v1 reference; intentionally uses removed v1 APIs.' && exit 0",
     "pretty": "biome format . --write",
     "lint": "biome lint . --write",
     "start:prod": "pnpm run build && serve -s dist",

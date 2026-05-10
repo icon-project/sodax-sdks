@@ -13,13 +13,16 @@ A bridge call deposits the source token into its vault on the hub, then triggers
 ## Public methods
 
 ```ts
-sodax.bridge.bridge<K>(action: BridgeAction<K, false>): Promise<Result<[SpokeTxHash, HubTxHash], SodaxError>>;
+sodax.bridge.bridge<K>(action: BridgeAction<K, false>): Promise<Result<TxHashPair, SodaxError>>;
 sodax.bridge.createBridgeIntent<K, Raw>(action): Promise<Result<CreateBridgeIntentResult<K, Raw>, SodaxError>>;
 sodax.bridge.approve<K, Raw>(args): Promise<Result<TxReturnType<K, Raw>, SodaxError>>;
 sodax.bridge.isAllowanceValid<K, Raw>(args): Promise<Result<boolean, SodaxError>>;
 
-sodax.bridge.getBridgeableAmount(srcChainKey, srcToken, dstChainKey, dstToken): Promise<Result<bigint, SodaxError>>;
-sodax.bridge.getBridgeableTokens(srcChainKey, srcToken): Promise<Result<XToken[], SodaxError>>;
+sodax.bridge.getBridgeableAmount(from: XToken, to: XToken): Promise<Result<BridgeLimit, SodaxError>>;
+sodax.bridge.getBridgeableTokens(from: SpokeChainKey, to: SpokeChainKey, token: string): Result<XToken[], SodaxError>;
+// Plus the sync helper:
+sodax.bridge.isBridgeable({ from: XToken, to: XToken }): boolean;
+sodax.bridge.getFee(inputAmount: bigint): bigint;
 ```
 
 ## Action params shape
@@ -56,7 +59,7 @@ const result = await sodax.bridge.bridge({
 });
 
 if (!result.ok) return;
-const [spokeHash, hubHash] = result.value;
+const { srcChainTxHash, dstChainTxHash } = result.value;
 ```
 
 ### Create-intent (custom relay control)
@@ -75,29 +78,28 @@ const { tx, intent, relayData } = result.value;
 
 ### Bridgeable-amount check
 
-Respects vault deposit limits (spoke→hub) and asset-manager balance (hub→spoke):
+Respects vault deposit limits (spoke→hub) and asset-manager balance (hub→spoke). Pass the source and destination tokens as full `XToken` objects (each carries its own `chainKey`):
 
 ```ts
-const result = await sodax.bridge.getBridgeableAmount(
-  ChainKeys.ARBITRUM_MAINNET,
-  USDC_ARBITRUM.address,
-  ChainKeys.STELLAR_MAINNET,
-  USDC_STELLAR.address,
-);
+const result = await sodax.bridge.getBridgeableAmount(USDC_ARBITRUM, USDC_STELLAR);
 if (result.ok) {
-  console.log(`Up to ${result.value} can be bridged`);
+  const { amount, decimals, type } = result.value;   // BridgeLimit
+  console.log(`Up to ${amount} (${decimals} decimals) can be bridged`);
 }
 ```
 
 ### Find compatible tokens
 
+Synchronous (config-derived). Pass source-chain key, destination-chain key, and the source token address; the SDK filters the destination's supported tokens by matching vault:
+
 ```ts
-const result = await sodax.bridge.getBridgeableTokens(
+const result = sodax.bridge.getBridgeableTokens(
   ChainKeys.ARBITRUM_MAINNET,
+  ChainKeys.STELLAR_MAINNET,
   USDC_ARBITRUM.address,
 );
 if (result.ok) {
-  // result.value: XToken[] — every token across all chains that shares USDC's vault
+  // result.value: XToken[] — Stellar-side tokens that share USDC_ARBITRUM's vault
   for (const token of result.value) {
     console.log(token.chainKey, token.symbol);
   }
@@ -108,11 +110,11 @@ if (result.ok) {
 
 | Method | Success type |
 |---|---|
-| `bridge` | `[SpokeTxHash, HubTxHash]` |
+| `bridge` | `TxHashPair` |
 | `createBridgeIntent` | `CreateBridgeIntentResult<K, Raw>` = `{ tx: TxReturnType<K, Raw>, intent, relayData }` |
 | `approve` | `TxReturnType<K, Raw>` |
 | `isAllowanceValid` | `boolean` |
-| `getBridgeableAmount` | `bigint` |
+| `getBridgeableAmount` | `BridgeLimit = { amount, decimals, type }` |
 | `getBridgeableTokens` | `XToken[]` |
 
 ## Error codes

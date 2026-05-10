@@ -27,7 +27,7 @@ spoke chain (e.g. Arbitrum)
     ▼
 SpokeService (in @sodax/sdk)
     │
-    │  IntentRelayApiService.submitTransaction
+    │  submitTransaction (from intentRelay module)
     ▼
 relay layer
     │
@@ -40,7 +40,7 @@ EvmHubProvider
 destination spoke (e.g. Stellar)
 ```
 
-For most consumers, this whole pipeline is one method call (`sodax.swaps.swap(...)`, `sodax.bridge.bridge(...)`, etc.). The result is a `Result<[SpokeTxHash, HubTxHash]>` (or `{ srcChainTxHash, dstChainTxHash }` for money market). The relay state in between is handled internally.
+For most consumers, this whole pipeline is one method call (`sodax.swaps.swap(...)`, `sodax.bridge.bridge(...)`, etc.). The result is a `Result<TxHashPair>` where `TxHashPair = { srcChainTxHash, dstChainTxHash }` — the spoke transaction hash on the source chain and the relayed hub transaction hash. The relay state in between is handled internally.
 
 **You will hit "the relay" surface area** when:
 
@@ -50,7 +50,7 @@ For most consumers, this whole pipeline is one method call (`sodax.swaps.swap(..
 
 ### Supported chains
 
-20 total. EVM (12): Sonic (hub), Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia. Non-EVM (8): Solana, Sui, Stellar, ICON, Injective, NEAR, Stacks, Bitcoin. See [`reference.md`](reference.md) § "Chain keys" for the full table with relay IDs and address-type mapping.
+20 total. EVM (12): Sonic (hub), Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia. Non-EVM (8): Solana, Sui, Stellar, ICON, Injective, NEAR, Stacks, Bitcoin. See [`reference/`](reference/) § "Chain keys" for the full table with relay IDs and address-type mapping.
 
 ---
 
@@ -156,12 +156,13 @@ const sodax = new Sodax();
 await sodax.config.initialize();   // network call + cache; fall back on failure
 
 // After init:
-sodax.config.isSupportedChain(chainKey);
+sodax.config.isValidSpokeChainKey(chainKey);
 sodax.config.findSupportedTokenBySymbol(chainKey, 'USDC');
 sodax.config.getSupportedTokensPerChain();
-sodax.config.getOriginalAssetAddress(hubAddress);
+sodax.config.getOriginalAssetAddress(chainKey, hubAsset);   // (chainId, hubAsset) → original spoke-side address
 sodax.config.getMoneyMarketReserveAssets();
-sodax.config.getSolverSupportedTokens(chainKey);
+sodax.config.getMoneyMarketToken(chainKey, tokenAddress);   // resolve a hub-asset address → XToken
+sodax.config.getSupportedSwapTokensByChainId(chainKey);     // solver-supported tokens for one chain
 sodax.config.getSpokeChainKeyFromIntentRelayChainId(BigInt(...));
 ```
 
@@ -192,7 +193,7 @@ ChainKeys.BITCOIN_MAINNET          // 'bitcoin'
 // …
 ```
 
-The full table with values + chain family + relay id is in [`reference.md`](reference.md) § "Chain keys".
+The full table with values + chain family + relay id is in [`reference/`](reference/) § "Chain keys".
 
 ### Narrowing
 
@@ -357,7 +358,7 @@ class SodaxError<C extends SodaxErrorCode = SodaxErrorCode> extends Error {
 | `EXTERNAL_API_ERROR` | Upstream API call failed (solver, backend). |
 | `UNKNOWN` | Last-resort catch in an outer `try`. Should be rare. |
 
-The full per-code semantics, common context fields, per-feature narrow unions, and retry guidance are in [`reference.md`](reference.md) § "Error codes".
+The full per-code semantics, common context fields, per-feature narrow unions, and retry guidance are in [`reference/`](reference/) § "Error codes".
 
 ### `(feature, code)` discrimination
 
@@ -387,7 +388,7 @@ type CreateSupplyIntentErrorCode = Extract<
 >;
 ```
 
-Switch exhaustively over the narrow union when you know which method emitted the error. The full per-method catalogue is in [`reference.md`](reference.md) § "Per-method error codes".
+Switch exhaustively over the narrow union when you know which method emitted the error. The full per-method catalogue is in [`reference/`](reference/) § "Per-method error codes".
 
 ### Context fields
 
@@ -441,18 +442,18 @@ if (isSwapError(e)) {
 }
 ```
 
-Use these in cross-bundle code (Next.js apps, ESM/CJS interop, monorepos). `instanceof SodaxError` returns `false` when `@sodax/sdk` is loaded twice in the same bundle — `isSodaxError` walks structural shape and works regardless.
+Use these in cross-bundle code (apps with mixed ESM/CJS resolution, monorepos with multiple package copies). `instanceof SodaxError` returns `false` when `@sodax/sdk` is loaded twice in the same bundle — `isSodaxError` walks structural shape and works regardless.
 
 ---
 
 ## 9. Relay layer: `relayTxAndWaitPacket` and `mapRelayFailure`
 
-Cross-chain coordination is centralised in `IntentRelayApiService`, an internal SDK service. Two entry points the feature services use under the hood:
+Cross-chain coordination is exposed as two top-level functions (re-exported from `@sodax/sdk`'s barrel):
 
-- `submitTransaction({ srcChainKey, txHash, payload })` — POSTs the spoke transaction to the relay submit endpoint and resolves the relay's first-stage acknowledgement.
-- `relayTxAndWaitPacket({ srcChainKey, dstChainKey, txHash, payload, timeout? })` — runs `submitTransaction` and then polls until the destination packet reaches `executed`.
+- `submitTransaction({ relayerApiEndpoint, srcChainKey, txHash, payload })` — POSTs the spoke transaction to the relay submit endpoint and resolves the relay's first-stage acknowledgement.
+- `relayTxAndWaitPacket({ relayerApiEndpoint, srcChainKey, dstChainKey, txHash, payload, timeout? })` — runs `submitTransaction` and then polls until the destination packet reaches `executed`.
 
-`IntentRelayApiService` is **not** exposed on the `Sodax` instance. Consumers do not call it directly — every feature service (`swaps.swap`, `bridge.bridge`, `staking.stake`, …) wraps the spoke→hub leg internally. If you genuinely need custom relay orchestration (rare), import the class from `@sodax/sdk` and instantiate it with the same `relayerApiEndpoint` your `Sodax` instance uses.
+These functions are **not** exposed on the `Sodax` instance. Consumers don't call them directly — every feature service (`swaps.swap`, `bridge.bridge`, `staking.stake`, …) wraps the spoke→hub leg internally. If you genuinely need custom relay orchestration (rare), import `relayTxAndWaitPacket` / `submitTransaction` from `@sodax/sdk` and pass the same `relayerApiEndpoint` your `Sodax` instance uses.
 
 ### Relay-layer error contract
 
@@ -473,12 +474,10 @@ These codes appear on `error.context.relayCode` of the `SodaxError` that surface
 The single shared mapper from a relay-layer error to a `SodaxError`. Every feature service uses it internally — exported for custom orchestration:
 
 ```ts
-import { mapRelayFailure, IntentRelayApiService } from '@sodax/sdk';
-
-const relayApi = new IntentRelayApiService(/* relayerApiEndpoint */);
+import { mapRelayFailure, relayTxAndWaitPacket } from '@sodax/sdk';
 
 try {
-  await relayApi.relayTxAndWaitPacket({ /* … */ });
+  await relayTxAndWaitPacket({ /* relayerApiEndpoint, srcChainKey, dstChainKey, txHash, payload, timeout? */ });
 } catch (e) {
   const sodaxError = mapRelayFailure(e, {
     feature: 'swap',
@@ -495,7 +494,7 @@ Maps to one of: `'TX_SUBMIT_FAILED'`, `'RELAY_TIMEOUT'`, `'RELAY_FAILED'`, or `'
 
 ### When to use the relay layer directly
 
-Almost never. The right abstraction is a feature service — `sodax.swaps.swap(...)`, `sodax.bridge.bridge(...)`, `sodax.staking.stake(...)` — which internally builds the spoke tx, calls `relayTxAndWaitPacket`, runs hub-side post-execution, and returns the unified `Result<[SpokeTxHash, HubTxHash]>`.
+Almost never. The right abstraction is a feature service — `sodax.swaps.swap(...)`, `sodax.bridge.bridge(...)`, `sodax.staking.stake(...)` — which internally builds the spoke tx, calls `relayTxAndWaitPacket`, runs hub-side post-execution, and returns the unified `Result<TxHashPair>`.
 
 You drop down to the relay layer only when:
 
@@ -506,15 +505,15 @@ You drop down to the relay layer only when:
 ### Cross-references
 
 - `RecoveryService` for pulling stuck hub-wallet assets back to a spoke chain: see [`features/auxiliary-services.md`](features/auxiliary-services.md).
-- Per-feature error codes related to relay (e.g. `'TX_SUBMIT_FAILED'`, `'RELAY_TIMEOUT'`): [`reference.md`](reference.md) § "Error codes".
+- Per-feature error codes related to relay (e.g. `'TX_SUBMIT_FAILED'`, `'RELAY_TIMEOUT'`): [`reference/`](reference/) § "Error codes".
 
 ---
 
 ## Cross-references
 
-- Quickstart (Node + Next.js setup): [`quickstart.md`](quickstart.md).
-- Lookup tables (chain keys, error codes, public API surface): [`reference.md`](reference.md).
-- Recipes (init, result handling, raw vs signed, narrowing, testing): [`recipes.md`](recipes.md).
+- Quickstart (install + initialize): [`quickstart.md`](quickstart.md).
+- Lookup tables (chain keys, error codes, public API surface): [`reference/`](reference/).
+- Recipes (init, result handling, raw vs signed, narrowing, testing): [`recipes/`](recipes/).
 - Per-feature usage: [`features/`](features/).
 - Non-EVM chain quirks: [`chain-specifics.md`](chain-specifics.md).
 - v1 → v2 porting context: [`../migration/README.md`](../migration/README.md).

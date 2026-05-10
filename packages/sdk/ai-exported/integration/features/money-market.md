@@ -27,22 +27,24 @@ sodax.moneyMarket.createRepayIntent<K, Raw>(...): Promise<Result<...>>;
 
 // Approve + allowance (action-discriminated)
 sodax.moneyMarket.approve<K, Raw>(args): Promise<Result<TxReturnType<K, Raw>, SodaxError>>;
-sodax.moneyMarket.isAllowanceValid<K, Raw>(args): Promise<Result<boolean, SodaxError>>;
+sodax.moneyMarket.isAllowanceValid<K>(args): Promise<Result<boolean, SodaxError>>;
 
 // Estimation
-sodax.moneyMarket.estimateGas(args): Promise<Result<GasEstimate, SodaxError>>;
+sodax.moneyMarket.estimateGas<K>(params): Promise<Result<GetEstimateGasReturnType<K>, SodaxError>>;
 
-// Reads
-sodax.moneyMarket.getSupportedTokens(): Record<SpokeChainKey, XToken[]>;
-sodax.moneyMarket.getSupportedTokensByChainId(chainKey): XToken[];
-sodax.moneyMarket.getSupportedReserves(): ReserveAsset[];
-sodax.moneyMarket.getReservesData(): Promise<Result<...>>;
-sodax.moneyMarket.getReservesHumanized(): Promise<Result<...>>;
-sodax.moneyMarket.getUserReservesData(srcChainKey, userAddress): Promise<Result<...>>;
-sodax.moneyMarket.getUserFormattedSummary(srcChainKey, userAddress): Promise<Result<...>>;
-sodax.moneyMarket.getATokensBalances(aTokens, spokeChainKey, userAddress): Promise<Result<...>>;
-sodax.moneyMarket.getAToken(aToken): Promise<Result<Erc20Token & { chainKey: ChainKey }, SodaxError>>;
+// Reads (sync — config-derived, no I/O)
+sodax.moneyMarket.getSupportedTokens(): GetMoneyMarketTokensApiResponse;
+sodax.moneyMarket.getSupportedTokensByChainId(chainKey): readonly XToken[];
+sodax.moneyMarket.getSupportedReserves(): readonly Address[];
+
+// Hub-side calldata builders (Hex outputs; pre-flight inspection / custom orchestration)
+sodax.moneyMarket.buildSupplyData(srcChainKey, fromToken, amount, toHubAddress): Hex;
+sodax.moneyMarket.buildBorrowData(...): Hex;
+sodax.moneyMarket.buildWithdrawData(...): Hex;
+sodax.moneyMarket.buildRepayData(...): Hex;
 ```
+
+For per-position user reads (reserves data, user reserves data, formatted summaries, aToken balances, etc.) the entrypoint is `sodax.backendApi`, not `MoneyMarketService` — see `auxiliary-services.md` § "BackendApiService" for `getMoneyMarketPosition`, `getAllMoneyMarketAssets`, `getMoneyMarketAsset`, `getMoneyMarketAssetBorrowers`, `getMoneyMarketAssetSuppliers`, `getAllMoneyMarketBorrowers`.
 
 ## Action params shape
 
@@ -147,7 +149,6 @@ await sodax.moneyMarket.approve({
 
 const allowed = await sodax.moneyMarket.isAllowanceValid({
   params: { srcChainKey, srcAddress, token, amount, action: 'supply' },
-  raw: true,    // no walletProvider needed for read-only
 });
 ```
 
@@ -161,11 +162,13 @@ The `action` field routes to the right token under the hood — relevant for rep
 | `create*Intent` | `CreateIntentResult<K, Raw>` |
 | `approve` | `TxReturnType<K, Raw>` |
 | `isAllowanceValid` | `boolean` |
-| `getUserFormattedSummary` | RAY-formatted user state |
-| `getATokensBalances` | `Record<address, bigint>` |
-| `getAToken` | `Erc20Token & { chainKey: ChainKey }` (hub chain key, not a full `XToken`) |
+| `estimateGas` | `GetEstimateGasReturnType<K>` (chain-family-specific) |
+| `getSupportedTokens` | `GetMoneyMarketTokensApiResponse` (record of chains → token arrays) |
+| `getSupportedTokensByChainId` | `readonly XToken[]` |
+| `getSupportedReserves` | `readonly Address[]` |
+| `buildSupplyData` / `buildBorrowData` / `buildWithdrawData` / `buildRepayData` | `Hex` (calldata for hub-side calls) |
 
-> The `TxHashPair` object shape (vs `[spokeHash, hubHash]` array used by bridge/staking/dex) is preserved from v1.
+> Every cross-chain mutation across the SDK (bridge, staking, dex, migration, MM) returns `TxHashPair = { srcChainTxHash, dstChainTxHash }` — there is no array-form variant in v2.
 
 ## Error codes
 
@@ -186,7 +189,7 @@ The `action` field routes to the right token under the hood — relevant for rep
 
 ## RAY precision math
 
-Interest calculations use RAY precision (27 decimals), ported from Aave's math libraries. `getUserFormattedSummary` returns pre-formatted values; raw RAY-precision data is on `getReservesData` / `getUserReservesData` for custom math. Don't simplify the precision handling.
+Aave's RAY precision (27 decimals) is used for interest calculations under the hood. Raw RAY values flow through `BackendApiService.getMoneyMarketAsset` / `getMoneyMarketPosition` (via `sodax.backendApi`); pre-formatted user-facing values come from the same backend service. Don't simplify the precision handling — porting Aave's `RayMath`/`PercentageMath` losslessly is a load-bearing requirement.
 
 ## Cross-references
 
