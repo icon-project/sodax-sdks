@@ -240,7 +240,6 @@ import {
   bnUSDLegacySpokeChainIds,
   newbnUSDSpokeChainIds,
   bnUSDLegacyTokens,
-  bnUSDNewTokens,
   isLegacybnUSDChainId,
   isNewbnUSDChainId,
   isLegacybnUSDToken,

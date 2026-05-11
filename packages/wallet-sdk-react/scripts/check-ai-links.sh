@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
-# CI guard for `ai-exported/` cross-references.
+# CI guard for cross-references in `@sodax/wallet-sdk-react` documentation.
+#
+# Scope (all package-owned markdown):
+#   - ai-exported/**/*.md
+#   - docs/**/*.md            (partner-facing how-to docs)
+#   - skills/**/*.md          (partner skill guides)
+#   - README.md
+#   - CLAUDE.md
 #
 # Walks every markdown file and validates that every relative link target
 # (`[text](path)` or `[text](path#anchor)`) resolves to an existing path on
@@ -25,6 +32,16 @@ if [ ! -d "$DOCS_DIR" ]; then
   echo "error: $DOCS_DIR/ not found (run from packages/wallet-sdk-react/)" >&2
   exit 2
 fi
+
+# Enumerate every markdown file in this package's documentation surface.
+list_docs() {
+  find "$DOCS_DIR" -name '*.md' -type f 2>/dev/null
+  [ -d docs ] && find docs -name '*.md' -type f 2>/dev/null
+  [ -d skills ] && find skills -name '*.md' -type f 2>/dev/null
+  for f in README.md CLAUDE.md; do
+    [ -f "$f" ] && echo "$f"
+  done
+}
 
 # Strip fenced code blocks from a markdown file, then emit every `](target)`
 # group on its own line. Awk tracks the ``` toggle so regex/code samples
@@ -68,14 +85,14 @@ broken=$(
             echo "BROKEN: $f -> $target"
           fi
         done || true
-  done < <(find "$DOCS_DIR" -name '*.md' -type f)
+  done < <(list_docs)
 )
 
 if [ -n "$broken" ]; then
-  echo "FAIL: broken relative links in $DOCS_DIR/" >&2
+  echo "FAIL: broken relative links in @sodax/wallet-sdk-react docs" >&2
   echo "$broken" | sed 's/^/    /' >&2
   exit 1
 fi
 
-count=$(find "$DOCS_DIR" -name '*.md' -type f | wc -l | tr -d ' ')
+count=$(list_docs | wc -l | tr -d ' ')
 echo "ok: every relative link in $count markdown files resolves"

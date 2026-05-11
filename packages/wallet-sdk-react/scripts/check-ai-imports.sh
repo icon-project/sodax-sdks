@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # CI guard that typechecks every `import … from '@sodax/wallet-sdk-react[/xchains/<chain>]'`
-# statement found in `ai-exported/**/*.md` against the local source.
+# statement found in `@sodax/wallet-sdk-react` documentation against the local source.
+#
+# Scope (all package-owned markdown):
+#   - ai-exported/**/*.md
+#   - docs/**/*.md            (partner-facing how-to docs)
+#   - skills/**/*.md          (partner skill guides)
+#   - README.md
+#   - CLAUDE.md
 #
 # Catches symbol-name drift: if a markdown example imports `useXAccount` or
 # `XverseXConnector` and that name has been renamed or removed from
@@ -32,6 +39,16 @@ if [ ! -d "$FIXTURE_DIR" ]; then
   echo "error: $FIXTURE_DIR/ not found (run from packages/wallet-sdk-react/)" >&2
   exit 2
 fi
+
+# Enumerate every markdown file in this package's documentation surface.
+list_docs() {
+  find "$DOCS_DIR" -name '*.md' -type f 2>/dev/null
+  [ -d docs ] && find docs -name '*.md' -type f 2>/dev/null
+  [ -d skills ] && find skills -name '*.md' -type f 2>/dev/null
+  for f in README.md CLAUDE.md; do
+    [ -f "$f" ] && echo "$f"
+  done
+}
 
 # Wipe previous fixture statements but keep tsconfig + README + .gitignore.
 find "$FIXTURE_DIR" -name 'imp-*.ts' -delete
@@ -112,10 +129,10 @@ while IFS= read -r f; do
 |g' | rewrite_specifier
     } > "$out"
   done < <(extract_imports_from "$f")
-done < <(find "$DOCS_DIR" -name '*.md' -type f | sort)
+done < <(list_docs | sort)
 
 if [ "$seq" -eq 0 ]; then
-  echo "ok: no \`import … from '@sodax/wallet-sdk-react'\` statements found in $DOCS_DIR (nothing to typecheck)"
+  echo "ok: no \`import … from '@sodax/wallet-sdk-react'\` statements found in @sodax/wallet-sdk-react docs (nothing to typecheck)"
   exit 0
 fi
 
@@ -126,7 +143,7 @@ tsc_out=$(npx --no-install tsc --noEmit -p "$FIXTURE_DIR" 2>&1 || true)
 fixture_errors=$(echo "$tsc_out" | grep -E "${FIXTURE_DIR}/imp-[0-9]+\.ts" || true)
 
 if [ -n "$fixture_errors" ]; then
-  echo "FAIL: at least one import statement extracted from $DOCS_DIR did not typecheck against local source." >&2
+  echo "FAIL: at least one import statement extracted from @sodax/wallet-sdk-react docs did not typecheck against local source." >&2
   echo >&2
   echo "$fixture_errors" | sed 's/^/    /' >&2
   echo >&2

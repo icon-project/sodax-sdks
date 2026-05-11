@@ -253,10 +253,9 @@ Concrete chain classes (e.g. `EvmXService`, `XverseXConnector`) are **not** expo
 
 **Barrel (`@sodax/wallet-sdk-react`)** exports:
 - Hooks, utils, types, interfaces, `SodaxWalletProvider`
-- `export type` only for `StellarXService`, `XverseXConnector`, `BtcWalletAddressType` (no runtime class)
 
 **Deep imports (`@sodax/wallet-sdk-react/xchains/<chain>`)** export:
-- Concrete classes for advanced use (e.g. `instanceof`, calling chain-specific methods)
+- Concrete classes and their named types (e.g. `XverseXConnector`, `BtcWalletAddressType`) for advanced use (`instanceof`, calling chain-specific methods, `import type` for narrow refs)
 
 ```typescript
 // ✅ Normal usage — barrel import

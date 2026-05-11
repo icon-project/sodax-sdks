@@ -36,7 +36,7 @@ Three reasons:
 
 ### Barrel (`@sodax/wallet-sdk-react`)
 
-Everything in `src/index.ts` — hooks, utils, types, interfaces, the `<SodaxWalletProvider>` component, the abstract `XConnector` / `XService` base classes, and a few `export type` re-exports for ergonomics:
+Everything in `src/index.ts` — hooks, utils, types, interfaces, the `<SodaxWalletProvider>` component, and the abstract `XConnector` / `XService` base classes:
 
 ```typescript
 // ✅ Barrel imports
@@ -53,9 +53,6 @@ import {
   type SodaxWalletConfig,
   type XAccount,
   type XConnection,
-  type StellarXService,             // type-only (no runtime class)
-  type XverseXConnector,            // type-only
-  type BtcWalletAddressType,        // type-only
   sortConnectors,
 } from '@sodax/wallet-sdk-react';
 ```
@@ -93,19 +90,17 @@ import {
 
 For the full list, see [`CONNECTORS.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONNECTORS.md#sub-path-imports--concrete-classes).
 
-### Type-only re-exports from the barrel
+### Concrete chain symbols live only in sub-paths
 
-Three types are surfaced from the barrel as `export type` for convenience — there's **no runtime class** at the barrel; you still need the sub-path for `new XverseXConnector()` or `instanceof`:
+Concrete connector / service classes — and their named types — are not re-exported from the barrel. Even a `type`-only reference must come from the sub-path; `import type { XverseXConnector } from '@sodax/wallet-sdk-react'` fails with TS2305 / TS2724.
 
 ```typescript
-// ✅ Type from barrel (no runtime class)
-import type { StellarXService, XverseXConnector, BtcWalletAddressType } from '@sodax/wallet-sdk-react';
-
-// ❌ Runtime class — must come from sub-path
+// ✅ Sub-path — works for both `type` and runtime use
 import { XverseXConnector } from '@sodax/wallet-sdk-react/xchains/bitcoin';
+import type { BtcWalletAddressType } from '@sodax/wallet-sdk-react/xchains/bitcoin';
 ```
 
-Add `export type` to the barrel only if a type is genuinely cross-cutting (typing a function param, narrowing a return type) and forcing consumers to deep-import for a type-only ref would be excessive ergonomics tax.
+If a cross-cutting type genuinely needs to be available from the barrel (typing a function param, narrowing a return type), add it as `export type { ... }` in `src/index.ts` — but the default is sub-path-only.
 
 ---
 

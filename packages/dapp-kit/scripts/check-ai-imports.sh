@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # CI guard that typechecks every `import … from '@sodax/dapp-kit'` statement
-# found in `ai-exported/**/*.md` against the local dapp-kit source.
+# found in `@sodax/dapp-kit` documentation against the local dapp-kit source.
+#
+# Scope (all package-owned markdown):
+#   - ai-exported/**/*.md
+#   - README.md
+#   - CLAUDE.md
+#   - src/hooks/backend/README.md   (in-source per-folder README)
 #
 # Catches symbol-name drift: if a markdown example imports `useSwap` and
 # that name has been renamed or removed from `src/index.ts`, this guard
@@ -12,6 +18,8 @@
 # a relative import of the local source.
 
 set -euo pipefail
+
+cd "$(dirname "$0")/.."
 
 DOCS_DIR="ai-exported"
 FIXTURE_DIR="scripts/_ai-imports-fixture"
@@ -25,6 +33,15 @@ if [ ! -d "$FIXTURE_DIR" ]; then
   echo "error: $FIXTURE_DIR/ not found (run from packages/dapp-kit/)" >&2
   exit 2
 fi
+
+# Enumerate every markdown file in this package's documentation surface.
+list_docs() {
+  find "$DOCS_DIR" -name '*.md' -type f 2>/dev/null
+  for f in README.md CLAUDE.md; do
+    [ -f "$f" ] && echo "$f"
+  done
+  find src -name 'README.md' -type f 2>/dev/null
+}
 
 # Keep tsconfig + README + .gitignore intact across runs.
 find "$FIXTURE_DIR" -name 'imp-*.ts' -delete
@@ -92,10 +109,10 @@ while IFS= read -r f; do
 |g' | sed -E "s|from[[:space:]]+(\"@sodax/dapp-kit\"\|'@sodax/dapp-kit')|from '${DAPPKIT_INDEX_REL}'|g"
     } > "$out"
   done < <(extract_imports_from "$f")
-done < <(find "$DOCS_DIR" -name '*.md' -type f | sort)
+done < <(list_docs | sort)
 
 if [ "$seq" -eq 0 ]; then
-  echo "ok: no \`import … from '@sodax/dapp-kit'\` statements found in $DOCS_DIR (nothing to typecheck)"
+  echo "ok: no \`import … from '@sodax/dapp-kit'\` statements found in @sodax/dapp-kit docs (nothing to typecheck)"
   exit 0
 fi
 
@@ -105,7 +122,7 @@ tsc_out=$(npx --no-install tsc --noEmit -p "$FIXTURE_DIR" 2>&1 || true)
 fixture_errors=$(echo "$tsc_out" | grep -E "${FIXTURE_DIR}/imp-[0-9]+\.ts" || true)
 
 if [ -n "$fixture_errors" ]; then
-  echo "FAIL: at least one import statement extracted from $DOCS_DIR did not typecheck against \`src/index.ts\`." >&2
+  echo "FAIL: at least one import statement extracted from @sodax/dapp-kit docs did not typecheck against \`src/index.ts\`." >&2
   echo >&2
   echo "$fixture_errors" | sed 's/^/    /' >&2
   echo >&2

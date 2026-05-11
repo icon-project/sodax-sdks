@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
-# CI guard for `packages/dapp-kit/ai-exported/` cross-references.
+# CI guard for cross-references in `@sodax/dapp-kit` documentation.
+#
+# Scope (all package-owned markdown):
+#   - ai-exported/**/*.md
+#   - README.md
+#   - CLAUDE.md
+#   - src/hooks/backend/README.md   (in-source per-folder README)
 #
 # Walks every markdown file and validates that every relative link target
 # (`[text](path)` or `[text](path#anchor)`) resolves to an existing path on
@@ -15,12 +21,24 @@
 
 set -euo pipefail
 
+cd "$(dirname "$0")/.."
+
 DOCS_DIR="ai-exported"
 
 if [ ! -d "$DOCS_DIR" ]; then
   echo "error: $DOCS_DIR/ not found (run from packages/dapp-kit/)" >&2
   exit 2
 fi
+
+# Enumerate every markdown file in this package's documentation surface.
+# Includes in-source per-folder READMEs (e.g. src/hooks/backend/README.md).
+list_docs() {
+  find "$DOCS_DIR" -name '*.md' -type f 2>/dev/null
+  for f in README.md CLAUDE.md; do
+    [ -f "$f" ] && echo "$f"
+  done
+  find src -name 'README.md' -type f 2>/dev/null
+}
 
 # Collect broken links into a string. The `while` loop runs in a sub-shell
 # (because of the piped read), so we capture its output rather than mutating
@@ -49,14 +67,14 @@ broken=$(
             echo "BROKEN: $f -> $target"
           fi
         done || true
-  done < <(find "$DOCS_DIR" -name '*.md' -type f)
+  done < <(list_docs)
 )
 
 if [ -n "$broken" ]; then
-  echo "FAIL: broken relative links in $DOCS_DIR/" >&2
+  echo "FAIL: broken relative links in @sodax/dapp-kit docs" >&2
   echo "$broken" | sed 's/^/    /' >&2
   exit 1
 fi
 
-count=$(find "$DOCS_DIR" -name '*.md' -type f | wc -l | tr -d ' ')
+count=$(list_docs | wc -l | tr -d ' ')
 echo "ok: every relative link in $count markdown files resolves"
