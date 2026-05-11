@@ -1,4 +1,4 @@
-# Skill: Backend Queries
+# Recipe: Backend Queries
 
 Read-only data hooks. No wallet connection required.
 
@@ -58,7 +58,7 @@ function IntentTracker({ txHash }: { txHash: string }) {
 ```tsx
 import { useBackendUserIntents } from '@sodax/dapp-kit';
 
-function IntentHistory({ userAddress }: { userAddress: string }) {
+function IntentHistory({ userAddress }: { userAddress: `0x${string}` }) {
   const { data: intents } = useBackendUserIntents({
     params: {
       userAddress,
@@ -69,9 +69,9 @@ function IntentHistory({ userAddress }: { userAddress: string }) {
 
   return (
     <div>
-      {intents?.map((intent, i) => (
+      {intents?.items.map((intent, i) => (
         <div key={i}>
-          <p>{intent.intentHash} -- {intent.status}</p>
+          <p>{intent.intentHash} -- {intent.open ? 'open' : 'closed'}</p>
         </div>
       ))}
     </div>
@@ -85,8 +85,9 @@ function IntentHistory({ userAddress }: { userAddress: string }) {
 import { useBackendOrderbook } from '@sodax/dapp-kit';
 
 function Orderbook() {
+  // `pagination` is nested under `params` per the canonical query-hook shape.
   const { data: orderbook } = useBackendOrderbook({
-    pagination: { offset: '0', limit: '20' },
+    params: { pagination: { offset: '0', limit: '20' } },
   });
   return <pre>{JSON.stringify(orderbook, null, 2)}</pre>;
 }
@@ -95,6 +96,7 @@ function Orderbook() {
 ## Money Market Dashboard
 
 ```tsx
+// @ai-snippets-skip — uses example field name supplyAPY not in MoneyMarketAsset type
 import { useBackendMoneyMarketPosition, useBackendAllMoneyMarketAssets } from '@sodax/dapp-kit';
 
 function MMDashboard({ userAddress }: { userAddress: string }) {
@@ -115,6 +117,7 @@ function MMDashboard({ userAddress }: { userAddress: string }) {
 All read hooks accept `queryOptions` to override defaults:
 
 ```tsx
+// @ai-snippets-skip
 const { data } = useBackendIntentByTxHash({
   params: { txHash },
   queryOptions: { staleTime: 5000, refetchInterval: 2000, retry: 3 },

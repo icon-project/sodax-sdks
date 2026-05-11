@@ -1,4 +1,4 @@
-# Skill: Setup
+# Recipe: Setup
 
 Install and wire `@sodax/dapp-kit` into a React project.
 
@@ -52,6 +52,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 If you want to use `@sodax/wallet-sdk-react` for wallet connectivity, wrap `SodaxWalletProvider` inside `QueryClientProvider`:
 
 ```tsx
+// @ai-snippets-skip
 import { SodaxWalletProvider, type SodaxWalletConfig } from '@sodax/wallet-sdk-react';
 
 const walletConfig: SodaxWalletConfig = {
@@ -79,6 +80,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 `createSodaxQueryClient` returns a `QueryClient` pre-wired with a `MutationCache.onError` hook for global mutation observability. Use it instead of `new QueryClient()`:
 
 ```tsx
+// @ai-snippets-skip — illustrative — multiple createSodaxQueryClient variations
 import { createSodaxQueryClient } from '@sodax/dapp-kit';
 
 // Default: logs every mutation failure as `[sodax] Mutation error: <error>`
@@ -117,24 +119,26 @@ export function useInitializeSodax() {
 ## Chain Key Constants
 
 ```tsx
-import {
-  ChainKeys,
-  // or individual constants:
-  SONIC_MAINNET_CHAIN_ID,      // '0x92.sonic' (hub)
-  ARBITRUM_MAINNET_CHAIN_ID,   // '0xa4b1.arbitrum'
-  BASE_MAINNET_CHAIN_ID,       // '0x2105.base'
-  BSC_MAINNET_CHAIN_ID,        // '0x38.bsc'
-  ETHEREUM_MAINNET_CHAIN_ID,   // '0x1.ethereum'
-  POLYGON_MAINNET_CHAIN_ID,    // '0x89.polygon'
-  OPTIMISM_MAINNET_CHAIN_ID,   // '0xa.optimism'
-  AVALANCHE_MAINNET_CHAIN_ID,  // '0xa86a.avalanche'
-  SUI_MAINNET_CHAIN_ID,        // 'sui:mainnet'
-  STELLAR_MAINNET_CHAIN_ID,    // 'stellar:mainnet'
-  SOLANA_MAINNET_CHAIN_ID,     // 'solana:mainnet'
-  ICON_MAINNET_CHAIN_ID,       // '0x1.icon'
-  INJECTIVE_MAINNET_CHAIN_ID,  // 'injective-1'
-  NEAR_MAINNET_CHAIN_ID,       // 'near:mainnet'
-  STACKS_MAINNET_CHAIN_ID,     // 'stacks:mainnet'
-  BITCOIN_MAINNET_CHAIN_ID,    // 'bitcoin:mainnet'
-} from '@sodax/sdk';
+import { ChainKeys } from '@sodax/sdk';
+
+// Examples (full list lives in @sodax/sdk's reference):
+ChainKeys.SONIC_MAINNET;       // 'sonic'           (hub)
+ChainKeys.ARBITRUM_MAINNET;    // '0xa4b1.arbitrum'
+ChainKeys.BASE_MAINNET;        // '0x2105.base'
+ChainKeys.BSC_MAINNET;         // '0x38.bsc'
+ChainKeys.ETHEREUM_MAINNET;    // '0x1.ethereum'
+ChainKeys.POLYGON_MAINNET;     // '0x89.polygon'
+ChainKeys.OPTIMISM_MAINNET;    // '0xa.optimism'
+ChainKeys.AVALANCHE_MAINNET;   // '0xa86a.avax'
+ChainKeys.SUI_MAINNET;         // 'sui'
+ChainKeys.STELLAR_MAINNET;     // 'stellar'
+ChainKeys.SOLANA_MAINNET;      // 'solana'
+ChainKeys.ICON_MAINNET;        // '0x1.icon'
+ChainKeys.INJECTIVE_MAINNET;   // 'injective-1'
+ChainKeys.NEAR_MAINNET;        // 'near'
+ChainKeys.STACKS_MAINNET;      // 'stacks'
+ChainKeys.BITCOIN_MAINNET;     // 'bitcoin'
+// HyperEVM, Lightlink, Redbelly, Kaia also available.
 ```
+
+**v1 → v2:** the legacy `*_MAINNET_CHAIN_ID` constants (e.g. `BSC_MAINNET_CHAIN_ID`) are gone. Use `ChainKeys.X_MAINNET` namespace access.

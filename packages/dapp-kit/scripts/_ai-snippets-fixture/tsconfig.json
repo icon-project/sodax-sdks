@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "isolatedModules": false,
+    "allowImportingTsExtensions": false,
+    "lib": ["ES2022", "DOM"],
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noImplicitAny": false,
+    "allowUnreachableCode": true,
+    "allowJs": false,
+    "baseUrl": ".",
+    "paths": {
+      "@sodax/dapp-kit": ["../../src/index.js"],
+      "@sodax/wallet-sdk-react": ["../../../wallet-sdk-react/src/index.js"]
+    }
+  },
+  "include": ["snippet-*.tsx", "_preamble.d.ts"]
+}

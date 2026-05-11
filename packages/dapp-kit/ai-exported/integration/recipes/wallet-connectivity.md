@@ -1,4 +1,4 @@
-# Skill: Wallet Connectivity
+# Recipe: Wallet Connectivity
 
 Connect wallets and pass wallet providers to feature hooks.
 
@@ -22,6 +22,7 @@ Connect wallets and pass wallet providers to feature hooks.
 `@sodax/wallet-sdk-react` provides per-chain wallet hooks:
 
 ```tsx
+// @ai-snippets-skip
 import { useEvmWallet } from '@sodax/wallet-sdk-react';
 
 function ConnectButton() {
@@ -48,7 +49,7 @@ import { useWalletProvider } from '@sodax/wallet-sdk-react';
 import { ChainKeys } from '@sodax/sdk';
 
 function MyFeature() {
-  const walletProvider = useWalletProvider(ChainKeys.BSC_MAINNET);
+  const walletProvider = useWalletProvider({ xChainId: ChainKeys.BSC_MAINNET });
   // undefined until wallet is connected for that chain
   // Pass as: useSwap() then swap({ params, walletProvider })
 }
@@ -60,11 +61,16 @@ function MyFeature() {
 
 ```tsx
 import { useXBalances } from '@sodax/dapp-kit';
-import { BSC_MAINNET_CHAIN_ID } from '@sodax/sdk';
+import { useXService, getXChainType } from '@sodax/wallet-sdk-react';
+import { ChainKeys, type XToken } from '@sodax/sdk';
 
-function TokenBalance({ address }: { address: string }) {
+function TokenBalance({ address, xTokens }: { address: string; xTokens: readonly XToken[] }) {
+  const xChainId = ChainKeys.BSC_MAINNET;
+  // `useXBalances` requires an `xService` from `@sodax/wallet-sdk-react` plus the chain key,
+  // the token list to read, and the user's address — all four fields are part of `params`.
+  const xService = useXService({ xChainType: getXChainType(xChainId) });
   const { data: balances } = useXBalances({
-    params: { xChainId: BSC_MAINNET_CHAIN_ID, address },
+    params: { xService, xChainId, xTokens, address },
   });
 
   // balances is a map of token address → balance (bigint)
@@ -81,7 +87,7 @@ import { useWalletProvider } from '@sodax/wallet-sdk-react';
 import { ChainKeys } from '@sodax/sdk';
 
 function SwapButton() {
-  const walletProvider = useWalletProvider(ChainKeys.BSC_MAINNET);
+  const walletProvider = useWalletProvider({ xChainId: ChainKeys.BSC_MAINNET });
   const { mutateAsync: swap, isPending } = useSwap();
 
   const handleSwap = async () => {
