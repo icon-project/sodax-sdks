@@ -30,10 +30,43 @@ const { address } = useXAccount({ xChainType: 'EVM' });
 const { address } = useXAccount({ xChainId: ChainKeys.ETHEREUM_MAINNET });
 ```
 
+**Decision rule (positional value → field name):** v1 accepted both `ChainType` and `ChainId` and detected at runtime. In v2 you must choose the right field:
+
+- v1 value is a family literal (`'EVM'`, `'SOLANA'`, …) → v2 `xChainType`.
+- v1 value is a chain-key string (`'0x1.eth'`, `XToken.xChainId`, …) → v2 `xChainId` typed as `SpokeChainKey`.
+- v1 value comes from `getXChainType(...)` (returns `ChainType | undefined`) → v2 `xChainType`, but **guard against `undefined`** — see below.
+
+**v2 asserts at runtime that exactly one of `xChainId` / `xChainType` is present.** Both undefined throws `'[useXAccount] pass xChainId or xChainType'`; both present throws `'[useXAccount] pass either xChainId or xChainType, not both'`. v1 was permissive (called with `undefined`, it returned an empty account). v2 is strict.
+
+**Common nullable patterns and their fixes:**
+
+```ts
+// ❌ v1 idiom — returns empty account when nothing selected, runs every render
+const { address } = useXAccount(selectedChainId ?? undefined);
+
+// ✅ v2 fix 1 — index a snapshot from useXAccounts (no per-key hook call)
+const xAccounts = useXAccounts();
+const chainType = selectedChainId ? getXChainType(selectedChainId) : undefined;
+const address = chainType ? xAccounts[chainType]?.address : undefined;
+
+// ✅ v2 fix 2 — supply a sensible default chain key so the hook always has input
+const { address } = useXAccount({
+  xChainId: selectedChainId ?? ChainKeys.SONIC_MAINNET,
+});
+
+// ✅ v2 fix 3 — split into a child component that only mounts when input is known
+{selectedChainId ? <Account xChainId={selectedChainId} /> : null}
+function Account({ xChainId }: { xChainId: SpokeChainKey }) {
+  const { address } = useXAccount({ xChainId });
+  // ...
+}
+```
+
+The other "options-object" hooks (`useXConnection`, `useXConnectors`, `useXService`, `useWalletProvider`) are **lenient** — passing no field returns the empty/undefined value silently. `useXAccount` is the only one that asserts.
+
 **Other notes:**
 - Return shape unchanged: `XAccount = { address, xChainType, publicKey? }`.
-- v2 always returns a populated object (never `undefined`); when no wallet is connected, `address` is `undefined` but `xChainType` is filled.
-- TypeScript enforces "exactly one of `xChainId` / `xChainType`" — passing both throws.
+- When a valid chain is supplied but no wallet is connected, `address` is `undefined` while `xChainType` is filled — same as v1's connected-empty state.
 
 ---
 
