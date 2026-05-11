@@ -273,3 +273,23 @@ describe('StakingService — out-of-union wrap-path smoke for non-stake orchestr
     expect(result.error.context?.action).toBe('cancelUnstake');
   });
 });
+
+// Regression coverage for createInstantUnstakeIntent's SODA lookup. The previous
+// implementation read SODA from the hub-chain config and then queried the source
+// spoke registry by the hub-side address, returning undefined for every non-Sonic
+// spoke and tripping the "SODA asset not found" invariant. Exercising the real
+// method body with the BSC fixture locks that path in.
+describe('StakingService.createInstantUnstakeIntent — SODA lookup from non-Sonic spoke', () => {
+  it('builds the intent payload without throwing the SODA-asset invariant', async () => {
+    vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockResolvedValueOnce(HUB_WALLET);
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: SPOKE_TX_HASH });
+
+    const result = await sodax.staking.createInstantUnstakeIntent(instantUnstakeInput());
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.tx).toBe(SPOKE_TX_HASH);
+    expect(result.value.relayData.address).toBe(HUB_WALLET);
+    expect(result.value.relayData.payload.startsWith('0x')).toBe(true);
+  });
+});
