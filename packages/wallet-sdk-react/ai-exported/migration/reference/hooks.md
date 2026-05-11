@@ -181,11 +181,10 @@ const account = useXAccount({ xChainType: 'EVM' });
 ## `useEvmSwitchChain`
 
 ```ts
-// v1 ❌ — no args; returned wagmi `switchChain` mutation directly
-const { switchChain } = useEvmSwitchChain();
-await switchChain({ chainId: 1 });
+// v1 ❌ — positional `expectedXChainId: ChainId`
+const { isWrongChain, handleSwitchChain } = useEvmSwitchChain(chainId);
 
-// v2 ✅ — required `xChainId` option; returns `{ isWrongChain, handleSwitchChain }`
+// v2 ✅ — options object; `xChainId: SpokeChainKey`
 import { ChainKeys } from '@sodax/types';
 
 const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({
@@ -195,9 +194,17 @@ const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({
 if (isWrongChain) handleSwitchChain();
 ```
 
-**Breaking — completely reshaped.** v2 takes `{ xChainId }: UseEvmSwitchChainOptions` and returns `{ isWrongChain: boolean, handleSwitchChain: () => void }`. The wagmi `switchChain` is wrapped — the hook compares the connected EVM chain to the chain expected by `xChainId` and exposes `isWrongChain` so UI can render a "switch network" CTA without recomputing. Safe to call when EVM is disabled in `walletConfig` — returns no-op values.
+**Breaking changes:**
 
-Also handles **Injective + MetaMask** (auto-switches Ethereum mainnet underneath). v1 had no Injective awareness.
+- **Call shape**: positional → options object. Same forward-compat reason as the other hooks.
+- **Parameter type**: `ChainId` → `SpokeChainKey` (rename in `@sodax/types`). If the chain key value comes from `XToken.chainKey` (v2) or any `ChainKeys.*` constant, no value change is needed — the rename is type-only.
+
+**Return shape is unchanged** — both v1 and v2 return `{ isWrongChain: boolean, handleSwitchChain: () => void }`. The hook compares the connected EVM chain to the chain expected by `xChainId` and exposes `isWrongChain` so UI can render a "switch network" CTA without recomputing.
+
+**Behavior added in v2:**
+
+- **Injective + MetaMask auto-switch.** When the user connects to Injective via MetaMask, v2 automatically targets Ethereum mainnet underneath. v1 had no Injective awareness.
+- **Safe when EVM is disabled.** v2 returns no-op values (`isWrongChain: false`, `handleSwitchChain: () => {}`) if `walletConfig.EVM` is absent, so UI doesn't need to branch.
 
 ---
 
