@@ -47,13 +47,25 @@ const sodax = new Sodax();
 // Local SpokeChainKey fixtures — staking is initiated from a non-hub chain so the
 // relay branch fires. BSC is a well-supported EVM spoke.
 const BSC = '0x38.bsc' satisfies SpokeChainKey;
-const BASE = '0x2105.base' satisfies SpokeChainKey;
-const SONIC = 'sonic' satisfies SpokeChainKey;
 
-// EVM spokes parametrized across the per-chain SODA-lookup matrix below. The set
-// intentionally covers two non-hub spokes (where chain-context bugs surface) plus
-// Sonic (the hub-as-source case that previously masked the bug).
-const EVM_SPOKES = [BSC, BASE, SONIC] as const;
+// Every EVM spoke that registers a SODA token. The matrix below runs the staking
+// intent creators across all of them so any chain-context regression surfaces on
+// the affected chain instead of hiding behind a single fixture. Sonic is included
+// to guard the hub-as-source path that previously masked the SODA-asset bug.
+const EVM_SPOKES = [
+  'sonic',
+  '0x2105.base',
+  '0x38.bsc',
+  '0xa4b1.arbitrum',
+  '0xa86a.avax',
+  '0xa.optimism',
+  '0x89.polygon',
+  'hyper',
+  'lightlink',
+  'ethereum',
+  'redbelly',
+  '0x2019.kaia',
+] as const satisfies readonly SpokeChainKey[];
 type EvmSpokeFixture = (typeof EVM_SPOKES)[number];
 
 const SAMPLE_USER = '0x4444444444444444444444444444444444444444' as Address;
