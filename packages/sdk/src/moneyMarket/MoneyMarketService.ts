@@ -1248,13 +1248,13 @@ export class MoneyMarketService {
       }
     }
 
-    if (toToken.toLowerCase() !== vaultAddress.toLowerCase()) {
+    if (!this.config.isValidVault(assetAddress)) {
       // if the target token is not the vault token, we need to withdraw the tokens from the vault
       calls.push(EvmVaultTokenService.encodeWithdraw(vaultAddress, assetAddress, translatedInAmount - feeAmount));
     }
 
     let translatedAmountOut: bigint;
-    if (this.config.isValidVault(toToken)) {
+    if (this.config.isValidVault(assetAddress)) {
       translatedAmountOut = EvmVaultTokenService.translateOutgoingDecimals(
         toHubAsset.decimals,
         translatedInAmount - feeAmount,
@@ -1342,13 +1342,13 @@ export class MoneyMarketService {
       ),
     );
 
-    if (!this.config.isValidVault(toToken)) {
+    if (!this.config.isValidVault(assetAddress)) {
       // if the target token is not the vault token, we need to withdraw the tokens from the vault
       calls.push(EvmVaultTokenService.encodeWithdraw(vaultAddress, assetAddress, translatedInAmount));
     }
 
     let translatedAmountOut: bigint;
-    if (this.config.isValidVault(toToken)) {
+    if (this.config.isValidVault(assetAddress)) {
       translatedAmountOut = EvmVaultTokenService.translateOutgoingDecimals(toHubAsset.decimals, translatedInAmount);
     } else {
       translatedAmountOut = EvmVaultTokenService.translateOutgoingDecimals(dstToken.decimals, translatedInAmount);
