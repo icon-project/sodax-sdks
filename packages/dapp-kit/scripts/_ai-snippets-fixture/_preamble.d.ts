@@ -154,5 +154,3 @@ declare global {
   const status: unknown;
   const txHash: string;
 }
-
-export {};
