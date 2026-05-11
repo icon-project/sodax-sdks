@@ -3,32 +3,52 @@
 
 # Sodax SDKs
 
-This repository contains the demo/example apps and SDK libraries implementation for the Sodax project, built with a modern tech stack and monorepo architecture.
+This repository contains the SDK packages and demo applications for the Sodax project, organized as a Turborepo + pnpm monorepo.
 
-If you want to contribute, please refer to the [contributing guidelines](./CONTRIBUTING.md) of this project.
+## Architecture
+
+SODAX is a cross-chain DeFi platform built on a **hub-and-spoke architecture**, with **Sonic** as the hub chain. It supports swaps (intent-based via solver), lending/borrowing (money market), staking, bridging, DEX (concentrated liquidity), token migration, and partner fee operations across 20 blockchains:
+
+- **EVM (12):** Sonic, Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia
+- **Non-EVM (8):** Solana, Sui, Stellar, ICON, Injective, NEAR, Stacks, Bitcoin
+
+See the [Sodax SDK README](./packages/sdk/README.md) for a deeper architectural overview.
 
 ## Repository Structure
 
+### Packages (`/packages`)
+
+- **types** (`/packages/types`) — Shared TypeScript type definitions: chain IDs, chain configs, wallet provider interfaces, backend API types. No runtime dependencies.
+- **sdk** (`/packages/sdk`) — Core SDK exposing the full Sodax feature set (swap, bridge, money market, staking, DEX, migration, partner) through a streamlined `Sodax` facade. [Sodax SDK Documentation](./packages/sdk/README.md).
+- **wallet-sdk-core** (`/packages/wallet-sdk-core`) — Low-level multi-chain wallet providers (signing, broadcasting) for 9 chain types. Supports both private-key (scripts/testing) and browser-extension (production) configs.
+- **wallet-sdk-react** (`/packages/wallet-sdk-react`) — React layer over `wallet-sdk-core` with the `XService`/`XConnector` pattern, Zustand state persistence, and EIP-6963 wallet discovery. [Wallet SDK Documentation](./packages/wallet-sdk-react/README.md).
+- **dapp-kit** (`/packages/dapp-kit`) — High-level React hooks combining the SDK, `wallet-sdk-react`, and React Query. Modular, production-ready building blocks for dApp development. [dApp Kit Documentation](./packages/dapp-kit/README.md).
+
 ### Apps (`/apps`)
 
-The `apps` directory contains various frontend applications:
-- **demo** (`/apps/demo`): Demo application showcasing features
-- **node** (`/apps/node`): Node.js specific implementation
-- **react-solver-example** (`/apps/react-solver-example`): Example implementation of the solver
+- **demo** (`/apps/demo`) — Vite + React demo app showcasing the SDK.
+- **node** (`/apps/node`) — Node.js scripts for E2E testing chain operations, with per-chain entry points.
+- **node-cjs** (`/apps/node-cjs`) — CommonJS consumer regression test (verifies SDK CJS output works).
+- **wallet-modal-example** (`/apps/wallet-modal-example`) — Vite + React demo for the Wallet React SDK.
 
-### SDK's (`/packages`)
+## Common Commands
 
-The `packages` directory contains a sdk's and libraries:
+```bash
+pnpm i                # Install dependencies
+pnpm dev:demo         # Run demo app dev server
+pnpm build            # Build everything (packages, then apps)
+pnpm build:packages   # Build only SDK packages
+pnpm lint             # Lint with Biome (auto-fixes)
+pnpm checkTs          # TypeScript type checking across all packages
+pnpm test             # Run tests across all packages
+```
 
-- **sdk** (`/packages/sdk`): The core SDK that exposes the full suite of Sodax features through a streamlined set of interfaces and functions. For wallet integration, developers can either implement the provided wallet provider interfaces or utilize the optional wallet-sdk SDK for a more comprehensive solution. [Sodax SDK Documentation](./packages/sdk/README.md).
-- **wallet-sdk-react** (`/packages/wallet-sdk-react`): A dedicated Wallet Connectivity SDK that supports multi-chain wallet operations, including transaction signing, broadcasting, and retrieval. It is fully compliant with the Sodax SDK wallet provider interface specifications, ensuring seamless integration. [Wallet SDK Documentation](./packages/wallet-sdk-react/README.md).
-- **dapp-kit** (`/packages/dapp-kit`): A utility kit optimized for React and Next.js applications, leveraging both the wallet-sdk and Sodax SDKs. It offers a collection of hooks, components, and utilities designed to accelerate frontend dApp development with modular, production-ready building blocks. [dApp Kit Documentation](./packages/dapp-kit/README.md).
+Package manager: **pnpm 10.32.1**. Tested against Node.js 20.x, 22.x, 24.x.
 
-### Publishing SDK's
+## Contributing
 
-Instruction on how to release new packages can be found in [RELEASE_INSTRUCTIONS.md](./packages/RELEASE_INSTRUCTIONS.md)
+See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
-rules for merging:
-1. when merge feature branches to main, use squash merge
-2. when merge main into staging, use normal merge
-3. when merge staging into production, use normal merge 
+## Publishing
+
+Instructions for releasing new packages: [packages/RELEASE_INSTRUCTIONS.md](./packages/RELEASE_INSTRUCTIONS.md).

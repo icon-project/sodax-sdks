@@ -257,6 +257,10 @@ Concentrated liquidity (similar to Uniswap V3/PancakeSwap V3):
 - `AssetService` — DEX asset wrapping/unwrapping
 - Pool configs defined in `src/shared/constants.ts`
 
+## Gotchas
+
+- **Never use `bigint` in types passed to `JSON.stringify`** — it throws `TypeError` at runtime. Use `string` for numeric fields in API request/response types (e.g. anything in `src/backendApi/`). If `bigint` is needed in domain types, convert to string before serialization. Note: `SodaxError.toJSON` already coerces bigints in `context` to strings — see Error Handling above.
+
 ## Documentation
 
 Detailed feature docs are in `docs/`:

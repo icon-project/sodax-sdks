@@ -63,3 +63,11 @@ Reproducibility rate:
 ```
 
 A good bug report shouldn't leave others needing to chase you up for more.
+
+## Git workflow
+
+Merge strategy:
+
+1. Feature branches → `main`: **squash merge**
+2. `main` → `staging`: **normal merge**
+3. `staging` → `production`: **normal merge**
