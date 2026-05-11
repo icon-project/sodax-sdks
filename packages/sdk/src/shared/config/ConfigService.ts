@@ -257,8 +257,15 @@ export class ConfigService {
   }
 
   public getDexPools(): PoolKey[] {
-    // TODO make those dynamic in future
     return Object.values(this.dex.dexPools);
+  }
+
+  public getSodaToken(chainId: SpokeChainKey): XToken {
+    const sodaToken = this.sodax.chains[chainId].supportedTokens.SODA;
+    if (!sodaToken) {
+      throw new Error(`[getSodaToken] Soda token not found for chain ${chainId}`);
+    }
+    return sodaToken;
   }
 
   public isMoneyMarketSupportedToken(chainId: SpokeChainKey, token: string): boolean {

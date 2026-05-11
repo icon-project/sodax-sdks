@@ -457,7 +457,7 @@ export class StakingService {
     const { params, skipSimulation } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, action: 'stake' as const };
     try {
-      const sodaToken = this.config.sodaxConfig.chains[params.srcChainKey].supportedTokens.SODA as XToken;
+      const sodaToken = this.config.getSodaToken(params.srcChainKey);
       stakingInvariant(sodaToken, 'SODA token not found', { ...baseCtx, field: 'sodaToken' });
       const sodaAsset = this.config.getSpokeTokenFromOriginalAssetAddress(params.srcChainKey, sodaToken.address);
       stakingInvariant(sodaAsset, 'SODA asset not found', { ...baseCtx, field: 'sodaAsset' });
@@ -916,7 +916,7 @@ export class StakingService {
     try {
       const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
 
-      const sodaToken = this.config.sodaxConfig.chains[params.srcChainKey].supportedTokens.SODA as XToken;
+      const sodaToken = this.config.getSodaToken(params.srcChainKey);
       stakingInvariant(sodaToken, 'SODA token not found', { ...baseCtx, field: 'sodaToken' });
       const sodaAsset = this.config.getSpokeTokenFromOriginalAssetAddress(params.srcChainKey, sodaToken.address);
       stakingInvariant(sodaAsset, 'SODA asset not found', { ...baseCtx, field: 'sodaAsset' });

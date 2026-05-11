@@ -34,6 +34,12 @@ export default defineConfig(({ command, mode }: ConfigEnv) => {
         '@': path.resolve(__dirname, './src'),
         buffer: 'buffer/',
       },
+      // Force a single React instance in the bundle. Without this, transitive
+      // deps that still declare a React 18 peer (e.g. @ledgerhq/domain-service
+      // pulled in via @injectivelabs/wallet-ledger) drag a second copy of
+      // react/react-dom into the graph, and the dev server renders a blank
+      // page because hooks fire on a different React than the renderer sees.
+      dedupe: ['react', 'react-dom'],
     },
 
     optimizeDeps: {
