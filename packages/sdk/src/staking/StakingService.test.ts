@@ -47,6 +47,14 @@ const sodax = new Sodax();
 // Local SpokeChainKey fixtures — staking is initiated from a non-hub chain so the
 // relay branch fires. BSC is a well-supported EVM spoke.
 const BSC = '0x38.bsc' satisfies SpokeChainKey;
+const BASE = '0x2105.base' satisfies SpokeChainKey;
+const SONIC = 'sonic' satisfies SpokeChainKey;
+
+// EVM spokes parametrized across the per-chain SODA-lookup matrix below. The set
+// intentionally covers two non-hub spokes (where chain-context bugs surface) plus
+// Sonic (the hub-as-source case that previously masked the bug).
+const EVM_SPOKES = [BSC, BASE, SONIC] as const;
+type EvmSpokeFixture = (typeof EVM_SPOKES)[number];
 
 const SAMPLE_USER = '0x4444444444444444444444444444444444444444' as Address;
 const SAMPLE_TOKEN = '0x2170Ed0880ac9A755fd29B2688956BD959F933F8' as Address;
@@ -274,17 +282,88 @@ describe('StakingService — out-of-union wrap-path smoke for non-stake orchestr
   });
 });
 
-// Regression coverage for createInstantUnstakeIntent's SODA lookup. The previous
-// implementation read SODA from the hub-chain config and then queried the source
-// spoke registry by the hub-side address, returning undefined for every non-Sonic
-// spoke and tripping the "SODA asset not found" invariant. Exercising the real
-// method body with the BSC fixture locks that path in.
-describe('StakingService.createInstantUnstakeIntent — SODA lookup from non-Sonic spoke', () => {
-  it('builds the intent payload without throwing the SODA-asset invariant', async () => {
+// Chain-context regression matrix.
+//
+// The previous createInstantUnstakeIntent implementation read SODA from the hub
+// config and then queried the source-spoke registry by the hub-side address — a
+// chain-context bug that returned undefined for every non-Sonic spoke and tripped
+// the "SODA asset not found" invariant. createStakeIntent and createClaimIntent
+// also perform per-spoke SODA lookups and are vulnerable to the same class of
+// mistake. createUnstakeIntent reads only hub-side xSoda state and createCancel-
+// UnstakeIntent has no per-chain token lookup, so neither participates here.
+//
+// Running each method across BSC + BASE + SONIC catches both the non-Sonic-only
+// regression and any future regression on the hub-as-source path.
+const stakeInputFor = <K extends EvmSpokeFixture>(srcChainKey: K): StakeAction<K, false> =>
+  ({
+    raw: false,
+    walletProvider: mockEvmProvider,
+    params: {
+      srcChainKey,
+      srcAddress: SAMPLE_USER,
+      amount: 1_000_000n,
+      minReceive: 900_000n,
+      action: 'stake',
+    },
+  }) as StakeAction<K, false>;
+
+const instantUnstakeInputFor = <K extends EvmSpokeFixture>(srcChainKey: K): InstantUnstakeAction<K, false> =>
+  ({
+    raw: false,
+    walletProvider: mockEvmProvider,
+    params: {
+      srcChainKey,
+      srcAddress: SAMPLE_USER,
+      amount: 1_000_000n,
+      minAmount: 900_000n,
+      action: 'instantUnstake',
+    },
+  }) as InstantUnstakeAction<K, false>;
+
+const claimInputFor = <K extends EvmSpokeFixture>(srcChainKey: K): ClaimAction<K, false> =>
+  ({
+    raw: false,
+    walletProvider: mockEvmProvider,
+    params: {
+      srcChainKey,
+      srcAddress: SAMPLE_USER,
+      requestId: 1n,
+      amount: 1_000_000n,
+      action: 'claim',
+    },
+  }) as ClaimAction<K, false>;
+
+describe.each(EVM_SPOKES)('StakingService — per-chain SODA lookup on srcChainKey=%s', (srcChainKey) => {
+  it('createStakeIntent builds the intent payload without throwing chain-context invariants', async () => {
+    vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockResolvedValueOnce(HUB_WALLET);
+    vi.spyOn(sodax.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: SPOKE_TX_HASH });
+
+    const result = await sodax.staking.createStakeIntent(stakeInputFor(srcChainKey));
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.tx).toBe(SPOKE_TX_HASH);
+    expect(result.value.relayData.payload.startsWith('0x')).toBe(true);
+  });
+
+  it('createInstantUnstakeIntent builds the intent payload without throwing chain-context invariants', async () => {
     vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockResolvedValueOnce(HUB_WALLET);
     vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: SPOKE_TX_HASH });
 
-    const result = await sodax.staking.createInstantUnstakeIntent(instantUnstakeInput());
+    const result = await sodax.staking.createInstantUnstakeIntent(instantUnstakeInputFor(srcChainKey));
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.tx).toBe(SPOKE_TX_HASH);
+    expect(result.value.relayData.address).toBe(HUB_WALLET);
+    expect(result.value.relayData.payload.startsWith('0x')).toBe(true);
+  });
+
+  it('createClaimIntent builds the intent payload without throwing chain-context invariants', async () => {
+    vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockResolvedValueOnce(HUB_WALLET);
+    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: SPOKE_TX_HASH });
+
+    const result = await sodax.staking.createClaimIntent(claimInputFor(srcChainKey));
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
