@@ -17,7 +17,9 @@ Both batch hooks (and `useIsWalletInstalled`) take a `connectors: readonly strin
 | `'hana'` | Hana on EVM (`io.havah.hana`), Hana on ICON (`hana`), Hana on Sui, Hana on Stellar… |
 | `'phantom'` | Phantom on Solana (`phantom`), Phantom on EVM (`app.phantom`) |
 | `'metamask'` | MetaMask on EVM (`io.metamask`), Injective MetaMask connector |
-| `'xverse'` | Xverse on Bitcoin (`xverse`) |
+| `'xverse'` | Xverse on Bitcoin (`xverse`), Xverse on Stacks (`XverseProviders.BitcoinProvider`) |
+
+For the full list of known wallet brands and a runtime-discovery snippet (paste-in component that lists every connector available in your app), see [`../reference/wallet-brands.md`](../reference/wallet-brands.md).
 
 Earlier identifiers in the array are **higher-priority per chain**. The runner uses **fallback-on-failure**:
 

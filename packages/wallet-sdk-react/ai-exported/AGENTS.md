@@ -117,5 +117,6 @@ For internal architecture (only relevant if you're modifying the package itself,
 - [`migration/README.md`](./migration/README.md) — start here for v1 → v2 ports: file index, reading order, cross-cutting checklist pointer.
 - [`integration/recipes/setup.md`](./integration/recipes/setup.md) — install, mount `SodaxWalletProvider`, pick chain slots.
 - [`integration/architecture.md`](./integration/architecture.md) — mental model: provider mount tree, frozen config, EVM single-connection, `xChainType` vs `xChainId`.
-- [`integration/reference/`](./integration/reference/) — hooks, connectors, chain-support lookup tables.
+- [`integration/reference/`](./integration/reference/) — hooks, connectors, chain-support, wallet-brand identifiers lookup tables.
+- [`integration/reference/wallet-brands.md`](./integration/reference/wallet-brands.md) — known wallet brand identifiers (`'hana'`, `'phantom'`, `'xverse'`, …) for batch hooks, plus a runtime discovery snippet.
 - [`migration/breaking-changes.md`](./migration/breaking-changes.md) — full narrative of every v1 → v2 change.
