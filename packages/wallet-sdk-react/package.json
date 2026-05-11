@@ -40,7 +40,9 @@
     "test": "vitest run",
     "knip": "knip",
     "lint": "biome lint . --write",
-    "check:ai-exported": "bash ./scripts/check-ai-exported.sh"
+    "check:ai-exported": "bash ./scripts/check-ai-exported.sh",
+    "check:ai-links": "bash ./scripts/check-ai-links.sh",
+    "check:ai-imports": "bash ./scripts/check-ai-imports.sh"
   },
   "dependencies": {
     "@stacks/connect": "catalog:",

@@ -21,14 +21,13 @@ For each `useXWagmiStore(state => state.X)` selector, replace with the equivalen
 | `state.setXConnection` | not a public mutation — use `useXConnect()` (mutation hook) |
 | `state.unsetXConnection` | not a public mutation — use `useXDisconnect()` |
 
-```ts
-// v1 ❌
-import { useXWagmiStore } from '@sodax/wallet-sdk-react';
-const xServices = useXWagmiStore(state => state.xServices);
-
-// v2 ✅ — public hook, no store access
-import { useXServices } from '@sodax/wallet-sdk-react';
-const xServices = useXServices();
+```diff
+- // v1 ❌
+- import { useXWagmiStore } from '@sodax/wallet-sdk-react';
+- const xServices = useXWagmiStore(state => state.xServices);
++ // v2 ✅ — public hook, no store access
++ import { useXServices } from '@sodax/wallet-sdk-react';
++ const xServices = useXServices();
 ```
 
 ### Decision tree — `useXWagmiStore` selector handling
@@ -78,32 +77,30 @@ v1 re-exported every concrete `XService` / `XConnector` subclass from the packag
 
 ### Examples
 
-```ts
-// v1 ❌ — all concrete classes from barrel
-import {
-  EvmXService,
-  XverseXConnector,
-  IconHanaXConnector,
-} from '@sodax/wallet-sdk-react';
-
-// v2 ✅ — sub-path per chain
-import { EvmXService } from '@sodax/wallet-sdk-react/xchains/evm';
-import { XverseXConnector } from '@sodax/wallet-sdk-react/xchains/bitcoin';
-import { IconHanaXConnector } from '@sodax/wallet-sdk-react/xchains/icon';
+```diff
+- // v1 ❌ — all concrete classes from barrel
+- import {
+-   EvmXService,
+-   XverseXConnector,
+-   IconHanaXConnector,
+- } from '@sodax/wallet-sdk-react';
++ // v2 ✅ — sub-path per chain
++ import { EvmXService } from '@sodax/wallet-sdk-react/xchains/evm';
++ import { XverseXConnector } from '@sodax/wallet-sdk-react/xchains/bitcoin';
++ import { IconHanaXConnector } from '@sodax/wallet-sdk-react/xchains/icon';
 ```
 
 ### Type imports also use sub-path
 
 Even when you only need a **type** (not the runtime class), the v2 barrel does not re-export concrete chain types. Use the sub-path import with `import type`:
 
-```ts
-// v1 ❌
-import { type StellarXService, useXService } from '@sodax/wallet-sdk-react';
-
-// v2 ✅ — sub-path import for both type and runtime
-import type { StellarXService } from '@sodax/wallet-sdk-react/xchains/stellar';
-import type { XverseXConnector, BtcWalletAddressType } from '@sodax/wallet-sdk-react/xchains/bitcoin';
-import { useXService } from '@sodax/wallet-sdk-react';
+```diff
+- // v1 ❌
+- import { type StellarXService, useXService } from '@sodax/wallet-sdk-react';
++ // v2 ✅ — sub-path import for both type and runtime
++ import type { StellarXService } from '@sodax/wallet-sdk-react/xchains/stellar';
++ import type { XverseXConnector, BtcWalletAddressType } from '@sodax/wallet-sdk-react/xchains/bitcoin';
++ import { useXService } from '@sodax/wallet-sdk-react';
 ```
 
 `import type` from sub-paths is **erased at build time** — no runtime cost. Use it freely for type annotations, `as`, generics, etc.

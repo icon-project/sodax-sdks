@@ -19,85 +19,85 @@ v2 ships these primitives so the consumer focuses only on UI rendering.
 
 ## Before (v1, simplified)
 
-```tsx
-'use client';
-
-import { useState } from 'react';
-import {
-  useXConnectors,
-  useXConnect,
-  useXDisconnect,
-  type ChainType,
-} from '@sodax/wallet-sdk-react';
-
-const SUPPORTED_CHAINS: ChainType[] = ['EVM', 'SUI', 'SOLANA', 'ICON'];
-
-export function WalletModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [pickedChain, setPickedChain] = useState<ChainType | null>(null);
-  const [connectingId, setConnectingId] = useState<string | null>(null);
-  const [error, setError] = useState<Error | null>(null);
-
-  const evmConnectors = useXConnectors('EVM');
-  const suiConnectors = useXConnectors('SUI');
-  const solanaConnectors = useXConnectors('SOLANA');
-  const iconConnectors = useXConnectors('ICON');
-
-  const { mutateAsync: connect } = useXConnect();
-  const disconnect = useXDisconnect();
-
-  const connectorsByChain: Record<ChainType, ReturnType<typeof useXConnectors>> = {
-    EVM: evmConnectors,
-    SUI: suiConnectors,
-    SOLANA: solanaConnectors,
-    ICON: iconConnectors,
-  };
-
-  if (!open) return null;
-
-  if (!pickedChain) {
-    return (
-      <Dialog onClose={onClose}>
-        <h2>Select a chain</h2>
-        {SUPPORTED_CHAINS.map((chain) => (
-          <button key={chain} onClick={() => setPickedChain(chain)}>
-            {chain}
-          </button>
-        ))}
-      </Dialog>
-    );
-  }
-
-  const connectors = connectorsByChain[pickedChain] ?? [];
-
-  return (
-    <Dialog onClose={onClose}>
-      <button onClick={() => setPickedChain(null)}>← back</button>
-      <h2>Connect to {pickedChain}</h2>
-      {error && <div>Error: {error.message}</div>}
-      {connectors.map((connector) => (
-        <button
-          key={connector.id}
-          disabled={connectingId !== null}
-          onClick={async () => {
-            setConnectingId(connector.id);
-            setError(null);
-            try {
-              await connect(connector);
-              onClose();
-            } catch (err) {
-              setError(err as Error);
-            } finally {
-              setConnectingId(null);
-            }
-          }}
-        >
-          {connector.name}
-          {connectingId === connector.id && ' (connecting...)'}
-        </button>
-      ))}
-    </Dialog>
-  );
-}
+```diff
+- 'use client';
+-
+- import { useState } from 'react';
+- import {
+-   useXConnectors,
+-   useXConnect,
+-   useXDisconnect,
+-   type ChainType,
+- } from '@sodax/wallet-sdk-react';
+-
+- const SUPPORTED_CHAINS: ChainType[] = ['EVM', 'SUI', 'SOLANA', 'ICON'];
+-
+- export function WalletModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+-   const [pickedChain, setPickedChain] = useState<ChainType | null>(null);
+-   const [connectingId, setConnectingId] = useState<string | null>(null);
+-   const [error, setError] = useState<Error | null>(null);
+-
+-   const evmConnectors = useXConnectors('EVM');
+-   const suiConnectors = useXConnectors('SUI');
+-   const solanaConnectors = useXConnectors('SOLANA');
+-   const iconConnectors = useXConnectors('ICON');
+-
+-   const { mutateAsync: connect } = useXConnect();
+-   const disconnect = useXDisconnect();
+-
+-   const connectorsByChain: Record<ChainType, ReturnType<typeof useXConnectors>> = {
+-     EVM: evmConnectors,
+-     SUI: suiConnectors,
+-     SOLANA: solanaConnectors,
+-     ICON: iconConnectors,
+-   };
+-
+-   if (!open) return null;
+-
+-   if (!pickedChain) {
+-     return (
+-       <Dialog onClose={onClose}>
+-         <h2>Select a chain</h2>
+-         {SUPPORTED_CHAINS.map((chain) => (
+-           <button key={chain} onClick={() => setPickedChain(chain)}>
+-             {chain}
+-           </button>
+-         ))}
+-       </Dialog>
+-     );
+-   }
+-
+-   const connectors = connectorsByChain[pickedChain] ?? [];
+-
+-   return (
+-     <Dialog onClose={onClose}>
+-       <button onClick={() => setPickedChain(null)}>← back</button>
+-       <h2>Connect to {pickedChain}</h2>
+-       {error && <div>Error: {error.message}</div>}
+-       {connectors.map((connector) => (
+-         <button
+-           key={connector.id}
+-           disabled={connectingId !== null}
+-           onClick={async () => {
+-             setConnectingId(connector.id);
+-             setError(null);
+-             try {
+-               await connect(connector);
+-               onClose();
+-             } catch (err) {
+-               setError(err as Error);
+-             } finally {
+-               setConnectingId(null);
+-             }
+-           }}
+-         >
+-           {connector.name}
+-           {connectingId === connector.id && ' (connecting...)'}
+-         </button>
+-       ))}
+-     </Dialog>
+-   );
+- }
 ```
 
 (Most v1 modals look like this — manual chain list, manual loop over connectors, manual try/catch for state.)

@@ -18,40 +18,40 @@ If the project is **not** Next.js (Vite, CRA), only the prop-shape rewrite appli
 
 ## Before (v1)
 
-```tsx
-// app/layout.tsx — v1 ❌
-import { headers } from 'next/headers';
-import { cookieToInitialState } from 'wagmi';
-import { SodaxWalletProvider } from '@sodax/wallet-sdk-react';
-import { createWagmiConfig } from '@sodax/wallet-sdk-react'; // hypothetical helper consumers used
-
-const rpcConfig = {
-  'sonic': 'https://rpc.soniclabs.com',
-  '0x1.eth': 'https://ethereum-rpc.publicnode.com',
-};
-
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const headersList = await headers();
-  const cookie = headersList.get('cookie');
-
-  // Build wagmi config the same way the package built it internally to derive initialState
-  const wagmiConfig = createWagmiConfig(rpcConfig, { ssr: true });
-  const initialState = cookieToInitialState(wagmiConfig, cookie);
-
-  return (
-    <html>
-      <body>
-        <SodaxWalletProvider
-          rpcConfig={rpcConfig}
-          options={{ wagmi: { ssr: true, reconnectOnMount: true } }}
-          initialState={initialState}
-        >
-          {children}
-        </SodaxWalletProvider>
-      </body>
-    </html>
-  );
-}
+```diff
+- // app/layout.tsx — v1 ❌
+- import { headers } from 'next/headers';
+- import { cookieToInitialState } from 'wagmi';
+- import { SodaxWalletProvider } from '@sodax/wallet-sdk-react';
+- import { createWagmiConfig } from '@sodax/wallet-sdk-react'; // hypothetical helper consumers used
+-
+- const rpcConfig = {
+-   'sonic': 'https://rpc.soniclabs.com',
+-   '0x1.eth': 'https://ethereum-rpc.publicnode.com',
+- };
+-
+- export default async function RootLayout({ children }: { children: React.ReactNode }) {
+-   const headersList = await headers();
+-   const cookie = headersList.get('cookie');
+-
+-   // Build wagmi config the same way the package built it internally to derive initialState
+-   const wagmiConfig = createWagmiConfig(rpcConfig, { ssr: true });
+-   const initialState = cookieToInitialState(wagmiConfig, cookie);
+-
+-   return (
+-     <html>
+-       <body>
+-         <SodaxWalletProvider
+-           rpcConfig={rpcConfig}
+-           options={{ wagmi: { ssr: true, reconnectOnMount: true } }}
+-           initialState={initialState}
+-         >
+-           {children}
+-         </SodaxWalletProvider>
+-       </body>
+-     </html>
+-   );
+- }
 ```
 
 ---
@@ -64,11 +64,8 @@ import { headers } from 'next/headers';
 import { cookieToInitialState } from 'wagmi';
 import { ChainKeys } from '@sodax/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import {
-  SodaxWalletProvider,
-  type SodaxWalletConfig,
-  createWagmiConfig,
-} from '@sodax/wallet-sdk-react/xchains/evm';
+import { SodaxWalletProvider, type SodaxWalletConfig } from '@sodax/wallet-sdk-react';
+import { createWagmiConfig } from '@sodax/wallet-sdk-react/xchains/evm';
 
 const walletConfig: SodaxWalletConfig = {
   EVM: {

@@ -111,9 +111,9 @@ For each `useXWagmiStore(state => state.X)` selector, replace with the equivalen
 
 v1 re-exported every concrete `XService` and `XConnector` class from the package barrel:
 
-```ts
-// v1 — barrel exports concrete classes
-import { EvmXService, XverseXConnector, IconHanaXConnector } from '@sodax/wallet-sdk-react';
+```diff
+- // v1 — barrel exports concrete classes
+- import { EvmXService, XverseXConnector, IconHanaXConnector } from '@sodax/wallet-sdk-react';
 ```
 
 v2's barrel exports only **types, hooks, abstractions, and `SodaxWalletProvider`**. Concrete chain classes live behind sub-paths:
@@ -209,16 +209,15 @@ Not breaking — additive. See [`recipes/multi-chain-modal.md`](./recipes/multi-
 
 v1 exported `useXBalances({ xChainId, xTokens, address })` from `@sodax/wallet-sdk-react`. v2 removes it. A hook with the same name lives in `@sodax/dapp-kit`, but the **signature has changed**:
 
-```ts
-// v1 ❌ — from wallet-sdk-react
-import { useXBalances } from '@sodax/wallet-sdk-react';
-const { data } = useXBalances({ xChainId, xTokens, address });
-
-// v2 ✅ — from dapp-kit, params are now wrapped
-import { useXBalances } from '@sodax/dapp-kit';
-import { useXService } from '@sodax/wallet-sdk-react';
-const xService = useXService({ xChainType: 'EVM' });
-const { data } = useXBalances({ params: { xService, xChainId, xTokens, address } });
+```diff
+- // v1 ❌ — from wallet-sdk-react
+- import { useXBalances } from '@sodax/wallet-sdk-react';
+- const { data } = useXBalances({ xChainId, xTokens, address });
++ // v2 ✅ — from dapp-kit, params are now wrapped
++ import { useXBalances } from '@sodax/dapp-kit';
++ import { useXService } from '@sodax/wallet-sdk-react';
++ const xService = useXService({ xChainType: 'EVM' });
++ const { data } = useXBalances({ params: { xService, xChainId, xTokens, address } });
 ```
 
 ### Why

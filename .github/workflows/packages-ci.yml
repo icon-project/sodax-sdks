@@ -58,6 +58,12 @@ jobs:
       - name: Type-check ai-exported examples (wallet-sdk-react)
         run: pnpm -C packages/wallet-sdk-react run checkTs:examples
 
+      - name: Check ai-exported relative links resolve (wallet-sdk-react)
+        run: pnpm -C packages/wallet-sdk-react run check:ai-links
+
+      - name: Check ai-exported @sodax/wallet-sdk-react imports compile
+        run: pnpm -C packages/wallet-sdk-react run check:ai-imports
+
       - name: Check ai-exported docs reference real Sodax members
         run: pnpm -C packages/sdk run check:ai-exported
 

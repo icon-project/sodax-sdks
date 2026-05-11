@@ -203,25 +203,25 @@ Also handles **Injective + MetaMask** (auto-switches Ethereum mainnet underneath
 
 ## `useEthereumChainId`
 
-**Removed from the public barrel in v2.** v1 exported a top-level `useEthereumChainId` for components that needed the raw EVM chain ID (mainly Injective/MetaMask integration). v2 makes it internal — `useEvmSwitchChain` handles the Injective case and most other usage was already redundant with `wagmi`'s `useAccount().chainId`.
+**Removed from the public barrel in v2.** Despite the generic-sounding name, the v1 hook was **Injective + MetaMask specific** — it read the underlying Ethereum chain ID exposed by Injective's wallet strategy and was almost always used to drive the "switch back to Ethereum mainnet" UX. v2 makes the hook internal because `useEvmSwitchChain` now handles that Injective auto-switch case directly.
 
 Migration:
 
-```ts
-// v1 ❌
-import { useEthereumChainId } from '@sodax/wallet-sdk-react';
-const chainId = useEthereumChainId();
-
-// v2 ✅ — for EVM chains use wagmi directly
-import { useAccount } from 'wagmi';
-const { chainId } = useAccount();
-
-// v2 ✅ — for Injective/MetaMask "switch to mainnet" UX use useEvmSwitchChain
-import { ChainKeys } from '@sodax/types';
-const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({
-  xChainId: ChainKeys.INJECTIVE_MAINNET,
-});
+```diff
+- // v1 ❌ — manual chain-ID comparison for Injective + MetaMask UX
+- import { useEthereumChainId } from '@sodax/wallet-sdk-react';
+- const chainId = useEthereumChainId();
+- if (chainId !== 1) /* prompt user to switch to Ethereum mainnet */;
++ // v2 ✅ — useEvmSwitchChain auto-handles Injective + MetaMask underneath
++ import { useEvmSwitchChain } from '@sodax/wallet-sdk-react';
++ import { ChainKeys } from '@sodax/types';
++ const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({
++   xChainId: ChainKeys.INJECTIVE_MAINNET,
++ });
++ if (isWrongChain) handleSwitchChain();
 ```
+
+If you genuinely need the raw EVM chain ID (rare — almost no usage outside the Injective case), wagmi's `useAccount().chainId` is the underlying source. Prefer staying inside `@sodax/wallet-sdk-react` hooks where possible.
 
 ---
 
