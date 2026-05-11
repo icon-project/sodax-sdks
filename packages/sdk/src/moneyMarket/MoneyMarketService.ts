@@ -1,6 +1,13 @@
 import { encodeFunctionData, isAddress } from 'viem';
 import { mapRelayFailure } from '../errors/relay-error-mapping.js';
-import {  verifyFailed, intentCreationFailed, executionFailed, approveFailed, allowanceCheckFailed, gasEstimationFailed } from '../errors/wrappers.js';
+import {
+  verifyFailed,
+  intentCreationFailed,
+  executionFailed,
+  approveFailed,
+  allowanceCheckFailed,
+  gasEstimationFailed,
+} from '../errors/wrappers.js';
 import {
   type MoneyMarketAllowanceCheckError,
   type MoneyMarketApproveError,
@@ -544,7 +551,16 @@ export class MoneyMarketService {
         timeout,
       });
 
-      if (!packet.ok) return { ok: false, error: mapRelayFailure(packet.error, { feature: 'moneyMarket', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey, dstChainKey: baseCtx.dstChainKey }) };
+      if (!packet.ok)
+        return {
+          ok: false,
+          error: mapRelayFailure(packet.error, {
+            feature: 'moneyMarket',
+            action: baseCtx.action,
+            srcChainKey: baseCtx.srcChainKey,
+            dstChainKey: baseCtx.dstChainKey,
+          }),
+        };
 
       return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packet.value.dst_tx_hash } };
     } catch (error) {
@@ -703,7 +719,16 @@ export class MoneyMarketService {
         timeout,
       });
 
-      if (!packet.ok) return { ok: false, error: mapRelayFailure(packet.error, { feature: 'moneyMarket', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey, dstChainKey: baseCtx.dstChainKey }) };
+      if (!packet.ok)
+        return {
+          ok: false,
+          error: mapRelayFailure(packet.error, {
+            feature: 'moneyMarket',
+            action: baseCtx.action,
+            srcChainKey: baseCtx.srcChainKey,
+            dstChainKey: baseCtx.dstChainKey,
+          }),
+        };
 
       return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packet.value.dst_tx_hash } };
     } catch (error) {
@@ -748,8 +773,10 @@ export class MoneyMarketService {
       const dstAddress = params.dstAddress ?? params.srcAddress;
       const dstToken = this.config.getMoneyMarketToken(dstChainKey, params.token);
 
-      mmInvariant(dstToken, `Money market token not found for spoke chain (${dstChainKey}) token: ${params.token}`,
-        { ...baseCtx, field: 'token' });
+      mmInvariant(dstToken, `Money market token not found for spoke chain (${dstChainKey}) token: ${params.token}`, {
+        ...baseCtx,
+        field: 'token',
+      });
 
       const encodedDstAddress = encodeAddress(dstChainKey, dstAddress);
       const fromHubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, srcChainKey);
@@ -867,7 +894,16 @@ export class MoneyMarketService {
         timeout,
       });
 
-      if (!packet.ok) return { ok: false, error: mapRelayFailure(packet.error, { feature: 'moneyMarket', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey, dstChainKey: baseCtx.dstChainKey }) };
+      if (!packet.ok)
+        return {
+          ok: false,
+          error: mapRelayFailure(packet.error, {
+            feature: 'moneyMarket',
+            action: baseCtx.action,
+            srcChainKey: baseCtx.srcChainKey,
+            dstChainKey: baseCtx.dstChainKey,
+          }),
+        };
 
       return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packet.value.dst_tx_hash } };
     } catch (error) {
@@ -1022,7 +1058,16 @@ export class MoneyMarketService {
         timeout,
       });
 
-      if (!packet.ok) return { ok: false, error: mapRelayFailure(packet.error, { feature: 'moneyMarket', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey, dstChainKey: baseCtx.dstChainKey }) };
+      if (!packet.ok)
+        return {
+          ok: false,
+          error: mapRelayFailure(packet.error, {
+            feature: 'moneyMarket',
+            action: baseCtx.action,
+            srcChainKey: baseCtx.srcChainKey,
+            dstChainKey: baseCtx.dstChainKey,
+          }),
+        };
 
       return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packet.value.dst_tx_hash } };
     } catch (error) {
@@ -1144,8 +1189,10 @@ export class MoneyMarketService {
     const calls: EvmContractCall[] = [];
 
     const fromHubAsset = this.config.getSpokeTokenFromOriginalAssetAddress(srcChainKey, fromToken);
-    mmInvariant(fromHubAsset, `hub asset not found for source chain token (token): ${fromToken}`,
-      { srcChainKey, field: 'token' });
+    mmInvariant(fromHubAsset, `hub asset not found for source chain token (token): ${fromToken}`, {
+      srcChainKey,
+      field: 'token',
+    });
 
     const lendingPool = this.config.moneyMarket.lendingPool;
 
@@ -1195,10 +1242,14 @@ export class MoneyMarketService {
   ): Hex {
     const toHubAsset = this.config.getSpokeTokenFromOriginalAssetAddress(dstChainKey, toToken);
     const dstToken = this.config.getMoneyMarketToken(dstChainKey, toToken);
-    mmInvariant(toHubAsset, `hub asset not found for target chain token (toToken): ${toToken}`,
-      { dstChainKey, field: 'token' });
-    mmInvariant(dstToken, `Money market token not found for spoke chain (${dstChainKey}) token: ${toToken}`,
-      { dstChainKey, field: 'token' });
+    mmInvariant(toHubAsset, `hub asset not found for target chain token (toToken): ${toToken}`, {
+      dstChainKey,
+      field: 'token',
+    });
+    mmInvariant(dstToken, `Money market token not found for spoke chain (${dstChainKey}) token: ${toToken}`, {
+      dstChainKey,
+      field: 'token',
+    });
 
     const assetAddress = toHubAsset.hubAsset;
     const vaultAddress = toHubAsset.vault;
@@ -1324,10 +1375,14 @@ export class MoneyMarketService {
 
     const toHubAsset = this.config.getSpokeTokenFromOriginalAssetAddress(dstChainKey, toToken);
     const dstToken = this.config.getMoneyMarketToken(dstChainKey, toToken);
-    mmInvariant(toHubAsset, `hub asset not found for target chain token (toToken): ${toToken}`,
-      { dstChainKey, field: 'token' });
-    mmInvariant(dstToken, `Money market token not found for spoke chain (${dstChainKey}) token: ${toToken}`,
-      { dstChainKey, field: 'token' });
+    mmInvariant(toHubAsset, `hub asset not found for target chain token (toToken): ${toToken}`, {
+      dstChainKey,
+      field: 'token',
+    });
+    mmInvariant(dstToken, `Money market token not found for spoke chain (${dstChainKey}) token: ${toToken}`, {
+      dstChainKey,
+      field: 'token',
+    });
 
     const assetAddress = toHubAsset.hubAsset;
     const vaultAddress = toHubAsset.vault;
@@ -1413,8 +1468,10 @@ export class MoneyMarketService {
     const calls: EvmContractCall[] = [];
 
     const fromHubAsset = this.config.getSpokeTokenFromOriginalAssetAddress(srcChainKey, fromToken);
-    mmInvariant(fromHubAsset, `hub asset not found for source chain token (fromToken): ${fromToken}`,
-      { srcChainKey, field: 'token' });
+    mmInvariant(fromHubAsset, `hub asset not found for source chain token (fromToken): ${fromToken}`, {
+      srcChainKey,
+      field: 'token',
+    });
 
     const assetAddress = fromHubAsset.hubAsset;
     const vaultAddress = fromHubAsset.vault;
