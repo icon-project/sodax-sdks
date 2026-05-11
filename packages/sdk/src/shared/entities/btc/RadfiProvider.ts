@@ -1,5 +1,40 @@
 import { detectBitcoinAddressType, type IBitcoinWalletProvider, type RadfiConfig, type RadfiDepositTxResponse } from '@sodax/types';
 
+/**
+ * Raw error body shape returned by the Radfi HTTP API on non-2xx responses.
+ * The human-readable detail typically lives at `error.details` (nested), with
+ * `code` carrying a Radfi-specific identifier (e.g. "2002" insufficientBTCBalance,
+ * "4008" duplicatedPubKey) and `message` an i18n key.
+ */
+export type RadfiErrorBody = {
+  code?: string;
+  message?: string;
+  details?: string;
+  error?: { details?: string; message?: string };
+};
+
+/**
+ * Structured error from a Radfi HTTP request. Exposes `status` (HTTP), `code`
+ * (Radfi-specific identifier), and `details` (human-readable) so callers can
+ * discriminate without fragile string-matching on `message`. The raw response
+ * body is preserved on `cause` for structured logging.
+ */
+export class RadfiApiError extends Error {
+  readonly status: number;
+  readonly code?: string;
+  readonly details?: string;
+  override readonly cause?: unknown;
+
+  constructor(status: number, body: RadfiErrorBody, fallback: string) {
+    super(body?.message || fallback);
+    this.name = 'RadfiApiError';
+    this.status = status;
+    this.code = body?.code;
+    this.details = body?.error?.details || body?.details;
+    this.cause = body;
+  }
+}
+
 export type RadfiTradingWallet = {
   tradingAddress: string;
   userAddress: string;
@@ -159,7 +194,7 @@ export class RadfiProvider {
 
     if (!res.ok) {
       const err = await res.json();
-      throw new Error(err.message || 'Radfi authentication failed');
+      throw new RadfiApiError(res.status, err, 'Radfi authentication failed');
     }
 
     return res.json().then(r => ({
@@ -177,7 +212,7 @@ export class RadfiProvider {
 
     if (!res.ok) {
       const err = await res.json();
-      throw new Error(err.message || 'Token refresh failed');
+      throw new RadfiApiError(res.status, err, 'Token refresh failed');
     }
 
     return res.json().then(r => ({
@@ -203,7 +238,7 @@ export class RadfiProvider {
 
     if (!res.ok) {
       const err = await res.json();
-      throw new Error(err.message || 'Failed to create trading wallet');
+      throw new RadfiApiError(res.status, err, 'Failed to create trading wallet');
     }
 
     return res.json().then(r => r.data);
@@ -284,7 +319,7 @@ export class RadfiProvider {
 
     if (!res.ok) {
       const err = await res.json();
-      throw new Error(err.message || 'Radfi transaction request failed');
+      throw new RadfiApiError(res.status, err, 'Radfi transaction request failed');
     }
 
     return res.json().then(r => r.data);
@@ -310,7 +345,7 @@ export class RadfiProvider {
 
     if (!res.ok) {
       const err = await res.json();
-      throw new Error(err.message || 'Radfi signature request failed');
+      throw new RadfiApiError(res.status, err, 'Radfi signature request failed');
     }
 
     return res.json().then(r => r.data.txId);
@@ -366,7 +401,7 @@ export class RadfiProvider {
 
     if (!res.ok) {
       const err = await res.json();
-      throw new Error(err.message || 'Failed to build renew-utxo transaction');
+      throw new RadfiApiError(res.status, err, 'Failed to build renew-utxo transaction');
     }
 
     return res.json().then(r => r.data);
@@ -393,7 +428,7 @@ export class RadfiProvider {
 
     if (!res.ok) {
       const err = await res.json();
-      throw new Error(err.message || 'Failed to sign and broadcast renew-utxo transaction');
+      throw new RadfiApiError(res.status, err, 'Failed to sign and broadcast renew-utxo transaction');
     }
 
     return res.json().then(r => r.data.txId);
@@ -425,7 +460,7 @@ export class RadfiProvider {
 
     if (!res.ok) {
       const err = await res.json();
-      throw new Error(err.message || 'Failed to build withdraw transaction');
+      throw new RadfiApiError(res.status, err, 'Failed to build withdraw transaction');
     }
 
     return res.json().then(r => r.data);
@@ -451,7 +486,7 @@ export class RadfiProvider {
 
     if (!res.ok) {
       const err = await res.json();
-      throw new Error(err.message || 'Failed to sign and broadcast withdraw transaction');
+      throw new RadfiApiError(res.status, err, 'Failed to sign and broadcast withdraw transaction');
     }
 
     return res.json().then(r => {
@@ -486,7 +521,7 @@ export class RadfiProvider {
 
     if (!res.ok) {
       const err = await res.json();
-      throw new Error(err.message || 'Failed to get max withdrawable amount');
+      throw new RadfiApiError(res.status, err, 'Failed to get max withdrawable amount');
     }
 
     return res.json().then(r => r.data);
