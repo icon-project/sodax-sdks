@@ -17,7 +17,15 @@ import {
   useBitcoinBalance,
 } from '@sodax/dapp-kit';
 import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
-import { ChainKeys, type ChainType, type SpokeChainKey, type XToken, type GetWalletProviderType, type IBitcoinWalletProvider, type IStellarWalletProvider } from '@sodax/sdk';
+import {
+  ChainKeys,
+  type ChainType,
+  type SpokeChainKey,
+  type XToken,
+  type GetWalletProviderType,
+  type IBitcoinWalletProvider,
+  type IStellarWalletProvider,
+} from '@sodax/sdk';
 import type { CreateBridgeIntentParams } from '@sodax/sdk';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
 import { formatMutationFailureMessage } from '@/lib/utils';
@@ -151,7 +159,7 @@ export function BridgeDialog({
             To: {toToken?.symbol ?? order.dstToken} on {order.dstChainKey}
           </div>
           <div>Amount: {formatUnits(order.amount, fromToken?.decimals ?? 0)}</div>
-          <div>Recipient: {order.recipient}</div>
+          <div className="break-all">Recipient: {order.recipient}</div>
 
           {needsTrustline && (
             <div className="text-red-500">Insufficient Stellar trustline — request trustline to proceed.</div>
@@ -212,7 +220,9 @@ export function BridgeDialog({
 
           {!isWrongChain && (
             <Button className="w-full" onClick={handleBridge} disabled={isBridgeDisabled}>
-              {isBridging ? 'Bridging…' : (
+              {isBridging ? (
+                'Bridging…'
+              ) : (
                 <>
                   <ArrowLeftRight className="mr-2 h-4 w-4" /> Bridge
                 </>
