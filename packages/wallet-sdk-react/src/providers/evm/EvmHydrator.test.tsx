@@ -194,12 +194,21 @@ describe('EvmHydrator → EvmWalletProvider', () => {
       expect(setters.unsetXConnection).not.toHaveBeenCalled();
     });
 
-    it('does not call setXConnection on connected while walletClient is still loading', () => {
+    // Regression for PR #13: wagmi reports 'connected' when the active chain is outside
+    // wagmiConfig.chains (e.g. Injective EVM 1776), so useWalletClient() never resolves.
+    // xConnections.EVM must track intent regardless; walletProviders.EVM stays undefined
+    // until walletClient resolves so callers know to prompt switchChain before signing.
+    it('calls setXConnection on connected even when walletClient is unresolved (intent tracking)', () => {
       wagmiState.walletClient = undefined;
       wagmiState.account = { address: fakeAddress, status: 'connected', connector: fakeConnector };
       renderWith({ EVM: {} });
-      expect(setters.setXConnection).not.toHaveBeenCalled();
+      expect(setters.setXConnection).toHaveBeenCalledWith('EVM', {
+        xAccount: { address: fakeAddress, xChainType: 'EVM' },
+        xConnectorId: fakeConnector.id,
+      });
       expect(setters.unsetXConnection).not.toHaveBeenCalled();
+      const providerCalls = setters.setWalletProvider.mock.calls;
+      expect(providerCalls.every(([, p]) => p === undefined)).toBe(true);
     });
 
     it('does not call unsetXConnection on initial disconnected (preserves persisted state)', () => {
