@@ -1,6 +1,6 @@
 # Migration
 
-> **Error handling conventions:** This module uses the **relay-layer contract** — discriminate on `error.message === 'RELAY_TIMEOUT'` / `'SUBMIT_TX_FAILED'` (also exported as `RELAY_ERROR_CODES` from `@sodax/sdk`). The **swap module** uses a different convention (`SodaxError<SwapErrorCode>` — see [SWAPS.md](./SWAPS.md) Error Handling). Both conventions coexist during the swap-first migration; the legacy pattern documented below is unchanged for Migration.
+> **Error handling conventions:** This module returns `Result<T, SodaxError<NarrowCode>>` from every async public method. Discriminate on `error.code` (a closed reason-only union) and `error.feature === 'migration'`. See [Error Handling](#error-handling) below.
 
 Migration part of the SDK provides abstractions to assist you with migrating tokens between ICON and the hub chain (Sonic). The service supports multiple migration types including ICX/wICX → SODA, bnUSD legacy → new bnUSD, BALN → SODA, and their reverse operations.
 
@@ -57,7 +57,7 @@ All exec methods on `MigrationService` follow the `SpokeExecActionParams` wrappe
 const result = await sodax.migration.migrateIcxToSoda({
   params: { srcChainKey: ChainKeys.ICON_MAINNET, /* ... */ },
   walletProvider: iconWalletProvider,
-  timeout: 30000,       // optional, ms; default 60000
+  timeout: 30000,       // optional, ms; default 120000
   skipSimulation: false, // optional
 });
 
@@ -181,7 +181,7 @@ const migrationParams: IcxMigrateParams = {
 const result = await sodax.migration.migrateIcxToSoda({
   params: migrationParams,
   walletProvider: iconWalletProvider,
-  timeout: 30000, // Optional timeout in milliseconds (default: 60000)
+  timeout: 30000, // Optional timeout in milliseconds (default: 120000)
 });
 
 if (result.ok) {
@@ -214,7 +214,7 @@ const revertParams: IcxCreateRevertMigrationParams = {
 const result = await sodax.migration.revertMigrateSodaToIcx({
   params: revertParams,
   walletProvider: sonicWalletProvider,
-  timeout: 30000, // Optional timeout in milliseconds (default: 60000)
+  timeout: 30000, // Optional timeout in milliseconds (default: 120000)
 });
 
 if (result.ok) {
@@ -288,7 +288,7 @@ const migrationParams: UnifiedBnUSDMigrateParams<typeof ChainKeys.ICON_MAINNET> 
 const result = await sodax.migration.migratebnUSD({
   params: migrationParams,
   walletProvider: iconWalletProvider,
-  timeout: 30000, // Optional timeout in milliseconds (default: 60000)
+  timeout: 30000, // Optional timeout in milliseconds (default: 120000)
 });
 
 if (result.ok) {
@@ -349,7 +349,7 @@ if (!isAllowed.ok) {
 const result = await sodax.migration.migratebnUSD({
   params: revertParams,
   walletProvider: sonicWalletProvider,
-  timeout: 30000, // Optional timeout in milliseconds (default: 60000)
+  timeout: 30000, // Optional timeout in milliseconds (default: 120000)
 });
 
 if (result.ok) {
@@ -386,7 +386,7 @@ const migrationParams: BalnMigrateParams = {
 const result = await sodax.migration.migrateBaln({
   params: migrationParams,
   walletProvider: iconWalletProvider,
-  timeout: 30000, // Optional timeout in milliseconds (default: 60000)
+  timeout: 30000, // Optional timeout in milliseconds (default: 120000)
 });
 
 if (result.ok) {
@@ -700,7 +700,7 @@ try {
 }
 ```
 
-Available guards: `isMigrationError` (broad), `isMigrateOrchestrationError`, `isRevertMigrationOrchestrationError`, `isCreateMigrateIntentError`, `isCreateRevertMigrationIntentError`, `isMigrationApproveError`, `isMigrationAllowanceCheckError`, `isMigrationLookupError`.
+Available guards: `isMigrationError` (broad — any migration error), `isMigrateOrchestrationError` (forward `migrateIcxToSoda` / `migratebnUSD` / `migrateBaln`), `isRevertMigrationOrchestrationError` (`revertMigrateSodaToIcx`), `isMigrationCreateIntentError` (shared by all 4 `create*Intent` methods), `isMigrationApproveError`, `isMigrationAllowanceCheckError`, `isMigrationLookupError`. Per-operation discrimination across the orchestrators is via `error.context.action` (one of `'migrateIcxToSoda' | 'migratebnUSD' | 'migrateBaln' | 'revertMigrateSodaToIcx'`).
 
 ### Validation invariant
 
@@ -746,4 +746,4 @@ await sodax.config.initialize(); // optional: fetch dynamic chain config from ba
 
 Default configuration:
 - `relayerApiEndpoint`: `https://relay.soniclabs.com`
-- `timeout`: 60000 ms (60 seconds) — overridable per call via the `timeout` field in action params
+- `timeout`: 120000 ms (120 seconds) — overridable per call via the `timeout` field in action params

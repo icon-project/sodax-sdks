@@ -40,41 +40,55 @@ How to setup local development
 
 <a href="https://docs.sodax.com/developers/packages/sdk/swaps" class="button secondary" data-icon="rotate">Swaps (Solver)</a> -  Cross-chain intent-based swaps
 
-* EVM (Arbitrum, Avalanche, Base, BSC, Optimism, Polygon, Sonic, HyperEVM, Lightlink) ✅
+* EVM (Sonic, Ethereum, Arbitrum, Avalanche, Base, BSC, Optimism, Polygon, HyperEVM, Lightlink, Redbelly, Kaia) ✅
 * Sui ✅
 * Stellar ✅
 * ICON ✅
 * Solana ✅
 * Injective ✅
+* NEAR ✅
+* Stacks ✅
+* Bitcoin ✅
 
 <a href="https://docs.sodax.com/developers/packages/sdk/money_market" class="button secondary" data-icon="sack-dollar">Lend / Borrow (Money Market)</a>- Cross-chain lending and borrowing
 
-* EVM (Arbitrum, Avalanche, Base, BSC, Optimism, Polygon, Sonic, HyperEVM, Lightlink) ✅
+* EVM (Sonic, Ethereum, Arbitrum, Avalanche, Base, BSC, Optimism, Polygon, HyperEVM, Lightlink, Redbelly, Kaia) ✅
 * Sui ✅
 * Stellar ✅
-* ICON ✅
+* ICON ✅ (bnUSD only)
 * Solana ✅
 * Injective ✅
+* NEAR ✅
+* Stacks ✅
+* Bitcoin ✅ (BTC only)
 
 <a href="https://docs.sodax.com/developers/packages/sdk/bridge" class="button secondary" data-icon="bridge-suspension">Bridge</a>- Cross-chain token bridging
 
-* EVM (Arbitrum, Avalanche, Base, BSC, Optimism, Polygon, Sonic, HyperEVM, Lightlink) ✅
+* EVM (Sonic, Ethereum, Arbitrum, Avalanche, Base, BSC, Optimism, Polygon, HyperEVM, Lightlink, Redbelly, Kaia) ✅
 * Sui ✅
 * Stellar ✅
 * ICON ✅
 * Solana ✅
 * Injective ✅
+* NEAR ✅
+* Stacks ✅
+* Bitcoin ✅
 
 <a href="https://docs.sodax.com/developers/packages/sdk/migration" class="button secondary" data-icon="truck">Migration</a>- Token migration (ICX, bnUSD, BALN)
 
+* ICX / wICX → SODA: source chain ICON only
+* BALN → SODA: source chain ICON only
+* bnUSD: between legacy chains (ICON, Sui, Stellar) and the new bnUSD on any other supported chain
+
 <a href="https://docs.sodax.com/developers/packages/sdk/staking" class="button secondary" data-icon="seedling">Staking</a>- SODA token staking
 
-* EVM (Arbitrum, Avalanche, Base, BSC, Optimism, Polygon, Sonic, HyperEVM, Lightlink) ✅
+* EVM (Sonic, Ethereum, Arbitrum, Avalanche, Base, BSC, Optimism, Polygon, HyperEVM, Lightlink, Redbelly, Kaia) ✅
 * Sui ✅
 * Stellar ✅
-* ICON ✅
 * Solana ✅
 * Injective ✅
+* NEAR ✅
+* Stacks ✅
 
 ### Tooling Modules inside the SDK
 

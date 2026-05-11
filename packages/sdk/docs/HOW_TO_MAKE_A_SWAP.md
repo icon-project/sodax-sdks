@@ -1,6 +1,6 @@
 # How to Make a Swap
 
-> **Error handling conventions:** The swap module returns `SodaxError<SwapErrorCode>` from `swap`, `createIntent`, `postExecution`, `createLimitOrder`, and `createLimitOrderIntent`. Discriminate on `result.error.code` (e.g. `'RELAY_TIMEOUT'`) — not `result.error.message`. Inline error-handling examples below may show the legacy `error.message` pattern; if so, prefer the canonical examples in [SWAPS.md](./SWAPS.md) Error Handling. The lower-level methods (`getQuote`, `getStatus`, `submitIntent`, `getSolvedIntentPacket`, `cancelIntent`, …) are unchanged and still return `Result<T, SolverErrorResponse>` or relay-contract errors.
+> **Error handling conventions:** The swap module returns `SodaxError<SwapErrorCode>` from `swap`, `createIntent`, `postExecution`, `createLimitOrder`, and `createLimitOrderIntent`. Discriminate on `result.error.code` (e.g. `'RELAY_TIMEOUT'`) — not `result.error.message`. See [SWAPS.md](./SWAPS.md#error-handling) for the full per-method code unions. The lower-level methods (`getQuote`, `getStatus`, `submitIntent`, `getSolvedIntentPacket`, `cancelIntent`, …) still return `Result<T, SolverErrorResponse>` or `Result<T, Error | unknown>` — `cancelIntent`/`cancelLimitOrder` were not migrated to `SodaxError`, so don't `switch (error.code)` on those.
 
 This guide provides a step-by-step walkthrough for executing a cross-chain swap using the Sodax SDK. It covers everything from initializing the SDK to handling errors during the swap process.
 
@@ -50,21 +50,22 @@ if (!initResult.ok) {
 If you need to use custom solver configuration or hub provider settings, you can pass them when creating the Sodax instance:
 
 ```typescript
-import { Sodax, getSolverConfig, getHubChainConfig, ChainKeys } from "@sodax/sdk";
+import { Sodax, getSolverConfig } from "@sodax/sdk";
 
 const sodax = new Sodax({
-  swap: getSolverConfig(ChainKeys.SONIC_MAINNET), // Custom solver config
-  hubProviderConfig: {
-    hubRpcUrl: 'https://rpc.soniclabs.com',
-    chainConfig: getHubChainConfig(),
+  solver: getSolverConfig(), // Custom solver config (takes no args; returns the packaged default object)
+  hub: {
+    rpcUrl: 'https://rpc.soniclabs.com', // override only what you need; the rest merges with the packaged HubConfig
   },
 });
 
-const initResult = await sodax.initialize();
+const initResult = await sodax.config.initialize();
 if (!initResult.ok) {
   console.warn('Initialization failed, using packaged defaults:', initResult.error);
 }
 ```
+
+See [CONFIGURE_SDK.md](./CONFIGURE_SDK.md) for the full `SodaxConfig` shape and canonical override patterns.
 
 ## Step 2: Obtain a Wallet Provider
 
@@ -294,7 +295,7 @@ const swapResult = await sodax.swaps.swap({
   params: createIntentParams,
   walletProvider: evmWalletProvider,
   // Optional parameters:
-  // timeout: 120000, // Timeout in milliseconds waiting for hub relay (default: 60 s)
+  // timeout: 120000, // Timeout in milliseconds waiting for hub relay (default: DEFAULT_RELAY_TX_TIMEOUT = 120 s)
   // skipSimulation: false, // Whether to skip transaction simulation (default: false)
 });
 
@@ -425,58 +426,54 @@ await checkIntentStatus(sodax, intentDeliveryInfo.dstTxHash);
 
 ## Step 9: Handle Errors
 
-All swap methods return `Result<T>`. When `result.ok === false`, inspect `result.error`:
+All swap methods return `Result<T, SodaxError<SwapErrorCode>>`. Discriminate on **`result.error.code`** (a closed reason-only union), never on `error.message` (human-readable, may change). The original lower-level failure is preserved on `error.cause`; structured metadata is on `error.context`.
 
-- `result.error.message` carries a phase tag (`SCREAMING_SNAKE_CASE`) when the failure originated in a `catch` block during a multi-step operation.
-- `result.error.cause` (ES2022 `Error.cause`) holds the underlying error when one exists.
-- Precondition failures (invalid chain keys, unsupported tokens) carry a prose message without a `.cause`.
-
-**Example**: See how errors are handled in the example file: [`apps/node/src/swap.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/swap.ts#L144-L170).
+See [SWAPS.md](./SWAPS.md#error-handling) for the full per-method code unions and `context` schema.
 
 ```typescript
 if (!swapResult.ok) {
   const error = swapResult.error;
+  switch (error.code) {
+    case 'EXECUTION_FAILED':
+      // Catch-all for the swap orchestrator. context.phase tells you which stage
+      // ('postExecution' for the solver-API step).
+      console.error('Swap orchestration failed:', error.cause);
+      break;
 
-  if (error instanceof Error) {
-    switch (error.message) {
-      case 'POST_EXECUTION_FAILED':
-        // Intent was relayed to the hub, but the solver API call failed.
-        // The intent may be live on the hub — check status manually and retry postExecution.
-        console.error('Post execution failed. Underlying cause:', error.cause);
-        break;
+    case 'RELAY_TIMEOUT':
+      // Spoke transaction was submitted but the hub packet did not arrive within timeout.
+      // The relay may still complete — poll the relayer API.
+      console.error('Relay timed out. Cause:', error.cause);
+      break;
 
-      case 'RELAY_TIMEOUT':
-        // Spoke transaction was submitted to the relayer but the hub packet did not arrive
-        // within the configured timeout. The relay may still complete — poll the relayer API.
-        console.error('Relay timed out waiting for hub confirmation. Cause:', error.cause);
-        break;
+    case 'TX_SUBMIT_FAILED':
+      // CRITICAL: spoke tx landed but relay submission failed. Funds may be in flight.
+      // Persist the user's input + spoke tx hash and retry submission.
+      console.error('Relay submit failed:', error.context?.relayCode, error.cause);
+      break;
 
-      case 'SUBMIT_TX_FAILED':
-        // CRITICAL: The intent transaction was created on-chain but failed to reach the
-        // relayer API. The user's funds are locked until you successfully re-submit.
-        // Retry submitIntent() with the spoke tx hash and store it for recovery.
-        console.error('Submit to relayer failed. Cause:', error.cause);
-        // Retry manually:
-        // const retryResult = await sodax.swaps.submitIntent({
-        //   action: 'submit',
-        //   params: {
-        //     chain_id: getIntentRelayChainId(createIntentParams.srcChainKey).toString(),
-        //     tx_hash: spokeTxHash,
-        //   },
-        // });
-        break;
+    case 'RELAY_FAILED':
+      // error.context.relayCode disambiguates:
+      //   'RELAY_POLLING_FAILED' — polling endpoint outage; query the hub directly.
+      //   'UNKNOWN'              — forward-compat fallback for new relay error codes.
+      break;
 
-      default:
-        // Precondition failure (unsupported token, invalid chain key, etc.) or unknown error
-        console.error('Swap error:', error.message, error.cause ?? '');
-    }
-  } else {
-    console.error('Non-Error failure:', error);
+    case 'VALIDATION_FAILED':
+      // Bad input — error.context.field tells you which.
+      console.error('Bad input:', error.message);
+      break;
+
+    case 'INTENT_CREATION_FAILED':
+    case 'TX_VERIFICATION_FAILED':
+    case 'EXTERNAL_API_ERROR':
+    case 'UNKNOWN':
+    default:
+      console.error('Swap error:', error.code, error.cause);
   }
 }
 ```
 
-**Note**: There are no module-specific error type guards (such as `isIntentCreationFailedError`, `isIntentSubmitTxFailedError`, etc.) in the v2 SDK. Branch on `error.message` instead as shown above.
+**Note**: The swap module exports narrow guards `isSwapError`, `isSwapCreateIntentError`, `isPostExecutionError` from `@sodax/sdk`. Use them in `catch` blocks for cross-bundle type safety; see [SWAPS.md](./SWAPS.md#error-handling).
 
 ## Complete Example
 

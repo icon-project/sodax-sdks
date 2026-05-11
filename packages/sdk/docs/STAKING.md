@@ -28,7 +28,7 @@ All mutating methods accept a single `SpokeExecActionParams` object with the fol
   walletProvider: ...,       // required when raw: false; chain-narrowed by srcChainKey
   raw?: boolean,             // false (default) → sign & broadcast; true → return raw tx payload
   skipSimulation?: boolean,  // optional: skip preflight simulation
-  timeout?: number,          // optional: relay timeout in milliseconds (default: 60 000)
+  timeout?: number,          // optional: relay timeout in milliseconds (default: 120 000)
 }
 ```
 
