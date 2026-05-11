@@ -4,7 +4,7 @@ Repository navigation hub for Claude Code. Per-package guidance lives in `packag
 
 ## Project Overview
 
-SODAX is a cross-chain DeFi platform built on a **hub-and-spoke architecture** where **Sonic is the hub chain**. It supports swaps (intent-based via solver), lending/borrowing (money market), staking, bridging, DEX (concentrated liquidity), token migration, and partner fee operations across 20 blockchains:
+SODAX is a cross-chain DeFi platform built on a **hub-and-spoke architecture** where **Sonic is the hub chain**. It supports swaps (intent-based via solver), lending/borrowing (money market), staking, bridging, DEX (concentrated liquidity), token migration, partner fee operations, and recovery (withdrawing stuck hub-wallet assets) across 20 blockchains:
 
 - **EVM (12):** Sonic (hub), Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia
 - **Non-EVM (8):** Solana, Sui, Stellar, ICON, Injective, NEAR, Stacks, Bitcoin
@@ -25,12 +25,12 @@ Turborepo + pnpm workspace. Package manager: **pnpm 10.32.1**.
 
 ### Apps
 
-No per-app CLAUDE.md files yet (follow-up task). See each app's `package.json` for scripts.
-
-- `apps/demo` — Vite + React demo app for SDK showcase
-- `apps/node` — Node.js scripts for E2E testing various chain operations
-- `apps/node-cjs` — Node.js regression test for CJS
-- `apps/wallet-modal-example` — Vite + React demo app for Wallet React SDK showcase
+| App | Role | Per-app guide |
+|-----|------|---------------|
+| `apps/demo` | Vite + React showcase for the full SDK surface (one page per feature) | [`apps/demo/CLAUDE.md`](apps/demo/CLAUDE.md) |
+| `apps/node` | Node.js scripts for E2E testing each chain integration against mainnet | [`apps/node/CLAUDE.md`](apps/node/CLAUDE.md) |
+| `apps/node-cjs` | CommonJS regression harness for `@sodax/sdk` consumer interop | [`apps/node-cjs/CLAUDE.md`](apps/node-cjs/CLAUDE.md) |
+| `apps/wallet-modal-example` | Headless wallet-modal reference for `@sodax/wallet-sdk-react` primitives | [`apps/wallet-modal-example/CLAUDE.md`](apps/wallet-modal-example/CLAUDE.md) |
 
 ### Dependency chain
 
@@ -78,10 +78,13 @@ For per-package gotchas (SDK bigint/JSON handling, wallet-sdk-core type-system o
 
 ## CI Pipeline
 
-GitHub Actions runs on push to `main`/`development` and all PRs (Node.js 20.x, 22.x, 24.x):
+GitHub Actions ([`.github/workflows/packages-ci.yml`](.github/workflows/packages-ci.yml)) runs on push to `main`/`development` and all PRs (Node.js 20.x, 22.x, 24.x):
 
 1. `pnpm install --frozen-lockfile`
-2. `pnpm lint`
-3. `pnpm build:packages`
-4. `pnpm checkTs`
-5. `pnpm build`
+2. `pnpm lint:packages`
+3. `pnpm check:circular-deps:packages`
+4. `pnpm build:packages`
+5. CJS compatibility check (`cd apps/node-cjs && pnpm test`)
+6. `pnpm checkTs:packages`
+7. AI-exported docs guards — multiple `check:ai-*` scripts across `sdk`, `wallet-sdk-react`, `dapp-kit` (verify exports, scope, links, imports compile, snippets typecheck, queryKey/mutationKey segments). See [`packages/dapp-kit/CLAUDE.md`](packages/dapp-kit/CLAUDE.md) for details on the dapp-kit guards.
+8. `pnpm test:packages`

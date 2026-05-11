@@ -46,7 +46,7 @@ Central dispatch for all 9 chains. Each chain registers a `ChainServiceFactory`:
 - Use direct browser extension APIs
 - `ChainActions` registered by `chainRegistry` during `createChainServices()`
 - Wallet providers created as side-effect in `setXConnection()`
-- **Bitcoin `signMessage`**: auto-detects address type — BIP-322 for P2WPKH/P2TR, ECDSA for P2SH/P2PKH (same logic as SDK `BitcoinSpokeProvider.authenticateWithWallet`)
+- **Bitcoin `signMessage`**: auto-detects address type — BIP-322 for P2WPKH/P2TR, ECDSA for P2SH/P2PKH (same logic as SDK `RadfiProvider.authenticateWithWallet` in `packages/sdk/src/shared/entities/btc/RadfiProvider.ts`; the spoke entry point is `BitcoinSpokeService`)
 
 ### Provider/Hydrator/Actions Pattern (EVM, Solana, Sui)
 
@@ -73,8 +73,8 @@ Centralized state with persistence:
 }
 ```
 
-Middleware stack: `devtools` → `persist` → `immer`
-Only `xConnections` is persisted (key: `'xwagmi-store'`).
+Middleware stack (outer → inner, as written in code): `devtools(persist(immer(...)))`. Zustand applies the innermost first, so the runtime execution order is `immer → persist → devtools`.
+Only `xConnections` is persisted (key: `'xwagmi-store'` — preserved from v1 for backward compatibility, so existing users don't lose persisted connections on upgrade).
 
 **Persist hydration caveat**: `initChainServices` runs before persist hydration completes. Persist then restores `xConnections` from localStorage, which may include connections for now-disabled chains. `cleanupDisabledConnections()` runs after hydration to remove these stale connections.
 
@@ -241,6 +241,9 @@ src/
 │   └── stacks/
 ├── actions/                    # getXChainType, getXService utilities
 ├── types/                      # Type definitions (config, chainActions, interfaces)
+├── shared/                     # Shared guard utilities
+├── assets/                     # Wallet icons / metadata assets
+├── declarations/               # Ambient type declarations (e.g. stellar-wallets-kit.d.ts)
 └── utils/
 ```
 
