@@ -131,16 +131,14 @@ export class ConfigService {
     return this.supportedHubAssetsSet.has(hubAsset.toLowerCase() as Address);
   }
 
-  public isValidSodaVaultAsset(vault: string): boolean {
-    return this.supportedSodaVaultAssetsSet.has(vault.toLowerCase() as Address);
-  }
-
-  public isValidVault(vault: string | XToken): boolean {
-    if (typeof vault === 'string') {
-      return this.isValidSodaVaultAsset(vault);
-    }
-
-    return this.isValidSodaVaultAsset(vault.address);
+  /**
+   * Checks whether a hub-chain address is one of the soda-vault hub assets
+   * (sodaUSDC, sodaUSDT, bnUSD, etc.). The input MUST be a hub-chain address;
+   * passing a spoke token address will silently produce wrong answers when a
+   * spoke address collides with a hub vault address (e.g. SODA on Base).
+   */
+  public isSodaVaultHubAsset(hubAsset: Address): boolean {
+    return this.supportedSodaVaultAssetsSet.has(hubAsset.toLowerCase() as Address);
   }
 
   public isValidChainHubAsset(chainId: SpokeChainKey, hubAsset: Address): boolean {

@@ -28,6 +28,7 @@ import { Sodax } from '../shared/entities/Sodax.js';
 import { SodaxError } from '../errors/SodaxError.js';
 import { decodeFunctionData } from 'viem';
 import { poolAbi } from '../shared/abis/pool.abi.js';
+import { EvmVaultTokenService } from '../shared/services/hub/EvmVaultTokenService.js';
 
 // MoneyMarketService now calls `getUserHubWalletAddress` / `getUserRouter` as instance methods on
 // `sodax.hubProvider`. We keep `vi.fn()` stubs in `vi.hoisted` so per-test
@@ -2597,7 +2598,7 @@ describe('MoneyMarketService.buildSupplyData', () => {
   it('returns hex bytes when the hub asset is a non-vault token (extra approve+deposit calls)', () => {
     vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValueOnce(fakeHubAsset() as never);
     // The hub-asset address is NOT a recognized vault → extra approve+deposit calls inserted.
-    vi.spyOn(sodax.config, 'isValidVault').mockReturnValueOnce(false);
+    vi.spyOn(sodax.config, 'isSodaVaultHubAsset').mockReturnValueOnce(false);
 
     const data = sodax.moneyMarket.buildSupplyData(ChainKeys.BSC_MAINNET, SAMPLE_EVM_TOKEN, 1_000_000n, HUB_WALLET);
 
@@ -2608,7 +2609,7 @@ describe('MoneyMarketService.buildSupplyData', () => {
 
   it('returns hex bytes when the hub asset is itself a vault (no extra deposit step)', () => {
     vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValueOnce(fakeHubAsset() as never);
-    vi.spyOn(sodax.config, 'isValidVault').mockReturnValueOnce(true);
+    vi.spyOn(sodax.config, 'isSodaVaultHubAsset').mockReturnValueOnce(true);
 
     const data = sodax.moneyMarket.buildSupplyData(ChainKeys.BSC_MAINNET, SAMPLE_EVM_TOKEN, 1_000_000n, HUB_WALLET);
 
@@ -2639,7 +2640,7 @@ describe('MoneyMarketService.buildBorrowData', () => {
       fakeHubAsset({ hubAsset: wrappedSonic }) as never,
     );
     vi.spyOn(sodax.config, 'getMoneyMarketToken').mockReturnValueOnce(fakeMoneyMarketToken as never);
-    vi.spyOn(sodax.config, 'isValidVault').mockReturnValue(false);
+    vi.spyOn(sodax.config, 'isSodaVaultHubAsset').mockReturnValue(false);
 
     const data = sodax.moneyMarket.buildBorrowData(
       HUB_WALLET,
@@ -2655,7 +2656,7 @@ describe('MoneyMarketService.buildBorrowData', () => {
   it('returns hex bytes when target chain is non-hub (asset-manager transfer path)', () => {
     vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValueOnce(fakeHubAsset() as never);
     vi.spyOn(sodax.config, 'getMoneyMarketToken').mockReturnValueOnce(fakeMoneyMarketToken as never);
-    vi.spyOn(sodax.config, 'isValidVault').mockReturnValue(false);
+    vi.spyOn(sodax.config, 'isSodaVaultHubAsset').mockReturnValue(false);
 
     const data = sodax.moneyMarket.buildBorrowData(
       HUB_WALLET,
@@ -2674,7 +2675,7 @@ describe('MoneyMarketService.buildBorrowData', () => {
       fakeHubAsset({ vault: bnUSDVault }) as never,
     );
     vi.spyOn(sodax.config, 'getMoneyMarketToken').mockReturnValueOnce(fakeMoneyMarketToken as never);
-    vi.spyOn(sodax.config, 'isValidVault').mockReturnValue(false);
+    vi.spyOn(sodax.config, 'isSodaVaultHubAsset').mockReturnValue(false);
 
     const data = sodax.moneyMarket.buildBorrowData(
       HUB_WALLET,
@@ -2717,7 +2718,7 @@ describe('MoneyMarketService.buildWithdrawData', () => {
   it('returns hex bytes for non-hub target chain', () => {
     vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValueOnce(fakeHubAsset as never);
     vi.spyOn(sodax.config, 'getMoneyMarketToken').mockReturnValueOnce(fakeMoneyMarketToken as never);
-    vi.spyOn(sodax.config, 'isValidVault').mockReturnValue(false);
+    vi.spyOn(sodax.config, 'isSodaVaultHubAsset').mockReturnValue(false);
 
     const data = sodax.moneyMarket.buildWithdrawData(
       HUB_WALLET,
@@ -2737,7 +2738,7 @@ describe('MoneyMarketService.buildWithdrawData', () => {
       hubAsset: wrappedSonic,
     } as never);
     vi.spyOn(sodax.config, 'getMoneyMarketToken').mockReturnValueOnce(fakeMoneyMarketToken as never);
-    vi.spyOn(sodax.config, 'isValidVault').mockReturnValue(false);
+    vi.spyOn(sodax.config, 'isSodaVaultHubAsset').mockReturnValue(false);
 
     const data = sodax.moneyMarket.buildWithdrawData(
       HUB_WALLET,
@@ -2753,7 +2754,7 @@ describe('MoneyMarketService.buildWithdrawData', () => {
   it('returns hex bytes when target token is itself a recognized vault (skip-vault-withdraw branch)', () => {
     vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValueOnce(fakeHubAsset as never);
     vi.spyOn(sodax.config, 'getMoneyMarketToken').mockReturnValueOnce(fakeMoneyMarketToken as never);
-    vi.spyOn(sodax.config, 'isValidVault').mockReturnValue(true);
+    vi.spyOn(sodax.config, 'isSodaVaultHubAsset').mockReturnValue(true);
 
     const data = sodax.moneyMarket.buildWithdrawData(
       HUB_WALLET,
@@ -2786,7 +2787,7 @@ describe('MoneyMarketService.buildRepayData', () => {
 
   it('returns hex bytes when the hub asset is non-vault (extra approve+deposit calls)', () => {
     vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValueOnce(fakeHubAsset() as never);
-    vi.spyOn(sodax.config, 'isValidVault').mockReturnValue(false);
+    vi.spyOn(sodax.config, 'isSodaVaultHubAsset').mockReturnValue(false);
 
     const data = sodax.moneyMarket.buildRepayData(ChainKeys.BSC_MAINNET, SAMPLE_EVM_TOKEN, 1_000_000n, HUB_WALLET);
 
@@ -2817,7 +2818,7 @@ describe('MoneyMarketService.buildRepayData', () => {
 
   it('returns hex bytes when the hub asset itself is a recognized vault (skip the inner approve+deposit pair)', () => {
     vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValueOnce(fakeHubAsset() as never);
-    vi.spyOn(sodax.config, 'isValidVault').mockReturnValue(true);
+    vi.spyOn(sodax.config, 'isSodaVaultHubAsset').mockReturnValue(true);
 
     const data = sodax.moneyMarket.buildRepayData(ChainKeys.BSC_MAINNET, SAMPLE_EVM_TOKEN, 1_000_000n, HUB_WALLET);
 
@@ -2830,6 +2831,93 @@ describe('MoneyMarketService.buildRepayData', () => {
     expect(() => sodax.moneyMarket.buildRepayData(ChainKeys.BSC_MAINNET, SAMPLE_EVM_TOKEN, 1n, HUB_WALLET)).toThrow(
       /hub asset not found/,
     );
+  });
+});
+
+// =========================================================================
+// Regression: SODA-on-Base spoke/hub address collision.
+//
+// Bug shape (pre-fix): buildBorrowData / buildWithdrawData called
+//   isValidVault(toToken)
+// where `toToken` is the user-facing SPOKE chain address. The predicate
+// checks against the HUB-chain vault set, so for almost every token it
+// returned false by coincidence. When a spoke address collided with a
+// hub vault address (SODA on Base), it flipped to true and the
+// vault-withdraw step was silently skipped → wrong hub calldata.
+//
+// Pinned invariant: the predicate is evaluated against the hub asset
+// (toHubAsset.hubAsset), never against the spoke `toToken`. We assert
+// this directly via an argument-capturing mock, plus the observable
+// downstream effect (EvmVaultTokenService.encodeWithdraw was called
+// with hub-side addresses — which under the bug would have been skipped).
+// =========================================================================
+
+describe('buildBorrowData / buildWithdrawData — spoke/hub address collision regression', () => {
+  // A spoke-chain token address that, in the SODA-on-Base bug, also exists
+  // in the hub vault set.
+  const COLLIDING_SPOKE_TOKEN = '0xcafe0000000000000000000000000000000cafe1' as Address;
+  // Hub-side addresses distinct from the colliding spoke address.
+  const NON_VAULT_HUB_ASSET = '0xa110ca7ed0000000000000000000000000000001' as Address;
+  const HUB_VAULT = '0xa110ca7ed0000000000000000000000000000002' as Address;
+
+  const fakeHubAsset = {
+    hubAsset: NON_VAULT_HUB_ASSET,
+    vault: HUB_VAULT,
+    decimals: 18,
+  };
+  const fakeMoneyMarketToken = {
+    address: '0xa110ca7ed0000000000000000000000000000003' as Address,
+    decimals: 18,
+  };
+
+  // isSodaVaultHubAsset returns true ONLY for the colliding spoke address.
+  // With the fix: predicate is called with the hub asset → false → vault-withdraw emitted.
+  // With the bug: predicate would be called with the spoke token → true → vault-withdraw skipped.
+  const makeArgSensitiveMock = () =>
+    vi
+      .spyOn(sodax.config, 'isSodaVaultHubAsset')
+      .mockImplementation((addr: Address) => addr.toLowerCase() === COLLIDING_SPOKE_TOKEN.toLowerCase());
+
+  it('buildBorrowData: predicate checks the hub asset, never the spoke token; vault-withdraw is emitted', () => {
+    vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValueOnce(fakeHubAsset as never);
+    vi.spyOn(sodax.config, 'getMoneyMarketToken').mockReturnValueOnce(fakeMoneyMarketToken as never);
+    const predicateSpy = makeArgSensitiveMock();
+    const encodeWithdrawSpy = vi.spyOn(EvmVaultTokenService, 'encodeWithdraw');
+
+    sodax.moneyMarket.buildBorrowData(
+      HUB_WALLET,
+      SAMPLE_DST_ADDRESS,
+      COLLIDING_SPOKE_TOKEN,
+      1_000_000n,
+      ChainKeys.BSC_MAINNET,
+    );
+
+    expect(predicateSpy).toHaveBeenCalled();
+    for (const [arg] of predicateSpy.mock.calls) {
+      expect((arg as string).toLowerCase()).toBe(NON_VAULT_HUB_ASSET.toLowerCase());
+    }
+    expect(encodeWithdrawSpy).toHaveBeenCalledWith(HUB_VAULT, NON_VAULT_HUB_ASSET, expect.any(BigInt));
+  });
+
+  it('buildWithdrawData: predicate checks the hub asset, never the spoke token; vault-withdraw is emitted', () => {
+    vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValueOnce(fakeHubAsset as never);
+    vi.spyOn(sodax.config, 'getMoneyMarketToken').mockReturnValueOnce(fakeMoneyMarketToken as never);
+    const predicateSpy = makeArgSensitiveMock();
+    const encodeWithdrawSpy = vi.spyOn(EvmVaultTokenService, 'encodeWithdraw');
+
+    sodax.moneyMarket.buildWithdrawData(
+      HUB_WALLET,
+      SAMPLE_DST_ADDRESS,
+      COLLIDING_SPOKE_TOKEN,
+      1_000_000n,
+      ChainKeys.BSC_MAINNET,
+    );
+
+    expect(predicateSpy).toHaveBeenCalled();
+    for (const [arg] of predicateSpy.mock.calls) {
+      expect((arg as string).toLowerCase()).toBe(NON_VAULT_HUB_ASSET.toLowerCase());
+    }
+    expect(encodeWithdrawSpy).toHaveBeenCalledWith(HUB_VAULT, NON_VAULT_HUB_ASSET, expect.any(BigInt));
   });
 });
 
@@ -2918,7 +3006,7 @@ describe('borrow / withdraw: relayData is forwarded to relayTxAndWaitPacket on S
 });
 
 describe('buildBorrowData / buildWithdrawData — remaining branch coverage', () => {
-  // To exercise the partner-fee and "isValidVault(toToken)" branches we spin up a
+  // To exercise the partner-fee and "isSodaVaultHubAsset(assetAddress)" branches we spin up a
   // separate Sodax instance with a configured partnerFee. Reusing the shared `sodax`
   // would mean stubbing a readonly field on its MoneyMarketService.
   const sodaxWithFee = new Sodax({
@@ -2938,7 +3026,7 @@ describe('buildBorrowData / buildWithdrawData — remaining branch coverage', ()
       address: '0xb000000000000000000000000000000000000003' as Address,
       decimals: 18,
     } as never);
-    vi.spyOn(sodaxWithFee.config, 'isValidVault').mockReturnValue(false);
+    vi.spyOn(sodaxWithFee.config, 'isSodaVaultHubAsset').mockReturnValue(false);
 
     const data = sodaxWithFee.moneyMarket.buildBorrowData(
       HUB_WALLET,
@@ -2961,7 +3049,7 @@ describe('buildBorrowData / buildWithdrawData — remaining branch coverage', ()
       address: '0xb000000000000000000000000000000000000003' as Address,
       decimals: 18,
     } as never);
-    vi.spyOn(sodaxWithFee.config, 'isValidVault').mockReturnValue(false);
+    vi.spyOn(sodaxWithFee.config, 'isSodaVaultHubAsset').mockReturnValue(false);
 
     const data = sodaxWithFee.moneyMarket.buildBorrowData(
       HUB_WALLET,
@@ -2985,7 +3073,7 @@ describe('buildBorrowData / buildWithdrawData — remaining branch coverage', ()
       decimals: 18,
     } as never);
     // Both toToken and fromHubAsset are recognized vaults → outgoing decimals from hubAsset.
-    vi.spyOn(sodax.config, 'isValidVault').mockReturnValue(true);
+    vi.spyOn(sodax.config, 'isSodaVaultHubAsset').mockReturnValue(true);
 
     const data = sodax.moneyMarket.buildBorrowData(
       HUB_WALLET,
@@ -3008,7 +3096,7 @@ describe('buildBorrowData / buildWithdrawData — remaining branch coverage', ()
       address: '0xb000000000000000000000000000000000000003' as Address,
       decimals: 18,
     } as never);
-    vi.spyOn(sodax.config, 'isValidVault').mockReturnValue(false);
+    vi.spyOn(sodax.config, 'isSodaVaultHubAsset').mockReturnValue(false);
 
     const data = sodax.moneyMarket.buildBorrowData(
       HUB_WALLET,
@@ -3031,7 +3119,7 @@ describe('buildBorrowData / buildWithdrawData — remaining branch coverage', ()
       address: '0xc000000000000000000000000000000000000003' as Address,
       decimals: 18,
     } as never);
-    vi.spyOn(sodax.config, 'isValidVault').mockReturnValue(false);
+    vi.spyOn(sodax.config, 'isSodaVaultHubAsset').mockReturnValue(false);
 
     const data = sodax.moneyMarket.buildWithdrawData(
       HUB_WALLET,

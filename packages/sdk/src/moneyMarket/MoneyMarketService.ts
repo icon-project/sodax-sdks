@@ -1196,7 +1196,7 @@ export class MoneyMarketService {
 
     const lendingPool = this.config.moneyMarket.lendingPool;
 
-    if (!this.config.isValidVault(fromHubAsset.hubAsset)) {
+    if (!this.config.isSodaVaultHubAsset(fromHubAsset.hubAsset)) {
       // deposit non-vault token into the vault
       calls.push(Erc20Service.encodeApprove(fromHubAsset.hubAsset, fromHubAsset.vault, amount));
       calls.push(EvmVaultTokenService.encodeDeposit(fromHubAsset.vault, fromHubAsset.hubAsset, amount));
@@ -1299,13 +1299,13 @@ export class MoneyMarketService {
       }
     }
 
-    if (!this.config.isValidVault(assetAddress)) {
+    if (!this.config.isSodaVaultHubAsset(assetAddress)) {
       // if the target token is not the vault token, we need to withdraw the tokens from the vault
       calls.push(EvmVaultTokenService.encodeWithdraw(vaultAddress, assetAddress, translatedInAmount - feeAmount));
     }
 
     let translatedAmountOut: bigint;
-    if (this.config.isValidVault(assetAddress)) {
+    if (this.config.isSodaVaultHubAsset(assetAddress)) {
       translatedAmountOut = EvmVaultTokenService.translateOutgoingDecimals(
         toHubAsset.decimals,
         translatedInAmount - feeAmount,
@@ -1397,13 +1397,13 @@ export class MoneyMarketService {
       ),
     );
 
-    if (!this.config.isValidVault(assetAddress)) {
+    if (!this.config.isSodaVaultHubAsset(assetAddress)) {
       // if the target token is not the vault token, we need to withdraw the tokens from the vault
       calls.push(EvmVaultTokenService.encodeWithdraw(vaultAddress, assetAddress, translatedInAmount));
     }
 
     let translatedAmountOut: bigint;
-    if (this.config.isValidVault(assetAddress)) {
+    if (this.config.isSodaVaultHubAsset(assetAddress)) {
       translatedAmountOut = EvmVaultTokenService.translateOutgoingDecimals(toHubAsset.decimals, translatedInAmount);
     } else {
       translatedAmountOut = EvmVaultTokenService.translateOutgoingDecimals(dstToken.decimals, translatedInAmount);
@@ -1495,7 +1495,7 @@ export class MoneyMarketService {
       // withdraw the bnUSD debt token from the vault
       calls.push(EvmVaultTokenService.encodeWithdraw(bnUSDVault, bnUSD, translatedAmountIn));
     } else {
-      if (!this.config.isValidVault(fromHubAsset.hubAsset)) {
+      if (!this.config.isSodaVaultHubAsset(fromHubAsset.hubAsset)) {
         calls.push(Erc20Service.encodeApprove(assetAddress, vaultAddress, amount));
         calls.push(EvmVaultTokenService.encodeDeposit(vaultAddress, assetAddress, amount));
       }

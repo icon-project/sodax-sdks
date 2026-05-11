@@ -611,7 +611,7 @@ export class AssetService {
     }
 
     const calls: EvmContractCall[] = [];
-    if (!this.config.isValidVault(assetConfig.hubAsset)) {
+    if (!this.config.isSodaVaultHubAsset(assetConfig.hubAsset)) {
       calls.push(Erc20Service.encodeApprove(assetConfig.hubAsset, assetConfig.vault, amount));
       calls.push(EvmVaultTokenService.encodeDeposit(assetConfig.vault, assetConfig.hubAsset, amount));
     }
