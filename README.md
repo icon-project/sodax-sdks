@@ -1,4 +1,4 @@
-[![CI](https://github.com/icon-project/sodax-sdks/actions/workflows/ci.yml/badge.svg)](https://github.com/icon-project/sodax-sdks/actions/workflows/ci.yml)
+[![Packages CI](https://github.com/icon-project/sodax-sdks/actions/workflows/packages-ci.yml/badge.svg)](https://github.com/icon-project/sodax-sdks/actions/workflows/packages-ci.yml)
 [![Security](https://github.com/icon-project/sodax-sdks/actions/workflows/security.yml/badge.svg)](https://github.com/icon-project/sodax-sdks/actions/workflows/security.yml)
 
 # Sodax SDKs
@@ -7,7 +7,7 @@ This repository contains the SDK packages and demo applications for the Sodax pr
 
 ## Architecture
 
-SODAX is a cross-chain DeFi platform built on a **hub-and-spoke architecture**, with **Sonic** as the hub chain. It supports swaps (intent-based via solver), lending/borrowing (money market), staking, bridging, DEX (concentrated liquidity), token migration, and partner fee operations across 20 blockchains:
+SODAX is a cross-chain DeFi platform built on a **hub-and-spoke architecture**, with **Sonic** as the hub chain. It supports swaps (intent-based via solver), lending/borrowing (money market), staking, bridging, DEX (concentrated liquidity), token migration, partner fee operations, and recovery (withdrawing stuck hub-wallet assets) across 20 blockchains:
 
 - **EVM (12):** Sonic, Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia
 - **Non-EVM (8):** Solana, Sui, Stellar, ICON, Injective, NEAR, Stacks, Bitcoin
