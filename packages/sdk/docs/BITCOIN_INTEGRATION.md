@@ -41,23 +41,33 @@ import { SodaxWalletProvider } from "@sodax/wallet-sdk-react";
 
 <SodaxProvider testnet={false}>
   <QueryClientProvider client={queryClient}>
-    <SodaxWalletProvider config={{ chains: { BITCOIN: {} } }}>
+    <SodaxWalletProvider config={{ BITCOIN: {} }}>
       {children}
     </SodaxWalletProvider>
   </QueryClientProvider>
 </SodaxProvider>
 ```
 
-To override RPC endpoints (canary, signet), pass them through `RpcConfig`:
+To override RPC endpoints (canary, signet), pass them under `BITCOIN.chains[ChainKeys.BITCOIN_MAINNET]`:
 
 ```tsx
-const rpcConfig = {
-  bitcoin: {
-    rpcUrl: "https://mempool.space/api",
-    radfiApiUrl: "https://api.radfi.co/api",
-    radfiUmsUrl: "https://ums.radfi.co/api",
-  },
-};
+import { ChainKeys } from "@sodax/types";
+
+<SodaxWalletProvider
+  config={{
+    BITCOIN: {
+      chains: {
+        [ChainKeys.BITCOIN_MAINNET]: {
+          rpcUrl: "https://mempool.space/api",
+          radfiApiUrl: "https://api.radfi.co/api",
+          radfiUmsUrl: "https://ums.radfi.co/api",
+        },
+      },
+    },
+  }}
+>
+  {children}
+</SodaxWalletProvider>
 ```
 
 ### Step 2: Connect a Bitcoin wallet
@@ -110,9 +120,12 @@ The user sends BTC from their personal wallet to the trading-wallet address. Thi
 import { useFundTradingWallet } from "@sodax/dapp-kit";
 import { parseUnits } from "viem";
 
-const { mutateAsync: fund } = useFundTradingWallet(walletProvider);
+const { mutateAsync: fund } = useFundTradingWallet();
 
-const txId = await fund(parseUnits("0.001", 8));   // 100,000 sats
+const txId = await fund({
+  amount: parseUnits("0.001", 8),   // 100,000 sats
+  walletProvider,
+});
 ```
 
 **Confirmation takes \~10 minutes.** Until confirmed, the deposit appears in `tradingBalance.externalPendingSatoshi`. Surface this pending state in your UI so users do not double-fund.
@@ -131,8 +144,12 @@ import {
 } from "@sodax/dapp-kit";
 
 const { isAuthed, tradingAddress } = useRadfiSession(walletProvider);
-const { data: tradingBalance } = useTradingWalletBalance(walletProvider, tradingAddress);
-const { data: expiredUtxos } = useExpiredUtxos(walletProvider, tradingAddress);
+const { data: tradingBalance } = useTradingWalletBalance({
+  params: { walletProvider, tradingAddress },
+});
+const { data: expiredUtxos } = useExpiredUtxos({
+  params: { walletProvider, tradingAddress },
+});
 
 const isReady =
   isAuthed &&
@@ -205,8 +222,8 @@ Use `sodax.swaps.swap()` (or the equivalent bridge call) — same as any other s
 
 ```tsx
 const swapResult = await sodax.swaps.swap({
-  intentParams: params,
-  spokeProvider: bitcoinSpokeProvider,
+  params,
+  walletProvider,   // IBitcoinWalletProvider — the personal-wallet provider
 });
 
 if (!swapResult.ok) {
@@ -214,7 +231,7 @@ if (!swapResult.ok) {
   return;
 }
 
-const [solverResponse, intent, intentDeliveryInfo] = swapResult.value;
+const { solverExecutionResponse, intent, intentDeliveryInfo } = swapResult.value;
 ```
 
 **Constraints when source is Bitcoin:**
@@ -234,12 +251,13 @@ PSBT round-trip: server builds, user signs, server co-signs and broadcasts.
 ```tsx
 import { useRadfiWithdraw } from "@sodax/dapp-kit";
 
-const { mutateAsync: withdraw } = useRadfiWithdraw(walletProvider);
+const { mutateAsync: withdraw } = useRadfiWithdraw();
 
 const result = await withdraw({
   amount: "50000",              // sats as string
   tokenId: "0:0",               // native BTC
   withdrawTo: "bc1q...",        // any valid BTC address
+  walletProvider,               // IBitcoinWalletProvider
 });
 // { txId, fee }
 ```
@@ -252,7 +270,7 @@ import { useSodaxContext, loadRadfiSession } from "@sodax/dapp-kit";
 const { sodax } = useSodaxContext();
 const session = loadRadfiSession(walletAddress);
 
-const max = await sodax.spokeService.bitcoinSpokeService.radfi.getMaxWithdrawable(
+const max = await sodax.spoke.bitcoin.radfi.getMaxWithdrawable(
   { userAddress: walletAddress, amount, tokenId: "0:0", withdrawTo },
   session.accessToken,
 );
@@ -266,12 +284,15 @@ Trading-wallet UTXOs have a time-bounded script. `useExpiredUtxos` polls every 6
 ```tsx
 import { useExpiredUtxos, useRenewUtxos } from "@sodax/dapp-kit";
 
-const { data: expiredUtxos } = useExpiredUtxos(walletProvider, tradingAddress);
-const { mutateAsync: renew } = useRenewUtxos(walletProvider);
+const { data: expiredUtxos } = useExpiredUtxos({
+  params: { walletProvider, tradingAddress },
+});
+const { mutateAsync: renew } = useRenewUtxos();
 
 if (expiredUtxos?.length) {
   await renew({
     txIdVouts: expiredUtxos.map((u) => u.txidVout ?? `${u.txid}:${u.vout}`),
+    walletProvider,
   });
 }
 ```
@@ -287,7 +308,7 @@ if (expiredUtxos?.length) {
 
 ### Reference Implementation
 
-A complete working example is in [`apps/demo/src/components/solver/SwapCard.tsx`](https://github.com/icon-project/sodax-frontend/blob/main/apps/demo/src/components/solver/SwapCard.tsx) — it composes the readiness gate, applies the three intent-param overrides, and gates the swap button. Run `pnpm dev:demo` (on port 1993) to try it locally.
+A complete working example is in [`apps/demo/src/components/swaps/SwapCard.tsx`](https://github.com/icon-project/sodax-frontend/blob/main/apps/demo/src/components/swaps/SwapCard.tsx) — it composes the readiness gate, applies the three intent-param overrides, and gates the swap button. The demo's default dev script binds port 3000 (`pnpm dev:demo`); for end-to-end Bitcoin testing against the partner API, start it on the whitelisted port instead — e.g. `pnpm --filter sodax-demo-v2 exec vite --port 1993 --host` (see the IMPORTANT note at the top of this guide).
 
 
 ---
