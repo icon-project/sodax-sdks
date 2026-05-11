@@ -19,12 +19,19 @@ Both batch hooks (and `useIsWalletInstalled`) take a `connectors: readonly strin
 | `'metamask'` | MetaMask on EVM (`io.metamask`), Injective MetaMask connector |
 | `'xverse'` | Xverse on Bitcoin (`xverse`) |
 
-Earlier identifiers in the array win **per chain**. Use this for fallback chains:
+Earlier identifiers in the array are **higher-priority per chain**. The runner uses **fallback-on-failure**:
+
+- If a chain matches `'hana'` but the Hana popup is denied / errors out, the runner tries the next identifier's connector on that same chain (e.g. Phantom).
+- If a chain succeeds on the first identifier, later identifiers for that chain are **silently skipped** — only one popup per chain on the happy path.
+- A chain ends up in `result.failed` only when **every** matched identifier's connector has failed.
 
 ```typescript
-// Prefer Hana, fall back to Phantom on chains where Hana isn't available
+// Prefer Hana on every chain it covers; fall back to Phantom either
+// because Hana isn't available (e.g. Solana) OR because its popup failed.
 const { run } = useBatchConnect({ connectors: ['hana', 'phantom'] });
 ```
+
+`onProgress` fires per attempt — a chain can emit a `failure` event followed by a `success` event when fallback kicks in. The final outcome lives in `result`.
 
 To target a specific connector (not a brand), bypass this API and use `useXConnectors({ xChainType }).find(c => c.id === '...')` + `useXConnect` directly.
 
