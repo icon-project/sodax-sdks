@@ -2,14 +2,13 @@ import { keccak256, toHex, type Address, type Hex } from 'viem';
 import {
   type AleoChainKey,
   type AleoExecuteOptions,
+  type AleoGasEstimate,
   type AleoNetworkEnv,
   type AleoProgramId,
   type AleoRawTransaction,
-  type AleoSpokeChainConfig,
-  type AleoTransactionReceipt,
+  type AleoRawTransactionReceipt,
   ChainKeys,
   getIntentRelayChainId,
-  type IAleoWalletProvider,
   type Result,
   type TxReturnType,
 } from '@sodax/types';
@@ -22,19 +21,20 @@ import type {
   WaitForTxReceiptReturnType,
 } from '../../types/spoke-types.js';
 import type { ConfigService } from '../../config/ConfigService.js';
+import { sleep } from '../../utils/shared-utils.js';
 import { decodeBech32m } from '../../utils/bech32m.js';
 import type { EvmHubProvider } from '../../entities/EvmHubProvider.js';
 
 const U64_MAX = BigInt('18446744073709551615');
-const ALEO_DEFAULT_TIMEOUT_MS = 45_000;
-const ALEO_DEFAULT_CHECK_INTERVAL_MS = 2_000;
 const ALEO_ADDRESS_PREFIX = 'aleo1';
 const ALEO_ADDRESS_LENGTH = 63;
 const ALEO_TX_PREFIX = 'at1';
 const ALEO_TX_LENGTH = 61;
 const ALEO_CONNSN_GENERATION_RETRIES = 3;
 
-// Lazy-load @provablehq/sdk to avoid triggering WASM initialization at import time.
+// Lazy-load @provablehq/sdk to avoid pulling 43MB WASM into the bundle graph at import time.
+// The WASM module uses top-level await which breaks SSR and causes OOM during builds. The SDK
+// default export resolves to testnet — we must import the network-specific build.
 type AleoSDK = typeof import('@provablehq/sdk');
 
 function loadAleoSDK(network: AleoNetworkEnv): Promise<AleoSDK> {
@@ -79,60 +79,72 @@ function aleoAddressToHex(address: string): Hex {
 }
 
 export class AleoSpokeService {
-  private readonly chainConfig: AleoSpokeChainConfig;
+  private readonly config: ConfigService;
   private readonly network: AleoNetworkEnv;
   private readonly pollingIntervalMs: number;
   private readonly maxTimeoutMs: number;
 
-  private _networkClient: Awaited<AleoSDK>['AleoNetworkClient']['prototype'] | null = null;
-  private _programManager: Awaited<AleoSDK>['ProgramManager']['prototype'] | null = null;
+  private networkClient: Awaited<AleoSDK>['AleoNetworkClient']['prototype'] | null = null;
+  private programManager: Awaited<AleoSDK>['ProgramManager']['prototype'] | null = null;
 
-  public constructor(config: ConfigService, network: AleoNetworkEnv = 'mainnet') {
-    this.chainConfig = config.getChainConfig(ChainKeys.ALEO_MAINNET) as AleoSpokeChainConfig;
-    this.network = network;
-    this.pollingIntervalMs = this.chainConfig.pollingConfig.pollingIntervalMs;
-    this.maxTimeoutMs = this.chainConfig.pollingConfig.maxTimeoutMs;
+  public constructor(config: ConfigService) {
+    this.config = config;
+    // since we only support mainnet for now, we can hardcode the single aleo chain config
+    const chainConfig = config.getChainConfig(ChainKeys.ALEO_MAINNET);
+    this.network = chainConfig.chain.mainnet ? 'mainnet' : 'testnet';
+    this.pollingIntervalMs = chainConfig.pollingConfig.pollingIntervalMs;
+    this.maxTimeoutMs = chainConfig.pollingConfig.maxTimeoutMs;
   }
 
   private async ensureClients(): Promise<void> {
-    if (!this._networkClient) {
+    if (!this.networkClient) {
+      const chainConfig = this.config.getChainConfig(ChainKeys.ALEO_MAINNET);
       const { AleoNetworkClient, ProgramManager } = await loadAleoSDK(this.network);
-      this._networkClient = new AleoNetworkClient(this.chainConfig.rpcUrl);
-      this._programManager = new ProgramManager(this.chainConfig.rpcUrl);
+      this.networkClient = new AleoNetworkClient(chainConfig.rpcUrl);
+      this.programManager = new ProgramManager(chainConfig.rpcUrl);
     }
   }
 
-  public async estimateGas(_: EstimateGasParams<AleoChainKey>): Promise<bigint | number> {
+  /**
+   * Estimate the gas for an Aleo transaction. Aleo fees are computed by the program manager
+   * from execute params at submit time; without a concrete signed tx context this returns 0.
+   * @param {EstimateGasParams<AleoChainKey>} params - The parameters for the gas estimation.
+   * @returns {Promise<AleoGasEstimate>} The estimated gas (fee in microcredits).
+   */
+  public async estimateGas(params: EstimateGasParams<AleoChainKey>): Promise<AleoGasEstimate> {
+    void params;
     await this.ensureClients();
-    if (!this._programManager) throw new Error('Aleo SDK not initialized');
-    // Without a concrete tx context we approximate at zero gas — Aleo fees are computed
-    // by the program manager from execute params at submit time.
+    if (!this.programManager) throw new Error('Aleo SDK not initialized');
     return 0n;
   }
 
   /**
-   * Deposit tokens from Aleo to the hub via asset_manager.aleo.
+   * Transfers tokens to the hub chain by depositing into spoke chain asset manager.
    * Aleo transitions cannot read on-chain mappings, so conn_sn, fee, hub_chain_id, and
    * hub_address must all be passed as inputs.
+   * @param {DepositParams<AleoChainKey, R>} params - The parameters for the transfer.
+   * @returns {Promise<TxReturnType<AleoChainKey, R>>} A promise that resolves to the transaction hash.
    */
   public async deposit<R extends boolean>(
     params: DepositParams<AleoChainKey, R>,
     hubProvider: EvmHubProvider,
   ): Promise<TxReturnType<AleoChainKey, R>> {
+    void hubProvider;
     if (params.amount > U64_MAX) {
       throw new Error(`Amount ${params.amount} exceeds u64 maximum of ${U64_MAX}`);
     }
 
+    const chainConfig = this.config.getChainConfig(params.srcChainKey);
     const tokenField = BigInt(params.token);
-    const isNative = tokenField === BigInt(this.chainConfig.nativeToken);
-    const recipient: Address =
-      params.to ?? (await hubProvider.getUserHubWalletAddress(params.srcAddress, ChainKeys.ALEO_MAINNET));
+    const isNative = tokenField === BigInt(chainConfig.nativeToken);
     const dataHash = keccak256(params.data);
     const connSn = await this.generateUniqueConnSn();
     const feeAmount = params.feeAmount ?? 0n;
+    const recipient: Address =
+      params.to ?? (await hubProvider.getUserHubWalletAddress(params.srcAddress, ChainKeys.ALEO_MAINNET));
 
     const hubChainId = BigInt(getIntentRelayChainId(ChainKeys.SONIC_MAINNET));
-    const hubAddress = hubProvider.chainConfig.addresses.assetManager;
+    const hubAddress = this.config.getHubChainConfig().addresses.assetManager;
 
     const commonInputs: string[] = [
       hexToAleoU8Array(recipient),
@@ -163,9 +175,9 @@ export class AleoSpokeService {
       functionName = isNative ? 'transfer_native_public' : 'transfer_token_public';
       inputs = [formatAleoInput(tokenField, 'field'), ...commonInputs];
     }
-   
+
     const executeParams: AleoExecuteOptions = {
-      programName: this.chainConfig.addresses.assetManager,
+      programName: chainConfig.addresses.assetManager,
       functionName,
       inputs,
     };
@@ -173,26 +185,72 @@ export class AleoSpokeService {
     if (params.raw === true) {
       const tx: AleoRawTransaction = {
         from: params.srcAddress,
-        to: this.chainConfig.addresses.assetManager as AleoProgramId,
-        value: BigInt(params.amount),
+        to: chainConfig.addresses.assetManager as AleoProgramId,
+        value: params.amount,
         data: executeParams,
       };
       return tx as TxReturnType<AleoChainKey, true> as TxReturnType<AleoChainKey, R>;
     }
 
-    const wallet = params.walletProvider as IAleoWalletProvider;
-    const result = await wallet.execute(executeParams);
+    const result = await params.walletProvider.execute(executeParams);
     return result.transactionId as TxReturnType<AleoChainKey, false> as TxReturnType<AleoChainKey, R>;
   }
 
-  public async sendMessage<R extends boolean>(
-    params: SendMessageParams<AleoChainKey, R>,
-  ): Promise<TxReturnType<AleoChainKey, R>> {
+  /**
+   * Read the balance of a token for a wallet on Aleo. Native (ALEO) balances live in
+   * credits.aleo::account; token balances live in token_registry.aleo::authorized_balances
+   * keyed by BHP256({ account, token_id }).
+   */
+  public async getDeposit(params: GetDepositParams<AleoChainKey>): Promise<bigint> {
+    await this.ensureClients();
+    if (!this.networkClient) throw new Error('Aleo SDK not initialized');
+
+    const walletAddress = params.srcAddress;
+    if (!isValidAleoAddress(walletAddress)) {
+      throw new Error(`Invalid Aleo address: ${walletAddress}`);
+    }
+
+    const chainConfig = this.config.getChainConfig(params.srcChainKey);
+
+    if (params.token === chainConfig.nativeToken) {
+      const balanceStr = await this.networkClient.getProgramMappingValue(
+        chainConfig.addresses.creditsProgram,
+        chainConfig.mappings.account,
+        walletAddress,
+      );
+      return balanceStr ? BigInt(balanceStr.replace(/u.*/, '')) : 0n;
+    }
+
+    const { BHP256, Plaintext } = await loadAleoSDK(this.network);
+    const bhp = new BHP256();
+    const structLiteral = `{ account: ${walletAddress}, token_id: ${params.token}field }`;
+    const plaintext = Plaintext.fromString(structLiteral);
+    const key = bhp.hash(plaintext.toBitsLe()).toString();
+    const result = await this.networkClient.getProgramMappingValue(
+      chainConfig.addresses.tokenRegistry,
+      chainConfig.mappings.authorizedBalances,
+      key,
+    );
+    
+    if (result == null) return 0n;
+    const match = result.match(/balance:\s*(\d+)u128/);
+    return match?.[1] != null ? BigInt(match[1]) : 0n;
+  }
+
+  /**
+   * Sends a message to the hub chain via connection.aleo::send_message.
+   * @param params - The send message parameters.
+   * @returns The transaction result.
+   */
+  public async sendMessage<Raw extends boolean>(
+    params: SendMessageParams<AleoChainKey, Raw>,
+  ): Promise<TxReturnType<AleoChainKey, Raw>> {
+    const chainConfig = this.config.getChainConfig(params.srcChainKey);
     const dstChainId = BigInt(getIntentRelayChainId(params.dstChainKey));
     const connSn = await this.generateUniqueConnSn();
 
     const executeParams: AleoExecuteOptions = {
-      programName: this.chainConfig.addresses.connection,
+      programName: chainConfig.addresses.connection,
       functionName: 'send_message',
       inputs: [
         formatAleoInput(dstChainId, 'u128'),
@@ -205,51 +263,21 @@ export class AleoSpokeService {
     if (params.raw === true) {
       const tx: AleoRawTransaction = {
         from: params.srcAddress,
-        to: this.chainConfig.addresses.connection as AleoProgramId,
+        to: chainConfig.addresses.connection as AleoProgramId,
         value: 0n,
         data: executeParams,
       };
-      return tx as TxReturnType<AleoChainKey, true> as TxReturnType<AleoChainKey, R>;
+      return tx as TxReturnType<AleoChainKey, true> as TxReturnType<AleoChainKey, Raw>;
     }
 
-    const wallet = params.walletProvider as IAleoWalletProvider;
-    const result = await wallet.execute(executeParams);
-    return result.transactionId as TxReturnType<AleoChainKey, false> as TxReturnType<AleoChainKey, R>;
+    const result = await params.walletProvider.execute(executeParams);
+    return result.transactionId as TxReturnType<AleoChainKey, false> as TxReturnType<AleoChainKey, Raw>;
   }
 
-  public async getDeposit(params: GetDepositParams<AleoChainKey>): Promise<bigint> {
-    await this.ensureClients();
-    if (!this._networkClient) throw new Error('Aleo SDK not initialized');
-
-    const walletAddress = params.srcAddress;
-    if (!isValidAleoAddress(walletAddress)) {
-      throw new Error(`Invalid Aleo address: ${walletAddress}`);
-    }
-
-    if (params.token === this.chainConfig.nativeToken) {
-      const balanceStr = await this._networkClient.getProgramMappingValue(
-        this.chainConfig.addresses.creditsProgram,
-        this.chainConfig.mappings.account,
-        walletAddress,
-      );
-      return balanceStr ? BigInt(balanceStr.replace(/[^\d]/g, '')) : 0n;
-    }
-
-    const { BHP256, Plaintext } = await loadAleoSDK(this.network);
-    const bhp = new BHP256();
-    const structLiteral = `{ account: ${walletAddress}, token_id: ${params.token}field }`;
-    const plaintext = Plaintext.fromString(structLiteral);
-    const key = bhp.hash(plaintext.toBitsLe()).toString();
-    const result = await this._networkClient.getProgramMappingValue(
-      this.chainConfig.addresses.tokenRegistry,
-      this.chainConfig.mappings.authorizedBalances,
-      key,
-    );
-    if (result == null) return 0n;
-    const match = result.match(/balance:\s*(\d+)u128/);
-    return match?.[1] != null ? BigInt(match[1]) : 0n;
-  }
-
+  /**
+   * Polls the Aleo network for a transaction until it is finalized or the timeout elapses.
+   * Aleo has no push subscription, so polling is the only option.
+   */
   public async waitForTransactionReceipt(
     params: WaitForTxReceiptParams<AleoChainKey>,
   ): Promise<Result<WaitForTxReceiptReturnType<AleoChainKey>>> {
@@ -259,54 +287,51 @@ export class AleoSpokeService {
       return { ok: false, error: new Error(`Invalid Aleo transaction ID: ${txHash}`) };
     }
 
-    void pollingIntervalMs;
-    void maxTimeoutMs;
-    void ALEO_DEFAULT_TIMEOUT_MS;
-    void ALEO_DEFAULT_CHECK_INTERVAL_MS;
+    await this.ensureClients();
+    if (!this.networkClient) return { ok: false, error: new Error('Aleo SDK not initialized') };
+
+    const deadline = Date.now() + maxTimeoutMs;
+
+    while (Date.now() < deadline) {
+      try {
+        const tx = await this.networkClient.getTransaction(txHash);
+        if (tx) {
+          return {
+            ok: true,
+            value: { status: 'success', receipt: tx as unknown as AleoRawTransactionReceipt },
+          };
+        }
+      } catch {
+        // ignore transient RPC errors and keep polling
+      }
+      await sleep(pollingIntervalMs);
+    }
 
     return {
-      ok: false,
-      error: new Error('waitForTransactionReceipt for Aleo requires a connected IAleoWalletProvider'),
+      ok: true,
+      value: {
+        status: 'timeout',
+        error: new Error(`Transaction ${txHash} not finalized within ${maxTimeoutMs}ms`),
+      },
     };
   }
 
   /**
-   * Wait for an Aleo transaction using the wallet provider's receipt API.
-   * Aleo network does not expose a standalone tx-status RPC, so this requires
-   * a connected wallet provider to query.
-   */
-  public async waitForReceiptViaWallet(
-    txHash: string,
-    walletProvider: IAleoWalletProvider,
-    timeout = ALEO_DEFAULT_TIMEOUT_MS,
-  ): Promise<Result<AleoTransactionReceipt>> {
-    if (!isValidAleoTransactionId(txHash)) {
-      return { ok: false, error: new Error(`Invalid Aleo transaction ID: ${txHash}`) };
-    }
-    try {
-      const receipt = await walletProvider.waitForTransactionReceipt(txHash, {
-        timeout,
-        checkInterval: ALEO_DEFAULT_CHECK_INTERVAL_MS,
-      });
-      return { ok: true, value: receipt };
-    } catch (error) {
-      return { ok: false, error };
-    }
-  }
-
-  /**
    * Generate a unique conn_sn (u64) by reading the messages mapping on connection.aleo.
-   * Aleo transitions can't read mappings, so the value is generated client-side.
+   * Aleo transitions can't read mappings, so the value is generated client-side and
+   * verified to be unused before submission.
    */
   private async generateUniqueConnSn(inputConnSn?: bigint): Promise<bigint> {
     await this.ensureClients();
-    if (!this._networkClient) throw new Error('Aleo SDK not initialized');
+    if (!this.networkClient) throw new Error('Aleo SDK not initialized');
+
+    const chainConfig = this.config.getChainConfig(ChainKeys.ALEO_MAINNET);
 
     const isUsed = async (connSn: bigint): Promise<boolean> => {
       try {
-        const value = await this._networkClient?.getProgramMappingValue(
-          this.chainConfig.addresses.connection,
-          this.chainConfig.mappings.messages,
+        const value = await this.networkClient?.getProgramMappingValue(
+          chainConfig.addresses.connection,
+          chainConfig.mappings.messages,
           `${connSn}u128`,
         );
         return value != null;
