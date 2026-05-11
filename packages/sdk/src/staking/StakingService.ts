@@ -755,7 +755,7 @@ export class StakingService {
     try {
       const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
 
-      const sodaToken = this.hubProvider.chainConfig.supportedTokens.SODA;
+      const sodaToken = this.config.getSodaToken(params.srcChainKey);
       stakingInvariant(sodaToken, 'SODA token not found', { ...baseCtx, field: 'sodaToken' });
       const sodaAsset = this.config.getSpokeTokenFromOriginalAssetAddress(params.srcChainKey, sodaToken.address);
       stakingInvariant(sodaAsset, 'SODA asset not found', { ...baseCtx, field: 'sodaAsset' });
