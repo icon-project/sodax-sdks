@@ -498,9 +498,36 @@ const { data } = useXBalances({ xService, xChainId, xTokens, address });
 
 This mirrors the `wallet-sdk-core` ↔ `@sodax/sdk` pattern: wallet-sdk-core implements wallet contracts; `@sodax/sdk` carries domain types consumers import from `@sodax/sdk` (`export * from '@sodax/types'`), without dapp-kit taking a separate `@sodax/types` dependency.
 
-## AI Skills (Scaffolding Guides)
+## AI agent docs
 
-See `skills/SKILLS.md` for AI-agent-friendly guides to scaffold each feature with dapp-kit hooks. Covers setup, wallet connectivity, swap, bridge, money market, staking, migration, DEX, and backend queries. All examples follow the single-object-parameter convention.
+This package ships an AI-consumable docs tree at `ai-exported/` (also at `node_modules/@sodax/dapp-kit/ai-exported/` after install). Two sub-trees:
+
+- **`ai-exported/integration/`** — for agents writing NEW v2 dapp-kit code: `quickstart.md`, `architecture.md`, per-feature reference (`features/`), copy-paste recipes (`recipes/` — 13 patterns including the previous `skills/*.md` content plus 3 new cross-cutting recipes), and lookup tables (`reference/`).
+- **`ai-exported/migration/`** — for agents porting v1 → v2: `checklist.md`, `breaking-changes/` (4 cross-cutting deltas), per-feature porting playbooks (`features/`), codemods + adapters (`recipes.md`), reference tables.
+
+Entry point for agents: `ai-exported/AGENTS.md`.
+
+### CI guards (7)
+
+Run on every PR. Each catches a distinct bug class — green guards together prove syntactic + structural correctness, but **NOT** prose-level accuracy (see "Maintaining ai-exported docs" below).
+
+- `check:ai-exported` — every `useFoo` reference in markdown resolves to a real export from `@sodax/dapp-kit` (or upstream allowlist: React, React Query, wallet-sdk-react).
+- `check:ai-scope` — no imports from forbidden packages (`@sodax/wallet-sdk-core`, `@sodax/types` directly, framework-specifics).
+- `check:ai-links` — every relative link between markdown files resolves on disk.
+- `check:ai-imports` — every `import … from '@sodax/dapp-kit'` example typechecks against `src/index.ts`.
+- `check:ai-snippets` — **opt-out by default**: every fenced `​```ts`/`​```tsx` block is typechecked unless it carries `// @ai-snippets-skip` as the first content line. Catches call-shape drift (`useFoo({ params: X })` vs canonical `useFoo({ params: { payload: X } })`). Genuinely illustrative blocks (queryKey shapes, diff blocks with placeholder identifiers, JSX-without-imports) must opt out.
+- `check:ai-keys` — every `queryKey: [...]` / `mutationKey: [...]` literal in docs (both declaration form AND backticked-array table cells) matches a real source key prefix from `src/hooks/**/*.ts`. Catches drift like `['staking', 'stakingInfo', ...]` in docs when source uses `['staking', 'info', ...]`. Opt out for v1/illustrative arrays via `<!-- ai-keys-allow -->` (markdown) or `// ai-keys-allow` (inside code blocks), within 6 lines preceding the array.
+- `check:ai-consistency` — polling-interval claims in docs (e.g. "polls 3s", `useQuote | 3s | refetchInterval`) match the actual `refetchInterval` value in source. Bind-to-hook by same-line proximity. Opt out via `<!-- ai-consistency-allow -->`.
+
+### Maintaining ai-exported docs
+
+**Green guards prove syntactic correctness, not semantic correctness.** After fixing any claim in `ai-exported/`, run these manual checks too:
+
+1. **Grep sweep after every targeted fix.** When fixing one drift site (e.g. `intentHash → intentTxHash`), immediately `grep -rn '<old-term>' ai-exported/` to find every other site. Drift tends to cluster across the four mirror trees (`integration/features/`, `integration/recipes/`, `migration/features/`, `migration/reference/`).
+2. **Reference tables must be updated alongside their feature counterparts.** When `ai-exported/integration/features/staking.md` changes a hook's return shape or call shape, the same claim in `ai-exported/integration/reference/hooks-index.md`, `ai-exported/integration/reference/querykey-conventions.md`, and `ai-exported/migration/reference/renamed-hooks.md` likely needs updating too. A single hook's claim must appear consistently across all four trees.
+3. **Source is the source of truth.** Write reference tables by reading the actual `src/hooks/<feature>/use*.ts` file — never by reasoning about what the convention "should be." The most-missed drift class is `'stakingInfo'` (doc) vs `'info'` (source) — these are 1:1 grep-able.
+4. **The 7 guards together cover**: hook names, import statements, code-block typechecks, queryKey segments, polling intervals, links, scope. They do **NOT** cover: prose claims about behavior, return-type table cells (use the snippet guard's typecheck to validate the canonical types instead), field-name renames not yet caught by typecheck.
+5. **When in doubt, spawn a per-file review agent.** For non-trivial doc changes, spawn one Explore agent per touched file with a prompt mirroring `packages/dapp-kit/scripts/check-ai-*.sh` patterns: read the doc, cross-check every claim against source. Don't trust your own synthesis.
 
 ## Build
 

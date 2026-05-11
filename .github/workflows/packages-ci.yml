@@ -76,5 +76,26 @@ jobs:
       - name: Check ai-exported @sodax/sdk imports compile
         run: pnpm -C packages/sdk run check:ai-imports
 
+      - name: Check dapp-kit ai-exported hooks reference real exports
+        run: pnpm -C packages/dapp-kit run check:ai-exported
+
+      - name: Check dapp-kit ai-exported scope (no forbidden sibling-package imports)
+        run: pnpm -C packages/dapp-kit run check:ai-scope
+
+      - name: Check dapp-kit ai-exported relative links resolve
+        run: pnpm -C packages/dapp-kit run check:ai-links
+
+      - name: Check dapp-kit ai-exported @sodax/dapp-kit imports compile
+        run: pnpm -C packages/dapp-kit run check:ai-imports
+
+      - name: Check dapp-kit ai-exported ts/tsx code blocks typecheck
+        run: pnpm -C packages/dapp-kit run check:ai-snippets
+
+      - name: Check dapp-kit ai-exported queryKey/mutationKey segments match source
+        run: pnpm -C packages/dapp-kit run check:ai-keys
+
+      - name: Check dapp-kit ai-exported polling-interval claims match source
+        run: pnpm -C packages/dapp-kit run check:ai-consistency
+
       - name: Run Tests
         run: pnpm test:packages

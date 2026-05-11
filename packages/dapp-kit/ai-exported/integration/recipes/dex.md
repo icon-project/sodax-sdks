@@ -1,4 +1,4 @@
-# Skill: DEX
+# Recipe: DEX
 
 Concentrated liquidity positions and asset management.
 
@@ -43,12 +43,15 @@ Concentrated liquidity positions and asset management.
 import { usePools } from '@sodax/dapp-kit';
 
 function PoolsList() {
+  // `usePools` returns `PoolKey[]` — pool keys carry `currency0`, `currency1`, `fee`,
+  // `hooks`, `poolManager`, and `parameters`. Resolve token symbols via your own
+  // token-list lookup (e.g. config-derived).
   const { data: pools } = usePools({});
   return (
     <div>
-      {pools?.map((pool) => (
-        <div key={pool.poolAddress}>
-          <h3>{pool.token0Symbol}/{pool.token1Symbol}</h3>
+      {pools?.map((pool, i) => (
+        <div key={`${pool.currency0}-${pool.currency1}-${pool.fee}-${i}`}>
+          <h3>{pool.currency0} / {pool.currency1}</h3>
           <p>Fee: {pool.fee / 10000}%</p>
         </div>
       ))}
@@ -62,14 +65,23 @@ function PoolsList() {
 ```tsx
 import { useDexDeposit, useDexAllowance, useDexApprove } from '@sodax/dapp-kit';
 import { useWalletProvider } from '@sodax/wallet-sdk-react';
-import { ChainKeys } from '@sodax/sdk';
+import { ChainKeys, type CreateAssetDepositParams } from '@sodax/sdk';
 
-function DepositToPool() {
-  const walletProvider = useWalletProvider(ChainKeys.BASE_MAINNET);
-  const depositParams = { srcChainKey: ChainKeys.BASE_MAINNET, asset: '0x...', amount: 1_000_000_000_000_000_000n, poolToken: '0x...' };
+function DepositToPool({ srcAddress }: { srcAddress: `0x${string}` }) {
+  const walletProvider = useWalletProvider({ xChainId: ChainKeys.BASE_MAINNET });
+  const depositParams: CreateAssetDepositParams<typeof ChainKeys.BASE_MAINNET> = {
+    srcChainKey: ChainKeys.BASE_MAINNET,
+    srcAddress,
+    asset: '0x0000000000000000000000000000000000000000',
+    amount: 1_000_000_000_000_000_000n,
+    poolToken: '0x0000000000000000000000000000000000000000',
+  };
 
-  const { data: allowance } = useDexAllowance({ params: depositParams, walletProvider });
-  const isApproved = allowance?.ok && allowance.value;
+  // useDexAllowance wraps CreateAssetDepositParams under params.payload. Read-only;
+  // no walletProvider needed (the SDK call uses `raw: true`).
+  const { data: isApproved } = useDexAllowance({
+    params: { payload: depositParams },
+  });
   const { mutateAsync: approve, isPending: isApproving } = useDexApprove();
   const { mutateAsync: deposit, isPending: isDepositing } = useDexDeposit();
 
@@ -95,12 +107,17 @@ function DepositToPool() {
 ## Supply Liquidity
 
 ```tsx
+// @ai-snippets-skip — illustrative flow only; `useCreateSupplyLiquidityParams` takes
+// a flat shape `{ poolData, poolKey, minPrice, maxPrice, liquidityToken0Amount,
+// liquidityToken1Amount, slippageTolerance }` and the consumer must add
+// `srcChainKey` + `srcAddress` at the mutation call site. Real consumers should
+// reference `useCreateSupplyLiquidityParams` source for the full param set.
 import { useSupplyLiquidity, useCreateSupplyLiquidityParams } from '@sodax/dapp-kit';
 import { useWalletProvider } from '@sodax/wallet-sdk-react';
 import { ChainKeys } from '@sodax/sdk';
 
 function SupplyLiquidity() {
-  const walletProvider = useWalletProvider(ChainKeys.BASE_MAINNET);
+  const walletProvider = useWalletProvider({ xChainId: ChainKeys.BASE_MAINNET });
   const supplyParams = useCreateSupplyLiquidityParams({
     params: {
       poolKey: { /* ... */ },
@@ -134,13 +151,20 @@ function SupplyLiquidity() {
 ## Position + Claim Rewards
 
 ```tsx
+// @ai-snippets-skip — illustrative flow only. Real call-shape notes:
+//   - `usePositionInfo` params.tokenId is `string | null`, not bigint
+//   - `usePositionInfo` data is `{ positionInfo: ClPositionInfo, isValid: boolean }` —
+//     access `position.positionInfo.liquidity` etc.
+//   - `useClaimRewards` params shape: `{ srcChainKey, srcAddress, poolKey, tokenId,
+//     tickLower, tickUpper }` — far richer than shown.
+// See `features/dex.md` for the canonical param types.
 import { usePositionInfo, useClaimRewards } from '@sodax/dapp-kit';
 import { useWalletProvider } from '@sodax/wallet-sdk-react';
 import { ChainKeys } from '@sodax/sdk';
 import type { PoolKey } from '@sodax/sdk';
 
 function Position({ positionId, poolKey }: { positionId: bigint; poolKey: PoolKey }) {
-  const walletProvider = useWalletProvider(ChainKeys.BASE_MAINNET);
+  const walletProvider = useWalletProvider({ xChainId: ChainKeys.BASE_MAINNET });
   const { data: position } = usePositionInfo({ params: { tokenId: positionId, poolKey } });
   const { mutateAsync: claimRewards, isPending } = useClaimRewards();
 
@@ -163,7 +187,8 @@ function Position({ positionId, poolKey }: { positionId: bigint; poolKey: PoolKe
 ## Remove Liquidity
 
 ```tsx
-const walletProvider = useWalletProvider(ChainKeys.BASE_MAINNET);
+// @ai-snippets-skip
+const walletProvider = useWalletProvider({ xChainId: ChainKeys.BASE_MAINNET });
 const { mutateAsync: decreaseLiquidity } = useDecreaseLiquidity();
 
 await decreaseLiquidity({

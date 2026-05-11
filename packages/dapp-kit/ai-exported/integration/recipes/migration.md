@@ -1,4 +1,4 @@
-# Skill: Migration
+# Recipe: Migration
 
 Legacy token migration (ICX, bnUSD, BALN) from the ICON ecosystem to SODAX.
 
@@ -28,10 +28,10 @@ Legacy token migration (ICX, bnUSD, BALN) from the ICON ecosystem to SODAX.
 ```tsx
 import { useMigrateIcxToSoda } from '@sodax/dapp-kit';
 import { useWalletProvider } from '@sodax/wallet-sdk-react';
-import { ChainKeys, ICON_MAINNET_CHAIN_ID } from '@sodax/sdk';
+import { ChainKeys, type IconAddress } from '@sodax/sdk';
 
-function IcxMigration({ srcAddress, dstAddress }: { srcAddress: string; dstAddress: `0x${string}` }) {
-  const walletProvider = useWalletProvider(ChainKeys.ICON_MAINNET);
+function IcxMigration({ srcAddress, dstAddress }: { srcAddress: IconAddress; dstAddress: `0x${string}` }) {
+  const walletProvider = useWalletProvider({ xChainId: ChainKeys.ICON_MAINNET });
   const { mutateAsync: migrate, isPending } = useMigrateIcxToSoda();
 
   const handleMigrate = async () => {
@@ -41,7 +41,9 @@ function IcxMigration({ srcAddress, dstAddress }: { srcAddress: string; dstAddre
         params: {
           srcChainKey: ChainKeys.ICON_MAINNET,
           srcAddress,
-          address: 'cx88fd7df7ddff82f7cc735c871dc519838cb235bb', // wICX token on ICON
+          // `address` must be the wICX or native-ICX token address — typed as the
+          // narrow IcxTokenType union from @sodax/sdk's ICON chain config.
+          address: 'cx3975b43d260fb8ec802cef6e60c2f4d07486f11d', // wICX on ICON mainnet
           amount: 1_000_000_000_000_000_000n,
           dstAddress, // Sonic recipient address
         },
@@ -72,7 +74,7 @@ import { ChainKeys } from '@sodax/sdk';
 import type { IcxCreateRevertMigrationParams } from '@sodax/sdk';
 
 function RevertMigration({ srcAddress }: { srcAddress: `0x${string}` }) {
-  const walletProvider = useWalletProvider(ChainKeys.SONIC_MAINNET);
+  const walletProvider = useWalletProvider({ xChainId: ChainKeys.SONIC_MAINNET });
 
   const revertParams: IcxCreateRevertMigrationParams = {
     srcChainKey: ChainKeys.SONIC_MAINNET,
@@ -115,10 +117,10 @@ BALN migration does not require approval (ICON chain, no ERC-20 allowance). Long
 ```tsx
 import { useMigrateBaln } from '@sodax/dapp-kit';
 import { useWalletProvider } from '@sodax/wallet-sdk-react';
-import { ChainKeys } from '@sodax/sdk';
+import { ChainKeys, LockupPeriod, type IconAddress } from '@sodax/sdk';
 
-function BalnMigration({ srcAddress, dstAddress }: { srcAddress: string; dstAddress: `0x${string}` }) {
-  const walletProvider = useWalletProvider(ChainKeys.ICON_MAINNET);
+function BalnMigration({ srcAddress, dstAddress }: { srcAddress: IconAddress; dstAddress: `0x${string}` }) {
+  const walletProvider = useWalletProvider({ xChainId: ChainKeys.ICON_MAINNET });
   const { mutateAsync: migrateBaln, isPending } = useMigrateBaln();
 
   const handleMigrate = async () => {
@@ -129,8 +131,12 @@ function BalnMigration({ srcAddress, dstAddress }: { srcAddress: string; dstAddr
           srcChainKey: ChainKeys.ICON_MAINNET,
           srcAddress,
           amount: 100_000_000_000_000_000_000n,
-          lockupPeriod: 12, // months: 0=0.5x, 6=0.75x, 12=1.0x, 24=1.5x
+          // LockupPeriod is an enum in seconds: NO_LOCKUP (0.5x reward),
+          // SIX_MONTHS (0.75x), TWELVE_MONTHS (1.0x), EIGHTEEN_MONTHS (1.25x),
+          // TWENTY_FOUR_MONTHS (1.5x).
+          lockupPeriod: LockupPeriod.TWELVE_MONTHS,
           dstAddress,
+          stake: true, // Auto-stake the migrated SODA into the xSODA vault
         },
         walletProvider,
       });
@@ -159,7 +165,7 @@ import { ChainKeys } from '@sodax/sdk';
 import type { UnifiedBnUSDMigrateParams } from '@sodax/sdk';
 
 function BnUSDMigration({ srcAddress }: { srcAddress: string }) {
-  const walletProvider = useWalletProvider(ChainKeys.BASE_MAINNET);
+  const walletProvider = useWalletProvider({ xChainId: ChainKeys.BASE_MAINNET });
 
   const bnUSDParams: UnifiedBnUSDMigrateParams<typeof ChainKeys.BASE_MAINNET> = {
     srcChainKey: ChainKeys.BASE_MAINNET,

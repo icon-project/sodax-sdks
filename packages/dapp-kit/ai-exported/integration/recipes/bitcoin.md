@@ -1,4 +1,4 @@
-# Skill: Bitcoin (Radfi)
+# Recipe: Bitcoin (Radfi)
 
 Bitcoin trading via the Radfi protocol. Authenticate, fund a trading wallet, trade, withdraw, and manage UTXOs.
 
@@ -40,7 +40,7 @@ import { useWalletProvider } from '@sodax/wallet-sdk-react';
 import { ChainKeys } from '@sodax/sdk';
 
 function BitcoinAuth() {
-  const walletProvider = useWalletProvider(ChainKeys.BITCOIN_MAINNET);
+  const walletProvider = useWalletProvider({ xChainId: ChainKeys.BITCOIN_MAINNET });
   const { isAuthed, tradingAddress, login, isLoginPending } = useRadfiSession(walletProvider);
 
   if (isAuthed) {
@@ -69,7 +69,7 @@ import { useWalletProvider } from '@sodax/wallet-sdk-react';
 import { ChainKeys } from '@sodax/sdk';
 
 function BitcoinBalances({ walletAddress }: { walletAddress: string }) {
-  const walletProvider = useWalletProvider(ChainKeys.BITCOIN_MAINNET);
+  const walletProvider = useWalletProvider({ xChainId: ChainKeys.BITCOIN_MAINNET });
   const { tradingAddress } = useTradingWallet(walletAddress);
 
   // Personal wallet balance (from mempool.space)
@@ -77,7 +77,8 @@ function BitcoinBalances({ walletAddress }: { walletAddress: string }) {
     params: { address: walletAddress },
   });
 
-  // Trading wallet balance (from Radfi API)
+  // Trading wallet balance (from Radfi API). `RadfiWalletBalance` fields:
+  // `btcSatoshi`, `pendingSatoshi`, `externalPendingSatoshi`, `totalUtxos`.
   const { data: tradingBalance } = useTradingWalletBalance({
     params: { walletProvider, tradingAddress },
   });
@@ -85,7 +86,7 @@ function BitcoinBalances({ walletAddress }: { walletAddress: string }) {
   return (
     <div>
       <p>Personal: {personalBalance?.toString() ?? '...'} sats</p>
-      <p>Trading: {tradingBalance?.confirmed?.toString() ?? '...'} sats</p>
+      <p>Trading: {tradingBalance?.btcSatoshi?.toString() ?? '...'} sats</p>
     </div>
   );
 }
@@ -99,7 +100,7 @@ import { useWalletProvider } from '@sodax/wallet-sdk-react';
 import { ChainKeys } from '@sodax/sdk';
 
 function FundButton() {
-  const walletProvider = useWalletProvider(ChainKeys.BITCOIN_MAINNET);
+  const walletProvider = useWalletProvider({ xChainId: ChainKeys.BITCOIN_MAINNET });
   const { mutateAsyncSafe: fundWallet, isPending } = useFundTradingWallet();
 
   const handleFund = async () => {
@@ -125,7 +126,7 @@ import { useWalletProvider } from '@sodax/wallet-sdk-react';
 import { ChainKeys } from '@sodax/sdk';
 
 function WithdrawButton({ withdrawTo }: { withdrawTo: string }) {
-  const walletProvider = useWalletProvider(ChainKeys.BITCOIN_MAINNET);
+  const walletProvider = useWalletProvider({ xChainId: ChainKeys.BITCOIN_MAINNET });
   const { mutateAsync: withdraw, isPending } = useRadfiWithdraw();
 
   const handleWithdraw = async () => {
@@ -157,7 +158,7 @@ import { useWalletProvider } from '@sodax/wallet-sdk-react';
 import { ChainKeys } from '@sodax/sdk';
 
 function UtxoManager({ tradingAddress }: { tradingAddress: string }) {
-  const walletProvider = useWalletProvider(ChainKeys.BITCOIN_MAINNET);
+  const walletProvider = useWalletProvider({ xChainId: ChainKeys.BITCOIN_MAINNET });
   const { data: expiredUtxos } = useExpiredUtxos({
     params: { walletProvider, tradingAddress },
   });

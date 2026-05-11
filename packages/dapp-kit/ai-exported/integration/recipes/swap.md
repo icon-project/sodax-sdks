@@ -1,4 +1,4 @@
-# Skill: Swap
+# Recipe: Swap
 
 Cross-chain token swaps via the intent-based solver.
 
@@ -21,20 +21,22 @@ Cross-chain token swaps via the intent-based solver.
 
 ```tsx
 import { useQuote } from '@sodax/dapp-kit';
-import { BSC_MAINNET_CHAIN_ID, ARBITRUM_MAINNET_CHAIN_ID } from '@sodax/sdk';
+import { ChainKeys } from '@sodax/sdk';
 
 function SwapQuote({ inputAmount }: { inputAmount: bigint }) {
   const { data: quoteResult, isLoading } = useQuote({
-    params: inputAmount > 0n
-      ? {
-          token_src: '0x2170Ed0880ac9A755fd29B2688956BD959F933F8',
-          token_dst: '0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f',
-          token_src_blockchain_id: BSC_MAINNET_CHAIN_ID,
-          token_dst_blockchain_id: ARBITRUM_MAINNET_CHAIN_ID,
-          amount: inputAmount,
-          quote_type: 'exact_input',
-        }
-      : undefined,
+    params: {
+      payload: inputAmount > 0n
+        ? {
+            token_src: '0x2170Ed0880ac9A755fd29B2688956BD959F933F8',
+            token_dst: '0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f',
+            token_src_blockchain_id: ChainKeys.BSC_MAINNET,
+            token_dst_blockchain_id: ChainKeys.ARBITRUM_MAINNET,
+            amount: inputAmount,
+            quote_type: 'exact_input',
+          }
+        : undefined,
+    },
   });
 
   if (isLoading) return <div>Fetching quote...</div>;
@@ -52,12 +54,21 @@ import { ChainKeys } from '@sodax/sdk';
 import type { CreateIntentParams } from '@sodax/sdk';
 
 function SwapApproval({ intentParams }: { intentParams: CreateIntentParams }) {
-  const walletProvider = useWalletProvider(ChainKeys.BSC_MAINNET);
+  const walletProvider = useWalletProvider({ xChainId: ChainKeys.BSC_MAINNET });
 
-  const { data: isApproved } = useSwapAllowance({ params: intentParams, walletProvider });
+  // useSwapAllowance wraps the request under params.payload and takes walletProvider + srcChainKey
+  // alongside (all under `params`, not at the top level).
+  const { data: isApproved } = useSwapAllowance({
+    params: {
+      payload: intentParams,
+      srcChainKey: ChainKeys.BSC_MAINNET,
+      walletProvider,
+    },
+  });
   const { mutateAsync: approve, isPending } = useSwapApprove();
 
-  if (isApproved?.ok && isApproved.value) return null;
+  // useSwapAllowance data is `boolean | undefined` (already unwrapped from Result by the hook).
+  if (isApproved) return null;
   return (
     <button onClick={() => walletProvider && approve({ params: intentParams, walletProvider })} disabled={isPending}>
       {isPending ? 'Approving...' : 'Approve Token'}
@@ -75,7 +86,7 @@ import { ChainKeys } from '@sodax/sdk';
 import type { CreateIntentParams } from '@sodax/sdk';
 
 function SwapButton({ intentParams }: { intentParams: CreateIntentParams }) {
-  const walletProvider = useWalletProvider(ChainKeys.BSC_MAINNET);
+  const walletProvider = useWalletProvider({ xChainId: ChainKeys.BSC_MAINNET });
   const { mutateAsync: swap, isPending } = useSwap();
 
   const handleSwap = async () => {
@@ -103,9 +114,9 @@ function SwapButton({ intentParams }: { intentParams: CreateIntentParams }) {
 
 ```tsx
 import { useState } from 'react';
-import { useQuote, useSwap, useSwapAllowance, useSwapApprove, useSpokeProvider } from '@sodax/dapp-kit';
+import { useQuote, useSwap, useSwapAllowance, useSwapApprove } from '@sodax/dapp-kit';
 import { useWalletProvider } from '@sodax/wallet-sdk-react';
-import { BSC_MAINNET_CHAIN_ID, ARBITRUM_MAINNET_CHAIN_ID, ChainKeys } from '@sodax/sdk';
+import { ChainKeys } from '@sodax/sdk';
 import type { CreateIntentParams, SolverIntentQuoteRequest } from '@sodax/sdk';
 import { parseUnits } from 'viem';
 
@@ -114,27 +125,30 @@ const DST_TOKEN = '0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f';
 
 export function SwapPage() {
   const [inputAmount, setInputAmount] = useState('');
-  const spokeProvider = useSpokeProvider({ chainId: BSC_MAINNET_CHAIN_ID });
-  const walletProvider = useWalletProvider(ChainKeys.BSC_MAINNET);
+  const walletProvider = useWalletProvider({ xChainId: ChainKeys.BSC_MAINNET });
   const parsedAmount = inputAmount ? parseUnits(inputAmount, 18) : 0n;
 
-  // 1. Quote
+  // 1. Quote — useQuote takes { params: { payload: SolverIntentQuoteRequest } }.
   const { data: quoteResult, isLoading: isQuoting } = useQuote({
-    params: parsedAmount > 0n
-      ? {
-          token_src: SRC_TOKEN,
-          token_dst: DST_TOKEN,
-          token_src_blockchain_id: BSC_MAINNET_CHAIN_ID,
-          token_dst_blockchain_id: ARBITRUM_MAINNET_CHAIN_ID,
-          amount: parsedAmount,
-          quote_type: 'exact_input',
-        }
-      : undefined,
+    params: {
+      payload: parsedAmount > 0n
+        ? {
+            token_src: SRC_TOKEN,
+            token_dst: DST_TOKEN,
+            token_src_blockchain_id: ChainKeys.BSC_MAINNET,
+            token_dst_blockchain_id: ChainKeys.ARBITRUM_MAINNET,
+            amount: parsedAmount,
+            quote_type: 'exact_input',
+          }
+        : undefined,
+    },
   });
 
-  // 2. Build intent params
+  // 2. Build intent params. The request-side fields are `srcChainKey` / `dstChainKey`
+  // (distinct from the read-side `Intent.srcChain` / `Intent.dstChain` which are
+  // `IntentRelayChainId` bigints — a separate shape).
   const intentParams: CreateIntentParams | undefined =
-    quoteResult?.ok && spokeProvider
+    quoteResult?.ok
       ? {
           inputToken: SRC_TOKEN,
           outputToken: DST_TOKEN,
@@ -142,18 +156,21 @@ export function SwapPage() {
           minOutputAmount: BigInt(quoteResult.value.quoted_amount),
           deadline: 0n,
           allowPartialFill: false,
-          srcChain: BSC_MAINNET_CHAIN_ID,
-          dstChain: ARBITRUM_MAINNET_CHAIN_ID,
-          srcAddress: '0x...', // connected wallet address
-          dstAddress: '0x...', // destination address
+          srcChainKey: ChainKeys.BSC_MAINNET,
+          dstChainKey: ChainKeys.ARBITRUM_MAINNET,
+          srcAddress: '0x0000000000000000000000000000000000000000', // connected wallet address
+          dstAddress: '0x0000000000000000000000000000000000000000', // destination address
           solver: '0x0000000000000000000000000000000000000000',
           data: '0x',
         }
       : undefined;
 
-  // 3. Allowance
-  const { data: allowanceResult } = useSwapAllowance({ params: intentParams, spokeProvider });
-  const isApproved = allowanceResult?.ok && allowanceResult.value;
+  // 3. Allowance — useSwapAllowance nests payload + srcChainKey + walletProvider under params.
+  const { data: isApproved } = useSwapAllowance({
+    params: intentParams
+      ? { payload: intentParams, srcChainKey: ChainKeys.BSC_MAINNET, walletProvider }
+      : undefined,
+  });
 
   // 4. Approve + Swap (using mutateAsyncSafe — no try/catch, no unhandled rejections)
   const { mutateAsyncSafe: approve, isPending: isApproving } = useSwapApprove();
@@ -186,12 +203,19 @@ export function SwapPage() {
 ## Limit Orders
 
 ```tsx
+import { useCreateLimitOrder, useCancelLimitOrder } from '@sodax/dapp-kit';
+import type { Intent } from '@sodax/sdk';
+
 const { mutateAsync: createLimitOrder } = useCreateLimitOrder();
 const { mutateAsync: cancelLimitOrder } = useCancelLimitOrder();
 
-// Limit orders have no deadline, must be cancelled manually
-await createLimitOrder({ params: intentParams, walletProvider });
-await cancelLimitOrder({ srcChainKey, walletProvider, intent });
+// Limit orders have no deadline, must be cancelled manually.
+// `useCancelLimitOrder` TVars are FLAT: `{ srcChainKey, intent, walletProvider }` (no `params` wrapper).
+async function flow(intent: Intent) {
+  if (!walletProvider) return;
+  await createLimitOrder({ params: limitOrderParams, walletProvider });
+  await cancelLimitOrder({ srcChainKey, intent, walletProvider });
+}
 ```
 
 ## Customize TanStack Query behavior
@@ -199,6 +223,9 @@ await cancelLimitOrder({ srcChainKey, walletProvider, intent });
 Every mutation hook accepts an optional `mutationOptions` slot for consumers to override TanStack Query knobs (`retry`, `onError`, `mutationKey`, etc.). The hook's `mutationFn` throws on SDK failure (so `mutation.error`, `onError`, and `retry` engage natively); its own `onSuccess` invalidations run first on real success, then the consumer's `onSuccess` is awaited.
 
 ```tsx
+import { useSwap } from '@sodax/dapp-kit';
+import { useIsMutating } from '@tanstack/react-query';
+
 const { mutateAsync: swap, isError, error } = useSwap({
   mutationOptions: {
     retry: 5,
@@ -212,6 +239,7 @@ const { mutateAsync: swap, isError, error } = useSwap({
 
 // Track in-flight swaps anywhere in the app via the default mutationKey
 const swapsInFlight = useIsMutating({ mutationKey: ['swap'] });
+console.log({ swap, isError, error, swapsInFlight });
 ```
 
 ## Gotchas

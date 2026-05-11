@@ -1,4 +1,4 @@
-# Skill: Staking
+# Recipe: Staking
 
 SODA token staking via xSODA ERC-4626 vault.
 
@@ -38,6 +38,7 @@ SODA token staking via xSODA ERC-4626 vault.
 
 ```tsx
 import { useStakingInfo, useStakingConfig, useStakeRatio } from '@sodax/dapp-kit';
+import type { SpokeChainKey } from '@sodax/sdk';
 import { formatUnits } from 'viem';
 
 function StakingDashboard({ srcAddress, srcChainKey }: { srcAddress: `0x${string}`; srcChainKey: SpokeChainKey }) {
@@ -51,8 +52,8 @@ function StakingDashboard({ srcAddress, srcChainKey }: { srcAddress: `0x${string
       <p>Total Staked: {formatUnits(info.totalStaked, 18)} SODA</p>
       <p>Your xSODA: {formatUnits(info.userXSodaBalance, 18)}</p>
       <p>Your Value: {formatUnits(info.userXSodaValue, 18)} SODA</p>
-      {ratio?.ok && <p>Rate: 1 SODA = {formatUnits(ratio.value[0], 18)} xSODA</p>}
-      {config?.ok && <p>Unstaking: {(Number(config.value.unstakingPeriod) / 86400).toFixed(1)} days</p>}
+      {ratio && <p>Rate: 1 SODA = {formatUnits(ratio[0], 18)} xSODA</p>}
+      {config && <p>Unstaking: {(Number(config.unstakingPeriod) / 86400).toFixed(1)} days</p>}
     </div>
   );
 }
@@ -61,6 +62,7 @@ function StakingDashboard({ srcAddress, srcChainKey }: { srcAddress: `0x${string
 ## Stake
 
 ```tsx
+import { useState } from 'react';
 import { useStake, useStakeAllowance, useStakeApprove, useStakeRatio } from '@sodax/dapp-kit';
 import { useWalletProvider } from '@sodax/wallet-sdk-react';
 import { ChainKeys } from '@sodax/sdk';
@@ -69,17 +71,22 @@ import { parseUnits, formatUnits, type Address } from 'viem';
 function StakeForm({ srcAddress }: { srcAddress: Address }) {
   const [amount, setAmount] = useState('');
   const chainKey = ChainKeys.BASE_MAINNET;
-  const walletProvider = useWalletProvider(chainKey);
+  const walletProvider = useWalletProvider({ xChainId: chainKey });
   const parsedAmount = amount ? parseUnits(amount, 18) : 0n;
 
   const { data: ratio } = useStakeRatio({ params: { amount: parsedAmount } });
 
   const stakeParams = parsedAmount > 0n
-    ? { srcChainKey: chainKey, srcAddress, amount: parsedAmount, minReceive: ratio?.ok ? (ratio.value[0] * 95n) / 100n : 0n, action: 'stake' as const }
+    ? { srcChainKey: chainKey, srcAddress, amount: parsedAmount, minReceive: ratio ? (ratio[0] * 95n) / 100n : 0n, action: 'stake' as const }
     : undefined;
 
-  const { data: allowance } = useStakeAllowance({ params: stakeParams, walletProvider });
-  const isApproved = allowance?.ok && allowance.value;
+  // useStakeAllowance wraps `Omit<StakeParams, 'action'>` under params.payload. Read-only,
+  // no walletProvider needed (calls `staking.isAllowanceValid` with `raw: true` internally).
+  const { data: isApproved } = useStakeAllowance({
+    params: stakeParams
+      ? { payload: { srcChainKey: chainKey, srcAddress, amount: parsedAmount, minReceive: stakeParams.minReceive } }
+      : undefined,
+  });
   const { mutateAsync: approve, isPending: isApproving } = useStakeApprove();
   const { mutateAsync: stake, isPending: isStaking } = useStake();
 
@@ -97,7 +104,7 @@ function StakeForm({ srcAddress }: { srcAddress: Address }) {
   return (
     <div>
       <input placeholder="SODA amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
-      {ratio?.ok && <p>~{formatUnits(ratio.value[0], 18)} xSODA</p>}
+      {ratio && <p>~{formatUnits(ratio[0], 18)} xSODA</p>}
       <button onClick={handleStake} disabled={isStaking || isApproving || !stakeParams || !walletProvider}>
         {isApproving ? 'Approving...' : isStaking ? 'Staking...' : 'Stake'}
       </button>
@@ -116,7 +123,7 @@ import { formatUnits, type Address } from 'viem';
 
 function UnstakePanel({ srcAddress }: { srcAddress: Address }) {
   const chainKey = ChainKeys.BASE_MAINNET;
-  const walletProvider = useWalletProvider(chainKey);
+  const walletProvider = useWalletProvider({ xChainId: chainKey });
   const { data: info } = useUnstakingInfoWithPenalty({ params: { srcAddress, srcChainKey: chainKey } });
   const { mutateAsync: claim } = useClaim();
 
@@ -127,7 +134,9 @@ function UnstakePanel({ srcAddress }: { srcAddress: Address }) {
           <p>{formatUnits(req.claimableAmount, 18)} SODA claimable (penalty: {req.penaltyPercentage}%)</p>
           <button
             onClick={() => walletProvider && claim({
-              params: { srcChainKey: chainKey, srcAddress, requestId: req.request.requestId, amount: req.claimableAmount, action: 'claim' },
+              // req.id is the requestId on the UserUnstakeInfo shape; req.request holds the
+              // original UnstakeSodaRequest. ClaimParams takes the id and the post-penalty amount.
+              params: { srcChainKey: chainKey, srcAddress, requestId: req.id, amount: req.claimableAmount, action: 'claim' },
               walletProvider,
             })}
           >
@@ -150,7 +159,7 @@ import { type Address } from 'viem';
 
 function InstantUnstakeButton({ xSodaAmount, srcAddress }: { xSodaAmount: bigint; srcAddress: Address }) {
   const chainKey = ChainKeys.BASE_MAINNET;
-  const walletProvider = useWalletProvider(chainKey);
+  const walletProvider = useWalletProvider({ xChainId: chainKey });
   const { data: ratio } = useInstantUnstakeRatio({ params: { amount: xSodaAmount } });
   const { mutateAsync: instantUnstake, isPending } = useInstantUnstake();
 
@@ -162,7 +171,7 @@ function InstantUnstakeButton({ xSodaAmount, srcAddress }: { xSodaAmount: bigint
           srcChainKey: chainKey,
           srcAddress,
           amount: xSodaAmount,
-          minAmount: ratio?.ok ? (ratio.value * 95n) / 100n : 0n,
+          minAmount: ratio ? (ratio * 95n) / 100n : 0n,
           action: 'instantUnstake',
         },
         walletProvider,

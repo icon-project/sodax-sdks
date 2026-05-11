@@ -1,4 +1,4 @@
-# Skill: Money Market
+# Recipe: Money Market
 
 Cross-chain lending (supply) and borrowing.
 
@@ -28,6 +28,7 @@ Cross-chain lending (supply) and borrowing.
 All mutation hooks follow the **zero-domain-param** policy — the hook itself takes only an optional `mutationOptions` slot; ALL domain inputs (`params`, `walletProvider`, etc.) flow through `mutate(vars)`:
 
 ```ts
+// @ai-snippets-skip
 const { mutateAsync: supply } = useSupply();
 await supply({ params: { srcChainKey, srcAddress, token, amount, action: 'supply' }, walletProvider });
 ```
@@ -87,9 +88,10 @@ import { useWalletProvider } from '@sodax/wallet-sdk-react';
 import { ChainKeys, type MoneyMarketSupplyParams } from '@sodax/sdk';
 
 function MMApproval({ params }: { params: MoneyMarketSupplyParams<typeof ChainKeys.BASE_MAINNET> }) {
-  const walletProvider = useWalletProvider(ChainKeys.BASE_MAINNET);
-  // auto-returns true for borrow/withdraw — no unnecessary RPC calls
-  const { data: isApproved } = useMMAllowance({ params });
+  const walletProvider = useWalletProvider({ xChainId: ChainKeys.BASE_MAINNET });
+  // useMMAllowance wraps the request under params.payload.
+  // Auto-returns true for borrow/withdraw — no unnecessary RPC calls.
+  const { data: isApproved } = useMMAllowance({ params: { payload: params } });
   const { mutateAsync: approve, isPending } = useMMApprove();
 
   if (isApproved) return null;
@@ -113,7 +115,7 @@ import { ChainKeys } from '@sodax/sdk';
 
 function SupplyButton({ srcAddress }: { srcAddress: string }) {
   const chainKey = ChainKeys.BASE_MAINNET;
-  const walletProvider = useWalletProvider(chainKey);
+  const walletProvider = useWalletProvider({ xChainId: chainKey });
   const { mutateAsync: supply, isPending } = useSupply();
 
   const handleSupply = async () => {
@@ -144,31 +146,40 @@ import { useBorrow, useWithdraw, useRepay } from '@sodax/dapp-kit';
 import { useWalletProvider } from '@sodax/wallet-sdk-react';
 import { ChainKeys } from '@sodax/sdk';
 
-const chainKey = ChainKeys.BASE_MAINNET;
-const walletProvider = useWalletProvider(chainKey);
+function MMActions({ srcAddress }: { srcAddress: `0x${string}` }) {
+  const chainKey = ChainKeys.BASE_MAINNET;
+  const walletProvider = useWalletProvider({ xChainId: chainKey });
 
-if (!walletProvider) return;
+  const { mutateAsync: borrow } = useBorrow();
+  const { mutateAsync: withdraw } = useWithdraw();
+  const { mutateAsync: repay } = useRepay();
 
-// Borrow
-const { mutateAsync: borrow } = useBorrow();
-await borrow({
-  params: { srcChainKey: chainKey, srcAddress, token: '0x...', amount: 500_000n, action: 'borrow' },
-  walletProvider,
-});
+  const handleBorrow = async () => {
+    if (!walletProvider) return;
+    await borrow({
+      params: { srcChainKey: chainKey, srcAddress, token: '0x0000000000000000000000000000000000000000', amount: 500_000n, action: 'borrow' },
+      walletProvider,
+    });
+  };
 
-// Withdraw
-const { mutateAsync: withdraw } = useWithdraw();
-await withdraw({
-  params: { srcChainKey: chainKey, srcAddress, token: '0x...', amount: 1_000_000n, action: 'withdraw' },
-  walletProvider,
-});
+  const handleWithdraw = async () => {
+    if (!walletProvider) return;
+    await withdraw({
+      params: { srcChainKey: chainKey, srcAddress, token: '0x0000000000000000000000000000000000000000', amount: 1_000_000n, action: 'withdraw' },
+      walletProvider,
+    });
+  };
 
-// Repay
-const { mutateAsync: repay } = useRepay();
-await repay({
-  params: { srcChainKey: chainKey, srcAddress, token: '0x...', amount: 500_000n, action: 'repay' },
-  walletProvider,
-});
+  const handleRepay = async () => {
+    if (!walletProvider) return;
+    await repay({
+      params: { srcChainKey: chainKey, srcAddress, token: '0x0000000000000000000000000000000000000000', amount: 500_000n, action: 'repay' },
+      walletProvider,
+    });
+  };
+
+  return null;
+}
 ```
 
 ## Types
