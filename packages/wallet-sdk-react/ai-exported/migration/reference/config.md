@@ -88,7 +88,7 @@ options: {
 // v2 ✅
 EVM: {
   ssr: true,
-  // reconnectOnMount is not a v2 option — wagmi defaults apply
+  reconnectOnMount: true,
   chains: { ... },
 }
 ```
@@ -96,7 +96,7 @@ EVM: {
 | v1 | v2 | Notes |
 |---|---|---|
 | `options.wagmi.ssr` | `EVM.ssr` | Defaults: v1 `true`, v2 not set (caller decides). For Next.js, set `true`. |
-| `options.wagmi.reconnectOnMount` | (removed) | wagmi's default applies. If you need it, file an issue. |
+| `options.wagmi.reconnectOnMount` | `EVM.reconnectOnMount` | Still supported, default `false`. Moved into the `EVM` slot. See [`migration/recipes/ssr-setup.md`](../recipes/ssr-setup.md) for the SSR-aware flow. |
 
 ---
 
@@ -137,12 +137,21 @@ options: {
 ```ts
 // v2 ✅
 SUI: {
+  autoConnect: true,
   network: 'mainnet',
-  // autoConnect support: check current SUI slot type in src/types/config.ts
 }
 ```
 
-`SUI` slot accepts `network: 'mainnet' | 'testnet'`. Inspect `SodaxWalletConfig['SUI']` for the current shape.
+`SUI` slot fields (per `SuiAdapterFields` in `src/types/config.ts`):
+
+| Field | Type | Default |
+|---|---|---|
+| `autoConnect` | `boolean?` | `true` |
+| `network` | `'mainnet' \| 'testnet' \| 'devnet'?` | `'mainnet'` |
+
+| v1 | v2 |
+|---|---|
+| `options.sui.autoConnect` | `SUI.autoConnect` |
 
 ---
 
