@@ -18,8 +18,7 @@
       "types": "./dist/xchains/*/index.d.ts",
       "import": "./dist/xchains/*/index.mjs",
       "require": "./dist/xchains/*/index.cjs"
-    },
-    "./ai-exported/*": "./ai-exported/*"
+    }
   },
   "typesVersions": {
     "*": {
@@ -37,6 +36,7 @@
     "clean": "rm -rf dist && rm -rf node_modules && rm -rf .turbo",
     "pretty": "biome format . --write",
     "checkTs": "tsc --noEmit",
+    "checkTs:examples": "tsc --noEmit -p tsconfig.examples.json",
     "test": "vitest run",
     "knip": "knip",
     "lint": "biome lint . --write",

@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["ai-exported/integration/examples/**/*.tsx"],
+  "exclude": ["./dist/**", "**/*.test.ts"],
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "noUnusedLocals": false,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@sodax/wallet-sdk-react": ["./src/index.ts"],
+      "@sodax/wallet-sdk-react/xchains/*": ["./src/xchains/*/index.ts"]
+    }
+  }
+}

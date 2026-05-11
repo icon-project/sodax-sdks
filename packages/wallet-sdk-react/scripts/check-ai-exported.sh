@@ -23,6 +23,11 @@
 # Out of scope (would need a TS-aware tool):
 #   - Component / type symbol checks (e.g. `SodaxWalletProvider`, `IXConnector`)
 #   - Sub-path import-symbol validation (which class lives in which xchains/)
+#
+# Requires GNU coreutils — uses `comm`, `find -mindepth/-maxdepth`, and `grep -oE`.
+# CI runs on Ubuntu (where these are default). On macOS, install via
+# `brew install coreutils grep` and put GNU binaries first on PATH, or run inside
+# the Linux Docker image used by CI.
 
 set -euo pipefail
 

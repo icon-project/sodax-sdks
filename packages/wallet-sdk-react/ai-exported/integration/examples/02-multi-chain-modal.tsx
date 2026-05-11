@@ -11,6 +11,7 @@ import {
   type SodaxWalletConfig,
   useWalletModal,
   useChainGroups,
+  useXConnectors,
   sortConnectors,
   type IXConnector,
 } from '@sodax/wallet-sdk-react';
@@ -68,7 +69,6 @@ function WalletModalRoot() {
       return (
         <WalletPicker
           chainType={modal.state.chainType}
-          connectors={modal.state.connectors}
           onPick={modal.selectWallet}
           onBack={modal.back}
           onClose={modal.close}
@@ -120,7 +120,7 @@ function ChainPicker({ onPick, onClose }: { onPick: (c: ChainType) => void; onCl
   return (
     <Dialog onClose={onClose}>
       <h2>Select a chain</h2>
-      {groups.map((group) => (
+      {groups.map(group => (
         <button type="button" key={group.chainType} onClick={() => onPick(group.chainType)}>
           <span>{group.displayName}</span>
           {group.isConnected && ' ✓'}
@@ -134,31 +134,24 @@ const PREFERRED = ['hana', 'metamask', 'phantom'] as const;
 
 function WalletPicker({
   chainType,
-  connectors: rawConnectors,
   onPick,
   onBack,
   onClose,
 }: {
   chainType: ChainType;
-  connectors: readonly IXConnector[];
   onPick: (c: IXConnector) => void;
   onBack: () => void;
   onClose: () => void;
 }) {
-  const connectors = sortConnectors(rawConnectors, { preferred: PREFERRED });
+  const connectors = sortConnectors(useXConnectors({ xChainType: chainType }), { preferred: PREFERRED });
   return (
     <Dialog onClose={onClose}>
       <button type="button" onClick={onBack}>
         ← Back
       </button>
       <h2>Connect to {chainType}</h2>
-      {connectors.map((connector) => (
-        <button
-          type="button"
-          key={connector.id}
-          onClick={() => onPick(connector)}
-          disabled={!connector.isInstalled}
-        >
+      {connectors.map(connector => (
+        <button type="button" key={connector.id} onClick={() => onPick(connector)} disabled={!connector.isInstalled}>
           {connector.name}
           {!connector.isInstalled && ' (not installed)'}
         </button>
