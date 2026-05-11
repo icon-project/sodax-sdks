@@ -57,7 +57,7 @@ type BitcoinWalletDefaults = {
 };
 ```
 
-Merge strategy: flat (`mergeDefaults`). Per-call `finalize` argument on `signTransaction` overrides the default.
+Read directly via `this.defaults.defaultFinalize` — no `mergePolicy` / `mergeDefaults` call. Per-call `finalize` argument on `signTransaction` overrides the default; if both are omitted the implementation falls back to `true`.
 
 ---
 
@@ -90,7 +90,7 @@ Merge strategy: flat (`mergeDefaults`). Per-call `finalize` argument on `signTra
 
 - **The discriminant is `type`, uppercase.** Bitcoin and Stellar use this style — every other chain uses field presence. Easy to confuse.
 - **`addressType` is optional in PK mode.** If you omit it, bitcoinjs picks a default (typically P2WPKH on mainnet). Browser-extension mode infers it from the wallet kit.
-- **PSBT inputs are base64-encoded** when passed to `signTransaction`. The browser-extension kit may use hex internally; the provider handles the conversion.
+- **PSBT inputs are base64-encoded** when passed to `signTransaction`. In browser-extension mode the same base64 string is forwarded to `walletsKit.signPsbt`; the kit's parameter is misleadingly named `psbtHex` but receives base64. The kit returns a signed PSBT which the provider parses as hex when finalising.
 - **`sendBitcoin` is optional on the wallet kit.** Some browser-extension wallets (Xverse / Unisat) implement it; others don't. Guard on its presence.
 - **`signEcdsaMessage` vs `signBip322Message`** — choose based on what your verifier expects. BIP-322 is the more modern, structured signature spec; ECDSA is the legacy `signmessage` RPC behavior.
 

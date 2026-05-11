@@ -98,7 +98,7 @@ In a React dApp you usually consume this package **indirectly** — `useWalletPr
 - **Shallow merge, not deep.** Nested objects in `defaults` are **replaced wholesale** by per-call options of the same key. See `src/utils/merge.ts` and [`recipes/defaults-and-overrides.md`](./recipes/defaults-and-overrides.md).
 - **`library-exports` removes upstream deps.** You can `import type { WalletClient } from '@sodax/wallet-sdk-core'` instead of taking a direct dep on `viem`. See [`recipes/library-exports.md`](./recipes/library-exports.md).
 - **The barrel is the source of truth.** Internal utilities (`shallowMerge`, helper functions) are **not** exported. If something isn't on `@sodax/wallet-sdk-core`'s root, do not deep-import it.
-- **No `as unknown as` casts.** The discriminated unions are precise — if TypeScript complains, your config is wrong, not the type. See `../../CLAUDE.md` § Biome rules.
+- **No `as unknown as` casts.** The discriminated unions are precise — if TypeScript complains, your config is wrong, not the type.
 
 ---
 
@@ -106,4 +106,3 @@ In a React dApp you usually consume this package **indirectly** — `useWalletPr
 
 - API surface lookup: [`reference/`](./reference/).
 - Bug or missing feature: [open an issue](https://github.com/icon-project/sodax-sdks/issues).
-- Internal architecture (only relevant for SODAX maintainers): `../CLAUDE.md` in the package root.

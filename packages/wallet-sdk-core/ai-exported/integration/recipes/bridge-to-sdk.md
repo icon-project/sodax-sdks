@@ -100,7 +100,7 @@ function SwapButton() {
 }
 ```
 
-The hook narrows on `xChainId`, returns the chain-specific interface, and is `undefined` until the user is connected on that family. See [`@sodax/wallet-sdk-react`'s ai-exported docs](../../../../wallet-sdk-react/ai-exported/integration/recipes/bridge-to-sdk.md) for the full pattern.
+The hook narrows on `xChainId`, returns the chain-specific interface, and is `undefined` until the user is connected on that family. Refer to `@sodax/wallet-sdk-react`'s own docs for the full pattern.
 
 ---
 

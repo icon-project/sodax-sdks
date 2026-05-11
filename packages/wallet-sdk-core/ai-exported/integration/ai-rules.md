@@ -94,7 +94,7 @@ Each is independent — apply only what the user asked for.
 
 | Signal | Why stop |
 |---|---|
-| User asks for a chain family not in [chain support](./reference/chain-support.md) | Adding a new chain requires package-level changes (see `../../CLAUDE.md`), not user-app integration. |
+| User asks for a chain family not in [chain support](./reference/chain-support.md) | Adding a new chain is a maintainer task, not user-app integration. |
 | User wants to extend `BaseWalletProvider` directly | Maintainer-only path. Confirm scope first. |
 | User wants to deep-merge `defaults` with per-call options | Not supported — merge is **shallow** by design. See [`recipes/defaults-and-overrides.md`](./recipes/defaults-and-overrides.md). If the user really needs deep merge, they must combine before passing. |
 | User wants to inject a custom `Transport` / `Connection` / `SuiClient` in private-key mode | Some chains expose this via `defaults`; others don't. Check the chain's [feature file](./features/) first. |

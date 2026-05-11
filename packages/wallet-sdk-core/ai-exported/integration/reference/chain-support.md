@@ -62,4 +62,4 @@ Run-time deps each provider pulls in. See [`../recipes/library-exports.md`](../r
 
 ## When to NOT use this package
 
-If your chain is not in the table above, this package does not yet support it. Adding a new chain is a **maintainer task** — see `../../CLAUDE.md` § "Adding a New Chain Provider". Open an issue if your chain is missing.
+If your chain is not in the table above, this package does not yet support it. Adding a new chain is a **maintainer task** — open an issue if your chain is missing.

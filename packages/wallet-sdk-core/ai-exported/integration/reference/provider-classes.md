@@ -51,4 +51,4 @@ BaseWalletProvider<TDefaults>           ← abstract base from this package
 └── StacksWalletProvider    implements IStacksWalletProvider
 ```
 
-Subclassing `BaseWalletProvider` is **maintainer-only** — it implies adding a new chain to the package. See `../../CLAUDE.md` § "Adding a New Chain Provider".
+Subclassing `BaseWalletProvider` is **maintainer-only** — it implies adding a new chain to the package.

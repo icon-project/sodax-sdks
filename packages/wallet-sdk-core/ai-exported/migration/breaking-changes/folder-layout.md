@@ -44,10 +44,10 @@ src/
     │   ├── EvmWalletProvider.ts
     │   ├── EvmWalletProvider.test.ts
     │   └── types.ts
-    ├── bitcoin/                          # renamed folder from flat BTCWalletProvider.ts
+    ├── bitcoin/                          # new folder; file name kept as BTCWalletProvider.ts
     │   ├── index.ts
-    │   ├── BitcoinWalletProvider.ts
-    │   ├── BitcoinWalletProvider.test.ts
+    │   ├── BTCWalletProvider.ts
+    │   ├── BTCWalletProvider.test.ts
     │   └── types.ts
     ├── sui/        { …same shape… }
     ├── icon/       { …same shape… }

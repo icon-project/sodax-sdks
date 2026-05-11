@@ -43,7 +43,7 @@ describe('depositFlow', () => {
 });
 ```
 
-> Test files are the **only** place where `as any` / `as unknown as` casts are allowed in this project — see `../../CLAUDE.md` § "No `as unknown as` double-casts".
+> Test files are the **only** place where `as any` / `as unknown as` casts should be tolerated — production code paths should rely on the discriminated unions instead.
 
 ---
 
@@ -161,4 +161,3 @@ grep -rn "IEvmWalletProvider\|ISolanaWalletProvider\|IBitcoinWalletProvider" <us
 
 - `src/utils/merge.test.ts` — reference test style for utility-level tests in this package.
 - Every `src/wallet-providers/*/`*`WalletProvider.test.ts` file — provider-level test patterns.
-- `../../CLAUDE.md` § "No `as unknown as` double-casts in non-test source files".

@@ -36,13 +36,13 @@ Additive changes that older code does not use. All optional — no migration req
 | `BrowserExtensionSolanaWalletConfig` | `defaults?: SolanaWalletDefaults` | `{}` |
 | `PrivateKeySuiWalletConfig` | `defaults?: SuiWalletDefaults` | `{}` |
 | `BrowserExtensionSuiWalletConfig` | `defaults?: SuiWalletDefaults` | `{}` |
-| `PrivateKeyBitcoinWalletConfig` | `defaults?: BitcoinWalletDefaults` + `addressType?: BtcAddressType` | `{}`, address-type chosen by lib |
+| `PrivateKeyBitcoinWalletConfig` | `defaults?: BitcoinWalletDefaults` | `{}` |
 | `BrowserExtensionBitcoinWalletConfig` | `defaults?: BitcoinWalletDefaults` | `{}` |
-| `PrivateKeyStellarWalletConfig` | `defaults?: StellarWalletDefaults` + `rpcUrl?: string` | `{}`, public Horizon URL |
-| `BrowserExtensionStellarWalletConfig` | `defaults?: StellarWalletDefaults` + `rpcUrl?: string` | `{}`, public Horizon URL |
+| `PrivateKeyStellarWalletConfig` | `defaults?: StellarWalletDefaults` | `{}` |
+| `BrowserExtensionStellarWalletConfig` | `defaults?: StellarWalletDefaults` | `{}` |
 | `PrivateKeyIconWalletConfig` | `defaults?: IconWalletDefaults` | `{}` |
 | `BrowserExtensionIconWalletConfig` | `defaults?: IconWalletDefaults` | `{}` |
-| `SecretInjectiveWalletConfig` | `defaults?: InjectiveWalletDefaults` + `evmOptions?` (reserved) | `{}`, `evmOptions` currently unused |
+| `SecretInjectiveWalletConfig` | `defaults?: InjectiveWalletDefaults` | `{}` |
 | `BrowserExtensionInjectiveWalletConfig` | `defaults?: InjectiveWalletDefaults` | `{}` |
 | `PrivateKeyNearWalletConfig` | `defaults?: NearWalletDefaults` | `{}` |
 | `BrowserExtensionNearWalletConfig` | `defaults?: NearWalletDefaults` | `{}` |

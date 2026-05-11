@@ -51,7 +51,7 @@ If a project does anything more than that at the wallet-sdk-core surface, you ar
 
 1. `migration/ai-rules.md` — DO/DON'T + workflow. The headline: **v1 code drops in unchanged.** No mandatory edits at the wallet-sdk-core surface.
 2. `migration/README.md` — what (additively) changed, read order, TL;DR
-3. `migration/breaking-changes/*.md` — narrative WHY behind each additive shift (folder layout, base-class, defaults, library-exports, stellar-rpc-url)
+3. `migration/breaking-changes/*.md` — narrative WHY behind each additive shift (folder layout, base-class, defaults, library-exports)
 4. `migration/reference/*.md` — confirm no renames / no deletions exist
 5. `migration/recipes/<task>.md` — paired before/after for **optional** cleanup (adopt-defaults, adopt-library-exports)
 6. `migration/checklist.md` — verification loop
@@ -69,7 +69,7 @@ Read the relevant list **before** applying any change. When stopping, quote the 
 
 Cross-flow signals (true regardless of flow):
 
-- User asks for a chain family not in [`integration/reference/chain-support.md`](./integration/reference/chain-support.md). Adding a new chain requires package-level changes (see `../CLAUDE.md`), not user-app integration.
+- User asks for a chain family not in [`integration/reference/chain-support.md`](./integration/reference/chain-support.md). Adding a new chain is a maintainer task, not user-app integration.
 - User wants to extend `BaseWalletProvider` directly. That is a maintainer-only path — confirm scope before writing code.
 
 ---
@@ -125,8 +125,6 @@ If still not found: the symbol may be **internal** (not exported from the packag
 - **Install**: `pnpm add @sodax/wallet-sdk-core`
 - **Runtime**: Node ≥ 18 + browser (tsup `platform: 'neutral'`).
 - **Audience**: backend engineers, script authors, and React-layer authors building higher-level wrappers (`@sodax/wallet-sdk-react`).
-
-For internal architecture (only relevant if you're modifying the package itself, not consuming it), see `../CLAUDE.md` in the parent directory.
 
 ---
 

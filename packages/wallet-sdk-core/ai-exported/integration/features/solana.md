@@ -45,7 +45,7 @@ interface WalletContextState {
 
 ```ts
 type SolanaWalletDefaults = {
-  connectionCommitment?: Commitment;      // for Connection ctor
+  connectionCommitment?: Commitment;      // for Connection ctor — default 'confirmed'
   connectionConfig?: ConnectionConfig;    // overrides connectionCommitment if present
   sendOptions?: SendOptions;              // default for sendRawTransaction
   confirmCommitment?: Commitment;         // for confirmation polling — default 'finalized'

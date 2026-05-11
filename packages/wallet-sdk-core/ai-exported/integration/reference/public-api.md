@@ -16,7 +16,7 @@ import { /* … */ } from '@sodax/wallet-sdk-core';
 | `EvmWalletProvider` | EVM | `wallet-providers/evm/EvmWalletProvider.ts` |
 | `SolanaWalletProvider` | Solana | `wallet-providers/solana/SolanaWalletProvider.ts` |
 | `SuiWalletProvider` | Sui | `wallet-providers/sui/SuiWalletProvider.ts` |
-| `BitcoinWalletProvider` | Bitcoin | `wallet-providers/bitcoin/BitcoinWalletProvider.ts` |
+| `BitcoinWalletProvider` | Bitcoin | `wallet-providers/bitcoin/BTCWalletProvider.ts` |
 | `StellarWalletProvider` | Stellar | `wallet-providers/stellar/StellarWalletProvider.ts` |
 | `IconWalletProvider` | ICON | `wallet-providers/icon/IconWalletProvider.ts` |
 | `InjectiveWalletProvider` | Injective | `wallet-providers/injective/InjectiveWalletProvider.ts` |
