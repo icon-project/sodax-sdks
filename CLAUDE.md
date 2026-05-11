@@ -15,9 +15,11 @@ Turborepo + pnpm workspace. Package manager: **pnpm 10.32.1**.
 
 ### Apps
 
-- `apps/web` — Main Next.js 15 web app (App Router, React 19, Tailwind CSS, shadcn/ui)
 - `apps/demo` — Vite + React demo app for SDK showcase
 - `apps/node` — Node.js scripts for E2E testing various chain operations
+- `apps/node-cjs` — Node.js regression test for CJS
+- `apps/wallet-modal-example` — Vite + React demo app for Wallet React SDK showcase
+
 
 ### Packages
 
@@ -26,32 +28,19 @@ Turborepo + pnpm workspace. Package manager: **pnpm 10.32.1**.
 - `packages/wallet-sdk-core` — Low-level multi-chain wallet providers (signing, broadcasting) for 9 chain types. Dual config: private-key (scripts/testing) and browser-extension (production). See `packages/wallet-sdk-core/CLAUDE.md`.
 - `packages/wallet-sdk-react` — React layer over wallet-sdk-core. Abstract `XService`/`XConnector` pattern, Zustand state persistence, EIP-6963 wallet discovery. See `packages/wallet-sdk-react/CLAUDE.md`.
 - `packages/dapp-kit` — High-level React hooks (100+) combining SDK + wallet-sdk-react + React Query. Organized by feature domain. See `packages/dapp-kit/CLAUDE.md`.
-- `packages/typescript-config` — Shared tsconfig base files (only actively used for next at the moment)
 
-### Package dependency chain (current)
+### Package dependency chain
 
-```
-types → sdk → wallet-sdk-core → wallet-sdk-react → dapp-kit → apps/web
-```
-
-### Target dependency chain (v2)
-
-```
-sdk (absorbs types) → wallet-sdk-core → wallet-sdk-react → dapp-kit → apps/web
-                  ↘                                    ↗
-                    ──────────────────────────────────
-```
-
-- `sdk` absorbs `types` package (no more `@sodax/types`)
-- `wallet-sdk-core` depends only on SDK types
-- `wallet-sdk-react` depends only on `wallet-sdk-core`
-- `dapp-kit` depends on `sdk` + `wallet-sdk-react`
+- sdk (`@sodax/sdk`) depends on types package (`@sodax/types`), it both imports and exports it.
+- dapp-kit (`@sodax/dapp-kit`) depends on sdk (`@sodax/sdk`), it both imports and exports it.
+- types (`@sodax/types`) has no package dependencies.
+- wallet-sdk-core (`@sodax/wallet-sdk-core`) depends on types package (`@sodax/types`), it only imports it.
+- wallet-sdk-react (`@sodax/wallet-sdk-react`) depends on (`@sodax/types`) and wallet-sdk-core (`@sodax/wallet-sdk-core`), it only imports them.
 
 ## Common Commands
 
 ```bash
 pnpm i                    # Install dependencies
-pnpm dev:web              # Run web app dev server (Next.js on port 3001 with Turbopack)
 pnpm dev:demo             # Run demo app dev server
 pnpm build                # Build everything (packages must build before apps)
 pnpm build:packages       # Build only SDK packages
@@ -144,19 +133,6 @@ All cross-chain operations route through the **hub chain (Sonic)**. The SDK mode
 - `EvmHubProvider` — interacts with hub contracts (vault tokens, asset manager, wallet abstraction)
 - Per-chain `SpokeProvider` implementations — handle chain-specific contract calls, then relay to/from hub
 - `IntentRelayApiService` — relays intents between hub and spoke chains
-
-### Web App (`apps/web`)
-
-- **Routing**: Next.js App Router. Feature routes under `app/(apps)/` (swap, loans, save, stake, migrate, partner).
-- **State**: Zustand stores in `stores/` (app-store for chain/page state, modal-store for modals). Server state via `@tanstack/react-query`.
-- **Provider stack** (in `providers/providers.tsx`): `SodaxProvider` → `QueryClientProvider` → `SodaxWalletProvider`
-- **UI**: shadcn/ui components (Radix UI) in `components/ui/`, shared components in `components/shared/`
-- **Hooks**: Cross-route hooks live in `hooks/` (chain balances, token prices, APY, etc.). Route-scoped hooks live in the route's `_hooks/` folder (e.g. `app/(apps)/pool/_hooks/`). Route-scoped constants live in `_constants/`. The leading underscore is Next.js's private-folder convention — it opts out of routing.
-- **CMS**: TipTap editor, Notion integration, MongoDB backend in `lib/`
-- **SEO / link previews**: Per-page OpenGraph + Twitter card metadata. Three patterns:
-  - **Static preview** (default — e.g. `consensus-miami`, `partners/*`, `holders`): `export const metadata: Metadata` from the route's `page.tsx`. Place the image in `apps/web/public/` named `link-preview-<page>.png` (1200×630). Reference it as `/link-preview-<page>.png` in `openGraph.images` and `twitter.images`. Always include `alternates.canonical`, `openGraph` (title/description/type/url/siteName/images), and `twitter` (card: 'summary_large_image', site/creator: '@gosodax').
-  - **Dynamic preview** (e.g. `news/[slug]`, `concepts/[slug]`, `system/[slug]`): use Next's `opengraph-image.tsx` + `twitter-image.tsx` file convention with `ImageResponse` from `next/og`.
-  - **Separate `layout.tsx`** only when the route also needs JSON-LD structured data (e.g. `community/soda-token`). Don't create a layout just to hold metadata — `page.tsx` accepts a `metadata` export.
 
 ### SDK Package Overview
 

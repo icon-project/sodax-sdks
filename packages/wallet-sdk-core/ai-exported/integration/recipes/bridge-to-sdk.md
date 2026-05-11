@@ -45,12 +45,12 @@ async function deposit(wallet: EvmWalletProvider) { /* … */ }
 
 ---
 
-## Pattern: spoke service call
+## Pattern: pass the provider to a `Sodax` feature service
 
-`@sodax/sdk` spoke services (e.g. `EvmSpokeService`, `SolanaSpokeService`) accept the chain-specific provider directly. Construct the provider once, pass it where needed.
+Construct the wallet provider once, instantiate the `Sodax` facade, and pass the provider as `walletProvider` to the feature method you want (swap, bridge, money market, staking, …). The `Sodax` facade owns the per-chain spoke services internally — you do **not** construct `*SpokeService` yourself.
 
 ```ts
-import { Sodax, EvmSpokeProvider } from '@sodax/sdk';
+import { Sodax } from '@sodax/sdk';
 import { EvmWalletProvider } from '@sodax/wallet-sdk-core';
 import { ChainKeys } from '@sodax/types';
 
@@ -60,15 +60,25 @@ const walletProvider = new EvmWalletProvider({
   rpcUrl: process.env.EVM_RPC,
 });
 
-const sodax = new Sodax({ /* SodaxConfig — see @sodax/sdk docs */ });
+const sodax = new Sodax(/* optional SodaxConfig — see @sodax/sdk docs */);
 
-const spokeProvider = new EvmSpokeProvider({
-  chainConfig: /* … */,
+// Example: supply to the money market on BSC. The wallet provider goes in
+// at the feature-method call, not at facade construction.
+const result = await sodax.moneyMarket.supply({
+  params: {
+    srcChainKey: ChainKeys.BSC_MAINNET,
+    srcAddress:  await walletProvider.getWalletAddress(),
+    token:       '0x…',
+    amount:      1_000n,
+    action:      'supply',
+  },
   walletProvider,                           // ← the IEvmWalletProvider
 });
-
-// Use spokeProvider in higher-level service calls (swap, bridge, mm, stake, etc.).
 ```
+
+The same shape applies to `sodax.swaps.*`, `sodax.bridge.*`, `sodax.staking.*`, `sodax.migration.*`, etc. — each feature service method that needs signing takes a `walletProvider` argument typed to the chain-specific interface.
+
+> If you need the underlying spoke service for advanced read-only operations, get it via `sodax.spoke.getSpokeService(chainKey)` — but never `new EvmSpokeService(...)` yourself.
 
 For SDK-level recipes (initialise the `Sodax` facade, configure hub provider, raw-tx flows, error handling) see `@sodax/sdk`'s `ai-exported/`.
 
