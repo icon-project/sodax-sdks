@@ -108,3 +108,14 @@ If still not found: the symbol may be **internal** (not exported from v2) or **r
 - **Audience**: dApp builders integrating multi-chain wallet connectivity (9 chain types: EVM, Solana, Sui, Bitcoin, Stellar, ICON, Injective, NEAR, Stacks).
 
 For internal architecture (only relevant if you're modifying the package itself, not consuming it), see `../CLAUDE.md` in the parent directory.
+
+---
+
+## Pointers
+
+- [`integration/README.md`](./integration/README.md) — start here for new integrations: file index, recommended reading order, install snippet, provider-stack ordering.
+- [`migration/README.md`](./migration/README.md) — start here for v1 → v2 ports: file index, reading order, cross-cutting checklist pointer.
+- [`integration/recipes/setup.md`](./integration/recipes/setup.md) — install, mount `SodaxWalletProvider`, pick chain slots.
+- [`integration/architecture.md`](./integration/architecture.md) — mental model: provider mount tree, frozen config, EVM single-connection, `xChainType` vs `xChainId`.
+- [`integration/reference/`](./integration/reference/) — hooks, connectors, chain-support lookup tables.
+- [`migration/breaking-changes.md`](./migration/breaking-changes.md) — full narrative of every v1 → v2 change.
