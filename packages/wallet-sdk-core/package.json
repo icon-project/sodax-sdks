@@ -42,6 +42,7 @@
     "pretty": "biome format . --write",
     "lint": "biome lint . --write",
     "check-exports": "attw $(pnpm pack) --ignore-rules=cjs-resolves-to-esm",
+    "check-ai-exported": "bash scripts/check-ai-exported.sh",
     "prepublishOnly": "pnpm run ci",
     "local-release": "changeset version && changeset publish",
     "clean": "rm -rf node_modules && rm -rf dist && rm -rf .turbo"
