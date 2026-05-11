@@ -10,7 +10,7 @@ High-level React hooks library for dApp developers. Wraps `@sodax/sdk` with Reac
 - **Staking** — `useStake`, `useUnstake`, `useInstantUnstake`, `useClaim`, `useCancelUnstake`, approval hooks, info/config/ratio queries
 - **DEX** — `useDexDeposit`, `useDexWithdraw`, `useSupplyLiquidity`, `useDecreaseLiquidity`, `useClaimRewards`, pool/position queries, param builders
 - **Migration** — `useMigrateIcxToSoda`, `useRevertMigrateSodaToIcx`, `useMigratebnUSD`, `useMigrateBaln`, `useMigrationApprove`, `useMigrationAllowance`
-- **Bitcoin (Radfi)** — `useRadfiSession`, `useFundTradingWallet`, `useRadfiWithdraw`, `useExpiredUtxos`, `useRenewUtxos`
+- **Bitcoin (Radfi)** — `useRadfiAuth`, `useRadfiSession`, `useTradingWallet`, `useTradingWalletBalance`, `useBitcoinBalance`, `useFundTradingWallet`, `useRadfiWithdraw`, `useExpiredUtxos`, `useRenewUtxos`
 - **Partner** — `useFetchAssetsBalances`, `useGetAutoSwapPreferences`, `useIsTokenApproved`, `useApproveToken`, `useSetSwapPreference`, `useFeeClaimSwap`
 - **Recovery** — `useHubAssetBalances`, `useWithdrawHubAsset`
 - **Backend Queries** — Intent tracking, orderbook, money market position queries
@@ -100,7 +100,10 @@ function SwapButton({ intentParams }: { intentParams: CreateIntentParams }) {
   const handleSwap = async () => {
     if (!walletProvider) return;
     const result = await swap({ params: intentParams, walletProvider });
-    if (!result.ok) { alert(result.error.message); return; }
+    if (!result.ok) {
+      alert(result.error instanceof Error ? result.error.message : 'Swap failed');
+      return;
+    }
     console.log('Swap submitted!', result.value);
   };
 
@@ -252,7 +255,7 @@ function SwapButton({ intentParams }: { intentParams: CreateIntentParams }) {
 - [`useBackendIntentByTxHash()`](src/hooks/backend/useBackendIntentByTxHash.ts) — Get intent by hub tx hash (polls 1s)
 - [`useBackendIntentByHash()`](src/hooks/backend/useBackendIntentByHash.ts) — Get intent by intent hash
 - [`useBackendUserIntents()`](src/hooks/backend/useBackendUserIntents.ts) — All intents for a user with date filtering
-- [`useBackendOrderbook()`](src/hooks/backend/useBackendOrderbook.ts) — Solver orderbook (polls 30s)
+- [`useBackendOrderbook()`](src/hooks/backend/useBackendOrderbook.ts) — Solver orderbook (cached 30s, no auto-refetch)
 - [`useBackendMoneyMarketPosition()`](src/hooks/backend/useBackendMoneyMarketPosition.ts) — User money market position
 - [`useBackendAllMoneyMarketAssets()`](src/hooks/backend/useBackendAllMoneyMarketAssets.ts) — All MM assets
 - [`useBackendMoneyMarketAsset()`](src/hooks/backend/useBackendMoneyMarketAsset.ts) — Single MM asset details

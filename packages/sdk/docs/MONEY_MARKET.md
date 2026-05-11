@@ -35,7 +35,7 @@ await sodax.config.initialize();
 By default, configuration from the specific SDK version you are using is used.
 
 ```typescript
-import { Sodax, ChainKeys, type SpokeChainKey, type Token, type Address } from '@sodax/sdk';
+import { Sodax, ChainKeys, type SpokeChainKey, type Address } from '@sodax/sdk';
 
 const sodax = new Sodax();
 await sodax.config.initialize(); // Initialize for dynamic config (optional)
@@ -117,7 +117,7 @@ All money market exec methods use a single `SpokeExecActionParams`-shaped object
 - **`walletProvider`**: The wallet provider for the source chain. Required when `raw` is `false` (or omitted); forbidden when `raw: true`. The type is automatically narrowed to the correct interface for the given `srcChainKey` (e.g. `IEvmWalletProvider` for EVM chains).
 - **`raw`**: (Optional, default `false`) When `true`, returns unsigned transaction data instead of executing. When `true`, `walletProvider` must not be passed. Used in `create*Intent` and `approve` methods.
 - **`skipSimulation`**: (Optional, default `false`) Skip transaction simulation before broadcast. Used in `create*Intent` methods.
-- **`timeout`**: (Optional, default: `DEFAULT_RELAY_TX_TIMEOUT` = 60 seconds) Timeout in milliseconds for relay operations. Used in `supply`, `borrow`, `withdraw`, and `repay` methods.
+- **`timeout`**: (Optional, default: `DEFAULT_RELAY_TX_TIMEOUT` = 120 seconds) Timeout in milliseconds for relay operations. Used in `supply`, `borrow`, `withdraw`, and `repay` methods.
 
 ## Allowance and Approval
 
@@ -306,8 +306,8 @@ if (supplyIntentResult.ok) {
   const { tx: rawTx } = supplyIntentResult.value;
 
   const gasEstimate = await sodax.moneyMarket.estimateGas({
-    srcChainKey: ChainKeys.BSC_MAINNET,
-    // ... encoded calldata fields
+    tx: rawTx,
+    chainKey: ChainKeys.BSC_MAINNET,
   });
 
   if (gasEstimate.ok) {
@@ -360,7 +360,7 @@ if (!isAllowanceValid.value) {
 const supplyAndSubmitResult = await sodax.moneyMarket.supply({
   params: supplyParams,
   walletProvider: evmWalletProvider,
-  timeout: DEFAULT_RELAY_TX_TIMEOUT, // Optional: timeout in milliseconds (default: 60 seconds)
+  timeout: DEFAULT_RELAY_TX_TIMEOUT, // Optional: timeout in milliseconds (default: 120 seconds)
 });
 
 if (supplyAndSubmitResult.ok) {
@@ -583,23 +583,21 @@ class SodaxError<C extends string = string> extends Error {
 - `error.cause` walks the underlying error chain (loggers like Sentry/Pino/Datadog walk this automatically).
 - `error.context` carries structured metadata: `srcChainKey`, `dstChainKey`, `action`, `phase`, plus per-code extras (`relayCode`, `field`, …).
 - `error.toJSON()` is the canonical logger surface; `JSON.stringify(error)` invokes it automatically and produces a logger-safe payload (bigints in `context` are coerced to strings, cause walked depth-3, no circular hazards).
-- Use `isMoneyMarketError(e)` / `is<Op>Error(e)` from `@sodax/sdk` instead of `instanceof SodaxError` in dapp/app code (bundle-safe).
+- Use `isMoneyMarketError(e)` (broad) or one of the narrow guards `isMoneyMarketOrchestrationError(e)` / `isMoneyMarketCreateIntentError(e)` / `isMoneyMarketApproveError(e)` / `isMoneyMarketAllowanceCheckError(e)` / `isMoneyMarketGasEstimationError(e)` from `@sodax/sdk` instead of `instanceof SodaxError` in dapp/app code (bundle-safe).
 
-### Per-method error code unions
+### Per-method error type unions
 
-| Method | Codes |
-|---|---|
-| `supply` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `UNKNOWN` |
-| `borrow` | same shape, `OrchestrationErrorCode` with `context.action: 'borrow'` |
-| `withdraw` | same shape, `OrchestrationErrorCode` with `context.action: 'withdraw'` |
-| `repay` | same shape, `OrchestrationErrorCode` with `context.action: 'repay'` |
-| `createSupplyIntent` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
-| `createBorrowIntent` / `createWithdrawIntent` / `createRepayIntent` | same, per-op intent-creation code |
-| `approve` | `VALIDATION_FAILED`, `APPROVE_FAILED`, `UNKNOWN` |
-| `isAllowanceValid` | `VALIDATION_FAILED`, `ALLOWANCE_CHECK_FAILED`, `UNKNOWN` |
-| `estimateGas` | `VALIDATION_FAILED`, `GAS_ESTIMATION_FAILED`, `UNKNOWN` |
+The 4 orchestrators (`supply`/`borrow`/`withdraw`/`repay`) share **one** type — `MoneyMarketOrchestrationError`. They are not partitioned at the type level; instead, discriminate operations at runtime via `error.context.action`. Similarly, the 4 `create*Intent` methods share `MoneyMarketCreateIntentError`.
 
-Each method's narrow type alias is exported (`SupplyError`, `BorrowError`, `CreateSupplyIntentError`, etc.) along with a matching `is<Op>Error` type guard.
+| Method | Error type | Codes |
+|---|---|---|
+| `supply` / `borrow` / `withdraw` / `repay` | `MoneyMarketOrchestrationError` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `UNKNOWN` |
+| `createSupplyIntent` / `createBorrowIntent` / `createWithdrawIntent` / `createRepayIntent` | `MoneyMarketCreateIntentError` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
+| `approve` | `MoneyMarketApproveError` | `VALIDATION_FAILED`, `APPROVE_FAILED`, `UNKNOWN` |
+| `isAllowanceValid` | `MoneyMarketAllowanceCheckError` | `VALIDATION_FAILED`, `ALLOWANCE_CHECK_FAILED`, `UNKNOWN` |
+| `estimateGas` | `MoneyMarketGasEstimationError` | `VALIDATION_FAILED`, `GAS_ESTIMATION_FAILED`, `UNKNOWN` |
+
+Use `error.context.action` (`'supply' | 'borrow' | 'withdraw' | 'repay'`) to discriminate which orchestrator surfaced the error.
 
 ### Standard `context` fields
 
@@ -619,7 +617,7 @@ Each method's narrow type alias is exported (`SupplyError`, `BorrowError`, `Crea
 ### Discrimination example
 
 ```typescript
-import { isMoneyMarketError, isSupplyError } from '@sodax/sdk';
+import { isMoneyMarketOrchestrationError } from '@sodax/sdk';
 
 const result = await sodax.moneyMarket.supply({
   params: supplyParams,
@@ -627,7 +625,8 @@ const result = await sodax.moneyMarket.supply({
 });
 
 if (!result.ok) {
-  // result.error is SupplyError = SodaxError<SupplyErrorCode>
+  // result.error is MoneyMarketOrchestrationError = SodaxError<MoneyMarketOrchestrationErrorCode>
+  // with context.action === 'supply'
   switch (result.error.code) {
     case 'VALIDATION_FAILED':
       // Bad input — error.message is human-readable; error.context.field tells you which.
@@ -722,7 +721,7 @@ If you were on the previous CODE-string-on-`error.message` pattern (or the older
 | `error.message === 'CREATE_SUPPLY_INTENT_FAILED'` | `error.code === 'INTENT_CREATION_FAILED'` |
 | `error.message === 'CREATE_BORROW_INTENT_FAILED'` etc. | `error.code === 'INTENT_CREATION_FAILED'` etc. |
 | `error.message === 'SUPPLY_UNKNOWN_ERROR'` etc. | `error.code === 'EXECUTION_FAILED'` etc. (with cause) |
-| `isMoneyMarketSubmitTxFailedError(e)` | `e.code === 'TX_SUBMIT_FAILED'` (after `isSupplyError(e)` etc.) |
+| `isMoneyMarketSubmitTxFailedError(e)` | `e.code === 'TX_SUBMIT_FAILED'` (after `isMoneyMarketOrchestrationError(e)` and `e.context?.action === 'supply'`) |
 | Prose `error.message` for invariants | `error.code === 'VALIDATION_FAILED'`; the prose stays on `error.message` |
 | `error.data.payload` (historical) | **Not preserved.** Capture input params before calling if you need them for retry; this is the one departure from the historical published guidance. |
 
@@ -733,7 +732,7 @@ If you were on the previous CODE-string-on-`error.message` pattern (or the older
 3. **Discriminate `RELAY_FAILED` via `context.relayCode`**. `'RELAY_POLLING_FAILED'` (polling outage — packet status unknown) needs different UX from generic `'UNKNOWN'`.
 4. **Use `error.cause` for forensics**. Every wrapped error preserves the original on `cause`. Loggers walk it automatically.
 5. **Use `JSON.stringify(error)` for logging**. The `toJSON()` method handles bigint coercion + cause-chain truncation safely.
-6. **Type-guard, don't `as`-cast**. Use `is<Op>Error(error)` to narrow; an `as <Op>Error` cast after a generic `isSodaxError` check would silently widen the contract.
+6. **Type-guard, don't `as`-cast**. Use the narrow guards (`isMoneyMarketOrchestrationError`, `isMoneyMarketCreateIntentError`, etc.) to narrow; an `as MoneyMarketOrchestrationError` cast after a generic `isSodaxError` check would silently widen the contract.
 
 ## Data Retrieval and Formatting
 

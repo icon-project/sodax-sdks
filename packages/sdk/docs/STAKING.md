@@ -1,6 +1,6 @@
 # Staking Documentation
 
-> **Error handling conventions:** This module uses the **relay-layer contract** — discriminate on `error.message === 'RELAY_TIMEOUT'` / `'SUBMIT_TX_FAILED'` (also exported as `RELAY_ERROR_CODES` from `@sodax/sdk`). The **swap module** uses a different convention (`SodaxError<SwapErrorCode>` — see [SWAPS.md](./SWAPS.md) Error Handling). Both conventions coexist during the swap-first migration; the legacy pattern documented below is unchanged for Staking.
+> **Error handling conventions:** This module returns `Result<T, SodaxError<NarrowCode>>` from every async public method. Discriminate on `error.code` (a closed reason-only union) and `error.feature === 'staking'`. See [Error Handling](#error-handling) below.
 
 The `StakingService` class, reachable through `sodax.staking`, provides functionality for staking SODA tokens,
 unstaking, claiming rewards, and retrieving staking information. It supports operations across all spoke chains
@@ -349,10 +349,11 @@ const result = await sodax.staking.createInstantUnstakeIntent({
 
 ### claim
 
-Claims SODA from a fully-elapsed unstake request, relays the intent to the hub, and waits for confirmation.
+Claims SODA from an unstake request, relays the intent to the hub, and waits for confirmation.
 
-Requires the unstaking period to have passed. Use `getUnstakingInfoWithPenalty` first to preview the
-claimable amount when the period may not have fully elapsed.
+Can be invoked before the unstaking period has fully elapsed, in which case the claim incurs a linear
+penalty against the claimable amount. Use `getUnstakingInfoWithPenalty` first to preview the exact
+claimable amount given the current penalty.
 
 **Signature:**
 ```typescript
@@ -805,11 +806,11 @@ is preserved on `error.cause`; structured metadata (chain, action, phase, relayC
 `error.context`.
 
 ```typescript
-import { isStakeError, type StakeError } from '@sodax/sdk';
+import { isStakeOrchestrationError, type StakeOrchestrationError } from '@sodax/sdk';
 
 const result = await sodax.staking.stake({ /* params */ });
 if (!result.ok) {
-  // result.error is typed as `StakeError = SodaxError<StakeErrorCode>`
+  // result.error is typed as `StakeOrchestrationError = SodaxError<StakeOrchestrationErrorCode>`
   switch (result.error.code) {
     case 'VALIDATION_FAILED':       // precondition tripped (see context.field)
     case 'INTENT_CREATION_FAILED':
@@ -839,8 +840,9 @@ if (!result.ok) {
 | `isAllowanceValid` | `VALIDATION_FAILED`, `ALLOWANCE_CHECK_FAILED`, `UNKNOWN` |
 | `getStakingInfo*` / `getUnstakingInfo*` / `getStakingConfig` / `getInstantUnstakeRatio` / `getConvertedAssets` / `getStakeRatio` | `VALIDATION_FAILED`, `LOOKUP_FAILED`, `UNKNOWN` |
 
-Note: `TX_VERIFICATION_FAILED` only appears in `StakeErrorCode` because `stake` is the only orchestrator
-that calls `spoke.verifyTxHash`.
+Note: `TX_VERIFICATION_FAILED` only appears in `StakeOrchestrationErrorCode` because `stake` is the
+only orchestrator that calls `spoke.verifyTxHash`. The 4 non-stake orchestrators
+(`unstake`/`instantUnstake`/`claim`/`cancelUnstake`) share `StakingOrchestrationErrorCode`.
 
 ### Structured `context`
 
@@ -861,21 +863,23 @@ Per-method type guards are runtime-checked and compile-checked in lockstep with 
 them in `catch` blocks to short-circuit when a foreign code escapes:
 
 ```typescript
-import { isStakeError, isStakingError } from '@sodax/sdk';
+import { isStakeOrchestrationError, isStakingError } from '@sodax/sdk';
 
 try {
   // ... call sodax.staking.stake ...
 } catch (e) {
-  if (isStakeError(e)) console.error('typed stake error:', e.code, e.context);
+  if (isStakeOrchestrationError(e)) console.error('typed stake error:', e.code, e.context);
   else if (isStakingError(e)) console.error('staking error from another method:', e.code);
   else throw e; // not a staking error — bubble up
 }
 ```
 
-Available guards: `isStakingError` (broad), `isStakeError` / `isUnstakeError` / `isInstantUnstakeError` /
-`isClaimError` / `isCancelUnstakeError`, `isCreateStakeIntentError` / `isCreateUnstakeIntentError` /
-`isCreateInstantUnstakeIntentError` / `isCreateClaimIntentError` / `isCreateCancelUnstakeIntentError`,
-`isStakingApproveError`, `isStakingAllowanceCheckError`, `isStakingInfoFetchError`.
+Available guards: `isStakingError` (broad — any staking error), `isStakeOrchestrationError` (the
+`stake` orchestrator only, the one path with `TX_VERIFICATION_FAILED`), `isStakingOrchestrationError`
+(the 4 non-stake orchestrators), `isStakingCreateIntentError` (shared by all 5 `create*Intent`
+methods), `isStakingApproveError`, `isStakingAllowanceCheckError`, `isStakingInfoFetchError`.
+Per-operation discrimination across the orchestrators is via `error.context.action` (one of
+`'stake' | 'unstake' | 'instantUnstake' | 'claim' | 'cancelUnstake'`).
 
 ### Validation invariant
 

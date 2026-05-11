@@ -18,7 +18,7 @@ Read-only data hooks. No wallet connection required.
 
 | Hook | Purpose |
 |------|---------|
-| `useBackendOrderbook` | Solver orderbook with pagination (polls 30s) |
+| `useBackendOrderbook` | Solver orderbook with pagination (cached 30s, no auto-refetch) |
 
 ### Money Market
 
@@ -153,5 +153,5 @@ function SubmitButton({ swapPayload, baseURL }) {
 | Hook | Interval |
 |------|---------|
 | `useBackendIntentByTxHash` | 1s |
-| `useBackendOrderbook` | 30s |
+| `useBackendOrderbook` | none (`staleTime: 30s`, no auto-refetch) |
 | Others | No auto-refresh |

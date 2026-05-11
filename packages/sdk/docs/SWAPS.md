@@ -191,6 +191,7 @@ function isSodaxError(e: unknown): e is SodaxError;
   dstChainKey?: SpokeChainKey;
   phase?: 'validate' | 'createIntent' | 'verify' | 'submit' | 'relay' | 'postExecution';
   // Only on EXTERNAL_API_ERROR:
+  api?: 'solver';                // discriminator for upstream API errors (used as Sentry/Datadog tag)
   solverCode?: SolverIntentErrorCode;
   solverDetail?: SolverErrorResponse['detail'];
   // Only on RELAY_TIMEOUT / TX_SUBMIT_FAILED / RELAY_FAILED:
@@ -560,8 +561,7 @@ const swapResult = await sodax.swaps.swap({
     data: '0x',
   },
   walletProvider: evmWalletProvider,
-  fee: undefined,          // optional — uses the configured partner fee if omitted
-  timeout: 60_000,         // optional — relay timeout in ms (default: 60 s)
+  timeout: 120_000,        // optional — relay timeout in ms (default: DEFAULT_RELAY_TX_TIMEOUT = 120 s)
   skipSimulation: false,   // optional — skip spoke tx simulation (default: false)
 });
 
@@ -587,7 +587,6 @@ Use `createIntent` when you need raw transaction data or want to control the rel
 const createIntentResult = await sodax.swaps.createIntent({
   params: createIntentParams, // CreateIntentParams<typeof ChainKeys.BSC_MAINNET>
   walletProvider: evmWalletProvider,
-  fee: undefined,     // optional
   skipSimulation: false, // optional
 });
 
@@ -704,6 +703,8 @@ if (cancelResult.ok) {
 }
 ```
 
+> **Error-type note:** `cancelIntent` and `cancelLimitOrder` return `Result<TxHashPair, Error | unknown>` — they were **not** migrated to the `SodaxError<C>` family. Don't `switch` on `error.code` here; treat the error as an opaque `Error` and use `instanceof Error` / `error.message` for diagnostics. The rest of this module (swap, createIntent, postExecution, createLimitOrder, createLimitOrderIntent) uses `SodaxError<SwapErrorCode>` — see [Error Handling](#error-handling).
+
 ### Build Cancel Intent (raw or signed — no relay wait)
 
 Use `createCancelIntent` when you need only the cancel transaction (e.g. for gas estimation or manual relay):
@@ -716,7 +717,9 @@ const rawCancelResult = await sodax.swaps.createCancelIntent({
 });
 
 if (rawCancelResult.ok) {
-  const rawTx = rawCancelResult.value; // EvmRawTransaction
+  // rawTx is the chain-specific raw transaction (EvmRawTransaction for EVM chains,
+  // SolanaRawTransaction for Solana, etc.) — TypeScript narrows it from `srcChainKey`.
+  const rawTx = rawCancelResult.value;
 }
 ```
 
@@ -959,7 +962,9 @@ if (!swapResult.ok) {
       break;
 
     case 'RELAY_FAILED':
-      // Other relay failure. error.context.relayCode === 'UNKNOWN'.
+      // Other relay failure. error.context.relayCode disambiguates:
+      //   'RELAY_POLLING_FAILED' — polling endpoint outage; query the hub directly.
+      //   'UNKNOWN'              — forward-compat fallback for new relay error codes.
       break;
 
     case 'TX_VERIFICATION_FAILED':

@@ -102,7 +102,7 @@ Note: the request param is still `xChainId` (not renamed to `chainKey`). This is
 ## Pitfalls
 
 1. **`useBackendIntentByTxHash` polls every 1s while pending** — same as v1, but make sure your `queryOptions.refetchInterval` overrides if needed.
-2. **`useBackendOrderbook` polls every 30s** — set to `false` if not visible.
+2. **`useBackendOrderbook` does NOT auto-refetch** — it has `staleTime: 30s` only, so data stays fresh for 30s after a fetch but won't refresh on its own. Trigger a refetch manually or pass `refetchInterval` via `queryOptions` if you need polling.
 3. **`useXBalances` uses `xChainId` (not `chainKey`)** — request-side field name retained on this hook.
 4. **`useBackendSubmitSwapTx` config moved to per-call.** v1 may have had `baseURL` at hook init; v2 puts it in `mutate(vars).apiConfig`. Lets you have a single hook serve multiple backends if needed.
 

@@ -115,7 +115,7 @@ wallet-providers/
 ├── injective/                 # InjectiveWalletProvider + types
 ├── stellar/                   # StellarWalletProvider + types
 ├── stacks/                    # StacksWalletProvider + types
-├── bitcoin/                   # BTCWalletProvider + types
+├── bitcoin/                   # BitcoinWalletProvider + types
 └── near/                      # NearWalletProvider + types
 ```
 
@@ -192,7 +192,7 @@ All config types include an optional `defaults` field for per-method behavioral 
 | Injective | `InjectiveWalletProvider` | @injectivelabs/sdk-ts | `'INJECTIVE'` |
 | Stellar | `StellarWalletProvider` | @stellar/stellar-sdk | `'STELLAR'` |
 | Stacks | `StacksWalletProvider` | @stacks/transactions | `'STACKS'` |
-| Bitcoin | `BTCWalletProvider` | bitcoinjs-lib (PSBT) | `'BITCOIN'` |
+| Bitcoin | `BitcoinWalletProvider` | bitcoinjs-lib (PSBT) | `'BITCOIN'` |
 | NEAR | `NearWalletProvider` | near-api-js | `'NEAR'` |
 
 ---
@@ -284,6 +284,8 @@ new IconWalletProvider({
 
 `IconWalletDefaults` accepts: `stepLimit`, `version`, `timestampProvider`, `jsonRpcId`.
 
+> **Note:** `rpcUrl` is typed as `` `http${string}` `` (template literal), not a bare `string`. EVM and Injective `rpcUrl` fields have the same constraint. If you pass a `string` from an environment variable, either narrow it explicitly (e.g. `process.env.RPC_URL as \`http${string}\``) or validate at the boundary.
+
 ### Injective (`InjectiveWalletProvider`)
 
 ```ts
@@ -310,7 +312,7 @@ new InjectiveWalletProvider({
 // Private-key mode (explicit `type` field)
 new StellarWalletProvider({
   type: 'PRIVATE_KEY',
-  privateKey: '0x…',
+  privateKey: 'S…',                // Stellar secret key (S-prefixed), typed as `Hex` string alias
   network: 'PUBLIC',               // or 'TESTNET'
   rpcUrl?: 'https://…',
   defaults?: StellarWalletDefaults,
@@ -349,11 +351,11 @@ new StacksWalletProvider({
 
 `StacksWalletDefaults` accepts: `network` (`'mainnet'` | `'testnet'`), `postConditionMode`.
 
-### Bitcoin (`BTCWalletProvider`)
+### Bitcoin (`BitcoinWalletProvider`)
 
 ```ts
 // Private-key mode (explicit `type` field)
-new BTCWalletProvider({
+new BitcoinWalletProvider({
   type: 'PRIVATE_KEY',
   privateKey: '0x…',
   network: 'MAINNET',            // or 'TESTNET'
@@ -362,7 +364,7 @@ new BTCWalletProvider({
 });
 
 // Browser-extension mode
-new BTCWalletProvider({
+new BitcoinWalletProvider({
   type: 'BROWSER_EXTENSION',
   walletsKit: bitcoinWalletsKit,  // BitcoinWalletsKit interface
   network: 'MAINNET',
@@ -443,6 +445,9 @@ import { ChainKeys } from '@sodax/sdk';
       [ChainKeys.ARBITRUM_MAINNET]: { rpcUrl: 'https://…' },
       [ChainKeys.BASE_MAINNET]:     { rpcUrl: 'https://…' },
     },
+    // EVM adapter also supports:
+    walletConnect: { projectId: 'YOUR_WC_PROJECT_ID' }, // enables WalletConnect-based wallets (Fireblocks, Ledger Live, etc.)
+    ssr: true, // safe SSR hydration when rendering in Next.js
   },
   SOLANA: { chains: { [ChainKeys.SOLANA_MAINNET]: { rpcUrl: 'https://…' } } },
   BITCOIN: {},   // mount with SDK defaults
