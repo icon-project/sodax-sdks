@@ -308,7 +308,7 @@ export class SolanaSpokeService {
     while (Date.now() < deadline) {
       try {
         const tx = await this.connection.getTransaction(txHash, {
-          commitment: 'finalized',
+          commitment: 'confirmed',
           maxSupportedTransactionVersion: 0,
         });
         if (tx) {
@@ -327,7 +327,7 @@ export class SolanaSpokeService {
       ok: true,
       value: {
         status: 'timeout',
-        error: new Error(`Timed out after ${maxTimeoutMs}ms waiting for finalized confirmation for ${txHash}`),
+        error: new Error(`Timed out after ${maxTimeoutMs}ms waiting for confirmation for ${txHash}`),
       },
     };
   }
