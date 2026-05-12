@@ -28,9 +28,9 @@
     }
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
-  "files": ["dist"],
+  "files": ["dist", "ai-exported"],
   "scripts": {
     "build": "tsup",
     "test": "vitest run --exclude ./src/tests/e2e",
