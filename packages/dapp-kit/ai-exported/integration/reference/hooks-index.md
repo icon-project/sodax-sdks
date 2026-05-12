@@ -1,6 +1,6 @@
 # Hooks index — `@sodax/dapp-kit` v2
 
-Comprehensive hook table. ~95 hooks across 11 feature domains. Use this when you know the feature you're building but don't remember the exact hook name.
+Comprehensive hook table across 11 feature domains. Use this when you know the feature you're building but don't remember the exact hook name.
 
 ## Provider + context
 
@@ -11,7 +11,7 @@ Comprehensive hook table. ~95 hooks across 11 feature domains. Use this when you
 | `useSodaxContext` | Utility | Access the `Sodax` SDK instance |
 | `useHubProvider` | Utility | Hub chain (Sonic) provider |
 
-## Swap (8)
+## Swap
 
 | Hook | Type | Purpose |
 |---|---|---|
@@ -24,7 +24,7 @@ Comprehensive hook table. ~95 hooks across 11 feature domains. Use this when you
 | `useCreateLimitOrder` | Mutation | Create a limit order (no deadline) |
 | `useCancelLimitOrder` | Mutation | Cancel a limit order |
 
-## Money market (13)
+## Money market
 
 | Hook | Type | Purpose |
 |---|---|---|
@@ -43,7 +43,7 @@ Comprehensive hook table. ~95 hooks across 11 feature domains. Use this when you
 | `useAToken` | Query | aToken metadata |
 | `useATokensBalances` | Query | aToken balances |
 
-## Bridge (5)
+## Bridge
 
 | Hook | Type | Purpose |
 |---|---|---|
@@ -53,7 +53,7 @@ Comprehensive hook table. ~95 hooks across 11 feature domains. Use this when you
 | `useGetBridgeableAmount` | Query | Max bridgeable amount between two `XToken`s |
 | `useGetBridgeableTokens` | Query | Tokens bridgeable to a destination chain |
 
-## Staking (~18)
+## Staking
 
 | Hook | Type | Purpose |
 |---|---|---|
@@ -76,7 +76,7 @@ Comprehensive hook table. ~95 hooks across 11 feature domains. Use this when you
 | `useInstantUnstakeRatio` | Query | Instant unstake rate |
 | `useConvertedAssets` | Query | xSODA → SODA conversion |
 
-## DEX (~13)
+## DEX
 
 | Hook | Type | Purpose |
 |---|---|---|
@@ -97,7 +97,7 @@ Comprehensive hook table. ~95 hooks across 11 feature domains. Use this when you
 | `useCreateSupplyLiquidityParams` | Param builder | Build tick-range + liquidity params |
 | `useCreateDecreaseLiquidityParams` | Param builder | Build decrease params from position state |
 
-## Migration (6)
+## Migration
 
 | Hook | Type | Purpose |
 |---|---|---|
@@ -108,7 +108,7 @@ Comprehensive hook table. ~95 hooks across 11 feature domains. Use this when you
 | `useMigrationApprove` | Mutation | Approve before migration (action-discriminated) |
 | `useMigrationAllowance` | Query | Approval check (action-discriminated) |
 
-## Bitcoin / Radfi (~8)
+## Bitcoin / Radfi
 
 | Hook | Type | Purpose |
 |---|---|---|
@@ -122,7 +122,7 @@ Comprehensive hook table. ~95 hooks across 11 feature domains. Use this when you
 | `useExpiredUtxos` | Query | Expired UTXOs (polls 60s) |
 | `useRenewUtxos` | Mutation | Renew expired UTXOs |
 
-## Backend queries (~13)
+## Backend queries
 
 ### Intents
 
@@ -151,7 +151,7 @@ Comprehensive hook table. ~95 hooks across 11 feature domains. Use this when you
 | `useBackendMoneyMarketAssetBorrowers` | Borrowers for an asset |
 | `useBackendAllMoneyMarketBorrowers` | All borrowers |
 
-## Partner (6)
+## Partner
 
 | Hook | Type | Purpose |
 |---|---|---|
@@ -162,14 +162,14 @@ Comprehensive hook table. ~95 hooks across 11 feature domains. Use this when you
 | `useSetSwapPreference` | Mutation | Set swap preference |
 | `useFeeClaimSwap` | Mutation | Claim partner fees via swap |
 
-## Recovery (2)
+## Recovery
 
 | Hook | Type | Purpose |
 |---|---|---|
 | `useHubAssetBalances` | Query | Hub asset balances |
 | `useWithdrawHubAsset` | Mutation | Withdraw hub asset |
 
-## Shared (~9)
+## Shared
 
 | Hook | Type | Purpose |
 |---|---|---|
@@ -182,10 +182,6 @@ Comprehensive hook table. ~95 hooks across 11 feature domains. Use this when you
 | `useSafeMutation` | Internal | The wrapper every mutation hook calls |
 | `unwrapResult` | Internal | `Result<T>` → throw / return |
 | `toResult` | Internal | `Promise<T>` → `Result<T>` |
-
-## Total
-
-41 mutations + ~50 queries + utilities + provider = **~95 hooks**.
 
 ## Cross-references
 

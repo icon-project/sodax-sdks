@@ -1,6 +1,11 @@
-# Deleted exports inventory
+# Deleted / replaced exports inventory
 
-Every v1 export removed from `@sodax/sdk` and `@sodax/types`, with its v2 replacement. If you see `error TS2305: Module '"@sodax/sdk"' has no exported member '<X>'`, find `<X>` in the left column.
+Every v1 export that's gone, replaced, or repurposed in v2 — and its v2 successor. If you see `error TS2305: Module '"@sodax/sdk"' has no exported member '<X>'`, find `<X>` in the left column.
+
+Three categories worth distinguishing:
+- **Truly deleted** — the v1 symbol is gone; an import will fail compile (`TS2305`).
+- **Name preserved, shape replaced** — a v1 `import` still compiles, but the runtime shape changed. Silent breakage if you read v1-only fields.
+- **Legacy still exported** — the v1 symbol is still re-exported through `@sodax/sdk`. Prefer the v2 service-API replacement for new code.
 
 ### Spoke-provider classes + guards
 
@@ -24,11 +29,18 @@ Every v1 export removed from `@sodax/sdk` and `@sodax/types`, with its v2 replac
 | v1 export | v2 replacement |
 |---|---|
 | `hubAssets` | `XToken.vault` / `XToken.hubAsset` baked in; or `sodax.config.getOriginalAssetAddress(...)`. See [`../breaking-changes/architecture.md`](../breaking-changes/architecture.md) § 2. |
-| `moneyMarketSupportedTokens` | `sodax.moneyMarket.getSupportedTokensByChainId(chainKey)` / `getSupportedTokens()`. |
-| `solverSupportedTokens` | `sodax.config.getSupportedSwapTokensByChainId(chainKey)`. |
-| `SodaTokens` | `sodax.config.getMoneyMarketReserveAssets()` / `sodax.moneyMarket.getSupportedReserves()`. |
-| `getHubChainConfig()` | `sodax.config.*` lookups; specific chain configs are loaded by `ConfigService.initialize()`. |
+| `getHubChainConfig()` (free function) | `sodax.config.getHubChainConfig()` (now a method on `ConfigService`, accessed via the `Sodax` instance). |
 | `EvmWalletAbstraction` (class) | `sodax.hubProvider.getUserHubWalletAddress(...)` (the equivalent functionality lives on `EvmHubProvider`, accessed via the `Sodax` instance). |
+
+### Legacy constants — still exported, prefer service API
+
+These names still ship through `@sodax/sdk` (re-exported from `@sodax/types`), so a v1 `import { ... } from '@sodax/sdk'` will not break. New code should use the dynamic `sodax.config.*` / `sodax.moneyMarket.*` lookups instead, since the static tables are frozen snapshots that miss runtime config updates from the backend.
+
+| v1 export | v2 status | Preferred v2 API |
+|---|---|---|
+| `moneyMarketSupportedTokens` | Still exported (`packages/types/src/moneyMarket/moneyMarket.ts`) | `sodax.moneyMarket.getSupportedTokensByChainId(chainKey)` / `getSupportedTokens()`. |
+| `swapSupportedTokens` (v1 had no `solverSupportedTokens`) | Still exported (`packages/types/src/swap/swap.ts`) | `sodax.config.getSupportedSwapTokensByChainId(chainKey)`. |
+| `SodaTokens` | Still exported (`packages/types/src/chains/tokens.ts`) | `sodax.config.getMoneyMarketReserveAssets()` / `sodax.moneyMarket.getSupportedReserves()`. |
 
 ### Type aliases
 
@@ -39,9 +51,10 @@ Every v1 export removed from `@sodax/sdk` and `@sodax/types`, with its v2 replac
 | `EvmChainId` (type) | `EvmChainKey` (subset of `SpokeChainKey`). |
 | `HubChainId` (type) | `HubChainKey` (literal `'sonic'`). |
 | `Token` (type) | `XToken`. See [`../breaking-changes/type-system.md`](../breaking-changes/type-system.md) § 4. |
-| `AddressType` (type) | `BtcAddressType`. See [`../breaking-changes/type-system.md`](../breaking-changes/type-system.md) § 7. |
-| `BtcWalletAddressType` (type) | `BtcAddressType` (cleaned-up name). |
+| `AddressType` (type — `'P2PKH' \| 'P2SH' \| 'P2WPKH' \| 'P2TR'`) | `BtcAddressType` (renamed; same shape). See [`../breaking-changes/type-system.md`](../breaking-changes/type-system.md) § 7. |
 | `Payload` (type) | None — internal `IntentRelayApiService` shape that v1 leaked publicly. Consumers calling the relay layer directly should use `relayTxAndWaitPacket` / `submitTransaction` (which take typed inputs). |
+
+> Note: `BtcWalletAddressType` (`'taproot' | 'segwit'`, wallet-UI choice) is preserved in v2 with the same shape — it is **not** the same thing as `BtcAddressType` (on-chain address format). They coexist; do not blindly rename one to the other.
 
 ### Constants
 
@@ -57,20 +70,41 @@ Every v1 export removed from `@sodax/sdk` and `@sodax/types`, with its v2 replac
 
 ### Error types and guards
 
+#### Error types — name preserved, shape replaced
+
+The following v1 error types were **plain object literals** `{ code: T; data: GetXxxError<T> }`. v2 keeps the same export names but redefines them as type aliases for the canonical `SodaxError<NarrowCode>` class instance. **A v1 `import { MoneyMarketError } from '@sodax/sdk'` still compiles** — but reading `err.data` will silently fail at runtime because the v2 shape is `{ name, code, feature, message, stack, context, cause }`. Treat these as "shape replaced" rather than deleted.
+
+| v1 shape | v2 shape | What to read |
+|---|---|---|
+| `MoneyMarketError<MoneyMarketErrorCode> = { code, data }` | `MoneyMarketError = SodaxError<MoneyMarketErrorCode>` (class instance) | `err.code`, `err.feature === 'moneyMarket'`, `err.context`, `err.cause`. See [`error-code-crosswalk.md`](error-code-crosswalk.md) for code crosswalk. |
+| `BridgeError<BridgeErrorCode> = { code, data }` | `BridgeError = SodaxError<BridgeErrorCode>` | Same pattern; `err.feature === 'bridge'`. |
+| `StakingError<StakingErrorCode> = { code, data }` | `StakingError = SodaxError<StakingErrorCode>` | Same pattern; `err.feature === 'staking'`. |
+| `MigrationError<MigrationErrorCode> = { code, data }` | `MigrationError = SodaxError<MigrationErrorCode>` | Same pattern; `err.feature === 'migration'`. |
+
+#### Error types — fully deleted
+
 | v1 export | v2 replacement |
 |---|---|
-| `MoneyMarketError<MoneyMarketErrorCode>`, plus `MoneyMarketErrorCode` | `SodaxError<C>` with `feature: 'moneyMarket'`. See [`error-code-crosswalk.md`](error-code-crosswalk.md) for code crosswalk. |
-| `IntentError<IntentErrorCode>`, plus the union | `SodaxError<C>` with `feature: 'swap'`. |
-| `StakingError<StakingErrorCode>`, plus the union | `SodaxError<C>` with `feature: 'staking'`. |
-| `BridgeError<BridgeErrorCode>`, plus the union | `SodaxError<C>` with `feature: 'bridge'`. |
-| `MigrationError<MigrationErrorCode>`, plus the union | `SodaxError<C>` with `feature: 'migration'`. |
-| `AssetServiceError<AssetServiceErrorCode>`, plus the union | `SodaxError<C>` with `feature: 'dex'`. |
-| `ConcentratedLiquidityError<ConcentratedLiquidityErrorCode>`, plus the union | `SodaxError<C>` with `feature: 'dex'`. |
-| `RelayError<RelayErrorCode>`, plus the union | `SodaxError<C>` with relay code on `error.context.relayCode`. |
-| `PartnerFeeClaimError<...>` (5 partner errors) | `SodaxError<C>` with `feature: 'partner'`. |
-| `isMoneyMarketError`, `isIntentError`, `isStakingError`, `isBridgeError`, `isMigrationError`, `isAssetServiceError`, `isConcentratedLiquidityError`, `isRelayError` (type-guards) | `isSodaxError(e)` + check `e.feature === '<feature>'`, or use `isFeatureError('<feature>')` to build a guard. See [`../breaking-changes/result-and-errors.md`](../breaking-changes/result-and-errors.md) § 6 for migration patterns. |
-| `isIntentPostExecutionFailedError(e)` | `isSodaxError(e) && e.feature === 'swap' && e.code === 'EXECUTION_FAILED' && e.context?.phase === 'postExecution'`. |
+| `IntentError<IntentErrorCode>`, plus `IntentErrorCode`, `IntentErrorData` | `SwapError = SodaxError<SwapErrorCode>` (renamed). `feature: 'swap'`. |
+| `AssetServiceError<AssetServiceErrorCode>`, plus the union | `DexError = SodaxError<DexErrorCode>`. `feature: 'dex'`. |
+| `ConcentratedLiquidityError<ConcentratedLiquidityErrorCode>`, plus the union | `DexError = SodaxError<DexErrorCode>` (asset + CL collapsed into one feature). |
+| `RelayError<RelayErrorCode>`, plus the union | `SodaxError<C>` with the lower-level relay code on `error.context.relayCode`. |
+| `SetSwapPreferenceError`, `CreateIntentAutoSwapError`, `WaitIntentAutoSwapError`, `UnknownIntentAutoSwapError`, `ExecuteIntentAutoSwapError` (5 distinct partner error types in `PartnerFeeClaimService.ts`) | `PartnerError = SodaxError<PartnerErrorCode>`. `feature: 'partner'`. |
+
+#### Type guards — deleted
+
+v1 only exposed **specific per-failure-mode guards**. v2 deleted all of these and instead ships **feature-level guards** + helper builders (`isFeatureError('<feature>')`, `isCodeMember(codeSet)`).
+
+| v1 deleted guard | v2 replacement |
+|---|---|
+| `isIntentCreationFailedError(e)` | `isSwapCreateIntentError(e)` or `isSodaxError(e) && e.code === 'INTENT_CREATION_FAILED' && e.feature === 'swap'`. |
 | `isIntentSubmitTxFailedError(e)` | `isSodaxError(e) && e.code === 'TX_SUBMIT_FAILED'`. |
+| `isIntentPostExecutionFailedError(e)` | `isSodaxError(e) && e.feature === 'swap' && e.code === 'EXECUTION_FAILED' && e.context?.phase === 'postExecution'`. |
+| `isIntentCreationUnknownError(e)` | `isSodaxError(e) && e.code === 'UNKNOWN' && e.feature === 'swap'`. |
+| `isMoneyMarketSubmitTxFailedError`, `isMoneyMarketRelayTimeoutError`, `isMoneyMarketCreate{Supply,Borrow,Withdraw,Repay}IntentFailedError`, `isMoneyMarket{Supply,Borrow,Withdraw,Repay}UnknownError` (10 specific guards) | `isMoneyMarketError(e)` (new in v2) for the feature-level check, then narrow on `e.code` / `e.context.action`. |
+| `isCreateIntentAutoSwapError`, `isWaitIntentAutoSwapError`, `isUnknownIntentAutoSwapError`, `isSetSwapPreferenceError` (4 partner guards) | `isPartnerError(e)` (new in v2) for the feature-level check, then narrow on `e.code` / `e.context.action`. |
+
+> Note: `isMoneyMarketError`, `isBridgeError`, `isStakingError`, `isMigrationError`, `isSwapError`, `isDexError`, `isPartnerError`, `isRecoveryError` did **not** exist in v1 — v2 added them as new feature-level guards alongside `isSodaxError` and the `isFeatureError('<feature>')` factory. See [`../breaking-changes/result-and-errors.md`](../breaking-changes/result-and-errors.md) § 6 for migration patterns.
 
 ### Per-feature param shape
 

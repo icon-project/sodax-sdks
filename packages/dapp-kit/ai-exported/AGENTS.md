@@ -4,7 +4,7 @@
 
 ## Project
 
-`@sodax/dapp-kit` is a React hooks library that wraps `@sodax/sdk` with React Query. It provides ~95 hooks across 11 feature domains (swap, money market, staking, bridge, dex, migration, partner, recovery, bitcoin/Radfi, backend queries, shared) for consumer dApps. It is **React-only** — Node.js scripts and backend services use `@sodax/sdk` directly.
+`@sodax/dapp-kit` is a React hooks library that wraps `@sodax/sdk` with React Query. It provides hooks across 11 feature domains (swap, money market, staking, bridge, dex, migration, partner, recovery, bitcoin/Radfi, backend queries, shared) for consumer dApps. It is **React-only** — Node.js scripts and backend services use `@sodax/sdk` directly.
 
 This package is **v2**. v2 was a deep canonicalization pass over v1's hook shapes — single-object params, mandatory `mutateAsyncSafe`, hook-owned invalidations, throw-on-`Result.!ok` inside `mutationFn`, canonical queryKey/mutationKey conventions. Plus the entire SDK underneath was reshaped (chain-key-driven routing, `Result<T>` everywhere, `WalletProviderSlot<K, Raw>`). Code written against v1 dapp-kit will not compile against v2.
 
