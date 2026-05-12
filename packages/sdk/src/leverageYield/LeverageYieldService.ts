@@ -149,6 +149,55 @@ export type LeverageYieldDirectWithdrawParams<R extends boolean> = {
   raw?: R;
 };
 
+export type LeverageYieldDirectRedeemParams<R extends boolean> = {
+  vault: Address;
+  /**
+   * Number of vault shares to burn. Use this in preference to the asset-denominated
+   * `withdraw` whenever possible — it bypasses the ERC-4626 `withdraw → previewWithdraw`
+   * round-up that can ask for `balanceOf + 1` shares when the caller passes `maxWithdraw`
+   * exactly.
+   */
+  shares: bigint;
+  receiver: Address;
+  owner: Address;
+  walletProvider: IEvmWalletProvider;
+  raw?: R;
+};
+
+export type LeverageYieldRedeemAllParams<R extends boolean> = {
+  vault: Address;
+  receiver: Address;
+  owner: Address;
+  walletProvider: IEvmWalletProvider;
+  raw?: R;
+};
+
+export type CreateLeverageYieldXRedeemParams<K extends SpokeChainKey = SpokeChainKey> = {
+  /** Hub-side LeverageYieldVault proxy address. */
+  vault: Address;
+  /** User's address on the spoke chain (also drives hub-wallet derivation). */
+  srcAddress: string;
+  /** Spoke chain key — message originates here AND bridged tokens land back here. */
+  srcChainKey: K;
+  /** Spoke-side token to receive on the destination side. */
+  dstToken: string;
+  /**
+   * Number of vault shares to redeem (held by the user's hub wallet). The SDK queries
+   * `vault.previewRedeem(shares)` once at intent-build time to size the unwrap + bridge
+   * steps that follow. Pass the result of {@link LeverageYieldService.getShareBalance}
+   * for a full exit.
+   */
+  shares: bigint;
+  /** Spoke-side recipient. Defaults to `srcAddress`. */
+  recipient?: string;
+};
+
+export type LeverageYieldXRedeemParams<K extends SpokeChainKey, Raw extends boolean> = SpokeExecActionParams<
+  K,
+  Raw,
+  CreateLeverageYieldXRedeemParams<K>
+>;
+
 export type LeverageYieldApproveParams<R extends boolean> = {
   vault: Address;
   /** Amount of the vault's underlying asset to approve. */
@@ -179,12 +228,16 @@ export type LeverageYieldServiceConstructorParams = {
  * `EvmAssetManagerService` — so the leverage-yield-specific surface is small.
  *
  * Methods:
- * - `xdeposit` / `xwithdraw` — full cross-chain orchestration; return `[srcTx, dstTx]`.
- * - `createXDepositIntent` / `createXWithdrawIntent` — spoke-side only; caller drives relay.
- * - `deposit` / `withdraw` / `approve` — Sonic-direct calls for users already holding
- *   the vault's underlying asset (sodaWEETH-style) on the hub.
- * - `getPosition` / `getMaxWithdraw` / `previewDeposit` / `previewWithdraw` — reads.
- * - `listVaults` / `getVault` — registry lookup over `config.leverageYield.vaults`.
+ * - `xdeposit` / `xwithdraw` / `xredeem` — full cross-chain orchestration; return `[srcTx, dstTx]`.
+ *   Prefer `xredeem` (share-denominated) over `xwithdraw` (asset-denominated) for full exits
+ *   to avoid the ERC-4626 `withdraw(maxWithdraw)` round-up edge case.
+ * - `createXDepositIntent` / `createXWithdrawIntent` / `createXRedeemIntent` — spoke-side
+ *   only; caller drives relay.
+ * - `deposit` / `withdraw` / `redeem` / `redeemAll` / `approve` — Sonic-direct calls for
+ *   users already holding the vault's underlying asset (sodaWEETH-style) on the hub.
+ * - `getPosition` / `getMaxWithdraw` / `getShareBalance` / `previewDeposit` / `previewWithdraw`
+ *   / `previewRedeem` — reads.
+ * - `listVaults` / `getVault` / `getVaultByAddress` — registry lookups.
  */
 export class LeverageYieldService {
   public readonly hubProvider: HubProvider;
@@ -633,6 +686,161 @@ export class LeverageYieldService {
     }
   }
 
+  /**
+   * Cross-chain redemption by share count — the rounding-safe sibling of {@link xwithdraw}.
+   *
+   * Burns `shares` of the leverage vault held by the user's hub wallet, unwraps the
+   * resulting Sodax vault tokens, and bridges the underlying asset back to `recipient`
+   * on `srcChainKey`. Returns `[srcTx, dstTx]` once the relay packet is executed.
+   *
+   * The asset amount needed for the unwrap + bridge steps is computed off-chain via
+   * `vault.previewRedeem(shares)` at intent-build time — small drift between query and
+   * execution is possible but rare in practice.
+   */
+  public async xredeem<K extends SpokeChainKey>(
+    _params: LeverageYieldXRedeemParams<K, false>,
+  ): Promise<Result<TxHashPair, LeverageYieldOrchestrationError>> {
+    const { params, timeout } = _params;
+    const baseCtx = { srcChainKey: params.srcChainKey, action: 'xwithdraw' as const };
+    try {
+      const txResult = await this.createXRedeemIntent(_params);
+      if (!txResult.ok) return { ok: false, error: txResult.error };
+
+      const verifyTxHashResult = await this.spoke.verifyTxHash({
+        txHash: txResult.value.tx,
+        chainKey: params.srcChainKey,
+      });
+      if (!verifyTxHashResult.ok) {
+        return { ok: false, error: verifyFailed('leverageYield', verifyTxHashResult.error, baseCtx) };
+      }
+
+      const packetResult = await relayTxAndWaitPacket({
+        srcTxHash: txResult.value.tx,
+        data: txResult.value.relayData,
+        chainKey: params.srcChainKey,
+        relayerApiEndpoint: this.config.relay.relayerApiEndpoint,
+        timeout,
+      });
+      if (!packetResult.ok) {
+        return {
+          ok: false,
+          error: mapRelayFailure(packetResult.error, {
+            feature: 'leverageYield',
+            action: 'xwithdraw',
+            srcChainKey: params.srcChainKey,
+          }),
+        };
+      }
+
+      return {
+        ok: true,
+        value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packetResult.value.dst_tx_hash },
+      };
+    } catch (error) {
+      if (isLeverageYieldOrchestrationError(error)) return { ok: false, error };
+      return { ok: false, error: executionFailed('leverageYield', error, baseCtx) };
+    }
+  }
+
+  /**
+   * Submits the spoke-side `sendMessage` for a cross-chain redeem-by-shares without
+   * waiting for the relay. Caller drives the relay step.
+   */
+  public async createXRedeemIntent<K extends SpokeChainKey, Raw extends boolean>(
+    _params: LeverageYieldXRedeemParams<K, Raw>,
+  ): Promise<Result<IntentTxResult<K, Raw>, LeverageYieldCreateIntentError>> {
+    const { params, skipSimulation } = _params;
+    const baseCtx = { srcChainKey: params.srcChainKey, action: 'xwithdraw' as const };
+    try {
+      leverageYieldInvariant(params.shares > 0n, 'Shares must be greater than 0', { ...baseCtx, field: 'shares' });
+      leverageYieldInvariant(params.vault.length > 0, 'Vault address is required', { ...baseCtx, field: 'vault' });
+      leverageYieldInvariant(params.dstToken.length > 0, 'Destination token is required', {
+        ...baseCtx,
+        field: 'dstToken',
+      });
+
+      const dstToken = this.config.getSpokeTokenFromOriginalAssetAddress(params.srcChainKey, params.dstToken);
+      leverageYieldInvariant(
+        dstToken,
+        `Unsupported spoke chain (${params.srcChainKey}) token: ${params.dstToken}`,
+        { ...baseCtx, field: 'dstToken' },
+      );
+
+      const registered = this.getVaultByAddress(params.vault);
+      if (registered) {
+        leverageYieldInvariant(
+          registered.asset.toLowerCase() === dstToken.vault.toLowerCase(),
+          `Vault '${registered.name}' (${registered.vault}) holds ${registered.asset}, but dstToken ${params.dstToken} maps to ${dstToken.vault}. Use a matching dstToken.`,
+          { ...baseCtx, field: 'dstToken' },
+        );
+      }
+
+      // Off-chain `previewRedeem` to size the unwrap + bridge steps. The on-chain
+      // `vault.redeem(shares)` returns the same asset amount in steady state.
+      const previewResult = await Erc4626Service.previewRedeem(
+        params.vault,
+        params.shares,
+        this.hubProvider.publicClient,
+      );
+      leverageYieldInvariant(previewResult.ok, 'Failed to preview redeem', {
+        ...baseCtx,
+        field: 'shares',
+      });
+      const assetAmount = previewResult.value;
+      leverageYieldInvariant(assetAmount > 0n, 'previewRedeem returned 0 — shares too small', {
+        ...baseCtx,
+        field: 'shares',
+      });
+
+      const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
+      const recipientOnSpoke = params.recipient ?? params.srcAddress;
+      const encodedRecipient = encodeAddress(params.srcChainKey, recipientOnSpoke);
+
+      const data = this.buildXRedeemHookData({
+        hubAsset: dstToken.hubAsset,
+        sodaAsset: dstToken.vault,
+        spokeDecimals: dstToken.decimals,
+        leverageVault: params.vault,
+        shares: params.shares,
+        assetAmount,
+        hubWallet,
+        recipientOnSpoke: encodedRecipient,
+        assetManager: this.hubProvider.chainConfig.addresses.assetManager,
+      });
+
+      const coreParams = {
+        srcChainKey: params.srcChainKey,
+        srcAddress: params.srcAddress as GetAddressType<K>,
+        dstChainKey: this.hubProvider.chainConfig.chain.key,
+        dstAddress: hubWallet,
+        payload: data,
+        skipSimulation,
+      } as const;
+
+      const txResult = await this.spoke.sendMessage(
+        _params.raw
+          ? { ...coreParams, raw: true }
+          : { ...coreParams, raw: false, walletProvider: _params.walletProvider as GetWalletProviderType<K> },
+      );
+
+      if (!txResult.ok) {
+        if (isLeverageYieldCreateIntentError(txResult.error)) return { ok: false, error: txResult.error };
+        return { ok: false, error: intentCreationFailed('leverageYield', txResult.error, baseCtx) };
+      }
+
+      return {
+        ok: true,
+        value: {
+          tx: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
+          relayData: { address: hubWallet, payload: data },
+        },
+      };
+    } catch (error) {
+      if (isLeverageYieldCreateIntentError(error)) return { ok: false, error };
+      return { ok: false, error: intentCreationFailed('leverageYield', error, baseCtx) };
+    }
+  }
+
   // ─── Hub-direct (Sonic) ─────────────────────────────────────────────────
 
   /**
@@ -685,6 +893,66 @@ export class LeverageYieldService {
         params.raw,
       );
       return { ok: true, value: tx as TxReturnType<HubChainKey, R> };
+    } catch (error) {
+      if (isLeverageYieldDirectError(error)) return { ok: false, error };
+      return { ok: false, error: executionFailed('leverageYield', error, baseCtx) };
+    }
+  }
+
+  /**
+   * Direct vault redemption on Sonic, by share count. Prefer this over
+   * {@link LeverageYieldService.withdraw} when redeeming the user's full position —
+   * `withdraw(maxWithdraw)` can revert with `ERC4626ExceededMaxRedeem` because the
+   * standard `previewWithdraw` rounds shares *up*, occasionally asking for `balanceOf + 1`.
+   * `redeem(shares)` uses the share count as-is.
+   *
+   * For the convenience "redeem everything" case use {@link redeemAll}.
+   */
+  public async redeem<R extends boolean = false>(
+    params: LeverageYieldDirectRedeemParams<R>,
+  ): Promise<Result<TxReturnType<HubChainKey, R> | EvmReturnType<true>, LeverageYieldDirectError>> {
+    const baseCtx = { action: 'withdraw' as const };
+    try {
+      leverageYieldInvariant(params.shares > 0n, 'Shares must be greater than 0', { ...baseCtx, field: 'shares' });
+      leverageYieldInvariant(params.vault.length > 0, 'Vault address is required', { ...baseCtx, field: 'vault' });
+
+      const tx = await Erc4626Service.redeem(
+        params.vault,
+        params.shares,
+        params.receiver,
+        params.owner,
+        params.walletProvider,
+        params.raw,
+      );
+      return { ok: true, value: tx as TxReturnType<HubChainKey, R> };
+    } catch (error) {
+      if (isLeverageYieldDirectError(error)) return { ok: false, error };
+      return { ok: false, error: executionFailed('leverageYield', error, baseCtx) };
+    }
+  }
+
+  /**
+   * Convenience wrapper around {@link redeem}: reads `vault.balanceOf(owner)` and redeems
+   * the full balance. Always exits cleanly without rounding errors. No-ops (returns a
+   * VALIDATION_FAILED) when the owner holds zero shares.
+   */
+  public async redeemAll<R extends boolean = false>(
+    params: LeverageYieldRedeemAllParams<R>,
+  ): Promise<Result<TxReturnType<HubChainKey, R> | EvmReturnType<true>, LeverageYieldDirectError>> {
+    const baseCtx = { action: 'withdraw' as const };
+    try {
+      const sharesResult = await this.getShareBalance(params.vault, params.owner);
+      if (!sharesResult.ok) return { ok: false, error: executionFailed('leverageYield', sharesResult.error, baseCtx) };
+      leverageYieldInvariant(sharesResult.value > 0n, 'Owner has zero shares', { ...baseCtx, field: 'owner' });
+
+      return this.redeem({
+        vault: params.vault,
+        shares: sharesResult.value,
+        receiver: params.receiver,
+        owner: params.owner,
+        walletProvider: params.walletProvider,
+        raw: params.raw,
+      });
     } catch (error) {
       if (isLeverageYieldDirectError(error)) return { ok: false, error };
       return { ok: false, error: executionFailed('leverageYield', error, baseCtx) };
@@ -817,6 +1085,33 @@ export class LeverageYieldService {
     return { ok: true, value: inner.value };
   }
 
+  /** Assets received for a given share redemption. Useful pre-flight before {@link xredeem}. */
+  public async previewRedeem(vault: Address, shares: bigint): Promise<Result<bigint, LeverageYieldLookupError>> {
+    const inner = await Erc4626Service.previewRedeem(vault, shares, this.hubProvider.publicClient);
+    if (!inner.ok) return { ok: false, error: lookupFailed('leverageYield', 'previewRedeem', inner.error) };
+    return { ok: true, value: inner.value };
+  }
+
+  /**
+   * Vault shares held by `owner`. Use as the `shares` argument to {@link redeem} or
+   * {@link xredeem} for a full exit — bypasses the ERC-4626 round-up edge case that
+   * trips `withdraw(maxWithdraw)`.
+   */
+  public async getShareBalance(vault: Address, owner: Address): Promise<Result<bigint, LeverageYieldLookupError>> {
+    try {
+      const value = await this.hubProvider.publicClient.readContract({
+        address: vault,
+        abi: parseAbi(['function balanceOf(address) view returns (uint256)']),
+        functionName: 'balanceOf',
+        args: [owner],
+      });
+      return { ok: true, value };
+    } catch (error) {
+      if (isLeverageYieldLookupError(error)) return { ok: false, error };
+      return { ok: false, error: lookupFailed('leverageYield', 'getShareBalance', error) };
+    }
+  }
+
   /**
    * Convenience: resolves the user's hub wallet from `(srcChainKey, srcAddress)` and
    * returns its on-chain `maxWithdraw`. Useful pre-flight before {@link xwithdraw}.
@@ -832,6 +1127,25 @@ export class LeverageYieldService {
     } catch (error) {
       if (isLeverageYieldLookupError(error)) return { ok: false, error };
       return { ok: false, error: lookupFailed('leverageYield', 'getMaxWithdrawForUser', error, { srcChainKey }) };
+    }
+  }
+
+  /**
+   * Convenience: resolves the user's hub wallet from `(srcChainKey, srcAddress)` and
+   * returns its on-chain share balance. Pass the result directly as `shares` to
+   * {@link xredeem} for a rounding-safe full exit.
+   */
+  public async getShareBalanceForUser<K extends SpokeChainKey>(
+    vault: Address,
+    srcChainKey: K,
+    srcAddress: string,
+  ): Promise<Result<bigint, LeverageYieldLookupError>> {
+    try {
+      const hubWallet = await this.hubProvider.getUserHubWalletAddress(srcAddress, srcChainKey);
+      return await this.getShareBalance(vault, hubWallet);
+    } catch (error) {
+      if (isLeverageYieldLookupError(error)) return { ok: false, error };
+      return { ok: false, error: lookupFailed('leverageYield', 'getShareBalanceForUser', error, { srcChainKey }) };
     }
   }
 
@@ -889,6 +1203,36 @@ export class LeverageYieldService {
     const calls: EvmContractCall[] = [
       Erc4626Service.encodeWithdraw(args.leverageVault, args.vaultAssetAmount, args.hubWallet, args.hubWallet),
       EvmVaultTokenService.encodeWithdraw(args.sodaAsset, args.hubAsset, args.vaultAssetAmount),
+      Erc20Service.encodeApprove(args.hubAsset, args.assetManager, translatedAmount),
+      EvmAssetManagerService.encodeTransfer(args.hubAsset, args.recipientOnSpoke, translatedAmount, args.assetManager),
+    ];
+    return encodeContractCalls(calls);
+  }
+
+  /**
+   * Encodes the hub-wallet call sequence for an `xredeem`. Same shape as the withdraw
+   * hook except the vault call is `redeem(shares, …)` instead of `withdraw(assets, …)` —
+   * uses the user's exact share count and avoids the ERC-4626 round-up edge case.
+   *
+   * `assetAmount` must equal the on-chain `previewRedeem(shares)` at execution time.
+   * Tiny drift between the off-chain query and on-chain exec would cause step 2 to
+   * revert (insufficient sodaWEETH to unwrap) — rare in practice; caller retries.
+   */
+  private buildXRedeemHookData(args: {
+    hubAsset: Address;
+    sodaAsset: Address;
+    spokeDecimals: number;
+    leverageVault: Address;
+    shares: bigint;
+    assetAmount: bigint;
+    hubWallet: Address;
+    recipientOnSpoke: Hex;
+    assetManager: Address;
+  }): Hex {
+    const translatedAmount = EvmVaultTokenService.translateOutgoingDecimals(args.spokeDecimals, args.assetAmount);
+    const calls: EvmContractCall[] = [
+      Erc4626Service.encodeRedeem(args.leverageVault, args.shares, args.hubWallet, args.hubWallet),
+      EvmVaultTokenService.encodeWithdraw(args.sodaAsset, args.hubAsset, args.assetAmount),
       Erc20Service.encodeApprove(args.hubAsset, args.assetManager, translatedAmount),
       EvmAssetManagerService.encodeTransfer(args.hubAsset, args.recipientOnSpoke, translatedAmount, args.assetManager),
     ];
