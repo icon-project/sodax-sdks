@@ -1,11 +1,12 @@
 # Deleted / replaced exports inventory
 
-Every v1 export that's gone, replaced, or repurposed in v2 — and its v2 successor. If you see `error TS2305: Module '"@sodax/sdk"' has no exported member '<X>'`, find `<X>` in the left column.
+Every v1 export that's gone or repurposed in v2 — and its v2 successor. If you see `error TS2305: Module '"@sodax/sdk"' has no exported member '<X>'`, find `<X>` in the left column.
 
-Three categories worth distinguishing:
+Two categories worth distinguishing:
 - **Truly deleted** — the v1 symbol is gone; an import will fail compile (`TS2305`).
 - **Name preserved, shape replaced** — a v1 `import` still compiles, but the runtime shape changed. Silent breakage if you read v1-only fields.
-- **Legacy still exported** — the v1 symbol is still re-exported through `@sodax/sdk`. Prefer the v2 service-API replacement for new code.
+
+> Scope note: This doc only lists symbols that **don't import anymore** or **silently changed shape**. For v1 static constants that are still exported in v2 but should yield to the dynamic service API, see [`../breaking-changes/architecture.md`](../breaking-changes/architecture.md) § 2.
 
 ### Spoke-provider classes + guards
 
@@ -31,16 +32,6 @@ Three categories worth distinguishing:
 | `hubAssets` | `XToken.vault` / `XToken.hubAsset` baked in; or `sodax.config.getOriginalAssetAddress(...)`. See [`../breaking-changes/architecture.md`](../breaking-changes/architecture.md) § 2. |
 | `getHubChainConfig()` (free function) | `sodax.config.getHubChainConfig()` (now a method on `ConfigService`, accessed via the `Sodax` instance). |
 | `EvmWalletAbstraction` (class) | `sodax.hubProvider.getUserHubWalletAddress(...)` (the equivalent functionality lives on `EvmHubProvider`, accessed via the `Sodax` instance). |
-
-### Legacy constants — still exported, prefer service API
-
-These names still ship through `@sodax/sdk` (re-exported from `@sodax/types`), so a v1 `import { ... } from '@sodax/sdk'` will not break. New code should use the dynamic `sodax.config.*` / `sodax.moneyMarket.*` lookups instead, since the static tables are frozen snapshots that miss runtime config updates from the backend.
-
-| v1 export | v2 status | Preferred v2 API |
-|---|---|---|
-| `moneyMarketSupportedTokens` | Still exported (`packages/types/src/moneyMarket/moneyMarket.ts`) | `sodax.moneyMarket.getSupportedTokensByChainId(chainKey)` / `getSupportedTokens()`. |
-| `swapSupportedTokens` (v1 had no `solverSupportedTokens`) | Still exported (`packages/types/src/swap/swap.ts`) | `sodax.config.getSupportedSwapTokensByChainId(chainKey)`. |
-| `SodaTokens` | Still exported (`packages/types/src/chains/tokens.ts`) | `sodax.config.getMoneyMarketReserveAssets()` / `sodax.moneyMarket.getSupportedReserves()`. |
 
 ### Type aliases
 
@@ -100,6 +91,7 @@ v1 only exposed **specific per-failure-mode guards**. v2 deleted all of these an
 | `isIntentCreationFailedError(e)` | `isSwapCreateIntentError(e)` or `isSodaxError(e) && e.code === 'INTENT_CREATION_FAILED' && e.feature === 'swap'`. |
 | `isIntentSubmitTxFailedError(e)` | `isSodaxError(e) && e.code === 'TX_SUBMIT_FAILED'`. |
 | `isIntentPostExecutionFailedError(e)` | `isSodaxError(e) && e.feature === 'swap' && e.code === 'EXECUTION_FAILED' && e.context?.phase === 'postExecution'`. |
+| `isWaitUntilIntentExecutedFailed(e)` | `isSodaxError(e) && e.feature === 'swap' && e.code === 'RELAY_TIMEOUT'`. The v1 guard fired when the destination packet never reached `executed`; in v2 that surfaces as the unified `RELAY_TIMEOUT` code (with the underlying relay code on `error.context.relayCode`). |
 | `isIntentCreationUnknownError(e)` | `isSodaxError(e) && e.code === 'UNKNOWN' && e.feature === 'swap'`. |
 | `isMoneyMarketSubmitTxFailedError`, `isMoneyMarketRelayTimeoutError`, `isMoneyMarketCreate{Supply,Borrow,Withdraw,Repay}IntentFailedError`, `isMoneyMarket{Supply,Borrow,Withdraw,Repay}UnknownError` (10 specific guards) | `isMoneyMarketError(e)` (new in v2) for the feature-level check, then narrow on `e.code` / `e.context.action`. |
 | `isCreateIntentAutoSwapError`, `isWaitIntentAutoSwapError`, `isUnknownIntentAutoSwapError`, `isSetSwapPreferenceError` (4 partner guards) | `isPartnerError(e)` (new in v2) for the feature-level check, then narrow on `e.code` / `e.context.action`. |
@@ -132,3 +124,4 @@ The [`error TS1360`](https://www.typescriptlang.org/docs/handbook/release-notes/
 - [`README.md`](README.md) — migration reference index.
 - [`../README.md`](../README.md) — migration overview.
 - [`../checklist.md`](../checklist.md) — top-level migration checklist.
+- [`../breaking-changes/architecture.md`](../breaking-changes/architecture.md) § 2 — guidance for v1 static constants that are still exported but should yield to the service API after `await sodax.config.initialize()`.

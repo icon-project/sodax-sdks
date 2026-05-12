@@ -103,11 +103,18 @@ If your project's v1 wrapper code instantiated `*SpokeProvider` classes, don't t
 |---|---|
 | `hubAssets[chainId][address]` (vault lookup) | `token.vault` directly (added to `XToken` — see [`type-system.md`](type-system.md) § 4) |
 | `hubAssets[chainId][address]` (hub-asset address) | `token.hubAsset` directly |
-| `moneyMarketSupportedTokens[chainId]` | `sodax.moneyMarket.getSupportedTokensByChainId(chainKey)` |
-| `Object.entries(moneyMarketSupportedTokens)` | `sodax.moneyMarket.getSupportedTokens()` (returns `Record<SpokeChainKey, XToken[]>`) |
-| `SodaTokens` registry (vault-validation) | `sodax.config.getMoneyMarketReserveAssets()` or `sodax.moneyMarket.getSupportedReserves()` |
-| `solverSupportedTokens[chainId]` | `sodax.config.getSupportedSwapTokensByChainId(chainKey)` |
 | `baseChainInfo[chain].id` | `baseChainInfo[chain].key` (field renamed) |
+
+### Static defaults — still exported, prefer the service API
+
+These v1 names still ship through `@sodax/sdk` (re-exported from `@sodax/types`), so a v1 `import { ... } from '@sodax/sdk'` will not break. Once you call `await sodax.config.initialize()`, the dynamic config from the backend supersedes the packaged defaults — read through the service API to see runtime updates (new tokens, fee parameters). Without `initialize()`, both paths return the same packaged values.
+
+| v1 export | v2 status | Preferred v2 API |
+|---|---|---|
+| `moneyMarketSupportedTokens[chainId]` | Still exported (`packages/types/src/moneyMarket/moneyMarket.ts`) | `sodax.moneyMarket.getSupportedTokensByChainId(chainKey)` |
+| `Object.entries(moneyMarketSupportedTokens)` (walk pattern) | Const still exported | `sodax.moneyMarket.getSupportedTokens()` (returns `Record<SpokeChainKey, XToken[]>`) |
+| `SodaTokens` registry (vault-validation) | Still exported (`packages/types/src/chains/tokens.ts`) | `sodax.config.getMoneyMarketReserveAssets()` or `sodax.moneyMarket.getSupportedReserves()` |
+| `swapSupportedTokens[chainId]` (v1 had no `solverSupportedTokens`) | Still exported (`packages/types/src/swap/swap.ts`) | `sodax.config.getSupportedSwapTokensByChainId(chainKey)` |
 
 ### What replaces them
 
