@@ -10,7 +10,7 @@ const sharedConfig = {
   sourcemap: true,
   dts: false as const,
   clean: false as const,
-  target: 'node18' as const,
+  target: 'node20' as const,
   treeshake: true,
   external: ['react', 'react-dom', '@tanstack/react-query'],
   esbuildOptions(options: any) {

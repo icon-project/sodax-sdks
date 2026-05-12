@@ -15,6 +15,9 @@
     "type": "git",
     "url": "https://github.com/icon-project/sodax-sdks"
   },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "files": ["dist"],
   "type": "module",
   "exports": {

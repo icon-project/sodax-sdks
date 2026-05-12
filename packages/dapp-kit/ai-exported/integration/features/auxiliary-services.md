@@ -6,7 +6,7 @@ Pair: [`../../migration/features/auxiliary-services.md`](../../migration/feature
 
 ## Partner
 
-Partner fee claiming and auto-swap preferences. 6 hooks.
+Partner fee claiming and auto-swap preferences.
 
 ```ts
 // @ai-snippets-skip
@@ -22,7 +22,7 @@ useFeeClaimSwap({ mutationOptions });               // Claim partner fees via sw
 
 ## Recovery
 
-Withdraw stuck hub-wallet assets back to a spoke chain. 2 hooks.
+Withdraw stuck hub-wallet assets back to a spoke chain.
 
 ```ts
 // @ai-snippets-skip
@@ -32,7 +32,7 @@ useWithdrawHubAsset({ mutationOptions });
 
 ## Backend queries (read-only data)
 
-12 hooks. No wallet connection required.
+No wallet connection required.
 
 ### Intent tracking
 

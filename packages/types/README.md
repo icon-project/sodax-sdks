@@ -1,54 +1,66 @@
-# @sodax/wallet-types
+# @sodax/types
 
-Wallet connectivity type definitions for the SODAX multi-chain ecosystem.
+Shared SODAX type definitions, constants, and configuration for SDK packages and applications.
 
-Provides `WalletProvider` interfaces and chain-specific transaction types for 9 blockchain families. Self-contained with **zero external dependencies**.
+This package includes chain and token metadata, wallet provider interfaces, transaction and receipt types, backend API contracts, swap and money market configuration, DEX configuration, and common utilities.
 
 ## Install
 
 ```bash
-pnpm add @sodax/wallet-types
+pnpm add @sodax/types
 ```
 
 ## Usage
 
-Import everything from the root:
+Import shared types, constants, configuration, and helpers from the root package:
 
 ```typescript
-import type { WalletAddressProvider, IBitcoinWalletProvider } from '@sodax/wallet-types';
+import {
+  ChainKeys,
+  CONFIG_VERSION,
+  getEvmChainKeyByChainId,
+  sodaxConfig,
+  supportedTokensByChain,
+} from '@sodax/types';
+
+import type {
+  Address,
+  DeepPartial,
+  EvmRawTransaction,
+  IBitcoinWalletProvider,
+  IEvmWalletProvider,
+  IWalletProvider,
+  SpokeChainKey,
+  WalletAddressProvider,
+} from '@sodax/types';
 ```
 
-Or import only the chain you need via sub-package exports:
+DEX types and constants are also available from the dedicated DEX subpath export:
 
 ```typescript
-import type { IEvmWalletProvider, EvmRawTransaction } from '@sodax/wallet-types/evm';
-import type { ISolanaWalletProvider } from '@sodax/wallet-types/solana';
-import type { IBitcoinWalletProvider, UTXO } from '@sodax/wallet-types/bitcoin';
-import type { IIconWalletProvider } from '@sodax/wallet-types/icon';
-import type { INearWalletProvider } from '@sodax/wallet-types/near';
-import type { IStellarWalletProvider } from '@sodax/wallet-types/stellar';
-import type { ISuiWalletProvider } from '@sodax/wallet-types/sui';
-import type { IInjectiveWalletProvider } from '@sodax/wallet-types/injective';
-import type { IStacksWalletProvider } from '@sodax/wallet-types/stacks';
+import { concentratedLiquidityConfig, dexConfig } from '@sodax/types/dex';
+
+import type { ConcentratedLiquidityConfig, DexConfig, PoolKey } from '@sodax/types/dex';
 ```
 
-## Supported Chains
+The package currently exposes only the root export (`@sodax/types`) and the DEX export (`@sodax/types/dex`). Chain-specific types such as `IEvmWalletProvider`, `BitcoinRawTransaction`, and `SolanaRawTransactionReceipt` are available from the root package.
 
-| Chain | Sub-import | Wallet Provider Interface |
-| --- | --- | --- |
-| EVM (Sonic, Ethereum, Arbitrum, …) | `@sodax/wallet-types/evm` | `IEvmWalletProvider` |
-| Bitcoin | `@sodax/wallet-types/bitcoin` | `IBitcoinWalletProvider` |
-| Solana | `@sodax/wallet-types/solana` | `ISolanaWalletProvider` |
-| Stellar | `@sodax/wallet-types/stellar` | `IStellarWalletProvider` |
-| Sui | `@sodax/wallet-types/sui` | `ISuiWalletProvider` |
-| ICON | `@sodax/wallet-types/icon` | `IIconWalletProvider` |
-| Injective | `@sodax/wallet-types/injective` | `IInjectiveWalletProvider` |
-| NEAR | `@sodax/wallet-types/near` | `INearWalletProvider` |
-| Stacks | `@sodax/wallet-types/stacks` | `IStacksWalletProvider` |
+## Export Overview
 
-## Base Interface
+| Area | Examples |
+| --- | --- |
+| Shared primitives | `Address`, `Hex`, `Hash`, `Base64String`, `HttpUrl`, `TxPollingConfig` |
+| Common types and constants | `Result`, `PartnerFee`, `TxReturnType`, `apiConfig`, `solverConfig`, retry and timeout constants |
+| Chains and tokens | `ChainKeys`, `SpokeChainKey`, `ChainType`, `baseChainInfo`, `spokeChainConfig`, `supportedTokensByChain` |
+| Wallet providers | `WalletAddressProvider`, `ICoreWallet`, `IWalletProvider`, `GetWalletProviderType` |
+| Chain transaction types | `EvmRawTransaction`, `BitcoinRawTransaction`, `SolanaRawTransaction`, `StellarRawTransaction`, `SuiRawTransaction`, `IconRawTransaction`, `InjectiveRawTransaction`, `NearRawTransaction`, `StacksRawTransaction` |
+| Backend API contracts | `IConfigApi`, `GetAllConfigApiResponse`, `SubmitSwapTxRequest`, `SubmitSwapTxResponse`, `SubmitSwapTxStatusResponse` |
+| Product configuration | `sodaxConfig`, `bridgeConfig`, `swapsConfig`, `moneyMarketConfig`, `dexConfig`, `concentratedLiquidityConfig` |
+| Utilities | `DeepPartial`, `getChainType`, `getEvmChainKeyByChainId`, chain guard helpers, bnUSD token helpers |
 
-All wallet providers extend `WalletAddressProvider`:
+## Wallet Providers
+
+All wallet providers extend the base wallet address contract:
 
 ```typescript
 interface WalletAddressProvider {
@@ -57,4 +69,28 @@ interface WalletAddressProvider {
 }
 ```
 
-Each chain-specific provider adds its own signing, transaction, and query methods.
+`ICoreWallet` extends `WalletAddressProvider`, and each chain-specific provider adds its own signing, transaction, and query methods. The root export includes provider interfaces for all supported chain families:
+
+| Chain family | Provider interface |
+| --- | --- |
+| EVM | `IEvmWalletProvider` |
+| Bitcoin | `IBitcoinWalletProvider` |
+| Solana | `ISolanaWalletProvider` |
+| Stellar | `IStellarWalletProvider` |
+| Sui | `ISuiWalletProvider` |
+| ICON | `IIconWalletProvider` |
+| Injective | `IInjectiveWalletProvider` |
+| NEAR | `INearWalletProvider` |
+| Stacks | `IStacksWalletProvider` |
+
+Use `IWalletProvider` for the union of all chain-specific wallet providers, or `GetWalletProviderType<C>` to map a `SpokeChainKey` or `ChainType` to the matching provider interface.
+
+```typescript
+import type { GetWalletProviderType, IEvmWalletProvider, IWalletProvider, SpokeChainKey } from '@sodax/types';
+
+type ProviderForChain<C extends SpokeChainKey> = GetWalletProviderType<C>;
+
+function isEvmProvider(provider: IWalletProvider): provider is IEvmWalletProvider {
+  return provider.chainType === 'EVM';
+}
+```

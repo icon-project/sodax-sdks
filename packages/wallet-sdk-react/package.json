@@ -7,6 +7,9 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "files": ["dist", "README.md", "docs", "skills", "ai-exported"],
   "exports": {
     ".": {
@@ -91,8 +94,5 @@
   "peerDependencies": {
     "@tanstack/react-query": "5.x",
     "react": ">=19"
-  },
-  "engines": {
-    "node": ">=18.0.0"
   }
 }

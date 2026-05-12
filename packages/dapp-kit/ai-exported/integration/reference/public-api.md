@@ -8,14 +8,14 @@ The package's `src/index.ts` re-exports four buckets:
 
 ```ts
 // @ai-snippets-skip
-export * from './hooks/index.js';      // ~95 hooks across 11 feature dirs
+export * from './hooks/index.js';      // hooks across 11 feature dirs
 export * from './providers/index.js';  // SodaxProvider, createSodaxQueryClient
 export * from './utils/index.js';      // dex-utils param builders
 export * from '@sodax/sdk';            // FULL @sodax/sdk re-export
 ```
 
 Practical implications:
-- All ~95 hooks are importable from the root: `import { useSwap, useSupply, ... } from '@sodax/dapp-kit'`.
+- All hooks are importable from the root: `import { useSwap, useSupply, ... } from '@sodax/dapp-kit'`.
 - All `@sodax/sdk` types are importable from `@sodax/dapp-kit` directly: `import { ChainKeys, type SodaxConfig, type CreateIntentParams } from '@sodax/dapp-kit'`.
 - You may also import directly from `@sodax/sdk` — both work, both are stable.
 

@@ -4,7 +4,7 @@ Pair: [`../../integration/features/auxiliary-services.md`](../../integration/fea
 
 Smaller surfaces grouped together: partner, recovery, backend queries, shared utilities. Most changes are mechanical — single-object params, mutateAsyncSafe — same as the other features.
 
-## Partner (6 hooks)
+## Partner
 
 ```diff
 - const claim = useFeeClaimSwap(spokeProvider);
@@ -18,7 +18,7 @@ Smaller surfaces grouped together: partner, recovery, backend queries, shared ut
 
 `useFetchAssetsBalances`, `useGetAutoSwapPreferences`, `useIsTokenApproved` — convert to single-object query shape.
 
-## Recovery (2 hooks)
+## Recovery
 
 ```diff
 - const withdraw = useWithdrawHubAsset(spokeProvider);
@@ -26,7 +26,7 @@ Smaller surfaces grouped together: partner, recovery, backend queries, shared ut
 + await withdraw({ params, walletProvider });
 ```
 
-## Backend queries (~13 hooks)
+## Backend queries
 
 Read-only. No `walletProvider` involved. Convert to single-object query shape.
 

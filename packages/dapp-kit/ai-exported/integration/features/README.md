@@ -2,16 +2,16 @@
 
 Per-feature reference docs. Each file documents the hooks, params types, return types, and feature-specific gotchas — but doesn't include extended worked examples (those live in [`../recipes/`](../recipes/)).
 
-| File | Hook count | What's covered |
-|---|---|---|
-| [`swap.md`](swap.md) | 8 | Cross-chain swaps via the intent solver: `useQuote`, `useSwap`, allowance/approve, status polling, limit orders. |
-| [`money-market.md`](money-market.md) | 13 | Lending/borrowing on the cross-chain MM: `useSupply`, `useBorrow`, `useWithdraw`, `useRepay`, allowance/approve, reserves data hooks. |
-| [`staking.md`](staking.md) | ~18 | SODA → xSODA staking: `useStake`, `useUnstake`, `useInstantUnstake`, `useClaim`, `useCancelUnstake`, allowance/approve, info/ratio reads. |
-| [`bridge.md`](bridge.md) | 5 | Cross-chain token bridging: `useBridge`, allowance/approve, bridgeable amount/tokens. |
-| [`dex.md`](dex.md) | ~13 | Concentrated liquidity DEX: assets in/out, liquidity supply/decrease, claim rewards, position info, pool reads, param builders. |
-| [`migration.md`](migration.md) | 6 | Token migration: `useMigrateIcxToSoda`, `useRevertMigrateSodaToIcx`, `useMigratebnUSD`, `useMigrateBaln`, allowance/approve. |
-| [`bitcoin.md`](bitcoin.md) | ~8 | Radfi (dapp-kit-unique): session, trading wallet, fund/withdraw, UTXOs. |
-| [`auxiliary-services.md`](auxiliary-services.md) | ~30 | Partner fee claiming, recovery, backend queries (intent tracking, orderbook, MM data), shared utilities (xBalances, gas, trustlines). |
+| File | What's covered |
+|---|---|
+| [`swap.md`](swap.md) | Cross-chain swaps via the intent solver: `useQuote`, `useSwap`, allowance/approve, status polling, limit orders. |
+| [`money-market.md`](money-market.md) | Lending/borrowing on the cross-chain MM: `useSupply`, `useBorrow`, `useWithdraw`, `useRepay`, allowance/approve, reserves data hooks. |
+| [`staking.md`](staking.md) | SODA → xSODA staking: `useStake`, `useUnstake`, `useInstantUnstake`, `useClaim`, `useCancelUnstake`, allowance/approve, info/ratio reads. |
+| [`bridge.md`](bridge.md) | Cross-chain token bridging: `useBridge`, allowance/approve, bridgeable amount/tokens. |
+| [`dex.md`](dex.md) | Concentrated liquidity DEX: assets in/out, liquidity supply/decrease, claim rewards, position info, pool reads, param builders. |
+| [`migration.md`](migration.md) | Token migration: `useMigrateIcxToSoda`, `useRevertMigrateSodaToIcx`, `useMigratebnUSD`, `useMigrateBaln`, allowance/approve. |
+| [`bitcoin.md`](bitcoin.md) | Radfi (dapp-kit-unique): session, trading wallet, fund/withdraw, UTXOs. |
+| [`auxiliary-services.md`](auxiliary-services.md) | Partner fee claiming, recovery, backend queries (intent tracking, orderbook, MM data), shared utilities (xBalances, gas, trustlines). |
 
 ## Reference vs recipes
 
