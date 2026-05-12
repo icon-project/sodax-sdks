@@ -43,7 +43,6 @@ Two categories worth distinguishing:
 | `HubChainId` (type) | `HubChainKey` (literal `'sonic'`). |
 | `Token` (type) | `XToken`. See [`../breaking-changes/type-system.md`](../breaking-changes/type-system.md) § 4. |
 | `AddressType` (type — `'P2PKH' \| 'P2SH' \| 'P2WPKH' \| 'P2TR'`) | `BtcAddressType` (renamed; same shape). See [`../breaking-changes/type-system.md`](../breaking-changes/type-system.md) § 7. |
-| `Payload` (type) | None — internal `IntentRelayApiService` shape that v1 leaked publicly. Consumers calling the relay layer directly should use `relayTxAndWaitPacket` / `submitTransaction` (which take typed inputs). |
 
 > Note: `BtcWalletAddressType` (`'taproot' | 'segwit'`, wallet-UI choice) is preserved in v2 with the same shape — it is **not** the same thing as `BtcAddressType` (on-chain address format). They coexist; do not blindly rename one to the other.
 
