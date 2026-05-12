@@ -123,4 +123,4 @@ The [`error TS1360`](https://www.typescriptlang.org/docs/handbook/release-notes/
 - [`README.md`](README.md) — migration reference index.
 - [`../README.md`](../README.md) — migration overview.
 - [`../checklist.md`](../checklist.md) — top-level migration checklist.
-- [`../breaking-changes/architecture.md`](../breaking-changes/architecture.md) § 2 — guidance for v1 static constants that are still exported but should be read through the dynamic service API; `await sodax.config.initialize()` additionally pulls live updates from the backend.
+- [`../breaking-changes/architecture.md`](../breaking-changes/architecture.md) § 2 — guidance for v1 static constants that are still exported in v2.
