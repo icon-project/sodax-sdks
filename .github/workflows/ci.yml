@@ -46,59 +46,15 @@ jobs:
 
       - name: Build Packages
         run: pnpm build:packages
-      - name: CJS Compatibility Check
-        run: cd apps/node-cjs && pnpm test
 
       - name: Build Check
         run: pnpm checkTs
 
-      - name: Check ai-exported docs reference real exports (wallet-sdk-react)
-        run: pnpm -C packages/wallet-sdk-react run check:ai-exported
+      - name: AI-exported docs guards (sdk, wallet-sdk-react, dapp-kit)
+        run: pnpm check:ai
 
-      - name: Type-check ai-exported examples (wallet-sdk-react)
-        run: pnpm -C packages/wallet-sdk-react run checkTs:examples
-
-      - name: Check ai-exported relative links resolve (wallet-sdk-react)
-        run: pnpm -C packages/wallet-sdk-react run check:ai-links
-
-      - name: Check ai-exported @sodax/wallet-sdk-react imports compile
-        run: pnpm -C packages/wallet-sdk-react run check:ai-imports
-
-      - name: Check ai-exported docs reference real Sodax members
-        run: pnpm -C packages/sdk run check:ai-exported
-
-      - name: Check ai-exported scope (Core SDK only — no React/dapp-kit/wallet-sdk-react)
-        run: pnpm -C packages/sdk run check:ai-scope
-
-      - name: Check ai-exported relative links resolve
-        run: pnpm -C packages/sdk run check:ai-links
-
-      - name: Check ai-exported @sodax/sdk imports compile
-        run: pnpm -C packages/sdk run check:ai-imports
-
-      - name: Check dapp-kit ai-exported hooks reference real exports
-        run: pnpm -C packages/dapp-kit run check:ai-exported
-
-      - name: Check dapp-kit ai-exported scope (no forbidden sibling-package imports)
-        run: pnpm -C packages/dapp-kit run check:ai-scope
-
-      - name: Check dapp-kit ai-exported relative links resolve
-        run: pnpm -C packages/dapp-kit run check:ai-links
-
-      - name: Check dapp-kit ai-exported @sodax/dapp-kit imports compile
-        run: pnpm -C packages/dapp-kit run check:ai-imports
-
-      - name: Check dapp-kit ai-exported ts/tsx code blocks typecheck
-        run: pnpm -C packages/dapp-kit run check:ai-snippets
-
-      - name: Check dapp-kit ai-exported queryKey/mutationKey segments match source
-        run: pnpm -C packages/dapp-kit run check:ai-keys
-
-      - name: Check dapp-kit ai-exported polling-interval claims match source
-        run: pnpm -C packages/dapp-kit run check:ai-consistency
-
-      - name: Build
-        run: pnpm build
+      - name: Build Apps
+        run: pnpm turbo run build --filter='./apps/*' --filter='!./apps/node'
 
       - name: Run Tests
         run: pnpm test

@@ -62,6 +62,10 @@
     "check:circular-deps:packages": {
       "dependsOn": ["^check:circular-deps"],
       "inputs": ["packages/**"]
+    },
+    "check:ai": {
+      "dependsOn": ["^build"],
+      "cache": false
     }
   },
   "remoteCache": {

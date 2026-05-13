@@ -45,7 +45,8 @@
     "lint": "biome lint . --write",
     "check:ai-exported": "bash ./scripts/check-ai-exported.sh",
     "check:ai-links": "bash ./scripts/check-ai-links.sh",
-    "check:ai-imports": "bash ./scripts/check-ai-imports.sh"
+    "check:ai-imports": "bash ./scripts/check-ai-imports.sh",
+    "check:ai": "pnpm run check:ai-exported && pnpm run checkTs:examples && pnpm run check:ai-links && pnpm run check:ai-imports"
   },
   "dependencies": {
     "@stacks/connect": "catalog:",
