@@ -45,6 +45,31 @@ await sodax.config.initialize();
 
 `initialize()` is the only initialization step. Don't `await` it inside every feature call — call it once at app startup. If you skip it entirely, feature services fall back to packaged defaults, which may be stale relative to the latest backend config (new tokens, new chains, fee parameter changes).
 
+## Module-scope reads (no Sodax instance needed)
+
+Some code runs at **module-load time** — constants files, utility modules, framework-provider configs — before any `Sodax` instance exists. For those, import the packaged-default constants directly from `@sodax/sdk` (re-exported from `@sodax/types`):
+
+```ts
+import { sodaxConfig, hubConfig } from '@sodax/sdk';
+
+// Hub address constants
+export const HUB_WALLET = hubConfig.addresses.hubWallet;
+export const STAKING_ROUTER = hubConfig.addresses.stakingRouter;
+
+// Full default config (every SodaxConfig field with packaged defaults)
+export const DEFAULT_SOLVER_ENDPOINT = sodaxConfig.solver.solverApiEndpoint;
+export const SUPPORTED_TOKENS_PER_CHAIN = sodaxConfig.swaps.supportedTokens;
+```
+
+| Need | Module-scope import |
+|---|---|
+| Hub contract addresses (assetManager, hubWallet, stakingRouter, etc.) | `hubConfig.addresses.*` |
+| Full default SodaxConfig (read-only snapshot) | `sodaxConfig.*` (e.g. `sodaxConfig.hub`, `sodaxConfig.moneyMarket`) |
+| Per-chain config (rpcUrl, polling, chain-specifics) | `sodaxConfig.chains[ChainKeys.X_MAINNET]` |
+| Money market reserve assets | `sodaxConfig.moneyMarket.supportedReserveAssets` |
+
+> **Static vs dynamic.** `sodaxConfig` / `hubConfig` are **packaged-default snapshots** frozen at SDK release time. They are safe at module scope but won't reflect backend-driven config updates. Once a `Sodax` instance exists and `initialize()` has resolved, prefer `sodax.config.*` for runtime-live data (`sodax.config.getHubChainConfig()`, `sodax.config.getMoneyMarketReserveAssets()`, etc.).
+
 
 ## Cross-references
 

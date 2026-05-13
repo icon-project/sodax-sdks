@@ -30,8 +30,9 @@ Two categories worth distinguishing:
 | v1 export | v2 replacement |
 |---|---|
 | `hubAssets` | `XToken.vault` / `XToken.hubAsset` baked in; or `sodax.config.getOriginalAssetAddress(...)`. See [`../breaking-changes/architecture.md`](../breaking-changes/architecture.md) § 2. |
-| `getHubChainConfig()` (free function) | `sodax.config.getHubChainConfig()` (now a method on `ConfigService`, accessed via the `Sodax` instance). |
+| `getHubChainConfig()` (free function) | `sodax.config.getHubChainConfig()` (now a method on `ConfigService`, accessed via the `Sodax` instance). For module-scope reads (before a `Sodax` instance exists), see [`sodax-config.md`](sodax-config.md) § "Pitfall — module-scope reads". |
 | `EvmWalletAbstraction` (class) | `sodax.hubProvider.getUserHubWalletAddress(...)` (the equivalent functionality lives on `EvmHubProvider`, accessed via the `Sodax` instance). |
+| `HubService` (class) + `HubService.getUserHubWalletAddress(spokeAddress, spokeChainId, hubProvider)` (static method) | `sodax.hubProvider.getUserHubWalletAddress(spokeAddress, spokeChainKey)` (instance method on `EvmHubProvider`; doesn't take `hubProvider` arg — `this` is the hub provider). v1 callers in `dex/AssetService.ts`, `mm/useATokensBalances.ts`, `shared/useGetUserHubWalletAddress.ts` all flatten to this single shape. |
 
 ### Type aliases
 
@@ -41,7 +42,7 @@ Two categories worth distinguishing:
 | `SpokeChainId` (type) | `SpokeChainKey`. |
 | `EvmChainId` (type) | `EvmChainKey` (subset of `SpokeChainKey`). |
 | `HubChainId` (type) | `HubChainKey` (literal `'sonic'`). |
-| `Token` (type) | `XToken`. See [`../breaking-changes/type-system.md`](../breaking-changes/type-system.md) § 4. |
+| `Token` (type) | `XToken`. **Fully removed — no legacy alias.** `import type { Token } from '@sodax/types'` fails with `TS2305: '"@sodax/types"' has no exported member named 'Token'. Did you mean 'XToken'?`. The shape also changed (added `vault`, `hubAsset`; renamed `xChainId` → `chainKey`) — see [`../breaking-changes/type-system.md`](../breaking-changes/type-system.md) § 4. |
 | `AddressType` (type — `'P2PKH' \| 'P2SH' \| 'P2WPKH' \| 'P2TR'`) | `BtcAddressType` (renamed; same shape). See [`../breaking-changes/type-system.md`](../breaking-changes/type-system.md) § 7. |
 
 > Note: `BtcWalletAddressType` (`'taproot' | 'segwit'`, wallet-UI choice) is preserved in v2 with the same shape — it is **not** the same thing as `BtcAddressType` (on-chain address format). They coexist; do not blindly rename one to the other.
@@ -56,7 +57,7 @@ Two categories worth distinguishing:
 
 | v1 export | v2 replacement |
 |---|---|
-| `CustomProvider` (Hana-wallet window typedecl) | None. Window declaration becomes `unknown` or imports directly from the wallet vendor. Low-level Hana-extension helper functions (`requestAddress`, `requestSigning`, `requestJsonRpc`) ship from `@sodax/sdk` for consumers building their own Hana-based `IIconWalletProvider`. |
+| `CustomProvider` (Hana-wallet window typedecl) | **Pick by what you actually use:** (a) **You only declared `window.hanaWallet.ethereum: CustomProvider` for typedecl quietness, never called methods on it** → replace the type with `unknown` (`declare global { interface Window { hanaWallet: { ethereum: unknown } } }`). 1-line fix. (b) **You called `window.hanaWallet.ethereum.request(...)` or built a custom Hana wallet** → import the named helpers `requestAddress`, `requestSigning`, `requestJsonRpc` from `@sodax/sdk` and use them in place of the raw provider calls. These are the same low-level Hana-extension helpers v1 wrapped, now first-class exports. |
 
 ### Error types and guards
 

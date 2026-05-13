@@ -63,7 +63,7 @@ ai-exported/
 2. **Every async public method returns `Result<T>`.** Branch on `result.ok`. No throws across service boundaries. Sub-Result forwarding is the default: `if (!sub.ok) return sub`.
 3. **Errors are `SodaxError<C>`.** A single class with a closed 13-code reason vocabulary (`VALIDATION_FAILED`, `RELAY_TIMEOUT`, `EXECUTION_FAILED`, …) plus a `feature` field (`'swap' | 'moneyMarket' | …`). The pair `(feature, code)` is your discriminator. Use `isSodaxError(e)` (not bare `instanceof`).
 4. **Signed vs raw is a discriminated union.** `WalletProviderSlot<K, Raw>` enforces at compile time: `{ raw: false, walletProvider: <chain-narrowed> }` for signing, `{ raw: true }` for unsigned-tx building. Mixing them is a TypeScript error.
-5. **Config is dynamic.** `await sodax.config.initialize()` fetches current chain/token config from the backend, with a safe fallback to packaged defaults. Lookups go through `sodax.config.*` — there is no `hubAssets`, no `moneyMarketSupportedTokens` global map, no static registry to import.
+5. **Config is dynamic.** `await sodax.config.initialize()` fetches current chain/token config from the backend, with a safe fallback to packaged defaults. Prefer `sodax.config.*` so backend updates take effect — static defaults stay stale until you initialize. Per-symbol status of v1 globals (deleted vs still-exported-as-defaults) lives in [`migration/breaking-changes/architecture.md`](migration/breaking-changes/architecture.md) § 2.
 
 ## Top 5 v1 → v2 traps
 

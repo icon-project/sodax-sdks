@@ -66,10 +66,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
 | Framework | Where to mount `<Providers>` | `EVM.ssr` |
 |---|---|---|
-| Next.js (App Router) | `app/layout.tsx`, inside `<body>`. Mark the providers file `'use client'`. Pair with [`recipes/ssr-setup.md`](../../migration/recipes/ssr-setup.md) if you need wagmi cookie hydration. | `true` |
+| Next.js (App Router) | `app/layout.tsx`, inside `<body>`. Mark the providers file `'use client'`. Pair with [`../../migration/recipes/ssr-setup.md`](../../migration/recipes/ssr-setup.md) if you need wagmi cookie hydration. | `true` |
 | Vite + React | `main.tsx`, wrap `<App />` directly. | omit (defaults `false`) |
 | Create React App | `index.tsx`, wrap `<App />` directly. | omit |
 | Remix / Tanstack Start | Root route component, marked client-only. Same as Next.js. | `true` |
+
+For wagmi cookie hydration in App Router, also see [`../../migration/recipes/ssr-setup.md`](../../migration/recipes/ssr-setup.md).
 
 ---
 

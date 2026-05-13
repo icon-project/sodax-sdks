@@ -196,7 +196,7 @@ The errors most likely to hit on a fresh install or first port.
 
 ### `sodax.config.initialize()` hangs / errors
 
-- The backend API is unreachable. The SDK should fall back to packaged defaults silently — check your network, then check that `SodaxConfig.backendApi.url` is correct (or omit it for the default).
+- The backend API is unreachable. The SDK should fall back to packaged defaults silently — check your network, then check that `SodaxConfig.api.baseURL` is correct (or omit it for the default).
 
 ### Stellar bridge / swap fails with `'Trustline missing'`
 

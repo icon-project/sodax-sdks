@@ -112,7 +112,7 @@ Concrete chain classes live behind sub-paths. Default to barrel imports; opt int
 
 ### Default pattern (most chains)
 
-`/xchains/{evm, icon, injective, near, solana, sui}` re-export the chain's `XService` + `XConnector` classes — `EvmXService`/`EvmXConnector`, `SolanaXService`/`SolanaXConnector`, etc. Icon also exports `IconHanaXConnector` (the connector for the Hana wallet).
+`/xchains/{bitcoin, evm, icon, injective, near, solana, stacks, sui}` re-export the chain's `XService` + `XConnector` classes — `EvmXService`/`EvmXConnector`, `SolanaXService`/`SolanaXConnector`, `BitcoinXService`/`BitcoinXConnector`, `StacksXService`/`StacksXConnector`, etc. Icon also exports `IconHanaXConnector` (the connector for the Hana wallet).
 
 ```ts
 import { EvmXService, EvmXConnector } from '@sodax/wallet-sdk-react/xchains/evm';
