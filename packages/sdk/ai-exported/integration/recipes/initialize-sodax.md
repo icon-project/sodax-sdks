@@ -61,14 +61,14 @@ export const DEFAULT_SOLVER_ENDPOINT = sodaxConfig.solver.solverApiEndpoint;
 export const SUPPORTED_TOKENS_PER_CHAIN = sodaxConfig.swaps.supportedTokens;
 ```
 
-| Need | Module-scope import |
-|---|---|
-| Hub contract addresses (assetManager, hubWallet, stakingRouter, etc.) | `hubConfig.addresses.*` |
-| Full default SodaxConfig (read-only snapshot) | `sodaxConfig.*` (e.g. `sodaxConfig.hub`, `sodaxConfig.moneyMarket`) |
-| Per-chain config (rpcUrl, polling, chain-specifics) | `sodaxConfig.chains[ChainKeys.X_MAINNET]` |
-| Money market reserve assets | `sodaxConfig.moneyMarket.supportedReserveAssets` |
+| Need | Module-scope import (defaults only) | Instance-scope read (with overrides) |
+|---|---|---|
+| Hub contract addresses (assetManager, hubWallet, stakingRouter, etc.) | `hubConfig.addresses.*` | `sodax.config.getHubChainConfig().addresses.*` |
+| Full default SodaxConfig (read-only snapshot) | `sodaxConfig.*` (e.g. `sodaxConfig.hub`, `sodaxConfig.moneyMarket`) | `sodax.config.sodaxConfig` |
+| Per-chain spoke config (rpcUrl, nativeToken, addresses, supportedTokens, polling) | `spokeChainConfig[ChainKeys.X_MAINNET]` (from `@sodax/types` / `@sodax/sdk`) | `sodax.config.spokeChainConfig[ChainKeys.X_MAINNET]` *or* `sodax.config.getChainConfig(ChainKeys.X_MAINNET)` |
+| Money market reserve assets | `sodaxConfig.moneyMarket.supportedReserveAssets` | `sodax.config.getMoneyMarketReserveAssets()` |
 
-> **Static vs dynamic.** `sodaxConfig` / `hubConfig` are **packaged-default snapshots** frozen at SDK release time. They are safe at module scope but won't reflect backend-driven config updates. Once a `Sodax` instance exists and `initialize()` has resolved, prefer `sodax.config.*` for runtime-live data (`sodax.config.getHubChainConfig()`, `sodax.config.getMoneyMarketReserveAssets()`, etc.).
+> **Static vs dynamic — and the override-gap consequence.** `sodaxConfig` / `hubConfig` / `spokeChainConfig` are **packaged-default snapshots** frozen at SDK release time. They are safe at module scope but: (a) won't reflect backend-driven config updates loaded by `sodax.config.initialize()`, and (b) **won't reflect overrides passed to `new Sodax(config)`** — those merge into `sodax.config` (the `ConfigService`) but never mutate the static imports. So once a `Sodax` instance exists, prefer the instance-scope readers in the right column above — particularly `sodax.config.spokeChainConfig` over the same-named static import — or you will silently fall back to the packaged defaults for any chain you customized.
 
 
 ## Cross-references

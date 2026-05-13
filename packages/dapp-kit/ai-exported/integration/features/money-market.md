@@ -29,9 +29,37 @@ useUserFormattedSummary({ params, queryOptions });     // Health factor, collate
 useUserReservesData({ params, queryOptions });         // Per-reserve user position
 
 // aTokens
-useAToken({ params, queryOptions });                   // aToken metadata
-useATokensBalances({ params, queryOptions });          // aToken balances
+useAToken({ params: { aToken }, queryOptions });                                  // aToken metadata (single)
+useATokensBalances({ params: { aTokens, spokeChainKey, userAddress }, queryOptions }); // aToken balances (batched multicall)
 ```
+
+### Read-hook param shapes
+
+```ts
+// @ai-snippets-skip
+// useUserFormattedSummary / useUserReservesData — user-position queries
+type UseUserFormattedSummaryParams = ReadHookParams<FormatUserSummaryResponse, {
+  spokeChainKey: SpokeChainKey | undefined;
+  userAddress: string | undefined;
+}>;
+// Same shape on useUserReservesData. The hook derives the hub wallet from (spokeChainKey, userAddress) internally.
+
+// useAToken — single aToken metadata; FLAT (no chain/user fields)
+type UseATokenParams = ReadHookParams<ATokenData, {
+  aToken: Address | string | undefined;
+}>;
+// ATokenData = Erc20Token & { chainKey: ChainKey }
+
+// useATokensBalances — batched aToken balances
+type UseATokensBalancesParams = ReadHookParams<Map<Address, bigint>, {
+  aTokens: readonly Address[];
+  spokeChainKey: SpokeChainKey | undefined;
+  userAddress: string | undefined;
+}>;
+// Returns a Map keyed by aToken address. The hook resolves the hub wallet from (spokeChainKey, userAddress).
+```
+
+> **Read-side chain key is `spokeChainKey`, not `srcChainKey`.** Mutation hooks (`useSupply`/`useBorrow`/etc.) use `srcChainKey` because the request crosses chains and needs a source. Read hooks describe a user's position on a single spoke chain — the field is `spokeChainKey`. Applies to `useATokensBalances`, `useUserFormattedSummary`, and `useUserReservesData` (`useAToken` is metadata-only and takes neither). Don't grep-replace one for the other.
 
 ## Mutation params
 

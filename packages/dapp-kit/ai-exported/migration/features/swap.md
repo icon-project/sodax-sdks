@@ -27,7 +27,9 @@ Pair: [`../../integration/features/swap.md`](../../integration/features/swap.md)
 +     if (!walletProvider) return;
 -     const result = await swap.mutateAsync({ params: intentParams });
 -     if (result.ok) {
--       const { intent, intentDeliveryInfo } = result.value;
+-       // v1: result.value was a TUPLE — destructure positionally
+-       const [executionResponse] = result.value;
+-       const txHash = executionResponse.intent_hash;
 -       /* ... */
 -     } else {
 -       toast.error(result.error.message);
@@ -37,11 +39,24 @@ Pair: [`../../integration/features/swap.md`](../../integration/features/swap.md)
 +       toast.error(result.error instanceof Error ? result.error.message : 'Swap failed');
 +       return;
 +     }
-+     const { intent, intentDeliveryInfo } = result.value;
++     // v2: result.value is a NAMED OBJECT (SwapResponse) — destructure by name
++     const { solverExecutionResponse, intent, intentDeliveryInfo } = result.value;
++     const intentHash = solverExecutionResponse.intent_hash;       // protocol-level intent id (v1 ≈ executionResponse.intent_hash)
++     const spokeTxHash = intentDeliveryInfo.srcTxHash;             // on-chain tx hash on srcChainKey — use for tx-history display
 +     /* ... */
     };
   }
 ```
+
+#### `SwapResponse` field map (`result.value`)
+
+| Field | Type | Use it for |
+|---|---|---|
+| `solverExecutionResponse` | `{ answer: 'OK'; intent_hash: Hex }` | Protocol-level intent identifier. **`solverExecutionResponse.intent_hash` is the v2 equivalent of v1's `executionResponse.intent_hash`.** Pass it to `useStatus({ params: { intentTxHash } })` to poll execution status. |
+| `intent` | `Intent` | Intent metadata (`intentId: bigint`, `creator`, tokens, amounts, `srcChain`/`dstChain` as `IntentRelayChainId` bigints). **No transaction hashes on this object** — don't read `intent.intent_hash` (does not exist) or `intent.tx_hash`. |
+| `intentDeliveryInfo` | `{ srcChainKey, srcTxHash, srcAddress, dstChainKey, dstTxHash, dstAddress }` | **On-chain transaction hashes.** `srcTxHash` is the spoke-chain tx on `srcChainKey` (the one that typically feeds a user-facing transaction history); `dstTxHash` is the delivery tx on `dstChainKey`. |
+
+**Porting `[executionResponse] = result.value` (v1 tuple) → v2:** rename to `{ solverExecutionResponse } = result.value`. Any `executionResponse.intent_hash` read becomes `solverExecutionResponse.intent_hash`. If the value was being used as the **transaction hash** in a transaction-history row (not as the intent identifier), switch to `intentDeliveryInfo.srcTxHash` instead — `intent_hash` and `srcTxHash` are not interchangeable.
 
 ### `useSwapApprove` — return shape
 
