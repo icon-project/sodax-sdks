@@ -10,7 +10,7 @@ Pair: [`../../integration/features/money-market.md`](../../integration/features/
 2. **`MoneyMarketSupplyParams<K>` (and the four similar action-param types) gained required `srcChainKey` + `srcAddress`** — SDK-leakage.
 3. **`useMMAllowance` auto-skips on-chain checks for borrow/withdraw** — v1 may have had this too, but v2 returns `true` synchronously for those actions instead of issuing a no-op RPC.
 4. **`useMMApprove` returns standard `SafeUseMutationResult`** — `isLoading` → `isPending`.
-5. **Reserve data hooks renamed `address` → `userAddress`** in some queries (`useUserFormattedSummary`, `useUserReservesData`).
+5. **Position / aToken-balance hooks renamed `address` → `userAddress`.** Applies to `useUserFormattedSummary`, `useUserReservesData`, **and `useATokensBalances`** (which also drops `spokeProvider` and adds a required `spokeChainKey` alongside `aTokens` + `userAddress`). `useAToken` is unaffected — it takes only `{ aToken }`.
 
 ## Per-method delta
 
@@ -45,7 +45,25 @@ Pair: [`../../integration/features/money-market.md`](../../integration/features/
   }
 ```
 
-`useBorrow`, `useWithdraw`, `useRepay` follow the same pattern with their respective `action` literals (`'borrow'` / `'withdraw'` / `'repay'`). Borrow + repay can specify optional `dstChainKey` / `dstAddress` for cross-chain delivery.
+`useBorrow`, `useWithdraw`, `useRepay` follow the same pattern with their respective `action` literals (`'borrow'` / `'withdraw'` / `'repay'`). **All four MM action params share an identical field shape** — only the `action` literal differs:
+
+```ts
+// @ai-snippets-skip
+// MoneyMarketSupplyParams<K> | MoneyMarketBorrowParams<K> | MoneyMarketWithdrawParams<K> | MoneyMarketRepayParams<K>
+{
+  srcChainKey: K;                  // required — where the user signs / funds come from
+  srcAddress: string;              // required — user's spoke-side address on srcChainKey
+  token: string;                   // token on srcChainKey (supply/repay) or on dstChainKey (borrow/withdraw)
+  amount: bigint;
+  action: 'supply' | 'borrow' | 'withdraw' | 'repay';
+  dstChainKey?: SpokeChainKey;     // optional — defaults to srcChainKey (same-chain)
+  dstAddress?: string;             // optional — defaults to srcAddress (same-chain)
+}
+```
+
+Cross-chain delivery via `dstChainKey` / `dstAddress` is supported on **all four** actions, not just borrow/repay. Omit both for same-chain operations.
+
+> **Porting note** — v2 does NOT use `fromChainKey` / `fromAddress` / `toChainKey` / `toAddress` (or `fromChainId` / `toChainId`) on any MM action. Borrow and repay use the **same** `src*` / `dst*` field names as supply and withdraw — the v2 type system unified the cross-chain shape across all four actions. If your v1 call sites or app types carry `from*` / `to*` naming for the spend-chain vs. debt-chain, rename to `src*` / `dst*` (e.g. `fromChainKey → srcChainKey`, `toChainKey → dstChainKey`). See the SDK migration doc cross-link below for explicit borrow/repay diff examples.
 
 ### `useMMAllowance` — auto-skip
 
@@ -82,11 +100,35 @@ User-position hooks renamed param fields:
 + const { data } = useUserFormattedSummary({ params: { spokeChainKey, userAddress } });
 ```
 
+Same shape on `useUserReservesData`.
+
+### `useATokensBalances`
+
+```diff
+- const { data: balances } = useATokensBalances({ aTokens, spokeProvider, userAddress });
++ const { data: balances } = useATokensBalances({
++   params: {
++     aTokens,                                  // readonly Address[]
++     spokeChainKey,                            // SpokeChainKey — NOT `srcChainKey`
++     userAddress,                              // string — spoke-side user address (renamed from `address` if you're porting from any earlier shape)
++   },
++ });
++ // data: Map<Address, bigint> | undefined (already unwrapped — hook throws on SDK !ok)
+```
+
+Three things to verify when porting:
+
+- `spokeProvider` is gone — the hook derives the hub wallet internally from `(spokeChainKey, userAddress)` via `EvmHubProvider.getUserHubWalletAddress`.
+- The chain-key field is **`spokeChainKey`**, not `srcChainKey`. `src*` names belong to mutation params (`useSupply`/`useBorrow`/etc.) — read hooks for a single-chain position use `spokeChainKey`.
+- The user-address field is **`userAddress`**, not `address` — same rename as `useUserFormattedSummary` and `useUserReservesData`.
+
+`useAToken` (metadata-only) is unaffected by the user/chain renames — it takes only `{ aToken }`.
+
 ## Pitfalls
 
 1. **`srcAddress` is the user's spoke-side address**, not the hub address. Hub wallet is derived internally.
 2. **`useMMAllowance` returns `true` instantly for borrow/withdraw** — don't wait on the query state. Branch on `isApproved` directly.
-3. **Cross-chain borrow/repay**: omit `dstChainKey` / `dstAddress` for same-chain. Don't pass `dstChainKey === srcChainKey` (let the default kick in).
+3. **Cross-chain delivery (all four actions)**: omit `dstChainKey` / `dstAddress` for same-chain. Don't pass `dstChainKey === srcChainKey` (let the default kick in). The field names are `src*` / `dst*` on **every** MM action — there is no `from*` / `to*` variant.
 4. **`MoneyMarketSupplyParams<K>` is now generic.** Use `as const` on `srcChainKey` for narrowing: `srcChainKey: ChainKeys.BASE_MAINNET as const`.
 
 ## Cross-references

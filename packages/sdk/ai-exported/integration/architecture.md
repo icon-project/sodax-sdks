@@ -132,14 +132,20 @@ import { Sodax, type SodaxConfig, type DeepPartial } from '@sodax/sdk';
 new Sodax(config?: DeepPartial<SodaxConfig>): Sodax;
 ```
 
-`SodaxConfig` carries (all optional via `DeepPartial`):
+`SodaxConfig` has exactly **10 fields** (all required at the type level, but `DeepPartial` makes every leaf optional):
 
-- `solver` — `{ intentsContract, solverApiEndpoint, protocolIntentsContract }` (endpoints).
-- `swaps` — `SwapsConfig` (supported solver tokens per chain).
-- `moneyMarket`, `bridge`, `staking`, `dex`, `migration`, `partner`, `recovery` — feature-specific config (contract addresses, etc.).
-- `rpcConfig` — mapped type keyed by `ChainKey` values; `BitcoinRpcConfig` for `BITCOIN_MAINNET`, `StellarRpcConfig` for `STELLAR_MAINNET`, RPC URL strings for everything else.
-- `hubConfig` — hub provider config (consumed by `EvmHubProvider`).
-- `backendApi` — `{ url, api?: IConfigApi }` for custom backend / sandbox endpoints.
+- `fee: PartnerFee | undefined` — global partner fee, applied unless a feature-level config overrides.
+- `chains: Record<SpokeChainKey, SpokeChainConfig>` — per-spoke-chain config. Each entry carries `rpcUrl`, polling config, and chain-family-specific extras (`BitcoinSpokeChainConfig`, `StellarSpokeChainConfig`, etc.).
+- `swaps: SwapsConfig` — supported solver tokens per chain.
+- `moneyMarket: MoneyMarketConfig` — money market contracts + supported tokens.
+- `bridge: BridgeConfig` — bridge `{ partnerFee }` override.
+- `dex: DexConfig` — DEX pool/asset config.
+- `hub: HubConfig` — hub-chain (Sonic) full address map + RPC URL + polling config.
+- `api: ApiConfig` — backend API endpoint (`{ baseURL, timeout, headers }`).
+- `solver: SolverConfig` — `{ intentsContract, solverApiEndpoint, protocolIntentsContract }`.
+- `relay: RelayConfig` — intent relay endpoint + chain-id map.
+
+> **Not config slots** — `staking`, `migration`, `partner`/`partners`, `recovery` are services on the `Sodax` instance (`sodax.staking`, etc.) but they are **not** configurable via `SodaxConfig`. They run on packaged defaults; per-call params handle customization.
 
 In production, the packaged defaults are sufficient — pass nothing and call `await sodax.config.initialize()` to load fresh data from the backend.
 
@@ -174,7 +180,15 @@ Chain configs (vault addresses, supported tokens, fee parameters) change between
 
 ### Custom backend
 
-Inject a custom `IConfigApi` for testing or sandbox via `SodaxConfig.backendApi.api`. The contract: every method on `IConfigApi` returns `Promise<Result<T>>`.
+Point at a custom backend URL via `SodaxConfig.api.baseURL`:
+
+```ts
+const sodax = new Sodax({
+  api: { baseURL: 'https://sandbox-api.example.com' },
+});
+```
+
+`SodaxConfig.api` is `ApiConfig` (`{ baseURL, timeout, headers }`) — pass any subset via `DeepPartial`. v2 does not provide a typed slot to inject a custom `IConfigApi` implementation at construction; if you need to mock the backend for tests, point `baseURL` at a local mock server, or construct your own `BackendApiService`-compatible mock and inject it where you control the `Sodax` instance (e.g. dependency-injected in your app layer).
 
 ---
 

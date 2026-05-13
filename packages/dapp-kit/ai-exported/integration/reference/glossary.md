@@ -132,6 +132,8 @@ App-level React component. Provides:
 
 Optional config: `<SodaxProvider config={DeepPartial<SodaxConfig>}>`. Without config, SDK uses packaged defaults.
 
+Config is tracked by **reference** - see [`recipes/setup.md § Config reactivity`](../recipes/setup.md#config-reactivity) for module-const vs `useMemo` patterns.
+
 ### `createSodaxQueryClient`
 
 Factory for a `QueryClient` with `MutationCache.onError` pre-wired for global mutation observability. Optional — if you construct your own `QueryClient`, dapp-kit hooks still work; you just don't get the global observability seam.

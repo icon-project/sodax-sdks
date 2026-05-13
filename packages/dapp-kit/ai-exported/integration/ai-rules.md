@@ -39,6 +39,7 @@ DO / DO NOT / workflow / stop conditions for AI agents writing v2 dapp-kit code.
 - **DO NOT** recreate the v1 `invalidateMmQueries(...)` utility or anything similar. Each mutation hook invalidates the relevant keys in its own `onSuccess`. Add cross-feature invalidations via consumer `onSuccess`.
 - **DO NOT** destructure cross-chain mutation results as arrays — `[a, b] = result.value` is wrong. The shape is `TxHashPair = { srcChainTxHash, dstChainTxHash }` (object). This applies to `useBridge`, `useStake`/`useUnstake`/etc., `useDexDeposit`/`useDexWithdraw`, all four MM mutations, and all four migration mutations.
 - **DO NOT** use legacy chain-id constants (`BSC_MAINNET_CHAIN_ID`, etc.). They're gone in v2 — use `ChainKeys.X_MAINNET`.
+- **DO NOT** reach for `as any` / `as IEvmWalletProvider` casts when wiring `useWalletProvider({ xChainId })` into mutation `mutate(vars)`. v2 supports the broad-union case structurally; the cast is not needed. See `recipes/wallet-connectivity.md` § "No type cast is needed".
 
 ## Stop conditions (defer to user)
 

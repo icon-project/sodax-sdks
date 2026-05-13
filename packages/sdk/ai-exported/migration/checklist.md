@@ -20,6 +20,11 @@ Work this top-down. Each step is independent enough to land as its own commit; t
 [ ] 7.  Add { raw: false } discriminator to every signed call shape that
         previously took a positional spoke provider:
             { intentParams, spokeProvider }   →   { params, raw: false, walletProvider }
+[ ] 7b. Cross-cutting rename: every payload field named `spokeProvider:` (incl.
+        approve/allowance/utility methods that aren't signed-execution shapes)
+        → `walletProvider:`. Mechanical for the OBJECT-LITERAL field key; don't
+        blindly rename variable names of the same spelling. See
+        [`recipes.md`](recipes.md) § 1 "What's not safe to grep-replace".
 [ ] 8.  Add srcChainKey + srcAddress to every action params object that didn't
         carry them in v1 (most MM, staking, dex, bridge, migration param shapes).
 [ ] 9.  Convert every await sodax.<service>.<method>(...) call site that previously
@@ -28,9 +33,10 @@ Work this top-down. Each step is independent enough to land as its own commit; t
 [ ] 10. Delete imports of MoneyMarketError, IntentError, StakingError, BridgeError,
         MigrationError, AssetServiceError, ConcentratedLiquidityError, RelayError,
         plus the five Partner error types and their type-guard helpers.
-[ ] 11. Replace any walked global lookup (hubAssets[chainId][address],
-        moneyMarketSupportedTokens[chainId], SodaTokens[...]) with the equivalent
-        sodax.config.* / sodax.moneyMarket.getSupportedTokens*() calls.
+[ ] 11. Replace any walked global lookup (hubAssets, moneyMarketSupportedTokens,
+        SodaTokens, supportedSpokeChains) with the equivalent sodax.config.* /
+        sodax.moneyMarket.getSupportedTokens*() call. Per-symbol deleted-vs-
+        still-exported status: see breaking-changes/architecture.md § 2.
 [ ] 12. Initialize ConfigService at app startup: await sodax.config.initialize().
         Falls back to packaged defaults if the backend is unreachable.
 [ ] 13. Add { raw: true } to any read-only allowance check that previously took

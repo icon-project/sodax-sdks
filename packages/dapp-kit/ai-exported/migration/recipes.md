@@ -42,28 +42,25 @@ for (const file of project.getSourceFiles('src/**/*.{ts,tsx}')) {
 await project.save();
 ```
 
-## Codemod 2: useSpokeProvider deletion
+## Codemod 2: useSpokeProvider deletion (2-arg → 1-arg)
 
-`useSpokeProvider` is gone in v2. Delete the import + usage; replace with `useWalletProvider` from `@sodax/wallet-sdk-react`.
+`useSpokeProvider` is gone in v2. Replace with `useWalletProvider` from `@sodax/wallet-sdk-react`.
 
-```bash
-# 1. Find all usages first.
-grep -rE '\buseSpokeProvider\b' src/
-
-# 2. Manual delete + rewrite each (no safe sed for this — context varies).
-```
-
-Per call site, the rewrite:
+v1 had **two positional args**: `useSpokeProvider(spokeChainId, walletProvider)`. v2 collapses to a single options object: `useWalletProvider({ xChainId })`. The second v1 argument is **dropped entirely** — v2 resolves the wallet provider from the wallet-sdk-react store internally based on `xChainId`. If your v1 code constructed a wallet provider separately to pass in, delete that construction code too.
 
 ```diff
+- // v1 — 2 positional args (chainKey + walletProvider)
 - import { useSpokeProvider } from '@sodax/dapp-kit';
-- const spokeProvider = useSpokeProvider({ chainId: BSC_MAINNET_CHAIN_ID });
+- const spokeProvider = useSpokeProvider(srcChainId, walletProvider);
+
++ // v2 — 1 options arg, no external walletProvider
 + import { useWalletProvider } from '@sodax/wallet-sdk-react';
-+ import { ChainKeys } from '@sodax/sdk';
-+ const walletProvider = useWalletProvider({ xChainId: ChainKeys.BSC_MAINNET });
++ const walletProvider = useWalletProvider({ xChainId: srcChainId });
 ```
 
-Then update consumers of `spokeProvider` to use `walletProvider` instead — usually inside `mutate(vars)` payloads, sometimes inside query hook params.
+A naive single-pass regex over `useSpokeProvider\(([^)]+)\)` eats both args and produces invalid `useWalletProvider({ xChainId: chainKey, walletProvider })`. Do the rewrite in two passes: first the call shape (drop the second positional arg), then the import (from `@sodax/dapp-kit` → `@sodax/wallet-sdk-react`). A small number of v1 callers used the single-arg form `useSpokeProvider(chainId)` — handle those separately since they don't have a second arg to drop.
+
+Update downstream consumers of `spokeProvider` to use `walletProvider` instead — usually inside `mutate(vars)` payloads or query hook params. The field name on payloads also renamed `spokeProvider:` → `walletProvider:` (see `@sodax/sdk/ai-exported/migration/checklist.md` step 7b).
 
 ## Codemod 3: invalidate*Queries utilities deletion
 

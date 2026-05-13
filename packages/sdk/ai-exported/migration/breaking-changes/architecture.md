@@ -5,7 +5,7 @@ The structural changes that reshaped the SDK at the service / runtime layer. Rea
 The four load-bearing shifts:
 
 1. **Per-chain `*SpokeProvider` classes are deleted.** Routing is by chain key, dispatched internally by `SpokeService`.
-2. **Static lookup tables (`hubAssets`, `moneyMarketSupportedTokens`, `SodaTokens`) are deleted.** Lookups go through `sodax.config.*`.
+2. **Static lookup tables — `hubAssets` deleted; `moneyMarketSupportedTokens`, `SodaTokens`, `supportedSpokeChains` still exported as packaged defaults but should yield to `sodax.config.*` so backend updates take effect.** See § 2 below for the per-symbol status table.
 3. **Relay flow is centralised.** Two functions (`relayTxAndWaitPacket`, `submitTransaction`) and one mapper (`mapRelayFailure`) replace per-feature relay helpers.
 4. **Invariants and guards are unified.** `sodaxInvariant` + per-feature aliases (`swapInvariant`, `mmInvariant`, etc.) and `isSodaxError` / `isFeatureError` replace ad-hoc throws and module-specific type guards.
 
@@ -115,6 +115,8 @@ These v1 names still ship through `@sodax/sdk` (re-exported from `@sodax/types`)
 | `Object.entries(moneyMarketSupportedTokens)` (walk pattern) | Const still exported | `sodax.moneyMarket.getSupportedTokens()` (returns `Record<SpokeChainKey, XToken[]>`) |
 | `SodaTokens` registry (vault-validation) | Still exported (`packages/types/src/chains/tokens.ts`) | `sodax.config.getMoneyMarketReserveAssets()` or `sodax.moneyMarket.getSupportedReserves()` |
 | `swapSupportedTokens[chainId]` (v1 had no `solverSupportedTokens`) | Still exported (`packages/types/src/swap/swap.ts`) | `sodax.config.getSupportedSwapTokensByChainId(chainKey)` |
+| `getSupportedSolverTokens(chainId)` (free function) | Still exported (`packages/types/src/swap/swap.ts`) | `sodax.config.getSupportedSwapTokensByChainId(chainKey)` |
+| `supportedSpokeChains` (`SpokeChainKey[]`) | Still exported (`packages/types/src/chains/chains.ts`) | `sodax.config.isValidSpokeChainKey(chainKey)` for validation, or read `sodaxConfig.chains` at module scope |
 
 ### What replaces them
 
