@@ -1,4 +1,4 @@
-import { useMemo, useRef, type ReactNode, type ReactElement } from 'react';
+import { useMemo, type ReactNode, type ReactElement } from 'react';
 import { Sodax, type SodaxConfig } from '@sodax/sdk';
 import { SodaxContext } from '@/contexts/index.js';
 import type { DeepPartial } from '@sodax/sdk';
@@ -6,20 +6,24 @@ import type { DeepPartial } from '@sodax/sdk';
 interface SodaxProviderProps {
   children: ReactNode;
   /**
-   * Sodax config (overrides defaults including rpcUrls). **Read-once at mount** —
-   * changes after first render are ignored to prevent re-instantiating the SDK
-   * from unstable parent references. To switch config (e.g. testnet ↔ mainnet),
-   * unmount/remount the provider.
+   * Sodax SDK config. Tracked by **reference** - a new identity re-instantiates the
+   * SDK. Hoist to a module constant or wrap in `useMemo`; include any value the SDK
+   * should react to (e.g. solver env) in the deps. Inline `{...}` re-creates the SDK
+   * every parent render and resets every `useSodaxContext` consumer.
+   *
+   * @example
+   * ```tsx
+   * const config = useMemo(() => ({ solver: solverMap[env] }), [env]);
+   * <SodaxProvider config={config}>...</SodaxProvider>
+   * ```
    */
   config?: DeepPartial<SodaxConfig>;
 }
 
+/** Root provider for `@sodax/dapp-kit`. Must be paired with `QueryClientProvider`. */
 export const SodaxProvider = ({ children, config }: SodaxProviderProps): ReactElement => {
-  // Freeze config on first render so the SDK instance and consumers share one
-  // snapshot (matches SodaxWalletProvider semantic).
-  const configRef = useRef<DeepPartial<SodaxConfig> | undefined>(config);
-  const frozen = configRef.current;
-  const sodax = useMemo(() => new Sodax(frozen), [frozen]);
+  const sodax = useMemo(() => new Sodax(config), [config]);
+  const contextValue = useMemo(() => ({ sodax }), [sodax]);
 
-  return <SodaxContext.Provider value={{ sodax }}>{children}</SodaxContext.Provider>;
+  return <SodaxContext.Provider value={contextValue}>{children}</SodaxContext.Provider>;
 };

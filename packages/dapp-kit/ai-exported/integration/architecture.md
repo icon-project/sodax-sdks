@@ -33,6 +33,8 @@ Every v2 design concept the hooks rest on, in one TOC-navigable file. Read it on
 
 `SodaxProvider` does **not** depend on `@sodax/wallet-sdk-react` — wallet state is wired side-by-side. Backend / non-React consumers (Node scripts, bots) bypass dapp-kit entirely and use `@sodax/sdk` directly with their own wallet implementation.
 
+**Config reactivity.** `config` is tracked by reference - see [`recipes/setup.md § Config reactivity`](recipes/setup.md#config-reactivity) for the module-const vs `useMemo` patterns.
+
 ### `createSodaxQueryClient`
 
 Returns a `QueryClient` pre-wired with a `MutationCache.onError` hook for global mutation observability. Default behavior: logs every mutation failure to console as `[sodax] Mutation error: <error>`.
