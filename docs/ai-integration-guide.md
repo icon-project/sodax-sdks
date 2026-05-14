@@ -47,13 +47,13 @@ Skip this step if `@sodax/*` is already in your project.
 Pick the install combination for what you're building:
 
 ```bash
-# React dApp with ready-made hooks (most common)
+# React dApp with @sodax/dapp-kit hooks (most common)
 pnpm add @sodax/sdk @sodax/dapp-kit @sodax/wallet-sdk-react
 
-# React app calling the SDK directly (no hooks layer)
+# React dApp without @sodax/dapp-kit (call SDK methods directly, wallet via wallet-sdk-react)
 pnpm add @sodax/sdk @sodax/wallet-sdk-react
 
-# Node.js / scripts / backend
+# Node.js / scripts, or custom non-React browser flow
 pnpm add @sodax/sdk @sodax/wallet-sdk-core
 ```
 
