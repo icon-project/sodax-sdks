@@ -44,20 +44,16 @@ The three steps below walk you through each.
 
 Skip this step if `@sodax/*` is already in your project.
 
-Pick the install combination for what you're building:
+Install the packages you need:
 
 ```bash
-# React dApp with @sodax/dapp-kit hooks (most common)
-pnpm add @sodax/sdk @sodax/dapp-kit @sodax/wallet-sdk-react
-
-# React dApp without @sodax/dapp-kit (call SDK methods directly, wallet via wallet-sdk-react)
-pnpm add @sodax/sdk @sodax/wallet-sdk-react
-
-# Node.js / scripts, or custom non-React browser flow
-pnpm add @sodax/sdk @sodax/wallet-sdk-core
+pnpm add @sodax/sdk                  # core SDK - always needed
+pnpm add @sodax/dapp-kit             # React hooks (optional)
+pnpm add @sodax/wallet-sdk-react     # React wallet connection (optional)
+pnpm add @sodax/wallet-sdk-core      # wallet for Node / scripts / non-React browser (optional)
 ```
 
-See [The Sodax packages](#the-sodax-packages) above for what each does, or [Per-package entry points](#per-package-entry-points) at the bottom for the full table.
+See [The Sodax packages](#the-sodax-packages) above for what each does and when to use it.
 
 After install, each package exposes an `ai-exported/` folder inside `node_modules/`:
 
