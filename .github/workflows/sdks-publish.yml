@@ -1,0 +1,74 @@
+name: Publish All SODAX SDK Packages to npmjs
+
+on:
+  push:
+    tags:
+      - '@sdks@*.*.*'
+
+concurrency:
+  group: sdks-publish
+  cancel-in-progress: false
+
+jobs:
+  publish-npm:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    env:
+      NODE_OPTIONS: --max-old-space-size=8192
+      NODE_AUTH_TOKEN: ${{ secrets.SODAX_SDKS_NPM_PUBLISH_TOKEN }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Validate tag matches all package.json versions and determine dist-tag
+        id: dist_tag
+        run: |
+          EXPECTED_VERSION="${GITHUB_REF_NAME#@sdks@}"
+          PACKAGES=(types wallet-sdk-core sdk wallet-sdk-react dapp-kit)
+          for pkg in "${PACKAGES[@]}"; do
+            actual=$(jq -er .version "packages/$pkg/package.json")
+            if [[ "$actual" != "$EXPECTED_VERSION" ]]; then
+              echo "::error::packages/$pkg/package.json version ($actual) does not match git tag ($EXPECTED_VERSION)"
+              exit 1
+            fi
+          done
+          if [[ "$EXPECTED_VERSION" == *-* ]]; then
+            PRERELEASE_ID="${EXPECTED_VERSION#*-}"
+            TAG="${PRERELEASE_ID%%.*}"
+          else
+            TAG="latest"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24.x'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.32.1
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build:packages
+
+      - name: Publish packages in topological order
+        run: |
+          PACKAGES=(types wallet-sdk-core sdk wallet-sdk-react dapp-kit)
+          for pkg in "${PACKAGES[@]}"; do
+            echo "::group::Publishing @sodax/$pkg"
+            (cd "packages/$pkg" && pnpm publish --no-git-checks --provenance --access public --tag "$DIST_TAG")
+            echo "::endgroup::"
+          done
+        env:
+          DIST_TAG: ${{ steps.dist_tag.outputs.tag }}

@@ -23,6 +23,8 @@ Five architectural pieces hold the canonical hook shape together. Read this sect
 
 Accessed via `useSodaxContext()` hook — all other hooks use this internally.
 
+**Config reactivity.** `config` is tracked by reference: `new Sodax(config)` runs whenever the prop identity changes, resetting wagmi connection state, in-flight RPC, and any persisted state inside `useSodaxContext` consumers. Consumer-facing guidance (with module-const vs `useMemo` examples) lives in [`ai-exported/integration/recipes/setup.md`](ai-exported/integration/recipes/setup.md).
+
 **Recommended provider stack ordering:**
 
 ```tsx

@@ -4,6 +4,36 @@ The biggest single change in v2. v1 spread chain configuration across three prop
 
 ---
 
+## ⚠️ First, fix the provider stack (silent runtime crash otherwise)
+
+**v1 created `QueryClient` internally; v2 expects the consumer to provide one.** If you only swap the prop shape without adding `QueryClientProvider`, the app crashes at runtime — React Query hooks throw "No QueryClient set". This is **not** a typecheck error; it surfaces only when a wallet hook mounts.
+
+```tsx
+// v1 ❌ — QueryClientProvider was internal
+<SodaxWalletProvider rpcConfig={...} options={...}>{children}</SodaxWalletProvider>
+
+// v2 ✅ — caller wraps with QueryClientProvider
+<QueryClientProvider client={queryClient}>
+  <SodaxWalletProvider config={walletConfig}>{children}</SodaxWalletProvider>
+</QueryClientProvider>
+```
+
+Add `@tanstack/react-query 5.x` as a direct dependency if your app didn't already have it. See [`../breaking-changes.md`](../breaking-changes.md) §2.
+
+When dapp-kit is also in use, the full provider stack is:
+
+```tsx
+<SodaxProvider config={sodaxConfig}>
+  <QueryClientProvider client={queryClient}>           {/* required wrapper */}
+    <SodaxWalletProvider config={walletConfig}>
+      <YourApp />
+    </SodaxWalletProvider>
+  </QueryClientProvider>
+</SodaxProvider>
+```
+
+---
+
 ## Top-level shape
 
 ```tsx
@@ -243,19 +273,7 @@ Bumping `configVersion` (e.g. when the user picks a new RPC endpoint) forces a c
 
 ## Provider-stack order changed
 
-v1 created `QueryClient` internally; v2 expects the consumer to provide one:
-
-```tsx
-// v1 ❌ — QueryClientProvider was internal
-<SodaxWalletProvider rpcConfig={...} options={...}>{children}</SodaxWalletProvider>
-
-// v2 ✅ — caller wraps with QueryClientProvider
-<QueryClientProvider client={queryClient}>
-  <SodaxWalletProvider config={walletConfig}>{children}</SodaxWalletProvider>
-</QueryClientProvider>
-```
-
-Add `@tanstack/react-query 5.x` as a direct dependency if your app didn't already have it. See [`../breaking-changes.md`](../breaking-changes.md) §2.
+Moved to the top of this file — see the ⚠️ block at the start. The summary: wrap `SodaxWalletProvider` in `QueryClientProvider`, otherwise React Query throws "No QueryClient set" at runtime.
 
 ---
 

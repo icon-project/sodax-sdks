@@ -1,12 +1,15 @@
 # Migration recipes — v1 → v2
 
-Practical patterns for porting consumer code without rewriting everything in one pass. Three recipes:
+Practical patterns for porting consumer code without rewriting everything in one pass.
 
 1. [Codemod patterns](#1-codemod-patterns) — regex find/replace + a small `ts-morph` script for the renames that grep can't safely handle.
-2. [Error-shape adapter](#2-error-shape-adapter) — adapt v2 `SodaxError` onto v1 `{ code, data }` branches so existing error-formatting helpers keep working.
-3. [Result adapter](#3-result-adapter) — wrap v2 `Result<T>` in a v1-style throw shim for incremental conversion of call sites.
+2. [Free-function lookups at module scope](#2-free-function-lookups-at-module-scope) — `getHubChainConfig()` / `getMoneyMarketConfig()` migration for constants/util files where no `Sodax` instance exists yet.
+3. [Error-shape adapter](#3-error-shape-adapter) — adapt v2 `SodaxError` onto v1 `{ code, data }` branches so existing error-formatting helpers keep working.
+4. [Result adapter](#4-result-adapter) — wrap v2 `Result<T>` in a v1-style throw shim for incremental conversion of call sites.
 
 These are migration-only — once the port is complete, delete them. They're not patterns for new code.
+
+The patterns below describe **what** the rewrite needs to do; pick whichever codemod tool fits your project (regex, `ts-morph`, `jscodeshift`, IDE refactor). The example scripts use `ts-morph` for AST-level rewrites where regex is unsafe.
 
 ---
 
@@ -16,11 +19,26 @@ These are migration-only — once the port is complete, delete them. They're not
 
 | Change | Find | Replace | Notes |
 |---|---|---|---|
-| Chain-id constants | `(\w+)_MAINNET_CHAIN_ID` | `ChainKeys.$1_MAINNET` | Mechanical. After: fix `import` statements. |
+| Chain-id constants | `(\w+)_MAINNET_CHAIN_ID` | `ChainKeys.$1_MAINNET` | Mechanical. **Two-pass — see below.** First-pass rewrites usages; second-pass fixes the broken `import { ... }` statements. |
 | `xChainId` field on `XToken` | `\.xChainId\b` | `.chainKey` | Token field rename. Audit first — some non-token types may use `xChainId` differently. |
 | `Token` type rename | `\bimport(.*)\bToken\b(.*)\bfrom 'sodax/types'` | `import$1XToken$2from '@sodax/sdk'` | Best done with `ts-morph` to avoid touching unrelated `Token` identifiers. |
 | `SpokeChainId` → `SpokeChainKey` | `\b(SpokeChainId\|ChainId)\b` (in type positions) | `SpokeChainKey` | Audit — `ChainId` is also used by 3rd-party libs (viem, etc.). Limit to `@sodax/types` imports. |
 | `AddressType` → `BtcAddressType` | `\bAddressType\b` (in `@sodax/types` import positions) | `BtcAddressType` | |
+
+### Two-pass codemod for chain-id constants
+
+A one-pass `_MAINNET_CHAIN_ID` → `ChainKeys.*_MAINNET` rewrite produces invalid syntax inside `import { ... }` blocks — `ChainKeys.SONIC_MAINNET` is a member-access expression, not a bare identifier, and cannot live inside a named-import list (TS1109).
+
+Split the rewrite into two passes:
+
+1. **Pass 1 — rewrite usages.** Every `<X>_MAINNET_CHAIN_ID` → `ChainKeys.<X>_MAINNET`. Touches expression positions and (incorrectly) named-import positions; the broken imports get fixed in pass 2.
+2. **Pass 2 — sweep imports.** For each `import { … } from '@sodax/{types,sdk}'`, drop the now-broken `ChainKeys.<X>_MAINNET` entries from the named-imports list and ensure `ChainKeys` itself is imported once.
+
+Use the `ts-morph` script from the chain-id section above as a starting point for an AST-aware version, or build the two passes with whatever tooling fits your repo. After pass 2, every chain-id reference compiles.
+
+### Pitfall — duplicate `ChainKeys` imports
+
+If a file imports `<X>_MAINNET_CHAIN_ID` from BOTH `@sodax/types` and `@sodax/sdk` (some legacy code split imports across the two), pass 2 may add `ChainKeys` to both import statements → `TS2300 Duplicate identifier 'ChainKeys'`. Either keep `ChainKeys` only in the first import block, or consolidate to one import — `@sodax/sdk` re-exports the entire `@sodax/types` surface, so a single `import … from '@sodax/sdk'` is sufficient.
 
 ### What's not safe to grep-replace
 
@@ -95,7 +113,51 @@ The `ts-morph` script above edits in-place. Commit your tree before running.
 
 ---
 
-## 2. Error-shape adapter
+## 2. Free-function lookups at module scope
+
+v1 exported free functions like `getHubChainConfig()` and `getMoneyMarketConfig(chainId)` that consumers called at **module-load time** inside constants/util files — *before* any `Sodax` instance exists. The v2 replacement on `Sodax.config.*` is unusable in that context (chicken-and-egg).
+
+The real v2 answer: read directly from the packaged-default const `sodaxConfig`, re-exported from `@sodax/sdk` (and from `@sodax/types`):
+
+| v1 free function | v2 module-scope equivalent |
+|---|---|
+| `getHubChainConfig()` | `sodaxConfig.hub` |
+| `getMoneyMarketConfig(hubChainId)` | `sodaxConfig.moneyMarket` |
+| `getMoneyMarketConfig(hubChainId).supportedTokens` | `sodaxConfig.moneyMarket.supportedTokens` |
+| `getSolverConfig(SONIC_MAINNET_CHAIN_ID)` (read solver endpoints) | `sodaxConfig.solver` |
+| (none — v1 had no module-scope-safe accessor for full hub object) | `sodaxConfig.hub.addresses.hubWallet`, `.assetManager`, etc. |
+
+```diff
+- // v1 — module-scope constants file (no Sodax instance available yet)
+- import { getHubChainConfig, getMoneyMarketConfig } from '@sodax/sdk';
+- import { SONIC_MAINNET_CHAIN_ID } from '@sodax/types';
+-
+- const hubConfig = { hubRpcUrl, chainConfig: getHubChainConfig() };
+- const moneyMarketConfig = getMoneyMarketConfig(SONIC_MAINNET_CHAIN_ID);
+
++ // v2 — read from packaged defaults; no Sodax instance needed
++ import { sodaxConfig } from '@sodax/sdk';
++
++ const hubAddresses = sodaxConfig.hub.addresses;
++ const moneyMarketTokens = sodaxConfig.moneyMarket.supportedTokens;
+```
+
+> **Once you have a `Sodax` instance**, prefer `sodax.config.*` (`sodax.config.getHubChainConfig()`, `sodax.config.getMoneyMarketReserveAssets()`, etc.). The service-API path reflects backend-driven runtime updates after `await sodax.config.initialize()`; `sodaxConfig` is a packaged-default snapshot frozen at SDK release time.
+
+For hub-only module-scope reads, `hubConfig` is also exported directly:
+
+```ts
+import { hubConfig } from '@sodax/sdk';
+
+const HUB_WALLET = hubConfig.addresses.hubWallet;
+const STAKING_ROUTER = hubConfig.addresses.stakingRouter;
+```
+
+See [`reference/sodax-config.md`](reference/sodax-config.md) § "Pitfall — module-scope reads" for the same guidance in the SodaxConfig reshape doc.
+
+---
+
+## 3. Error-shape adapter
 
 If your consumer code has `getMmErrorText`, `getSwapErrorText`, or similar helpers that branch on a v1 error object's `.code` and `.data.error`, the minimal-change migration is to wrap incoming v2 `SodaxError` instances at the entry point of each helper:
 
@@ -191,7 +253,7 @@ See [`reference/error-code-crosswalk.md`](reference/error-code-crosswalk.md) for
 
 ---
 
-## 3. Result adapter
+## 4. Result adapter
 
 If converting every call site to branch on `result.ok` in one pass isn't realistic, use a `throwIfError` shim during migration. Then convert call sites at your own pace.
 

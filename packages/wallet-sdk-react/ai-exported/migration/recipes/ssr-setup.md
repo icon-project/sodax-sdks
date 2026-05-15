@@ -160,3 +160,5 @@ grep -rnE "EVM:\s*\{[^}]*\bssr:\s*true" <user-src>
 - **Creating `QueryClient` inside the layout component.** Each render creates a new client and React Query loses its cache. Define `queryClient` as a **module-level constant**, or use `useState(() => new QueryClient())` inside a client component.
 - **Pages Router project.** This recipe assumes App Router. For Pages Router, mount the providers in `_app.tsx` instead — the API is the same.
 - **Dynamic RPC URLs from env vars.** If `rpcUrl` comes from `process.env.NEXT_PUBLIC_*`, ensure the env var is available at module init time (it is, by Next.js convention). Don't compute the config inside a hook — `SodaxWalletProvider` freezes config on first render, so config must be stable.
+
+

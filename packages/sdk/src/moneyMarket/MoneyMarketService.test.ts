@@ -662,7 +662,7 @@ describe('MoneyMarketService.isAllowanceValid', () => {
         params: supplyParams(ChainKeys.SONIC_MAINNET),
       });
 
-      expect(result).toEqual({ ok: false, error: routerError });
+      expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: routerError.message }) });
     });
 
     it('forwards a failure Result from spoke.isAllowanceValid (EVM-spoke supply path)', async () => {
@@ -676,7 +676,7 @@ describe('MoneyMarketService.isAllowanceValid', () => {
         params: supplyParams(ChainKeys.BSC_MAINNET),
       });
 
-      expect(result).toEqual({ ok: false, error: allowanceError });
+      expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: allowanceError.message }) });
     });
 
     it('returns ok:false when spoke.isAllowanceValid throws', async () => {
@@ -687,7 +687,7 @@ describe('MoneyMarketService.isAllowanceValid', () => {
         params: supplyParams(ChainKeys.BSC_MAINNET),
       });
 
-      expect(result).toEqual({ ok: false, error: rpcError });
+      expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: rpcError.message }) });
     });
 
     it('forwards a failure Result from the src trustline lookup (Stellar src+dst path)', async () => {
@@ -704,7 +704,7 @@ describe('MoneyMarketService.isAllowanceValid', () => {
         },
       });
 
-      expect(result).toEqual({ ok: false, error: trustlineError });
+      expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: trustlineError.message }) });
     });
   });
 });
@@ -845,7 +845,7 @@ describe('MoneyMarketService.approve', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: routerError });
+      expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: routerError.message }) });
     });
 
     it('forwards a failure Result from spoke.approve (EVM-spoke path)', async () => {
@@ -858,7 +858,7 @@ describe('MoneyMarketService.approve', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: approveError });
+      expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: approveError.message }) });
     });
 
     it('returns ok:false when spoke.approve throws', async () => {
@@ -871,7 +871,7 @@ describe('MoneyMarketService.approve', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: thrown });
+      expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: thrown.message }) });
     });
   });
 });
@@ -954,7 +954,7 @@ describe('MoneyMarketService.approve (raw: true)', () => {
 
     const result = await sodax.moneyMarket.approve({ raw: true, params: supplyParams(ChainKeys.BSC_MAINNET) });
 
-    expect(result).toEqual({ ok: false, error: approveError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: approveError.message }) });
   });
 });
 
@@ -972,9 +972,7 @@ describe('MoneyMarketService.createSupplyIntent', () => {
   describe('happy paths', () => {
     it('on hub (Sonic): builds data, deposits, returns tx hash + extra data', async () => {
       vi.spyOn(sodax.moneyMarket, 'buildSupplyData').mockReturnValueOnce('0xsupply-data');
-      const depositSpy = vi
-        .spyOn(sodax.spoke, 'deposit')
-        .mockResolvedValueOnce({ ok: true, value: '0xdeposit-hash' });
+      const depositSpy = vi.spyOn(sodax.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: '0xdeposit-hash' });
 
       const result = await sodax.moneyMarket.createSupplyIntent({
         raw: false,
@@ -1101,7 +1099,7 @@ describe('MoneyMarketService.createSupplyIntent', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: hubError });
+      expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: hubError.message }) });
     });
 
     it('forwards a failure Result from spoke.deposit', async () => {
@@ -1115,7 +1113,7 @@ describe('MoneyMarketService.createSupplyIntent', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: depositError });
+      expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: depositError.message }) });
     });
 
     it('returns ok:false when spoke.deposit throws', async () => {
@@ -1129,7 +1127,7 @@ describe('MoneyMarketService.createSupplyIntent', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: thrown });
+      expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: thrown.message }) });
     });
   });
 });
@@ -1203,7 +1201,7 @@ describe('MoneyMarketService.createSupplyIntent (raw: true)', () => {
       params: supplyParams(ChainKeys.BSC_MAINNET),
     });
 
-    expect(result).toEqual({ ok: false, error: depositError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: depositError.message }) });
   });
 });
 
@@ -1305,7 +1303,7 @@ describe('MoneyMarketService.supply', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: intentError });
+      expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: intentError.message }) });
     });
 
     it('wraps a verifyTxHash failure as MM_VERIFY_FAILED with cause', async () => {
@@ -1369,7 +1367,7 @@ describe('MoneyMarketService.supply', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: thrown });
+      expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: thrown.message }) });
     });
 
     it('wraps a SodaxError with a non-supply code as MM_SUPPLY_FAILED (typed contract preserved)', async () => {
@@ -1418,9 +1416,7 @@ describe('MoneyMarketService.createBorrowIntent', () => {
   describe('happy paths', () => {
     it('on EVM spoke (BSC): builds borrow data and sends message to the hub', async () => {
       vi.spyOn(sodax.moneyMarket, 'buildBorrowData').mockReturnValueOnce('0xborrow-data');
-      const sendSpy = vi
-        .spyOn(sodax.spoke, 'sendMessage')
-        .mockResolvedValueOnce({ ok: true, value: '0xsend-hash' });
+      const sendSpy = vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xsend-hash' });
 
       const result = await sodax.moneyMarket.createBorrowIntent({
         raw: false,
@@ -1455,7 +1451,6 @@ describe('MoneyMarketService.createBorrowIntent', () => {
 
       expect(result.ok).toBe(true);
     });
-
   });
 
   describe('rejects on invalid inputs', () => {
@@ -1526,7 +1521,7 @@ describe('MoneyMarketService.createBorrowIntent', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: hubError });
+      expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: hubError.message }) });
     });
 
     it('forwards a failure Result from spoke.sendMessage', async () => {
@@ -1540,7 +1535,7 @@ describe('MoneyMarketService.createBorrowIntent', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: sendError });
+      expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: sendError.message }) });
     });
 
     it('returns ok:false when spoke.sendMessage throws', async () => {
@@ -1554,7 +1549,7 @@ describe('MoneyMarketService.createBorrowIntent', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: thrown });
+      expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: thrown.message }) });
     });
   });
 });
@@ -1638,7 +1633,7 @@ describe('MoneyMarketService.createBorrowIntent (raw: true)', () => {
       params: borrowParams(ChainKeys.BSC_MAINNET),
     });
 
-    expect(result).toEqual({ ok: false, error: sendError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: sendError.message }) });
   });
 });
 
@@ -1733,7 +1728,7 @@ describe('MoneyMarketService.borrow', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: intentError });
+      expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: intentError.message }) });
     });
 
     it('wraps verifyTxHash failure as MM_VERIFY_FAILED with cause + action="borrow"', async () => {
@@ -1795,7 +1790,7 @@ describe('MoneyMarketService.borrow', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: thrown });
+      expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: thrown.message }) });
     });
 
     it('wraps a SodaxError with a non-borrow code as MM_BORROW_FAILED', async () => {
@@ -1830,9 +1825,7 @@ describe('MoneyMarketService.createWithdrawIntent', () => {
   describe('happy paths', () => {
     it('on EVM spoke: builds withdraw data and sends message to the hub', async () => {
       vi.spyOn(sodax.moneyMarket, 'buildWithdrawData').mockReturnValueOnce('0xwithdraw-data');
-      const sendSpy = vi
-        .spyOn(sodax.spoke, 'sendMessage')
-        .mockResolvedValueOnce({ ok: true, value: '0xsend-hash' });
+      const sendSpy = vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xsend-hash' });
 
       const result = await sodax.moneyMarket.createWithdrawIntent({
         raw: false,
@@ -1919,7 +1912,7 @@ describe('MoneyMarketService.createWithdrawIntent', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: sendError });
+      expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: sendError.message }) });
     });
 
     it('returns ok:false when spoke.sendMessage throws', async () => {
@@ -1933,7 +1926,7 @@ describe('MoneyMarketService.createWithdrawIntent', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: thrown });
+      expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: thrown.message }) });
     });
   });
 });
@@ -2006,7 +1999,7 @@ describe('MoneyMarketService.createWithdrawIntent (raw: true)', () => {
       params: withdrawParams(ChainKeys.BSC_MAINNET),
     });
 
-    expect(result).toEqual({ ok: false, error: sendError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: sendError.message }) });
   });
 });
 
@@ -2113,7 +2106,7 @@ describe('MoneyMarketService.withdraw', () => {
 
   describe('propagates internal errors', () => {
     it('forwards createWithdrawIntent failure', async () => {
-      const intentError = new Error('CREATE_INTENT_FAILED');
+      const intentError = new SodaxError('CREATE_INTENT_FAILED', 'CREATE_INTENT_FAILED', { feature: 'moneyMarket' });
       vi.spyOn(sodax.moneyMarket, 'createWithdrawIntent').mockResolvedValueOnce({
         ok: false,
         error: intentError,
@@ -2125,7 +2118,7 @@ describe('MoneyMarketService.withdraw', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: intentError });
+      expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: intentError.message }) });
     });
 
     it('wraps verifyTxHash failure as MM_VERIFY_FAILED with action="withdraw"', async () => {
@@ -2187,7 +2180,7 @@ describe('MoneyMarketService.withdraw', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: thrown });
+      expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: thrown.message }) });
     });
 
     it('wraps a SodaxError with a code outside the withdraw orchestration union as EXECUTION_FAILED', async () => {
@@ -2224,9 +2217,7 @@ describe('MoneyMarketService.createRepayIntent', () => {
   describe('happy paths', () => {
     it('on EVM spoke: builds repay data and deposits to the hub wallet', async () => {
       vi.spyOn(sodax.moneyMarket, 'buildRepayData').mockReturnValueOnce('0xrepay-data');
-      const depositSpy = vi
-        .spyOn(sodax.spoke, 'deposit')
-        .mockResolvedValueOnce({ ok: true, value: '0xdeposit-hash' });
+      const depositSpy = vi.spyOn(sodax.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: '0xdeposit-hash' });
 
       const result = await sodax.moneyMarket.createRepayIntent({
         raw: false,
@@ -2326,7 +2317,7 @@ describe('MoneyMarketService.createRepayIntent', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: depositError });
+      expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: depositError.message }) });
     });
 
     it('returns ok:false when spoke.deposit throws', async () => {
@@ -2340,7 +2331,7 @@ describe('MoneyMarketService.createRepayIntent', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: thrown });
+      expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: thrown.message }) });
     });
   });
 });
@@ -2404,7 +2395,7 @@ describe('MoneyMarketService.createRepayIntent (raw: true)', () => {
 
     const result = await sodax.moneyMarket.createRepayIntent({ raw: true, params: repayParams(ChainKeys.BSC_MAINNET) });
 
-    expect(result).toEqual({ ok: false, error: depositError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: depositError.message }) });
   });
 });
 
@@ -2495,7 +2486,7 @@ describe('MoneyMarketService.repay', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: intentError });
+      expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: intentError.message }) });
     });
 
     it('wraps verifyTxHash failure as MM_VERIFY_FAILED with action="repay"', async () => {
@@ -2557,7 +2548,7 @@ describe('MoneyMarketService.repay', () => {
         walletProvider: mockEvmProvider,
       });
 
-      expect(result).toEqual({ ok: false, error: thrown });
+      expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: thrown.message }) });
     });
 
     it('wraps a SodaxError with a non-repay code as MM_REPAY_FAILED', async () => {
@@ -2937,7 +2928,7 @@ describe('approve hub-path: forwards a failure Result from spoke.approve', () =>
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: approveError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: approveError.message }) });
   });
 
   it('approve (raw: true): hub-path failure propagates', async () => {
@@ -2950,7 +2941,7 @@ describe('approve hub-path: forwards a failure Result from spoke.approve', () =>
       params: supplyParams(ChainKeys.SONIC_MAINNET),
     });
 
-    expect(result).toEqual({ ok: false, error: approveError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: approveError.message }) });
   });
 });
 

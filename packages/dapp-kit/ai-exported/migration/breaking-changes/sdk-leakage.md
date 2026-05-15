@@ -96,6 +96,8 @@ Full SDK-level detail: [`../../../../sdk/ai-exported/migration/breaking-changes/
 + }}>
 ```
 
+**Config is tracked by reference in v2.** See [`../../integration/recipes/setup.md § Config reactivity`](../../integration/recipes/setup.md#config-reactivity) for the module-const vs `useMemo` patterns. Drive runtime config switches (e.g. solver env) through `useMemo` deps, not by remounting the provider.
+
 Other v1 fields renamed or restructured:
 
 | v1 | v2 |

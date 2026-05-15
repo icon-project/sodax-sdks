@@ -99,3 +99,30 @@ function SwapButton() {
 ```
 
 This pattern is consistent across all features: `useSwap`, `useBridge`, `useSupply`, `useStake`, `useDexDeposit`, etc.
+
+## No type cast is needed — broad-union wiring just works
+
+A common anti-pattern is reaching for `as any` / `as IEvmWalletProvider` when the runtime-typed `walletProvider` from `useWalletProvider({ xChainId })` is passed into a mutation hook. **That cast is not needed.** v2 accepts the broad-union wallet-provider type as long as the chain key on the payload and the wallet provider both come from the same runtime `xChainId` value.
+
+```tsx
+// @ai-snippets-skip — illustrative anti-pattern vs correct
+// ❌ ANTI-PATTERN — unnecessary cast
+const walletProvider = useWalletProvider({ xChainId });
+await swap({ params, walletProvider: walletProvider as any });           // don't
+await swap({ params, walletProvider: walletProvider as IEvmWalletProvider }); // don't
+
+// ✅ CORRECT — pass directly, TypeScript infers the relationship
+const walletProvider = useWalletProvider({ xChainId });
+if (!walletProvider) return;        // narrow undefined first
+await swap({ params, walletProvider });
+```
+
+### Why this works
+
+- `useWalletProvider({ xChainId })` returns `GetWalletProviderType<typeof xChainId> | undefined`. When `xChainId` is a runtime value (e.g. from props/state typed `SpokeChainKey`), the return type is the **broad union** `IWalletProvider | undefined`, not `any`.
+- Mutation hooks like `useSwap<K>()` default `K` to the broad `SpokeChainKey` union. Their `mutate` vars are typed `{ params: SwapParams<SpokeChainKey>, walletProvider: GetWalletProviderType<SpokeChainKey> }` — i.e. `walletProvider` is the same broad union.
+- The two unions are structurally assignable. No cast required.
+
+### When the cast is actually needed
+
+If you've narrowed `xChainId` to a literal (e.g. via `chainKey === ChainKeys.BSC_MAINNET` checks in a branch) and the mutation hook is also generic-narrowed, you'll get narrower types on both sides. Even there, the cast is usually unnecessary — TypeScript propagates the narrowed `K` through the hook's generic. Reach for a cast only when you can produce a real TS error message proving it's needed.

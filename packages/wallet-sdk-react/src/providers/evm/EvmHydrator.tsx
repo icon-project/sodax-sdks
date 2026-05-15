@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useConfig, useConnectors, useAccount, usePublicClient, useWalletClient, useReconnect } from 'wagmi';
 import { EvmWalletProvider } from '@sodax/wallet-sdk-core';
 import { EvmXService } from '@/xchains/evm/EvmXService.js';
 import { EvmXConnector } from '@/xchains/evm/index.js';
 import { useXWalletStore } from '@/useXWalletStore.js';
+import { usePersistHydrated } from '@/hooks/usePersistHydrated.js';
 import { useWalletConfig } from '@/context/WalletConfigContext.js';
 import { resolveEvmDefaults } from '@/utils/walletRpcConfig.js';
 
@@ -32,17 +33,10 @@ export const EvmHydrator = () => {
     useXWalletStore.getState().setXConnectors('EVM', evmConnectors);
   }, [evmConnectors]);
 
-  // Retry reconnect when new connectors announce (Hana lazy-announces post-mount) or
-  // when status settles to 'disconnected' with a persisted connection. wagmi's
-  // `Hydrate.onMount()` only runs once and won't retry on its own.
-  // `hydrated` gates retry until persist rehydration so `xConnections.EVM` and
-  // `userDisconnected.EVM` reads are authoritative.
-  const [hydrated, setHydrated] = useState(() => useXWalletStore.persist.hasHydrated());
-  useEffect(() => {
-    if (hydrated) return;
-    const unsub = useXWalletStore.persist.onFinishHydration(() => setHydrated(true));
-    return unsub;
-  }, [hydrated]);
+  // Retry reconnect on connector announce (Hana lazy-announces post-mount) and
+  // when status flips to 'disconnected'. wagmi's `Hydrate.onMount()` only runs
+  // once. `hydrated` gates retry until persisted state is readable.
+  const hydrated = usePersistHydrated();
   // biome-ignore lint/correctness/useExhaustiveDependencies: `connectors` is a re-fire trigger only — wagmi mipd appends new connectors when wallets announce post-mount, and we want to retry reconnect each time the list grows
   useEffect(() => {
     if (!hydrated) return;

@@ -16,6 +16,22 @@ Per-hook signature changes for v1 → v2. See [`../breaking-changes.md`](../brea
 
 ---
 
+## Canonical rule — `xChainId` is non-nullable
+
+Hooks that take `xChainId` declare it via overloads as required `SpokeChainKey`. Passing a nullable value (e.g. `token?.chainKey`) does not compile.
+
+The exported `UseWalletProviderOptions` (and similar) is the *implementation* type and looks permissive — but calls resolve against the overloads, which are stricter. Casting around the error is unsafe: it either fails to bypass the overload at all, or silently strips the nullable from the type while the runtime value stays `undefined` (some hooks tolerate that and return `undefined`; `useXAccount` throws).
+
+Handle the nullable **before** the hook call:
+
+```ts
+// Narrow, default-fallback, or split into a child component — pick the one that fits.
+if (!chainKey) return null;
+const wp = useWalletProvider({ xChainId: chainKey });
+```
+
+---
+
 ## `useXAccount`
 
 ```ts
@@ -112,6 +128,8 @@ const service = useXService({ xChainType: 'EVM' });
 ```
 
 Return type unchanged.
+
+> **Need the typed concrete class** (e.g. `EvmXService.publicClient`, `StellarXService.server`, `BitcoinXService` for `instanceof` checks)? The concrete classes (`EvmXService`, `SolanaXService`, `StellarXService`, etc.) are **still exported in v2**, but moved from the package barrel to per-chain sub-paths: `@sodax/wallet-sdk-react/xchains/<chain>`. See [`imports.md` § Concrete chain classes](./imports.md#concrete-chain-classes--moved-behind-sub-path-imports) for the full per-chain table. The TS error `TS2724: '"@sodax/wallet-sdk-react"' has no exported member named 'StellarXService'. Did you mean 'useXService'?` is misleading when you actually need the class — the class is at the sub-path, not the hook.
 
 ---
 
@@ -267,9 +285,36 @@ If you genuinely need the raw EVM chain ID (rare — almost no usage outside the
 
 ## Removed in v2
 
-| Hook | Replacement |
+| Hook / symbol | Replacement |
 |---|---|
-| `useXBalances` | Moved to `@sodax/dapp-kit`. See [`../breaking-changes.md`](../breaking-changes.md) §10. |
+| `useXBalances` | Moved to `@sodax/dapp-kit` **AND signature changed**. See note below. |
+| `useXWagmiStore` | Removed entirely — direct store reads are not part of the v2 API. Use public hooks (`useXServices`, `useXConnections`, `useXService({ xChainType })`, `useXConnection({ xChainType })`, etc.). See note below. |
+| Concrete X-service / X-connector classes (`EvmXService`, `SolanaXService`, `StellarXService`, `BitcoinXService`, `IconXService`, `InjectiveXService`, `SuiXService`, `NearXService`, `StacksXService`, `XverseXConnector`, `UnisatXConnector`, `OKXXConnector`, `IconHanaXConnector`, …) | **Not removed — moved to per-chain sub-paths.** TS error `TS2724: '"@sodax/wallet-sdk-react"' has no exported member named 'StellarXService'. Did you mean 'useXService'?` is misleading — the hint points at `useXService` (which returns the abstract `XService \| undefined`), but the typed class itself lives at `@sodax/wallet-sdk-react/xchains/<chain>`. See [`imports.md` § "Concrete chain classes — moved behind sub-path imports"](./imports.md#concrete-chain-classes--moved-behind-sub-path-imports) for the per-chain table. |
+
+### `useXBalances` — moved + reshaped
+
+Not a simple package-rename. The v2 hook also wraps params and adds a required `xService` field:
+
+```diff
+- // v1 — flat args from @sodax/wallet-sdk-react
+- import { useXBalances } from '@sodax/wallet-sdk-react';
+- const { data } = useXBalances({ xChainId, xTokens, address });
+
++ // v2 — from @sodax/dapp-kit; params wrapped; xService required
++ import { useXBalances } from '@sodax/dapp-kit';
++ import { useXService, getXChainType } from '@sodax/wallet-sdk-react';
++
++ const xService = useXService({ xChainType: getXChainType(xChainId) });
++ const { data } = useXBalances({
++   params: { xService, xChainId, xTokens, address },
++ });
+```
+
+The `xService` injection is part of dapp-kit's "no implicit wallet-sdk dependency" design — dapp-kit doesn't import from `wallet-sdk-react`, so the consumer wires the service across at the call site. See `@sodax/dapp-kit/ai-exported/integration/architecture.md` § "Decoupling from wallet-sdk-react".
+
+### `useXWagmiStore` — removed (store reads moved to public hooks)
+
+The v1 Zustand store hook is gone from the v2 barrel. Direct store access is no longer supported. Every `useXWagmiStore(state => state.X)` selector maps to a public hook — see [`imports.md` § "Store hook removed from the public API"](./imports.md#store-hook-removed-from-the-public-api) for the full field-to-hook map and decision tree (`state.xServices` → `useXServices()`, `state.xConnections[chainType]` → `useXConnection({ xChainType })`, etc.). The localStorage key (`xwagmi-store`) is unchanged, so user connections survive the upgrade.
 
 ---
 

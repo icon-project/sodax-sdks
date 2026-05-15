@@ -29,6 +29,8 @@ These keep their name but their TypeScript signature is different. Usually requi
 | `useMMAllowance` | Query params: `{ params: { payload: MoneyMarketParams<K> } }`. For `'borrow'` / `'withdraw'` actions: `enabled: false` — `data` stays `undefined`. |
 | `useUserReservesData` | Param key rename: `address → userAddress`; chain key is `spokeChainKey`. |
 | `useUserFormattedSummary` | Same. |
+| `useATokensBalances` | Params: `{ aTokens, spokeProvider, userAddress } → { params: { aTokens, spokeChainKey, userAddress } }`. `spokeProvider` dropped; chain key is **`spokeChainKey`** (NOT `srcChainKey`); user field is **`userAddress`** (NOT `address`). Data: `Map<Address, bigint> \| undefined` (already unwrapped). |
+| `useAToken` | Unaffected by the position-hook renames — takes only `{ aToken }`. Data: `Erc20Token & { chainKey }` (`hubAsset` / `vault` NOT included). |
 | All staking mutations | Same as MM. Plus dedicated approve hooks per token (`useStakeApprove` ↔ `useUnstakeApprove` ↔ `useInstantUnstakeApprove`). |
 | `useStakeRatio` | Return: `Result<bigint> → [xSodaAmount, previewDepositAmount]` (unwrapped tuple — NOT Result-wrapped in v2). |
 | `useStakingInfo` / `useUnstakingInfo` / `useUnstakingInfoWithPenalty` / `useStakingConfig` / `useInstantUnstakeRatio` / `useConvertedAssets` | All unwrapped in v2 (hooks throw on SDK `!ok`). Branch on `isError`/`error`, not `data?.ok`. |

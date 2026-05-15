@@ -272,7 +272,10 @@ These are the actual edits that landed during the migration, not the planned one
   - Extracted `srcAddress = account?.address as \\`0x\\\${string}\\` | undefined` once at
     component scope; reused in every params object.
   - Replaced `spokeChainConfig[selectedChainId]?.supportedTokens.SODA` lookup with
-    `sodax.config.findSupportedTokenBySymbol(selectedChainId, 'SODA')` (cleaner v2 SDK API).
+    `sodax.config.findSupportedTokenBySymbol(selectedChainId, 'SODA')` (cleaner v2 SDK API,
+    and — critically — picks up any constructor-time `Sodax({ ... })` overrides plus dynamic
+    backend config; the direct `spokeChainConfig` import is a packaged-default snapshot that
+    silently ignores both).
   - Removed all `as unknown as Record<...>` casts on the SODA token.
   - Mutation calls — drop the `spokeProvider` hook-time arg; pass `{ params, walletProvider }`
     to `mutateAsync`. Build `params` with `srcChainKey: selectedChainId` + `srcAddress`.

@@ -274,7 +274,7 @@ Read these when working on a specific feature for detailed flow documentation.
 
 ## Build
 
-tsup: dual ESM (`.mjs`) + CJS (`.cjs`). Target: Node 18+, also runs in browser.
+tsup: dual ESM (`.mjs`) + CJS (`.cjs`). Target: Node 20+, also runs in browser.
 `near-api-js` and `@sodax/types` are bundled (not externalized) for CJS compatibility.
 
 ## Tests

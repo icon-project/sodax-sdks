@@ -194,6 +194,26 @@ v1 consumers reached into a global `hubAssets[chainId][address]` map to get the 
 
 Read shapes like `Intent` and `IntentResponse` from the backend keep `srcChain` / `dstChain` as the **relay** chain id (numeric, `IntentRelayChainId`). They are **not** chain keys and were **not** renamed to `srcChainKey`/`dstChainKey`. Only **request** types (`CreateIntentParams`, `CreateLimitOrderParams`, `SubmitSwapTxRequest`) gained the `*ChainKey` field names.
 
+### Exception — partner module read shapes DID rename
+
+The above "read shapes keep `srcChain`/`dstChain`" rule has one exception: **partner module** read shapes also renamed `dstChain` → `dstChainKey`. Specifically:
+
+- `AutoSwapPreferences` (returned by `sodax.partners.getAutoSwapPreferences(queryAddress)`) — field `dstChain` → **`dstChainKey: SpokeChainKey | 'not configured'`**.
+- `SetSwapPreferenceParams` (request type for `setSwapPreference`) — `dstChain` → `dstChainKey: SpokeChainKey`.
+
+```diff
+- // v1
+- const prefs = await partnerFeeClaimService.getAutoSwapPreferences(addr);
+- const destChain: SpokeChainId = prefs.dstChain;
+
++ // v2
++ const result = await sodax.partners.getAutoSwapPreferences(addr);
++ if (!result.ok) return;
++ const destChain: SpokeChainKey | 'not configured' = result.value.dstChainKey;
+```
+
+A blanket grep `dstChain` → `dstChainKey` is safe in the partner module **but** still unsafe in `Intent` / `IntentResponse` reads. Scope grep replacements per file or per import. The general rule for `srcChain` (Intent read field) is unchanged: it remains the relay chain id.
+
 ---
 
 ## 5. `RpcConfig` reshape

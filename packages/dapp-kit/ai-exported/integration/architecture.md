@@ -33,6 +33,8 @@ Every v2 design concept the hooks rest on, in one TOC-navigable file. Read it on
 
 `SodaxProvider` does **not** depend on `@sodax/wallet-sdk-react` — wallet state is wired side-by-side. Backend / non-React consumers (Node scripts, bots) bypass dapp-kit entirely and use `@sodax/sdk` directly with their own wallet implementation.
 
+**Config reactivity.** `config` is tracked by reference - see [`recipes/setup.md § Config reactivity`](recipes/setup.md#config-reactivity) for the module-const vs `useMemo` patterns.
+
 ### `createSodaxQueryClient`
 
 Returns a `QueryClient` pre-wired with a `MutationCache.onError` hook for global mutation observability. Default behavior: logs every mutation failure to console as `[sodax] Mutation error: <error>`.
@@ -237,7 +239,7 @@ queryClient.invalidateQueries({ queryKey: ['dex', 'positionInfo', tokenId, poolK
 
 ## Hook organization
 
-~95 hooks (41 mutations + ~50 queries + utilities) organized by feature domain in `src/hooks/`:
+Hooks organized by feature domain in `src/hooks/`:
 
 ```
 hooks/
@@ -248,13 +250,13 @@ hooks/
 ├── swap/       # useQuote, useSwap, useStatus, useSwapAllowance, useSwapApprove,
 │               # useCancelSwap, useCreateLimitOrder, useCancelLimitOrder
 ├── mm/         # useSupply, useWithdraw, useBorrow, useRepay, useMMAllowance, useMMApprove,
-│               # reserves data hooks (13 hooks total)
+│               # reserves data hooks
 ├── bridge/     # useBridge, useBridgeAllowance, useBridgeApprove, bridgeable amounts/tokens
-├── staking/    # useStake, useUnstake, useInstantUnstake, useClaim, staking info hooks (~18)
-├── dex/        # usePools, useDexDeposit, useDexWithdraw, liquidity hooks (~13)
-├── bitcoin/    # useRadfiSession, fund/withdraw, UTXO management (~8)
-├── backend/    # Intent tracking, swap submission, orderbook, money market position queries (~13)
-├── partner/    # Partner fee claim, auto-swap preferences, token approval (6)
+├── staking/    # useStake, useUnstake, useInstantUnstake, useClaim, staking info hooks
+├── dex/        # usePools, useDexDeposit, useDexWithdraw, liquidity hooks
+├── bitcoin/    # useRadfiSession, fund/withdraw, UTXO management
+├── backend/    # Intent tracking, swap submission, orderbook, money market position queries
+├── partner/    # Partner fee claim, auto-swap preferences, token approval
 ├── recovery/   # useHubAssetBalances, useWithdrawHubAsset
 └── migrate/    # useMigrateIcxToSoda, useRevertMigrateSodaToIcx, useMigratebnUSD,
                 # useMigrateBaln, useMigrationApprove, useMigrationAllowance

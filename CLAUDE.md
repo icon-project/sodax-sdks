@@ -76,6 +76,34 @@ cd packages/<pkg> && npx vitest run path/to/test.test.ts
 
 For per-package gotchas (SDK bigint/JSON handling, wallet-sdk-core type-system overrides, dapp-kit React Query patterns, etc.), see the relevant `packages/<pkg>/CLAUDE.md`.
 
+## `ai-exported/` conventions
+
+Each SDK package ships an `ai-exported/` tree (sdk, wallet-sdk-react, dapp-kit, wallet-sdk-core — types currently does not). The tree is split into two purposes:
+
+- **`migration/`** — v1 → v2 reference. Renamed/deleted/reshaped symbols, before/after mappings, codemod patterns. Read by AI agents porting v1 code.
+- **`integration/`** — pure v2 reference. SDK public API as it ships today: type shapes, hook/function signatures, canonical patterns. Read by AI agents writing new v2 code with no v1 to port.
+
+When editing either tree, keep these in scope:
+
+- **SDK public API** — type signatures, hook overloads, return shapes, behaviors as they ship from `src/`.
+- **v1 → v2 deltas** (migration tree only) — what changed and how to mechanically port it.
+- **Canonical SDK-design patterns** — how to use the API correctly (e.g. nullable handling at hook boundary, broad-union wiring without casts).
+- **Surprising behaviors** — overload vs implementation type mismatches, sub-path exports, etc.
+
+Out of scope (do not add to either tree):
+
+- **Workflow scripts** (`find … | xargs perl -i -pe …`, `grep -rE …`) — tooling preference of the integrator, not SDK reference. State the rewrite pattern; let the consumer pick the tool. The `ts-morph` scripts already in `migration/recipes.md` are the existing-style example.
+- **App-specific references** (`apps/web`, `apps/demo`) — example apps are not canonical SDK. Write generic prose; if a demo is illustrative, link via README, not body text.
+- **Integrator code design** (their UI types, state widening, fetch-response shapes) — outside SDK boundary. Don't teach them to write their own code.
+- **General engineering hygiene that applies to any library** (sizing estimates, smoke-test-before-declaring-done, "fix at the source rather than cast" when applied to the integrator's own types, validate-at-boundaries patterns) — not SDK-specific. Belongs in project / engineering docs. Anti-pattern rules tied to **specific SDK API behavior** (e.g. "don't cast the return value of `useWalletProvider`" — because of the hook's broad-union design) are different and stay in scope.
+
+`integration/` content stays **pure v2** even when fixing inherited drift. Two failure modes to avoid:
+
+- **Defensive callouts against deleted legacy names.** Writing "Field name is X, not Y" or "the type is X, not Z" treats the deleted name as still load-bearing context. Just describe the v2 surface directly — readers don't need to know which historical names are dead.
+- **Historicizing prose.** Phrases like "this is the v2 home for what used to be called X" or "this replaces the old Y system" tie integration text to v1 chronology. State what v2 ships; cross-link to `migration/` if the v1 → v2 mapping is what the reader actually needs.
+
+v1 mentions in `integration/` are limited to: cross-links to `migration/` (`see migration/...`), and explicit anti-pattern callouts when an agent is likely to carry v1 idioms forward (`DO NOT call the deleted v1 hook X — pass walletProvider directly`). Everything else lives in `migration/`.
+
 ## CI Pipeline
 
 GitHub Actions ([`.github/workflows/packages-ci.yml`](.github/workflows/packages-ci.yml)) runs on push to `main`/`development` and all PRs (Node.js 20.x, 22.x, 24.x):

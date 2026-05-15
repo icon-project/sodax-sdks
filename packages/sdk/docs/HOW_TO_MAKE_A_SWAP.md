@@ -124,13 +124,16 @@ Before executing a swap, it is good practice to get a quote to show users the ex
 ```typescript
 import {
   ChainKeys,
-  spokeChainConfig,
   type SolverIntentQuoteRequest
 } from "@sodax/sdk";
 
-// Get native token addresses from chain configuration
-const arbEthToken = spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].nativeToken; // ETH on Arbitrum
-const polygonPolToken = spokeChainConfig[ChainKeys.POLYGON_MAINNET].nativeToken; // POL on Polygon
+// Read chain config off the Sodax instance — this picks up any config overrides
+// passed to `new Sodax(...)` and any dynamic updates loaded by `sodax.config.initialize()`.
+// Do NOT import `spokeChainConfig` directly from `@sodax/types` (or its `@sodax/sdk`
+// re-export): that's a packaged-default snapshot frozen at SDK release time and will
+// silently miss your overrides.
+const arbEthToken = sodax.config.spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].nativeToken; // ETH on Arbitrum
+const polygonPolToken = sodax.config.spokeChainConfig[ChainKeys.POLYGON_MAINNET].nativeToken; // POL on Polygon
 
 // Amount to swap — IMPORTANT: Amount must be in the token's smallest unit.
 // For example, ETH has 18 decimals, so 0.0001 ETH = 100000000000000n (0.0001 * 10^18).
@@ -483,7 +486,6 @@ Here's a complete end-to-end example combining all the steps. For a production-r
 import {
   Sodax,
   ChainKeys,
-  spokeChainConfig,
   type CreateIntentParams,
   type SolverIntentQuoteRequest,
   type SolverIntentStatusRequest,
@@ -504,9 +506,11 @@ async function executeSwap(
       console.warn('Initialization failed, using packaged defaults:', initResult.error);
     }
 
-    // Get native token addresses from chain configuration
-    const arbEthToken = spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].nativeToken; // ETH on Arbitrum
-    const polygonPolToken = spokeChainConfig[ChainKeys.POLYGON_MAINNET].nativeToken; // POL on Polygon
+    // Read chain config off the Sodax instance — picks up any constructor overrides
+    // and any dynamic config loaded by initialize(). Never use a static import of
+    // `spokeChainConfig` from `@sodax/types` here — overrides will be silently lost.
+    const arbEthToken = sodax.config.spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].nativeToken; // ETH on Arbitrum
+    const polygonPolToken = sodax.config.spokeChainConfig[ChainKeys.POLYGON_MAINNET].nativeToken; // POL on Polygon
 
     // Step 2: Get Quote
     console.log('Step 2: Getting quote...');

@@ -28,7 +28,7 @@
     }
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "files": ["dist", "ai-exported"],
   "scripts": {
@@ -47,6 +47,7 @@
     "check:ai-scope": "bash ./scripts/check-ai-scope.sh",
     "check:ai-links": "bash ./scripts/check-ai-links.sh",
     "check:ai-imports": "bash ./scripts/check-ai-imports.sh",
+    "check:ai": "pnpm run check:ai-exported && pnpm run check:ai-scope && pnpm run check:ai-links && pnpm run check:ai-imports",
     "prepublishOnly": "pnpm run ci",
     "local-release": "changeset version && changeset publish",
     "clean": "rm -rf node_modules && rm -rf dist && rm -rf .turbo"

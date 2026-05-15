@@ -191,16 +191,17 @@ type MoneyMarketSupplyParams<K extends SpokeChainKey = SpokeChainKey> = {
   token: string;
   amount: bigint;
   action: 'supply';
-  toChainId?: SpokeChainKey;
-  toAddress?: string;
+  dstChainKey?: SpokeChainKey;
+  dstAddress?: string;
 };
 
-// Borrow / Withdraw / Repay follow the same shape with their respective `action` literal.
+// Borrow / Withdraw / Repay follow the same shape with their respective `action` literal
+// (`'borrow'` / `'withdraw'` / `'repay'`) and the same `src*` / `dst*` field names.
 ```
 
 ## Notes
 
 - **Borrow/withdraw skip approval** — `useMMAllowance` returns `true` automatically for these actions.
 - **Health factor < 1.0** means liquidation risk.
-- All operations support optional `toChainId` / `toAddress` (and `fromChainId` / `fromAddress` on borrow) for cross-chain delivery.
+- All four operations (supply / borrow / withdraw / repay) accept optional `dstChainKey` / `dstAddress` for cross-chain delivery — omit both for same-chain. There are no `from*` / `to*` field variants on any action.
 - Mutations throw on SDK failure — use `mutateAsyncSafe` for `Result<T>` ergonomics without `try/catch`.

@@ -19,7 +19,7 @@ Pair: [`../../integration/features/bridge.md`](../../integration/features/bridge
 
 | Type | v1 shape | v2 shape | Notes |
 |---|---|---|---|
-| `CreateBridgeParams` | `{ srcAsset, amount, dstChainId, dstAddress, dstAsset }` | `{ srcChainKey, srcAddress, srcAsset, amount, dstChainKey, dstAddress, dstAsset }` | Now generic `<K>`. `srcChainId`/`dstChainId` (where they appeared) → `srcChainKey`/`dstChainKey`. |
+| `CreateBridgeIntentParams` | `{ srcChainId, srcAsset, amount, dstChainId, dstAsset, recipient }` | `{ srcChainKey, srcAddress, srcToken, amount, dstChainKey, dstToken, recipient }` | Now generic `<K>`. Renames: `srcChainId`/`dstChainId` → `srcChainKey`/`dstChainKey`; `srcAsset`/`dstAsset` → `srcToken`/`dstToken`. `recipient` is **unchanged**. NEW required: `srcAddress` (user's spoke-side sender, distinct from `recipient` which is the destination receiver). |
 | Bridge action wrapper | `{ params, spokeProvider }` | `{ params, raw: false, walletProvider }` | Same as every feature. |
 | `bridge` return | `Promise<string>` (tx hash, throws on error) | `Promise<Result<TxHashPair, SodaxError>>` | Tx-pair + Result. |
 | `getBridgeableAmount` | `Promise<bigint>` | `Promise<Result<BridgeLimit, SodaxError>>` where `BridgeLimit = { amount, decimals, type }` | Result-wrapped + richer return shape. Now takes `(from: XToken, to: XToken)` (was `(srcChainId, srcToken, dstChainId, dstToken)`). |
@@ -44,21 +44,24 @@ Pair: [`../../integration/features/bridge.md`](../../integration/features/bridge
 
 ```diff
 - const txHash: string = await sodax.bridge.bridge({
--   params: { srcAsset, amount, dstChainId, dstAddress, dstAsset },
+-   params: { srcAsset, amount, dstChainId, dstAsset, recipient },
 -   spokeProvider,
 - });
 + const result = await sodax.bridge.bridge({
 +   params: {
 +     srcChainKey: ChainKeys.ARBITRUM_MAINNET,
-+     srcAddress: '0x…',
-+     srcAsset, amount,
++     srcAddress: '0x…',                          // NEW: required (your spoke-side sender)
++     srcToken,                                    // RENAMED from `srcAsset`
++     amount,
 +     dstChainKey: ChainKeys.STELLAR_MAINNET,
-+     dstAddress: 'G…',
-+     dstAsset,
++     dstToken,                                    // RENAMED from `dstAsset`
++     recipient: 'G…',                             // UNCHANGED — destination receiver
 +   },
 +   raw: false,
 +   walletProvider,
 + });
++ // Type: Result<TxHashPair, BridgeOrchestrationError>
++ //       where TxHashPair = { srcChainTxHash: string; dstChainTxHash: string }
 + if (!result.ok) return;
 + const { srcChainTxHash, dstChainTxHash } = result.value;
 ```

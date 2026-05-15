@@ -47,6 +47,30 @@ export function Providers({ children }: { children: React.ReactNode }) {
 }
 ```
 
+### Config reactivity
+
+`SodaxProvider`'s `config` prop is tracked by **reference**, not by value. The SDK is re-instantiated whenever the prop identity changes - resetting wagmi connection state, in-flight RPC, and any persisted state inside `useSodaxContext` consumers. Choose the pattern that matches your config source:
+
+```tsx
+// @ai-snippets-skip — illustrative; uses placeholder values + JSX without surrounding imports
+// ✅ Static config — module constant (preferred when nothing depends on runtime state).
+const sodaxConfig: DeepPartial<SodaxConfig> = {
+  chains: { [ChainKeys.SONIC_MAINNET]: { rpcUrl: '...' } },
+};
+
+// ✅ Runtime-switchable config — useMemo with explicit deps.
+//    Re-runs only when listed deps change, so the SDK survives unrelated re-renders.
+const sodaxConfig = useMemo(
+  () => ({ solver: solverConfigMap[solverEnv], chains: { ... } }),
+  [solverEnv], // SDK re-inits when solverEnv switches.
+);
+
+// ❌ Inline — new identity every parent render, SDK churns on every render.
+<SodaxProvider config={{ chains: { ... } }}>
+```
+
+Drive runtime config switches (solver env, feature flags, etc.) through `useMemo` deps - never remount `SodaxProvider` for them.
+
 ### Optional: Add Wallet Provider
 
 If you want to use `@sodax/wallet-sdk-react` for wallet connectivity, wrap `SodaxWalletProvider` inside `QueryClientProvider`:
