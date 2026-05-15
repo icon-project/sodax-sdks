@@ -354,21 +354,21 @@ describe('LeverageYieldService — registry', () => {
     const vaults = sodax.leverageYield.listVaults();
     expect(vaults.length).toBeGreaterThan(0);
     expect(vaults[0]).toMatchObject({
-      name: 'weETH-leveraged',
+      name: 'lsodaWEETH',
       vault: VAULT,
       asset: SODA_ASSET,
     });
   });
 
   it('getVault by name returns the matching entry, or undefined for an unknown name', () => {
-    const found = sodax.leverageYield.getVault('weETH-leveraged');
+    const found = sodax.leverageYield.getVault('lsodaWEETH');
     expect(found?.vault).toBe(VAULT);
     expect(sodax.leverageYield.getVault('nonexistent-vault')).toBeUndefined();
   });
 
   it('getVaultByAddress is case-insensitive and returns undefined for unknown addresses', () => {
-    expect(sodax.leverageYield.getVaultByAddress(VAULT.toLowerCase() as Address)?.name).toBe('weETH-leveraged');
-    expect(sodax.leverageYield.getVaultByAddress(VAULT.toUpperCase() as Address)?.name).toBe('weETH-leveraged');
+    expect(sodax.leverageYield.getVaultByAddress(VAULT.toLowerCase() as Address)?.name).toBe('lsodaWEETH');
+    expect(sodax.leverageYield.getVaultByAddress(VAULT.toUpperCase() as Address)?.name).toBe('lsodaWEETH');
     expect(
       sodax.leverageYield.getVaultByAddress('0x0000000000000000000000000000000000000000' as Address),
     ).toBeUndefined();
@@ -393,7 +393,7 @@ describe('LeverageYieldService — asset-mismatch validation', () => {
     if (result.ok) return;
     expect(result.error.code).toBe('VALIDATION_FAILED');
     expect(result.error.context?.field).toBe('srcToken');
-    expect(result.error.message).toContain('weETH-leveraged');
+    expect(result.error.message).toContain('lsodaWEETH');
   });
 
   it('createXWithdrawIntent rejects when a registered vault does not match the resolved sodaAsset', async () => {

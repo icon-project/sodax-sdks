@@ -14,7 +14,10 @@ import type { Address } from '../shared/shared.js';
  * registry exists for vault discovery and UI display, not for routing.
  */
 export type LeverageYieldVault = {
-  /** Stable lookup key, e.g. `'weETH-leveraged'`. Used by `LeverageYieldService.getVault(name)`. */
+  /**
+   * Stable lookup key — by convention the leverage-vault share-token symbol
+   * (e.g. `'lsodaWEETH'`, `'lsodaWSTETH'`). Used by `LeverageYieldService.getVault(name)`.
+   */
   name: string;
   /** Deployed `LeverageYieldVault` proxy address on the Sonic hub. */
   vault: Address;
@@ -39,9 +42,15 @@ export type LeverageYieldVault = {
  */
 export const leverageYieldVaults = [
   {
-    name: 'weETH-leveraged',
+    name: 'lsodaWEETH',
     vault: '0xD09de2f5070699A909c0FD32fb5A909d3886701D',
     asset: '0xCb6B152D3a943f25157381aFcA7fEFCD2ef5a357', // sodaWEETH on Sonic
+    borrowToken: '0x4effB5813271699683C25c734F4daBc45B363709', // sodaETH on Sonic
+  },
+  {
+    name: 'lsodaWSTETH',
+    vault: '0x136e5d1cec5db1829e24941eddd9c8640e02ce7a',
+    asset: '0x58b0538D7EEaeE69EF32f9F1dE5cbF32A10a977B', // sodaWSTETH on Sonic
     borrowToken: '0x4effB5813271699683C25c734F4daBc45B363709', // sodaETH on Sonic
   },
 ] as const satisfies readonly LeverageYieldVault[];
