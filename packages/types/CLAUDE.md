@@ -48,7 +48,7 @@ There are **no per-chain sub-path exports**. New chain types are added under the
 
 ## Build
 
-Built with `tsc` (not tsup). ESM only (`"type": "module"`). Output: `dist/` with `.js` + `.d.ts` files.
+Built with `tsc` (other workspace packages bundle with tsup — this one doesn't bundle). ESM only (`"type": "module"`). Output: `dist/` with `.js` + `.d.ts` files.
 
 Relative imports inside source must use `.js` extensions (see [`src/index.ts`](src/index.ts) for the pattern).
 

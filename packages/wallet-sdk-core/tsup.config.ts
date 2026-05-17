@@ -8,7 +8,7 @@ export default defineConfig(options => ({
   sourcemap: true, // Helpful for debugging
   dts: true, // Type declarations
   clean: true,
-  target: 'node20',
+  target: 'es2023',
   treeshake: true,
   external: [], // tsup still externalizes all dependencies by default; this is additive, not a replacement
   noExternal: ['near-api-js', '@sodax/types'], // Force-bundle ESM-only packages for CJS compatibility

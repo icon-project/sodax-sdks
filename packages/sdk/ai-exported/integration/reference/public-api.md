@@ -125,7 +125,7 @@ This is a partial list — see `src/index.ts` of the published tarball for the a
 ### Rules
 
 - **Import only from `@sodax/sdk` root.** No deep imports from `dist/...`.
-- **Do not depend on `@sodax/types` separately.** It's a transitive of `@sodax/sdk` (bundled via tsup `noExternal`); declaring it as a direct dependency invites version skew.
+- **Do not depend on `@sodax/types` separately.** It's a transitive of `@sodax/sdk` (force-bundled via tsup `noExternal`); declaring it as a direct dependency invites version skew.
 - **Stable contract:** every export above is part of the public API. Anything not exported from the root barrel is internal — don't reach for it via `dist` paths.
 - **Tarball contents:** `dist/` (compiled JS + types) and `ai-exported/` (this docs tree). Nothing else ships.
 

@@ -123,7 +123,7 @@ If still not found: the symbol may be **internal** (not exported from the packag
 - **Version target**: latest RC / stable on npm.
 - **Peer deps**: none — chain SDKs are direct dependencies and consumers can re-import types via `library-exports`.
 - **Install**: `pnpm add @sodax/wallet-sdk-core`
-- **Runtime**: Node ≥ 18 + browser (tsup `platform: 'neutral'`).
+- **Runtime**: Node ≥ 20.12 + browser (tsup `esbuildOptions.platform: 'neutral'`).
 - **Audience**: backend engineers, script authors, and React-layer authors building higher-level wrappers (`@sodax/wallet-sdk-react`).
 
 ---

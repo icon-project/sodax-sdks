@@ -8,19 +8,30 @@
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.12.0"
   },
   "files": ["dist", "README.md", "docs", "skills", "ai-exported"],
+  "sideEffects": false,
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./xchains/*": {
-      "types": "./dist/xchains/*/index.d.ts",
-      "import": "./dist/xchains/*/index.mjs",
-      "require": "./dist/xchains/*/index.cjs"
+      "import": {
+        "types": "./dist/xchains/*/index.d.ts",
+        "default": "./dist/xchains/*/index.mjs"
+      },
+      "require": {
+        "types": "./dist/xchains/*/index.d.cts",
+        "default": "./dist/xchains/*/index.cjs"
+      }
     }
   },
   "typesVersions": {
@@ -35,11 +46,12 @@
   "scripts": {
     "build": "NODE_OPTIONS=--max-old-space-size=8192 tsup",
     "dev": "tsup --watch ./src",
-    "prepublishOnly": "tsup",
+    "prepublishOnly": "pnpm run build",
     "clean": "rm -rf dist && rm -rf node_modules && rm -rf .turbo",
     "pretty": "biome format . --write",
     "checkTs": "tsc --noEmit",
     "checkTs:examples": "tsc --noEmit -p tsconfig.examples.json",
+    "check-exports": "attw --pack",
     "test": "vitest run",
     "knip": "knip",
     "lint": "biome lint . --write",
@@ -82,6 +94,7 @@
     "bs58": "6.0.0"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "catalog:",
     "@testing-library/react": "^16.1.0",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",

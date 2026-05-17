@@ -9,6 +9,7 @@ export default defineConfig(options => ({
   treeshake: true,
   splitting: true,
   sourcemap: true,
+  target: 'es2023',
   outExtension({ format }) {
     return {
       js: format === 'esm' ? '.mjs' : '.cjs',

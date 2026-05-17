@@ -63,6 +63,10 @@
       "dependsOn": ["^check:circular-deps"],
       "inputs": ["packages/**"]
     },
+    "check-exports": {
+      "dependsOn": ["build"],
+      "inputs": ["dist/**", "package.json"]
+    },
     "check:ai": {
       "dependsOn": ["^build"],
       "cache": false

@@ -274,8 +274,8 @@ Read these when working on a specific feature for detailed flow documentation.
 
 ## Build
 
-tsup: dual ESM (`.mjs`) + CJS (`.cjs`). Target: Node 20+, also runs in browser.
-`near-api-js` and `@sodax/types` are bundled (not externalized) for CJS compatibility.
+tsup: dual ESM (`.mjs`) + CJS (`.cjs`) with sibling `.d.ts` / `.d.cts` (`dts: true`). Target: Node 20+, also runs in browser via `esbuildOptions.platform = 'neutral'`.
+`near-api-js` and `@sodax/types` are force-bundled (via `noExternal` in [tsup.config.ts](tsup.config.ts)) for CJS compatibility.
 
 ## Tests
 

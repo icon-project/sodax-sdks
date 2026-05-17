@@ -16,10 +16,11 @@
     "build": "tsup",
     "dev": "tsup --watch ./src",
     "test": "vitest run",
-    "prepublishOnly": "tsup",
+    "prepublishOnly": "pnpm run build",
     "clean": "rm -rf dist && rm -rf node_modules && rm -rf .turbo",
     "pretty": "biome format . --write",
     "checkTs": "tsc --noEmit",
+    "check-exports": "attw --pack",
     "knip": "knip",
     "lint": "biome lint . --write",
     "check:ai-exported": "bash ./scripts/check-ai-exported.sh",
@@ -36,6 +37,7 @@
     "viem": "catalog:"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "catalog:",
     "@tanstack/react-query": "catalog:",
     "@types/react": "catalog:",
     "knip": "5.30.5",
@@ -48,14 +50,20 @@
     "react": ">=18"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.12.0"
   },
+  "sideEffects": false,
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     }
   }
 }

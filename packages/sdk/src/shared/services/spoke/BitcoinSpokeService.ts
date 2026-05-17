@@ -1,4 +1,4 @@
-import * as bitcoin from 'bitcoinjs-lib';
+import { initEccLib, networks, Transaction, Psbt, payments, opcodes, script } from 'bitcoinjs-lib';
 import type {
   BitcoinChainKey,
   BitcoinRawTransactionReceipt,
@@ -26,7 +26,7 @@ import { RadfiProvider } from '../../entities/btc/RadfiProvider.js';
 import { encodeBtcPayloadToBytes, estimateBitcoinTxSize, normalizePsbtToBase64, type BtcPayload, type WalletMode } from '../../entities/btc/btc-utils.js';
 export type { BtcPayload, WalletMode } from '../../entities/btc/btc-utils.js';
 
-bitcoin.initEccLib(ecc);
+initEccLib(ecc);
 
 export type BitcoinSpokeDepositParams = {
   srcChainKey: BitcoinChainKey; // The chain key of the spoke (origin) chain
@@ -93,8 +93,8 @@ export class BitcoinSpokeService {
     this.maxTimeoutMs = chainConfig.pollingConfig.maxTimeoutMs;
   }
 
-  public getBtcNetwork(chainId: BitcoinChainKey): bitcoin.networks.Network {
-    return this.config.getChainConfig(chainId).network === 'MAINNET' ? bitcoin.networks.bitcoin : bitcoin.networks.testnet;
+  public getBtcNetwork(chainId: BitcoinChainKey): networks.Network {
+    return this.config.getChainConfig(chainId).network === 'MAINNET' ? networks.bitcoin : networks.testnet;
   }
 
   public async getBalance(tokenAddress: string, walletAddress: string): Promise<bigint> {
@@ -109,7 +109,7 @@ export class BitcoinSpokeService {
 
   public async fetchScriptPubKey(utxo: BitcoinUTXO): Promise<string> {
     const txHex = await this.fetchRawTransaction(utxo.txid);
-    const tx = bitcoin.Transaction.fromHex(txHex);
+    const tx = Transaction.fromHex(txHex);
     const out = tx.outs[utxo.vout];
     if (!out) {
       throw new Error(`UTXO not found: ${utxo.txid}:${utxo.vout}`);
@@ -233,8 +233,8 @@ export class BitcoinSpokeService {
     chainId: BitcoinChainKey,
     walletProvider: IBitcoinWalletProvider,
     feeRate?: number,
-  ): Promise<bitcoin.Psbt> {
-    const psbt = new bitcoin.Psbt({ network: this.getBtcNetwork(chainId) });
+  ): Promise<Psbt> {
+    const psbt = new Psbt({ network: this.getBtcNetwork(chainId) });
     const effectiveFeeRate = feeRate ?? (await this.getFeeRateEstimate());
     const walletAddress = await walletProvider.getWalletAddress();
     const addressType = detectBitcoinAddressType(walletAddress);
@@ -271,7 +271,7 @@ export class BitcoinSpokeService {
           throw new Error('Missing public key for P2SH-P2WPKH input');
         }
         const pubKeyHex = await walletProvider.getPublicKey();
-        const redeemScript = bitcoin.payments.p2wpkh({
+        const redeemScript = payments.p2wpkh({
           pubkey: Buffer.from(pubKeyHex, 'hex'),
           network: this.getBtcNetwork(chainId),
         }).output;
@@ -466,7 +466,7 @@ export class BitcoinSpokeService {
     amount: bigint,
     data: string,
     utxos: BitcoinUTXO[],
-  ): Promise<bitcoin.Psbt> {
+  ): Promise<Psbt> {
     const assetManagerAddress = this.config.getChainConfig(srcChainKey).addresses.assetManager;
 
     if (token.toLocaleLowerCase() === 'btc') {
@@ -482,16 +482,16 @@ export class BitcoinSpokeService {
       const OP_RADFI_SODAX_DATA = 0x31;
       const payload = Buffer.concat([Buffer.from([OP_RADFI_SODAX_DATA]), Buffer.from(data.slice(2), 'hex')]);
 
-      const OP_RETURN = bitcoin.opcodes.OP_RETURN;
-      const OP_12 = bitcoin.opcodes.OP_12;
+      const OP_RETURN = opcodes.OP_RETURN;
+      const OP_12 = opcodes.OP_12;
       if (OP_RETURN === undefined || OP_12 === undefined) {
         throw new Error('bitcoinjs-lib opcodes OP_RETURN or OP_12 are undefined');
       }
 
-      const script = bitcoin.script.compile([OP_RETURN, OP_12, payload]);
+      const compiledScript = script.compile([OP_RETURN, OP_12, payload]);
 
       psbt.addOutput({
-        script: script,
+        script: compiledScript,
         value: 0,
       });
 
@@ -578,7 +578,7 @@ export class BitcoinSpokeService {
    * Sign and broadcast a Bitcoin transaction
    */
   public async signAndBroadcastTransaction(
-    psbt: bitcoin.Psbt | string,
+    psbt: Psbt | string,
     walletProvider: IBitcoinWalletProvider,
   ): Promise<string> {
     const psbtBase64 = typeof psbt === 'string' ? psbt : psbt.toBase64();

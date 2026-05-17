@@ -12,8 +12,6 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    env:
-      NODE_OPTIONS: --max-old-space-size=8192
     steps:
       - name: Check out code
         uses: actions/checkout@v6

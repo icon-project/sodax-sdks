@@ -22,15 +22,22 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs"
-    }
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.12.0"
   },
-  "files": ["dist", "ai-exported"],
+  "files": ["dist", "!dist/**/*.map", "ai-exported"],
+  "sideEffects": false,
   "scripts": {
     "build": "tsup",
     "test": "vitest run --exclude ./src/e2e-tests",
@@ -41,7 +48,8 @@
     "checkTs": "tsc --noEmit",
     "pretty": "biome format . --write",
     "lint": "biome lint . --write",
-    "check-exports": "attw $(pnpm pack) --ignore-rules=cjs-resolves-to-esm",
+    "size:check": "node ./scripts/size-check.mjs",
+    "check-exports": "attw --pack",
     "check:circular-deps": "madge --circular --exclude 'types/dist' $(find ./src -name '*.ts')",
     "check:ai-exported": "bash ./scripts/check-ai-exported.sh",
     "check:ai-scope": "bash ./scripts/check-ai-scope.sh",

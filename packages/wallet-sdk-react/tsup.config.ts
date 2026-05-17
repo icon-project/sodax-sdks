@@ -10,7 +10,7 @@ const sharedConfig = {
   sourcemap: true,
   dts: false as const,
   clean: false as const,
-  target: 'node20' as const,
+  target: 'es2023' as const,
   treeshake: true,
   external: ['react', 'react-dom', '@tanstack/react-query'],
   esbuildOptions(options: any) {
@@ -39,8 +39,9 @@ export default defineConfig([
     // entries will fail. In practice this is not an issue because browser apps (Vite,
     // Next.js) resolve ESM, and Node.js scripts don't use sub-path instanceof checks.
     splitting: false,
+    dts: !isWatchMode, // emit `.d.cts` files so CJS consumers get types (package.json#exports.require.types references them)
     outExtension() {
-      return { js: '.cjs' };
+      return { js: '.cjs', dts: '.d.cts' };
     },
   },
 ]);

@@ -25,7 +25,7 @@ cat <user>/package.json | grep '"@sodax/wallet-sdk-react'
 cat <user>/package.json | grep -E '"viem"|"@solana/web3.js"|"@mysten/sui"|"@stellar/stellar-sdk"|"@stacks/transactions"|"@injectivelabs"|"near-api-js"|"bitcoinjs-lib"|"icon-sdk-js"'
 ```
 
-**If Node < 18**, stop and tell the user — this package requires Node ≥ 18.
+**If Node < 20.12**, stop and tell the user — this package requires Node ≥ 20.12.
 
 **If the user is already using `@sodax/wallet-sdk-react` in the same project**, ask whether they really need to construct providers directly. In a React app the answer is usually **no**: `useWalletProvider({ xChainId })` returns the typed provider for them. Direct construction is only correct for scripts, tests, or non-React clients.
 

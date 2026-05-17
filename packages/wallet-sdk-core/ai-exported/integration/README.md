@@ -14,7 +14,7 @@ If you are upgrading from an older version of the package instead, see `../migra
 - Extends a small `BaseWalletProvider` to merge per-call options over a typed `defaults` shape.
 - Implements the chain-specific `IXxxWalletProvider` interface from `@sodax/types`, so it can be passed straight into `@sodax/sdk` calls.
 
-It is intentionally framework-agnostic — Node ≥ 18, browser, edge runtimes are all supported (tsup `platform: 'neutral'`).
+It is intentionally framework-agnostic — Node ≥ 20.12, browser, edge runtimes are all supported (tsup `esbuildOptions.platform: 'neutral'`).
 
 | Chain family | Provider class | Underlying chain SDK |
 |---|---|---|

@@ -30,7 +30,7 @@ yarn add @sodax/sdk
 
 ## 2. TypeScript
 
-Targets Node 18+ and modern browsers. The package ships dual ESM (`.mjs`) + CJS (`.cjs`) + DTS, with `"type": "module"`. No additional TypeScript config needed — the package's `exports` field handles resolution for both `tsc` and `bundler` `moduleResolution` modes.
+Targets Node 20.12+ and modern browsers. The package ships dual ESM (`.mjs`) + CJS (`.cjs`) + DTS, with `"type": "module"`. No additional TypeScript config needed — the package's `exports` field handles resolution for both `tsc` and `bundler` `moduleResolution` modes.
 
 If you're on `moduleResolution: 'node'` (legacy), upgrade to `'bundler'` or `'node16'` / `'nodenext'` — `'node'` doesn't read the `exports` field and will fall back to `main` / `module` (which still work, but you may see resolution warnings).
 

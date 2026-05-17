@@ -533,4 +533,4 @@ Run on every PR. Each catches a distinct bug class — green guards together pro
 
 ## Build
 
-tsup: dual ESM (`.mjs`) + CJS (`.cjs`). React and React Query are externalized (not bundled).
+tsup: dual ESM (`.mjs`) + CJS (`.cjs`) with sibling `.d.ts` / `.d.cts` (`dts: true`). `splitting: true` for shared-chunk dedup. React, React DOM, and React Query are externalized (not bundled) via `external`.

@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": ">=20.12.0"
+  },
   "scripts": {
     "build": "turbo run build --filter=!./apps/node",
     "build:packages": "turbo run build:packages",
@@ -17,6 +20,7 @@
     "test:packages": "turbo run test:packages",
     "check:circular-deps": "turbo run check:circular-deps",
     "check:circular-deps:packages": "turbo run check:circular-deps:packages",
+    "check-exports": "turbo run check-exports --filter=./packages/*",
     "check:ai": "turbo run check:ai",
     "clean": "turbo clean && rm -rf node_modules dist .turbo && rm -rf apps/*/node_modules apps/*/dist apps/*/.turbo && rm -rf packages/*/node_modules packages/*/dist packages/*/.turbo",
     "prepare": "husky"
