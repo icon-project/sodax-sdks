@@ -286,75 +286,21 @@ pnpm lint        # Lint code
 
 ## AI agent docs
 
-`@sodax/dapp-kit` ships an AI-ready documentation tree at `node_modules/@sodax/dapp-kit/ai-exported/`. It's tool-neutral: any agent that can read files (Claude Code, Cursor, Aider, Copilot Chat, ChatGPT with file context, etc.) can use it without further setup.
+AI-readable docs for `@sodax/dapp-kit` (and the other `@sodax/*` packages) are shipped via [`@sodax/skills`](https://github.com/icon-project/sodax-sdks/tree/main/packages/skills) — a separate npm package bundling Claude-Code SKILL.md files and a long-form knowledge tree.
 
-### Get started
+**Recommended: [Claude Skills CLI](https://github.com/mattpocock/skills)** — from your project root:
 
-Point your agent at `node_modules/@sodax/dapp-kit/ai-exported/AGENTS.md` — it routes to the rest. Three sample prompts covering the typical entry points:
-
-```
-> Read node_modules/@sodax/dapp-kit/ai-exported/AGENTS.md and integrate
-> SODAX cross-chain swaps into my React app.
-
-> Read node_modules/@sodax/dapp-kit/ai-exported/AGENTS.md. My app uses
-> v1 dapp-kit (useSpokeProvider, custom approve return shapes) — port to v2.
-
-> Look up the canonical mutation hook shape in
-> node_modules/@sodax/dapp-kit/ai-exported/integration/architecture.md.
+```bash
+npx skills@latest add icon-project/sodax-sdks/packages/skills
 ```
 
-### What's inside
+**npm fallback** (for agents that don't use the CLI — Cursor, Codex, Copilot, plain ChatGPT):
 
-```
-ai-exported/
-├── AGENTS.md                          # Tool-neutral entry point — start here
-├── integration/                       # Building NEW v2 dapp-kit code
-│   ├── README.md, ai-rules.md         # Index + DO / DO NOT / workflow for agents
-│   ├── quickstart.md                  # Install + wire providers + first feature
-│   ├── architecture.md                # Hook shapes, queryKey conventions, useSafeMutation, mutateAsyncSafe
-│   ├── features/                      # 8 feature pages: swap, money-market, staking, bridge,
-│   │                                  #   dex, migration, bitcoin (Radfi), auxiliary-services
-│   ├── recipes/                       # 13 patterns: setup, wallet-connectivity, per-feature flows,
-│   │                                  #   mutation error handling, observability, invalidations
-│   └── reference/                     # 4 lookup tables: full hook index, queryKey conventions,
-│                                      #   public API surface, glossary
-└── migration/                         # Porting EXISTING v1 dapp-kit code to v2
-    ├── README.md, ai-rules.md         # Index + workflow for porting agents
-    ├── checklist.md                   # Top-down cross-cutting checklist
-    ├── breaking-changes/              # 4 cross-cutting changes: hook-signatures, result-handling,
-    │                                  #   querykey-conventions, sdk-leakage
-    ├── features/                      # 8 per-feature porting playbooks
-    ├── recipes.md                     # Codemods + adapters
-    └── reference/                     # 3 reference tables: deleted hooks, renamed hooks,
-                                       #   error-shape crosswalk
+```bash
+pnpm add -D @sodax/skills
 ```
 
-### Scope
-
-This tree documents `@sodax/dapp-kit` (a React hooks library) only. It assumes:
-
-- **TypeScript + React** (>=18). Examples use TSX.
-- **Framework-agnostic**: works in any React app (Vite, Next.js client components, CRA, Remix, etc.). **No Next.js Server Components content** — dapp-kit is client-side React.
-- **Sibling packages used in examples**: `@sodax/sdk` (peer; types and config; re-exported transparently from dapp-kit), `@sodax/wallet-sdk-react` (sibling; `useWalletProvider` is in every signed-flow example), `@tanstack/react-query` (peer).
-- **`@sodax/types` is re-exported** through `@sodax/sdk` (which dapp-kit re-exports); consumers don't add it as a separate dependency.
-
-The underlying Core SDK has its own ai-exported tree at `node_modules/@sodax/sdk/ai-exported/` (resolves correctly in node_modules). The dapp-kit migration tree links to it for SDK-leakage topics (chain-key terminology, `Result<T>` semantics, `SodaxError<C>`).
-
-### Integrity guarantees
-
-Every release passes seven CI checks against `ai-exported/`:
-
-| Guard | What it catches |
-|---|---|
-| `check:ai-exported` | Each `useFoo` hook reference in markdown matches a real exported hook from `@sodax/dapp-kit` (or an upstream allowlist: React, React Query, wallet-sdk-react). |
-| `check:ai-scope` | No accidental imports from forbidden packages (e.g. `@sodax/wallet-sdk-core` for Node-only flows; `@sodax/types` directly). |
-| `check:ai-links` | Every relative link between markdown files resolves (including cross-package links into `../../../sdk/ai-exported/`). |
-| `check:ai-imports` | Every `import … from '@sodax/dapp-kit'` example in the docs typechecks against the package source. |
-| `check:ai-snippets` | Every fenced `​```ts`/`​```tsx` block is typechecked AS-IS against source (opt-out via `// @ai-snippets-skip` for genuinely illustrative blocks). Catches call-shape drift like wrong `useQuote({ params: <Request> })` vs canonical `useQuote({ params: { payload: <Request> } })`. |
-| `check:ai-keys` | Every `queryKey:` / `mutationKey:` literal in docs (both `kind: [...]` declarations and backticked-array table cells) matches a real source key prefix. Catches drift like `['staking', 'stakingInfo']` in docs when source uses `['staking', 'info']`. |
-| `check:ai-consistency` | Polling-interval claims in docs (e.g. "polls 3s", "auto-refresh every 2s") match the actual `refetchInterval` value in source. Catches drift like docs claiming 1s when source is 3000ms. |
-
-If you're contributing to this repo, run them with `pnpm -C packages/dapp-kit run check:ai-exported` (or `:scope`, `:links`, `:imports`, `:snippets`, `:keys`, `:consistency`).
+Then point your agent at `node_modules/@sodax/skills/AGENTS.md`. See [docs/ai-integration-guide.md](https://github.com/icon-project/sodax-sdks/blob/main/docs/ai-integration-guide.md) for the full setup (per-tool rules files, prompt examples).
 
 ## License
 

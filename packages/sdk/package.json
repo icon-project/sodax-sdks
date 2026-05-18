@@ -30,24 +30,19 @@
   "engines": {
     "node": ">=20.0.0"
   },
-  "files": ["dist", "ai-exported"],
+  "files": ["dist"],
   "scripts": {
     "build": "tsup",
     "test": "vitest run --exclude ./src/e2e-tests",
     "test-e2e": "vitest run ./src/e2e-tests",
     "coverage": "vitest run --coverage",
     "dev": "tsup --watch",
-    "ci": "pnpm run pretty && pnpm run build && pnpm run test && pnpm run check:ai-exported && pnpm run check:ai-scope && pnpm run check:ai-links && pnpm run check:ai-imports",
+    "ci": "pnpm run pretty && pnpm run build && pnpm run test",
     "checkTs": "tsc --noEmit",
     "pretty": "biome format . --write",
     "lint": "biome lint . --write",
     "check-exports": "attw $(pnpm pack) --ignore-rules=cjs-resolves-to-esm",
     "check:circular-deps": "madge --circular --exclude 'types/dist' $(find ./src -name '*.ts')",
-    "check:ai-exported": "bash ./scripts/check-ai-exported.sh",
-    "check:ai-scope": "bash ./scripts/check-ai-scope.sh",
-    "check:ai-links": "bash ./scripts/check-ai-links.sh",
-    "check:ai-imports": "bash ./scripts/check-ai-imports.sh",
-    "check:ai": "pnpm run check:ai-exported && pnpm run check:ai-scope && pnpm run check:ai-links && pnpm run check:ai-imports",
     "prepublishOnly": "pnpm run ci",
     "local-release": "changeset version && changeset publish",
     "clean": "rm -rf node_modules && rm -rf dist && rm -rf .turbo"

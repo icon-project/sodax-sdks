@@ -50,7 +50,7 @@ jobs:
       - name: Build Check
         run: pnpm checkTs
 
-      - name: AI-exported docs guards (sdk, wallet-sdk-react, dapp-kit)
+      - name: AI docs validation
         run: pnpm check:ai
 
       - name: Build Apps
