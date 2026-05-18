@@ -67,6 +67,7 @@ vi.mock('@/useXWalletStore.js', () => ({
     }),
     persist: {
       hasHydrated: () => true,
+      onHydrate: () => () => {},
       onFinishHydration: () => () => {},
     },
   }),
