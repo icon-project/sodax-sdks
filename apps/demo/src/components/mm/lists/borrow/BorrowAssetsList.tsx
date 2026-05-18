@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { getXChainType, useXAccount, useXService } from '@sodax/wallet-sdk-react';
 import { BorrowAssetsListItem } from './BorrowAssetsListItem';
-import { formatUnits } from 'viem';
+import { formatTokenAmount } from '@/lib/utils';
 import { getBorrowableAssetsWithMarketData } from '@/lib/borrowUtils';
 import { BorrowModal } from '../BorrowModal';
 import { ChainKeys, type SpokeChainKey, type XToken } from '@sodax/sdk';
@@ -241,7 +241,7 @@ export function BorrowAssetsList({ initialChainId }: BorrowAssetsListProps): JSX
                         disabled={!hasCollateral}
                         walletBalance={
                           asset.token?.chainKey === selectedChainId && balances?.[asset.token.address]
-                            ? Number(formatUnits(balances[asset.token.address], asset.token.decimals)).toFixed(6)
+                            ? formatTokenAmount(balances[asset.token.address], asset.token.decimals, 6)
                             : '-'
                         }
                         formattedReserves={formattedReserves || []}
