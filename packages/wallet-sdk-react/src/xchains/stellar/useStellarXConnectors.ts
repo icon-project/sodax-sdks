@@ -1,8 +1,7 @@
 import { useXService } from '@/hooks/index.js';
 import { type UseQueryResult, useQuery } from '@tanstack/react-query';
-
-import { StellarWalletsKitXConnector, StellarXService } from './index.js';
-import type { StellarWalletType } from './StellarWalletsKitXConnector.js';
+import { StellarWalletsKitXConnector, type StellarWalletType } from './StellarWalletsKitXConnector.js';
+import { StellarXService } from './StellarXService.js';
 
 export const useStellarXConnectors = (): UseQueryResult<StellarWalletsKitXConnector[] | undefined, Error | null> => {
   const xService = useXService({ xChainType: 'STELLAR' });

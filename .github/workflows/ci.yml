@@ -44,6 +44,9 @@ jobs:
       - name: Check Circular Dependencies
         run: pnpm check:circular-deps
 
+      - name: Knip (unused files / exports / deps)
+        run: pnpm check:knip
+
       - name: Build Packages
         run: pnpm build:packages
 

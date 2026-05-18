@@ -39,3 +39,4 @@ catalog:
   "@stacks/connect": "8.2.6"
   "near-api-js": "7.2.0"
   "madge": "8.0.0"
+  "knip": "5.30.5"

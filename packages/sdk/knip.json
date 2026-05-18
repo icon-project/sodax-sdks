@@ -1,0 +1,9 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": ["src/index.ts", "src/e2e-tests/**/*.test.ts"],
+  "project": ["src/**/*.ts"],
+  "ignore": ["ai-exported/**"],
+  "ignoreBinaries": ["biome"],
+  "ignoreDependencies": ["@sodax/types"],
+  "ignoreExportsUsedInFile": true
+}

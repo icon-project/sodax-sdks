@@ -1,0 +1,12 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": ["src/index.ts", "src/xchains/*/index.ts", "src/tests/e2e/**/*.test.ts"],
+  "project": ["src/**/*.{ts,tsx}"],
+  "ignore": ["ai-exported/**", "docs/**", "skills/**"],
+  "ignoreBinaries": ["biome"],
+  "ignoreDependencies": ["@sodax/types", "@sodax/wallet-sdk-core"],
+  "ignoreExportsUsedInFile": true,
+  "rules": {
+    "enumMembers": "off"
+  }
+}
