@@ -1,6 +1,8 @@
 # @sodax/skills
 
-AI-agent skills and knowledge for building on the **SODAX** cross-chain DeFi platform. Drop this into your repo and your AI coding agent (Claude Code today; other agents read the markdown directly) writes v2-correct `@sodax/*` SDK code on the first try.
+AI-agent skills and knowledge for building on the **SODAX** cross-chain DeFi platform. Drop this into your repo and your AI coding agent writes v2-correct `@sodax/*` SDK code on the first try.
+
+**Full setup** (skills CLI, npm, monorepo/local install, wiring agents to `AGENTS.md`): [docs/ai-integration-guide.md](https://github.com/icon-project/sodax-sdks/blob/main/docs/ai-integration-guide.md).
 
 ## Install
 
@@ -13,12 +15,7 @@ npx skills@latest add icon-project/sodax-sdks/packages/skills
 
 Eight skills land in your repo (under `.claude/skills/` or wherever the CLI installs them), one knowledge tree per SODAX SDK package, and a router `AGENTS.md`. Re-running the command picks up the latest content.
 
-> **No subpath support?** As a fallback, install via npm and read directly:
-> ```bash
-> pnpm add -D @sodax/skills
-> # Then in CLAUDE.md / .cursor/rules / AGENTS.md, point your agent at
-> # node_modules/@sodax/skills/AGENTS.md
-> ```
+> **npm fallback** (web chats or when you prefer a devDependency): `pnpm add -D @sodax/skills`, then point your agent at `node_modules/@sodax/skills/AGENTS.md`. See the [integration guide](https://github.com/icon-project/sodax-sdks/blob/main/docs/ai-integration-guide.md#wire-your-agent).
 
 ## What you get
 
