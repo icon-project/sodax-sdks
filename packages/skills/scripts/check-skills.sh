@@ -70,6 +70,22 @@ for dir in "${REGISTERED[@]}"; do
       err "SKILL.md frontmatter missing '${key}:' field: $skill_md"
     fi
   done
+  # Parse the frontmatter through a real YAML parser so we catch issues the
+  # grep above can't see — most importantly, `: ` (colon-space) inside an
+  # unquoted plain scalar. The vercel-labs/skills CLI uses strict YAML 1.2;
+  # a description like `9 chain types: EVM` parses there as a sub-mapping
+  # and the whole skill gets silently skipped at install time. Wrap each
+  # description in single quotes (see packages/skills/CLAUDE.md).
+  if ! node -e '
+    const fs = require("fs"); const { parse } = require("yaml");
+    const md = fs.readFileSync(process.argv[1], "utf8");
+    const m = md.match(/^---\n([\s\S]*?)\n---/);
+    if (!m) { process.exit(2); }
+    const doc = parse(m[1]);
+    if (!doc || typeof doc.name !== "string" || typeof doc.description !== "string") { process.exit(3); }
+  ' "$skill_md" 2>/dev/null; then
+    err "SKILL.md frontmatter is not valid YAML (or name/description not strings): $skill_md"
+  fi
 done
 
 # -----------------------------------------------------------------------------

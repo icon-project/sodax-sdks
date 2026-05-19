@@ -42,6 +42,7 @@
     "@types/react-dom": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "viem": "catalog:"
+    "viem": "catalog:",
+    "yaml": "2.8.2"
   }
 }
