@@ -5,6 +5,9 @@
   "files": {
     "includes": ["!**/.next", "!src/components/ui"]
   },
+  "javascript": {
+    "jsxRuntime": "reactClassic"
+  },
   "linter": {
     "rules": {
       "style": {
@@ -16,6 +19,9 @@
       },
       "complexity": {
         "noStaticOnlyClass": "off"
+      },
+      "a11y": {
+        "noStaticElementInteractions": "off"
       }
     }
   }
