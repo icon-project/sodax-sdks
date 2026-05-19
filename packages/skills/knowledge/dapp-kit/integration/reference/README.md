@@ -9,4 +9,4 @@ Lookup tables. Read while writing code; not a tutorial.
 | [`public-api.md`](public-api.md) | What `@sodax/dapp-kit` exports + import rules. |
 | [`glossary.md`](glossary.md) | Type aliases (`ReadHookParams`, `MutationHookParams`, `SafeUseMutationResult`, `MutationHookOptions`, etc.). |
 
-For full SDK reference (chain keys, error codes, `Sodax` class surface, wallet provider interfaces), see [`../../../sdk/integration/reference/`](../../../sdk/integration/reference/) — `@sodax/dapp-kit` re-exports the SDK's public surface, so those types are reachable from `@sodax/dapp-kit` directly.
+For full SDK reference (chain keys, error codes, `Sodax` class surface, wallet provider interfaces), see [`@sodax/sdk`: `integration/reference/`](https://github.com/icon-project/sodax-sdks/tree/main/packages/skills/knowledge/sdk/integration/reference/) — `@sodax/dapp-kit` re-exports the SDK's public surface, so those types are reachable from `@sodax/dapp-kit` directly.

@@ -64,7 +64,7 @@ The SDK reduced the per-feature code unions to a unified 13-code reason vocabula
 | `*Error<'GAS_ESTIMATION_FAILED'>` | Same |
 | `*Error<'RELAY_TIMEOUT'>` | `SodaxError<'RELAY_TIMEOUT'>` with `relayCode: 'RELAY_TIMEOUT'` on context |
 
-Full crosswalk (per feature): [`../../../sdk/migration/reference/error-code-crosswalk.md`](../../../sdk/migration/reference/error-code-crosswalk.md).
+Full crosswalk (per feature): [`@sodax/sdk`: `migration/reference/error-code-crosswalk.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/migration/reference/error-code-crosswalk.md).
 
 ## How to migrate error-handling code
 
@@ -139,6 +139,6 @@ Plan to delete the adapter once you've ported all error UI.
 
 - [`../breaking-changes/result-handling.md`](../breaking-changes/result-handling.md) — semantic shift in `Result<T>` handling.
 - [`../breaking-changes/sdk-leakage.md`](../breaking-changes/sdk-leakage.md) — broader SDK-side migrations.
-- [`../../../sdk/migration/breaking-changes/result-and-errors.md`](../../../sdk/migration/breaking-changes/result-and-errors.md) — full SDK error-class consolidation.
-- [`../../../sdk/migration/reference/error-code-crosswalk.md`](../../../sdk/migration/reference/error-code-crosswalk.md) — per-feature error code crosswalks.
+- [`@sodax/sdk`: `migration/breaking-changes/result-and-errors.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/migration/breaking-changes/result-and-errors.md) — full SDK error-class consolidation.
+- [`@sodax/sdk`: `migration/reference/error-code-crosswalk.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/migration/reference/error-code-crosswalk.md) — per-feature error code crosswalks.
 - [`../../integration/architecture.md`](../../integration/architecture.md) § "SDK Result handling" — design rationale.

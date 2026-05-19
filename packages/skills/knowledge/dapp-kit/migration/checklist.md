@@ -68,9 +68,9 @@ If your code grafts onto dapp-kit's cache invalidation (e.g. you fetch a related
 
 These are SDK-level changes that surface in dapp-kit hook signatures or types. Refer to the SDK migration tree for full detail:
 
-- [ ] **Chain-key terminology** — `xChainId` / `srcChainId` / `dstChainId` on action params → `chainKey` / `srcChainKey` / `dstChainKey`. See [`../../sdk/migration/breaking-changes/type-system.md`](../../sdk/migration/breaking-changes/type-system.md).
-- [ ] **SodaxConfig reshape** — flat `rpcConfig` → nested `chains[ChainKeys.X]: { rpcUrl }`. See [`../../sdk/migration/breaking-changes/architecture.md`](../../sdk/migration/breaking-changes/architecture.md).
-- [ ] **Error class** — `MoneyMarketError<Code>` etc. → single `SodaxError<C>`. See [`../../sdk/migration/breaking-changes/result-and-errors.md`](../../sdk/migration/breaking-changes/result-and-errors.md). dapp-kit consumers see this only if they directly reference SDK error classes.
+- [ ] **Chain-key terminology** — `xChainId` / `srcChainId` / `dstChainId` on action params → `chainKey` / `srcChainKey` / `dstChainKey`. See [`@sodax/sdk`: `migration/breaking-changes/type-system.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/migration/breaking-changes/type-system.md).
+- [ ] **SodaxConfig reshape** — flat `rpcConfig` → nested `chains[ChainKeys.X]: { rpcUrl }`. See [`@sodax/sdk`: `migration/breaking-changes/architecture.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/migration/breaking-changes/architecture.md).
+- [ ] **Error class** — `MoneyMarketError<Code>` etc. → single `SodaxError<C>`. See [`@sodax/sdk`: `migration/breaking-changes/result-and-errors.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/migration/breaking-changes/result-and-errors.md). dapp-kit consumers see this only if they directly reference SDK error classes.
 
 ## Phase 8 — verification
 

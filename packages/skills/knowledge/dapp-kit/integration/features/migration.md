@@ -115,4 +115,4 @@ await approve({ params: bnUSDParams, walletProvider, action: 'migrate' });
 
 - [`../recipes/migration.md`](../recipes/migration.md) — full worked examples.
 - [`../../migration/features/migration.md`](../../migration/features/migration.md) — v1 → v2 porting (the v1 dapp-kit had a single `useMigrate(spokeProvider)`-style hook; v2 split into 6).
-- [`../../../sdk/integration/features/icx-bnusd-baln.md`](../../../sdk/integration/features/icx-bnusd-baln.md) — underlying SDK migration surface.
+- [`@sodax/sdk`: `integration/features/icx-bnusd-baln.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/integration/features/icx-bnusd-baln.md) — underlying SDK migration surface.

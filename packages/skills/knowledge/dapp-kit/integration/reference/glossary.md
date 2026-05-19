@@ -1,6 +1,6 @@
 # Glossary — `@sodax/dapp-kit` v2
 
-Type aliases, conventions, and domain terms specific to dapp-kit. SDK-side terms (Hub, Spoke, Intent, ChainKey, SodaxError, etc.) are documented in [`../../../sdk/integration/reference/glossary.md`](../../../sdk/integration/reference/glossary.md).
+Type aliases, conventions, and domain terms specific to dapp-kit. SDK-side terms (Hub, Spoke, Intent, ChainKey, SodaxError, etc.) are documented in [`@sodax/sdk`: `integration/reference/glossary.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/integration/reference/glossary.md).
 
 ## Hook shape types
 
@@ -187,4 +187,4 @@ When porting v1 code, these shifts are pervasive:
 - [`../architecture.md`](../architecture.md) — full design rationale for these types and conventions.
 - [`querykey-conventions.md`](querykey-conventions.md) — queryKey/mutationKey rules.
 - [`public-api.md`](public-api.md) — what's exported.
-- [`../../../sdk/integration/reference/glossary.md`](../../../sdk/integration/reference/glossary.md) — SDK-side terms (Hub, Spoke, Intent, ChainKey, SodaxError).
+- [`@sodax/sdk`: `integration/reference/glossary.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/integration/reference/glossary.md) — SDK-side terms (Hub, Spoke, Intent, ChainKey, SodaxError).

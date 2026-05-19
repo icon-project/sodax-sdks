@@ -60,7 +60,7 @@ v1 had **two positional args**: `useSpokeProvider(spokeChainId, walletProvider)`
 
 A naive single-pass regex over `useSpokeProvider\(([^)]+)\)` eats both args and produces invalid `useWalletProvider({ xChainId: chainKey, walletProvider })`. Do the rewrite in two passes: first the call shape (drop the second positional arg), then the import (from `@sodax/dapp-kit` → `@sodax/wallet-sdk-react`). A small number of v1 callers used the single-arg form `useSpokeProvider(chainId)` — handle those separately since they don't have a second arg to drop.
 
-Update downstream consumers of `spokeProvider` to use `walletProvider` instead — usually inside `mutate(vars)` payloads or query hook params. The field name on payloads also renamed `spokeProvider:` → `walletProvider:` (see [`../../sdk/migration/checklist.md`](../../sdk/migration/checklist.md) step 7b).
+Update downstream consumers of `spokeProvider` to use `walletProvider` instead — usually inside `mutate(vars)` payloads or query hook params. The field name on payloads also renamed `spokeProvider:` → `walletProvider:` (see [`@sodax/sdk`: `migration/checklist.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/migration/checklist.md) step 7b).
 
 ## Codemod 3: invalidate*Queries utilities deletion
 

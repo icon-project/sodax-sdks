@@ -53,7 +53,7 @@ Every breaking-change file in this tree has a v2-design counterpart in `../integ
 - [`breaking-changes/hook-signatures.md`](breaking-changes/hook-signatures.md) ↔ [`../integration/architecture.md`](../integration/architecture.md) (§ Read hook shape, Mutation hook shape).
 - [`breaking-changes/result-handling.md`](breaking-changes/result-handling.md) ↔ [`../integration/recipes/mutation-error-handling.md`](../integration/recipes/mutation-error-handling.md).
 - [`breaking-changes/querykey-conventions.md`](breaking-changes/querykey-conventions.md) ↔ [`../integration/reference/querykey-conventions.md`](../integration/reference/querykey-conventions.md).
-- [`breaking-changes/sdk-leakage.md`](breaking-changes/sdk-leakage.md) ↔ [`../../sdk/migration/`](../../sdk/migration/) (the underlying SDK's migration tree).
+- [`breaking-changes/sdk-leakage.md`](breaking-changes/sdk-leakage.md) ↔ [`@sodax/sdk` migration tree](https://github.com/icon-project/sodax-sdks/tree/main/packages/skills/knowledge/sdk/migration/) (the underlying SDK's migration tree).
 - [`features/<x>.md`](features/) ↔ [`../integration/features/<x>.md`](../integration/features/) (same filename).
 - [`recipes.md`](recipes.md) ↔ no integration counterpart (migration-only patterns).
 

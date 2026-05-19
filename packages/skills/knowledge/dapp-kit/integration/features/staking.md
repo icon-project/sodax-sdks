@@ -120,4 +120,4 @@ All read hooks here are **already unwrapped** — they call `unwrapResult` inter
 
 - [`../recipes/staking.md`](../recipes/staking.md) — full worked examples.
 - [`../../migration/features/staking.md`](../../migration/features/staking.md) — v1 → v2 porting.
-- [`../../../sdk/integration/features/staking.md`](../../../sdk/integration/features/staking.md) — underlying SDK staking surface.
+- [`@sodax/sdk`: `integration/features/staking.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/integration/features/staking.md) — underlying SDK staking surface.

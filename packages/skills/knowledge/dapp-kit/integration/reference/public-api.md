@@ -107,4 +107,4 @@ Don't rely on any other path being present. Consumer-facing AI docs (this knowle
 
 - [`../architecture.md`](../architecture.md) — design rationale for the canonical hook shapes.
 - [`hooks-index.md`](hooks-index.md) — full hook list.
-- [`../../../sdk/integration/reference/public-api.md`](../../../sdk/integration/reference/public-api.md) — underlying SDK's public API surface.
+- [`@sodax/sdk`: `integration/reference/public-api.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/integration/reference/public-api.md) — underlying SDK's public API surface.

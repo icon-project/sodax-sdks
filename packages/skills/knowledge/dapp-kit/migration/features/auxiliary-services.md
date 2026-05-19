@@ -111,4 +111,4 @@ Note: the request param is still `xChainId` (not renamed to `chainKey`). This is
 - [`../../integration/features/auxiliary-services.md`](../../integration/features/auxiliary-services.md) — v2 reference.
 - [`../../integration/recipes/backend-queries.md`](../../integration/recipes/backend-queries.md) — backend hooks worked examples.
 - [`../../integration/recipes/wallet-connectivity.md`](../../integration/recipes/wallet-connectivity.md) — `useXBalances` worked example.
-- [`../../../sdk/migration/features/auxiliary-services.md`](../../../sdk/migration/features/auxiliary-services.md) — underlying SDK auxiliary migrations.
+- [`@sodax/sdk`: `migration/features/auxiliary-services.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/migration/features/auxiliary-services.md) — underlying SDK auxiliary migrations.

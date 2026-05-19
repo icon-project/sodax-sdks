@@ -8,7 +8,7 @@ Lookup tables for the v1 → v2 delta. Skim during migration to confirm specific
 | [`renamed-hooks.md`](renamed-hooks.md) | Hooks whose name or signature changed (rare — most renames are field-level). |
 | [`error-shape-crosswalk.md`](error-shape-crosswalk.md) | v1 error class names → v2 `SodaxError<C>` mapping; how thrown errors look at the consumer level. |
 
-For SDK-level reference (deleted exports, renames, error code crosswalk), see [`../../../sdk/migration/reference/`](../../../sdk/migration/reference/) — the underlying SDK has its own reference tree.
+For SDK-level reference (deleted exports, renames, error code crosswalk), see [`@sodax/sdk`: `migration/reference/`](https://github.com/icon-project/sodax-sdks/tree/main/packages/skills/knowledge/sdk/migration/reference/) — the underlying SDK has its own reference tree.
 
 ## Pair
 

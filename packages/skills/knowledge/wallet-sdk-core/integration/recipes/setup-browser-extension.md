@@ -94,7 +94,7 @@ const evm = useWalletProvider({ xChainId: ChainKeys.SONIC_MAINNET });
 // evm: IEvmWalletProvider | undefined  ← already typed, already wired
 ```
 
-`@sodax/wallet-sdk-react` handles the construction internally — see [`../../../wallet-sdk-react/integration/recipes/setup.md`](../../../wallet-sdk-react/integration/recipes/setup.md). Skip this recipe (the manual path) unless you are:
+`@sodax/wallet-sdk-react` handles the construction internally — see [`@sodax/wallet-sdk-react`: `integration/recipes/setup.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/wallet-sdk-react/integration/recipes/setup.md). Skip this recipe (the manual path) unless you are:
 
 - Building a custom non-React frontend that talks to a wallet extension directly.
 - Writing a thin wrapper around the package for a framework that doesn't have a SODAX integration yet.

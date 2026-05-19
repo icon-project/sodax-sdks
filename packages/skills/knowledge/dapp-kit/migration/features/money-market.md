@@ -136,4 +136,4 @@ Three things to verify when porting:
 - [`../../integration/features/money-market.md`](../../integration/features/money-market.md) — v2 reference.
 - [`../../integration/recipes/money-market.md`](../../integration/recipes/money-market.md) — full v2 worked example.
 - [`../breaking-changes/sdk-leakage.md`](../breaking-changes/sdk-leakage.md) — `srcChainKey`/`srcAddress` required.
-- [`../../../sdk/migration/features/money-market.md`](../../../sdk/migration/features/money-market.md) — underlying SDK MM migration.
+- [`@sodax/sdk`: `migration/features/money-market.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/migration/features/money-market.md) — underlying SDK MM migration.

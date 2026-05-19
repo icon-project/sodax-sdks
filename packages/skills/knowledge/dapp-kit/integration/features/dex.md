@@ -149,4 +149,4 @@ if (supplyResult && walletProvider) {
 
 - [`../recipes/dex.md`](../recipes/dex.md) — full worked examples.
 - [`../../migration/features/dex.md`](../../migration/features/dex.md) — v1 → v2 porting.
-- [`../../../sdk/integration/features/dex.md`](../../../sdk/integration/features/dex.md) — underlying SDK DEX surface.
+- [`@sodax/sdk`: `integration/features/dex.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/integration/features/dex.md) — underlying SDK DEX surface.

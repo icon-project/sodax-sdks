@@ -31,7 +31,7 @@ The SDK renamed `xChainId` / `srcChainId` / `dstChainId` to `chainKey` / `srcCha
 
 **Note:** `Intent.srcChain` / `Intent.dstChain` (read shape) kept their names. They're `IntentRelayChainId` (bigints), distinct from request-side `srcChainKey` / `dstChainKey`. Don't blanket grep-replace.
 
-Full SDK-level detail: [`../../../sdk/migration/breaking-changes/type-system.md`](../../../sdk/migration/breaking-changes/type-system.md).
+Full SDK-level detail: [`@sodax/sdk`: `migration/breaking-changes/type-system.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/migration/breaking-changes/type-system.md).
 
 ## Required `srcChainKey` + `srcAddress` on action params
 
@@ -55,7 +55,7 @@ v1 mutation params were minimal (`{ token, amount, action }`). v2 added required
 
 Same applies to `useBorrow`, `useWithdraw`, `useRepay`, `useStake`, `useUnstake`, `useBridge`, `useDexDeposit`, `useDexWithdraw`, etc. — anywhere the SDK now requires it.
 
-Full SDK-level detail: [`../../../sdk/migration/features/`](../../../sdk/migration/features/) — each feature's migration file lists the required new fields.
+Full SDK-level detail: [`@sodax/sdk`: `migration/features/`](https://github.com/icon-project/sodax-sdks/tree/main/packages/skills/knowledge/sdk/migration/features/) — each feature's migration file lists the required new fields.
 
 ## `*_MAINNET_CHAIN_ID` constants gone
 
@@ -77,7 +77,7 @@ find src -type f \( -name '*.ts' -o -name '*.tsx' \) | xargs sed -i '' -E 's/\b(
 
 Then add `import { ChainKeys } from '@sodax/sdk'` (or `@sodax/dapp-kit`) where needed.
 
-Full SDK-level detail: [`../../../sdk/migration/breaking-changes/type-system.md`](../../../sdk/migration/breaking-changes/type-system.md).
+Full SDK-level detail: [`@sodax/sdk`: `migration/breaking-changes/type-system.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/migration/breaking-changes/type-system.md).
 
 ## `SodaxConfig` reshape — `rpcConfig` → `chains`
 
@@ -107,7 +107,7 @@ Other v1 fields renamed or restructured:
 | `swaps: { intentsContract, ... }` | Split: `solver: { intentsContract, ... }` for endpoints; `swaps: SwapsConfig` for supported tokens |
 | `hubProviderConfig` | `hub: HubConfig` |
 
-Full SDK-level detail: [`../../../sdk/migration/breaking-changes/architecture.md`](../../../sdk/migration/breaking-changes/architecture.md) (Appendix B).
+Full SDK-level detail: [`@sodax/sdk`: `migration/breaking-changes/architecture.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/migration/breaking-changes/architecture.md) (Appendix B).
 
 ## Error class
 
@@ -133,7 +133,7 @@ If your dapp-kit consumer code catches errors from mutations and uses `instanceo
 
 `isSodaxError` is re-exported from `@sodax/dapp-kit`. Discriminate via `(error.feature, error.code)` — the feature is now a first-class field, and the code vocabulary is unified to 13 reason-only codes.
 
-Full SDK-level detail: [`../../../sdk/migration/breaking-changes/result-and-errors.md`](../../../sdk/migration/breaking-changes/result-and-errors.md).
+Full SDK-level detail: [`@sodax/sdk`: `migration/breaking-changes/result-and-errors.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/migration/breaking-changes/result-and-errors.md).
 
 ## `Result<T>` type and propagation
 
@@ -155,13 +155,13 @@ These are unlikely to leak through hook signatures unless your app reaches into 
 - **`ConfigService` replaces static lookup tables** — `hubAssets`, `moneyMarketSupportedTokens`, `SodaTokens` globals are gone. Use `sodax.config.*` (which dapp-kit's hooks already do internally).
 - **`WalletProviderSlot<K, Raw>` discriminated union** — a TypeScript-level construct; `walletProvider` is the typical consumer-facing shape.
 
-For the full SDK migration playbook, start at [`../../../sdk/migration/README.md`](../../../sdk/migration/README.md).
+For the full SDK migration playbook, start at [`@sodax/sdk`: `migration/README.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/migration/README.md).
 
 ## Cross-references
 
-- [`../../../sdk/migration/README.md`](../../../sdk/migration/README.md) — full SDK migration overview.
-- [`../../../sdk/migration/breaking-changes/type-system.md`](../../../sdk/migration/breaking-changes/type-system.md) — type renames + ChainKeys.
-- [`../../../sdk/migration/breaking-changes/architecture.md`](../../../sdk/migration/breaking-changes/architecture.md) — `*SpokeProvider`, ConfigService, SodaxConfig reshape.
-- [`../../../sdk/migration/breaking-changes/result-and-errors.md`](../../../sdk/migration/breaking-changes/result-and-errors.md) — `Result<T>` + error class consolidation.
+- [`@sodax/sdk`: `migration/README.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/migration/README.md) — full SDK migration overview.
+- [`@sodax/sdk`: `migration/breaking-changes/type-system.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/migration/breaking-changes/type-system.md) — type renames + ChainKeys.
+- [`@sodax/sdk`: `migration/breaking-changes/architecture.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/migration/breaking-changes/architecture.md) — `*SpokeProvider`, ConfigService, SodaxConfig reshape.
+- [`@sodax/sdk`: `migration/breaking-changes/result-and-errors.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/migration/breaking-changes/result-and-errors.md) — `Result<T>` + error class consolidation.
 - [`hook-signatures.md`](hook-signatures.md) — dapp-kit-only hook-shape changes.
 - [`result-handling.md`](result-handling.md) — dapp-kit-only `Result<T>` unwrap-point shift.

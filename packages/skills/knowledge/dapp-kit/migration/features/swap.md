@@ -130,4 +130,4 @@ Same shape changes as `useSwap` — drop `spokeProvider`, move domain inputs to 
 - [`../../integration/features/swap.md`](../../integration/features/swap.md) — v2 reference.
 - [`../../integration/recipes/swap.md`](../../integration/recipes/swap.md) — full v2 worked example.
 - [`../breaking-changes/hook-signatures.md`](../breaking-changes/hook-signatures.md), [`../breaking-changes/result-handling.md`](../breaking-changes/result-handling.md) — cross-cutting deltas.
-- [`../../../sdk/migration/features/swap.md`](../../../sdk/migration/features/swap.md) — underlying SDK swap migration.
+- [`@sodax/sdk`: `migration/features/swap.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/migration/features/swap.md) — underlying SDK swap migration.

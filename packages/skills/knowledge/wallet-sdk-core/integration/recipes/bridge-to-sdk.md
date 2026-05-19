@@ -80,7 +80,7 @@ The same shape applies to `sodax.swaps.*`, `sodax.bridge.*`, `sodax.staking.*`, 
 
 > If you need the underlying spoke service for advanced read-only operations, get it via `sodax.spoke.getSpokeService(chainKey)` — but never `new EvmSpokeService(...)` yourself.
 
-For SDK-level recipes (initialise the `Sodax` facade, configure hub provider, raw-tx flows, error handling) see the [`@sodax/sdk` knowledge tree](../../../sdk/) (sibling under `@sodax/skills`).
+For SDK-level recipes (initialise the `Sodax` facade, configure hub provider, raw-tx flows, error handling) see the [`@sodax/sdk` knowledge tree](https://github.com/icon-project/sodax-sdks/tree/main/packages/skills/knowledge/sdk/) (sibling under `@sodax/skills`).
 
 ---
 

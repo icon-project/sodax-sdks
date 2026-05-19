@@ -98,4 +98,4 @@ type UseStatusParams = ReadHookParams<
 - [`../recipes/swap.md`](../recipes/swap.md) — full worked example.
 - [`../recipes/mutation-error-handling.md`](../recipes/mutation-error-handling.md) — call-shape patterns.
 - [`../../migration/features/swap.md`](../../migration/features/swap.md) — v1 → v2 porting.
-- [`../../../sdk/integration/features/swap.md`](../../../sdk/integration/features/swap.md) — underlying SDK swap surface.
+- [`@sodax/sdk`: `integration/features/swap.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/integration/features/swap.md) — underlying SDK swap surface.

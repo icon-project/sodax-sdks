@@ -27,7 +27,7 @@ The structural shape of every dapp-kit hook changed in v2. Five categories of br
 + }}>
 ```
 
-The `config` prop is `DeepPartial<SodaxConfig>` from `@sodax/sdk`. Other fields available: `api`, `solver`, `swaps`, `bridge`, `dex`, `moneyMarket`, `hub`, `relay`, `fee`. See [`../../../sdk/migration/breaking-changes/architecture.md`](../../../sdk/migration/breaking-changes/architecture.md) for the SDK-side reshape.
+The `config` prop is `DeepPartial<SodaxConfig>` from `@sodax/sdk`. Other fields available: `api`, `solver`, `swaps`, `bridge`, `dex`, `moneyMarket`, `hub`, `relay`, `fee`. See [`@sodax/sdk`: `migration/breaking-changes/architecture.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/migration/breaking-changes/architecture.md) for the SDK-side reshape.
 
 **Recommended pairing**: replace `new QueryClient()` with `createSodaxQueryClient()` for global mutation observability.
 

@@ -88,4 +88,4 @@ type UseGetBridgeableTokensParams = ReadHookParams<XToken[], {
 
 - [`../recipes/bridge.md`](../recipes/bridge.md) — full worked example.
 - [`../../migration/features/bridge.md`](../../migration/features/bridge.md) — v1 → v2 porting.
-- [`../../../sdk/integration/features/bridge.md`](../../../sdk/integration/features/bridge.md) — underlying SDK bridge surface.
+- [`@sodax/sdk`: `integration/features/bridge.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/integration/features/bridge.md) — underlying SDK bridge surface.

@@ -166,4 +166,4 @@ All overridable via `queryOptions.refetchInterval`.
 - [`../recipes/backend-queries.md`](../recipes/backend-queries.md) — worked examples for intent tracking, orderbook, MM data.
 - [`../recipes/wallet-connectivity.md`](../recipes/wallet-connectivity.md) — `useXBalances` worked example.
 - [`../../migration/features/auxiliary-services.md`](../../migration/features/auxiliary-services.md) — v1 → v2 porting.
-- [`../../../sdk/integration/features/auxiliary-services.md`](../../../sdk/integration/features/auxiliary-services.md) — underlying SDK auxiliary surfaces (partner, recovery, backendApi).
+- [`@sodax/sdk`: `integration/features/auxiliary-services.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/integration/features/auxiliary-services.md) — underlying SDK auxiliary surfaces (partner, recovery, backendApi).

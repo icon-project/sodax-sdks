@@ -98,4 +98,4 @@ Convert to single-object query shape:
 
 - [`../../integration/features/dex.md`](../../integration/features/dex.md) — v2 reference.
 - [`../../integration/recipes/dex.md`](../../integration/recipes/dex.md) — full v2 worked example.
-- [`../../../sdk/migration/features/dex.md`](../../../sdk/migration/features/dex.md) — underlying SDK DEX migration.
+- [`@sodax/sdk`: `migration/features/dex.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/migration/features/dex.md) — underlying SDK DEX migration.

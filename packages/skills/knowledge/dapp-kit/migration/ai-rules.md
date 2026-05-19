@@ -30,7 +30,7 @@ DO / DO NOT / workflow / stop conditions for AI agents porting v1 dapp-kit code 
 - **DO** delete consumer-side `invalidate*Queries` utility files. Hook-owned invalidations make them obsolete.
 - **DO** swap `BSC_MAINNET_CHAIN_ID` (and the other 14 v1 constants) for `ChainKeys.BSC_MAINNET` (or whichever chain). Codemod-friendly.
 - **DO** consult [`../integration/architecture.md`](../integration/architecture.md) when "what does v2 expect instead?" comes up.
-- **DO** consult [`../../sdk/migration/`](../../sdk/migration/) for any SDK-leakage migrations (chain-key terminology, `Result<T>` propagation, ConfigService).
+- **DO** consult [`@sodax/sdk` migration tree](https://github.com/icon-project/sodax-sdks/tree/main/packages/skills/knowledge/sdk/migration/) for any SDK-leakage migrations (chain-key terminology, `Result<T>` propagation, ConfigService).
 
 ## DO NOT
 
@@ -49,7 +49,7 @@ DO / DO NOT / workflow / stop conditions for AI agents porting v1 dapp-kit code 
 | User wants to use React Server Components (RSC) | dapp-kit code goes in client components. Server Components can't run hooks. |
 | Codebase has consumer wrappers around dapp-kit hooks that look like dapp-kit's own internals | Examine each — they may be reasonable but check that they preserve `mutateAsyncSafe`. v1 wrappers often replaced React Query's `useMutation` directly. |
 | User expects approve hooks to look like before | Show them the new return shape. v2 standardized approve to `SafeUseMutationResult`; `{ approve, isLoading }` is gone. |
-| You hit an SDK-level migration item | Defer to [`../../sdk/migration/`](../../sdk/migration/). Don't try to re-explain SDK changes inside dapp-kit migration files — link them out. |
+| You hit an SDK-level migration item | Defer to [`@sodax/sdk` migration tree](https://github.com/icon-project/sodax-sdks/tree/main/packages/skills/knowledge/sdk/migration/). Don't try to re-explain SDK changes inside dapp-kit migration files — link them out. |
 
 ## Verification protocol
 

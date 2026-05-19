@@ -42,7 +42,7 @@ The naming rule: **every file in `integration/features/` has a sibling in `migra
 
 ## Cross-references to the underlying SDK
 
-`@sodax/dapp-kit` re-exports `@sodax/sdk` at the package root, so most types you'd reach for (`ChainKeys`, `SodaxConfig`, `CreateIntentParams`, `XToken`, `Result`, `SodaxError`) are available from `@sodax/dapp-kit` directly. The Core SDK has its own knowledge tree at [`../../sdk/`](../../sdk/) (sibling under `@sodax/skills`). Useful for:
+`@sodax/dapp-kit` re-exports `@sodax/sdk` at the package root, so most types you'd reach for (`ChainKeys`, `SodaxConfig`, `CreateIntentParams`, `XToken`, `Result`, `SodaxError`) are available from `@sodax/dapp-kit` directly. The Core SDK has its own knowledge tree at [`@sodax/sdk` knowledge tree](https://github.com/icon-project/sodax-sdks/tree/main/packages/skills/knowledge/sdk/) (sibling under `@sodax/skills`). Useful for:
 
 - The full SDK migration playbook for v1→v2 (chain-key terminology, `Result<T>` semantics, ConfigService) — referenced from [`../migration/breaking-changes/sdk-leakage.md`](../migration/breaking-changes/sdk-leakage.md).
 - Architectural concepts that surface through hook signatures (`SodaxError<C>` vocabulary, `WalletProviderSlot<K, Raw>` discriminator semantics).

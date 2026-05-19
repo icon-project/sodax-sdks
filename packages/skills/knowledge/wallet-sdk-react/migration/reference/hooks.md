@@ -323,7 +323,7 @@ Not a simple package-rename. The v2 hook also wraps params and adds a required `
 + });
 ```
 
-The `xService` injection is part of dapp-kit's "no implicit wallet-sdk dependency" design — dapp-kit doesn't import from `wallet-sdk-react`, so the consumer wires the service across at the call site. See [`../../../dapp-kit/integration/architecture.md`](../../../dapp-kit/integration/architecture.md) § "Decoupling from wallet-sdk-react".
+The `xService` injection is part of dapp-kit's "no implicit wallet-sdk dependency" design — dapp-kit doesn't import from `wallet-sdk-react`, so the consumer wires the service across at the call site. See [`@sodax/dapp-kit`: `integration/architecture.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/dapp-kit/integration/architecture.md) § "Decoupling from wallet-sdk-react".
 
 ### `useXWagmiStore` — removed (store reads moved to public hooks)
 

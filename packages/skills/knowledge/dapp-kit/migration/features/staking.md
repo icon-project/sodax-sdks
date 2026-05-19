@@ -106,4 +106,4 @@ if (result?.ok) {
 
 - [`../../integration/features/staking.md`](../../integration/features/staking.md) — v2 reference.
 - [`../../integration/recipes/staking.md`](../../integration/recipes/staking.md) — full v2 worked example.
-- [`../../../sdk/migration/features/staking.md`](../../../sdk/migration/features/staking.md) — underlying SDK staking migration.
+- [`@sodax/sdk`: `migration/features/staking.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/migration/features/staking.md) — underlying SDK staking migration.

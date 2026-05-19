@@ -157,4 +157,4 @@ The hook equivalence in code:
 
 - [`../../integration/features/bridge.md`](../../integration/features/bridge.md) — v2 reference.
 - [`../../integration/recipes/bridge.md`](../../integration/recipes/bridge.md) — full v2 worked example.
-- [`../../../sdk/migration/features/bridge.md`](../../../sdk/migration/features/bridge.md) — underlying SDK bridge migration.
+- [`@sodax/sdk`: `migration/features/bridge.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/migration/features/bridge.md) — underlying SDK bridge migration.

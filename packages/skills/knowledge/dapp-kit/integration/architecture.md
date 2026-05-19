@@ -273,4 +273,4 @@ Every mutation hook returns `SafeUseMutationResult` and is registered in `_mutat
 - [`recipes/invalidations.md`](recipes/invalidations.md) — composing your own `onSuccess`.
 - [`reference/querykey-conventions.md`](reference/querykey-conventions.md) — full key tables.
 - [`features/`](features/) — per-feature reference (hook tables, types, gotchas).
-- [`../../sdk/integration/architecture.md`](../../sdk/integration/architecture.md) — the underlying SDK architecture (`Result<T>`, `SodaxError<C>`, `WalletProviderSlot<K, Raw>`).
+- [`@sodax/sdk`: `integration/architecture.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/integration/architecture.md) — the underlying SDK architecture (`Result<T>`, `SodaxError<C>`, `WalletProviderSlot<K, Raw>`).

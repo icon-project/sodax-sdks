@@ -208,4 +208,4 @@ For per-hook truth, check the per-feature reference (`integration/features/<x>.m
 - [`hook-signatures.md`](hook-signatures.md) — the structural changes (provider stack, hook shapes, approve returns).
 - [`../../integration/recipes/mutation-error-handling.md`](../../integration/recipes/mutation-error-handling.md) — full v2 patterns for picking call shapes.
 - [`../../integration/architecture.md`](../../integration/architecture.md) § "SDK Result handling" — full design rationale.
-- [`../../../sdk/migration/breaking-changes/result-and-errors.md`](../../../sdk/migration/breaking-changes/result-and-errors.md) — SDK-side `Result<T>` migration (the underlying contract that dapp-kit translates).
+- [`@sodax/sdk`: `migration/breaking-changes/result-and-errors.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/migration/breaking-changes/result-and-errors.md) — SDK-side `Result<T>` migration (the underlying contract that dapp-kit translates).

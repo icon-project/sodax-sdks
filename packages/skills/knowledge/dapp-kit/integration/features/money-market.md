@@ -141,4 +141,4 @@ if (!isApproved) await approve({ params: supplyParams, walletProvider });
 
 - [`../recipes/money-market.md`](../recipes/money-market.md) — full worked examples.
 - [`../../migration/features/money-market.md`](../../migration/features/money-market.md) — v1 → v2 porting.
-- [`../../../sdk/integration/features/money-market.md`](../../../sdk/integration/features/money-market.md) — underlying SDK MM surface.
+- [`@sodax/sdk`: `integration/features/money-market.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/integration/features/money-market.md) — underlying SDK MM surface.

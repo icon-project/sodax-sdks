@@ -184,5 +184,5 @@ For broader v1 → v2 migration, see [`../migration/README.md`](../migration/REA
 
 ## Cross-references
 
-- [`../../sdk/AGENTS.md`](../../sdk/AGENTS.md) — the underlying Core SDK's tree (resolves correctly in `node_modules/@sodax/`-layout). Useful when you hit SDK-level types or behaviors leaking through hook signatures.
+- [`@sodax/sdk`: `AGENTS.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/AGENTS.md) — the underlying Core SDK's knowledge tree (sibling under `@sodax/skills`). Useful when you hit SDK-level types or behaviors leaking through hook signatures.
 
