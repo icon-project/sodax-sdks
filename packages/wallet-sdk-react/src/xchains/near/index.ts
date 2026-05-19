@@ -2,4 +2,3 @@
 // This barrel is auto-discovered by tsup. Do NOT re-export from src/index.ts.
 export { NearXService } from './NearXService.js';
 export { NearXConnector } from './NearXConnector.js';
-export { useNearXConnectors } from './useNearXConnectors.js';
