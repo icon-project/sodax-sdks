@@ -1,12 +1,6 @@
 import { SodaxError } from '../errors/SodaxError.js';
 import { mapRelayFailure } from '../errors/relay-error-mapping.js';
-import {
-  verifyFailed,
-  intentCreationFailed,
-  executionFailed,
-  approveFailed,
-  allowanceCheckFailed,
-} from '../errors/wrappers.js';
+import {  verifyFailed, intentCreationFailed, executionFailed, approveFailed, allowanceCheckFailed } from '../errors/wrappers.js';
 import {
   type MigrateOrchestrationError,
   type MigrationAllowanceCheckError,
@@ -158,10 +152,7 @@ export class MigrationService {
   ): Promise<Result<boolean, MigrationAllowanceCheckError>> {
     const baseCtx = { srcChainKey: params.srcChainKey };
     try {
-      migrationInvariant(action === 'migrate' || action === 'revert', 'Invalid action', {
-        ...baseCtx,
-        field: 'action',
-      });
+      migrationInvariant(action === 'migrate' || action === 'revert', 'Invalid action', { ...baseCtx, field: 'action' });
       migrationInvariant(params.amount > 0n, 'Amount must be greater than 0', { ...baseCtx, field: 'amount' });
 
       // Compute the underlying Result<boolean> across action × chain-type branches, then wrap any
@@ -169,10 +160,11 @@ export class MigrationService {
       let inner: Result<boolean> = { ok: true, value: true };
 
       if (action === 'migrate') {
-        migrationInvariant(isAddress(params.dstAddress) || isIconAddress(params.dstAddress), 'To address is required', {
-          ...baseCtx,
-          field: 'dstAddress',
-        });
+        migrationInvariant(
+          isAddress(params.dstAddress) || isIconAddress(params.dstAddress),
+          'To address is required',
+          { ...baseCtx, field: 'dstAddress' },
+        );
         migrationInvariant(
           isIcxMigrateParams(params) || isBalnMigrateParams(params) || isUnifiedBnUSDMigrateParams(params),
           'Invalid params',
@@ -186,14 +178,10 @@ export class MigrationService {
 
         if (isUnifiedBnUSDMigrateParams(params) && isEvmChainKeyType(params.srcChainKey)) {
           const bnUSDTokenAddress = this.config.getChainConfig(params.srcChainKey).supportedTokens.bnUSD?.address ?? '';
-          migrationInvariant(
-            isAddress(bnUSDTokenAddress),
-            `bnUSD token not found for chain key: ${params.srcChainKey}`,
-            {
-              ...baseCtx,
-              field: 'bnUSDTokenAddress',
-            },
-          );
+          migrationInvariant(isAddress(bnUSDTokenAddress), `bnUSD token not found for chain key: ${params.srcChainKey}`, {
+            ...baseCtx,
+            field: 'bnUSDTokenAddress',
+          });
 
           inner = await this.spoke.isAllowanceValid({
             srcChainKey: params.srcChainKey,
@@ -290,10 +278,7 @@ export class MigrationService {
     const wrapApproveFailure = (cause: unknown) => approveFailed('migration', cause, baseCtx);
 
     try {
-      migrationInvariant(action === 'migrate' || action === 'revert', 'Invalid action', {
-        ...baseCtx,
-        field: 'action',
-      });
+      migrationInvariant(action === 'migrate' || action === 'revert', 'Invalid action', { ...baseCtx, field: 'action' });
       migrationInvariant(params.amount > 0n, 'Amount must be greater than 0', { ...baseCtx, field: 'amount' });
       migrationInvariant(params.dstAddress.length > 0, 'To address is required', { ...baseCtx, field: 'dstAddress' });
 
@@ -640,14 +625,7 @@ export class MigrationService {
       });
 
       if (!packetResult.ok) {
-        return {
-          ok: false,
-          error: mapRelayFailure(packetResult.error, {
-            feature: 'migration',
-            action: baseCtx.action,
-            srcChainKey: baseCtx.srcChainKey,
-          }),
-        };
+        return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'migration', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey }) };
       }
 
       return { ok: true, value: { srcChainTxHash: tx, dstChainTxHash: packetResult.value.dst_tx_hash } };
@@ -696,14 +674,7 @@ export class MigrationService {
       });
 
       if (!packetResult.ok) {
-        return {
-          ok: false,
-          error: mapRelayFailure(packetResult.error, {
-            feature: 'migration',
-            action: baseCtx.action,
-            srcChainKey: baseCtx.srcChainKey,
-          }),
-        };
+        return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'migration', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey }) };
       }
 
       return { ok: true, value: { srcChainTxHash: tx, dstChainTxHash: packetResult.value.dst_tx_hash } };
@@ -749,14 +720,7 @@ export class MigrationService {
       });
 
       if (!packetResult.ok) {
-        return {
-          ok: false,
-          error: mapRelayFailure(packetResult.error, {
-            feature: 'migration',
-            action: baseCtx.action,
-            srcChainKey: baseCtx.srcChainKey,
-          }),
-        };
+        return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'migration', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey }) };
       }
 
       return { ok: true, value: { srcChainTxHash: tx, dstChainTxHash: packetResult.value.dst_tx_hash } };
@@ -876,14 +840,10 @@ export class MigrationService {
           ...baseCtx,
           field: 'srcChainKey',
         });
-        migrationInvariant(
-          this.config.isValidSpokeChainKey(params.dstChainKey),
-          'Invalid spoke destination chain key',
-          {
-            ...baseCtx,
-            field: 'dstChainKey',
-          },
-        );
+        migrationInvariant(this.config.isValidSpokeChainKey(params.dstChainKey), 'Invalid spoke destination chain key', {
+          ...baseCtx,
+          field: 'dstChainKey',
+        });
         migrationInvariant(params.srcbnUSD.length > 0, 'Legacy bnUSD token address is required', {
           ...baseCtx,
           field: 'srcbnUSD',
@@ -1064,9 +1024,7 @@ export class MigrationService {
         // MigrationLookupError on `cause` (subset narrowing doesn't apply — Lookup ⊄ Create).
         return {
           ok: false,
-          error: new SodaxError('INTENT_CREATION_FAILED', 'Failed to read ICX migration liquidity', {
-            feature: 'migration',
-            cause: availableAmount.error,
+          error: new SodaxError('INTENT_CREATION_FAILED', 'Failed to read ICX migration liquidity', { feature: 'migration', cause: availableAmount.error,
             context: { ...baseCtx, phase: 'intentCreation' },
           }),
         };
