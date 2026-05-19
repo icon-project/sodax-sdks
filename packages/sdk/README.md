@@ -106,13 +106,13 @@ AI-readable docs for `@sodax/sdk` (and the other `@sodax/*` packages) are shippe
 npx skills@latest add icon-project/sodax-sdks/packages/skills
 ```
 
-**npm fallback** (for agents that don't use the CLI — Cursor, Codex, Copilot, plain ChatGPT):
+**npm + `AGENTS.md` pointer** (fallback for web chats, or when you prefer a devDependency over the CLI):
 
 ```bash
 pnpm add -D @sodax/skills
 ```
 
-Then point your agent at `node_modules/@sodax/skills/AGENTS.md`. See [docs/ai-integration-guide.md](https://github.com/icon-project/sodax-sdks/blob/main/docs/ai-integration-guide.md) for the full setup (per-tool rules files, prompt examples).
+Then point your agent at `node_modules/@sodax/skills/AGENTS.md`. See [docs/ai-integration-guide.md](https://github.com/icon-project/sodax-sdks/blob/main/docs/ai-integration-guide.md) for all install modes and per-tool wiring.
 
 ***
 
