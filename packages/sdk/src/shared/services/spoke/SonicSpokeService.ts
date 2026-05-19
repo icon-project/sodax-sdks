@@ -43,24 +43,6 @@ import type {
 import type { CreateIntentParams, Intent } from '../../types/intent-types.js';
 import type { ConfigService } from '../../config/ConfigService.js';
 
-export type SonicSpokeDepositParams<Raw extends boolean> = {
-  srcAddress: Address;
-  srcChainKey: SonicChainKey;
-  to: HubAddress; // The address of the user on the hub chain (wallet abstraction address)
-  token: Address; // The address of the token to deposit
-  amount: bigint; // The amount of tokens to deposit
-  data: Hex; // The data to send with the deposit (encoded calls array)
-} & WalletProviderSlot<SonicChainKey, Raw>;
-
-export type SonicDepositParams = {
-  srcAddress: Address;
-  srcChainKey: SonicChainKey;
-  to: HubAddress; // The address of the user on the hub chain (wallet abstraction address)
-  token: Address; // The address of the token to deposit
-  amount: bigint; // The amount of tokens to deposit
-  data: Hex; // The data to send with the deposit (encoded calls array)
-};
-
 export type WithdrawInfo = {
   aTokenAddress: Address;
   aTokenAmount: bigint;
@@ -84,13 +66,6 @@ export type CreateSonicSwapIntentParams<Raw extends boolean> = {
   solverConfig: SolverConfig;
   fee: PartnerFee | undefined;
   hubProvider: { config: ConfigService; chainConfig: HubConfig };
-} & WalletProviderSlot<SonicChainKey, Raw>;
-
-export type ApproveSonicWithdrawParams<Raw extends boolean> = {
-  srcAddress: Address;
-  srcChainKey: SonicChainKey;
-  from: Address;
-  withdrawInfo: WithdrawInfo;
 } & WalletProviderSlot<SonicChainKey, Raw>;
 
 export class SonicSpokeService {
@@ -223,7 +198,7 @@ export class SonicSpokeService {
 
   /**
    * Deposit tokens to the spoke chain using the Sonic wallet abstraction.
-   * @param {SonicSpokeDepositParams<Raw>} params - The parameters for the deposit
+   * @param {DepositParams<SonicChainKey, Raw>} params - The parameters for the deposit
    * @returns {Promise<TxReturnType<SonicChainKey, Raw>>} A promise that resolves to the transaction hash
    */
   public async deposit<Raw extends boolean>(
