@@ -3,7 +3,7 @@
   "$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
   "extends": "//",
   "files": {
-    "includes": ["!**/src/solana/solana-web3.ts"]
+    "includes": ["**", "!**/src/solana/solana-web3.ts"]
   },
   "linter": {
     "rules": {
