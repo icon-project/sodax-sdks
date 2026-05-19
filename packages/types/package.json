@@ -54,7 +54,6 @@
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+  "keywords": ["sodax", "types", "typescript", "multichain", "wallet-providers"],
+  "license": "MIT"
 }

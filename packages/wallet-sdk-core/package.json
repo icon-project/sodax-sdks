@@ -30,7 +30,7 @@
   "engines": {
     "node": ">=20.0.0"
   },
-  "files": ["dist", "ai-exported"],
+  "files": ["dist"],
   "scripts": {
     "build": "tsup",
     "test": "vitest run --exclude ./src/tests/e2e",
@@ -42,7 +42,6 @@
     "pretty": "biome format . --write",
     "lint": "biome lint . --write",
     "check-exports": "attw $(pnpm pack) --ignore-rules=cjs-resolves-to-esm",
-    "check-ai-exported": "bash scripts/check-ai-exported.sh",
     "check:knip": "knip",
     "prepublishOnly": "pnpm run ci",
     "local-release": "changeset version && changeset publish",

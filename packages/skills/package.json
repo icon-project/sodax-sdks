@@ -1,0 +1,47 @@
+{
+  "name": "@sodax/skills",
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "version": "0.0.1",
+  "license": "MIT",
+  "description": "AI-agent skills and knowledge for consumers of @sodax/* SDKs (Claude Code, Codex, Cursor, …)",
+  "keywords": ["sodax", "skills", "ai", "claude-code", "agents"],
+  "homepage": "https://github.com/icon-project/sodax-sdks/tree/main/packages/skills",
+  "bugs": {
+    "url": "https://github.com/icon-project/sodax-sdks/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/icon-project/sodax-sdks"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "files": [".claude-plugin", "skills", "knowledge", "AGENTS.md", "README.md"],
+  "scripts": {
+    "lint": "biome lint . --write",
+    "pretty": "biome format . --write",
+    "check:ai-structural": "bash ./scripts/check-skills.sh",
+    "check:ai-imports": "bash ./scripts/check-ai-imports.sh",
+    "check:ai-snippets": "bash ./scripts/check-ai-snippets.sh",
+    "check:ai-tsx-examples": "bash ./scripts/check-ai-tsx-examples.sh",
+    "check:ai-keys": "bash ./scripts/check-ai-keys.sh",
+    "check:ai-consistency": "bash ./scripts/check-ai-consistency.sh",
+    "check:ai": "pnpm run check:ai-structural && pnpm run check:ai-imports && pnpm run check:ai-snippets && pnpm run check:ai-tsx-examples && pnpm run check:ai-keys && pnpm run check:ai-consistency",
+    "ci": "pnpm run pretty && pnpm run check:ai",
+    "prepublishOnly": "pnpm run ci",
+    "clean": "rm -rf node_modules && rm -rf .turbo"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "@tanstack/react-query": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "viem": "catalog:"
+  }
+}

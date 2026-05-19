@@ -2,7 +2,9 @@
 
 Core SDK implementing all SODAX DeFi operations. Entry point: the `Sodax` class in `src/shared/entities/Sodax.ts`.
 
-**This package works standalone** — no React, no wallet-sdk, no dapp-kit required. Backend partners (API servers, bots, scripts) use `@sodax/sdk` directly with a private-key wallet provider and call services. Frontend partners use `@sodax/dapp-kit` which wraps this SDK in React hooks — see `packages/dapp-kit/skills/` for frontend scaffolding guides.
+**This package works standalone** — no React, no wallet-sdk, no dapp-kit required. Backend partners (API servers, bots, scripts) use `@sodax/sdk` directly with a private-key wallet provider and call services. Frontend partners use `@sodax/dapp-kit` which wraps this SDK in React hooks.
+
+Consumer-facing AI material (skills + knowledge for Claude Code, Cursor, Codex) lives in [`packages/skills`](../skills/CLAUDE.md) — not in this package.
 
 ## Architecture
 

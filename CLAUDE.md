@@ -22,6 +22,7 @@ Turborepo + pnpm workspace. Package manager: **pnpm 10.32.1**.
 | `packages/wallet-sdk-core` | Multi-chain wallet providers (signing/broadcasting) — 9 chain types | [`packages/wallet-sdk-core/CLAUDE.md`](packages/wallet-sdk-core/CLAUDE.md) |
 | `packages/wallet-sdk-react` | React wallet state layer — `XService`/`XConnector`, Zustand, EIP-6963 | [`packages/wallet-sdk-react/CLAUDE.md`](packages/wallet-sdk-react/CLAUDE.md) |
 | `packages/dapp-kit` | High-level React hooks combining SDK + wallet-sdk-react + React Query | [`packages/dapp-kit/CLAUDE.md`](packages/dapp-kit/CLAUDE.md) |
+| `packages/skills` | Consumer-facing AI material — 8 Claude-Code skills + knowledge for the SDK packages | [`packages/skills/CLAUDE.md`](packages/skills/CLAUDE.md) |
 
 ### Apps
 
@@ -39,6 +40,7 @@ Turborepo + pnpm workspace. Package manager: **pnpm 10.32.1**.
 - `@sodax/wallet-sdk-core` → `@sodax/types`
 - `@sodax/wallet-sdk-react` → `@sodax/types`, `@sodax/wallet-sdk-core`
 - `@sodax/dapp-kit` → `@sodax/sdk` (imports and re-exports)
+- `@sodax/skills` — no package dependencies (markdown only, no runtime code)
 
 ## Common Commands
 
@@ -76,14 +78,17 @@ cd packages/<pkg> && npx vitest run path/to/test.test.ts
 
 For per-package gotchas (SDK bigint/JSON handling, wallet-sdk-core type-system overrides, dapp-kit React Query patterns, etc.), see the relevant `packages/<pkg>/CLAUDE.md`.
 
-## `ai-exported/` conventions
+## `packages/skills` conventions
 
-Each SDK package ships an `ai-exported/` tree (sdk, wallet-sdk-react, dapp-kit, wallet-sdk-core — types currently does not). The tree is split into two purposes:
+Consumer-facing AI material for the `@sodax/*` SDKs lives in a single dedicated package: [`packages/skills`](packages/skills/CLAUDE.md). It ships:
 
-- **`migration/`** — v1 → v2 reference. Renamed/deleted/reshaped symbols, before/after mappings, codemod patterns. Read by AI agents porting v1 code.
-- **`integration/`** — pure v2 reference. SDK public API as it ships today: type shapes, hook/function signatures, canonical patterns. Read by AI agents writing new v2 code with no v1 to port.
+- **8 skills** (`packages/skills/skills/sodax-<pkg>-<mode>/SKILL.md`) — short, action-oriented entries with YAML frontmatter (`name`, `description`). One pair per SDK package: `migration` (port v1 → v2) and `integration` (write new v2 code). 4 packages × 2 modes = 8.
+- **Knowledge** (`packages/skills/knowledge/<pkg>/<mode>/`) — long-form supporting docs (features, recipes, reference tables, breaking-change writeups, code examples). The same content that used to live in each SDK package's `ai-exported/` tree, moved verbatim.
+- **AGENTS.md** at the package root — tool-neutral router that maps consumer intent → skill name.
 
-When editing either tree, keep these in scope:
+Distribution: external [Claude Skills CLI](https://github.com/mattpocock/skills) — `npx skills@latest add icon-project/sodax-sdks/packages/skills` (no `bin` in `@sodax/skills`).
+
+When editing knowledge files, keep these in scope:
 
 - **SDK public API** — type signatures, hook overloads, return shapes, behaviors as they ship from `src/`.
 - **v1 → v2 deltas** (migration tree only) — what changed and how to mechanically port it.
@@ -102,11 +107,13 @@ Out of scope (do not add to either tree):
 - **Defensive callouts against deleted legacy names.** Writing "Field name is X, not Y" or "the type is X, not Z" treats the deleted name as still load-bearing context. Just describe the v2 surface directly — readers don't need to know which historical names are dead.
 - **Historicizing prose.** Phrases like "this is the v2 home for what used to be called X" or "this replaces the old Y system" tie integration text to v1 chronology. State what v2 ships; cross-link to `migration/` if the v1 → v2 mapping is what the reader actually needs.
 
-v1 mentions in `integration/` are limited to: cross-links to `migration/` (`see migration/...`), and explicit anti-pattern callouts when an agent is likely to carry v1 idioms forward (`DO NOT call the deleted v1 hook X — pass walletProvider directly`). Everything else lives in `migration/`.
+v1 mentions in `integration/` are limited to: cross-links to `migration/` (`see ../../migration/...`), and explicit anti-pattern callouts when an agent is likely to carry v1 idioms forward (`DO NOT call the deleted v1 hook X — pass walletProvider directly`). Everything else lives in `migration/`.
+
+**Skill descriptions are load-bearing.** The `description:` field in each SKILL.md frontmatter is what the agent reads to decide whether to load the skill. Write it concretely with explicit trigger phrases. See existing skills under `packages/skills/skills/` for the established voice.
 
 ## CI Pipeline
 
-GitHub Actions ([`.github/workflows/packages-ci.yml`](.github/workflows/packages-ci.yml)) runs on push to `main`/`development` and all PRs (Node.js 20.x, 22.x, 24.x):
+GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on push to `main`/`development` and all PRs (Node.js 24.x):
 
 1. `pnpm install --frozen-lockfile`
 2. `pnpm lint:packages`
@@ -114,5 +121,5 @@ GitHub Actions ([`.github/workflows/packages-ci.yml`](.github/workflows/packages
 4. `pnpm build:packages`
 5. CJS compatibility check (`cd apps/node-cjs && pnpm test`)
 6. `pnpm checkTs:packages`
-7. AI-exported docs guards — multiple `check:ai-*` scripts across `sdk`, `wallet-sdk-react`, `dapp-kit` (verify exports, scope, links, imports compile, snippets typecheck, queryKey/mutationKey segments). See [`packages/dapp-kit/CLAUDE.md`](packages/dapp-kit/CLAUDE.md) for details on the dapp-kit guards.
+7. AI docs validation — `pnpm check:ai` runs six sub-scripts in `packages/skills/`: `check:ai-structural` (plugin.json + SKILL.md frontmatter + link resolution); `check:ai-imports` (every `import … from '@sodax/<pkg>'` snippet typechecks against `src/index.ts`, all 4 SDK packages); `check:ai-snippets` (every fenced ts/tsx block in dapp-kit + wallet-sdk-react knowledge typechecks; illustrative pattern blocks opt out via `// @ai-snippets-skip`); `check:ai-tsx-examples` (every standalone `.tsx` file under `knowledge/<pkg>/integration/examples/` typechecks as a complete module — today: 4 wallet-sdk-react app shells); `check:ai-keys` (queryKey/mutationKey literals in dapp-kit docs match source); `check:ai-consistency` (polling-interval claims match `refetchInterval` in source). Opt-outs documented in [packages/skills/CLAUDE.md](packages/skills/CLAUDE.md).
 8. `pnpm test:packages`

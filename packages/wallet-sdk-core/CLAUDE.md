@@ -2,6 +2,8 @@
 
 Low-level multi-chain wallet providers for signing and broadcasting transactions. Each chain has a provider class supporting both private-key (for scripts/testing) and browser-extension (for production dApps) configurations.
 
+Consumer-facing AI material (skills + knowledge for Claude Code, Cursor, Codex) lives in [`packages/skills`](../skills/CLAUDE.md) — not in this package.
+
 ## Architecture
 
 ### Folder-per-provider structure

@@ -1,13 +1,22 @@
 {
   "name": "@sodax/dapp-kit",
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "license": "MIT",
   "version": "0.0.1-rc.4",
-  "description": "dapp-kit of New World",
+  "description": "React hooks for building dApps on the SODAX cross-chain DeFi platform",
+  "keywords": ["sodax", "dapp-kit", "react", "react-query", "hooks", "defi"],
+  "homepage": "https://github.com/icon-project/sodax-sdks/tree/main/packages/dapp-kit",
+  "bugs": {
+    "url": "https://github.com/icon-project/sodax-sdks/issues"
+  },
   "type": "module",
   "main": "dist/index.cjs",
   "types": "dist/index.d.ts",
   "module": "dist/index.mjs",
-  "files": ["dist", "src", "ai-exported"],
+  "files": ["dist", "src"],
   "repository": {
     "type": "git",
     "url": "https://github.com/icon-project/sodax-sdks"
@@ -21,15 +30,7 @@
     "pretty": "biome format . --write",
     "checkTs": "tsc --noEmit",
     "check:knip": "knip",
-    "lint": "biome lint . --write",
-    "check:ai-exported": "bash ./scripts/check-ai-exported.sh",
-    "check:ai-scope": "bash ./scripts/check-ai-scope.sh",
-    "check:ai-links": "bash ./scripts/check-ai-links.sh",
-    "check:ai-imports": "bash ./scripts/check-ai-imports.sh",
-    "check:ai-snippets": "bash ./scripts/check-ai-snippets.sh",
-    "check:ai-keys": "bash ./scripts/check-ai-keys.sh",
-    "check:ai-consistency": "bash ./scripts/check-ai-consistency.sh",
-    "check:ai": "pnpm run check:ai-exported && pnpm run check:ai-scope && pnpm run check:ai-links && pnpm run check:ai-imports && pnpm run check:ai-snippets && pnpm run check:ai-keys && pnpm run check:ai-consistency"
+    "lint": "biome lint . --write"
   },
   "dependencies": {
     "@sodax/sdk": "workspace:*",
