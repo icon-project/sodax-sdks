@@ -1,8 +1,17 @@
 {
   "name": "@sodax/wallet-sdk-react",
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "license": "MIT",
   "version": "0.0.1-test",
   "description": "Wallet SDK of Sodax",
+  "keywords": ["sodax", "wallet", "sdk", "react", "multichain", "web3"],
+  "homepage": "https://github.com/icon-project/sodax-sdks/tree/main/packages/wallet-sdk-react",
+  "bugs": {
+    "url": "https://github.com/icon-project/sodax-sdks/issues"
+  },
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",

@@ -1,8 +1,17 @@
 {
   "name": "@sodax/dapp-kit",
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "license": "MIT",
   "version": "0.0.1-rc.4",
-  "description": "dapp-kit of New World",
+  "description": "React hooks for building dApps on the SODAX cross-chain DeFi platform",
+  "keywords": ["sodax", "dapp-kit", "react", "react-query", "hooks", "defi"],
+  "homepage": "https://github.com/icon-project/sodax-sdks/tree/main/packages/dapp-kit",
+  "bugs": {
+    "url": "https://github.com/icon-project/sodax-sdks/issues"
+  },
   "type": "module",
   "main": "dist/index.cjs",
   "types": "dist/index.d.ts",
