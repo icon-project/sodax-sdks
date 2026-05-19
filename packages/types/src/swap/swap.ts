@@ -1,7 +1,7 @@
 // currently supported spoke chain tokens for solver
 import type { PartnerFee } from '../common/common.js';
 import type { SpokeChainKey } from '../chains/chains.js';
-import { type XToken, SodaTokens } from '../chains/tokens.js';
+import { type XToken, SodaTokens, LsodaTokens } from '../chains/tokens.js';
 import { spokeChainConfig, ChainKeys } from '../chains/chains.js';
 
 export const swapSupportedTokens = {
@@ -13,6 +13,7 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.wS,
     spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.SODA,
     ...Object.values(SodaTokens),
+    ...Object.values(LsodaTokens),
   ] as const satisfies XToken[],
   [ChainKeys.AVALANCHE_MAINNET]: [
     spokeChainConfig[ChainKeys.AVALANCHE_MAINNET].supportedTokens.AVAX,
