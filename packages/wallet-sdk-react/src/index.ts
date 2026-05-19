@@ -6,9 +6,8 @@ export * from './utils/index.js';
 
 export * from './hooks/index.js';
 export * from './SodaxWalletProvider.js';
-export * from './providers/index.js';
+
 export * from './types/index.js';
-export * from './constants.js';
 export type { IXConnector, IXService } from './types/interfaces.js';
 
 // ---------------------------------------------------------------------------

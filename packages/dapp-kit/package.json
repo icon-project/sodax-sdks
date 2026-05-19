@@ -40,7 +40,7 @@
     "@tanstack/react-query": "catalog:",
     "@types/react": "catalog:",
     "knip": "catalog:",
-    "tslib": "^2.8.1",
+    "tslib": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
