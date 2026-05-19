@@ -113,7 +113,7 @@ v1 mentions in `integration/` are limited to: cross-links to `migration/` (`see 
 
 ## CI Pipeline
 
-GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on push to `main`/`development` and all PRs (Node.js 20.x, 22.x, 24.x):
+GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on push to `main`/`development` and all PRs (Node.js 24.x):
 
 1. `pnpm install --frozen-lockfile`
 2. `pnpm lint:packages`
