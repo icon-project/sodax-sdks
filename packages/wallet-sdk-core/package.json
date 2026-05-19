@@ -42,6 +42,7 @@
     "pretty": "biome format . --write",
     "lint": "biome lint . --write",
     "check-exports": "attw $(pnpm pack) --ignore-rules=cjs-resolves-to-esm",
+    "check:knip": "knip",
     "prepublishOnly": "pnpm run ci",
     "local-release": "changeset version && changeset publish",
     "clean": "rm -rf node_modules && rm -rf dist && rm -rf .turbo"
@@ -77,6 +78,7 @@
     "@types/node": "catalog:",
     "@types/secp256k1": "^4.0.7",
     "@vitest/coverage-v8": "catalog:",
+    "knip": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

@@ -29,7 +29,7 @@
     "clean": "rm -rf dist && rm -rf node_modules && rm -rf .turbo",
     "pretty": "biome format . --write",
     "checkTs": "tsc --noEmit",
-    "knip": "knip",
+    "check:knip": "knip",
     "lint": "biome lint . --write"
   },
   "dependencies": {
@@ -39,7 +39,8 @@
   "devDependencies": {
     "@tanstack/react-query": "catalog:",
     "@types/react": "catalog:",
-    "knip": "5.30.5",
+    "knip": "catalog:",
+    "tslib": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
