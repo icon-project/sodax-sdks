@@ -30,6 +30,8 @@ export interface ICONexResponseEvent {
   payload?: string;
 }
 
+export type ICONexEvent = ICONexRequestEvent | ICONexResponseEvent;
+
 export const request = (event: ICONexRequestEvent): Promise<ICONexResponseEvent> => {
   return new Promise((resolve, reject) => {
     // evt is a CustomEvent dispatched by the ICONex/Hana extension. Type the handler
