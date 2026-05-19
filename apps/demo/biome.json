@@ -1,8 +1,9 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
-  "extends": ["../../biome.json"],
+  "root": false,
+  "$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
+  "extends": "//",
   "files": {
-    "ignore": ["**/.next", "./components/ui"]
+    "includes": ["!**/.next", "!src/components/ui"]
   },
   "linter": {
     "rules": {
@@ -16,7 +17,6 @@
       "complexity": {
         "noStaticOnlyClass": "off"
       }
-    },
-    "ignore": []
+    }
   }
 }
