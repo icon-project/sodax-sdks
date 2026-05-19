@@ -288,7 +288,7 @@ pnpm lint        # Lint code
 
 AI-readable docs for `@sodax/dapp-kit` (and the other `@sodax/*` packages) are shipped via [`@sodax/skills`](https://github.com/icon-project/sodax-sdks/tree/main/packages/skills) — a separate npm package bundling Claude-Code SKILL.md files and a long-form knowledge tree.
 
-**Recommended: [Claude Skills CLI](https://github.com/mattpocock/skills)** — from your project root:
+**Recommended: [`skills` CLI](https://github.com/vercel-labs/skills)** — from your project root:
 
 ```bash
 npx skills@latest add icon-project/sodax-sdks/packages/skills

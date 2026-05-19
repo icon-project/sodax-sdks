@@ -4,7 +4,7 @@ AI-agent skills and knowledge for building on the **SODAX** cross-chain DeFi pla
 
 ## Install
 
-Using the [Claude Skills CLI](https://github.com/mattpocock/skills) (the same CLI as [mattpocock/skills](https://github.com/mattpocock/skills)):
+Using the [`skills` CLI](https://github.com/vercel-labs/skills) from Vercel Labs — the open agent-skills ecosystem CLI (supports Claude Code, Cursor, Codex, GitHub Copilot, and 50+ other agents):
 
 ```bash
 # From the root of your consumer repo

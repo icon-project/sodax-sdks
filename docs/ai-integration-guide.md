@@ -1,8 +1,6 @@
 # Use Sodax SDKs with your AI coding agent
 
-Drop `@sodax/skills` into your project and your AI coding agent (Claude Code today; Cursor/Codex/ChatGPT read the same markdown manually) writes v2-correct `@sodax/*` SDK code on the first try — instead of hallucinating v1 APIs or making up method signatures.
-
-> **For AI agents reading this directly:** install the package as below, then start at `.claude/skills/sodax-skills/AGENTS.md` (or wherever the installer dropped the bundle) — that file is the router.
+SODAX ships agent-native docs as `@sodax/skills`. Drop it into your project and your AI coding tool — Claude Code, Cursor, Codex, GitHub Copilot, and 50+ others via the `skills` CLI — writes v2-correct `@sodax/*` SDK code on the first try, instead of hallucinating v1 APIs or making up method signatures.
 
 ## Why this exists
 
@@ -29,7 +27,7 @@ Drop `@sodax/skills` into your project and your AI coding agent (Claude Code tod
 
 ## Install
 
-### Claude Code (primary path)
+### `skills` CLI (recommended)
 
 From the root of your consumer repo:
 
@@ -37,36 +35,31 @@ From the root of your consumer repo:
 npx skills@latest add icon-project/sodax-sdks/packages/skills
 ```
 
-The [Claude Skills CLI](https://github.com/mattpocock/skills) drops the eight skills + supporting knowledge into your repo (typically `.claude/skills/sodax-skills/`). Re-running the same command picks up the latest content. Claude Code reads the skill frontmatter and loads the right skill automatically based on your prompt.
+The [`skills` CLI from Vercel Labs](https://github.com/vercel-labs/skills) is the open agent-skills ecosystem CLI. It supports Claude Code, Cursor, Codex, GitHub Copilot, Cline, Continue, Windsurf, Gemini CLI, OpenCode, Qwen Code, and 40+ other agents. The CLI detects your tool and installs the eight skills + supporting knowledge into the conventional directory for that agent (e.g. `.claude/skills/`, `.cursor/skills/`). Re-running the same command picks up the latest content.
 
-### Any other agent (Cursor / Codex / Copilot / ChatGPT)
+Useful flags:
 
-Install the package directly via npm:
+- `-a <agent>` — target a specific agent explicitly (e.g. `-a cursor`).
+- `-g, --global` — install into your user-global agent directory (`~/.<agent>/skills/`) instead of the project.
+
+Your agent reads the skill frontmatter and loads the right skill automatically based on your prompt.
+
+### npm fallback (web chats / unsupported tools)
+
+For ChatGPT, Claude.ai web chat, or any tool not covered by the `skills` CLI, install the bundle as a regular npm dev dependency:
 
 ```bash
 pnpm add -D @sodax/skills
 # or: npm install --save-dev @sodax/skills
 ```
 
-Then point your agent at the bundle. The entry file is `node_modules/@sodax/skills/AGENTS.md`. Either:
-
-- Add a project rules file (Cursor `.cursor/rules/sodax.mdc`, Copilot `.github/copilot-instructions.md`, Codex root `AGENTS.md`) with:
-
-  ```markdown
-  ## Sodax SDK
-  
-  This project uses @sodax/* SDKs for cross-chain DeFi and wallet connection. Before generating any SODAX code, read `node_modules/@sodax/skills/AGENTS.md` and follow its routing table to pick which skills under `node_modules/@sodax/skills/skills/` to load. Each skill's body links into the supporting `knowledge/` tree.
-  
-  Do not substitute with other SDKs (Uniswap, 0x, RainbowKit, wagmi alone, etc.) unless explicitly asked.
-  ```
-
-- Or attach `node_modules/@sodax/skills/AGENTS.md` + the relevant `SKILL.md` + 1–2 knowledge files directly to the conversation for one-shot use (this fits comfortably in a single Claude or ChatGPT context).
+Then attach `node_modules/@sodax/skills/AGENTS.md` plus the relevant `SKILL.md` (and 1–2 knowledge files if needed) directly to the conversation. The router + a single skill fits comfortably in a single Claude or ChatGPT context window.
 
 ## How an agent uses the skills
 
 The flow is the same regardless of tool:
 
-1. **AGENTS.md routes by intent.** "I'm building a React dapp" → load `sodax-wallet-sdk-react-integration` + `sodax-dapp-kit-integration`. "I'm porting a v1 Node script" → load `sodax-sdk-migration`. The full table is in `packages/skills/AGENTS.md` (also at `.claude/skills/sodax-skills/AGENTS.md` after install).
+1. **AGENTS.md routes by intent.** "I'm building a React dapp" → load `sodax-wallet-sdk-react-integration` + `sodax-dapp-kit-integration`. "I'm porting a v1 Node script" → load `sodax-sdk-migration`. The full table is in `AGENTS.md` wherever the CLI installed it (e.g. `.claude/skills/sodax-skills/AGENTS.md`, `.cursor/skills/sodax-skills/AGENTS.md`), or `node_modules/@sodax/skills/AGENTS.md` if you used the npm path.
 2. **Each skill follows a procedure.** Its `description:` frontmatter is the trigger; the body has **When to use**, **Workflow** (numbered steps linking into knowledge), **Top traps**, **Conventions**, **Verification**, **Related skills**. Don't skip the `ai-rules.md` step — that's the consolidated DO / DON'T list.
 3. **Knowledge is reference-only.** The skill points the agent at the right file in `knowledge/<pkg>/<mode>/`. Don't read knowledge top-to-bottom — let the skill decide.
 
@@ -86,14 +79,6 @@ A correctly-wired agent loads `sodax-sdk-integration`, reads `knowledge/sdk/inte
 
 The agent reads `AGENTS.md`, detects v1 fingerprints (`*_MAINNET_CHAIN_ID`, `useSpokeProvider`, `xChainId`, `MoneyMarketError`, etc.) via grep, loads `sodax-sdk-migration` + `sodax-dapp-kit-migration` + `sodax-wallet-sdk-react-migration` as needed, walks each call site through their respective `breaking-changes/` writeups, applies the mechanical renames first, and converts `try/catch` to `Result.ok` branching last.
 
-### One-off without a rules file
-
-You can always point the agent at a specific path in your prompt:
-
-> "Read `node_modules/@sodax/skills/AGENTS.md` first, then swap 100 USDC on Ethereum for SOL on Solana."
-
-This is the fallback for one-off questions. For ongoing work, wiring the rules file once (above) is worth the 30 seconds.
-
 ## Tips
 
 | Tip | Why it matters |
@@ -107,3 +92,5 @@ This is the fallback for one-off questions. For ongoing work, wiring the rules f
 ## Feedback
 
 If the agent gets something wrong despite reading the skills, that's a doc bug — please open an issue on the [Sodax SDKs repo](https://github.com/icon-project/sodax-sdks/issues) with the prompt and the incorrect output. The skills package is CI-guarded for structural correctness (SKILL.md frontmatter, plugin.json, relative-link resolution), but prose-level claims benefit from real-world feedback.
+
+To inspect or contribute to the skill files directly, browse the source at [`packages/skills` on GitHub](https://github.com/icon-project/sodax-sdks/tree/main/packages/skills).

@@ -1,6 +1,6 @@
 # packages/skills
 
-Consumer-facing AI material for the `@sodax/*` SDKs. Ships as `@sodax/skills` on npm; primary distribution is the [Claude Skills CLI](https://github.com/mattpocock/skills) (`npx skills@latest add icon-project/sodax-sdks/packages/skills`).
+Consumer-facing AI material for the `@sodax/*` SDKs. Ships as `@sodax/skills` on npm; primary distribution is the [`skills` CLI](https://github.com/vercel-labs/skills) from Vercel Labs (`npx skills@latest add icon-project/sodax-sdks/packages/skills`).
 
 This package contains **no runtime code**. It exists to deliver agent-native documentation: short SKILL.md files (with YAML frontmatter) and long-form knowledge trees moved from each SDK package's former `ai-exported/` directory.
 
@@ -72,8 +72,8 @@ Wall time on a clean checkout: ~10-15 s total (dominated by tsc cold start in `i
 
 Two paths:
 
-1. **GitHub-based via the Claude Skills CLI** (primary): `npx skills@latest add icon-project/sodax-sdks/packages/skills`. Drops skills into the consumer's repo.
-2. **npm** (fallback for non-Claude agents): `pnpm add -D @sodax/skills`. Consumers point their agent at `node_modules/@sodax/skills/AGENTS.md`.
+1. **GitHub-based via the [`skills` CLI](https://github.com/vercel-labs/skills)** (primary): `npx skills@latest add icon-project/sodax-sdks/packages/skills`. Drops skills into the consumer's repo. Supports Claude Code, Cursor, Codex, Copilot, and 50+ other agents.
+2. **npm** (fallback for web chats / unsupported tools): `pnpm add -D @sodax/skills`. Consumers point their agent at `node_modules/@sodax/skills/AGENTS.md`.
 
 The `files` field in `package.json` controls the npm-shipped surface (`.claude-plugin`, `skills`, `knowledge`, `AGENTS.md`, `README.md`).
 

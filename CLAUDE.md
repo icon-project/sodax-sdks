@@ -86,7 +86,7 @@ Consumer-facing AI material for the `@sodax/*` SDKs lives in a single dedicated 
 - **Knowledge** (`packages/skills/knowledge/<pkg>/<mode>/`) — long-form supporting docs (features, recipes, reference tables, breaking-change writeups, code examples). The same content that used to live in each SDK package's `ai-exported/` tree, moved verbatim.
 - **AGENTS.md** at the package root — tool-neutral router that maps consumer intent → skill name.
 
-Distribution: external [Claude Skills CLI](https://github.com/mattpocock/skills) — `npx skills@latest add icon-project/sodax-sdks/packages/skills` (no `bin` in `@sodax/skills`).
+Distribution: external [`skills` CLI](https://github.com/vercel-labs/skills) — `npx skills@latest add icon-project/sodax-sdks/packages/skills` (no `bin` in `@sodax/skills`).
 
 When editing knowledge files, keep these in scope:
 
