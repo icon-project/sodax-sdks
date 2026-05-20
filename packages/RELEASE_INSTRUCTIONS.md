@@ -7,6 +7,7 @@
 **RECOMMENDED**: run [`./scripts/bump-versions.sh`](../scripts/bump-versions.sh) from the repo root — it prompts for the new version, validates the format, updates all 5 `package.json` files, and increments `CONFIG_VERSION` in one go.
 **NOTE** if you are making a release candidate (RC), use `rc.<number>` postfix (e.g. `1.0.0-rc.1`, `1.0.0-rc.2`). The publish workflow derives the npm dist-tag by splitting the prerelease identifier at the first `.`, so all `rc.N` releases land under a single `rc` dist-tag and consumers can install `@sodax/sdk@rc` to get the latest RC. Stable releases (no `-` suffix) publish under `latest`.
   - [ ] `@sodax/types`
+  - [ ] `@sodax/libs`
   - [ ] `@sodax/wallet-sdk-core`
   - [ ] `@sodax/sdk`
   - [ ] `@sodax/wallet-sdk-react`

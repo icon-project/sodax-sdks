@@ -5,11 +5,12 @@ const broadcastTransaction = vi.fn().mockResolvedValue({ txid: 'tx-123' });
 const makeContractCall = vi.fn().mockResolvedValue({ kind: 'tx' });
 const stacksRequest = vi.fn().mockResolvedValue({ txid: 'browser-tx-123' });
 
-vi.mock('@stacks/network', () => ({
+// The SUT imports from `@sodax/libs/stacks/core` and `@sodax/libs/stacks/connect` — bundled
+// re-exports added to work around a Turbopack scope-hoisting cycle in Next.js 16. Mock those
+// re-export modules directly; mocking the underlying `@stacks/*` packages would not intercept
+// the calls the SUT actually makes.
+vi.mock('@sodax/libs/stacks/core', () => ({
   networkFrom,
-}));
-
-vi.mock('@stacks/transactions', () => ({
   broadcastTransaction,
   fetchCallReadOnlyFunction: vi.fn(),
   getAddressFromPrivateKey: vi.fn().mockReturnValue('SP1ADDR'),
@@ -19,7 +20,7 @@ vi.mock('@stacks/transactions', () => ({
   publicKeyToHex: vi.fn().mockReturnValue('hex'),
 }));
 
-vi.mock('@stacks/connect', () => ({ request: stacksRequest }));
+vi.mock('@sodax/libs/stacks/connect', () => ({ request: stacksRequest }));
 
 const { StacksWalletProvider } = await import('./StacksWalletProvider.js');
 

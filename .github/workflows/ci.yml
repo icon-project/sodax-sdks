@@ -68,5 +68,8 @@ jobs:
       - name: Build Apps
         run: pnpm turbo run build --filter='./apps/*' --filter='!./apps/node'
 
+      - name: Next.js 16 Turbopack regression check
+        run: pnpm --filter example-next-js-16 verify
+
       - name: Run Tests
         run: pnpm test

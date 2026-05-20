@@ -46,7 +46,7 @@
  *  10. waitForTransactionReceipt — every tx_status branch + polling defaults
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Cl, type ContractPrincipalCV, type UIntCV } from '@stacks/transactions';
+import { Cl, type ContractPrincipalCV, type UIntCV } from '@sodax/libs/stacks/core';
 import { ChainKeys, getIntentRelayChainId, spokeChainConfig, type Hex, type IStacksWalletProvider } from '@sodax/types';
 
 // --- hoisted mocks --------------------------------------------------------
@@ -62,10 +62,12 @@ const mocks = vi.hoisted(() => ({
   validateStacksAddress: vi.fn(),
 }));
 
-vi.mock('@stacks/transactions', async () => {
+vi.mock('@sodax/libs/stacks/core', async () => {
   // Pass-through the rest of the module (real Cl, noneCV, someCV, uintCV, PostConditionMode,
-  // parseContractId). Only the network-touching statics get replaced.
-  const actual = await vi.importActual<typeof import('@stacks/transactions')>('@stacks/transactions');
+  // parseContractId). Only the network-touching statics get replaced. The SUT imports from
+  // `@sodax/libs/stacks/core` (a bundled re-export of `@stacks/transactions`) — mock the re-export
+  // module the SUT actually sees, NOT the underlying package.
+  const actual = await vi.importActual<typeof import('@sodax/libs/stacks/core')>('@sodax/libs/stacks/core');
   return {
     ...actual,
     fetchCallReadOnlyFunction: mocks.fetchCallReadOnlyFunction,
@@ -140,7 +142,7 @@ const FAKE_PAYLOAD_BYTES = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
 // rather than silently masking it in the fixture.
 const FAKE_PAYLOAD_HEX = '0x0xdeadbeef';
 const fakeUnsignedTx = { payload: { type: 'contract-call', _opaque: true } } as unknown as Awaited<
-  ReturnType<typeof import('@stacks/transactions').makeUnsignedContractCall>
+  ReturnType<typeof import('@sodax/libs/stacks/core').makeUnsignedContractCall>
 >;
 
 beforeEach(() => {
