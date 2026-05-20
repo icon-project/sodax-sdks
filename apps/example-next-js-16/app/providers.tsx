@@ -2,30 +2,17 @@
 
 import type { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { SodaxWalletProvider } from '@sodax/wallet-sdk-react';
+import { SodaxWalletProvider, type SodaxWalletConfig } from '@sodax/wallet-sdk-react';
 import { SodaxProvider } from '@sodax/dapp-kit';
-import * as SDK from '@sodax/sdk';
-import * as Types from '@sodax/types';
+import { ChainKeys, type DeepPartial, type SodaxConfig } from '@sodax/sdk';
 import type { State as WagmiState } from 'wagmi';
 
 const queryClient = new QueryClient();
 
-const sodaxConfig: SDK.SodaxConfig = {
-  hubProviderConfig: {
-    hubRpcUrl: 'https://rpc.soniclabs.com',
-    chainConfig: SDK.getHubChainConfig(),
+const sodaxConfig: DeepPartial<SodaxConfig> = {
+  chains: {
+    [ChainKeys.SONIC_MAINNET]: { rpcUrl: 'https://rpc.soniclabs.com' },
   },
-  moneyMarket: SDK.getMoneyMarketConfig(Types.SONIC_MAINNET_CHAIN_ID),
-  swaps: {
-    intentsContract: '0x6382D6ccD780758C5e8A6123c33ee8F4472F96ef',
-    solverApiEndpoint: 'https://api.sodax.com/v1/intent',
-  },
-};
-
-const rpcConfig: Types.RpcConfig = {
-  sonic: 'https://rpc.soniclabs.com',
-  '0x1.icon': 'https://ctz.solidwallet.io/api/v3',
-  solana: 'https://solana-rpc.publicnode.com',
 };
 
 export default function Providers({
@@ -35,16 +22,26 @@ export default function Providers({
   children: ReactNode;
   initialState?: WagmiState;
 }) {
+  const walletConfig: SodaxWalletConfig = {
+    EVM: {
+      ssr: true,
+      reconnectOnMount: true,
+      initialState,
+    },
+    ICON: {},
+    SOLANA: {},
+    SUI: {},
+    BITCOIN: {},
+    STELLAR: {},
+    INJECTIVE: {},
+    NEAR: {},
+    STACKS: { chains: { [ChainKeys.STACKS_MAINNET]: 'mainnet' } },
+  };
+
   return (
-    <SodaxProvider testnet={false} config={sodaxConfig} rpcConfig={rpcConfig}>
+    <SodaxProvider config={sodaxConfig}>
       <QueryClientProvider client={queryClient}>
-        <SodaxWalletProvider
-          rpcConfig={rpcConfig}
-          options={{ wagmi: { ssr: true, reconnectOnMount: true } }}
-          initialState={initialState}
-        >
-          {children}
-        </SodaxWalletProvider>
+        <SodaxWalletProvider config={walletConfig}>{children}</SodaxWalletProvider>
       </QueryClientProvider>
     </SodaxProvider>
   );

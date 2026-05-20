@@ -2,21 +2,7 @@
 // Must stay in sync with `createWagmiConfig` from @sodax/wallet-sdk-react
 // (chains + storage key + ssr flag) so the serialized cookie state matches
 // what SodaxWalletProvider uses internally on the client.
-import {
-  ARBITRUM_MAINNET_CHAIN_ID,
-  AVALANCHE_MAINNET_CHAIN_ID,
-  BASE_MAINNET_CHAIN_ID,
-  BSC_MAINNET_CHAIN_ID,
-  ETHEREUM_MAINNET_CHAIN_ID,
-  HYPEREVM_MAINNET_CHAIN_ID,
-  KAIA_MAINNET_CHAIN_ID,
-  LIGHTLINK_MAINNET_CHAIN_ID,
-  OPTIMISM_MAINNET_CHAIN_ID,
-  POLYGON_MAINNET_CHAIN_ID,
-  REDBELLY_MAINNET_CHAIN_ID,
-  SONIC_MAINNET_CHAIN_ID,
-  type RpcConfig,
-} from '@sodax/types';
+import { ChainKeys, type RpcConfig } from '@sodax/types';
 import { cookieStorage, createConfig, createStorage, http, type Config } from 'wagmi';
 import {
   arbitrum,
@@ -62,18 +48,18 @@ export const createServerWagmiConfig = (config: RpcConfig): Config =>
     ],
     ssr: true,
     transports: {
-      [mainnet.id]: http(config[ETHEREUM_MAINNET_CHAIN_ID]),
-      [avalanche.id]: http(config[AVALANCHE_MAINNET_CHAIN_ID]),
-      [arbitrum.id]: http(config[ARBITRUM_MAINNET_CHAIN_ID]),
-      [base.id]: http(config[BASE_MAINNET_CHAIN_ID]),
-      [bsc.id]: http(config[BSC_MAINNET_CHAIN_ID]),
-      [sonic.id]: http(config[SONIC_MAINNET_CHAIN_ID]),
-      [optimism.id]: http(config[OPTIMISM_MAINNET_CHAIN_ID]),
-      [polygon.id]: http(config[POLYGON_MAINNET_CHAIN_ID]),
-      [hyper.id]: http(config[HYPEREVM_MAINNET_CHAIN_ID]),
-      [lightlinkPhoenix.id]: http(config[LIGHTLINK_MAINNET_CHAIN_ID]),
-      [redbellyMainnet.id]: http(config[REDBELLY_MAINNET_CHAIN_ID]),
-      [kaia.id]: http(config[KAIA_MAINNET_CHAIN_ID]),
+      [mainnet.id]: http(config[ChainKeys.ETHEREUM_MAINNET]),
+      [avalanche.id]: http(config[ChainKeys.AVALANCHE_MAINNET]),
+      [arbitrum.id]: http(config[ChainKeys.ARBITRUM_MAINNET]),
+      [base.id]: http(config[ChainKeys.BASE_MAINNET]),
+      [bsc.id]: http(config[ChainKeys.BSC_MAINNET]),
+      [sonic.id]: http(config[ChainKeys.SONIC_MAINNET]),
+      [optimism.id]: http(config[ChainKeys.OPTIMISM_MAINNET]),
+      [polygon.id]: http(config[ChainKeys.POLYGON_MAINNET]),
+      [hyper.id]: http(config[ChainKeys.HYPEREVM_MAINNET]),
+      [lightlinkPhoenix.id]: http(config[ChainKeys.LIGHTLINK_MAINNET]),
+      [redbellyMainnet.id]: http(config[ChainKeys.REDBELLY_MAINNET]),
+      [kaia.id]: http(config[ChainKeys.KAIA_MAINNET]),
     },
     storage: createStorage({
       storage: cookieStorage,

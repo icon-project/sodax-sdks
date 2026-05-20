@@ -7,8 +7,8 @@ import type { ChainType } from '@sodax/types';
 const CHAINS: ChainType[] = ['EVM', 'STACKS', 'SOLANA', 'SUI', 'STELLAR', 'NEAR', 'INJECTIVE', 'ICON', 'BITCOIN'];
 
 function ChainSection({ chain }: { chain: ChainType }) {
-  const connectors = useXConnectors(chain);
-  const account = useXAccount(chain);
+  const connectors = useXConnectors({ xChainType: chain });
+  const account = useXAccount({ xChainType: chain });
   const { mutateAsync: connect, isPending } = useXConnect();
   const disconnect = useXDisconnect();
 
@@ -20,7 +20,7 @@ function ChainSection({ chain }: { chain: ChainType }) {
           <p data-testid={`${chain}-address`} style={{ fontSize: 12, wordBreak: 'break-all' }}>
             {account.address}
           </p>
-          <button type="button" onClick={() => disconnect(chain)} style={{ padding: '4px 12px', cursor: 'pointer' }}>
+          <button type="button" onClick={() => disconnect({ xChainType: chain })} style={{ padding: '4px 12px', cursor: 'pointer' }}>
             Disconnect
           </button>
         </div>
