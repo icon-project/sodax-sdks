@@ -71,7 +71,7 @@ const stubUnusedPackages: EsbuildPlugin = {
   },
 };
 
-export default defineConfig(() => ({
+export default defineConfig(options => ({
   entry: {
     'stacks/core/index': 'src/stacks/core/index.ts',
     'stacks/connect/index': 'src/stacks/connect/index.ts',
@@ -80,12 +80,10 @@ export default defineConfig(() => ({
   format: ['esm', 'cjs'],
   outDir: 'dist',
   splitting: false,
-  sourcemap: true,
+  sourcemap: !process.env.CI,
   dts: true,
   clean: true,
-  // target = JS syntax level only (ES2022). Module resolution is 'browser' via
-  // esbuildOptions below — the two settings are orthogonal despite looking mismatched.
-  target: 'node18',
+  target: 'es2023',
   treeshake: true,
   external: [
     // Node builtins — platform: neutral doesn't auto-externalize these.

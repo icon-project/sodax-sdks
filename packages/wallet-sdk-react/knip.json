@@ -9,7 +9,7 @@
   "project": ["src/**/*.{ts,tsx}"],
   "ignore": ["ai-exported/**", "docs/**", "skills/**", "src/providers/**", "src/constants.ts"],
   "ignoreBinaries": ["biome"],
-  "ignoreDependencies": ["@sodax/types", "@sodax/wallet-sdk-core"],
+  "ignoreDependencies": ["@sodax/types", "@sodax/wallet-sdk-core", "@sodax/libs"],
   "ignoreExportsUsedInFile": true,
   "rules": {
     "enumMembers": "off"

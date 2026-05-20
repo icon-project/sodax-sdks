@@ -23,34 +23,63 @@
   "type": "module",
   "exports": {
     "./stacks/core": {
-      "types": "./dist/stacks/core/index.d.ts",
-      "import": "./dist/stacks/core/index.mjs",
-      "require": "./dist/stacks/core/index.cjs"
+      "import": {
+        "types": "./dist/stacks/core/index.d.ts",
+        "default": "./dist/stacks/core/index.mjs"
+      },
+      "require": {
+        "types": "./dist/stacks/core/index.d.cts",
+        "default": "./dist/stacks/core/index.cjs"
+      }
     },
     "./stacks/connect": {
-      "types": "./dist/stacks/connect/index.d.ts",
-      "import": "./dist/stacks/connect/index.mjs",
-      "require": "./dist/stacks/connect/index.cjs"
+      "import": {
+        "types": "./dist/stacks/connect/index.d.ts",
+        "default": "./dist/stacks/connect/index.mjs"
+      },
+      "require": {
+        "types": "./dist/stacks/connect/index.d.cts",
+        "default": "./dist/stacks/connect/index.cjs"
+      }
     },
     "./injective/wallet-strategy": {
-      "types": "./dist/injective/wallet-strategy/index.d.ts",
-      "import": "./dist/injective/wallet-strategy/index.mjs",
-      "require": "./dist/injective/wallet-strategy/index.cjs"
+      "import": {
+        "types": "./dist/injective/wallet-strategy/index.d.ts",
+        "default": "./dist/injective/wallet-strategy/index.mjs"
+      },
+      "require": {
+        "types": "./dist/injective/wallet-strategy/index.d.cts",
+        "default": "./dist/injective/wallet-strategy/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "stacks/core": ["./dist/stacks/core/index.d.ts"],
+      "stacks/connect": ["./dist/stacks/connect/index.d.ts"],
+      "injective/wallet-strategy": ["./dist/injective/wallet-strategy/index.d.ts"]
     }
   },
   "engines": {
     "node": ">=20.12.0"
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/**/*.map"
   ],
+  "sideEffects": false,
   "scripts": {
     "build": "node scripts/verify-stacks-connect-ui-stub.mjs && tsup",
     "dev": "tsup --watch",
     "checkTs": "tsc --noEmit",
     "pretty": "biome format . --write",
     "lint": "biome lint . --write",
-    "clean": "rm -rf node_modules && rm -rf dist && rm -rf .turbo"
+    "clean": "rm -rf node_modules && rm -rf dist && rm -rf .turbo",
+    "check-exports": "attw --pack",
+    "check:circular-deps": "madge --circular --exclude 'types/dist' $(find ./src -name '*.ts')",
+    "check:no-duplicate-bundling": "node scripts/verify-no-duplicate-bundling.mjs",
+    "check:knip": "knip"
   },
   "dependencies": {
     "@injectivelabs/wallet-strategy": "catalog:",
@@ -61,6 +90,9 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "tsup": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "knip": "catalog:",
+    "madge": "catalog:",
+    "@arethetypeswrong/cli": "catalog:"
   }
 }

@@ -11,7 +11,7 @@ import {
   type PostConditionModeName,
   type StacksNetwork,
 } from '@sodax/libs/stacks/core';
-import { request, } from '@sodax/libs/stacks/connect';
+import { request } from '@sodax/libs/stacks/connect';
 import type { IStacksWalletProvider, StacksTransactionParams } from '@sodax/types';
 import { BaseWalletProvider } from '../BaseWalletProvider.js';
 import type {
