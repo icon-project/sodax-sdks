@@ -1,6 +1,5 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalEnv": ["CI"],
   "tasks": {
     "dev": {
       "cache": false,
@@ -10,6 +9,7 @@
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**"],
       "env": [
+        "CI",
         "NOTION_TOKEN",
         "DATABASE_URI",
         "BLOB_READ_WRITE_TOKEN",
@@ -25,7 +25,8 @@
     "build:packages": {
       "dependsOn": ["^build"],
       "inputs": ["packages/**"],
-      "outputs": ["dist/**"]
+      "outputs": ["dist/**"],
+      "env": ["CI"]
     },
     "test": {
       "dependsOn": ["^build"]
