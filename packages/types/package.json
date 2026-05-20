@@ -43,16 +43,17 @@
     "lint": "biome lint . --write",
     "check-exports": "attw $(pnpm pack) --ignore-rules=cjs-resolves-to-esm",
     "check:circular-deps": "madge --circular $(find ./src -name '*.ts')",
+    "check:knip": "knip",
     "clean": "rm -rf node_modules && rm -rf dist && rm -rf .turbo"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
+    "knip": "catalog:",
     "madge": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+  "keywords": ["sodax", "types", "typescript", "multichain", "wallet-providers"],
+  "license": "MIT"
 }

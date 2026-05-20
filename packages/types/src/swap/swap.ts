@@ -12,7 +12,6 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.USDT,
     spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.wS,
     spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.SODA,
-    spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.bnUSD,
     ...Object.values(SodaTokens),
   ] as const satisfies XToken[],
   [ChainKeys.AVALANCHE_MAINNET]: [

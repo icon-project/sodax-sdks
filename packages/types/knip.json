@@ -1,0 +1,9 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": ["src/index.ts"],
+  "project": ["src/**/*.ts"],
+  "ignore": ["src/near/near-api-js.ts", "src/dex/pancakeswap-infinity.ts"],
+  "ignoreBinaries": ["biome", "attw"],
+  "ignoreDependencies": ["@vitest/coverage-v8"],
+  "ignoreExportsUsedInFile": true
+}

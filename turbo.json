@@ -66,6 +66,9 @@
     "check:ai": {
       "dependsOn": ["^build"],
       "cache": false
+    },
+    "check:knip": {
+      "cache": false
     }
   },
   "remoteCache": {

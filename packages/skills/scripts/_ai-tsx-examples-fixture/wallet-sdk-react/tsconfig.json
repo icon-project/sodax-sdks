@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM"],
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "isolatedModules": true,
+    "baseUrl": ".",
+    "paths": {
+      "@sodax/types":              ["../../../../types/src/index.ts"],
+      "@sodax/sdk":                ["../../../../sdk/src/index.ts"],
+      "@sodax/wallet-sdk-react":   ["../../../../wallet-sdk-react/src/index.ts"],
+      "@sodax/wallet-sdk-react/*": ["../../../../wallet-sdk-react/src/*/index.ts"],
+      "@sodax/wallet-sdk-core":    ["../../../../wallet-sdk-core/src/index.ts"]
+    }
+  },
+  "include": ["../../../knowledge/wallet-sdk-react/integration/examples/*.tsx"]
+}

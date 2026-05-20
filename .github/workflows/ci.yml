@@ -44,13 +44,16 @@ jobs:
       - name: Check Circular Dependencies
         run: pnpm check:circular-deps
 
+      - name: Knip (unused files / exports / deps)
+        run: pnpm check:knip
+
       - name: Build Packages
         run: pnpm build:packages
 
       - name: Build Check
         run: pnpm checkTs
 
-      - name: AI-exported docs guards (sdk, wallet-sdk-react, dapp-kit)
+      - name: AI docs validation
         run: pnpm check:ai
 
       - name: Build Apps

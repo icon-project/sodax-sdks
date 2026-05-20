@@ -18,7 +18,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { Info } from 'lucide-react';
 import { SupplyModal } from './SupplyModal';
 import { WithdrawModal } from './WithdrawModal';
-import { getHealthFactorState } from '@/lib/utils';
+import { formatTokenAmount, getHealthFactorState } from '@/lib/utils';
 
 const TABLE_HEADERS = [
   'Asset',
@@ -306,7 +306,7 @@ export function SupplyAssetsList(): ReactElement {
                             // Show "0.0000" when loading (better UX than "...") or when balance is 0
                             // Only show "-" if balances object is null (error/unavailable state)
                             balances != null
-                              ? Number(formatUnits(balances[token.address] ?? 0n, token.decimals)).toFixed(4)
+                              ? formatTokenAmount(balances[token.address] ?? 0n, token.decimals, 4)
                               : isBalancesLoading
                                 ? '0.0000'
                                 : '-'

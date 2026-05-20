@@ -1,18 +1,6 @@
 import { PublicKey } from '@solana/web3.js';
 import type BN from 'bn.js';
 
-export const RateLimitPDA = {
-  config(programId: PublicKey) {
-    const [pda, bump] = PublicKey.findProgramAddressSync([Buffer.from('rmconfig')], programId);
-    return { bump, pda };
-  },
-
-  rateLimitAccount(programId: PublicKey, token: PublicKey) {
-    const [pda, bump] = PublicKey.findProgramAddressSync([Buffer.from('limit'), token.toBuffer()], programId);
-    return { bump, pda };
-  },
-};
-
 export const ConnectionConfigPDA = {
   config(programId: PublicKey) {
     const [pda, bump] = PublicKey.findProgramAddressSync([Buffer.from('config')], programId);

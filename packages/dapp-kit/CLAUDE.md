@@ -23,7 +23,7 @@ Five architectural pieces hold the canonical hook shape together. Read this sect
 
 Accessed via `useSodaxContext()` hook — all other hooks use this internally.
 
-**Config reactivity.** `config` is tracked by reference: `new Sodax(config)` runs whenever the prop identity changes, resetting wagmi connection state, in-flight RPC, and any persisted state inside `useSodaxContext` consumers. Consumer-facing guidance (with module-const vs `useMemo` examples) lives in [`ai-exported/integration/recipes/setup.md`](ai-exported/integration/recipes/setup.md).
+**Config reactivity.** `config` is tracked by reference: `new Sodax(config)` runs whenever the prop identity changes, resetting wagmi connection state, in-flight RPC, and any persisted state inside `useSodaxContext` consumers. Consumer-facing guidance (with module-const vs `useMemo` examples) lives in [`packages/skills/knowledge/dapp-kit/integration/recipes/setup.md`](../skills/knowledge/dapp-kit/integration/recipes/setup.md).
 
 **Recommended provider stack ordering:**
 
@@ -502,34 +502,32 @@ This mirrors the `wallet-sdk-core` ↔ `@sodax/sdk` pattern: wallet-sdk-core imp
 
 ## AI agent docs
 
-This package ships an AI-consumable docs tree at `ai-exported/` (also at `node_modules/@sodax/dapp-kit/ai-exported/` after install). Two sub-trees:
+Consumer-facing AI material for `@sodax/dapp-kit` lives in [`packages/skills`](../skills/CLAUDE.md), not in this package. Two skills cover dapp-kit:
 
-- **`ai-exported/integration/`** — for agents writing NEW v2 dapp-kit code: `quickstart.md`, `architecture.md`, per-feature reference (`features/`), copy-paste recipes (`recipes/` — 13 patterns including the previous `skills/*.md` content plus 3 new cross-cutting recipes), and lookup tables (`reference/`).
-- **`ai-exported/migration/`** — for agents porting v1 → v2: `checklist.md`, `breaking-changes/` (4 cross-cutting deltas), per-feature porting playbooks (`features/`), codemods + adapters (`recipes.md`), reference tables.
+- `sodax-dapp-kit-integration` — for agents writing NEW v2 dapp-kit code.
+- `sodax-dapp-kit-migration` — for agents porting v1 dapp-kit to v2.
 
-Entry point for agents: `ai-exported/AGENTS.md`.
+Their supporting knowledge lives at `packages/skills/knowledge/dapp-kit/{integration,migration}/` — the same `quickstart.md`, `architecture.md`, per-feature reference, recipes, and lookup tables that used to live in this package's `ai-exported/` tree, moved verbatim.
 
-### CI guards (7)
+### When you edit hook signatures, queryKey shapes, or feature behavior
 
-Run on every PR. Each catches a distinct bug class — green guards together prove syntactic + structural correctness, but **NOT** prose-level accuracy (see "Maintaining ai-exported docs" below).
+The dapp-kit knowledge tree is downstream of the source. Source is the source of truth — when you change a hook here, the reference tables in `packages/skills/knowledge/dapp-kit/integration/reference/` likely need a matching update.
 
-- `check:ai-exported` — every `useFoo` reference in markdown resolves to a real export from `@sodax/dapp-kit` (or upstream allowlist: React, React Query, wallet-sdk-react).
-- `check:ai-scope` — no imports from forbidden packages (`@sodax/wallet-sdk-core`, `@sodax/types` directly, framework-specifics).
-- `check:ai-links` — every relative link between markdown files resolves on disk.
-- `check:ai-imports` — every `import … from '@sodax/dapp-kit'` example typechecks against `src/index.ts`.
-- `check:ai-snippets` — **opt-out by default**: every fenced `​```ts`/`​```tsx` block is typechecked unless it carries `// @ai-snippets-skip` as the first content line. Catches call-shape drift (`useFoo({ params: X })` vs canonical `useFoo({ params: { payload: X } })`). Genuinely illustrative blocks (queryKey shapes, diff blocks with placeholder identifiers, JSX-without-imports) must opt out.
-- `check:ai-keys` — every `queryKey: [...]` / `mutationKey: [...]` literal in docs (both declaration form AND backticked-array table cells) matches a real source key prefix from `src/hooks/**/*.ts`. Catches drift like `['staking', 'stakingInfo', ...]` in docs when source uses `['staking', 'info', ...]`. Opt out for v1/illustrative arrays via `<!-- ai-keys-allow -->` (markdown) or `// ai-keys-allow` (inside code blocks), within 6 lines preceding the array.
-- `check:ai-consistency` — polling-interval claims in docs (e.g. "polls 3s", `useQuote | 3s | refetchInterval`) match the actual `refetchInterval` value in source. Bind-to-hook by same-line proximity. Opt out via `<!-- ai-consistency-allow -->`.
+The drift to watch for clusters across four mirror trees: `integration/features/`, `integration/recipes/`, `migration/features/`, `migration/reference/`. The most-missed class is queryKey segment drift like `'stakingInfo'` (doc) vs `'info'` (source) — these are 1:1 grep-able with `grep -rn 'stakingInfo' packages/skills/knowledge/dapp-kit/`.
 
-### Maintaining ai-exported docs
+### CI guards
 
-**Green guards prove syntactic correctness, not semantic correctness.** After fixing any claim in `ai-exported/`, run these manual checks too:
+The validators that used to live in this package now run from `packages/skills/scripts/` against the consolidated knowledge tree. Five sub-scripts chain under `pnpm --filter @sodax/skills check:ai`:
 
-1. **Grep sweep after every targeted fix.** When fixing one drift site (e.g. `intentHash → intentTxHash`), immediately `grep -rn '<old-term>' ai-exported/` to find every other site. Drift tends to cluster across the four mirror trees (`integration/features/`, `integration/recipes/`, `migration/features/`, `migration/reference/`).
-2. **Reference tables must be updated alongside their feature counterparts.** When `ai-exported/integration/features/staking.md` changes a hook's return shape or call shape, the same claim in `ai-exported/integration/reference/hooks-index.md`, `ai-exported/integration/reference/querykey-conventions.md`, and `ai-exported/migration/reference/renamed-hooks.md` likely needs updating too. A single hook's claim must appear consistently across all four trees.
-3. **Source is the source of truth.** Write reference tables by reading the actual `src/hooks/<feature>/use*.ts` file — never by reasoning about what the convention "should be." The most-missed drift class is `'stakingInfo'` (doc) vs `'info'` (source) — these are 1:1 grep-able.
-4. **The 7 guards together cover**: hook names, import statements, code-block typechecks, queryKey segments, polling intervals, links, scope. They do **NOT** cover: prose claims about behavior, return-type table cells (use the snippet guard's typecheck to validate the canonical types instead), field-name renames not yet caught by typecheck.
-5. **When in doubt, spawn a per-file review agent.** For non-trivial doc changes, spawn one Explore agent per touched file with a prompt mirroring `packages/dapp-kit/scripts/check-ai-*.sh` patterns: read the doc, cross-check every claim against source. Don't trust your own synthesis.
+| Guard | What it enforces (dapp-kit-relevant scope) |
+|---|---|
+| `check:ai-structural` | `packages/skills/.claude-plugin/plugin.json`, SKILL.md frontmatter, relative link resolution. |
+| `check:ai-imports` | Every `import … from '@sodax/dapp-kit'` snippet in `packages/skills/knowledge/dapp-kit/**/*.md` (plus this package's README/CLAUDE.md) typechecks against `src/index.ts`. |
+| `check:ai-snippets` | Every fenced ts/tsx code block under `packages/skills/knowledge/dapp-kit/` typechecks against `src/`. Opt-out: `// @ai-snippets-skip` as first content line. |
+| `check:ai-keys` | Every `queryKey: [...]` / `mutationKey: [...]` in dapp-kit knowledge has a matching literal-prefix in `src/hooks/**/*.ts`. Catches drift like `'stakingInfo'` vs `'info'`. Opt-out: `<!-- ai-keys-allow -->`. |
+| `check:ai-consistency` | Every polling-interval claim near a `useFoo` mention matches `refetchInterval` in source. Opt-out: `<!-- ai-consistency-allow -->`. |
+
+When you edit a hook signature, queryKey shape, or `refetchInterval`, also grep `packages/skills/knowledge/dapp-kit/` for the affected names — these guards catch the syntactic drift, but **not** prose-level claims about behavior. The drift clusters across four mirror trees (`integration/features/`, `integration/recipes/`, `migration/features/`, `migration/reference/`) — fix all of them together.
 
 ## Build
 
