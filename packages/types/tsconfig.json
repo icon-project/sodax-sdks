@@ -17,9 +17,9 @@
     "module": "NodeNext",
     "outDir": "dist",
     "rootDir": "src",
-    "sourceMap": true,
+    "sourceMap": false,
     "declaration": true,
-    "declarationMap": true,
+    "declarationMap": false,
     "noUnusedLocals": true
   },
   "exclude": ["**/*.test.ts", "dist", "node_modules", ".turbo"]

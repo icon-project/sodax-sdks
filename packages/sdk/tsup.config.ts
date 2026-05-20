@@ -5,7 +5,7 @@ export default defineConfig(options => ({
   format: ['esm', 'cjs'], // Dual format: ESM for web, CJS for Node (optionally ESM too)
   outDir: 'dist',
   splitting: false, // Flat output, easier for consumers
-  sourcemap: true, // Helpful for debugging
+  sourcemap: !process.env.CI, // On for local debug builds, off in CI (publish + ci.yml set CI=true)
   dts: true, // Type declarations
   clean: true,
   target: 'es2023',

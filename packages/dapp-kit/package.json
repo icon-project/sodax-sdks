@@ -7,7 +7,7 @@
   "main": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "module": "dist/index.mjs",
-  "files": ["dist", "src", "ai-exported"],
+  "files": ["dist", "!dist/**/*.map", "src", "ai-exported"],
   "repository": {
     "type": "git",
     "url": "https://github.com/icon-project/sodax-sdks"

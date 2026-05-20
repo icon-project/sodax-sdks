@@ -13,7 +13,7 @@ export default defineConfig({
   splitting: true,
   clean: true,
   dts: !isWatchMode, // skip slow .d.ts generation during watch — only needed for production builds
-  sourcemap: true,
+  sourcemap: !process.env.CI, // On for local debug builds, off in CI (publish + ci.yml set CI=true)
   target: 'es2023',
   treeshake: true,
   external: ['react', 'react-dom', '@tanstack/react-query'],
