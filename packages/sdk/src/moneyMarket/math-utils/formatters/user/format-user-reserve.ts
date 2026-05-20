@@ -8,10 +8,6 @@ export interface FormatUserReserveRequest<T extends FormatReserveUSDResponse = F
   marketReferenceCurrencyDecimals: number;
 }
 
-export interface FormatUserReserveResponse<T extends FormatReserveUSDResponse = FormatReserveUSDResponse> {
-  reserve: ComputedUserReserve<T>;
-}
-
 export function formatUserReserve<T extends FormatReserveUSDResponse = FormatReserveUSDResponse>({
   reserve: _reserve,
   marketReferenceCurrencyDecimals,

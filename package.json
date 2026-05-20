@@ -22,6 +22,7 @@
     "check:circular-deps:packages": "turbo run check:circular-deps:packages",
     "check-exports": "turbo run check-exports --filter=./packages/*",
     "check:ai": "turbo run check:ai",
+    "check:knip": "turbo run check:knip",
     "clean": "turbo clean && rm -rf node_modules dist .turbo && rm -rf apps/*/node_modules apps/*/dist apps/*/.turbo && rm -rf packages/*/node_modules packages/*/dist packages/*/.turbo",
     "prepare": "husky"
   },

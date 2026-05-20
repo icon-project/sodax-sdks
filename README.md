@@ -23,6 +23,7 @@ See the [Sodax SDK README](./packages/sdk/README.md) for a deeper architectural 
 - **wallet-sdk-core** (`/packages/wallet-sdk-core`) — Low-level multi-chain wallet providers (signing, broadcasting) for 9 chain types. Supports both private-key (scripts/testing) and browser-extension (production) configs.
 - **wallet-sdk-react** (`/packages/wallet-sdk-react`) — React layer over `wallet-sdk-core` with the `XService`/`XConnector` pattern, Zustand state persistence, and EIP-6963 wallet discovery. [Wallet SDK Documentation](./packages/wallet-sdk-react/README.md).
 - **dapp-kit** (`/packages/dapp-kit`) — High-level React hooks combining the SDK, `wallet-sdk-react`, and React Query. Modular, production-ready building blocks for dApp development. [dApp Kit Documentation](./packages/dapp-kit/README.md).
+- **skills** (`/packages/skills`) — AI-agent skills and knowledge for the `@sodax/*` SDKs (8 skills covering integration + migration for `sdk`, `wallet-sdk-core`, `wallet-sdk-react`, `dapp-kit`). No runtime code. Distributed via the [`skills` CLI](https://github.com/vercel-labs/skills) or `@sodax/skills` on npm. [Skills Documentation](./packages/skills/README.md).
 
 ### Apps (`/apps`)
 

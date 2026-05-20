@@ -12,8 +12,6 @@ import {
 } from '@stellar/stellar-sdk';
 import type CustomSorobanServer from './CustomSorobanServer.js';
 
-export const STELLAR_RLP_MSG_TYPE = { type: 'symbol' };
-
 // Can be used whenever you need an Address argument for a contract method
 export const accountToScVal = (account: string) => new Address(account).toScVal();
 

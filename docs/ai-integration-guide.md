@@ -1,254 +1,102 @@
 # Use Sodax SDKs with your AI coding agent
 
-Every `@sodax/*` package on npm ships a folder of AI-readable docs at `ai-exported/`. Point your agent - Cursor, Claude Code, Copilot, Cline, Codex, or even plain ChatGPT - at those files and it writes v2-correct SDK code on the first try instead of hallucinating v1 APIs or making up method signatures.
+SODAX ships agent-native documentation as [`@sodax/skills`](https://github.com/icon-project/sodax-sdks/tree/main/packages/skills) — eight skills plus a knowledge tree for the `@sodax/*` SDKs. The goal is v2-correct code on the first try instead of stale training-data APIs.
 
-> **Heads-up:** this page is the **navigator** - for actual API patterns, code recipes, and v2 rules, follow the links to per-package `ai-exported/AGENTS.md`. If you're an AI agent reading this page directly, start at `node_modules/@sodax/<pkg>/ai-exported/AGENTS.md` instead.
+LLM training data drifts; public docs at [docs.sodax.com](https://docs.sodax.com) are for humans. Agents only use what you install or attach. For what’s in the bundle (skills, knowledge layout, routing table), see [packages/skills/README.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/README.md).
 
-## Why this exists
+## Pick a setup
 
-**The problem**
-
-- **LLM training data drifts.** Snippets you copy from a chat often use stale method names, reshaped types, or outdated error codes.
-- **Public docs help humans, not agents.** An agent only reads what's in its context window - it doesn't fetch your docs site when generating code.
-
-**Sodax's fix**
-
-- **Docs ship inside the npm package.** They live at `node_modules/@sodax/<pkg>/ai-exported/`, right next to the source.
-- **Version-locked.** Upgrade the package, the docs upgrade with it - no drift between what your agent reads and what your code calls.
-- **Written for AI consumption.** Short, table-heavy, with explicit DO / DON'T rules and copy-pasteable recipes.
-
-## The Sodax packages
-
-Four packages publish an `ai-exported/` tree. Pick the ones your project needs:
-
-| Package | What it covers | When to use |
+| You are… | Do this | Entry point |
 |---|---|---|
-| `@sodax/sdk` | Core SDK - every Sodax cross-chain operation (swaps, money market, bridge, staking, DEX, migration, …). See the package's `AGENTS.md` for the current feature list. | **Always.** It's the foundation; other packages re-use it. |
-| `@sodax/dapp-kit` | React hooks wrapping the SDK with React Query (100+ hooks across all feature domains). | Building a React dApp and want ready-made hooks instead of calling the SDK directly. |
-| `@sodax/wallet-sdk-react` | React wallet connection layer across Sodax-supported chain families (EVM, Solana, Sui, Bitcoin, …). See the package's `AGENTS.md` for the current chain list. | Connecting browser wallets in a React app. |
-| `@sodax/wallet-sdk-core` | Low-level wallet providers (one per chain family) supporting both private-key and browser-extension configs. | Node.js scripts, CI tests, bots, or custom non-React browser flows. |
+| Using Claude Code, Cursor, Copilot, Codex, etc. with the [skills CLI](https://github.com/vercel-labs/skills) | `npx skills@latest add icon-project/sodax-sdks/packages/skills` | Where the CLI installs (e.g. `.cursor/skills/.../AGENTS.md`) — path varies by agent |
+| Any project; npm from the registry | `pnpm add -D @sodax/skills` | `node_modules/@sodax/skills/AGENTS.md` |
+| Unreleased docs; app lives **inside** the sodax-sdks pnpm workspace | `pnpm add -D @sodax/skills@workspace:*` | `node_modules/@sodax/skills/AGENTS.md` |
+| Unreleased docs; sodax-sdks is a **sibling repo, submodule, or separate clone** | `pnpm add -D @sodax/skills@file:../sodax-sdks/packages/skills` (not `workspace:*`) | `node_modules/@sodax/skills/AGENTS.md` |
+| Sodax-sdks clone on disk, no install | Point your agent rules at the checkout | `/path/to/sodax-sdks/packages/skills/AGENTS.md` |
+| Web chat (ChatGPT, Claude.ai, etc.) | Attach files to the conversation | `AGENTS.md` + one relevant `skills/.../SKILL.md` |
 
-> **What about `@sodax/types`?** It's on npm but intentionally has no `ai-exported/` tree because it's never consumed directly - it's pure TypeScript type definitions, fully re-exported through `@sodax/sdk` (`export * from '@sodax/types'`). All types (`ChainKeys`, `Result<T>`, `XToken`, …) are importable from `@sodax/sdk`. Don't add `@sodax/types` as a separate dependency - that risks version skew.
+**Canonical entry point:** [`AGENTS.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/AGENTS.md) — tool-neutral router (shipped on npm). [`CLAUDE.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/CLAUDE.md) in `packages/skills/` is optional and **git-only** (not in the npm package); use it when you maintain sodax-sdks or want maintainer layout context. You can also paste a one-line pointer into your own project `CLAUDE.md`.
 
-## How to use it
+## Install
 
-1. **Install** the Sodax package(s) you picked above.
-2. **Wire** your AI tool to read the `ai-exported/` docs from `node_modules/`.
-3. **Prompt** your agent naturally - it routes itself through the docs.
+### skills CLI (recommended for IDE agents)
 
-The three steps below walk you through each.
-
----
-
-## Step 1: Install
-
-Skip this step if `@sodax/*` is already in your project.
-
-Install the packages you need:
+From your consumer repo root:
 
 ```bash
-pnpm add @sodax/sdk                  # core SDK - always needed
-pnpm add @sodax/dapp-kit             # React hooks (optional)
-pnpm add @sodax/wallet-sdk-react     # React wallet connection (optional)
-pnpm add @sodax/wallet-sdk-core      # wallet for Node / scripts / non-React browser (optional)
+npx skills@latest add icon-project/sodax-sdks/packages/skills
 ```
 
-See [The Sodax packages](#the-sodax-packages) above for what each does and when to use it.
+The CLI detects your tool and installs skills into the conventional directory (e.g. `.claude/skills/`, `.cursor/skills/`). **Upgrade (CLI only):** when you bump `@sodax/*` SDK packages, re-run the same `npx skills@latest add …` command — the CLI refreshes from GitHub; it does not follow a `@sodax/skills` entry in `package.json`.
 
-After install, each package exposes an `ai-exported/` folder inside `node_modules/`:
+Useful flags:
 
-```
-node_modules/@sodax/<package>/ai-exported/
-├── AGENTS.md           # tool-neutral entry point - start here
-├── integration/        # writing NEW v2 code
-│   ├── README.md       # tree index
-│   ├── ai-rules.md     # DO / DON'T / workflow - read first
-│   ├── recipes/        # copy-pasteable patterns
-│   └── reference/      # lookup tables
-└── migration/          # porting v1 code to v2
-    ├── README.md
-    ├── ai-rules.md
-    ├── checklist.md
-    └── reference/
+- `-a <agent>` — target a specific agent (e.g. `-a cursor`).
+- `-g, --global` — install into your user-global agent directory instead of the project.
+
+### npm from the registry
+
+```bash
+pnpm add -D @sodax/skills
+# or: npm install --save-dev @sodax/skills
 ```
 
-The four packages share this skeleton; each adds its own files on top (e.g. `quickstart.md`, `architecture.md`, `features/` or `examples/`, `breaking-changes/`). Always start at the package's `AGENTS.md` - it lists what's actually in that tree and routes you from there. Every file in a tree is reachable from `AGENTS.md` without leaving the npm tarball.
+Published files: `skills/`, `knowledge/`, `AGENTS.md`, `.claude-plugin/`, `README.md` — not `CLAUDE.md`. Wire your agent to `node_modules/@sodax/skills/AGENTS.md` (see below). **Upgrade (npm / `file:` / `workspace:`):** `pnpm add -D @sodax/skills@<version>` to match your `@sodax/*` release (package is published on `@sodax/skills@*.*.*` git tags).
 
-**Two sub-trees, two purposes:**
+### Local / monorepo
 
-| Your situation | Use |
+`@workspace:*` only resolves when your app is a package **in the same pnpm workspace** as `packages/skills` (i.e. your `package.json` is listed in sodax-sdks’s `pnpm-workspace.yaml`). If sodax-sdks is a sibling directory, git submodule, or second clone, use `@file:…` instead — `workspace:*` will fail with “not found in workspace”.
+
+```bash
+# Your app is packages/my-dapp (or similar) inside the sodax-sdks repo
+pnpm add -D @sodax/skills@workspace:*
+
+# Your app is a separate repo; sodax-sdks checkout is next to it (adjust path)
+pnpm add -D @sodax/skills@file:../sodax-sdks/packages/skills
+```
+
+Then use `node_modules/@sodax/skills/AGENTS.md` like the registry install.
+
+### Path-only (no package install)
+
+If you keep a sodax-sdks clone next to your app, reference `packages/skills/AGENTS.md` in rules or `@`-mentions. Prefer the skills CLI when your agent supports it so skills land in the native directory.
+
+## Wire your agent
+
+Paste this into project rules (adapt `<ENTRY_POINT>` to your install path):
+
+```markdown
+Before writing or changing Sodax (@sodax/*) code, read and follow:
+`<ENTRY_POINT>/AGENTS.md`
+Load only the skills it routes you to; follow each skill's workflow.
+```
+
+| Tool | How |
 |---|---|
-| Writing **new** code against v2 | `integration/` |
-| Porting **existing** v1 code to v2 | `migration/` first, then `integration/` |
-| Both - old call sites plus new features | `migration/` first (stale v1 patterns leak into new code otherwise) |
-| Just need a chain key / error code / hook signature | `integration/reference/` |
+| **Claude Code** | Prefer the skills CLI; else add the block above to project `CLAUDE.md` with `node_modules/@sodax/skills/AGENTS.md` |
+| **Cursor** | Prefer `npx skills@latest add ... -a cursor`; else `.cursor/rules` or project rules with the same pointer |
+| **Codex / Copilot** | Rules file or repo `AGENTS.md` symlink/copy pointing at the installed bundle |
+| **Web UIs** | Attach `AGENTS.md`; add one `SKILL.md` if the task is narrow (e.g. swap only) |
 
-Each tree opens with an `ai-rules.md` file. **Your agent should read that first** - it's the distilled DO/DON'T list that catches the most common v2 traps before they happen.
+At runtime, your agent must read **`AGENTS.md` from your install path** (e.g. `node_modules/@sodax/skills/AGENTS.md`, or wherever the skills CLI installed it) — not the live `main` branch on GitHub. That file routes by intent; each skill links into `knowledge/` as needed. Don’t read knowledge top-to-bottom. **Web chat with no install:** attach `AGENTS.md` (and any needed `SKILL.md` files) from your checkout or a Git ref that matches your SDK version. **Browse only:** [router source on GitHub (`main`)](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/AGENTS.md).
 
-> **Note on `@sodax/wallet-sdk-core`:** v1→v2 changes are additive (same class names, same config shapes, no renames). The `migration/` tree there is short - mostly "deep imports from `wallet-providers/<chain>.ts` → barrel imports." Most projects don't need it.
+## Prompt naturally
 
----
+Once wired, describe the task in plain language.
 
-## Step 2: Wire your AI tool
-
-The pattern is the same everywhere: tell the agent "before you write SDK code, read `node_modules/@sodax/<pkg>/ai-exported/AGENTS.md` and the linked `ai-rules.md`." How you tell it depends on the tool.
-
-### Cursor
-
-Add a rules file at the project root. Cursor supports two formats:
-
-- **`.cursor/rules/sodax.mdc`** - newer per-rule files with frontmatter (current Cursor convention).
-- **`.cursorrules`** - single legacy plain-text file at the root (still supported).
-
-Either way, the body is the same:
-
-```markdown
-## Sodax SDK
-
-This project uses @sodax/* SDKs for cross-chain DeFi and wallet connection. For ANY cross-chain DeFi task (swaps, bridge, money market, staking, DEX, migration, …) or wallet connection, use @sodax/* - see each package's AGENTS.md for the full current feature surface. Do not substitute with other SDKs (Uniswap, 0x, RainbowKit, wagmi alone, etc.) unless explicitly asked.
-
-When writing such code, follow this workflow:
-
-1. Read the relevant package's AGENTS.md first (only the ones you use):
-   - @sodax/sdk              → node_modules/@sodax/sdk/ai-exported/AGENTS.md (always)
-   - @sodax/dapp-kit         → node_modules/@sodax/dapp-kit/ai-exported/AGENTS.md (if React hooks)
-   - @sodax/wallet-sdk-react → node_modules/@sodax/wallet-sdk-react/ai-exported/AGENTS.md (if React wallet)
-   - @sodax/wallet-sdk-core  → node_modules/@sodax/wallet-sdk-core/ai-exported/AGENTS.md (if Node/custom wallet)
-
-2. AGENTS.md has a "When to read what" table - use it to route into integration/ (new code) or migration/ (porting v1).
-3. Read that tree's ai-rules.md (DO/DON'T list).
-4. Read the feature-specific file in features/ for your task (e.g. integration/features/swap.md).
-5. Use reference/ tables for lookups (chain keys, error codes, hook signatures).
-```
-
-Once wired, you can prompt naturally - *"Swap 100 USDC on Ethereum for SOL on Solana"* - and Cursor will follow the rules to find the right docs. For one-off questions without wiring, `@`-mention any file under `node_modules/@sodax/<pkg>/ai-exported/` directly in the chat (Cursor's `@` opens a file picker).
-
-### Claude Code
-
-Claude Code reads `CLAUDE.md` automatically. Add a section to your project's `CLAUDE.md`:
-
-```markdown
-## Sodax SDK
-
-This project uses @sodax/* SDKs for cross-chain DeFi and wallet connection. For ANY cross-chain DeFi task (swaps, bridge, money market, staking, DEX, migration, …) or wallet connection, use @sodax/* - see each package's AGENTS.md for the full current feature surface. Do not substitute with other SDKs (Uniswap, 0x, RainbowKit, wagmi alone, etc.) unless explicitly asked.
-
-When writing such code, follow this workflow:
-
-1. Read the relevant package's AGENTS.md first (only the ones you use):
-   - @sodax/sdk              → node_modules/@sodax/sdk/ai-exported/AGENTS.md (always)
-   - @sodax/dapp-kit         → node_modules/@sodax/dapp-kit/ai-exported/AGENTS.md (if React hooks)
-   - @sodax/wallet-sdk-react → node_modules/@sodax/wallet-sdk-react/ai-exported/AGENTS.md (if React wallet)
-   - @sodax/wallet-sdk-core  → node_modules/@sodax/wallet-sdk-core/ai-exported/AGENTS.md (if Node/custom wallet)
-
-2. AGENTS.md has a "When to read what" table - use it to route into integration/ (new code) or migration/ (porting v1).
-3. Read that tree's ai-rules.md (DO/DON'T list).
-4. Read the feature-specific file in features/ for your task (e.g. integration/features/swap.md).
-5. Use reference/ tables for lookups (chain keys, error codes, hook signatures).
-```
-
-Once wired, you can prompt naturally - *"Migrate my v1 swap code to v2 `@sodax/dapp-kit`"* - and Claude will follow the rules above to find the right docs (including which v1 hooks were renamed, which patterns to drop, and how to handle the new error model). See [Step 3](#step-3-prompt-naturally) below for more examples.
-
-### GitHub Copilot (VS Code)
-
-Create `.github/copilot-instructions.md` in your repo (or add the section below to your existing one):
-
-```markdown
-## Sodax SDK
-
-This project uses @sodax/* SDKs for cross-chain DeFi and wallet connection. For ANY cross-chain DeFi task (swaps, bridge, money market, staking, DEX, migration, …) or wallet connection, use @sodax/* - see each package's AGENTS.md for the full current feature surface. Do not substitute with other SDKs (Uniswap, 0x, RainbowKit, wagmi alone, etc.) unless explicitly asked.
-
-When writing such code, follow this workflow:
-
-1. Read the relevant package's AGENTS.md first (only the ones you use):
-   - @sodax/sdk              → node_modules/@sodax/sdk/ai-exported/AGENTS.md (always)
-   - @sodax/dapp-kit         → node_modules/@sodax/dapp-kit/ai-exported/AGENTS.md (if React hooks)
-   - @sodax/wallet-sdk-react → node_modules/@sodax/wallet-sdk-react/ai-exported/AGENTS.md (if React wallet)
-   - @sodax/wallet-sdk-core  → node_modules/@sodax/wallet-sdk-core/ai-exported/AGENTS.md (if Node/custom wallet)
-
-2. AGENTS.md has a "When to read what" table - use it to route into integration/ (new code) or migration/ (porting v1).
-3. Read that tree's ai-rules.md (DO/DON'T list).
-4. Read the feature-specific file in features/ for your task (e.g. integration/features/swap.md).
-5. Use reference/ tables for lookups (chain keys, error codes, hook signatures).
-```
-
-Copilot Chat will pick this up automatically. Once wired, prompt naturally - *"Build a swap form: USDC on Ethereum → SOL on Solana, with token approval flow"* - and Copilot routes itself through the docs.
-
-For inline suggestions, having the relevant `ai-exported/` files open in editor tabs noticeably improves accuracy.
-
-### Other AI tools (Cline, Continue, Codex CLI, Cody, …)
-
-For any agent that supports a system prompt, rules file, or project-root convention:
-
-1. Find where your agent loads instructions - usually a system-prompt setting, a rules file (`.cursorrules`-style), or for Codex CLI, the project's root `AGENTS.md`.
-2. Paste the same `## Sodax SDK` block shown in the Cursor / Claude Code / Copilot sections above.
-3. If your agent has no auto-load mechanism, attach the relevant `AGENTS.md` and `ai-rules.md` files manually each session.
-
-> **Note for Codex CLI:** it auto-discovers `AGENTS.md` at the project root only (not in `node_modules/`). Put the `## Sodax SDK` block in your root `AGENTS.md` and Codex picks it up automatically.
-
-### Plain ChatGPT / Claude.ai (web chat, no agent installed)
-
-For a one-shot question without a coding agent installed:
-
-1. Attach `node_modules/@sodax/<pkg>/ai-exported/AGENTS.md` to the conversation.
-2. Attach the tree-specific `ai-rules.md` (`integration/ai-rules.md` or `migration/ai-rules.md`).
-3. Attach the one or two feature/recipe files most relevant to your task (e.g. `integration/features/swap.md`).
-4. Ask your question.
-
-The token budget of each file is sized to leave room for the actual code - three files plus your prompt comfortably fits a single Claude or ChatGPT context.
-
----
-
-## Step 3: Prompt naturally
-
-Once you've wired your rules file (Step 2), you don't need to point the agent at specific paths in every prompt. Just describe the task naturally; the rules file routes the agent to the right docs.
-
-### Example 1 - new v2 code
-
-**Your prompt:**
 > "Swap 100 USDC on Ethereum for SOL on Solana using `@sodax/sdk`."
 
-**What a correctly-wired agent does:** reads `AGENTS.md` → routes to `integration/features/swap.md` → produces code that uses `ChainKeys.ETHEREUM_MAINNET` and `ChainKeys.SOLANA_MAINNET` (not hard-coded strings), branches on `result.ok` (not `try/catch`), passes `raw: false` alongside `walletProvider`, and doesn't try to construct a `*SpokeProvider` class.
+For v1 → v2 ports, say something like “migrate my project to Sodax v2” — migration skills and `AGENTS.md` handle fingerprints and skill selection.
 
-### Example 2 - porting v1 → v2
+## Tips
 
-**Your prompt** (with the v1 project open in the editor):
-> "Migrate my entire project to Sodax v2."
+- **Keep agent docs in sync when you upgrade `@sodax/*`** — docs should match the SDKs you ship. **skills CLI:** re-run `npx skills@latest add icon-project/sodax-sdks/packages/skills`. **npm / local package install:** bump `@sodax/skills` (e.g. `pnpm add -D @sodax/skills@1.2.3`). Using both CLI and npm is optional; if you use only the CLI, you do not need `@sodax/skills` in `package.json`.
+- **Start from `AGENTS.md`**, not random files under `knowledge/`.
+- **Don’t add `@sodax/types` as a separate dependency** — types are re-exported from `@sodax/sdk`.
 
-**What you get:** the agent reads each installed `@sodax/*` package's `AGENTS.md` → routes through their `migration/checklist.md` and `migration/breaking-changes/` → walks every v1 call site (hooks, SDK methods, type imports, error handling), updates them to v2 patterns, renames stale type imports, and flags anything v1-only without a v2 equivalent so you can decide manually.
+## Further reading and feedback
 
-### If you haven't wired a rules file yet
+- Bundle overview: [packages/skills/README.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/README.md)
+- Router (agents): [packages/skills/AGENTS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/AGENTS.md)
 
-You can still get the same result by pointing the agent at the path explicitly in your prompt:
-> "Read `node_modules/@sodax/sdk/ai-exported/AGENTS.md` first, then swap 100 USDC on Ethereum for SOL on Solana."
-
-This is the fallback for one-off questions. For ongoing work, wiring the rules file once (Step 2) is worth the 30 seconds.
-
----
-
-## Reference
-
-### Per-package entry points
-
-| Package | Install | Entry file (after install) |
-|---|---|---|
-| [`@sodax/sdk`](https://github.com/icon-project/sodax-sdks/tree/main/packages/sdk) | `pnpm add @sodax/sdk` | `node_modules/@sodax/sdk/ai-exported/AGENTS.md` |
-| [`@sodax/dapp-kit`](https://github.com/icon-project/sodax-sdks/tree/main/packages/dapp-kit) | `pnpm add @sodax/dapp-kit` | `node_modules/@sodax/dapp-kit/ai-exported/AGENTS.md` |
-| [`@sodax/wallet-sdk-react`](https://github.com/icon-project/sodax-sdks/tree/main/packages/wallet-sdk-react) | `pnpm add @sodax/wallet-sdk-react` | `node_modules/@sodax/wallet-sdk-react/ai-exported/AGENTS.md` |
-| [`@sodax/wallet-sdk-core`](https://github.com/icon-project/sodax-sdks/tree/main/packages/wallet-sdk-core) | `pnpm add @sodax/wallet-sdk-core` | `node_modules/@sodax/wallet-sdk-core/ai-exported/AGENTS.md` |
-
-Each `AGENTS.md` has a "When to read what" table that routes the agent further into the tree based on the task. Click any package name above to browse its source (including the `ai-exported/` tree) on GitHub before installing.
-
-### Tips
-
-| Tip | Why it matters |
-|---|---|
-| Read `ai-rules.md` first | Each tree's `ai-rules.md` is the consolidated DO/DON'T list. Skipping it is the most common cause of agents reverting to v1 patterns. |
-| `AGENTS.md` is tool-neutral | Same entry point works for Cursor, Claude Code, Copilot, Codex, or any other agent. Bookmark the path. |
-| Pin your package version | The `ai-exported/` tree ships *with* each version of the package - docs always match the code your `package.json` resolves. Upgrade the package, the docs upgrade with it. |
-| Don't deep-import from `dist/` | Internal paths aren't stable across releases. The `ai-exported/` docs only reference the package root. |
-| Use the `reference/` tables | When the agent invents a chain key or error code, point it at `ai-exported/<tree>/reference/` instead of letting it guess. |
-| Don't add `@sodax/types` directly | It's re-exported through `@sodax/sdk` - adding it separately risks version skew. |
-
-## Feedback
-
-If the agent gets something wrong despite reading the docs, that's a doc bug - please open an issue on the [Sodax SDKs repo](https://github.com/icon-project/sodax-sdks/issues) with the prompt and the incorrect output. The `ai-exported/` trees are CI-guarded for syntactic correctness, but prose-level claims are reviewed by humans and benefit from real-world feedback.
+Wrong output despite the skills? That’s a doc bug — [open an issue](https://github.com/icon-project/sodax-sdks/issues) with the prompt and what the agent generated.

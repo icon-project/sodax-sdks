@@ -2,6 +2,8 @@
 
 React layer over `wallet-sdk-core`. Provides wallet connection, disconnection, signing, and account management via hooks backed by Zustand state.
 
+Consumer-facing AI material (skills + knowledge for Claude Code, Cursor, Codex) lives in [`packages/skills`](../skills/CLAUDE.md) — not in this package. The legacy `skills/` directory that used to live here was removed; its content was superseded by `packages/skills/knowledge/wallet-sdk-react/integration/recipes/`.
+
 ## Architecture
 
 ### Core Abstractions (`src/core/`)

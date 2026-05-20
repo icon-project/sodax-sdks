@@ -44,6 +44,9 @@ jobs:
       - name: Check Circular Dependencies
         run: pnpm check:circular-deps
 
+      - name: Knip (unused files / exports / deps)
+        run: pnpm check:knip
+
       - name: Build Packages
         run: pnpm build:packages
 
@@ -52,14 +55,14 @@ jobs:
 
       - name: SDK tarball size check
         env:
-          SODAX_SDK_TARBALL_BASELINE_BYTES: '726000'
+          SODAX_SDK_TARBALL_BASELINE_BYTES: '627000'
           SODAX_SDK_TARBALL_TOLERANCE_PCT: '15'
         run: pnpm --filter @sodax/sdk size:check
 
       - name: Build Check
         run: pnpm checkTs
 
-      - name: AI-exported docs guards (sdk, wallet-sdk-react, dapp-kit)
+      - name: AI docs validation
         run: pnpm check:ai
 
       - name: Build Apps

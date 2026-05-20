@@ -28,7 +28,7 @@ jobs:
         id: dist_tag
         run: |
           EXPECTED_VERSION="${GITHUB_REF_NAME#@sdks@}"
-          PACKAGES=(types wallet-sdk-core sdk wallet-sdk-react dapp-kit)
+          PACKAGES=(types wallet-sdk-core sdk wallet-sdk-react dapp-kit skills)
           for pkg in "${PACKAGES[@]}"; do
             actual=$(jq -er .version "packages/$pkg/package.json")
             if [[ "$actual" != "$EXPECTED_VERSION" ]]; then
@@ -63,7 +63,7 @@ jobs:
 
       - name: Publish packages in topological order
         run: |
-          PACKAGES=(types wallet-sdk-core sdk wallet-sdk-react dapp-kit)
+          PACKAGES=(types wallet-sdk-core sdk wallet-sdk-react dapp-kit skills)
           for pkg in "${PACKAGES[@]}"; do
             echo "::group::Publishing @sodax/$pkg"
             (cd "packages/$pkg" && pnpm publish --no-git-checks --provenance --access public --tag "$DIST_TAG")
