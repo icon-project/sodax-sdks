@@ -277,6 +277,28 @@ describe('AleoWalletProvider', () => {
         expect.objectContaining({ url: 'https://custom.delegate/prove' }),
       );
     });
+
+    it('proves locally via ProgramManager.execute when no delegate is configured', async () => {
+      const provider = new AleoWalletProvider({
+        type: 'privateKey',
+        rpcUrl: RPC_URL,
+        privateKey: PRIVATE_KEY,
+        network: 'mainnet',
+      });
+
+      const result = await provider.execute(EXECUTE_OPTIONS);
+
+      expect(programManagerExecute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          programName: EXECUTE_OPTIONS.programName,
+          functionName: EXECUTE_OPTIONS.functionName,
+          inputs: EXECUTE_OPTIONS.inputs,
+        }),
+      );
+      expect(provingRequestFn).not.toHaveBeenCalled();
+      expect(submitProvingRequestFn).not.toHaveBeenCalled();
+      expect(result.transactionId).toBe('at1pktxid');
+    });
   });
 
   describe('execute — defaults merge (private-key)', () => {

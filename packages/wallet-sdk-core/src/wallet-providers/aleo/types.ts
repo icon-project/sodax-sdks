@@ -36,7 +36,7 @@ export type PrivateKeyAleoWalletConfig = {
   rpcUrl: string;
   privateKey: string;
   network: AleoNetworkEnv;
-  delegate: DelegateProvingConfig;
+  delegate?: DelegateProvingConfig;
   defaults?: AleoWalletDefaults;
 };
 
