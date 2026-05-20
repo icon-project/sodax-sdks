@@ -94,7 +94,7 @@ These are pure functions for assembling DEX feature params from pool data + user
 The published `@sodax/dapp-kit` tarball contains:
 
 ```
-dist/                  # Built ESM (.mjs) + CJS (.cjs) + .d.ts
+dist/                  # Built ESM (.mjs) + .d.ts
 ai-exported/           # This documentation tree
 package.json
 README.md

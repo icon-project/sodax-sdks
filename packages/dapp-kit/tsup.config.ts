@@ -2,7 +2,7 @@ import { defineConfig } from 'tsup';
 
 export default defineConfig(options => ({
   entry: ['./src/index.ts'],
-  format: ['esm', 'cjs'],
+  format: ['esm'],
   dts: true,
   clean: !options.watch,
   external: ['react', 'react-dom', '@tanstack/react-query'], // <— important
@@ -10,9 +10,7 @@ export default defineConfig(options => ({
   splitting: true,
   sourcemap: true,
   target: 'es2023',
-  outExtension({ format }) {
-    return {
-      js: format === 'esm' ? '.mjs' : '.cjs',
-    };
+  outExtension() {
+    return { js: '.mjs' };
   },
 }));
