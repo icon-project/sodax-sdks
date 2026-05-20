@@ -90,24 +90,27 @@ async function getUserHubWallet(): Promise<Address> {
   return hubProvider.getUserHubWalletAddress(walletAddress, ALEO_CHAIN_KEY);
 }
 
-async function depositTo(token: string, amount: bigint, _recipient: Address): Promise<void> {
+async function depositTo(token: string, amount: bigint, recipient?: Address): Promise<void> {
   const walletAddress = await aleoWalletProvider.getWalletAddress();
   const userHubWallet = await getUserHubWallet();
   console.log('userHubWallet ✌️:', userHubWallet);
 
+  const to = recipient ?? userHubWallet;
+  console.log('[depositTo] to:', to);
+
   const txId = await aleoSpokeService.deposit<false>({
     srcChainKey: ALEO_CHAIN_KEY,
     srcAddress: walletAddress,
-    to: userHubWallet,
+    to,
     token,
     amount,
     data: '0x',
     raw: false,
     walletProvider: aleoWalletProvider,
     feeAmount: BigInt(0),
-  }, hubProvider);
+  });
 
-  const res = await submitData(txId, userHubWallet, null);
+  const res = await submitData(txId, to, null);
   console.log(res);
   console.log('[depositTo] txId', txId);
 }
@@ -265,7 +268,7 @@ async function estimateGas(token: string, amount: bigint): Promise<void> {
     amount,
     data: '0x',
     raw: true,
-  }, hubProvider);
+  });
 
   const gasEstimate = await aleoSpokeService.estimateGas({ tx: rawTx, chainKey: ALEO_CHAIN_KEY });
   console.log('[estimateGas] tx:', rawTx);
@@ -278,7 +281,7 @@ async function main(): Promise<void> {
   if (functionName === 'deposit') {
     const token = process.argv[3];
     const amount = BigInt(process.argv[4]);
-    const recipient = process.argv[5] as Address;
+    const recipient = process.argv[5] as Address | undefined;
     await depositTo(token, amount, recipient);
   } else if (functionName === 'withdrawAsset') {
     const token = process.argv[3];

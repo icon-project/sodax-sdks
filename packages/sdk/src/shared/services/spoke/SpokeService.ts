@@ -627,7 +627,6 @@ export class SpokeService {
           if (!verify.ok) return verify;
           const value = (await this.aleo.deposit(
             params as DepositParams<AleoChainKey, R>,
-            this.hubProvider,
           )) satisfies TxReturnType<AleoChainKey, R> as TxReturnType<K, R>;
           return { ok: true, value };
         }

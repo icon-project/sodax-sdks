@@ -23,7 +23,6 @@ import type {
 import type { ConfigService } from '../../config/ConfigService.js';
 import { sleep } from '../../utils/shared-utils.js';
 import { decodeBech32m } from '../../utils/bech32m.js';
-import type { EvmHubProvider } from '../../entities/EvmHubProvider.js';
 
 const U64_MAX = BigInt('18446744073709551615');
 const ALEO_ADDRESS_PREFIX = 'aleo1';
@@ -127,9 +126,7 @@ export class AleoSpokeService {
    */
   public async deposit<R extends boolean>(
     params: DepositParams<AleoChainKey, R>,
-    hubProvider: EvmHubProvider,
   ): Promise<TxReturnType<AleoChainKey, R>> {
-    void hubProvider;
     if (params.amount > U64_MAX) {
       throw new Error(`Amount ${params.amount} exceeds u64 maximum of ${U64_MAX}`);
     }
@@ -140,8 +137,7 @@ export class AleoSpokeService {
     const dataHash = keccak256(params.data);
     const connSn = await this.generateUniqueConnSn();
     const feeAmount = params.feeAmount ?? 0n;
-    const recipient: Address =
-      params.to ?? (await hubProvider.getUserHubWalletAddress(params.srcAddress, ChainKeys.ALEO_MAINNET));
+    const recipient: Address = params.to;
 
     const hubChainId = BigInt(getIntentRelayChainId(ChainKeys.SONIC_MAINNET));
     const hubAddress = this.config.getHubChainConfig().addresses.assetManager;
