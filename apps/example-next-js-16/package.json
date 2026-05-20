@@ -8,6 +8,7 @@
     "build": "next build",
     "verify": "next build && node verify-build.mjs",
     "start": "next start --port 3016",
+    "checkTs": "tsc --noEmit",
     "clean": "rm -rf .next node_modules .turbo"
   },
   "dependencies": {

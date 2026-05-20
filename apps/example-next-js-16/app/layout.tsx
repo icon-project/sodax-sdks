@@ -1,23 +1,19 @@
 import type { ReactNode } from 'react';
 import { headers } from 'next/headers';
 import { cookieToInitialState } from 'wagmi';
-import type { RpcConfig } from '@sodax/types';
+import { createWagmiConfig } from '@sodax/wallet-sdk-react/xchains/evm';
 import Providers from './providers';
-import { createServerWagmiConfig } from './wagmi-config';
 
 export const metadata = { title: 'sodax next16 repro' };
 
-const rpcConfig: RpcConfig = {
-  sonic: 'https://rpc.soniclabs.com',
-  '0x1.icon': 'https://ctz.solidwallet.io/api/v3',
-  solana: 'https://solana-rpc.publicnode.com',
-};
+// Match the runtime SodaxWalletProvider — pass no `EVM.chains`, so both this
+// SSR-side wagmi config and the client-side one created inside the provider
+// use the SDK's default EVM chain set + transports. Single source of truth =
+// no cookie/runtime drift on wagmi version bumps or new chains.
+const wagmiConfig = createWagmiConfig();
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
-  const initialState = cookieToInitialState(
-    createServerWagmiConfig(rpcConfig),
-    (await headers()).get('cookie'),
-  );
+  const initialState = cookieToInitialState(wagmiConfig, (await headers()).get('cookie'));
 
   return (
     <html lang="en" suppressHydrationWarning>

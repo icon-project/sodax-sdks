@@ -35,9 +35,7 @@
     "turbo": "^2.4.0"
   },
   "commitlint": {
-    "extends": [
-      "@commitlint/config-conventional"
-    ]
+    "extends": ["@commitlint/config-conventional"]
   },
   "pnpm": {
     "overrides": {

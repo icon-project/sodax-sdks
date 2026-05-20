@@ -1,3 +1,4 @@
+import { builtinModules } from 'node:module';
 import { defineConfig, type Options } from 'tsup';
 
 type EsbuildPlugin = NonNullable<Options['esbuildPlugins']>[number];
@@ -86,14 +87,15 @@ export default defineConfig(options => ({
   target: 'es2023',
   treeshake: true,
   external: [
-    // Node builtins — platform: neutral doesn't auto-externalize these.
-    // Reached via @stacks/connect (node-fetch → stream/http) and
-    // @injectivelabs/wallet-strategy (axios → http2, form-data → path/fs,
-    // debug/supports-color → tty, etc.). Consumer's bundler handles them.
-    'crypto', 'node:crypto',
-    'stream', 'http', 'https', 'http2', 'zlib', 'node-fetch',
-    'path', 'fs', 'url', 'util', 'net', 'tls', 'os', 'buffer',
-    'tty', 'events', 'assert', 'dns', 'querystring', 'perf_hooks', 'worker_threads', 'process',
+    // Node builtins — `platform: 'browser'` doesn't auto-externalize these when
+    // source code imports them. Reached transitively (e.g. @stacks/connect →
+    // node-fetch → stream/http, @injectivelabs/wallet-strategy → axios → http2,
+    // form-data → path/fs, debug → tty). Use the live builtinModules list +
+    // their `node:`-prefixed forms so any future builtin pulled in by an
+    // upgrade is externalized automatically.
+    ...builtinModules,
+    ...builtinModules.map((m) => `node:${m}`),
+    'node-fetch',
     // @injectivelabs/wallet-strategy → @injectivelabs/sdk-ts → cosmjs → libsodium.
     // libsodium-wrappers-sumo has broken ESM resolution ('./libsodium-sumo.mjs' 404);
     // keep external so consumer's bundler handles it.
