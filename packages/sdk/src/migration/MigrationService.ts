@@ -1038,7 +1038,7 @@ export class MigrationService {
 
       const hubWalletAddress = await this.hubProvider.getUserHubWalletAddress(
         params.srcAddress,
-        ChainKeys.SONIC_MAINNET,
+        ChainKeys.ICON_MAINNET,
       );
 
       const coreParams = {

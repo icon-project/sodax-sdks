@@ -14,9 +14,6 @@ import type {
 import type { ConfigService } from '../../config/ConfigService.js';
 import { sleep, BigIntToHex, encodeAddress } from '../../utils/shared-utils.js';
 import {
-  type HubAddress,
-  type HubChainKey,
-  type IconAddress,
   type IconChainKey,
   type IconTransactionResult,
   type Result,
@@ -24,37 +21,10 @@ import {
   isNativeToken,
   ChainKeys,
   type Hex,
-  type Address,
-  type GetAddressType,
-  type WalletProviderSlot,
   type IconGasEstimate,
   type TxReturnType,
 } from '@sodax/types';
 import { estimateStepCost } from '../../utils/icon-utils.js';
-
-export type IconSpokeDepositParams = {
-  from: IconAddress; // The address of the user on the spoke chain
-  srcChainKey: IconChainKey; // The chain key of the source spoke chain
-  to?: HubAddress; // The address of the user on the hub chain (wallet abstraction address)
-  token: string; // The address of the token to deposit
-  amount: bigint; // The amount of tokens to deposit
-  data: Hex; // The data to send with the deposit
-};
-
-export type IconTransferToHubParams = {
-  token: string;
-  recipient: Address;
-  amount: bigint;
-  data: Hex;
-};
-
-export type IconCallParams<Raw extends boolean> = {
-  srcChainKey: IconChainKey;
-  srcAddress: GetAddressType<IconChainKey>;
-  dstChainKey: HubChainKey;
-  dstAddress: HubAddress;
-  payload: Hex;
-} & WalletProviderSlot<IconChainKey, Raw>;
 
 export class IconSpokeService {
   private readonly config: ConfigService;
@@ -79,7 +49,7 @@ export class IconSpokeService {
 
   /**
    * Deposit tokens to the spoke chain.
-   * @param {IconSpokeDepositParams} params - The parameters for the deposit
+   * @param {DepositParams<IconChainKey, R>} params - The parameters for the deposit
    * @param {IconSpokeProviderType} spokeProvider - The provider for the spoke chain
    * @param {EvmHubProvider} hubProvider - The provider for the hub chain
    * @param {boolean} raw - The return type raw or just transaction hash

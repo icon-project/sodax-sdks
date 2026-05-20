@@ -1,7 +1,10 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
-  "extends": ["../../biome.json"],
-  "files": {},
+  "root": false,
+  "$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
+  "extends": "//",
+  "files": {
+    "includes": ["**", "!**/ai-exported", "!**/scripts"]
+  },
   "linter": {
     "rules": {
       "style": {
@@ -19,6 +22,6 @@
         "noUnusedFunctionParameters": "off"
       }
     },
-    "ignore": ["tsup.config.ts"]
+    "includes": ["**", "!**/tsup.config.ts"]
   }
 }

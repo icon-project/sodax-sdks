@@ -70,7 +70,13 @@ export const createWagmiConfig = (
       redbellyMainnet,
     ],
     connectors: options?.connectors ?? [],
-    ssr: options?.ssr,
+    // NOTE: wagmi's `ssr` is a hydration-timing flag, not an "is host app SSR"
+    // flag. `true` defers `Hydrate.onMount()` into `useEffect` (safe for both
+    // CSR and SSR); `false` runs it in render and trips React's "setState
+    // during render" warning on subscribers like `EvmHydrator`. Default to
+    // `true` so direct callers of `createWagmiConfig` stay safe — only pass
+    // `false` if you have a specific reason. See issue #129.
+    ssr: options?.ssr ?? true,
     transports: {
       [mainnet.id]: http(getRpcUrl(evmChains?.[ChainKeys.ETHEREUM_MAINNET])),
       [avalanche.id]: http(getRpcUrl(evmChains?.[ChainKeys.AVALANCHE_MAINNET])),

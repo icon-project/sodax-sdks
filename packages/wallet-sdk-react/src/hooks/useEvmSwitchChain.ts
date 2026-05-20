@@ -1,3 +1,4 @@
+// biome-ignore-all lint/correctness/useHookAtTopLevel: wagmi hooks require WagmiProvider; EVM slot omitted when evmEnabled is false and config is immutable after mount
 import { useCallback, useMemo } from 'react';
 import { useAccount, useSwitchChain } from 'wagmi';
 import { baseChainInfo, type SpokeChainKey } from '@sodax/types';

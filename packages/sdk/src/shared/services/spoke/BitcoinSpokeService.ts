@@ -2,9 +2,6 @@ import { initEccLib, networks, Transaction, Psbt, payments, opcodes, script } fr
 import type {
   BitcoinChainKey,
   BitcoinRawTransactionReceipt,
-  GetAddressType,
-  Hex,
-  HubAddress,
   IBitcoinWalletProvider,
   Result,
   TxReturnType,
@@ -27,25 +24,6 @@ import { encodeBtcPayloadToBytes, estimateBitcoinTxSize, normalizePsbtToBase64, 
 export type { BtcPayload, WalletMode } from '../../entities/btc/btc-utils.js';
 
 initEccLib(ecc);
-
-export type BitcoinSpokeDepositParams = {
-  srcChainKey: BitcoinChainKey; // The chain key of the spoke (origin) chain
-  srcAddress: GetAddressType<BitcoinChainKey>; // The address of the user on the spoke (origin) chain
-  to: HubAddress; // The address of the user on the hub chain (wallet abstraction address)
-  token: string; // Token identifier
-  amount: bigint; // Amount in satoshis
-  data: Hex; // Additional data to send with the deposit
-  accessToken?: string; // Access token to use trading wallet
-};
-
-export type BitcoinTransferToHubParams = {
-  srcChainKey: BitcoinChainKey; // The chain key of the spoke (origin) chain
-  srcAddress: GetAddressType<BitcoinChainKey>; // The address of the user on the spoke (origin) chain
-  token: string;
-  amount: bigint;
-  data?: Hex;
-  accessToken?: string;
-};
 
 export type BitcoinUTXO = {
   txid: string;
