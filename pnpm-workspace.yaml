@@ -41,3 +41,32 @@ catalog:
   "madge": "8.0.0"
   "knip": "5.30.5"
   "tslib": "2.8.1"
+
+# pnpm-managed dep tree tweaks. Kept in workspace.yaml (not root package.json)
+# so each entry can carry an inline comment explaining the reason.
+overrides:
+  # Pulls @hpke/core forward to a release without the GHSA-7x9p-2ph9-mf2x advisory.
+  "@hpke/core": ">=1.8.0"
+  # Pulls valibot forward to a release without the GHSA-q8pj-h94p-6m4r advisory.
+  valibot: ">=1.2.0"
+  # Pin to flush out two transitive axios versions resolved by @injectivelabs/*.
+  axios: "1.13.2"
+  # Clears 8 transitive Trezor advisories that resolve protobufjs <7.5.8.
+  protobufjs: "^7.5.8"
+  # Clears a Next.js transitive XSS advisory against postcss <8.5.10.
+  postcss: "^8.5.10"
+  # Force every transitive `@tanstack/react-query` to the catalog version.
+  # Without this, @mysten/dapp-kit's peer `^5.50.1` can resolve to 5.100.x
+  # while demo / wagmi keep 5.87.4 — two React Query contexts in the same
+  # tree, and wagmi's `useWalletClient` throws "No QueryClient set" because
+  # its useQueryClient resolves to the wrong instance. Update both lines
+  # together when bumping the catalog version.
+  "@tanstack/react-query": "5.87.4"
+
+patchedDependencies:
+  # Fixes a multi-chunk tarball-extraction bug in @arethetypeswrong/core (used by
+  # `check-exports`) — triggered by @sodax/libs's ~6.5MB injective bundle. The
+  # upstream `extractTarball` overwrites `unzipped` on each Gunzip chunk callback
+  # instead of accumulating; large tarballs lose data. Drop the patch once
+  # arethetypeswrong/arethetypeswrong.github.io ships the fix.
+  "@arethetypeswrong/core@0.17.4": "patches/@arethetypeswrong__core@0.17.4.patch"

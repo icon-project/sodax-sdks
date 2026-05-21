@@ -1,7 +1,7 @@
 import type { XAccount } from '@/types/index.js';
 import { XConnector } from '@/core/index.js';
-import type { StacksProvider } from '@stacks/connect';
-import { request, disconnect } from '@stacks/connect';
+import type { StacksProvider } from '@sodax/libs/stacks/connect';
+import { request, disconnect } from '@sodax/libs/stacks/connect';
 
 export interface StacksProviderConfig {
   /** The provider ID matching the window path, e.g. 'LeatherProvider' or 'XverseProviders.BitcoinProvider' */
@@ -13,6 +13,7 @@ export interface StacksProviderConfig {
 
 /** Resolves a provider from `window` by dot-separated ID, matching @stacks/connect-ui's getProviderFromId */
 function getProviderFromId(id: string): StacksProvider | undefined {
+  if (typeof window === 'undefined') return undefined;
   return id.split('.').reduce<unknown>((acc, part) => (acc as Record<string, unknown>)?.[part], window) as
     | StacksProvider
     | undefined;

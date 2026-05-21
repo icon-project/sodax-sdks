@@ -14,7 +14,9 @@ import {
   fetchFeeEstimateTransaction,
   validateStacksAddress,
   serializePayloadBytes,
-} from '@stacks/transactions';
+  type StacksNetwork,
+  createNetwork,
+} from '@sodax/libs/stacks/core';
 import { getIntentRelayChainId, isNativeToken, ChainKeys } from '@sodax/types';
 import type {
   FeeEstimateTransaction,
@@ -35,7 +37,6 @@ import type {
   WaitForTxReceiptReturnType,
 } from '../../types/spoke-types.js';
 import type { ConfigService } from '../../config/ConfigService.js';
-import { type StacksNetwork, createNetwork } from '@stacks/network';
 import { bytesToHex } from 'viem';
 
 export class StacksSpokeService {
@@ -120,13 +121,9 @@ export class StacksSpokeService {
     params: DepositParams<StacksChainKey, R>,
   ): Promise<TxReturnType<StacksChainKey, R>> {
     const chainConfig = this.config.getChainConfig(params.srcChainKey);
-    const assetManagerImpl = await this.getImplContractAddress(
-      chainConfig.addresses.assetManager,
-    );
+    const assetManagerImpl = await this.getImplContractAddress(chainConfig.addresses.assetManager);
     const [implAddress, implName] = parseContractId(assetManagerImpl as ContractIdString);
-    const [connectionAddress, connectionName] = parseContractId(
-      chainConfig.addresses.connection as ContractIdString,
-    );
+    const [connectionAddress, connectionName] = parseContractId(chainConfig.addresses.connection as ContractIdString);
     const reqData = {
       contractAddress: implAddress as string,
       contractName: implName as string,
@@ -154,7 +151,7 @@ export class StacksSpokeService {
       });
 
       return {
-        payload: `0x${bytesToHex(serializePayloadBytes(tx.payload))}`,
+        payload: bytesToHex(serializePayloadBytes(tx.payload)),
       } satisfies StacksReturnType<true> as StacksReturnType<R>;
     }
     const txId = await params.walletProvider.sendTransaction(reqData);
@@ -202,7 +199,7 @@ export class StacksSpokeService {
       });
 
       return {
-        payload: `0x${bytesToHex(serializePayloadBytes(tx.payload))}`,
+        payload: bytesToHex(serializePayloadBytes(tx.payload)),
       } satisfies StacksReturnType<true> as StacksReturnType<Raw>;
     }
 

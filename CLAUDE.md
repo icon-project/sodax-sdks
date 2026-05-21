@@ -19,6 +19,7 @@ Turborepo + pnpm workspace. Package manager: **pnpm 10.32.1**.
 |---------|------|-------------------|
 | `packages/sdk` | Core SDK — `Sodax` facade, hub-and-spoke services, intent relay | [`packages/sdk/CLAUDE.md`](packages/sdk/CLAUDE.md) |
 | `packages/types` | Shared TypeScript types — chain IDs, chain configs, wallet/API interfaces | [`packages/types/CLAUDE.md`](packages/types/CLAUDE.md) |
+| `packages/libs` | Internal dependency isolation; bundles and re-exports selected third-party libs via stable subpaths | [`packages/libs/CLAUDE.md`](packages/libs/CLAUDE.md) |
 | `packages/wallet-sdk-core` | Multi-chain wallet providers (signing/broadcasting) — 9 chain types | [`packages/wallet-sdk-core/CLAUDE.md`](packages/wallet-sdk-core/CLAUDE.md) |
 | `packages/wallet-sdk-react` | React wallet state layer — `XService`/`XConnector`, Zustand, EIP-6963 | [`packages/wallet-sdk-react/CLAUDE.md`](packages/wallet-sdk-react/CLAUDE.md) |
 | `packages/dapp-kit` | High-level React hooks combining SDK + wallet-sdk-react + React Query | [`packages/dapp-kit/CLAUDE.md`](packages/dapp-kit/CLAUDE.md) |

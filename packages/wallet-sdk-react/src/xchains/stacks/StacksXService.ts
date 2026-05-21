@@ -1,7 +1,13 @@
 import { XService } from '@/core/XService.js';
-import type { XToken } from '@sodax/types';
-import { fetchCallReadOnlyFunction, Cl, type UIntCV, type ResponseOkCV } from '@stacks/transactions';
-import { networkFrom, type StacksNetwork, type StacksNetworkName } from '@stacks/network';
+import type { XToken, StacksNetworkName } from '@sodax/types';
+import {
+  networkFrom,
+  fetchCallReadOnlyFunction,
+  Cl,
+  type UIntCV,
+  type ResponseOkCV,
+  type StacksNetwork,
+} from '@sodax/libs/stacks/core';
 
 export class StacksXService extends XService {
   private static instance: StacksXService;
@@ -22,6 +28,12 @@ export class StacksXService extends XService {
     return StacksXService.instance;
   }
 
+  /**
+   * @warning Network / fetch / contract-read failures are silently swallowed —
+   * `0n` is returned on any error. Callers cannot distinguish "zero balance"
+   * from "fetch failed"; UI that needs to surface the failure must wrap this
+   * call externally and re-fetch on its own error path.
+   */
   override async getBalance(address: string | undefined, xToken: XToken): Promise<bigint> {
     if (!address) return 0n;
 

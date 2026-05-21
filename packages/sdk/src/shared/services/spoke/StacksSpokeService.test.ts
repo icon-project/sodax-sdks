@@ -46,7 +46,7 @@
  *  10. waitForTransactionReceipt — every tx_status branch + polling defaults
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Cl, type ContractPrincipalCV, type UIntCV } from '@stacks/transactions';
+import { Cl, type ContractPrincipalCV, type UIntCV } from '@sodax/libs/stacks/core';
 import { ChainKeys, getIntentRelayChainId, spokeChainConfig, type Hex, type IStacksWalletProvider } from '@sodax/types';
 
 // --- hoisted mocks --------------------------------------------------------
@@ -62,10 +62,12 @@ const mocks = vi.hoisted(() => ({
   validateStacksAddress: vi.fn(),
 }));
 
-vi.mock('@stacks/transactions', async () => {
+vi.mock('@sodax/libs/stacks/core', async () => {
   // Pass-through the rest of the module (real Cl, noneCV, someCV, uintCV, PostConditionMode,
-  // parseContractId). Only the network-touching statics get replaced.
-  const actual = await vi.importActual<typeof import('@stacks/transactions')>('@stacks/transactions');
+  // parseContractId). Only the network-touching statics get replaced. The SUT imports from
+  // `@sodax/libs/stacks/core` (a bundled re-export of `@stacks/transactions`) — mock the re-export
+  // module the SUT actually sees, NOT the underlying package.
+  const actual = await vi.importActual<typeof import('@sodax/libs/stacks/core')>('@sodax/libs/stacks/core');
   return {
     ...actual,
     fetchCallReadOnlyFunction: mocks.fetchCallReadOnlyFunction,
@@ -134,13 +136,9 @@ const mockStacksProvider = {
 // The SUT only reads `tx.payload` and passes it to `serializePayloadBytes`. Pin the shape; the
 // content is opaque to the SUT.
 const FAKE_PAYLOAD_BYTES = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
-// NOTE: the SUT produces a double-`0x` prefix because viem's `bytesToHex` already returns a
-// '0x'-prefixed string, and the SUT wraps it as `\`0x${bytesToHex(...)}\``. We pin the actual
-// current output here (`'0x0xdeadbeef'`) — flagging this as a potential SUT bug worth a follow-up
-// rather than silently masking it in the fixture.
-const FAKE_PAYLOAD_HEX = '0x0xdeadbeef';
+const FAKE_PAYLOAD_HEX = '0xdeadbeef';
 const fakeUnsignedTx = { payload: { type: 'contract-call', _opaque: true } } as unknown as Awaited<
-  ReturnType<typeof import('@stacks/transactions').makeUnsignedContractCall>
+  ReturnType<typeof import('@sodax/libs/stacks/core').makeUnsignedContractCall>
 >;
 
 beforeEach(() => {
@@ -269,6 +267,20 @@ describe('StacksSpokeService.getSTXBalance', () => {
       'Error fetching STX balance: Internal Server Error',
     );
   });
+
+  it('throws TypeError when ok=true but the JSON shape is missing `stx.balance`', async () => {
+    // `data.stx.balance` is accessed without runtime validation. If Hiro ever
+    // returned 200 with `{}` (or any other shape), the SUT surfaces a cryptic
+    // TypeError rather than an explicit "unexpected response shape" error.
+    // Pinning the behaviour so a future contributor adding a runtime guard
+    // knows it's a contract change.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) } as unknown as Response),
+    );
+
+    await expect(stacksSpoke.getSTXBalance(SRC_ADDR)).rejects.toThrow(TypeError);
+  });
 });
 
 // =========================================================================
@@ -296,6 +308,17 @@ describe('StacksSpokeService.readTokenBalance', () => {
         senderAddress: STACKS_ASSET_MGR,
       }),
     );
+  });
+
+  it('throws on an unexpected Clarity response shape (no runtime guard on the `{ value: UIntCV }` cast)', async () => {
+    // The SUT performs `(result as { value: UIntCV }).value.value as bigint`. The cast
+    // is purely a TypeScript assertion — if `fetchCallReadOnlyFunction` ever returns a
+    // different Clarity type (e.g. a `ResponseErr`, a `Tuple`, or — most relevant — the
+    // `(ok uint)` ResponseOk-wrapped shape that on-chain SIP-010 `get-balance` actually
+    // returns), the nested access throws. Pin current behaviour.
+    mocks.fetchCallReadOnlyFunction.mockResolvedValueOnce({});
+
+    await expect(stacksSpoke.readTokenBalance(STACKS_BNUSD, STACKS_ASSET_MGR)).rejects.toThrow();
   });
 });
 
@@ -325,6 +348,18 @@ describe('StacksSpokeService.getImplContractAddress', () => {
         senderAddress: 'SP3031RGK734636C8KGW2Y76TEQBTVX59Q472EQH0',
       }),
     );
+  });
+
+  it('does not validate the readContract response shape (cast trusts current ABI)', async () => {
+    // The SUT casts the readContract result directly to `ContractPrincipalCV` and reads
+    // `.value`. The cast is a TypeScript assertion only — runtime accepts any object
+    // with a `.value` field. Pinning current behaviour: a `string-ascii` response with
+    // a non-principal string value silently "succeeds" because `.value` happens to exist.
+    // If the on-chain contract ABI ever drifts (returns a tuple, a response wrapper, etc.),
+    // the wrong-shape value flows downstream and crashes in `parseContractId` or similar.
+    mocks.fetchCallReadOnlyFunction.mockResolvedValueOnce({ type: 'string-ascii', value: 'not-a-contract-principal' });
+
+    await expect(stacksSpoke.getImplContractAddress(STACKS_ASSET_MGR)).resolves.toBe('not-a-contract-principal');
   });
 });
 
@@ -665,6 +700,29 @@ describe('StacksSpokeService.waitForTransactionReceipt', () => {
     // Pin the exact URL — proves the SUT reads network.client.baseUrl (which itself comes from
     // chainConfig.rpcUrl).
     expect(fetchSpy).toHaveBeenCalledWith(`${STACKS_RPC_URL}/extended/v1/tx/${TX_ID}`);
+  });
+
+  it('treats unknown tx_status (e.g. "submitted") as a continue-polling state until timeout', async () => {
+    // The SUT branches on three terminal statuses (`success`,
+    // `abort_by_response`, `abort_by_post_condition`). Any other Stacks status —
+    // `submitted`, `broadcast`, anything new in a future Hiro API version — falls
+    // through to the next poll iteration. With `maxTimeoutMs: 0`, the deadline
+    // check exits the loop immediately and returns `status: 'timeout'`.
+    const submittedReceipt = { tx_id: TX_ID, tx_status: 'submitted', tx_type: 'contract_call' };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(submittedReceipt) } as unknown as Response),
+    );
+
+    const result = await stacksSpoke.waitForTransactionReceipt({
+      chainKey: STACKS,
+      txHash: TX_ID,
+      maxTimeoutMs: 0,
+      pollingIntervalMs: 1,
+    });
+
+    if (!result.ok) throw new Error('expected ok');
+    expect(result.value.status).toBe('timeout');
   });
 
   it('forwards custom pollingIntervalMs / maxTimeoutMs (custom-override branch)', async () => {

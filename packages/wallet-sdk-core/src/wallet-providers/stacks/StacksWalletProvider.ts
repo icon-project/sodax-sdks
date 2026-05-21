@@ -1,5 +1,5 @@
-import { networkFrom, type StacksNetwork } from '@stacks/network';
 import {
+  networkFrom,
   broadcastTransaction,
   fetchCallReadOnlyFunction,
   getAddressFromPrivateKey,
@@ -9,8 +9,9 @@ import {
   publicKeyToHex,
   type ClarityValue,
   type PostConditionModeName,
-} from '@stacks/transactions';
-import { request } from '@stacks/connect';
+  type StacksNetwork,
+} from '@sodax/libs/stacks/core';
+import { request } from '@sodax/libs/stacks/connect';
 import type { IStacksWalletProvider, StacksTransactionParams } from '@sodax/types';
 import { BaseWalletProvider } from '../BaseWalletProvider.js';
 import type {
