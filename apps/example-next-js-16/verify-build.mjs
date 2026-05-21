@@ -57,7 +57,10 @@ async function run() {
     const html = await res.text();
 
     const checks = [
-      // @sodax/libs/stacks/core loaded clean in SSR and produced the encoded hex
+      // @sodax/libs/stacks/core loaded clean in SSR and produced the encoded hex.
+      // The literal below is `encodeAddress('stacks', 'SP000000000000000000002Q6VF78')`
+      // — the Stacks zero principal, rendered on the page by app/page.tsx. If the
+      // encoding contract ever changes, regenerate this expected value from page.tsx.
       ['stacks-ssr', (h) => h.includes('0x05160000000000000000000000000000000000000000')],
       // new SDK.Sodax() constructed without throwing in SSR.
       // Match an attribute, not rendered text — React's text-node separator
