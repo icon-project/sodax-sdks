@@ -46,14 +46,6 @@ export class AleoXService extends XService {
     this._networkClient = null;
   }
 
-  // Both mainnet and testnet use the same base URL — the Provable SDK's AleoNetworkClient
-  // handles network routing internally. We still invalidate the cached client so it picks
-  // up any state change on the next async call.
-  public setNetworkClient(network: Network): void {
-    this.rpcUrl = 'https://api.provable.com/v2';
-    this._networkClient = null;
-  }
-
   override async getBalance(address: string | undefined, xToken: XToken): Promise<bigint> {
     if (!address) return 0n;
 
