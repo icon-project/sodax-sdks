@@ -3,6 +3,7 @@ import * as rlp from 'rlp';
 import { encodeFunctionData, type Address } from 'viem';
 import {
   type Hex,
+  type AleoChainKey,
   type BitcoinChainKey,
   type HubChainKey,
   type IconChainKey,
@@ -28,6 +29,7 @@ import { encodeAddress } from '../../utils/shared-utils.js';
 import { StacksSpokeService } from './StacksSpokeService.js';
 import { BitcoinSpokeService } from './BitcoinSpokeService.js';
 import { NearSpokeService } from './NearSpokeService.js';
+import { AleoSpokeService } from './AleoSpokeService.js';
 import { SonicSpokeService } from './SonicSpokeService.js';
 import { SuiSpokeService } from './SuiSpokeService.js';
 import { StellarSpokeService } from './StellarSpokeService.js';
@@ -49,6 +51,7 @@ import {
   isStacksChainKeyType,
   isSuiChainKeyType,
   isUndefinedOrValidWalletProviderForChainKey,
+  isAleoChainKeyType,
 } from '../../guards.js';
 import type { ConfigService } from '../../config/ConfigService.js';
 import type { EvmHubProvider } from '../../entities/EvmHubProvider.js';
@@ -80,7 +83,8 @@ export type SpokeServiceType =
   | InjectiveSpokeService
   | StacksSpokeService
   | NearSpokeService
-  | BitcoinSpokeService;
+  | BitcoinSpokeService
+  | AleoSpokeService;
 
 export type GetSpokeServiceType<C extends SpokeChainKey> = C extends EvmSpokeOnlyChainKey
   ? EvmSpokeService
@@ -102,7 +106,9 @@ export type GetSpokeServiceType<C extends SpokeChainKey> = C extends EvmSpokeOnl
                   ? NearSpokeService
                   : C extends BitcoinChainKey
                     ? BitcoinSpokeService
-                    : SpokeServiceType;
+                    : C extends AleoChainKey
+                      ? AleoSpokeService
+                      : SpokeServiceType;
 
 export type SpokeServiceConstructorParams = {
   config: ConfigService;
@@ -130,6 +136,7 @@ export class SpokeService {
   public readonly bitcoin: BitcoinSpokeService;
   public readonly near: NearSpokeService;
   public readonly stacks: StacksSpokeService;
+  public readonly aleo: AleoSpokeService;
 
   public constructor({ config, hubProvider }: SpokeServiceConstructorParams) {
     this.config = config;
@@ -144,6 +151,7 @@ export class SpokeService {
     this.bitcoin = new BitcoinSpokeService(this.config);
     this.near = new NearSpokeService(this.config);
     this.stacks = new StacksSpokeService(this.config);
+    this.aleo = new AleoSpokeService(this.config);
   }
 
   public getSpokeService<C extends SpokeChainKey>(chainKey: C): GetSpokeServiceType<C> {
@@ -180,6 +188,9 @@ export class SpokeService {
       }
       case 'NEAR': {
         return this.near satisfies GetSpokeServiceType<NearChainKey> as GetSpokeServiceType<C>;
+      }
+      case 'ALEO': {
+        return this.aleo satisfies GetSpokeServiceType<AleoChainKey> as GetSpokeServiceType<C>;
       }
       default: {
         const exhaustiveCheck: never = chainType; // The never type is used to ensure that the default case is exhaustive
@@ -370,6 +381,12 @@ export class SpokeService {
           const value = (await this.near.estimateGas(
             params as EstimateGasParams<NearChainKey>,
           )) satisfies GetEstimateGasReturnType<NearChainKey> as GetEstimateGasReturnType<C>;
+          return { ok: true, value };
+        }
+        case 'ALEO': {
+          const value = (await this.aleo.estimateGas(
+            params as EstimateGasParams<AleoChainKey>,
+          )) satisfies GetEstimateGasReturnType<AleoChainKey> as GetEstimateGasReturnType<C>;
           return { ok: true, value };
         }
         default: {
@@ -606,6 +623,14 @@ export class SpokeService {
           > as TxReturnType<K, R>;
           return { ok: true, value };
         }
+        case 'ALEO': {
+          const verify = await this.verifyDepositSimulation(params);
+          if (!verify.ok) return verify;
+          const value = (await this.aleo.deposit(
+            params as DepositParams<AleoChainKey, R>,
+          )) satisfies TxReturnType<AleoChainKey, R> as TxReturnType<K, R>;
+          return { ok: true, value };
+        }
         default: {
           const exhaustiveCheck: never = chainType;
           console.log(exhaustiveCheck);
@@ -686,6 +711,10 @@ export class SpokeService {
         }
         case 'NEAR': {
           const value = await this.near.getDeposit(params as GetDepositParams<NearChainKey>);
+          return { ok: true, value };
+        }
+        case 'ALEO': {
+          const value = await this.aleo.getDeposit(params as GetDepositParams<AleoChainKey>);
           return { ok: true, value };
         }
         default: {
@@ -817,6 +846,14 @@ export class SpokeService {
           > as TxReturnType<K, Raw>;
           return { ok: true, value };
         }
+        case 'ALEO': {
+          const verify = await this.verifySimulation(params);
+          if (!verify.ok) return verify;
+          const value = (await this.aleo.sendMessage(
+            params as SendMessageParams<AleoChainKey, Raw>,
+          )) as TxReturnType<AleoChainKey, Raw> as TxReturnType<K, Raw>;
+          return { ok: true, value };
+        }
         default: {
           const exhaustiveCheck: never = chainType;
           console.log(exhaustiveCheck);
@@ -929,6 +966,9 @@ export class SpokeService {
       if (isStacksChainKeyType(chainKey)) {
         return this.verifyReceiptStatus(this.stacks.waitForTransactionReceipt({ txHash, chainKey }));
       }
+      if (isAleoChainKeyType(chainKey)) {
+        return this.verifyReceiptStatus(this.aleo.waitForTransactionReceipt({ txHash, chainKey }));
+      }
 
       return { ok: true, value: true };
     } catch (error) {
@@ -1009,6 +1049,11 @@ export class SpokeService {
           return (await this.near.waitForTransactionReceipt(
             effectiveParams as WaitForTxReceiptParams<NearChainKey>,
           )) satisfies Result<WaitForTxReceiptReturnType<NearChainKey>> as Result<WaitForTxReceiptReturnType<C>>;
+        }
+        case 'ALEO': {
+          return (await this.aleo.waitForTransactionReceipt(
+            effectiveParams as WaitForTxReceiptParams<AleoChainKey>,
+          )) satisfies Result<WaitForTxReceiptReturnType<AleoChainKey>> as Result<WaitForTxReceiptReturnType<C>>;
         }
         default: {
           const exhaustiveCheck: never = chainType;

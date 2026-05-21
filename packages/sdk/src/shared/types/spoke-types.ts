@@ -1,5 +1,6 @@
 import type {
   Address,
+  AleoEoaAddress,
   GetTokenAddressType,
   Hex,
   HubAddress,
@@ -16,6 +17,7 @@ import type {
   NearRawTransactionReceipt,
   StacksRawTransactionReceipt,
   BitcoinRawTransactionReceipt,
+  AleoRawTransactionReceipt,
   ChainType,
   GetAddressType,
   EvmSpokeOnlyChainKey,
@@ -38,6 +40,10 @@ export type DepositParams<C extends SpokeChainKey, Raw extends boolean = boolean
   token: GetTokenAddressType<C>; // The original spoke chain address of the token to deposit
   amount: bigint; // The amount of tokens to deposit
   data: Hex; // The data to send with the deposit
+  feeAmount?: bigint; // Aleo-only: cross-chain fee amount passed as a transition input (defaults to 0)
+  aleoMode?: 'public' | 'private'; // Aleo-only: select transfer_*_public (default) vs transfer_*_private
+  aleoRecord?: string; // Aleo-only: required when aleoMode === 'private'. Plaintext credits.aleo or token_registry.aleo record consumed by the private transition.
+  aleoFallbackRecipient?: AleoEoaAddress; // Aleo-only: required when aleoMode === 'private'. Receives any change/refund from the private transition.
 } & WalletProviderSlot<C, Raw> &
   OptionalSkipSimulation;
 
@@ -98,7 +104,9 @@ export type GetTxReceiptType<C extends SpokeChainKey | ChainType> = GetChainType
                 ? StacksRawTransactionReceipt
                 : GetChainType<C> extends 'BITCOIN'
                   ? BitcoinRawTransactionReceipt
-                  : unknown;
+                  : GetChainType<C> extends 'ALEO'
+                    ? AleoRawTransactionReceipt
+                    : unknown;
 
 export type TxStatus = 'success' | 'failure' | 'timeout';
 export type WaitForTxReceiptParams<C extends SpokeChainKey> = {

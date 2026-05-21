@@ -174,6 +174,9 @@ export const moneyMarketSupportedTokens = {
   [ChainKeys.BITCOIN_MAINNET]: [
     spokeChainConfig[ChainKeys.BITCOIN_MAINNET].supportedTokens.BTC,
   ] as const satisfies XToken[],
+  [ChainKeys.ALEO_MAINNET]: [
+    spokeChainConfig[ChainKeys.ALEO_MAINNET].supportedTokens.ALEO,
+  ] as const satisfies XToken[],
 } as const satisfies Record<SpokeChainKey, readonly XToken[]>;
 
 export const moneyMarketReserveAssets = [

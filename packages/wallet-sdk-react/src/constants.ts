@@ -31,6 +31,11 @@ export const STELLAR_DEFAULT_SOROBAN_RPC_URL = 'https://rpc.ankr.com/stellar_sor
 // ─── NEAR ───────────────────────────────────────────────────────────────────
 export const NEAR_DEFAULT_RPC_URL = 'https://1rpc.io/near';
 
+// ─── Aleo ───────────────────────────────────────────────────────────────────
+export const ALEO_DEFAULT_AUTO_CONNECT = true;
+export const ALEO_DEFAULT_NETWORK = 'mainnet' as const;
+export const ALEO_DEFAULT_RPC_URL = 'https://api.provable.com/v2';
+
 // ─── Wallet metadata (install URLs + icons for extension-based wallets) ────
 // Keys are wallet-level, not per-connector: one OKX extension serves both
 // Bitcoin and EVM connectors, so metadata is shared.

@@ -1,4 +1,5 @@
 import type {
+  AleoChainKey,
   baseChainInfo,
   BitcoinChainKey,
   BitcoinRpcConfig,
@@ -18,6 +19,7 @@ import type {
   SuiChainKey,
 } from '@sodax/types';
 import type {
+  AleoWalletDefaults,
   BitcoinWalletDefaults,
   EvmWalletDefaults,
   IconWalletDefaults,
@@ -28,6 +30,7 @@ import type {
   StellarWalletDefaults,
   SuiWalletDefaults,
 } from '@sodax/wallet-sdk-core';
+
 import type { State as WagmiState } from 'wagmi';
 import type { WalletConnectParameters } from 'wagmi/connectors';
 import type { IXConnector } from './interfaces.js';
@@ -49,6 +52,7 @@ export type SolanaChainEntry = SimpleChainEntry<SolanaWalletDefaults>;
 export type SuiChainEntry = SimpleChainEntry<SuiWalletDefaults>;
 export type IconChainEntry = SimpleChainEntry<IconWalletDefaults>;
 export type NearChainEntry = SimpleChainEntry<NearWalletDefaults>;
+export type AleoChainEntry = SimpleChainEntry<AleoWalletDefaults>;
 
 // Chains with multi-field RPC config (horizon+soroban, rpc+radfi, indexer+grpc)
 // extend the existing `*RpcConfig` from @sodax/types instead.
@@ -95,6 +99,14 @@ export type SuiAdapterFields = {
   network?: 'mainnet' | 'testnet' | 'devnet';
 };
 
+/** `@provablehq/aleo-wallet-adaptor-react` provider settings. */
+export type AleoAdapterFields = {
+  /** Auto-connect previously connected Aleo wallet on mount. @default true */
+  autoConnect?: boolean;
+  /** Default network for the AleoWalletProvider. @default 'mainnet' */
+  network?: 'mainnet' | 'testnet';
+};
+
 // ─── Central chain registry ─────────────────────────────────────────────────
 // Single source of truth for per-chain-type data. Adding a new chain type =
 // add one entry here. `SodaxWalletConfig` and the per-key dispatchers below derive
@@ -119,6 +131,7 @@ export type ChainMeta = {
   BITCOIN: { keys: BitcoinChainKey; entry: BitcoinChainEntry; defaults: BitcoinWalletDefaults; adapter: {} };
   INJECTIVE: { keys: InjectiveChainKey; entry: InjectiveChainEntry; defaults: InjectiveWalletDefaults; adapter: {} };
   STACKS: { keys: StacksChainKey; entry: StacksChainEntry; defaults: StacksWalletDefaults; adapter: {} };
+  ALEO: { keys: AleoChainKey; entry: AleoChainEntry; defaults: AleoWalletDefaults; adapter: AleoAdapterFields };
 };
 
 // ─── Derived types — change `ChainMeta` and these update automatically ─────
@@ -161,6 +174,7 @@ export type InjectiveTypeConfig = ChainTypeConfig<'INJECTIVE'>;
 export type IconTypeConfig = ChainTypeConfig<'ICON'>;
 export type NearTypeConfig = ChainTypeConfig<'NEAR'>;
 export type StacksTypeConfig = ChainTypeConfig<'STACKS'>;
+export type AleoTypeConfig = ChainTypeConfig<'ALEO'>;
 
 /** Top-level config for `<SodaxWalletProvider>`. Omitted chain-type slots are not mounted. */
 export type SodaxWalletConfig = {

@@ -71,6 +71,7 @@ export const availableChains: ChainUI[] = [
   { id: ChainKeys.HYPEREVM_MAINNET, name: 'Hyper', icon: '/chain/hyper.png' },
   { id: ChainKeys.KAIA_MAINNET, name: 'Kaia', icon: '/chain/0x2019.kaia.png' },
   { id: ChainKeys.REDBELLY_MAINNET, name: 'Redbelly', icon: '/chain/redbelly.png' },
+  { id: ChainKeys.ALEO_MAINNET, name: 'Aleo', icon: '/chain/aleo.png' },
 ];
 
 /**

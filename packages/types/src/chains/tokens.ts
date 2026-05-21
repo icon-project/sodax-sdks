@@ -2106,6 +2106,27 @@ export const kaiaSupportedTokens = {
   },
 } as const satisfies Record<string, XToken>;
 
+export const aleoSupportedTokens = {
+  ALEO: {
+    symbol: 'ALEO',
+    name: 'Aleo',
+    decimals: 6,
+    address: '3443843282313283355522573239085696902919850365217539366784739393210722344986',
+    chainKey: ChainKeys.ALEO_MAINNET,
+    hubAsset: '0xEd7c473183e66c933e355da282481D464Dc11fc5',
+    vault: '0x',
+  },
+  VUSDC: {
+    symbol: 'VUSDC',
+    name: 'VUSDC', //USDC provided by verulink bridge
+    decimals: 6,
+    address: '6088188135219746443092391282916151282477828391085949070550825603498725268775',
+    chainKey: ChainKeys.ALEO_MAINNET,
+    hubAsset: '0x72abd9b7ed000ed51475111ddb380f783ca79aec',
+    vault: '0x',
+  },
+} as const satisfies Record<string, XToken>;
+
 export const stacksSupportedTokens = {
   STX: {
     symbol: 'STX',
@@ -2177,4 +2198,5 @@ export const supportedTokensByChain = {
   [ChainKeys.ETHEREUM_MAINNET]: ethereumSupportedTokens,
   [ChainKeys.KAIA_MAINNET]: kaiaSupportedTokens,
   [ChainKeys.STACKS_MAINNET]: stacksSupportedTokens,
+  [ChainKeys.ALEO_MAINNET]: aleoSupportedTokens,
 } as const satisfies Record<ChainKey, Record<string, XToken>>;

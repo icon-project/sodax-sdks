@@ -42,6 +42,24 @@ catalogs:
     '@mysten/wallet-standard':
       specifier: 0.15.6
       version: 0.15.6
+    '@provablehq/aleo-types':
+      specifier: 0.3.0-alpha.3
+      version: 0.3.0-alpha.3
+    '@provablehq/aleo-wallet-adaptor-core':
+      specifier: 0.3.0-alpha.1
+      version: 0.3.0-alpha.1
+    '@provablehq/aleo-wallet-adaptor-react':
+      specifier: 0.3.0-alpha.1
+      version: 0.3.0-alpha.1
+    '@provablehq/aleo-wallet-adaptor-shield':
+      specifier: 0.3.0-alpha.1
+      version: 0.3.0-alpha.1
+    '@provablehq/aleo-wallet-standard':
+      specifier: 0.3.0-alpha.1
+      version: 0.3.0-alpha.1
+    '@provablehq/sdk':
+      specifier: 0.9.17
+      version: 0.9.17
     '@solana/spl-token':
       specifier: 0.4.9
       version: 0.4.9
@@ -483,6 +501,9 @@ importers:
       '@pancakeswap/v3-sdk':
         specifier: ^3.9.7
         version: 3.10.0(bufferutil@4.1.0)(encoding@0.1.13)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.5.4)(utf-8-validate@6.0.6)(zod@3.25.76)
+      '@provablehq/sdk':
+        specifier: 'catalog:'
+        version: 0.9.17
       '@sodax/types':
         specifier: workspace:*
         version: link:../types
@@ -637,6 +658,15 @@ importers:
       '@mysten/wallet-standard':
         specifier: 'catalog:'
         version: 0.15.6(typescript@5.5.4)
+      '@provablehq/aleo-types':
+        specifier: 'catalog:'
+        version: 0.3.0-alpha.3
+      '@provablehq/aleo-wallet-standard':
+        specifier: 'catalog:'
+        version: 0.3.0-alpha.1
+      '@provablehq/sdk':
+        specifier: 'catalog:'
+        version: 0.9.17
       '@sodax/types':
         specifier: workspace:*
         version: link:../types
@@ -746,6 +776,24 @@ importers:
       '@mysten/sui':
         specifier: 'catalog:'
         version: 1.21.2(typescript@5.5.4)
+      '@provablehq/aleo-types':
+        specifier: 'catalog:'
+        version: 0.3.0-alpha.3
+      '@provablehq/aleo-wallet-adaptor-core':
+        specifier: 'catalog:'
+        version: 0.3.0-alpha.1
+      '@provablehq/aleo-wallet-adaptor-react':
+        specifier: 'catalog:'
+        version: 0.3.0-alpha.1(react-dom@19.1.4(react@19.1.4))(react@19.1.4)
+      '@provablehq/aleo-wallet-adaptor-shield':
+        specifier: 'catalog:'
+        version: 0.3.0-alpha.1
+      '@provablehq/aleo-wallet-standard':
+        specifier: 'catalog:'
+        version: 0.3.0-alpha.1
+      '@provablehq/sdk':
+        specifier: 'catalog:'
+        version: 0.9.17
       '@sodax/types':
         specifier: workspace:*
         version: link:../types
@@ -2834,6 +2882,33 @@ packages:
 
   '@protobufjs/utf8@1.1.0':
     resolution: {integrity: sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw==}
+
+  '@provablehq/aleo-types@0.3.0-alpha.1':
+    resolution: {integrity: sha512-DoW4jHF7nqqbvqFbCK0k1Ei5iIMjA6Yq+3A/5Y79d3Uhw9hzvPjASrWt2e40/6A8TBaSVboJ4Z1huaQYWOBBuA==}
+
+  '@provablehq/aleo-types@0.3.0-alpha.3':
+    resolution: {integrity: sha512-8oQYDfUXn7hOdF2MOXit94j+OWT/MmYq5Hjhfrqv8Ws4/XrqHmRb7mcMVwVobSC5m8qLz7ew9Rg3mvc1pMkqDQ==}
+
+  '@provablehq/aleo-wallet-adaptor-core@0.3.0-alpha.1':
+    resolution: {integrity: sha512-+1ruZ7zpGh35BipFeWdkxP1BIKsT3rE0IiW/pe3o3x3qHLPGxpsoZ1AX6uA3O7k1ckTYNqlH9JucGBfOpD5KDQ==}
+
+  '@provablehq/aleo-wallet-adaptor-react@0.3.0-alpha.1':
+    resolution: {integrity: sha512-SSWOngt42DhjEe1bEe9Rxnz/b/4qvWJxkal0fkYoULhrRapRVQ1YtTU8o01SX/K6eo+F4p1Qn87T3A0Y5BbT4w==}
+    peerDependencies:
+      react: ^18.0.0
+      react-dom: ^18.0.0
+
+  '@provablehq/aleo-wallet-adaptor-shield@0.3.0-alpha.1':
+    resolution: {integrity: sha512-0nnSs8FNuDK/8Tt3X0mMQ/UVL36N+wKVxVrpdy2kAj1bnKH4+mCJmzdWG20LjEXd0ksyIlk7/CVN3dPJSGYdCQ==}
+
+  '@provablehq/aleo-wallet-standard@0.3.0-alpha.1':
+    resolution: {integrity: sha512-D5A2r4X2smlx7dO7fnjVfh/RGZgxYeTkjCS4PZRI/GRpj81uNEu+6tDyrPqoWzcNM8bV3pAV87eUT41KeytJ9Q==}
+
+  '@provablehq/sdk@0.9.17':
+    resolution: {integrity: sha512-YfBfXHv/lJBL4eVVB0KYuLDJiGqWc8Be5kzYUHLq6cDO0Xl4JS3Mvsem+PGNFPDFDPDEt1cTperZTl6NVLcxnQ==}
+
+  '@provablehq/wasm@0.9.18':
+    resolution: {integrity: sha512-wNOHQnLM/et8oAevFSvQrVCvKfQGQQZBBAp8335/BM+CjC2k+ft5PlqPHuLrRb1K0XrKe3b9lSa0NQsO8aND4g==}
 
   '@radix-ui/number@1.1.1':
     resolution: {integrity: sha512-MkKCwxlXTgz6CFoJx3pCwn07GKp36+aZyu/u2Ln2VrA5DcdyCZkASEDBTd8x5whTQQL5CiYf4prXKLcgQdv29g==}
@@ -6263,6 +6338,9 @@ packages:
     resolution: {integrity: sha512-FQN4MRfuJeHf7cBbBMJFXhKSDq+2kAArBlmRBvcvFE5BB1HZKXtSFASDhdlz9zOYwxh8lDdnvmMOe/+5cdoEdg==}
     engines: {node: '>= 0.8'}
 
+  comlink@4.4.2:
+    resolution: {integrity: sha512-OxGdvBmJuNKSCMO4NTl1L47VRp6xn2wG4F/2hYzB6tiCb709otOxtEYCSvK80PtjODfXXZu8ds+Nw5kVCjqd2g==}
+
   commander@10.0.1:
     resolution: {integrity: sha512-y4Mg2tXshplEbSGzx7amzPwKKOCGuoSRP/CjEdwwk0FOGlUbq6lKuoyDZTNZkmxHdJtp54hdfY/JUrdL7Xfdug==}
     engines: {node: '>=14'}
@@ -7757,6 +7835,12 @@ packages:
   libsodium-wrappers-sumo@0.7.16:
     resolution: {integrity: sha512-gR0JEFPeN3831lB9+ogooQk0KH4K5LSMIO5Prd5Q5XYR2wHFtZfPg0eP7t1oJIWq+UIzlU4WVeBxZ97mt28tXw==}
 
+  libsodium-wrappers@0.8.4:
+    resolution: {integrity: sha512-mu8aAWucZjTB5O/BtGXtW4e1agy7uHxNYG7zPthmmD1jU43LCDmSWZLN4JhflbdPXj3yDO4lxM1O9hLDgIOXDw==}
+
+  libsodium@0.8.4:
+    resolution: {integrity: sha512-lMcYaRi0zcs7tarATsQUYC7rstliIXZuoq0c6zXSgNtSNtdvBgkSegjWhpMJAXzKX3SUSwIp7+zEsob+j3LuRw==}
+
   lie@3.1.1:
     resolution: {integrity: sha512-RiNhHysUjhrDQntfYSfY4MU24coXXdEOgw9WGcKHNeEwffDYbF//u87M1EWaMGzuFoSbqW0C9C6lEEhDOAswfw==}
 
@@ -8143,6 +8227,11 @@ packages:
   mime@1.6.0:
     resolution: {integrity: sha512-x0Vn8spI+wuJ1O6S7gnbaQg8Pxh4NNHb7KSINmEWKiPE4RKOplvijn+NkmYmmRgP68mc70j2EbeTFRsrswaQeg==}
     engines: {node: '>=4'}
+    hasBin: true
+
+  mime@4.1.0:
+    resolution: {integrity: sha512-X5ju04+cAzsojXKes0B/S4tcYtFAJ6tTMuSPBEn9CPGlrWr8Fiw7qYeLT0XyH80HSoAoqWCaz+MWKh22P7G1cw==}
+    engines: {node: '>=16'}
     hasBin: true
 
   mimic-fn@2.1.0:
@@ -10399,6 +10488,10 @@ packages:
   xmlhttprequest-ssl@2.1.2:
     resolution: {integrity: sha512-TEU+nJVUUnA4CYJFLvK5X9AOeH4KvDvhIfm0vV1GaQRtchnG0hgK5p8hw/xjv8cunWYCsiPCSDzObPyhEwq3KQ==}
     engines: {node: '>=0.4.0'}
+
+  xmlhttprequest-ssl@4.0.0:
+    resolution: {integrity: sha512-b7DXzbCm8VWmII2mQiQHy5VG1L6YBUnNxuCooldWpMUXTwa08uXEz1q5Nv6wlULnSI5GiHuwBIq6pNJrqRh/8Q==}
+    engines: {node: '>=13.0.0'}
 
   xrpl@4.4.3:
     resolution: {integrity: sha512-vi2OjuNkiaP8nv1j+nqHp8GZwwEjO6Y8+j/OuVMg6M4LwXEwyHdIj33dlg7cyY1Lw5+jb9HqFOQvABhaywVbTQ==}
@@ -13667,6 +13760,46 @@ snapshots:
   '@protobufjs/pool@1.1.0': {}
 
   '@protobufjs/utf8@1.1.0': {}
+
+  '@provablehq/aleo-types@0.3.0-alpha.1': {}
+
+  '@provablehq/aleo-types@0.3.0-alpha.3': {}
+
+  '@provablehq/aleo-wallet-adaptor-core@0.3.0-alpha.1':
+    dependencies:
+      '@provablehq/aleo-types': 0.3.0-alpha.1
+      '@provablehq/aleo-wallet-standard': 0.3.0-alpha.1
+
+  '@provablehq/aleo-wallet-adaptor-react@0.3.0-alpha.1(react-dom@19.1.4(react@19.1.4))(react@19.1.4)':
+    dependencies:
+      '@provablehq/aleo-types': 0.3.0-alpha.1
+      '@provablehq/aleo-wallet-adaptor-core': 0.3.0-alpha.1
+      '@provablehq/aleo-wallet-standard': 0.3.0-alpha.1
+      react: 19.1.4
+      react-dom: 19.1.4(react@19.1.4)
+
+  '@provablehq/aleo-wallet-adaptor-shield@0.3.0-alpha.1':
+    dependencies:
+      '@provablehq/aleo-types': 0.3.0-alpha.1
+      '@provablehq/aleo-wallet-adaptor-core': 0.3.0-alpha.1
+      '@provablehq/aleo-wallet-standard': 0.3.0-alpha.1
+
+  '@provablehq/aleo-wallet-standard@0.3.0-alpha.1':
+    dependencies:
+      '@provablehq/aleo-types': 0.3.0-alpha.1
+      eventemitter3: 5.0.4
+
+  '@provablehq/sdk@0.9.17':
+    dependencies:
+      '@provablehq/wasm': 0.9.18
+      '@scure/base': 2.0.0
+      comlink: 4.4.2
+      core-js: 3.48.0
+      libsodium-wrappers: 0.8.4
+      mime: 4.1.0
+      xmlhttprequest-ssl: 4.0.0
+
+  '@provablehq/wasm@0.9.18': {}
 
   '@radix-ui/number@1.1.1': {}
 
@@ -20133,6 +20266,8 @@ snapshots:
     dependencies:
       delayed-stream: 1.0.0
 
+  comlink@4.4.2: {}
+
   commander@10.0.1: {}
 
   commander@12.1.0: {}
@@ -21863,6 +21998,12 @@ snapshots:
     dependencies:
       libsodium-sumo: 0.7.16
 
+  libsodium-wrappers@0.8.4:
+    dependencies:
+      libsodium: 0.8.4
+
+  libsodium@0.8.4: {}
+
   lie@3.1.1:
     dependencies:
       immediate: 3.0.6
@@ -22368,6 +22509,8 @@ snapshots:
       mime-db: 1.52.0
 
   mime@1.6.0: {}
+
+  mime@4.1.0: {}
 
   mimic-fn@2.1.0: {}
 
@@ -24914,6 +25057,8 @@ snapshots:
       utf-8-validate: 6.0.6
 
   xmlhttprequest-ssl@2.1.2: {}
+
+  xmlhttprequest-ssl@4.0.0: {}
 
   xrpl@4.4.3(bufferutil@4.1.0)(utf-8-validate@5.0.10):
     dependencies:

@@ -106,6 +106,7 @@ The `package.json` `exports` field maps `./xchains/*` to `dist/xchains/*/index.{
 | `@sodax/wallet-sdk-react/xchains/icon` | `IconXService`, `IconHanaXConnector`, `CHAIN_INFO`, `SupportedChainId` |
 | `@sodax/wallet-sdk-react/xchains/near` | `NearXService`, `NearXConnector` |
 | `@sodax/wallet-sdk-react/xchains/stacks` | `StacksXService`, `StacksXConnector`, `STACKS_PROVIDERS`, `useStacksXConnectors`, type `StacksProviderConfig` |
+| `@sodax/wallet-sdk-react/xchains/aleo` | `AleoXService`, `AleoXConnector` |
 
 `StellarXService`, `XverseXConnector`, `BtcWalletAddressType` are **also** re-exported from the barrel as `export type` (no runtime class) — those imports work either way.
 
@@ -124,6 +125,7 @@ The `package.json` `exports` field maps `./xchains/*` to `dist/xchains/*/index.{
 | Bitcoin | `UnisatXConnector`, `XverseXConnector`, `OKXXConnector` | `window.unisat`, `window.XverseProviders`, `window.okxwallet.bitcoin` | `sats-connect` (Xverse), connector-specific (Unisat, OKX) |
 | NEAR | `NearXConnector` | `@hot-labs/near-connect` | `near-api-js` |
 | Stacks | `StacksXConnector` × N (one per registered provider) | provider list + `window.LeatherProvider` probe | `@stacks/connect` |
+| Aleo | `AleoXConnector` (metadata wrapper) | `@provablehq/aleo-wallet-adaptor-react` (Shield) | `@provablehq/sdk` |
 
 The `BitcoinXConnector` is an abstract base — concrete subclasses (Unisat, Xverse, OKX) implement `signEcdsaMessage` / `signBip322Message` per wallet's API. See [`SIGN_MESSAGE.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/SIGN_MESSAGE.md) for the dispatch logic.
 

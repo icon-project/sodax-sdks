@@ -52,7 +52,7 @@ export function App({ children }: { children: React.ReactNode }) {
 }
 ```
 
-`SodaxWalletProvider` mounts the EVM (wagmi), Solana (`@solana/wallet-adapter-react`), and Sui (`@mysten/dapp-kit`) React providers conditionally based on which slots are present, then registers chain services for non-provider chains (Bitcoin, ICON, Injective, Stellar, NEAR, Stacks).
+`SodaxWalletProvider` mounts the EVM (wagmi), Solana (`@solana/wallet-adapter-react`), Sui (`@mysten/dapp-kit`), and Aleo (`@provablehq/aleo-wallet-adaptor-react`) React providers conditionally based on which slots are present, then registers chain services for non-provider chains (Bitcoin, ICON, Injective, Stellar, NEAR, Stacks).
 
 ---
 
@@ -71,8 +71,9 @@ Top-level keys are `ChainType` strings — one slot per chain family. **Every sl
 | `BITCOIN` | (no React adapter) | — | `BitcoinRpcConfig & { defaults? }` per `BitcoinChainKey` |
 | `INJECTIVE` | (no React adapter) | — | `InjectiveRpcConfig & { defaults? }` per `InjectiveChainKey` |
 | `STACKS` | (no React adapter) | — | `StacksNetworkName \| (StacksNetworkLike & { defaults? })` |
+| `ALEO` | `@provablehq/aleo-wallet-adaptor-react` | `autoConnect`, `network` | `{ rpcUrl?, defaults? }` per `AleoChainKey` |
 
-**Provider-managed vs non-provider** — EVM, Solana, and Sui need React context providers from their native SDKs (Hydrator components sync state into the Zustand store). The remaining six chains use direct browser-extension APIs and skip the React adapter layer; their actions are registered during `initChainServices()` after the provider mounts.
+**Provider-managed vs non-provider** — EVM, Solana, Sui, and Aleo need React context providers from their native SDKs (Hydrator components sync state into the Zustand store). The remaining five chains use direct browser-extension APIs and skip the React adapter layer; their actions are registered during `initChainServices()` after the provider mounts.
 
 Each slot also accepts an optional `connectors?: IXConnector[]` array to override the default connectors registered by `chainRegistry`.
 
@@ -112,7 +113,7 @@ Each slot's `chains` field is keyed by `ChainKey` constants. The entry shape var
 
 ### Simple chains — `{ rpcUrl?, defaults? }`
 
-EVM, Solana, Sui, ICON, and NEAR share the simple shape — single RPC URL plus optional wallet provider defaults.
+EVM, Solana, Sui, ICON, NEAR, and Aleo share the simple shape — single RPC URL plus optional wallet provider defaults.
 
 ```typescript
 import { ChainKeys } from '@sodax/types';
@@ -204,6 +205,7 @@ The `defaults` field on each chain entry forwards directly to `wallet-sdk-core`'
 | `STACKS` | `StacksWalletDefaults` — `network`, `postConditionMode` |
 | `BITCOIN` | `BitcoinWalletDefaults` — `defaultFinalize` |
 | `NEAR` | `NearWalletDefaults` — `throwOnFailure`, `waitUntil`, `gasDefault`, `depositDefault` |
+| `ALEO` | `AleoWalletDefaults` — `priorityFee`, `privateFee`, `delegateUrl`, `waitForReceipt` |
 
 Defaults merge **shallowly** — top-level keys only. Nested objects (e.g. `sendTransaction: { gas, maxFeePerGas }`) are replaced wholesale, not deep-merged. See [`packages/sdk/docs/WALLET_PROVIDERS.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/WALLET_PROVIDERS.md) for full per-chain config reference.
 

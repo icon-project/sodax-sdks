@@ -11,6 +11,7 @@ export const ChainTypeArr = [
   'STACKS',
   'NEAR',
   'BITCOIN',
+  'ALEO',
 ] as const;
 
 export const ChainKeys = {
@@ -34,6 +35,7 @@ export const ChainKeys = {
   REDBELLY_MAINNET: 'redbelly',
   KAIA_MAINNET: '0x2019.kaia',
   STACKS_MAINNET: 'stacks',
+  ALEO_MAINNET: 'aleo',
 } as const;
 
 export type ChainKey = (typeof ChainKeys)[keyof typeof ChainKeys];

@@ -14,7 +14,7 @@ import type {
   IntentRelayRequest,
   WaitUntilIntentExecutedPayload,
 } from '../../types/relay-types.js';
-import { isBitcoinChainKeyType, isSolanaChainKeyType } from '../../guards.js';
+import { isAleoChainKeyType, isBitcoinChainKeyType, isSolanaChainKeyType } from '../../guards.js';
 
 export type { RelayAction, RelayExtraData, IntentDeliveryInfo, IntentRelayRequest, WaitUntilIntentExecutedPayload };
 
@@ -388,8 +388,9 @@ export async function relayTxAndWaitPacket(params: RelayAndWaitParams): Promise<
     const { srcTxHash, data, chainKey, relayerApiEndpoint, timeout = DEFAULT_RELAY_TX_TIMEOUT } = params;
     const intentRelayChainId = getIntentRelayChainId(chainKey).toString();
 
-    const isSplitTxChain = isSolanaChainKeyType(chainKey) || isBitcoinChainKeyType(chainKey);
-    invariant(!isSplitTxChain || data !== undefined, 'Data is required for Solana and Bitcoin chain keys');
+    const isSplitTxChain =
+      isSolanaChainKeyType(chainKey) || isBitcoinChainKeyType(chainKey) || isAleoChainKeyType(chainKey);
+    invariant(!isSplitTxChain || data !== undefined, 'Data is required for Solana, Bitcoin, and Aleo chain keys');
 
     const submitPayload: IntentRelayRequest<'submit'> = {
       action: 'submit',

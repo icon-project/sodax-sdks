@@ -99,6 +99,7 @@ Adapter-field types (only chains with React adapters):
 | `EvmAdapterFields` | type |
 | `SolanaAdapterFields` | type |
 | `SuiAdapterFields` | type |
+| `AleoAdapterFields` | type |
 
 ### Hook option / result types
 
@@ -112,11 +113,12 @@ Concrete chain classes live behind sub-paths. Default to barrel imports; opt int
 
 ### Default pattern (most chains)
 
-`/xchains/{bitcoin, evm, icon, injective, near, solana, stacks, sui}` re-export the chain's `XService` + `XConnector` classes — `EvmXService`/`EvmXConnector`, `SolanaXService`/`SolanaXConnector`, `BitcoinXService`/`BitcoinXConnector`, `StacksXService`/`StacksXConnector`, etc. Icon also exports `IconHanaXConnector` (the connector for the Hana wallet).
+`/xchains/{aleo, bitcoin, evm, icon, injective, near, solana, stacks, sui}` re-export the chain's `XService` + `XConnector` classes — `EvmXService`/`EvmXConnector`, `SolanaXService`/`SolanaXConnector`, `AleoXService`/`AleoXConnector`, `BitcoinXService`/`BitcoinXConnector`, `StacksXService`/`StacksXConnector`, etc. Icon also exports `IconHanaXConnector` (the connector for the Hana wallet).
 
 ```ts
 // @ai-snippets-skip
 import { EvmXService, EvmXConnector } from '@sodax/wallet-sdk-react/xchains/evm';
+import { AleoXService, AleoXConnector } from '@sodax/wallet-sdk-react/xchains/aleo';
 import { IconHanaXConnector } from '@sodax/wallet-sdk-react/xchains/icon';
 ```
 

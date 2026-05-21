@@ -44,6 +44,12 @@ export default defineConfig(({ command, mode }: ConfigEnv) => {
 
     optimizeDeps: {
       include: ['buffer'],
+      esbuildOptions: {
+        target: 'esnext',
+      },
+    },
+    build: {
+      target: 'esnext',
     },
     server: {
       open: true,

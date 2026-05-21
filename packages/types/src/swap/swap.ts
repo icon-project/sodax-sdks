@@ -233,6 +233,9 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.STACKS_MAINNET].supportedTokens.sBTC,
     spokeChainConfig[ChainKeys.STACKS_MAINNET].supportedTokens.USDC,
   ] as const satisfies XToken[],
+  [ChainKeys.ALEO_MAINNET]: [
+    spokeChainConfig[ChainKeys.ALEO_MAINNET].supportedTokens.ALEO,
+  ] as const satisfies XToken[],
 } as const satisfies Record<SpokeChainKey, readonly XToken[]>;
 
 export type SwapsConfig = {

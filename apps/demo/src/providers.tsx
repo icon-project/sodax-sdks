@@ -29,6 +29,7 @@ const rpcConfig: RpcConfig = {
     radfiUmsUrl: process.env.RADFI_UMS_URL ?? 'https://ums.radfi.co/api',
     rpcUrl: process.env.BITCOIN_RPC_URL ?? 'https://mempool.space/api',
   },
+  [ChainKeys.ALEO_MAINNET]: process.env.ALEO_RPC_URL ?? 'https://api.provable.com/v2',
 };
 
 const configMap: Record<SolverEnv, SolverConfig> = {

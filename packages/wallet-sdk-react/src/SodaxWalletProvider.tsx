@@ -7,6 +7,7 @@ import { WalletConfigProvider } from './context/WalletConfigContext.js';
 import { EvmProvider } from './providers/evm/index.js';
 import { SolanaProvider } from './providers/solana/index.js';
 import { SuiProvider } from './providers/sui/index.js';
+import { AleoProvider } from './providers/aleo/index.js';
 import { useInitChainServices } from './hooks/useInitChainServices.js';
 
 export type SodaxWalletProviderProps = {
@@ -53,6 +54,10 @@ export const SodaxWalletProvider = ({ children, config }: SodaxWalletProviderPro
 
   if (frozen.SUI) {
     content = <SuiProvider config={frozen.SUI}>{content}</SuiProvider>;
+  }
+
+  if (frozen.ALEO) {
+    content = <AleoProvider config={frozen.ALEO}>{content}</AleoProvider>;
   }
 
   if (frozen.EVM) {
