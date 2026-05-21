@@ -25,8 +25,8 @@ export class AleoXConnector extends XConnector {
 
   async disconnect(): Promise<void> {}
 
-  public override get icon(): string {
-    return this.wallet?.adapter?.icon!;
+  public override get icon(): string | undefined {
+    return this.wallet?.adapter.icon;
   }
 
   public override get isInstalled(): boolean {
