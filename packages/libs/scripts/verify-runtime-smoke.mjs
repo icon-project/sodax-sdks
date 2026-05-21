@@ -131,6 +131,21 @@ for (const subpath of Object.keys(EXPECTED_EXPORTS)) {
   }
 }
 
+// Construct WalletStrategy via CJS too — confirms the bundled hardware-wallet
+// stubs survive in the CJS output and the ctor runs identically to ESM.
+try {
+  const injCjs = require(`${distRoot}/injective/wallet-strategy/index.cjs`);
+  const ws = new injCjs.WalletStrategy({
+    chainId: 'injective-1',
+    strategies: {},
+    evmOptions: { evmChainId: 1, rpcUrl: 'https://ethereum-rpc.publicnode.com' },
+  });
+  if (ws) ok('WalletStrategy ctor runs via CJS (parity with ESM)');
+  else fail('WalletStrategy CJS ctor returned falsy');
+} catch (e) {
+  fail(`WalletStrategy CJS ctor threw: ${e.message}`);
+}
+
 if (failed) {
   console.error('\nverify-runtime-smoke: FAILED');
   process.exit(1);
