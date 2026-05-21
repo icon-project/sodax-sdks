@@ -169,7 +169,7 @@ export type InjectiveTypeConfig = ChainTypeConfig<'INJECTIVE'>;
 export type IconTypeConfig = ChainTypeConfig<'ICON'>;
 export type NearTypeConfig = ChainTypeConfig<'NEAR'>;
 export type StacksTypeConfig = ChainTypeConfig<'STACKS'>;
-export type AleoTypeConfig = ChainTypeConfig<'ALEO'>
+export type AleoTypeConfig = ChainTypeConfig<'ALEO'>;
 
 /** Top-level config for `<SodaxWalletProvider>`. Omitted chain-type slots are not mounted. */
 export type SodaxWalletConfig = {
