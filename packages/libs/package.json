@@ -71,7 +71,7 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "node scripts/verify-stacks-connect-ui-stub.mjs && tsup",
+    "build": "node scripts/verify-stacks-connect-ui-stub.mjs && tsup && node scripts/verify-dist-self-contained.mjs",
     "dev": "tsup --watch",
     "checkTs": "tsc --noEmit",
     "pretty": "biome format . --write",
@@ -80,13 +80,8 @@
     "check-exports": "attw --pack",
     "check:circular-deps": "madge --circular --exclude 'types/dist' $(find ./src -name '*.ts')",
     "check:no-duplicate-bundling": "node scripts/verify-no-duplicate-bundling.mjs",
+    "check:dist-self-contained": "node scripts/verify-dist-self-contained.mjs",
     "check:knip": "knip"
-  },
-  "dependencies": {
-    "@injectivelabs/wallet-strategy": "catalog:",
-    "@stacks/connect": "catalog:",
-    "@stacks/network": "catalog:",
-    "@stacks/transactions": "catalog:"
   },
   "peerDependencies": {
     "libsodium-wrappers-sumo": "^0.7.11"
@@ -97,6 +92,10 @@
     }
   },
   "devDependencies": {
+    "@injectivelabs/wallet-strategy": "catalog:",
+    "@stacks/connect": "catalog:",
+    "@stacks/network": "catalog:",
+    "@stacks/transactions": "catalog:",
     "@types/node": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",

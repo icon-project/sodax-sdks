@@ -513,6 +513,13 @@ importers:
 
   packages/libs:
     dependencies:
+      libsodium-wrappers-sumo:
+        specifier: ^0.7.11
+        version: 0.7.16
+    devDependencies:
+      '@arethetypeswrong/cli':
+        specifier: 'catalog:'
+        version: 0.17.4
       '@injectivelabs/wallet-strategy':
         specifier: 'catalog:'
         version: 1.18.14(@ethersproject/abi@5.8.0)(@ethersproject/rlp@5.8.0)(@ethersproject/sha2@5.8.0)(@ethersproject/transactions@5.8.0)(@react-native-async-storage/async-storage@1.24.0(react-native@0.85.3(@babel/core@7.29.0)(@types/react@19.2.15)(bufferutil@4.1.0)(react@19.0.0)(utf-8-validate@5.0.10)))(@solana/sysvars@5.5.1(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.5.4))(@types/react@19.2.15)(axios@1.13.2)(bignumber.js@9.3.1)(bufferutil@4.1.0)(ethers@6.16.0(bufferutil@4.1.0)(utf-8-validate@5.0.10))(fastestsmallesttextencoderdecoder@1.0.22)(immer@11.1.8)(react-native@0.85.3(@babel/core@7.29.0)(@types/react@19.2.15)(bufferutil@4.1.0)(react@19.0.0)(utf-8-validate@5.0.10))(react@19.0.0)(tslib@2.8.1)(typescript@5.5.4)(use-sync-external-store@1.6.0(react@19.0.0))(utf-8-validate@5.0.10)(ws@8.20.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))(zod@3.25.76)
@@ -525,13 +532,6 @@ importers:
       '@stacks/transactions':
         specifier: 'catalog:'
         version: 7.3.1
-      libsodium-wrappers-sumo:
-        specifier: ^0.7.11
-        version: 0.7.16
-    devDependencies:
-      '@arethetypeswrong/cli':
-        specifier: 'catalog:'
-        version: 0.17.4
       '@types/node':
         specifier: 'catalog:'
         version: 22.18.1
