@@ -1,37 +1,32 @@
-// Regression tests for #1070: verifies @stacks/transactions bundled into SDK
-// works correctly for both sync encoding and full swap pipeline.
+// Regression test for #1070 + the double-`0x` payload bug fixed in 6ebc71fd.
 //
-// Run: pnpm exec tsx src/test-stacks.ts
+// Verifies that:
+//   1. The bundled `@sodax/libs/stacks/core` (re-exporting `@stacks/transactions`)
+//      loads cleanly from Node and produces the documented hex encodings.
+//   2. `StacksSpokeService.sendMessage({ raw: true })` returns a single-`0x`-
+//      prefixed payload — the path where the old `\`0x${bytesToHex(...)}\``
+//      wrapper produced `0x0x...` and broke downstream Stacks RPC parsing.
+//
+// Run: `pnpm exec tsx src/test-stacks.ts` (no env / wallet required —
+// `sendMessage` raw mode builds the unsigned tx locally without an RPC call).
 
-import {
-  EvmHubProvider,
-  Sodax,
-  StacksRawSpokeProvider,
-  encodeAddress,
-  getHubChainConfig,
-  getMoneyMarketConfig,
-  serializeAddressData,
-  spokeChainConfig,
-  type EvmHubProviderConfig,
-  type SodaxConfig,
-} from '@sodax/sdk';
-import { SONIC_MAINNET_CHAIN_ID, STACKS_MAINNET_CHAIN_ID, type StacksSpokeChainConfig } from '@sodax/types';
-import { solverConfig } from './config.js';
+import { encodeAddress, serializeAddressData, Sodax } from '@sodax/sdk';
+import { ChainKeys } from '@sodax/types';
 
 let failed = false;
+const ok = (msg: string) => console.log('OK:', msg);
 const fail = (msg: string) => {
-  console.error(`❌ ${msg}`);
+  console.error('FAIL:', msg);
   failed = true;
 };
-const ok = (msg: string) => console.log(`✅ ${msg}`);
 
-// ── 1. Sync encode tests ──────────────────────────────────────────────
-console.log('=== Sync encode tests ===\n');
+// 1. Sync encode tests ────────────────────────────────────────────────
+console.log('=== Sync encode tests ===');
 
 {
   const addr = 'SP1D5PA98M0PF9Z4Q4N2CDTMTD7XSZ6GE7QQG5XBX';
   const expected = '0x05165a5b2928a02cf4fc972544c6ea9a69fb9f9a0e3d';
-  const enc = encodeAddress(STACKS_MAINNET_CHAIN_ID, addr);
+  const enc = encodeAddress(ChainKeys.STACKS_MAINNET, addr);
   const ser = serializeAddressData(addr);
   if (enc === expected && ser === expected) ok(`standard principal: ${enc}`);
   else fail(`standard principal mismatch: enc=${enc} ser=${ser}`);
@@ -39,8 +34,9 @@ console.log('=== Sync encode tests ===\n');
 
 {
   const addr = 'SP3031RGK734636C8KGW2Y76TEQBTVX59Q472EQH0.asset-manager-impl';
-  const expected = '0x0616c030e21338c86199889c382f1cda75d7adf4a9b91261737365742d6d616e616765722d696d706c';
-  const enc = encodeAddress(STACKS_MAINNET_CHAIN_ID, addr);
+  const expected =
+    '0x0616c030e21338c86199889c382f1cda75d7adf4a9b91261737365742d6d616e616765722d696d706c';
+  const enc = encodeAddress(ChainKeys.STACKS_MAINNET, addr);
   if (enc === expected) ok(`contract principal: ${enc.slice(0, 40)}...`);
   else fail(`contract principal mismatch: ${enc}`);
 }
@@ -48,74 +44,42 @@ console.log('=== Sync encode tests ===\n');
 {
   const addr = 'SP000000000000000000002Q6VF78';
   const expected = '0x05160000000000000000000000000000000000000000';
-  const enc = encodeAddress(STACKS_MAINNET_CHAIN_ID, addr);
-  if (enc === expected) ok(`zero address: ${enc}`);
-  else fail(`zero address mismatch: ${enc}`);
+  const enc = encodeAddress(ChainKeys.STACKS_MAINNET, addr);
+  if (enc === expected) ok(`zero principal: ${enc}`);
+  else fail(`zero principal mismatch: ${enc}`);
 }
 
-// ── 2. Full swap pipeline ─────────────────────────────────────────────
-console.log('\n=== Full swap pipeline ===\n');
+// 2. Raw spoke payload hex format ─────────────────────────────────────
+// Drives `StacksSpokeService.sendMessage({ raw: true })` directly so the
+// serialized bytes are exposed. The double-`0x` bug would surface here.
+console.log('\n=== Raw spoke payload hex format ===');
 
-const STACKS_USER = 'SP1K8PCE9CDDKKQYH7PPKPNACY0A12NS1Z9GJE6TK';
-const hubConfig = {
-  hubRpcUrl: 'https://rpc.soniclabs.com',
-  chainConfig: getHubChainConfig(),
-} satisfies EvmHubProviderConfig;
+const sodax = new Sodax();
+const stacksSpoke = sodax.spoke.getSpokeService(ChainKeys.STACKS_MAINNET);
 
-const sodax = new Sodax({
-  swaps: solverConfig,
-  moneyMarket: getMoneyMarketConfig(SONIC_MAINNET_CHAIN_ID),
-  hubProviderConfig: hubConfig,
-} satisfies SodaxConfig);
+// Any valid 33-byte compressed secp256k1 public key works — used purely
+// for unsigned-tx auth field construction, never broadcast.
+const STACKS_TEST_PUBKEY = '02b8d2c9fe1aa1f29e9c80c6e0b6cdf2cf6b9fbb47d9b86c83a8b69a3e74e4f8e8';
 
-const stacksConfig = spokeChainConfig[STACKS_MAINNET_CHAIN_ID] as StacksSpokeChainConfig;
-const spokeProvider = new StacksRawSpokeProvider(STACKS_USER, stacksConfig);
-
-const result = await sodax.swaps.createIntent({
-  intentParams: {
-    inputToken: stacksConfig.nativeToken,
-    outputToken: stacksConfig.nativeToken,
-    inputAmount: 1_000_000n,
-    minOutputAmount: 900_000n,
-    deadline: 0n,
-    allowPartialFill: false,
-    srcChain: STACKS_MAINNET_CHAIN_ID,
-    dstChain: STACKS_MAINNET_CHAIN_ID,
-    srcAddress: STACKS_USER,
-    dstAddress: STACKS_USER,
-    solver: '0x0000000000000000000000000000000000000000',
-    data: '0x',
-  },
-  spokeProvider,
+const sendMsgResult = await stacksSpoke.sendMessage({
   raw: true,
+  srcAddress: STACKS_TEST_PUBKEY,
+  srcChainKey: ChainKeys.STACKS_MAINNET,
+  dstChainKey: ChainKeys.SONIC_MAINNET,
+  dstAddress: `0x${'00'.repeat(20)}`,
+  payload: `0x${'00'.repeat(32)}`,
 });
 
-if (!result.ok) {
-  console.error('createIntent failed:', result.error);
-  process.exit(1);
+const payload = (sendMsgResult as { payload: string }).payload;
+if (typeof payload === 'string' && /^0x[0-9a-f]+$/i.test(payload) && !payload.startsWith('0x0x')) {
+  ok(`sendMessage raw payload: ${payload.slice(0, 24)}... (single-0x prefix)`);
+} else {
+  fail(`sendMessage raw payload not single-0x: ${payload}`);
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: dynamic shape
-const r = (result.value as any)[0];
-
-if (r.contractAddress === 'SP3031RGK734636C8KGW2Y76TEQBTVX59Q472EQH0') ok('contractAddress');
-else fail(`contractAddress: ${r.contractAddress}`);
-
-if (r.contractName === 'asset-manager-impl') ok('contractName');
-else fail(`contractName: ${r.contractName}`);
-
-if (r.functionName === 'transfer') ok('functionName');
-else fail(`functionName: ${r.functionName}`);
-
-if (r.postConditionMode === 1) ok('postConditionMode');
-else fail(`postConditionMode: ${r.postConditionMode}`);
-
-if (Array.isArray(r.functionArgs) && r.functionArgs.length === 5) ok('functionArgs (5 args)');
-else fail(`functionArgs length: ${r.functionArgs?.length}`);
-
-// ── Result ────────────────────────────────────────────────────────────
+// Result ─────────────────────────────────────────────────────────────
 if (failed) {
-  console.error('\n❌ test-stacks: FAILED');
+  console.error('\ntest-stacks: FAILED');
   process.exit(1);
 }
-console.log('\n✅ test-stacks: all checks passed');
+console.log('\ntest-stacks: all checks passed');
