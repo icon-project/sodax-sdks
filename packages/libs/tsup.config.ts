@@ -82,7 +82,13 @@ export default defineConfig(options => ({
   },
   format: ['esm', 'cjs'],
   outDir: 'dist',
-  splitting: false,
+  // Code-split shared chunks across subpath entries — without this, every
+  // subpath bundle inlines its own copy of @stacks/transactions, which means
+  // consumers loading both `stacks/core` and `stacks/connect` ship two copies
+  // of e.g. `serializeCV` and end up with distinct module instances. Splitting
+  // is ESM-only in esbuild; CJS still duplicates (acceptable: most consumers
+  // are ESM, and CJS is for Node-only interop tests).
+  splitting: true,
   // esbuild emits null `sourcesContent` for some inlined dep files, so vitest
   // warns "missing source files" on every downstream test run. Maps aren't
   // shipped anyway (see `files` in package.json), and the barrels are tiny.
