@@ -1,6 +1,5 @@
 import { XService } from '../../core/XService.js';
-import type { XToken } from '@sodax/types';
-import { Network } from '@provablehq/aleo-types';
+import type { XToken, AleoNetworkEnv } from '@sodax/types';
 import { isNativeToken } from '../../utils/index.js';
 
 // Lazy-load @provablehq/sdk to avoid triggering WASM initialization at import time.
@@ -8,14 +7,14 @@ import { isNativeToken } from '../../utils/index.js';
 // The SDK default export resolves to testnet — we must import the network-specific build.
 type AleoSDK = typeof import('@provablehq/sdk');
 
-function loadAleoSDK(network: Network): Promise<AleoSDK> {
-  if (network === Network.TESTNET) return import('@provablehq/sdk/testnet.js') as unknown as Promise<AleoSDK>;
+function loadAleoSDK(network: AleoNetworkEnv): Promise<AleoSDK> {
+  if (network === 'testnet') return import('@provablehq/sdk/testnet.js') as unknown as Promise<AleoSDK>;
   return import('@provablehq/sdk/mainnet.js') as unknown as Promise<AleoSDK>;
 }
 
 export class AleoXService extends XService {
   private static instance: AleoXService;
-  public network: Network = Network.MAINNET;
+  public network: AleoNetworkEnv = 'mainnet';
 
   // Lazily created after SDK loads; use ensureNetworkClient() in async methods.
   private _networkClient: Awaited<AleoSDK>['AleoNetworkClient']['prototype'] | null = null;
