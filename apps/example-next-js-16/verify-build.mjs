@@ -59,8 +59,10 @@ async function run() {
     const checks = [
       // @sodax/libs/stacks/core loaded clean in SSR and produced the encoded hex
       ['stacks-ssr', (h) => h.includes('0x05160000000000000000000000000000000000000000')],
-      // new SDK.Sodax() constructed without throwing in SSR
-      ['sdk-ready', (h) => h.includes('data-testid="sdk"') && h.includes('>ok</')],
+      // new SDK.Sodax() constructed without throwing in SSR.
+      // Match an attribute, not rendered text — React's text-node separator
+      // could change and silently break a string-includes assertion.
+      ['sdk-ready', (h) => h.includes('data-sdk-ready="ok"')],
       // Client bundle mounted (ClientWalletSection emits this marker)
       ['client-mounted', (h) => h.includes('data-testid="wallet-section"')],
       // No SSR crash bubbled into the HTML

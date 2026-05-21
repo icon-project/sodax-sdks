@@ -27,7 +27,7 @@ export default function Page() {
       <p data-testid="encoded">encoded: {encoded}</p>
       <p data-testid="encoded-contract">encodedContract: {encodedContract}</p>
       <p data-testid="serialized">serialized: {serialized}</p>
-      <p data-testid="sdk">sdk: {sdkReady}</p>
+      <p data-testid="sdk" data-sdk-ready={sdkReady}>sdk: {sdkReady}</p>
 
       <hr style={{ margin: '24px 0' }} />
       <ClientWalletSection />

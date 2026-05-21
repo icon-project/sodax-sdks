@@ -15,8 +15,8 @@
  *
  * Run AFTER `pnpm build:packages` so the dists exist.
  */
-import { readFileSync, existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -50,37 +50,48 @@ const FORBIDDEN_INLINE_MARKERS = {
   ],
 };
 
-const CONSUMER_DISTS = [
-  'packages/sdk/dist/index.mjs',
-  'packages/sdk/dist/index.cjs',
-  'packages/wallet-sdk-core/dist/index.mjs',
-  'packages/wallet-sdk-core/dist/index.cjs',
-  'packages/wallet-sdk-react/dist/index.mjs',
-  'packages/wallet-sdk-react/dist/index.cjs',
+// Walk each consumer's whole dist so code-split entries (xchains/*) aren't missed.
+const CONSUMER_DIST_ROOTS = [
+  'packages/sdk/dist',
+  'packages/wallet-sdk-core/dist',
+  'packages/wallet-sdk-react/dist',
 ];
+
+function walkJs(dir) {
+  const out = [];
+  for (const name of readdirSync(dir)) {
+    const p = join(dir, name);
+    const s = statSync(p);
+    if (s.isDirectory()) out.push(...walkJs(p));
+    else if (/\.(mjs|cjs)$/.test(name)) out.push(p);
+  }
+  return out;
+}
 
 let failed = false;
 const fail = (msg) => {
   console.error(`FAIL: ${msg}`);
   failed = true;
 };
-const ok = (msg) => console.log(`OK: ${msg}`);
 
 let checked = 0;
-for (const relPath of CONSUMER_DISTS) {
-  const absPath = join(repoRoot, relPath);
-  if (!existsSync(absPath)) {
+for (const distRoot of CONSUMER_DIST_ROOTS) {
+  const absRoot = join(repoRoot, distRoot);
+  if (!existsSync(absRoot)) {
     // Skip missing dists silently — they may not be built yet when running
     // this script standalone. CI should run after pnpm build:packages.
     continue;
   }
-  checked++;
-  const src = readFileSync(absPath, 'utf8');
+  for (const absPath of walkJs(absRoot)) {
+    checked++;
+    const src = readFileSync(absPath, 'utf8');
+    const relPath = relative(repoRoot, absPath);
 
-  for (const [pkg, markers] of Object.entries(FORBIDDEN_INLINE_MARKERS)) {
-    const leaked = markers.filter((m) => src.includes(m));
-    if (leaked.length > 0) {
-      fail(`${relPath}: ${pkg} appears to be bundled inline (found: ${leaked.join(', ')})`);
+    for (const [pkg, markers] of Object.entries(FORBIDDEN_INLINE_MARKERS)) {
+      const leaked = markers.filter((m) => src.includes(m));
+      if (leaked.length > 0) {
+        fail(`${relPath}: ${pkg} appears to be bundled inline (found: ${leaked.join(', ')})`);
+      }
     }
   }
 }

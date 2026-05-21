@@ -40,7 +40,9 @@ const stubUnusedPackages: EsbuildPlugin = {
       '@injectivelabs/wallet-wallet-connect',
     ];
     for (const pkg of stubbed) {
-      build.onResolve({ filter: new RegExp(`^${pkg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) }, () => ({
+      // Anchor the tail so `wallet-ledger` doesn't also catch a future `wallet-ledger-legacy`.
+      const escaped = pkg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      build.onResolve({ filter: new RegExp(`^${escaped}(?:$|/)`) }, () => ({
         path: pkg,
         namespace: 'stub',
       }));
@@ -81,7 +83,10 @@ export default defineConfig(options => ({
   format: ['esm', 'cjs'],
   outDir: 'dist',
   splitting: false,
-  sourcemap: !process.env.CI,
+  // esbuild emits null `sourcesContent` for some inlined dep files, so vitest
+  // warns "missing source files" on every downstream test run. Maps aren't
+  // shipped anyway (see `files` in package.json), and the barrels are tiny.
+  sourcemap: false,
   dts: true,
   clean: true,
   target: 'es2023',
