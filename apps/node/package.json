@@ -14,7 +14,6 @@
     "moneyMarket": "pnpm run build && node dist/moneymarket.js",
     "staking": "pnpm run build && node dist/soda-staking.js",
     "stacks": "pnpm run build && node dist/stacks.js",
-    "test-stacks": "tsx src/test-stacks.ts",
     "stellar": "pnpm run build && node dist/stellar.js",
     "icon": "pnpm run build && node dist/icon.js",
     "near": "pnpm run build && node dist/near.js",
