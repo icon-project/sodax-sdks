@@ -25,8 +25,8 @@ import type {
 } from '../../types/spoke-types.js';
 import type { ConfigService } from '../../config/ConfigService.js';
 
-export type SuiNativeCoinResult = { $kind: 'NestedResult'; NestedResult: [number, number] };
-export type SuiTxObject = { $kind: 'Input'; Input: number; type?: 'object' | undefined };
+type SuiNativeCoinResult = { $kind: 'NestedResult'; NestedResult: [number, number] };
+type SuiTxObject = { $kind: 'Input'; Input: number; type?: 'object' | undefined };
 
 export class SuiSpokeService {
   private readonly config: ConfigService;
@@ -104,10 +104,6 @@ export class SuiSpokeService {
     }
 
     return coin;
-  }
-
-  static getAddressBCSBytes(suiaddress: string): Hex {
-    return toHex(bcs.Address.serialize(suiaddress).toBytes());
   }
 
   public encodeSimulationParams(token: string, assetManager: string): { encodedToken: Hex; encodedSrcAddress: Hex } {
@@ -265,8 +261,7 @@ export class SuiSpokeService {
 
   /**
    * Get the balance of the token in the spoke chain.
-   * @param {Address} token - The address of the token to get the balance of.
-   * @param {SuiSpokeProvider} spokeProvider - The spoke provider.
+   * @param {GetDepositParams<SuiChainKey>} params - The src chain key, src address, and token address.
    * @returns {Promise<bigint>} The balance of the token.
    */
   public async getDeposit(params: GetDepositParams<SuiChainKey>): Promise<bigint> {
@@ -295,7 +290,7 @@ export class SuiSpokeService {
 
   /**
    * Fetch the asset manager config from the spoke chain.
-   * @param {SuiBaseSpokeProvider} suiSpokeProvider - The spoke provider.
+   * @param {SuiChainKey} chainId - The Sui chain key.
    * @returns {Promise<string>} The asset manager config.
    */
   public async fetchAssetManagerAddress(chainId: SuiChainKey): Promise<string> {
@@ -306,7 +301,7 @@ export class SuiSpokeService {
 
   /**
    * Fetch the latest asset manager package id from the spoke chain.
-   * @param {SuiBaseSpokeProvider} suiSpokeProvider - The spoke provider.
+   * @param {SuiChainKey} chainId - The Sui chain key.
    * @returns {Promise<string>} The latest asset manager package id.
    */
   public async fetchLatestAssetManagerPackageId(chainId: SuiChainKey): Promise<string> {

@@ -8,7 +8,7 @@ import {
   TransactionMessage,
   VersionedTransaction,
 } from '@solana/web3.js';
-import { keccak256, type Hex } from 'viem';
+import { keccak256 } from 'viem';
 import { AssetManagerPDA, ConnectionConfigPDA } from '../../entities/solana/pda/pda.js';
 import {
   convertTransactionInstructionToRaw,
@@ -29,7 +29,6 @@ import { sleep } from '../../utils/shared-utils.js';
 import {
   getIntentRelayChainId,
   ChainKeys,
-  type HubAddress,
   type SolanaAccountMeta,
   type SolanaBase58PublicKey,
   type SolanaChainKey,
@@ -44,21 +43,6 @@ import {
 } from '@sodax/types';
 import BN from 'bn.js';
 import { getAssociatedTokenAddress } from '@solana/spl-token';
-
-export type SolanaSpokeDepositParams = {
-  from: SolanaBase58PublicKey;
-  to?: HubAddress; // The address of the user on the hub chain (wallet abstraction address)
-  token: SolanaBase58PublicKey;
-  amount: bigint;
-  data: Hex;
-};
-
-export type SolanaTransferToHubParams = {
-  token: PublicKey;
-  recipient: string;
-  amount: string;
-  data: Hex;
-};
 
 export class SolanaSpokeService {
   private readonly config: ConfigService;

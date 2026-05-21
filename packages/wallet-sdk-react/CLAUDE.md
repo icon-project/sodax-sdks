@@ -2,6 +2,8 @@
 
 React layer over `wallet-sdk-core`. Provides wallet connection, disconnection, signing, and account management via hooks backed by Zustand state.
 
+Consumer-facing AI material (skills + knowledge for Claude Code, Cursor, Codex) lives in [`packages/skills`](../skills/CLAUDE.md) — not in this package. The legacy `skills/` directory that used to live here was removed; its content was superseded by `packages/skills/knowledge/wallet-sdk-react/integration/recipes/`.
+
 ## Architecture
 
 ### Core Abstractions (`src/core/`)
@@ -269,7 +271,7 @@ if (connector instanceof XverseXConnector) {
 ```
 
 Configuration:
-- `tsup.config.ts` — multi-entry: `src/index.ts` + `src/xchains/*/index.ts`
+- `tsup.config.ts` — multi-entry: `src/index.ts` + `src/xchains/*/index.ts` + `src/xchains/*/index.tsx`
 - `package.json` `exports` — wildcard `./xchains/*` maps to `dist/xchains/*/index.*`
 - `package.json` `typesVersions` — fallback for `moduleResolution: "node"`
 
@@ -292,4 +294,4 @@ Configuration:
 
 ## Build
 
-tsup: dual ESM (`.mjs`) + CJS (`.cjs`) with multi-entry (barrel + per-chain sub-paths). React, React DOM, and React Query are externalized.
+tsup: ESM-only (`.mjs`) with `.d.ts` declarations (`dts: true`). Multi-entry (barrel + per-chain sub-paths) with `splitting: true` so `instanceof XverseXConnector` works across import paths. React, React DOM, and React Query are externalized via `external`. Build script wraps tsup in `NODE_OPTIONS=--max-old-space-size=8192` because rollup-plugin-dts inlines transitive dep types and otherwise OOMs the default V8 heap on this package's type graph.

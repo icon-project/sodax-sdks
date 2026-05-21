@@ -419,7 +419,7 @@ Before opening a PR, walk through each item:
 
 - [ ] `pnpm checkTs` passes — `SodaxWalletConfig.APTOS` is recognized; `useWalletProvider({ xChainType: 'APTOS' })` returns the right type.
 - [ ] `pnpm test` passes for new files.
-- [ ] `pnpm build:packages` produces `dist/xchains/aptos/index.{mjs,cjs,d.ts}`.
+- [ ] `pnpm build:packages` produces `dist/xchains/aptos/index.{mjs,d.ts}`.
 - [ ] `import { AptosXService } from '@sodax/wallet-sdk-react/xchains/aptos'` resolves in a consumer app.
 - [ ] `import { AptosXService } from '@sodax/wallet-sdk-react'` is **not** available (intentional — concrete classes stay behind deep imports).
 - [ ] Adding `APTOS: {}` to `SodaxWalletConfig` mounts the chain; omitting the slot skips it.

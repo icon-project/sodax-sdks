@@ -5,10 +5,10 @@ export default defineConfig(options => ({
   format: ['esm', 'cjs'], // Dual format: ESM for web, CJS for Node (optionally ESM too)
   outDir: 'dist',
   splitting: false, // Flat output, easier for consumers
-  sourcemap: true, // Helpful for debugging
+  sourcemap: !process.env.CI, // On for local debug builds, off in CI (publish + ci.yml set CI=true)
   dts: true, // Type declarations
   clean: true,
-  target: 'node20',
+  target: 'es2023',
   treeshake: true,
   external: [], // tsup still externalizes all dependencies by default; this is additive, not a replacement
   noExternal: ['near-api-js', '@sodax/types'], // Force-bundle ESM-only packages for CJS compatibility

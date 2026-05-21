@@ -2,8 +2,7 @@
 
 The Sodax wallet-sdk-core is a core wallet SDK package containing implementations of wallet providers that enable multi-chain wallet connectivity. This package provides TypeScript implementations of wallet providers for various blockchain networks, making them compatible with the Core Sodax SDK (@sodax/sdk).
 
-> **AI-friendly docs:** see [`ai-exported/AGENTS.md`](./ai-exported/AGENTS.md) for the agent-readable integration & migration guide.
-> Entry points: [`ai-exported/integration/`](./ai-exported/integration/) (new setup), [`ai-exported/migration/`](./ai-exported/migration/) (upgrading from older RCs).
+> **AI-friendly docs:** shipped via [`@sodax/skills`](https://github.com/icon-project/sodax-sdks/tree/main/packages/skills) — [`skills` CLI](https://github.com/vercel-labs/skills) recommended; npm + `AGENTS.md` pointer as fallback. See [docs/ai-integration-guide.md](https://github.com/icon-project/sodax-sdks/blob/main/docs/ai-integration-guide.md) for all install modes and per-tool wiring.
 
 ## Installation
 

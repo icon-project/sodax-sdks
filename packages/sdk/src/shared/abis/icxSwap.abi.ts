@@ -435,5 +435,3 @@ export const icxSwapAbi = [
     ],
   },
 ] as const satisfies Abi;
-
-export type IcxSwapAbi = typeof icxSwapAbi;

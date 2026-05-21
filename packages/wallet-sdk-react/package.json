@@ -1,26 +1,34 @@
 {
   "name": "@sodax/wallet-sdk-react",
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "license": "MIT",
   "version": "2.0.0-rc.3",
   "description": "Wallet SDK of Sodax",
+  "keywords": ["sodax", "wallet", "sdk", "react", "multichain", "web3"],
+  "homepage": "https://github.com/icon-project/sodax-sdks/tree/main/packages/wallet-sdk-react",
+  "bugs": {
+    "url": "https://github.com/icon-project/sodax-sdks/issues"
+  },
   "type": "module",
-  "main": "./dist/index.cjs",
+  "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.12.0"
   },
-  "files": ["dist", "README.md", "docs", "skills", "ai-exported"],
+  "files": ["dist", "!dist/**/*.map", "README.md", "docs"],
+  "sideEffects": false,
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs"
+      "import": "./dist/index.mjs"
     },
     "./xchains/*": {
       "types": "./dist/xchains/*/index.d.ts",
-      "import": "./dist/xchains/*/index.mjs",
-      "require": "./dist/xchains/*/index.cjs"
+      "import": "./dist/xchains/*/index.mjs"
     }
   },
   "typesVersions": {
@@ -35,18 +43,14 @@
   "scripts": {
     "build": "NODE_OPTIONS=--max-old-space-size=8192 tsup",
     "dev": "tsup --watch ./src",
-    "prepublishOnly": "tsup",
+    "prepublishOnly": "pnpm run build",
     "clean": "rm -rf dist && rm -rf node_modules && rm -rf .turbo",
     "pretty": "biome format . --write",
     "checkTs": "tsc --noEmit",
-    "checkTs:examples": "tsc --noEmit -p tsconfig.examples.json",
+    "check-exports": "attw --pack --profile esm-only",
     "test": "vitest run",
-    "knip": "knip",
-    "lint": "biome lint . --write",
-    "check:ai-exported": "bash ./scripts/check-ai-exported.sh",
-    "check:ai-links": "bash ./scripts/check-ai-links.sh",
-    "check:ai-imports": "bash ./scripts/check-ai-imports.sh",
-    "check:ai": "pnpm run check:ai-exported && pnpm run checkTs:examples && pnpm run check:ai-links && pnpm run check:ai-imports"
+    "check:knip": "knip",
+    "lint": "biome lint . --write"
   },
   "dependencies": {
     "@stacks/connect": "catalog:",
@@ -60,7 +64,6 @@
     "@injectivelabs/wallet-base": "catalog:",
     "@injectivelabs/wallet-core": "catalog:",
     "@injectivelabs/wallet-cosmos": "catalog:",
-    "@injectivelabs/wallet-evm": "catalog:",
     "@injectivelabs/wallet-strategy": "catalog:",
     "@mysten/dapp-kit": "catalog:",
     "@mysten/sui": "catalog:",
@@ -69,25 +72,24 @@
     "@sodax/wallet-sdk-core": "workspace:*",
     "@solana/spl-token": "catalog:",
     "@solana/wallet-adapter-react": "0.15.35",
-    "@solana/wallet-adapter-wallets": "0.19.30",
     "@solana/web3.js": "catalog:",
     "@stellar/stellar-sdk": "catalog:",
-    "@walletconnect/ethereum-provider": "^2.23.9",
     "icon-sdk-js": "catalog:",
     "immer": "10.1.1",
     "sats-connect": "^4.2.1",
     "viem": "catalog:",
     "wagmi": "catalog:",
-    "zustand": "4.5.2",
-    "bs58": "6.0.0"
+    "zustand": "4.5.2"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "catalog:",
     "@testing-library/react": "^16.1.0",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
     "happy-dom": "^20.8.9",
-    "knip": "5.30.5",
+    "knip": "catalog:",
     "react-dom": "19.1.4",
+    "tslib": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

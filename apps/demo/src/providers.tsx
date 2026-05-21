@@ -46,7 +46,10 @@ export default function Providers({ children }: { children: ReactNode }) {
 
     return {
       EVM: {
-        ssr: false,
+        // Hydration-timing flag, not "is host app SSR". Keep `true` so wagmi
+        // defers its reconnect into `useEffect` and avoids React's "setState
+        // during render" warning. See issue #129.
+        ssr: true,
         reconnectOnMount: true,
         walletConnect,
         chains: {

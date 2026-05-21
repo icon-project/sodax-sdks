@@ -117,14 +117,21 @@ The full guide lives in [`docs/`](docs/). Start with the topic that matches what
 
 ## AI agent docs
 
-This package ships with AI-consumable integration & migration docs at `node_modules/@sodax/wallet-sdk-react/ai-exported/`. Point your AI coding agent at [`ai-exported/AGENTS.md`](ai-exported/AGENTS.md) to start — it routes to integration recipes (new consumers), migration recipes (v1 → v2), and reference tables.
+AI-readable docs for `@sodax/wallet-sdk-react` (and the other `@sodax/*` packages) are shipped via [`@sodax/skills`](https://github.com/icon-project/sodax-sdks/tree/main/packages/skills) — a separate npm package bundling Claude-Code SKILL.md files and a long-form knowledge tree.
 
-```
-> Read node_modules/@sodax/wallet-sdk-react/ai-exported/AGENTS.md and integrate
-> SODAX wallet connectivity into my Next.js app.
+**Recommended: [`skills` CLI](https://github.com/vercel-labs/skills)** — from your project root:
+
+```bash
+npx skills@latest add icon-project/sodax-sdks/packages/skills
 ```
 
-The CI guard `scripts/check-ai-exported.sh` validates that every hook reference and sub-path in those docs resolves to a real export.
+**npm + `AGENTS.md` pointer** (fallback for web chats, or when you prefer a devDependency over the CLI):
+
+```bash
+pnpm add -D @sodax/skills
+```
+
+Then point your agent at `node_modules/@sodax/skills/AGENTS.md`. See [docs/ai-integration-guide.md](https://github.com/icon-project/sodax-sdks/blob/main/docs/ai-integration-guide.md) for all install modes and per-tool wiring.
 
 ---
 
@@ -147,7 +154,7 @@ See [Connectors](docs/CONNECTORS.md) for the full list of deep-import sub-paths.
 
 ## Requirements
 
-- Node.js >= 18.0.0
+- Node.js >= 20.12.0
 - React >= 19
 - TypeScript
 
