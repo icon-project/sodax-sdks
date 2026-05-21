@@ -3,6 +3,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const networkFrom = vi.fn().mockReturnValue({ client: { baseUrl: 'https://stacks.example' } });
 const broadcastTransaction = vi.fn().mockResolvedValue({ txid: 'tx-123' });
 const makeContractCall = vi.fn().mockResolvedValue({ kind: 'tx' });
+const fetchCallReadOnlyFunction = vi.fn();
+const privateKeyToPublic = vi.fn().mockReturnValue('pub');
+const publicKeyToHex = vi.fn().mockReturnValue('hex');
 const stacksRequest = vi.fn().mockResolvedValue({ txid: 'browser-tx-123' });
 
 // The SUT imports from `@sodax/libs/stacks/core` and `@sodax/libs/stacks/connect` — bundled
@@ -12,12 +15,12 @@ const stacksRequest = vi.fn().mockResolvedValue({ txid: 'browser-tx-123' });
 vi.mock('@sodax/libs/stacks/core', () => ({
   networkFrom,
   broadcastTransaction,
-  fetchCallReadOnlyFunction: vi.fn(),
+  fetchCallReadOnlyFunction,
   getAddressFromPrivateKey: vi.fn().mockReturnValue('SP1ADDR'),
   makeContractCall,
   PostConditionMode: { Allow: 0x01, Deny: 0x02 },
-  privateKeyToPublic: vi.fn().mockReturnValue('pub'),
-  publicKeyToHex: vi.fn().mockReturnValue('hex'),
+  privateKeyToPublic,
+  publicKeyToHex,
 }));
 
 vi.mock('@sodax/libs/stacks/connect', () => ({ request: stacksRequest }));
@@ -169,6 +172,134 @@ describe('StacksWalletProvider', () => {
 
       const params = stacksRequest.mock.calls[0]?.[1];
       expect(params.network).toBe('mainnet');
+    });
+  });
+
+  describe('readContract', () => {
+    beforeEach(() => {
+      fetchCallReadOnlyFunction.mockClear();
+    });
+
+    it('forwards txParams + bound network + PK-derived sender to fetchCallReadOnlyFunction', async () => {
+      fetchCallReadOnlyFunction.mockResolvedValue({ type: 'uint', value: 42n });
+      const provider = new StacksWalletProvider({ privateKey: PK });
+
+      const result = await provider.readContract({
+        contractAddress: 'SP1',
+        contractName: 'token',
+        functionName: 'get-balance',
+        functionArgs: [],
+      });
+
+      expect(result).toEqual({ type: 'uint', value: 42n });
+      const call = fetchCallReadOnlyFunction.mock.calls[0]?.[0];
+      expect(call.contractAddress).toBe('SP1');
+      expect(call.contractName).toBe('token');
+      expect(call.functionName).toBe('get-balance');
+      expect(call.senderAddress).toBe('SP1ADDR');
+      // Bound network from ctor — `networkFrom` returned the mainnet stub.
+      expect(call.network).toEqual({ client: { baseUrl: 'https://stacks.example' } });
+    });
+
+    it('uses the browser-extension address as sender when configured that way', async () => {
+      fetchCallReadOnlyFunction.mockResolvedValue({ type: 'bool', value: true });
+      const provider = new StacksWalletProvider({ address: BROWSER_ADDRESS });
+
+      await provider.readContract({
+        contractAddress: 'SP1',
+        contractName: 'token',
+        functionName: 'get-name',
+        functionArgs: [],
+      });
+
+      const call = fetchCallReadOnlyFunction.mock.calls[0]?.[0];
+      expect(call.senderAddress).toBe(BROWSER_ADDRESS);
+    });
+  });
+
+  describe('getPublicKey', () => {
+    beforeEach(() => {
+      privateKeyToPublic.mockClear();
+      publicKeyToHex.mockClear();
+    });
+
+    it('PK path returns the hex-encoded public key', async () => {
+      const provider = new StacksWalletProvider({ privateKey: PK });
+
+      const result = await provider.getPublicKey();
+
+      expect(result).toBe('hex');
+      expect(privateKeyToPublic).toHaveBeenCalledWith(PK);
+      expect(publicKeyToHex).toHaveBeenCalledWith('pub');
+    });
+
+    it('browser-extension path throws — there is no key to derive', async () => {
+      const provider = new StacksWalletProvider({ address: BROWSER_ADDRESS });
+
+      await expect(provider.getPublicKey()).rejects.toThrow(
+        'getPublicKey is only supported for private key wallet configuration',
+      );
+    });
+  });
+
+  describe('getBalance', () => {
+    beforeEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('returns the parsed balance on a 200 with the expected shape', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          statusText: 'OK',
+          json: async () => ({ stx: { balance: '12345' } }),
+        }),
+      );
+      const provider = new StacksWalletProvider({ privateKey: PK });
+
+      const result = await provider.getBalance('SP1ADDR');
+
+      expect(result).toBe(12345n);
+    });
+
+    it('swallows a non-OK response and returns 0n (warning logged but no throw)', async () => {
+      // Hush the expected `console.error` so vitest output stays clean.
+      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: false,
+          statusText: 'Service Unavailable',
+          json: async () => ({}),
+        }),
+      );
+      const provider = new StacksWalletProvider({ privateKey: PK });
+
+      const result = await provider.getBalance('SP1ADDR');
+
+      expect(result).toBe(0n);
+      expect(errSpy).toHaveBeenCalled();
+      errSpy.mockRestore();
+    });
+
+    it('swallows a malformed JSON body and returns 0n (data.stx undefined → throw → caught)', async () => {
+      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          statusText: 'OK',
+          json: async () => ({}), // no `stx.balance` → accessing `.stx.balance` throws
+        }),
+      );
+      const provider = new StacksWalletProvider({ privateKey: PK });
+
+      const result = await provider.getBalance('SP1ADDR');
+
+      expect(result).toBe(0n);
+      expect(errSpy).toHaveBeenCalled();
+      errSpy.mockRestore();
     });
   });
 });
