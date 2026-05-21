@@ -1,6 +1,9 @@
 import { XService } from '../../core/XService.js';
-import type { XToken, AleoNetworkEnv } from '@sodax/types';
+import { ChainKeys, spokeChainConfig } from '@sodax/types';
+import type { XToken, AleoNetworkEnv, AleoSpokeChainConfig } from '@sodax/types';
 import { isNativeToken } from '../../utils/index.js';
+
+const aleoChainConfig = spokeChainConfig[ChainKeys.ALEO_MAINNET] as AleoSpokeChainConfig;
 
 // Lazy-load @provablehq/sdk to avoid triggering WASM initialization at import time.
 // The WASM module uses top-level await which fails during SSR / Vercel builds.
@@ -52,7 +55,11 @@ export class AleoXService extends XService {
       const networkClient = await this.ensureNetworkClient();
 
       if (isNativeToken(xToken)) {
-        const mapping = await networkClient.getProgramMappingValue('credits.aleo', 'account', address);
+        const mapping = await networkClient.getProgramMappingValue(
+          aleoChainConfig.addresses.creditsProgram,
+          aleoChainConfig.mappings.account,
+          address,
+        );
 
         if (mapping) {
           const valueStr = mapping.toString().replace(/u.*/, '');
@@ -66,7 +73,11 @@ export class AleoXService extends XService {
       const structLiteral = `{ account: ${address}, token_id: ${xToken.address}field }`;
       const plaintext = Plaintext.fromString(structLiteral);
       const key = bhp.hash(plaintext.toBitsLe()).toString();
-      const result = await networkClient.getProgramMappingValue('token_registry.aleo', 'authorized_balances', key);
+      const result = await networkClient.getProgramMappingValue(
+        aleoChainConfig.addresses.tokenRegistry,
+        aleoChainConfig.mappings.authorizedBalances,
+        key,
+      );
       if (result == null) return 0n;
       const match = result.match(/balance:\s*(\d+)u128/);
       return match?.[1] != null ? BigInt(match[1]) : 0n;
