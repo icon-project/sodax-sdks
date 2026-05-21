@@ -1,4 +1,3 @@
-import type { Account as ProvableAccount } from '@provablehq/aleo-types';
 import type { WalletAdapter } from '@provablehq/aleo-wallet-standard';
 import type { AleoNetworkEnv, AleoWaitForReceiptOptions } from '@sodax/types';
 
@@ -59,7 +58,6 @@ export type PkAleoWallet = {
 export type BrowserExtensionAleoWallet = {
   type: 'browserExtension';
   adapter: WalletAdapter;
-  connectedAccount: ProvableAccount | null;
 };
 
 export type AleoWallet = PkAleoWallet | BrowserExtensionAleoWallet;

@@ -107,7 +107,6 @@ export class AleoWalletProvider extends BaseWalletProvider<AleoWalletDefaults> i
     const wallet: BrowserExtensionAleoWallet = {
       type: 'browserExtension',
       adapter: browserConfig.provableAdapter,
-      connectedAccount: null,
     };
     const programManager = new ProgramManager(
       browserConfig.rpcUrl,
