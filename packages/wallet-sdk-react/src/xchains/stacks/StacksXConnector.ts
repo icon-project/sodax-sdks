@@ -13,6 +13,7 @@ export interface StacksProviderConfig {
 
 /** Resolves a provider from `window` by dot-separated ID, matching @stacks/connect-ui's getProviderFromId */
 function getProviderFromId(id: string): StacksProvider | undefined {
+  if (typeof window === 'undefined') return undefined;
   return id.split('.').reduce<unknown>((acc, part) => (acc as Record<string, unknown>)?.[part], window) as
     | StacksProvider
     | undefined;

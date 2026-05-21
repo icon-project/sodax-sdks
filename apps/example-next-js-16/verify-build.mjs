@@ -67,6 +67,9 @@ async function run() {
       ['client-mounted', (h) => h.includes('data-testid="wallet-section"')],
       // No SSR crash bubbled into the HTML
       ['no-ssr-crash', (h) => !h.includes('Application error') && !h.includes('window is not defined')],
+      // No React hydration mismatch — real risk when mixing 'use client' boundaries with
+      // browser-only wallet state. These strings come from React's dev error messages.
+      ['no-hydration-mismatch', (h) => !h.includes('Hydration failed') && !h.includes('did not match')],
     ];
 
     for (const [name, test] of checks) {
