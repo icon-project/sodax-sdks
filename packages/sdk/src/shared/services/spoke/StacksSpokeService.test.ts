@@ -268,18 +268,18 @@ describe('StacksSpokeService.getSTXBalance', () => {
     );
   });
 
-  it('throws TypeError when ok=true but the JSON shape is missing `stx.balance`', async () => {
-    // `data.stx.balance` is accessed without runtime validation. If Hiro ever
-    // returned 200 with `{}` (or any other shape), the SUT surfaces a cryptic
-    // TypeError rather than an explicit "unexpected response shape" error.
-    // Pinning the behaviour so a future contributor adding a runtime guard
-    // knows it's a contract change.
+  it('throws a meaningful shape error when ok=true but the JSON body is missing `stx.balance`', async () => {
+    // The SUT guards `data.stx.balance` and converts a shape mismatch into an
+    // explicit error message — replaces the cryptic TypeError that the
+    // unguarded code used to surface.
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) } as unknown as Response),
     );
 
-    await expect(stacksSpoke.getSTXBalance(SRC_ADDR)).rejects.toThrow(TypeError);
+    await expect(stacksSpoke.getSTXBalance(SRC_ADDR)).rejects.toThrow(
+      'Unexpected STX balance response shape: missing data.stx.balance',
+    );
   });
 });
 
@@ -310,15 +310,16 @@ describe('StacksSpokeService.readTokenBalance', () => {
     );
   });
 
-  it('throws on an unexpected Clarity response shape (no runtime guard on the `{ value: UIntCV }` cast)', async () => {
-    // The SUT performs `(result as { value: UIntCV }).value.value as bigint`. The cast
-    // is purely a TypeScript assertion — if `fetchCallReadOnlyFunction` ever returns a
-    // different Clarity type (e.g. a `ResponseErr`, a `Tuple`, or — most relevant — the
-    // `(ok uint)` ResponseOk-wrapped shape that on-chain SIP-010 `get-balance` actually
-    // returns), the nested access throws. Pin current behaviour.
+  it('throws a meaningful shape error when the Clarity response misses the expected `.value.value` bigint', async () => {
+    // The SUT verifies the nested shape before unwrapping and raises an
+    // explicit error if the contract ABI ever returns a different Clarity
+    // type (e.g. a `ResponseErr`, a `Tuple`, or the ResponseOk-wrapped
+    // `(ok uint)` shape).
     mocks.fetchCallReadOnlyFunction.mockResolvedValueOnce({});
 
-    await expect(stacksSpoke.readTokenBalance(STACKS_BNUSD, STACKS_ASSET_MGR)).rejects.toThrow();
+    await expect(stacksSpoke.readTokenBalance(STACKS_BNUSD, STACKS_ASSET_MGR)).rejects.toThrow(
+      /Unexpected get-balance response shape/,
+    );
   });
 });
 
@@ -350,19 +351,16 @@ describe('StacksSpokeService.getImplContractAddress', () => {
     );
   });
 
-  it('throws on an unexpected Clarity response shape (no runtime guard on the ContractPrincipalCV cast)', async () => {
-    // The SUT casts the readContract result directly to `ContractPrincipalCV` and reads
-    // `.value`. If the on-chain contract ABI ever changes shape (e.g. wraps in a Response,
-    // returns a Tuple, or returns a plain string principal), the assertion lies and the
-    // nested access throws. Pin current behaviour — same risk pattern as readTokenBalance.
+  it('throws a meaningful shape error when the readContract response is not a ContractPrincipalCV', async () => {
+    // The SUT requires `.value` to be a `address.contractName` string (a Stacks
+    // contract principal carries a `.` separator). A drift to e.g. a string-ascii
+    // response without the dot would silently bind to a wrong-shape string —
+    // catch it explicitly instead.
     mocks.fetchCallReadOnlyFunction.mockResolvedValueOnce({ type: 'string-ascii', value: 'not-a-contract-principal' });
 
-    await expect(stacksSpoke.getImplContractAddress(STACKS_ASSET_MGR)).resolves.toBe('not-a-contract-principal');
-    // ^ This passes today because `.value` happens to exist on the string-ascii response,
-    // but the type narrowing is wrong — the returned string is NOT a contract principal.
-    // The point of this test is to surface that the SUT trusts the ABI without verification:
-    // a real shape change (e.g. returning `{ value: { type: 'tuple', value: {...} } }`)
-    // would surface as a confusing runtime error elsewhere.
+    await expect(stacksSpoke.getImplContractAddress(STACKS_ASSET_MGR)).rejects.toThrow(
+      /Unexpected get-asset-manager-impl response/,
+    );
   });
 });
 

@@ -8,8 +8,6 @@ import {
   type ClarityValue,
   fetchCallReadOnlyFunction,
   parseContractId,
-  type ContractPrincipalCV,
-  type UIntCV,
   makeUnsignedContractCall,
   fetchFeeEstimateTransaction,
   validateStacksAddress,
@@ -81,21 +79,34 @@ export class StacksSpokeService {
     if (!response.ok) {
       throw new Error(`Error fetching STX balance: ${response.statusText}`);
     }
-    const data = await response.json();
-    return BigInt(data.stx.balance);
+    const data = (await response.json()) as { stx?: { balance?: string } };
+    const balance = data?.stx?.balance;
+    if (balance === undefined) {
+      throw new Error('Unexpected STX balance response shape: missing data.stx.balance');
+    }
+    return BigInt(balance);
   }
 
   async readTokenBalance(token: string, address: string): Promise<bigint> {
     const [contractAddress, contractName] = parseContractId(token as ContractIdString);
-    const result = (await fetchCallReadOnlyFunction({
+    const result = await fetchCallReadOnlyFunction({
       contractAddress: contractAddress as string,
       contractName: contractName as string,
       functionName: 'get-balance',
       functionArgs: [Cl.principal(address)],
       network: this.network,
       senderAddress: address,
-    })) as { value: UIntCV };
-    return result.value.value as bigint;
+    });
+    // SIP-010 `get-balance` returns the bound `UIntCV` either directly or
+    // wrapped in a ResponseOk depending on the contract. The current SODAX
+    // ABI calls it via the simpler unwrapped shape; assert before reading.
+    const balance = (result as { value?: { value?: unknown } })?.value?.value;
+    if (typeof balance !== 'bigint') {
+      throw new Error(
+        `Unexpected get-balance response shape: expected nested .value.value as bigint, got ${typeof balance}`,
+      );
+    }
+    return balance;
   }
 
   async getImplContractAddress(stateContract: string): Promise<string> {
@@ -107,7 +118,20 @@ export class StacksSpokeService {
       functionArgs: [],
     };
 
-    return ((await this.readContract(contractAddress as string, txParams)) as ContractPrincipalCV).value;
+    const result = await this.readContract(contractAddress as string, txParams);
+    // ContractPrincipalCV.value is the `address.contractName` string. Verify
+    // both the type and the contract-principal `.`-delimiter so a future ABI
+    // change (e.g. tuple or response wrapping) raises a meaningful error
+    // instead of silently returning a wrong-shaped string.
+    const value = (result as { value?: unknown })?.value;
+    if (typeof value !== 'string' || !value.includes('.')) {
+      throw new Error(
+        `Unexpected get-asset-manager-impl response: expected ContractPrincipalCV.value (e.g. 'SP....name'), got ${
+          typeof value === 'string' ? `'${value}'` : typeof value
+        }`,
+      );
+    }
+    return value;
   }
 
   /**

@@ -67,9 +67,15 @@ if (!existsSync(distDir)) {
 // Match: import { a, b as c } from '@stacks/connect-ui'
 // Also:   from "@stacks/connect-ui"
 const namedImportRe = /import\s*\{([^}]+)\}\s*from\s*["']@stacks\/connect-ui["']/g;
+// Match: import * as foo from '@stacks/connect-ui'
+// A namespace import needs the stub to ship a default + `__esModule` marker
+// for the bundler's runtime helper to treat the stub as a CJS-style module.
+// Our stub only emits named ES exports, so this would silently break.
+const namespaceImportRe = /import\s*\*\s*as\s*\w+\s*from\s*["']@stacks\/connect-ui["']/g;
 
 const missing = new Set();
 const found = new Set();
+let namespaceImportSeen = false;
 for (const file of walk(distDir)) {
   const src = readFileSync(file, 'utf8');
   let m;
@@ -83,6 +89,18 @@ for (const file of walk(distDir)) {
       if (!STUB_EXPORTS.has(n)) missing.add(n);
     }
   }
+  if (namespaceImportRe.test(src)) {
+    namespaceImportSeen = true;
+  }
+}
+
+if (namespaceImportSeen) {
+  console.error(
+    'verify-stacks-connect-ui-stub: FAILED — @stacks/connect uses `import * as` from @stacks/connect-ui. ' +
+      'The current stub exports named bindings only and would silently bind to undefined under namespace import. ' +
+      'Update the stub in packages/libs/tsup.config.ts to also emit a default export + `__esModule: true`.',
+  );
+  process.exit(1);
 }
 
 if (missing.size > 0) {

@@ -9,9 +9,14 @@ import type { State as WagmiState } from 'wagmi';
 
 const queryClient = new QueryClient();
 
+// Public RPC is the default to keep `pnpm verify` work for ad-hoc local runs,
+// but CI overrides via `SONIC_RPC_URL` to swap in a higher-quota endpoint
+// (rate-limit on `rpc.soniclabs.com` has bitten preview deploys before).
+const SONIC_RPC = process.env.SONIC_RPC_URL ?? 'https://rpc.soniclabs.com';
+
 const sodaxConfig: DeepPartial<SodaxConfig> = {
   chains: {
-    [ChainKeys.SONIC_MAINNET]: { rpcUrl: 'https://rpc.soniclabs.com' },
+    [ChainKeys.SONIC_MAINNET]: { rpcUrl: SONIC_RPC },
   },
 };
 
