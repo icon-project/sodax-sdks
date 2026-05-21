@@ -8,6 +8,12 @@
  *
  * Remove this package and revert consumers to `@stacks/*` imports when the
  * upstream cycle is fixed.
+ *
+ * Re-exports only the subset of `@stacks/transactions` + `@stacks/network`
+ * that `@sodax/*` consumers actually use. When a consumer needs an
+ * additional Stacks symbol, add it here first — do not import from
+ * `@stacks/transactions` directly elsewhere, otherwise the bundling
+ * isolation breaks (caught at CI by `verify-no-duplicate-bundling.mjs`).
  */
 
 // @stacks/transactions — values

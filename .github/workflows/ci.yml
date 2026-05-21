@@ -17,6 +17,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Linux-only. Turbopack has historically had platform-specific
+        # behaviour around pnpm workspace symlinks and file paths; if you
+        # need Windows / macOS coverage for the regression check, extend
+        # `runs-on` rather than this matrix.
         node-version: ['24.x']
 
     steps:

@@ -34,6 +34,10 @@ const FORBIDDEN_INLINE_MARKERS = {
     'function broadcastTransaction(',
     'function fetchCallReadOnlyFunction(',
   ],
+  '@stacks/network': [
+    'function createNetwork(',
+    'function networkFrom(',
+  ],
   '@stacks/connect': [
     // Internal identifiers from @stacks/connect source — not referenced by
     // SODAX code. Note: RPC method names like "stx_callContract" are NOT safe

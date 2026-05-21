@@ -28,6 +28,12 @@ export class StacksXService extends XService {
     return StacksXService.instance;
   }
 
+  /**
+   * @warning Network / fetch / contract-read failures are silently swallowed —
+   * `0n` is returned on any error. Callers cannot distinguish "zero balance"
+   * from "fetch failed"; UI that needs to surface the failure must wrap this
+   * call externally and re-fetch on its own error path.
+   */
   override async getBalance(address: string | undefined, xToken: XToken): Promise<bigint> {
     if (!address) return 0n;
 
