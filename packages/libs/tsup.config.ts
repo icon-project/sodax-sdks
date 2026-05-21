@@ -123,6 +123,10 @@ export default defineConfig(options => ({
     options.platform = 'browser';
     options.mainFields = ['browser', 'module', 'main'];
     options.conditions = ['browser', 'import'];
+    // Preserve bundled deps' license headers as separate `*.LEGAL.txt` files.
+    // Required by Apache-2.0 (@injectivelabs/wallet-strategy) and MIT
+    // (@stacks/*) when redistributing inlined source.
+    options.legalComments = 'external';
   },
   outExtension({ format }) {
     return {
