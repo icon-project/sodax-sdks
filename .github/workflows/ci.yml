@@ -68,6 +68,9 @@ jobs:
       - name: Build Apps
         run: pnpm turbo run build --filter='./apps/*' --filter='!./apps/node'
 
+      - name: Stacks SDK→libs Node integration smoke
+        run: pnpm --filter node test-stacks
+
       - name: Next.js 16 Turbopack regression check
         # Skip `next build` — the previous `Build Apps` step already built it.
         run: pnpm --filter example-next-js-16 verify-only

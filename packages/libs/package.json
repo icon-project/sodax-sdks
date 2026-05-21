@@ -71,7 +71,7 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "node scripts/verify-stacks-connect-ui-stub.mjs && tsup && node scripts/verify-dist-self-contained.mjs",
+    "build": "node scripts/verify-stacks-connect-ui-stub.mjs && tsup && node scripts/verify-dist-self-contained.mjs && node scripts/verify-runtime-smoke.mjs",
     "dev": "tsup --watch",
     "checkTs": "tsc --noEmit",
     "pretty": "biome format . --write",
@@ -81,6 +81,7 @@
     "check:circular-deps": "madge --circular --exclude 'types/dist' $(find ./src -name '*.ts')",
     "check:no-duplicate-bundling": "node scripts/verify-no-duplicate-bundling.mjs",
     "check:dist-self-contained": "node scripts/verify-dist-self-contained.mjs",
+    "check:runtime-smoke": "node scripts/verify-runtime-smoke.mjs",
     "check:knip": "knip"
   },
   "peerDependencies": {
