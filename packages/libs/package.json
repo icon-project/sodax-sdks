@@ -87,6 +87,14 @@
     "@stacks/network": "catalog:",
     "@stacks/transactions": "catalog:"
   },
+  "peerDependencies": {
+    "libsodium-wrappers-sumo": "^0.7.11"
+  },
+  "peerDependenciesMeta": {
+    "libsodium-wrappers-sumo": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/node": "catalog:",
     "tsup": "catalog:",

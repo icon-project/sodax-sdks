@@ -36,17 +36,5 @@
   },
   "commitlint": {
     "extends": ["@commitlint/config-conventional"]
-  },
-  "pnpm": {
-    "overrides": {
-      "@hpke/core": ">=1.8.0",
-      "valibot": ">=1.2.0",
-      "axios": "1.13.2",
-      "protobufjs": "^7.5.8",
-      "postcss": "^8.5.10"
-    },
-    "patchedDependencies": {
-      "@arethetypeswrong/core@0.17.4": "patches/@arethetypeswrong__core@0.17.4.patch"
-    }
   }
 }

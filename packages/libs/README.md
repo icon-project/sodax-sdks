@@ -21,7 +21,7 @@ If the dep "just works" when consumers import it directly, it does **not** belon
 |---|---|---|---|
 | `@sodax/libs/stacks/core` | `@stacks/transactions`, `@stacks/network` | bundle to bypass Turbopack scope-hoisting cycle ([#1070](https://github.com/icon-project/sodax-frontend/issues/1070)) | sdk, wallet-sdk-core, wallet-sdk-react |
 | `@sodax/libs/stacks/connect` | `@stacks/connect` | bundle + stub unused WalletConnect / UI deps (`@reown/appkit*`, `@stacks/connect-ui`, `cross-fetch`) | wallet-sdk-core, wallet-sdk-react |
-| `@sodax/libs/injective/wallet-strategy` | `@injectivelabs/wallet-strategy` | bundle + stub hardware wallet packages (`wallet-ledger`, `wallet-trezor`, `wallet-magic`, `wallet-turnkey`, `wallet-wallet-connect`) | wallet-sdk-react |
+| `@sodax/libs/injective/wallet-strategy` | `@injectivelabs/wallet-strategy` | bundle + stub hardware wallet packages (`wallet-ledger`, `wallet-trezor`, `wallet-magic`, `wallet-turnkey`, `wallet-wallet-connect`). **Consumer must install `libsodium-wrappers-sumo`** (declared as optional peer; bundled deps reach it transitively via `@injectivelabs/sdk-ts → cosmjs`) | wallet-sdk-react |
 
 ## Adding a new subpath
 

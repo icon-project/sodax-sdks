@@ -527,6 +527,9 @@ importers:
       '@stacks/transactions':
         specifier: 'catalog:'
         version: 7.3.1
+      libsodium-wrappers-sumo:
+        specifier: ^0.7.11
+        version: 0.7.16
     devDependencies:
       '@arethetypeswrong/cli':
         specifier: 'catalog:'
@@ -12294,11 +12297,11 @@ snapshots:
     dependencies:
       http-status-codes: 2.3.0
 
-  '@injectivelabs/grpc-web-node-http-transport@0.0.2(@injectivelabs/grpc-web@0.0.1(google-protobuf@3.21.4))':
+  '@injectivelabs/grpc-web-node-http-transport@0.0.2(@injectivelabs/grpc-web@0.0.1)':
     dependencies:
       '@injectivelabs/grpc-web': 0.0.1(google-protobuf@3.21.4)
 
-  '@injectivelabs/grpc-web-react-native-transport@0.0.2(@injectivelabs/grpc-web@0.0.1(google-protobuf@3.21.4))':
+  '@injectivelabs/grpc-web-react-native-transport@0.0.2(@injectivelabs/grpc-web@0.0.1)':
     dependencies:
       '@injectivelabs/grpc-web': 0.0.1(google-protobuf@3.21.4)
 
@@ -12338,8 +12341,8 @@ snapshots:
       '@injectivelabs/core-proto-ts-v2': 1.18.0
       '@injectivelabs/exceptions': 1.18.14
       '@injectivelabs/grpc-web': 0.0.1(google-protobuf@3.21.4)
-      '@injectivelabs/grpc-web-node-http-transport': 0.0.2(@injectivelabs/grpc-web@0.0.1(google-protobuf@3.21.4))
-      '@injectivelabs/grpc-web-react-native-transport': 0.0.2(@injectivelabs/grpc-web@0.0.1(google-protobuf@3.21.4))
+      '@injectivelabs/grpc-web-node-http-transport': 0.0.2(@injectivelabs/grpc-web@0.0.1)
+      '@injectivelabs/grpc-web-react-native-transport': 0.0.2(@injectivelabs/grpc-web@0.0.1)
       '@injectivelabs/indexer-proto-ts-v2': 1.18.10
       '@injectivelabs/mito-proto-ts-v2': 1.17.3
       '@injectivelabs/networks': 1.18.14
@@ -12379,8 +12382,8 @@ snapshots:
       '@injectivelabs/core-proto-ts-v2': 1.18.0
       '@injectivelabs/exceptions': 1.18.14
       '@injectivelabs/grpc-web': 0.0.1(google-protobuf@3.21.4)
-      '@injectivelabs/grpc-web-node-http-transport': 0.0.2(@injectivelabs/grpc-web@0.0.1(google-protobuf@3.21.4))
-      '@injectivelabs/grpc-web-react-native-transport': 0.0.2(@injectivelabs/grpc-web@0.0.1(google-protobuf@3.21.4))
+      '@injectivelabs/grpc-web-node-http-transport': 0.0.2(@injectivelabs/grpc-web@0.0.1)
+      '@injectivelabs/grpc-web-react-native-transport': 0.0.2(@injectivelabs/grpc-web@0.0.1)
       '@injectivelabs/indexer-proto-ts-v2': 1.18.10
       '@injectivelabs/mito-proto-ts-v2': 1.17.3
       '@injectivelabs/networks': 1.18.14
@@ -12420,8 +12423,8 @@ snapshots:
       '@injectivelabs/core-proto-ts-v2': 1.18.0
       '@injectivelabs/exceptions': 1.18.14
       '@injectivelabs/grpc-web': 0.0.1(google-protobuf@3.21.4)
-      '@injectivelabs/grpc-web-node-http-transport': 0.0.2(@injectivelabs/grpc-web@0.0.1(google-protobuf@3.21.4))
-      '@injectivelabs/grpc-web-react-native-transport': 0.0.2(@injectivelabs/grpc-web@0.0.1(google-protobuf@3.21.4))
+      '@injectivelabs/grpc-web-node-http-transport': 0.0.2(@injectivelabs/grpc-web@0.0.1)
+      '@injectivelabs/grpc-web-react-native-transport': 0.0.2(@injectivelabs/grpc-web@0.0.1)
       '@injectivelabs/indexer-proto-ts-v2': 1.18.10
       '@injectivelabs/mito-proto-ts-v2': 1.17.3
       '@injectivelabs/networks': 1.18.14
