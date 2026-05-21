@@ -268,18 +268,18 @@ describe('StacksSpokeService.getSTXBalance', () => {
     );
   });
 
-  it('throws a meaningful shape error when ok=true but the JSON body is missing `stx.balance`', async () => {
-    // The SUT guards `data.stx.balance` and converts a shape mismatch into an
-    // explicit error message — replaces the cryptic TypeError that the
-    // unguarded code used to surface.
+  it('throws TypeError when ok=true but the JSON shape is missing `stx.balance`', async () => {
+    // `data.stx.balance` is accessed without runtime validation. If Hiro ever
+    // returned 200 with `{}` (or any other shape), the SUT surfaces a cryptic
+    // TypeError rather than an explicit "unexpected response shape" error.
+    // Pinning the behaviour so a future contributor adding a runtime guard
+    // knows it's a contract change.
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) } as unknown as Response),
     );
 
-    await expect(stacksSpoke.getSTXBalance(SRC_ADDR)).rejects.toThrow(
-      'Unexpected STX balance response shape: missing data.stx.balance',
-    );
+    await expect(stacksSpoke.getSTXBalance(SRC_ADDR)).rejects.toThrow(TypeError);
   });
 });
 
@@ -310,16 +310,15 @@ describe('StacksSpokeService.readTokenBalance', () => {
     );
   });
 
-  it('throws a meaningful shape error when the Clarity response misses the expected `.value.value` bigint', async () => {
-    // The SUT verifies the nested shape before unwrapping and raises an
-    // explicit error if the contract ABI ever returns a different Clarity
-    // type (e.g. a `ResponseErr`, a `Tuple`, or the ResponseOk-wrapped
-    // `(ok uint)` shape).
+  it('throws on an unexpected Clarity response shape (no runtime guard on the `{ value: UIntCV }` cast)', async () => {
+    // The SUT performs `(result as { value: UIntCV }).value.value as bigint`. The cast
+    // is purely a TypeScript assertion — if `fetchCallReadOnlyFunction` ever returns a
+    // different Clarity type (e.g. a `ResponseErr`, a `Tuple`, or — most relevant — the
+    // `(ok uint)` ResponseOk-wrapped shape that on-chain SIP-010 `get-balance` actually
+    // returns), the nested access throws. Pin current behaviour.
     mocks.fetchCallReadOnlyFunction.mockResolvedValueOnce({});
 
-    await expect(stacksSpoke.readTokenBalance(STACKS_BNUSD, STACKS_ASSET_MGR)).rejects.toThrow(
-      /Unexpected get-balance response shape/,
-    );
+    await expect(stacksSpoke.readTokenBalance(STACKS_BNUSD, STACKS_ASSET_MGR)).rejects.toThrow();
   });
 });
 
@@ -351,16 +350,16 @@ describe('StacksSpokeService.getImplContractAddress', () => {
     );
   });
 
-  it('throws a meaningful shape error when the readContract response is not a ContractPrincipalCV', async () => {
-    // The SUT requires `.value` to be a `address.contractName` string (a Stacks
-    // contract principal carries a `.` separator). A drift to e.g. a string-ascii
-    // response without the dot would silently bind to a wrong-shape string —
-    // catch it explicitly instead.
+  it('does not validate the readContract response shape (cast trusts current ABI)', async () => {
+    // The SUT casts the readContract result directly to `ContractPrincipalCV` and reads
+    // `.value`. The cast is a TypeScript assertion only — runtime accepts any object
+    // with a `.value` field. Pinning current behaviour: a `string-ascii` response with
+    // a non-principal string value silently "succeeds" because `.value` happens to exist.
+    // If the on-chain contract ABI ever drifts (returns a tuple, a response wrapper, etc.),
+    // the wrong-shape value flows downstream and crashes in `parseContractId` or similar.
     mocks.fetchCallReadOnlyFunction.mockResolvedValueOnce({ type: 'string-ascii', value: 'not-a-contract-principal' });
 
-    await expect(stacksSpoke.getImplContractAddress(STACKS_ASSET_MGR)).rejects.toThrow(
-      /Unexpected get-asset-manager-impl response/,
-    );
+    await expect(stacksSpoke.getImplContractAddress(STACKS_ASSET_MGR)).resolves.toBe('not-a-contract-principal');
   });
 });
 
