@@ -60,6 +60,7 @@
     "viem": "catalog:"
   },
   "devDependencies": {
+    "@sodax/libs": "workspace:*",
     "@types/bn.js": "^5.1.6",
     "@types/node": "catalog:",
     "@types/secp256k1": "^4.0.7",

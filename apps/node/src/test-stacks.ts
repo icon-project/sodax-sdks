@@ -1,17 +1,25 @@
 // Regression test for #1070 + the double-`0x` payload bug fixed in 6ebc71fd.
 //
-// Verifies that:
-//   1. The bundled `@sodax/libs/stacks/core` (re-exporting `@stacks/transactions`)
-//      loads cleanly from Node and produces the documented hex encodings.
-//   2. `StacksSpokeService.sendMessage({ raw: true })` returns a single-`0x`-
-//      prefixed payload — the path where the old `\`0x${bytesToHex(...)}\``
-//      wrapper produced `0x0x...` and broke downstream Stacks RPC parsing.
+// Exercises every `@sodax/libs` subpath on the Node ESM runtime path:
 //
-// Run: `pnpm exec tsx src/test-stacks.ts` (no env / wallet required —
-// `sendMessage` raw mode builds the unsigned tx locally without an RPC call).
+//   1. Sync encode via `encodeAddress` / `serializeAddressData` (sdk →
+//      `@sodax/libs/stacks/core`).
+//   2. `StacksSpokeService.sendMessage({ raw: true })` returns a
+//      single-`0x`-prefixed payload (regression for the double-prefix bug
+//      that lived on the same code path).
+//   3. `@sodax/libs/stacks/connect` subpath loads — `request` / `disconnect`
+//      are the public names; the bundled `@stacks/connect` reaches the
+//      stubbed `@stacks/connect-ui` named exports at module init.
+//   4. `@sodax/libs/injective/wallet-strategy` subpath loads — `WalletStrategy`
+//      is a constructor; instantiates with empty strategies to confirm the
+//      lazy hardware-wallet stubs don't crash at construction.
+//
+// Run: `pnpm --filter node test-stacks` (no env / wallet required).
 
 import { encodeAddress, serializeAddressData, Sodax } from '@sodax/sdk';
 import { ChainKeys } from '@sodax/types';
+import { request, disconnect } from '@sodax/libs/stacks/connect';
+import { WalletStrategy } from '@sodax/libs/injective/wallet-strategy';
 
 let failed = false;
 const ok = (msg: string) => console.log('OK:', msg);
@@ -21,7 +29,7 @@ const fail = (msg: string) => {
 };
 
 // 1. Sync encode tests ────────────────────────────────────────────────
-console.log('=== Sync encode tests ===');
+console.log('=== 1. stacks/core sync encode ===');
 
 {
   const addr = 'SP1D5PA98M0PF9Z4Q4N2CDTMTD7XSZ6GE7QQG5XBX';
@@ -50,15 +58,13 @@ console.log('=== Sync encode tests ===');
 }
 
 // 2. Raw spoke payload hex format ─────────────────────────────────────
-// Drives `StacksSpokeService.sendMessage({ raw: true })` directly so the
-// serialized bytes are exposed. The double-`0x` bug would surface here.
-console.log('\n=== Raw spoke payload hex format ===');
+console.log('\n=== 2. stacks/core raw payload ===');
 
 const sodax = new Sodax();
 const stacksSpoke = sodax.spoke.getSpokeService(ChainKeys.STACKS_MAINNET);
 
-// Any valid 33-byte compressed secp256k1 public key works — used purely
-// for unsigned-tx auth field construction, never broadcast.
+// Any valid 33-byte compressed secp256k1 public key — used only for unsigned-tx
+// auth field construction, never broadcast.
 const STACKS_TEST_PUBKEY = '02b8d2c9fe1aa1f29e9c80c6e0b6cdf2cf6b9fbb47d9b86c83a8b69a3e74e4f8e8';
 
 const sendMsgResult = await stacksSpoke.sendMessage({
@@ -75,6 +81,36 @@ if (typeof payload === 'string' && /^0x[0-9a-f]+$/i.test(payload) && !payload.st
   ok(`sendMessage raw payload: ${payload.slice(0, 24)}... (single-0x prefix)`);
 } else {
   fail(`sendMessage raw payload not single-0x: ${payload}`);
+}
+
+// 3. stacks/connect subpath ───────────────────────────────────────────
+console.log('\n=== 3. stacks/connect subpath ===');
+
+if (typeof request === 'function') ok('request is a function');
+else fail(`request not a function: typeof=${typeof request}`);
+
+if (typeof disconnect === 'function') ok('disconnect is a function');
+else fail(`disconnect not a function: typeof=${typeof disconnect}`);
+
+// 4. injective/wallet-strategy subpath ────────────────────────────────
+console.log('\n=== 4. injective/wallet-strategy subpath ===');
+
+if (typeof WalletStrategy === 'function') ok('WalletStrategy is a class');
+else fail(`WalletStrategy not a class: typeof=${typeof WalletStrategy}`);
+
+try {
+  // Constructor runs synchronously; hardware-wallet loaders are lazy so the
+  // 5 stubbed packages aren't reached here. If the stubs broke construction
+  // (e.g. a missing top-level symbol) this would throw.
+  const ws = new WalletStrategy({
+    chainId: 'injective-1' as never,
+    strategies: {},
+    evmOptions: { evmChainId: 1 as never, rpcUrl: 'https://ethereum-rpc.publicnode.com' },
+  });
+  if (ws) ok('WalletStrategy instantiated (hardware-wallet stubs harmless at ctor)');
+  else fail('WalletStrategy ctor returned falsy');
+} catch (e) {
+  fail(`WalletStrategy ctor threw: ${(e as Error).message}`);
 }
 
 // Result ─────────────────────────────────────────────────────────────
