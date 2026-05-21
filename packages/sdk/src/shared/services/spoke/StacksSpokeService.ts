@@ -151,7 +151,7 @@ export class StacksSpokeService {
       });
 
       return {
-        payload: `0x${bytesToHex(serializePayloadBytes(tx.payload))}`,
+        payload: bytesToHex(serializePayloadBytes(tx.payload)),
       } satisfies StacksReturnType<true> as StacksReturnType<R>;
     }
     const txId = await params.walletProvider.sendTransaction(reqData);
@@ -199,7 +199,7 @@ export class StacksSpokeService {
       });
 
       return {
-        payload: `0x${bytesToHex(serializePayloadBytes(tx.payload))}`,
+        payload: bytesToHex(serializePayloadBytes(tx.payload)),
       } satisfies StacksReturnType<true> as StacksReturnType<Raw>;
     }
 

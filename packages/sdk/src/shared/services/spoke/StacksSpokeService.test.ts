@@ -136,11 +136,7 @@ const mockStacksProvider = {
 // The SUT only reads `tx.payload` and passes it to `serializePayloadBytes`. Pin the shape; the
 // content is opaque to the SUT.
 const FAKE_PAYLOAD_BYTES = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
-// NOTE: the SUT produces a double-`0x` prefix because viem's `bytesToHex` already returns a
-// '0x'-prefixed string, and the SUT wraps it as `\`0x${bytesToHex(...)}\``. We pin the actual
-// current output here (`'0x0xdeadbeef'`) — flagging this as a potential SUT bug worth a follow-up
-// rather than silently masking it in the fixture.
-const FAKE_PAYLOAD_HEX = '0x0xdeadbeef';
+const FAKE_PAYLOAD_HEX = '0xdeadbeef';
 const fakeUnsignedTx = { payload: { type: 'contract-call', _opaque: true } } as unknown as Awaited<
   ReturnType<typeof import('@sodax/libs/stacks/core').makeUnsignedContractCall>
 >;
