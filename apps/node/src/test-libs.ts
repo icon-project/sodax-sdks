@@ -8,7 +8,7 @@
 // Run: `pnpm --filter node test-libs` (no env / wallet required; all calls
 // build locally and never touch the network).
 
-import { encodeAddress, serializeAddressData, Sodax } from '@sodax/sdk';
+import { encodeAddress, reverseEncodeAddress, serializeAddressData, Sodax } from '@sodax/sdk';
 import { PostConditionMode, StacksWalletProvider } from '@sodax/wallet-sdk-core';
 import { ChainKeys } from '@sodax/types';
 
@@ -75,11 +75,24 @@ console.log('\n=== 3. wallet-sdk-core → libs/stacks/core (PostConditionMode en
   }
 }
 
-// 4. @sodax/wallet-sdk-core → @sodax/libs/stacks/core (StacksWalletProvider)
+// 4. @sodax/sdk → @sodax/libs/stacks/core (decode round-trip) ────────
+// `reverseEncodeAddress` calls bundled `cvToString` + `deserializeCV` —
+// the inverse path of section 1. Asserts encode → decode returns the
+// original principal, catching a regression on either side of libs.
+console.log('\n=== 4. sdk → libs/stacks/core (reverseEncodeAddress round-trip) ===');
+{
+  const addr = 'SP1D5PA98M0PF9Z4Q4N2CDTMTD7XSZ6GE7QQG5XBX';
+  const enc = encodeAddress(ChainKeys.STACKS_MAINNET, addr);
+  const dec = reverseEncodeAddress(ChainKeys.STACKS_MAINNET, enc);
+  if (dec === addr) ok(`round-trip: ${dec}`);
+  else fail(`round-trip mismatch: original=${addr} decoded=${dec}`);
+}
+
+// 5. @sodax/wallet-sdk-core → @sodax/libs/stacks/core (StacksWalletProvider)
 // `StacksWalletProvider`'s constructor builds a network via libs's
 // `networkFrom` and pins the private key. If libs's `@stacks/network` or
 // `@stacks/transactions` chain doesn't load, instantiation throws.
-console.log('\n=== 4. wallet-sdk-core → libs/stacks/core (StacksWalletProvider) ===');
+console.log('\n=== 5. wallet-sdk-core → libs/stacks/core (StacksWalletProvider) ===');
 {
   try {
     const provider = new StacksWalletProvider({
