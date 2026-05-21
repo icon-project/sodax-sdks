@@ -68,7 +68,7 @@ jobs:
       - name: Build Apps
         run: pnpm turbo run build --filter='./apps/*' --filter='!./apps/node'
 
-      - name: Stacks SDK→libs Node integration smoke
+      - name: Stacks SDK integration smoke (Node)
         run: pnpm --filter node test-stacks
 
       - name: Next.js 16 Turbopack regression check
