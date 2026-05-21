@@ -6,11 +6,12 @@
   },
   "version": "0.0.1-rc.0",
   "license": "MIT",
-  "description": "Sodax shared bundled libraries (internal dependency isolation)",
+  "description": "Internal package — do not depend on directly. Consumed transitively by @sodax/sdk, @sodax/wallet-sdk-core, @sodax/wallet-sdk-react.",
   "keywords": [
     "sodax",
     "libs",
-    "internal"
+    "internal",
+    "do-not-use-directly"
   ],
   "homepage": "https://github.com/icon-project/sodax-sdks/tree/main/packages/libs",
   "bugs": {

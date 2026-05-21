@@ -24,7 +24,12 @@
   - [ ] 8.5 Mark `Set as a pre-release` if you are creating an RC
   - [ ] 8.6 Click `Publish release`
   - [ ] 8.7 The [sdks-publish.yml](../.github/workflows/sdks-publish.yml) workflow will validate that all 5 `package.json` versions match the tag, then publish in topological order: `types` → `wallet-sdk-core` → `sdk` → `wallet-sdk-react` → `dapp-kit`. If validation fails, fix the mismatched `package.json`, bump to the next patch (e.g. `rc.1` → `rc.2`), and re-tag — npm rejects republishing the same version.
-- [ ] 9. Share release info (npm links to the new versions + changelog) in [Venture 23 #sodax-sdk](https://discord.com/channels/688963201101987847/1385504703672094760) and [Sodax #sodax_sdk](https://discord.com/channels/880651922682560582/1425075360550223994) Discord channels
+- [ ] 9. **Mark `@sodax/libs` as deprecated on npm** — it ships publicly so the SDK's transitive install works, but it is internal-only:
+  ```bash
+  npm deprecate @sodax/libs@<version> "Internal package — do not depend on directly. Consumed transitively by @sodax/sdk, @sodax/wallet-sdk-core, @sodax/wallet-sdk-react. Subpaths may be removed without notice when upstream Turbopack bugs are fixed."
+  ```
+  This makes `npm install @sodax/libs` show a deprecation warning, deterring direct consumer dependencies. Re-run per published version.
+- [ ] 10. Share release info (npm links to the new versions + changelog) in [Venture 23 #sodax-sdk](https://discord.com/channels/688963201101987847/1385504703672094760) and [Sodax #sodax_sdk](https://discord.com/channels/880651922682560582/1425075360550223994) Discord channels
 
 ## Republishing a single package
 
