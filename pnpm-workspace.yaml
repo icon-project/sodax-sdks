@@ -55,6 +55,13 @@ overrides:
   protobufjs: "^7.5.8"
   # Clears a Next.js transitive XSS advisory against postcss <8.5.10.
   postcss: "^8.5.10"
+  # Force every transitive `@tanstack/react-query` to the catalog version.
+  # Without this, @mysten/dapp-kit's peer `^5.50.1` can resolve to 5.100.x
+  # while demo / wagmi keep 5.87.4 — two React Query contexts in the same
+  # tree, and wagmi's `useWalletClient` throws "No QueryClient set" because
+  # its useQueryClient resolves to the wrong instance. Update both lines
+  # together when bumping the catalog version.
+  "@tanstack/react-query": "5.87.4"
 
 patchedDependencies:
   # Fixes a multi-chunk tarball-extraction bug in @arethetypeswrong/core (used by
