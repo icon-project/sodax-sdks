@@ -398,7 +398,7 @@ Public methods declare narrow code unions via `Extract<SodaxErrorCode, ...>`:
 ```ts
 type CreateSupplyIntentErrorCode = Extract<
   SodaxErrorCode,
-  'VALIDATION_FAILED' | 'INTENT_CREATION_FAILED' | 'UNKNOWN'
+  'USER_REJECTED' | 'VALIDATION_FAILED' | 'INTENT_CREATION_FAILED' | 'UNKNOWN'
 >;
 ```
 

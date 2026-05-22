@@ -131,7 +131,7 @@ If your dapp-kit consumer code catches errors from mutations and uses `instanceo
 + }
 ```
 
-`isSodaxError` is re-exported from `@sodax/dapp-kit`. Discriminate via `(error.feature, error.code)` — the feature is now a first-class field, and the code vocabulary is unified to 13 reason-only codes.
+`isSodaxError` is re-exported from `@sodax/dapp-kit`. Discriminate via `(error.feature, error.code)` — the feature is now a first-class field, and the code vocabulary is unified to 14 reason-only codes (`'USER_REJECTED'` is reachable from any orchestrator that wraps a wallet sign step, which lets consumers render a "Cancelled" UI distinct from real failures).
 
 Full SDK-level detail: [`@sodax/sdk`: `migration/breaking-changes/result-and-errors.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/knowledge/sdk/migration/breaking-changes/result-and-errors.md).
 

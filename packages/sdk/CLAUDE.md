@@ -136,10 +136,11 @@ class SodaxError<C extends SodaxErrorCode = SodaxErrorCode> extends Error {
 
 #### Unified code vocabulary
 
-13 reason-only codes cover every feature:
+14 reason-only codes cover every feature:
 
 | Code                     | Meaning                                                                |
 |--------------------------|------------------------------------------------------------------------|
+| `USER_REJECTED`          | User cancelled the wallet prompt (signing / approval / connection). Classified at the source by `intentCreationFailed` / `approveFailed` wrappers via the internal `isWalletRejection` detector — recognises viem `4001` / `UserRejectedRequestError`, ICON Hana `CANCEL_SIGNING` / `-31002`, and name + message patterns from Solana / Sui / Stellar / Stacks / NEAR / Injective wallets. Branch on this to render a "Cancelled" UI distinct from real failures. |
 | `VALIDATION_FAILED`      | Pre-flight invariant tripped (input shape, unsupported chain, etc.)    |
 | `INTENT_CREATION_FAILED` | Building the intent / payload failed                                   |
 | `EXECUTION_FAILED`       | Orchestrator-level catch-all (per-op via `context.action`)             |
