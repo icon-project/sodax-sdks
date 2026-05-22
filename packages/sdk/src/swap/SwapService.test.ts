@@ -1770,7 +1770,7 @@ describe('SwapService.approve — additional branches', () => {
     }
   });
 
-  it('forwards a failure Result from spoke.approve on an EVM spoke (ok:false not re-wrapped)', async () => {
+  it('wraps a failure Result from spoke.approve on an EVM spoke as SodaxError(APPROVE_FAILED) with the original error preserved as cause', async () => {
     const approveError = new Error('APPROVE_REJECTED');
     vi.spyOn(sodax.spoke, 'approve').mockResolvedValueOnce({ ok: false, error: approveError });
 
@@ -1780,7 +1780,12 @@ describe('SwapService.approve — additional branches', () => {
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: approveError });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error)).toBe(true);
+    expect((result.error as SodaxError).code).toBe('APPROVE_FAILED');
+    expect((result.error as SodaxError).feature).toBe('swap');
+    expect((result.error as SodaxError).cause).toBe(approveError);
   });
 
   it('returns ok:false when spoke.approve rejects (thrown)', async () => {
@@ -2191,7 +2196,7 @@ describe('SwapService.createCancelIntent', () => {
     }
   });
 
-  it('forwards a failure Result from spoke.sendMessage unchanged', async () => {
+  it('wraps a failure Result from spoke.sendMessage as SodaxError(INTENT_CREATION_FAILED) with the original error preserved as cause', async () => {
     const intent = makeIntent(ChainKeys.BSC_MAINNET);
     const sendError = new Error('SEND_REJECTED');
     vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
@@ -2205,7 +2210,12 @@ describe('SwapService.createCancelIntent', () => {
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: sendError });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error)).toBe(true);
+    expect((result.error as SodaxError).code).toBe('INTENT_CREATION_FAILED');
+    expect((result.error as SodaxError).feature).toBe('swap');
+    expect((result.error as SodaxError).cause).toBe(sendError);
   });
 
   it('returns ok:false when spoke.sendMessage rejects', async () => {

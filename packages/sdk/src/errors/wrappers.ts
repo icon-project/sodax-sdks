@@ -16,6 +16,85 @@ export function messageOf(error: unknown, fallback: string): string {
 
 type Ctx = Partial<SodaxErrorContext>;
 
+/**
+ * Private wallet-rejection detector. Used inside wrappers that wrap wallet-sign operations
+ * (`intentCreationFailed`, `approveFailed`, `executionFailed`) so the canonical `USER_REJECTED`
+ * code surfaces uniformly across features without each service catch block re-implementing
+ * the shape-matching logic.
+ *
+ * Shapes recognised:
+ * - EVM (viem):                `UserRejectedRequestError`, EIP-1193 code `4001`,
+ *                              ethers-compat `code === 'ACTION_REJECTED'`.
+ * - ICON (Hana):               `code === 'CANCEL_SIGNING'` / `'CANCEL_JSON-RPC'` / `-31002`.
+ * - Solana / Sui / Stellar /
+ *   Stacks / Bitcoin / NEAR /
+ *   Injective:                 falls back to error `name` + message-pattern match — those
+ *                              wallet libraries do not expose a stable numeric code.
+ */
+const REJECTION_TEXT_PATTERNS: readonly string[] = [
+  'user rejected',
+  'user denied',
+  'user declined',
+  'user cancel',
+  'rejected by user',
+  'cancelled by user',
+  'canceled by user',
+  'cancel_signing',
+  'cancel_json-rpc',
+  'popup closed',
+  'popupclosed',
+  'request rejected',
+];
+
+function matchRejectionText(text: unknown): boolean {
+  if (typeof text !== 'string' || text.length === 0) return false;
+  const lower = text.toLowerCase();
+  for (const pattern of REJECTION_TEXT_PATTERNS) {
+    if (lower.includes(pattern)) return true;
+  }
+  return false;
+}
+
+function isWalletRejection(error: unknown): boolean {
+  if (error == null) return false;
+  if (typeof error === 'string') return matchRejectionText(error);
+  if (typeof error !== 'object') return false;
+
+  const o = error as {
+    name?: string;
+    code?: unknown;
+    message?: string;
+    shortMessage?: string;
+    reason?: string;
+    details?: string;
+  };
+
+  if (o.name === 'UserRejectedRequestError') return true;
+  if (o.name === 'WalletSignTransactionError' && matchRejectionText(o.message)) return true;
+  if (o.name === 'WalletConnectionError' && matchRejectionText(o.message)) return true;
+
+  if (o.code === 4001) return true;
+  if (o.code === 'ACTION_REJECTED') return true;
+  if (o.code === 'CANCEL_SIGNING') return true;
+  if (o.code === 'CANCEL_JSON-RPC') return true;
+  if (o.code === -31002) return true;
+
+  if (matchRejectionText(o.shortMessage)) return true;
+  if (matchRejectionText(o.details)) return true;
+  if (matchRejectionText(o.message)) return true;
+  if (matchRejectionText(o.reason)) return true;
+
+  return false;
+}
+
+function userRejected(feature: SodaxFeature, cause: unknown, context?: Ctx): SodaxError<'USER_REJECTED'> {
+  return new SodaxError('USER_REJECTED', messageOf(cause, 'User rejected the request'), {
+    feature,
+    cause,
+    context,
+  });
+}
+
 /** `LOOKUP_FAILED` for read-only on-chain queries / off-chain config fetches. */
 export function lookupFailed(
   feature: SodaxFeature,
@@ -43,12 +122,18 @@ export function verifyFailed(
   });
 }
 
-/** `INTENT_CREATION_FAILED` — spoke deposit / sendMessage / intent build failed. */
+/**
+ * `INTENT_CREATION_FAILED` — spoke deposit / sendMessage / intent build failed.
+ *
+ * Wraps the wallet-sign step. If the cause matches a wallet rejection shape, classifies as
+ * `USER_REJECTED` instead so consumers can branch on a single canonical "cancelled" code.
+ */
 export function intentCreationFailed(
   feature: SodaxFeature,
   cause: unknown,
   context?: Ctx,
-): SodaxError<'INTENT_CREATION_FAILED'> {
+): SodaxError<'USER_REJECTED' | 'INTENT_CREATION_FAILED'> {
+  if (isWalletRejection(cause)) return userRejected(feature, cause, { phase: 'intentCreation', ...context });
   return new SodaxError('INTENT_CREATION_FAILED', messageOf(cause, 'Intent creation failed'), {
     feature,
     cause,
@@ -69,8 +154,18 @@ export function executionFailed(
   });
 }
 
-/** `APPROVE_FAILED` — token approval call failed. */
-export function approveFailed(feature: SodaxFeature, cause: unknown, context?: Ctx): SodaxError<'APPROVE_FAILED'> {
+/**
+ * `APPROVE_FAILED` — token approval call failed.
+ *
+ * Wraps the wallet-sign step. If the cause matches a wallet rejection shape, classifies as
+ * `USER_REJECTED` instead.
+ */
+export function approveFailed(
+  feature: SodaxFeature,
+  cause: unknown,
+  context?: Ctx,
+): SodaxError<'USER_REJECTED' | 'APPROVE_FAILED'> {
+  if (isWalletRejection(cause)) return userRejected(feature, cause, { phase: 'approve', ...context });
   return new SodaxError('APPROVE_FAILED', messageOf(cause, 'Approve failed'), {
     feature,
     cause,

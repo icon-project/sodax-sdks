@@ -4,7 +4,7 @@ import { erc20Abi, encodeFunctionData, isAddress, type Address } from 'viem';
 import type { ConfigService } from '../shared/config/ConfigService.js';
 import type { HubProvider } from '../shared/types/types.js';
 import { SodaxError } from '../errors/SodaxError.js';
-import { lookupFailed } from '../errors/wrappers.js';
+import { lookupFailed, approveFailed } from '../errors/wrappers.js';
 import { SolverApiService } from '../swap/SolverApiService.js';
 import { ProtocolIntentsAbi } from '../shared/abis/protocolIntents.abi.js';
 import {
@@ -489,7 +489,7 @@ export class PartnerFeeClaimService {
     } catch (error) {
       return {
         ok: false,
-        error: new SodaxError('APPROVE_FAILED', error instanceof Error ? error.message : 'approveToken failed', { feature: 'partner', cause: error, context: { phase: 'approve' } }),
+        error: approveFailed('partner', error),
       };
     }
   }

@@ -37,7 +37,7 @@ import { SolverApiService } from './SolverApiService.js';
 import { EvmSolverService } from './EvmSolverService.js';
 import { SodaxError } from '../errors/SodaxError.js';
 import { mapRelayFailure } from '../errors/relay-error-mapping.js';
-import {  verifyFailed, intentCreationFailed, executionFailed, unknownFailed } from '../errors/wrappers.js';
+import {  verifyFailed, intentCreationFailed, executionFailed, unknownFailed, approveFailed } from '../errors/wrappers.js';
 import {
   type SwapCreateIntentError,
   type PostExecutionError,
@@ -521,6 +521,7 @@ export class SwapService {
     _params: SwapActionParams<K, Raw>,
   ): Promise<Result<TxReturnType<K, Raw>>> {
     const { params } = _params;
+    const wrapApproveFailure = (cause: unknown) => approveFailed('swap', cause);
 
     try {
       if (isHubChainKeyType(params.srcChainKey) || isEvmSpokeOnlyChainKeyType(params.srcChainKey)) {
@@ -546,7 +547,7 @@ export class SwapService {
         });
 
         if (!result.ok) {
-          return result;
+          return { ok: false, error: wrapApproveFailure(result.error) };
         }
 
         return {
@@ -580,7 +581,7 @@ export class SwapService {
               },
         );
 
-        if (!result.ok) return result;
+        if (!result.ok) return { ok: false, error: wrapApproveFailure(result.error) };
 
         return {
           ok: true,
@@ -914,7 +915,7 @@ export class SwapService {
 
       const txResult = await this.spoke.sendMessage(sendMessageParams);
 
-      if (!txResult.ok) return txResult;
+      if (!txResult.ok) return { ok: false, error: intentCreationFailed('swap', txResult.error) };
 
       return {
         ok: true,

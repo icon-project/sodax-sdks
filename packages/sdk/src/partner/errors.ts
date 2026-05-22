@@ -11,12 +11,13 @@ export type PartnerAction = 'waitAutoSwap';
 
 export type PartnerErrorCode = Extract<
   SodaxErrorCode,
-  'VALIDATION_FAILED' | 'LOOKUP_FAILED' | 'APPROVE_FAILED' | 'EXECUTION_FAILED' | 'UNKNOWN'
+  'USER_REJECTED' | 'VALIDATION_FAILED' | 'LOOKUP_FAILED' | 'APPROVE_FAILED' | 'EXECUTION_FAILED' | 'UNKNOWN'
 >;
 
 export type PartnerError = SodaxError<PartnerErrorCode>;
 
 const PARTNER_CODES: ReadonlySet<PartnerErrorCode> = new Set([
+  'USER_REJECTED',
   'VALIDATION_FAILED',
   'LOOKUP_FAILED',
   'APPROVE_FAILED',

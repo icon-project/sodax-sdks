@@ -16,6 +16,9 @@
  * Reason-only error codes. Each code answers "what kind of failure was this?", not
  * "which feature?".
  *
+ * - `USER_REJECTED` — the connected wallet reported a user-initiated rejection of the
+ *   signing / connection / approval prompt. Cancellation is a normal flow, not a failure per
+ *   se — consumers branch on this code to render a "Cancelled" UI.
  * - `VALIDATION_FAILED` — a precondition / invariant tripped before any external call.
  * - `INTENT_CREATION_FAILED` — building the intent / calldata / payload failed (typically
  *   in a `create*Intent` method).
@@ -40,6 +43,7 @@
  * - `UNKNOWN` — last-resort catch in an outer `try`. Should be extremely rare in production.
  */
 export type SodaxErrorCode =
+  | 'USER_REJECTED'
   | 'VALIDATION_FAILED'
   | 'INTENT_CREATION_FAILED'
   | 'EXECUTION_FAILED'
@@ -141,8 +145,14 @@ export type SodaxErrorContext = {
 // shapes and keeps each `errors.ts` file focused on feature-specific narrowing.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type CreateIntentErrorCode = Extract<SodaxErrorCode, 'VALIDATION_FAILED' | 'INTENT_CREATION_FAILED' | 'UNKNOWN'>;
-export type ApproveErrorCode = Extract<SodaxErrorCode, 'VALIDATION_FAILED' | 'APPROVE_FAILED' | 'UNKNOWN'>;
+export type CreateIntentErrorCode = Extract<
+  SodaxErrorCode,
+  'USER_REJECTED' | 'VALIDATION_FAILED' | 'INTENT_CREATION_FAILED' | 'UNKNOWN'
+>;
+export type ApproveErrorCode = Extract<
+  SodaxErrorCode,
+  'USER_REJECTED' | 'VALIDATION_FAILED' | 'APPROVE_FAILED' | 'UNKNOWN'
+>;
 export type AllowanceCheckErrorCode = Extract<
   SodaxErrorCode,
   'VALIDATION_FAILED' | 'ALLOWANCE_CHECK_FAILED' | 'UNKNOWN'
@@ -155,6 +165,7 @@ export type LookupErrorCode = Extract<SodaxErrorCode, 'VALIDATION_FAILED' | 'LOO
 
 /** Codes any `create*Intent` method can return. */
 export const CREATE_INTENT_CODES: ReadonlySet<CreateIntentErrorCode> = new Set([
+  'USER_REJECTED',
   'VALIDATION_FAILED',
   'INTENT_CREATION_FAILED',
   'UNKNOWN',
@@ -162,6 +173,7 @@ export const CREATE_INTENT_CODES: ReadonlySet<CreateIntentErrorCode> = new Set([
 
 /** Codes any `approve` method can return. */
 export const APPROVE_CODES: ReadonlySet<ApproveErrorCode> = new Set([
+  'USER_REJECTED',
   'VALIDATION_FAILED',
   'APPROVE_FAILED',
   'UNKNOWN',
@@ -186,6 +198,7 @@ export const LOOKUP_CODES: ReadonlySet<LookupErrorCode> = new Set(['VALIDATION_F
 
 /** Runtime list of all valid error codes — useful for membership checks and exhaustive switches. */
 export const SODAX_ERROR_CODES = [
+  'USER_REJECTED',
   'VALIDATION_FAILED',
   'INTENT_CREATION_FAILED',
   'EXECUTION_FAILED',
