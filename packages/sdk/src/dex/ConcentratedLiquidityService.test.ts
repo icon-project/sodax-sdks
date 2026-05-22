@@ -23,6 +23,7 @@ import type {
   ClLiquidityClaimRewardsAction,
 } from './ConcentratedLiquidityService.js';
 import { ClService } from './ConcentratedLiquidityService.js';
+import { isSodaxError, SodaxError } from '../errors/SodaxError.js';
 
 // `ClService` reaches `relayTxAndWaitPacket`, the pancakeswap calldata encoders, `Erc4626Service`,
 // and viem's `parseEventLogs` directly from their source modules. Vitest's hoisted `vi.mock` lets
@@ -316,7 +317,7 @@ describe('ClService.executeSupplyLiquidity', () => {
     expect(sendArg).not.toHaveProperty('walletProvider');
   });
 
-  it('forwards a failure Result from SpokeService.sendMessage', async () => {
+  it('wraps a failure Result from SpokeService.sendMessage as SodaxError(INTENT_CREATION_FAILED, dex) with .cause', async () => {
     const sendError = new Error('SEND_REJECTED');
     vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
 
@@ -326,7 +327,12 @@ describe('ClService.executeSupplyLiquidity', () => {
       walletProvider: mockEvmProvider,
     } satisfies ClSupplyAction<'0x38.bsc', false>);
 
-    expect(result).toEqual({ ok: false, error: sendError });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error)).toBe(true);
+    expect((result.error as SodaxError).code).toBe('INTENT_CREATION_FAILED');
+    expect((result.error as SodaxError).feature).toBe('dex');
+    expect((result.error as SodaxError).cause).toBe(sendError);
   });
 
   it('returns ok:false when getUserHubWalletAddress rejects (top-of-method failure)', async () => {
@@ -371,7 +377,7 @@ describe('ClService.executeIncreaseLiquidity', () => {
     expect(sendArg).not.toHaveProperty('walletProvider');
   });
 
-  it('forwards sendMessage failure as-is', async () => {
+  it('wraps sendMessage failure as SodaxError(INTENT_CREATION_FAILED, dex) with .cause', async () => {
     const sendError = new Error('SEND_REJECTED');
     vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
 
@@ -381,7 +387,12 @@ describe('ClService.executeIncreaseLiquidity', () => {
       walletProvider: mockEvmProvider,
     } satisfies ClLiquidityIncreaseLiquidityAction<'0x38.bsc', false>);
 
-    expect(result).toEqual({ ok: false, error: sendError });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error)).toBe(true);
+    expect((result.error as SodaxError).code).toBe('INTENT_CREATION_FAILED');
+    expect((result.error as SodaxError).feature).toBe('dex');
+    expect((result.error as SodaxError).cause).toBe(sendError);
   });
 
   it('returns ok:false when getUserHubWalletAddress rejects', async () => {
@@ -430,7 +441,7 @@ describe('ClService.executeDecreaseLiquidity', () => {
     expect(sendArg).not.toHaveProperty('walletProvider');
   });
 
-  it('forwards sendMessage failure as-is', async () => {
+  it('wraps sendMessage failure as SodaxError(INTENT_CREATION_FAILED, dex) with .cause', async () => {
     const sendError = new Error('SEND_REJECTED');
     vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
 
@@ -440,7 +451,12 @@ describe('ClService.executeDecreaseLiquidity', () => {
       walletProvider: mockEvmProvider,
     } satisfies ClLiquidityDecreaseLiquidityAction<'0x38.bsc', false>);
 
-    expect(result).toEqual({ ok: false, error: sendError });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error)).toBe(true);
+    expect((result.error as SodaxError).code).toBe('INTENT_CREATION_FAILED');
+    expect((result.error as SodaxError).feature).toBe('dex');
+    expect((result.error as SodaxError).cause).toBe(sendError);
   });
 
   it('returns ok:false when getUserHubWalletAddress rejects', async () => {
@@ -487,7 +503,7 @@ describe('ClService.executeClaimRewards', () => {
     expect(sendArg).not.toHaveProperty('walletProvider');
   });
 
-  it('forwards sendMessage failure as-is', async () => {
+  it('wraps sendMessage failure as SodaxError(INTENT_CREATION_FAILED, dex) with .cause', async () => {
     const sendError = new Error('SEND_REJECTED');
     vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
 
@@ -497,7 +513,12 @@ describe('ClService.executeClaimRewards', () => {
       walletProvider: mockEvmProvider,
     } satisfies ClLiquidityClaimRewardsAction<'0x38.bsc', false>);
 
-    expect(result).toEqual({ ok: false, error: sendError });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error)).toBe(true);
+    expect((result.error as SodaxError).code).toBe('INTENT_CREATION_FAILED');
+    expect((result.error as SodaxError).feature).toBe('dex');
+    expect((result.error as SodaxError).cause).toBe(sendError);
   });
 
   it('returns ok:false when getUserHubWalletAddress rejects', async () => {
@@ -546,7 +567,7 @@ describe('ClService.supplyLiquidity', () => {
     expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
   });
 
-  it('returns the failure Result from executeSupplyLiquidity unchanged', async () => {
+  it('forwards the wrapped failure from executeSupplyLiquidity (SodaxError(INTENT_CREATION_FAILED, dex))', async () => {
     const sendError = new Error('SEND_REJECTED');
     vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
 
@@ -556,7 +577,12 @@ describe('ClService.supplyLiquidity', () => {
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: sendError });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error)).toBe(true);
+    expect((result.error as SodaxError).code).toBe('INTENT_CREATION_FAILED');
+    expect((result.error as SodaxError).feature).toBe('dex');
+    expect((result.error as SodaxError).cause).toBe(sendError);
   });
 
   it('returns the failure Result from relayTxAndWaitPacket unchanged', async () => {
@@ -614,7 +640,7 @@ describe('ClService.increaseLiquidity', () => {
     expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
   });
 
-  it('forwards the failure from executeIncreaseLiquidity', async () => {
+  it('forwards the wrapped failure from executeIncreaseLiquidity (SodaxError(INTENT_CREATION_FAILED, dex))', async () => {
     const sendError = new Error('SEND_REJECTED');
     vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
 
@@ -624,7 +650,12 @@ describe('ClService.increaseLiquidity', () => {
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: sendError });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error)).toBe(true);
+    expect((result.error as SodaxError).code).toBe('INTENT_CREATION_FAILED');
+    expect((result.error as SodaxError).feature).toBe('dex');
+    expect((result.error as SodaxError).cause).toBe(sendError);
   });
 
   it('forwards the failure from relayTxAndWaitPacket', async () => {
@@ -669,7 +700,7 @@ describe('ClService.decreaseLiquidity', () => {
     expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
   });
 
-  it('forwards the failure from executeDecreaseLiquidity', async () => {
+  it('forwards the wrapped failure from executeDecreaseLiquidity (SodaxError(INTENT_CREATION_FAILED, dex))', async () => {
     const sendError = new Error('SEND_REJECTED');
     vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
 
@@ -679,7 +710,12 @@ describe('ClService.decreaseLiquidity', () => {
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: sendError });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error)).toBe(true);
+    expect((result.error as SodaxError).code).toBe('INTENT_CREATION_FAILED');
+    expect((result.error as SodaxError).feature).toBe('dex');
+    expect((result.error as SodaxError).cause).toBe(sendError);
   });
 
   it('forwards the failure from relayTxAndWaitPacket', async () => {
@@ -724,7 +760,7 @@ describe('ClService.claimRewards', () => {
     expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
   });
 
-  it('forwards the failure from executeClaimRewards', async () => {
+  it('forwards the wrapped failure from executeClaimRewards (SodaxError(INTENT_CREATION_FAILED, dex))', async () => {
     const sendError = new Error('SEND_REJECTED');
     vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
 
@@ -734,7 +770,12 @@ describe('ClService.claimRewards', () => {
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: sendError });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error)).toBe(true);
+    expect((result.error as SodaxError).code).toBe('INTENT_CREATION_FAILED');
+    expect((result.error as SodaxError).feature).toBe('dex');
+    expect((result.error as SodaxError).cause).toBe(sendError);
   });
 
   it('forwards the failure from relayTxAndWaitPacket', async () => {

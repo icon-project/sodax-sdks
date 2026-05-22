@@ -12,7 +12,7 @@ import {
   type SendMessageParams,
 } from '../shared/index.js';
 import { SodaxError } from '../errors/SodaxError.js';
-import { lookupFailed } from '../errors/wrappers.js';
+import { intentCreationFailed, lookupFailed } from '../errors/wrappers.js';
 import { dexInvariant } from './errors.js';
 import type { MintPositionEventLog } from '../swap/EvmSolverService.js';
 import type {
@@ -433,10 +433,7 @@ export class ClService {
 
       if (!txResult.ok) {
         console.error('executeSupplyLiquidity error:', txResult.error);
-        return {
-          ok: false,
-          error: txResult.error,
-        };
+        return { ok: false, error: intentCreationFailed('dex', txResult.error) };
       }
 
       return {
@@ -577,12 +574,7 @@ export class ClService {
 
       const txResult = await this.spoke.sendMessage(sendMessageParams);
 
-      if (!txResult.ok) {
-        return {
-          ok: false,
-          error: txResult.error,
-        };
-      }
+      if (!txResult.ok) return { ok: false, error: intentCreationFailed('dex', txResult.error) };
 
       return {
         ok: true,
@@ -663,12 +655,7 @@ export class ClService {
 
       const txResult = await this.spoke.sendMessage(sendMessageParams);
 
-      if (!txResult.ok) {
-        return {
-          ok: false,
-          error: txResult.error,
-        };
-      }
+      if (!txResult.ok) return { ok: false, error: intentCreationFailed('dex', txResult.error) };
 
       return {
         ok: true,
@@ -1008,10 +995,7 @@ export class ClService {
 
       if (!txResult.ok) {
         console.error('executeClaimRewards error:', txResult.error);
-        return {
-          ok: false,
-          error: txResult.error,
-        };
+        return { ok: false, error: intentCreationFailed('dex', txResult.error) };
       }
 
       return {
