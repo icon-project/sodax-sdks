@@ -18,9 +18,9 @@ type Ctx = Partial<SodaxErrorContext>;
 
 /**
  * Private wallet-rejection detector. Used inside wrappers that wrap wallet-sign operations
- * (`intentCreationFailed`, `approveFailed`, `executionFailed`) so the canonical `USER_REJECTED`
- * code surfaces uniformly across features without each service catch block re-implementing
- * the shape-matching logic.
+ * (`intentCreationFailed`, `approveFailed`) so the canonical `USER_REJECTED` code surfaces
+ * uniformly across features without each service catch block re-implementing the
+ * shape-matching logic.
  *
  * Shapes recognised:
  * - EVM (viem):                `UserRejectedRequestError`, EIP-1193 code `4001`,
@@ -30,27 +30,35 @@ type Ctx = Partial<SodaxErrorContext>;
  *   Stacks / Bitcoin / NEAR /
  *   Injective:                 falls back to error `name` + message-pattern match — those
  *                              wallet libraries do not expose a stable numeric code.
+ *
+ * The `cancel_signing` / `cancel_json-rpc` text patterns intentionally overlap with the
+ * Hana `code` checks above so that a Hana error with a string message but no `code` field
+ * (e.g. when bubbled up by intermediate layers) still classifies correctly.
  */
-const REJECTION_TEXT_PATTERNS: readonly string[] = [
-  'user rejected',
-  'user denied',
-  'user declined',
-  'user cancel',
-  'rejected by user',
-  'cancelled by user',
-  'canceled by user',
-  'cancel_signing',
-  'cancel_json-rpc',
-  'popup closed',
-  'popupclosed',
-  'request rejected',
+const REJECTION_TEXT_PATTERNS: readonly RegExp[] = [
+  /user rejected/i,
+  /user denied/i,
+  /user declined/i,
+  /user cancel(?:l)?ed/i,
+  /user abort(?:ed)?/i,
+  /user closed/i,
+  /rejected by user/i,
+  /cancelled by user/i,
+  /canceled by user/i,
+  // `was` is mandatory: matches Phantom / Brave's "Transaction was rejected" (user cancellation)
+  // but NOT bare "Transaction rejected by node / by validator" (network or chain-level reject).
+  /transaction was rejected/i,
+  /signature rejected/i,
+  /request rejected/i,
+  /cancel_signing/i,
+  /cancel_json-rpc/i,
+  /popup ?closed/i,
 ];
 
 function matchRejectionText(text: unknown): boolean {
   if (typeof text !== 'string' || text.length === 0) return false;
-  const lower = text.toLowerCase();
   for (const pattern of REJECTION_TEXT_PATTERNS) {
-    if (lower.includes(pattern)) return true;
+    if (pattern.test(text)) return true;
   }
   return false;
 }
@@ -87,8 +95,15 @@ function isWalletRejection(error: unknown): boolean {
   return false;
 }
 
+/**
+ * Build a `USER_REJECTED` SodaxError with a clean, hardcoded message. We deliberately do NOT
+ * inherit `cause.message` here — viem's `UserRejectedRequestError` carries a multi-line dump
+ * (Request Arguments, encoded calldata, Version) that's useful for debugging but terrible as
+ * an end-user error message or Sentry/Datadog issue title. The raw cause is still available
+ * on `error.cause` for whoever needs to inspect it.
+ */
 function userRejected(feature: SodaxFeature, cause: unknown, context?: Ctx): SodaxError<'USER_REJECTED'> {
-  return new SodaxError('USER_REJECTED', messageOf(cause, 'User rejected the request'), {
+  return new SodaxError('USER_REJECTED', 'User rejected the request', {
     feature,
     cause,
     context,

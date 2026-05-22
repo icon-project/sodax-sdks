@@ -922,7 +922,8 @@ export class SwapService {
         value: txResult.value satisfies TxReturnType<K, boolean> as TxReturnType<K, Raw>,
       };
     } catch (error) {
-      return { ok: false, error };
+      if (isSwapCreateIntentError(error)) return { ok: false, error };
+      return { ok: false, error: intentCreationFailed('swap', error) };
     }
   }
 

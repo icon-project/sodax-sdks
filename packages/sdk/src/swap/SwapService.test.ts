@@ -2218,7 +2218,7 @@ describe('SwapService.createCancelIntent', () => {
     expect((result.error as SodaxError).cause).toBe(sendError);
   });
 
-  it('returns ok:false when spoke.sendMessage rejects', async () => {
+  it('wraps a thrown spoke.sendMessage failure as SodaxError(INTENT_CREATION_FAILED, swap) with .cause', async () => {
     const intent = makeIntent(ChainKeys.BSC_MAINNET);
     const thrownError = new Error('SEND_THROWS');
     vi.spyOn(sodax.spoke, 'sendMessage').mockRejectedValueOnce(thrownError);
@@ -2232,7 +2232,12 @@ describe('SwapService.createCancelIntent', () => {
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: thrownError });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error)).toBe(true);
+    expect((result.error as SodaxError).code).toBe('INTENT_CREATION_FAILED');
+    expect((result.error as SodaxError).feature).toBe('swap');
+    expect((result.error as SodaxError).cause).toBe(thrownError);
   });
 });
 

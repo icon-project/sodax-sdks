@@ -13,7 +13,7 @@ import {
 } from '../shared/index.js';
 import { SodaxError } from '../errors/SodaxError.js';
 import { intentCreationFailed, lookupFailed } from '../errors/wrappers.js';
-import { dexInvariant } from './errors.js';
+import { dexInvariant, isDexCreateIntentError } from './errors.js';
 import type { MintPositionEventLog } from '../swap/EvmSolverService.js';
 import type {
   Address,
@@ -445,10 +445,8 @@ export class ClService {
       };
     } catch (error) {
       console.error('executeSupplyLiquidity error:', error);
-      return {
-        ok: false,
-        error,
-      };
+      if (isDexCreateIntentError(error)) return { ok: false, error };
+      return { ok: false, error: intentCreationFailed('dex', error) };
     }
   }
 
@@ -584,10 +582,8 @@ export class ClService {
         },
       };
     } catch (error) {
-      return {
-        ok: false,
-        error,
-      };
+      if (isDexCreateIntentError(error)) return { ok: false, error };
+      return { ok: false, error: intentCreationFailed('dex', error) };
     }
   }
 
@@ -665,10 +661,8 @@ export class ClService {
         },
       };
     } catch (error) {
-      return {
-        ok: false,
-        error,
-      };
+      if (isDexCreateIntentError(error)) return { ok: false, error };
+      return { ok: false, error: intentCreationFailed('dex', error) };
     }
   }
 
@@ -751,10 +745,8 @@ export class ClService {
       return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
     } catch (error) {
       console.error('supplyLiquidity error:', error);
-      return {
-        ok: false,
-        error,
-      };
+      if (isDexCreateIntentError(error)) return { ok: false, error };
+      return { ok: false, error: intentCreationFailed('dex', error) };
     }
   }
 
@@ -800,10 +792,8 @@ export class ClService {
 
       return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
     } catch (error) {
-      return {
-        ok: false,
-        error,
-      };
+      if (isDexCreateIntentError(error)) return { ok: false, error };
+      return { ok: false, error: intentCreationFailed('dex', error) };
     }
   }
 
@@ -849,10 +839,8 @@ export class ClService {
 
       return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
     } catch (error) {
-      return {
-        ok: false,
-        error,
-      };
+      if (isDexCreateIntentError(error)) return { ok: false, error };
+      return { ok: false, error: intentCreationFailed('dex', error) };
     }
   }
 
@@ -1007,10 +995,8 @@ export class ClService {
       };
     } catch (error) {
       console.error('executeClaimRewards error:', error);
-      return {
-        ok: false,
-        error,
-      };
+      if (isDexCreateIntentError(error)) return { ok: false, error };
+      return { ok: false, error: intentCreationFailed('dex', error) };
     }
   }
 
@@ -1057,10 +1043,8 @@ export class ClService {
       return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
     } catch (error) {
       console.error('claimRewards error:', error);
-      return {
-        ok: false,
-        error,
-      };
+      if (isDexCreateIntentError(error)) return { ok: false, error };
+      return { ok: false, error: intentCreationFailed('dex', error) };
     }
   }
 

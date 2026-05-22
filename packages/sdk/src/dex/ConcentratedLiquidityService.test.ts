@@ -23,7 +23,7 @@ import type {
   ClLiquidityClaimRewardsAction,
 } from './ConcentratedLiquidityService.js';
 import { ClService } from './ConcentratedLiquidityService.js';
-import { isSodaxError, SodaxError } from '../errors/SodaxError.js';
+import { isSodaxError, type SodaxError } from '../errors/SodaxError.js';
 
 // `ClService` reaches `relayTxAndWaitPacket`, the pancakeswap calldata encoders, `Erc4626Service`,
 // and viem's `parseEventLogs` directly from their source modules. Vitest's hoisted `vi.mock` lets
@@ -345,7 +345,12 @@ describe('ClService.executeSupplyLiquidity', () => {
       walletProvider: mockEvmProvider,
     } satisfies ClSupplyAction<'0x38.bsc', false>);
 
-    expect(result).toEqual({ ok: false, error: hubError });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error)).toBe(true);
+    expect((result.error as SodaxError).code).toBe('INTENT_CREATION_FAILED');
+    expect((result.error as SodaxError).feature).toBe('dex');
+    expect((result.error as SodaxError).cause).toBe(hubError);
   });
 });
 
@@ -405,7 +410,12 @@ describe('ClService.executeIncreaseLiquidity', () => {
       walletProvider: mockEvmProvider,
     } satisfies ClLiquidityIncreaseLiquidityAction<'0x38.bsc', false>);
 
-    expect(result).toEqual({ ok: false, error: hubError });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error)).toBe(true);
+    expect((result.error as SodaxError).code).toBe('INTENT_CREATION_FAILED');
+    expect((result.error as SodaxError).feature).toBe('dex');
+    expect((result.error as SodaxError).cause).toBe(hubError);
   });
 });
 
@@ -469,7 +479,12 @@ describe('ClService.executeDecreaseLiquidity', () => {
       walletProvider: mockEvmProvider,
     } satisfies ClLiquidityDecreaseLiquidityAction<'0x38.bsc', false>);
 
-    expect(result).toEqual({ ok: false, error: hubError });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error)).toBe(true);
+    expect((result.error as SodaxError).code).toBe('INTENT_CREATION_FAILED');
+    expect((result.error as SodaxError).feature).toBe('dex');
+    expect((result.error as SodaxError).cause).toBe(hubError);
   });
 });
 
@@ -531,7 +546,12 @@ describe('ClService.executeClaimRewards', () => {
       walletProvider: mockEvmProvider,
     } satisfies ClLiquidityClaimRewardsAction<'0x38.bsc', false>);
 
-    expect(result).toEqual({ ok: false, error: hubError });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error)).toBe(true);
+    expect((result.error as SodaxError).code).toBe('INTENT_CREATION_FAILED');
+    expect((result.error as SodaxError).feature).toBe('dex');
+    expect((result.error as SodaxError).cause).toBe(hubError);
   });
 });
 
@@ -599,7 +619,7 @@ describe('ClService.supplyLiquidity', () => {
     expect(result).toEqual({ ok: false, error: relayError });
   });
 
-  it('returns ok:false when sendMessage throws', async () => {
+  it('wraps a thrown sendMessage failure as SodaxError(INTENT_CREATION_FAILED, dex) with .cause', async () => {
     const thrown = new Error('SEND_THREW');
     vi.spyOn(sodax.spoke, 'sendMessage').mockRejectedValueOnce(thrown);
 
@@ -609,7 +629,12 @@ describe('ClService.supplyLiquidity', () => {
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: thrown });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error)).toBe(true);
+    expect((result.error as SodaxError).code).toBe('INTENT_CREATION_FAILED');
+    expect((result.error as SodaxError).feature).toBe('dex');
+    expect((result.error as SodaxError).cause).toBe(thrown);
   });
 });
 

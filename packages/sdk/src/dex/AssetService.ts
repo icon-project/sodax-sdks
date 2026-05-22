@@ -43,7 +43,7 @@ import { encodeFunctionData, erc20Abi, isAddress } from 'viem';
 import { invariant } from '../shared/utils/tiny-invariant.js';
 import { stataTokenFactoryAbi } from '../shared/abis/stataTokenFactory.abi.js';
 import { approveFailed, intentCreationFailed } from '../errors/wrappers.js';
-import { dexInvariant } from './errors.js';
+import { dexInvariant, isDexCreateIntentError } from './errors.js';
 
 export type CreateAssetWithdrawParams<K extends SpokeChainKey> = {
   srcChainKey: K;
@@ -359,10 +359,8 @@ export class AssetService {
         },
       };
     } catch (error) {
-      return {
-        ok: false,
-        error,
-      };
+      if (isDexCreateIntentError(error)) return { ok: false, error };
+      return { ok: false, error: intentCreationFailed('dex', error) };
     }
   }
 
@@ -443,10 +441,8 @@ export class AssetService {
         },
       };
     } catch (error) {
-      return {
-        ok: false,
-        error,
-      };
+      if (isDexCreateIntentError(error)) return { ok: false, error };
+      return { ok: false, error: intentCreationFailed('dex', error) };
     }
   }
 
@@ -522,7 +518,8 @@ export class AssetService {
 
       return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
     } catch (error) {
-      return { ok: false, error };
+      if (isDexCreateIntentError(error)) return { ok: false, error };
+      return { ok: false, error: intentCreationFailed('dex', error) };
     }
   }
 
@@ -562,7 +559,8 @@ export class AssetService {
 
       return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
     } catch (error) {
-      return { ok: false, error };
+      if (isDexCreateIntentError(error)) return { ok: false, error };
+      return { ok: false, error: intentCreationFailed('dex', error) };
     }
   }
 
