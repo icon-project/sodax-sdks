@@ -987,7 +987,8 @@ export class SwapService {
 
       return { ok: true, value: { srcChainTxHash: cancelTxHash, dstChainTxHash: dstIntentTxHash } };
     } catch (error) {
-      return { ok: false, error };
+      if (isSwapError(error)) return { ok: false, error };
+      return { ok: false, error: executionFailed('swap', error, { action: 'cancelIntent' }) };
     }
   }
 

@@ -43,7 +43,7 @@ import { encodeFunctionData, erc20Abi, isAddress } from 'viem';
 import { invariant } from '../shared/utils/tiny-invariant.js';
 import { stataTokenFactoryAbi } from '../shared/abis/stataTokenFactory.abi.js';
 import { approveFailed, intentCreationFailed } from '../errors/wrappers.js';
-import { dexInvariant, isDexCreateIntentError } from './errors.js';
+import { dexInvariant, isDexApproveError, isDexCreateIntentError } from './errors.js';
 
 export type CreateAssetWithdrawParams<K extends SpokeChainKey> = {
   srcChainKey: K;
@@ -274,10 +274,8 @@ export class AssetService {
 
       dexInvariant(false, 'Approve only supported for EVM/Stellar spoke chains');
     } catch (error) {
-      return {
-        ok: false,
-        error,
-      };
+      if (isDexApproveError(error)) return { ok: false, error };
+      return { ok: false, error: wrapApproveFailure(error) };
     }
   }
 

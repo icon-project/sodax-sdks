@@ -127,6 +127,37 @@ describe('approveFailed (wallet rejection classification)', () => {
   });
 });
 
+describe('isSodaxError early-out (prevents message-content false positives)', () => {
+  it('does NOT reclassify a SodaxError("VALIDATION_FAILED") with rejection-shaped message', async () => {
+    // Construct a SodaxError whose message contains 'user rejected' text. Without the early-out,
+    // the regex `/user rejected/i` would match and `intentCreationFailed` would re-emit
+    // USER_REJECTED — silently changing the code from VALIDATION_FAILED.
+    const { SodaxError } = await import('./SodaxError.js');
+    const upstream = new SodaxError('VALIDATION_FAILED', 'user rejected by invariant', { feature: 'staking' });
+
+    const err = intentCreationFailed('staking', upstream);
+
+    // The wrapper still proceeds via the default branch (not USER_REJECTED) — the SodaxError
+    // taxonomy is trusted over message content. The reviewer's call-site `isXxxCreateIntentError`
+    // guard is what forwards the original SodaxError unchanged; this test only verifies that the
+    // wrapper itself does not silently reclassify a non-rejection SodaxError.
+    expect(err.code).toBe('INTENT_CREATION_FAILED');
+    expect(err.cause).toBe(upstream);
+  });
+
+  it('still recognises a SodaxError("USER_REJECTED") as a rejection', async () => {
+    const { SodaxError } = await import('./SodaxError.js');
+    const upstream = new SodaxError('USER_REJECTED', 'User rejected the request', { feature: 'swap' });
+
+    const err = intentCreationFailed('swap', upstream);
+
+    // Already-classified USER_REJECTED stays USER_REJECTED (the canonical call-site forward via
+    // isXxxCreateIntentError handles this more efficiently, but the wrapper alone preserves the
+    // code rather than mutating it).
+    expect(err.code).toBe('USER_REJECTED');
+  });
+});
+
 describe('USER_REJECTED clean message', () => {
   it('uses a hardcoded "User rejected the request" message, not the cause.message', () => {
     // viem's UserRejectedRequestError message is a multi-line dump with Request Arguments + Version.

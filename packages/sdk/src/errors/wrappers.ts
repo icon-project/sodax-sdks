@@ -7,7 +7,7 @@
  */
 
 import type { SodaxErrorContext, SodaxFeature } from './codes.js';
-import { SodaxError } from './SodaxError.js';
+import { isSodaxError, SodaxError } from './SodaxError.js';
 
 /** Extract `error.message` if `error` is an `Error`; otherwise return the fallback. */
 export function messageOf(error: unknown, fallback: string): string {
@@ -65,6 +65,15 @@ function matchRejectionText(text: unknown): boolean {
 
 function isWalletRejection(error: unknown): boolean {
   if (error == null) return false;
+  // A `SodaxError` is already classified at the source — trust its `code` field instead of
+  // scanning its message. Without this guard, the canonical `USER_REJECTED` message
+  // ('User rejected the request') hardcoded by the `userRejected` factory would itself match
+  // `/user rejected/i` further down, so a `SodaxError<'VALIDATION_FAILED'>` whose message
+  // happens to include rejection-like prose (or any future `intentCreationFailed(feature,
+  // sodaxError)` call that skips the per-code-set guard at the call site) would be silently
+  // reclassified as `USER_REJECTED`. The guard makes the contract explicit and message-content
+  // false positives impossible.
+  if (isSodaxError(error)) return error.code === 'USER_REJECTED';
   if (typeof error === 'string') return matchRejectionText(error);
   if (typeof error !== 'object') return false;
 
