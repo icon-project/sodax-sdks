@@ -1,13 +1,9 @@
 {
   "name": "sodax-skills",
   "skills": [
-    "./skills/sodax-sdk-migration",
-    "./skills/sodax-sdk-integration",
-    "./skills/sodax-wallet-sdk-core-migration",
-    "./skills/sodax-wallet-sdk-core-integration",
-    "./skills/sodax-wallet-sdk-react-migration",
-    "./skills/sodax-wallet-sdk-react-integration",
-    "./skills/sodax-dapp-kit-migration",
-    "./skills/sodax-dapp-kit-integration"
+    "./skills/sodax-sdk",
+    "./skills/sodax-wallet-sdk-core",
+    "./skills/sodax-wallet-sdk-react",
+    "./skills/sodax-dapp-kit"
   ]
 }

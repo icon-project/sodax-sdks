@@ -23,7 +23,7 @@ Turborepo + pnpm workspace. Package manager: **pnpm 10.32.1**.
 | `packages/wallet-sdk-core` | Multi-chain wallet providers (signing/broadcasting) — 9 chain types | [`packages/wallet-sdk-core/CLAUDE.md`](packages/wallet-sdk-core/CLAUDE.md) |
 | `packages/wallet-sdk-react` | React wallet state layer — `XService`/`XConnector`, Zustand, EIP-6963 | [`packages/wallet-sdk-react/CLAUDE.md`](packages/wallet-sdk-react/CLAUDE.md) |
 | `packages/dapp-kit` | High-level React hooks combining SDK + wallet-sdk-react + React Query | [`packages/dapp-kit/CLAUDE.md`](packages/dapp-kit/CLAUDE.md) |
-| `packages/skills` | Consumer-facing AI material — 8 Claude-Code skills + knowledge for the SDK packages | [`packages/skills/CLAUDE.md`](packages/skills/CLAUDE.md) |
+| `packages/skills` | Consumer-facing AI material — 4 mode-gated Claude-Code skills (one per SDK package, each with integration + migration knowledge subtrees) | [`packages/skills/CLAUDE.md`](packages/skills/CLAUDE.md) |
 
 ### Apps
 
@@ -83,11 +83,13 @@ For per-package gotchas (SDK bigint/JSON handling, wallet-sdk-core type-system o
 
 Consumer-facing AI material for the `@sodax/*` SDKs lives in a single dedicated package: [`packages/skills`](packages/skills/CLAUDE.md). It ships:
 
-- **8 skills** (`packages/skills/skills/sodax-<pkg>-<mode>/SKILL.md`) — short, action-oriented entries with YAML frontmatter (`name`, `description`). One pair per SDK package: `migration` (port v1 → v2) and `integration` (write new v2 code). 4 packages × 2 modes = 8.
-- **Knowledge** (`packages/skills/knowledge/<pkg>/<mode>/`) — long-form supporting docs (features, recipes, reference tables, breaking-change writeups, code examples). The same content that used to live in each SDK package's `ai-exported/` tree, moved verbatim.
+- **4 mode-gated skills** (`packages/skills/skills/sodax-<pkg>/SKILL.md`) — one per SDK package (`sdk`, `wallet-sdk-core`, `wallet-sdk-react`, `dapp-kit`). Each SKILL.md gates by mode at the top: integration (write new v2 code) or migration (port v1 → v2). Frontmatter `description` carries trigger phrases for BOTH modes.
+- **Knowledge** (`packages/skills/skills/sodax-<pkg>/{integration,migration-v1-to-v2}/knowledge/`) — long-form supporting docs (features, recipes, reference tables, breaking-change writeups, code examples) shipped as two subtrees inside each skill so the `skills` CLI's per-skill copy includes everything. The migration subtree is named `migration-v1-to-v2/` (not `migration/`) to avoid ambiguity with per-feature `features/migration.md` (ICX/bnUSD token migration).
 - **AGENTS.md** at the package root — tool-neutral router that maps consumer intent → skill name.
 
 Distribution: external [`skills` CLI](https://github.com/vercel-labs/skills) — `npx skills@latest add icon-project/sodax-sdks/packages/skills` (no `bin` in `@sodax/skills`).
+
+**Cross-SDK-package references are forbidden.** A skill MUST NOT link to (or cite a relative/absolute path into) a skill belonging to a different SDK package — `sodax-dapp-kit` knowledge MUST NOT reference `sodax-sdk`, `sodax-wallet-sdk-react`, or `sodax-wallet-sdk-core` content via relative paths, GitHub URLs, or any other clickable form. Use prose pointers naming the sibling skill instead (e.g., *"load the `sodax-sdk` skill (integration mode)"*). Intra-SDK-package cross-mode links (between the two subtrees of the SAME skill: `integration/` ↔ `migration-v1-to-v2/`) ARE allowed via `../<dots>{integration,migration-v1-to-v2}/knowledge/...` because they ship together and document the same SDK package. See [`packages/skills/CLAUDE.md`](packages/skills/CLAUDE.md) "Editing rules" for the full rule and depth conventions.
 
 When editing knowledge files, keep these in scope:
 
@@ -122,5 +124,5 @@ GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on 
 4. `pnpm build:packages`
 5. CJS compatibility check (`cd apps/node-cjs && pnpm test`)
 6. `pnpm checkTs:packages`
-7. AI docs validation — `pnpm check:ai` runs six sub-scripts in `packages/skills/`: `check:ai-structural` (plugin.json + SKILL.md frontmatter + link resolution); `check:ai-imports` (every `import … from '@sodax/<pkg>'` snippet typechecks against `src/index.ts`, all 4 SDK packages); `check:ai-snippets` (every fenced ts/tsx block in dapp-kit + wallet-sdk-react knowledge typechecks; illustrative pattern blocks opt out via `// @ai-snippets-skip`); `check:ai-tsx-examples` (every standalone `.tsx` file under `knowledge/<pkg>/integration/examples/` typechecks as a complete module — today: 4 wallet-sdk-react app shells); `check:ai-keys` (queryKey/mutationKey literals in dapp-kit docs match source); `check:ai-consistency` (polling-interval claims match `refetchInterval` in source). Opt-outs documented in [packages/skills/CLAUDE.md](packages/skills/CLAUDE.md).
+7. AI docs validation — `pnpm check:ai` runs six sub-scripts in `packages/skills/`: `check:ai-structural` (plugin.json + SKILL.md frontmatter + link resolution); `check:ai-imports` (every `import … from '@sodax/<pkg>'` snippet typechecks against `src/index.ts`, all 4 SDK packages); `check:ai-snippets` (every fenced ts/tsx block in dapp-kit + wallet-sdk-react knowledge typechecks; illustrative pattern blocks opt out via `// @ai-snippets-skip`); `check:ai-tsx-examples` (every standalone `.tsx` file under `skills/sodax-<pkg>/integration/knowledge/examples/` typechecks as a complete module — today: 4 wallet-sdk-react app shells); `check:ai-keys` (queryKey/mutationKey literals in dapp-kit docs match source); `check:ai-consistency` (polling-interval claims match `refetchInterval` in source). Opt-outs documented in [packages/skills/CLAUDE.md](packages/skills/CLAUDE.md).
 8. `pnpm test:packages`

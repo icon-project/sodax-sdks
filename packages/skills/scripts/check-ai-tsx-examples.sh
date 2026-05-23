@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Typechecks each standalone `.tsx` example under
-# knowledge/<pkg>/integration/examples/ as a complete module.
+# skills/sodax-<pkg>/integration/knowledge/examples/ as a complete module.
 #
 # Different from check-ai-snippets: snippets are fenced code blocks extracted
 # from markdown and wrapped in synthetic fixtures. These .tsx files are
@@ -14,13 +14,15 @@ cd "$(dirname "$0")/.."   # packages/skills/
 
 FIXTURE_ROOT="scripts/_ai-tsx-examples-fixture"
 
-# Auto-detect packages with integration/examples/ directories containing .tsx files.
+# Auto-detect packages with integration knowledge/examples/ directories containing .tsx files.
 detect_pkgs() {
-  for d in knowledge/*/integration/examples; do
+  for d in skills/sodax-*/integration/knowledge/examples; do
     [[ -d "$d" ]] || continue
     if compgen -G "$d/*.tsx" > /dev/null; then
-      # d = knowledge/<pkg>/integration/examples; extract <pkg>
-      echo "$d" | awk -F/ '{print $2}'
+      # d = skills/sodax-<pkg>/integration/knowledge/examples; extract <pkg>
+      local skill_dir
+      skill_dir=$(echo "$d" | awk -F/ '{print $2}')
+      echo "${skill_dir#sodax-}"
     fi
   done
 }
@@ -58,7 +60,7 @@ write_fixture_tsconfig() {
       "@sodax/wallet-sdk-core":    ["../../../../wallet-sdk-core/src/index.ts"]
     }
   },
-  "include": ["../../../knowledge/$pkg/integration/examples/*.tsx"]
+  "include": ["../../../skills/sodax-$pkg/integration/knowledge/examples/*.tsx"]
 }
 EOF
 }
@@ -75,13 +77,13 @@ fi
 
 for pkg in $pkgs; do
   write_fixture_tsconfig "$pkg"
-  count=$(find "knowledge/$pkg/integration/examples" -name '*.tsx' -type f | wc -l | tr -d ' ')
+  count=$(find "skills/sodax-$pkg/integration/knowledge/examples" -name '*.tsx' -type f | wc -l | tr -d ' ')
   total_files=$((total_files + count))
   n_pkgs=$((n_pkgs + 1))
 
   tsc_out=$(npx --no-install tsc --noEmit -p "$FIXTURE_ROOT/$pkg" 2>&1 || true)
   # Filter to errors located in the example .tsx files themselves.
-  fixture_errors=$(echo "$tsc_out" | grep -E "knowledge/$pkg/integration/examples/[^:]*\.tsx" || true)
+  fixture_errors=$(echo "$tsc_out" | grep -E "skills/sodax-$pkg/integration/knowledge/examples/[^:]*\.tsx" || true)
 
   if [[ -n "$fixture_errors" ]]; then
     echo "FAIL[$pkg]: example .tsx file(s) did not typecheck." >&2
