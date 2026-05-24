@@ -637,9 +637,13 @@ export class SwapService {
         `Invalid wallet provider for chain key: ${params.srcChainKey}`,
         baseCtx,
       );
+      // Hub-wallet swap: `inputToken` lives on the hub, not on `srcChainKey` (which is the
+      // chain the user signs on). Validate it against the hub chain instead.
+      const hubChainKey = this.hubProvider.chainConfig.chain.key;
+      const inputTokenChainKey = params.hubWalletSwap ? hubChainKey : params.srcChainKey;
       swapInvariant(
-        this.config.isValidOriginalAssetAddress(params.srcChainKey, params.inputToken),
-        `Unsupported spoke chain token (srcChainKey): ${params.srcChainKey}, params.inputToken): ${params.inputToken}`,
+        this.config.isValidOriginalAssetAddress(inputTokenChainKey, params.inputToken),
+        `Unsupported spoke chain token (srcChainKey): ${inputTokenChainKey}, params.inputToken): ${params.inputToken}`,
         { ...baseCtx, field: 'inputToken' },
       );
       swapInvariant(
@@ -682,6 +686,55 @@ export class SwapService {
 
       // derive users hub wallet address
       const creatorHubWalletAddress = await this.hubProvider.getUserHubWalletAddress(walletAddress, params.srcChainKey);
+
+      // Hub-wallet swap: the input token already sits in the user's hub wallet. The user
+      // signs a `Connection.sendMessage` on their spoke chain (`srcChainKey`) authorising
+      // the hub wallet to run the encoded [approve, createIntent] sequence itself — no
+      // spoke-side AssetManager deposit. The shared `swap()` tail then relays the message
+      // and notifies the solver exactly as for a normal spoke-sourced swap.
+      if (params.hubWalletSwap) {
+        const [data, intent, feeAmount] = EvmSolverService.constructCreateIntentData(
+          { ...params, srcChainKey: hubChainKey, srcAddress: creatorHubWalletAddress },
+          creatorHubWalletAddress,
+          this.config,
+          this.config.swaps.partnerFee,
+        );
+
+        const coreSendMessageParams = {
+          srcChainKey: params.srcChainKey,
+          srcAddress: walletAddress as GetAddressType<K>,
+          dstChainKey: hubChainKey,
+          dstAddress: creatorHubWalletAddress,
+          payload: data,
+          skipSimulation,
+        } as const;
+
+        const txResult = await this.spoke.sendMessage(
+          _params.raw
+            ? { ...coreSendMessageParams, raw: true }
+            : {
+                ...coreSendMessageParams,
+                raw: false,
+                walletProvider: _params.walletProvider as GetWalletProviderType<K>,
+              },
+        );
+
+        if (!txResult.ok) {
+          if (isSwapCreateIntentError(txResult.error)) {
+            return { ok: false, error: txResult.error };
+          }
+          return { ok: false, error: intentCreationFailed('swap', txResult.error, baseCtx) };
+        }
+
+        return {
+          ok: true,
+          value: {
+            tx: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
+            intent: { ...intent, feeAmount } as Intent & FeeAmount,
+            relayData: { address: creatorHubWalletAddress, payload: data },
+          },
+        };
+      }
 
       if (isHubChainKeyType(params.srcChainKey) && isSonicChainKeyType(params.srcChainKey)) {
         const coreSonicParams = {
@@ -1143,4 +1196,3 @@ export class SwapService {
     return this.config.getSupportedSwapTokens();
   }
 }
-

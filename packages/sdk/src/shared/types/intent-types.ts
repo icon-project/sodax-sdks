@@ -13,14 +13,25 @@ export type CreateIntentParams<K extends SpokeChainKey = SpokeChainKey> = {
   dstAddress: string;
   solver?: Address; // Optional specific solver address (address(0) = any solver)
   data: Hex;
+  /**
+   * Hub-wallet swap mode. When `true`, `inputToken` is a hub-chain (Sonic) token that
+   * already sits in the user's hub wallet — not a token on `srcChainKey`. `srcChainKey`
+   * is then the chain the user *signs* on, and the intent is created by authorising the
+   * hub wallet via a `Connection.sendMessage` rather than a spoke-side AssetManager
+   * deposit. Used to swap tokens accumulated in the hub wallet (e.g. leverage-vault
+   * shares) without first bridging them out. Defaults to `false`.
+   */
+  hubWalletSwap?: boolean;
 };
 
 /**
  * Parameters for creating a limit order intent.
  * Makes the `deadline` field optional for limit orders.
  */
-export type CreateLimitOrderParams<K extends SpokeChainKey = SpokeChainKey> =
-  Omit<CreateIntentParams<K>, 'deadline'> & { deadline?: bigint };
+export type CreateLimitOrderParams<K extends SpokeChainKey = SpokeChainKey> = Omit<
+  CreateIntentParams<K>,
+  'deadline'
+> & { deadline?: bigint };
 
 export type Intent = {
   intentId: bigint;
