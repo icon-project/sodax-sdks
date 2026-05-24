@@ -24,6 +24,7 @@ import {
   useBackendSubmitSwapTx,
   useQuote,
   useSodaxContext,
+  useSwap,
   useSwapAllowance,
   useSwapApprove,
   useXBalances,
@@ -34,6 +35,7 @@ import {
   useEvmSwitchChain,
   useWalletProvider,
   useXAccount,
+  useXAccounts,
   useXService,
 } from '@sodax/wallet-sdk-react';
 import {
@@ -47,9 +49,9 @@ import {
   type SwapIntentData,
   type XToken,
 } from '@sodax/sdk';
-import { ArrowDownUp } from 'lucide-react';
 import BigNumber from 'bignumber.js';
-import { formatUnits, parseUnits } from 'viem';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type Address, formatUnits, parseUnits } from 'viem';
 import { SolverEnv, useAppStore } from '@/zustand/useAppStore';
 
 const SONIC = ChainKeys.SONIC_MAINNET satisfies SpokeChainKey;
@@ -66,8 +68,54 @@ function fmtUnits(value: bigint | undefined, decimals: number, digits = 6): stri
   return `${int}.${frac.slice(0, digits).padEnd(digits, '0')}`;
 }
 
+/**
+ * Format an AAVE-style RAY rate (1e27 = 100%) as a percentage string. Handles negative
+ * net APRs (when leverage × borrow exceeds 1 × supply) — sign survives the bigint→number
+ * conversion via the explicit negative branch.
+ */
+function fmtApr(rateRay: bigint | undefined, digits = 2): string {
+  if (rateRay === undefined) return '—';
+  // 1e27 → 1.0 = 100%. Convert to percentage: rate × 100 / 1e27 = rate / 1e25.
+  // Do the divide in bigint to avoid number-precision loss, then format.
+  const SCALE = 100_000n; // keep 5 fractional digits for safety
+  const sign = rateRay < 0n ? -1n : 1n;
+  const abs = rateRay < 0n ? -rateRay : rateRay;
+  // (abs × 100 × SCALE) / 1e27, then back to decimal
+  const pctScaled = (abs * 100n * SCALE) / 10n ** 27n;
+  const num = Number(sign * pctScaled) / Number(SCALE);
+  return `${num.toFixed(digits)}%`;
+}
+
+/** Format a WAD-scaled (1e18) leverage multiplier as `5.67`. */
+function fmtLeverage(multWad: bigint | undefined, digits = 2): string {
+  if (multWad === undefined) return '—';
+  const SCALE = 100_000n;
+  const scaled = (multWad * SCALE) / 1_000_000_000_000_000_000n;
+  return (Number(scaled) / Number(SCALE)).toFixed(digits);
+}
+
+/** Format a basis-points value (e.g. `8500n`) as a percentage string. */
+function fmtBps(value: bigint | undefined, digits = 2): string {
+  if (value === undefined) return '—';
+  return `${(Number(value) / 100).toFixed(digits)}%`;
+}
+
+/**
+ * Format a WAD-scaled health factor. The vault returns `type(uint256).max` when there
+ * is no debt — display that as `∞` instead of a giant number.
+ */
+function fmtHealthFactor(hfWad: bigint | undefined, digits = 2): string {
+  if (hfWad === undefined) return '—';
+  const UINT256_MAX = (1n << 256n) - 1n;
+  if (hfWad >= UINT256_MAX - 1n) return '∞';
+  const SCALE = 100_000n;
+  const scaled = (hfWad * SCALE) / 1_000_000_000_000_000_000n;
+  return (Number(scaled) / Number(SCALE)).toFixed(digits);
+}
+
 export default function LeverageYieldPage() {
   const { sodax } = useSodaxContext();
+  const queryClient = useQueryClient();
   const { openWalletModal, solverEnvironment, setSolverEnvironment } = useAppStore();
 
   // ─── Vault selection ─────────────────────────────────────────────────────
@@ -87,69 +135,69 @@ export default function LeverageYieldPage() {
     return sonicTokens.find(t => t.address.toLowerCase() === selectedVault.vault.toLowerCase());
   }, [selectedVault]);
 
-  // ─── Counterparty (the "other" side that the user picks) ─────────────────
-  // Same state object reused for both tabs. On the Deposit tab it's the source
-  // (any → lsoda); on Withdraw it's the destination (lsoda → any).
+  // ─── Single-side state ──────────────────────────────────────────────────
+  // The user only connects ONE wallet (their spoke chain) and picks ONE token. The
+  // counterparty token is implicit:
+  //   - Deposit:  user-picked token → lsoda* (in their hub wallet)
+  //   - Withdraw: lsoda* (from hub wallet) → user-picked token
+  // No Sonic wallet connection needed for either flow — the hub wallet is derived
+  // deterministically from (userChain, userAddress).
 
   const supportedSpokeChains = useMemo(() => sodax.config.getSupportedSpokeChains(), [sodax]);
-  const [otherChain, setOtherChain] = useState<SpokeChainKey>(ChainKeys.ARBITRUM_MAINNET);
-  const otherTokens = useMemo(() => getSupportedSolverTokens(otherChain), [otherChain]);
-  const [otherToken, setOtherToken] = useState<XToken | undefined>(otherTokens[0]);
+  const [userChain, setUserChain] = useState<SpokeChainKey>(ChainKeys.ARBITRUM_MAINNET);
+  const userTokens = useMemo(() => getSupportedSolverTokens(userChain), [userChain]);
+  const [userToken, setUserToken] = useState<XToken | undefined>(userTokens[0]);
 
   useEffect(() => {
-    if (otherTokens.length === 0) return;
-    setOtherToken(prev =>
-      prev && otherTokens.some(t => t.address === prev.address) ? prev : otherTokens[0],
+    if (userTokens.length === 0) return;
+    setUserToken(prev =>
+      prev && userTokens.some(t => t.address === prev.address) ? prev : userTokens[0],
     );
-  }, [otherTokens]);
+  }, [userTokens]);
 
   // ─── Active tab ──────────────────────────────────────────────────────────
 
   const [tab, setTab] = useState<'deposit' | 'withdraw'>('deposit');
 
-  // Resolve src/dst by tab. lsoda is dst on deposit, src on withdraw.
+  // src/dst derivation — single user-picked side, the other is implicitly lsoda* on hub.
+  // Deposit:  user pays `userToken` on `userChain` → receives `lsodaToken` on Sonic.
+  // Withdraw: user burns `lsodaToken` on Sonic → receives `userToken` on `userChain`.
   const src = tab === 'deposit'
-    ? { chain: otherChain, token: otherToken }
+    ? { chain: userChain, token: userToken }
     : { chain: SONIC, token: lsodaToken };
   const dst = tab === 'deposit'
     ? { chain: SONIC, token: lsodaToken }
-    : { chain: otherChain, token: otherToken };
+    : { chain: userChain, token: userToken };
 
-  // ─── Wallets ─────────────────────────────────────────────────────────────
+  // ─── Wallet (single — the user's spoke chain) ────────────────────────────
+  // Same EOA holds the source funds on deposit AND receives the swap output on withdraw.
+  // No dst wallet connection required: dst address is derived (deposit → hub wallet;
+  // withdraw → same EOA on `userChain`).
 
-  const sourceAccount = useXAccount({ xChainId: src.chain });
-  const destAccount = useXAccount({ xChainId: dst.chain });
-  const sourceWalletProvider = useWalletProvider({ xChainId: src.chain });
-  const sourceChainType = getXChainType(src.chain);
-  const destChainType = getXChainType(dst.chain);
-  const { isWrongChain: isSrcWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: src.chain });
-  const showEvmSwitch = sourceChainType === 'EVM' && isSrcWrongChain && !!sourceAccount.address;
+  const userAccount = useXAccount({ xChainId: userChain });
+  const userWalletProvider = useWalletProvider({ xChainId: userChain });
+  const userChainType = getXChainType(userChain);
+  const { isWrongChain: isUserWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: userChain });
+  const showEvmSwitch = userChainType === 'EVM' && isUserWrongChain && !!userAccount.address;
 
-  // ─── Balances ────────────────────────────────────────────────────────────
-  // useXBalances routes per chain type via the XService (EVM viem, Solana web3.js, etc.).
-  // Passing the right service is what makes balance reads work outside EVM.
+  // Aliases — handleSwap and friends were written against src.*; keep them working.
+  const sourceAccount = userAccount;
+  const sourceWalletProvider = userWalletProvider;
 
-  const sourceXService = useXService({ xChainType: sourceChainType });
-  const { data: srcBalances } = useXBalances({
+  // ─── Balances (single — user's token on user chain) ──────────────────────
+
+  const userXService = useXService({ xChainType: userChainType });
+  const { data: userBalances } = useXBalances({
     params: {
-      xService: sourceXService,
-      xChainId: src.chain,
-      xTokens: src.token ? [src.token] : [],
-      address: sourceAccount.address,
+      xService: userXService,
+      xChainId: userChain,
+      xTokens: userToken ? [userToken] : [],
+      address: userAccount.address,
     },
   });
-  const srcBalance: bigint | undefined = src.token ? (srcBalances?.[src.token.address] as bigint | undefined) : undefined;
-
-  const destXService = useXService({ xChainType: destChainType });
-  const { data: dstBalances } = useXBalances({
-    params: {
-      xService: destXService,
-      xChainId: dst.chain,
-      xTokens: dst.token ? [dst.token] : [],
-      address: destAccount.address,
-    },
-  });
-  const dstBalance: bigint | undefined = dst.token ? (dstBalances?.[dst.token.address] as bigint | undefined) : undefined;
+  const userBalance: bigint | undefined = userToken
+    ? (userBalances?.[userToken.address] as bigint | undefined)
+    : undefined;
 
   // ─── Amount + quote ──────────────────────────────────────────────────────
 
@@ -160,7 +208,7 @@ export default function LeverageYieldPage() {
   useEffect(() => {
     setSourceAmount('');
     setIntentOrderPayload(undefined);
-  }, [tab, selectedVaultName, otherChain, otherToken?.address]);
+  }, [tab, selectedVaultName, userChain, userToken?.address]);
 
   const quotePayload: SolverIntentQuoteRequest | undefined = useMemo(() => {
     if (!src.token || !dst.token || Number(sourceAmount) <= 0) return undefined;
@@ -200,9 +248,11 @@ export default function LeverageYieldPage() {
   const [intentOrderPayload, setIntentOrderPayload] = useState<CreateIntentParams | undefined>();
   const [actionError, setActionError] = useState<string | null>(null);
 
+  // Withdraw skips the spoke-side allowance/approve: the [approve, createIntent] pair
+  // is encoded into the sendMessage payload and the hub wallet executes it on Sonic.
   const { data: hasAllowance, isLoading: isAllowanceLoading } = useSwapAllowance({
     params: {
-      payload: intentOrderPayload,
+      payload: tab === 'deposit' ? intentOrderPayload : undefined,
       srcChainKey: src.chain,
       walletProvider: sourceWalletProvider,
     },
@@ -210,41 +260,169 @@ export default function LeverageYieldPage() {
 
   const { mutateAsyncSafe: approve, isPending: isApproving } = useSwapApprove();
   const { mutateAsyncSafe: submitSwapTx, isPending: isSubmitting } = useBackendSubmitSwapTx();
+  const { mutateAsync: swap, isPending: isSwapping } = useSwap();
+
+  // ─── Submit-tx API toggle ────────────────────────────────────────────────
+  // When OFF (default): createIntent + relay inline, then poll solver status. Deposit
+  // uses `useSwap`; withdraw relays the hub-wallet `sendMessage` then calls
+  // `postExecution`. When ON: createIntent → POST to BES → poll the BES status endpoint.
+  const [useSubmitTxApi, setUseSubmitTxApi] = useState(false);
+
+  // ─── Shares across ALL connected chains' hub wallets ─────────────────────
+  // Users may hold shares under multiple hub wallets — one per spoke chain they
+  // deposited from. Enumerate every spoke chain that currently has a connected wallet
+  // (per ChainType: EVM connection covers all EVM spoke chains; non-EVM map 1:1).
+  // For each, the holder address is the user's EOA on Sonic, or the CREATE3-derived
+  // hub wallet otherwise. Fetch share balances in parallel.
+  const xAccounts = useXAccounts();
+  const connectedHolders = useMemo(() => {
+    return supportedSpokeChains
+      .map(chainKey => {
+        const chainType = getXChainType(chainKey);
+        if (!chainType) return null;
+        const address = xAccounts[chainType]?.address;
+        return address ? { chainKey, address: address as string } : null;
+      })
+      .filter((x): x is { chainKey: SpokeChainKey; address: string } => x !== null);
+  }, [supportedSpokeChains, xAccounts]);
+
+  const sharesByChain = useQueries({
+    queries: connectedHolders.map(({ chainKey, address }) => ({
+      queryKey: ['leverageYield', 'sharesByChain', selectedVault?.vault, chainKey, address] as const,
+      enabled: !!selectedVault,
+      refetchInterval: 15_000,
+      queryFn: async () => {
+        if (!selectedVault) throw new Error('No vault');
+        const holder =
+          chainKey === SONIC
+            ? (address as Address)
+            : await sodax.hubProvider.getUserHubWalletAddress(address, chainKey);
+        const r = await sodax.leverageYield.getShareBalance(selectedVault.vault, holder);
+        if (!r.ok) throw r.error;
+        return { chainKey, holder, shares: r.value };
+      },
+    })),
+  });
+
+  // Holder + share balance for the currently-selected userChain — used by deposit
+  // dstAddress, withdraw MAX/validation, and the inline withdraw display.
+  const currentHolder = useMemo(
+    () => sharesByChain.find(q => q.data?.chainKey === userChain)?.data,
+    [sharesByChain, userChain],
+  );
+  const userShares: bigint | undefined = currentHolder?.shares;
+
+  // Sum across all chains — single headline number for the user's total position.
+  const totalShares: bigint = useMemo(
+    () => sharesByChain.reduce((acc, q) => acc + (q.data?.shares ?? 0n), 0n),
+    [sharesByChain],
+  );
+
+  // Steady-state APR — `getApr` reads AAVE rates + vault targetLTV and applies the
+  // standard leveraged-LSD formula. Slow-refresh (60s): AAVE rates drift slowly and a
+  // headline number doesn't need second-by-second precision.
+  const { data: vaultApr } = useQuery({
+    queryKey: ['leverageYield', 'apr', selectedVault?.vault],
+    enabled: !!selectedVault,
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      if (!selectedVault) return null;
+      const r = await sodax.leverageYield.getApr(selectedVault.vault);
+      if (!r.ok) throw r.error;
+      return r.value;
+    },
+  });
+
+  // Vault TVL + share price. `previewRedeem(1e18)` = "1 share → N underlying" — the
+  // per-share yield indicator that creeps up as the vault accrues interest. TVL is the
+  // scale signal. 60s refresh: both move slowly.
+  const { data: vaultStats } = useQuery({
+    queryKey: ['leverageYield', 'stats', selectedVault?.vault],
+    enabled: !!selectedVault,
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      if (!selectedVault) return null;
+      const [tvl, sharePrice] = await Promise.all([
+        sodax.leverageYield.getTotalAssets(selectedVault.vault),
+        sodax.leverageYield.previewRedeem(selectedVault.vault, 10n ** 18n),
+      ]);
+      if (!tvl.ok) throw tvl.error;
+      if (!sharePrice.ok) throw sharePrice.error;
+      return { tvl: tvl.value, sharePrice: sharePrice.value };
+    },
+  });
+
+  // Live position snapshot — actual LTV (drift vs `targetLTV`), health factor
+  // (liquidation safety, ∞ when no debt), idleAsset (capital not yet deployed).
+  // 30s refresh: faster than APR since LTV shifts with each rebalance/rate tick.
+  const { data: vaultPosition } = useQuery({
+    queryKey: ['leverageYield', 'position', selectedVault?.vault],
+    enabled: !!selectedVault,
+    refetchInterval: 30_000,
+    queryFn: async () => {
+      if (!selectedVault) return null;
+      const r = await sodax.leverageYield.getPosition(selectedVault.vault);
+      if (!r.ok) throw r.error;
+      return r.value;
+    },
+  });
 
   // Accumulated orders — each one polls the BES status endpoint via <OrderStatus> and
   // shows live progress. Mirrors the solver page's pattern so users see the same UX
   // whether they deposit/withdraw via this page or swap via /solver.
   const [orders, setOrders] = useState<Order[]>([]);
 
-  const buildIntent = (): CreateIntentParams | undefined => {
-    if (!src.token || !dst.token || !sourceAccount.address || !destAccount.address || !sourceWalletProvider) {
-      return undefined;
-    }
-    if (!quote || !minOutputAmount) return undefined;
-    return {
-      inputToken: src.token.address,
-      outputToken: dst.token.address,
-      inputAmount: parseUnits(sourceAmount, src.token.decimals),
-      minOutputAmount,
-      deadline: BigInt(Math.floor(Date.now() / 1000) + 60 * 5),
-      allowPartialFill: false,
-      srcChainKey: src.chain,
-      dstChainKey: dst.chain,
-      srcAddress: sourceAccount.address,
-      dstAddress: destAccount.address,
-      solver: '0x0000000000000000000000000000000000000000',
-      data: '0x',
-    } satisfies CreateIntentParams;
+  // Resets the form and refreshes balances after a successful submit. Invalidates rather
+  // than waits — the share balance won't move until the solver fills (seconds-to-minutes),
+  // but invalidating now means the next read picks up any state shift instead of cached zeros.
+  const resetAfterSubmit = () => {
+    setSourceAmount('');
+    setIntentOrderPayload(undefined);
+    queryClient.invalidateQueries({ queryKey: ['leverageYield'] });
+    queryClient.invalidateQueries({ queryKey: ['shared', 'xBalances'] });
   };
 
-  const prepare = () => {
+  // Builds the swap intent params via the SDK's leverage-yield builders, then stashes them
+  // for `handleSwap`. Deposit (any token → lsoda*) and withdraw (lsoda* → any token) both
+  // produce plain `CreateIntentParams` consumed by the one `swaps.swap()` path — withdraw's
+  // params carry `hubWalletSwap: true` so `swap()` routes via the hub wallet internally.
+  const prepare = async () => {
     setActionError(null);
-    const intent = buildIntent();
-    if (!intent) {
-      setActionError('Missing wallet, token, or quote — connect both chains and enter an amount.');
+    if (
+      !src.token ||
+      !dst.token ||
+      !sourceAccount.address ||
+      !selectedVault ||
+      !quote ||
+      minOutputAmount === undefined
+    ) {
+      setActionError('Missing wallet, token, or quote — connect your chain and enter an amount.');
       return;
     }
-    setIntentOrderPayload(intent);
+    const inputAmount = parseUnits(sourceAmount, src.token.decimals);
+    const result = await (tab === 'deposit'
+      ? sodax.leverageYield.deposit({
+          vault: selectedVault.vault,
+          srcChainKey: userChain,
+          srcAddress: sourceAccount.address,
+          inputToken: src.token.address,
+          inputAmount,
+          minOutputAmount,
+        })
+      : sodax.leverageYield.withdraw({
+          vault: selectedVault.vault,
+          srcChainKey: userChain,
+          srcAddress: sourceAccount.address,
+          dstChainKey: dst.chain,
+          outputToken: dst.token.address,
+          inputAmount,
+          minOutputAmount,
+        }));
+    if (!result.ok) {
+      setActionError(`Failed to build intent: ${(result.error as Error)?.message ?? 'unknown'}`);
+      return;
+    }
+    setIntentOrderPayload(result.value);
   };
 
   const handleApprove = async () => {
@@ -255,28 +433,51 @@ export default function LeverageYieldPage() {
   };
 
   /**
-   * Two-step submit-tx flow (matches the solver page's `handleSubmitTxSwap`):
-   *   1. `createIntent` — broadcasts the spoke tx and returns immediately with the intent
-   *      payload + relay metadata. Does NOT wait for relay to land — so it can't time out
-   *      on a still-relaying intent the way `useSwap` does.
-   *   2. `submitSwapTx` — POSTs the spoke tx hash + intent to the BES backend, which
-   *      forwards to the solver and exposes a status endpoint we poll via `<OrderStatus>`.
-   * After both succeed we push an Order; live status renders above the card.
+   * Executes the prepared intent. Tab-agnostic — `intentOrderPayload` already encodes
+   * deposit vs withdraw (withdraw carries `hubWalletSwap: true`, handled inside `swap()`
+   * / `createIntent()`). Two modes via the submit-tx toggle:
+   *  - OFF (default): `useSwap` creates the intent, relays it, and notifies the solver,
+   *    returning full delivery info. Order renders in 'solver' mode.
+   *  - ON: `createIntent` + BES `submitSwapTx` — POSTs the spoke tx to the backend, which
+   *    drives the relay/solver. Order renders in 'submit-tx' mode.
    */
   const handleSwap = async () => {
-    if (!intentOrderPayload || !sourceWalletProvider || !sourceAccount.address) return;
+    if (!intentOrderPayload || !sourceWalletProvider) return;
     setActionError(null);
 
-    const createIntentResult = await sodax.swaps.createIntent({
+    if (!useSubmitTxApi) {
+      try {
+        const { solverExecutionResponse, intent, intentDeliveryInfo } = await swap({
+          params: intentOrderPayload,
+          walletProvider: sourceWalletProvider,
+        });
+        setOrders(prev => [
+          ...prev,
+          {
+            mode: 'solver',
+            intentHash: solverExecutionResponse.intent_hash,
+            intent,
+            intentDeliveryInfo,
+          },
+        ]);
+        resetAfterSubmit();
+      } catch (e) {
+        setActionError(`Swap failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      return;
+    }
+
+    // Submit-tx (BES) path: create the intent, then hand the spoke tx to the backend.
+    const createResult = await sodax.swaps.createIntent({
       params: intentOrderPayload,
       raw: false,
       walletProvider: sourceWalletProvider,
     });
-    if (!createIntentResult.ok) {
-      setActionError(`Create intent failed: ${(createIntentResult.error as Error)?.message ?? 'unknown'}`);
+    if (!createResult.ok) {
+      setActionError(`Create intent failed: ${(createResult.error as Error)?.message ?? 'unknown'}`);
       return;
     }
-    const { tx: spokeTxHash, intent, relayData } = createIntentResult.value;
+    const { tx: spokeTxHash, intent, relayData } = createResult.value;
 
     const swapIntentData: SwapIntentData = {
       intentId: intent.intentId.toString(),
@@ -295,10 +496,12 @@ export default function LeverageYieldPage() {
       data: intent.data,
     };
 
+    // BES locates the tx on `srcChainKey` — the spoke chain the user signed on (`userChain`
+    // for both tabs; withdraw signs a `sendMessage` there).
     const request: SubmitSwapTxRequest = {
       txHash: spokeTxHash as string,
-      srcChainKey: src.chain,
-      walletAddress: sourceAccount.address,
+      srcChainKey: userChain,
+      walletAddress: intentOrderPayload.srcAddress,
       intent: swapIntentData,
       relayData: relayData.payload,
     };
@@ -313,12 +516,11 @@ export default function LeverageYieldPage() {
       {
         mode: 'submit-tx',
         txHash: spokeTxHash as string,
-        srcChainKey: src.chain,
+        srcChainKey: userChain,
         apiBaseURL: SUBMIT_TX_API_CONFIG.baseURL,
       },
     ]);
-    setSourceAmount('');
-    setIntentOrderPayload(undefined);
+    resetAfterSubmit();
   };
 
   // ─── Render ──────────────────────────────────────────────────────────────
@@ -384,7 +586,130 @@ export default function LeverageYieldPage() {
               <div>asset: <code>{selectedVault.asset}</code></div>
               <div>borrowToken: <code>{selectedVault.borrowToken}</code></div>
             </div>
+
+            {/* Steady-state APR — supply rate + leveraged spread between asset and borrowToken
+                AAVE rates, scaled by the vault's targetLTV. Headline number for a UI. */}
+            {vaultApr && (
+              <div className="border-t pt-3 grid grid-cols-2 gap-y-1 text-sm">
+                <span className="text-muted-foreground">Net APR</span>
+                <span className="text-right font-mono text-base font-semibold">
+                  {fmtApr(vaultApr.netAprRay)}
+                </span>
+                <span className="text-xs text-muted-foreground">supply APR ({selectedVault.asset.slice(0, 6)}…)</span>
+                <span className="text-right font-mono text-xs">{fmtApr(vaultApr.supplyAprRay)}</span>
+                <span className="text-xs text-muted-foreground">
+                  borrow APR ({selectedVault.borrowToken.slice(0, 6)}…)
+                </span>
+                <span className="text-right font-mono text-xs">{fmtApr(vaultApr.borrowAprRay)}</span>
+                <span className="text-xs text-muted-foreground">target leverage</span>
+                <span className="text-right font-mono text-xs">{fmtLeverage(vaultApr.leverageMultiplierWad)}×</span>
+              </div>
+            )}
+
+            {/* Vault scale + live position — TVL and share price answer "how big / how
+                productive is this vault", the position block answers "is it safe right
+                now". Actual LTV next to target shows drift; HF goes ∞ when there's no
+                debt; idleAsset shows un-deployed capital that's not earning leverage. */}
+            {(vaultStats || vaultPosition) && (
+              <div className="border-t pt-3 grid grid-cols-2 gap-y-1 text-sm">
+                {vaultStats && (
+                  <>
+                    <span className="text-muted-foreground">TVL</span>
+                    <span className="text-right font-mono">
+                      {fmtUnits(vaultStats.tvl, 18)} {selectedVault.asset.slice(0, 6)}…
+                    </span>
+                    <span className="text-xs text-muted-foreground">share price (1 share →)</span>
+                    <span className="text-right font-mono text-xs">{fmtUnits(vaultStats.sharePrice, 18, 8)}</span>
+                  </>
+                )}
+                {vaultPosition && vaultApr && (
+                  <>
+                    <span className="text-xs text-muted-foreground">current LTV (target)</span>
+                    <span className="text-right font-mono text-xs">
+                      {fmtBps(vaultPosition.ltv)} ({fmtBps(vaultApr.targetLtvBps)})
+                    </span>
+                    <span className="text-xs text-muted-foreground">health factor</span>
+                    <span className="text-right font-mono text-xs">{fmtHealthFactor(vaultPosition.healthFactor)}</span>
+                    <span className="text-xs text-muted-foreground">idle asset</span>
+                    <span className="text-right font-mono text-xs">{fmtUnits(vaultPosition.idleAsset, 18)}</span>
+                  </>
+                )}
+              </div>
+            )}
           </div>
+
+          {/* Cross-chain position — one row per connected wallet. Each row reads
+              vault.balanceOf(holder) where holder = user's EOA on Sonic, or the
+              CREATE3-derived hub wallet on any other chain. Total sums all chains. */}
+          {connectedHolders.length > 0 && (
+            <div className="border-t pt-3 space-y-1 text-sm">
+              <div className="flex justify-between font-medium">
+                <span>Your shares (all chains)</span>
+                <span className="font-mono">
+                  {fmtUnits(totalShares, lsodaToken.decimals)} {lsodaToken.symbol}
+                </span>
+              </div>
+              {/* Underlying-equivalent — shares × current share price. Shows what the
+                  user would get if they fully exited *right now*, in vault-asset units
+                  (sodaWEETH-style, 18 dec). Tracks vault performance for the user. */}
+              {vaultStats && totalShares > 0n && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">≈ underlying</span>
+                  <span className="font-mono text-muted-foreground">
+                    {fmtUnits((totalShares * vaultStats.sharePrice) / 10n ** 18n, 18)}
+                  </span>
+                </div>
+              )}
+              <div className="space-y-0.5 pt-1">
+                {connectedHolders.map(({ chainKey }, i) => {
+                  const q = sharesByChain[i];
+                  const d = q?.data;
+                  if (d && d.shares > 0n) {
+                    return (
+                      <div key={chainKey} className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">
+                          {chainKey}{' '}
+                          <span className="opacity-60">
+                            ({chainKey === SONIC ? 'wallet' : 'hub wallet'})
+                          </span>
+                        </span>
+                        <span className="font-mono">
+                          {fmtUnits(d.shares, lsodaToken.decimals)}
+                        </span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })}
+                {(() => {
+                  const loading = sharesByChain.filter(q => q.isLoading).length;
+                  const errored = sharesByChain.filter(q => q.isError).length;
+                  const resolved = sharesByChain.filter(q => q.data !== undefined).length;
+                  const nonZero = sharesByChain.filter(q => (q.data?.shares ?? 0n) > 0n).length;
+                  if (loading > 0) {
+                    return (
+                      <div className="text-xs text-muted-foreground">
+                        loading {loading} of {sharesByChain.length} chains…
+                      </div>
+                    );
+                  }
+                  if (errored > 0) {
+                    return (
+                      <div className="text-xs text-amber-600">
+                        {errored} of {sharesByChain.length} chains failed to load (likely CORS — check console)
+                      </div>
+                    );
+                  }
+                  if (resolved === sharesByChain.length && nonZero === 0) {
+                    return (
+                      <div className="text-xs text-muted-foreground">no shares on any connected chain</div>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -392,33 +717,70 @@ export default function LeverageYieldPage() {
         <CardContent className="pt-6">
           <Tabs value={tab} onValueChange={v => setTab(v as 'deposit' | 'withdraw')}>
             <TabsList className="w-full">
-              <TabsTrigger value="deposit" className="flex-1">Deposit (any → {lsodaToken.symbol})</TabsTrigger>
-              <TabsTrigger value="withdraw" className="flex-1">Withdraw ({lsodaToken.symbol} → any)</TabsTrigger>
+              <TabsTrigger value="deposit" className="flex-1">Deposit</TabsTrigger>
+              <TabsTrigger value="withdraw" className="flex-1">Withdraw</TabsTrigger>
             </TabsList>
 
             <TabsContent value={tab} className="space-y-4 pt-4">
-              {/* Source */}
+              {/* Single-side flow. The user only ever interacts with ONE chain (their EOA's
+                  chain). For deposit: that's where they hold the input token. For withdraw:
+                  that's where the swap output lands AND where they sign the sendMessage that
+                  authorises their hub wallet to create the intent. Hub wallet is derived
+                  deterministically — no Sonic connection needed. */}
+              <div className="space-y-2">
+                <Label>{tab === 'deposit' ? 'Your chain' : 'Receive on'}</Label>
+                <ChainSelector
+                  selectedChainId={userChain}
+                  selectChainId={setUserChain}
+                  allowedChains={supportedSpokeChains}
+                />
+                <div className="text-xs text-muted-foreground break-all">
+                  {userAccount.address ? (
+                    <>signer: <code>{userAccount.address}</code></>
+                  ) : (
+                    <span className="text-amber-600">connect a wallet on {userChain}</span>
+                  )}
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label>From</Label>
-                  {src.token && srcBalance !== undefined && (
+                  <Label>{tab === 'deposit' ? 'Pay with' : 'Receive token'}</Label>
+                  {tab === 'deposit' && userToken && userBalance !== undefined && (
                     <span className="text-xs text-muted-foreground">
-                      balance: <span className="font-mono">{fmtUnits(srcBalance, src.token.decimals)}</span>
+                      balance: <span className="font-mono">{fmtUnits(userBalance, userToken.decimals)}</span>
+                    </span>
+                  )}
+                  {tab === 'withdraw' && userShares !== undefined && (
+                    <span className="text-xs text-muted-foreground">
+                      your shares: <span className="font-mono">{fmtUnits(userShares, lsodaToken.decimals)}</span>{' '}
+                      {lsodaToken.symbol}
                     </span>
                   )}
                 </div>
-                {tab === 'deposit' ? (
-                  <ChainSelector
-                    selectedChainId={otherChain}
-                    selectChainId={setOtherChain}
-                    allowedChains={supportedSpokeChains}
-                  />
-                ) : (
-                  <div className="text-sm">
-                    <code>{SONIC}</code>{' '}
-                    <span className="text-xs text-muted-foreground">(locked — Sonic)</span>
-                  </div>
-                )}
+                <Select
+                  value={userToken?.address}
+                  onValueChange={addr => setUserToken(userTokens.find(t => t.address === addr))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Token" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {userTokens.map(t => (
+                      <SelectItem key={t.address} value={t.address}>
+                        {t.symbol}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>
+                  {tab === 'deposit'
+                    ? `Amount (${userToken?.symbol ?? 'token'})`
+                    : `Shares to redeem (${lsodaToken.symbol})`}
+                </Label>
                 <div className="flex gap-2">
                   <Input
                     type="number"
@@ -426,118 +788,43 @@ export default function LeverageYieldPage() {
                     value={sourceAmount}
                     onChange={e => setSourceAmount(e.target.value)}
                   />
-                  {tab === 'deposit' ? (
-                    <Select
-                      value={otherToken?.address}
-                      onValueChange={addr => setOtherToken(otherTokens.find(t => t.address === addr))}
-                    >
-                      <SelectTrigger className="w-[140px]">
-                        <SelectValue placeholder="Token" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {otherTokens.map(t => (
-                          <SelectItem key={t.address} value={t.address}>
-                            {t.symbol}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <div className="w-[140px] flex items-center justify-center border rounded-md text-sm font-medium">
-                      {lsodaToken.symbol}
-                    </div>
-                  )}
                   <Button
                     variant="outline"
                     onClick={() => {
-                      if (src.token && srcBalance !== undefined) {
-                        setSourceAmount(formatUnits(srcBalance, src.token.decimals));
-                      }
+                      // Max source amount depends on the active flow:
+                      //   deposit  → wallet balance of the chosen input token
+                      //   withdraw → user's lsoda* share balance (in hub wallet)
+                      const maxRaw =
+                        tab === 'deposit' ? userBalance : userShares;
+                      const decimals =
+                        tab === 'deposit' ? userToken?.decimals ?? 18 : lsodaToken.decimals;
+                      if (maxRaw !== undefined) setSourceAmount(formatUnits(maxRaw, decimals));
                     }}
-                    disabled={!src.token || srcBalance === undefined}
+                    disabled={
+                      tab === 'deposit'
+                        ? !userToken || userBalance === undefined
+                        : userShares === undefined
+                    }
                   >
                     Max
                   </Button>
                 </div>
-                <div className="text-xs text-muted-foreground break-all">
-                  {sourceAccount.address ? (
-                    <>signer: <code>{sourceAccount.address}</code></>
-                  ) : (
-                    <span className="text-amber-600">connect a wallet on {src.chain}</span>
-                  )}
-                </div>
               </div>
 
-              <div className="flex justify-center">
-                <ArrowDownUp className="h-5 w-5 text-muted-foreground" />
-              </div>
-
-              {/* Destination */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label>To</Label>
-                  {dst.token && dstBalance !== undefined && (
+              {/* Output preview — readonly. Updates as the quote streams in. */}
+              <div className="text-xs text-muted-foreground space-y-0.5 border-t pt-3">
+                {quote?.quoted_amount !== undefined && dst.token && (
+                  <div className="text-sm text-foreground">
+                    You'll receive ≈{' '}
+                    <span className="font-mono">{fmtUnits(quote.quoted_amount, dst.token.decimals)}</span>{' '}
+                    {dst.token.symbol}{' '}
                     <span className="text-xs text-muted-foreground">
-                      balance: <span className="font-mono">{fmtUnits(dstBalance, dst.token.decimals)}</span>
+                      {tab === 'deposit'
+                        ? '(in your hub wallet)'
+                        : `(on ${userChain}, to your address)`}
                     </span>
-                  )}
-                </div>
-                {tab === 'withdraw' ? (
-                  <ChainSelector
-                    selectedChainId={otherChain}
-                    selectChainId={setOtherChain}
-                    allowedChains={supportedSpokeChains}
-                  />
-                ) : (
-                  <div className="text-sm">
-                    <code>{SONIC}</code>{' '}
-                    <span className="text-xs text-muted-foreground">(locked — Sonic)</span>
                   </div>
                 )}
-                <div className="flex gap-2">
-                  <Input
-                    type="text"
-                    readOnly
-                    value={
-                      quote?.quoted_amount && dst.token
-                        ? formatUnits(quote.quoted_amount, dst.token.decimals)
-                        : ''
-                    }
-                    placeholder={quoteQuery.isFetching ? 'Quoting…' : '0.0'}
-                  />
-                  {tab === 'withdraw' ? (
-                    <Select
-                      value={otherToken?.address}
-                      onValueChange={addr => setOtherToken(otherTokens.find(t => t.address === addr))}
-                    >
-                      <SelectTrigger className="w-[140px]">
-                        <SelectValue placeholder="Token" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {otherTokens.map(t => (
-                          <SelectItem key={t.address} value={t.address}>
-                            {t.symbol}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <div className="w-[140px] flex items-center justify-center border rounded-md text-sm font-medium">
-                      {lsodaToken.symbol}
-                    </div>
-                  )}
-                </div>
-                <div className="text-xs text-muted-foreground break-all">
-                  {destAccount.address ? (
-                    <>recipient: <code>{destAccount.address}</code></>
-                  ) : (
-                    <span className="text-amber-600">connect a wallet on {dst.chain}</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Quote summary */}
-              <div className="text-xs text-muted-foreground space-y-0.5">
                 {exchangeRate && dst.token && src.token && (
                   <div>
                     rate: 1 {src.token.symbol} ≈{' '}
@@ -559,16 +846,32 @@ export default function LeverageYieldPage() {
                     className="h-7 w-24 text-xs"
                   />
                 </div>
+
+                {/* Submit-tx API toggle — mirrors the solver page. ON: createIntent →
+                    BES POST → poll status. OFF: useSwap (waits for relay packet inline). */}
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    id="ly-submit-tx-toggle"
+                    type="checkbox"
+                    checked={useSubmitTxApi}
+                    onChange={e => setUseSubmitTxApi(e.target.checked)}
+                    className="h-4 w-4 cursor-pointer"
+                  />
+                  <label htmlFor="ly-submit-tx-toggle" className="text-xs cursor-pointer">
+                    Submit tx to API
+                  </label>
+                </div>
               </div>
 
-              {/* Action buttons */}
-              {!sourceAccount.address || !destAccount.address ? (
+              {/* Action — only the user's spoke wallet matters. Dst address is always
+                  derived (hub wallet on deposit; userAccount on withdraw). */}
+              {!userAccount.address ? (
                 <Button onClick={openWalletModal} className="w-full">
-                  Connect wallet{!sourceAccount.address && !destAccount.address ? 's' : ''}
+                  Connect wallet
                 </Button>
               ) : showEvmSwitch ? (
                 <Button onClick={handleSwitchChain} className="w-full" variant="cherryOutline">
-                  Switch wallet to {src.chain}
+                  Switch wallet to {userChain}
                 </Button>
               ) : !intentOrderPayload ? (
                 <Button
@@ -578,15 +881,25 @@ export default function LeverageYieldPage() {
                 >
                   {quoteQuery.isFetching ? 'Quoting…' : 'Review'}
                 </Button>
-              ) : isAllowanceLoading ? (
+              ) : tab === 'deposit' && isAllowanceLoading ? (
                 <Button disabled className="w-full">Checking allowance…</Button>
-              ) : hasAllowance ? (
-                <Button onClick={handleSwap} disabled={isSubmitting} className="w-full">
-                  {isSubmitting ? 'Submitting…' : tab === 'deposit' ? 'Deposit' : 'Withdraw'}
-                </Button>
-              ) : (
+              ) : tab === 'deposit' && !hasAllowance ? (
                 <Button onClick={handleApprove} disabled={isApproving} className="w-full">
                   {isApproving ? 'Approving…' : 'Approve'}
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleSwap}
+                  disabled={isSubmitting || isSwapping}
+                  className="w-full"
+                >
+                  {isSubmitting || isSwapping
+                    ? isSwapping
+                      ? 'Swapping…'
+                      : 'Submitting…'
+                    : tab === 'deposit'
+                      ? 'Deposit'
+                      : 'Withdraw'}
                 </Button>
               )}
 
@@ -597,10 +910,9 @@ export default function LeverageYieldPage() {
           </Tabs>
         </CardContent>
         <CardFooter className="text-xs text-muted-foreground">
-          Routed via the Sodax solver.{' '}
           {tab === 'deposit'
-            ? `${lsodaToken.symbol} lands on your Sonic wallet — hold or trade like any token.`
-            : `Burns ${lsodaToken.symbol} from your Sonic wallet and delivers the chosen token to your destination chain.`}
+            ? `Swap any token via the Sodax solver into ${lsodaToken.symbol}. Shares land in your hub wallet — no Sonic connection needed.`
+            : `Burns ${lsodaToken.symbol} from your hub wallet via a cross-chain message you sign on ${userChain}; the swapped output lands at your address there.`}
         </CardFooter>
       </Card>
     </div>

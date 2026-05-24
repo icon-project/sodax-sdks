@@ -27,12 +27,7 @@
 
 import 'dotenv/config';
 import { type Address, type Hex, formatUnits } from 'viem';
-import {
-  ChainKeys,
-  type EvmChainKey,
-  Sodax,
-  type SpokeChainKey,
-} from '@sodax/sdk';
+import { ChainKeys, type EvmChainKey, Sodax, type SpokeChainKey } from '@sodax/sdk';
 import { EvmWalletProvider } from '@sodax/wallet-sdk-core';
 
 // ─── Env / clients ────────────────────────────────────────────────────────
@@ -48,8 +43,9 @@ if (!PRIVATE_KEY.startsWith('0x')) throw new Error('PRIVATE_KEY must start with 
 // Override via SPOKE_RPC / SONIC_RPC env vars only when you need a custom provider —
 // public defaults rate-limit aggressively but are fine for smoke tests.
 const sodax = new Sodax();
-const SPOKE_RPC = (process.env.SPOKE_RPC ??
-  sodax.config.getChainConfig(SPOKE_CHAIN_KEY as EvmChainKey).rpcUrl) as `http${string}` | undefined;
+const SPOKE_RPC = (process.env.SPOKE_RPC ?? sodax.config.getChainConfig(SPOKE_CHAIN_KEY as EvmChainKey).rpcUrl) as
+  | `http${string}`
+  | undefined;
 const SONIC_RPC = (process.env.SONIC_RPC ??
   sodax.config.getChainConfig(ChainKeys.SONIC_MAINNET).rpcUrl) as `http${string}`;
 
@@ -119,9 +115,7 @@ function resolveVault(args: string[]): { address: Address; rest: string[] } {
   }
   if (vaults.length > 1) {
     const known = vaults.map(v => v.name).join(', ');
-    throw new Error(
-      `Multiple vaults registered (${vaults.length}); pass --vault <name>. Known: ${known}`,
-    );
+    throw new Error(`Multiple vaults registered (${vaults.length}); pass --vault <name>. Known: ${known}`);
   }
   return { address: vaults[0].vault, rest };
 }
@@ -163,23 +157,14 @@ async function cmdHelp(): Promise<void> {
     preview-deposit <amount>                 shares minted for an asset deposit
     preview-withdraw <amount>                shares burned for an asset withdrawal
 
-  CROSS-CHAIN (spoke ↔ Sonic)
-    xdeposit <amount>                        bridge SPOKE_TOKEN from SPOKE_CHAIN_KEY into vault
-    xwithdraw <amount>                       withdraw vault assets and bridge back to SPOKE_CHAIN_KEY
-
   SONIC-DIRECT (signer already holds vault asset on hub)
-    deposit <amount>                         vault.deposit
-    withdraw <amount>                        vault.withdraw
     approve <amount>                         ERC20 approve of vault.asset() to vault
     is-allowance-valid <amount>              check signer's allowance covers amount
 
   EXAMPLES
     pnpm --filter node leverage-yield list-vaults
     pnpm --filter node leverage-yield status
-    pnpm --filter node leverage-yield xdeposit 0.01
-    pnpm --filter node leverage-yield xdeposit 0.01 --vault weETH-leveraged
     pnpm --filter node leverage-yield max-withdraw --hub
-    pnpm --filter node leverage-yield xwithdraw 0.005
 `);
 }
 
@@ -295,146 +280,7 @@ async function cmdStatus(args: string[]): Promise<void> {
   if (maxHub.ok) console.log(`  hub-wallet maxWithdraw: ${fmt(maxHub.value)}`);
 }
 
-// ─── Cross-chain ──────────────────────────────────────────────────────────
-
-async function cmdXDeposit(args: string[]): Promise<void> {
-  const wallet = requireSpokeWallet();
-  const { address: vault, rest } = resolveVault(args);
-  const amount = parseAmount(rest[0]);
-  const signer = await wallet.getWalletAddress();
-
-  console.log(`xdeposit ${fmt(amount)} of ${SPOKE_TOKEN} from ${SPOKE_CHAIN_KEY} into vault ${vault}`);
-  console.log(`  signer: ${signer}`);
-
-  const xdepositParams = {
-    raw: false as const,
-    walletProvider: wallet,
-    params: {
-      vault,
-      srcChainKey: SPOKE_CHAIN_KEY,
-      srcAddress: signer,
-      srcToken: SPOKE_TOKEN,
-      amount,
-    },
-  };
-
-  // Pre-flight: ensure the spoke asset manager is approved to pull `amount` of `srcToken`.
-  // Without this, the spoke tx reverts with "ERC20: transfer amount exceeds allowance".
-  const allowance = await sodax.leverageYield.isXDepositAllowanceValid(xdepositParams);
-  if (!allowance.ok) {
-    console.error('[xdeposit] allowance check failed:', allowance.error.toJSON());
-    process.exitCode = 1;
-    return;
-  }
-  if (!allowance.value) {
-    console.log('  approving spoke asset manager...');
-    const approveResult = await sodax.leverageYield.xdepositApprove(xdepositParams);
-    if (!approveResult.ok) {
-      console.error('[xdeposit] approve failed:', approveResult.error.toJSON());
-      process.exitCode = 1;
-      return;
-    }
-    console.log(`  ✓ approve tx: ${approveResult.value as string}`);
-    await wallet.waitForTransactionReceipt(approveResult.value as Hex);
-    // small settle delay; some RPCs lag behind the receipt for state reads
-    await new Promise(r => setTimeout(r, 2000));
-  } else {
-    console.log('  allowance OK, skipping approve');
-  }
-
-  const result = await sodax.leverageYield.xdeposit(xdepositParams);
-
-  if (!result.ok) {
-    console.error('[xdeposit] error:', result.error.toJSON());
-    process.exitCode = 1;
-    return;
-  }
-  console.log(`  ✓ srcChainTxHash: ${result.value.srcChainTxHash}`);
-  console.log(`  ✓ dstChainTxHash: ${result.value.dstChainTxHash}`);
-}
-
-async function cmdXWithdraw(args: string[]): Promise<void> {
-  const wallet = requireSpokeWallet();
-  const { address: vault, rest } = resolveVault(args);
-  const amount = parseAmount(rest[0]);
-  const signer = await wallet.getWalletAddress();
-
-  console.log(`xwithdraw ${fmt(amount)} of vault asset (sodaWEETH) → ${SPOKE_TOKEN} on ${SPOKE_CHAIN_KEY}`);
-  console.log(`  signer: ${signer}`);
-
-  // Pre-flight: show the on-chain max for the user's hub wallet.
-  const maxResult = await sodax.leverageYield.getMaxWithdrawForUser(vault, SPOKE_CHAIN_KEY, signer);
-  if (maxResult.ok) {
-    console.log(`  hub-wallet maxWithdraw: ${fmt(maxResult.value)} (${maxResult.value.toString()})`);
-    if (amount > maxResult.value) {
-      console.warn(`  ⚠ amount ${fmt(amount)} exceeds maxWithdraw — call may revert; deleverage required first`);
-    }
-  }
-
-  const result = await sodax.leverageYield.xwithdraw({
-    raw: false,
-    walletProvider: wallet,
-    params: {
-      vault,
-      srcChainKey: SPOKE_CHAIN_KEY,
-      srcAddress: signer,
-      dstToken: SPOKE_TOKEN,
-      amount,
-    },
-  });
-
-  if (!result.ok) {
-    console.error('[xwithdraw] error:', result.error.toJSON());
-    process.exitCode = 1;
-    return;
-  }
-  console.log(`  ✓ srcChainTxHash: ${result.value.srcChainTxHash}`);
-  console.log(`  ✓ dstChainTxHash: ${result.value.dstChainTxHash}`);
-}
-
 // ─── Sonic-direct ─────────────────────────────────────────────────────────
-
-async function cmdDirectDeposit(args: string[]): Promise<void> {
-  const { address: vault, rest } = resolveVault(args);
-  const assets = parseAmount(rest[0]);
-  const receiver = (await hubWalletProvider.getWalletAddress()) as Address;
-
-  console.log(`deposit ${fmt(assets)} of vault asset to vault ${vault} (receiver=${receiver})`);
-  const result = await sodax.leverageYield.deposit({
-    vault,
-    assets,
-    receiver,
-    walletProvider: hubWalletProvider,
-  });
-  if (!result.ok) {
-    console.error('[deposit] error:', result.error.toJSON());
-    process.exitCode = 1;
-    return;
-  }
-  console.log(`  ✓ txHash: ${result.value as string}`);
-}
-
-async function cmdDirectWithdraw(args: string[]): Promise<void> {
-  const { address: vault, rest } = resolveVault(args);
-  const assets = parseAmount(rest[0]);
-  const owner = (await hubWalletProvider.getWalletAddress()) as Address;
-  const receiver = owner;
-
-  console.log(`withdraw ${fmt(assets)} from vault ${vault} (owner=${owner})`);
-  const result = await sodax.leverageYield.withdraw({
-    vault,
-    assets,
-    receiver,
-    owner,
-    walletProvider: hubWalletProvider,
-  });
-  if (!result.ok) {
-    console.error('[withdraw] error:', result.error.toJSON());
-    process.exitCode = 1;
-    return;
-  }
-  console.log(`  ✓ txHash: ${result.value as string}`);
-}
 
 async function cmdApprove(args: string[]): Promise<void> {
   const { address: vault, rest } = resolveVault(args);
@@ -479,10 +325,6 @@ const COMMANDS: Record<string, (args: string[]) => Promise<void>> = {
   'max-withdraw': cmdMaxWithdraw,
   'preview-deposit': cmdPreviewDeposit,
   'preview-withdraw': cmdPreviewWithdraw,
-  xdeposit: cmdXDeposit,
-  xwithdraw: cmdXWithdraw,
-  deposit: cmdDirectDeposit,
-  withdraw: cmdDirectWithdraw,
   approve: cmdApprove,
   'is-allowance-valid': cmdIsAllowanceValid,
 };
