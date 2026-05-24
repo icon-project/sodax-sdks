@@ -9,15 +9,22 @@ set -euo pipefail
 cd "$(dirname "$0")/.."   # packages/skills/
 
 SRC_DIR="../dapp-kit/src/hooks"
-DOCS_DIR="knowledge/dapp-kit"
+DOCS_DIRS=(
+  "skills/sodax-dapp-kit/integration/knowledge"
+  "skills/sodax-dapp-kit/migration-v1-to-v2/knowledge"
+)
 
 if [[ ! -d "$SRC_DIR" ]]; then
   echo "FATAL: $SRC_DIR not found (run from packages/skills/)" >&2
   exit 2
 fi
-if [[ ! -d "$DOCS_DIR" ]]; then
-  echo "FATAL: $DOCS_DIR not found (run from packages/skills/)" >&2
-  exit 2
-fi
+for d in "${DOCS_DIRS[@]}"; do
+  if [[ ! -d "$d" ]]; then
+    echo "FATAL: $d not found (run from packages/skills/)" >&2
+    exit 2
+  fi
+done
 
-exec python3 "$(dirname "$0")/check-ai-consistency.py" --src "$SRC_DIR" --docs "$DOCS_DIR" "$@"
+for d in "${DOCS_DIRS[@]}"; do
+  python3 "$(dirname "$0")/check-ai-consistency.py" --src "$SRC_DIR" --docs "$d" "$@"
+done

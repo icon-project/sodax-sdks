@@ -17,6 +17,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Linux-only. Turbopack has historically had platform-specific
+        # behaviour around pnpm workspace symlinks and file paths; if you
+        # need Windows / macOS coverage for the regression check, extend
+        # `runs-on` rather than this matrix.
         node-version: ['24.x']
 
     steps:
@@ -67,6 +71,13 @@ jobs:
 
       - name: Build Apps
         run: pnpm turbo run build --filter='./apps/*' --filter='!./apps/node'
+
+      - name: SDK features powered by @sodax/libs (Node smoke)
+        run: pnpm --filter node test-libs
+
+      - name: Next.js 16 Turbopack regression check
+        # Skip `next build` — the previous `Build Apps` step already built it.
+        run: pnpm --filter example-next-js-16 verify-only
 
       - name: Run Tests
         run: pnpm test

@@ -135,7 +135,7 @@ export class RadfiProvider {
       throw new Error('Failed to retrieve public key from wallet. Please unlock your wallet and try again.');
     }
 
-    const message = `Login to Radfi via Sodax: ${Date.now()}`;
+    const message = `${Date.now()}`;
     const addressType = detectBitcoinAddressType(address);
     // BIP322 signing is supported for P2WPKH and P2TR; P2SH and P2PKH use ECDSA
     const signature =

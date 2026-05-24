@@ -4,29 +4,29 @@
 
 ## What's here
 
-This package ships **eight skills** (`skills/<name>/SKILL.md`) and a **knowledge** tree (`knowledge/<pkg>/<mode>/`) split per SODAX package. Skills are action-oriented: when to use, workflow, anti-patterns, links into knowledge. Knowledge is the reference material your workflow points at.
+This package ships **four mode-gated skills** (`skills/<name>/SKILL.md`) — one per SODAX SDK package. Each skill bundles two long-form **knowledge** subtrees: `integration/knowledge/` (writing new v2 code) and `migration-v1-to-v2/knowledge/` (porting v1 → v2). Skills are action-oriented (when to use, workflow, anti-patterns, links into knowledge); knowledge is the reference material your workflow points at. SKILL.md gates by mode at the top — pick integration or migration based on the consumer signal.
 
-| SDK package | Skill (write new code) | Skill (port v1 → v2) |
-|---|---|---|
-| `@sodax/sdk` | `sodax-sdk-integration` | `sodax-sdk-migration` |
-| `@sodax/wallet-sdk-core` | `sodax-wallet-sdk-core-integration` | `sodax-wallet-sdk-core-migration` |
-| `@sodax/wallet-sdk-react` | `sodax-wallet-sdk-react-integration` | `sodax-wallet-sdk-react-migration` |
-| `@sodax/dapp-kit` | `sodax-dapp-kit-integration` | `sodax-dapp-kit-migration` |
+| SDK package | Skill |
+|---|---|
+| `@sodax/sdk` | `sodax-sdk` |
+| `@sodax/wallet-sdk-core` | `sodax-wallet-sdk-core` |
+| `@sodax/wallet-sdk-react` | `sodax-wallet-sdk-react` |
+| `@sodax/dapp-kit` | `sodax-dapp-kit` |
 
 > **What about `@sodax/types`?** No skill. The package has no consumer-facing surface — it's pure TypeScript types, re-exported through `@sodax/sdk`. Importing `@sodax/types` directly invites version skew. The SDK skills cover all `@sodax/types` symbols you need.
 
 ## Route by consumer intent
 
-Pick the consumer's situation, load the listed skills in order:
+Pick the consumer's situation, load the listed skills in order. Each entry names the **skill** + the **mode** to run it in. SKILL.md has the mode decision-tree at the top — follow that section.
 
-| Consumer is… | Load skills |
+| Consumer is… | Load skills (mode) |
 |---|---|
-| **Building a NEW React dapp** | `sodax-wallet-sdk-react-integration` → `sodax-dapp-kit-integration` → (`sodax-sdk-integration` only if dropping below dapp-kit) |
-| **Building a NEW React app, no dapp-kit** (calling the SDK directly) | `sodax-wallet-sdk-react-integration` → `sodax-sdk-integration` |
-| **Building a NEW Node / backend service or script** | `sodax-sdk-integration` → `sodax-wallet-sdk-core-integration` (only if it signs) |
-| **Building a NEW non-React browser flow** | `sodax-wallet-sdk-core-integration` → `sodax-sdk-integration` |
-| **Porting an EXISTING v1 React dapp** | `sodax-wallet-sdk-react-migration` → `sodax-dapp-kit-migration` → `sodax-sdk-migration` (then the matching `*-integration` skills for any new code) |
-| **Porting an EXISTING v1 backend** | `sodax-sdk-migration` → `sodax-wallet-sdk-core-migration` (often no-op — additive only) |
+| **Building a NEW React dapp** | `sodax-wallet-sdk-react` (integration) → `sodax-dapp-kit` (integration) → (`sodax-sdk` (integration) only if dropping below dapp-kit) |
+| **Building a NEW React app, no dapp-kit** (calling the SDK directly) | `sodax-wallet-sdk-react` (integration) → `sodax-sdk` (integration) |
+| **Building a NEW Node / backend service or script** | `sodax-sdk` (integration) → `sodax-wallet-sdk-core` (integration; only if it signs) |
+| **Building a NEW non-React browser flow** | `sodax-wallet-sdk-core` (integration) → `sodax-sdk` (integration) |
+| **Porting an EXISTING v1 React dapp** | `sodax-wallet-sdk-react` (migration) → `sodax-dapp-kit` (migration) → `sodax-sdk` (migration). Then switch each skill to integration mode for any new code. |
+| **Porting an EXISTING v1 backend** | `sodax-sdk` (migration) → `sodax-wallet-sdk-core` (migration; often no-op — additive only) |
 
 If you don't know which situation applies, **ask the user** rather than guessing. Two signals to listen for:
 
@@ -48,26 +48,23 @@ Each `SKILL.md` is short on purpose. Follow it like a procedure:
 
 ```
 packages/skills/
-├── AGENTS.md                                   # You are here
-├── .claude-plugin/plugin.json                  # Skill registry (8 entries)
-├── skills/
-│   ├── sodax-sdk-{integration,migration}/SKILL.md
-│   ├── sodax-wallet-sdk-core-{integration,migration}/SKILL.md
-│   ├── sodax-wallet-sdk-react-{integration,migration}/SKILL.md
-│   └── sodax-dapp-kit-{integration,migration}/SKILL.md
-└── knowledge/
-    ├── sdk/{migration,integration}/            # ai-rules, quickstart, architecture, features/, recipes/, reference/, chain-specifics
-    ├── wallet-sdk-core/{migration,integration}/
-    ├── wallet-sdk-react/{migration,integration}/   # includes 4 working .tsx example apps
-    └── dapp-kit/{migration,integration}/
+├── AGENTS.md                              # You are here
+├── .claude-plugin/plugin.json             # Skill registry (4 entries)
+└── skills/                                # Each skill is mode-gated: SKILL.md + two knowledge subtrees
+    ├── sodax-sdk/                         {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/}
+    ├── sodax-wallet-sdk-core/             {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/}
+    ├── sodax-wallet-sdk-react/            {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/ — incl. 4 .tsx example apps under integration/knowledge/examples/}
+    └── sodax-dapp-kit/                    {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/}
 ```
+
+Each `<mode>/knowledge/` subtree contains `ai-rules.md`, `quickstart.md`, `architecture.md`, `features/`, `recipes/`, `reference/`, and `chain-specifics.md` / `breaking-changes/` where applicable.
 
 ## Conventions you can rely on
 
-- **`ai-rules.md` first.** Each `<mode>/ai-rules.md` is the consolidated DO / DO NOT list. Skipping it is the top cause of stale v1 patterns.
+- **`ai-rules.md` first.** Each mode's `<mode>/knowledge/ai-rules.md` is the consolidated DO / DO NOT list. Skipping it is the top cause of stale v1 patterns.
 - **`README.md`** at every level is the tree index — useful when the skill points you at a directory rather than a file.
-- **Reference tables** under `<mode>/reference/` are for lookup, not narrative — chain keys, error codes, public API surface, hook signatures.
-- **Recipes** under `<mode>/recipes/` are self-contained — a recipe contains before/after code, steps, and verification. Don't jump between recipes for one task.
+- **Reference tables** under `<mode>/knowledge/reference/` are for lookup, not narrative — chain keys, error codes, public API surface, hook signatures.
+- **Recipes** under `<mode>/knowledge/recipes/` are self-contained — a recipe contains before/after code, steps, and verification. Don't jump between recipes for one task.
 - **Token budget**: if you're loading more than 3 files for a single task, you're probably off-route — re-check the workflow.
 
 ## When SODAX is the wrong tool

@@ -154,7 +154,8 @@ for pkg in "${TARGET_PKGS[@]}"; do
       seq=$((seq + 1))
       emit_fixture "$pkg" "$src" "$line" "$body" "$seq"
     done < <(extract_blocks "$f")
-  done < <(find "knowledge/$pkg" -name '*.md' -type f 2>/dev/null | sort)
+  done < <(find "skills/sodax-$pkg/integration/knowledge" "skills/sodax-$pkg/migration-v1-to-v2/knowledge" \
+    -name '*.md' -type f 2>/dev/null | sort)
 
   total_files=$((total_files + pkg_files))
   total_snippets=$((total_snippets + seq))

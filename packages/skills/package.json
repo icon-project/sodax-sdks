@@ -20,7 +20,7 @@
   "engines": {
     "node": ">=20.0.0"
   },
-  "files": [".claude-plugin", "skills", "knowledge", "AGENTS.md", "README.md"],
+  "files": [".claude-plugin", "skills", "AGENTS.md", "README.md"],
   "scripts": {
     "lint": "biome lint . --write",
     "pretty": "biome format . --write",

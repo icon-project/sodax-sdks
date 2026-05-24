@@ -1,5 +1,5 @@
-import type { PostConditionMode } from '@stacks/transactions';
-import type { StacksProvider } from '@stacks/connect';
+import type { PostConditionMode } from '@sodax/libs/stacks/core';
+import type { StacksProvider } from '@sodax/libs/stacks/connect';
 
 /** Defaults applied to every call. Per-call options shallow-merge over these. */
 export type StacksWalletDefaults = {

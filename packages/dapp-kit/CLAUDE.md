@@ -23,7 +23,7 @@ Five architectural pieces hold the canonical hook shape together. Read this sect
 
 Accessed via `useSodaxContext()` hook — all other hooks use this internally.
 
-**Config reactivity.** `config` is tracked by reference: `new Sodax(config)` runs whenever the prop identity changes, resetting wagmi connection state, in-flight RPC, and any persisted state inside `useSodaxContext` consumers. Consumer-facing guidance (with module-const vs `useMemo` examples) lives in [`packages/skills/knowledge/dapp-kit/integration/recipes/setup.md`](../skills/knowledge/dapp-kit/integration/recipes/setup.md).
+**Config reactivity.** `config` is tracked by reference: `new Sodax(config)` runs whenever the prop identity changes, resetting wagmi connection state, in-flight RPC, and any persisted state inside `useSodaxContext` consumers. Consumer-facing guidance (with module-const vs `useMemo` examples) lives in [`packages/skills/skills/sodax-dapp-kit/integration/knowledge/recipes/setup.md`](../skills/skills/sodax-dapp-kit/integration/knowledge/recipes/setup.md).
 
 **Recommended provider stack ordering:**
 
@@ -502,18 +502,19 @@ This mirrors the `wallet-sdk-core` ↔ `@sodax/sdk` pattern: wallet-sdk-core imp
 
 ## AI agent docs
 
-Consumer-facing AI material for `@sodax/dapp-kit` lives in [`packages/skills`](../skills/CLAUDE.md), not in this package. Two skills cover dapp-kit:
+Consumer-facing AI material for `@sodax/dapp-kit` lives in [`packages/skills`](../skills/CLAUDE.md), not in this package. One unified mode-gated skill covers dapp-kit:
 
-- `sodax-dapp-kit-integration` — for agents writing NEW v2 dapp-kit code.
-- `sodax-dapp-kit-migration` — for agents porting v1 dapp-kit to v2.
+- `sodax-dapp-kit` — SKILL.md gates by mode at the top:
+  - **Integration mode** — for agents writing NEW v2 dapp-kit code (consumer signals: `useSwap`, `useMoneyMarket*`, "wire React Query for SODAX", greenfield project).
+  - **Migration mode** — for agents porting v1 dapp-kit to v2 (consumer signals: `useSpokeProvider`, `invalidateMmQueries`, legacy `useMigrate`, positional hook args).
 
-Their supporting knowledge lives at `packages/skills/knowledge/dapp-kit/{integration,migration}/` — the same `quickstart.md`, `architecture.md`, per-feature reference, recipes, and lookup tables that used to live in this package's `ai-exported/` tree, moved verbatim.
+Their supporting knowledge lives at `packages/skills/skills/sodax-dapp-kit/{integration,migration-v1-to-v2}/knowledge/` — the same `quickstart.md`, `architecture.md`, per-feature reference, recipes, and lookup tables that used to live in this package's `ai-exported/` tree, now shipped as two subtrees inside the unified `sodax-dapp-kit` skill so the `skills` CLI's per-skill copy includes everything.
 
 ### When you edit hook signatures, queryKey shapes, or feature behavior
 
-The dapp-kit knowledge tree is downstream of the source. Source is the source of truth — when you change a hook here, the reference tables in `packages/skills/knowledge/dapp-kit/integration/reference/` likely need a matching update.
+The dapp-kit knowledge tree is downstream of the source. Source is the source of truth — when you change a hook here, the reference tables in `packages/skills/skills/sodax-dapp-kit/integration/knowledge/reference/` likely need a matching update.
 
-The drift to watch for clusters across four mirror trees: `integration/features/`, `integration/recipes/`, `migration/features/`, `migration/reference/`. The most-missed class is queryKey segment drift like `'stakingInfo'` (doc) vs `'info'` (source) — these are 1:1 grep-able with `grep -rn 'stakingInfo' packages/skills/knowledge/dapp-kit/`.
+The drift to watch for clusters across four mirror trees: `sodax-dapp-kit/integration/knowledge/features/`, `…/integration/knowledge/recipes/`, `sodax-dapp-kit/migration-v1-to-v2/knowledge/features/`, `…/migration-v1-to-v2/knowledge/reference/`. The most-missed class is queryKey segment drift like `'stakingInfo'` (doc) vs `'info'` (source) — these are 1:1 grep-able with `grep -rn 'stakingInfo' packages/skills/skills/sodax-dapp-kit/`.
 
 ### CI guards
 
@@ -522,12 +523,12 @@ The validators that used to live in this package now run from `packages/skills/s
 | Guard | What it enforces (dapp-kit-relevant scope) |
 |---|---|
 | `check:ai-structural` | `packages/skills/.claude-plugin/plugin.json`, SKILL.md frontmatter, relative link resolution. |
-| `check:ai-imports` | Every `import … from '@sodax/dapp-kit'` snippet in `packages/skills/knowledge/dapp-kit/**/*.md` (plus this package's README/CLAUDE.md) typechecks against `src/index.ts`. |
-| `check:ai-snippets` | Every fenced ts/tsx code block under `packages/skills/knowledge/dapp-kit/` typechecks against `src/`. Opt-out: `// @ai-snippets-skip` as first content line. |
+| `check:ai-imports` | Every `import … from '@sodax/dapp-kit'` snippet in `packages/skills/skills/sodax-dapp-kit/{integration,migration-v1-to-v2}/knowledge/**/*.md` (plus this package's README/CLAUDE.md) typechecks against `src/index.ts`. |
+| `check:ai-snippets` | Every fenced ts/tsx code block under `packages/skills/skills/sodax-dapp-kit/{integration,migration-v1-to-v2}/knowledge/` typechecks against `src/`. Opt-out: `// @ai-snippets-skip` as first content line. |
 | `check:ai-keys` | Every `queryKey: [...]` / `mutationKey: [...]` in dapp-kit knowledge has a matching literal-prefix in `src/hooks/**/*.ts`. Catches drift like `'stakingInfo'` vs `'info'`. Opt-out: `<!-- ai-keys-allow -->`. |
 | `check:ai-consistency` | Every polling-interval claim near a `useFoo` mention matches `refetchInterval` in source. Opt-out: `<!-- ai-consistency-allow -->`. |
 
-When you edit a hook signature, queryKey shape, or `refetchInterval`, also grep `packages/skills/knowledge/dapp-kit/` for the affected names — these guards catch the syntactic drift, but **not** prose-level claims about behavior. The drift clusters across four mirror trees (`integration/features/`, `integration/recipes/`, `migration/features/`, `migration/reference/`) — fix all of them together.
+When you edit a hook signature, queryKey shape, or `refetchInterval`, also grep `packages/skills/skills/sodax-dapp-kit/` for the affected names — these guards catch the syntactic drift, but **not** prose-level claims about behavior. The drift clusters across four mirror trees (`sodax-dapp-kit/integration/knowledge/features/`, `…/integration/knowledge/recipes/`, `sodax-dapp-kit/migration-v1-to-v2/knowledge/features/`, `…/migration-v1-to-v2/knowledge/reference/`) — fix all of them together.
 
 ## Build
 
