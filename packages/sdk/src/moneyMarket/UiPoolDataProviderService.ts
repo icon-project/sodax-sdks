@@ -213,6 +213,7 @@ export class UiPoolDataProviderService implements UiPoolDataProviderInterface {
       // User debt is stored scaled by bnUSD's index, so reading it back requires the same index.
       // Using the vault's index here would inflate the displayed debt amount.
       variableBorrowIndex: bnUSDReserve.variableBorrowIndex,
+      borrowingEnabled: bnUSDReserve.borrowingEnabled,
     };
 
     return [

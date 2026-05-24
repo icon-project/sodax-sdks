@@ -513,7 +513,7 @@ export class BridgeService {
     let translatedAmount = params.amount;
     let srcVault = params.srcToken as `0x${string}`;
     // if src asset is not a vault token, we need to approve and deposit into the vault
-    if (!this.config.isValidVault(srcToken.hubAsset)) {
+    if (!this.config.isSodaVaultHubAsset(srcToken.hubAsset)) {
       calls.push(Erc20Service.encodeApprove(srcToken.hubAsset, srcToken.vault, params.amount));
       calls.push(EvmVaultTokenService.encodeDeposit(srcToken.vault, srcToken.hubAsset, params.amount));
       translatedAmount = EvmVaultTokenService.translateIncomingDecimals(srcToken.decimals, params.amount);
@@ -529,7 +529,7 @@ export class BridgeService {
     let translatedWithdrawAmount = withdrawAmount;
 
     // if dst asset is not a vault token, we need to withdraw from the vault
-    if (!this.config.isValidVault(dstToken.hubAsset)) {
+    if (!this.config.isSodaVaultHubAsset(dstToken.hubAsset)) {
       calls.push(EvmVaultTokenService.encodeWithdraw(dstToken.vault, dstToken.hubAsset, withdrawAmount));
       translatedWithdrawAmount = EvmVaultTokenService.translateOutgoingDecimals(dstToken.decimals, withdrawAmount);
     }

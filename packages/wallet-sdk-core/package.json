@@ -22,15 +22,21 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     }
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.12.0"
   },
-  "files": ["dist"],
+  "files": ["dist", "!dist/**/*.map"],
+  "sideEffects": false,
   "scripts": {
     "build": "tsup",
     "test": "vitest run --exclude ./src/tests/e2e",
@@ -41,7 +47,8 @@
     "checkTs": "tsc --noEmit",
     "pretty": "biome format . --write",
     "lint": "biome lint . --write",
-    "check-exports": "attw $(pnpm pack) --ignore-rules=cjs-resolves-to-esm",
+    "check-exports": "attw --pack",
+    "check:knip": "knip",
     "prepublishOnly": "pnpm run ci",
     "local-release": "changeset version && changeset publish",
     "clean": "rm -rf node_modules && rm -rf dist && rm -rf .turbo"
@@ -55,14 +62,12 @@
     "@injectivelabs/wallet-core": "catalog:",
     "@mysten/sui": "catalog:",
     "@mysten/wallet-standard": "catalog:",
+    "@sodax/libs": "workspace:*",
     "@sodax/types": "workspace:*",
     "@solana/spl-token": "catalog:",
     "@solana/wallet-adapter-base": "catalog:",
     "@solana/web3.js": "catalog:",
     "@stellar/stellar-sdk": "catalog:",
-    "@stacks/connect": "catalog:",
-    "@stacks/transactions": "catalog:",
-    "@stacks/network": "catalog:",
     "bip322-js": "^3.0.0",
     "bitcoinjs-lib": "^6.1.5",
     "ecpair": "^2.0.1",
@@ -77,6 +82,7 @@
     "@types/node": "catalog:",
     "@types/secp256k1": "^4.0.7",
     "@vitest/coverage-v8": "catalog:",
+    "knip": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

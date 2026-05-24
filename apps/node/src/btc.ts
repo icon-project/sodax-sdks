@@ -180,7 +180,7 @@ async function depositTo(token: Address, amount: bigint, recipient: Address) {
 }
 
 async function getRadfiAccessToken(walletAddress: string) {
-  const message = "Login to Radfi via Sodax";
+  const message = `${Date.now()}`;
   const bip322Signature = await spokeProvider.walletProvider.signBip322Message(message);
 
   if (!spokeProvider.walletProvider.getPublicKey) {

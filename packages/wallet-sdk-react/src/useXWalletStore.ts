@@ -151,9 +151,20 @@ export const useXWalletStore = create<XWalletStore>()(
         },
       })),
       {
-        // key kept as 'xwagmi-store' for backward compat — existing users won't lose persisted connections on upgrade
+        // key kept as 'xwagmi-store' for backward compat, existing users won't lose persisted connections on upgrade
         name: 'xwagmi-store',
-        storage: createJSONStorage(() => localStorage),
+        // Throw on SSR or when localStorage rejects writes (Safari strict
+        // private mode, disabled storage). `createJSONStorage` catches the
+        // throw, zustand short-circuits `.persist`, and downstream falls back
+        // via `usePersistHydrated`. `setItem` probe is required because modern
+        // Safari only throws on writes, not reads.
+        storage: createJSONStorage(() => {
+          if (typeof window === 'undefined') throw new Error('no window');
+          const probe = '__sodax_probe__';
+          window.localStorage.setItem(probe, '1');
+          window.localStorage.removeItem(probe);
+          return window.localStorage;
+        }),
         partialize: state => ({
           xConnections: state.xConnections,
           userDisconnected: state.userDisconnected,

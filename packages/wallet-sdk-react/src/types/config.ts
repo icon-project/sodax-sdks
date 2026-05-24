@@ -69,7 +69,12 @@ export type StacksChainEntry = StacksNetworkName | (StacksNetworkLike & { defaul
 export type EvmAdapterFields = {
   /** Attempt to reconnect previously connected wallets on mount. @default false */
   reconnectOnMount?: boolean;
-  /** Enable SSR-safe hydration for Next.js. @default true */
+  /**
+   * wagmi hydration-timing flag (not an "app is SSR" flag).
+   * `true` defers wagmi reconnect into `useEffect`; `false` runs it in render
+   * and triggers React's "setState during render" warning. Keep `true` unless
+   * you know you need otherwise. @default true
+   */
   ssr?: boolean;
   /** Wagmi SSR hydration state — pass `cookieToInitialState()` to avoid disconnect flash on first load (Next.js only). */
   initialState?: WagmiState;

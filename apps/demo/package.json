@@ -4,11 +4,11 @@
   "type": "module",
   "private": true,
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.12.0"
   },
   "scripts": {
     "dev": "vite --port 3000 --host",
-    "build": "NODE_OPTIONS=--max-old-space-size=8192 vite build",
+    "build": "vite build",
     "preview": "vite preview",
     "test": "true",
     "checkTs": "tsc --noEmit",

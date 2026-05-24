@@ -1,22 +1,22 @@
 import { PublicKey, type TransactionInstruction, Connection } from '@solana/web3.js';
 import type { Hex } from 'viem';
 import { ChainKeys, spokeChainConfig, type SolanaRawTransactionInstruction } from '@sodax/types';
-import * as anchor from '@coral-xyz/anchor';
+import { AnchorProvider, Program } from '@coral-xyz/anchor';
 import type { AssetManager } from '../types/asset_manager.js';
 import type { Connection as ConnectionContract } from '../types/connection.js';
-export async function getProvider(base58PublicKey: string, rpcUrl: string): Promise<anchor.AnchorProvider> {
+export async function getProvider(base58PublicKey: string, rpcUrl: string): Promise<AnchorProvider> {
   const wallet = {
     publicKey: new PublicKey(base58PublicKey),
     signTransaction: () => Promise.reject(),
     signAllTransactions: () => Promise.reject(),
   };
   const connection = new Connection(rpcUrl);
-  return new anchor.AnchorProvider(connection, wallet, { commitment: 'confirmed' });
+  return new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
 }
 
-export async function getAssetManagerIdl(assetManager: string, provider: anchor.AnchorProvider) {
+export async function getAssetManagerIdl(assetManager: string, provider: AnchorProvider) {
   try {
-    const idl = await anchor.Program.fetchIdl(new PublicKey(assetManager), provider);
+    const idl = await Program.fetchIdl(new PublicKey(assetManager), provider);
 
     if (!idl) {
       throw new Error('asset manager idl not available');
@@ -29,9 +29,9 @@ export async function getAssetManagerIdl(assetManager: string, provider: anchor.
   }
 }
 
-export async function getConnectionIdl(connection: string, provider: anchor.AnchorProvider) {
+export async function getConnectionIdl(connection: string, provider: AnchorProvider) {
   try {
-    const idl = await anchor.Program.fetchIdl(new PublicKey(connection), provider);
+    const idl = await Program.fetchIdl(new PublicKey(connection), provider);
 
     if (!idl) {
       throw new Error('asset manager idl not available');
@@ -48,22 +48,22 @@ export async function getAssetManagerProgram(
   base58PublicKey: string,
   rpcUrl: string,
   assetManager: string,
-): Promise<anchor.Program<AssetManager>> {
+): Promise<Program<AssetManager>> {
   const provider = await getProvider(base58PublicKey, rpcUrl);
   const idl = await getAssetManagerIdl(assetManager, provider);
 
-  return new anchor.Program(idl, provider) as unknown as anchor.Program<AssetManager>;
+  return new Program(idl, provider) as unknown as Program<AssetManager>;
 }
 
 export async function getConnectionProgram(
   base58PublicKey: string,
   rpcUrl: string,
   connection: string,
-): Promise<anchor.Program<ConnectionContract>> {
+): Promise<Program<ConnectionContract>> {
   const provider = await getProvider(base58PublicKey, rpcUrl);
   const idl = await getConnectionIdl(connection, provider);
 
-  return new anchor.Program(idl, provider) as unknown as anchor.Program<ConnectionContract>;
+  return new Program(idl, provider) as unknown as Program<ConnectionContract>;
 }
 
 export function getSolanaAddressBytes(address: PublicKey): Hex {

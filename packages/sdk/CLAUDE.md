@@ -2,7 +2,9 @@
 
 Core SDK implementing all SODAX DeFi operations. Entry point: the `Sodax` class in `src/shared/entities/Sodax.ts`.
 
-**This package works standalone** — no React, no wallet-sdk, no dapp-kit required. Backend partners (API servers, bots, scripts) use `@sodax/sdk` directly with a private-key wallet provider and call services. Frontend partners use `@sodax/dapp-kit` which wraps this SDK in React hooks — see `packages/dapp-kit/skills/` for frontend scaffolding guides.
+**This package works standalone** — no React, no wallet-sdk, no dapp-kit required. Backend partners (API servers, bots, scripts) use `@sodax/sdk` directly with a private-key wallet provider and call services. Frontend partners use `@sodax/dapp-kit` which wraps this SDK in React hooks.
+
+Consumer-facing AI material (skills + knowledge for Claude Code, Cursor, Codex) lives in [`packages/skills`](../skills/CLAUDE.md) — not in this package.
 
 ## Architecture
 
@@ -112,7 +114,7 @@ The chain key in the request payload (e.g. `srcChainKey`) drives both TypeScript
 
 ### Error Handling
 
-All 7 feature modules (swap, moneyMarket, bridge, staking, migration, dex, partner, recovery) emit a single canonical error type — `SodaxError<C>` — with a closed, reason-only code vocabulary. Codes describe **what** went wrong (`RELAY_TIMEOUT`, `INTENT_CREATION_FAILED`); the producing feature is carried as a first-class `feature` field on the error.
+All 8 feature modules (swap, moneyMarket, bridge, staking, migration, dex, partner, recovery) emit a single canonical error type — `SodaxError<C>` — with a closed, reason-only code vocabulary. Codes describe **what** went wrong (`RELAY_TIMEOUT`, `INTENT_CREATION_FAILED`); the producing feature is carried as a first-class `feature` field on the error.
 
 All async public methods return `Result<T, SodaxError<NarrowCode>>` (= `{ ok: true; value: T } | { ok: false; error }`) and wrap their bodies in `try/catch`. The `Result` type is defined in `@sodax/types`.
 
@@ -257,10 +259,15 @@ Concentrated liquidity (similar to Uniswap V3/PancakeSwap V3):
 - `AssetService` — DEX asset wrapping/unwrapping
 - Pool configs defined in `src/shared/constants.ts`
 
+## Gotchas
+
+- **Never use `bigint` in types passed to `JSON.stringify`** — it throws `TypeError` at runtime. Use `string` for numeric fields in API request/response types (e.g. anything in `src/backendApi/`). If `bigint` is needed in domain types, convert to string before serialization. Note: `SodaxError.toJSON` already coerces bigints in `context` to strings — see Error Handling above.
+
 ## Documentation
 
 Detailed feature docs are in `docs/`:
 - `SWAPS.md`, `MONEY_MARKET.md`, `STAKING.md`, `BRIDGE.md`, `DEX.md`, `MIGRATION.md`
+- `BITCOIN_INTEGRATION.md` — Bitcoin trading-wallet model, custody trade-off, readiness gate
 - `CONFIGURE_SDK.md` — SDK initialization patterns
 - `WALLET_PROVIDERS.md` — wallet integration patterns
 - `ARCHITECTURE_REFACTOR_SUMMARY.md` — full architecture reference (spoke services, raw tx handling, Result\<T\>, error convention, wallet-sdk patterns)
@@ -269,8 +276,8 @@ Read these when working on a specific feature for detailed flow documentation.
 
 ## Build
 
-tsup: dual ESM (`.mjs`) + CJS (`.cjs`). Target: Node 18+, also runs in browser.
-`near-api-js` and `@sodax/types` are bundled (not externalized) for CJS compatibility.
+tsup: dual ESM (`.mjs`) + CJS (`.cjs`) with sibling `.d.ts` / `.d.cts` (`dts: true`). Target: Node 20+, also runs in browser via `esbuildOptions.platform = 'neutral'`.
+`near-api-js` and `@sodax/types` are force-bundled (via `noExternal` in [tsup.config.ts](tsup.config.ts)) for CJS compatibility.
 
 ## Tests
 

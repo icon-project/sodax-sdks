@@ -27,3 +27,4 @@ public/dist
 
 scripts/find_malicious_npm_packages.sh
 .pnpm-store/
+skills-lock.json

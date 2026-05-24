@@ -41,10 +41,10 @@ export type { MsgBroadcaster } from '@injectivelabs/wallet-core';
 export { Networks } from '@stellar/stellar-sdk';
 
 // ─── Stacks ────────────────────────────────────────────────────────────────
-export { PostConditionMode } from '@stacks/transactions';
-export type { ClarityValue, PostConditionModeName } from '@stacks/transactions';
-export type { StacksNetwork } from '@stacks/network';
-export type { StacksProvider } from '@stacks/connect';
+export { PostConditionMode } from '@sodax/libs/stacks/core';
+export type { ClarityValue, PostConditionModeName } from '@sodax/libs/stacks/core';
+export type { StacksNetwork } from '@sodax/libs/stacks/core';
+export type { StacksProvider } from '@sodax/libs/stacks/connect';
 
 // ─── Near ──────────────────────────────────────────────────────────────────
 export type { KeyPairString } from 'near-api-js';

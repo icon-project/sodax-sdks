@@ -1,6 +1,6 @@
 # @sodax/wallet-sdk-react
 
-React layer over [`@sodax/wallet-sdk-core`](../wallet-sdk-core/README.md) — wallet connection, signing, and account management for the SODAX cross-chain ecosystem. Hooks read from a single Zustand store; per-chain native SDKs (wagmi, `@solana/wallet-adapter`, `@mysten/dapp-kit`, …) are wrapped behind a uniform `IXService` / `IXConnector` interface.
+React layer over [`@sodax/wallet-sdk-core`](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-core/README.md) — wallet connection, signing, and account management for the SODAX cross-chain ecosystem. Hooks read from a single Zustand store; per-chain native SDKs (wagmi, `@solana/wallet-adapter`, `@mysten/dapp-kit`, …) are wrapped behind a uniform `IXService` / `IXConnector` interface.
 
 ## Features
 
@@ -113,7 +113,27 @@ The full guide lives in [`docs/`](docs/). Start with the topic that matches what
 | [EVM Switch Chain](docs/EVM_SWITCH_CHAIN.md) | Single wagmi connection across all configured EVM networks |
 | [Connectors](docs/CONNECTORS.md) | `IXConnector` contract, deep-import concrete classes, custom connectors |
 | [Architecture](docs/ARCHITECTURE.md) | Zustand store, Provider/Hydrator/Actions trio, persist hydration caveat |
-| [Adding a New Chain](docs/ADDING_A_NEW_CHAIN.md) | `ChainMeta` extension, chain registry, sub-path export wiring |
+| [Adding a New Chain](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/ADDING_A_NEW_CHAIN.md) | `ChainMeta` extension, chain registry, sub-path export wiring |
+
+## AI agent docs
+
+AI-readable docs for `@sodax/wallet-sdk-react` (and the other `@sodax/*` packages) are shipped via [`@sodax/skills`](https://github.com/icon-project/sodax-sdks/tree/main/packages/skills) — a separate npm package bundling Claude-Code SKILL.md files and a long-form knowledge tree.
+
+**Recommended: [`skills` CLI](https://github.com/vercel-labs/skills)** — from your project root:
+
+```bash
+npx skills@latest add icon-project/sodax-sdks/packages/skills
+```
+
+**npm + `AGENTS.md` pointer** (fallback for web chats, or when you prefer a devDependency over the CLI):
+
+```bash
+pnpm add -D @sodax/skills
+```
+
+Then point your agent at `node_modules/@sodax/skills/AGENTS.md`. See [docs/ai-integration-guide.md](https://github.com/icon-project/sodax-sdks/blob/main/docs/ai-integration-guide.md) for all install modes and per-tool wiring.
+
+---
 
 ## Sub-path exports
 
@@ -134,7 +154,7 @@ See [Connectors](docs/CONNECTORS.md) for the full list of deep-import sub-paths.
 
 ## Requirements
 
-- Node.js >= 18.0.0
+- Node.js >= 20.12.0
 - React >= 19
 - TypeScript
 
@@ -152,7 +172,7 @@ pnpm lint        # Lint code
 
 ## Contributing
 
-Contributions welcome — see the repo [Contributing Guide](../../CONTRIBUTING.md). For onboarding a new chain family, follow [`docs/ADDING_A_NEW_CHAIN.md`](docs/ADDING_A_NEW_CHAIN.md).
+Contributions welcome — see the repo [Contributing Guide](https://github.com/icon-project/sodax-sdks/blob/main/CONTRIBUTING.md). For onboarding a new chain family, follow [`docs/ADDING_A_NEW_CHAIN.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/ADDING_A_NEW_CHAIN.md).
 
 ## License
 

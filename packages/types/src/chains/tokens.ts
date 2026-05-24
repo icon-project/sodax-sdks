@@ -236,7 +236,7 @@ export const SodaTokens = {
   sodaNEAR: {
     symbol: 'sodaNEAR',
     name: 'SODA NEAR',
-    decimals: 24,
+    decimals: 18,
     address: '0xf4ba497c9b805e4bd88a8a9e6a7b8f74984c3e39',
     chainKey: ChainKeys.SONIC_MAINNET,
     hubAsset: '0xf4ba497c9b805e4bd88a8a9e6a7b8f74984c3e39',
