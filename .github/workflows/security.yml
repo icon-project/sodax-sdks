@@ -7,6 +7,9 @@ on:
       - development
   pull_request:
     types: [opened, synchronize]
+  schedule:
+    # Weekly Monday 09:00 UTC. Catches CVEs disclosed against deps already merged.
+    - cron: '0 9 * * 1'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -46,3 +49,64 @@ jobs:
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
+
+  osv-scanner:
+    name: OSV-Scanner (dependencies)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      # Non-blocking on first land so we can triage the baseline of pre-existing
+      # findings before making it gate PRs. Remove `continue-on-error` to enforce.
+      - name: Run OSV-Scanner
+        continue-on-error: true
+        uses: google/osv-scanner-action/osv-scanner-action@v2.3.8
+        with:
+          scan-args: |-
+            --recursive
+            --format=sarif
+            --output=osv-results.sarif
+            ./
+
+      - name: Upload OSV-Scanner results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: osv-scanner-results
+          path: osv-results.sarif
+          retention-days: 30
+
+  semgrep:
+    name: Semgrep (static analysis)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    container:
+      image: semgrep/semgrep:1.163.0
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      # No `--error` flag yet so the baseline of pre-existing findings doesn't block PRs.
+      # Add `--error` once the team has triaged the first run.
+      - name: Run Semgrep
+        run: |
+          semgrep scan \
+            --config=p/default \
+            --config=p/react \
+            --config=p/owasp-top-ten \
+            --config=p/secrets \
+            --sarif --output=semgrep-results.sarif
+
+      - name: Upload Semgrep results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-results
+          path: semgrep-results.sarif
+          retention-days: 30

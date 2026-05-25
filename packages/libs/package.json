@@ -1,0 +1,107 @@
+{
+  "name": "@sodax/libs",
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "version": "0.0.1-rc.0",
+  "license": "MIT",
+  "description": "Internal package — do not depend on directly. Consumed transitively by @sodax/sdk, @sodax/wallet-sdk-core, @sodax/wallet-sdk-react.",
+  "keywords": [
+    "sodax",
+    "libs",
+    "internal",
+    "do-not-use-directly"
+  ],
+  "homepage": "https://github.com/icon-project/sodax-sdks/tree/main/packages/libs",
+  "bugs": {
+    "url": "https://github.com/icon-project/sodax-sdks/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/icon-project/sodax-sdks"
+  },
+  "type": "module",
+  "exports": {
+    "./stacks/core": {
+      "import": {
+        "types": "./dist/stacks/core/index.d.ts",
+        "default": "./dist/stacks/core/index.mjs"
+      },
+      "require": {
+        "types": "./dist/stacks/core/index.d.cts",
+        "default": "./dist/stacks/core/index.cjs"
+      }
+    },
+    "./stacks/connect": {
+      "import": {
+        "types": "./dist/stacks/connect/index.d.ts",
+        "default": "./dist/stacks/connect/index.mjs"
+      },
+      "require": {
+        "types": "./dist/stacks/connect/index.d.cts",
+        "default": "./dist/stacks/connect/index.cjs"
+      }
+    },
+    "./injective/wallet-strategy": {
+      "import": {
+        "types": "./dist/injective/wallet-strategy/index.d.ts",
+        "default": "./dist/injective/wallet-strategy/index.mjs"
+      },
+      "require": {
+        "types": "./dist/injective/wallet-strategy/index.d.cts",
+        "default": "./dist/injective/wallet-strategy/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "stacks/core": ["./dist/stacks/core/index.d.ts"],
+      "stacks/connect": ["./dist/stacks/connect/index.d.ts"],
+      "injective/wallet-strategy": ["./dist/injective/wallet-strategy/index.d.ts"]
+    }
+  },
+  "engines": {
+    "node": ">=20.12.0"
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.map"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "node scripts/verify-stacks-connect-ui-stub.mjs && tsup && node scripts/verify-dist-self-contained.mjs && node scripts/verify-runtime-smoke.mjs",
+    "dev": "tsup --watch",
+    "checkTs": "tsc --noEmit",
+    "pretty": "biome format . --write",
+    "lint": "biome lint . --write",
+    "clean": "rm -rf node_modules && rm -rf dist && rm -rf .turbo",
+    "check-exports": "attw --pack",
+    "check:circular-deps": "madge --circular --exclude 'types/dist' $(find ./src -name '*.ts')",
+    "check:no-duplicate-bundling": "node scripts/verify-no-duplicate-bundling.mjs",
+    "check:dist-self-contained": "node scripts/verify-dist-self-contained.mjs",
+    "check:runtime-smoke": "node scripts/verify-runtime-smoke.mjs",
+    "check:knip": "knip"
+  },
+  "peerDependencies": {
+    "libsodium-wrappers-sumo": "^0.7.11"
+  },
+  "peerDependenciesMeta": {
+    "libsodium-wrappers-sumo": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@injectivelabs/wallet-strategy": "catalog:",
+    "@stacks/connect": "catalog:",
+    "@stacks/network": "catalog:",
+    "@stacks/transactions": "catalog:",
+    "@types/node": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "knip": "catalog:",
+    "madge": "catalog:",
+    "@arethetypeswrong/cli": "catalog:"
+  }
+}

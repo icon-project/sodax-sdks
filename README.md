@@ -19,11 +19,12 @@ See the [Sodax SDK README](./packages/sdk/README.md) for a deeper architectural 
 ### Packages (`/packages`)
 
 - **types** (`/packages/types`) — Shared TypeScript type definitions: chain IDs, chain configs, wallet provider interfaces, backend API types. No runtime dependencies.
+- **libs** (`/packages/libs`): Internal dependency isolation package. Bundles selected third-party libraries and re-exports them via stable subpaths so Sodax SDKs and consuming apps don't need bundler-specific workarounds. [Libs Documentation](./packages/libs/README.md).
 - **sdk** (`/packages/sdk`) — Core SDK exposing the full Sodax feature set (swap, bridge, money market, staking, DEX, migration, partner) through a streamlined `Sodax` facade. [Sodax SDK Documentation](./packages/sdk/README.md).
 - **wallet-sdk-core** (`/packages/wallet-sdk-core`) — Low-level multi-chain wallet providers (signing, broadcasting) for 9 chain types. Supports both private-key (scripts/testing) and browser-extension (production) configs.
 - **wallet-sdk-react** (`/packages/wallet-sdk-react`) — React layer over `wallet-sdk-core` with the `XService`/`XConnector` pattern, Zustand state persistence, and EIP-6963 wallet discovery. [Wallet SDK Documentation](./packages/wallet-sdk-react/README.md).
 - **dapp-kit** (`/packages/dapp-kit`) — High-level React hooks combining the SDK, `wallet-sdk-react`, and React Query. Modular, production-ready building blocks for dApp development. [dApp Kit Documentation](./packages/dapp-kit/README.md).
-- **skills** (`/packages/skills`) — AI-agent skills and knowledge for the `@sodax/*` SDKs (8 skills covering integration + migration for `sdk`, `wallet-sdk-core`, `wallet-sdk-react`, `dapp-kit`). No runtime code. Distributed via the [`skills` CLI](https://github.com/vercel-labs/skills) or `@sodax/skills` on npm. [Skills Documentation](./packages/skills/README.md).
+- **skills** (`/packages/skills`) — AI-agent skills and knowledge for the `@sodax/*` SDKs (4 mode-gated skills, one per SDK package: `sdk`, `wallet-sdk-core`, `wallet-sdk-react`, `dapp-kit` — each bundling `integration/knowledge/` for new v2 code and `migration-v1-to-v2/knowledge/` for v1→v2 porting). No runtime code. Distributed via the [`skills` CLI](https://github.com/vercel-labs/skills) or `@sodax/skills` on npm. [Skills Documentation](./packages/skills/README.md).
 
 ### Apps (`/apps`)
 

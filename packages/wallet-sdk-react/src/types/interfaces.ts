@@ -1,5 +1,5 @@
 import type { ChainType, IXServiceBase } from '@sodax/types';
-import type { XAccount } from './index.js';
+import type { XAccount } from './account.js';
 
 /**
  * Public interface for chain service implementations.

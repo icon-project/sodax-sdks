@@ -51,7 +51,7 @@ export const hyper = /*#__PURE__*/ defineChain({
 });
 
 export const createWagmiConfig = (
-  evmChains: EvmTypeConfig['chains'],
+  evmChains?: EvmTypeConfig['chains'],
   options?: WagmiOptions & { connectors?: CreateConnectorFn[] },
 ): Config => {
   return createConfig({
