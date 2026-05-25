@@ -1,3 +1,4 @@
+export * from './isUserRejectedError.js';
 export * from './types.js';
 export * from './unwrapResult.js';
 export * from './useSafeMutation.js';
