@@ -47,7 +47,9 @@ Pair: [`features/backend-api.md`](../../../integration/knowledge/features/backen
 
 ## Custom `IConfigApi` (sandbox / test fixtures)
 
-If you implemented `IConfigApi` for a sandbox or test fixture:
+If you implemented `IConfigApi` for a sandbox or test fixture, two things changed in v2:
+
+**1. Method signatures.** Every method now returns `Promise<Result<T>>` instead of throwing on failure:
 
 ```diff
   const sandboxApi: IConfigApi = {
@@ -63,7 +65,7 @@ If you implemented `IConfigApi` for a sandbox or test fixture:
   };
 ```
 
-Every method on the contract returns `Promise<Result<T>>` in v2.
+**2. Injection mechanism.** `SodaxConfig` does NOT expose a typed slot to inject a custom `IConfigApi` at construction. v1 patterns that passed a custom api into `new Sodax(...)` no longer typecheck. Point at a local mock via `SodaxConfig.api.baseURL`, or inject your own `BackendApiService`-compatible mock at the app layer. See [`../../../integration/knowledge/architecture.md`](../../../integration/knowledge/architecture.md) § 4 "Custom backend" for the v2 pattern.
 
 ## Pitfalls
 

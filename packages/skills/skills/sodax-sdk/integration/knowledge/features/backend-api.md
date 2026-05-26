@@ -55,21 +55,22 @@ if (!submitResult.ok) return;
 
 ## Custom backend (sandbox / fixtures)
 
-Inject an `IConfigApi` implementation via `SodaxConfig.backendApi.api`:
+`SodaxConfig` does not expose a typed slot to inject a custom `IConfigApi` implementation at construction. Two supported patterns:
 
-```ts
-const sandboxApi: IConfigApi = {
-  async getChains() { return { ok: true, value: [/* fixture */] }; },
-  // …
-};
+1. **Point at a local mock backend** via `SodaxConfig.api.baseURL`:
 
-const sodax = new Sodax({
-  backendApi: { url: 'unused', api: sandboxApi },
-});
-await sodax.config.initialize();
-```
+   ```ts
+   const sodax = new Sodax({
+     api: { baseURL: 'http://localhost:4000' },
+   });
+   await sodax.config.initialize();
+   ```
 
-Every method on `IConfigApi` returns `Promise<Result<T>>` in v2.
+   `SodaxConfig.api` is `ApiConfig` (`{ baseURL, timeout, headers }`) — pass any subset via `DeepPartial`.
+
+2. **Inject your own `BackendApiService`-compatible mock at the app layer** (dependency-injected where you control the `Sodax` instance), rather than via the constructor.
+
+The `IConfigApi` interface itself still matters for both patterns — every method returns `Promise<Result<T>>` in v2, so any mock or local server must conform. See [`../architecture.md`](../architecture.md) § 4 "Custom backend" for the authoritative reference.
 
 ## Cross-references
 
