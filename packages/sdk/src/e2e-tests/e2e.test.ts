@@ -184,17 +184,12 @@ describe('e2e', () => {
         //   `${spokeChain} ${token.symbol} ${token.hubAsset} ${vaultAssets.includes(token.hubAsset.toLowerCase() as Address)}`,
         // );
 
-        if (
-          !vaultAssets.includes(token.hubAsset.toLowerCase() as Address) &&
-          token.hubAsset.toLowerCase() !== '0x0000000000000000000000000000000000000000' &&
-          token.hubAsset.toLowerCase() !== vaultAddress.toLowerCase()
-        ) {
-          throw new Error(`Hub asset ${token.hubAsset} not found in vault ${vaultAddress} on chain ${spokeChain}`);
-        }
+        const hubAssetLower = token.hubAsset.toLowerCase();
         expect(
-          vaultAssets.includes(token.hubAsset.toLowerCase() as Address) ||
-            token.hubAsset.toLowerCase() === '0x0000000000000000000000000000000000000000' ||
-            token.hubAsset.toLowerCase() === vaultAddress.toLowerCase(),
+          vaultAssets.includes(hubAssetLower as Address) ||
+            hubAssetLower === '0x0000000000000000000000000000000000000000' ||
+            hubAssetLower === vaultAddress.toLowerCase(),
+          `${spokeChain} ${token.symbol}: hub asset ${token.hubAsset} not found in vault ${vaultAddress}`,
         ).toBe(true);
       }
     }
