@@ -32,8 +32,7 @@
       "dependsOn": ["^build"]
     },
     "test:e2e": {
-      "dependsOn": ["^build"],
-      "inputs": ["packages/sdk/**"]
+      "dependsOn": ["^build"]
     },
     "test:packages": {
       "dependsOn": ["^build"],

@@ -8,7 +8,8 @@ import { Sodax } from '../index.js';
 
 describe('e2e', () => {
   /**
-   * E2e integration tests that hit live mainnet (Sonic RPC + SODAX backend API).
+   * E2e integration tests that hit live Sonic mainnet (public RPC + on-chain reads)
+   * and assert static config in `@sodax/types` is in sync with on-chain state.
    * Runs in the non-blocking `e2e` CI job — see `.github/workflows/ci.yml`.
    */
 
@@ -49,18 +50,15 @@ describe('e2e', () => {
   const isMmTokenSyncExcludedStaleInTypes = (chain: SpokeChainKey, address: string): boolean =>
     mmTokenSyncExcludedStaleInTypes.has(toMmTokenSyncKey(chain, address));
 
-  // Non-EVM spoke addresses cannot be validated via Sonic vault getAllTokenInfo hub-asset lookup.
+  // Specific tokens skipped from the vault getAllTokenInfo hub-asset containment check.
   const mmTokenSyncExcludedFromVaultHubAssetCheck = new Set<string>([
     `${ChainKeys.NEAR_MAINNET}|bnusd.sodax.near`, // bnUSD — NEAR account id, not a hex address
-  ]);
-
-  const mmTokenSyncExcludedVaultHubAssetChains = new Set<SpokeChainKey>([
-    ChainKeys.STACKS_MAINNET, // Stacks contract ids (SP…/SM…/ST…) are not EVM hex addresses
+    // Drift: sodaBTC vault does not list this hubAsset on-chain — track and remove once fixed upstream.
+    `${ChainKeys.STACKS_MAINNET}|sm3vdxk3wzzsa84xxfkafaf15nnzx32ctsg82jfq4.sbtc-token`, // sBTC
   ]);
 
   const isMmTokenSyncExcludedFromVaultHubAssetCheck = (chain: SpokeChainKey, address: string): boolean =>
-    mmTokenSyncExcludedFromVaultHubAssetCheck.has(toMmTokenSyncKey(chain, address)) ||
-    mmTokenSyncExcludedVaultHubAssetChains.has(chain);
+    mmTokenSyncExcludedFromVaultHubAssetCheck.has(toMmTokenSyncKey(chain, address));
 
   // date: 10.07.2025
   const solverCompatibleAssets: Record<SpokeChainKey, Address[]> = {
@@ -204,13 +202,15 @@ describe('e2e', () => {
 
   it('Verify solver-compatible assets resolve to original spoke addresses', async () => {
     for (const [spokeChain, assets] of Object.entries(solverCompatibleAssets)) {
-      // console.log('************************************************');
-      // console.log(`${spokeChain} ${assets.length} assets`);
-      // console.log('--------------------------------');
+      const supportedTokens = Object.values(
+        sodax.config.spokeChainConfig[spokeChain as SpokeChainKey].supportedTokens,
+      );
       for (const asset of assets) {
-        const originalToken = sodax.config.getOriginalAssetAddress(spokeChain as SpokeChainKey, asset);
-        // console.log(`${spokeChain} ${asset} ${originalToken}`);
-        expect(originalToken).toBeDefined();
+        const match = supportedTokens.find(t => t.hubAsset.toLowerCase() === asset.toLowerCase());
+        expect(
+          match,
+          `${spokeChain}: hub asset ${asset} not found in spoke supportedTokens`,
+        ).toBeDefined();
       }
     }
   });
