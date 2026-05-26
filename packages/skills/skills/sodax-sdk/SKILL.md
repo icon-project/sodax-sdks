@@ -39,13 +39,21 @@ Load this broad skill (keep reading below) when:
 
 ## Out of scope
 
-This skill documents the **SDK call sites** — what to import, how to construct `Sodax`, which method to call, and how to handle the `Result<T>`. It does **not** prescribe application-layer concerns:
+This skill documents the **SDK call sites** — what to import, how to construct `Sodax`, which method to call, and how to handle the `Result<T>`. It does **not** prescribe application-layer concerns.
 
-- **Multi-user state** (Telegram bot per-user wallets, dApp session storage, custodial vs non-custodial design). Hold one `IEvmWalletProvider`/`ISolanaWalletProvider`/etc. per user/chain at the app layer and pass it into each call — the SDK is stateless.
-- **UI**, framework wiring, route handlers, webhooks. For React with hooks, load `sodax-dapp-kit` instead.
+### Where to go for the things this skill does NOT cover
+
+- **Wallet provider implementations** (`IEvmWalletProvider`, `ISolanaWalletProvider`, etc.) → **load the `sodax-wallet-sdk-core` skill** (integration mode). It ships ready-made provider classes for all 9 chain families, both private-key (Node / scripts) and browser-extension modes. This skill only treats wallet providers as a contract (`declare const evmWallet: IEvmWalletProvider`).
+- **React hooks wrapping the SDK** → **load the `sodax-dapp-kit` skill** instead of this one.
+- **Browser wallet connectivity** (connect / disconnect / chain switching for React apps) → **load the `sodax-wallet-sdk-react` skill**.
+
+### App-layer concerns the SDK is intentionally silent on
+
+- **Multi-user state** (Telegram bot per-user wallets, dApp session storage, custodial vs non-custodial design). Hold one wallet-provider instance per user/chain at the app layer and pass it into each call — the SDK is stateless.
+- **UI**, framework wiring, route handlers, webhooks. Pick your own framework (telegraf/grammy for bots, Next.js / Vite for web, etc.) — the SDK has no opinion.
 - **Token discovery beyond `sodax.config`**. The SDK exposes `sodax.config.findSupportedTokenBySymbol(chainKey, symbol)` for per-chain lookups and `sodax.bridge.getBridgeableTokens(from, to, srcAddress)` / `sodax.bridge.isBridgeable({ from, to })` for vault-pair checks. There is no exhaustive "all bridgeable pairs across all chains" table — derive it at runtime if needed.
 
-If the consumer needs a runnable end-to-end app (Node bot, CLI, full dApp), the SDK call sites here plus their own framework/state code is the right combination. The SDK does not ship an app skeleton.
+If the consumer needs a runnable end-to-end app (Node bot, CLI, full dApp), the right combination is: this skill (for SDK call sites) + `sodax-wallet-sdk-core` (for wallet providers) + the consumer's chosen framework code. The SDK does not ship an app skeleton.
 
 ---
 
