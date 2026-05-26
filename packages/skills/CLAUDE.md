@@ -12,7 +12,7 @@ packages/skills/
 │   └── plugin.json                # Skill registry (broad + nested granular paths)
 ├── AGENTS.md                      # Tool-neutral router: consumer intent → skill (+ mode)
 ├── skills/                        # Each broad skill is mode-gated; some have nested granular children
-│   ├── sodax-sdk/                          {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/, <feature>/SKILL.md ×7}
+│   ├── sodax-sdk/                          {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/, <feature>/SKILL.md ×9}
 │   ├── sodax-wallet-sdk-core/              {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/}
 │   ├── sodax-wallet-sdk-react/             {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/ — incl. 4 .tsx example apps under integration/knowledge/examples/}
 │   └── sodax-dapp-kit/                     {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/}
