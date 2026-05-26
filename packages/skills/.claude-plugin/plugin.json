@@ -2,6 +2,15 @@
   "name": "sodax-skills",
   "skills": [
     "./skills/sodax-sdk",
+    "./skills/sodax-sdk/swap",
+    "./skills/sodax-sdk/money-market",
+    "./skills/sodax-sdk/bridge",
+    "./skills/sodax-sdk/staking",
+    "./skills/sodax-sdk/dex",
+    "./skills/sodax-sdk/icx-bnusd-baln",
+    "./skills/sodax-sdk/partner",
+    "./skills/sodax-sdk/recovery",
+    "./skills/sodax-sdk/backend-api",
     "./skills/sodax-wallet-sdk-core",
     "./skills/sodax-wallet-sdk-react",
     "./skills/sodax-dapp-kit"

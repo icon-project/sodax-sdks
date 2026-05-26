@@ -26,15 +26,20 @@ Pair: [`features/staking.md`](../../../integration/knowledge/features/staking.md
 | `InstantUnstakeParams` | `{ amount, minAmount, account, action: 'instantUnstake' }` | `{ srcChainKey, srcAddress, amount, minAmount, action: 'instantUnstake' }` | |
 | `ClaimParams` | `{ requestId, amount, action: 'claim' }` | `{ srcChainKey, srcAddress, requestId, amount, action: 'claim' }` | Adds chain context. |
 | `CancelUnstakeParams` | `{ requestId, action: 'cancelUnstake' }` | `{ srcChainKey, srcAddress, requestId, action: 'cancelUnstake' }` | Adds chain context. |
-| `getStakingInfo` (read) | `(spokeProvider) => Promise<StakingInfo>` | `(srcAddress, srcChainKey) => Promise<Result<StakingInfo>>` | Renamed to `getStakingInfoFromSpoke` (the v1 `getStakingInfo` was hub-only and is not surfaced now). |
+| `getStakingInfo` (read) | `(spokeProvider) => Promise<StakingInfo>` | `getStakingInfoFromSpoke(srcAddress, srcChainKey) => Promise<Result<StakingInfo>>` (or `getStakingInfo(hubAddress)` if you already have the hub address) | v1 took a `spokeProvider` and resolved internally; v2 splits this into two public reads — `getStakingInfoFromSpoke` for spoke-side resolution, `getStakingInfo` for direct hub-side reads. Both return `Result`. |
 | `getUnstakingInfo` (read) | `(userAddress, spokeProvider)` | `(srcAddress, srcChainKey)` | v1 ignored `userAddress`; v2 reads it for real. |
 | `getUnstakingInfoWithPenalty` (read) | new (v2) | `(srcAddress, srcChainKey) => Promise<Result<UnstakingInfo & { requestsWithPenalty: UnstakeRequestWithPenalty[] }>>` | Wraps `getUnstakingInfo`'s base shape with a penalty-augmented request list. |
 
 ### Deleted symbols
 
 - `StakingError<StakingErrorCode>` and `isStakingError` — replaced by `SodaxError<C>` + `feature: 'staking'`.
-- v1 `getStakingInfo(hubAddress, …)` — not exposed as a public method in v2. Use `getStakingInfoFromSpoke(srcAddress, srcChainKey)`; the SDK derives the hub wallet via `HubService.getUserHubWalletAddress` internally.
 - `spokeProvider instanceof SonicSpokeProvider` runtime checks — replace with `isHubChainKeyType(chainKey)` from `@sodax/sdk`.
+
+### Renamed / re-shaped (not deleted)
+
+- v1 `getStakingInfo(spokeProvider)` had implicit spoke-side resolution. v2 surfaces two public reads instead:
+  - `getStakingInfoFromSpoke(srcAddress, srcChainKey)` — for the spoke-side flow; derives the hub wallet via `HubService.getUserHubWalletAddress` internally.
+  - `getStakingInfo(hubAddress: Address)` — direct hub-side read, kept public for when the hub address is already known.
 
 ### v1 → v2 error code crosswalk (staking-specific)
 
@@ -119,7 +124,7 @@ Cross-cutting traps (Result destructuring, error-model migration, srcChain/dstCh
 1. **Wrong return shape for actions.** Treating `stake/unstake/etc.` as returning `Result<TxReturnType<K, false>>` (single hash) is **wrong** — they return `Result<TxHashPair>` because they always relay spoke→hub. Only `approve` returns a single hash.
 2. **Forgetting `raw: true` on the allowance query.** TypeScript error: `Property 'walletProvider' is missing`. `isAllowanceValid` requires `WalletProviderSlot<K, Raw>`; `raw: false` would force a wallet provider. Use `raw: true` for read-only.
 3. **Forgetting to remove the v1 `account` field from params.** v2 uses `srcAddress`. If both are set, TypeScript rejects the literal.
-4. **`getStakingInfo(hubAddress)` is not a public method in v2.** v1 had it for direct hub queries. v2 has `getStakingInfoFromSpoke(srcAddress, srcChainKey)` which derives the hub wallet internally. Use the spoke variant.
+4. **Confusing `getStakingInfo` and `getStakingInfoFromSpoke`.** Both are public in v2 — pick by which address you have. `getStakingInfo(hubAddress: Address)` reads the hub wallet directly; `getStakingInfoFromSpoke(srcAddress, srcChainKey)` derives the hub wallet from a spoke address via `HubService.getUserHubWalletAddress`, then delegates. Passing a spoke address into `getStakingInfo` returns wrong data (no hub-wallet resolution); always use the spoke variant when starting from a spoke address.
 5. **`UnstakingInfo` no longer accepts `userAddress` separately.** v1 took both `spokeProvider` and `userAddress` props but ignored `userAddress` inside. v2 takes `srcAddress` and uses it.
 
 ## Verification

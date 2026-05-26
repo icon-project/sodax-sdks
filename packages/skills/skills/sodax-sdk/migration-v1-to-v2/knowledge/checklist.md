@@ -63,5 +63,5 @@ After items 1–17 land, the typecheck should be clean. The remaining work is pe
 - Items 5–6, 11–12: [`breaking-changes/architecture.md`](breaking-changes/architecture.md).
 - Items 7–8, 13: [`breaking-changes/architecture.md`](breaking-changes/architecture.md) § "WalletProviderSlot" + per-feature files.
 - Items 9–10, 14, 16: [`breaking-changes/result-and-errors.md`](breaking-changes/result-and-errors.md).
-- Item 15: [`features/auxiliary-services.md`](features/auxiliary-services.md) § "BackendApiService".
+- Item 15: [`features/backend-api.md`](features/backend-api.md).
 - Item 17 + the long tail: [`features/`](features/), one per feature you use.

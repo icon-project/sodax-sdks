@@ -4,14 +4,16 @@
 
 ## What's here
 
-This package ships **four mode-gated skills** (`skills/<name>/SKILL.md`) — one per SODAX SDK package. Each skill bundles two long-form **knowledge** subtrees: `integration/knowledge/` (writing new v2 code) and `migration-v1-to-v2/knowledge/` (porting v1 → v2). Skills are action-oriented (when to use, workflow, anti-patterns, links into knowledge); knowledge is the reference material your workflow points at. SKILL.md gates by mode at the top — pick integration or migration based on the consumer signal.
+This package ships **four mode-gated broad skills** (`skills/<name>/SKILL.md`) — one per SODAX SDK package — plus **nested granular per-feature skills** under `sodax-sdk` (one per Core SDK feature service). Each broad skill bundles two long-form **knowledge** subtrees: `integration/knowledge/` (writing new v2 code) and `migration-v1-to-v2/knowledge/` (porting v1 → v2). Granular skills are single-file SKILL.md that link into their parent's knowledge tree. Skills are action-oriented (when to use, workflow, anti-patterns, links into knowledge); knowledge is the reference material your workflow points at. SKILL.md gates by mode at the top — pick integration or migration based on the consumer signal.
 
-| SDK package | Skill |
-|---|---|
-| `@sodax/sdk` | `sodax-sdk` |
-| `@sodax/wallet-sdk-core` | `sodax-wallet-sdk-core` |
-| `@sodax/wallet-sdk-react` | `sodax-wallet-sdk-react` |
-| `@sodax/dapp-kit` | `sodax-dapp-kit` |
+| SDK package | Broad skill | Granular per-feature skills |
+|---|---|---|
+| `@sodax/sdk` | `sodax-sdk` | `sodax-sdk/swap`, `sodax-sdk/money-market`, `sodax-sdk/bridge`, `sodax-sdk/staking`, `sodax-sdk/dex`, `sodax-sdk/icx-bnusd-baln`, `sodax-sdk/partner`, `sodax-sdk/recovery`, `sodax-sdk/backend-api` |
+| `@sodax/wallet-sdk-core` | `sodax-wallet-sdk-core` | — |
+| `@sodax/wallet-sdk-react` | `sodax-wallet-sdk-react` | — |
+| `@sodax/dapp-kit` | `sodax-dapp-kit` | — |
+
+**When to prefer a granular skill:** if the consumer has already picked a feature (e.g. *"swap with Sodax"*, *"supply on money market"*), load the matching granular skill — it's ~3 KB vs `sodax-sdk`'s ~13 KB and points at exactly the knowledge files needed for that feature. Load the broad `sodax-sdk` skill when the feature is undecided, the task spans multiple features, or the consumer is porting a full v1 codebase.
 
 > **What about `@sodax/types`?** No skill. The package has no consumer-facing surface — it's pure TypeScript types, re-exported through `@sodax/sdk`. Importing `@sodax/types` directly invites version skew. The SDK skills cover all `@sodax/types` symbols you need.
 
@@ -21,6 +23,7 @@ Pick the consumer's situation, load the listed skills in order. Each entry names
 
 | Consumer is… | Load skills (mode) |
 |---|---|
+| **Scaffolding ONE specific Core SDK feature** (swap, money-market, bridge, staking, dex, icx-bnusd-baln, partner, recovery, backend-api) | `sodax-sdk/<feature>` (granular, covers both modes via internal links). Add `sodax-wallet-sdk-core` (integration) if it signs and lives outside React. Skip the broad `sodax-sdk` skill |
 | **Building a NEW React dapp** | `sodax-wallet-sdk-react` (integration) → `sodax-dapp-kit` (integration) → (`sodax-sdk` (integration) only if dropping below dapp-kit) |
 | **Building a NEW React app, no dapp-kit** (calling the SDK directly) | `sodax-wallet-sdk-react` (integration) → `sodax-sdk` (integration) |
 | **Building a NEW Node / backend service or script** | `sodax-sdk` (integration) → `sodax-wallet-sdk-core` (integration; only if it signs) |
@@ -49,9 +52,11 @@ Each `SKILL.md` is short on purpose. Follow it like a procedure:
 ```
 packages/skills/
 ├── AGENTS.md                              # You are here
-├── .claude-plugin/plugin.json             # Skill registry (4 entries)
-└── skills/                                # Each skill is mode-gated: SKILL.md + two knowledge subtrees
-    ├── sodax-sdk/                         {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/}
+├── .claude-plugin/plugin.json             # Skill registry (broad + nested granular paths)
+└── skills/                                # Each broad skill is mode-gated; some have nested granular children
+    ├── sodax-sdk/                         {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/,
+    │                                       <feature>/SKILL.md ×9 — swap, money-market, bridge, staking, dex,
+    │                                       icx-bnusd-baln, partner, recovery, backend-api}
     ├── sodax-wallet-sdk-core/             {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/}
     ├── sodax-wallet-sdk-react/            {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/ — incl. 4 .tsx example apps under integration/knowledge/examples/}
     └── sodax-dapp-kit/                    {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/}
