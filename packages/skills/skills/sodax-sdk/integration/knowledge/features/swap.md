@@ -109,17 +109,23 @@ const { quoted_amount } = quote.value;   // bigint output amount in dst-token un
 
 ### Signed swap (full flow)
 
+`inputToken` / `outputToken` are full `XToken` objects (with `chainKey`, `address`, `decimals`, `symbol`). Look them up from config — do **not** hand-construct:
+
 ```ts
+const inputToken  = sodax.config.findSupportedTokenBySymbol(ChainKeys.ARBITRUM_MAINNET, 'USDC');
+const outputToken = sodax.config.findSupportedTokenBySymbol(ChainKeys.STELLAR_MAINNET,  'XLM');
+if (!inputToken || !outputToken) throw new Error('Token missing from config — did you call sodax.config.initialize()?');
+
 const result = await sodax.swaps.swap({
   params: {
     srcChainKey: ChainKeys.ARBITRUM_MAINNET,
     dstChainKey: ChainKeys.STELLAR_MAINNET,
     srcAddress: '0x…',
     dstAddress: 'G…',
-    inputToken: USDC_ARBITRUM,    // XToken with chainKey === ARBITRUM_MAINNET
-    outputToken: XLM,             // XToken with chainKey === STELLAR_MAINNET
-    inputAmount: 1_000_000n,      // 1 USDC (6 decimals)
-    minOutputAmount: 500_0000000n, // 50 XLM (7 decimals)
+    inputToken,                                     // XToken; chainKey === srcChainKey
+    outputToken,                                    // XToken; chainKey === dstChainKey
+    inputAmount: parseUnits('1', inputToken.decimals),   // 1 USDC
+    minOutputAmount: parseUnits('50', outputToken.decimals), // 50 XLM floor
     deadline: BigInt(Math.floor(Date.now() / 1000) + 300),
     allowPartialFill: false,
     solver: '0x0000000000000000000000000000000000000000',
@@ -134,6 +140,37 @@ const { solverExecutionResponse, intent, intentDeliveryInfo } = result.value;
 // SwapResponse: { solverExecutionResponse, intent, intentDeliveryInfo }
 // Use `intentDeliveryInfo` for spoke / hub tx hashes; `solverExecutionResponse` for solver-side outcome.
 ```
+
+### Hub as source (Sonic → spoke)
+
+`srcChainKey` accepts `ChainKeys.SONIC_MAINNET` too — same `WalletProviderSlot<K, Raw>` shape, same `Result<T>` return. The SDK routes through the user's hub-wallet abstraction instead of a spoke deposit. The token lookup pattern is identical; only the chain key changes:
+
+```ts
+const sodaSonic = sodax.config.findSupportedTokenBySymbol(ChainKeys.SONIC_MAINNET, 'SODA');
+const sodaBase  = sodax.config.findSupportedTokenBySymbol(ChainKeys.BASE_MAINNET,  'SODA');
+if (!sodaSonic || !sodaBase) throw new Error('SODA missing from config');
+
+const result = await sodax.swaps.swap({
+  params: {
+    srcChainKey: ChainKeys.SONIC_MAINNET,
+    dstChainKey: ChainKeys.BASE_MAINNET,
+    srcAddress: (await evmWp.getWalletAddress()) as `0x${string}`,
+    dstAddress: recipientOnBase,
+    inputToken: sodaSonic,
+    outputToken: sodaBase,
+    inputAmount: parseUnits('1', sodaSonic.decimals),
+    minOutputAmount: parseUnits('0.99', sodaBase.decimals),   // tighten with getQuote() in production
+    deadline: BigInt(Math.floor(Date.now() / 1000) + 300),
+    allowPartialFill: false,
+    solver: '0x0000000000000000000000000000000000000000',
+    data: '0x',
+  },
+  raw: false,
+  walletProvider: evmWp,
+});
+```
+
+If both `srcChainKey` and `dstChainKey` are spoke chains that share a vault for the token, prefer [`sodax.bridge.bridge`](bridge.md) — it skips the solver and tends to be cheaper. Use `swap` when no vault pair exists or when a solver-routed price improves the outcome.
 
 ### Create intent only (custom relay)
 

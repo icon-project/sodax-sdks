@@ -9,6 +9,15 @@ Granular skill for `MigrationService` — the SDK module that migrates legacy IC
 
 > **Important disambiguation.** This skill is about the `MigrationService` SDK module. It is **NOT** about porting v1 SDK code to v2 — that lives under the broad `sodax-sdk` skill (migration mode) and the [`../migration-v1-to-v2/knowledge/`](../migration-v1-to-v2/knowledge/) subtree of this package. Same word, different concept.
 
+## Step 0 — Confirm this IS a token-protocol migration
+
+The word "migrate" is overloaded. This skill only handles **legacy ICON-ecosystem token swaps to SODAX assets** (ICX → SODA, legacy bnUSD → new bnUSD, BALN → SODA). If the user phrases the task as:
+
+- *"move / send / transfer SODA from chain A to chain B"* → that's a **bridge** (vault-pair) or a **swap** (solver-routed). Load `sodax-sdk-bridge` or `sodax-sdk-swap` instead.
+- *"migrate my v1 SDK code to v2"* → that's the SDK port. Load the broad `sodax-sdk` skill in migration mode and the `migration-v1-to-v2/` knowledge subtree.
+
+Only continue here if the task involves one of the three legacy-token sources below.
+
 ## Step 1 — Clarify with user before coding
 
 1. **Which token are you migrating?**

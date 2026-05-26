@@ -61,3 +61,7 @@ Read in order. Skipping `ai-rules.md` is the most common cause of agents reverti
 - [`../backend-api/SKILL.md`](../backend-api/SKILL.md) — `submitSwapTx` and intent / orderbook lookups (step-by-step swap flow + diagnostics).
 
 For tasks spanning multiple features, load the broad [`sodax-sdk` skill](../SKILL.md) instead.
+
+## Wallet provider (different SDK package family)
+
+This skill treats `walletProvider` as a contract (`IEvmWalletProvider` etc.) — it does not instantiate one. For Node bots / scripts / non-React backends that need a wallet implementation (private-key EVM, Solana keypair, Stellar SDK, etc.), **also load the `sodax-wallet-sdk-core` skill (integration mode)**. That package ships ready-made `I*WalletProvider` classes for all 9 chain families.
