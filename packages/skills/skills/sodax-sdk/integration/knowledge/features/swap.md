@@ -21,6 +21,9 @@ Two execution paths:
 ```ts
 sodax.swaps.swap<K extends SpokeChainKey>(action: SwapActionParams<K, false>): Promise<Result<SwapResponse, SodaxError>>;
 
+sodax.swaps.getQuote(payload: SolverIntentQuoteRequest): Promise<Result<SolverIntentQuoteResponse, SolverErrorResponse>>;
+//   Preview the output amount before signing — useful for UX confirmations / bot previews.
+
 sodax.swaps.createIntent<K extends SpokeChainKey, Raw extends boolean>(
   action: SwapActionParams<K, Raw>,
 ): Promise<Result<CreateIntentResult<K, Raw>, SodaxError>>;
@@ -77,6 +80,32 @@ type CreateIntentParams<K extends SpokeChainKey> = {
 `CreateLimitOrderParams<K>` is `Omit<CreateIntentParams<K>, 'deadline'>` (limit orders have a different expiry mechanism).
 
 ## Common call shapes
+
+### Quote before signing (preview / confirmation UX)
+
+`getQuote` is a read-only call to the solver — no wallet, no signing. Use it for trading-bot previews, UI confirmations, or to set `minOutputAmount` based on a fresh quote.
+
+```ts
+const quote = await sodax.swaps.getQuote({
+  token_src: USDC_ARBITRUM.address,
+  token_src_blockchain_id: ChainKeys.ARBITRUM_MAINNET,
+  token_dst: XLM.address,
+  token_dst_blockchain_id: ChainKeys.STELLAR_MAINNET,
+  amount: 1_000_000n,        // 1 USDC (6 decimals)
+  quote_type: 'exact_input', // currently the only supported type
+});
+
+if (!quote.ok) {
+  // quote.error: SolverErrorResponse — different shape from SodaxError;
+  // see `error.detail.code` and `error.detail.message`.
+  return;
+}
+
+const { quoted_amount } = quote.value;   // bigint output amount in dst-token units
+// Use `quoted_amount` (with a slippage buffer) as `minOutputAmount` on the swap call.
+```
+
+`SolverIntentQuoteRequest` uses snake_case fields and **`token_src`/`token_dst` are token addresses** (strings), not full `XToken` objects. `quote_type` is currently `'exact_input'` only.
 
 ### Signed swap (full flow)
 

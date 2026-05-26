@@ -37,6 +37,16 @@ Load this broad skill (keep reading below) when:
 - The task spans **multiple** features (e.g. swap + money-market in one flow).
 - The consumer is doing a **full v1 → v2 port** of an existing codebase.
 
+## Out of scope
+
+This skill documents the **SDK call sites** — what to import, how to construct `Sodax`, which method to call, and how to handle the `Result<T>`. It does **not** prescribe application-layer concerns:
+
+- **Multi-user state** (Telegram bot per-user wallets, dApp session storage, custodial vs non-custodial design). Hold one `IEvmWalletProvider`/`ISolanaWalletProvider`/etc. per user/chain at the app layer and pass it into each call — the SDK is stateless.
+- **UI**, framework wiring, route handlers, webhooks. For React with hooks, load `sodax-dapp-kit` instead.
+- **Token discovery beyond `sodax.config`**. The SDK exposes `sodax.config.findSupportedTokenBySymbol(chainKey, symbol)` for per-chain lookups and `sodax.bridge.getBridgeableTokens(from, to, srcAddress)` / `sodax.bridge.isBridgeable({ from, to })` for vault-pair checks. There is no exhaustive "all bridgeable pairs across all chains" table — derive it at runtime if needed.
+
+If the consumer needs a runnable end-to-end app (Node bot, CLI, full dApp), the SDK call sites here plus their own framework/state code is the right combination. The SDK does not ship an app skeleton.
+
 ---
 
 ## Integration mode (writing new v2 code)
