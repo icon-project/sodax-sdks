@@ -24,8 +24,6 @@
 #         need their own subtrees.
 #      c. No old split skill directories (sodax-<pkg>-{integration,migration})
 #         remain.
-#      d. No skill contains a bare migration/ subdir (would conflict with the
-#         migration-v1-to-v2/ naming).
 #   6. Cross-SDK-package reference prohibition: no skill may link to (or cite a
 #      GitHub URL into) a skill belonging to a different SDK package family.
 #      Family is the broad-skill name (sdk, wallet-sdk-core, wallet-sdk-react,
@@ -227,13 +225,11 @@ for d in skills/sodax-*-integration skills/sodax-*-migration; do
 done
 shopt -u nullglob
 
-# 5d. No skill contains a bare migration/ subdir (would clash with
-#     migration-v1-to-v2/ and with the per-feature features/migration.md).
-for skill_dir in "${EXPECTED_BROAD_SKILLS[@]}"; do
-  if [[ -d "$skill_dir/migration" ]]; then
-    err "Forbidden bare migration/ subdir (use migration-v1-to-v2/ instead): $skill_dir/migration"
-  fi
-done
+# 5d. (Removed) The previous rule blocked a bare migration/ subdir to prevent
+#     confusion with the migration-v1-to-v2/ mode tree. With granular per-feature
+#     skills introduced, skills/sodax-sdk/migration/ is now a valid feature skill
+#     for MigrationService (token migration). Mode subtrees stay named
+#     migration-v1-to-v2/, so there is no actual collision.
 
 # -----------------------------------------------------------------------------
 # 6. Cross-SDK-package reference prohibition (packages/skills/CLAUDE.md

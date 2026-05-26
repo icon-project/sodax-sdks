@@ -23,7 +23,7 @@ Each broad skill ships **both** mode subtrees under its own directory. The `skil
 
 ### Granular per-feature skills
 
-Broad skills that cover multiple unrelated features can have **nested granular skills** at `skills/<broad>/<feature>/SKILL.md`. Currently only `sodax-sdk` has granular children — one per feature service: swap, money-market, bridge, staking, dex, icx-bnusd-baln, partner, recovery, backend-api. They exist so agents can load just the swap workflow (~3 KB) instead of the whole `sodax-sdk` SKILL.md (~13 KB) plus its broad knowledge index.
+Broad skills that cover multiple unrelated features can have **nested granular skills** at `skills/<broad>/<feature>/SKILL.md`. Currently only `sodax-sdk` has granular children — one per feature service: swap, money-market, bridge, staking, dex, migration, partner, recovery, backend-api. They exist so agents can load just the swap workflow (~3 KB) instead of the whole `sodax-sdk` SKILL.md (~13 KB) plus its broad knowledge index.
 
 Granular skills are **one file each** (`<feature>/SKILL.md`). They do **NOT** ship their own `integration/knowledge/` or `migration-v1-to-v2/knowledge/` subtrees — they link directly into the parent broad skill's knowledge tree (`../integration/knowledge/features/<feature>.md`, etc.). The Vercel Labs `skills` CLI discovers them via the explicit nested paths in `plugin.json`; see [`vercel-labs/skills`](https://github.com/vercel-labs/skills) source (`src/plugin-manifest.ts`) for how parent-dir scanning resolves nested entries.
 

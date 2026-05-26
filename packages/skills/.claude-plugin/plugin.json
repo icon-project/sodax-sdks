@@ -7,7 +7,7 @@
     "./skills/sodax-sdk/bridge",
     "./skills/sodax-sdk/staking",
     "./skills/sodax-sdk/dex",
-    "./skills/sodax-sdk/icx-bnusd-baln",
+    "./skills/sodax-sdk/migration",
     "./skills/sodax-sdk/partner",
     "./skills/sodax-sdk/recovery",
     "./skills/sodax-sdk/backend-api",

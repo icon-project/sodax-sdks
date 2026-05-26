@@ -43,7 +43,7 @@ Granular skill for `StakingService` — `sodax.staking`. Feature tag: `'staking'
 
 ## Related granular skills (same family)
 
-- [`../icx-bnusd-baln/SKILL.md`](../icx-bnusd-baln/SKILL.md) — BALN → SODA migration also stakes (lockup periods 0–24 months); use it for BALN-specific lock flows.
+- [`../migration/SKILL.md`](../migration/SKILL.md) — BALN → SODA migration also stakes (lockup periods 0–24 months); use it for BALN-specific lock flows.
 - [`../recovery/SKILL.md`](../recovery/SKILL.md) — recovery for stuck staking-related assets.
 
 For multi-feature tasks, load the broad [`sodax-sdk` skill](../SKILL.md).

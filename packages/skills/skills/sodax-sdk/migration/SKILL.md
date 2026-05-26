@@ -1,6 +1,6 @@
 ---
-name: sodax-sdk-icx-bnusd-baln
-description: 'Granular skill for the @sodax/sdk v2 token-migration feature only — `MigrationService` covering ICX ↔ SODA, legacy bnUSD ↔ new bnUSD, and BALN → SODA with lockup multipliers. Use when the task is migrating legacy ICON-ecosystem tokens to SODAX (e.g. "migrate ICX to SODA", "revert SODA back to ICX", "swap legacy bnUSD on Sui/Stellar/ICON to new bnUSD", "migrate BALN with lock period for reward multiplier", "claim staked BALN"). NOT the same as v1 → v2 SDK migration (that is a separate cross-cutting concern handled by the broad sodax-sdk skill in migration mode). Covers BOTH integration and migration of the SDK module itself. Skill links into the parent sodax-sdk knowledge tree.'
+name: sodax-sdk-migration
+description: 'Granular skill for the @sodax/sdk v2 token-migration feature only — `MigrationService` (`sodax.migration`) covering ICX ↔ SODA, legacy bnUSD ↔ new bnUSD, and BALN → SODA with lockup multipliers. Use when the task is migrating legacy ICON-ecosystem tokens to SODAX (e.g. "migrate ICX to SODA", "revert SODA back to ICX", "swap legacy bnUSD on Sui/Stellar/ICON to new bnUSD", "migrate BALN with lock period for reward multiplier", "claim staked BALN"). IMPORTANT — this is NOT the same as v1 → v2 SDK migration (porting old SDK code). That is a separate cross-cutting concern handled by the broad sodax-sdk skill in migration mode and the migration-v1-to-v2/ knowledge subtree. Same word, different concept. Skill links into the parent sodax-sdk knowledge tree.'
 ---
 
 # Token migration (Core SDK granular skill)
@@ -23,7 +23,7 @@ Granular skill for `MigrationService` — the SDK module that migrates legacy IC
 ## Integration workflow
 
 1. [`../integration/knowledge/ai-rules.md`](../integration/knowledge/ai-rules.md).
-2. [`../integration/knowledge/features/icx-bnusd-baln.md`](../integration/knowledge/features/icx-bnusd-baln.md) — `MigrationService` API surface and the three sub-services.
+2. [`../integration/knowledge/features/migration.md`](../integration/knowledge/features/migration.md) — `MigrationService` API surface and the three sub-services.
 3. Path-specific recipe:
    - Signed → [`../integration/knowledge/recipes/signed-tx-flow.md`](../integration/knowledge/recipes/signed-tx-flow.md)
    - Unsigned → [`../integration/knowledge/recipes/raw-tx-flow.md`](../integration/knowledge/recipes/raw-tx-flow.md)
@@ -40,7 +40,7 @@ Granular skill for `MigrationService` — the SDK module that migrates legacy IC
 If the user is porting v1 `MigrationService` code to v2:
 
 1. [`../migration-v1-to-v2/knowledge/ai-rules.md`](../migration-v1-to-v2/knowledge/ai-rules.md).
-2. [`../migration-v1-to-v2/knowledge/features/icx-bnusd-baln.md`](../migration-v1-to-v2/knowledge/features/icx-bnusd-baln.md) — v1 `MigrationError` → v2 `SodaxError<C>` with `feature: 'migration'`. Note the BALN lock-method carve-out (still throws).
+2. [`../migration-v1-to-v2/knowledge/features/migration.md`](../migration-v1-to-v2/knowledge/features/migration.md) — v1 `MigrationError` → v2 `SodaxError<C>` with `feature: 'migration'`. Note the BALN lock-method carve-out (still throws).
 
 ## Verification
 

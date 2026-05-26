@@ -9,7 +9,7 @@ One file per feature service. Each file documents the v2 API surface, common cal
 | [`staking.md`](staking.md) | `StakingService` | SODA → xSoda staking via ERC-4626 vault. Stake, unstake (with penalty curve), instant unstake (slippage), claim, cancel. |
 | [`bridge.md`](bridge.md) | `BridgeService` | Cross-chain token transfer via vault. `bridge` returns `TxHashPair = { srcChainTxHash, dstChainTxHash }`. Bridgeable-amount queries respect vault deposit limits. |
 | [`dex.md`](dex.md) | `ClService` + `AssetService` | Uniswap-V3-style concentrated liquidity positions. Asset deposit/withdraw. Increase/decrease/claim flows. |
-| [`icx-bnusd-baln.md`](icx-bnusd-baln.md) | `MigrationService` (the SDK module — not v1→v2 porting) | Legacy ICON ecosystem token migration. ICX ↔ SODA, legacy bnUSD ↔ new bnUSD, BALN → SODA with lockup multipliers. |
+| [`migration.md`](migration.md) | `MigrationService` (the SDK module — not v1→v2 porting) | Legacy ICON ecosystem token migration. ICX ↔ SODA, legacy bnUSD ↔ new bnUSD, BALN → SODA with lockup multipliers. |
 | [`partner.md`](partner.md) | `PartnerService` | Partner-fee handling: token approval, auto-swap preferences, fee-claim flows. |
 | [`recovery.md`](recovery.md) | `RecoveryService` | Withdraw stuck hub-wallet assets back to a spoke chain. |
 | [`backend-api.md`](backend-api.md) | `BackendApiService` | HTTP client for backend services: swap-tx submission, intent / orderbook lookups, money-market reads. |
