@@ -22,6 +22,7 @@ Turborepo + pnpm workspace. Package manager: **pnpm 10.32.1**.
 | `packages/libs` | Internal dependency isolation; bundles and re-exports selected third-party libs via stable subpaths | [`packages/libs/CLAUDE.md`](packages/libs/CLAUDE.md) |
 | `packages/wallet-sdk-core` | Multi-chain wallet providers (signing/broadcasting) — 9 chain types | [`packages/wallet-sdk-core/CLAUDE.md`](packages/wallet-sdk-core/CLAUDE.md) |
 | `packages/wallet-sdk-react` | React wallet state layer — `XService`/`XConnector`, Zustand, EIP-6963 | [`packages/wallet-sdk-react/CLAUDE.md`](packages/wallet-sdk-react/CLAUDE.md) |
+| `packages/wallet-hw` | Optional, opt-in hardware-wallet add-on (Ledger + Trezor on EVM) — wagmi connectors for the EVM slot | [`packages/wallet-hw/CLAUDE.md`](packages/wallet-hw/CLAUDE.md) |
 | `packages/dapp-kit` | High-level React hooks combining SDK + wallet-sdk-react + React Query | [`packages/dapp-kit/CLAUDE.md`](packages/dapp-kit/CLAUDE.md) |
 | `packages/skills` | Consumer-facing AI material — 4 mode-gated Claude-Code skills (one per SDK package, each with integration + migration knowledge subtrees) | [`packages/skills/CLAUDE.md`](packages/skills/CLAUDE.md) |
 
@@ -40,6 +41,7 @@ Turborepo + pnpm workspace. Package manager: **pnpm 10.32.1**.
 - `@sodax/sdk` → `@sodax/types` (imports and re-exports)
 - `@sodax/wallet-sdk-core` → `@sodax/types`
 - `@sodax/wallet-sdk-react` → `@sodax/types`, `@sodax/wallet-sdk-core`
+- `@sodax/wallet-hw` → peer deps `viem`, `wagmi` only — **not** a dependency of any `@sodax/*` package (opt-in add-on)
 - `@sodax/dapp-kit` → `@sodax/sdk` (imports and re-exports)
 - `@sodax/skills` — no package dependencies (markdown only, no runtime code)
 

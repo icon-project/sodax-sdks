@@ -141,6 +141,18 @@ walletConnect: {
 
 **Note:** `qrModalOptions` extends `QrModalOptions` from `@walletconnect/ethereum-provider`. Key filtering options: `explorerRecommendedWalletIds` (prioritize), `explorerExcludedWalletIds` (hide — use `"ALL"` to hide everything except recommended). Wallet IDs are from the WalletConnect Explorer.
 
+### Custom wagmi connectors (`wagmiConnectors`)
+
+EVM connectors come from the wagmi config, not the per-chain `connectors` override (that field is only read for non-provider chains in `chainRegistry`). To add custom EVM wallets — hardware wallets (`@sodax/wallet-hw`), Coinbase, Safe, etc. — pass wagmi `CreateConnectorFn[]` via the `EVM.wagmiConnectors` field. `EvmProvider` appends them to the wagmi config (after any WalletConnect connector) and `EvmHydrator` discovers them through `useConnectors()` — they appear in the modal automatically with their own `name`/`icon`.
+
+```typescript
+import { ledgerEvmConnectors } from '@sodax/wallet-hw';
+
+const walletConfig: SodaxWalletConfig = {
+  EVM: { wagmiConnectors: ledgerEvmConnectors() },
+};
+```
+
 ### Provider Stack (`src/SodaxWalletProvider.tsx`)
 
 ```

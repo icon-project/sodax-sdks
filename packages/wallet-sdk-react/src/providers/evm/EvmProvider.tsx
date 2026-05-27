@@ -24,6 +24,7 @@ export const EvmProvider = ({ children, config }: EvmProviderProps) => {
   }
 
   const walletConnectConfig = config.walletConnect;
+  const extraConnectors = config.wagmiConnectors;
 
   const wagmiConfig = useMemo(() => {
     const connectors = [];
@@ -34,8 +35,11 @@ export const EvmProvider = ({ children, config }: EvmProviderProps) => {
         console.warn('[wallet-sdk-react] walletConnect.projectId is required — WalletConnect connector skipped.');
       }
     }
+    if (extraConnectors?.length) {
+      connectors.push(...extraConnectors);
+    }
     return createWagmiConfig(config.chains, { reconnectOnMount, ssr, connectors });
-  }, [config.chains, reconnectOnMount, ssr, walletConnectConfig]);
+  }, [config.chains, reconnectOnMount, ssr, walletConnectConfig, extraConnectors]);
 
   // wagmi requires its own QueryClientProvider — this is wagmi-internal, not the app's React Query cache.
   return (
