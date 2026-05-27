@@ -78,6 +78,9 @@ catalogs:
     bignumber.js:
       specifier: 9.3.1
       version: 9.3.1
+    cross-env:
+      specifier: 7.0.3
+      version: 7.0.3
     icon-sdk-js:
       specifier: 1.5.3
       version: 1.5.3
@@ -886,6 +889,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.0.3
         version: 19.2.3(@types/react@19.2.15)
+      cross-env:
+        specifier: 'catalog:'
+        version: 7.0.3
       happy-dom:
         specifier: ^20.8.9
         version: 20.9.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
@@ -6608,6 +6614,11 @@ packages:
 
   create-require@1.1.1:
     resolution: {integrity: sha512-dcKFX3jn0MpIaXjisoRvexIJVEKzaq7z2rZKxf+MSr9TkdmHmsU4m2lcLojrj/FHl8mk5VxMmYA+ftRkP/3oKQ==}
+
+  cross-env@7.0.3:
+    resolution: {integrity: sha512-+/HKd6EgcQCJGh2PSjZuUitQBQynKor4wrFbRg4DtAgS1aWO+gU52xpH7M9ScGgXSYmAVS9bIJ8EzuaGw0oNAw==}
+    engines: {node: '>=10.14', npm: '>=6', yarn: '>=1'}
+    hasBin: true
 
   cross-fetch@3.2.0:
     resolution: {integrity: sha512-Q+xVJLoGOeIMXZmbUK4HYk+69cQH6LudR0Vu/pRm2YlU/hDV9CiS0gKUMaWY5f2NeUH9C1nV3bsTlCo0FsTV1Q==}
@@ -21318,6 +21329,10 @@ snapshots:
       sha.js: 2.4.12
 
   create-require@1.1.1: {}
+
+  cross-env@7.0.3:
+    dependencies:
+      cross-spawn: 7.0.6
 
   cross-fetch@3.2.0:
     dependencies:
