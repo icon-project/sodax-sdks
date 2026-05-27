@@ -55,7 +55,7 @@ export function encodeBtcPayloadToBytes(payload: BtcPayload): string {
 /**
  * Normalize a signed PSBT to base64 format.
  * Unisat/OKX wallets return hex, Xverse returns base64.
- * Radfi API expects base64.
+ * Bound Exchange API expects base64.
  */
 export function normalizePsbtToBase64(signedPsbt: string): string {
   const isHex = /^[0-9a-fA-F]+$/.test(signedPsbt);

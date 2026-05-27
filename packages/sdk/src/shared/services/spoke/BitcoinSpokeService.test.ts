@@ -4,10 +4,10 @@
  * Pattern: mirrors SuiSpokeService.test.ts (issue #109) collapsed to one chain. Unlike Sui's
  * SuiClient, Bitcoin's "RPC" is an Esplora-style HTTP API — the SUT calls `fetch(...)` directly,
  * so this file stubs `globalThis.fetch` per-test (with `vi.stubGlobal`) instead of spying on a
- * client method. The Radfi trading-wallet flow is a second collaborator; `radfi.*` instance
+ * client method. The Bound Exchange trading-wallet flow is a second collaborator; `radfi.*` instance
  * methods are spied per-test.
  *
- * Real config data is used wherever possible — every address, RPC URL, polling interval, Radfi
+ * Real config data is used wherever possible — every address, RPC URL, polling interval, Bound Exchange
  * config field, and `walletMode` is sourced from `spokeChainConfig[BITCOIN_MAINNET]`. Only user
  * identities (`USER_ADDR`, `HUB_WALLET`), UTXOs, and txids are fabricated.
  *
@@ -295,7 +295,7 @@ describe('BitcoinSpokeService.getDeposit', () => {
 // =========================================================================
 
 describe('BitcoinSpokeService.getEffectiveWalletAddress', () => {
-  it('TRADING mode → returns the trading-wallet address from Radfi', async () => {
+  it('TRADING mode → returns the trading-wallet address from Bound Exchange', async () => {
     vi.spyOn(btcSpoke.radfi, 'getTradingWallet').mockResolvedValueOnce({
       tradingAddress: TRADING_ADDR,
     } as never);
@@ -316,7 +316,7 @@ describe('BitcoinSpokeService.getEffectiveWalletAddress', () => {
 });
 
 describe('BitcoinSpokeService.getTradingWalletAddress', () => {
-  it('always returns the trading address from Radfi', async () => {
+  it('always returns the trading address from Bound Exchange', async () => {
     vi.spyOn(btcSpoke.radfi, 'getTradingWallet').mockResolvedValueOnce({
       tradingAddress: TRADING_ADDR,
     } as never);

@@ -17,7 +17,7 @@ This tree documents v2 of the SDK for **new consumers** building against it. If 
 | [`features/auxiliary-services.md`](features/auxiliary-services.md) | `PartnerService` + `RecoveryService` + `BackendApiService` — small APIs grouped together. |
 | [`recipes/`](recipes/) | Copy-pasteable patterns: SDK initialization, `Result` + error discrimination, raw-tx flow, signed-tx flow, chain-key narrowing + cast-at-boundary, testing (mocks/stubs), gas estimation, backend-server init. |
 | [`reference/`](reference/) | Lookup tables: 20-chain `ChainKeys` table with family + relay id, `I*WalletProvider` interfaces, 13 `SodaxErrorCode` meanings + per-feature narrow unions, public API surface (incl. `@sodax/types` re-export rule), glossary. |
-| [`chain-specifics.md`](chain-specifics.md) | Non-EVM quirks — Stellar trustline check/request, Bitcoin PSBT + Radfi auth/session, Solana PDA derivation, ICON Hana wallet + chain-key string, NEAR connector discovery. |
+| [`chain-specifics.md`](chain-specifics.md) | Non-EVM quirks — Stellar trustline check/request, Bitcoin PSBT + Bound Exchange auth/session, Solana PDA derivation, ICON Hana wallet + chain-key string, NEAR connector discovery. |
 
 ## Reading order for a new integrator
 

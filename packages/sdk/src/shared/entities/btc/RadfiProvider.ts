@@ -1,9 +1,9 @@
 import { detectBitcoinAddressType, type IBitcoinWalletProvider, type RadfiConfig, type RadfiDepositTxResponse } from '@sodax/types';
 
 /**
- * Raw error body shape returned by the Radfi HTTP API on non-2xx responses.
+ * Raw error body shape returned by the Bound Exchange HTTP API on non-2xx responses.
  * The human-readable detail typically lives at `error.details` (nested), with
- * `code` carrying a Radfi-specific identifier (e.g. "2002" insufficientBTCBalance,
+ * `code` carrying a Bound Exchange-specific identifier (e.g. "2002" insufficientBTCBalance,
  * "4008" duplicatedPubKey) and `message` an i18n key.
  */
 export type RadfiErrorBody = {
@@ -14,8 +14,8 @@ export type RadfiErrorBody = {
 };
 
 /**
- * Structured error from a Radfi HTTP request. Exposes `status` (HTTP), `code`
- * (Radfi-specific identifier), and `details` (human-readable) so callers can
+ * Structured error from a Bound Exchange HTTP request. Exposes `status` (HTTP), `code`
+ * (Bound Exchange-specific identifier), and `details` (human-readable) so callers can
  * discriminate without fragile string-matching on `message`. The raw response
  * body is preserved on `cause` for structured logging.
  */
@@ -115,7 +115,7 @@ export class RadfiProvider {
   }
 
   /**
-   * Authenticate with Radfi: BIP322-sign a login message, then call the Radfi API.
+   * Authenticate with Bound Exchange: BIP322-sign a login message, then call the Bound Exchange API.
    * Returns accessToken, refreshToken, and tradingAddress.
    */
   public async authenticateWithWallet(
@@ -149,8 +149,8 @@ export class RadfiProvider {
   }
 
   /**
-   * Ensure a valid Radfi access token is set on this provider.
-   * If a token exists, validates it via the Radfi API.
+   * Ensure a valid Bound Exchange access token is set on this provider.
+   * If a token exists, validates it via the Bound Exchange API.
    * If invalid, tries refreshing with the refresh token first.
    * If refresh also fails, falls back to full re-authentication (BIP322 sign).
    */
@@ -194,7 +194,7 @@ export class RadfiProvider {
 
     if (!res.ok) {
       const err = await res.json();
-      throw new RadfiApiError(res.status, err, 'Radfi authentication failed');
+      throw new RadfiApiError(res.status, err, 'Bound Exchange authentication failed');
     }
 
     return res.json().then(r => ({
@@ -319,7 +319,7 @@ export class RadfiProvider {
 
     if (!res.ok) {
       const err = await res.json();
-      throw new RadfiApiError(res.status, err, 'Radfi transaction request failed');
+      throw new RadfiApiError(res.status, err, 'Bound Exchange transaction request failed');
     }
 
     return res.json().then(r => r.data);
@@ -345,7 +345,7 @@ export class RadfiProvider {
 
     if (!res.ok) {
       const err = await res.json();
-      throw new RadfiApiError(res.status, err, 'Radfi signature request failed');
+      throw new RadfiApiError(res.status, err, 'Bound Exchange signature request failed');
     }
 
     return res.json().then(r => r.data.txId);
@@ -378,7 +378,7 @@ export class RadfiProvider {
   }
 
   /**
-   * Build a renew-utxo transaction via the Radfi API.
+   * Build a renew-utxo transaction via the Bound Exchange API.
    * Returns a PSBT that needs to be signed by the user.
    */
   public async buildRenewUtxoTransaction(
@@ -408,8 +408,8 @@ export class RadfiProvider {
   }
 
   /**
-   * Sign and broadcast a renew-utxo transaction via the Radfi API.
-   * The user signs the PSBT first, then Radfi co-signs and broadcasts.
+   * Sign and broadcast a renew-utxo transaction via the Bound Exchange API.
+   * The user signs the PSBT first, then Bound Exchange co-signs and broadcasts.
    */
   public async signAndBroadcastRenewUtxo(
     params: { userAddress: string; signedBase64Tx: string },
@@ -467,7 +467,7 @@ export class RadfiProvider {
   }
 
   /**
-   * Sign and broadcast a withdraw transaction via Radfi.
+   * Sign and broadcast a withdraw transaction via Bound Exchange.
    */
   public async signAndBroadcastWithdraw(
     params: { userAddress: string; signedBase64Tx: string },

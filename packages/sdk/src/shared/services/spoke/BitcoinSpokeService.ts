@@ -168,7 +168,7 @@ export class BitcoinSpokeService {
   }
 
   /**
-   * Fund the Radfi trading wallet by sending BTC from the user's personal wallet
+   * Fund the Bound Exchange trading wallet by sending BTC from the user's personal wallet
    *
    * @param {bigint} amount - Amount in satoshis to send
    * @param {BitcoinSpokeProvider} spokeProvider - The Bitcoin spoke provider (must have signing capability)

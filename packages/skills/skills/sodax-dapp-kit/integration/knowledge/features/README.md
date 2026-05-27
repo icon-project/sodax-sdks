@@ -10,7 +10,7 @@ Per-feature reference docs. Each file documents the hooks, params types, return 
 | [`bridge.md`](bridge.md) | Cross-chain token bridging: `useBridge`, allowance/approve, bridgeable amount/tokens. |
 | [`dex.md`](dex.md) | Concentrated liquidity DEX: assets in/out, liquidity supply/decrease, claim rewards, position info, pool reads, param builders. |
 | [`migration.md`](migration.md) | Token migration: `useMigrateIcxToSoda`, `useRevertMigrateSodaToIcx`, `useMigratebnUSD`, `useMigrateBaln`, allowance/approve. |
-| [`bitcoin.md`](bitcoin.md) | Radfi (dapp-kit-unique): session, trading wallet, fund/withdraw, UTXOs. |
+| [`bitcoin.md`](bitcoin.md) | Bound Exchange (dapp-kit-unique): session, trading wallet, fund/withdraw, UTXOs. |
 | [`auxiliary-services.md`](auxiliary-services.md) | Partner fee claiming, recovery, backend queries (intent tracking, orderbook, MM data), shared utilities (xBalances, gas, trustlines). |
 
 ## Reference vs recipes
