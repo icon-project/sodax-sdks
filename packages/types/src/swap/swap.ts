@@ -233,6 +233,7 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.STACKS_MAINNET].supportedTokens.sBTC,
     spokeChainConfig[ChainKeys.STACKS_MAINNET].supportedTokens.USDC,
   ] as const satisfies XToken[],
+  [ChainKeys.HEDERA_MAINNET]: [] as const satisfies XToken[],
 } as const satisfies Record<SpokeChainKey, readonly XToken[]>;
 
 export type SwapsConfig = {

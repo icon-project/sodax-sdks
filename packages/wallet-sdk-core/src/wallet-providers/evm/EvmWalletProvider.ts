@@ -29,6 +29,7 @@ import {
   redbellyMainnet,
   kaia,
   lightlinkPhoenix,
+  hedera,
 } from 'viem/chains';
 
 /**
@@ -80,6 +81,8 @@ export function getEvmViemChain(key: EvmChainKey): Chain {
       return redbellyMainnet;
     case ChainKeys.KAIA_MAINNET:
       return kaia;
+    case ChainKeys.HEDERA_MAINNET:
+      return hedera;
     default: {
       const exhaustiveCheck: never = key; // The never type is used to ensure that the default case is exhaustive
       console.log(exhaustiveCheck);

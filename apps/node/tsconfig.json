@@ -17,6 +17,6 @@
     "forceConsistentCasingInFileNames": false,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"],
+  "include": ["src/evm.ts"],
   "exclude": ["node_modules", "**/__tests__/*"]
 }

@@ -18,6 +18,7 @@ import {
   lightlinkPhoenix,
   redbellyMainnet,
   kaia,
+  hedera,
 } from 'wagmi/chains';
 type WagmiOptions = {
   reconnectOnMount?: boolean;
@@ -68,6 +69,7 @@ export const createWagmiConfig = (
       lightlinkPhoenix,
       kaia,
       redbellyMainnet,
+      hedera,
     ],
     connectors: options?.connectors ?? [],
     // NOTE: wagmi's `ssr` is a hydration-timing flag, not an "is host app SSR"
@@ -90,6 +92,7 @@ export const createWagmiConfig = (
       [lightlinkPhoenix.id]: http(getRpcUrl(evmChains?.[ChainKeys.LIGHTLINK_MAINNET])),
       [redbellyMainnet.id]: http(getRpcUrl(evmChains?.[ChainKeys.REDBELLY_MAINNET])),
       [kaia.id]: http(getRpcUrl(evmChains?.[ChainKeys.KAIA_MAINNET])),
+      [hedera.id]: http(getRpcUrl(evmChains?.[ChainKeys.HEDERA_MAINNET])),
     },
     storage: createStorage({
       storage: cookieStorage,
