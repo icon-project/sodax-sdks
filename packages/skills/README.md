@@ -22,6 +22,7 @@ Four mode-gated skills land in your repo (under `.claude/skills/` or wherever th
 | Bundle | Contains |
 |---|---|
 | **4 mode-gated skills** under `skills/sodax-<pkg>/SKILL.md` | One skill per SODAX SDK package. `<pkg>` ∈ `sdk`, `wallet-sdk-core`, `wallet-sdk-react`, `dapp-kit`. Each SKILL.md gates by mode (integration vs migration) at the top of the body. |
+| **Granular per-feature skills** under `skills/sodax-<pkg>/<feature>/SKILL.md` | `sodax-sdk` and `sodax-dapp-kit` each ship one focused skill per feature (swap, money-market, bridge, staking, dex, migration, …). Load one when the task is already scoped to a single feature — it points at exactly the knowledge files for that feature instead of the whole broad skill. |
 | **Knowledge** under `skills/sodax-<pkg>/{integration,migration-v1-to-v2}/knowledge/` | Long-form supporting docs — features, recipes, reference tables, breaking-change writeups, code examples. Each skill ships both mode subtrees so `npx skills add` copies the full reference together. |
 | **`AGENTS.md`** at the package root | Tool-neutral router: maps the consumer's stated task to the right skill + mode. |
 

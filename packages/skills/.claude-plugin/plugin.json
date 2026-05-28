@@ -13,6 +13,14 @@
     "./skills/sodax-sdk/backend-api",
     "./skills/sodax-wallet-sdk-core",
     "./skills/sodax-wallet-sdk-react",
-    "./skills/sodax-dapp-kit"
+    "./skills/sodax-dapp-kit",
+    "./skills/sodax-dapp-kit/swap",
+    "./skills/sodax-dapp-kit/money-market",
+    "./skills/sodax-dapp-kit/staking",
+    "./skills/sodax-dapp-kit/bridge",
+    "./skills/sodax-dapp-kit/dex",
+    "./skills/sodax-dapp-kit/migration",
+    "./skills/sodax-dapp-kit/bitcoin",
+    "./skills/sodax-dapp-kit/auxiliary-services"
   ]
 }
