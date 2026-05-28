@@ -109,6 +109,7 @@ export default function SwapCard({
   const { requestTrustline } = useRequestTrustline(dst.token?.address);
   const [open, setOpen] = useState(false);
   const [approveError, setApproveError] = useState<string | null>(null);
+  const [swapError, setSwapError] = useState<string | null>(null);
   const [slippage, setSlippage] = useState<string>('0.5');
   const [useSubmitTxApi, setUseSubmitTxApi] = useState(false);
   const { mutateAsyncSafe: submitSwapTx, isPending: isSubmitting } = useBackendSubmitSwapTx();
@@ -369,12 +370,14 @@ export default function SwapCard({
     console.log('intentOrderPayload', intentOrderPayload);
     console.log('wallet provider', sourceWalletProvider);
     if (!sourceWalletProvider) return;
+    setSwapError(null);
     try {
       const swapResponse = await swap({ params: intentOrderPayload, walletProvider: sourceWalletProvider });
       const { solverExecutionResponse: response, intent, intentDeliveryInfo } = swapResponse;
       setOrders(prev => [...prev, { mode: 'solver', intentHash: response.intent_hash, intent, intentDeliveryInfo }]);
     } catch (error) {
       console.error('Error creating and submitting intent:', error);
+      setSwapError(formatMutationFailureMessage(error, 'Swap failed'));
     }
   };
 
@@ -633,7 +636,10 @@ export default function SwapCard({
           open={open}
           onOpenChange={(nextOpen): void => {
             setOpen(nextOpen);
-            if (nextOpen) setApproveError(null);
+            if (nextOpen) {
+              setApproveError(null);
+              setSwapError(null);
+            }
           }}
         >
           <DialogTrigger asChild>
@@ -669,6 +675,7 @@ export default function SwapCard({
                   <div className="text-red-500">Insufficient Stellar trustline (request trustline to proceed)</div>
                 )}
                 {approveError ? <div className="text-red-500 text-sm">{approveError}</div> : null}
+                {swapError ? <div className="text-red-500 text-sm">{swapError}</div> : null}
               </div>
             </div>
             <DialogFooter>

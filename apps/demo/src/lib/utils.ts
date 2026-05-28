@@ -10,6 +10,7 @@ import {
   type SpokeChainKey,
   type ChainKey,
   baseChainInfo,
+  RadfiApiError,
 } from '@sodax/sdk';
 
 export function cn(...inputs: ClassValue[]) {
@@ -224,7 +225,14 @@ export function formatMutationFailureMessage(error: unknown, fallback: string): 
   if (typeof error === 'string') return error;
   if (error instanceof Error) {
     const cause = (error as { cause?: unknown }).cause;
-    const causeText = cause instanceof Error ? ` — ${cause.message}` : '';
+    // A Bound Exchange API failure carries the human-readable text on `details`; its
+    // top-level `message` is only an i18n key. Prefer `details` whether the error is the
+    // RadfiApiError itself or wrapped as the `cause` of a SodaxError.
+    const radfi = error instanceof RadfiApiError ? error : cause instanceof RadfiApiError ? cause : undefined;
+    if (radfi) return radfi.details ?? radfi.message;
+    // SDK wrappers copy `cause.message` onto the SodaxError, so the two are often identical;
+    // only append the cause when it adds new text to avoid "X — X" duplication.
+    const causeText = cause instanceof Error && cause.message !== error.message ? ` — ${cause.message}` : '';
     return `${error.message}${causeText}`;
   }
   return fallback;

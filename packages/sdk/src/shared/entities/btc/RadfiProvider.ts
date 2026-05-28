@@ -317,12 +317,15 @@ export class RadfiProvider {
       }),
     });
 
-    if (!res.ok) {
-      const err = await res.json();
-      throw new RadfiApiError(res.status, err, 'Bound Exchange transaction request failed');
+    // The API can return HTTP 200 with a logical-error envelope (e.g. code "2002"
+    // insufficientBTCBalance) and no `data`. Treat a missing `data` as an error so the
+    // RadfiApiError (code/details) surfaces instead of a downstream undefined access.
+    const body = await res.json();
+    if (!res.ok || !body?.data) {
+      throw new RadfiApiError(res.status, body, 'Bound Exchange transaction request failed');
     }
 
-    return res.json().then(r => r.data);
+    return body.data;
   }
 
   public async requestRadfiSignature(
