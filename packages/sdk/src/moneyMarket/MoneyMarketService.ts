@@ -44,6 +44,8 @@ import {
   isOptionalEvmWalletProviderType,
   isOptionalStellarWalletProviderType,
   isUndefinedOrValidWalletProviderForChainKey,
+  isBitcoinChainKeyType,
+  isBitcoinWalletProviderType,
 } from '../shared/index.js';
 import type { HubProvider, IntentTxResult, TxHashPair } from '../shared/types/types.js';
 import {
@@ -233,7 +235,19 @@ export class MoneyMarketService {
     this.spoke = spoke;
     this.partnerFee = config.moneyMarket.partnerFee;
     this.relayerApiEndpoint = config.relay.relayerApiEndpoint;
-    this.data = new MoneyMarketDataService({ hubProvider, config: config });
+    this.data = new MoneyMarketDataService({ hubProvider, config: config, spoke });
+  }
+
+  /**
+   * Resolve the spoke address used to derive the user's hub wallet.
+   *
+   * Bitcoin (TRADING mode) routes every spoke action through the per-user Radfi trading wallet,
+   * so the relay derives the hub wallet from the trading address — not the personal address.
+   * Resolve to the trading address before deriving the hub wallet, mirroring
+   * `SwapService`/`BridgeService`. Non-Bitcoin chains pass through unchanged.
+   */
+  private async resolveHubWalletAddress(chainKey: SpokeChainKey, address: string): Promise<string> {
+    return isBitcoinChainKeyType(chainKey) ? await this.spoke.bitcoin.getEffectiveWalletAddress(address) : address;
   }
 
   /**
@@ -609,16 +623,31 @@ export class MoneyMarketService {
       const dstChainKey = params.dstChainKey ?? srcChainKey;
       const dstAddress = params.dstAddress ?? params.srcAddress;
 
+      // Bitcoin deposits are pulled from the Radfi trading wallet; make sure the session token is
+      // valid before signing, mirroring SwapService/BridgeService.
+      if (
+        isBitcoinChainKeyType(srcChainKey) &&
+        _params.raw === false &&
+        isBitcoinWalletProviderType(_params.walletProvider)
+      ) {
+        await this.spoke.bitcoin.radfi.ensureRadfiAccessToken(_params.walletProvider);
+      }
+
+      const [effectiveSrc, effectiveDst] = await Promise.all([
+        this.resolveHubWalletAddress(srcChainKey, params.srcAddress),
+        this.resolveHubWalletAddress(dstChainKey, dstAddress),
+      ]);
+
       const [fromHubWallet, toHubWallet] = await Promise.all([
-        this.hubProvider.getUserHubWalletAddress(params.srcAddress, srcChainKey),
-        this.hubProvider.getUserHubWalletAddress(dstAddress, dstChainKey),
+        this.hubProvider.getUserHubWalletAddress(effectiveSrc, srcChainKey),
+        this.hubProvider.getUserHubWalletAddress(effectiveDst, dstChainKey),
       ]);
 
       const data: Hex = this.buildSupplyData(srcChainKey, params.token, params.amount, toHubWallet);
 
       const coreParams = {
         srcChainKey,
-        srcAddress: params.srcAddress as GetAddressType<K>,
+        srcAddress: effectiveSrc as GetAddressType<K>,
         to: fromHubWallet,
         token: params.token as GetTokenAddressType<K>,
         amount: params.amount,
@@ -779,7 +808,8 @@ export class MoneyMarketService {
       });
 
       const encodedDstAddress = encodeAddress(dstChainKey, dstAddress);
-      const fromHubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, srcChainKey);
+      const effectiveSrc = await this.resolveHubWalletAddress(srcChainKey, params.srcAddress);
+      const fromHubWallet = await this.hubProvider.getUserHubWalletAddress(effectiveSrc, srcChainKey);
 
       const payload: Hex = this.buildBorrowData(
         fromHubWallet,
@@ -791,7 +821,7 @@ export class MoneyMarketService {
 
       const coreParams = {
         srcChainKey,
-        srcAddress: params.srcAddress as GetAddressType<K>,
+        srcAddress: effectiveSrc as GetAddressType<K>,
         dstChainKey: HUB_CHAIN_KEY,
         dstAddress: fromHubWallet,
         payload,
@@ -954,7 +984,8 @@ export class MoneyMarketService {
       );
 
       const encodedDstAddress = encodeAddress(dstChainKey, dstAddress);
-      const fromHubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, srcChainKey);
+      const effectiveSrc = await this.resolveHubWalletAddress(srcChainKey, params.srcAddress);
+      const fromHubWallet = await this.hubProvider.getUserHubWalletAddress(effectiveSrc, srcChainKey);
 
       const payload: Hex = this.buildWithdrawData(
         fromHubWallet,
@@ -966,7 +997,7 @@ export class MoneyMarketService {
 
       const coreParams = {
         srcChainKey,
-        srcAddress: params.srcAddress as GetAddressType<K>,
+        srcAddress: effectiveSrc as GetAddressType<K>,
         dstChainKey: HUB_CHAIN_KEY,
         dstAddress: fromHubWallet,
         payload,
@@ -1116,16 +1147,31 @@ export class MoneyMarketService {
       const dstChainKey = params.dstChainKey ?? srcChainKey;
       const dstAddress = params.dstAddress ?? params.srcAddress;
 
+      // Bitcoin deposits are pulled from the Radfi trading wallet; make sure the session token is
+      // valid before signing, mirroring SwapService/BridgeService.
+      if (
+        isBitcoinChainKeyType(srcChainKey) &&
+        _params.raw === false &&
+        isBitcoinWalletProviderType(_params.walletProvider)
+      ) {
+        await this.spoke.bitcoin.radfi.ensureRadfiAccessToken(_params.walletProvider);
+      }
+
+      const [effectiveSrc, effectiveDst] = await Promise.all([
+        this.resolveHubWalletAddress(srcChainKey, params.srcAddress),
+        this.resolveHubWalletAddress(dstChainKey, dstAddress),
+      ]);
+
       const [fromHubWallet, toHubWallet] = await Promise.all([
-        this.hubProvider.getUserHubWalletAddress(params.srcAddress, srcChainKey),
-        this.hubProvider.getUserHubWalletAddress(dstAddress, dstChainKey),
+        this.hubProvider.getUserHubWalletAddress(effectiveSrc, srcChainKey),
+        this.hubProvider.getUserHubWalletAddress(effectiveDst, dstChainKey),
       ]);
 
       const data: Hex = this.buildRepayData(srcChainKey, params.token, params.amount, toHubWallet);
 
       const coreParams = {
         srcChainKey,
-        srcAddress: params.srcAddress as GetAddressType<K>,
+        srcAddress: effectiveSrc as GetAddressType<K>,
         to: fromHubWallet,
         token: params.token as GetTokenAddressType<K>,
         amount: params.amount,

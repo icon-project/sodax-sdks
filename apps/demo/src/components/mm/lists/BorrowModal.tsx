@@ -6,8 +6,21 @@ import { Label } from '@/components/ui/label';
 import { ChainSelector } from '@/components/shared/ChainSelector';
 import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
 import { parseUnits, formatUnits } from 'viem';
-import type { FormatUserSummaryResponse, MoneyMarketBorrowParams, SpokeChainKey, XToken } from '@sodax/sdk';
-import { useBorrow, useReservesUsdFormat, useAToken, useUserReservesData, useSodaxContext } from '@sodax/dapp-kit';
+import {
+  ChainKeys,
+  type FormatUserSummaryResponse,
+  type MoneyMarketBorrowParams,
+  type SpokeChainKey,
+  type XToken,
+} from '@sodax/sdk';
+import {
+  useBorrow,
+  useReservesUsdFormat,
+  useAToken,
+  useUserReservesData,
+  useSodaxContext,
+  loadRadfiSession,
+} from '@sodax/dapp-kit';
 import { useAppStore } from '@/zustand/useAppStore';
 import {
   getChainsWithThisToken,
@@ -172,7 +185,18 @@ export function BorrowModal({
   const params: MoneyMarketBorrowParams | undefined = useMemo(() => {
     if (!parsedAmount || exceedsMaxBorrow || !destinationToken || !srcAddress) return undefined;
 
-    const crossChainParams = isSameChain ? {} : { dstChainKey, dstAddress };
+    // Bitcoin delivery must target the Radfi trading wallet, never the personal wallet.
+    const btcDst = dstChainKey === ChainKeys.BITCOIN_MAINNET;
+    if (btcDst && !dstAddress) return undefined;
+
+    const deliveryAddress =
+      btcDst && dstAddress ? (loadRadfiSession(dstAddress)?.tradingAddress ?? dstAddress) : dstAddress;
+    // Always send dst params for BTC delivery so the relay routes to the trading wallet (bypass same-chain shortcut).
+    const crossChainParams = btcDst
+      ? { dstChainKey, dstAddress: deliveryAddress }
+      : isSameChain
+        ? {}
+        : { dstChainKey, dstAddress };
 
     return {
       srcChainKey,

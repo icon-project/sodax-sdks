@@ -1030,6 +1030,31 @@ describe('MoneyMarketService.createSupplyIntent', () => {
       // buildSupplyData receives toHubWallet (the dst lookup result), not the src hub wallet.
       expect(buildSpy).toHaveBeenCalledWith(ChainKeys.BSC_MAINNET, SAMPLE_EVM_TOKEN, 1_000_000n, TO_HUB_WALLET);
     });
+
+    it('on Bitcoin: derives the hub wallet from the Radfi trading address, not the personal address', async () => {
+      const TRADING_ADDRESS = 'bc1p-trading-wallet';
+      const getEffSpy = vi.spyOn(sodax.spoke.bitcoin, 'getEffectiveWalletAddress').mockResolvedValue(TRADING_ADDRESS);
+      const ensureSpy = vi.spyOn(sodax.spoke.bitcoin.radfi, 'ensureRadfiAccessToken').mockResolvedValue(undefined);
+      vi.spyOn(sodax.moneyMarket, 'buildSupplyData').mockReturnValueOnce('0xsupply-data');
+      const depositSpy = vi.spyOn(sodax.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: '0xdeposit-hash' });
+
+      const result = await sodax.moneyMarket.createSupplyIntent({
+        raw: false,
+        params: supplyParams(ChainKeys.BITCOIN_MAINNET),
+        walletProvider: mockBitcoinProvider,
+      });
+
+      expect(result.ok).toBe(true);
+      // personal srcAddress is resolved to the trading wallet before hub-wallet derivation
+      expect(getEffSpy).toHaveBeenCalledWith(SAMPLE_USER_ADDRESS);
+      expect(ensureSpy).toHaveBeenCalledWith(mockBitcoinProvider);
+      // hub wallet is derived from the trading address (matches what the relay credits), never the personal one
+      expect(mocks.getUserHubWalletAddress).toHaveBeenCalledWith(TRADING_ADDRESS, ChainKeys.BITCOIN_MAINNET);
+      expect(mocks.getUserHubWalletAddress).not.toHaveBeenCalledWith(SAMPLE_USER_ADDRESS, ChainKeys.BITCOIN_MAINNET);
+      // the spoke deposit (and thus the relay-derived executing wallet) must also use the trading address,
+      // otherwise the hub executes through the personal-derived wallet which never received the bridged BTC
+      expect(depositSpy.mock.calls[0]?.[0]?.srcAddress).toBe(TRADING_ADDRESS);
+    });
   });
 
   describe('rejects on invalid inputs', () => {

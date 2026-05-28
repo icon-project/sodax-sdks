@@ -42,8 +42,8 @@ export function useATokensBalances({
         }
       }
 
-      const hubWalletAddress = await sodax.hubProvider.getUserHubWalletAddress(userAddress, spokeChainKey);
-      return sodax.moneyMarket.data.getATokensBalances(aTokens, hubWalletAddress);
+      // Hub-wallet derivation (incl. Bitcoin's Radfi trading-wallet resolution) lives in the SDK.
+      return sodax.moneyMarket.data.getATokensBalancesForSpokeUser(spokeChainKey, userAddress, aTokens);
     },
     enabled: aTokens.length > 0 && !!spokeChainKey && !!userAddress,
     ...queryOptions,
