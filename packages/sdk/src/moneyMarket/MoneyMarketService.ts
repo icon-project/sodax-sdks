@@ -246,6 +246,9 @@ export class MoneyMarketService {
    * so the relay derives the hub wallet from the trading address — not the personal address.
    * Returning both keeps the effective spoke sender and the hub wallet in lockstep (they must
    * never diverge), mirroring `SwapService`/`BridgeService`. Non-Bitcoin chains pass through.
+   *
+   * Read-side counterpart: {@link MoneyMarketDataService.resolveHubWallet} (same Bitcoin guard,
+   * returns only the hub wallet).
    */
   private async resolveSender(
     chainKey: SpokeChainKey,
@@ -646,10 +649,12 @@ export class MoneyMarketService {
 
       await this.ensureBitcoinDepositToken(srcChainKey, _params.raw, _params.walletProvider);
 
-      const [src, dst] = await Promise.all([
-        this.resolveSender(srcChainKey, params.srcAddress),
-        this.resolveSender(dstChainKey, dstAddress),
-      ]);
+      const src = await this.resolveSender(srcChainKey, params.srcAddress);
+      // Same-chain self-deposit (the common case) reuses src to avoid a second effective-address lookup.
+      const dst =
+        dstChainKey === srcChainKey && dstAddress === params.srcAddress
+          ? src
+          : await this.resolveSender(dstChainKey, dstAddress);
       const fromHubWallet = src.hubWallet;
       const toHubWallet = dst.hubWallet;
 
@@ -1163,10 +1168,12 @@ export class MoneyMarketService {
 
       await this.ensureBitcoinDepositToken(srcChainKey, _params.raw, _params.walletProvider);
 
-      const [src, dst] = await Promise.all([
-        this.resolveSender(srcChainKey, params.srcAddress),
-        this.resolveSender(dstChainKey, dstAddress),
-      ]);
+      const src = await this.resolveSender(srcChainKey, params.srcAddress);
+      // Same-chain self-deposit (the common case) reuses src to avoid a second effective-address lookup.
+      const dst =
+        dstChainKey === srcChainKey && dstAddress === params.srcAddress
+          ? src
+          : await this.resolveSender(dstChainKey, dstAddress);
       const fromHubWallet = src.hubWallet;
       const toHubWallet = dst.hubWallet;
 

@@ -9,6 +9,7 @@ import { parseUnits, formatUnits } from 'viem';
 import type { FormatUserSummaryResponse, MoneyMarketBorrowParams, SpokeChainKey, XToken } from '@sodax/sdk';
 import { useBorrow, useReservesUsdFormat, useAToken, useUserReservesData, useSodaxContext } from '@sodax/dapp-kit';
 import { buildMmDeliveryParams } from '@/lib/mmBtc';
+import { useBtcTradingBalance } from '@/hooks/useBtcTradingBalance';
 import { useAppStore } from '@/zustand/useAppStore';
 import {
   getChainsWithThisToken,
@@ -72,6 +73,10 @@ export function BorrowModal({
   const sourceWalletProvider = useWalletProvider({ xChainId: srcChainKey });
   const { address: srcAddress } = useXAccount({ xChainId: srcChainKey });
   const { address: dstAddress } = useXAccount({ xChainId: dstChainKey });
+
+  // BTC delivery goes to the Radfi trading wallet; needs a signed-in session (balance not required).
+  const { isBitcoin: isBtcDelivery, tradingAddress: deliveryTradingAddress } = useBtcTradingBalance(dstChainKey);
+  const btcDeliveryNotReady = isBtcDelivery && !!dstAddress && !deliveryTradingAddress;
 
   const isSameChain = srcChainKey === dstChainKey;
 
@@ -292,6 +297,12 @@ export function BorrowModal({
                 >
                   Open wallet menu
                 </button>
+              </p>
+            )}
+            {btcDeliveryNotReady && (
+              <p className="text-xs text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-lg border border-amber-200 dark:border-amber-800">
+                Sign in to the <strong>Bitcoin Trading Wallet</strong> section on the Money Market page to receive the
+                borrowed BTC.
               </p>
             )}
           </div>

@@ -1464,6 +1464,29 @@ describe('MoneyMarketService.createBorrowIntent', () => {
       expect(call?.walletProvider).toBe(mockEvmProvider);
     });
 
+    it('on Bitcoin source: derives the hub wallet and sends from the Radfi trading address', async () => {
+      const TRADING = 'bc1p-trading-wallet';
+      const getEffSpy = vi.spyOn(sodax.spoke.bitcoin, 'getEffectiveWalletAddress').mockResolvedValue(TRADING);
+      vi.spyOn(sodax.moneyMarket, 'buildBorrowData').mockReturnValueOnce('0xborrow-data');
+      const sendSpy = vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xsend-hash' });
+
+      const result = await sodax.moneyMarket.createBorrowIntent({
+        raw: false,
+        params: {
+          ...borrowParams(ChainKeys.BITCOIN_MAINNET),
+          dstChainKey: ChainKeys.BSC_MAINNET,
+          dstAddress: SAMPLE_DST_ADDRESS,
+        },
+        walletProvider: mockBitcoinProvider,
+      });
+
+      expect(result.ok).toBe(true);
+      expect(getEffSpy).toHaveBeenCalledWith(SAMPLE_USER_ADDRESS);
+      expect(mocks.getUserHubWalletAddress).toHaveBeenCalledWith(TRADING, ChainKeys.BITCOIN_MAINNET);
+      expect(mocks.getUserHubWalletAddress).not.toHaveBeenCalledWith(SAMPLE_USER_ADDRESS, ChainKeys.BITCOIN_MAINNET);
+      expect(sendSpy.mock.calls[0]?.[0]?.srcAddress).toBe(TRADING);
+    });
+
     it('on hub (Sonic): same path applies', async () => {
       vi.spyOn(sodax.moneyMarket, 'buildBorrowData').mockReturnValueOnce('0xborrow-data');
       vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xsend-hash' });
@@ -1869,6 +1892,28 @@ describe('MoneyMarketService.createWithdrawIntent', () => {
       expect(call?.payload).toBe('0xwithdraw-data');
       expect(call?.raw).toBe(false);
     });
+
+    it('on Bitcoin source: derives the hub wallet and sends from the Radfi trading address', async () => {
+      const TRADING = 'bc1p-trading-wallet';
+      const getEffSpy = vi.spyOn(sodax.spoke.bitcoin, 'getEffectiveWalletAddress').mockResolvedValue(TRADING);
+      vi.spyOn(sodax.moneyMarket, 'buildWithdrawData').mockReturnValueOnce('0xwithdraw-data');
+      const sendSpy = vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xsend-hash' });
+
+      const result = await sodax.moneyMarket.createWithdrawIntent({
+        raw: false,
+        params: {
+          ...withdrawParams(ChainKeys.BITCOIN_MAINNET),
+          dstChainKey: ChainKeys.BSC_MAINNET,
+          dstAddress: SAMPLE_DST_ADDRESS,
+        },
+        walletProvider: mockBitcoinProvider,
+      });
+
+      expect(result.ok).toBe(true);
+      expect(getEffSpy).toHaveBeenCalledWith(SAMPLE_USER_ADDRESS);
+      expect(mocks.getUserHubWalletAddress).toHaveBeenCalledWith(TRADING, ChainKeys.BITCOIN_MAINNET);
+      expect(sendSpy.mock.calls[0]?.[0]?.srcAddress).toBe(TRADING);
+    });
   });
 
   describe('rejects on invalid inputs', () => {
@@ -2260,6 +2305,26 @@ describe('MoneyMarketService.createRepayIntent', () => {
       const call = depositSpy.mock.calls[0]?.[0];
       expect(call?.data).toBe('0xrepay-data');
       expect(call?.raw).toBe(false);
+    });
+
+    it('on Bitcoin source: deposits from the Radfi trading address and ensures the session token', async () => {
+      const TRADING = 'bc1p-trading-wallet';
+      const getEffSpy = vi.spyOn(sodax.spoke.bitcoin, 'getEffectiveWalletAddress').mockResolvedValue(TRADING);
+      const ensureSpy = vi.spyOn(sodax.spoke.bitcoin.radfi, 'ensureRadfiAccessToken').mockResolvedValue(undefined);
+      vi.spyOn(sodax.moneyMarket, 'buildRepayData').mockReturnValueOnce('0xrepay-data');
+      const depositSpy = vi.spyOn(sodax.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: '0xdeposit-hash' });
+
+      const result = await sodax.moneyMarket.createRepayIntent({
+        raw: false,
+        params: repayParams(ChainKeys.BITCOIN_MAINNET),
+        walletProvider: mockBitcoinProvider,
+      });
+
+      expect(result.ok).toBe(true);
+      expect(getEffSpy).toHaveBeenCalledWith(SAMPLE_USER_ADDRESS);
+      expect(ensureSpy).toHaveBeenCalledWith(mockBitcoinProvider);
+      expect(mocks.getUserHubWalletAddress).toHaveBeenCalledWith(TRADING, ChainKeys.BITCOIN_MAINNET);
+      expect(depositSpy.mock.calls[0]?.[0]?.srcAddress).toBe(TRADING);
     });
 
     it('on hub: same path applies', async () => {

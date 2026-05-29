@@ -34,6 +34,12 @@ import {
 import type { ConfigService } from '../shared/config/ConfigService.js';
 import { erc20Abi } from 'viem';
 
+/**
+ * Constructor params for the money-market data service. Instantiated only by
+ * {@link MoneyMarketService} (not meant for direct construction). `spoke` is required so Bitcoin
+ * positions resolve through the Radfi trading wallet — adding it is an internal/breaking change
+ * for any consumer who (against guidance) constructed this service directly.
+ */
 export type MoneyMarketDataServiceConstructorParams = {
   hubProvider: HubProvider;
   config: ConfigService;
@@ -78,6 +84,9 @@ export class MoneyMarketDataService {
    * Bitcoin (TRADING mode) routes positions through the per-user Radfi trading wallet, so the
    * hub wallet is derived from the trading address — not the personal address. Resolves the
    * effective (trading) address first, then derives the hub wallet. Non-Bitcoin passes through.
+   *
+   * Write-side counterpart: {@link MoneyMarketService.resolveSender} (also returns the effective
+   * spoke address, needed there as the deposit/message sender).
    */
   private async resolveHubWallet(chainKey: SpokeChainKey, address: string): Promise<Address> {
     const effectiveAddress = isBitcoinChainKeyType(chainKey)

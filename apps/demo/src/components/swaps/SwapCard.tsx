@@ -56,11 +56,7 @@ import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
 
 const SUBMIT_TX_API_CONFIG = { baseURL: 'https://canary-api.sodax.com/v1/bes' } as const;
 
-export default function SwapCard({
-  setOrders,
-}: {
-  setOrders: (value: SetStateAction<Order[]>) => void;
-}) {
+export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAction<Order[]>) => void }) {
   const { sodax } = useSodaxContext();
   //chain and account states
   const [src, setSrc] = useState<{ chain: SpokeChainKey; token: XToken }>({
@@ -271,6 +267,18 @@ export default function SwapCard({
       return;
     }
 
+    // Bitcoin delivery must target the Radfi trading wallet (never the personal wallet). Block
+    // when there's no signed-in trading wallet rather than silently delivering to the personal one.
+    let dstAddress = destAccount.address;
+    if (dst.chain === ChainKeys.BITCOIN_MAINNET) {
+      const tradingAddress = loadRadfiSession(destAccount.address)?.tradingAddress;
+      if (!tradingAddress) {
+        console.error('Bitcoin destination requires a Radfi trading wallet — sign in first');
+        return;
+      }
+      dstAddress = tradingAddress;
+    }
+
     const createIntentParams = {
       inputToken: src.token.address, // The address of the input token on hub chain
       outputToken: dst.token.address, // The address of the output token on hub chain
@@ -281,10 +289,7 @@ export default function SwapCard({
       srcChainKey: src.chain, // Chain ID where input tokens originate
       dstChainKey: dst.chain, // Chain ID where output tokens should be delivered
       srcAddress: await sourceWalletProvider.getWalletAddress(), // Source address (original address on spoke chain)
-      dstAddress:
-        dst.chain === ChainKeys.BITCOIN_MAINNET && destAccount.address
-          ? loadRadfiSession(destAccount.address)?.tradingAddress || destAccount.address
-          : destAccount.address, // Bitcoin: prefer trading wallet, others: personal wallet
+      dstAddress, // Bitcoin: Radfi trading wallet (resolved above); others: personal wallet
       solver: '0x0000000000000000000000000000000000000000', // Optional specific solver address (address(0) = any solver)
       data: '0x', // Additional arbitrary data
     } satisfies CreateIntentParams;
