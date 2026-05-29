@@ -148,6 +148,10 @@ export type RelayAndWaitParams = {
   chainKey: SpokeChainKey;
   relayerApiEndpoint: HttpUrl;
   timeout: number | undefined;
+  // Identity used to poll `get_transaction_packets`, when it differs from the submit `srcTxHash`.
+  // Bitcoin on-demand submits under tx_hash "withdraw" but the relay tracks the packet under a
+  // derived id (`od:<keccak256(payload_hex)>`). Defaults to `srcTxHash` for every other flow.
+  pollTxHash?: string;
 };
 
 async function postRequest<T extends RelayAction>(
@@ -390,7 +394,7 @@ export async function waitUntilIntentExecuted(payload: WaitUntilIntentExecutedPa
  */
 export async function relayTxAndWaitPacket(params: RelayAndWaitParams): Promise<Result<PacketData>> {
   try {
-    const { srcTxHash, data, chainKey, relayerApiEndpoint, timeout = DEFAULT_RELAY_TX_TIMEOUT } = params;
+    const { srcTxHash, data, chainKey, relayerApiEndpoint, timeout = DEFAULT_RELAY_TX_TIMEOUT, pollTxHash } = params;
     const intentRelayChainId = getIntentRelayChainId(chainKey).toString();
 
     const isSplitTxChain = isSolanaChainKeyType(chainKey) || isBitcoinChainKeyType(chainKey);
@@ -415,7 +419,9 @@ export async function relayTxAndWaitPacket(params: RelayAndWaitParams): Promise<
 
     return await waitUntilIntentExecuted({
       intentRelayChainId,
-      srcTxHash,
+      // The relay may track the packet under a different id than the submit tx_hash (Bitcoin
+      // on-demand: submit "withdraw", poll the derived `od:<hash>`). Defaults to the submit id.
+      srcTxHash: pollTxHash ?? srcTxHash,
       timeout,
       apiUrl: relayerApiEndpoint,
     });

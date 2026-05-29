@@ -791,12 +791,12 @@ describe('relayTxAndWaitPacket', () => {
       });
     });
 
-    it('forwards an arbitrary tx_hash and a JSON-object `data` payload for split-tx chains', async () => {
-      // money-market borrow/withdraw on Bitcoin relay the signed payload as a JSON object under a
-      // literal "withdraw" tx_hash (the on-demand relay shape produced by MoneyMarketService).
-      // The generic relay must forward both verbatim and poll by the same tx_hash.
-      const onDemandPayload = { payload_hex: '7b22737263', signature: 'AUBsig' };
-      const packet = buildPacket({ status: 'executed', src_tx_hash: 'withdraw' });
+    it('submits under srcTxHash + JSON-object data but polls under pollTxHash (Bitcoin on-demand)', async () => {
+      // Bitcoin on-demand borrow/withdraw submit the signed payload (JSON object) under the literal
+      // "withdraw" tx_hash, but the relay tracks the packet under a derived id — so polling uses
+      // `pollTxHash` (od:<keccak256(payload_hex)>), not "withdraw".
+      const onDemandPayload = { payload_hex: '7b22737263', signature: 'aabbcc' };
+      const packet = buildPacket({ status: 'executed', src_tx_hash: 'od:deadbeef' });
       mockFetch
         .mockResolvedValueOnce(jsonResponse({ success: true, message: 'ok' } satisfies SubmitTxResponse))
         .mockResolvedValueOnce(jsonResponse({ success: true, data: [packet] } satisfies GetTransactionPacketsResponse));
@@ -807,13 +807,15 @@ describe('relayTxAndWaitPacket', () => {
         chainKey: ChainKeys.BITCOIN_MAINNET,
         relayerApiEndpoint: API_URL,
         timeout: undefined,
+        pollTxHash: 'od:deadbeef',
       });
 
       expect(result).toEqual({ ok: true, value: packet });
       const submitBody = JSON.parse(mockFetch.mock.calls[0]?.[1].body);
       expect(submitBody.params).toEqual({ chain_id: '627463', tx_hash: 'withdraw', data: onDemandPayload });
+      // polling uses the relay-derived id, NOT the submit "withdraw"
       const pollBody = JSON.parse(mockFetch.mock.calls[1]?.[1].body);
-      expect(pollBody.params.tx_hash).toBe('withdraw');
+      expect(pollBody.params.tx_hash).toBe('od:deadbeef');
     });
 
     it('forwards the explicit timeout to waitUntilIntentExecuted', async () => {

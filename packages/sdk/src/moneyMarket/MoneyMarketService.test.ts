@@ -26,7 +26,7 @@ import {
 } from '@sodax/types';
 import { Sodax } from '../shared/entities/Sodax.js';
 import { SodaxError } from '../errors/SodaxError.js';
-import { decodeFunctionData } from 'viem';
+import { decodeFunctionData, keccak256, stringToBytes } from 'viem';
 import { poolAbi } from '../shared/abis/pool.abi.js';
 import { EvmVaultTokenService } from '../shared/services/hub/EvmVaultTokenService.js';
 
@@ -3090,11 +3090,13 @@ describe('borrow / withdraw: relayData is forwarded to relayTxAndWaitPacket on S
       walletProvider: mockBitcoinProvider,
     });
 
-    // Bitcoin borrow/withdraw are on-demand: tx_hash is the literal "withdraw" and the signed
-    // payload travels in `data` as a JSON object (the {address,payload} relayData is dropped).
+    // Bitcoin borrow/withdraw are on-demand: submit tx_hash is the literal "withdraw" and the signed
+    // payload travels in `data` as a JSON object (the {address,payload} relayData is dropped). The
+    // relay tracks the packet under `od:<keccak256 of the ASCII payload_hex>`, so polling uses that.
     const relayArg = mocks.relayTxAndWaitPacket.mock.calls[0]?.[0];
     expect(relayArg?.srcTxHash).toBe('withdraw');
     expect(relayArg?.data).toEqual(signedPayload);
+    expect(relayArg?.pollTxHash).toBe(`od:${keccak256(stringToBytes(signedPayload.payload_hex)).slice(2)}`);
   });
 });
 

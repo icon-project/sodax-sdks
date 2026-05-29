@@ -1,4 +1,4 @@
-import { encodeFunctionData, isAddress } from 'viem';
+import { encodeFunctionData, isAddress, keccak256, stringToBytes } from 'viem';
 import { mapRelayFailure } from '../errors/relay-error-mapping.js';
 import {
   verifyFailed,
@@ -288,8 +288,11 @@ export class MoneyMarketService {
    * Build the relay submit/poll identity for an on-demand action (borrow/withdraw).
    *
    * Bitcoin borrow/withdraw are on-demand: there is no broadcast transaction — the spoke result is
-   * the signed withdrawal payload JSON. The relay tracks these under the literal "withdraw" tx_hash
-   * with the signed payload carried in `data`. Every other chain relays by its real spoke tx hash.
+   * the signed payload JSON. The relay accepts the submit under the literal "withdraw" tx_hash with
+   * the signed payload (as a JSON object) in `data`, then tracks the resulting packet under a derived
+   * id: `od:` + keccak256 of the ASCII `payload_hex` string (hash the hex characters, not the decoded
+   * bytes). Polling must use that derived id (`pollTxHash`), not "withdraw". Every other chain relays
+   * and polls by its real spoke tx hash.
    *
    * Only valid for the sendMessage actions (borrow/withdraw). Deposit actions (supply/repay) always
    * relay by their real broadcast txid and must not use this.
@@ -298,12 +301,15 @@ export class MoneyMarketService {
     srcChainKey: SpokeChainKey,
     tx: string,
     relayData: RelayExtraData,
-  ): { srcTxHash: string; data: RelayExtraData | OnDemandRelayData } {
-    // `tx` is the JSON-stringified signed payload from `encodeWithdrawalData`; the relay wants it
-    // as a JSON object (not a string) under the "withdraw" tx_hash.
-    return isBitcoinChainKeyType(srcChainKey)
-      ? { srcTxHash: 'withdraw', data: JSON.parse(tx) as OnDemandRelayData }
-      : { srcTxHash: tx, data: relayData };
+  ): { srcTxHash: string; data: RelayExtraData | OnDemandRelayData; pollTxHash?: string } {
+    if (!isBitcoinChainKeyType(srcChainKey)) {
+      return { srcTxHash: tx, data: relayData };
+    }
+    // `tx` is the JSON-stringified signed payload from `encodeWithdrawalData`.
+    const data = JSON.parse(tx) as OnDemandRelayData;
+    const payloadHex = data.payload_hex.startsWith('0x') ? data.payload_hex.slice(2) : data.payload_hex;
+    const pollTxHash = `od:${keccak256(stringToBytes(payloadHex)).slice(2)}`;
+    return { srcTxHash: 'withdraw', data, pollTxHash };
   }
 
   /**
