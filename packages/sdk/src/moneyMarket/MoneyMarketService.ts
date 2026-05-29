@@ -47,7 +47,7 @@ import {
   isBitcoinChainKeyType,
   isBitcoinWalletProviderType,
 } from '../shared/index.js';
-import type { HubProvider, IntentTxResult, TxHashPair } from '../shared/types/types.js';
+import type { HubProvider, IntentTxResult, RelayExtraData, TxHashPair } from '../shared/types/types.js';
 import {
   type SpokeChainKey,
   type XToken,
@@ -276,6 +276,26 @@ export class MoneyMarketService {
     if (!isRaw && isBitcoinChainKeyType(srcChainKey) && walletProvider && isBitcoinWalletProviderType(walletProvider)) {
       await this.spoke.bitcoin.radfi.ensureRadfiAccessToken(walletProvider);
     }
+  }
+
+  /**
+   * Build the relay submit/poll identity for an on-demand action (borrow/withdraw).
+   *
+   * Bitcoin borrow/withdraw are on-demand: there is no broadcast transaction — the spoke result is
+   * the signed withdrawal payload JSON. The relay tracks these under the literal "withdraw" tx_hash
+   * with the signed payload carried in `data`. Every other chain relays by its real spoke tx hash.
+   *
+   * Only valid for the sendMessage actions (borrow/withdraw). Deposit actions (supply/repay) always
+   * relay by their real broadcast txid and must not use this.
+   */
+  private toRelayIdentity(
+    srcChainKey: SpokeChainKey,
+    tx: string,
+    relayData: RelayExtraData,
+  ): { srcTxHash: string; data: RelayExtraData | string } {
+    return isBitcoinChainKeyType(srcChainKey)
+      ? { srcTxHash: 'withdraw', data: tx }
+      : { srcTxHash: tx, data: relayData };
   }
 
   /**
@@ -760,8 +780,7 @@ export class MoneyMarketService {
       }
 
       const packet = await relayTxAndWaitPacket({
-        srcTxHash: txResult.value.tx,
-        data: txResult.value.relayData,
+        ...this.toRelayIdentity(srcChainKey, txResult.value.tx, txResult.value.relayData),
         chainKey: srcChainKey,
         relayerApiEndpoint: this.relayerApiEndpoint,
         timeout,
@@ -940,8 +959,7 @@ export class MoneyMarketService {
       }
 
       const packet = await relayTxAndWaitPacket({
-        srcTxHash: txResult.value.tx,
-        data: txResult.value.relayData,
+        ...this.toRelayIdentity(srcChainKey, txResult.value.tx, txResult.value.relayData),
         chainKey: srcChainKey,
         relayerApiEndpoint: this.relayerApiEndpoint,
         timeout,

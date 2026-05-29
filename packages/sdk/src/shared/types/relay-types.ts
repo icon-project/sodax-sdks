@@ -23,7 +23,7 @@ export type RelayAction = 'submit' | 'get_transaction_packets' | 'get_packet';
 export type IntentRelayRequest<T extends RelayAction> = {
   action: T;
   params: T extends 'submit'
-    ? { chain_id: string; tx_hash: string; data?: RelayExtraData }
+    ? { chain_id: string; tx_hash: string; data?: RelayExtraData | string }
     : T extends 'get_transaction_packets'
       ? { chain_id: string; tx_hash: string }
       : T extends 'get_packet'

@@ -134,7 +134,9 @@ export type IntentRelayRequestParams = SubmitTxParams | GetTransactionPacketsPar
 
 export type RelayAndWaitParams = {
   srcTxHash: string;
-  data: RelayExtraData;
+  // Usually `RelayExtraData` ({ address, payload }) for split-tx chains. Bitcoin on-demand
+  // withdrawals (money-market borrow/withdraw) instead pass the signed payload JSON as a string.
+  data: RelayExtraData | string;
   chainKey: SpokeChainKey;
   relayerApiEndpoint: HttpUrl;
   timeout: number | undefined;
@@ -267,10 +269,7 @@ export async function getPacket(
  * - `hardError`: persistent HTTP/transport failure (5xx, network errors after retries) —
  *   stop polling and surface RELAY_POLLING_FAILED with `error` as cause.
  */
-type PollOutcome =
-  | { kind: 'found'; packet: PacketData }
-  | { kind: 'continue' }
-  | { kind: 'hardError'; error: unknown };
+type PollOutcome = { kind: 'found'; packet: PacketData } | { kind: 'continue' } | { kind: 'hardError'; error: unknown };
 
 async function pollForExecutedPacket(payload: WaitUntilIntentExecutedPayload): Promise<PollOutcome> {
   const txPacketsResult = await getTransactionPackets(
@@ -297,9 +296,7 @@ async function pollForExecutedPacket(payload: WaitUntilIntentExecutedPayload): P
 
   const txPackets = txPacketsResult.value;
   if (txPackets.success && txPackets.data.length > 0) {
-    const packet = txPackets.data.find(
-      packet => packet.src_tx_hash.toLowerCase() === payload.srcTxHash.toLowerCase(),
-    );
+    const packet = txPackets.data.find(packet => packet.src_tx_hash.toLowerCase() === payload.srcTxHash.toLowerCase());
     if (packet?.status === 'executed') {
       return { kind: 'found', packet };
     }

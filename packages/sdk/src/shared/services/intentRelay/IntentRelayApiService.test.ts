@@ -590,9 +590,7 @@ describe('waitUntilIntentExecuted', () => {
         .mockResolvedValueOnce(
           httpErrorResponse(404, 'Not Found', '{"success":false,"message":"requested packet not found"}'),
         )
-        .mockResolvedValueOnce(
-          jsonResponse({ success: true, data: [packet] } satisfies GetTransactionPacketsResponse),
-        );
+        .mockResolvedValueOnce(jsonResponse({ success: true, data: [packet] } satisfies GetTransactionPacketsResponse));
 
       const promise = waitUntilIntentExecuted(baseInput);
       // First poll = 404 → continue → 2s sleep → second poll succeeds.
@@ -791,6 +789,31 @@ describe('relayTxAndWaitPacket', () => {
         tx_hash: SPOKE_TX_HASH,
         data,
       });
+    });
+
+    it('forwards an arbitrary tx_hash and a string `data` payload for split-tx chains', async () => {
+      // money-market borrow/withdraw on Bitcoin relay the signed payload JSON as a string `data`
+      // under a literal "withdraw" tx_hash (the on-demand relay shape produced by MoneyMarketService).
+      // The generic relay must forward both verbatim and poll by the same tx_hash.
+      const onDemandPayload = JSON.stringify({ payload_hex: '7b22737263', signature: 'AUBsig' });
+      const packet = buildPacket({ status: 'executed', src_tx_hash: 'withdraw' });
+      mockFetch
+        .mockResolvedValueOnce(jsonResponse({ success: true, message: 'ok' } satisfies SubmitTxResponse))
+        .mockResolvedValueOnce(jsonResponse({ success: true, data: [packet] } satisfies GetTransactionPacketsResponse));
+
+      const result = await relayTxAndWaitPacket({
+        srcTxHash: 'withdraw',
+        data: onDemandPayload,
+        chainKey: ChainKeys.BITCOIN_MAINNET,
+        relayerApiEndpoint: API_URL,
+        timeout: undefined,
+      });
+
+      expect(result).toEqual({ ok: true, value: packet });
+      const submitBody = JSON.parse(mockFetch.mock.calls[0]?.[1].body);
+      expect(submitBody.params).toEqual({ chain_id: '627463', tx_hash: 'withdraw', data: onDemandPayload });
+      const pollBody = JSON.parse(mockFetch.mock.calls[1]?.[1].body);
+      expect(pollBody.params.tx_hash).toBe('withdraw');
     });
 
     it('forwards the explicit timeout to waitUntilIntentExecuted', async () => {
