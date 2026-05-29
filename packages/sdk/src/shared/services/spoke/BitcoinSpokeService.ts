@@ -20,7 +20,13 @@ import type {
 import type { ConfigService } from '../../config/ConfigService.js';
 import { sleep } from '../../utils/shared-utils.js';
 import { RadfiProvider } from '../../entities/btc/RadfiProvider.js';
-import { encodeBtcPayloadToBytes, estimateBitcoinTxSize, normalizePsbtToBase64, type BtcPayload, type WalletMode } from '../../entities/btc/btc-utils.js';
+import {
+  encodeBtcPayloadToBytes,
+  estimateBitcoinTxSize,
+  normalizePsbtToBase64,
+  type BtcPayload,
+  type WalletMode,
+} from '../../entities/btc/btc-utils.js';
 export type { BtcPayload, WalletMode } from '../../entities/btc/btc-utils.js';
 
 initEccLib(ecc);
@@ -503,13 +509,7 @@ export class BitcoinSpokeService {
   public async encodeWithdrawalData<Raw extends boolean>(
     params: SendMessageParams<BitcoinChainKey, Raw> & { walletMode?: WalletMode },
   ): Promise<TxReturnType<BitcoinChainKey, Raw>> {
-    const {
-      srcAddress: from,
-      srcChainKey,
-      dstChainKey,
-      payload: data,
-      walletMode = 'TRADING',
-    } = params;
+    const { srcAddress: from, srcChainKey, dstChainKey, payload: data, walletMode = 'TRADING' } = params;
     let srcAddress = from;
     const addressType = detectBitcoinAddressType(from);
 
@@ -545,12 +545,14 @@ export class BitcoinSpokeService {
     // Pick the message-signing scheme by address type, mirroring RadfiProvider.authenticateWithWallet:
     // P2WPKH/P2TR sign via BIP322 (Taproot uses Schnorr — wallets like Xverse reject ECDSA on it),
     // legacy P2SH/P2PKH use ECDSA.
-    const signature =
-      addressType === 'P2WPKH' || addressType === 'P2TR'
-        ? await params.walletProvider.signBip322Message(orderedPayload)
-        : await params.walletProvider.signEcdsaMessage(orderedPayload);
+    const usesBip322 = addressType === 'P2WPKH' || addressType === 'P2TR';
+    const rawSignature = usesBip322
+      ? await params.walletProvider.signBip322Message(orderedPayload)
+      : await params.walletProvider.signEcdsaMessage(orderedPayload);
 
-    onDemandWithdraw.signature = signature;
+    // The relay expects the signature as hex. signEcdsaMessage already returns hex; BIP322 wallets
+    // return base64, so decode it to hex.
+    onDemandWithdraw.signature = usesBip322 ? Buffer.from(rawSignature, 'base64').toString('hex') : rawSignature;
 
     return JSON.stringify(onDemandWithdraw) satisfies TxReturnType<BitcoinChainKey, false> as TxReturnType<
       BitcoinChainKey,

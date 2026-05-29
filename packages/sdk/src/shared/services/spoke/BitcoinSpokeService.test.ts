@@ -160,7 +160,7 @@ describe('BitcoinSpokeService.getBtcNetwork', () => {
 // =========================================================================
 
 describe('BitcoinSpokeService.fetchUTXOs', () => {
-  it("fetches `${rpcUrl}/address/{addr}/utxo` and returns the JSON array", async () => {
+  it('fetches `${rpcUrl}/address/{addr}/utxo` and returns the JSON array', async () => {
     const utxos = [{ txid: 'aa', vout: 0, value: 1000, status: { confirmed: true } }];
     setFetch(url => {
       expect(url).toBe(`${BTC_RPC_URL}/address/${USER_ADDR}/utxo`);
@@ -176,7 +176,7 @@ describe('BitcoinSpokeService.fetchUTXOs', () => {
 });
 
 describe('BitcoinSpokeService.fetchRawTransaction', () => {
-  it("fetches `${rpcUrl}/tx/{txid}/hex` and returns the raw text", async () => {
+  it('fetches `${rpcUrl}/tx/{txid}/hex` and returns the raw text', async () => {
     setFetch(url => {
       expect(url).toBe(`${BTC_RPC_URL}/tx/${TX_HASH}/hex`);
       return text('deadbeef');
@@ -261,9 +261,9 @@ describe('BitcoinSpokeService.estimateGas', () => {
   });
 
   it('throws when tx is a string (raw mode not supported here)', async () => {
-    await expect(
-      btcSpoke.estimateGas({ chainKey: BTC, tx: 'whatever' as never }),
-    ).rejects.toThrow(/string tx not supported/);
+    await expect(btcSpoke.estimateGas({ chainKey: BTC, tx: 'whatever' as never })).rejects.toThrow(
+      /string tx not supported/,
+    );
   });
 });
 
@@ -370,18 +370,19 @@ describe('BitcoinSpokeService.encodeWithdrawalData', () => {
     expect(parsed.signature).toBeUndefined();
   });
 
-  it('TRADING raw=false on P2WPKH/P2TR → signs via BIP322 and embeds the signature', async () => {
+  it('TRADING raw=false on P2WPKH/P2TR → signs via BIP322 and embeds the signature as hex', async () => {
     // USER_ADDR is a bc1q (P2WPKH) address; Taproot (bc1p) takes the same branch. Wallets like
     // Xverse reject ECDSA message signing on these, so the scheme is picked by address type.
     vi.spyOn(btcSpoke.radfi, 'getTradingWallet').mockResolvedValueOnce({
       tradingAddress: TRADING_ADDR,
     } as never);
-    (mockBtcProvider.signBip322Message as ReturnType<typeof vi.fn>).mockResolvedValueOnce('BIP322SIG');
+    // BIP322 wallets return a base64 signature; the relay expects hex, so it is converted.
+    (mockBtcProvider.signBip322Message as ReturnType<typeof vi.fn>).mockResolvedValueOnce('AAEC');
 
     const result = await btcSpoke.encodeWithdrawalData(sendMessageParams<false>({ raw: false }));
 
     const parsed = JSON.parse(result as unknown as string);
-    expect(parsed.signature).toBe('BIP322SIG');
+    expect(parsed.signature).toBe('000102'); // hex of base64 "AAEC" → bytes 00 01 02
     expect(mockBtcProvider.signBip322Message).toHaveBeenCalledTimes(1);
     expect(mockBtcProvider.signEcdsaMessage).not.toHaveBeenCalled();
   });
