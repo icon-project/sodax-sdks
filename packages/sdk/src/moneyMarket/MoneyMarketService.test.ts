@@ -1464,7 +1464,7 @@ describe('MoneyMarketService.createBorrowIntent', () => {
       expect(call?.walletProvider).toBe(mockEvmProvider);
     });
 
-    it('on Bitcoin source: derives the hub wallet and sends from the Radfi trading address', async () => {
+    it('on Bitcoin source: derives the hub wallet from the trading address but passes the personal srcAddress', async () => {
       const TRADING = 'bc1p-trading-wallet';
       const getEffSpy = vi.spyOn(sodax.spoke.bitcoin, 'getEffectiveWalletAddress').mockResolvedValue(TRADING);
       vi.spyOn(sodax.moneyMarket, 'buildBorrowData').mockReturnValueOnce('0xborrow-data');
@@ -1482,9 +1482,12 @@ describe('MoneyMarketService.createBorrowIntent', () => {
 
       expect(result.ok).toBe(true);
       expect(getEffSpy).toHaveBeenCalledWith(SAMPLE_USER_ADDRESS);
+      // hub wallet is derived from the trading address (where collateral/debt live)
       expect(mocks.getUserHubWalletAddress).toHaveBeenCalledWith(TRADING, ChainKeys.BITCOIN_MAINNET);
       expect(mocks.getUserHubWalletAddress).not.toHaveBeenCalledWith(SAMPLE_USER_ADDRESS, ChainKeys.BITCOIN_MAINNET);
-      expect(sendSpy.mock.calls[0]?.[0]?.srcAddress).toBe(TRADING);
+      // srcAddress stays personal: spoke.sendMessage re-resolves the trading address itself, so
+      // pre-resolving here would double-resolve (getTradingWallet(tradingAddress) → not found).
+      expect(sendSpy.mock.calls[0]?.[0]?.srcAddress).toBe(SAMPLE_USER_ADDRESS);
     });
 
     it('on hub (Sonic): same path applies', async () => {
@@ -1893,7 +1896,7 @@ describe('MoneyMarketService.createWithdrawIntent', () => {
       expect(call?.raw).toBe(false);
     });
 
-    it('on Bitcoin source: derives the hub wallet and sends from the Radfi trading address', async () => {
+    it('on Bitcoin source: derives the hub wallet from the trading address but passes the personal srcAddress', async () => {
       const TRADING = 'bc1p-trading-wallet';
       const getEffSpy = vi.spyOn(sodax.spoke.bitcoin, 'getEffectiveWalletAddress').mockResolvedValue(TRADING);
       vi.spyOn(sodax.moneyMarket, 'buildWithdrawData').mockReturnValueOnce('0xwithdraw-data');
@@ -1911,8 +1914,11 @@ describe('MoneyMarketService.createWithdrawIntent', () => {
 
       expect(result.ok).toBe(true);
       expect(getEffSpy).toHaveBeenCalledWith(SAMPLE_USER_ADDRESS);
+      // hub wallet is derived from the trading address (where collateral/debt live)
       expect(mocks.getUserHubWalletAddress).toHaveBeenCalledWith(TRADING, ChainKeys.BITCOIN_MAINNET);
-      expect(sendSpy.mock.calls[0]?.[0]?.srcAddress).toBe(TRADING);
+      // srcAddress stays personal: spoke.sendMessage re-resolves the trading address itself, so
+      // pre-resolving here would double-resolve (getTradingWallet(tradingAddress) → not found).
+      expect(sendSpy.mock.calls[0]?.[0]?.srcAddress).toBe(SAMPLE_USER_ADDRESS);
     });
   });
 

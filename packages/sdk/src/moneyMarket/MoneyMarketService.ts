@@ -243,9 +243,13 @@ export class MoneyMarketService {
    * Resolve a spoke address to both its effective form and the derived hub wallet.
    *
    * Bitcoin (TRADING mode) routes every spoke action through the per-user Radfi trading wallet,
-   * so the relay derives the hub wallet from the trading address — not the personal address.
-   * Returning both keeps the effective spoke sender and the hub wallet in lockstep (they must
-   * never diverge), mirroring `SwapService`/`BridgeService`. Non-Bitcoin chains pass through.
+   * so the hub wallet is derived from the trading address — not the personal address. The hub
+   * wallet (where collateral/debt live) therefore always uses `effectiveAddress`. Non-Bitcoin
+   * chains pass through.
+   *
+   * `effectiveAddress` is consumed only by the deposit path (supply/repay), which does NOT
+   * re-resolve the trading address itself. The sendMessage path (borrow/withdraw) re-resolves
+   * internally, so those callers pass the personal address through and use only `hubWallet`.
    *
    * This is the WRITE path (authoritative, network resolve, may fail/gate). Reads resolve the
    * Bitcoin trading address locally in dapp-kit (no network) — see `resolveBtcReadAddress`.
@@ -823,10 +827,12 @@ export class MoneyMarketService {
       });
 
       const encodedDstAddress = encodeAddress(dstChainKey, dstAddress);
-      const { effectiveAddress: effectiveSrc, hubWallet: fromHubWallet } = await this.resolveSender(
-        srcChainKey,
-        params.srcAddress,
-      );
+      // Only the hub wallet needs the effective (Bitcoin trading) address — that's where the
+      // collateral/debt lives. srcAddress stays the personal address because `SpokeService.sendMessage`
+      // resolves the effective address itself (unlike the deposit path used by supply/repay, which
+      // does not). Passing the already-resolved trading address here would double-resolve it
+      // (getTradingWallet(tradingAddress) → "Trading wallet not found").
+      const { hubWallet: fromHubWallet } = await this.resolveSender(srcChainKey, params.srcAddress);
 
       const payload: Hex = this.buildBorrowData(
         fromHubWallet,
@@ -838,7 +844,7 @@ export class MoneyMarketService {
 
       const coreParams = {
         srcChainKey,
-        srcAddress: effectiveSrc as GetAddressType<K>,
+        srcAddress: params.srcAddress as GetAddressType<K>,
         dstChainKey: HUB_CHAIN_KEY,
         dstAddress: fromHubWallet,
         payload,
@@ -1001,10 +1007,12 @@ export class MoneyMarketService {
       );
 
       const encodedDstAddress = encodeAddress(dstChainKey, dstAddress);
-      const { effectiveAddress: effectiveSrc, hubWallet: fromHubWallet } = await this.resolveSender(
-        srcChainKey,
-        params.srcAddress,
-      );
+      // Only the hub wallet needs the effective (Bitcoin trading) address — that's where the
+      // collateral/debt lives. srcAddress stays the personal address because `SpokeService.sendMessage`
+      // resolves the effective address itself (unlike the deposit path used by supply/repay, which
+      // does not). Passing the already-resolved trading address here would double-resolve it
+      // (getTradingWallet(tradingAddress) → "Trading wallet not found").
+      const { hubWallet: fromHubWallet } = await this.resolveSender(srcChainKey, params.srcAddress);
 
       const payload: Hex = this.buildWithdrawData(
         fromHubWallet,
@@ -1016,7 +1024,7 @@ export class MoneyMarketService {
 
       const coreParams = {
         srcChainKey,
-        srcAddress: effectiveSrc as GetAddressType<K>,
+        srcAddress: params.srcAddress as GetAddressType<K>,
         dstChainKey: HUB_CHAIN_KEY,
         dstAddress: fromHubWallet,
         payload,
