@@ -47,7 +47,13 @@ import {
   isBitcoinChainKeyType,
   isBitcoinWalletProviderType,
 } from '../shared/index.js';
-import type { HubProvider, IntentTxResult, RelayExtraData, TxHashPair } from '../shared/types/types.js';
+import type {
+  HubProvider,
+  IntentTxResult,
+  OnDemandRelayData,
+  RelayExtraData,
+  TxHashPair,
+} from '../shared/types/types.js';
 import {
   type SpokeChainKey,
   type XToken,
@@ -292,9 +298,11 @@ export class MoneyMarketService {
     srcChainKey: SpokeChainKey,
     tx: string,
     relayData: RelayExtraData,
-  ): { srcTxHash: string; data: RelayExtraData | string } {
+  ): { srcTxHash: string; data: RelayExtraData | OnDemandRelayData } {
+    // `tx` is the JSON-stringified signed payload from `encodeWithdrawalData`; the relay wants it
+    // as a JSON object (not a string) under the "withdraw" tx_hash.
     return isBitcoinChainKeyType(srcChainKey)
-      ? { srcTxHash: 'withdraw', data: tx }
+      ? { srcTxHash: 'withdraw', data: JSON.parse(tx) as OnDemandRelayData }
       : { srcTxHash: tx, data: relayData };
   }
 

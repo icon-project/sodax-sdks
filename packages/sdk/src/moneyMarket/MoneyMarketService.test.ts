@@ -3070,12 +3070,14 @@ describe('borrow / withdraw: relayData is forwarded to relayTxAndWaitPacket on S
     expect(mocks.relayTxAndWaitPacket.mock.calls[0]?.[0]?.data).toBe(extraData);
   });
 
-  it('withdraw on Bitcoin: relays the signed payload as `data` under the literal "withdraw" tx_hash', async () => {
+  it('withdraw on Bitcoin: relays the signed payload object as `data` under the literal "withdraw" tx_hash', async () => {
     const extraData = { address: HUB_WALLET, payload: '0xbtc-payload' as `0x${string}` };
+    const signedPayload = { payload_hex: '7b22737263', signature: 'AUBsig' };
     vi.spyOn(sodax.moneyMarket, 'createWithdrawIntent').mockResolvedValueOnce({
       ok: true,
       value: {
-        tx: '0xbtc-tx', // the signed on-demand withdrawal payload — there is no broadcast txid
+        // the signed on-demand withdrawal payload (JSON string) — there is no broadcast txid
+        tx: JSON.stringify(signedPayload),
         relayData: extraData,
       },
     });
@@ -3089,10 +3091,10 @@ describe('borrow / withdraw: relayData is forwarded to relayTxAndWaitPacket on S
     });
 
     // Bitcoin borrow/withdraw are on-demand: tx_hash is the literal "withdraw" and the signed
-    // payload travels in `data` (the {address,payload} relayData is dropped for this path).
+    // payload travels in `data` as a JSON object (the {address,payload} relayData is dropped).
     const relayArg = mocks.relayTxAndWaitPacket.mock.calls[0]?.[0];
     expect(relayArg?.srcTxHash).toBe('withdraw');
-    expect(relayArg?.data).toBe('0xbtc-tx');
+    expect(relayArg?.data).toEqual(signedPayload);
   });
 });
 

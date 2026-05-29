@@ -10,13 +10,21 @@ import { retry } from '../../utils/shared-utils.js';
 import type {
   RelayAction,
   RelayExtraData,
+  OnDemandRelayData,
   IntentDeliveryInfo,
   IntentRelayRequest,
   WaitUntilIntentExecutedPayload,
 } from '../../types/relay-types.js';
 import { isBitcoinChainKeyType, isSolanaChainKeyType } from '../../guards.js';
 
-export type { RelayAction, RelayExtraData, IntentDeliveryInfo, IntentRelayRequest, WaitUntilIntentExecutedPayload };
+export type {
+  RelayAction,
+  RelayExtraData,
+  OnDemandRelayData,
+  IntentDeliveryInfo,
+  IntentRelayRequest,
+  WaitUntilIntentExecutedPayload,
+};
 
 export type RelayTxStatus = 'pending' | 'validating' | 'executing' | 'executed';
 
@@ -135,8 +143,8 @@ export type IntentRelayRequestParams = SubmitTxParams | GetTransactionPacketsPar
 export type RelayAndWaitParams = {
   srcTxHash: string;
   // Usually `RelayExtraData` ({ address, payload }) for split-tx chains. Bitcoin on-demand
-  // withdrawals (money-market borrow/withdraw) instead pass the signed payload JSON as a string.
-  data: RelayExtraData | string;
+  // borrow/withdraw instead pass the signed payload as an `OnDemandRelayData` JSON object.
+  data: RelayExtraData | OnDemandRelayData;
   chainKey: SpokeChainKey;
   relayerApiEndpoint: HttpUrl;
   timeout: number | undefined;

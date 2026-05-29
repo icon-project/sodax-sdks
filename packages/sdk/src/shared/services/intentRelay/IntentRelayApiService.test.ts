@@ -791,11 +791,11 @@ describe('relayTxAndWaitPacket', () => {
       });
     });
 
-    it('forwards an arbitrary tx_hash and a string `data` payload for split-tx chains', async () => {
-      // money-market borrow/withdraw on Bitcoin relay the signed payload JSON as a string `data`
-      // under a literal "withdraw" tx_hash (the on-demand relay shape produced by MoneyMarketService).
+    it('forwards an arbitrary tx_hash and a JSON-object `data` payload for split-tx chains', async () => {
+      // money-market borrow/withdraw on Bitcoin relay the signed payload as a JSON object under a
+      // literal "withdraw" tx_hash (the on-demand relay shape produced by MoneyMarketService).
       // The generic relay must forward both verbatim and poll by the same tx_hash.
-      const onDemandPayload = JSON.stringify({ payload_hex: '7b22737263', signature: 'AUBsig' });
+      const onDemandPayload = { payload_hex: '7b22737263', signature: 'AUBsig' };
       const packet = buildPacket({ status: 'executed', src_tx_hash: 'withdraw' });
       mockFetch
         .mockResolvedValueOnce(jsonResponse({ success: true, message: 'ok' } satisfies SubmitTxResponse))
