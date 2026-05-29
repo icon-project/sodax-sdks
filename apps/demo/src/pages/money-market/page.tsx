@@ -4,7 +4,6 @@ import { useParams, useNavigate } from 'react-router';
 import { ChainSelector } from '@/components/shared/ChainSelector';
 import { SupplyAssetsList } from '@/components/mm/lists/SupplyAssetsList';
 import { BitcoinTradingSection } from '@/components/mm/BitcoinTradingSection';
-import { useBtcTradingBalance } from '@/hooks/useBtcTradingBalance';
 import { Button } from '@/components/ui/button';
 import { useXAccount } from '@sodax/wallet-sdk-react';
 import { useAppStore } from '@/zustand/useAppStore';
@@ -42,12 +41,9 @@ export default function MoneyMarketPage() {
 
   const xAccount = useXAccount({ xChainId: chainId });
 
-  // On Bitcoin the hub wallet is derived from the Radfi trading address, not the personal wallet.
-  const { isBitcoin, tradingAddress } = useBtcTradingBalance(chainId);
-  const hubSpokeAddress = isBitcoin ? tradingAddress : xAccount?.address;
-
+  // Pass the personal address; the hook resolves the Bitcoin trading-wallet hub address internally.
   const { data: walletAddressOnHub } = useGetUserHubWalletAddress({
-    params: { spokeChainId: chainId, spokeAddress: hubSpokeAddress },
+    params: { spokeChainId: chainId, spokeAddress: xAccount?.address },
   });
 
   return (

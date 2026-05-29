@@ -236,7 +236,7 @@ export class MoneyMarketService {
     this.spoke = spoke;
     this.partnerFee = config.moneyMarket.partnerFee;
     this.relayerApiEndpoint = config.relay.relayerApiEndpoint;
-    this.data = new MoneyMarketDataService({ hubProvider, config: config, spoke });
+    this.data = new MoneyMarketDataService({ hubProvider, config: config });
   }
 
   /**
@@ -247,8 +247,8 @@ export class MoneyMarketService {
    * Returning both keeps the effective spoke sender and the hub wallet in lockstep (they must
    * never diverge), mirroring `SwapService`/`BridgeService`. Non-Bitcoin chains pass through.
    *
-   * Read-side counterpart: {@link MoneyMarketDataService.resolveHubWallet} (same Bitcoin guard,
-   * returns only the hub wallet).
+   * This is the WRITE path (authoritative, network resolve, may fail/gate). Reads resolve the
+   * Bitcoin trading address locally in dapp-kit (no network) — see `resolveBtcReadAddress`.
    */
   private async resolveSender(
     chainKey: SpokeChainKey,
