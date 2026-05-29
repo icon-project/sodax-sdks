@@ -80,8 +80,7 @@ export function RepayModal({
 
   // On Bitcoin the repay deposit is pulled from the Radfi trading wallet, so the spendable
   // balance is the trading-wallet balance, not the personal wallet's UTXO balance.
-  const { isBitcoin, tradingAddress, tradingBalanceSats } = useBtcTradingBalance(srcChainKey);
-  const btcNotReady = isBitcoin && (!tradingAddress || tradingBalanceSats === 0n);
+  const { isBitcoin, tradingBalanceSats, notReady: btcNotReady } = useBtcTradingBalance(srcChainKey);
 
   const isSameChain = srcChainKey === dstChainKey;
 

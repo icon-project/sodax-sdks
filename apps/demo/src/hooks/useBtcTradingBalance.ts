@@ -6,6 +6,9 @@ interface UseBtcTradingBalanceResult {
   isBitcoin: boolean;
   tradingAddress: string | undefined;
   tradingBalanceSats: bigint;
+  /** True when Bitcoin is selected but the trading wallet can't fund a source action yet
+   * (not signed in / empty balance). Used to gate supply/repay. */
+  notReady: boolean;
 }
 
 /**
@@ -25,9 +28,12 @@ export function useBtcTradingBalance(chainId: SpokeChainKey): UseBtcTradingBalan
     params: { walletProvider: isBitcoin ? walletProvider : undefined, tradingAddress },
   });
 
+  const tradingBalanceSats = data?.btcSatoshi ?? 0n;
+
   return {
     isBitcoin,
     tradingAddress,
-    tradingBalanceSats: data?.btcSatoshi ?? 0n,
+    tradingBalanceSats,
+    notReady: isBitcoin && (!tradingAddress || tradingBalanceSats === 0n),
   };
 }

@@ -52,6 +52,7 @@ import {
   type SpokeChainKey,
   type XToken,
   type Address,
+  type IWalletProvider,
   type Hex,
   type HttpUrl,
   type EvmContractCall,
@@ -239,15 +240,35 @@ export class MoneyMarketService {
   }
 
   /**
-   * Resolve the spoke address used to derive the user's hub wallet.
+   * Resolve a spoke address to both its effective form and the derived hub wallet.
    *
    * Bitcoin (TRADING mode) routes every spoke action through the per-user Radfi trading wallet,
    * so the relay derives the hub wallet from the trading address — not the personal address.
-   * Resolve to the trading address before deriving the hub wallet, mirroring
-   * `SwapService`/`BridgeService`. Non-Bitcoin chains pass through unchanged.
+   * Returning both keeps the effective spoke sender and the hub wallet in lockstep (they must
+   * never diverge), mirroring `SwapService`/`BridgeService`. Non-Bitcoin chains pass through.
    */
-  private async resolveHubWalletAddress(chainKey: SpokeChainKey, address: string): Promise<string> {
-    return isBitcoinChainKeyType(chainKey) ? await this.spoke.bitcoin.getEffectiveWalletAddress(address) : address;
+  private async resolveSender(
+    chainKey: SpokeChainKey,
+    address: string,
+  ): Promise<{ effectiveAddress: string; hubWallet: Address }> {
+    const effectiveAddress = isBitcoinChainKeyType(chainKey)
+      ? await this.spoke.bitcoin.getEffectiveWalletAddress(address)
+      : address;
+    return { effectiveAddress, hubWallet: await this.hubProvider.getUserHubWalletAddress(effectiveAddress, chainKey) };
+  }
+
+  /**
+   * Ensure the Radfi session token is valid before a Bitcoin deposit (supply/repay). No-op for
+   * non-Bitcoin chains, raw mode, or non-Bitcoin wallet providers. Mirrors SwapService/BridgeService.
+   */
+  private async ensureBitcoinDepositToken(
+    srcChainKey: SpokeChainKey,
+    isRaw: boolean | undefined,
+    walletProvider: IWalletProvider | undefined,
+  ): Promise<void> {
+    if (!isRaw && isBitcoinChainKeyType(srcChainKey) && walletProvider && isBitcoinWalletProviderType(walletProvider)) {
+      await this.spoke.bitcoin.radfi.ensureRadfiAccessToken(walletProvider);
+    }
   }
 
   /**
@@ -623,31 +644,20 @@ export class MoneyMarketService {
       const dstChainKey = params.dstChainKey ?? srcChainKey;
       const dstAddress = params.dstAddress ?? params.srcAddress;
 
-      // Bitcoin deposits are pulled from the Radfi trading wallet; make sure the session token is
-      // valid before signing, mirroring SwapService/BridgeService.
-      if (
-        isBitcoinChainKeyType(srcChainKey) &&
-        _params.raw === false &&
-        isBitcoinWalletProviderType(_params.walletProvider)
-      ) {
-        await this.spoke.bitcoin.radfi.ensureRadfiAccessToken(_params.walletProvider);
-      }
+      await this.ensureBitcoinDepositToken(srcChainKey, _params.raw, _params.walletProvider);
 
-      const [effectiveSrc, effectiveDst] = await Promise.all([
-        this.resolveHubWalletAddress(srcChainKey, params.srcAddress),
-        this.resolveHubWalletAddress(dstChainKey, dstAddress),
+      const [src, dst] = await Promise.all([
+        this.resolveSender(srcChainKey, params.srcAddress),
+        this.resolveSender(dstChainKey, dstAddress),
       ]);
-
-      const [fromHubWallet, toHubWallet] = await Promise.all([
-        this.hubProvider.getUserHubWalletAddress(effectiveSrc, srcChainKey),
-        this.hubProvider.getUserHubWalletAddress(effectiveDst, dstChainKey),
-      ]);
+      const fromHubWallet = src.hubWallet;
+      const toHubWallet = dst.hubWallet;
 
       const data: Hex = this.buildSupplyData(srcChainKey, params.token, params.amount, toHubWallet);
 
       const coreParams = {
         srcChainKey,
-        srcAddress: effectiveSrc as GetAddressType<K>,
+        srcAddress: src.effectiveAddress as GetAddressType<K>,
         to: fromHubWallet,
         token: params.token as GetTokenAddressType<K>,
         amount: params.amount,
@@ -808,8 +818,10 @@ export class MoneyMarketService {
       });
 
       const encodedDstAddress = encodeAddress(dstChainKey, dstAddress);
-      const effectiveSrc = await this.resolveHubWalletAddress(srcChainKey, params.srcAddress);
-      const fromHubWallet = await this.hubProvider.getUserHubWalletAddress(effectiveSrc, srcChainKey);
+      const { effectiveAddress: effectiveSrc, hubWallet: fromHubWallet } = await this.resolveSender(
+        srcChainKey,
+        params.srcAddress,
+      );
 
       const payload: Hex = this.buildBorrowData(
         fromHubWallet,
@@ -984,8 +996,10 @@ export class MoneyMarketService {
       );
 
       const encodedDstAddress = encodeAddress(dstChainKey, dstAddress);
-      const effectiveSrc = await this.resolveHubWalletAddress(srcChainKey, params.srcAddress);
-      const fromHubWallet = await this.hubProvider.getUserHubWalletAddress(effectiveSrc, srcChainKey);
+      const { effectiveAddress: effectiveSrc, hubWallet: fromHubWallet } = await this.resolveSender(
+        srcChainKey,
+        params.srcAddress,
+      );
 
       const payload: Hex = this.buildWithdrawData(
         fromHubWallet,
@@ -1147,31 +1161,20 @@ export class MoneyMarketService {
       const dstChainKey = params.dstChainKey ?? srcChainKey;
       const dstAddress = params.dstAddress ?? params.srcAddress;
 
-      // Bitcoin deposits are pulled from the Radfi trading wallet; make sure the session token is
-      // valid before signing, mirroring SwapService/BridgeService.
-      if (
-        isBitcoinChainKeyType(srcChainKey) &&
-        _params.raw === false &&
-        isBitcoinWalletProviderType(_params.walletProvider)
-      ) {
-        await this.spoke.bitcoin.radfi.ensureRadfiAccessToken(_params.walletProvider);
-      }
+      await this.ensureBitcoinDepositToken(srcChainKey, _params.raw, _params.walletProvider);
 
-      const [effectiveSrc, effectiveDst] = await Promise.all([
-        this.resolveHubWalletAddress(srcChainKey, params.srcAddress),
-        this.resolveHubWalletAddress(dstChainKey, dstAddress),
+      const [src, dst] = await Promise.all([
+        this.resolveSender(srcChainKey, params.srcAddress),
+        this.resolveSender(dstChainKey, dstAddress),
       ]);
-
-      const [fromHubWallet, toHubWallet] = await Promise.all([
-        this.hubProvider.getUserHubWalletAddress(effectiveSrc, srcChainKey),
-        this.hubProvider.getUserHubWalletAddress(effectiveDst, dstChainKey),
-      ]);
+      const fromHubWallet = src.hubWallet;
+      const toHubWallet = dst.hubWallet;
 
       const data: Hex = this.buildRepayData(srcChainKey, params.token, params.amount, toHubWallet);
 
       const coreParams = {
         srcChainKey,
-        srcAddress: effectiveSrc as GetAddressType<K>,
+        srcAddress: src.effectiveAddress as GetAddressType<K>,
         to: fromHubWallet,
         token: params.token as GetTokenAddressType<K>,
         amount: params.amount,

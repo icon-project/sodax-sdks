@@ -73,14 +73,17 @@ export class MoneyMarketDataService {
   }
 
   /**
-   * Resolve the spoke address used to derive the user's hub wallet.
+   * Derive the hub wallet for a spoke-chain user address.
    *
    * Bitcoin (TRADING mode) routes positions through the per-user Radfi trading wallet, so the
-   * hub wallet is derived from the trading address — not the personal address. Resolve to the
-   * trading address before deriving the hub wallet. Non-Bitcoin chains pass through unchanged.
+   * hub wallet is derived from the trading address — not the personal address. Resolves the
+   * effective (trading) address first, then derives the hub wallet. Non-Bitcoin passes through.
    */
-  private async resolveHubWalletAddress(chainKey: SpokeChainKey, address: string): Promise<string> {
-    return isBitcoinChainKeyType(chainKey) ? await this.spoke.bitcoin.getEffectiveWalletAddress(address) : address;
+  private async resolveHubWallet(chainKey: SpokeChainKey, address: string): Promise<Address> {
+    const effectiveAddress = isBitcoinChainKeyType(chainKey)
+      ? await this.spoke.bitcoin.getEffectiveWalletAddress(address)
+      : address;
+    return this.hubProvider.getUserHubWalletAddress(effectiveAddress, chainKey);
   }
 
   /**
@@ -145,8 +148,7 @@ export class MoneyMarketDataService {
     userAddress: string,
     aTokens: readonly Address[],
   ): Promise<Map<Address, bigint>> {
-    const effectiveAddress = await this.resolveHubWalletAddress(spokeChainId, userAddress);
-    const hubWalletAddress = await this.hubProvider.getUserHubWalletAddress(effectiveAddress, spokeChainId);
+    const hubWalletAddress = await this.resolveHubWallet(spokeChainId, userAddress);
     return this.getATokensBalances(aTokens, hubWalletAddress);
   }
 
@@ -216,8 +218,7 @@ export class MoneyMarketDataService {
     spokeChainId: SpokeChainKey,
     userAddress: string,
   ): Promise<readonly [readonly UserReserveData[], number]> {
-    const effectiveAddress = await this.resolveHubWalletAddress(spokeChainId, userAddress);
-    const hubWalletAddress = await this.hubProvider.getUserHubWalletAddress(effectiveAddress, spokeChainId);
+    const hubWalletAddress = await this.resolveHubWallet(spokeChainId, userAddress);
 
     return this.uiPoolDataProviderService.getUserReservesData(hubWalletAddress);
   }
@@ -280,8 +281,7 @@ export class MoneyMarketDataService {
     userReserves: UserReserveDataHumanized[];
     userEmodeCategoryId: number;
   }> {
-    const effectiveAddress = await this.resolveHubWalletAddress(spokeChainId, userAddress);
-    const hubWalletAddress = await this.hubProvider.getUserHubWalletAddress(effectiveAddress, spokeChainId);
+    const hubWalletAddress = await this.resolveHubWallet(spokeChainId, userAddress);
 
     return this.uiPoolDataProviderService.getUserReservesHumanized(hubWalletAddress);
   }
