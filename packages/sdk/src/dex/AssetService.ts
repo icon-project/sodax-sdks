@@ -692,7 +692,7 @@ export class AssetService {
     }
 
     calls.push(EvmVaultTokenService.encodeWithdraw(assetConfig.vault, assetConfig.hubAsset, vaultAmount));
-    const translatedAmount = EvmVaultTokenService.translateIncomingDecimals(assetConfig.decimals, vaultAmount);
+    const translatedAmount = EvmVaultTokenService.translateOutgoingDecimals(assetConfig.decimals, vaultAmount);
 
     if (dstChainKey === this.hubProvider.chainConfig.chain.key) {
       if (

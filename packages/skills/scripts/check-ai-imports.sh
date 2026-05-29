@@ -5,7 +5,8 @@
 #
 # For each tracked SDK package (sdk, wallet-sdk-core, wallet-sdk-react, dapp-kit),
 # walks these markdown surfaces:
-#   - packages/skills/knowledge/<pkg>/**/*.md     (moved from <pkg>/ai-exported)
+#   - packages/skills/skills/sodax-<pkg>/integration/knowledge/**/*.md
+#   - packages/skills/skills/sodax-<pkg>/migration-v1-to-v2/knowledge/**/*.md
 #   - packages/<pkg>/README.md
 #   - packages/<pkg>/CLAUDE.md
 #   - packages/<pkg>/src/**/README.md             (in-source per-folder READMEs)
@@ -30,7 +31,8 @@ fi
 # Enumerate every markdown file owned by package $1's documentation surface.
 list_docs_for() {
   local pkg=$1
-  find "knowledge/$pkg" -name '*.md' -type f 2>/dev/null
+  find "skills/sodax-$pkg/integration/knowledge" "skills/sodax-$pkg/migration-v1-to-v2/knowledge" \
+    -name '*.md' -type f 2>/dev/null
   for f in "../$pkg/README.md" "../$pkg/CLAUDE.md"; do
     [[ -f "$f" ]] && echo "$f"
   done

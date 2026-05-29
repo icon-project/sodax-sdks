@@ -58,6 +58,7 @@ export const moneyMarketSupportedTokens = {
     spokeChainConfig[ChainKeys.BSC_MAINNET].supportedTokens.bnUSD,
     spokeChainConfig[ChainKeys.BSC_MAINNET].supportedTokens.SODA,
     spokeChainConfig[ChainKeys.BSC_MAINNET].supportedTokens.weETH,
+    spokeChainConfig[ChainKeys.BSC_MAINNET].supportedTokens.USDC,
     spokeChainConfig[ChainKeys.BSC_MAINNET].supportedTokens.USDT,
   ] as const satisfies XToken[],
   [ChainKeys.HYPEREVM_MAINNET]: [
@@ -73,6 +74,7 @@ export const moneyMarketSupportedTokens = {
     spokeChainConfig[ChainKeys.LIGHTLINK_MAINNET].supportedTokens.USDC,
     spokeChainConfig[ChainKeys.LIGHTLINK_MAINNET].supportedTokens['AVAX.LL'],
     spokeChainConfig[ChainKeys.LIGHTLINK_MAINNET].supportedTokens['BNB.LL'],
+    spokeChainConfig[ChainKeys.LIGHTLINK_MAINNET].supportedTokens['BTC.LL'],
     spokeChainConfig[ChainKeys.LIGHTLINK_MAINNET].supportedTokens['SOL.LL'],
     spokeChainConfig[ChainKeys.LIGHTLINK_MAINNET].supportedTokens['XLM.LL'],
     spokeChainConfig[ChainKeys.LIGHTLINK_MAINNET].supportedTokens['INJ.LL'],
@@ -141,6 +143,7 @@ export const moneyMarketSupportedTokens = {
     spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.wstETH,
     spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.USDT,
     spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.WBTC,
+    spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.LL,
   ] as const,
   [ChainKeys.REDBELLY_MAINNET]: [
     spokeChainConfig[ChainKeys.REDBELLY_MAINNET].supportedTokens.bnUSD,
