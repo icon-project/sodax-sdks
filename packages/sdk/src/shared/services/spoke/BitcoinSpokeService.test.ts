@@ -370,17 +370,36 @@ describe('BitcoinSpokeService.encodeWithdrawalData', () => {
     expect(parsed.signature).toBeUndefined();
   });
 
-  it('TRADING raw=false → calls walletProvider.signEcdsaMessage and embeds the signature', async () => {
+  it('TRADING raw=false on P2WPKH/P2TR → signs via BIP322 and embeds the signature', async () => {
+    // USER_ADDR is a bc1q (P2WPKH) address; Taproot (bc1p) takes the same branch. Wallets like
+    // Xverse reject ECDSA message signing on these, so the scheme is picked by address type.
     vi.spyOn(btcSpoke.radfi, 'getTradingWallet').mockResolvedValueOnce({
       tradingAddress: TRADING_ADDR,
     } as never);
-    (mockBtcProvider.signEcdsaMessage as ReturnType<typeof vi.fn>).mockResolvedValueOnce('SIGSIGSIG');
+    (mockBtcProvider.signBip322Message as ReturnType<typeof vi.fn>).mockResolvedValueOnce('BIP322SIG');
 
     const result = await btcSpoke.encodeWithdrawalData(sendMessageParams<false>({ raw: false }));
 
     const parsed = JSON.parse(result as unknown as string);
-    expect(parsed.signature).toBe('SIGSIGSIG');
+    expect(parsed.signature).toBe('BIP322SIG');
+    expect(mockBtcProvider.signBip322Message).toHaveBeenCalledTimes(1);
+    expect(mockBtcProvider.signEcdsaMessage).not.toHaveBeenCalled();
+  });
+
+  it('TRADING raw=false on legacy P2PKH/P2SH → signs via ECDSA and embeds the signature', async () => {
+    vi.spyOn(btcSpoke.radfi, 'getTradingWallet').mockResolvedValueOnce({
+      tradingAddress: TRADING_ADDR,
+    } as never);
+    (mockBtcProvider.signEcdsaMessage as ReturnType<typeof vi.fn>).mockResolvedValueOnce('ECDSASIG');
+
+    const result = await btcSpoke.encodeWithdrawalData(
+      sendMessageParams<false>({ raw: false, srcAddress: '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa' }),
+    );
+
+    const parsed = JSON.parse(result as unknown as string);
+    expect(parsed.signature).toBe('ECDSASIG');
     expect(mockBtcProvider.signEcdsaMessage).toHaveBeenCalledTimes(1);
+    expect(mockBtcProvider.signBip322Message).not.toHaveBeenCalled();
   });
 
   it('TRADING + getTradingWallet rejection → falls back to original srcAddress (catch branch)', async () => {

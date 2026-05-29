@@ -542,7 +542,13 @@ export class BitcoinSpokeService {
       >;
     }
 
-    const signature = await params.walletProvider.signEcdsaMessage(orderedPayload);
+    // Pick the message-signing scheme by address type, mirroring RadfiProvider.authenticateWithWallet:
+    // P2WPKH/P2TR sign via BIP322 (Taproot uses Schnorr — wallets like Xverse reject ECDSA on it),
+    // legacy P2SH/P2PKH use ECDSA.
+    const signature =
+      addressType === 'P2WPKH' || addressType === 'P2TR'
+        ? await params.walletProvider.signBip322Message(orderedPayload)
+        : await params.walletProvider.signEcdsaMessage(orderedPayload);
 
     onDemandWithdraw.signature = signature;
 
