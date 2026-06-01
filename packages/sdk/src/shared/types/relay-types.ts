@@ -5,8 +5,10 @@ export type RelayExtraData = { address: Hex; payload: Hex };
 /**
  * Signed Bitcoin on-demand payload (money-market borrow/withdraw) carried in the relay submit
  * `data` as a JSON object — not a stringified JSON. There is no broadcast tx for these.
+ * `public_key` is the signer's public key, required by the relay to verify a BIP-322 signature
+ * (BIP-322 is not public-key-recoverable, unlike BIP-137).
  */
-export type OnDemandRelayData = { payload_hex: string; signature?: string };
+export type OnDemandRelayData = { payload_hex: string; signature?: string; public_key?: string };
 
 export type IntentDeliveryInfo = {
   srcChainKey: SpokeChainKey;
