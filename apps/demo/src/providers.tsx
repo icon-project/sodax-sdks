@@ -25,8 +25,8 @@ const rpcConfig: RpcConfig = {
     sorobanRpcUrl: process.env.STELLAR_SOROBAN_RPC_URL ?? 'https://rpc.ankr.com/stellar_soroban',
   },
   [ChainKeys.BITCOIN_MAINNET]: {
-    radfiApiUrl: process.env.RADFI_API_URL ?? 'https://api.radfi.co/api',
-    radfiUmsUrl: process.env.RADFI_UMS_URL ?? 'https://ums.radfi.co/api',
+    radfiApiUrl: process.env.RADFI_API_URL ?? 'https://api.bound.exchange/api',
+    radfiUmsUrl: process.env.RADFI_UMS_URL ?? 'https://api.ums.bound.exchange/api',
     rpcUrl: process.env.BITCOIN_RPC_URL ?? 'https://mempool.space/api',
   },
 };

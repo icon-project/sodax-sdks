@@ -108,7 +108,7 @@ Comprehensive hook table across 11 feature domains. Use this when you know the f
 | `useMigrationApprove` | Mutation | Approve before migration (action-discriminated) |
 | `useMigrationAllowance` | Query | Approval check (action-discriminated) |
 
-## Bitcoin / Radfi
+## Bitcoin / Bound Exchange
 
 | Hook | Type | Purpose |
 |---|---|---|
@@ -116,7 +116,7 @@ Comprehensive hook table across 11 feature domains. Use this when you know the f
 | `useRadfiSession` | Utility | Manage full session lifecycle |
 | `useTradingWallet` | Utility | Synchronously read trading wallet from localStorage |
 | `useBitcoinBalance` | Query | BTC balance for any address |
-| `useTradingWalletBalance` | Query | Trading wallet balance from Radfi API |
+| `useTradingWalletBalance` | Query | Trading wallet balance from Bound Exchange API |
 | `useFundTradingWallet` | Mutation | Fund trading wallet from personal wallet |
 | `useRadfiWithdraw` | Mutation | Withdraw from trading wallet |
 | `useExpiredUtxos` | Query | Expired UTXOs (polls 60s) |

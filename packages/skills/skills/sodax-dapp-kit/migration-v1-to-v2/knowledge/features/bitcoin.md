@@ -1,8 +1,8 @@
-# Bitcoin (Radfi) migration — v1 → v2 (dapp-kit)
+# Bitcoin (Bound Exchange) migration — v1 → v2 (dapp-kit)
 
 Pair: [`features/bitcoin.md`](../../../integration/knowledge/features/bitcoin.md).
 
-Bitcoin / Radfi hook surface was new in v1 with limited adoption; v2 standardizes its shapes against the canonical hook conventions. Treat the v2 forms below as the canonical reference — if your v1 code used a different shape, swap to v2's directly.
+Bitcoin / Bound Exchange hook surface was new in v1 with limited adoption; v2 standardizes its shapes against the canonical hook conventions. Treat the v2 forms below as the canonical reference — if your v1 code used a different shape, swap to v2's directly.
 
 ## TL;DR
 

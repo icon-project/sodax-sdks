@@ -12,7 +12,7 @@ export type UseRenewUtxosVars = {
 };
 
 /**
- * React hook for renewing expired UTXOs in the user's Radfi trading wallet. Pure mutation: pass
+ * React hook for renewing expired UTXOs in the user's Bound Exchange trading wallet. Pure mutation: pass
  * `{ txIdVouts, walletProvider }` to `mutate({...})`.
  */
 export function useRenewUtxos({
@@ -32,7 +32,7 @@ export function useRenewUtxos({
       const accessToken = session?.accessToken || radfi.accessToken;
 
       if (!accessToken) {
-        throw new Error('Radfi authentication required. Please login first.');
+        throw new Error('Bound Exchange authentication required. Please login first.');
       }
 
       const buildResult = await radfi.buildRenewUtxoTransaction({ userAddress, txIdVouts }, accessToken);

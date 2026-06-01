@@ -900,7 +900,7 @@ describe('SwapService.createIntent', () => {
       expect(depositCall.to).toBe('0xhubwallet');
     });
 
-    it('invokes Radfi access-token setup with the Bitcoin wallet provider when params.srcChain is Bitcoin and raw=false', async () => {
+    it('invokes Bound Exchange access-token setup with the Bitcoin wallet provider when params.srcChain is Bitcoin and raw=false', async () => {
       const svc = sodax.swaps;
       mocks.getUserHubWalletAddress.mockResolvedValueOnce('0xhubwallet');
       mocks.constructCreateIntentData.mockReturnValueOnce(['0xintentdata', makeIntent(ChainKeys.BITCOIN_MAINNET), 0n]);

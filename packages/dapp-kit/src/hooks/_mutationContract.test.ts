@@ -7,7 +7,7 @@ const HOOKS_DIR = resolve(fileURLToPath(import.meta.url), '..');
 
 /**
  * Manifest of every mutation hook. `nativeThrow: true` marks hooks whose underlying SDK methods
- * throw natively (Radfi APIs) and so don't need `unwrapResult`.
+ * throw natively (Bound Exchange APIs) and so don't need `unwrapResult`.
  *
  * To add a new mutation hook, add its path here. The friction is intentional — it forces explicit
  * registration so the contract is enforced from day one.

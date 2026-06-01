@@ -10,7 +10,7 @@ High-level React hooks library for dApp developers. Wraps `@sodax/sdk` with Reac
 - **Staking** — `useStake`, `useUnstake`, `useInstantUnstake`, `useClaim`, `useCancelUnstake`, approval hooks, info/config/ratio queries
 - **DEX** — `useDexDeposit`, `useDexWithdraw`, `useSupplyLiquidity`, `useDecreaseLiquidity`, `useClaimRewards`, pool/position queries, param builders
 - **Migration** — `useMigrateIcxToSoda`, `useRevertMigrateSodaToIcx`, `useMigratebnUSD`, `useMigrateBaln`, `useMigrationApprove`, `useMigrationAllowance`
-- **Bitcoin (Radfi)** — `useRadfiAuth`, `useRadfiSession`, `useTradingWallet`, `useTradingWalletBalance`, `useBitcoinBalance`, `useFundTradingWallet`, `useRadfiWithdraw`, `useExpiredUtxos`, `useRenewUtxos`
+- **Bitcoin (Bound Exchange)** — `useRadfiAuth`, `useRadfiSession`, `useTradingWallet`, `useTradingWalletBalance`, `useBitcoinBalance`, `useFundTradingWallet`, `useRadfiWithdraw`, `useExpiredUtxos`, `useRenewUtxos`
 - **Partner** — `useFetchAssetsBalances`, `useGetAutoSwapPreferences`, `useIsTokenApproved`, `useApproveToken`, `useSetSwapPreference`, `useFeeClaimSwap`
 - **Recovery** — `useHubAssetBalances`, `useWithdrawHubAsset`
 - **Backend Queries** — Intent tracking, orderbook, money market position queries
@@ -213,13 +213,13 @@ function SwapButton({ intentParams }: { intentParams: CreateIntentParams }) {
 - [`useMigrationApprove()`](src/hooks/migrate/useMigrationApprove.ts) — Approve token spending before migration
 - [`useMigrationAllowance()`](src/hooks/migrate/useMigrationAllowance.ts) — Check if approval is needed
 
-### Bitcoin (Radfi) Hooks
+### Bitcoin (Bound Exchange) Hooks
 
-- [`useRadfiSession()`](src/hooks/bitcoin/useRadfiSession.ts) — Manage Radfi session (login, auto-refresh)
-- [`useRadfiAuth()`](src/hooks/bitcoin/useRadfiAuth.ts) — Authenticate with Radfi via BIP322 signing
+- [`useRadfiSession()`](src/hooks/bitcoin/useRadfiSession.ts) — Manage Bound Exchange session (login, auto-refresh)
+- [`useRadfiAuth()`](src/hooks/bitcoin/useRadfiAuth.ts) — Authenticate with Bound Exchange via BIP322 signing
 - [`useTradingWallet()`](src/hooks/bitcoin/useTradingWallet.ts) — Get trading wallet address from persisted session
 - [`useBitcoinBalance()`](src/hooks/bitcoin/useBitcoinBalance.ts) — BTC balance for any address
-- [`useTradingWalletBalance()`](src/hooks/bitcoin/useTradingWalletBalance.ts) — Trading wallet balance from Radfi API
+- [`useTradingWalletBalance()`](src/hooks/bitcoin/useTradingWalletBalance.ts) — Trading wallet balance from Bound Exchange API
 - [`useFundTradingWallet()`](src/hooks/bitcoin/useFundTradingWallet.ts) — Fund trading wallet from personal wallet
 - [`useRadfiWithdraw()`](src/hooks/bitcoin/useRadfiWithdraw.ts) — Withdraw from trading wallet
 - [`useExpiredUtxos()`](src/hooks/bitcoin/useExpiredUtxos.ts) — Fetch expired UTXOs (polls every 60s)

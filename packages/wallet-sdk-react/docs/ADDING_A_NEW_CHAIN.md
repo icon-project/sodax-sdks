@@ -210,7 +210,7 @@ export type ChainMeta = {
 };
 ```
 
-If the chain has multi-field RPC (Stellar's horizon + soroban, Bitcoin's RPC + Radfi), define a custom entry shape that extends `*RpcConfig` from `@sodax/types`:
+If the chain has multi-field RPC (Stellar's horizon + soroban, Bitcoin's RPC + Bound Exchange), define a custom entry shape that extends `*RpcConfig` from `@sodax/types`:
 
 ```typescript
 export type AptosChainEntry = AptosRpcConfig & { defaults?: AptosWalletDefaults };

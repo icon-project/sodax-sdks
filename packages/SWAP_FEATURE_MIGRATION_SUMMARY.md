@@ -98,7 +98,7 @@ breaking changes" and Concepts 1, 4. Demo-specific deltas:
 ### Other impacts
 
 - `RpcConfig` is now keyed by `ChainKey` values (`rpcConfig[ChainKeys.SONIC_MAINNET]`).
-  `BitcoinRpcConfig` for Bitcoin (Radfi endpoints), `StellarRpcConfig` for Stellar, `string` for
+  `BitcoinRpcConfig` for Bitcoin (Bound Exchange endpoints), `StellarRpcConfig` for Stellar, `string` for
   EVM URLs.
 - `IConfigApi` methods now return `Promise<Result<T>>` (every method).
 - Bitcoin types live under `@sodax/types`'s `bitcoin` sub-path (was `btc`).
@@ -313,7 +313,7 @@ runtime smoke-test (config wiring).
 - **`components/swaps/LimitOrderCard.tsx`** — same patterns as SwapCard, no backend submit-tx.
 - **`components/swaps/LimitOrderItem.tsx`** — gotcha: the `Intent` object literal you build for cancel keeps `srcChain`/`dstChain` (those are `IntentRelayChainId` bigints, not chain keys). Method renamed: `sodax.config.getSpokeChainIdFromIntentRelayChainId` → `getSpokeChainKeyFromIntentRelayChainId`. **dapp-kit** cancel: `useCancelLimitOrder()` then `mutate({ intent, srcChainKey, walletProvider [, timeout] })`.
 - **`components/swaps/SelectChain.tsx`, `LimitOrderList.tsx`, `OrderStatus.tsx`** — type / import alignment (`SpokeChainId` → `SpokeChainKey`) as needed.
-- **`components/bitcoin/BitcoinSetupPanel.tsx`** — prop rename `spokeProvider: BitcoinSpokeProvider` → `walletProvider: IBitcoinWalletProvider`. Internal Radfi calls go through `sodax.spokeService.bitcoinSpokeService.radfi.*` (singleton owned by `Sodax`), not via the per-component provider.
+- **`components/bitcoin/BitcoinSetupPanel.tsx`** — prop rename `spokeProvider: BitcoinSpokeProvider` → `walletProvider: IBitcoinWalletProvider`. Internal Bound Exchange calls go through `sodax.spokeService.bitcoinSpokeService.radfi.*` (singleton owned by `Sodax`), not via the per-component provider.
 - **`providers.tsx`** — `SodaxProvider`'s `config` prop becomes `DeepPartial<SodaxConfig>`. Solver endpoints move from `SodaxConfig.swaps` to `SodaxConfig.solver`. (This is the easy-to-miss config-shape pitfall — `swaps` is now `SwapsConfig` for supported-tokens-per-chain; `solver` is the endpoint/contract config.)
 - **`zustand/useAppStore.tsx`** — `ChainId` → `SpokeChainKey`; replace string-literal default (`'stacks'`) with a typed `ChainKeys.X` constant.
 - **`constants.ts`, `lib/chains.ts`** — chain-ID constant migration (mechanical). `type CustomProvider` → `unknown` in window declaration.

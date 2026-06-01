@@ -5,7 +5,7 @@ EVM chains (12 of them) work uniformly through `IEvmWalletProvider`. Non-EVM cha
 ## Section index
 
 1. [Stellar trustline](#1-stellar-trustline) — `STELLAR_MAINNET`. Required before receiving any non-XLM asset.
-2. [Bitcoin PSBT and Radfi](#2-bitcoin-psbt-and-radfi) — `BITCOIN_MAINNET`. PSBT signing; trading wallet; Radfi auth/session.
+2. [Bitcoin PSBT and Bound Exchange](#2-bitcoin-psbt-and-radfi) — `BITCOIN_MAINNET`. PSBT signing; trading wallet; Bound Exchange auth/session.
 3. [Solana PDA derivation](#3-solana-pda-derivation) — `SOLANA_MAINNET`. Deterministic addresses; one-time setup utilities.
 4. [ICON Hana wallet](#4-icon-hana-wallet) — `ICON_MAINNET`. Low-level Hana-extension helpers; chain key string vs numeric ID.
 5. [NEAR connector discovery](#5-near-connector-discovery) — `NEAR_MAINNET`. Account-id semantics; multiple wallet variants.
@@ -39,7 +39,7 @@ Stellar accounts that have never held the asset have **no** trustline — receiv
 
 ---
 
-## 2. Bitcoin PSBT and Radfi
+## 2. Bitcoin PSBT and Bound Exchange
 
 Bitcoin support uses Partially Signed Bitcoin Transactions (PSBT) — a different model than EVM tx signing. The wallet provider (`BTCWalletProvider`) handles PSBT construction and signing internally.
 
@@ -51,11 +51,11 @@ type BtcAddressType = 'P2PKH' | 'P2SH' | 'P2WPKH' | 'P2TR';
 
 `BTCWalletProvider` config takes an `addressType`. `'P2WPKH'` (native SegWit) is the modern default; `'P2TR'` (Taproot) is supported but may have lower compatibility with some on-chain logic.
 
-### Radfi (auth + trading wallet)
+### Bound Exchange (auth + trading wallet)
 
-SODAX uses the Radfi infrastructure for Bitcoin. Each user gets a derived "trading wallet" funded from their main BTC address. Operations consume UTXOs from the trading wallet rather than directly from the user's main address.
+SODAX uses the Bound Exchange infrastructure for Bitcoin. Each user gets a derived "trading wallet" funded from their main BTC address. Operations consume UTXOs from the trading wallet rather than directly from the user's main address.
 
-The Radfi provider is owned by `BitcoinSpokeService`. Reach it via the spoke router:
+The Bound Exchange provider is owned by `BitcoinSpokeService`. Reach it via the spoke router:
 
 ```ts
 import { ChainKeys, type BitcoinSpokeService } from '@sodax/sdk';
@@ -64,10 +64,10 @@ const btcSpoke = sodax.spoke.getSpokeService(ChainKeys.BITCOIN_MAINNET) as Bitco
 const radfi = btcSpoke.radfi;   // RadfiProvider instance
 ```
 
-Most consumer flows don't need to touch `radfi` directly — `sodax.bridge.bridge(...)`, `sodax.swaps.createIntent(...)`, etc. handle the Radfi auth + trading-wallet routing internally on the Bitcoin path. For explicit lifecycle management:
+Most consumer flows don't need to touch `radfi` directly — `sodax.bridge.bridge(...)`, `sodax.swaps.createIntent(...)`, etc. handle the Bound Exchange auth + trading-wallet routing internally on the Bitcoin path. For explicit lifecycle management:
 
 ```ts
-// Authenticate against Radfi (the wallet signs an auth message):
+// Authenticate against Bound Exchange (the wallet signs an auth message):
 await radfi.authenticateWithWallet(/* args per RadfiProvider source */);
 
 // Fetch the trading wallet for an address (creating it if needed):
@@ -84,7 +84,7 @@ Other public methods on `RadfiProvider` you may need: `setRadfiAccessToken`, `re
 
 ### Pitfall
 
-`BitcoinSpokeService.radfi` is what feature services use under the hood. Bypassing the feature services and driving Radfi yourself works but is rarely needed — and you have to wire token balances + UTXO state manually. Prefer the standard feature flows unless you specifically need lifecycle control.
+`BitcoinSpokeService.radfi` is what feature services use under the hood. Bypassing the feature services and driving Bound Exchange yourself works but is rarely needed — and you have to wire token balances + UTXO state manually. Prefer the standard feature flows unless you specifically need lifecycle control.
 
 ---
 
