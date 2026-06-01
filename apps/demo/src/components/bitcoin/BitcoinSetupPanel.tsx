@@ -47,9 +47,6 @@ export const BitcoinSetupPanel = ({ walletProvider, onReadyChange, nativeBalance
   const [renewError, setRenewError] = useState<string | null>(null);
   const [showFundDialog, setShowFundDialog] = useState(false);
   const [showWithdrawDialog, setShowWithdrawDialog] = useState(false);
-  const [testResult, setTestResult] = useState<string | null>(null);
-  const [testError, setTestError] = useState<string | null>(null);
-  const [isTesting, setIsTesting] = useState(false);
 
   // Address type selector (Xverse only)
   const xConnection = useXConnection({ xChainType: 'BITCOIN' });
@@ -123,58 +120,6 @@ export const BitcoinSetupPanel = ({ walletProvider, onReadyChange, nativeBalance
       console.error('Failed to renew UTXOs', result.error);
     }
   };
-
-  // Sign a sample on-demand withdrawal payload with the connected browser wallet and log
-  // payload_hex + signature + public_key — the exact shape the intent relay receives. Hand the
-  // logged JSON to the relayer team as a real test vector for signature verification.
-  const handleTestSign = useCallback(async () => {
-    if (!walletProvider || !walletAddress) return;
-    setIsTesting(true);
-    setTestError(null);
-    setTestResult(null);
-    try {
-      const raw = await sodax.spoke.bitcoin.encodeWithdrawalData({
-        srcChainKey: ChainKeys.BITCOIN_MAINNET,
-        srcAddress: walletAddress,
-        dstChainKey: ChainKeys.SONIC_MAINNET,
-        dstAddress: '0x0000000000000000000000000000000000000000',
-        payload: '0xdeadbeef',
-        raw: false,
-        walletProvider,
-        walletMode: 'TRADING',
-      });
-      const parsed = JSON.parse(raw as unknown as string);
-      const bytes = (parsed.payload_hex.match(/../g) ?? []).map((h: string) => Number.parseInt(h, 16));
-      const message = new TextDecoder().decode(new Uint8Array(bytes));
-      const payloadObj = JSON.parse(message);
-      const addressType = detectBitcoinAddressType(walletAddress);
-      const vector = {
-        _note:
-          'Verify `signature` (hex → base64) against `signer_address` (the user wallet) by `address_type`: ' +
-          'BIP-322 for P2WPKH/P2TR, BIP-137 for P2SH/P2PKH. `message` = utf8(hex_decode(payload_hex)) and ' +
-          'contains wallet_used="TRADING" → map to the user trading wallet. Do NOT verify against ' +
-          'trading_address / src_address (Radfi-derived, different key).',
-        address_type: addressType,
-        scheme: addressType === 'P2WPKH' || addressType === 'P2TR' ? 'BIP-322' : 'ECDSA (BIP-137)',
-        signer_address: walletAddress, // personal wallet — verify the signature against THIS
-        trading_address: tradingAddress, // Radfi trading wallet (the operation target)
-        src_address_in_payload: payloadObj.src_address, // trading address as signed (lowercased by the SDK)
-        public_key: parsed.public_key,
-        payload_hex: parsed.payload_hex,
-        signature: parsed.signature,
-        message,
-      };
-      console.log('=== Bitcoin relay test vector ===');
-      console.log(vector);
-      setTestResult(JSON.stringify(vector, null, 2));
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Sign failed';
-      console.error('Bitcoin relay test sign failed:', e);
-      setTestError(msg);
-    } finally {
-      setIsTesting(false);
-    }
-  }, [sodax, walletProvider, walletAddress, tradingAddress]);
 
   return (
     <div className="flex flex-col gap-4 p-4 mt-4 bg-muted/30 rounded-lg border border-border">
@@ -365,36 +310,6 @@ export const BitcoinSetupPanel = ({ walletProvider, onReadyChange, nativeBalance
               )}
             </div>
           )}
-
-          {/* Relay signature test — sign a sample on-demand payload with the connected browser
-              wallet and log payload_hex + signature + public_key for the relayer team. */}
-          <div className="flex flex-col gap-2 border-t border-border pt-3 mt-1">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Relay signature test</span>
-              <Button size="sm" variant="outline" onClick={handleTestSign} disabled={isTesting || !walletAddress}>
-                {isTesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Sign &amp; log payload
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Signs a sample on-demand withdrawal payload with your connected wallet and logs payload_hex +
-              signature + public_key (also printed to the browser console).
-            </p>
-            {testError && <p className="text-xs text-red-500 break-all">{testError}</p>}
-            {testResult && (
-              <div className="relative">
-                <pre className="text-[10px] leading-relaxed bg-background border border-border rounded p-2 overflow-x-auto max-h-60 whitespace-pre-wrap break-all">{testResult}</pre>
-                <button
-                  type="button"
-                  onClick={() => navigator.clipboard.writeText(testResult)}
-                  className="absolute top-1 right-1 cursor-pointer text-muted-foreground hover:text-foreground transition-colors"
-                  title="Copy"
-                >
-                  <Copy className="h-3 w-3" />
-                </button>
-              </div>
-            )}
-          </div>
         </div>
       )}
     </div>
