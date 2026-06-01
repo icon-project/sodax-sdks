@@ -300,7 +300,7 @@ export function SupplyAssetsList(): ReactElement {
                       userReserves &&
                       tokens.map(token => (
                         <SupplyAssetsListItem
-                          key={token.address}
+                          key={`${token.address}-${token.symbol}`}
                           token={token}
                           walletBalance={
                             // Show "0.0000" when loading (better UX than "...") or when balance is 0
