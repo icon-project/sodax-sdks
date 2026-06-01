@@ -6,7 +6,7 @@ import type {
   Result,
   TxReturnType,
 } from '@sodax/types';
-import { ChainKeys, detectBitcoinAddressType, getIntentRelayChainId } from '@sodax/types';
+import { ChainKeys, detectBitcoinAddressType, getIntentRelayChainId, usesBip322MessageSigning } from '@sodax/types';
 import * as ecc from '@bitcoinerlab/secp256k1';
 import { keccak256 } from 'viem';
 import type {
@@ -24,6 +24,7 @@ import {
   encodeBtcPayloadToBytes,
   estimateBitcoinTxSize,
   normalizePsbtToBase64,
+  normalizeSignatureToHex,
   type BtcPayload,
   type WalletMode,
 } from '../../entities/btc/btc-utils.js';
@@ -53,6 +54,7 @@ export interface BitcoinTransactionResult {
 export interface OnDemandBtcPayload {
   payload_hex: string;
   signature?: string;
+  public_key?: string;
 }
 
 const BITCOIN_DEFAULT_FEE_RATE = 3;
@@ -542,17 +544,18 @@ export class BitcoinSpokeService {
       >;
     }
 
-    // Pick the message-signing scheme by address type, mirroring RadfiProvider.authenticateWithWallet:
-    // P2WPKH/P2TR sign via BIP322 (Taproot uses Schnorr — wallets like Xverse reject ECDSA on it),
-    // legacy P2SH/P2PKH use ECDSA.
-    const usesBip322 = addressType === 'P2WPKH' || addressType === 'P2TR';
-    const rawSignature = usesBip322
+    // Pick the message-signing scheme by address type (see usesBip322MessageSigning): P2WPKH/P2TR
+    // sign via BIP322, P2SH/P2PKH via ECDSA — browser wallets reject the other scheme per type.
+    // The relay expects the signature as hex (wallets return base64 → normalize) plus the signer's
+    // public key, which it needs to verify BIP322 (Taproot/Schnorr is not public-key-recoverable).
+    if (!params.walletProvider.getPublicKey) {
+      throw new Error('Wallet provider does not support getPublicKey');
+    }
+    const rawSignature = usesBip322MessageSigning(addressType)
       ? await params.walletProvider.signBip322Message(orderedPayload)
       : await params.walletProvider.signEcdsaMessage(orderedPayload);
-
-    // The relay expects the signature as hex. signEcdsaMessage already returns hex; BIP322 wallets
-    // return base64, so decode it to hex.
-    onDemandWithdraw.signature = usesBip322 ? Buffer.from(rawSignature, 'base64').toString('hex') : rawSignature;
+    onDemandWithdraw.signature = normalizeSignatureToHex(rawSignature);
+    onDemandWithdraw.public_key = await params.walletProvider.getPublicKey();
 
     return JSON.stringify(onDemandWithdraw) satisfies TxReturnType<BitcoinChainKey, false> as TxReturnType<
       BitcoinChainKey,

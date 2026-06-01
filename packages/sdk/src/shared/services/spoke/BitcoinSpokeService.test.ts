@@ -368,37 +368,43 @@ describe('BitcoinSpokeService.encodeWithdrawalData', () => {
     expect(parsed).toHaveProperty('payload_hex');
     expect(typeof parsed.payload_hex).toBe('string');
     expect(parsed.signature).toBeUndefined();
+    expect(parsed.public_key).toBeUndefined();
   });
 
-  it('TRADING raw=false on P2WPKH/P2TR → signs via BIP322 and embeds the signature as hex', async () => {
-    // USER_ADDR is a bc1q (P2WPKH) address; Taproot (bc1p) takes the same branch. Wallets like
-    // Xverse reject ECDSA message signing on these, so the scheme is picked by address type.
+  it('TRADING raw=false on P2WPKH/P2TR → signs via BIP322 (base64 → hex) and attaches the public key', async () => {
+    // USER_ADDR is a bc1q (P2WPKH) address; Taproot (bc1p) takes the same branch. P2WPKH/P2TR sign
+    // via BIP322 — wallets return base64, normalized to hex — and the public key is sent alongside it
+    // because BIP322 signatures are not public-key-recoverable.
     vi.spyOn(btcSpoke.radfi, 'getTradingWallet').mockResolvedValueOnce({
       tradingAddress: TRADING_ADDR,
     } as never);
-    // BIP322 wallets return a base64 signature; the relay expects hex, so it is converted.
-    (mockBtcProvider.signBip322Message as ReturnType<typeof vi.fn>).mockResolvedValueOnce('AAEC');
+    (mockBtcProvider.signBip322Message as ReturnType<typeof vi.fn>).mockResolvedValueOnce('EjQ=');
+    (mockBtcProvider.getPublicKey as ReturnType<typeof vi.fn>).mockResolvedValueOnce('02abcdef');
 
     const result = await btcSpoke.encodeWithdrawalData(sendMessageParams<false>({ raw: false }));
 
     const parsed = JSON.parse(result as unknown as string);
-    expect(parsed.signature).toBe('000102'); // hex of base64 "AAEC" → bytes 00 01 02
+    expect(parsed.signature).toBe('1234'); // base64 "EjQ=" → bytes 0x12 0x34 → hex
+    expect(parsed.public_key).toBe('02abcdef');
     expect(mockBtcProvider.signBip322Message).toHaveBeenCalledTimes(1);
     expect(mockBtcProvider.signEcdsaMessage).not.toHaveBeenCalled();
   });
 
-  it('TRADING raw=false on legacy P2PKH/P2SH → signs via ECDSA and embeds the signature', async () => {
+  it('TRADING raw=false on legacy P2PKH/P2SH → signs via ECDSA and attaches the public key', async () => {
     vi.spyOn(btcSpoke.radfi, 'getTradingWallet').mockResolvedValueOnce({
       tradingAddress: TRADING_ADDR,
     } as never);
-    (mockBtcProvider.signEcdsaMessage as ReturnType<typeof vi.fn>).mockResolvedValueOnce('ECDSASIG');
+    // 1A1z… is a P2PKH (legacy) address → ECDSA. A signature already in hex passes through unchanged.
+    (mockBtcProvider.signEcdsaMessage as ReturnType<typeof vi.fn>).mockResolvedValueOnce('deadbeef');
+    (mockBtcProvider.getPublicKey as ReturnType<typeof vi.fn>).mockResolvedValueOnce('02abcdef');
 
     const result = await btcSpoke.encodeWithdrawalData(
       sendMessageParams<false>({ raw: false, srcAddress: '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa' }),
     );
 
     const parsed = JSON.parse(result as unknown as string);
-    expect(parsed.signature).toBe('ECDSASIG');
+    expect(parsed.signature).toBe('deadbeef');
+    expect(parsed.public_key).toBe('02abcdef');
     expect(mockBtcProvider.signEcdsaMessage).toHaveBeenCalledTimes(1);
     expect(mockBtcProvider.signBip322Message).not.toHaveBeenCalled();
   });

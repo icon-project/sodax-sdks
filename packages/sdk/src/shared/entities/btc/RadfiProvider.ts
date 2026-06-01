@@ -1,4 +1,10 @@
-import { detectBitcoinAddressType, type IBitcoinWalletProvider, type RadfiConfig, type RadfiDepositTxResponse } from '@sodax/types';
+import {
+  detectBitcoinAddressType,
+  usesBip322MessageSigning,
+  type IBitcoinWalletProvider,
+  type RadfiConfig,
+  type RadfiDepositTxResponse,
+} from '@sodax/types';
 
 /**
  * Raw error body shape returned by the Radfi HTTP API on non-2xx responses.
@@ -136,12 +142,10 @@ export class RadfiProvider {
     }
 
     const message = `${Date.now()}`;
-    const addressType = detectBitcoinAddressType(address);
-    // BIP322 signing is supported for P2WPKH and P2TR; P2SH and P2PKH use ECDSA
-    const signature =
-      addressType === 'P2WPKH' || addressType === 'P2TR'
-        ? await walletProvider.signBip322Message(message)
-        : await walletProvider.signEcdsaMessage(message);
+    // Pick the message-signing scheme by address type: P2WPKH/P2TR sign via BIP322, P2SH/P2PKH via ECDSA.
+    const signature = usesBip322MessageSigning(detectBitcoinAddressType(address))
+      ? await walletProvider.signBip322Message(message)
+      : await walletProvider.signEcdsaMessage(message);
 
     const result = await this.authenticate({ message, signature, address, publicKey });
     this.setRadfiAccessToken(result.accessToken, result.refreshToken);

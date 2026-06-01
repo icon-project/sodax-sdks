@@ -61,3 +61,13 @@ export function normalizePsbtToBase64(signedPsbt: string): string {
   const isHex = /^[0-9a-fA-F]+$/.test(signedPsbt);
   return isHex ? Buffer.from(signedPsbt, 'hex').toString('base64') : signedPsbt;
 }
+
+/**
+ * Normalize a wallet message signature to hex. The intent relay requires the on-demand withdrawal
+ * signature as hex, but wallets return BIP322 signatures as base64 — decode those. A signature that
+ * is already hex passes through unchanged. Inverse of `normalizePsbtToBase64`.
+ */
+export function normalizeSignatureToHex(signature: string): string {
+  const isHex = /^[0-9a-fA-F]+$/.test(signature);
+  return isHex ? signature : Buffer.from(signature, 'base64').toString('hex');
+}
