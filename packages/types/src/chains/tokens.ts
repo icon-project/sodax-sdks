@@ -724,6 +724,7 @@ export const arbitrumSupportedTokens = {
     chainKey: ChainKeys.ARBITRUM_MAINNET,
     hubAsset: '0x96Fc8540736f1598b7E235e6dE8814062b3b5d3B',
     vault: SodaTokens.sodaBTC.address,
+    access: 'withdrawOnly',
   },
   WBTC: {
     symbol: 'WBTC',
@@ -899,6 +900,7 @@ export const baseSupportedTokens = {
     chainKey: ChainKeys.BASE_MAINNET,
     hubAsset: '0x2803a23a3BA6b09e57D1c71deC0D9eFdBB00A27F',
     vault: SodaTokens.sodaBTC.address,
+    access: 'withdrawOnly',
   },
   SODA: {
     symbol: 'SODA',
