@@ -229,7 +229,7 @@ export class LeverageYieldService {
   public async deposit(
     params: LeverageYieldSwapDepositParams,
   ): Promise<Result<CreateIntentParams, LeverageYieldCreateIntentError>> {
-    const baseCtx = { srcChainKey: params.srcChainKey, action: 'xdeposit' as const };
+    const baseCtx = { srcChainKey: params.srcChainKey, action: 'deposit' as const };
     try {
       leverageYieldInvariant(params.inputAmount > 0n, 'inputAmount must be greater than 0', {
         ...baseCtx,
@@ -275,7 +275,7 @@ export class LeverageYieldService {
    * uniform with {@link LeverageYieldService.deposit}.
    */
   public withdraw(params: LeverageYieldSwapWithdrawParams): Result<CreateIntentParams, LeverageYieldCreateIntentError> {
-    const baseCtx = { srcChainKey: params.srcChainKey, action: 'xwithdraw' as const };
+    const baseCtx = { srcChainKey: params.srcChainKey, action: 'withdraw' as const };
     try {
       leverageYieldInvariant(params.inputAmount > 0n, 'inputAmount must be greater than 0', {
         ...baseCtx,
