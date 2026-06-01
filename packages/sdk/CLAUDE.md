@@ -259,6 +259,15 @@ Concentrated liquidity (similar to Uniswap V3/PancakeSwap V3):
 - `AssetService` — DEX asset wrapping/unwrapping
 - Pool configs defined in `src/shared/constants.ts`
 
+### leverageYield
+
+Leveraged-yield ERC-4626 vaults on the Sonic hub (`LeverageYieldService`, reachable via `sodax.leverageYield`). A vault loops supply → borrow → swap → re-supply to a `targetLTV`, producing a leveraged long on the `asset` / `borrowToken` peg; the ERC-4626 share token (`lsoda*`) represents the position and **its address is the vault proxy address**. The share token is treated as a solver-tradeable token:
+- `deposit` / `withdraw` build `CreateIntentParams` — the caller relays them via `sodax.swaps.swap()`. `withdraw` stamps `hubWalletSwap: true` so `swap()` spends the `lsoda*` held in the user's hub wallet via a `Connection.sendMessage` (the swap-layer `hubWalletSwap` branch validates the input token against the hub chain, not `srcChainKey`).
+- `approve` / `isAllowanceValid` — Sonic-direct allowance management for the vault's underlying asset (the swap-style `deposit` handles its own approvals).
+- `getApr` / `getPosition` / `getMaxWithdraw[ForUser]` / `getShareBalance[ForUser]` / `getTotalAssets` / `previewDeposit|Withdraw|Redeem` / `getAsset` — reads. `getApr` computes steady-state leverage APR (`supplyApr + (targetLTV/(1−targetLTV)) × (supplyApr − borrowApr)`; RAY rates × WAD multiplier; net APR can be negative on an inverted spread).
+- `listVaults` / `getVault` / `getVaultByAddress` — registry lookups; the registry lives in `@sodax/types` (`leverageYieldConfig`) and derives all addresses from the canonical `LsodaTokens` / `SodaTokens` registries.
+- **Errors**: All async methods return `Result<T, SodaxError<NarrowCode>>`. The 3 user-facing actions discriminate via `context.action` (`'deposit' | 'withdraw' | 'approve'`); read methods emit `LOOKUP_FAILED` partitioned by `context.method`. No relay/tx-verification codes (there is no in-service relay step). See `docs/LEVERAGE_YIELD.md`.
+
 ## Gotchas
 
 - **Never use `bigint` in types passed to `JSON.stringify`** — it throws `TypeError` at runtime. Use `string` for numeric fields in API request/response types (e.g. anything in `src/backendApi/`). If `bigint` is needed in domain types, convert to string before serialization. Note: `SodaxError.toJSON` already coerces bigints in `context` to strings — see Error Handling above.
@@ -266,7 +275,7 @@ Concentrated liquidity (similar to Uniswap V3/PancakeSwap V3):
 ## Documentation
 
 Detailed feature docs are in `docs/`:
-- `SWAPS.md`, `MONEY_MARKET.md`, `STAKING.md`, `BRIDGE.md`, `DEX.md`, `MIGRATION.md`
+- `SWAPS.md`, `MONEY_MARKET.md`, `STAKING.md`, `BRIDGE.md`, `DEX.md`, `MIGRATION.md`, `LEVERAGE_YIELD.md`
 - `BITCOIN_INTEGRATION.md` — Bitcoin trading-wallet model, custody trade-off, readiness gate
 - `CONFIGURE_SDK.md` — SDK initialization patterns
 - `WALLET_PROVIDERS.md` — wallet integration patterns
