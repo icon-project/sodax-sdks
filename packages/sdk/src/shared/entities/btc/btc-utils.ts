@@ -63,11 +63,11 @@ export function normalizePsbtToBase64(signedPsbt: string): string {
 }
 
 /**
- * Normalize a wallet message signature to hex. The intent relay requires the on-demand withdrawal
- * signature as hex, but wallets return BIP322 signatures as base64 — decode those. A signature that
- * is already hex passes through unchanged. Inverse of `normalizePsbtToBase64`.
+ * Normalize a wallet message signature to base64. The intent relay requires the on-demand
+ * withdrawal signature as base64. Browser wallets (UniSat/Xverse/OKX) already return base64; a hex
+ * signature (e.g. a private-key wallet) is encoded. Mirrors `normalizePsbtToBase64`.
  */
-export function normalizeSignatureToHex(signature: string): string {
+export function normalizeSignatureToBase64(signature: string): string {
   const isHex = /^[0-9a-fA-F]+$/.test(signature);
-  return isHex ? signature : Buffer.from(signature, 'base64').toString('hex');
+  return isHex ? Buffer.from(signature, 'hex').toString('base64') : signature;
 }

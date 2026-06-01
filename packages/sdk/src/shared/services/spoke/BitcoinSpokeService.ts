@@ -24,7 +24,7 @@ import {
   encodeBtcPayloadToBytes,
   estimateBitcoinTxSize,
   normalizePsbtToBase64,
-  normalizeSignatureToHex,
+  normalizeSignatureToBase64,
   type BtcPayload,
   type WalletMode,
 } from '../../entities/btc/btc-utils.js';
@@ -546,7 +546,7 @@ export class BitcoinSpokeService {
 
     // Pick the message-signing scheme by address type (see usesBip322MessageSigning): P2WPKH/P2TR
     // sign via BIP322, P2SH/P2PKH via ECDSA — browser wallets reject the other scheme per type.
-    // The relay expects the signature as hex (wallets return base64 → normalize) plus the signer's
+    // The relay expects the signature as base64 (the wallets' native form) plus the signer's
     // public key, which it needs to verify BIP322 (Taproot/Schnorr is not public-key-recoverable).
     if (!params.walletProvider.getPublicKey) {
       throw new Error('Wallet provider does not support getPublicKey');
@@ -554,7 +554,7 @@ export class BitcoinSpokeService {
     const rawSignature = usesBip322MessageSigning(addressType)
       ? await params.walletProvider.signBip322Message(orderedPayload)
       : await params.walletProvider.signEcdsaMessage(orderedPayload);
-    onDemandWithdraw.signature = normalizeSignatureToHex(rawSignature);
+    onDemandWithdraw.signature = normalizeSignatureToBase64(rawSignature);
     onDemandWithdraw.public_key = await params.walletProvider.getPublicKey();
 
     return JSON.stringify(onDemandWithdraw) satisfies TxReturnType<BitcoinChainKey, false> as TxReturnType<

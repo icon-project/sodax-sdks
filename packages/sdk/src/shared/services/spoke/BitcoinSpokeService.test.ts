@@ -371,9 +371,9 @@ describe('BitcoinSpokeService.encodeWithdrawalData', () => {
     expect(parsed.public_key).toBeUndefined();
   });
 
-  it('TRADING raw=false on P2WPKH/P2TR → signs via BIP322 (base64 → hex) and attaches the public key', async () => {
+  it('TRADING raw=false on P2WPKH/P2TR → signs via BIP322 (base64) and attaches the public key', async () => {
     // USER_ADDR is a bc1q (P2WPKH) address; Taproot (bc1p) takes the same branch. P2WPKH/P2TR sign
-    // via BIP322 — wallets return base64, normalized to hex — and the public key is sent alongside it
+    // via BIP322 — wallets return base64, sent as-is — and the public key is sent alongside it
     // because BIP322 signatures are not public-key-recoverable.
     vi.spyOn(btcSpoke.radfi, 'getTradingWallet').mockResolvedValueOnce({
       tradingAddress: TRADING_ADDR,
@@ -384,7 +384,7 @@ describe('BitcoinSpokeService.encodeWithdrawalData', () => {
     const result = await btcSpoke.encodeWithdrawalData(sendMessageParams<false>({ raw: false }));
 
     const parsed = JSON.parse(result as unknown as string);
-    expect(parsed.signature).toBe('1234'); // base64 "EjQ=" → bytes 0x12 0x34 → hex
+    expect(parsed.signature).toBe('EjQ='); // browser wallets return base64 — passed through
     expect(parsed.public_key).toBe('02abcdef');
     expect(mockBtcProvider.signBip322Message).toHaveBeenCalledTimes(1);
     expect(mockBtcProvider.signEcdsaMessage).not.toHaveBeenCalled();
@@ -394,7 +394,7 @@ describe('BitcoinSpokeService.encodeWithdrawalData', () => {
     vi.spyOn(btcSpoke.radfi, 'getTradingWallet').mockResolvedValueOnce({
       tradingAddress: TRADING_ADDR,
     } as never);
-    // 1A1z… is a P2PKH (legacy) address → ECDSA. A signature already in hex passes through unchanged.
+    // 1A1z… is a P2PKH (legacy) address → ECDSA. A hex signature (private-key wallet) is encoded to base64.
     (mockBtcProvider.signEcdsaMessage as ReturnType<typeof vi.fn>).mockResolvedValueOnce('deadbeef');
     (mockBtcProvider.getPublicKey as ReturnType<typeof vi.fn>).mockResolvedValueOnce('02abcdef');
 
@@ -403,7 +403,7 @@ describe('BitcoinSpokeService.encodeWithdrawalData', () => {
     );
 
     const parsed = JSON.parse(result as unknown as string);
-    expect(parsed.signature).toBe('deadbeef');
+    expect(parsed.signature).toBe('3q2+7w=='); // hex "deadbeef" → base64
     expect(parsed.public_key).toBe('02abcdef');
     expect(mockBtcProvider.signEcdsaMessage).toHaveBeenCalledTimes(1);
     expect(mockBtcProvider.signBip322Message).not.toHaveBeenCalled();
