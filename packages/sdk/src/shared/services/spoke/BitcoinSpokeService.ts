@@ -516,10 +516,10 @@ export class BitcoinSpokeService {
     const addressType = detectBitcoinAddressType(from);
 
     if (walletMode === 'TRADING') {
-      srcAddress = await this.radfi
-        .getTradingWallet(srcAddress)
-        .then(res => res.tradingAddress)
-        .catch(() => srcAddress);
+      // No fallback to the personal address: in TRADING mode the relay derives the hub wallet from
+      // the trading address, so a failed lookup must throw rather than emit a payload whose
+      // src_address (personal) disagrees with that trading-derived hub wallet.
+      srcAddress = (await this.radfi.getTradingWallet(srcAddress)).tradingAddress;
     }
     const payload: BtcPayload = {
       src_address: srcAddress,

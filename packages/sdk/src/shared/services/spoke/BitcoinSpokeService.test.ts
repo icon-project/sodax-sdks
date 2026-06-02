@@ -409,14 +409,13 @@ describe('BitcoinSpokeService.encodeWithdrawalData', () => {
     expect(mockBtcProvider.signBip322Message).not.toHaveBeenCalled();
   });
 
-  it('TRADING + getTradingWallet rejection → falls back to original srcAddress (catch branch)', async () => {
+  it('TRADING + getTradingWallet rejection → throws (no silent personal-address fallback)', async () => {
     vi.spyOn(btcSpoke.radfi, 'getTradingWallet').mockRejectedValueOnce(new Error('radfi 503'));
 
-    const result = await btcSpoke.encodeWithdrawalData(sendMessageParams<true>({ raw: true }));
-    expect(typeof result).toBe('string');
-    // The payload still encodes — fallback uses the unchanged USER_ADDR; we can't easily decode
-    // the byte payload, but the function must not throw.
-    expect(() => JSON.parse(result as unknown as string)).not.toThrow();
+    // In TRADING mode a failed trading-wallet lookup must surface, not silently fall back to the
+    // personal address — that would emit a payload whose src_address disagrees with the
+    // trading-derived hub wallet the relay actually targets.
+    await expect(btcSpoke.encodeWithdrawalData(sendMessageParams<true>({ raw: true }))).rejects.toThrow('radfi 503');
   });
 
   it('sendMessage delegates to encodeWithdrawalData', async () => {
