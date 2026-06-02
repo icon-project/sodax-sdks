@@ -25,8 +25,12 @@ export function useSodaxScanMessageUrl(txHash: string | undefined): UseSodaxScan
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     let retryCount = 0;
-    const maxRetries = 3;
-    const retryDelay = 2000;
+    // Cross-chain messages (especially Bitcoin on-demand borrow/withdraw) can take longer than a few
+    // seconds to appear in SodaxScan's index after the relay reports executed. Retry over a wider
+    // window so the link resolves once the message is indexed instead of giving up while it is still
+    // propagating — which would otherwise leave no link at all for od:<hash> ids (no explorer fallback).
+    const maxRetries = 10;
+    const retryDelay = 3000;
 
     const fetchUrl = async (): Promise<void> => {
       try {
