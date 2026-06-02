@@ -609,7 +609,7 @@ export class SwapService {
    * - `raw: false` — broadcasts the transaction; `walletProvider` is required and must match `K`.
    *
    * Validates tokens and chain keys against the active `ConfigService` before constructing the
-   * intent. Bitcoin source chains require an additional RadFi access token step.
+   * intent. Bitcoin source chains require an additional Bound Exchange access token step.
    *
    * @param _params - Intent parameters, source chain key, wallet provider (when `raw: false`),
    *   and optional `skipSimulation` flag.

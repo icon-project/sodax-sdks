@@ -44,7 +44,7 @@ export function useATokensBalances({
       }
 
       // Bitcoin positions live under the trading-wallet-derived hub wallet; resolve it locally
-      // (no network) so a Radfi outage never reads a real position as empty.
+      // (no network) so a Bound Exchange outage never reads a real position as empty.
       const hubWalletAddress = await sodax.hubProvider.getUserHubWalletAddress(
         resolveBtcReadAddress(spokeChainKey, userAddress),
         spokeChainKey,

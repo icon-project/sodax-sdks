@@ -48,7 +48,7 @@ export function SupplyAssetsList(): ReactElement {
   const tokens = sodax.moneyMarket.getSupportedTokensByChainId(selectedChainId);
   const isIcon = selectedChainId === ChainKeys.ICON_MAINNET;
 
-  // On Bitcoin the suppliable funds live in the Radfi trading wallet, not the personal wallet.
+  // On Bitcoin the suppliable funds live in the Bound Exchange trading wallet, not the personal wallet.
   const { isBitcoin, tradingBalanceSats } = useBtcTradingBalance(selectedChainId);
 
   const { address } = useXAccount({ xChainId: selectedChainId });

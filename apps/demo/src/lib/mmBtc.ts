@@ -7,9 +7,9 @@ type MmCrossChainParams = { dstChainKey?: SpokeChainKey; dstAddress?: string };
  * Build the cross-chain delivery params (`dstChainKey`/`dstAddress`) for a money-market
  * borrow/withdraw.
  *
- * Bitcoin destinations must deliver to the Radfi **trading** wallet (not the personal wallet),
+ * Bitcoin destinations must deliver to the Bound Exchange **trading** wallet (not the personal wallet),
  * and dst params are always sent so the relay routes there even same-chain. Returns `null` when
- * the Bitcoin trading address can't be resolved (no destination wallet, or no signed-in Radfi
+ * the Bitcoin trading address can't be resolved (no destination wallet, or no signed-in Bound Exchange
  * session) — the caller should treat that as "params not ready" and return `undefined`, rather
  * than silently delivering to the personal wallet. Non-Bitcoin keeps the same-chain shortcut.
  */

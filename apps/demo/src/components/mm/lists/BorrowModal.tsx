@@ -74,7 +74,7 @@ export function BorrowModal({
   const { address: srcAddress } = useXAccount({ xChainId: srcChainKey });
   const { address: dstAddress } = useXAccount({ xChainId: dstChainKey });
 
-  // BTC delivery goes to the Radfi trading wallet; needs a signed-in session (balance not required).
+  // BTC delivery goes to the Bound Exchange trading wallet; needs a signed-in session (balance not required).
   const { isBitcoin: isBtcDelivery, tradingAddress: deliveryTradingAddress } = useBtcTradingBalance(dstChainKey);
   const btcDeliveryNotReady = isBtcDelivery && !!dstAddress && !deliveryTradingAddress;
 

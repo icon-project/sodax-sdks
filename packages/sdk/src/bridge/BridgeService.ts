@@ -389,7 +389,7 @@ export class BridgeService {
    * transaction simulation or batching). When `raw` is `false`, signs and submits the deposit
    * transaction via the provided wallet provider.
    *
-   * Bitcoin is only supported with `raw: false` because it requires the RadFi trading wallet
+   * Bitcoin is only supported with `raw: false` because it requires the Bound Exchange trading wallet
    * derivation flow.
    *
    * @param _params - Bridge parameters including source/destination chain keys, token addresses,

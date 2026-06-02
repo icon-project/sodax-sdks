@@ -268,13 +268,13 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       return;
     }
 
-    // Bitcoin delivery must target the Radfi trading wallet (never the personal wallet). Block
+    // Bitcoin delivery must target the Bound Exchange trading wallet (never the personal wallet). Block
     // when there's no signed-in trading wallet rather than silently delivering to the personal one.
     let dstAddress = destAccount.address;
     if (dst.chain === ChainKeys.BITCOIN_MAINNET) {
       const tradingAddress = loadRadfiSession(destAccount.address)?.tradingAddress;
       if (!tradingAddress) {
-        console.error('Bitcoin destination requires a Radfi trading wallet — sign in first');
+        console.error('Bitcoin destination requires a Bound Exchange trading wallet — sign in first');
         return;
       }
       dstAddress = tradingAddress;
@@ -290,7 +290,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       srcChainKey: src.chain, // Chain ID where input tokens originate
       dstChainKey: dst.chain, // Chain ID where output tokens should be delivered
       srcAddress: await sourceWalletProvider.getWalletAddress(), // Source address (original address on spoke chain)
-      dstAddress, // Bitcoin: Radfi trading wallet (resolved above); others: personal wallet
+      dstAddress, // Bitcoin: Bound Exchange trading wallet (resolved above); others: personal wallet
       solver: '0x0000000000000000000000000000000000000000', // Optional specific solver address (address(0) = any solver)
       data: '0x', // Additional arbitrary data
     } satisfies CreateIntentParams;

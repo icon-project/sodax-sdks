@@ -8,8 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 const noop = () => {};
 
 /**
- * Money-market BTC funds live in the Radfi trading wallet, not the personal wallet.
- * This section lets the user sign in to Radfi, fund/withdraw the trading wallet, and
+ * Money-market BTC funds live in the Bound Exchange trading wallet, not the personal wallet.
+ * This section lets the user sign in to Bound Exchange, fund/withdraw the trading wallet, and
  * renew expired UTXOs — a prerequisite for every BTC supply / withdraw / borrow / repay.
  * Renders nothing until a Bitcoin wallet is connected.
  */
@@ -33,7 +33,7 @@ export function BitcoinTradingSection() {
       <CardHeader className="pb-0">
         <CardTitle>Bitcoin Trading Wallet</CardTitle>
         <p className="text-sm text-clay font-normal">
-          Supply, withdraw, borrow and repay BTC route through this Radfi trading wallet. Sign in and top it up before
+          Supply, withdraw, borrow and repay BTC route through this Bound Exchange trading wallet. Sign in and top it up before
           using BTC in the money market.
         </p>
       </CardHeader>

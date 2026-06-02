@@ -12,9 +12,9 @@ interface UseBtcTradingBalanceResult {
 }
 
 /**
- * Money-market BTC funds live in the user's Radfi trading wallet, not their personal wallet.
+ * Money-market BTC funds live in the user's Bound Exchange trading wallet, not their personal wallet.
  * Reads the trading-wallet balance for that chain; returns zeros for non-Bitcoin chains.
- * Read-only — the Radfi session itself is owned by BitcoinSetupPanel's useRadfiSession.
+ * Read-only — the Bound Exchange session itself is owned by BitcoinSetupPanel's useRadfiSession.
  */
 export function useBtcTradingBalance(chainId: SpokeChainKey): UseBtcTradingBalanceResult {
   const isBitcoin = chainId === ChainKeys.BITCOIN_MAINNET;

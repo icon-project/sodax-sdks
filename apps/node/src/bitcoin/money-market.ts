@@ -12,7 +12,7 @@ import { BitcoinWalletProvider } from '@sodax/wallet-sdk-core';
  * resolves (there is no Bitcoin chain tx to link).
  *
  * Prerequisites (this script does NOT set them up):
- *   - BTC_PRIVATE_KEY        hex private key of the PERSONAL Bitcoin wallet. Its Radfi trading wallet
+ *   - BTC_PRIVATE_KEY        hex private key of the PERSONAL Bitcoin wallet. Its Bound Exchange trading wallet
  *                            must already exist (sign in once on the dapp) and hold MM collateral.
  *   - BASE_RECIPIENT_ADDRESS EVM address on Base that receives the borrowed SODA.
  *   - BTC_ADDRESS_TYPE       optional: P2TR | P2WPKH | P2SH | P2PKH (default P2TR). Must match your
@@ -37,7 +37,7 @@ if (!baseRecipient) {
 // Default config targets mainnet (production defaults from @sodax/types) — enough for a relay E2E.
 const sodax = new Sodax();
 
-// Personal signer. Radfi derives the trading wallet from its public key; `addressType` selects the
+// Personal signer. Bound Exchange derives the trading wallet from its public key; `addressType` selects the
 // message-signing scheme used for the on-demand payload (P2TR/P2WPKH → BIP322, P2SH/P2PKH → ECDSA).
 const walletProvider = new BitcoinWalletProvider({
   type: 'PRIVATE_KEY',
@@ -65,7 +65,7 @@ async function main(): Promise<void> {
   const radfi = sodax.spoke.bitcoin.radfi;
   if (!(await radfi.checkIfTradingWalletExists(srcAddress))) {
     throw new Error(
-      `No Radfi trading wallet for ${srcAddress}. Sign in once on the dapp to create it and supply collateral first.`,
+      `No Bound Exchange trading wallet for ${srcAddress}. Sign in once on the dapp to create it and supply collateral first.`,
     );
   }
   const { tradingAddress } = await radfi.getTradingWallet(srcAddress);

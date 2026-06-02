@@ -76,7 +76,7 @@ export function BorrowAssetsList({ initialChainId }: BorrowAssetsListProps): JSX
     );
   }, [sodax, allMoneyMarketAssets, selectedChainId]);
 
-  // On Bitcoin the wallet balance shown is the Radfi trading wallet, not the personal wallet.
+  // On Bitcoin the wallet balance shown is the Bound Exchange trading wallet, not the personal wallet.
   const { isBitcoin, tradingBalanceSats } = useBtcTradingBalance(selectedChainId);
 
   const tokensOnSelectedChain = sodax.moneyMarket.getSupportedTokensByChainId(selectedChainId);

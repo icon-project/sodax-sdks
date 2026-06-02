@@ -78,7 +78,7 @@ export function RepayModal({
 
   const { mutateAsync: repay, isPending, error, reset: resetRepay } = useRepay();
 
-  // On Bitcoin the repay deposit is pulled from the Radfi trading wallet, so the spendable
+  // On Bitcoin the repay deposit is pulled from the Bound Exchange trading wallet, so the spendable
   // balance is the trading-wallet balance, not the personal wallet's UTXO balance.
   const { isBitcoin, tradingBalanceSats, notReady: btcNotReady } = useBtcTradingBalance(srcChainKey);
 

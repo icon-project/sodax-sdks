@@ -248,7 +248,7 @@ export class MoneyMarketService {
   /**
    * Resolve a spoke address to both its effective form and the derived hub wallet.
    *
-   * Bitcoin (TRADING mode) routes every spoke action through the per-user Radfi trading wallet,
+   * Bitcoin (TRADING mode) routes every spoke action through the per-user Bound Exchange trading wallet,
    * so the hub wallet is derived from the trading address — not the personal address. The hub
    * wallet (where collateral/debt live) therefore always uses `effectiveAddress`. Non-Bitcoin
    * chains pass through.
@@ -271,7 +271,7 @@ export class MoneyMarketService {
   }
 
   /**
-   * Ensure the Radfi session token is valid before a Bitcoin deposit (supply/repay). No-op for
+   * Ensure the Bound Exchange session token is valid before a Bitcoin deposit (supply/repay). No-op for
    * non-Bitcoin chains, raw mode, or non-Bitcoin wallet providers. Mirrors SwapService/BridgeService.
    */
   private async ensureBitcoinDepositToken(

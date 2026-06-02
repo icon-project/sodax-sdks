@@ -1031,7 +1031,7 @@ describe('MoneyMarketService.createSupplyIntent', () => {
       expect(buildSpy).toHaveBeenCalledWith(ChainKeys.BSC_MAINNET, SAMPLE_EVM_TOKEN, 1_000_000n, TO_HUB_WALLET);
     });
 
-    it('on Bitcoin: derives the hub wallet from the Radfi trading address, not the personal address', async () => {
+    it('on Bitcoin: derives the hub wallet from the Bound Exchange trading address, not the personal address', async () => {
       const TRADING_ADDRESS = 'bc1p-trading-wallet';
       const getEffSpy = vi.spyOn(sodax.spoke.bitcoin, 'getEffectiveWalletAddress').mockResolvedValue(TRADING_ADDRESS);
       const ensureSpy = vi.spyOn(sodax.spoke.bitcoin.radfi, 'ensureRadfiAccessToken').mockResolvedValue(undefined);
@@ -2313,7 +2313,7 @@ describe('MoneyMarketService.createRepayIntent', () => {
       expect(call?.raw).toBe(false);
     });
 
-    it('on Bitcoin source: deposits from the Radfi trading address and ensures the session token', async () => {
+    it('on Bitcoin source: deposits from the Bound Exchange trading address and ensures the session token', async () => {
       const TRADING = 'bc1p-trading-wallet';
       const getEffSpy = vi.spyOn(sodax.spoke.bitcoin, 'getEffectiveWalletAddress').mockResolvedValue(TRADING);
       const ensureSpy = vi.spyOn(sodax.spoke.bitcoin.radfi, 'ensureRadfiAccessToken').mockResolvedValue(undefined);

@@ -70,7 +70,7 @@ export function SupplyModal({ open, onOpenChange, token, onSuccess, inlineSucces
 
   const { mutateAsync: supply, isPending, error, reset: resetSupply } = useSupply();
 
-  // On Bitcoin the deposit is pulled from the Radfi trading wallet, so the spendable max
+  // On Bitcoin the deposit is pulled from the Bound Exchange trading wallet, so the spendable max
   // is the trading-wallet balance, not the personal wallet's UTXO balance.
   const { isBitcoin, tradingBalanceSats, notReady: btcNotReady } = useBtcTradingBalance(srcChainKey);
 
