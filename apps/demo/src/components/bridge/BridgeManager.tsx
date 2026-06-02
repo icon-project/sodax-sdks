@@ -154,7 +154,7 @@ export function BridgeManager() {
               </SelectTrigger>
               <SelectContent>
                 {fromTokens.map(t => (
-                  <SelectItem key={t.address} value={t.symbol}>
+                  <SelectItem key={`${t.address}-${t.symbol}`} value={t.symbol}>
                     {t.symbol}
                   </SelectItem>
                 ))}

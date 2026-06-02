@@ -16,6 +16,7 @@ export const moneyMarketSupportedTokens = {
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.ETH,
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.bnUSD,
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.WBTC,
+    spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.WBTC_LEGACY,
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.weETH,
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.wstETH,
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.tBTC,
@@ -143,6 +144,7 @@ export const moneyMarketSupportedTokens = {
     spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.wstETH,
     spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.USDT,
     spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.WBTC,
+    spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.WBTC_LEGACY,
     spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.LL,
   ] as const,
   [ChainKeys.REDBELLY_MAINNET]: [

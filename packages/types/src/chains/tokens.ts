@@ -5,7 +5,20 @@ import type { Address } from '../shared/shared.js';
 import { ChainKeys, type ChainKey } from './chain-keys.js';
 
 /**
+ * Access restrictions for an {@link XToken} entry. Omit the field for full access
+ * (deposit + withdraw, plus supply/borrow when the entry is in the money-market list).
+ *
+ * - `withdrawOnly` — entry kept for users to withdraw positions from a deprecated hub vault.
+ * - `depositOnly` — entry temporarily accepts deposits but blocks withdrawals.
+ */
+export type XTokenAccess = 'withdrawOnly' | 'depositOnly';
+
+/**
  * Cross-chain token descriptor used by swap / money market / bridge configs.
+ *
+ * `access` is omitted for full-access entries (deposit + withdraw). Set it to mark
+ * restricted entries — e.g. a `withdrawOnly` entry sharing an on-chain address with
+ * its active counterpart so users can withdraw deprecated-vault positions.
  */
 export type XToken = {
   readonly symbol: string;
@@ -15,6 +28,7 @@ export type XToken = {
   readonly chainKey: ChainKey;
   readonly hubAsset: Address;
   readonly vault: Address;
+  readonly access?: XTokenAccess;
 };
 
 export const StatATokenAddresses = {
@@ -28,6 +42,7 @@ export const HubVaultSymbols = [
   'sodaBNB',
   'sodaETH',
   'sodaBTC',
+  'sodaWBTC',
   'sodaSUI',
   'sodaINJ',
   'sodaXLM',
@@ -88,6 +103,15 @@ export const SodaTokens = {
     chainKey: ChainKeys.SONIC_MAINNET,
     hubAsset: '0x7A1A5555842Ad2D0eD274d09b5c4406a95799D5d',
     vault: '0x7A1A5555842Ad2D0eD274d09b5c4406a95799D5d',
+  },
+  sodaWBTC: {
+    symbol: 'sodaWBTC',
+    name: 'Soda Wrapped BTC',
+    decimals: 18,
+    address: '0x811C3fCc13f9c2a23AE2Ae2DCadacFAC6eb5f0eB',
+    chainKey: ChainKeys.SONIC_MAINNET,
+    hubAsset: '0x811C3fCc13f9c2a23AE2Ae2DCadacFAC6eb5f0eB',
+    vault: '0x811C3fCc13f9c2a23AE2Ae2DCadacFAC6eb5f0eB',
   },
   sodaSOL: {
     symbol: 'sodaSOL',
@@ -700,6 +724,7 @@ export const arbitrumSupportedTokens = {
     chainKey: ChainKeys.ARBITRUM_MAINNET,
     hubAsset: '0x96Fc8540736f1598b7E235e6dE8814062b3b5d3B',
     vault: SodaTokens.sodaBTC.address,
+    access: 'withdrawOnly',
   },
   WBTC: {
     symbol: 'WBTC',
@@ -708,7 +733,17 @@ export const arbitrumSupportedTokens = {
     address: '0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f',
     chainKey: ChainKeys.ARBITRUM_MAINNET,
     hubAsset: '0xfB0ACB1b2720B620935F50a6dd3F7FEA52b2FCBe',
+    vault: SodaTokens.sodaWBTC.address,
+  },
+  WBTC_LEGACY: {
+    symbol: 'WBTC.legacy',
+    name: 'Wrapped BTC (Legacy)',
+    decimals: 8,
+    address: '0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f',
+    chainKey: ChainKeys.ARBITRUM_MAINNET,
+    hubAsset: '0xfB0ACB1b2720B620935F50a6dd3F7FEA52b2FCBe',
     vault: SodaTokens.sodaBTC.address,
+    access: 'withdrawOnly',
   },
   USDC: {
     symbol: 'USDC',
@@ -865,6 +900,7 @@ export const baseSupportedTokens = {
     chainKey: ChainKeys.BASE_MAINNET,
     hubAsset: '0x2803a23a3BA6b09e57D1c71deC0D9eFdBB00A27F',
     vault: SodaTokens.sodaBTC.address,
+    access: 'withdrawOnly',
   },
   SODA: {
     symbol: 'SODA',
@@ -1919,7 +1955,17 @@ export const ethereumSupportedTokens = {
     address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599',
     chainKey: ChainKeys.ETHEREUM_MAINNET,
     hubAsset: '0x4ccbe4c2cf2aeed19314790622efd71dc0b67acb',
+    vault: SodaTokens.sodaWBTC.address,
+  },
+  WBTC_LEGACY: {
+    symbol: 'WBTC.legacy',
+    name: 'Wrapped Bitcoin (Legacy)',
+    decimals: 8,
+    address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599',
+    chainKey: ChainKeys.ETHEREUM_MAINNET,
+    hubAsset: '0x4ccbe4c2cf2aeed19314790622efd71dc0b67acb',
     vault: SodaTokens.sodaBTC.address,
+    access: 'withdrawOnly',
   },
   sUSDat: {
     symbol: 'sUSDat',

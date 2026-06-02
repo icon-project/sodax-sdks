@@ -6,20 +6,32 @@
 #   1. .claude-plugin/plugin.json exists and parses as JSON.
 #   2. Every skill directory listed in plugin.json exists and contains a SKILL.md.
 #   3. Every SKILL.md has YAML frontmatter with `name:` and `description:`.
-#   4. Every skill directory under skills/ is registered in plugin.json (no orphans).
-#   5. Structural layout invariants (post-unification):
-#      a. The registered skill set is exactly the expected four: sodax-sdk,
-#         sodax-wallet-sdk-core, sodax-wallet-sdk-react, sodax-dapp-kit.
-#      b. Each skill contains BOTH integration/knowledge/ and
+#      For broad (top-level) skills, frontmatter `name` must equal the directory
+#      basename. For nested granular skills (skills/<broad>/<feature>/), the
+#      frontmatter `name` must equal `<broad-basename>-<feature-basename>` so
+#      installed names stay unique across the skill ecosystem.
+#   4. Every skill directory under skills/ is registered in plugin.json (no
+#      orphans). Applies to both top-level dirs and nested dirs that contain a
+#      SKILL.md.
+#   5. Structural layout invariants:
+#      a. The four broad skills (sodax-sdk, sodax-wallet-sdk-core,
+#         sodax-wallet-sdk-react, sodax-dapp-kit) must all be registered.
+#         Additional skills are allowed only if nested directly under one of the
+#         four broad skill directories (granular per-feature skills).
+#      b. Each BROAD skill contains BOTH integration/knowledge/ and
 #         migration-v1-to-v2/knowledge/ subtrees, and they are non-empty.
+#         Nested granular skills reuse the parent's knowledge tree and do NOT
+#         need their own subtrees.
 #      c. No old split skill directories (sodax-<pkg>-{integration,migration})
 #         remain.
-#      d. No skill contains a bare migration/ subdir (would conflict with the
-#         migration-v1-to-v2/ naming).
 #   6. Cross-SDK-package reference prohibition: no skill may link to (or cite a
-#      GitHub URL into) a skill belonging to a different SDK package. Intra-
-#      SDK-package cross-mode links (integration ↔ migration-v1-to-v2 within
-#      the same skill) ARE allowed.
+#      GitHub URL into) a skill belonging to a different SDK package family.
+#      Family is the broad-skill name (sdk, wallet-sdk-core, wallet-sdk-react,
+#      dapp-kit). Granular skills nested under a broad skill share that broad
+#      skill's family, so intra-family links (broad ↔ granular and granular ↔
+#      granular within the same broad parent) are allowed. Intra-family
+#      cross-mode links (integration ↔ migration-v1-to-v2 within the same
+#      family) are also allowed.
 #   7. Every relative .md link in packages/skills/{AGENTS,CLAUDE,README}.md and
 #      under skills/ resolves to an existing file (with optional #fragment).
 #
@@ -90,12 +102,24 @@ for dir in "${REGISTERED[@]}"; do
   # and the whole skill gets silently skipped at install time. Wrap each
   # description in single quotes (see packages/skills/CLAUDE.md).
   #
-  # Also enforce `name:` === basename(dir) — the vercel-labs/skills CLI uses
-  # the frontmatter `name` as the install target name. A mismatch causes
+  # Enforce `name:` matching the directory layout — the vercel-labs/skills CLI
+  # uses the frontmatter `name` as the install target name. A mismatch causes
   # routing confusion (AGENTS.md references the directory name but the agent
   # loads the frontmatter name). The rule is documented in packages/skills/
   # CLAUDE.md "Editing rules".
-  expected_name="$(basename "$dir")"
+  #
+  # Top-level skill (skills/<broad>/):
+  #   expected_name = <broad-basename>      (e.g. "sodax-sdk")
+  # Nested granular skill (skills/<broad>/<feature>/):
+  #   expected_name = <broad>-<feature>     (e.g. "sodax-sdk-swap")
+  # The namespaced form keeps installed names unique across the skill ecosystem
+  # (a bare "swap" would collide with any other skill called "swap").
+  parent_dir="$(dirname "$dir")"
+  if [[ "$parent_dir" == "skills" ]]; then
+    expected_name="$(basename "$dir")"
+  else
+    expected_name="$(basename "$parent_dir")-$(basename "$dir")"
+  fi
   rc=0
   node -e '
     const fs = require("fs"); const { parse } = require("yaml");
@@ -121,6 +145,12 @@ done
 
 # -----------------------------------------------------------------------------
 # 4. No orphan skill directories
+#
+# Checks both top-level dirs (skills/<broad>/) and nested dirs inside each
+# broad skill (skills/<broad>/<feature>/). A nested directory is treated as a
+# skill only if it contains a SKILL.md — the integration/ and
+# migration-v1-to-v2/ knowledge subtrees inside each broad skill are NOT
+# skills and must not be flagged.
 # -----------------------------------------------------------------------------
 if [[ -d skills ]]; then
   for d in skills/*/; do
@@ -129,31 +159,52 @@ if [[ -d skills ]]; then
     if ! printf '%s\n' "${REGISTERED[@]}" | grep -qFx "$name"; then
       err "Orphan skill directory not registered in plugin.json: $name"
     fi
+    # Look one level deeper for nested granular skills.
+    for nested in "$name"/*/; do
+      [[ -d "$nested" ]] || continue
+      nested_name="${nested%/}"
+      # Only flag directories that actually contain a SKILL.md.
+      [[ -f "$nested_name/SKILL.md" ]] || continue
+      if ! printf '%s\n' "${REGISTERED[@]}" | grep -qFx "$nested_name"; then
+        err "Orphan nested skill directory not registered in plugin.json: $nested_name"
+      fi
+    done
   done
 fi
 
 # -----------------------------------------------------------------------------
 # 5. Structural layout invariants
 # -----------------------------------------------------------------------------
-# 5a. Exactly the expected 4 skills are registered, no more, no less.
-EXPECTED_SKILLS=(
+# 5a. The four broad skills must all be registered. Additional registered
+#     skills are allowed only if they are nested directly under one of those
+#     four broad skill directories (granular per-feature skills).
+EXPECTED_BROAD_SKILLS=(
   "skills/sodax-sdk"
   "skills/sodax-wallet-sdk-core"
   "skills/sodax-wallet-sdk-react"
   "skills/sodax-dapp-kit"
 )
-for expected in "${EXPECTED_SKILLS[@]}"; do
+for expected in "${EXPECTED_BROAD_SKILLS[@]}"; do
   if ! printf '%s\n' "${REGISTERED[@]}" | grep -qFx "$expected"; then
-    err "Expected skill not registered in plugin.json: $expected"
+    err "Expected broad skill not registered in plugin.json: $expected"
   fi
 done
-if (( ${#REGISTERED[@]} != ${#EXPECTED_SKILLS[@]} )); then
-  err "plugin.json must register exactly ${#EXPECTED_SKILLS[@]} skills, found ${#REGISTERED[@]}"
-fi
+for reg in "${REGISTERED[@]}"; do
+  # Top-level broad skills are fine.
+  if printf '%s\n' "${EXPECTED_BROAD_SKILLS[@]}" | grep -qFx "$reg"; then
+    continue
+  fi
+  # Otherwise must be nested directly under a broad skill.
+  parent="$(dirname "$reg")"
+  if ! printf '%s\n' "${EXPECTED_BROAD_SKILLS[@]}" | grep -qFx "$parent"; then
+    err "Registered skill is neither broad nor nested under a broad skill: $reg"
+  fi
+done
 
-# 5b. Each skill has both integration/knowledge/ and migration-v1-to-v2/knowledge/
-#     subtrees, and they are non-empty.
-for skill_dir in "${EXPECTED_SKILLS[@]}"; do
+# 5b. Each BROAD skill has both integration/knowledge/ and
+#     migration-v1-to-v2/knowledge/ subtrees, and they are non-empty.
+#     Nested granular skills reuse the parent's tree and skip this check.
+for skill_dir in "${EXPECTED_BROAD_SKILLS[@]}"; do
   [[ -d "$skill_dir" ]] || continue   # already flagged in section 2
   for mode in integration migration-v1-to-v2; do
     kdir="$skill_dir/$mode/knowledge"
@@ -174,31 +225,36 @@ for d in skills/sodax-*-integration skills/sodax-*-migration; do
 done
 shopt -u nullglob
 
-# 5d. No skill contains a bare migration/ subdir (would clash with
-#     migration-v1-to-v2/ and with the per-feature features/migration.md).
-for skill_dir in "${EXPECTED_SKILLS[@]}"; do
-  if [[ -d "$skill_dir/migration" ]]; then
-    err "Forbidden bare migration/ subdir (use migration-v1-to-v2/ instead): $skill_dir/migration"
-  fi
-done
+# 5d. (Removed) The previous rule blocked a bare migration/ subdir to prevent
+#     confusion with the migration-v1-to-v2/ mode tree. With granular per-feature
+#     skills introduced, skills/sodax-sdk/migration/ is now a valid feature skill
+#     for MigrationService (token migration). Mode subtrees stay named
+#     migration-v1-to-v2/, so there is no actual collision.
 
 # -----------------------------------------------------------------------------
 # 6. Cross-SDK-package reference prohibition (packages/skills/CLAUDE.md
 #    "Editing rules"). A skill MUST NOT link to (or cite a GitHub URL into) a
-#    skill belonging to a different SDK package. Intra-SDK-package cross-mode
-#    links (integration ↔ migration-v1-to-v2 within the SAME skill dir) are
-#    allowed. Cross-pkg references must be prose-only (e.g., "load the
-#    `sodax-sdk` skill (integration mode)").
+#    skill belonging to a different SDK package family. Family is the broad
+#    skill name (e.g. "sdk" for sodax-sdk and all granular skills nested under
+#    it). Intra-family links are allowed: broad ↔ granular, granular ↔
+#    granular within the same broad parent, integration ↔ migration-v1-to-v2
+#    within the same family. Cross-family references must be prose-only
+#    (e.g., "load the `sodax-sdk` skill (integration mode)").
 # -----------------------------------------------------------------------------
 while IFS= read -r line; do
   [[ -n "$line" ]] && err "$line"
 done < <(python3 - << 'PY'
 import os, re, sys
-SKILL_FROM_PATH = re.compile(r'skills/sodax-([a-z-]+?)/(integration|migration-v1-to-v2)/')
-# Markdown link target: ](.../sodax-<pkg>/<mode>/...)
-LINK_RE = re.compile(r'\]\((?:\./|\.\./)+sodax-(?P<pkg>[a-z-]+?)/(?:integration|migration-v1-to-v2)/')
-# GitHub URL into another skill: .../packages/skills/skills/sodax-<pkg>/<mode>/...
-URL_RE = re.compile(r'https?://github\.com/[^/\s)]+/[^/\s)]+/(?:blob|tree)/[^/\s)]+/packages/skills/skills/sodax-(?P<pkg>[a-z-]+?)/(?:integration|migration-v1-to-v2)/')
+# Family extractor: any file path under skills/sodax-<family>/... belongs to
+# that family. Works for top-level broad skill files
+# (skills/sodax-sdk/SKILL.md), knowledge files
+# (skills/sodax-sdk/integration/knowledge/...), AND nested granular skills
+# (skills/sodax-sdk/swap/SKILL.md).
+SKILL_FROM_PATH = re.compile(r'skills/sodax-([a-z][a-z-]*?)(?:/|$)')
+# Markdown link target: ](.../sodax-<family>/...)
+LINK_RE = re.compile(r'\]\((?:\./|\.\./)+sodax-(?P<pkg>[a-z][a-z-]*?)/')
+# GitHub URL into another skill: .../packages/skills/skills/sodax-<family>/...
+URL_RE = re.compile(r'https?://github\.com/[^/\s)]+/[^/\s)]+/(?:blob|tree)/[^/\s)]+/packages/skills/skills/sodax-(?P<pkg>[a-z][a-z-]*?)/')
 for root, _, files in os.walk('skills'):
     m_src = SKILL_FROM_PATH.search(root + '/')
     if not m_src:

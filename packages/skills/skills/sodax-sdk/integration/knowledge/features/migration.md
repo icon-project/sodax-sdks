@@ -8,7 +8,7 @@ Migration of legacy ICON ecosystem tokens to the SODAX hub. Three sub-services:
 
 Access: `sodax.migration`. Service class: `MigrationService` (with sub-services `sodax.migration.icxMigration`, `sodax.migration.bnUSDMigrationService`, `sodax.migration.balnSwapService`). Feature tag for errors: `'migration'`.
 
-> Don't confuse this feature (the `MigrationService` SDK module) with the v1 → v2 SDK port itself. They share the word "migration" but are independent concerns. The v1 → v2 port playbook lives at [`features/icx-bnusd-baln.md`](../../../migration-v1-to-v2/knowledge/features/icx-bnusd-baln.md).
+> Don't confuse this feature (the `MigrationService` SDK module) with the v1 → v2 SDK port itself. They share the word "migration" but are independent concerns. The v1 → v2 port playbook lives at [`features/migration.md`](../../../migration-v1-to-v2/knowledge/features/migration.md).
 
 ## How it works
 
@@ -177,5 +177,5 @@ try {
 
 ## Cross-references
 
-- v1 → v2 migration of this feature: [`features/icx-bnusd-baln.md`](../../../migration-v1-to-v2/knowledge/features/icx-bnusd-baln.md).
+- v1 → v2 migration of this feature: [`features/migration.md`](../../../migration-v1-to-v2/knowledge/features/migration.md).
 - Architecture (relay layer's `phase: 'destinationExecution'` for bnUSD): [`../architecture.md`](../architecture.md) § 9.
