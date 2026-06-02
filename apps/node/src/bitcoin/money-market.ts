@@ -18,8 +18,8 @@ import { BitcoinWalletProvider } from '@sodax/wallet-sdk-core';
  *   - BTC_ADDRESS_TYPE       optional: P2TR | P2WPKH | P2SH | P2PKH (default P2TR). Must match your
  *                            key — it selects the message-signing scheme (BIP322 vs ECDSA).
  *
- * Run:  ACTION=borrow   tsx apps/node/src/moneymarket-bitcoin.ts
- *       ACTION=withdraw tsx apps/node/src/moneymarket-bitcoin.ts
+ * Run:  ACTION=borrow   tsx apps/node/src/bitcoin/money-market.ts
+ *       ACTION=withdraw tsx apps/node/src/bitcoin/money-market.ts
  */
 
 const btcPrivateKey = process.env.BTC_PRIVATE_KEY;
