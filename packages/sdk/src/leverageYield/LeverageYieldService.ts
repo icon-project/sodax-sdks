@@ -56,6 +56,41 @@ const ANY_SOLVER_ADDRESS: Address = '0x0000000000000000000000000000000000000000'
  */
 const MAX_WITHDRAW_DUST_BUFFER = 1000n;
 
+/**
+ * Convert a percentage value (e.g. `3.07` for 3.07%) to RAY (1e27 = 100%) via bigint math.
+ * `aprPct * 1e9` stays well within `Number` precision (~2^53), then we bigint-shift by
+ * 1e16 to land in RAY units (1% = 1e25, so 3.07% = 3.07e25 = 3.07e9 × 1e16).
+ */
+function pctToRay(aprPct: number): bigint {
+  return BigInt(Math.round(aprPct * 1e9)) * 10n ** 16n;
+}
+
+/**
+ * Fetches the latest APR for a DefiLlama yield pool. DefiLlama's `/chart/<poolId>`
+ * endpoint returns the pool's full time series with permissive CORS (`access-control-
+ * allow-origin: *`) and a small response (~1 entry/day). The latest entry's `apy` is the
+ * compounded yield including any reward tokens — what a depositor actually earns.
+ *
+ * Adding a new LSD: find its pool ID via the bulk `/pools` endpoint (filter by symbol +
+ * project) and reference it from the vault's `lsdSource.poolId` in `leverageYieldVaults`.
+ * No SDK changes needed — DefiLlama aggregates rates across all LSD issuers already.
+ *
+ * Throws on network/parse error; the caller swallows and uses the registry's
+ * `fallbackAprPct`.
+ */
+async function fetchDefillamaApr(poolId: string): Promise<number> {
+  const response = await fetch(`https://yields.llama.fi/chart/${poolId}`);
+  if (!response.ok) throw new Error(`DefiLlama APR fetch failed: HTTP ${response.status}`);
+  const json = (await response.json()) as { data?: ReadonlyArray<{ apy?: unknown }> };
+  const series = json?.data;
+  if (!Array.isArray(series) || series.length === 0) {
+    throw new Error('DefiLlama APR response: empty time series');
+  }
+  const latest = series[series.length - 1]?.apy;
+  if (typeof latest !== 'number') throw new Error('DefiLlama APR: latest entry missing numeric apy');
+  return latest;
+}
+
 // ─── Param types ──────────────────────────────────────────────────────────
 
 export type LeverageYieldPosition = {
@@ -98,6 +133,46 @@ export type LeverageYieldApr = {
   leverageMultiplierWad: bigint;
   /** Net APR earned by a depositor at `targetLtvBps`, in RAY. Can be negative. */
   netAprRay: bigint;
+};
+
+/**
+ * Off-chain LSD staking-APR snapshot for a leverage-yield vault's underlying asset.
+ * Returned by {@link LeverageYieldService.getLsdApr} and embedded in
+ * {@link LeverageYieldEffectiveApr}.
+ */
+export type LeverageYieldLsdApr = {
+  /** LSD staking APR in RAY (1e27 = 100%). Zero when the vault has no configured LSD source. */
+  aprRay: bigint;
+  /** Human-readable provider label, e.g. `'Lido (stETH)'` (suffixed with `(fallback)` on error). */
+  label: string;
+  /**
+   * `true` when this value came from the hardcoded `fallbackAprPct` rather than a live
+   * fetch — either because the provider has no live endpoint (`manual`), the network
+   * call failed, or the vault has no LSD source configured. UIs should label the value
+   * as an estimate in this state.
+   */
+  stale: boolean;
+};
+
+/**
+ * Combined AAVE + LSD APR view — extends {@link LeverageYieldApr} with the LSD staking
+ * yield folded into the supply side. Returned by {@link LeverageYieldService.getEffectiveApr}.
+ *
+ * The `netAprRay` inherited from {@link LeverageYieldApr} is the **AAVE-only** number —
+ * the negative-spread case the SDK historically reported. `effectiveNetAprRay` is the
+ * honest one for LSD-backed strategies because it includes the LSD's native staking yield,
+ * which is the dominant component for these vaults.
+ */
+export type LeverageYieldEffectiveApr = LeverageYieldApr & {
+  /** LSD staking APR snapshot used to compute the effective rates. */
+  lsdApr: LeverageYieldLsdApr;
+  /** `supplyAprRay + lsdApr.aprRay`, in RAY — the yield the supply side actually earns. */
+  effectiveSupplyAprRay: bigint;
+  /**
+   * `effectiveSupplyAprRay + leverage × (effectiveSupplyAprRay − borrowAprRay)`, in RAY.
+   * The headline number a UI should display.
+   */
+  effectiveNetAprRay: bigint;
 };
 
 /**
@@ -184,9 +259,11 @@ export type LeverageYieldServiceConstructorParams = {
  *   hub wallet via a `Connection.sendMessage`.
  * - `approve` / `isAllowanceValid` — Sonic-direct allowance management for the vault's
  *   underlying asset (sodaWEETH-style).
- * - `getPosition` / `getApr` / `getMaxWithdraw` / `getMaxWithdrawForUser` / `getShareBalance`
- *   / `getShareBalanceForUser` / `getTotalAssets` / `previewDeposit` / `previewWithdraw` /
- *   `previewRedeem` — reads.
+ * - `getPosition` / `getApr` / `getEffectiveApr` / `getLsdApr` / `getMaxWithdraw` /
+ *   `getMaxWithdrawForUser` / `getShareBalance` / `getShareBalanceForUser` /
+ *   `getTotalAssets` / `previewDeposit` / `previewWithdraw` / `previewRedeem` — reads.
+ *   Use `getEffectiveApr` for the honest LSD-aware APR; `getApr` reports the AAVE-only
+ *   spread and goes negative when the LSD's native staking yield is the alpha source.
  * - `listVaults` / `getVault` / `getVaultByAddress` — registry lookups.
  */
 export class LeverageYieldService {
@@ -493,6 +570,70 @@ export class LeverageYieldService {
     } catch (error) {
       if (isLeverageYieldLookupError(error)) return { ok: false, error };
       return { ok: false, error: lookupFailed('leverageYield', 'getApr', error) };
+    }
+  }
+
+  /**
+   * Off-chain LSD staking-APR for the vault's underlying asset. Looks the vault up in the
+   * registry, hits DefiLlama's per-pool chart endpoint for the configured `poolId`, and on
+   * any fetch failure returns the registry's hardcoded `fallbackAprPct` with `stale: true`.
+   *
+   * Always resolves to `{ ok: true, ... }` for a known vault — the fallback path replaces
+   * the error, since a missing LSD APR shouldn't break the parent call. Returns
+   * `{ aprRay: 0n, stale: true, label: 'no LSD source' }` for vaults without an
+   * `lsdSource` configured (non-LSD strategies); callers can treat that as "skip LSD".
+   */
+  public async getLsdApr(vault: Address): Promise<Result<LeverageYieldLsdApr, LeverageYieldLookupError>> {
+    try {
+      const cfg = this.getVaultByAddress(vault);
+      const source = cfg?.lsdSource;
+      if (!source) {
+        return { ok: true, value: { aprRay: 0n, label: 'no LSD source', stale: true } };
+      }
+      try {
+        const aprPct = await fetchDefillamaApr(source.poolId);
+        return { ok: true, value: { aprRay: pctToRay(aprPct), label: source.label, stale: false } };
+      } catch {
+        return {
+          ok: true,
+          value: { aprRay: pctToRay(source.fallbackAprPct), label: `${source.label} (fallback)`, stale: true },
+        };
+      }
+    } catch (error) {
+      if (isLeverageYieldLookupError(error)) return { ok: false, error };
+      return { ok: false, error: lookupFailed('leverageYield', 'getLsdApr', error) };
+    }
+  }
+
+  /**
+   * Combined view of {@link getApr} + {@link getLsdApr}: re-applies the vault's leverage
+   * formula with the LSD's native staking yield folded into the supply side, exposing the
+   * **effective** net APR that LSD-backed strategies actually earn. The AAVE-only
+   * `netAprRay` is preserved on the return value for callers who want to display both.
+   *
+   *   effectiveSupply = supplyAprRay + lsdApr.aprRay
+   *   effectiveNet    = effectiveSupply + leverage × (effectiveSupply − borrowAprRay)
+   *
+   * Fetches AAVE rates and the LSD APR in parallel for one round-trip's worth of latency.
+   */
+  public async getEffectiveApr(vault: Address): Promise<Result<LeverageYieldEffectiveApr, LeverageYieldLookupError>> {
+    try {
+      const [aprResult, lsdResult] = await Promise.all([this.getApr(vault), this.getLsdApr(vault)]);
+      if (!aprResult.ok) return aprResult;
+      if (!lsdResult.ok) return lsdResult;
+      const apr = aprResult.value;
+      const lsd = lsdResult.value;
+      const effectiveSupplyAprRay = apr.supplyAprRay + lsd.aprRay;
+      const spreadRay = effectiveSupplyAprRay - apr.borrowAprRay;
+      const WAD = 1_000_000_000_000_000_000n; // 1e18 — matches `leverageMultiplierWad`'s scale
+      const effectiveNetAprRay = effectiveSupplyAprRay + (spreadRay * apr.leverageMultiplierWad) / WAD;
+      return {
+        ok: true,
+        value: { ...apr, lsdApr: lsd, effectiveSupplyAprRay, effectiveNetAprRay },
+      };
+    } catch (error) {
+      if (isLeverageYieldLookupError(error)) return { ok: false, error };
+      return { ok: false, error: lookupFailed('leverageYield', 'getEffectiveApr', error) };
     }
   }
 

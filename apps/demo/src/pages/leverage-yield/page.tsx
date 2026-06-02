@@ -150,9 +150,7 @@ export default function LeverageYieldPage() {
 
   useEffect(() => {
     if (userTokens.length === 0) return;
-    setUserToken(prev =>
-      prev && userTokens.some(t => t.address === prev.address) ? prev : userTokens[0],
-    );
+    setUserToken(prev => (prev && userTokens.some(t => t.address === prev.address) ? prev : userTokens[0]));
   }, [userTokens]);
 
   // ─── Active tab ──────────────────────────────────────────────────────────
@@ -162,12 +160,8 @@ export default function LeverageYieldPage() {
   // src/dst derivation — single user-picked side, the other is implicitly lsoda* on hub.
   // Deposit:  user pays `userToken` on `userChain` → receives `lsodaToken` on Sonic.
   // Withdraw: user burns `lsodaToken` on Sonic → receives `userToken` on `userChain`.
-  const src = tab === 'deposit'
-    ? { chain: userChain, token: userToken }
-    : { chain: SONIC, token: lsodaToken };
-  const dst = tab === 'deposit'
-    ? { chain: SONIC, token: lsodaToken }
-    : { chain: userChain, token: userToken };
+  const src = tab === 'deposit' ? { chain: userChain, token: userToken } : { chain: SONIC, token: lsodaToken };
+  const dst = tab === 'deposit' ? { chain: SONIC, token: lsodaToken } : { chain: userChain, token: userToken };
 
   // ─── Wallet (single — the user's spoke chain) ────────────────────────────
   // Same EOA holds the source funds on deposit AND receives the swap output on withdraw.
@@ -319,16 +313,18 @@ export default function LeverageYieldPage() {
     [sharesByChain],
   );
 
-  // Steady-state APR — `getApr` reads AAVE rates + vault targetLTV and applies the
-  // standard leveraged-LSD formula. Slow-refresh (60s): AAVE rates drift slowly and a
-  // headline number doesn't need second-by-second precision.
+  // Effective APR — AAVE rates + LSD staking yield combined, with the leverage formula
+  // re-applied on the boosted supply side. Single SDK call that does the on-chain reads
+  // (AAVE supply/borrow + vault targetLTV) and the off-chain LSD fetch (Lido live; EtherFi
+  // hardcoded fallback per the @sodax/types registry) in parallel. 60s refresh: AAVE rates
+  // drift slowly and LSD APRs are 7-day MAs, so a headline number doesn't need finer.
   const { data: vaultApr } = useQuery({
-    queryKey: ['leverageYield', 'apr', selectedVault?.vault],
+    queryKey: ['leverageYield', 'effectiveApr', selectedVault?.vault],
     enabled: !!selectedVault,
     refetchInterval: 60_000,
     queryFn: async () => {
       if (!selectedVault) return null;
-      const r = await sodax.leverageYield.getApr(selectedVault.vault);
+      const r = await sodax.leverageYield.getEffectiveApr(selectedVault.vault);
       if (!r.ok) throw r.error;
       return r.value;
     },
@@ -583,27 +579,46 @@ export default function LeverageYieldPage() {
               </SelectContent>
             </Select>
             <div className="text-xs text-muted-foreground space-y-0.5 break-all">
-              <div>vault: <code>{selectedVault.vault}</code></div>
-              <div>asset: <code>{selectedVault.asset}</code></div>
-              <div>borrowToken: <code>{selectedVault.borrowToken}</code></div>
+              <div>
+                vault: <code>{selectedVault.vault}</code>
+              </div>
+              <div>
+                asset: <code>{selectedVault.asset}</code>
+              </div>
+              <div>
+                borrowToken: <code>{selectedVault.borrowToken}</code>
+              </div>
             </div>
 
-            {/* Steady-state APR — supply rate + leveraged spread between asset and borrowToken
-                AAVE rates, scaled by the vault's targetLTV. Headline number for a UI. */}
+            {/* Steady-state APR — leveraged spread between the supply side (AAVE supply
+                rate + LSD staking yield) and the borrow side, scaled by the vault's
+                targetLTV. The "Net APR" headline is the *effective* rate including the
+                LSD's native staking yield (the dominant component for LSD-backed vaults);
+                AAVE-only rows below show the math behind it. */}
             {vaultApr && (
               <div className="border-t pt-3 grid grid-cols-2 gap-y-1 text-sm">
                 <span className="text-muted-foreground">Net APR</span>
                 <span className="text-right font-mono text-base font-semibold">
-                  {fmtApr(vaultApr.netAprRay)}
+                  {fmtApr(vaultApr.effectiveNetAprRay)}
                 </span>
-                <span className="text-xs text-muted-foreground">supply APR ({selectedVault.asset.slice(0, 6)}…)</span>
+                {vaultApr.lsdApr.aprRay > 0n && (
+                  <>
+                    <span className="text-xs text-muted-foreground">
+                      LSD staking {vaultApr.lsdApr.stale ? '(estimate)' : ''}
+                    </span>
+                    <span className="text-right font-mono text-xs">+{fmtApr(vaultApr.lsdApr.aprRay)}</span>
+                  </>
+                )}
+                <span className="text-xs text-muted-foreground">AAVE supply ({selectedVault.asset.slice(0, 6)}…)</span>
                 <span className="text-right font-mono text-xs">{fmtApr(vaultApr.supplyAprRay)}</span>
                 <span className="text-xs text-muted-foreground">
-                  borrow APR ({selectedVault.borrowToken.slice(0, 6)}…)
+                  AAVE borrow ({selectedVault.borrowToken.slice(0, 6)}…)
                 </span>
                 <span className="text-right font-mono text-xs">{fmtApr(vaultApr.borrowAprRay)}</span>
                 <span className="text-xs text-muted-foreground">target leverage</span>
                 <span className="text-right font-mono text-xs">{fmtLeverage(vaultApr.leverageMultiplierWad)}×</span>
+                <span className="text-xs text-muted-foreground">AAVE-only net</span>
+                <span className="text-right font-mono text-xs">{fmtApr(vaultApr.netAprRay)}</span>
               </div>
             )}
 
@@ -670,13 +685,9 @@ export default function LeverageYieldPage() {
                       <div key={chainKey} className="flex justify-between text-xs">
                         <span className="text-muted-foreground">
                           {chainKey}{' '}
-                          <span className="opacity-60">
-                            ({chainKey === SONIC ? 'wallet' : 'hub wallet'})
-                          </span>
+                          <span className="opacity-60">({chainKey === SONIC ? 'wallet' : 'hub wallet'})</span>
                         </span>
-                        <span className="font-mono">
-                          {fmtUnits(d.shares, lsodaToken.decimals)}
-                        </span>
+                        <span className="font-mono">{fmtUnits(d.shares, lsodaToken.decimals)}</span>
                       </div>
                     );
                   }
@@ -702,9 +713,7 @@ export default function LeverageYieldPage() {
                     );
                   }
                   if (resolved === sharesByChain.length && nonZero === 0) {
-                    return (
-                      <div className="text-xs text-muted-foreground">no shares on any connected chain</div>
-                    );
+                    return <div className="text-xs text-muted-foreground">no shares on any connected chain</div>;
                   }
                   return null;
                 })()}
@@ -718,8 +727,12 @@ export default function LeverageYieldPage() {
         <CardContent className="pt-6">
           <Tabs value={tab} onValueChange={v => setTab(v as 'deposit' | 'withdraw')}>
             <TabsList className="w-full">
-              <TabsTrigger value="deposit" className="flex-1">Deposit</TabsTrigger>
-              <TabsTrigger value="withdraw" className="flex-1">Withdraw</TabsTrigger>
+              <TabsTrigger value="deposit" className="flex-1">
+                Deposit
+              </TabsTrigger>
+              <TabsTrigger value="withdraw" className="flex-1">
+                Withdraw
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value={tab} className="space-y-4 pt-4">
@@ -737,7 +750,9 @@ export default function LeverageYieldPage() {
                 />
                 <div className="text-xs text-muted-foreground break-all">
                   {userAccount.address ? (
-                    <>signer: <code>{userAccount.address}</code></>
+                    <>
+                      signer: <code>{userAccount.address}</code>
+                    </>
                   ) : (
                     <span className="text-amber-600">connect a wallet on {userChain}</span>
                   )}
@@ -795,17 +810,11 @@ export default function LeverageYieldPage() {
                       // Max source amount depends on the active flow:
                       //   deposit  → wallet balance of the chosen input token
                       //   withdraw → user's lsoda* share balance (in hub wallet)
-                      const maxRaw =
-                        tab === 'deposit' ? userBalance : userShares;
-                      const decimals =
-                        tab === 'deposit' ? userToken?.decimals ?? 18 : lsodaToken.decimals;
+                      const maxRaw = tab === 'deposit' ? userBalance : userShares;
+                      const decimals = tab === 'deposit' ? (userToken?.decimals ?? 18) : lsodaToken.decimals;
                       if (maxRaw !== undefined) setSourceAmount(formatUnits(maxRaw, decimals));
                     }}
-                    disabled={
-                      tab === 'deposit'
-                        ? !userToken || userBalance === undefined
-                        : userShares === undefined
-                    }
+                    disabled={tab === 'deposit' ? !userToken || userBalance === undefined : userShares === undefined}
                   >
                     Max
                   </Button>
@@ -820,16 +829,14 @@ export default function LeverageYieldPage() {
                     <span className="font-mono">{fmtUnits(quote.quoted_amount, dst.token.decimals)}</span>{' '}
                     {dst.token.symbol}{' '}
                     <span className="text-xs text-muted-foreground">
-                      {tab === 'deposit'
-                        ? '(in your hub wallet)'
-                        : `(on ${userChain}, to your address)`}
+                      {tab === 'deposit' ? '(in your hub wallet)' : `(on ${userChain}, to your address)`}
                     </span>
                   </div>
                 )}
                 {exchangeRate && dst.token && src.token && (
                   <div>
-                    rate: 1 {src.token.symbol} ≈{' '}
-                    <span className="font-mono">{exchangeRate.toFixed(6)}</span> {dst.token.symbol}
+                    rate: 1 {src.token.symbol} ≈ <span className="font-mono">{exchangeRate.toFixed(6)}</span>{' '}
+                    {dst.token.symbol}
                   </div>
                 )}
                 {minOutputAmount !== undefined && dst.token && (
@@ -883,17 +890,15 @@ export default function LeverageYieldPage() {
                   {quoteQuery.isFetching ? 'Quoting…' : 'Review'}
                 </Button>
               ) : tab === 'deposit' && isAllowanceLoading ? (
-                <Button disabled className="w-full">Checking allowance…</Button>
+                <Button disabled className="w-full">
+                  Checking allowance…
+                </Button>
               ) : tab === 'deposit' && !hasAllowance ? (
                 <Button onClick={handleApprove} disabled={isApproving} className="w-full">
                   {isApproving ? 'Approving…' : 'Approve'}
                 </Button>
               ) : (
-                <Button
-                  onClick={handleSwap}
-                  disabled={isSubmitting || isSwapping}
-                  className="w-full"
-                >
+                <Button onClick={handleSwap} disabled={isSubmitting || isSwapping} className="w-full">
                   {isSubmitting || isSwapping
                     ? isSwapping
                       ? 'Swapping…'
@@ -904,9 +909,7 @@ export default function LeverageYieldPage() {
                 </Button>
               )}
 
-              {actionError && (
-                <div className="text-sm text-red-600 break-all">{actionError}</div>
-              )}
+              {actionError && <div className="text-sm text-red-600 break-all">{actionError}</div>}
             </TabsContent>
           </Tabs>
         </CardContent>
