@@ -4,7 +4,7 @@ Every v2 design concept the SDK rests on, in a single TOC-navigable file. Read e
 
 ## Section index
 
-1. [Hub-and-spoke model](#1-hub-and-spoke-model) — Sonic is the hub; 19 spoke chains route through it.
+1. [Hub-and-spoke model](#1-hub-and-spoke-model) — Sonic is the hub; 20 spoke chains route through it.
 2. [`SpokeService` router](#2-spokeservice-router) — single internal dispatcher; no per-chain provider classes.
 3. [`Sodax` facade and service graph](#3-sodax-facade-and-service-graph) — one instance owns every feature service.
 4. [`ConfigService`](#4-configservice) — dynamic config from backend with packaged-defaults fallback.
@@ -50,7 +50,7 @@ For most consumers, this whole pipeline is one method call (`sodax.swaps.swap(..
 
 ### Supported chains
 
-20 total. EVM (12): Sonic (hub), Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia. Non-EVM (8): Solana, Sui, Stellar, ICON, Injective, NEAR, Stacks, Bitcoin. See [`reference/`](reference/) § "Chain keys" for the full table with relay IDs and address-type mapping.
+21 total. EVM (13): Sonic (hub), Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia, Hedera. Non-EVM (8): Solana, Sui, Stellar, ICON, Injective, NEAR, Stacks, Bitcoin. See [`reference/`](reference/) § "Chain keys" for the full table with relay IDs and address-type mapping.
 
 ---
 
@@ -62,7 +62,7 @@ Instead, the SDK has **one** `SpokeService` instance (owned by `Sodax`) which ho
 
 ```
 SpokeService
- ├── EvmSpokeService        (handles all 12 EVM chains)
+ ├── EvmSpokeService        (handles all 13 EVM chains)
  ├── SonicSpokeService      (special-cased for the hub)
  ├── SolanaSpokeService
  ├── SuiSpokeService

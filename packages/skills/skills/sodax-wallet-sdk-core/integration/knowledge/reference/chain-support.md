@@ -22,6 +22,7 @@ Chain families and spoke chain keys this package can sign for. Keys live in `@so
 | `ChainKeys.LIGHTLINK_MAINNET` | `lightlinkPhoenix` |
 | `ChainKeys.REDBELLY_MAINNET` | `redbellyMainnet` |
 | `ChainKeys.KAIA_MAINNET` | `kaia` |
+| `ChainKeys.HEDERA_MAINNET` | `hedera` |
 
 ---
 
@@ -38,7 +39,7 @@ Chain families and spoke chain keys this package can sign for. Keys live in `@so
 | NEAR      | `NearWalletProvider`      | `ChainKeys.NEAR_MAINNET` |
 | Stacks    | `StacksWalletProvider`    | `ChainKeys.STACKS_MAINNET` |
 
-> 20 spoke chains total = 12 EVM + 8 non-EVM. The hub chain (Sonic) is counted with EVM.
+> 21 spoke chains total = 13 EVM + 8 non-EVM. The hub chain (Sonic) is counted with EVM.
 
 ---
 

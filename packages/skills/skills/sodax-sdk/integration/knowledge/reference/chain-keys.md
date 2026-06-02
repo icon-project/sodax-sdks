@@ -16,6 +16,7 @@
 | `LIGHTLINK_MAINNET` | `'lightlink'` | EVM | spoke | `0x${string}` |
 | `REDBELLY_MAINNET` | `'redbelly'` | EVM | spoke | `0x${string}` |
 | `KAIA_MAINNET` | `'0x2019.kaia'` | EVM | spoke | `0x${string}` |
+| `HEDERA_MAINNET` | `'hedera'` | EVM | spoke | `0x${string}` |
 | `SOLANA_MAINNET` | `'solana'` | SOLANA | spoke | base58 PublicKey string |
 | `SUI_MAINNET` | `'sui'` | SUI | spoke | `0x${string}` (32-byte) |
 | `STELLAR_MAINNET` | `'stellar'` | STELLAR | spoke | `G…` |
@@ -35,9 +36,9 @@
 
 | Type | What it is |
 |---|---|
-| `ChainKey` | Union of all `ChainKeys.*` values (20 chains). |
-| `SpokeChainKey` | `ChainKey` minus `'sonic'` (19 spoke chains). |
-| `EvmChainKey` | Subset of `ChainKey` for the 12 EVM chains. |
+| `ChainKey` | Union of all `ChainKeys.*` values (21 chains). |
+| `SpokeChainKey` | `ChainKey` minus `'sonic'` (20 spoke chains). |
+| `EvmChainKey` | Subset of `ChainKey` for the 13 EVM chains. |
 | `HubChainKey` | The literal `'sonic'`. |
 
 ### Chain-family helpers
