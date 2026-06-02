@@ -3084,7 +3084,7 @@ describe('borrow / withdraw: relayData is forwarded to relayTxAndWaitPacket on S
     vi.spyOn(sodax.spoke, 'verifyTxHash').mockResolvedValueOnce({ ok: true, value: true });
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xdst' } });
 
-    await sodax.moneyMarket.withdraw({
+    const result = await sodax.moneyMarket.withdraw({
       raw: false,
       params: withdrawParams(ChainKeys.BITCOIN_MAINNET),
       walletProvider: mockBitcoinProvider,
@@ -3093,10 +3093,40 @@ describe('borrow / withdraw: relayData is forwarded to relayTxAndWaitPacket on S
     // Bitcoin borrow/withdraw are on-demand: submit tx_hash is the literal "withdraw" and the signed
     // payload travels in `data` as a JSON object (the {address,payload} relayData is dropped). The
     // relay tracks the packet under `od:<keccak256 of the ASCII payload_hex>`, so polling uses that.
+    const pollId = `od:${keccak256(stringToBytes(signedPayload.payload_hex)).slice(2)}`;
     const relayArg = mocks.relayTxAndWaitPacket.mock.calls[0]?.[0];
     expect(relayArg?.srcTxHash).toBe('withdraw');
     expect(relayArg?.data).toEqual(signedPayload);
-    expect(relayArg?.pollTxHash).toBe(`od:${keccak256(stringToBytes(signedPayload.payload_hex)).slice(2)}`);
+    expect(relayArg?.pollTxHash).toBe(pollId);
+    // The returned srcChainTxHash is that poll id, not the opaque signed payload — it is the identifier
+    // SodaxScan resolves and the explorer link is built from.
+    expect(result).toEqual({ ok: true, value: { srcChainTxHash: pollId, dstChainTxHash: '0xdst' } });
+  });
+
+  it('borrow on Bitcoin: returns the on-demand poll id (od:<hash>) as srcChainTxHash, not the raw payload', async () => {
+    const extraData = { address: HUB_WALLET, payload: '0xbtc-payload' as `0x${string}` };
+    const signedPayload = { payload_hex: '7b22737263', signature: 'AUBsig' };
+    vi.spyOn(sodax.moneyMarket, 'createBorrowIntent').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        // the signed on-demand borrow payload (JSON string) — there is no broadcast txid
+        tx: JSON.stringify(signedPayload),
+        relayData: extraData,
+      },
+    });
+    vi.spyOn(sodax.spoke, 'verifyTxHash').mockResolvedValueOnce({ ok: true, value: true });
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xdst' } });
+
+    const result = await sodax.moneyMarket.borrow({
+      raw: false,
+      params: borrowParams(ChainKeys.BITCOIN_MAINNET),
+      walletProvider: mockBitcoinProvider,
+    });
+
+    // Same on-demand identity as withdraw: the source identifier is the derived poll id, never the
+    // payload JSON (which would render as a broken "tx hash" / explorer link in consumers).
+    const pollId = `od:${keccak256(stringToBytes(signedPayload.payload_hex)).slice(2)}`;
+    expect(result).toEqual({ ok: true, value: { srcChainTxHash: pollId, dstChainTxHash: '0xdst' } });
   });
 });
 

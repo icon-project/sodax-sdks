@@ -793,8 +793,9 @@ export class MoneyMarketService {
         };
       }
 
+      const relayIdentity = this.toRelayIdentity(srcChainKey, txResult.value.tx, txResult.value.relayData);
       const packet = await relayTxAndWaitPacket({
-        ...this.toRelayIdentity(srcChainKey, txResult.value.tx, txResult.value.relayData),
+        ...relayIdentity,
         chainKey: srcChainKey,
         relayerApiEndpoint: this.relayerApiEndpoint,
         timeout,
@@ -811,7 +812,16 @@ export class MoneyMarketService {
           }),
         };
 
-      return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packet.value.dst_tx_hash } };
+      // On-demand relays (Bitcoin borrow/withdraw) have no broadcast spoke tx — the source-side
+      // identifier is the derived poll id (od:<hash>) the relay and SodaxScan track the packet by, not
+      // the opaque signed payload. Other chains have no pollTxHash, so srcChainTxHash stays the spoke tx.
+      return {
+        ok: true,
+        value: {
+          srcChainTxHash: relayIdentity.pollTxHash ?? txResult.value.tx,
+          dstChainTxHash: packet.value.dst_tx_hash,
+        },
+      };
     } catch (error) {
       if (isMoneyMarketOrchestrationError(error)) return { ok: false, error };
       return {
@@ -972,8 +982,9 @@ export class MoneyMarketService {
         };
       }
 
+      const relayIdentity = this.toRelayIdentity(srcChainKey, txResult.value.tx, txResult.value.relayData);
       const packet = await relayTxAndWaitPacket({
-        ...this.toRelayIdentity(srcChainKey, txResult.value.tx, txResult.value.relayData),
+        ...relayIdentity,
         chainKey: srcChainKey,
         relayerApiEndpoint: this.relayerApiEndpoint,
         timeout,
@@ -990,7 +1001,16 @@ export class MoneyMarketService {
           }),
         };
 
-      return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packet.value.dst_tx_hash } };
+      // On-demand relays (Bitcoin borrow/withdraw) have no broadcast spoke tx — the source-side
+      // identifier is the derived poll id (od:<hash>) the relay and SodaxScan track the packet by, not
+      // the opaque signed payload. Other chains have no pollTxHash, so srcChainTxHash stays the spoke tx.
+      return {
+        ok: true,
+        value: {
+          srcChainTxHash: relayIdentity.pollTxHash ?? txResult.value.tx,
+          dstChainTxHash: packet.value.dst_tx_hash,
+        },
+      };
     } catch (error) {
       if (isMoneyMarketOrchestrationError(error)) return { ok: false, error };
       return {
