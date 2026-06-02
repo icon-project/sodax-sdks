@@ -59,8 +59,10 @@ const BTC_RPC_URL = btcConfig.rpcUrl;
 const BTC_POLLING_MS = btcConfig.pollingConfig.pollingIntervalMs;
 const BTC_TIMEOUT_MS = btcConfig.pollingConfig.maxTimeoutMs;
 
-// A real-ish taproot (bc1p…) address used for tests. NOT the asset manager.
+// A real-ish Native SegWit (bc1q / P2WPKH) address used for tests. NOT the asset manager.
 const USER_ADDR = 'bc1q5q3xczsl9zlt0gjys5khjknfp40zfdmkme9ene';
+// A real-ish Taproot (bc1p / P2TR) address — exercises the BIP322 branch from a Schnorr-key type.
+const TAPROOT_ADDR = 'bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr';
 const HUB_WALLET = '0x2222222222222222222222222222222222222222' as `0x${string}`;
 const DST_ADDR = '0x3333333333333333333333333333333333333333' as `0x${string}`;
 const TRADING_ADDR = 'bc1ptradingwallettradingwallettradingwallet000000000000000';
@@ -390,6 +392,30 @@ describe('BitcoinSpokeService.encodeWithdrawalData', () => {
     expect(mockBtcProvider.signEcdsaMessage).not.toHaveBeenCalled();
   });
 
+  it('TRADING raw=false on P2TR (bc1p) → signs via BIP322 (Schnorr key) and attaches the public key', async () => {
+    // Taproot keys are Schnorr/x-only — ECDSA cannot sign for them — so P2TR routes to BIP322 like
+    // P2WPKH. Pins the bc1p → BIP322 routing explicitly (the case above uses a bc1q/P2WPKH address)
+    // and checks the payload's address_type, which is what the relay reads to verify the signature.
+    vi.spyOn(btcSpoke.radfi, 'getTradingWallet').mockResolvedValueOnce({
+      tradingAddress: TRADING_ADDR,
+    } as never);
+    (mockBtcProvider.signBip322Message as ReturnType<typeof vi.fn>).mockResolvedValueOnce('EjQ=');
+    (mockBtcProvider.getPublicKey as ReturnType<typeof vi.fn>).mockResolvedValueOnce('02abcdef');
+
+    const result = await btcSpoke.encodeWithdrawalData(
+      sendMessageParams<false>({ raw: false, srcAddress: TAPROOT_ADDR }),
+    );
+
+    const parsed = JSON.parse(result as unknown as string);
+    expect(parsed.signature).toBe('EjQ=');
+    expect(parsed.public_key).toBe('02abcdef');
+    expect(mockBtcProvider.signBip322Message).toHaveBeenCalledTimes(1);
+    expect(mockBtcProvider.signEcdsaMessage).not.toHaveBeenCalled();
+    // address_type travels inside payload_hex — the relay reads it to pick the verification scheme.
+    const payloadJson = JSON.parse(Buffer.from(parsed.payload_hex, 'hex').toString());
+    expect(payloadJson.address_type).toBe('P2TR');
+  });
+
   it('TRADING raw=false on legacy P2PKH/P2SH → signs via ECDSA and attaches the public key', async () => {
     vi.spyOn(btcSpoke.radfi, 'getTradingWallet').mockResolvedValueOnce({
       tradingAddress: TRADING_ADDR,
@@ -416,6 +442,22 @@ describe('BitcoinSpokeService.encodeWithdrawalData', () => {
     // personal address — that would emit a payload whose src_address disagrees with the
     // trading-derived hub wallet the relay actually targets.
     await expect(btcSpoke.encodeWithdrawalData(sendMessageParams<true>({ raw: true }))).rejects.toThrow('radfi 503');
+  });
+
+  it('TRADING raw=false without getPublicKey support → throws (the relay needs the pubkey to verify)', async () => {
+    vi.spyOn(btcSpoke.radfi, 'getTradingWallet').mockResolvedValueOnce({
+      tradingAddress: TRADING_ADDR,
+    } as never);
+    // BIP322 signatures are not public-key-recoverable, so a provider that cannot surface the public
+    // key must fail loudly rather than emit a payload the relay can never verify.
+    const providerWithoutPublicKey = {
+      ...mockBtcProvider,
+      getPublicKey: undefined,
+    } as unknown as IBitcoinWalletProvider;
+
+    await expect(
+      btcSpoke.encodeWithdrawalData(sendMessageParams<false>({ raw: false, walletProvider: providerWithoutPublicKey })),
+    ).rejects.toThrow('Wallet provider does not support getPublicKey');
   });
 
   it('sendMessage delegates to encodeWithdrawalData', async () => {
