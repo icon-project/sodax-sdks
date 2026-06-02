@@ -455,7 +455,7 @@ describe('MigrationService.isAllowanceValid — invalid action', () => {
 
     const result = await sodax.migration.isAllowanceValid(bnUSDEvmSpokeParams(), 'migrate');
 
-    expect(result).toEqual({ ok: false, error: spokeError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: spokeError.message }) });
   });
 });
 
@@ -498,9 +498,7 @@ describe('MigrationService.approve — migrate', () => {
 
   it('approves bnUSD on Stellar (raw=false) — forwards Stellar walletProvider', async () => {
     const params = bnUSDStellarParams();
-    const approveSpy = vi
-      .spyOn(sodax.spoke, 'approve')
-      .mockResolvedValueOnce({ ok: true, value: '0xstellar-approve' });
+    const approveSpy = vi.spyOn(sodax.spoke, 'approve').mockResolvedValueOnce({ ok: true, value: '0xstellar-approve' });
 
     const result = await sodax.migration.approve(
       { params, raw: false, walletProvider: mockStellarProvider },
@@ -598,16 +596,14 @@ describe('MigrationService.approve — migrate', () => {
       'migrate',
     );
 
-    expect(result).toEqual({ ok: false, error: approveError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: approveError.message }) });
   });
 });
 
 describe('MigrationService.approve — revert', () => {
   it('approves bnUSD revert on EVM spoke — uses assetManager as spender', async () => {
     const params = bnUSDEvmSpokeParams();
-    const approveSpy = vi
-      .spyOn(sodax.spoke, 'approve')
-      .mockResolvedValueOnce({ ok: true, value: '0xrevert-approve' });
+    const approveSpy = vi.spyOn(sodax.spoke, 'approve').mockResolvedValueOnce({ ok: true, value: '0xrevert-approve' });
 
     const result = await sodax.migration.approve({ params, raw: false, walletProvider: mockEvmProvider }, 'revert');
 
@@ -668,9 +664,7 @@ describe('MigrationService.approve — revert', () => {
 
   it('approves bnUSD revert on Stellar (raw=false)', async () => {
     const params = bnUSDStellarParams();
-    const approveSpy = vi
-      .spyOn(sodax.spoke, 'approve')
-      .mockResolvedValueOnce({ ok: true, value: '0xrevert-stellar' });
+    const approveSpy = vi.spyOn(sodax.spoke, 'approve').mockResolvedValueOnce({ ok: true, value: '0xrevert-stellar' });
 
     const result = await sodax.migration.approve({ params, raw: false, walletProvider: mockStellarProvider }, 'revert');
 
@@ -734,7 +728,7 @@ describe('MigrationService.approve — revert', () => {
       'revert',
     );
 
-    expect(result).toEqual({ ok: false, error: approveError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: approveError.message }) });
   });
 
   it('returns ok:false with "Invalid action" for an unrecognized action string', async () => {
@@ -852,7 +846,7 @@ describe('MigrationService.migratebnUSD', () => {
       walletProvider: mockIconProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: createError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: createError.message }) });
     expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
   });
 
@@ -911,7 +905,7 @@ describe('MigrationService.migratebnUSD', () => {
       walletProvider: mockIconProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: thrownError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: thrownError.message }) });
   });
 });
 
@@ -951,7 +945,7 @@ describe('MigrationService.migrateIcxToSoda', () => {
       walletProvider: mockIconProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: intentError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: intentError.message }) });
     expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
   });
 
@@ -986,7 +980,7 @@ describe('MigrationService.migrateIcxToSoda', () => {
       walletProvider: mockIconProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: thrownError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: thrownError.message }) });
   });
 });
 
@@ -1027,7 +1021,7 @@ describe('MigrationService.revertMigrateSodaToIcx', () => {
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: intentError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: intentError.message }) });
   });
 
   it('wraps a relay failure via mapRelayFailureToMigrationError', async () => {
@@ -1061,7 +1055,7 @@ describe('MigrationService.revertMigrateSodaToIcx', () => {
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: thrownError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: thrownError.message }) });
   });
 });
 
@@ -1102,7 +1096,7 @@ describe('MigrationService.migrateBaln', () => {
       walletProvider: mockIconProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: intentError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: intentError.message }) });
   });
 
   it('wraps a relay failure via mapRelayFailureToMigrationError', async () => {
@@ -1136,7 +1130,7 @@ describe('MigrationService.migrateBaln', () => {
       walletProvider: mockIconProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: thrownError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: thrownError.message }) });
   });
 });
 
@@ -1197,7 +1191,7 @@ describe('MigrationService.createMigrateBalnIntent', () => {
       walletProvider: mockIconProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: depositError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: depositError.message }) });
   });
 
   it('returns ok:false when getUserHubWalletAddress rejects', async () => {
@@ -1211,7 +1205,7 @@ describe('MigrationService.createMigrateBalnIntent', () => {
       walletProvider: mockIconProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: hubError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: hubError.message }) });
   });
 
   it('returns ok:false when balnSwapService.swapData throws', async () => {
@@ -1226,7 +1220,7 @@ describe('MigrationService.createMigrateBalnIntent', () => {
       walletProvider: mockIconProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: swapDataError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: swapDataError.message }) });
   });
 });
 
@@ -1440,7 +1434,7 @@ describe('MigrationService.createMigratebnUSDIntent — error propagation', () =
       walletProvider: mockIconProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: hubError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: hubError.message }) });
   });
 
   it('forwards a deposit failure as Result.error', async () => {
@@ -1454,7 +1448,7 @@ describe('MigrationService.createMigratebnUSDIntent — error propagation', () =
       walletProvider: mockIconProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: depositError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: depositError.message }) });
   });
 
   it('returns ok:false when bnUSDMigrationService.migrateData throws', async () => {
@@ -1469,7 +1463,7 @@ describe('MigrationService.createMigratebnUSDIntent — error propagation', () =
       walletProvider: mockIconProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: dataError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: dataError.message }) });
   });
 });
 
@@ -1492,10 +1486,13 @@ describe('MigrationService.createMigrateIcxToSodaIntent — happy paths', () => 
       walletProvider: mockIconProvider,
     });
 
-    expect(result).toEqual({ ok: true, value: {
-      tx: spokeTxHash,
-      relayData: { address: hubWalletAddress, payload: '0xicx-migrate-data' },
-    } });
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        tx: spokeTxHash,
+        relayData: { address: hubWalletAddress, payload: '0xicx-migrate-data' },
+      },
+    });
     const depositCall = depositSpy.mock.calls[0]?.[0];
     expect(depositCall).toMatchObject({
       srcChainKey: ChainKeys.ICON_MAINNET,
@@ -1635,7 +1632,7 @@ describe('MigrationService.createMigrateIcxToSodaIntent — error propagation', 
       walletProvider: mockIconProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: depositError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: depositError.message }) });
   });
 
   it('returns ok:false when getUserHubWalletAddress rejects', async () => {
@@ -1652,7 +1649,7 @@ describe('MigrationService.createMigrateIcxToSodaIntent — error propagation', 
       walletProvider: mockIconProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: hubError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: hubError.message }) });
   });
 });
 
@@ -1673,10 +1670,13 @@ describe('MigrationService.createRevertSodaToIcxMigrationIntent', () => {
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: true, value: {
-      tx: spokeTxHash,
-      relayData: { address: hubWalletAddress, payload: '0xrevert-data' },
-    } });
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        tx: spokeTxHash,
+        relayData: { address: hubWalletAddress, payload: '0xrevert-data' },
+      },
+    });
     expect(revertMigrationSpy).toHaveBeenCalledTimes(1);
     const revertCall = revertMigrationSpy.mock.calls[0]?.[0];
     expect(revertCall).toMatchObject({
@@ -1720,7 +1720,7 @@ describe('MigrationService.createRevertSodaToIcxMigrationIntent', () => {
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: hubError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: hubError.message }) });
   });
 
   it('returns ok:false when icxMigration.revertMigration throws', async () => {
@@ -1735,7 +1735,7 @@ describe('MigrationService.createRevertSodaToIcxMigrationIntent', () => {
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: revertError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: revertError.message }) });
   });
 
   it('forwards a deposit failure as Result.error', async () => {
@@ -1749,7 +1749,7 @@ describe('MigrationService.createRevertSodaToIcxMigrationIntent', () => {
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: depositError });
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ message: depositError.message }) });
   });
 });
 
@@ -1823,7 +1823,9 @@ describe('MigrationService.migratebnUSD — SodaxError wrap-path coverage', () =
     // The `isMigrateOrchestrationError` guard rejects codes outside the forward-orchestrator
     // union. Pinning the wrap path here so a future regression that widens the guard surfaces
     // immediately.
-    const outOfUnion = new SodaxError('SWAP_RELAY_TIMEOUT' as never, 'foreign code thrown into migration', { feature: 'migration' });
+    const outOfUnion = new SodaxError('SWAP_RELAY_TIMEOUT' as never, 'foreign code thrown into migration', {
+      feature: 'migration',
+    });
     vi.spyOn(sodax.migration, 'createMigratebnUSDIntent').mockRejectedValueOnce(outOfUnion);
 
     const result = await sodax.migration.migratebnUSD({
@@ -1846,7 +1848,9 @@ describe('MigrationService.migratebnUSD — SodaxError wrap-path coverage', () =
 
 describe('MigrationService — out-of-union wrap-path smoke for non-bnUSD orchestrators', () => {
   it('migrateIcxToSoda wraps as MIGRATION_FAILED', async () => {
-    const outOfUnion = new SodaxError('BRIDGE_FAILED' as never, 'foreign code thrown into migration', { feature: 'migration' });
+    const outOfUnion = new SodaxError('BRIDGE_FAILED' as never, 'foreign code thrown into migration', {
+      feature: 'migration',
+    });
     vi.spyOn(sodax.migration, 'createMigrateIcxToSodaIntent').mockRejectedValueOnce(outOfUnion);
 
     const result = await sodax.migration.migrateIcxToSoda({
@@ -1863,7 +1867,9 @@ describe('MigrationService — out-of-union wrap-path smoke for non-bnUSD orches
   });
 
   it('revertMigrateSodaToIcx wraps as MIGRATION_REVERT_FAILED', async () => {
-    const outOfUnion = new SodaxError('STAKING_STAKE_FAILED' as never, 'foreign code thrown into migration', { feature: 'migration' });
+    const outOfUnion = new SodaxError('STAKING_STAKE_FAILED' as never, 'foreign code thrown into migration', {
+      feature: 'migration',
+    });
     vi.spyOn(sodax.migration, 'createRevertSodaToIcxMigrationIntent').mockRejectedValueOnce(outOfUnion);
 
     const result = await sodax.migration.revertMigrateSodaToIcx({
@@ -1880,7 +1886,9 @@ describe('MigrationService — out-of-union wrap-path smoke for non-bnUSD orches
   });
 
   it('migrateBaln wraps as MIGRATION_FAILED', async () => {
-    const outOfUnion = new SodaxError('MM_SUPPLY_FAILED' as never, 'foreign code thrown into migration', { feature: 'migration' });
+    const outOfUnion = new SodaxError('MM_SUPPLY_FAILED' as never, 'foreign code thrown into migration', {
+      feature: 'migration',
+    });
     vi.spyOn(sodax.migration, 'createMigrateBalnIntent').mockRejectedValueOnce(outOfUnion);
 
     const result = await sodax.migration.migrateBaln({

@@ -632,7 +632,7 @@ export const spokeChainConfig = {
     walletAddress: '',
     pollingConfig: {
       pollingIntervalMs: 750,
-      maxTimeoutMs: 60_000, // aligns with blockhash expiry timeout.
+      maxTimeoutMs: 15_000, // aligns with blockhash expiry timeout.
     },
   } as const satisfies SolanaChainConfig,
   [ChainKeys.AVALANCHE_MAINNET]: {

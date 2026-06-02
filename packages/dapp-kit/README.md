@@ -10,7 +10,7 @@ High-level React hooks library for dApp developers. Wraps `@sodax/sdk` with Reac
 - **Staking** — `useStake`, `useUnstake`, `useInstantUnstake`, `useClaim`, `useCancelUnstake`, approval hooks, info/config/ratio queries
 - **DEX** — `useDexDeposit`, `useDexWithdraw`, `useSupplyLiquidity`, `useDecreaseLiquidity`, `useClaimRewards`, pool/position queries, param builders
 - **Migration** — `useMigrateIcxToSoda`, `useRevertMigrateSodaToIcx`, `useMigratebnUSD`, `useMigrateBaln`, `useMigrationApprove`, `useMigrationAllowance`
-- **Bitcoin (Radfi)** — `useRadfiSession`, `useFundTradingWallet`, `useRadfiWithdraw`, `useExpiredUtxos`, `useRenewUtxos`
+- **Bitcoin (Radfi)** — `useRadfiAuth`, `useRadfiSession`, `useTradingWallet`, `useTradingWalletBalance`, `useBitcoinBalance`, `useFundTradingWallet`, `useRadfiWithdraw`, `useExpiredUtxos`, `useRenewUtxos`
 - **Partner** — `useFetchAssetsBalances`, `useGetAutoSwapPreferences`, `useIsTokenApproved`, `useApproveToken`, `useSetSwapPreference`, `useFeeClaimSwap`
 - **Recovery** — `useHubAssetBalances`, `useWithdrawHubAsset`
 - **Backend Queries** — Intent tracking, orderbook, money market position queries
@@ -100,7 +100,10 @@ function SwapButton({ intentParams }: { intentParams: CreateIntentParams }) {
   const handleSwap = async () => {
     if (!walletProvider) return;
     const result = await swap({ params: intentParams, walletProvider });
-    if (!result.ok) { alert(result.error.message); return; }
+    if (!result.ok) {
+      alert(result.error instanceof Error ? result.error.message : 'Swap failed');
+      return;
+    }
     console.log('Swap submitted!', result.value);
   };
 
@@ -114,7 +117,7 @@ function SwapButton({ intentParams }: { intentParams: CreateIntentParams }) {
 
 ## Requirements
 
-- Node.js >= 18.0.0
+- Node.js >= 20.12.0
 - React >= 18
 - TypeScript
 
@@ -252,7 +255,7 @@ function SwapButton({ intentParams }: { intentParams: CreateIntentParams }) {
 - [`useBackendIntentByTxHash()`](src/hooks/backend/useBackendIntentByTxHash.ts) — Get intent by hub tx hash (polls 1s)
 - [`useBackendIntentByHash()`](src/hooks/backend/useBackendIntentByHash.ts) — Get intent by intent hash
 - [`useBackendUserIntents()`](src/hooks/backend/useBackendUserIntents.ts) — All intents for a user with date filtering
-- [`useBackendOrderbook()`](src/hooks/backend/useBackendOrderbook.ts) — Solver orderbook (polls 30s)
+- [`useBackendOrderbook()`](src/hooks/backend/useBackendOrderbook.ts) — Solver orderbook (cached 30s, no auto-refetch)
 - [`useBackendMoneyMarketPosition()`](src/hooks/backend/useBackendMoneyMarketPosition.ts) — User money market position
 - [`useBackendAllMoneyMarketAssets()`](src/hooks/backend/useBackendAllMoneyMarketAssets.ts) — All MM assets
 - [`useBackendMoneyMarketAsset()`](src/hooks/backend/useBackendMoneyMarketAsset.ts) — Single MM asset details
@@ -281,9 +284,23 @@ pnpm pretty      # Format code
 pnpm lint        # Lint code
 ```
 
-## AI Scaffolding
+## AI agent docs
 
-See [`skills/SKILLS.md`](skills/SKILLS.md) for AI-agent-friendly guides to scaffold each feature. Point Claude Code at any skill file to generate ready-to-use hook wiring.
+AI-readable docs for `@sodax/dapp-kit` (and the other `@sodax/*` packages) are shipped via [`@sodax/skills`](https://github.com/icon-project/sodax-sdks/tree/main/packages/skills) — a separate npm package bundling Claude-Code SKILL.md files and a long-form knowledge tree.
+
+**Recommended: [`skills` CLI](https://github.com/vercel-labs/skills)** — from your project root:
+
+```bash
+npx skills@latest add icon-project/sodax-sdks/packages/skills
+```
+
+**npm + `AGENTS.md` pointer** (fallback for web chats, or when you prefer a devDependency over the CLI):
+
+```bash
+pnpm add -D @sodax/skills
+```
+
+Then point your agent at `node_modules/@sodax/skills/AGENTS.md`. See [docs/ai-integration-guide.md](https://github.com/icon-project/sodax-sdks/blob/main/docs/ai-integration-guide.md) for all install modes and per-tool wiring.
 
 ## License
 

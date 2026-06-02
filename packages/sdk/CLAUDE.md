@@ -2,7 +2,9 @@
 
 Core SDK implementing all SODAX DeFi operations. Entry point: the `Sodax` class in `src/shared/entities/Sodax.ts`.
 
-**This package works standalone** — no React, no wallet-sdk, no dapp-kit required. Backend partners (API servers, bots, scripts) use `@sodax/sdk` directly with a private-key wallet provider and call services. Frontend partners use `@sodax/dapp-kit` which wraps this SDK in React hooks — see `packages/dapp-kit/skills/` for frontend scaffolding guides.
+**This package works standalone** — no React, no wallet-sdk, no dapp-kit required. Backend partners (API servers, bots, scripts) use `@sodax/sdk` directly with a private-key wallet provider and call services. Frontend partners use `@sodax/dapp-kit` which wraps this SDK in React hooks.
+
+Consumer-facing AI material (skills + knowledge for Claude Code, Cursor, Codex) lives in [`packages/skills`](../skills/CLAUDE.md) — not in this package.
 
 ## Architecture
 
@@ -112,7 +114,7 @@ The chain key in the request payload (e.g. `srcChainKey`) drives both TypeScript
 
 ### Error Handling
 
-All 7 feature modules (swap, moneyMarket, bridge, staking, migration, dex, partner, recovery) emit a single canonical error type — `SodaxError<C>` — with a closed, reason-only code vocabulary. Codes describe **what** went wrong (`RELAY_TIMEOUT`, `INTENT_CREATION_FAILED`); the producing feature is carried as a first-class `feature` field on the error.
+All 8 feature modules (swap, moneyMarket, bridge, staking, migration, dex, partner, recovery) emit a single canonical error type — `SodaxError<C>` — with a closed, reason-only code vocabulary. Codes describe **what** went wrong (`RELAY_TIMEOUT`, `INTENT_CREATION_FAILED`); the producing feature is carried as a first-class `feature` field on the error.
 
 All async public methods return `Result<T, SodaxError<NarrowCode>>` (= `{ ok: true; value: T } | { ok: false; error }`) and wrap their bodies in `try/catch`. The `Result` type is defined in `@sodax/types`.
 
@@ -257,10 +259,24 @@ Concentrated liquidity (similar to Uniswap V3/PancakeSwap V3):
 - `AssetService` — DEX asset wrapping/unwrapping
 - Pool configs defined in `src/shared/constants.ts`
 
+### leverageYield
+
+Leveraged-yield ERC-4626 vaults on the Sonic hub (`LeverageYieldService`, reachable via `sodax.leverageYield`). A vault loops supply → borrow → swap → re-supply to a `targetLTV`, producing a leveraged long on the `asset` / `borrowToken` peg; the ERC-4626 share token (`lsoda*`) represents the position and **its address is the vault proxy address**. The share token is treated as a solver-tradeable token:
+- `deposit` / `withdraw` build `CreateIntentParams` — the caller relays them via `sodax.swaps.swap()`. `withdraw` stamps `hubWalletSwap: true` so `swap()` spends the `lsoda*` held in the user's hub wallet via a `Connection.sendMessage` (the swap-layer `hubWalletSwap` branch validates the input token against the hub chain, not `srcChainKey`).
+- `approve` / `isAllowanceValid` — Sonic-direct allowance management for the vault's underlying asset (the swap-style `deposit` handles its own approvals).
+- `getApr` / `getPosition` / `getMaxWithdraw[ForUser]` / `getShareBalance[ForUser]` / `getTotalAssets` / `previewDeposit|Withdraw|Redeem` / `getAsset` — reads. `getApr` computes steady-state leverage APR (`supplyApr + (targetLTV/(1−targetLTV)) × (supplyApr − borrowApr)`; RAY rates × WAD multiplier; net APR can be negative on an inverted spread).
+- `listVaults` / `getVault` / `getVaultByAddress` — registry lookups; the registry lives in `@sodax/types` (`leverageYieldConfig`) and derives all addresses from the canonical `LsodaTokens` / `SodaTokens` registries.
+- **Errors**: All async methods return `Result<T, SodaxError<NarrowCode>>`. The 3 user-facing actions discriminate via `context.action` (`'deposit' | 'withdraw' | 'approve'`); read methods emit `LOOKUP_FAILED` partitioned by `context.method`. No relay/tx-verification codes (there is no in-service relay step). See `docs/LEVERAGE_YIELD.md`.
+
+## Gotchas
+
+- **Never use `bigint` in types passed to `JSON.stringify`** — it throws `TypeError` at runtime. Use `string` for numeric fields in API request/response types (e.g. anything in `src/backendApi/`). If `bigint` is needed in domain types, convert to string before serialization. Note: `SodaxError.toJSON` already coerces bigints in `context` to strings — see Error Handling above.
+
 ## Documentation
 
 Detailed feature docs are in `docs/`:
-- `SWAPS.md`, `MONEY_MARKET.md`, `STAKING.md`, `BRIDGE.md`, `DEX.md`, `MIGRATION.md`
+- `SWAPS.md`, `MONEY_MARKET.md`, `STAKING.md`, `BRIDGE.md`, `DEX.md`, `MIGRATION.md`, `LEVERAGE_YIELD.md`
+- `BITCOIN_INTEGRATION.md` — Bitcoin trading-wallet model, custody trade-off, readiness gate
 - `CONFIGURE_SDK.md` — SDK initialization patterns
 - `WALLET_PROVIDERS.md` — wallet integration patterns
 - `ARCHITECTURE_REFACTOR_SUMMARY.md` — full architecture reference (spoke services, raw tx handling, Result\<T\>, error convention, wallet-sdk patterns)
@@ -269,8 +285,8 @@ Read these when working on a specific feature for detailed flow documentation.
 
 ## Build
 
-tsup: dual ESM (`.mjs`) + CJS (`.cjs`). Target: Node 18+, also runs in browser.
-`near-api-js` and `@sodax/types` are bundled (not externalized) for CJS compatibility.
+tsup: dual ESM (`.mjs`) + CJS (`.cjs`) with sibling `.d.ts` / `.d.cts` (`dts: true`). Target: Node 20+, also runs in browser via `esbuildOptions.platform = 'neutral'`.
+`near-api-js` and `@sodax/types` are force-bundled (via `noExternal` in [tsup.config.ts](tsup.config.ts)) for CJS compatibility.
 
 ## Tests
 
@@ -278,6 +294,6 @@ Vitest. Co-located with source (`*.test.ts`). E2E tests in `src/e2e-tests/`.
 
 ```bash
 pnpm test          # Unit tests
-pnpm test-e2e      # E2E tests
+pnpm test:e2e      # E2E tests
 pnpm coverage      # Coverage report
 ```

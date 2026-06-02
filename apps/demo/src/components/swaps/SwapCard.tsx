@@ -13,7 +13,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { calculateExchangeRate, formatMutationFailureMessage } from '@/lib/utils';
+import { calculateExchangeRate, formatMutationFailureMessage, formatTokenAmount } from '@/lib/utils';
 import { parseUnits, formatUnits } from 'viem';
 import { type CreateIntentParams, getSupportedSolverTokens, type SolverIntentQuoteRequest } from '@sodax/sdk';
 import type { GetWalletProviderType, SubmitSwapTxRequest, SwapIntentData } from '@sodax/sdk';
@@ -470,14 +470,11 @@ export default function SwapCard({
         <div className="mix-blend-multiply text-black text-(length:--body-comfortable) font-medium font-['InterRegular'] flex gap-1">
           <span className="hidden sm:inline">Balance:</span>
           <span className="inline">
-            {Number(
-              formatUnits(
-                src.chain === ChainKeys.BITCOIN_MAINNET && srcTradingBal
-                  ? srcTradingBal.btcSatoshi
-                  : sourceTokenBalance,
-                src.token?.decimals ?? 0,
-              ),
-            ).toFixed(5)}
+            {formatTokenAmount(
+              src.chain === ChainKeys.BITCOIN_MAINNET && srcTradingBal ? srcTradingBal.btcSatoshi : sourceTokenBalance,
+              src.token?.decimals ?? 0,
+              5,
+            )}
           </span>
         </div>
         <div className="grow">
@@ -550,14 +547,11 @@ export default function SwapCard({
         <div className="mix-blend-multiply text-black text-(length:--body-comfortable) font-medium font-['InterRegular'] flex gap-1">
           <span className="hidden sm:inline">Balance:</span>
           <span className="inline">
-            {Number(
-              formatUnits(
-                dst.chain === ChainKeys.BITCOIN_MAINNET && destTradingBal
-                  ? destTradingBal.btcSatoshi
-                  : destTokenBalance,
-                dst.token?.decimals ?? 0,
-              ),
-            ).toFixed(4)}
+            {formatTokenAmount(
+              dst.chain === ChainKeys.BITCOIN_MAINNET && destTradingBal ? destTradingBal.btcSatoshi : destTokenBalance,
+              dst.token?.decimals ?? 0,
+              4,
+            )}
           </span>
         </div>
         <div className="grow">

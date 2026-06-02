@@ -1,10 +1,10 @@
-import { useMemo, useSyncExternalStore } from 'react';
+import { useMemo } from 'react';
 import { ChainTypeArr, type ChainType } from '@sodax/types';
 import type { XAccount, XConnection } from '@/types/index.js';
 import type { IXConnector } from '@/types/interfaces.js';
-import { useXWalletStore } from '@/useXWalletStore.js';
 import { useXConnections } from './useXConnections.js';
 import { useXConnectorsByChain } from './useXConnectorsByChain.js';
+import { usePersistHydrated } from './usePersistHydrated.js';
 import { compareChainByOrder } from '@/utils/chainOrder.js';
 
 export type ConnectedChain = {
@@ -74,21 +74,12 @@ export function buildConnectedChains(
   };
 }
 
-function subscribeHydration(onChange: () => void): () => void {
-  const unsubHydrate = useXWalletStore.persist.onHydrate(onChange);
-  const unsubFinish = useXWalletStore.persist.onFinishHydration(onChange);
-  return () => {
-    unsubHydrate();
-    unsubFinish();
-  };
-}
-
 /**
  * Aggregate view of every currently-connected chain with enriched connector
  * metadata (name + icon) looked up from the store. Useful for "Manage
  * connections" UIs and status badges.
  *
- * Gate rendering on `status === 'ready'` to avoid the "Connect wallet" →
+ * Gate rendering on `status === 'ready'` to avoid the "Connect wallet" to
  * "Connected" flicker on reload while the store rehydrates from localStorage.
  *
  * @example
@@ -97,7 +88,7 @@ function subscribeHydration(onChange: () => void): () => void {
  * return total >= 1 ? <ConnectedChainsDisplay chains={chains} /> : <ConnectCta />;
  *
  * @example
- * // Deterministic display order — required if rendering a list that must
+ * // Deterministic display order, required if rendering a list that must
  * // be stable across page reloads (hydrator race otherwise randomizes
  * // insertion order).
  * const { chains } = useConnectedChains({ order: ['EVM', 'ICON', 'SOLANA'] });
@@ -105,11 +96,7 @@ function subscribeHydration(onChange: () => void): () => void {
 export function useConnectedChains({ order }: UseConnectedChainsOptions = {}): UseConnectedChainsResult {
   const xConnections = useXConnections();
   const xConnectorsByChain = useXConnectorsByChain();
-  const isReady = useSyncExternalStore(
-    subscribeHydration,
-    () => useXWalletStore.persist.hasHydrated(),
-    () => false,
-  );
+  const isReady = usePersistHydrated();
 
   return useMemo(
     () => buildConnectedChains(xConnections, xConnectorsByChain, isReady, order),

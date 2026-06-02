@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "isolatedModules": true,
+    "allowImportingTsExtensions": false,
+    "baseUrl": ".",
+    "paths": {
+      "@sodax/wallet-sdk-react": ["../../../../wallet-sdk-react/src/index.js"],
+      "@sodax/wallet-sdk-react/*": ["../../../../wallet-sdk-react/src/*/index.js", "../../../../wallet-sdk-react/src/*.ts"]
+    }
+  },
+  "include": ["imp-*.ts"]
+}

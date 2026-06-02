@@ -2,7 +2,7 @@ import { describe, it, expect, expectTypeOf, vi } from 'vitest';
 import { assertOk, invariant } from './tiny-invariant';
 
 describe('tiny-invariant', () => {
-  it('should correctly narrow a type (boolean)', done => {
+  it('should correctly narrow a type (boolean)', _done => {
     try {
       const value: boolean = false;
 
@@ -32,13 +32,17 @@ describe('tiny-invariant', () => {
 
   it('should not throw if condition is truthy', () => {
     const truthy: unknown[] = [1, -1, true, {}, [], Symbol(), 'hi'];
-    truthy.forEach((value: unknown) => expect(() => invariant(value)).not.toThrow());
+    truthy.forEach((value: unknown) => {
+      expect(() => invariant(value)).not.toThrow();
+    });
   });
 
   it('should throw if the condition is falsy', () => {
     // https://github.com/getify/You-Dont-Know-JS/blob/master/types%20%26%20grammar/ch4.md#falsy-values
     const falsy: unknown[] = [undefined, null, false, +0, -0, Number.NaN, ''];
-    falsy.forEach((value: unknown) => expect(() => invariant(value)).toThrow());
+    falsy.forEach((value: unknown) => {
+      expect(() => invariant(value)).toThrow();
+    });
   });
 
   it('should include a default message when an invariant does throw and no message is provided', () => {

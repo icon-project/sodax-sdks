@@ -146,7 +146,7 @@ if (balancesResult.ok) {
     console.log(`  Original address: ${balance.originalAddress}`);
   }
 } else {
-  // error.message === 'FETCH_ASSETS_BALANCES_FAILED'
+  // result.error.code === 'LOOKUP_FAILED' (context.method === 'fetchAssetsBalances')
   console.error('Balance fetch failed:', balancesResult.error);
 }
 ```
@@ -212,7 +212,7 @@ if (approvedResult.ok && !approvedResult.value) {
   });
 
   if (!approveResult.ok) {
-    // error.message === 'APPROVE_TOKEN_FAILED'
+    // result.error.code === 'APPROVE_FAILED'
     console.error('Approval failed:', approveResult.error);
   }
 }
@@ -241,11 +241,11 @@ if (claimResult.ok) {
   console.log('Intent confirmed:', intentTxHash);
   console.log('Solver response:', solverExecutionResponse);
 } else {
-  // error.message may be:
-  //   'EXECUTION_FAILED' (action: 'waitAutoSwap') — receipt polling failed after submission
+  // result.error.code may be:
+  //   'EXECUTION_FAILED' (context.action === 'waitAutoSwap') — receipt polling failed after submission
   //   error from createIntentAutoSwap — if the initial tx failed
   //   error from SolverApiService.postExecution — if solver notification failed
-  console.error('Claim failed:', claimResult.error.message, claimResult.error.cause);
+  console.error('Claim failed:', claimResult.error.code, claimResult.error.cause);
 }
 ```
 
@@ -254,28 +254,38 @@ notification step (e.g. to retry independently).
 
 ### Error handling
 
-All `partners.feeClaim` methods return `Promise<Result<T>>`. On failure, `result.ok` is `false`
-and `result.error` is an `Error` object. Phase-failure errors follow the CODE form — check
-`result.error.message` for the tag and `result.error.cause` for the underlying error:
+All `partners.feeClaim` methods return `Promise<Result<T, SodaxError<PartnerErrorCode>>>` from
+the unified vocabulary. Discriminate on `error.code` (closed reason-only union) and
+`error.feature === 'partner'`. The original lower-level failure is preserved on `error.cause`;
+operation/method partition is on `error.context.action` / `error.context.method`.
 
 ```typescript
-if (!result.ok) {
-  const { message, cause } = result.error instanceof Error
-    ? result.error
-    : new Error(String(result.error));
+import { isPartnerError, type PartnerError } from '@sodax/sdk';
 
-  // CODE-form tags used by feeClaim methods:
-  // 'FETCH_ASSETS_BALANCES_FAILED'
-  // 'LOOKUP_FAILED' (method: 'getAutoSwapPreferences')
-  // 'APPROVE_TOKEN_FAILED'
-  // 'IS_TOKEN_APPROVED_FAILED'
-  // 'EXECUTION_FAILED' (action: 'waitAutoSwap')
-  console.error(`[${message}]`, cause);
+if (!result.ok) {
+  // result.error: PartnerError = SodaxError<PartnerErrorCode>
+  switch (result.error.code) {
+    case 'VALIDATION_FAILED':
+      // Bad input — see context.field.
+      break;
+    case 'LOOKUP_FAILED':
+      // Read failed — context.method is one of:
+      //   'fetchAssetsBalances' | 'getAutoSwapPreferences' | 'isTokenApproved'
+      break;
+    case 'APPROVE_FAILED':
+      // approveToken transaction failed.
+      break;
+    case 'EXECUTION_FAILED':
+      // Orchestrator-level failure — context.action === 'waitAutoSwap'.
+      break;
+    case 'UNKNOWN':
+      break;
+  }
+  console.error('Partner error:', result.error.toJSON());
 }
 ```
 
-The old typed partner error discriminators (five error types and their type-guard helpers) are
-removed in v2. Branch on `result.error.message` instead.
+`PartnerErrorCode` is the narrow union `'VALIDATION_FAILED' | 'LOOKUP_FAILED' | 'APPROVE_FAILED' | 'EXECUTION_FAILED' | 'UNKNOWN'`. Use `isPartnerError(e)` instead of `instanceof SodaxError` in dapp/app code (bundle-safe).
 
 ### Raw transaction mode
 

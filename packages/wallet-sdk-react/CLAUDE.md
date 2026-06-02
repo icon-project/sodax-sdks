@@ -2,6 +2,8 @@
 
 React layer over `wallet-sdk-core`. Provides wallet connection, disconnection, signing, and account management via hooks backed by Zustand state.
 
+Consumer-facing AI material (skills + knowledge for Claude Code, Cursor, Codex) lives in [`packages/skills`](../skills/CLAUDE.md) — not in this package. The legacy `skills/` directory that used to live here was removed; its content was superseded by `packages/skills/skills/sodax-wallet-sdk-react/integration/knowledge/recipes/`.
+
 ## Architecture
 
 ### Core Abstractions (`src/core/`)
@@ -46,7 +48,7 @@ Central dispatch for all 9 chains. Each chain registers a `ChainServiceFactory`:
 - Use direct browser extension APIs
 - `ChainActions` registered by `chainRegistry` during `createChainServices()`
 - Wallet providers created as side-effect in `setXConnection()`
-- **Bitcoin `signMessage`**: auto-detects address type — BIP-322 for P2WPKH/P2TR, ECDSA for P2SH/P2PKH (same logic as SDK `BitcoinSpokeProvider.authenticateWithWallet`)
+- **Bitcoin `signMessage`**: auto-detects address type — BIP-322 for P2WPKH/P2TR, ECDSA for P2SH/P2PKH (same logic as SDK `RadfiProvider.authenticateWithWallet` in `packages/sdk/src/shared/entities/btc/RadfiProvider.ts`; the spoke entry point is `BitcoinSpokeService`)
 
 ### Provider/Hydrator/Actions Pattern (EVM, Solana, Sui)
 
@@ -73,8 +75,8 @@ Centralized state with persistence:
 }
 ```
 
-Middleware stack: `devtools` → `persist` → `immer`
-Only `xConnections` is persisted (key: `'xwagmi-store'`).
+Middleware stack (outer → inner, as written in code): `devtools(persist(immer(...)))`. Zustand applies the innermost first, so the runtime execution order is `immer → persist → devtools`.
+Only `xConnections` is persisted (key: `'xwagmi-store'` — preserved from v1 for backward compatibility, so existing users don't lose persisted connections on upgrade).
 
 **Persist hydration caveat**: `initChainServices` runs before persist hydration completes. Persist then restores `xConnections` from localStorage, which may include connections for now-disabled chains. `cleanupDisabledConnections()` runs after hydration to remove these stale connections.
 
@@ -241,6 +243,9 @@ src/
 │   └── stacks/
 ├── actions/                    # getXChainType, getXService utilities
 ├── types/                      # Type definitions (config, chainActions, interfaces)
+├── shared/                     # Shared guard utilities
+├── assets/                     # Wallet icons / metadata assets
+├── declarations/               # Ambient type declarations (e.g. stellar-wallets-kit.d.ts)
 └── utils/
 ```
 
@@ -250,10 +255,9 @@ Concrete chain classes (e.g. `EvmXService`, `XverseXConnector`) are **not** expo
 
 **Barrel (`@sodax/wallet-sdk-react`)** exports:
 - Hooks, utils, types, interfaces, `SodaxWalletProvider`
-- `export type` only for `StellarXService`, `XverseXConnector`, `BtcWalletAddressType` (no runtime class)
 
 **Deep imports (`@sodax/wallet-sdk-react/xchains/<chain>`)** export:
-- Concrete classes for advanced use (e.g. `instanceof`, calling chain-specific methods)
+- Concrete classes and their named types (e.g. `XverseXConnector`, `BtcWalletAddressType`) for advanced use (`instanceof`, calling chain-specific methods, `import type` for narrow refs)
 
 ```typescript
 // ✅ Normal usage — barrel import
@@ -267,7 +271,7 @@ if (connector instanceof XverseXConnector) {
 ```
 
 Configuration:
-- `tsup.config.ts` — multi-entry: `src/index.ts` + `src/xchains/*/index.ts`
+- `tsup.config.ts` — multi-entry: `src/index.ts` + `src/xchains/*/index.ts` + `src/xchains/*/index.tsx`
 - `package.json` `exports` — wildcard `./xchains/*` maps to `dist/xchains/*/index.*`
 - `package.json` `typesVersions` — fallback for `moduleResolution: "node"`
 
@@ -290,4 +294,4 @@ Configuration:
 
 ## Build
 
-tsup: dual ESM (`.mjs`) + CJS (`.cjs`) with multi-entry (barrel + per-chain sub-paths). React, React DOM, and React Query are externalized.
+tsup: ESM-only (`.mjs`) with `.d.ts` declarations (`dts: true`). Multi-entry (barrel + per-chain sub-paths) with `splitting: true` so `instanceof XverseXConnector` works across import paths. React, React DOM, and React Query are externalized via `external`. Build script wraps tsup in `NODE_OPTIONS=--max-old-space-size=8192` because rollup-plugin-dts inlines transitive dep types and otherwise OOMs the default V8 heap on this package's type graph.

@@ -7,8 +7,9 @@
     },
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
       "env": [
+        "CI",
         "NOTION_TOKEN",
         "DATABASE_URI",
         "BLOB_READ_WRITE_TOKEN",
@@ -24,9 +25,13 @@
     "build:packages": {
       "dependsOn": ["^build"],
       "inputs": ["packages/**"],
-      "outputs": ["dist/**"]
+      "outputs": ["dist/**"],
+      "env": ["CI"]
     },
     "test": {
+      "dependsOn": ["^build"]
+    },
+    "test:e2e": {
       "dependsOn": ["^build"]
     },
     "test:packages": {
@@ -62,6 +67,17 @@
     "check:circular-deps:packages": {
       "dependsOn": ["^check:circular-deps"],
       "inputs": ["packages/**"]
+    },
+    "check-exports": {
+      "dependsOn": ["build"],
+      "inputs": ["dist/**", "package.json"]
+    },
+    "check:ai": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "check:knip": {
+      "cache": false
     }
   },
   "remoteCache": {

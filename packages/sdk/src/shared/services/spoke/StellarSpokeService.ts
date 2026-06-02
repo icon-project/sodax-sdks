@@ -29,7 +29,6 @@ import {
 import {
   ChainKeys,
   getIntentRelayChainId,
-  type HubAddress,
   type IStellarWalletProvider,
   type Result,
   type StellarChainKey,
@@ -85,21 +84,6 @@ export class CustomStellarAccount {
     this.sequenceNumber = this.startingSequenceNumber;
   }
 }
-
-export type StellarSpokeDepositParams = {
-  from: Hex; // The address of the user on the spoke chain
-  to?: HubAddress; // The address of the user on the hub chain (wallet abstraction address)
-  token: string; // The address of the token to deposit
-  amount: bigint; // The amount of tokens to deposit
-  data: Hex; // The data to send with the deposit
-};
-
-export type StellarTransferToHubParams = {
-  token: string;
-  recipient: Address;
-  amount: bigint;
-  data: Hex;
-};
 
 export type RequestTrustlineParams<S extends StellarChainKey, Raw extends boolean> = {
   srcAddress: string;

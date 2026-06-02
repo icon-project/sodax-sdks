@@ -1,0 +1,14 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "src/stacks/core/index.ts",
+    "src/stacks/connect/index.ts",
+    "src/injective/wallet-strategy/index.ts",
+    "tsup.config.ts",
+    "scripts/verify-stacks-connect-ui-stub.mjs",
+    "scripts/verify-no-duplicate-bundling.mjs"
+  ],
+  "project": ["src/**/*.ts", "scripts/**/*.mjs", "tsup.config.ts"],
+  "ignoreBinaries": ["biome"],
+  "ignoreExportsUsedInFile": true
+}

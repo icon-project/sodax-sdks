@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "isolatedModules": true,
+    "allowImportingTsExtensions": false,
+    "baseUrl": ".",
+    "paths": {
+      "@sodax/dapp-kit": ["../../../../dapp-kit/src/index.js"],
+      "@sodax/dapp-kit/*": ["../../../../dapp-kit/src/*/index.js", "../../../../dapp-kit/src/*.ts"]
+    }
+  },
+  "include": ["imp-*.ts"]
+}

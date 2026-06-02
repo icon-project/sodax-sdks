@@ -416,7 +416,7 @@ class SodaxError<C extends string = string> extends Error {
 - `error.cause` walks the underlying error chain (loggers like Sentry/Pino/Datadog walk this automatically).
 - `error.context` carries structured metadata: `srcChainKey`, `dstChainKey`, `phase`, plus per-code extras (`relayCode`, `field`).
 - `error.toJSON()` is the canonical logger surface; `JSON.stringify(error)` invokes it automatically and produces a logger-safe payload (bigints in `context` are coerced to strings, cause walked depth-3, no circular hazards).
-- Use `isBridgeError(e)` / `is<Op>Error(e)` from `@sodax/sdk` instead of `instanceof SodaxError` in dapp/app code (bundle-safe).
+- Use `isBridgeError(e)` (broad) or one of the narrow guards `isBridgeOrchestrationError(e)` / `isBridgeCreateIntentError(e)` / `isBridgeApproveError(e)` / `isBridgeAllowanceCheckError(e)` / `isBridgeLookupError(e)` from `@sodax/sdk` instead of `instanceof SodaxError` in dapp/app code (bundle-safe).
 
 ### Per-method error code unions
 
@@ -429,7 +429,7 @@ class SodaxError<C extends string = string> extends Error {
 | `getBridgeableAmount` | `VALIDATION_FAILED`, `LOOKUP_FAILED`, `UNKNOWN` |
 | `getBridgeableTokens` | `VALIDATION_FAILED`, `LOOKUP_FAILED`, `UNKNOWN` |
 
-Each method's narrow type alias is exported (`BridgeOrchestrationError`, `CreateBridgeIntentError`, `BridgeApproveError`, `BridgeAllowanceCheckError`, `GetBridgeableAmountError`, `GetBridgeableTokensError`) along with a matching `is<Op>Error` type guard.
+The exported narrow types are `BridgeOrchestrationError` (for `bridge`), `BridgeCreateIntentError` (for `createBridgeIntent`), `BridgeApproveError`, `BridgeAllowanceCheckError`, and a single `BridgeLookupError` shared by `getBridgeableAmount` and `getBridgeableTokens` (discriminate them at runtime via `error.context.method`). Each has a matching narrow guard listed above.
 
 ### Standard `context` fields
 

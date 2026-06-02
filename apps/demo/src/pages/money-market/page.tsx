@@ -102,7 +102,7 @@ export default function MoneyMarketPage() {
               </div>
               <div>
                 <h2 className="text-2xl font-semibold text-cherry-dark mb-2">Connect Your Wallet</h2>
-                <p className="text-clay">Connect your wallet to start supplying and borrowing assets</p>
+                <p className="text-clay">Connect your wallet to start supplying and withdrawing assets</p>
               </div>
               <Button onClick={openWalletModal} variant="cherry" size="lg" className="px-8">
                 Connect Wallet

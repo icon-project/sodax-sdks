@@ -2,6 +2,8 @@
 
 Low-level multi-chain wallet providers for signing and broadcasting transactions. Each chain has a provider class supporting both private-key (for scripts/testing) and browser-extension (for production dApps) configurations.
 
+Consumer-facing AI material (skills + knowledge for Claude Code, Cursor, Codex) lives in [`packages/skills`](../skills/CLAUDE.md) — not in this package.
+
 ## Architecture
 
 ### Folder-per-provider structure
@@ -109,8 +111,8 @@ These are tech debt. When modifying code in this package, fix non-null assertion
 
 ## Build
 
-tsup: dual ESM (`.mjs`) + CJS (`.cjs`). Platform: neutral (Node + browser).
-`near-api-js` and `@sodax/types` are force-bundled for CJS compatibility via `noExternal` in tsup config.
+tsup: dual ESM (`.mjs`) + CJS (`.cjs`) with sibling `.d.ts` / `.d.cts` (`dts: true`). Platform: neutral (Node + browser) via `esbuildOptions.platform = 'neutral'`.
+`near-api-js` and `@sodax/types` are force-bundled for CJS compatibility via `noExternal` in [tsup.config.ts](tsup.config.ts).
 
 ## Tests
 

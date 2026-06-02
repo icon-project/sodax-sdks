@@ -1,0 +1,9 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": ["src/index.ts", "src/hooks/_mutationContract.test.ts"],
+  "project": ["src/**/*.{ts,tsx}"],
+  "ignore": ["ai-exported/**"],
+  "ignoreBinaries": ["biome"],
+  "ignoreDependencies": ["@sodax/sdk"],
+  "ignoreExportsUsedInFile": true
+}

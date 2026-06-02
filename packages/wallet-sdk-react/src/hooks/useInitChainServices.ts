@@ -6,18 +6,18 @@ import { chainRegistry } from '@/chainRegistry.js';
 import { reconnectIcon } from '@/xchains/icon/actions.js';
 import { reconnectInjective } from '@/xchains/injective/actions.js';
 import { reconnectStellar } from '@/xchains/stellar/actions.js';
+import { whenPersistReady } from './usePersistHydrated.js';
 
 /**
- * Initializes chain services based on config. Runs once on mount.
- * Config is immutable after initial render — dynamic changes require remounting SodaxWalletProvider.
- * After persist hydration, re-fires setXConnection for every persisted connection so the
- * createWalletProvider side-effect rebuilds walletProviders (which are not persisted).
+ * Initializes chain services from config (run-once). After persist hydration,
+ * re-fires setXConnection so `createWalletProvider` rebuilds walletProviders
+ * (not persisted) and reconnects non-provider chains.
  */
 export function useInitChainServices(walletConfig: SodaxWalletConfig) {
   const initChainServices = useXWalletStore(state => state.initChainServices);
   const cleanupDisabledConnections = useXWalletStore(state => state.cleanupDisabledConnections);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: run-once on mount — config is immutable after initial render, dynamic changes require remounting SodaxWalletProvider
+  // biome-ignore lint/correctness/useExhaustiveDependencies: run-once on mount, config is immutable; dynamic changes require remounting SodaxWalletProvider
   useEffect(() => {
     initChainServices(walletConfig);
 
@@ -42,10 +42,6 @@ export function useInitChainServices(walletConfig: SodaxWalletConfig) {
       }
     };
 
-    if (useXWalletStore.persist.hasHydrated()) {
-      afterHydration();
-    } else {
-      useXWalletStore.persist.onFinishHydration(afterHydration);
-    }
+    whenPersistReady(afterHydration);
   }, []);
 }

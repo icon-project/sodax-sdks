@@ -199,6 +199,7 @@ export default function LeverageYieldPage() {
   const [slippage, setSlippage] = useState(DEFAULT_SLIPPAGE);
 
   // Reset amount + intent when tab/vault/chain/token changes — stale quotes are confusing.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps are intentional reset triggers, not values read in the effect
   useEffect(() => {
     setSourceAmount('');
     setIntentOrderPayload(undefined);

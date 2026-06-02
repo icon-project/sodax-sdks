@@ -1,13 +1,22 @@
 {
   "name": "@sodax/dapp-kit",
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "license": "MIT",
   "version": "0.0.1-rc.4",
-  "description": "dapp-kit of New World",
+  "description": "React hooks for building dApps on the SODAX cross-chain DeFi platform",
+  "keywords": ["sodax", "dapp-kit", "react", "react-query", "hooks", "defi"],
+  "homepage": "https://github.com/icon-project/sodax-sdks/tree/main/packages/dapp-kit",
+  "bugs": {
+    "url": "https://github.com/icon-project/sodax-sdks/issues"
+  },
   "type": "module",
-  "main": "dist/index.cjs",
+  "main": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "module": "dist/index.mjs",
-  "files": ["dist", "src", "skills"],
+  "files": ["dist", "!dist/**/*.map", "src"],
   "repository": {
     "type": "git",
     "url": "https://github.com/icon-project/sodax-sdks"
@@ -16,11 +25,12 @@
     "build": "tsup",
     "dev": "tsup --watch ./src",
     "test": "vitest run",
-    "prepublishOnly": "tsup",
+    "prepublishOnly": "pnpm run build",
     "clean": "rm -rf dist && rm -rf node_modules && rm -rf .turbo",
     "pretty": "biome format . --write",
     "checkTs": "tsc --noEmit",
-    "knip": "knip",
+    "check-exports": "attw --pack --profile esm-only",
+    "check:knip": "knip",
     "lint": "biome lint . --write"
   },
   "dependencies": {
@@ -28,9 +38,11 @@
     "viem": "catalog:"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "catalog:",
     "@tanstack/react-query": "catalog:",
     "@types/react": "catalog:",
-    "knip": "5.30.5",
+    "knip": "catalog:",
+    "tslib": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
@@ -40,14 +52,14 @@
     "react": ">=18"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.12.0"
   },
+  "sideEffects": false,
   "exports": {
     "./package.json": "./package.json",
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs"
+      "import": "./dist/index.mjs"
     }
   }
 }

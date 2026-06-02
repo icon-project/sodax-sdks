@@ -611,7 +611,7 @@ export class AssetService {
     }
 
     const calls: EvmContractCall[] = [];
-    if (!this.config.isValidVault(assetConfig.hubAsset)) {
+    if (!this.config.isSodaVaultHubAsset(assetConfig.hubAsset)) {
       calls.push(Erc20Service.encodeApprove(assetConfig.hubAsset, assetConfig.vault, amount));
       calls.push(EvmVaultTokenService.encodeDeposit(assetConfig.vault, assetConfig.hubAsset, amount));
     }
@@ -692,7 +692,7 @@ export class AssetService {
     }
 
     calls.push(EvmVaultTokenService.encodeWithdraw(assetConfig.vault, assetConfig.hubAsset, vaultAmount));
-    const translatedAmount = EvmVaultTokenService.translateIncomingDecimals(assetConfig.decimals, vaultAmount);
+    const translatedAmount = EvmVaultTokenService.translateOutgoingDecimals(assetConfig.decimals, vaultAmount);
 
     if (dstChainKey === this.hubProvider.chainConfig.chain.key) {
       if (
