@@ -514,7 +514,7 @@ describe('BitcoinSpokeService.deposit', () => {
       base64Psbt: 'cHNidA==',
     } as never);
     (mockBtcProvider.signTransaction as ReturnType<typeof vi.fn>).mockResolvedValueOnce('signedhex');
-    vi.spyOn(btcSpoke.radfi, 'requestRadfiSignature').mockResolvedValueOnce(TX_HASH as never);
+    const sigSpy = vi.spyOn(btcSpoke.radfi, 'requestRadfiSignature').mockResolvedValueOnce(TX_HASH as never);
 
     const BTC_TOKEN = btcConfig.supportedTokens.BTC.address;
     const result = await btcSpoke.deposit({
@@ -530,6 +530,12 @@ describe('BitcoinSpokeService.deposit', () => {
 
     expect(result).toBe(TX_HASH);
     expect(mockBtcProvider.signTransaction).toHaveBeenCalledWith('cHNidA==', false);
+    // relayData ({ hub wallet address, full payload }) is forwarded so Bound Exchange can
+    // auto-resubmit a stuck relay: address === deposit `to`, payload === deposit `data`.
+    expect(sigSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ relayData: { address: HUB_WALLET, payload: '0x' } }),
+      expect.anything(),
+    );
   });
 
   it('TRADING with unsupported token → throws "Unsupported token: …"', async () => {
