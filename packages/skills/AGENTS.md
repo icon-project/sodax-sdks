@@ -4,16 +4,16 @@
 
 ## What's here
 
-This package ships **four mode-gated broad skills** (`skills/<name>/SKILL.md`) — one per SODAX SDK package — plus **nested granular per-feature skills** under `sodax-sdk` (one per Core SDK feature service) and under `sodax-dapp-kit` (one per dapp-kit feature domain). Each broad skill bundles two long-form **knowledge** subtrees: `integration/knowledge/` (writing new v2 code) and `migration-v1-to-v2/knowledge/` (porting v1 → v2). Granular skills are single-file SKILL.md that link into their parent's knowledge tree. Skills are action-oriented (when to use, workflow, anti-patterns, links into knowledge); knowledge is the reference material your workflow points at. SKILL.md gates by mode at the top — pick integration or migration based on the consumer signal.
+This package ships **four mode-gated broad skills** (`skills/<name>/SKILL.md`) — one per SODAX SDK package — plus **nested granular skills** under every broad skill: `sodax-sdk` (one per Core SDK feature service), `sodax-dapp-kit` (one per dapp-kit feature domain), `sodax-wallet-sdk-core` (one per chain family), and `sodax-wallet-sdk-react` (one per connectivity concern). Each broad skill bundles two long-form **knowledge** subtrees: `integration/knowledge/` (writing new v2 code) and `migration-v1-to-v2/knowledge/` (porting v1 → v2). Granular skills are single-file SKILL.md that link into their parent's knowledge tree. Skills are action-oriented (when to use, workflow, anti-patterns, links into knowledge); knowledge is the reference material your workflow points at. SKILL.md gates by mode at the top — pick integration or migration based on the consumer signal.
 
 | SDK package | Broad skill | Granular per-feature skills |
 |---|---|---|
 | `@sodax/sdk` | `sodax-sdk` | `sodax-sdk/swap`, `sodax-sdk/money-market`, `sodax-sdk/bridge`, `sodax-sdk/staking`, `sodax-sdk/dex`, `sodax-sdk/migration`, `sodax-sdk/partner`, `sodax-sdk/recovery`, `sodax-sdk/backend-api` |
-| `@sodax/wallet-sdk-core` | `sodax-wallet-sdk-core` | — |
-| `@sodax/wallet-sdk-react` | `sodax-wallet-sdk-react` | — |
+| `@sodax/wallet-sdk-core` | `sodax-wallet-sdk-core` | `sodax-wallet-sdk-core/evm`, `sodax-wallet-sdk-core/solana`, `sodax-wallet-sdk-core/sui`, `sodax-wallet-sdk-core/bitcoin`, `sodax-wallet-sdk-core/stellar`, `sodax-wallet-sdk-core/icon`, `sodax-wallet-sdk-core/injective`, `sodax-wallet-sdk-core/near`, `sodax-wallet-sdk-core/stacks` |
+| `@sodax/wallet-sdk-react` | `sodax-wallet-sdk-react` | `sodax-wallet-sdk-react/connect`, `sodax-wallet-sdk-react/wallet-modal`, `sodax-wallet-sdk-react/bridge-to-sdk`, `sodax-wallet-sdk-react/switch-chain`, `sodax-wallet-sdk-react/sign-message`, `sodax-wallet-sdk-react/walletconnect` |
 | `@sodax/dapp-kit` | `sodax-dapp-kit` | `sodax-dapp-kit/swap`, `sodax-dapp-kit/money-market`, `sodax-dapp-kit/staking`, `sodax-dapp-kit/bridge`, `sodax-dapp-kit/dex`, `sodax-dapp-kit/migration`, `sodax-dapp-kit/bitcoin`, `sodax-dapp-kit/auxiliary-services` |
 
-**When to prefer a granular skill:** if the consumer has already picked a feature (e.g. *"swap with Sodax"*, *"supply on money market"*, *"useSwap hook"*), load the matching granular skill — it's ~3 KB vs the broad skill's ~13 KB and points at exactly the knowledge files needed for that feature. For a React dapp that has settled on one feature, load `sodax-dapp-kit/<feature>`; for raw SDK / backend work, load `sodax-sdk/<feature>`. Load the broad skill when the feature is undecided, the task spans multiple features, or the consumer is porting a full v1 codebase.
+**When to prefer a granular skill:** if the consumer has already picked a sub-domain (e.g. *"swap with Sodax"*, *"supply on money market"*, *"useSwap hook"*, *"instantiate EvmWalletProvider"*, *"add a connect button"*), load the matching granular skill — it's ~3 KB vs the broad skill's ~13 KB and points at exactly the knowledge files needed. For a React dapp that has settled on one feature, load `sodax-dapp-kit/<feature>`; for raw SDK / backend work, load `sodax-sdk/<feature>`; for a known chain in a backend/Node wallet flow, load `sodax-wallet-sdk-core/<chain>`; for a known React wallet concern (connect, wallet-modal, bridge-to-sdk, switch-chain, sign-message, walletconnect), load `sodax-wallet-sdk-react/<concern>`. Load the broad skill when the sub-domain is undecided, the task spans several, or the consumer is porting a full v1 codebase.
 
 > **What about `@sodax/types`?** No skill. The package has no consumer-facing surface — it's pure TypeScript types, re-exported through `@sodax/sdk`. Importing `@sodax/types` directly invites version skew. The SDK skills cover all `@sodax/types` symbols you need.
 
@@ -25,6 +25,8 @@ Pick the consumer's situation, load the listed skills in order. Each entry names
 |---|---|
 | **Scaffolding ONE specific Core SDK feature** (swap, money-market, bridge, staking, dex, migration, partner, recovery, backend-api) | `sodax-sdk/<feature>` (granular, covers both modes via internal links). Add `sodax-wallet-sdk-core` (integration) if it signs and lives outside React. Skip the broad `sodax-sdk` skill |
 | **Scaffolding ONE specific dapp-kit feature in React** (swap, money-market, staking, bridge, dex, migration, bitcoin, auxiliary-services) | `sodax-wallet-sdk-react` (integration) → `sodax-dapp-kit/<feature>` (granular, covers both modes via internal links). Skip the broad `sodax-dapp-kit` skill |
+| **Scaffolding ONE chain's wallet provider** (backend/Node/non-React: evm, solana, sui, bitcoin, stellar, icon, injective, near, stacks) | `sodax-wallet-sdk-core/<chain>` (granular, covers both modes) → `sodax-sdk/<feature>` for the operation it signs. Skip the broad `sodax-wallet-sdk-core` skill |
+| **Scaffolding ONE React wallet concern** (connect, wallet-modal, bridge-to-sdk, switch-chain, sign-message, walletconnect) | `sodax-wallet-sdk-react/<concern>` (granular, covers both modes). Skip the broad `sodax-wallet-sdk-react` skill |
 | **Building a NEW React dapp** | `sodax-wallet-sdk-react` (integration) → `sodax-dapp-kit` (integration) → (`sodax-sdk` (integration) only if dropping below dapp-kit) |
 | **Building a NEW React app, no dapp-kit** (calling the SDK directly) | `sodax-wallet-sdk-react` (integration) → `sodax-sdk` (integration) |
 | **Building a NEW Node / backend service or script** | `sodax-sdk` (integration) → `sodax-wallet-sdk-core` (integration; only if it signs) |
@@ -58,8 +60,13 @@ packages/skills/
     ├── sodax-sdk/                         {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/,
     │                                       <feature>/SKILL.md ×9 — swap, money-market, bridge, staking, dex,
     │                                       migration, partner, recovery, backend-api}
-    ├── sodax-wallet-sdk-core/             {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/}
-    ├── sodax-wallet-sdk-react/            {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/ — incl. 4 .tsx example apps under integration/knowledge/examples/}
+    ├── sodax-wallet-sdk-core/             {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/,
+    │                                       <chain>/SKILL.md ×9 — evm, solana, sui, bitcoin, stellar, icon,
+    │                                       injective, near, stacks}
+    ├── sodax-wallet-sdk-react/            {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/
+    │                                       (incl. 4 .tsx example apps under integration/knowledge/examples/),
+    │                                       <concern>/SKILL.md ×6 — connect, wallet-modal, bridge-to-sdk,
+    │                                       switch-chain, sign-message, walletconnect}
     └── sodax-dapp-kit/                    {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/,
                                             <feature>/SKILL.md ×8 — swap, money-market, staking, bridge, dex,
                                             migration, bitcoin, auxiliary-services}
