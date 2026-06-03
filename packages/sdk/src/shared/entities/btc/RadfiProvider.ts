@@ -5,6 +5,7 @@ import {
   type RadfiConfig,
   type RadfiDepositTxResponse,
 } from '@sodax/types';
+import type { RelayExtraData } from '../../types/relay-types.js';
 
 /**
  * Raw error body shape returned by the Bound Exchange HTTP API on non-2xx responses.
@@ -332,10 +333,19 @@ export class RadfiProvider {
     return body.data;
   }
 
+  /**
+   * Co-sign and broadcast a `sodax-withdraw` deposit via the Bound Exchange API.
+   *
+   * `relayData` ({ address, payload }) is the same `RelayExtraData` the SDK returns from
+   * `createIntent()` / money-market supply etc. It is optional and non-breaking: when supplied,
+   * the Bound Exchange backend persists it so it can auto-resubmit the intent relay if the relay
+   * gets stuck (otherwise a stuck relay eventually refunds instead of completing the swap).
+   */
   public async requestRadfiSignature(
     params: {
       userAddress: string;
       signedBase64Tx: string;
+      relayData?: RelayExtraData;
     },
     accessToken: string,
   ): Promise<string> {

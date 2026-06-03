@@ -402,6 +402,11 @@ export class BitcoinSpokeService {
           {
             userAddress: from,
             signedBase64Tx,
+            // Forward the relay identity ({ hub wallet address, full payload }) so the Bound Exchange
+            // backend can auto-resubmit the intent relay if it gets stuck. `to` is the hub wallet
+            // (relayData.address) and `data` is the full payload (relayData.payload) — the same pair
+            // feature services return as `relayData` from createIntent()/supply().
+            relayData: { address: params.to, payload: data },
           },
           accessToken,
         )) satisfies TxReturnType<BitcoinChainKey, false> as TxReturnType<BitcoinChainKey, Raw>;
