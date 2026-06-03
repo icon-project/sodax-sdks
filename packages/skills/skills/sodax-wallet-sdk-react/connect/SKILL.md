@@ -10,7 +10,7 @@ Granular skill for the everyday connect / disconnect + account-state + connector
 ## Step 1 — Clarify with user before coding
 
 1. **New code or v1 → v2 port?** New → § Integration. Port v1 → § Migration.
-2. **Which task?** A connect/disconnect button (`useXConnect` / `useXDisconnect`), reading the account (`useXAccount` / `useXAccounts`), connection metadata (`useXConnection` / `useXConnections`), or listing wallets (`useXConnectors` / `useIsWalletInstalled`).
+2. **Which task?** A connect/disconnect button (`useXConnect` / `useXDisconnect`), reading the account (`useXAccount` / `useXAccounts`), connection metadata (`useXConnection` / `useXConnections`), or listing wallets (`useXConnectors` / `useIsWalletInstalled`). Advanced: per-chain service access + `getXConnectorById` via `useXService` / `useXServices`.
 3. **Single chain or per-family?** `useXAccount` takes **either** `xChainId` (chain key, narrowest typing) **or** `xChainType` (family) — never both.
 
 ## Integration workflow (new v2 code)
@@ -19,7 +19,7 @@ Granular skill for the everyday connect / disconnect + account-state + connector
 2. [`../integration/knowledge/recipes/setup.md`](../integration/knowledge/recipes/setup.md) — prerequisite: mount `SodaxWalletProvider`, declare chain-type slots, wire React Query.
 3. [`../integration/knowledge/architecture.md`](../integration/knowledge/architecture.md) — provider mount tree, frozen config, `xChainType` vs `xChainId`, persist hydration.
 4. [`../integration/knowledge/recipes/connect-button.md`](../integration/knowledge/recipes/connect-button.md) and [`../integration/knowledge/recipes/chain-detection.md`](../integration/knowledge/recipes/chain-detection.md).
-5. Lookups → [`../integration/knowledge/reference/hooks.md`](../integration/knowledge/reference/hooks.md), [`connectors.md`](../integration/knowledge/reference/connectors.md), [`wallet-brands.md`](../integration/knowledge/reference/wallet-brands.md).
+5. Lookups → [`../integration/knowledge/reference/hooks.md`](../integration/knowledge/reference/hooks.md) (incl. the service-level `useXService` / `useXServices`), [`connectors.md`](../integration/knowledge/reference/connectors.md), [`wallet-brands.md`](../integration/knowledge/reference/wallet-brands.md).
 
 ### Connect-specific anti-patterns
 

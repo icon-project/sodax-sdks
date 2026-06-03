@@ -47,4 +47,4 @@ Sibling chain skills follow the same shape — bitcoin, solana, sui, stellar, ic
 
 ## Passing the provider into the SDK (different package family)
 
-This skill *builds* the provider. To execute SODAX operations with it, **also load the `sodax-sdk` skill (integration mode)** and pass the provider in the SDK call payload (`{ raw: false, walletProvider }`). React dapps should get the provider via `useWalletProvider(...)` — **load the `sodax-wallet-sdk-react` skill** instead.
+This skill *builds* the provider. For the concrete handoff, see [`../integration/knowledge/recipes/bridge-to-sdk.md`](../integration/knowledge/recipes/bridge-to-sdk.md). To execute SODAX operations with it, **also load the `sodax-sdk` skill (integration mode)** and pass the provider in the SDK call payload (`{ raw: false, walletProvider }`). React dapps should get the provider via `useWalletProvider(...)` — **load the `sodax-wallet-sdk-react` skill** instead.
