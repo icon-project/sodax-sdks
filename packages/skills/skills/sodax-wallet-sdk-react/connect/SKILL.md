@@ -49,3 +49,7 @@ Granular skill for the everyday connect / disconnect + account-state + connector
 - [`../switch-chain/SKILL.md`](../switch-chain/SKILL.md) — EVM wrong-network handling.
 
 For multi-feature work, load the broad [`sodax-wallet-sdk-react` skill](../SKILL.md).
+
+## Wiring into dapp-kit (different package family)
+
+The `xService` from `useXService` is exactly what `@sodax/dapp-kit`'s `useXBalances` consumes (alongside `xChainId` / `xTokens` / `address`; map the id with `getXChainType(xChainId)`). The `useWalletProvider` result — see the [`bridge-to-sdk`](../bridge-to-sdk/SKILL.md) sibling skill — feeds dapp-kit's mutation hooks. For that consuming side, **also load the `sodax-dapp-kit` skill (integration mode)**.
