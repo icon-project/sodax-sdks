@@ -285,6 +285,6 @@ Vitest. Co-located with source (`*.test.ts`). E2E tests in `src/e2e-tests/`.
 
 ```bash
 pnpm test          # Unit tests
-pnpm test-e2e      # E2E tests
+pnpm test:e2e      # E2E tests
 pnpm coverage      # Coverage report
 ```

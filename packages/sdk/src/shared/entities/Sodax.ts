@@ -10,9 +10,9 @@ import { MoneyMarketService } from '../../moneyMarket/MoneyMarketService.js';
 import { sodaxConfig, type DeepPartial, type Result, type SodaxConfig } from '@sodax/types';
 import type { HubProvider } from '../types/types.js';
 import { ConfigService } from '../config/index.js';
+import { mergeSodaxConfig } from '../config/mergeSodaxConfig.js';
 import { PartnerService } from '../../partner/PartnerService.js';
 import { RecoveryService } from '../../recovery/RecoveryService.js';
-import { deepMerge } from '../utils/deepMerge.js';
 
 /**
  * Sodax class is used to interact with the Sodax.
@@ -37,9 +37,9 @@ export class Sodax {
   public readonly spoke: SpokeService; // spoke service enabling spoke chain operations
 
   constructor(config?: DeepPartial<SodaxConfig>) {
-    this.instanceConfig = config ? deepMerge<SodaxConfig>(sodaxConfig, config) : sodaxConfig;
+    this.instanceConfig = config ? mergeSodaxConfig(sodaxConfig, config) : sodaxConfig;
     this.backendApi = new BackendApiService(this.instanceConfig.api);
-    this.config = new ConfigService({ api: this.backendApi, config: this.instanceConfig });
+    this.config = new ConfigService({ api: this.backendApi, config: this.instanceConfig, userConfig: config });
 
     this.hubProvider = new EvmHubProvider({ config: this.config }); // default to Sonic mainnet
     this.spoke = new SpokeService({ config: this.config, hubProvider: this.hubProvider });

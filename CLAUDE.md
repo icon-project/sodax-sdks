@@ -61,7 +61,7 @@ pnpm clean                # Remove all node_modules, dist, .turbo, .next
 
 ```bash
 cd packages/<pkg> && pnpm test          # Unit tests (excludes e2e)
-cd packages/<pkg> && pnpm test-e2e      # E2E tests only
+cd packages/<pkg> && pnpm test:e2e      # E2E tests only
 cd packages/<pkg> && pnpm coverage      # Coverage report
 ```
 
