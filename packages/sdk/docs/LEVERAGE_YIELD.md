@@ -188,6 +188,12 @@ Reads the on-chain allowance of the vault's `asset` for `owner → vault` and re
 
 Computes the **steady-state** APR of a vault from the AAVE supply/borrow rates of its `asset` and `borrowToken`, scaled by the vault's target leverage (see *How the leverage-yield vault works* above for the formula and caveats). **Returns:** `Promise<Result<LeverageYieldApr, LeverageYieldLookupError>>`. Rates are in RAY (`1e27`); the leverage multiplier is in WAD (`1e18`). `netAprRay` can be negative; `targetLTV ≥ 100%` is rejected with `VALIDATION_FAILED`.
 
+### getLsdApr / getEffectiveApr
+
+`getLsdApr` fetches the underlying LSD's staking yield from DefiLlama; `getEffectiveApr` folds that yield into `getApr`'s AAVE-only view for the honest leveraged APR. **Returns:** `Promise<Result<LeverageYieldLsdApr | LeverageYieldEffectiveApr, LeverageYieldLookupError>>`.
+
+> **No SDK-level caching.** Each call hits the DefiLlama HTTP API fresh — there is no built-in cache or rate limiting. UIs are typically protected by their query layer (the demo uses a 60 s `refetchInterval`), but server-side aggregators or tight polling loops should add their own caching to avoid DefiLlama rate limits. A failed/timed-out DefiLlama fetch falls back gracefully rather than throwing.
+
 ### getPosition
 
 Reads the live leveraged-position snapshot (`collateral`, `debt`, `ltv`, `healthFactor`, `idleAsset`) via the non-standard `getPositionDetails()` view. **Returns:** `Promise<Result<LeverageYieldPosition, LeverageYieldLookupError>>`.

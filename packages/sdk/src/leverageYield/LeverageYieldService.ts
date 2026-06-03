@@ -2,7 +2,6 @@ import { type SpokeService, Erc20Service, Erc4626Service, poolAbi } from '../sha
 import type { HubProvider } from '../shared/types/types.js';
 import type {
   Address,
-  EvmReturnType,
   HubChainKey,
   IEvmWalletProvider,
   LeverageYieldVault,
@@ -395,7 +394,7 @@ export class LeverageYieldService {
    */
   public async approve<R extends boolean = false>(
     params: LeverageYieldApproveParams<R>,
-  ): Promise<Result<TxReturnType<HubChainKey, R> | EvmReturnType<true>, LeverageYieldApproveError>> {
+  ): Promise<Result<TxReturnType<HubChainKey, R>, LeverageYieldApproveError>> {
     const baseCtx = { action: 'approve' as const };
     try {
       leverageYieldInvariant(params.amount > 0n, 'Amount must be greater than 0', { ...baseCtx, field: 'amount' });
@@ -438,7 +437,7 @@ export class LeverageYieldService {
   public async isAllowanceValid(
     params: LeverageYieldAllowanceParams,
   ): Promise<Result<boolean, LeverageYieldAllowanceCheckError>> {
-    const baseCtx = { action: 'deposit' as const };
+    const baseCtx = { action: 'allowanceCheck' as const };
     try {
       leverageYieldInvariant(params.amount > 0n, 'Amount must be greater than 0', { ...baseCtx, field: 'amount' });
 

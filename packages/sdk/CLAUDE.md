@@ -266,7 +266,7 @@ Leveraged-yield ERC-4626 vaults on the Sonic hub (`LeverageYieldService`, reacha
 - `approve` / `isAllowanceValid` — Sonic-direct allowance management for the vault's underlying asset (the swap-style `deposit` handles its own approvals).
 - `getApr` / `getPosition` / `getMaxWithdraw[ForUser]` / `getShareBalance[ForUser]` / `getTotalAssets` / `previewDeposit|Withdraw|Redeem` / `getAsset` — reads. `getApr` computes steady-state leverage APR (`supplyApr + (targetLTV/(1−targetLTV)) × (supplyApr − borrowApr)`; RAY rates × WAD multiplier; net APR can be negative on an inverted spread).
 - `listVaults` / `getVault` / `getVaultByAddress` — registry lookups; the registry lives in `@sodax/types` (`leverageYieldConfig`) and derives all addresses from the canonical `LsodaTokens` / `SodaTokens` registries.
-- **Errors**: All async methods return `Result<T, SodaxError<NarrowCode>>`. The 3 user-facing actions discriminate via `context.action` (`'deposit' | 'withdraw' | 'approve'`); read methods emit `LOOKUP_FAILED` partitioned by `context.method`. No relay/tx-verification codes (there is no in-service relay step). See `docs/LEVERAGE_YIELD.md`.
+- **Errors**: All async methods return `Result<T, SodaxError<NarrowCode>>`. The 3 user-facing actions discriminate via `context.action` (`'deposit' | 'withdraw' | 'approve'`); `isAllowanceValid`'s allowance pre-flight uses `action: 'allowanceCheck'` (the 4th member of `LeverageYieldAction`) so its failures don't masquerade as `'deposit'`; read methods emit `LOOKUP_FAILED` partitioned by `context.method`. No relay/tx-verification codes (there is no in-service relay step). See `docs/LEVERAGE_YIELD.md`.
 
 ## Gotchas
 

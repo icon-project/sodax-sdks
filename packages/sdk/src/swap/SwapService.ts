@@ -643,7 +643,7 @@ export class SwapService {
       const inputTokenChainKey = params.hubWalletSwap ? hubChainKey : params.srcChainKey;
       swapInvariant(
         this.config.isValidOriginalAssetAddress(inputTokenChainKey, params.inputToken),
-        `Unsupported spoke chain token (srcChainKey): ${inputTokenChainKey}, params.inputToken): ${params.inputToken}`,
+        `Unsupported spoke chain token (srcChainKey: ${inputTokenChainKey}, inputToken: ${params.inputToken})`,
         { ...baseCtx, field: 'inputToken' },
       );
       swapInvariant(
