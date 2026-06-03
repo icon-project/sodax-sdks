@@ -50,7 +50,7 @@ const SAMPLE_RESERVE_ADDRESS = '0x14238d267557e9d799016ad635b53cd15935d290';
 
 const sampleSubmitSwapTxRequest: SubmitSwapTxRequest = {
   txHash: '0x1e68359c3b541ac4aa0239bdfed9356f79969392d7893b44d206d1f408be4fe9',
-  srcChainKey: '0x38.bsc',
+  srcChainId: '0x38.bsc',
   walletAddress: '0x152740b9dB0C232a2909d4BeE5Ee83F565785813',
   intent: {
     intentId: '123456789',

@@ -46,7 +46,7 @@ export interface SwapIntentData {
 
 export interface SubmitSwapTxRequest {
   txHash: string;
-  srcChainKey: string;
+  srcChainId: string;
   walletAddress: string;
   intent: SwapIntentData;
   relayData: string;

@@ -335,7 +335,7 @@ export default function SwapCard({
 
     const request: SubmitSwapTxRequest = {
       txHash: spokeTxHash as string,
-      srcChainKey: src.chain,
+      srcChainId: src.chain,
       walletAddress: sourceAccount.address ?? '',
       intent: swapIntentData,
       relayData: relayData.payload,

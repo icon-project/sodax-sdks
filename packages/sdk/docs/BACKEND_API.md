@@ -261,7 +261,7 @@ Submits a signed spoke-chain swap transaction to the backend for relay processin
 ```typescript
 const result = await sodax.backendApi.submitSwapTx({
   txHash: '0x123...abc',
-  srcChainKey: 'arbitrum',
+  srcChainId: 'arbitrum',
   // ... other SubmitSwapTxRequest fields
 });
 if (result.ok) {

@@ -493,11 +493,11 @@ export default function LeverageYieldPage() {
       data: intent.data,
     };
 
-    // BES locates the tx on `srcChainKey` — the spoke chain the user signed on (`userChain`
+    // BES locates the tx on `srcChainId` — the spoke chain the user signed on (`userChain`
     // for both tabs; withdraw signs a `sendMessage` there).
     const request: SubmitSwapTxRequest = {
       txHash: spokeTxHash as string,
-      srcChainKey: userChain,
+      srcChainId: userChain,
       walletAddress: intentOrderPayload.srcAddress,
       intent: swapIntentData,
       relayData: relayData.payload,
