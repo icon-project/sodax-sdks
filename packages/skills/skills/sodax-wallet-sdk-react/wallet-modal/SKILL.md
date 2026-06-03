@@ -1,6 +1,6 @@
 ---
 name: sodax-wallet-sdk-react-wallet-modal
-description: 'Granular skill for the @sodax/wallet-sdk-react v2 headless wallet-modal + multi-chain UI primitives only — useWalletModal (chainSelect → walletSelect → connecting → success | error state machine), useConnectionFlow (connect without a modal), useChainGroups, useConnectedChains, useBatchConnect / useBatchDisconnect, and the sortConnectors utility. Use when a React dapp needs a multi-chain wallet picker modal, an inline connection flow, batch connect/disconnect across chains, or chain/connector list rendering — e.g. "build a wallet modal", "useWalletModal", "multi-chain connect UI", "connect all chains with one wallet", "useBatchConnect". Covers BOTH integration (write new v2 code) and migration (port v1). Picks via Step 1. Links into the parent sodax-wallet-sdk-react knowledge tree. For a plain connect button use the sibling connect skill; reference app: apps/wallet-modal-example.'
+description: 'Granular skill for the @sodax/wallet-sdk-react v2 headless wallet-modal + multi-chain UI primitives only — useWalletModal (chainSelect → walletSelect → connecting → success | error state machine), useConnectionFlow (connect without a modal), useChainGroups, useConnectedChains, useBatchConnect / useBatchDisconnect, and the sortConnectors utility. Use when a React dapp needs a multi-chain wallet picker modal, an inline connection flow, batch connect/disconnect across chains, or chain/connector list rendering — e.g. "build a wallet modal", "useWalletModal", "multi-chain connect UI", "connect all chains with one wallet", "useBatchConnect". Covers BOTH integration (write new v2 code) and migration (port v1). Picks via Step 1. Links into the parent sodax-wallet-sdk-react knowledge tree. For a plain connect button use the sibling connect skill.'
 ---
 
 # Wallet modal (`wallet-sdk-react` granular skill)
@@ -11,7 +11,7 @@ Granular skill for the headless multi-chain modal + connection-flow + batch hook
 
 1. **New code or v1 → v2 port?** New → § Integration. Port v1 → § Migration.
 2. **Which primitive?** Full modal state machine (`useWalletModal`), modal-less inline flow (`useConnectionFlow`), chain/connection lists (`useChainGroups` / `useConnectedChains`), or bulk ops (`useBatchConnect` / `useBatchDisconnect`).
-3. **Need a render?** These hooks are render-agnostic — you own the JSX. The reference render lives in the `apps/wallet-modal-example` app of the SODAX monorepo.
+3. **Need a render?** These hooks are render-agnostic — you own the JSX (the hooks supply state + actions; you map them to your components).
 
 ## Integration workflow (new v2 code)
 

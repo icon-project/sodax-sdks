@@ -99,7 +99,7 @@ Stop and ask the user before continuing if you encounter any of the following. T
 | User reads from `useXWagmiStore` with a selector touching `setXConnection`, `unsetXConnection`, or any v2-internal field (`enabledChains`, `walletProviders`, `chainActions`, …) | These are not part of the v2 public API. Agent must replace direct store reads with public hooks (`useXServices`, `useXConnections`, etc. — see [`reference/imports.md`](./reference/imports.md) § "Store hook removed"). For mutations the user must adopt `useXConnect` / `useXDisconnect` — confirm before substituting. |
 | User passes `rpcConfig`, `options`, or `initialState` to the v1 provider | These are removed in v2. Migration target is the new `config` object. Verify what behavior the user wants preserved. |
 | Test files that mock `XService` or `XConnector` | Mock surface differs. Tests must be updated by hand with the user's intent in mind. |
-| `apps/wallet-modal-example` is referenced | This is internal SODAX scaffolding, not for end users. |
+| Code references internal SODAX example / scaffolding (not a published `@sodax/*` export) | Not part of the public API — don't port or depend on it. |
 | User explicitly says "don't change behavior X" | Some v2 changes are intentional behavior shifts (e.g. EVM = single connection across all networks). Confirm before forcing v1 behavior back. |
 
 When stopping, **quote the file/line** of the offending code and present the user with concrete options.
