@@ -961,7 +961,7 @@ export const spokeChainConfig = {
     chain: baseChainInfo[ChainKeys.HEDERA_MAINNET] satisfies BaseChainInfo<'EVM'>,
     rpcUrl: 'https://mainnet.hashio.io/api',
     addresses: {
-      assetManager: '0x0df73542cc68bdc01b361d231c60f726b0e0bc05',
+      assetManager: '0x0df73542cC68bDC01b361d231c60F726B0e0bC05',
       connection: '0x4555aC13D7338D9E671584C1D118c06B2a3C88eD',
     },
     nativeToken: '0x0000000000000000000000000000000000000000' as const,

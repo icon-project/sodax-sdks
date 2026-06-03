@@ -178,7 +178,6 @@ export const moneyMarketSupportedTokens = {
     spokeChainConfig[ChainKeys.BITCOIN_MAINNET].supportedTokens.BTC,
   ] as const satisfies XToken[],
   [ChainKeys.HEDERA_MAINNET]: [
-    // spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.HBAR,
     spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.bnUSD,
     spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.SODA,
     spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.USDC,

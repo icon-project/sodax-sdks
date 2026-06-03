@@ -112,7 +112,7 @@ export function isBrowserExtensionEvmWalletConfig(config: EvmWalletConfig): conf
  *   injected by the dApp's wallet adapter (e.g. wagmi). Transport/client defaults are ignored
  *   in this mode.
  *
- * All 12 supported EVM chains are covered via {@link getEvmViemChain}; HyperEVM is defined
+ * All 13 supported EVM chains are covered via {@link getEvmViemChain}; HyperEVM is defined
  * locally as {@link hyper} because it is absent from `viem/chains`.
  */
 export class EvmWalletProvider extends BaseWalletProvider<EvmWalletDefaults> implements IEvmWalletProvider {
