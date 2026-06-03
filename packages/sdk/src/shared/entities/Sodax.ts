@@ -7,10 +7,11 @@ import { DexService } from '../../dex/DexService.js';
 import { SpokeService } from '../services/spoke/SpokeService.js';
 import { EvmHubProvider } from './EvmHubProvider.js';
 import { MoneyMarketService } from '../../moneyMarket/MoneyMarketService.js';
-import { sodaxConfig, type DeepPartial, type Result, type SodaxConfig } from '@sodax/types';
+import { sodaxConfig, type DeepPartial, type Result, type SodaxConfig, type SodaxLoggerOption } from '@sodax/types';
 import type { HubProvider } from '../types/types.js';
 import { ConfigService } from '../config/index.js';
 import { mergeSodaxConfig } from '../config/mergeSodaxConfig.js';
+import { resolveLogger } from '../logger.js';
 import { PartnerService } from '../../partner/PartnerService.js';
 import { RecoveryService } from '../../recovery/RecoveryService.js';
 
@@ -37,9 +38,13 @@ export class Sodax {
   public readonly spoke: SpokeService; // spoke service enabling spoke chain operations
 
   constructor(config?: DeepPartial<SodaxConfig>) {
+    // Resolve the log sink once, up front, and hand it to the services so it survives the
+    // dynamic-config swap in `config.initialize()`. `DeepPartial` loosens the option's type
+    // (its methods would be made optional), so cast back to the exact union before resolving.
+    const logger = resolveLogger(config?.logger as SodaxLoggerOption | undefined);
     this.instanceConfig = config ? mergeSodaxConfig(sodaxConfig, config) : sodaxConfig;
-    this.backendApi = new BackendApiService(this.instanceConfig.api);
-    this.config = new ConfigService({ api: this.backendApi, config: this.instanceConfig, userConfig: config });
+    this.backendApi = new BackendApiService(this.instanceConfig.api, logger);
+    this.config = new ConfigService({ api: this.backendApi, config: this.instanceConfig, userConfig: config, logger });
 
     this.hubProvider = new EvmHubProvider({ config: this.config }); // default to Sonic mainnet
     this.spoke = new SpokeService({ config: this.config, hubProvider: this.hubProvider });

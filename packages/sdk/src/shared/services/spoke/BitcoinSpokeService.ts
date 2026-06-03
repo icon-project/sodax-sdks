@@ -428,7 +428,7 @@ export class BitcoinSpokeService {
         false
       > as TxReturnType<BitcoinChainKey, Raw>;
     } catch (error) {
-      console.error('Error during deposit:', error);
+      this.config.logger.error('Error during deposit', error);
       throw error;
     }
   }

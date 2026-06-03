@@ -1,9 +1,11 @@
 import { invariant } from '../shared/utils/tiny-invariant.js';
 import { retry } from '../shared/utils/shared-utils.js';
 import type { ConfigService } from '../shared/config/ConfigService.js';
+import { consoleLogger } from '../shared/logger.js';
 import {
   SolverIntentErrorCode,
   type Result,
+  type SodaxLogger,
   type SolverConfig,
   type SolverErrorResponse,
   type SolverExecutionRequest,
@@ -105,7 +107,7 @@ export class SolverApiService {
         } satisfies SolverIntentQuoteResponse,
       };
     } catch (e: unknown) {
-      console.error(`[SolverApiService.getQuote] failed. Details: ${JSON.stringify(e)}`);
+      configService.logger.error(`[SolverApiService.getQuote] failed. Details: ${JSON.stringify(e)}`);
       return {
         ok: false,
         error: {
@@ -132,6 +134,7 @@ export class SolverApiService {
   public static async postExecution(
     request: SolverExecutionRequest,
     config: SolverConfig,
+    logger: SodaxLogger = consoleLogger,
   ): Promise<Result<SolverExecutionResponse, SolverErrorResponse>> {
     try {
       const response = await retry(() =>
@@ -156,7 +159,7 @@ export class SolverApiService {
         value: await response.json(),
       };
     } catch (e: unknown) {
-      console.error(`[SolverApiService.postExecution] failed. Details: ${JSON.stringify(e)}`);
+      logger.error(`[SolverApiService.postExecution] failed. Details: ${JSON.stringify(e)}`);
       return {
         ok: false,
         error: {
@@ -181,6 +184,7 @@ export class SolverApiService {
   public static async getStatus(
     request: SolverIntentStatusRequest,
     config: SolverConfig,
+    logger: SodaxLogger = consoleLogger,
   ): Promise<Result<SolverIntentStatusResponse, SolverErrorResponse>> {
     invariant(request.intent_tx_hash.length > 0, 'Empty intent_tx_hash');
     try {
@@ -204,7 +208,7 @@ export class SolverApiService {
         value: await response.json(),
       };
     } catch (e: unknown) {
-      console.error(`[SolverApiService.getStatus] failed. Details: ${JSON.stringify(e)}`);
+      logger.error(`[SolverApiService.getStatus] failed. Details: ${JSON.stringify(e)}`);
       return {
         ok: false,
         error: {

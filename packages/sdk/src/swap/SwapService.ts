@@ -265,7 +265,7 @@ export class SwapService {
   public async getStatus(
     request: SolverIntentStatusRequest,
   ): Promise<Result<SolverIntentStatusResponse, SolverErrorResponse>> {
-    return SolverApiService.getStatus(request, this.solver);
+    return SolverApiService.getStatus(request, this.solver, this.config.logger);
   }
 
   /**
@@ -291,7 +291,7 @@ export class SwapService {
     request: SolverExecutionRequest,
   ): Promise<Result<SolverExecutionResponse, PostExecutionError>> {
     try {
-      const result = await SolverApiService.postExecution(request, this.solver);
+      const result = await SolverApiService.postExecution(request, this.solver, this.config.logger);
       if (result.ok) return result;
 
       // Defensive: SolverApiService is contractually typed to return SolverErrorResponse,

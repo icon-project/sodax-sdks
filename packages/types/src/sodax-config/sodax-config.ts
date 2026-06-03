@@ -1,4 +1,5 @@
 import type { TxPollingConfig } from '../shared/shared.js';
+import type { SodaxLoggerOption } from '../shared/logger.js';
 import {
   apiConfig,
   solverConfig,
@@ -64,6 +65,7 @@ export type SodaxConfig = {
   api: ApiConfig; // API config used to interact with the Backend API
   solver: SolverConfig;
   relay: RelayConfig; // Relayer config to relay intents/user actions to the hub and vice versa
+  logger?: SodaxLoggerOption; // SDK log sink: 'console' (default) | 'silent' | a custom SodaxLogger. Resolved client-side; never fetched from or overwritten by the backend config.
 };
 
 // default sodax config object which can always be overriden through Sodax instance (i.e. new Sodax(...config))
