@@ -6,6 +6,7 @@ import { SodaxProvider, createSodaxQueryClient } from '@sodax/dapp-kit';
 import { productionSolverConfig, stagingSolverConfig, devSolverConfig } from './constants';
 import { type SodaxConfig, type SolverConfig, ChainKeys, type DeepPartial, type RpcConfig } from '@sodax/sdk';
 import { SolverEnv, useAppStore } from './zustand/useAppStore';
+import { createDatadogLogger } from './lib/loggers/datadogLogger';
 
 const queryClient = createSodaxQueryClient();
 
@@ -18,8 +19,7 @@ const rpcConfig: RpcConfig = {
   [ChainKeys.POLYGON_MAINNET]: process.env.POLYGON_RPC_URL ?? 'https://polygon-bor-rpc.publicnode.com',
   [ChainKeys.ETHEREUM_MAINNET]: process.env.ETHEREUM_RPC_URL ?? 'https://ethereum-rpc.publicnode.com',
   [ChainKeys.HYPEREVM_MAINNET]: process.env.HYPEREVM_RPC_URL ?? 'https://rpc.hyperliquid.xyz/evm',
-  [ChainKeys.SOLANA_MAINNET]:
-    process.env.SOLANA_RPC_URL ?? 'https://solana-rpc.publicnode.com',
+  [ChainKeys.SOLANA_MAINNET]: process.env.SOLANA_RPC_URL ?? 'https://solana-rpc.publicnode.com',
   [ChainKeys.STELLAR_MAINNET]: {
     horizonRpcUrl: process.env.STELLAR_HORIZON_RPC_URL ?? 'https://horizon.stellar.org',
     sorobanRpcUrl: process.env.STELLAR_SOROBAN_RPC_URL ?? 'https://rpc.ankr.com/stellar_soroban',
@@ -96,7 +96,10 @@ export default function Providers({ children }: { children: ReactNode }) {
 
   // override sodax config for rpc urls and solver config
   const sodaxConfig: DeepPartial<SodaxConfig> = useMemo(() => {
+    // Opt-in observability sink (Sentry + Datadog), enabled via VITE_ENABLE_OBSERVABILITY.
+    // `undefined` when off, which leaves the SDK on its default console logger.
     return {
+      logger: createDatadogLogger(),
       solver: configMap[solverEnvironment],
       chains: {
         [ChainKeys.SONIC_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.SONIC_MAINNET] },
