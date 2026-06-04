@@ -2,6 +2,7 @@ import React, { useMemo, type ReactNode } from 'react';
 
 import { QueryClientProvider } from '@tanstack/react-query';
 import { SodaxWalletProvider, type SodaxWalletConfig } from '@sodax/wallet-sdk-react';
+import { ledgerEvmConnectors, trezorEvmConnectors } from '@sodax/wallet-hw';
 import { SodaxProvider, createSodaxQueryClient } from '@sodax/dapp-kit';
 import { productionSolverConfig, stagingSolverConfig, devSolverConfig } from './constants';
 import { type SodaxConfig, type SolverConfig, ChainKeys, type DeepPartial, type RpcConfig } from '@sodax/sdk';
@@ -18,8 +19,7 @@ const rpcConfig: RpcConfig = {
   [ChainKeys.POLYGON_MAINNET]: process.env.POLYGON_RPC_URL ?? 'https://polygon-bor-rpc.publicnode.com',
   [ChainKeys.ETHEREUM_MAINNET]: process.env.ETHEREUM_RPC_URL ?? 'https://ethereum-rpc.publicnode.com',
   [ChainKeys.HYPEREVM_MAINNET]: process.env.HYPEREVM_RPC_URL ?? 'https://rpc.hyperliquid.xyz/evm',
-  [ChainKeys.SOLANA_MAINNET]:
-    process.env.SOLANA_RPC_URL ?? 'https://solana-rpc.publicnode.com',
+  [ChainKeys.SOLANA_MAINNET]: process.env.SOLANA_RPC_URL ?? 'https://solana-rpc.publicnode.com',
   [ChainKeys.STELLAR_MAINNET]: {
     horizonRpcUrl: process.env.STELLAR_HORIZON_RPC_URL ?? 'https://horizon.stellar.org',
     sorobanRpcUrl: process.env.STELLAR_SOROBAN_RPC_URL ?? 'https://rpc.ankr.com/stellar_soroban',
@@ -52,6 +52,10 @@ export default function Providers({ children }: { children: ReactNode }) {
         ssr: true,
         reconnectOnMount: true,
         walletConnect,
+        // Hardware-wallet add-on: registers Ledger (WebHID) and Trezor (hosted
+        // popup) connectors that appear alongside the injected/WalletConnect wallets
+        // in the EVM row of the wallet modal. Desktop only.
+        wagmiConnectors: [...ledgerEvmConnectors(), ...trezorEvmConnectors()],
         chains: {
           [ChainKeys.SONIC_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.SONIC_MAINNET] },
           [ChainKeys.AVALANCHE_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.AVALANCHE_MAINNET] },

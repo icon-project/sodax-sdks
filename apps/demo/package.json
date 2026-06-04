@@ -30,6 +30,7 @@
     "@radix-ui/react-visually-hidden": "^1.1.2",
     "@sodax/dapp-kit": "workspace:*",
     "@sodax/sdk": "workspace:*",
+    "@sodax/wallet-hw": "workspace:*",
     "@sodax/wallet-sdk-react": "workspace:*",
     "@tanstack/react-query": "catalog:",
     "@types/node": "catalog:",
@@ -44,6 +45,7 @@
     "react-router": "^7.6.1",
     "tailwind-merge": "^2.5.4",
     "viem": "catalog:",
+    "wagmi": "catalog:",
     "web-vitals": "^2.1.4",
     "zustand": "4.5.2"
   },
