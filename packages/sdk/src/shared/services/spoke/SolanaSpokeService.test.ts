@@ -48,6 +48,7 @@ import {
   TransactionMessage,
   VersionedTransaction,
 } from '@solana/web3.js';
+import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import type BN from 'bn.js';
 import {
   ChainKeys,
@@ -351,6 +352,8 @@ describe('SolanaSpokeService.deposit', () => {
       blockhash: FAKE_BLOCKHASH,
       lastValidBlockHeight: 0,
     });
+    // The mint's owning token program is read on-chain to resolve legacy vs Token-2022.
+    vi.spyOn(solanaSpoke.connection, 'getAccountInfo').mockResolvedValueOnce({ owner: TOKEN_PROGRAM_ID } as never);
 
     await solanaSpoke.deposit(depositParams<true>({ token: SOL_BNUSD, raw: true }));
 
@@ -362,9 +365,35 @@ describe('SolanaSpokeService.deposit', () => {
       AssetManagerPDA.vault_token(ASSET_MGR_PROGRAM_ID, new PublicKey(SOL_BNUSD)).pda.toBase58(),
     );
     expect(accounts.mint.toBase58()).toBe(SOL_BNUSD);
+    // A legacy SPL mint keeps the legacy token program.
+    expect(accounts.tokenProgram.toBase58()).toBe(TOKEN_PROGRAM_ID.toBase58());
     // signerTokenAccount is the user's ATA for the mint — pin via the static helper.
     const expectedAta = await SolanaSpokeService.getAssociatedTokenAddress(SOL_BNUSD, SRC_ADDR);
     expect(accounts.signerTokenAccount).toBe(expectedAta);
+  });
+
+  it('SPL path resolves a Token-2022 mint and threads it into the ATA + tokenProgram', async () => {
+    vi.spyOn(solanaSpoke.connection, 'getLatestBlockhash').mockResolvedValueOnce({
+      blockhash: FAKE_BLOCKHASH,
+      lastValidBlockHeight: 0,
+    });
+    // A Token-2022 mint (e.g. xStock tokens like CRCLx) is owned by the Token-2022 program.
+    vi.spyOn(solanaSpoke.connection, 'getAccountInfo').mockResolvedValueOnce({
+      owner: TOKEN_2022_PROGRAM_ID,
+    } as never);
+
+    await solanaSpoke.deposit(depositParams<true>({ token: SOL_BNUSD, raw: true }));
+
+    const transferChain = (fakeAssetManagerProgram.methods.transfer as ReturnType<typeof vi.fn>).mock.results[0]
+      ?.value as ReturnType<typeof mocks.makeChain>;
+    const accounts = (transferChain.accountsStrict as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    // The mint's program must flip both the tokenProgram account and the ATA derivation.
+    expect(accounts.tokenProgram.toBase58()).toBe(TOKEN_2022_PROGRAM_ID.toBase58());
+    const expectedAta = await SolanaSpokeService.getAssociatedTokenAddress(SOL_BNUSD, SRC_ADDR, TOKEN_2022_PROGRAM_ID);
+    expect(accounts.signerTokenAccount).toBe(expectedAta);
+    // The legacy-derived ATA differs, proving the program id actually changes the address.
+    const legacyAta = await SolanaSpokeService.getAssociatedTokenAddress(SOL_BNUSD, SRC_ADDR, TOKEN_PROGRAM_ID);
+    expect(accounts.signerTokenAccount).not.toBe(legacyAta);
   });
 
   it('raw=true returns {from, to: assetManager.programId, value: amount, data: base64}', async () => {
@@ -716,6 +745,32 @@ describe('SolanaSpokeService static helpers', () => {
     expect(ata.length).toBeGreaterThan(0);
     const ata2 = await SolanaSpokeService.getAssociatedTokenAddress(SOL_BNUSD, SRC_ADDR);
     expect(ata2).toBe(ata);
+  });
+
+  it('getAssociatedTokenAddress derives a distinct ATA per token program, defaulting to legacy', async () => {
+    const legacy = await SolanaSpokeService.getAssociatedTokenAddress(SOL_BNUSD, SRC_ADDR, TOKEN_PROGRAM_ID);
+    const token2022 = await SolanaSpokeService.getAssociatedTokenAddress(SOL_BNUSD, SRC_ADDR, TOKEN_2022_PROGRAM_ID);
+    expect(legacy).not.toBe(token2022);
+    // No program id → legacy, preserving the original two-arg behaviour.
+    const def = await SolanaSpokeService.getAssociatedTokenAddress(SOL_BNUSD, SRC_ADDR);
+    expect(def).toBe(legacy);
+  });
+
+  it('getMintTokenProgramId resolves the mint owner program, defaulting to legacy', async () => {
+    const conn = solanaSpoke.connection;
+    const mint = new PublicKey(SOL_BNUSD);
+
+    vi.spyOn(conn, 'getAccountInfo').mockResolvedValueOnce({ owner: TOKEN_2022_PROGRAM_ID } as never);
+    expect((await SolanaSpokeService.getMintTokenProgramId(conn, mint)).toBase58()).toBe(
+      TOKEN_2022_PROGRAM_ID.toBase58(),
+    );
+
+    vi.spyOn(conn, 'getAccountInfo').mockResolvedValueOnce({ owner: TOKEN_PROGRAM_ID } as never);
+    expect((await SolanaSpokeService.getMintTokenProgramId(conn, mint)).toBase58()).toBe(TOKEN_PROGRAM_ID.toBase58());
+
+    // Unreadable mint account → fall back to the legacy program.
+    vi.spyOn(conn, 'getAccountInfo').mockResolvedValueOnce(null as never);
+    expect((await SolanaSpokeService.getMintTokenProgramId(conn, mint)).toBase58()).toBe(TOKEN_PROGRAM_ID.toBase58());
   });
 
   it('buildTransactionInstruction reconstructs TransactionInstruction[] from raw shape', () => {
