@@ -54,12 +54,20 @@ export class SolanaXService extends XService {
 
       const accounts = await connection.getMultipleAccountsInfo(candidates.map(c => c.ata));
 
+      // A mint is owned by exactly one program, so normally only one ATA exists. Summing (and
+      // skipping anything that isn't a token account for that program) keeps the result correct
+      // even if a stray account sits at the other candidate address.
+      let balance = BigInt(0);
       for (const [i, candidate] of candidates.entries()) {
         const info = accounts[i];
-        if (info) return unpackAccount(candidate.ata, info, candidate.programId).amount;
+        if (!info) continue;
+        try {
+          balance += unpackAccount(candidate.ata, info, candidate.programId).amount;
+        } catch {
+          // Not a token account for this program — ignore it.
+        }
       }
-
-      return BigInt(0);
+      return balance;
     } catch {
       return BigInt(0);
     }
