@@ -44,7 +44,7 @@ sodax.moneyMarket.buildWithdrawData(...): Hex;
 sodax.moneyMarket.buildRepayData(...): Hex;
 ```
 
-For per-position user reads (reserves data, user reserves data, formatted summaries, aToken balances, etc.) the entrypoint is `sodax.backendApi`, not `MoneyMarketService` — see `auxiliary-services.md` § "BackendApiService" for `getMoneyMarketPosition`, `getAllMoneyMarketAssets`, `getMoneyMarketAsset`, `getMoneyMarketAssetBorrowers`, `getMoneyMarketAssetSuppliers`, `getAllMoneyMarketBorrowers`.
+For per-position user reads (reserves data, user reserves data, formatted summaries, aToken balances, etc.) the entrypoint is `sodax.backendApi`, not `MoneyMarketService` — see [`backend-api.md`](backend-api.md) for `getMoneyMarketPosition`, `getAllMoneyMarketAssets`, `getMoneyMarketAsset`, `getMoneyMarketAssetBorrowers`, `getMoneyMarketAssetSuppliers`, `getAllMoneyMarketBorrowers`.
 
 ## Action params shape
 

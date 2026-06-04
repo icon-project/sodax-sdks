@@ -37,7 +37,7 @@ import { SolverApiService } from './SolverApiService.js';
 import { EvmSolverService } from './EvmSolverService.js';
 import { SodaxError } from '../errors/SodaxError.js';
 import { mapRelayFailure } from '../errors/relay-error-mapping.js';
-import {  verifyFailed, intentCreationFailed, executionFailed, unknownFailed, approveFailed } from '../errors/wrappers.js';
+import { verifyFailed, intentCreationFailed, executionFailed, unknownFailed, approveFailed } from '../errors/wrappers.js';
 import {
   type SwapCreateIntentError,
   type PostExecutionError,
@@ -1031,6 +1031,37 @@ export class SwapService {
   }
 
   /**
+   * Re-derives the byte-identical relay extra data (`{ address, payload }`) for a swap intent from a
+   * fully-populated `Intent` alone — no on-chain call, no original `createIntent` return value needed.
+   *
+   * The `payload` matches exactly what `createIntent` relayed when the intent was first created:
+   * - Sonic-hub source — raw `createIntent(intent)` calldata.
+   * - Any spoke source — the `[approve, createIntent]` multicall (uniform across all spokes).
+   *
+   * Byte-identity is possible because the only originally-random field, `intentId`, is already
+   * carried on the `Intent`; everything else in the payload is a pure function of the intent and
+   * the configured intents contract. Use this to rebuild relay submission data for a manual relay
+   * step when the runtime `relayData` from `createIntent` is no longer available.
+   *
+   * @param intent - A fully-populated intent (e.g. from `getIntent(txHash)` or the `intent` field
+   *   returned by `createIntent`).
+   * @returns A `Result` containing `RelayExtraData`: `{ address: Hex; payload: Hex }`.
+   */
+  public reconstructRelayData(intent: Intent): Result<RelayExtraData> {
+    try {
+      invariant(this.config.isValidIntentRelayChainId(intent.srcChain), `Invalid intent.srcChain: ${intent.srcChain}`);
+      invariant(this.config.isValidIntentRelayChainId(intent.dstChain), `Invalid intent.dstChain: ${intent.dstChain}`);
+
+      const isHubSource = intent.srcChain === getIntentRelayChainId(HUB_CHAIN_KEY);
+      const payload = EvmSolverService.reconstructCreateIntentData(intent, this.solver.intentsContract, isHubSource);
+
+      return { ok: true, value: { address: intent.creator, payload } };
+    } catch (error) {
+      return { ok: false, error };
+    }
+  }
+
+  /**
    * Fetches a previously created `Intent` from the hub chain by its transaction hash.
    *
    * Parses the `IntentCreated` event log from the transaction receipt.
@@ -1082,7 +1113,11 @@ export class SwapService {
     chainId,
     fillTxHash,
     timeout = DEFAULT_RELAY_TX_TIMEOUT,
-  }: { chainId: SpokeChainKey; fillTxHash: string; timeout?: number }): Promise<Result<PacketData>> {
+  }: {
+    chainId: SpokeChainKey;
+    fillTxHash: string;
+    timeout?: number;
+  }): Promise<Result<PacketData>> {
     return waitUntilIntentExecuted({
       intentRelayChainId: getIntentRelayChainId(chainId).toString(),
       srcTxHash: fillTxHash,
@@ -1146,4 +1181,3 @@ export class SwapService {
     return this.config.getSupportedSwapTokens();
   }
 }
-

@@ -19,7 +19,7 @@
   "engines": {
     "node": ">=20.12.0"
   },
-  "files": ["dist", "!dist/**/*.map", "README.md", "docs"],
+  "files": ["dist", "!dist/**/*.map", "README.md"],
   "sideEffects": false,
   "exports": {
     ".": {
@@ -41,7 +41,7 @@
     "url": "https://github.com/icon-project/sodax-sdks"
   },
   "scripts": {
-    "build": "NODE_OPTIONS=--max-old-space-size=8192 tsup",
+    "build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 tsup",
     "dev": "tsup --watch ./src",
     "prepublishOnly": "pnpm run build",
     "clean": "rm -rf dist && rm -rf node_modules && rm -rf .turbo",
@@ -84,6 +84,7 @@
     "@testing-library/react": "^16.1.0",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
+    "cross-env": "catalog:",
     "happy-dom": "^20.8.9",
     "knip": "catalog:",
     "madge": "catalog:",

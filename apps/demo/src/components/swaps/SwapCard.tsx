@@ -460,7 +460,7 @@ export default function SwapCard({
             </SelectTrigger>
             <SelectContent>
               {getSupportedSolverTokens(src.chain).map(token => (
-                <SelectItem key={token.address} value={token.symbol}>
+                <SelectItem key={`${token.address}-${token.symbol}`} value={token.symbol}>
                   {token.symbol}
                 </SelectItem>
               ))}
@@ -537,7 +537,7 @@ export default function SwapCard({
             </SelectTrigger>
             <SelectContent>
               {getSupportedSolverTokens(dst.chain).map(token => (
-                <SelectItem key={token.address} value={token.symbol}>
+                <SelectItem key={`${token.address}-${token.symbol}`} value={token.symbol}>
                   {token.symbol}
                 </SelectItem>
               ))}

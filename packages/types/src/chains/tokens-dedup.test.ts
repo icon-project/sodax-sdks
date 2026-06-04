@@ -23,8 +23,12 @@ function findDuplicates(tokens: readonly XToken[], by: (t: XToken) => string): M
 function describeTable(table: TokenList, label: string) {
   describe(`${label}: per-chain token list has no duplicates`, () => {
     for (const [chainKey, tokens] of Object.entries(table) as [SpokeChainKey, readonly XToken[]][]) {
-      it(`${chainKey}: unique by address (case-insensitive)`, () => {
-        const dups = findDuplicates(tokens, t => t.address.toLowerCase());
+      it(`${chainKey}: unique by (symbol, address) — restricted entries may share an address with a different symbol`, () => {
+        // Restricted entries (e.g. `WBTC.legacy` for a deprecated vault) intentionally
+        // share an on-chain address with their full-access counterpart but must carry
+        // a distinct symbol. Pair (symbol, address) — matches how UI keys list items —
+        // so legacy + active pairs pass while accidental duplicates still fail.
+        const dups = findDuplicates(tokens, t => `${t.symbol}:${t.address.toLowerCase()}`);
         expect(
           dups,
           `duplicate address(es) on ${chainKey}: ${[...dups.entries()]

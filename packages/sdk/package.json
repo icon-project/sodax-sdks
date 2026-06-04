@@ -41,7 +41,7 @@
   "scripts": {
     "build": "tsup",
     "test": "vitest run --exclude ./src/e2e-tests",
-    "test-e2e": "vitest run ./src/e2e-tests",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "coverage": "vitest run --coverage",
     "dev": "tsup --watch",
     "ci": "pnpm run pretty && pnpm run build && pnpm run test",

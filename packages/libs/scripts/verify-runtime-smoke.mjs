@@ -15,11 +15,15 @@
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { statSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distRoot = join(__dirname, '..', 'dist');
 const require = createRequire(import.meta.url);
+
+// Dynamic import() needs a file:// URL on Windows — a bare `C:\…` path is
+// parsed as the unsupported `c:` URL scheme. (require() below takes plain paths.)
+const importDist = (relFile) => import(pathToFileURL(join(distRoot, relFile)).href);
 
 let failed = false;
 const ok = (msg) => console.log('OK:', msg);
@@ -69,14 +73,14 @@ function assertExportsPresent(subpath, mod) {
 
 // 1. stacks/core — bundled @stacks/transactions + @stacks/network ────
 console.log('=== stacks/core (ESM) ===');
-const core = await import(`${distRoot}/stacks/core/index.mjs`);
+const core = await importDist('stacks/core/index.mjs');
 assertExportsPresent('stacks/core', core);
 if (typeof core.Cl === 'object' && core.Cl !== null) ok('Cl is a namespace object');
 else fail(`Cl=${typeof core.Cl}`);
 
 // 2. stacks/connect — bundled @stacks/connect + stubbed @stacks/connect-ui
 console.log('\n=== stacks/connect (ESM) ===');
-const connect = await import(`${distRoot}/stacks/connect/index.mjs`);
+const connect = await importDist('stacks/connect/index.mjs');
 assertExportsPresent('stacks/connect', connect);
 if (typeof connect.request === 'function' && typeof connect.disconnect === 'function') {
   ok('request + disconnect are functions');
@@ -86,7 +90,7 @@ if (typeof connect.request === 'function' && typeof connect.disconnect === 'func
 
 // 3. injective/wallet-strategy — bundled + 5 hardware-wallet stubs ────
 console.log('\n=== injective/wallet-strategy (ESM) ===');
-const inj = await import(`${distRoot}/injective/wallet-strategy/index.mjs`);
+const inj = await importDist('injective/wallet-strategy/index.mjs');
 assertExportsPresent('injective/wallet-strategy', inj);
 if (typeof inj.WalletStrategy === 'function') ok('WalletStrategy is a class');
 else fail(`WalletStrategy=${typeof inj.WalletStrategy}`);

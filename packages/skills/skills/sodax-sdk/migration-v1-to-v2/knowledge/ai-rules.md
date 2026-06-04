@@ -16,7 +16,9 @@ DO / DO NOT / workflow / stop conditions for AI agents porting v1 `@sodax/sdk` c
 3. **Apply changes in order: type-level first, runtime second.** Type-level renames don't affect behavior; runtime patterns (Result branching, error model) require thinking. Doing them in the wrong order means the typecheck stays noisy and you can't see the real problems.
 4. **Re-run `pnpm tsc --noEmit` after every step.** Each step should reduce the error count. If errors grow, you've introduced something — back out and try again.
 
-## DO
+> **v2 cross-cutting rules apply too.** Everything in [`integration/ai-rules.md`](../../integration/knowledge/ai-rules.md) (Result branching, `isSodaxError`, `TxHashPair`, `BalnSwapService` throws, package-root imports, no `@sodax/types` peer dep, …) holds when writing migrated code. The DO / DO NOT below are **migration-specific** rules on top.
+
+## DO (migration-specific)
 
 - **DO** start with mechanical type renames:
   - `*_MAINNET_CHAIN_ID` → `ChainKeys.*` (regex: `(\w+)_MAINNET_CHAIN_ID` → `ChainKeys.$1_MAINNET`).
@@ -28,18 +30,12 @@ DO / DO NOT / workflow / stop conditions for AI agents porting v1 `@sodax/sdk` c
 - **DO** add the `raw: false` (or `raw: true`) discriminator to every signed call shape that previously took `{ intentParams, spokeProvider }`. Also rename `intentParams` → `params` and drop `spokeProvider` in favor of `walletProvider`.
 - **DO** convert v1 `try/catch` to `result.ok` branching last — touching every call site is the biggest commit, easiest to do once the type-level changes settled.
 - **DO** treat the `Result<T>` ↔ `try/catch` migration as the *highest-leverage* change. If you stop early, ensure result branching is at least in place even if the surrounding error UX is rough.
-- **DO** use `isSodaxError(e)` over bare `instanceof SodaxError` in the new error-handling branches. `instanceof` is fragile across bundle copies.
-- **DO** branch on `(error.feature, error.code)` for fine-grained UX. The narrow per-method code unions enable exhaustive `switch`.
 
-## DO NOT
+## DO NOT (migration-specific)
 
 - **DO NOT** grep-replace `srcChain` → `srcChainKey` blindly. The `Intent` *read* shape (returned from `createIntent` / `getIntentByHash` / etc.) keeps `srcChain` and `dstChain` as `IntentRelayChainId` (bigint) — those did **not** rename. Only **request** types changed (`CreateIntentParams`, `CreateLimitOrderParams`, `SubmitSwapTxRequest`).
 - **DO NOT** treat `instanceof MoneyMarketError` (or any other module-error class) as still working. Those classes are deleted. Replace with `isSodaxError(e) && e.feature === 'moneyMarket'`.
-- **DO NOT** destructure cross-chain mutation results as arrays. v1 had `bridge()` returning a string and others returning tuples; v2 returns `TxHashPair = { srcChainTxHash, dstChainTxHash }` for **every** cross-chain mutation (bridge, staking, dex, MM, migration). Destructure as `{ srcChainTxHash, dstChainTxHash } = result.value`.
-- **DO NOT** assume `BalnSwapService` lock-management methods (`stake`, `unstake`, `claim`, `claimUnstaked`, `cancelUnstake`, `getDetailedUserLocks`) return `Result<T>`. They still throw — known carve-out. Keep `try/catch` for those specific calls.
-- **DO NOT** keep `try/catch` blocks expecting them to catch SDK-level failures from non-Baln methods. v2 mutation methods resolve `{ ok: false, error }` rather than throwing — `catch` only fires for synchronous wrapper exceptions (e.g. missing `walletProvider`).
-- **DO NOT** call `getStakingInfo(hubAddress)` in v2. It's `getStakingInfoFromSpoke(srcAddress, srcChainKey)` now. `getStakingInfo` is not a public method.
-- **DO NOT** import `@sodax/types` as a peer dependency. It's bundled into `@sodax/sdk`'s public surface; declaring it separately invites version skew.
+- **DO NOT** pass v1 spoke-side state into `getStakingInfo(hubAddress)`. The method is still public in v2 but expects a *hub* address. v1 call sites that used `spokeProvider`-derived data should switch to `getStakingInfoFromSpoke(srcAddress, srcChainKey)` which derives the hub wallet internally.
 - **DO NOT** keep `try { await sodax.swaps.createIntent(...) } catch` and expect to inspect `e.code === 'CREATE_INTENT_FAILED'`. The v2 code is `INTENT_CREATION_FAILED` and lives on `result.error.code` (Result branch), not on a thrown error. See [`reference/error-code-crosswalk.md`](reference/error-code-crosswalk.md) for the full v1 → v2 code crosswalk.
 
 ## Stop conditions (defer to user)
