@@ -13,19 +13,26 @@ packages/skills/
 ├── AGENTS.md                      # Tool-neutral router: consumer intent → skill (+ mode)
 ├── skills/                        # Each broad skill is mode-gated; some have nested granular children
 │   ├── sodax-sdk/                          {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/, <feature>/SKILL.md ×9}
-│   ├── sodax-wallet-sdk-core/              {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/}
-│   ├── sodax-wallet-sdk-react/             {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/ — incl. 4 .tsx example apps under integration/knowledge/examples/}
-│   └── sodax-dapp-kit/                     {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/}
+│   ├── sodax-wallet-sdk-core/              {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/, <chain>/SKILL.md ×9}
+│   ├── sodax-wallet-sdk-react/             {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/ (incl. 4 .tsx example apps under integration/knowledge/examples/), <concern>/SKILL.md ×6}
+│   └── sodax-dapp-kit/                     {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/, <feature>/SKILL.md ×8}
 └── scripts/check-skills.sh        # Validation: plugin.json, frontmatter, internal links
 ```
 
 Each broad skill ships **both** mode subtrees under its own directory. The `skills` CLI's per-skill copy lands every referenced file. SKILL.md gates by mode at the top — picks integration vs migration based on the consumer signal. The migration subtree is named `migration-v1-to-v2/` (not `migration/`) to (a) avoid ambiguity with per-feature `features/migration.md` (ICX/bnUSD token migration) and (b) future-proof for a hypothetical `migration-v2-to-v3/`.
 
-### Granular per-feature skills
+### Granular skills
 
-Broad skills that cover multiple unrelated features can have **nested granular skills** at `skills/<broad>/<feature>/SKILL.md`. Currently only `sodax-sdk` has granular children — one per feature service: swap, money-market, bridge, staking, dex, migration, partner, recovery, backend-api. They exist so agents can load just the swap workflow (~3 KB) instead of the whole `sodax-sdk` SKILL.md (~13 KB) plus its broad knowledge index.
+Each broad skill has **nested granular skills** at `skills/<broad>/<sub-domain>/SKILL.md`. The split axis differs per package — pick whatever the consumer decides upfront and whatever maps 1:1 to a coherent slice of the broad knowledge tree:
 
-Granular skills are **one file each** (`<feature>/SKILL.md`). They do **NOT** ship their own `integration/knowledge/` or `migration-v1-to-v2/knowledge/` subtrees — they link directly into the parent broad skill's knowledge tree (`../integration/knowledge/features/<feature>.md`, etc.). The Vercel Labs `skills` CLI discovers them via the explicit nested paths in `plugin.json`; see [`vercel-labs/skills`](https://github.com/vercel-labs/skills) source (`src/plugin-manifest.ts`) for how parent-dir scanning resolves nested entries.
+- `sodax-sdk` — one per Core SDK feature service (9): swap, money-market, bridge, staking, dex, migration, partner, recovery, backend-api.
+- `sodax-dapp-kit` — one per dapp-kit feature domain (8), matching the feature-knowledge filenames: swap, money-market, staking, bridge, dex, migration, bitcoin, auxiliary-services. (`auxiliary-services` bundles partner + recovery + backend queries + shared utilities, mirroring `features/auxiliary-services.md`.)
+- `sodax-wallet-sdk-core` — one per **chain family** (9), 1:1 with `integration/knowledge/features/<chain>.md`: evm, solana, sui, bitcoin, stellar, icon, injective, near, stacks. (The axis is chain, not feature — hooks/services are uniform across chains; the per-chain config + methods + gotchas are what differ.)
+- `sodax-wallet-sdk-react` — one per **connectivity concern** (6), each backed by a dedicated integration recipe: connect (connect-button + chain-detection), wallet-modal (multi-chain-modal + batch-operations), bridge-to-sdk, switch-chain, sign-message, walletconnect. (No `features/` dir — hooks are chain-agnostic; `setup.md` is a shared prerequisite, not its own granular skill.)
+
+They exist so agents can load just one workflow (~3 KB) instead of the whole broad SKILL.md (~13 KB) plus its broad knowledge index.
+
+Granular skills are **one file each** (`<sub-domain>/SKILL.md`). They do **NOT** ship their own `integration/knowledge/` or `migration-v1-to-v2/knowledge/` subtrees — they link directly into the parent broad skill's knowledge tree (`../integration/knowledge/features/<feature>.md`, `../integration/knowledge/recipes/<recipe>.md`, etc.). The Vercel Labs `skills` CLI discovers them via the explicit nested paths in `plugin.json`; see [`vercel-labs/skills`](https://github.com/vercel-labs/skills) source (`src/plugin-manifest.ts`) for how parent-dir scanning resolves nested entries.
 
 **Family rule:** every granular skill shares its parent broad skill's family. Family is the broad-skill name (`sdk`, `wallet-sdk-core`, `wallet-sdk-react`, `dapp-kit`). Cross-family clickable links remain forbidden; intra-family links (broad ↔ granular, granular ↔ granular within the same broad parent) are explicitly allowed.
 
