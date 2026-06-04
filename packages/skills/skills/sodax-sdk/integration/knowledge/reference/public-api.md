@@ -11,6 +11,13 @@ import {
   type SodaxConfig,
   type DeepPartial,
 
+  // Logging (see recipes/logging.md)
+  type SodaxLogger,
+  type SodaxLoggerOption,
+  consoleLogger,
+  silentLogger,
+  resolveLogger,
+
   // Chain keys + narrowing
   ChainKeys,
   type ChainKey,

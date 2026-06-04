@@ -31,6 +31,8 @@ const config: DeepPartial<SodaxConfig> = {
   solver: {
     solverApiEndpoint: 'https://my-solver.example.com',
   },
+  // SDK log sink: 'console' (default) | 'silent' | a custom SodaxLogger. See logging.md.
+  logger: 'silent',
 };
 
 const sodax = new Sodax(config);
@@ -74,5 +76,6 @@ export const SUPPORTED_TOKENS_PER_CHAIN = sodaxConfig.swaps.supportedTokens;
 ## Cross-references
 
 - [`README.md`](README.md) — recipe index.
+- [`logging.md`](logging.md) — the `logger` constructor option in depth (presets + custom sinks).
 - [`../architecture.md`](../architecture.md) — concepts behind these patterns.
 - [`../reference/`](../reference/) — chain keys, error codes, public API surface.
