@@ -150,7 +150,12 @@ export default function LeverageYieldPage() {
 
   useEffect(() => {
     if (userTokens.length === 0) return;
-    setUserToken(prev => (prev && userTokens.some(t => t.address === prev.address) ? prev : userTokens[0]));
+    // Re-resolve to the NEW chain's token instance on every chain switch. Match by symbol so
+    // the user's selection persists, but always return the entry from `userTokens` (carrying
+    // the new chain's `chainKey`) — never keep the stale `prev` object. Balance readers derive
+    // the chain to query from `xToken.chainKey`, so retaining the old object would fetch the
+    // previous chain's balance for an unchanged token.
+    setUserToken(prev => userTokens.find(t => t.symbol === prev?.symbol) ?? userTokens[0]);
   }, [userTokens]);
 
   // ─── Active tab ──────────────────────────────────────────────────────────

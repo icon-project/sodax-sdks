@@ -964,7 +964,7 @@ describe('SwapService.createIntent', () => {
         const caughtError = result.error;
         expect(isSodaxError(caughtError)).toBe(true);
         expect(caughtError.code).toBe('VALIDATION_FAILED');
-        expect(caughtError.message).toContain('Unsupported spoke chain token (srcChainKey)');
+        expect(caughtError.message).toContain('Unsupported spoke chain token (srcChainKey:');
       }
     });
 
