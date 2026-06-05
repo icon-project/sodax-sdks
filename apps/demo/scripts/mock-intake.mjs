@@ -23,9 +23,9 @@ const C = {
 };
 
 function readBody(req) {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const chunks = [];
-    req.on('data', (c) => chunks.push(c));
+    req.on('data', c => chunks.push(c));
     req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
   });
 }
@@ -46,7 +46,7 @@ function sentryMessage(payload) {
 // A Sentry envelope is: header line, then repeating [item-header line, item-payload line].
 // We surface the actual log events; non-event items (sessions, etc.) collapse to a quiet note.
 function printSentry(raw) {
-  const lines = raw.split('\n').filter((l) => l.length > 0);
+  const lines = raw.split('\n').filter(l => l.length > 0);
   const events = [];
   const otherTypes = [];
   for (let i = 1; i < lines.length; i += 2) {
@@ -57,7 +57,9 @@ function printSentry(raw) {
 
   if (events.length === 0) {
     // Sessions / metrics / etc. — not your logs. One dim line so the noise is visible but tiny.
-    console.log(`${C.sentry}· SENTRY${C.reset} ${C.dim}${ts()}  ${otherTypes.join(', ') || 'empty'} (not a log event)${C.reset}`);
+    console.log(
+      `${C.sentry}· SENTRY${C.reset} ${C.dim}${ts()}  ${otherTypes.join(', ') || 'empty'} (not a log event)${C.reset}`,
+    );
     return;
   }
 
@@ -76,7 +78,9 @@ function printSentry(raw) {
     if (Array.isArray(crumbs) && crumbs.length) {
       console.log(`${C.sentry}│${C.reset}  breadcrumbs (debug/info ride here):`);
       for (const b of crumbs) {
-        console.log(`${C.sentry}│${C.reset}    [${b?.level ?? 'info'}] ${b?.message}${b?.data ? ` ${JSON.stringify(b.data)}` : ''}`);
+        console.log(
+          `${C.sentry}│${C.reset}    [${b?.level ?? 'info'}] ${b?.message}${b?.data ? ` ${JSON.stringify(b.data)}` : ''}`,
+        );
       }
     }
     console.log(`${C.sentry}└─${C.reset}`);
@@ -129,7 +133,7 @@ const server = http.createServer(async (req, res) => {
     else if (req.url?.includes('datadog')) printDatadog(body);
     else console.log(`${C.warn}? ${req.url}${C.reset}\n${body}`);
   } catch (err) {
-    console.log(`${C.warn}failed to parse ${req.url}:${C.reset}`, err, '\nraw:', body);
+    console.log('%sfailed to parse %s:%s', C.warn, req.url, C.reset, err, '\nraw:', body);
   }
 
   // Sentry expects a JSON body with an id; Datadog is happy with 202/200. Return both-friendly 200.
