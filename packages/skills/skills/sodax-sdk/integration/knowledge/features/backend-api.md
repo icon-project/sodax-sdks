@@ -44,7 +44,7 @@ After `sodax.swaps.createIntent({ params, raw: false, walletProvider })` returns
 ```ts
 const submitResult = await sodax.backendApi.submitSwapTx({
   txHash: spokeTxHash as string,
-  srcChainId: src.chain,
+  srcChainKey: src.chain,
   walletAddress: '0x…',
   intent: swapIntentData,
   relayData: relayData.payload,    // string, not the RelayExtraData object
