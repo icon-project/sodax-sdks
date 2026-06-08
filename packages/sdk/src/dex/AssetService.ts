@@ -200,7 +200,6 @@ export class AssetService {
     _params: AssetDepositAction<K, Raw>,
   ): Promise<Result<TxReturnType<K, Raw>>> {
     const { params } = _params;
-    const wrapApproveFailure = (cause: unknown) => approveFailed('dex', cause);
 
     try {
       invariant(params.amount > 0n, 'Amount must be greater than 0');
@@ -231,7 +230,7 @@ export class AssetService {
               },
         );
 
-        if (!result.ok) return { ok: false, error: wrapApproveFailure(result.error) };
+        if (!result.ok) return { ok: false, error: approveFailed('dex', result.error) };
 
         return {
           ok: true,
@@ -264,7 +263,7 @@ export class AssetService {
           walletProvider: _params.walletProvider,
         });
 
-        if (!result.ok) return { ok: false, error: wrapApproveFailure(result.error) };
+        if (!result.ok) return { ok: false, error: approveFailed('dex', result.error) };
 
         return {
           ok: true,
@@ -275,7 +274,7 @@ export class AssetService {
       dexInvariant(false, 'Approve only supported for EVM/Stellar spoke chains');
     } catch (error) {
       if (isDexApproveError(error)) return { ok: false, error };
-      return { ok: false, error: wrapApproveFailure(error) };
+      return { ok: false, error: approveFailed('dex', error) };
     }
   }
 
