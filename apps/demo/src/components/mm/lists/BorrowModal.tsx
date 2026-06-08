@@ -6,8 +6,17 @@ import { Label } from '@/components/ui/label';
 import { ChainSelector } from '@/components/shared/ChainSelector';
 import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
 import { parseUnits, formatUnits } from 'viem';
-import type { FormatUserSummaryResponse, MoneyMarketBorrowParams, SpokeChainKey, XToken } from '@sodax/sdk';
-import { useBorrow, useReservesUsdFormat, useAToken, useUserReservesData, useSodaxContext } from '@sodax/dapp-kit';
+import {
+  type FormatUserSummaryResponse,
+  type MoneyMarketBorrowParams,
+  type SpokeChainKey,
+  type XToken,
+  useBorrow,
+  useReservesUsdFormat,
+  useAToken,
+  useUserReservesData,
+  useSodaxContext,
+} from '@sodax/dapp-kit';
 import { useAppStore } from '@/zustand/useAppStore';
 import {
   getChainsWithThisToken,

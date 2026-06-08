@@ -10,7 +10,7 @@ import {
   type SpokeChainKey,
   type ChainKey,
   baseChainInfo,
-} from '@sodax/sdk';
+} from '@sodax/dapp-kit';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));

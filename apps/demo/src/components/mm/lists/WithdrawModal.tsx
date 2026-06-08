@@ -7,10 +7,16 @@ import { ChainSelector } from '@/components/shared/ChainSelector';
 
 import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
 import { parseUnits } from 'viem';
-import { useMMApprove, useSodaxContext, useWithdraw } from '@sodax/dapp-kit';
-import { type SpokeChainKey, type XToken, getChainType } from '@sodax/sdk';
+import {
+  useMMApprove,
+  useSodaxContext,
+  useWithdraw,
+  type SpokeChainKey,
+  type XToken,
+  getChainType,
+  type MoneyMarketWithdrawParams,
+} from '@sodax/dapp-kit';
 import { useAppStore } from '@/zustand/useAppStore';
-import type { MoneyMarketWithdrawParams } from '@sodax/sdk';
 import {
   formatDecimalForDisplay,
   getChainsWithThisToken,

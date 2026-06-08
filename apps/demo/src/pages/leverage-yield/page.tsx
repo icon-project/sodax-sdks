@@ -27,17 +27,13 @@ import {
   useSwapAllowance,
   useSwapApprove,
   useXBalances,
-} from '@sodax/dapp-kit';
-import OrderStatus, { type Order } from '@/components/swaps/OrderStatus';
-import {
-  getXChainType,
-  useEvmSwitchChain,
-  useWalletProvider,
-  useXAccount,
-  useXAccounts,
-  useXService,
-} from '@sodax/wallet-sdk-react';
-import {
+  useLeverageYieldDeposit,
+  useLeverageYieldWithdraw,
+  useLeverageYieldEffectiveApr,
+  useLeverageYieldPosition,
+  useLeverageYieldTotalAssets,
+  useLeverageYieldPreviewRedeem,
+  useLeverageYieldShareBalances,
   ChainKeys,
   getSupportedSolverTokens,
   type CreateIntentParams,
@@ -47,10 +43,19 @@ import {
   type SubmitSwapTxRequest,
   type SwapIntentData,
   type XToken,
-} from '@sodax/sdk';
+} from '@sodax/dapp-kit';
+import {
+  getXChainType,
+  useEvmSwitchChain,
+  useWalletProvider,
+  useXAccount,
+  useXAccounts,
+  useXService,
+} from '@sodax/wallet-sdk-react';
+import OrderStatus, { type Order } from '@/components/swaps/OrderStatus';
 import BigNumber from 'bignumber.js';
-import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { type Address, formatUnits, parseUnits } from 'viem';
+import { useQueryClient } from '@tanstack/react-query';
+import { formatUnits, parseUnits } from 'viem';
 import { SolverEnv, useAppStore } from '@/zustand/useAppStore';
 
 const SONIC = ChainKeys.SONIC_MAINNET satisfies SpokeChainKey;
@@ -261,6 +266,11 @@ export default function LeverageYieldPage() {
   const { mutateAsyncSafe: submitSwapTx, isPending: isSubmitting } = useBackendSubmitSwapTx();
   const { mutateAsync: swap, isPending: isSwapping } = useSwap();
 
+  // Leverage-yield intent builders. `mutateAsyncSafe` returns `Result<CreateIntentParams>` and
+  // never rejects, so `prepare()` branches on `.ok` exactly like the SDK's own builder did.
+  const { mutateAsyncSafe: buildDepositIntent } = useLeverageYieldDeposit();
+  const { mutateAsyncSafe: buildWithdrawIntent } = useLeverageYieldWithdraw();
+
   // ─── Submit-tx API toggle ────────────────────────────────────────────────
   // When OFF (default): createIntent + relay inline, then poll solver status. Deposit
   // uses `useSwap`; withdraw relays the hub-wallet `sendMessage` then calls
@@ -285,22 +295,9 @@ export default function LeverageYieldPage() {
       .filter((x): x is { chainKey: SpokeChainKey; address: string } => x !== null);
   }, [supportedSpokeChains, xAccounts]);
 
-  const sharesByChain = useQueries({
-    queries: connectedHolders.map(({ chainKey, address }) => ({
-      queryKey: ['leverageYield', 'sharesByChain', selectedVault?.vault, chainKey, address] as const,
-      enabled: !!selectedVault,
-      refetchInterval: 15_000,
-      queryFn: async () => {
-        if (!selectedVault) throw new Error('No vault');
-        const holder =
-          chainKey === SONIC
-            ? (address as Address)
-            : await sodax.hubProvider.getUserHubWalletAddress(address, chainKey);
-        const r = await sodax.leverageYield.getShareBalance(selectedVault.vault, holder);
-        if (!r.ok) throw r.error;
-        return { chainKey, holder, shares: r.value };
-      },
-    })),
+  const sharesByChain = useLeverageYieldShareBalances({
+    vault: selectedVault?.vault,
+    holders: connectedHolders,
   });
 
   // Holder + share balance for the currently-selected userChain — used by deposit
@@ -322,51 +319,26 @@ export default function LeverageYieldPage() {
   // (AAVE supply/borrow + vault targetLTV) and the off-chain LSD fetch (Lido live; EtherFi
   // hardcoded fallback per the @sodax/types registry) in parallel. 60s refresh: AAVE rates
   // drift slowly and LSD APRs are 7-day MAs, so a headline number doesn't need finer.
-  const { data: vaultApr } = useQuery({
-    queryKey: ['leverageYield', 'effectiveApr', selectedVault?.vault],
-    enabled: !!selectedVault,
-    refetchInterval: 60_000,
-    queryFn: async () => {
-      if (!selectedVault) return null;
-      const r = await sodax.leverageYield.getEffectiveApr(selectedVault.vault);
-      if (!r.ok) throw r.error;
-      return r.value;
-    },
-  });
+  const { data: vaultApr } = useLeverageYieldEffectiveApr({ params: { vault: selectedVault?.vault } });
 
   // Vault TVL + share price. `previewRedeem(1e18)` = "1 share → N underlying" — the
   // per-share yield indicator that creeps up as the vault accrues interest. TVL is the
   // scale signal. 60s refresh: both move slowly.
-  const { data: vaultStats } = useQuery({
-    queryKey: ['leverageYield', 'stats', selectedVault?.vault],
-    enabled: !!selectedVault,
-    refetchInterval: 60_000,
-    queryFn: async () => {
-      if (!selectedVault) return null;
-      const [tvl, sharePrice] = await Promise.all([
-        sodax.leverageYield.getTotalAssets(selectedVault.vault),
-        sodax.leverageYield.previewRedeem(selectedVault.vault, 10n ** 18n),
-      ]);
-      if (!tvl.ok) throw tvl.error;
-      if (!sharePrice.ok) throw sharePrice.error;
-      return { tvl: tvl.value, sharePrice: sharePrice.value };
-    },
+  // TVL + share price: two granular dapp-kit reads composed for display. `previewRedeem(1e18)` =
+  // "1 share → N underlying" — the per-share price that creeps up as the vault accrues interest.
+  const { data: vaultTvl } = useLeverageYieldTotalAssets({ params: { vault: selectedVault?.vault } });
+  const { data: vaultSharePrice } = useLeverageYieldPreviewRedeem({
+    params: { vault: selectedVault?.vault, shares: 10n ** 18n },
   });
+  const vaultStats =
+    vaultTvl !== undefined && vaultSharePrice !== undefined
+      ? { tvl: vaultTvl, sharePrice: vaultSharePrice }
+      : undefined;
 
   // Live position snapshot — actual LTV (drift vs `targetLTV`), health factor
   // (liquidation safety, ∞ when no debt), idleAsset (capital not yet deployed).
   // 30s refresh: faster than APR since LTV shifts with each rebalance/rate tick.
-  const { data: vaultPosition } = useQuery({
-    queryKey: ['leverageYield', 'position', selectedVault?.vault],
-    enabled: !!selectedVault,
-    refetchInterval: 30_000,
-    queryFn: async () => {
-      if (!selectedVault) return null;
-      const r = await sodax.leverageYield.getPosition(selectedVault.vault);
-      if (!r.ok) throw r.error;
-      return r.value;
-    },
-  });
+  const { data: vaultPosition } = useLeverageYieldPosition({ params: { vault: selectedVault?.vault } });
 
   // Accumulated orders — each one polls the BES status endpoint via <OrderStatus> and
   // shows live progress. Mirrors the solver page's pattern so users see the same UX
@@ -402,7 +374,7 @@ export default function LeverageYieldPage() {
     }
     const inputAmount = parseUnits(sourceAmount, src.token.decimals);
     const result = await (tab === 'deposit'
-      ? sodax.leverageYield.deposit({
+      ? buildDepositIntent({
           vault: selectedVault.vault,
           srcChainKey: userChain,
           srcAddress: sourceAccount.address,
@@ -410,7 +382,7 @@ export default function LeverageYieldPage() {
           inputAmount,
           minOutputAmount,
         })
-      : sodax.leverageYield.withdraw({
+      : buildWithdrawIntent({
           vault: selectedVault.vault,
           srcChainKey: userChain,
           srcAddress: sourceAccount.address,

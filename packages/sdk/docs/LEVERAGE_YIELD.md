@@ -91,6 +91,19 @@ The service does **not** expose bespoke "deposit into vault" / "redeem from vaul
 
 `LeverageYieldService`'s job is to build the correct `CreateIntentParams`; the caller hands them to the swap service, and the solver (plus the vault's ERC-4626 mechanics) does the rest. This is why deposits and withdrawals are cross-chain by default and require no vault-specific approvals on the spoke side.
 
+### Partner fee
+
+Because entering and exiting a position are ordinary `sodax.swaps.swap()` calls, they inherit the **global partner fee** configured on the Sodax instance — there is no vault-specific fee knob. Set `config.swaps.partnerFee` and every leverage-vault **deposit** (and withdraw) deducts it from the input amount, exactly like any other swap:
+
+```typescript
+const sodax = new Sodax({
+  swaps: { partnerFee: { address: '0xYourFeeReceiver...', percentage: 100 } }, // 100 bps = 1%
+  // ...rest of config
+});
+```
+
+The fee is taken inside `createIntent()` (which `swap()` delegates to): the configured fee is deducted from `inputAmount` and encoded into the intent's `data` as the `IntentDataType.FEE` envelope, so the intents contract routes it to the partner address on the hub. `LeverageYieldService.deposit()` builds the `CreateIntentParams` with `data: '0x'`; the fee `data` is then constructed by the swap layer at intent-creation time, so the deposit needs no fee plumbing of its own. When `config.swaps.partnerFee` is `undefined`, no fee is taken (the historical "fee not charged" case).
+
 ## Flows
 
 ### Deposit (any token → `lsoda*`)

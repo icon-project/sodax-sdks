@@ -6,6 +6,8 @@ import {
   useUserReservesData,
   useATokensBalances,
   useXBalances,
+  ChainKeys,
+  type XToken,
 } from '@sodax/dapp-kit';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -13,7 +15,6 @@ import { getXChainType, useXAccount, useXService } from '@sodax/wallet-sdk-react
 import { formatUnits, isAddress } from 'viem';
 import { SupplyAssetsListItem } from './SupplyAssetsListItem';
 import { useAppStore } from '@/zustand/useAppStore';
-import { ChainKeys, type XToken } from '@sodax/sdk';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Info } from 'lucide-react';
 import { SupplyModal } from './SupplyModal';

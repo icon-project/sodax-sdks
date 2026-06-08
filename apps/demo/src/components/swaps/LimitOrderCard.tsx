@@ -15,18 +15,26 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatMutationFailureMessage } from '@/lib/utils';
 import { parseUnits, formatUnits } from 'viem';
-import { type CreateLimitOrderParams, getSupportedSolverTokens, type SolverIntentQuoteRequest } from '@sodax/sdk';
-import BigNumber from 'bignumber.js';
-import { ArrowDownUp, ArrowLeftRight } from 'lucide-react';
-import React, { useMemo, useState } from 'react';
 import {
+  type CreateLimitOrderParams,
+  getSupportedSolverTokens,
+  type SolverIntentQuoteRequest,
   useSwapAllowance,
   useSwapApprove,
   useCreateLimitOrder,
   useStellarTrustlineCheck,
   useRequestTrustline,
   useSodaxContext,
+  type SpokeChainKey,
+  type XToken,
+  type ChainType,
+  type IStellarWalletProvider,
+  type StellarChainKey,
+  ChainKeys,
 } from '@sodax/dapp-kit';
+import BigNumber from 'bignumber.js';
+import { ArrowDownUp, ArrowLeftRight } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
 import {
   getXChainType,
   useEvmSwitchChain,
@@ -34,14 +42,6 @@ import {
   useXDisconnect,
   useWalletProvider,
 } from '@sodax/wallet-sdk-react';
-import {
-  type SpokeChainKey,
-  type XToken,
-  type ChainType,
-  type IStellarWalletProvider,
-  type StellarChainKey,
-  ChainKeys,
-} from '@sodax/sdk';
 import { useAppStore } from '@/zustand/useAppStore';
 import LimitOrderList from './LimitOrderList';
 import { useQueryClient } from '@tanstack/react-query';

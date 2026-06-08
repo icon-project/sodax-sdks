@@ -6,6 +6,9 @@ import {
   useUserFormattedSummary,
   useXBalances,
   useSodaxContext,
+  ChainKeys,
+  type SpokeChainKey,
+  type XToken,
 } from '@sodax/dapp-kit';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -14,7 +17,6 @@ import { BorrowAssetsListItem } from './BorrowAssetsListItem';
 import { formatTokenAmount } from '@/lib/utils';
 import { getBorrowableAssetsWithMarketData } from '@/lib/borrowUtils';
 import { BorrowModal } from '../BorrowModal';
-import { ChainKeys, type SpokeChainKey, type XToken } from '@sodax/sdk';
 import { ChainSelector } from '@/components/shared/ChainSelector';
 import { RepayModal } from '../RepayModal';
 import { Info, Wallet } from 'lucide-react';
