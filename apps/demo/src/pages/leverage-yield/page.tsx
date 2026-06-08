@@ -17,7 +17,6 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChainSelector } from '@/components/shared/ChainSelector';
 import {
@@ -498,11 +497,11 @@ export default function LeverageYieldPage() {
       data: intent.data,
     };
 
-    // BES locates the tx on `srcChainId` — the spoke chain the user signed on (`userChain`
+    // BES locates the tx on `srcChainKey` — the spoke chain the user signed on (`userChain`
     // for both tabs; withdraw signs a `sendMessage` there).
     const request: SubmitSwapTxRequest = {
       txHash: spokeTxHash as string,
-      srcChainId: userChain,
+      srcChainKey: userChain,
       walletAddress: intentOrderPayload.srcAddress,
       intent: swapIntentData,
       relayData: relayData.payload,
