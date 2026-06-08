@@ -17,6 +17,14 @@ export interface DatadogLoggerOptions {
   source?: string;
 }
 
+/**
+ * JSON replacer that coerces `bigint` to its decimal string. Caller `data` records routinely carry
+ * `bigint` amounts (token values, chain IDs); without this `JSON.stringify` throws a `TypeError` and
+ * a log call must never throw.
+ */
+const bigintReplacer = (_key: string, value: unknown): unknown =>
+  typeof value === 'bigint' ? value.toString() : value;
+
 /** Serialize the thrown value so the exception survives JSON transport. */
 function serializeError(error: unknown): unknown {
   if (error && typeof (error as { toJSON?: () => unknown }).toJSON === 'function') {
@@ -47,7 +55,7 @@ export function createDatadogLogger(options: DatadogLoggerOptions = {}): SodaxLo
     void fetch(intakeUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify(body, bigintReplacer),
       keepalive: true,
     }).catch(() => {
       /* intake unreachable — drop the line rather than surface it */

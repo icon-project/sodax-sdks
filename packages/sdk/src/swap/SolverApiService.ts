@@ -18,6 +18,14 @@ import {
 } from '@sodax/types';
 
 /**
+ * JSON replacer that coerces `bigint` to its decimal string so error serialization never throws.
+ * Caught values are `unknown` and may carry `bigint` fields (e.g. viem errors with gas amounts);
+ * `JSON.stringify` throws a `TypeError` on those, which would escape the surrounding catch block.
+ */
+const bigintReplacer = (_key: string, value: unknown): unknown =>
+  typeof value === 'bigint' ? value.toString() : value;
+
+/**
  * Stateless HTTP client for the SODAX solver API.
  *
  * All methods are `static` — this class is never instantiated and holds no state.
@@ -107,13 +115,13 @@ export class SolverApiService {
         } satisfies SolverIntentQuoteResponse,
       };
     } catch (e: unknown) {
-      configService.logger.error(`[SolverApiService.getQuote] failed. Details: ${JSON.stringify(e)}`);
+      configService.logger.error(`[SolverApiService.getQuote] failed. Details: ${JSON.stringify(e, bigintReplacer)}`);
       return {
         ok: false,
         error: {
           detail: {
             code: SolverIntentErrorCode.UNKNOWN,
-            message: e ? JSON.stringify(e) : 'Unknown error',
+            message: e ? JSON.stringify(e, bigintReplacer) : 'Unknown error',
           },
         },
       };
@@ -159,13 +167,13 @@ export class SolverApiService {
         value: await response.json(),
       };
     } catch (e: unknown) {
-      logger.error(`[SolverApiService.postExecution] failed. Details: ${JSON.stringify(e)}`);
+      logger.error(`[SolverApiService.postExecution] failed. Details: ${JSON.stringify(e, bigintReplacer)}`);
       return {
         ok: false,
         error: {
           detail: {
             code: SolverIntentErrorCode.UNKNOWN,
-            message: e ? JSON.stringify(e) : 'Unknown error',
+            message: e ? JSON.stringify(e, bigintReplacer) : 'Unknown error',
           },
         },
       };
@@ -208,13 +216,13 @@ export class SolverApiService {
         value: await response.json(),
       };
     } catch (e: unknown) {
-      logger.error(`[SolverApiService.getStatus] failed. Details: ${JSON.stringify(e)}`);
+      logger.error(`[SolverApiService.getStatus] failed. Details: ${JSON.stringify(e, bigintReplacer)}`);
       return {
         ok: false,
         error: {
           detail: {
             code: SolverIntentErrorCode.UNKNOWN,
-            message: e ? JSON.stringify(e) : 'Unknown error',
+            message: e ? JSON.stringify(e, bigintReplacer) : 'Unknown error',
           },
         },
       };
