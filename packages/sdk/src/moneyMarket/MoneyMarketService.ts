@@ -47,7 +47,7 @@ import {
   isBitcoinChainKeyType,
   isBitcoinWalletProviderType,
 } from '../shared/index.js';
-import type { HubProvider, IntentTxResult, TxHashPair } from '../shared/types/types.js';
+import type { HubProvider, IntentTxResult, TxHashPair, RelayExtraData } from '../shared/types/types.js';
 import {
   type SpokeChainKey,
   type XToken,
@@ -616,7 +616,15 @@ export class MoneyMarketService {
       // trading wallet, not the personal one. getEffectiveWalletAddress + ensureRadfiAccessToken are the
       // Bitcoin spoke/Bound primitives (mirrors SwapService/BridgeService); non-Bitcoin chains pass through.
       const isBitcoinSrc = isBitcoinChainKeyType(srcChainKey);
-      if (isBitcoinSrc && !_params.raw && walletProvider && isBitcoinWalletProviderType(walletProvider)) {
+      if (isBitcoinSrc && !_params.raw) {
+        // Fail fast (mirrors SwapService/BridgeService): a non-raw Bitcoin deposit must sign via a
+        // Bitcoin wallet provider. A missing/wrong provider here would otherwise silently skip the
+        // Bound Exchange session and only surface as an opaque undefined error deep in spoke.deposit.
+        mmInvariant(
+          walletProvider !== undefined && isBitcoinWalletProviderType(walletProvider),
+          `Invalid wallet provider for chain key: ${srcChainKey}. Expected bitcoin wallet provider.`,
+          { ...baseCtx, field: 'walletProvider' },
+        );
         await this.spoke.bitcoin.radfi.ensureRadfiAccessToken(walletProvider);
       }
       const srcEffectiveAddress = isBitcoinSrc
@@ -688,6 +696,20 @@ export class MoneyMarketService {
   // ==== borrow ==========================================================================
 
   /**
+   * Build the relay submit/poll identity for a money-market borrow/withdraw.
+   *
+   * Bitcoin borrow/withdraw are on-demand: the spoke result is a signed payload JSON that the relay
+   * submits under the literal "withdraw" tx_hash and tracks under a derived `od:<hash>` poll id
+   * (see {@link BitcoinSpokeService.getOnDemandRelayIdentity}). Every other chain relays and polls by
+   * its real spoke tx hash, so `pollTxHash` is undefined and `srcChainTxHash` stays the spoke tx.
+   */
+  private buildRelayIdentity(srcChainKey: SpokeChainKey, tx: string, relayData: RelayExtraData) {
+    return isBitcoinChainKeyType(srcChainKey)
+      ? this.spoke.bitcoin.getOnDemandRelayIdentity(tx)
+      : { srcTxHash: tx, data: relayData, pollTxHash: undefined };
+  }
+
+  /**
    * Borrow tokens from the money market lending pool and wait for the cross-chain relay to
    * deliver the funds to the destination address.
    *
@@ -733,12 +755,7 @@ export class MoneyMarketService {
         };
       }
 
-      // Bitcoin borrow/withdraw are on-demand: the spoke result is a signed payload JSON that the relay
-      // submits under the literal "withdraw" tx_hash and tracks under a derived `od:<hash>` poll id.
-      // Every other chain relays and polls by its real spoke tx hash.
-      const relayIdentity = isBitcoinChainKeyType(srcChainKey)
-        ? this.spoke.bitcoin.getOnDemandRelayIdentity(txResult.value.tx)
-        : { srcTxHash: txResult.value.tx, data: txResult.value.relayData, pollTxHash: undefined };
+      const relayIdentity = this.buildRelayIdentity(srcChainKey, txResult.value.tx, txResult.value.relayData);
       const packet = await relayTxAndWaitPacket({
         ...relayIdentity,
         chainKey: srcChainKey,
@@ -757,9 +774,9 @@ export class MoneyMarketService {
           }),
         };
 
-      // On-demand relays (Bitcoin borrow/withdraw) have no broadcast spoke tx — the source-side
-      // identifier is the derived poll id (od:<hash>) the relay and SodaxScan track the packet by, not
-      // the opaque signed payload. Other chains have no pollTxHash, so srcChainTxHash stays the spoke tx.
+      // On-demand relays expose the derived poll id (od:<hash>) as the source identifier — what the
+      // relay/SodaxScan track — not the opaque signed payload; other chains keep the spoke tx (see
+      // buildRelayIdentity).
       return {
         ok: true,
         value: {
@@ -930,12 +947,7 @@ export class MoneyMarketService {
         };
       }
 
-      // Bitcoin borrow/withdraw are on-demand: the spoke result is a signed payload JSON that the relay
-      // submits under the literal "withdraw" tx_hash and tracks under a derived `od:<hash>` poll id.
-      // Every other chain relays and polls by its real spoke tx hash.
-      const relayIdentity = isBitcoinChainKeyType(srcChainKey)
-        ? this.spoke.bitcoin.getOnDemandRelayIdentity(txResult.value.tx)
-        : { srcTxHash: txResult.value.tx, data: txResult.value.relayData, pollTxHash: undefined };
+      const relayIdentity = this.buildRelayIdentity(srcChainKey, txResult.value.tx, txResult.value.relayData);
       const packet = await relayTxAndWaitPacket({
         ...relayIdentity,
         chainKey: srcChainKey,
@@ -954,9 +966,9 @@ export class MoneyMarketService {
           }),
         };
 
-      // On-demand relays (Bitcoin borrow/withdraw) have no broadcast spoke tx — the source-side
-      // identifier is the derived poll id (od:<hash>) the relay and SodaxScan track the packet by, not
-      // the opaque signed payload. Other chains have no pollTxHash, so srcChainTxHash stays the spoke tx.
+      // On-demand relays expose the derived poll id (od:<hash>) as the source identifier — what the
+      // relay/SodaxScan track — not the opaque signed payload; other chains keep the spoke tx (see
+      // buildRelayIdentity).
       return {
         ok: true,
         value: {
@@ -1187,7 +1199,15 @@ export class MoneyMarketService {
       // trading wallet, not the personal one. getEffectiveWalletAddress + ensureRadfiAccessToken are the
       // Bitcoin spoke/Bound primitives (mirrors SwapService/BridgeService); non-Bitcoin chains pass through.
       const isBitcoinSrc = isBitcoinChainKeyType(srcChainKey);
-      if (isBitcoinSrc && !_params.raw && walletProvider && isBitcoinWalletProviderType(walletProvider)) {
+      if (isBitcoinSrc && !_params.raw) {
+        // Fail fast (mirrors SwapService/BridgeService): a non-raw Bitcoin deposit must sign via a
+        // Bitcoin wallet provider. A missing/wrong provider here would otherwise silently skip the
+        // Bound Exchange session and only surface as an opaque undefined error deep in spoke.deposit.
+        mmInvariant(
+          walletProvider !== undefined && isBitcoinWalletProviderType(walletProvider),
+          `Invalid wallet provider for chain key: ${srcChainKey}. Expected bitcoin wallet provider.`,
+          { ...baseCtx, field: 'walletProvider' },
+        );
         await this.spoke.bitcoin.radfi.ensureRadfiAccessToken(walletProvider);
       }
       const srcEffectiveAddress = isBitcoinSrc

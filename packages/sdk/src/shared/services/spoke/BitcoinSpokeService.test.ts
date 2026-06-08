@@ -29,6 +29,7 @@ import {
   type Hex,
   type IBitcoinWalletProvider,
 } from '@sodax/types';
+import { keccak256, stringToBytes } from 'viem';
 
 // --- hoisted mocks --------------------------------------------------------
 
@@ -323,6 +324,32 @@ describe('BitcoinSpokeService.getTradingWalletAddress', () => {
       tradingAddress: TRADING_ADDR,
     } as never);
     expect(await btcSpoke.getTradingWalletAddress(USER_ADDR)).toBe(TRADING_ADDR);
+  });
+});
+
+describe('BitcoinSpokeService.getOnDemandRelayIdentity', () => {
+  // The spoke result for an on-demand borrow/withdraw is the signed payload JSON. The relay submits it
+  // under the literal "withdraw" tx_hash but tracks the packet under `od:` + keccak256 of the ASCII
+  // payload_hex characters — polling must use that derived id, not "withdraw".
+  it('submits under "withdraw" and derives the poll id from keccak256 of the payload_hex chars', () => {
+    const payloadHex = '7b22737263';
+    const tx = JSON.stringify({ payload_hex: payloadHex, signature: 'AUBsig' });
+
+    const identity = btcSpoke.getOnDemandRelayIdentity(tx);
+
+    expect(identity.srcTxHash).toBe('withdraw');
+    expect(identity.data).toEqual({ payload_hex: payloadHex, signature: 'AUBsig' });
+    expect(identity.pollTxHash).toBe(`od:${keccak256(stringToBytes(payloadHex)).slice(2)}`);
+  });
+
+  it('strips a leading 0x from payload_hex before hashing (bare-hex chars only)', () => {
+    // Real payloads are bare hex (Buffer.toString('hex')), but if a payload_hex ever carries a 0x
+    // prefix the poll id must hash the same bare-hex chars — otherwise polling never matches the
+    // relay-tracked id. This pins the strip branch the production payloads don't exercise.
+    const bareHex = '7b22737263';
+    const tx = JSON.stringify({ payload_hex: `0x${bareHex}` });
+
+    expect(btcSpoke.getOnDemandRelayIdentity(tx).pollTxHash).toBe(`od:${keccak256(stringToBytes(bareHex)).slice(2)}`);
   });
 });
 

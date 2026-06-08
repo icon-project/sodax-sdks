@@ -12,7 +12,8 @@ import { loadRadfiSession } from './useRadfiAuth.js';
  * an empty hub wallet, which is correct. Non-Bitcoin chains pass through unchanged.
  *
  * The WRITE path resolves the trading address authoritatively in the SDK
- * (`MoneyMarketService.resolveSender`); reads deliberately use this lighter, fail-safe path.
+ * (`getEffectiveWalletAddress`, called from the money-market create*Intent flows); reads
+ * deliberately use this lighter, fail-safe path.
  */
 export function resolveBtcReadAddress(chainKey: SpokeChainKey, address: string): string {
   if (chainKey !== ChainKeys.BITCOIN_MAINNET) return address;

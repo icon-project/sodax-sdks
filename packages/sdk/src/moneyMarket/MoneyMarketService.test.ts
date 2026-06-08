@@ -1098,6 +1098,32 @@ describe('MoneyMarketService.createSupplyIntent', () => {
       if (!result.ok) expect(String(result.error)).toMatch(/Invalid wallet provider/);
     });
 
+    it('on Bitcoin (non-raw): rejects a missing wallet provider before building any tx', async () => {
+      // Guard mirrors Swap/Bridge: a non-raw Bitcoin deposit MUST sign via a Bitcoin wallet provider.
+      // `undefined` slips past the generic walletProvider check (which permits undefined), so this
+      // guard is what fails it fast — before any effective-address resolution or deposit/tx is built.
+      // Both collaborators are mocked to no-ops so even a guard regression can never reach a real
+      // deposit/tx (which costs money); the assertions then prove the guard short-circuits first.
+      const getEffSpy = vi.spyOn(sodax.spoke.bitcoin, 'getEffectiveWalletAddress').mockResolvedValue('bc1p-trading');
+      const depositSpy = vi.spyOn(sodax.spoke, 'deposit').mockResolvedValue({ ok: true, value: '0xunused' });
+
+      const result = await sodax.moneyMarket.createSupplyIntent({
+        raw: false,
+        params: supplyParams(ChainKeys.BITCOIN_MAINNET),
+        walletProvider: undefined,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('VALIDATION_FAILED');
+        expect(result.error.context?.field).toBe('walletProvider');
+        expect(String(result.error)).toMatch(/Expected bitcoin wallet provider/);
+      }
+      // fail-fast: no trading-address resolution, no deposit/tx built
+      expect(getEffSpy).not.toHaveBeenCalled();
+      expect(depositSpy).not.toHaveBeenCalled();
+    });
+
     it('rejects unsupported token on srcChain', async () => {
       vi.spyOn(sodax.config, 'isMoneyMarketSupportedToken').mockReturnValueOnce(false);
 
@@ -2366,6 +2392,29 @@ describe('MoneyMarketService.createRepayIntent', () => {
       });
       expect(result.ok).toBe(false);
       if (!result.ok) expect(String(result.error)).toMatch(/Invalid wallet provider for chain key/);
+    });
+
+    it('on Bitcoin (non-raw): rejects a missing wallet provider before building any tx', async () => {
+      // Same fail-fast guard as supply: a non-raw Bitcoin repay deposit MUST sign via a Bitcoin wallet
+      // provider. Collaborators mocked to no-ops so a guard regression can never reach a real deposit/tx
+      // (which costs money); the assertions prove the guard short-circuits before any tx is built.
+      const getEffSpy = vi.spyOn(sodax.spoke.bitcoin, 'getEffectiveWalletAddress').mockResolvedValue('bc1p-trading');
+      const depositSpy = vi.spyOn(sodax.spoke, 'deposit').mockResolvedValue({ ok: true, value: '0xunused' });
+
+      const result = await sodax.moneyMarket.createRepayIntent({
+        raw: false,
+        params: repayParams(ChainKeys.BITCOIN_MAINNET),
+        walletProvider: undefined,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('VALIDATION_FAILED');
+        expect(result.error.context?.field).toBe('walletProvider');
+        expect(String(result.error)).toMatch(/Expected bitcoin wallet provider/);
+      }
+      expect(getEffSpy).not.toHaveBeenCalled();
+      expect(depositSpy).not.toHaveBeenCalled();
     });
 
     it('rejects unsupported token on srcChain', async () => {
