@@ -77,7 +77,7 @@ export function BorrowAssetsList({ initialChainId }: BorrowAssetsListProps): JSX
   }, [sodax, allMoneyMarketAssets, selectedChainId]);
 
   // On Bitcoin the wallet balance shown is the Bound Exchange trading wallet, not the personal wallet.
-  const { isBitcoin, tradingBalanceSats } = useBtcTradingBalance(selectedChainId);
+  const { isBitcoin, tradingBalanceSats } = useBtcTradingBalance({ chainId: selectedChainId });
 
   const tokensOnSelectedChain = sodax.moneyMarket.getSupportedTokensByChainId(selectedChainId);
   const xService = useXService({ xChainType: getXChainType(selectedChainId) });

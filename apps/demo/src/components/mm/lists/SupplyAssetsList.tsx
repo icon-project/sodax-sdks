@@ -49,7 +49,7 @@ export function SupplyAssetsList(): ReactElement {
   const isIcon = selectedChainId === ChainKeys.ICON_MAINNET;
 
   // On Bitcoin the suppliable funds live in the Bound Exchange trading wallet, not the personal wallet.
-  const { isBitcoin, tradingBalanceSats } = useBtcTradingBalance(selectedChainId);
+  const { isBitcoin, tradingBalanceSats } = useBtcTradingBalance({ chainId: selectedChainId });
 
   const { address } = useXAccount({ xChainId: selectedChainId });
   const xService = useXService({ xChainType: getXChainType(selectedChainId) });

@@ -72,7 +72,7 @@ export function SupplyModal({ open, onOpenChange, token, onSuccess, inlineSucces
 
   // On Bitcoin the deposit is pulled from the Bound Exchange trading wallet, so the spendable max
   // is the trading-wallet balance, not the personal wallet's UTXO balance.
-  const { isBitcoin, tradingBalanceSats, notReady: btcNotReady } = useBtcTradingBalance(srcChainKey);
+  const { isBitcoin, tradingBalanceSats, notReady: btcNotReady } = useBtcTradingBalance({ chainId: srcChainKey });
 
   const isSameChain = srcChainKey === dstChainKey;
 

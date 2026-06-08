@@ -2,6 +2,10 @@ import { useTradingWallet, useTradingWalletBalance } from '@sodax/dapp-kit';
 import { ChainKeys, type IBitcoinWalletProvider, type SpokeChainKey } from '@sodax/sdk';
 import { useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
 
+interface UseBtcTradingBalanceParams {
+  chainId: SpokeChainKey;
+}
+
 interface UseBtcTradingBalanceResult {
   isBitcoin: boolean;
   tradingAddress: string | undefined;
@@ -16,7 +20,7 @@ interface UseBtcTradingBalanceResult {
  * Reads the trading-wallet balance for that chain; returns zeros for non-Bitcoin chains.
  * Read-only — the Bound Exchange session itself is owned by BitcoinSetupPanel's useRadfiSession.
  */
-export function useBtcTradingBalance(chainId: SpokeChainKey): UseBtcTradingBalanceResult {
+export function useBtcTradingBalance({ chainId }: UseBtcTradingBalanceParams): UseBtcTradingBalanceResult {
   const isBitcoin = chainId === ChainKeys.BITCOIN_MAINNET;
   const walletProvider = useWalletProvider({ xChainId: ChainKeys.BITCOIN_MAINNET }) as
     | IBitcoinWalletProvider

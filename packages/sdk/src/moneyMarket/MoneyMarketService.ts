@@ -1,4 +1,4 @@
-import { encodeFunctionData, isAddress, keccak256, stringToBytes } from 'viem';
+import { encodeFunctionData, isAddress } from 'viem';
 import { mapRelayFailure } from '../errors/relay-error-mapping.js';
 import {
   verifyFailed,
@@ -47,18 +47,11 @@ import {
   isBitcoinChainKeyType,
   isBitcoinWalletProviderType,
 } from '../shared/index.js';
-import type {
-  HubProvider,
-  IntentTxResult,
-  OnDemandRelayData,
-  RelayExtraData,
-  TxHashPair,
-} from '../shared/types/types.js';
+import type { HubProvider, IntentTxResult, TxHashPair } from '../shared/types/types.js';
 import {
   type SpokeChainKey,
   type XToken,
   type Address,
-  type IWalletProvider,
   type Hex,
   type HttpUrl,
   type EvmContractCall,
@@ -243,73 +236,6 @@ export class MoneyMarketService {
     this.partnerFee = config.moneyMarket.partnerFee;
     this.relayerApiEndpoint = config.relay.relayerApiEndpoint;
     this.data = new MoneyMarketDataService({ hubProvider, config: config });
-  }
-
-  /**
-   * Resolve a spoke address to both its effective form and the derived hub wallet.
-   *
-   * Bitcoin (TRADING mode) routes every spoke action through the per-user Bound Exchange trading wallet,
-   * so the hub wallet is derived from the trading address — not the personal address. The hub
-   * wallet (where collateral/debt live) therefore always uses `effectiveAddress`. Non-Bitcoin
-   * chains pass through.
-   *
-   * `effectiveAddress` is consumed only by the deposit path (supply/repay), which does NOT
-   * re-resolve the trading address itself. The sendMessage path (borrow/withdraw) re-resolves
-   * internally, so those callers pass the personal address through and use only `hubWallet`.
-   *
-   * This is the WRITE path (authoritative, network resolve, may fail/gate). Reads resolve the
-   * Bitcoin trading address locally in dapp-kit (no network) — see `resolveBtcReadAddress`.
-   */
-  private async resolveSender(
-    chainKey: SpokeChainKey,
-    address: string,
-  ): Promise<{ effectiveAddress: string; hubWallet: Address }> {
-    const effectiveAddress = isBitcoinChainKeyType(chainKey)
-      ? await this.spoke.bitcoin.getEffectiveWalletAddress(address)
-      : address;
-    return { effectiveAddress, hubWallet: await this.hubProvider.getUserHubWalletAddress(effectiveAddress, chainKey) };
-  }
-
-  /**
-   * Ensure the Bound Exchange session token is valid before a Bitcoin deposit (supply/repay). No-op for
-   * non-Bitcoin chains, raw mode, or non-Bitcoin wallet providers. Mirrors SwapService/BridgeService.
-   */
-  private async ensureBitcoinDepositToken(
-    srcChainKey: SpokeChainKey,
-    isRaw: boolean | undefined,
-    walletProvider: IWalletProvider | undefined,
-  ): Promise<void> {
-    if (!isRaw && isBitcoinChainKeyType(srcChainKey) && walletProvider && isBitcoinWalletProviderType(walletProvider)) {
-      await this.spoke.bitcoin.radfi.ensureRadfiAccessToken(walletProvider);
-    }
-  }
-
-  /**
-   * Build the relay submit/poll identity for an on-demand action (borrow/withdraw).
-   *
-   * Bitcoin borrow/withdraw are on-demand: there is no broadcast transaction — the spoke result is
-   * the signed payload JSON. The relay accepts the submit under the literal "withdraw" tx_hash with
-   * the signed payload (as a JSON object) in `data`, then tracks the resulting packet under a derived
-   * id: `od:` + keccak256 of the ASCII `payload_hex` string (hash the hex characters, not the decoded
-   * bytes). Polling must use that derived id (`pollTxHash`), not "withdraw". Every other chain relays
-   * and polls by its real spoke tx hash.
-   *
-   * Only valid for the sendMessage actions (borrow/withdraw). Deposit actions (supply/repay) always
-   * relay by their real broadcast txid and must not use this.
-   */
-  private toRelayIdentity(
-    srcChainKey: SpokeChainKey,
-    tx: string,
-    relayData: RelayExtraData,
-  ): { srcTxHash: string; data: RelayExtraData | OnDemandRelayData; pollTxHash?: string } {
-    if (!isBitcoinChainKeyType(srcChainKey)) {
-      return { srcTxHash: tx, data: relayData };
-    }
-    // `tx` is the JSON-stringified signed payload from `encodeWithdrawalData`.
-    const data = JSON.parse(tx) as OnDemandRelayData;
-    const payloadHex = data.payload_hex.startsWith('0x') ? data.payload_hex.slice(2) : data.payload_hex;
-    const pollTxHash = `od:${keccak256(stringToBytes(payloadHex)).slice(2)}`;
-    return { srcTxHash: 'withdraw', data, pollTxHash };
   }
 
   /**
@@ -685,22 +611,36 @@ export class MoneyMarketService {
       const dstChainKey = params.dstChainKey ?? srcChainKey;
       const dstAddress = params.dstAddress ?? params.srcAddress;
 
-      await this.ensureBitcoinDepositToken(srcChainKey, _params.raw, _params.walletProvider);
+      // Bitcoin (TRADING mode) pulls the deposit from the Bound Exchange trading wallet, so the
+      // effective source address — and the hub wallet derived from it, where collateral lives — is the
+      // trading wallet, not the personal one. getEffectiveWalletAddress + ensureRadfiAccessToken are the
+      // Bitcoin spoke/Bound primitives (mirrors SwapService/BridgeService); non-Bitcoin chains pass through.
+      const isBitcoinSrc = isBitcoinChainKeyType(srcChainKey);
+      if (isBitcoinSrc && !_params.raw && walletProvider && isBitcoinWalletProviderType(walletProvider)) {
+        await this.spoke.bitcoin.radfi.ensureRadfiAccessToken(walletProvider);
+      }
+      const srcEffectiveAddress = isBitcoinSrc
+        ? await this.spoke.bitcoin.getEffectiveWalletAddress(params.srcAddress)
+        : params.srcAddress;
+      const fromHubWallet = await this.hubProvider.getUserHubWalletAddress(srcEffectiveAddress, srcChainKey);
 
-      const src = await this.resolveSender(srcChainKey, params.srcAddress);
-      // Same-chain self-deposit (the common case) reuses src to avoid a second effective-address lookup.
-      const dst =
+      // Same-chain self-deposit (the common case) reuses the source resolution; a distinct destination
+      // resolves its own effective (Bitcoin trading) address before hub-wallet derivation.
+      const toHubWallet =
         dstChainKey === srcChainKey && dstAddress === params.srcAddress
-          ? src
-          : await this.resolveSender(dstChainKey, dstAddress);
-      const fromHubWallet = src.hubWallet;
-      const toHubWallet = dst.hubWallet;
+          ? fromHubWallet
+          : await this.hubProvider.getUserHubWalletAddress(
+              isBitcoinChainKeyType(dstChainKey)
+                ? await this.spoke.bitcoin.getEffectiveWalletAddress(dstAddress)
+                : dstAddress,
+              dstChainKey,
+            );
 
       const data: Hex = this.buildSupplyData(srcChainKey, params.token, params.amount, toHubWallet);
 
       const coreParams = {
         srcChainKey,
-        srcAddress: src.effectiveAddress as GetAddressType<K>,
+        srcAddress: srcEffectiveAddress as GetAddressType<K>,
         to: fromHubWallet,
         token: params.token as GetTokenAddressType<K>,
         amount: params.amount,
@@ -793,7 +733,12 @@ export class MoneyMarketService {
         };
       }
 
-      const relayIdentity = this.toRelayIdentity(srcChainKey, txResult.value.tx, txResult.value.relayData);
+      // Bitcoin borrow/withdraw are on-demand: the spoke result is a signed payload JSON that the relay
+      // submits under the literal "withdraw" tx_hash and tracks under a derived `od:<hash>` poll id.
+      // Every other chain relays and polls by its real spoke tx hash.
+      const relayIdentity = isBitcoinChainKeyType(srcChainKey)
+        ? this.spoke.bitcoin.getOnDemandRelayIdentity(txResult.value.tx)
+        : { srcTxHash: txResult.value.tx, data: txResult.value.relayData, pollTxHash: undefined };
       const packet = await relayTxAndWaitPacket({
         ...relayIdentity,
         chainKey: srcChainKey,
@@ -875,7 +820,10 @@ export class MoneyMarketService {
       // resolves the effective address itself (unlike the deposit path used by supply/repay, which
       // does not). Passing the already-resolved trading address here would double-resolve it
       // (getTradingWallet(tradingAddress) → "Trading wallet not found").
-      const { hubWallet: fromHubWallet } = await this.resolveSender(srcChainKey, params.srcAddress);
+      const srcEffectiveAddress = isBitcoinChainKeyType(srcChainKey)
+        ? await this.spoke.bitcoin.getEffectiveWalletAddress(params.srcAddress)
+        : params.srcAddress;
+      const fromHubWallet = await this.hubProvider.getUserHubWalletAddress(srcEffectiveAddress, srcChainKey);
 
       const payload: Hex = this.buildBorrowData(
         fromHubWallet,
@@ -982,7 +930,12 @@ export class MoneyMarketService {
         };
       }
 
-      const relayIdentity = this.toRelayIdentity(srcChainKey, txResult.value.tx, txResult.value.relayData);
+      // Bitcoin borrow/withdraw are on-demand: the spoke result is a signed payload JSON that the relay
+      // submits under the literal "withdraw" tx_hash and tracks under a derived `od:<hash>` poll id.
+      // Every other chain relays and polls by its real spoke tx hash.
+      const relayIdentity = isBitcoinChainKeyType(srcChainKey)
+        ? this.spoke.bitcoin.getOnDemandRelayIdentity(txResult.value.tx)
+        : { srcTxHash: txResult.value.tx, data: txResult.value.relayData, pollTxHash: undefined };
       const packet = await relayTxAndWaitPacket({
         ...relayIdentity,
         chainKey: srcChainKey,
@@ -1064,7 +1017,10 @@ export class MoneyMarketService {
       // resolves the effective address itself (unlike the deposit path used by supply/repay, which
       // does not). Passing the already-resolved trading address here would double-resolve it
       // (getTradingWallet(tradingAddress) → "Trading wallet not found").
-      const { hubWallet: fromHubWallet } = await this.resolveSender(srcChainKey, params.srcAddress);
+      const srcEffectiveAddress = isBitcoinChainKeyType(srcChainKey)
+        ? await this.spoke.bitcoin.getEffectiveWalletAddress(params.srcAddress)
+        : params.srcAddress;
+      const fromHubWallet = await this.hubProvider.getUserHubWalletAddress(srcEffectiveAddress, srcChainKey);
 
       const payload: Hex = this.buildWithdrawData(
         fromHubWallet,
@@ -1226,22 +1182,36 @@ export class MoneyMarketService {
       const dstChainKey = params.dstChainKey ?? srcChainKey;
       const dstAddress = params.dstAddress ?? params.srcAddress;
 
-      await this.ensureBitcoinDepositToken(srcChainKey, _params.raw, _params.walletProvider);
+      // Bitcoin (TRADING mode) pulls the deposit from the Bound Exchange trading wallet, so the
+      // effective source address — and the hub wallet derived from it, where collateral lives — is the
+      // trading wallet, not the personal one. getEffectiveWalletAddress + ensureRadfiAccessToken are the
+      // Bitcoin spoke/Bound primitives (mirrors SwapService/BridgeService); non-Bitcoin chains pass through.
+      const isBitcoinSrc = isBitcoinChainKeyType(srcChainKey);
+      if (isBitcoinSrc && !_params.raw && walletProvider && isBitcoinWalletProviderType(walletProvider)) {
+        await this.spoke.bitcoin.radfi.ensureRadfiAccessToken(walletProvider);
+      }
+      const srcEffectiveAddress = isBitcoinSrc
+        ? await this.spoke.bitcoin.getEffectiveWalletAddress(params.srcAddress)
+        : params.srcAddress;
+      const fromHubWallet = await this.hubProvider.getUserHubWalletAddress(srcEffectiveAddress, srcChainKey);
 
-      const src = await this.resolveSender(srcChainKey, params.srcAddress);
-      // Same-chain self-deposit (the common case) reuses src to avoid a second effective-address lookup.
-      const dst =
+      // Same-chain self-deposit (the common case) reuses the source resolution; a distinct destination
+      // resolves its own effective (Bitcoin trading) address before hub-wallet derivation.
+      const toHubWallet =
         dstChainKey === srcChainKey && dstAddress === params.srcAddress
-          ? src
-          : await this.resolveSender(dstChainKey, dstAddress);
-      const fromHubWallet = src.hubWallet;
-      const toHubWallet = dst.hubWallet;
+          ? fromHubWallet
+          : await this.hubProvider.getUserHubWalletAddress(
+              isBitcoinChainKeyType(dstChainKey)
+                ? await this.spoke.bitcoin.getEffectiveWalletAddress(dstAddress)
+                : dstAddress,
+              dstChainKey,
+            );
 
       const data: Hex = this.buildRepayData(srcChainKey, params.token, params.amount, toHubWallet);
 
       const coreParams = {
         srcChainKey,
-        srcAddress: src.effectiveAddress as GetAddressType<K>,
+        srcAddress: srcEffectiveAddress as GetAddressType<K>,
         to: fromHubWallet,
         token: params.token as GetTokenAddressType<K>,
         amount: params.amount,

@@ -71,7 +71,9 @@ export function WithdrawModal({
   const { address: dstAddress } = useXAccount({ xChainId: dstChainKey });
 
   // BTC delivery goes to the Bound Exchange trading wallet; needs a signed-in session (balance not required).
-  const { isBitcoin: isBtcDelivery, tradingAddress: deliveryTradingAddress } = useBtcTradingBalance(dstChainKey);
+  const { isBitcoin: isBtcDelivery, tradingAddress: deliveryTradingAddress } = useBtcTradingBalance({
+    chainId: dstChainKey,
+  });
   const btcDeliveryNotReady = isBtcDelivery && !!dstAddress && !deliveryTradingAddress;
 
   const isSameChain = srcChainKey === dstChainKey;

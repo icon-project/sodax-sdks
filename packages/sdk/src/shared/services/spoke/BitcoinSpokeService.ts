@@ -8,7 +8,8 @@ import type {
 } from '@sodax/types';
 import { ChainKeys, detectBitcoinAddressType, getIntentRelayChainId, usesBip322MessageSigning } from '@sodax/types';
 import * as ecc from '@bitcoinerlab/secp256k1';
-import { keccak256 } from 'viem';
+import { keccak256, stringToBytes } from 'viem';
+import type { OnDemandRelayData } from '../../types/types.js';
 import type {
   DepositParams,
   EstimateGasParams,
@@ -207,6 +208,25 @@ export class BitcoinSpokeService {
     params: SendMessageParams<BitcoinChainKey, Raw> & { walletMode?: WalletMode },
   ): Promise<TxReturnType<BitcoinChainKey, Raw>> {
     return (await this.encodeWithdrawalData(params)) satisfies TxReturnType<BitcoinChainKey, Raw>;
+  }
+
+  /**
+   * Build the relay submit/poll identity for an on-demand action (borrow/withdraw).
+   *
+   * Bitcoin borrow/withdraw are on-demand: there is no broadcast transaction — the spoke result is
+   * the signed payload JSON produced by {@link encodeWithdrawalData}/{@link sendMessage}. The relay
+   * accepts the submit under the literal `withdraw` tx_hash with the signed payload (as a JSON object)
+   * in `data`, then tracks the resulting packet under a derived id: `od:` + keccak256 of the ASCII
+   * `payload_hex` string (hash the hex characters, not the decoded bytes). Polling must use that
+   * derived id (`pollTxHash`), not `withdraw`.
+   *
+   * @param tx - The JSON-stringified signed payload returned by `sendMessage` / `encodeWithdrawalData`.
+   */
+  public getOnDemandRelayIdentity(tx: string): { srcTxHash: string; data: OnDemandRelayData; pollTxHash: string } {
+    const data = JSON.parse(tx) as OnDemandRelayData;
+    const payloadHex = data.payload_hex.startsWith('0x') ? data.payload_hex.slice(2) : data.payload_hex;
+    const pollTxHash = `od:${keccak256(stringToBytes(payloadHex)).slice(2)}`;
+    return { srcTxHash: 'withdraw', data, pollTxHash };
   }
 
   /**
