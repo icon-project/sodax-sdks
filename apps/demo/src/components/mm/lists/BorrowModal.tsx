@@ -180,7 +180,12 @@ export function BorrowModal({
   const params: MoneyMarketBorrowParams | undefined = useMemo(() => {
     if (!parsedAmount || exceedsMaxBorrow || !destinationToken || !srcAddress) return undefined;
 
-    const crossChainParams = buildMmDeliveryParams({ dstChainKey, dstAddress, isSameChain });
+    const crossChainParams = buildMmDeliveryParams({
+      dstChainKey,
+      dstAddress,
+      isSameChain,
+      btcTradingAddress: deliveryTradingAddress,
+    });
     if (crossChainParams === null) return undefined; // BTC delivery requires a connected destination wallet
 
     return {
@@ -201,6 +206,7 @@ export function BorrowModal({
     dstAddress,
     srcAddress,
     isSameChain,
+    deliveryTradingAddress,
   ]);
 
   const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: srcChainKey });

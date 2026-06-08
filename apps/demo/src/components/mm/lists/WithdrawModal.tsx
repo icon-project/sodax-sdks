@@ -84,7 +84,12 @@ export function WithdrawModal({
     if (!amount || !srcAddress) return undefined;
     if (!isSameChain && !dstAddress) return undefined;
 
-    const crossChainParams = buildMmDeliveryParams({ dstChainKey, dstAddress, isSameChain });
+    const crossChainParams = buildMmDeliveryParams({
+      dstChainKey,
+      dstAddress,
+      isSameChain,
+      btcTradingAddress: deliveryTradingAddress,
+    });
     if (crossChainParams === null) return undefined; // BTC delivery requires a connected destination wallet
 
     const normalizedAmount = amount.replace(',', '.');
@@ -98,7 +103,7 @@ export function WithdrawModal({
       action: 'withdraw' as const,
       ...crossChainParams,
     };
-  }, [amount, srcAddress, dstAddress, srcChainKey, dstChainKey, destinationToken, isSameChain]);
+  }, [amount, srcAddress, dstAddress, srcChainKey, dstChainKey, destinationToken, isSameChain, deliveryTradingAddress]);
 
   const isEvmChain = getChainType(srcChainKey) === 'EVM';
 
