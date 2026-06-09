@@ -1,6 +1,7 @@
 import { useQueries, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import type { Address, SpokeChainKey } from '@sodax/sdk';
+import type { ReadHookParams } from '../shared/types.js';
 
 /** A single `(chain, hub-wallet holder, share balance)` row produced by {@link useLeverageYieldShareBalances}. */
 export type LeverageYieldShareHolding = {
@@ -15,10 +16,10 @@ export type LeverageYieldShareHolder = {
   address: string;
 };
 
-export type UseLeverageYieldShareBalancesParams = {
-  vault: Address | undefined;
-  holders: readonly LeverageYieldShareHolder[] | undefined;
-};
+export type UseLeverageYieldShareBalancesParams = ReadHookParams<
+  LeverageYieldShareHolding,
+  { vault: Address | undefined; holders: readonly LeverageYieldShareHolder[] | undefined }
+>;
 
 /**
  * Reads a user's leverage-vault share (`lsoda*`) balances across every chain they may hold a
@@ -29,24 +30,30 @@ export type UseLeverageYieldShareBalancesParams = {
  * Returns the raw `useQueries` result array (15s refresh per query); callers aggregate as needed
  * (e.g. sum `shares` for a headline total, or pick the row for the active chain).
  *
+ * `useQueries` has no top-level options slot, so `queryOptions` is spread into every individual
+ * query config (and applies uniformly to each holder's query).
+ *
  * @example
  * ```typescript
- * const balances = useLeverageYieldShareBalances({ vault: vault.vault, holders });
+ * const balances = useLeverageYieldShareBalances({ params: { vault: vault.vault, holders } });
  * const total = balances.reduce((acc, q) => acc + (q.data?.shares ?? 0n), 0n);
  * ```
  */
 export function useLeverageYieldShareBalances({
-  vault,
-  holders,
-}: UseLeverageYieldShareBalancesParams): UseQueryResult<LeverageYieldShareHolding, Error>[] {
+  params,
+  queryOptions,
+}: UseLeverageYieldShareBalancesParams = {}): UseQueryResult<LeverageYieldShareHolding, Error>[] {
   const { sodax } = useSodaxContext();
   const hubChainKey = sodax.hubProvider.chainConfig.chain.key;
+  const vault = params?.vault;
+  const holders = params?.holders;
 
   return useQueries({
     queries: (holders ?? []).map(({ chainKey, address }) => ({
       queryKey: ['leverageYield', 'shareBalance', vault, chainKey, address] as const,
-      enabled: !!vault,
       refetchInterval: 15_000,
+      ...queryOptions,
+      enabled: !!vault,
       queryFn: async (): Promise<LeverageYieldShareHolding> => {
         if (!vault) throw new Error('vault is required');
         const holder =

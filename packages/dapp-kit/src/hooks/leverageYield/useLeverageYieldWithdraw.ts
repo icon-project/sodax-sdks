@@ -34,6 +34,6 @@ export function useLeverageYieldWithdraw({
   return useSafeMutation<CreateIntentParams, Error, UseLeverageYieldWithdrawVars>({
     mutationKey: ['leverageYield', 'withdraw'],
     ...mutationOptions,
-    mutationFn: async vars => unwrapResult(sodax.leverageYield.withdraw(vars)),
+    mutationFn: async vars => unwrapResult(await sodax.leverageYield.withdraw(vars)),
   });
 }

@@ -296,8 +296,7 @@ export default function LeverageYieldPage() {
   }, [supportedSpokeChains, xAccounts]);
 
   const sharesByChain = useLeverageYieldShareBalances({
-    vault: selectedVault?.vault,
-    holders: connectedHolders,
+    params: { vault: selectedVault?.vault, holders: connectedHolders },
   });
 
   // Holder + share balance for the currently-selected userChain — used by deposit
@@ -324,8 +323,6 @@ export default function LeverageYieldPage() {
   // Vault TVL + share price. `previewRedeem(1e18)` = "1 share → N underlying" — the
   // per-share yield indicator that creeps up as the vault accrues interest. TVL is the
   // scale signal. 60s refresh: both move slowly.
-  // TVL + share price: two granular dapp-kit reads composed for display. `previewRedeem(1e18)` =
-  // "1 share → N underlying" — the per-share price that creeps up as the vault accrues interest.
   const { data: vaultTvl } = useLeverageYieldTotalAssets({ params: { vault: selectedVault?.vault } });
   const { data: vaultSharePrice } = useLeverageYieldPreviewRedeem({
     params: { vault: selectedVault?.vault, shares: 10n ** 18n },
@@ -392,7 +389,7 @@ export default function LeverageYieldPage() {
           minOutputAmount,
         }));
     if (!result.ok) {
-      setActionError(`Failed to build intent: ${(result.error as Error)?.message ?? 'unknown'}`);
+      setActionError(`Failed to build intent: ${result.error instanceof Error ? result.error.message : 'unknown'}`);
       return;
     }
     setIntentOrderPayload(result.value);
@@ -402,7 +399,7 @@ export default function LeverageYieldPage() {
     if (!intentOrderPayload || !sourceWalletProvider) return;
     setActionError(null);
     const result = await approve({ params: intentOrderPayload, walletProvider: sourceWalletProvider });
-    if (!result.ok) setActionError((result.error as Error)?.message ?? 'Approve failed');
+    if (!result.ok) setActionError(result.error instanceof Error ? result.error.message : 'Approve failed');
   };
 
   /**
@@ -516,6 +513,32 @@ export default function LeverageYieldPage() {
       </div>
     );
   }
+
+  // Aggregate load/error/empty status across the per-chain share queries (one row each above).
+  const renderSharesStatus = () => {
+    const loading = sharesByChain.filter(q => q.isLoading).length;
+    const errored = sharesByChain.filter(q => q.isError).length;
+    const resolved = sharesByChain.filter(q => q.data !== undefined).length;
+    const nonZero = sharesByChain.filter(q => (q.data?.shares ?? 0n) > 0n).length;
+    if (loading > 0) {
+      return (
+        <div className="text-xs text-muted-foreground">
+          loading {loading} of {sharesByChain.length} chains…
+        </div>
+      );
+    }
+    if (errored > 0) {
+      return (
+        <div className="text-xs text-amber-600">
+          {errored} of {sharesByChain.length} chains failed to load (likely CORS — check console)
+        </div>
+      );
+    }
+    if (resolved === sharesByChain.length && nonZero === 0) {
+      return <div className="text-xs text-muted-foreground">no shares on any connected chain</div>;
+    }
+    return null;
+  };
 
   return (
     <div className="flex flex-col items-center justify-start min-h-screen p-4 gap-4">
@@ -669,30 +692,7 @@ export default function LeverageYieldPage() {
                   }
                   return null;
                 })}
-                {(() => {
-                  const loading = sharesByChain.filter(q => q.isLoading).length;
-                  const errored = sharesByChain.filter(q => q.isError).length;
-                  const resolved = sharesByChain.filter(q => q.data !== undefined).length;
-                  const nonZero = sharesByChain.filter(q => (q.data?.shares ?? 0n) > 0n).length;
-                  if (loading > 0) {
-                    return (
-                      <div className="text-xs text-muted-foreground">
-                        loading {loading} of {sharesByChain.length} chains…
-                      </div>
-                    );
-                  }
-                  if (errored > 0) {
-                    return (
-                      <div className="text-xs text-amber-600">
-                        {errored} of {sharesByChain.length} chains failed to load (likely CORS — check console)
-                      </div>
-                    );
-                  }
-                  if (resolved === sharesByChain.length && nonZero === 0) {
-                    return <div className="text-xs text-muted-foreground">no shares on any connected chain</div>;
-                  }
-                  return null;
-                })()}
+                {renderSharesStatus()}
               </div>
             </div>
           )}
