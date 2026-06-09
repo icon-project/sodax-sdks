@@ -7,7 +7,7 @@ import { ChainSelector } from '@/components/shared/ChainSelector';
 
 import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
 import { parseUnits } from 'viem';
-import { useMMApprove, useSodaxContext, useWithdraw } from '@sodax/dapp-kit';
+import { useMMApprove, useSodaxContext, useWithdraw, useNearStorageGate } from '@sodax/dapp-kit';
 import { type SpokeChainKey, type XToken, getChainType } from '@sodax/sdk';
 import { useAppStore } from '@/zustand/useAppStore';
 import type { MoneyMarketWithdrawParams } from '@sodax/sdk';
@@ -18,9 +18,9 @@ import {
   getNativeTokenSymbol,
   getSafeMaxAmountForInput,
   getTokenOnChain,
+  formatMutationFailureMessage,
 } from '@/lib/utils';
 import { logger } from '@/lib/logger';
-import { useNearStorageGate } from '@/hooks/useNearStorageGate';
 import { ErrorAlert } from '../ErrorAlert';
 import { extractTxHash } from '@/lib/extractTxHash';
 import { getChainName } from '@/constants';
@@ -56,6 +56,7 @@ export function WithdrawModal({
   const [amount, setAmount] = useState('');
   const [step, setStep] = useState<'form' | 'success'>('form');
   const [successData, setSuccessData] = useState<ActionSuccessData | null>(null);
+  const [nearStorageError, setNearStorageError] = useState<string | null>(null);
   const { selectedChainId, openWalletModal, isWalletModalOpen } = useAppStore();
   const { sodax } = useSodaxContext();
 
@@ -161,7 +162,12 @@ export function WithdrawModal({
   };
 
   const handleRegisterNearStorage = async (): Promise<void> => {
-    await nearStorage.registerStorage();
+    const result = await nearStorage.registerStorage();
+    if (result && !result.ok) {
+      setNearStorageError(formatMutationFailureMessage(result.error, 'Storage registration failed'));
+      return;
+    }
+    setNearStorageError(null);
   };
 
   const handleMaxClick = (): void => {
@@ -177,6 +183,7 @@ export function WithdrawModal({
       setAmount('');
       setStep('form');
       setSuccessData(null);
+      setNearStorageError(null);
       setDstChainKey(token.chainKey);
       resetError?.();
       resetApproveError?.();
@@ -304,6 +311,11 @@ export function WithdrawModal({
         {nearStorage.needsRegistration && (
           <div className="min-w-0 w-full">
             <ErrorAlert text="Recipient is not storage-registered for this token on NEAR. Register storage to receive the withdrawn funds." />
+          </div>
+        )}
+        {nearStorageError && (
+          <div className="min-w-0 w-full">
+            <ErrorAlert text={nearStorageError} />
           </div>
         )}
 

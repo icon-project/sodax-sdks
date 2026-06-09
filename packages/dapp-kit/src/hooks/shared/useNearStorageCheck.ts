@@ -33,7 +33,7 @@ export function useNearStorageCheck({
   const chainId = params?.chainId;
 
   return useQuery<boolean, Error>({
-    queryKey: ['shared', 'nearStorageCheck', token, accountId],
+    queryKey: ['shared', 'nearStorageCheck', chainId, token, accountId],
     queryFn: async () => {
       if (chainId !== ChainKeys.NEAR_MAINNET) return true;
       if (!token || !accountId) return false;

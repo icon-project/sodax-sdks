@@ -32,6 +32,7 @@ import {
   useTradingWalletBalance,
   useBackendSubmitSwapTx,
   useXBalances,
+  useNearStorageGate,
 } from '@sodax/dapp-kit';
 import {
   getXChainType,
@@ -53,7 +54,6 @@ import {
 import type { Order } from '@/components/swaps/OrderStatus';
 import { DEFAULT_SELECTED_CHAIN, useAppStore } from '@/zustand/useAppStore';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
-import { useNearStorageGate } from '@/hooks/useNearStorageGate';
 
 const SUBMIT_TX_API_CONFIG = { baseURL: 'https://canary-api.sodax.com/v1/bes' } as const;
 
@@ -112,6 +112,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   });
   const [open, setOpen] = useState(false);
   const [approveError, setApproveError] = useState<string | null>(null);
+  const [nearStorageError, setNearStorageError] = useState<string | null>(null);
   const [slippage, setSlippage] = useState<string>('0.5');
   const [useSubmitTxApi, setUseSubmitTxApi] = useState(false);
   const { mutateAsyncSafe: submitSwapTx, isPending: isSubmitting } = useBackendSubmitSwapTx();
@@ -425,7 +426,12 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   };
 
   const handleRegisterNearStorage = async () => {
-    await nearStorage.registerStorage();
+    const result = await nearStorage.registerStorage();
+    if (result && !result.ok) {
+      setNearStorageError(formatMutationFailureMessage(result.error, 'Storage registration failed'));
+      return;
+    }
+    setNearStorageError(null);
   };
 
   return (
@@ -681,6 +687,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
                   </div>
                 )}
                 {approveError ? <div className="text-red-500 text-sm">{approveError}</div> : null}
+                {nearStorageError ? <div className="text-red-500 text-sm">{nearStorageError}</div> : null}
               </div>
             </div>
             <DialogFooter>

@@ -15,6 +15,7 @@ import {
   useStellarTrustlineCheck,
   useRequestTrustline,
   useBitcoinBalance,
+  useNearStorageGate,
 } from '@sodax/dapp-kit';
 import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
 import {
@@ -28,7 +29,6 @@ import {
 } from '@sodax/sdk';
 import type { CreateBridgeIntentParams } from '@sodax/sdk';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
-import { useNearStorageGate } from '@/hooks/useNearStorageGate';
 import { formatMutationFailureMessage } from '@/lib/utils';
 import { ArrowLeftRight, Loader2 } from 'lucide-react';
 import { formatUnits } from 'viem';

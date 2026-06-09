@@ -1,4 +1,4 @@
-import type { INearWalletProvider } from '@sodax/sdk';
+import { ChainKeys, type INearWalletProvider } from '@sodax/sdk';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSodaxContext } from './useSodaxContext.js';
 import type { MutationHookParams } from './types.js';
@@ -37,7 +37,9 @@ export function useRegisterNearStorage({
     mutationFn: async ({ token, accountId, walletProvider, deposit }) =>
       sodax.spoke.near.registerStorage({ token, accountId, walletProvider, deposit, raw: false }),
     onSuccess: async (data, vars, ctx) => {
-      queryClient.invalidateQueries({ queryKey: ['shared', 'nearStorageCheck', vars.token, vars.accountId] });
+      queryClient.invalidateQueries({
+        queryKey: ['shared', 'nearStorageCheck', ChainKeys.NEAR_MAINNET, vars.token, vars.accountId],
+      });
       await mutationOptions?.onSuccess?.(data, vars, ctx);
     },
   });

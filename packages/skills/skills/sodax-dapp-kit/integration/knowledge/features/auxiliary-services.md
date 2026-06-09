@@ -96,6 +96,7 @@ useStellarTrustlineCheck({ params, queryOptions });
 useRequestTrustline({ mutationOptions });
 useNearStorageCheck({ params, queryOptions });      // NEP-141 storage registration check (NEAR)
 useRegisterNearStorage({ mutationOptions });        // NEP-141 storage_deposit (NEAR)
+useNearStorageGate({ dstChainKey, token, accountId, walletProvider }); // composite NEAR receive-side gate
 resolveNearStorageGate(chainKey, check);            // unwrapped util: gate-state from a useNearStorageCheck result
 ```
 
@@ -149,14 +150,14 @@ if (hasTrustline === false) {
 
 ### NEAR storage registration
 
-NEP-141 accounts must pay a one-time storage bond before they can receive a token — delivering to an unregistered account fails. The receive-side analogue of Stellar trustlines: gate any flow that delivers a token to the user on NEAR (swap output on NEAR, bridge into NEAR, money-market borrow/withdraw to NEAR). Pre-flight with `useNearStorageCheck`; fix with `useRegisterNearStorage`.
+NEP-141 accounts must pay a one-time storage bond before they can receive a token — delivering to an unregistered account fails. The receive-side analogue of Stellar trustlines: gate any flow that delivers a token to the user on NEAR (swap output on NEAR, bridge into NEAR, money-market borrow/withdraw to NEAR). Use `useNearStorageGate` for app UI; use the lower-level `useNearStorageCheck` + `useRegisterNearStorage` pair when you need custom wiring.
 
 ```ts
 // @ai-snippets-skip — illustrative only; real types pulled into agents below.
 // useNearStorageCheck is a canonical read hook: { params: { token, accountId, chainId }, queryOptions }.
 // `chainId` is a SpokeChainKey typed loosely — the hook returns `true` for non-NEAR chains (safe to
 // gate conditionally) and `true` for native NEAR (not a NEP-141 token). data is a boolean;
-// queryKey: ['shared', 'nearStorageCheck', token, accountId].
+// queryKey: ['shared', 'nearStorageCheck', chainId, token, accountId].
 const { data: isRegistered, isLoading } = useNearStorageCheck({
   params: { token, accountId, chainId: ChainKeys.NEAR_MAINNET },
 });
@@ -171,7 +172,9 @@ if (isRegistered === false) {
 }
 ```
 
-Derive UI gate flags with the unwrapped `resolveNearStorageGate` util (no hook) so the check/register hooks aren't re-wired at every call site:
+For the common UI path, `useNearStorageGate` returns `{ isNear, needsRegistration, blocksAction, isChecking, isRegistering, registerStorage }`.
+
+Derive UI gate flags with the unwrapped `resolveNearStorageGate` util (no hook) when you need custom check/register composition:
 
 ```ts
 // @ai-snippets-skip — illustrative only.

@@ -411,7 +411,7 @@ describe('NearSpokeService.registerStorage', () => {
 });
 
 // =========================================================================
-// 8. sendMessage — raw vs walletProvider, dstChainKey-driven relay id
+// 9. sendMessage — raw vs walletProvider, dstChainKey-driven relay id
 // =========================================================================
 
 describe('NearSpokeService.sendMessage', () => {
@@ -457,7 +457,7 @@ describe('NearSpokeService.sendMessage', () => {
 });
 
 // =========================================================================
-// 9. getLimit / getAvailable — smoke via mocked getRateLimit
+// 10. getLimit / getAvailable — smoke via mocked getRateLimit
 // =========================================================================
 
 describe('NearSpokeService.getLimit / getAvailable', () => {
@@ -483,7 +483,7 @@ describe('NearSpokeService.getLimit / getAvailable', () => {
 });
 
 // =========================================================================
-// 10. waitForTransactionReceipt — every result branch + polling defaults
+// 11. waitForTransactionReceipt — every result branch + polling defaults
 // =========================================================================
 
 describe('NearSpokeService.waitForTransactionReceipt', () => {

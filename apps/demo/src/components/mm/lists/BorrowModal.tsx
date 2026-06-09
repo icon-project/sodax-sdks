@@ -7,7 +7,14 @@ import { ChainSelector } from '@/components/shared/ChainSelector';
 import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
 import { parseUnits, formatUnits } from 'viem';
 import type { FormatUserSummaryResponse, MoneyMarketBorrowParams, SpokeChainKey, XToken } from '@sodax/sdk';
-import { useBorrow, useReservesUsdFormat, useAToken, useUserReservesData, useSodaxContext } from '@sodax/dapp-kit';
+import {
+  useBorrow,
+  useReservesUsdFormat,
+  useAToken,
+  useUserReservesData,
+  useSodaxContext,
+  useNearStorageGate,
+} from '@sodax/dapp-kit';
 import { useAppStore } from '@/zustand/useAppStore';
 import {
   getChainsWithThisToken,
@@ -17,10 +24,10 @@ import {
   formatDecimalForDisplay,
   getSafeMaxAmountForInput,
   truncateToDecimals,
+  formatMutationFailureMessage,
 } from '@/lib/utils';
 import { logger } from '@/lib/logger';
 import { useReserveMetrics } from '@/hooks/useReserveMetrics';
-import { useNearStorageGate } from '@/hooks/useNearStorageGate';
 import { MAX_BORROW_SAFETY_MARGIN, ZERO_ADDRESS, AMOUNT_DISPLAY_DECIMALS } from '../constants';
 import { isUserReserveDataArray, isValidEvmAddress } from '../typeGuards';
 import { extractTxHash } from '@/lib/extractTxHash';
@@ -60,6 +67,7 @@ export function BorrowModal({
   const [amount, setAmount] = useState('');
   const [step, setStep] = useState<'form' | 'success'>('form');
   const [successData, setSuccessData] = useState<ActionSuccessData | null>(null);
+  const [nearStorageError, setNearStorageError] = useState<string | null>(null);
   const { selectedChainId, openWalletModal, isWalletModalOpen } = useAppStore();
   const { sodax } = useSodaxContext();
 
@@ -233,7 +241,12 @@ export function BorrowModal({
   };
 
   const handleRegisterNearStorage = async (): Promise<void> => {
-    await nearStorage.registerStorage();
+    const result = await nearStorage.registerStorage();
+    if (result && !result.ok) {
+      setNearStorageError(formatMutationFailureMessage(result.error, 'Storage registration failed'));
+      return;
+    }
+    setNearStorageError(null);
   };
 
   const handleMaxClick = (): void => {
@@ -250,6 +263,7 @@ export function BorrowModal({
       setAmount('');
       setStep('form');
       setSuccessData(null);
+      setNearStorageError(null);
       setDstChainKey(token.chainKey);
       resetBorrowError?.();
     }
@@ -360,6 +374,11 @@ export function BorrowModal({
         {nearStorage.needsRegistration && (
           <div className="min-w-0 w-full">
             <ErrorAlert text="Recipient is not storage-registered for this token on NEAR. Register storage to receive the borrowed funds." />
+          </div>
+        )}
+        {nearStorageError && (
+          <div className="min-w-0 w-full">
+            <ErrorAlert text={nearStorageError} />
           </div>
         )}
 
