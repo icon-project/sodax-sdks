@@ -38,22 +38,15 @@ export class Sodax {
   public readonly spoke: SpokeService; // spoke service enabling spoke chain operations
 
   constructor(config?: SodaxOptions) {
-    // `logger` is a client-side runtime option that lives on `SodaxOptions`, not on the
-    // `DeepPartial<SodaxConfig>` data contract. Split it off the rest of the override so (a) it keeps
-    // its exact type and needs no cast, and (b) it never leaks into `instanceConfig` (the data shape
-    // fetched from / merged with the backend). Resolve the sink once, up front, and hand it to the
-    // services so it survives the dynamic-config swap in `config.initialize()`.
-    const { logger: loggerOption, ...configOverride } = config ?? ({} as SodaxOptions);
-    const logger = resolveLogger(loggerOption);
-    const hasConfigOverride = Object.keys(configOverride).length > 0;
-    this.instanceConfig = hasConfigOverride ? mergeSodaxConfig(sodaxConfig, configOverride) : sodaxConfig;
+    // Resolve the log sink once, up front, and hand it to the services so it survives the
+    // dynamic-config swap in `config.initialize()`. `logger` lives on `SodaxOptions`, not on the
+    // `DeepPartial<SodaxConfig>` data contract, so it keeps its exact type and needs no cast — the
+    // type-level conflation is gone. `mergeSodaxConfig` / `userConfig` ignore the extra `logger` key
+    // (it is never read off the data config; services read the resolved sink via `config.logger`).
+    const logger = resolveLogger(config?.logger);
+    this.instanceConfig = config ? mergeSodaxConfig(sodaxConfig, config) : sodaxConfig;
     this.backendApi = new BackendApiService(this.instanceConfig.api, logger);
-    this.config = new ConfigService({
-      api: this.backendApi,
-      config: this.instanceConfig,
-      userConfig: hasConfigOverride ? configOverride : undefined,
-      logger,
-    });
+    this.config = new ConfigService({ api: this.backendApi, config: this.instanceConfig, userConfig: config, logger });
 
     this.hubProvider = new EvmHubProvider({ config: this.config }); // default to Sonic mainnet
     this.spoke = new SpokeService({ config: this.config, hubProvider: this.hubProvider });
