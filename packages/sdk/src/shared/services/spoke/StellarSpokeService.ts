@@ -255,7 +255,7 @@ export class StellarSpokeService {
 
       return `${hash}` satisfies TxReturnType<StellarChainKey, false> as TxReturnType<StellarChainKey, Raw>;
     } catch (error) {
-      this.config.logger.error('Error during sendMessage:', error);
+      this.config.logger.error('Error during sendMessage', error);
       throw error;
     }
   }
@@ -429,7 +429,7 @@ export class StellarSpokeService {
 
       return `${hash}` satisfies TxReturnType<StellarChainKey, false> as TxReturnType<StellarChainKey, R>;
     } catch (error) {
-      this.config.logger.error('Error during deposit:', error);
+      this.config.logger.error('Error during deposit', error);
       throw error;
     }
   }
@@ -540,7 +540,7 @@ export class StellarSpokeService {
 
       return `${hash}` satisfies TxReturnType<StellarChainKey, false> as TxReturnType<StellarChainKey, Raw>;
     } catch (error) {
-      this.config.logger.error('Error during requestTrustline:', error);
+      this.config.logger.error('Error during requestTrustline', error);
       throw error;
     }
   }

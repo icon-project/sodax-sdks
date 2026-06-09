@@ -1,5 +1,6 @@
 import type { TxPollingConfig } from '../shared/shared.js';
 import type { SodaxLoggerOption } from '../shared/logger.js';
+import type { DeepPartial } from '../utils/deep-partial.js';
 import {
   apiConfig,
   solverConfig,
@@ -65,6 +66,18 @@ export type SodaxConfig = {
   api: ApiConfig; // API config used to interact with the Backend API
   solver: SolverConfig;
   relay: RelayConfig; // Relayer config to relay intents/user actions to the hub and vice versa
+};
+
+/**
+ * Options accepted by `new Sodax(...)`. A deep-partial override of the {@link SodaxConfig} data
+ * contract, plus the client-side `logger` runtime option which is deliberately kept OUT of
+ * `SodaxConfig` itself: `SodaxConfig` is the data shape fetched from / merged with the backend,
+ * whereas `logger` is a local sink that is resolved once and never fetched or overwritten.
+ *
+ * Keeping `logger` here (rather than on `SodaxConfig`) means `DeepPartial<SodaxConfig>` no longer
+ * makes the logger's methods optional, so the SDK can resolve `options.logger` without casting.
+ */
+export type SodaxOptions = DeepPartial<SodaxConfig> & {
   logger?: SodaxLoggerOption; // SDK log sink: 'console' (default) | 'silent' | a custom SodaxLogger. Resolved client-side; never fetched from or overwritten by the backend config.
 };
 

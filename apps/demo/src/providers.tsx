@@ -4,7 +4,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { SodaxWalletProvider, type SodaxWalletConfig } from '@sodax/wallet-sdk-react';
 import { SodaxProvider, createSodaxQueryClient } from '@sodax/dapp-kit';
 import { productionSolverConfig, stagingSolverConfig, devSolverConfig } from './constants';
-import { type SodaxConfig, type SolverConfig, ChainKeys, type DeepPartial, type RpcConfig } from '@sodax/sdk';
+import { type SodaxOptions, type SolverConfig, ChainKeys, type RpcConfig } from '@sodax/sdk';
 import { SolverEnv, useAppStore } from './zustand/useAppStore';
 import { createDatadogLogger } from './lib/loggers/datadogLogger';
 
@@ -95,7 +95,7 @@ export default function Providers({ children }: { children: ReactNode }) {
   }, []);
 
   // override sodax config for rpc urls and solver config
-  const sodaxConfig: DeepPartial<SodaxConfig> = useMemo(() => {
+  const sodaxConfig: SodaxOptions = useMemo(() => {
     // Opt-in observability sink (Sentry + Datadog), enabled via VITE_ENABLE_OBSERVABILITY.
     // `undefined` when off, which leaves the SDK on its default console logger.
     return {

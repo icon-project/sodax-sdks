@@ -8,6 +8,7 @@ Import everything from `@sodax/sdk`. The barrel re-exports the entire `@sodax/ty
 import {
   // Main entry
   Sodax,
+  type SodaxOptions, // constructor param: DeepPartial<SodaxConfig> & { logger? }
   type SodaxConfig,
   type DeepPartial,
 

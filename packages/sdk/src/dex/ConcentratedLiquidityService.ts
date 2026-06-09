@@ -432,7 +432,7 @@ export class ClService {
       const txResult = await this.spoke.sendMessage(sendMessageParams);
 
       if (!txResult.ok) {
-        this.config.logger.error('executeSupplyLiquidity error:', txResult.error);
+        this.config.logger.error('executeSupplyLiquidity error', txResult.error);
         return {
           ok: false,
           error: txResult.error,
@@ -447,7 +447,7 @@ export class ClService {
         },
       };
     } catch (error) {
-      this.config.logger.error('executeSupplyLiquidity error:', error);
+      this.config.logger.error('executeSupplyLiquidity error', error);
       return {
         ok: false,
         error,
@@ -763,7 +763,7 @@ export class ClService {
 
       return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
     } catch (error) {
-      this.config.logger.error('supplyLiquidity error:', error);
+      this.config.logger.error('supplyLiquidity error', error);
       return {
         ok: false,
         error,
@@ -934,7 +934,7 @@ export class ClService {
         },
       };
     } catch (error) {
-      this.config.logger.error('getPoolRewardConfig error:', error);
+      this.config.logger.error('getPoolRewardConfig error', error);
       return {
         ok: false,
         error: lookupFailed('dex', 'getPoolRewardConfig', error),
@@ -1007,7 +1007,7 @@ export class ClService {
       const txResult = await this.spoke.sendMessage(sendMessageParams);
 
       if (!txResult.ok) {
-        this.config.logger.error('executeClaimRewards error:', txResult.error);
+        this.config.logger.error('executeClaimRewards error', txResult.error);
         return {
           ok: false,
           error: txResult.error,
@@ -1022,7 +1022,7 @@ export class ClService {
         },
       };
     } catch (error) {
-      this.config.logger.error('executeClaimRewards error:', error);
+      this.config.logger.error('executeClaimRewards error', error);
       return {
         ok: false,
         error,
@@ -1072,7 +1072,7 @@ export class ClService {
 
       return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
     } catch (error) {
-      this.config.logger.error('claimRewards error:', error);
+      this.config.logger.error('claimRewards error', error);
       return {
         ok: false,
         error,
@@ -1126,7 +1126,7 @@ export class ClService {
         address: tokenAddress,
       };
     } catch (error) {
-      this.config.logger.error(`Failed to fetch token info for ${tokenAddress}:`, error);
+      this.config.logger.error(`Failed to fetch token info for ${tokenAddress}`, error);
       // Return fallback info if contract calls fail
       return {
         symbol: 'UNKNOWN',
@@ -1156,12 +1156,12 @@ export class ClService {
       const oneShare = BigInt(10 ** 18); // 1 share
       const result = await Erc4626Service.convertToAssets(statATokenAddress, oneShare, this.hubProvider.publicClient);
       if (!result.ok) {
-        this.config.logger.error('[getStatATokenConversionRate] Failed to get conversion rate:', result.error);
+        this.config.logger.error('[getStatATokenConversionRate] Failed to get conversion rate', result.error);
         return oneShare; // Return 1:1 as fallback
       }
       return result.value;
     } catch (error) {
-      this.config.logger.error('[getStatATokenConversionRate] Error:', error);
+      this.config.logger.error('[getStatATokenConversionRate] Error', error);
       return BigInt(10 ** 18); // Return 1:1 as fallback
     }
   }
@@ -1208,7 +1208,7 @@ export class ClService {
         underlyingToken,
       };
     } catch (error) {
-      this.config.logger.error(`[getTokenEnrichmentData] Failed to enrich token ${token.address}:`, error);
+      this.config.logger.error(`[getTokenEnrichmentData] Failed to enrich token ${token.address}`, error);
       return {
         token,
         isStatAToken: true,
@@ -1340,7 +1340,7 @@ export class ClService {
         },
       };
     } catch (error) {
-      this.config.logger.error('Failed to fetch pool data:', error);
+      this.config.logger.error('Failed to fetch pool data', error);
       return {
         ok: false,
         error: lookupFailed('dex', 'getPoolData', error),

@@ -80,7 +80,7 @@ export class ConfigService {
     this.api = api;
     this.sodax = config;
     this.userConfig = userConfig;
-    this.logger = logger ?? resolveLogger(config.logger);
+    this.logger = logger ?? resolveLogger(undefined);
     this.loadSodaxConfigDataStructures(config);
   }
 

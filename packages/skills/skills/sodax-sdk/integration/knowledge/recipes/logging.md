@@ -6,8 +6,9 @@ patching globals.
 
 ## Select a logger at construction
 
-`logger` is a `Sodax` constructor option (a field on `SodaxConfig`). It accepts a preset name or a
-custom implementation:
+`logger` is a `Sodax` constructor option — a field on `SodaxOptions` (the constructor's parameter
+type), kept off the `SodaxConfig` data contract because it is a client-side sink, not backend-fetched
+config. It accepts a preset name or a custom implementation:
 
 ```ts
 import { Sodax } from '@sodax/sdk';
@@ -22,8 +23,9 @@ dynamic config (read it back as `sodax.config.logger`). `await sodax.config.init
 chain config from the backend but **never** replaces the logger — the backend cannot set or overwrite
 it.
 
-> Combine with the other constructor options freely — `logger` merges alongside `chains` / `api` /
-> `solver` overrides in the same object. See [`initialize-sodax.md`](initialize-sodax.md).
+> Combine with the other constructor options freely — pass `logger` alongside `chains` / `api` /
+> `solver` overrides in the same object. The constructor splits `logger` off the data override before
+> merging, so it never lands in `sodax.instanceConfig`. See [`initialize-sodax.md`](initialize-sodax.md).
 
 ## Custom sink
 

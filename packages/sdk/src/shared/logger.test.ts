@@ -48,6 +48,23 @@ describe('consoleLogger', () => {
     expect(spy).toHaveBeenCalledWith('just a message');
     spy.mockRestore();
   });
+
+  for (const level of ['debug', 'info', 'warn'] as const) {
+    it(`forwards ${level}(message, data) to console.${level} when data is present`, () => {
+      const spy = vi.spyOn(console, level).mockImplementation(() => {});
+      const data = { k: 'v' };
+      consoleLogger[level]('a message', data);
+      expect(spy).toHaveBeenCalledWith('a message', data);
+      spy.mockRestore();
+    });
+
+    it(`omits the second console.${level} argument when no data is passed`, () => {
+      const spy = vi.spyOn(console, level).mockImplementation(() => {});
+      consoleLogger[level]('a message');
+      expect(spy).toHaveBeenCalledWith('a message');
+      spy.mockRestore();
+    });
+  }
 });
 
 describe('Sodax logger wiring', () => {

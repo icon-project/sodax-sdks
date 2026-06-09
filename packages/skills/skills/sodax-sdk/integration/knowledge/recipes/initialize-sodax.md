@@ -15,9 +15,10 @@ const result = sodax.config.isValidSpokeChainKey(ChainKeys.ARBITRUM_MAINNET);   
 ### With config override
 
 ```ts
-import { Sodax, ChainKeys, type SodaxConfig, type DeepPartial } from '@sodax/sdk';
+import { Sodax, ChainKeys, type SodaxOptions } from '@sodax/sdk';
 
-const config: DeepPartial<SodaxConfig> = {
+// `SodaxOptions` = `DeepPartial<SodaxConfig>` (the data override) plus the client-side `logger` option.
+const config: SodaxOptions = {
   // Per-chain overrides — merged with packaged defaults at the field level.
   chains: {
     [ChainKeys.SONIC_MAINNET]: { rpcUrl: process.env.SONIC_RPC_URL },

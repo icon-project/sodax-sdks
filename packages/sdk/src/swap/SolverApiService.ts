@@ -1,7 +1,7 @@
 import { invariant } from '../shared/utils/tiny-invariant.js';
 import { retry } from '../shared/utils/shared-utils.js';
 import type { ConfigService } from '../shared/config/ConfigService.js';
-import { consoleLogger } from '../shared/logger.js';
+import { silentLogger } from '../shared/logger.js';
 import {
   SolverIntentErrorCode,
   type Result,
@@ -115,7 +115,10 @@ export class SolverApiService {
         } satisfies SolverIntentQuoteResponse,
       };
     } catch (e: unknown) {
-      configService.logger.error(`[SolverApiService.getQuote] failed. Details: ${JSON.stringify(e, bigintReplacer)}`);
+      configService.logger.error(
+        '[SolverApiService.getQuote] failed',
+        e instanceof Error ? e : new Error(JSON.stringify(e, bigintReplacer)),
+      );
       return {
         ok: false,
         error: {
@@ -142,7 +145,7 @@ export class SolverApiService {
   public static async postExecution(
     request: SolverExecutionRequest,
     config: SolverConfig,
-    logger: SodaxLogger = consoleLogger,
+    logger: SodaxLogger = silentLogger,
   ): Promise<Result<SolverExecutionResponse, SolverErrorResponse>> {
     try {
       const response = await retry(() =>
@@ -167,7 +170,10 @@ export class SolverApiService {
         value: await response.json(),
       };
     } catch (e: unknown) {
-      logger.error(`[SolverApiService.postExecution] failed. Details: ${JSON.stringify(e, bigintReplacer)}`);
+      logger.error(
+        '[SolverApiService.postExecution] failed',
+        e instanceof Error ? e : new Error(JSON.stringify(e, bigintReplacer)),
+      );
       return {
         ok: false,
         error: {
@@ -192,7 +198,7 @@ export class SolverApiService {
   public static async getStatus(
     request: SolverIntentStatusRequest,
     config: SolverConfig,
-    logger: SodaxLogger = consoleLogger,
+    logger: SodaxLogger = silentLogger,
   ): Promise<Result<SolverIntentStatusResponse, SolverErrorResponse>> {
     invariant(request.intent_tx_hash.length > 0, 'Empty intent_tx_hash');
     try {
@@ -216,7 +222,10 @@ export class SolverApiService {
         value: await response.json(),
       };
     } catch (e: unknown) {
-      logger.error(`[SolverApiService.getStatus] failed. Details: ${JSON.stringify(e, bigintReplacer)}`);
+      logger.error(
+        '[SolverApiService.getStatus] failed',
+        e instanceof Error ? e : new Error(JSON.stringify(e, bigintReplacer)),
+      );
       return {
         ok: false,
         error: {
