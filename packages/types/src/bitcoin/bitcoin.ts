@@ -132,6 +132,14 @@ export interface IBitcoinWalletProvider extends ICoreWallet {
   signBip322Message(message: string): Promise<string>;
 
   /**
+   * Get the signer's public key as a hex string. Optional capability: required only for the
+   * money-market on-demand (borrow/withdraw) flow, where the relay needs the key to verify a
+   * BIP-322 (Schnorr/Taproot) signature — which is not public-key-recoverable. Wallets that
+   * cannot expose it omit this method; callers guard before use.
+   */
+  getPublicKey?(): Promise<string>;
+
+  /**
    * Send Bitcoin to an address
    * @param toAddress - Destination Bitcoin address
    * @param satoshis - Amount to send in satoshis
