@@ -196,3 +196,4 @@ Aave's RAY precision (27 decimals) is used for interest calculations under the h
 - v1 → v2 money market migration: [`features/money-market.md`](../../../migration-v1-to-v2/knowledge/features/money-market.md).
 - Architecture (hub-side wallet abstraction, ConfigService): [`../architecture.md`](../architecture.md) §§ 3, 4.
 - Stellar destinations need a trustline: [`../chain-specifics.md`](../chain-specifics.md).
+- NEAR destinations (borrow/withdraw to NEAR) need NEP-141 storage registration: [`../chain-specifics.md`](../chain-specifics.md).

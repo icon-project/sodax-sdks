@@ -168,6 +168,31 @@ Both are valid. `GetAddressType<typeof ChainKeys.NEAR_MAINNET>` accepts both via
 
 `NearWalletProvider` requires the `accountId` field at construction (alongside `privateKey`). Unlike EVM, NEAR can't derive an account from a key alone — keys are scoped to accounts.
 
+### Receiving tokens: NEP-141 storage registration
+
+Before a NEAR account can **receive** (hold a balance of) a NEP-141 token, it must pay a one-time storage bond on that token contract — delivering to an unregistered account fails. This gates any flow that delivers a token to a user on NEAR: swap output on NEAR, bridge into NEAR, money-market borrow/withdraw to NEAR. (Native NEAR is not a NEP-141 token and needs no registration.)
+
+The NEAR spoke service exposes two methods — reach it via `sodax.spoke.near` or `sodax.spoke.getSpokeService(ChainKeys.NEAR_MAINNET)`:
+
+- `isStorageRegistered(token, accountId): Promise<boolean>` — whether `accountId` can already receive `token`. Returns `true` for the native token (no NEP-141). Read-only; uses the configured NEAR RPC.
+- `registerStorage({ token, accountId, walletProvider, deposit?, raw? })` — submits a `storage_deposit` for `accountId`; returns the tx hash (or the unsigned tx when `raw: true`). `deposit` defaults to `NEAR_STORAGE_DEPOSIT` (0.00125 NEAR, exported from `@sodax/sdk`) — override per token if its `storage_balance_bounds.min` differs. Throws for the native token. The recipient's NEAR wallet signs it.
+
+Gate pattern, run before delivering to NEAR:
+
+```ts
+// @ai-snippets-skip — illustrative.
+const near = sodax.spoke.near;
+if (!(await near.isStorageRegistered(token, accountId))) {
+  await near.registerStorage({ token, accountId, walletProvider });
+}
+```
+
+The `sodax-dapp-kit` skill wraps these as the `useNearStorageCheck` / `useRegisterNearStorage` hooks plus a `resolveNearStorageGate` helper (integration mode).
+
+### `ft_transfer_call` attaches 1 yoctoNEAR
+
+Deposits **from** NEAR (`deposit()` / `fillIntent()` on the NEAR spoke service) call the token's `ft_transfer_call`, which per NEP-141 must carry **exactly 1 yoctoNEAR** — the spoke service attaches it automatically. The signer only needs a small NEAR balance to cover gas (the 1 yoctoNEAR is dust). Native-token deposits use a plain `transfer` and aren't subject to this.
+
 ---
 
 ## Other non-EVM chains

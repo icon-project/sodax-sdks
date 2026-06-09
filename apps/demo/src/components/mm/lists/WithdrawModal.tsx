@@ -20,6 +20,7 @@ import {
   getTokenOnChain,
 } from '@/lib/utils';
 import { logger } from '@/lib/logger';
+import { useNearStorageGate } from '@/hooks/useNearStorageGate';
 import { ErrorAlert } from '../ErrorAlert';
 import { extractTxHash } from '@/lib/extractTxHash';
 import { getChainName } from '@/constants';
@@ -65,10 +66,18 @@ export function WithdrawModal({
   const destinationToken = getTokenOnChain(sodax, token.symbol, dstChainKey) ?? token;
 
   const sourceWalletProvider = useWalletProvider({ xChainId: srcChainKey });
+  const destWalletProvider = useWalletProvider({ xChainId: dstChainKey });
   const { address: srcAddress } = useXAccount({ xChainId: srcChainKey });
   const { address: dstAddress } = useXAccount({ xChainId: dstChainKey });
 
   const isSameChain = srcChainKey === dstChainKey;
+
+  const nearStorage = useNearStorageGate({
+    dstChainKey,
+    token: destinationToken.address,
+    accountId: dstAddress,
+    walletProvider: destWalletProvider,
+  });
 
   const { mutateAsync: withdraw, isPending, error, reset: resetError } = useWithdraw();
 
@@ -149,6 +158,10 @@ export function WithdrawModal({
     } catch (err) {
       logger.error('Withdraw failed', err);
     }
+  };
+
+  const handleRegisterNearStorage = async (): Promise<void> => {
+    await nearStorage.registerStorage();
   };
 
   const handleMaxClick = (): void => {
@@ -288,6 +301,12 @@ export function WithdrawModal({
           </div>
         )}
 
+        {nearStorage.needsRegistration && (
+          <div className="min-w-0 w-full">
+            <ErrorAlert text="Recipient is not storage-registered for this token on NEAR. Register storage to receive the withdrawn funds." />
+          </div>
+        )}
+
         {!isWrongChain && !!srcAddress && !!amount && (
           <p className="text-xs text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-lg border border-amber-200 dark:border-amber-800">
             Make sure you have enough <strong>{getNativeTokenSymbol(srcChainKey)}</strong> on{' '}
@@ -296,6 +315,26 @@ export function WithdrawModal({
         )}
 
         <DialogFooter className="w-full min-w-0 flex-col gap-2 sm:justify-start">
+          {nearStorage.isNear && (nearStorage.isChecking || nearStorage.needsRegistration) && (
+            <Button
+              className="w-full"
+              variant="cherry"
+              onClick={handleRegisterNearStorage}
+              disabled={nearStorage.isChecking || nearStorage.isRegistering}
+            >
+              {nearStorage.isChecking ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Checking storage…
+                </>
+              ) : nearStorage.isRegistering ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Registering…
+                </>
+              ) : (
+                'Register Storage on NEAR'
+              )}
+            </Button>
+          )}
           {isWrongChain ? (
             <Button className="w-full" variant="cherry" onClick={handleSwitchChain} disabled={isBusy}>
               Switch Chain
@@ -330,6 +369,7 @@ export function WithdrawModal({
                 !params ||
                 !sourceWalletProvider ||
                 amount === '' ||
+                nearStorage.blocksAction ||
                 (maxWithdraw !== undefined &&
                   maxWithdraw !== '0' &&
                   Number.parseFloat(amount.replace(',', '.')) > Number.parseFloat(maxWithdraw))

@@ -179,6 +179,9 @@ Comprehensive hook table across 11 feature domains. Use this when you know the f
 | `useEstimateGas` | Mutation | Estimate gas for raw tx |
 | `useStellarTrustlineCheck` | Query | Check Stellar trustline |
 | `useRequestTrustline` | Mutation | Request a Stellar trustline |
+| `useNearStorageCheck` | Query | Check NEP-141 storage registration (NEAR) |
+| `useRegisterNearStorage` | Mutation | Submit NEP-141 `storage_deposit` (NEAR) |
+| `resolveNearStorageGate` | Utility | Derive gate flags from a `useNearStorageCheck` result (unwrapped) |
 | `useSafeMutation` | Internal | The wrapper every mutation hook calls |
 | `unwrapResult` | Internal | `Result<T>` → throw / return |
 | `toResult` | Internal | `Promise<T>` → `Result<T>` |

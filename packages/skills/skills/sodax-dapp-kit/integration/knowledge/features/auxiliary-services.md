@@ -94,6 +94,9 @@ useGetUserHubWalletAddress({ params, queryOptions }); // Hub wallet via wallet r
 useEstimateGas({ mutationOptions });                // Gas estimation for raw tx
 useStellarTrustlineCheck({ params, queryOptions });
 useRequestTrustline({ mutationOptions });
+useNearStorageCheck({ params, queryOptions });      // NEP-141 storage registration check (NEAR)
+useRegisterNearStorage({ mutationOptions });        // NEP-141 storage_deposit (NEAR)
+resolveNearStorageGate(chainKey, check);            // unwrapped util: gate-state from a useNearStorageCheck result
 ```
 
 ### `useXBalances` shape
@@ -143,6 +146,44 @@ if (hasTrustline === false) {
   await requestTrustline({ token, amount, srcChainKey: ChainKeys.STELLAR_MAINNET, walletProvider });
 }
 ```
+
+### NEAR storage registration
+
+NEP-141 accounts must pay a one-time storage bond before they can receive a token — delivering to an unregistered account fails. The receive-side analogue of Stellar trustlines: gate any flow that delivers a token to the user on NEAR (swap output on NEAR, bridge into NEAR, money-market borrow/withdraw to NEAR). Pre-flight with `useNearStorageCheck`; fix with `useRegisterNearStorage`.
+
+```ts
+// @ai-snippets-skip — illustrative only; real types pulled into agents below.
+// useNearStorageCheck is a canonical read hook: { params: { token, accountId, chainId }, queryOptions }.
+// `chainId` is a SpokeChainKey typed loosely — the hook returns `true` for non-NEAR chains (safe to
+// gate conditionally) and `true` for native NEAR (not a NEP-141 token). data is a boolean;
+// queryKey: ['shared', 'nearStorageCheck', token, accountId].
+const { data: isRegistered, isLoading } = useNearStorageCheck({
+  params: { token, accountId, chainId: ChainKeys.NEAR_MAINNET },
+});
+
+// useRegisterNearStorage IS a canonical mutation hook: { mutationOptions }, returns
+// SafeUseMutationResult. Domain inputs flow through mutate / mutateAsync / mutateAsyncSafe.
+// Vars: { token, accountId, walletProvider, deposit? } — deposit defaults to the NEP-141
+// storage bond (0.00125 NEAR). mutationKey: ['shared', 'registerNearStorage'].
+const { mutateAsyncSafe: registerStorage } = useRegisterNearStorage();
+if (isRegistered === false) {
+  await registerStorage({ token, accountId, walletProvider });
+}
+```
+
+Derive UI gate flags with the unwrapped `resolveNearStorageGate` util (no hook) so the check/register hooks aren't re-wired at every call site:
+
+```ts
+// @ai-snippets-skip — illustrative only.
+// resolveNearStorageGate(chainKey, check) reads `isLoading` + `data` off the useNearStorageCheck
+// result and returns { isNear, needsRegistration, blocksAction }:
+//   needsRegistration — show the register action (check resolved AND not registered)
+//   blocksAction      — keep the downstream action disabled (still checking OR needs registration)
+const check = useNearStorageCheck({ params: { token, accountId, chainId: dstChainKey } });
+const { needsRegistration, blocksAction } = resolveNearStorageGate(dstChainKey, check);
+```
+
+The underlying SDK methods (`isStorageRegistered` / `registerStorage` on the NEAR spoke service, and the `NEAR_STORAGE_DEPOSIT` constant) are documented in the `sodax-sdk` skill (integration mode).
 
 ## Default polling intervals
 
