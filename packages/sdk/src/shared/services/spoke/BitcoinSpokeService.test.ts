@@ -620,6 +620,122 @@ describe('BitcoinSpokeService.deposit', () => {
       Object.defineProperty(btcSpoke, 'walletMode', { value: original, configurable: true });
     }
   });
+
+  it('USER + all UTXOs mempool-spent → throws "No UTXOs available for deposit"', async () => {
+    // fetchMempoolSpentOutpoints returns both UTXOs as spent — the filter leaves nothing.
+    const original = btcSpoke.walletMode;
+    Object.defineProperty(btcSpoke, 'walletMode', { value: 'USER', configurable: true });
+    setFetch(url => {
+      if (url.endsWith('/utxo')) {
+        return json([
+          { txid: 'aa', vout: 0, value: 30_000, status: { confirmed: true } },
+          { txid: 'bb', vout: 1, value: 30_000, status: { confirmed: true } },
+        ]);
+      }
+      if (url.endsWith('/txs/mempool')) {
+        // Both UTXOs already spent in mempool
+        return json([{ vin: [{ txid: 'aa', vout: 0 }, { txid: 'bb', vout: 1 }] }]);
+      }
+      return new Response(null, { status: 404 });
+    });
+    try {
+      await expect(
+        btcSpoke.deposit({
+          srcChainKey: BTC,
+          srcAddress: USER_ADDR,
+          to: HUB_WALLET,
+          token: 'BTC',
+          amount: 50_000n,
+          data: '0x' as Hex,
+          raw: false,
+          walletProvider: mockBtcProvider,
+        }),
+      ).rejects.toThrow(/No UTXOs available/);
+    } finally {
+      Object.defineProperty(btcSpoke, 'walletMode', { value: original, configurable: true });
+    }
+  });
+
+  it('USER + one UTXO mempool-spent → buildDepositPsbt receives only the unspent UTXO', async () => {
+    // fetchMempoolSpentOutpoints marks 'aa:0' as spent; 'bb:1' is clean.
+    // buildDepositPsbt is stubbed to prevent real PSBT construction.
+    const original = btcSpoke.walletMode;
+    Object.defineProperty(btcSpoke, 'walletMode', { value: 'USER', configurable: true });
+    setFetch(url => {
+      if (url.endsWith('/utxo')) {
+        return json([
+          { txid: 'aa', vout: 0, value: 30_000, status: { confirmed: true } },
+          { txid: 'bb', vout: 1, value: 30_000, status: { confirmed: true } },
+        ]);
+      }
+      if (url.endsWith('/txs/mempool')) {
+        return json([{ vin: [{ txid: 'aa', vout: 0 }] }]); // only 'aa:0' is spent
+      }
+      return new Response(null, { status: 404 });
+    });
+    const BTC_TOKEN = btcConfig.supportedTokens.BTC.address;
+    const buildSpy = vi
+      .spyOn(btcSpoke, 'buildDepositPsbt')
+      .mockResolvedValueOnce({ data: 'fakePsbt' } as never);
+    vi.spyOn(btcSpoke, 'signAndBroadcastTransaction').mockResolvedValueOnce(TX_HASH as never);
+    try {
+      await btcSpoke.deposit({
+        srcChainKey: BTC,
+        srcAddress: USER_ADDR,
+        to: HUB_WALLET,
+        token: BTC_TOKEN,
+        amount: 20_000n,
+        data: '0x' as Hex,
+        raw: false,
+        walletProvider: mockBtcProvider,
+      });
+      // buildDepositPsbt receives only the UTXOs that survived the filter
+      const receivedUtxos = buildSpy.mock.calls[0]?.[6];
+      expect(receivedUtxos).toHaveLength(1);
+      expect(receivedUtxos[0]).toMatchObject({ txid: 'bb', vout: 1 });
+    } finally {
+      Object.defineProperty(btcSpoke, 'walletMode', { value: original, configurable: true });
+    }
+  });
+
+  it('USER + mempool endpoint non-ok → all UTXOs pass through (mempool check is non-blocking)', async () => {
+    // fetchMempoolSpentOutpoints returns empty Set when the endpoint is unavailable —
+    // the deposit must not be blocked by a mempool API outage.
+    const original = btcSpoke.walletMode;
+    Object.defineProperty(btcSpoke, 'walletMode', { value: 'USER', configurable: true });
+    setFetch(url => {
+      if (url.endsWith('/utxo')) {
+        return json([{ txid: 'cc', vout: 0, value: 80_000, status: { confirmed: true } }]);
+      }
+      if (url.endsWith('/txs/mempool')) {
+        return new Response(null, { status: 503 }); // mempool endpoint down
+      }
+      return new Response(null, { status: 404 });
+    });
+    const BTC_TOKEN = btcConfig.supportedTokens.BTC.address;
+    const buildSpy = vi
+      .spyOn(btcSpoke, 'buildDepositPsbt')
+      .mockResolvedValueOnce({ data: 'fakePsbt' } as never);
+    vi.spyOn(btcSpoke, 'signAndBroadcastTransaction').mockResolvedValueOnce(TX_HASH as never);
+    try {
+      await btcSpoke.deposit({
+        srcChainKey: BTC,
+        srcAddress: USER_ADDR,
+        to: HUB_WALLET,
+        token: BTC_TOKEN,
+        amount: 20_000n,
+        data: '0x' as Hex,
+        raw: false,
+        walletProvider: mockBtcProvider,
+      });
+      // All UTXOs (including the one that could have been filtered) are forwarded
+      const receivedUtxos = buildSpy.mock.calls[0]?.[6];
+      expect(receivedUtxos).toHaveLength(1);
+      expect(receivedUtxos[0]).toMatchObject({ txid: 'cc', vout: 0 });
+    } finally {
+      Object.defineProperty(btcSpoke, 'walletMode', { value: original, configurable: true });
+    }
+  });
 });
 
 // =========================================================================
