@@ -7,7 +7,14 @@ import { ChainSelector } from '@/components/shared/ChainSelector';
 import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
 import { parseUnits, formatUnits } from 'viem';
 import type { FormatUserSummaryResponse, MoneyMarketBorrowParams, SpokeChainKey, XToken } from '@sodax/sdk';
-import { useBorrow, useReservesUsdFormat, useAToken, useUserReservesData, useSodaxContext } from '@sodax/dapp-kit';
+import {
+  useBorrow,
+  useReservesUsdFormat,
+  useAToken,
+  useUserReservesData,
+  useSodaxContext,
+  useNearStorageGate,
+} from '@sodax/dapp-kit';
 import { buildMmDeliveryParams } from '@/lib/mmBtc';
 import { useBtcTradingBalance } from '@/hooks/useBtcTradingBalance';
 import { useAppStore } from '@/zustand/useAppStore';
@@ -19,6 +26,7 @@ import {
   formatDecimalForDisplay,
   getSafeMaxAmountForInput,
   truncateToDecimals,
+  formatMutationFailureMessage,
 } from '@/lib/utils';
 import { logger } from '@/lib/logger';
 import { useReserveMetrics } from '@/hooks/useReserveMetrics';
@@ -61,6 +69,7 @@ export function BorrowModal({
   const [amount, setAmount] = useState('');
   const [step, setStep] = useState<'form' | 'success'>('form');
   const [successData, setSuccessData] = useState<ActionSuccessData | null>(null);
+  const [nearStorageError, setNearStorageError] = useState<string | null>(null);
   const { selectedChainId, openWalletModal, isWalletModalOpen } = useAppStore();
   const { sodax } = useSodaxContext();
 
@@ -71,6 +80,7 @@ export function BorrowModal({
   const destinationToken = getTokenOnChain(sodax, token.symbol, dstChainKey);
 
   const sourceWalletProvider = useWalletProvider({ xChainId: srcChainKey });
+  const destWalletProvider = useWalletProvider({ xChainId: dstChainKey });
   const { address: srcAddress } = useXAccount({ xChainId: srcChainKey });
   const { address: dstAddress } = useXAccount({ xChainId: dstChainKey });
 
@@ -81,6 +91,13 @@ export function BorrowModal({
   const btcDeliveryNotReady = isBtcDelivery && !!dstAddress && !deliveryTradingAddress;
 
   const isSameChain = srcChainKey === dstChainKey;
+
+  const nearStorage = useNearStorageGate({
+    dstChainKey,
+    token: destinationToken?.address,
+    accountId: dstAddress,
+    walletProvider: destWalletProvider,
+  });
 
   const { data: formattedReserves } = useReservesUsdFormat();
   const { data: destinationUserReserves } = useUserReservesData({
@@ -238,6 +255,15 @@ export function BorrowModal({
     }
   };
 
+  const handleRegisterNearStorage = async (): Promise<void> => {
+    const result = await nearStorage.registerStorage();
+    if (result && !result.ok) {
+      setNearStorageError(formatMutationFailureMessage(result.error, 'Storage registration failed'));
+      return;
+    }
+    setNearStorageError(null);
+  };
+
   const handleMaxClick = (): void => {
     if (isMaxBorrowEffectivelyZero) return;
     setAmount(getSafeMaxAmountForInput(maxBorrow));
@@ -252,6 +278,7 @@ export function BorrowModal({
       setAmount('');
       setStep('form');
       setSuccessData(null);
+      setNearStorageError(null);
       setDstChainKey(token.chainKey);
       resetBorrowError?.();
     }
@@ -365,6 +392,17 @@ export function BorrowModal({
           </div>
         )}
 
+        {nearStorage.needsRegistration && (
+          <div className="min-w-0 w-full">
+            <ErrorAlert text="Recipient is not storage-registered for this token on NEAR. Register storage to receive the borrowed funds." />
+          </div>
+        )}
+        {nearStorageError && (
+          <div className="min-w-0 w-full">
+            <ErrorAlert text={nearStorageError} />
+          </div>
+        )}
+
         {!isWrongChain && !!srcAddress && !!parsedAmount && (
           <p className="text-xs text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-lg border border-amber-200 dark:border-amber-800">
             Make sure you have enough <strong>{getNativeTokenSymbol(srcChainKey)}</strong> on{' '}
@@ -373,6 +411,26 @@ export function BorrowModal({
         )}
 
         <DialogFooter className="w-full min-w-0 flex-col gap-2 sm:justify-start">
+          {nearStorage.isNear && (nearStorage.isChecking || nearStorage.needsRegistration) && (
+            <Button
+              className="w-full"
+              variant="cherry"
+              onClick={handleRegisterNearStorage}
+              disabled={nearStorage.isChecking || nearStorage.isRegistering}
+            >
+              {nearStorage.isChecking ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Checking storage…
+                </>
+              ) : nearStorage.isRegistering ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Registering…
+                </>
+              ) : (
+                'Register Storage on NEAR'
+              )}
+            </Button>
+          )}
           {isWrongChain ? (
             <Button className="w-full" variant="cherry" onClick={handleSwitchChain} disabled={isPending}>
               Switch Chain
@@ -388,7 +446,7 @@ export function BorrowModal({
               type="button"
               variant="default"
               onClick={handleBorrow}
-              disabled={!params || !sourceWalletProvider}
+              disabled={!params || !sourceWalletProvider || nearStorage.blocksAction}
             >
               Borrow {token.symbol}
             </Button>

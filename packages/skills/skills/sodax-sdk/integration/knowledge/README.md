@@ -13,8 +13,10 @@ This tree documents v2 of the SDK for **new consumers** building against it. If 
 | [`features/staking.md`](features/staking.md) | `StakingService`: SODA → xSoda — stake, unstake, instant unstake, claim, cancel; ratio + info reads. |
 | [`features/bridge.md`](features/bridge.md) | `BridgeService`: cross-chain token transfer via vault — `bridge`, `createBridgeIntent`, `getBridgeableAmount`, `getBridgeableTokens`. |
 | [`features/dex.md`](features/dex.md) | `ClService` (concentrated liquidity) + `AssetService`: position lifecycle (mint/increase/decrease), claim rewards, asset deposit/withdraw. |
-| [`features/icx-bnusd-baln.md`](features/icx-bnusd-baln.md) | `MigrationService` (the SDK module): ICX, bnUSD, BALN sub-services + lock management. |
-| [`features/auxiliary-services.md`](features/auxiliary-services.md) | `PartnerService` + `RecoveryService` + `BackendApiService` — small APIs grouped together. |
+| [`features/migration.md`](features/migration.md) | `MigrationService` (the SDK module): ICX, bnUSD, BALN sub-services + lock management. |
+| [`features/partner.md`](features/partner.md) | `PartnerService` — partner-fee handling. |
+| [`features/recovery.md`](features/recovery.md) | `RecoveryService` — withdraw stuck hub-wallet assets. |
+| [`features/backend-api.md`](features/backend-api.md) | `BackendApiService` — HTTP client for backend reads + swap-tx submission. |
 | [`recipes/`](recipes/) | Copy-pasteable patterns: SDK initialization, `Result` + error discrimination, raw-tx flow, signed-tx flow, chain-key narrowing + cast-at-boundary, testing (mocks/stubs), gas estimation, backend-server init. |
 | [`reference/`](reference/) | Lookup tables: 20-chain `ChainKeys` table with family + relay id, `I*WalletProvider` interfaces, 13 `SodaxErrorCode` meanings + per-feature narrow unions, public API surface (incl. `@sodax/types` re-export rule), glossary. |
 | [`chain-specifics.md`](chain-specifics.md) | Non-EVM quirks — Stellar trustline check/request, Bitcoin PSBT + Bound Exchange auth/session, Solana PDA derivation, ICON Hana wallet + chain-key string, NEAR connector discovery. |

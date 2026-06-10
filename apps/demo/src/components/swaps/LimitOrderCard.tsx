@@ -288,7 +288,7 @@ export default function LimitOrderCard() {
               </SelectTrigger>
               <SelectContent>
                 {getSupportedSolverTokens(sourceChain).map(token => (
-                  <SelectItem key={token.address} value={token.symbol}>
+                  <SelectItem key={`${token.address}-${token.symbol}`} value={token.symbol}>
                     {token.symbol}
                   </SelectItem>
                 ))}
@@ -339,7 +339,7 @@ export default function LimitOrderCard() {
               </SelectTrigger>
               <SelectContent>
                 {getSupportedSolverTokens(destChain).map(token => (
-                  <SelectItem key={token.address} value={token.symbol}>
+                  <SelectItem key={`${token.address}-${token.symbol}`} value={token.symbol}>
                     {token.symbol}
                   </SelectItem>
                 ))}

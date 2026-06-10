@@ -44,6 +44,7 @@ import { isSodaxError, SodaxError } from '../errors/SodaxError.js';
 const mocks = vi.hoisted(() => ({
   sonicCreateSwapIntent: vi.fn(),
   constructCreateIntentData: vi.fn(),
+  reconstructCreateIntentData: vi.fn(),
   encodeCancelIntent: vi.fn().mockReturnValue({
     address: '0x0000000000000000000000000000000000000000',
     value: 0n,
@@ -79,6 +80,7 @@ vi.mock('../shared/services/spoke/SonicSpokeService.js', () => {
 vi.mock('./EvmSolverService.js', () => ({
   EvmSolverService: {
     constructCreateIntentData: mocks.constructCreateIntentData,
+    reconstructCreateIntentData: mocks.reconstructCreateIntentData,
     encodeCancelIntent: mocks.encodeCancelIntent,
     encodeCreateIntent: mocks.encodeCreateIntent,
     getIntent: mocks.getIntent,
@@ -1490,6 +1492,47 @@ describe('SwapService.getIntentSubmitTxExtraData', () => {
   });
 });
 
+describe('SwapService.reconstructRelayData', () => {
+  it('reconstructs relay data for a spoke source (isHubSource = false)', () => {
+    const intent = makeIntent(ChainKeys.BSC_MAINNET);
+    mocks.reconstructCreateIntentData.mockReturnValueOnce('0xspokepayload');
+
+    const result = sodax.swaps.reconstructRelayData(intent);
+
+    expect(result).toEqual({ ok: true, value: { address: intent.creator, payload: '0xspokepayload' } });
+    expect(mocks.reconstructCreateIntentData).toHaveBeenCalledWith(intent, intentsContract, false);
+  });
+
+  it('reconstructs relay data for a Sonic-hub source (isHubSource = true)', () => {
+    const intent = makeIntent(ChainKeys.SONIC_MAINNET);
+    mocks.reconstructCreateIntentData.mockReturnValueOnce('0xhubpayload');
+
+    const result = sodax.swaps.reconstructRelayData(intent);
+
+    expect(result).toEqual({ ok: true, value: { address: intent.creator, payload: '0xhubpayload' } });
+    expect(mocks.reconstructCreateIntentData).toHaveBeenCalledWith(intent, intentsContract, true);
+  });
+
+  it('returns ok:false when intent.srcChain is not a valid relay chain id', () => {
+    vi.spyOn(sodax.config, 'isValidIntentRelayChainId').mockReturnValue(false);
+
+    const result = sodax.swaps.reconstructRelayData(makeIntent(ChainKeys.BSC_MAINNET));
+
+    expect(result.ok).toBe(false);
+    expect(mocks.reconstructCreateIntentData).not.toHaveBeenCalled();
+  });
+
+  it('returns ok:false when intent.dstChain is not a valid relay chain id', () => {
+    // srcChain passes, dstChain fails
+    vi.spyOn(sodax.config, 'isValidIntentRelayChainId').mockReturnValueOnce(true).mockReturnValueOnce(false);
+
+    const result = sodax.swaps.reconstructRelayData(makeIntent(ChainKeys.BSC_MAINNET));
+
+    expect(result.ok).toBe(false);
+    expect(mocks.reconstructCreateIntentData).not.toHaveBeenCalled();
+  });
+});
+
 describe('SwapService.getSolvedIntentPacket', () => {
   it('forwards params to waitUntilIntentExecuted and returns its Result on success', async () => {
     const packet = { dst_tx_hash: '0xdstTxHash' } as never;
@@ -1532,7 +1575,7 @@ describe('SwapService.getStatus', () => {
     const result = await sodax.swaps.getStatus(request);
 
     expect(result).toBe(statusResult);
-    expect(mocks.solverGetStatus).toHaveBeenCalledWith(request, sodax.swaps.solver);
+    expect(mocks.solverGetStatus).toHaveBeenCalledWith(request, sodax.swaps.solver, sodax.swaps.config.logger);
   });
 
   it('forwards a SolverErrorResponse failure from SolverApiService.getStatus', async () => {
@@ -1554,7 +1597,7 @@ describe('SwapService.postExecution', () => {
     const result = await sodax.swaps.postExecution(request);
 
     expect(result).toBe(execResult);
-    expect(mocks.solverPostExecution).toHaveBeenCalledWith(request, sodax.swaps.solver);
+    expect(mocks.solverPostExecution).toHaveBeenCalledWith(request, sodax.swaps.solver, sodax.swaps.config.logger);
   });
 
   it('wraps a SolverErrorResponse failure as SWAP_SOLVER_API_ERROR with solver code on context', async () => {
@@ -1876,6 +1919,7 @@ describe('SwapService.swap', () => {
     expect(mocks.solverPostExecution).toHaveBeenCalledWith(
       expect.objectContaining({ intent_tx_hash: '0xsonicTx' }),
       sodax.swaps.solver,
+      sodax.swaps.config.logger,
     );
     // The relay path must NOT have been invoked for hub-chain srcChain.
     expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
@@ -1898,6 +1942,7 @@ describe('SwapService.swap', () => {
     expect(mocks.solverPostExecution).toHaveBeenCalledWith(
       expect.objectContaining({ intent_tx_hash: '0xdstTx' }),
       sodax.swaps.solver,
+      sodax.swaps.config.logger,
     );
   });
 

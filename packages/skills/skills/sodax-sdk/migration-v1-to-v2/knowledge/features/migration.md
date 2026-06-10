@@ -2,7 +2,7 @@
 
 Pure-SDK migration playbook for `MigrationService` (the SDK module — not v1→v2 SDK porting).
 
-Pair: [`features/icx-bnusd-baln.md`](../../../integration/knowledge/features/icx-bnusd-baln.md).
+Pair: [`features/migration.md`](../../../integration/knowledge/features/migration.md).
 
 ## TL;DR
 
@@ -147,5 +147,5 @@ grep -rE "spokeProvider:\s*\w+|migrateBnUSDForward\b|migrateBnUSDReverse\b|isMig
 
 ## Cross-references
 
-- v2 token migration usage: [`features/icx-bnusd-baln.md`](../../../integration/knowledge/features/icx-bnusd-baln.md).
+- v2 token migration usage: [`features/migration.md`](../../../integration/knowledge/features/migration.md).
 - Cross-cutting prerequisites listed in [`../README.md`](../README.md).

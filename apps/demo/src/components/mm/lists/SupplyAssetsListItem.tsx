@@ -186,7 +186,13 @@ export function SupplyAssetsListItem({
       {/* Actions */}
       <TableCell className="px-6 py-5">
         <div className="flex items-center gap-2">
-          <Button variant="cherry" size="sm" onClick={() => onSupplyClick(token)} className="flex-1 min-w-[85px]">
+          <Button
+            variant="cherry"
+            size="sm"
+            onClick={() => onSupplyClick(token)}
+            disabled={token.access === 'withdrawOnly'}
+            className="flex-1 min-w-[85px]"
+          >
             Supply
           </Button>
           <Button
@@ -195,7 +201,7 @@ export function SupplyAssetsListItem({
             onClick={() => {
               onWithdrawClick(token, maxWithdrawExact, isHfLimited);
             }}
-            disabled={!hasSupply}
+            disabled={!hasSupply || token.access === 'depositOnly'}
             className="flex-1 min-w-[85px]"
           >
             Withdraw

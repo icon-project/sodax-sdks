@@ -223,9 +223,9 @@ export class PartnerFeeClaimService {
         if (typeof balanceResult === 'bigint') {
           balance = balanceResult;
         } else {
-          console.warn(
-            `[PartnerFeeClaimService] Unexpected balance result format for ${entry.hubAsset.symbol} (${entry.assetAddress}):`,
-            balanceResult,
+          this.config.logger.warn(
+            `[PartnerFeeClaimService] Unexpected balance result format for ${entry.hubAsset.symbol} (${entry.assetAddress})`,
+            { balanceResult },
           );
           balance = 0n;
         }
@@ -609,6 +609,7 @@ export class PartnerFeeClaimService {
       const solverExecutionResponse = await SolverApiService.postExecution(
         { intent_tx_hash: intentTxHash },
         this.config.solver,
+        this.config.logger,
       );
 
       if (!solverExecutionResponse.ok) {

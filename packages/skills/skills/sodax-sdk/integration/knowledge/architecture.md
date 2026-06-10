@@ -95,7 +95,7 @@ The chain key is the bridge between the type system and runtime routing.
 The `Sodax` class is the public entry point. It constructs and wires every service once at construction time, then reuses them across calls:
 
 ```ts
-const sodax = new Sodax(/* optional DeepPartial<SodaxConfig> */);
+const sodax = new Sodax(/* optional SodaxOptions */);
 await sodax.config.initialize();   // fetch dynamic config; fall back to packaged defaults
 
 // All feature services accessed off the instance:
@@ -127,10 +127,12 @@ All feature services receive `{ hubProvider, config, spoke }` via constructor in
 ### Constructor
 
 ```ts
-import { Sodax, type SodaxConfig, type DeepPartial } from '@sodax/sdk';
+import { Sodax, type SodaxOptions } from '@sodax/sdk';
 
-new Sodax(config?: DeepPartial<SodaxConfig>): Sodax;
+new Sodax(config?: SodaxOptions): Sodax;
 ```
+
+`SodaxOptions` is `DeepPartial<SodaxConfig> & { logger?: SodaxLoggerOption }` — a deep-partial override of the `SodaxConfig` data contract, plus the client-side `logger` sink (kept off `SodaxConfig` itself; see [`recipes/logging.md`](recipes/logging.md)).
 
 `SodaxConfig` has exactly **10 fields** (all required at the type level, but `DeepPartial` makes every leaf optional):
 
@@ -356,23 +358,7 @@ class SodaxError<C extends SodaxErrorCode = SodaxErrorCode> extends Error {
 
 ### The 13 codes
 
-| Code | Meaning |
-|---|---|
-| `VALIDATION_FAILED` | Pre-flight invariant tripped. |
-| `INTENT_CREATION_FAILED` | Building the intent / payload failed. |
-| `EXECUTION_FAILED` | Orchestrator-level catch-all for multi-step ops. |
-| `TX_VERIFICATION_FAILED` | Spoke-side `verifyTxHash` returned false / threw. |
-| `TX_SUBMIT_FAILED` | Spoke tx landed; relay POST submit failed. |
-| `RELAY_TIMEOUT` | Destination packet didn't reach `executed` within timeout. |
-| `RELAY_FAILED` | Relay polling outage / unrecognised relay error. |
-| `APPROVE_FAILED` | Token approval call failed. |
-| `ALLOWANCE_CHECK_FAILED` | Reading on-chain allowance failed. |
-| `GAS_ESTIMATION_FAILED` | Gas estimation returned an error. |
-| `LOOKUP_FAILED` | Read-only on-chain query / off-chain config fetch. |
-| `EXTERNAL_API_ERROR` | Upstream API call failed (solver, backend). |
-| `UNKNOWN` | Last-resort catch in an outer `try`. Should be rare. |
-
-The full per-code semantics, common context fields, per-feature narrow unions, and retry guidance are in [`reference/`](reference/) § "Error codes".
+The closed code vocabulary is the same 13 names across every feature — see [`reference/error-codes.md`](reference/error-codes.md) for the full table, per-code semantics, common `context` field shapes, per-feature narrow unions, and retry guidance.
 
 ### `(feature, code)` discrimination
 
@@ -518,7 +504,7 @@ You drop down to the relay layer only when:
 
 ### Cross-references
 
-- `RecoveryService` for pulling stuck hub-wallet assets back to a spoke chain: see [`features/auxiliary-services.md`](features/auxiliary-services.md).
+- `RecoveryService` for pulling stuck hub-wallet assets back to a spoke chain: see [`features/recovery.md`](features/recovery.md).
 - Per-feature error codes related to relay (e.g. `'TX_SUBMIT_FAILED'`, `'RELAY_TIMEOUT'`): [`reference/`](reference/) § "Error codes".
 
 ---

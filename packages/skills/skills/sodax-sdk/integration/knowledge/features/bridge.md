@@ -76,6 +76,42 @@ const { tx, intent, relayData } = result.value;
 // Submit relayData.payload via your own relay infrastructure if needed.
 ```
 
+### Hub as source (Sonic → spoke)
+
+`srcChainKey` accepts `ChainKeys.SONIC_MAINNET` too — the SDK routes through the user's hub-wallet abstraction (instead of a spoke deposit) and then triggers the destination withdrawal. The call shape is the same; only the chain key changes:
+
+```ts
+const sodaSonic = sodax.config.findSupportedTokenBySymbol(ChainKeys.SONIC_MAINNET, 'SODA');
+const sodaBase  = sodax.config.findSupportedTokenBySymbol(ChainKeys.BASE_MAINNET,  'SODA');
+if (!sodaSonic || !sodaBase) throw new Error('SODA missing from config');
+
+// 1. Confirm the pair is vault-bridgeable (synchronous, config-derived).
+if (!sodax.bridge.isBridgeable({ from: sodaSonic, to: sodaBase })) {
+  // Fall back to swap if needed — different vaults aren't bridgeable.
+  return;
+}
+
+// 2. (Optional) check the vault-side cap.
+const limit = await sodax.bridge.getBridgeableAmount(sodaSonic, sodaBase);
+
+// 3. Execute. srcChainKey is the hub.
+const result = await sodax.bridge.bridge({
+  params: {
+    srcChainKey: ChainKeys.SONIC_MAINNET,
+    srcAddress: (await evmWp.getWalletAddress()) as `0x${string}`,
+    srcAsset: sodaSonic.address,
+    amount: parseUnits('1', sodaSonic.decimals),
+    dstChainKey: ChainKeys.BASE_MAINNET,
+    dstAddress: recipientOnBase,
+    dstAsset: sodaBase.address,
+  },
+  raw: false,
+  walletProvider: evmWp,
+});
+```
+
+Internally `bridge()` branches on `isHubChainKeyType(srcChainKey)` and uses the user's hub wallet abstraction as the spender (the assetManager spoke address is used for non-hub sources). For allowance and approval flows, treat Sonic-as-source the same as any other EVM source — `isAllowanceValid` and `approve` use the same parameter shape.
+
 ### Bridgeable-amount check
 
 Respects vault deposit limits (spoke→hub) and asset-manager balance (hub→spoke). Pass the source and destination tokens as full `XToken` objects (each carries its own `chainKey`):
@@ -133,4 +169,5 @@ if (result.ok) {
 
 - v1 → v2 bridge migration: [`features/bridge.md`](../../../migration-v1-to-v2/knowledge/features/bridge.md).
 - Stellar destinations need a trustline first: [`../chain-specifics.md`](../chain-specifics.md).
+- NEAR destinations need NEP-141 storage registration first: [`../chain-specifics.md`](../chain-specifics.md).
 - Hub-and-spoke vault architecture: [`../architecture.md`](../architecture.md) § 1.

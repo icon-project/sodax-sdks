@@ -44,6 +44,16 @@ export default defineConfig(({ command, mode }: ConfigEnv) => {
       open: true,
       // this sets a default port to 3000
       port: 3000,
+      // Local observability testing (no DNS): forward `/__intake/*` to the localhost mock-intake
+      // server (`pnpm mock-intake`). The browser only ever talks to this same-origin path, so the
+      // Sentry/Datadog adapters need no DNS resolution and trigger no CORS preflight.
+      proxy: {
+        '/__intake': {
+          target: env.MOCK_INTAKE_URL || 'http://localhost:9009',
+          changeOrigin: true,
+          rewrite: (p) => p.replace(/^\/__intake/, ''),
+        },
+      },
     },
     define: {
       global: 'globalThis',

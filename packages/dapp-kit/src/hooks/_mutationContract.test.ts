@@ -41,6 +41,7 @@ const HOOKS: Array<{ path: string; nativeThrow?: true }> = [
   { path: 'partner/useSetSwapPreference.ts' },
   { path: 'recovery/useWithdrawHubAsset.ts' },
   { path: 'shared/useEstimateGas.ts' },
+  { path: 'shared/useRegisterNearStorage.ts', nativeThrow: true },
   { path: 'staking/useCancelUnstake.ts' },
   { path: 'staking/useClaim.ts' },
   { path: 'staking/useInstantUnstake.ts' },

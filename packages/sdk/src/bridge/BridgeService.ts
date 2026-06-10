@@ -462,7 +462,7 @@ export class BridgeService {
       );
 
       if (!txResult.ok) {
-        console.error(txResult.error);
+        this.config.logger.error('createBridgeIntent failed', txResult.error);
         if (isBridgeCreateIntentError(txResult.error)) return { ok: false, error: txResult.error };
         return {
           ok: false,
@@ -478,7 +478,7 @@ export class BridgeService {
         },
       };
     } catch (error) {
-      console.error(error);
+      this.config.logger.error('createBridgeIntent failed', error);
       if (isBridgeCreateIntentError(error)) return { ok: false, error };
       return {
         ok: false,
@@ -673,7 +673,7 @@ export class BridgeService {
           : { amount: assetManagerBalance, decimals: toTokenInfo.decimals, type: 'WITHDRAWAL_LIMIT' },
       };
     } catch (error) {
-      console.error(error);
+      this.config.logger.error('getBridgeableAmount failed', error);
       if (isBridgeLookupError(error)) return { ok: false, error };
       return {
         ok: false,
@@ -727,7 +727,7 @@ export class BridgeService {
       // Check if the vault addresses are the same (case-insensitive comparison)
       return srcToken.vault.toLowerCase() === dstToken.vault.toLowerCase();
     } catch (error) {
-      console.error(error);
+      this.config.logger.error('isBridgeable check failed', error);
 
       // Return false on any error
       return false;

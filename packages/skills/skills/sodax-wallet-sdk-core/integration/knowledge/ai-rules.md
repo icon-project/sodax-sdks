@@ -38,7 +38,7 @@ For **each** chain the user wants to integrate, decide between:
 | **Private-key** | A Node script, CI runner, indexer, or test that legitimately possesses a raw key. | The user pastes a real-looking key in a frontend file. Never embed a private key in a browser bundle. |
 | **Browser-extension** | A dApp where a wallet extension (MetaMask, Phantom, Xverse, Hana, Freighter, Leather, …) provides the signing primitives. | The user has neither a key nor a wallet adapter on hand. They probably want `@sodax/wallet-sdk-react` instead. |
 
-Ask the user which mode applies **before** writing code. Default to **private-key** for `apps/node`-style scripts and **browser-extension** for `apps/web`-style dApps.
+Ask the user which mode applies **before** writing code. Default to **private-key** for Node scripts / CI / bots and **browser-extension** for browser dApps.
 
 ### 3. Apply the matching recipe
 

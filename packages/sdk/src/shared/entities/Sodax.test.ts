@@ -263,12 +263,14 @@ describe('Sodax constructor — dependency wiring', () => {
     expect(helpers.captured.backendApi[0]).toBe(sodax.instanceConfig.api);
   });
 
-  it('ConfigService receives { api: <BackendApiService instance>, config: instanceConfig }', () => {
+  it('ConfigService receives { api, config: instanceConfig, userConfig: undefined } when constructed without overrides', () => {
     const sodax = new Sodax();
     expect(helpers.captured.config).toHaveLength(1);
-    const args = helpers.captured.config[0] as { api: unknown; config: unknown };
+    const args = helpers.captured.config[0] as { api: unknown; config: unknown; userConfig: unknown };
     expect(args.api).toBe(sodax.backendApi);
     expect(args.config).toBe(sodax.instanceConfig);
+    // No override was passed → userConfig must be undefined so initialize() uses dynamic config as-is.
+    expect(args.userConfig).toBeUndefined();
   });
 
   it('EvmHubProvider receives { config: <ConfigService instance> }', () => {
@@ -386,6 +388,18 @@ describe('Sodax constructor — config override propagates downstream', () => {
     const configArg = helpers.captured.config[0] as { config: SodaxConfig };
     expect(configArg.config).toBe(sodax.instanceConfig);
     expect(configArg.config.fee).toEqual(fee);
+  });
+
+  it('the RAW override (not the merged result) is forwarded to ConfigService as userConfig', () => {
+    // ConfigService needs the unmerged partial so initialize() can re-layer it on top of the
+    // dynamic config. Passing the merged instanceConfig instead would defeat that — assert identity
+    // with the exact object handed to the constructor.
+    const override = { fee: { address: '0x6666666666666666666666666666666666666666' as const, percentage: 5 } };
+    new Sodax(override);
+    const configArg = helpers.captured.config[0] as { config: SodaxConfig; userConfig: unknown };
+    expect(configArg.userConfig).toBe(override);
+    // And it is distinct from the merged config the service also receives.
+    expect(configArg.userConfig).not.toBe(configArg.config);
   });
 });
 

@@ -304,7 +304,7 @@ export function SupplyAssetsList(): ReactElement {
                       userReserves &&
                       tokens.map(token => (
                         <SupplyAssetsListItem
-                          key={token.address}
+                          key={`${token.address}-${token.symbol}`}
                           token={token}
                           walletBalance={
                             isBitcoin

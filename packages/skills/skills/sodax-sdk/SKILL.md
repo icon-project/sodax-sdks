@@ -15,6 +15,46 @@ AGENTS.md routes you here when you're working with `@sodax/sdk` v2 — either wr
 
 For React dapps using hooks → use `sodax-dapp-kit` instead (this skill is still relevant for any unwrapped SDK call).
 
+## Prefer a granular skill if the feature is known
+
+If the user has already picked a single feature, load the matching granular skill instead of this broad one — it loads ~3 KB of focused workflow vs this file's ~13 KB and links directly into the right knowledge files. The granular skills sit in the same family (`sdk`) and cover both integration and migration via internal cross-links.
+
+| Feature | Granular skill | Trigger phrases |
+|---|---|---|
+| Intent-based swap (market + limit orders) | [`./swap/SKILL.md`](./swap/SKILL.md) | "swap with Sodax", "limit order", "cancel intent" |
+| Cross-chain lending / borrowing | [`./money-market/SKILL.md`](./money-market/SKILL.md) | "supply", "borrow", "withdraw collateral", "repay" |
+| Direct token bridge via vault | [`./bridge/SKILL.md`](./bridge/SKILL.md) | "bridge tokens", "cross-chain transfer" |
+| SODA ↔ xSoda staking | [`./staking/SKILL.md`](./staking/SKILL.md) | "stake SODA", "instant unstake", "claim staking rewards" |
+| Concentrated-liquidity LP | [`./dex/SKILL.md`](./dex/SKILL.md) | "LP position", "concentrated liquidity", "deposit hub assets" |
+| ICX / bnUSD / BALN token migration to SODAX | [`./migration/SKILL.md`](./migration/SKILL.md) | "migrate ICX", "legacy bnUSD", "BALN lockup" (NOT v1→v2 SDK porting) |
+| Partner fees | [`./partner/SKILL.md`](./partner/SKILL.md) | "claim partner fee", "partner auto-swap preference", "approve partner fee token" |
+| Stuck-asset recovery | [`./recovery/SKILL.md`](./recovery/SKILL.md) | "recover stuck assets on Sonic", "RecoveryService", "withdrawHubAsset" |
+| Backend HTTP client (intents, orderbook, MM reads) | [`./backend-api/SKILL.md`](./backend-api/SKILL.md) | "submit swap tx to backend", "getIntentByHash", "Sodax backend API", "custom IConfigApi" |
+
+Load this broad skill (keep reading below) when:
+
+- The feature is not yet decided.
+- The task spans **multiple** features (e.g. swap + money-market in one flow).
+- The consumer is doing a **full v1 → v2 port** of an existing codebase.
+
+## Out of scope
+
+This skill documents the **SDK call sites** — what to import, how to construct `Sodax`, which method to call, and how to handle the `Result<T>`. It does **not** prescribe application-layer concerns.
+
+### Where to go for the things this skill does NOT cover
+
+- **Wallet provider implementations** (`IEvmWalletProvider`, `ISolanaWalletProvider`, etc.) → **load the `sodax-wallet-sdk-core` skill** (integration mode). It ships ready-made provider classes for all 9 chain families, both private-key (Node / scripts) and browser-extension modes. This skill only treats wallet providers as a contract (`declare const evmWallet: IEvmWalletProvider`).
+- **React hooks wrapping the SDK** → **load the `sodax-dapp-kit` skill** instead of this one.
+- **Browser wallet connectivity** (connect / disconnect / chain switching for React apps) → **load the `sodax-wallet-sdk-react` skill**.
+
+### App-layer concerns the SDK is intentionally silent on
+
+- **Multi-user state** (Telegram bot per-user wallets, dApp session storage, custodial vs non-custodial design). Hold one wallet-provider instance per user/chain at the app layer and pass it into each call — the SDK is stateless.
+- **UI**, framework wiring, route handlers, webhooks. Pick your own framework (telegraf/grammy for bots, Next.js / Vite for web, etc.) — the SDK has no opinion.
+- **Token discovery beyond `sodax.config`**. The SDK exposes `sodax.config.findSupportedTokenBySymbol(chainKey, symbol)` for per-chain lookups and `sodax.bridge.getBridgeableTokens(from, to, srcAddress)` / `sodax.bridge.isBridgeable({ from, to })` for vault-pair checks. There is no exhaustive "all bridgeable pairs across all chains" table — derive it at runtime if needed.
+
+If the consumer needs a runnable end-to-end app (Node bot, CLI, full dApp), the right combination is: this skill (for SDK call sites) + `sodax-wallet-sdk-core` (for wallet providers) + the consumer's chosen framework code. The SDK does not ship an app skeleton.
+
 ---
 
 ## Integration mode (writing new v2 code)
@@ -31,8 +71,8 @@ Follow in order. Skipping `ai-rules.md` is the most common cause of agents rever
 
 1. Read [`integration/knowledge/ai-rules.md`](./integration/knowledge/ai-rules.md) — DO / DO NOT / workflow / stop conditions.
 2. Read [`integration/knowledge/quickstart.md`](./integration/knowledge/quickstart.md) — install, initialize, first-run troubleshooting.
-3. For your feature, read [`integration/knowledge/features/`](./integration/knowledge/features/) — `swap.md`, `money-market.md`, `staking.md`, `bridge.md`, `dex.md`, `icx-bnusd-baln.md`, `auxiliary-services.md`.
-4. For specific patterns (init, raw vs signed, chain narrowing, gas, testing, errors), read [`integration/knowledge/recipes/`](./integration/knowledge/recipes/).
+3. For your feature, read [`integration/knowledge/features/`](./integration/knowledge/features/) — `swap.md`, `money-market.md`, `staking.md`, `bridge.md`, `dex.md`, `migration.md`, `partner.md`, `recovery.md`, `backend-api.md`.
+4. For specific patterns (init, raw vs signed, chain narrowing, gas, testing, errors, logging), read [`integration/knowledge/recipes/`](./integration/knowledge/recipes/).
 5. Lookups (chain keys, error codes, public API surface, wallet provider types, glossary) → [`integration/knowledge/reference/`](./integration/knowledge/reference/).
 6. Non-EVM quirks (Stellar trustline, BTC PSBT, Solana PDA, ICON, NEAR) → [`integration/knowledge/chain-specifics.md`](./integration/knowledge/chain-specifics.md).
 
@@ -44,29 +84,9 @@ Follow in order. Skipping `ai-rules.md` is the most common cause of agents rever
 4. **Signed vs raw is a discriminated union.** `WalletProviderSlot<K, Raw>` enforces at compile time: `{ raw: false, walletProvider }` for signing, `{ raw: true }` for unsigned-tx building. Mixing them is a TypeScript error.
 5. **Config is dynamic; overrides only land on `sodax.config`.** Always read via `sodax.config.*` (e.g. `sodax.config.spokeChainConfig[chainKey]`). Direct imports of `spokeChainConfig` / `sodaxConfig` from `@sodax/types` / `@sodax/sdk` are packaged-default snapshots and silently miss both `await sodax.config.initialize()` updates and `new Sodax(config)` overrides.
 
-### Top traps to avoid (integration)
+### Top traps, conventions, verification
 
-1. **Reaching for a `*SpokeProvider`.** They're deleted. Pass an object satisfying the chain-specific `I*WalletProvider` interface directly into the SDK call payload. Implementations come from your application — write your own or install `@sodax/wallet-sdk-core`.
-2. **Forgetting `raw: false`.** Without the discriminator, `walletProvider` is rejected with "Object literal may only specify known properties." Add `raw: false` for signed flows; `raw: true` for unsigned-tx building.
-3. **Importing from `@sodax/types` directly.** `@sodax/sdk` re-exports the entire `@sodax/types` surface. Add `@sodax/sdk` as your only dependency; importing `@sodax/types` separately risks version skew.
-4. **Treating `Result<T>` as throw-on-failure.** v2 mutation methods do **not** throw on SDK-level failure — they resolve `{ ok: false, error }`. A `try/catch` only catches *exceptions* from inside `mutationFn` (e.g. missing `walletProvider`); it will **not** catch `RELAY_TIMEOUT` or `EXECUTION_FAILED`. Branch on `.ok`.
-5. **Reading `xToken.xChainId` or hard-coding `*_MAINNET_CHAIN_ID`.** Renamed: `XToken.chainKey` and `ChainKeys.*`. v1 numeric/string chain-id constants are gone.
-
-### Conventions agents must follow (integration)
-
-- **`Result<T>` discrimination on `.ok`.** Always branch on `result.ok` before reading `.value` or `.error`. Forward sub-Results without re-wrapping (`if (!sub.ok) return sub`).
-- **`(feature, code)` for error switching.** Use `isSodaxError(e)`, then `e.feature` and `e.code` for routing logic. Don't string-match on `e.message`.
-- **`ChainKeys.*` over hard-coded strings.** The set of supported chains evolves per release.
-- **No `as unknown as <Type>` double-casts.** v2 type narrowing makes them unnecessary — chain-key generic flow + `GetWalletProviderType<K>` resolves to the exact interface.
-- **Don't generate `try { await sodax.<method>(...) } catch` for SDK-level failures.** That catch never fires for `Result.!ok`. Branch on `result.ok`.
-- Import only from the package root: `import { Sodax, ChainKeys, type SpokeChainKey } from '@sodax/sdk'`. Don't deep-import from `dist/...`.
-
-### Verification (integration)
-
-1. `pnpm tsc --noEmit` from the consumer repo — must exit clean.
-2. Every `await sodax.<feature>.<method>(...)` call site has `if (!result.ok)` branching.
-3. No `xToken.xChainId`, no `*_MAINNET_CHAIN_ID`, no `*SpokeProvider` references.
-4. `isSodaxError(e)` (not bare `instanceof SodaxError`) in cross-bundle code.
+The DO / DO NOT / verification checklist lives in [`integration/knowledge/ai-rules.md`](./integration/knowledge/ai-rules.md) — read it before writing any call site. The biggest source of generated v1-style code is skipping it.
 
 ---
 
@@ -89,7 +109,7 @@ If the consumer has v1 fingerprints AND also wants new features: **do migration 
    - [`breaking-changes/type-system.md`](./migration-v1-to-v2/knowledge/breaking-changes/type-system.md) — renames at `@sodax/types`, `ChainKeys`, `WalletProviderSlot`, `RpcConfig`, `IConfigApi` Result.
    - [`breaking-changes/architecture.md`](./migration-v1-to-v2/knowledge/breaking-changes/architecture.md) — `*SpokeProvider` deletion, `ConfigService`, relay reshape.
    - [`breaking-changes/result-and-errors.md`](./migration-v1-to-v2/knowledge/breaking-changes/result-and-errors.md) — throws → `Result<T>`; module errors → `SodaxError<C>`; v1↔v2 code crosswalk.
-4. **Per-feature playbooks** under [`features/`](./migration-v1-to-v2/knowledge/features/) — `swap.md`, `money-market.md`, `staking.md`, `bridge.md`, `dex.md`, `icx-bnusd-baln.md`, `auxiliary-services.md` — read only the ones the consumer uses.
+4. **Per-feature playbooks** under [`features/`](./migration-v1-to-v2/knowledge/features/) — `swap.md`, `money-market.md`, `staking.md`, `bridge.md`, `dex.md`, `migration.md`, `partner.md`, `recovery.md`, `backend-api.md` — read only the ones the consumer uses.
 5. **Codemods + adapters** for mechanical replacement → [`recipes.md`](./migration-v1-to-v2/knowledge/recipes.md).
 6. **Cross-check** symbols in [`reference/`](./migration-v1-to-v2/knowledge/reference/) — `deleted-exports.md`, `error-code-crosswalk.md`, `return-shapes.md`, `sodax-config.md`.
 
@@ -107,30 +127,9 @@ Apply in this order — type-level changes don't affect behavior; runtime patter
 
 Then on every signed-call payload: drop `spokeProvider`, add `walletProvider`, add `raw: false` discriminator, rename `intentParams` → `params`. Plus add `srcChainKey` + `srcAddress` to every action params object (MM, staking, deposit, …).
 
-### Top traps to avoid (migration)
+### Top traps, DO NOT, verification
 
-1. **Reaching for a `*SpokeProvider`.** They're deleted. Pass `walletProvider` (an `I*WalletProvider` impl) directly in the call payload.
-2. **`instanceof MoneyMarketError` (and other module error classes).** Deleted. Replace with `isSodaxError(e) && e.feature === 'moneyMarket'`.
-3. **Destructuring cross-chain results as arrays.** v1 had `bridge()` returning a string and others returning tuples; v2 returns `TxHashPair = { srcChainTxHash, dstChainTxHash }` for **every** cross-chain mutation. Destructure as `{ srcChainTxHash, dstChainTxHash } = result.value`.
-4. **Keeping `try/catch` to inspect v1 error codes.** v2 returns `Result<T>` — failure lives on `result.error.code`, not on a thrown error. The v2 code names changed too — see `reference/error-code-crosswalk.md`.
-5. **Calling `getStakingInfo(hubAddress)`.** Renamed to `getStakingInfoFromSpoke(srcAddress, srcChainKey)`. `getStakingInfo` is not a public method anymore.
-
-### DO NOT
-
-- Grep-replace `srcChain` → `srcChainKey` blindly. The `Intent` read shape keeps `srcChain` / `dstChain` as `IntentRelayChainId` (bigint). Only **request** types changed.
-- Assume `BalnSwapService` lock methods (`stake`, `unstake`, `claim`, `claimUnstaked`, `cancelUnstake`, `getDetailedUserLocks`) return `Result<T>`. They still throw — known carve-out. Keep `try/catch` for those specific calls.
-- Add `@sodax/types` as a peer dependency. It's bundled into `@sodax/sdk`'s public surface.
-
-### Verification (migration)
-
-```bash
-pnpm tsc --noEmit    # must exit clean
-# No leftover v1 fingerprints:
-grep -rE '_MAINNET_CHAIN_ID\b|\bxChainId\b|\bSpokeChainId\b|\bSpokeProvider\b|hubAssets|moneyMarketSupportedTokens' src/   # empty
-grep -rE 'MoneyMarketError|IntentError|StakingError|BridgeError|MigrationError|AssetServiceError|ConcentratedLiquidityError|RelayError' src/   # empty
-```
-
-Every `await sodax.<feature>.<method>(...)` call site must have `if (!result.ok)` branching (highest-leverage change — if you stop early, ensure result branching is at least in place).
+The full DO / DO NOT list, mode-specific pitfalls, and verification protocol live in [`migration-v1-to-v2/knowledge/ai-rules.md`](./migration-v1-to-v2/knowledge/ai-rules.md) — read it before touching any call site. Highest-leverage rule: every `await sodax.<feature>.<method>(...)` call site must have `if (!result.ok)` branching.
 
 ---
 

@@ -61,8 +61,6 @@ Headless building blocks (render-agnostic, wallet-agnostic):
 | `useIsWalletInstalled({ connectors?, chainType? })` | Cross-chain install check; filters AND. |
 | `sortConnectors(xs, { preferred })` | Preferred first, then installed, then original. |
 
-Reference app: `apps/wallet-modal-example` in the SODAX monorepo.
-
 ### Top traps to avoid (integration)
 
 1. **Passing both `xChainId` and `xChainType`** to `useXAccount` / `useWalletProvider`. They're mutually exclusive.
