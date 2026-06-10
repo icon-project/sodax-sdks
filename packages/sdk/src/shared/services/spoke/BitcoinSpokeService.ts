@@ -23,6 +23,7 @@ import { sleep } from '../../utils/shared-utils.js';
 import { RadfiProvider } from '../../entities/btc/RadfiProvider.js';
 import {
   encodeBtcPayloadToBytes,
+  calcOpReturnOutputVbytes,
   estimateBitcoinTxSize,
   normalizePsbtToBase64,
   normalizeSignatureToBase64,
@@ -239,6 +240,7 @@ export class BitcoinSpokeService {
     chainId: BitcoinChainKey,
     walletProvider: IBitcoinWalletProvider,
     feeRate?: number,
+    opReturnOutputVbytes?: number,
   ): Promise<Psbt> {
     const psbt = new Psbt({ network: this.getBtcNetwork(chainId) });
     const effectiveFeeRate = feeRate ?? (await this.getFeeRateEstimate());
@@ -312,7 +314,7 @@ export class BitcoinSpokeService {
       inputSum += utxo.value;
 
       // Conservative estimate WITHOUT assuming change yet
-      const estimatedSize = estimateBitcoinTxSize(psbt.inputCount, outputs.length, addressType);
+      const estimatedSize = estimateBitcoinTxSize(psbt.inputCount, outputs.length, addressType, opReturnOutputVbytes);
       const estimatedFee = Math.ceil(effectiveFeeRate * estimatedSize);
 
       if (inputSum >= outputSum + estimatedFee + DUST_THRESHOLD) {
@@ -329,8 +331,13 @@ export class BitcoinSpokeService {
     }
 
     // ---- Final fee & change calculation ----
-    const sizeWithChange = estimateBitcoinTxSize(psbt.inputCount, outputs.length + 1, addressType);
-    const sizeWithoutChange = estimateBitcoinTxSize(psbt.inputCount, outputs.length, addressType);
+    const sizeWithChange = estimateBitcoinTxSize(
+      psbt.inputCount,
+      outputs.length + 1,
+      addressType,
+      opReturnOutputVbytes,
+    );
+    const sizeWithoutChange = estimateBitcoinTxSize(psbt.inputCount, outputs.length, addressType, opReturnOutputVbytes);
 
     const feeWithChange = Math.ceil(effectiveFeeRate * sizeWithChange);
     const feeWithoutChange = Math.ceil(effectiveFeeRate * sizeWithoutChange);
@@ -440,7 +447,12 @@ export class BitcoinSpokeService {
         );
       }
 
-      const utxos = await this.fetchUTXOs(from);
+      const [allUtxos, mempoolSpent] = await Promise.all([
+        this.fetchUTXOs(from),
+        this.fetchMempoolSpentOutpoints(from),
+      ]);
+
+      const utxos = allUtxos.filter(u => !mempoolSpent.has(`${u.txid}:${u.vout}`));
 
       if (!utxos?.length) {
         throw new Error('No UTXOs available for deposit');
@@ -478,9 +490,27 @@ export class BitcoinSpokeService {
     data: string,
     utxos: BitcoinUTXO[],
   ): Promise<Psbt> {
-    const assetManagerAddress = this.config.getChainConfig(srcChainKey).addresses.assetManager;
+    const chainConfig = this.config.getChainConfig(srcChainKey);
+    const assetManagerAddress = chainConfig.addresses.assetManager;
+    const normalizedToken = token.toLocaleLowerCase();
+    const nativeBtcTokens = new Set(
+      ['btc', chainConfig.nativeToken, chainConfig.supportedTokens.BTC?.address]
+        .filter((value): value is string => !!value)
+        .map(value => value.toLocaleLowerCase()),
+    );
+    const isNativeBtc = nativeBtcTokens.has(normalizedToken);
 
-    if (token.toLocaleLowerCase() === 'btc') {
+    if (isNativeBtc) {
+      const OP_RETURN = opcodes.OP_RETURN;
+      const OP_12 = opcodes.OP_12;
+      if (OP_RETURN === undefined || OP_12 === undefined) {
+        throw new Error('bitcoinjs-lib opcodes OP_RETURN or OP_12 are undefined');
+      }
+
+      const OP_RADFI_SODAX_DATA = 0x31;
+      const payload = Buffer.concat([Buffer.from([OP_RADFI_SODAX_DATA]), Buffer.from(data.slice(2), 'hex')]);
+      const opReturnOutputVbytes = calcOpReturnOutputVbytes(payload.length);
+
       const outputs = [
         {
           address: assetManagerAddress,
@@ -488,16 +518,15 @@ export class BitcoinSpokeService {
         },
       ];
 
-      const psbt = await this.buildBitcoinTransaction(utxos, outputs, walletAddress, srcChainKey, walletProvider);
-
-      const OP_RADFI_SODAX_DATA = 0x31;
-      const payload = Buffer.concat([Buffer.from([OP_RADFI_SODAX_DATA]), Buffer.from(data.slice(2), 'hex')]);
-
-      const OP_RETURN = opcodes.OP_RETURN;
-      const OP_12 = opcodes.OP_12;
-      if (OP_RETURN === undefined || OP_12 === undefined) {
-        throw new Error('bitcoinjs-lib opcodes OP_RETURN or OP_12 are undefined');
-      }
+      const psbt = await this.buildBitcoinTransaction(
+        utxos,
+        outputs,
+        walletAddress,
+        srcChainKey,
+        walletProvider,
+        undefined,
+        opReturnOutputVbytes,
+      );
 
       const compiledScript = script.compile([OP_RETURN, OP_12, payload]);
 
@@ -520,6 +549,28 @@ export class BitcoinSpokeService {
       throw new Error(`Failed to fetch UTXOs: ${response.statusText}`);
     }
     return await response.json();
+  }
+
+  /**
+   * Returns the set of "txid:vout" outpoints currently being spent by
+   * unconfirmed transactions in the mempool for the given address.
+   * Used to prevent double-spend when building a new PSBT.
+   */
+  private async fetchMempoolSpentOutpoints(address: string): Promise<Set<string>> {
+    try {
+      const response = await fetch(`${this.rpcUrl}/address/${address}/txs/mempool`);
+      if (!response.ok) return new Set();
+      const mempoolTxs: Array<{ vin: Array<{ txid: string; vout: number }> }> = await response.json();
+      const spent = new Set<string>();
+      for (const tx of mempoolTxs) {
+        for (const input of tx.vin) {
+          spent.add(`${input.txid}:${input.vout}`);
+        }
+      }
+      return spent;
+    } catch {
+      return new Set();
+    }
   }
 
   /**
@@ -596,8 +647,23 @@ export class BitcoinSpokeService {
     walletProvider: IBitcoinWalletProvider,
   ): Promise<string> {
     const psbtBase64 = typeof psbt === 'string' ? psbt : psbt.toBase64();
-    const signedPsbtHex = await walletProvider.signTransaction(psbtBase64);
-    const txHash = await this.broadcastTransaction(signedPsbtHex);
+
+    // Pass finalize=false so all wallet types (private key, browser extension) return
+    // a signed PSBT rather than an extracted raw tx — we handle finalization here.
+    const signedRaw = await walletProvider.signTransaction(psbtBase64, false);
+    // Unisat/OKX return hex, Xverse/private-key return base64 — normalize before parsing
+    const signedPsbt = Psbt.fromBase64(normalizePsbtToBase64(signedRaw));
+
+    // Some wallets finalize inputs internally regardless of the flag; skip if already done
+    try {
+      signedPsbt.finalizeAllInputs();
+    } catch {
+      // inputs already finalized by wallet
+    }
+
+    const txHex = signedPsbt.extractTransaction().toHex();
+    const txHash = await this.broadcastTransaction(txHex);
+
     return txHash;
   }
 

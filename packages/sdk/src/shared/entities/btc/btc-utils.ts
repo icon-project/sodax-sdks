@@ -12,15 +12,42 @@ export interface BtcPayload {
   address_type: BtcAddressType;
 }
 
+const BITCOIN_FEE_SAFETY_VBYTES = 20;
+
+/**
+ * Calculate the actual vbytes of an OP_RETURN output given the payload byte length.
+ * Accounts for variable-length pushdata opcodes and script-length varints.
+ */
+export function calcOpReturnOutputVbytes(payloadByteLength: number): number {
+  // script = OP_RETURN(1) + OP_12(1) + pushdata_overhead + payload
+  let scriptSize: number;
+  if (payloadByteLength <= 75) {
+    scriptSize = 3 + payloadByteLength; // direct push opcode
+  } else if (payloadByteLength <= 255) {
+    scriptSize = 4 + payloadByteLength; // OP_PUSHDATA1 + 1-byte length
+  } else {
+    scriptSize = 5 + payloadByteLength; // OP_PUSHDATA2 + 2-byte length
+  }
+  const scriptLenVarint = scriptSize <= 252 ? 1 : 3;
+  return 8 + scriptLenVarint + scriptSize;
+}
+
 /**
  * Estimate transaction size in vbytes.
  * @param addressType — caller's address type for accurate per-input weight.
  *   P2PKH ≈ 148 vB, P2SH-P2WPKH ≈ 91 vB, P2WPKH ≈ 68 vB, P2TR ≈ 58 vB.
  *   Defaults to P2WPKH (68 vB) when omitted.
+ * @param opReturnOutputVbytes — actual OP_RETURN output size in vbytes.
+ *   Use calcOpReturnOutputVbytes() when the payload size is known. Defaults to 44 vB (~33-byte payload).
  */
-export function estimateBitcoinTxSize(inputCount: number, outputCount: number, addressType?: BtcAddressType): number {
+export function estimateBitcoinTxSize(
+  inputCount: number,
+  outputCount: number,
+  addressType?: BtcAddressType,
+  opReturnOutputVbytes = 44,
+): number {
   // 10.5 vB fixed overhead
-  // +44 vB for one OP_RETURN (~33-byte payload), not included in outputCount
+  // opReturnOutputVbytes for one OP_RETURN output, not included in outputCount
   // 31 vB per non-OP_RETURN output
   let inputWeight: number;
   switch (addressType) {
@@ -37,7 +64,7 @@ export function estimateBitcoinTxSize(inputCount: number, outputCount: number, a
       inputWeight = 68;
       break;
   }
-  return Math.ceil(10.5 + 44 + inputCount * inputWeight + outputCount * 31);
+  return Math.ceil(10.5 + opReturnOutputVbytes + BITCOIN_FEE_SAFETY_VBYTES + inputCount * inputWeight + outputCount * 31);
 }
 
 export function encodeBtcPayloadToBytes(payload: BtcPayload): string {

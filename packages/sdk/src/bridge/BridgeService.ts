@@ -416,8 +416,9 @@ export class BridgeService {
         { ...baseCtx, field: 'dstToken' });
 
       const personalAddress = params.srcAddress;
-      // Bitcoin TRADING mode: use trading wallet for hub wallet derivation (see getEffectiveWalletAddress)
-      // NOTE: bitcoin is only enabled in non-raw execution mode == walletProvider is required
+      // Bitcoin TRADING mode uses the Bound trading wallet; USER mode sends directly from the
+      // connected Bitcoin wallet.
+      // NOTE: bitcoin is only enabled in non-raw execution mode == walletProvider is required.
       let walletAddress: string = personalAddress;
       if (isBitcoinChainKeyType(params.srcChainKey) && _params.raw === false) {
         bridgeInvariant(
@@ -426,10 +427,14 @@ export class BridgeService {
           { ...baseCtx, field: 'walletProvider' },
         );
         walletAddress = await this.spoke.bitcoin.getEffectiveWalletAddress(personalAddress);
-        await this.spoke.bitcoin.radfi.ensureRadfiAccessToken(_params.walletProvider);
+        if (this.spoke.bitcoin.walletMode === 'TRADING') {
+          await this.spoke.bitcoin.radfi.ensureRadfiAccessToken(_params.walletProvider);
+        }
       }
 
-      const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
+      const hubWallet = await this.hubProvider.getUserHubWalletAddress(walletAddress, params.srcChainKey);
+      const effectiveSkipSimulation =
+        skipSimulation || (isBitcoinChainKeyType(params.srcChainKey) && this.spoke.bitcoin.walletMode === 'USER');
 
       const data: Hex = this.buildBridgeData(params, srcToken, dstToken, this.config.bridge.partnerFee);
 
@@ -440,7 +445,7 @@ export class BridgeService {
         token: params.srcToken as GetTokenAddressType<K>,
         amount: params.amount,
         data,
-        skipSimulation,
+        skipSimulation: effectiveSkipSimulation,
       } as const;
 
       const txResult = await this.spoke.deposit(
