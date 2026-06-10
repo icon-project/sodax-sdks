@@ -62,6 +62,31 @@ pnpm pretty       # biome format --write
 
 `pnpm test` is a no-op (`true`) — there are no tests in this app.
 
+## Local observability testing (Sentry + Datadog, no DNS)
+
+A self-contained harness for verifying `SodaxLogger` sinks (`new Sodax({ logger })`) **without DNS or a real Sentry/Datadog account**. Everything stays on localhost.
+
+**How it routes (the no-DNS trick).** The browser only ever POSTs to the same-origin path `/__intake/*`, which the Vite dev proxy (`vite.config.ts`) forwards to a tiny localhost mock-intake server (`scripts/mock-intake.mjs`). Same-origin → no CORS preflight; localhost → no DNS lookup. Sentry reaches it via its `tunnel` option; the Datadog adapter just `fetch`-POSTs to it.
+
+**Pieces:**
+
+- `scripts/mock-intake.mjs` — zero-dep Node server (`pnpm mock-intake`, port 9009) that pretty-prints every Sentry envelope / Datadog record it receives.
+- `src/lib/loggers/datadogLogger.ts` — `createDatadogLogger()`: plain HTTP-intake adapter (no Datadog SDK). One JSON POST per log line; `error()` serializes via `SodaxError.toJSON()`.
+- `src/lib/loggers/sentryLogger.ts` — `createSentryLogger()`: real `@sentry/react` (lazy-imported) with a dummy DSN + `tunnel`. `debug/info` → breadcrumbs, `warn` → `captureMessage`, `error` → `captureException`.
+- `src/lib/loggers/index.ts` — `getObservabilityLogger()`: fans out to console + Datadog + Sentry, gated on `VITE_ENABLE_OBSERVABILITY === 'true'` (else `undefined` → SDK keeps its default console logger). Also exposes the logger on `window.__sodaxLog` for manual triggering from the browser console. Wired into the SDK in `providers.tsx` via `sodaxConfig.logger`.
+
+**Run:**
+
+```bash
+cp .env.example .env          # sets VITE_ENABLE_OBSERVABILITY=true
+pnpm mock-intake              # terminal A — the local intake
+pnpm dev                      # terminal B
+# In the browser console: window.__sodaxLog.error('boom', new Error('x'), { a: 1 })
+# …or exercise any SDK feature page; internal SDK logs flow through too.
+```
+
+Requires `@sentry/react` installed (listed in `package.json`). To send to the **real** services instead, set `VITE_DD_INTAKE_URL` / `VITE_SENTRY_DSN` (drop the tunnel) — then DNS is required, as expected.
+
 ## Common pitfalls
 
 - **Node polyfills.** Uses `@bangjelkoski/vite-plugin-node-polyfills` (Bitcoin/Solana deps pull in `buffer`, `crypto`, etc.). If a new dependency requires a polyfill, add it there rather than in app code.

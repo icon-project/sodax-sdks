@@ -26,10 +26,12 @@ import {
   type BridgeConfig,
   type GetSpokeChainConfigType,
   type DeepPartial,
+  type SodaxLogger,
 } from '@sodax/types';
 import { isAddress } from 'viem';
 import type { BackendApiService } from '../../backendApi/BackendApiService.js';
 import { mergeSodaxConfig } from './mergeSodaxConfig.js';
+import { resolveLogger } from '../logger.js';
 
 export type ConfigServiceConstructorParams = {
   api: BackendApiService;
@@ -40,6 +42,11 @@ export type ConfigServiceConstructorParams = {
    * that a remote config fetch never clobbers explicit user overrides.
    */
   userConfig?: DeepPartial<SodaxConfig>;
+  /**
+   * Pre-resolved SDK log sink. Held outside the swappable `SodaxConfig` so a dynamic config fetch
+   * in {@link ConfigService.initialize} never replaces it. Defaults to the console logger when omitted.
+   */
+  logger?: SodaxLogger;
 };
 
 /**
@@ -49,6 +56,12 @@ export class ConfigService {
   private sodax: SodaxConfig;
   private readonly api: BackendApiService;
   private readonly userConfig?: DeepPartial<SodaxConfig>;
+
+  /**
+   * SDK log sink. Resolved once at construction and kept independent of {@link sodax} so that
+   * {@link initialize}'s dynamic-config swap never clobbers it. Read by services via `config.logger`.
+   */
+  public readonly logger: SodaxLogger;
 
   private initialized = false;
 
@@ -63,10 +76,11 @@ export class ConfigService {
   private chainToSupportedTokenAddressMap!: Map<SpokeChainKey, Set<string>>;
   private hubAssetToXTokenMap!: Map<Address, XToken>;
 
-  constructor({ api, config, userConfig }: ConfigServiceConstructorParams) {
+  constructor({ api, config, userConfig, logger }: ConfigServiceConstructorParams) {
     this.api = api;
     this.sodax = config;
     this.userConfig = userConfig;
+    this.logger = logger ?? resolveLogger(undefined);
     this.loadSodaxConfigDataStructures(config);
   }
 
@@ -77,7 +91,7 @@ export class ConfigService {
       const response = result.value;
 
       if (!response.version || response.version < CONFIG_VERSION) {
-        console.warn(
+        this.logger.warn(
           `Dynamic config version is less than the current version, resorting to the default one. Current version: ${CONFIG_VERSION}, response version: ${response.version}`,
         );
       } else {

@@ -1,9 +1,16 @@
-import { detectBitcoinAddressType, type IBitcoinWalletProvider, type RadfiConfig, type RadfiDepositTxResponse } from '@sodax/types';
+import {
+  detectBitcoinAddressType,
+  usesBip322MessageSigning,
+  type IBitcoinWalletProvider,
+  type RadfiConfig,
+  type RadfiDepositTxResponse,
+} from '@sodax/types';
+import type { RelayExtraData } from '../../types/relay-types.js';
 
 /**
- * Raw error body shape returned by the Radfi HTTP API on non-2xx responses.
+ * Raw error body shape returned by the Bound Exchange HTTP API on non-2xx responses.
  * The human-readable detail typically lives at `error.details` (nested), with
- * `code` carrying a Radfi-specific identifier (e.g. "2002" insufficientBTCBalance,
+ * `code` carrying a Bound Exchange-specific identifier (e.g. "2002" insufficientBTCBalance,
  * "4008" duplicatedPubKey) and `message` an i18n key.
  */
 export type RadfiErrorBody = {
@@ -14,8 +21,8 @@ export type RadfiErrorBody = {
 };
 
 /**
- * Structured error from a Radfi HTTP request. Exposes `status` (HTTP), `code`
- * (Radfi-specific identifier), and `details` (human-readable) so callers can
+ * Structured error from a Bound Exchange HTTP request. Exposes `status` (HTTP), `code`
+ * (Bound Exchange-specific identifier), and `details` (human-readable) so callers can
  * discriminate without fragile string-matching on `message`. The raw response
  * body is preserved on `cause` for structured logging.
  */
@@ -115,7 +122,7 @@ export class RadfiProvider {
   }
 
   /**
-   * Authenticate with Radfi: BIP322-sign a login message, then call the Radfi API.
+   * Authenticate with Bound Exchange: BIP322-sign a login message, then call the Bound Exchange API.
    * Returns accessToken, refreshToken, and tradingAddress.
    */
   public async authenticateWithWallet(
@@ -136,12 +143,10 @@ export class RadfiProvider {
     }
 
     const message = `${Date.now()}`;
-    const addressType = detectBitcoinAddressType(address);
-    // BIP322 signing is supported for P2WPKH and P2TR; P2SH and P2PKH use ECDSA
-    const signature =
-      addressType === 'P2WPKH' || addressType === 'P2TR'
-        ? await walletProvider.signBip322Message(message)
-        : await walletProvider.signEcdsaMessage(message);
+    // Pick the message-signing scheme by address type: P2WPKH/P2TR sign via BIP322, P2SH/P2PKH via ECDSA.
+    const signature = usesBip322MessageSigning(detectBitcoinAddressType(address))
+      ? await walletProvider.signBip322Message(message)
+      : await walletProvider.signEcdsaMessage(message);
 
     const result = await this.authenticate({ message, signature, address, publicKey });
     this.setRadfiAccessToken(result.accessToken, result.refreshToken);
@@ -149,8 +154,8 @@ export class RadfiProvider {
   }
 
   /**
-   * Ensure a valid Radfi access token is set on this provider.
-   * If a token exists, validates it via the Radfi API.
+   * Ensure a valid Bound Exchange access token is set on this provider.
+   * If a token exists, validates it via the Bound Exchange API.
    * If invalid, tries refreshing with the refresh token first.
    * If refresh also fails, falls back to full re-authentication (BIP322 sign).
    */
@@ -194,7 +199,7 @@ export class RadfiProvider {
 
     if (!res.ok) {
       const err = await res.json();
-      throw new RadfiApiError(res.status, err, 'Radfi authentication failed');
+      throw new RadfiApiError(res.status, err, 'Bound Exchange authentication failed');
     }
 
     return res.json().then(r => ({
@@ -317,18 +322,30 @@ export class RadfiProvider {
       }),
     });
 
-    if (!res.ok) {
-      const err = await res.json();
-      throw new RadfiApiError(res.status, err, 'Radfi transaction request failed');
+    // The API can return HTTP 200 with a logical-error envelope (e.g. code "2002"
+    // insufficientBTCBalance) and no `data`. Treat a missing `data` as an error so the
+    // RadfiApiError (code/details) surfaces instead of a downstream undefined access.
+    const body = await res.json();
+    if (!res.ok || !body?.data) {
+      throw new RadfiApiError(res.status, body, 'Bound Exchange transaction request failed');
     }
 
-    return res.json().then(r => r.data);
+    return body.data;
   }
 
+  /**
+   * Co-sign and broadcast a `sodax-withdraw` deposit via the Bound Exchange API.
+   *
+   * `relayData` ({ address, payload }) is the same `RelayExtraData` the SDK returns from
+   * `createIntent()` / money-market supply etc. It is optional and non-breaking: when supplied,
+   * the Bound Exchange backend persists it so it can auto-resubmit the intent relay if the relay
+   * gets stuck (otherwise a stuck relay eventually refunds instead of completing the swap).
+   */
   public async requestRadfiSignature(
     params: {
       userAddress: string;
       signedBase64Tx: string;
+      relayData?: RelayExtraData;
     },
     accessToken: string,
   ): Promise<string> {
@@ -345,7 +362,7 @@ export class RadfiProvider {
 
     if (!res.ok) {
       const err = await res.json();
-      throw new RadfiApiError(res.status, err, 'Radfi signature request failed');
+      throw new RadfiApiError(res.status, err, 'Bound Exchange signature request failed');
     }
 
     return res.json().then(r => r.data.txId);
@@ -378,7 +395,7 @@ export class RadfiProvider {
   }
 
   /**
-   * Build a renew-utxo transaction via the Radfi API.
+   * Build a renew-utxo transaction via the Bound Exchange API.
    * Returns a PSBT that needs to be signed by the user.
    */
   public async buildRenewUtxoTransaction(
@@ -408,8 +425,8 @@ export class RadfiProvider {
   }
 
   /**
-   * Sign and broadcast a renew-utxo transaction via the Radfi API.
-   * The user signs the PSBT first, then Radfi co-signs and broadcasts.
+   * Sign and broadcast a renew-utxo transaction via the Bound Exchange API.
+   * The user signs the PSBT first, then Bound Exchange co-signs and broadcasts.
    */
   public async signAndBroadcastRenewUtxo(
     params: { userAddress: string; signedBase64Tx: string },
@@ -467,7 +484,7 @@ export class RadfiProvider {
   }
 
   /**
-   * Sign and broadcast a withdraw transaction via Radfi.
+   * Sign and broadcast a withdraw transaction via Bound Exchange.
    */
   public async signAndBroadcastWithdraw(
     params: { userAddress: string; signedBase64Tx: string },

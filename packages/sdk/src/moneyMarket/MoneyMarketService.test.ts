@@ -26,7 +26,7 @@ import {
 } from '@sodax/types';
 import { Sodax } from '../shared/entities/Sodax.js';
 import { SodaxError } from '../errors/SodaxError.js';
-import { decodeFunctionData } from 'viem';
+import { decodeFunctionData, keccak256, stringToBytes } from 'viem';
 import { poolAbi } from '../shared/abis/pool.abi.js';
 import { EvmVaultTokenService } from '../shared/services/hub/EvmVaultTokenService.js';
 
@@ -1030,6 +1030,31 @@ describe('MoneyMarketService.createSupplyIntent', () => {
       // buildSupplyData receives toHubWallet (the dst lookup result), not the src hub wallet.
       expect(buildSpy).toHaveBeenCalledWith(ChainKeys.BSC_MAINNET, SAMPLE_EVM_TOKEN, 1_000_000n, TO_HUB_WALLET);
     });
+
+    it('on Bitcoin: derives the hub wallet from the Bound Exchange trading address, not the personal address', async () => {
+      const TRADING_ADDRESS = 'bc1p-trading-wallet';
+      const getEffSpy = vi.spyOn(sodax.spoke.bitcoin, 'getEffectiveWalletAddress').mockResolvedValue(TRADING_ADDRESS);
+      const ensureSpy = vi.spyOn(sodax.spoke.bitcoin.radfi, 'ensureRadfiAccessToken').mockResolvedValue(undefined);
+      vi.spyOn(sodax.moneyMarket, 'buildSupplyData').mockReturnValueOnce('0xsupply-data');
+      const depositSpy = vi.spyOn(sodax.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: '0xdeposit-hash' });
+
+      const result = await sodax.moneyMarket.createSupplyIntent({
+        raw: false,
+        params: supplyParams(ChainKeys.BITCOIN_MAINNET),
+        walletProvider: mockBitcoinProvider,
+      });
+
+      expect(result.ok).toBe(true);
+      // personal srcAddress is resolved to the trading wallet before hub-wallet derivation
+      expect(getEffSpy).toHaveBeenCalledWith(SAMPLE_USER_ADDRESS);
+      expect(ensureSpy).toHaveBeenCalledWith(mockBitcoinProvider);
+      // hub wallet is derived from the trading address (matches what the relay credits), never the personal one
+      expect(mocks.getUserHubWalletAddress).toHaveBeenCalledWith(TRADING_ADDRESS, ChainKeys.BITCOIN_MAINNET);
+      expect(mocks.getUserHubWalletAddress).not.toHaveBeenCalledWith(SAMPLE_USER_ADDRESS, ChainKeys.BITCOIN_MAINNET);
+      // the spoke deposit (and thus the relay-derived executing wallet) must also use the trading address,
+      // otherwise the hub executes through the personal-derived wallet which never received the bridged BTC
+      expect(depositSpy.mock.calls[0]?.[0]?.srcAddress).toBe(TRADING_ADDRESS);
+    });
   });
 
   describe('rejects on invalid inputs', () => {
@@ -1071,6 +1096,32 @@ describe('MoneyMarketService.createSupplyIntent', () => {
       });
       expect(result.ok).toBe(false);
       if (!result.ok) expect(String(result.error)).toMatch(/Invalid wallet provider/);
+    });
+
+    it('on Bitcoin (non-raw): rejects a missing wallet provider before building any tx', async () => {
+      // Guard mirrors Swap/Bridge: a non-raw Bitcoin deposit MUST sign via a Bitcoin wallet provider.
+      // `undefined` slips past the generic walletProvider check (which permits undefined), so this
+      // guard is what fails it fast — before any effective-address resolution or deposit/tx is built.
+      // Both collaborators are mocked to no-ops so even a guard regression can never reach a real
+      // deposit/tx (which costs money); the assertions then prove the guard short-circuits first.
+      const getEffSpy = vi.spyOn(sodax.spoke.bitcoin, 'getEffectiveWalletAddress').mockResolvedValue('bc1p-trading');
+      const depositSpy = vi.spyOn(sodax.spoke, 'deposit').mockResolvedValue({ ok: true, value: '0xunused' });
+
+      const result = await sodax.moneyMarket.createSupplyIntent({
+        raw: false,
+        params: supplyParams(ChainKeys.BITCOIN_MAINNET),
+        walletProvider: undefined,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('VALIDATION_FAILED');
+        expect(result.error.context?.field).toBe('walletProvider');
+        expect(String(result.error)).toMatch(/Expected bitcoin wallet provider/);
+      }
+      // fail-fast: no trading-address resolution, no deposit/tx built
+      expect(getEffSpy).not.toHaveBeenCalled();
+      expect(depositSpy).not.toHaveBeenCalled();
     });
 
     it('rejects unsupported token on srcChain', async () => {
@@ -1437,6 +1488,32 @@ describe('MoneyMarketService.createBorrowIntent', () => {
       expect(call?.payload).toBe('0xborrow-data');
       expect(call?.raw).toBe(false);
       expect(call?.walletProvider).toBe(mockEvmProvider);
+    });
+
+    it('on Bitcoin source: derives the hub wallet from the trading address but passes the personal srcAddress', async () => {
+      const TRADING = 'bc1p-trading-wallet';
+      const getEffSpy = vi.spyOn(sodax.spoke.bitcoin, 'getEffectiveWalletAddress').mockResolvedValue(TRADING);
+      vi.spyOn(sodax.moneyMarket, 'buildBorrowData').mockReturnValueOnce('0xborrow-data');
+      const sendSpy = vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xsend-hash' });
+
+      const result = await sodax.moneyMarket.createBorrowIntent({
+        raw: false,
+        params: {
+          ...borrowParams(ChainKeys.BITCOIN_MAINNET),
+          dstChainKey: ChainKeys.BSC_MAINNET,
+          dstAddress: SAMPLE_DST_ADDRESS,
+        },
+        walletProvider: mockBitcoinProvider,
+      });
+
+      expect(result.ok).toBe(true);
+      expect(getEffSpy).toHaveBeenCalledWith(SAMPLE_USER_ADDRESS);
+      // hub wallet is derived from the trading address (where collateral/debt live)
+      expect(mocks.getUserHubWalletAddress).toHaveBeenCalledWith(TRADING, ChainKeys.BITCOIN_MAINNET);
+      expect(mocks.getUserHubWalletAddress).not.toHaveBeenCalledWith(SAMPLE_USER_ADDRESS, ChainKeys.BITCOIN_MAINNET);
+      // srcAddress stays personal: spoke.sendMessage re-resolves the trading address itself, so
+      // pre-resolving here would double-resolve (getTradingWallet(tradingAddress) → not found).
+      expect(sendSpy.mock.calls[0]?.[0]?.srcAddress).toBe(SAMPLE_USER_ADDRESS);
     });
 
     it('on hub (Sonic): same path applies', async () => {
@@ -1844,6 +1921,31 @@ describe('MoneyMarketService.createWithdrawIntent', () => {
       expect(call?.payload).toBe('0xwithdraw-data');
       expect(call?.raw).toBe(false);
     });
+
+    it('on Bitcoin source: derives the hub wallet from the trading address but passes the personal srcAddress', async () => {
+      const TRADING = 'bc1p-trading-wallet';
+      const getEffSpy = vi.spyOn(sodax.spoke.bitcoin, 'getEffectiveWalletAddress').mockResolvedValue(TRADING);
+      vi.spyOn(sodax.moneyMarket, 'buildWithdrawData').mockReturnValueOnce('0xwithdraw-data');
+      const sendSpy = vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xsend-hash' });
+
+      const result = await sodax.moneyMarket.createWithdrawIntent({
+        raw: false,
+        params: {
+          ...withdrawParams(ChainKeys.BITCOIN_MAINNET),
+          dstChainKey: ChainKeys.BSC_MAINNET,
+          dstAddress: SAMPLE_DST_ADDRESS,
+        },
+        walletProvider: mockBitcoinProvider,
+      });
+
+      expect(result.ok).toBe(true);
+      expect(getEffSpy).toHaveBeenCalledWith(SAMPLE_USER_ADDRESS);
+      // hub wallet is derived from the trading address (where collateral/debt live)
+      expect(mocks.getUserHubWalletAddress).toHaveBeenCalledWith(TRADING, ChainKeys.BITCOIN_MAINNET);
+      // srcAddress stays personal: spoke.sendMessage re-resolves the trading address itself, so
+      // pre-resolving here would double-resolve (getTradingWallet(tradingAddress) → not found).
+      expect(sendSpy.mock.calls[0]?.[0]?.srcAddress).toBe(SAMPLE_USER_ADDRESS);
+    });
   });
 
   describe('rejects on invalid inputs', () => {
@@ -2237,6 +2339,26 @@ describe('MoneyMarketService.createRepayIntent', () => {
       expect(call?.raw).toBe(false);
     });
 
+    it('on Bitcoin source: deposits from the Bound Exchange trading address and ensures the session token', async () => {
+      const TRADING = 'bc1p-trading-wallet';
+      const getEffSpy = vi.spyOn(sodax.spoke.bitcoin, 'getEffectiveWalletAddress').mockResolvedValue(TRADING);
+      const ensureSpy = vi.spyOn(sodax.spoke.bitcoin.radfi, 'ensureRadfiAccessToken').mockResolvedValue(undefined);
+      vi.spyOn(sodax.moneyMarket, 'buildRepayData').mockReturnValueOnce('0xrepay-data');
+      const depositSpy = vi.spyOn(sodax.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: '0xdeposit-hash' });
+
+      const result = await sodax.moneyMarket.createRepayIntent({
+        raw: false,
+        params: repayParams(ChainKeys.BITCOIN_MAINNET),
+        walletProvider: mockBitcoinProvider,
+      });
+
+      expect(result.ok).toBe(true);
+      expect(getEffSpy).toHaveBeenCalledWith(SAMPLE_USER_ADDRESS);
+      expect(ensureSpy).toHaveBeenCalledWith(mockBitcoinProvider);
+      expect(mocks.getUserHubWalletAddress).toHaveBeenCalledWith(TRADING, ChainKeys.BITCOIN_MAINNET);
+      expect(depositSpy.mock.calls[0]?.[0]?.srcAddress).toBe(TRADING);
+    });
+
     it('on hub: same path applies', async () => {
       vi.spyOn(sodax.moneyMarket, 'buildRepayData').mockReturnValueOnce('0xrepay-data');
       vi.spyOn(sodax.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: '0xdep' });
@@ -2270,6 +2392,29 @@ describe('MoneyMarketService.createRepayIntent', () => {
       });
       expect(result.ok).toBe(false);
       if (!result.ok) expect(String(result.error)).toMatch(/Invalid wallet provider for chain key/);
+    });
+
+    it('on Bitcoin (non-raw): rejects a missing wallet provider before building any tx', async () => {
+      // Same fail-fast guard as supply: a non-raw Bitcoin repay deposit MUST sign via a Bitcoin wallet
+      // provider. Collaborators mocked to no-ops so a guard regression can never reach a real deposit/tx
+      // (which costs money); the assertions prove the guard short-circuits before any tx is built.
+      const getEffSpy = vi.spyOn(sodax.spoke.bitcoin, 'getEffectiveWalletAddress').mockResolvedValue('bc1p-trading');
+      const depositSpy = vi.spyOn(sodax.spoke, 'deposit').mockResolvedValue({ ok: true, value: '0xunused' });
+
+      const result = await sodax.moneyMarket.createRepayIntent({
+        raw: false,
+        params: repayParams(ChainKeys.BITCOIN_MAINNET),
+        walletProvider: undefined,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('VALIDATION_FAILED');
+        expect(result.error.context?.field).toBe('walletProvider');
+        expect(String(result.error)).toMatch(/Expected bitcoin wallet provider/);
+      }
+      expect(getEffSpy).not.toHaveBeenCalled();
+      expect(depositSpy).not.toHaveBeenCalled();
     });
 
     it('rejects unsupported token on srcChain', async () => {
@@ -2974,25 +3119,63 @@ describe('borrow / withdraw: relayData is forwarded to relayTxAndWaitPacket on S
     expect(mocks.relayTxAndWaitPacket.mock.calls[0]?.[0]?.data).toBe(extraData);
   });
 
-  it('withdraw on Bitcoin: forwards extra data tuple', async () => {
+  it('withdraw on Bitcoin: relays the signed payload object as `data` under the literal "withdraw" tx_hash', async () => {
     const extraData = { address: HUB_WALLET, payload: '0xbtc-payload' as `0x${string}` };
+    const signedPayload = { payload_hex: '7b22737263', signature: 'AUBsig' };
     vi.spyOn(sodax.moneyMarket, 'createWithdrawIntent').mockResolvedValueOnce({
       ok: true,
       value: {
-        tx: '0xbtc-tx',
+        // the signed on-demand withdrawal payload (JSON string) — there is no broadcast txid
+        tx: JSON.stringify(signedPayload),
         relayData: extraData,
       },
     });
     vi.spyOn(sodax.spoke, 'verifyTxHash').mockResolvedValueOnce({ ok: true, value: true });
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xdst' } });
 
-    await sodax.moneyMarket.withdraw({
+    const result = await sodax.moneyMarket.withdraw({
       raw: false,
       params: withdrawParams(ChainKeys.BITCOIN_MAINNET),
       walletProvider: mockBitcoinProvider,
     });
 
-    expect(mocks.relayTxAndWaitPacket.mock.calls[0]?.[0]?.data).toBe(extraData);
+    // Bitcoin borrow/withdraw are on-demand: submit tx_hash is the literal "withdraw" and the signed
+    // payload travels in `data` as a JSON object (the {address,payload} relayData is dropped). The
+    // relay tracks the packet under `od:<keccak256 of the ASCII payload_hex>`, so polling uses that.
+    const pollId = `od:${keccak256(stringToBytes(signedPayload.payload_hex)).slice(2)}`;
+    const relayArg = mocks.relayTxAndWaitPacket.mock.calls[0]?.[0];
+    expect(relayArg?.srcTxHash).toBe('withdraw');
+    expect(relayArg?.data).toEqual(signedPayload);
+    expect(relayArg?.pollTxHash).toBe(pollId);
+    // The returned srcChainTxHash is that poll id, not the opaque signed payload — it is the identifier
+    // SodaxScan resolves and the explorer link is built from.
+    expect(result).toEqual({ ok: true, value: { srcChainTxHash: pollId, dstChainTxHash: '0xdst' } });
+  });
+
+  it('borrow on Bitcoin: returns the on-demand poll id (od:<hash>) as srcChainTxHash, not the raw payload', async () => {
+    const extraData = { address: HUB_WALLET, payload: '0xbtc-payload' as `0x${string}` };
+    const signedPayload = { payload_hex: '7b22737263', signature: 'AUBsig' };
+    vi.spyOn(sodax.moneyMarket, 'createBorrowIntent').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        // the signed on-demand borrow payload (JSON string) — there is no broadcast txid
+        tx: JSON.stringify(signedPayload),
+        relayData: extraData,
+      },
+    });
+    vi.spyOn(sodax.spoke, 'verifyTxHash').mockResolvedValueOnce({ ok: true, value: true });
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xdst' } });
+
+    const result = await sodax.moneyMarket.borrow({
+      raw: false,
+      params: borrowParams(ChainKeys.BITCOIN_MAINNET),
+      walletProvider: mockBitcoinProvider,
+    });
+
+    // Same on-demand identity as withdraw: the source identifier is the derived poll id, never the
+    // payload JSON (which would render as a broken "tx hash" / explorer link in consumers).
+    const pollId = `od:${keccak256(stringToBytes(signedPayload.payload_hex)).slice(2)}`;
+    expect(result).toEqual({ ok: true, value: { srcChainTxHash: pollId, dstChainTxHash: '0xdst' } });
   });
 });
 

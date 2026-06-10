@@ -8,8 +8,16 @@ Import everything from `@sodax/sdk`. The barrel re-exports the entire `@sodax/ty
 import {
   // Main entry
   Sodax,
+  type SodaxOptions, // constructor param: DeepPartial<SodaxConfig> & { logger? }
   type SodaxConfig,
   type DeepPartial,
+
+  // Logging (see recipes/logging.md)
+  type SodaxLogger,
+  type SodaxLoggerOption,
+  consoleLogger,
+  silentLogger,
+  resolveLogger,
 
   // Chain keys + narrowing
   ChainKeys,

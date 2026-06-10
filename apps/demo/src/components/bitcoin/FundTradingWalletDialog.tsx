@@ -71,7 +71,7 @@ export const FundTradingWalletDialog = ({
         <DialogHeader>
           <DialogTitle>Deposit using {connectorName}</DialogTitle>
           <DialogDescription>
-            Transfer BTC from your wallet to your Radfi trading wallet
+            Transfer BTC from your wallet to your Bound Exchange trading wallet
           </DialogDescription>
         </DialogHeader>
 
@@ -160,7 +160,7 @@ export const FundTradingWalletDialog = ({
         <div className="flex items-start gap-2 pt-1 text-xs text-muted-foreground">
           <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
           <span>
-            Your trading wallet is a 2-of-2 multisig with Radfi. You retain full custody — Radfi's co-sign expires after 3 months.
+            Your trading wallet is a 2-of-2 multisig with Bound Exchange. You retain full custody — Bound Exchange's co-sign expires after 3 months.
           </span>
         </div>
       </DialogContent>

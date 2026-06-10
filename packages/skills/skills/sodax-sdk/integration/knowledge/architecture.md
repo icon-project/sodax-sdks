@@ -95,7 +95,7 @@ The chain key is the bridge between the type system and runtime routing.
 The `Sodax` class is the public entry point. It constructs and wires every service once at construction time, then reuses them across calls:
 
 ```ts
-const sodax = new Sodax(/* optional DeepPartial<SodaxConfig> */);
+const sodax = new Sodax(/* optional SodaxOptions */);
 await sodax.config.initialize();   // fetch dynamic config; fall back to packaged defaults
 
 // All feature services accessed off the instance:
@@ -127,10 +127,12 @@ All feature services receive `{ hubProvider, config, spoke }` via constructor in
 ### Constructor
 
 ```ts
-import { Sodax, type SodaxConfig, type DeepPartial } from '@sodax/sdk';
+import { Sodax, type SodaxOptions } from '@sodax/sdk';
 
-new Sodax(config?: DeepPartial<SodaxConfig>): Sodax;
+new Sodax(config?: SodaxOptions): Sodax;
 ```
+
+`SodaxOptions` is `DeepPartial<SodaxConfig> & { logger?: SodaxLoggerOption }` — a deep-partial override of the `SodaxConfig` data contract, plus the client-side `logger` sink (kept off `SodaxConfig` itself; see [`recipes/logging.md`](recipes/logging.md)).
 
 `SodaxConfig` has exactly **10 fields** (all required at the type level, but `DeepPartial` makes every leaf optional):
 

@@ -4,10 +4,10 @@
  * Pattern: mirrors SuiSpokeService.test.ts (issue #109) collapsed to one chain. Unlike Sui's
  * SuiClient, Bitcoin's "RPC" is an Esplora-style HTTP API — the SUT calls `fetch(...)` directly,
  * so this file stubs `globalThis.fetch` per-test (with `vi.stubGlobal`) instead of spying on a
- * client method. The Radfi trading-wallet flow is a second collaborator; `radfi.*` instance
+ * client method. The Bound Exchange trading-wallet flow is a second collaborator; `radfi.*` instance
  * methods are spied per-test.
  *
- * Real config data is used wherever possible — every address, RPC URL, polling interval, Radfi
+ * Real config data is used wherever possible — every address, RPC URL, polling interval, Bound Exchange
  * config field, and `walletMode` is sourced from `spokeChainConfig[BITCOIN_MAINNET]`. Only user
  * identities (`USER_ADDR`, `HUB_WALLET`), UTXOs, and txids are fabricated.
  *
@@ -29,6 +29,7 @@ import {
   type Hex,
   type IBitcoinWalletProvider,
 } from '@sodax/types';
+import { keccak256, stringToBytes } from 'viem';
 
 // --- hoisted mocks --------------------------------------------------------
 
@@ -59,8 +60,10 @@ const BTC_RPC_URL = btcConfig.rpcUrl;
 const BTC_POLLING_MS = btcConfig.pollingConfig.pollingIntervalMs;
 const BTC_TIMEOUT_MS = btcConfig.pollingConfig.maxTimeoutMs;
 
-// A real-ish taproot (bc1p…) address used for tests. NOT the asset manager.
+// A real-ish Native SegWit (bc1q / P2WPKH) address used for tests. NOT the asset manager.
 const USER_ADDR = 'bc1q5q3xczsl9zlt0gjys5khjknfp40zfdmkme9ene';
+// A real-ish Taproot (bc1p / P2TR) address — exercises the BIP322 branch from a Schnorr-key type.
+const TAPROOT_ADDR = 'bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr';
 const HUB_WALLET = '0x2222222222222222222222222222222222222222' as `0x${string}`;
 const DST_ADDR = '0x3333333333333333333333333333333333333333' as `0x${string}`;
 const TRADING_ADDR = 'bc1ptradingwallettradingwallettradingwallet000000000000000';
@@ -160,7 +163,7 @@ describe('BitcoinSpokeService.getBtcNetwork', () => {
 // =========================================================================
 
 describe('BitcoinSpokeService.fetchUTXOs', () => {
-  it("fetches `${rpcUrl}/address/{addr}/utxo` and returns the JSON array", async () => {
+  it('fetches `${rpcUrl}/address/{addr}/utxo` and returns the JSON array', async () => {
     const utxos = [{ txid: 'aa', vout: 0, value: 1000, status: { confirmed: true } }];
     setFetch(url => {
       expect(url).toBe(`${BTC_RPC_URL}/address/${USER_ADDR}/utxo`);
@@ -176,7 +179,7 @@ describe('BitcoinSpokeService.fetchUTXOs', () => {
 });
 
 describe('BitcoinSpokeService.fetchRawTransaction', () => {
-  it("fetches `${rpcUrl}/tx/{txid}/hex` and returns the raw text", async () => {
+  it('fetches `${rpcUrl}/tx/{txid}/hex` and returns the raw text', async () => {
     setFetch(url => {
       expect(url).toBe(`${BTC_RPC_URL}/tx/${TX_HASH}/hex`);
       return text('deadbeef');
@@ -261,9 +264,9 @@ describe('BitcoinSpokeService.estimateGas', () => {
   });
 
   it('throws when tx is a string (raw mode not supported here)', async () => {
-    await expect(
-      btcSpoke.estimateGas({ chainKey: BTC, tx: 'whatever' as never }),
-    ).rejects.toThrow(/string tx not supported/);
+    await expect(btcSpoke.estimateGas({ chainKey: BTC, tx: 'whatever' as never })).rejects.toThrow(
+      /string tx not supported/,
+    );
   });
 });
 
@@ -295,7 +298,7 @@ describe('BitcoinSpokeService.getDeposit', () => {
 // =========================================================================
 
 describe('BitcoinSpokeService.getEffectiveWalletAddress', () => {
-  it('TRADING mode → returns the trading-wallet address from Radfi', async () => {
+  it('TRADING mode → returns the trading-wallet address from Bound Exchange', async () => {
     vi.spyOn(btcSpoke.radfi, 'getTradingWallet').mockResolvedValueOnce({
       tradingAddress: TRADING_ADDR,
     } as never);
@@ -316,11 +319,37 @@ describe('BitcoinSpokeService.getEffectiveWalletAddress', () => {
 });
 
 describe('BitcoinSpokeService.getTradingWalletAddress', () => {
-  it('always returns the trading address from Radfi', async () => {
+  it('always returns the trading address from Bound Exchange', async () => {
     vi.spyOn(btcSpoke.radfi, 'getTradingWallet').mockResolvedValueOnce({
       tradingAddress: TRADING_ADDR,
     } as never);
     expect(await btcSpoke.getTradingWalletAddress(USER_ADDR)).toBe(TRADING_ADDR);
+  });
+});
+
+describe('BitcoinSpokeService.getOnDemandRelayIdentity', () => {
+  // The spoke result for an on-demand borrow/withdraw is the signed payload JSON. The relay submits it
+  // under the literal "withdraw" tx_hash but tracks the packet under `od:` + keccak256 of the ASCII
+  // payload_hex characters — polling must use that derived id, not "withdraw".
+  it('submits under "withdraw" and derives the poll id from keccak256 of the payload_hex chars', () => {
+    const payloadHex = '7b22737263';
+    const tx = JSON.stringify({ payload_hex: payloadHex, signature: 'AUBsig' });
+
+    const identity = btcSpoke.getOnDemandRelayIdentity(tx);
+
+    expect(identity.srcTxHash).toBe('withdraw');
+    expect(identity.data).toEqual({ payload_hex: payloadHex, signature: 'AUBsig' });
+    expect(identity.pollTxHash).toBe(`od:${keccak256(stringToBytes(payloadHex)).slice(2)}`);
+  });
+
+  it('strips a leading 0x from payload_hex before hashing (bare-hex chars only)', () => {
+    // Real payloads are bare hex (Buffer.toString('hex')), but if a payload_hex ever carries a 0x
+    // prefix the poll id must hash the same bare-hex chars — otherwise polling never matches the
+    // relay-tracked id. This pins the strip branch the production payloads don't exercise.
+    const bareHex = '7b22737263';
+    const tx = JSON.stringify({ payload_hex: `0x${bareHex}` });
+
+    expect(btcSpoke.getOnDemandRelayIdentity(tx).pollTxHash).toBe(`od:${keccak256(stringToBytes(bareHex)).slice(2)}`);
   });
 });
 
@@ -368,29 +397,94 @@ describe('BitcoinSpokeService.encodeWithdrawalData', () => {
     expect(parsed).toHaveProperty('payload_hex');
     expect(typeof parsed.payload_hex).toBe('string');
     expect(parsed.signature).toBeUndefined();
+    expect(parsed.public_key).toBeUndefined();
   });
 
-  it('TRADING raw=false → calls walletProvider.signEcdsaMessage and embeds the signature', async () => {
+  it('TRADING raw=false on P2WPKH/P2TR → signs via BIP322 (base64) and attaches the public key', async () => {
+    // USER_ADDR is a bc1q (P2WPKH) address; Taproot (bc1p) takes the same branch. P2WPKH/P2TR sign
+    // via BIP322 — wallets return base64, sent as-is — and the public key is sent alongside it
+    // because BIP322 signatures are not public-key-recoverable.
     vi.spyOn(btcSpoke.radfi, 'getTradingWallet').mockResolvedValueOnce({
       tradingAddress: TRADING_ADDR,
     } as never);
-    (mockBtcProvider.signEcdsaMessage as ReturnType<typeof vi.fn>).mockResolvedValueOnce('SIGSIGSIG');
+    (mockBtcProvider.signBip322Message as ReturnType<typeof vi.fn>).mockResolvedValueOnce('EjQ=');
+    (mockBtcProvider.getPublicKey as ReturnType<typeof vi.fn>).mockResolvedValueOnce('02abcdef');
 
     const result = await btcSpoke.encodeWithdrawalData(sendMessageParams<false>({ raw: false }));
 
     const parsed = JSON.parse(result as unknown as string);
-    expect(parsed.signature).toBe('SIGSIGSIG');
-    expect(mockBtcProvider.signEcdsaMessage).toHaveBeenCalledTimes(1);
+    expect(parsed.signature).toBe('EjQ='); // browser wallets return base64 — passed through
+    expect(parsed.public_key).toBe('02abcdef');
+    expect(mockBtcProvider.signBip322Message).toHaveBeenCalledTimes(1);
+    expect(mockBtcProvider.signEcdsaMessage).not.toHaveBeenCalled();
   });
 
-  it('TRADING + getTradingWallet rejection → falls back to original srcAddress (catch branch)', async () => {
+  it('TRADING raw=false on P2TR (bc1p) → signs via BIP322 (Schnorr key) and attaches the public key', async () => {
+    // Taproot keys are Schnorr/x-only — ECDSA cannot sign for them — so P2TR routes to BIP322 like
+    // P2WPKH. Pins the bc1p → BIP322 routing explicitly (the case above uses a bc1q/P2WPKH address)
+    // and checks the payload's address_type, which is what the relay reads to verify the signature.
+    vi.spyOn(btcSpoke.radfi, 'getTradingWallet').mockResolvedValueOnce({
+      tradingAddress: TRADING_ADDR,
+    } as never);
+    (mockBtcProvider.signBip322Message as ReturnType<typeof vi.fn>).mockResolvedValueOnce('EjQ=');
+    (mockBtcProvider.getPublicKey as ReturnType<typeof vi.fn>).mockResolvedValueOnce('02abcdef');
+
+    const result = await btcSpoke.encodeWithdrawalData(
+      sendMessageParams<false>({ raw: false, srcAddress: TAPROOT_ADDR }),
+    );
+
+    const parsed = JSON.parse(result as unknown as string);
+    expect(parsed.signature).toBe('EjQ=');
+    expect(parsed.public_key).toBe('02abcdef');
+    expect(mockBtcProvider.signBip322Message).toHaveBeenCalledTimes(1);
+    expect(mockBtcProvider.signEcdsaMessage).not.toHaveBeenCalled();
+    // address_type travels inside payload_hex — the relay reads it to pick the verification scheme.
+    const payloadJson = JSON.parse(Buffer.from(parsed.payload_hex, 'hex').toString());
+    expect(payloadJson.address_type).toBe('P2TR');
+  });
+
+  it('TRADING raw=false on legacy P2PKH/P2SH → signs via ECDSA and attaches the public key', async () => {
+    vi.spyOn(btcSpoke.radfi, 'getTradingWallet').mockResolvedValueOnce({
+      tradingAddress: TRADING_ADDR,
+    } as never);
+    // 1A1z… is a P2PKH (legacy) address → ECDSA. A hex signature (private-key wallet) is encoded to base64.
+    (mockBtcProvider.signEcdsaMessage as ReturnType<typeof vi.fn>).mockResolvedValueOnce('deadbeef');
+    (mockBtcProvider.getPublicKey as ReturnType<typeof vi.fn>).mockResolvedValueOnce('02abcdef');
+
+    const result = await btcSpoke.encodeWithdrawalData(
+      sendMessageParams<false>({ raw: false, srcAddress: '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa' }),
+    );
+
+    const parsed = JSON.parse(result as unknown as string);
+    expect(parsed.signature).toBe('3q2+7w=='); // hex "deadbeef" → base64
+    expect(parsed.public_key).toBe('02abcdef');
+    expect(mockBtcProvider.signEcdsaMessage).toHaveBeenCalledTimes(1);
+    expect(mockBtcProvider.signBip322Message).not.toHaveBeenCalled();
+  });
+
+  it('TRADING + getTradingWallet rejection → throws (no silent personal-address fallback)', async () => {
     vi.spyOn(btcSpoke.radfi, 'getTradingWallet').mockRejectedValueOnce(new Error('radfi 503'));
 
-    const result = await btcSpoke.encodeWithdrawalData(sendMessageParams<true>({ raw: true }));
-    expect(typeof result).toBe('string');
-    // The payload still encodes — fallback uses the unchanged USER_ADDR; we can't easily decode
-    // the byte payload, but the function must not throw.
-    expect(() => JSON.parse(result as unknown as string)).not.toThrow();
+    // In TRADING mode a failed trading-wallet lookup must surface, not silently fall back to the
+    // personal address — that would emit a payload whose src_address disagrees with the
+    // trading-derived hub wallet the relay actually targets.
+    await expect(btcSpoke.encodeWithdrawalData(sendMessageParams<true>({ raw: true }))).rejects.toThrow('radfi 503');
+  });
+
+  it('TRADING raw=false without getPublicKey support → throws (the relay needs the pubkey to verify)', async () => {
+    vi.spyOn(btcSpoke.radfi, 'getTradingWallet').mockResolvedValueOnce({
+      tradingAddress: TRADING_ADDR,
+    } as never);
+    // BIP322 signatures are not public-key-recoverable, so a provider that cannot surface the public
+    // key must fail loudly rather than emit a payload the relay can never verify.
+    const providerWithoutPublicKey = {
+      ...mockBtcProvider,
+      getPublicKey: undefined,
+    } as unknown as IBitcoinWalletProvider;
+
+    await expect(
+      btcSpoke.encodeWithdrawalData(sendMessageParams<false>({ raw: false, walletProvider: providerWithoutPublicKey })),
+    ).rejects.toThrow('Wallet provider does not support getPublicKey');
   });
 
   it('sendMessage delegates to encodeWithdrawalData', async () => {
@@ -447,7 +541,7 @@ describe('BitcoinSpokeService.deposit', () => {
       base64Psbt: 'cHNidA==',
     } as never);
     (mockBtcProvider.signTransaction as ReturnType<typeof vi.fn>).mockResolvedValueOnce('signedhex');
-    vi.spyOn(btcSpoke.radfi, 'requestRadfiSignature').mockResolvedValueOnce(TX_HASH as never);
+    const sigSpy = vi.spyOn(btcSpoke.radfi, 'requestRadfiSignature').mockResolvedValueOnce(TX_HASH as never);
 
     const BTC_TOKEN = btcConfig.supportedTokens.BTC.address;
     const result = await btcSpoke.deposit({
@@ -463,6 +557,12 @@ describe('BitcoinSpokeService.deposit', () => {
 
     expect(result).toBe(TX_HASH);
     expect(mockBtcProvider.signTransaction).toHaveBeenCalledWith('cHNidA==', false);
+    // relayData ({ hub wallet address, full payload }) is forwarded so Bound Exchange can
+    // auto-resubmit a stuck relay: address === deposit `to`, payload === deposit `data`.
+    expect(sigSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ relayData: { address: HUB_WALLET, payload: '0x' } }),
+      expect.anything(),
+    );
   });
 
   it('TRADING with unsupported token → throws "Unsupported token: …"', async () => {
@@ -516,6 +616,122 @@ describe('BitcoinSpokeService.deposit', () => {
           walletProvider: mockBtcProvider,
         }),
       ).rejects.toThrow(/No UTXOs available/);
+    } finally {
+      Object.defineProperty(btcSpoke, 'walletMode', { value: original, configurable: true });
+    }
+  });
+
+  it('USER + all UTXOs mempool-spent → throws "No UTXOs available for deposit"', async () => {
+    // fetchMempoolSpentOutpoints returns both UTXOs as spent — the filter leaves nothing.
+    const original = btcSpoke.walletMode;
+    Object.defineProperty(btcSpoke, 'walletMode', { value: 'USER', configurable: true });
+    setFetch(url => {
+      if (url.endsWith('/utxo')) {
+        return json([
+          { txid: 'aa', vout: 0, value: 30_000, status: { confirmed: true } },
+          { txid: 'bb', vout: 1, value: 30_000, status: { confirmed: true } },
+        ]);
+      }
+      if (url.endsWith('/txs/mempool')) {
+        // Both UTXOs already spent in mempool
+        return json([{ vin: [{ txid: 'aa', vout: 0 }, { txid: 'bb', vout: 1 }] }]);
+      }
+      return new Response(null, { status: 404 });
+    });
+    try {
+      await expect(
+        btcSpoke.deposit({
+          srcChainKey: BTC,
+          srcAddress: USER_ADDR,
+          to: HUB_WALLET,
+          token: 'BTC',
+          amount: 50_000n,
+          data: '0x' as Hex,
+          raw: false,
+          walletProvider: mockBtcProvider,
+        }),
+      ).rejects.toThrow(/No UTXOs available/);
+    } finally {
+      Object.defineProperty(btcSpoke, 'walletMode', { value: original, configurable: true });
+    }
+  });
+
+  it('USER + one UTXO mempool-spent → buildDepositPsbt receives only the unspent UTXO', async () => {
+    // fetchMempoolSpentOutpoints marks 'aa:0' as spent; 'bb:1' is clean.
+    // buildDepositPsbt is stubbed to prevent real PSBT construction.
+    const original = btcSpoke.walletMode;
+    Object.defineProperty(btcSpoke, 'walletMode', { value: 'USER', configurable: true });
+    setFetch(url => {
+      if (url.endsWith('/utxo')) {
+        return json([
+          { txid: 'aa', vout: 0, value: 30_000, status: { confirmed: true } },
+          { txid: 'bb', vout: 1, value: 30_000, status: { confirmed: true } },
+        ]);
+      }
+      if (url.endsWith('/txs/mempool')) {
+        return json([{ vin: [{ txid: 'aa', vout: 0 }] }]); // only 'aa:0' is spent
+      }
+      return new Response(null, { status: 404 });
+    });
+    const BTC_TOKEN = btcConfig.supportedTokens.BTC.address;
+    const buildSpy = vi
+      .spyOn(btcSpoke, 'buildDepositPsbt')
+      .mockResolvedValueOnce({ data: 'fakePsbt' } as never);
+    vi.spyOn(btcSpoke, 'signAndBroadcastTransaction').mockResolvedValueOnce(TX_HASH as never);
+    try {
+      await btcSpoke.deposit({
+        srcChainKey: BTC,
+        srcAddress: USER_ADDR,
+        to: HUB_WALLET,
+        token: BTC_TOKEN,
+        amount: 20_000n,
+        data: '0x' as Hex,
+        raw: false,
+        walletProvider: mockBtcProvider,
+      });
+      // buildDepositPsbt receives only the UTXOs that survived the filter
+      const receivedUtxos = buildSpy.mock.calls[0]?.[6];
+      expect(receivedUtxos).toHaveLength(1);
+      expect(receivedUtxos[0]).toMatchObject({ txid: 'bb', vout: 1 });
+    } finally {
+      Object.defineProperty(btcSpoke, 'walletMode', { value: original, configurable: true });
+    }
+  });
+
+  it('USER + mempool endpoint non-ok → all UTXOs pass through (mempool check is non-blocking)', async () => {
+    // fetchMempoolSpentOutpoints returns empty Set when the endpoint is unavailable —
+    // the deposit must not be blocked by a mempool API outage.
+    const original = btcSpoke.walletMode;
+    Object.defineProperty(btcSpoke, 'walletMode', { value: 'USER', configurable: true });
+    setFetch(url => {
+      if (url.endsWith('/utxo')) {
+        return json([{ txid: 'cc', vout: 0, value: 80_000, status: { confirmed: true } }]);
+      }
+      if (url.endsWith('/txs/mempool')) {
+        return new Response(null, { status: 503 }); // mempool endpoint down
+      }
+      return new Response(null, { status: 404 });
+    });
+    const BTC_TOKEN = btcConfig.supportedTokens.BTC.address;
+    const buildSpy = vi
+      .spyOn(btcSpoke, 'buildDepositPsbt')
+      .mockResolvedValueOnce({ data: 'fakePsbt' } as never);
+    vi.spyOn(btcSpoke, 'signAndBroadcastTransaction').mockResolvedValueOnce(TX_HASH as never);
+    try {
+      await btcSpoke.deposit({
+        srcChainKey: BTC,
+        srcAddress: USER_ADDR,
+        to: HUB_WALLET,
+        token: BTC_TOKEN,
+        amount: 20_000n,
+        data: '0x' as Hex,
+        raw: false,
+        walletProvider: mockBtcProvider,
+      });
+      // All UTXOs (including the one that could have been filtered) are forwarded
+      const receivedUtxos = buildSpy.mock.calls[0]?.[6];
+      expect(receivedUtxos).toHaveLength(1);
+      expect(receivedUtxos[0]).toMatchObject({ txid: 'cc', vout: 0 });
     } finally {
       Object.defineProperty(btcSpoke, 'walletMode', { value: original, configurable: true });
     }

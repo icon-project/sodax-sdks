@@ -1,5 +1,5 @@
 import type { EvmHubProvider } from '../entities/EvmHubProvider.js';
-export type { RelayExtraData } from './relay-types.js';
+export type { RelayExtraData, OnDemandRelayData } from './relay-types.js';
 import type { RelayExtraData } from './relay-types.js';
 import type { SpokeChainKey, TxReturnType } from '@sodax/types';
 
@@ -22,7 +22,6 @@ export type RateLimitConfig = {
 export type OptionalRaw<R extends boolean> = { raw?: R };
 export type OptionalSkipSimulation = { skipSimulation?: boolean };
 export type OptionalTimeout = { timeout?: number };
-
 
 export type TxHashPair = {
   srcChainTxHash: string; // tx hash on the source chain (usually spoke chain)

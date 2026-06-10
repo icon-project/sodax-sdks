@@ -34,6 +34,7 @@ vi.mock('../shared/utils/shared-utils.js', async () => {
 });
 
 import type { ConfigService } from '../shared/config/ConfigService.js';
+import { silentLogger } from '../shared/logger.js';
 import { SolverApiService } from './SolverApiService.js';
 
 // --- fixtures -------------------------------------------------------------
@@ -67,6 +68,7 @@ const dstXToken = { hubAsset: DST_HUB_ASSET } as unknown as XToken;
 const mockConfigService = {
   isValidOriginalAssetAddress: vi.fn(),
   getSpokeTokenFromOriginalAssetAddress: vi.fn(),
+  logger: silentLogger,
 } as unknown as ConfigService;
 
 const realFetch = globalThis.fetch;

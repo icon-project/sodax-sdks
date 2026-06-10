@@ -81,7 +81,7 @@ Full SDK-level detail: `sodax-sdk`: `migration-v1-to-v2/knowledge/breaking-chang
 
 ## `SodaxConfig` reshape — `rpcConfig` → `chains`
 
-`SodaxProvider`'s config prop is `DeepPartial<SodaxConfig>`. The SDK renamed/restructured the config:
+`SodaxProvider`'s config prop is `SodaxOptions` (`= DeepPartial<SodaxConfig> & { logger? }`). The SDK renamed/restructured the config:
 
 ```diff
 - <SodaxProvider rpcConfig={{
