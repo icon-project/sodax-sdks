@@ -12,6 +12,8 @@
  * throw with an unlisted string code is a compile error — additions go through this file.
  */
 
+import type { SodaxFeature } from '@sodax/types';
+
 /**
  * Reason-only error codes. Each code answers "what kind of failure was this?", not
  * "which feature?".
@@ -57,16 +59,11 @@ export type SodaxErrorCode =
 /**
  * The producing feature of a SodaxError. Required at construction so consumers /
  * loggers always have a feature tag.
+ *
+ * Defined once in `@sodax/types` (shared with the analytics layer) and re-exported here so
+ * existing `@sodax/sdk` imports of `SodaxFeature` keep working unchanged.
  */
-export type SodaxFeature =
-  | 'swap'
-  | 'moneyMarket'
-  | 'bridge'
-  | 'staking'
-  | 'migration'
-  | 'dex'
-  | 'partner'
-  | 'recovery';
+export type { SodaxFeature };
 
 /**
  * Orchestration phase tag attached via `context.phase`. Canonical superset across all

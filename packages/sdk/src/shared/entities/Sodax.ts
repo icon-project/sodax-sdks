@@ -12,6 +12,7 @@ import type { HubProvider } from '../types/types.js';
 import { ConfigService } from '../config/index.js';
 import { mergeSodaxConfig } from '../config/mergeSodaxConfig.js';
 import { resolveLogger } from '../logger.js';
+import { resolveAnalytics } from '../analytics.js';
 import { PartnerService } from '../../partner/PartnerService.js';
 import { RecoveryService } from '../../recovery/RecoveryService.js';
 
@@ -44,9 +45,18 @@ export class Sodax {
     // type-level conflation is gone. `mergeSodaxConfig` / `userConfig` ignore the extra `logger` key
     // (it is never read off the data config; services read the resolved sink via `config.logger`).
     const logger = resolveLogger(config?.logger);
+    // Analytics is opt-in: `resolveAnalytics` returns a no-op emitter unless `config.analytics` is set,
+    // so feature services can call `config.analytics.emit(...)` unconditionally with zero cost when off.
+    const analytics = resolveAnalytics(config?.analytics);
     this.instanceConfig = config ? mergeSodaxConfig(sodaxConfig, config) : sodaxConfig;
     this.backendApi = new BackendApiService(this.instanceConfig.api, logger);
-    this.config = new ConfigService({ api: this.backendApi, config: this.instanceConfig, userConfig: config, logger });
+    this.config = new ConfigService({
+      api: this.backendApi,
+      config: this.instanceConfig,
+      userConfig: config,
+      logger,
+      analytics,
+    });
 
     this.hubProvider = new EvmHubProvider({ config: this.config }); // default to Sonic mainnet
     this.spoke = new SpokeService({ config: this.config, hubProvider: this.hubProvider });

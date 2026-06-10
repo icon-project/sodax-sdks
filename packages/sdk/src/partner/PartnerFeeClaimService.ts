@@ -324,6 +324,12 @@ export class PartnerFeeClaimService {
   public async setSwapPreference<K extends SpokeChainKey, Raw extends boolean>(
     _params: SetSwapPreferenceAction<K, Raw>,
   ): Promise<Result<TxReturnType<K, Raw>>> {
+    return this.config.analytics.trackResult('partner', 'setSwapPreference', () => this.setSwapPreferenceImpl(_params));
+  }
+
+  private async setSwapPreferenceImpl<K extends SpokeChainKey, Raw extends boolean>(
+    _params: SetSwapPreferenceAction<K, Raw>,
+  ): Promise<Result<TxReturnType<K, Raw>>> {
     const { params, walletProvider, raw } = _params;
     try {
       invariant(isHubChainKeyType(params.srcChainKey), 'PartnerFeeClaimService only supports Sonic spoke provider');
@@ -589,6 +595,12 @@ export class PartnerFeeClaimService {
    *   - Error from `SolverApiService.postExecution` — if the solver notification failed.
    */
   public async swap(
+    _params: PartnerFeeClaimSwapAction<HubChainKey, false>,
+  ): Promise<Result<IntentAutoSwapResult>> {
+    return this.config.analytics.trackResult('partner', 'swap', () => this.swapImpl(_params));
+  }
+
+  private async swapImpl(
     _params: PartnerFeeClaimSwapAction<HubChainKey, false>,
   ): Promise<Result<IntentAutoSwapResult>> {
     try {

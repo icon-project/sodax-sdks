@@ -32,6 +32,7 @@ import { isAddress } from 'viem';
 import type { BackendApiService } from '../../backendApi/BackendApiService.js';
 import { mergeSodaxConfig } from './mergeSodaxConfig.js';
 import { resolveLogger } from '../logger.js';
+import { noopAnalytics, type ResolvedAnalytics } from '../analytics.js';
 
 export type ConfigServiceConstructorParams = {
   api: BackendApiService;
@@ -47,6 +48,11 @@ export type ConfigServiceConstructorParams = {
    * in {@link ConfigService.initialize} never replaces it. Defaults to the console logger when omitted.
    */
   logger?: SodaxLogger;
+  /**
+   * Pre-resolved analytics emitter. Like {@link logger}, held outside the swappable `SodaxConfig` so a
+   * dynamic config fetch never replaces it. Defaults to the no-op (disabled) emitter when omitted.
+   */
+  analytics?: ResolvedAnalytics;
 };
 
 /**
@@ -63,6 +69,13 @@ export class ConfigService {
    */
   public readonly logger: SodaxLogger;
 
+  /**
+   * Analytics emitter. Resolved once at construction and kept independent of {@link sodax} so that
+   * {@link initialize}'s dynamic-config swap never clobbers it. Read by services via `config.analytics`;
+   * disabled (no-op) unless the consumer passed an `analytics` config to `new Sodax(...)`.
+   */
+  public readonly analytics: ResolvedAnalytics;
+
   private initialized = false;
 
   // data structures for quick lookup
@@ -76,11 +89,12 @@ export class ConfigService {
   private chainToSupportedTokenAddressMap!: Map<SpokeChainKey, Set<string>>;
   private hubAssetToXTokenMap!: Map<Address, XToken>;
 
-  constructor({ api, config, userConfig, logger }: ConfigServiceConstructorParams) {
+  constructor({ api, config, userConfig, logger, analytics }: ConfigServiceConstructorParams) {
     this.api = api;
     this.sodax = config;
     this.userConfig = userConfig;
     this.logger = logger ?? resolveLogger(undefined);
+    this.analytics = analytics ?? noopAnalytics;
     this.loadSodaxConfigDataStructures(config);
   }
 

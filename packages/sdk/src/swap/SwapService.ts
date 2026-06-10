@@ -376,74 +376,89 @@ export class SwapService {
     const { params } = _params;
     const srcChainKey = params.srcChainKey;
     const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey };
-    try {
-      const timeout = _params.timeout;
-      const createIntentResult = await this.createIntent(_params);
-      if (!createIntentResult.ok) {
-        // CreateIntentErrorCode ⊂ SwapErrorCode by definition; the cast is structural, not a
-        // contract widening. (Verified at design time via the type alias relationship.)
-        return { ok: false, error: createIntentResult.error };
-      }
-
-      const { tx: spokeTxHash, intent, relayData } = createIntentResult.value;
-
-      const verifyTxHashResult = await this.spoke.verifyTxHash({
-        txHash: spokeTxHash,
-        chainKey: srcChainKey,
-      });
-      if (!verifyTxHashResult.ok) {
-        return { ok: false, error: verifyFailed('swap', verifyTxHashResult.error, { ...baseCtx, action: 'swap' }) };
-      }
-
-      let dstIntentTxHash: string;
-      if (isHubChainKeyType(srcChainKey)) {
-        dstIntentTxHash = spokeTxHash;
-      } else {
-        const packet = await relayTxAndWaitPacket({
-          srcTxHash: spokeTxHash,
-          data: relayData,
-          chainKey: srcChainKey,
-          relayerApiEndpoint: this.relayerApiEndpoint,
-          timeout,
-        });
-        if (!packet.ok) {
-          return { ok: false, error: mapRelayFailure(packet.error, { feature: 'swap', action: 'swap', ...baseCtx }) };
+    return this.config.analytics.trackResult('swap', 'swap', async () => {
+      try {
+        const timeout = _params.timeout;
+        const createIntentResult = await this.createIntent(_params);
+        if (!createIntentResult.ok) {
+          // CreateIntentErrorCode ⊂ SwapErrorCode by definition; the cast is structural, not a
+          // contract widening. (Verified at design time via the type alias relationship.)
+          return { ok: false, error: createIntentResult.error };
         }
-        dstIntentTxHash = packet.value.dst_tx_hash;
-      }
 
-      const postExecResult = await this.postExecution({
-        intent_tx_hash: dstIntentTxHash as `0x${string}`,
-      });
-      if (!postExecResult.ok) {
-        // PostExecutionErrorCode ⊂ SwapErrorCode by definition.
-        return { ok: false, error: postExecResult.error };
-      }
+        const { tx: spokeTxHash, intent, relayData } = createIntentResult.value;
 
-      return {
-        ok: true,
-        value: {
-          solverExecutionResponse: postExecResult.value,
-          intent,
-          intentDeliveryInfo: {
-            srcChainKey,
+        const verifyTxHashResult = await this.spoke.verifyTxHash({
+          txHash: spokeTxHash,
+          chainKey: srcChainKey,
+        });
+        if (!verifyTxHashResult.ok) {
+          return { ok: false, error: verifyFailed('swap', verifyTxHashResult.error, { ...baseCtx, action: 'swap' }) };
+        }
+
+        let dstIntentTxHash: string;
+        if (isHubChainKeyType(srcChainKey)) {
+          dstIntentTxHash = spokeTxHash;
+        } else {
+          const packet = await relayTxAndWaitPacket({
             srcTxHash: spokeTxHash,
-            srcAddress: params.srcAddress,
-            dstChainKey: params.dstChainKey,
-            dstTxHash: dstIntentTxHash,
-            dstAddress: params.dstAddress,
-          } satisfies IntentDeliveryInfo,
-        },
-      };
-    } catch (error) {
-      // Narrow guard: preserve SodaxErrors whose code is in the swap union; wrap unknown
-      // codes (e.g. an accidental cross-feature code) as UNKNOWN.
-      if (isSwapError(error)) return { ok: false, error };
-      return {
-        ok: false,
-        error: unknownFailed('swap', error, { ...baseCtx, action: 'swap' }),
-      };
-    }
+            data: relayData,
+            chainKey: srcChainKey,
+            relayerApiEndpoint: this.relayerApiEndpoint,
+            timeout,
+          });
+          if (!packet.ok) {
+            return { ok: false, error: mapRelayFailure(packet.error, { feature: 'swap', action: 'swap', ...baseCtx }) };
+          }
+          dstIntentTxHash = packet.value.dst_tx_hash;
+        }
+
+        const postExecResult = await this.postExecution({
+          intent_tx_hash: dstIntentTxHash as `0x${string}`,
+        });
+        if (!postExecResult.ok) {
+          // PostExecutionErrorCode ⊂ SwapErrorCode by definition.
+          return { ok: false, error: postExecResult.error };
+        }
+
+        return {
+          ok: true,
+          value: {
+            solverExecutionResponse: postExecResult.value,
+            intent,
+            intentDeliveryInfo: {
+              srcChainKey,
+              srcTxHash: spokeTxHash,
+              srcAddress: params.srcAddress,
+              dstChainKey: params.dstChainKey,
+              dstTxHash: dstIntentTxHash,
+              dstAddress: params.dstAddress,
+            } satisfies IntentDeliveryInfo,
+          },
+        };
+      } catch (error) {
+        // Narrow guard: preserve SodaxErrors whose code is in the swap union; wrap unknown
+        // codes (e.g. an accidental cross-feature code) as UNKNOWN.
+        if (isSwapError(error)) return { ok: false, error };
+        return {
+          ok: false,
+          error: unknownFailed('swap', error, { ...baseCtx, action: 'swap' }),
+        };
+      }
+    }, {
+      start: () => ({
+        srcChainKey,
+        dstChainKey: params.dstChainKey,
+        srcAddress: params.srcAddress,
+        dstAddress: params.dstAddress,
+      }),
+      success: value => ({
+        srcChainKey,
+        dstChainKey: params.dstChainKey,
+        srcTxHash: value.intentDeliveryInfo.srcTxHash,
+        dstTxHash: value.intentDeliveryInfo.dstTxHash,
+      }),
+    });
   }
 
   /**

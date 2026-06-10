@@ -174,6 +174,12 @@ export class RecoveryService {
   public async withdrawHubAsset<K extends SpokeChainKey, Raw extends boolean>(
     _params: WithdrawHubAssetAction<K, Raw>,
   ): Promise<Result<TxReturnType<K, Raw>>> {
+    return this.config.analytics.trackResult('recovery', 'withdrawHubAsset', () => this.withdrawHubAssetImpl(_params));
+  }
+
+  private async withdrawHubAssetImpl<K extends SpokeChainKey, Raw extends boolean>(
+    _params: WithdrawHubAssetAction<K, Raw>,
+  ): Promise<Result<TxReturnType<K, Raw>>> {
     const { params } = _params;
     try {
       const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);

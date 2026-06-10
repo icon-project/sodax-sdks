@@ -336,6 +336,12 @@ export class BridgeService {
   public async bridge<K extends SpokeChainKey>(
     _params: BridgeParams<K, false>,
   ): Promise<Result<TxHashPair, BridgeOrchestrationError>> {
+    return this.config.analytics.trackResult('bridge', 'bridge', () => this.bridgeImpl(_params));
+  }
+
+  private async bridgeImpl<K extends SpokeChainKey>(
+    _params: BridgeParams<K, false>,
+  ): Promise<Result<TxHashPair, BridgeOrchestrationError>> {
     const { params, timeout } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
     try {

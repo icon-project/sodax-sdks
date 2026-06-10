@@ -514,6 +514,12 @@ export class MigrationService {
   async migratebnUSD<K extends SpokeChainKey>(
     _params: UnifiedBnUSDMigrateAction<K, false>,
   ): Promise<Result<TxHashPair, MigrateOrchestrationError>> {
+    return this.config.analytics.trackResult('migration', 'migratebnUSD', () => this.migratebnUSDImpl(_params));
+  }
+
+  private async migratebnUSDImpl<K extends SpokeChainKey>(
+    _params: UnifiedBnUSDMigrateAction<K, false>,
+  ): Promise<Result<TxHashPair, MigrateOrchestrationError>> {
     const { params, timeout } = _params;
     const baseCtx = {
       srcChainKey: params.srcChainKey,
@@ -607,6 +613,12 @@ export class MigrationService {
    *   check fails, the deposit reverts, or the relay times out.
    */
   async migrateIcxToSoda(_params: IcxMigrateAction<false>): Promise<Result<TxHashPair, MigrateOrchestrationError>> {
+    return this.config.analytics.trackResult('migration', 'migrateIcxToSoda', () => this.migrateIcxToSodaImpl(_params));
+  }
+
+  private async migrateIcxToSodaImpl(
+    _params: IcxMigrateAction<false>,
+  ): Promise<Result<TxHashPair, MigrateOrchestrationError>> {
     const { timeout } = _params;
     const baseCtx = { srcChainKey: _params.params.srcChainKey, action: 'migrateIcxToSoda' as const };
     try {
@@ -656,6 +668,14 @@ export class MigrationService {
   async revertMigrateSodaToIcx(
     _params: IcxRevertMigrationAction<false>,
   ): Promise<Result<TxHashPair, RevertMigrationOrchestrationError>> {
+    return this.config.analytics.trackResult('migration', 'revertMigrateSodaToIcx', () =>
+      this.revertMigrateSodaToIcxImpl(_params),
+    );
+  }
+
+  private async revertMigrateSodaToIcxImpl(
+    _params: IcxRevertMigrationAction<false>,
+  ): Promise<Result<TxHashPair, RevertMigrationOrchestrationError>> {
     const { timeout } = _params;
     const baseCtx = { srcChainKey: ChainKeys.SONIC_MAINNET, action: 'revertMigrateSodaToIcx' as const };
     try {
@@ -702,6 +722,10 @@ export class MigrationService {
    *   ICON deposit transaction and `dstChainTxHash` is the hub-side packet receipt.
    */
   async migrateBaln(_params: BalnMigrateAction<false>): Promise<Result<TxHashPair, MigrateOrchestrationError>> {
+    return this.config.analytics.trackResult('migration', 'migrateBaln', () => this.migrateBalnImpl(_params));
+  }
+
+  private async migrateBalnImpl(_params: BalnMigrateAction<false>): Promise<Result<TxHashPair, MigrateOrchestrationError>> {
     const { timeout } = _params;
     const baseCtx = { srcChainKey: ChainKeys.ICON_MAINNET, action: 'migrateBaln' as const };
     try {

@@ -391,6 +391,12 @@ export class StakingService {
   public async stake<K extends SpokeChainKey>(
     _params: StakeAction<K, false>,
   ): Promise<Result<TxHashPair, StakeOrchestrationError>> {
+    return this.config.analytics.trackResult('staking', 'stake', () => this.stakeImpl(_params));
+  }
+
+  private async stakeImpl<K extends SpokeChainKey>(
+    _params: StakeAction<K, false>,
+  ): Promise<Result<TxHashPair, StakeOrchestrationError>> {
     const { params, timeout } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, action: 'stake' as const };
     try {
@@ -556,6 +562,12 @@ export class StakingService {
   public async unstake<K extends SpokeChainKey>(
     _params: UnstakeAction<K, false>,
   ): Promise<Result<TxHashPair, StakingOrchestrationError>> {
+    return this.config.analytics.trackResult('staking', 'unstake', () => this.unstakeImpl(_params));
+  }
+
+  private async unstakeImpl<K extends SpokeChainKey>(
+    _params: UnstakeAction<K, false>,
+  ): Promise<Result<TxHashPair, StakingOrchestrationError>> {
     const { params, timeout } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, action: 'unstake' as const };
     try {
@@ -699,6 +711,12 @@ export class StakingService {
    * @returns `{ ok: true, value: { srcChainTxHash, dstChainTxHash } }` on success.
    */
   public async instantUnstake<K extends SpokeChainKey>(
+    _params: InstantUnstakeAction<K, false>,
+  ): Promise<Result<TxHashPair, StakingOrchestrationError>> {
+    return this.config.analytics.trackResult('staking', 'instantUnstake', () => this.instantUnstakeImpl(_params));
+  }
+
+  private async instantUnstakeImpl<K extends SpokeChainKey>(
     _params: InstantUnstakeAction<K, false>,
   ): Promise<Result<TxHashPair, StakingOrchestrationError>> {
     const { params, timeout } = _params;
@@ -861,6 +879,12 @@ export class StakingService {
    * @returns `{ ok: true, value: { srcChainTxHash, dstChainTxHash } }` on success.
    */
   public async claim<K extends SpokeChainKey>(
+    _params: ClaimAction<K, false>,
+  ): Promise<Result<TxHashPair, StakingOrchestrationError>> {
+    return this.config.analytics.trackResult('staking', 'claim', () => this.claimImpl(_params));
+  }
+
+  private async claimImpl<K extends SpokeChainKey>(
     _params: ClaimAction<K, false>,
   ): Promise<Result<TxHashPair, StakingOrchestrationError>> {
     const { params, timeout } = _params;
@@ -1030,6 +1054,12 @@ export class StakingService {
    * @returns `{ ok: true, value: { srcChainTxHash, dstChainTxHash } }` on success.
    */
   public async cancelUnstake<K extends SpokeChainKey>(
+    _params: CancelUnstakeAction<K, false>,
+  ): Promise<Result<TxHashPair, StakingOrchestrationError>> {
+    return this.config.analytics.trackResult('staking', 'cancelUnstake', () => this.cancelUnstakeImpl(_params));
+  }
+
+  private async cancelUnstakeImpl<K extends SpokeChainKey>(
     _params: CancelUnstakeAction<K, false>,
   ): Promise<Result<TxHashPair, StakingOrchestrationError>> {
     const { params, timeout } = _params;

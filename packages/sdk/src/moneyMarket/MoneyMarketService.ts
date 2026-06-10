@@ -518,6 +518,12 @@ export class MoneyMarketService {
   public async supply<K extends SpokeChainKey>(
     _params: MoneyMarketSupplyActionParams<K, false>,
   ): Promise<Result<TxHashPair, MoneyMarketOrchestrationError>> {
+    return this.config.analytics.trackResult('moneyMarket', 'supply', () => this.supplyImpl(_params));
+  }
+
+  private async supplyImpl<K extends SpokeChainKey>(
+    _params: MoneyMarketSupplyActionParams<K, false>,
+  ): Promise<Result<TxHashPair, MoneyMarketOrchestrationError>> {
     const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;
     const srcChainKey = params.srcChainKey;
     const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'supply' as const };
@@ -679,6 +685,12 @@ export class MoneyMarketService {
    *   `dstChainTxHash` (hub delivery or relay destination).
    */
   public async borrow<K extends SpokeChainKey>(
+    _params: MoneyMarketBorrowActionParams<K, false>,
+  ): Promise<Result<TxHashPair, MoneyMarketOrchestrationError>> {
+    return this.config.analytics.trackResult('moneyMarket', 'borrow', () => this.borrowImpl(_params));
+  }
+
+  private async borrowImpl<K extends SpokeChainKey>(
     _params: MoneyMarketBorrowActionParams<K, false>,
   ): Promise<Result<TxHashPair, MoneyMarketOrchestrationError>> {
     const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;
@@ -853,6 +865,12 @@ export class MoneyMarketService {
   public async withdraw<K extends SpokeChainKey>(
     _params: MoneyMarketWithdrawActionParams<K, false>,
   ): Promise<Result<TxHashPair, MoneyMarketOrchestrationError>> {
+    return this.config.analytics.trackResult('moneyMarket', 'withdraw', () => this.withdrawImpl(_params));
+  }
+
+  private async withdrawImpl<K extends SpokeChainKey>(
+    _params: MoneyMarketWithdrawActionParams<K, false>,
+  ): Promise<Result<TxHashPair, MoneyMarketOrchestrationError>> {
     const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;
     const srcChainKey = params.srcChainKey;
     const hubChainId = this.hubProvider.chainConfig.chain.key;
@@ -1024,6 +1042,12 @@ export class MoneyMarketService {
    * @returns A pair of transaction hashes — `srcChainTxHash` (spoke) and `dstChainTxHash` (hub).
    */
   public async repay<K extends SpokeChainKey>(
+    _params: MoneyMarketRepayActionParams<K, false>,
+  ): Promise<Result<TxHashPair, MoneyMarketOrchestrationError>> {
+    return this.config.analytics.trackResult('moneyMarket', 'repay', () => this.repayImpl(_params));
+  }
+
+  private async repayImpl<K extends SpokeChainKey>(
     _params: MoneyMarketRepayActionParams<K, false>,
   ): Promise<Result<TxHashPair, MoneyMarketOrchestrationError>> {
     const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;

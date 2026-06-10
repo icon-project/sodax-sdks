@@ -1,5 +1,6 @@
 import type { TxPollingConfig } from '../shared/shared.js';
 import type { SodaxLoggerOption } from '../shared/logger.js';
+import type { AnalyticsOption } from '../shared/analytics.js';
 import type { DeepPartial } from '../utils/deep-partial.js';
 import {
   apiConfig,
@@ -79,6 +80,7 @@ export type SodaxConfig = {
  */
 export type SodaxOptions = DeepPartial<SodaxConfig> & {
   logger?: SodaxLoggerOption; // SDK log sink: 'console' (default) | 'silent' | a custom SodaxLogger. Resolved client-side; never fetched from or overwritten by the backend config.
+  analytics?: AnalyticsOption; // Opt-in user-action analytics: an AnalyticsConfig (sink + optional level/feature scoping) or false (default, disabled). Resolved client-side; never fetched from or overwritten by the backend config.
 };
 
 // default sodax config object which can always be overriden through Sodax instance (i.e. new Sodax(...config))

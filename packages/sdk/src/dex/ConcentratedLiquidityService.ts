@@ -736,6 +736,12 @@ export class ClService {
   public async supplyLiquidity<K extends SpokeChainKey>(
     _params: ClSupplyAction<K, false>,
   ): Promise<Result<TxHashPair>> {
+    return this.config.analytics.trackResult('dex', 'supplyLiquidity', () => this.supplyLiquidityImpl(_params));
+  }
+
+  private async supplyLiquidityImpl<K extends SpokeChainKey>(
+    _params: ClSupplyAction<K, false>,
+  ): Promise<Result<TxHashPair>> {
     const { params, timeout } = _params;
     try {
       const txResult = await this.executeSupplyLiquidity(_params);
@@ -786,6 +792,12 @@ export class ClService {
   public async increaseLiquidity<K extends SpokeChainKey>(
     _params: ClLiquidityIncreaseLiquidityAction<K, false>,
   ): Promise<Result<TxHashPair>> {
+    return this.config.analytics.trackResult('dex', 'increaseLiquidity', () => this.increaseLiquidityImpl(_params));
+  }
+
+  private async increaseLiquidityImpl<K extends SpokeChainKey>(
+    _params: ClLiquidityIncreaseLiquidityAction<K, false>,
+  ): Promise<Result<TxHashPair>> {
     const { params, timeout } = _params;
     try {
       const txResult = await this.executeIncreaseLiquidity(_params);
@@ -833,6 +845,12 @@ export class ClService {
    *   `dstChainTxHash` (hub) once the packet has been confirmed.
    */
   public async decreaseLiquidity<K extends SpokeChainKey>(
+    _params: ClLiquidityDecreaseLiquidityAction<K, false>,
+  ): Promise<Result<TxHashPair>> {
+    return this.config.analytics.trackResult('dex', 'decreaseLiquidity', () => this.decreaseLiquidityImpl(_params));
+  }
+
+  private async decreaseLiquidityImpl<K extends SpokeChainKey>(
     _params: ClLiquidityDecreaseLiquidityAction<K, false>,
   ): Promise<Result<TxHashPair>> {
     const { params, timeout } = _params;
@@ -1043,6 +1061,12 @@ export class ClService {
    *   `dstChainTxHash` (hub) once the packet has been confirmed.
    */
   public async claimRewards<K extends SpokeChainKey>(
+    _params: ClLiquidityClaimRewardsAction<K, false>,
+  ): Promise<Result<TxHashPair>> {
+    return this.config.analytics.trackResult('dex', 'claimRewards', () => this.claimRewardsImpl(_params));
+  }
+
+  private async claimRewardsImpl<K extends SpokeChainKey>(
     _params: ClLiquidityClaimRewardsAction<K, false>,
   ): Promise<Result<TxHashPair>> {
     const { params, timeout } = _params;

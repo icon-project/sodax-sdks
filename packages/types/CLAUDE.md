@@ -15,7 +15,7 @@ Subdirectory-per-domain. Each subdirectory has its own `index.ts` barrel and is 
 src/
 ├── index.ts            # Root barrel — re-exports every subdirectory
 ├── chains/             # Chain IDs, chain keys, chain configs
-├── shared/             # Shared types used across multiple domains
+├── shared/             # Shared types used across multiple domains (logger, analytics, SodaxFeature)
 ├── common/             # Base types: Hex, Hash, Address, WalletAddressProvider
 ├── sodax-config/       # Dynamic SDK config shape (fetched from backend)
 ├── backend/            # Backend API request/response DTOs
@@ -45,6 +45,15 @@ Only **two** entry points are exported via [`package.json` `exports`](package.js
 - `./dex` — dedicated entry for DEX types: `import { … } from '@sodax/types/dex'`.
 
 There are **no per-chain sub-path exports**. New chain types are added under the appropriate subdirectory, re-exported through that subdirectory's `index.ts`, and flow out through the root barrel automatically.
+
+## Client-side runtime options & cross-cutting tags (`shared/`)
+
+Two `Sodax` constructor options are **client-side runtime sinks**, deliberately kept OUT of `SodaxConfig` (the backend-fetched data contract) and instead added to `SodaxOptions` (`sodax-config/sodax-config.ts`) so the dynamic-config swap never overwrites them:
+
+- `logger` ([`shared/logger.ts`](src/shared/logger.ts)) — `SodaxLogger` / `SodaxLoggerOption`. Developer diagnostics, **on by default** (`console`).
+- `analytics` ([`shared/analytics.ts`](src/shared/analytics.ts)) — `SodaxAnalytics` (sink), `AnalyticsEvent` (`feature` + `action` + `phase` + `level` + `data`), `AnalyticsConfig` (sink + optional `level`/`features` scoping), `AnalyticsOption = AnalyticsConfig | false`. Product user-action tracking, **off by default** — the SDK builds/emits nothing unless a consumer passes an `AnalyticsConfig`. The SDK-side resolution + emit gating (issue #175) is implemented in `@sodax/sdk` (`shared/analytics.ts`), mirroring `resolveLogger`.
+
+`SodaxFeature` ([`shared/features.ts`](src/shared/features.ts)) is the canonical list of SDK features (`swap`, `moneyMarket`, …). It lives here — the lowest layer — because both the error layer (`SodaxError.feature` in `@sodax/sdk`) and analytics depend on it; `@sodax/sdk`'s `errors/codes.ts` re-exports it (and keeps the runtime `SODAX_FEATURES` list). Add a new feature here, in one place.
 
 ## Build
 
