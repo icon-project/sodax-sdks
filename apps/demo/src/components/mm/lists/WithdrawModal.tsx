@@ -7,8 +7,10 @@ import { ChainSelector } from '@/components/shared/ChainSelector';
 
 import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
 import { parseUnits } from 'viem';
-import { useMMApprove, useSodaxContext, useWithdraw } from '@sodax/dapp-kit';
+import { useMMApprove, useSodaxContext, useWithdraw, useNearStorageGate } from '@sodax/dapp-kit';
 import { type SpokeChainKey, type XToken, getChainType } from '@sodax/sdk';
+import { buildMmDeliveryParams } from '@/lib/mmBtc';
+import { useBtcTradingBalance } from '@/hooks/useBtcTradingBalance';
 import { useAppStore } from '@/zustand/useAppStore';
 import type { MoneyMarketWithdrawParams } from '@sodax/sdk';
 import {
@@ -18,6 +20,7 @@ import {
   getNativeTokenSymbol,
   getSafeMaxAmountForInput,
   getTokenOnChain,
+  formatMutationFailureMessage,
 } from '@/lib/utils';
 import { logger } from '@/lib/logger';
 import { ErrorAlert } from '../ErrorAlert';
@@ -55,6 +58,7 @@ export function WithdrawModal({
   const [amount, setAmount] = useState('');
   const [step, setStep] = useState<'form' | 'success'>('form');
   const [successData, setSuccessData] = useState<ActionSuccessData | null>(null);
+  const [nearStorageError, setNearStorageError] = useState<string | null>(null);
   const { selectedChainId, openWalletModal, isWalletModalOpen } = useAppStore();
   const { sodax } = useSodaxContext();
 
@@ -65,20 +69,41 @@ export function WithdrawModal({
   const destinationToken = getTokenOnChain(sodax, token.symbol, dstChainKey) ?? token;
 
   const sourceWalletProvider = useWalletProvider({ xChainId: srcChainKey });
+  const destWalletProvider = useWalletProvider({ xChainId: dstChainKey });
   const { address: srcAddress } = useXAccount({ xChainId: srcChainKey });
   const { address: dstAddress } = useXAccount({ xChainId: dstChainKey });
 
+  // BTC delivery goes to the Bound Exchange trading wallet; needs a signed-in session (balance not required).
+  const { isBitcoin: isBtcDelivery, tradingAddress: deliveryTradingAddress } = useBtcTradingBalance({
+    chainId: dstChainKey,
+  });
+  const btcDeliveryNotReady = isBtcDelivery && !!dstAddress && !deliveryTradingAddress;
+
   const isSameChain = srcChainKey === dstChainKey;
+
+  const nearStorage = useNearStorageGate({
+    dstChainKey,
+    token: destinationToken.address,
+    accountId: dstAddress,
+    walletProvider: destWalletProvider,
+  });
 
   const { mutateAsync: withdraw, isPending, error, reset: resetError } = useWithdraw();
 
   const params: MoneyMarketWithdrawParams | undefined = useMemo(() => {
     if (!amount || !srcAddress) return undefined;
     if (!isSameChain && !dstAddress) return undefined;
+
+    const crossChainParams = buildMmDeliveryParams({
+      dstChainKey,
+      dstAddress,
+      isSameChain,
+      btcTradingAddress: deliveryTradingAddress,
+    });
+    if (crossChainParams === null) return undefined; // BTC delivery requires a connected destination wallet
+
     const normalizedAmount = amount.replace(',', '.');
     const parsedAmount = parseUnits(normalizedAmount, destinationToken.decimals);
-
-    const crossChainParams = isSameChain ? {} : { dstChainKey, dstAddress };
 
     return {
       srcChainKey,
@@ -88,7 +113,7 @@ export function WithdrawModal({
       action: 'withdraw' as const,
       ...crossChainParams,
     };
-  }, [amount, srcAddress, dstAddress, srcChainKey, dstChainKey, destinationToken, isSameChain]);
+  }, [amount, srcAddress, dstAddress, srcChainKey, dstChainKey, destinationToken, isSameChain, deliveryTradingAddress]);
 
   const isEvmChain = getChainType(srcChainKey) === 'EVM';
 
@@ -151,6 +176,15 @@ export function WithdrawModal({
     }
   };
 
+  const handleRegisterNearStorage = async (): Promise<void> => {
+    const result = await nearStorage.registerStorage();
+    if (result && !result.ok) {
+      setNearStorageError(formatMutationFailureMessage(result.error, 'Storage registration failed'));
+      return;
+    }
+    setNearStorageError(null);
+  };
+
   const handleMaxClick = (): void => {
     setAmount(getSafeMaxAmountForInput(maxWithdraw));
   };
@@ -164,6 +198,7 @@ export function WithdrawModal({
       setAmount('');
       setStep('form');
       setSuccessData(null);
+      setNearStorageError(null);
       setDstChainKey(token.chainKey);
       resetError?.();
       resetApproveError?.();
@@ -218,6 +253,12 @@ export function WithdrawModal({
                 >
                   Open wallet menu
                 </button>
+              </p>
+            )}
+            {btcDeliveryNotReady && (
+              <p className="text-xs text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-lg border border-amber-200 dark:border-amber-800">
+                Sign in to the <strong>Bitcoin Trading Wallet</strong> section on the Money Market page to receive the
+                withdrawn BTC.
               </p>
             )}
           </div>
@@ -288,6 +329,17 @@ export function WithdrawModal({
           </div>
         )}
 
+        {nearStorage.needsRegistration && (
+          <div className="min-w-0 w-full">
+            <ErrorAlert text="Recipient is not storage-registered for this token on NEAR. Register storage to receive the withdrawn funds." />
+          </div>
+        )}
+        {nearStorageError && (
+          <div className="min-w-0 w-full">
+            <ErrorAlert text={nearStorageError} />
+          </div>
+        )}
+
         {!isWrongChain && !!srcAddress && !!amount && (
           <p className="text-xs text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-lg border border-amber-200 dark:border-amber-800">
             Make sure you have enough <strong>{getNativeTokenSymbol(srcChainKey)}</strong> on{' '}
@@ -296,6 +348,26 @@ export function WithdrawModal({
         )}
 
         <DialogFooter className="w-full min-w-0 flex-col gap-2 sm:justify-start">
+          {nearStorage.isNear && (nearStorage.isChecking || nearStorage.needsRegistration) && (
+            <Button
+              className="w-full"
+              variant="cherry"
+              onClick={handleRegisterNearStorage}
+              disabled={nearStorage.isChecking || nearStorage.isRegistering}
+            >
+              {nearStorage.isChecking ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Checking storage…
+                </>
+              ) : nearStorage.isRegistering ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Registering…
+                </>
+              ) : (
+                'Register Storage on NEAR'
+              )}
+            </Button>
+          )}
           {isWrongChain ? (
             <Button className="w-full" variant="cherry" onClick={handleSwitchChain} disabled={isBusy}>
               Switch Chain
@@ -330,6 +402,7 @@ export function WithdrawModal({
                 !params ||
                 !sourceWalletProvider ||
                 amount === '' ||
+                nearStorage.blocksAction ||
                 (maxWithdraw !== undefined &&
                   maxWithdraw !== '0' &&
                   Number.parseFloat(amount.replace(',', '.')) > Number.parseFloat(maxWithdraw))

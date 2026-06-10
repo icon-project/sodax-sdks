@@ -13,6 +13,7 @@ import { getXChainType, useXAccount, useXService } from '@sodax/wallet-sdk-react
 import { formatUnits, isAddress } from 'viem';
 import { SupplyAssetsListItem } from './SupplyAssetsListItem';
 import { useAppStore } from '@/zustand/useAppStore';
+import { useBtcTradingBalance } from '@/hooks/useBtcTradingBalance';
 import { ChainKeys, type XToken } from '@sodax/sdk';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Info } from 'lucide-react';
@@ -46,6 +47,9 @@ export function SupplyAssetsList(): ReactElement {
 
   const tokens = sodax.moneyMarket.getSupportedTokensByChainId(selectedChainId);
   const isIcon = selectedChainId === ChainKeys.ICON_MAINNET;
+
+  // On Bitcoin the suppliable funds live in the Bound Exchange trading wallet, not the personal wallet.
+  const { isBitcoin, tradingBalanceSats } = useBtcTradingBalance({ chainId: selectedChainId });
 
   const { address } = useXAccount({ xChainId: selectedChainId });
   const xService = useXService({ xChainType: getXChainType(selectedChainId) });
@@ -303,13 +307,16 @@ export function SupplyAssetsList(): ReactElement {
                           key={`${token.address}-${token.symbol}`}
                           token={token}
                           walletBalance={
-                            // Show "0.0000" when loading (better UX than "...") or when balance is 0
-                            // Only show "-" if balances object is null (error/unavailable state)
-                            balances != null
-                              ? formatTokenAmount(balances[token.address] ?? 0n, token.decimals, 4)
-                              : isBalancesLoading
-                                ? '0.0000'
-                                : '-'
+                            isBitcoin
+                              ? // BTC funds live in the trading wallet (8-decimal sats), not the personal wallet
+                                formatTokenAmount(tradingBalanceSats, 8, 4)
+                              : // Show "0.0000" when loading (better UX than "...") or when balance is 0
+                                // Only show "-" if balances object is null (error/unavailable state)
+                                balances != null
+                                ? formatTokenAmount(balances[token.address] ?? 0n, token.decimals, 4)
+                                : isBalancesLoading
+                                  ? '0.0000'
+                                  : '-'
                           }
                           formattedReserves={formattedReserves}
                           userReserves={userReserves}

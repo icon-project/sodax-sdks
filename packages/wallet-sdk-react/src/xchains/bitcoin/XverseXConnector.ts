@@ -164,7 +164,7 @@ const XVERSE_ADDRESS_TYPE_KEY = 'xverse-address-type';
 export class XverseXConnector extends BitcoinXConnector {
   private walletProvider: XverseWalletProvider | undefined;
 
-  /** Address purpose used when connecting. Taproot (Ordinals) by default to match Radfi. */
+  /** Address purpose used when connecting. Taproot (Ordinals) by default to match Bound Exchange. */
   public addressPurpose: AddressPurpose;
 
   constructor(defaults?: BitcoinWalletDefaults) {

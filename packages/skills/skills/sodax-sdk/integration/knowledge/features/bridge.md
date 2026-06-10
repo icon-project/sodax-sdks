@@ -169,4 +169,5 @@ if (result.ok) {
 
 - v1 → v2 bridge migration: [`features/bridge.md`](../../../migration-v1-to-v2/knowledge/features/bridge.md).
 - Stellar destinations need a trustline first: [`../chain-specifics.md`](../chain-specifics.md).
+- NEAR destinations need NEP-141 storage registration first: [`../chain-specifics.md`](../chain-specifics.md).
 - Hub-and-spoke vault architecture: [`../architecture.md`](../architecture.md) § 1.

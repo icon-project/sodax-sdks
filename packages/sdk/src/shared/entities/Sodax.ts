@@ -7,10 +7,11 @@ import { DexService } from '../../dex/DexService.js';
 import { SpokeService } from '../services/spoke/SpokeService.js';
 import { EvmHubProvider } from './EvmHubProvider.js';
 import { MoneyMarketService } from '../../moneyMarket/MoneyMarketService.js';
-import { sodaxConfig, type DeepPartial, type Result, type SodaxConfig } from '@sodax/types';
+import { sodaxConfig, type Result, type SodaxConfig, type SodaxOptions } from '@sodax/types';
 import type { HubProvider } from '../types/types.js';
 import { ConfigService } from '../config/index.js';
 import { mergeSodaxConfig } from '../config/mergeSodaxConfig.js';
+import { resolveLogger } from '../logger.js';
 import { PartnerService } from '../../partner/PartnerService.js';
 import { RecoveryService } from '../../recovery/RecoveryService.js';
 
@@ -36,10 +37,16 @@ export class Sodax {
   public readonly hubProvider: HubProvider; // hub provider for the hub chain (e.g. Sonic mainnet)
   public readonly spoke: SpokeService; // spoke service enabling spoke chain operations
 
-  constructor(config?: DeepPartial<SodaxConfig>) {
+  constructor(config?: SodaxOptions) {
+    // Resolve the log sink once, up front, and hand it to the services so it survives the
+    // dynamic-config swap in `config.initialize()`. `logger` lives on `SodaxOptions`, not on the
+    // `DeepPartial<SodaxConfig>` data contract, so it keeps its exact type and needs no cast — the
+    // type-level conflation is gone. `mergeSodaxConfig` / `userConfig` ignore the extra `logger` key
+    // (it is never read off the data config; services read the resolved sink via `config.logger`).
+    const logger = resolveLogger(config?.logger);
     this.instanceConfig = config ? mergeSodaxConfig(sodaxConfig, config) : sodaxConfig;
-    this.backendApi = new BackendApiService(this.instanceConfig.api);
-    this.config = new ConfigService({ api: this.backendApi, config: this.instanceConfig, userConfig: config });
+    this.backendApi = new BackendApiService(this.instanceConfig.api, logger);
+    this.config = new ConfigService({ api: this.backendApi, config: this.instanceConfig, userConfig: config, logger });
 
     this.hubProvider = new EvmHubProvider({ config: this.config }); // default to Sonic mainnet
     this.spoke = new SpokeService({ config: this.config, hubProvider: this.hubProvider });

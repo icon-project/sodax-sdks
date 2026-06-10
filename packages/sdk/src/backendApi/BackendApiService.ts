@@ -19,9 +19,11 @@ import type {
   GetSubmitSwapTxStatusParams,
   SubmitSwapTxStatusResponse,
   ApiConfig,
+  SodaxLogger,
 } from '@sodax/types';
 
 import { isSubmitSwapTxResponse, isSubmitSwapTxStatusResponse } from '../shared/guards.js';
+import { consoleLogger } from '../shared/logger.js';
 
 /**
  * Shape used to type certain backend responses that include a `data` envelope.
@@ -206,9 +208,14 @@ export interface MoneyMarketBorrowers {
 export class BackendApiService implements IConfigApi {
 
   private readonly headers: Record<string, string>;
+  private readonly logger: SodaxLogger;
 
-  constructor(private readonly config: ApiConfig) {
+  constructor(
+    private readonly config: ApiConfig,
+    logger: SodaxLogger = consoleLogger,
+  ) {
     this.headers = { ...config.headers };
+    this.logger = logger;
   }
 
   /**
@@ -256,11 +263,11 @@ export class BackendApiService implements IConfigApi {
         if (error.name === 'AbortError') {
           throw new Error('REQUEST_TIMEOUT', { cause: new Error(`Request timeout after ${timeout}ms`) });
         }
-        console.error('[BackendApiService] Request error:', error.message);
+        this.logger.error('[BackendApiService] Request error', error);
         throw error;
       }
 
-      console.error('[BackendApiService] Unknown error:', error);
+      this.logger.error('[BackendApiService] Unknown error', error);
       throw new Error('UNKNOWN_REQUEST_ERROR', { cause: error });
     }
   }

@@ -1,4 +1,4 @@
-import { type ChainType, ChainKeys, ChainTypeArr, detectBitcoinAddressType } from '@sodax/types';
+import { type ChainType, ChainKeys, ChainTypeArr, detectBitcoinAddressType, usesBip322MessageSigning } from '@sodax/types';
 import {
   IconWalletProvider,
   InjectiveWalletProvider,
@@ -195,28 +195,17 @@ export const chainRegistry: Record<string, ChainServiceFactory> = {
         }
         const address = connection?.xAccount.address;
         if (!address) throw new Error('Bitcoin address not found');
-        const addressType = detectBitcoinAddressType(address);
-
-        switch (addressType) {
-          case 'P2WPKH':
-          case 'P2TR': {
-            if (!hasSignBip322(connector)) {
-              throw new Error(`${connector.id} does not support BIP-322 signing`);
-            }
-            return connector.signBip322Message(message);
+        // Pick the message-signing scheme by address type: P2WPKH/P2TR sign via BIP322, P2SH/P2PKH via ECDSA.
+        if (usesBip322MessageSigning(detectBitcoinAddressType(address))) {
+          if (!hasSignBip322(connector)) {
+            throw new Error(`${connector.id} does not support BIP-322 signing`);
           }
-          case 'P2SH':
-          case 'P2PKH': {
-            if (!hasSignEcdsa(connector)) {
-              throw new Error(`${connector.id} does not support ECDSA signing`);
-            }
-            return connector.signEcdsaMessage(message);
-          }
-          default: {
-            const _exhaustiveCheck: never = addressType;
-            throw new Error(`Unhandled Bitcoin address type: ${_exhaustiveCheck}`);
-          }
+          return connector.signBip322Message(message);
         }
+        if (!hasSignEcdsa(connector)) {
+          throw new Error(`${connector.id} does not support ECDSA signing`);
+        }
+        return connector.signEcdsaMessage(message);
       },
     }),
     createWalletProvider: (service, getStore) => {

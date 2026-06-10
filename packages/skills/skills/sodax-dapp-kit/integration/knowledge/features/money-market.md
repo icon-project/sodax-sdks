@@ -43,6 +43,8 @@ type UseUserFormattedSummaryParams = ReadHookParams<FormatUserSummaryResponse, {
   userAddress: string | undefined;
 }>;
 // Same shape on useUserReservesData. The hook derives the hub wallet from (spokeChainKey, userAddress) internally.
+// Bitcoin: always pass the personal address as userAddress — the hook transparently resolves to the
+// Bound Exchange trading-wallet-derived hub wallet when a session is active (local lookup, no network).
 
 // useAToken — single aToken metadata; FLAT (no chain/user fields)
 type UseATokenParams = ReadHookParams<ATokenData, {
@@ -57,9 +59,12 @@ type UseATokensBalancesParams = ReadHookParams<Map<Address, bigint>, {
   userAddress: string | undefined;
 }>;
 // Returns a Map keyed by aToken address. The hook resolves the hub wallet from (spokeChainKey, userAddress).
+// Bitcoin: always pass the personal address — trading-wallet resolution is automatic when a session exists.
 ```
 
 > **Read-side chain key is `spokeChainKey`, not `srcChainKey`.** Mutation hooks (`useSupply`/`useBorrow`/etc.) use `srcChainKey` because the request crosses chains and needs a source. Read hooks describe a user's position on a single spoke chain — the field is `spokeChainKey`. Applies to `useATokensBalances`, `useUserFormattedSummary`, and `useUserReservesData` (`useAToken` is metadata-only and takes neither). Don't grep-replace one for the other.
+
+> **Bitcoin `userAddress`**: always pass the **personal** address (the user's wallet address), not the Bound Exchange trading address. The read hooks (`useATokensBalances`, `useUserReservesData`, `useUserFormattedSummary`, `useGetUserHubWalletAddress`) automatically resolve to the trading-wallet-derived hub wallet when a Bound Exchange session is active — this is a local lookup with no network call and no throw on an unauthenticated session. See [`features/bitcoin.md`](bitcoin.md) for Bound Exchange session setup.
 
 ## Mutation params
 

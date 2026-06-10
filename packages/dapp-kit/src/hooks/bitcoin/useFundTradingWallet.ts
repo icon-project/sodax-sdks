@@ -11,7 +11,7 @@ export type UseFundTradingWalletVars = {
 };
 
 /**
- * React hook for funding the user's Radfi trading wallet from their personal Bitcoin wallet.
+ * React hook for funding the user's Bound Exchange trading wallet from their personal Bitcoin wallet.
  * Pure mutation: pass `{ amount, walletProvider }` to `mutate({...})`. Returns the broadcast tx
  * id on success.
  */

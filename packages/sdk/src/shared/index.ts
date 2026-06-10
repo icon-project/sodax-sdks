@@ -5,4 +5,5 @@ export * from './services/index.js';
 export * from './entities/index.js';
 export * from './constants.js';
 export * from './guards.js';
+export * from './logger.js';
 export * from './types/index.js';

@@ -10,6 +10,7 @@ import {
   type SpokeChainKey,
   type ChainKey,
   baseChainInfo,
+  RadfiApiError,
 } from '@sodax/sdk';
 
 export function cn(...inputs: ClassValue[]) {
@@ -56,12 +57,25 @@ export function truncateToDecimals(value: number, decimals: number): string {
 }
 
 /**
+ * Expand a numeric string in scientific notation (e.g. "5.54e-8") to a plain decimal string
+ * ("0.0000000554"). JS `number.toString()` emits sci-notation for |x| < 1e-6, which the
+ * decimal-string parsers here (they split on '.') would otherwise mis-read — taking the mantissa
+ * and silently dropping the exponent. Plain decimal strings pass through unchanged.
+ */
+export function expandExponential(value: string): string {
+  if (!/e/i.test(value)) return value;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return value;
+  return n.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits: 20 });
+}
+
+/**
  * Truncates a decimal string to at most maxDecimals fractional digits (no rounding).
  * Trims trailing zeros. For non-zero values that truncate to "0" (e.g. 0.00005 with 4 decimals),
  * returns a "< threshold" hint instead so the user knows the value is small but non-zero.
  */
 export function formatDecimalForDisplay(value: string, maxDecimals: number): string {
-  const trimmedInput = value.trim();
+  const trimmedInput = expandExponential(value.trim());
   // Reject empty or non-numeric input
   if (trimmedInput === '') return '0';
   const num = Number.parseFloat(trimmedInput);
@@ -104,7 +118,7 @@ export function getSafeMaxAmountForInput(
     extraDecimalsAfterFirstNonZero = 3,
   }: { minDecimals?: number; extraDecimalsAfterFirstNonZero?: number } = {},
 ): string {
-  const trimmed = value.trim();
+  const trimmed = expandExponential(value.trim());
   if (trimmed === '') return '';
 
   const dotIndex = trimmed.indexOf('.');
@@ -224,7 +238,14 @@ export function formatMutationFailureMessage(error: unknown, fallback: string): 
   if (typeof error === 'string') return error;
   if (error instanceof Error) {
     const cause = (error as { cause?: unknown }).cause;
-    const causeText = cause instanceof Error ? ` — ${cause.message}` : '';
+    // A Bound Exchange API failure carries the human-readable text on `details`; its
+    // top-level `message` is only an i18n key. Prefer `details` whether the error is the
+    // RadfiApiError itself or wrapped as the `cause` of a SodaxError.
+    const radfi = error instanceof RadfiApiError ? error : cause instanceof RadfiApiError ? cause : undefined;
+    if (radfi) return radfi.details ?? radfi.message;
+    // SDK wrappers copy `cause.message` onto the SodaxError, so the two are often identical;
+    // only append the cause when it adds new text to avoid "X — X" duplication.
+    const causeText = cause instanceof Error && cause.message !== error.message ? ` — ${cause.message}` : '';
     return `${error.message}${causeText}`;
   }
   return fallback;
@@ -369,9 +390,12 @@ function collectNestedErrorText(dataError: unknown, maxDepth = 6): string {
       const errorObj = node as Record<string, unknown>;
       if (typeof errorObj.error === 'string' && errorObj.error.trim().length > 0) parts.push(errorObj.error.trim());
       if (errorObj.error != null && typeof errorObj.error !== 'string') collectErrorMessages(errorObj.error, depth + 1);
-      if (typeof errorObj.details === 'string' && errorObj.details.trim().length > 0) parts.push(errorObj.details.trim());
-      if (typeof errorObj.message === 'string' && errorObj.message.trim().length > 0) parts.push(errorObj.message.trim());
-      if (typeof errorObj.shortMessage === 'string' && errorObj.shortMessage.trim().length > 0) parts.push(errorObj.shortMessage.trim());
+      if (typeof errorObj.details === 'string' && errorObj.details.trim().length > 0)
+        parts.push(errorObj.details.trim());
+      if (typeof errorObj.message === 'string' && errorObj.message.trim().length > 0)
+        parts.push(errorObj.message.trim());
+      if (typeof errorObj.shortMessage === 'string' && errorObj.shortMessage.trim().length > 0)
+        parts.push(errorObj.shortMessage.trim());
       if ('cause' in errorObj) collectErrorMessages(errorObj.cause, depth + 1);
     }
   };
