@@ -108,21 +108,16 @@ export type CreateIntentResult<K extends SpokeChainKey, Raw extends boolean> = {
 
 // Exec-mode params: walletProvider is required and K-narrowed. Consumed by `createIntent`,
 // `createLimitOrder`, `createLimitOrderIntent`, `approve` — methods that send a transaction
-// and return an executed tx hash.
+// and return an executed tx hash. `hubWalletSwap` marks `params.inputToken` as a hub-chain
+// token already sitting in the user's hub wallet — `srcChainKey` is then the chain the user
+// *signs* on, and the intent is created by authorising the hub wallet via a
+// `Connection.sendMessage` instead of a spoke-side AssetManager deposit. `partnerFee`
+// overrides the globally configured `config.swaps.partnerFee` for this intent only.
 export type SwapActionParams<K extends SpokeChainKey, Raw extends boolean = false> = SpokeExecActionParams<
   K,
   Raw,
   CreateIntentParams<K>
-> & {
-  /**
-   * Hub-wallet swap mode. When `true`, `params.inputToken` is a hub-chain (Sonic) token that
-   * already sits in the user's hub wallet — not a token on `params.srcChainKey`. `srcChainKey`
-   * is then the chain the user *signs* on, and the intent is created by authorising the
-   * hub wallet via a `Connection.sendMessage` rather than a spoke-side AssetManager
-   * deposit. Defaults to `false`.
-   */
-  hubWalletSwap?: boolean;
-};
+> & { hubWalletSwap?: boolean; partnerFee?: PartnerFee };
 
 export type LimitOrderActionParams<K extends SpokeChainKey, Raw extends boolean = false> = SpokeExecActionParams<
   K,
@@ -637,7 +632,8 @@ export class SwapService {
   public async createIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: SwapActionParams<K, Raw>,
   ): Promise<Result<CreateIntentResult<K, Raw>, SwapCreateIntentError>> {
-    const { params, skipSimulation, hubWalletSwap } = _params;
+    // Per-intent partnerFee override beats the globally configured fee (undefined = no fee).
+    const { params, skipSimulation, hubWalletSwap, partnerFee = this.config.swaps.partnerFee } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
 
     try {
@@ -706,7 +702,7 @@ export class SwapService {
           { ...params, srcChainKey: hubChainKey, srcAddress: creatorHubWalletAddress },
           creatorHubWalletAddress,
           this.config,
-          this.config.swaps.partnerFee,
+          partnerFee,
         );
 
         const coreSendMessageParams = {
@@ -750,7 +746,7 @@ export class SwapService {
           createIntentParams: params,
           creatorHubWalletAddress,
           solverConfig: this.solver,
-          fee: this.config.swaps.partnerFee,
+          fee: partnerFee,
           hubProvider: this.hubProvider,
         } as const;
 
@@ -783,7 +779,7 @@ export class SwapService {
         },
         creatorHubWalletAddress,
         this.config,
-        this.config.swaps.partnerFee,
+        partnerFee,
       );
 
       const coreDepositParams = {

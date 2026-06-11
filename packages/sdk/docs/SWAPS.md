@@ -566,6 +566,8 @@ const swapResult = await sodax.swaps.swap({
   hubWalletSwap: false,    // optional — inputToken is a hub-chain token already in the user's
                            // hub wallet; the intent is created by authorising the hub wallet via
                            // Connection.sendMessage instead of a spoke-side deposit (default: false)
+  partnerFee: undefined,   // optional — per-intent fee override; takes precedence over the
+                           // globally configured config.swaps.partnerFee for this intent only
 });
 
 if (!swapResult.ok) {

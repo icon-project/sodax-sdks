@@ -78,6 +78,42 @@ describe('LeverageYieldService.deposit — intent builder', () => {
     expect(result.value.hubWalletSwap).toBeUndefined();
   });
 
+  it('forwards a caller-supplied partnerFee on the payload (per-intent override)', async () => {
+    vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockResolvedValueOnce(HUB_WALLET);
+    const partnerFee = { address: SAMPLE_USER, percentage: 100 } as const;
+
+    const result = await sodax.leverageYield.deposit({
+      vault: VAULT,
+      srcChainKey: ARBITRUM,
+      srcAddress: SAMPLE_USER,
+      inputToken: SPOKE_TOKEN,
+      inputAmount: 1_000n,
+      minOutputAmount: 900n,
+      partnerFee,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.partnerFee).toEqual(partnerFee);
+  });
+
+  it('omits partnerFee from the payload when the caller does not supply one', async () => {
+    vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockResolvedValueOnce(HUB_WALLET);
+
+    const result = await sodax.leverageYield.deposit({
+      vault: VAULT,
+      srcChainKey: ARBITRUM,
+      srcAddress: SAMPLE_USER,
+      inputToken: SPOKE_TOKEN,
+      inputAmount: 1_000n,
+      minOutputAmount: 900n,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect('partnerFee' in result.value).toBe(false);
+  });
+
   it('rejects a non-positive inputAmount', async () => {
     const result = await sodax.leverageYield.deposit({
       vault: VAULT,

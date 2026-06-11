@@ -93,7 +93,7 @@ The service does **not** expose bespoke "deposit into vault" / "redeem from vaul
 
 ### Partner fee
 
-Because entering and exiting a position are ordinary `sodax.swaps.swap()` calls, they inherit the **global partner fee** configured on the Sodax instance — there is no vault-specific fee knob. Set `config.swaps.partnerFee` and every leverage-vault **deposit** (and withdraw) deducts it from the input amount, exactly like any other swap:
+Because entering and exiting a position are ordinary `sodax.swaps.swap()` calls, they inherit the **global partner fee** configured on the Sodax instance by default. Set `config.swaps.partnerFee` and every leverage-vault **deposit** (and withdraw) deducts it from the input amount, exactly like any other swap:
 
 ```typescript
 const sodax = new Sodax({
@@ -102,7 +102,17 @@ const sodax = new Sodax({
 });
 ```
 
-The fee is taken inside `createIntent()` (which `swap()` delegates to): the configured fee is deducted from `inputAmount` and encoded into the intent's `data` as the `IntentDataType.FEE` envelope, so the intents contract routes it to the partner address on the hub. `LeverageYieldService.deposit()` builds the `CreateIntentParams` with `data: '0x'`; the fee `data` is then constructed by the swap layer at intent-creation time, so the deposit needs no fee plumbing of its own. When `config.swaps.partnerFee` is `undefined`, no fee is taken (the historical "fee not charged" case).
+To charge a fee **only on leverage-vault deposits** (or a different fee than the global one), pass `partnerFee` to `deposit()`. It rides on the returned payload as the swap layer's generic per-intent fee override (`SwapActionParams.partnerFee`) and takes precedence over `config.swaps.partnerFee` for that intent only:
+
+```typescript
+const intentResult = await sodax.leverageYield.deposit({
+  // ...deposit params
+  partnerFee: { address: '0xYourFeeReceiver...', percentage: 100 },
+});
+// intentResult.value = { params, partnerFee } — spread into swap() as usual.
+```
+
+The fee is taken inside `createIntent()` (which `swap()` delegates to): the effective fee (per-intent override, falling back to the global config) is deducted from `inputAmount` and encoded into the intent's `data` as the `IntentDataType.FEE` envelope, so the intents contract routes it to the partner address on the hub. `LeverageYieldService.deposit()` builds the `CreateIntentParams` with `data: '0x'`; the fee `data` is then constructed by the swap layer at intent-creation time, so the deposit needs no fee plumbing of its own. When neither fee is set, no fee is taken (the historical "fee not charged" case).
 
 ## Flows
 
@@ -183,7 +193,7 @@ if (ok.ok && !ok.value) {
 
 ### deposit
 
-Builds the `LeverageYieldSwapPayload` for a deposit (any token → `lsoda*`, delivered to the hub wallet). **Returns:** `Promise<Result<LeverageYieldSwapPayload, LeverageYieldCreateIntentError>>`. `context.action` is `'deposit'`.
+Builds the `LeverageYieldSwapPayload` for a deposit (any token → `lsoda*`, delivered to the hub wallet). An optional `partnerFee` is forwarded on the payload as the swap layer's per-intent fee override. **Returns:** `Promise<Result<LeverageYieldSwapPayload, LeverageYieldCreateIntentError>>`. `context.action` is `'deposit'`.
 
 ### withdraw
 

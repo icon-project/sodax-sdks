@@ -35,9 +35,11 @@ import {
   useLeverageYieldPreviewRedeem,
   useLeverageYieldShareBalances,
   ChainKeys,
+  adjustAmountByFee,
   getSupportedSolverTokens,
   type LeverageYieldSwapPayload,
   type LeverageYieldVault,
+  type PartnerFee,
   type SolverIntentQuoteRequest,
   type SpokeChainKey,
   type SubmitSwapTxRequest,
@@ -64,6 +66,14 @@ const DEFAULT_SLIPPAGE = '0.5'; // %
 // Backend Execution Service — submits the spoke tx to the relay/solver and exposes a
 // status endpoint we can poll. Same canary host the solver page uses.
 const SUBMIT_TX_API_CONFIG = { baseURL: 'https://canary-api.sodax.com/v1/bes' } as const;
+
+// Partner fee charged on leverage-vault DEPOSITS only (100 bps = 1%, the max). Rides on the
+// deposit payload as the swap layer's per-intent fee override, so withdraws and ordinary
+// swaps stay on the global `config.swaps.partnerFee` (unset in this demo).
+const DEPOSIT_PARTNER_FEE = {
+  address: '0x93D5CE288b3BF6b33F913b98FD1fA844Acc462d4',
+  percentage: 100,
+} as const satisfies PartnerFee;
 
 function fmtUnits(value: bigint | undefined, decimals: number, digits = 6): string {
   if (value === undefined || value === null) return '—';
@@ -216,15 +226,18 @@ export default function LeverageYieldPage() {
 
   const quotePayload: SolverIntentQuoteRequest | undefined = useMemo(() => {
     if (!src.token || !dst.token || Number(sourceAmount) <= 0) return undefined;
+    const amount = parseUnits(sourceAmount, src.token.decimals);
     return {
       token_src: src.token.address,
       token_src_blockchain_id: src.chain,
       token_dst: dst.token.address,
       token_dst_blockchain_id: dst.chain,
-      amount: parseUnits(sourceAmount, src.token.decimals),
+      // Deposits carry DEPOSIT_PARTNER_FEE, which createIntent() deducts from inputAmount
+      // before the swap — quote on the post-fee amount so minOutputAmount stays fillable.
+      amount: tab === 'deposit' ? adjustAmountByFee(amount, DEPOSIT_PARTNER_FEE, 'exact_input') : amount,
       quote_type: 'exact_input',
     } satisfies SolverIntentQuoteRequest;
-  }, [src.token, dst.token, src.chain, dst.chain, sourceAmount]);
+  }, [src.token, dst.token, src.chain, dst.chain, sourceAmount, tab]);
 
   const quoteQuery = useQuote({ params: { payload: quotePayload } });
   const quote = quoteQuery.data?.ok ? quoteQuery.data.value : undefined;
@@ -379,6 +392,7 @@ export default function LeverageYieldPage() {
           inputToken: src.token.address,
           inputAmount,
           minOutputAmount,
+          partnerFee: DEPOSIT_PARTNER_FEE,
         })
       : buildWithdrawIntent({
           vault: selectedVault.vault,

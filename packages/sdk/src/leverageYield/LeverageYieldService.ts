@@ -5,6 +5,7 @@ import type {
   HubChainKey,
   IEvmWalletProvider,
   LeverageYieldVault,
+  PartnerFee,
   Result,
   SpokeChainKey,
   TxReturnType,
@@ -196,6 +197,11 @@ export type LeverageYieldSwapDepositParams = {
   deadline?: bigint;
   /** Optional specific solver. `0x0` = any solver. */
   solver?: Address;
+  /**
+   * Partner fee for this deposit, carried on the payload as the swap layer's per-intent
+   * fee override. Defaults to the globally configured `config.swaps.partnerFee`.
+   */
+  partnerFee?: PartnerFee;
 };
 
 /**
@@ -237,6 +243,8 @@ export type LeverageYieldSwapWithdrawParams = {
 export type LeverageYieldSwapPayload = {
   params: CreateIntentParams;
   hubWalletSwap?: true;
+  /** Per-intent partner-fee override forwarded to the swap layer (deposit only). */
+  partnerFee?: PartnerFee;
 };
 
 export type LeverageYieldApproveParams<R extends boolean> = {
@@ -313,7 +321,8 @@ export class LeverageYieldService {
    * Builds the {@link LeverageYieldSwapPayload} for a leverage-yield deposit (any token → lsoda*).
    * The lsoda* output is delivered to the user's hub wallet on Sonic so a later
    * {@link LeverageYieldService.withdraw} can swap it back. Spread the result into
-   * `swaps.swap()`: `swap({ ...payload, walletProvider })`.
+   * `swaps.swap()`: `swap({ ...payload, walletProvider })`. An optional `partnerFee` is
+   * forwarded on the payload as the swap layer's per-intent fee override.
    */
   public async deposit(
     params: LeverageYieldSwapDepositParams,
@@ -350,6 +359,9 @@ export class LeverageYieldService {
             solver: params.solver ?? ANY_SOLVER_ADDRESS,
             data: '0x',
           },
+          // Per-intent fee override — only included when the caller supplies one, so the
+          // payload stays free of undefined-valued keys.
+          ...(params.partnerFee !== undefined && { partnerFee: params.partnerFee }),
         },
       };
     } catch (error) {
