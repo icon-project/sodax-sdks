@@ -1700,6 +1700,33 @@ export const stellarSupportedTokens = {
     hubAsset: '0xD749B5FfFED7cEDaa3239abDd16D677179C29AEc',
     vault: SodaTokens.sodaSODA.address,
   },
+  sodaETH: {
+    symbol: 'sodaETH',
+    name: 'Soda ETH',
+    decimals: 7,
+    address: 'CDK5EWVTZLGSLI6D5OSES7XUKWZUKBXDRNOWUVDNPP5RJRP5EYWCW7SL',
+    chainKey: ChainKeys.STELLAR_MAINNET,
+    hubAsset: '0x4985a4b72ac723723e9ae82382d12d77e9a715de',
+    vault: SodaTokens.sodaETH.address,
+  },
+  sodaBTC: {
+    symbol: 'sodaBTC',
+    name: 'Soda BTC',
+    decimals: 7,
+    address: 'CD6XWBW74YVFDQQYUM2GALCULMA5MAWGP6NTCWF3ZYXP4Z7MEVY4JKBX',
+    chainKey: ChainKeys.STELLAR_MAINNET,
+    hubAsset: '0xddee01f63c18843e2bac30cb702864d7632c83a2',
+    vault: SodaTokens.sodaBTC.address,
+  },
+  sodaBNB: {
+    symbol: 'sodaBNB',
+    name: 'Soda BNB',
+    decimals: 7,
+    address: 'CCXTXZAFLVNTMORVWYB6BGL7YEW3U3ONDAL2FGBRGDUQH7AGANVQPRS6',
+    chainKey: ChainKeys.STELLAR_MAINNET,
+    hubAsset: '0xa10be5f5c2dea7d272555dc73ea2a7317c3c5b63',
+    vault: SodaTokens.sodaBNB.address,
+  },
 } as const satisfies Record<string, XToken>;
 
 export const suiSupportedTokens = {
