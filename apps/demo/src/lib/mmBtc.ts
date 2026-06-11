@@ -1,4 +1,4 @@
-import { ChainKeys, type SpokeChainKey } from '@sodax/sdk';
+import { ChainKeys, type SpokeChainKey } from '@sodax/dapp-kit';
 
 type MmCrossChainParams = { dstChainKey?: SpokeChainKey; dstAddress?: string };
 
