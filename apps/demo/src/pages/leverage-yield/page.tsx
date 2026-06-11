@@ -36,7 +36,7 @@ import {
   useLeverageYieldShareBalances,
   ChainKeys,
   getSupportedSolverTokens,
-  type CreateIntentParams,
+  type LeverageYieldSwapPayload,
   type LeverageYieldVault,
   type SolverIntentQuoteRequest,
   type SpokeChainKey,
@@ -249,14 +249,14 @@ export default function LeverageYieldPage() {
 
   // ─── Intent payload + allowance + swap mutations ─────────────────────────
 
-  const [intentOrderPayload, setIntentOrderPayload] = useState<CreateIntentParams | undefined>();
+  const [intentOrderPayload, setIntentOrderPayload] = useState<LeverageYieldSwapPayload | undefined>();
   const [actionError, setActionError] = useState<string | null>(null);
 
   // Withdraw skips the spoke-side allowance/approve: the [approve, createIntent] pair
   // is encoded into the sendMessage payload and the hub wallet executes it on Sonic.
   const { data: hasAllowance, isLoading: isAllowanceLoading } = useSwapAllowance({
     params: {
-      payload: tab === 'deposit' ? intentOrderPayload : undefined,
+      payload: tab === 'deposit' ? intentOrderPayload?.params : undefined,
       srcChainKey: src.chain,
       walletProvider: sourceWalletProvider,
     },
@@ -266,8 +266,8 @@ export default function LeverageYieldPage() {
   const { mutateAsyncSafe: submitSwapTx, isPending: isSubmitting } = useBackendSubmitSwapTx();
   const { mutateAsync: swap, isPending: isSwapping } = useSwap();
 
-  // Leverage-yield intent builders. `mutateAsyncSafe` returns `Result<CreateIntentParams>` and
-  // never rejects, so `prepare()` branches on `.ok` exactly like the SDK's own builder did.
+  // Leverage-yield intent builders. `mutateAsyncSafe` returns `Result<LeverageYieldSwapPayload>`
+  // and never rejects, so `prepare()` branches on `.ok` exactly like the SDK's own builder did.
   const { mutateAsyncSafe: buildDepositIntent } = useLeverageYieldDeposit();
   const { mutateAsyncSafe: buildWithdrawIntent } = useLeverageYieldWithdraw();
 
@@ -352,10 +352,11 @@ export default function LeverageYieldPage() {
     queryClient.invalidateQueries({ queryKey: ['shared', 'xBalances'] });
   };
 
-  // Builds the swap intent params via the SDK's leverage-yield builders, then stashes them
-  // for `handleSwap`. Deposit (any token → lsoda*) and withdraw (lsoda* → any token) both
-  // produce plain `CreateIntentParams` consumed by the one `swaps.swap()` path — withdraw's
-  // params carry `hubWalletSwap: true` so `swap()` routes via the hub wallet internally.
+  // Builds the swap payload via the SDK's leverage-yield builders, then stashes it for
+  // `handleSwap`. Deposit (any token → lsoda*) and withdraw (lsoda* → any token) both
+  // produce an action-shaped `LeverageYieldSwapPayload` spread into the one `swaps.swap()`
+  // path — withdraw's payload carries `hubWalletSwap: true` so `swap()` routes via the
+  // hub wallet internally.
   const prepare = async () => {
     setActionError(null);
     if (
@@ -398,14 +399,15 @@ export default function LeverageYieldPage() {
   const handleApprove = async () => {
     if (!intentOrderPayload || !sourceWalletProvider) return;
     setActionError(null);
-    const result = await approve({ params: intentOrderPayload, walletProvider: sourceWalletProvider });
+    const result = await approve({ params: intentOrderPayload.params, walletProvider: sourceWalletProvider });
     if (!result.ok) setActionError(result.error instanceof Error ? result.error.message : 'Approve failed');
   };
 
   /**
-   * Executes the prepared intent. Tab-agnostic — `intentOrderPayload` already encodes
-   * deposit vs withdraw (withdraw carries `hubWalletSwap: true`, handled inside `swap()`
-   * / `createIntent()`). Two modes via the submit-tx toggle:
+   * Executes the prepared intent. Tab-agnostic — the action-shaped `intentOrderPayload`
+   * already encodes deposit vs withdraw (withdraw carries `hubWalletSwap: true`, handled
+   * inside `swap()` / `createIntent()`), so it spreads into either call unchanged. Two
+   * modes via the submit-tx toggle:
    *  - OFF (default): `useSwap` creates the intent, relays it, and notifies the solver,
    *    returning full delivery info. Order renders in 'solver' mode.
    *  - ON: `createIntent` + BES `submitSwapTx` — POSTs the spoke tx to the backend, which
@@ -418,7 +420,7 @@ export default function LeverageYieldPage() {
     if (!useSubmitTxApi) {
       try {
         const { solverExecutionResponse, intent, intentDeliveryInfo } = await swap({
-          params: intentOrderPayload,
+          ...intentOrderPayload,
           walletProvider: sourceWalletProvider,
         });
         setOrders(prev => [
@@ -439,7 +441,7 @@ export default function LeverageYieldPage() {
 
     // Submit-tx (BES) path: create the intent, then hand the spoke tx to the backend.
     const createResult = await sodax.swaps.createIntent({
-      params: intentOrderPayload,
+      ...intentOrderPayload,
       raw: false,
       walletProvider: sourceWalletProvider,
     });
@@ -471,7 +473,7 @@ export default function LeverageYieldPage() {
     const request: SubmitSwapTxRequest = {
       txHash: spokeTxHash as string,
       srcChainKey: userChain,
-      walletAddress: intentOrderPayload.srcAddress,
+      walletAddress: intentOrderPayload.params.srcAddress,
       intent: swapIntentData,
       relayData: relayData.payload,
     };

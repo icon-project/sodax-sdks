@@ -113,7 +113,16 @@ export type SwapActionParams<K extends SpokeChainKey, Raw extends boolean = fals
   K,
   Raw,
   CreateIntentParams<K>
->;
+> & {
+  /**
+   * Hub-wallet swap mode. When `true`, `params.inputToken` is a hub-chain (Sonic) token that
+   * already sits in the user's hub wallet — not a token on `params.srcChainKey`. `srcChainKey`
+   * is then the chain the user *signs* on, and the intent is created by authorising the
+   * hub wallet via a `Connection.sendMessage` rather than a spoke-side AssetManager
+   * deposit. Defaults to `false`.
+   */
+  hubWalletSwap?: boolean;
+};
 
 export type LimitOrderActionParams<K extends SpokeChainKey, Raw extends boolean = false> = SpokeExecActionParams<
   K,
@@ -612,7 +621,7 @@ export class SwapService {
    * intent. Bitcoin source chains require an additional RadFi access token step.
    *
    * @param _params - Intent parameters, source chain key, wallet provider (when `raw: false`),
-   *   and optional `skipSimulation` flag.
+   *   and optional `skipSimulation` / `hubWalletSwap` flags.
    * @returns A `Result<CreateIntentResult<K, Raw>, SwapCreateIntentError>`. On success contains:
    *   - `tx` — chain-specific tx hash (executed) or raw tx data (raw mode).
    *   - `intent` — the fully constructed `Intent` object augmented with `feeAmount`.
@@ -628,7 +637,7 @@ export class SwapService {
   public async createIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: SwapActionParams<K, Raw>,
   ): Promise<Result<CreateIntentResult<K, Raw>, SwapCreateIntentError>> {
-    const { params, skipSimulation } = _params;
+    const { params, skipSimulation, hubWalletSwap } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
 
     try {
@@ -640,7 +649,7 @@ export class SwapService {
       // Hub-wallet swap: `inputToken` lives on the hub, not on `srcChainKey` (which is the
       // chain the user signs on). Validate it against the hub chain instead.
       const hubChainKey = this.hubProvider.chainConfig.chain.key;
-      const inputTokenChainKey = params.hubWalletSwap ? hubChainKey : params.srcChainKey;
+      const inputTokenChainKey = hubWalletSwap ? hubChainKey : params.srcChainKey;
       swapInvariant(
         this.config.isValidOriginalAssetAddress(inputTokenChainKey, params.inputToken),
         `Unsupported spoke chain token (srcChainKey: ${inputTokenChainKey}, inputToken: ${params.inputToken})`,
@@ -692,7 +701,7 @@ export class SwapService {
       // the hub wallet to run the encoded [approve, createIntent] sequence itself — no
       // spoke-side AssetManager deposit. The shared `swap()` tail then relays the message
       // and notifies the solver exactly as for a normal spoke-sourced swap.
-      if (params.hubWalletSwap) {
+      if (hubWalletSwap) {
         const [data, intent, feeAmount] = EvmSolverService.constructCreateIntentData(
           { ...params, srcChainKey: hubChainKey, srcAddress: creatorHubWalletAddress },
           creatorHubWalletAddress,

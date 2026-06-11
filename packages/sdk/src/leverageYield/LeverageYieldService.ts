@@ -175,9 +175,9 @@ export type LeverageYieldEffectiveApr = LeverageYieldApr & {
 };
 
 /**
- * Builds the {@link CreateIntentParams} for a swap-style leverage-yield deposit — swapping
- * any solver-supported `inputToken` on `srcChainKey` into the vault's lsoda* share token,
- * delivered to the user's hub wallet on Sonic. Pass the result straight to `swaps.swap()`.
+ * Builds the swap payload for a swap-style leverage-yield deposit — swapping any
+ * solver-supported `inputToken` on `srcChainKey` into the vault's lsoda* share token,
+ * delivered to the user's hub wallet on Sonic. Spread the result into `swaps.swap()`.
  */
 export type LeverageYieldSwapDepositParams = {
   /** Hub-side LeverageYieldVault proxy address — its address doubles as the lsoda* token. */
@@ -199,10 +199,10 @@ export type LeverageYieldSwapDepositParams = {
 };
 
 /**
- * Builds the {@link CreateIntentParams} for a swap-style leverage-yield withdraw — swapping
- * the vault's lsoda* shares (held in the user's hub wallet) back into any solver-supported
- * token on any chain. The result carries `hubWalletSwap: true`; pass it straight to
- * `swaps.swap()`, which authorises the hub wallet via `Connection.sendMessage`.
+ * Builds the swap payload for a swap-style leverage-yield withdraw — swapping the vault's
+ * lsoda* shares (held in the user's hub wallet) back into any solver-supported token on
+ * any chain. The payload carries `hubWalletSwap: true`; spread it into `swaps.swap()`,
+ * which authorises the hub wallet via `Connection.sendMessage`.
  */
 export type LeverageYieldSwapWithdrawParams = {
   /** Hub-side LeverageYieldVault proxy address — its address doubles as the lsoda* token. */
@@ -225,6 +225,18 @@ export type LeverageYieldSwapWithdrawParams = {
   deadline?: bigint;
   /** Optional specific solver. `0x0` = any solver. */
   solver?: Address;
+};
+
+/**
+ * Action-shaped swap payload built by {@link LeverageYieldService.deposit} /
+ * {@link LeverageYieldService.withdraw}. Spread it into `swaps.swap()` (or
+ * `swaps.createIntent()`) alongside the wallet provider:
+ * `swap({ ...payload, walletProvider })`. `withdraw` sets `hubWalletSwap: true`
+ * so the swap spends the lsoda* held in the user's hub wallet.
+ */
+export type LeverageYieldSwapPayload = {
+  params: CreateIntentParams;
+  hubWalletSwap?: true;
 };
 
 export type LeverageYieldApproveParams<R extends boolean> = {
@@ -252,10 +264,10 @@ export type LeverageYieldServiceConstructorParams = {
  * deposits and withdrawals are ordinary intent-based swaps routed through `swaps.swap()`.
  *
  * Methods:
- * - `deposit` / `withdraw` — build `CreateIntentParams` for a swap-style deposit (any token →
- *   lsoda*) and withdraw (lsoda* → any token); pass the result straight to `swaps.swap()`.
- *   `withdraw` stamps `hubWalletSwap: true` so `swap()` spends the lsoda* held in the user's
- *   hub wallet via a `Connection.sendMessage`.
+ * - `deposit` / `withdraw` — build a {@link LeverageYieldSwapPayload} for a swap-style deposit
+ *   (any token → lsoda*) and withdraw (lsoda* → any token); spread the result into
+ *   `swaps.swap()`. `withdraw` sets `hubWalletSwap: true` so `swap()` spends the lsoda* held
+ *   in the user's hub wallet via a `Connection.sendMessage`.
  * - `approve` / `isAllowanceValid` — Sonic-direct allowance management for the vault's
  *   underlying asset (sodaWEETH-style).
  * - `getPosition` / `getApr` / `getEffectiveApr` / `getLsdApr` / `getMaxWithdraw` /
@@ -298,13 +310,14 @@ export class LeverageYieldService {
   }
 
   /**
-   * Builds the {@link CreateIntentParams} for a leverage-yield deposit (any token → lsoda*).
+   * Builds the {@link LeverageYieldSwapPayload} for a leverage-yield deposit (any token → lsoda*).
    * The lsoda* output is delivered to the user's hub wallet on Sonic so a later
-   * {@link LeverageYieldService.withdraw} can swap it back. Pass the result to `swaps.swap()`.
+   * {@link LeverageYieldService.withdraw} can swap it back. Spread the result into
+   * `swaps.swap()`: `swap({ ...payload, walletProvider })`.
    */
   public async deposit(
     params: LeverageYieldSwapDepositParams,
-  ): Promise<Result<CreateIntentParams, LeverageYieldCreateIntentError>> {
+  ): Promise<Result<LeverageYieldSwapPayload, LeverageYieldCreateIntentError>> {
     const baseCtx = { srcChainKey: params.srcChainKey, action: 'xdeposit' as const };
     try {
       leverageYieldInvariant(params.inputAmount > 0n, 'inputAmount must be greater than 0', {
@@ -323,18 +336,20 @@ export class LeverageYieldService {
       return {
         ok: true,
         value: {
-          inputToken: params.inputToken,
-          outputToken: params.vault,
-          inputAmount: params.inputAmount,
-          minOutputAmount: params.minOutputAmount,
-          deadline: params.deadline ?? BigInt(Math.floor(Date.now() / 1000) + INTENT_DEADLINE_BUFFER_SECONDS),
-          allowPartialFill: false,
-          srcChainKey: params.srcChainKey,
-          dstChainKey: this.hubProvider.chainConfig.chain.key,
-          srcAddress: params.srcAddress,
-          dstAddress: hubWallet,
-          solver: params.solver ?? ANY_SOLVER_ADDRESS,
-          data: '0x',
+          params: {
+            inputToken: params.inputToken,
+            outputToken: params.vault,
+            inputAmount: params.inputAmount,
+            minOutputAmount: params.minOutputAmount,
+            deadline: params.deadline ?? BigInt(Math.floor(Date.now() / 1000) + INTENT_DEADLINE_BUFFER_SECONDS),
+            allowPartialFill: false,
+            srcChainKey: params.srcChainKey,
+            dstChainKey: this.hubProvider.chainConfig.chain.key,
+            srcAddress: params.srcAddress,
+            dstAddress: hubWallet,
+            solver: params.solver ?? ANY_SOLVER_ADDRESS,
+            data: '0x',
+          },
         },
       };
     } catch (error) {
@@ -344,13 +359,15 @@ export class LeverageYieldService {
   }
 
   /**
-   * Builds the {@link CreateIntentParams} for a leverage-yield withdraw (lsoda* → any token).
-   * The result carries `hubWalletSwap: true` — `swaps.swap()` then spends the lsoda* held in
-   * the user's hub wallet by authorising it via a `Connection.sendMessage` the user signs on
-   * `srcChainKey`. Returned synchronously, wrapped in a {@link Result} for a call shape
-   * uniform with {@link LeverageYieldService.deposit}.
+   * Builds the {@link LeverageYieldSwapPayload} for a leverage-yield withdraw (lsoda* → any
+   * token). The payload carries `hubWalletSwap: true` — `swaps.swap()` then spends the lsoda*
+   * held in the user's hub wallet by authorising it via a `Connection.sendMessage` the user
+   * signs on `srcChainKey`. Returned synchronously, wrapped in a {@link Result} for a call
+   * shape uniform with {@link LeverageYieldService.deposit}.
    */
-  public withdraw(params: LeverageYieldSwapWithdrawParams): Result<CreateIntentParams, LeverageYieldCreateIntentError> {
+  public withdraw(
+    params: LeverageYieldSwapWithdrawParams,
+  ): Result<LeverageYieldSwapPayload, LeverageYieldCreateIntentError> {
     const baseCtx = { srcChainKey: params.srcChainKey, action: 'xwithdraw' as const };
     try {
       leverageYieldInvariant(params.inputAmount > 0n, 'inputAmount must be greater than 0', {
@@ -366,18 +383,20 @@ export class LeverageYieldService {
       return {
         ok: true,
         value: {
-          inputToken: params.vault,
-          outputToken: params.outputToken,
-          inputAmount: params.inputAmount,
-          minOutputAmount: params.minOutputAmount,
-          deadline: params.deadline ?? BigInt(Math.floor(Date.now() / 1000) + INTENT_DEADLINE_BUFFER_SECONDS),
-          allowPartialFill: false,
-          srcChainKey: params.srcChainKey,
-          dstChainKey: params.dstChainKey,
-          srcAddress: params.srcAddress,
-          dstAddress: params.recipient ?? params.srcAddress,
-          solver: params.solver ?? ANY_SOLVER_ADDRESS,
-          data: '0x',
+          params: {
+            inputToken: params.vault,
+            outputToken: params.outputToken,
+            inputAmount: params.inputAmount,
+            minOutputAmount: params.minOutputAmount,
+            deadline: params.deadline ?? BigInt(Math.floor(Date.now() / 1000) + INTENT_DEADLINE_BUFFER_SECONDS),
+            allowPartialFill: false,
+            srcChainKey: params.srcChainKey,
+            dstChainKey: params.dstChainKey,
+            srcAddress: params.srcAddress,
+            dstAddress: params.recipient ?? params.srcAddress,
+            solver: params.solver ?? ANY_SOLVER_ADDRESS,
+            data: '0x',
+          },
           hubWalletSwap: true,
         },
       };

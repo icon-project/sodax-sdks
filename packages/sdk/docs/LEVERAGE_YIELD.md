@@ -89,7 +89,7 @@ The service does **not** expose bespoke "deposit into vault" / "redeem from vaul
 - **Enter** a position = swap *any token → `lsoda*` shares*.
 - **Exit** a position = swap *`lsoda*` shares → any token*.
 
-`LeverageYieldService`'s job is to build the correct `CreateIntentParams`; the caller hands them to the swap service, and the solver (plus the vault's ERC-4626 mechanics) does the rest. This is why deposits and withdrawals are cross-chain by default and require no vault-specific approvals on the spoke side.
+`LeverageYieldService`'s job is to build the correct swap payload (the `CreateIntentParams` plus any execution flags); the caller spreads it into the swap service, and the solver (plus the vault's ERC-4626 mechanics) does the rest. This is why deposits and withdrawals are cross-chain by default and require no vault-specific approvals on the spoke side.
 
 ### Partner fee
 
@@ -108,7 +108,7 @@ The fee is taken inside `createIntent()` (which `swap()` delegates to): the conf
 
 ### Deposit (any token → `lsoda*`)
 
-`deposit()` builds the `CreateIntentParams` for swapping any solver-supported `inputToken` on a spoke chain into the vault's `lsoda*` share token. The output is delivered to the user's **hub wallet** on Sonic (not back to the spoke) so a later `withdraw()` can spend it from there. The `deadline` defaults to now + 5 minutes; `solver` defaults to `0x0` (any solver).
+`deposit()` builds the `LeverageYieldSwapPayload` — `{ params: CreateIntentParams }` — for swapping any solver-supported `inputToken` on a spoke chain into the vault's `lsoda*` share token. The output is delivered to the user's **hub wallet** on Sonic (not back to the spoke) so a later `withdraw()` can spend it from there. The `deadline` defaults to now + 5 minutes; `solver` defaults to `0x0` (any solver).
 
 ```typescript
 import { ChainKeys } from '@sodax/sdk';
@@ -125,9 +125,9 @@ const intentResult = await sodax.leverageYield.deposit({
 });
 
 if (intentResult.ok) {
-  // Hand the params straight to the swap service.
+  // Spread the payload straight into the swap service.
   const swapResult = await sodax.swaps.swap({
-    params: intentResult.value,
+    ...intentResult.value,
     walletProvider: evmWalletProvider,
   });
 }
@@ -135,7 +135,7 @@ if (intentResult.ok) {
 
 ### Withdraw (`lsoda*` → any token)
 
-`withdraw()` builds the `CreateIntentParams` for swapping the vault's `lsoda*` shares — which sit in the user's hub wallet — back into any solver-supported token on any chain. The result carries **`hubWalletSwap: true`**: `swaps.swap()` then authorises the hub wallet to spend the shares via a `Connection.sendMessage` the user signs on `srcChainKey`, instead of a spoke-side asset-manager deposit. `withdraw()` is synchronous (it does no chain reads) but still returns a `Result` for a call shape uniform with `deposit()`.
+`withdraw()` builds the `LeverageYieldSwapPayload` for swapping the vault's `lsoda*` shares — which sit in the user's hub wallet — back into any solver-supported token on any chain. The payload carries **`hubWalletSwap: true`**: `swaps.swap()` then authorises the hub wallet to spend the shares via a `Connection.sendMessage` the user signs on `srcChainKey`, instead of a spoke-side asset-manager deposit. `withdraw()` is synchronous (it does no chain reads) but still returns a `Result` for a call shape uniform with `deposit()`.
 
 ```typescript
 const intentResult = sodax.leverageYield.withdraw({
@@ -151,7 +151,7 @@ const intentResult = sodax.leverageYield.withdraw({
 
 if (intentResult.ok) {
   const swapResult = await sodax.swaps.swap({
-    params: intentResult.value, // hubWalletSwap: true is already set
+    ...intentResult.value, // hubWalletSwap: true is already set on the payload
     walletProvider: evmWalletProvider,
   });
 }
@@ -183,11 +183,11 @@ if (ok.ok && !ok.value) {
 
 ### deposit
 
-Builds the `CreateIntentParams` for a deposit (any token → `lsoda*`, delivered to the hub wallet). **Returns:** `Promise<Result<CreateIntentParams, LeverageYieldCreateIntentError>>`. `context.action` is `'deposit'`.
+Builds the `LeverageYieldSwapPayload` for a deposit (any token → `lsoda*`, delivered to the hub wallet). **Returns:** `Promise<Result<LeverageYieldSwapPayload, LeverageYieldCreateIntentError>>`. `context.action` is `'deposit'`.
 
 ### withdraw
 
-Builds the `CreateIntentParams` for a withdraw (`lsoda*` → any token), stamping `hubWalletSwap: true`. Synchronous. **Returns:** `Result<CreateIntentParams, LeverageYieldCreateIntentError>`. `context.action` is `'withdraw'`.
+Builds the `LeverageYieldSwapPayload` for a withdraw (`lsoda*` → any token), with `hubWalletSwap: true` set on the payload. Synchronous. **Returns:** `Result<LeverageYieldSwapPayload, LeverageYieldCreateIntentError>`. `context.action` is `'withdraw'`.
 
 ### approve
 
@@ -268,7 +268,7 @@ type LeverageYieldPosition = {
 
 All async public methods return `Promise<Result<T, SodaxError<NarrowCode>>>`. Discriminate on `result.error.code` (a string literal) — never on `result.error.message`. Same canonical shape used by swap, bridge, and money market.
 
-This service is a **thin layer** over the solver and the hub: `deposit` / `withdraw` build `CreateIntentParams` (no relay step happens here — the caller relays via `swaps.swap()`), `approve` / `isAllowanceValid` manage the Sonic allowance, and the read methods query on-chain state. So the emitted codes are limited to the create-intent, approve, allowance-check, and lookup subsets — there are no relay/tx-verification codes.
+This service is a **thin layer** over the solver and the hub: `deposit` / `withdraw` build swap payloads (no relay step happens here — the caller relays via `swaps.swap()`), `approve` / `isAllowanceValid` manage the Sonic allowance, and the read methods query on-chain state. So the emitted codes are limited to the create-intent, approve, allowance-check, and lookup subsets — there are no relay/tx-verification codes.
 
 ### Per-method error code unions
 

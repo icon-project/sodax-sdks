@@ -1,9 +1,9 @@
 /**
  * Tests for LeverageYieldService.
  *
- * The service is a thin layer over the solver: `deposit` / `withdraw` build
- * `CreateIntentParams` that the caller hands to `swaps.swap()`. These tests lock the
- * shape of those params plus the static vault-registry lookups.
+ * The service is a thin layer over the solver: `deposit` / `withdraw` build an
+ * action-shaped `LeverageYieldSwapPayload` the caller spreads into `swaps.swap()`.
+ * These tests lock the shape of that payload plus the static vault-registry lookups.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -65,7 +65,7 @@ describe('LeverageYieldService.deposit — intent builder', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value).toMatchObject({
+    expect(result.value.params).toMatchObject({
       inputToken: SPOKE_TOKEN,
       outputToken: VAULT, // the vault address doubles as the lsoda* token
       inputAmount: 1_000n,
@@ -109,7 +109,7 @@ describe('LeverageYieldService.withdraw — intent builder', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value).toMatchObject({
+    expect(result.value.params).toMatchObject({
       inputToken: VAULT, // lsoda* shares are the swap input
       outputToken: SPOKE_TOKEN,
       inputAmount: 1_000n,
@@ -118,8 +118,8 @@ describe('LeverageYieldService.withdraw — intent builder', () => {
       dstChainKey: ARBITRUM,
       srcAddress: SAMPLE_USER,
       dstAddress: SAMPLE_USER, // recipient defaults to srcAddress
-      hubWalletSwap: true, // routes swap() through the hub-wallet sendMessage path
     });
+    expect(result.value.hubWalletSwap).toBe(true); // routes swap() through the hub-wallet sendMessage path
   });
 
   it('honours an explicit recipient', () => {
@@ -136,7 +136,7 @@ describe('LeverageYieldService.withdraw — intent builder', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.dstAddress).toBe(HUB_WALLET);
+    expect(result.value.params.dstAddress).toBe(HUB_WALLET);
   });
 
   it('rejects an empty vault address', () => {
