@@ -1,28 +1,67 @@
-import { type SpokeService, Erc20Service, Erc4626Service, poolAbi } from '../shared/index.js';
+import {
+  type SpokeService,
+  Erc20Service,
+  Erc4626Service,
+  poolAbi,
+  SonicSpokeService,
+  isSonicChainKeyType,
+  isHubChainKeyType,
+  isBitcoinChainKeyType,
+  isBitcoinWalletProviderType,
+  isUndefinedOrValidWalletProviderForChainKey,
+  relayTxAndWaitPacket,
+  type RelayExtraData,
+  type IntentDeliveryInfo,
+} from '../shared/index.js';
 import type { HubProvider } from '../shared/types/types.js';
+import { isBitcoinChainKey } from '@sodax/types';
 import type {
   Address,
+  FeeAmount,
+  GetAddressType,
+  GetTokenAddressType,
+  GetWalletProviderType,
   HubChainKey,
   IEvmWalletProvider,
   LeverageYieldVault,
   PartnerFee,
   Result,
+  SolverExecutionRequest,
+  SolverExecutionResponse,
+  SonicChainKey,
   SpokeChainKey,
+  SpokeExecActionParams,
   TxReturnType,
 } from '@sodax/types';
 import { parseAbi } from 'viem';
 import type { ConfigService } from '../shared/config/ConfigService.js';
-import type { CreateIntentParams } from '../swap/SwapService.js';
-import { allowanceCheckFailed, approveFailed, intentCreationFailed, lookupFailed } from '../errors/wrappers.js';
+import type { CreateIntentParams, Intent } from '../shared/types/intent-types.js';
+import { EvmSolverService } from '../swap/EvmSolverService.js';
+import { SolverApiService } from '../swap/SolverApiService.js';
+import { SodaxError } from '../errors/SodaxError.js';
+import { mapRelayFailure } from '../errors/relay-error-mapping.js';
+import {
+  allowanceCheckFailed,
+  approveFailed,
+  executionFailed,
+  intentCreationFailed,
+  lookupFailed,
+  unknownFailed,
+  verifyFailed,
+} from '../errors/wrappers.js';
 import {
   isLeverageYieldAllowanceCheckError,
   isLeverageYieldApproveError,
   isLeverageYieldCreateIntentError,
   isLeverageYieldLookupError,
+  isLeverageYieldPostExecutionError,
+  isLeverageYieldSwapError,
   type LeverageYieldAllowanceCheckError,
   type LeverageYieldApproveError,
   type LeverageYieldCreateIntentError,
   type LeverageYieldLookupError,
+  type LeverageYieldPostExecutionError,
+  type LeverageYieldSwapError,
   leverageYieldInvariant,
 } from './errors.js';
 
@@ -235,16 +274,57 @@ export type LeverageYieldSwapWithdrawParams = {
 
 /**
  * Action-shaped swap payload built by {@link LeverageYieldService.deposit} /
- * {@link LeverageYieldService.withdraw}. Spread it into `swaps.swap()` (or
- * `swaps.createIntent()`) alongside the wallet provider:
- * `swap({ ...payload, walletProvider })`. `withdraw` sets `hubWalletSwap: true`
- * so the swap spends the lsoda* held in the user's hub wallet.
+ * {@link LeverageYieldService.withdraw}. Spread it into
+ * {@link LeverageYieldService.vaultSwap} (or {@link LeverageYieldService.createVaultIntent})
+ * alongside the wallet provider: `vaultSwap({ ...payload, walletProvider })`.
+ * `withdraw` sets `hubWalletSwap: true` so the swap spends the lsoda* held in the
+ * user's hub wallet.
  */
 export type LeverageYieldSwapPayload = {
   params: CreateIntentParams;
   hubWalletSwap?: true;
-  /** Per-intent partner-fee override forwarded to the swap layer (deposit only). */
+  /** Per-intent partner-fee override (deposit only). */
   partnerFee?: PartnerFee;
+};
+
+/**
+ * Exec-mode params for {@link LeverageYieldService.createVaultIntent} /
+ * {@link LeverageYieldService.vaultSwap}: `walletProvider` is required and K-narrowed
+ * (`raw: true` returns unsigned tx data instead). The two vault-specific execution
+ * modifiers live HERE — on the leverage-yield action wrapper, never on the generic swap
+ * surface:
+ * - `hubWalletSwap` marks `params.inputToken` as a hub-chain token already sitting in the
+ *   user's hub wallet — `srcChainKey` is then the chain the user *signs* on, and the
+ *   intent is created by authorising the hub wallet via a `Connection.sendMessage`
+ *   instead of a spoke-side AssetManager deposit.
+ * - `partnerFee` overrides the globally configured `config.swaps.partnerFee` for this
+ *   intent only.
+ */
+export type VaultSwapActionParams<K extends SpokeChainKey, Raw extends boolean = false> = SpokeExecActionParams<
+  K,
+  Raw,
+  CreateIntentParams<K>
+> & { hubWalletSwap?: boolean; partnerFee?: PartnerFee };
+
+/**
+ * Success value of {@link LeverageYieldService.createVaultIntent}. Mirrors the swap
+ * domain's `CreateIntentResult` — duplicated deliberately so the leverage-yield surface
+ * stands alone.
+ */
+export type CreateVaultIntentResult<K extends SpokeChainKey, Raw extends boolean> = {
+  tx: TxReturnType<K, Raw>;
+  intent: Intent & FeeAmount;
+  relayData: RelayExtraData;
+};
+
+/**
+ * Success value of {@link LeverageYieldService.vaultSwap}. Mirrors the swap domain's
+ * `SwapResponse` — duplicated deliberately so the leverage-yield surface stands alone.
+ */
+export type VaultSwapResponse = {
+  solverExecutionResponse: SolverExecutionResponse;
+  intent: Intent;
+  intentDeliveryInfo: IntentDeliveryInfo;
 };
 
 export type LeverageYieldApproveParams<R extends boolean> = {
@@ -269,13 +349,19 @@ export type LeverageYieldServiceConstructorParams = {
 
 /**
  * Treats leverage-yield ERC-4626 vault shares (lsoda* tokens) as solver-tradeable tokens:
- * deposits and withdrawals are ordinary intent-based swaps routed through `swaps.swap()`.
+ * deposits and withdrawals are intent-based swaps the service executes itself via
+ * `vaultSwap()` — the generic swap surface stays untouched by vault concerns.
  *
  * Methods:
  * - `deposit` / `withdraw` — build a {@link LeverageYieldSwapPayload} for a swap-style deposit
  *   (any token → lsoda*) and withdraw (lsoda* → any token); spread the result into
- *   `swaps.swap()`. `withdraw` sets `hubWalletSwap: true` so `swap()` spends the lsoda* held
- *   in the user's hub wallet via a `Connection.sendMessage`.
+ *   `vaultSwap()`. `withdraw` sets `hubWalletSwap: true` so the vault swap spends the lsoda*
+ *   held in the user's hub wallet via a `Connection.sendMessage`.
+ * - `createVaultIntent` / `vaultSwap` — leverage-yield copies of the swap domain's
+ *   `createIntent` / `swap()` (duplicated deliberately — the vault execution modifiers
+ *   `hubWalletSwap` and per-intent `partnerFee` live here, not on the swap domain).
+ *   `createVaultIntent` submits the intent tx on the source spoke chain; `vaultSwap`
+ *   orchestrates the full create → verify → relay → notify-solver lifecycle.
  * - `approve` / `isAllowanceValid` — Sonic-direct allowance management for the vault's
  *   underlying asset (sodaWEETH-style).
  * - `getPosition` / `getApr` / `getEffectiveApr` / `getLsdApr` / `getMaxWithdraw` /
@@ -321,8 +407,8 @@ export class LeverageYieldService {
    * Builds the {@link LeverageYieldSwapPayload} for a leverage-yield deposit (any token → lsoda*).
    * The lsoda* output is delivered to the user's hub wallet on Sonic so a later
    * {@link LeverageYieldService.withdraw} can swap it back. Spread the result into
-   * `swaps.swap()`: `swap({ ...payload, walletProvider })`. An optional `partnerFee` is
-   * forwarded on the payload as the swap layer's per-intent fee override.
+   * {@link LeverageYieldService.vaultSwap}: `vaultSwap({ ...payload, walletProvider })`.
+   * An optional `partnerFee` is forwarded on the payload as the per-intent fee override.
    */
   public async deposit(
     params: LeverageYieldSwapDepositParams,
@@ -372,10 +458,10 @@ export class LeverageYieldService {
 
   /**
    * Builds the {@link LeverageYieldSwapPayload} for a leverage-yield withdraw (lsoda* → any
-   * token). The payload carries `hubWalletSwap: true` — `swaps.swap()` then spends the lsoda*
-   * held in the user's hub wallet by authorising it via a `Connection.sendMessage` the user
-   * signs on `srcChainKey`. Returned synchronously, wrapped in a {@link Result} for a call
-   * shape uniform with {@link LeverageYieldService.deposit}.
+   * token). The payload carries `hubWalletSwap: true` — {@link LeverageYieldService.vaultSwap}
+   * then spends the lsoda* held in the user's hub wallet by authorising it via a
+   * `Connection.sendMessage` the user signs on `srcChainKey`. Returned synchronously, wrapped
+   * in a {@link Result} for a call shape uniform with {@link LeverageYieldService.deposit}.
    */
   public withdraw(
     params: LeverageYieldSwapWithdrawParams,
@@ -415,6 +501,379 @@ export class LeverageYieldService {
     } catch (error) {
       if (isLeverageYieldCreateIntentError(error)) return { ok: false, error };
       return { ok: false, error: intentCreationFailed('leverageYield', error, baseCtx) };
+    }
+  }
+
+  /**
+   * Creates a vault swap intent on the user's source spoke chain without submitting it to
+   * the solver. Leverage-yield copy of the swap domain's `createIntent`, specialised for
+   * vault flows — duplicated deliberately so the vault-specific execution modifiers
+   * (`hubWalletSwap`, per-intent `partnerFee`) stay off the generic swap surface.
+   *
+   * Use {@link LeverageYieldService.vaultSwap} for the full end-to-end flow
+   * (create → relay → notify solver); use this directly when you need the raw transaction
+   * or drive the relay yourself (e.g. the backend submit-tx path).
+   *
+   * @param _params - Intent parameters, source chain key, wallet provider (when `raw: false`),
+   *   and optional `skipSimulation` / `hubWalletSwap` / `partnerFee`.
+   * @returns A `Result<CreateVaultIntentResult<K, Raw>, LeverageYieldCreateIntentError>`.
+   *   On success contains:
+   *   - `tx` — chain-specific tx hash (executed) or raw tx data (raw mode).
+   *   - `intent` — the fully constructed `Intent` object augmented with `feeAmount`.
+   *   - `relayData` — `{ address, payload }` needed to submit the intent to the relayer.
+   *
+   *   On failure `result.error` is a SodaxError with `VALIDATION_FAILED` (invariant
+   *   precondition), `INTENT_CREATION_FAILED` (spoke-side creation/deposit failed) or
+   *   `UNKNOWN` (defensive fallback).
+   */
+  public async createVaultIntent<K extends SpokeChainKey, Raw extends boolean>(
+    _params: VaultSwapActionParams<K, Raw>,
+  ): Promise<Result<CreateVaultIntentResult<K, Raw>, LeverageYieldCreateIntentError>> {
+    // Per-intent partnerFee override beats the globally configured fee (undefined = no fee).
+    const { params, skipSimulation, hubWalletSwap, partnerFee = this.config.swaps.partnerFee } = _params;
+    const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
+
+    try {
+      leverageYieldInvariant(
+        isUndefinedOrValidWalletProviderForChainKey(params.srcChainKey, _params.walletProvider),
+        `Invalid wallet provider for chain key: ${params.srcChainKey}`,
+        baseCtx,
+      );
+      // Hub-wallet swap (withdraw): `inputToken` lives on the hub, not on `srcChainKey`
+      // (which is the chain the user signs on). Validate it against the hub chain instead.
+      const hubChainKey = this.hubProvider.chainConfig.chain.key;
+      const inputTokenChainKey = hubWalletSwap ? hubChainKey : params.srcChainKey;
+      leverageYieldInvariant(
+        this.config.isValidOriginalAssetAddress(inputTokenChainKey, params.inputToken),
+        `Unsupported spoke chain token (srcChainKey: ${inputTokenChainKey}, inputToken: ${params.inputToken})`,
+        { ...baseCtx, field: 'inputToken' },
+      );
+      leverageYieldInvariant(
+        this.config.isValidOriginalAssetAddress(params.dstChainKey, params.outputToken),
+        `Unsupported spoke chain token (params.dstChain): ${params.dstChainKey}, params.outputToken): ${params.outputToken}`,
+        { ...baseCtx, field: 'outputToken' },
+      );
+      leverageYieldInvariant(
+        this.config.isValidSpokeChainKey(params.srcChainKey),
+        `Invalid spoke chain (srcChainKey): ${params.srcChainKey}`,
+        { ...baseCtx, field: 'srcChainKey' },
+      );
+      leverageYieldInvariant(
+        this.config.isValidSpokeChainKey(params.dstChainKey),
+        `Invalid spoke chain (params.dstChain): ${params.dstChainKey}`,
+        { ...baseCtx, field: 'dstChainKey' },
+      );
+      // A withdraw can deliver BTC: if dstChain is Bitcoin and token is BTC, minOutputAmount
+      // must stay above the 546-sat dust limit.
+      if (isBitcoinChainKey(params.dstChainKey) && params.outputToken === 'BTC') {
+        leverageYieldInvariant(
+          params.minOutputAmount >= 546n,
+          `Invalid minOutputAmount (params.minOutputAmount): ${params.minOutputAmount}`,
+          { ...baseCtx, field: 'minOutputAmount' },
+        );
+      }
+      const personalAddress = params.srcAddress;
+
+      // Bitcoin TRADING mode: use trading wallet for hub wallet derivation (see getEffectiveWalletAddress)
+      // NOTE: bitcoin is only enabled in non-raw execution mode == walletProvider is required
+      let walletAddress: string = personalAddress;
+      if (isBitcoinChainKeyType(params.srcChainKey) && _params.raw === false) {
+        leverageYieldInvariant(
+          isBitcoinWalletProviderType(_params.walletProvider),
+          `Invalid wallet provider for chain key: ${params.srcChainKey}`,
+          baseCtx,
+        );
+        walletAddress = await this.spoke.bitcoin.getEffectiveWalletAddress(personalAddress);
+        await this.spoke.bitcoin.radfi.ensureRadfiAccessToken(_params.walletProvider);
+      }
+
+      // derive users hub wallet address
+      const creatorHubWalletAddress = await this.hubProvider.getUserHubWalletAddress(walletAddress, params.srcChainKey);
+
+      // Hub-wallet swap (withdraw): the lsoda* input already sits in the user's hub wallet.
+      // The user signs a `Connection.sendMessage` on their spoke chain (`srcChainKey`)
+      // authorising the hub wallet to run the encoded [approve, createIntent] sequence
+      // itself — no spoke-side AssetManager deposit. The `vaultSwap()` tail then relays the
+      // message and notifies the solver exactly as for a normal spoke-sourced swap.
+      if (hubWalletSwap) {
+        const [data, intent, feeAmount] = EvmSolverService.constructCreateIntentData(
+          { ...params, srcChainKey: hubChainKey, srcAddress: creatorHubWalletAddress },
+          creatorHubWalletAddress,
+          this.config,
+          partnerFee,
+        );
+
+        const coreSendMessageParams = {
+          srcChainKey: params.srcChainKey,
+          srcAddress: walletAddress as GetAddressType<K>,
+          dstChainKey: hubChainKey,
+          dstAddress: creatorHubWalletAddress,
+          payload: data,
+          skipSimulation,
+        } as const;
+
+        const txResult = await this.spoke.sendMessage(
+          _params.raw
+            ? { ...coreSendMessageParams, raw: true }
+            : {
+                ...coreSendMessageParams,
+                raw: false,
+                walletProvider: _params.walletProvider as GetWalletProviderType<K>,
+              },
+        );
+
+        if (!txResult.ok) {
+          if (isLeverageYieldCreateIntentError(txResult.error)) {
+            return { ok: false, error: txResult.error };
+          }
+          return { ok: false, error: intentCreationFailed('leverageYield', txResult.error, baseCtx) };
+        }
+
+        return {
+          ok: true,
+          value: {
+            tx: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
+            intent: { ...intent, feeAmount } as Intent & FeeAmount,
+            relayData: { address: creatorHubWalletAddress, payload: data },
+          },
+        };
+      }
+
+      if (isHubChainKeyType(params.srcChainKey) && isSonicChainKeyType(params.srcChainKey)) {
+        const coreSonicParams = {
+          createIntentParams: params,
+          creatorHubWalletAddress,
+          solverConfig: this.config.solver,
+          fee: partnerFee,
+          hubProvider: this.hubProvider,
+        } as const;
+
+        // on hub chain create intent directly
+        const [txResult, intent, feeAmount, data] = await SonicSpokeService.createSwapIntent(
+          _params.raw
+            ? { ...coreSonicParams, raw: true }
+            : {
+                ...coreSonicParams,
+                raw: false,
+                walletProvider: _params.walletProvider as GetWalletProviderType<SonicChainKey>,
+              },
+        );
+
+        return {
+          ok: true,
+          value: {
+            tx: txResult satisfies TxReturnType<SonicChainKey, boolean> as TxReturnType<K, Raw>,
+            intent: { ...intent, feeAmount } as Intent & FeeAmount,
+            relayData: { address: intent.creator, payload: data },
+          },
+        };
+      }
+
+      // construct the intent data
+      const [data, intent, feeAmount] = EvmSolverService.constructCreateIntentData(
+        {
+          ...params,
+          srcAddress: walletAddress,
+        },
+        creatorHubWalletAddress,
+        this.config,
+        partnerFee,
+      );
+
+      const coreDepositParams = {
+        srcChainKey: params.srcChainKey,
+        srcAddress: walletAddress as GetAddressType<K>,
+        to: creatorHubWalletAddress,
+        token: params.inputToken as GetTokenAddressType<K>,
+        amount: params.inputAmount,
+        data: data,
+        skipSimulation,
+      } as const;
+
+      const txResult = await this.spoke.deposit(
+        _params.raw
+          ? {
+              ...coreDepositParams,
+              raw: true,
+            }
+          : {
+              ...coreDepositParams,
+              raw: false,
+              walletProvider: _params.walletProvider as GetWalletProviderType<K>,
+            },
+      );
+
+      if (!txResult.ok) {
+        if (isLeverageYieldCreateIntentError(txResult.error)) {
+          return { ok: false, error: txResult.error };
+        }
+        return {
+          ok: false,
+          error: intentCreationFailed('leverageYield', txResult.error, baseCtx),
+        };
+      }
+
+      return {
+        ok: true,
+        value: {
+          tx: txResult.value satisfies TxReturnType<K, Raw> as TxReturnType<K, Raw>,
+          intent: { ...intent, feeAmount } as Intent & FeeAmount,
+          relayData: { address: intent.creator, payload: data },
+        },
+      };
+    } catch (error) {
+      // leverageYieldInvariant() throws SodaxError<'VALIDATION_FAILED'> directly, so the
+      // guard catches validation failures by code membership. Anything else (a hubProvider
+      // rejection, deposit throw, etc.) gets wrapped as INTENT_CREATION_FAILED with the
+      // original on cause.
+      if (isLeverageYieldCreateIntentError(error)) return { ok: false, error };
+      return {
+        ok: false,
+        error: intentCreationFailed('leverageYield', error, baseCtx),
+      };
+    }
+  }
+
+  /**
+   * Executes a full end-to-end leverage-yield vault swap (deposit or withdraw).
+   * Leverage-yield copy of the swap domain's `swap()` orchestrator:
+   * 1. Calls {@link LeverageYieldService.createVaultIntent} to submit the intent
+   *    transaction on the source spoke chain.
+   * 2. Verifies the spoke transaction landed on-chain.
+   * 3. For non-hub source chains: submits the spoke tx to the relayer and waits for the
+   *    relay packet to land on the hub (Sonic). Skipped when `srcChainKey` is the hub.
+   * 4. Notifies the solver, triggering it to fill the intent.
+   *
+   * Spread a {@link LeverageYieldSwapPayload} from `deposit` / `withdraw` into this method
+   * alongside the wallet provider: `vaultSwap({ ...payload, walletProvider })`.
+   *
+   * @returns A `Result<VaultSwapResponse, LeverageYieldSwapError>`. On success:
+   *   - `solverExecutionResponse` — solver acknowledgement (`{ answer: 'OK', intent_hash }`).
+   *   - `intent` — the on-chain intent object that was created.
+   *   - `intentDeliveryInfo` — source/destination chain keys, tx hashes, and user addresses.
+   *
+   *   On failure `result.error` carries one of the create-intent codes plus
+   *   `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`,
+   *   `EXECUTION_FAILED`, `EXTERNAL_API_ERROR` or `UNKNOWN`.
+   */
+  public async vaultSwap<K extends SpokeChainKey>(
+    _params: VaultSwapActionParams<K, false>,
+  ): Promise<Result<VaultSwapResponse, LeverageYieldSwapError>> {
+    const { params } = _params;
+    const srcChainKey = params.srcChainKey;
+    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey };
+    try {
+      const timeout = _params.timeout;
+      const createIntentResult = await this.createVaultIntent(_params);
+      if (!createIntentResult.ok) {
+        // LeverageYieldCreateIntentErrorCode ⊂ LeverageYieldSwapErrorCode by definition.
+        return { ok: false, error: createIntentResult.error };
+      }
+
+      const { tx: spokeTxHash, intent, relayData } = createIntentResult.value;
+
+      const verifyTxHashResult = await this.spoke.verifyTxHash({
+        txHash: spokeTxHash,
+        chainKey: srcChainKey,
+      });
+      if (!verifyTxHashResult.ok) {
+        return {
+          ok: false,
+          error: verifyFailed('leverageYield', verifyTxHashResult.error, { ...baseCtx, action: 'vaultSwap' }),
+        };
+      }
+
+      let dstIntentTxHash: string;
+      if (isHubChainKeyType(srcChainKey)) {
+        dstIntentTxHash = spokeTxHash;
+      } else {
+        const packet = await relayTxAndWaitPacket({
+          srcTxHash: spokeTxHash,
+          data: relayData,
+          chainKey: srcChainKey,
+          relayerApiEndpoint: this.config.relay.relayerApiEndpoint,
+          timeout,
+        });
+        if (!packet.ok) {
+          return {
+            ok: false,
+            error: mapRelayFailure(packet.error, { feature: 'leverageYield', action: 'vaultSwap', ...baseCtx }),
+          };
+        }
+        dstIntentTxHash = packet.value.dst_tx_hash;
+      }
+
+      const postExecResult = await this.notifySolver({
+        intent_tx_hash: dstIntentTxHash as `0x${string}`,
+      });
+      if (!postExecResult.ok) {
+        // LeverageYieldPostExecutionErrorCode ⊂ LeverageYieldSwapErrorCode by definition.
+        return { ok: false, error: postExecResult.error };
+      }
+
+      return {
+        ok: true,
+        value: {
+          solverExecutionResponse: postExecResult.value,
+          intent,
+          intentDeliveryInfo: {
+            srcChainKey,
+            srcTxHash: spokeTxHash,
+            srcAddress: params.srcAddress,
+            dstChainKey: params.dstChainKey,
+            dstTxHash: dstIntentTxHash,
+            dstAddress: params.dstAddress,
+          } satisfies IntentDeliveryInfo,
+        },
+      };
+    } catch (error) {
+      // Narrow guard: preserve SodaxErrors whose code is in the vault-swap union; wrap
+      // unknown codes (e.g. an accidental cross-feature code) as UNKNOWN.
+      if (isLeverageYieldSwapError(error)) return { ok: false, error };
+      return {
+        ok: false,
+        error: unknownFailed('leverageYield', error, { ...baseCtx, action: 'vaultSwap' }),
+      };
+    }
+  }
+
+  /**
+   * Notifies the solver that the vault intent landed on the hub, triggering it to fill.
+   * Leverage-yield copy of the swap domain's `postExecution` — emits only
+   * `EXECUTION_FAILED` / `EXTERNAL_API_ERROR` / `UNKNOWN` (relay/verify codes appear only
+   * on {@link LeverageYieldService.vaultSwap}, which owns the verify + relay steps).
+   */
+  private async notifySolver(
+    request: SolverExecutionRequest,
+  ): Promise<Result<SolverExecutionResponse, LeverageYieldPostExecutionError>> {
+    try {
+      const result = await SolverApiService.postExecution(request, this.config.solver, this.config.logger);
+      if (result.ok) return result;
+
+      // Defensive: SolverApiService is contractually typed to return SolverErrorResponse,
+      // but a malformed upstream payload would otherwise surface as a cryptic
+      // "Cannot read properties of undefined" caught below. Fall back to a synthetic detail
+      // so the canonical SodaxError carries enough context for forensics.
+      const detail = result.error?.detail ?? {
+        code: -999, // SolverIntentErrorCode.UNKNOWN
+        message: 'Solver returned malformed error response',
+      };
+      return {
+        ok: false,
+        error: new SodaxError('EXTERNAL_API_ERROR', detail.message, {
+          feature: 'leverageYield',
+          context: {
+            phase: 'postExecution',
+            api: 'solver',
+            solverCode: detail.code,
+            solverDetail: detail,
+          },
+        }),
+      };
+    } catch (error) {
+      // Narrow guard: only preserve SodaxErrors whose code is in the post-execution union.
+      if (isLeverageYieldPostExecutionError(error)) return { ok: false, error };
+      return { ok: false, error: executionFailed('leverageYield', error, { phase: 'postExecution' }) };
     }
   }
 

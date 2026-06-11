@@ -9,8 +9,9 @@ export type UseLeverageYieldWithdrawVars = LeverageYieldSwapWithdrawParams;
 
 /**
  * Builds the `LeverageYieldSwapPayload` for a leverage-yield withdraw (`lsoda*` shares → any token).
- * The returned payload carries `hubWalletSwap: true`; spread it into {@link useSwap}, which
- * authorises the hub wallet to spend the shares via a `Connection.sendMessage`.
+ * The returned payload carries `hubWalletSwap: true`; spread it into
+ * {@link useLeverageYieldVaultSwap}, which authorises the hub wallet to spend the shares via a
+ * `Connection.sendMessage`.
  *
  * This is a builder, not an executor. Throws on SDK failure so React Query's error model engages;
  * returns the unwrapped `LeverageYieldSwapPayload` on success.
@@ -19,7 +20,7 @@ export type UseLeverageYieldWithdrawVars = LeverageYieldSwapWithdrawParams;
  * ```typescript
  * const { mutateAsyncSafe: buildWithdraw } = useLeverageYieldWithdraw();
  * const built = await buildWithdraw({ vault, srcChainKey, srcAddress, dstChainKey, outputToken, inputAmount, minOutputAmount });
- * if (built.ok) swap({ ...built.value, walletProvider });
+ * if (built.ok) vaultSwap({ ...built.value, walletProvider });
  * ```
  */
 export function useLeverageYieldWithdraw({

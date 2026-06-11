@@ -9,17 +9,18 @@ export type UseLeverageYieldDepositVars = LeverageYieldSwapDepositParams;
 
 /**
  * Builds the `LeverageYieldSwapPayload` for a leverage-yield deposit (any token → `lsoda*` shares,
- * delivered to the user's hub wallet). Spread the returned payload into {@link useSwap}.
+ * delivered to the user's hub wallet). Spread the returned payload into
+ * {@link useLeverageYieldVaultSwap}.
  *
  * This is a builder, not an executor — it derives the hub wallet and assembles the intent; the
- * actual swap is relayed by `useSwap`. Throws on SDK failure so React Query's error model engages;
- * returns the unwrapped `LeverageYieldSwapPayload` on success.
+ * actual swap is relayed by `useLeverageYieldVaultSwap`. Throws on SDK failure so React Query's
+ * error model engages; returns the unwrapped `LeverageYieldSwapPayload` on success.
  *
  * @example
  * ```typescript
  * const { mutateAsyncSafe: buildDeposit } = useLeverageYieldDeposit();
  * const built = await buildDeposit({ vault, srcChainKey, srcAddress, inputToken, inputAmount, minOutputAmount });
- * if (built.ok) swap({ ...built.value, walletProvider });
+ * if (built.ok) vaultSwap({ ...built.value, walletProvider });
  * ```
  */
 export function useLeverageYieldDeposit({

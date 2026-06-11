@@ -2,7 +2,8 @@
  * Tests for LeverageYieldService.
  *
  * The service is a thin layer over the solver: `deposit` / `withdraw` build an
- * action-shaped `LeverageYieldSwapPayload` the caller spreads into `swaps.swap()`.
+ * action-shaped `LeverageYieldSwapPayload` the caller spreads into
+ * `leverageYield.vaultSwap()` (or `createVaultIntent()` for manual relay control).
  * These tests lock the shape of that payload plus the static vault-registry lookups.
  */
 
@@ -155,7 +156,7 @@ describe('LeverageYieldService.withdraw — intent builder', () => {
       srcAddress: SAMPLE_USER,
       dstAddress: SAMPLE_USER, // recipient defaults to srcAddress
     });
-    expect(result.value.hubWalletSwap).toBe(true); // routes swap() through the hub-wallet sendMessage path
+    expect(result.value.hubWalletSwap).toBe(true); // routes vaultSwap() through the hub-wallet sendMessage path
   });
 
   it('honours an explicit recipient', () => {

@@ -84,16 +84,18 @@ The registry lives in `@sodax/types` (`leverageYieldConfig`) and derives every a
 
 ## The SDK model: shares as solver-tradeable tokens
 
-The service does **not** expose bespoke "deposit into vault" / "redeem from vault" calls. Instead, the `lsoda*` share token is registered as an ordinary **solver-tradeable token** (it is spread into the swap-supported tokens for Sonic). So entering and exiting a leveraged position are just **intent-based swaps** routed through `sodax.swaps.swap()`:
+The service does **not** expose bespoke "deposit into vault" / "redeem from vault" calls. Instead, the `lsoda*` share token is registered as an ordinary **solver-tradeable token** (it is spread into the swap-supported tokens for Sonic). So entering and exiting a leveraged position are just **intent-based swaps**, executed by the service's own `vaultSwap()`:
 
 - **Enter** a position = swap *any token → `lsoda*` shares*.
 - **Exit** a position = swap *`lsoda*` shares → any token*.
 
-`LeverageYieldService`'s job is to build the correct swap payload (the `CreateIntentParams` plus any execution flags); the caller spreads it into the swap service, and the solver (plus the vault's ERC-4626 mechanics) does the rest. This is why deposits and withdrawals are cross-chain by default and require no vault-specific approvals on the spoke side.
+`LeverageYieldService`'s job is to build the correct swap payload (the `CreateIntentParams` plus any execution flags) via `deposit()` / `withdraw()`, then execute it via `vaultSwap()` (or `createVaultIntent()` for manual relay control); the solver (plus the vault's ERC-4626 mechanics) does the rest. This is why deposits and withdrawals are cross-chain by default and require no vault-specific approvals on the spoke side.
+
+`createVaultIntent` / `vaultSwap` are leverage-yield copies of the swap domain's `createIntent` / `swap()` — duplicated **deliberately** so the vault-specific execution modifiers (`hubWalletSwap`, per-intent `partnerFee`) live on the leverage-yield action wrapper (`VaultSwapActionParams`) and never leak into the generic swap surface.
 
 ### Partner fee
 
-Because entering and exiting a position are ordinary `sodax.swaps.swap()` calls, they inherit the **global partner fee** configured on the Sodax instance by default. Set `config.swaps.partnerFee` and every leverage-vault **deposit** (and withdraw) deducts it from the input amount, exactly like any other swap:
+Because entering and exiting a position are ordinary intent-based swaps, `vaultSwap()` inherits the **global partner fee** configured on the Sodax instance by default. Set `config.swaps.partnerFee` and every leverage-vault **deposit** (and withdraw) deducts it from the input amount, exactly like any other swap:
 
 ```typescript
 const sodax = new Sodax({
@@ -102,17 +104,17 @@ const sodax = new Sodax({
 });
 ```
 
-To charge a fee **only on leverage-vault deposits** (or a different fee than the global one), pass `partnerFee` to `deposit()`. It rides on the returned payload as the swap layer's generic per-intent fee override (`SwapActionParams.partnerFee`) and takes precedence over `config.swaps.partnerFee` for that intent only:
+To charge a fee **only on leverage-vault deposits** (or a different fee than the global one), pass `partnerFee` to `deposit()`. It rides on the returned payload as the per-intent fee override (`VaultSwapActionParams.partnerFee`) and takes precedence over `config.swaps.partnerFee` for that intent only:
 
 ```typescript
 const intentResult = await sodax.leverageYield.deposit({
   // ...deposit params
   partnerFee: { address: '0xYourFeeReceiver...', percentage: 100 },
 });
-// intentResult.value = { params, partnerFee } — spread into swap() as usual.
+// intentResult.value = { params, partnerFee } — spread into vaultSwap() as usual.
 ```
 
-The fee is taken inside `createIntent()` (which `swap()` delegates to): the effective fee (per-intent override, falling back to the global config) is deducted from `inputAmount` and encoded into the intent's `data` as the `IntentDataType.FEE` envelope, so the intents contract routes it to the partner address on the hub. `LeverageYieldService.deposit()` builds the `CreateIntentParams` with `data: '0x'`; the fee `data` is then constructed by the swap layer at intent-creation time, so the deposit needs no fee plumbing of its own. When neither fee is set, no fee is taken (the historical "fee not charged" case).
+The fee is taken inside `createVaultIntent()` (which `vaultSwap()` delegates to): the effective fee (per-intent override, falling back to the global config) is deducted from `inputAmount` and encoded into the intent's `data` as the `IntentDataType.FEE` envelope, so the intents contract routes it to the partner address on the hub. `LeverageYieldService.deposit()` builds the `CreateIntentParams` with `data: '0x'`; the fee `data` is then constructed at intent-creation time, so the deposit needs no fee plumbing of its own. When neither fee is set, no fee is taken (the historical "fee not charged" case).
 
 ## Flows
 
@@ -135,8 +137,8 @@ const intentResult = await sodax.leverageYield.deposit({
 });
 
 if (intentResult.ok) {
-  // Spread the payload straight into the swap service.
-  const swapResult = await sodax.swaps.swap({
+  // Spread the payload straight into the vault-swap executor.
+  const swapResult = await sodax.leverageYield.vaultSwap({
     ...intentResult.value,
     walletProvider: evmWalletProvider,
   });
@@ -145,7 +147,7 @@ if (intentResult.ok) {
 
 ### Withdraw (`lsoda*` → any token)
 
-`withdraw()` builds the `LeverageYieldSwapPayload` for swapping the vault's `lsoda*` shares — which sit in the user's hub wallet — back into any solver-supported token on any chain. The payload carries **`hubWalletSwap: true`**: `swaps.swap()` then authorises the hub wallet to spend the shares via a `Connection.sendMessage` the user signs on `srcChainKey`, instead of a spoke-side asset-manager deposit. `withdraw()` is synchronous (it does no chain reads) but still returns a `Result` for a call shape uniform with `deposit()`.
+`withdraw()` builds the `LeverageYieldSwapPayload` for swapping the vault's `lsoda*` shares — which sit in the user's hub wallet — back into any solver-supported token on any chain. The payload carries **`hubWalletSwap: true`**: `vaultSwap()` then authorises the hub wallet to spend the shares via a `Connection.sendMessage` the user signs on `srcChainKey`, instead of a spoke-side asset-manager deposit. `withdraw()` is synchronous (it does no chain reads) but still returns a `Result` for a call shape uniform with `deposit()`.
 
 ```typescript
 const intentResult = sodax.leverageYield.withdraw({
@@ -160,7 +162,7 @@ const intentResult = sodax.leverageYield.withdraw({
 });
 
 if (intentResult.ok) {
-  const swapResult = await sodax.swaps.swap({
+  const swapResult = await sodax.leverageYield.vaultSwap({
     ...intentResult.value, // hubWalletSwap: true is already set on the payload
     walletProvider: evmWalletProvider,
   });
@@ -198,6 +200,14 @@ Builds the `LeverageYieldSwapPayload` for a deposit (any token → `lsoda*`, del
 ### withdraw
 
 Builds the `LeverageYieldSwapPayload` for a withdraw (`lsoda*` → any token), with `hubWalletSwap: true` set on the payload. Synchronous. **Returns:** `Result<LeverageYieldSwapPayload, LeverageYieldCreateIntentError>`. `context.action` is `'withdraw'`.
+
+### createVaultIntent
+
+Creates the vault swap intent on the user's source spoke chain without submitting it to the solver — the leverage-yield copy of the swap domain's `createIntent`, honouring `hubWalletSwap` (withdraw routes via a hub-wallet `Connection.sendMessage`) and the per-intent `partnerFee` override. With `raw: true` returns unsigned tx data. Use it directly when you drive the relay yourself (e.g. the backend submit-tx path). **Returns:** `Promise<Result<CreateVaultIntentResult<K, Raw>, LeverageYieldCreateIntentError>>` — `tx`, the constructed `intent` (with `feeAmount`), and `relayData`.
+
+### vaultSwap
+
+Executes the full end-to-end vault swap: `createVaultIntent` → verify the spoke tx → relay to the hub (skipped when the source is Sonic) → notify the solver. Spread a `LeverageYieldSwapPayload` into it alongside the wallet provider: `vaultSwap({ ...payload, walletProvider })`. **Returns:** `Promise<Result<VaultSwapResponse, LeverageYieldSwapError>>` — `solverExecutionResponse`, `intent`, and `intentDeliveryInfo`. `context.action` is `'vaultSwap'`.
 
 ### approve
 
@@ -278,13 +288,14 @@ type LeverageYieldPosition = {
 
 All async public methods return `Promise<Result<T, SodaxError<NarrowCode>>>`. Discriminate on `result.error.code` (a string literal) — never on `result.error.message`. Same canonical shape used by swap, bridge, and money market.
 
-This service is a **thin layer** over the solver and the hub: `deposit` / `withdraw` build swap payloads (no relay step happens here — the caller relays via `swaps.swap()`), `approve` / `isAllowanceValid` manage the Sonic allowance, and the read methods query on-chain state. So the emitted codes are limited to the create-intent, approve, allowance-check, and lookup subsets — there are no relay/tx-verification codes.
+The service owns the full vault-swap lifecycle: `deposit` / `withdraw` build swap payloads, `createVaultIntent` submits the intent on the source spoke chain, `vaultSwap` orchestrates create → verify → relay → notify-solver, `approve` / `isAllowanceValid` manage the Sonic allowance, and the read methods query on-chain state. Relay/tx-verification codes appear **only** on `vaultSwap` — every other method stays within the create-intent, approve, allowance-check, and lookup subsets.
 
 ### Per-method error code unions
 
 | Method | Narrow type | Codes |
 |---|---|---|
-| `deposit`, `withdraw` | `LeverageYieldCreateIntentError` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
+| `deposit`, `withdraw`, `createVaultIntent` | `LeverageYieldCreateIntentError` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
+| `vaultSwap` | `LeverageYieldSwapError` | create-intent codes plus `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `EXTERNAL_API_ERROR` |
 | `approve` | `LeverageYieldApproveError` | `VALIDATION_FAILED`, `APPROVE_FAILED`, `UNKNOWN` |
 | `isAllowanceValid` | `LeverageYieldAllowanceCheckError` | `VALIDATION_FAILED`, `ALLOWANCE_CHECK_FAILED`, `UNKNOWN` |
 | all read methods | `LeverageYieldLookupError` | `VALIDATION_FAILED`, `LOOKUP_FAILED`, `UNKNOWN` |
@@ -293,17 +304,18 @@ The broad union type is `LeverageYieldError` (`SodaxError<LeverageYieldErrorCode
 
 ### Discriminators
 
-- **`context.action`** — the user-facing operation (`'deposit' | 'withdraw' | 'approve'`).
+- **`context.action`** — the user-facing operation (`'deposit' | 'withdraw' | 'approve' | 'vaultSwap'`).
 - **`context.method`** — partitions `LOOKUP_FAILED` across the read methods (`'getApr'`, `'getPosition'`, `'getMaxWithdrawForUser'`, `'getShareBalance'`, …).
 - **`context.field`** — set on `VALIDATION_FAILED` (`'inputAmount'`, `'vault'`, `'inputToken'`, `'outputToken'`, `'amount'`, `'targetLtvBps'`).
-- **`context.phase`** — `'intentCreation' | 'approve' | 'allowanceCheck' | 'lookup' | 'validate'`.
+- **`context.phase`** — `'intentCreation' | 'approve' | 'allowanceCheck' | 'lookup' | 'validate' | 'verify' | 'relay' | 'postExecution'`.
 
 ### Guards
 
 Use the exported guards instead of `instanceof SodaxError` (bundle-safe):
 
 - `isLeverageYieldError(e)` — broad guard for any leverage-yield error.
-- `isLeverageYieldCreateIntentError(e)` — `deposit` / `withdraw`.
+- `isLeverageYieldCreateIntentError(e)` — `deposit` / `withdraw` / `createVaultIntent`.
+- `isLeverageYieldSwapError(e)` — `vaultSwap`.
 - `isLeverageYieldApproveError(e)` — `approve`.
 - `isLeverageYieldAllowanceCheckError(e)` — `isAllowanceValid`.
 - `isLeverageYieldLookupError(e)` — read methods.

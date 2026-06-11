@@ -563,11 +563,6 @@ const swapResult = await sodax.swaps.swap({
   walletProvider: evmWalletProvider,
   timeout: 120_000,        // optional — relay timeout in ms (default: DEFAULT_RELAY_TX_TIMEOUT = 120 s)
   skipSimulation: false,   // optional — skip spoke tx simulation (default: false)
-  hubWalletSwap: false,    // optional — inputToken is a hub-chain token already in the user's
-                           // hub wallet; the intent is created by authorising the hub wallet via
-                           // Connection.sendMessage instead of a spoke-side deposit (default: false)
-  partnerFee: undefined,   // optional — per-intent fee override; takes precedence over the
-                           // globally configured config.swaps.partnerFee for this intent only
 });
 
 if (!swapResult.ok) {

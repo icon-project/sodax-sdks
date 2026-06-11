@@ -12,7 +12,7 @@ Five architectural pieces hold the canonical hook shape together. Read this sect
 - **`useSafeMutation` foundation.** Every mutation hook calls `useSafeMutation(...)` (drop-in for React Query's `useMutation`) which augments the result with a `mutateAsyncSafe` method that returns `Promise<Result<TData>>` and never rejects. Lives at [src/hooks/shared/useSafeMutation.ts](src/hooks/shared/useSafeMutation.ts). → see *Mutation hook shape* and *Choosing `mutate` / `mutateAsync` / `mutateAsyncSafe`*.
 - **`unwrapResult` translation.** SDK service methods return `Result<T>`; `unwrapResult` ([src/hooks/shared/unwrapResult.ts](src/hooks/shared/unwrapResult.ts)) converts that to thrown errors inside `mutationFn` so React Query's native error model (`isError`, `error`, `onError`, `retry`, devtools) engages for SDK failures. → see *SDK Result handling*.
 - **`createSodaxQueryClient`** (optional). Factory that returns a `QueryClient` with a `MutationCache.onError` hook giving consumers a single observability seam for mutation failures, plus a `meta.silent` per-mutation opt-out. → see *Provider*.
-- **Mechanical enforcement via [_mutationContract.test.ts](src/hooks/_mutationContract.test.ts).** 43 hooks × 6 assertions (258 contract tests) run on every `pnpm test` and lock the canonical shape: `useSafeMutation` not `useMutation`, default `mutationKey` before the spread, `mutationFn` after, `unwrapResult` translation, feature-prefix queryKey rule. Adding a new mutation hook requires registering it in the manifest. → see *Adding a New Hook*.
+- **Mechanical enforcement via [_mutationContract.test.ts](src/hooks/_mutationContract.test.ts).** 44 hooks × 6 assertions (264 contract tests) run on every `pnpm test` and lock the canonical shape: `useSafeMutation` not `useMutation`, default `mutationKey` before the spread, `mutationFn` after, `unwrapResult` translation, feature-prefix queryKey rule. Adding a new mutation hook requires registering it in the manifest. → see *Adding a New Hook*.
 
 ### Provider
 
@@ -84,7 +84,7 @@ const queryClient = createSodaxQueryClient({ config: { mutationCache: myCache } 
 
 ### Hook Organization
 
-~102 hooks (43 mutations + ~55 queries + utilities) organized by feature domain in `src/hooks/`:
+~103 hooks (44 mutations + ~55 queries + utilities) organized by feature domain in `src/hooks/`:
 
 ```
 hooks/
@@ -110,10 +110,11 @@ hooks/
 │               # useMigrateBaln, useMigrationApprove, useMigrationAllowance
 └── leverageYield/  # useLeverageYieldEffectiveApr, useLeverageYieldPosition,
                     # useLeverageYieldTotalAssets, useLeverageYieldPreviewRedeem,
-                    # useLeverageYieldShareBalances, useLeverageYieldDeposit, useLeverageYieldWithdraw
+                    # useLeverageYieldShareBalances, useLeverageYieldDeposit, useLeverageYieldWithdraw,
+                    # useLeverageYieldVaultSwap
 ```
 
-Every mutation hook returns `SafeUseMutationResult` (extends `UseMutationResult` with `mutateAsyncSafe`). The 43-hook contract is enforced by [_mutationContract.test.ts](src/hooks/_mutationContract.test.ts).
+Every mutation hook returns `SafeUseMutationResult` (extends `UseMutationResult` with `mutateAsyncSafe`). The 44-hook contract is enforced by [_mutationContract.test.ts](src/hooks/_mutationContract.test.ts).
 
 ### React Query Patterns
 

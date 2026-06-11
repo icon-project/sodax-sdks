@@ -23,11 +23,11 @@ import {
   useBackendSubmitSwapTx,
   useQuote,
   useSodaxContext,
-  useSwap,
   useSwapAllowance,
   useSwapApprove,
   useXBalances,
   useLeverageYieldDeposit,
+  useLeverageYieldVaultSwap,
   useLeverageYieldWithdraw,
   useLeverageYieldEffectiveApr,
   useLeverageYieldPosition,
@@ -277,7 +277,7 @@ export default function LeverageYieldPage() {
 
   const { mutateAsyncSafe: approve, isPending: isApproving } = useSwapApprove();
   const { mutateAsyncSafe: submitSwapTx, isPending: isSubmitting } = useBackendSubmitSwapTx();
-  const { mutateAsync: swap, isPending: isSwapping } = useSwap();
+  const { mutateAsync: vaultSwap, isPending: isSwapping } = useLeverageYieldVaultSwap();
 
   // Leverage-yield intent builders. `mutateAsyncSafe` returns `Result<LeverageYieldSwapPayload>`
   // and never rejects, so `prepare()` branches on `.ok` exactly like the SDK's own builder did.
@@ -285,9 +285,9 @@ export default function LeverageYieldPage() {
   const { mutateAsyncSafe: buildWithdrawIntent } = useLeverageYieldWithdraw();
 
   // ─── Submit-tx API toggle ────────────────────────────────────────────────
-  // When OFF (default): createIntent + relay inline, then poll solver status. Deposit
-  // uses `useSwap`; withdraw relays the hub-wallet `sendMessage` then calls
-  // `postExecution`. When ON: createIntent → POST to BES → poll the BES status endpoint.
+  // When OFF (default): `useLeverageYieldVaultSwap` creates the intent, relays it, and
+  // notifies the solver (withdraw routes via the hub-wallet `sendMessage` internally).
+  // When ON: createVaultIntent → POST to BES → poll the BES status endpoint.
   const [useSubmitTxApi, setUseSubmitTxApi] = useState(false);
 
   // ─── Shares across ALL connected chains' hub wallets ─────────────────────
@@ -367,9 +367,9 @@ export default function LeverageYieldPage() {
 
   // Builds the swap payload via the SDK's leverage-yield builders, then stashes it for
   // `handleSwap`. Deposit (any token → lsoda*) and withdraw (lsoda* → any token) both
-  // produce an action-shaped `LeverageYieldSwapPayload` spread into the one `swaps.swap()`
-  // path — withdraw's payload carries `hubWalletSwap: true` so `swap()` routes via the
-  // hub wallet internally.
+  // produce an action-shaped `LeverageYieldSwapPayload` spread into the one
+  // `leverageYield.vaultSwap()` path — withdraw's payload carries `hubWalletSwap: true`
+  // so the vault swap routes via the hub wallet internally.
   const prepare = async () => {
     setActionError(null);
     if (
@@ -420,12 +420,12 @@ export default function LeverageYieldPage() {
   /**
    * Executes the prepared intent. Tab-agnostic — the action-shaped `intentOrderPayload`
    * already encodes deposit vs withdraw (withdraw carries `hubWalletSwap: true`, handled
-   * inside `swap()` / `createIntent()`), so it spreads into either call unchanged. Two
-   * modes via the submit-tx toggle:
-   *  - OFF (default): `useSwap` creates the intent, relays it, and notifies the solver,
-   *    returning full delivery info. Order renders in 'solver' mode.
-   *  - ON: `createIntent` + BES `submitSwapTx` — POSTs the spoke tx to the backend, which
-   *    drives the relay/solver. Order renders in 'submit-tx' mode.
+   * inside `vaultSwap()` / `createVaultIntent()`), so it spreads into either call
+   * unchanged. Two modes via the submit-tx toggle:
+   *  - OFF (default): `useLeverageYieldVaultSwap` creates the intent, relays it, and
+   *    notifies the solver, returning full delivery info. Order renders in 'solver' mode.
+   *  - ON: `createVaultIntent` + BES `submitSwapTx` — POSTs the spoke tx to the backend,
+   *    which drives the relay/solver. Order renders in 'submit-tx' mode.
    */
   const handleSwap = async () => {
     if (!intentOrderPayload || !sourceWalletProvider) return;
@@ -433,7 +433,7 @@ export default function LeverageYieldPage() {
 
     if (!useSubmitTxApi) {
       try {
-        const { solverExecutionResponse, intent, intentDeliveryInfo } = await swap({
+        const { solverExecutionResponse, intent, intentDeliveryInfo } = await vaultSwap({
           ...intentOrderPayload,
           walletProvider: sourceWalletProvider,
         });
@@ -454,7 +454,7 @@ export default function LeverageYieldPage() {
     }
 
     // Submit-tx (BES) path: create the intent, then hand the spoke tx to the backend.
-    const createResult = await sodax.swaps.createIntent({
+    const createResult = await sodax.leverageYield.createVaultIntent({
       ...intentOrderPayload,
       raw: false,
       walletProvider: sourceWalletProvider,
@@ -847,8 +847,9 @@ export default function LeverageYieldPage() {
                   />
                 </div>
 
-                {/* Submit-tx API toggle — mirrors the solver page. ON: createIntent →
-                    BES POST → poll status. OFF: useSwap (waits for relay packet inline). */}
+                {/* Submit-tx API toggle — mirrors the solver page. ON: createVaultIntent →
+                    BES POST → poll status. OFF: useLeverageYieldVaultSwap (waits for relay
+                    packet inline). */}
                 <div className="flex items-center gap-2 pt-1">
                   <input
                     id="ly-submit-tx-toggle"
