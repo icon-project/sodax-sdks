@@ -17,6 +17,20 @@ export function detectBitcoinAddressType(address: string): BtcAddressType {
   throw new Error(`Unknown Bitcoin address type: ${address}`);
 }
 
+/**
+ * Off-chain message-signing scheme a Bitcoin address type must use: BIP-322 vs ECDSA (BIP-137).
+ *
+ * - **P2WPKH / P2TR → BIP-322.** Taproot keys are Schnorr/x-only, so ECDSA cannot sign for them
+ *   (and wallets like Xverse default to Taproot).
+ * - **P2SH / P2PKH → ECDSA (BIP-137).** Browser wallets (UniSat/OKX) reject BIP-322 on
+ *   nested-segwit/legacy addresses — they throw "Not support address type to sign".
+ *
+ * No single scheme works for every address type, so signers AND verifiers must branch on this.
+ */
+export function usesBip322MessageSigning(addressType: BtcAddressType): boolean {
+  return addressType === 'P2WPKH' || addressType === 'P2TR';
+}
+
 export const BTC_WALLET_ADDRESS_TYPES = ['taproot', 'segwit'] as const;
 /** User-friendly Bitcoin address type for wallet connection. */
 export type BtcWalletAddressType = (typeof BTC_WALLET_ADDRESS_TYPES)[number];
@@ -116,6 +130,14 @@ export interface IBitcoinWalletProvider extends ICoreWallet {
   signEcdsaMessage(message: string): Promise<string>;
 
   signBip322Message(message: string): Promise<string>;
+
+  /**
+   * Get the signer's public key as a hex string. Optional capability: required only for the
+   * money-market on-demand (borrow/withdraw) flow, where the relay needs the key to verify a
+   * BIP-322 (Schnorr/Taproot) signature — which is not public-key-recoverable. Wallets that
+   * cannot expose it omit this method; callers guard before use.
+   */
+  getPublicKey?(): Promise<string>;
 
   /**
    * Send Bitcoin to an address

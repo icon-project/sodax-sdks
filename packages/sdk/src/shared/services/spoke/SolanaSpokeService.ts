@@ -1,4 +1,4 @@
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import {
   ComputeBudgetProgram,
   Connection,
@@ -128,7 +128,15 @@ export class SolanaSpokeService {
         ])
         .instruction();
     } else {
-      const signerTokenAccount = await SolanaSpokeService.getAssociatedTokenAddress(token.toBase58(), walletAddress);
+      // The asset manager receives the token program as an account, so the ATA derivation and the
+      // `tokenProgram` account must both match the mint's owning program (legacy SPL Token vs
+      // Token-2022, e.g. xStock tokens like CRCLx).
+      const tokenProgramId = await SolanaSpokeService.getMintTokenProgramId(this.connection, token);
+      const signerTokenAccount = await SolanaSpokeService.getAssociatedTokenAddress(
+        token.toBase58(),
+        walletAddress,
+        tokenProgramId,
+      );
       depositInstruction = await assetManagerProgram.methods
         .transfer(amountBN, Buffer.from(recipient.slice(2), 'hex'), Buffer.from(data.slice(2), 'hex'))
         .accountsStrict({
@@ -141,7 +149,7 @@ export class SolanaSpokeService {
           authority: AssetManagerPDA.authority(assetManagerProgram.programId).pda,
           mint: token,
           connection: connectionProgram.programId,
-          tokenProgram: TOKEN_PROGRAM_ID,
+          tokenProgram: tokenProgramId,
         })
         .remainingAccounts([
           {
@@ -327,11 +335,27 @@ export class SolanaSpokeService {
     return await connection.getTokenAccountBalance(new PublicKey(publicKey));
   }
 
+  /**
+   * Resolves the token program that owns a mint (legacy SPL Token vs Token-2022). Falls back to
+   * the legacy SPL Token program when the mint account can't be read.
+   */
+  public static async getMintTokenProgramId(connection: Connection, mint: PublicKey): Promise<PublicKey> {
+    const mintAccountInfo = await connection.getAccountInfo(mint);
+    return mintAccountInfo?.owner.equals(TOKEN_2022_PROGRAM_ID) ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID;
+  }
+
   public static async getAssociatedTokenAddress(
     mint: SolanaBase58PublicKey,
     walletAddress: SolanaBase58PublicKey,
+    tokenProgramId: PublicKey = TOKEN_PROGRAM_ID,
   ): Promise<SolanaBase58PublicKey> {
-    return (await getAssociatedTokenAddress(new PublicKey(mint), new PublicKey(walletAddress), true)).toBase58();
+    const ata = await getAssociatedTokenAddress(
+      new PublicKey(mint),
+      new PublicKey(walletAddress),
+      true,
+      tokenProgramId,
+    );
+    return ata.toBase58();
   }
 
   public static buildTransactionInstruction(

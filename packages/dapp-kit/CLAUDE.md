@@ -101,7 +101,7 @@ hooks/
 │               # (~18 hooks)
 ├── dex/        # usePools, useDexDeposit, useDexWithdraw, liquidity supply/decrease, position info
 │               # (~13 hooks)
-├── bitcoin/    # useBitcoinBalance, Radfi auth/session/trading wallet hooks (~8 hooks)
+├── bitcoin/    # useBitcoinBalance, Bound Exchange (formerly Radfi) auth/session/trading wallet hooks (~8 hooks)
 ├── backend/    # Intent tracking, swap submission, orderbook, money market position queries
 │               # (~13 hooks)
 ├── partner/    # Partner fee claim, auto-swap preferences, token approval (6 hooks)

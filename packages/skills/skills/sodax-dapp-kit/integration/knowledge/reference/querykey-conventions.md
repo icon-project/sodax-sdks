@@ -77,6 +77,7 @@ queryKey: ['staking', 'allowance', srcChainKey, action, srcAddress, amount.toStr
 queryKey: ['mm', 'userReservesData', spokeChainKey, userAddress]
 queryKey: ['staking', 'info', srcChainKey, srcAddress]              // useStakingInfo — second segment is 'info', not 'stakingInfo'
 queryKey: ['shared', 'xBalances', xChainId, tokens, address]
+queryKey: ['shared', 'nearStorageCheck', chainId, token, accountId] // useNearStorageCheck
 
 // Mutation default keys
 mutationKey: ['swap']                                                // useSwap
@@ -90,6 +91,7 @@ mutationKey: ['staking', 'approve', 'stake']                         // useStake
 mutationKey: ['bridge']                                              // useBridge — single segment (no 'execute' suffix)
 mutationKey: ['migrate', 'icxToSoda']
 mutationKey: ['dex', 'supplyLiquidity']
+mutationKey: ['shared', 'registerNearStorage']                       // useRegisterNearStorage
 ```
 
 ## Per-feature key tables

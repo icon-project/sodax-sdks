@@ -15,6 +15,7 @@ import {
   useStellarTrustlineCheck,
   useRequestTrustline,
   useBitcoinBalance,
+  useNearStorageGate,
   ChainKeys,
   type ChainType,
   type SpokeChainKey,
@@ -27,7 +28,7 @@ import {
 import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
 import { formatMutationFailureMessage } from '@/lib/utils';
-import { ArrowLeftRight } from 'lucide-react';
+import { ArrowLeftRight, Loader2 } from 'lucide-react';
 import { formatUnits } from 'viem';
 
 interface BridgeDialogProps {
@@ -99,6 +100,13 @@ export function BridgeDialog({
   });
   const { requestTrustline, isLoading: isRequestingTrustline } = useRequestTrustline(order.dstToken);
 
+  const nearStorage = useNearStorageGate({
+    dstChainKey: toChainKey,
+    token: order.dstToken,
+    accountId: toAccount.address,
+    walletProvider: toWalletProvider,
+  });
+
   const toBtcAddress = toChainKey === ChainKeys.BITCOIN_MAINNET ? toAccount.address : undefined;
   const { data: toBtcBalance } = useBitcoinBalance({ params: { address: toBtcAddress } });
 
@@ -131,6 +139,13 @@ export function BridgeDialog({
     });
   };
 
+  const handleRegisterNearStorage = async () => {
+    const result = await nearStorage.registerStorage();
+    if (result && !result.ok) {
+      setBridgeError(formatMutationFailureMessage(result.error, 'Storage registration failed'));
+    }
+  };
+
   const isDestinationStellar = toChainKey === ChainKeys.STELLAR_MAINNET;
   const needsTrustline = isDestinationStellar && !isTrustlineLoading && !hasSufficientTrustline;
 
@@ -139,7 +154,8 @@ export function BridgeDialog({
     (fromChainType === 'EVM' && !hasAllowance) ||
     (order.srcChainKey === ChainKeys.BITCOIN_MAINNET && !isFromBtcReady) ||
     (toChainKey === ChainKeys.BITCOIN_MAINNET && !isToBtcReady) ||
-    needsTrustline;
+    needsTrustline ||
+    nearStorage.blocksAction;
 
   return (
     <Dialog open={open} onOpenChange={isOpen => !isOpen && onClose()}>
@@ -161,6 +177,12 @@ export function BridgeDialog({
 
           {needsTrustline && (
             <div className="text-red-500">Insufficient Stellar trustline — request trustline to proceed.</div>
+          )}
+
+          {nearStorage.needsRegistration && (
+            <div className="text-red-500">
+              Recipient is not storage-registered for this token on NEAR — register storage to proceed.
+            </div>
           )}
         </div>
 
@@ -207,6 +229,26 @@ export function BridgeDialog({
           {needsTrustline && (
             <Button className="w-full" onClick={handleRequestTrustline} disabled={isRequestingTrustline}>
               {isRequestingTrustline ? 'Requesting…' : 'Request Trustline'}
+            </Button>
+          )}
+
+          {nearStorage.isNear && (nearStorage.isChecking || nearStorage.needsRegistration) && (
+            <Button
+              className="w-full"
+              onClick={handleRegisterNearStorage}
+              disabled={nearStorage.isChecking || nearStorage.isRegistering}
+            >
+              {nearStorage.isChecking ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Checking storage…
+                </>
+              ) : nearStorage.isRegistering ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Registering…
+                </>
+              ) : (
+                'Register Storage'
+              )}
             </Button>
           )}
 

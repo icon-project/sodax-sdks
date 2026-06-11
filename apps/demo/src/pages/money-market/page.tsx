@@ -3,10 +3,11 @@ import { useParams, useNavigate } from 'react-router';
 
 import { ChainSelector } from '@/components/shared/ChainSelector';
 import { SupplyAssetsList } from '@/components/mm/lists/SupplyAssetsList';
+import { BitcoinTradingSection } from '@/components/mm/BitcoinTradingSection';
 import { Button } from '@/components/ui/button';
 import { useXAccount } from '@sodax/wallet-sdk-react';
 import { useAppStore } from '@/zustand/useAppStore';
-import { useGetUserHubWalletAddress, baseChainInfo, type SpokeChainKey } from '@sodax/dapp-kit';
+import { useGetUserHubWalletAddress, baseChainInfo, ChainKeys, type SpokeChainKey } from '@sodax/dapp-kit';
 import { Info, Wallet } from 'lucide-react';
 import { BorrowAssetsList } from '@/components/mm/lists/borrow/BorrowAssetsList';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -39,6 +40,7 @@ export default function MoneyMarketPage() {
 
   const xAccount = useXAccount({ xChainId: chainId });
 
+  // Pass the personal address; the hook resolves the Bitcoin trading-wallet hub address internally.
   const { data: walletAddressOnHub } = useGetUserHubWalletAddress({
     params: { spokeChainId: chainId, spokeAddress: xAccount?.address },
   });
@@ -87,6 +89,8 @@ export default function MoneyMarketPage() {
             )}
           </div>
         </div>
+        {/* Bitcoin trading wallet setup — only on the Bitcoin market (and when a BTC wallet is connected) */}
+        {chainId === ChainKeys.BITCOIN_MAINNET && <BitcoinTradingSection />}
         {/* Main Content */}
         {xAccount?.address ? (
           <div className="animate-in fade-in duration-500">

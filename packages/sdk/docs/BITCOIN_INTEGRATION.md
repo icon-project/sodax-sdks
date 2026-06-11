@@ -8,7 +8,7 @@ The trading wallet amortizes Bitcoin's settlement cost. Users sign in once (BIP3
 
 The trade-off is the one-time setup (sign in + fund) and a custody disclosure to end-users (the partner is one of two multisig keys). Once that's done, the dApp UX matches any other spoke chain.
 
-The transaction-signing partner is [**Radfi**](https://radfi.co). SDK hook names and config URLs reflect this integration (`useRadfiSession`, `useRadfiWithdraw`, `api.radfi.co`, etc.). For the rest of this guide, "the partner" refers to Radfi.
+The transaction-signing partner is [**Bound Exchange**](https://bound.exchange) (formerly Radfi). SDK hook names and config field names still use the `Radfi*` prefix for API-compatibility (`useRadfiSession`, `useRadfiWithdraw`, `radfiApiUrl`, etc.), but the live endpoints now resolve to `api.bound.exchange`. For the rest of this guide, "the partner" refers to Bound Exchange.
 
 For the generic intent flow, see [SWAPS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md) and [BRIDGE.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BRIDGE.md). This guide only covers Bitcoin-specific differences.
 
@@ -59,8 +59,8 @@ import { ChainKeys } from "@sodax/types";
       chains: {
         [ChainKeys.BITCOIN_MAINNET]: {
           rpcUrl: "https://mempool.space/api",
-          radfiApiUrl: "https://api.radfi.co/api",
-          radfiUmsUrl: "https://ums.radfi.co/api",
+          radfiApiUrl: "https://api.bound.exchange/api",
+          radfiUmsUrl: "https://api.ums.bound.exchange/api",
         },
       },
     },

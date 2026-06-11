@@ -268,6 +268,10 @@ Leveraged-yield ERC-4626 vaults on the Sonic hub (`LeverageYieldService`, reacha
 - `listVaults` / `getVault` / `getVaultByAddress` — registry lookups; the registry lives in `@sodax/types` (`leverageYieldConfig`) and derives all addresses from the canonical `LsodaTokens` / `SodaTokens` registries.
 - **Errors**: All async methods return `Result<T, SodaxError<NarrowCode>>`. The 3 user-facing actions discriminate via `context.action` (`'deposit' | 'withdraw' | 'approve'`); `isAllowanceValid`'s allowance pre-flight uses `action: 'allowanceCheck'` (the 4th member of `LeverageYieldAction`) so its failures don't masquerade as `'deposit'`; read methods emit `LOOKUP_FAILED` partitioned by `context.method`. No relay/tx-verification codes (there is no in-service relay step). See `docs/LEVERAGE_YIELD.md`.
 
+## Logging
+
+The SDK routes its internal diagnostics through a configurable `SodaxLogger` (`debug`/`info`/`warn`/`error`) instead of calling `console.*` directly. Select it via `new Sodax({ logger: 'console' | 'silent' | customLogger })` (default `'console'`). The `logger` option lives on the constructor's `SodaxOptions` type (`= DeepPartial<SodaxConfig> & { logger?: SodaxLoggerOption }` in `@sodax/types`), deliberately **not** on `SodaxConfig` itself — `SodaxConfig` is the data contract fetched from / merged with the backend, whereas `logger` is a client-side runtime sink. The constructor splits `logger` off the rest of the override so it never lands in `instanceConfig`. The resolved logger is held on `ConfigService` (`config.logger`, a `public readonly`) **outside** the swappable `SodaxConfig`, so `config.initialize()`'s dynamic-config fetch never clobbers it. Resolution lives in `shared/logger.ts` (`resolveLogger`, `consoleLogger`, `silentLogger`, all exported from the barrel); the `SodaxLogger` / `SodaxLoggerOption` types live in `@sodax/types`. Services log via `this.config.logger`; the static `SolverApiService.postExecution`/`getStatus` take an optional `logger` param that defaults to `silentLogger` (internal callers pass `this.config.logger`, so the default only affects direct external callers and never overrides a consumer's `'silent'` choice); `BackendApiService` takes a logger as its 2nd constructor arg (it holds an `ApiConfig`, not a `ConfigService`). `error(message, error?, data?)` takes the thrown value separately; `warn`/`info`/`debug` take `(message, data?)` — wrap a non-record second arg as `{ value }`. A handful of pure utils / static helpers (`shared/utils/*`, `entities/btc/RadfiProvider`, `entities/solana/utils`, `EvmSolverService.decodeIntentFeeAmount`) still call `console.*` directly (no logger in scope) — tracked follow-up. See `docs/LOGGING.md`.
+
 ## Gotchas
 
 - **Never use `bigint` in types passed to `JSON.stringify`** — it throws `TypeError` at runtime. Use `string` for numeric fields in API request/response types (e.g. anything in `src/backendApi/`). If `bigint` is needed in domain types, convert to string before serialization. Note: `SodaxError.toJSON` already coerces bigints in `context` to strings — see Error Handling above.
@@ -278,6 +282,7 @@ Detailed feature docs are in `docs/`:
 - `SWAPS.md`, `MONEY_MARKET.md`, `STAKING.md`, `BRIDGE.md`, `DEX.md`, `MIGRATION.md`, `LEVERAGE_YIELD.md`
 - `BITCOIN_INTEGRATION.md` — Bitcoin trading-wallet model, custody trade-off, readiness gate
 - `CONFIGURE_SDK.md` — SDK initialization patterns
+- `LOGGING.md` — `SodaxLogger` interface, presets, custom-sink (Sentry/Pino) wiring
 - `WALLET_PROVIDERS.md` — wallet integration patterns
 - `ARCHITECTURE_REFACTOR_SUMMARY.md` — full architecture reference (spoke services, raw tx handling, Result\<T\>, error convention, wallet-sdk patterns)
 

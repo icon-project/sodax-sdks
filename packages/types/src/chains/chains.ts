@@ -788,9 +788,9 @@ export const spokeChainConfig = {
     supportedTokens: bitcoinSupportedTokens,
     radfi: {
       walletMode: 'TRADING',
-      apiUrl: 'https://api.radfi.co/api',
+      apiUrl: 'https://api.bound.exchange/api',
       apiKey: '',
-      umsUrl: 'https://ums.radfi.co/api',
+      umsUrl: 'https://api.ums.bound.exchange/api',
       accessToken: '',
       refreshToken: '',
     },

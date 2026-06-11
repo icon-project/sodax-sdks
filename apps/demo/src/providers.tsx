@@ -5,7 +5,7 @@ import { SodaxWalletProvider, type SodaxWalletConfig } from '@sodax/wallet-sdk-r
 import {
   SodaxProvider,
   createSodaxQueryClient,
-  type SodaxConfig,
+  type SodaxOptions,
   type SolverConfig,
   ChainKeys,
   type DeepPartial,
@@ -13,6 +13,7 @@ import {
 } from '@sodax/dapp-kit';
 import { productionSolverConfig, stagingSolverConfig, devSolverConfig } from './constants';
 import { SolverEnv, useAppStore } from './zustand/useAppStore';
+import { createDatadogLogger } from './lib/loggers/datadogLogger';
 
 const queryClient = createSodaxQueryClient();
 
@@ -25,15 +26,15 @@ const rpcConfig: RpcConfig = {
   [ChainKeys.POLYGON_MAINNET]: process.env.POLYGON_RPC_URL ?? 'https://polygon-bor-rpc.publicnode.com',
   [ChainKeys.ETHEREUM_MAINNET]: process.env.ETHEREUM_RPC_URL ?? 'https://ethereum-rpc.publicnode.com',
   [ChainKeys.HYPEREVM_MAINNET]: process.env.HYPEREVM_RPC_URL ?? 'https://rpc.hyperliquid.xyz/evm',
-  [ChainKeys.SOLANA_MAINNET]:
-    process.env.SOLANA_RPC_URL ?? 'https://solana-rpc.publicnode.com',
+  [ChainKeys.SOLANA_MAINNET]: process.env.SOLANA_RPC_URL ?? 'https://solana-rpc.publicnode.com',
+  [ChainKeys.NEAR_MAINNET]: process.env.NEAR_RPC_URL ?? 'https://free.rpc.fastnear.com',
   [ChainKeys.STELLAR_MAINNET]: {
     horizonRpcUrl: process.env.STELLAR_HORIZON_RPC_URL ?? 'https://horizon.stellar.org',
     sorobanRpcUrl: process.env.STELLAR_SOROBAN_RPC_URL ?? 'https://rpc.ankr.com/stellar_soroban',
   },
   [ChainKeys.BITCOIN_MAINNET]: {
-    radfiApiUrl: process.env.RADFI_API_URL ?? 'https://api.radfi.co/api',
-    radfiUmsUrl: process.env.RADFI_UMS_URL ?? 'https://ums.radfi.co/api',
+    radfiApiUrl: process.env.RADFI_API_URL ?? 'https://api.bound.exchange/api',
+    radfiUmsUrl: process.env.RADFI_UMS_URL ?? 'https://api.ums.bound.exchange/api',
     rpcUrl: process.env.BITCOIN_RPC_URL ?? 'https://mempool.space/api',
   },
 };
@@ -96,14 +97,23 @@ export default function Providers({ children }: { children: ReactNode }) {
       },
       ICON: {},
       INJECTIVE: {},
-      NEAR: {},
+      NEAR: {
+        chains: {
+          [ChainKeys.NEAR_MAINNET]: {
+            rpcUrl: rpcConfig[ChainKeys.NEAR_MAINNET],
+          },
+        },
+      },
       STACKS: { chains: { [ChainKeys.STACKS_MAINNET]: 'mainnet' } },
     };
   }, []);
 
   // override sodax config for rpc urls and solver config
-  const sodaxConfig: DeepPartial<SodaxConfig> = useMemo(() => {
+  const sodaxConfig: SodaxOptions = useMemo(() => {
+    // Opt-in observability sink (Sentry + Datadog), enabled via VITE_ENABLE_OBSERVABILITY.
+    // `undefined` when off, which leaves the SDK on its default console logger.
     return {
+      logger: createDatadogLogger(),
       solver: configMap[solverEnvironment],
       chains: {
         [ChainKeys.SONIC_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.SONIC_MAINNET] },
@@ -115,6 +125,7 @@ export default function Providers({ children }: { children: ReactNode }) {
         [ChainKeys.ETHEREUM_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.ETHEREUM_MAINNET] },
         [ChainKeys.HYPEREVM_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.HYPEREVM_MAINNET] },
         [ChainKeys.SOLANA_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.SOLANA_MAINNET] },
+        [ChainKeys.NEAR_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.NEAR_MAINNET] },
         [ChainKeys.STELLAR_MAINNET]: rpcConfig[ChainKeys.STELLAR_MAINNET],
         [ChainKeys.BITCOIN_MAINNET]: rpcConfig[ChainKeys.BITCOIN_MAINNET],
       },
