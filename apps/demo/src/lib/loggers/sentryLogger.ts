@@ -1,4 +1,4 @@
-import type { SodaxLogger } from '@sodax/sdk';
+import type { SodaxLogger } from '@sodax/dapp-kit';
 
 // Sentry `SodaxLogger` adapter built on the real `@sentry/react` SDK, so the envelopes you inspect
 // locally are exactly what production would send. The `tunnel` option routes every envelope to a
@@ -26,7 +26,7 @@ export function createSentryLogger(options: SentryLoggerOptions = {}): SodaxLogg
 
   let sentry: SentryModule | undefined;
   const ready: Promise<void> = import('@sentry/react')
-    .then((mod) => {
+    .then(mod => {
       mod.init({
         dsn,
         tunnel,
@@ -39,7 +39,7 @@ export function createSentryLogger(options: SentryLoggerOptions = {}): SodaxLogg
       });
       sentry = mod;
     })
-    .catch((err) => {
+    .catch(err => {
       console.warn('[sodax-obs] Sentry disabled — failed to load @sentry/react (is it installed?)', err);
     });
 
@@ -53,11 +53,11 @@ export function createSentryLogger(options: SentryLoggerOptions = {}): SodaxLogg
   };
 
   return {
-    debug: (message, data) => run((s) => s.addBreadcrumb({ level: 'debug', message, data })),
-    info: (message, data) => run((s) => s.addBreadcrumb({ level: 'info', message, data })),
-    warn: (message, data) => run((s) => s.captureMessage(message, { level: 'warning', extra: data })),
+    debug: (message, data) => run(s => s.addBreadcrumb({ level: 'debug', message, data })),
+    info: (message, data) => run(s => s.addBreadcrumb({ level: 'info', message, data })),
+    warn: (message, data) => run(s => s.captureMessage(message, { level: 'warning', extra: data })),
     error: (message, error, data) =>
-      run((s) =>
+      run(s =>
         error !== undefined
           ? s.captureException(error, { extra: { message, ...(data ?? {}) } })
           : s.captureMessage(message, { level: 'error', extra: data }),

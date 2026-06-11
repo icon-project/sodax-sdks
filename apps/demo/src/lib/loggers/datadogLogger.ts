@@ -1,4 +1,4 @@
-import type { SodaxLogger } from '@sodax/sdk';
+import type { SodaxLogger } from '@sodax/dapp-kit';
 
 // Datadog `SodaxLogger` adapter using the plain HTTP logs intake — no Datadog SDK, no agent.
 // Each SDK log line becomes one JSON POST to the intake URL. For local testing the URL defaults
