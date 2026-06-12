@@ -13,8 +13,8 @@ Access: `sodax.swaps`. Service class: `SwapService`. Feature tag for errors: `'s
 
 Two execution paths:
 
-- **`swap`** — full flow in one call. Wraps `createIntent` + relay + `postExecution`. Returns `SwapResponse` on success.
-- **`createIntent` + backend submit** — break it apart for custom relay handling. `createIntent` returns `{ tx, intent, relayData }`; submit `relayData.payload` to the backend swap-tx endpoint via `BackendApiService.submitSwapTx`.
+- **`swap`** — full flow in one call. Wraps `createIntent` + relay + `postExecution`. Returns `SwapResponse` on success. Opt into a **backend-driven 2-step** variant (the backend relays + post-executes server-side) with `new Sodax({ swapsOptions: { useBackendSubmitTx: true } })`; on any non-success it falls back to the client-side relay, returning the same `SwapResponse`.
+- **`createIntent` + backend submit** — break it apart for custom relay handling. `createIntent` returns `{ tx, intent, relayData }`; submit `relayData.payload` to the backend swap-tx endpoint via `sodax.api.swaps.submitTx`.
 
 ## Public methods
 
@@ -190,11 +190,11 @@ const { tx: spokeTxHash, intent, relayData } = result.value;
 ### Backend submit-tx flow
 
 ```ts
-const submitResult = await sodax.backendApi.submitSwapTx({
+const submitResult = await sodax.api.swaps.submitTx({
   txHash: spokeTxHash as string,
   srcChainKey: ChainKeys.ARBITRUM_MAINNET,
   walletAddress: '0x…',
-  intent: /* SwapIntentData built from CreateIntentResult.value.intent */,
+  intent,                         // IntentRequestV2 — CreateIntentResult.value.intent passes through
   relayData: relayData.payload,   // string (not the object)
 });
 

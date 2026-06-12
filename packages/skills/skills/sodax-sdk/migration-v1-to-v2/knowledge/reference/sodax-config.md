@@ -59,7 +59,7 @@ All v1 fields were **optional**. v1 had **no** top-level `rpcConfig` on `SodaxCo
 | `SodaxConfig.partners` (`PartnerServiceConfig`) | **Removed.** Partner service runs with defaults. | Per-claim partner-fee config now flows via call-level params on `sodax.partners.*` methods. |
 | `SodaxConfig.sharedConfig` (`typeof defaultSharedConfig`) | **Removed.** | Absorbed into `ConfigService` + per-chain `SpokeChainConfig`. Override individual chains via `SodaxConfig.chains[key]`. |
 | (none in v1) | **`SodaxConfig.fee: PartnerFee \| undefined`** (new). | Global partner-fee, applies to all features unless overridden by feature-level config (`bridge.partnerFee`, money market, etc.). |
-| (v1 had no top-level `configService` injection slot on `SodaxConfig` — `ConfigService` was always constructed internally from `backendApiConfig` + `sharedConfig`.) | Same — `ConfigService` is internal. v2 does **not** expose a typed slot to inject a custom `IConfigApi` either. To swap the backend in tests, point `SodaxConfig.api.baseURL` at a mock server. | See Pitfall below. |
+| (v1 had no top-level `configService` injection slot on `SodaxConfig` — `ConfigService` was always constructed internally from `backendApiConfig` + `sharedConfig`.) | Same — `ConfigService` is internal. v2 does **not** expose a typed slot to inject a custom `IConfigApiV1` either. To swap the backend in tests, point `SodaxConfig.api.baseURL` at a mock server. | See Pitfall below. |
 
 Migration:
 
@@ -113,12 +113,12 @@ See [`../breaking-changes/type-system.md`](../breaking-changes/type-system.md) �
 
 ### Pitfall
 
-If you previously injected a custom `ConfigService` for testing (a v1 escape hatch), v2 doesn't accept one at the top level — and unlike what earlier doc versions claimed, **v2 also doesn't expose a typed slot to inject a custom `IConfigApi`**. The realistic options:
+If you previously injected a custom `ConfigService` for testing (a v1 escape hatch), v2 doesn't accept one at the top level — and unlike what earlier doc versions claimed, **v2 also doesn't expose a typed slot to inject a custom `IConfigApiV1`**. The realistic options:
 
 - Point `SodaxConfig.api.baseURL` at a local mock backend server.
 - Construct your own `BackendApiService`-compatible object in your app/test bootstrap and swap it in where you control the `Sodax` instance.
 
-The `SodaxConfig.api` field is `ApiConfig` (`{ baseURL, timeout, headers }`) — there is no `api.api` sub-field for IConfigApi injection.
+The `SodaxConfig.api` field is `ApiConfig` (`{ baseURL, timeout, headers }`) — there is no `api.api` sub-field for IConfigApiV1 injection.
 
 ### Pitfall — module-scope reads
 

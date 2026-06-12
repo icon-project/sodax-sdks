@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import type { Hex, Intent, IntentDeliveryInfo } from '@sodax/sdk';
-import { useStatus, useBackendSubmitSwapTxStatus } from '@sodax/dapp-kit';
+import { useStatus, useSwapsApiSubmitTxStatus } from '@sodax/dapp-kit';
 import { statusCodeToMessage } from '@/lib/utils';
 
 export type SolverOrder = {
@@ -51,7 +51,7 @@ function SubmitTxOrderStatus({ order }: { order: SubmitTxOrder }) {
     () => (order.apiBaseURL ? { baseURL: order.apiBaseURL } : undefined),
     [order.apiBaseURL],
   );
-  const { data: statusResponse } = useBackendSubmitSwapTxStatus({
+  const { data: statusResponse } = useSwapsApiSubmitTxStatus({
     params: { txHash: order.txHash, srcChainKey: order.srcChainKey, apiConfig },
   });
 

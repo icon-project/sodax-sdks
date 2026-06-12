@@ -21,7 +21,6 @@ import {
   type DexConfig,
   type PoolKey,
   type Result,
-  CONFIG_VERSION,
   type SwapsConfig,
   type BridgeConfig,
   type GetSpokeChainConfigType,
@@ -30,7 +29,6 @@ import {
 } from '@sodax/types';
 import { isAddress } from 'viem';
 import type { BackendApiService } from '../../backendApi/BackendApiService.js';
-import { mergeSodaxConfig } from './mergeSodaxConfig.js';
 import { resolveLogger } from '../logger.js';
 
 export type ConfigServiceConstructorParams = {
@@ -54,8 +52,8 @@ export type ConfigServiceConstructorParams = {
  */
 export class ConfigService {
   private sodax: SodaxConfig;
-  private readonly api: BackendApiService;
-  private readonly userConfig?: DeepPartial<SodaxConfig>;
+  // private readonly api: BackendApiService;
+  // private readonly userConfig?: DeepPartial<SodaxConfig>;
 
   /**
    * SDK log sink. Resolved once at construction and kept independent of {@link sodax} so that
@@ -77,33 +75,34 @@ export class ConfigService {
   private hubAssetToXTokenMap!: Map<Address, XToken>;
 
   constructor({ api, config, userConfig, logger }: ConfigServiceConstructorParams) {
-    this.api = api;
+    // this.api = api;
     this.sodax = config;
-    this.userConfig = userConfig;
+    // this.userConfig = userConfig;
     this.logger = logger ?? resolveLogger(undefined);
     this.loadSodaxConfigDataStructures(config);
   }
 
   public async initialize(): Promise<Result<void>> {
     try {
-      const result = await this.api.getAllConfig();
-      if (!result.ok) return result;
-      const response = result.value;
+      // TODO: enable once config v2 endpoint is live
+      // const result = await this.api.getAllConfig();
+      // if (!result.ok) return result;
+      // const response = result.value;
 
-      if (!response.version || response.version < CONFIG_VERSION) {
-        this.logger.warn(
-          `Dynamic config version is less than the current version, resorting to the default one. Current version: ${CONFIG_VERSION}, response version: ${response.version}`,
-        );
-      } else {
-        // Dynamic config replaces the static defaults, but explicit user overrides must still win —
-        // re-layer them on top so initialize() never clobbers config the caller passed to `new Sodax(...)`.
-        const next = this.userConfig ? mergeSodaxConfig(response.config, this.userConfig) : response.config;
-        // Rebuild the lookup structures from `next` before committing it, so a failure here leaves the
-        // previously committed config and its derived maps intact (no torn state).
-        this.loadSodaxConfigDataStructures(next);
-        this.sodax = next;
-        this.initialized = true;
-      }
+      // if (!response.version || response.version < CONFIG_VERSION) {
+      //   this.logger.warn(
+      //     `Dynamic config version is less than the current version, resorting to the default one. Current version: ${CONFIG_VERSION}, response version: ${response.version}`,
+      //   );
+      // } else {
+      //   // Dynamic config replaces the static defaults, but explicit user overrides must still win —
+      //   // re-layer them on top so initialize() never clobbers config the caller passed to `new Sodax(...)`.
+      //   const next = this.userConfig ? mergeSodaxConfig(response.config, this.userConfig) : response.config;
+      //   // Rebuild the lookup structures from `next` before committing it, so a failure here leaves the
+      //   // previously committed config and its derived maps intact (no torn state).
+      //   this.loadSodaxConfigDataStructures(next);
+      //   this.sodax = next;
+      //   this.initialized = true;
+      // }
 
       return { ok: true, value: undefined };
     } catch (error) {

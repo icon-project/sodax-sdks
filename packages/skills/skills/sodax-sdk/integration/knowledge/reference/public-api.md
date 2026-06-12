@@ -2,6 +2,8 @@
 
 Import everything from `@sodax/sdk`. The barrel re-exports the entire `@sodax/types` surface — you don't need a separate `@sodax/types` dependency.
 
+`sodax.api` is an alias for `sodax.backendApi`; `sodax.api.swaps` is the typed Swaps API v2 client (`SwapsApiService`) — see [`../features/swaps-api.md`](../features/swaps-api.md).
+
 ### Top-level exports
 
 ```ts
@@ -111,13 +113,20 @@ import {
   // …
 
   // Backend / relay
-  type IConfigApi,
-  type SubmitSwapTxRequest,
-  type SubmitSwapTxResponse,
+  type IConfigApiV1,
+  type SubmitTxRequestV2,       // swaps API submit-tx request (sodax.api.swaps.submitTx)
+  type SubmitTxResponseV2,      // swaps API submit-tx response
   relayTxAndWaitPacket,         // function — runs spoke→hub relay submit + wait
   submitTransaction,            // function — relay submit ack only
   type RelayExtraData,
   type IntentRelayChainId,
+
+  // Backend API config + per-call override
+  type ApiConfig,               // BaseApiConfig | CustomApiConfig
+  type BaseApiConfig,
+  type CustomApiConfig,         // point the swaps API at its own endpoint
+  type SwapsApiConfig,
+  type RequestOverrideConfig,   // per-call override on any backendApi / sodax.api.swaps method
 
   // Read shapes
   type Intent,

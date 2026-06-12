@@ -5,6 +5,7 @@ import { createBrowserRouter, Outlet, RouterProvider, Navigate } from 'react-rou
 import { ChainKeys } from '@sodax/sdk';
 import Header from './components/shared/header';
 import SolverPage from './pages/solver/page';
+import SwapsApiPage from './pages/swaps-api/page';
 import MoneyMarketPage from './pages/money-market/page';
 import BridgePage from './pages/bridge/page';
 import DexPage from './pages/dex/page';
@@ -29,6 +30,10 @@ const router = createBrowserRouter([
       {
         path: '/solver',
         element: <SolverPage />,
+      },
+      {
+        path: '/swaps-api',
+        element: <SwapsApiPage />,
       },
       {
         path: '/money-market',

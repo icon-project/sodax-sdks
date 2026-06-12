@@ -30,7 +30,7 @@ Sodax
  ├── migration: MigrationService (ICX/bnUSD/BALN migration)
  ├── partners: PartnerService    (partner fee claiming)
  ├── recovery: RecoveryService   (withdraw stuck hub-wallet assets back to a spoke chain)
- ├── backendApi: BackendApiService
+ ├── backendApi: BackendApiService   (also `sodax.api`; `.swaps` = SwapsApiService — typed Swaps API v2 client)
  ├── config: ConfigService       (dynamic config from backend API, falls back to defaults)
  ├── hubProvider: EvmHubProvider
  └── spoke: SpokeService
@@ -270,7 +270,7 @@ The SDK routes its internal diagnostics through a configurable `SodaxLogger` (`d
 ## Documentation
 
 Detailed feature docs are in `docs/`:
-- `SWAPS.md`, `MONEY_MARKET.md`, `STAKING.md`, `BRIDGE.md`, `DEX.md`, `MIGRATION.md`
+- `SWAPS.md`, `SWAPS_API.md` (the `sodax.api.swaps` HTTP client), `BACKEND_API.md`, `MONEY_MARKET.md`, `STAKING.md`, `BRIDGE.md`, `DEX.md`, `MIGRATION.md`
 - `BITCOIN_INTEGRATION.md` — Bitcoin trading-wallet model, custody trade-off, readiness gate
 - `CONFIGURE_SDK.md` — SDK initialization patterns
 - `LOGGING.md` — `SodaxLogger` interface, presets, custom-sink (Sentry/Pino) wiring

@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { calculateExchangeRate, formatMutationFailureMessage, formatTokenAmount } from '@/lib/utils';
 import { parseUnits, formatUnits } from 'viem';
 import { type CreateIntentParams, getSupportedSolverTokens, type SolverIntentQuoteRequest } from '@sodax/sdk';
-import type { GetWalletProviderType, SubmitSwapTxRequest, SwapIntentData } from '@sodax/sdk';
+import type { GetWalletProviderType, SubmitTxRequestV2 } from '@sodax/sdk';
 import BigNumber from 'bignumber.js';
 import { ArrowDownUp, ArrowLeftRight, Loader2 } from 'lucide-react';
 import React, { type SetStateAction, useMemo, useState } from 'react';
@@ -30,7 +30,7 @@ import {
   useSodaxContext,
   loadRadfiSession,
   useTradingWalletBalance,
-  useBackendSubmitSwapTx,
+  useSwapsApiSubmitTx,
   useXBalances,
   useNearStorageGate,
 } from '@sodax/dapp-kit';
@@ -116,7 +116,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const [nearStorageError, setNearStorageError] = useState<string | null>(null);
   const [slippage, setSlippage] = useState<string>('0.5');
   const [useSubmitTxApi, setUseSubmitTxApi] = useState(false);
-  const { mutateAsyncSafe: submitSwapTx, isPending: isSubmitting } = useBackendSubmitSwapTx();
+  const { mutateAsyncSafe: submitSwapTx, isPending: isSubmitting } = useSwapsApiSubmitTx();
   const [isBitcoinReady, setIsBitcoinReady] = useState(false);
   const [isDestBitcoinReady, setIsDestBitcoinReady] = useState(false);
 
@@ -330,28 +330,11 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     const { tx: spokeTxHash, intent, relayData } = createIntentResult.value;
     console.log('Intent created. Spoke tx hash:', spokeTxHash);
 
-    const swapIntentData: SwapIntentData = {
-      intentId: intent.intentId.toString(),
-      creator: intent.creator,
-      inputToken: intent.inputToken,
-      outputToken: intent.outputToken,
-      inputAmount: intent.inputAmount.toString(),
-      minOutputAmount: intent.minOutputAmount.toString(),
-      deadline: intent.deadline.toString(),
-      allowPartialFill: intent.allowPartialFill,
-      srcChain: Number(intent.srcChain),
-      dstChain: Number(intent.dstChain),
-      srcAddress: intent.srcAddress,
-      dstAddress: intent.dstAddress,
-      solver: intent.solver,
-      data: intent.data,
-    };
-
-    const request: SubmitSwapTxRequest = {
+    const request: SubmitTxRequestV2 = {
       txHash: spokeTxHash as string,
       srcChainKey: src.chain,
       walletAddress: sourceAccount.address ?? '',
-      intent: swapIntentData,
+      intent,
       relayData: relayData.payload,
     };
 

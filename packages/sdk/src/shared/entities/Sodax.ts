@@ -27,6 +27,7 @@ export class Sodax {
   public readonly moneyMarket: MoneyMarketService; // Money Market service enabling cross-chain lending and borrowing
   public readonly migration: MigrationService; // ICX migration service enabling ICX migration to SODA
   public readonly backendApi: BackendApiService; // backend API service enabling backend API endpoints
+  public readonly api: BackendApiService; // syntactic sugar for backend API service
   public readonly bridge: BridgeService; // Bridge service enabling cross-chain transfers
   public readonly staking: StakingService; // Staking service enabling SODA staking operations
   public readonly partners: PartnerService; // Partner service enabling partner fee claim and other partner operations
@@ -44,8 +45,12 @@ export class Sodax {
     // type-level conflation is gone. `mergeSodaxConfig` / `userConfig` ignore the extra `logger` key
     // (it is never read off the data config; services read the resolved sink via `config.logger`).
     const logger = resolveLogger(config?.logger);
+    // Like `logger`, swaps options are client-side runtime toggles read off `SodaxOptions` —
+    // never merged into the backend-fetched `SodaxConfig`/`instanceConfig`.
+    const useBackendSubmitTx = config?.swapsOptions?.useBackendSubmitTx ?? false;
     this.instanceConfig = config ? mergeSodaxConfig(sodaxConfig, config) : sodaxConfig;
     this.backendApi = new BackendApiService(this.instanceConfig.api, logger);
+    this.api = this.backendApi;
     this.config = new ConfigService({ api: this.backendApi, config: this.instanceConfig, userConfig: config, logger });
 
     this.hubProvider = new EvmHubProvider({ config: this.config }); // default to Sonic mainnet
@@ -54,6 +59,8 @@ export class Sodax {
       config: this.config,
       hubProvider: this.hubProvider,
       spoke: this.spoke,
+      backendApi: this.backendApi,
+      useBackendSubmitTx,
     });
 
     this.moneyMarket = new MoneyMarketService({

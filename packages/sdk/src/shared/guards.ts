@@ -32,8 +32,6 @@ import {
   type EvmSpokeChainConfig,
   type SpokeChainConfig,
   type IconAddress,
-  type SubmitSwapTxResponse,
-  type SubmitSwapTxStatusResponse,
   isSonicChainKey,
   isBitcoinChainKey,
   isSolanaChainKey,
@@ -222,34 +220,6 @@ export function isRawDestinationParams(value: unknown): value is RawDestinationP
   if (!('dstChainKey' in obj) || !('dstAddress' in obj)) return false;
   if (typeof obj.dstAddress !== 'string') return false;
   return typeof obj.dstChainKey === 'string' && spokeChainKeysSet.has(obj.dstChainKey as SpokeChainKey);
-}
-
-// Backend API response guards
-export function isSubmitSwapTxResponse(value: unknown): value is SubmitSwapTxResponse {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as Record<string, unknown>).success === 'boolean' &&
-    typeof (value as Record<string, unknown>).message === 'string'
-  );
-}
-
-export function isSubmitSwapTxStatusResponse(value: unknown): value is SubmitSwapTxStatusResponse {
-  if (typeof value !== 'object' || value === null) return false;
-  const obj = value as Record<string, unknown>;
-  if (typeof obj.success !== 'boolean') return false;
-  if (typeof obj.data !== 'object' || obj.data === null) return false;
-  const data = obj.data as Record<string, unknown>;
-  if (typeof data.txHash !== 'string') return false;
-  if (typeof data.srcChainKey !== 'string') return false;
-  if (typeof data.status !== 'string') return false;
-  if (typeof data.failedAttempts !== 'number') return false;
-  if (data.result !== undefined) {
-    if (typeof data.result !== 'object' || data.result === null) return false;
-    const result = data.result as Record<string, unknown>;
-    if (typeof result.dstIntentTxHash !== 'string') return false;
-  }
-  return true;
 }
 
 // Concrete-typed discriminant guards refine `IWalletProvider` to its specific variant via the

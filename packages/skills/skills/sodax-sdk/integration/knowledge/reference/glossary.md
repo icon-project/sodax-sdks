@@ -18,7 +18,7 @@
 | **`Result<T>`** | The `{ ok: true; value: T } \| { ok: false; error: E }` discriminated union returned by every async public method. |
 | **`SodaxError<C>`** | The canonical error class. Discriminated by `(feature, code)`. |
 | **Code (`SodaxErrorCode`)** | One of 13 reason-only error codes. See § 3. |
-| **Feature (`SodaxFeature`)** | One of 8 producing features (`'swap'`, `'moneyMarket'`, …). |
+| **Feature (`SodaxFeature`)** | One of 8 domain features (`'swap'`, `'moneyMarket'`, …) plus `'backend'` for the HTTP-client layer (`BackendApiService` / `sodax.api.swaps`). |
 | **Phase (`SodaxPhase`)** | The orchestration step at which an error occurred. See § 3. |
 | **Action (`error.context.action`)** | The user-facing operation that triggered the error (`'supply'`, `'stake'`, `'migrateBaln'`, …). |
 | **`raw: true / false`** | The discriminator on `WalletProviderSlot<K, Raw>`. `true` = build unsigned tx; `false` = sign and broadcast. |

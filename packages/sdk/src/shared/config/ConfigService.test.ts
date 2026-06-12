@@ -1,7 +1,12 @@
 /**
  * Tests for ConfigService.initialize() — the dynamic-config merge contract.
  *
- * The behavior under test: a successful remote-config fetch REPLACES the static defaults
+ * NOTE: `ConfigService.initialize()` is currently a deliberate no-op (`// TODO: enable once config v2
+ * endpoint is live`) — it returns `{ ok: true }` without fetching or merging. The dynamic-merge suites
+ * below are therefore `describe.skip`-ped (each carries a TODO(config-v2) note) and restored when
+ * initialize() is re-enabled; the final live suite asserts the current no-op contract.
+ *
+ * The behavior under test (when re-enabled): a successful remote-config fetch REPLACES the static defaults
  * (so chains/tokens can change without an SDK release), but it must NOT clobber the explicit
  * overrides the caller passed to `new Sodax(...)`. Those user overrides are re-layered on top
  * of the dynamic config via deepMerge.
@@ -50,7 +55,8 @@ const ok = (config: SodaxConfig, version = CONFIG_VERSION): Result<GetAllConfigA
   value: { version, config },
 });
 
-describe('ConfigService.initialize — user override is preserved over dynamic config', () => {
+// TODO(config-v2): un-skip + rewrite mocks for the flattened GetAllConfigApiResponse when ConfigService.initialize is re-enabled.
+describe.skip('ConfigService.initialize — user override is preserved over dynamic config', () => {
   it('re-applies a top-level user override on top of a valid dynamic config', async () => {
     // Remote config carries a DIFFERENT fee; without the fix it would clobber the user's.
     const { service } = makeService(
@@ -114,7 +120,8 @@ describe('ConfigService.initialize — user override is preserved over dynamic c
   });
 });
 
-describe('ConfigService.initialize — fallback paths keep the merged config', () => {
+// TODO(config-v2): un-skip + rewrite mocks for the flattened GetAllConfigApiResponse when ConfigService.initialize is re-enabled.
+describe.skip('ConfigService.initialize — fallback paths keep the merged config', () => {
   it('keeps the user override when the dynamic config version is too old', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { service } = makeService(
@@ -168,7 +175,8 @@ describe('ConfigService.initialize — fallback paths keep the merged config', (
   });
 });
 
-describe('ConfigService.initialize — PartnerFee variant is atomic, not deep-merged', () => {
+// TODO(config-v2): un-skip + rewrite mocks for the flattened GetAllConfigApiResponse when ConfigService.initialize is re-enabled.
+describe.skip('ConfigService.initialize — PartnerFee variant is atomic, not deep-merged', () => {
   it('a percentage user override replaces an amount-variant dynamic fee wholesale (no hybrid)', async () => {
     // The regression: a naive deep-merge would yield { address, amount, percentage }, which downstream
     // discrimination reads as the amount variant — silently dropping the user's percentage.
@@ -220,7 +228,8 @@ describe('ConfigService.initialize — PartnerFee variant is atomic, not deep-me
   });
 });
 
-describe('ConfigService.initialize — commit-last: a rebuild failure leaves prior state intact', () => {
+// TODO(config-v2): un-skip + rewrite mocks for the flattened GetAllConfigApiResponse when ConfigService.initialize is re-enabled.
+describe.skip('ConfigService.initialize — commit-last: a rebuild failure leaves prior state intact', () => {
   it('keeps the previously committed config and stays uninitialized when the rebuild throws', async () => {
     // Structurally valid version, but the dynamic config's dex map is removed so the rebuild hits
     // Object.keys(undefined) and throws. With commit-last, this.sodax must remain the pre-init config.
@@ -235,5 +244,27 @@ describe('ConfigService.initialize — commit-last: a rebuild failure leaves pri
     expect(result.ok).toBe(false); // the throw is caught and surfaced
     expect(service.sodaxConfig).toBe(before); // no torn state — config reference not swapped
     expect(service.isInitialized()).toBe(false);
+  });
+});
+
+describe('ConfigService.initialize — current no-op contract (dynamic fetch/merge disabled)', () => {
+  it('returns ok, never calls getAllConfig, and leaves the constructor-merged config + isInitialized untouched', async () => {
+    const { service, getAllConfig } = makeService(
+      { fee: USER_FEE },
+      ok(
+        remoteConfig(cfg => {
+          cfg.fee = REMOTE_FEE;
+        }),
+      ),
+    );
+    const before = service.sodaxConfig;
+
+    const result = await service.initialize();
+
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(getAllConfig).not.toHaveBeenCalled(); // initialize() does not fetch while disabled
+    expect(service.sodaxConfig).toBe(before); // config reference unchanged
+    expect(service.sodaxConfig.fee).toEqual(USER_FEE); // constructor-merged user override retained
+    expect(service.isInitialized()).toBe(false); // no-op never flips the flag
   });
 });

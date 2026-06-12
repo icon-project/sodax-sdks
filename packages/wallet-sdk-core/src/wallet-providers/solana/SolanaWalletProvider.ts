@@ -21,6 +21,7 @@ import type {
   SolanaSignatureResult,
   SolanaRawTransactionInstruction,
   TransactionSignature,
+  SolanaRawTransaction,
 } from '@sodax/types';
 import { BaseWalletProvider } from '../BaseWalletProvider.js';
 import { shallowMerge } from '../../utils/index.js';
@@ -99,6 +100,13 @@ export class SolanaWalletProvider extends BaseWalletProvider<SolanaWalletDefault
     return this.connection.sendRawTransaction(rawTransaction, sendOptions);
   }
 
+  public async signAndSendTransaction(params: SolanaRawTransaction): Promise<TransactionSignature> {
+    const serializedTxBytes = Buffer.from(params.data, 'base64');
+    const versionedTx = VersionedTransaction.deserialize(serializedTxBytes);
+    const signedTx = await this.signAndSerializeTransaction(versionedTx);
+    return this.sendTransaction(signedTx);
+  }
+
   public async sendTransactionWithConfirmation(
     rawTransaction: Uint8Array | Array<number>,
     optionsOrCommitment?: Commitment | { send?: SendOptions; commitment?: Commitment },
@@ -143,6 +151,40 @@ export class SolanaWalletProvider extends BaseWalletProvider<SolanaWalletDefault
 
     const tx = await adapterWallet.signTransaction(new VersionedTransaction(messageV0));
     return tx.serialize();
+  }
+
+  public async signTransaction(transaction: VersionedTransaction): Promise<VersionedTransaction> {
+    if (this.isAdapterMode) {
+      return this.signTransactionWithAdapter(transaction);
+    }
+    return this.signTransactionWithKeypair(transaction);
+  }
+
+  public async signAndSerializeTransaction(transaction: VersionedTransaction): Promise<SolanaSerializedTransaction> {
+    let tx: VersionedTransaction;
+    if (this.isAdapterMode) {
+      tx = await this.signTransactionWithAdapter(transaction);
+    }
+    tx = await this.signTransactionWithKeypair(transaction);
+    return tx.serialize();
+  }
+
+  public async signTransactionWithAdapter(transaction: VersionedTransaction): Promise<VersionedTransaction> {
+    const adapterWallet = this.wallet as WalletContextState;
+    if (!adapterWallet.signTransaction) {
+      throw new Error('Wallet signTransaction is not initialized');
+    }
+    return adapterWallet.signTransaction(transaction);
+  }
+
+  public async signTransactionWithKeypair(transaction: VersionedTransaction): Promise<VersionedTransaction> {
+    if (this.isAdapterMode) {
+      throw new Error('Cannot sign transaction with keypair in adapter mode');
+    }
+
+    const keypairWallet = this.wallet as Keypair;
+    transaction.sign([keypairWallet]);
+    return transaction;
   }
 
   private async buildV0TxnWithKeypair(

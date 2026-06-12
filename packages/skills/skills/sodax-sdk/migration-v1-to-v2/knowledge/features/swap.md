@@ -13,7 +13,7 @@ Pair: [`features/swap.md`](../../../integration/knowledge/features/swap.md).
    - `dstChain` → `dstChainKey`
    - **`Intent.srcChain` / `Intent.dstChain` are unchanged** (read shape) — they're `IntentRelayChainId` (bigint).
 4. **`CreateIntentResult` shape changed.** v1 was a tuple `[spokeTxHash, intent, relayData]`; v2 is an object `{ tx, intent, relayData }`. Destructure accordingly.
-5. **`SubmitSwapTxRequest.srcChainId` → `srcChainKey`.** And `relayData` field on the request expects a **string** (`relayData.payload`), not the `RelayExtraData` object.
+5. **Backend submit-tx moved to `sodax.api.swaps.submitTx`** (`SubmitTxRequestV2`, was v1 `SubmitSwapTxRequest`): `srcChainId` → `srcChainKey`, and `relayData` expects a **string** (`relayData.payload`), not the `RelayExtraData` object.
 6. **Errors → `SodaxError` + `Result<T>`.** v1's `IntentError<IntentErrorCode>` is gone. Branch on `result.ok`; use `(error.feature, error.code)` for discrimination.
 
 ## Type / symbol cheat sheet
@@ -24,7 +24,7 @@ Pair: [`features/swap.md`](../../../integration/knowledge/features/swap.md).
 |---|---|---|---|
 | `CreateIntentParams` (request) | `srcChain`, `dstChain` | `srcChainKey`, `dstChainKey` | Now generic: `CreateIntentParams<K extends SpokeChainKey>`. |
 | `CreateLimitOrderParams` (request) | `srcChain`, `dstChain` | `srcChainKey`, `dstChainKey` | `Omit<CreateIntentParams<K>, 'deadline'>`. |
-| `SubmitSwapTxRequest` (backend req) | `srcChainId` | `srcChainKey` | And `relayData: string` (was the object in v1). |
+| `SubmitTxRequestV2` (backend req, was `SubmitSwapTxRequest`) | `srcChainId` | `srcChainKey` | Submitted via `sodax.api.swaps.submitTx`; `relayData: string` (was the object in v1). |
 | `Intent` (read shape) | `srcChain`, `dstChain` | **unchanged** | `IntentRelayChainId` (bigint). Don't grep-replace blindly. |
 | `XToken` | `xChainId` | `chainKey` | Type renamed from `Token` → `XToken`. |
 | `CreateIntentResult` | tuple `[spokeTxHash, intent, relayData]` | object `{ tx, intent, relayData }` | Generic: `CreateIntentResult<K, Raw>`. |
@@ -110,19 +110,22 @@ const result = await sodax.swaps.isAllowanceValid({ params, raw: true });
 
 The underlying read doesn't consult the wallet provider; `raw: true` is the contract for read-only access.
 
-### Backend submit-tx (`SubmitSwapTxRequest`)
+### Backend submit-tx (`SubmitTxRequestV2`)
 
 ```diff
-  const request: SubmitSwapTxRequest = {
+- const request: SubmitSwapTxRequest = {
++ const request: SubmitTxRequestV2 = {
     txHash: spokeTxHash as string,
 -   srcChainId: sourceChain,
 +   srcChainKey: src.chain,
     walletAddress: sourceAccount.address ?? '',
-    intent: swapIntentData,
+-   intent: swapIntentData,          // was: V1 string/number-downcast shape
++   intent,                          // IntentRequestV2 — the createIntent intent passes through (bigint)
 -   relayData,                       // was the RelayExtraData object
 +   relayData: relayData.payload,    // now a string
   };
-  const submitResult = await sodax.backendApi.submitSwapTx(request);
+- const submitResult = await sodax.backendApi.submitSwapTx(request);
++ const submitResult = await sodax.api.swaps.submitTx(request);   // moved off BackendApiService
   if (!submitResult.ok) return;
 ```
 
@@ -144,24 +147,24 @@ The underlying read doesn't consult the wallet provider; `raw: true` is the cont
     if (!createIntentResult.ok) return;
 -   const [spokeTxHash, intent, relayData] = createIntentResult.value;
 +   const { tx: spokeTxHash, intent, relayData } = createIntentResult.value;
-    const swapIntentData: SwapIntentData = {
-      /* … */
--     srcChain: Number(intent.srcChain),    // Intent.srcChain still on read shape
--     dstChain: Number(intent.dstChain),    // Intent.dstChain still on read shape
-+     srcChain: Number(intent.srcChain),    // unchanged — Intent shape kept these
-+     dstChain: Number(intent.dstChain),
-    };
-    const request: SubmitSwapTxRequest = {
+-   const swapIntentData: SwapIntentData = {
+-     /* … string/number downcasts of intent.* … */
+-     srcChain: Number(intent.srcChain),
+-     dstChain: Number(intent.dstChain),
+-   };
+-   const request: SubmitSwapTxRequest = {
++   const request: SubmitTxRequestV2 = {
       txHash: spokeTxHash as string,
 -     srcChainId: sourceChain,
 +     srcChainKey: src.chain,
       walletAddress: sourceAccount.address ?? '',
-      intent: swapIntentData,
+-     intent: swapIntentData,
++     intent,                         // IntentRequestV2 — bigint fields pass through, no downcast
 -     relayData,
 +     relayData: relayData.payload,
     };
 -   await submitSwapTx(request);
-+   const submitResult = await sodax.backendApi.submitSwapTx(request);
++   const submitResult = await sodax.api.swaps.submitTx(request);
 +   if (!submitResult.ok) return;
   };
 ```
@@ -172,7 +175,7 @@ Cross-cutting traps (Result destructuring, error-model migration, srcChain/dstCh
 
 1. **Over-broad regex on `srcChain` / `dstChain`.** Request types renamed; `Intent` (read shape) didn't. Distinguish "I'm building a request" from "I'm reading an intent."
 2. **`createIntent` success shape changed from tuple to object.** `{ tx, intent, relayData }`, not `[spokeTxHash, intent, relayData]`.
-3. **`relayData` on `SubmitSwapTxRequest` is a `string`.** It's `relayData.payload`, not the full `RelayExtraData` object.
+3. **`relayData` on `SubmitTxRequestV2` is a `string`.** It's `relayData.payload`, not the full `RelayExtraData` object.
 4. **`spokeTxHash` is `TxReturnType<K, false>`, not necessarily `string`.** For most chains it's a string already, but the SDK type is broader. Cast at the boundary when passing to APIs that strictly want `string`: `txHash: spokeTxHash as string`.
 5. **`Intent.deadline` is `bigint`.** `Math.floor(Date.now() / 1000) + 60 * 5` returns a number; wrap in `BigInt(...)`.
 6. **`IntentResponse.srcChain` / `dstChain` from the backend are `IntentRelayChainId` (number/bigint), not chain keys.** Convert via `sodax.config.getSpokeChainKeyFromIntentRelayChainId(BigInt(intent.dstChain))` when displaying.

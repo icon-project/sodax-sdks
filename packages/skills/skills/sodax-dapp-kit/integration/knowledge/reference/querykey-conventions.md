@@ -149,6 +149,38 @@ Skip if you're writing a feature hook for the first time and want to align with 
 | `['staking', 'cancelUnstake']` | `useCancelUnstake` |
 | `['staking', 'approve', 'stake' \| 'unstake' \| 'instantUnstake']` | `useStakeApprove` / `useUnstakeApprove` / `useInstantUnstakeApprove` |
 
+### Backend (read)
+
+Backend read hooks (`useBackendIntentByTxHash`, `useBackendIntentByHash`, `useBackendUserIntents`, `useBackendOrderbook`, `useBackendMoneyMarketPosition`, …) follow the `['backend', action, ...]` shape — see the source hook files.
+
+### Swaps API (`sodax.api.swaps`)
+
+Typed wrappers over `sodax.api.swaps.*` (one per Swaps API v2 endpoint), all keyed `['swapsApi', action, ...]`.
+
+| Key | Hook |
+|---|---|
+| `['swapsApi', 'tokens']` | `useSwapsApiTokens` |
+| `['swapsApi', 'tokens', chainKey]` | `useSwapsApiTokensByChain` |
+| `['swapsApi', 'quote', …]` | `useSwapsApiQuote` |
+| `['swapsApi', 'deadline', …]` | `useSwapsApiDeadline` |
+| `['swapsApi', 'allowance', …]` | `useSwapsApiAllowance` |
+| `['swapsApi', 'status', …]` | `useSwapsApiStatus` |
+| `['swapsApi', 'intentHash', …]` | `useSwapsApiIntentHash` |
+| `['swapsApi', 'intentPacket', …]` | `useSwapsApiIntentPacket` |
+| `['swapsApi', 'intentExtraData', …]` | `useSwapsApiIntentExtraData` |
+| `['swapsApi', 'filledIntent', txHash]` | `useSwapsApiFilledIntent` |
+| `['swapsApi', 'intent', txHash]` | `useSwapsApiIntent` |
+| `['swapsApi', 'estimateGas', …]` | `useSwapsApiEstimateGas` |
+| `['swapsApi', 'partnerFee', amount]` | `useSwapsApiPartnerFee` |
+| `['swapsApi', 'solverFee', amount]` | `useSwapsApiSolverFee` |
+| `['swapsApi', 'submitTx', 'status', txHash, srcChainKey]` | `useSwapsApiSubmitTxStatus` — both identifiers required |
+| `['swapsApi', 'approve']` | `useSwapsApiApprove` mutation |
+| `['swapsApi', 'createIntent']` | `useSwapsApiCreateIntent` mutation |
+| `['swapsApi', 'submitIntent']` | `useSwapsApiSubmitIntent` mutation |
+| `['swapsApi', 'cancelIntent']` | `useSwapsApiCancelIntent` mutation |
+| `['swapsApi', 'createLimitOrder']` | `useSwapsApiCreateLimitOrder` mutation |
+| `['swapsApi', 'submitTx']` | `useSwapsApiSubmitTx` mutation |
+
 ### Bridge / DEX / Migration / Bitcoin / etc.
 
 Follow the same shape. See the source hook files (`packages/dapp-kit/src/hooks/<feature>/`) for current keys.

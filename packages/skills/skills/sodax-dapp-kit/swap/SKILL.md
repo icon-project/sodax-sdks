@@ -51,7 +51,7 @@ Granular skill for the swap hooks of `@sodax/dapp-kit` v2. React-only — backen
 ## Related granular skills (same family)
 
 - [`../money-market/SKILL.md`](../money-market/SKILL.md) — if the swap feeds a supply/borrow action.
-- [`../auxiliary-services/SKILL.md`](../auxiliary-services/SKILL.md) — `useBackendSubmitSwapTx` / intent-tracking + orderbook reads (step-by-step swap + diagnostics), partner fee-claim swaps.
+- [`../auxiliary-services/SKILL.md`](../auxiliary-services/SKILL.md) — `useSwapsApiSubmitTx` / intent-tracking + orderbook reads (step-by-step swap + diagnostics), partner fee-claim swaps.
 
 For tasks spanning multiple features, load the broad [`sodax-dapp-kit` skill](../SKILL.md) instead.
 

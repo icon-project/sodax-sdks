@@ -1,6 +1,10 @@
 /**
  * End-to-end regression guard for the dynamic-config merge bug.
  *
+ * NOTE: `ConfigService.initialize()` is currently a deliberate no-op (pending the v2 config endpoint),
+ * so the merge regression below is `describe.skip`-ped (restore when initialize() is re-enabled). The
+ * live suite asserts the current no-op contract + the Sodax → ConfigService constructor wiring.
+ *
  * The bug: ConfigService.initialize() did `this.sodax = response.config`, wholesale replacing the
  * merged config with the remote one. Because Sodax only handed ConfigService the already-merged
  * instanceConfig, a successful `initialize()` silently discarded every override the caller passed
@@ -25,7 +29,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('Sodax.initialize — regression: dynamic config must not clobber user overrides', () => {
+// TODO(config-v2): un-skip when ConfigService.initialize is re-enabled; rewrite mocks for the flattened GetAllConfigApiResponse.
+describe.skip('Sodax.initialize — regression: dynamic config must not clobber user overrides', () => {
   it('preserves a top-level user override through a successful initialize() while adopting remote values elsewhere', async () => {
     const sodax = new Sodax({ fee: USER_FEE });
 
@@ -66,5 +71,19 @@ describe('Sodax.initialize — regression: dynamic config must not clobber user 
 
     expect(sodax.config.sodaxConfig.api.timeout).toBe(99_999); // user override survives
     expect(sodax.config.sodaxConfig.api.baseURL).toBe('https://remote.example/v1'); // sibling from remote
+  });
+});
+
+describe('Sodax.initialize — current no-op contract (dynamic fetch/merge disabled)', () => {
+  it('resolves ok, preserves the constructor-merged override, and does not fetch while initialize() is a no-op', async () => {
+    const sodax = new Sodax({ fee: USER_FEE });
+    const getAllConfig = vi.spyOn(sodax.backendApi, 'getAllConfig');
+
+    const result = await sodax.initialize();
+
+    expect(result.ok).toBe(true);
+    expect(sodax.config.sodaxConfig.fee).toEqual(USER_FEE); // Sodax → ConfigService wiring carries the override
+    expect(sodax.config.isInitialized()).toBe(false); // no-op never flips the flag
+    expect(getAllConfig).not.toHaveBeenCalled(); // initialize() does not fetch while disabled
   });
 });

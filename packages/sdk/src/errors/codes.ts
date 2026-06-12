@@ -66,7 +66,8 @@ export type SodaxFeature =
   | 'migration'
   | 'dex'
   | 'partner'
-  | 'recovery';
+  | 'recovery'
+  | 'backend'; // backend-API HTTP client layer (BackendApiService / SwapsApiService), not a domain feature
 
 /**
  * Orchestration phase tag attached via `context.phase`. Canonical superset across all
@@ -147,10 +148,7 @@ export type AllowanceCheckErrorCode = Extract<
   SodaxErrorCode,
   'VALIDATION_FAILED' | 'ALLOWANCE_CHECK_FAILED' | 'UNKNOWN'
 >;
-export type GasEstimationErrorCode = Extract<
-  SodaxErrorCode,
-  'VALIDATION_FAILED' | 'GAS_ESTIMATION_FAILED' | 'UNKNOWN'
->;
+export type GasEstimationErrorCode = Extract<SodaxErrorCode, 'VALIDATION_FAILED' | 'GAS_ESTIMATION_FAILED' | 'UNKNOWN'>;
 export type LookupErrorCode = Extract<SodaxErrorCode, 'VALIDATION_FAILED' | 'LOOKUP_FAILED' | 'UNKNOWN'>;
 
 /** Codes any `create*Intent` method can return. */
@@ -161,11 +159,7 @@ export const CREATE_INTENT_CODES: ReadonlySet<CreateIntentErrorCode> = new Set([
 ]);
 
 /** Codes any `approve` method can return. */
-export const APPROVE_CODES: ReadonlySet<ApproveErrorCode> = new Set([
-  'VALIDATION_FAILED',
-  'APPROVE_FAILED',
-  'UNKNOWN',
-]);
+export const APPROVE_CODES: ReadonlySet<ApproveErrorCode> = new Set(['VALIDATION_FAILED', 'APPROVE_FAILED', 'UNKNOWN']);
 
 /** Codes any `isAllowanceValid` method can return. */
 export const ALLOWANCE_CHECK_CODES: ReadonlySet<AllowanceCheckErrorCode> = new Set([
@@ -211,4 +205,5 @@ export const SODAX_FEATURES = [
   'dex',
   'partner',
   'recovery',
+  'backend',
 ] as const satisfies ReadonlyArray<SodaxFeature>;

@@ -73,12 +73,12 @@ if (!result.ok) {
 }
 ```
 
-### Custom `IConfigApi` for sandbox
+### Custom `IConfigApiV1` for sandbox
 
 ```ts
-import { Sodax, type IConfigApi } from '@sodax/sdk';
+import { Sodax, type IConfigApiV1 } from '@sodax/sdk';
 
-const sandboxApi: IConfigApi = {
+const sandboxApi: IConfigApiV1 = {
   async getChains() { return { ok: true, value: [/* fixture */] }; },
   async getSwapTokens() { return { ok: true, value: { /* … */ } }; },
   async getSwapTokensByChainId(chainKey) { return { ok: true, value: [/* … */] }; },

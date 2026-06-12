@@ -9,6 +9,7 @@ import { ChevronDown, Wallet } from 'lucide-react';
 const navLinks = [
   { to: '/money-market', label: 'Money Market' },
   { to: '/solver', label: 'Solver' },
+  { to: '/swaps-api', label: 'Swaps API' },
   { to: '/bridge', label: 'Bridge' },
   { to: '/staking', label: 'Staking' },
   { to: '/partner-fee-claim', label: 'Partner Fee Claim' },

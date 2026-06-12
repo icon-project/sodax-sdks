@@ -116,7 +116,8 @@ Sodax
  ├── migration       — MigrationService       (ICX/bnUSD/BALN migration)
  ├── partners        — PartnerService         (partner fee claiming)
  ├── recovery        — RecoveryService        (withdraw stuck hub-wallet assets)
- ├── backendApi      — BackendApiService      (intent lookup, swap submission, config fetching)
+ ├── backendApi      — BackendApiService      (intent lookup, orderbook, money-market reads, config fetching)
+ ├── api             — alias for backendApi; `api.swaps` is SwapsApiService (typed Swaps API v2 client)
  ├── config          — ConfigService          (dynamic config; see § 4)
  ├── hubProvider     — HubProvider            (hub contract interactions; concrete impl `EvmHubProvider`)
  └── spoke           — SpokeService           (per-chain-family router; see § 2)
@@ -143,7 +144,7 @@ new Sodax(config?: SodaxOptions): Sodax;
 - `bridge: BridgeConfig` — bridge `{ partnerFee }` override.
 - `dex: DexConfig` — DEX pool/asset config.
 - `hub: HubConfig` — hub-chain (Sonic) full address map + RPC URL + polling config.
-- `api: ApiConfig` — backend API endpoint (`{ baseURL, timeout, headers }`).
+- `api: ApiConfig` — backend API config: flat `BaseApiConfig` (`{ baseURL, timeout, headers }`, shared by `sodax.backendApi` and the swaps client `sodax.api.swaps`) or nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig? }`) to point the swaps API at its own endpoint.
 - `solver: SolverConfig` — `{ intentsContract, solverApiEndpoint, protocolIntentsContract }`.
 - `relay: RelayConfig` — intent relay endpoint + chain-id map.
 
@@ -190,7 +191,7 @@ const sodax = new Sodax({
 });
 ```
 
-`SodaxConfig.api` is `ApiConfig` (`{ baseURL, timeout, headers }`) — pass any subset via `DeepPartial`. v2 does not provide a typed slot to inject a custom `IConfigApi` implementation at construction; if you need to mock the backend for tests, point `baseURL` at a local mock server, or construct your own `BackendApiService`-compatible mock and inject it where you control the `Sodax` instance (e.g. dependency-injected in your app layer).
+`SodaxConfig.api` is `ApiConfig` — the flat `BaseApiConfig` (`{ baseURL, timeout, headers }`) shared by both backend clients, or the nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig? }`) to point the swaps API (`sodax.api.swaps`) at its own endpoint. Pass any subset via `DeepPartial`. v2 does not provide a typed slot to inject a custom `IConfigApiV1` implementation at construction; if you need to mock the backend for tests, point `baseURL` at a local mock server, or construct your own `BackendApiService`-compatible mock and inject it where you control the `Sodax` instance (e.g. dependency-injected in your app layer).
 
 ---
 
@@ -348,7 +349,7 @@ The canonical error class. Every SDK-emitted error is a `SodaxError<C>` paramete
 ```ts
 class SodaxError<C extends SodaxErrorCode = SodaxErrorCode> extends Error {
   readonly code: C;                 // closed 13-code reason union
-  readonly feature: SodaxFeature;   // 'swap' | 'moneyMarket' | 'bridge' | 'staking' | 'migration' | 'dex' | 'partner' | 'recovery'
+  readonly feature: SodaxFeature;   // 'swap' | 'moneyMarket' | 'bridge' | 'staking' | 'migration' | 'dex' | 'partner' | 'recovery' | 'backend'
   readonly cause?: unknown;
   readonly context?: SodaxErrorContext;
 

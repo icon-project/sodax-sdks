@@ -1,19 +1,21 @@
 # Backend API — `BackendApiService`
 
-HTTP client for backend services. Provides intent lookup, swap-tx submission, solver orderbook queries, money-market position/reserve reads, and (internally) config fetching. Most consumer-side code uses just `submitSwapTx`, `getIntentByHash` / `getIntentByTxHash`, and the money-market read methods.
+HTTP client for backend services. Provides intent lookup, solver orderbook queries, money-market position/reserve reads, and (internally) config fetching. Most consumer-side code uses just `getIntentByHash` / `getIntentByTxHash` and the money-market read methods. Swap-tx submission lives on the sibling swaps API client — `sodax.api.swaps.submitTx` (see below).
 
-Access: `sodax.backendApi`. Service class: `BackendApiService`. **Feature tag for errors:** appears under multiple features depending on the call site (`'swap'` for `submitSwapTx`, `'moneyMarket'` for MM-related reads, etc.); errors carry `error.context.api: 'backend'`.
+Access: `sodax.backendApi`. Service class: `BackendApiService`. **Feature tag for errors:** every method emits `feature: 'backend'` with `error.context.api: 'backend'` (the HTTP-client layer — the domain feature tags like `'moneyMarket'` belong to the on-chain services, not these backend reads).
 
 ## Methods
 
 ```ts
-// Swap-related
-sodax.backendApi.submitSwapTx(request, config?): Promise<Result<SubmitSwapTxResponse>>;
-sodax.backendApi.getSubmitSwapTxStatus(...): Promise<Result<...>>;
+// Swap-related reads
 sodax.backendApi.getOrderbook(...): Promise<Result<OrderbookEntry[]>>;
 sodax.backendApi.getIntentByHash(intentHash, config?): Promise<Result<IntentResponse>>;
 sodax.backendApi.getIntentByTxHash(txHash, config?): Promise<Result<IntentResponse>>;
 sodax.backendApi.getUserIntents(...): Promise<Result<IntentResponse[]>>;
+
+// Swap-tx submission — on the swaps API client (sodax.api.swaps), not BackendApiService
+sodax.api.swaps.submitTx(request, config?): Promise<Result<SubmitTxResponseV2>>;
+sodax.api.swaps.getSubmitTxStatus(query, config?): Promise<Result<SubmitTxStatusResponseV2>>;
 
 // Money-market reads (these are the canonical reads for MM positions/reserves;
 // MoneyMarketService does NOT expose getReservesData / getUserReservesData / etc.)
@@ -24,7 +26,7 @@ sodax.backendApi.getMoneyMarketAssetBorrowers(...): Promise<Result<...>>;
 sodax.backendApi.getMoneyMarketAssetSuppliers(...): Promise<Result<...>>;
 sodax.backendApi.getAllMoneyMarketBorrowers(...): Promise<Result<...>>;
 
-// Config-API methods (used internally by ConfigService — implements `IConfigApi`)
+// Config-API methods (used internally by ConfigService — implements `IConfigApiV1`)
 sodax.backendApi.getAllConfig(config?): Promise<Result<GetAllConfigApiResponse>>;
 sodax.backendApi.getChains(config?): Promise<Result<GetChainsApiResponse>>;
 sodax.backendApi.getSwapTokens(config?): Promise<Result<GetSwapTokensApiResponse>>;
@@ -35,18 +37,20 @@ sodax.backendApi.getMoneyMarketTokensByChainId(...): Promise<Result<XToken[]>>;
 sodax.backendApi.getRelayChainIdMap(config?): Promise<Result<GetRelayChainIdMapApiResponse>>;
 ```
 
-All methods return `Result<T, SodaxError>` where the error carries `feature: 'swap' | 'moneyMarket' | …` (depending on call site) and `error.context.api === 'backend'`.
+All methods return `Result<T, SodaxError<'EXTERNAL_API_ERROR'>>` where the error carries `feature: 'backend'`, `error.context.api === 'backend'`, and `context.endpoint`.
 
-## Common call shape — `submitSwapTx`
+Every data / token / money-market response is validated at runtime against a valibot schema (like `sodax.api.swaps`): a 2xx body that fails the contract resolves to `EXTERNAL_API_ERROR` with `context.reason: 'invalid_response_shape'` rather than a mistyped value. The config/relay reads — `getAllConfig`, `getSpokeChainConfig`, `getRelayChainIdMap` — are **not** schema-validated (the `SodaxConfig` shape is too large to mirror faithfully, and `ConfigService` already version-gates and falls back to packaged defaults, so it relies on no response-shape guarantee).
+
+## Common call shape — submit swap tx (`sodax.api.swaps.submitTx`)
 
 After `sodax.swaps.createIntent({ params, raw: false, walletProvider })` returns:
 
 ```ts
-const submitResult = await sodax.backendApi.submitSwapTx({
+const submitResult = await sodax.api.swaps.submitTx({
   txHash: spokeTxHash as string,
   srcChainKey: src.chain,
   walletAddress: '0x…',
-  intent: swapIntentData,
+  intent,                          // IntentRequestV2 (bigint fields) — the createIntent intent passes through
   relayData: relayData.payload,    // string, not the RelayExtraData object
 });
 
@@ -55,7 +59,7 @@ if (!submitResult.ok) return;
 
 ## Custom backend (sandbox / fixtures)
 
-`SodaxConfig` does not expose a typed slot to inject a custom `IConfigApi` implementation at construction. Two supported patterns:
+`SodaxConfig` does not expose a typed slot to inject a custom `IConfigApiV1` implementation at construction. Two supported patterns:
 
 1. **Point at a local mock backend** via `SodaxConfig.api.baseURL`:
 
@@ -66,16 +70,17 @@ if (!submitResult.ok) return;
    await sodax.config.initialize();
    ```
 
-   `SodaxConfig.api` is `ApiConfig` (`{ baseURL, timeout, headers }`) — pass any subset via `DeepPartial`.
+   `SodaxConfig.api` is `ApiConfig` — either the flat `BaseApiConfig` (`{ baseURL, timeout, headers }`, shared by the base API and the swaps client) or the nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig? }`) to point the swaps API at its own endpoint. Pass any subset via `DeepPartial`. See [`./swaps-api.md`](swaps-api.md) § "Custom endpoint for the swaps API".
 
 2. **Inject your own `BackendApiService`-compatible mock at the app layer** (dependency-injected where you control the `Sodax` instance), rather than via the constructor.
 
-The `IConfigApi` interface itself still matters for both patterns — every method returns `Promise<Result<T>>` in v2, so any mock or local server must conform. See [`../architecture.md`](../architecture.md) § 4 "Custom backend" for the authoritative reference.
+The `IConfigApiV1` interface itself still matters for both patterns — every method returns `Promise<Result<T>>` in v2, so any mock or local server must conform. See [`../architecture.md`](../architecture.md) § 4 "Custom backend" for the authoritative reference.
 
 ## Cross-references
 
 - v1 → v2 migration of `BackendApiService` (the load-bearing change: every method now returns `Promise<Result<T>>`): [`features/backend-api.md`](../../../migration-v1-to-v2/knowledge/features/backend-api.md).
-- The full `submitSwapTx` flow with `createIntent` upstream: [`./swap.md`](swap.md) § "Backend submit-tx flow".
+- The full submit-tx flow with `createIntent` upstream: [`./swap.md`](swap.md) § "Backend submit-tx flow".
+- The full typed Swaps API v2 client (`sodax.api.swaps`, 21 endpoints — quote, create-intent, submit-tx, fees, status, …): [`./swaps-api.md`](swaps-api.md).
 - Partner-fee handling (separate service): [`./partner.md`](partner.md).
 - Stuck-asset recovery (separate service): [`./recovery.md`](recovery.md).
 - Error model context fields (`error.context.api`, `error.context.method`): [`../reference/`](../reference/) § 3.

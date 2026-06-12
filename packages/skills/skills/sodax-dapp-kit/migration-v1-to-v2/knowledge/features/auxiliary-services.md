@@ -44,14 +44,16 @@ Read-only. No `walletProvider` involved. Convert to single-object query shape.
 + const { data: assets } = useBackendAllMoneyMarketAssets({});
 ```
 
-`useBackendSubmitSwapTx` is a mutation — per-call config flows through `mutate(vars)`:
+`useSwapsApiSubmitTx` (v1: `useBackendSubmitSwapTx` — renamed and moved into the `swapsApi/` namespace) is a mutation — per-call config flows through `mutate(vars)`. The v2 `request` is a `SubmitTxRequestV2` (`{ txHash, srcChainKey, walletAddress, intent, relayData }`):
 
 ```diff
 - const submit = useBackendSubmitSwapTx({ baseURL: 'https://...' });   // v1: per-instance config
 - await submit.mutateAsync(swapPayload);
-+ const { mutateAsync: submit } = useBackendSubmitSwapTx();
++ const { mutateAsync: submit } = useSwapsApiSubmitTx();
 + await submit({ request: swapPayload, apiConfig: { baseURL: 'https://...' } });   // v2: per-call config
 ```
+
+`useSwapsApiSubmitTxStatus` (v1: `useBackendSubmitSwapTxStatus`) now requires **both** `txHash` and `srcChainKey` (the v2 status endpoint needs the source chain key) — a v1 call that passed only a tx hash won't run until `srcChainKey` is supplied. The full Swaps API v2 surface is now wrapped as `useSwapsApi*` hooks (see the integration `hooks-index`).
 
 ## Shared utilities
 

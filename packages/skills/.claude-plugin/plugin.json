@@ -11,6 +11,7 @@
     "./skills/sodax-sdk/partner",
     "./skills/sodax-sdk/recovery",
     "./skills/sodax-sdk/backend-api",
+    "./skills/sodax-sdk/swaps-api",
     "./skills/sodax-wallet-sdk-core",
     "./skills/sodax-wallet-sdk-core/evm",
     "./skills/sodax-wallet-sdk-core/solana",

@@ -33,7 +33,7 @@ DO / DO NOT / workflow / stop conditions for AI agents porting v1 `@sodax/sdk` c
 
 ## DO NOT (migration-specific)
 
-- **DO NOT** grep-replace `srcChain` → `srcChainKey` blindly. The `Intent` *read* shape (returned from `createIntent` / `getIntentByHash` / etc.) keeps `srcChain` and `dstChain` as `IntentRelayChainId` (bigint) — those did **not** rename. Only **request** types changed (`CreateIntentParams`, `CreateLimitOrderParams`, `SubmitSwapTxRequest`).
+- **DO NOT** grep-replace `srcChain` → `srcChainKey` blindly. The `Intent` *read* shape (returned from `createIntent` / `getIntentByHash` / etc.) keeps `srcChain` and `dstChain` as `IntentRelayChainId` (bigint) — those did **not** rename. Only **request** types changed (`CreateIntentParams`, `CreateLimitOrderParams`, `SubmitTxRequestV2`).
 - **DO NOT** treat `instanceof MoneyMarketError` (or any other module-error class) as still working. Those classes are deleted. Replace with `isSodaxError(e) && e.feature === 'moneyMarket'`.
 - **DO NOT** pass v1 spoke-side state into `getStakingInfo(hubAddress)`. The method is still public in v2 but expects a *hub* address. v1 call sites that used `spokeProvider`-derived data should switch to `getStakingInfoFromSpoke(srcAddress, srcChainKey)` which derives the hub wallet internally.
 - **DO NOT** keep `try { await sodax.swaps.createIntent(...) } catch` and expect to inspect `e.code === 'CREATE_INTENT_FAILED'`. The v2 code is `INTENT_CREATION_FAILED` and lives on `result.error.code` (Result branch), not on a thrown error. See [`reference/error-code-crosswalk.md`](reference/error-code-crosswalk.md) for the full v1 → v2 code crosswalk.

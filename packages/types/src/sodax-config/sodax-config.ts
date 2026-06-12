@@ -77,8 +77,22 @@ export type SodaxConfig = {
  * Keeping `logger` here (rather than on `SodaxConfig`) means `DeepPartial<SodaxConfig>` no longer
  * makes the logger's methods optional, so the SDK can resolve `options.logger` without casting.
  */
+/**
+ * Client-side swap behavior options. Like {@link SodaxOptions.logger}, these are runtime toggles
+ * resolved once at construction — NOT part of the backend-fetched {@link SodaxConfig} data.
+ */
+export type SwapsOptions = {
+  /**
+   * Opt-in: route `swap()` through the backend submit-tx 2-step flow (the backend relays +
+   * post-executes server-side). On ANY non-success the SDK falls back to the client-side relay so
+   * the swap still completes. Default `false` (the current fully client-side flow).
+   */
+  useBackendSubmitTx?: boolean;
+};
+
 export type SodaxOptions = DeepPartial<SodaxConfig> & {
   logger?: SodaxLoggerOption; // SDK log sink: 'console' (default) | 'silent' | a custom SodaxLogger. Resolved client-side; never fetched from or overwritten by the backend config.
+  swapsOptions?: SwapsOptions; // client-side swap behavior toggles (e.g. useBackendSubmitTx). Resolved client-side; distinct key so it never collides with the data `swaps` key from DeepPartial<SodaxConfig>.
 };
 
 // default sodax config object which can always be overriden through Sodax instance (i.e. new Sodax(...config))

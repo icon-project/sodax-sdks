@@ -29,7 +29,8 @@ type SodaxFeature =
   | 'migration'
   | 'dex'
   | 'partner'
-  | 'recovery';
+  | 'recovery'
+  | 'backend'; // HTTP-client layer (BackendApiService / SwapsApiService) — not a domain feature
 ```
 
 The `(feature, code)` pair is the canonical discriminator. Loggers tag both fields; switch statements branch on both.
@@ -155,6 +156,10 @@ type LookupErrorCode = 'VALIDATION_FAILED' | 'LOOKUP_FAILED' | 'UNKNOWN';
 ### Partner (`feature: 'partner'`) and Recovery (`feature: 'recovery'`)
 
 Both follow the same shape: action methods get the full exec union (`'EXECUTION_FAILED' \| 'INTENT_CREATION_FAILED' \| ...`), read methods get `LookupErrorCode`, approve methods get `ApproveErrorCode`.
+
+### Backend / Swaps API (`feature: 'backend'`)
+
+`BackendApiService` (`sodax.backendApi`) and the Swaps API v2 client (`sodax.api.swaps`) are the HTTP-client layer — not domain features. Every method returns `Result<T, SodaxError<'EXTERNAL_API_ERROR'>>` with `context.api: 'backend'` and `context.endpoint`; the transport failure (timeout / non-2xx / response-shape mismatch) is preserved on `error.cause`.
 
 ---
 
