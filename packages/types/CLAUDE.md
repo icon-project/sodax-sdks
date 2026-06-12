@@ -46,6 +46,15 @@ Only **two** entry points are exported via [`package.json` `exports`](package.js
 
 There are **no per-chain sub-path exports**. New chain types are added under the appropriate subdirectory, re-exported through that subdirectory's `index.ts`, and flow out through the root barrel automatically.
 
+## Swap supported tokens (staging vs production)
+
+Swap tokens live in [`src/swap/swap.ts`](src/swap/swap.ts) as two separate per-chain lists, both `Record<SpokeChainKey, readonly XToken[]>`:
+
+- `swapSupportedTokens` — **production** solver tokens (also wired into `swapsConfig.supportedTokens`).
+- `stagingSwapSupportedTokens` — tokens supported **only** in the **staging** solver environment. The staging solver supports **all** tokens: every production token plus these.
+
+The two lists are **disjoint per chain** — a token is stored in exactly one of them. `isSwapSupportedToken(chainId, token)` validates against the **union** of both (it is upon the caller to target the correct environment; the SDK does not gate on env). Accessors: `getSupportedSolverTokens` (production list only), `getStagingSolverTokens` (production + staging-only, i.e. the full staging set). Invariants are enforced by [`src/chains/tokens-dedup.test.ts`](src/chains/tokens-dedup.test.ts) (no intra-list dups) and [`src/swap/swap.test.ts`](src/swap/swap.test.ts) (disjointness, staging-superset accessor, union validation). The staging-only entries were derived by diffing the lists against the production solver oracle (`https://sodax-solver.iconblockchain.xyz/oracle`) on 2026-06-12, pending solver-team confirmation (#193). Use the repo-internal `add-swap-token` Claude skill (`.claude/skills/add-swap-token`) to add entries — it always asks for the target environment.
+
 ## Build
 
 Built with `tsc` (other workspace packages bundle with tsup — this one doesn't bundle). ESM only (`"type": "module"`). Output: `dist/` with `.js` + `.d.ts` files.

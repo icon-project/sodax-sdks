@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { XToken } from './tokens.js';
 import type { SpokeChainKey } from './chains.js';
-import { swapSupportedTokens } from '../swap/swap.js';
+import { swapSupportedTokens, stagingSwapSupportedTokens } from '../swap/swap.js';
 import { moneyMarketSupportedTokens } from '../moneyMarket/moneyMarket.js';
 
 type TokenList = Record<SpokeChainKey, readonly XToken[]>;
@@ -49,4 +49,5 @@ function describeTable(table: TokenList, label: string) {
 }
 
 describeTable(swapSupportedTokens, 'swapSupportedTokens');
+describeTable(stagingSwapSupportedTokens, 'stagingSwapSupportedTokens');
 describeTable(moneyMarketSupportedTokens, 'moneyMarketSupportedTokens');
