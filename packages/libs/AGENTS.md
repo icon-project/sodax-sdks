@@ -1,6 +1,6 @@
 # packages/libs
 
-Internal **dependency-isolation** package. Bundles and re-exports third-party libraries that need non-trivial build workarounds (Turbopack/Next.js 16 incompatibilities — [#1070](https://github.com/icon-project/sodax-frontend/issues/1070)) through stable subpaths so consumer packages don't each duplicate the workaround.
+Internal **dependency-isolation** package. Bundles and re-exports third-party libraries that need non-trivial build workarounds through stable subpaths so consumer packages do not duplicate the workaround.
 
 **Not part of the public Sodax API.** Consumed only by `@sodax/sdk`, `@sodax/wallet-sdk-core`, `@sodax/wallet-sdk-react`.
 
@@ -8,7 +8,7 @@ See [`README.md`](README.md) for the subpath table, when-to-add criteria, and th
 
 ## Structure
 
-Folder-per-npm-scope. Three subpaths today, each a tiny barrel that re-exports only the names consumers need:
+Folder-per-npm-scope. Each subpath is a tiny barrel that re-exports only the names consumers need:
 
 ```
 src/
@@ -17,7 +17,7 @@ src/
 └── injective/wallet-strategy/index.ts   → @sodax/libs/injective/wallet-strategy (@injectivelabs/wallet-strategy)
 ```
 
-Every barrel opens with a `TODO(#1070)` JSDoc explaining the upstream root cause and the revert condition.
+Every workaround barrel should include a JSDoc explaining the upstream root cause and the revert condition.
 
 ## Build ([`tsup.config.ts`](tsup.config.ts))
 
@@ -55,7 +55,7 @@ See [`packages/sdk/src/shared/services/spoke/StacksSpokeService.test.ts`](../sdk
 ## Rules
 
 - **Only add a subpath when the dep needs a non-trivial build workaround.** If npm import "just works" for consumers, it doesn't belong here — see the README's "When to use this package" criteria.
-- **Re-export minimally.** Only names consumers use today; expand on demand.
-- **Every barrel keeps its `TODO(#1070)` JSDoc** so the revert condition stays co-located with the workaround.
+- **Re-export minimally.** Only names consumers use; expand on demand.
+- **Every workaround barrel keeps a root-cause JSDoc** so the revert condition stays co-located with the workaround.
 - **Add a drift-detection script for any shape-dependent workaround.** Stubs that assume upstream's named exports break silently on upgrade unless a build-time check exists.
 - **Extend `external` when a new bundled dep imports new Node builtins** — missing entries surface as Turbopack crashes downstream, not here.

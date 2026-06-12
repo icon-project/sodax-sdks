@@ -79,6 +79,8 @@ for (const path of agentFiles) {
     /\ball\s+\d+\s+chains\b/i,
     /\bissue\s+#\d+\b/i,
     /\bparent\s+issue\s+#\d+\b/i,
+    /#\d+/,
+    /\bformerly\b/i,
     /\btoday:\s*\d+/i,
   ];
 
