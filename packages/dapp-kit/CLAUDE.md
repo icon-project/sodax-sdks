@@ -111,7 +111,7 @@ hooks/
 └── leverageYield/  # useLeverageYieldEffectiveApr, useLeverageYieldPosition,
                     # useLeverageYieldTotalAssets, useLeverageYieldPreviewRedeem,
                     # useLeverageYieldShareBalances, useLeverageYieldDeposit, useLeverageYieldWithdraw,
-                    # useLeverageYieldVaultSwap
+                    # useLeverageYieldVaultSwap, useLeverageYieldNotifySolver
 ```
 
 Every mutation hook returns `SafeUseMutationResult` (extends `UseMutationResult` with `mutateAsyncSafe`). The 44-hook contract is enforced by [_mutationContract.test.ts](src/hooks/_mutationContract.test.ts).

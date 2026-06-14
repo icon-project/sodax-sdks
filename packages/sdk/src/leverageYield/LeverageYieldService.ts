@@ -10,6 +10,7 @@ import {
   isBitcoinWalletProviderType,
   isUndefinedOrValidWalletProviderForChainKey,
   relayTxAndWaitPacket,
+  retry,
   type RelayExtraData,
   type IntentDeliveryInfo,
 } from '../shared/index.js';
@@ -56,6 +57,7 @@ import {
   isLeverageYieldLookupError,
   isLeverageYieldPostExecutionError,
   isLeverageYieldSwapError,
+  type LeverageYieldAction,
   type LeverageYieldAllowanceCheckError,
   type LeverageYieldApproveError,
   type LeverageYieldCreateIntentError,
@@ -80,7 +82,11 @@ const leverageYieldVaultAbi = parseAbi([
   'function targetLTV() view returns (uint256)',
 ]);
 
-/** Seconds added to `Date.now()` for the default intent `deadline` when the caller omits one. */
+/**
+ * Seconds added to the hub-chain (Sonic) block timestamp for the default intent `deadline`
+ * when the caller omits one. Anchored to block time — never the client clock — because the
+ * deadline is enforced on-chain against the hub block timestamp.
+ */
 const INTENT_DEADLINE_BUFFER_SECONDS = 5 * 60;
 
 /** Sentinel `solver` address meaning "any solver may fill this intent". */
@@ -104,39 +110,83 @@ function pctToRay(aprPct: number): bigint {
   return BigInt(Math.round(aprPct * 1e9)) * 10n ** 16n;
 }
 
+/** Per-attempt timeout (ms) for the DefiLlama APR fetch — bounds a hung endpoint. */
+const DEFILLAMA_FETCH_TIMEOUT_MS = 10_000;
+
+/**
+ * Max attempts (1 retry) for the DefiLlama APR fetch. Deliberately below the shared
+ * `DEFAULT_MAX_RETRY` (3): this is a best-effort read with a hardcoded `fallbackAprPct`, and
+ * it runs inside `getEffectiveApr`'s `Promise.all`, so a hung endpoint must not stall the
+ * headline APR for long. Caps the worst case at `2 × DEFILLAMA_FETCH_TIMEOUT_MS` + one
+ * back-off (~22s) instead of the default ~34s, while still riding out a single transient blip.
+ */
+const DEFILLAMA_FETCH_MAX_ATTEMPTS = 2;
+
+/**
+ * `fetch` with an `AbortController`-backed timeout (mirrors `BackendApiService.makeRequest`).
+ * Aborts the request after `timeoutMs` so an unresponsive endpoint can't stall the caller
+ * indefinitely — the bare `fetch` has no client-side timeout.
+ */
+async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 /**
  * Fetches the latest APR for a DefiLlama yield pool. DefiLlama's `/chart/<poolId>`
  * endpoint returns the pool's full time series with permissive CORS (`access-control-
  * allow-origin: *`) and a small response (~1 entry/day). The latest entry's `apy` is the
  * compounded yield including any reward tokens — what a depositor actually earns.
  *
+ * Hardened against a flaky/hung endpoint: each attempt is bounded by
+ * {@link DEFILLAMA_FETCH_TIMEOUT_MS} via {@link fetchWithTimeout}, and the whole thing is
+ * wrapped in the shared {@link retry} helper (mirrors `SolverApiService`'s fetch usage),
+ * capped at {@link DEFILLAMA_FETCH_MAX_ATTEMPTS} so a hung endpoint can't stall
+ * `getEffectiveApr` for long before the caller's `fallbackAprPct` kicks in.
+ *
  * Adding a new LSD: find its pool ID via the bulk `/pools` endpoint (filter by symbol +
  * project) and reference it from the vault's `lsdSource.poolId` in `leverageYieldVaults`.
  * No SDK changes needed — DefiLlama aggregates rates across all LSD issuers already.
  *
- * Throws on network/parse error; the caller swallows and uses the registry's
- * `fallbackAprPct`.
+ * Throws on network/parse error after exhausting retries; the caller swallows it and uses
+ * the registry's `fallbackAprPct`.
  */
 async function fetchDefillamaApr(poolId: string): Promise<number> {
-  const response = await fetch(`https://yields.llama.fi/chart/${poolId}`);
-  if (!response.ok) throw new Error(`DefiLlama APR fetch failed: HTTP ${response.status}`);
-  const json = (await response.json()) as { data?: ReadonlyArray<{ apy?: unknown }> };
-  const series = json?.data;
-  if (!Array.isArray(series) || series.length === 0) {
-    throw new Error('DefiLlama APR response: empty time series');
-  }
-  const latest = series[series.length - 1]?.apy;
-  if (typeof latest !== 'number') throw new Error('DefiLlama APR: latest entry missing numeric apy');
-  return latest;
+  return retry(async () => {
+    const response = await fetchWithTimeout(`https://yields.llama.fi/chart/${poolId}`, DEFILLAMA_FETCH_TIMEOUT_MS);
+    if (!response.ok) throw new Error(`DefiLlama APR fetch failed: HTTP ${response.status}`);
+    const json = (await response.json()) as { data?: ReadonlyArray<{ apy?: unknown }> };
+    const series = json?.data;
+    if (!Array.isArray(series) || series.length === 0) {
+      throw new Error('DefiLlama APR response: empty time series');
+    }
+    const latest = series[series.length - 1]?.apy;
+    if (typeof latest !== 'number') throw new Error('DefiLlama APR: latest entry missing numeric apy');
+    return latest;
+  }, DEFILLAMA_FETCH_MAX_ATTEMPTS);
 }
 
 // ─── Param types ──────────────────────────────────────────────────────────
 
+/**
+ * Leveraged-position snapshot from the vault's non-standard `getPositionDetails()`.
+ * Field scales (mirroring the AAVE conventions the vault inherits):
+ */
 export type LeverageYieldPosition = {
+  /** Collateral supplied to the AAVE pool, in vault-asset units (18 decimals). */
   collateral: bigint;
+  /** Variable debt borrowed against the collateral, in vault-asset units (18 decimals). */
   debt: bigint;
+  /** Current loan-to-value in basis points (out of `10_000`; e.g. `8_500` = 85%). */
   ltv: bigint;
+  /** AAVE health factor in WAD (1e18); below `1e18` implies liquidation risk, `type(uint256).max` = no debt. */
   healthFactor: bigint;
+  /** Asset held by the vault but not yet supplied to the pool, in vault-asset units (18 decimals). */
   idleAsset: bigint;
 };
 
@@ -232,7 +282,7 @@ export type LeverageYieldSwapDepositParams = {
   inputAmount: bigint;
   /** Minimum acceptable lsoda* output (18 decimals). Slippage already applied. */
   minOutputAmount: bigint;
-  /** Deadline (unix seconds). Defaults to now + 5 min. */
+  /** Deadline (unix seconds). Defaults to the hub block timestamp + 5 min. */
   deadline?: bigint;
   /** Optional specific solver. `0x0` = any solver. */
   solver?: Address;
@@ -266,7 +316,7 @@ export type LeverageYieldSwapWithdrawParams = {
   minOutputAmount: bigint;
   /** Recipient on `dstChainKey`. Defaults to `srcAddress`. */
   recipient?: string;
-  /** Deadline (unix seconds). Defaults to now + 5 min. */
+  /** Deadline (unix seconds). Defaults to the hub block timestamp + 5 min. */
   deadline?: bigint;
   /** Optional specific solver. `0x0` = any solver. */
   solver?: Address;
@@ -357,11 +407,13 @@ export type LeverageYieldServiceConstructorParams = {
  *   (any token → lsoda*) and withdraw (lsoda* → any token); spread the result into
  *   `vaultSwap()`. `withdraw` sets `hubWalletSwap: true` so the vault swap spends the lsoda*
  *   held in the user's hub wallet via a `Connection.sendMessage`.
- * - `createVaultIntent` / `vaultSwap` — leverage-yield copies of the swap domain's
- *   `createIntent` / `swap()` (duplicated deliberately — the vault execution modifiers
- *   `hubWalletSwap` and per-intent `partnerFee` live here, not on the swap domain).
- *   `createVaultIntent` submits the intent tx on the source spoke chain; `vaultSwap`
- *   orchestrates the full create → verify → relay → notify-solver lifecycle.
+ * - `createVaultIntent` / `vaultSwap` / `notifySolver` — leverage-yield copies of the swap
+ *   domain's `createIntent` / `swap()` / `postExecution` (duplicated deliberately — the vault
+ *   execution modifiers `hubWalletSwap` and per-intent `partnerFee` live here, not on the swap
+ *   domain). `createVaultIntent` submits the intent tx on the source spoke chain; `vaultSwap`
+ *   orchestrates the full create → verify → relay → notify-solver lifecycle; `notifySolver` is
+ *   the standalone notify step, public so callers driving the relay themselves (after a
+ *   `createVaultIntent`) can complete the flow.
  * - `approve` / `isAllowanceValid` — Sonic-direct allowance management for the vault's
  *   underlying asset (sodaWEETH-style).
  * - `getPosition` / `getApr` / `getEffectiveApr` / `getLsdApr` / `getMaxWithdraw` /
@@ -404,16 +456,47 @@ export class LeverageYieldService {
   }
 
   /**
+   * Resolves the intent `deadline`: returns the caller-supplied value verbatim, otherwise
+   * derives a default from the hub-chain (Sonic) block timestamp plus
+   * {@link INTENT_DEADLINE_BUFFER_SECONDS}. The deadline is enforced on-chain against the hub
+   * block time, so the default is anchored to that block — never the client clock, which can
+   * drift and produce an already-expired or over-extended deadline.
+   *
+   * Returns a {@link Result}: a `getBlock` RPC outage is a read failure, surfaced as
+   * `LOOKUP_FAILED` (`method: 'resolveDeadline'`) rather than masquerading as an intent-build
+   * failure. The `deposit` / `withdraw` callers forward it verbatim.
+   */
+  private async resolveDeadline(
+    deadline: bigint | undefined,
+    srcChainKey: SpokeChainKey,
+  ): Promise<Result<bigint, LeverageYieldLookupError>> {
+    if (deadline !== undefined) return { ok: true, value: deadline };
+    try {
+      const block = await this.hubProvider.publicClient.getBlock({
+        includeTransactions: false,
+        blockTag: 'latest',
+      });
+      return { ok: true, value: block.timestamp + BigInt(INTENT_DEADLINE_BUFFER_SECONDS) };
+    } catch (error) {
+      return { ok: false, error: lookupFailed('leverageYield', 'resolveDeadline', error, { srcChainKey }) };
+    }
+  }
+
+  /**
    * Builds the {@link LeverageYieldSwapPayload} for a leverage-yield deposit (any token → lsoda*).
    * The lsoda* output is delivered to the user's hub wallet on Sonic so a later
    * {@link LeverageYieldService.withdraw} can swap it back. Spread the result into
    * {@link LeverageYieldService.vaultSwap}: `vaultSwap({ ...payload, walletProvider })`.
    * An optional `partnerFee` is forwarded on the payload as the per-intent fee override.
+   *
+   * For `minOutputAmount`, quote via `sodax.swaps.getQuote` with the vault address as the
+   * destination token (`token_dst`) — vault shares are solver-tradeable, so the generic swap
+   * quote applies; then subtract your slippage tolerance.
    */
   public async deposit(
     params: LeverageYieldSwapDepositParams,
-  ): Promise<Result<LeverageYieldSwapPayload, LeverageYieldCreateIntentError>> {
-    const baseCtx = { srcChainKey: params.srcChainKey, action: 'xdeposit' as const };
+  ): Promise<Result<LeverageYieldSwapPayload, LeverageYieldCreateIntentError | LeverageYieldLookupError>> {
+    const baseCtx = { srcChainKey: params.srcChainKey, action: 'deposit' satisfies LeverageYieldAction };
     try {
       leverageYieldInvariant(params.inputAmount > 0n, 'inputAmount must be greater than 0', {
         ...baseCtx,
@@ -427,6 +510,9 @@ export class LeverageYieldService {
 
       // lsoda* lands in the hub wallet so a later `withdraw` can spend it from there.
       const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
+      const deadlineResult = await this.resolveDeadline(params.deadline, params.srcChainKey);
+      if (!deadlineResult.ok) return deadlineResult;
+      const deadline = deadlineResult.value;
 
       return {
         ok: true,
@@ -436,7 +522,7 @@ export class LeverageYieldService {
             outputToken: params.vault,
             inputAmount: params.inputAmount,
             minOutputAmount: params.minOutputAmount,
-            deadline: params.deadline ?? BigInt(Math.floor(Date.now() / 1000) + INTENT_DEADLINE_BUFFER_SECONDS),
+            deadline,
             allowPartialFill: false,
             srcChainKey: params.srcChainKey,
             dstChainKey: this.hubProvider.chainConfig.chain.key,
@@ -460,13 +546,18 @@ export class LeverageYieldService {
    * Builds the {@link LeverageYieldSwapPayload} for a leverage-yield withdraw (lsoda* → any
    * token). The payload carries `hubWalletSwap: true` — {@link LeverageYieldService.vaultSwap}
    * then spends the lsoda* held in the user's hub wallet by authorising it via a
-   * `Connection.sendMessage` the user signs on `srcChainKey`. Returned synchronously, wrapped
-   * in a {@link Result} for a call shape uniform with {@link LeverageYieldService.deposit}.
+   * `Connection.sendMessage` the user signs on `srcChainKey`. Wrapped in a {@link Result} for
+   * a call shape uniform with {@link LeverageYieldService.deposit}; async because the default
+   * `deadline` is read from the hub block timestamp.
+   *
+   * For `minOutputAmount`, quote via `sodax.swaps.getQuote` with the vault address as the
+   * source token (`token_src`) — vault shares are solver-tradeable, so the generic swap quote
+   * applies; then subtract your slippage tolerance.
    */
-  public withdraw(
+  public async withdraw(
     params: LeverageYieldSwapWithdrawParams,
-  ): Result<LeverageYieldSwapPayload, LeverageYieldCreateIntentError> {
-    const baseCtx = { srcChainKey: params.srcChainKey, action: 'xwithdraw' as const };
+  ): Promise<Result<LeverageYieldSwapPayload, LeverageYieldCreateIntentError | LeverageYieldLookupError>> {
+    const baseCtx = { srcChainKey: params.srcChainKey, action: 'withdraw' satisfies LeverageYieldAction };
     try {
       leverageYieldInvariant(params.inputAmount > 0n, 'inputAmount must be greater than 0', {
         ...baseCtx,
@@ -478,6 +569,10 @@ export class LeverageYieldService {
         field: 'outputToken',
       });
 
+      const deadlineResult = await this.resolveDeadline(params.deadline, params.srcChainKey);
+      if (!deadlineResult.ok) return deadlineResult;
+      const deadline = deadlineResult.value;
+
       return {
         ok: true,
         value: {
@@ -486,7 +581,7 @@ export class LeverageYieldService {
             outputToken: params.outputToken,
             inputAmount: params.inputAmount,
             minOutputAmount: params.minOutputAmount,
-            deadline: params.deadline ?? BigInt(Math.floor(Date.now() / 1000) + INTENT_DEADLINE_BUFFER_SECONDS),
+            deadline,
             allowPartialFill: false,
             srcChainKey: params.srcChainKey,
             dstChainKey: params.dstChainKey,
@@ -512,7 +607,9 @@ export class LeverageYieldService {
    *
    * Use {@link LeverageYieldService.vaultSwap} for the full end-to-end flow
    * (create → relay → notify solver); use this directly when you need the raw transaction
-   * or drive the relay yourself (e.g. the backend submit-tx path).
+   * or drive the relay yourself (e.g. the backend submit-tx path). To complete a manual flow,
+   * relay the returned `relayData` (the shared `relayTxAndWaitPacket` helper) and then call
+   * {@link LeverageYieldService.notifySolver} with the hub-side intent tx hash.
    *
    * @param _params - Intent parameters, source chain key, wallet provider (when `raw: false`),
    *   and optional `skipSimulation` / `hubWalletSwap` / `partnerFee`.
@@ -605,7 +702,12 @@ export class LeverageYieldService {
 
         const coreSendMessageParams = {
           srcChainKey: params.srcChainKey,
-          srcAddress: walletAddress as GetAddressType<K>,
+          // Personal address — NOT the resolved trading `walletAddress`. SpokeService.sendMessage
+          // re-resolves the effective (Bitcoin trading) address itself; passing the already-resolved
+          // trading address here would double-resolve it (getTradingWallet(tradingAddress) →
+          // "Trading wallet not found"). The trading address is used only for the hub-wallet
+          // derivation above (creatorHubWalletAddress). Mirrors MoneyMarketService borrow/withdraw.
+          srcAddress: personalAddress as GetAddressType<K>,
           dstChainKey: hubChainKey,
           dstAddress: creatorHubWalletAddress,
           payload: data,
@@ -761,7 +863,7 @@ export class LeverageYieldService {
   ): Promise<Result<VaultSwapResponse, LeverageYieldSwapError>> {
     const { params } = _params;
     const srcChainKey = params.srcChainKey;
-    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey };
+    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'vaultSwap' satisfies LeverageYieldAction };
     try {
       const timeout = _params.timeout;
       const createIntentResult = await this.createVaultIntent(_params);
@@ -779,7 +881,7 @@ export class LeverageYieldService {
       if (!verifyTxHashResult.ok) {
         return {
           ok: false,
-          error: verifyFailed('leverageYield', verifyTxHashResult.error, { ...baseCtx, action: 'vaultSwap' }),
+          error: verifyFailed('leverageYield', verifyTxHashResult.error, baseCtx),
         };
       }
 
@@ -797,7 +899,7 @@ export class LeverageYieldService {
         if (!packet.ok) {
           return {
             ok: false,
-            error: mapRelayFailure(packet.error, { feature: 'leverageYield', action: 'vaultSwap', ...baseCtx }),
+            error: mapRelayFailure(packet.error, { feature: 'leverageYield', ...baseCtx }),
           };
         }
         dstIntentTxHash = packet.value.dst_tx_hash;
@@ -832,7 +934,7 @@ export class LeverageYieldService {
       if (isLeverageYieldSwapError(error)) return { ok: false, error };
       return {
         ok: false,
-        error: unknownFailed('leverageYield', error, { ...baseCtx, action: 'vaultSwap' }),
+        error: unknownFailed('leverageYield', error, baseCtx),
       };
     }
   }
@@ -842,8 +944,17 @@ export class LeverageYieldService {
    * Leverage-yield copy of the swap domain's `postExecution` — emits only
    * `EXECUTION_FAILED` / `EXTERNAL_API_ERROR` / `UNKNOWN` (relay/verify codes appear only
    * on {@link LeverageYieldService.vaultSwap}, which owns the verify + relay steps).
+   *
+   * Called automatically by {@link LeverageYieldService.vaultSwap} after the relay packet
+   * lands on the hub. Public so callers who created the intent via
+   * {@link LeverageYieldService.createVaultIntent} and relayed it themselves can finish the
+   * flow manually.
+   *
+   * @param request - `{ intent_tx_hash }` — the hub-chain (Sonic) tx hash where the intent
+   *   was registered (the relay packet's `dst_tx_hash`, or the spoke tx hash for hub-sourced
+   *   intents).
    */
-  private async notifySolver(
+  public async notifySolver(
     request: SolverExecutionRequest,
   ): Promise<Result<SolverExecutionResponse, LeverageYieldPostExecutionError>> {
     try {
@@ -885,7 +996,7 @@ export class LeverageYieldService {
   public async approve<R extends boolean = false>(
     params: LeverageYieldApproveParams<R>,
   ): Promise<Result<TxReturnType<HubChainKey, R>, LeverageYieldApproveError>> {
-    const baseCtx = { action: 'approve' as const };
+    const baseCtx = { action: 'approve' satisfies LeverageYieldAction };
     try {
       leverageYieldInvariant(params.amount > 0n, 'Amount must be greater than 0', { ...baseCtx, field: 'amount' });
       leverageYieldInvariant(params.vault.length > 0, 'Vault address is required', { ...baseCtx, field: 'vault' });
@@ -927,7 +1038,7 @@ export class LeverageYieldService {
   public async isAllowanceValid(
     params: LeverageYieldAllowanceParams,
   ): Promise<Result<boolean, LeverageYieldAllowanceCheckError>> {
-    const baseCtx = { action: 'allowanceCheck' as const };
+    const baseCtx = { action: 'allowanceCheck' satisfies LeverageYieldAction };
     try {
       leverageYieldInvariant(params.amount > 0n, 'Amount must be greater than 0', { ...baseCtx, field: 'amount' });
 
@@ -1082,7 +1193,16 @@ export class LeverageYieldService {
       try {
         const aprPct = await fetchDefillamaApr(source.poolId);
         return { ok: true, value: { aprRay: pctToRay(aprPct), label: source.label, stale: false } };
-      } catch {
+      } catch (fetchError) {
+        // Best-effort: a live-APR fetch failure must not break the parent call, so we fall
+        // back to the registry's hardcoded rate — but surface it via the configured logger
+        // so the stale value is observable rather than silently swallowed.
+        this.config.logger.warn('[leverageYield] DefiLlama APR fetch failed; using fallbackAprPct', {
+          vault,
+          poolId: source.poolId,
+          fallbackAprPct: source.fallbackAprPct,
+          error: fetchError instanceof Error ? fetchError.message : String(fetchError),
+        });
         return {
           ok: true,
           value: { aprRay: pctToRay(source.fallbackAprPct), label: `${source.label} (fallback)`, stale: true },

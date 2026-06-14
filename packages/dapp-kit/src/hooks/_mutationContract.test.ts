@@ -27,6 +27,7 @@ const HOOKS: Array<{ path: string; nativeThrow?: true }> = [
   { path: 'dex/useDexWithdraw.ts' },
   { path: 'dex/useSupplyLiquidity.ts' },
   { path: 'leverageYield/useLeverageYieldDeposit.ts' },
+  { path: 'leverageYield/useLeverageYieldNotifySolver.ts' },
   { path: 'leverageYield/useLeverageYieldVaultSwap.ts' },
   { path: 'leverageYield/useLeverageYieldWithdraw.ts' },
   { path: 'migrate/useMigrateBaln.ts' },

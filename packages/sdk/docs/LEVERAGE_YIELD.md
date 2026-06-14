@@ -120,7 +120,7 @@ The fee is taken inside `createVaultIntent()` (which `vaultSwap()` delegates to)
 
 ### Deposit (any token → `lsoda*`)
 
-`deposit()` builds the `LeverageYieldSwapPayload` — `{ params: CreateIntentParams }` — for swapping any solver-supported `inputToken` on a spoke chain into the vault's `lsoda*` share token. The output is delivered to the user's **hub wallet** on Sonic (not back to the spoke) so a later `withdraw()` can spend it from there. The `deadline` defaults to now + 5 minutes; `solver` defaults to `0x0` (any solver).
+`deposit()` builds the `LeverageYieldSwapPayload` — `{ params: CreateIntentParams }` — for swapping any solver-supported `inputToken` on a spoke chain into the vault's `lsoda*` share token. The output is delivered to the user's **hub wallet** on Sonic (not back to the spoke) so a later `withdraw()` can spend it from there. The `deadline` defaults to the hub (Sonic) block timestamp + 5 minutes — anchored to on-chain time rather than the client clock; `solver` defaults to `0x0` (any solver). To size `minOutputAmount`, quote via `sodax.swaps.getQuote` with the vault address as the destination token (`token_dst`) — `lsoda*` shares are solver-tradeable — then subtract your slippage tolerance.
 
 ```typescript
 import { ChainKeys } from '@sodax/sdk';
@@ -147,10 +147,10 @@ if (intentResult.ok) {
 
 ### Withdraw (`lsoda*` → any token)
 
-`withdraw()` builds the `LeverageYieldSwapPayload` for swapping the vault's `lsoda*` shares — which sit in the user's hub wallet — back into any solver-supported token on any chain. The payload carries **`hubWalletSwap: true`**: `vaultSwap()` then authorises the hub wallet to spend the shares via a `Connection.sendMessage` the user signs on `srcChainKey`, instead of a spoke-side asset-manager deposit. `withdraw()` is synchronous (it does no chain reads) but still returns a `Result` for a call shape uniform with `deposit()`.
+`withdraw()` builds the `LeverageYieldSwapPayload` for swapping the vault's `lsoda*` shares — which sit in the user's hub wallet — back into any solver-supported token on any chain. The payload carries **`hubWalletSwap: true`**: `vaultSwap()` then authorises the hub wallet to spend the shares via a `Connection.sendMessage` the user signs on `srcChainKey`, instead of a spoke-side asset-manager deposit. `withdraw()` is `async` (it reads the hub block timestamp for the default `deadline`) and returns a `Result` for a call shape uniform with `deposit()`. Size `minOutputAmount` the same way as a deposit — `sodax.swaps.getQuote` with the vault address as the **source** token (`token_src`) — then subtract slippage.
 
 ```typescript
-const intentResult = sodax.leverageYield.withdraw({
+const intentResult = await sodax.leverageYield.withdraw({
   vault: vault.vault,
   srcChainKey: ChainKeys.ARBITRUM_MAINNET, // chain the user signs the sendMessage on
   srcAddress: '0xYourArbitrumEOA...',
@@ -203,11 +203,15 @@ Builds the `LeverageYieldSwapPayload` for a withdraw (`lsoda*` → any token), w
 
 ### createVaultIntent
 
-Creates the vault swap intent on the user's source spoke chain without submitting it to the solver — the leverage-yield copy of the swap domain's `createIntent`, honouring `hubWalletSwap` (withdraw routes via a hub-wallet `Connection.sendMessage`) and the per-intent `partnerFee` override. With `raw: true` returns unsigned tx data. Use it directly when you drive the relay yourself (e.g. the backend submit-tx path). **Returns:** `Promise<Result<CreateVaultIntentResult<K, Raw>, LeverageYieldCreateIntentError>>` — `tx`, the constructed `intent` (with `feeAmount`), and `relayData`.
+Creates the vault swap intent on the user's source spoke chain without submitting it to the solver — the leverage-yield copy of the swap domain's `createIntent`, honouring `hubWalletSwap` (withdraw routes via a hub-wallet `Connection.sendMessage`) and the per-intent `partnerFee` override. With `raw: true` returns unsigned tx data. Use it directly when you drive the relay yourself (e.g. the backend submit-tx path): relay the returned `relayData` with the shared `relayTxAndWaitPacket` helper, then call `notifySolver` with the hub-side intent tx hash to complete the flow. **Returns:** `Promise<Result<CreateVaultIntentResult<K, Raw>, LeverageYieldCreateIntentError>>` — `tx`, the constructed `intent` (with `feeAmount`), and `relayData`.
 
 ### vaultSwap
 
 Executes the full end-to-end vault swap: `createVaultIntent` → verify the spoke tx → relay to the hub (skipped when the source is Sonic) → notify the solver. Spread a `LeverageYieldSwapPayload` into it alongside the wallet provider: `vaultSwap({ ...payload, walletProvider })`. **Returns:** `Promise<Result<VaultSwapResponse, LeverageYieldSwapError>>` — `solverExecutionResponse`, `intent`, and `intentDeliveryInfo`. `context.action` is `'vaultSwap'`.
+
+### notifySolver
+
+Notifies the solver that a vault intent has landed on the hub, triggering it to fill — the leverage-yield copy of the swap domain's `postExecution`. `vaultSwap` calls it automatically; it is public so callers who created the intent with `createVaultIntent` and relayed it themselves can finish the flow manually. Pass `{ intent_tx_hash }` — the hub-chain (Sonic) tx hash where the intent registered (the relay packet's `dst_tx_hash`, or the spoke tx hash for hub-sourced intents). **Returns:** `Promise<Result<SolverExecutionResponse, LeverageYieldPostExecutionError>>` — emits only `EXECUTION_FAILED` / `EXTERNAL_API_ERROR` / `UNKNOWN`.
 
 ### approve
 
@@ -276,11 +280,11 @@ type LeverageYieldApr = {
 
 ```typescript
 type LeverageYieldPosition = {
-  collateral: bigint;   // total collateral supplied (asset units, 18 dp)
-  debt: bigint;         // outstanding borrowToken debt
-  ltv: bigint;          // current loan-to-value
-  healthFactor: bigint; // AAVE health factor (fixed-point); below 1.0 implies liquidation risk
-  idleAsset: bigint;    // asset held by the vault but not yet supplied
+  collateral: bigint;   // collateral supplied to the pool — vault-asset units (18 decimals)
+  debt: bigint;         // outstanding borrowToken debt — vault-asset units (18 decimals)
+  ltv: bigint;          // current loan-to-value in basis points (out of 10_000; 8_500 = 85%)
+  healthFactor: bigint; // AAVE health factor in WAD (1e18); below 1e18 implies liquidation risk, type(uint256).max = no debt
+  idleAsset: bigint;    // asset held by the vault but not yet supplied — vault-asset units (18 decimals)
 };
 ```
 
@@ -288,13 +292,14 @@ type LeverageYieldPosition = {
 
 All async public methods return `Promise<Result<T, SodaxError<NarrowCode>>>`. Discriminate on `result.error.code` (a string literal) — never on `result.error.message`. Same canonical shape used by swap, bridge, and money market.
 
-The service owns the full vault-swap lifecycle: `deposit` / `withdraw` build swap payloads, `createVaultIntent` submits the intent on the source spoke chain, `vaultSwap` orchestrates create → verify → relay → notify-solver, `approve` / `isAllowanceValid` manage the Sonic allowance, and the read methods query on-chain state. Relay/tx-verification codes appear **only** on `vaultSwap` — every other method stays within the create-intent, approve, allowance-check, and lookup subsets.
+The service owns the full vault-swap lifecycle: `deposit` / `withdraw` build swap payloads, `createVaultIntent` submits the intent on the source spoke chain, `vaultSwap` orchestrates create → verify → relay → notify-solver, `approve` / `isAllowanceValid` manage the Sonic allowance, and the read methods query on-chain state. Relay/tx-verification codes appear **only** on `vaultSwap`. `deposit` / `withdraw` can additionally emit `LOOKUP_FAILED` (`method: 'resolveDeadline'`) when the default-`deadline` hub-block read fails — an RPC outage, not an intent-build failure. Every other method stays within the create-intent, approve, allowance-check, and lookup subsets.
 
 ### Per-method error code unions
 
 | Method | Narrow type | Codes |
 |---|---|---|
-| `deposit`, `withdraw`, `createVaultIntent` | `LeverageYieldCreateIntentError` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
+| `deposit`, `withdraw` | `LeverageYieldCreateIntentError \| LeverageYieldLookupError` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `LOOKUP_FAILED`, `UNKNOWN` |
+| `createVaultIntent` | `LeverageYieldCreateIntentError` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
 | `vaultSwap` | `LeverageYieldSwapError` | create-intent codes plus `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `EXTERNAL_API_ERROR` |
 | `approve` | `LeverageYieldApproveError` | `VALIDATION_FAILED`, `APPROVE_FAILED`, `UNKNOWN` |
 | `isAllowanceValid` | `LeverageYieldAllowanceCheckError` | `VALIDATION_FAILED`, `ALLOWANCE_CHECK_FAILED`, `UNKNOWN` |
@@ -305,7 +310,7 @@ The broad union type is `LeverageYieldError` (`SodaxError<LeverageYieldErrorCode
 ### Discriminators
 
 - **`context.action`** — the user-facing operation (`'deposit' | 'withdraw' | 'approve' | 'vaultSwap'`).
-- **`context.method`** — partitions `LOOKUP_FAILED` across the read methods (`'getApr'`, `'getPosition'`, `'getMaxWithdrawForUser'`, `'getShareBalance'`, …).
+- **`context.method`** — partitions `LOOKUP_FAILED` across the read methods (`'getApr'`, `'getPosition'`, `'getMaxWithdrawForUser'`, `'getShareBalance'`, …) and `'resolveDeadline'` for the `deposit` / `withdraw` default-deadline read.
 - **`context.field`** — set on `VALIDATION_FAILED` (`'inputAmount'`, `'vault'`, `'inputToken'`, `'outputToken'`, `'amount'`, `'targetLtvBps'`).
 - **`context.phase`** — `'intentCreation' | 'approve' | 'allowanceCheck' | 'lookup' | 'validate' | 'verify' | 'relay' | 'postExecution'`.
 
@@ -314,7 +319,7 @@ The broad union type is `LeverageYieldError` (`SodaxError<LeverageYieldErrorCode
 Use the exported guards instead of `instanceof SodaxError` (bundle-safe):
 
 - `isLeverageYieldError(e)` — broad guard for any leverage-yield error.
-- `isLeverageYieldCreateIntentError(e)` — `deposit` / `withdraw` / `createVaultIntent`.
+- `isLeverageYieldCreateIntentError(e)` — `createVaultIntent` and the create-intent arm of `deposit` / `withdraw` (whose default-deadline read can instead yield a `LOOKUP_FAILED` caught by `isLeverageYieldLookupError`).
 - `isLeverageYieldSwapError(e)` — `vaultSwap`.
 - `isLeverageYieldApproveError(e)` — `approve`.
 - `isLeverageYieldAllowanceCheckError(e)` — `isAllowanceValid`.
@@ -334,6 +339,10 @@ if (!result.ok) {
     case 'INTENT_CREATION_FAILED':
       // Building the swap params failed (e.g. hub-wallet resolution). cause has the original.
       console.error('Intent creation failed:', result.error.cause);
+      break;
+    case 'LOOKUP_FAILED':
+      // An on-chain read failed — e.g. the default-deadline hub-block read (method='resolveDeadline').
+      console.error('Lookup failed:', result.error.context?.method, result.error.cause);
       break;
     case 'UNKNOWN':
       console.error('Unexpected:', result.error.cause);
