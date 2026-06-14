@@ -3,9 +3,9 @@
 // client, and neither @sodax/dapp-kit nor @sodax/sdk ship a utility for this step — every consumer
 // has to hand-roll the per-chain dispatch below. Remaining gaps this file works around:
 //
-// a. No shared sign+broadcast hook/utility. Four of nine chain families (Stellar, Stacks,
-//    Injective, Bitcoin) still cannot be implemented against the current wallet-provider
-//    interfaces — see the `sdk-gap` branches below.
+// a. No shared sign+broadcast hook/utility. Three of nine chain families (Stacks, Injective,
+//    Bitcoin) still cannot be implemented against the current wallet-provider interfaces — see
+//    the `sdk-gap` branches below.
 // b. No `IntentResponseV2` → `IntentRequestV2` converter (see ./mappers.ts).
 // c. `useSwapsApiApprove` cannot auto-invalidate `['swapsApi','allowance']` — confirmation
 //    happens client-side after the hook resolves, so callers refetch allowance manually.
@@ -21,6 +21,7 @@ import type {
   IIconWalletProvider,
   INearWalletProvider,
   ISolanaWalletProvider,
+  IStellarWalletProvider,
   ISuiWalletProvider,
   IWalletProvider,
   IcxCallTransaction,
@@ -29,6 +30,7 @@ import type {
   SolanaChainKey,
   SolanaRawTransaction,
   SpokeChainKey,
+  StellarRawTransaction,
   SuiRawTransaction,
   TxReturnType,
 } from '@sodax/sdk';
@@ -87,13 +89,18 @@ export async function signAndBroadcastSwapsApiTx(args: {
       }
       return await solana.signAndSendTransaction(tx as TxReturnType<SolanaChainKey, true>);
     }
-    case 'STELLAR':
-      throw new SwapsApiSignError(
-        chainKey,
-        'sdk-gap',
-        'Stellar: IStellarWalletProvider.signTransaction can sign the XDR but the interface has no broadcast method (the SDK submits via StellarSpokeService’s Soroban server). Needs a submit surface.',
-        tx,
-      );
+    case 'STELLAR': {
+      const stellar = walletProvider as IStellarWalletProvider;
+      if (!stellar.signAndSendTransaction) {
+        throw new SwapsApiSignError(
+          chainKey,
+          'sdk-gap',
+          'Stellar: this wallet provider does not implement signAndSendTransaction.',
+          tx,
+        );
+      }
+      return await stellar.signAndSendTransaction(tx as StellarRawTransaction);
+    }
     case 'STACKS':
       throw new SwapsApiSignError(
         chainKey,
@@ -124,15 +131,21 @@ export async function signAndBroadcastSwapsApiTx(args: {
 export function isSignableSwapsApiChain(chainKey: SpokeChainKey): boolean {
   const chainType = getXChainType(chainKey);
   return (
-    chainType === 'EVM' || chainType === 'SUI' || chainType === 'ICON' || chainType === 'NEAR' || chainType === 'SOLANA'
+    chainType === 'EVM' ||
+    chainType === 'SUI' ||
+    chainType === 'ICON' ||
+    chainType === 'NEAR' ||
+    chainType === 'SOLANA' ||
+    chainType === 'STELLAR'
   );
 }
 
 /**
  * Wait until the broadcast tx is final enough to re-check allowance / submit to the API.
  * EVM and ICON expose receipts; Solana's signAndSendTransaction returns before confirmation, so
- * await it explicitly. Sui's signAndExecuteTxn and NEAR's signAndSubmitTxn already resolve on
- * execution, so they need no extra wait.
+ * await it explicitly. Stellar's signAndSendTransaction returns once the tx is submitted to Soroban
+ * RPC, so poll Horizon for the receipt. Sui's signAndExecuteTxn and NEAR's signAndSubmitTxn already
+ * resolve on execution, so they need no extra wait.
  */
 export async function waitForTxFinality(
   chainKey: SpokeChainKey,
@@ -146,5 +159,7 @@ export async function waitForTxFinality(
     await (walletProvider as IIconWalletProvider).waitForTransactionReceipt(txHash as Hex);
   } else if (chainType === 'SOLANA') {
     await (walletProvider as ISolanaWalletProvider).waitForConfirmation(txHash, 'confirmed');
+  } else if (chainType === 'STELLAR') {
+    await (walletProvider as IStellarWalletProvider).waitForTransactionReceipt(txHash);
   }
 }

@@ -25,7 +25,10 @@ export type PrivateKeyStellarWalletConfig = {
   type: 'PRIVATE_KEY';
   privateKey: Hex;
   network: StellarNetwork;
+  /** Horizon server URL. Defaults per network. */
   rpcUrl?: string;
+  /** Soroban RPC server URL used to broadcast transactions. Defaults per network. */
+  sorobanRpcUrl?: string;
   defaults?: StellarWalletDefaults;
 };
 
@@ -34,7 +37,10 @@ export type BrowserExtensionStellarWalletConfig = {
   type: 'BROWSER_EXTENSION';
   walletsKit: StellarWalletsKit;
   network: StellarNetwork;
+  /** Horizon server URL. Defaults per network. */
   rpcUrl?: string;
+  /** Soroban RPC server URL used to broadcast transactions. Defaults per network. */
+  sorobanRpcUrl?: string;
   defaults?: StellarWalletDefaults;
 };
 
