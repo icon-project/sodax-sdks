@@ -97,6 +97,46 @@ for (const path of routedGuides) {
   if (!exists(rel)) fail(`${path} should have a sibling CLAUDE.md shim`);
 }
 
+// Dev skills are the ones our AGENTS.md files point at (.claude/skills/<name>/);
+// vendored skills (cloudflare/resend/…) aren't referenced, so the CLI owns them.
+const sodaxDevSkills = [
+  ...new Set(
+    agentFiles
+      .filter(exists)
+      .flatMap(path => [...read(path).matchAll(/\.claude\/skills\/([a-z0-9][a-z0-9-]*)\//g)].map(match => match[1])),
+  ),
+].sort();
+const seenSkillNames = new Map();
+
+for (const skill of sodaxDevSkills) {
+  const dir = `.claude/skills/${skill}`;
+  const skillPath = `${dir}/SKILL.md`;
+  if (!exists(skillPath)) {
+    fail(`Missing dev skill ${skillPath}`);
+    continue;
+  }
+
+  const content = read(skillPath);
+  const frontmatter = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!frontmatter) {
+    fail(`${skillPath} is missing YAML frontmatter`);
+  } else {
+    const block = frontmatter[1];
+    const nameMatch = block.match(/^name:\s*(.+?)\s*$/m);
+    const name = nameMatch ? nameMatch[1].replace(/^['"]|['"]$/g, '').trim() : '';
+    if (!name) fail(`${skillPath} frontmatter is missing 'name'`);
+    if (!/^description:\s*\S/m.test(block)) fail(`${skillPath} frontmatter is missing 'description'`);
+    if (name && name !== skill) fail(`${skillPath} frontmatter name '${name}' must match its directory '${skill}'`);
+    if (name && seenSkillNames.has(name)) fail(`Duplicate dev skill name '${name}'`);
+    if (name) seenSkillNames.set(name, skillPath);
+  }
+
+  // Relative .md links (e.g. references/…) must resolve.
+  for (const match of content.matchAll(/\]\((?!https?:)([^)#]+\.md)(?:#[^)]*)?\)/g)) {
+    if (!existsSync(join(root, dir, match[1]))) fail(`${skillPath} links to missing file ${match[1]}`);
+  }
+}
+
 if (failures.length > 0) {
   console.error('AI dev file validation failed:\n');
   for (const failure of failures) console.error(`- ${failure}`);
@@ -104,5 +144,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `AI dev file validation passed (${agentFiles.length} AGENTS.md files, ${claudeFiles.length} CLAUDE.md shims).`,
+  `AI dev file validation passed (${agentFiles.length} AGENTS.md files, ${claudeFiles.length} CLAUDE.md shims, ${sodaxDevSkills.length} dev skills).`,
 );
