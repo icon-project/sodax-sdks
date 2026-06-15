@@ -3,10 +3,9 @@
 // client, and neither @sodax/dapp-kit nor @sodax/sdk ship a utility for this step — every consumer
 // has to hand-roll the per-chain dispatch below. Remaining gaps this file works around:
 //
-// a. No shared sign+broadcast hook/utility. Stacks still cannot be implemented against the current
-//    wallet-provider interface — see the `sdk-gap` branch below. Bitcoin is signable but not via
-//    this wallet-only dispatcher: its 2-of-2 Bound Exchange trading wallet needs the SDK's
-//    BitcoinSpokeService.signAndSubmitRawTransaction (sign → Bound co-sign + broadcast), which
+// a. No shared sign+broadcast hook/utility — every consumer hand-rolls the per-chain dispatch below.
+//    Bitcoin is the one chain not handled here: its 2-of-2 Bound Exchange trading wallet needs the
+//    SDK's BitcoinSpokeService.signAndSubmitRawTransaction (sign → Bound co-sign + broadcast), which
 //    SwapCard calls directly with the client's Bound session.
 // b. No `IntentResponseV2` → `IntentRequestV2` converter (see ./mappers.ts).
 // c. `useSwapsApiApprove` cannot auto-invalidate `['swapsApi','allowance']` — confirmation
@@ -24,6 +23,7 @@ import type {
   IInjectiveWalletProvider,
   INearWalletProvider,
   ISolanaWalletProvider,
+  IStacksWalletProvider,
   IStellarWalletProvider,
   ISuiWalletProvider,
   IWalletProvider,
@@ -32,8 +32,8 @@ import type {
   NearRawTransaction,
   RawTxReturnType,
   SolanaChainKey,
-  SolanaRawTransaction,
   SpokeChainKey,
+  StacksRawTransaction,
   StellarRawTransaction,
   SuiRawTransaction,
   TxReturnType,
@@ -105,13 +105,18 @@ export async function signAndBroadcastSwapsApiTx(args: {
       }
       return await stellar.signAndSendTransaction(tx as StellarRawTransaction);
     }
-    case 'STACKS':
-      throw new SwapsApiSignError(
-        chainKey,
-        'sdk-gap',
-        'Stacks: the raw tx is a hex-serialized contract-call payload, but IStacksWalletProvider.sendTransaction requires structured StacksTransactionParams (ClarityValue args). Needs payload deserialization or a raw-payload send surface.',
-        tx,
-      );
+    case 'STACKS': {
+      const stacks = walletProvider as IStacksWalletProvider;
+      if (!stacks.signAndSendTransaction) {
+        throw new SwapsApiSignError(
+          chainKey,
+          'sdk-gap',
+          'Stacks: this wallet provider does not implement signAndSendTransaction.',
+          tx,
+        );
+      }
+      return await stacks.signAndSendTransaction(tx as StacksRawTransaction);
+    }
     case 'INJECTIVE': {
       const injective = walletProvider as IInjectiveWalletProvider;
       if (!injective.signAndSendTransaction) {
@@ -150,6 +155,7 @@ export function isSignableSwapsApiChain(chainKey: SpokeChainKey): boolean {
     chainType === 'NEAR' ||
     chainType === 'SOLANA' ||
     chainType === 'STELLAR' ||
+    chainType === 'STACKS' ||
     chainType === 'INJECTIVE'
   );
 }
