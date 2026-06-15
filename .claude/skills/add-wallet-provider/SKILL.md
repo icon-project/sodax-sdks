@@ -19,16 +19,22 @@ description: 'Use when adding a WALLET to the SODAX SDK for a chain that is ALRE
 
 The wallet layer is two independent slices: **wallet-sdk-core** signs/broadcasts (`I<Chain>WalletProvider` over `BaseWalletProvider`); **wallet-sdk-react** connects the browser wallet (`XConnector`) and exposes it to React via `chainRegistry.ts`. Most "add a wallet" tasks are Case A.
 
-## Case A — a new connector for an existing chain (the common path)
+## Case A — a new wallet for an existing chain (`wallet-sdk-react` only)
 
-`wallet-sdk-react` only. Applies to **non-provider-managed** chains (Bitcoin, Stellar, Icon, Injective, NEAR, Stacks). EVM/Solana/Sui are provider-managed — see the caveat.
+**First find the chain's registration pattern in `chainRegistry.ts` — it differs by family, and it decides whether you write a new class at all:**
 
-1. **Connector class** — `src/xchains/<chain>/<Wallet>XConnector.ts`, extending the chain's connector base (e.g. `BitcoinXConnector`, itself extending `XConnector`). Start from a sibling (`UnisatXConnector` / `XverseXConnector` / `OKXXConnector` for Bitcoin). Implement the base's abstract methods — for Bitcoin: `connect()`, `disconnect()`, `getWalletProvider()`, `recreateWalletProvider(xAccount)` — plus `isInstalled` / `installUrl` overrides. The connector builds the matching `I<Chain>WalletProvider` from `wallet-sdk-core`, forwarding `this.defaults`.
-2. **Register** — in `chainRegistry.ts`: import the class and add `new <Wallet>XConnector(defaults)` to that chain's `defaultConnectors(...)` array. Keep the connector `id` and install metadata **stable** — they key persisted connections and the modal.
-3. **Runtime-detected wallets** — if the wallet is only discoverable at runtime (browser scan, manifest), surface it via the entry's `discoverConnectors` (like Stellar/NEAR), not `defaultConnectors`.
-4. **Tests** — `<Wallet>XConnector.test.ts` covering `connect` / `disconnect` / `isInstalled` / `installUrl`; extend `chainRegistry.test.ts` only if registry behavior changed.
+| Chain(s) | Pattern | Add a wallet by |
+| --- | --- | --- |
+| Bitcoin, Icon | one `XConnector` subclass **per wallet**, listed in `defaultConnectors` | write `<Wallet>XConnector` (extend the chain's connector base) **and** add `new <Wallet>XConnector(defaults)` to the array |
+| Injective, Stacks | **one** connector class, multiple parameterized **instances** | add an instance — Injective `new InjectiveXConnector('Name', Wallet.X)`, Stacks add to `STACKS_PROVIDERS` — usually **no new class** |
+| Stellar, NEAR | runtime **discovery** via an aggregator (`discoverConnectors`) | the wallet set comes from the Stellar Wallets Kit / NEAR wallet-selector — support is added through the aggregator, not a hand-written connector |
+| EVM, Solana, Sui | **provider-managed** (native SDK) | not Case A — see the caveat |
 
-**Provider-managed caveat (EVM / Solana / Sui):** their connectors come from the native SDK (wagmi / wallet-adapter) through the `providers/<chain>/` Hydrator, **not** hand-written `XConnector`s — `defaultConnectors` is ignored for these. To support another EVM wallet, add it through the native connector config (a wagmi connector, or `EVM.walletConnect`), not a new `XConnector`.
+**Writing a connector** (Bitcoin / Icon pattern): `src/xchains/<chain>/<Wallet>XConnector.ts` extending the chain's connector base (e.g. `BitcoinXConnector`, itself extending `XConnector`). Implement the base's abstract methods — for Bitcoin: `connect()`, `disconnect()`, `getWalletProvider()`, `recreateWalletProvider(xAccount)` — plus `isInstalled` / `installUrl`. It builds the matching `I<Chain>WalletProvider` from `wallet-sdk-core`, forwarding `this.defaults`. Keep the connector `id` and install metadata **stable** — they key persisted connections and the modal.
+
+**Tests** — `<Wallet>XConnector.test.ts` covering `connect` / `disconnect` / `isInstalled` / `installUrl`; extend `chainRegistry.test.ts` only if registry behavior changed.
+
+**Provider-managed caveat (EVM / Solana / Sui):** their connectors come from the native SDK (wagmi / wallet-adapter) through the `providers/<chain>/` Hydrator — `defaultConnectors` is `[]` and ignored. To support another EVM wallet, add it through the native connector config (a wagmi connector, or `EVM.walletConnect`), not a new `XConnector`.
 
 ## Case B — a new signing variant on an existing core provider
 

@@ -8,7 +8,7 @@ covers. Verify class names and the base's abstract methods against current `src/
 ## 1. Connector class
 `src/xchains/bitcoin/LeatherXConnector.ts`, extending `BitcoinXConnector` (which extends `XConnector`
 via `super('BITCOIN', name, id)`). Mirror `UnisatXConnector`:
-- `connect()` → call the wallet's `window` API and return an `XAccount` `{ address, xChainType: 'BITCOIN' }`.
+- `connect()` → call the wallet's `window` API and return an `XAccount` `{ address, xChainType: 'BITCOIN' }`. Match the existing connectors' **address purpose** — Taproot/Ordinals by default to match Bound Exchange (see `XverseXConnector`).
 - `disconnect()`.
 - `getWalletProvider()` / `recreateWalletProvider(xAccount)` → return the `IBitcoinWalletProvider` the
   connector wraps (built from `wallet-sdk-core`), forwarding `this.defaults`. `recreateWalletProvider`
@@ -46,3 +46,4 @@ capability is selected at runtime by the `hasSignBip322` / `hasSignEcdsa` guards
 - **No** `wallet-sdk-core` change — the existing `BitcoinWalletProvider` covers it.
 - **No** `chainRegistry` shape change, no `types/config.ts` change (no new chain type).
 - **No** new `XService` — `BitcoinXService` is shared across all Bitcoin connectors.
+- **No** SDK change — Bitcoin's SDK-side trading-wallet model (RadFi/Bound — `packages/sdk/src/shared/entities/btc/RadfiProvider.ts`, `BitcoinSpokeService`) is **separate**; a wallet connector does not touch it. That model is add-chain / SDK territory.
