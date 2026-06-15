@@ -1,7 +1,7 @@
 /**
  * Tests for EvmSpokeService — handles all EVM spoke chains (Ethereum, Arbitrum, Base, BSC,
- * Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia). Sonic is the hub and is
- * covered by SonicSpokeService.test.ts.
+ * Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia, Hedera). Sonic is the hub
+ * and is covered by SonicSpokeService.test.ts.
  *
  * Issue #109 — enable tests for all spoke services. Coverage is structured around multi-chain
  * parametrisation:
@@ -11,12 +11,12 @@
  *      chain-independent; multi-chain isolation is folded into a dedicated getPublicClient test.
  *
  *   2. **Per-chain method coverage** — every config-consuming public method runs through
- *      `describe.each(TEST_CHAINS)` against all 11 EVM spokes. Catches per-chain regressions:
+ *      `describe.each(TEST_CHAINS)` against all 12 EVM spokes. Catches per-chain regressions:
  *      hardcoded addresses, wrong-chain config lookups, cache returning the wrong client.
  *
  *   3. **Chain-independent branches** — error handling, parameter defaults, relayId derivation,
  *      and viem-response-mapping branches. Run on ARB only because the code path doesn't depend
- *      on the chain (a regression there would surface on every chain identically, so 11×
+ *      on the chain (a regression there would surface on every chain identically, so 12×
  *      parametrisation is redundant).
  *
  *   4. **Cross-chain independence** — proves chains don't bleed into each other: distinct cached
@@ -69,6 +69,7 @@ const evmSpoke = sodax.spoke.evm;
 const ARB = ChainKeys.ARBITRUM_MAINNET;
 const BASE = ChainKeys.BASE_MAINNET;
 const SONIC = ChainKeys.SONIC_MAINNET; // sendMessage destination (hub chain)
+const HEDERA = ChainKeys.HEDERA_MAINNET; // the only chain that scales native msg.value (see below)
 
 const arbConfig = spokeChainConfig[ARB];
 const ARB_ASSET_MANAGER = arbConfig.addresses.assetManager as Address;
@@ -78,6 +79,20 @@ const ARB_RPC = arbConfig.rpcUrl;
 // A real ERC-20 deployed on Arbitrum (sourced from chain config). Grounds chain-independent
 // branch tests in actual on-chain data.
 const ARB_TOKEN: Address = arbConfig.bnUSD as Address;
+
+const hederaConfig = spokeChainConfig[HEDERA];
+const HEDERA_ASSET_MANAGER = hederaConfig.addresses.assetManager as Address;
+const HEDERA_NATIVE = hederaConfig.nativeToken as Address;
+const HEDERA_TOKEN: Address = hederaConfig.bnUSD as Address;
+
+// HBAR is tracked as 8 decimals in spoke accounting, but Hedera's EVM layer treats native
+// msg.value as 18 decimals, so a native deposit's msg.value is multiplied by 10^10 (the
+// transfer calldata amount stays in 8). Every other chain passes the amount through unscaled.
+// Mirrors `scaleNativeMsgValue` in EvmSpokeService.ts; the dedicated invariant suite below pins
+// the literal values independently.
+const HEDERA_NATIVE_VALUE_SCALE = 10n ** 10n;
+const scaleNativeMsgValue = (chainKey: EvmSpokeOnlyChainKey, amount: bigint): bigint =>
+  chainKey === HEDERA ? amount * HEDERA_NATIVE_VALUE_SCALE : amount;
 
 // Per-user / per-flow inputs — these represent test users and call destinations, not
 // infrastructure, so they have no config source.
@@ -110,6 +125,7 @@ const TEST_CHAINS = [
   ChainKeys.LIGHTLINK_MAINNET,
   ChainKeys.REDBELLY_MAINNET,
   ChainKeys.KAIA_MAINNET,
+  ChainKeys.HEDERA_MAINNET,
 ] as const satisfies readonly EvmSpokeOnlyChainKey[];
 
 // Warm the publicClients cache for ARB so chain-independent test spies have a stable client
@@ -213,10 +229,10 @@ describe('EvmSpokeService.getPublicClient', () => {
 });
 
 // =========================================================================
-// 2. Per-chain method coverage — every config-consuming method across all 11 EVM spokes
+// 2. Per-chain method coverage — every config-consuming method across all 12 EVM spokes
 // =========================================================================
 //
-// EvmSpokeService is generic over the 11 non-hub EVM spoke chains. Restricting coverage to one
+// EvmSpokeService is generic over the 12 non-hub EVM spoke chains. Restricting coverage to one
 // chain misses regressions where:
 //   - chain-specific addresses are hardcoded inside the SUT (only matter where addresses diverge),
 //   - `getChainConfig` always reads ARB regardless of `srcChainKey`,
@@ -224,12 +240,12 @@ describe('EvmSpokeService.getPublicClient', () => {
 //   - `getEvmViemChain()` has a switch hole for one chain.
 // Every method whose output depends on chain config (assetManager, connection, nativeToken) or
 // on per-chain client routing is parametrised. Chain-independent error / mapping branches sit
-// in section 3 to avoid redundant 11× runs of identical logic.
+// in section 3 to avoid redundant 12× runs of identical logic.
 //
 // Address diversity (drawn from chains.ts):
-//   assetManager: 5 distinct values across 11 chains
-//   connection:   5 distinct values across 11 chains
-//   bnUSD:       11 distinct values across 11 chains
+//   assetManager: 7 distinct values across 12 chains
+//   connection:   4 distinct values across 12 chains
+//   bnUSD:       11 distinct values across 12 chains
 // Hardcode regressions surface on any chain whose value diverges from the hardcoded sample.
 
 describe.each(TEST_CHAINS)('EvmSpokeService — %s', chainKey => {
@@ -363,7 +379,7 @@ describe.each(TEST_CHAINS)('EvmSpokeService — %s', chainKey => {
       });
     });
 
-    it("native raw=true → value=amount when token matches this chain's nativeToken", async () => {
+    it("native raw=true → msg.value uses this chain's native scaling when token matches nativeToken", async () => {
       const result = await evmSpoke.deposit({
         srcAddress: SRC_ADDR,
         srcChainKey: chainKey,
@@ -377,7 +393,9 @@ describe.each(TEST_CHAINS)('EvmSpokeService — %s', chainKey => {
       expect(result).toEqual({
         from: SRC_ADDR,
         to: ASSET_MANAGER,
-        value: 1_000n,
+        // Unscaled (amount) everywhere except Hedera, where HBAR's msg.value is ×10^10. The
+        // transfer calldata amount stays unscaled on every chain (verified below).
+        value: scaleNativeMsgValue(chainKey, 1_000n),
         data: expectedCalldata(NATIVE, 1_000n),
       });
     });
@@ -396,7 +414,7 @@ describe.each(TEST_CHAINS)('EvmSpokeService — %s', chainKey => {
       });
       expect(result).toBe(TX_HASH);
       expect(mockEvmProvider.sendTransaction).toHaveBeenCalledWith(
-        expect.objectContaining({ to: ASSET_MANAGER, value: 1_000n }),
+        expect.objectContaining({ to: ASSET_MANAGER, value: scaleNativeMsgValue(chainKey, 1_000n) }),
       );
     });
   });
@@ -411,8 +429,8 @@ describe.each(TEST_CHAINS)('EvmSpokeService — %s', chainKey => {
 
     it("raw=true → rawTx targets this chain's connection with relay-id-encoded calldata", async () => {
       // BSC, HyperEVM, Lightlink, and Redbelly have connection addresses distinct from the
-      // ARB/BASE/OPT/POL/AVAX/ETH/KAIA group. Their iterations are the actual catchers for a
-      // "connection address hardcoded from one sample chain" regression.
+      // ARB/BASE/OPT/POL/AVAX/ETH/KAIA/HEDERA group. Their iterations are the actual catchers for
+      // a "connection address hardcoded from one sample chain" regression.
       const result = await evmSpoke.sendMessage({
         srcAddress: SRC_ADDR,
         srcChainKey: chainKey,
@@ -489,7 +507,7 @@ describe.each(TEST_CHAINS)('EvmSpokeService — %s', chainKey => {
 //
 // These tests exercise code paths whose behaviour is identical across all chains: error wrapping,
 // parameter defaults, comparison logic (toLowerCase), viem-response field mapping. Running them
-// 11× over TEST_CHAINS would be pure noise — a regression in any of these surfaces uniformly on
+// 12× over TEST_CHAINS would be pure noise — a regression in any of these surfaces uniformly on
 // every chain, so one chain (ARB) suffices to catch it.
 
 describe('EvmSpokeService.estimateGas — bigint precision', () => {
@@ -585,6 +603,79 @@ describe('EvmSpokeService.deposit — chain-independent branches', () => {
 
     const result = await evmSpoke.deposit(params);
     expect(result.data).toBe(expectedCalldata(ARB_TOKEN, 1_000n, '0x'));
+  });
+});
+
+// =========================================================================
+// 3a. Hedera native msg.value scaling (scaleNativeMsgValue) — the core new behaviour of this PR
+// =========================================================================
+//
+// HBAR is accounted in 8 decimals but Hedera's EVM layer expects native msg.value in 18 decimals.
+// EvmSpokeService.deposit therefore multiplies a *native* HBAR deposit's msg.value by 10^10, while
+// leaving the asset-manager `transfer` calldata amount in 8 decimals. The three-way contract is
+// pinned here with literal values (independent of the SUT's own constant):
+//   - HBAR native deposit       → msg.value = amount * 10^10   (scaled), calldata amount unscaled
+//   - non-native Hedera deposit → msg.value = 0n               (ERC-20 path, no scaling)
+//   - non-Hedera native deposit → msg.value = amount           (existing behaviour, unscaled)
+describe('EvmSpokeService.deposit — Hedera native msg.value scaling', () => {
+  const expectedCalldata = (token: Address, amount: bigint, data: Hex = '0x'): Hex =>
+    encodeFunctionData({
+      abi: spokeAssetManagerAbi,
+      functionName: 'transfer',
+      args: [token, HUB_WALLET, amount, data],
+    });
+
+  it('scales a native HBAR deposit msg.value by 10^10 while leaving the transfer amount in 8 decimals', async () => {
+    const result = await evmSpoke.deposit({
+      srcAddress: SRC_ADDR,
+      srcChainKey: HEDERA,
+      to: HUB_WALLET,
+      token: HEDERA_NATIVE,
+      amount: 1_000n,
+      data: '0x' as Hex,
+      raw: true,
+    });
+
+    expect(result).toEqual({
+      from: SRC_ADDR,
+      to: HEDERA_ASSET_MANAGER,
+      // 1_000n * 10^10. Literal here so a change to HEDERA_NATIVE_VALUE_SCALE in the SUT (or this
+      // test's mirror) can't silently agree with itself.
+      value: 10_000_000_000_000n,
+      // Calldata amount stays unscaled (8-decimal HBAR) — only msg.value is scaled.
+      data: expectedCalldata(HEDERA_NATIVE, 1_000n),
+    });
+  });
+
+  it('leaves msg.value at 0n for a non-native Hedera (ERC-20) deposit — no scaling', async () => {
+    const result = await evmSpoke.deposit({
+      srcAddress: SRC_ADDR,
+      srcChainKey: HEDERA,
+      to: HUB_WALLET,
+      token: HEDERA_TOKEN,
+      amount: 1_000n,
+      data: '0x' as Hex,
+      raw: true,
+    });
+
+    expect(result.value).toBe(0n);
+    expect(result.to).toBe(HEDERA_ASSET_MANAGER);
+    expect(result.data).toBe(expectedCalldata(HEDERA_TOKEN, 1_000n));
+  });
+
+  it('passes a non-Hedera native deposit msg.value through unscaled (Arbitrum)', async () => {
+    const result = await evmSpoke.deposit({
+      srcAddress: SRC_ADDR,
+      srcChainKey: ARB,
+      to: HUB_WALLET,
+      token: ARB_NATIVE,
+      amount: 1_000n,
+      data: '0x' as Hex,
+      raw: true,
+    });
+
+    // Unchanged existing behaviour: value === amount, no 10^10 factor.
+    expect(result.value).toBe(1_000n);
   });
 });
 
@@ -789,7 +880,7 @@ describe('EvmSpokeService — cross-chain independence', () => {
   it('getPublicClient returns a distinct cached instance for every chain (all-pairs)', () => {
     // All-pairs comparison catches a map keyed wrong even if some entries happen to collide
     // (e.g. a regression that stored every chain under the same key would have 1 distinct
-    // client across 11 keys — easily detected here).
+    // client across 12 keys — easily detected here).
     const clients = TEST_CHAINS.map(k => evmSpoke.getPublicClient(k));
     for (let i = 0; i < clients.length; i++) {
       for (let j = i + 1; j < clients.length; j++) {
@@ -815,7 +906,7 @@ describe('EvmSpokeService — cross-chain independence', () => {
 
     // Every chain key must appear in the spy's calls. A regression that snapshotted chainKey
     // at module-init (or hardcoded a specific chain) would show one key dominating the call
-    // list and the other 10 missing.
+    // list and the other 11 missing.
     for (const chainKey of TEST_CHAINS) {
       expect(spy).toHaveBeenCalledWith(chainKey);
     }
