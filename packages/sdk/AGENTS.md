@@ -83,6 +83,8 @@ try {
 5. Add or update unit tests beside the changed code.
 6. Update `docs/` and `packages/skills` only when public SDK behavior, imports, signatures, or examples changed.
 
+To scaffold a **whole new feature/service**, use the `add-feature` skill (`.claude/skills/add-feature/`) — it covers the `Sodax` facade wiring, the `src/index.ts` barrel, and the error/dapp-kit footprint.
+
 To **add a token**, use the `add-token` skill (`.claude/skills/add-token/`); token config lives in `@sodax/types`, not here.
 
 To **add a chain** (new spoke), use the `add-chain` skill (`.claude/skills/add-chain/`); it covers the spoke service + router here plus the cross-package steps in `@sodax/types` and the wallet packages.
