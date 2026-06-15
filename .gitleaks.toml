@@ -1,0 +1,52 @@
+# gitleaks configuration for sodax-sdks.
+#
+# Extends the default gitleaks ruleset and allowlists the false positives a
+# web3 monorepo produces: public on-chain addresses and test fixtures trip the
+# entropy-based `generic-api-key` rule. A real private key (`0x` + 64 hex) is
+# deliberately NOT allowlisted and still fails the scan.
+
+title = "sodax-sdks gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public on-chain addresses, chain ids, and test fixtures (not secrets)"
+paths = [
+  '''.*\.test\.(ts|tsx)$''',
+  '''.*\.spec\.(ts|tsx)$''',
+  '''(^|/)__mocks__/''',
+  '''(^|/)node_modules/''',
+  '''(^|/)dist/''',
+  '''(^|/)\.git/''',
+  '''pnpm-lock\.yaml$''',
+  # AI-agent tooling dirs: vendored third-party skill docs (Cloudflare, Resend,
+  # …) carry example API keys/curl headers. Docs, not production secrets.
+  '''(^|/)\.claude/''',
+  '''(^|/)\.agents/''',
+  '''(^|/)\.github/skills/''',
+  # Build outputs / coverage (gitignored, generated — not source).
+  '''(^|/)\.next/''',
+  '''(^|/)build/''',
+  '''(^|/)coverage/''',
+  # Documentation: example addresses/hashes/keys are illustrative, not secrets
+  # (Biome likewise excludes **/*.md). The gate targets code and config.
+  '''.*\.md$''',
+]
+regexes = [
+  # EVM address: 0x + exactly 40 hex. The trailing \b stops this from matching
+  # a 0x + 64 hex private key, which must still be flagged.
+  '''\b0x[a-fA-F0-9]{40}\b''',
+  # Stellar account (G...) / contract (C...) address: base32, 56 chars.
+  '''\b[GC][A-Z2-7]{55}\b''',
+  # "<hex>.<chain>" blockchain id, e.g. 0xa4b1.arbitrum, 0x38.bsc.
+  '''0x[a-fA-F0-9]+\.[a-z0-9-]+''',
+  # Code identifiers the keyword heuristic flags but that are not values:
+  # a TypeScript type name and a contract-method reference in a doc comment.
+  '''Ed25519SecretKey''',
+  '''ERC20\.approve''',
+  # Documented mock ICON key in the CJS interop harness (a repeating test
+  # vector, explicitly "do not use in production") — not a real secret. Scoped
+  # to this exact pattern so a genuine 0x+64-hex key is still flagged.
+  '''0x(?:11223344556677889900aabbccddeeff){2}''',
+]
