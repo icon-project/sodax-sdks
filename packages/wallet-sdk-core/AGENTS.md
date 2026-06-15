@@ -91,6 +91,8 @@ new BitcoinWalletProvider({
 ### Adding a New Chain Provider
 
 > The provider here is one slice of a full chain integration. For the end-to-end cross-package flow (types, sdk spoke, wallet-sdk-react), use the `add-chain` skill (`.claude/skills/add-chain/`).
+>
+> To add a new **signing-config variant** to an existing provider (e.g. a mnemonic mode) or a new **wallet connector** to a chain that already exists, use the `add-wallet-provider` skill (`.claude/skills/add-wallet-provider/`).
 
 Follow an existing implementation (e.g. `evm/`):
 1. Create folder `src/wallet-providers/<chain>/`
