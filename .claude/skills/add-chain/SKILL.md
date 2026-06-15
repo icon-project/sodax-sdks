@@ -25,7 +25,7 @@ Each ✓ feature then drives its own touch points (e.g. money-market token wirin
 
 | Family | Spoke service | Footprint |
 | --- | --- | --- |
-| **EVM** | reuses the single shared **`EvmSpokeService`** (`EvmChainKey = ChainKeysByType<'EVM'>`) | **small** — mostly `@sodax/types` config |
+| **EVM** | reuses the single shared **`EvmSpokeService`** (`EvmChainKey = ChainKeysByType<'EVM'>`) | **small but NOT config-only** — no new spoke service, yet still the hardcoded viem/wagmi maps across sdk + both wallet packages (see the EVM example) |
 | **New non-EVM** (Solana/Sui/Stacks/Near/Stellar/Icon/Injective-like) | a **new `<Chain>SpokeService`** | **large** — full cross-package integration |
 | **Bitcoin-like** | `BitcoinSpokeService` + `entities/btc/` trading-wallet (RadFi/Bound) model | **special** — different shape, do not generalize |
 
