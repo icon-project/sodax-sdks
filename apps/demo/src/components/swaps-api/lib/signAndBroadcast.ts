@@ -3,9 +3,9 @@
 // client, and neither @sodax/dapp-kit nor @sodax/sdk ship a utility for this step — every consumer
 // has to hand-roll the per-chain dispatch below. Remaining gaps this file works around:
 //
-// a. No shared sign+broadcast hook/utility. Three of nine chain families (Stacks, Injective,
-//    Bitcoin) still cannot be implemented against the current wallet-provider interfaces — see
-//    the `sdk-gap` branches below.
+// a. No shared sign+broadcast hook/utility. Two of nine chain families (Stacks, Bitcoin) still
+//    cannot be implemented against the current wallet-provider interfaces — see the `sdk-gap`
+//    branches below.
 // b. No `IntentResponseV2` → `IntentRequestV2` converter (see ./mappers.ts).
 // c. `useSwapsApiApprove` cannot auto-invalidate `['swapsApi','allowance']` — confirmation
 //    happens client-side after the hook resolves, so callers refetch allowance manually.
@@ -19,12 +19,14 @@ import type {
   Hex,
   IEvmWalletProvider,
   IIconWalletProvider,
+  IInjectiveWalletProvider,
   INearWalletProvider,
   ISolanaWalletProvider,
   IStellarWalletProvider,
   ISuiWalletProvider,
   IWalletProvider,
   IcxCallTransaction,
+  InjectiveRawTransaction,
   NearRawTransaction,
   RawTxReturnType,
   SolanaChainKey,
@@ -108,13 +110,18 @@ export async function signAndBroadcastSwapsApiTx(args: {
         'Stacks: the raw tx is a hex-serialized contract-call payload, but IStacksWalletProvider.sendTransaction requires structured StacksTransactionParams (ClarityValue args). Needs payload deserialization or a raw-payload send surface.',
         tx,
       );
-    case 'INJECTIVE':
-      throw new SwapsApiSignError(
-        chainKey,
-        'sdk-gap',
-        'Injective: the raw tx is { from, to, signedDoc } whose Uint8Array fields do not survive JSON, and IInjectiveWalletProvider.execute() requires the structured contract msg, which cannot be recovered from a SignDoc.',
-        tx,
-      );
+    case 'INJECTIVE': {
+      const injective = walletProvider as IInjectiveWalletProvider;
+      if (!injective.signAndSendTransaction) {
+        throw new SwapsApiSignError(
+          chainKey,
+          'sdk-gap',
+          'Injective: this wallet provider does not implement signAndSendTransaction.',
+          tx,
+        );
+      }
+      return await injective.signAndSendTransaction(tx as InjectiveRawTransaction);
+    }
     case 'BITCOIN':
       throw new SwapsApiSignError(
         chainKey,
@@ -136,7 +143,8 @@ export function isSignableSwapsApiChain(chainKey: SpokeChainKey): boolean {
     chainType === 'ICON' ||
     chainType === 'NEAR' ||
     chainType === 'SOLANA' ||
-    chainType === 'STELLAR'
+    chainType === 'STELLAR' ||
+    chainType === 'INJECTIVE'
   );
 }
 
@@ -144,8 +152,9 @@ export function isSignableSwapsApiChain(chainKey: SpokeChainKey): boolean {
  * Wait until the broadcast tx is final enough to re-check allowance / submit to the API.
  * EVM and ICON expose receipts; Solana's signAndSendTransaction returns before confirmation, so
  * await it explicitly. Stellar's signAndSendTransaction returns once the tx is submitted to Soroban
- * RPC, so poll Horizon for the receipt. Sui's signAndExecuteTxn and NEAR's signAndSubmitTxn already
- * resolve on execution, so they need no extra wait.
+ * RPC, so poll Horizon for the receipt. Sui's signAndExecuteTxn, NEAR's signAndSubmitTxn, and
+ * Injective's signAndSendTransaction (which broadcasts via TxGrpcApi) already resolve on execution,
+ * so they need no extra wait.
  */
 export async function waitForTxFinality(
   chainKey: SpokeChainKey,
