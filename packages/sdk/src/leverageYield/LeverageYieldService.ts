@@ -34,7 +34,7 @@ import type {
   SpokeExecActionParams,
   TxReturnType,
 } from '@sodax/types';
-import { parseAbi } from 'viem';
+import { erc20Abi, parseAbi } from 'viem';
 import type { ConfigService } from '../shared/config/ConfigService.js';
 import type { CreateIntentParams, Intent } from '../shared/types/intent-types.js';
 import { EvmSolverService } from '../swap/EvmSolverService.js';
@@ -424,9 +424,9 @@ export type LeverageYieldServiceConstructorParams = {
  * - `listVaults` / `getVault` / `getVaultByAddress` — registry lookups.
  */
 export class LeverageYieldService {
-  public readonly hubProvider: HubProvider;
-  public readonly config: ConfigService;
-  public readonly spoke: SpokeService;
+  private readonly hubProvider: HubProvider;
+  private readonly config: ConfigService;
+  private readonly spoke: SpokeService;
 
   constructor({ hubProvider, config, spoke }: LeverageYieldServiceConstructorParams) {
     this.hubProvider = hubProvider;
@@ -647,7 +647,7 @@ export class LeverageYieldService {
       );
       leverageYieldInvariant(
         this.config.isValidOriginalAssetAddress(params.dstChainKey, params.outputToken),
-        `Unsupported spoke chain token (params.dstChain): ${params.dstChainKey}, params.outputToken): ${params.outputToken}`,
+        `Unsupported spoke chain token (params.dstChain: ${params.dstChainKey}, params.outputToken: ${params.outputToken})`,
         { ...baseCtx, field: 'outputToken' },
       );
       leverageYieldInvariant(
@@ -1049,7 +1049,7 @@ export class LeverageYieldService {
 
       const allowance = await this.hubProvider.publicClient.readContract({
         address: assetResult.value,
-        abi: parseAbi(['function allowance(address,address) view returns (uint256)']),
+        abi: erc20Abi,
         functionName: 'allowance',
         args: [params.owner, params.vault],
       });
@@ -1286,7 +1286,7 @@ export class LeverageYieldService {
     try {
       const value = await this.hubProvider.publicClient.readContract({
         address: vault,
-        abi: parseAbi(['function balanceOf(address) view returns (uint256)']),
+        abi: erc20Abi,
         functionName: 'balanceOf',
         args: [owner],
       });
