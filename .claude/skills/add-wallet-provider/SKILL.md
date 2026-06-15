@@ -7,7 +7,8 @@ description: 'Use when adding a WALLET to the SODAX SDK for a chain that is ALRE
 
 > Verify every class, base, and registry slot against current `src/` before copying — the wallet
 > layer refactors. This skill adds a wallet to an **already-integrated chain**. A brand-new chain
-> (new `ChainType` + its own SpokeService) is the **add-chain** skill instead.
+> (new `ChainType` + its own SpokeService — e.g. Aleo) is the **add-chain** skill instead; it picks
+> the chain's first connector from the same pattern table below.
 
 ## First: which case?
 
