@@ -26,7 +26,13 @@ export type UseLeverageYieldShareBalancesParams = ReadHookParams<
  * position under — one query per holder, fanned out via `useQueries`.
  *
  * For each `(chainKey, address)` the holder is resolved to the address that actually owns the
- * shares: the user's EOA when `chainKey` is the hub chain, otherwise their derived hub wallet.
+ * shares: the user's **derived hub wallet** on every chain, including the hub itself. Leverage
+ * deposits always deliver `lsoda*` to `getUserHubWalletAddress(srcAddress, srcChainKey)` (the
+ * CREATE3 user-router on Sonic for a hub-sourced deposit, the per-spoke hub wallet otherwise) —
+ * never the bare EOA — so a hub-chain deposit's shares live in the router, not the signing EOA.
+ * Resolving the holder the same way the deposit does is what makes a Sonic-sourced position show
+ * up here instead of reading a stale zero off the EOA.
+ *
  * Returns the raw `useQueries` result array (15s refresh per query); callers aggregate as needed
  * (e.g. sum `shares` for a headline total, or pick the row for the active chain).
  *
@@ -44,7 +50,6 @@ export function useLeverageYieldShareBalances({
   queryOptions,
 }: UseLeverageYieldShareBalancesParams = {}): UseQueryResult<LeverageYieldShareHolding, Error>[] {
   const { sodax } = useSodaxContext();
-  const hubChainKey = sodax.hubProvider.chainConfig.chain.key;
   const vault = params?.vault;
   const holders = params?.holders;
 
@@ -56,10 +61,10 @@ export function useLeverageYieldShareBalances({
       enabled: !!vault,
       queryFn: async (): Promise<LeverageYieldShareHolding> => {
         if (!vault) throw new Error('vault is required');
-        const holder =
-          chainKey === hubChainKey
-            ? (address as Address)
-            : await sodax.hubProvider.getUserHubWalletAddress(address, chainKey);
+        // Always the derived hub wallet — on the hub chain too. A leverage deposit delivers
+        // shares to getUserHubWalletAddress(...), the CREATE3 router on Sonic, never the EOA,
+        // so reading balanceOf(EOA) for the hub chain would always come back zero.
+        const holder = await sodax.hubProvider.getUserHubWalletAddress(address, chainKey);
         const result = await sodax.leverageYield.getShareBalance(vault, holder);
         if (!result.ok) throw result.error;
         return { chainKey, holder, shares: result.value };

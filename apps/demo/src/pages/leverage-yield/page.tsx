@@ -670,8 +670,9 @@ export default function LeverageYieldPage() {
           </div>
 
           {/* Cross-chain position — one row per connected wallet. Each row reads
-              vault.balanceOf(holder) where holder = user's EOA on Sonic, or the
-              CREATE3-derived hub wallet on any other chain. Total sums all chains. */}
+              vault.balanceOf(holder) where holder = the user's derived hub wallet for that
+              chain (the CREATE3 router on Sonic, the per-spoke hub wallet otherwise) — where
+              leverage deposits always deliver shares. Total sums all chains. */}
           {connectedHolders.length > 0 && (
             <div className="border-t pt-3 space-y-1 text-sm">
               <div className="flex justify-between font-medium">
@@ -699,8 +700,7 @@ export default function LeverageYieldPage() {
                     return (
                       <div key={chainKey} className="flex justify-between text-xs">
                         <span className="text-muted-foreground">
-                          {chainKey}{' '}
-                          <span className="opacity-60">({chainKey === SONIC ? 'wallet' : 'hub wallet'})</span>
+                          {chainKey} <span className="opacity-60">(hub wallet)</span>
                         </span>
                         <span className="font-mono">{fmtUnits(d.shares, lsodaToken.decimals)}</span>
                       </div>
