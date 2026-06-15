@@ -121,26 +121,28 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v6
 
-      # Run the MIT-licensed gitleaks binary directly: the gitleaks-action
-      # wrapper requires a paid license for organization accounts, even on
-      # public repos. Pinned to match the version the allowlist was tuned with.
+      # gitleaks-action needs a paid org license even on public repos; run the binary.
       - name: Install gitleaks
         run: |
           curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz" | tar -xz gitleaks
           ./gitleaks version
 
-      # Scan the working tree (not git history) so the gate is about secrets in
-      # the current code. Non-blocking on first land so the baseline doesn't gate
-      # PRs; allowlisted web3 false positives live in .gitleaks.toml, while a real
-      # 0x+64-hex key still fails. Remove `continue-on-error` to enforce.
-      - name: Run gitleaks
+      # Broad low-noise pass (allowlists docs/skills/fixtures). Non-blocking, like OSV/Semgrep.
+      - name: Run gitleaks (broad)
         continue-on-error: true
         run: ./gitleaks dir . --config .gitleaks.toml --redact --no-banner --report-format sarif --report-path gitleaks-results.sarif
+
+      # Strict private-key pass — scans docs/dev-skills too; only fake fixtures exempt.
+      - name: Run gitleaks (strict private-key)
+        continue-on-error: true
+        run: ./gitleaks dir . --config .gitleaks-strict.toml --redact --no-banner --report-format sarif --report-path gitleaks-strict-results.sarif
 
       - name: Upload gitleaks results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gitleaks-results
-          path: gitleaks-results.sarif
+          path: |
+            gitleaks-results.sarif
+            gitleaks-strict-results.sarif
           retention-days: 30
