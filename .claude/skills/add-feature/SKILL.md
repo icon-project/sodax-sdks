@@ -10,6 +10,19 @@ description: 'Use when adding a NEW feature/service to the @sodax/sdk core — a
 > This skill covers the **cross-cutting wiring** that is easy to miss, not the logic. Verify each
 > slot against current `src/`.
 
+## Existing feature families — pick the closest as your template
+
+Most "new feature" work is closest to one of the existing services in `packages/sdk/src/<feature>/`. Start from the nearest; these are existing domains, **not** separate per-feature workflows.
+
+- **`swap`** — intent/solver flow: quote → create → cancel → post-execution; backend/solver API; token support from the `@sodax/types` swap list.
+- **`bridge`** — vault-backed transfer: hub asset/vault config, bridge limits, deposit/withdraw path.
+- **`moneyMarket`** — supply / borrow / repay / withdraw + collateral / liquidation; reserve + user-data services; `math-utils` / formatters; MM token + reserve wiring.
+- **`staking`** — SODA stake / unstake / claim; chain support matrix.
+- **`dex`** — concentrated-liquidity pool / liquidity / position / reward flows.
+- **`migration` · `partner` · `recovery`** — smaller, specialized templates.
+
+> If the task is really "extend an existing feature to a new chain", "add a money-market asset", "add a bridge route", or "add a solver swap token" — that's a feature **update**, not a new service: update the owning module above, don't create a new `<Feature>Service`.
+
 ## Where a feature lives
 
 `packages/sdk/src/<feature>/` — a self-contained module. Mirror the nearest sibling:
