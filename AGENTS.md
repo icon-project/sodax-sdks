@@ -76,9 +76,32 @@ cd packages/<pkg> && npx vitest run path/to/test.test.ts
 - Commits must follow conventional commit format and must not include AI-tool attribution.
 - Do not add exact chain counts, issue-era history, or current-state claims to agent guidance unless the statement is stable and source-of-truth-backed.
 
+## Working Rules (planning + code quality)
+
+These guide every change. Where a rule maps to tooling (types, lint, tests, `check:ai-*`), CI is the backstop; the rest are review-enforced. Before reporting a change done, run the relevant check and trust its real output over assumption.
+
+- **Verify against current source.** Confirm every claim against `src/` before writing; do not rely on memory or older commits/PRs (the codebase refactors). If a fact is unverified, mark it so or ask.
+- **Don't assume — ask when ambiguous.** If a required input or the scope is missing or unclear, stop and ask the requester or the source of truth rather than guessing.
+- **Use the established skill/pattern.** Adding a token or chain → use the `add-token` / `add-chain` skill (`.claude/skills/`); don't wire it ad-hoc. Start from the nearest existing implementation.
+- **Branch by case; don't over-generalize.** Chain/token work differs by family and feature (e.g. EVM vs non-EVM); verify the specific case instead of copying one onto another.
+- **Source-derived config.** Token/chain config is source-of-truth in `@sodax/types` / backend — never hardcode chain or token lists in feature code.
+- **No escape hatches.** Don't use `any`, `@ts-ignore`, non-null `!`, or unsafe casts to silence type/quality checks; fix the underlying type. (Existing `biome.json` overrides are tracked tech debt, not a license.)
+- **Don't weaken safety surfaces.** This is financial code: preserve input validation, guards, amount/decimal and address handling, signing boundaries, and explicit error surfaces, and cover changes with tests. SDK error/`Result` specifics live in `packages/sdk/AGENTS.md`.
+- **Never commit or hardcode secrets.** Keep private keys, mnemonics, and RPC credentials in env vars (`process.env` / git-ignored `.env`, with `.env.example` placeholders) the way the `apps/node` smoke scripts do — never inline a real key, paste one into a sample, or log it. If a task needs a secret, stop and ask.
+- **Fix the gate, don't game it.** Don't skip or disable tests (`.only`, `.skip`, deleted assertions), blanket-suppress lint, or bypass the husky pre-commit / commit-msg hooks (`--no-verify`, force-push) to go green. If a check fails, fix the cause or stop and report it — silencing it just hides the regression.
+- **Preserve package boundaries.** Keep dependency direction intact and put reusable logic in the package/domain that owns it; don't hide cross-package coupling in callers.
+- **Add dependencies deliberately.** Don't pull in a new runtime dependency for something the repo already covers; prefer existing utilities and the curated re-export subpaths in `packages/libs`. If a third-party dep is genuinely needed, isolate it through `packages/libs` and say why.
+- **Keep feature services lean.** Feature-service code stays core feature logic; move reusable utilities and chain-specific work to `utils/`, entities, wallet providers, or spoke services. Extract a helper when it is genuinely shared, not as a speculative single-use abstraction.
+- **Cover new code with meaningful tests.** Add or extend tests for core flows, invariants, edge cases, and chain/feature matrices beside the changed code; don't rely on superficial coverage.
+- **Keep AI docs faithful.** When public behavior, imports, signatures, examples, chains, tokens, or feature support change, update `packages/skills` so agents can implement from code + docs without guessing; run `pnpm check:ai`.
+- **Keep demo code exemplary.** `apps/demo` should follow its local patterns, prefer `@sodax/dapp-kit` for product flows, and remain readable for external integrators. If demo code becomes reusable app logic, move or propose it in `dapp-kit` / SDK rather than burying it in the demo.
+
+**Definition of done:** scoped diff · behavior verified against `src/` · relevant `test`/`checkTs`/`lint`/`check:ai` green · `packages/skills` updated when public behavior changed · no unrelated refactor.
+
 ## AI File Maintenance
 
 - `AGENTS.md` is the canonical shared agent guidance. `CLAUDE.md` files should be thin Claude-specific shims that import the sibling `AGENTS.md`.
+- Dev skills are authored and committed under `.claude/skills/` (the canonical copy). The `.agents/skills/` (Codex) and `.github/skills/` (Copilot) mirrors are gitignored and regenerated locally by the Vercel `skills` CLI (`npx skills`); native Codex/Copilot auto-trigger needs that local sync, while the `AGENTS.md` skill pointers work without it. Edit the skill in `.claude/skills/`, never a generated mirror.
 - Root guidance is for information every domain needs. Put package/app-specific architecture, patterns, commands, and pitfalls in that subtree's `AGENTS.md`.
 - Prefer broad durable patterns over volatile enumerations. When exact values matter, point agents to source files or package docs rather than copying values.
 - Validate changes to these files with `pnpm check:ai-dev-files`.
