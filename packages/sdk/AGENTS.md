@@ -82,6 +82,8 @@ try {
 5. Add or update unit tests beside the changed code.
 6. Update `docs/` and `packages/skills` only when public SDK behavior, imports, signatures, or examples changed.
 
+To **add a token**, use the `add-token` skill (`.claude/skills/add-token/`); token config lives in `@sodax/types`, not here.
+
 ## Logging
 
 SDK diagnostics go through `SodaxLogger`, resolved from `new Sodax({ logger })`.

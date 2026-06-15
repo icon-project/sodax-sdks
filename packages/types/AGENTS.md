@@ -58,6 +58,7 @@ Relative imports inside source must use `.js` extensions (see [`src/index.ts`](s
 - **No re-exporting external types.** Do not import or re-export types from third-party packages (e.g. `viem`, `ethers`, `@solana/web3.js`). Define equivalent types locally so consumers don't pick up transitive type deps.
 - **Prefer `import type`** wherever possible — this package should produce minimal runtime JavaScript (effectively just re-exports plus a small number of intentional runtime values, e.g. `CONFIG_VERSION`, chain key constants, Stacks enums).
 - **Add new types in their subdirectory**, then re-export through that subdirectory's `index.ts`. The root `src/index.ts` already re-exports each subdirectory's barrel, so nothing more is needed for the type to be importable from `@sodax/types`.
+- **Adding a token?** Use the `add-token` skill (`.claude/skills/add-token/`) — it has the verified end-to-end procedure (which chain map and feature lists to touch, the payload→`XToken` field mapping, and what is auto-handled). Do not wire token config ad hoc.
 - **`CONFIG_VERSION` bump convention** ([`src/index.ts`](src/index.ts)): bump this on any types change inside a `release/sdk` branch. Consumers (notably `@sodax/sdk`'s `ConfigService`) rely on it to detect config-schema drift between SDK releases.
 - **All wallet provider interfaces extend `WalletAddressProvider`** from `common/`.
 - **No `any`.** Use `unknown` where the type cannot be known statically.
