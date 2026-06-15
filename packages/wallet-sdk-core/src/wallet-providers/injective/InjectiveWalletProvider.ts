@@ -4,8 +4,12 @@ import {
   createTransaction,
   PrivateKey,
   getInjectiveSignerAddress,
+  TxGrpcApi,
+  CosmosTxV1Beta1TxPb,
+  fromBase64,
   type TxResponse,
 } from '@injectivelabs/sdk-ts';
+import { getNetworkEndpoints, type NetworkEndpoints } from '@injectivelabs/networks';
 import type {
   Hex,
   JsonObject,
@@ -55,12 +59,15 @@ export class InjectiveWalletProvider
 {
   public readonly chainType = 'INJECTIVE' as const;
   public wallet: InjectiveWallet;
+  /** Network endpoints used to broadcast a signed `TxRaw` via {@link sendTransaction}. */
+  private readonly endpoints: NetworkEndpoints;
 
   constructor(config: InjectiveWalletConfig) {
     super(config.defaults);
 
     if (isBrowserExtensionInjectiveWalletConfig(config)) {
       this.wallet = { msgBroadcaster: config.msgBroadcaster };
+      this.endpoints = config.msgBroadcaster.endpoints;
       return;
     }
 
@@ -74,6 +81,7 @@ export class InjectiveWalletProvider
         throw new Error('Invalid Secret Injective wallet config');
       }
       this.wallet = { msgBroadcaster: new MsgBroadcasterWithPk({ privateKey, network: config.network }) };
+      this.endpoints = getNetworkEndpoints(config.network);
       return;
     }
 
@@ -193,5 +201,74 @@ export class InjectiveWalletProvider
     }
 
     return txResponseToExecuteResponse(txResult);
+  }
+
+  /**
+   * Broadcasts an already-signed, proto-encoded Cosmos `TxRaw` via the configured gRPC endpoint.
+   * @param signedTxRaw - The signed transaction, encoded with `CosmosTxV1Beta1TxPb.TxRaw.encode(...).finish()`.
+   * @returns The transaction hash.
+   * @throws {Error} if the node rejects the transaction (non-zero result code).
+   */
+  async sendTransaction(signedTxRaw: Uint8Array): Promise<string> {
+    const txRaw = CosmosTxV1Beta1TxPb.TxRaw.decode(signedTxRaw);
+    const res = await new TxGrpcApi(this.endpoints.grpc).broadcast(txRaw);
+    if (res.code !== 0) {
+      throw new Error(`Injective broadcast failed (code ${res.code}): ${res.rawLog}`);
+    }
+    return res.txHash;
+  }
+
+  /**
+   * Signs and broadcasts an unsigned `InjectiveRawTransaction` (e.g. from the Swaps API).
+   *
+   * The `signedDoc` carries the unsigned Cosmos `SignDoc` parts (`bodyBytes`/`authInfoBytes`); this
+   * signs them — with the private key in secret mode, or via the wallet's `signCosmosTransaction`
+   * for browser Cosmos wallets (Keplr/Leap) — then assembles and broadcasts a `TxRaw`.
+   *
+   * @returns The transaction hash.
+   * @throws {Error} for EVM/Metamask wallets, which cannot sign a raw Cosmos `SignDoc`.
+   */
+  async signAndSendTransaction(tx: InjectiveRawTransaction): Promise<string> {
+    const { bodyBytes, authInfoBytes, chainId, accountNumber } = tx.signedDoc;
+    let signedTxRaw: CosmosTxV1Beta1TxPb.TxRaw;
+
+    if (this.wallet.msgBroadcaster instanceof MsgBroadcasterWithPk) {
+      const signDoc = CosmosTxV1Beta1TxPb.SignDoc.fromPartial({ bodyBytes, authInfoBytes, chainId, accountNumber });
+      const signBytes = CosmosTxV1Beta1TxPb.SignDoc.encode(signDoc).finish();
+      const signature = this.wallet.msgBroadcaster.privateKey.sign(Buffer.from(signBytes));
+      signedTxRaw = CosmosTxV1Beta1TxPb.TxRaw.fromPartial({ bodyBytes, authInfoBytes, signatures: [signature] });
+    } else {
+      const walletStrategy = this.wallet.msgBroadcaster.walletStrategy;
+      const address = await this.getWalletAddress();
+      const unsignedTxRaw = CosmosTxV1Beta1TxPb.TxRaw.fromPartial({ bodyBytes, authInfoBytes, signatures: [] });
+
+      let directSign: Awaited<ReturnType<typeof walletStrategy.signCosmosTransaction>>;
+      try {
+        directSign = await walletStrategy.signCosmosTransaction({
+          txRaw: unsignedTxRaw,
+          chainId,
+          accountNumber: Number(accountNumber),
+          address,
+        });
+      } catch (error) {
+        // Surface the wallet's own error (e.g. a Keplr/Leap user rejection) rather than masking it,
+        // while flagging the common cause: EVM/Metamask wallets sign EIP-712 typed data and cannot
+        // sign a raw Cosmos SignDoc, so their `signCosmosTransaction` is an unsupported stub.
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new Error(
+          `Injective: failed to sign the Swaps API transaction (${detail}). EVM/Metamask wallets cannot ` +
+            'sign a raw Cosmos SignDoc — use a Cosmos wallet (Keplr/Leap) or PK mode.',
+          { cause: error },
+        );
+      }
+
+      signedTxRaw = CosmosTxV1Beta1TxPb.TxRaw.fromPartial({
+        bodyBytes: directSign.signed.bodyBytes,
+        authInfoBytes: directSign.signed.authInfoBytes,
+        signatures: [fromBase64(directSign.signature.signature)],
+      });
+    }
+
+    return this.sendTransaction(CosmosTxV1Beta1TxPb.TxRaw.encode(signedTxRaw).finish());
   }
 }
