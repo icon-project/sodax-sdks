@@ -1,7 +1,7 @@
 # Worked example — 8 xStock swap tokens on Solana
 
-Real merged change `feat(types): add 8 xStock tokens on Solana` (PR #179).
-**Footprint: 2 files, +80 lines, 0 deletions.** Canonical reference for the swap-token path.
+Real merged change `feat(types): add 8 xStock tokens on Solana`.
+**Footprint: the chain token map + the swap opt-in list — no SDK `src/` change.** Canonical reference for the swap-token path.
 
 ## Input from the contracts (swap-only, Solana)
 
@@ -35,7 +35,7 @@ CRCLx: {
 
 Authored names: Circle / Tesla / SP500 / NVIDIA / Nasdaq / MicroStrategy / Coinbase / Alphabet xStock.
 
-> **Casing note:** #179 stored these `hubAsset` / `vault` values **lowercase** (as the payload arrived).
+> **Casing note:** these `hubAsset` / `vault` values were stored **lowercase** (as the payload arrived).
 > The `add-token` skill now **requires checksummed (EIP-55)** for new EVM entries. SDK lookups are
 > case-insensitive, so the existing lowercase entries keep working — but new ones should be checksummed.
 
@@ -61,7 +61,7 @@ spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.GOOGLx,
   the test only checks tokens in the swap / money-market lists (per chain), **not** the raw
   `<chain>SupportedTokens` map; a defined-but-not-opted-in token would not be dedup-checked.
 - xStocks are Token-2022 mints; `SolanaSpokeService` already handles that program generically
-  (landed separately in PR #188), so no SDK `src/` change was required here.
+  (Token-2022 mint support lives in `SolanaSpokeService`), so no SDK `src/` change was required here.
 
 ## Scope
 This change is purely the `@sodax/types` token wiring shown above (2 files). Releasing/publishing

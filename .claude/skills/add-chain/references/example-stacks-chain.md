@@ -14,7 +14,7 @@ Use it as the template shape for a new non-EVM family; confirm each file in `src
 
 ## `@sodax/sdk`
 - `shared/services/spoke/StacksSpokeService.ts` (+ `StacksSpokeService.test.ts`).
-- `shared/services/spoke/SpokeService.ts` — register in ~7 spots: `import StacksSpokeService`, `type StacksChainKey`, `isStacksChainKeyType`, add `| StacksSpokeService` to the union, the `GetSpokeServiceType` conditional (`C extends StacksChainKey ? StacksSpokeService`), a `public readonly stacks: StacksSpokeService` field, `this.stacks = new StacksSpokeService(this.config)` in the ctor, and the `getSpokeService` return.
+- `shared/services/spoke/SpokeService.ts` — register at: `import StacksSpokeService`, `type StacksChainKey`, `isStacksChainKeyType`, add `| StacksSpokeService` to the union, the `GetSpokeServiceType` conditional (`C extends StacksChainKey ? StacksSpokeService`), a `public readonly stacks: StacksSpokeService` field, `this.stacks = new StacksSpokeService(this.config)` in the ctor, and the `getSpokeService` return.
 - `shared/services/spoke/index.ts` barrel; `shared/guards.ts`; `shared/types/spoke-types.ts` (DepositParams/SendMessage + the Stacks raw-receipt type); `shared/utils/stacks-utils.ts`.
 - **No** `entities/stacks/` — Stacks needs no helper entity (contrast: `btc`/`icon`/`injective`/`solana`/`stellar` do).
 - **NOT touched (generic, verified 0 chain refs):** hub services (`EvmHubProvider`, `EvmAssetManagerService`) and intent-relay (`IntentRelayApiService`).

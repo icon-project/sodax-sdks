@@ -62,6 +62,25 @@ for (const path of routedGuides) {
   if (!exists(path)) fail(`Root AGENTS.md routes to missing ${path}`);
 }
 
+const volatilePatterns = [
+  /\bacross\s+\d+\s+blockchains\b/i,
+  /\bEVM\s*\(\d+\)/,
+  /\bNon-EVM\s*\(\d+\)/,
+  /\b\d+\s+chains\b/i,
+  /\ball\s+\d+\s+chains\b/i,
+  /\bissue\s+#\d+\b/i,
+  /\bparent\s+issue\s+#\d+\b/i,
+  /#\d+/,
+  /\bformerly\b/i,
+  /\btoday:\s*\d+/i,
+];
+
+function checkVolatile(path, content) {
+  for (const pattern of volatilePatterns) {
+    if (pattern.test(content)) fail(`${path} contains volatile AI-guidance text matching ${pattern}`);
+  }
+}
+
 for (const path of agentFiles) {
   if (!exists(path)) continue;
   const content = read(path);
@@ -70,25 +89,7 @@ for (const path of agentFiles) {
   if (lineCount > maxLines) {
     fail(`${path} is ${lineCount} lines; keep agent guidance under ${maxLines} lines`);
   }
-
-  const volatilePatterns = [
-    /\bacross\s+\d+\s+blockchains\b/i,
-    /\bEVM\s*\(\d+\)/,
-    /\bNon-EVM\s*\(\d+\)/,
-    /\b\d+\s+chains\b/i,
-    /\ball\s+\d+\s+chains\b/i,
-    /\bissue\s+#\d+\b/i,
-    /\bparent\s+issue\s+#\d+\b/i,
-    /#\d+/,
-    /\bformerly\b/i,
-    /\btoday:\s*\d+/i,
-  ];
-
-  for (const pattern of volatilePatterns) {
-    if (pattern.test(content)) {
-      fail(`${path} contains volatile AI-guidance text matching ${pattern}`);
-    }
-  }
+  checkVolatile(path, content);
 }
 
 for (const path of routedGuides) {
@@ -134,6 +135,15 @@ for (const skill of sodaxDevSkills) {
   // Relative .md links (e.g. references/…) must resolve.
   for (const match of content.matchAll(/\]\((?!https?:)([^)#]+\.md)(?:#[^)]*)?\)/g)) {
     if (!existsSync(join(root, dir, match[1]))) fail(`${skillPath} links to missing file ${match[1]}`);
+  }
+
+  // Volatile-text ban applies to skill prose too (SKILL.md + references).
+  checkVolatile(skillPath, content);
+  const refDir = `${dir}/references`;
+  if (exists(refDir)) {
+    for (const file of readdirSync(join(root, refDir))) {
+      if (file.endsWith('.md')) checkVolatile(`${refDir}/${file}`, read(`${refDir}/${file}`));
+    }
   }
 }
 

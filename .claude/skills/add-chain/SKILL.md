@@ -30,7 +30,7 @@ Each ✓ feature then drives its own touch points (e.g. money-market token wirin
 | **Bitcoin-like** | `BitcoinSpokeService` + `entities/btc/` trading-wallet (RadFi/Bound) model | **special** — different shape, do not generalize |
 
 ## Complete coverage — CHECK every package; edit only when required (don't skip, don't over-edit)
-A chain *can* reach **all 7 packages** — but edit each **only when the family + feature matrix requires it** (`libs` only for a build workaround; `dapp-kit` only for a special gate). Checklist:
+A chain *can* reach **every package** — but edit each **only when the family + feature matrix requires it** (`libs` only for a build workaround; `dapp-kit` only for a special gate). Checklist:
 - `types` · `libs` (only if build workaround) · `sdk` · `wallet-sdk-core` · `wallet-sdk-react`
 - `dapp-kit` — usually nothing (chain-agnostic); only a special-need hook (NEAR storage / Stellar trustline).
 - **`packages/skills`** — the **largest footprint and easiest to forget** (consumer docs). Update the skill knowledge that references chains (esp. `sodax-wallet-sdk-react`: config / hooks / imports / checklist), then run `pnpm check:ai`.
@@ -61,11 +61,11 @@ Template: read a recent same-shape chain end-to-end (`Stacks`, `Near`, `Sui`, �
   - `chains/chains.ts`: `baseChainInfo` (`type`, explorer) + `spokeChainConfig` (addresses / RPC).
   - `<chain>/<chain>.ts` (+ extras, e.g. `near/near-api-js.ts`): chain types, raw tx/receipt types, and the `I<Chain>WalletProvider` interface (extends `WalletAddressProvider`).
   - `wallet/providers.ts`: add `I<Chain>WalletProvider` to the provider union.
-  - **`common/common.ts` — #1 easy-to-miss for a NEW family:** a branch in **every** per-family conditional type — `GetChainType`, `GetAddressType`, `GetTokenAddressType`, `GetWalletProviderType`, `TxReturnType`, the 3 estimate-gas return types (~20 sites; `checkTs` finds the gaps). Note estimate-gas shape is family-dependent (EVM/Bitcoin/Near/Solana → decimal string; Sui/Stellar/Stacks/Icon/Injective → structured object).
+  - **`common/common.ts` — the easiest-to-miss for a NEW family:** add a branch to **every** per-family conditional type (`GetChainType`, `GetAddressType`, `GetTokenAddressType`, `GetWalletProviderType`, `TxReturnType`, the estimate-gas return types); `checkTs` enumerates every gap. Estimate-gas has two shapes (decimal string vs structured object) — confirm which your family uses in `common.ts`.
   - `utils/utils.ts`: chain helper fns (`is<Chain>ChainKey`, …); `backend/backendApiV2.ts`: DTO if chain-specific.
   - `tokens.ts` + `swap.ts`/`moneyMarket.ts`: tokens (via `add-token`). Plus chain-type guards.
 - **sdk:**
-  - `services/spoke/<Chain>SpokeService.ts` + `services/spoke/index.ts` barrel; **register in `SpokeService.ts`** (~8 sites: import + type import + guard import + spoke union + `GetSpokeServiceType` conditional + `public readonly <chain>` field + ctor construct + `getSpokeService` route).
+  - `services/spoke/<Chain>SpokeService.ts` + `services/spoke/index.ts` barrel; **register in `SpokeService.ts`** at: import, type import, guard import, the spoke union, the `GetSpokeServiceType` conditional, the `public readonly <chain>` field, ctor construction, and the `getSpokeService` route.
   - `shared/guards.ts` (chain guards), `shared/types/spoke-types.ts` (DepositParams/SendMessage + the chain's `<Chain>RawTransactionReceipt` + a branch in `GetTxReceiptType`), chain-specific `shared/utils/<chain>-utils.ts`; add `entities/<chain>/` **only if** the chain needs helpers (`btc`/`icon`/`injective`/`solana`/`stellar` have them; `stacks`/`near`/`sui` don't).
   - **Generic — NO per-chain edit (verified 0 chain refs):** hub services (`EvmHubProvider`, `EvmAssetManagerService`) and intent-relay (`IntentRelayApiService`) work on the generic spoke abstraction. Don't go hunting for hub/relay edits.
 - **wallet-sdk-core:** `wallet-providers/<chain>/` provider — its "Adding a New Chain Provider" playbook.
