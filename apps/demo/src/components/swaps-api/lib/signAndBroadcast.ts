@@ -3,9 +3,11 @@
 // client, and neither @sodax/dapp-kit nor @sodax/sdk ship a utility for this step — every consumer
 // has to hand-roll the per-chain dispatch below. Remaining gaps this file works around:
 //
-// a. No shared sign+broadcast hook/utility. Two of nine chain families (Stacks, Bitcoin) still
-//    cannot be implemented against the current wallet-provider interfaces — see the `sdk-gap`
-//    branches below.
+// a. No shared sign+broadcast hook/utility. Stacks still cannot be implemented against the current
+//    wallet-provider interface — see the `sdk-gap` branch below. Bitcoin is signable but not via
+//    this wallet-only dispatcher: its 2-of-2 Bound Exchange trading wallet needs the SDK's
+//    BitcoinSpokeService.signAndSubmitRawTransaction (sign → Bound co-sign + broadcast), which
+//    SwapCard calls directly with the client's Bound session.
 // b. No `IntentResponseV2` → `IntentRequestV2` converter (see ./mappers.ts).
 // c. `useSwapsApiApprove` cannot auto-invalidate `['swapsApi','allowance']` — confirmation
 //    happens client-side after the hook resolves, so callers refetch allowance manually.
@@ -123,10 +125,14 @@ export async function signAndBroadcastSwapsApiTx(args: {
       return await injective.signAndSendTransaction(tx as InjectiveRawTransaction);
     }
     case 'BITCOIN':
+      // Bitcoin is signable but not through this wallet-only dispatcher: the 2-of-2 Bound Exchange
+      // trading wallet needs the SDK's BitcoinSpokeService.signAndSubmitRawTransaction (sign → Bound
+      // co-sign + broadcast), which requires the client's Bound session + relay identity. SwapCard
+      // routes Bitcoin source there directly, so this branch should not be reached.
       throw new SwapsApiSignError(
         chainKey,
         'sdk-gap',
-        'Bitcoin: IBitcoinWalletProvider.signTransaction signs a PSBT but cannot broadcast (broadcast lives in BitcoinSpokeService), and the Bound Exchange trading-wallet flow requires a client-side session the backend cannot produce.',
+        'Bitcoin must be signed + submitted via BitcoinSpokeService.signAndSubmitRawTransaction (Bound trading-wallet flow), not this wallet-only dispatcher.',
         tx,
       );
     default:

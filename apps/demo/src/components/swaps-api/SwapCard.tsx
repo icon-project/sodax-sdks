@@ -16,9 +16,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { calculateExchangeRate, formatMutationFailureMessage, formatTokenAmount } from '@/lib/utils';
 import { parseUnits, formatUnits } from 'viem';
 import type {
+  BitcoinRawTransaction,
   ChainType,
   CreateIntentParamsV2,
   GetWalletProviderType,
+  Hex,
+  IBitcoinWalletProvider,
   IStellarWalletProvider,
   QuoteRequestV2,
   SpokeChainKey,
@@ -32,6 +35,7 @@ import { ArrowDownUp, ArrowLeftRight, Loader2 } from 'lucide-react';
 import React, { type SetStateAction, useEffect, useMemo, useState } from 'react';
 import {
   loadRadfiSession,
+  useSodaxContext,
   useNearStorageGate,
   useRequestTrustline,
   useStellarTrustlineCheck,
@@ -85,6 +89,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const destAccount = useXAccount({ xChainId: dstChainKey });
   const destWalletProvider = useWalletProvider({ xChainId: dstChainKey });
   const { openWalletModal } = useAppStore();
+  const { sodax } = useSodaxContext();
 
   const [sourceAmount, setSourceAmount] = useState<string>('');
   const [slippage, setSlippage] = useState<string>('0.5');
@@ -276,7 +281,9 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
 
   // Whether the dispatcher can sign+broadcast on the selected source chain (see
   // lib/signAndBroadcast.ts for the chains the wallet-provider interfaces can't serve yet).
-  const isSourceSignable = isSignableSwapsApiChain(srcChainKey);
+  // Bitcoin source isn't handled by the wallet-only dispatcher — it routes through the Bound
+  // trading-wallet path in handleSwap — but it is still a signable source for the demo.
+  const isSourceSignable = isSignableSwapsApiChain(srcChainKey) || getXChainType(srcChainKey) === 'BITCOIN';
 
   const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: srcChainKey });
 
@@ -357,12 +364,31 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       }
       const { tx, intent, relayData } = created.value;
 
-      // 2. The wallet provider signs + broadcasts on the source chain.
-      const spokeTxHash = await signAndBroadcastSwapsApiTx({
-        chainKey: srcChainKey,
-        tx,
-        walletProvider: sourceWalletProvider,
-      });
+      // 2. Sign + broadcast on the source chain.
+      let spokeTxHash: string;
+      if (getXChainType(srcChainKey) === 'BITCOIN') {
+        // Bitcoin uses a 2-of-2 Bound Exchange trading wallet: the user signs the Bound-built PSBT,
+        // then Bound co-signs + broadcasts. This needs the client's Bound session + the relay
+        // identity — context the wallet-only dispatcher doesn't have — so route it through the SDK.
+        const session = loadRadfiSession(sourceAccount.address);
+        if (!session?.accessToken) {
+          setSwapError('Bitcoin source requires a Bound Exchange trading wallet — sign in first.');
+          return;
+        }
+        spokeTxHash = await sodax.spoke.getSpokeService(ChainKeys.BITCOIN_MAINNET).signAndSubmitRawTransaction({
+          rawTx: tx as BitcoinRawTransaction,
+          walletProvider: sourceWalletProvider as IBitcoinWalletProvider,
+          // The Swaps API types relayData as plain strings; they are hex at runtime.
+          relayData: { address: relayData.address as Hex, payload: relayData.payload as Hex },
+          accessToken: session.accessToken,
+        });
+      } else {
+        spokeTxHash = await signAndBroadcastSwapsApiTx({
+          chainKey: srcChainKey,
+          tx,
+          walletProvider: sourceWalletProvider,
+        });
+      }
 
       // 3. Hand the tx back to the API for relay + solver post-execution.
       const request: SubmitTxRequestV2 = {
