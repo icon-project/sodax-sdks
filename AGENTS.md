@@ -98,6 +98,8 @@ These guide every change. Where a rule maps to tooling (types, lint, tests, `che
 
 **Definition of done:** scoped diff · behavior verified against `src/` · relevant `test`/`checkTs`/`lint`/`check:ai` green · `packages/skills` updated when public behavior changed · no unrelated refactor.
 
+To review a change against these rules, use the `review-core-sdk` skill (`.claude/skills/review-core-sdk/`).
+
 ## AI File Maintenance
 
 - `AGENTS.md` is the canonical shared agent guidance. `CLAUDE.md` files should be thin Claude-specific shims that import the sibling `AGENTS.md`.
