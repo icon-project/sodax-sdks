@@ -59,6 +59,7 @@ Relative imports inside source must use `.js` extensions (see [`src/index.ts`](s
 - **Prefer `import type`** wherever possible — this package should produce minimal runtime JavaScript (effectively just re-exports plus a small number of intentional runtime values, e.g. `CONFIG_VERSION`, chain key constants, Stacks enums).
 - **Add new types in their subdirectory**, then re-export through that subdirectory's `index.ts`. The root `src/index.ts` already re-exports each subdirectory's barrel, so nothing more is needed for the type to be importable from `@sodax/types`.
 - **Adding a token?** Use the `add-token` skill (`.claude/skills/add-token/`) — it has the verified end-to-end procedure (which chain map and feature lists to touch, the payload→`XToken` field mapping, and what is auto-handled). Do not wire token config ad hoc.
+- **Adding a chain?** Use the `add-chain` skill (`.claude/skills/add-chain/`) — it orchestrates the cross-package footprint that starts here (chain key, config, types, wallet interface) and continues into the sdk spoke and the wallet packages.
 - **`CONFIG_VERSION` bump convention** ([`src/index.ts`](src/index.ts)): bump this on any types change inside a `release/sdk` branch. Consumers (notably `@sodax/sdk`'s `ConfigService`) rely on it to detect config-schema drift between SDK releases.
 - **All wallet provider interfaces extend `WalletAddressProvider`** from `common/`.
 - **No `any`.** Use `unknown` where the type cannot be known statically.

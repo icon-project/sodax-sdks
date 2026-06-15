@@ -64,6 +64,8 @@ Concrete chain classes stay behind deep imports such as `@sodax/wallet-sdk-react
 
 ## Adding A New Chain Type
 
+> This is one slice of a full chain integration. For the end-to-end cross-package flow (types, sdk spoke, wallet-sdk-core), use the `add-chain` skill (`.claude/skills/add-chain/`).
+
 1. Create `src/xchains/<chain>/` with service, connector, and an `index.ts` barrel.
 2. Extend `XService` and `XConnector`; keep connector IDs and install metadata stable.
 3. Add a `chainRegistry` entry with service creation, default connectors, provider-management mode, and optional actions/discovery/provider creation.

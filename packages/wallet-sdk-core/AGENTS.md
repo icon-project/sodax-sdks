@@ -90,6 +90,8 @@ new BitcoinWalletProvider({
 
 ### Adding a New Chain Provider
 
+> The provider here is one slice of a full chain integration. For the end-to-end cross-package flow (types, sdk spoke, wallet-sdk-react), use the `add-chain` skill (`.claude/skills/add-chain/`).
+
 Follow an existing implementation (e.g. `evm/`):
 1. Create folder `src/wallet-providers/<chain>/`
 2. In `<chain>/types.ts`: define `PrivateKey<Chain>WalletConfig`, `BrowserExtension<Chain>WalletConfig`, the `<Chain>WalletConfig` discriminated union, the `<Chain>Defaults` shape, and the provider interface `I<Chain>WalletProvider` extending `WalletAddressProvider`. **Exception:** when the credential is not a plain private key (e.g. the config supports both `privateKey` and `mnemonics`), use a descriptive name and a nested credential object instead of the `PrivateKey*` literal pattern — see `SecretInjectiveWalletConfig` (with `secret: { privateKey } | { mnemonics }`) as the canonical example.
