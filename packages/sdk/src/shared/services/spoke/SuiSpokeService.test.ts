@@ -15,7 +15,7 @@
  * balances) are fabricated.
  *
  * `@mysten/sui` is NOT module-mocked: real `Transaction`, `bcs`, and `SuiClient` constructors run.
- * `tx.build({ onlyTransactionKind: true })` is a local-only operation (no network). Only the four
+ * `tx.serialize()` is a local-only operation (no network). Only the four
  * `publicClient` network methods used by the SUT are spied per-test:
  *   - getCoins, getObject, devInspectTransactionBlock, waitForTransaction.
  *
@@ -535,10 +535,13 @@ describe('SuiSpokeService.deposit', () => {
     expect(result.from).toBe(SRC_ADDR);
     expect(result.to).toBe(expectedTransferTarget);
     expect(result.value).toBe(1_000n);
-    // `data` is base64 of the transaction-kind bytes. Pin the shape, not the exact value (the
-    // serialization is not deterministic across @mysten/sui versions).
+    // `data` is the @mysten/sui Transaction JSON from `serialize()`. Pin the shape, not the exact
+    // value (serialization is not deterministic across @mysten/sui versions), and assert it
+    // round-trips through `Transaction.from()` — the consume path used for signing and gas
+    // estimation. This guards the "Unknown value 6 for enum TransactionKind" regression.
     expect(typeof result.data).toBe('string');
     expect(result.data.length).toBeGreaterThan(0);
+    expect(() => Transaction.from(result.data)).not.toThrow();
   });
 
   it('native raw=true does NOT call publicClient.getCoins (native path uses tx.gas)', async () => {
@@ -675,11 +678,10 @@ describe('SuiSpokeService.sendMessage', () => {
 
 describe('SuiSpokeService.estimateGas', () => {
   it('returns the gasUsed struct from devInspectTransactionBlock effects', async () => {
-    // Build a real transaction-kind base64 so Transaction.fromKind(tx.data) succeeds locally.
+    // Serialize a real Transaction to the @mysten/sui JSON so Transaction.from(tx.data) succeeds locally.
     const realTx = new Transaction();
     realTx.setSender(SRC_ADDR);
-    const kindBytes = await realTx.build({ client: suiSpoke.publicClient, onlyTransactionKind: true });
-    const kindB64 = Buffer.from(kindBytes).toString('base64');
+    const txJson = realTx.serialize();
 
     const gasUsed = {
       computationCost: '1000',
@@ -693,7 +695,7 @@ describe('SuiSpokeService.estimateGas', () => {
 
     const result = await suiSpoke.estimateGas({
       chainKey: SUI,
-      tx: { from: SRC_ADDR, to: expectedTransferStub(), value: 0n, data: kindB64 },
+      tx: { from: SRC_ADDR, to: expectedTransferStub(), value: 0n, data: txJson },
     });
 
     expect(result).toBe(gasUsed);

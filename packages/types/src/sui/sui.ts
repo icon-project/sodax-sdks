@@ -1,4 +1,4 @@
-import type { Base64String, Hex } from '../shared/shared.js';
+import type { Hex } from '../shared/shared.js';
 import type { ICoreWallet } from '../wallet/wallet.js';
 
 export type SuiReturnType<Raw extends boolean> = Raw extends true
@@ -11,7 +11,8 @@ export type SuiRawTransaction = {
   from: Hex;
   to: string;
   value: bigint;
-  data: Base64String;
+  /** The @mysten/sui Transaction JSON from `Transaction#serialize()`; reconstruct with `Transaction.from()`. */
+  data: string;
 };
 
 export type SuiTransaction = {
