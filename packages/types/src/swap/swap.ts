@@ -253,10 +253,11 @@ export const swapSupportedTokens = {
 // depend on the solver updating its oracle to the new address.
 // Staging-only additions below were synced 2026-06-16 against the staging solver oracle
 // (https://sodax-solver-staging.iconblockchain.xyz/oracle): Polygon USDT+wstETH, Sui USDT,
-// Ethereum wstETH+weETH. Other staging-oracle tokens were intentionally NOT added — wrapped
-// natives (WETH/WAVAX/WBNB/WSOL/…) the SDK exposes via their native form, and tokens not yet
-// defined in spokeChainConfig (Sui CETUS/BUCK/wUSDC/wUSDT, Base AERO, Stacks aeUSDC, Eth
-// stETH/eETH, …) which need a token def first.
+// Ethereum wstETH+weETH, and Base AERO (the latter required a new XToken def in tokens.ts —
+// it is onboarded on the hub, hubAsset=BASE_AERO_ASSET). Other staging-oracle tokens were
+// intentionally NOT added — wrapped natives (WETH/WAVAX/WBNB/WSOL/…) the SDK exposes via their
+// native form, and tokens NOT onboarded on the hub (no hubAsset/vault: Sui CETUS/BUCK/wUSDC/
+// wUSDT, Stacks aeUSDC, Eth stETH/eETH) which the contracts team must onboard first.
 // Use the `add-swap-token` Claude skill to add entries.
 export const stagingSwapSupportedTokens = {
   [ChainKeys.SONIC_MAINNET]: [SodaTokens.sodaUSDS] as const satisfies XToken[],
@@ -264,6 +265,7 @@ export const stagingSwapSupportedTokens = {
   [ChainKeys.ARBITRUM_MAINNET]: [],
   [ChainKeys.BASE_MAINNET]: [
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.bnUSD,
+    spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.AERO,
   ] as const satisfies XToken[],
   [ChainKeys.OPTIMISM_MAINNET]: [],
   [ChainKeys.POLYGON_MAINNET]: [

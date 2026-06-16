@@ -1010,6 +1010,15 @@ export const baseSupportedTokens = {
     hubAsset: '0xaa81bb5ba3c972ab53605d3ba7e443a3de6d1cb9',
     vault: '0xaa81bb5ba3c972ab53605d3ba7e443a3de6d1cb9',
   },
+  AERO: {
+    symbol: 'AERO',
+    name: 'Aerodrome Finance',
+    decimals: 18,
+    address: '0x940181a94A35A4569e4529A3CDfB74e38FD98631',
+    chainKey: ChainKeys.BASE_MAINNET,
+    hubAsset: '0x348e086ab6f424dfc575a325c28624ed23973173',
+    vault: '0x348e086ab6f424dfc575a325c28624ed23973173',
+  },
 } as const satisfies Record<string, XToken>;
 
 export const optimismSupportedTokens = {
