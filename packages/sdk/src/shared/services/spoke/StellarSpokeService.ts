@@ -73,6 +73,7 @@ export class CustomStellarAccount {
   decrementSequenceNumber(): void {
     if (this.sequenceNumber > this.startingSequenceNumber) {
       this.sequenceNumber--;
+      return;
     }
 
     throw new Error(

@@ -652,6 +652,9 @@ describe('SuiSpokeService.sendMessage', () => {
     expect(result.value).toBe(0n);
     expect(typeof result.data).toBe('string');
     expect(result.data.length).toBeGreaterThan(0);
+    // The raw data must round-trip through Transaction.from() — the consume path used for signing
+    // and gas estimation. Guards the "Unknown value 6 for enum TransactionKind" regression.
+    expect(() => Transaction.from(result.data)).not.toThrow();
   });
 
   it('raw=false → delegates to walletProvider.signAndExecuteTxn and returns its digest', async () => {
