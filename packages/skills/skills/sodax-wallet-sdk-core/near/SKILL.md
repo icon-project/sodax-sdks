@@ -1,6 +1,10 @@
 ---
 name: sodax-wallet-sdk-core-near
 description: 'Granular skill for the @sodax/wallet-sdk-core v2 NEAR wallet provider only — `NearWalletProvider` (backed by near-api-js for PK signing + @hot-labs/near-connect for browser flows). Use when a backend / Node script / CI / bot / non-React browser flow needs to instantiate a NEAR provider directly and sign + submit — e.g. "instantiate NearWalletProvider", "NEAR private-key signing in Node", "signAndSubmitTxn", "getRawTransaction for inspection". Covers BOTH integration (write new v2 code) and migration (port v1 — almost a no-op at this surface: deep-import → barrel). Picks via Step 1. Links into the parent sodax-wallet-sdk-core knowledge tree. For React dapps use the sodax-wallet-sdk-react skill instead (get the typed provider via useWalletProvider).'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # NEAR (`wallet-sdk-core` granular skill)

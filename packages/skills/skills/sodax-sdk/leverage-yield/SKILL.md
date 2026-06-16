@@ -1,6 +1,10 @@
 ---
 name: sodax-sdk-leverage-yield
 description: 'Granular skill for the @sodax/sdk v2 leverage-yield feature only — leveraged-yield ERC-4626 vaults on Sonic via LeverageYieldService. Deposit any token → lsoda* shares, withdraw shares → any token (both as solver-tradeable intent swaps), createVaultIntent/vaultSwap/notifySolver, Sonic-direct approve/isAllowanceValid, and reads (getApr, getEffectiveApr, getPosition, getTotalAssets, preview*, getMaxWithdraw*, getShareBalance*, listVaults). Use when the task is leverage-yield vaults (e.g. "deposit into a leverage vault", "withdraw lsoda shares", "vault APR / effective APR", "leverage vault position / health factor", "lsoda share balance"). New in v2 — integration only, no v1 migration path. Links into the parent sodax-sdk knowledge tree. For React dapps, prefer sodax-dapp-kit.'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # Leverage Yield (Core SDK granular skill)

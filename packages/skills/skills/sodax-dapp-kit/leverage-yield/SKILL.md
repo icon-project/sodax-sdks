@@ -1,6 +1,10 @@
 ---
 name: sodax-dapp-kit-leverage-yield
 description: 'Granular skill for the @sodax/dapp-kit v2 leverage-yield feature only — React Query hooks for leveraged-yield ERC-4626 vaults on Sonic: useLeverageYieldDeposit and useLeverageYieldWithdraw (build a swap payload), useLeverageYieldVaultSwap (execute it end-to-end), plus reads useLeverageYieldEffectiveApr, useLeverageYieldPosition, useLeverageYieldTotalAssets, useLeverageYieldPreviewRedeem, useLeverageYieldShareBalances. Use when a React dapp task is leverage-yield vaults (e.g. "deposit into a leverage vault with dapp-kit", "useLeverageYieldVaultSwap hook", "render vault APR / position / TVL", "lsoda share balances across chains", "withdraw from leverage vault"). New in v2 — integration only, no v1 migration path. Links into the parent sodax-dapp-kit knowledge tree. For backend/Node, use the sodax-sdk skill.'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # Leverage Yield (dapp-kit granular skill)

@@ -1,6 +1,10 @@
 ---
 name: sodax-wallet-sdk-core-icon
 description: 'Granular skill for the @sodax/wallet-sdk-core v2 ICON wallet provider only — `IconWalletProvider` (backed by icon-sdk-js; browser-extension mode targets Hana''s postMessage bridge). Use when a backend / Node script / CI / bot / non-React browser flow needs to instantiate an ICON provider directly and sign + broadcast — e.g. "instantiate IconWalletProvider", "ICON private-key signing in Node", "send an IcxCallTransaction", "Hana wallet bridge". Covers BOTH integration (write new v2 code) and migration (port v1 — almost a no-op at this surface: deep-import → barrel). Picks via Step 1. Links into the parent sodax-wallet-sdk-core knowledge tree. For React dapps use the sodax-wallet-sdk-react skill instead (get the typed provider via useWalletProvider).'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # ICON (`wallet-sdk-core` granular skill)

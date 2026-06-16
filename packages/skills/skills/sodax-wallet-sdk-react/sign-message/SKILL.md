@@ -1,6 +1,10 @@
 ---
 name: sodax-wallet-sdk-react-sign-message
 description: 'Granular skill for the @sodax/wallet-sdk-react v2 message-signing surface only — useXSignMessage, a React Query mutation that signs an arbitrary message with the connected wallet across chain types (Bitcoin auto-detects BIP-322 vs ECDSA). Use when a React dapp needs to prove wallet ownership or sign a login/SIWE-style challenge — e.g. "useXSignMessage", "sign a message in React", "wallet signature for auth", "per-chain message signing". Covers BOTH integration (write new v2 code) and migration (port v1 — single-object params). Picks via Step 1. Links into the parent sodax-wallet-sdk-react knowledge tree. For signing actual SODAX transactions use the bridge-to-sdk skill (useWalletProvider) instead.'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # Sign message (`wallet-sdk-react` granular skill)

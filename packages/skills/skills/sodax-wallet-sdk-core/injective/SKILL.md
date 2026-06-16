@@ -1,6 +1,10 @@
 ---
 name: sodax-wallet-sdk-core-injective
 description: 'Granular skill for the @sodax/wallet-sdk-core v2 Injective wallet provider only — `InjectiveWalletProvider` (backed by @injectivelabs/sdk-ts + @injectivelabs/wallet-core MsgBroadcaster). Use when a backend / Node script / CI / bot / non-React browser flow needs to instantiate an Injective provider directly and build + broadcast msgs — e.g. "instantiate InjectiveWalletProvider", "Injective signing from a private key or mnemonic", "getRawTransaction then execute", "MsgBroadcaster setup". Covers BOTH integration (write new v2 code) and migration (port v1 — almost a no-op at this surface: deep-import → barrel). Picks via Step 1. Links into the parent sodax-wallet-sdk-core knowledge tree. For React dapps use the sodax-wallet-sdk-react skill instead (get the typed provider via useWalletProvider).'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # Injective (`wallet-sdk-core` granular skill)

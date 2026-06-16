@@ -1,6 +1,10 @@
 ---
 name: sodax-wallet-sdk-core-evm
 description: 'Granular skill for the @sodax/wallet-sdk-core v2 EVM wallet provider only — `EvmWalletProvider` (backed by viem), one class covering all 12 SODAX EVM spoke chains (Sonic hub, Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia). Use when a backend / Node script / CI / bot / non-React browser flow needs to instantiate an EVM provider directly and sign + broadcast — e.g. "instantiate EvmWalletProvider", "private-key EVM signing in Node", "EVM wallet provider for a bot", "sendTransaction from a script". Covers BOTH integration (write new v2 code) and migration (port v1 — almost a no-op at this surface: deep-import → barrel). Picks via Step 1. Links into the parent sodax-wallet-sdk-core knowledge tree. For React dapps use the sodax-wallet-sdk-react skill instead (get the typed provider via useWalletProvider).'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # EVM (`wallet-sdk-core` granular skill)
