@@ -127,6 +127,7 @@ for (const skill of sodaxDevSkills) {
     const name = nameMatch ? nameMatch[1].replace(/^['"]|['"]$/g, '').trim() : '';
     if (!name) fail(`${skillPath} frontmatter is missing 'name'`);
     if (!/^description:\s*\S/m.test(block)) fail(`${skillPath} frontmatter is missing 'description'`);
+    else if (!/^description:\s*['"]/m.test(block)) fail(`${skillPath} frontmatter 'description' must be quoted (it usually contains a colon)`);
     if (name && name !== skill) fail(`${skillPath} frontmatter name '${name}' must match its directory '${skill}'`);
     if (name && seenSkillNames.has(name)) fail(`Duplicate dev skill name '${name}'`);
     if (name) seenSkillNames.set(name, skillPath);
