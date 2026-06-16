@@ -72,7 +72,7 @@ const SUBMIT_TX_API_CONFIG = { baseURL: 'https://canary-api.sodax.com/v1/bes' } 
 // swaps stay on the global `config.swaps.partnerFee` (unset in this demo).
 const DEPOSIT_PARTNER_FEE = {
   address: '0x93D5CE288b3BF6b33F913b98FD1fA844Acc462d4',
-  percentage: 100,
+  percentage: 10,
 } as const satisfies PartnerFee;
 
 function fmtUnits(value: bigint | undefined, decimals: number, digits = 6): string {
