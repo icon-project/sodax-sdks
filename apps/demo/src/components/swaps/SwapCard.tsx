@@ -15,8 +15,6 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { calculateExchangeRate, formatMutationFailureMessage, formatTokenAmount } from '@/lib/utils';
 import { parseUnits, formatUnits } from 'viem';
-import { type CreateIntentParams, getSupportedSolverTokens, type SolverIntentQuoteRequest } from '@sodax/sdk';
-import type { GetWalletProviderType, SubmitSwapTxRequest, SwapIntentData } from '@sodax/sdk';
 import BigNumber from 'bignumber.js';
 import { ArrowDownUp, ArrowLeftRight, Loader2 } from 'lucide-react';
 import React, { type SetStateAction, useMemo, useState } from 'react';
@@ -33,6 +31,18 @@ import {
   useBackendSubmitSwapTx,
   useXBalances,
   useNearStorageGate,
+  type CreateIntentParams,
+  getSupportedSolverTokens,
+  type SolverIntentQuoteRequest,
+  type GetWalletProviderType,
+  type SubmitSwapTxRequest,
+  type SwapIntentData,
+  type SpokeChainKey,
+  type XToken,
+  type ChainType,
+  type IStellarWalletProvider,
+  type StellarChainKey,
+  ChainKeys,
 } from '@sodax/dapp-kit';
 import {
   getXChainType,
@@ -43,14 +53,6 @@ import {
   useXConnection,
   useXService,
 } from '@sodax/wallet-sdk-react';
-import {
-  type SpokeChainKey,
-  type XToken,
-  type ChainType,
-  type IStellarWalletProvider,
-  type StellarChainKey,
-  ChainKeys,
-} from '@sodax/sdk';
 import type { Order } from '@/components/swaps/OrderStatus';
 import { DEFAULT_SELECTED_CHAIN, useAppStore } from '@/zustand/useAppStore';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';

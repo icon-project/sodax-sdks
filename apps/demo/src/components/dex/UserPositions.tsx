@@ -1,15 +1,17 @@
 // apps/demo/src/components/dex/UserPositions.tsx
 import React, { type JSX, useEffect, useState } from 'react';
-import type { Hash, PoolData, PoolKey } from '@sodax/sdk';
-import type { SpokeChainKey } from '@sodax/sdk';
-import type { IWalletProvider } from '@sodax/wallet-sdk-react';
 import {
+  type Hash,
+  type PoolData,
+  type PoolKey,
+  type SpokeChainKey,
   createDecreaseLiquidityParamsProps,
   useDecreaseLiquidity,
   useClaimRewards,
   usePositionInfo,
   useSodaxContext,
 } from '@sodax/dapp-kit';
+import type { IWalletProvider } from '@sodax/wallet-sdk-react';
 import {
   formatCompactNumber,
   formatTokenAmount,
