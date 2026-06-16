@@ -92,4 +92,4 @@ Requires `@sentry/react` installed (listed in `package.json`). To send to the **
 - **Node polyfills.** Uses `@bangjelkoski/vite-plugin-node-polyfills` (Bitcoin/Solana deps pull in `buffer`, `crypto`, etc.). If a new dependency requires a polyfill, add it there rather than in app code.
 - **Env vars.** Vite-side env vars must be `VITE_*` (e.g. `VITE_WALLETCONNECT_PROJECT_ID`). The RPC overrides in `providers.tsx` read from `process.env.*` which is replaced at build time — leaving them unset is fine (public fallbacks).
 - **Build memory.** Build script sets `--max-old-space-size=8192` because the bundle is large. Don't drop that flag.
-- **Don't add business logic here.** This app demos the SDK; real wallet/registration/ToS flows belong in partner apps, not in `demo/`.
+- **Don't add business logic here.** This app demos the SDK; real wallet/registration/ToS flows belong in partner apps, not in `demo/`. Prefer `@sodax/dapp-kit` for product flows, and if demo code becomes reusable, move it to `dapp-kit` / SDK rather than burying it here.

@@ -86,7 +86,6 @@ These guide every change. Where a rule maps to tooling (types, lint, tests, `che
 - **Branch by case; don't over-generalize.** Chain/token work differs by family and feature (e.g. EVM vs non-EVM); verify the specific case instead of copying one onto another.
 - **Source-derived config.** Token/chain config is source-of-truth in `@sodax/types` / backend — never hardcode chain or token lists in feature code.
 - **No escape hatches.** Don't use `any`, `@ts-ignore`, non-null `!`, or unsafe casts to silence type/quality checks; fix the underlying type. (Existing `biome.json` overrides are tracked tech debt, not a license.)
-- **Don't weaken safety surfaces.** This is financial code: preserve input validation, guards, amount/decimal and address handling, signing boundaries, and explicit error surfaces, and cover changes with tests. SDK error/`Result` specifics live in `packages/sdk/AGENTS.md`.
 - **Never commit or hardcode secrets.** Keep private keys, mnemonics, and RPC credentials in env vars (`process.env` / git-ignored `.env`, with `.env.example` placeholders) the way the `apps/node` smoke scripts do — never inline a real key, paste one into a sample, or log it. If a task needs a secret, stop and ask.
 - **Fix the gate, don't game it.** Don't skip or disable tests (`.only`, `.skip`, deleted assertions), blanket-suppress lint, or bypass the husky pre-commit / commit-msg hooks (`--no-verify`, force-push) to go green. If a check fails, fix the cause or stop and report it — silencing it just hides the regression.
 - **Preserve package boundaries.** Keep dependency direction intact and put reusable logic in the package/domain that owns it; don't hide cross-package coupling in callers.
@@ -95,7 +94,6 @@ These guide every change. Where a rule maps to tooling (types, lint, tests, `che
 - **Comment sparingly — why, not what.** Explain a non-obvious constraint or decision in a line or two; don't narrate what the code or config already says, and don't leave commented-out code.
 - **Cover new code with meaningful tests.** Add or extend tests for core flows, invariants, edge cases, and chain/feature matrices beside the changed code; don't rely on superficial coverage.
 - **Keep AI docs faithful.** When public behavior, imports, signatures, examples, chains, tokens, or feature support change, update `packages/skills` so agents can implement from code + docs without guessing; run `pnpm check:ai`.
-- **Keep demo code exemplary.** `apps/demo` should follow its local patterns, prefer `@sodax/dapp-kit` for product flows, and remain readable for external integrators. If demo code becomes reusable app logic, move or propose it in `dapp-kit` / SDK rather than burying it in the demo.
 
 **Definition of done:** scoped diff · behavior verified against `src/` · relevant `test`/`checkTs`/`lint`/`check:ai` green · `packages/skills` updated when public behavior changed · no unrelated refactor.
 
