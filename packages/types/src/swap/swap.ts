@@ -243,22 +243,7 @@ export const swapSupportedTokens = {
 // `getStagingSolverTokens` for the full staging set. The two lists are disjoint per chain;
 // a token lives in exactly one of them. It is upon the user to provide a token valid for
 // their target environment — validation accepts either (see `isSwapSupportedToken`).
-// Derived from the production solver oracle (tokens absent there). Last re-synced against the
-// oracle on 2026-06-16: Base SODA, Optimism bnUSD, and the 8 Solana xStocks (CRCLx/TSLAx/SPYx/
-// NVDAx/QQQx/MSTRx/COINx/GOOGLx) were found in the production oracle and promoted to
-// `swapSupportedTokens`. Still pending solver-team confirmation (#193): ICON (ICX/wICX/bnUSD)
-// and Sonic sodaWBTC/IbnUSD are absent from the oracle but kept in production for now.
-// Arbitrum SODA was moved to production (its SDK address 0x5bDa87…dc6F5 is the correct current
-// token); both solver oracles still list an OLD deployment (0x6958…b3b92F), so production fills
-// depend on the solver updating its oracle to the new address.
-// Staging-only additions below were synced 2026-06-16 against the staging solver oracle
-// (https://sodax-solver-staging.iconblockchain.xyz/oracle): Polygon USDT+wstETH, Sui USDT,
-// Ethereum wstETH+weETH, and Base AERO (the latter required a new XToken def in tokens.ts —
-// it is onboarded on the hub, hubAsset=BASE_AERO_ASSET). Other staging-oracle tokens were
-// intentionally NOT added — wrapped natives (WETH/WAVAX/WBNB/WSOL/…) the SDK exposes via their
-// native form, and tokens NOT onboarded on the hub (no hubAsset/vault: Sui CETUS/BUCK/wUSDC/
-// wUSDT, Stacks aeUSDC, Eth stETH/eETH) which the contracts team must onboard first.
-// Use the `add-swap-token` Claude skill to add entries.
+// Derived from the production solver oracle (tokens absent there). 
 export const stagingSwapSupportedTokens = {
   [ChainKeys.SONIC_MAINNET]: [SodaTokens.sodaUSDS] as const satisfies XToken[],
   [ChainKeys.AVALANCHE_MAINNET]: [],
