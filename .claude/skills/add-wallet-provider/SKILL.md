@@ -22,7 +22,7 @@ The wallet layer is two independent slices: **wallet-sdk-core** signs/broadcasts
 
 ## Case A — a new wallet for an existing chain (`wallet-sdk-react` only)
 
-**First find the chain's registration pattern in `chainRegistry.ts` — it differs by family, and it decides whether you write a new class at all:**
+**First read the chain's `chainRegistry.ts` entry and match its *shape* — the names below are examples, so a chain not listed still maps by its registry shape, and it decides whether you write a new class at all:**
 
 | Chain(s) | Pattern | Add a wallet by |
 | --- | --- | --- |

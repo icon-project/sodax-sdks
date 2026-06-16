@@ -81,12 +81,7 @@ The contract payload gives 4 fields; **supply the other 3 by hand**:
 | `access?` | omit unless restricted (`withdrawOnly` / `depositOnly`) |
 
 **Address format:**
-- **EVM addresses (`hubAsset`, `vault`, EVM `address`): use checksummed (EIP-55)** — the canonical
-  mixed-case form via viem's `getAddress(...)` or the block-explorer page; don't paste all-lowercase/uppercase.
-  **Convention, NOT enforced** — SDK lookups `.toLowerCase()` (lowercase still functions), the repo has
-  many legacy lowercase `hubAsset`/`vault` entries, and **no CI check catches casing**, so a lowercase entry
-  will pass green. Treat checksummed as the preferred form for new entries; to make it a true hard rule it
-  needs a validator + normalizing the existing entries (a separate follow-up).
+- **EVM addresses (`hubAsset`, `vault`, EVM `address`): use checksummed (EIP-55)** — viem's `getAddress(...)` or the explorer's mixed-case form. Convention only (lookups `.toLowerCase()`, not CI-enforced), but the preferred form for new entries.
 - **Non-EVM `address` keeps its native, case-sensitive form** (Solana **base58** like `XsueG8Bt…`, Sui,
   Stacks, …). Checksumming does not apply — **NEVER lowercase/uppercase or transform** it; re-casing
   base58 yields a different, wrong address. Store byte-for-byte from the contract/explorer.
