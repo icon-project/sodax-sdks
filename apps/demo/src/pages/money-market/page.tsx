@@ -7,11 +7,10 @@ import { BitcoinTradingSection } from '@/components/mm/BitcoinTradingSection';
 import { Button } from '@/components/ui/button';
 import { useXAccount } from '@sodax/wallet-sdk-react';
 import { useAppStore } from '@/zustand/useAppStore';
-import { useGetUserHubWalletAddress } from '@sodax/dapp-kit';
+import { useGetUserHubWalletAddress, baseChainInfo, ChainKeys, type SpokeChainKey } from '@sodax/dapp-kit';
 import { Info, Wallet } from 'lucide-react';
 import { BorrowAssetsList } from '@/components/mm/lists/borrow/BorrowAssetsList';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { baseChainInfo, ChainKeys, type SpokeChainKey } from '@sodax/sdk';
 
 const validChainIds = new Set<string>(Object.keys(baseChainInfo));
 const isValidChainId = (id: string | undefined): id is SpokeChainKey => !!id && validChainIds.has(id);

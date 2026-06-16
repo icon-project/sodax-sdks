@@ -30,7 +30,8 @@ type SodaxFeature =
   | 'dex'
   | 'partner'
   | 'recovery'
-  | 'backend'; // HTTP-client layer (BackendApiService / SwapsApiService) — not a domain feature
+  | 'backend' // HTTP-client layer (BackendApiService / SwapsApiService) — not a domain feature
+  | 'leverageYield';
 ```
 
 The `(feature, code)` pair is the canonical discriminator. Loggers tag both fields; switch statements branch on both.
@@ -160,6 +161,21 @@ Both follow the same shape: action methods get the full exec union (`'EXECUTION_
 ### Backend / Swaps API (`feature: 'backend'`)
 
 `BackendApiService` (`sodax.backendApi`) and the Swaps API v2 client (`sodax.api.swaps`) are the HTTP-client layer — not domain features. Every method returns `Result<T, SodaxError<'EXTERNAL_API_ERROR'>>` with `context.api: 'backend'` and `context.endpoint`; the transport failure (timeout / non-2xx / response-shape mismatch) is preserved on `error.cause`.
+
+### Leverage Yield (`feature: 'leverageYield'`)
+
+Action discriminator on `context.action`: `'deposit' \| 'withdraw' \| 'approve' \| 'allowanceCheck' \| 'vaultSwap'`.
+
+| Method | Narrow code union |
+|---|---|
+| `deposit`, `withdraw`, `createVaultIntent` | `CreateIntentErrorCode` (create-intent subset) |
+| `vaultSwap` | All exec codes: `VALIDATION_FAILED \| INTENT_CREATION_FAILED \| TX_VERIFICATION_FAILED \| TX_SUBMIT_FAILED \| RELAY_TIMEOUT \| RELAY_FAILED \| EXECUTION_FAILED \| EXTERNAL_API_ERROR \| UNKNOWN` |
+| `notifySolver` | `EXECUTION_FAILED \| EXTERNAL_API_ERROR \| UNKNOWN` (with `phase: 'postExecution'`) |
+| `approve` | `ApproveErrorCode` |
+| `isAllowanceValid` | `AllowanceCheckErrorCode` (action `'allowanceCheck'`) |
+| `getApr`, `getEffectiveApr`, `getLsdApr`, `getPosition`, `getTotalAssets`, `previewDeposit`, `previewWithdraw`, `previewRedeem`, `getMaxWithdraw`, `getMaxWithdrawForUser`, `getShareBalance`, `getShareBalanceForUser`, `getAsset` | `LookupErrorCode` (with `method` discriminator) |
+
+Relay/tx-verification codes appear only on `vaultSwap`; `createVaultIntent` stays within the create-intent subset. `notifySolver` is public (manual create→relay→notify) and emits the post-execution subset.
 
 ---
 

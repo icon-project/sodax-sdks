@@ -1,6 +1,10 @@
 ---
 name: sodax-dapp-kit-money-market
 description: 'Granular skill for the @sodax/dapp-kit v2 money-market feature only — React Query hooks for cross-chain lending/borrowing: useSupply, useBorrow, useWithdraw, useRepay, useMMAllowance, useMMApprove, plus reserves/position reads (useReservesHumanized, useUserFormattedSummary, useUserReservesData, useAToken, useATokensBalances). Use when a React dapp task is specifically money-market (e.g. "useSupply with dapp-kit", "borrow hook", "render health factor in React", "Sodax lending hooks", "withdraw collateral hook"). Covers BOTH integration (new v2 hooks) and migration (port v1 MM hooks — single-object params, srcChainKey/srcAddress required, mutateAsyncSafe). Links into the parent sodax-dapp-kit knowledge tree. For backend/Node, use the sodax-sdk skill.'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # Money Market (dapp-kit granular skill)

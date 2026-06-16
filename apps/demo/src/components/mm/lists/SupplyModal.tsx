@@ -8,11 +8,18 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 import { getXChainType, useEvmSwitchChain, useWalletProvider, useXAccount, useXService } from '@sodax/wallet-sdk-react';
 import { formatUnits, parseUnits } from 'viem';
-import { useMMAllowance, useMMApprove, useSodaxContext, useSupply, useXBalances } from '@sodax/dapp-kit';
-import type { SpokeChainKey, XToken } from '@sodax/sdk';
+import {
+  useMMAllowance,
+  useMMApprove,
+  useSodaxContext,
+  useSupply,
+  useXBalances,
+  type SpokeChainKey,
+  type XToken,
+  type MoneyMarketSupplyParams,
+} from '@sodax/dapp-kit';
 import { useAppStore } from '@/zustand/useAppStore';
 import { useBtcTradingBalance } from '@/hooks/useBtcTradingBalance';
-import type { MoneyMarketSupplyParams } from '@sodax/sdk';
 import {
   formatDecimalForDisplay,
   getChainsWithThisToken,

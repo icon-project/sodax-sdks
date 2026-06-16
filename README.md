@@ -14,6 +14,16 @@ SODAX is a cross-chain DeFi platform built on a **hub-and-spoke architecture**, 
 
 See the [Sodax SDK README](./packages/sdk/README.md) for a deeper architectural overview.
 
+## AI Agent Skills
+
+Building with the `@sodax/*` SDKs in an AI coding agent (Claude Code, Cursor, Codex, Copilot, and 50+ others)? Install the official SODAX skills — agent-native guides covering integration and v1→v2 migration for every package:
+
+```bash
+npx skills@latest add icon-project/sodax-sdks/packages/skills
+```
+
+Browse them on [skills.sh](https://www.skills.sh/icon-project/sodax-sdks). See the [Skills Documentation](./packages/skills/README.md) for what ships and how to use it.
+
 ## Repository Structure
 
 ### Packages (`/packages`)

@@ -1,6 +1,6 @@
 # Hooks index — `@sodax/dapp-kit` v2
 
-Comprehensive hook table across 11 feature domains. Use this when you know the feature you're building but don't remember the exact hook name.
+Comprehensive hook table across 12 feature domains. Use this when you know the feature you're building but don't remember the exact hook name.
 
 ## Provider + context
 
@@ -96,6 +96,20 @@ Comprehensive hook table across 11 feature domains. Use this when you know the f
 | `useCreateWithdrawParams` | Param builder | Build withdraw params |
 | `useCreateSupplyLiquidityParams` | Param builder | Build tick-range + liquidity params |
 | `useCreateDecreaseLiquidityParams` | Param builder | Build decrease params from position state |
+
+## Leverage Yield
+
+| Hook | Type | Purpose |
+|---|---|---|
+| `useLeverageYieldDeposit` | Mutation | Build a deposit payload (any token → `lsoda*` shares) — spread into `useLeverageYieldVaultSwap` |
+| `useLeverageYieldWithdraw` | Mutation | Build a withdraw payload (`lsoda*` → any token; `hubWalletSwap`) |
+| `useLeverageYieldVaultSwap` | Mutation | Execute a built payload end-to-end (create → verify → relay → notify solver) |
+| `useLeverageYieldNotifySolver` | Mutation | Manual-flow notify step (after a self-driven `createVaultIntent` + relay) |
+| `useLeverageYieldEffectiveApr` | Query | AAVE + LSD effective net APR (60s) |
+| `useLeverageYieldPosition` | Query | Live position: collateral, debt, LTV, health factor, idle (30s) |
+| `useLeverageYieldTotalAssets` | Query | Vault TVL (18-dp bigint, 60s) |
+| `useLeverageYieldPreviewRedeem` | Query | Assets for N shares; pass `1e18` for price-per-share (60s) |
+| `useLeverageYieldShareBalances` | Query | Per-chain `lsoda*` balances via `useQueries` — returns an array (15s) |
 
 ## Migration
 

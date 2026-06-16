@@ -13,6 +13,7 @@ import type { MoneyMarketConfig, PartnerFee } from '../common/common.js';
 import { moneyMarketConfig } from '../moneyMarket/moneyMarket.js';
 import { dexConfig, type DexConfig } from '../dex/dex.js';
 import { swapsConfig, type SwapsConfig } from '../swap/swap.js';
+import { leverageYieldConfig, type LeverageYieldConfig } from '../leverageYield/leverageYield.js';
 import {
   spokeChainConfig,
   type HubConfig,
@@ -62,6 +63,7 @@ export type SodaxConfig = {
   moneyMarket: MoneyMarketConfig; // Optional Money Market service enabling cross-chain lending and borrowing
   bridge: BridgeConfig; // Optional Bridge config for partner fee
   dex: DexConfig; // Optional Dex service enabling DEX operations
+  leverageYield: LeverageYieldConfig; // Registry of deployed leverage-yield ERC-4626 vaults on Sonic
   hub: HubConfig; // Hub provider for the hub chain (e.g. Sonic mainnet)
   api: ApiConfig; // API config used to interact with the Backend API
   solver: SolverConfig;
@@ -103,6 +105,7 @@ export const sodaxConfig = {
   moneyMarket: moneyMarketConfig,
   bridge: bridgeConfig,
   dex: dexConfig,
+  leverageYield: leverageYieldConfig,
   hub: hubConfig,
   api: apiConfig,
   solver: solverConfig,

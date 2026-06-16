@@ -33,6 +33,12 @@ import {
   useSwapsApiSubmitTx,
   useXBalances,
   useNearStorageGate,
+  type SpokeChainKey,
+  type XToken,
+  type ChainType,
+  type IStellarWalletProvider,
+  type StellarChainKey,
+  ChainKeys,
 } from '@sodax/dapp-kit';
 import {
   getXChainType,
@@ -43,14 +49,6 @@ import {
   useXConnection,
   useXService,
 } from '@sodax/wallet-sdk-react';
-import {
-  type SpokeChainKey,
-  type XToken,
-  type ChainType,
-  type IStellarWalletProvider,
-  type StellarChainKey,
-  ChainKeys,
-} from '@sodax/sdk';
 import type { Order } from '@/components/swaps/OrderStatus';
 import { DEFAULT_SELECTED_CHAIN, useAppStore } from '@/zustand/useAppStore';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';

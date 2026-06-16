@@ -1,6 +1,10 @@
 ---
 name: sodax-sdk-swap
 description: 'Granular skill for the @sodax/sdk v2 swap feature only — intent-based swaps via solver (market orders + limit orders) and cancel/approve flows. Use when the consumer has decided the task is a swap (e.g. "swap with Sodax", "Sodax intent swap", "limit order on Sodax", "cross-chain swap via Sonic", "cancel a Sodax intent") and you want to skip loading the broad sodax-sdk skill. Covers BOTH integration (write new v2 swap code) and migration (port v1 swap to v2) — picks via Step 1 question. Skill is intentionally short and links into the parent sodax-sdk knowledge tree (../integration/knowledge/, ../migration-v1-to-v2/knowledge/) for full reference. For React dapps doing swaps, prefer the sodax-dapp-kit skill instead.'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # Swap (Core SDK granular skill)

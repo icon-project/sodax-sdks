@@ -2,7 +2,7 @@ import React from 'react';
 import './App.css';
 
 import { createBrowserRouter, Outlet, RouterProvider, Navigate } from 'react-router';
-import { ChainKeys } from '@sodax/sdk';
+import { ChainKeys } from '@sodax/dapp-kit';
 import Header from './components/shared/header';
 import SolverPage from './pages/solver/page';
 import SwapsApiPage from './pages/swaps-api/page';
@@ -12,6 +12,7 @@ import DexPage from './pages/dex/page';
 import StakingPage from './pages/staking/page';
 import PartnerFeeClaimPage from './pages/partner-fee-claim/page';
 import RecoveryPage from './pages/recovery/page';
+import LeverageYieldPage from './pages/leverage-yield/page';
 
 const router = createBrowserRouter([
   {
@@ -62,6 +63,10 @@ const router = createBrowserRouter([
       {
         path: '/recovery',
         element: <RecoveryPage />,
+      },
+      {
+        path: '/leverage-yield',
+        element: <LeverageYieldPage />,
       },
     ],
   },

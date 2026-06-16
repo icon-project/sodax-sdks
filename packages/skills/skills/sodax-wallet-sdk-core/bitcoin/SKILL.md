@@ -1,6 +1,10 @@
 ---
 name: sodax-wallet-sdk-core-bitcoin
 description: 'Granular skill for the @sodax/wallet-sdk-core v2 Bitcoin wallet provider only — `BitcoinWalletProvider` (PSBT signing via bitcoinjs-lib + ecpair + bip322-js). Use when a backend / Node script / CI / bot / non-React browser flow needs to instantiate a Bitcoin provider directly and sign PSBTs / messages — e.g. "instantiate BitcoinWalletProvider", "sign a PSBT in Node", "BIP-322 vs ECDSA message signing", "private-key Bitcoin signing". Covers BOTH integration (write new v2 code) and migration (port v1 — almost a no-op at this surface: deep-import → barrel). Picks via Step 1. Links into the parent sodax-wallet-sdk-core knowledge tree. For React dapps use the sodax-wallet-sdk-react skill instead (get the typed provider via useWalletProvider).'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # Bitcoin (`wallet-sdk-core` granular skill)

@@ -67,7 +67,8 @@ export type SodaxFeature =
   | 'dex'
   | 'partner'
   | 'recovery'
-  | 'backend'; // backend-API HTTP client layer (BackendApiService / SwapsApiService), not a domain feature
+  | 'backend' // backend-API HTTP client layer (BackendApiService / SwapsApiService), not a domain feature
+  | 'leverageYield';
 
 /**
  * Orchestration phase tag attached via `context.phase`. Canonical superset across all
@@ -206,4 +207,5 @@ export const SODAX_FEATURES = [
   'partner',
   'recovery',
   'backend',
+  'leverageYield',
 ] as const satisfies ReadonlyArray<SodaxFeature>;

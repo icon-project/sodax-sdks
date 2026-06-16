@@ -73,6 +73,7 @@ export class CustomStellarAccount {
   decrementSequenceNumber(): void {
     if (this.sequenceNumber > this.startingSequenceNumber) {
       this.sequenceNumber--;
+      return;
     }
 
     throw new Error(
@@ -233,7 +234,7 @@ export class StellarSpokeService {
       const assembledPriorityTx = rpc.assembleTransaction(rawPriorityTx, simulation).build();
 
       if (params.raw) {
-        const transactionXdr = rawPriorityTx.toXDR();
+        const transactionXdr = assembledPriorityTx.toXDR();
 
         return {
           from: from,
@@ -407,7 +408,7 @@ export class StellarSpokeService {
       const assembledPriorityTx = rpc.assembleTransaction(rawPriorityTx, simulation).build();
 
       if (params.raw) {
-        const transactionXdr = rawPriorityTx.toXDR();
+        const transactionXdr = assembledPriorityTx.toXDR();
 
         return {
           from: from,

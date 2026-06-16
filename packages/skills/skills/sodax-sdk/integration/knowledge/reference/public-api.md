@@ -69,6 +69,7 @@ import {
   dexInvariant,
   partnerInvariant,
   recoveryInvariant,
+  leverageYieldInvariant,
   mapRelayFailure,
 
   // Tokens
@@ -110,6 +111,17 @@ import {
   type ClClaimRewardsParams,
   type MigrationParams,
   type UnifiedBnUSDMigrateParams,
+  type LeverageYieldSwapDepositParams,
+  type LeverageYieldSwapWithdrawParams,
+  type LeverageYieldSwapPayload,
+  type VaultSwapActionParams,
+  type VaultSwapResponse,
+  type CreateVaultIntentResult,
+  type LeverageYieldApr,
+  type LeverageYieldEffectiveApr,
+  type LeverageYieldLsdApr,
+  type LeverageYieldPosition,
+  type LeverageYieldVault,
   // …
 
   // Backend / relay
