@@ -4,7 +4,7 @@
 
 ## What's here
 
-This package ships **four mode-gated broad skills** (`skills/<name>/SKILL.md`) — one per SODAX SDK package — plus **nested granular skills** under every broad skill: `sodax-sdk` (one per Core SDK feature service), `sodax-dapp-kit` (one per dapp-kit feature domain), `sodax-wallet-sdk-core` (one per chain family), and `sodax-wallet-sdk-react` (one per connectivity concern). Each broad skill bundles two long-form **knowledge** subtrees: `integration/knowledge/` (writing new v2 code) and `migration-v1-to-v2/knowledge/` (porting v1 → v2). Granular skills are single-file SKILL.md that link into their parent's knowledge tree. Skills are action-oriented (when to use, workflow, anti-patterns, links into knowledge); knowledge is the reference material your workflow points at. SKILL.md gates by mode at the top — pick integration or migration based on the consumer signal.
+This package ships **four mode-gated broad skills** (`skills/<name>/SKILL.md`) — one per SODAX SDK package — plus **nested granular skills** under every broad skill: `sodax-sdk` (one per Core SDK feature service), `sodax-dapp-kit` (one per dapp-kit feature domain), `sodax-wallet-sdk-core` (one per chain family), and `sodax-wallet-sdk-react` (one per connectivity concern). Each broad skill bundles two long-form **knowledge** subtrees: `integration/knowledge/` (writing new v2 code) and `migration-v1-to-v2/knowledge/` (porting v1 → v2). Granular skills are single-file SKILL.md that link into their parent's knowledge tree. The **4 broad skills are the only installable units** — installing one (e.g. `npx skills add … --skill sodax-sdk`) lands its full knowledge tree **and** all its nested granular SKILL.md files, so you "load a granular skill" by reading `skills/<broad>/<feature>/SKILL.md` from within the installed broad skill. (Granular skills are not installed standalone: they link up into the parent tree via `../`, which only resolves inside the broad skill.) Skills are action-oriented (when to use, workflow, anti-patterns, links into knowledge); knowledge is the reference material your workflow points at. SKILL.md gates by mode at the top — pick integration or migration based on the consumer signal.
 
 | SDK package | Broad skill | Granular per-feature skills |
 |---|---|---|
@@ -55,7 +55,7 @@ Each `SKILL.md` is short on purpose. Follow it like a procedure:
 ```
 packages/skills/
 ├── AGENTS.md                              # You are here
-├── .claude-plugin/plugin.json             # Skill registry (broad + nested granular paths)
+├── .claude-plugin/plugin.json             # Skill registry — the 4 broad skills ONLY (granular ship bundled inside them)
 └── skills/                                # Each broad skill is mode-gated; some have nested granular children
     ├── sodax-sdk/                         {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/,
     │                                       <feature>/SKILL.md ×10 — swap, money-market, bridge, staking, dex,
