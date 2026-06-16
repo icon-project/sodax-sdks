@@ -161,11 +161,7 @@ export class SolanaWalletProvider extends BaseWalletProvider<SolanaWalletDefault
   }
 
   public async signAndSerializeTransaction(transaction: VersionedTransaction): Promise<SolanaSerializedTransaction> {
-    let tx: VersionedTransaction;
-    if (this.isAdapterMode) {
-      tx = await this.signTransactionWithAdapter(transaction);
-    }
-    tx = await this.signTransactionWithKeypair(transaction);
+    const tx = await this.signTransaction(transaction);
     return tx.serialize();
   }
 
