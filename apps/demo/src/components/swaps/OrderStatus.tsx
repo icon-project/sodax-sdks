@@ -1,6 +1,11 @@
 import React, { useMemo } from 'react';
-import type { Hex, Intent, IntentDeliveryInfo } from '@sodax/sdk';
-import { useStatus, useBackendSubmitSwapTxStatus } from '@sodax/dapp-kit';
+import {
+  type Hex,
+  type Intent,
+  type IntentDeliveryInfo,
+  useStatus,
+  useBackendSubmitSwapTxStatus,
+} from '@sodax/dapp-kit';
 import { statusCodeToMessage } from '@/lib/utils';
 
 export type SolverOrder = {

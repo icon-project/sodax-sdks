@@ -1,8 +1,13 @@
 import React, { type ReactElement, useMemo } from 'react';
 import { TableCell, TableRow } from '@/components/ui/table';
-import { ChainKeys, type XToken, type Address } from '@sodax/sdk';
+import {
+  ChainKeys,
+  type XToken,
+  type Address,
+  type FormatReserveUSDResponse,
+  type UserReserveData,
+} from '@sodax/dapp-kit';
 import { formatUnits } from 'viem';
-import type { FormatReserveUSDResponse, UserReserveData } from '@sodax/sdk';
 import { useReserveMetrics } from '@/hooks/useReserveMetrics';
 import { Button } from '@/components/ui/button';
 import {

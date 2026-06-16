@@ -1,5 +1,4 @@
-import type { MoneyMarketAsset, Sodax } from '@sodax/sdk';
-import type { SpokeChainKey, XToken } from '@sodax/sdk';
+import type { MoneyMarketAsset, Sodax, SpokeChainKey, XToken } from '@sodax/dapp-kit';
 
 /**
  * Find the MoneyMarketAsset for a borrowable asset by matching the vault address.

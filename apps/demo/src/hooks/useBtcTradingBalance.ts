@@ -1,5 +1,10 @@
-import { useTradingWallet, useTradingWalletBalance } from '@sodax/dapp-kit';
-import { ChainKeys, type IBitcoinWalletProvider, type SpokeChainKey } from '@sodax/sdk';
+import {
+  useTradingWallet,
+  useTradingWalletBalance,
+  ChainKeys,
+  type IBitcoinWalletProvider,
+  type SpokeChainKey,
+} from '@sodax/dapp-kit';
 import { useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
 
 interface UseBtcTradingBalanceParams {

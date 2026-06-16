@@ -12,10 +12,10 @@ packages/skills/
 │   └── plugin.json                # Skill registry (broad + nested granular paths)
 ├── AGENTS.md                      # Tool-neutral router: consumer intent → skill (+ mode)
 ├── skills/                        # Each broad skill is mode-gated; some have nested granular children
-│   ├── sodax-sdk/                          {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/, <feature>/SKILL.md ×9}
+│   ├── sodax-sdk/                          {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/, <feature>/SKILL.md ×10}
 │   ├── sodax-wallet-sdk-core/              {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/, <chain>/SKILL.md ×9}
 │   ├── sodax-wallet-sdk-react/             {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/ (incl. 4 .tsx example apps under integration/knowledge/examples/), <concern>/SKILL.md ×6}
-│   └── sodax-dapp-kit/                     {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/, <feature>/SKILL.md ×8}
+│   └── sodax-dapp-kit/                     {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/, <feature>/SKILL.md ×9}
 └── scripts/check-skills.sh        # Validation: plugin.json, frontmatter, internal links
 ```
 
@@ -25,8 +25,8 @@ Each broad skill ships **both** mode subtrees under its own directory. The `skil
 
 Each broad skill has **nested granular skills** at `skills/<broad>/<sub-domain>/SKILL.md`. The split axis differs per package — pick whatever the consumer decides upfront and whatever maps 1:1 to a coherent slice of the broad knowledge tree:
 
-- `sodax-sdk` — one per Core SDK feature service (9): swap, money-market, bridge, staking, dex, migration, partner, recovery, backend-api.
-- `sodax-dapp-kit` — one per dapp-kit feature domain (8), matching the feature-knowledge filenames: swap, money-market, staking, bridge, dex, migration, bitcoin, auxiliary-services. (`auxiliary-services` bundles partner + recovery + backend queries + shared utilities, mirroring `features/auxiliary-services.md`.)
+- `sodax-sdk` — one per Core SDK feature service (10): swap, money-market, bridge, staking, dex, leverage-yield, migration, partner, recovery, backend-api.
+- `sodax-dapp-kit` — one per dapp-kit feature domain (9), matching the feature-knowledge filenames: swap, money-market, staking, bridge, dex, leverage-yield, migration, bitcoin, auxiliary-services. (`auxiliary-services` bundles partner + recovery + backend queries + shared utilities, mirroring `features/auxiliary-services.md`.)
 - `sodax-wallet-sdk-core` — one per **chain family** (9), 1:1 with `integration/knowledge/features/<chain>.md`: evm, solana, sui, bitcoin, stellar, icon, injective, near, stacks. (The axis is chain, not feature — hooks/services are uniform across chains; the per-chain config + methods + gotchas are what differ.)
 - `sodax-wallet-sdk-react` — one per **connectivity concern** (6), each backed by a dedicated integration recipe: connect (connect-button + chain-detection), wallet-modal (multi-chain-modal + batch-operations), bridge-to-sdk, switch-chain, sign-message, walletconnect. (No `features/` dir — hooks are chain-agnostic; `setup.md` is a shared prerequisite, not its own granular skill.)
 

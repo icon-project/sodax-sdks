@@ -182,19 +182,14 @@ export class SuiSpokeService {
     });
 
     if (params.raw === true) {
-      tx.setSender(from);
-      const transactionRaw = await tx.build({
-        client: this.publicClient,
-        onlyTransactionKind: true,
-      });
-
-      const transactionRawBase64String = Buffer.from(transactionRaw).toString('base64');
-
+      // Serialize the unbuilt PTB as the @mysten/sui Transaction JSON. This round-trips through
+      // Transaction.from() on the consume side (signing + gas estimation). Sender and gas are left
+      // unset — the wallet provider sets the sender and selects gas at build({ client }) time.
       return {
         from: from,
         to: `${assetManager.packageId}::${assetManager.moduleId}::transfer`,
         value: amount,
-        data: transactionRawBase64String,
+        data: tx.serialize(),
       } satisfies TxReturnType<SuiChainKey, true> as TxReturnType<SuiChainKey, R>;
     }
 
@@ -224,18 +219,14 @@ export class SuiSpokeService {
     });
 
     if (params.raw === true) {
-      txb.setSender(from);
-      const transactionRaw = await txb.build({
-        client: this.publicClient,
-        onlyTransactionKind: true,
-      });
-      const transactionRawBase64String = Buffer.from(transactionRaw).toString('base64');
-
+      // Serialize the unbuilt PTB as the @mysten/sui Transaction JSON. This round-trips through
+      // Transaction.from() on the consume side (signing + gas estimation). Sender and gas are left
+      // unset — the wallet provider sets the sender and selects gas at build({ client }) time.
       return {
         from: from,
         to: `${connection.packageId}::${connection.moduleId}::send_message_ua`,
         value: 0n,
-        data: transactionRawBase64String,
+        data: txb.serialize(),
       } satisfies TxReturnType<SuiChainKey, true> as TxReturnType<SuiChainKey, Raw>;
     }
 
@@ -250,7 +241,7 @@ export class SuiSpokeService {
    * @returns {Promise<bigint>} The estimated computation cost.
    */
   public async estimateGas({ tx }: EstimateGasParams<SuiChainKey>): Promise<SuiGasEstimate> {
-    const txb = Transaction.fromKind(tx.data);
+    const txb = Transaction.from(tx.data);
     const result = await this.publicClient.devInspectTransactionBlock({
       sender: tx.from,
       transactionBlock: txb,
