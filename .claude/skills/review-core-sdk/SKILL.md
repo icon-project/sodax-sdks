@@ -10,7 +10,7 @@ description: 'Use when reviewing a change, diff, or PR to the SODAX core SDK (pa
 > finding you cannot reproduce against the diff is not a finding.
 
 ## 1. Scope the diff
-`git diff main...HEAD --stat`, then read the hunks. Anything outside the stated task — an unrelated refactor, rename, or restyle — is a defect; the change should be scoped.
+`git diff origin/main...HEAD --stat`, then read the hunks. Anything outside the stated task — an unrelated refactor, rename, or restyle — is a defect; the change should be scoped.
 
 ## 2. Run the gates (read real output, don't assume)
 - `pnpm checkTs` · `pnpm lint` · `pnpm --filter @sodax/sdk test` (add `pnpm --filter @sodax/sdk test:e2e` if cross-chain logic changed; run the `apps/node` smoke script for the affected chain when relevant).
