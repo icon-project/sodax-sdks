@@ -34,7 +34,7 @@ A chain *can* reach **every package** — but edit each **only when the family +
 - `types` · `libs` (only if build workaround) · `sdk` · `wallet-sdk-core` · `wallet-sdk-react`
 - `dapp-kit` — usually nothing (chain-agnostic); only a special-need hook (NEAR storage / Stellar trustline).
 - **`packages/skills`** — the **largest footprint and easiest to forget** (consumer docs). Update the skill knowledge that references chains (esp. `sodax-wallet-sdk-react`: config / hooks / imports / checklist), then run `pnpm check:ai`.
-- **apps** — `apps/node/src/<chain>.ts` smoke script; wire the chain into `apps/demo`, `apps/example-next-js-16`, `apps/wallet-modal-example` as relevant.
+- **apps** — `apps/node/src/<chain>.ts` smoke script; wire the chain into the demo / example apps that surface chains (e.g. `apps/demo`, `apps/wallet-modal-example`) as relevant.
 
 ## Per-family quirks — check these 4 dimensions for YOUR non-EVM chain
 A new non-EVM chain follows §2; it is **not** a copy of an existing one. Ask which of these apply to it:

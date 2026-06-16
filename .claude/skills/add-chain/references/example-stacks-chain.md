@@ -37,8 +37,8 @@ Update the consumer skill knowledge that names chains — most of it under `soda
 (config / hooks / imports / checklist). Validate with `pnpm check:ai`.
 
 ## apps
-`apps/node/src/stacks.ts` smoke script; chain wiring in `apps/demo`, `apps/example-next-js-16`,
-`apps/wallet-modal-example` (and `apps/node-cjs` interop) as relevant.
+`apps/node/src/stacks.ts` smoke script; chain wiring in the demo / example apps that surface chains
+(`apps/demo`, `apps/wallet-modal-example`, and `apps/node-cjs` interop) as relevant.
 
 ## Tests
 **Created alongside:** `StacksSpokeService.test.ts`, `StacksWalletProvider.test.ts`,
