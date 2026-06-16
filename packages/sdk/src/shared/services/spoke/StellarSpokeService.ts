@@ -233,7 +233,7 @@ export class StellarSpokeService {
       const assembledPriorityTx = rpc.assembleTransaction(rawPriorityTx, simulation).build();
 
       if (params.raw) {
-        const transactionXdr = rawPriorityTx.toXDR();
+        const transactionXdr = assembledPriorityTx.toXDR();
 
         return {
           from: from,
@@ -407,7 +407,7 @@ export class StellarSpokeService {
       const assembledPriorityTx = rpc.assembleTransaction(rawPriorityTx, simulation).build();
 
       if (params.raw) {
-        const transactionXdr = rawPriorityTx.toXDR();
+        const transactionXdr = assembledPriorityTx.toXDR();
 
         return {
           from: from,
