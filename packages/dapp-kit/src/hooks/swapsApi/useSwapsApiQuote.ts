@@ -47,6 +47,8 @@ export const useSwapsApiQuote = ({
       body?.tokenDstChainKey,
       body?.tokenDst,
       body?.amount,
+      body?.srcAddress,
+      body?.dstAddress,
       query?.includeTxData ?? false,
     ],
     queryFn: async (): Promise<QuoteResponseV2 | undefined> => {
