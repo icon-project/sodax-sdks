@@ -67,7 +67,7 @@ pnpm pretty       # biome format --write
 ## Common pitfalls
 
 - **Real funds.** Every script signs with `PRIVATE_KEY` and broadcasts to mainnet. Use a dedicated test wallet with minimal balance; never use a wallet that holds real value.
-- **ICON chain is being phased out.** `icon.ts` and ICON-touching tests may fail — that's expected, don't treat as a regression.
+- **ICON failures aren't automatically a regression.** `icon.ts` and ICON-touching tests can fail when ICON is disabled/deprioritized in config — confirm against `spokeChainConfig` before treating it as one.
 - **Type module.** `package.json` declares `"type": "module"` and tsconfig is `NodeNext`. Relative imports in source must use `.js` extensions (resolved post-build).
 - **Build before run.** Every `pnpm run <x>` script already chains `pnpm build` first, but if you're iterating with `node dist/...` directly remember to rebuild after edits.
 - **Don't add Vitest here.** The `tests/` directory uses `*.test.ts` naming convention but they're plain scripts. The package's `test` script is intentionally `true` — these run against live chains and aren't suited for CI.

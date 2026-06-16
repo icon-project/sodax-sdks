@@ -66,7 +66,7 @@ Template: read a recent same-shape chain end-to-end (`Stacks`, `Near`, `Sui`, �
   - `tokens.ts` + `swap.ts`/`moneyMarket.ts`: tokens (via `add-token`). Plus chain-type guards.
 - **sdk:**
   - `services/spoke/<Chain>SpokeService.ts` + `services/spoke/index.ts` barrel; **register in `SpokeService.ts`** at: import, type import, guard import, the spoke union, the `GetSpokeServiceType` conditional, the `public readonly <chain>` field, ctor construction, and the `getSpokeService` route.
-  - `shared/guards.ts` (chain guards), `shared/types/spoke-types.ts` (DepositParams/SendMessage + the chain's `<Chain>RawTransactionReceipt` + a branch in `GetTxReceiptType`), chain-specific `shared/utils/<chain>-utils.ts`; add `entities/<chain>/` **only if** the chain needs helpers (`btc`/`icon`/`injective`/`solana`/`stellar` have them; `stacks`/`near`/`sui` don't).
+  - `shared/guards.ts` (chain guards), `shared/types/spoke-types.ts` (DepositParams/SendMessage + the chain's `<Chain>RawTransactionReceipt` + a branch in `GetTxReceiptType`), chain-specific `shared/utils/<chain>-utils.ts`; add `entities/<chain>/` **only if** the chain needs a helper — many families don't, so check the current `entities/` dirs for which do.
   - **Generic — NO per-chain edit (verified 0 chain refs):** hub services (`EvmHubProvider`, `EvmAssetManagerService`) and intent-relay (`IntentRelayApiService`) work on the generic spoke abstraction. Don't go hunting for hub/relay edits.
 - **wallet-sdk-core:** `wallet-providers/<chain>/` provider — its "Adding a New Chain Provider" playbook.
 - **wallet-sdk-react:** `xchains/<chain>/` XService/XConnector + a `chainRegistry.ts` entry — its "Adding A New Chain Type" playbook.
@@ -83,7 +83,7 @@ Bitcoin doesn't follow the non-EVM pattern: it uses a **custodial trading-wallet
 2. **Connect layer — `@sodax/wallet-sdk-react`:**
    - `xchains/<chain>/`: a `<Chain>XService` + the wallet connector(s). Pick the **connector registration shape** by the new chain's wallet model — per-wallet class (Bitcoin/Icon), one parameterized class (Injective/Stacks), or runtime discovery via an aggregator (Stellar/Near); see the `add-wallet-provider` skill's pattern table.
    - a `chainRegistry.ts` entry exposing `defaultConnectors`, `providerManaged`, `createWalletProvider` (builds the wallet-sdk-core provider from the connected service), and optional `createActions` / `discoverConnectors`; **plus a `<Chain>ChainEntry` in `types/config.ts`** (the wallet config typing — easy to miss).
-   - **`providerManaged` branch — decides the shape:** if the chain's native wallet SDK needs React context (wagmi=EVM, wallet-adapter=Solana, dapp-kit=Sui) → set `providerManaged: true` AND add a `providers/<chain>/` Provider/Hydrator/Actions trio mounted conditionally in `SodaxWalletProvider.tsx`. Otherwise (Stacks/Near/Icon/Injective/Stellar/Bitcoin) just the registry entry — no trio.
+   - **`providerManaged` branch — decides the shape:** if the chain's native wallet SDK needs React context (e.g. wagmi=EVM, wallet-adapter=Solana, dapp-kit=Sui) → set `providerManaged: true` AND add a `providers/<chain>/` Provider/Hydrator/Actions trio mounted conditionally in `SodaxWalletProvider.tsx`. Otherwise just the registry entry — no trio (confirm the chain's mode in `chainRegistry.ts`).
 3. **Output:** consumers read the typed provider via `useWalletProvider({ xChainId })` and pass it into SDK / dapp-kit calls; the spoke service uses it to sign.
 
 ## 4. Tests — required per chain (not optional)
