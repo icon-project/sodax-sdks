@@ -42,6 +42,7 @@ import {
 import {
   ChainKeys,
   FEE_PERCENTAGE_SCALE,
+  HookKind,
   type PartnerFee,
   type SolverConfig,
   type XToken,
@@ -51,6 +52,7 @@ import type { ConfigService } from '../shared/config/ConfigService.js';
 import { IntentDataType, type CreateIntentParams, type Intent } from '../shared/types/intent-types.js';
 import { calculatePercentageFeeAmount } from '../shared/utils/shared-utils.js';
 import { EvmSolverService } from './EvmSolverService.js';
+import { HookService } from './HookService.js';
 
 // --- fixtures -------------------------------------------------------------
 
@@ -153,8 +155,7 @@ const encodeIntentFilledLog = (
 // Wrap a list of pseudo-logs in the minimal shape `waitForTransactionReceipt`
 // returns — `parseEventLogs` only reads the `logs` array, so we don't bother
 // populating the rest of the receipt.
-const receiptWith = (logs: ReadonlyArray<unknown>): TransactionReceipt =>
-  ({ logs }) as unknown as TransactionReceipt;
+const receiptWith = (logs: ReadonlyArray<unknown>): TransactionReceipt => ({ logs }) as unknown as TransactionReceipt;
 
 // =========================================================================
 // constructCreateIntentData — hub-asset resolution + multicall encoding
@@ -216,7 +217,11 @@ describe('EvmSolverService.constructCreateIntentData', () => {
     // Only the *output* lookup runs; the input is the hub asset directly.
     vi.mocked(mockConfig.getSpokeTokenFromOriginalAssetAddress).mockReturnValueOnce(hubOutputXToken);
 
-    const params: CreateIntentParams = { ...baseParams(), srcChainKey: ChainKeys.SONIC_MAINNET, inputToken: HUB_INPUT_ASSET };
+    const params: CreateIntentParams = {
+      ...baseParams(),
+      srcChainKey: ChainKeys.SONIC_MAINNET,
+      inputToken: HUB_INPUT_ASSET,
+    };
     const [, intent] = EvmSolverService.constructCreateIntentData(params, HUB_WALLET, mockConfig, undefined);
 
     expect(intent.inputToken).toBe(HUB_INPUT_ASSET);
@@ -227,7 +232,11 @@ describe('EvmSolverService.constructCreateIntentData', () => {
   it('treats the output token as already-on-hub when dstChainKey is the hub chain (skips lookup)', () => {
     vi.mocked(mockConfig.getSpokeTokenFromOriginalAssetAddress).mockReturnValueOnce(hubInputXToken);
 
-    const params: CreateIntentParams = { ...baseParams(), dstChainKey: ChainKeys.SONIC_MAINNET, outputToken: HUB_OUTPUT_ASSET };
+    const params: CreateIntentParams = {
+      ...baseParams(),
+      dstChainKey: ChainKeys.SONIC_MAINNET,
+      outputToken: HUB_OUTPUT_ASSET,
+    };
     const [, intent] = EvmSolverService.constructCreateIntentData(params, HUB_WALLET, mockConfig, undefined);
 
     expect(intent.outputToken).toBe(HUB_OUTPUT_ASSET);
@@ -256,12 +265,7 @@ describe('EvmSolverService.constructCreateIntentData', () => {
       .mockReturnValueOnce(hubOutputXToken);
 
     const fee: PartnerFee = { address: FEE_RECEIVER, percentage: 100 }; // 1%
-    const [, intent, feeAmount] = EvmSolverService.constructCreateIntentData(
-      baseParams(),
-      HUB_WALLET,
-      mockConfig,
-      fee,
-    );
+    const [, intent, feeAmount] = EvmSolverService.constructCreateIntentData(baseParams(), HUB_WALLET, mockConfig, fee);
 
     const expectedFee = calculatePercentageFeeAmount(1_000_000n, 100);
     expect(feeAmount).toBe(expectedFee);
@@ -420,6 +424,25 @@ describe('EvmSolverService.decodeIntentFeeAmount', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(EvmSolverService.decodeIntentFeeAmount(bogus)).toBe(0n);
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Unknown IntentData type byte'));
+  });
+
+  it('recovers the fee from a TYPE_ARRAY envelope carrying fee + delivery', () => {
+    const [feeEnvelope] = EvmSolverService.createIntentFeeData({ address: FEE_RECEIVER, amount: 1_234n }, 1_000_000n);
+    const data = HookService.composeIntentData(
+      feeEnvelope,
+      HookService.encodeDeliveryData({ kind: HookKind.HYPERCORE_DEPOSIT }, FEE_RECEIVER),
+    );
+    expect(EvmSolverService.decodeIntentFeeAmount(data)).toBe(1_234n);
+  });
+
+  it('returns 0n (no log) for a delivery-only envelope', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const data = HookService.composeIntentData(
+      '0x',
+      HookService.encodeDeliveryData({ kind: HookKind.HYPERCORE_DEPOSIT }, FEE_RECEIVER),
+    );
+    expect(EvmSolverService.decodeIntentFeeAmount(data)).toBe(0n);
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 });
 
