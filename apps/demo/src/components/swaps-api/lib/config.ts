@@ -1,4 +1,4 @@
-import type { RequestOverrideConfig } from '@sodax/sdk';
+import type { RequestOverrideConfig } from '@sodax/dapp-kit';
 
 /**
  * Canary deployment of the Swaps API v2. Passed per-call via each `useSwapsApi*` hook's

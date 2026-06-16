@@ -37,7 +37,7 @@ import type {
   StellarRawTransaction,
   SuiRawTransaction,
   TxReturnType,
-} from '@sodax/sdk';
+} from '@sodax/dapp-kit';
 import { getXChainType } from '@sodax/wallet-sdk-react';
 
 export class SwapsApiSignError extends Error {

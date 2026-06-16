@@ -28,8 +28,7 @@ import type {
   StellarChainKey,
   SubmitTxRequestV2,
   SwapTokenV2,
-} from '@sodax/sdk';
-import { ChainKeys } from '@sodax/sdk';
+} from '@sodax/dapp-kit';
 import BigNumber from 'bignumber.js';
 import { ArrowDownUp, ArrowLeftRight, Loader2 } from 'lucide-react';
 import React, { type SetStateAction, useEffect, useMemo, useState } from 'react';
@@ -48,6 +47,7 @@ import {
   useSwapsApiTokens,
   useTradingWalletBalance,
   useXBalances,
+  ChainKeys,
 } from '@sodax/dapp-kit';
 import {
   getXChainType,

@@ -1,4 +1,4 @@
-import type { Address, ChainKey, IntentRequestV2, IntentResponseV2, SwapTokenV2, XToken } from '@sodax/sdk';
+import type { Address, ChainKey, IntentRequestV2, IntentResponseV2, SwapTokenV2, XToken } from '@sodax/dapp-kit';
 
 /**
  * Convert the intent returned by `createIntent` (`IntentResponseV2`, decimal-string numerics)

@@ -15,8 +15,6 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { calculateExchangeRate, formatMutationFailureMessage, formatTokenAmount } from '@/lib/utils';
 import { parseUnits, formatUnits } from 'viem';
-import { type CreateIntentParams, getSupportedSolverTokens, type SolverIntentQuoteRequest } from '@sodax/sdk';
-import type { GetWalletProviderType, SubmitTxRequestV2 } from '@sodax/sdk';
 import BigNumber from 'bignumber.js';
 import { ArrowDownUp, ArrowLeftRight, Loader2 } from 'lucide-react';
 import React, { type SetStateAction, useMemo, useState } from 'react';
@@ -33,6 +31,11 @@ import {
   useSwapsApiSubmitTx,
   useXBalances,
   useNearStorageGate,
+  getSupportedSolverTokens,
+  type CreateIntentParams,
+  type SolverIntentQuoteRequest,
+  type GetWalletProviderType,
+  type SubmitTxRequestV2,
   type SpokeChainKey,
   type XToken,
   type ChainType,
