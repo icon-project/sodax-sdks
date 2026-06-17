@@ -378,6 +378,113 @@ describe('EvmSolverService.createIntentFeeData', () => {
 });
 
 // =========================================================================
+// decodeIntentFeeAmount — inverse of createIntentFeeData (fee recovery)
+// =========================================================================
+
+describe('EvmSolverService.decodeIntentFeeAmount', () => {
+  it('returns 0n for empty data ("0x")', () => {
+    expect(EvmSolverService.decodeIntentFeeAmount('0x')).toBe(0n);
+  });
+
+  it('round-trips a fixed-amount fee encoded by createIntentFeeData', () => {
+    const [data, feeAmount] = EvmSolverService.createIntentFeeData(
+      { address: FEE_RECEIVER, amount: 7_777n },
+      1_000_000n,
+    );
+    expect(EvmSolverService.decodeIntentFeeAmount(data)).toBe(feeAmount);
+  });
+
+  it('round-trips a percentage fee encoded by createIntentFeeData', () => {
+    const [data, feeAmount] = EvmSolverService.createIntentFeeData(
+      { address: FEE_RECEIVER, percentage: 250 },
+      1_000_000n,
+    );
+    expect(feeAmount).toBeGreaterThan(0n);
+    expect(EvmSolverService.decodeIntentFeeAmount(data)).toBe(feeAmount);
+  });
+
+  it('gracefully returns 0n (logging the unknown type byte) for an unknown IntentData type byte', () => {
+    const bogus = encodePacked(
+      ['uint8', 'bytes'],
+      [
+        99,
+        encodeAbiParameters(
+          [
+            { name: 'fee', type: 'uint256' },
+            { name: 'receiver', type: 'address' },
+          ],
+          [1n, FEE_RECEIVER],
+        ),
+      ],
+    );
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(EvmSolverService.decodeIntentFeeAmount(bogus)).toBe(0n);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Unknown IntentData type byte'));
+  });
+});
+
+// =========================================================================
+// reconstructCreateIntentData — byte-identical relay payload from an Intent
+// =========================================================================
+
+describe('EvmSolverService.reconstructCreateIntentData', () => {
+  // Spoke-source params (BSC → ETH); two hub-asset lookups happen per construct call.
+  const spokeParams = (): CreateIntentParams => ({
+    inputToken: SPOKE_INPUT_TOKEN,
+    outputToken: SPOKE_OUTPUT_TOKEN,
+    inputAmount: 1_000_000n,
+    minOutputAmount: 900_000n,
+    deadline: 1_700_000_000n,
+    allowPartialFill: false,
+    srcChainKey: ChainKeys.BSC_MAINNET,
+    dstChainKey: ChainKeys.ETHEREUM_MAINNET,
+    srcAddress: SRC_USER,
+    dstAddress: DST_USER,
+    solver: SOLVER_ADDRESS,
+    data: '0x',
+  });
+
+  const mockHubLookups = () =>
+    vi
+      .mocked(mockConfig.getSpokeTokenFromOriginalAssetAddress)
+      .mockReturnValueOnce(hubInputXToken)
+      .mockReturnValueOnce(hubOutputXToken);
+
+  // The canonical proof: the payload `constructCreateIntentData` produced for a spoke source must be
+  // reproducible from the resulting `Intent` alone (same intents contract, isHubSource = false).
+  it('reproduces the spoke multicall payload byte-for-byte (no fee)', () => {
+    mockHubLookups();
+    const [expected, intent] = EvmSolverService.constructCreateIntentData(
+      spokeParams(),
+      HUB_WALLET,
+      mockConfig,
+      undefined,
+    );
+    expect(EvmSolverService.reconstructCreateIntentData(intent, INTENTS_CONTRACT, false)).toBe(expected);
+  });
+
+  it('reproduces the spoke multicall payload byte-for-byte (percentage fee)', () => {
+    mockHubLookups();
+    const fee: PartnerFee = { address: FEE_RECEIVER, percentage: 100 }; // 1%
+    const [expected, intent] = EvmSolverService.constructCreateIntentData(spokeParams(), HUB_WALLET, mockConfig, fee);
+    expect(EvmSolverService.reconstructCreateIntentData(intent, INTENTS_CONTRACT, false)).toBe(expected);
+  });
+
+  it('reproduces the spoke multicall payload byte-for-byte (fixed-amount fee)', () => {
+    mockHubLookups();
+    const fee: PartnerFee = { address: FEE_RECEIVER, amount: 1_000n };
+    const [expected, intent] = EvmSolverService.constructCreateIntentData(spokeParams(), HUB_WALLET, mockConfig, fee);
+    expect(EvmSolverService.reconstructCreateIntentData(intent, INTENTS_CONTRACT, false)).toBe(expected);
+  });
+
+  it('reproduces the raw createIntent calldata for a hub (Sonic) source', () => {
+    const intent = buildIntent();
+    const expected = encodeFunctionData({ abi: IntentsAbi, functionName: 'createIntent', args: [intent] });
+    expect(EvmSolverService.reconstructCreateIntentData(intent, INTENTS_CONTRACT, true)).toBe(expected);
+  });
+});
+
+// =========================================================================
 // getIntent — receipt → IntentCreated event → Intent struct
 // =========================================================================
 

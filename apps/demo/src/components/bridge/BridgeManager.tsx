@@ -6,10 +6,17 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useGetBridgeableTokens, useGetBridgeableAmount, useSodaxContext, loadRadfiSession } from '@sodax/dapp-kit';
+import {
+  useGetBridgeableTokens,
+  useGetBridgeableAmount,
+  useSodaxContext,
+  loadRadfiSession,
+  ChainKeys,
+  type SpokeChainKey,
+  type XToken,
+  type CreateBridgeIntentParams,
+} from '@sodax/dapp-kit';
 import { useWalletProvider, useXAccount, useXDisconnect, getXChainType, useXConnection, useXService } from '@sodax/wallet-sdk-react';
-import { ChainKeys, type SpokeChainKey, type XToken } from '@sodax/sdk';
-import type { CreateBridgeIntentParams } from '@sodax/sdk';
 import { ArrowDownUp } from 'lucide-react';
 import { formatUnits, parseUnits } from 'viem';
 import { useAppStore } from '@/zustand/useAppStore';
@@ -154,7 +161,7 @@ export function BridgeManager() {
               </SelectTrigger>
               <SelectContent>
                 {fromTokens.map(t => (
-                  <SelectItem key={t.address} value={t.symbol}>
+                  <SelectItem key={`${t.address}-${t.symbol}`} value={t.symbol}>
                     {t.symbol}
                   </SelectItem>
                 ))}

@@ -590,9 +590,7 @@ describe('waitUntilIntentExecuted', () => {
         .mockResolvedValueOnce(
           httpErrorResponse(404, 'Not Found', '{"success":false,"message":"requested packet not found"}'),
         )
-        .mockResolvedValueOnce(
-          jsonResponse({ success: true, data: [packet] } satisfies GetTransactionPacketsResponse),
-        );
+        .mockResolvedValueOnce(jsonResponse({ success: true, data: [packet] } satisfies GetTransactionPacketsResponse));
 
       const promise = waitUntilIntentExecuted(baseInput);
       // First poll = 404 → continue → 2s sleep → second poll succeeds.
@@ -791,6 +789,33 @@ describe('relayTxAndWaitPacket', () => {
         tx_hash: SPOKE_TX_HASH,
         data,
       });
+    });
+
+    it('submits under srcTxHash + JSON-object data but polls under pollTxHash (Bitcoin on-demand)', async () => {
+      // Bitcoin on-demand borrow/withdraw submit the signed payload (JSON object) under the literal
+      // "withdraw" tx_hash, but the relay tracks the packet under a derived id — so polling uses
+      // `pollTxHash` (od:<keccak256(payload_hex)>), not "withdraw".
+      const onDemandPayload = { payload_hex: '7b22737263', signature: 'aabbcc' };
+      const packet = buildPacket({ status: 'executed', src_tx_hash: 'od:deadbeef' });
+      mockFetch
+        .mockResolvedValueOnce(jsonResponse({ success: true, message: 'ok' } satisfies SubmitTxResponse))
+        .mockResolvedValueOnce(jsonResponse({ success: true, data: [packet] } satisfies GetTransactionPacketsResponse));
+
+      const result = await relayTxAndWaitPacket({
+        srcTxHash: 'withdraw',
+        data: onDemandPayload,
+        chainKey: ChainKeys.BITCOIN_MAINNET,
+        relayerApiEndpoint: API_URL,
+        timeout: undefined,
+        pollTxHash: 'od:deadbeef',
+      });
+
+      expect(result).toEqual({ ok: true, value: packet });
+      const submitBody = JSON.parse(mockFetch.mock.calls[0]?.[1].body);
+      expect(submitBody.params).toEqual({ chain_id: '627463', tx_hash: 'withdraw', data: onDemandPayload });
+      // polling uses the relay-derived id, NOT the submit "withdraw"
+      const pollBody = JSON.parse(mockFetch.mock.calls[1]?.[1].body);
+      expect(pollBody.params.tx_hash).toBe('od:deadbeef');
     });
 
     it('forwards the explicit timeout to waitUntilIntentExecuted', async () => {

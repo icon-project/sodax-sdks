@@ -1,16 +1,27 @@
 import React from 'react';
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { useRadfiSession, useTradingWalletBalance, useFundTradingWallet, useExpiredUtxos, useRenewUtxos, useRadfiWithdraw, useSodaxContext } from '@sodax/dapp-kit';
+import {
+  useRadfiSession,
+  useTradingWalletBalance,
+  useFundTradingWallet,
+  useExpiredUtxos,
+  useRenewUtxos,
+  useRadfiWithdraw,
+  useSodaxContext,
+  type BtcWalletAddressType,
+  type IBitcoinWalletProvider,
+  ChainKeys,
+  baseChainInfo,
+  detectBitcoinAddressType,
+  loadRadfiSession,
+} from '@sodax/dapp-kit';
 import { useXConnection, useXConnectors, useXConnect, useXDisconnect } from '@sodax/wallet-sdk-react';
 import { XverseXConnector } from '@sodax/wallet-sdk-react/xchains/bitcoin';
-import type { BtcWalletAddressType, IBitcoinWalletProvider } from '@sodax/sdk';
-import { ChainKeys, baseChainInfo, detectBitcoinAddressType } from '@sodax/sdk';
 import { formatUnits } from 'viem';
 import { Loader2, Copy, ExternalLink, Check, AlertTriangle, RefreshCw } from 'lucide-react';
 import { FundTradingWalletDialog } from './FundTradingWalletDialog';
 import { WithdrawTradingWalletDialog } from './WithdrawTradingWalletDialog';
-import { loadRadfiSession } from '@sodax/dapp-kit';
 
 interface BitcoinSetupPanelProps {
   walletProvider: IBitcoinWalletProvider;

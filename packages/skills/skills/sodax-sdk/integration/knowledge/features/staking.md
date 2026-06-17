@@ -34,8 +34,12 @@ sodax.staking.getStakeRatio(amount): Promise<Result<[bigint, bigint], SodaxError
 sodax.staking.getInstantUnstakeRatio(amount): Promise<Result<bigint, SodaxError>>;
 sodax.staking.getConvertedAssets(amount): Promise<Result<bigint, SodaxError>>;
 
+// Reads (hub-address — caller already has the hub wallet):
+sodax.staking.getStakingInfo(hubAddress: Address): Promise<Result<StakingInfo, SodaxError>>;
+
 // Reads (cross-chain — derive hub wallet from src chain):
 sodax.staking.getStakingInfoFromSpoke(srcAddress, srcChainKey): Promise<Result<StakingInfo, SodaxError>>;
+//   internally calls hubProvider.getUserHubWalletAddress(srcAddress, srcChainKey), then delegates to getStakingInfo
 sodax.staking.getUnstakingInfo(srcAddress, srcChainKey): Promise<Result<UnstakingInfo, SodaxError>>;
 //   value: { userUnstakeSodaRequests: UserUnstakeInfo[]; totalUnstaking: bigint }
 sodax.staking.getUnstakingInfoWithPenalty(srcAddress, srcChainKey): Promise<Result<UnstakingInfo & { requestsWithPenalty: UnstakeRequestWithPenalty[] }, SodaxError>>;
@@ -140,7 +144,8 @@ const allowed = await sodax.staking.isAllowanceValid({
 | `getStakeRatio` | `[xSodaAmount: bigint, previewDepositAmount: bigint]` (estimated xSoda shares + vault's `previewDeposit` preview) |
 | `getInstantUnstakeRatio` | `bigint` |
 | `getConvertedAssets` | `bigint` (SODA per xSoda) |
-| `getStakingInfoFromSpoke` | `StakingInfo` (xSoda balance, accrued, etc.) |
+| `getStakingInfo` | `StakingInfo` (totals + user's xSoda balance + SODA value). Takes a hub address directly. |
+| `getStakingInfoFromSpoke` | `StakingInfo` (same shape). Takes `(srcAddress, srcChainKey)`; resolves hub wallet internally. |
 | `getUnstakingInfo` | `UnstakingInfo` (object; carries `userUnstakeSodaRequests` array + aggregate amount) |
 | `getUnstakingInfoWithPenalty` | `UnstakingInfo & { requestsWithPenalty: UnstakeRequestWithPenalty[] }` (each entry adds `penalty`, `penaltyPercentage`, `claimableAmount`) |
 

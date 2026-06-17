@@ -14,6 +14,7 @@ const navLinks = [
   { to: '/partner-fee-claim', label: 'Partner Fee Claim' },
   { to: '/dex', label: 'Dex' },
   { to: '/recovery', label: 'Recovery' },
+  { to: '/leverage-yield', label: 'Leverage Yield' },
 ];
 
 const getNavLinkClass = (isActive: boolean) =>

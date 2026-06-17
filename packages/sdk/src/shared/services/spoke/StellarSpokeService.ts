@@ -73,6 +73,7 @@ export class CustomStellarAccount {
   decrementSequenceNumber(): void {
     if (this.sequenceNumber > this.startingSequenceNumber) {
       this.sequenceNumber--;
+      return;
     }
 
     throw new Error(
@@ -233,7 +234,7 @@ export class StellarSpokeService {
       const assembledPriorityTx = rpc.assembleTransaction(rawPriorityTx, simulation).build();
 
       if (params.raw) {
-        const transactionXdr = rawPriorityTx.toXDR();
+        const transactionXdr = assembledPriorityTx.toXDR();
 
         return {
           from: from,
@@ -255,7 +256,7 @@ export class StellarSpokeService {
 
       return `${hash}` satisfies TxReturnType<StellarChainKey, false> as TxReturnType<StellarChainKey, Raw>;
     } catch (error) {
-      console.error('Error during sendMessage:', error);
+      this.config.logger.error('Error during sendMessage', error);
       throw error;
     }
   }
@@ -264,7 +265,7 @@ export class StellarSpokeService {
     response: rpc.Api.SendTransactionResponse,
   ): rpc.Api.SendTransactionResponse {
     if (response.status === 'ERROR') {
-      console.error(JSON.stringify(response, null, 2));
+      this.config.logger.error(JSON.stringify(response, null, 2));
       throw new Error(JSON.stringify(response, null, 2));
     }
 
@@ -407,7 +408,7 @@ export class StellarSpokeService {
       const assembledPriorityTx = rpc.assembleTransaction(rawPriorityTx, simulation).build();
 
       if (params.raw) {
-        const transactionXdr = rawPriorityTx.toXDR();
+        const transactionXdr = assembledPriorityTx.toXDR();
 
         return {
           from: from,
@@ -429,7 +430,7 @@ export class StellarSpokeService {
 
       return `${hash}` satisfies TxReturnType<StellarChainKey, false> as TxReturnType<StellarChainKey, R>;
     } catch (error) {
-      console.error('Error during deposit:', error);
+      this.config.logger.error('Error during deposit', error);
       throw error;
     }
   }
@@ -473,7 +474,7 @@ export class StellarSpokeService {
     ) as Horizon.HorizonApi.BalanceLineAsset<'credit_alphanum4' | 'credit_alphanum12'> | undefined;
 
     if (!tokenBalance) {
-      console.error(`No token balances found for token: ${token}`);
+      this.config.logger.error(`No token balances found for token: ${token}`);
       return false;
     }
 
@@ -540,7 +541,7 @@ export class StellarSpokeService {
 
       return `${hash}` satisfies TxReturnType<StellarChainKey, false> as TxReturnType<StellarChainKey, Raw>;
     } catch (error) {
-      console.error('Error during requestTrustline:', error);
+      this.config.logger.error('Error during requestTrustline', error);
       throw error;
     }
   }

@@ -8,10 +8,18 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 import { getXChainType, useEvmSwitchChain, useWalletProvider, useXAccount, useXService } from '@sodax/wallet-sdk-react';
 import { formatUnits, parseUnits } from 'viem';
-import { useMMAllowance, useMMApprove, useSodaxContext, useSupply, useXBalances } from '@sodax/dapp-kit';
-import type { SpokeChainKey, XToken } from '@sodax/sdk';
+import {
+  useMMAllowance,
+  useMMApprove,
+  useSodaxContext,
+  useSupply,
+  useXBalances,
+  type SpokeChainKey,
+  type XToken,
+  type MoneyMarketSupplyParams,
+} from '@sodax/dapp-kit';
 import { useAppStore } from '@/zustand/useAppStore';
-import type { MoneyMarketSupplyParams } from '@sodax/sdk';
+import { useBtcTradingBalance } from '@/hooks/useBtcTradingBalance';
 import {
   formatDecimalForDisplay,
   getChainsWithThisToken,
@@ -69,6 +77,10 @@ export function SupplyModal({ open, onOpenChange, token, onSuccess, inlineSucces
 
   const { mutateAsync: supply, isPending, error, reset: resetSupply } = useSupply();
 
+  // On Bitcoin the deposit is pulled from the Bound Exchange trading wallet, so the spendable max
+  // is the trading-wallet balance, not the personal wallet's UTXO balance.
+  const { isBitcoin, tradingBalanceSats, notReady: btcNotReady } = useBtcTradingBalance({ chainId: srcChainKey });
+
   const isSameChain = srcChainKey === dstChainKey;
 
   const parsedAmount: number | undefined = useMemo(() => {
@@ -78,12 +90,16 @@ export function SupplyModal({ open, onOpenChange, token, onSuccess, inlineSucces
   }, [amount]);
 
   const parsedMaxAmount: number | undefined = useMemo(() => {
+    if (isBitcoin) {
+      const num = Number(formatUnits(tradingBalanceSats, 8));
+      return Number.isFinite(num) && num >= 0 ? num : undefined;
+    }
     if (!sourceToken || !sourceBalances) return undefined;
     const raw = sourceBalances[sourceToken.address] ?? 0n;
     const num = Number(formatUnits(raw, sourceToken.decimals));
     if (!Number.isFinite(num) || num < 0) return undefined;
     return num;
-  }, [sourceBalances, sourceToken]);
+  }, [isBitcoin, tradingBalanceSats, sourceBalances, sourceToken]);
 
   const exceedsMaxSupply =
     parsedAmount !== undefined && parsedMaxAmount !== undefined && parsedAmount > parsedMaxAmount;
@@ -274,6 +290,13 @@ export function SupplyModal({ open, onOpenChange, token, onSuccess, inlineSucces
         {error && <ErrorAlert text={getMmErrorText(error)} />}
         {approveError && <ErrorAlert text={getMmErrorText(approveError)} />}
 
+        {btcNotReady && (
+          <p className="text-xs text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-lg border border-amber-200 dark:border-amber-800">
+            Sign in and top up the <strong>Bitcoin Trading Wallet</strong> section on the Money Market page before
+            supplying BTC.
+          </p>
+        )}
+
         {!isWrongChain && !!srcAddress && !!parsedAmount && (
           <p className="text-xs text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-lg border border-amber-200 dark:border-amber-800">
             Make sure you have enough <strong>{getNativeTokenSymbol(srcChainKey)}</strong> on{' '}
@@ -318,7 +341,7 @@ export function SupplyModal({ open, onOpenChange, token, onSuccess, inlineSucces
               type="button"
               variant="default"
               onClick={handleSupply}
-              disabled={!params || !sourceWalletProvider || !amount}
+              disabled={!params || !sourceWalletProvider || !amount || btcNotReady}
             >
               Supply {token.symbol}
             </Button>

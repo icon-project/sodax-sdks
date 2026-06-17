@@ -62,9 +62,38 @@ pnpm pretty       # biome format --write
 
 `pnpm test` is a no-op (`true`) — there are no tests in this app.
 
+## Local observability testing (Sentry + Datadog, no DNS)
+
+A self-contained harness for verifying `SodaxLogger` sinks (`new Sodax({ logger })`) **without DNS or a real Sentry/Datadog account**. Everything stays on localhost.
+
+**How it routes (the no-DNS trick).** The browser only ever POSTs to the same-origin path `/__intake/*`, which the Vite dev proxy (`vite.config.ts`) forwards to a tiny localhost mock-intake server (`scripts/mock-intake.mjs`). Same-origin → no CORS preflight; localhost → no DNS lookup. Sentry reaches it via its `tunnel` option; the Datadog adapter just `fetch`-POSTs to it.
+
+**Pieces:**
+
+- `scripts/mock-intake.mjs` — zero-dep Node server (`pnpm mock-intake`, port 9009) that pretty-prints every Sentry envelope / Datadog record it receives.
+- `src/lib/loggers/datadogLogger.ts` — `createDatadogLogger()`: plain HTTP-intake adapter (no Datadog SDK). One JSON POST per log line; `error()` serializes via `SodaxError.toJSON()`.
+- `src/lib/loggers/sentryLogger.ts` — `createSentryLogger()`: real `@sentry/react` (lazy-imported) with a dummy DSN + `tunnel`. `debug/info` → breadcrumbs, `warn` → `captureMessage`, `error` → `captureException`.
+- `src/lib/loggers/index.ts` — `getObservabilityLogger()`: fans out to console + Datadog + Sentry, gated on `VITE_ENABLE_OBSERVABILITY === 'true'` (else `undefined` → SDK keeps its default console logger). Also exposes the logger on `window.__sodaxLog` for manual triggering from the browser console. Wired into the SDK in `providers.tsx` via `sodaxConfig.logger`.
+
+**Run:**
+
+```bash
+cp .env.example .env          # sets VITE_ENABLE_OBSERVABILITY=true
+pnpm mock-intake              # terminal A — the local intake
+pnpm dev                      # terminal B
+# In the browser console: window.__sodaxLog.error('boom', new Error('x'), { a: 1 })
+# …or exercise any SDK feature page; internal SDK logs flow through too.
+```
+
+Requires `@sentry/react` installed (listed in `package.json`). To send to the **real** services instead, set `VITE_DD_INTAKE_URL` / `VITE_SENTRY_DSN` (drop the tunnel) — then DNS is required, as expected.
+
 ## Common pitfalls
 
 - **Node polyfills.** Uses `@bangjelkoski/vite-plugin-node-polyfills` (Bitcoin/Solana deps pull in `buffer`, `crypto`, etc.). If a new dependency requires a polyfill, add it there rather than in app code.
 - **Env vars.** Vite-side env vars must be `VITE_*` (e.g. `VITE_WALLETCONNECT_PROJECT_ID`). The RPC overrides in `providers.tsx` read from `process.env.*` which is replaced at build time — leaving them unset is fine (public fallbacks).
 - **Build memory.** Build script sets `--max-old-space-size=8192` because the bundle is large. Don't drop that flag.
 - **Don't add business logic here.** This app demos the SDK; real wallet/registration/ToS flows belong in partner apps, not in `demo/`.
+- **Balance readers derive the chain from `xToken.chainKey`, not the selected chain.** `EvmXService.getBalances` queries `getWagmiChainId(firstToken.chainKey)`. So on a chain switch, any "keep the same token" logic must re-resolve the selected `XToken` to the **new chain's** instance (match by symbol, return the entry from the new `getSupportedSolverTokens(chain)` list) — never retain the previous `XToken` object, or `useXBalances` fetches the old chain's balance for an unchanged token. Fixed on the leverage-yield page; the same pattern applies wherever a chain selector and token selector coexist.
+- **Per-intent partner fees must be reflected in the quote.** Leverage-yield deposits charge `DEPOSIT_PARTNER_FEE` (1%, `pages/leverage-yield/page.tsx`) via the leverage-yield domain's per-intent override; `createVaultIntent()` (inside `useLeverageYieldVaultSwap`) deducts the fee from `inputAmount` before the swap, so the quote is requested on the post-fee amount (`adjustAmountByFee(amount, fee, 'exact_input')`). If a fee and its quote drift apart, `minOutputAmount` becomes unfillable and intents never settle.
+- **Leverage-yield positions live in the derived hub wallet, never the EOA — on Sonic too.** A leverage deposit always delivers `lsoda*` to `getUserHubWalletAddress(srcAddress, srcChainKey)` (the CREATE3 user-router for a Sonic-sourced deposit, the per-spoke hub wallet otherwise). `useLeverageYieldShareBalances` therefore resolves *every* holder via `getUserHubWalletAddress` — do NOT special-case the hub chain to read `balanceOf(EOA)`, or a Sonic-sourced position reads a stale zero and looks "lost". The withdraw flow spends from the same derived hub wallet, so the two stay consistent.
+- **Leverage `lsoda*` shares are NOT recoverable via the Recovery page.** They're hub-only ERC-4626 vault shares, not asset-manager-registered assets, so the recovery `assetManager.transfer` path reverts on them (the wallet shows it as a failed gas estimate / "undefined gas fee"). The SDK's `RecoveryService.fetchHubAssetBalances` now filters them out (by `leverageYield.vaults[].vault` address), so they no longer appear as stranded assets — exit a position via the leverage-yield **withdraw** tab instead.

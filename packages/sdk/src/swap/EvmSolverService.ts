@@ -5,6 +5,7 @@ import {
   type GetLogsReturnType,
   type HttpTransport,
   type PublicClient,
+  decodeAbiParameters,
   encodeAbiParameters,
   encodeFunctionData,
   encodePacked,
@@ -191,6 +192,75 @@ export class EvmSolverService {
 
     // Encode the intent data
     return [encodePacked(['uint8', 'bytes'], [intentData.type, intentData.data]), feeAmount];
+  }
+
+  /**
+   * Recovers the partner fee amount embedded in an intent's `data` field.
+   *
+   * Exact inverse of {@link createIntentFeeData}: `'0x'` means no fee (`0n`); otherwise the first
+   * byte is the {@link IntentDataType} tag (from the `encodePacked(['uint8','bytes'], …)` envelope)
+   * and the remainder is the ABI-encoded `(uint256 fee, address receiver)` struct.
+   *
+   * @param data - The intent's `data` field (`'0x'` when no fee was configured).
+   * @returns The fee amount in the input token's smallest unit (`0n` when no fee data is present, or
+   *   when the leading type byte is not {@link IntentDataType.FEE} — in which case it logs and degrades to `0n`).
+   */
+  public static decodeIntentFeeAmount(data: Hex): bigint {
+    if (data === '0x' || data.length <= 2) {
+      return 0n;
+    }
+
+    // encodePacked(['uint8', 'bytes'], …) prepends a single type byte (2 hex chars).
+    const typeByte = Number.parseInt(data.slice(2, 4), 16);
+
+    if (typeByte !== IntentDataType.FEE) {
+      console.error(`[decodeIntentFeeAmount] Unknown IntentData type byte: ${typeByte}. Gracefully returning 0n.`);
+      return 0n;
+    }
+
+    const [feeAmount] = decodeAbiParameters(
+      [
+        { name: 'fee', type: 'uint256' },
+        { name: 'receiver', type: 'address' },
+      ],
+      `0x${data.slice(4)}`,
+    );
+    return feeAmount;
+  }
+
+  /**
+   * Re-derives the byte-identical relay payload that `createIntent` originally produced, from a
+   * fully-populated `Intent` alone.
+   *
+   * Mirrors the two payload shapes built at intent-creation time:
+   * - Hub (Sonic) source — raw `createIntent(intent)` calldata (no approval, no multicall), matching
+   *   {@link SonicSpokeService.createSwapIntent}.
+   * - Spoke source — the `[approve(intentsContract, gross), createIntent(intent)]` multicall, matching
+   *   {@link constructCreateIntentData}. The gross approval amount is recovered as
+   *   `intent.inputAmount + feeAmount`, where `feeAmount` comes from {@link decodeIntentFeeAmount}.
+   *
+   * Byte-identity holds because this reuses the exact encode primitives (`encodeCreateIntent`,
+   * `Erc20Service.encodeApprove`, `encodeContractCalls`) that produced the original — the only
+   * originally-random input, `intentId`, is already carried on the `Intent`.
+   *
+   * @param intent - The fully-populated intent (e.g. from `createIntent` or `getIntent`).
+   * @param intentsContract - The hub-chain intents contract address (`config.solver.intentsContract`).
+   * @param isHubSource - `true` when the intent's source chain is the hub (Sonic).
+   * @returns The byte-identical relay payload `Hex`.
+   */
+  public static reconstructCreateIntentData(intent: Intent, intentsContract: Address, isHubSource: boolean): Hex {
+    const createIntentCall = EvmSolverService.encodeCreateIntent(intent, intentsContract);
+
+    if (isHubSource) {
+      return createIntentCall.data;
+    }
+
+    const grossInputAmount = intent.inputAmount + EvmSolverService.decodeIntentFeeAmount(intent.data);
+
+    return encodeContractCalls([
+      Erc20Service.encodeApprove(intent.inputToken, intentsContract, grossInputAmount),
+      createIntentCall,
+    ]);
   }
 
   /**

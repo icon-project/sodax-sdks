@@ -1,7 +1,7 @@
 // currently supported spoke chain tokens for solver
 import type { PartnerFee } from '../common/common.js';
 import type { SpokeChainKey } from '../chains/chains.js';
-import { type XToken, SodaTokens } from '../chains/tokens.js';
+import { type XToken, SodaTokens, LsodaTokens } from '../chains/tokens.js';
 import { spokeChainConfig, ChainKeys } from '../chains/chains.js';
 
 export const swapSupportedTokens = {
@@ -13,6 +13,7 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.wS,
     spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.SODA,
     ...Object.values(SodaTokens),
+    ...Object.values(LsodaTokens),
   ] as const satisfies XToken[],
   [ChainKeys.AVALANCHE_MAINNET]: [
     spokeChainConfig[ChainKeys.AVALANCHE_MAINNET].supportedTokens.AVAX,
@@ -133,6 +134,14 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.PYTH,
     spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.JTO,
     spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.WBTC,
+    spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.CRCLx,
+    spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.TSLAx,
+    spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.SPYx,
+    spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.NVDAx,
+    spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.QQQx,
+    spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.MSTRx,
+    spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.COINx,
+    spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.GOOGLx,
   ] as const satisfies XToken[],
   [ChainKeys.ICON_MAINNET]: [
     spokeChainConfig[ChainKeys.ICON_MAINNET].supportedTokens.ICX,

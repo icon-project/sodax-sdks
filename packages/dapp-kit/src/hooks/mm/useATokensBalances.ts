@@ -2,6 +2,7 @@ import type { SpokeChainKey } from '@sodax/sdk';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { type Address, isAddress } from 'viem';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import { resolveBtcReadAddress } from '../bitcoin/resolveBtcReadAddress.js';
 import type { ReadHookParams } from '../shared/types.js';
 
 export type UseATokensBalancesParams = ReadHookParams<
@@ -42,7 +43,12 @@ export function useATokensBalances({
         }
       }
 
-      const hubWalletAddress = await sodax.hubProvider.getUserHubWalletAddress(userAddress, spokeChainKey);
+      // Bitcoin positions live under the trading-wallet-derived hub wallet; resolve it locally
+      // (no network) so a Bound Exchange outage never reads a real position as empty.
+      const hubWalletAddress = await sodax.hubProvider.getUserHubWalletAddress(
+        resolveBtcReadAddress(spokeChainKey, userAddress),
+        spokeChainKey,
+      );
       return sodax.moneyMarket.data.getATokensBalances(aTokens, hubWalletAddress);
     },
     enabled: aTokens.length > 0 && !!spokeChainKey && !!userAddress,

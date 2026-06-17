@@ -15,12 +15,12 @@ const network = IS_TESTNET ? bitcoin.networks.testnet : bitcoin.networks.bitcoin
 const ECPair = ECPairFactory(ecc);
 
 const RADFI_API_BASE_URL = IS_TESTNET
-  ? 'https://api.signet.radfi.co/api'
-  : 'https://staging.api.radfi.co/api';
+  ? 'https://signet.api.bound.exchange/api'
+  : 'https://staging.api.bound.exchange/api';
 
 const RADFI_UMS_BASE_URL = IS_TESTNET
-  ? 'https://signet.ums.radfi.co/api'
-  : 'https://staging.ums.radfi.co/api';
+  ? 'https://signet.api.ums.bound.exchange/api'
+  : 'https://staging.api.ums.bound.exchange/api';
 
 /**
  * Generate a new Bitcoin private key in HEX format
@@ -130,7 +130,7 @@ function dumpKeyInfo(privateKeyHex: string): void {
 }
 
 /**
- * Create trading wallet via Radfi API
+ * Create trading wallet via Bound Exchange API
  * @param privateKeyHex - Private key in HEX format
  */
 async function createTradingWallet(privateKeyHex: string): Promise<void> {
@@ -168,7 +168,7 @@ async function createTradingWallet(privateKeyHex: string): Promise<void> {
 }
 
 /**
- * Create trading wallet via Radfi API
+ * Create trading wallet via Bound Exchange API
  * @param privateKeyHex - Private key in HEX format
  */
 async function checkTradingWallet(address: string, publicKey: string): Promise<void> {
@@ -204,7 +204,7 @@ async function checkTradingWallet(address: string, publicKey: string): Promise<v
 }
 
 /**
- * Fetch trading wallet information from Radfi API
+ * Fetch trading wallet information from Bound Exchange API
  * @param walletAddress - Bitcoin wallet address
  */
 async function fetchTradingWallet(walletAddress: string): Promise<void> {
@@ -232,7 +232,7 @@ async function fetchTradingWallet(walletAddress: string): Promise<void> {
 }
 
 /**
- * Get trading wallet balance from Radfi API
+ * Get trading wallet balance from Bound Exchange API
  * @param walletAddress - Bitcoin wallet address (userAddress)
  */
 async function getWalletBalance(walletAddress: string): Promise<void> {
@@ -282,7 +282,7 @@ async function getWalletBalance(walletAddress: string): Promise<void> {
 }
 
 /**
- * Create withdraw transaction via Radfi API
+ * Create withdraw transaction via Bound Exchange API
  * @param userAddress - User's Bitcoin wallet address
  * @param amount - Amount to withdraw (as string)
  * @param tokenId - Token ID to withdraw (e.g., '2904354:3119' or '0:0' for BTC)
@@ -357,7 +357,7 @@ async function createWithdrawTransaction(
 }
 
 /**
- * Authenticate with Radfi API using BIP322 signature
+ * Authenticate with Bound Exchange API using BIP322 signature
  * Signs a message with the private key and sends authentication request
  * @param privateKeyHex - Private key in HEX format (64 characters)
  * @returns Authentication response with access and refresh tokens
@@ -563,7 +563,7 @@ function signBitcoinTransaction(base64Tx: string, privateKeyHex: string): string
 }
 
 /**
- * Sign and broadcast withdraw transaction via Radfi API
+ * Sign and broadcast withdraw transaction via Bound Exchange API
  * @param userAddress - User's Bitcoin wallet address
  * @param signedBase64Tx - Base64 encoded signed transaction
  * @param authToken - Optional authentication token

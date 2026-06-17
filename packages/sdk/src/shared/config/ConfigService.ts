@@ -25,13 +25,28 @@ import {
   type SwapsConfig,
   type BridgeConfig,
   type GetSpokeChainConfigType,
+  type DeepPartial,
+  type SodaxLogger,
 } from '@sodax/types';
 import { isAddress } from 'viem';
 import type { BackendApiService } from '../../backendApi/BackendApiService.js';
+import { mergeSodaxConfig } from './mergeSodaxConfig.js';
+import { resolveLogger } from '../logger.js';
 
 export type ConfigServiceConstructorParams = {
   api: BackendApiService;
   config: SodaxConfig;
+  /**
+   * The raw user-provided config override (the `DeepPartial<SodaxConfig>` passed to `new Sodax(...)`),
+   * NOT the merged result. Re-applied on top of dynamic config in {@link ConfigService.initialize} so
+   * that a remote config fetch never clobbers explicit user overrides.
+   */
+  userConfig?: DeepPartial<SodaxConfig>;
+  /**
+   * Pre-resolved SDK log sink. Held outside the swappable `SodaxConfig` so a dynamic config fetch
+   * in {@link ConfigService.initialize} never replaces it. Defaults to the console logger when omitted.
+   */
+  logger?: SodaxLogger;
 };
 
 /**
@@ -40,6 +55,13 @@ export type ConfigServiceConstructorParams = {
 export class ConfigService {
   private sodax: SodaxConfig;
   private readonly api: BackendApiService;
+  private readonly userConfig?: DeepPartial<SodaxConfig>;
+
+  /**
+   * SDK log sink. Resolved once at construction and kept independent of {@link sodax} so that
+   * {@link initialize}'s dynamic-config swap never clobbers it. Read by services via `config.logger`.
+   */
+  public readonly logger: SodaxLogger;
 
   private initialized = false;
 
@@ -54,9 +76,11 @@ export class ConfigService {
   private chainToSupportedTokenAddressMap!: Map<SpokeChainKey, Set<string>>;
   private hubAssetToXTokenMap!: Map<Address, XToken>;
 
-  constructor({ api, config }: ConfigServiceConstructorParams) {
+  constructor({ api, config, userConfig, logger }: ConfigServiceConstructorParams) {
     this.api = api;
     this.sodax = config;
+    this.userConfig = userConfig;
+    this.logger = logger ?? resolveLogger(undefined);
     this.loadSodaxConfigDataStructures(config);
   }
 
@@ -67,12 +91,17 @@ export class ConfigService {
       const response = result.value;
 
       if (!response.version || response.version < CONFIG_VERSION) {
-        console.warn(
+        this.logger.warn(
           `Dynamic config version is less than the current version, resorting to the default one. Current version: ${CONFIG_VERSION}, response version: ${response.version}`,
         );
       } else {
-        this.sodax = response.config;
-        this.loadSodaxConfigDataStructures(this.sodax);
+        // Dynamic config replaces the static defaults, but explicit user overrides must still win —
+        // re-layer them on top so initialize() never clobbers config the caller passed to `new Sodax(...)`.
+        const next = this.userConfig ? mergeSodaxConfig(response.config, this.userConfig) : response.config;
+        // Rebuild the lookup structures from `next` before committing it, so a failure here leaves the
+        // previously committed config and its derived maps intact (no torn state).
+        this.loadSodaxConfigDataStructures(next);
+        this.sodax = next;
         this.initialized = true;
       }
 
@@ -307,9 +336,9 @@ export class ConfigService {
       ]),
     );
     this.loadSpokeChainConfigDataStructures(sodaxConfig);
-    this.moneyMarketReserveAssetsSet = new Set(this.moneyMarket.supportedReserveAssets);
+    this.moneyMarketReserveAssetsSet = new Set(sodaxConfig.moneyMarket.supportedReserveAssets);
     this.stakedATokenAddressesSet = new Set(
-      Object.keys(this.dex.statATokenAddresses).map(address => address.toLowerCase() as Address),
+      Object.keys(sodaxConfig.dex.statATokenAddresses).map(address => address.toLowerCase() as Address),
     );
   }
 

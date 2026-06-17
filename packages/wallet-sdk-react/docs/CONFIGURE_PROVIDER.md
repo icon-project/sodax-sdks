@@ -135,7 +135,7 @@ const walletConfig: SodaxWalletConfig = {
 
 ### Multi-field RPC — Stellar, Bitcoin, Injective
 
-Stellar (Horizon + Soroban), Bitcoin (RPC + Radfi indexer), and Injective (gRPC + indexer) extend their existing `*RpcConfig` types from `@sodax/types`. Mirror the full shape:
+Stellar (Horizon + Soroban), Bitcoin (RPC + Bound Exchange indexer), and Injective (gRPC + indexer) extend their existing `*RpcConfig` types from `@sodax/types`. Mirror the full shape:
 
 ```typescript
 import { ChainKeys } from '@sodax/types';

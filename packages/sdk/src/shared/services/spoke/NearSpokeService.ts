@@ -19,6 +19,7 @@ import {
   type NearRawTransaction,
   type NearChainKey,
   type NearRawTransactionReceipt,
+  type INearWalletProvider,
   type Result,
   type TxReturnType,
   isNativeToken,
@@ -29,6 +30,8 @@ export type QueryResponse = string | number | boolean | object | undefined;
 export type CallResponse = string | number | object | bigint | boolean;
 
 export const NEAR_DEFAULT_GAS = BigInt('300000000000000'); // 30 TGas derived from near documentation as max limit
+/** NEP-141 default storage bond for a one-time `storage_deposit` registration (0.00125 NEAR). */
+export const NEAR_STORAGE_DEPOSIT = BigInt('1250000000000000000000'); // 0.00125 NEAR
 
 export class NearSpokeService {
   private readonly config: ConfigService;
@@ -88,7 +91,8 @@ export class NearSpokeService {
       srcChainKey: NearChainKey;
     },
     fillData: FillData,
-    deposit: bigint = BigInt('0'),
+    // NEP-141 requires exactly 1 yoctoNEAR attached to ft_transfer_call; the native-token branch below overrides this with the amount.
+    deposit: bigint = BigInt('1'),
     gas: bigint = BigInt('300000000000000'),
   ): Promise<NearRawTransaction> {
     const intentFiller = this.config.getChainConfig(fromInfo.srcChainKey).addresses.intentFiller;
@@ -168,7 +172,8 @@ export class NearSpokeService {
               data: inputParams.data,
             }),
           },
-          deposit: BigInt('0'),
+          // NEP-141 requires exactly 1 yoctoNEAR attached to ft_transfer_call.
+          deposit: BigInt('1'),
           gas: NEAR_DEFAULT_GAS,
         },
       };
@@ -204,6 +209,65 @@ export class NearSpokeService {
     }
 
     return BigInt(bal);
+  }
+
+  /**
+   * Whether `accountId` is storage-registered on a NEP-141 `token` contract. NEP-141 requires an
+   * account to pay a one-time storage bond before it can receive (hold a balance of) the token, so
+   * this gates any leg that delivers a token to a user on NEAR (swap output on NEAR, bridge into
+   * NEAR, money-market borrow/withdraw to NEAR).
+   *
+   * Native NEAR is not a NEP-141 token and has no storage registration, so this returns `true` for
+   * the native token. The view goes through {@link queryContract}, i.e. the configurable RPC from
+   * chain config — a custom `rpcUrl` passed to the SDK is honoured.
+   */
+  public async isStorageRegistered(token: string, accountId: string): Promise<boolean> {
+    if (isNativeToken(ChainKeys.NEAR_MAINNET, token)) {
+      return true;
+    }
+    const balance = await this.queryContract(token, 'storage_balance_of', { account_id: accountId });
+    return balance != null;
+  }
+
+  /**
+   * Build (and, unless `raw`, submit) a NEP-141 `storage_deposit` registration for `accountId` on
+   * the `token` contract. Call this when {@link isStorageRegistered} is `false` before a token is
+   * delivered to the account on NEAR.
+   *
+   * Native NEAR has no storage registration — passing the native token throws.
+   *
+   * @param params.deposit Storage bond to attach; defaults to {@link NEAR_STORAGE_DEPOSIT}
+   *   (0.00125 NEAR). Override per token if its `storage_balance_bounds.min` differs.
+   */
+  public async registerStorage<Raw extends boolean = false>(params: {
+    token: string;
+    accountId: string;
+    walletProvider: INearWalletProvider;
+    deposit?: bigint;
+    raw?: Raw;
+  }): Promise<TxReturnType<NearChainKey, Raw>> {
+    if (isNativeToken(ChainKeys.NEAR_MAINNET, params.token)) {
+      throw new Error('[NearSpokeService.registerStorage] Native NEAR has no NEP-141 storage registration.');
+    }
+
+    const tx: NearRawTransaction = {
+      signerId: params.accountId,
+      params: {
+        contractId: params.token,
+        method: 'storage_deposit',
+        args: { account_id: params.accountId, registration_only: true },
+        deposit: params.deposit ?? NEAR_STORAGE_DEPOSIT,
+        gas: NEAR_DEFAULT_GAS,
+      },
+    } satisfies NearRawTransaction;
+
+    if (params.raw === true) {
+      return tx satisfies TxReturnType<NearChainKey, true> as TxReturnType<NearChainKey, Raw>;
+    }
+
+    return params.walletProvider.signAndSubmitTxn(tx) satisfies Promise<TxReturnType<NearChainKey, false>> as Promise<
+      TxReturnType<NearChainKey, Raw>
+    >;
   }
 
   /**
