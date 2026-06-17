@@ -25,6 +25,12 @@ type WagmiOptions = {
   ssr?: boolean;
 };
 
+// Hedera's JSON-RPC relay reports native HBAR in 18-decimal "weibar" via eth_getBalance,
+// but HBAR is configured with its canonical 8 decimals. Scale the raw balance down by 10^10
+// so it matches token.decimals. Mirrors `scaleNativeMsgValue` in the SDK's EvmSpokeService,
+// which scales outgoing msg.value up by the same factor.
+const HEDERA_NATIVE_BALANCE_SCALE = 10n ** 10n;
+
 // HyperEVM chain is not supported by viem, so we need to define it manually
 export const hyper = /*#__PURE__*/ defineChain({
   id: 999,
@@ -149,7 +155,11 @@ export class EvmXService extends XService {
     const chainId = getWagmiChainId(xToken.chainKey);
 
     if (isNativeToken(xToken)) {
-      return this._getChainBalance(address, chainId);
+      const balance = await this._getChainBalance(address, chainId);
+      if (xToken.chainKey === ChainKeys.HEDERA_MAINNET) {
+        return balance / HEDERA_NATIVE_BALANCE_SCALE;
+      }
+      return balance;
     }
 
     throw new Error(`Unsupported token: ${xToken.symbol}`);
