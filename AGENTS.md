@@ -23,7 +23,7 @@ Turborepo + pnpm workspace. Package manager: **pnpm 10.32.1**.
 | `packages/wallet-sdk-core` | Multi-chain wallet providers (signing/broadcasting) — 9 chain types | [`packages/wallet-sdk-core/AGENTS.md`](packages/wallet-sdk-core/AGENTS.md) |
 | `packages/wallet-sdk-react` | React wallet state layer — `XService`/`XConnector`, Zustand, EIP-6963 | [`packages/wallet-sdk-react/AGENTS.md`](packages/wallet-sdk-react/AGENTS.md) |
 | `packages/dapp-kit` | High-level React hooks combining SDK + wallet-sdk-react + React Query | [`packages/dapp-kit/AGENTS.md`](packages/dapp-kit/AGENTS.md) |
-| `packages/skills` | Consumer-facing AI material — 4 mode-gated Codex skills (one per SDK package, each with integration + migration knowledge subtrees) | [`packages/skills/AGENTS.md`](packages/skills/AGENTS.md) |
+| `packages/skills` | Consumer-facing AI material — mode-gated per-SDK-package skills (each with integration + migration knowledge subtrees) plus a cross-cutting `sodax-build` front-door / ideation skill | [`packages/skills/AGENTS.md`](packages/skills/AGENTS.md) |
 
 ### Apps
 
@@ -83,7 +83,8 @@ For per-package gotchas (SDK bigint/JSON handling, wallet-sdk-core type-system o
 
 Consumer-facing AI material for the `@sodax/*` SDKs lives in a single dedicated package: [`packages/skills`](packages/skills/AGENTS.md). It ships:
 
-- **4 mode-gated skills** (`packages/skills/skills/sodax-<pkg>/SKILL.md`) — one per SDK package (`sdk`, `wallet-sdk-core`, `wallet-sdk-react`, `dapp-kit`). Each SKILL.md gates by mode at the top: integration (write new v2 code) or migration (port v1 → v2). Frontmatter `description` carries trigger phrases for BOTH modes.
+- **Mode-gated per-SDK-package skills** (`packages/skills/skills/sodax-<pkg>/SKILL.md`) — one per SDK package (`sdk`, `wallet-sdk-core`, `wallet-sdk-react`, `dapp-kit`). Each SKILL.md gates by mode at the top: integration (write new v2 code) or migration (port v1 → v2). Frontmatter `description` carries trigger phrases for BOTH modes.
+- **Front-door / ideation skill** (`packages/skills/skills/sodax-build/SKILL.md`) — a cross-cutting meta skill (NOT a 5th per-package skill) for users who haven't picked an SDK/feature yet. It interviews, produces a product brief, and hands off to the dev skills by prose name; it writes no app code. Flat `knowledge/` tree (no integration/migration split); registered via a separate `EXPECTED_META_SKILLS` allowlist in `check-skills.sh`. See [`packages/skills/AGENTS.md`](packages/skills/AGENTS.md) and `packages/skills/CLAUDE.md` "Meta / ideation skills" for the three deliberate exemptions and the self-contained-but-grounded policy.
 - **Knowledge** (`packages/skills/skills/sodax-<pkg>/{integration,migration-v1-to-v2}/knowledge/`) — long-form supporting docs (features, recipes, reference tables, breaking-change writeups, code examples) shipped as two subtrees inside each skill so the `skills` CLI's per-skill copy includes everything. The migration subtree is named `migration-v1-to-v2/` (not `migration/`) to avoid ambiguity with per-feature `features/migration.md` (ICX/bnUSD token migration).
 - **AGENTS.md** at the package root — tool-neutral router that maps consumer intent → skill name.
 

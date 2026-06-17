@@ -9,13 +9,14 @@ This package contains **no runtime code**. It exists to deliver agent-native doc
 ```
 packages/skills/
 ├── .claude-plugin/
-│   └── plugin.json                # Skill registry — the 4 broad skills ONLY (granular ship bundled inside them)
+│   └── plugin.json                # Skill registry (source of truth) — broad SDK skills + registered meta skills (granular ship bundled inside broad skills)
 ├── AGENTS.md                      # Tool-neutral router: consumer intent → skill (+ mode)
 ├── skills/                        # Each broad skill is mode-gated; some have nested granular children
-│   ├── sodax-sdk/                          {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/, <feature>/SKILL.md ×10}
-│   ├── sodax-wallet-sdk-core/              {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/, <chain>/SKILL.md ×9}
-│   ├── sodax-wallet-sdk-react/             {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/ (incl. 4 .tsx example apps under integration/knowledge/examples/), <concern>/SKILL.md ×6}
-│   └── sodax-dapp-kit/                     {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/, <feature>/SKILL.md ×9}
+│   ├── sodax-build/                        {SKILL.md, knowledge/ (flat) — cross-cutting front-door / ideation meta skill; NO integration/migration split}
+│   ├── sodax-sdk/                          {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/, <feature>/SKILL.md children}
+│   ├── sodax-wallet-sdk-core/              {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/, <chain>/SKILL.md children}
+│   ├── sodax-wallet-sdk-react/             {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/ (incl. .tsx example apps under integration/knowledge/examples/), <concern>/SKILL.md children}
+│   └── sodax-dapp-kit/                     {SKILL.md, integration/knowledge/, migration-v1-to-v2/knowledge/, <feature>/SKILL.md children}
 └── scripts/check-skills.sh        # Validation: plugin.json, frontmatter, internal links
 ```
 
@@ -25,18 +26,34 @@ Each broad skill ships **both** mode subtrees under its own directory. The `skil
 
 Each broad skill has **nested granular skills** at `skills/<broad>/<sub-domain>/SKILL.md`. The split axis differs per package — pick whatever the consumer decides upfront and whatever maps 1:1 to a coherent slice of the broad knowledge tree:
 
-- `sodax-sdk` — one per Core SDK feature service (10): swap, money-market, bridge, staking, dex, leverage-yield, migration, partner, recovery, backend-api.
-- `sodax-dapp-kit` — one per dapp-kit feature domain (9), matching the feature-knowledge filenames: swap, money-market, staking, bridge, dex, leverage-yield, migration, bitcoin, auxiliary-services. (`auxiliary-services` bundles partner + recovery + backend queries + shared utilities, mirroring `features/auxiliary-services.md`.)
-- `sodax-wallet-sdk-core` — one per **chain family** (9), 1:1 with `integration/knowledge/features/<chain>.md`: evm, solana, sui, bitcoin, stellar, icon, injective, near, stacks. (The axis is chain, not feature — hooks/services are uniform across chains; the per-chain config + methods + gotchas are what differ.)
-- `sodax-wallet-sdk-react` — one per **connectivity concern** (6), each backed by a dedicated integration recipe: connect (connect-button + chain-detection), wallet-modal (multi-chain-modal + batch-operations), bridge-to-sdk, switch-chain, sign-message, walletconnect. (No `features/` dir — hooks are chain-agnostic; `setup.md` is a shared prerequisite, not its own granular skill.)
+- `sodax-sdk` — one per Core SDK feature service: swap, money-market, bridge, staking, dex, leverage-yield, migration, partner, recovery, backend-api.
+- `sodax-dapp-kit` — one per dapp-kit feature domain, matching the feature-knowledge filenames: swap, money-market, staking, bridge, dex, leverage-yield, migration, bitcoin, auxiliary-services. (`auxiliary-services` bundles partner + recovery + backend queries + shared utilities, mirroring `features/auxiliary-services.md`.)
+- `sodax-wallet-sdk-core` — one per **chain family**, 1:1 with `integration/knowledge/features/<chain>.md`: evm, solana, sui, bitcoin, stellar, icon, injective, near, stacks. (The axis is chain, not feature — hooks/services are uniform across chains; the per-chain config + methods + gotchas are what differ.)
+- `sodax-wallet-sdk-react` — one per **connectivity concern**, each backed by a dedicated integration recipe: connect (connect-button + chain-detection), wallet-modal (multi-chain-modal + batch-operations), bridge-to-sdk, switch-chain, sign-message, walletconnect. (No `features/` dir — hooks are chain-agnostic; `setup.md` is a shared prerequisite, not its own granular skill.)
 
 They exist so agents can load just one workflow (~3 KB) instead of the whole broad SKILL.md (~13 KB) plus its broad knowledge index.
 
 Granular skills are **one file each** (`<sub-domain>/SKILL.md`). They do **NOT** ship their own `integration/knowledge/` or `migration-v1-to-v2/knowledge/` subtrees — they link directly into the parent broad skill's knowledge tree (`../integration/knowledge/features/<feature>.md`, `../integration/knowledge/recipes/<recipe>.md`, etc.).
 
-**Granular skills are bundled, not separately published.** `plugin.json` registers **only the 4 broad skills**. Each broad skill's directory already contains its nested granular `SKILL.md` files, so installing a broad skill (e.g. `npx skills add … --skill sodax-sdk`) lands every granular file alongside the knowledge tree; the broad SKILL.md's "prefer a granular skill" table then links to `./swap/SKILL.md` etc., which resolve in the consumer's install. Granular skills are deliberately **not** registered because they are not self-contained: a granular `SKILL.md` links **up** into its parent's tree (`../integration/knowledge/...`), and the `skills` CLI copies only a skill's own directory — so installing a granular skill standalone would leave every `../knowledge` link dangling. Keeping the registry to the 4 broad skills also concentrates skills.sh install telemetry (which drives search ranking) instead of diluting it across ~38 rows. To add a new granular skill, drop a `<feature>/SKILL.md` into the broad skill dir — do **not** add it to `plugin.json`.
+**Granular skills are bundled, not separately published.** `plugin.json` registers **only the top-level skills** (the broad SDK skills plus any registered meta skills). Each broad skill's directory already contains its nested granular `SKILL.md` files, so installing a broad skill (e.g. `npx skills add … --skill sodax-sdk`) lands every granular file alongside the knowledge tree; the broad SKILL.md's "prefer a granular skill" table then links to `./swap/SKILL.md` etc., which resolve in the consumer's install. Granular skills are deliberately **not** registered because they are not self-contained: a granular `SKILL.md` links **up** into its parent's tree (`../integration/knowledge/...`), and the `skills` CLI copies only a skill's own directory — so installing a granular skill standalone would leave every `../knowledge` link dangling. Keeping the registry to the top-level skills also concentrates skills.sh install telemetry (which drives search ranking) instead of diluting it across the many bundled granular rows. To add a new granular skill, drop a `<feature>/SKILL.md` into the broad skill dir — do **not** add it to `plugin.json`.
 
 **Family rule:** every granular skill shares its parent broad skill's family. Family is the broad-skill name (`sdk`, `wallet-sdk-core`, `wallet-sdk-react`, `dapp-kit`). Cross-family clickable links remain forbidden; intra-family links (broad ↔ granular, granular ↔ granular within the same broad parent) are explicitly allowed.
+
+## Meta / ideation skills (cross-cutting front door)
+
+`sodax-build` is a **deliberately different category** from the four per-package SDK skills — a single cross-cutting "front-door" skill that sits *upstream* of them. A non-technical or undecided user loads it first; it runs a guided interview, produces a product brief, and hands off to the dev skills by name. It writes no app code.
+
+Three deliberate exemptions distinguish it from a broad skill — all intentional, not drift:
+
+- **It is not a `sodax-<pkg>` skill.** It maps to no SDK package and has no granular children. Its "family" (for the cross-package link check) is `build`.
+- **No integration/migration split — a flat `knowledge/` tree.** There is no v1→v2 axis for ideation. `check-skills.sh` 5b (which requires both mode subtrees) iterates only `EXPECTED_BROAD_SKILLS`, so the meta skill is exempt; it is registered + frontmatter-validated via a separate `EXPECTED_META_SKILLS` allowlist in 5a.
+- **Dev-skill references are prose-only.** Because its family is `build`, ANY clickable link or GitHub URL into `sodax-sdk` / `sodax-dapp-kit` / `sodax-wallet-sdk-core` / `sodax-wallet-sdk-react` would trip the cross-package check. It names the four dev skills in prose (backticks) only, and links exclusively within its own `knowledge/`.
+
+**Self-contained but grounded.** The skill needs no network to run, but its facts are derived from repo source. Qualitative facts (what a feature does, the intent/solver swap model) are baked in; enumerable/exact values (chain lists, token symbols, fee caps) are NOT — each grounded knowledge file carries a "Source & freshness" header telling the agent to fetch the canonical `packages/types/...` / `packages/sdk/...` source before quoting exact values. Citing those source paths is CI-safe: the cross-package URL check only forbids URLs into `packages/skills/skills/sodax-<pkg>/...`.
+
+**Evals.** A trigger-regression corpus lives at `scripts/_evals/sodax-build.json` — deliberately **outside** the shipped `skills/` tree so it is never copied into a consumer's install (`package.json` `files` excludes `scripts/`). Not a CI gate today; a fixture for future automated trigger testing.
+
+To add another meta skill later: drop `skills/<name>/SKILL.md` + a flat `knowledge/`, register it in `plugin.json`, and add it to `EXPECTED_META_SKILLS` in `scripts/check-skills.sh`.
 
 ## Separation of concerns
 
@@ -70,7 +87,7 @@ Chains five sub-scripts. Each catches a distinct bug class — green guards toge
 
 | Sub-script | What it enforces | Source of truth | Opt-out |
 |---|---|---|---|
-| `check:ai-structural` | `.claude-plugin/plugin.json` parses and registers exactly the 4 broad skills; every SKILL.md (broad + bundled granular) has valid `name:` / `description:` frontmatter; no orphan top-level skill dirs; every relative `.md` link resolves. | this package's filesystem | none — structural |
+| `check:ai-structural` | `.claude-plugin/plugin.json` parses and registers exactly the expected broad SDK skills + meta skills (the `EXPECTED_*` arrays in `check-skills.sh` are the source of truth); every SKILL.md (broad + bundled granular + meta) has valid `name:` / `description:` frontmatter; no orphan top-level skill dirs; every relative `.md` link resolves. | this package's filesystem | none — structural |
 | `check:ai-imports` | Every `import … from '@sodax/<pkg>'` statement in `skills/sodax-<pkg>/{integration,migration-v1-to-v2}/knowledge/**/*.md` + each SDK package's README/CLAUDE.md typechecks against `packages/<pkg>/src/index.ts`. Catches deleted / renamed exports. | `packages/<pkg>/src/index.ts` via fixture tsconfig `paths` | none |
 | `check:ai-snippets` | Every fenced ts/tsx code block in `skills/sodax-{dapp-kit,wallet-sdk-react}/{integration,migration-v1-to-v2}/knowledge/**/*.md` typechecks against the real SDK. Catches call-shape drift. **Opt-out by default** — every block is typechecked unless it carries the marker. wallet-sdk-react's migration docs and integration pattern-style blocks (inline hook references without imports) are opted out via `// @ai-snippets-skip`; ~83 markers in place. Real working examples (with imports + complete code) still validate. | same as imports, plus `_ai-snippets-fixture/_preamble.d.ts` ambients | `// @ai-snippets-skip` as first content line of the block |
 | `check:ai-tsx-examples` | Every standalone `.tsx` file under `skills/sodax-<pkg>/integration/knowledge/examples/` typechecks as a complete module against the live `src/`. Today: 4 files under wallet-sdk-react (drop-in app shells the README markets as copy-paste-runnable). Catches export drift, hook-shape drift, renamed-param drift in the user-facing examples. | each SDK package's `src/index.ts` (and `xchains/*` sub-paths for wallet-sdk-react) via fixture tsconfig `paths` | none — illustrative blocks live in `.md` via `@ai-snippets-skip`; `integration/knowledge/examples/` is for runnable code only |
