@@ -138,13 +138,13 @@ export class StacksSpokeService {
       postConditionMode: PostConditionMode.Allow,
     };
     if (params.raw === true) {
-      if (validateStacksAddress(params.srcAddress)) {
-        throw new Error('When using raw transactions, the public key must be provided as "from" parameter');
+      if (!params.srcPublicKey || validateStacksAddress(params.srcPublicKey)) {
+        throw new Error('Stacks raw transactions require the signer public key in srcPublicKey (not a Stacks address).');
       }
 
       const tx = await makeUnsignedContractCall({
         ...reqData,
-        publicKey: params.srcAddress,
+        publicKey: params.srcPublicKey,
         network: this.network,
         fee: 0, // placeholder — we'll estimate
         nonce: 0n,

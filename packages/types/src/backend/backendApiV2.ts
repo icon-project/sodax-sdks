@@ -255,6 +255,8 @@ export interface CreateIntentParamsV2 {
   allowPartialFill: boolean;
   /** User address on the source spoke chain (chain-specific format). */
   srcAddress: string;
+  /** Source-chain signer public key (compressed hex), for chains whose address can't yield it (e.g. Stacks). */
+  srcPublicKey?: string;
   /** Recipient address on the destination spoke chain (chain-specific format). */
   dstAddress: string;
   /** Solver address (EVM hub address). Defaults to the zero address for "any solver". */

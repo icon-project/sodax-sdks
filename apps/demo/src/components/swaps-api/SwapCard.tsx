@@ -263,6 +263,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       deadline,
       allowPartialFill: false,
       srcAddress: sourceAccount.address,
+      srcPublicKey: sourceAccount.publicKey, // Stacks needs the signer's public key (its `SP…` address is a one-way hash); undefined elsewhere.
       dstAddress,
     });
   };
