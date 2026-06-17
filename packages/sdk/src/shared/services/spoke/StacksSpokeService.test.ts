@@ -27,11 +27,10 @@
  * catches a class of regressions where a hardcoded value happens to match a test fixture but
  * diverges from production config.
  *
- * Stacks-specific gotcha: `deposit` with `raw=true` expects `srcAddress` to be a **public key**,
- * NOT a Stacks address. The SUT asserts this via `validateStacksAddress(srcAddress) === true`
- * throwing. Our raw-mode fixtures therefore pass a fake hex public key (66 chars, compressed-
- * secp256k1 shape) and the validation mock returns `false` for it. The address-error test mocks
- * `validateStacksAddress` to return `true` for the same input to trigger the throw branch.
+ * Stacks-specific gotcha: `deposit` with `raw=true` builds the tx unsigned, so it needs the signer's
+ * **public key** via `srcPublicKey` (the `SP…` address is a one-way hash of it); `srcAddress` stays
+ * the real address. Raw-mode fixtures pass a fake hex public key (66 chars, compressed-secp256k1
+ * shape) as `srcPublicKey`; the missing-key test omits it to trigger the throw branch.
  *
  * Section organization:
  *   1. constructor — method surface, network wiring, polling config
@@ -372,9 +371,9 @@ describe('StacksSpokeService.deposit', () => {
     overrides: Partial<DepositParams<typeof STACKS, Raw>>,
   ): DepositParams<typeof STACKS, Raw> =>
     ({
-      // raw-mode expects a public key here; non-raw mode is fine with either. The default uses the
-      // pubkey so the same fixture works for both branches without per-test surgery.
-      srcAddress: SRC_PUBKEY,
+      // raw-mode needs the signer public key via srcPublicKey; srcAddress is always the real Stacks address.
+      srcAddress: SRC_ADDR,
+      srcPublicKey: SRC_PUBKEY,
       srcChainKey: STACKS,
       to: HUB_WALLET,
       token: STACKS_BNUSD,
@@ -434,15 +433,20 @@ describe('StacksSpokeService.deposit', () => {
     expect(call?.functionArgs?.[0]).toMatchObject({ type: 'none' });
   });
 
-  it('raw=true → throws when srcAddress validates as a real Stacks address (publicKey-required invariant)', async () => {
-    // Flip validateStacksAddress to return true for this call only — simulates a caller who
-    // passed a Stacks address instead of a public key.
-    mocks.validateStacksAddress.mockReturnValueOnce(true);
-
-    await expect(stacksSpoke.deposit(depositParams<true>({ srcAddress: SRC_ADDR, raw: true }))).rejects.toThrow(
-      'When using raw transactions, the public key must be provided as "from" parameter',
+  it('raw=true → throws when srcPublicKey is missing (needed to build the unsigned tx)', async () => {
+    await expect(stacksSpoke.deposit(depositParams<true>({ srcPublicKey: undefined, raw: true }))).rejects.toThrow(
+      'Stacks raw transactions require the signer public key in srcPublicKey',
     );
     // makeUnsignedContractCall must NOT have been invoked once the invariant fails.
+    expect(mocks.makeUnsignedContractCall).not.toHaveBeenCalled();
+  });
+
+  it('raw=true → throws when srcPublicKey is a Stacks address, not a public key', async () => {
+    // Caller swapped the address into srcPublicKey — validateStacksAddress returns true for it.
+    mocks.validateStacksAddress.mockReturnValueOnce(true);
+    await expect(stacksSpoke.deposit(depositParams<true>({ srcPublicKey: SRC_ADDR, raw: true }))).rejects.toThrow(
+      'not a Stacks address',
+    );
     expect(mocks.makeUnsignedContractCall).not.toHaveBeenCalled();
   });
 
