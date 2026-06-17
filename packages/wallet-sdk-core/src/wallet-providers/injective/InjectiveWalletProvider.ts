@@ -5,10 +5,11 @@ import {
   PrivateKey,
   getInjectiveSignerAddress,
   TxGrpcApi,
-  CosmosTxV1Beta1TxPb,
-  fromBase64,
   type TxResponse,
 } from '@injectivelabs/sdk-ts';
+// Import the Cosmos tx proto codecs directly from cosmjs-types because @injectivelabs/sdk-ts's
+// `CosmosTxV1Beta1TxPb` namespace export does not expose codec helpers like `fromPartial`.
+import { TxRaw, SignDoc } from 'cosmjs-types/cosmos/tx/v1beta1/tx.js';
 import { getNetworkEndpoints, type NetworkEndpoints } from '@injectivelabs/networks';
 import type {
   Hex,
@@ -205,12 +206,12 @@ export class InjectiveWalletProvider
 
   /**
    * Broadcasts an already-signed, proto-encoded Cosmos `TxRaw` via the configured gRPC endpoint.
-   * @param signedTxRaw - The signed transaction, encoded with `CosmosTxV1Beta1TxPb.TxRaw.encode(...).finish()`.
+   * @param signedTxRaw - The signed transaction, encoded with `TxRaw.encode(...).finish()`.
    * @returns The transaction hash.
    * @throws {Error} if the node rejects the transaction (non-zero result code).
    */
   async sendTransaction(signedTxRaw: Uint8Array): Promise<string> {
-    const txRaw = CosmosTxV1Beta1TxPb.TxRaw.decode(signedTxRaw);
+    const txRaw = TxRaw.decode(signedTxRaw);
     const res = await new TxGrpcApi(this.endpoints.grpc).broadcast(txRaw);
     if (res.code !== 0) {
       throw new Error(`Injective broadcast failed (code ${res.code}): ${res.rawLog}`);
@@ -230,17 +231,20 @@ export class InjectiveWalletProvider
    */
   async signAndSendTransaction(tx: InjectiveRawTransaction): Promise<string> {
     const { bodyBytes, authInfoBytes, chainId, accountNumber } = tx.signedDoc;
-    let signedTxRaw: CosmosTxV1Beta1TxPb.TxRaw;
+    const signerAddress = await this.getWalletAddress();
+    if (tx.from !== signerAddress) {
+      throw new Error(`Injective: cannot sign transaction for ${tx.from} with wallet ${signerAddress}.`);
+    }
+    let signedTxRaw: TxRaw;
 
     if (this.wallet.msgBroadcaster instanceof MsgBroadcasterWithPk) {
-      const signDoc = CosmosTxV1Beta1TxPb.SignDoc.fromPartial({ bodyBytes, authInfoBytes, chainId, accountNumber });
-      const signBytes = CosmosTxV1Beta1TxPb.SignDoc.encode(signDoc).finish();
+      const signDoc = SignDoc.fromPartial({ bodyBytes, authInfoBytes, chainId, accountNumber });
+      const signBytes = SignDoc.encode(signDoc).finish();
       const signature = this.wallet.msgBroadcaster.privateKey.sign(Buffer.from(signBytes));
-      signedTxRaw = CosmosTxV1Beta1TxPb.TxRaw.fromPartial({ bodyBytes, authInfoBytes, signatures: [signature] });
+      signedTxRaw = TxRaw.fromPartial({ bodyBytes, authInfoBytes, signatures: [signature] });
     } else {
       const walletStrategy = this.wallet.msgBroadcaster.walletStrategy;
-      const address = await this.getWalletAddress();
-      const unsignedTxRaw = CosmosTxV1Beta1TxPb.TxRaw.fromPartial({ bodyBytes, authInfoBytes, signatures: [] });
+      const unsignedTxRaw = TxRaw.fromPartial({ bodyBytes, authInfoBytes, signatures: [] });
 
       let directSign: Awaited<ReturnType<typeof walletStrategy.signCosmosTransaction>>;
       try {
@@ -248,7 +252,7 @@ export class InjectiveWalletProvider
           txRaw: unsignedTxRaw,
           chainId,
           accountNumber: Number(accountNumber),
-          address,
+          address: signerAddress,
         });
       } catch (error) {
         // Surface the wallet's own error (e.g. a Keplr/Leap user rejection) rather than masking it,
@@ -262,13 +266,13 @@ export class InjectiveWalletProvider
         );
       }
 
-      signedTxRaw = CosmosTxV1Beta1TxPb.TxRaw.fromPartial({
+      signedTxRaw = TxRaw.fromPartial({
         bodyBytes: directSign.signed.bodyBytes,
         authInfoBytes: directSign.signed.authInfoBytes,
-        signatures: [fromBase64(directSign.signature.signature)],
+        signatures: [Buffer.from(directSign.signature.signature, 'base64')],
       });
     }
 
-    return this.sendTransaction(CosmosTxV1Beta1TxPb.TxRaw.encode(signedTxRaw).finish());
+    return this.sendTransaction(TxRaw.encode(signedTxRaw).finish());
   }
 }

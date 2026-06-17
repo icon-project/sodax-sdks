@@ -35,13 +35,13 @@ import { toBase64 } from '@injectivelabs/sdk-ts';
 
 const mocks = vi.hoisted(() => ({
   sleep: vi.fn(),
-  // `@injectivelabs/sdk-ts` re-exports `CosmosTxV1Beta1TxPb` via a path that doesn't expose
-  // `TxRaw.fromPartial` cleanly under Vitest's ESM/CJS interop. Provide a minimal stand-in so
-  // `estimateGas` can build a TxRaw without touching the missing static.
+  // `TxRaw` is imported directly from cosmjs-types because the @injectivelabs namespace export
+  // does not expose the codec-style `fromPartial` helper in this runtime.
   txRawFromPartial: vi.fn(),
   // Stub the account fetch + (pure) tx builder + msg constructor so `getRawTransaction` can be
   // exercised directly (without spying on it) and its fee/funds/accountNumber wiring asserted.
   fetchCosmosAccount: vi.fn(),
+  chainRestAuthApiEndpoints: [] as string[],
   baseAccountFromRest: vi.fn(),
   createTx: vi.fn(),
   msgExecFromJSON: vi.fn(),
@@ -56,12 +56,11 @@ vi.mock('@injectivelabs/sdk-ts', async () => {
   const actual = await vi.importActual<Record<string, unknown>>('@injectivelabs/sdk-ts');
   return {
     ...actual,
-    CosmosTxV1Beta1TxPb: {
-      ...(actual.CosmosTxV1Beta1TxPb as Record<string, unknown>),
-      TxRaw: { fromPartial: mocks.txRawFromPartial },
-    },
     createTransaction: mocks.createTx,
     ChainRestAuthApi: class {
+      constructor(endpoint: string) {
+        mocks.chainRestAuthApiEndpoints.push(endpoint);
+      }
       fetchCosmosAccount = mocks.fetchCosmosAccount;
     },
     BaseAccount: { fromRestCosmosApi: mocks.baseAccountFromRest },
@@ -71,6 +70,10 @@ vi.mock('@injectivelabs/sdk-ts', async () => {
     },
   };
 });
+
+vi.mock('cosmjs-types/cosmos/tx/v1beta1/tx.js', () => ({
+  TxRaw: { fromPartial: mocks.txRawFromPartial },
+}));
 
 import { Sodax } from '../../entities/Sodax.js';
 import { InjectiveSpokeService } from './InjectiveSpokeService.js';
@@ -123,6 +126,7 @@ beforeEach(() => {
   mocks.sleep.mockResolvedValue(undefined);
   mocks.txRawFromPartial.mockReturnValue({ __fakeTxRaw: true });
   mocks.msgExecFromJSON.mockImplementation((args: unknown) => ({ __msg: args }));
+  mocks.chainRestAuthApiEndpoints.length = 0;
   mocks.fetchCosmosAccount.mockResolvedValue({ account: 'raw' });
   mocks.baseAccountFromRest.mockReturnValue({ accountNumber: 7, sequence: 3, pubKey: { key: 'pk', type: '' } });
   // `createTransaction` is pure; echo the accountNumber into signDoc so the test verifies the
@@ -219,6 +223,7 @@ describe('InjectiveSpokeService.getRawTransaction', () => {
 
     expect(mocks.fetchCosmosAccount).toHaveBeenCalledTimes(1);
     expect(mocks.fetchCosmosAccount).toHaveBeenCalledWith(SRC_ADDR);
+    expect(mocks.chainRestAuthApiEndpoints).toEqual([injSpoke.endpoints.rest]);
     expect(mocks.createTx.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({ pubKey: 'pk', sequence: 3, accountNumber: 7, chainId: INJ_NETWORK_ID }),
     );

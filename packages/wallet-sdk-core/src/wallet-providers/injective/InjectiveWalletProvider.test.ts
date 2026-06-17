@@ -37,20 +37,22 @@ vi.mock('@injectivelabs/sdk-ts', () => {
     getInjectiveSignerAddress: (s: string) => s,
     MsgBroadcasterWithPk,
     TxGrpcApi,
-    CosmosTxV1Beta1TxPb: {
-      TxRaw: {
-        fromPartial: (x: Record<string, unknown>) => ({ __txRaw: true, ...x }),
-        encode: () => ({ finish: txRawEncodeFinish }),
-        decode: (bytes: Uint8Array) => ({ __decodedTxRaw: true, bytes }),
-      },
-      SignDoc: {
-        fromPartial: (x: Record<string, unknown>) => ({ __signDoc: true, ...x }),
-        encode: () => ({ finish: () => new Uint8Array([1, 2, 3]) }),
-      },
-    },
     fromBase64: (_s: string) => new Uint8Array([0xab]),
   };
 });
+
+// TxRaw/SignDoc are imported directly from cosmjs-types now (not the @injectivelabs namespace re-export).
+vi.mock('cosmjs-types/cosmos/tx/v1beta1/tx.js', () => ({
+  TxRaw: {
+    fromPartial: (x: Record<string, unknown>) => ({ __txRaw: true, ...x }),
+    encode: () => ({ finish: txRawEncodeFinish }),
+    decode: (bytes: Uint8Array) => ({ __decodedTxRaw: true, bytes }),
+  },
+  SignDoc: {
+    fromPartial: (x: Record<string, unknown>) => ({ __signDoc: true, ...x }),
+    encode: () => ({ finish: () => new Uint8Array([1, 2, 3]) }),
+  },
+}));
 
 vi.mock('@injectivelabs/networks', () => ({
   Network: { Mainnet: 'mainnet' },
@@ -229,7 +231,7 @@ describe('InjectiveWalletProvider', () => {
   });
 
   const RAW_TX = {
-    from: '0xfrom' as `0x${string}`,
+    from: SENDER as `0x${string}`,
     to: '0xto' as `0x${string}`,
     signedDoc: {
       bodyBytes: new Uint8Array([1]),
@@ -278,6 +280,16 @@ describe('InjectiveWalletProvider', () => {
       expect(grpcBroadcast).toHaveBeenCalledTimes(1);
       expect(hash).toBe('grpc-tx-hash');
     });
+
+    it('throws before signing when the raw tx sender does not match the connected wallet', async () => {
+      const provider = makeProvider();
+
+      await expect(
+        provider.signAndSendTransaction({ ...RAW_TX, from: 'inj1different' as `0x${string}` }),
+      ).rejects.toThrow(/cannot sign transaction for inj1different with wallet inj1abc/);
+      expect(pkSign).not.toHaveBeenCalled();
+      expect(grpcBroadcast).not.toHaveBeenCalled();
+    });
   });
 
   describe('signAndSendTransaction — browser mode', () => {
@@ -305,6 +317,21 @@ describe('InjectiveWalletProvider', () => {
       expect(arg.address).toBe('inj1abc');
       expect(grpcBroadcast).toHaveBeenCalledTimes(1);
       expect(hash).toBe('grpc-tx-hash');
+    });
+
+    it('throws before signing when the raw tx sender does not match the connected browser wallet', async () => {
+      const signCosmosTransaction = vi.fn();
+      const msgBroadcaster: any = {
+        endpoints: { grpc: 'https://grpc.mock' },
+        walletStrategy: { getAddresses: vi.fn().mockResolvedValue(['inj1abc']), signCosmosTransaction },
+      };
+      const provider = new InjectiveWalletProvider({ msgBroadcaster });
+
+      await expect(
+        provider.signAndSendTransaction({ ...RAW_TX, from: 'inj1different' as `0x${string}` }),
+      ).rejects.toThrow(/cannot sign transaction for inj1different with wallet inj1abc/);
+      expect(signCosmosTransaction).not.toHaveBeenCalled();
+      expect(grpcBroadcast).not.toHaveBeenCalled();
     });
 
     it('flags the EVM/Metamask limitation while preserving the underlying signing error', async () => {
