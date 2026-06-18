@@ -1,6 +1,10 @@
 ---
 name: sodax-wallet-sdk-react-walletconnect
 description: 'Granular skill for the @sodax/wallet-sdk-react v2 WalletConnect / enterprise-custody setup only — the walletConnect field on the EVM slot of SodaxWalletConfig, which adds non-injected wallets (Fireblocks, Ledger, mobile-only) beyond the default EIP-6963 browser-extension discovery. Use when a React dapp needs enterprise custody or mobile wallets on EVM — e.g. "add WalletConnect", "Fireblocks wallet support", "Ledger via WalletConnect", "mobile wallet connect", "projectId for WalletConnect". Covers BOTH integration (write new v2 config) and migration (port v1 WalletConnect setup). Picks via Step 1. Links into the parent sodax-wallet-sdk-react knowledge tree. WalletConnect is EVM-slot-only; for the connect UI itself use the connect / wallet-modal skills.'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # WalletConnect (`wallet-sdk-react` granular skill)

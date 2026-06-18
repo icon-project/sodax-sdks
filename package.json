@@ -11,6 +11,7 @@
     "build:packages": "turbo run build:packages",
     "dev": "turbo run dev",
     "dev:demo": "turbo run dev --filter=demo",
+    "mock-intake:demo": "pnpm --filter=./apps/demo mock-intake",
     "pretty": "turbo run pretty --filter=!./apps/node",
     "lint": "turbo run lint --filter=!./apps/node",
     "lint:packages": "turbo run lint:packages",

@@ -59,7 +59,7 @@ These keep their name but their TypeScript signature is different. Usually requi
 | `useTradingWalletBalance` | Return is `RadfiWalletBalance = { btcSatoshi, pendingSatoshi, externalPendingSatoshi, totalUtxos }` — NOT `{ confirmed, pending }`. |
 | `useExpiredUtxos` | Return is `RadfiUtxo[]` (with `_id`, `txid`, `vout`, `txidVout`, `satoshi`, `amount`, `address`, `isSpent`, `status`, `source`, optional `runes`). Both this and `useTradingWalletBalance` take `{ params: { walletProvider, tradingAddress } }`. |
 | `useRadfiAuth` | TData is `RadfiAuthResult = { accessToken, refreshToken, tradingAddress }` (3 fields — `publicKey` is persisted to localStorage but NOT returned). |
-| All Bitcoin/Radfi mutations | Standard pattern — drop hook-init args; pass through `mutate(vars)`. |
+| All Bitcoin/Bound Exchange mutations | Standard pattern — drop hook-init args; pass through `mutate(vars)`. |
 
 ## Cross-references
 

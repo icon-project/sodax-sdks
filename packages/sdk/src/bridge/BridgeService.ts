@@ -389,7 +389,7 @@ export class BridgeService {
    * transaction simulation or batching). When `raw` is `false`, signs and submits the deposit
    * transaction via the provided wallet provider.
    *
-   * Bitcoin is only supported with `raw: false` because it requires the RadFi trading wallet
+   * Bitcoin is only supported with `raw: false` because it requires the Bound Exchange trading wallet
    * derivation flow.
    *
    * @param _params - Bridge parameters including source/destination chain keys, token addresses,
@@ -416,8 +416,9 @@ export class BridgeService {
         { ...baseCtx, field: 'dstToken' });
 
       const personalAddress = params.srcAddress;
-      // Bitcoin TRADING mode: use trading wallet for hub wallet derivation (see getEffectiveWalletAddress)
-      // NOTE: bitcoin is only enabled in non-raw execution mode == walletProvider is required
+      // Bitcoin TRADING mode uses the Bound trading wallet; USER mode sends directly from the
+      // connected Bitcoin wallet.
+      // NOTE: bitcoin is only enabled in non-raw execution mode == walletProvider is required.
       let walletAddress: string = personalAddress;
       if (isBitcoinChainKeyType(params.srcChainKey) && _params.raw === false) {
         bridgeInvariant(
@@ -426,10 +427,14 @@ export class BridgeService {
           { ...baseCtx, field: 'walletProvider' },
         );
         walletAddress = await this.spoke.bitcoin.getEffectiveWalletAddress(personalAddress);
-        await this.spoke.bitcoin.radfi.ensureRadfiAccessToken(_params.walletProvider);
+        if (this.spoke.bitcoin.walletMode === 'TRADING') {
+          await this.spoke.bitcoin.radfi.ensureRadfiAccessToken(_params.walletProvider);
+        }
       }
 
-      const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
+      const hubWallet = await this.hubProvider.getUserHubWalletAddress(walletAddress, params.srcChainKey);
+      const effectiveSkipSimulation =
+        skipSimulation || (isBitcoinChainKeyType(params.srcChainKey) && this.spoke.bitcoin.walletMode === 'USER');
 
       const data: Hex = this.buildBridgeData(params, srcToken, dstToken, this.config.bridge.partnerFee);
 
@@ -440,7 +445,7 @@ export class BridgeService {
         token: params.srcToken as GetTokenAddressType<K>,
         amount: params.amount,
         data,
-        skipSimulation,
+        skipSimulation: effectiveSkipSimulation,
       } as const;
 
       const txResult = await this.spoke.deposit(
@@ -457,7 +462,7 @@ export class BridgeService {
       );
 
       if (!txResult.ok) {
-        console.error(txResult.error);
+        this.config.logger.error('createBridgeIntent failed', txResult.error);
         if (isBridgeCreateIntentError(txResult.error)) return { ok: false, error: txResult.error };
         return {
           ok: false,
@@ -473,7 +478,7 @@ export class BridgeService {
         },
       };
     } catch (error) {
-      console.error(error);
+      this.config.logger.error('createBridgeIntent failed', error);
       if (isBridgeCreateIntentError(error)) return { ok: false, error };
       return {
         ok: false,
@@ -668,7 +673,7 @@ export class BridgeService {
           : { amount: assetManagerBalance, decimals: toTokenInfo.decimals, type: 'WITHDRAWAL_LIMIT' },
       };
     } catch (error) {
-      console.error(error);
+      this.config.logger.error('getBridgeableAmount failed', error);
       if (isBridgeLookupError(error)) return { ok: false, error };
       return {
         ok: false,
@@ -722,7 +727,7 @@ export class BridgeService {
       // Check if the vault addresses are the same (case-insensitive comparison)
       return srcToken.vault.toLowerCase() === dstToken.vault.toLowerCase();
     } catch (error) {
-      console.error(error);
+      this.config.logger.error('isBridgeable check failed', error);
 
       // Return false on any error
       return false;

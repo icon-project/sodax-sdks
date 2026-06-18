@@ -1,6 +1,10 @@
 ---
 name: sodax-dapp-kit-swap
 description: 'Granular skill for the @sodax/dapp-kit v2 swap feature only — React Query hooks for intent-based cross-chain swaps via the solver: useSwap, useQuote, useSwapAllowance, useSwapApprove, useStatus, useCreateLimitOrder, useCancelSwap, useCancelLimitOrder. Use when a React dapp has decided the task is a swap (e.g. "useSwap with dapp-kit", "Sodax React swap hook", "limit order hook", "poll swap status", "cancel a Sodax intent in React") and you want to skip loading the broad sodax-dapp-kit skill. Covers BOTH integration (write new v2 hooks) and migration (port v1 swap hooks to v2 — single-object params, mutateAsyncSafe, hook-owned invalidations). Picks via Step 1. Links into the parent sodax-dapp-kit knowledge tree. For backend/Node swaps (no React), use the sodax-sdk skill instead.'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # Swap (dapp-kit granular skill)

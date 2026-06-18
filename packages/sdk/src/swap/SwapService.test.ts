@@ -902,7 +902,7 @@ describe('SwapService.createIntent', () => {
       expect(depositCall.to).toBe('0xhubwallet');
     });
 
-    it('invokes Radfi access-token setup with the Bitcoin wallet provider when params.srcChain is Bitcoin and raw=false', async () => {
+    it('invokes Bound Exchange access-token setup with the Bitcoin wallet provider when params.srcChain is Bitcoin and raw=false', async () => {
       const svc = sodax.swaps;
       mocks.getUserHubWalletAddress.mockResolvedValueOnce('0xhubwallet');
       mocks.constructCreateIntentData.mockReturnValueOnce(['0xintentdata', makeIntent(ChainKeys.BITCOIN_MAINNET), 0n]);
@@ -1575,7 +1575,7 @@ describe('SwapService.getStatus', () => {
     const result = await sodax.swaps.getStatus(request);
 
     expect(result).toBe(statusResult);
-    expect(mocks.solverGetStatus).toHaveBeenCalledWith(request, sodax.swaps.solver);
+    expect(mocks.solverGetStatus).toHaveBeenCalledWith(request, sodax.swaps.solver, sodax.swaps.config.logger);
   });
 
   it('forwards a SolverErrorResponse failure from SolverApiService.getStatus', async () => {
@@ -1597,7 +1597,7 @@ describe('SwapService.postExecution', () => {
     const result = await sodax.swaps.postExecution(request);
 
     expect(result).toBe(execResult);
-    expect(mocks.solverPostExecution).toHaveBeenCalledWith(request, sodax.swaps.solver);
+    expect(mocks.solverPostExecution).toHaveBeenCalledWith(request, sodax.swaps.solver, sodax.swaps.config.logger);
   });
 
   it('wraps a SolverErrorResponse failure as SWAP_SOLVER_API_ERROR with solver code on context', async () => {
@@ -1924,6 +1924,7 @@ describe('SwapService.swap', () => {
     expect(mocks.solverPostExecution).toHaveBeenCalledWith(
       expect.objectContaining({ intent_tx_hash: '0xsonicTx' }),
       sodax.swaps.solver,
+      sodax.swaps.config.logger,
     );
     // The relay path must NOT have been invoked for hub-chain srcChain.
     expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
@@ -1946,6 +1947,7 @@ describe('SwapService.swap', () => {
     expect(mocks.solverPostExecution).toHaveBeenCalledWith(
       expect.objectContaining({ intent_tx_hash: '0xdstTx' }),
       sodax.swaps.solver,
+      sodax.swaps.config.logger,
     );
   });
 

@@ -33,7 +33,7 @@ src/
 ├── moneymarket.ts, moneymarket-actions.ts, moneymarket-ops.ts
 ├── swap.ts                                 # intent-based swap E2E
 ├── soda-staking.ts
-├── bitcoin-radfi.ts                        # Bitcoin via Radfi provider
+├── bitcoin-radfi.ts                        # Bitcoin via Bound Exchange (formerly Radfi) provider
 ├── config.ts                               # shared config (RPC URLs, addresses)
 └── tests/                                  # focused regression scripts
     ├── bnusd-migration.test.ts

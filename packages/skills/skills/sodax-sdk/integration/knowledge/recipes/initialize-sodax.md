@@ -15,9 +15,10 @@ const result = sodax.config.isValidSpokeChainKey(ChainKeys.ARBITRUM_MAINNET);   
 ### With config override
 
 ```ts
-import { Sodax, ChainKeys, type SodaxConfig, type DeepPartial } from '@sodax/sdk';
+import { Sodax, ChainKeys, type SodaxOptions } from '@sodax/sdk';
 
-const config: DeepPartial<SodaxConfig> = {
+// `SodaxOptions` = `DeepPartial<SodaxConfig>` (the data override) plus the client-side `logger` option.
+const config: SodaxOptions = {
   // Per-chain overrides — merged with packaged defaults at the field level.
   chains: {
     [ChainKeys.SONIC_MAINNET]: { rpcUrl: process.env.SONIC_RPC_URL },
@@ -31,6 +32,8 @@ const config: DeepPartial<SodaxConfig> = {
   solver: {
     solverApiEndpoint: 'https://my-solver.example.com',
   },
+  // SDK log sink: 'console' (default) | 'silent' | a custom SodaxLogger. See logging.md.
+  logger: 'silent',
 };
 
 const sodax = new Sodax(config);
@@ -74,5 +77,6 @@ export const SUPPORTED_TOKENS_PER_CHAIN = sodaxConfig.swaps.supportedTokens;
 ## Cross-references
 
 - [`README.md`](README.md) — recipe index.
+- [`logging.md`](logging.md) — the `logger` constructor option in depth (presets + custom sinks).
 - [`../architecture.md`](../architecture.md) — concepts behind these patterns.
 - [`../reference/`](../reference/) — chain keys, error codes, public API surface.

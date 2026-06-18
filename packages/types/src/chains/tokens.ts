@@ -295,6 +295,40 @@ export const SodaTokens = {
   }
 } as const satisfies Record<HubVaultSymbol, XToken>;
 
+/**
+ * Leverage-yield vault share tokens on Sonic. Each entry is the ERC-4626 share token
+ * issued by a deployed `LeverageYieldVault` (see `leverageYield.leverageYieldVaults` for
+ * the matching vault metadata). Spread into `sonicSupportedTokens` and the swap registry
+ * so they're discoverable in token selectors and swappable via the solver.
+ *
+ * `address`, `hubAsset`, and `vault` are all the leverage-vault proxy address — these
+ * tokens live on the hub and aren't further wrapped.
+ */
+export const LsodaSymbols = ['lsodaWEETH', 'lsodaWSTETH'] as const;
+
+export type LsodaSymbol = (typeof LsodaSymbols)[number];
+
+export const LsodaTokens = {
+  lsodaWEETH: {
+    symbol: 'lsodaWEETH',
+    name: 'Leveraged Soda weETH',
+    decimals: 18,
+    address: '0xD09de2f5070699A909c0FD32fb5A909d3886701D',
+    chainKey: ChainKeys.SONIC_MAINNET,
+    hubAsset: '0xD09de2f5070699A909c0FD32fb5A909d3886701D',
+    vault: '0xD09de2f5070699A909c0FD32fb5A909d3886701D',
+  },
+  lsodaWSTETH: {
+    symbol: 'lsodaWSTETH',
+    name: 'Leveraged Soda wstETH',
+    decimals: 18,
+    address: '0x136E5D1CEC5db1829E24941Eddd9C8640E02Ce7a',
+    chainKey: ChainKeys.SONIC_MAINNET,
+    hubAsset: '0x136E5D1CEC5db1829E24941Eddd9C8640E02Ce7a',
+    vault: '0x136E5D1CEC5db1829E24941Eddd9C8640E02Ce7a',
+  },
+} as const satisfies Record<LsodaSymbol, XToken>;
+
 // --- Per-chain supported tokens ---
 
 export const sonicSupportedTokens = {
@@ -362,6 +396,7 @@ export const sonicSupportedTokens = {
     vault: SodaTokens.sodaSODA.address,
   },
   ...SodaTokens,
+  ...LsodaTokens,
 } as const satisfies Record<string, XToken>;
 
 export const redbellySupportedTokens = {
@@ -1009,6 +1044,15 @@ export const baseSupportedTokens = {
     chainKey: ChainKeys.BASE_MAINNET,
     hubAsset: '0xaa81bb5ba3c972ab53605d3ba7e443a3de6d1cb9',
     vault: '0xaa81bb5ba3c972ab53605d3ba7e443a3de6d1cb9',
+  },
+  AERO: {
+    symbol: 'AERO',
+    name: 'Aerodrome Finance',
+    decimals: 18,
+    address: '0x940181a94A35A4569e4529A3CDfB74e38FD98631',
+    chainKey: ChainKeys.BASE_MAINNET,
+    hubAsset: '0x348e086ab6f424dfc575a325c28624ed23973173',
+    vault: '0x348e086ab6f424dfc575a325c28624ed23973173',
   },
 } as const satisfies Record<string, XToken>;
 

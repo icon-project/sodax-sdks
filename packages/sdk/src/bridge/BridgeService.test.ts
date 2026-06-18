@@ -20,7 +20,8 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Address, IEvmWalletProvider, SpokeChainKey } from '@sodax/types';
+import type { Address, IBitcoinWalletProvider, IEvmWalletProvider, SpokeChainKey } from '@sodax/types';
+import { ChainKeys } from '@sodax/types';
 import { Sodax } from '../shared/entities/Sodax.js';
 import { SodaxError } from '../errors/SodaxError.js';
 import type { BridgeParams } from './BridgeService.js';
@@ -79,6 +80,101 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.clearAllMocks();
+});
+
+// =========================================================================
+// Bitcoin USER mode — createBridgeIntent invariants
+// =========================================================================
+
+const BTC = ChainKeys.BITCOIN_MAINNET;
+const BTC_USER_ADDR = 'bc1q5q3xczsl9zlt0gjys5khjknfp40zfdmkme9ene';
+const BTC_TOKEN = '0:0';
+const HUB_BTC_WALLET = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' as Address;
+
+const mockBtcProvider = {
+  chainType: 'BITCOIN',
+  signTransaction: vi.fn(),
+  signEcdsaMessage: vi.fn(),
+  signBip322Message: vi.fn(),
+  sendBitcoin: vi.fn(),
+  getWalletAddress: vi.fn(),
+  getPublicKey: vi.fn(),
+} as unknown as IBitcoinWalletProvider;
+
+const btcBridgeInput = (): BridgeParams<typeof BTC, false> =>
+  ({
+    raw: false,
+    walletProvider: mockBtcProvider,
+    params: {
+      srcAddress: BTC_USER_ADDR,
+      srcChainKey: BTC,
+      srcToken: BTC_TOKEN,
+      amount: 100_000n,
+      dstChainKey: BSC,
+      dstToken: SAMPLE_TOKEN,
+      recipient: SAMPLE_DST,
+    },
+  }) as BridgeParams<typeof BTC, false>;
+
+describe('BridgeService.createBridgeIntent — Bitcoin USER mode', () => {
+  let ensureRadfiSpy: ReturnType<typeof vi.spyOn>;
+  let depositSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    Object.defineProperty(sodax.spoke.bitcoin, 'walletMode', { value: 'USER', configurable: true });
+
+    vi.spyOn(sodax.spoke.bitcoin, 'getEffectiveWalletAddress').mockResolvedValue(BTC_USER_ADDR);
+    ensureRadfiSpy = vi.spyOn(sodax.spoke.bitcoin.radfi, 'ensureRadfiAccessToken').mockResolvedValue(
+      undefined as never,
+    );
+    vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockResolvedValue(HUB_BTC_WALLET);
+    vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValue({
+      address: BTC_TOKEN,
+      vault: '0xvault',
+      symbol: 'BTC',
+    } as never);
+    // Short-circuit data encoding — the test only cares about the Bitcoin wiring before buildBridgeData.
+    vi.spyOn(sodax.bridge, 'buildBridgeData').mockReturnValue('0xdata' as never);
+    depositSpy = vi.spyOn(sodax.spoke, 'deposit').mockResolvedValue({
+      ok: true,
+      value: 'btctxhash',
+    } as never);
+  });
+
+  afterEach(() => {
+    Object.defineProperty(sodax.spoke.bitcoin, 'walletMode', { value: 'TRADING', configurable: true });
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
+
+  it('does NOT call ensureRadfiAccessToken (Bound Exchange auth is TRADING-only)', async () => {
+    const result = await sodax.bridge.createBridgeIntent(btcBridgeInput());
+    expect(result.ok).toBe(true);
+    expect(ensureRadfiSpy).not.toHaveBeenCalled();
+  });
+
+  it('passes skipSimulation=true so the hub skips EVM simulation for Bitcoin USER deposits', async () => {
+    await sodax.bridge.createBridgeIntent(btcBridgeInput());
+    expect(depositSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ skipSimulation: true }),
+    );
+  });
+
+  it('derives hub wallet from personal address, not a trading address', async () => {
+    const getEffectiveSpy = vi.spyOn(sodax.spoke.bitcoin, 'getEffectiveWalletAddress');
+    const getHubSpy = vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress');
+
+    await sodax.bridge.createBridgeIntent(btcBridgeInput());
+
+    // getEffectiveWalletAddress is called with the user's personal address
+    expect(getEffectiveSpy).toHaveBeenCalledWith(BTC_USER_ADDR);
+    // The returned personal address (not a trading address) is forwarded to hub wallet derivation
+    expect(getHubSpy).toHaveBeenCalledWith(BTC_USER_ADDR, BTC);
+    // The spoke deposit srcAddress also uses the personal address
+    expect(depositSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ srcAddress: BTC_USER_ADDR }),
+    );
+  });
 });
 
 describe('BridgeService.bridge — integration error-path coverage', () => {

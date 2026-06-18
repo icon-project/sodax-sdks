@@ -10,4 +10,5 @@ export * from './migration/index.js';
 export * from './partner/index.js';
 export * from './recovery/index.js';
 export * from './dex/index.js';
+export * from './leverageYield/index.js';
 export * from '@sodax/types';

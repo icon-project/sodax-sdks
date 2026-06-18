@@ -46,6 +46,15 @@ Only **two** entry points are exported via [`package.json` `exports`](package.js
 
 There are **no per-chain sub-path exports**. New chain types are added under the appropriate subdirectory, re-exported through that subdirectory's `index.ts`, and flow out through the root barrel automatically.
 
+## Swap supported tokens (staging vs production)
+
+Swap tokens live in [`src/swap/swap.ts`](src/swap/swap.ts) as two separate per-chain lists, both `Record<SpokeChainKey, readonly XToken[]>`:
+
+- `swapSupportedTokens` — **production** solver tokens (also wired into `swapsConfig.supportedTokens`).
+- `stagingSwapSupportedTokens` — tokens supported **only** in the **staging** solver environment. The staging solver supports **all** tokens: every production token plus these.
+
+The two lists are **disjoint per chain** — a token is stored in exactly one of them. `isSwapSupportedToken(chainId, token)` validates against the **union** of both (it is upon the caller to target the correct environment; the SDK does not gate on env). Accessors: `getSupportedSolverTokens` (production list only), `getStagingSolverTokens` (production + staging-only, i.e. the full staging set). Invariants are enforced by [`src/chains/tokens-dedup.test.ts`](src/chains/tokens-dedup.test.ts) (no intra-list dups) and [`src/swap/swap.test.ts`](src/swap/swap.test.ts) (disjointness, staging-superset accessor, union validation). The staging-only entries were derived by diffing the lists against the production solver oracle (`https://sodax-solver.iconblockchain.xyz/oracle`). Last re-synced 2026-06-16: tokens now present in the oracle were promoted to production (Base `SODA`, Optimism `bnUSD`, and the 8 Solana xStocks `CRCLx`/`TSLAx`/`SPYx`/`NVDAx`/`QQQx`/`MSTRx`/`COINx`/`GOOGLx`). Three items remain pending solver-team confirmation (#193) and were intentionally **not** changed: (1) ICON `ICX`/`wICX`/`bnUSD` — the oracle returns no ICON entries at all (likely out-of-scope rather than staging); (2) Sonic `sodaWBTC`/`IbnUSD` — absent from the oracle but pulled into production via the `Object.values(SodaTokens)` spread; (3) Arbitrum `SODA` — moved to **production**; the SDK address `0x5bDa87…dc6F5` is the correct current token, but **both** solver oracles still list an **older** deployment (`0x6958…b3b92F`), so production fills depend on the solver updating its oracle (do **not** change the SDK address). Note non-EVM addresses differ in format between oracle and SDK (Sui zero-padding, Bitcoin hex, Stacks `::token` suffix), so oracle membership cannot be checked by naive string match for those chains. Use the repo-internal `add-swap-token` Claude skill (`.claude/skills/add-swap-token`) to add entries — it always asks for the target environment.
+
 ## Build
 
 Built with `tsc` (other workspace packages bundle with tsup — this one doesn't bundle). ESM only (`"type": "module"`). Output: `dist/` with `.js` + `.d.ts` files.

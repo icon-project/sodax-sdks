@@ -1,6 +1,10 @@
 ---
 name: sodax-wallet-sdk-react-wallet-modal
 description: 'Granular skill for the @sodax/wallet-sdk-react v2 headless wallet-modal + multi-chain UI primitives only — useWalletModal (chainSelect → walletSelect → connecting → success | error state machine), useConnectionFlow (connect without a modal), useChainGroups, useConnectedChains, useBatchConnect / useBatchDisconnect, and the sortConnectors utility. Use when a React dapp needs a multi-chain wallet picker modal, an inline connection flow, batch connect/disconnect across chains, or chain/connector list rendering — e.g. "build a wallet modal", "useWalletModal", "multi-chain connect UI", "connect all chains with one wallet", "useBatchConnect". Covers BOTH integration (write new v2 code) and migration (port v1). Picks via Step 1. Links into the parent sodax-wallet-sdk-react knowledge tree. For a plain connect button use the sibling connect skill.'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # Wallet modal (`wallet-sdk-react` granular skill)

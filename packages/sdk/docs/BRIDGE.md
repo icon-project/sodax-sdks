@@ -162,7 +162,7 @@ This is the first step of a bridge operation. After this call succeeds you must 
 
 When `raw` is `true`, returns the encoded transaction without broadcasting (useful for simulation or batching). When `raw` is `false`, signs and submits the deposit transaction via the provided wallet provider.
 
-**Bitcoin note:** Bitcoin is only supported with `raw: false` because it requires the RadFi trading wallet derivation flow.
+**Bitcoin note:** Bitcoin is only supported with `raw: false` because it requires the Bound Exchange trading wallet derivation flow.
 
 **Parameters:**
 - `_params`: `BridgeParams<K, Raw>` — bridge parameters including source/destination chain keys, token addresses, amount, recipient, wallet provider, `raw` flag, and optional `skipSimulation`

@@ -19,7 +19,7 @@ type WithdrawResult = {
 };
 
 /**
- * React hook for withdrawing BTC from the user's Radfi trading wallet back to their personal
+ * React hook for withdrawing BTC from the user's Bound Exchange trading wallet back to their personal
  * Bitcoin wallet. Pure mutation: pass all inputs (including the wallet provider) to
  * `mutate({...})`.
  */
@@ -44,7 +44,7 @@ export function useRadfiWithdraw({
       const accessToken = session?.accessToken || radfi.accessToken;
 
       if (!accessToken) {
-        throw new Error('Radfi authentication required. Please login first.');
+        throw new Error('Bound Exchange authentication required. Please login first.');
       }
 
       const buildResult = await radfi.withdrawToUser({ userAddress, amount, tokenId, withdrawTo }, accessToken);
