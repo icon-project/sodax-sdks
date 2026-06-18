@@ -42,7 +42,7 @@ import {
 import { encodeFunctionData, erc20Abi, isAddress } from 'viem';
 import { invariant } from '../shared/utils/tiny-invariant.js';
 import { stataTokenFactoryAbi } from '../shared/abis/stataTokenFactory.abi.js';
-import { approveFailed, intentCreationFailed } from '../errors/wrappers.js';
+import { approveFailed, intentCreationFailed, lookupFailed } from '../errors/wrappers.js';
 import { dexInvariant, isDexApproveError, isDexCreateIntentError } from './errors.js';
 
 export type CreateAssetWithdrawParams<K extends SpokeChainKey> = {
@@ -724,10 +724,10 @@ export class AssetService {
   public async getWrappedAmount(dexToken: Address, assetAmount: bigint): Promise<Result<bigint>> {
     try {
       const shares = await Erc4626Service.convertToShares(dexToken, assetAmount, this.hubProvider.publicClient);
-      if (!shares.ok) return shares;
+      if (!shares.ok) return { ok: false, error: lookupFailed('dex', 'getWrappedAmount', shares.error) };
       return { ok: true, value: shares.value };
     } catch (error) {
-      return { ok: false, error };
+      return { ok: false, error: lookupFailed('dex', 'getWrappedAmount', error) };
     }
   }
 
@@ -744,10 +744,10 @@ export class AssetService {
   public async getUnwrappedAmount(dexToken: Address, shareAmount: bigint): Promise<Result<bigint>> {
     try {
       const assetAmount = await Erc4626Service.convertToAssets(dexToken, shareAmount, this.hubProvider.publicClient);
-      if (!assetAmount.ok) return assetAmount;
+      if (!assetAmount.ok) return { ok: false, error: lookupFailed('dex', 'getUnwrappedAmount', assetAmount.error) };
       return { ok: true, value: assetAmount.value };
     } catch (error) {
-      return { ok: false, error };
+      return { ok: false, error: lookupFailed('dex', 'getUnwrappedAmount', error) };
     }
   }
 
@@ -778,7 +778,7 @@ export class AssetService {
       });
       return { ok: true, value };
     } catch (error) {
-      return { ok: false, error };
+      return { ok: false, error: lookupFailed('dex', 'getDeposit', error) };
     }
   }
 }
