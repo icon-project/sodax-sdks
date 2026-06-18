@@ -18,8 +18,8 @@ import {
   createTransaction,
   ChainRestAuthApi,
   BaseAccount,
-  CosmosTxV1Beta1TxPb,
 } from '@injectivelabs/sdk-ts';
+import { TxRaw } from 'cosmjs-types/cosmos/tx/v1beta1/tx.js';
 import { Network, getNetworkEndpoints, type NetworkEndpoints } from '@injectivelabs/networks';
 import {
   getIntentRelayChainId,
@@ -144,7 +144,7 @@ export class InjectiveSpokeService {
    * @returns {Promise<InjectiveGasEstimate>} The estimated gas for the transaction.
    */
   public async estimateGas({ tx }: EstimateGasParams<InjectiveChainKey>): Promise<InjectiveGasEstimate> {
-    const txRaw = CosmosTxV1Beta1TxPb.TxRaw.fromPartial({
+    const txRaw = TxRaw.fromPartial({
       bodyBytes: tx.signedDoc.bodyBytes,
       authInfoBytes: tx.signedDoc.authInfoBytes,
       signatures: [], // not required for simulation
@@ -238,7 +238,7 @@ export class InjectiveSpokeService {
     // Fetch the on-chain account once (number, sequence, pubKey) and reuse it for both the
     // simulation draft and the final tx — avoids the double account/block fetch that calling
     // `createTransactionForAddressAndMsg` twice would incur.
-    const accountResponse = await new ChainRestAuthApi(this.endpoints.grpc).fetchCosmosAccount(senderAddress);
+    const accountResponse = await new ChainRestAuthApi(this.endpoints.rest).fetchCosmosAccount(senderAddress);
     const baseAccount = BaseAccount.fromRestCosmosApi(accountResponse);
     const pubKey = baseAccount.pubKey.key;
     if (!pubKey) {
@@ -258,7 +258,7 @@ export class InjectiveSpokeService {
     const draft = createTransaction(txArgs);
 
     const { gasInfo } = await this.txClient.simulate(
-      CosmosTxV1Beta1TxPb.TxRaw.fromPartial({
+      TxRaw.fromPartial({
         bodyBytes: draft.txRaw.bodyBytes,
         authInfoBytes: draft.txRaw.authInfoBytes,
         signatures: [], // not required for simulation
