@@ -93,6 +93,7 @@ export const moneyMarketSupportedTokens = {
     spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.USDC,
     spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.SODA,
     spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.USDT,
+    spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.JitoSOL,
   ] as const satisfies XToken[],
   [ChainKeys.ICON_MAINNET]: [
     // spokeChainConfig[ChainKeys.ICON].supportedTokens.ICX,
