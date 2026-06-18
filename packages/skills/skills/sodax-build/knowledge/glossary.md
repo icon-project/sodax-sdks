@@ -27,5 +27,9 @@ For glossing terms during the interview. Apply **by tier** (see [`interview-guid
 | **Gas** | "The small network fee paid to process a transaction." | Paid in the chain's native coin; not a SODAX fee. |
 | **Token migration** | "Move an older ICON-era coin (ICX/BALN/bnUSD) into the new system." | Specific tokens only. |
 | **Recovery** | "Getting back coins that got stuck." | Withdraw stuck hub-wallet assets to a spoke. |
+| **Cross-chain** | "Doing something that spans two different blockchains at once — SODAX's specialty." | The hub routes the action between spokes; this is SODAX's main advantage. |
+| **Stablecoin** | "A coin designed to hold a steady value, often about 1 US dollar (e.g. USDC)." | Peg stability is the issuer's promise, not SODAX's — never guarantee a peg. |
+| **Testnet / mainnet** | "Mainnet is the real network with real money; testnet is a free practice copy." | Not every SODAX feature flow has a testnet — confirm per feature before assuming one exists. |
+| **Smart contract** | "A program on the blockchain that runs exactly as written, with no middleman." | SODAX features are smart contracts the SDK calls for you. |
 
 If a user asks about a term not listed here, give a one-line plain answer and, if it is an exact/enumerable fact (a specific token, chain, or number), fetch live source per the README policy rather than guessing.

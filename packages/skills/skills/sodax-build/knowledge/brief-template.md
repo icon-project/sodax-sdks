@@ -12,7 +12,7 @@ The output skeleton. After the Stage 5 playback and the user's confirmation, fil
 6. **Out of scope (v1)** — the explicit parking lot from Stage 5. This is what keeps Phase 1 shippable.
 7. **Phased build plan** — Phase 1 is a single tracer-bullet (smallest end-to-end slice). Each phase has a **"done when"** line. Later phases are bullets, not detail.
 8. **Risks & assumptions** — unsupported-chain checks, exact-value confirmations needed, non-EVM provider work, fee-policy confirmation, and any market/price assumption (never a promise).
-9. **Handoff to dev skills** — from [`handoff.md`](./handoff.md): the ordered dev skill(s) + mode + starter app + scaffolding steps. Skills named in prose only.
+9. **Handoff to dev skills** — from [`handoff.md`](./handoff.md): the ordered dev skill(s) + mode + starter app + scaffolding steps. Skills named in prose only. Then append the machine-readable **handoff block** (YAML) from [`handoff.md`](./handoff.md) so downstream tooling can parse the routing.
 
 ## Worked example (abridged) — Cross-chain payments widget
 

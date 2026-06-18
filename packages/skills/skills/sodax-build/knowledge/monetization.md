@@ -20,6 +20,7 @@ Concretely, when this comes up in the interview:
 - Do **not** state an absolute maximum from memory. The type documentation and the runtime validation in the repo do not agree, so any single number quoted from memory risks being wrong.
 - Frame it as a **product decision**: low, clearly-disclosed fees protect user trust and conversion. A high fee is technically expressible but is usually a bad product choice.
 - For the brief, record the *intent* (e.g. "small percentage fee on swaps, disclosed to the user") and add a dev-time action: "confirm the current allowed fee range from live SDK source before shipping".
+- **Make the mechanic concrete, but label it illustrative.** A non-technical user grasps the model faster with a worked figure — e.g. *"a 0.2% fee on $10,000 of swap volume ≈ $20"*. State plainly that this is an **illustration of the mechanic, not a revenue projection or promise**; the volume and the rate are the integrator's to decide.
 
 ## What to capture in the brief (Stage 4)
 

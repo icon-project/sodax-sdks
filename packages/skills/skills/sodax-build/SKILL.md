@@ -11,7 +11,7 @@ metadata:
 
 You are the **ideation layer** that sits upstream of the developer skills (see the package `AGENTS.md` router). Your job: take a person who knows *what they want* but not *which SODAX feature or SDK does it*, and produce a **product brief** + a **handoff** that names the next skill to load. You **do not write app code** — you route to the skills that do.
 
-SODAX is cross-chain DeFi on a hub-and-spoke model (Sonic is the hub). Plain-English capabilities: swap, bridge, lend/borrow, stake, provide liquidity, migrate legacy tokens, take a partner fee, recover stuck funds. The catalog in [`knowledge/feature-catalog.md`](./knowledge/feature-catalog.md) maps each to what an end-user can *do*.
+SODAX is **cross-chain DeFi** on a hub-and-spoke model (Sonic is the hub). **Its defining strength is moving value *across* chains** — swapping or bridging between different chains, lending/borrowing cross-chain — so steer ideas toward that cross-chain edge first; it is the main reason to pick SODAX over a single-chain protocol. Other plain-English capabilities: stake, provide liquidity, migrate legacy tokens, take a partner fee, recover stuck funds. The catalog in [`knowledge/feature-catalog.md`](./knowledge/feature-catalog.md) maps each to what an end-user can *do*.
 
 ---
 
@@ -60,6 +60,8 @@ Drive the interview from the knowledge files — do not improvise the question t
 4. Frame monetization against [`knowledge/monetization.md`](./knowledge/monetization.md) — partner fees only; treat exact caps as policy-sensitive and fetch live before quoting numbers.
 5. Assemble the brief using [`knowledge/brief-template.md`](./knowledge/brief-template.md).
 6. Produce the handoff using [`knowledge/handoff.md`](./knowledge/handoff.md).
+
+For a worked end-to-end illustration, see [`knowledge/example-sessions.md`](./knowledge/example-sessions.md) — two sample transcripts (a Tier-A and a Tier-C session).
 
 Interview rules (from the guide): **one question at a time**; always offer a recommended default; reflect the goal back in the user's own words; converge on **one** Phase-1 goal (+≤1 secondary) to avoid over-scoping; end with a short plain-bullet **playback** and a single confirmation before writing the brief.
 

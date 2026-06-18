@@ -5,6 +5,7 @@ Reference material for the `sodax-build` front-door skill. The SKILL.md workflow
 | File | Use it to… |
 |---|---|
 | [`interview-guide.md`](./interview-guide.md) | Drive the tiered, branching interview (Stage 0–5) + map plain-English goals to SODAX features. |
+| [`example-sessions.md`](./example-sessions.md) | Style reference: two worked interview transcripts (a Tier-A and a Tier-C session) end to end. |
 | [`feature-catalog.md`](./feature-catalog.md) | Explain, in plain English, what each SODAX capability lets an end-user *do*. |
 | [`use-case-gallery.md`](./use-case-gallery.md) | Borrow worked product ideas → the features + chains they use. |
 | [`glossary.md`](./glossary.md) | Gloss DeFi jargon for non-technical users (tiered). |

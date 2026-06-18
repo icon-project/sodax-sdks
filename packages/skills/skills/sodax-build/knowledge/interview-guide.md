@@ -37,9 +37,12 @@ Each archetype opens 1–3 disambiguating questions phrased about **product beha
 | "earn by locking SODA" | Lock the SODA token? | **Staking** |
 | "borrow against what they hold" | Use collateral? | **Money market** (borrow) |
 | "provide liquidity / market-make" | Run an LP position? | **DEX** (concentrated liquidity) |
+| "leveraged / amplified yield" (advanced — Tier B/C only) | Understands leverage risk? | **Leverage yield** (see [`feature-catalog.md`](./feature-catalog.md); never offer Tier A as "savings") |
 | "move a legacy ICON-era token over" | Which token — ICX / BALN / bnUSD? | **Token migration** (else honesty-gate) |
 | "launch a brand-new token" | — | **Honesty-gate**: SODAX does not mint new tokens |
 | "get back funds stuck on the hub" | — | **Recovery** (usually secondary) |
+
+> **Lead with cross-chain — it is SODAX's edge.** Swap vs Bridge is about the *coin*, not the chain: Swap = the output token differs (most powerfully **across chains**); Bridge = the *same* token moved to another chain. A same-chain conversion is still a Swap (not a Bridge); lead with the cross-chain angle — that is SODAX's strength.
 
 Always plant the **monetization seed** here: *"Do you want to earn from this — now, later, or keep it free?"* (detail deferred to Stage 4).
 

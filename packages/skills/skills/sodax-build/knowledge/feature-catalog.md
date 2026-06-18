@@ -6,9 +6,9 @@ SODAX is **cross-chain DeFi on a hub-and-spoke model**: Sonic is the hub chain, 
 
 The feature surface (which services actually exist) lives in the `@sodax/sdk` source — fetch it (see the README *Source & freshness policy*) if you need to confirm a feature still ships.
 
-## Swap — convert one token into another, even across chains
+## Swap — convert one token into another, across chains (or on one chain)
 
-The user gives token A and receives token B, where B can be on a **different chain**. Use it for "let people trade / convert / get a different coin".
+**Cross-chain is the point — lead with it.** The user gives token A on one chain and receives token B on **another** chain in a single intent. This cross-chain reach is SODAX's core strength and the main reason to choose it over a single-chain DEX, so frame swap products around it. Mechanically the SDK takes a source chain and a destination chain separately, so a **same-chain** swap (A → B on one chain) is also valid — but cross-chain is where SODAX adds the most, so lead swap products with it. Use it for "let people trade / convert / get a different coin", ideally where the coins live on different chains.
 
 **How pricing works (important, and a common misconception):** SODAX swap is **intent-based**. The user expresses an intent ("swap this for at least that much"), and an **off-chain solver network** quotes a live price and fills it. The price is **not** read from an on-chain price oracle, and it is **not** a fixed on-chain AMM pool — it is a real-time solver quote. The user is protected by a **minimum-output floor** (slippage protection): they receive at least the minimum or the intent does not fill. Practical consequence for a brief: the exact amount received must come from a **live quote**, never a promised number.
 

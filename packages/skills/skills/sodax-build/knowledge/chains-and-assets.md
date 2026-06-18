@@ -6,10 +6,12 @@
 
 SODAX is **hub-and-spoke**: **Sonic is the hub**, and a broad set of spoke chains spans **both EVM and non-EVM ecosystems**. For ideation you only need two facts:
 
-1. **There are many EVM chains.** They all share one wallet-provider family, so adding a second or third EVM chain is cheap.
-2. **There are several non-EVM chains** across different ecosystems. Each non-EVM chain needs its **own** wallet provider — this is real extra work and changes the handoff.
+1. **There are many EVM chains** (for example major chains like Ethereum and Base; Sonic itself is the hub). They all share one wallet-provider family, so adding a second or third EVM chain is cheap.
+2. **There are several non-EVM chains** across different ecosystems (for example Solana, Sui, Bitcoin). Each non-EVM chain needs its **own** wallet provider — this is real extra work and changes the handoff.
 
-Do not bake the actual chain list into the brief — confirm it from live source when it matters.
+These names are **illustrative anchors only** — do not bake the actual chain list into the brief; confirm it from live source when it matters.
+
+**Cross-chain is the value.** SODAX's edge is moving value *between* these chains through the hub — that is the main reason to build on it. Lead the design with the cross-chain story.
 
 ## How to use this in the interview (Stage 3)
 

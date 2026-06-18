@@ -5,7 +5,7 @@ Worked product ideas → the SODAX features and chain shape they use. Use these 
 | # | Product idea | Core feature(s) | Secondary | Typical shape |
 |---|---|---|---|---|
 | 1 | Cross-chain payments widget ("pay a friend on another chain") | Bridge (same coin) or Swap (different coin) | Partner fee | Web app + wallet |
-| 2 | In-app "convert any token" button | Swap | Partner fee | Web app + wallet |
+| 2 | In-app "convert any token" button (same-chain *or* cross-chain) | Swap | Partner fee | Web app + wallet |
 | 3 | Savings / "earn on your stablecoins" app | Money market (supply) | — | Web app + wallet |
 | 4 | Borrow-against-holdings tool | Money market (borrow) | — | Web app + wallet |
 | 5 | SODA staking dashboard | Staking | — | Web app + wallet |
@@ -23,6 +23,7 @@ Worked product ideas → the SODAX features and chain shape they use. Use these 
 - Map the chosen idea to its features via [`feature-catalog.md`](./feature-catalog.md), then disambiguate with [`interview-guide.md`](./interview-guide.md) Stage 2.
 - The "typical shape" column previews the handoff — web+wallet vs backend vs migration drives [`handoff.md`](./handoff.md).
 - If a product touches **any non-EVM chain**, flag the extra wallet-provider work in Stage 3 (each non-EVM chain needs its own provider).
+- **Lead with cross-chain — it is SODAX's edge.** Swap is most compelling when the output lands on *another* chain; steer ideas toward that. A same-chain A → B conversion is also valid (entry #2), but cross-chain is where SODAX shines — lead with it. (Don't force a Bridge onto a same-chain idea either.)
 
 ## Anti-patterns (honesty-gate these)
 
