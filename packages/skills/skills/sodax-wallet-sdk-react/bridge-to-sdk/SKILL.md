@@ -1,6 +1,10 @@
 ---
 name: sodax-wallet-sdk-react-bridge-to-sdk
 description: 'Granular skill for the @sodax/wallet-sdk-react v2 wallet-provider bridge only — useWalletProvider, which turns the connected wallet into a typed IXxxWalletProvider to pass into @sodax/sdk (or @sodax/dapp-kit hooks) for signing. Use when a React dapp has wallet connectivity working and now needs to execute a SODAX operation — e.g. "useWalletProvider", "pass the connected wallet into a Sodax swap", "get IEvmWalletProvider in React", "sign a Sodax tx from React", "feed walletProvider to a dapp-kit mutation". Covers BOTH integration (write new v2 code) and migration (port v1 — single-object params; the deleted useSpokeProvider). Picks via Step 1. Links into the parent sodax-wallet-sdk-react knowledge tree. The consuming side (raw SDK calls / dapp-kit hooks) lives in the sodax-sdk and sodax-dapp-kit skills.'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # Bridge to SDK (`wallet-sdk-react` granular skill)

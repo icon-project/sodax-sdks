@@ -1,11 +1,15 @@
 import React from 'react';
 import { TableCell, TableRow } from '@/components/ui/table';
 import { formatUnits } from 'viem';
-import type { XToken } from '@sodax/sdk';
+import {
+  type XToken,
+  type FormatReserveUSDResponse,
+  type FormatUserSummaryResponse,
+  type UserReserveData,
+  useAToken,
+} from '@sodax/dapp-kit';
 import { formatDecimalForDisplay, truncateToDecimals } from '@/lib/utils';
 import { useReserveMetrics } from '@/hooks/useReserveMetrics';
-import type { FormatReserveUSDResponse, FormatUserSummaryResponse, UserReserveData } from '@sodax/sdk';
-import { useAToken } from '@sodax/dapp-kit';
 import { Button } from '@/components/ui/button';
 import { MAX_BORROW_SAFETY_MARGIN, ZERO_ADDRESS, AMOUNT_DISPLAY_DECIMALS, AAVE_INDEX_PRECISION } from '../../constants';
 import { isUserReserveDataArray, isValidEvmAddress } from '../../typeGuards';

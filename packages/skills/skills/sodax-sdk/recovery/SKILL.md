@@ -1,6 +1,10 @@
 ---
 name: sodax-sdk-recovery
 description: 'Granular skill for the @sodax/sdk v2 recovery feature only — `RecoveryService` for withdrawing stuck hub-wallet assets back to a spoke chain. Use when the task is recovering assets stranded on the hub after a failed cross-chain operation (e.g. "recover stuck assets on Sonic", "Sodax RecoveryService", "fetchHubAssetBalances", "withdrawHubAsset", "stuck-asset withdrawal"). Service is NEW in v2 (no v1 equivalent). Covers BOTH integration and the v2-only migration note. Skill links into the parent sodax-sdk knowledge tree.'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # Recovery (Core SDK granular skill)

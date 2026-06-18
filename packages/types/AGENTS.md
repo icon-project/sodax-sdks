@@ -46,6 +46,15 @@ Only **two** entry points are exported via [`package.json` `exports`](package.js
 
 There are **no per-chain sub-path exports**. New chain types are added under the appropriate subdirectory, re-exported through that subdirectory's `index.ts`, and flow out through the root barrel automatically.
 
+## Swap supported tokens (staging vs production)
+
+Swap tokens live in [`src/swap/swap.ts`](src/swap/swap.ts) as two per-chain `Record<SpokeChainKey, readonly XToken[]>` lists:
+
+- `swapSupportedTokens` — **production** solver tokens (also wired into `swapsConfig.supportedTokens`).
+- `stagingSwapSupportedTokens` — tokens supported **only** in the **staging** solver environment.
+
+The two lists are **disjoint per chain** (a token lives in exactly one). The staging solver supports the union — every production token plus the staging-only set. Accessors: `getSupportedSolverTokens` returns the production list only; `getStagingSolverTokens` returns the full staging set (production + staging-only). `isSwapSupportedToken(chainId, token)` validates against the union and does **not** gate on environment — the caller targets the correct one. Invariants (intra-list dedup, disjointness, staging-superset accessor, union validation) are enforced by [`src/chains/tokens-dedup.test.ts`](src/chains/tokens-dedup.test.ts) and [`src/swap/swap.test.ts`](src/swap/swap.test.ts). Add or move entries via the `add-token` skill (see Rules) and always confirm the target environment first.
+
 ## Build
 
 Built with `tsc` (other workspace packages bundle with tsup — this one doesn't bundle). ESM only (`"type": "module"`). Output: `dist/` with `.js` + `.d.ts` files.

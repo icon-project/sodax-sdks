@@ -1,6 +1,10 @@
 ---
 name: sodax-sdk-money-market
 description: 'Granular skill for the @sodax/sdk v2 money-market feature only — cross-chain lending and borrowing (supply, borrow, withdraw, repay) and per-position reads. Use when the consumer task is specifically money-market (e.g. "supply on Sodax", "borrow against my position", "Sodax lending", "withdraw collateral", "repay debt", "cross-chain borrow"). Covers BOTH integration (write new v2 code) and migration (port v1 MoneyMarketService to v2). Skill links into the parent sodax-sdk knowledge tree — does NOT duplicate it. For React dapps, prefer the sodax-dapp-kit skill.'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # Money Market (Core SDK granular skill)

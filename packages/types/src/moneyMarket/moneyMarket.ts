@@ -104,6 +104,9 @@ export const moneyMarketSupportedTokens = {
     spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.bnUSD,
     spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.SODA,
     spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.USDC,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.sodaETH,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.sodaBTC,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.sodaBNB,
   ] as const satisfies XToken[],
   [ChainKeys.SUI_MAINNET]: [
     spokeChainConfig[ChainKeys.SUI_MAINNET].supportedTokens.SUI,

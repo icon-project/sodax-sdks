@@ -1,6 +1,6 @@
 import React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { baseChainInfo, type SpokeChainKey } from '@sodax/sdk';
+import { baseChainInfo, type SpokeChainKey } from '@sodax/dapp-kit';
 
 interface ChainSelectorProps {
   selectedChainId: SpokeChainKey;

@@ -6,13 +6,14 @@ import {
   useIsTokenApproved,
   useSetSwapPreference,
   useSodaxContext,
+  ChainKeys,
+  type SpokeChainKey,
 } from '@sodax/dapp-kit';
 import { useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { ChainKeys, type SpokeChainKey } from '@sodax/sdk';
 import { type Address, formatUnits, isAddress, parseUnits } from 'viem';
 import { chainIdToChainName } from '@/constants';
 import { SelectChain } from '@/components/swaps/SelectChain';

@@ -1,6 +1,10 @@
 ---
 name: sodax-sdk-staking
 description: 'Granular skill for the @sodax/sdk v2 staking feature only — SODA ↔ xSoda staking via ERC-4626 vault. Stake, unstake (with penalty curve), instant unstake (slippage), claim, cancel unstake. Use when the task is staking (e.g. "stake SODA", "unstake xSoda", "claim Sodax staking rewards", "instant unstake with penalty", "cancel pending unstake", "get staking info from spoke"). Covers BOTH integration and migration. Skill links into the parent sodax-sdk knowledge tree. For React dapps, prefer sodax-dapp-kit.'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # Staking (Core SDK granular skill)

@@ -25,6 +25,7 @@ src/
 ├── bridge/                  # vault-backed cross-chain token transfers
 ├── staking/                 # SODA staking and unstaking flows
 ├── dex/                     # concentrated liquidity and DEX asset operations
+├── leverageYield/           # leveraged-yield ERC-4626 vaults on the Sonic hub
 ├── migration/               # legacy ecosystem token migration flows
 ├── partner/                 # partner fee operations
 ├── recovery/                # hub-wallet asset recovery

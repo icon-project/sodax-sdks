@@ -103,7 +103,20 @@ export class RecoveryService {
         field: 'chainKey',
       });
 
-      const entries = Object.values(chainConfig.supportedTokens).filter(token => isAddress(token.hubAsset));
+      // Leverage-yield vault share tokens (lsoda*) appear in `supportedTokens` (so they're
+      // discoverable in swaps), and their `hubAsset` is the vault proxy itself — so a naive
+      // `balanceOf(hubWallet)` would surface a deposited position here as if it were a stranded
+      // asset. But they are NOT registered asset-manager assets: `withdrawHubAsset` encodes an
+      // `assetManager.transfer`, which reverts for them (no spoke mapping) and shows up in the
+      // wallet as a failed gas estimate / "undefined gas fee". They are exited via the
+      // leverage-yield withdraw flow, not asset recovery — so omit them from recoverable assets.
+      const leverageVaultAddresses = new Set(
+        this.config.sodaxConfig.leverageYield.vaults.map(vault => vault.vault.toLowerCase()),
+      );
+
+      const entries = Object.values(chainConfig.supportedTokens).filter(
+        token => isAddress(token.hubAsset) && !leverageVaultAddresses.has(token.hubAsset.toLowerCase()),
+      );
 
       if (entries.length === 0) {
         return { ok: true, value: [] };

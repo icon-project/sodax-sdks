@@ -1,6 +1,5 @@
 import React from 'react';
-import { useBitcoinBalance } from '@sodax/dapp-kit';
-import { ChainKeys, type IBitcoinWalletProvider } from '@sodax/sdk';
+import { useBitcoinBalance, ChainKeys, type IBitcoinWalletProvider } from '@sodax/dapp-kit';
 import { getXChainType, useWalletProvider, useXAccount, useXConnection, useXService } from '@sodax/wallet-sdk-react';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,8 +32,8 @@ export function BitcoinTradingSection() {
       <CardHeader className="pb-0">
         <CardTitle>Bitcoin Trading Wallet</CardTitle>
         <p className="text-sm text-clay font-normal">
-          Supply, withdraw, borrow and repay BTC route through this Bound Exchange trading wallet. Sign in and top it up before
-          using BTC in the money market.
+          Supply, withdraw, borrow and repay BTC route through this Bound Exchange trading wallet. Sign in and top it up
+          before using BTC in the money market.
         </p>
       </CardHeader>
       <CardContent className="pt-0">

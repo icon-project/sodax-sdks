@@ -1,6 +1,10 @@
 ---
 name: sodax-wallet-sdk-react-switch-chain
 description: 'Granular skill for the @sodax/wallet-sdk-react v2 EVM chain-switching surface only — useEvmSwitchChain, which compares the connected EVM network to a target xChainId and exposes wrong-network state + a switch handler (also covers the Injective + MetaMask auto-switch to Ethereum). Use when a React dapp needs to detect a wallet on the wrong EVM network and prompt a switch before a signed action — e.g. "useEvmSwitchChain", "wrong network banner", "switch EVM chain before swap", "isWrongChain". Covers BOTH integration (write new v2 code) and migration (port v1 — note there is no top-level useEthereumChainId in v2). Picks via Step 1. Links into the parent sodax-wallet-sdk-react knowledge tree. EVM-only — non-EVM chains have no switch concept here.'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # Switch chain (`wallet-sdk-react` granular skill)

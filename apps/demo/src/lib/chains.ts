@@ -1,4 +1,4 @@
-import { ChainKeys } from '@sodax/sdk';
+import { ChainKeys } from '@sodax/dapp-kit';
 
 export interface ChainUI {
   id: string;
