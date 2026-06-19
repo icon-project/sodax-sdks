@@ -15,6 +15,7 @@
     "staking": "pnpm run build && node dist/soda-staking.js",
     "stacks": "pnpm run build && node dist/stacks.js",
     "injective-raw-intent": "tsx src/injective-raw-intent.ts",
+    "bitcoin-raw-intent-check": "tsx src/bitcoin-raw-intent-check.ts",
     "test-libs": "tsx src/test-libs.ts",
     "stellar": "pnpm run build && node dist/stellar.js",
     "icon": "pnpm run build && node dist/icon.js",
