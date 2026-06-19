@@ -10,10 +10,11 @@ import { Sodax, ChainKeys } from '@sodax/sdk';
 //   - In a dapp, the SDK now carries it on the connected account: `useXAccount().publicKey`.
 //   - Pass them via env: SRC_ADDRESS=SP... SRC_PUBLIC_KEY=02...
 //
-// With no env set it runs with the sample values below (a real Stacks address + a valid compressed
-// public key) just to prove the SDK produces data.
+// With no env set it runs with the sample pair below — a compressed public key and the mainnet address
+// it derives to. They MUST belong to the same account: the SDK derives the address from srcPublicKey and
+// rejects the call if it doesn't equal srcAddress (your wallet returns both for the same account).
+const srcPublicKey = process.env.SRC_PUBLIC_KEY ?? '025259f813b57dd5c3fcac09776d767a49f6dd77bba5895823b891e31b10a96a5d';
 const srcAddress = process.env.SRC_ADDRESS ?? 'SP1D5PA98M0PF9Z4Q4N2CDTMTD7XSZ6GE7QQG5XBX';
-const srcPublicKey = process.env.SRC_PUBLIC_KEY ?? '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798';
 
 // No-arg Sodax uses the packaged static defaults (hub RPC, spoke configs, solver, relay).
 const sodax = new Sodax();

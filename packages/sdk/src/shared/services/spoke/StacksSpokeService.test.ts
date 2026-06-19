@@ -13,7 +13,6 @@
  *        - `fetchFeeEstimateTransaction` — used by `estimateGas`.
  *        - `makeUnsignedContractCall`   — used by `deposit` and `sendMessage` in raw mode.
  *        - `serializePayloadBytes`      — used to turn an unsigned tx into the rawTx payload.
- *        - `validateStacksAddress`      — used by `deposit` raw-mode invariant.
  *      All other exports (`Cl`, `noneCV`, `someCV`, `uintCV`, `PostConditionMode`,
  *      `parseContractId`, the Clarity type constructors, etc.) are pass-through via
  *      `vi.importActual` so payload-shape assertions can read real Clarity values.
@@ -29,8 +28,10 @@
  *
  * Stacks-specific gotcha: `deposit` with `raw=true` builds the tx unsigned, so it needs the signer's
  * **public key** via `srcPublicKey` (the `SP…` address is a one-way hash of it); `srcAddress` stays
- * the real address. Raw-mode fixtures pass a fake hex public key (66 chars, compressed-secp256k1
- * shape) as `srcPublicKey`; the missing-key test omits it to trigger the throw branch.
+ * the real address. The raw guard derives the address from `srcPublicKey` and asserts it equals
+ * `srcAddress`. Fixtures use a REAL compressed public key and its REAL derived mainnet address (the
+ * crypto is not mocked — `getAddressFromPublicKey` passes through `vi.importActual`), so the happy path
+ * matches; the guard tests feed a missing key, a mismatched address, and a non-key string.
  *
  * Section organization:
  *   1. constructor — method surface, network wiring, polling config
@@ -58,7 +59,6 @@ const mocks = vi.hoisted(() => ({
   fetchFeeEstimateTransaction: vi.fn(),
   makeUnsignedContractCall: vi.fn(),
   serializePayloadBytes: vi.fn(),
-  validateStacksAddress: vi.fn(),
 }));
 
 vi.mock('@sodax/libs/stacks/core', async () => {
@@ -73,7 +73,6 @@ vi.mock('@sodax/libs/stacks/core', async () => {
     fetchFeeEstimateTransaction: mocks.fetchFeeEstimateTransaction,
     makeUnsignedContractCall: mocks.makeUnsignedContractCall,
     serializePayloadBytes: mocks.serializePayloadBytes,
-    validateStacksAddress: mocks.validateStacksAddress,
   };
 });
 
@@ -113,11 +112,12 @@ const STACKS_TIMEOUT_MS = stacksConfig.pollingConfig.maxTimeoutMs;
 const STACKS_ASSET_MGR_IMPL = 'SP3031RGK734636C8KGW2Y76TEQBTVX59Q472EQH0.asset-manager-impl-v1';
 
 // Per-user / per-flow scratch — no config source.
-// A valid Stacks principal (mainnet 'SP…' single-sig prefix).
-const SRC_ADDR = 'SP2C2YFP12AJZB4MABJBAJ55XECVS7E4PMMZ89YZR';
-// A fake compressed-secp256k1 public key (33 bytes hex = 66 chars). `validateStacksAddress`
-// returns false for this in the happy-path raw deposit (publicKey-as-from invariant).
-const SRC_PUBKEY = '02'.padEnd(66, 'a');
+// A real Stacks account: a compressed public key and the mainnet single-sig address it derives to, so the
+// raw-deposit guard `getAddressFromPublicKey(srcPublicKey) === srcAddress` holds without mocking the crypto.
+const SRC_PUBKEY = '025259f813b57dd5c3fcac09776d767a49f6dd77bba5895823b891e31b10a96a5d';
+const SRC_ADDR = 'SP1D5PA98M0PF9Z4Q4N2CDTMTD7XSZ6GE7QQG5XBX';
+// A different real mainnet address — used to exercise the pubkey↔address mismatch guard.
+const OTHER_ADDR = 'SP2C2YFP12AJZB4MABJBAJ55XECVS7E4PMMZ89YZR';
 // 20-byte HUB destinations as 40-hex strings (Cl.bufferFromHex accepts them).
 const HUB_WALLET: Hex = `0x${'22'.repeat(20)}`;
 const DST_ADDR: Hex = `0x${'33'.repeat(20)}`;
@@ -145,8 +145,6 @@ beforeEach(() => {
   // Restore mock default behaviour after `clearAllMocks` (which wipes implementations).
   mocks.makeUnsignedContractCall.mockResolvedValue(fakeUnsignedTx);
   mocks.serializePayloadBytes.mockReturnValue(FAKE_PAYLOAD_BYTES);
-  // Default: the fake public key is NOT a valid Stacks address — i.e. raw-mode invariant holds.
-  mocks.validateStacksAddress.mockReturnValue(false);
 });
 
 afterEach(() => {
@@ -435,17 +433,25 @@ describe('StacksSpokeService.deposit', () => {
 
   it('raw=true → throws when srcPublicKey is missing (needed to build the unsigned tx)', async () => {
     await expect(stacksSpoke.deposit(depositParams<true>({ srcPublicKey: undefined, raw: true }))).rejects.toThrow(
-      'Stacks raw transactions require the signer public key in srcPublicKey',
+      'Stacks raw transactions require srcPublicKey',
     );
     // makeUnsignedContractCall must NOT have been invoked once the invariant fails.
     expect(mocks.makeUnsignedContractCall).not.toHaveBeenCalled();
   });
 
-  it('raw=true → throws when srcPublicKey is a Stacks address, not a public key', async () => {
-    // Caller swapped the address into srcPublicKey — validateStacksAddress returns true for it.
-    mocks.validateStacksAddress.mockReturnValueOnce(true);
+  it('raw=true → throws when srcPublicKey derives a different address than srcAddress', async () => {
+    // Real key G derives SRC_ADDR; pairing it with a different real address must be rejected — otherwise
+    // the user signs a tx for an account other than the one hub-wallet derivation used.
+    await expect(
+      stacksSpoke.deposit(depositParams<true>({ srcPublicKey: SRC_PUBKEY, srcAddress: OTHER_ADDR, raw: true })),
+    ).rejects.toThrow('does not match srcAddress');
+    expect(mocks.makeUnsignedContractCall).not.toHaveBeenCalled();
+  });
+
+  it('raw=true → throws when srcPublicKey is not a valid public key (e.g. a Stacks address)', async () => {
+    // A c32 address is not hex, so getAddressFromPublicKey fails to parse it — surfaced as a clean error.
     await expect(stacksSpoke.deposit(depositParams<true>({ srcPublicKey: SRC_ADDR, raw: true }))).rejects.toThrow(
-      'not a Stacks address',
+      'not a valid Stacks public key',
     );
     expect(mocks.makeUnsignedContractCall).not.toHaveBeenCalled();
   });
