@@ -1,6 +1,6 @@
-# CLAUDE.md
+@AGENTS.md
 
-Repository navigation hub for Claude Code. Per-package guidance lives in `packages/<pkg>/CLAUDE.md` — read the relevant one before working in that package.
+## Claude Code
 
 ## Project Overview
 
@@ -126,3 +126,4 @@ GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on 
 6. `pnpm checkTs:packages`
 7. AI docs validation — `pnpm check:ai` runs six sub-scripts in `packages/skills/`: `check:ai-structural` (plugin.json + SKILL.md frontmatter + link resolution); `check:ai-imports` (every `import … from '@sodax/<pkg>'` snippet typechecks against `src/index.ts`, all 4 SDK packages); `check:ai-snippets` (every fenced ts/tsx block in dapp-kit + wallet-sdk-react knowledge typechecks; illustrative pattern blocks opt out via `// @ai-snippets-skip`); `check:ai-tsx-examples` (every standalone `.tsx` file under `skills/sodax-<pkg>/integration/knowledge/examples/` typechecks as a complete module — today: 4 wallet-sdk-react app shells); `check:ai-keys` (queryKey/mutationKey literals in dapp-kit docs match source); `check:ai-consistency` (polling-interval claims match `refetchInterval` in source). Opt-outs documented in [packages/skills/CLAUDE.md](packages/skills/CLAUDE.md).
 8. `pnpm test:packages`
+This repository uses `AGENTS.md` as the canonical shared agent guidance. Claude-specific instructions should stay here only when they cannot be expressed in `AGENTS.md`.
