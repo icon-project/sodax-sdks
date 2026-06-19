@@ -24,6 +24,7 @@ import type {
   IBitcoinWalletProvider,
   IStellarWalletProvider,
   QuoteRequestV2,
+  RequestOverrideConfig,
   SpokeChainKey,
   StellarChainKey,
   SubmitTxRequestV2,
@@ -39,6 +40,7 @@ import {
   useRequestTrustline,
   useStellarTrustlineCheck,
   useSwapsApiAllowance,
+  useEnsureRadfiAccessToken,
   useSwapsApiApprove,
   useSwapsApiCreateIntent,
   useSwapsApiDeadline,
@@ -84,14 +86,14 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const srcChainKey = src.chain as SpokeChainKey;
   const dstChainKey = dst.chain as SpokeChainKey;
 
-  const sourceAccount = useXAccount({ xChainId: srcChainKey });
-  const sourceWalletProvider = useWalletProvider({ xChainId: srcChainKey });
+  const srcAccount = useXAccount({ xChainId: srcChainKey });
+  const srcWalletProvider = useWalletProvider({ xChainId: srcChainKey });
   const destAccount = useXAccount({ xChainId: dstChainKey });
   const destWalletProvider = useWalletProvider({ xChainId: dstChainKey });
   const { openWalletModal } = useAppStore();
   const { sodax } = useSodaxContext();
 
-  const [sourceAmount, setSourceAmount] = useState<string>('');
+  const [srcAmount, setSrcAmount] = useState<string>('');
   const [slippage, setSlippage] = useState<string>('0.5');
   const [intentParams, setIntentParams] = useState<CreateIntentParamsV2 | undefined>(undefined);
   const [open, setOpen] = useState(false);
@@ -100,6 +102,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const [nearStorageError, setNearStorageError] = useState<string | null>(null);
   const [isApproving, setIsApproving] = useState(false);
   const [isSwapping, setIsSwapping] = useState(false);
+  const [isSrcBitcoinReady, setIsSrcBitcoinReady] = useState(false);
   const [isDestBitcoinReady, setIsDestBitcoinReady] = useState(false);
 
   // Supported chains + tokens straight from the Swaps API.
@@ -127,16 +130,35 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   };
 
   // Balance fetching is wallet-layer (not covered by the Swaps API).
-  const sourceXService = useXService({ xChainType: getXChainType(srcChainKey) });
-  const { data: sourceBalances } = useXBalances({
+  const srcXService = useXService({ xChainType: getXChainType(srcChainKey) });
+  const { data: srcBalances } = useXBalances({
     params: {
-      xService: sourceXService,
+      xService: srcXService,
       xChainId: srcChainKey,
       xTokens: src.token ? [toXToken(src.token)] : [],
-      address: sourceAccount.address,
+      address: srcAccount.address,
     },
   });
-  const sourceTokenBalance = sourceBalances?.[src.token?.address ?? ''] ?? 0n;
+  const srcTokenBalance = srcBalances?.[src.token?.address ?? ''] ?? 0n;
+
+  // Bitcoin source spends from its Bound trading wallet (sign-in + funded wallet are client-side
+  // prerequisites the Swaps API doesn't cover; mirrors the destination panel).
+  const srcChainType = getXChainType(srcChainKey);
+  const isBitcoinSrc = srcChainType === 'BITCOIN';
+  const srcBitcoinWallet = isBitcoinSrc
+    ? (srcWalletProvider as GetWalletProviderType<typeof ChainKeys.BITCOIN_MAINNET> | undefined)
+    : undefined;
+  const srcTradingAddress =
+    isBitcoinSrc && srcAccount.address ? loadRadfiSession(srcAccount.address)?.tradingAddress : undefined;
+  const { data: srcTradingBal } = useTradingWalletBalance({
+    params: { walletProvider: srcBitcoinWallet, tradingAddress: srcTradingAddress },
+  });
+  const srcBtcConnection = useXConnection({ xChainType: srcChainType });
+  const srcBtcService = useXService({ xChainType: srcChainType });
+  const srcBtcConnector =
+    isBitcoinSrc && srcBtcConnection?.xConnectorId
+      ? srcBtcService?.getXConnectorById(srcBtcConnection.xConnectorId)
+      : undefined;
 
   const destXService = useXService({ xChainType: getXChainType(dstChainKey) });
   const { data: destBalances } = useXBalances({
@@ -172,7 +194,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       : undefined;
 
   // Quote via the Swaps API (debounced so we don't hit the endpoint per keystroke).
-  const debouncedAmount = useDebouncedValue(sourceAmount);
+  const debouncedAmount = useDebouncedValue(srcAmount);
   const quoteBody = useMemo((): QuoteRequestV2 | undefined => {
     if (!src.token || !dst.token) {
       return undefined;
@@ -228,11 +250,11 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     }
 
     if (!src.token || !dst.token) {
-      console.error('sourceToken or destToken undefined');
+      console.error('srcToken or destToken undefined');
       return;
     }
 
-    if (!sourceAccount.address || !destAccount.address) {
+    if (!srcAccount.address || !destAccount.address) {
       console.error('source or destination account undefined');
       return;
     }
@@ -262,7 +284,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       minOutputAmount,
       deadline,
       allowPartialFill: false,
-      srcAddress: sourceAccount.address,
+      srcAddress: srcAccount.address,
       dstAddress,
     });
   };
@@ -278,12 +300,13 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const { mutateAsyncSafe: approve } = useSwapsApiApprove();
   const { mutateAsyncSafe: createIntent } = useSwapsApiCreateIntent();
   const { mutateAsyncSafe: submitTx } = useSwapsApiSubmitTx();
+  const { mutateAsync: ensureBoundAccessToken } = useEnsureRadfiAccessToken();
 
   // Whether the dispatcher can sign+broadcast on the selected source chain (see
   // lib/signAndBroadcast.ts for the chains the wallet-provider interfaces can't serve yet).
   // Bitcoin source isn't handled by the wallet-only dispatcher — it routes through the Bound
   // trading-wallet path in handleSwap — but it is still a signable source for the demo.
-  const isSourceSignable = isSignableSwapsApiChain(srcChainKey) || getXChainType(srcChainKey) === 'BITCOIN';
+  const isSrcSignable = isSignableSwapsApiChain(srcChainKey) || getXChainType(srcChainKey) === 'BITCOIN';
 
   const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: srcChainKey });
 
@@ -316,8 +339,8 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   });
 
   const handleApprove = async (): Promise<void> => {
-    if (!intentParams || !sourceWalletProvider) {
-      console.error('intentParams or sourceWalletProvider undefined');
+    if (!intentParams || !srcWalletProvider) {
+      console.error('intentParams or srcWalletProvider undefined');
       return;
     }
 
@@ -334,9 +357,9 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       const txHash = await signAndBroadcastSwapsApiTx({
         chainKey: srcChainKey,
         tx: result.value.tx,
-        walletProvider: sourceWalletProvider,
+        walletProvider: srcWalletProvider,
       });
-      await waitForTxFinality(srcChainKey, sourceWalletProvider, txHash);
+      await waitForTxFinality(srcChainKey, srcWalletProvider, txHash);
       // The approve hook can't invalidate the allowance query (confirmation happened
       // client-side, outside the hook) — refetch manually.
       await refetchAllowance();
@@ -348,16 +371,30 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   };
 
   const handleSwap = async (): Promise<void> => {
-    if (!intentParams || !sourceWalletProvider || !sourceAccount.address) {
-      console.error('intentParams, sourceWalletProvider or sourceAccount undefined');
+    if (!intentParams || !srcWalletProvider || !srcAccount.address) {
+      console.error('intentParams, srcWalletProvider or srcAccount undefined');
       return;
     }
 
     setSwapError(null);
     setIsSwapping(true);
     try {
+      // Bitcoin source needs a Bound access token for BOTH the BE createIntent call (BE rebuilds the
+      // raw tx via Bound) and the client-side sign + co-sign below. Ensure a fresh one once (refresh,
+      // or re-auth via BIP322 if needed).
+      let boundToken: string | undefined;
+      if (getXChainType(srcChainKey) === 'BITCOIN' && srcBitcoinWallet) {
+        boundToken = await ensureBoundAccessToken({ walletProvider: srcBitcoinWallet });
+      }
+
+      // A credential belongs in the header, not the body: forward the Bound token to BE so it can
+      // authenticate its Bound raw-tx build.
+      const apiConfig: RequestOverrideConfig = boundToken
+        ? { ...SWAPS_API_CONFIG, headers: { 'x-bound-access-token': boundToken } }
+        : SWAPS_API_CONFIG;
+
       // 1. The API builds the unsigned create-intent tx + intent + relay data.
-      const created = await createIntent({ body: intentParams, apiConfig: SWAPS_API_CONFIG });
+      const created = await createIntent({ body: intentParams, apiConfig });
       if (!created.ok) {
         setSwapError(formatMutationFailureMessage(created.error, 'Create intent failed'));
         return;
@@ -368,25 +405,19 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       let spokeTxHash: string;
       if (getXChainType(srcChainKey) === 'BITCOIN') {
         // Bitcoin uses a 2-of-2 Bound Exchange trading wallet: the user signs the Bound-built PSBT,
-        // then Bound co-signs + broadcasts. This needs the client's Bound session + the relay
-        // identity — context the wallet-only dispatcher doesn't have — so route it through the SDK.
-        const session = loadRadfiSession(sourceAccount.address);
-        if (!session?.accessToken) {
-          setSwapError('Bitcoin source requires a Bound Exchange trading wallet — sign in first.');
-          return;
-        }
+        // then Bound co-signs + broadcasts (with the fresh token ensured above).
         spokeTxHash = await sodax.spoke.getSpokeService(ChainKeys.BITCOIN_MAINNET).signAndSubmitRawTransaction({
           rawTx: tx as BitcoinRawTransaction,
-          walletProvider: sourceWalletProvider as IBitcoinWalletProvider,
+          walletProvider: srcWalletProvider as IBitcoinWalletProvider,
           // The Swaps API types relayData as plain strings; they are hex at runtime.
           relayData: { address: relayData.address as Hex, payload: relayData.payload as Hex },
-          accessToken: session.accessToken,
+          accessToken: boundToken,
         });
       } else {
         spokeTxHash = await signAndBroadcastSwapsApiTx({
           chainKey: srcChainKey,
           tx,
-          walletProvider: sourceWalletProvider,
+          walletProvider: srcWalletProvider,
         });
       }
 
@@ -394,7 +425,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       const request: SubmitTxRequestV2 = {
         txHash: spokeTxHash,
         srcChainKey: src.chain,
-        walletAddress: sourceAccount.address,
+        walletAddress: srcAccount.address,
         intent: toIntentRequest(intent),
         relayData: relayData.payload,
       };
@@ -417,7 +448,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   };
 
   const disconnect = useXDisconnect();
-  const handleSourceAccountDisconnect = () => {
+  const handleSrcAccountDisconnect = () => {
     disconnect({ xChainType: getXChainType(srcChainKey) as ChainType });
   };
 
@@ -474,8 +505,8 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
             <Input
               type="number"
               placeholder="0.0"
-              value={sourceAmount}
-              onChange={e => setSourceAmount(e.target.value)}
+              value={srcAmount}
+              onChange={e => setSrcAmount(e.target.value)}
             />
           </div>
           <Select
@@ -501,25 +532,41 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
         </div>
         <div className="mix-blend-multiply text-black text-(length:--body-comfortable) font-medium font-['InterRegular'] flex gap-1">
           <span className="hidden sm:inline">Balance:</span>
-          <span className="inline">{formatTokenAmount(sourceTokenBalance, src.token?.decimals ?? 0, 5)}</span>
+          <span className="inline">
+            {formatTokenAmount(
+              src.chain === ChainKeys.BITCOIN_MAINNET && srcTradingBal ? srcTradingBal.btcSatoshi : srcTokenBalance,
+              src.token?.decimals ?? 0,
+              5,
+            )}
+          </span>
         </div>
         <div className="grow">
           <Label htmlFor="fromAddress">Source address</Label>
           <div className="flex items-center gap-2">
-            <Input id="fromAddress" type="text" placeholder="" value={sourceAccount.address || ''} disabled={true} />
-            {sourceAccount.address ? (
-              <Button onClick={handleSourceAccountDisconnect}>Disconnect</Button>
+            <Input id="fromAddress" type="text" placeholder="" value={srcAccount.address || ''} disabled={true} />
+            {srcAccount.address ? (
+              <Button onClick={handleSrcAccountDisconnect}>Disconnect</Button>
             ) : (
               <Button onClick={openWalletModal}>Connect</Button>
             )}
           </div>
         </div>
 
-        {!isSourceSignable && (
+        {!isSrcSignable && (
           <div className="text-amber-600 text-sm">
             Source-chain signing for {src.chain} is not yet supported by the wallet-provider interfaces — see
             components/swaps-api/lib/signAndBroadcast.ts.
           </div>
+        )}
+
+        {srcBitcoinWallet && (
+          <BitcoinSetupPanel
+            walletProvider={srcBitcoinWallet}
+            onReadyChange={setIsSrcBitcoinReady}
+            nativeBalance={srcTokenBalance}
+            connectorName={srcBtcConnector?.name}
+            connectorIcon={srcBtcConnector?.icon}
+          />
         )}
 
         <div className="flex justify-center">
@@ -675,7 +722,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
                 <div>
                   minOutputAmount: {formatUnits(BigInt(intentParams?.minOutputAmount ?? '0'), dst.token?.decimals ?? 0)}
                 </div>
-                {!isSourceSignable && (
+                {!isSrcSignable && (
                   <div className="text-amber-600">
                     Source-chain signing for {src.chain} is not yet supported by the wallet-provider interfaces.
                   </div>
@@ -699,7 +746,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
                 type="button"
                 variant="default"
                 onClick={handleApprove}
-                disabled={!isSourceSignable || isAllowanceLoading || hasAllowed || isApproving}
+                disabled={!isSrcSignable || isAllowanceLoading || hasAllowed || isApproving}
               >
                 {isApproving ? 'Approving...' : hasAllowed ? 'Approved' : 'Approve'}
               </Button>
@@ -716,9 +763,10 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
                     className="w-full"
                     onClick={handleSwap}
                     disabled={
-                      !isSourceSignable ||
+                      !isSrcSignable ||
                       !hasAllowed ||
                       isSwapping ||
+                      (src.chain === ChainKeys.BITCOIN_MAINNET && !isSrcBitcoinReady) ||
                       (dst.chain === ChainKeys.BITCOIN_MAINNET && !isDestBitcoinReady) ||
                       nearStorage.blocksAction
                     }
