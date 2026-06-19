@@ -4,8 +4,16 @@ import {
   createTransaction,
   PrivateKey,
   getInjectiveSignerAddress,
+  TxGrpcApi,
   type TxResponse,
 } from '@injectivelabs/sdk-ts';
+// Import the Cosmos tx proto codecs directly from cosmjs-types because @injectivelabs/sdk-ts's
+// `CosmosTxV1Beta1TxPb` namespace export does not expose codec helpers like `fromPartial`.
+import { TxRaw, SignDoc, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx.js';
+// Decoder for the execute messages embedded in `bodyBytes` — used to re-sign a raw tx with a browser
+// wallet (a DIRECT SignDoc can't be re-signed by an EVM wallet; we rebuild from the messages instead).
+import { MsgExecuteContract as CosmwasmMsgExecuteContract } from 'cosmjs-types/cosmwasm/wasm/v1/tx.js';
+import { getNetworkEndpoints, type NetworkEndpoints } from '@injectivelabs/networks';
 import type {
   Hex,
   JsonObject,
@@ -49,18 +57,46 @@ function txResponseToExecuteResponse(txResult: TxResponse): InjectiveExecuteResp
   };
 }
 
+const COSMWASM_MSG_EXECUTE_CONTRACT_TYPE_URL = '/cosmwasm.wasm.v1.MsgExecuteContract';
+
+/**
+ * Recovers the execute message(s) from an unsigned tx `bodyBytes`. The Swaps API raw tx carries only
+ * proto-encoded bytes, but an EVM wallet (Metamask) can't sign a DIRECT Cosmos SignDoc — it signs
+ * EIP-712 built from the messages. We decode the messages and rebuild them as `MsgExecuteContractCompat`
+ * (the EIP-712-friendly variant `execute()` already uses for browser wallets) so the broadcaster can
+ * produce the right sign payload. The on-chain effect is identical (same contract/msg/funds).
+ */
+function decodeInjectiveExecuteMsgs(bodyBytes: Uint8Array): MsgExecuteContractCompat[] {
+  const { messages } = TxBody.decode(bodyBytes);
+  return messages.map((message) => {
+    if (message.typeUrl !== COSMWASM_MSG_EXECUTE_CONTRACT_TYPE_URL) {
+      throw new Error(`Injective: cannot rebuild message type ${message.typeUrl} for browser signing.`);
+    }
+    const { sender, contract, msg, funds } = CosmwasmMsgExecuteContract.decode(message.value);
+    return MsgExecuteContractCompat.fromJSON({
+      contractAddress: contract,
+      sender,
+      msg: JSON.parse(Buffer.from(msg).toString('utf8')),
+      funds: funds.map((coin) => ({ denom: coin.denom, amount: coin.amount })),
+    });
+  });
+}
+
 export class InjectiveWalletProvider
   extends BaseWalletProvider<InjectiveWalletDefaults>
   implements IInjectiveWalletProvider
 {
   public readonly chainType = 'INJECTIVE' as const;
   public wallet: InjectiveWallet;
+  /** Network endpoints used to broadcast a signed `TxRaw` via {@link sendTransaction}. */
+  private readonly endpoints: NetworkEndpoints;
 
   constructor(config: InjectiveWalletConfig) {
     super(config.defaults);
 
     if (isBrowserExtensionInjectiveWalletConfig(config)) {
       this.wallet = { msgBroadcaster: config.msgBroadcaster };
+      this.endpoints = config.msgBroadcaster.endpoints;
       return;
     }
 
@@ -74,6 +110,7 @@ export class InjectiveWalletProvider
         throw new Error('Invalid Secret Injective wallet config');
       }
       this.wallet = { msgBroadcaster: new MsgBroadcasterWithPk({ privateKey, network: config.network }) };
+      this.endpoints = getNetworkEndpoints(config.network);
       return;
     }
 
@@ -193,5 +230,56 @@ export class InjectiveWalletProvider
     }
 
     return txResponseToExecuteResponse(txResult);
+  }
+
+  /**
+   * Broadcasts an already-signed, proto-encoded Cosmos `TxRaw` via the configured gRPC endpoint.
+   * @param signedTxRaw - The signed transaction, encoded with `TxRaw.encode(...).finish()`.
+   * @returns The transaction hash.
+   * @throws {Error} if the node rejects the transaction (non-zero result code).
+   */
+  async sendTransaction(signedTxRaw: Uint8Array): Promise<string> {
+    const txRaw = TxRaw.decode(signedTxRaw);
+    const res = await new TxGrpcApi(this.endpoints.grpc).broadcast(txRaw);
+    if (res.code !== 0) {
+      throw new Error(`Injective broadcast failed (code ${res.code}): ${res.rawLog}`);
+    }
+    return res.txHash;
+  }
+
+  /**
+   * Signs and broadcasts an unsigned `InjectiveRawTransaction` (e.g. from the Swaps API).
+   *
+   * - **PK (secret) mode**: signs the exact unsigned `SignDoc` (`bodyBytes`/`authInfoBytes`) and
+   *   broadcasts it as-is, preserving the precise fee/account the Swaps API built.
+   * - **Browser mode (Keplr/Leap/Metamask)**: an EVM wallet can't sign a raw Cosmos `SignDoc`, so we
+   *   recover the messages from `bodyBytes` and broadcast them through the fee-delegation path (same as
+   *   {@link execute}). The broadcaster builds the wallet-appropriate sign payload (DIRECT for Cosmos
+   *   wallets, EIP-712 for Metamask). Trade-off: the broadcaster recomputes gas/fee rather than using
+   *   the exact fee in the raw tx; the on-chain effect (the execute message) is unchanged.
+   *
+   * @returns The transaction hash.
+   */
+  async signAndSendTransaction(tx: InjectiveRawTransaction): Promise<string> {
+    const { bodyBytes, authInfoBytes, chainId, accountNumber } = tx.signedDoc;
+    const signerAddress = await this.getWalletAddress();
+    if (tx.from !== signerAddress) {
+      throw new Error(`Injective: cannot sign transaction for ${tx.from} with wallet ${signerAddress}.`);
+    }
+
+    if (this.wallet.msgBroadcaster instanceof MsgBroadcasterWithPk) {
+      const signDoc = SignDoc.fromPartial({ bodyBytes, authInfoBytes, chainId, accountNumber });
+      const signBytes = SignDoc.encode(signDoc).finish();
+      const signature = this.wallet.msgBroadcaster.privateKey.sign(Buffer.from(signBytes));
+      const signedTxRaw = TxRaw.fromPartial({ bodyBytes, authInfoBytes, signatures: [signature] });
+      return this.sendTransaction(TxRaw.encode(signedTxRaw).finish());
+    }
+
+    const msgs = decodeInjectiveExecuteMsgs(bodyBytes);
+    const txResult = await this.wallet.msgBroadcaster.broadcastWithFeeDelegation({
+      msgs,
+      injectiveAddress: signerAddress,
+    });
+    return txResult.txHash;
   }
 }
