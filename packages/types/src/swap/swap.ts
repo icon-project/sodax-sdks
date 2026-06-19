@@ -240,12 +240,8 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.STACKS_MAINNET].supportedTokens.sBTC,
     spokeChainConfig[ChainKeys.STACKS_MAINNET].supportedTokens.USDC,
   ] as const satisfies XToken[],
-  [ChainKeys.HEDERA_MAINNET]: [
-    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.HBAR,
-    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.bnUSD,
-    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.USDC,
-    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.SODA,
-  ] as const satisfies XToken[],
+  // Hedera is currently staging-only — see stagingSwapSupportedTokens
+  [ChainKeys.HEDERA_MAINNET]: [],
 } as const satisfies Record<SpokeChainKey, readonly XToken[]>;
 
 // Tokens supported ONLY in the staging solver environment.
@@ -291,6 +287,12 @@ export const stagingSwapSupportedTokens = {
   [ChainKeys.REDBELLY_MAINNET]: [],
   [ChainKeys.KAIA_MAINNET]: [],
   [ChainKeys.STACKS_MAINNET]: [],
+  [ChainKeys.HEDERA_MAINNET]: [
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.HBAR,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.bnUSD,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.USDC,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.SODA,
+  ] as const satisfies XToken[],
 } as const satisfies Record<SpokeChainKey, readonly XToken[]>;
 
 export type SwapsConfig = {
