@@ -14,6 +14,8 @@
     "moneyMarket": "pnpm run build && node dist/moneymarket.js",
     "staking": "pnpm run build && node dist/soda-staking.js",
     "stacks": "pnpm run build && node dist/stacks.js",
+    "bitcoin-raw-intent": "tsx src/bitcoin-raw-intent.ts",
+    "bitcoin-raw-intent-check": "tsx src/bitcoin-raw-intent-check.ts",
     "test-libs": "tsx src/test-libs.ts",
     "stellar": "pnpm run build && node dist/stellar.js",
     "icon": "pnpm run build && node dist/icon.js",

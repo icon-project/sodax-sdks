@@ -14,6 +14,7 @@ const HOOKS_DIR = resolve(fileURLToPath(import.meta.url), '..');
  */
 const HOOKS: Array<{ path: string; nativeThrow?: true }> = [
   { path: 'backend/useBackendSubmitSwapTx.ts' },
+  { path: 'bitcoin/useEnsureRadfiAccessToken.ts', nativeThrow: true },
   { path: 'bitcoin/useFundTradingWallet.ts', nativeThrow: true },
   { path: 'bitcoin/useRadfiAuth.ts', nativeThrow: true },
   { path: 'bitcoin/useRadfiWithdraw.ts', nativeThrow: true },
