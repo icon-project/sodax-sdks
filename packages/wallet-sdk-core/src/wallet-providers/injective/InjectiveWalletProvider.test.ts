@@ -9,6 +9,9 @@ const broadcastWithPk = vi.fn().mockResolvedValue({ txHash: 'pk-tx-hash', height
 const pkSign = vi.fn().mockReturnValue(new Uint8Array([7, 7]));
 const grpcBroadcast = vi.fn().mockResolvedValue({ txHash: 'grpc-tx-hash', code: 0, rawLog: '' });
 const txRawEncodeFinish = vi.fn().mockReturnValue(new Uint8Array([9, 9]));
+const broadcastWithFeeDelegation = vi.fn().mockResolvedValue({ txHash: 'fee-deleg-tx-hash', height: '200' });
+const txBodyDecode = vi.fn();
+const cosmwasmMsgDecode = vi.fn();
 
 vi.mock('@injectivelabs/sdk-ts', () => {
   class MsgBroadcasterWithPk {
@@ -41,7 +44,7 @@ vi.mock('@injectivelabs/sdk-ts', () => {
   };
 });
 
-// TxRaw/SignDoc are imported directly from cosmjs-types now (not the @injectivelabs namespace re-export).
+// TxRaw/SignDoc/TxBody are imported directly from cosmjs-types now (not the @injectivelabs namespace re-export).
 vi.mock('cosmjs-types/cosmos/tx/v1beta1/tx.js', () => ({
   TxRaw: {
     fromPartial: (x: Record<string, unknown>) => ({ __txRaw: true, ...x }),
@@ -52,6 +55,12 @@ vi.mock('cosmjs-types/cosmos/tx/v1beta1/tx.js', () => ({
     fromPartial: (x: Record<string, unknown>) => ({ __signDoc: true, ...x }),
     encode: () => ({ finish: () => new Uint8Array([1, 2, 3]) }),
   },
+  TxBody: { decode: txBodyDecode },
+}));
+
+// Decoder for the execute message embedded in the raw tx body (browser re-sign path).
+vi.mock('cosmjs-types/cosmwasm/wasm/v1/tx.js', () => ({
+  MsgExecuteContract: { decode: cosmwasmMsgDecode },
 }));
 
 vi.mock('@injectivelabs/networks', () => ({
@@ -294,71 +303,66 @@ describe('InjectiveWalletProvider', () => {
 
   describe('signAndSendTransaction — browser mode', () => {
     beforeEach(() => {
-      grpcBroadcast.mockReset();
-      grpcBroadcast.mockResolvedValue({ txHash: 'grpc-tx-hash', code: 0, rawLog: '' });
+      msgExecuteContractCompatFromJSON.mockClear();
+      broadcastWithFeeDelegation.mockClear();
+      broadcastWithFeeDelegation.mockResolvedValue({ txHash: 'fee-deleg-tx-hash', height: '200' });
+      // Default: bodyBytes decodes to a single cosmwasm execute message (token transfer to asset manager).
+      txBodyDecode.mockReturnValue({
+        messages: [{ typeUrl: '/cosmwasm.wasm.v1.MsgExecuteContract', value: new Uint8Array([5]) }],
+      });
+      cosmwasmMsgDecode.mockReturnValue({
+        sender: 'inj1abc',
+        contract: 'inj1contract',
+        msg: new TextEncoder().encode(JSON.stringify(MSG)),
+        funds: [{ denom: 'inj', amount: '1' }],
+      });
     });
 
-    it('signs via a Cosmos wallet (signCosmosTransaction) then broadcasts the result', async () => {
-      const signCosmosTransaction = vi.fn().mockResolvedValue({
-        signed: { bodyBytes: new Uint8Array([3]), authInfoBytes: new Uint8Array([4]) },
-        signature: { signature: 'YmFzZTY0' },
-      });
+    function makeBrowserProvider() {
       const msgBroadcaster: any = {
         endpoints: { grpc: 'https://grpc.mock' },
-        walletStrategy: { getAddresses: vi.fn().mockResolvedValue(['inj1abc']), signCosmosTransaction },
+        walletStrategy: { getAddresses: vi.fn().mockResolvedValue(['inj1abc']) },
+        broadcastWithFeeDelegation,
       };
-      const provider = new InjectiveWalletProvider({ msgBroadcaster });
+      return new InjectiveWalletProvider({ msgBroadcaster });
+    }
+
+    it('decodes the raw tx messages and broadcasts via fee delegation (Cosmos + Metamask), returning the hash', async () => {
+      const provider = makeBrowserProvider();
 
       const hash = await provider.signAndSendTransaction(RAW_TX);
 
-      expect(signCosmosTransaction).toHaveBeenCalledTimes(1);
-      const arg = signCosmosTransaction.mock.calls[0]?.[0];
-      expect(arg.accountNumber).toBe(42);
-      expect(arg.address).toBe('inj1abc');
-      expect(grpcBroadcast).toHaveBeenCalledTimes(1);
-      expect(hash).toBe('grpc-tx-hash');
+      // Messages are recovered from bodyBytes and rebuilt as the EIP-712-friendly compat message.
+      expect(msgExecuteContractCompatFromJSON).toHaveBeenCalledWith({
+        contractAddress: 'inj1contract',
+        sender: 'inj1abc',
+        msg: MSG,
+        funds: [{ denom: 'inj', amount: '1' }],
+      });
+      // Broadcast goes through the fee-delegation path with the connected address as the signer.
+      const broadcastArgs = broadcastWithFeeDelegation.mock.calls[0]?.[0];
+      expect(broadcastArgs.injectiveAddress).toBe('inj1abc');
+      expect(broadcastArgs.msgs).toEqual([{ kind: 'MsgExecuteContractCompat' }]);
+      expect(hash).toBe('fee-deleg-tx-hash');
     });
 
-    it('throws before signing when the raw tx sender does not match the connected browser wallet', async () => {
-      const signCosmosTransaction = vi.fn();
-      const msgBroadcaster: any = {
-        endpoints: { grpc: 'https://grpc.mock' },
-        walletStrategy: { getAddresses: vi.fn().mockResolvedValue(['inj1abc']), signCosmosTransaction },
-      };
-      const provider = new InjectiveWalletProvider({ msgBroadcaster });
+    it('throws before decoding when the raw tx sender does not match the connected wallet', async () => {
+      const provider = makeBrowserProvider();
 
       await expect(
         provider.signAndSendTransaction({ ...RAW_TX, from: 'inj1different' as `0x${string}` }),
       ).rejects.toThrow(/cannot sign transaction for inj1different with wallet inj1abc/);
-      expect(signCosmosTransaction).not.toHaveBeenCalled();
-      expect(grpcBroadcast).not.toHaveBeenCalled();
+      expect(broadcastWithFeeDelegation).not.toHaveBeenCalled();
     });
 
-    it('flags the EVM/Metamask limitation while preserving the underlying signing error', async () => {
-      const signCosmosTransaction = vi.fn().mockRejectedValue(new Error('signCosmosTransaction is not supported'));
-      const msgBroadcaster: any = {
-        endpoints: { grpc: 'https://grpc.mock' },
-        walletStrategy: { getAddresses: vi.fn().mockResolvedValue(['inj1abc']), signCosmosTransaction },
-      };
-      const provider = new InjectiveWalletProvider({ msgBroadcaster });
+    it('throws when the raw tx carries a message type other than MsgExecuteContract', async () => {
+      txBodyDecode.mockReturnValue({
+        messages: [{ typeUrl: '/cosmos.bank.v1beta1.MsgSend', value: new Uint8Array([5]) }],
+      });
+      const provider = makeBrowserProvider();
 
-      const error = await provider.signAndSendTransaction(RAW_TX).catch(e => e);
-      expect(error).toBeInstanceOf(Error);
-      expect((error as Error).message).toMatch(/EVM\/Metamask/);
-      // underlying reason is surfaced, not masked
-      expect((error as Error).message).toMatch(/signCosmosTransaction is not supported/);
-      expect((error as { cause?: unknown }).cause).toBeInstanceOf(Error);
-    });
-
-    it('surfaces a Cosmos wallet rejection reason instead of mislabeling it', async () => {
-      const signCosmosTransaction = vi.fn().mockRejectedValue(new Error('Request rejected by user'));
-      const msgBroadcaster: any = {
-        endpoints: { grpc: 'https://grpc.mock' },
-        walletStrategy: { getAddresses: vi.fn().mockResolvedValue(['inj1abc']), signCosmosTransaction },
-      };
-      const provider = new InjectiveWalletProvider({ msgBroadcaster });
-
-      await expect(provider.signAndSendTransaction(RAW_TX)).rejects.toThrow(/Request rejected by user/);
+      await expect(provider.signAndSendTransaction(RAW_TX)).rejects.toThrow(/cannot rebuild message type/);
+      expect(broadcastWithFeeDelegation).not.toHaveBeenCalled();
     });
   });
 });
