@@ -17,7 +17,7 @@ catalog:
   "tsup": "8.5.0"
   "@changesets/cli": "2.29.7"
   "@arethetypeswrong/cli": "0.17.4"
-  "vitest": "3.2.4"
+  "vitest": "3.2.6"
   "bignumber.js": "9.3.1"
   "@mysten/sui": "1.21.2"
   "@mysten/wallet-standard": "0.15.6"
