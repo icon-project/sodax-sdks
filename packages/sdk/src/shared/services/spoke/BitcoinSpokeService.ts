@@ -114,6 +114,7 @@ export class BitcoinSpokeService {
    */
   public async getEffectiveWalletAddress(personalAddress: string): Promise<string> {
     if (this.walletMode === 'TRADING') {
+      // The trading-wallet lookup is a public GET — no access token required.
       const tradingWallet = await this.radfi.getTradingWallet(personalAddress);
       return tradingWallet.tradingAddress;
     }

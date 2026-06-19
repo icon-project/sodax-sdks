@@ -111,6 +111,13 @@ export class RadfiProvider {
 
   constructor(config: RadfiConfig) {
     this.config = config;
+    // Seed any pre-provisioned Bound Exchange session from config. `RadfiConfig` declares
+    // `accessToken` / `refreshToken` precisely so a server-side caller — which never runs the
+    // interactive BIP322 sign-in — can inject a token via `new Sodax({ ... })` and have the
+    // raw-tx build flow authenticate. Without this they stayed '' and every Bound call went out
+    // unauthenticated (which the API answers with a non-2xx HTML page).
+    this.accessToken = config.accessToken ?? '';
+    this.refreshToken = config.refreshToken ?? '';
     if (config.apiUrl.endsWith('/')) {
       // Remove trailing slash from baseUrl
       this.config.apiUrl = config.apiUrl.slice(0, -1);
@@ -197,16 +204,16 @@ export class RadfiProvider {
       body: JSON.stringify(params),
     });
 
+    const body = await this.parseJsonBody(res, 'Bound Exchange authentication failed');
     if (!res.ok) {
-      const err = await res.json();
-      throw new RadfiApiError(res.status, err, 'Bound Exchange authentication failed');
+      throw new RadfiApiError(res.status, body, 'Bound Exchange authentication failed');
     }
 
-    return res.json().then(r => ({
-      accessToken: r.data?.accessToken ?? '',
-      refreshToken: r.data?.refreshToken ?? '',
-      tradingAddress: r.data?.tradingAddress ?? r.data?.wallet?.tradingAddress ?? '',
-    }));
+    return {
+      accessToken: body.data?.accessToken ?? '',
+      refreshToken: body.data?.refreshToken ?? '',
+      tradingAddress: body.data?.tradingAddress ?? body.data?.wallet?.tradingAddress ?? '',
+    };
   }
 
   public async refreshAccessToken(refreshToken: string): Promise<{ accessToken: string; refreshToken: string }> {
@@ -215,15 +222,15 @@ export class RadfiProvider {
       body: JSON.stringify({ refreshToken }),
     });
 
+    const body = await this.parseJsonBody(res, 'Token refresh failed');
     if (!res.ok) {
-      const err = await res.json();
-      throw new RadfiApiError(res.status, err, 'Token refresh failed');
+      throw new RadfiApiError(res.status, body, 'Token refresh failed');
     }
 
-    return res.json().then(r => ({
-      accessToken: r.data?.accessToken ?? '',
-      refreshToken: r.data?.refreshToken ?? refreshToken,
-    }));
+    return {
+      accessToken: body.data?.accessToken ?? '',
+      refreshToken: body.data?.refreshToken ?? refreshToken,
+    };
   }
 
   public async createTradingWallet(
@@ -236,17 +243,17 @@ export class RadfiProvider {
     const res = await this.request('/wallets', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${accessToken || this.config.apiKey}`,
+        Authorization: `Bearer ${this.resolveAuth(accessToken)}`,
       },
       body: JSON.stringify(params),
     });
 
+    const body = await this.parseJsonBody(res, 'Failed to create trading wallet');
     if (!res.ok) {
-      const err = await res.json();
-      throw new RadfiApiError(res.status, err, 'Failed to create trading wallet');
+      throw new RadfiApiError(res.status, body, 'Failed to create trading wallet');
     }
 
-    return res.json().then(r => r.data);
+    return body.data;
   }
 
   public async getTradingWallet(userAddress: string, accessToken?: string): Promise<RadfiTradingWallet> {
@@ -259,7 +266,8 @@ export class RadfiProvider {
       throw new Error('Trading wallet not found');
     }
 
-    const data = await res.json().then(r => r.data);
+    const body = await this.parseJsonBody(res, 'Trading wallet not found');
+    const data = body?.data;
     if (!data) throw new Error('Trading wallet not found');
     return data;
   }
@@ -278,7 +286,7 @@ export class RadfiProvider {
       throw new Error('Failed to fetch wallet balance');
     }
 
-    const { data } = await res.json();
+    const { data } = await this.parseJsonBody(res, 'Failed to fetch wallet balance');
     return {
       btcSatoshi: BigInt(data.btcSatoshi ?? '0'),
       pendingSatoshi: BigInt(data.pendingSatoshi ?? '0'),
@@ -310,7 +318,7 @@ export class RadfiProvider {
     const res = await this.request('/sodax/transaction', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${accessToken || this.config.apiKey}`,
+        Authorization: `Bearer ${this.resolveAuth(accessToken)}`,
       },
       body: JSON.stringify({
         type: 'sodax-withdraw',
@@ -325,7 +333,7 @@ export class RadfiProvider {
     // The API can return HTTP 200 with a logical-error envelope (e.g. code "2002"
     // insufficientBTCBalance) and no `data`. Treat a missing `data` as an error so the
     // RadfiApiError (code/details) surfaces instead of a downstream undefined access.
-    const body = await res.json();
+    const body = await this.parseJsonBody(res, 'Bound Exchange transaction request failed');
     if (!res.ok || !body?.data) {
       throw new RadfiApiError(res.status, body, 'Bound Exchange transaction request failed');
     }
@@ -352,7 +360,7 @@ export class RadfiProvider {
     const res = await this.request('/sodax/transaction/sign', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${accessToken || this.config.apiKey}`,
+        Authorization: `Bearer ${this.resolveAuth(accessToken)}`,
       },
       body: JSON.stringify({
         type: 'sodax-withdraw',
@@ -360,12 +368,12 @@ export class RadfiProvider {
       }),
     });
 
+    const body = await this.parseJsonBody(res, 'Bound Exchange signature request failed');
     if (!res.ok) {
-      const err = await res.json();
-      throw new RadfiApiError(res.status, err, 'Bound Exchange signature request failed');
+      throw new RadfiApiError(res.status, body, 'Bound Exchange signature request failed');
     }
 
-    return res.json().then(r => r.data.txId);
+    return body.data.txId;
   }
 
   /**
@@ -391,7 +399,7 @@ export class RadfiProvider {
       throw new Error('Failed to fetch expired UTXOs');
     }
 
-    return res.json();
+    return this.parseJsonBody(res, 'Failed to fetch expired UTXOs');
   }
 
   /**
@@ -416,12 +424,12 @@ export class RadfiProvider {
       }),
     });
 
+    const body = await this.parseJsonBody(res, 'Failed to build renew-utxo transaction');
     if (!res.ok) {
-      const err = await res.json();
-      throw new RadfiApiError(res.status, err, 'Failed to build renew-utxo transaction');
+      throw new RadfiApiError(res.status, body, 'Failed to build renew-utxo transaction');
     }
 
-    return res.json().then(r => r.data);
+    return body.data;
   }
 
   /**
@@ -443,12 +451,12 @@ export class RadfiProvider {
       }),
     });
 
+    const body = await this.parseJsonBody(res, 'Failed to sign and broadcast renew-utxo transaction');
     if (!res.ok) {
-      const err = await res.json();
-      throw new RadfiApiError(res.status, err, 'Failed to sign and broadcast renew-utxo transaction');
+      throw new RadfiApiError(res.status, body, 'Failed to sign and broadcast renew-utxo transaction');
     }
 
-    return res.json().then(r => r.data.txId);
+    return body.data.txId;
   }
 
   /**
@@ -475,12 +483,12 @@ export class RadfiProvider {
       }),
     });
 
+    const body = await this.parseJsonBody(res, 'Failed to build withdraw transaction');
     if (!res.ok) {
-      const err = await res.json();
-      throw new RadfiApiError(res.status, err, 'Failed to build withdraw transaction');
+      throw new RadfiApiError(res.status, body, 'Failed to build withdraw transaction');
     }
 
-    return res.json().then(r => r.data);
+    return body.data;
   }
 
   /**
@@ -501,16 +509,14 @@ export class RadfiProvider {
       }),
     });
 
+    const body = await this.parseJsonBody(res, 'Failed to sign and broadcast withdraw transaction');
     if (!res.ok) {
-      const err = await res.json();
-      throw new RadfiApiError(res.status, err, 'Failed to sign and broadcast withdraw transaction');
+      throw new RadfiApiError(res.status, body, 'Failed to sign and broadcast withdraw transaction');
     }
 
-    return res.json().then(r => {
-      const txId = r.data?.txId;
-      // API may return nested response: { txId: { data: "actualTxId" } }
-      return typeof txId === 'object' && txId?.data ? txId.data : txId;
-    });
+    const txId = body.data?.txId;
+    // API may return nested response: { txId: { data: "actualTxId" } }
+    return typeof txId === 'object' && txId?.data ? txId.data : txId;
   }
 
   /**
@@ -536,12 +542,60 @@ export class RadfiProvider {
       }),
     });
 
+    const body = await this.parseJsonBody(res, 'Failed to get max withdrawable amount');
     if (!res.ok) {
-      const err = await res.json();
-      throw new RadfiApiError(res.status, err, 'Failed to get max withdrawable amount');
+      throw new RadfiApiError(res.status, body, 'Failed to get max withdrawable amount');
     }
 
-    return res.json().then(r => r.data);
+    return body.data;
+  }
+
+  /**
+   * Resolve the bearer credential for an authenticated Bound Exchange call, failing fast when none
+   * is available. A server-side raw-build caller that never ran the interactive sign-in would
+   * otherwise send `Authorization: Bearer ` (empty) and get an opaque 403 from Bound's gateway;
+   * throwing here turns that into an actionable client-side error naming the fix. We deliberately do
+   * NOT validate the token's contents (expiry / scope / signature) — only Bound can, and an invalid
+   * token still surfaces as a legible 401/403 via `parseJsonBody`.
+   */
+  private resolveAuth(accessToken?: string): string {
+    const auth = accessToken || this.config.apiKey;
+    if (!auth) {
+      throw new RadfiApiError(
+        401,
+        {
+          message:
+            'Bound Exchange access token (or apiKey) is required but none was set. Inject one via sodax.spoke.bitcoin.radfi.setRadfiAccessToken(token) or new Sodax({ ... }) with radfi.accessToken.',
+        },
+        'Missing Bound Exchange credentials',
+      );
+    }
+    return auth;
+  }
+
+  /**
+   * Parse a Bound Exchange response body as JSON defensively.
+   *
+   * Bound (or an upstream gateway / WAF / CDN) can answer a request with an HTML error page
+   * instead of JSON — e.g. an unauthenticated call, a blocked origin, a 404, or a 5xx. Calling
+   * `res.json()` on that throws a cryptic `SyntaxError: Unexpected token '<'` that masks the real
+   * HTTP status and bubbles up as an opaque failure (it surfaced as a `createIntent` /
+   * `INTENT_CREATION_FAILED` "is not valid JSON" error on the Bitcoin raw-tx path). Reading the
+   * body as text first and parsing it ourselves lets us raise a `RadfiApiError` carrying the
+   * actual status code and a body snippet instead.
+   */
+  private async parseJsonBody(res: Response, fallback: string): Promise<any> {
+    const text = await res.text();
+    try {
+      return text.length ? JSON.parse(text) : {};
+    } catch {
+      const snippet = text.replace(/\s+/g, ' ').trim().slice(0, 200);
+      throw new RadfiApiError(
+        res.status,
+        { message: `Bound Exchange returned a non-JSON response (HTTP ${res.status})${snippet ? `: ${snippet}` : ''}` },
+        fallback,
+      );
+    }
   }
 
   private async request(endpoint: string, options?: RequestInit): Promise<Response> {
