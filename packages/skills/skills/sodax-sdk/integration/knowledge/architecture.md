@@ -132,9 +132,9 @@ import { Sodax, type SodaxOptions } from '@sodax/sdk';
 new Sodax(config?: SodaxOptions): Sodax;
 ```
 
-`SodaxOptions` is `DeepPartial<SodaxConfig> & { logger?: SodaxLoggerOption; fee?: PartnerFee }` — a deep-partial override of the `SodaxConfig` data contract, plus the client-side options (`logger` sink + global partner `fee`) kept off `SodaxConfig` itself: the integrator sets them, they are resolved once, and the backend never fetches or overwrites them. Read the resolved global fee back via `sodax.config.fee`. The global `fee` is the **default applied to any feature whose own `partnerFee` is unset** — the effective fee is `featureFee ?? fee`, resolved via `sodax.config.swapPartnerFee` / `moneyMarketPartnerFee` / `bridgePartnerFee`. (See [`recipes/logging.md`](recipes/logging.md) for the `logger` precedent.)
+`SodaxOptions` is `DeepPartial<SodaxDefaultConfig> & { logger?: SodaxLoggerOption; fee?: PartnerFee }` — a deep-partial override of the `SodaxDefaultConfig` data contract, plus the client-side options (`logger` sink + global partner `fee`) kept off `SodaxDefaultConfig` itself: the integrator sets them, they are resolved once, and the backend never fetches or overwrites them. Read the resolved global fee back via `sodax.config.fee`. The global `fee` is the **default applied to any feature whose own `partnerFee` is unset** — the effective fee is `featureFee ?? fee`, resolved via `sodax.config.swapPartnerFee` / `moneyMarketPartnerFee` / `bridgePartnerFee` / `leverageYieldPartnerFee`. (See [`recipes/logging.md`](recipes/logging.md) for the `logger` precedent.)
 
-`SodaxConfig` has exactly **10 fields** (all required at the type level, but `DeepPartial` makes every leaf optional):
+`SodaxDefaultConfig` has exactly **10 fields** (all required at the type level, but `DeepPartial` makes every leaf optional):
 
 - `chains: Record<SpokeChainKey, SpokeChainConfig>` — per-spoke-chain config. Each entry carries `rpcUrl`, polling config, and chain-family-specific extras (`BitcoinSpokeChainConfig`, `StellarSpokeChainConfig`, etc.).
 - `swaps: SwapsConfig` — supported solver tokens per chain (+ optional per-feature `partnerFee` override).

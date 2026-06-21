@@ -39,7 +39,7 @@ export type ConfigServiceConstructorParams = {
   api: BackendApiService;
   config: SodaxConfig;
   /**
-   * The raw user-provided config override (the `DeepPartial<SodaxConfig>` passed to `new Sodax(...)`),
+   * The raw user-provided config override (the `SodaxOptions` passed to `new Sodax(...)`),
    * NOT the merged result. Re-applied on top of dynamic config in {@link ConfigService.initialize} so
    * that a remote config fetch never clobbers explicit user overrides.
    */

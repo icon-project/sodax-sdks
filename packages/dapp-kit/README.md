@@ -35,11 +35,11 @@ RPC URLs are injected through `config.chains`. `SodaxProvider` is the outermost 
 import { QueryClientProvider } from '@tanstack/react-query';
 import { SodaxProvider, createSodaxQueryClient } from '@sodax/dapp-kit';
 import { SodaxWalletProvider, type SodaxWalletConfig } from '@sodax/wallet-sdk-react';
-import { ChainKeys, type DeepPartial, type SodaxConfig } from '@sodax/sdk';
+import { ChainKeys, type SodaxOptions } from '@sodax/sdk';
 
 const queryClient = createSodaxQueryClient();
 
-const sodaxConfig: DeepPartial<SodaxConfig> = {
+const sodaxConfig: SodaxOptions = {
   chains: {
     [ChainKeys.SONIC_MAINNET]: { rpcUrl: 'https://sonic-rpc.publicnode.com' },
     [ChainKeys.BSC_MAINNET]: { rpcUrl: 'https://bsc-dataseed.binance.org' },
@@ -125,7 +125,7 @@ function SwapButton({ intentParams }: { intentParams: CreateIntentParams }) {
 
 ### Provider
 
-- [`SodaxProvider`](src/providers/SodaxProvider.tsx) — Wraps your app, creates the `Sodax` SDK instance. Accepts `config?: DeepPartial<SodaxConfig>`.
+- [`SodaxProvider`](src/providers/SodaxProvider.tsx) — Wraps your app, creates the `Sodax` SDK instance. Accepts `config?: SodaxOptions`.
 - [`createSodaxQueryClient()`](src/providers/createSodaxQueryClient.ts) — Factory for a `QueryClient` with global mutation observability (`onMutationError` hook, `meta.silent` opt-out).
 
 ### Swap Hooks

@@ -24,18 +24,17 @@ import {
   sodaxConfig,
   CONFIG_VERSION,
   type SodaxConfig,
-  type DeepPartial,
   type Result,
   type GetAllConfigApiResponse,
   type PartnerFee,
-  SodaxOptions,
+  type SodaxOptions,
 } from '@sodax/types';
 import { ConfigService } from './ConfigService.js';
 import { deepMerge } from '../utils/deepMerge.js';
 import type { BackendApiService } from '../../backendApi/BackendApiService.js';
 
 function makeService(
-  userConfig: DeepPartial<SodaxConfig> | undefined,
+  userConfig: SodaxOptions | undefined,
   response: Result<GetAllConfigApiResponse>,
   fee?: PartnerFee,
 ) {

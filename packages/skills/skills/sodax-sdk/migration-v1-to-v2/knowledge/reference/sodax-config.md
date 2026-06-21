@@ -1,18 +1,19 @@
 # `SodaxConfig` constructor reshape
 
-The v2 `Sodax` constructor accepts a `DeepPartial<SodaxConfig>`. Several config fields renamed, moved, or were added between v1 and v2; if your project passed a custom config, check these.
+The v2 `Sodax` constructor accepts a `SodaxOptions` (`DeepPartial<SodaxDefaultConfig> & SodaxOptionalConfig`). Several config fields renamed, moved, or were added between v1 and v2; if your project passed a custom config, check these.
 
-## v2 `SodaxConfig` shape (source of truth)
+## v2 config data shape (`SodaxDefaultConfig`, source of truth)
 
-Defined in `@sodax/types` (`packages/types/src/sodax-config/sodax-config.ts`):
+Defined in `@sodax/types` (`packages/types/src/sodax-config/sodax-config.ts`). This is the static data contract the backend serves and the packaged defaults are built from; `SodaxConfig` is the merged result (`SodaxDefaultConfig & SodaxOptionalConfig`):
 
 ```ts
-type SodaxConfig = {
+type SodaxDefaultConfig = {
   chains: Record<SpokeChainKey, SpokeChainConfig>;   // per-spoke-chain config (rpcUrl + tx polling + chain-specific shape)
   swaps: SwapsConfig;                                // supported swap tokens per chain (+ per-feature partnerFee override)
   moneyMarket: MoneyMarketConfig;                    // money market service config (+ per-feature partnerFee override)
   bridge: BridgeConfig;                              // bridge partner-fee override
   dex: DexConfig;                                    // DEX service config
+  leverageYield: LeverageYieldConfig;                // leverage-yield ERC-4626 vault registry (+ per-feature partnerFee override)
   hub: HubConfig;                                    // hub-chain (Sonic) provider config
   api: ApiConfig;                                    // backend API endpoint
   solver: SolverConfig;                              // intent solver endpoint + contracts
@@ -20,9 +21,9 @@ type SodaxConfig = {
 };
 ```
 
-A matching default `sodaxConfig` const is exported from the same module — `new Sodax()` deep-merges your `DeepPartial<SodaxConfig>` over it.
+A matching default `sodaxConfig` const is exported from the same module — `new Sodax()` deep-merges your `DeepPartial<SodaxDefaultConfig>` over it.
 
-The `new Sodax(...)` argument is actually `SodaxOptions = DeepPartial<SodaxConfig> & { logger?; fee? }`. The global partner `fee` and `logger` are **client-side options, NOT `SodaxConfig` data fields**: the integrator sets them, they are resolved once, and they are never fetched from or overwritten by the backend config. Read the resolved global fee back via `sodax.config.fee`. It is the **fallback applied to any feature whose own `partnerFee` is unset** (effective fee = `featureFee ?? fee`, via `sodax.config.swapPartnerFee` / `moneyMarketPartnerFee` / `bridgePartnerFee`). (Per-feature partner-fee overrides — `swaps.partnerFee`, `moneyMarket.partnerFee`, `bridge.partnerFee` — remain on `SodaxConfig`.)
+The `new Sodax(...)` argument is actually `SodaxOptions = DeepPartial<SodaxDefaultConfig> & SodaxOptionalConfig`, where `SodaxOptionalConfig` carries the client-side options `{ logger?; fee? }` plus the per-feature option objects. The global partner `fee` and `logger` are **client-side options, NOT `SodaxDefaultConfig` data fields**: the integrator sets them, they are resolved once, and they are never fetched from or overwritten by the backend config. Read the resolved global fee back via `sodax.config.fee`. It is the **fallback applied to any feature whose own `partnerFee` is unset** (effective fee = `featureFee ?? fee`, via `sodax.config.swapPartnerFee` / `moneyMarketPartnerFee` / `bridgePartnerFee` / `leverageYieldPartnerFee`). (Per-feature partner-fee overrides — `swaps.partnerFee`, `moneyMarket.partnerFee`, `bridge.partnerFee`, `leverageYield.partnerFee` — live on the feature options.)
 
 ## v1 shape (for reference)
 
@@ -80,7 +81,7 @@ Migration:
 - // RPC URLs were passed as a SEPARATE prop on the framework-layer SodaxProvider
 - // (alongside the sodaxConfig). The Sodax constructor itself never saw rpcConfig.
 
-+ // v2 — DeepPartial<SodaxConfig> passed directly to new Sodax(...)
++ // v2 — SodaxOptions (DeepPartial<SodaxDefaultConfig> & client options) passed directly to new Sodax(...)
 + const sodax = new Sodax({
 +   hub: { /* HubConfig — usually omit, default ships full hub addresses */ },
 +   solver: {

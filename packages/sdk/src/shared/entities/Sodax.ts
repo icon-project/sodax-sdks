@@ -42,7 +42,7 @@ export class Sodax {
   constructor(options?: SodaxOptions) {
     // Resolve the client-side options (`logger`, `fee`) once, up front, and hand them to the services
     // so they survive the dynamic-config swap in `config.initialize()`. Both live on `SodaxOptions`,
-    // not on the `DeepPartial<SodaxConfig>` data contract, so they keep their exact types and need no
+    // not on the `DeepPartial<SodaxDefaultConfig>` data contract, so they keep their exact types and need no
     // cast. `mergeSodaxConfig` / `userConfig` ignore these extra keys (they are never read off the data
     // config; services read them via `config.logger` / `config.fee`).
     const logger = resolveLogger(options?.logger);
