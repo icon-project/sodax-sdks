@@ -41,10 +41,10 @@ async function testStacksRawIntent() {
       deadline: BigInt(Math.floor(Date.now() / 1000) + 600),
       allowPartialFill: false,
       srcAddress, // real address — used for hub-wallet derivation + the intent record
-      srcPublicKey, // the public key — used to build the unsigned source tx
       dstAddress: '0x1468d3529032106291433B7e9e3026dF1Ff78F31',
       data: '0x',
     },
+    extras: { srcPublicKey }, // the public key — used to build the unsigned source tx (Stacks-only extra)
     raw: true, // ← returns the unsigned tx, no broadcast (walletProvider is forbidden in raw mode)
   });
 

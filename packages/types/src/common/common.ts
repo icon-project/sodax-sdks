@@ -423,13 +423,18 @@ export type WalletProviderSlot<K extends SpokeChainKey | ChainType, Raw extends 
   : { raw?: false; walletProvider: GetWalletProviderType<K> };
 
 /**
- * Standard exec-mode wrapper for hub/spoke flows: bounded `params`, optional relay toggles,
- * plus {@link WalletProviderSlot} (`raw: true` for unsigned payloads, otherwise `walletProvider` required).
- * Compose feature-specific extras at the alias site, e.g.
- * `SpokeExecActionParams<K, Raw, P> & { fee?: PartnerFee }`.
+ * Standard exec-mode wrapper for hub/spoke flows: bounded `params`, optional per-action `extras`,
+ * optional relay toggles, plus {@link WalletProviderSlot} (`raw: true` for unsigned payloads,
+ * otherwise `walletProvider` required).
+ *
+ * Per-action data beyond `params` goes in the typed `extras` slot (`E`), parameterized like
+ * `params` so a feature can key it off `K`, e.g. `SpokeExecActionParams<K, Raw, P, MyExtras<K>>`.
+ * `E` defaults to `never`, so callers that don't opt in get `extras?: never` (effectively absent).
+ * Simple one-off modifiers may still be intersected at the alias site instead.
  */
-export type SpokeExecActionParams<K extends SpokeChainKey, Raw extends boolean, P> = {
+export type SpokeExecActionParams<K extends SpokeChainKey, Raw extends boolean, P, E = never> = {
   params: P;
+  extras?: E;
   skipSimulation?: boolean;
   timeout?: number;
 } & WalletProviderSlot<K, Raw>;

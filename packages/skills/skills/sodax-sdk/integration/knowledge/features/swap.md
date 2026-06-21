@@ -21,7 +21,9 @@ Two execution paths:
 ```ts
 sodax.swaps.swap<K extends SpokeChainKey>(action: SwapActionParams<K, false>): Promise<Result<SwapResponse, SodaxError>>;
 
-sodax.swaps.getQuote(payload: SolverIntentQuoteRequest): Promise<Result<SolverIntentQuoteResponse, SolverErrorResponse>>;
+sodax.swaps.getQuote(payload: GetQuoteParams): Promise<Result<SolverIntentQuoteResponse, SolverErrorResponse>>;
+//   GetQuoteParams = SolverIntentQuoteRequest & { partnerFee?: PartnerFee } — pass the request as before;
+//   optionally add `partnerFee` to override the configured swap fee for this quote (matches extras.partnerFee).
 //   Preview the output amount before signing — useful for UX confirmations / bot previews.
 
 sodax.swaps.createIntent<K extends SpokeChainKey, Raw extends boolean>(

@@ -44,6 +44,14 @@ import type { SodaxDefaultConfig } from '../sodax-config/sodax-config.js';
 export type QuoteTypeV2 = 'exact_input';
 
 /**
+ * JSON-safe partner fee for swap requests. Wire mirror of the SDK `PartnerFee` union, with the
+ * bigint `amount` projected to a decimal `string`. `address` is the EVM hub fee receiver; provide
+ * either a fixed `amount` (input token's smallest unit, decimal string) or a `percentage` (basis
+ * points, e.g. 100 = 1%). If both are present the backend uses `amount`, matching the SDK.
+ */
+export type PartnerFeeV2 = { address: string; amount: string } | { address: string; percentage: number };
+
+/**
  * Solver intent status code:
  * -1 NOT_FOUND, 1 NOT_STARTED_YET, 2 STARTED_NOT_FINISHED, 3 SOLVED (terminal), 4 FAILED (terminal).
  */
@@ -200,6 +208,8 @@ export interface QuoteRequestV2 {
   srcAddress?: string;
   /** Destination address — required only when `includeTxData=true`; ignored otherwise. */
   dstAddress?: string;
+  /** Optional per-request partner-fee override; defaults to the backend's configured fee. Keeps the fee-adjusted quote (and the `includeTxData` intent) consistent with `createIntent`. */
+  partnerFee?: PartnerFeeV2;
 }
 
 /** POST /swaps/quote — query params. */
@@ -265,6 +275,8 @@ export interface CreateIntentParamsV2 {
   solver?: string;
   /** Arbitrary calldata hex string. Defaults to `0x`. */
   data?: string;
+  /** Optional per-request partner-fee override embedded into the built intent. When omitted the backend applies its configured default. */
+  partnerFee?: PartnerFeeV2;
 }
 
 /** POST /swaps/allowance/check — response body. */
@@ -670,8 +682,10 @@ export interface ISwapsApiV2 {
 //
 // `SodaxDefaultConfig` is the default/static data shape ONLY — NOT the merged
 // `SodaxConfig` (`SodaxDefaultConfig & SodaxOptions`). Client options never travel on
-// the wire: the global `fee`, the `logger`, and every per-feature `partnerFee` override
-// live on `SodaxOptions`, resolved client-side, so they are all excluded here.
+// the CONFIG wire: the global `fee`, the `logger`, and every per-feature `partnerFee` CONFIG
+// override live on `SodaxOptions`, resolved client-side, so they are all excluded from this
+// config contract. (Config only — distinct from a swap REQUEST, which may carry a per-request
+// `partnerFee`; see `CreateIntentParamsV2` / `QuoteRequestV2` above.)
 //
 // Unlike the swaps section above — which re-declares every shape with plain
 // primitives — the config section REUSES the canonical `SodaxDefaultConfig` type tree
@@ -686,9 +700,10 @@ export interface ISwapsApiV2 {
 //   1. `relay.relayChainIdMap`                         Record<…, bigint> → Record<string, string>
 //   2. `dex.concentratedLiquidityConfig.defaultBitmap` bigint            → string
 //
-// There is no partner-fee entry: partner fees are options on `SodaxOptions`, and
-// `SodaxDefaultConfig` already exposes only static `*DefaultConfig` per-feature configs, so no
-// option ever reaches this contract (see `SodaxConfigV2` below).
+// There is no partner-fee entry in this config contract: the partner-fee CONFIG is an option on
+// `SodaxOptions`, and `SodaxDefaultConfig` exposes only static `*DefaultConfig` per-feature configs,
+// so no config option ever reaches this contract (see `SodaxConfigV2` below). This constrains the
+// config wire only — a per-request swap `partnerFee` still lives on the swap request DTOs above.
 
 // ──────────────────────────────────────────────────────────────────────
 // Relay (bigint #1) and DEX (bigint #2)

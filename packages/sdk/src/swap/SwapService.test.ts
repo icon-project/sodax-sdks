@@ -32,6 +32,7 @@ import type {
 } from '../index.js';
 import { Sodax } from '../shared/entities/Sodax.js';
 import { isSodaxError, SodaxError } from '../errors/SodaxError.js';
+import { adjustAmountByFee } from '../shared/utils/shared-utils.js';
 
 // SwapService imports SonicSpokeService, EvmSolverService, etc. via the SDK barrel
 // (`../index.js`). Under Vitest's module graph the barrel's re-export ordering makes a direct
@@ -424,6 +425,29 @@ describe('SwapService.createIntent — narrows walletProvider from params.srcCha
       void svc.createIntent<SpokeChainKey, false>({ params, walletProvider: mockEvmProvider });
       void svc.createIntent<SpokeChainKey, false>({ params, walletProvider: mockSolanaProvider });
       void svc.createIntent<SpokeChainKey, false>({ params, walletProvider: mockStellarProvider });
+    }
+  });
+
+  it('extras.srcPublicKey is keyed off K — typeable for Stacks, rejected elsewhere', () => {
+    if (false as boolean) {
+      // Stacks: srcPublicKey is part of the extras type.
+      void svc.createIntent({
+        params: intentInput(ChainKeys.STACKS_MAINNET),
+        extras: { srcPublicKey: '02ab' },
+        raw: true,
+      });
+      // partnerFee is chain-agnostic — accepted on any chain.
+      void svc.createIntent({
+        params: intentInput(ChainKeys.BSC_MAINNET),
+        extras: { partnerFee: { address: '0x00000000000000000000000000000000feec0b02', percentage: 100 } },
+        raw: true,
+      });
+      void svc.createIntent({
+        params: intentInput(ChainKeys.BSC_MAINNET),
+        // @ts-expect-error — srcPublicKey is `never` for non-Stacks chains (EVM here).
+        extras: { srcPublicKey: '02ab' },
+        raw: true,
+      });
     }
   });
 });
@@ -1733,6 +1757,97 @@ describe('SwapService.submitIntent', () => {
 // Batch 4: quote request — adjusts amount by partner fee before delegating.
 // =========================================================================
 
+describe('SwapService.createIntent — extras (partnerFee + srcPublicKey)', () => {
+  // Distinct valid addresses so the override is provably different from the configured fee.
+  const CONFIGURED_FEE = { address: '0x00000000000000000000000000000000feec0a01', percentage: 50 } as const;
+  const OVERRIDE_FEE = { address: '0x00000000000000000000000000000000feec0b02', percentage: 100 } as const;
+
+  it('forwards extras.partnerFee to EvmSolverService.constructCreateIntentData, overriding the configured fee', async () => {
+    const svc = sodax.swaps;
+    vi.spyOn(svc.config, 'swapPartnerFee', 'get').mockReturnValue(CONFIGURED_FEE);
+    mocks.getUserHubWalletAddress.mockResolvedValueOnce('0xhubwallet');
+    mocks.constructCreateIntentData.mockReturnValueOnce(['0xintentdata', makeIntent(ChainKeys.BSC_MAINNET), 42n]);
+    vi.spyOn(svc.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: '0xdeposit-hash' });
+
+    const result = await svc.createIntent({
+      params: intentInput(ChainKeys.BSC_MAINNET),
+      extras: { partnerFee: OVERRIDE_FEE },
+      raw: false,
+      walletProvider: mockEvmProvider,
+    });
+
+    expect(result.ok).toBe(true);
+    // 4th positional arg to constructCreateIntentData is the effective partner fee.
+    expect(mocks.constructCreateIntentData.mock.calls.at(-1)?.[3]).toEqual(OVERRIDE_FEE);
+  });
+
+  it('falls back to the configured swap fee when extras.partnerFee is omitted', async () => {
+    const svc = sodax.swaps;
+    vi.spyOn(svc.config, 'swapPartnerFee', 'get').mockReturnValue(CONFIGURED_FEE);
+    mocks.getUserHubWalletAddress.mockResolvedValueOnce('0xhubwallet');
+    mocks.constructCreateIntentData.mockReturnValueOnce(['0xintentdata', makeIntent(ChainKeys.BSC_MAINNET), 42n]);
+    vi.spyOn(svc.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: '0xdeposit-hash' });
+
+    const result = await svc.createIntent({
+      params: intentInput(ChainKeys.BSC_MAINNET),
+      raw: false,
+      walletProvider: mockEvmProvider,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(mocks.constructCreateIntentData.mock.calls.at(-1)?.[3]).toEqual(CONFIGURED_FEE);
+  });
+
+  it('forwards extras.partnerFee as the fee on the Sonic (hub) intent path', async () => {
+    const svc = sodax.swaps;
+    const fakeIntent = makeIntent(ChainKeys.SONIC_MAINNET);
+    mocks.getUserHubWalletAddress.mockResolvedValueOnce('0xhubwallet');
+    mocks.sonicCreateSwapIntent.mockResolvedValueOnce(['0xexec-hash', fakeIntent, 0n, '0xdata']);
+
+    const result = await svc.createIntent({
+      params: intentInput(ChainKeys.SONIC_MAINNET),
+      extras: { partnerFee: OVERRIDE_FEE },
+      raw: false,
+      walletProvider: mockEvmProvider,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(mocks.sonicCreateSwapIntent.mock.calls.at(-1)?.[0].fee).toEqual(OVERRIDE_FEE);
+  });
+
+  it('passes extras.srcPublicKey through to SpokeService.deposit for a Stacks raw intent', async () => {
+    const svc = sodax.swaps;
+    const srcPublicKey = '025259f813b57dd5c3fcac09776d767a49f6dd77bba5895823b891e31b10a96a5d';
+    mocks.getUserHubWalletAddress.mockResolvedValueOnce('SP-hub-wallet');
+    mocks.constructCreateIntentData.mockReturnValueOnce(['0xintentdata', makeIntent(), 0n]);
+    vi.spyOn(svc.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: { payload: '0xraw' } as never });
+
+    const result = await svc.createIntent({
+      params: intentInput(ChainKeys.STACKS_MAINNET),
+      extras: { srcPublicKey },
+      raw: true,
+    });
+
+    expect(result.ok).toBe(true);
+    const depositCall = (svc.spoke.deposit as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0];
+    expect(depositCall.srcPublicKey).toBe(srcPublicKey);
+  });
+
+  it('rejects a Stacks raw intent when extras.srcPublicKey is missing', async () => {
+    const result = await sodax.swaps.createIntent({
+      params: intentInput(ChainKeys.STACKS_MAINNET),
+      raw: true,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(isSodaxError(result.error)).toBe(true);
+      expect(result.error.code).toBe('VALIDATION_FAILED');
+      expect(result.error.message).toContain('srcPublicKey');
+    }
+  });
+});
+
 describe('SwapService.getQuote', () => {
   const baseQuoteRequest = {
     token_src: '0x2170Ed0880ac9A755fd29B2688956BD959F933F8',
@@ -1775,6 +1890,19 @@ describe('SwapService.getQuote', () => {
     const result = await sodax.swaps.getQuote(baseQuoteRequest);
 
     expect(result).toBe(failure);
+  });
+
+  it('adjusts the amount by a per-call partnerFee override when supplied', async () => {
+    mocks.solverGetQuote.mockResolvedValueOnce({ ok: true, value: {} as never });
+    const overrideFee = { address: '0x00000000000000000000000000000000feec0b02', percentage: 100 } as const;
+
+    await sodax.swaps.getQuote({ ...baseQuoteRequest, partnerFee: overrideFee } as never);
+
+    const forwarded = mocks.solverGetQuote.mock.calls.at(-1)?.[0] as { amount: bigint };
+    const baseAmount = (baseQuoteRequest as unknown as { amount: bigint }).amount;
+    // Override beats the (unconfigured) default fee, so the forwarded amount is fee-adjusted.
+    expect(forwarded.amount).toBe(adjustAmountByFee(baseAmount, overrideFee, 'exact_input'));
+    expect(forwarded.amount).not.toBe(baseAmount);
   });
 });
 
