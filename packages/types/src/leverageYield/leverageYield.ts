@@ -1,5 +1,6 @@
 import type { Address } from '../shared/shared.js';
 import { LsodaTokens, SodaTokens } from '../chains/tokens.js';
+import type { PartnerFee, Prettify } from '../common/common.js';
 
 /**
  * A single deployed LeverageYieldVault.
@@ -121,10 +122,17 @@ export const leverageYieldVaults = [
   },
 ] as const satisfies readonly LeverageYieldVault[];
 
-export type LeverageYieldConfig = {
+// options for the leverage yield service to be configured by the integrator
+export type LeverageYieldOptions = {
+  partnerFee?: PartnerFee; // enables override of global partner fee
+};
+
+export type LeverageYieldConfig = Prettify<LeverageYieldDefaultConfig & LeverageYieldOptions>;
+
+export type LeverageYieldDefaultConfig = {
   vaults: readonly LeverageYieldVault[];
 };
 
 export const leverageYieldConfig = {
   vaults: leverageYieldVaults,
-} as const satisfies LeverageYieldConfig;
+} as const satisfies LeverageYieldDefaultConfig;

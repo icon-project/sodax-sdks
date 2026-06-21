@@ -25,8 +25,10 @@ import {
   type SwapsConfig,
   type BridgeConfig,
   type GetSpokeChainConfigType,
-  type DeepPartial,
   type SodaxLogger,
+  type PartnerFee,
+  type SodaxOptions,
+  type LeverageYieldConfig,
 } from '@sodax/types';
 import { isAddress } from 'viem';
 import type { BackendApiService } from '../../backendApi/BackendApiService.js';
@@ -41,12 +43,18 @@ export type ConfigServiceConstructorParams = {
    * NOT the merged result. Re-applied on top of dynamic config in {@link ConfigService.initialize} so
    * that a remote config fetch never clobbers explicit user overrides.
    */
-  userConfig?: DeepPartial<SodaxConfig>;
+  userConfig?: SodaxOptions;
   /**
    * Pre-resolved SDK log sink. Held outside the swappable `SodaxConfig` so a dynamic config fetch
    * in {@link ConfigService.initialize} never replaces it. Defaults to the console logger when omitted.
    */
   logger?: SodaxLogger;
+  /**
+   * Global partner fee (the `fee` option passed to `new Sodax(...)`). Held outside the swappable
+   * `SodaxConfig` — like {@link logger} — so a dynamic config fetch never replaces it. The backend
+   * never supplies it; it is purely a client-side option.
+   */
+  fee?: PartnerFee;
 };
 
 /**
@@ -55,13 +63,20 @@ export type ConfigServiceConstructorParams = {
 export class ConfigService {
   private sodax: SodaxConfig;
   private readonly api: BackendApiService;
-  private readonly userConfig?: DeepPartial<SodaxConfig>;
+  private readonly userConfig?: SodaxOptions;
 
   /**
    * SDK log sink. Resolved once at construction and kept independent of {@link sodax} so that
    * {@link initialize}'s dynamic-config swap never clobbers it. Read by services via `config.logger`.
    */
   public readonly logger: SodaxLogger;
+
+  /**
+   * Global partner fee. Resolved once at construction and kept independent of {@link sodax} so that
+   * {@link initialize}'s dynamic-config swap never clobbers it. The backend never supplies it — it is
+   * a client-side option set via `new Sodax({ fee })`. Per-feature overrides live on the feature config.
+   */
+  public readonly fee: PartnerFee | undefined;
 
   private initialized = false;
 
@@ -76,11 +91,12 @@ export class ConfigService {
   private chainToSupportedTokenAddressMap!: Map<SpokeChainKey, Set<string>>;
   private hubAssetToXTokenMap!: Map<Address, XToken>;
 
-  constructor({ api, config, userConfig, logger }: ConfigServiceConstructorParams) {
+  constructor({ api, config, userConfig, logger, fee }: ConfigServiceConstructorParams) {
     this.api = api;
     this.sodax = config;
     this.userConfig = userConfig;
     this.logger = logger ?? resolveLogger(undefined);
+    this.fee = fee;
     this.loadSodaxConfigDataStructures(config);
   }
 
@@ -380,6 +396,29 @@ export class ConfigService {
 
   get moneyMarket(): MoneyMarketConfig {
     return this.sodax.moneyMarket;
+  }
+
+  get leverageYield(): LeverageYieldConfig {
+    return this.sodax.leverageYield;
+  }
+
+  // Effective partner fee per feature: the feature-specific override if set, otherwise the global
+  // `fee` client option ({@link fee}). The global fee is the default, overridable per-feature. `??`
+  // (never a merge) keeps the chosen PartnerFee variant intact — no discriminated-union hybrid.
+  get swapPartnerFee(): PartnerFee | undefined {
+    return this.swaps.partnerFee ?? this.fee;
+  }
+
+  get moneyMarketPartnerFee(): PartnerFee | undefined {
+    return this.moneyMarket.partnerFee ?? this.fee;
+  }
+
+  get bridgePartnerFee(): PartnerFee | undefined {
+    return this.bridge.partnerFee ?? this.fee;
+  }
+  
+  get leverageYieldPartnerFee(): PartnerFee | undefined {
+    return this.leverageYield.partnerFee ?? this.fee;
   }
 
   get dex(): DexConfig {
