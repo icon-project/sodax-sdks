@@ -650,8 +650,9 @@ export class SwapService {
     _params: SwapActionParams<K, Raw>,
   ): Promise<Result<CreateIntentResult<K, Raw>, SwapCreateIntentError>> {
     const { params, skipSimulation, extras } = _params;
-    // Per-action partnerFee overrides the effective swap fee (per-feature override, else global); undefined = no fee.
-    const partnerFee = extras?.partnerFee ?? this.config.swapPartnerFee;
+    // Per-action `extras.partnerFee` is primary; `this.partnerFee` (constructor snapshot of the effective
+    // swap fee, `swaps.partnerFee ?? fee`) is the fallback default. undefined = no fee.
+    const partnerFee = extras?.partnerFee ?? this.partnerFee;
     const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
 
     try {

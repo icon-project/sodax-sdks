@@ -1762,14 +1762,22 @@ describe('SwapService.createIntent — extras (partnerFee + srcPublicKey)', () =
   const CONFIGURED_FEE = { address: '0x00000000000000000000000000000000feec0a01', percentage: 50 } as const;
   const OVERRIDE_FEE = { address: '0x00000000000000000000000000000000feec0b02', percentage: 100 } as const;
 
-  it('forwards extras.partnerFee to EvmSolverService.constructCreateIntentData, overriding the configured fee', async () => {
-    const svc = sodax.swaps;
-    vi.spyOn(svc.config, 'swapPartnerFee', 'get').mockReturnValue(CONFIGURED_FEE);
-    mocks.getUserHubWalletAddress.mockResolvedValueOnce('0xhubwallet');
-    mocks.constructCreateIntentData.mockReturnValueOnce(['0xintentdata', makeIntent(ChainKeys.BSC_MAINNET), 42n]);
-    vi.spyOn(svc.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: '0xdeposit-hash' });
+  // createIntent's fee fallback is `this.partnerFee` — the constructor snapshot of config.swapPartnerFee.
+  // Build a Sodax whose configured swap fee IS CONFIGURED_FEE, with createIntent's deps stubbed.
+  const makeConfiguredFeeSwaps = () => {
+    const s = new Sodax({ swaps: { partnerFee: CONFIGURED_FEE } });
+    vi.spyOn(s.config, 'isValidOriginalAssetAddress').mockReturnValue(true);
+    vi.spyOn(s.config, 'isValidSpokeChainKey').mockReturnValue(true);
+    vi.spyOn(s.hubProvider, 'getUserHubWalletAddress').mockResolvedValue('0xhubwallet');
+    vi.spyOn(s.spoke, 'deposit').mockResolvedValue({ ok: true, value: '0xdeposit-hash' });
+    return s.swaps;
+  };
 
-    const result = await svc.createIntent({
+  it('uses extras.partnerFee, overriding the configured swap fee (this.partnerFee)', async () => {
+    const swaps = makeConfiguredFeeSwaps();
+    mocks.constructCreateIntentData.mockReturnValueOnce(['0xintentdata', makeIntent(ChainKeys.BSC_MAINNET), 42n]);
+
+    const result = await swaps.createIntent({
       params: intentInput(ChainKeys.BSC_MAINNET),
       extras: { partnerFee: OVERRIDE_FEE },
       raw: false,
@@ -1777,18 +1785,15 @@ describe('SwapService.createIntent — extras (partnerFee + srcPublicKey)', () =
     });
 
     expect(result.ok).toBe(true);
-    // 4th positional arg to constructCreateIntentData is the effective partner fee.
+    // 4th positional arg to constructCreateIntentData is the effective partner fee — the override wins.
     expect(mocks.constructCreateIntentData.mock.calls.at(-1)?.[3]).toEqual(OVERRIDE_FEE);
   });
 
-  it('falls back to the configured swap fee when extras.partnerFee is omitted', async () => {
-    const svc = sodax.swaps;
-    vi.spyOn(svc.config, 'swapPartnerFee', 'get').mockReturnValue(CONFIGURED_FEE);
-    mocks.getUserHubWalletAddress.mockResolvedValueOnce('0xhubwallet');
+  it('falls back to the configured swap fee (this.partnerFee) when extras.partnerFee is omitted', async () => {
+    const swaps = makeConfiguredFeeSwaps();
     mocks.constructCreateIntentData.mockReturnValueOnce(['0xintentdata', makeIntent(ChainKeys.BSC_MAINNET), 42n]);
-    vi.spyOn(svc.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: '0xdeposit-hash' });
 
-    const result = await svc.createIntent({
+    const result = await swaps.createIntent({
       params: intentInput(ChainKeys.BSC_MAINNET),
       raw: false,
       walletProvider: mockEvmProvider,

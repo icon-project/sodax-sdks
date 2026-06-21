@@ -54,10 +54,19 @@ Generic `K extends SpokeChainKey` carries the literal source chain key. `WalletP
 ```ts
 type SwapActionParams<K extends SpokeChainKey, Raw extends boolean> = {
   params: CreateIntentParams<K>;
+  extras?: SwapExtras<K>;    // per-action overrides (optional)
   skipSimulation?: boolean;
   timeout?: number;
-  fee?: PartnerFee;
 } & WalletProviderSlot<K, Raw>;
+```
+
+`extras` and every field on it are optional. `partnerFee` overrides the configured swap fee for this single action (the same override `getQuote` accepts, below); `srcPublicKey` is chain-key-gated — only typeable when `K` is a Stacks chain (`never` elsewhere) and only needed for raw (`raw: true`) Stacks `createIntent`. `LimitOrderActionParams<K, Raw>` carries the same `SwapExtras<K>`.
+
+```ts
+type SwapExtras<K extends SpokeChainKey> = {
+  partnerFee?: PartnerFee;   // overrides the configured swap fee for this action; falls back to config
+  srcPublicKey?: string;     // Stacks only (raw createIntent): signer public key. Chain-key-gated — `never` on non-Stacks K.
+};
 ```
 
 `CreateIntentParams<K>`:
