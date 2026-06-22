@@ -8,8 +8,9 @@ Import everything from `@sodax/sdk`. The barrel re-exports the entire `@sodax/ty
 import {
   // Main entry
   Sodax,
-  type SodaxOptions, // constructor param: DeepPartial<SodaxConfig> & { logger? }
-  type SodaxConfig,
+  type SodaxOptions, // constructor param: DeepPartial<SodaxDefaultConfig> & client options (logger + global fee)
+  type SodaxConfig, // merged result: SodaxDefaultConfig & client options (e.g. sodax.instanceConfig)
+  type SodaxDefaultConfig, // static data contract the backend serves / defaults are built from
   type DeepPartial,
 
   // Logging (see recipes/logging.md)
@@ -67,6 +68,7 @@ import {
   dexInvariant,
   partnerInvariant,
   recoveryInvariant,
+  leverageYieldInvariant,
   mapRelayFailure,
 
   // Tokens
@@ -108,6 +110,17 @@ import {
   type ClClaimRewardsParams,
   type MigrationParams,
   type UnifiedBnUSDMigrateParams,
+  type LeverageYieldSwapDepositParams,
+  type LeverageYieldSwapWithdrawParams,
+  type LeverageYieldSwapPayload,
+  type VaultSwapActionParams,
+  type VaultSwapResponse,
+  type CreateVaultIntentResult,
+  type LeverageYieldApr,
+  type LeverageYieldEffectiveApr,
+  type LeverageYieldLsdApr,
+  type LeverageYieldPosition,
+  type LeverageYieldVault,
   // …
 
   // Backend / relay

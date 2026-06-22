@@ -10,6 +10,7 @@ export * from './hooks/index.js';
 export * from './icon/index.js';
 export * from './injective/index.js';
 export * from './moneyMarket/index.js';
+export * from './leverageYield/index.js';
 export * from './near/index.js';
 export * from './solana/index.js';
 export * from './stacks/index.js';

@@ -14,6 +14,8 @@ import type {
   IntentDeliveryInfo,
   IntentRelayRequest,
   WaitUntilIntentExecutedPayload,
+  RelayTxStatus,
+  PacketData,
 } from '../../types/relay-types.js';
 import { isBitcoinChainKeyType, isSolanaChainKeyType } from '../../guards.js';
 
@@ -24,9 +26,9 @@ export type {
   IntentDeliveryInfo,
   IntentRelayRequest,
   WaitUntilIntentExecutedPayload,
+  RelayTxStatus,
+  PacketData,
 };
-
-export type RelayTxStatus = 'pending' | 'validating' | 'executing' | 'executed';
 
 /**
  * Stable error message strings emitted by relay-layer helpers ({@link submitTransaction},
@@ -92,19 +94,6 @@ export type GetPacketParams = {
 export type SubmitTxResponse = {
   success: boolean;
   message: string;
-};
-
-export type PacketData = {
-  src_chain_id: number;
-  src_tx_hash: string;
-  src_address: string;
-  status: RelayTxStatus;
-  dst_chain_id: number;
-  conn_sn: number;
-  dst_address: string;
-  dst_tx_hash: string;
-  signatures: string[];
-  payload: string;
 };
 
 export type GetTransactionPacketsResponse = {
@@ -308,7 +297,14 @@ async function pollForExecutedPacket(payload: WaitUntilIntentExecutedPayload): P
 
   const txPackets = txPacketsResult.value;
   if (txPackets.success && txPackets.data.length > 0) {
-    const packet = txPackets.data.find(packet => packet.src_tx_hash.toLowerCase() === payload.srcTxHash.toLowerCase());
+    // A single src tx can emit multiple relay packets that all share `src_tx_hash`. Filter to the
+    // candidates, then let `selectPacket` disambiguate (defaults to first — the legacy behavior).
+    // The executed gate runs against the *selected* packet so we wait for the right packet to
+    // execute, rather than returning early when a sibling packet executes first.
+    const candidates = txPackets.data.filter(
+      packet => packet.src_tx_hash.toLowerCase() === payload.srcTxHash.toLowerCase(),
+    );
+    const packet = payload.selectPacket ? payload.selectPacket(candidates) : candidates[0];
     if (packet?.status === 'executed') {
       return { kind: 'found', packet };
     }

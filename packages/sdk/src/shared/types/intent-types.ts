@@ -1,6 +1,4 @@
-import type { Address, Hex, SpokeChainKey, IntentRelayChainId } from '@sodax/types';
-import type { HookKind } from '@sodax/types';
-
+import type { Address, GetChainType, Hex, IntentRelayChainId, PartnerFee, SpokeChainKey, HookKind } from '@sodax/types';
 /**
  * High-level request for routing an intent's output through a deployed delivery hook. Pick a hook by
  * its {@link HookKind}; the SDK resolves the hook's deployed address and encodes the payload it expects
@@ -12,6 +10,7 @@ import type { HookKind } from '@sodax/types';
 export type HookRequest = { kind: typeof HookKind.HYPERCORE_DEPOSIT };
 // Future hooks that need extra params become additional union members, e.g.
 //   | { kind: typeof HookKind.SOME_HOOK; someParam: Address };
+
 
 export type CreateIntentParams<K extends SpokeChainKey = SpokeChainKey> = {
   inputToken: string;
@@ -51,6 +50,20 @@ export type CreateLimitOrderParams<K extends SpokeChainKey = SpokeChainKey> = Om
   CreateIntentParams<K>,
   'deadline'
 > & { deadline?: bigint };
+
+// srcPublicKey only matters for Stacks (its `SP…` address can't be derived at raw-tx build time);
+// key it off K so non-Stacks actions can't set it.
+type SrcPublicKeySlot<K extends SpokeChainKey> =
+  GetChainType<K> extends 'STACKS' ? { srcPublicKey?: string } : { srcPublicKey?: never };
+
+/**
+ * Per-action extras for swap intent creation, supplied via the `extras` slot of the swap
+ * action params.
+ */
+export type SwapExtras<K extends SpokeChainKey = SpokeChainKey> = {
+  /** Overrides the configured swap partner fee for this action; falls back to config when omitted. */
+  partnerFee?: PartnerFee;
+} & SrcPublicKeySlot<K>;
 
 export type Intent = {
   intentId: bigint;

@@ -12,6 +12,7 @@ Mandatory shape rules for every `queryKey` and `mutationKey`. Mechanically enfor
 | `bitcoin/` | `'bitcoin'` |
 | `bridge/` | `'bridge'` |
 | `dex/` | `'dex'` |
+| `leverageYield/` | `'leverageYield'` |
 | `mm/` | `'mm'` |
 | `partner/` | `'partner'` |
 | `recovery/` | `'recovery'` |
@@ -148,6 +149,20 @@ Skip if you're writing a feature hook for the first time and want to align with 
 | `['staking', 'claim']` | `useClaim` |
 | `['staking', 'cancelUnstake']` | `useCancelUnstake` |
 | `['staking', 'approve', 'stake' \| 'unstake' \| 'instantUnstake']` | `useStakeApprove` / `useUnstakeApprove` / `useInstantUnstakeApprove` |
+
+### Leverage Yield
+
+| Key | Hook |
+|---|---|
+| `['leverageYield', 'effectiveApr', vault]` | `useLeverageYieldEffectiveApr` |
+| `['leverageYield', 'position', vault]` | `useLeverageYieldPosition` |
+| `['leverageYield', 'totalAssets', vault]` | `useLeverageYieldTotalAssets` |
+| `['leverageYield', 'previewRedeem', vault, shares.toString()]` | `useLeverageYieldPreviewRedeem` |
+| `['leverageYield', 'shareBalance', vault, chainKey, address]` | `useLeverageYieldShareBalances` (singular `shareBalance`; one query per holder) |
+| `['leverageYield', 'deposit']` | `useLeverageYieldDeposit` mutation |
+| `['leverageYield', 'withdraw']` | `useLeverageYieldWithdraw` mutation |
+| `['leverageYield', 'vaultSwap']` | `useLeverageYieldVaultSwap` mutation |
+| `['leverageYield', 'notifySolver']` | `useLeverageYieldNotifySolver` mutation |
 
 ### Bridge / DEX / Migration / Bitcoin / etc.
 

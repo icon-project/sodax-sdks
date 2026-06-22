@@ -1,0 +1,42 @@
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import { useSodaxContext } from '../shared/useSodaxContext.js';
+import type { Address, LeverageYieldEffectiveApr } from '@sodax/sdk';
+import type { ReadHookParams } from '../shared/types.js';
+
+export type UseLeverageYieldEffectiveAprParams = ReadHookParams<
+  LeverageYieldEffectiveApr,
+  { vault: Address | undefined }
+>;
+
+/**
+ * Reads a leverage-yield vault's effective APR — AAVE supply/borrow rates plus the LSD
+ * staking yield, with the vault's leverage formula re-applied on the boosted supply side.
+ *
+ * The underlying SDK call does the on-chain reads (AAVE rates + `targetLTV`) and the
+ * off-chain LSD fetch in parallel. Rates drift slowly, so the default refresh is 60s.
+ *
+ * @example
+ * ```typescript
+ * const { data: apr } = useLeverageYieldEffectiveApr({ params: { vault: vault.vault } });
+ * ```
+ */
+export function useLeverageYieldEffectiveApr({
+  params,
+  queryOptions,
+}: UseLeverageYieldEffectiveAprParams = {}): UseQueryResult<LeverageYieldEffectiveApr, Error> {
+  const { sodax } = useSodaxContext();
+  const vault = params?.vault;
+
+  return useQuery<LeverageYieldEffectiveApr, Error>({
+    queryKey: ['leverageYield', 'effectiveApr', vault],
+    queryFn: async () => {
+      if (!vault) throw new Error('vault is required');
+      const result = await sodax.leverageYield.getEffectiveApr(vault);
+      if (!result.ok) throw result.error;
+      return result.value;
+    },
+    enabled: !!vault,
+    refetchInterval: 60_000,
+    ...queryOptions,
+  });
+}

@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import type { RadfiMaxSpentResponse } from '@sodax/sdk';
+import type { RadfiMaxSpentResponse } from '@sodax/dapp-kit';
 import { Loader2, ArrowRight, Info } from 'lucide-react';
 import { formatUnits, parseUnits } from 'viem';
 

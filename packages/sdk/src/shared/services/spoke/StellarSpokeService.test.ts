@@ -277,6 +277,20 @@ describe('CustomStellarAccount', () => {
     // `new Account(..., this.sequenceNumber.toString())`, so the clone reports the bumped value.
     expect(clone.sequenceNumber()).toBe('43');
   });
+
+  it('decrementSequenceNumber steps the running counter back without throwing when above the start', () => {
+    const account = new CustomStellarAccount({ account_id: SRC_ADDR, sequence: '42' });
+    account.incrementSequenceNumber();
+    expect(() => account.decrementSequenceNumber()).not.toThrow();
+    expect(account.getSequenceNumber()).toBe(42n);
+  });
+
+  it('decrementSequenceNumber throws at the starting sequence (cannot go below the start)', () => {
+    const account = new CustomStellarAccount({ account_id: SRC_ADDR, sequence: '42' });
+    expect(() => account.decrementSequenceNumber()).toThrow(/cannot be decremented below the starting sequence number/);
+    // sequence is unchanged after the rejected decrement
+    expect(account.getSequenceNumber()).toBe(42n);
+  });
 });
 
 // =========================================================================
@@ -474,6 +488,9 @@ describe('StellarSpokeService.sendMessage', () => {
     expect(result.value).toBe(0n);
     expect(typeof result.data).toBe('string');
     expect(result.data.length).toBeGreaterThan(0);
+    // The raw XDR must be a fully-assembled, parseable transaction (footprint + resource fees).
+    // Guards the original `txMalformed` regression where the unassembled tx was returned.
+    expect(() => TransactionBuilder.fromXDR(result.data, NETWORK_PASSPHRASE)).not.toThrow();
   });
 
   it('raw=false → delegates through submitOrRestoreAndRetry to walletProvider.signTransaction + sorobanServer.sendTransaction', async () => {
@@ -540,6 +557,9 @@ describe('StellarSpokeService.deposit', () => {
     expect(result.value).toBe(1_000n);
     expect(typeof result.data).toBe('string');
     expect(result.data.length).toBeGreaterThan(0);
+    // The raw XDR must be a fully-assembled, parseable transaction (footprint + resource fees).
+    // Guards the original `txMalformed` regression where the unassembled tx was returned.
+    expect(() => TransactionBuilder.fromXDR(result.data, NETWORK_PASSPHRASE)).not.toThrow();
   });
 
   it('raw=false → delegates through submitOrRestoreAndRetry and returns the hash', async () => {
@@ -756,6 +776,9 @@ describe('StellarSpokeService.requestTrustline', () => {
     expect(result.value).toBe(5_000n);
     expect(typeof result.data).toBe('string');
     expect(result.data.length).toBeGreaterThan(0);
+    // changeTrust is a classic operation (no Soroban assembly), but the raw XDR must still be a
+    // valid, parseable transaction envelope.
+    expect(() => TransactionBuilder.fromXDR(result.data, NETWORK_PASSPHRASE)).not.toThrow();
   });
 
   it('raw=false → delegates to signAndSendTransaction and returns the hash', async () => {

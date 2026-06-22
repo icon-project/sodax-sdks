@@ -1,6 +1,10 @@
 ---
 name: sodax-sdk-bridge
 description: 'Granular skill for the @sodax/sdk v2 bridge feature only — cross-chain token transfer via vault. Use when the task is specifically bridging (e.g. "bridge tokens cross-chain with Sodax", "Sodax bridge", "transfer USDC from Arbitrum to Stellar via Sodax", "check bridgeable amount"). The bridge() method returns `TxHashPair = { srcChainTxHash, dstChainTxHash }` for every cross-chain mutation. Covers BOTH integration (new v2 code) and migration (port v1 BridgeService). Skill links into the parent sodax-sdk knowledge tree. For React dapps, prefer sodax-dapp-kit.'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # Bridge (Core SDK granular skill)

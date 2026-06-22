@@ -1,6 +1,10 @@
 ---
 name: sodax-dapp-kit-bridge
 description: 'Granular skill for the @sodax/dapp-kit v2 bridge feature only — React Query hooks for cross-chain token transfer via the hub-and-spoke vault: useBridge, useBridgeApprove, useBridgeAllowance, useGetBridgeableAmount, useGetBridgeableTokens. Use when a React dapp task is specifically bridging (e.g. "useBridge with dapp-kit", "bridge tokens cross-chain in React", "check bridgeable amount hook", "list bridgeable destinations"). useBridge resolves to TxHashPair = { srcChainTxHash, dstChainTxHash }. Covers BOTH integration (new v2 hooks) and migration (port v1 bridge hooks — field renames srcChainId→srcChainKey, recipient→dstAddress, mutateAsyncSafe). Links into the parent sodax-dapp-kit knowledge tree. For backend/Node, use the sodax-sdk skill.'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # Bridge (dapp-kit granular skill)

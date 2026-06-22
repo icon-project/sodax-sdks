@@ -14,6 +14,16 @@ SODAX is a cross-chain DeFi platform built on a **hub-and-spoke architecture**, 
 
 See the [Sodax SDK README](./packages/sdk/README.md) for a deeper architectural overview.
 
+## AI Agent Skills
+
+Building with the `@sodax/*` SDKs in an AI coding agent (Claude Code, Cursor, Codex, Copilot, and 50+ others)? Install the official SODAX skills — agent-native guides covering integration and v1→v2 migration for every package:
+
+```bash
+npx skills@latest add icon-project/sodax-sdks/packages/skills
+```
+
+Browse them on [skills.sh](https://www.skills.sh/icon-project/sodax-sdks). See the [Skills Documentation](./packages/skills/README.md) for what ships and how to use it.
+
 ## Repository Structure
 
 ### Packages (`/packages`)
@@ -24,7 +34,7 @@ See the [Sodax SDK README](./packages/sdk/README.md) for a deeper architectural 
 - **wallet-sdk-core** (`/packages/wallet-sdk-core`) — Low-level multi-chain wallet providers (signing, broadcasting) for 9 chain types. Supports both private-key (scripts/testing) and browser-extension (production) configs.
 - **wallet-sdk-react** (`/packages/wallet-sdk-react`) — React layer over `wallet-sdk-core` with the `XService`/`XConnector` pattern, Zustand state persistence, and EIP-6963 wallet discovery. [Wallet SDK Documentation](./packages/wallet-sdk-react/README.md).
 - **dapp-kit** (`/packages/dapp-kit`) — High-level React hooks combining the SDK, `wallet-sdk-react`, and React Query. Modular, production-ready building blocks for dApp development. [dApp Kit Documentation](./packages/dapp-kit/README.md).
-- **skills** (`/packages/skills`) — AI-agent skills and knowledge for the `@sodax/*` SDKs (4 mode-gated skills, one per SDK package: `sdk`, `wallet-sdk-core`, `wallet-sdk-react`, `dapp-kit` — each bundling `integration/knowledge/` for new v2 code and `migration-v1-to-v2/knowledge/` for v1→v2 porting). No runtime code. Distributed via the [`skills` CLI](https://github.com/vercel-labs/skills) or `@sodax/skills` on npm. [Skills Documentation](./packages/skills/README.md).
+- **skills** (`/packages/skills`) — AI-agent skills and knowledge for the `@sodax/*` SDKs (mode-gated per-SDK-package skills: `sdk`, `wallet-sdk-core`, `wallet-sdk-react`, `dapp-kit` — each bundling `integration/knowledge/` for new v2 code and `migration-v1-to-v2/knowledge/` for v1→v2 porting — plus a cross-cutting `sodax-build` front-door / ideation skill). No runtime code. Distributed via the [`skills` CLI](https://github.com/vercel-labs/skills) or `@sodax/skills` on npm. [Skills Documentation](./packages/skills/README.md).
 
 ### Apps (`/apps`)
 

@@ -29,7 +29,8 @@ type SodaxFeature =
   | 'migration'
   | 'dex'
   | 'partner'
-  | 'recovery';
+  | 'recovery'
+  | 'leverageYield';
 ```
 
 The `(feature, code)` pair is the canonical discriminator. Loggers tag both fields; switch statements branch on both.
@@ -155,6 +156,21 @@ type LookupErrorCode = 'VALIDATION_FAILED' | 'LOOKUP_FAILED' | 'UNKNOWN';
 ### Partner (`feature: 'partner'`) and Recovery (`feature: 'recovery'`)
 
 Both follow the same shape: action methods get the full exec union (`'EXECUTION_FAILED' \| 'INTENT_CREATION_FAILED' \| ...`), read methods get `LookupErrorCode`, approve methods get `ApproveErrorCode`.
+
+### Leverage Yield (`feature: 'leverageYield'`)
+
+Action discriminator on `context.action`: `'deposit' \| 'withdraw' \| 'approve' \| 'allowanceCheck' \| 'vaultSwap'`.
+
+| Method | Narrow code union |
+|---|---|
+| `deposit`, `withdraw`, `createVaultIntent` | `CreateIntentErrorCode` (create-intent subset) |
+| `vaultSwap` | All exec codes: `VALIDATION_FAILED \| INTENT_CREATION_FAILED \| TX_VERIFICATION_FAILED \| TX_SUBMIT_FAILED \| RELAY_TIMEOUT \| RELAY_FAILED \| EXECUTION_FAILED \| EXTERNAL_API_ERROR \| UNKNOWN` |
+| `notifySolver` | `EXECUTION_FAILED \| EXTERNAL_API_ERROR \| UNKNOWN` (with `phase: 'postExecution'`) |
+| `approve` | `ApproveErrorCode` |
+| `isAllowanceValid` | `AllowanceCheckErrorCode` (action `'allowanceCheck'`) |
+| `getApr`, `getEffectiveApr`, `getLsdApr`, `getPosition`, `getTotalAssets`, `previewDeposit`, `previewWithdraw`, `previewRedeem`, `getMaxWithdraw`, `getMaxWithdrawForUser`, `getShareBalance`, `getShareBalanceForUser`, `getAsset` | `LookupErrorCode` (with `method` discriminator) |
+
+Relay/tx-verification codes appear only on `vaultSwap`; `createVaultIntent` stays within the create-intent subset. `notifySolver` is public (manual create→relay→notify) and emits the post-execution subset.
 
 ---
 

@@ -11,7 +11,7 @@ import {
   type ChainKey,
   baseChainInfo,
   RadfiApiError,
-} from '@sodax/sdk';
+} from '@sodax/dapp-kit';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));

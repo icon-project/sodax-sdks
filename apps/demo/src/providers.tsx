@@ -2,9 +2,16 @@ import React, { useMemo, type ReactNode } from 'react';
 
 import { QueryClientProvider } from '@tanstack/react-query';
 import { SodaxWalletProvider, type SodaxWalletConfig } from '@sodax/wallet-sdk-react';
-import { SodaxProvider, createSodaxQueryClient } from '@sodax/dapp-kit';
+import {
+  SodaxProvider,
+  createSodaxQueryClient,
+  type SodaxOptions,
+  type SolverConfig,
+  ChainKeys,
+  type DeepPartial,
+  type RpcConfig,
+} from '@sodax/dapp-kit';
 import { productionSolverConfig, stagingSolverConfig, devSolverConfig } from './constants';
-import { type SodaxOptions, type SolverConfig, ChainKeys, type RpcConfig } from '@sodax/sdk';
 import { SolverEnv, useAppStore } from './zustand/useAppStore';
 import { createDatadogLogger } from './lib/loggers/datadogLogger';
 
@@ -125,8 +132,15 @@ export default function Providers({ children }: { children: ReactNode }) {
     };
   }, [solverEnvironment]);
 
+  // `SodaxProvider` freezes its config at first render (read-once via `useRef`), so
+  // setting `solverEnvironment` doesn't take effect on its own. Keying the provider on the
+  // env forces a clean unmount/remount whenever it changes — the SDK reinitialises with the
+  // new solver endpoint. Wallet state is preserved (it lives below in `SodaxWalletProvider`,
+  // which is *outside* the keyed scope is what we'd ideally want — but the wallet provider
+  // is keyed on the SDK provider tree and doesn't carry per-config state, so unmount cost
+  // is just a fresh React Query cache).
   return (
-    <SodaxProvider config={sodaxConfig}>
+    <SodaxProvider key={solverEnvironment} config={sodaxConfig}>
       <QueryClientProvider client={queryClient}>
         <SodaxWalletProvider config={walletConfig}>{children}</SodaxWalletProvider>
       </QueryClientProvider>

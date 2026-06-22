@@ -16,9 +16,6 @@ import {
   useRequestTrustline,
   useBitcoinBalance,
   useNearStorageGate,
-} from '@sodax/dapp-kit';
-import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
-import {
   ChainKeys,
   type ChainType,
   type SpokeChainKey,
@@ -26,8 +23,9 @@ import {
   type GetWalletProviderType,
   type IBitcoinWalletProvider,
   type IStellarWalletProvider,
-} from '@sodax/sdk';
-import type { CreateBridgeIntentParams } from '@sodax/sdk';
+  type CreateBridgeIntentParams,
+} from '@sodax/dapp-kit';
+import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
 import { formatMutationFailureMessage } from '@/lib/utils';
 import { ArrowLeftRight, Loader2 } from 'lucide-react';

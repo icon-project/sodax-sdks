@@ -1,6 +1,10 @@
 ---
 name: sodax-sdk-dex
 description: 'Granular skill for the @sodax/sdk v2 DEX feature only — Uniswap-V3-style concentrated liquidity positions on the hub, plus AssetService for hub-asset deposit/withdraw. Use when the task is LP positions (e.g. "Sodax concentrated liquidity", "create LP position on Sodax", "increase liquidity", "decrease liquidity", "claim LP fees", "deposit hub assets for LP"). Covers BOTH integration and migration. Skill links into the parent sodax-sdk knowledge tree. For React dapps, prefer sodax-dapp-kit.'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # DEX (Core SDK granular skill)

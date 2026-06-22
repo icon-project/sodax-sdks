@@ -3,7 +3,7 @@
 Learn how to configure fees and monetize your Sodax SDK integration.
 
 When using the SODAX SDK, you can monetize your integration by collecting fees from the transactions processed through your application.
-Fees are configured globally per feature when creating the `Sodax` instance — there is no per-request override for `getQuote()` or `swap()`.
+Fees are configured globally per feature when creating the `Sodax` instance, and the swap feature additionally accepts a per-action override: `getQuote()` takes an optional `partnerFee` argument, and `swap()` / `createIntent()` read `extras.partnerFee`. When omitted, the configured fee applies.
 
 ## Defining Fee
 
@@ -58,25 +58,31 @@ const sodaxWithFees = new Sodax({
 
 ## Per-request fee configuration
 
-There is no per-request fee override for `getQuote()` or `swap()`. Fees are always taken from the global config set on `new Sodax({ swaps: { partnerFee } })`. Configure different fee rates by creating separate `Sodax` instances.
+The swap feature supports a per-action fee override that beats the configured `swaps.partnerFee` (per-feature override, else global). When omitted, the configured fee applies. This is what lets a backend construct swap intents on behalf of partners whose fee differs per request.
 
 ### Quote request
 
-`SwapService.getQuote()` automatically deducts the configured `swaps.partnerFee` from the `amount` before forwarding to the solver. No fee field appears in the request payload.
+`SwapService.getQuote()` deducts the partner fee from the `amount` before forwarding to the solver, so `quoted_amount` reflects the net output. No fee field appears in the request payload. Pass an optional `partnerFee` second argument to match a per-action override used on `createIntent` / `swap`; omit it to use the configured swap fee.
 
 ```typescript
 import {
   type SolverIntentQuoteRequest,
 } from "@sodax/sdk";
 
-const result = await sodax.swaps.getQuote({
+const quoteRequest = {
   token_src: '0x...', // The address of the source token on the spoke chain
   token_dst: '0x...', // The address of the destination token on the spoke chain
   token_src_blockchain_id: ChainKeys.BSC_MAINNET,  // Source chain key (e.g. Binance Smart Chain)
   token_dst_blockchain_id: ChainKeys.ARBITRUM_MAINNET, // Destination chain key (e.g. Arbitrum)
   amount: 1000000000000000n, // token amount in scaled token decimal precision (e.g. 1 ETH = 1e18)
   quote_type: 'exact_input', // type of quote
-} satisfies SolverIntentQuoteRequest);
+} satisfies SolverIntentQuoteRequest;
+
+// Uses the configured swaps.partnerFee:
+const result = await sodax.swaps.getQuote(quoteRequest);
+
+// Or override the fee just for this quote (matches an extras.partnerFee passed to createIntent/swap):
+const overriddenResult = await sodax.swaps.getQuote({ ...quoteRequest, partnerFee: partnerFeePercentage });
 
 if (result.ok) {
   const { quoted_amount } = result.value;
@@ -89,7 +95,7 @@ if (result.ok) {
 
 ### Swap request
 
-The configured `swaps.partnerFee` is applied automatically by the service. No fee field appears in the call.
+The fee is applied automatically by the service. No fee field appears on the wire. Pass `extras.partnerFee` to override the configured `swaps.partnerFee` for this single action — omit `extras` (or `extras.partnerFee`) to use the configured fee.
 
 ```typescript
 const swapResult = await sodax.swaps.swap({
@@ -107,6 +113,7 @@ const swapResult = await sodax.swaps.swap({
     solver: '0x0000000000000000000000000000000000000000', // Optional: specific solver, address(0) means any solver
     data: '0x', // Arbitrary additional data
   },
+  extras: { partnerFee: partnerFeePercentage }, // optional per-action fee override; falls back to the configured swaps.partnerFee
   walletProvider, // chain-narrowed wallet provider for the source chain
   timeout, // optional, request timeout in ms if needed
   skipSimulation, // optional - whether to skip transaction simulation (default: false)

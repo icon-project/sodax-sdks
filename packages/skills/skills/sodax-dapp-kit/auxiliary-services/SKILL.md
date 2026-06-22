@@ -1,6 +1,10 @@
 ---
 name: sodax-dapp-kit-auxiliary-services
 description: 'Granular skill for the @sodax/dapp-kit v2 auxiliary surfaces — partner fee claiming (useFeeClaimSwap, useApproveToken, useSetSwapPreference, useGetAutoSwapPreferences, useIsTokenApproved), recovery (useHubAssetBalances, useWithdrawHubAsset), read-only backend queries (useBackendIntentByTxHash, useBackendUserIntents, useBackendOrderbook, useBackendMoneyMarketPosition, useBackendSubmitSwapTx), and shared utilities (useSodaxContext, useHubProvider, useXBalances, useDeriveUserWalletAddress, useEstimateGas, useStellarTrustlineCheck, useRequestTrustline). Use when a React dapp task is partner fees, recovering stuck hub assets, backend data reads (intent tracking / orderbook / MM data, no wallet), or cross-cutting utilities (token balances, gas estimation, Stellar trustlines). Covers BOTH integration and migration. Links into the parent sodax-dapp-kit knowledge tree.'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # Auxiliary services (dapp-kit granular skill)
