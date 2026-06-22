@@ -21,6 +21,14 @@ export type RadfiErrorBody = {
 };
 
 /**
+ * Shape of a parsed Bound Exchange JSON response: the {@link RadfiErrorBody} envelope fields plus an
+ * optional, per-call typed `data` payload. Modeled as a superset of `RadfiErrorBody` so a parsed body
+ * can be handed straight to {@link RadfiApiError} on the error path. `data` is optional because Bound
+ * can answer 2xx with a logical-error envelope (no `data`); callers guard before dereferencing it.
+ */
+export type RadfiResponseEnvelope<T = unknown> = RadfiErrorBody & { data?: T };
+
+/**
  * Structured error from a Bound Exchange HTTP request. Exposes `status` (HTTP), `code`
  * (Bound Exchange-specific identifier), and `details` (human-readable) so callers can
  * discriminate without fragile string-matching on `message`. The raw response
@@ -204,7 +212,12 @@ export class RadfiProvider {
       body: JSON.stringify(params),
     });
 
-    const body = await this.parseJsonBody(res, 'Bound Exchange authentication failed');
+    const body = await this.parseJsonBody<{
+      accessToken?: string;
+      refreshToken?: string;
+      tradingAddress?: string;
+      wallet?: { tradingAddress?: string };
+    }>(res, 'Bound Exchange authentication failed');
     if (!res.ok) {
       throw new RadfiApiError(res.status, body, 'Bound Exchange authentication failed');
     }
@@ -222,7 +235,7 @@ export class RadfiProvider {
       body: JSON.stringify({ refreshToken }),
     });
 
-    const body = await this.parseJsonBody(res, 'Token refresh failed');
+    const body = await this.parseJsonBody<{ accessToken?: string; refreshToken?: string }>(res, 'Token refresh failed');
     if (!res.ok) {
       throw new RadfiApiError(res.status, body, 'Token refresh failed');
     }
@@ -248,8 +261,8 @@ export class RadfiProvider {
       body: JSON.stringify(params),
     });
 
-    const body = await this.parseJsonBody(res, 'Failed to create trading wallet');
-    if (!res.ok) {
+    const body = await this.parseJsonBody<RadfiTradingWallet>(res, 'Failed to create trading wallet');
+    if (!res.ok || !body.data) {
       throw new RadfiApiError(res.status, body, 'Failed to create trading wallet');
     }
 
@@ -266,8 +279,8 @@ export class RadfiProvider {
       throw new Error('Trading wallet not found');
     }
 
-    const body = await this.parseJsonBody(res, 'Trading wallet not found');
-    const data = body?.data;
+    const body = await this.parseJsonBody<RadfiTradingWallet>(res, 'Trading wallet not found');
+    const data = body.data;
     if (!data) throw new Error('Trading wallet not found');
     return data;
   }
@@ -286,12 +299,17 @@ export class RadfiProvider {
       throw new Error('Failed to fetch wallet balance');
     }
 
-    const { data } = await this.parseJsonBody(res, 'Failed to fetch wallet balance');
+    const { data } = await this.parseJsonBody<{
+      btcSatoshi?: string | number;
+      pendingSatoshi?: string | number;
+      externalPendingSatoshi?: string | number;
+      totalUtxos?: string | number;
+    }>(res, 'Failed to fetch wallet balance');
     return {
-      btcSatoshi: BigInt(data.btcSatoshi ?? '0'),
-      pendingSatoshi: BigInt(data.pendingSatoshi ?? '0'),
-      externalPendingSatoshi: BigInt(data.externalPendingSatoshi ?? '0'),
-      totalUtxos: Number(data.totalUtxos ?? 0),
+      btcSatoshi: BigInt(data?.btcSatoshi ?? '0'),
+      pendingSatoshi: BigInt(data?.pendingSatoshi ?? '0'),
+      externalPendingSatoshi: BigInt(data?.externalPendingSatoshi ?? '0'),
+      totalUtxos: Number(data?.totalUtxos ?? 0),
     };
   }
 
@@ -333,8 +351,8 @@ export class RadfiProvider {
     // The API can return HTTP 200 with a logical-error envelope (e.g. code "2002"
     // insufficientBTCBalance) and no `data`. Treat a missing `data` as an error so the
     // RadfiApiError (code/details) surfaces instead of a downstream undefined access.
-    const body = await this.parseJsonBody(res, 'Bound Exchange transaction request failed');
-    if (!res.ok || !body?.data) {
+    const body = await this.parseJsonBody<RadfiDepositTxResponse>(res, 'Bound Exchange transaction request failed');
+    if (!res.ok || !body.data) {
       throw new RadfiApiError(res.status, body, 'Bound Exchange transaction request failed');
     }
 
@@ -368,8 +386,8 @@ export class RadfiProvider {
       }),
     });
 
-    const body = await this.parseJsonBody(res, 'Bound Exchange signature request failed');
-    if (!res.ok) {
+    const body = await this.parseJsonBody<{ txId?: string }>(res, 'Bound Exchange signature request failed');
+    if (!res.ok || !body.data?.txId) {
       throw new RadfiApiError(res.status, body, 'Bound Exchange signature request failed');
     }
 
@@ -399,7 +417,8 @@ export class RadfiProvider {
       throw new Error('Failed to fetch expired UTXOs');
     }
 
-    return this.parseJsonBody(res, 'Failed to fetch expired UTXOs');
+    const body = await this.parseJsonBody<RadfiUtxo[]>(res, 'Failed to fetch expired UTXOs');
+    return { code: body.code ?? '', message: body.message ?? '', data: body.data ?? [] };
   }
 
   /**
@@ -424,8 +443,8 @@ export class RadfiProvider {
       }),
     });
 
-    const body = await this.parseJsonBody(res, 'Failed to build renew-utxo transaction');
-    if (!res.ok) {
+    const body = await this.parseJsonBody<RadfiBuildTxResponse>(res, 'Failed to build renew-utxo transaction');
+    if (!res.ok || !body.data) {
       throw new RadfiApiError(res.status, body, 'Failed to build renew-utxo transaction');
     }
 
@@ -451,8 +470,11 @@ export class RadfiProvider {
       }),
     });
 
-    const body = await this.parseJsonBody(res, 'Failed to sign and broadcast renew-utxo transaction');
-    if (!res.ok) {
+    const body = await this.parseJsonBody<{ txId?: string }>(
+      res,
+      'Failed to sign and broadcast renew-utxo transaction',
+    );
+    if (!res.ok || !body.data?.txId) {
       throw new RadfiApiError(res.status, body, 'Failed to sign and broadcast renew-utxo transaction');
     }
 
@@ -483,8 +505,8 @@ export class RadfiProvider {
       }),
     });
 
-    const body = await this.parseJsonBody(res, 'Failed to build withdraw transaction');
-    if (!res.ok) {
+    const body = await this.parseJsonBody<RadfiBuildTxResponse>(res, 'Failed to build withdraw transaction');
+    if (!res.ok || !body.data) {
       throw new RadfiApiError(res.status, body, 'Failed to build withdraw transaction');
     }
 
@@ -509,14 +531,21 @@ export class RadfiProvider {
       }),
     });
 
-    const body = await this.parseJsonBody(res, 'Failed to sign and broadcast withdraw transaction');
+    const body = await this.parseJsonBody<{ txId?: string | { data?: string } }>(
+      res,
+      'Failed to sign and broadcast withdraw transaction',
+    );
     if (!res.ok) {
       throw new RadfiApiError(res.status, body, 'Failed to sign and broadcast withdraw transaction');
     }
 
-    const txId = body.data?.txId;
+    const raw = body.data?.txId;
     // API may return nested response: { txId: { data: "actualTxId" } }
-    return typeof txId === 'object' && txId?.data ? txId.data : txId;
+    const txId = typeof raw === 'object' ? raw?.data : raw;
+    if (!txId) {
+      throw new RadfiApiError(res.status, body, 'Failed to sign and broadcast withdraw transaction');
+    }
+    return txId;
   }
 
   /**
@@ -542,8 +571,8 @@ export class RadfiProvider {
       }),
     });
 
-    const body = await this.parseJsonBody(res, 'Failed to get max withdrawable amount');
-    if (!res.ok) {
+    const body = await this.parseJsonBody<RadfiMaxSpentResponse>(res, 'Failed to get max withdrawable amount');
+    if (!res.ok || !body.data) {
       throw new RadfiApiError(res.status, body, 'Failed to get max withdrawable amount');
     }
 
@@ -584,10 +613,10 @@ export class RadfiProvider {
    * body as text first and parsing it ourselves lets us raise a `RadfiApiError` carrying the
    * actual status code and a body snippet instead.
    */
-  private async parseJsonBody(res: Response, fallback: string): Promise<any> {
+  private async parseJsonBody<T = unknown>(res: Response, fallback: string): Promise<RadfiResponseEnvelope<T>> {
     const text = await res.text();
     try {
-      return text.length ? JSON.parse(text) : {};
+      return text.length ? (JSON.parse(text) as RadfiResponseEnvelope<T>) : {};
     } catch {
       const snippet = text.replace(/\s+/g, ' ').trim().slice(0, 200);
       throw new RadfiApiError(
