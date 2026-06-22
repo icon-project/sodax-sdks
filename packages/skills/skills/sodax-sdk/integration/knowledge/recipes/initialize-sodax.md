@@ -17,7 +17,7 @@ const result = sodax.config.isValidSpokeChainKey(ChainKeys.ARBITRUM_MAINNET);   
 ```ts
 import { Sodax, ChainKeys, type SodaxOptions } from '@sodax/sdk';
 
-// `SodaxOptions` = `DeepPartial<SodaxConfig>` (the data override) plus the client-side `logger` option.
+// `SodaxOptions` = `DeepPartial<SodaxDefaultConfig>` (the data override) plus the client-side options (`logger` + global `fee`).
 const config: SodaxOptions = {
   // Per-chain overrides — merged with packaged defaults at the field level.
   chains: {

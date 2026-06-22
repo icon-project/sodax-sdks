@@ -1,0 +1,37 @@
+# Broad secret scan: allowlists web3 address noise, docs, dev-skill dirs, and
+# test fixtures. Private keys in those paths are covered by .gitleaks-strict.toml.
+
+title = "sodax-sdks gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public on-chain addresses, chain ids, docs, and test fixtures (not secrets)"
+paths = [
+  '''.*\.test\.(ts|tsx)$''',
+  '''.*\.spec\.(ts|tsx)$''',
+  '''(^|/)__mocks__/''',
+  '''(^|/)node_modules/''',
+  '''(^|/)dist/''',
+  '''(^|/)\.git/''',
+  '''pnpm-lock\.yaml$''',
+  # Vendored third-party skill docs carry example keys/curl headers.
+  '''(^|/)\.claude/''',
+  '''(^|/)\.agents/''',
+  '''(^|/)\.github/skills/''',
+  '''(^|/)\.next/''',
+  '''(^|/)build/''',
+  '''(^|/)coverage/''',
+  '''.*\.md$''',
+]
+regexes = [
+  # Public addresses / chain ids. The 40-hex \b boundary won't match a 64-hex key.
+  '''\b0x[a-fA-F0-9]{40}\b''',
+  '''\b[GC][A-Z2-7]{55}\b''',
+  '''0x[a-fA-F0-9]+\.[a-z0-9-]+''',
+  # Code identifiers (type name, doc method ref) and the documented mock ICON key.
+  '''Ed25519SecretKey''',
+  '''ERC20\.approve''',
+  '''0x(?:11223344556677889900aabbccddeeff){2}''',
+]

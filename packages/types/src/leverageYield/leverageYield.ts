@@ -1,5 +1,6 @@
 import type { Address } from '../shared/shared.js';
 import { LsodaTokens, SodaTokens } from '../chains/tokens.js';
+import type { PartnerFee, Prettify } from '../common/common.js';
 
 /**
  * A single deployed LeverageYieldVault.
@@ -107,12 +108,31 @@ export const leverageYieldVaults = [
       label: 'Lido (stETH)',
     },
   },
+  {
+    name: LsodaTokens.lsodaJITOSOL.symbol,
+    vault: LsodaTokens.lsodaJITOSOL.vault,
+    asset: SodaTokens.sodaJITOSOL.address, // sodaJITOSOL on Sonic
+    borrowToken: SodaTokens.sodaSOL.address, // sodaSOL on Sonic
+    lsdSource: {
+      // DefiLlama pool for Jito's JitoSOL native staking on Solana (project: 'jito-liquid-staking').
+      poolId: '0e7d0722-9054-4907-8593-567b353c0900',
+      fallbackAprPct: 5.5,
+      label: 'Jito (JitoSOL)',
+    },
+  },
 ] as const satisfies readonly LeverageYieldVault[];
 
-export type LeverageYieldConfig = {
+// options for the leverage yield service to be configured by the integrator
+export type LeverageYieldOptions = {
+  partnerFee?: PartnerFee; // enables override of global partner fee
+};
+
+export type LeverageYieldConfig = Prettify<LeverageYieldDefaultConfig & LeverageYieldOptions>;
+
+export type LeverageYieldDefaultConfig = {
   vaults: readonly LeverageYieldVault[];
 };
 
 export const leverageYieldConfig = {
   vaults: leverageYieldVaults,
-} as const satisfies LeverageYieldConfig;
+} as const satisfies LeverageYieldDefaultConfig;

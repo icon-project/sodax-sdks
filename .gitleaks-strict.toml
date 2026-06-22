@@ -1,0 +1,32 @@
+# Strict private-key pass (runs with .gitleaks.toml). Keyword-anchored, so it
+# detects a hardcoded 0x+64-hex private key in code, docs, and dev-skills — the
+# paths the broad scan allowlists — while public addresses and tx hashes don't match.
+
+title = "sodax-sdks strict private-key scan"
+
+[extend]
+useDefault = false
+
+[[rules]]
+id = "sodax-hardcoded-private-key"
+description = "Hardcoded private key assigned to a credential variable"
+regex = '''(?i)(private[_-]?key|secret[_-]?key)\s*[:=]\s*['"]?(0x)?[0-9a-fA-F]{64}\b'''
+keywords = ["privatekey", "private_key", "private-key", "secretkey", "secret_key"]
+
+  [rules.allowlist]
+  description = "Documented fake fixtures only — production/docs/skills still scanned"
+  regexes = [
+    '''0x(?:11223344556677889900aabbccddeeff){2}''',
+  ]
+  paths = [
+    '''(^|/)node_modules/''',
+    '''(^|/)\.git/''',
+    '''(^|/)dist/''',
+    '''(^|/)build/''',
+    '''(^|/)\.next/''',
+    # Test fixtures and the node smoke / CJS-interop harnesses use fake keys.
+    '''.*\.test\.(ts|tsx)$''',
+    '''.*\.spec\.(ts|tsx)$''',
+    '''(^|/)apps/node/src/test-libs\.ts$''',
+    '''(^|/)apps/node-cjs/src/index\.ts$''',
+  ]

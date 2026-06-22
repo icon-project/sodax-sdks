@@ -33,6 +33,7 @@ type OptionalSkipSimulation = { skipSimulation?: boolean };
  */
 export type DepositParams<C extends SpokeChainKey, Raw extends boolean = boolean> = {
   srcAddress: GetAddressType<C>; // The address of the user on the spoke (origin) chain
+  srcPublicKey?: string; // Signer public key, for chains whose address can't yield it (e.g. Stacks raw txs). Ignored elsewhere.
   srcChainKey: C; // The chain key of the spoke (origin) chain
   to: HubAddress; // The address of the user on the hub chain (wallet abstraction address)
   token: GetTokenAddressType<C>; // The original spoke chain address of the token to deposit

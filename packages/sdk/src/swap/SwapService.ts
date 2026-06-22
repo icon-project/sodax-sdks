@@ -32,6 +32,7 @@ import {
   isBitcoinWalletProviderType,
   type RelayExtraData,
   type TxHashPair,
+  isStacksChainKeyType,
 } from '../shared/index.js';
 import { SolverApiService } from './SolverApiService.js';
 import { EvmSolverService } from './EvmSolverService.js';
@@ -176,7 +177,7 @@ export class SwapService {
 
   public constructor({ config, hubProvider, spoke }: SwapServiceConstructorParams) {
     this.solver = config.solver;
-    this.partnerFee = config.swaps.partnerFee;
+    this.partnerFee = config.swapPartnerFee;
     this.relayerApiEndpoint = config.relay.relayerApiEndpoint;
     this.config = config;
     this.hubProvider = hubProvider;
@@ -666,6 +667,14 @@ export class SwapService {
           { ...baseCtx, field: 'minOutputAmount' },
         );
       }
+      if (isStacksChainKeyType(params.srcChainKey) && _params.raw === true) {
+        swapInvariant(
+          params.srcPublicKey !== undefined,
+          'srcPublicKey is required for Stacks createIntent (raw) — the source tx is built unsigned and needs the signer public key',
+          { ...baseCtx, field: 'srcPublicKey' },
+        );
+      }
+
       const personalAddress = params.srcAddress;
 
       // Bitcoin TRADING mode: use trading wallet for hub wallet derivation (see getEffectiveWalletAddress)
@@ -689,7 +698,7 @@ export class SwapService {
           createIntentParams: params,
           creatorHubWalletAddress,
           solverConfig: this.solver,
-          fee: this.config.swaps.partnerFee,
+          fee: this.config.swapPartnerFee,
           hubProvider: this.hubProvider,
         } as const;
 
@@ -722,12 +731,13 @@ export class SwapService {
         },
         creatorHubWalletAddress,
         this.config,
-        this.config.swaps.partnerFee,
+        this.config.swapPartnerFee,
       );
 
       const coreDepositParams = {
         srcChainKey: params.srcChainKey,
         srcAddress: walletAddress as GetAddressType<K>,
+        srcPublicKey: params.srcPublicKey,
         to: creatorHubWalletAddress,
         token: params.inputToken as GetTokenAddressType<K>,
         amount: params.inputAmount,

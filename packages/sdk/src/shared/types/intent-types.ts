@@ -10,6 +10,7 @@ export type CreateIntentParams<K extends SpokeChainKey = SpokeChainKey> = {
   srcChainKey: K;
   dstChainKey: SpokeChainKey;
   srcAddress: string;
+  srcPublicKey?: string;
   dstAddress: string;
   solver?: Address; // Optional specific solver address (address(0) = any solver)
   data: Hex;
@@ -19,8 +20,10 @@ export type CreateIntentParams<K extends SpokeChainKey = SpokeChainKey> = {
  * Parameters for creating a limit order intent.
  * Makes the `deadline` field optional for limit orders.
  */
-export type CreateLimitOrderParams<K extends SpokeChainKey = SpokeChainKey> =
-  Omit<CreateIntentParams<K>, 'deadline'> & { deadline?: bigint };
+export type CreateLimitOrderParams<K extends SpokeChainKey = SpokeChainKey> = Omit<
+  CreateIntentParams<K>,
+  'deadline'
+> & { deadline?: bigint };
 
 export type Intent = {
   intentId: bigint;

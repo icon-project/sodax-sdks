@@ -1293,6 +1293,17 @@ describe('SwapService.getPartnerFee', () => {
     // we're proving the method *routed into* the helper, not replicating the helper's math.
     expect(fee).toBeGreaterThan(0n);
   });
+
+  it('falls back to the global fee when no swap-specific partnerFee is set', () => {
+    // Regression: a global `fee` with no per-feature `swaps.partnerFee` must still be charged.
+    // The effective swap fee is `swaps.partnerFee ?? fee` (resolved by config.swapPartnerFee), so a
+    // global-only fee is no longer silently dropped. `fee` is a typed SodaxOptions slot — no cast needed.
+    const sodaxWithGlobalFee = new Sodax({
+      fee: { address: '0x3333333333333333333333333333333333333333', percentage: 100 },
+    });
+
+    expect(sodaxWithGlobalFee.swaps.getPartnerFee(1_000_000n)).toBeGreaterThan(0n);
+  });
 });
 
 describe('SwapService.getSolverFee', () => {
