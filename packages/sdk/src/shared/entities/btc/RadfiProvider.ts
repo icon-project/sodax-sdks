@@ -269,20 +269,19 @@ export class RadfiProvider {
     return body.data;
   }
 
-  public async getTradingWallet(userAddress: string, accessToken?: string): Promise<RadfiTradingWallet> {
+  public async getTradingWallet(userAddress: string): Promise<RadfiTradingWallet> {
     const res = await this.request(`/wallets/details/${userAddress}`, {
       method: 'GET',
-      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
     });
 
-    if (!res.ok) {
-      throw new Error('Trading wallet not found');
-    }
-
+    // A non-2xx may be a JSON Bound error OR an HTML gateway/WAF page (e.g. an edge "403 Forbidden").
+    // parseJsonBody turns the latter into a legible RadfiApiError carrying the real HTTP status, so an
+    // edge/origin block no longer masquerades as a generic "Trading wallet not found".
     const body = await this.parseJsonBody<RadfiTradingWallet>(res, 'Trading wallet not found');
-    const data = body.data;
-    if (!data) throw new Error('Trading wallet not found');
-    return data;
+    if (!res.ok || !body.data) {
+      throw new RadfiApiError(res.status, body, 'Trading wallet not found');
+    }
+    return body.data;
   }
 
   public async getBalance(address: string): Promise<RadfiWalletBalance> {

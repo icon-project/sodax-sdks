@@ -103,9 +103,38 @@ describe('RadfiProvider — non-JSON error bodies (issue #233)', () => {
     expect((caught as RadfiApiError).status).toBe(403);
     expect((caught as Error).message).not.toContain('Unexpected token');
   });
+
+  it('getTradingWallet surfaces the real HTTP status (403), not a generic "Trading wallet not found"', async () => {
+    // The trading-wallet lookup is a public GET; an edge/WAF "403 Forbidden" HTML page used to throw a
+    // generic Error('Trading wallet not found'), masking the real status. It must now be a typed
+    // RadfiApiError carrying status 403 so an origin/WAF block is diagnosable.
+    fetchMock.mockResolvedValue(makeResponse(403, HTML_403));
+    const radfi = new RadfiProvider(baseConfig);
+
+    let caught: unknown;
+    try {
+      await radfi.getTradingWallet('bc1pax7wcjw4r7m25fn2405x5a5f6vucv8pcqr8ltsz2mp4xjmx26rgstqgwhz');
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(RadfiApiError);
+    expect(caught).not.toBeInstanceOf(SyntaxError);
+    expect((caught as RadfiApiError).status).toBe(403);
+    expect((caught as Error).message).not.toContain('Unexpected token');
+    expect((caught as Error).message).toContain('403');
+  });
 });
 
 describe('RadfiProvider — happy path + logical-error envelopes still work', () => {
+  it('getTradingWallet returns the trading wallet on a valid JSON 200', async () => {
+    const wallet = { tradingAddress: 'bc1ptrade', userAddress: 'bc1puser', userPublicKey: '02abcd' };
+    fetchMock.mockResolvedValue(makeResponse(200, JSON.stringify({ data: wallet })));
+    const radfi = new RadfiProvider(baseConfig);
+
+    expect(await radfi.getTradingWallet('bc1puser')).toEqual(wallet);
+  });
+
   it('createWithdrawTransaction returns data on a valid JSON 200', async () => {
     fetchMock.mockResolvedValue(makeResponse(200, JSON.stringify({ data: { base64Psbt: 'cHNidP8=', txId: 'abc' } })));
     const radfi = new RadfiProvider(baseConfig);
