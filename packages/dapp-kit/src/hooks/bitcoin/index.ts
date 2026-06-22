@@ -1,4 +1,5 @@
 export * from './useRadfiAuth.js';
+export * from './useEnsureRadfiAccessToken.js';
 export * from './useRadfiSession.js';
 export * from './useFundTradingWallet.js';
 export * from './useBitcoinBalance.js';

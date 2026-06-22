@@ -57,6 +57,7 @@ export type {
   IntentData,
   IntentState,
   SwapExtras,
+  BitcoinBoundExtras,
 } from '../shared/types/intent-types.js';
 export { IntentDataType } from '../shared/types/intent-types.js';
 import type {
@@ -699,17 +700,22 @@ export class SwapService {
 
       const personalAddress = params.srcAddress;
 
-      // Bitcoin TRADING mode: use trading wallet for hub wallet derivation (see getEffectiveWalletAddress)
-      // NOTE: bitcoin is only enabled in non-raw execution mode == walletProvider is required
+      // Bitcoin TRADING mode: derive the hub wallet from the trading address (raw + non-raw), since
+      // deposits originate from the trading wallet, not the personal one.
       let walletAddress: string = personalAddress;
-      if (isBitcoinChainKeyType(params.srcChainKey) && _params.raw === false) {
-        swapInvariant(
-          isBitcoinWalletProviderType(_params.walletProvider),
-          `Invalid wallet provider for chain key: ${params.srcChainKey}`,
-          baseCtx,
-        );
+      if (isBitcoinChainKeyType(params.srcChainKey)) {
+        if (_params.raw === false) {
+          // Non-raw needs a provider to sign; only TRADING mode needs Bound auth (USER is self-custody).
+          swapInvariant(
+            isBitcoinWalletProviderType(_params.walletProvider),
+            `Invalid wallet provider for chain key: ${params.srcChainKey}`,
+            baseCtx,
+          );
+          if (this.spoke.bitcoin.walletMode === 'TRADING') {
+            await this.spoke.bitcoin.radfi.ensureRadfiAccessToken(_params.walletProvider);
+          }
+        }
         walletAddress = await this.spoke.bitcoin.getEffectiveWalletAddress(personalAddress);
-        await this.spoke.bitcoin.radfi.ensureRadfiAccessToken(_params.walletProvider);
       }
 
       // derive users hub wallet address
@@ -760,6 +766,8 @@ export class SwapService {
         srcChainKey: params.srcChainKey,
         srcAddress: walletAddress as GetAddressType<K>,
         srcPublicKey: extras?.srcPublicKey,
+        // Bitcoin Bound token; BitcoinSpokeService.deposit falls back to the RadfiProvider instance token when undefined.
+        accessToken: extras?.bound?.accessToken,
         to: creatorHubWalletAddress,
         token: params.inputToken as GetTokenAddressType<K>,
         amount: params.inputAmount,

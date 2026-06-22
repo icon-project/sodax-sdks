@@ -127,6 +127,7 @@ Comprehensive hook table across 12 feature domains. Use this when you know the f
 | Hook | Type | Purpose |
 |---|---|---|
 | `useRadfiAuth` | Mutation | Authenticate via BIP322 signing |
+| `useEnsureRadfiAccessToken` | Mutation | Ensure a fresh Bound access token (silent refresh or BIP322 re-auth) |
 | `useRadfiSession` | Utility | Manage full session lifecycle |
 | `useTradingWallet` | Utility | Synchronously read trading wallet from localStorage |
 | `useBitcoinBalance` | Query | BTC balance for any address |

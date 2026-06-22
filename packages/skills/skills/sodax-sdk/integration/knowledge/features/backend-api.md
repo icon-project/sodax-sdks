@@ -53,6 +53,12 @@ const submitResult = await sodax.backendApi.submitSwapTx({
 if (!submitResult.ok) return;
 ```
 
+## Swap-intent request DTO — `accessToken` (Bitcoin TRADING)
+
+`CreateIntentParamsV2` is the shared wire-level request body behind the typed `/swaps/allowance/check`, `/swaps/approve`, and `/swaps/intents` calls (the `IBackendApiV2` methods the SDK drives internally). For Bitcoin **TRADING**-mode `raw` intents it carries `accessToken?: string` — the Bound Exchange (Radfi) token — passed in the request body instead of an `x-bound-access-token` header so it stays inside the typed DTO. Required only when the source chain is Bitcoin in TRADING mode; ignored otherwise.
+
+You rarely build this DTO yourself: `sodax.swaps.createIntent` takes the token via the chain-key-gated `extras.bound.accessToken` slot and maps it onto `CreateIntentParamsV2.accessToken`. See [`swap.md`](swap.md) § `SwapExtras` and [`../chain-specifics.md`](../chain-specifics.md) § "Bitcoin PSBT and Bound Exchange" for the consumer-facing flow and token-injection points.
+
 ## Custom backend (sandbox / fixtures)
 
 `SodaxConfig` does not expose a typed slot to inject a custom `IConfigApi` implementation at construction. Two supported patterns:

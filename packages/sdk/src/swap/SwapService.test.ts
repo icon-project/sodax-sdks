@@ -450,6 +450,23 @@ describe('SwapService.createIntent — narrows walletProvider from params.srcCha
       });
     }
   });
+
+  it('extras.bound is keyed off K — typeable for Bitcoin, rejected elsewhere', () => {
+    if (false as boolean) {
+      // Bitcoin: the grouped `bound` slot is part of the extras type.
+      void svc.createIntent({
+        params: intentInput(ChainKeys.BITCOIN_MAINNET),
+        extras: { bound: { accessToken: 'bound-token' } },
+        raw: true,
+      });
+      void svc.createIntent({
+        params: intentInput(ChainKeys.BSC_MAINNET),
+        // @ts-expect-error — bound is `never` for non-Bitcoin chains (EVM here).
+        extras: { bound: { accessToken: 'bound-token' } },
+        raw: true,
+      });
+    }
+  });
 });
 
 describe('SwapService.swap — narrows walletProvider (always exec)', () => {
@@ -944,6 +961,41 @@ describe('SwapService.createIntent', () => {
 
       expect(effectiveAddressSpy).toHaveBeenCalledWith('bc1qusersource');
       expect(ensureRadfiSpy).toHaveBeenCalledWith(mockBitcoinProvider);
+    });
+
+    it('on Bitcoin raw=true, derives the trading address, skips Bound auth, and threads extras.bound.accessToken to deposit', async () => {
+      const svc = sodax.swaps;
+      mocks.getUserHubWalletAddress.mockResolvedValueOnce('0xhubwallet');
+      mocks.constructCreateIntentData.mockReturnValueOnce(['0xintentdata', makeIntent(ChainKeys.BITCOIN_MAINNET), 0n]);
+      const rawDepositTx = { from: '0x1', to: '0x2', data: '0x', value: 0n };
+      vi.spyOn(svc.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: rawDepositTx });
+      // Trading-address derivation still runs on the raw path — it resolves the wallet via Bound.
+      const effectiveAddressSpy = vi
+        .spyOn(svc.spoke.bitcoin, 'getEffectiveWalletAddress')
+        .mockResolvedValueOnce('bc1qtradingwallet');
+      // Bound auth (ensureRadfiAccessToken) is a non-raw concern; raw must never trigger the sign-in.
+      const ensureRadfiSpy = vi.spyOn(svc.spoke.bitcoin.radfi, 'ensureRadfiAccessToken').mockResolvedValue(undefined);
+
+      const result = await svc.createIntent({
+        params: { ...intentInput(ChainKeys.BITCOIN_MAINNET), srcAddress: 'bc1qusersource' },
+        extras: { bound: { accessToken: 'bound-token' } },
+        raw: true,
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value.tx).toBe(rawDepositTx);
+
+      expect(effectiveAddressSpy).toHaveBeenCalledWith('bc1qusersource');
+      expect(ensureRadfiSpy).not.toHaveBeenCalled();
+
+      const depositCall = (svc.spoke.deposit as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+      expect(depositCall.raw).toBe(true);
+      expect(depositCall).not.toHaveProperty('walletProvider');
+      expect(depositCall.srcChainKey).toBe(ChainKeys.BITCOIN_MAINNET);
+      // Deposit originates from the derived trading address, not the user's personal address.
+      expect(depositCall.srcAddress).toBe('bc1qtradingwallet');
+      // extras.bound.accessToken threads through to DepositParams.accessToken.
+      expect(depositCall.accessToken).toBe('bound-token');
     });
   });
 
@@ -1850,6 +1902,42 @@ describe('SwapService.createIntent — extras (partnerFee + srcPublicKey)', () =
       expect(result.error.code).toBe('VALIDATION_FAILED');
       expect(result.error.message).toContain('srcPublicKey');
     }
+  });
+
+  it('passes extras.bound.accessToken through to SpokeService.deposit for a Bitcoin raw intent', async () => {
+    const svc = sodax.swaps;
+    const accessToken = 'bound-access-token-xyz';
+    mocks.getUserHubWalletAddress.mockResolvedValueOnce('0xhubwallet');
+    mocks.constructCreateIntentData.mockReturnValueOnce(['0xintentdata', makeIntent(ChainKeys.BITCOIN_MAINNET), 0n]);
+    vi.spyOn(svc.spoke.bitcoin, 'getEffectiveWalletAddress').mockImplementation(async (a: string) => a);
+    vi.spyOn(svc.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: { payload: '0xraw' } as never });
+
+    const result = await svc.createIntent({
+      params: intentInput(ChainKeys.BITCOIN_MAINNET),
+      extras: { bound: { accessToken } },
+      raw: true,
+    });
+
+    expect(result.ok).toBe(true);
+    const depositCall = (svc.spoke.deposit as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0];
+    expect(depositCall.accessToken).toBe(accessToken);
+  });
+
+  it('omits accessToken on the deposit params when extras.bound is absent (BitcoinSpokeService falls back to its radfi instance token)', async () => {
+    const svc = sodax.swaps;
+    mocks.getUserHubWalletAddress.mockResolvedValueOnce('0xhubwallet');
+    mocks.constructCreateIntentData.mockReturnValueOnce(['0xintentdata', makeIntent(ChainKeys.BITCOIN_MAINNET), 0n]);
+    vi.spyOn(svc.spoke.bitcoin, 'getEffectiveWalletAddress').mockImplementation(async (a: string) => a);
+    vi.spyOn(svc.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: { payload: '0xraw' } as never });
+
+    const result = await svc.createIntent({
+      params: intentInput(ChainKeys.BITCOIN_MAINNET),
+      raw: true,
+    });
+
+    expect(result.ok).toBe(true);
+    const depositCall = (svc.spoke.deposit as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0];
+    expect(depositCall.accessToken).toBeUndefined();
   });
 });
 
