@@ -57,6 +57,7 @@ export type {
   IntentData,
   IntentState,
   SwapExtras,
+  BitcoinBoundExtras,
 } from '../shared/types/intent-types.js';
 export { IntentDataType } from '../shared/types/intent-types.js';
 import type {
@@ -765,9 +766,10 @@ export class SwapService {
         srcChainKey: params.srcChainKey,
         srcAddress: walletAddress as GetAddressType<K>,
         srcPublicKey: extras?.srcPublicKey,
-        // Bitcoin TRADING raw: per-action Bound token. Falls back to the RadfiProvider instance
-        // token (config / setRadfiAccessToken) inside BitcoinSpokeService.deposit when undefined.
-        accessToken: extras?.accessToken,
+        // Bitcoin TRADING raw: per-action Bound token from the grouped `bound` slot. Falls back to
+        // the RadfiProvider instance token (config / setRadfiAccessToken) inside
+        // BitcoinSpokeService.deposit when undefined.
+        accessToken: extras?.bound?.accessToken,
         to: creatorHubWalletAddress,
         token: params.inputToken as GetTokenAddressType<K>,
         amount: params.inputAmount,

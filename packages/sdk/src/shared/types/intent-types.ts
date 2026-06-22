@@ -29,11 +29,21 @@ export type CreateLimitOrderParams<K extends SpokeChainKey = SpokeChainKey> = Om
 type SrcPublicKeySlot<K extends SpokeChainKey> =
   GetChainType<K> extends 'STACKS' ? { srcPublicKey?: string } : { srcPublicKey?: never };
 
-// accessToken is the Bound Exchange (Radfi) token, needed only for Bitcoin TRADING-mode intents —
-// server-side raw callers that can't run the BIP322 auth flow. Key it off K so non-Bitcoin actions
-// can't set it; falls back to the RadfiProvider's instance token when omitted.
-type AccessTokenSlot<K extends SpokeChainKey> =
-  GetChainType<K> extends 'BITCOIN' ? { accessToken?: string } : { accessToken?: never };
+/** Bound Exchange (Radfi) inputs for raw Bitcoin TRADING-mode swap intents. */
+export type BitcoinBoundExtras = {
+  /**
+   * Bound Exchange (Radfi) access token. Needed only for raw Bitcoin TRADING-mode `createIntent`
+   * by server-side callers that can't run the BIP322 auth flow; falls back to the RadfiProvider's
+   * instance token (config / `setRadfiAccessToken`) when omitted.
+   */
+  accessToken?: string;
+};
+
+// Bound Exchange (Radfi) state is Bitcoin-specific, so group it under one `bound` object rather
+// than spreading a top-level extras slot per field — future Bound inputs (trading mode, refresh
+// token, …) extend BitcoinBoundExtras instead. Keyed off K so non-Bitcoin actions can't set it.
+type BitcoinBoundSlot<K extends SpokeChainKey> =
+  GetChainType<K> extends 'BITCOIN' ? { bound?: BitcoinBoundExtras } : { bound?: never };
 
 /**
  * Per-action extras for swap intent creation, supplied via the `extras` slot of the swap
@@ -43,7 +53,7 @@ export type SwapExtras<K extends SpokeChainKey = SpokeChainKey> = {
   /** Overrides the configured swap partner fee for this action; falls back to config when omitted. */
   partnerFee?: PartnerFee;
 } & SrcPublicKeySlot<K> &
-  AccessTokenSlot<K>;
+  BitcoinBoundSlot<K>;
 
 export type Intent = {
   intentId: bigint;

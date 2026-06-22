@@ -451,18 +451,18 @@ describe('SwapService.createIntent — narrows walletProvider from params.srcCha
     }
   });
 
-  it('extras.accessToken is keyed off K — typeable for Bitcoin, rejected elsewhere', () => {
+  it('extras.bound is keyed off K — typeable for Bitcoin, rejected elsewhere', () => {
     if (false as boolean) {
-      // Bitcoin: accessToken is part of the extras type.
+      // Bitcoin: the grouped `bound` slot is part of the extras type.
       void svc.createIntent({
         params: intentInput(ChainKeys.BITCOIN_MAINNET),
-        extras: { accessToken: 'bound-token' },
+        extras: { bound: { accessToken: 'bound-token' } },
         raw: true,
       });
       void svc.createIntent({
         params: intentInput(ChainKeys.BSC_MAINNET),
-        // @ts-expect-error — accessToken is `never` for non-Bitcoin chains (EVM here).
-        extras: { accessToken: 'bound-token' },
+        // @ts-expect-error — bound is `never` for non-Bitcoin chains (EVM here).
+        extras: { bound: { accessToken: 'bound-token' } },
         raw: true,
       });
     }
@@ -963,7 +963,7 @@ describe('SwapService.createIntent', () => {
       expect(ensureRadfiSpy).toHaveBeenCalledWith(mockBitcoinProvider);
     });
 
-    it('on Bitcoin raw=true, derives the trading address, skips Bound auth, and threads extras.accessToken to deposit', async () => {
+    it('on Bitcoin raw=true, derives the trading address, skips Bound auth, and threads extras.bound.accessToken to deposit', async () => {
       const svc = sodax.swaps;
       mocks.getUserHubWalletAddress.mockResolvedValueOnce('0xhubwallet');
       mocks.constructCreateIntentData.mockReturnValueOnce(['0xintentdata', makeIntent(ChainKeys.BITCOIN_MAINNET), 0n]);
@@ -978,7 +978,7 @@ describe('SwapService.createIntent', () => {
 
       const result = await svc.createIntent({
         params: { ...intentInput(ChainKeys.BITCOIN_MAINNET), srcAddress: 'bc1qusersource' },
-        extras: { accessToken: 'bound-token' },
+        extras: { bound: { accessToken: 'bound-token' } },
         raw: true,
       });
 
@@ -996,7 +996,7 @@ describe('SwapService.createIntent', () => {
       expect(depositCall.srcChainKey).toBe(ChainKeys.BITCOIN_MAINNET);
       // Deposit originates from the derived trading address, not the user's personal address.
       expect(depositCall.srcAddress).toBe('bc1qtradingwallet');
-      // extras.accessToken threads through to DepositParams.accessToken.
+      // extras.bound.accessToken threads through to DepositParams.accessToken.
       expect(depositCall.accessToken).toBe('bound-token');
     });
   });
@@ -1906,7 +1906,7 @@ describe('SwapService.createIntent — extras (partnerFee + srcPublicKey)', () =
     }
   });
 
-  it('passes extras.accessToken through to SpokeService.deposit for a Bitcoin raw intent', async () => {
+  it('passes extras.bound.accessToken through to SpokeService.deposit for a Bitcoin raw intent', async () => {
     const svc = sodax.swaps;
     const accessToken = 'bound-access-token-xyz';
     mocks.getUserHubWalletAddress.mockResolvedValueOnce('0xhubwallet');
@@ -1916,7 +1916,7 @@ describe('SwapService.createIntent — extras (partnerFee + srcPublicKey)', () =
 
     const result = await svc.createIntent({
       params: intentInput(ChainKeys.BITCOIN_MAINNET),
-      extras: { accessToken },
+      extras: { bound: { accessToken } },
       raw: true,
     });
 
@@ -1925,7 +1925,7 @@ describe('SwapService.createIntent — extras (partnerFee + srcPublicKey)', () =
     expect(depositCall.accessToken).toBe(accessToken);
   });
 
-  it('omits accessToken on the deposit params when extras.accessToken is absent (BitcoinSpokeService falls back to its radfi instance token)', async () => {
+  it('omits accessToken on the deposit params when extras.bound is absent (BitcoinSpokeService falls back to its radfi instance token)', async () => {
     const svc = sodax.swaps;
     mocks.getUserHubWalletAddress.mockResolvedValueOnce('0xhubwallet');
     mocks.constructCreateIntentData.mockReturnValueOnce(['0xintentdata', makeIntent(ChainKeys.BITCOIN_MAINNET), 0n]);

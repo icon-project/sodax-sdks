@@ -6,10 +6,10 @@ import { Sodax, ChainKeys, type CreateIntentParams, type SpokeChainKey } from '@
 //
 // New flow: the Bound Exchange access token travels IN the request body
 // (CreateIntentParamsV2.accessToken) and is forwarded to the SDK through the typed, Bitcoin-gated
-// `extras.accessToken` slot — not an `x-bound-access-token` header, not setRadfiAccessToken().
+// `extras.bound.accessToken` slot — not an `x-bound-access-token` header, not setRadfiAccessToken().
 //
 //   1. BE receives a JSON create-intent body (string numerics + accessToken) — `apiBody` below.
-//   2. BE maps it to SDK domain params (bigint numerics) and lifts accessToken into `extras`.
+//   2. BE maps it to SDK domain params (bigint numerics) and lifts accessToken into `extras.bound`.
 //   3. BE calls createIntent({ params, extras, raw: true }) — no walletProvider — to get the unsigned
 //      PSBT it returns to the client to sign + co-sign via Bound.
 //
@@ -69,7 +69,7 @@ const short = (s: string, head = 16, tail = 8): string =>
 // Map the wire body (CreateIntentParamsV2 — flat string fields, incl. accessToken) to the SDK swap
 // action input: typed `params` (bigint numerics, `data` → '0x') plus the per-action `extras` slot.
 // This is the split BE does — one flat HTTP body becomes `params` + `extras`. The Bitcoin key narrows
-// K so `extras.accessToken` is typeable (it's `never` off Bitcoin).
+// K so the grouped `extras.bound` slot is typeable (it's `never` off Bitcoin).
 function toCreateIntentInput(body: ApiCreateIntentBody) {
   const params = {
     srcChainKey: body.srcChainKey as BitcoinKey,
@@ -84,7 +84,7 @@ function toCreateIntentInput(body: ApiCreateIntentBody) {
     dstAddress: body.dstAddress,
     data: '0x',
   } satisfies CreateIntentParams<BitcoinKey>;
-  return { params, extras: { accessToken: body.accessToken } };
+  return { params, extras: { bound: { accessToken: body.accessToken } } };
 }
 
 // Log every Bound Exchange / UMS HTTP call the SDK makes — method, URL, auth + origin, request body,
@@ -149,7 +149,7 @@ async function main(): Promise<void> {
     apiBody.accessToken ? `present (${apiBody.accessToken.length} chars)` : '(none — expect a legible auth/HTTP error)',
   );
   console.log('  origin     :', process.env.BOUND_ORIGIN ?? '(none — default Node request)');
-  console.log('\n→ createIntent({ params, extras: { accessToken }, raw: true })');
+  console.log('\n→ createIntent({ params, extras: { bound: { accessToken } }, raw: true })');
 
   const result = await sodax.swaps.createIntent({ ...toCreateIntentInput(apiBody), raw: true });
 

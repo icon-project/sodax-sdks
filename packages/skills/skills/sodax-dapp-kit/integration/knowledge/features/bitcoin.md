@@ -25,7 +25,7 @@ useExpiredUtxos({ params: { walletProvider, tradingAddress }, queryOptions }); /
 useRenewUtxos({ mutationOptions });
 ```
 
-`useEnsureRadfiAccessToken` is for raw / server-side `createIntent`: it resolves a valid Bound token to forward as `extras.accessToken` (Bitcoin-gated) on a `raw: true` swap intent, or as the `accessToken` field on a backend createIntent DTO. See the `sodax-sdk` skill (swap feature) for the `extras.accessToken` slot.
+`useEnsureRadfiAccessToken` is for raw / server-side `createIntent`: it resolves a valid Bound token to forward as `extras.bound.accessToken` (the Bitcoin-gated `bound` slot) on a `raw: true` swap intent, or as the `accessToken` field on a backend createIntent DTO. See the `sodax-sdk` skill (swap feature) for the `extras.bound` slot.
 
 ## Session flow
 
