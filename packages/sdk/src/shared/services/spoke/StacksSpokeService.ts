@@ -140,13 +140,14 @@ export class StacksSpokeService {
     if (params.raw === true) {
       // srcPublicKey (builds the unsigned tx) and srcAddress (hub-wallet derivation + intent record) must
       // be the same account — derive the address from the key and match, else the user signs a tx for another.
-      if (!params.srcPublicKey) {
+      const srcPublicKey = params.extras?.srcPublicKey;
+      if (!srcPublicKey) {
         throw new Error('Stacks raw transactions require srcPublicKey (the signer public key for srcAddress).');
       }
       let derivedAddress: string;
       try {
         // Reuse the network the service was built with (config-driven) so the address version matches.
-        derivedAddress = getAddressFromPublicKey(params.srcPublicKey, this.network);
+        derivedAddress = getAddressFromPublicKey(srcPublicKey, this.network);
       } catch (error) {
         throw new Error(`srcPublicKey is not a valid Stacks public key: ${(error as Error).message}`);
       }
@@ -158,7 +159,7 @@ export class StacksSpokeService {
 
       const tx = await makeUnsignedContractCall({
         ...reqData,
-        publicKey: params.srcPublicKey,
+        publicKey: srcPublicKey,
         network: this.network,
         fee: 0, // placeholder — we'll estimate
         nonce: 0n,

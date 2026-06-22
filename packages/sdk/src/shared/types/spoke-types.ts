@@ -25,6 +25,16 @@ import type {
 } from '@sodax/types';
 type OptionalSkipSimulation = { skipSimulation?: boolean };
 
+// Chain-gated per-action extras, reused by DepositParams and SwapExtras (intent-types) so the
+// swap→deposit forward needs no cast. Each field is settable only on its chain (`never` elsewhere).
+export type SrcPublicKeySlot<C extends SpokeChainKey> =
+  GetChainType<C> extends 'STACKS' ? { srcPublicKey?: string } : { srcPublicKey?: never };
+export type AccessTokenSlot<C extends SpokeChainKey> =
+  GetChainType<C> extends 'BITCOIN' ? { accessToken?: string } : { accessToken?: never };
+
+/** Chain-gated per-action deposit extras — typeable only on the chain that uses each field. */
+export type DepositExtras<C extends SpokeChainKey> = SrcPublicKeySlot<C> & AccessTokenSlot<C>;
+
 /*
  * Deposit parameters type for depositing tokens into spoke chain asset manager.
  * @param {C} C - The chain ID of the spoke chain.
@@ -33,13 +43,12 @@ type OptionalSkipSimulation = { skipSimulation?: boolean };
  */
 export type DepositParams<C extends SpokeChainKey, Raw extends boolean = boolean> = {
   srcAddress: GetAddressType<C>; // The address of the user on the spoke (origin) chain
-  srcPublicKey?: string; // Signer public key, for chains whose address can't yield it (e.g. Stacks raw txs). Ignored elsewhere.
-  accessToken?: string; // Bound Exchange (Radfi) access token, for Bitcoin TRADING-mode deposits. Ignored elsewhere.
   srcChainKey: C; // The chain key of the spoke (origin) chain
   to: HubAddress; // The address of the user on the hub chain (wallet abstraction address)
   token: GetTokenAddressType<C>; // The original spoke chain address of the token to deposit
   amount: bigint; // The amount of tokens to deposit
   data: Hex; // The data to send with the deposit
+  extras?: DepositExtras<C>; // per-action extras object: srcPublicKey (Stacks) / accessToken (Bitcoin), gated by chain
 } & WalletProviderSlot<C, Raw> &
   OptionalSkipSimulation;
 

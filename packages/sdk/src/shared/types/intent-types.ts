@@ -1,4 +1,5 @@
-import type { Address, GetChainType, Hex, IntentRelayChainId, PartnerFee, SpokeChainKey } from '@sodax/types';
+import type { Address, Hex, IntentRelayChainId, PartnerFee, SpokeChainKey } from '@sodax/types';
+import type { AccessTokenSlot, SrcPublicKeySlot } from './spoke-types.js';
 
 export type CreateIntentParams<K extends SpokeChainKey = SpokeChainKey> = {
   inputToken: string;
@@ -24,20 +25,11 @@ export type CreateLimitOrderParams<K extends SpokeChainKey = SpokeChainKey> = Om
   'deadline'
 > & { deadline?: bigint };
 
-// srcPublicKey only matters for Stacks (its `SP…` address can't be derived at raw-tx build time);
-// key it off K so non-Stacks actions can't set it.
-type SrcPublicKeySlot<K extends SpokeChainKey> =
-  GetChainType<K> extends 'STACKS' ? { srcPublicKey?: string } : { srcPublicKey?: never };
-
-// accessToken is the Bound Exchange (Radfi) token, needed only for Bitcoin TRADING-mode intents —
-// server-side raw callers that can't run the BIP322 auth flow. Key it off K so non-Bitcoin actions
-// can't set it; falls back to the RadfiProvider's instance token when omitted.
-type AccessTokenSlot<K extends SpokeChainKey> =
-  GetChainType<K> extends 'BITCOIN' ? { accessToken?: string } : { accessToken?: never };
-
 /**
- * Per-action extras for swap intent creation, supplied via the `extras` slot of the swap
- * action params.
+ * Per-action extras for swap intent creation, supplied via the `extras` slot of the swap action
+ * params. Reuses the chain-gated {@link SrcPublicKeySlot} / {@link AccessTokenSlot} from the deposit
+ * layer so the public gate and the internal `DepositParams` gate are the same type (a generic-K
+ * unwrap in `SwapService.createIntent` needs no cast).
  */
 export type SwapExtras<K extends SpokeChainKey = SpokeChainKey> = {
   /** Overrides the configured swap partner fee for this action; falls back to config when omitted. */

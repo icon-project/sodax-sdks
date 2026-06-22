@@ -412,7 +412,9 @@ export class SpokeService {
 
     return `0x${Buffer.from(rlpEncodedData).toString('hex')}`;
   }
-  public async simulateDeposit(params: DepositParams<SpokeChainKey, boolean>): Promise<Result<boolean>> {
+  public async simulateDeposit<C extends SpokeChainKey, R extends boolean>(
+    params: DepositParams<C, R>,
+  ): Promise<Result<boolean>> {
     try {
       if (isHubChainKeyType(params.srcChainKey)) {
         return { ok: false, error: new Error('Hub chain id is not supported for deposit simulation') };
@@ -521,9 +523,10 @@ export class SpokeService {
   ): Promise<Result<TxReturnType<K, R>>> {
     try {
       if (isHubChainKeyType(params.srcChainKey)) {
-        const value = (await this.sonic.deposit(
-          params as DepositParams<SonicChainKey, R>,
-        )) satisfies TxReturnType<SonicChainKey, R> as TxReturnType<K, R>;
+        const value = (await this.sonic.deposit(params as DepositParams<SonicChainKey, R>)) satisfies TxReturnType<
+          SonicChainKey,
+          R
+        > as TxReturnType<K, R>;
         return { ok: true, value };
       }
 
@@ -936,9 +939,7 @@ export class SpokeService {
     }
   }
 
-  private async verifyReceiptStatus(
-    receiptPromise: Promise<Result<{ status: string }>>,
-  ): Promise<Result<boolean>> {
+  private async verifyReceiptStatus(receiptPromise: Promise<Result<{ status: string }>>): Promise<Result<boolean>> {
     const result = await receiptPromise;
     return result.ok && result.value.status === 'success'
       ? { ok: true, value: true }

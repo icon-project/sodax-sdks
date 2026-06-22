@@ -369,9 +369,9 @@ describe('StacksSpokeService.deposit', () => {
     overrides: Partial<DepositParams<typeof STACKS, Raw>>,
   ): DepositParams<typeof STACKS, Raw> =>
     ({
-      // raw-mode needs the signer public key via srcPublicKey; srcAddress is always the real Stacks address.
+      // raw-mode needs the signer public key via extras.srcPublicKey; srcAddress is the real Stacks address.
       srcAddress: SRC_ADDR,
-      srcPublicKey: SRC_PUBKEY,
+      extras: { srcPublicKey: SRC_PUBKEY },
       srcChainKey: STACKS,
       to: HUB_WALLET,
       token: STACKS_BNUSD,
@@ -432,7 +432,7 @@ describe('StacksSpokeService.deposit', () => {
   });
 
   it('raw=true → throws when srcPublicKey is missing (needed to build the unsigned tx)', async () => {
-    await expect(stacksSpoke.deposit(depositParams<true>({ srcPublicKey: undefined, raw: true }))).rejects.toThrow(
+    await expect(stacksSpoke.deposit(depositParams<true>({ extras: { srcPublicKey: undefined }, raw: true }))).rejects.toThrow(
       'Stacks raw transactions require srcPublicKey',
     );
     // makeUnsignedContractCall must NOT have been invoked once the invariant fails.
@@ -443,14 +443,14 @@ describe('StacksSpokeService.deposit', () => {
     // Real key G derives SRC_ADDR; pairing it with a different real address must be rejected — otherwise
     // the user signs a tx for an account other than the one hub-wallet derivation used.
     await expect(
-      stacksSpoke.deposit(depositParams<true>({ srcPublicKey: SRC_PUBKEY, srcAddress: OTHER_ADDR, raw: true })),
+      stacksSpoke.deposit(depositParams<true>({ extras: { srcPublicKey: SRC_PUBKEY }, srcAddress: OTHER_ADDR, raw: true })),
     ).rejects.toThrow('does not match srcAddress');
     expect(mocks.makeUnsignedContractCall).not.toHaveBeenCalled();
   });
 
   it('raw=true → throws when srcPublicKey is not a valid public key (e.g. a Stacks address)', async () => {
     // A c32 address is not hex, so getAddressFromPublicKey fails to parse it — surfaced as a clean error.
-    await expect(stacksSpoke.deposit(depositParams<true>({ srcPublicKey: SRC_ADDR, raw: true }))).rejects.toThrow(
+    await expect(stacksSpoke.deposit(depositParams<true>({ extras: { srcPublicKey: SRC_ADDR }, raw: true }))).rejects.toThrow(
       'not a valid Stacks public key',
     );
     expect(mocks.makeUnsignedContractCall).not.toHaveBeenCalled();

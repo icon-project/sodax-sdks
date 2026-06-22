@@ -1852,7 +1852,7 @@ describe('SwapService.createIntent — extras (partnerFee + srcPublicKey)', () =
 
     expect(result.ok).toBe(true);
     const depositCall = (svc.spoke.deposit as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0];
-    expect(depositCall.srcPublicKey).toBe(srcPublicKey);
+    expect(depositCall.extras?.srcPublicKey).toBe(srcPublicKey);
   });
 
   it('rejects a Stacks raw intent when extras.srcPublicKey is missing', async () => {
@@ -1885,7 +1885,7 @@ describe('SwapService.createIntent — extras (partnerFee + srcPublicKey)', () =
 
     expect(result.ok).toBe(true);
     const depositCall = (svc.spoke.deposit as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0];
-    expect(depositCall.accessToken).toBe(accessToken);
+    expect(depositCall.extras?.accessToken).toBe(accessToken);
   });
 
   it('omits accessToken on the deposit params when extras.accessToken is absent (BitcoinSpokeService falls back to its radfi instance token)', async () => {
@@ -1902,7 +1902,7 @@ describe('SwapService.createIntent — extras (partnerFee + srcPublicKey)', () =
 
     expect(result.ok).toBe(true);
     const depositCall = (svc.spoke.deposit as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0];
-    expect(depositCall.accessToken).toBeUndefined();
+    expect(depositCall.extras?.accessToken).toBeUndefined();
   });
 });
 

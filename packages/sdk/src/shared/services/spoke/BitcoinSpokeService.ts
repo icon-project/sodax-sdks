@@ -379,14 +379,9 @@ export class BitcoinSpokeService {
     params: DepositParams<BitcoinChainKey, Raw>,
   ): Promise<TxReturnType<BitcoinChainKey, Raw>> {
     try {
-      const {
-        srcChainKey,
-        srcAddress: from,
-        token,
-        amount,
-        data = '0x',
-        accessToken = this.radfi.accessToken,
-      } = params;
+      const { srcChainKey, srcAddress: from, token, amount, data = '0x' } = params;
+      // Per-action Bound token from extras; falls back to the radfi instance token when omitted.
+      const accessToken = params.extras?.accessToken ?? this.radfi.accessToken;
       const chainConfig = this.config.getChainConfig(srcChainKey);
 
       const returnRawTx = (psbtBase64: string): TxReturnType<BitcoinChainKey, Raw> =>
