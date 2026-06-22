@@ -765,6 +765,9 @@ export class SwapService {
         srcChainKey: params.srcChainKey,
         srcAddress: walletAddress as GetAddressType<K>,
         srcPublicKey: extras?.srcPublicKey,
+        // Bitcoin TRADING raw: per-action Bound token. Falls back to the RadfiProvider instance
+        // token (config / setRadfiAccessToken) inside BitcoinSpokeService.deposit when undefined.
+        accessToken: extras?.accessToken,
         to: creatorHubWalletAddress,
         token: params.inputToken as GetTokenAddressType<K>,
         amount: params.inputAmount,

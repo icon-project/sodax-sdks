@@ -277,6 +277,12 @@ export interface CreateIntentParamsV2 {
   data?: string;
   /** Optional per-request partner-fee override embedded into the built intent. When omitted the backend applies its configured default. */
   partnerFee?: PartnerFeeV2;
+  /**
+   * Bound Exchange (Radfi) access token for Bitcoin TRADING-mode (`raw`) intents — supplied in the
+   * request body instead of an `x-bound-access-token` header so the token threads through the typed
+   * DTO. Required only when the source chain is Bitcoin in TRADING mode; ignored otherwise.
+   */
+  accessToken?: string;
 }
 
 /** POST /swaps/allowance/check — response body. */
