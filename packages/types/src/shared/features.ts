@@ -14,4 +14,5 @@ export type SodaxFeature =
   | 'migration'
   | 'dex'
   | 'partner'
-  | 'recovery';
+  | 'recovery'
+  | 'leverageYield';

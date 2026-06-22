@@ -87,6 +87,14 @@ pnpm dev                      # terminal B
 
 Requires `@sentry/react` installed (listed in `package.json`). To send to the **real** services instead, set `VITE_DD_INTAKE_URL` / `VITE_SENTRY_DSN` (drop the tunnel) — then DNS is required, as expected.
 
+## Analytics tracking (issue #175)
+
+The demo enables the SDK's opt-in user-action analytics so every feature flow it exercises is tracked.
+
+- `src/lib/analytics.ts` — `createDemoAnalytics()`: returns the `analytics` option for `new Sodax({ analytics })` (an `AnalyticsConfig` with `level: 'detailed'`). The sink logs each `AnalyticsEvent` to the console (`[Sodax Analytics] feature.action:phase`) and re-dispatches it as a `sodax:analytics` **window CustomEvent** (`ANALYTICS_EVENT_NAME`) so a UI panel can subscribe and render a live feed. A real integrator forwards `event` to their product-analytics backend instead.
+- Wired in `providers.tsx` via `sodaxConfig.analytics = createDemoAnalytics() ?? false`. Enabled by default; set `VITE_ENABLE_ANALYTICS=false` to disable (the helper returns `undefined`, so the SDK stays on its disabled default).
+- What flows: every feature's user-action methods emit `start` / `success` / `failure` — exercise any feature page and watch the console / a `sodax:analytics` listener. No demo change is needed as SDK emit-sites are enriched.
+
 ## Common pitfalls
 
 - **Node polyfills.** Uses `@bangjelkoski/vite-plugin-node-polyfills` (Bitcoin/Solana deps pull in `buffer`, `crypto`, etc.). If a new dependency requires a polyfill, add it there rather than in app code.

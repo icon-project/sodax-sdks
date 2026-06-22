@@ -98,6 +98,17 @@ SDK diagnostics go through `SodaxLogger`, resolved from `new Sodax({ logger })`.
 - Avoid adding new direct `console.*` calls in service code.
 - Keep runtime logging separate from backend config data.
 
+## Analytics (issue #175)
+
+Separate from logging: the SDK can emit **structured, opt-in user-action events** to a consumer-supplied sink. Unlike `logger`, analytics is **off by default** and events are structured (`feature` + `action` + `phase` + `level` + `data`) rather than free-form messages.
+
+- **Enable:** `new Sodax({ analytics: { sink, level?, features? } })`. The `analytics` option lives on `SodaxOptions` (in `@sodax/types`) next to `logger` and `fee` — client-side runtime, never on the backend-fetched `SodaxConfig`. Omit it (or pass `false`) to stay disabled.
+- **Types** live in `@sodax/types` (`shared/analytics.ts`): `SodaxAnalytics`, `AnalyticsEvent`, `AnalyticsConfig`, `AnalyticsOption = AnalyticsConfig | false`. The `feature` field is `SodaxFeature` (sourced from `@sodax/types`, re-exported from `errors/codes.ts`) so analytics events and `SodaxError`s share one feature taxonomy.
+- **Resolution** lives in `shared/analytics.ts` (`resolveAnalytics`, `noopAnalytics`, `ResolvedAnalytics`), defaulting to the no-op (disabled) emitter. The resolved emitter is held on `ConfigService` (`config.analytics`, `public readonly`) **outside** the swappable `SodaxConfig`, exactly like `config.logger` and `config.fee`.
+- **Emit gating** — `emit(feature, action, phase, build?, level?)` takes a **lazy thunk** invoked only when the event passes the enabled / per-feature / level gate, so payloads are never built when analytics is off. A throwing sink is swallowed (fire-and-forget); analytics never breaks a feature flow.
+- **`trackResult` is the canonical instrumentation pattern.** Each public action method is a thin wrapper delegating to a private `*Impl`: `return this.config.analytics.trackResult('<feature>', '<action>', () => this.<action>Impl(_params), { start?, success?, failure? })`. It emits `start`, runs the impl, then `success`/`failure` from the returned `Result`, returning it unchanged — one boundary call covers every internal return.
+- **Coverage — all features.** Every user-action flow is instrumented (action mirrors `context.action`): swap, moneyMarket (`supply`/`borrow`/`withdraw`/`repay`), bridge, staking, migration, dex, partner, recovery, leverageYield. Per-action `start`/`success` payloads can be enriched incrementally via each `trackResult` call's `data` builders.
+
 ## Build And Tests
 
 ```bash
