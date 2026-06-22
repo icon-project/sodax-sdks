@@ -985,9 +985,7 @@ describe('SwapService.createIntent', () => {
       expect(result.ok).toBe(true);
       if (result.ok) expect(result.value.tx).toBe(rawDepositTx);
 
-      // Address derivation runs against the personal address even in raw mode...
       expect(effectiveAddressSpy).toHaveBeenCalledWith('bc1qusersource');
-      // ...but the interactive Bound sign-in is skipped.
       expect(ensureRadfiSpy).not.toHaveBeenCalled();
 
       const depositCall = (svc.spoke.deposit as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
