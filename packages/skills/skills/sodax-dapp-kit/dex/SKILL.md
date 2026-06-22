@@ -1,6 +1,10 @@
 ---
 name: sodax-dapp-kit-dex
 description: 'Granular skill for the @sodax/dapp-kit v2 DEX feature only — React Query hooks for concentrated-liquidity LP plus asset deposit/withdraw: useDexDeposit, useDexWithdraw, useSupplyLiquidity, useDecreaseLiquidity, useClaimRewards, useDexApprove/useDexAllowance, the useCreate*Params builders, and reads (usePools, usePoolData, usePositionInfo, useLiquidityAmounts). Use when a React dapp task is concentrated-liquidity LP (e.g. "create LP position with dapp-kit", "useSupplyLiquidity hook", "increase/decrease liquidity in React", "claim LP fees hook", "deposit hub assets for LP"). Two-step flow: deposit assets → supply liquidity. Covers BOTH integration (new v2 hooks) and migration (port v1 dex hooks — field renames + srcChainKey, mint/increase routing). Links into the parent sodax-dapp-kit knowledge tree. For backend/Node, use the sodax-sdk skill.'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # DEX (dapp-kit granular skill)

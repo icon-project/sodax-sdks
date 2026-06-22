@@ -10,15 +10,25 @@ import { retry } from '../../utils/shared-utils.js';
 import type {
   RelayAction,
   RelayExtraData,
+  OnDemandRelayData,
   IntentDeliveryInfo,
   IntentRelayRequest,
   WaitUntilIntentExecutedPayload,
+  RelayTxStatus,
+  PacketData,
 } from '../../types/relay-types.js';
 import { isBitcoinChainKeyType, isSolanaChainKeyType } from '../../guards.js';
 
-export type { RelayAction, RelayExtraData, IntentDeliveryInfo, IntentRelayRequest, WaitUntilIntentExecutedPayload };
-
-export type RelayTxStatus = 'pending' | 'validating' | 'executing' | 'executed';
+export type {
+  RelayAction,
+  RelayExtraData,
+  OnDemandRelayData,
+  IntentDeliveryInfo,
+  IntentRelayRequest,
+  WaitUntilIntentExecutedPayload,
+  RelayTxStatus,
+  PacketData,
+};
 
 /**
  * Stable error message strings emitted by relay-layer helpers ({@link submitTransaction},
@@ -86,19 +96,6 @@ export type SubmitTxResponse = {
   message: string;
 };
 
-export type PacketData = {
-  src_chain_id: number;
-  src_tx_hash: string;
-  src_address: string;
-  status: RelayTxStatus;
-  dst_chain_id: number;
-  conn_sn: number;
-  dst_address: string;
-  dst_tx_hash: string;
-  signatures: string[];
-  payload: string;
-};
-
 export type GetTransactionPacketsResponse = {
   success: boolean;
   data: PacketData[];
@@ -134,10 +131,16 @@ export type IntentRelayRequestParams = SubmitTxParams | GetTransactionPacketsPar
 
 export type RelayAndWaitParams = {
   srcTxHash: string;
-  data: RelayExtraData;
+  // Usually `RelayExtraData` ({ address, payload }) for split-tx chains. Bitcoin on-demand
+  // borrow/withdraw instead pass the signed payload as an `OnDemandRelayData` JSON object.
+  data: RelayExtraData | OnDemandRelayData;
   chainKey: SpokeChainKey;
   relayerApiEndpoint: HttpUrl;
   timeout: number | undefined;
+  // Identity used to poll `get_transaction_packets`, when it differs from the submit `srcTxHash`.
+  // Bitcoin on-demand submits under tx_hash "withdraw" but the relay tracks the packet under a
+  // derived id (`od:<keccak256(payload_hex)>`). Defaults to `srcTxHash` for every other flow.
+  pollTxHash?: string;
 };
 
 async function postRequest<T extends RelayAction>(
@@ -267,10 +270,7 @@ export async function getPacket(
  * - `hardError`: persistent HTTP/transport failure (5xx, network errors after retries) —
  *   stop polling and surface RELAY_POLLING_FAILED with `error` as cause.
  */
-type PollOutcome =
-  | { kind: 'found'; packet: PacketData }
-  | { kind: 'continue' }
-  | { kind: 'hardError'; error: unknown };
+type PollOutcome = { kind: 'found'; packet: PacketData } | { kind: 'continue' } | { kind: 'hardError'; error: unknown };
 
 async function pollForExecutedPacket(payload: WaitUntilIntentExecutedPayload): Promise<PollOutcome> {
   const txPacketsResult = await getTransactionPackets(
@@ -297,9 +297,14 @@ async function pollForExecutedPacket(payload: WaitUntilIntentExecutedPayload): P
 
   const txPackets = txPacketsResult.value;
   if (txPackets.success && txPackets.data.length > 0) {
-    const packet = txPackets.data.find(
+    // A single src tx can emit multiple relay packets that all share `src_tx_hash`. Filter to the
+    // candidates, then let `selectPacket` disambiguate (defaults to first — the legacy behavior).
+    // The executed gate runs against the *selected* packet so we wait for the right packet to
+    // execute, rather than returning early when a sibling packet executes first.
+    const candidates = txPackets.data.filter(
       packet => packet.src_tx_hash.toLowerCase() === payload.srcTxHash.toLowerCase(),
     );
+    const packet = payload.selectPacket ? payload.selectPacket(candidates) : candidates[0];
     if (packet?.status === 'executed') {
       return { kind: 'found', packet };
     }
@@ -385,7 +390,7 @@ export async function waitUntilIntentExecuted(payload: WaitUntilIntentExecutedPa
  */
 export async function relayTxAndWaitPacket(params: RelayAndWaitParams): Promise<Result<PacketData>> {
   try {
-    const { srcTxHash, data, chainKey, relayerApiEndpoint, timeout = DEFAULT_RELAY_TX_TIMEOUT } = params;
+    const { srcTxHash, data, chainKey, relayerApiEndpoint, timeout = DEFAULT_RELAY_TX_TIMEOUT, pollTxHash } = params;
     const intentRelayChainId = getIntentRelayChainId(chainKey).toString();
 
     const isSplitTxChain = isSolanaChainKeyType(chainKey) || isBitcoinChainKeyType(chainKey);
@@ -410,7 +415,9 @@ export async function relayTxAndWaitPacket(params: RelayAndWaitParams): Promise<
 
     return await waitUntilIntentExecuted({
       intentRelayChainId,
-      srcTxHash,
+      // The relay may track the packet under a different id than the submit tx_hash (Bitcoin
+      // on-demand: submit "withdraw", poll the derived `od:<hash>`). Defaults to the submit id.
+      srcTxHash: pollTxHash ?? srcTxHash,
       timeout,
       apiUrl: relayerApiEndpoint,
     });

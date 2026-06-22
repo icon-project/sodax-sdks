@@ -788,9 +788,9 @@ export const spokeChainConfig = {
     supportedTokens: bitcoinSupportedTokens,
     radfi: {
       walletMode: 'TRADING',
-      apiUrl: 'https://api.radfi.co/api',
+      apiUrl: 'https://api.bound.exchange/api',
       apiKey: '',
-      umsUrl: 'https://ums.radfi.co/api',
+      umsUrl: 'https://api.ums.bound.exchange/api',
       accessToken: '',
       refreshToken: '',
     },
@@ -822,6 +822,21 @@ export const spokeChainConfig = {
       {
         assetCode: 'SODA',
         contractId: 'CAH5LKJC2ZB4RVUVEVL2QWJWNJLHQE2UF767ILLQ5EQ4O3OURR2XIUGM',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'sodaETH',
+        contractId: 'CDK5EWVTZLGSLI6D5OSES7XUKWZUKBXDRNOWUVDNPP5RJRP5EYWCW7SL',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'sodaBTC',
+        contractId: 'CD6XWBW74YVFDQQYUM2GALCULMA5MAWGP6NTCWF3ZYXP4Z7MEVY4JKBX',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'sodaBNB',
+        contractId: 'CCXTXZAFLVNTMORVWYB6BGL7YEW3U3ONDAL2FGBRGDUQH7AGANVQPRS6',
         assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
       },
     ],

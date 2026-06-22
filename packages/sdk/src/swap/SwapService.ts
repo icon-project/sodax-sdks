@@ -32,9 +32,11 @@ import {
   isBitcoinWalletProviderType,
   type RelayExtraData,
   type TxHashPair,
+  isStacksChainKeyType,
 } from '../shared/index.js';
 import { SolverApiService } from './SolverApiService.js';
 import { EvmSolverService } from './EvmSolverService.js';
+import { selectSolvedIntentPacket } from './selectSolvedIntentPacket.js';
 import { SodaxError } from '../errors/SodaxError.js';
 import { mapRelayFailure } from '../errors/relay-error-mapping.js';
 import { verifyFailed, intentCreationFailed, executionFailed, unknownFailed } from '../errors/wrappers.js';
@@ -175,7 +177,7 @@ export class SwapService {
 
   public constructor({ config, hubProvider, spoke }: SwapServiceConstructorParams) {
     this.solver = config.solver;
-    this.partnerFee = config.swaps.partnerFee;
+    this.partnerFee = config.swapPartnerFee;
     this.relayerApiEndpoint = config.relay.relayerApiEndpoint;
     this.config = config;
     this.hubProvider = hubProvider;
@@ -624,7 +626,7 @@ export class SwapService {
    * - `raw: false` — broadcasts the transaction; `walletProvider` is required and must match `K`.
    *
    * Validates tokens and chain keys against the active `ConfigService` before constructing the
-   * intent. Bitcoin source chains require an additional RadFi access token step.
+   * intent. Bitcoin source chains require an additional Bound Exchange access token step.
    *
    * @param _params - Intent parameters, source chain key, wallet provider (when `raw: false`),
    *   and optional `skipSimulation` flag.
@@ -680,6 +682,14 @@ export class SwapService {
           { ...baseCtx, field: 'minOutputAmount' },
         );
       }
+      if (isStacksChainKeyType(params.srcChainKey) && _params.raw === true) {
+        swapInvariant(
+          params.srcPublicKey !== undefined,
+          'srcPublicKey is required for Stacks createIntent (raw) — the source tx is built unsigned and needs the signer public key',
+          { ...baseCtx, field: 'srcPublicKey' },
+        );
+      }
+
       const personalAddress = params.srcAddress;
 
       // Bitcoin TRADING mode: use trading wallet for hub wallet derivation (see getEffectiveWalletAddress)
@@ -703,7 +713,7 @@ export class SwapService {
           createIntentParams: params,
           creatorHubWalletAddress,
           solverConfig: this.solver,
-          fee: this.config.swaps.partnerFee,
+          fee: this.config.swapPartnerFee,
           hubProvider: this.hubProvider,
         } as const;
 
@@ -736,12 +746,13 @@ export class SwapService {
         },
         creatorHubWalletAddress,
         this.config,
-        this.config.swaps.partnerFee,
+        this.config.swapPartnerFee,
       );
 
       const coreDepositParams = {
         srcChainKey: params.srcChainKey,
         srcAddress: walletAddress as GetAddressType<K>,
+        srcPublicKey: params.srcPublicKey,
         to: creatorHubWalletAddress,
         token: params.inputToken as GetTokenAddressType<K>,
         amount: params.inputAmount,
@@ -1115,6 +1126,11 @@ export class SwapService {
    * Use this after `getStatus` returns `SolverIntentStatusCode.SOLVED (3)` to obtain the
    * destination-chain transaction hash from `packet.dst_tx_hash`.
    *
+   * A single solver fill tx emits multiple relay packets sharing the same `src_tx_hash`. The
+   * user-facing `IntentFilled` delivery is the packet whose payload targets the hub intents
+   * contract; `selectSolvedIntentPacket` disambiguates so the returned `dst_tx_hash` is the
+   * destination delivery tx rather than an internal hop.
+   *
    * @param chainId - The destination spoke chain key (where output tokens are delivered).
    * @param fillTxHash - The solver's fill transaction hash, obtained from `getStatus.fill_tx_hash`.
    * @param timeout - Poll timeout in milliseconds. Defaults to `DEFAULT_RELAY_TX_TIMEOUT` (120 s).
@@ -1135,6 +1151,7 @@ export class SwapService {
       srcTxHash: fillTxHash,
       timeout,
       apiUrl: this.relayerApiEndpoint,
+      selectPacket: packets => selectSolvedIntentPacket(packets, this.solver.intentsContract),
     });
   }
 

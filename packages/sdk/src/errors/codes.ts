@@ -208,4 +208,5 @@ export const SODAX_FEATURES = [
   'dex',
   'partner',
   'recovery',
+  'leverageYield',
 ] as const satisfies ReadonlyArray<SodaxFeature>;

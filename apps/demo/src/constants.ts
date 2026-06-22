@@ -1,5 +1,4 @@
-import { type SolverConfig, spokeChainConfig } from '@sodax/sdk';
-import { ChainKeys, type SpokeChainKey } from '@sodax/sdk';
+import { type SolverConfig, spokeChainConfig, ChainKeys, type SpokeChainKey } from '@sodax/dapp-kit';
 
 declare global {
   interface Window {

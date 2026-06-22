@@ -10,10 +10,15 @@ import {
   type SolverConfig,
   type RelayConfig,
 } from '../common/constants.js';
-import type { MoneyMarketConfig, PartnerFee } from '../common/common.js';
+import type { MoneyMarketDefaultConfig, MoneyMarketOptions, PartnerFee, Prettify } from '../common/common.js';
 import { moneyMarketConfig } from '../moneyMarket/moneyMarket.js';
-import { dexConfig, type DexConfig } from '../dex/dex.js';
-import { swapsConfig, type SwapsConfig } from '../swap/swap.js';
+import { dexConfig, type DexDefaultConfig } from '../dex/dex.js';
+import { swapsConfig, type SwapsDefaultConfig, type SwapsOptions } from '../swap/swap.js';
+import {
+  leverageYieldConfig,
+  type LeverageYieldDefaultConfig,
+  type LeverageYieldOptions,
+} from '../leverageYield/leverageYield.js';
 import {
   spokeChainConfig,
   type HubConfig,
@@ -48,21 +53,48 @@ export type BitcoinSharedChainConfig = TxPollingConfig & {
   walletMode?: 'USER' | 'TRADING';
 };
 
-export type BridgeConfig = {
-  partnerFee: PartnerFee | undefined; // enables override of global partner fee
+export type BridgeConfig = Prettify<BridgeDefaultConfig & BridgeOptions>;
+
+export type BridgeOptions = {
+  partnerFee?: PartnerFee; // enables override of global partner fee
 };
 
-export const bridgeConfig = {
-  partnerFee: undefined,
-} satisfies BridgeConfig;
+export type BridgeDefaultConfig = {}; // kept for future extension
 
-export type SodaxConfig = {
-  fee: PartnerFee | undefined; // global partner fee which can be overridden by feature specific fee config (e.g. swap, money market, bridge, etc.)
+export const bridgeConfig = {} satisfies BridgeDefaultConfig;
+
+export type SodaxOptionalConfig = {
+  logger?: SodaxLoggerOption;
+  analytics?: AnalyticsOption; // Opt-in user-action analytics: an AnalyticsConfig or false (default, disabled). Resolved client-side; never fetched from or overwritten by the backend config.
+  fee?: PartnerFee;
+  swaps?: SwapsOptions;
+  moneyMarket?: MoneyMarketOptions;
+  bridge?: BridgeOptions;
+  leverageYield?: LeverageYieldOptions;
+};
+
+/**
+ * Options (always optional) accepted by `new Sodax(...)`. A deep-partial override of the {@link SodaxDefaultConfig} data
+ * contract, plus client-side runtime options and feature-specific option types that are deliberately
+ * kept OUT of `SodaxStaticConfig` itself.
+ */
+export type SodaxOptions = DeepPartial<SodaxDefaultConfig> & SodaxOptionalConfig;
+/**
+ * Consolidated config type that combines the default static config and the client provided options in Core SDK.
+ * Used in new Sodax constructor where clients can override static config and provide options for the services.
+ */
+export type SodaxConfig = Prettify<SodaxDefaultConfig & SodaxOptionalConfig>;
+
+/**
+ * Default static config data shape used as default config in Core SDK and also used in backend API config responses.
+ */
+export type SodaxDefaultConfig = {
   chains: Record<SpokeChainKey, SpokeChainConfig>;
-  swaps: SwapsConfig; // swaps config for supported swap tokens per chain
-  moneyMarket: MoneyMarketConfig; // Optional Money Market service enabling cross-chain lending and borrowing
-  bridge: BridgeConfig; // Optional Bridge config for partner fee
-  dex: DexConfig; // Optional Dex service enabling DEX operations
+  swaps: SwapsDefaultConfig; // swaps config for supported swap tokens per chain
+  moneyMarket: MoneyMarketDefaultConfig; // Optional Money Market service enabling cross-chain lending and borrowing
+  bridge: BridgeDefaultConfig; // Optional Bridge config for partner fee
+  dex: DexDefaultConfig; // Optional Dex service enabling DEX operations
+  leverageYield: LeverageYieldDefaultConfig; // Registry of deployed leverage-yield ERC-4626 vaults on Sonic
   hub: HubConfig; // Hub provider for the hub chain (e.g. Sonic mainnet)
   api: ApiConfig; // API config used to interact with the Backend API
   solver: SolverConfig;
@@ -70,29 +102,17 @@ export type SodaxConfig = {
 };
 
 /**
- * Options accepted by `new Sodax(...)`. A deep-partial override of the {@link SodaxConfig} data
- * contract, plus the client-side `logger` runtime option which is deliberately kept OUT of
- * `SodaxConfig` itself: `SodaxConfig` is the data shape fetched from / merged with the backend,
- * whereas `logger` is a local sink that is resolved once and never fetched or overwritten.
- *
- * Keeping `logger` here (rather than on `SodaxConfig`) means `DeepPartial<SodaxConfig>` no longer
- * makes the logger's methods optional, so the SDK can resolve `options.logger` without casting.
+ * Sodax default static data object which can always be overriden through Sodax instance (i.e. new Sodax(...config))
  */
-export type SodaxOptions = DeepPartial<SodaxConfig> & {
-  logger?: SodaxLoggerOption; // SDK log sink: 'console' (default) | 'silent' | a custom SodaxLogger. Resolved client-side; never fetched from or overwritten by the backend config.
-  analytics?: AnalyticsOption; // Opt-in user-action analytics: an AnalyticsConfig (sink + optional level/feature scoping) or false (default, disabled). Resolved client-side; never fetched from or overwritten by the backend config.
-};
-
-// default sodax config object which can always be overriden through Sodax instance (i.e. new Sodax(...config))
 export const sodaxConfig = {
-  fee: undefined,
   chains: spokeChainConfig,
   swaps: swapsConfig,
   moneyMarket: moneyMarketConfig,
   bridge: bridgeConfig,
   dex: dexConfig,
+  leverageYield: leverageYieldConfig,
   hub: hubConfig,
   api: apiConfig,
   solver: solverConfig,
   relay: relayConfig,
-} satisfies SodaxConfig;
+} satisfies SodaxDefaultConfig;

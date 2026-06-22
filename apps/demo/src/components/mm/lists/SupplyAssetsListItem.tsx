@@ -1,12 +1,18 @@
 import React, { type ReactElement, useMemo } from 'react';
 import { TableCell, TableRow } from '@/components/ui/table';
-import type { XToken, Address } from '@sodax/sdk';
+import {
+  ChainKeys,
+  type XToken,
+  type Address,
+  type FormatReserveUSDResponse,
+  type UserReserveData,
+} from '@sodax/dapp-kit';
 import { formatUnits } from 'viem';
-import type { FormatReserveUSDResponse, UserReserveData } from '@sodax/sdk';
 import { useReserveMetrics } from '@/hooks/useReserveMetrics';
 import { Button } from '@/components/ui/button';
 import {
   DUST_THRESHOLD,
+  BITCOIN_DUST_SATS,
   ATOKEN_DECIMALS,
   MAX_WITHDRAW_SAFETY_MARGIN,
   HF_LIMITED_THRESHOLD,
@@ -67,11 +73,15 @@ export function SupplyAssetsListItem({
       ? aTokenBalancesMap.get(aTokenAddress)
       : undefined;
 
+  // BTC is high-value with 8 decimals — show more precision and use the Bitcoin protocol dust
+  // (546 sats) instead of the flat token-unit threshold (which is ~1000 sats for BTC).
+  const isBtc = token.chainKey === ChainKeys.BITCOIN_MAINNET;
+  const displayDecimals = isBtc ? 8 : BALANCE_DISPLAY_DECIMALS;
+  const dustThreshold = isBtc ? BITCOIN_DUST_SATS / 10 ** token.decimals : DUST_THRESHOLD;
+
   // ALWAYS USE ATOKEN_DECIMALS (18) FOR aTOKENS
-  const formattedBalance =
-    aTokenBalance !== undefined
-      ? truncateToDecimals(Number(formatUnits(aTokenBalance, ATOKEN_DECIMALS)), BALANCE_DISPLAY_DECIMALS)
-      : '-';
+  const suppliedValue = aTokenBalance !== undefined ? Number(formatUnits(aTokenBalance, ATOKEN_DECIMALS)) : 0;
+  const formattedBalance = aTokenBalance !== undefined ? truncateToDecimals(suppliedValue, displayDecimals) : '-';
 
   /**
    * Health-factor-aware max withdrawal — Aave V3 formula.
@@ -128,13 +138,10 @@ export function SupplyAssetsListItem({
     return Number.isFinite(maxWithdrawNum) && maxWithdrawNum < fullBalance * HF_LIMITED_THRESHOLD;
   }, [aTokenBalance, maxWithdrawExact]);
 
-  // Check if user has meaningful supply: balance exists AND formatted amount is greater than DUST_THRESHOLD
-  // This prevents enabling withdraw button for dust amounts that display as "0.00000"
-  const hasSupply =
-    aTokenBalance !== undefined &&
-    aTokenBalance > 0n &&
-    formattedBalance !== '-' &&
-    Number.parseFloat(formattedBalance) > DUST_THRESHOLD;
+  // Check if user has meaningful supply: balance exists AND the raw supplied value is above dust.
+  // Compare the raw value (not the display-rounded string) so small-but-real BTC positions
+  // (e.g. 550 sats > 546 dust) aren't masked by display rounding.
+  const hasSupply = aTokenBalance !== undefined && aTokenBalance > 0n && suppliedValue > dustThreshold;
 
   return (
     <TableRow className="border-b border-cherry-grey/10 hover:bg-cream/20 transition-colors">

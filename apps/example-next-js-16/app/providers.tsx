@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SodaxWalletProvider, type SodaxWalletConfig } from '@sodax/wallet-sdk-react';
 import { SodaxProvider } from '@sodax/dapp-kit';
-import { ChainKeys, type DeepPartial, type SodaxConfig } from '@sodax/sdk';
+import { ChainKeys, SodaxOptions} from '@sodax/sdk';
 import type { State as WagmiState } from 'wagmi';
 
 const queryClient = new QueryClient();
@@ -14,7 +14,7 @@ const queryClient = new QueryClient();
 // (rate-limit on `rpc.soniclabs.com` has bitten preview deploys before).
 const SONIC_RPC = process.env.SONIC_RPC_URL ?? 'https://rpc.soniclabs.com';
 
-const sodaxConfig: DeepPartial<SodaxConfig> = {
+const sodaxConfig: SodaxOptions = {
   chains: {
     [ChainKeys.SONIC_MAINNET]: { rpcUrl: SONIC_RPC },
   },

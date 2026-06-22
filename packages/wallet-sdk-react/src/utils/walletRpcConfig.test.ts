@@ -30,8 +30,8 @@ describe('getEntryDefaults', () => {
   it('returns defaults from Bitcoin entry', () => {
     const entry = {
       rpcUrl: 'https://mempool.space/api',
-      radfiApiUrl: 'https://api.radfi.co/api',
-      radfiUmsUrl: 'https://ums.radfi.co/api',
+      radfiApiUrl: 'https://api.bound.exchange/api',
+      radfiUmsUrl: 'https://api.ums.bound.exchange/api',
       defaults: { defaultFinalize: true },
     };
     const result = getEntryDefaults<typeof ChainKeys.BITCOIN_MAINNET>(entry);
@@ -75,8 +75,8 @@ describe('getRpcUrl', () => {
   it('returns rpcUrl from Bitcoin entry (RpcConfig-extended)', () => {
     const entry = {
       rpcUrl: 'https://mempool.space/api',
-      radfiApiUrl: 'https://api.radfi.co/api',
-      radfiUmsUrl: 'https://ums.radfi.co/api',
+      radfiApiUrl: 'https://api.bound.exchange/api',
+      radfiUmsUrl: 'https://api.ums.bound.exchange/api',
     };
     expect(getRpcUrl<typeof ChainKeys.BITCOIN_MAINNET>(entry)).toBe('https://mempool.space/api');
   });

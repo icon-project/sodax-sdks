@@ -6,11 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertCircle, Loader2 } from 'lucide-react';
-import type { ClPositionInfo, PoolData, PoolKey } from '@sodax/sdk';
-import { baseChainInfo, type SpokeChainKey } from '@sodax/sdk';
-import { type IWalletProvider, type XAccount, getXChainType, useXService } from '@sodax/wallet-sdk-react';
-import { UserPositions } from '@/components/dex/UserPositions';
 import {
+  type ClPositionInfo,
+  type PoolData,
+  type PoolKey,
+  baseChainInfo,
+  type SpokeChainKey,
   createWithdrawParamsProps,
   useCreateDepositParams,
   useDexAllowance,
@@ -20,6 +21,8 @@ import {
   useSodaxContext,
   useXBalances,
 } from '@sodax/dapp-kit';
+import { type IWalletProvider, type XAccount, getXChainType, useXService } from '@sodax/wallet-sdk-react';
+import { UserPositions } from '@/components/dex/UserPositions';
 import { NavLink } from 'react-router';
 
 interface ManageLiquidityProps {

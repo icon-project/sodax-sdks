@@ -1,6 +1,10 @@
 ---
 name: sodax-sdk-backend-api
 description: 'Granular skill for the @sodax/sdk v2 BackendApiService — HTTP client to the SODAX backend for intent lookup, swap-tx submission, solver orderbook, money-market position/reserve reads, and (internally) config fetching. Use when the task touches a backend read or write (e.g. "submit swap tx to Sodax backend", "Sodax getIntentByHash", "fetch money market position from Sodax backend", "Sodax orderbook", "Sodax BackendApiService", "implement custom IConfigApi sandbox"). Covers BOTH integration and the load-bearing v1 → v2 Result-wrapping migration. Skill links into the parent sodax-sdk knowledge tree.'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # Backend API (Core SDK granular skill)

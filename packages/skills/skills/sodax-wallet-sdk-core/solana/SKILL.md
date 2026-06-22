@@ -1,6 +1,10 @@
 ---
 name: sodax-wallet-sdk-core-solana
 description: 'Granular skill for the @sodax/wallet-sdk-core v2 Solana wallet provider only — `SolanaWalletProvider` (backed by @solana/web3.js + wallet-adapter interfaces). Use when a backend / Node script / CI / bot / non-React browser flow needs to instantiate a Solana provider directly and sign + broadcast — e.g. "instantiate SolanaWalletProvider", "private-key Solana signing in Node", "build a v0 transaction", "sendTransactionWithConfirmation". Covers BOTH integration (write new v2 code) and migration (port v1 — almost a no-op at this surface: deep-import → barrel). Picks via Step 1. Links into the parent sodax-wallet-sdk-core knowledge tree. For React dapps use the sodax-wallet-sdk-react skill instead (get the typed provider via useWalletProvider).'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # Solana (`wallet-sdk-core` granular skill)

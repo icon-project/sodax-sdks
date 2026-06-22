@@ -1,6 +1,10 @@
 ---
 name: sodax-dapp-kit-bitcoin
 description: 'Granular skill for the @sodax/dapp-kit v2 Bitcoin/Radfi feature only — React Query hooks for Bitcoin trading via the Radfi protocol: useRadfiAuth, useRadfiSession, useTradingWallet, useFundTradingWallet, useRadfiWithdraw, useExpiredUtxos, useRenewUtxos, useBitcoinBalance, useTradingWalletBalance. This is a dapp-kit-UNIQUE surface (no @sodax/sdk equivalent — the flows are React-shaped). Use when a React dapp task is Bitcoin/Radfi (e.g. "Radfi session hook", "fund trading wallet hook", "Radfi withdraw in React", "manage Bitcoin UTXOs hook", "BIP322 auth with dapp-kit"). Covers BOTH integration (new v2 hooks) and migration (port v1 Radfi hooks — mostly signature tightening, flow unchanged). Links into the parent sodax-dapp-kit knowledge tree.'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # Bitcoin / Radfi (dapp-kit granular skill)
