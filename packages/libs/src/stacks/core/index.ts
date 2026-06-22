@@ -29,6 +29,7 @@ export {
   broadcastTransaction,
   fetchCallReadOnlyFunction,
   getAddressFromPrivateKey,
+  getAddressFromPublicKey,
   makeContractCall,
   makeSTXTokenTransfer,
   PostConditionMode,

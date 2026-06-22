@@ -56,6 +56,7 @@ const ok = (config: SodaxConfig, version = CONFIG_VERSION): Result<GetAllConfigA
 });
 
 // TODO(config-v2): un-skip + rewrite mocks for the flattened GetAllConfigApiResponse when ConfigService.initialize is re-enabled.
+// biome-ignore lint/suspicious/noSkippedTests: gated on the not-yet-live config-v2 endpoint (see TODO above); the active no-op suite covers current behavior.
 describe.skip('ConfigService.initialize — user override is preserved over dynamic config', () => {
   it('re-applies a top-level user override on top of a valid dynamic config', async () => {
     // Remote config carries a DIFFERENT fee; without the fix it would clobber the user's.
@@ -121,6 +122,7 @@ describe.skip('ConfigService.initialize — user override is preserved over dyna
 });
 
 // TODO(config-v2): un-skip + rewrite mocks for the flattened GetAllConfigApiResponse when ConfigService.initialize is re-enabled.
+// biome-ignore lint/suspicious/noSkippedTests: gated on the not-yet-live config-v2 endpoint (see TODO above); the active no-op suite covers current behavior.
 describe.skip('ConfigService.initialize — fallback paths keep the merged config', () => {
   it('keeps the user override when the dynamic config version is too old', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -176,6 +178,7 @@ describe.skip('ConfigService.initialize — fallback paths keep the merged confi
 });
 
 // TODO(config-v2): un-skip + rewrite mocks for the flattened GetAllConfigApiResponse when ConfigService.initialize is re-enabled.
+// biome-ignore lint/suspicious/noSkippedTests: gated on the not-yet-live config-v2 endpoint (see TODO above); the active no-op suite covers current behavior.
 describe.skip('ConfigService.initialize — PartnerFee variant is atomic, not deep-merged', () => {
   it('a percentage user override replaces an amount-variant dynamic fee wholesale (no hybrid)', async () => {
     // The regression: a naive deep-merge would yield { address, amount, percentage }, which downstream
@@ -229,6 +232,7 @@ describe.skip('ConfigService.initialize — PartnerFee variant is atomic, not de
 });
 
 // TODO(config-v2): un-skip + rewrite mocks for the flattened GetAllConfigApiResponse when ConfigService.initialize is re-enabled.
+// biome-ignore lint/suspicious/noSkippedTests: gated on the not-yet-live config-v2 endpoint (see TODO above); the active no-op suite covers current behavior.
 describe.skip('ConfigService.initialize — commit-last: a rebuild failure leaves prior state intact', () => {
   it('keeps the previously committed config and stays uninitialized when the rebuild throws', async () => {
     // Structurally valid version, but the dynamic config's dex map is removed so the rebuild hits

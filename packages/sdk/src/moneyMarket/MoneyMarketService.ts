@@ -233,7 +233,7 @@ export class MoneyMarketService {
     this.config = config;
     this.hubProvider = hubProvider;
     this.spoke = spoke;
-    this.partnerFee = config.moneyMarket.partnerFee;
+    this.partnerFee = config.moneyMarketPartnerFee;
     this.relayerApiEndpoint = config.relay.relayerApiEndpoint;
     this.data = new MoneyMarketDataService({ hubProvider, config: config });
   }

@@ -11,6 +11,7 @@ Pair: [`features/bitcoin.md`](../../../migration-v1-to-v2/knowledge/features/bit
 // Session lifecycle
 useRadfiAuth({ mutationOptions });               // Authenticate via BIP322 signing
 useRadfiSession(walletProvider);                 // Manage full lifecycle (login, refresh, auto-refresh)
+useEnsureRadfiAccessToken({ mutationOptions });  // Ensure a fresh Bound token; resolves to the token string
 useTradingWallet(walletAddress);                 // Synchronous: read persisted session
 
 // Balances
@@ -23,6 +24,8 @@ useRadfiWithdraw({ mutationOptions });
 useExpiredUtxos({ params: { walletProvider, tradingAddress }, queryOptions }); // Polls 60s
 useRenewUtxos({ mutationOptions });
 ```
+
+`useEnsureRadfiAccessToken` is for raw / server-side `createIntent`: it resolves a valid Bound token to forward as `extras.accessToken` (Bitcoin-gated) on a `raw: true` swap intent, or as the `accessToken` field on a backend createIntent DTO. See the `sodax-sdk` skill (swap feature) for the `extras.accessToken` slot.
 
 ## Session flow
 
@@ -63,6 +66,7 @@ type RenewUtxosVars = { txIdVouts: string[]; walletProvider: IBitcoinWalletProvi
 | Hook | Returns |
 |---|---|
 | `useRadfiAuth` | `SafeUseMutationResult<RadfiAuthResult, Error, UseRadfiAuthVars>` where `RadfiAuthResult = { accessToken, refreshToken, tradingAddress }` (3 fields, NOT `RadfiSession` — the hook persists `publicKey` to localStorage internally but doesn't return it) |
+| `useEnsureRadfiAccessToken` | `SafeUseMutationResult<string, Error, { walletProvider }>` — resolves to a valid Bound Exchange access token (silent refresh when possible, else BIP322 re-auth) |
 | `useFundTradingWallet` | `SafeUseMutationResult<TxId, Error, ...>` |
 | `useRadfiWithdraw` | `SafeUseMutationResult<{ txId, fee }, Error, ...>` |
 | `useRenewUtxos` | `SafeUseMutationResult<TxId, Error, ...>` |

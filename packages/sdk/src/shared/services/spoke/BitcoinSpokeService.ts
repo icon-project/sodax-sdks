@@ -378,7 +378,7 @@ export class BitcoinSpokeService {
    * Deposit operation - transfer BTC to the asset manager
    */
   public async deposit<Raw extends boolean = false>(
-    params: DepositParams<BitcoinChainKey, Raw> & { accessToken?: string },
+    params: DepositParams<BitcoinChainKey, Raw>,
   ): Promise<TxReturnType<BitcoinChainKey, Raw>> {
     try {
       const {

@@ -2,7 +2,7 @@
 
 Learn how to configure the Sodax SDK for your application. The SDK supports Swaps (intent-based solver swaps), Money Market (cross-chain lending and borrowing), and many other cross-chain DeFi services. All feature configurations are optional—you can use just the features you need.
 
-The canonical TypeScript shape is [`SodaxConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/sodax-config/sodax-config.ts) in `@sodax/types` (re-exported from `@sodax/sdk`).
+`new Sodax(...)` accepts [`SodaxOptions`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/sodax-config/sodax-config.ts) — a deep-partial override of the static [`SodaxDefaultConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/sodax-config/sodax-config.ts) data shape plus client-side options (`logger`, global `fee`, and per-feature `partnerFee` options). The merged result is [`SodaxConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/sodax-config/sodax-config.ts) (exposed as `sodax.instanceConfig`). All three live in `@sodax/types` and are re-exported from `@sodax/sdk`.
 
 ## Basic Configuration
 
@@ -16,7 +16,7 @@ import { Sodax } from '@sodax/sdk';
 const sodax = new Sodax();
 ```
 
-The constructor signature is `new Sodax(config?: SodaxOptions)`, where `SodaxOptions = DeepPartial<SodaxConfig> & { logger?: SodaxLoggerOption; swapsOptions?: SwapsOptions }` — a deep-partial override of the config data contract plus client-side runtime options: the `logger` sink (see [LOGGING.md](./LOGGING.md)) and `swapsOptions` (see [Backend submit-tx 2-step](#backend-submit-tx-2-step-swapsoptionsusebackendsubmittx)). These runtime options are resolved locally and are never fetched from or merged into the backend config. When called with no arguments the SDK merges your overrides with the packaged static defaults ([`sodaxConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/sodax-config/sodax-config.ts)) using a recursive `deepMerge`. Omitted keys keep their default values.
+The constructor signature is `new Sodax(config?: SodaxOptions)`, where `SodaxOptions = DeepPartial<SodaxDefaultConfig> & SodaxOptionalConfig` — a deep-partial override of the `SodaxDefaultConfig` data contract plus the client-side options: the `logger` sink (see [LOGGING.md](./LOGGING.md)), the global partner `fee`, and per-feature `partnerFee` options. The `logger` and global `fee` are kept off the data contract: they are resolved once and never fetched from or overwritten by the backend config. When called with no arguments the SDK merges your overrides with the packaged static defaults ([`sodaxConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/sodax-config/sodax-config.ts)) using a recursive `deepMerge`. Omitted keys keep their default values.
 
 ### Dynamic Configuration
 
@@ -33,24 +33,38 @@ if (!initResult.ok) {
 
 ## SodaxConfig overview
 
-Top-level keys on `SodaxConfig`:
+Top-level data keys (the `SodaxDefaultConfig` shape carried inside `SodaxConfig`):
 
 | Key | Type (summary) | Role |
 |-----|----------------|------|
-| `fee` | `PartnerFee \| undefined` | Optional global fee field on the config object; swap / money market / bridge each have their own `partnerFee` used by those services (see below). |
 | `chains` | `Record<SpokeChainKey, SpokeChainConfig>` | Per-spoke chain addresses, tokens, RPC settings, polling. |
-| `swaps` | `SwapsConfig` | Swap partner fee and per-chain solver-supported token lists. |
-| `moneyMarket` | `MoneyMarketConfig` | Lending pool addresses, reserve assets, MM partner fee, supported tokens. |
-| `bridge` | `BridgeConfig` | Optional bridge partner fee override. |
+| `swaps` | `SwapsConfig` | Per-chain solver-supported token lists, plus an optional per-feature `partnerFee`. |
+| `moneyMarket` | `MoneyMarketConfig` | Lending pool addresses, reserve assets, supported tokens, plus an optional per-feature `partnerFee`. |
+| `bridge` | `BridgeConfig` | Optional bridge per-feature `partnerFee`. |
 | `dex` | `DexConfig` | Concentrated liquidity contract set and pool keys (Sonic hub). |
+| `leverageYield` | `LeverageYieldConfig` | Registry of leverage-yield ERC-4626 vaults on the hub, plus an optional per-feature `partnerFee`. |
 | `hub` | `HubConfig` | Hub chain (Sonic) metadata, contract addresses, and `rpcUrl` used by `EvmHubProvider`. |
 | `api` | `ApiConfig` | Backend API config — flat `BaseApiConfig` (`{ baseURL, timeout, headers }`, shared by `sodax.api.swaps`) or `CustomApiConfig` to point swaps at its own endpoint. |
 | `solver` | `SolverConfig` | Intents contract addresses and solver HTTP API endpoint. |
 | `relay` | `RelayConfig` | Relayer HTTP endpoint and spoke-to-intent relay chain ID map. |
 
+The global partner `fee` is **not** a data key — it is a `SodaxOptions` client-side option (like `logger`). Set it via `new Sodax({ fee })` and read the resolved value back on `sodax.config.fee`. It is the default applied to any feature whose own `partnerFee` is unset (see [Partner Fees](#partner-fees)).
+
 ### Partner Fees
 
-Configure partner fees per feature. `SwapService` reads `swaps.partnerFee`, `MoneyMarketService` reads `moneyMarket.partnerFee`, and `BridgeService` reads `bridge.partnerFee`. See [Monetize SDK](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/MONETIZE_SDK.md) for usage details and per-request overrides.
+Set a global `fee` once, override it per feature, or both. The effective fee for a feature is `featureFee ?? fee` — a feature's own `partnerFee` wins, otherwise the global `fee` applies. Services read the resolved value through `ConfigService` getters: `SwapService` reads `config.swapPartnerFee`, `MoneyMarketService` reads `config.moneyMarketPartnerFee`, `BridgeService` reads `config.bridgePartnerFee`, and `LeverageYieldService` reads `config.leverageYieldPartnerFee`. See [Monetize SDK](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/MONETIZE_SDK.md) for usage details and per-request overrides.
+
+```typescript
+import { Sodax, PartnerFee } from '@sodax/sdk';
+
+const partnerFee: PartnerFee = {
+  address: '0x0000000000000000000000000000000000000000',
+  percentage: 100, // basis points: 100 = 1%, 10_000 = 100%
+};
+
+// Global fee applied to every feature that has no per-feature override
+const sodaxWithGlobalFee = new Sodax({ fee: partnerFee });
+```
 
 ```typescript
 import { Sodax, PartnerFee } from '@sodax/sdk';
@@ -130,12 +144,12 @@ Partner fees for swaps belong in **`swaps.partnerFee`**, not inside `solver`.
 
 `SwapsConfig` includes `supportedTokens: Record<SpokeChainKey, readonly XToken[]>`. Normally you rely on the packaged lists. If you override them, remember that **`deepMerge` replaces arrays wholesale**—provide the full list for any chain you touch, or omit `supportedTokens` to keep defaults.
 
-### Backend submit-tx 2-step (`swapsOptions.useBackendSubmitTx`)
+### Backend submit-tx 2-step (`swaps.useBackendSubmitTx`)
 
-`swapsOptions` is a **client-side runtime option** on `SodaxOptions` (like `logger`) — it is NOT part of the backend-fetched `SodaxConfig`. Setting `useBackendSubmitTx: true` opts `sodax.swaps.swap()` into a backend-driven **2-step flow**: after the intent tx is created + verified on the source chain, the SDK hands it to the backend swaps API (`sodax.api.swaps.submitTx`), which relays and post-executes server-side; the SDK polls submit-tx status and returns the same `SwapResponse`.
+`swaps` is a **client-side runtime option** on `SodaxOptions` (like `logger`) — it is NOT part of the backend-fetched `SodaxConfig`. Setting `useBackendSubmitTx: true` opts `sodax.swaps.swap()` into a backend-driven **2-step flow**: after the intent tx is created + verified on the source chain, the SDK hands it to the backend swaps API (`sodax.api.swaps.submitTx`), which relays and post-executes server-side; the SDK polls submit-tx status and returns the same `SwapResponse`.
 
 ```typescript
-const sodax = new Sodax({ swapsOptions: { useBackendSubmitTx: true } });
+const sodax = new Sodax({ swaps: { useBackendSubmitTx: true } });
 ```
 
 If the backend path does not reach `executed` for **any** reason (submission rejected, terminal `failed`/abandoned status, or poll timeout), `swap()` automatically falls back to the fully client-side relay + post-execution so the swap still completes — **safely**, because re-relaying / re-posting an already-processed swap is idempotent (no double-fill; verified by `e2e-tests/e2e-relay.test.ts`), and the backend poll + fallback share one `timeout` budget (total latency ≤ one `timeout`). Default is `false`. See [SWAPS.md](./SWAPS.md#backend-2-step-submit-opt-in) for the flow.

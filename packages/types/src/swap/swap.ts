@@ -1,5 +1,5 @@
 // currently supported spoke chain tokens for solver
-import type { PartnerFee } from '../common/common.js';
+import type { PartnerFee, Prettify } from '../common/common.js';
 import type { SpokeChainKey } from '../chains/chains.js';
 import { type XToken, SodaTokens, LsodaTokens } from '../chains/tokens.js';
 import { spokeChainConfig, ChainKeys } from '../chains/chains.js';
@@ -12,7 +12,8 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.USDT,
     spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.wS,
     spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.SODA,
-    ...Object.values(SodaTokens),
+    // sodaUSDS is staging-only — see stagingSwapSupportedTokens
+    ...Object.values(SodaTokens).filter(t => t !== SodaTokens.sodaUSDS),
     ...Object.values(LsodaTokens),
   ] as const satisfies XToken[],
   [ChainKeys.AVALANCHE_MAINNET]: [
@@ -32,7 +33,6 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.tBTC,
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.USDC,
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.USDT,
-    spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.SODA,
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.ARB,
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.AAVE,
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.LINK,
@@ -40,21 +40,20 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.CRV,
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.PENDLE,
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.rETH,
+    spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.SODA,
   ] as const satisfies XToken[],
   [ChainKeys.BASE_MAINNET]: [
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.ETH,
-    spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.bnUSD,
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.weETH,
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.USDC,
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.wstETH,
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.cbBTC,
-    spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.SODA,
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.VIRTUAL,
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.cbETH,
+    spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.SODA,
   ] as const satisfies XToken[],
   [ChainKeys.OPTIMISM_MAINNET]: [
     spokeChainConfig[ChainKeys.OPTIMISM_MAINNET].supportedTokens.ETH,
-    spokeChainConfig[ChainKeys.OPTIMISM_MAINNET].supportedTokens.bnUSD,
     spokeChainConfig[ChainKeys.OPTIMISM_MAINNET].supportedTokens.USDC,
     spokeChainConfig[ChainKeys.OPTIMISM_MAINNET].supportedTokens.wstETH,
     // spokeChainConfig[OPTIMISM_MAINNET_CHAIN_ID].supportedTokens.weETH, // NOTE: Not Implemented
@@ -62,6 +61,7 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.OPTIMISM_MAINNET].supportedTokens.SODA,
     spokeChainConfig[ChainKeys.OPTIMISM_MAINNET].supportedTokens.OP,
     spokeChainConfig[ChainKeys.OPTIMISM_MAINNET].supportedTokens.WBTC,
+    spokeChainConfig[ChainKeys.OPTIMISM_MAINNET].supportedTokens.bnUSD,
   ] as const satisfies XToken[],
   [ChainKeys.POLYGON_MAINNET]: [
     spokeChainConfig[ChainKeys.POLYGON_MAINNET].supportedTokens.POL,
@@ -117,7 +117,6 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.LIGHTLINK_MAINNET].supportedTokens['SUI.LL'],
     spokeChainConfig[ChainKeys.LIGHTLINK_MAINNET].supportedTokens['S.LL'],
     spokeChainConfig[ChainKeys.LIGHTLINK_MAINNET].supportedTokens['POL.LL'],
-    spokeChainConfig[ChainKeys.LIGHTLINK_MAINNET].supportedTokens['HYPE.LL'],
     spokeChainConfig[ChainKeys.LIGHTLINK_MAINNET].supportedTokens.LL,
   ] as const satisfies XToken[],
   [ChainKeys.SOLANA_MAINNET]: [
@@ -155,6 +154,9 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.bnUSD, // NOTE: Not Implemented
     spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.USDC,
     spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.SODA,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.sodaETH,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.sodaBTC,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.sodaBNB,
   ] as const satisfies XToken[],
   [ChainKeys.SUI_MAINNET]: [
     spokeChainConfig[ChainKeys.SUI_MAINNET].supportedTokens.SUI,
@@ -171,12 +173,8 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.SUI_MAINNET].supportedTokens.WAL,
     spokeChainConfig[ChainKeys.SUI_MAINNET].supportedTokens.NAVX,
   ] as const satisfies XToken[],
-  [ChainKeys.INJECTIVE_MAINNET]: [
-    spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.INJ,
-    spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.bnUSD,
-    spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.USDC,
-    // spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.SODA, // NOTE: not in solver wiki
-  ] as const satisfies XToken[],
+  // Injective is currently staging-only — see stagingSwapSupportedTokens
+  [ChainKeys.INJECTIVE_MAINNET]: [] as const satisfies XToken[],
   [ChainKeys.NEAR_MAINNET]: [
     spokeChainConfig[ChainKeys.NEAR_MAINNET].supportedTokens.NEAR,
     spokeChainConfig[ChainKeys.NEAR_MAINNET].supportedTokens.bnUSD,
@@ -244,19 +242,81 @@ export const swapSupportedTokens = {
   ] as const satisfies XToken[],
 } as const satisfies Record<SpokeChainKey, readonly XToken[]>;
 
-export type SwapsConfig = {
-  partnerFee: PartnerFee | undefined; // enables override of global partner fee
+// Tokens supported ONLY in the staging solver environment.
+// The staging solver supports every production token PLUS these — use
+// `getStagingSolverTokens` for the full staging set. The two lists are disjoint per chain;
+// a token lives in exactly one of them. It is upon the user to provide a token valid for
+// their target environment — validation accepts either (see `isSwapSupportedToken`).
+// Derived from the production solver oracle (tokens absent there).
+export const stagingSwapSupportedTokens = {
+  [ChainKeys.SONIC_MAINNET]: [SodaTokens.sodaUSDS] as const satisfies XToken[],
+  [ChainKeys.AVALANCHE_MAINNET]: [],
+  [ChainKeys.ARBITRUM_MAINNET]: [],
+  [ChainKeys.BASE_MAINNET]: [
+    spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.bnUSD,
+    spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.AERO,
+  ] as const satisfies XToken[],
+  [ChainKeys.OPTIMISM_MAINNET]: [],
+  [ChainKeys.POLYGON_MAINNET]: [
+    spokeChainConfig[ChainKeys.POLYGON_MAINNET].supportedTokens.USDT,
+    spokeChainConfig[ChainKeys.POLYGON_MAINNET].supportedTokens.wstETH,
+  ] as const satisfies XToken[],
+  [ChainKeys.BSC_MAINNET]: [],
+  [ChainKeys.HYPEREVM_MAINNET]: [],
+  [ChainKeys.LIGHTLINK_MAINNET]: [
+    spokeChainConfig[ChainKeys.LIGHTLINK_MAINNET].supportedTokens['HYPE.LL'],
+  ] as const satisfies XToken[],
+  [ChainKeys.SOLANA_MAINNET]: [],
+  [ChainKeys.ICON_MAINNET]: [],
+  [ChainKeys.STELLAR_MAINNET]: [],
+  [ChainKeys.SUI_MAINNET]: [spokeChainConfig[ChainKeys.SUI_MAINNET].supportedTokens.USDT] as const satisfies XToken[],
+  [ChainKeys.INJECTIVE_MAINNET]: [
+    spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.INJ,
+    spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.bnUSD,
+    spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.USDC,
+    // spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.SODA, // NOTE: not in solver wiki
+  ] as const satisfies XToken[],
+  [ChainKeys.NEAR_MAINNET]: [],
+  [ChainKeys.BITCOIN_MAINNET]: [],
+  [ChainKeys.ETHEREUM_MAINNET]: [
+    spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.wstETH,
+    spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.weETH,
+  ] as const satisfies XToken[],
+  [ChainKeys.REDBELLY_MAINNET]: [],
+  [ChainKeys.KAIA_MAINNET]: [],
+  [ChainKeys.STACKS_MAINNET]: [],
+} as const satisfies Record<SpokeChainKey, readonly XToken[]>;
+
+export type SwapsOptions = {
+  partnerFee?: PartnerFee; // enables override of global partner fee
+  // Client-side toggle: route `swap()` through the backend submit-tx 2-step (BE relays + post-executes).
+  // Resolved once at construction; never fetched from or merged into the backend config. Default false.
+  useBackendSubmitTx?: boolean;
+};
+
+export type SwapsDefaultConfig = {
   supportedTokens: Record<SpokeChainKey, readonly XToken[]>;
 };
 
-export const swapsConfig = {
-  partnerFee: undefined,
-  supportedTokens: swapSupportedTokens,
-} satisfies SwapsConfig;
+export type SwapsConfig = Prettify<SwapsDefaultConfig & SwapsOptions>;
 
-// get supported spoke chain tokens for solver
+export const swapsConfig = {
+  supportedTokens: swapSupportedTokens,
+} satisfies SwapsDefaultConfig;
+
+// get production supported spoke chain tokens for solver
 export const getSupportedSolverTokens = (chainId: SpokeChainKey): readonly XToken[] => swapSupportedTokens[chainId];
 
-// check if token address for given spoke chain id is supported
+// get supported spoke chain tokens for the staging solver — staging supports every
+// production token plus the staging-only ones
+export const getStagingSolverTokens = (chainId: SpokeChainKey): readonly XToken[] => [
+  ...swapSupportedTokens[chainId],
+  ...stagingSwapSupportedTokens[chainId],
+];
+
+// check if token address for given spoke chain id is supported in either the production or
+// staging solver environment — the caller is responsible for targeting the correct environment.
 export const isSwapSupportedToken = (chainId: SpokeChainKey, token: string): boolean =>
-  swapSupportedTokens[chainId].some(t => t.address.toLowerCase() === token.toLowerCase());
+  [...swapSupportedTokens[chainId], ...stagingSwapSupportedTokens[chainId]].some(
+    t => t.address.toLowerCase() === token.toLowerCase(),
+  );

@@ -13,7 +13,7 @@ Access: `sodax.swaps`. Service class: `SwapService`. Feature tag for errors: `'s
 
 Two execution paths:
 
-- **`swap`** — full flow in one call. Wraps `createIntent` + relay + `postExecution`. Returns `SwapResponse` on success. Opt into a **backend-driven 2-step** variant (the backend relays + post-executes server-side) with `new Sodax({ swapsOptions: { useBackendSubmitTx: true } })`; on any non-success it falls back to the client-side relay, returning the same `SwapResponse`.
+- **`swap`** — full flow in one call. Wraps `createIntent` + relay + `postExecution`. Returns `SwapResponse` on success. Opt into a **backend-driven 2-step** variant (the backend relays + post-executes server-side) with `new Sodax({ swaps: { useBackendSubmitTx: true } })`; on any non-success it falls back to the client-side relay, returning the same `SwapResponse`.
 - **`createIntent` + backend submit** — break it apart for custom relay handling. `createIntent` returns `{ tx, intent, relayData }`; submit `relayData.payload` to the backend swap-tx endpoint via `sodax.api.swaps.submitTx`.
 
 ## Public methods
@@ -21,7 +21,9 @@ Two execution paths:
 ```ts
 sodax.swaps.swap<K extends SpokeChainKey>(action: SwapActionParams<K, false>): Promise<Result<SwapResponse, SodaxError>>;
 
-sodax.swaps.getQuote(payload: SolverIntentQuoteRequest): Promise<Result<SolverIntentQuoteResponse, SolverErrorResponse>>;
+sodax.swaps.getQuote(payload: GetQuoteParams): Promise<Result<SolverIntentQuoteResponse, SolverErrorResponse>>;
+//   GetQuoteParams = SolverIntentQuoteRequest & { partnerFee?: PartnerFee } — pass the request as before;
+//   optionally add `partnerFee` to override the configured swap fee for this quote (matches extras.partnerFee).
 //   Preview the output amount before signing — useful for UX confirmations / bot previews.
 
 sodax.swaps.createIntent<K extends SpokeChainKey, Raw extends boolean>(
@@ -52,10 +54,20 @@ Generic `K extends SpokeChainKey` carries the literal source chain key. `WalletP
 ```ts
 type SwapActionParams<K extends SpokeChainKey, Raw extends boolean> = {
   params: CreateIntentParams<K>;
+  extras?: SwapExtras<K>;    // per-action overrides (optional)
   skipSimulation?: boolean;
   timeout?: number;
-  fee?: PartnerFee;
 } & WalletProviderSlot<K, Raw>;
+```
+
+`extras` and every field on it are optional. `partnerFee` overrides the configured swap fee for this single action (the same override `getQuote` accepts, below); `srcPublicKey` is chain-key-gated — only typeable when `K` is a Stacks chain (`never` elsewhere) and only needed for raw (`raw: true`) Stacks `createIntent`; `accessToken` is likewise chain-key-gated to Bitcoin and only needed for raw Bitcoin TRADING-mode `createIntent` — it overrides the RadfiProvider's configured Bound Exchange token, falling back to that instance token when omitted. `LimitOrderActionParams<K, Raw>` carries the same `SwapExtras<K>`.
+
+```ts
+type SwapExtras<K extends SpokeChainKey> = {
+  partnerFee?: PartnerFee;   // overrides the configured swap fee for this action; falls back to config
+  srcPublicKey?: string;     // Stacks only (raw createIntent): signer public key. Chain-key-gated — `never` on non-Stacks K.
+  accessToken?: string;      // Bitcoin only (raw TRADING createIntent): Bound Exchange token. Chain-key-gated — `never` on non-Bitcoin K.
+};
 ```
 
 `CreateIntentParams<K>`:

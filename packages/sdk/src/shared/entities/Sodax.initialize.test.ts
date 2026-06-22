@@ -30,6 +30,7 @@ afterEach(() => {
 });
 
 // TODO(config-v2): un-skip when ConfigService.initialize is re-enabled; rewrite mocks for the flattened GetAllConfigApiResponse.
+// biome-ignore lint/suspicious/noSkippedTests: gated on the not-yet-live config-v2 endpoint (see TODO above); re-enable with ConfigService.initialize.
 describe.skip('Sodax.initialize — regression: dynamic config must not clobber user overrides', () => {
   it('preserves a top-level user override through a successful initialize() while adopting remote values elsewhere', async () => {
     const sodax = new Sodax({ fee: USER_FEE });

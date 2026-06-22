@@ -118,11 +118,11 @@ export class BridgeService {
    * @returns Fee amount to be deducted, in the same units as `inputAmount`.
    */
   public getFee(inputAmount: bigint): bigint {
-    if (!this.config.bridge.partnerFee) {
+    if (!this.config.bridgePartnerFee) {
       return 0n;
     }
 
-    return calculateFeeAmount(inputAmount, this.config.bridge.partnerFee);
+    return calculateFeeAmount(inputAmount, this.config.bridgePartnerFee);
   }
 
   /**
@@ -436,7 +436,7 @@ export class BridgeService {
       const effectiveSkipSimulation =
         skipSimulation || (isBitcoinChainKeyType(params.srcChainKey) && this.spoke.bitcoin.walletMode === 'USER');
 
-      const data: Hex = this.buildBridgeData(params, srcToken, dstToken, this.config.bridge.partnerFee);
+      const data: Hex = this.buildBridgeData(params, srcToken, dstToken, this.config.bridgePartnerFee);
 
       const coreParams = {
         srcChainKey: params.srcChainKey,
