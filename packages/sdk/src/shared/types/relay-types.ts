@@ -19,11 +19,32 @@ export type IntentDeliveryInfo = {
   dstAddress: string;
 };
 
+export type RelayTxStatus = 'pending' | 'validating' | 'executing' | 'executed';
+
+export type PacketData = {
+  src_chain_id: number;
+  src_tx_hash: string;
+  src_address: string;
+  status: RelayTxStatus;
+  dst_chain_id: number;
+  conn_sn: number;
+  dst_address: string;
+  dst_tx_hash: string;
+  signatures: string[];
+  payload: string;
+};
+
 export type WaitUntilIntentExecutedPayload = {
   intentRelayChainId: string;
   srcTxHash: string;
   timeout?: number;
   apiUrl: HttpUrl;
+  /**
+   * Disambiguates when a single src tx emits multiple relay packets. Receives the candidates
+   * already filtered by `srcTxHash` and returns the desired one (or undefined to keep polling).
+   * Defaults to "first candidate" — the legacy behavior for single-packet flows.
+   */
+  selectPacket?: (packets: PacketData[]) => PacketData | undefined;
 };
 
 export type RelayAction = 'submit' | 'get_transaction_packets' | 'get_packet';

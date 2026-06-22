@@ -1,6 +1,10 @@
 ---
 name: sodax-sdk-migration
 description: 'Granular skill for the @sodax/sdk v2 token-migration feature only — `MigrationService` (`sodax.migration`) covering ICX ↔ SODA, legacy bnUSD ↔ new bnUSD, and BALN → SODA with lockup multipliers. Use when the task is migrating legacy ICON-ecosystem tokens to SODAX (e.g. "migrate ICX to SODA", "revert SODA back to ICX", "swap legacy bnUSD on Sui/Stellar/ICON to new bnUSD", "migrate BALN with lock period for reward multiplier", "claim staked BALN"). IMPORTANT — this is NOT the same as v1 → v2 SDK migration (porting old SDK code). That is a separate cross-cutting concern handled by the broad sodax-sdk skill in migration mode and the migration-v1-to-v2/ knowledge subtree. Same word, different concept. Skill links into the parent sodax-sdk knowledge tree.'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # Token migration (Core SDK granular skill)

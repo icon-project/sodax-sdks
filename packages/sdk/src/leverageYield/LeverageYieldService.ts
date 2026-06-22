@@ -288,7 +288,8 @@ export type LeverageYieldSwapDepositParams = {
   solver?: Address;
   /**
    * Partner fee for this deposit, carried on the payload as the swap layer's per-intent
-   * fee override. Defaults to the globally configured `config.swaps.partnerFee`.
+   * fee override. Defaults to the effective swap fee (`config.swapPartnerFee` = the `swaps`
+   * override if set, else the global `fee`).
    */
   partnerFee?: PartnerFee;
 };
@@ -347,7 +348,7 @@ export type LeverageYieldSwapPayload = {
  *   user's hub wallet — `srcChainKey` is then the chain the user *signs* on, and the
  *   intent is created by authorising the hub wallet via a `Connection.sendMessage`
  *   instead of a spoke-side AssetManager deposit.
- * - `partnerFee` overrides the globally configured `config.swaps.partnerFee` for this
+ * - `partnerFee` overrides the effective swap fee (`config.swapPartnerFee`) for this
  *   intent only.
  */
 export type VaultSwapActionParams<K extends SpokeChainKey, Raw extends boolean = false> = SpokeExecActionParams<
@@ -626,8 +627,8 @@ export class LeverageYieldService {
   public async createVaultIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: VaultSwapActionParams<K, Raw>,
   ): Promise<Result<CreateVaultIntentResult<K, Raw>, LeverageYieldCreateIntentError>> {
-    // Per-intent partnerFee override beats the globally configured fee (undefined = no fee).
-    const { params, skipSimulation, hubWalletSwap, partnerFee = this.config.swaps.partnerFee } = _params;
+    // Per-intent partnerFee override beats the effective swap fee (per-feature override, else global). undefined = no fee.
+    const { params, skipSimulation, hubWalletSwap, partnerFee = this.config.swapPartnerFee } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
 
     try {

@@ -25,6 +25,16 @@
 // numerics) and `IntentResponseV2` (all-string) genuinely differ;
 // `RelayExtraDataRequestV2` / `RelayExtraDataResponseV2` are identical (no bigint
 // fields). This mirrors the backend's request/response DTO pairs.
+//
+// The Config API v2 section at the bottom of this file takes a DIFFERENT approach
+// (see its header): it REUSES the canonical `@sodax/types` config types and projects
+// only the few bigint fields to `string`, rather than re-declaring a parallel tree.
+
+import type { SpokeChainConfig } from '../chains/chains.js';
+import type { XToken } from '../chains/tokens.js';
+import type { RelayConfig } from '../common/constants.js';
+import type { ConcentratedLiquidityConfig, DexDefaultConfig } from '../dex/dex.js';
+import type { SodaxDefaultConfig } from '../sodax-config/sodax-config.js';
 
 // ──────────────────────────────────────────────────────────────────────
 // Shared building blocks
@@ -32,6 +42,14 @@
 
 /** Quote direction. Only exact-input quoting is supported. */
 export type QuoteTypeV2 = 'exact_input';
+
+/**
+ * JSON-safe partner fee for swap requests. Wire mirror of the SDK `PartnerFee` union, with the
+ * bigint `amount` projected to a decimal `string`. `address` is the EVM hub fee receiver; provide
+ * either a fixed `amount` (input token's smallest unit, decimal string) or a `percentage` (basis
+ * points, e.g. 100 = 1%). If both are present the backend uses `amount`, matching the SDK.
+ */
+export type PartnerFeeV2 = { address: string; amount: string } | { address: string; percentage: number };
 
 /**
  * Solver intent status code:
@@ -190,6 +208,8 @@ export interface QuoteRequestV2 {
   srcAddress?: string;
   /** Destination address — required only when `includeTxData=true`; ignored otherwise. */
   dstAddress?: string;
+  /** Optional per-request partner-fee override; defaults to the backend's configured fee. Keeps the fee-adjusted quote (and the `includeTxData` intent) consistent with `createIntent`. */
+  partnerFee?: PartnerFeeV2;
 }
 
 /** POST /swaps/quote — query params. */
@@ -247,12 +267,16 @@ export interface CreateIntentParamsV2 {
   allowPartialFill: boolean;
   /** User address on the source spoke chain (chain-specific format). */
   srcAddress: string;
+  /** Source-chain signer public key (compressed hex), for chains whose address can't yield it (e.g. Stacks). */
+  srcPublicKey?: string;
   /** Recipient address on the destination spoke chain (chain-specific format). */
   dstAddress: string;
   /** Solver address (EVM hub address). Defaults to the zero address for "any solver". */
   solver?: string;
   /** Arbitrary calldata hex string. Defaults to `0x`. */
   data?: string;
+  /** Optional per-request partner-fee override embedded into the built intent. When omitted the backend applies its configured default. */
+  partnerFee?: PartnerFeeV2;
 }
 
 /** POST /swaps/allowance/check — response body. */
@@ -648,3 +672,205 @@ export interface ISwapsApiV2 {
   /** GET /swaps/submit-tx/status */
   getSubmitTxStatus(query: SubmitTxStatusQueryV2): Promise<SubmitTxStatusResponseV2>;
 }
+
+// ══════════════════════════════════════════════════════════════════════
+// Config API v2 — static SODAX configuration
+// ══════════════════════════════════════════════════════════════════════
+//
+// JSON-safe contract for the backend that serves the `@sodax/types` STATIC config
+// (`SodaxDefaultConfig`) so the SDK's `ConfigService` can load it dynamically.
+//
+// `SodaxDefaultConfig` is the default/static data shape ONLY — NOT the merged
+// `SodaxConfig` (`SodaxDefaultConfig & SodaxOptions`). Client options never travel on
+// the CONFIG wire: the global `fee`, the `logger`, and every per-feature `partnerFee` CONFIG
+// override live on `SodaxOptions`, resolved client-side, so they are all excluded from this
+// config contract. (Config only — distinct from a swap REQUEST, which may carry a per-request
+// `partnerFee`; see `CreateIntentParamsV2` / `QuoteRequestV2` above.)
+//
+// Unlike the swaps section above — which re-declares every shape with plain
+// primitives — the config section REUSES the canonical `SodaxDefaultConfig` type tree
+// and projects ONLY the fields that carry `bigint` to a decimal `string`. JSON
+// cannot represent `bigint`; everything else in `SodaxDefaultConfig` (chain configs,
+// hub, the static feature configs, api, solver, `XToken`, `PoolKey`) is already JSON-safe
+// (its addresses/keys/urls are `string` brands and the rest is strings/numbers).
+// Reusing the source types keeps this contract from drifting away from it.
+//
+// The COMPLETE bigint inventory in `SodaxConfigV2` — the only fields these wire
+// types override — is:
+//   1. `relay.relayChainIdMap`                         Record<…, bigint> → Record<string, string>
+//   2. `dex.concentratedLiquidityConfig.defaultBitmap` bigint            → string
+//
+// There is no partner-fee entry in this config contract: the partner-fee CONFIG is an option on
+// `SodaxOptions`, and `SodaxDefaultConfig` exposes only static `*DefaultConfig` per-feature configs,
+// so no config option ever reaches this contract (see `SodaxConfigV2` below). This constrains the
+// config wire only — a per-request swap `partnerFee` still lives on the swap request DTOs above.
+
+// ──────────────────────────────────────────────────────────────────────
+// Relay (bigint #1) and DEX (bigint #2)
+// ──────────────────────────────────────────────────────────────────────
+
+/** JSON-safe {@link RelayConfig}: relay chain ids are decimal strings on the wire. */
+export type RelayConfigV2 = Omit<RelayConfig, 'relayChainIdMap'> & {
+  /** SpokeChainKey → intent-relay chain id as a decimal string (e.g. `"146"`). */
+  relayChainIdMap: Record<string, string>;
+};
+
+/** JSON-safe {@link ConcentratedLiquidityConfig}: `defaultBitmap` is a decimal string. */
+export type ConcentratedLiquidityConfigV2 = Omit<ConcentratedLiquidityConfig, 'defaultBitmap'> & {
+  /** Default tick bitmap; bigint projected to a decimal string. */
+  defaultBitmap: string;
+};
+
+/** JSON-safe {@link DexDefaultConfig}. Only the concentrated-liquidity config carries bigint. */
+export type DexConfigV2 = Omit<DexDefaultConfig, 'concentratedLiquidityConfig'> & {
+  concentratedLiquidityConfig: ConcentratedLiquidityConfigV2;
+};
+
+// ──────────────────────────────────────────────────────────────────────
+// Top-level config
+// ──────────────────────────────────────────────────────────────────────
+
+/**
+ * JSON-safe projection of {@link SodaxDefaultConfig} — the STATIC config the backend serves,
+ * never the merged `SodaxConfig`. `SodaxDefaultConfig` already exposes only static per-feature
+ * configs (`SwapsDefaultConfig`, `MoneyMarketDefaultConfig`, `BridgeDefaultConfig`,
+ * `LeverageYieldDefaultConfig`, `DexDefaultConfig`), so every field is reused untouched —
+ * `chains`, `swaps`, `moneyMarket`, `bridge`, `leverageYield`, `hub`, `api`, `solver` are all
+ * JSON-safe as-is. Only `dex` and `relay` are projected to their `*V2` variants because they
+ * carry a `bigint` field.
+ *
+ * No options ever reach the wire: the global `fee`, the `logger`, and every per-feature
+ * `partnerFee` live on `SodaxOptions` (resolved client-side), which is not part of `SodaxDefaultConfig`.
+ */
+export type SodaxConfigV2 = Omit<SodaxDefaultConfig, 'dex' | 'relay'> & {
+  dex: DexConfigV2;
+  relay: RelayConfigV2;
+};
+
+// ──────────────────────────────────────────────────────────────────────
+// GET /config/all
+// ──────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /config/all — full config plus its schema version for drift detection.
+ *
+ * `version` is REQUIRED here (the v1 `GetAllConfigApiResponse.version` is optional):
+ * `ConfigService` already treats a missing/older version as "reject and keep the
+ * packaged defaults", so a required field is a strictly cleaner v2 contract.
+ */
+// The trailing `& _AssertJsonSafe<…>` is an erasable identity intersection (`& unknown`)
+// that wires the compile-time bigint guard (see the "Compile-time drift guard" block at the
+// end of this file) into an exported type. While the config wire types stay JSON-safe it is
+// a no-op; if a `bigint` ever leaks in, it collapses to a constraint error reported here.
+export type GetAllConfigResponseV2 = {
+  /** Config schema version; compared against the SDK's `CONFIG_VERSION`. */
+  version: number;
+  /** Full JSON-safe SODAX config. */
+  config: SodaxConfigV2;
+} & _AssertJsonSafe<[_ContainsBigint<SodaxConfigV2>] extends [false] ? true : false>;
+
+// ──────────────────────────────────────────────────────────────────────
+// Granular config endpoints (mirror the v1 IConfigApi slices)
+// ──────────────────────────────────────────────────────────────────────
+
+/** GET /config/spoke/chains — supported spoke chain keys. */
+export type GetChainsResponseV2 = readonly string[];
+
+/** GET /config/spoke/all-chains-configs — full per-chain config (no bigint → `SpokeChainConfig` reused). */
+export type GetSpokeChainConfigsResponseV2 = Record<string, SpokeChainConfig>;
+
+/**
+ * GET /config/swap/tokens — supported swap tokens per chain.
+ *
+ * Returns the canonical {@link XToken} (incl. its optional `access`), NOT the
+ * swaps-domain `SwapTokenV2`: this is config data, so it mirrors the source token
+ * exactly. (`GetSwapTokensResponseV2` above is the unrelated `/swaps/tokens` shape.)
+ */
+export type GetSwapTokensConfigResponseV2 = Record<string, readonly XToken[]>;
+
+/** GET /config/swap/:chainKey/tokens — supported swap tokens for one chain. */
+export type GetSwapTokensConfigByChainResponseV2 = readonly XToken[];
+
+/** GET /config/money-market/tokens — supported money-market tokens per chain. */
+export type GetMoneyMarketTokensConfigResponseV2 = Record<string, readonly XToken[]>;
+
+/** GET /config/money-market/:chainKey/tokens — supported money-market tokens for one chain. */
+export type GetMoneyMarketTokensConfigByChainResponseV2 = readonly XToken[];
+
+/** GET /config/money-market/reserve-assets — hub reserve asset addresses. */
+export type GetMoneyMarketReserveAssetsResponseV2 = readonly string[];
+
+/** GET /config/relay/chain-id-map — SpokeChainKey → intent-relay chain id (decimal string). */
+export type GetRelayChainIdMapResponseV2 = Record<string, string>;
+
+// ──────────────────────────────────────────────────────────────────────
+// Aggregating client interface — one method per endpoint
+// ──────────────────────────────────────────────────────────────────────
+
+/**
+ * Client-side surface for the backend Config API v2 — for typed HTTP clients
+ * (fetch wrappers / SDK adapters). Each method describes one endpoint as the
+ * client sees it: all methods are async and all field types are the
+ * post-serialization wire shapes above (bigint → decimal `string`).
+ *
+ * As with {@link ISwapsApiV2}, do NOT `implements` this on the NestJS controller:
+ * handlers return pre-serialization domain types (`bigint`, branded values) and the
+ * response interceptor serializes them into these wire shapes afterwards.
+ */
+export interface IConfigApiV2 {
+  /** GET /config/all */
+  getAllConfig(): Promise<GetAllConfigResponseV2>;
+  /** GET /config/spoke/chains */
+  getChains(): Promise<GetChainsResponseV2>;
+  /** GET /config/spoke/all-chains-configs */
+  getSpokeChainConfigs(): Promise<GetSpokeChainConfigsResponseV2>;
+  /** GET /config/swap/tokens */
+  getSwapTokens(): Promise<GetSwapTokensConfigResponseV2>;
+  /** GET /config/swap/:chainKey/tokens */
+  getSwapTokensByChain(chainKey: string): Promise<GetSwapTokensConfigByChainResponseV2>;
+  /** GET /config/money-market/tokens */
+  getMoneyMarketTokens(): Promise<GetMoneyMarketTokensConfigResponseV2>;
+  /** GET /config/money-market/:chainKey/tokens */
+  getMoneyMarketTokensByChain(chainKey: string): Promise<GetMoneyMarketTokensConfigByChainResponseV2>;
+  /** GET /config/money-market/reserve-assets */
+  getMoneyMarketReserveAssets(): Promise<GetMoneyMarketReserveAssetsResponseV2>;
+  /** GET /config/relay/chain-id-map */
+  getRelayChainIdMap(): Promise<GetRelayChainIdMapResponseV2>;
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Compile-time drift guard
+// ──────────────────────────────────────────────────────────────────────
+//
+// Makes the "reuse + project bigint" strategy above self-enforcing. The config v2 wire
+// types reuse source types (`SpokeChainConfig`, `XToken`, `PoolKey`, …) and override only
+// the known bigint spots. If a `bigint` is ever introduced anywhere in `SodaxConfigV2`
+// (e.g. a field added to a reused source type), `_AssertJsonSafe<false>` trips a constraint
+// error at the `GetAllConfigResponseV2` definition above and `pnpm checkTs` / `pnpm build`
+// go red — because JSON cannot carry bigint and these types claim to be JSON-safe.
+//
+// Asserting `SodaxConfigV2` is sufficient: it transitively reaches every reused config type
+// (chains → SpokeChainConfig → supportedTokens → XToken, dex, relay, …), so the granular
+// response types — all subsets of it — are covered too. These helpers are referenced only by
+// the exported `GetAllConfigResponseV2`, so they stay non-exported (no knip "unused export").
+
+/** True if `T` contains a `bigint` anywhere in its data shape. Recurses arrays/records/objects. */
+type _ContainsBigint<T> = T extends bigint
+  ? true
+  : T extends string | number | boolean | symbol | null | undefined
+    ? false
+    : T extends readonly (infer U)[]
+      ? _ContainsBigint<U>
+      : T extends object
+        ? true extends { [K in keyof T]-?: _ContainsBigint<T[K]> }[keyof T]
+          ? true
+          : false
+        : false;
+
+/**
+ * Resolves to `unknown` (an identity in an intersection) when `Ok` proves JSON-safety;
+ * otherwise the `Ok extends true` constraint is violated and compilation fails at the use site.
+ * The caller passes `[_ContainsBigint<T>] extends [false] ? true : false` — the `[…] extends […]`
+ * wrap is union-safe (a `true | false` result from union distribution still resolves to `false`).
+ */
+type _AssertJsonSafe<_Ok extends true> = unknown;

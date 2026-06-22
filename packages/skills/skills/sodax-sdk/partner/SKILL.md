@@ -1,6 +1,10 @@
 ---
 name: sodax-sdk-partner
 description: 'Granular skill for the @sodax/sdk v2 partner-fee feature only — `PartnerService` (operations on `sodax.partners.feeClaim`). Token approval on the hub, auto-swap preferences, immediate fee-claim swap, intent-driven auto-swap, asset-balance reads. Use when the task is partner-fee work (e.g. "claim partner fee", "configure partner auto-swap preference", "approve partner fee token on Sodax hub", "Sodax PartnerService"). Covers BOTH integration and migration. Skill links into the parent sodax-sdk knowledge tree. For React dapps, prefer sodax-dapp-kit.'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # Partner (Core SDK granular skill)

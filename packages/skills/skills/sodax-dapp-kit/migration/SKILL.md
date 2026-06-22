@@ -1,6 +1,10 @@
 ---
 name: sodax-dapp-kit-migration
 description: 'Granular skill for the @sodax/dapp-kit v2 token-migration feature only — React Query hooks for migrating legacy ICON-ecosystem tokens to SODAX assets: useMigrateIcxToSoda, useRevertMigrateSodaToIcx, useMigratebnUSD (bidirectional), useMigrateBaln (with lockup), useMigrationApprove/useMigrationAllowance (action-discriminated). Use when a React dapp task is migrating legacy tokens (e.g. "useMigrateIcxToSoda", "migrate bnUSD hook in React", "migrate BALN with lock period hook", "revert SODA to ICX hook"). IMPORTANT — this is the token-protocol migration FEATURE, NOT v1 → v2 SDK code porting (that is the sodax-dapp-kit skill in migration mode). Same word, different concept. Covers BOTH integration (new v2 hooks) and the v1 → v2 port of these migration hooks. Links into the parent sodax-dapp-kit knowledge tree. For backend/Node, use the sodax-sdk skill.'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # Token migration (dapp-kit granular skill)

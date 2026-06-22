@@ -1,6 +1,10 @@
 ---
 name: sodax-dapp-kit-staking
 description: 'Granular skill for the @sodax/dapp-kit v2 staking feature only — React Query hooks for SODA ↔ xSODA staking: useStake, useUnstake, useInstantUnstake, useClaim, useCancelUnstake, the three dedicated approve/allowance hook pairs (stake/unstake/instantUnstake), plus reads (useStakingInfo, useUnstakingInfoWithPenalty, useStakingConfig, useStakeRatio). Use when a React dapp task is specifically staking (e.g. "useStake with dapp-kit", "unstake hook with penalty", "claim staking rewards in React", "instant unstake slippage hook", "render staking info"). Covers BOTH integration (new v2 hooks) and migration (port v1 staking hooks — single-object params, useStakeRatio now returns a tuple, mutateAsyncSafe). Links into the parent sodax-dapp-kit knowledge tree. For backend/Node, use the sodax-sdk skill.'
+license: MIT
+metadata:
+  version: '0.0.1'
+  author: sodax
 ---
 
 # Staking (dapp-kit granular skill)

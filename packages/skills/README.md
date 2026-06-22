@@ -13,7 +13,7 @@ Using the [`skills` CLI](https://github.com/vercel-labs/skills) from Vercel Labs
 npx skills@latest add icon-project/sodax-sdks/packages/skills
 ```
 
-Four mode-gated skills land in your repo (under `.claude/skills/` or wherever the CLI installs them) — one per SODAX SDK package, each with two knowledge subtrees (`integration/` for new v2 code, `migration-v1-to-v2/` for v1→v2 porting) — plus a router `AGENTS.md`. Re-running the command picks up the latest content.
+The installable skills listed in `.claude-plugin/plugin.json` land in your repo — the `sodax-build` front-door / ideation skill plus the mode-gated per-SDK-package skills (each with two knowledge subtrees: `integration/` for new v2 code, `migration-v1-to-v2/` for v1→v2 porting) — alongside a router `AGENTS.md`. Re-running the command picks up the latest content.
 
 > **npm fallback** (web chats or when you prefer a devDependency): `pnpm add -D @sodax/skills`, then point your agent at `node_modules/@sodax/skills/AGENTS.md`. See the [integration guide](https://github.com/icon-project/sodax-sdks/blob/main/docs/ai-integration-guide.md#wire-your-agent).
 
@@ -21,8 +21,9 @@ Four mode-gated skills land in your repo (under `.claude/skills/` or wherever th
 
 | Bundle | Contains |
 |---|---|
-| **4 mode-gated skills** under `skills/sodax-<pkg>/SKILL.md` | One skill per SODAX SDK package. `<pkg>` ∈ `sdk`, `wallet-sdk-core`, `wallet-sdk-react`, `dapp-kit`. Each SKILL.md gates by mode (integration vs migration) at the top of the body. |
-| **Granular skills** under `skills/sodax-<pkg>/<sub-domain>/SKILL.md` | Every broad skill ships focused single-domain children: `sodax-sdk` / `sodax-dapp-kit` per feature (swap, money-market, bridge, staking, dex, …); `sodax-wallet-sdk-core` per chain (evm, solana, sui, bitcoin, stellar, icon, injective, near, stacks); `sodax-wallet-sdk-react` per connectivity concern (connect, wallet-modal, bridge-to-sdk, switch-chain, sign-message, walletconnect). Load one when the task is already scoped to a single sub-domain — it points at exactly the knowledge files for it instead of the whole broad skill. |
+| **Front-door skill** at `skills/sodax-build/SKILL.md` | A cross-cutting ideation skill for when you don't know what to build yet. It interviews you, turns the idea into a product brief, and hands off to the right developer skill(s). Writes no app code; flat `knowledge/` tree (no integration/migration split). |
+| **Mode-gated per-SDK-package skills** under `skills/sodax-<pkg>/SKILL.md` | One skill per SODAX SDK package. `<pkg>` ∈ `sdk`, `wallet-sdk-core`, `wallet-sdk-react`, `dapp-kit`. Each SKILL.md gates by mode (integration vs migration) at the top of the body. |
+| **Granular skills** bundled inside each broad skill at `skills/sodax-<pkg>/<sub-domain>/SKILL.md` | Every broad skill ships focused single-domain children: `sodax-sdk` / `sodax-dapp-kit` per feature (swap, money-market, bridge, staking, dex, …); `sodax-wallet-sdk-core` per chain (evm, solana, sui, bitcoin, stellar, icon, injective, near, stacks); `sodax-wallet-sdk-react` per connectivity concern (connect, wallet-modal, bridge-to-sdk, switch-chain, sign-message, walletconnect). They install **with** their parent broad skill (not as separate packages); once installed, load one when the task is already scoped to a single sub-domain — it points at exactly the knowledge files for it instead of the whole broad skill. |
 | **Knowledge** under `skills/sodax-<pkg>/{integration,migration-v1-to-v2}/knowledge/` | Long-form supporting docs — features, recipes, reference tables, breaking-change writeups, code examples. Each skill ships both mode subtrees so `npx skills add` copies the full reference together. |
 | **`AGENTS.md`** at the package root | Tool-neutral router: maps the consumer's stated task to the right skill + mode. |
 
@@ -34,6 +35,7 @@ After install, your agent picks based on what you're building. Quick guide:
 
 | You're building | Load these skills (mode) |
 |---|---|
+| Not sure what to build yet / not a developer | `sodax-build` — it interviews you, writes a product brief, and names the skill to load next |
 | Backend / Node app (no React) using `@sodax/sdk` | `sodax-sdk` (integration) + `sodax-wallet-sdk-core` (integration; if signing) |
 | React dapp using `@sodax/dapp-kit` | `sodax-dapp-kit` (integration) + `sodax-wallet-sdk-react` (integration; always) + `sodax-sdk` (integration; for any unwrapped operations) |
 | React app calling the SDK directly (no `dapp-kit`) | `sodax-sdk` (integration) + `sodax-wallet-sdk-react` (integration) |
