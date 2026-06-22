@@ -39,16 +39,23 @@ export class Sodax {
   public readonly hubProvider: HubProvider; // hub provider for the hub chain (e.g. Sonic mainnet)
   public readonly spoke: SpokeService; // spoke service enabling spoke chain operations
 
-  constructor(config?: SodaxOptions) {
-    // Resolve the log sink once, up front, and hand it to the services so it survives the
-    // dynamic-config swap in `config.initialize()`. `logger` lives on `SodaxOptions`, not on the
-    // `DeepPartial<SodaxConfig>` data contract, so it keeps its exact type and needs no cast — the
-    // type-level conflation is gone. `mergeSodaxConfig` / `userConfig` ignore the extra `logger` key
-    // (it is never read off the data config; services read the resolved sink via `config.logger`).
-    const logger = resolveLogger(config?.logger);
-    this.instanceConfig = config ? mergeSodaxConfig(sodaxConfig, config) : sodaxConfig;
+  constructor(options?: SodaxOptions) {
+    // Resolve the client-side options (`logger`, `fee`) once, up front, and hand them to the services
+    // so they survive the dynamic-config swap in `config.initialize()`. Both live on `SodaxOptions`,
+    // not on the `DeepPartial<SodaxDefaultConfig>` data contract, so they keep their exact types and need no
+    // cast. `mergeSodaxConfig` / `userConfig` ignore these extra keys (they are never read off the data
+    // config; services read them via `config.logger` / `config.fee`).
+    const logger = resolveLogger(options?.logger);
+    const fee = options?.fee;
+    this.instanceConfig = options ? mergeSodaxConfig(sodaxConfig, options) : sodaxConfig;
     this.backendApi = new BackendApiService(this.instanceConfig.api, logger);
-    this.config = new ConfigService({ api: this.backendApi, config: this.instanceConfig, userConfig: config, logger });
+    this.config = new ConfigService({
+      api: this.backendApi,
+      config: this.instanceConfig,
+      userConfig: options,
+      logger,
+      fee,
+    });
 
     this.hubProvider = new EvmHubProvider({ config: this.config }); // default to Sonic mainnet
     this.spoke = new SpokeService({ config: this.config, hubProvider: this.hubProvider });

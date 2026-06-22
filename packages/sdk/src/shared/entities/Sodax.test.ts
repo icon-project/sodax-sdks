@@ -183,12 +183,6 @@ describe('Sodax constructor — instanceConfig', () => {
     expect(sodax.instanceConfig).toEqual(sodaxConfig);
   });
 
-  it('applies a top-level scalar override (fee: undefined → fee: { ... })', () => {
-    const fee = { address: '0x1111111111111111111111111111111111111111' as const, percentage: 100 };
-    const sodax = new Sodax({ fee });
-    expect(sodax.instanceConfig.fee).toEqual(fee);
-  });
-
   it('applies a nested override while preserving sibling defaults under the same parent', () => {
     const customTimeout = 99_999;
     const sodax = new Sodax({ api: { timeout: customTimeout } });
@@ -200,8 +194,8 @@ describe('Sodax constructor — instanceConfig', () => {
   });
 
   it('leaves untouched top-level fields untouched (override one branch, others survive)', () => {
-    const fee = { address: '0x2222222222222222222222222222222222222222' as const, percentage: 50 };
-    const sodax = new Sodax({ fee });
+    const partnerFee = { address: '0x2222222222222222222222222222222222222222' as const, percentage: 50 };
+    const sodax = new Sodax({ bridge: { partnerFee } });
     // `chains` was not in the source — deepMerge preserves the reference, not just deep equality.
     expect(sodax.instanceConfig.chains).toBe(sodaxConfig.chains);
     expect(sodax.instanceConfig.relay).toBe(sodaxConfig.relay);
@@ -209,11 +203,11 @@ describe('Sodax constructor — instanceConfig', () => {
   });
 
   it('does not mutate the imported sodaxConfig default when an override is applied', () => {
-    const before = sodaxConfig.fee;
-    new Sodax({ fee: { address: '0x3333333333333333333333333333333333333333', percentage: 25 } });
+    const before = sodaxConfig.bridge.partnerFee;
+    new Sodax({ bridge: { partnerFee: { address: '0x3333333333333333333333333333333333333333', percentage: 25 } } });
     // Critical immutability invariant — the singleton default must remain pristine across
     // instances. Catches a deepMerge mutation that writes into `target` instead of cloning.
-    expect(sodaxConfig.fee).toBe(before);
+    expect(sodaxConfig.bridge.partnerFee).toBe(before);
   });
 });
 
@@ -302,22 +296,21 @@ describe('Sodax constructor — dependency wiring', () => {
     ['recovery', 'recovery'],
   ] as const;
 
-  it.each(TRIPLE_SERVICES)(
-    '%s service receives { config, hubProvider, spoke } pointing at the shared instances',
-    (sinkKey, fieldName) => {
-      const sodax = new Sodax();
-      const sink = helpers.captured[sinkKey];
-      expect(sink).toHaveLength(1);
-      const args = sink[0] as { config: unknown; hubProvider: unknown; spoke: unknown };
-      expect(args.config).toBe(sodax.config);
-      expect(args.hubProvider).toBe(sodax.hubProvider);
-      expect(args.spoke).toBe(sodax.spoke);
-      // Defensive: also pin that the field-name → sink-name mapping is correct so a mutation
-      // that swaps `this.swaps = new SwapService(...)` and `this.moneyMarket = new MoneyMarket(...)`
-      // gets caught.
-      expect((sodax as unknown as Record<string, FakeInstance>)[fieldName].__args).toBe(args);
-    },
-  );
+  it.each(
+    TRIPLE_SERVICES,
+  )('%s service receives { config, hubProvider, spoke } pointing at the shared instances', (sinkKey, fieldName) => {
+    const sodax = new Sodax();
+    const sink = helpers.captured[sinkKey];
+    expect(sink).toHaveLength(1);
+    const args = sink[0] as { config: unknown; hubProvider: unknown; spoke: unknown };
+    expect(args.config).toBe(sodax.config);
+    expect(args.hubProvider).toBe(sodax.hubProvider);
+    expect(args.spoke).toBe(sodax.spoke);
+    // Defensive: also pin that the field-name → sink-name mapping is correct so a mutation
+    // that swaps `this.swaps = new SwapService(...)` and `this.moneyMarket = new MoneyMarket(...)`
+    // gets caught.
+    expect((sodax as unknown as Record<string, FakeInstance>)[fieldName].__args).toBe(args);
+  });
 
   it('shares ONE config instance across every service that needs it', () => {
     const sodax = new Sodax();
@@ -383,18 +376,26 @@ describe('Sodax constructor — config override propagates downstream', () => {
   });
 
   it('the merged instanceConfig (not the raw default) is what ConfigService stores', () => {
-    const fee = { address: '0x4444444444444444444444444444444444444444' as const, percentage: 75 };
-    const sodax = new Sodax({ fee });
+    const sodax = new Sodax({ api: { timeout: 75 } });
     const configArg = helpers.captured.config[0] as { config: SodaxConfig };
     expect(configArg.config).toBe(sodax.instanceConfig);
-    expect(configArg.config.fee).toEqual(fee);
+    expect(configArg.config.api.timeout).toBe(75);
+  });
+
+  it('forwards the global fee option to ConfigService as a separate held option', () => {
+    const fee = { address: '0x4444444444444444444444444444444444444444' as const, percentage: 75 };
+    new Sodax({ fee });
+    // `fee` is a client-side option (like `logger`): handed to ConfigService as its own constructor
+    // arg, never read off the merged data config.
+    const configArg = helpers.captured.config[0] as { config: SodaxConfig; fee?: unknown };
+    expect(configArg.fee).toEqual(fee);
   });
 
   it('the RAW override (not the merged result) is forwarded to ConfigService as userConfig', () => {
     // ConfigService needs the unmerged partial so initialize() can re-layer it on top of the
     // dynamic config. Passing the merged instanceConfig instead would defeat that — assert identity
     // with the exact object handed to the constructor.
-    const override = { fee: { address: '0x6666666666666666666666666666666666666666' as const, percentage: 5 } };
+    const override = { api: { timeout: 5 } };
     new Sodax(override);
     const configArg = helpers.captured.config[0] as { config: SodaxConfig; userConfig: unknown };
     expect(configArg.userConfig).toBe(override);
@@ -466,11 +467,12 @@ describe('Sodax — multiple instances', () => {
 
   it('an override on one instance does not leak into a sibling constructed without overrides', () => {
     const fee = { address: '0x5555555555555555555555555555555555555555' as const, percentage: 10 };
-    const overridden = new Sodax({ fee });
+    new Sodax({ fee });
     const defaulted = new Sodax();
 
-    expect(overridden.instanceConfig.fee).toEqual(fee);
-    expect(defaulted.instanceConfig.fee).toBeUndefined();
-    expect(defaulted.instanceConfig).toBe(sodaxConfig);
+    // `fee` is forwarded per-instance (ConfigService is mocked, so assert via the captured args).
+    expect((helpers.captured.config[0] as { fee?: unknown }).fee).toEqual(fee);
+    expect((helpers.captured.config[1] as { fee?: unknown }).fee).toBeUndefined();
+    expect(defaulted.instanceConfig).toBe(sodaxConfig); // sibling default untouched
   });
 });

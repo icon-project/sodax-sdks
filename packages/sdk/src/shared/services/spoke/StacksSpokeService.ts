@@ -12,7 +12,7 @@ import {
   type UIntCV,
   makeUnsignedContractCall,
   fetchFeeEstimateTransaction,
-  validateStacksAddress,
+  getAddressFromPublicKey,
   serializePayloadBytes,
   type StacksNetwork,
   createNetwork,
@@ -138,13 +138,27 @@ export class StacksSpokeService {
       postConditionMode: PostConditionMode.Allow,
     };
     if (params.raw === true) {
-      if (validateStacksAddress(params.srcAddress)) {
-        throw new Error('When using raw transactions, the public key must be provided as "from" parameter');
+      // srcPublicKey (builds the unsigned tx) and srcAddress (hub-wallet derivation + intent record) must
+      // be the same account — derive the address from the key and match, else the user signs a tx for another.
+      if (!params.srcPublicKey) {
+        throw new Error('Stacks raw transactions require srcPublicKey (the signer public key for srcAddress).');
+      }
+      let derivedAddress: string;
+      try {
+        // Reuse the network the service was built with (config-driven) so the address version matches.
+        derivedAddress = getAddressFromPublicKey(params.srcPublicKey, this.network);
+      } catch (error) {
+        throw new Error(`srcPublicKey is not a valid Stacks public key: ${(error as Error).message}`);
+      }
+      if (derivedAddress !== params.srcAddress) {
+        throw new Error(
+          `srcPublicKey does not match srcAddress: it derives ${derivedAddress}, but srcAddress is ${params.srcAddress}.`,
+        );
       }
 
       const tx = await makeUnsignedContractCall({
         ...reqData,
-        publicKey: params.srcAddress,
+        publicKey: params.srcPublicKey,
         network: this.network,
         fee: 0, // placeholder — we'll estimate
         nonce: 0n,
@@ -190,6 +204,8 @@ export class StacksSpokeService {
     };
 
     if (params.raw === true) {
+      // TODO(follow-up): accept srcPublicKey here like deposit() does. Raw sendMessage still overloads
+      // srcAddress as the signer public key (money-market / recovery / swap-cancel callers).
       const tx = await makeUnsignedContractCall({
         ...reqData,
         publicKey: params.srcAddress,

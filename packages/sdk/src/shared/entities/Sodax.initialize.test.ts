@@ -26,13 +26,13 @@ afterEach(() => {
 });
 
 describe('Sodax.initialize — regression: dynamic config must not clobber user overrides', () => {
-  it('preserves a top-level user override through a successful initialize() while adopting remote values elsewhere', async () => {
-    const sodax = new Sodax({ fee: USER_FEE });
+  it('preserves a user override through a successful initialize() while adopting remote values elsewhere', async () => {
+    const sodax = new Sodax({ bridge: { partnerFee: USER_FEE } });
 
-    // Remote config carries a DIFFERENT fee (the old bug would let this overwrite the user's) plus a
-    // changed, non-overridden field (api.timeout) to prove the dynamic config is genuinely adopted.
+    // Remote config carries a DIFFERENT bridge fee (the old bug would let this overwrite the user's)
+    // plus a changed, non-overridden field (api.timeout) to prove the dynamic config is genuinely adopted.
     const remote = structuredClone(sodaxConfig) as SodaxConfig;
-    remote.fee = REMOTE_FEE;
+    remote.bridge.partnerFee = REMOTE_FEE;
     remote.api = { ...remote.api, timeout: 77_777 };
 
     vi.spyOn(sodax.backendApi, 'getAllConfig').mockResolvedValue({
@@ -44,7 +44,7 @@ describe('Sodax.initialize — regression: dynamic config must not clobber user 
 
     expect(result.ok).toBe(true);
     // The crux: under the old `this.sodax = response.config`, this equaled REMOTE_FEE after init.
-    expect(sodax.config.sodaxConfig.fee).toEqual(USER_FEE);
+    expect(sodax.config.bridge.partnerFee).toEqual(USER_FEE);
     // Sanity: a field the user did NOT override picks up the dynamic-config value — confirms the
     // assertion above is real preservation, not initialize() being a no-op.
     expect(sodax.config.sodaxConfig.api.timeout).toBe(77_777);

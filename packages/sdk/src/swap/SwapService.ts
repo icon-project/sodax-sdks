@@ -32,6 +32,7 @@ import {
   isBitcoinWalletProviderType,
   type RelayExtraData,
   type TxHashPair,
+  isStacksChainKeyType,
 } from '../shared/index.js';
 import { SolverApiService } from './SolverApiService.js';
 import { EvmSolverService } from './EvmSolverService.js';
@@ -55,9 +56,16 @@ export type {
   FeeData,
   IntentData,
   IntentState,
+  SwapExtras,
 } from '../shared/types/intent-types.js';
 export { IntentDataType } from '../shared/types/intent-types.js';
-import type { CreateIntentParams, CreateLimitOrderParams, Intent, IntentState } from '../shared/types/intent-types.js';
+import type {
+  CreateIntentParams,
+  CreateLimitOrderParams,
+  Intent,
+  IntentState,
+  SwapExtras,
+} from '../shared/types/intent-types.js';
 import {
   type SpokeChainKey,
   type Hex,
@@ -113,13 +121,15 @@ export type CreateIntentResult<K extends SpokeChainKey, Raw extends boolean> = {
 export type SwapActionParams<K extends SpokeChainKey, Raw extends boolean = false> = SpokeExecActionParams<
   K,
   Raw,
-  CreateIntentParams<K>
+  CreateIntentParams<K>,
+  SwapExtras<K>
 >;
 
 export type LimitOrderActionParams<K extends SpokeChainKey, Raw extends boolean = false> = SpokeExecActionParams<
   K,
   Raw,
-  CreateLimitOrderParams<K>
+  CreateLimitOrderParams<K>,
+  SwapExtras<K>
 >;
 
 /**
@@ -140,6 +150,14 @@ export type CancelIntentActionParams<K extends SpokeChainKey, Raw extends boolea
   Raw,
   CancelIntentParams<K>
 >;
+
+// Non-breaking superset of `SolverIntentQuoteRequest`: existing `getQuote(payload)` calls keep
+// working unchanged. `partnerFee` is an optional per-call override (matches `extras.partnerFee` on
+// createIntent/swap); it is stripped before the request is forwarded to the solver.
+export type GetQuoteParams = SolverIntentQuoteRequest & {
+  /** Optional per-call override of the configured swap partner fee. Falls back to config when omitted. */
+  partnerFee?: PartnerFee;
+};
 
 export type SwapServiceConstructorParams = {
   config: ConfigService;
@@ -176,7 +194,7 @@ export class SwapService {
 
   public constructor({ config, hubProvider, spoke }: SwapServiceConstructorParams) {
     this.solver = config.solver;
-    this.partnerFee = config.swaps.partnerFee;
+    this.partnerFee = config.swapPartnerFee;
     this.relayerApiEndpoint = config.relay.relayerApiEndpoint;
     this.config = config;
     this.hubProvider = hubProvider;
@@ -198,10 +216,13 @@ export class SwapService {
   /**
    * Requests a price quote from the solver API for a given token pair and amount.
    *
-   * Adjusts `payload.amount` by the configured partner fee before forwarding to the solver,
-   * so the returned `quoted_amount` reflects the net output the user actually receives.
+   * Adjusts `payload.amount` by the partner fee before forwarding to the solver, so the returned
+   * `quoted_amount` reflects the net output the user actually receives. Pass `partnerFee` to match
+   * a per-action override supplied to `createIntent` (`extras.partnerFee`); omit it to use the
+   * configured swap fee.
    *
-   * @param payload - Source/destination tokens, chain IDs, input amount, and quote type.
+   * @param payload - The solver quote request, optionally carrying a per-call `partnerFee` override
+   *   (defaults to the configured swap partner fee). `partnerFee` is stripped before forwarding.
    * @returns A `Result` containing `{ quoted_amount: bigint }` on success, or a
    *   `SolverErrorResponse` (with a `SolverIntentErrorCode`) on failure.
    *
@@ -216,14 +237,13 @@ export class SwapService {
    * });
    * if (response.ok) console.log('Quoted amount:', response.value.quoted_amount);
    */
-  public async getQuote(
-    payload: SolverIntentQuoteRequest,
-  ): Promise<Result<SolverIntentQuoteResponse, SolverErrorResponse>> {
-    payload = {
-      ...payload,
-      amount: adjustAmountByFee(payload.amount, this.partnerFee, payload.quote_type),
+  public async getQuote(payload: GetQuoteParams): Promise<Result<SolverIntentQuoteResponse, SolverErrorResponse>> {
+    const { partnerFee = this.partnerFee, ...request } = payload;
+    const adjustedPayload = {
+      ...request,
+      amount: adjustAmountByFee(request.amount, partnerFee, request.quote_type),
     } satisfies SolverIntentQuoteRequest;
-    return SolverApiService.getQuote(payload, this.solver, this.config);
+    return SolverApiService.getQuote(adjustedPayload, this.solver, this.config);
   }
 
   /**
@@ -629,7 +649,10 @@ export class SwapService {
   public async createIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: SwapActionParams<K, Raw>,
   ): Promise<Result<CreateIntentResult<K, Raw>, SwapCreateIntentError>> {
-    const { params, skipSimulation } = _params;
+    const { params, skipSimulation, extras } = _params;
+    // Per-action `extras.partnerFee` is primary; `this.partnerFee` (constructor snapshot of the effective
+    // swap fee, `swaps.partnerFee ?? fee`) is the fallback default. undefined = no fee.
+    const partnerFee = extras?.partnerFee ?? this.partnerFee;
     const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
 
     try {
@@ -666,6 +689,14 @@ export class SwapService {
           { ...baseCtx, field: 'minOutputAmount' },
         );
       }
+      if (isStacksChainKeyType(params.srcChainKey) && _params.raw === true) {
+        swapInvariant(
+          extras?.srcPublicKey !== undefined,
+          'srcPublicKey is required for Stacks createIntent (raw) — the source tx is built unsigned and needs the signer public key',
+          { ...baseCtx, field: 'srcPublicKey' },
+        );
+      }
+
       const personalAddress = params.srcAddress;
 
       // Bitcoin TRADING mode: derive the hub wallet from the trading address (raw + non-raw), since
@@ -694,7 +725,7 @@ export class SwapService {
           createIntentParams: params,
           creatorHubWalletAddress,
           solverConfig: this.solver,
-          fee: this.config.swaps.partnerFee,
+          fee: partnerFee,
           hubProvider: this.hubProvider,
         } as const;
 
@@ -727,12 +758,13 @@ export class SwapService {
         },
         creatorHubWalletAddress,
         this.config,
-        this.config.swaps.partnerFee,
+        partnerFee,
       );
 
       const coreDepositParams = {
         srcChainKey: params.srcChainKey,
         srcAddress: walletAddress as GetAddressType<K>,
+        srcPublicKey: extras?.srcPublicKey,
         to: creatorHubWalletAddress,
         token: params.inputToken as GetTokenAddressType<K>,
         amount: params.inputAmount,

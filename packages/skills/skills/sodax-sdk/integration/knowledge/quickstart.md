@@ -63,7 +63,7 @@ await sodax.config.initialize();   // load fresh config from backend; falls back
 //   sodax.config, sodax.backendApi, sodax.hubProvider, sodax.spoke
 ```
 
-`new Sodax()` accepts an optional `DeepPartial<SodaxConfig>` for custom RPC endpoints, solver / backend URLs, etc. — see [`recipes/`](recipes/) § "Initialize Sodax". `initialize()` is idempotent.
+`new Sodax()` accepts an optional `SodaxOptions` for custom RPC endpoints, solver / backend URLs, etc. — see [`recipes/`](recipes/) § "Initialize Sodax". `initialize()` is idempotent.
 
 ## 6. Reads without a wallet
 

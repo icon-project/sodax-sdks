@@ -1,5 +1,5 @@
 // currently supported spoke chain tokens for solver
-import type { PartnerFee } from '../common/common.js';
+import type { PartnerFee, Prettify } from '../common/common.js';
 import type { SpokeChainKey } from '../chains/chains.js';
 import { type XToken, SodaTokens, LsodaTokens } from '../chains/tokens.js';
 import { spokeChainConfig, ChainKeys } from '../chains/chains.js';
@@ -247,7 +247,7 @@ export const swapSupportedTokens = {
 // `getStagingSolverTokens` for the full staging set. The two lists are disjoint per chain;
 // a token lives in exactly one of them. It is upon the user to provide a token valid for
 // their target environment — validation accepts either (see `isSwapSupportedToken`).
-// Derived from the production solver oracle (tokens absent there). 
+// Derived from the production solver oracle (tokens absent there).
 export const stagingSwapSupportedTokens = {
   [ChainKeys.SONIC_MAINNET]: [SodaTokens.sodaUSDS] as const satisfies XToken[],
   [ChainKeys.AVALANCHE_MAINNET]: [],
@@ -287,15 +287,19 @@ export const stagingSwapSupportedTokens = {
   [ChainKeys.STACKS_MAINNET]: [],
 } as const satisfies Record<SpokeChainKey, readonly XToken[]>;
 
-export type SwapsConfig = {
-  partnerFee: PartnerFee | undefined; // enables override of global partner fee
+export type SwapsOptions = {
+  partnerFee?: PartnerFee; // enables override of global partner fee
+};
+
+export type SwapsDefaultConfig = {
   supportedTokens: Record<SpokeChainKey, readonly XToken[]>;
 };
 
+export type SwapsConfig = Prettify<SwapsDefaultConfig & SwapsOptions>;
+
 export const swapsConfig = {
-  partnerFee: undefined,
   supportedTokens: swapSupportedTokens,
-} satisfies SwapsConfig;
+} satisfies SwapsDefaultConfig;
 
 // get production supported spoke chain tokens for solver
 export const getSupportedSolverTokens = (chainId: SpokeChainKey): readonly XToken[] => swapSupportedTokens[chainId];

@@ -116,6 +116,23 @@ const btcBridgeInput = (): BridgeParams<typeof BTC, false> =>
     },
   }) as BridgeParams<typeof BTC, false>;
 
+describe('BridgeService.getFee — global-fee fallback', () => {
+  it('returns 0n when neither a bridge nor a global fee is configured', () => {
+    expect(sodax.bridge.getFee(1_000_000n)).toBe(0n);
+  });
+
+  it('falls back to the global fee when no bridge-specific partnerFee is set', () => {
+    // Regression: a global `fee` with no `bridge.partnerFee` must still be charged — the effective
+    // bridge fee is `bridge.partnerFee ?? fee` (via config.bridgePartnerFee), so a global-only fee
+    // is no longer silently dropped. `fee` is a typed SodaxOptions slot — no cast needed.
+    const sodaxWithGlobalFee = new Sodax({
+      fee: { address: '0x3333333333333333333333333333333333333333', percentage: 100 },
+    });
+
+    expect(sodaxWithGlobalFee.bridge.getFee(1_000_000n)).toBeGreaterThan(0n);
+  });
+});
+
 describe('BridgeService.createBridgeIntent — Bitcoin USER mode', () => {
   let ensureRadfiSpy: ReturnType<typeof vi.spyOn>;
   let depositSpy: ReturnType<typeof vi.spyOn>;
