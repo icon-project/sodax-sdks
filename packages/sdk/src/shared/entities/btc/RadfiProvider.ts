@@ -586,7 +586,7 @@ export class RadfiProvider {
    * NOT validate the token's contents (expiry / scope / signature) — only Bound can, and an invalid
    * token still surfaces as a legible 401/403 via `parseJsonBody`.
    */
-  private resolveAuth(accessToken?: string): string {
+  private resolveAuth(accessToken: string): string {
     const auth = accessToken || this.config.apiKey;
     if (!auth) {
       throw new RadfiApiError(

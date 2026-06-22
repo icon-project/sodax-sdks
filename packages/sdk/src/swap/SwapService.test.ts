@@ -962,6 +962,43 @@ describe('SwapService.createIntent', () => {
       expect(effectiveAddressSpy).toHaveBeenCalledWith('bc1qusersource');
       expect(ensureRadfiSpy).toHaveBeenCalledWith(mockBitcoinProvider);
     });
+
+    it('on Bitcoin raw=true, derives the trading address, skips Bound auth, and threads extras.accessToken to deposit', async () => {
+      const svc = sodax.swaps;
+      mocks.getUserHubWalletAddress.mockResolvedValueOnce('0xhubwallet');
+      mocks.constructCreateIntentData.mockReturnValueOnce(['0xintentdata', makeIntent(ChainKeys.BITCOIN_MAINNET), 0n]);
+      const rawDepositTx = { from: '0x1', to: '0x2', data: '0x', value: 0n };
+      vi.spyOn(svc.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: rawDepositTx });
+      // Trading-address derivation still runs on the raw path — it resolves the wallet via Bound.
+      const effectiveAddressSpy = vi
+        .spyOn(svc.spoke.bitcoin, 'getEffectiveWalletAddress')
+        .mockResolvedValueOnce('bc1qtradingwallet');
+      // Bound auth (ensureRadfiAccessToken) is a non-raw concern; raw must never trigger the sign-in.
+      const ensureRadfiSpy = vi.spyOn(svc.spoke.bitcoin.radfi, 'ensureRadfiAccessToken').mockResolvedValue(undefined);
+
+      const result = await svc.createIntent({
+        params: { ...intentInput(ChainKeys.BITCOIN_MAINNET), srcAddress: 'bc1qusersource' },
+        extras: { accessToken: 'bound-token' },
+        raw: true,
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value.tx).toBe(rawDepositTx);
+
+      // Address derivation runs against the personal address even in raw mode...
+      expect(effectiveAddressSpy).toHaveBeenCalledWith('bc1qusersource');
+      // ...but the interactive Bound sign-in is skipped.
+      expect(ensureRadfiSpy).not.toHaveBeenCalled();
+
+      const depositCall = (svc.spoke.deposit as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+      expect(depositCall.raw).toBe(true);
+      expect(depositCall).not.toHaveProperty('walletProvider');
+      expect(depositCall.srcChainKey).toBe(ChainKeys.BITCOIN_MAINNET);
+      // Deposit originates from the derived trading address, not the user's personal address.
+      expect(depositCall.srcAddress).toBe('bc1qtradingwallet');
+      // extras.accessToken threads through to DepositParams.accessToken.
+      expect(depositCall.accessToken).toBe('bound-token');
+    });
   });
 
   // Preflight `invariant()` checks run inside `createIntent`'s try/catch; failures resolve to

@@ -41,6 +41,8 @@ await sodax.swaps.createIntent({
 });
 ```
 
+> **Note (Bitcoin):** even on the `raw: true` path, a Bitcoin TRADING intent makes a live Bound Exchange call to resolve the trading-wallet address (`getEffectiveWalletAddress`) before the PSBT is built. The unsigned PSBT is returned for you to sign offline, but the address lookup is **not** offline — Bound must be reachable, and a valid `accessToken` (per-action or seeded) is required for it.
+
 Submit the raw tx via your own signing infrastructure. Once you have the spoke tx hash, you'll typically need to manually call the relay to complete the cross-chain flow:
 
 ```ts
