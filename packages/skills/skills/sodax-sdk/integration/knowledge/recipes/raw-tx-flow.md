@@ -18,6 +18,29 @@ const { tx, intent, relayData } = result.value;
 //   - …
 ```
 
+### Chain-specific raw inputs (`extras`)
+
+Some chains need a per-action input on the **raw** path, supplied via the chain-key-gated `extras` slot:
+
+- **Stacks** (`raw: true`): `extras.srcPublicKey` is **required** — the unsigned source tx is built from the signer public key (a `SP…` address can't yield it). Omitting it fails fast with a `VALIDATION_FAILED` `SodaxError` before any network call.
+- **Bitcoin** TRADING mode (`raw: true`): `extras.accessToken` carries a Bound Exchange token so the PSBT build authenticates. It falls back to the RadfiProvider instance token (`new Sodax({ ... })` with `radfi.accessToken`, or `radfi.setRadfiAccessToken(token)`) when omitted; with no token anywhere the call fails with a legible `RadfiApiError`.
+
+```ts
+// Stacks raw intent — srcPublicKey is mandatory:
+await sodax.swaps.createIntent({
+  params: { ...params, srcChainKey: ChainKeys.STACKS_MAINNET },
+  extras: { srcPublicKey },
+  raw: true,
+});
+
+// Bitcoin raw intent (TRADING) — accessToken (or a seeded radfi token):
+await sodax.swaps.createIntent({
+  params: { ...params, srcChainKey: ChainKeys.BITCOIN_MAINNET },
+  extras: { accessToken },
+  raw: true,
+});
+```
+
 Submit the raw tx via your own signing infrastructure. Once you have the spoke tx hash, you'll typically need to manually call the relay to complete the cross-chain flow:
 
 ```ts
