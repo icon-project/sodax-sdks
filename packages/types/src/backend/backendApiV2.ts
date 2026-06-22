@@ -51,6 +51,40 @@ export type QuoteTypeV2 = 'exact_input';
  */
 export type PartnerFeeV2 = { address: string; amount: string } | { address: string; percentage: number };
 
+/** JSON-safe mirror of the SDK `BitcoinBoundExtras` — Bound Exchange (Radfi) inputs for raw Bitcoin TRADING-mode intents. */
+export interface BitcoinBoundExtrasV2 {
+  /**
+   * Bound Exchange (Radfi) access token; threads through the typed DTO instead of an
+   * `x-bound-access-token` header. Only consumed for raw Bitcoin TRADING-mode intents.
+   */
+  accessToken?: string;
+}
+
+/**
+ * JSON-safe mirror of the SDK `SwapExtras<K>` — per-request swap extras flattened onto a request body.
+ * All fields are optional; chain applicability is documented per field (the wire DTO can't `K`-gate the
+ * way the SDK type does). Shared by {@link CreateIntentParamsV2} and {@link QuoteRequestV2}.
+ */
+export interface SwapExtrasV2 {
+  /**
+   * Per-request partner-fee override; defaults to the backend's configured fee. Keeps the fee-adjusted
+   * quote and the built intent consistent with `createIntent`.
+   */
+  partnerFee?: PartnerFeeV2;
+  /**
+   * Source-chain signer public key (compressed hex), for chains whose address can't yield it (e.g.
+   * Stacks). Only used when building a raw intent.
+   */
+  srcPublicKey?: string;
+  /**
+   * Bitcoin Bound (Radfi) inputs, grouped so future Bound fields extend one slot instead of adding a
+   * top-level field per item. Only used for raw Bitcoin TRADING-mode intents.
+   */
+  bound?: BitcoinBoundExtrasV2;
+}
+// JSON-safety (no `bigint`) is enforced at compile time by the `_AssertJsonSafe` guard intersected onto
+// `CreateLimitOrderParamsV2` below — the swaps-section counterpart to the `GetAllConfigResponseV2` guard.
+
 /**
  * Solver intent status code:
  * -1 NOT_FOUND, 1 NOT_STARTED_YET, 2 STARTED_NOT_FINISHED, 3 SOLVED (terminal), 4 FAILED (terminal).
@@ -190,8 +224,12 @@ export type GetSwapTokensByChainResponseV2 = readonly SwapTokenV2[];
 // POST /swaps/quote
 // ──────────────────────────────────────────────────────────────────────
 
-/** POST /swaps/quote — request body. */
-export interface QuoteRequestV2 {
+/**
+ * POST /swaps/quote — request body. Inherits the swap extras (`partnerFee`, `srcPublicKey`, `bound`) from
+ * {@link SwapExtrasV2}; the inherited `srcPublicKey`/`bound` are consumed only by the `includeTxData=true`
+ * intent-building path (Stacks/Bitcoin sources), mirroring `srcAddress`/`dstAddress` below.
+ */
+export interface QuoteRequestV2 extends SwapExtrasV2 {
   /** Source token address on the source spoke chain. */
   tokenSrc: string;
   /** Source spoke chain key (SODAX SpokeChainKey). */
@@ -204,12 +242,10 @@ export interface QuoteRequestV2 {
   amount: string;
   /** Quote type (only `exact_input` is supported). */
   quoteType: QuoteTypeV2;
-  /** Source address — required only when `includeTxData=true`; ignored otherwise. */
+  /** Source address — required only when `includeTxData=true` (with the inherited `srcPublicKey`/`bound` for Stacks/Bitcoin sources); ignored otherwise. */
   srcAddress?: string;
   /** Destination address — required only when `includeTxData=true`; ignored otherwise. */
   dstAddress?: string;
-  /** Optional per-request partner-fee override; defaults to the backend's configured fee. Keeps the fee-adjusted quote (and the `includeTxData` intent) consistent with `createIntent`. */
-  partnerFee?: PartnerFeeV2;
 }
 
 /** POST /swaps/quote — query params. */
@@ -247,8 +283,12 @@ export interface DeadlineResponseV2 {
 // (all three share the CreateIntentParamsV2 request body)
 // ──────────────────────────────────────────────────────────────────────
 
-/** Shared request body for `/swaps/allowance/check`, `/swaps/approve`, and `/swaps/intents`. */
-export interface CreateIntentParamsV2 {
+/**
+ * Shared request body for `/swaps/allowance/check`, `/swaps/approve`, and `/swaps/intents`. Inherits the
+ * swap extras (`partnerFee`, `srcPublicKey`, `bound`) from {@link SwapExtrasV2}; the Bitcoin Bound token
+ * is carried as `bound.accessToken` (not a flat `accessToken`), mirroring the SDK's grouped `extras.bound`.
+ */
+export interface CreateIntentParamsV2 extends SwapExtrasV2 {
   /** Source spoke chain key (SODAX SpokeChainKey). */
   srcChainKey: string;
   /** Destination spoke chain key (SODAX SpokeChainKey). */
@@ -267,22 +307,12 @@ export interface CreateIntentParamsV2 {
   allowPartialFill: boolean;
   /** User address on the source spoke chain (chain-specific format). */
   srcAddress: string;
-  /** Source-chain signer public key (compressed hex), for chains whose address can't yield it (e.g. Stacks). */
-  srcPublicKey?: string;
   /** Recipient address on the destination spoke chain (chain-specific format). */
   dstAddress: string;
   /** Solver address (EVM hub address). Defaults to the zero address for "any solver". */
   solver?: string;
   /** Arbitrary calldata hex string. Defaults to `0x`. */
   data?: string;
-  /** Optional per-request partner-fee override embedded into the built intent. When omitted the backend applies its configured default. */
-  partnerFee?: PartnerFeeV2;
-  /**
-   * Bound Exchange (Radfi) access token for Bitcoin TRADING-mode (`raw`) intents — supplied in the
-   * request body instead of an `x-bound-access-token` header so the token threads through the typed
-   * DTO. Required only when the source chain is Bitcoin in TRADING mode; ignored otherwise.
-   */
-  accessToken?: string;
 }
 
 /** POST /swaps/allowance/check — response body. */
@@ -458,11 +488,20 @@ export type GetIntentResponseV2 = IntentResponseV2;
 // POST /swaps/limit-orders
 // ──────────────────────────────────────────────────────────────────────
 
-/** POST /swaps/limit-orders — request body. Same as create-intent but `deadline` is optional. */
+/**
+ * POST /swaps/limit-orders — request body. Same as create-intent but `deadline` is optional.
+ *
+ * The trailing `& _AssertJsonSafe<…>` wires the compile-time JSON-safety guard (see the Config API v2
+ * section) into the swap request surface: if a `bigint` ever leaks into `SwapExtrasV2` — or the
+ * `PartnerFeeV2` / `BitcoinBoundExtrasV2` it composes — the constraint fails and `pnpm checkTs` /
+ * `pnpm build` go red. It is `& unknown` in the happy path, so it does not change the type. This is the
+ * swaps-section analog of the guard on `GetAllConfigResponseV2`; `CreateLimitOrderParamsV2` is the one
+ * exported swaps request `type` (the others are interfaces, which cannot carry an intersection).
+ */
 export type CreateLimitOrderParamsV2 = Omit<CreateIntentParamsV2, 'deadline'> & {
   /** Unix timestamp (seconds) at which the limit order expires. Omit (or pass `"0"`) for no expiry. */
   deadline?: string;
-};
+} & _AssertJsonSafe<[_ContainsBigint<SwapExtrasV2>] extends [false] ? true : false>;
 
 /** POST /swaps/limit-orders — response body (same shape as create-intent). */
 export type CreateLimitOrderResponseV2 = CreateIntentResponseV2;
@@ -857,8 +896,9 @@ export interface IConfigApiV2 {
 //
 // Asserting `SodaxConfigV2` is sufficient: it transitively reaches every reused config type
 // (chains → SpokeChainConfig → supportedTokens → XToken, dex, relay, …), so the granular
-// response types — all subsets of it — are covered too. These helpers are referenced only by
-// the exported `GetAllConfigResponseV2`, so they stay non-exported (no knip "unused export").
+// response types — all subsets of it — are covered too. These helpers are referenced by the exported
+// `GetAllConfigResponseV2` and by the swaps-section JSON-safety guard on `CreateLimitOrderParamsV2`, so
+// they stay non-exported (no knip "unused export").
 
 /** True if `T` contains a `bigint` anywhere in its data shape. Recurses arrays/records/objects. */
 type _ContainsBigint<T> = T extends bigint

@@ -5,11 +5,11 @@ import { Sodax, ChainKeys, type CreateIntentParams, type SpokeChainKey } from '@
 // Reproduce, in Node, how the backend (BE) builds a raw Bitcoin-source swap via @sodax/sdk.
 //
 // New flow: the Bound Exchange access token travels IN the request body
-// (CreateIntentParamsV2.accessToken) and is forwarded to the SDK through the typed, Bitcoin-gated
+// (CreateIntentParamsV2.bound.accessToken) and is forwarded to the SDK through the typed, Bitcoin-gated
 // `extras.bound.accessToken` slot — not an `x-bound-access-token` header, not setRadfiAccessToken().
 //
-//   1. BE receives a JSON create-intent body (string numerics + accessToken) — `apiBody` below.
-//   2. BE maps it to SDK domain params (bigint numerics) and lifts accessToken into `extras.bound`.
+//   1. BE receives a JSON create-intent body (string numerics + bound.accessToken) — `apiBody` below.
+//   2. BE maps it to SDK domain params (bigint numerics) and lifts bound.accessToken into `extras.bound`.
 //   3. BE calls createIntent({ params, extras, raw: true }) — no walletProvider — to get the unsigned
 //      PSBT it returns to the client to sign + co-sign via Bound.
 //
@@ -36,7 +36,7 @@ type ApiCreateIntentBody = {
   allowPartialFill: boolean;
   srcAddress: string;
   dstAddress: string;
-  accessToken?: string; // Bound Exchange token for Bitcoin TRADING-mode raw intents.
+  bound?: { accessToken?: string }; // Bound Exchange token for Bitcoin TRADING-mode raw intents.
 };
 
 // Defaults mirror the reported Bitcoin → Base case (srcChainKey is fixed to Bitcoin — this is the
@@ -54,7 +54,7 @@ const apiBody: ApiCreateIntentBody = {
   allowPartialFill: false,
   srcAddress: process.env.BTC_ADDRESS ?? 'bc1pax7wcjw4r7m25fn2405x5a5f6vucv8pcqr8ltsz2mp4xjmx26rgstqgwhz',
   dstAddress: process.env.DST_ADDRESS ?? '0x1468d3529032106291433B7e9e3026dF1Ff78F31',
-  accessToken: process.env.BOUND_ACCESS_TOKEN,
+  bound: { accessToken: process.env.BOUND_ACCESS_TOKEN },
 };
 
 // Stringify replacer so bigint fields (intent, error context) don't throw in console output.
@@ -66,7 +66,7 @@ const short = (s: string, head = 16, tail = 8): string =>
     ? s
     : `${s.slice(0, head)}…${s.slice(-tail)} (${s.length} chars)`;
 
-// Map the wire body (CreateIntentParamsV2 — flat string fields, incl. accessToken) to the SDK swap
+// Map the wire body (CreateIntentParamsV2 — string fields plus the nested bound.accessToken) to the SDK swap
 // action input: typed `params` (bigint numerics, `data` → '0x') plus the per-action `extras` slot.
 // This is the split BE does — one flat HTTP body becomes `params` + `extras`. The Bitcoin key narrows
 // K so the grouped `extras.bound` slot is typeable (it's `never` off Bitcoin).
@@ -84,7 +84,7 @@ function toCreateIntentInput(body: ApiCreateIntentBody) {
     dstAddress: body.dstAddress,
     data: '0x',
   } satisfies CreateIntentParams<BitcoinKey>;
-  return { params, extras: { bound: { accessToken: body.accessToken } } };
+  return { params, extras: { bound: { accessToken: body.bound?.accessToken } } };
 }
 
 // Log every Bound Exchange / UMS HTTP call the SDK makes — method, URL, auth + origin, request body,
@@ -146,7 +146,9 @@ async function main(): Promise<void> {
   console.log('  dstAddress :', short(apiBody.dstAddress));
   console.log(
     '  accessToken:',
-    apiBody.accessToken ? `present (${apiBody.accessToken.length} chars)` : '(none — expect a legible auth/HTTP error)',
+    apiBody.bound?.accessToken
+      ? `present (${apiBody.bound.accessToken.length} chars)`
+      : '(none — expect a legible auth/HTTP error)',
   );
   console.log('  origin     :', process.env.BOUND_ORIGIN ?? '(none — default Node request)');
   console.log('\n→ createIntent({ params, extras: { bound: { accessToken } }, raw: true })');
