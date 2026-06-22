@@ -180,15 +180,14 @@ export class RadfiProvider {
       try {
         const { accessToken, refreshToken } = await this.refreshAccessToken(this.refreshToken);
         this.setRadfiAccessToken(accessToken, refreshToken);
-        console.log('[ensureRadfiAccessToken] token refreshed successfully');
         return;
       } catch (error) {
+        // Refresh failed — keep the error visible, then fall through to full re-authentication below.
         console.warn('[ensureRadfiAccessToken] refresh failed, falling back to full re-auth', error);
       }
     }
 
     // Full re-authentication (requires user wallet signature)
-    console.log('[ensureRadfiAccessToken] performing full re-authentication (BIP322 sign)');
     this.accessToken = '';
     this.refreshToken = '';
     await this.authenticateWithWallet(walletProvider);
