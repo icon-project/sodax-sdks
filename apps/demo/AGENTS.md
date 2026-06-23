@@ -89,6 +89,7 @@ Requires `@sentry/react` installed (listed in `package.json`). To send to the **
 
 ## Common pitfalls
 
+- **Chain logos come from `@sodax/types`, not local files.** `baseChainInfo[key].logo` is the single source of truth (a `raw.githubusercontent.com` URL hosted in `packages/assets`). `src/constants.ts` derives `availableChains[].icon` / `EVM_CHAIN_ICONS` / `getChainIcon` / `chainIdToChainLogo` from it — don't reintroduce hardcoded `/chain/*.png` paths (the demo's `public/` has no `chain/` folder, so those 404). The logo URLs only resolve once `packages/assets` is on `main`; on a feature branch, point `CHAIN_LOGO_BASE_URL` at the branch to preview. (`src/lib/chains.ts` is an unused duplicate of the old logic — ignore it.)
 - **Node polyfills.** Uses `@bangjelkoski/vite-plugin-node-polyfills` (Bitcoin/Solana deps pull in `buffer`, `crypto`, etc.). If a new dependency requires a polyfill, add it there rather than in app code.
 - **Env vars.** Vite-side env vars must be `VITE_*` (e.g. `VITE_WALLETCONNECT_PROJECT_ID`). The RPC overrides in `providers.tsx` read from `process.env.*` which is replaced at build time — leaving them unset is fine (public fallbacks).
 - **Build memory.** Build script sets `--max-old-space-size=8192` because the bundle is large. Don't drop that flag.

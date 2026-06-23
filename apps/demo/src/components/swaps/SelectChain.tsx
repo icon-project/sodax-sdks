@@ -4,7 +4,7 @@ import React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { SpokeChainKey } from '@sodax/dapp-kit';
 import { Label } from '@/components/ui/label';
-import { chainIdToChainName } from '@/constants';
+import { chainIdToChainName, chainIdToChainLogo } from '@/constants';
 
 export function SelectChain({
   chainList,
@@ -31,7 +31,10 @@ export function SelectChain({
         <SelectContent>
           {chainList.map(chain => (
             <SelectItem key={chain} value={chain.toString()}>
-              {chainIdToChainName(chain)}
+              <span className="flex items-center gap-2">
+                <img src={chainIdToChainLogo(chain)} alt="" className="h-4 w-4 rounded-full" />
+                {chainIdToChainName(chain)}
+              </span>
             </SelectItem>
           ))}
         </SelectContent>
