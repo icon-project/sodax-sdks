@@ -83,13 +83,20 @@ Note: the request param is still `xChainId` (not renamed to `chainKey`). This is
 ### `useStellarTrustlineCheck` / `useRequestTrustline`
 
 ```diff
-- const { data: hasTrustline } = useStellarTrustlineCheck(account, asset);
-+ const { data: hasTrustline } = useStellarTrustlineCheck({ params: { account, asset } });
+- // Positional args; `destProvider` carried both the signer and the destination chain.
+- const { data: hasTrustline } = useStellarTrustlineCheck(token, amount, destProvider, dstChainId);
++ // Single `params` object. Pass the resolved Stellar address (e.g. useXAccount('STELLAR').address),
++ // NOT a provider — the address keys the cache per account.
++ const { data: hasTrustline } = useStellarTrustlineCheck({
++   params: { token, amount, chainId, walletAddress },
++ });
 
-- const request = useRequestTrustline(walletProvider);
-- await request.mutateAsync({ account, asset });
-+ const { mutateAsync: request } = useRequestTrustline();
-+ await request({ account, asset, walletProvider });
+- // The callback took a `spokeProvider`.
+- await requestTrustline({ token, amount, spokeProvider: destProvider });
++ // useRequestTrustline is NOT a canonical mutation: the token is positional, and it returns a
++ // `requestTrustline` callback that now takes `srcChainKey` + `walletProvider`.
++ const { requestTrustline } = useRequestTrustline(token);
++ await requestTrustline({ token, amount, srcChainKey, walletProvider });
 ```
 
 ### `useDeriveUserWalletAddress` / `useGetUserHubWalletAddress`

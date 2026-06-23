@@ -95,7 +95,7 @@ export function BridgeDialog({
       token: order.dstToken,
       amount: order.amount,
       chainId: toChainKey,
-      walletProvider: stellarWalletProvider,
+      walletAddress: toAccount.address,
     },
   });
   const { requestTrustline, isLoading: isRequestingTrustline } = useRequestTrustline(order.dstToken);
