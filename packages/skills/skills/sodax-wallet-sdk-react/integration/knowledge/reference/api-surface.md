@@ -125,7 +125,7 @@ import { IconHanaXConnector } from '@sodax/wallet-sdk-react/xchains/icon';
 | Sub-path | Beyond `XService`/`XConnector` |
 |---|---|
 | `/xchains/bitcoin` | `XverseXConnector`, `UnisatXConnector`, `OKXXConnector` (3 wallet connectors), hook `useBitcoinXConnectors`, type `BtcWalletAddressType` |
-| `/xchains/evm` | `createWagmiConfig` (function — also exported as alias `createWagmi`) |
+| `/xchains/evm` | `createWagmiConfig` (function — also exported as alias `createWagmi`); `tryCookieToInitialState` (wraps wagmi's `cookieToInitialState` so a malformed SSR cookie yields `undefined` instead of throwing) |
 | `/xchains/icon` | `CHAIN_INFO` (value), `SupportedChainId` (enum) |
 | `/xchains/stacks` | `STACKS_PROVIDERS` (value), hook `useStacksXConnectors`, type `StacksProviderConfig` |
 

@@ -5,7 +5,16 @@ import { getRpcUrl, getWagmiChainId, isNativeToken } from '@/utils/index.js';
 
 import { type Address, type Chain, defineChain, erc20Abi } from 'viem';
 import { getPublicClient } from 'wagmi/actions';
-import { type Config, type CreateConnectorFn, createConfig, http, createStorage, cookieStorage } from 'wagmi';
+import {
+  type Config,
+  type CreateConnectorFn,
+  createConfig,
+  http,
+  createStorage,
+  cookieStorage,
+  cookieToInitialState,
+  type State,
+} from 'wagmi';
 import {
   mainnet,
   avalanche,
@@ -22,6 +31,11 @@ import {
 type WagmiOptions = {
   reconnectOnMount?: boolean;
   ssr?: boolean;
+  /**
+   * Base key for wagmi's cookie storage (state cookie = `<persistKey>.store`). @default 'sodax'.
+   * SSR server and client must build from the same key, else the server reads the wrong cookie.
+   */
+  persistKey?: string;
 };
 
 // HyperEVM chain is not supported by viem, so we need to define it manually
@@ -93,10 +107,23 @@ export const createWagmiConfig = (
     },
     storage: createStorage({
       storage: cookieStorage,
-      key: 'sodax',
+      key: options?.persistKey ?? 'sodax',
     }),
   });
 };
+
+/**
+ * Wraps wagmi's `cookieToInitialState` so a malformed cookie returns `undefined` instead of throwing
+ * during SSR. NOT validation: a well-formed but attacker-controlled cookie still passes — the live
+ * wallet is authoritative once a connection is established. Errors are swallowed (not logged).
+ */
+export function tryCookieToInitialState(config: Config, cookie: string | null | undefined): State | undefined {
+  try {
+    return cookieToInitialState(config, cookie ?? undefined);
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Service class for handling EVM chain interactions.
