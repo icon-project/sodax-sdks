@@ -26,11 +26,15 @@
     "check:ai": "turbo run check:ai",
     "check:ai-dev-files": "node scripts/check-ai-dev-files.mjs",
     "check:knip": "turbo run check:knip",
+    "changeset": "changeset",
+    "version:packages": "changeset version",
     "clean": "turbo clean && rm -rf node_modules dist .turbo && rm -rf apps/*/node_modules apps/*/dist apps/*/.turbo && rm -rf packages/*/node_modules packages/*/dist packages/*/.turbo",
     "prepare": "husky"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.15",
+    "@changesets/changelog-github": "^0.5.0",
+    "@changesets/cli": "^2.27.11",
     "@commitlint/cli": "^19.7.1",
     "@commitlint/config-conventional": "^19.7.1",
     "husky": "^9.1.7",
