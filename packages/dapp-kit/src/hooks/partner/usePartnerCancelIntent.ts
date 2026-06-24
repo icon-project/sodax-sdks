@@ -31,7 +31,7 @@ export function usePartnerCancelIntent({
   return useSafeMutation<TxReturnType<HubChainKey, false>, Error, UsePartnerCancelIntentVars>({
     mutationKey: ['partner', 'cancelIntent'],
     ...mutationOptions,
-    mutationFn: async vars => unwrapResult(await sodax.partners.feeClaim.cancelIntent({ ...vars, raw: false })),
+    mutationFn: async vars => unwrapResult(await sodax.partners.feeClaim.cancelIntent<false>({ ...vars, raw: false })),
     onSuccess: async (data, vars, ctx) => {
       queryClient.invalidateQueries({
         queryKey: ['partner', 'feeClaim', 'assetsBalances', vars.params.srcAddress],

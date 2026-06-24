@@ -193,9 +193,35 @@ export default function PartnerFeeClaimPage() {
   // ── Recover a stuck intent ─────────────────────────────────────────────────
   const [recoverFromToken, setRecoverFromToken] = useState<string>('');
   const [recoverToToken, setRecoverToToken] = useState<string>('');
+  const [recoverTxHash, setRecoverTxHash] = useState<string>('');
+  const [recoverTxLoading, setRecoverTxLoading] = useState<boolean>(false);
   const [recoverError, setRecoverError] = useState<string | null>(null);
   const [recoverSuccess, setRecoverSuccess] = useState<string | null>(null);
   const { mutateAsync: cancelIntent, isPending: recoverLoading } = usePartnerCancelIntent();
+
+  // Convenience: derive the from/to tokens from the original claim transaction so the partner can
+  // recover by pasting a tx hash instead of typing token addresses. The on-chain cancel still keys
+  // on the token pair — this only fills the inputs.
+  const handleLoadFromTx = async (): Promise<void> => {
+    setRecoverError(null);
+    setRecoverSuccess(null);
+    const txHash = recoverTxHash.trim();
+    if (!txHash) {
+      setRecoverError('Enter the claim transaction hash');
+      return;
+    }
+    setRecoverTxLoading(true);
+    try {
+      const result = await sodax.swaps.getIntent(txHash as `0x${string}`);
+      if (!result.ok) throw result.error;
+      setRecoverFromToken(result.value.inputToken);
+      setRecoverToToken(result.value.outputToken);
+    } catch (error) {
+      setRecoverError(formatSdkError(error, 'Could not read an intent from this transaction'));
+    } finally {
+      setRecoverTxLoading(false);
+    }
+  };
 
   const recoverPairValid = isAddress(recoverFromToken.trim()) && isAddress(recoverToToken.trim()) && !!srcAddress;
 
@@ -798,6 +824,30 @@ export default function PartnerFeeClaimPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="recover-txhash">Claim Transaction Hash (optional)</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="recover-txhash"
+                  placeholder="0x... (paste the failed claim tx to auto-fill tokens)"
+                  value={recoverTxHash}
+                  onChange={e => setRecoverTxHash(e.target.value)}
+                  className="font-mono"
+                />
+                <Button
+                  variant="outline"
+                  onClick={handleLoadFromTx}
+                  disabled={recoverTxLoading || !recoverTxHash.trim()}
+                >
+                  {recoverTxLoading ? 'Loading...' : 'Load from Tx'}
+                </Button>
+              </div>
+              <p className="text-xs text-cream/60">
+                Optional shortcut — reads the intent from the transaction and fills the From/To tokens below.
+                The cancel itself uses the token pair, not the hash.
+              </p>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="recover-from">From Token (fee token claimed)</Label>
               <Input
