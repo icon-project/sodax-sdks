@@ -87,7 +87,7 @@ pnpm dev                      # terminal B
 
 Requires `@sentry/react` installed (listed in `package.json`). To send to the **real** services instead, set `VITE_DD_INTAKE_URL` / `VITE_SENTRY_DSN` (drop the tunnel) — then DNS is required, as expected.
 
-## Analytics tracking (issue #175)
+## Analytics tracking
 
 The demo enables the SDK's opt-in user-action analytics so every feature flow it exercises is tracked.
 

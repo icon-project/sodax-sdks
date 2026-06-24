@@ -98,7 +98,7 @@ SDK diagnostics go through `SodaxLogger`, resolved from `new Sodax({ logger })`.
 - Avoid adding new direct `console.*` calls in service code.
 - Keep runtime logging separate from backend config data.
 
-## Analytics (issue #175)
+## Analytics
 
 Separate from logging: the SDK can emit **structured, opt-in user-action events** to a consumer-supplied sink. Unlike `logger`, analytics is **off by default** and events are structured (`feature` + `action` + `phase` + `level` + `data`) rather than free-form messages.
 
