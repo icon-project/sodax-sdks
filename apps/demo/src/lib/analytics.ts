@@ -1,4 +1,4 @@
-import type { AnalyticsConfig, AnalyticsEvent } from '@sodax/sdk';
+import type { AnalyticsConfig, AnalyticsEvent } from '@sodax/dapp-kit';
 
 // Demo analytics sink. Receives the structured user-action events the SDK emits (issue #175) and,
 // for the showcase, logs each one to the console and re-dispatches it as a `sodax:analytics` window
