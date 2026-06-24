@@ -56,7 +56,7 @@ describe('PartnerFeeClaimService.cancelIntent', () => {
     const result = await service.cancelIntent({
       raw: false,
       params: { srcChainKey: ChainKeys.SONIC_MAINNET, srcAddress: SRC, fromToken: USDC, toToken: USDC },
-      walletProvider: { sendTransaction } as never,
+      walletProvider: { chainType: 'EVM', sendTransaction } as never,
     });
 
     expect(result.ok).toBe(true);
