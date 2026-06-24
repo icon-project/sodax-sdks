@@ -19,11 +19,30 @@ sodax.partners.feeClaim.setSwapPreference<K, Raw>(args): Promise<Result<TxReturn
 sodax.partners.feeClaim.swap(args): Promise<Result<...>>;                           // immediate fee swap
 sodax.partners.feeClaim.createIntentAutoSwap<Raw>(args): Promise<Result<...>>;       // intent-driven auto-swap
 
+// Recover a stuck claim. swap() rejects a same-token claim (output === fee token) up front with
+// VALIDATION_FAILED; an already-created same-token intent is unfillable and locks the funds. Cancel via
+// ProtocolIntents' own cancelIntent — the only authorized path: the intent's creator is the
+// ProtocolIntents contract, so the generic SwapService.cancelIntent reverts Unauthorized().
+sodax.partners.feeClaim.cancelIntent<Raw>(args): Promise<Result<TxReturnType, Error>>; // args.params: { srcChainKey: Hub, srcAddress, fromToken, toToken }
+
 // Reads
 sodax.partners.feeClaim.fetchAssetsBalances(args): Promise<Result<...>>;
+sodax.partners.feeClaim.getUserIntent({ user, fromToken, toToken }): Promise<Result<Hex, Error>>; // 0x0…0 = no open intent
+sodax.partners.feeClaim.getIntentDetails(intentHash): Promise<Result<Intent, Error>>;
 sodax.partners.feeClaim.getOriginalAssetAddress(chainId, hubAsset): OriginalAssetAddress | undefined;
 sodax.partners.feeClaim.getSpokeTokenFromOriginalAssetAddress(...): /* … */;
 ```
+
+## Same-token fees (no conversion) — withdraw directly
+
+When a partner wants the fee token itself (e.g. claim BTC fees as BTC), there is no swap to do — the
+solver rejects a same-token swap, and `swap()`/`createIntentAutoSwap` would lock the funds in an
+unfillable intent. Instead move the wrapped fee token off Sonic with the bridge:
+`sodax.bridge.bridge({ params: { srcChainKey: Sonic, srcAddress, srcToken: <hub asset on Sonic>,
+amount, dstChainKey: <fee's native chain, or Sonic>, dstToken: <original token on dstChain, or the
+hub asset for same-chain delivery>, recipient } })`. Bridging from Sonic pulls via the partner's
+hub-wallet router, so it needs a bridge allowance — a different spender than the ProtocolIntents
+approval used by the swap claim.
 
 ## Common call shape
 
