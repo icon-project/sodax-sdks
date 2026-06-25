@@ -3,7 +3,7 @@ import { invariant } from '../shared/utils/tiny-invariant.js';
 import { erc20Abi, encodeFunctionData, isAddress, type Address } from 'viem';
 import type { ConfigService } from '../shared/config/ConfigService.js';
 import type { HubProvider } from '../shared/types/types.js';
-import { SodaxError } from '../errors/SodaxError.js';
+import { SodaxError, isSodaxError } from '../errors/SodaxError.js';
 import { lookupFailed } from '../errors/wrappers.js';
 import { SolverApiService } from '../swap/SolverApiService.js';
 import { ProtocolIntentsAbi } from '../shared/abis/protocolIntents.abi.js';
@@ -389,7 +389,7 @@ export class PartnerFeeClaimService {
         dstAddress: _params.params.dstAddress,
       }),
       success: value => ({ txHash: value }),
-      failure: error => ({ code: error.code }),
+      failure: error => ({ code: isSodaxError(error) ? error.code : undefined }),
     });
   }
 
@@ -653,7 +653,7 @@ export class PartnerFeeClaimService {
         srcTxHash: value.srcTxHash,
         intentTxHash: value.intentTxHash,
       }),
-      failure: error => ({ code: error.code }),
+      failure: error => ({ code: isSodaxError(error) ? error.code : undefined }),
     });
   }
 }

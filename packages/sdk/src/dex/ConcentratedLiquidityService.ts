@@ -11,7 +11,7 @@ import {
   isHubChainKeyType,
   type SendMessageParams,
 } from '../shared/index.js';
-import { SodaxError } from '../errors/SodaxError.js';
+import { SodaxError, isSodaxError } from '../errors/SodaxError.js';
 import { lookupFailed } from '../errors/wrappers.js';
 import { dexInvariant } from './errors.js';
 import type { MintPositionEventLog } from '../swap/EvmSolverService.js';
@@ -785,7 +785,7 @@ export class ClService {
         amount1Max: _params.params.amount1Max,
       }),
       success: value => ({ srcChainTxHash: value.srcChainTxHash, dstChainTxHash: value.dstChainTxHash }),
-      failure: error => ({ code: error.code }),
+      failure: error => ({ code: isSodaxError(error) ? error.code : undefined }),
     });
   }
 
@@ -853,7 +853,7 @@ export class ClService {
         amount1Max: _params.params.amount1Max,
       }),
       success: value => ({ srcChainTxHash: value.srcChainTxHash, dstChainTxHash: value.dstChainTxHash }),
-      failure: error => ({ code: error.code }),
+      failure: error => ({ code: isSodaxError(error) ? error.code : undefined }),
     });
   }
 
@@ -919,7 +919,7 @@ export class ClService {
         amount1Min: _params.params.amount1Min,
       }),
       success: value => ({ srcChainTxHash: value.srcChainTxHash, dstChainTxHash: value.dstChainTxHash }),
-      failure: error => ({ code: error.code }),
+      failure: error => ({ code: isSodaxError(error) ? error.code : undefined }),
     });
   }
 
@@ -1146,7 +1146,7 @@ export class ClService {
         tickUpper: _params.params.tickUpper,
       }),
       success: value => ({ srcChainTxHash: value.srcChainTxHash, dstChainTxHash: value.dstChainTxHash }),
-      failure: error => ({ code: error.code }),
+      failure: error => ({ code: isSodaxError(error) ? error.code : undefined }),
     });
   }
 

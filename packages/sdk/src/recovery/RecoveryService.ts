@@ -6,7 +6,7 @@ import type { SpokeService } from '../shared/services/spoke/SpokeService.js';
 import { EvmAssetManagerService } from '../shared/services/hub/EvmAssetManagerService.js';
 import type { SendMessageParams } from '../shared/types/spoke-types.js';
 import { encodeAddress } from '../shared/index.js';
-import { SodaxError } from '../errors/SodaxError.js';
+import { SodaxError, isSodaxError } from '../errors/SodaxError.js';
 import { lookupFailed } from '../errors/wrappers.js';
 import { recoveryInvariant } from './errors.js';
 
@@ -243,7 +243,7 @@ export class RecoveryService {
         amount: _params.params.amount,
       }),
       success: value => ({ txHash: typeof value === 'string' ? value : undefined }),
-      failure: error => ({ code: error.code }),
+      failure: error => ({ code: isSodaxError(error) ? error.code : undefined }),
     });
   }
 }
