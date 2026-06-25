@@ -1,9 +1,10 @@
 import type { AnalyticsConfig, AnalyticsEvent } from '@sodax/dapp-kit';
 
-// Demo analytics sink. Receives the structured user-action events the SDK emits (issue #175) and,
+// Demo analytics tracker. Receives the structured user-action events the SDK emits (issue #175) and,
 // for the showcase, logs each one to the console and re-dispatches it as a `sodax:analytics` window
 // CustomEvent so any UI panel can subscribe and render a live feed. A real integrator would forward
-// `event` to their product-analytics backend (Segment, Amplitude, PostHog, …) instead.
+// `event` to their product-analytics backend (Segment, Amplitude, PostHog, …) instead, e.g.
+// `tracker: (event) => amplitude.track(event.action, event.data)`.
 
 const PREFIX = '[Sodax Analytics]';
 
@@ -28,7 +29,8 @@ function toSerializable(event: AnalyticsEvent): AnalyticsEvent {
  *
  * Enabled by default so the demo tracks out of the box; pass `{ enabled: false }` (or set
  * `VITE_ENABLE_ANALYTICS=false`) to return `undefined`, which leaves the SDK on its disabled default.
- * `level: 'detailed'` so the showcase surfaces full event payloads.
+ * `level: 'detailed'` so the showcase surfaces full event payloads. Scope which features/actions are
+ * tracked by editing {@link ANALYTICS_FEATURES} above.
  */
 export function createDemoAnalytics(options: { enabled?: boolean } = {}): AnalyticsConfig | undefined {
   const enabled = options.enabled ?? import.meta.env.VITE_ENABLE_ANALYTICS !== 'false';
@@ -36,14 +38,13 @@ export function createDemoAnalytics(options: { enabled?: boolean } = {}): Analyt
 
   return {
     level: 'detailed',
-    sink: {
-      track(event) {
-        const serializable = toSerializable(event);
-        console.info(`${PREFIX} ${event.feature}.${event.action}:${event.phase}`, serializable.data ?? {});
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent(ANALYTICS_EVENT_NAME, { detail: serializable }));
-        }
-      },
+    features: { swap: true, moneyMarket: { actions: ['supply'] } },
+    tracker(event) {
+      const serializable = toSerializable(event);
+      console.info(`${PREFIX} ${event.feature}.${event.action}:${event.phase}`, serializable.data ?? {});
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(ANALYTICS_EVENT_NAME, { detail: serializable }));
+      }
     },
   };
 }

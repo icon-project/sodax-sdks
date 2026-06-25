@@ -55,37 +55,65 @@ export interface AnalyticsEvent {
 }
 
 /**
- * Analytics sink implemented by the consumer. The SDK calls `track` once per emitted event; the
- * consumer forwards it to their product-analytics backend (Segment, Amplitude, PostHog, a custom
- * collector, …).
+ * Consumer-supplied tracker: the SDK calls it once per emitted event, and the consumer forwards the
+ * event to their product-analytics backend (Segment, Amplitude, PostHog, a custom collector, …),
+ * e.g. `tracker: (event) => amplitude.track(event.action, event.data)`.
  *
- * Implementations must be cheap and non-throwing — the SDK treats `track` as fire-and-forget and
- * does not await it.
+ * It must be cheap and non-throwing — the SDK treats it as fire-and-forget, does not await it, and
+ * swallows any error it throws so analytics can never break a feature flow.
  */
-export interface SodaxAnalytics {
-  track(event: AnalyticsEvent): void;
-}
+export type AnalyticsTracker = (event: AnalyticsEvent) => void;
+
+/**
+ * How much of one feature to track, in the {@link AnalyticsConfig.features} allowlist:
+ * - `true` — every action of the feature.
+ * - `{ actions }` — only the named actions (e.g. `{ actions: ['supply', 'borrow'] }`).
+ */
+export type AnalyticsFeatureScope = true | { actions: readonly string[] };
+
+/**
+ * The set of features (and actions) to track — an **allowlist**. Two equivalent forms:
+ * - Object: per-feature {@link AnalyticsFeatureScope}. A feature **omitted from the object is OFF**.
+ *   `{ swap: true, moneyMarket: { actions: ['supply'] } }`.
+ * - Array shorthand: a list of features, each fully tracked. `['swap', 'moneyMarket']`.
+ *
+ * Omitting {@link AnalyticsConfig.features} entirely tracks **everything** (all features, all
+ * actions) — scoping is opt-in.
+ */
+export type AnalyticsFeatures = Partial<Record<SodaxFeature, AnalyticsFeatureScope>> | readonly SodaxFeature[];
 
 /**
  * Analytics configuration passed to `new Sodax({ analytics })`.
  *
- * Providing this object is what turns analytics on; choosing a {@link SodaxAnalytics} `sink` is
- * the only required field. `level` and `features` narrow what gets emitted so consumers track only
- * what they care about — leveled by detail and by feature.
+ * Providing this object is what turns analytics on; the {@link AnalyticsTracker} `tracker` is the
+ * only required field. `level` and `features` narrow what gets emitted so consumers track only what
+ * they care about — by detail level and by feature/action.
+ *
+ * @example
+ * new Sodax({
+ *   analytics: {
+ *     tracker: (event) => amplitude.track(event.action, event.data),
+ *     features: {
+ *       swap: true,                              // all swap actions
+ *       moneyMarket: { actions: ['supply', 'borrow'] }, // only these
+ *       // staking omitted → OFF
+ *     }, // or simple form: features: ['swap', 'moneyMarket']
+ *   },
+ * });
  */
 export interface AnalyticsConfig {
-  /** Where events are delivered. Required — enabling analytics means choosing a sink. */
-  sink: SodaxAnalytics;
+  /** Where events are delivered. Required — enabling analytics means supplying a tracker. */
+  tracker: AnalyticsTracker;
   /**
    * Highest detail level to emit. Defaults to `'basic'`. Events tagged `'detailed'` are only built
    * and delivered when this is `'detailed'`.
    */
   level?: AnalyticsDetailLevel;
   /**
-   * Per-feature on/off overrides. Omitted features default to enabled. Set a feature to `false` to
-   * silence it — its events are never built. Lets consumers scope tracking to specific features.
+   * Allowlist of features/actions to track. Omit to track everything; otherwise only the listed
+   * features (and, with `{ actions }`, only the listed actions) emit. See {@link AnalyticsFeatures}.
    */
-  features?: Partial<Record<SodaxFeature, boolean>>;
+  features?: AnalyticsFeatures;
 }
 
 /**

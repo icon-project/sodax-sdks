@@ -336,50 +336,62 @@ export class BridgeService {
   public async bridge<K extends SpokeChainKey>(
     _params: BridgeParams<K, false>,
   ): Promise<Result<TxHashPair, BridgeOrchestrationError>> {
-    return this.config.analytics.trackResult('bridge', 'bridge', () => this.bridgeImpl(_params));
-  }
+    return this.config.analytics.trackResult('bridge', 'bridge', async () => {
+      const { params, timeout } = _params;
+      const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
+      try {
+        const txResult = await this.createBridgeIntent(_params);
+        // CreateBridgeIntentErrorCode ⊂ BridgeOrchestrationErrorCode, so SodaxError narrows correctly.
+        if (!txResult.ok) return { ok: false, error: txResult.error };
 
-  private async bridgeImpl<K extends SpokeChainKey>(
-    _params: BridgeParams<K, false>,
-  ): Promise<Result<TxHashPair, BridgeOrchestrationError>> {
-    const { params, timeout } = _params;
-    const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
-    try {
-      const txResult = await this.createBridgeIntent(_params);
-      // CreateBridgeIntentErrorCode ⊂ BridgeOrchestrationErrorCode, so SodaxError narrows correctly.
-      if (!txResult.ok) return { ok: false, error: txResult.error };
+        const verifyTxHashResult = await this.spoke.verifyTxHash({
+          txHash: txResult.value.tx,
+          chainKey: params.srcChainKey,
+        });
+        if (!verifyTxHashResult.ok) {
+          return {
+            ok: false,
+            error: verifyFailed('bridge', verifyTxHashResult.error, baseCtx),
+          };
+        }
 
-      const verifyTxHashResult = await this.spoke.verifyTxHash({
-        txHash: txResult.value.tx,
-        chainKey: params.srcChainKey,
-      });
-      if (!verifyTxHashResult.ok) {
+        const packetResult = await relayTxAndWaitPacket({
+          srcTxHash: txResult.value.tx,
+          data: txResult.value.relayData,
+          chainKey: params.srcChainKey,
+          relayerApiEndpoint: this.config.relay.relayerApiEndpoint,
+          timeout,
+        });
+        if (!packetResult.ok) return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'bridge', action: 'bridge', srcChainKey: baseCtx.srcChainKey, dstChainKey: baseCtx.dstChainKey }) };
+
+        return {
+          ok: true,
+          value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packetResult.value.dst_tx_hash },
+        };
+      } catch (error) {
+        if (isBridgeOrchestrationError(error)) return { ok: false, error };
         return {
           ok: false,
-          error: verifyFailed('bridge', verifyTxHashResult.error, baseCtx),
+          error: executionFailed('bridge', error, baseCtx),
         };
       }
-
-      const packetResult = await relayTxAndWaitPacket({
-        srcTxHash: txResult.value.tx,
-        data: txResult.value.relayData,
-        chainKey: params.srcChainKey,
-        relayerApiEndpoint: this.config.relay.relayerApiEndpoint,
-        timeout,
-      });
-      if (!packetResult.ok) return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'bridge', action: 'bridge', srcChainKey: baseCtx.srcChainKey, dstChainKey: baseCtx.dstChainKey }) };
-
-      return {
-        ok: true,
-        value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packetResult.value.dst_tx_hash },
-      };
-    } catch (error) {
-      if (isBridgeOrchestrationError(error)) return { ok: false, error };
-      return {
-        ok: false,
-        error: executionFailed('bridge', error, baseCtx),
-      };
-    }
+    },
+    {
+      start: () => ({
+        srcChainKey: _params.params.srcChainKey,
+        dstChainKey: _params.params.dstChainKey,
+        srcToken: _params.params.srcToken,
+        dstToken: _params.params.dstToken,
+        amount: _params.params.amount,
+        srcAddress: _params.params.srcAddress,
+        recipient: _params.params.recipient,
+      }),
+      success: value => ({
+        srcChainTxHash: value.srcChainTxHash,
+        dstChainTxHash: value.dstChainTxHash,
+      }),
+      failure: error => ({ code: error.code }),
+    });
   }
 
   /**

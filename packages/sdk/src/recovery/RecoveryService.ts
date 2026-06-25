@@ -187,53 +187,63 @@ export class RecoveryService {
   public async withdrawHubAsset<K extends SpokeChainKey, Raw extends boolean>(
     _params: WithdrawHubAssetAction<K, Raw>,
   ): Promise<Result<TxReturnType<K, Raw>>> {
-    return this.config.analytics.trackResult('recovery', 'withdrawHubAsset', () => this.withdrawHubAssetImpl(_params));
-  }
+    return this.config.analytics.trackResult('recovery', 'withdrawHubAsset', async () => {
+      const { params } = _params;
+      try {
+        const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
+        const payload = EvmAssetManagerService.withdrawAssetData(
+          {
+            token: params.token,
+            to: encodeAddress(params.srcChainKey, params.srcAddress),
+            amount: params.amount,
+          },
+          this.hubProvider,
+          params.srcChainKey,
+        );
 
-  private async withdrawHubAssetImpl<K extends SpokeChainKey, Raw extends boolean>(
-    _params: WithdrawHubAssetAction<K, Raw>,
-  ): Promise<Result<TxReturnType<K, Raw>>> {
-    const { params } = _params;
-    try {
-      const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
-      const payload = EvmAssetManagerService.withdrawAssetData(
-        {
-          token: params.token,
-          to: encodeAddress(params.srcChainKey, params.srcAddress),
-          amount: params.amount,
-        },
-        this.hubProvider,
-        params.srcChainKey,
-      );
+        const coreParams = {
+          srcChainKey: params.srcChainKey,
+          srcAddress: params.srcAddress,
+          dstChainKey: this.hubProvider.chainConfig.chain.key,
+          dstAddress: hubWallet,
+          payload,
+        };
 
-      const coreParams = {
-        srcChainKey: params.srcChainKey,
-        srcAddress: params.srcAddress,
-        dstChainKey: this.hubProvider.chainConfig.chain.key,
-        dstAddress: hubWallet,
-        payload,
-      };
+        const sendMessageParams = _params.raw
+          ? ({ ...coreParams, raw: true } satisfies SendMessageParams<K, true>)
+          : ({
+              ...coreParams,
+              raw: false,
+              walletProvider: _params.walletProvider,
+            } satisfies SendMessageParams<K, false>);
 
-      const sendMessageParams = _params.raw
-        ? ({ ...coreParams, raw: true } satisfies SendMessageParams<K, true>)
-        : ({ ...coreParams, raw: false, walletProvider: _params.walletProvider } satisfies SendMessageParams<K, false>);
+        const txResult = await this.spoke.sendMessage(sendMessageParams);
+        if (!txResult.ok) return txResult;
 
-      const txResult = await this.spoke.sendMessage(sendMessageParams);
-      if (!txResult.ok) return txResult;
-
-      return {
-        ok: true,
-        value: txResult.value satisfies TxReturnType<K, boolean> as TxReturnType<K, Raw>,
-      };
-    } catch (error) {
-      return {
-        ok: false,
-        error: new SodaxError(
-          'EXECUTION_FAILED',
-          error instanceof Error ? error.message : 'withdrawHubAsset failed',
-          { feature: 'recovery', cause: error, context: { action: 'withdrawHubAsset', phase: 'execution' } },
-        ),
-      };
-    }
+        return {
+          ok: true,
+          value: txResult.value satisfies TxReturnType<K, boolean> as TxReturnType<K, Raw>,
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          error: new SodaxError(
+            'EXECUTION_FAILED',
+            error instanceof Error ? error.message : 'withdrawHubAsset failed',
+            { feature: 'recovery', cause: error, context: { action: 'withdrawHubAsset', phase: 'execution' } },
+          ),
+        };
+      }
+    },
+    {
+      start: () => ({
+        srcChainKey: _params.params.srcChainKey,
+        srcAddress: _params.params.srcAddress,
+        token: _params.params.token,
+        amount: _params.params.amount,
+      }),
+      success: value => ({ txHash: typeof value === 'string' ? value : undefined }),
+      failure: error => ({ code: error.code }),
+    });
   }
 }

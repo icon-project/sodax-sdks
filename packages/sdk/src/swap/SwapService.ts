@@ -460,6 +460,7 @@ export class SwapService {
         srcTxHash: value.intentDeliveryInfo.srcTxHash,
         dstTxHash: value.intentDeliveryInfo.dstTxHash,
       }),
+      failure: error => ({ code: error.code }),
     });
   }
 
