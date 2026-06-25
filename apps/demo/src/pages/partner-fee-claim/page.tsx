@@ -15,7 +15,8 @@ import {
   ChainKeys,
   type SpokeChainKey,
 } from '@sodax/dapp-kit';
-import { useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
+import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
+import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,6 +44,10 @@ export default function PartnerFeeClaimPage() {
   const sonicAccount = useXAccount({ xChainId: SONIC });
   const walletProvider = useWalletProvider({ xChainId: SONIC });
   const srcAddress = sonicAccount?.address as Address | undefined;
+  // The wallet address (connection intent) is tracked independently of the active network, but the
+  // EVM walletProvider only hydrates once the wallet is on Sonic — without it every write action
+  // (claim, withdraw, recover) stays disabled with no hint. Prompt a network switch instead.
+  const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: SONIC });
 
   const supportedSpokeChains = useMemo(() => sodax.config.getSupportedSpokeChains(), [sodax]);
 
@@ -362,6 +367,18 @@ export default function PartnerFeeClaimPage() {
           <h1 className="text-3xl font-bold text-cream-white mb-2">Partner Fee Claim Demo</h1>
           <p className="text-cream/70">Query asset balances for any address on Sonic chain</p>
         </div>
+
+        {srcAddress && isWrongChain && (
+          <div className="flex items-center gap-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <AlertTriangle className="w-5 h-5 text-yellow-600 shrink-0" />
+            <span className="text-sm text-yellow-800">
+              Your wallet is connected to a different network. Switch to Sonic to claim, withdraw, or recover fees.
+            </span>
+            <Button variant="cherry" size="sm" onClick={handleSwitchChain} className="ml-auto shrink-0">
+              Switch to Sonic
+            </Button>
+          </div>
+        )}
 
         <Card>
           <CardHeader>
