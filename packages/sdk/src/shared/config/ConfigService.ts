@@ -163,6 +163,17 @@ export class ConfigService {
     return this.hubAssetToXTokenMap.get(hubAsset.toLowerCase() as Address)?.address;
   }
 
+  /**
+   * Resolves the {@link XToken} descriptor (hub asset, vault, decimals) for a hub-asset address.
+   *
+   * Useful when a caller holds a hub asset directly on Sonic that has no spoke-token entry under
+   * the hub chain — e.g. a partner BTC fee held as the BTC hub asset, which only exists as a spoke
+   * token on Bitcoin. Returns `undefined` when the address is not a known hub asset.
+   */
+  public getXTokenFromHubAsset(hubAsset: string): XToken | undefined {
+    return this.hubAssetToXTokenMap.get(hubAsset.toLowerCase() as Address);
+  }
+
   public getSpokeTokenFromOriginalAssetAddress(
     chainId: SpokeChainKey,
     originalAssetAddress: OriginalAssetAddress,
