@@ -53,6 +53,7 @@ import { IntentDataType, type CreateIntentParams, type Intent } from '../shared/
 import { calculatePercentageFeeAmount } from '../shared/utils/shared-utils.js';
 import { EvmSolverService } from './EvmSolverService.js';
 import { HookService } from './HookService.js';
+import { IntentDataService } from './IntentDataService.js';
 
 // --- fixtures -------------------------------------------------------------
 
@@ -428,7 +429,7 @@ describe('EvmSolverService.decodeIntentFeeAmount', () => {
 
   it('recovers the fee from a TYPE_ARRAY envelope carrying fee + delivery', () => {
     const [feeEnvelope] = EvmSolverService.createIntentFeeData({ address: FEE_RECEIVER, amount: 1_234n }, 1_000_000n);
-    const data = HookService.composeIntentData(
+    const data = IntentDataService.composeIntentData(
       feeEnvelope,
       HookService.encodeDeliveryData({ kind: HookKind.HYPERCORE_DEPOSIT }, FEE_RECEIVER),
     );
@@ -437,7 +438,7 @@ describe('EvmSolverService.decodeIntentFeeAmount', () => {
 
   it('returns 0n (no log) for a delivery-only envelope', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const data = HookService.composeIntentData(
+    const data = IntentDataService.composeIntentData(
       '0x',
       HookService.encodeDeliveryData({ kind: HookKind.HYPERCORE_DEPOSIT }, FEE_RECEIVER),
     );

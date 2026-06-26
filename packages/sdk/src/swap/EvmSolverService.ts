@@ -26,6 +26,7 @@ import {
   type IntentState,
 } from '../shared/types/intent-types.js';
 import { HookService } from './HookService.js';
+import { IntentDataService } from './IntentDataService.js';
 import {
   getIntentRelayChainId,
   isHubChainKey,
@@ -110,7 +111,7 @@ export class EvmSolverService {
     const { dstAddress, deliveryData } = HookService.resolveDelivery(createIntentParams);
     // Encode the partner fee, then fold it together with any delivery payload into the intent `data`.
     const [feeEnvelope, feeAmount] = EvmSolverService.createIntentFeeData(fee, createIntentParams.inputAmount);
-    const intentData = HookService.composeIntentData(feeEnvelope, deliveryData);
+    const intentData = IntentDataService.composeIntentData(feeEnvelope, deliveryData);
 
     const calls: EvmContractCall[] = [];
     const intentsContract = config.solver.intentsContract;
@@ -204,13 +205,13 @@ export class EvmSolverService {
    *
    * Inverse of {@link createIntentFeeData}: returns the encoded fee, regardless of whether the `data`
    * is a bare fee envelope or a multi-entry envelope that also carries delivery data. The envelope
-   * parsing lives in {@link HookService.extractFeePayload}; this method just decodes the fee struct.
+   * parsing lives in {@link IntentDataService.extractFeePayload}; this method just decodes the fee struct.
    *
    * @param data - The intent's `data` field (`'0x'` when no fee was configured).
    * @returns The fee amount in the input token's smallest unit (`0n` when no fee is present).
    */
   public static decodeIntentFeeAmount(data: Hex): bigint {
-    const feePayload = HookService.extractFeePayload(data);
+    const feePayload = IntentDataService.extractFeePayload(data);
     return feePayload ? EvmSolverService.decodeFeePayload(feePayload) : 0n;
   }
 

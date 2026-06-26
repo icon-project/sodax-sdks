@@ -40,9 +40,10 @@ const mocks = vi.hoisted(() => ({
   // which calls `encodeTransferFrom` to prepend a transfer call to the wallet-router payload.
   erc20IsAllowanceValid: vi.fn(),
   erc20EncodeTransferFrom: vi.fn(),
-  // HookService — `createSwapIntent` calls `resolveDelivery(params)` to apply any delivery hook and
-  // `composeIntentData(feeEnvelope, deliveryData)` to fold the fee + delivery into the intent `data`.
+  // HookService — `createSwapIntent` calls `resolveDelivery(params)` to apply any delivery hook.
   resolveDelivery: vi.fn(),
+  // IntentDataService — `createSwapIntent` calls `composeIntentData(feeEnvelope, deliveryData)` to fold
+  // the fee + delivery into the intent `data`.
   composeIntentData: vi.fn(),
   // EvmSolverService — `createSwapIntent` calls `createIntentFeeData(fee, inputAmount)` (fee envelope +
   // amount) and `encodeCreateIntent(intent, intentsContract)` for the on-hub calldata.
@@ -81,6 +82,15 @@ vi.mock('../../../swap/HookService.js', async () => {
     ...actual,
     HookService: {
       resolveDelivery: mocks.resolveDelivery,
+    },
+  };
+});
+
+vi.mock('../../../swap/IntentDataService.js', async () => {
+  const actual = await vi.importActual<object>('../../../swap/IntentDataService.js');
+  return {
+    ...actual,
+    IntentDataService: {
       composeIntentData: mocks.composeIntentData,
     },
   };

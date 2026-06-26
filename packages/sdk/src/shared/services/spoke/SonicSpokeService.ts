@@ -32,6 +32,7 @@ import { Erc20Service, type Erc20IsAllowanceParams } from '../erc-20/Erc20Servic
 import { wrappedSonicAbi, sonicWalletFactoryAbi } from '../../abis/index.js';
 import { EvmSolverService } from '../../../swap/EvmSolverService.js';
 import { HookService } from '../../../swap/HookService.js';
+import { IntentDataService } from '../../../swap/IntentDataService.js';
 import { isSonicChainKeyType } from '../../guards.js';
 import type {
   WaitForTxReceiptParams,
@@ -307,7 +308,7 @@ export class SonicSpokeService {
     const { dstAddress, deliveryData } = HookService.resolveDelivery(createIntentParams);
     // Encode the partner fee, then fold it together with any delivery payload into the intent `data`.
     const [feeEnvelope, feeAmount] = EvmSolverService.createIntentFeeData(fee, createIntentParams.inputAmount);
-    const intentData = HookService.composeIntentData(feeEnvelope, deliveryData);
+    const intentData = IntentDataService.composeIntentData(feeEnvelope, deliveryData);
 
     const intentsContract = solverConfig.intentsContract;
     const intent = {
