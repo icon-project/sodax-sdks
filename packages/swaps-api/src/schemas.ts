@@ -204,6 +204,10 @@ type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ?
 type Extends<A, B> = [A] extends [B] ? true : false;
 type Expect<T extends true> = T;
 
+/**
+ * @public Compile-time only. Each entry fails `tsc` if a schema drifts from its contract type.
+ * Intentionally exported — un-exporting trips TS6196 (declared but never used).
+ */
 export type SchemaDriftGuards = [
   Expect<Equal<v.InferOutput<typeof SwapTokenSchema>, SwapTokenV2>>,
   Expect<Equal<v.InferOutput<typeof IntentResponseSchema>, IntentResponseV2>>,
