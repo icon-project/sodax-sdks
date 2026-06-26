@@ -19,6 +19,7 @@ import type {
 import * as v from 'valibot';
 import type { SwapsApiConfig } from './config.js';
 import { type RequestContext, request } from './http.js';
+import { rawTxSchemaForChainKey } from './rawTxSchemas.js';
 import * as s from './schemas.js';
 import { serializeIntentRequest } from './serialize.js';
 
@@ -89,6 +90,7 @@ export class SwapsApi implements ISwapsApiV2 {
   }
 
   getQuote(body: QuoteRequestV2, query?: QuoteQueryV2) {
+    const txSchema = rawTxSchemaForChainKey(body.tokenSrcChainKey);
     return request(this.ctx, {
       method: 'POST',
       path: PATHS.quote,
@@ -96,7 +98,7 @@ export class SwapsApi implements ISwapsApiV2 {
       idempotent: true,
       query: { includeTxData: query?.includeTxData },
       body,
-      parse: raw => v.parse(s.QuoteResponseSchema, raw),
+      parse: raw => v.parse(s.makeQuoteResponseSchema(txSchema), raw),
     });
   }
 
@@ -123,22 +125,24 @@ export class SwapsApi implements ISwapsApiV2 {
   }
 
   approve(body: CreateIntentParamsV2) {
+    const txSchema = rawTxSchemaForChainKey(body.srcChainKey);
     return request(this.ctx, {
       method: 'POST',
       path: PATHS.approve,
       endpoint: 'approve',
       body,
-      parse: raw => v.parse(s.ApproveResponseSchema, raw),
+      parse: raw => v.parse(s.makeApproveResponseSchema(txSchema), raw),
     });
   }
 
   createIntent(body: CreateIntentParamsV2) {
+    const txSchema = rawTxSchemaForChainKey(body.srcChainKey);
     return request(this.ctx, {
       method: 'POST',
       path: PATHS.intents,
       endpoint: 'createIntent',
       body,
-      parse: raw => v.parse(s.CreateIntentResponseSchema, raw),
+      parse: raw => v.parse(s.makeCreateIntentResponseSchema(txSchema), raw),
     });
   }
 
@@ -164,12 +168,13 @@ export class SwapsApi implements ISwapsApiV2 {
   }
 
   cancelIntent(body: CancelIntentRequestV2) {
+    const txSchema = rawTxSchemaForChainKey(body.srcChainKey);
     return request(this.ctx, {
       method: 'POST',
       path: PATHS.intentsCancel,
       endpoint: 'cancelIntent',
       body: { srcChainKey: body.srcChainKey, intent: serializeIntentRequest(body.intent) },
-      parse: raw => v.parse(s.CancelIntentResponseSchema, raw),
+      parse: raw => v.parse(s.makeCancelIntentResponseSchema(txSchema), raw),
     });
   }
 
@@ -227,12 +232,13 @@ export class SwapsApi implements ISwapsApiV2 {
   }
 
   createLimitOrderIntent(body: CreateLimitOrderParamsV2) {
+    const txSchema = rawTxSchemaForChainKey(body.srcChainKey);
     return request(this.ctx, {
       method: 'POST',
       path: PATHS.limitOrders,
       endpoint: 'createLimitOrderIntent',
       body,
-      parse: raw => v.parse(s.CreateLimitOrderResponseSchema, raw),
+      parse: raw => v.parse(s.makeCreateIntentResponseSchema(txSchema), raw),
     });
   }
 

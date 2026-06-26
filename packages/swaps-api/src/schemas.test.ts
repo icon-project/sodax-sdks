@@ -1,13 +1,26 @@
 import * as v from 'valibot';
 import { describe, expect, it } from 'vitest';
+import { EvmRawTxSchema } from './rawTxSchemas.js';
 import {
-  CreateIntentResponseSchema,
   FeeResponseSchema,
   GetSwapTokensByChainResponseSchema,
   GetSwapTokensResponseSchema,
-  QuoteResponseSchema,
   StatusResponseSchema,
+  makeCreateIntentResponseSchema,
+  makeQuoteResponseSchema,
 } from './schemas.js';
+
+// The tx-bearing schemas are chain-parameterized factories; tests pin them to the EVM variant.
+const CreateIntentResponseSchema = makeCreateIntentResponseSchema(EvmRawTxSchema);
+const QuoteResponseSchema = makeQuoteResponseSchema(EvmRawTxSchema);
+
+// A valid EVM unsigned tx as it arrives on the wire (`value` is a decimal string).
+const evmTx = {
+  from: '0x1111111111111111111111111111111111111111',
+  to: '0x2222222222222222222222222222222222222222',
+  value: '1000000000000000000',
+  data: '0x',
+};
 
 // Mirrors a real token from GET /v1/swaps/tokens.
 const token = {
@@ -66,12 +79,13 @@ describe('QuoteResponseSchema', () => {
     expect(v.parse(QuoteResponseSchema, { quotedAmount: '5' }).quotedAmount).toBe('5');
   });
 
-  it('parses a quote with embedded txData', () => {
+  it('parses a quote with embedded txData and transforms tx.value to bigint', () => {
     const parsed = v.parse(QuoteResponseSchema, {
       quotedAmount: '5',
-      txData: { tx: { to: '0x1' }, intent: intentResponse, relayData: { address: '0x', payload: '0x' } },
+      txData: { tx: evmTx, intent: intentResponse, relayData: { address: '0x', payload: '0x' } },
     });
     expect(parsed.txData?.intent.intentId).toBe('1');
+    expect(parsed.txData?.tx.value).toBe(1000000000000000000n);
   });
 
   it('rejects a quote missing quotedAmount', () => {
@@ -90,19 +104,29 @@ describe('StatusResponseSchema', () => {
 });
 
 describe('CreateIntentResponseSchema', () => {
-  it('keeps opaque tx as unknown and validates intent/relayData', () => {
+  it('transforms tx to its chain variant (value string→bigint) and validates intent/relayData', () => {
     const parsed = v.parse(CreateIntentResponseSchema, {
-      tx: { from: '0x1', to: '0x2' },
+      tx: evmTx,
       intent: intentResponse,
       relayData: { address: '0xa', payload: '0xb' },
     });
+    expect(parsed.tx.value).toBe(1000000000000000000n);
     expect(parsed.relayData.payload).toBe('0xb');
   });
 
   it('rejects when intent is missing', () => {
-    expect(v.safeParse(CreateIntentResponseSchema, { tx: {}, relayData: { address: '', payload: '' } }).success).toBe(
-      false,
-    );
+    expect(
+      v.safeParse(CreateIntentResponseSchema, { tx: evmTx, relayData: { address: '', payload: '' } }).success,
+    ).toBe(false);
+  });
+
+  it('rejects a malformed tx (non-numeric value cannot convert to bigint)', () => {
+    const bad = {
+      tx: { ...evmTx, value: 'not-a-number' },
+      intent: intentResponse,
+      relayData: { address: '', payload: '' },
+    };
+    expect(v.safeParse(CreateIntentResponseSchema, bad).success).toBe(false);
   });
 });
 

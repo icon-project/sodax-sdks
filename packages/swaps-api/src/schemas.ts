@@ -21,14 +21,14 @@ import type {
   SubmitIntentResponseV2,
   SubmitTxResponseV2,
   SubmitTxStatusResponseV2,
+  RawTxReturnType,
   SwapTokenV2,
 } from '@sodax/types';
 import * as v from 'valibot';
 
-// Response schemas mirror `packages/types/src/backend/backendApiV2.ts`. `v.object` tolerates additive
-// backend fields (extra keys are ignored, not rejected) while inferring the exact contract shape, so
-// the drift guards at the bottom of this file stay strict. Opaque chain payloads (`tx`, `gas`,
-// `result`) are `v.unknown()` per the contract. These schemas are internal — not part of the public API.
+// Internal response schemas mirroring `backendApiV2.ts`; `v.object` ignores additive backend fields.
+// The unsigned `tx` is validated+transformed per source chain via `rawTxSchemas.ts` (tx-bearing
+// responses are `make*ResponseSchema(txSchema)` factories); other opaque payloads stay `v.unknown()`.
 
 // ── Shared building blocks ────────────────────────────────────────────
 
@@ -64,27 +64,36 @@ const RelayExtraDataResponseSchema = v.object({
   payload: v.string(),
 });
 
-export const CreateIntentResponseSchema = v.object({
-  tx: v.unknown(),
-  intent: IntentResponseSchema,
-  relayData: RelayExtraDataResponseSchema,
-});
+/**
+ * Unsigned create-intent tx + built intent + relay payload (`CreateIntentResponseV2` /
+ * `CreateLimitOrderResponseV2`). Parameterized by the chain-specific `tx` schema (see
+ * `rawTxSchemaForChainKey`) so `tx` is validated and transformed to its `RawTxReturnType` variant.
+ */
+export const makeCreateIntentResponseSchema = (txSchema: v.GenericSchema<unknown, RawTxReturnType>) =>
+  v.object({
+    tx: txSchema,
+    intent: IntentResponseSchema,
+    relayData: RelayExtraDataResponseSchema,
+  });
 
 // ── Per-endpoint response schemas ─────────────────────────────────────
 
 export const GetSwapTokensResponseSchema = v.record(v.string(), v.array(SwapTokenSchema));
 export const GetSwapTokensByChainResponseSchema = v.array(SwapTokenSchema);
 
-export const QuoteResponseSchema = v.object({
-  quotedAmount: v.string(),
-  txData: v.optional(CreateIntentResponseSchema),
-});
+/** POST /swaps/quote. `txData` (present only when `includeTxData=true`) carries the unsigned tx. */
+export const makeQuoteResponseSchema = (txSchema: v.GenericSchema<unknown, RawTxReturnType>) =>
+  v.object({
+    quotedAmount: v.string(),
+    txData: v.optional(makeCreateIntentResponseSchema(txSchema)),
+  });
 
 export const DeadlineResponseSchema = v.object({ deadline: v.string() });
 
 export const AllowanceCheckResponseSchema = v.object({ valid: v.boolean() });
 
-export const ApproveResponseSchema = v.object({ tx: v.unknown() });
+export const makeApproveResponseSchema = (txSchema: v.GenericSchema<unknown, RawTxReturnType>) =>
+  v.object({ tx: txSchema });
 
 export const SubmitIntentResponseSchema = v.object({ result: v.unknown() });
 
@@ -93,7 +102,8 @@ export const StatusResponseSchema = v.object({
   fillTxHash: v.optional(v.string()),
 });
 
-export const CancelIntentResponseSchema = v.object({ tx: v.unknown() });
+export const makeCancelIntentResponseSchema = (txSchema: v.GenericSchema<unknown, RawTxReturnType>) =>
+  v.object({ tx: txSchema });
 
 export const IntentHashResponseSchema = v.object({ hash: v.string() });
 
@@ -121,7 +131,8 @@ export const IntentStateSchema = v.object({
 
 export const GetIntentResponseSchema = IntentResponseSchema;
 
-export const CreateLimitOrderResponseSchema = CreateIntentResponseSchema;
+// `createLimitOrderIntent` shares `CreateIntentResponseV2`'s shape — the client reuses
+// `makeCreateIntentResponseSchema(txSchema)` rather than a separate alias.
 
 export const GasEstimateResponseSchema = v.object({ gas: v.unknown() });
 
@@ -186,8 +197,8 @@ export const SubmitTxStatusResponseSchema = v.object({
 
 // ── Compile-time drift guards ─────────────────────────────────────────
 // Each entry fails `tsc` if a schema's inferred output stops matching its contract type. `Equal` is
-// strict; `Extends` is one-way for the `readonly` array/record responses (a mutable array is a valid
-// runtime value for a `readonly` field, and the element type is strictly guarded via SwapTokenV2).
+// strict; `Extends` is one-way for the `readonly` array/record responses and the tx-bearing factories
+// (their inferred `tx` is `RawTxReturnType`, which `extends` this branch's contract `tx: unknown`).
 
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 type Extends<A, B> = [A] extends [B] ? true : false;
@@ -197,22 +208,22 @@ export type SchemaDriftGuards = [
   Expect<Equal<v.InferOutput<typeof SwapTokenSchema>, SwapTokenV2>>,
   Expect<Equal<v.InferOutput<typeof IntentResponseSchema>, IntentResponseV2>>,
   Expect<Equal<v.InferOutput<typeof RelayExtraDataResponseSchema>, RelayExtraDataResponseV2>>,
-  Expect<Equal<v.InferOutput<typeof CreateIntentResponseSchema>, CreateIntentResponseV2>>,
+  Expect<Extends<v.InferOutput<ReturnType<typeof makeCreateIntentResponseSchema>>, CreateIntentResponseV2>>,
   Expect<Extends<v.InferOutput<typeof GetSwapTokensResponseSchema>, GetSwapTokensResponseV2>>,
   Expect<Extends<v.InferOutput<typeof GetSwapTokensByChainResponseSchema>, GetSwapTokensByChainResponseV2>>,
-  Expect<Equal<v.InferOutput<typeof QuoteResponseSchema>, QuoteResponseV2>>,
+  Expect<Extends<v.InferOutput<ReturnType<typeof makeQuoteResponseSchema>>, QuoteResponseV2>>,
   Expect<Equal<v.InferOutput<typeof DeadlineResponseSchema>, DeadlineResponseV2>>,
   Expect<Equal<v.InferOutput<typeof AllowanceCheckResponseSchema>, AllowanceCheckResponseV2>>,
-  Expect<Equal<v.InferOutput<typeof ApproveResponseSchema>, ApproveResponseV2>>,
+  Expect<Extends<v.InferOutput<ReturnType<typeof makeApproveResponseSchema>>, ApproveResponseV2>>,
   Expect<Equal<v.InferOutput<typeof SubmitIntentResponseSchema>, SubmitIntentResponseV2>>,
   Expect<Equal<v.InferOutput<typeof StatusResponseSchema>, StatusResponseV2>>,
-  Expect<Equal<v.InferOutput<typeof CancelIntentResponseSchema>, CancelIntentResponseV2>>,
+  Expect<Extends<v.InferOutput<ReturnType<typeof makeCancelIntentResponseSchema>>, CancelIntentResponseV2>>,
   Expect<Equal<v.InferOutput<typeof IntentHashResponseSchema>, IntentHashResponseV2>>,
   Expect<Equal<v.InferOutput<typeof IntentPacketResponseSchema>, IntentPacketResponseV2>>,
   Expect<Equal<v.InferOutput<typeof IntentExtraDataResponseSchema>, IntentExtraDataResponseV2>>,
   Expect<Equal<v.InferOutput<typeof IntentStateSchema>, IntentStateV2>>,
   Expect<Equal<v.InferOutput<typeof GetIntentResponseSchema>, GetIntentResponseV2>>,
-  Expect<Equal<v.InferOutput<typeof CreateLimitOrderResponseSchema>, CreateLimitOrderResponseV2>>,
+  Expect<Extends<v.InferOutput<ReturnType<typeof makeCreateIntentResponseSchema>>, CreateLimitOrderResponseV2>>,
   Expect<Equal<v.InferOutput<typeof GasEstimateResponseSchema>, GasEstimateResponseV2>>,
   Expect<Equal<v.InferOutput<typeof FeeResponseSchema>, FeeResponseV2>>,
   Expect<Equal<v.InferOutput<typeof SubmitTxResponseSchema>, SubmitTxResponseV2>>,
