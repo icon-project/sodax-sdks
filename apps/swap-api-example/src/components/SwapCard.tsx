@@ -1,6 +1,8 @@
 import type {
+  Address,
   CreateIntentParamsV2,
   EvmRawTransaction,
+  Hex,
   IntentRequestV2,
   IntentResponseV2,
   SwapTokenV2,
@@ -30,6 +32,21 @@ function toIntentRequest(r: IntentResponseV2): IntentRequestV2 {
     deadline: BigInt(r.deadline),
     srcChain: BigInt(r.srcChain),
     dstChain: BigInt(r.dstChain),
+  };
+}
+
+/**
+ * The backend returns the EVM tx as JSON ({ from, to, value, data }) with `value` as a decimal
+ * string. The wallet provider expects an `EvmRawTransaction` whose `value` is a `bigint`, so coerce
+ * it here instead of casting the raw JSON (which would feed viem a string `value`).
+ */
+function toEvmRawTx(tx: unknown): EvmRawTransaction {
+  const t = tx as { from: string; to: string; value: string | number | bigint; data: string };
+  return {
+    from: t.from as Address,
+    to: t.to as Address,
+    value: BigInt(t.value ?? 0),
+    data: t.data as Hex,
   };
 }
 
@@ -111,7 +128,7 @@ export function SwapCard() {
       if (!allowance.valid) {
         setLog('Approving source token…');
         const approve = await swapsApi.approve(params);
-        await walletProvider.sendTransaction(approve.tx as EvmRawTransaction);
+        await walletProvider.sendTransaction(toEvmRawTx(approve.tx));
       }
 
       // 2) Build the intent (server-side) → unsigned create-intent tx.
@@ -120,7 +137,7 @@ export function SwapCard() {
 
       // 3) Sign + broadcast the create-intent tx via the connected wallet.
       setLog('Signing & broadcasting…');
-      const txHash = await walletProvider.sendTransaction(created.tx as EvmRawTransaction);
+      const txHash = await walletProvider.sendTransaction(toEvmRawTx(created.tx));
 
       // 4) Hand the broadcast tx to the backend to process the swap server-side.
       setLog('Submitting to relay…');
