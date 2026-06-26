@@ -13,6 +13,7 @@ const HOOKS_DIR = resolve(fileURLToPath(import.meta.url), '..');
  * registration so the contract is enforced from day one.
  */
 const HOOKS: Array<{ path: string; nativeThrow?: true }> = [
+  { path: 'bitcoin/useEnsureRadfiAccessToken.ts', nativeThrow: true },
   { path: 'bitcoin/useFundTradingWallet.ts', nativeThrow: true },
   { path: 'bitcoin/useRadfiAuth.ts', nativeThrow: true },
   { path: 'bitcoin/useRadfiWithdraw.ts', nativeThrow: true },

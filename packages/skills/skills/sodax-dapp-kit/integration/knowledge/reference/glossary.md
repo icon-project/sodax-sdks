@@ -130,7 +130,7 @@ App-level React component. Provides:
 - RPC config for all chains
 - Hub provider access (via `useHubProvider()`)
 
-Optional config: `<SodaxProvider config={SodaxOptions}>` (`SodaxOptions = DeepPartial<SodaxConfig> & { logger? }`). Without config, SDK uses packaged defaults.
+Optional config: `<SodaxProvider config={SodaxOptions}>` (`SodaxOptions = DeepPartial<SodaxDefaultConfig> & SodaxOptionalConfig` — the data override plus client-side options `logger` + global `fee`). Without config, SDK uses packaged defaults.
 
 Config is tracked by **reference** - see [`recipes/setup.md § Config reactivity`](../recipes/setup.md#config-reactivity) for module-const vs `useMemo` patterns.
 

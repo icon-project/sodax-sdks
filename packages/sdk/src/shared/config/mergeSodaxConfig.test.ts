@@ -2,15 +2,19 @@
  * Tests for mergeSodaxConfig — the config-aware layering used by both `new Sodax(...)` and
  * ConfigService.initialize().
  *
- * The contract: most fields deep-merge (a partial override keeps untouched siblings), but the two
- * `PartnerFee`-typed fields (`fee`, `bridge.partnerFee`) are ATOMIC. `PartnerFee` is a discriminated
- * union (`{address, amount}` | `{address, percentage}`); a naive deep-merge of two different variants
- * produces an invalid hybrid `{address, amount, percentage}`. Downstream discrimination treats any
- * object with a bigint `amount` as the amount variant (calculateFeeAmount → isPartnerFeeAmount), so the
- * hybrid silently mis-charges the fee. mergeSodaxConfig must replace these fields wholesale instead.
+ * The contract: every field deep-merges, so a partial override keeps untouched siblings. Each
+ * feature exposes an optional `partnerFee` override slot (`swaps` / `moneyMarket` / `bridge` /
+ * `leverageYield`). These slots are `SodaxOptions`/feature-options fields, NOT part of
+ * `SodaxDefaultConfig` or the backend dynamic config, so a `partnerFee` never travels on the wire
+ * and the base config never carries one. Every override therefore lands on an empty slot, and a
+ * complete `PartnerFee` is written wholesale — no partial-variant hybrid (`{address, amount, percentage}`)
+ * can arise from merging two different variants, because there is no base variant to merge against.
  *
- * We use calculateFeeAmount as the oracle: each variant yields a DISTINCT charged amount for the same
- * input, so the assertion proves which variant/value actually won — not just structural shape.
+ * (The global `fee` is NOT part of SodaxConfig merging — it is a `SodaxOptions` client option held by
+ * ConfigService, never merged here.)
+ *
+ * We keep calculateFeeAmount as an oracle on the fee-applied cases: it proves the merged config
+ * charges exactly the user's intended fee, not just that the structural shape matches.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -21,25 +25,14 @@ import {
   type DeepPartial,
   type PartnerFee,
   type SodaxConfig,
+  type SodaxOptions,
 } from '@sodax/types';
 import { mergeSodaxConfig } from './mergeSodaxConfig.js';
 import { calculateFeeAmount } from '../utils/shared-utils.js';
 import { resolveBaseApiConfig, resolveSwapsApiConfig } from '../../backendApi/apiConfig.js';
 
 const USER_ADDR = '0x1111111111111111111111111111111111111111';
-const REMOTE_ADDR = '0x9999999999999999999999999999999999999999';
 const INPUT = 1_000_000n;
-
-type Variant = 'amount' | 'percentage';
-
-// Distinct values per side & variant so calculateFeeAmount disambiguates exactly which one survived.
-// amount → charged as-is; percentage → INPUT * pct / 10000n.
-function userFee(v: Variant): PartnerFee {
-  return v === 'amount' ? { address: USER_ADDR, amount: 50n } : { address: USER_ADDR, percentage: 100 };
-}
-function remoteFee(v: Variant): PartnerFee {
-  return v === 'amount' ? { address: REMOTE_ADDR, amount: 7n } : { address: REMOTE_ADDR, percentage: 1 };
-}
 
 function freshConfig(): SodaxConfig {
   return structuredClone(sodaxConfig) as SodaxConfig;
@@ -47,68 +40,91 @@ function freshConfig(): SodaxConfig {
 
 type FeeField = {
   name: string;
-  set: (cfg: SodaxConfig, fee: PartnerFee | undefined) => void;
   get: (cfg: SodaxConfig) => PartnerFee | undefined;
-  override: (fee: PartnerFee) => DeepPartial<SodaxConfig>;
+  override: (fee: PartnerFee) => SodaxOptions;
+  // Distinct percentage variant per feature so a cross-feature leak would change the charged amount.
+  userFee: PartnerFee;
+  // A static default sibling that must survive a partnerFee-only override. Bridge has none
+  // (BridgeDefaultConfig is `{}`), so the sibling case is skipped for it.
+  sibling?: { name: string; get: (cfg: SodaxConfig) => unknown };
 };
 
 const FEE_FIELDS: FeeField[] = [
   {
-    name: 'fee',
-    set: (cfg, fee) => {
-      cfg.fee = fee;
-    },
-    get: cfg => cfg.fee,
-    override: fee => ({ fee }),
+    name: 'swaps.partnerFee',
+    get: cfg => cfg.swaps.partnerFee,
+    override: fee => ({ swaps: { partnerFee: fee } }),
+    userFee: { address: USER_ADDR, percentage: 25 },
+    sibling: { name: 'swaps.supportedTokens', get: cfg => cfg.swaps.supportedTokens },
+  },
+  {
+    name: 'moneyMarket.partnerFee',
+    get: cfg => cfg.moneyMarket.partnerFee,
+    override: fee => ({ moneyMarket: { partnerFee: fee } }),
+    userFee: { address: USER_ADDR, percentage: 50 },
+    sibling: { name: 'moneyMarket.lendingPool', get: cfg => cfg.moneyMarket.lendingPool },
   },
   {
     name: 'bridge.partnerFee',
-    set: (cfg, fee) => {
-      cfg.bridge.partnerFee = fee;
-    },
     get: cfg => cfg.bridge.partnerFee,
     override: fee => ({ bridge: { partnerFee: fee } }),
+    userFee: { address: USER_ADDR, percentage: 75 },
+  },
+  {
+    name: 'leverageYield.partnerFee',
+    get: cfg => cfg.leverageYield.partnerFee,
+    override: fee => ({ leverageYield: { partnerFee: fee } }),
+    userFee: { address: USER_ADDR, percentage: 100 },
+    sibling: { name: 'leverageYield.vaults', get: cfg => cfg.leverageYield.vaults },
   },
 ];
 
-const VARIANTS: Variant[] = ['amount', 'percentage'];
-const COMBINATIONS = VARIANTS.flatMap(remoteV => VARIANTS.map(userV => ({ remoteV, userV })));
+describe.each(FEE_FIELDS)('mergeSodaxConfig — $name override', field => {
+  it('applies the user fee onto a base with no partnerFee (constructor scenario)', () => {
+    const base = freshConfig(); // production default: no partnerFee on this feature
+    expect(field.get(base)).toBeUndefined();
 
-describe.each(FEE_FIELDS)('mergeSodaxConfig — $name is atomic across PartnerFee variants', field => {
-  it.each(COMBINATIONS)('remote=$remoteV, user=$userV → user override wins, no hybrid', ({ remoteV, userV }) => {
-    const base = freshConfig();
-    field.set(base, remoteFee(remoteV));
-    const user = userFee(userV);
+    const merged = mergeSodaxConfig(base, field.override(field.userFee));
 
-    const merged = mergeSodaxConfig(base, field.override(user));
-    const mergedFee = field.get(merged) as PartnerFee;
-
-    // Atomic replacement: exactly the user's variant, no leftover key from the remote variant.
-    expect(mergedFee).toEqual(user);
-    // Oracle: the charged fee matches the user's intent, not a hybrid mis-read.
-    expect(calculateFeeAmount(INPUT, mergedFee)).toBe(calculateFeeAmount(INPUT, user));
-    // base must not be mutated by the wholesale assignment.
-    expect(field.get(base)).toEqual(remoteFee(remoteV));
+    expect(field.get(merged)).toEqual(field.userFee);
+    // Oracle: the merged config charges exactly the user's intended fee.
+    expect(calculateFeeAmount(INPUT, field.get(merged))).toBe(calculateFeeAmount(INPUT, field.userFee));
   });
 
-  it('assigns the override wholesale when the base field is undefined (constructor scenario)', () => {
+  it('re-layers the user fee onto a remote default with no partnerFee (ConfigService.initialize path)', () => {
+    // The dynamic SodaxDefaultConfig fetched in ConfigService.initialize carries no per-feature
+    // partnerFee — it never travels on the wire — so this is the same empty-slot merge as the
+    // constructor, exercised explicitly as the initialize re-layer path.
     const base = freshConfig();
-    field.set(base, undefined);
-    const user = userFee('percentage');
 
-    const merged = mergeSodaxConfig(base, field.override(user));
+    const merged = mergeSodaxConfig(base, field.override(field.userFee));
 
-    expect(field.get(merged)).toEqual(user);
+    expect(field.get(merged)).toEqual(field.userFee);
   });
 
-  it('keeps the base fee when the override omits it', () => {
+  it('leaves the feature without a partnerFee when the override omits it', () => {
     const base = freshConfig();
-    field.set(base, remoteFee('amount'));
 
     const merged = mergeSodaxConfig(base, { api: { timeout: 12_345 } });
 
-    expect(field.get(merged)).toEqual(remoteFee('amount'));
+    // Treat an explicit `undefined` slot the same as an absent one.
+    expect(field.get(merged)).toBeUndefined();
   });
+
+  const siblingCase = field.sibling;
+  if (siblingCase) {
+    it(`preserves ${siblingCase.name} when only partnerFee is overridden`, () => {
+      const base = freshConfig();
+      const originalSibling = siblingCase.get(base);
+
+      const merged = mergeSodaxConfig(base, field.override(field.userFee));
+
+      // deepMerge keeps untouched nested refs, so the sibling survives by reference on the merged config.
+      expect(siblingCase.get(merged)).toBe(originalSibling);
+      // base must not be mutated by the merge.
+      expect(siblingCase.get(base)).toBe(originalSibling);
+    });
+  }
 });
 
 describe('mergeSodaxConfig — non-union fields still deep-merge', () => {

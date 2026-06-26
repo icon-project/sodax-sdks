@@ -6,6 +6,9 @@ import { Sodax, ChainKeys } from '@sodax/sdk';
 // with the SDK (the path the Swaps API backend uses). NO private key / wallet needed — Injective reads
 // the signer public key from the on-chain account (so the address must have signed at least once), then
 // builds the unsigned Cosmos SignDoc (bodyBytes + authInfoBytes). raw=true returns it, no broadcast.
+//
+// The fallback is a public mainnet address (not under the team's control) that has signed before, so the
+// on-chain pubkey lookup in getRawTransaction succeeds. Override with INJ_ADDRESS to use your own.
 const srcAddress = process.env.INJ_ADDRESS ?? 'inj10ch5tlensr62n3fhgz4xecavgjnffu8p5z7f5y';
 
 const sodax = new Sodax();

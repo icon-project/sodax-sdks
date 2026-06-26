@@ -70,6 +70,9 @@ jobs:
       - name: Build Check
         run: pnpm checkTs
 
+      - name: AI dev file validation
+        run: pnpm check:ai-dev-files
+
       - name: AI docs validation
         run: pnpm check:ai
 
