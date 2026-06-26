@@ -3,161 +3,129 @@ import type { ChainType } from '@sodax/types';
 import {
   useChainGroups,
   useConnectedChains,
-  useWalletModal,
+  useConnectionFlow,
   useXConnectors,
   useXDisconnect,
 } from '@sodax/wallet-sdk-react';
-import { ChevronLeft, Loader2, X } from 'lucide-react';
-import { useEffect } from 'react';
+import { Loader2, X } from 'lucide-react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { cn, shortenAddress } from '@/lib/utils';
 
-/** Multi-chain wallet connect, driven by the wallet SDK's unified `useWalletModal` state machine
- *  (closed → chainSelect → walletSelect → connecting → success | error). Supports every chain family
- *  the SDK configures, like wallet-modal-example. */
+/** Multi-chain connect in a single sidebar view: networks on the left, that network's wallets on the
+ *  right — no drill-down per network. Connecting/error/disconnect are handled in place. */
 export function ConnectWallet() {
-  const { state, open, close, back, selectChain } = useWalletModal();
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<ChainType>('EVM');
+  const groups = useChainGroups();
+  const connectors = useXConnectors({ xChainType: selected });
+  const { status, error, activeConnector, connect, reset } = useConnectionFlow();
   const connected = useConnectedChains();
+  const disconnect = useXDisconnect();
 
-  useEffect(() => {
-    if (state.kind === 'success') close();
-  }, [state.kind, close]);
+  const selectedGroup = groups.find(g => g.chainType === selected);
 
   return (
     <>
-      <Button variant="cherry" size="sm" onClick={open}>
+      <Button variant="cherry" size="sm" onClick={() => setOpen(true)}>
         {connected.total > 0 ? `${connected.total} connected` : 'Connect wallet'}
       </Button>
 
       <Dialog.Root
-        open={state.kind !== 'closed'}
+        open={open}
         onOpenChange={o => {
-          if (!o) close();
+          setOpen(o);
+          if (!o) reset();
         }}
       >
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm data-[state=open]:animate-in data-[state=open]:fade-in-0" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[380px] max-w-[92vw] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-card p-5 shadow-2xl data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95">
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                {(state.kind === 'walletSelect' || state.kind === 'connecting' || state.kind === 'error') && (
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 grid w-[620px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 grid-cols-[190px_1fr] overflow-hidden rounded-2xl border border-border bg-card shadow-2xl data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95">
+            {/* Sidebar: networks */}
+            <aside className="border-r border-border bg-secondary/40 p-2">
+              <p className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Networks</p>
+              <div className="space-y-0.5">
+                {groups.map(g => (
                   <button
                     type="button"
-                    onClick={back}
-                    aria-label="Back"
-                    className="text-muted-foreground hover:text-foreground"
+                    key={g.chainType}
+                    onClick={() => {
+                      setSelected(g.chainType);
+                      reset();
+                    }}
+                    className={cn(
+                      'flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm',
+                      selected === g.chainType ? 'bg-card font-medium shadow-sm' : 'hover:bg-card/60',
+                    )}
                   >
-                    <ChevronLeft className="size-5" />
+                    {g.iconUrl ? (
+                      <img src={g.iconUrl} alt="" className="size-5 rounded-full" />
+                    ) : (
+                      <span className="grid size-5 place-items-center rounded-full bg-cherry-soda/10 text-[9px] font-bold text-cherry-soda">
+                        {g.displayName.slice(0, 2)}
+                      </span>
+                    )}
+                    <span className="flex-1 truncate">{g.displayName}</span>
+                    {g.isConnected && <span className="size-1.5 rounded-full bg-cherry-soda" />}
                   </button>
-                )}
-                <Dialog.Title className="text-base font-semibold">
-                  {state.kind === 'chainSelect' ? 'Select a network' : 'Connect a wallet'}
-                </Dialog.Title>
+                ))}
               </div>
-              <Dialog.Close aria-label="Close" className="text-muted-foreground hover:text-foreground">
-                <X className="size-5" />
-              </Dialog.Close>
-            </div>
+            </aside>
 
-            {state.kind === 'chainSelect' && <ChainList onPick={selectChain} />}
-            {state.kind === 'walletSelect' && <WalletList chainType={state.chainType} />}
-            {state.kind === 'connecting' && (
-              <Centered>
-                <Loader2 className="size-6 animate-spin text-cherry-soda" />
-                <p className="text-sm text-muted-foreground">Approve in {state.connector.name}…</p>
-              </Centered>
-            )}
-            {state.kind === 'error' && (
-              <Centered>
-                <p className="text-sm text-destructive">{state.error.message}</p>
-                <Button variant="outline" size="sm" onClick={back}>
-                  Try another wallet
-                </Button>
-              </Centered>
-            )}
+            {/* Wallets for the selected network */}
+            <div className="flex min-h-[340px] flex-col p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <Dialog.Title className="text-base font-semibold">
+                  {selectedGroup?.displayName ?? selected}
+                </Dialog.Title>
+                <Dialog.Close aria-label="Close" className="text-muted-foreground hover:text-foreground">
+                  <X className="size-5" />
+                </Dialog.Close>
+              </div>
+
+              {selectedGroup?.isConnected ? (
+                <div className="flex flex-col items-start gap-3 rounded-xl bg-secondary/60 p-4">
+                  <span className="text-xs text-muted-foreground">Connected</span>
+                  <span className="font-mono text-sm">{shortenAddress(selectedGroup.account?.address)}</span>
+                  <Button variant="outline" size="sm" onClick={() => disconnect({ xChainType: selected })}>
+                    Disconnect
+                  </Button>
+                </div>
+              ) : status === 'connecting' && activeConnector ? (
+                <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+                  <Loader2 className="size-6 animate-spin text-cherry-soda" />
+                  <p className="text-sm text-muted-foreground">Approve in {activeConnector.name}…</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {connectors.length === 0 && (
+                    <p className="px-2 py-8 text-center text-sm text-muted-foreground">
+                      No wallets available for {selected}.
+                    </p>
+                  )}
+                  {connectors.map(c => (
+                    <button
+                      type="button"
+                      key={c.id}
+                      onClick={() => connect(c)}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-accent"
+                    >
+                      {c.icon ? (
+                        <img src={c.icon} alt="" className="size-7 rounded-md" />
+                      ) : (
+                        <span className="size-7 rounded-md bg-secondary" />
+                      )}
+                      <span className="flex-1 font-medium">{c.name}</span>
+                      {!c.isInstalled && <span className="text-xs text-muted-foreground">install</span>}
+                    </button>
+                  ))}
+                  {status === 'error' && error && <p className="px-2 pt-2 text-xs text-destructive">{error.message}</p>}
+                </div>
+              )}
+            </div>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
-
-      {connected.total > 0 && (
-        <div className="hidden md:flex md:flex-wrap md:items-center md:gap-1.5">
-          {connected.chains.map(c => (
-            <ConnectedPill key={c.chainType} chainType={c.chainType} address={c.account.address} />
-          ))}
-        </div>
-      )}
     </>
   );
-}
-
-function ChainList({ onPick }: { onPick: (chainType: ChainType) => void }) {
-  const groups = useChainGroups();
-  return (
-    <div className="space-y-1">
-      {groups.map(g => (
-        <button
-          type="button"
-          key={g.chainType}
-          onClick={() => onPick(g.chainType)}
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-accent"
-        >
-          {g.iconUrl ? (
-            <img src={g.iconUrl} alt="" className="size-6 rounded-full" />
-          ) : (
-            <span className="grid size-6 place-items-center rounded-full bg-secondary text-[10px] font-bold">
-              {g.displayName.slice(0, 2)}
-            </span>
-          )}
-          <span className="flex-1 font-medium">{g.displayName}</span>
-          {g.isConnected && <span className="text-xs text-cherry-soda">connected</span>}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function WalletList({ chainType }: { chainType: ChainType }) {
-  const { selectWallet } = useWalletModal();
-  const connectors = useXConnectors({ xChainType: chainType });
-  if (connectors.length === 0) {
-    return <Centered>No wallets available for {chainType}.</Centered>;
-  }
-  return (
-    <div className="space-y-1">
-      {connectors.map(c => (
-        <button
-          type="button"
-          key={c.id}
-          onClick={() => selectWallet(c)}
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-accent"
-        >
-          {c.icon ? (
-            <img src={c.icon} alt="" className="size-6 rounded-md" />
-          ) : (
-            <span className="size-6 rounded-md bg-secondary" />
-          )}
-          <span className="flex-1 font-medium">{c.name}</span>
-          {!c.isInstalled && <span className="text-xs text-muted-foreground">install</span>}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function ConnectedPill({ chainType, address }: { chainType: ChainType; address: string | undefined }) {
-  const disconnect = useXDisconnect();
-  return (
-    <button
-      type="button"
-      onClick={() => disconnect({ xChainType: chainType })}
-      title={`${chainType} · ${address ?? ''} — click to disconnect`}
-      className="rounded-full bg-secondary px-2.5 py-1 font-mono text-xs hover:bg-accent"
-    >
-      {chainType} {address ? `${address.slice(0, 4)}…${address.slice(-3)}` : ''}
-    </button>
-  );
-}
-
-function Centered({ children }: { children: React.ReactNode }) {
-  return <div className={cn('flex flex-col items-center gap-3 py-8 text-center')}>{children}</div>;
 }
