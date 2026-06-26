@@ -17,7 +17,7 @@ const INTENT_BIGINT_FIELDS = [
 type IntentBigintField = (typeof INTENT_BIGINT_FIELDS)[number];
 
 /** Wire form of {@link IntentRequestV2}: its bigint fields become decimal strings. */
-export type SerializedIntentRequest = Omit<IntentRequestV2, IntentBigintField> & Record<IntentBigintField, string>;
+type SerializedIntentRequest = Omit<IntentRequestV2, IntentBigintField> & Record<IntentBigintField, string>;
 
 const isIntentBigintField = (key: string): key is IntentBigintField =>
   (INTENT_BIGINT_FIELDS as readonly string[]).includes(key);

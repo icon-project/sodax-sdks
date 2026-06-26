@@ -1,11 +1,11 @@
 import { SwapsApiError } from './errors.js';
 import { rejectBigint } from './serialize.js';
 
-export type HttpMethod = 'GET' | 'POST';
+type HttpMethod = 'GET' | 'POST';
 
 /** Query value types that appear in the v2 contract. `undefined` keys are omitted from the URL. */
-export type QueryValue = string | number | boolean | undefined;
-export type QueryParams = Record<string, QueryValue>;
+type QueryValue = string | number | boolean | undefined;
+type QueryParams = Record<string, QueryValue>;
 
 /** Per-client transport state, built once by `SwapsApi` from its `SwapsApiConfig`. */
 export interface RequestContext {
@@ -15,7 +15,7 @@ export interface RequestContext {
 }
 
 /** Everything one endpoint call needs. `parse` validates+narrows the response (valibot lives here). */
-export interface RequestSpec<T> {
+interface RequestSpec<T> {
   method: HttpMethod;
   /** Fully-formed path with any params already `encodeURIComponent`-escaped, e.g. `/swaps/quote`. */
   path: string;
