@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   useApproveToken,
   useBridgeApprove,
@@ -270,8 +270,15 @@ export default function PartnerFeeClaimPage() {
   const [withdrawRecipient, setWithdrawRecipient] = useState<string>('');
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
   const [withdrawSuccess, setWithdrawSuccess] = useState<string | null>(null);
+  // Withdraw is gated on a successful bridge approval. The approval is specific to the
+  // token/amount/destination/recipient, so any change to those invalidates it (see effect below).
+  const [withdrawApproved, setWithdrawApproved] = useState<boolean>(false);
   const { mutateAsync: feeClaimWithdraw, isPending: withdrawLoading } = useFeeClaimWithdraw();
   const { mutateAsync: bridgeApprove, isPending: withdrawApproveLoading } = useBridgeApprove();
+
+  useEffect(() => {
+    setWithdrawApproved(false);
+  }, [withdrawToken, withdrawAmount, withdrawDstChain, withdrawRecipient]);
 
   const withdrawAsset = useMemo(
     () => balancesArray.find(a => a.address.toLowerCase() === withdrawToken.trim().toLowerCase()),
@@ -324,6 +331,7 @@ export default function PartnerFeeClaimPage() {
         },
         walletProvider,
       });
+      setWithdrawApproved(true);
       setWithdrawSuccess('Approved for bridge. You can withdraw now.');
     } catch (error) {
       setWithdrawError(formatSdkError(error, 'Failed to approve'));
@@ -812,7 +820,7 @@ export default function PartnerFeeClaimPage() {
               </Button>
               <Button
                 onClick={handleWithdraw}
-                disabled={withdrawLoading || !srcAddress || !walletProvider || !withdrawAsset}
+                disabled={withdrawLoading || !srcAddress || !walletProvider || !withdrawAsset || !withdrawApproved}
               >
                 {withdrawLoading ? 'Withdrawing...' : 'Withdraw'}
               </Button>
