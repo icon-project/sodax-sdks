@@ -681,6 +681,40 @@ importers:
         specifier: 2.8.2
         version: 2.8.2
 
+  packages/swaps-api:
+    dependencies:
+      '@sodax/types':
+        specifier: workspace:*
+        version: link:../types
+      valibot:
+        specifier: '>=1.2.0'
+        version: 1.4.0(typescript@5.5.4)
+    devDependencies:
+      '@arethetypeswrong/cli':
+        specifier: 'catalog:'
+        version: 0.17.4
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.18.1
+      '@vitest/coverage-v8':
+        specifier: 'catalog:'
+        version: 3.2.4(vitest@3.2.6(@types/debug@4.1.13)(@types/node@22.18.1)(happy-dom@20.9.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(lightningcss@1.32.0)(terser@5.47.1))
+      knip:
+        specifier: 'catalog:'
+        version: 5.30.5(@types/node@22.18.1)(typescript@5.5.4)
+      madge:
+        specifier: 'catalog:'
+        version: 8.0.0(typescript@5.5.4)
+      tsup:
+        specifier: 'catalog:'
+        version: 8.5.0(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.3)(typescript@5.5.4)(yaml@2.9.0)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.5.4
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.6(@types/debug@4.1.13)(@types/node@22.18.1)(happy-dom@20.9.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(lightningcss@1.32.0)(terser@5.47.1)
+
   packages/types:
     devDependencies:
       '@arethetypeswrong/cli':
