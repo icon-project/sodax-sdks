@@ -284,7 +284,7 @@ export function SwapCard() {
         disabled={!canSwap || busy}
         onClick={onSwap}
       >
-        {busy ? 'Working…' : !account.address ? 'Connect a wallet to swap' : 'Swap'}
+        {busy ? 'Working…' : !account.address ? 'Connect an EVM wallet to swap' : 'Swap'}
       </Button>
 
       {srcChain && !isEvmChainKey(srcChain) && (

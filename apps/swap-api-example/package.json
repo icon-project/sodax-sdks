@@ -17,6 +17,7 @@
     "clean": "rm -rf node_modules && rm -rf dist && rm -rf .turbo"
   },
   "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.14",
     "@radix-ui/react-popover": "^1.1.2",
     "@radix-ui/react-slot": "^1.1.0",
     "@sodax/swaps-api": "workspace:*",
