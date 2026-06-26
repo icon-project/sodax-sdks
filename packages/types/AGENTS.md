@@ -55,6 +55,19 @@ Swap tokens live in [`src/swap/swap.ts`](src/swap/swap.ts) as two per-chain `Rec
 
 The two lists are **disjoint per chain** (a token lives in exactly one). The staging solver supports the union — every production token plus the staging-only set. Accessors: `getSupportedSolverTokens` returns the production list only; `getStagingSolverTokens` returns the full staging set (production + staging-only). `isSwapSupportedToken(chainId, token)` validates against the union and does **not** gate on environment — the caller targets the correct one. Invariants (intra-list dedup, disjointness, staging-superset accessor, union validation) are enforced by [`src/chains/tokens-dedup.test.ts`](src/chains/tokens-dedup.test.ts) and [`src/swap/swap.test.ts`](src/swap/swap.test.ts). Add or move entries via the `add-token` skill (see Rules) and always confirm the target environment first.
 
+## Chain logos
+
+Each `baseChainInfo` entry carries a `logo` URL (default chain logo). The binary
+files are **not** in this package — they live in [`packages/assets`](../assets/AGENTS.md)
+and are served via `raw.githubusercontent.com`. `CHAIN_LOGO_BASE_URL` (exported
+from [`src/chains/chains.ts`](src/chains/chains.ts)) is the directory base, and
+each logo URL is `${CHAIN_LOGO_BASE_URL}/<chainKey>.png` — so the filename in
+`packages/assets/chain/` must equal the `ChainKeys` value. Adding a chain logo:
+drop `<chainKey>.png` in `packages/assets/chain/` and set the new entry's `logo`
+to `chainLogo(ChainKeys.<NAME>)`. Invariants are covered by
+[`src/chains/chains-logo.test.ts`](src/chains/chains-logo.test.ts). Consumers
+(demo, web app) must read `baseChainInfo[key].logo`, not hardcode icon paths.
+
 ## Build
 
 Built with `tsc` (other workspace packages bundle with tsup — this one doesn't bundle). ESM only (`"type": "module"`). Output: `dist/` with `.js` + `.d.ts` files.

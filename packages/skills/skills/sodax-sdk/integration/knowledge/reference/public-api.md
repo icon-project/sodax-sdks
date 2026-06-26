@@ -26,6 +26,9 @@ import {
   type SpokeChainKey,
   type HubChainKey,
   type EvmChainKey,
+  baseChainInfo,        // per-chain static metadata (name, key, logo, explorer, …)
+  type BaseChainInfo,
+  CHAIN_LOGO_BASE_URL,  // base URL for default chain logos — baseChainInfo[key].logo
   getChainType,
   isEvmChainKeyType,
   isSolanaChainKeyType,
