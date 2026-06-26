@@ -1,10 +1,9 @@
 import type {
-  Address,
   CreateIntentParamsV2,
   EvmRawTransaction,
-  Hex,
   IntentRequestV2,
   IntentResponseV2,
+  RawTxReturnType,
   SwapTokenV2,
 } from '@sodax/types';
 import { SwapsApiError } from '@sodax/swaps-api';
@@ -30,10 +29,10 @@ function toIntentRequest(r: IntentResponseV2): IntentRequestV2 {
   };
 }
 
-/** Backend EVM tx is JSON ({ from, to, value, data }) with a string `value`; the wallet wants a bigint. */
-function toEvmRawTx(tx: unknown): EvmRawTransaction {
-  const t = tx as { from: string; to: string; value: string | number | bigint; data: string };
-  return { from: t.from as Address, to: t.to as Address, value: BigInt(t.value ?? 0), data: t.data as Hex };
+// `tx` is now a typed `RawTxReturnType` (value already a bigint); just narrow the union to its EVM
+// variant. The union is structurally ambiguous (EVM/Solana/Sui/Stellar share a shape); this app is EVM-only.
+function asEvmRawTx(tx: RawTxReturnType): EvmRawTransaction {
+  return tx as EvmRawTransaction;
 }
 
 function errorText(e: unknown): string {
@@ -56,6 +55,7 @@ export function SwapCard() {
   const [amount, setAmount] = useState('');
   const [quote, setQuote] = useState<string>();
   const [quoteError, setQuoteError] = useState('');
+  const [slippage, setSlippage] = useState('0.5');
   const [busy, setBusy] = useState(false);
   const [swapLog, setSwapLog] = useState('');
 
@@ -116,10 +116,26 @@ export function SwapCard() {
   const quoted = quote && dst ? fromSmallestUnit(quote, dst.decimals) : undefined;
   const rate =
     quoted && Number(amount) > 0 ? (Number(quoted) / Number(amount)).toFixed(6).replace(/\.?0+$/, '') : undefined;
-  const canSwap = Boolean(account.address && walletProvider && src && dst && amount && isEvmChainKey(srcChain));
+
+  // Min output after slippage (raw smallest units), like Robi's SwapCard. slippage% → basis points;
+  // BigInt floor keeps precision on large amounts. Invalid slippage (NaN/<0/>100) → undefined, blocking the swap.
+  const minOutputAmount = useMemo(() => {
+    const s = Number(slippage);
+    if (!quote || !Number.isFinite(s) || s < 0 || s > 100) return undefined;
+    return ((BigInt(quote) * BigInt(Math.round((100 - s) * 100))) / 10000n).toString();
+  }, [quote, slippage]);
+  const minReceived = minOutputAmount && dst ? fromSmallestUnit(minOutputAmount, dst.decimals) : undefined;
+
+  const canSwap = Boolean(
+    account.address && walletProvider && src && dst && amount && isEvmChainKey(srcChain) && minOutputAmount,
+  );
 
   async function onSwap() {
     if (!src || !dst || !walletProvider || !account.address) return;
+    if (!minOutputAmount) {
+      setSwapLog('Enter an amount and wait for the quote before swapping.');
+      return;
+    }
     setBusy(true);
     setSwapLog('');
     try {
@@ -129,7 +145,7 @@ export function SwapCard() {
         inputToken: src.address,
         outputToken: dst.address,
         inputAmount: toSmallestUnit(amount, src.decimals),
-        minOutputAmount: quote ?? '1',
+        minOutputAmount,
         deadline: (await swapsApi.getDeadline()).deadline,
         allowPartialFill: false,
         srcAddress: account.address,
@@ -140,14 +156,17 @@ export function SwapCard() {
       if (!allowance.valid) {
         setSwapLog('Approve the source token in your wallet…');
         const approve = await swapsApi.approve(params);
-        await walletProvider.sendTransaction(toEvmRawTx(approve.tx));
+        const approveHash = await walletProvider.sendTransaction(asEvmRawTx(approve.tx));
+        // Wait until the approval is mined — otherwise createIntent's tx can revert on a stale allowance.
+        setSwapLog('Waiting for approval to confirm…');
+        await walletProvider.waitForTransactionReceipt(approveHash);
       }
 
       setSwapLog('Building the swap…');
       const created = await swapsApi.createIntent(params);
 
       setSwapLog('Confirm the swap in your wallet…');
-      const txHash = await walletProvider.sendTransaction(toEvmRawTx(created.tx));
+      const txHash = await walletProvider.sendTransaction(asEvmRawTx(created.tx));
 
       setSwapLog('Submitting to the relay…');
       await swapsApi.submitTx({
@@ -238,6 +257,24 @@ export function SwapCard() {
           </span>
         ) : (
           <span className="text-muted-foreground">Enter an amount to get a live quote</span>
+        )}
+      </div>
+
+      <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+        <label className="flex items-center gap-1.5">
+          <span>Slippage</span>
+          <input
+            inputMode="decimal"
+            value={slippage}
+            onChange={e => setSlippage(e.target.value)}
+            className="w-12 rounded-md border border-border/60 bg-secondary/40 px-1.5 py-0.5 text-right font-mono text-foreground outline-none"
+          />
+          <span>%</span>
+        </label>
+        {minReceived && dst && (
+          <span>
+            Min received <span className="font-mono text-foreground">{minReceived}</span> {dst.symbol}
+          </span>
         )}
       </div>
 
