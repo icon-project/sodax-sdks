@@ -3,18 +3,23 @@ import { SwapCard } from '@/components/SwapCard';
 
 export default function App() {
   return (
-    <div className="min-h-screen">
-      <header className="flex items-center justify-between border-b border-border px-6 py-4">
-        <div>
-          <h1 className="text-lg font-semibold">@sodax/swaps-api</h1>
-          <p className="text-xs text-muted-foreground">
-            Swap UI powered by the minimal swaps-api client (wallet only signs)
-          </p>
+    <div className="flex min-h-screen flex-col">
+      <header className="flex items-center justify-between px-6 py-5">
+        <div className="flex items-center gap-2.5">
+          <span className="grid size-8 place-items-center rounded-lg bg-cherry-soda font-mono text-sm font-bold text-white">
+            s
+          </span>
+          <span className="font-semibold tracking-tight">swaps-api</span>
         </div>
         <ConnectWallet />
       </header>
-      <main className="flex justify-center px-6 py-12">
+
+      <main className="flex flex-1 flex-col items-center justify-center px-6 py-10">
         <SwapCard />
+        <p className="mt-6 max-w-[460px] text-center text-xs text-muted-foreground">
+          Every call here goes through <span className="font-mono text-foreground">@sodax/swaps-api</span> — the wallet
+          only signs the transactions the backend returns. No SDK, no dapp-kit.
+        </p>
       </main>
     </div>
   );

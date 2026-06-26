@@ -9,19 +9,15 @@ import type {
 } from '@sodax/types';
 import { SwapsApiError } from '@sodax/swaps-api';
 import { useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
+import { ArrowDown } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
+import { type Option, SearchSelect } from '@/components/ui/SearchSelect';
 import { isEvmChainKey, swapsApi } from '@/lib/swapsApi';
-import { fromSmallestUnit, toSmallestUnit } from '@/lib/utils';
+import { cn, fromSmallestUnit, toSmallestUnit } from '@/lib/utils';
 
 type Token = SwapTokenV2;
 
-/** createIntent returns an IntentResponseV2 (wire strings); submitTx wants an IntentRequestV2 (bigint). */
 function toIntentRequest(r: IntentResponseV2): IntentRequestV2 {
   return {
     ...r,
@@ -34,19 +30,10 @@ function toIntentRequest(r: IntentResponseV2): IntentRequestV2 {
   };
 }
 
-/**
- * The backend returns the EVM tx as JSON ({ from, to, value, data }) with `value` as a decimal
- * string. The wallet provider expects an `EvmRawTransaction` whose `value` is a `bigint`, so coerce
- * it here instead of casting the raw JSON (which would feed viem a string `value`).
- */
+/** Backend EVM tx is JSON ({ from, to, value, data }) with a string `value`; the wallet wants a bigint. */
 function toEvmRawTx(tx: unknown): EvmRawTransaction {
   const t = tx as { from: string; to: string; value: string | number | bigint; data: string };
-  return {
-    from: t.from as Address,
-    to: t.to as Address,
-    value: BigInt(t.value ?? 0),
-    data: t.data as Hex,
-  };
+  return { from: t.from as Address, to: t.to as Address, value: BigInt(t.value ?? 0), data: t.data as Hex };
 }
 
 function errorText(e: unknown): string {
@@ -72,13 +59,18 @@ export function SwapCard() {
   const [busy, setBusy] = useState(false);
   const [swapLog, setSwapLog] = useState('');
 
-  const chains = useMemo(() => [...new Set(tokens.map(t => t.chainKey))].sort(), [tokens]);
+  const chainOptions = useMemo<Option[]>(
+    () => [...new Set(tokens.map(t => t.chainKey))].sort().map(c => ({ value: c, label: c })),
+    [tokens],
+  );
   const srcTokens = useMemo(() => tokens.filter(t => t.chainKey === srcChain), [tokens, srcChain]);
   const dstTokens = useMemo(() => tokens.filter(t => t.chainKey === dstChain), [tokens, dstChain]);
   const src = useMemo(() => srcTokens.find(t => t.address === srcAddr), [srcTokens, srcAddr]);
   const dst = useMemo(() => dstTokens.find(t => t.address === dstAddr), [dstTokens, dstAddr]);
 
-  // Load supported tokens once and default the networks.
+  const tokenOptions = (list: Token[]): Option[] =>
+    list.map(t => ({ value: t.address, label: t.symbol, sublabel: t.name }));
+
   useEffect(() => {
     swapsApi
       .getTokens()
@@ -89,11 +81,10 @@ export function SwapCard() {
         setSrcChain(c => c || keys.find(k => k === 'sonic') || keys[0] || '');
         setDstChain(c => c || keys.find(k => k !== 'sonic') || '');
       })
-      .catch(e => setSwapLog(`getTokens failed: ${errorText(e)}`));
+      .catch(e => setSwapLog(`Couldn't load tokens: ${errorText(e)}`));
   }, []);
 
-  // Live quote whenever the pair/amount changes. Clearing at the top means a successful (or simply
-  // newer) quote always wipes a stale error.
+  // Live quote. Clearing at the top means a newer (or successful) quote always wipes a stale error.
   useEffect(() => {
     setQuote(undefined);
     setQuoteError('');
@@ -115,6 +106,16 @@ export function SwapCard() {
     };
   }, [src, dst, amount]);
 
+  function flip() {
+    setSrcChain(dstChain);
+    setDstChain(srcChain);
+    setSrcAddr(dstAddr);
+    setDstAddr(srcAddr);
+  }
+
+  const quoted = quote && dst ? fromSmallestUnit(quote, dst.decimals) : undefined;
+  const rate =
+    quoted && Number(amount) > 0 ? (Number(quoted) / Number(amount)).toFixed(6).replace(/\.?0+$/, '') : undefined;
   const canSwap = Boolean(account.address && walletProvider && src && dst && amount && isEvmChainKey(srcChain));
 
   async function onSwap() {
@@ -137,18 +138,18 @@ export function SwapCard() {
 
       const allowance = await swapsApi.checkAllowance(params);
       if (!allowance.valid) {
-        setSwapLog('Approving source token…');
+        setSwapLog('Approve the source token in your wallet…');
         const approve = await swapsApi.approve(params);
         await walletProvider.sendTransaction(toEvmRawTx(approve.tx));
       }
 
-      setSwapLog('Creating intent…');
+      setSwapLog('Building the swap…');
       const created = await swapsApi.createIntent(params);
 
-      setSwapLog('Signing & broadcasting…');
+      setSwapLog('Confirm the swap in your wallet…');
       const txHash = await walletProvider.sendTransaction(toEvmRawTx(created.tx));
 
-      setSwapLog('Submitting to relay…');
+      setSwapLog('Submitting to the relay…');
       await swapsApi.submitTx({
         txHash,
         srcChainKey: src.chainKey,
@@ -157,7 +158,7 @@ export function SwapCard() {
         relayData: created.relayData.payload,
       });
 
-      setSwapLog(`Submitted (${txHash}). Tracking status…`);
+      setSwapLog(`Submitted ${txHash.slice(0, 10)}… · tracking`);
       for (let i = 0; i < 30; i++) {
         const status = await swapsApi.getSubmitTxStatus({ txHash, srcChainKey: src.chainKey });
         setSwapLog(`Status: ${status.data.status}`);
@@ -172,110 +173,139 @@ export function SwapCard() {
   }
 
   return (
-    <Card className="w-[440px]">
-      <CardHeader>
-        <CardTitle>Swap</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <AssetField
-          label="From"
-          chains={chains}
-          chain={srcChain}
-          onChainChange={c => {
-            setSrcChain(c);
-            setSrcAddr('');
-          }}
-          tokens={srcTokens}
-          token={srcAddr}
-          onTokenChange={setSrcAddr}
-        />
-
+    <div className="w-[460px] max-w-full rounded-3xl border border-border/70 bg-card p-5 shadow-[0_24px_60px_-30px_rgba(122,13,46,0.45)]">
+      <div className="mb-4 flex items-center justify-between">
         <div>
-          <Label>Amount</Label>
-          <Input inputMode="decimal" placeholder="0.0" value={amount} onChange={e => setAmount(e.target.value)} />
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cherry-soda">SODAX · swaps-api</p>
+          <h2 className="text-xl font-semibold tracking-tight">Cross-chain swap</h2>
         </div>
+      </div>
 
-        <AssetField
-          label="To"
-          chains={chains}
-          chain={dstChain}
-          onChainChange={c => {
-            setDstChain(c);
-            setDstAddr('');
-          }}
-          tokens={dstTokens}
-          token={dstAddr}
-          onTokenChange={setDstAddr}
+      <AssetPanel
+        heading="You pay"
+        chainOptions={chainOptions}
+        chain={srcChain}
+        onChainChange={c => {
+          setSrcChain(c);
+          setSrcAddr('');
+        }}
+        tokenOptions={tokenOptions(srcTokens)}
+        token={srcAddr}
+        onTokenChange={setSrcAddr}
+      >
+        <input
+          inputMode="decimal"
+          placeholder="0.0"
+          value={amount}
+          onChange={e => setAmount(e.target.value)}
+          className="w-full bg-transparent font-mono text-3xl font-medium tracking-tight outline-none placeholder:text-muted-foreground/50"
         />
+      </AssetPanel>
 
-        <Separator />
-        <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Quote</span>
-          <span>{quote && dst ? `${fromSmallestUnit(quote, dst.decimals)} ${dst.symbol}` : '—'}</span>
-        </div>
-        {quoteError && <p className="text-xs text-destructive">{quoteError}</p>}
+      {/* Signature: the swap-direction control. */}
+      <div className="relative z-10 -my-3 flex justify-center">
+        <button
+          type="button"
+          onClick={flip}
+          aria-label="Swap direction"
+          className="grid size-11 place-items-center rounded-full border-4 border-card bg-cherry-soda text-white shadow-lg transition-transform duration-300 hover:rotate-180 hover:bg-cherry-dark"
+        >
+          <ArrowDown className="size-4" />
+        </button>
+      </div>
 
-        <Button variant="cherrySoda" className="w-full" disabled={!canSwap || busy} onClick={onSwap}>
-          {busy ? 'Working…' : 'Swap'}
-        </Button>
+      <AssetPanel
+        heading="You receive"
+        chainOptions={chainOptions}
+        chain={dstChain}
+        onChainChange={c => {
+          setDstChain(c);
+          setDstAddr('');
+        }}
+        tokenOptions={tokenOptions(dstTokens)}
+        token={dstAddr}
+        onTokenChange={setDstAddr}
+      >
+        <div className="font-mono text-3xl font-medium tracking-tight text-muted-foreground">{quoted ?? '0.0'}</div>
+      </AssetPanel>
 
-        {srcChain && !isEvmChainKey(srcChain) && (
-          <p className="text-xs text-muted-foreground">
-            Execution here is EVM-only; pick an EVM source network to swap (quotes work for any network).
-          </p>
+      <div className="mt-4 flex min-h-5 items-center justify-between text-xs">
+        {quoteError ? (
+          <span className="text-destructive">{quoteError}</span>
+        ) : rate && src && dst ? (
+          <span className="text-muted-foreground">
+            1 {src.symbol} ≈ <span className="font-mono text-foreground">{rate}</span> {dst.symbol}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">Enter an amount to get a live quote</span>
         )}
-        {swapLog && <pre className="whitespace-pre-wrap rounded-md bg-secondary p-2 text-xs">{swapLog}</pre>}
-      </CardContent>
-    </Card>
+      </div>
+
+      <Button
+        variant="cherrySoda"
+        className="mt-3 h-12 w-full rounded-xl text-base"
+        disabled={!canSwap || busy}
+        onClick={onSwap}
+      >
+        {busy ? 'Working…' : !account.address ? 'Connect a wallet to swap' : 'Swap'}
+      </Button>
+
+      {srcChain && !isEvmChainKey(srcChain) && (
+        <p className="mt-2 text-center text-xs text-muted-foreground">
+          Quotes work for any network; signing here is EVM-only.
+        </p>
+      )}
+      {swapLog && (
+        <p className="mt-3 rounded-xl bg-secondary px-3 py-2 font-mono text-xs text-foreground/80">{swapLog}</p>
+      )}
+    </div>
   );
 }
 
-function AssetField({
-  label,
-  chains,
+function AssetPanel({
+  heading,
+  chainOptions,
   chain,
   onChainChange,
-  tokens,
+  tokenOptions,
   token,
   onTokenChange,
+  children,
 }: {
-  label: string;
-  chains: string[];
+  heading: string;
+  chainOptions: Option[];
   chain: string;
   onChainChange: (v: string) => void;
-  tokens: Token[];
+  tokenOptions: Option[];
   token: string;
   onTokenChange: (v: string) => void;
+  children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-1">
-      <Label>{label}</Label>
-      <div className="flex gap-2">
-        <Select value={chain} onValueChange={onChainChange}>
-          <SelectTrigger className="w-1/2">
-            <SelectValue placeholder="Network" />
-          </SelectTrigger>
-          <SelectContent className="max-h-72">
-            {chains.map(c => (
-              <SelectItem key={c} value={c}>
-                {c}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={token} onValueChange={onTokenChange} disabled={!chain}>
-          <SelectTrigger className="w-1/2">
-            <SelectValue placeholder="Token" />
-          </SelectTrigger>
-          <SelectContent className="max-h-72">
-            {tokens.map(t => (
-              <SelectItem key={t.address} value={t.address}>
-                {t.symbol}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+    <div className={cn('rounded-2xl border border-border/60 bg-secondary/40 p-4')}>
+      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">{heading}</p>
+      <div className="mb-3 flex gap-2">
+        <div className="w-[46%]">
+          <SearchSelect
+            options={chainOptions}
+            value={chain}
+            onChange={onChainChange}
+            placeholder="Network"
+            searchPlaceholder="Search networks"
+          />
+        </div>
+        <div className="flex-1">
+          <SearchSelect
+            options={tokenOptions}
+            value={token}
+            onChange={onTokenChange}
+            placeholder="Token"
+            searchPlaceholder="Search tokens"
+            disabled={!chain}
+          />
+        </div>
       </div>
+      {children}
     </div>
   );
 }

@@ -1,40 +1,46 @@
 @import "tailwindcss";
+@plugin "tailwindcss-animate";
 
-/* Minimal design tokens for the copied shadcn/ui components + the demo's "cherry" button variants.
-   The demo's real theme is not reproduced here (its CSS is redacted in this checkout); these are
-   sensible defaults so the components render cleanly. */
+/* "Cherry soda" identity, grounded in the SODAX brand. Warm near-white canvas, a single crimson
+   accent, ink text, and a monospace face reserved for amounts/quotes/hashes — the data this client
+   moves. The demo's own theme is redacted in this checkout, so this is a deliberate fresh palette. */
 @theme {
-  --color-background: #ffffff;
-  --color-foreground: #0a0a0a;
-  --color-card: #ffffff;
-  --color-card-foreground: #0a0a0a;
-  --color-popover: #ffffff;
-  --color-popover-foreground: #0a0a0a;
-  --color-primary: #b91c47;
-  --color-primary-foreground: #ffffff;
-  --color-secondary: #f4f4f5;
-  --color-secondary-foreground: #18181b;
-  --color-muted: #f4f4f5;
-  --color-muted-foreground: #71717a;
-  --color-accent: #f4f4f5;
-  --color-accent-foreground: #18181b;
-  --color-destructive: #dc2626;
-  --color-destructive-foreground: #ffffff;
-  --color-border: #e4e4e7;
-  --color-input: #e4e4e7;
-  --color-ring: #b91c47;
-  --color-background-foreground: #0a0a0a;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
 
-  --color-cherry-dark: #6d122b;
-  --color-cherry-soda: #b91c47;
+  --color-background: #ffffff;
+  --color-foreground: #1c1216;
+  --color-card: #ffffff;
+  --color-card-foreground: #1c1216;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #1c1216;
+  --color-primary: #c8164b;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f7eef1;
+  --color-secondary-foreground: #1c1216;
+  --color-muted: #f7eef1;
+  --color-muted-foreground: #8a767d;
+  --color-accent: #f7eef1;
+  --color-accent-foreground: #1c1216;
+  --color-destructive: #c8164b;
+  --color-destructive-foreground: #ffffff;
+  --color-border: #efe4e8;
+  --color-input: #e7d9de;
+  --color-ring: #c8164b;
+
+  --color-cherry-dark: #7a0d2e;
+  --color-cherry-soda: #c8164b;
   --color-cherry-bright: #e23a63;
-  --color-cherry-brighter: #f7b3c4;
+  --color-cherry-brighter: #f6b8c8;
 }
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  background: #fafafa;
+  font-family: var(--font-sans);
   color: var(--color-foreground);
+  -webkit-font-smoothing: antialiased;
+  background:
+    radial-gradient(60rem 40rem at 50% -10rem, #fbe6ec 0%, transparent 60%),
+    radial-gradient(50rem 30rem at 90% 100%, #f6eef1 0%, transparent 55%), #fbf9fa;
+  min-height: 100vh;
 }
