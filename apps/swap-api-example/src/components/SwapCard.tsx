@@ -14,13 +14,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
 import { isEvmChainKey, swapsApi } from '@/lib/swapsApi';
 import { fromSmallestUnit, toSmallestUnit } from '@/lib/utils';
 
 type Token = SwapTokenV2;
-const tokenKey = (t: Token) => `${t.chainKey}:${t.address}`;
 
 /** createIntent returns an IntentResponseV2 (wire strings); submitTx wants an IntentRequestV2 (bigint). */
 function toIntentRequest(r: IntentResponseV2): IntentRequestV2 {
@@ -63,29 +62,42 @@ export function SwapCard() {
   const walletProvider = useWalletProvider({ xChainType: 'EVM' });
 
   const [tokens, setTokens] = useState<Token[]>([]);
-  const [srcId, setSrcId] = useState<string>('');
-  const [dstId, setDstId] = useState<string>('');
-  const [amount, setAmount] = useState<string>('');
+  const [srcChain, setSrcChain] = useState('');
+  const [dstChain, setDstChain] = useState('');
+  const [srcAddr, setSrcAddr] = useState('');
+  const [dstAddr, setDstAddr] = useState('');
+  const [amount, setAmount] = useState('');
   const [quote, setQuote] = useState<string>();
+  const [quoteError, setQuoteError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [log, setLog] = useState<string>('');
+  const [swapLog, setSwapLog] = useState('');
 
-  const src = useMemo(() => tokens.find(t => tokenKey(t) === srcId), [tokens, srcId]);
-  const dst = useMemo(() => tokens.find(t => tokenKey(t) === dstId), [tokens, dstId]);
+  const chains = useMemo(() => [...new Set(tokens.map(t => t.chainKey))].sort(), [tokens]);
+  const srcTokens = useMemo(() => tokens.filter(t => t.chainKey === srcChain), [tokens, srcChain]);
+  const dstTokens = useMemo(() => tokens.filter(t => t.chainKey === dstChain), [tokens, dstChain]);
+  const src = useMemo(() => srcTokens.find(t => t.address === srcAddr), [srcTokens, srcAddr]);
+  const dst = useMemo(() => dstTokens.find(t => t.address === dstAddr), [dstTokens, dstAddr]);
 
-  // Load the supported tokens once (swaps-api getTokens).
+  // Load supported tokens once and default the networks.
   useEffect(() => {
     swapsApi
       .getTokens()
-      .then(byChain => setTokens(Object.values(byChain).flat()))
-      .catch(e => setLog(`getTokens failed: ${errorText(e)}`));
+      .then(byChain => {
+        const all = Object.values(byChain).flat();
+        setTokens(all);
+        const keys = [...new Set(all.map(t => t.chainKey))].sort();
+        setSrcChain(c => c || keys.find(k => k === 'sonic') || keys[0] || '');
+        setDstChain(c => c || keys.find(k => k !== 'sonic') || '');
+      })
+      .catch(e => setSwapLog(`getTokens failed: ${errorText(e)}`));
   }, []);
 
-  // Live quote whenever src/dst/amount change (swaps-api getQuote).
+  // Live quote whenever the pair/amount changes. Clearing at the top means a successful (or simply
+  // newer) quote always wipes a stale error.
   useEffect(() => {
     setQuote(undefined);
+    setQuoteError('');
     if (!src || !dst || !amount || Number(amount) <= 0) return;
-    const inputAmount = toSmallestUnit(amount, src.decimals);
     let cancelled = false;
     swapsApi
       .getQuote({
@@ -93,22 +105,22 @@ export function SwapCard() {
         tokenSrcChainKey: src.chainKey,
         tokenDst: dst.address,
         tokenDstChainKey: dst.chainKey,
-        amount: inputAmount,
+        amount: toSmallestUnit(amount, src.decimals),
         quoteType: 'exact_input',
       })
       .then(q => !cancelled && setQuote(q.quotedAmount))
-      .catch(e => !cancelled && setLog(`getQuote: ${errorText(e)}`));
+      .catch(e => !cancelled && setQuoteError(errorText(e)));
     return () => {
       cancelled = true;
     };
   }, [src, dst, amount]);
 
-  const canSwap = Boolean(account.address && walletProvider && src && dst && amount && isEvmChainKey(src.chainKey));
+  const canSwap = Boolean(account.address && walletProvider && src && dst && amount && isEvmChainKey(srcChain));
 
   async function onSwap() {
     if (!src || !dst || !walletProvider || !account.address) return;
     setBusy(true);
-    setLog('');
+    setSwapLog('');
     try {
       const params: CreateIntentParamsV2 = {
         srcChainKey: src.chainKey,
@@ -123,24 +135,20 @@ export function SwapCard() {
         dstAddress: account.address,
       };
 
-      // 1) Allowance — approve the source token if needed (unsigned tx → wallet).
       const allowance = await swapsApi.checkAllowance(params);
       if (!allowance.valid) {
-        setLog('Approving source token…');
+        setSwapLog('Approving source token…');
         const approve = await swapsApi.approve(params);
         await walletProvider.sendTransaction(toEvmRawTx(approve.tx));
       }
 
-      // 2) Build the intent (server-side) → unsigned create-intent tx.
-      setLog('Creating intent…');
+      setSwapLog('Creating intent…');
       const created = await swapsApi.createIntent(params);
 
-      // 3) Sign + broadcast the create-intent tx via the connected wallet.
-      setLog('Signing & broadcasting…');
+      setSwapLog('Signing & broadcasting…');
       const txHash = await walletProvider.sendTransaction(toEvmRawTx(created.tx));
 
-      // 4) Hand the broadcast tx to the backend to process the swap server-side.
-      setLog('Submitting to relay…');
+      setSwapLog('Submitting to relay…');
       await swapsApi.submitTx({
         txHash,
         srcChainKey: src.chainKey,
@@ -149,81 +157,125 @@ export function SwapCard() {
         relayData: created.relayData.payload,
       });
 
-      // 5) Poll backend processing status until it settles.
-      setLog(`Submitted (${txHash}). Tracking status…`);
+      setSwapLog(`Submitted (${txHash}). Tracking status…`);
       for (let i = 0; i < 30; i++) {
         const status = await swapsApi.getSubmitTxStatus({ txHash, srcChainKey: src.chainKey });
-        setLog(`Status: ${status.data.status}`);
+        setSwapLog(`Status: ${status.data.status}`);
         if (status.data.status === 'executed' || status.data.status === 'failed') break;
         await new Promise(r => setTimeout(r, 3000));
       }
     } catch (e) {
-      setLog(`Error: ${errorText(e)}`);
+      setSwapLog(`Error: ${errorText(e)}`);
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Card className="w-[420px]">
+    <Card className="w-[440px]">
       <CardHeader>
         <CardTitle>Swap</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <TokenField label="From" value={srcId} onChange={setSrcId} tokens={tokens} />
+        <AssetField
+          label="From"
+          chains={chains}
+          chain={srcChain}
+          onChainChange={c => {
+            setSrcChain(c);
+            setSrcAddr('');
+          }}
+          tokens={srcTokens}
+          token={srcAddr}
+          onTokenChange={setSrcAddr}
+        />
+
         <div>
           <Label>Amount</Label>
           <Input inputMode="decimal" placeholder="0.0" value={amount} onChange={e => setAmount(e.target.value)} />
         </div>
-        <TokenField label="To" value={dstId} onChange={setDstId} tokens={tokens} />
+
+        <AssetField
+          label="To"
+          chains={chains}
+          chain={dstChain}
+          onChainChange={c => {
+            setDstChain(c);
+            setDstAddr('');
+          }}
+          tokens={dstTokens}
+          token={dstAddr}
+          onTokenChange={setDstAddr}
+        />
 
         <Separator />
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Quote</span>
           <span>{quote && dst ? `${fromSmallestUnit(quote, dst.decimals)} ${dst.symbol}` : '—'}</span>
         </div>
+        {quoteError && <p className="text-xs text-destructive">{quoteError}</p>}
 
         <Button variant="cherrySoda" className="w-full" disabled={!canSwap || busy} onClick={onSwap}>
           {busy ? 'Working…' : 'Swap'}
         </Button>
 
-        {src && !isEvmChainKey(src.chainKey) && (
+        {srcChain && !isEvmChainKey(srcChain) && (
           <p className="text-xs text-muted-foreground">
-            Execution here is EVM-only; pick an EVM source chain to swap (quotes work for any chain).
+            Execution here is EVM-only; pick an EVM source network to swap (quotes work for any network).
           </p>
         )}
-        {log && <pre className="whitespace-pre-wrap rounded-md bg-secondary p-2 text-xs">{log}</pre>}
+        {swapLog && <pre className="whitespace-pre-wrap rounded-md bg-secondary p-2 text-xs">{swapLog}</pre>}
       </CardContent>
     </Card>
   );
 }
 
-function TokenField({
+function AssetField({
   label,
-  value,
-  onChange,
+  chains,
+  chain,
+  onChainChange,
   tokens,
+  token,
+  onTokenChange,
 }: {
   label: string;
-  value: string;
-  onChange: (v: string) => void;
+  chains: string[];
+  chain: string;
+  onChainChange: (v: string) => void;
   tokens: Token[];
+  token: string;
+  onTokenChange: (v: string) => void;
 }) {
   return (
-    <div>
+    <div className="space-y-1">
       <Label>{label}</Label>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger>
-          <SelectValue placeholder="Select token" />
-        </SelectTrigger>
-        <SelectContent className="max-h-72">
-          {tokens.map(t => (
-            <SelectItem key={tokenKey(t)} value={tokenKey(t)}>
-              {t.symbol} · {t.chainKey}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <div className="flex gap-2">
+        <Select value={chain} onValueChange={onChainChange}>
+          <SelectTrigger className="w-1/2">
+            <SelectValue placeholder="Network" />
+          </SelectTrigger>
+          <SelectContent className="max-h-72">
+            {chains.map(c => (
+              <SelectItem key={c} value={c}>
+                {c}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={token} onValueChange={onTokenChange} disabled={!chain}>
+          <SelectTrigger className="w-1/2">
+            <SelectValue placeholder="Token" />
+          </SelectTrigger>
+          <SelectContent className="max-h-72">
+            {tokens.map(t => (
+              <SelectItem key={t.address} value={t.address}>
+                {t.symbol}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
     </div>
   );
 }
