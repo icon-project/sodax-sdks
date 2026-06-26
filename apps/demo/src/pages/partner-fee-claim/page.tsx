@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   useApproveToken,
   useBridgeApprove,
@@ -271,19 +271,19 @@ export default function PartnerFeeClaimPage() {
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
   const [withdrawSuccess, setWithdrawSuccess] = useState<string | null>(null);
   // Withdraw is gated on a successful bridge approval. The approval is specific to the
-  // token/amount/destination/recipient, so any change to those invalidates it (see effect below).
-  const [withdrawApproved, setWithdrawApproved] = useState<boolean>(false);
+  // token/amount/destination/recipient — record what was approved and only enable Withdraw while the
+  // current inputs still match, so editing any field auto-invalidates the prior approval.
+  const [approvedWithdrawKey, setApprovedWithdrawKey] = useState<string | null>(null);
   const { mutateAsync: feeClaimWithdraw, isPending: withdrawLoading } = useFeeClaimWithdraw();
   const { mutateAsync: bridgeApprove, isPending: withdrawApproveLoading } = useBridgeApprove();
-
-  useEffect(() => {
-    setWithdrawApproved(false);
-  }, [withdrawToken, withdrawAmount, withdrawDstChain, withdrawRecipient]);
 
   const withdrawAsset = useMemo(
     () => balancesArray.find(a => a.address.toLowerCase() === withdrawToken.trim().toLowerCase()),
     [balancesArray, withdrawToken],
   );
+
+  const withdrawKey = `${withdrawToken.trim()}|${withdrawAmount.trim()}|${withdrawDstChain}|${withdrawRecipient.trim()}`;
+  const withdrawApproved = approvedWithdrawKey !== null && approvedWithdrawKey === withdrawKey;
 
   /**
    * Maps the selected fee balance + destination to bridge params. The fee token's wrapped hub-asset
@@ -331,7 +331,7 @@ export default function PartnerFeeClaimPage() {
         },
         walletProvider,
       });
-      setWithdrawApproved(true);
+      setApprovedWithdrawKey(withdrawKey);
       setWithdrawSuccess('Approved for bridge. You can withdraw now.');
     } catch (error) {
       setWithdrawError(formatSdkError(error, 'Failed to approve'));
