@@ -27,7 +27,7 @@
     "check:ai-dev-files": "node scripts/check-ai-dev-files.mjs",
     "check:knip": "turbo run check:knip",
     "changeset": "changeset",
-    "version:packages": "changeset version",
+    "version:packages": "changeset version && node scripts/bump-config-version.mjs",
     "clean": "turbo clean && rm -rf node_modules dist .turbo && rm -rf apps/*/node_modules apps/*/dist apps/*/.turbo && rm -rf packages/*/node_modules packages/*/dist packages/*/.turbo",
     "prepare": "husky"
   },

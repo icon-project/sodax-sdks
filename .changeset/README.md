@@ -17,7 +17,9 @@ user-facing summary. This writes a markdown file into `.changeset/` — commit i
 
 The seven published packages are configured as a **fixed** group in `config.json`, so a bump to
 any one of them bumps all of them to the same version. This mirrors the existing umbrella
-`@sdks@x.y.z` release model. The private `apps/*` workspaces are ignored automatically.
+`@sdks@x.y.z` release model. The private `apps/*` workspaces are excluded via
+`"privatePackages": { "version": false, "tag": false }` in `config.json`, so they are never
+versioned and do not appear in the `pnpm changeset` selection prompt.
 
 ## Cutting a release (full flow)
 
