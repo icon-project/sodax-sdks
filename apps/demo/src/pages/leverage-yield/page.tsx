@@ -54,11 +54,12 @@ import {
   useXAccounts,
   useXService,
 } from '@sodax/wallet-sdk-react';
-import OrderStatus, { type Order } from '@/components/swaps/OrderStatus';
+import OrderStatus, { type Order, buildOrderSummary } from '@/components/swaps/OrderStatus';
 import BigNumber from 'bignumber.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatUnits, parseUnits } from 'viem';
 import { SolverEnv, useAppStore } from '@/zustand/useAppStore';
+import { solverApiEndpointForEnv } from '@/constants';
 
 const SONIC = ChainKeys.SONIC_MAINNET satisfies SpokeChainKey;
 const DEFAULT_SLIPPAGE = '0.5'; // %
@@ -431,6 +432,9 @@ export default function LeverageYieldPage() {
     if (!intentOrderPayload || !sourceWalletProvider) return;
     setActionError(null);
 
+    // "AMOUNT TOKEN (NETWORK) => AMOUNT TOKEN (NETWORK)" snapshot for the order card.
+    const summary = buildOrderSummary(src, dst, sourceAmount, quote?.quoted_amount);
+
     if (!useSubmitTxApi) {
       try {
         const { solverExecutionResponse, intent, intentDeliveryInfo } = await vaultSwap({
@@ -442,8 +446,13 @@ export default function LeverageYieldPage() {
           {
             mode: 'solver',
             intentHash: solverExecutionResponse.intent_hash,
-            intent,
-            intentDeliveryInfo,
+            orderId: intent.intentId.toString(),
+            dstTxHash: intentDeliveryInfo.dstTxHash as string,
+            srcTxHash: intentDeliveryInfo.srcTxHash,
+            srcChainKey: intentDeliveryInfo.srcChainKey,
+            statusEndpoint: solverApiEndpointForEnv(solverEnvironment),
+            createdAt: Date.now(),
+            summary,
           },
         ]);
         resetAfterSubmit();
@@ -504,6 +513,8 @@ export default function LeverageYieldPage() {
         txHash: spokeTxHash as string,
         srcChainKey: userChain,
         apiBaseURL: SUBMIT_TX_API_CONFIG.baseURL,
+        createdAt: Date.now(),
+        summary,
       },
     ]);
     resetAfterSubmit();

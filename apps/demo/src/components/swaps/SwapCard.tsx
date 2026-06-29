@@ -17,7 +17,7 @@ import { calculateExchangeRate, formatMutationFailureMessage, formatTokenAmount 
 import { parseUnits, formatUnits } from 'viem';
 import BigNumber from 'bignumber.js';
 import { ArrowDownUp, ArrowLeftRight, Loader2 } from 'lucide-react';
-import React, { type SetStateAction, useMemo, useState } from 'react';
+import React, { type SetStateAction, useEffect, useMemo, useState } from 'react';
 import {
   useQuote,
   useSwapAllowance,
@@ -44,7 +44,7 @@ import {
   type StellarChainKey,
   ChainKeys,
   HookKind,
-  isHookSupportedToken
+  isHookSupportedToken,
 } from '@sodax/dapp-kit';
 import {
   getXChainType,
@@ -58,25 +58,40 @@ import {
 import type { Order } from '@/components/swaps/OrderStatus';
 import { DEFAULT_SELECTED_CHAIN, useAppStore } from '@/zustand/useAppStore';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
+import { loadLastSelection, saveLastSelection } from '@/lib/lastSelection';
+import { MAX_ORDERS } from '@/lib/orderHistory';
+import { buildOrderSummary } from '@/components/swaps/OrderStatus';
+import { solverApiEndpointForEnv } from '@/constants';
 
 const SUBMIT_TX_API_CONFIG = { baseURL: 'https://canary-api.sodax.com/v1/bes' } as const;
 
 export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAction<Order[]>) => void }) {
   const { sodax } = useSodaxContext();
-  //chain and account states
-  const [src, setSrc] = useState<{ chain: SpokeChainKey; token: XToken }>({
-    chain: DEFAULT_SELECTED_CHAIN,
-    token: getSupportedSolverTokens(DEFAULT_SELECTED_CHAIN)[0],
-  });
-  const [dst, setDst] = useState<{ chain: SpokeChainKey; token: XToken }>({
-    chain: ChainKeys.POLYGON_MAINNET,
-    token: getSupportedSolverTokens(ChainKeys.POLYGON_MAINNET)[0],
-  });
+  //chain and account states — restore last picked chain/token from localStorage, falling back to defaults
+  const [src, setSrc] = useState<{ chain: SpokeChainKey; token: XToken }>(
+    () =>
+      loadLastSelection().src ?? {
+        chain: DEFAULT_SELECTED_CHAIN,
+        token: getSupportedSolverTokens(DEFAULT_SELECTED_CHAIN)[0],
+      },
+  );
+  const [dst, setDst] = useState<{ chain: SpokeChainKey; token: XToken }>(
+    () =>
+      loadLastSelection().dst ?? {
+        chain: ChainKeys.POLYGON_MAINNET,
+        token: getSupportedSolverTokens(ChainKeys.POLYGON_MAINNET)[0],
+      },
+  );
+
+  // Persist the latest chain/token picks (symbol only) so they restore on reload.
+  useEffect(() => {
+    saveLastSelection(src, dst);
+  }, [src, dst]);
   const sourceAccount = useXAccount({ xChainId: src.chain });
   const sourceWalletProvider = useWalletProvider({ xChainId: src.chain });
   const destAccount = useXAccount({ xChainId: dst.chain });
   const destWalletProvider = useWalletProvider({ xChainId: dst.chain });
-  const { openWalletModal } = useAppStore();
+  const { openWalletModal, solverEnvironment } = useAppStore();
   const { mutateAsync: swap } = useSwap();
   const [sourceAmount, setSourceAmount] = useState<string>('');
   const [intentOrderPayload, setIntentOrderPayload] = useState<CreateIntentParams | undefined>(undefined);
@@ -378,15 +393,19 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     }
     console.log('Submit swap tx result:', submitResult.value);
 
-    setOrders(prev => [
-      ...prev,
-      {
-        mode: 'submit-tx',
-        txHash: spokeTxHash as string,
-        srcChainKey: src.chain,
-        apiBaseURL: SUBMIT_TX_API_CONFIG.baseURL,
-      },
-    ]);
+    setOrders(prev =>
+      [
+        ...prev,
+        {
+          mode: 'submit-tx' as const,
+          txHash: spokeTxHash as string,
+          srcChainKey: src.chain,
+          apiBaseURL: SUBMIT_TX_API_CONFIG.baseURL,
+          createdAt: Date.now(),
+          summary: buildOrderSummary(src, dst, sourceAmount, quote?.quoted_amount),
+        },
+      ].slice(-MAX_ORDERS),
+    );
   };
 
   const handleSwap = async (intentOrderPayload: CreateIntentParams) => {
@@ -403,7 +422,22 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     try {
       const swapResponse = await swap({ params: intentOrderPayload, walletProvider: sourceWalletProvider });
       const { solverExecutionResponse: response, intent, intentDeliveryInfo } = swapResponse;
-      setOrders(prev => [...prev, { mode: 'solver', intentHash: response.intent_hash, intent, intentDeliveryInfo }]);
+      setOrders(prev =>
+        [
+          ...prev,
+          {
+            mode: 'solver' as const,
+            intentHash: response.intent_hash,
+            orderId: intent.intentId.toString(),
+            dstTxHash: intentDeliveryInfo.dstTxHash as string,
+            srcTxHash: intentDeliveryInfo.srcTxHash,
+            srcChainKey: intentDeliveryInfo.srcChainKey,
+            statusEndpoint: solverApiEndpointForEnv(solverEnvironment),
+            createdAt: Date.now(),
+            summary: buildOrderSummary(src, dst, sourceAmount, quote?.quoted_amount),
+          },
+        ].slice(-MAX_ORDERS),
+      );
     } catch (error) {
       console.error('Error creating and submitting intent:', error);
       setSwapError(formatMutationFailureMessage(error, 'Swap failed'));
