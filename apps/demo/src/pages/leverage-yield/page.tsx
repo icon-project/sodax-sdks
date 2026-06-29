@@ -57,6 +57,7 @@ import {
 import { type FinalStatus, type Order, buildOrderSummary, orderId } from '@/components/swaps/OrderStatus';
 import OrderStatusPanel from '@/components/swaps/OrderStatusPanel';
 import { LEVERAGE_YIELD_ORDERS_KEY, appendOrder, loadOrders, saveOrders } from '@/lib/orderHistory';
+import { LEVERAGE_YIELD_PANEL_KEY } from '@/lib/panelPrefs';
 import BigNumber from 'bignumber.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatUnits, parseUnits } from 'viem';
@@ -584,7 +585,12 @@ export default function LeverageYieldPage() {
   return (
     <div className="flex flex-col items-center justify-start min-h-screen p-4 gap-4">
       {/* Swap history — fixed left sidebar on xl, in-flow below on smaller screens, same as /solver. */}
-      <OrderStatusPanel orders={orders} onDismiss={handleDismissOrder} onSettle={handleSettleOrder} />
+      <OrderStatusPanel
+        orders={orders}
+        onDismiss={handleDismissOrder}
+        onSettle={handleSettleOrder}
+        storageKey={LEVERAGE_YIELD_PANEL_KEY}
+      />
 
       {/* Solver-environment switcher — same control as on /solver. Drives `solverEnvironment`
           in the app store; providers.tsx remaps the SDK's solver config on change. */}

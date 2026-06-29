@@ -6,6 +6,7 @@ import OrderStatusPanel from '@/components/swaps/OrderStatusPanel';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SolverEnv, useAppStore } from '@/zustand/useAppStore';
 import { loadOrders, saveOrders, SOLVER_ORDERS_KEY } from '@/lib/orderHistory';
+import { SOLVER_PANEL_KEY } from '@/lib/panelPrefs';
 
 enum OrderType {
   Market = 'Market',
@@ -60,7 +61,12 @@ export default function SolverPage() {
       {orderType === OrderType.Limit && <LimitOrderCard />}
 
       {/* Below the form on small screens; a fixed left sidebar on lg+ (see OrderStatusPanel). */}
-      <OrderStatusPanel orders={orders} onDismiss={handleDismissOrder} onSettle={handleSettleOrder} />
+      <OrderStatusPanel
+        orders={orders}
+        onDismiss={handleDismissOrder}
+        onSettle={handleSettleOrder}
+        storageKey={SOLVER_PANEL_KEY}
+      />
     </main>
   );
 }
