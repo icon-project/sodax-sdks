@@ -211,9 +211,13 @@ Typed React Query wrappers over the backend Swaps API v2 (`sodax.api.swaps.*`), 
 | `useFetchAssetsBalances` | Query | Fetch partner asset balances |
 | `useGetAutoSwapPreferences` | Query | Get auto-swap preferences |
 | `useIsTokenApproved` | Query | Check token approval |
+| `useGetUserIntent` | Query | Look up a partner's stored intent hash for a token pair (`0x0…0` = none) |
+| `useGetIntentDetails` | Query | Read full intent details for an intent hash |
 | `useApproveToken` | Mutation | Approve token |
 | `useSetSwapPreference` | Mutation | Set swap preference |
 | `useFeeClaimSwap` | Mutation | Claim partner fees via swap |
+| `useFeeClaimWithdraw` | Mutation | Withdraw a fee token directly (no swap) via the bridge |
+| `usePartnerCancelIntent` | Mutation | Cancel a stuck same-token claim and recover the locked tokens |
 
 ## Recovery
 

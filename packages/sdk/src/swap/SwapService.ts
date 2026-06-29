@@ -416,41 +416,65 @@ export class SwapService {
     const { params } = _params;
     const srcChainKey = params.srcChainKey;
     const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey };
-    try {
-      const createIntentResult = await this.createIntent(_params);
-      if (!createIntentResult.ok) {
-        // CreateIntentErrorCode ⊂ SwapErrorCode by definition; the cast is structural, not a
-        // contract widening. (Verified at design time via the type alias relationship.)
-        return { ok: false, error: createIntentResult.error };
-      }
+    return this.config.analytics.trackResult(
+      'swap',
+      'swap',
+      async () => {
+        try {
+          const createIntentResult = await this.createIntent(_params);
+          if (!createIntentResult.ok) {
+            // CreateIntentErrorCode ⊂ SwapErrorCode by definition; the cast is structural, not a
+            // contract widening. (Verified at design time via the type alias relationship.)
+            return { ok: false, error: createIntentResult.error };
+          }
 
-      const created = createIntentResult.value;
+          const created = createIntentResult.value;
 
-      // One shared budget for the rest of the swap: the backend submit-tx poll and the client-side
-      // relay fallback split this single deadline, so total wall-clock never exceeds one `timeout`.
-      const deadline = Date.now() + (_params.timeout ?? DEFAULT_RELAY_TX_TIMEOUT);
+          // One shared budget for the rest of the swap: the backend submit-tx poll and the client-side
+          // relay fallback split this single deadline, so total wall-clock never exceeds one `timeout`.
+          const deadline = Date.now() + (_params.timeout ?? DEFAULT_RELAY_TX_TIMEOUT);
 
-      // Opt-in backend 2-step flow: hand the broadcast intent tx to the swaps API, which relays +
-      // post-executes server-side. On ANY non-success we fall back to the client-side relay so the
-      // swap still completes — safe because re-relay / re-post are idempotent (see `submitTx`).
-      if (this.useBackendSubmitTx) {
-        const submitted = await this.submitTx(_params, created, deadline);
-        if (submitted.ok) return submitted;
-        this.config.logger.warn('[swap] backend submit-tx did not complete; falling back to the client-side relay', {
-          error: submitted.error,
-        });
-      }
+          // Opt-in backend 2-step flow: hand the broadcast intent tx to the swaps API, which relays +
+          // post-executes server-side. On ANY non-success we fall back to the client-side relay so the
+          // swap still completes — safe because re-relay / re-post are idempotent (see `submitTx`).
+          if (this.useBackendSubmitTx) {
+            const submitted = await this.submitTx(_params, created, deadline);
+            if (submitted.ok) return submitted;
+            this.config.logger.warn(
+              '[swap] backend submit-tx did not complete; falling back to the client-side relay',
+              {
+                error: submitted.error,
+              },
+            );
+          }
 
-      return this.fallbackSwapSteps(_params, created, deadline);
-    } catch (error) {
-      // Narrow guard: preserve SodaxErrors whose code is in the swap union; wrap unknown
-      // codes (e.g. an accidental cross-feature code) as UNKNOWN.
-      if (isSwapError(error)) return { ok: false, error };
-      return {
-        ok: false,
-        error: unknownFailed('swap', error, { ...baseCtx, action: 'swap' }),
-      };
-    }
+          return this.fallbackSwapSteps(_params, created, deadline);
+        } catch (error) {
+          // Narrow guard: preserve SodaxErrors whose code is in the swap union; wrap unknown
+          // codes (e.g. an accidental cross-feature code) as UNKNOWN.
+          if (isSwapError(error)) return { ok: false, error };
+          return {
+            ok: false,
+            error: unknownFailed('swap', error, { ...baseCtx, action: 'swap' }),
+          };
+        }
+      },
+      {
+        start: () => ({
+          srcChainKey,
+          dstChainKey: params.dstChainKey,
+          srcAddress: params.srcAddress,
+          dstAddress: params.dstAddress,
+        }),
+        success: value => ({
+          srcChainKey,
+          dstChainKey: params.dstChainKey,
+          srcTxHash: value.intentDeliveryInfo.srcTxHash,
+          dstTxHash: value.intentDeliveryInfo.dstTxHash,
+        }),
+        failure: error => ({ code: error.code }),
+      },
+    );
   }
 
   /**

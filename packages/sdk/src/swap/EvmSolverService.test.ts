@@ -39,12 +39,21 @@ import {
   keccak256,
   toHex,
 } from 'viem';
-import { ChainKeys, FEE_PERCENTAGE_SCALE, type PartnerFee, type SolverConfig, type XToken } from '@sodax/types';
+import {
+  ChainKeys,
+  FEE_PERCENTAGE_SCALE,
+  HookKind,
+  type PartnerFee,
+  type SolverConfig,
+  type XToken,
+} from '@sodax/types';
 import { IntentsAbi } from '../shared/abis/intents.abi.js';
 import type { ConfigService } from '../shared/config/ConfigService.js';
 import { IntentDataType, type CreateIntentParams, type Intent } from '../shared/types/intent-types.js';
 import { calculatePercentageFeeAmount } from '../shared/utils/shared-utils.js';
 import { EvmSolverService } from './EvmSolverService.js';
+import { HookService } from './HookService.js';
+import { IntentDataService } from './IntentDataService.js';
 import { Sodax } from '../index.js';
 
 // --- fixtures -------------------------------------------------------------
@@ -417,6 +426,25 @@ describe('EvmSolverService.decodeIntentFeeAmount', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(EvmSolverService.decodeIntentFeeAmount(bogus)).toBe(0n);
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Unknown IntentData type byte'));
+  });
+
+  it('recovers the fee from a TYPE_ARRAY envelope carrying fee + delivery', () => {
+    const [feeEnvelope] = EvmSolverService.createIntentFeeData({ address: FEE_RECEIVER, amount: 1_234n }, 1_000_000n);
+    const data = IntentDataService.composeIntentData(
+      feeEnvelope,
+      HookService.encodeDeliveryData({ kind: HookKind.HYPERCORE_DEPOSIT }, FEE_RECEIVER),
+    );
+    expect(EvmSolverService.decodeIntentFeeAmount(data)).toBe(1_234n);
+  });
+
+  it('returns 0n (no log) for a delivery-only envelope', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const data = IntentDataService.composeIntentData(
+      '0x',
+      HookService.encodeDeliveryData({ kind: HookKind.HYPERCORE_DEPOSIT }, FEE_RECEIVER),
+    );
+    expect(EvmSolverService.decodeIntentFeeAmount(data)).toBe(0n);
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 });
 

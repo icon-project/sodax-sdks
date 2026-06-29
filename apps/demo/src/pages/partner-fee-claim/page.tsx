@@ -1,15 +1,22 @@
 import React, { useMemo, useState } from 'react';
 import {
   useApproveToken,
+  useBridgeApprove,
   useFeeClaimSwap,
+  useFeeClaimWithdraw,
   useFetchAssetsBalances,
+  useGetAutoSwapPreferences,
+  useGetIntentDetails,
+  useGetUserIntent,
   useIsTokenApproved,
+  usePartnerCancelIntent,
   useSetSwapPreference,
   useSodaxContext,
   ChainKeys,
   type SpokeChainKey,
 } from '@sodax/dapp-kit';
-import { useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
+import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
+import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,6 +26,7 @@ import { chainIdToChainName } from '@/constants';
 import { SelectChain } from '@/components/swaps/SelectChain';
 
 const SONIC: typeof ChainKeys.SONIC_MAINNET = ChainKeys.SONIC_MAINNET;
+const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000';
 
 /**
  * v2 SDK errors are tagged: `error.message` carries the CODE (e.g. FETCH_ASSETS_BALANCES_FAILED),
@@ -36,6 +44,10 @@ export default function PartnerFeeClaimPage() {
   const sonicAccount = useXAccount({ xChainId: SONIC });
   const walletProvider = useWalletProvider({ xChainId: SONIC });
   const srcAddress = sonicAccount?.address as Address | undefined;
+  // The wallet address (connection intent) is tracked independently of the active network, but the
+  // EVM walletProvider only hydrates once the wallet is on Sonic — without it every write action
+  // (claim, withdraw, recover) stays disabled with no hint. Prompt a network switch instead.
+  const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: SONIC });
 
   const supportedSpokeChains = useMemo(() => sodax.config.getSupportedSpokeChains(), [sodax]);
 
@@ -172,6 +184,190 @@ export default function PartnerFeeClaimPage() {
     }
   };
 
+  // ── Same-token detection (prevention) ──────────────────────────────────────
+  // The on-chain auto-swap preference (not the dropdown) drives the claim's output token. When it
+  // equals the fee token being claimed, the solver can't fill the swap and funds get stuck — warn
+  // and steer to Withdraw Directly instead.
+  const { data: autoSwapPrefs } = useGetAutoSwapPreferences({ params: { queryAddress: srcAddress } });
+  const isSameTokenSwap = useMemo(() => {
+    const out = autoSwapPrefs?.outputToken?.toLowerCase();
+    const from = swapFromToken.trim().toLowerCase();
+    return !!out && !!from && out === from;
+  }, [autoSwapPrefs, swapFromToken]);
+
+  // ── Recover a stuck intent ─────────────────────────────────────────────────
+  const [recoverFromToken, setRecoverFromToken] = useState<string>('');
+  const [recoverToToken, setRecoverToToken] = useState<string>('');
+  const [recoverTxHash, setRecoverTxHash] = useState<string>('');
+  const [recoverTxLoading, setRecoverTxLoading] = useState<boolean>(false);
+  const [recoverError, setRecoverError] = useState<string | null>(null);
+  const [recoverSuccess, setRecoverSuccess] = useState<string | null>(null);
+  const { mutateAsync: cancelIntent, isPending: recoverLoading } = usePartnerCancelIntent();
+
+  // Convenience: derive the from/to tokens from the original claim transaction so the partner can
+  // recover by pasting a tx hash instead of typing token addresses. The on-chain cancel still keys
+  // on the token pair — this only fills the inputs.
+  const handleLoadFromTx = async (): Promise<void> => {
+    setRecoverError(null);
+    setRecoverSuccess(null);
+    const txHash = recoverTxHash.trim();
+    if (!txHash) {
+      setRecoverError('Enter the claim transaction hash');
+      return;
+    }
+    setRecoverTxLoading(true);
+    try {
+      const result = await sodax.swaps.getIntent(txHash as `0x${string}`);
+      if (!result.ok) throw result.error;
+      setRecoverFromToken(result.value.inputToken);
+      setRecoverToToken(result.value.outputToken);
+    } catch (error) {
+      setRecoverError(formatSdkError(error, 'Could not read an intent from this transaction'));
+    } finally {
+      setRecoverTxLoading(false);
+    }
+  };
+
+  const recoverPairValid = isAddress(recoverFromToken.trim()) && isAddress(recoverToToken.trim()) && !!srcAddress;
+
+  const { data: stuckIntentHash } = useGetUserIntent({
+    params: recoverPairValid
+      ? { user: srcAddress, fromToken: recoverFromToken.trim() as Address, toToken: recoverToToken.trim() as Address }
+      : undefined,
+  });
+  const hasStuckIntent = !!stuckIntentHash && stuckIntentHash !== ZERO_HASH;
+  const { data: stuckIntent } = useGetIntentDetails({
+    params: { intentHash: hasStuckIntent ? stuckIntentHash : undefined },
+  });
+
+  const handleRecover = async (): Promise<void> => {
+    setRecoverError(null);
+    setRecoverSuccess(null);
+    if (!srcAddress || !walletProvider || !recoverPairValid) {
+      setRecoverError('Connect your wallet and enter valid from/to token addresses');
+      return;
+    }
+    try {
+      const txHash = await cancelIntent({
+        params: {
+          srcChainKey: SONIC,
+          srcAddress,
+          fromToken: recoverFromToken.trim() as Address,
+          toToken: recoverToToken.trim() as Address,
+        },
+        walletProvider,
+      });
+      setRecoverSuccess(`Recovered! Tokens returned to your wallet. Tx: ${txHash}`);
+    } catch (error) {
+      setRecoverError(formatSdkError(error, 'Failed to recover intent'));
+    }
+  };
+
+  // ── Withdraw directly (no swap) ────────────────────────────────────────────
+  const [withdrawToken, setWithdrawToken] = useState<string>('');
+  const [withdrawAmount, setWithdrawAmount] = useState<string>('');
+  const [withdrawDstChain, setWithdrawDstChain] = useState<SpokeChainKey>(SONIC);
+  const [withdrawRecipient, setWithdrawRecipient] = useState<string>('');
+  const [withdrawError, setWithdrawError] = useState<string | null>(null);
+  const [withdrawSuccess, setWithdrawSuccess] = useState<string | null>(null);
+  // Withdraw is gated on a successful bridge approval. The approval is specific to the
+  // token/amount/destination/recipient — record what was approved and only enable Withdraw while the
+  // current inputs still match, so editing any field auto-invalidates the prior approval.
+  const [approvedWithdrawKey, setApprovedWithdrawKey] = useState<string | null>(null);
+  const { mutateAsync: feeClaimWithdraw, isPending: withdrawLoading } = useFeeClaimWithdraw();
+  const { mutateAsync: bridgeApprove, isPending: withdrawApproveLoading } = useBridgeApprove();
+
+  const withdrawAsset = useMemo(
+    () => balancesArray.find(a => a.address.toLowerCase() === withdrawToken.trim().toLowerCase()),
+    [balancesArray, withdrawToken],
+  );
+
+  const withdrawKey = `${withdrawToken.trim()}|${withdrawAmount.trim()}|${withdrawDstChain}|${withdrawRecipient.trim()}`;
+  const withdrawApproved = approvedWithdrawKey !== null && approvedWithdrawKey === withdrawKey;
+
+  /**
+   * Maps the selected fee balance + destination to bridge params. The fee token's wrapped hub-asset
+   * address is the bridge `srcToken` on Sonic; the destination token is the same hub asset on Sonic
+   * (same-chain delivery) or the token's original address on its native chain.
+   */
+  const buildWithdrawParams = (): { srcToken: Address; amount: bigint; dstToken: string } | { error: string } => {
+    if (!withdrawAsset) return { error: 'Select a fee token from balances' };
+    if (!withdrawAmount.trim()) return { error: 'Enter an amount' };
+    if (!withdrawRecipient.trim()) return { error: 'Enter a recipient address' };
+    let dstToken: string;
+    if (withdrawDstChain === SONIC) dstToken = withdrawAsset.address;
+    else if (withdrawDstChain === withdrawAsset.originalChain) dstToken = withdrawAsset.originalAddress;
+    else
+      return {
+        error: `This fee token can only be withdrawn to Sonic or its native chain (${chainIdToChainName(
+          withdrawAsset.originalChain,
+        )})`,
+      };
+    return { srcToken: withdrawAsset.address, amount: parseUnits(withdrawAmount, withdrawAsset.decimal), dstToken };
+  };
+
+  const handleWithdrawApprove = async (): Promise<void> => {
+    setWithdrawError(null);
+    setWithdrawSuccess(null);
+    if (!srcAddress || !walletProvider) {
+      setWithdrawError('Please connect your wallet');
+      return;
+    }
+    const built = buildWithdrawParams();
+    if ('error' in built) {
+      setWithdrawError(built.error);
+      return;
+    }
+    try {
+      await bridgeApprove({
+        params: {
+          srcChainKey: SONIC,
+          srcAddress,
+          srcToken: built.srcToken,
+          amount: built.amount,
+          dstChainKey: withdrawDstChain,
+          dstToken: built.dstToken,
+          recipient: withdrawRecipient.trim(),
+        },
+        walletProvider,
+      });
+      setApprovedWithdrawKey(withdrawKey);
+      setWithdrawSuccess('Approved for bridge. You can withdraw now.');
+    } catch (error) {
+      setWithdrawError(formatSdkError(error, 'Failed to approve'));
+    }
+  };
+
+  const handleWithdraw = async (): Promise<void> => {
+    setWithdrawError(null);
+    setWithdrawSuccess(null);
+    if (!srcAddress || !walletProvider) {
+      setWithdrawError('Please connect your wallet');
+      return;
+    }
+    const built = buildWithdrawParams();
+    if ('error' in built) {
+      setWithdrawError(built.error);
+      return;
+    }
+    try {
+      const result = await feeClaimWithdraw({
+        params: {
+          srcAddress,
+          feeToken: built.srcToken,
+          amount: built.amount,
+          dstChainKey: withdrawDstChain,
+          dstToken: built.dstToken,
+          recipient: withdrawRecipient.trim(),
+        },
+        walletProvider,
+      });
+      setWithdrawSuccess(`Withdrawn! Source tx: ${result.srcChainTxHash}, destination tx: ${result.dstChainTxHash}`);
+    } catch (error) {
+      setWithdrawError(formatSdkError(error, 'Failed to withdraw'));
+    }
+  };
+
   return (
     <main className="container mx-auto px-4 py-8 max-w-4xl">
       <div className="space-y-6">
@@ -179,6 +375,18 @@ export default function PartnerFeeClaimPage() {
           <h1 className="text-3xl font-bold text-cream-white mb-2">Partner Fee Claim Demo</h1>
           <p className="text-cream/70">Query asset balances for any address on Sonic chain</p>
         </div>
+
+        {srcAddress && isWrongChain && (
+          <div className="flex items-center gap-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <AlertTriangle className="w-5 h-5 text-yellow-600 shrink-0" />
+            <span className="text-sm text-yellow-800">
+              Your wallet is connected to a different network. Switch to Sonic to claim, withdraw, or recover fees.
+            </span>
+            <Button variant="cherry" size="sm" onClick={handleSwitchChain} className="ml-auto shrink-0">
+              Switch to Sonic
+            </Button>
+          </div>
+        )}
 
         <Card>
           <CardHeader>
@@ -472,9 +680,24 @@ export default function PartnerFeeClaimPage() {
                 })()}
             </div>
 
+            {isSameTokenSwap && (
+              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+                Your configured output token equals this fee token — the solver cannot swap a token into
+                itself, and claiming would lock the funds in an unfillable intent. Use{' '}
+                <span className="font-semibold">Withdraw Directly</span> below instead, or change your swap preference.
+              </div>
+            )}
+
             <Button
               onClick={handleSwap}
-              disabled={swapLoading || !srcAddress || !walletProvider || !swapFromToken.trim() || !swapAmount.trim()}
+              disabled={
+                swapLoading ||
+                !srcAddress ||
+                !walletProvider ||
+                !swapFromToken.trim() ||
+                !swapAmount.trim() ||
+                isSameTokenSwap
+              }
             >
               {swapLoading ? 'Swapping...' : 'Execute Swap'}
             </Button>
@@ -488,6 +711,248 @@ export default function PartnerFeeClaimPage() {
             {swapSuccess && (
               <div className="p-3 bg-green-500/20 border border-green-500/50 rounded-lg text-black text-sm">
                 {swapSuccess}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Withdraw Directly (No Swap)</CardTitle>
+            <CardDescription>
+              Send a fee token to your wallet as-is, bypassing the solver. Use this when you want the fee
+              token itself (no conversion) — e.g. claiming BTC fees as BTC. Bridges the wrapped token from
+              Sonic to its native chain, or transfers it on Sonic.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="withdraw-token">Fee Token</Label>
+              <Input
+                id="withdraw-token"
+                placeholder="0x..."
+                value={withdrawToken}
+                onChange={e => setWithdrawToken(e.target.value)}
+                className="font-mono"
+              />
+              {balancesArray.length > 0 && (
+                <select
+                  className="w-full p-2 border rounded-lg text-sm"
+                  onChange={e => {
+                    const asset = balancesArray.find(a => a.address === e.target.value);
+                    if (asset) {
+                      setWithdrawToken(asset.address);
+                      setWithdrawDstChain(asset.originalChain);
+                      setWithdrawAmount('');
+                    }
+                  }}
+                  value=""
+                >
+                  <option value="">Select from balances...</option>
+                  {balancesArray.map(asset => (
+                    <option key={asset.address} value={asset.address}>
+                      {asset.symbol} - Balance: {formatUnits(asset.balance, asset.decimal)} (
+                      {asset.address.slice(0, 10)}...{asset.address.slice(-8)})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="withdraw-amount">Amount</Label>
+              <Input
+                id="withdraw-amount"
+                type="number"
+                placeholder="0.0"
+                value={withdrawAmount}
+                onChange={e => setWithdrawAmount(e.target.value)}
+                step="any"
+              />
+              {withdrawAsset && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setWithdrawAmount(formatUnits(withdrawAsset.balance, withdrawAsset.decimal))}
+                  className="text-xs"
+                >
+                  Use Max ({formatUnits(withdrawAsset.balance, withdrawAsset.decimal)} {withdrawAsset.symbol})
+                </Button>
+              )}
+            </div>
+
+            <SelectChain
+              chainList={withdrawAsset ? Array.from(new Set([SONIC, withdrawAsset.originalChain])) : [SONIC]}
+              value={withdrawDstChain}
+              setChain={setWithdrawDstChain}
+              label="Destination Chain"
+              id="withdraw-dst-chain"
+            />
+
+            <div className="space-y-2">
+              <Label htmlFor="withdraw-recipient">Recipient Address</Label>
+              <Input
+                id="withdraw-recipient"
+                placeholder="0x... or address on the destination chain"
+                value={withdrawRecipient}
+                onChange={e => setWithdrawRecipient(e.target.value)}
+                className="font-mono"
+              />
+              {sonicAccount?.address && withdrawDstChain === SONIC && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setWithdrawRecipient(sonicAccount.address ?? '')}
+                  className="text-xs"
+                >
+                  Use Connected Wallet
+                </Button>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={handleWithdrawApprove}
+                disabled={withdrawApproveLoading || !srcAddress || !walletProvider || !withdrawAsset}
+              >
+                {withdrawApproveLoading ? 'Approving...' : 'Approve for Bridge'}
+              </Button>
+              <Button
+                onClick={handleWithdraw}
+                disabled={withdrawLoading || !srcAddress || !walletProvider || !withdrawAsset || !withdrawApproved}
+              >
+                {withdrawLoading ? 'Withdrawing...' : 'Withdraw'}
+              </Button>
+            </div>
+
+            {withdrawError && (
+              <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-black text-sm break-all">
+                {withdrawError}
+              </div>
+            )}
+            {withdrawSuccess && (
+              <div className="p-3 bg-green-500/20 border border-green-500/50 rounded-lg text-black text-sm break-all">
+                {withdrawSuccess}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Recover Stuck Claim</CardTitle>
+            <CardDescription>
+              Cancel an unfillable auto-swap intent and return the locked tokens to your wallet. This happens
+              when a claim's output token equals its input token (same-token swap). Enter the claim's from/to
+              tokens — for a same-token claim they are identical.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="recover-txhash">Claim Transaction Hash (optional)</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="recover-txhash"
+                  placeholder="0x... (paste the failed claim tx to auto-fill tokens)"
+                  value={recoverTxHash}
+                  onChange={e => setRecoverTxHash(e.target.value)}
+                  className="font-mono"
+                />
+                <Button
+                  variant="outline"
+                  onClick={handleLoadFromTx}
+                  disabled={recoverTxLoading || !recoverTxHash.trim()}
+                >
+                  {recoverTxLoading ? 'Loading...' : 'Load from Tx'}
+                </Button>
+              </div>
+              <p className="text-xs text-cream/60">
+                Optional shortcut — reads the intent from the transaction and fills the From/To tokens below.
+                The cancel itself uses the token pair, not the hash.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="recover-from">From Token (fee token claimed)</Label>
+              <Input
+                id="recover-from"
+                placeholder="0x..."
+                value={recoverFromToken}
+                onChange={e => setRecoverFromToken(e.target.value)}
+                className="font-mono"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="recover-to">To Token (configured output token)</Label>
+              <Input
+                id="recover-to"
+                placeholder="0x..."
+                value={recoverToToken}
+                onChange={e => setRecoverToToken(e.target.value)}
+                className="font-mono"
+              />
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRecoverToToken(recoverFromToken)}
+                  className="text-xs"
+                >
+                  Same as From (same-token)
+                </Button>
+                {autoSwapPrefs?.outputToken && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setRecoverToToken(autoSwapPrefs.outputToken)}
+                    className="text-xs"
+                  >
+                    Use my output preference
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {recoverPairValid && (
+              <div
+                className={`p-3 rounded-lg border text-sm ${
+                  hasStuckIntent ? 'bg-yellow-50 border-yellow-200 text-yellow-800' : 'bg-gray-50 border-gray-200 text-gray-700'
+                }`}
+              >
+                {hasStuckIntent ? (
+                  <>
+                    Stuck intent found.
+                    {stuckIntent &&
+                      ` Locked: ${formatUnits(
+                        stuckIntent.inputAmount,
+                        balancesArray.find(a => a.address.toLowerCase() === stuckIntent.inputToken.toLowerCase())
+                          ?.decimal ?? 18,
+                      )} (${stuckIntent.inputToken.slice(0, 10)}...${stuckIntent.inputToken.slice(-8)}).`}{' '}
+                    Click Recover to return the tokens to your wallet.
+                  </>
+                ) : (
+                  'No stuck intent found for this token pair.'
+                )}
+              </div>
+            )}
+
+            <Button
+              onClick={handleRecover}
+              disabled={recoverLoading || !srcAddress || !walletProvider || !recoverPairValid}
+            >
+              {recoverLoading ? 'Recovering...' : 'Recover'}
+            </Button>
+
+            {recoverError && (
+              <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-black text-sm break-all">
+                {recoverError}
+              </div>
+            )}
+            {recoverSuccess && (
+              <div className="p-3 bg-green-500/20 border border-green-500/50 rounded-lg text-black text-sm break-all">
+                {recoverSuccess}
               </div>
             )}
           </CardContent>

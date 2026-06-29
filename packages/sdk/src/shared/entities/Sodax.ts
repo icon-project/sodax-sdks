@@ -12,6 +12,7 @@ import type { HubProvider } from '../types/types.js';
 import { ConfigService } from '../config/index.js';
 import { mergeSodaxConfig } from '../config/mergeSodaxConfig.js';
 import { resolveLogger } from '../logger.js';
+import { resolveAnalytics } from '../analytics.js';
 import { PartnerService } from '../../partner/PartnerService.js';
 import { RecoveryService } from '../../recovery/RecoveryService.js';
 import { LeverageYieldService } from '../../leverageYield/LeverageYieldService.js';
@@ -41,12 +42,15 @@ export class Sodax {
   public readonly spoke: SpokeService; // spoke service enabling spoke chain operations
 
   constructor(options?: SodaxOptions) {
-    // Resolve the client-side options (`logger`, `fee`) once, up front, and hand them to the services
-    // so they survive the dynamic-config swap in `config.initialize()`. Both live on `SodaxOptions`,
+    // Resolve the client-side options (`logger`, `analytics`, `fee`) once, up front, and hand them to the
+    // services so they survive the dynamic-config swap in `config.initialize()`. All live on `SodaxOptions`,
     // not on the `DeepPartial<SodaxDefaultConfig>` data contract, so they keep their exact types and need no
     // cast. `mergeSodaxConfig` / `userConfig` ignore these extra keys (they are never read off the data
-    // config; services read them via `config.logger` / `config.fee`).
+    // config; services read them via `config.logger` / `config.analytics` / `config.fee`).
     const logger = resolveLogger(options?.logger);
+    // Analytics is opt-in: `resolveAnalytics` returns a no-op emitter unless `options.analytics` is set,
+    // so feature services can call `config.analytics.emit(...)` unconditionally with zero cost when off.
+    const analytics = resolveAnalytics(options?.analytics);
     const fee = options?.fee;
     // Like `logger`, swaps options are client-side runtime toggles read off `SodaxOptions` —
     // never merged into the backend-fetched `SodaxConfig`/`instanceConfig`.
@@ -59,6 +63,7 @@ export class Sodax {
       config: this.instanceConfig,
       userConfig: options,
       logger,
+      analytics,
       fee,
     });
 

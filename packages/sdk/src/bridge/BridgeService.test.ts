@@ -194,6 +194,64 @@ describe('BridgeService.createBridgeIntent — Bitcoin USER mode', () => {
   });
 });
 
+// =========================================================================
+// Sonic-sourced "withdraw directly" — hub-asset token resolution
+// =========================================================================
+//
+// Partner fees are held on Sonic as hub assets (e.g. the BTC hub asset), which have no
+// spoke-token entry under the hub chain — their only XToken lives on the native spoke
+// (Bitcoin). createBridgeIntent must resolve those by hub-asset address so the withdraw goes
+// through instead of throwing `Unsupported spoke chain (sonic) token: <hub asset>`.
+
+describe('BridgeService.createBridgeIntent — Sonic-sourced hub-asset resolution', () => {
+  const SONIC = ChainKeys.SONIC_MAINNET;
+  // BTC hub asset on Sonic (bitcoinSupportedTokens.BTC.hubAsset) — no Sonic spoke-token entry.
+  const BTC_HUB_ASSET = '0xeb0393893b5bf98a50073d6740738b08e575058b' as Address;
+  // sodaBTC vault — bitcoinSupportedTokens.BTC.vault.
+  const SODA_BTC_VAULT = '0x7A1A5555842Ad2D0eD274d09b5c4406a95799D5d';
+
+  const sonicWithdrawInput = (srcToken: Address, dstToken: Address): BridgeParams<typeof SONIC, false> =>
+    ({
+      raw: false,
+      walletProvider: mockEvmProvider,
+      params: {
+        srcAddress: SAMPLE_USER,
+        srcChainKey: SONIC,
+        srcToken,
+        amount: 100_000n,
+        dstChainKey: SONIC,
+        dstToken,
+        recipient: SAMPLE_DST,
+      },
+    }) as BridgeParams<typeof SONIC, false>;
+
+  beforeEach(() => {
+    vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockResolvedValue(HUB_WALLET);
+    vi.spyOn(sodax.spoke, 'deposit').mockResolvedValue({ ok: true, value: 'sonictxhash' } as never);
+  });
+
+  it('resolves a hub-asset srcToken/dstToken via the hub-asset map and bridges (no "Unsupported spoke chain")', async () => {
+    const buildSpy = vi.spyOn(sodax.bridge, 'buildBridgeData').mockReturnValue('0xdata' as never);
+
+    const result = await sodax.bridge.createBridgeIntent(sonicWithdrawInput(BTC_HUB_ASSET, BTC_HUB_ASSET));
+
+    expect(result.ok).toBe(true);
+    // Both endpoints resolved to the BTC descriptor (sodaBTC vault), proving the hub-asset fallback.
+    const [, srcToken, dstToken] = buildSpy.mock.calls[0];
+    expect(srcToken.vault.toLowerCase()).toBe(SODA_BTC_VAULT.toLowerCase());
+    expect(dstToken.vault.toLowerCase()).toBe(SODA_BTC_VAULT.toLowerCase());
+  });
+
+  it('still rejects an unknown hub token that is neither a Sonic spoke token nor a hub asset', async () => {
+    const result = await sodax.bridge.createBridgeIntent(sonicWithdrawInput(SAMPLE_TOKEN, SAMPLE_TOKEN));
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.message).toContain('Unsupported spoke chain');
+    }
+  });
+});
+
 describe('BridgeService.bridge — integration error-path coverage', () => {
   it('propagates a BridgeCreateIntentError from createBridgeIntent (subset narrowing)', async () => {
     // `bridge()` first calls `createBridgeIntent`. When that returns `{ ok: false, error }`,
