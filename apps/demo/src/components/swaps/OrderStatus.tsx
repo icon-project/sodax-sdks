@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ChainKeys, useBackendSubmitSwapTxStatus, type SolverIntentStatusCode } from '@sodax/dapp-kit';
+import { useBackendSubmitSwapTxStatus, type SolverIntentStatusCode } from '@sodax/dapp-kit';
 import { formatUnits } from 'viem';
 import { ArrowRight, Check, Copy, ExternalLink, X } from 'lucide-react';
 import { Card } from '@/components/ui/card';
@@ -123,9 +123,6 @@ function shorten(value: string): string {
   return value;
 }
 
-/** The intent always settles on the Sonic hub, so its tx links there regardless of the swap's dst chain. */
-const HUB_CHAIN_KEY = ChainKeys.SONIC_MAINNET;
-
 // Both links are built directly from the hash — no fetch. SodaxScan's /messages/search page
 // resolves the hash client-side, so we never call its CORS-locked API.
 function txLinks(chainKey: string | undefined, txHash: string, scan = false): LinkRef[] {
@@ -150,7 +147,12 @@ function baseRows(order: Order): DetailRowData[] {
       // Src Tx → its own source-chain explorer; SodaxScan (per message) lives on the Intent Tx row.
       rows.push({ label: 'Src Tx', value: order.srcTxHash, links: txLinks(order.srcChainKey, order.srcTxHash) });
     }
-    rows.push({ label: 'Intent Tx', value: order.dstTxHash, links: txLinks(HUB_CHAIN_KEY, order.dstTxHash, true) });
+    // Intent settles on the Sonic hub; link only to SodaxScan (drop the chain explorer).
+    rows.push({
+      label: 'Intent Tx',
+      value: order.dstTxHash,
+      links: [{ label: 'SodaxScan', href: sodaxScanSearchUrl(order.dstTxHash) }],
+    });
     return rows;
   }
   return [{ label: 'Tx Hash', value: order.txHash, links: txLinks(order.srcChainKey, order.txHash, true) }];
