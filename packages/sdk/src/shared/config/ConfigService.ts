@@ -107,7 +107,6 @@ export class ConfigService {
   // `api` / `userConfig` are accepted but unused while initialize()'s dynamic fetch is disabled
   // (see TODO(config-v2) below); restore their assignments when re-enabling.
   constructor({ api, config, userConfig, logger, analytics, fee }: ConfigServiceConstructorParams) {
-    this.api = api;
     this.sodax = config;
     this.logger = logger ?? resolveLogger(undefined);
     this.analytics = analytics ?? noopAnalytics;
