@@ -24,6 +24,13 @@ on `main`.
   (The legacy `scripts/bump-versions.sh` is superseded by this flow; do not use it, as it bumps
   versions without consuming changesets or writing changelogs.)
 
+  > **First changesets-based release (one-time check):** `changeset version` bumps **from the
+  > version currently in each `package.json`**, so before the first changesets release those must
+  > already equal the latest **published** version. The 7 packages were aligned to `2.0.0-rc.17`
+  > (the last manually published `@sdks@` release) on the `feat/release-changeset` branch. If a
+  > newer version has shipped since, set all 7 `package.json` versions to that published value
+  > first, otherwise changesets will bump from a stale, lower base.
+
   **Release candidates (RC):** to produce `-rc.N` prerelease versions, enter changesets pre-release
   mode **before** the first RC and exit it for the stable release:
   ```bash
