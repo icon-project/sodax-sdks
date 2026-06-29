@@ -336,44 +336,62 @@ export class BridgeService {
   public async bridge<K extends SpokeChainKey>(
     _params: BridgeParams<K, false>,
   ): Promise<Result<TxHashPair, BridgeOrchestrationError>> {
-    const { params, timeout } = _params;
-    const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
-    try {
-      const txResult = await this.createBridgeIntent(_params);
-      // CreateBridgeIntentErrorCode ⊂ BridgeOrchestrationErrorCode, so SodaxError narrows correctly.
-      if (!txResult.ok) return { ok: false, error: txResult.error };
+    return this.config.analytics.trackResult('bridge', 'bridge', async () => {
+      const { params, timeout } = _params;
+      const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
+      try {
+        const txResult = await this.createBridgeIntent(_params);
+        // CreateBridgeIntentErrorCode ⊂ BridgeOrchestrationErrorCode, so SodaxError narrows correctly.
+        if (!txResult.ok) return { ok: false, error: txResult.error };
 
-      const verifyTxHashResult = await this.spoke.verifyTxHash({
-        txHash: txResult.value.tx,
-        chainKey: params.srcChainKey,
-      });
-      if (!verifyTxHashResult.ok) {
+        const verifyTxHashResult = await this.spoke.verifyTxHash({
+          txHash: txResult.value.tx,
+          chainKey: params.srcChainKey,
+        });
+        if (!verifyTxHashResult.ok) {
+          return {
+            ok: false,
+            error: verifyFailed('bridge', verifyTxHashResult.error, baseCtx),
+          };
+        }
+
+        const packetResult = await relayTxAndWaitPacket({
+          srcTxHash: txResult.value.tx,
+          data: txResult.value.relayData,
+          chainKey: params.srcChainKey,
+          relayerApiEndpoint: this.config.relay.relayerApiEndpoint,
+          timeout,
+        });
+        if (!packetResult.ok) return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'bridge', action: 'bridge', srcChainKey: baseCtx.srcChainKey, dstChainKey: baseCtx.dstChainKey }) };
+
+        return {
+          ok: true,
+          value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packetResult.value.dst_tx_hash },
+        };
+      } catch (error) {
+        if (isBridgeOrchestrationError(error)) return { ok: false, error };
         return {
           ok: false,
-          error: verifyFailed('bridge', verifyTxHashResult.error, baseCtx),
+          error: executionFailed('bridge', error, baseCtx),
         };
       }
-
-      const packetResult = await relayTxAndWaitPacket({
-        srcTxHash: txResult.value.tx,
-        data: txResult.value.relayData,
-        chainKey: params.srcChainKey,
-        relayerApiEndpoint: this.config.relay.relayerApiEndpoint,
-        timeout,
-      });
-      if (!packetResult.ok) return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'bridge', action: 'bridge', srcChainKey: baseCtx.srcChainKey, dstChainKey: baseCtx.dstChainKey }) };
-
-      return {
-        ok: true,
-        value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packetResult.value.dst_tx_hash },
-      };
-    } catch (error) {
-      if (isBridgeOrchestrationError(error)) return { ok: false, error };
-      return {
-        ok: false,
-        error: executionFailed('bridge', error, baseCtx),
-      };
-    }
+    },
+    {
+      start: () => ({
+        srcChainKey: _params.params.srcChainKey,
+        dstChainKey: _params.params.dstChainKey,
+        srcToken: _params.params.srcToken,
+        dstToken: _params.params.dstToken,
+        amount: _params.params.amount,
+        srcAddress: _params.params.srcAddress,
+        recipient: _params.params.recipient,
+      }),
+      success: value => ({
+        srcChainTxHash: value.srcChainTxHash,
+        dstChainTxHash: value.dstChainTxHash,
+      }),
+      failure: error => ({ code: error.code }),
+    });
   }
 
   /**
@@ -405,8 +423,8 @@ export class BridgeService {
     const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
     try {
       bridgeInvariant(params.amount > 0n, 'Amount must be greater than 0', { ...baseCtx, field: 'amount' });
-      const srcToken = this.config.getSpokeTokenFromOriginalAssetAddress(params.srcChainKey, params.srcToken);
-      const dstToken = this.config.getSpokeTokenFromOriginalAssetAddress(params.dstChainKey, params.dstToken);
+      const srcToken = this.resolveBridgeEndpointToken(params.srcChainKey, params.srcToken);
+      const dstToken = this.resolveBridgeEndpointToken(params.dstChainKey, params.dstToken);
 
       // Vault can only be used on Sonic
       bridgeInvariant(srcToken, `Unsupported spoke chain (${params.srcChainKey}) token: ${params.srcToken}`,
@@ -485,6 +503,21 @@ export class BridgeService {
         error: intentCreationFailed('bridge', error, baseCtx),
       };
     }
+  }
+
+  /**
+   * Resolves a bridge endpoint's {@link XToken} descriptor from a chain key + token address.
+   *
+   * Spoke endpoints (and hub-native tokens such as USDC/WETH/S whose on-chain address equals their
+   * hub asset) resolve by original asset address. On the hub a caller may instead hold a hub asset
+   * that has no spoke-token entry under the hub chain — e.g. a partner BTC fee held as the BTC hub
+   * asset, whose only spoke-token entry lives on Bitcoin. Resolve those by hub-asset address so the
+   * Sonic-sourced "withdraw directly" bridge can find the matching vault/decimals.
+   */
+  private resolveBridgeEndpointToken(chainKey: SpokeChainKey, token: string): XToken | undefined {
+    const spokeToken = this.config.getSpokeTokenFromOriginalAssetAddress(chainKey, token);
+    if (spokeToken) return spokeToken;
+    return isHubChainKeyType(chainKey) ? this.config.getXTokenFromHubAsset(token) : undefined;
   }
 
   /**

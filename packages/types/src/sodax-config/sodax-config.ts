@@ -1,5 +1,6 @@
 import type { TxPollingConfig } from '../shared/shared.js';
 import type { SodaxLoggerOption } from '../shared/logger.js';
+import type { AnalyticsOption } from '../shared/analytics.js';
 import type { DeepPartial } from '../utils/deep-partial.js';
 import {
   apiConfig,
@@ -64,6 +65,7 @@ export const bridgeConfig = {} satisfies BridgeDefaultConfig;
 
 export type SodaxOptionalConfig = {
   logger?: SodaxLoggerOption;
+  analytics?: AnalyticsOption; // Opt-in user-action analytics: an AnalyticsConfig or false (default, disabled). Resolved client-side; never fetched from or overwritten by the backend config.
   fee?: PartnerFee;
   swaps?: SwapsOptions;
   moneyMarket?: MoneyMarketOptions;

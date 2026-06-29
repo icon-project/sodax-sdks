@@ -37,6 +37,15 @@ src/
 └── dex/                # DEX (concentrated liquidity / AMM) shapes — has dedicated sub-path export
 ```
 
+## Client-side runtime options & cross-cutting tags (`shared/`)
+
+Two `Sodax` constructor options are **client-side runtime sinks**, deliberately kept OUT of the backend-fetched data contract and instead added to `SodaxOptionalConfig` / `SodaxOptions` (`sodax-config/sodax-config.ts`) so the dynamic-config swap never overwrites them:
+
+- `logger` ([`shared/logger.ts`](src/shared/logger.ts)) — `SodaxLogger` / `SodaxLoggerOption`. Developer diagnostics, **on by default** (`console`).
+- `analytics` ([`shared/analytics.ts`](src/shared/analytics.ts)) — `AnalyticsTracker` (a `(event) => void` callback), `AnalyticsEvent` (`feature` + `action` + `phase` + `level` + `data`), `AnalyticsConfig` (`tracker` + optional `level` + `features` allowlist), `AnalyticsFeatures`/`AnalyticsFeatureScope` (the allowlist: `true` | `{ actions }` per feature, or an array shorthand; omitting `features` tracks everything), `AnalyticsOption = AnalyticsConfig | false`. Product user-action tracking, **off by default**. The SDK-side resolution + emit gating is implemented in `@sodax/sdk` (`shared/analytics.ts`), mirroring `resolveLogger`.
+
+`SodaxFeature` ([`shared/features.ts`](src/shared/features.ts)) is the canonical list of SDK features (`swap`, `moneyMarket`, …, `leverageYield`). It lives here — the lowest layer — because both the error layer (`SodaxError.feature` in `@sodax/sdk`) and analytics depend on it; `@sodax/sdk`'s `errors/codes.ts` re-exports it (and keeps the runtime `SODAX_FEATURES` list). Add a new feature here, in one place.
+
 ## Root vs sub-path exports
 
 Only **two** entry points are exported via [`package.json` `exports`](package.json):

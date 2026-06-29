@@ -98,6 +98,18 @@ SDK diagnostics go through `SodaxLogger`, resolved from `new Sodax({ logger })`.
 - Avoid adding new direct `console.*` calls in service code.
 - Keep runtime logging separate from backend config data.
 
+## Analytics
+
+Separate from logging: the SDK can emit **structured, opt-in user-action events** to a consumer-supplied tracker. Unlike `logger`, analytics is **off by default** and events are structured (`feature` + `action` + `phase` + `level` + `data`) rather than free-form messages.
+
+- **Enable:** `new Sodax({ analytics: { tracker, level?, features? } })` where `tracker` is a `(event) => void` callback (e.g. `(event) => amplitude.track(event.action, event.data)`). The `analytics` option lives on `SodaxOptions` (in `@sodax/types`) next to `logger` and `fee` — client-side runtime, never on the backend-fetched `SodaxConfig`. Omit it (or pass `false`) to stay disabled.
+- **Types** live in `@sodax/types` (`shared/analytics.ts`): `AnalyticsTracker`, `AnalyticsEvent`, `AnalyticsConfig`, `AnalyticsFeatures`/`AnalyticsFeatureScope`, `AnalyticsOption = AnalyticsConfig | false`. The `feature` field is `SodaxFeature` (sourced from `@sodax/types`, re-exported from `errors/codes.ts`) so analytics events and `SodaxError`s share one feature taxonomy.
+- **Feature/action scoping is an allowlist.** `features` omitted → track everything. Otherwise only listed features emit: `{ swap: true, moneyMarket: { actions: ['supply','borrow'] } }` (a feature omitted from the object is OFF), or the array shorthand `['swap','moneyMarket']` (each fully tracked). `resolveAnalytics` normalizes this once into a `Map<feature, true | Set<action>>` (`null` = no scoping).
+- **Resolution** lives in `shared/analytics.ts` (`resolveAnalytics`, `noopAnalytics`, `ResolvedAnalytics`), defaulting to the no-op (disabled) emitter. The resolved emitter is held on `ConfigService` (`config.analytics`, `public readonly`) **outside** the swappable `SodaxConfig`, exactly like `config.logger` and `config.fee`.
+- **Emit gating** — `emit(feature, action, phase, build?, level?)` takes a **lazy thunk** invoked only when the event passes the enabled / feature+action allowlist / level gate, so payloads are never built when analytics is off or gated out. A throwing tracker is swallowed (fire-and-forget); analytics never breaks a feature flow.
+- **`trackResult` is the canonical instrumentation pattern.** Each public action method wraps its own body in an inline closure: `return this.config.analytics.trackResult('<feature>', '<action>', async () => { …action body… }, { start?, success?, failure? })`. It emits `start`, runs the body, then `success`/`failure` from the returned `Result`, returning it unchanged — one boundary call covers every internal return. Keep the body in the action method (no separate `*Impl` helper); any cheap pre-computation can sit above the `trackResult` call, but the work that can fail belongs inside the closure.
+- **Coverage — all features.** Every user-action flow is instrumented (action mirrors `context.action`): swap, moneyMarket (`supply`/`borrow`/`withdraw`/`repay`), bridge, staking, migration, dex, partner, recovery, leverageYield. Each `trackResult` call carries `data` builders: `start` emits the action inputs (chain keys, addresses, token(s), amount/ids — only fields present on that action's param type), `success` emits the public on-chain identifiers (tx hashes, intent/position ids), and `failure` emits `{ code: error.code }`. Builders reference the method parameter (`_params.params.<field>`) since they are siblings of the closure, and run lazily — never invoked when analytics is off or gated out. Add new fields the same way; keep amounts as `bigint` (the consumer tracker serializes).
+
 ## Build And Tests
 
 ```bash

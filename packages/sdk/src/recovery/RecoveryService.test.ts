@@ -7,6 +7,7 @@ import type { HubProvider } from '../shared/types/types.js';
 import type { SpokeService } from '../shared/services/spoke/SpokeService.js';
 import { assetManagerAbi } from '../shared/abis/index.js';
 import { encodeAddress } from '../shared/utils/shared-utils.js';
+import { noopAnalytics } from '../shared/analytics.js';
 import { RecoveryService } from './RecoveryService.js';
 
 describe('RecoveryService.withdrawHubAsset', () => {
@@ -20,6 +21,7 @@ describe('RecoveryService.withdrawHubAsset', () => {
 
     const config = {
       getSpokeTokenFromOriginalAssetAddress: vi.fn(() => ({ hubAsset })),
+      analytics: noopAnalytics,
     } as unknown as ConfigService;
     const hubProvider = {
       config,
