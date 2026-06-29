@@ -1,4 +1,5 @@
 import { SelectChain } from '@/components/swaps/SelectChain';
+import { SelectToken } from '@/components/swaps/SelectToken';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -12,7 +13,6 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { calculateExchangeRate, formatMutationFailureMessage, formatTokenAmount } from '@/lib/utils';
 import { parseUnits, formatUnits } from 'viem';
 import BigNumber from 'bignumber.js';
@@ -521,26 +521,12 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
               onChange={e => onSourceAmountChange(e.target.value)}
             />
           </div>
-          <Select
+          <SelectToken
+            tokens={getSupportedSolverTokens(src.chain)}
             value={src.token?.symbol}
-            onValueChange={v => {
-              setSrc(prev => ({
-                ...prev,
-                token: getSupportedSolverTokens(src.chain).find(token => token.symbol === v) as XToken,
-              }));
-            }}
-          >
-            <SelectTrigger className="w-[110px]">
-              <SelectValue placeholder="Token" />
-            </SelectTrigger>
-            <SelectContent>
-              {getSupportedSolverTokens(src.chain).map(token => (
-                <SelectItem key={`${token.address}-${token.symbol}`} value={token.symbol}>
-                  {token.symbol}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onSelect={token => setSrc(prev => ({ ...prev, token }))}
+            className="w-[110px]"
+          />
         </div>
         <div className="mix-blend-multiply text-black text-(length:--body-comfortable) font-medium font-['InterRegular'] flex gap-1">
           <span className="hidden sm:inline">Balance:</span>
@@ -598,26 +584,12 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
               readOnly
             />
           </div>
-          <Select
+          <SelectToken
+            tokens={getSupportedSolverTokens(dst.chain)}
             value={dst.token?.symbol}
-            onValueChange={v => {
-              setDst(prev => ({
-                ...prev,
-                token: getSupportedSolverTokens(dst.chain).find(token => token.symbol === v) as XToken,
-              }));
-            }}
-          >
-            <SelectTrigger className="w-[110px]">
-              <SelectValue placeholder="Token" />
-            </SelectTrigger>
-            <SelectContent>
-              {getSupportedSolverTokens(dst.chain).map(token => (
-                <SelectItem key={`${token.address}-${token.symbol}`} value={token.symbol}>
-                  {token.symbol}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onSelect={token => setDst(prev => ({ ...prev, token }))}
+            className="w-[110px]"
+          />
         </div>
         <div className="mix-blend-multiply text-black text-(length:--body-comfortable) font-medium font-['InterRegular'] flex gap-1">
           <span className="hidden sm:inline">Balance:</span>
