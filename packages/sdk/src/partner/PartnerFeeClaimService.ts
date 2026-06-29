@@ -738,42 +738,54 @@ export class PartnerFeeClaimService {
   public async cancelIntent<Raw extends boolean>(
     _params: PartnerFeeClaimCancelAction<HubChainKey, Raw>,
   ): Promise<Result<TxReturnType<HubChainKey, Raw>>> {
-    const { params } = _params;
-    try {
-      invariant(isHubChainKeyType(params.srcChainKey), 'PartnerFeeClaimService only supports Hub srcChainKey');
-      invariant(
-        isOptionalEvmWalletProviderType(_params.walletProvider),
-        'PartnerFeeClaimService only supports Evm wallet provider',
-      );
-      invariant(this.protocolIntentsContract, 'protocolIntentsContract is not configured in solver config');
+    return this.config.analytics.trackResult('partner', 'cancelIntent', async () => {
+      const { params } = _params;
+      try {
+        invariant(isHubChainKeyType(params.srcChainKey), 'PartnerFeeClaimService only supports Hub srcChainKey');
+        invariant(
+          isOptionalEvmWalletProviderType(_params.walletProvider),
+          'PartnerFeeClaimService only supports Evm wallet provider',
+        );
+        invariant(this.protocolIntentsContract, 'protocolIntentsContract is not configured in solver config');
 
-      const rawTx = {
-        from: params.srcAddress,
-        to: this.protocolIntentsContract,
-        value: 0n,
-        data: encodeFunctionData({
-          abi: ProtocolIntentsAbi,
-          functionName: 'cancelIntent',
-          args: [params.fromToken, params.toToken],
-        }),
-      };
+        const rawTx = {
+          from: params.srcAddress,
+          to: this.protocolIntentsContract,
+          value: 0n,
+          data: encodeFunctionData({
+            abi: ProtocolIntentsAbi,
+            functionName: 'cancelIntent',
+            args: [params.fromToken, params.toToken],
+          }),
+        };
 
-      if (_params.raw) {
+        if (_params.raw) {
+          return {
+            ok: true,
+            value: rawTx satisfies TxReturnType<HubChainKey, true> as TxReturnType<HubChainKey, Raw>,
+          };
+        }
+
+        const txHash = await _params.walletProvider.sendTransaction(rawTx);
+
         return {
           ok: true,
-          value: rawTx satisfies TxReturnType<HubChainKey, true> as TxReturnType<HubChainKey, Raw>,
+          value: txHash satisfies TxReturnType<HubChainKey, false> as TxReturnType<HubChainKey, Raw>,
         };
+      } catch (error) {
+        return { ok: false, error };
       }
-
-      const txHash = await _params.walletProvider.sendTransaction(rawTx);
-
-      return {
-        ok: true,
-        value: txHash satisfies TxReturnType<HubChainKey, false> as TxReturnType<HubChainKey, Raw>,
-      };
-    } catch (error) {
-      return { ok: false, error };
-    }
+    },
+    {
+      start: () => ({
+        srcChainKey: _params.params.srcChainKey,
+        srcAddress: _params.params.srcAddress,
+        fromToken: _params.params.fromToken,
+        toToken: _params.params.toToken,
+      }),
+      success: value => ({ txHash: value }),
+      failure: error => ({ code: isSodaxError(error) ? error.code : undefined }),
+    });
   }
 
   /**
