@@ -6,6 +6,7 @@ import type { ConfigService } from '../shared/config/ConfigService.js';
 import type { HubProvider } from '../shared/types/types.js';
 import type { SpokeService } from '../shared/services/spoke/SpokeService.js';
 import { ProtocolIntentsAbi } from '../shared/abis/protocolIntents.abi.js';
+import { noopAnalytics } from '../shared/index.js';
 import { PartnerFeeClaimService } from './PartnerFeeClaimService.js';
 
 const PROTOCOL_INTENTS = '0xaFf2EDb3057ed6f9C1dA6c930b8ddDf2beE573A5' as Address;
@@ -22,6 +23,7 @@ function makeService(overrides: {
   const config = {
     solver: { protocolIntentsContract: PROTOCOL_INTENTS },
     logger: { warn: vi.fn(), error: vi.fn() },
+    analytics: noopAnalytics,
     isValidIntentRelayChainId: overrides.isValidIntentRelayChainId ?? (() => true),
   } as unknown as ConfigService;
   const hubProvider = {
