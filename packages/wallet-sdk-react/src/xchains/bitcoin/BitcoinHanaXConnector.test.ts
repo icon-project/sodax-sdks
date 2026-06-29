@@ -15,9 +15,13 @@ const { BitcoinHanaXConnector } = await import('./BitcoinHanaXConnector.js');
 
 const HANA_PROVIDER_ID = 'hanaWallet.bitcoin';
 
+// The connector detects Hana via a local cast (it doesn't augment global `Window`),
+// so the test casts too when planting/clearing the window surface.
+type HanaWin = { hanaWallet?: { bitcoin?: unknown } };
+
 /** Mark Hana as installed on the happy-dom window. */
 function installHana(): void {
-  window.hanaWallet = { bitcoin: {} };
+  (window as HanaWin).hanaWallet = { bitcoin: {} };
 }
 
 beforeEach(() => {
@@ -29,7 +33,7 @@ afterEach(() => {
   // Unstub first: the SSR test stubs `window` to undefined, so clearing
   // `window.hanaWallet` must happen only after the real window is restored.
   vi.unstubAllGlobals();
-  if (typeof window !== 'undefined') window.hanaWallet = undefined;
+  if (typeof window !== 'undefined') (window as HanaWin).hanaWallet = undefined;
 });
 
 describe('BitcoinHanaXConnector — constructor + getters', () => {

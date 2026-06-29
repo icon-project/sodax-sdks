@@ -5,16 +5,9 @@ import { AddressPurpose, MessageSigningProtocols } from 'sats-connect';
 import { WALLET_METADATA } from '@/constants.js';
 import { BitcoinXConnector } from './BitcoinXConnector.js';
 
-// Hana ships a sats-connect-compatible Bitcoin provider at window.hanaWallet.bitcoin.
-// It is read only for install detection — every RPC goes through sats-connect's
-// request() pinned to HANA_PROVIDER_ID, so the surface is typed as opaque here.
-declare global {
-  interface Window {
-    hanaWallet?: {
-      bitcoin?: Record<string, unknown>;
-    };
-  }
-}
+// Detected by structural assertion, not a `declare global` Window augmentation:
+// apps/demo augments window.hanaWallet with a different shape, which would clash.
+type HanaBitcoinWindow = { hanaWallet?: { bitcoin?: unknown } };
 
 // Pins every sats-connect call to Hana so requests never fall through to another
 // installed sats-connect wallet (e.g. Xverse). `request(method, params, providerId)`
@@ -217,7 +210,8 @@ export class BitcoinHanaXConnector extends BitcoinXConnector {
   }
 
   public static isAvailable(): boolean {
-    return typeof window !== 'undefined' && !!window.hanaWallet?.bitcoin;
+    if (typeof window === 'undefined') return false;
+    return !!(window as HanaBitcoinWindow).hanaWallet?.bitcoin;
   }
 
   public override get isInstalled(): boolean {
