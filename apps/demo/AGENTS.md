@@ -87,8 +87,18 @@ pnpm dev                      # terminal B
 
 Requires `@sentry/react` installed (listed in `package.json`). To send to the **real** services instead, set `VITE_DD_INTAKE_URL` / `VITE_SENTRY_DSN` (drop the tunnel) — then DNS is required, as expected.
 
+## Analytics tracking
+
+The demo enables the SDK's opt-in user-action analytics so every feature flow it exercises is tracked.
+
+- `src/lib/analytics.ts` — `createDemoAnalytics()`: returns the `analytics` option for `new Sodax({ analytics })` (an `AnalyticsConfig` with `level: 'detailed'` and a `tracker` callback). The `tracker` logs each `AnalyticsEvent` to the console (`[Sodax Analytics] feature.action:phase`) and re-dispatches it as a `sodax:analytics` **window CustomEvent** (`ANALYTICS_EVENT_NAME`) so a UI panel can subscribe and render a live feed. A real integrator forwards `event` to their product-analytics backend instead (e.g. `(event) => amplitude.track(event.action, event.data)`).
+- Wired in `providers.tsx` via `sodaxConfig.analytics = createDemoAnalytics() ?? false`. Enabled by default; set `VITE_ENABLE_ANALYTICS=false` to disable (the helper returns `undefined`, so the SDK stays on its disabled default).
+- **Feature scoping.** Edit the `ANALYTICS_FEATURES` constant in `src/lib/analytics.ts` (kept in code, not env, so it's visible to integrators reading the sample). It is passed straight through as the SDK's `features` allowlist: `undefined` → all features/actions; `{ swap: true, moneyMarket: { actions: ['supply'] } }` → only those (a feature omitted from the object is OFF); array shorthand `['swap']` → fully-tracked features. Gated-out features/actions never reach the `tracker` and their `data` builders never run.
+- What flows: every feature's user-action methods emit `start` / `success` / `failure` — exercise any feature page and watch the console / a `sodax:analytics` listener. No demo change is needed as SDK emit-sites are enriched.
+
 ## Common pitfalls
 
+- **Chain logos come from `@sodax/types`, not local files.** `baseChainInfo[key].logo` is the single source of truth (a `raw.githubusercontent.com` URL hosted in `packages/assets`). `src/constants.ts` derives `availableChains[].icon` / `EVM_CHAIN_ICONS` / `getChainIcon` / `chainIdToChainLogo` from it — don't reintroduce hardcoded `/chain/*.png` paths (the demo's `public/` has no `chain/` folder, so those 404). The logo URLs only resolve once `packages/assets` is on `main`; on a feature branch, point `CHAIN_LOGO_BASE_URL` at the branch to preview. (`src/lib/chains.ts` is an unused duplicate of the old logic — ignore it.)
 - **Node polyfills.** Uses `@bangjelkoski/vite-plugin-node-polyfills` (Bitcoin/Solana deps pull in `buffer`, `crypto`, etc.). If a new dependency requires a polyfill, add it there rather than in app code.
 - **Env vars.** Vite-side env vars must be `VITE_*` (e.g. `VITE_WALLETCONNECT_PROJECT_ID`). The RPC overrides in `providers.tsx` read from `process.env.*` which is replaced at build time — leaving them unset is fine (public fallbacks).
 - **Build memory.** Build script sets `--max-old-space-size=8192` because the bundle is large. Don't drop that flag.

@@ -34,6 +34,7 @@ import { isAddress } from 'viem';
 import type { BackendApiService } from '../../backendApi/BackendApiService.js';
 import { mergeSodaxConfig } from './mergeSodaxConfig.js';
 import { resolveLogger } from '../logger.js';
+import { noopAnalytics, type ResolvedAnalytics } from '../analytics.js';
 
 export type ConfigServiceConstructorParams = {
   api: BackendApiService;
@@ -49,6 +50,11 @@ export type ConfigServiceConstructorParams = {
    * in {@link ConfigService.initialize} never replaces it. Defaults to the console logger when omitted.
    */
   logger?: SodaxLogger;
+  /**
+   * Pre-resolved analytics emitter. Like {@link logger}, held outside the swappable `SodaxConfig` so a
+   * dynamic config fetch never replaces it. Defaults to the no-op (disabled) emitter when omitted.
+   */
+  analytics?: ResolvedAnalytics;
   /**
    * Global partner fee (the `fee` option passed to `new Sodax(...)`). Held outside the swappable
    * `SodaxConfig` — like {@link logger} — so a dynamic config fetch never replaces it. The backend
@@ -72,6 +78,13 @@ export class ConfigService {
   public readonly logger: SodaxLogger;
 
   /**
+   * Analytics emitter. Resolved once at construction and kept independent of {@link sodax} so that
+   * {@link initialize}'s dynamic-config swap never clobbers it. Read by services via `config.analytics`;
+   * disabled (no-op) unless the consumer passed an `analytics` config to `new Sodax(...)`.
+   */
+  public readonly analytics: ResolvedAnalytics;
+
+  /**
    * Global partner fee. Resolved once at construction and kept independent of {@link sodax} so that
    * {@link initialize}'s dynamic-config swap never clobbers it. The backend never supplies it — it is
    * a client-side option set via `new Sodax({ fee })`. Per-feature overrides live on the feature config.
@@ -91,11 +104,12 @@ export class ConfigService {
   private chainToSupportedTokenAddressMap!: Map<SpokeChainKey, Set<string>>;
   private hubAssetToXTokenMap!: Map<Address, XToken>;
 
-  constructor({ api, config, userConfig, logger, fee }: ConfigServiceConstructorParams) {
+  constructor({ api, config, userConfig, logger, analytics, fee }: ConfigServiceConstructorParams) {
     this.api = api;
     this.sodax = config;
     this.userConfig = userConfig;
     this.logger = logger ?? resolveLogger(undefined);
+    this.analytics = analytics ?? noopAnalytics;
     this.fee = fee;
     this.loadSodaxConfigDataStructures(config);
   }

@@ -37,6 +37,15 @@ src/
 └── dex/                # DEX (concentrated liquidity / AMM) shapes — has dedicated sub-path export
 ```
 
+## Client-side runtime options & cross-cutting tags (`shared/`)
+
+Two `Sodax` constructor options are **client-side runtime sinks**, deliberately kept OUT of the backend-fetched data contract and instead added to `SodaxOptionalConfig` / `SodaxOptions` (`sodax-config/sodax-config.ts`) so the dynamic-config swap never overwrites them:
+
+- `logger` ([`shared/logger.ts`](src/shared/logger.ts)) — `SodaxLogger` / `SodaxLoggerOption`. Developer diagnostics, **on by default** (`console`).
+- `analytics` ([`shared/analytics.ts`](src/shared/analytics.ts)) — `AnalyticsTracker` (a `(event) => void` callback), `AnalyticsEvent` (`feature` + `action` + `phase` + `level` + `data`), `AnalyticsConfig` (`tracker` + optional `level` + `features` allowlist), `AnalyticsFeatures`/`AnalyticsFeatureScope` (the allowlist: `true` | `{ actions }` per feature, or an array shorthand; omitting `features` tracks everything), `AnalyticsOption = AnalyticsConfig | false`. Product user-action tracking, **off by default**. The SDK-side resolution + emit gating is implemented in `@sodax/sdk` (`shared/analytics.ts`), mirroring `resolveLogger`.
+
+`SodaxFeature` ([`shared/features.ts`](src/shared/features.ts)) is the canonical list of SDK features (`swap`, `moneyMarket`, …, `leverageYield`). It lives here — the lowest layer — because both the error layer (`SodaxError.feature` in `@sodax/sdk`) and analytics depend on it; `@sodax/sdk`'s `errors/codes.ts` re-exports it (and keeps the runtime `SODAX_FEATURES` list). Add a new feature here, in one place.
+
 ## Root vs sub-path exports
 
 Only **two** entry points are exported via [`package.json` `exports`](package.json):
@@ -54,6 +63,19 @@ Swap tokens live in [`src/swap/swap.ts`](src/swap/swap.ts) as two per-chain `Rec
 - `stagingSwapSupportedTokens` — tokens supported **only** in the **staging** solver environment.
 
 The two lists are **disjoint per chain** (a token lives in exactly one). The staging solver supports the union — every production token plus the staging-only set. Accessors: `getSupportedSolverTokens` returns the production list only; `getStagingSolverTokens` returns the full staging set (production + staging-only). `isSwapSupportedToken(chainId, token)` validates against the union and does **not** gate on environment — the caller targets the correct one. Invariants (intra-list dedup, disjointness, staging-superset accessor, union validation) are enforced by [`src/chains/tokens-dedup.test.ts`](src/chains/tokens-dedup.test.ts) and [`src/swap/swap.test.ts`](src/swap/swap.test.ts). Add or move entries via the `add-token` skill (see Rules) and always confirm the target environment first.
+
+## Chain logos
+
+Each `baseChainInfo` entry carries a `logo` URL (default chain logo). The binary
+files are **not** in this package — they live in [`packages/assets`](../assets/AGENTS.md)
+and are served via `raw.githubusercontent.com`. `CHAIN_LOGO_BASE_URL` (exported
+from [`src/chains/chains.ts`](src/chains/chains.ts)) is the directory base, and
+each logo URL is `${CHAIN_LOGO_BASE_URL}/<chainKey>.png` — so the filename in
+`packages/assets/chain/` must equal the `ChainKeys` value. Adding a chain logo:
+drop `<chainKey>.png` in `packages/assets/chain/` and set the new entry's `logo`
+to `chainLogo(ChainKeys.<NAME>)`. Invariants are covered by
+[`src/chains/chains-logo.test.ts`](src/chains/chains-logo.test.ts). Consumers
+(demo, web app) must read `baseChainInfo[key].logo`, not hardcode icon paths.
 
 ## Build
 

@@ -173,8 +173,11 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.SUI_MAINNET].supportedTokens.WAL,
     spokeChainConfig[ChainKeys.SUI_MAINNET].supportedTokens.NAVX,
   ] as const satisfies XToken[],
-  // Injective is currently staging-only — see stagingSwapSupportedTokens
-  [ChainKeys.INJECTIVE_MAINNET]: [] as const satisfies XToken[],
+  [ChainKeys.INJECTIVE_MAINNET]: [
+    spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.INJ,
+    spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.bnUSD,
+    spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.USDC,
+  ] as const satisfies XToken[],
   [ChainKeys.NEAR_MAINNET]: [
     spokeChainConfig[ChainKeys.NEAR_MAINNET].supportedTokens.NEAR,
     spokeChainConfig[ChainKeys.NEAR_MAINNET].supportedTokens.bnUSD,
@@ -270,12 +273,7 @@ export const stagingSwapSupportedTokens = {
   [ChainKeys.ICON_MAINNET]: [],
   [ChainKeys.STELLAR_MAINNET]: [],
   [ChainKeys.SUI_MAINNET]: [spokeChainConfig[ChainKeys.SUI_MAINNET].supportedTokens.USDT] as const satisfies XToken[],
-  [ChainKeys.INJECTIVE_MAINNET]: [
-    spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.INJ,
-    spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.bnUSD,
-    spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.USDC,
-    // spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.SODA, // NOTE: not in solver wiki
-  ] as const satisfies XToken[],
+  [ChainKeys.INJECTIVE_MAINNET]: [] as const satisfies XToken[],
   [ChainKeys.NEAR_MAINNET]: [],
   [ChainKeys.BITCOIN_MAINNET]: [],
   [ChainKeys.ETHEREUM_MAINNET]: [
