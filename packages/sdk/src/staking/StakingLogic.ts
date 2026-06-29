@@ -1,5 +1,5 @@
 // packages/sdk/src/services/staking/StakingLogic.ts
-import { type Address, type Hex, type HttpTransport, type PublicClient, encodeFunctionData } from 'viem';
+import { type Address, type Hex, type PublicClient, encodeFunctionData } from 'viem';
 import { stakedSodaAbi } from '../shared/abis/stakedSoda.abi.js';
 import { stakingRouterAbi } from '../shared/abis/stakingRouter.abi.js';
 import type { EvmContractCall, UserUnstakeInfo } from '@sodax/types';
@@ -28,7 +28,7 @@ export class StakingLogic {
   public static async getUnstakeSodaRequests(
     stakedSoda: Address,
     user: Address,
-    publicClient: PublicClient<HttpTransport>,
+    publicClient: PublicClient,
   ): Promise<readonly UserUnstakeInfo[]> {
     const requests = await publicClient.readContract({
       address: stakedSoda,
@@ -151,7 +151,7 @@ export class StakingLogic {
    * @param publicClient - Viem public client connected to the hub chain.
    * @returns Total SODA deposited across all stakers.
    */
-  public static async getXSodaTotalAssets(xSoda: Address, publicClient: PublicClient<HttpTransport>): Promise<bigint> {
+  public static async getXSodaTotalAssets(xSoda: Address, publicClient: PublicClient): Promise<bigint> {
     return publicClient.readContract({
       address: xSoda,
       abi: stakedSodaAbi,
@@ -170,7 +170,7 @@ export class StakingLogic {
   public static async convertSodaToXSodaShares(
     xSoda: Address,
     assets: bigint,
-    publicClient: PublicClient<HttpTransport>,
+    publicClient: PublicClient,
   ): Promise<bigint> {
     return publicClient.readContract({
       address: xSoda,
@@ -190,7 +190,7 @@ export class StakingLogic {
   public static async convertXSodaSharesToSoda(
     xSoda: Address,
     shares: bigint,
-    publicClient: PublicClient<HttpTransport>,
+    publicClient: PublicClient,
   ): Promise<bigint> {
     return publicClient.readContract({
       address: xSoda,
@@ -207,11 +207,7 @@ export class StakingLogic {
    * @param publicClient - Viem public client connected to the hub chain.
    * @returns The xSoda shares that would be minted for `assets`.
    */
-  public static async previewXSodaDeposit(
-    xSoda: Address,
-    assets: bigint,
-    publicClient: PublicClient<HttpTransport>,
-  ): Promise<bigint> {
+  public static async previewXSodaDeposit(xSoda: Address, assets: bigint, publicClient: PublicClient): Promise<bigint> {
     return publicClient.readContract({
       address: xSoda,
       abi: stakedSodaAbi,
@@ -227,11 +223,7 @@ export class StakingLogic {
    * @param publicClient - Viem public client connected to the hub chain.
    * @returns The SODA assets that would need to be deposited to mint `shares`.
    */
-  public static async previewXSodaMint(
-    xSoda: Address,
-    shares: bigint,
-    publicClient: PublicClient<HttpTransport>,
-  ): Promise<bigint> {
+  public static async previewXSodaMint(xSoda: Address, shares: bigint, publicClient: PublicClient): Promise<bigint> {
     return publicClient.readContract({
       address: xSoda,
       abi: stakedSodaAbi,
@@ -250,7 +242,7 @@ export class StakingLogic {
   public static async previewXSodaWithdraw(
     xSoda: Address,
     assets: bigint,
-    publicClient: PublicClient<HttpTransport>,
+    publicClient: PublicClient,
   ): Promise<bigint> {
     return publicClient.readContract({
       address: xSoda,
@@ -267,11 +259,7 @@ export class StakingLogic {
    * @param publicClient - Viem public client connected to the hub chain.
    * @returns The SODA assets that would be withdrawn for `shares`.
    */
-  public static async previewXSodaRedeem(
-    xSoda: Address,
-    shares: bigint,
-    publicClient: PublicClient<HttpTransport>,
-  ): Promise<bigint> {
+  public static async previewXSodaRedeem(xSoda: Address, shares: bigint, publicClient: PublicClient): Promise<bigint> {
     return publicClient.readContract({
       address: xSoda,
       abi: stakedSodaAbi,
@@ -432,7 +420,7 @@ export class StakingLogic {
   public static async estimateXSodaAmount(
     stakingRouter: Address,
     amount: bigint,
-    publicClient: PublicClient<HttpTransport>,
+    publicClient: PublicClient,
   ): Promise<readonly [bigint, bigint]> {
     return publicClient.readContract({
       address: stakingRouter,
@@ -457,7 +445,7 @@ export class StakingLogic {
   public static async estimateInstantUnstake(
     stakingRouter: Address,
     amount: bigint,
-    publicClient: PublicClient<HttpTransport>,
+    publicClient: PublicClient,
   ): Promise<bigint> {
     return publicClient.readContract({
       address: stakingRouter,

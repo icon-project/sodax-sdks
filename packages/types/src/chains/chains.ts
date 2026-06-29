@@ -3,7 +3,7 @@
  * Forbidden to import types from other packages in this file (exception for shared types)!
  */
 
-import type { Address, Hex, TxPollingConfig } from '../shared/shared.js';
+import type { Address, Hex, RpcFailoverConfig, TxPollingConfig } from '../shared/shared.js';
 import {
   sonicSupportedTokens,
   redbellySupportedTokens,
@@ -451,7 +451,8 @@ export type HubConfig = {
   nativeToken: Address;
   wrappedNativeToken: Address;
   rpcUrl: string;
-} & BaseSpokeChainConfig<'EVM'>;
+} & BaseSpokeChainConfig<'EVM'> &
+  RpcFailoverConfig;
 
 export type EvmSpokeChainConfig = BaseSpokeChainConfig<'EVM'> & {
   addresses: {
@@ -469,7 +470,7 @@ export type SonicSpokeChainConfig = BaseSpokeChainConfig<'EVM'> & {
   };
   nativeToken: Address;
   rpcUrl: string;
-};
+} & RpcFailoverConfig;
 
 export type SolanaChainConfig = BaseSpokeChainConfig<'SOLANA'> & {
   addresses: {
