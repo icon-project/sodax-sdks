@@ -37,7 +37,14 @@ export function usePartnerCancelIntent({
         queryKey: ['partner', 'feeClaim', 'assetsBalances', vars.params.srcAddress],
       });
       queryClient.invalidateQueries({
-        queryKey: ['partner', 'feeClaim', 'userIntent', vars.params.srcAddress],
+        queryKey: [
+          'partner',
+          'feeClaim',
+          'userIntent',
+          vars.params.srcAddress,
+          vars.params.fromToken,
+          vars.params.toToken,
+        ],
       });
       await mutationOptions?.onSuccess?.(data, vars, ctx);
     },

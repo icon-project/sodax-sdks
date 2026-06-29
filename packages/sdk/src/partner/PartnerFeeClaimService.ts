@@ -524,6 +524,11 @@ export class PartnerFeeClaimService {
    * This is the low-level building block. Use `swap` for the full flow that also waits for
    * the solver to execute the intent.
    *
+   * Guards against same-token intents: if the configured output token equals `fromToken` the solver
+   * cannot fill the swap, so the call is rejected with `VALIDATION_FAILED` before any transaction is
+   * built. The guard fails closed — if the preference lookup fails the call returns that error rather
+   * than submitting an intent that may become unfillable.
+   *
    * @param _params - Action descriptor containing:
    *   - `params.srcChainKey` — must be the hub chain key (Sonic).
    *   - `params.srcAddress` — partner's EVM address; also used as the intent creator.
@@ -549,6 +554,32 @@ export class PartnerFeeClaimService {
         this.config.solver.protocolIntentsContract,
         'protocolIntentsContract is not configured in solver config',
       );
+
+      // Same-token guard: the solver cannot fill a swap whose output token equals its input token.
+      // Creating the intent anyway pulls the partner's funds into an unfillable intent (deadline 0,
+      // no auto-refund). This is enforced here — the method that actually encodes and submits the
+      // ProtocolIntents call — so direct callers are protected, not only the `swap` flow.
+      // Fail closed: if the preference lookup fails we cannot prove the pair is safe, so block rather
+      // than risk recreating the stuck-funds scenario this guard exists to prevent.
+      const prefs = await this.getAutoSwapPreferences(params.srcAddress);
+      if (!prefs.ok) return prefs;
+      if (prefs.value.outputToken.toLowerCase() === params.fromToken.toLowerCase()) {
+        return {
+          ok: false,
+          error: new SodaxError(
+            'VALIDATION_FAILED',
+            'Auto-swap output token equals the fee token; the solver cannot swap a token into itself. Withdraw the fee token directly (bridge/transfer) or change the swap preference before claiming.',
+            {
+              feature: 'partner',
+              context: {
+                action: 'createIntentAutoSwap',
+                fromToken: params.fromToken,
+                outputToken: prefs.value.outputToken,
+              },
+            },
+          ),
+        };
+      }
 
       // currently we only allow Sodax solver to fille the intent using best price
       // IMPORTANT: if this is changed, quote needs to be used to create slippage based min output amount
@@ -605,31 +636,17 @@ export class PartnerFeeClaimService {
    *
    *   On failure the `error` is tagged:
    *   - `WAIT_INTENT_AUTO_SWAP_FAILED` — transaction was submitted but receipt polling failed.
-   *   - Error from `createIntentAutoSwap` — if the initial submission failed.
+   *   - Error from `createIntentAutoSwap` — if the initial submission failed, including
+   *     `VALIDATION_FAILED` when the output token equals the fee token (same-token guard) or the
+   *     preference lookup that backs the guard fails.
    *   - Error from `SolverApiService.postExecution` — if the solver notification failed.
    */
   public async swap(
     _params: PartnerFeeClaimSwapAction<HubChainKey, false>,
   ): Promise<Result<IntentAutoSwapResult>> {
     try {
-      // Same-token guard: the solver cannot fill a swap whose output token equals its input token.
-      // Creating the intent anyway pulls the partner's funds into an unfillable intent (deadline 0,
-      // no auto-refund). Reject up front and point the caller to the withdraw-direct path instead.
-      const prefs = await this.getAutoSwapPreferences(_params.params.srcAddress);
-      if (prefs.ok && prefs.value.outputToken.toLowerCase() === _params.params.fromToken.toLowerCase()) {
-        return {
-          ok: false,
-          error: new SodaxError(
-            'VALIDATION_FAILED',
-            'Auto-swap output token equals the fee token; the solver cannot swap a token into itself. Withdraw the fee token directly (bridge/transfer) or change the swap preference before claiming.',
-            {
-              feature: 'partner',
-              context: { action: 'swap', fromToken: _params.params.fromToken, outputToken: prefs.value.outputToken },
-            },
-          ),
-        };
-      }
-
+      // The same-token guard (output token === fee token) is enforced inside `createIntentAutoSwap`,
+      // which this flow delegates to, so it applies here too without duplication.
       const txHash = await this.createIntentAutoSwap(_params);
 
       if (!txHash.ok) {

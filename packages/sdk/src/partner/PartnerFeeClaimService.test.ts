@@ -1,6 +1,6 @@
 // packages/sdk/src/partner/PartnerFeeClaimService.test.ts
 import { decodeFunctionData, type Address, type Hex } from 'viem';
-import { ChainKeys } from '@sodax/types';
+import { ChainKeys, type IEvmWalletProvider } from '@sodax/types';
 import { describe, expect, it, vi } from 'vitest';
 import type { ConfigService } from '../shared/config/ConfigService.js';
 import type { HubProvider } from '../shared/types/types.js';
@@ -12,13 +12,17 @@ const PROTOCOL_INTENTS = '0xaFf2EDb3057ed6f9C1dA6c930b8ddDf2beE573A5' as Address
 const SRC = '0x6c5f91fd68dd7b3a1aedb0f09946659272f523a4' as Address;
 const USDC = '0x29219dd400f2Bf60E5a23d13Be72B486D4038894' as Address;
 
+const EVM_WALLET = { chainType: 'EVM', sendTransaction: vi.fn() } as unknown as IEvmWalletProvider;
+
 function makeService(overrides: {
   readContract?: ReturnType<typeof vi.fn>;
   sendTransaction?: ReturnType<typeof vi.fn>;
+  isValidIntentRelayChainId?: (chainId: bigint) => boolean;
 }): PartnerFeeClaimService {
   const config = {
     solver: { protocolIntentsContract: PROTOCOL_INTENTS },
     logger: { warn: vi.fn(), error: vi.fn() },
+    isValidIntentRelayChainId: overrides.isValidIntentRelayChainId ?? (() => true),
   } as unknown as ConfigService;
   const hubProvider = {
     publicClient: { readContract: overrides.readContract ?? vi.fn() },
@@ -56,7 +60,7 @@ describe('PartnerFeeClaimService.cancelIntent', () => {
     const result = await service.cancelIntent({
       raw: false,
       params: { srcChainKey: ChainKeys.SONIC_MAINNET, srcAddress: SRC, fromToken: USDC, toToken: USDC },
-      walletProvider: { chainType: 'EVM', sendTransaction } as never,
+      walletProvider: { chainType: 'EVM', sendTransaction } as unknown as IEvmWalletProvider,
     });
 
     expect(result.ok).toBe(true);
@@ -75,7 +79,7 @@ describe('PartnerFeeClaimService.swap same-token guard', () => {
     const result = await service.swap({
       raw: false,
       params: { srcChainKey: ChainKeys.SONIC_MAINNET, srcAddress: SRC, fromToken: USDC, amount: 1_000_000n },
-      walletProvider: { sendTransaction: vi.fn() } as never,
+      walletProvider: EVM_WALLET,
     });
 
     expect(result.ok).toBe(false);
@@ -100,5 +104,51 @@ describe('PartnerFeeClaimService.getUserIntent', () => {
     expect(readContract).toHaveBeenCalledWith(
       expect.objectContaining({ functionName: 'getUserIntent', args: [SRC, USDC, USDC] }),
     );
+  });
+});
+
+describe('PartnerFeeClaimService.getIntentDetails', () => {
+  const INTENT_HASH = '0x5f0317381efc3db8cc34186e3a4c09ebb934209d079d833425beb26d3d9932fb' as Hex;
+  // Raw struct as viem returns it from readContract: srcChain/dstChain are plain bigint chain ids.
+  const onChainIntent = {
+    intentId: 7n,
+    creator: PROTOCOL_INTENTS,
+    inputToken: USDC,
+    outputToken: USDC,
+    inputAmount: 1_000_000n,
+    minOutputAmount: 0n,
+    deadline: 0n,
+    allowPartialFill: false,
+    srcChain: 146n,
+    dstChain: 146n,
+    srcAddress: SRC as Hex,
+    dstAddress: SRC as Hex,
+    solver: PROTOCOL_INTENTS,
+    data: '0x' as Hex,
+  };
+
+  it('maps the on-chain intent struct when the relay chain ids are valid', async () => {
+    const readContract = vi.fn(async () => onChainIntent);
+    const service = makeService({ readContract, isValidIntentRelayChainId: () => true });
+
+    const result = await service.getIntentDetails(INTENT_HASH);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual(onChainIntent);
+    expect(readContract).toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: 'getIntentDetails', args: [INTENT_HASH] }),
+    );
+  });
+
+  it('fails with LOOKUP_FAILED when a relay chain id is not recognized', async () => {
+    const readContract = vi.fn(async () => ({ ...onChainIntent, srcChain: 999_999n }));
+    const service = makeService({ readContract, isValidIntentRelayChainId: (id) => id !== 999_999n });
+
+    const result = await service.getIntentDetails(INTENT_HASH);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect((result.error as { code?: string }).code).toBe('LOOKUP_FAILED');
   });
 });
