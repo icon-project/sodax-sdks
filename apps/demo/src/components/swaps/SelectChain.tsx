@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { SpokeChainKey } from '@sodax/dapp-kit';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { chainIdToChainName, chainIdToChainLogo } from '@/constants';
+import { useRadixSearchInput } from '@/hooks/useRadixSearchInput';
 
 export function SelectChain({
   chainList,
@@ -22,8 +23,7 @@ export function SelectChain({
   id?: string;
   label?: string;
 }) {
-  const [search, setSearch] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
+  const { search, inputProps, handleOpenChange } = useRadixSearchInput();
   const q = search.trim().toLowerCase();
   const filtered = q ? chainList.filter(chain => chainIdToChainName(chain).toLowerCase().includes(q)) : chainList;
 
@@ -33,33 +33,14 @@ export function SelectChain({
       <Select
         value={value.toString()}
         onValueChange={v => setChain(v as SpokeChainKey)}
-        onOpenChange={open => {
-          if (open) {
-            // Radix focuses the selected item on open; move focus to the search input instead.
-            requestAnimationFrame(() => inputRef.current?.focus());
-          } else {
-            setSearch('');
-          }
-        }}
+        onOpenChange={handleOpenChange}
       >
         <SelectTrigger id={id}>
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
           <div className="sticky top-0 z-10 bg-white p-1">
-            <Input
-              ref={inputRef}
-              autoFocus
-              placeholder="Search network..."
-              value={search}
-              onChange={e => {
-                setSearch(e.target.value);
-                // Radix re-grabs focus to a list item when the filtered children change — restore it.
-                requestAnimationFrame(() => inputRef.current?.focus());
-              }}
-              onKeyDown={e => e.stopPropagation()}
-              className="h-8"
-            />
+            <Input autoFocus placeholder="Search network..." className="h-8" {...inputProps} />
           </div>
           {filtered.length === 0 ? (
             <div className="px-2 py-3 text-center text-sm text-muted-foreground">No network found</div>

@@ -387,13 +387,14 @@ function SubmitTxLiveCard({
     params: { txHash: order.txHash, srcChainKey: order.srcChainKey, apiConfig },
   });
 
-  const { label, error, extraRows } = deriveSubmitTx(statusResponse);
+  // Derive once (memoized on the React-Query data ref) and reuse in both render and the settle effect.
+  const derived = useMemo(() => deriveSubmitTx(statusResponse), [statusResponse]);
+  const { label, error, extraRows } = derived;
   useEffect(() => {
-    const settled = deriveSubmitTx(statusResponse);
-    if (TERMINAL_LABELS.has(settled.label)) {
-      onSettle(order.txHash, { label: settled.label, error: settled.error, extraRows: settled.extraRows });
+    if (TERMINAL_LABELS.has(derived.label)) {
+      onSettle(order.txHash, { label: derived.label, error: derived.error, extraRows: derived.extraRows });
     }
-  }, [statusResponse, order.txHash, onSettle]);
+  }, [derived, order.txHash, onSettle]);
 
   return (
     <OrderCard

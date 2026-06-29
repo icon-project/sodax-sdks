@@ -59,7 +59,7 @@ import type { Order } from '@/components/swaps/OrderStatus';
 import { DEFAULT_SELECTED_CHAIN, useAppStore } from '@/zustand/useAppStore';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
 import { loadLastSelection, saveLastSelection } from '@/lib/lastSelection';
-import { MAX_ORDERS } from '@/lib/orderHistory';
+import { appendOrder } from '@/lib/orderHistory';
 import { buildOrderSummary } from '@/components/swaps/OrderStatus';
 import { solverApiEndpointForEnv } from '@/constants';
 
@@ -394,17 +394,14 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     console.log('Submit swap tx result:', submitResult.value);
 
     setOrders(prev =>
-      [
-        ...prev,
-        {
-          mode: 'submit-tx' as const,
-          txHash: spokeTxHash as string,
-          srcChainKey: src.chain,
-          apiBaseURL: SUBMIT_TX_API_CONFIG.baseURL,
-          createdAt: Date.now(),
-          summary: buildOrderSummary(src, dst, sourceAmount, quote?.quoted_amount),
-        },
-      ].slice(-MAX_ORDERS),
+      appendOrder(prev, {
+        mode: 'submit-tx',
+        txHash: spokeTxHash as string,
+        srcChainKey: src.chain,
+        apiBaseURL: SUBMIT_TX_API_CONFIG.baseURL,
+        createdAt: Date.now(),
+        summary: buildOrderSummary(src, dst, sourceAmount, quote?.quoted_amount),
+      }),
     );
   };
 
@@ -423,20 +420,17 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       const swapResponse = await swap({ params: intentOrderPayload, walletProvider: sourceWalletProvider });
       const { solverExecutionResponse: response, intent, intentDeliveryInfo } = swapResponse;
       setOrders(prev =>
-        [
-          ...prev,
-          {
-            mode: 'solver' as const,
-            intentHash: response.intent_hash,
-            orderId: intent.intentId.toString(),
-            dstTxHash: intentDeliveryInfo.dstTxHash as string,
-            srcTxHash: intentDeliveryInfo.srcTxHash,
-            srcChainKey: intentDeliveryInfo.srcChainKey,
-            statusEndpoint: solverApiEndpointForEnv(solverEnvironment),
-            createdAt: Date.now(),
-            summary: buildOrderSummary(src, dst, sourceAmount, quote?.quoted_amount),
-          },
-        ].slice(-MAX_ORDERS),
+        appendOrder(prev, {
+          mode: 'solver',
+          intentHash: response.intent_hash,
+          orderId: intent.intentId.toString(),
+          dstTxHash: intentDeliveryInfo.dstTxHash as string,
+          srcTxHash: intentDeliveryInfo.srcTxHash,
+          srcChainKey: intentDeliveryInfo.srcChainKey,
+          statusEndpoint: solverApiEndpointForEnv(solverEnvironment),
+          createdAt: Date.now(),
+          summary: buildOrderSummary(src, dst, sourceAmount, quote?.quoted_amount),
+        }),
       );
     } catch (error) {
       console.error('Error creating and submitting intent:', error);

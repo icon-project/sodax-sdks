@@ -7,16 +7,9 @@ import { useQuery } from '@tanstack/react-query';
 
 export type SolverStatusResult = { status: number; fill_tx_hash: string | null };
 
-/**
- * The endpoint requires a hub intent tx hash (`0x` + 64 hex = 66 chars) and 400s on anything else
- * (e.g. a base58 Solana hash). Skip the query for such hashes instead of polling a 400 forever.
- */
-function isQueryableHash(hash: string | undefined): hash is string {
-  return !!hash;
-}
-
-/** Cap polling (~2 min at 3s) so an intent that never resolves — wrong env, stale data — stops
- *  hammering the API. Terminal results stop earlier: the card caches and unmounts this hook. */
+/** Cap polling (~2 min at 3s) so an intent that never resolves — wrong env, stale data, or an
+ *  invalid hash the endpoint 400s on — stops hammering the API. Terminal results stop earlier:
+ *  the card caches the status and unmounts this hook. */
 const MAX_POLLS = 40;
 
 export function useSolverStatus(intentTxHash: string | undefined, endpoint: string | undefined) {
@@ -33,7 +26,7 @@ export function useSolverStatus(intentTxHash: string | undefined, endpoint: stri
       }
       return res.json();
     },
-    enabled: isQueryableHash(intentTxHash) && !!endpoint,
+    enabled: !!intentTxHash && !!endpoint,
     refetchInterval: query => (query.state.dataUpdateCount >= MAX_POLLS ? false : 3000),
   });
 }
