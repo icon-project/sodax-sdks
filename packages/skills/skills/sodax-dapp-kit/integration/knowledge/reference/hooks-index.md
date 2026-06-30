@@ -204,6 +204,19 @@ Typed React Query wrappers over the backend Swaps API v2 (`sodax.api.swaps.*`), 
 | `useSwapsApiCreateLimitOrder` | Mutation; builds limit-order intent tx |
 | `useSwapsApiSubmitTx` | Mutation; `request: SubmitTxRequestV2` |
 
+## Bridge API (`sodax.api.bridge`)
+
+Typed React Query wrappers over the backend Bridge API v2 (`sodax.api.bridge.*`). Distinct from the on-chain `bridge/` hooks (`useBridge`/`useBridgeAllowance`/…), which drive `sodax.bridge` (the `BridgeService`). Smaller than the swaps family (no intent/solver surface); the token *list* is backend-served but bridgeable-**amount** stays client-side (`useGetBridgeableAmount`).
+
+| Hook | Type / Polling |
+|---|---|
+| `useBridgeApiTokens` | Query; all supported bridge tokens by chain |
+| `useBridgeApiAllowance` | Query; `{ valid }` allowance check (wire-named body) |
+| `useBridgeApiSubmitTxStatus` | Query (1s); requires `txHash` + `srcChainKey`; polls until `executed` / `failed` |
+| `useBridgeApiApprove` | Mutation; builds unsigned approval tx |
+| `useBridgeApiCreateBridgeIntent` | Mutation; builds `{ tx, relayData }` (no intent) |
+| `useBridgeApiSubmitTx` | Mutation; `request: BridgeSubmitTxRequestV2` (FULL relayData envelope) |
+
 ## Partner
 
 | Hook | Type | Purpose |

@@ -16,7 +16,7 @@ import { Sodax } from '@sodax/sdk';
 const sodax = new Sodax();
 ```
 
-The constructor signature is `new Sodax(config?: SodaxOptions)`, where `SodaxOptions = DeepPartial<SodaxDefaultConfig> & SodaxOptionalConfig` — a deep-partial override of the `SodaxDefaultConfig` data contract plus the client-side options: the `logger` sink (see [LOGGING.md](./LOGGING.md)), the global partner `fee`, per-feature `partnerFee` options, and `swapsOptions` (see [Backend submit-tx 2-step](#backend-submit-tx-2-step-swapsoptionsusebackendsubmittx)). The `logger`, global `fee`, and `swapsOptions` are kept off the data contract: they are resolved once and never fetched from or overwritten by the backend config. When called with no arguments the SDK merges your overrides with the packaged static defaults ([`sodaxConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/sodax-config/sodax-config.ts)) using a recursive `deepMerge`. Omitted keys keep their default values.
+The constructor signature is `new Sodax(config?: SodaxOptions)`, where `SodaxOptions = DeepPartial<SodaxDefaultConfig> & SodaxOptionalConfig` — a deep-partial override of the `SodaxDefaultConfig` data contract plus the client-side options: the `logger` sink (see [LOGGING.md](./LOGGING.md)), the global partner `fee`, per-feature `partnerFee` options, and the client-side `swapsOptions` / `bridgeOptions` toggles (see [Backend submit-tx 2-step](#backend-submit-tx-2-step-swapsoptionsusebackendsubmittx)). The `logger`, global `fee`, and the `swapsOptions` / `bridgeOptions` toggles are kept off the data contract: they are resolved once and never fetched from or overwritten by the backend config. When called with no arguments the SDK merges your overrides with the packaged static defaults ([`sodaxConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/sodax-config/sodax-config.ts)) using a recursive `deepMerge`. Omitted keys keep their default values.
 
 ### Dynamic Configuration
 
@@ -153,6 +153,16 @@ const sodax = new Sodax({ swapsOptions: { useBackendSubmitTx: true } });
 ```
 
 If the backend path does not reach `executed` for **any** reason (submission rejected, terminal `failed`/abandoned status, or poll timeout), `swap()` automatically falls back to the fully client-side relay + post-execution so the swap still completes — **safely**, because re-relaying / re-posting an already-processed swap is idempotent (no double-fill; verified by `e2e-tests/e2e-relay.test.ts`), and the backend poll + fallback share one `timeout` budget (total latency ≤ one `timeout`). Default is `false`. See [SWAPS.md](./SWAPS.md#backend-2-step-submit-opt-in) for the flow.
+
+### Backend submit-tx (`bridgeOptions.useBackendSubmitTx`)
+
+`bridgeOptions` is the bridge counterpart of `swapsOptions` — a **client-side runtime option** on `SodaxOptions`, distinct from the data `bridge` (partner-fee) slot. Setting `useBackendSubmitTx: true` opts `sodax.bridge.bridge()` into routing the spoke-deposit through the backend bridge API (`sodax.api.bridge.submitTx`), which relays server-side; the SDK polls submit-tx status and returns the same `TxHashPair`.
+
+```typescript
+const sodax = new Sodax({ bridgeOptions: { useBackendSubmitTx: true } });
+```
+
+On any non-success (submission rejected, terminal `failed`/abandoned, or poll timeout) `bridge()` falls back to the client-side `relayTxAndWaitPacket` flow so the bridge still completes — safe because re-relaying an already-relayed bridge tx is idempotent, and the poll + fallback share one `timeout` budget. Bridge has no solver post-execution, so unlike swaps there is no `'posting_execution'` step. Default is `false`. See [BRIDGE_API.md](./BRIDGE_API.md) for the API client.
 
 ### Money market (`moneyMarket`)
 
