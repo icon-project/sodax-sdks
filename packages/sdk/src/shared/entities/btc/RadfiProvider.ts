@@ -4,6 +4,7 @@ import {
   type IBitcoinWalletProvider,
   type RadfiConfig,
   type RadfiDepositTxResponse,
+  type RadfiSigner,
 } from '@sodax/types';
 import type { RelayExtraData } from '../../types/relay-types.js';
 
@@ -114,11 +115,15 @@ export type RadfiMaxSpentResponse = {
 
 export class RadfiProvider {
   private readonly config: RadfiConfig;
+  // Client-side runtime signer (e.g. a backend's HMAC closure). Holds no credential itself — the SDK
+  // only keeps the reference and invokes it per outbound `apiUrl` request. See `RadfiOptions` / gh-831.
+  private readonly signer?: RadfiSigner;
   public accessToken = '';
   public refreshToken = '';
 
-  constructor(config: RadfiConfig) {
+  constructor(config: RadfiConfig, signer?: RadfiSigner) {
     this.config = config;
+    this.signer = signer;
     // Seed any pre-provisioned Bound Exchange session from config. `RadfiConfig` declares
     // `accessToken` / `refreshToken` precisely so a server-side caller — which never runs the
     // interactive BIP322 sign-in — can inject a token via `new Sodax({ ... })` and have the
@@ -626,11 +631,18 @@ export class RadfiProvider {
   }
 
   private async request(endpoint: string, options?: RequestInit): Promise<Response> {
+    // Let an injected signer add request headers (e.g. Bound's `x-api-signature` HMAC for a backend
+    // caller). Computed per request so a time-boxed signature stays inside its validity window. The
+    // signer owns the credential; this provider never sees it.
+    const signed = this.signer
+      ? await this.signer({ method: options?.method ?? 'GET', path: endpoint })
+      : undefined;
     return fetch(`${this.config.apiUrl}${endpoint}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
         ...(options?.headers || {}),
+        ...signed,
       },
     });
   }

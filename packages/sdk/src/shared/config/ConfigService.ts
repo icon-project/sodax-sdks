@@ -29,6 +29,7 @@ import {
   type PartnerFee,
   type SodaxOptions,
   type LeverageYieldConfig,
+  type RadfiSigner,
 } from '@sodax/types';
 import { isAddress } from 'viem';
 import type { BackendApiService } from '../../backendApi/BackendApiService.js';
@@ -61,6 +62,12 @@ export type ConfigServiceConstructorParams = {
    * never supplies it; it is purely a client-side option.
    */
   fee?: PartnerFee;
+  /**
+   * RadFi/Bound request signer (the `radfi.signRequest` option passed to `new Sodax(...)`). Held
+   * outside the swappable `SodaxConfig` — like {@link logger} — so a dynamic config fetch never
+   * replaces it. Read by {@link BitcoinSpokeService} to inject Bound `x-api-signature` headers.
+   */
+  radfiSigner?: RadfiSigner;
 };
 
 /**
@@ -91,6 +98,14 @@ export class ConfigService {
    */
   public readonly fee: PartnerFee | undefined;
 
+  /**
+   * RadFi/Bound request signer. Resolved once at construction and kept independent of {@link sodax}
+   * so that {@link initialize}'s dynamic-config swap never clobbers it. Read by `BitcoinSpokeService`
+   * via `config.radfiSigner`; `undefined` unless the consumer passed `radfi.signRequest` to
+   * `new Sodax(...)`. Holds the function reference only — never a credential.
+   */
+  public readonly radfiSigner: RadfiSigner | undefined;
+
   private initialized = false;
 
   // data structures for quick lookup
@@ -104,13 +119,14 @@ export class ConfigService {
   private chainToSupportedTokenAddressMap!: Map<SpokeChainKey, Set<string>>;
   private hubAssetToXTokenMap!: Map<Address, XToken>;
 
-  constructor({ api, config, userConfig, logger, analytics, fee }: ConfigServiceConstructorParams) {
+  constructor({ api, config, userConfig, logger, analytics, fee, radfiSigner }: ConfigServiceConstructorParams) {
     this.api = api;
     this.sodax = config;
     this.userConfig = userConfig;
     this.logger = logger ?? resolveLogger(undefined);
     this.analytics = analytics ?? noopAnalytics;
     this.fee = fee;
+    this.radfiSigner = radfiSigner;
     this.loadSodaxConfigDataStructures(config);
   }
 

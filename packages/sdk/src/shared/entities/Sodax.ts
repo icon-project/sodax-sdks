@@ -51,6 +51,9 @@ export class Sodax {
     // so feature services can call `config.analytics.emit(...)` unconditionally with zero cost when off.
     const analytics = resolveAnalytics(options?.analytics);
     const fee = options?.fee;
+    // RadFi/Bound request signer: another client-side runtime hook (like `logger`/`analytics`/`fee`),
+    // held off the data config so the dynamic-config swap never touches it. See `RadfiOptions` / gh-831.
+    const radfiSigner = options?.radfi?.signRequest;
     this.instanceConfig = options ? mergeSodaxConfig(sodaxConfig, options) : sodaxConfig;
     this.backendApi = new BackendApiService(this.instanceConfig.api, logger);
     this.config = new ConfigService({
@@ -60,6 +63,7 @@ export class Sodax {
       logger,
       analytics,
       fee,
+      radfiSigner,
     });
 
     this.hubProvider = new EvmHubProvider({ config: this.config }); // default to Sonic mainnet
