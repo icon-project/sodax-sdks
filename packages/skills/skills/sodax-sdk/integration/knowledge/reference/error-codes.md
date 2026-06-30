@@ -160,7 +160,7 @@ Both follow the same shape: action methods get the full exec union (`'EXECUTION_
 
 ### Backend / Swaps API (`feature: 'backend'`)
 
-`BackendApiService` (`sodax.backendApi`) and the Swaps API v2 client (`sodax.api.swaps`) are the HTTP-client layer — not domain features. Every method returns `Result<T, SodaxError<'EXTERNAL_API_ERROR'>>` with `context.api: 'backend'` and `context.endpoint`; the transport failure (timeout / non-2xx / response-shape mismatch) is preserved on `error.cause`.
+`BackendApiService` (`sodax.backendApi`) and the Swaps API v2 client (`sodax.api.swaps`) are the HTTP-client layer — not domain features. Every method returns `Result<T, SodaxError<'EXTERNAL_API_ERROR'>>` with `context.endpoint`, and the transport failure (timeout / non-2xx / response-shape mismatch) preserved on `error.cause`. `context.api` distinguishes the two clients: `'backend'` for `BackendApiService`, `'swaps'` for the `sodax.api.swaps` client.
 
 ### Leverage Yield (`feature: 'leverageYield'`)
 

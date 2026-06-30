@@ -215,7 +215,7 @@ const submitResult = await sodax.api.swaps.submitTx({
 });
 
 if (!submitResult.ok) {
-  // submitResult.error.code: 'EXTERNAL_API_ERROR' with context.api: 'backend'
+  // submitResult.error.code: 'EXTERNAL_API_ERROR' with context.api: 'swaps'
   return;
 }
 ```

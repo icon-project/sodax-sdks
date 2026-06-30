@@ -39,18 +39,11 @@ export const useSwapsApiQuote = ({
   const apiConfig = params?.apiConfig;
 
   return useQuery({
-    queryKey: [
-      'swapsApi',
-      'quote',
-      body?.tokenSrcChainKey,
-      body?.tokenSrc,
-      body?.tokenDstChainKey,
-      body?.tokenDst,
-      body?.amount,
-      body?.srcAddress,
-      body?.dstAddress,
-      query?.includeTxData ?? false,
-    ],
+    // Hash the whole request body so every quote input — including partnerFee and the other
+    // SwapExtrasV2 fields — is a cache dimension; a partnerFee change alters the quote and must
+    // miss the cache. QuoteRequestV2 is bigint-free (compile-time guaranteed), so React Query's
+    // default key hashing handles the object directly.
+    queryKey: ['swapsApi', 'quote', body, query?.includeTxData ?? false],
     queryFn: async (): Promise<QuoteResponseV2 | undefined> => {
       if (!body) return undefined;
       return unwrapResult(await sodax.api.swaps.getQuote(body, query, apiConfig));

@@ -37,6 +37,8 @@ export type MakeRequestParams = {
   config: RequestConfig;
   overrideConfig?: RequestOverrideConfig;
   logger: SodaxLogger;
+  /** Calling service's label, used only as the error-log prefix (e.g. `'SwapsApiService'`). */
+  serviceLabel: string;
 };
 
 /**
@@ -63,7 +65,7 @@ export const toJsonBody = (value: unknown): string =>
  * @throws `Error('UNKNOWN_REQUEST_ERROR')` for any other unexpected failure.
  */
 export async function makeRequest<T>(params: MakeRequestParams): Promise<T> {
-  const { endpoint, config, overrideConfig = {}, logger } = params;
+  const { endpoint, config, overrideConfig = {}, logger, serviceLabel } = params;
   // Truthy (not nullish) fallback mirrors the original behavior: an empty-string
   // baseURL is treated as "not provided" and falls back to the service default.
   const baseURL = overrideConfig.baseURL || config.baseURL || '';
@@ -100,11 +102,11 @@ export async function makeRequest<T>(params: MakeRequestParams): Promise<T> {
       if (error.name === 'AbortError') {
         throw new Error('REQUEST_TIMEOUT', { cause: new Error(`Request timeout after ${timeout}ms`) });
       }
-      logger.error('[BackendApiService] Request error', error);
+      logger.error(`[${serviceLabel}] Request error`, error);
       throw error;
     }
 
-    logger.error('[BackendApiService] Unknown error', error);
+    logger.error(`[${serviceLabel}] Unknown error`, error);
     throw new Error('UNKNOWN_REQUEST_ERROR', { cause: error });
   }
 }

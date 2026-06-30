@@ -246,6 +246,7 @@ export class BackendApiService implements IConfigApiV1 {
         endpoint,
         config: this.resolveRequestConfig(config),
         logger: this.logger,
+        serviceLabel: 'BackendApiService',
       });
       const parsed = v.safeParse(schema, raw);
       if (!parsed.success) {
@@ -272,7 +273,12 @@ export class BackendApiService implements IConfigApiV1 {
    */
   private async requestUnvalidated<T>(endpoint: string, config: RequestConfig): Promise<Result<T>> {
     try {
-      const value = await makeRequest<T>({ endpoint, config: this.resolveRequestConfig(config), logger: this.logger });
+      const value = await makeRequest<T>({
+        endpoint,
+        config: this.resolveRequestConfig(config),
+        logger: this.logger,
+        serviceLabel: 'BackendApiService',
+      });
       return { ok: true, value };
     } catch (error) {
       return { ok: false, error: this.toExternalApiError(endpoint, error) };

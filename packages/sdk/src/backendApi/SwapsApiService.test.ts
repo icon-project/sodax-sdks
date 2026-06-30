@@ -426,7 +426,7 @@ describe('SwapsApiService response validation', () => {
       expect(err.code).toBe('EXTERNAL_API_ERROR');
       expect(err.feature).toBe('backend');
       expect(err.context).toMatchObject({
-        api: 'backend',
+        api: 'swaps',
         endpoint: '/swaps/tokens',
         reason: 'invalid_response_shape',
       });
@@ -471,6 +471,8 @@ describe('SwapsApiService error propagation', () => {
       const err = result.error as SodaxError;
       expect(err.code).toBe('EXTERNAL_API_ERROR');
       expect(err.feature).toBe('backend');
+      // Distinguish swaps-client errors from BackendApiService errors on the transport (catch) path.
+      expect(err.context?.api).toBe('swaps');
       expect(err.message).toBe('HTTP_REQUEST_FAILED');
       expect((err.cause as Error).message).toBe('HTTP_REQUEST_FAILED');
     }

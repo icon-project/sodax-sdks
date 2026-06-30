@@ -8,7 +8,7 @@ response is validated at runtime against a valibot schema, so a backend contract
 
 Access: `sodax.api.swaps`. Service class: `SwapsApiService`. **Errors:** every failure (network, timeout,
 non-2xx HTTP, or response-shape mismatch) returns `Result<T, SodaxError<'EXTERNAL_API_ERROR'>>` with
-`feature: 'backend'`, `context.api: 'backend'`, and `context.endpoint` (the path). The underlying failure
+`feature: 'backend'`, `context.api: 'swaps'`, and `context.endpoint` (the path). The underlying failure
 is preserved on `error.cause`. This differs from the feature services (`sodax.swaps`, etc.), whose errors
 carry their own `feature` (`'swap'`, …) — the swaps **HTTP client** is uniformly `feature: 'backend'`.
 
@@ -152,7 +152,7 @@ The swaps slice layers over the base slice over the defaults (per field), so a c
 ```ts
 const r = await sodax.api.swaps.getQuote(body);
 if (!r.ok) {
-  // r.error: SodaxError<'EXTERNAL_API_ERROR'> — feature: 'backend', context.api: 'backend',
+  // r.error: SodaxError<'EXTERNAL_API_ERROR'> — feature: 'backend', context.api: 'swaps',
   // context.endpoint: '/swaps/quote'. The transport failure (HTTP_REQUEST_FAILED / REQUEST_TIMEOUT /
   // a shape-validation issue) is on r.error.cause.
   return;
