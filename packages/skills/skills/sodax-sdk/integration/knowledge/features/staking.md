@@ -7,7 +7,7 @@ Access: `sodax.staking`. Service class: `StakingService`. Feature tag for errors
 ## How it works
 
 - **SODA** (the staked asset) → **xSoda** (ERC4626 vault shares, proportional to current exchange rate).
-- **Unstake** has a configurable waiting period with linear penalty (max 1–100%).
+- **Unstake** has a configurable waiting period with a piecewise penalty (max 1–100%): the flat `maxPenalty` applies during the minimum period, then decays linearly to zero by the full unstaking period, and is none after.
 - **Instant unstake** bypasses the waiting period but pays slippage (via `StakingRouter`).
 - **Claim** redeems SODA after the unstaking period expires.
 - **Cancel unstake** restores xSoda from a pending unstake request before claim.
@@ -140,7 +140,7 @@ const allowed = await sodax.staking.isAllowanceValid({
 | `create*Intent` | `CreateIntentResult<K, Raw>` |
 | `approve` | `TxReturnType<K, Raw>` |
 | `isAllowanceValid` | `boolean` |
-| `getStakingConfig` | `{ unstakingPeriod, maxPenalty, minPenalty, /* … */ }` |
+| `getStakingConfig` | `{ unstakingPeriod, minUnstakingPeriod, maxPenalty }` |
 | `getStakeRatio` | `[xSodaAmount: bigint, previewDepositAmount: bigint]` (estimated xSoda shares + vault's `previewDeposit` preview) |
 | `getInstantUnstakeRatio` | `bigint` |
 | `getConvertedAssets` | `bigint` (SODA per xSoda) |

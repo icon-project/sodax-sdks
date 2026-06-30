@@ -63,7 +63,8 @@ Pair: [`features/swap.md`](../../../integration/knowledge/features/swap.md).
 +   walletProvider: sourceWalletProvider,
 + });
 + if (!result.ok) return;
-+ const { spokeTxHash, intent, relayData } = result.value;
++ const { solverExecutionResponse, intent, intentDeliveryInfo } = result.value;
++ // swap() returns SwapResponse = { solverExecutionResponse, intent, intentDeliveryInfo }
 ```
 
 ### `createIntent`

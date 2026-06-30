@@ -34,7 +34,7 @@ Granular skill for the swap hooks of `@sodax/dapp-kit` v2. React-only — backen
 - **Passing the SDK request directly under `params` on `useQuote`.** It nests under `params.payload` (a `SolverIntentQuoteRequest`). `useSwapAllowance` nests `payload` + `srcChainKey` + `walletProvider` under `params`.
 - **Reading `data.status` on `useQuote` / `useStatus` without `data?.ok`.** Both return a `Result<…>` as their `data` — branch on `.ok` first. (`useSwapAllowance` is the opposite — already-unwrapped `boolean`.)
 - **`useStatus` key is `intentTxHash`, not `intentHash`.**
-- **Flattening `getSupportedSwapTokens()` and keying rows on `address`.** The same token address recurs across chains — use a composite `${address}-${blockchain_id}` key.
+- **Flattening `getSupportedSwapTokens()` and keying rows on `address`.** The same token address recurs across chains — use a composite `${address}-${chainKey}` key (`XToken` carries `chainKey`, not `blockchain_id`).
 - **Reaching for `useSpokeProvider`.** Deleted. Pass `walletProvider` into `mutate(vars)` for `useSwap`/`useSwapApprove`; cancel hooks take it flat.
 
 ## Migration workflow (port v1 swap hooks to v2)

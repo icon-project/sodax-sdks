@@ -8,7 +8,7 @@ Access: `sodax.partners`. Service class: `PartnerService` (operations on `sodax.
 
 ```ts
 // Token approval
-sodax.partners.feeClaim.isTokenApproved({ token, srcAddress }): Promise<Result<boolean, Error>>;
+sodax.partners.feeClaim.isTokenApproved({ srcChainKey, srcAddress, token }): Promise<Result<boolean, Error>>;
 sodax.partners.feeClaim.approveToken<Raw>(args): Promise<Result<TxReturnType, Error>>;
 
 // Auto-swap preferences (whether partner-collected fees auto-swap into a target asset)
@@ -28,7 +28,7 @@ sodax.partners.feeClaim.createIntentAutoSwap<Raw>(args): Promise<Result<...>>;  
 sodax.partners.feeClaim.cancelIntent<Raw>(args): Promise<Result<TxReturnType, Error>>; // args.params: { srcChainKey: Hub, srcAddress, fromToken, toToken }
 
 // Reads
-sodax.partners.feeClaim.fetchAssetsBalances(args): Promise<Result<...>>;
+sodax.partners.feeClaim.fetchAssetsBalances(queryAddress): Promise<Result<...>>;
 sodax.partners.feeClaim.getUserIntent({ user, fromToken, toToken }): Promise<Result<Hex, Error>>; // 0x0…0 = no open intent
 sodax.partners.feeClaim.getIntentDetails(intentHash): Promise<Result<Intent, Error>>;
 sodax.partners.feeClaim.getOriginalAssetAddress(chainId, hubAsset): OriginalAssetAddress | undefined;
@@ -52,14 +52,15 @@ approval used by the swap claim.
 ```ts
 // 1. Check whether the partner's fee token is approved on the hub:
 const approved = await sodax.partners.feeClaim.isTokenApproved({
-  token: '0x…',         // hub asset address
+  srcChainKey: 'sonic',   // hub chain key (required by the param type)
   srcAddress: partnerAddress,
+  token: '0x…',           // hub asset address
 });
 
 // 2. Approve once if not:
 if (approved.ok && !approved.value) {
   await sodax.partners.feeClaim.approveToken({
-    params: { token: '0x…', amount: 2n ** 256n - 1n },
+    params: { srcChainKey: 'sonic', srcAddress: partnerAddress, token: '0x…' },
     raw: false,
     walletProvider: sonicWp,
   });

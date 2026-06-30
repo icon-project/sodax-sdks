@@ -15,7 +15,7 @@ Granular skill for `DexService` — facade owning `clService: ClService` (concen
 
 1. **New code or v1 → v2 port?**
 2. **Which operation?**
-   - LP: `createPosition`, `increaseLiquidity`, `decreaseLiquidity`, `claimFees`, `closePosition`.
+   - LP: `supplyLiquidity` (mint new), `increaseLiquidity`, `decreaseLiquidity`, `claimRewards`.
    - Assets: `deposit` (spoke → hub-asset wrapper), `withdraw` (hub → spoke).
 3. **Does the position require an asset deposit first?** LP positions hold hub assets; the user must deposit from a spoke chain before opening a position.
 4. **Signed or unsigned-tx flow?**

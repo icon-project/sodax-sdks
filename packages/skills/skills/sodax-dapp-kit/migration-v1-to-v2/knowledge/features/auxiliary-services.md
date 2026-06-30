@@ -77,26 +77,26 @@ Note: the request param is still `xChainId` (not renamed to `chainKey`). This is
 - const estimate = useEstimateGas(walletProvider);
 - await estimate.mutateAsync({ rawTx });
 + const { mutateAsyncSafe: estimateGas } = useEstimateGas();
-+ const result = await estimateGas({ rawTx, walletProvider });
++ const result = await estimateGas({ tx, chainKey });   // TVars is EstimateGasParams<C> = { tx, chainKey } — no walletProvider
 ```
 
 ### `useStellarTrustlineCheck` / `useRequestTrustline`
 
 ```diff
 - const { data: hasTrustline } = useStellarTrustlineCheck(account, asset);
-+ const { data: hasTrustline } = useStellarTrustlineCheck({ params: { account, asset } });
++ const { data: hasTrustline } = useStellarTrustlineCheck({ params: { token, amount, chainId, walletProvider } });
 
 - const request = useRequestTrustline(walletProvider);
 - await request.mutateAsync({ account, asset });
-+ const { mutateAsync: request } = useRequestTrustline();
-+ await request({ account, asset, walletProvider });
++ const { requestTrustline } = useRequestTrustline(token);   // positional token arg; NOT a mutation hook
++ await requestTrustline({ token, amount, srcChainKey, walletProvider });
 ```
 
 ### `useDeriveUserWalletAddress` / `useGetUserHubWalletAddress`
 
 ```diff
 - const { data: hubAddress } = useDeriveUserWalletAddress(spokeChainKey, srcAddress);
-+ const { data: hubAddress } = useDeriveUserWalletAddress({ params: { spokeChainKey, srcAddress } });
++ const { data: hubAddress } = useDeriveUserWalletAddress({ params: { spokeChainId, spokeAddress } });
 ```
 
 ## Pitfalls

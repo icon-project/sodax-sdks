@@ -231,7 +231,7 @@ This is what allows `sodax.swaps.createIntent({ params: { srcChainKey: ChainKeys
 ```ts
 import { getChainType, isEvmChainKeyType, isSolanaChainKeyType, isBitcoinChainKeyType, /* … */ } from '@sodax/sdk';
 
-getChainType(chainKey);        // 'EVM' | 'BITCOIN' | 'SOLANA' | 'STELLAR' | 'SUI' | 'ICON' | 'INJECTIVE' | 'STACKS' | 'NEAR' | 'SONIC'
+getChainType(chainKey);        // 'EVM' | 'BITCOIN' | 'SOLANA' | 'STELLAR' | 'SUI' | 'ICON' | 'INJECTIVE' | 'STACKS' | 'NEAR'
 isEvmChainKeyType(chainKey);   // boolean (with type guard)
 ```
 
@@ -348,7 +348,7 @@ The canonical error class. Every SDK-emitted error is a `SodaxError<C>` paramete
 ```ts
 class SodaxError<C extends SodaxErrorCode = SodaxErrorCode> extends Error {
   readonly code: C;                 // closed 13-code reason union
-  readonly feature: SodaxFeature;   // 'swap' | 'moneyMarket' | 'bridge' | 'staking' | 'migration' | 'dex' | 'partner' | 'recovery'
+  readonly feature: SodaxFeature;   // 'swap' | 'moneyMarket' | 'bridge' | 'staking' | 'migration' | 'dex' | 'partner' | 'recovery' | 'leverageYield'
   readonly cause?: unknown;
   readonly context?: SodaxErrorContext;
 
@@ -450,8 +450,8 @@ Use these in cross-bundle code (apps with mixed ESM/CJS resolution, monorepos wi
 
 Cross-chain coordination is exposed as two top-level functions (re-exported from `@sodax/sdk`'s barrel):
 
-- `submitTransaction({ relayerApiEndpoint, srcChainKey, txHash, payload })` — POSTs the spoke transaction to the relay submit endpoint and resolves the relay's first-stage acknowledgement.
-- `relayTxAndWaitPacket({ relayerApiEndpoint, srcChainKey, dstChainKey, txHash, payload, timeout? })` — runs `submitTransaction` and then polls until the destination packet reaches `executed`.
+- `submitTransaction(payload, apiUrl)` — TWO positional args: `payload: IntentRelayRequest<'submit'>` and `apiUrl: HttpUrl` (not an options object). POSTs the spoke transaction to the relay submit endpoint and resolves the relay's first-stage acknowledgement.
+- `relayTxAndWaitPacket({ srcTxHash, data, chainKey, relayerApiEndpoint, timeout, pollTxHash? })` — `RelayAndWaitParams`: `data` is the whole `RelayExtraData` / `OnDemandRelayData` object and `chainKey` is the source `SpokeChainKey`. Runs `submitTransaction` and then polls until the destination packet reaches `executed`.
 
 These functions are **not** exposed on the `Sodax` instance. Consumers don't call them directly — every feature service (`swaps.swap`, `bridge.bridge`, `staking.stake`, …) wraps the spoke→hub leg internally. If you genuinely need custom relay orchestration (rare), import `relayTxAndWaitPacket` / `submitTransaction` from `@sodax/sdk` and pass the same `relayerApiEndpoint` your `Sodax` instance uses.
 
@@ -477,7 +477,7 @@ The single shared mapper from a relay-layer error to a `SodaxError`. Every featu
 import { mapRelayFailure, relayTxAndWaitPacket } from '@sodax/sdk';
 
 try {
-  await relayTxAndWaitPacket({ /* relayerApiEndpoint, srcChainKey, dstChainKey, txHash, payload, timeout? */ });
+  await relayTxAndWaitPacket({ /* srcTxHash, data, chainKey, relayerApiEndpoint, timeout, pollTxHash? */ });
 } catch (e) {
   const sodaxError = mapRelayFailure(e, {
     feature: 'swap',

@@ -9,7 +9,7 @@ metadata:
 
 # Backend API (Core SDK granular skill)
 
-Granular skill for `BackendApiService` — `sodax.backendApi`. HTTP client used by every feature for reads + swap-tx submission. **Feature tag for errors** varies by call site (e.g. `'swap'` for `submitSwapTx`, `'moneyMarket'` for MM reads); errors always carry `error.context.api: 'backend'`.
+Granular skill for `BackendApiService` — `sodax.backendApi`. HTTP client used by every feature for reads + swap-tx submission. **Error shape:** direct `sodax.backendApi.<method>()` failures return `{ ok: false, error }` where `error` is a plain `Error` (`HTTP_REQUEST_FAILED` / `REQUEST_TIMEOUT` / `UNKNOWN_REQUEST_ERROR`, or an `Invalid …response shape` error) — **not** a `SodaxError`. There is no `feature` tag, no `error.context.api`, and `error.code` is `undefined`.
 
 ## Step 1 — Clarify with user before coding
 
@@ -17,7 +17,8 @@ Granular skill for `BackendApiService` — `sodax.backendApi`. HTTP client used 
 2. **Which category?**
    - **Swap-related reads / writes:** `submitSwapTx`, `getSubmitSwapTxStatus`, `getOrderbook`, `getIntentByHash`, `getIntentByTxHash`, `getUserIntents`.
    - **Money-market position reads:** `getMoneyMarketPosition`, `getAllMoneyMarketAssets`, `getMoneyMarketAsset`, `getMoneyMarketAssetBorrowers`, `getMoneyMarketAssetSuppliers`, `getAllMoneyMarketBorrowers`.
-   - **Config-API methods (implements `IConfigApi`):** `getAllConfig`, `getChains`, `getSwapTokens`, `getSwapTokensByChainId`, `getMoneyMarketTokens`, `getMoneyMarketReserveAssets`, `getMoneyMarketTokensByChainId`, `getRelayChainIdMap`.
+   - **`IConfigApi` interface methods (exactly 5):** `getChains`, `getSwapTokens`, `getSwapTokensByChainId`, `getMoneyMarketTokens`, `getMoneyMarketTokensByChainId`.
+   - **Other `BackendApiService` config reads (NOT part of `IConfigApi`):** `getAllConfig`, `getMoneyMarketReserveAssets`, `getRelayChainIdMap`.
 3. **Custom `IConfigApi` for sandbox / fixtures?** Every method must return `Promise<Result<T>>` in v2.
 
 ## Integration workflow
@@ -25,12 +26,12 @@ Granular skill for `BackendApiService` — `sodax.backendApi`. HTTP client used 
 1. [`../integration/knowledge/ai-rules.md`](../integration/knowledge/ai-rules.md).
 2. [`../integration/knowledge/features/backend-api.md`](../integration/knowledge/features/backend-api.md) — `BackendApiService` API + `submitSwapTx` call shape + custom-backend pattern.
 3. For the `submitSwapTx` + `createIntent` flow → also load [`../swap/SKILL.md`](../swap/SKILL.md) or read [`../integration/knowledge/features/swap.md`](../integration/knowledge/features/swap.md) § "Backend submit-tx flow".
-4. Errors carry `error.context.api === 'backend'` → [`../integration/knowledge/recipes/result-and-errors.md`](../integration/knowledge/recipes/result-and-errors.md) and [`../integration/knowledge/reference/error-codes.md`](../integration/knowledge/reference/error-codes.md).
+4. Direct backendApi failures return a plain `Error` (no `SodaxError`, no `feature`, no `error.context.api`, no `error.code`) → [`../integration/knowledge/recipes/result-and-errors.md`](../integration/knowledge/recipes/result-and-errors.md) and [`../integration/knowledge/reference/error-codes.md`](../integration/knowledge/reference/error-codes.md).
 
 ### Backend-API-specific anti-patterns
 
 - **Passing the `RelayExtraData` object** to `submitSwapTx.relayData`. The field is now `string` — pass `relayData.payload`.
-- **Using v1 `srcChainId` (numeric)** on `SubmitSwapTxRequest`. Renamed to `srcChainKey: SpokeChainKey`.
+- **Using v1 `srcChainId` (numeric)** on `SubmitSwapTxRequest`. Renamed to `srcChainKey: string`.
 - **Implementing `IConfigApi` with throw-on-error semantics.** v2 interface requires `Promise<Result<T>>` — every method.
 - **Reading money-market position from `MoneyMarketService`.** Those reads live here on `BackendApiService`.
 

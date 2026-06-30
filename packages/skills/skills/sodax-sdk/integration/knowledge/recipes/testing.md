@@ -73,24 +73,20 @@ if (!result.ok) {
 }
 ```
 
-### Custom `IConfigApi` for sandbox
+### Point tests at a sandbox backend
+
+There is no constructor slot to inject a custom `IConfigApi` — the only backend knob is `api.baseURL` (`ApiConfig = { baseURL, timeout?, headers? }`). To run tests against a sandbox or local mock server, set `api.baseURL` and let `initialize()` fetch config from it:
 
 ```ts
-import { Sodax, type IConfigApi } from '@sodax/sdk';
-
-const sandboxApi: IConfigApi = {
-  async getChains() { return { ok: true, value: [/* fixture */] }; },
-  async getSwapTokens() { return { ok: true, value: { /* … */ } }; },
-  async getSwapTokensByChainId(chainKey) { return { ok: true, value: [/* … */] }; },
-  async getMoneyMarketTokens() { return { ok: true, value: { /* … */ } }; },
-  async getMoneyMarketTokensByChainId(chainKey) { return { ok: true, value: [/* … */] }; },
-};
+import { Sodax } from '@sodax/sdk';
 
 const sodax = new Sodax({
-  backendApi: { url: 'unused', api: sandboxApi },
+  api: { baseURL: 'https://sandbox-api.example.com' },
 });
 await sodax.config.initialize();
 ```
+
+For fully offline unit tests, stub at the `Sodax` boundary instead (see "Mock the entire `Sodax` instance" above) rather than trying to inject a backend implementation.
 
 ---
 

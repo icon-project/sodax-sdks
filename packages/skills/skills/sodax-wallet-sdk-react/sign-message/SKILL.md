@@ -29,7 +29,7 @@ Granular skill for `useXSignMessage` — arbitrary message signing with the conn
 - **Treating `useXSignMessage` as a plain function.** It's a React Query mutation — call `mutateAsync({ xChainType, message })`.
 - **Assuming a single return type.** The result is a union — `` `0x${string}` | Uint8Array | string | undefined `` — depending on chain; handle accordingly.
 - **Expecting one Bitcoin scheme.** Bitcoin signing auto-detects BIP-322 vs ECDSA — don't hard-code one.
-- **Calling it with a disabled chain.** The mutation rejects for an unsupported `xChainType`; ensure the slot is in `walletConfig`.
+- **Calling it with a disabled or unsupported chain.** The mutation does *not* reject — it resolves `undefined` (with a one-time `console.warn`) for chains that don't implement `signMessage` or aren't in `walletConfig`. Branch on the `undefined` result; don't rely on a thrown error.
 
 ## Migration workflow (port v1 → v2)
 

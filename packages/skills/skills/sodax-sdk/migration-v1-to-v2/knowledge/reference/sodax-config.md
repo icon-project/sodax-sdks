@@ -9,11 +9,11 @@ Defined in `@sodax/types` (`packages/types/src/sodax-config/sodax-config.ts`). T
 ```ts
 type SodaxDefaultConfig = {
   chains: Record<SpokeChainKey, SpokeChainConfig>;   // per-spoke-chain config (rpcUrl + tx polling + chain-specific shape)
-  swaps: SwapsConfig;                                // supported swap tokens per chain (+ per-feature partnerFee override)
-  moneyMarket: MoneyMarketConfig;                    // money market service config (+ per-feature partnerFee override)
-  bridge: BridgeConfig;                              // bridge partner-fee override
-  dex: DexConfig;                                    // DEX service config
-  leverageYield: LeverageYieldConfig;                // leverage-yield ERC-4626 vault registry (+ per-feature partnerFee override)
+  swaps: SwapsDefaultConfig;                         // supported swap tokens per chain (+ per-feature partnerFee override)
+  moneyMarket: MoneyMarketDefaultConfig;             // money market service config (+ per-feature partnerFee override)
+  bridge: BridgeDefaultConfig;                       // bridge partner-fee override
+  dex: DexDefaultConfig;                             // DEX service config
+  leverageYield: LeverageYieldDefaultConfig;         // leverage-yield ERC-4626 vault registry (+ per-feature partnerFee override)
   hub: HubConfig;                                    // hub-chain (Sonic) provider config
   api: ApiConfig;                                    // backend API endpoint
   solver: SolverConfig;                              // intent solver endpoint + contracts

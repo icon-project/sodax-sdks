@@ -110,7 +110,7 @@ type LookupErrorCode = 'VALIDATION_FAILED' | 'LOOKUP_FAILED' | 'UNKNOWN';
 | `approve` | `ApproveErrorCode` |
 | `isAllowanceValid` | `AllowanceCheckErrorCode` |
 | `estimateGas` | `GasEstimationErrorCode` |
-| Read-only methods (reserves, user data, etc.) | `LookupErrorCode` |
+| Read methods (`sodax.moneyMarket.data.*` — reserves, user data, aToken balances) | throw on failure (bare `Promise<T>`, **not** a `Result`) — wrap in try/catch |
 
 ### Staking (`feature: 'staking'`)
 
@@ -151,7 +151,8 @@ type LookupErrorCode = 'VALIDATION_FAILED' | 'LOOKUP_FAILED' | 'UNKNOWN';
 | `createXxxIntent` (4 of these) | `CreateIntentErrorCode` |
 | `approve` | `ApproveErrorCode` |
 | `isAllowanceValid` | `AllowanceCheckErrorCode` |
-| `getAvailableAmount` | `LookupErrorCode` |
+
+> `getAvailableAmount` is **not** a public `MigrationService` method — it's an internal `icxMigration` sub-service helper, so it carries no public narrow code union.
 
 ### Partner (`feature: 'partner'`) and Recovery (`feature: 'recovery'`)
 

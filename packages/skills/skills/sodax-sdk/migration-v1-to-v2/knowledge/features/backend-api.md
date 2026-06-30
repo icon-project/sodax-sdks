@@ -16,14 +16,14 @@ Pair: [`features/backend-api.md`](../../../integration/knowledge/features/backen
 | `submitSwapTx` | `Promise<SubmitSwapTxResponse>` | `Promise<Result<SubmitSwapTxResponse>>` |
 | `getIntentByHash` | `Promise<IntentResponse>` | `Promise<Result<IntentResponse>>` |
 | `getIntentByTxHash` | (n/a in v1) | `Promise<Result<IntentResponse>>` (v2-new) |
-| `getOrderbook` (was `getSolverOrderbook`) | `Promise<OrderbookEntry[]>` | `Promise<Result<OrderbookEntry[]>>` |
-| `getUserIntents` (was `getUserSwapHistory`) | `Promise<IntentResponse[]>` | `Promise<Result<IntentResponse[]>>` |
+| `getOrderbook` (was `getSolverOrderbook`) | `Promise<OrderbookResponse>` | `Promise<Result<OrderbookResponse>>` (object `{ total, data: Array<{ intentState, intentData }> }`, not an array) |
+| `getUserIntents` (was `getUserSwapHistory`) | `Promise<UserIntentsResponse>` | `Promise<Result<UserIntentsResponse>>` (`{ total, offset, limit, items: IntentResponse[] }` — intents under `.items`) |
 | `getChains` | `Promise<ChainConfig[]>` | `Promise<Result<GetChainsApiResponse>>` |
 | `getSwapTokens` | `Promise<SwapTokenConfig>` | `Promise<Result<GetSwapTokensApiResponse>>` |
 | `getSwapTokensByChainId` | `Promise<XToken[]>` | `Promise<Result<XToken[]>>` |
 | `getMoneyMarketTokens` | `Promise<MMTokenConfig>` | `Promise<Result<GetMoneyMarketTokensApiResponse>>` |
 | `getMoneyMarketTokensByChainId` | `Promise<XToken[]>` | `Promise<Result<XToken[]>>` |
-| `SubmitSwapTxRequest.srcChainId` | numeric chain id | renamed → `srcChainKey: SpokeChainKey` |
+| `SubmitSwapTxRequest.srcChainId` | numeric chain id | renamed → `srcChainKey: string` |
 | `SubmitSwapTxRequest.relayData` | `RelayExtraData` object | now `string` (use `relayData.payload`) |
 
 ## Per-method delta
@@ -39,7 +39,8 @@ Pair: [`features/backend-api.md`](../../../integration/knowledge/features/backen
 +   relayData: relayData.payload,            // was: relayData (object)
 + });
 + if (!result.ok) {
-+   // result.error: SodaxError with feature: 'swap', context.api: 'backend'
++   // result.error is a plain Error (e.g. HTTP_REQUEST_FAILED / REQUEST_TIMEOUT).
++   // NOT a SodaxError — no feature tag, no error.context.api, error.code is undefined.
 +   return;
 + }
 + const response = result.value;
@@ -57,10 +58,10 @@ If you implemented `IConfigApi` for a sandbox or test fixture, two things change
 -     return [/* fixture */];
 -   },
 -   async getSwapTokens(): Promise<SwapTokenConfig> { /* … */ },
-+   async getChains(): Promise<Result<ChainConfig[], unknown>> {
-+     return { ok: true, value: [/* fixture */] };
++   async getChains(): Promise<Result<readonly SpokeChainKey[]>> {
++     return { ok: true, value: [/* fixture: chain KEYS, not configs */] };
 +   },
-+   async getSwapTokens(): Promise<Result<SwapTokenConfig, unknown>> { /* … */ },
++   async getSwapTokens(): Promise<Result<Record<SpokeChainKey, readonly XToken[]>>> { /* … */ },
     // …5 methods total
   };
 ```
@@ -70,7 +71,7 @@ If you implemented `IConfigApi` for a sandbox or test fixture, two things change
 ## Pitfalls
 
 1. **`SubmitSwapTxRequest.relayData` is `string`, not the `RelayExtraData` object.** v1 took the object; v2 takes the `payload` field as a string.
-2. **Backend errors carry `error.context.api === 'backend'`** but the `feature` reflects the call site (`'swap'` for `submitSwapTx`, `'moneyMarket'` for MM-related backend calls, etc.). Use both for logger tag pairs.
+2. **Direct backendApi failures return a plain `Error`, not a `SodaxError`.** `BackendApiService.request()` returns `{ ok: false, error: Error }` (`HTTP_REQUEST_FAILED` / `REQUEST_TIMEOUT` / `UNKNOWN_REQUEST_ERROR`, or an `Invalid …response shape` error). There is no `feature`, no `error.context.api`, and `error.code` is `undefined` — don't branch on them.
 3. **Custom `IConfigApi` implementations must return `Result<T>`** — old throw-on-error implementations will compile-error against the v2 interface.
 
 ## Verification

@@ -2,7 +2,7 @@
 
 HTTP client for backend services. Provides intent lookup, swap-tx submission, solver orderbook queries, money-market position/reserve reads, and (internally) config fetching. Most consumer-side code uses just `submitSwapTx`, `getIntentByHash` / `getIntentByTxHash`, and the money-market read methods.
 
-Access: `sodax.backendApi`. Service class: `BackendApiService`. **Feature tag for errors:** appears under multiple features depending on the call site (`'swap'` for `submitSwapTx`, `'moneyMarket'` for MM-related reads, etc.); errors carry `error.context.api: 'backend'`.
+Access: `sodax.backendApi`. Service class: `BackendApiService`. **Error shape:** direct `sodax.backendApi.<method>()` failures return `{ ok: false, error }` where `error` is a plain `Error` (`HTTP_REQUEST_FAILED` / `REQUEST_TIMEOUT` / `UNKNOWN_REQUEST_ERROR`, or an `Invalid …response shape` error). It is **not** a `SodaxError`: no `feature` tag, no `error.context.api`, and `error.code` is `undefined`.
 
 ## Methods
 
@@ -10,10 +10,10 @@ Access: `sodax.backendApi`. Service class: `BackendApiService`. **Feature tag fo
 // Swap-related
 sodax.backendApi.submitSwapTx(request, config?): Promise<Result<SubmitSwapTxResponse>>;
 sodax.backendApi.getSubmitSwapTxStatus(...): Promise<Result<...>>;
-sodax.backendApi.getOrderbook(...): Promise<Result<OrderbookEntry[]>>;
+sodax.backendApi.getOrderbook(...): Promise<Result<OrderbookResponse>>; // object: { total: number; data: Array<{ intentState, intentData }> } — NOT an array
 sodax.backendApi.getIntentByHash(intentHash, config?): Promise<Result<IntentResponse>>;
 sodax.backendApi.getIntentByTxHash(txHash, config?): Promise<Result<IntentResponse>>;
-sodax.backendApi.getUserIntents(...): Promise<Result<IntentResponse[]>>;
+sodax.backendApi.getUserIntents(...): Promise<Result<UserIntentsResponse>>; // { total, offset, limit, items: IntentResponse[] } — intents under .items
 
 // Money-market reads (these are the canonical reads for MM positions/reserves;
 // MoneyMarketService does NOT expose getReservesData / getUserReservesData / etc.)
@@ -35,7 +35,7 @@ sodax.backendApi.getMoneyMarketTokensByChainId(...): Promise<Result<XToken[]>>;
 sodax.backendApi.getRelayChainIdMap(config?): Promise<Result<GetRelayChainIdMapApiResponse>>;
 ```
 
-All methods return `Result<T, SodaxError>` where the error carries `feature: 'swap' | 'moneyMarket' | …` (depending on call site) and `error.context.api === 'backend'`.
+All methods return `Promise<Result<T>>`. On failure the `error` field is a plain `Error` — `BackendApiService` never constructs a `SodaxError`, so there is no `feature` tag, no `error.context.api`, and `error.code` is `undefined`.
 
 ## Common call shape — `submitSwapTx`
 
