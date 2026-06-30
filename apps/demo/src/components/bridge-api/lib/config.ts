@@ -1,6 +1,12 @@
-// Bridge API demo config (base URL passed as apiConfig to every hook call).
-//
-// TODO(gh-255): implement. Reference: apps/demo/src/components/swaps-api/lib/config.ts
-// export const BRIDGE_API_CONFIG = { baseURL: '<bridge canary base url>' } as const satisfies RequestOverrideConfig;
+import type { RequestOverrideConfig } from '@sodax/dapp-kit';
 
-export {};
+/**
+ * Canary deployment of the Bridge API v2. Passed per-call via each `useBridgeApi*` hook's
+ * `apiConfig` so this showcase targets canary without touching the app-wide SDK config.
+ *
+ * The backend `/bridge/*` routes do not exist yet; until they ship this page's API calls are
+ * expected to fail against the live host (the on-chain `bridge/` page remains the working flow).
+ */
+export const BRIDGE_API_CONFIG = {
+  baseURL: 'https://canary-api.sodax.com/v1',
+} as const satisfies RequestOverrideConfig;

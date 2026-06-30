@@ -1,7 +1,16 @@
-// Mappers between Bridge API DTOs and demo/wallet-layer types.
-//
-// TODO(gh-255): implement. Reference: apps/demo/src/components/swaps-api/lib/mappers.ts
-// toXToken(BridgeTokenV2): XToken (re-brand chainKey/hubAsset/vault).
-// NO toIntentRequest needed (bridge submit-tx has no intent struct).
+import type { Address, BridgeTokenV2, ChainKey, XToken } from '@sodax/dapp-kit';
 
-export {};
+/**
+ * `BridgeTokenV2` carries the same fields as `XToken` but as plain JSON strings; cast the
+ * branded fields back so wallet-layer hooks (`useXBalances`) accept API-sourced tokens.
+ *
+ * No `toIntentRequest` counterpart (unlike swaps): bridge submit-tx has no intent struct.
+ */
+export function toXToken(token: BridgeTokenV2): XToken {
+  return {
+    ...token,
+    chainKey: token.chainKey as ChainKey,
+    hubAsset: token.hubAsset as Address,
+    vault: token.vault as Address,
+  };
+}
