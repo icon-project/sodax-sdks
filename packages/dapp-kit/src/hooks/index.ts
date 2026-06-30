@@ -6,6 +6,7 @@ export * from './swap/index.js';
 export * from './backend/index.js';
 export * from './swapsApi/index.js';
 export * from './bridge/index.js';
+export * from './bridgeApi/index.js';
 export * from './staking/index.js';
 export * from './partner/index.js';
 export * from './recovery/index.js';

@@ -6,3 +6,4 @@
 export type { ApiResponse, RequestConfig, RequestOverrideConfig } from './api-utils.js';
 export * from './BackendApiService.js';
 export * from './SwapsApiService.js';
+export * from './BridgeApiService.js';

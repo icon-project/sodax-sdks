@@ -23,7 +23,8 @@ import { consoleLogger } from '../shared/logger.js';
 import * as v from 'valibot';
 import { makeRequest, type RequestConfig, type RequestOverrideConfig } from './api-utils.js';
 import { SwapsApiService } from './SwapsApiService.js';
-import { resolveBaseApiConfig, resolveSwapsApiConfig } from './apiConfig.js';
+import { BridgeApiService } from './BridgeApiService.js';
+import { resolveBaseApiConfig, resolveBridgeApiConfig, resolveSwapsApiConfig } from './apiConfig.js';
 import * as schemas from './backendApiSchemas.js';
 import { SodaxError } from '../errors/SodaxError.js';
 
@@ -180,6 +181,7 @@ export interface MoneyMarketBorrowers {
 export class BackendApiService implements IConfigApiV1 {
   // sub-services exposing domain-specific APIs
   public readonly swaps: SwapsApiService;
+  public readonly bridge: BridgeApiService;
 
   // resolved base-API slice of the ApiConfig union (flat config, or its `baseApiConfig`)
   private readonly config: BaseApiConfig;
@@ -194,6 +196,9 @@ export class BackendApiService implements IConfigApiV1 {
     // sub-service its concrete SwapsApiConfig plus the shared logger — it does not see the union,
     // and must route diagnostics through the same consumer-selected sink as the rest of the SDK.
     this.swaps = new SwapsApiService(resolveSwapsApiConfig(config), this.logger);
+    // Bridge shares the swaps host (`/bridge/*` sub-paths); resolveBridgeApiConfig is an alias of
+    // resolveBaseApiConfig, so the bridge client gets the same flat base config.
+    this.bridge = new BridgeApiService(resolveBridgeApiConfig(config), this.logger);
   }
 
   /**
@@ -642,9 +647,9 @@ export class BackendApiService implements IConfigApiV1 {
    * without constructing a new service instance. Existing header keys are
    * overwritten; keys absent from `headers` are preserved.
    *
-   * The headers are also fanned out to the sub-services (`swaps`), which hold
-   * their own header copies — so a token set here applies to every request made
-   * through this client, including `swaps.*`.
+   * The headers are also fanned out to the sub-services (`swaps`, `bridge`), which
+   * hold their own header copies — so a token set here applies to every request made
+   * through this client, including `swaps.*` and `bridge.*`.
    *
    * @param headers - Key-value pairs to add or overwrite in the default headers.
    */
@@ -653,6 +658,7 @@ export class BackendApiService implements IConfigApiV1 {
       this.headers[key] = value;
     });
     this.swaps.setHeaders(headers);
+    this.bridge.setHeaders(headers);
   }
 
   /**

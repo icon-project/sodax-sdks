@@ -57,10 +57,15 @@ const mockEvmProvider = {
   waitForTransactionReceipt: vi.fn(),
 } as unknown as IEvmWalletProvider;
 
-const bridgeInput = <K extends SpokeChainKey>(srcChainKey: K, dstChainKey: SpokeChainKey): BridgeParams<K, false> =>
+const bridgeInput = <K extends SpokeChainKey>(
+  srcChainKey: K,
+  dstChainKey: SpokeChainKey,
+  timeout?: number,
+): BridgeParams<K, false> =>
   ({
     raw: false,
     walletProvider: mockEvmProvider,
+    timeout,
     params: {
       srcAddress: SAMPLE_USER,
       srcChainKey,
@@ -350,5 +355,166 @@ describe('BridgeService.bridge — integration error-path coverage', () => {
     expect(result.error.cause).toBe(outOfUnion);
     expect(result.error.context?.srcChainKey).toBe(BSC);
     expect(result.error.context?.dstChainKey).toBe(ARBITRUM);
+  });
+});
+
+// =========================================================================
+// bridge — opt-in backend submit-tx flow (bridgeOptions.useBackendSubmitTx).
+// Mirrors SwapService.test.ts Batch 7, with bridge deltas: no intent / intent_hash,
+// success value is TxHashPair, fallback relays (no post-execution).
+// =========================================================================
+
+describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () => {
+  // A separate Sodax instance with the opt-in flag ON. Per-test we stub createBridgeIntent +
+  // verifyTxHash on this instance and the backend bridge API it calls (submitTx / getSubmitTxStatus);
+  // the module-level `mocks.relayTxAndWaitPacket` covers the client-side fallback path.
+  const sodaxBE = new Sodax({ logger: 'silent', bridgeOptions: { useBackendSubmitTx: true } });
+
+  // createBridgeIntent (broadcast) succeeds + on-chain verify succeeds, so bridge() reaches the
+  // submit/fallback branch. verifyTxHash is only consumed on the fallback path.
+  const stubCreatedAndVerified = () => {
+    vi.spyOn(sodaxBE.bridge, 'createBridgeIntent').mockResolvedValueOnce({
+      ok: true,
+      value: { tx: '0xspokeTx' as never, relayData: { address: HUB_WALLET, payload: '0x' } },
+    } as never);
+    vi.spyOn(sodaxBE.spoke, 'verifyTxHash').mockResolvedValue({ ok: true, value: undefined });
+  };
+
+  it('on backend "executed", returns the TxHashPair from the backend (no client-side relay)', async () => {
+    stubCreatedAndVerified();
+    const submitSpy = vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValueOnce({
+      ok: true,
+      value: { success: true, data: { status: 'inserted', message: 'accepted' } },
+    } as never);
+    vi.spyOn(sodaxBE.api.bridge, 'getSubmitTxStatus').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        success: true,
+        data: { txHash: '0xspokeTx', srcChainKey: BSC, status: 'executed', processingAttempts: 1, result: { dstIntentTxHash: '0xDST' } },
+      },
+    } as never);
+
+    const result = await sodaxBE.bridge.bridge(bridgeInput(BSC, ARBITRUM));
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.srcChainTxHash).toBe('0xspokeTx');
+      expect(result.value.dstChainTxHash).toBe('0xDST');
+    }
+    // The backend owns the relay — the client-side relay must NOT run.
+    expect(submitSpy).toHaveBeenCalledOnce();
+    expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the client-side relay when the backend submit POST is rejected', async () => {
+    stubCreatedAndVerified();
+    vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValueOnce({
+      ok: false,
+      error: new SodaxError('EXTERNAL_API_ERROR', 'backend down', { feature: 'backend' }),
+    } as never);
+    const statusSpy = vi.spyOn(sodaxBE.api.bridge, 'getSubmitTxStatus');
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
+
+    const result = await sodaxBE.bridge.bridge(bridgeInput(BSC, ARBITRUM));
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.dstChainTxHash).toBe('0xFALLBACKDST');
+    expect(statusSpy).not.toHaveBeenCalled(); // POST failed before any status polling
+    expect(mocks.relayTxAndWaitPacket).toHaveBeenCalledOnce();
+  });
+
+  it('falls back when the backend reports a terminal "failed" status', async () => {
+    stubCreatedAndVerified();
+    vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValueOnce({
+      ok: true,
+      value: { success: true, data: { status: 'inserted', message: 'accepted' } },
+    } as never);
+    vi.spyOn(sodaxBE.api.bridge, 'getSubmitTxStatus').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        success: true,
+        data: { txHash: '0xspokeTx', srcChainKey: BSC, status: 'failed', processingAttempts: 1, failureReason: 'boom' },
+      },
+    } as never);
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
+
+    const result = await sodaxBE.bridge.bridge(bridgeInput(BSC, ARBITRUM));
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.dstChainTxHash).toBe('0xFALLBACKDST');
+    expect(mocks.relayTxAndWaitPacket).toHaveBeenCalledOnce();
+  });
+
+  it('does not touch the backend submit API when the flag is off (default instance)', async () => {
+    // The module-level `sodax` has useBackendSubmitTx=false → pure client-side flow.
+    vi.spyOn(sodax.bridge, 'createBridgeIntent').mockResolvedValueOnce({
+      ok: true,
+      value: { tx: '0xspokeTx' as never, relayData: { address: HUB_WALLET, payload: '0x' } },
+    } as never);
+    vi.spyOn(sodax.spoke, 'verifyTxHash').mockResolvedValueOnce({ ok: true, value: undefined });
+    const submitSpy = vi.spyOn(sodax.api.bridge, 'submitTx');
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xdstTx' } });
+
+    const result = await sodax.bridge.bridge(bridgeInput(BSC, ARBITRUM));
+
+    expect(result.ok).toBe(true);
+    expect(submitSpy).not.toHaveBeenCalled();
+  });
+
+  it('shares one timeout budget: a stalled backend leaves the fallback a reduced (not fresh) relay budget', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    try {
+      stubCreatedAndVerified();
+      vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValueOnce({
+        ok: true,
+        value: { success: true, data: { status: 'inserted', message: 'accepted' } },
+      } as never);
+      // Backend never reaches `executed` → submitTx polls until its reserved cutoff, then falls back.
+      vi.spyOn(sodaxBE.api.bridge, 'getSubmitTxStatus').mockResolvedValue({
+        ok: true,
+        value: { success: true, data: { txHash: '0xspokeTx', srcChainKey: BSC, status: 'pending', processingAttempts: 1 } },
+      } as never);
+      mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
+
+      const overallTimeout = 30_000;
+      const bridgePromise = sodaxBE.bridge.bridge(bridgeInput(BSC, ARBITRUM, overallTimeout));
+      // Drive the submit-tx poll past its `deadline - reserve` cutoff so bridge() falls back.
+      await vi.advanceTimersByTimeAsync(overallTimeout);
+      const result = await bridgePromise;
+
+      expect(result.ok).toBe(true);
+      expect(mocks.relayTxAndWaitPacket).toHaveBeenCalled();
+      // Shared deadline: the fallback relay got the leftover budget (≈ the reserve), NOT a fresh
+      // `overallTimeout` — proving submitTx + fallback split ONE timeout (no 2×).
+      const relayTimeout = mocks.relayTxAndWaitPacket.mock.calls.at(-1)?.[0]?.timeout as number;
+      expect(relayTimeout).toBeGreaterThan(0);
+      expect(relayTimeout).toBeLessThan(overallTimeout);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+// =========================================================================
+// Sodax wiring — bridgeOptions.useBackendSubmitTx flows into BridgeService,
+// and sodax.api.bridge is reachable.
+// =========================================================================
+
+describe('Sodax bridgeOptions wiring', () => {
+  it('defaults useBackendSubmitTx to false and exposes sodax.api.bridge', () => {
+    const s = new Sodax();
+    expect(s.bridge.useBackendSubmitTx).toBe(false);
+    expect(s.api.bridge).toBeDefined();
+  });
+
+  it('threads bridgeOptions.useBackendSubmitTx=true into the BridgeService', () => {
+    const s = new Sodax({ bridgeOptions: { useBackendSubmitTx: true } });
+    expect(s.bridge.useBackendSubmitTx).toBe(true);
+  });
+
+  it('keeps the bridge toggle independent of swapsOptions', () => {
+    const s = new Sodax({ swapsOptions: { useBackendSubmitTx: true } });
+    expect(s.bridge.useBackendSubmitTx).toBe(false);
   });
 });

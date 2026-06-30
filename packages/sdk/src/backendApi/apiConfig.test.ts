@@ -14,7 +14,12 @@ import {
   DEFAULT_BACKEND_API_TIMEOUT,
   type ApiConfig,
 } from '@sodax/types';
-import { isCustomApiConfig, resolveBaseApiConfig, resolveSwapsApiConfig } from './apiConfig.js';
+import {
+  isCustomApiConfig,
+  resolveBaseApiConfig,
+  resolveBridgeApiConfig,
+  resolveSwapsApiConfig,
+} from './apiConfig.js';
 
 // Cast helper: tests intentionally pass partial / post-merge shapes that the strict
 // `ApiConfig` type would reject but that arise at runtime via `DeepPartial` overrides.
@@ -153,6 +158,42 @@ describe('resolveSwapsApiConfig', () => {
   it('fills omitted fields of a partial swapsApiConfig slice', () => {
     expect(resolveSwapsApiConfig(asConfig({ swapsApiConfig: { baseURL: 'https://swaps.example' } }))).toEqual({
       baseURL: 'https://swaps.example',
+      timeout: DEFAULT_BACKEND_API_TIMEOUT,
+      headers: { ...D },
+    });
+  });
+});
+
+describe('resolveBridgeApiConfig', () => {
+  // Bridge shares the swaps host: resolveBridgeApiConfig is an unconditional alias of
+  // resolveBaseApiConfig — it ignores any swapsApiConfig slice and never reads a
+  // (non-existent) bridgeApiConfig slice.
+  it('shares a flat config with the base API', () => {
+    const config = asConfig({ baseURL: 'https://base.example', timeout: 11, headers: { 'X-A': '1' } });
+    expect(resolveBridgeApiConfig(config)).toEqual(resolveBaseApiConfig(config));
+    expect(resolveBridgeApiConfig(config)).toEqual({
+      baseURL: 'https://base.example',
+      timeout: 11,
+      headers: { ...D, 'X-A': '1' },
+    });
+  });
+
+  it('uses the baseApiConfig slice of a CustomApiConfig (ignoring swapsApiConfig)', () => {
+    const config = asConfig({
+      baseApiConfig: { baseURL: 'https://base.example', timeout: 7, headers: { 'X-B': '1' } },
+      swapsApiConfig: { baseURL: 'https://swaps.example', timeout: 9, headers: { 'X-S': '1' } },
+    });
+    expect(resolveBridgeApiConfig(config)).toEqual(resolveBaseApiConfig(config));
+    expect(resolveBridgeApiConfig(config)).toEqual({
+      baseURL: 'https://base.example',
+      timeout: 7,
+      headers: { ...D, 'X-B': '1' },
+    });
+  });
+
+  it('falls back to defaults for an empty config', () => {
+    expect(resolveBridgeApiConfig(asConfig({}))).toEqual({
+      baseURL: DEFAULT_BACKEND_API_ENDPOINT,
       timeout: DEFAULT_BACKEND_API_TIMEOUT,
       headers: { ...D },
     });

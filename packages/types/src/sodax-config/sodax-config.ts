@@ -72,6 +72,7 @@ export type SodaxOptionalConfig = {
   bridge?: BridgeOptions;
   leverageYield?: LeverageYieldOptions;
   swapsOptions?: SwapsClientOptions; // client-side swap behavior toggles (e.g. useBackendSubmitTx). Resolved client-side; distinct key so it never collides with the data `swaps` slot.
+  bridgeOptions?: BridgeClientOptions; // client-side bridge behavior toggles (e.g. useBackendSubmitTx). Resolved client-side; distinct key so it never collides with the data `bridge` (partner-fee) slot.
 };
 
 /**
@@ -111,6 +112,20 @@ export type SwapsClientOptions = {
    * Opt-in: route `swap()` through the backend submit-tx 2-step flow (the backend relays +
    * post-executes server-side). On ANY non-success the SDK falls back to the client-side relay so
    * the swap still completes. Default `false` (the current fully client-side flow).
+   */
+  useBackendSubmitTx?: boolean;
+};
+
+/**
+ * Client-side bridge behavior options. Like {@link SwapsClientOptions}, these are runtime toggles
+ * resolved once at construction — NOT part of the backend-fetched {@link SodaxDefaultConfig} data.
+ */
+export type BridgeClientOptions = {
+  /**
+   * Opt-in: route `bridge()` through the backend submit-tx flow (the backend relays the spoke
+   * deposit server-side). On ANY non-success the SDK falls back to the client-side
+   * `relayTxAndWaitPacket` flow so the bridge still completes. Default `false` (the current fully
+   * client-side flow).
    */
   useBackendSubmitTx?: boolean;
 };
