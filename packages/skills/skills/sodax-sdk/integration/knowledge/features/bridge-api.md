@@ -8,8 +8,9 @@ response is validated at runtime against a valibot schema, so a backend contract
 
 Access: `sodax.api.bridge`. Service class: `BridgeApiService`. **Errors:** every failure (network, timeout,
 non-2xx HTTP, or response-shape mismatch) returns `Result<T, SodaxError<'EXTERNAL_API_ERROR'>>` with
-`feature: 'backend'`, `context.api: 'backend'`, and `context.endpoint` (the path); the underlying failure
-is on `error.cause`. Like `sodax.api.swaps`, the bridge **HTTP client** is uniformly `feature: 'backend'`.
+`feature: 'backend'`, `context.api: 'bridge'`, and `context.endpoint` (the path); the underlying failure
+is on `error.cause`. Like `sodax.api.swaps`, the bridge **HTTP client** is uniformly `feature: 'backend'`
+(with a per-service `context.api` tag — `'bridge'`).
 
 > Lower-level than `sodax.bridge` (the `BridgeService` orchestrator that deposits + relays end-to-end).
 > Use `sodax.api.bridge` for a single backend call, or when building your own flow. The Bridge API shares
@@ -120,7 +121,7 @@ the client-side relay on any non-success. **Default OFF.** This is a distinct ke
 ```ts
 const r = await sodax.api.bridge.createBridgeIntent(body);
 if (!r.ok) {
-  // r.error: SodaxError<'EXTERNAL_API_ERROR'> — feature: 'backend', context.api: 'backend',
+  // r.error: SodaxError<'EXTERNAL_API_ERROR'> — feature: 'backend', context.api: 'bridge',
   // context.endpoint: '/bridge/intents'. The transport / shape-validation failure is on r.error.cause.
   return;
 }

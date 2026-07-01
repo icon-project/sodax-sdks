@@ -290,7 +290,7 @@ describe('BridgeApiService response validation', () => {
       expect(err.code).toBe('EXTERNAL_API_ERROR');
       expect(err.feature).toBe('backend');
       expect(err.context).toMatchObject({
-        api: 'backend',
+        api: 'bridge',
         endpoint: '/bridge/tokens',
         reason: 'invalid_response_shape',
       });

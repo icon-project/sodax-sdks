@@ -111,13 +111,13 @@ true } })` (default OFF) — see [`CONFIGURE_SDK.md`](CONFIGURE_SDK.md) and [`BR
 
 Every method returns `Result<T, SodaxError<'EXTERNAL_API_ERROR'>>`. On any failure (network, timeout,
 non-2xx HTTP, or response-shape mismatch), the result is `{ ok: false }` with a `SodaxError` carrying
-`feature: 'backend'`, `context.api: 'backend'`, and `context.endpoint` (the path); the underlying transport
+`feature: 'backend'`, `context.api: 'bridge'`, and `context.endpoint` (the path); the underlying transport
 failure is preserved on `error.cause`.
 
 ```typescript
 const r = await sodax.api.bridge.createBridgeIntent(body);
 if (!r.ok) {
-  // r.error.feature === 'backend'; r.error.context.endpoint === '/bridge/intents'
+  // r.error.feature === 'backend'; r.error.context.api === 'bridge'; r.error.context.endpoint === '/bridge/intents'
   // r.error.cause: the HTTP_REQUEST_FAILED / REQUEST_TIMEOUT / validation failure
   return;
 }

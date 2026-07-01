@@ -84,7 +84,7 @@ export function toCreateBridgeIntentParamsV2(
  * All public methods return `Promise<Result<T>>` — they never throw. On network
  * failure, timeout, non-2xx HTTP response, or response-shape validation failure,
  * the returned Result has `ok: false` with a canonical
- * `SodaxError<'EXTERNAL_API_ERROR'>` (`feature: 'backend'`, `context.api: 'backend'`)
+ * `SodaxError<'EXTERNAL_API_ERROR'>` (`feature: 'backend'`, `context.api: 'bridge'`)
  * in the `error` field; the underlying failure is preserved on `error.cause`.
  *
  * Per-call request overrides (base URL, timeout, headers) can be passed as the
@@ -127,6 +127,7 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
         config: { baseURL: this.config.baseURL, timeout: this.config.timeout, headers: this.headers, ...config },
         overrideConfig,
         logger: this.logger,
+        serviceLabel: 'BridgeApiService',
       });
 
       const parsed = v.safeParse(schema, raw);
@@ -136,7 +137,7 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
           ok: false,
           error: new SodaxError('EXTERNAL_API_ERROR', `Invalid response shape from bridge API for ${endpoint}`, {
             feature: 'backend',
-            context: { api: 'backend', endpoint, reason: 'invalid_response_shape', issues: v.flatten(parsed.issues) },
+            context: { api: 'bridge', endpoint, reason: 'invalid_response_shape', issues: v.flatten(parsed.issues) },
           }),
         };
       }
@@ -152,7 +153,7 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
           {
             feature: 'backend',
             cause: error,
-            context: { api: 'backend', endpoint },
+            context: { api: 'bridge', endpoint },
           },
         ),
       };
