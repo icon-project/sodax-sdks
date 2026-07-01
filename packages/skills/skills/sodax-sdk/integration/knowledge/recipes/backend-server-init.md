@@ -11,9 +11,9 @@ declare const evmWallet: IEvmWalletProvider;
 //     class you can construct with `{ privateKey, rpcUrl }`.
 
 const sodax = new Sodax({
-  rpcConfig: {
-    [ChainKeys.ARBITRUM_MAINNET]: process.env.ARBITRUM_RPC_URL!,
-    [ChainKeys.SONIC_MAINNET]: process.env.SONIC_RPC_URL!,
+  chains: {
+    [ChainKeys.ARBITRUM_MAINNET]: { rpcUrl: process.env.ARBITRUM_RPC_URL! },
+    [ChainKeys.SONIC_MAINNET]: { rpcUrl: process.env.SONIC_RPC_URL! },
     // …
   },
 });

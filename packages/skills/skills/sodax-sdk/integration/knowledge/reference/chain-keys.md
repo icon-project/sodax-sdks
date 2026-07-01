@@ -36,7 +36,7 @@
 | Type | What it is |
 |---|---|
 | `ChainKey` | Union of all `ChainKeys.*` values (20 chains). |
-| `SpokeChainKey` | `ChainKey` minus `'sonic'` (19 spoke chains). |
+| `SpokeChainKey` | The full union of all 20 chain keys, **including** `'sonic'` — identical to `ChainKey` (see the note at the top of this file). |
 | `EvmChainKey` | Subset of `ChainKey` for the 12 EVM chains. |
 | `HubChainKey` | The literal `'sonic'`. |
 

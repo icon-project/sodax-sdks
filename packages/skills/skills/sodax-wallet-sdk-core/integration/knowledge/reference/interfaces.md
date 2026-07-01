@@ -68,7 +68,7 @@ Plus public field: `connection: Connection`.
 |---|---|
 | `getWalletAddress` | `() => Promise<string>` |
 | `signTransaction` | `(tx: XDR) => Promise<XDR>` |
-| `waitForTransactionReceipt` | `(hash: string, opts?: Partial<StellarWalletDefaults>) => Promise<…>` |
+| `waitForTransactionReceipt` | `(hash: string, opts?: Pick<StellarWalletDefaults, 'pollInterval' | 'pollTimeout'>) => Promise<…>` |
 
 ---
 
@@ -89,9 +89,11 @@ Plus public field: `iconService: IconService`.
 | Method | Signature (abridged) |
 |---|---|
 | `getWalletAddress` | `() => Promise<InjectiveEoaAddress>` |
-| `getWalletPubKey` | `() => Promise<string>` |
-| `getRawTransaction` | `(…) => Promise<…>` |
-| `execute` | `(…) => Promise<…>` |
+| `execute` | `(…) => Promise<InjectiveExecuteResponse>` |
+| `sendTransaction?` | `(signedTxRaw: Uint8Array) => Promise<string>` |
+| `signAndSendTransaction?` | `(tx: InjectiveRawTransaction) => Promise<string>` — the SDK / Swaps-API handoff path |
+| `getWalletPubKey` *(class-only, not on interface)* | `() => Promise<string>` |
+| `getRawTransaction` *(class-only, not on interface)* | `(…) => Promise<InjectiveRawTransaction>` |
 
 Plus public field: `wallet: InjectiveWallet`.
 
@@ -103,7 +105,7 @@ Plus public field: `wallet: InjectiveWallet`.
 |---|---|
 | `getWalletAddress` | `() => Promise<string>` |
 | `getRawTransaction` | `(params: CallContractParams) => Promise<NearRawTransaction>` |
-| `signAndSubmitTxn` | `(tx: NearRawTransaction, opts?: NearWalletDefaults) => Promise<string>` |
+| `signAndSubmitTxn` | `(tx: NearRawTransaction) => Promise<string>` *(the concrete class adds an optional `opts?: NearWalletDefaults`)* |
 
 Plus public fields (PK mode only): `account?: Account`, `rpcProvider?: JsonRpcProvider`.
 

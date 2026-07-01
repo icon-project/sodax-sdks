@@ -77,7 +77,8 @@
     "icon-sdk-js": "catalog:",
     "near-api-js": "catalog:",
     "rlp": "3.0.0",
-    "viem": "catalog:"
+    "viem": "catalog:",
+    "valibot": "catalog:"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "catalog:",
