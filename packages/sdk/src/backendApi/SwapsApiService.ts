@@ -74,7 +74,7 @@ type ResultifiedSwapsApiV2 = {
  * All public methods return `Promise<Result<T>>` — they never throw. On network
  * failure, timeout, non-2xx HTTP response, or response-shape validation failure,
  * the returned Result has `ok: false` with a canonical
- * `SodaxError<'EXTERNAL_API_ERROR'>` (`feature: 'backend'`, `context.api: 'backend'`)
+ * `SodaxError<'EXTERNAL_API_ERROR'>` (`feature: 'backend'`, `context.api: 'swaps'`)
  * in the `error` field; the underlying failure is preserved on `error.cause`.
  *
  * Per-call request overrides (base URL, timeout, headers) can be passed as the
@@ -113,6 +113,7 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
         config: { baseURL: this.config.baseURL, timeout: this.config.timeout, headers: this.headers, ...config },
         overrideConfig,
         logger: this.logger,
+        serviceLabel: 'SwapsApiService',
       });
 
       const parsed = v.safeParse(schema, raw);
@@ -122,7 +123,7 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
           ok: false,
           error: new SodaxError('EXTERNAL_API_ERROR', `Invalid response shape from swaps API for ${endpoint}`, {
             feature: 'backend',
-            context: { api: 'backend', endpoint, reason: 'invalid_response_shape', issues: v.flatten(parsed.issues) },
+            context: { api: 'swaps', endpoint, reason: 'invalid_response_shape', issues: v.flatten(parsed.issues) },
           }),
         };
       }
@@ -138,7 +139,7 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
           {
             feature: 'backend',
             cause: error,
-            context: { api: 'backend', endpoint },
+            context: { api: 'swaps', endpoint },
           },
         ),
       };

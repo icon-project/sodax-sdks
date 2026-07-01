@@ -13,7 +13,7 @@
  * `toJsonBody` is the bigint-safe request-body serializer.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_BACKEND_API_TIMEOUT } from '@sodax/types';
+import { DEFAULT_BACKEND_API_TIMEOUT, type SodaxLogger } from '@sodax/types';
 import { makeRequest, toJsonBody, type RequestConfig, type RequestOverrideConfig } from './api-utils.js';
 import { silentLogger } from '../shared/logger.js';
 
@@ -44,11 +44,11 @@ const caught = (p: Promise<unknown>): Promise<unknown> => p.then(v => v).catch(e
 const lastInit = () => mockFetch.mock.calls.at(-1)?.[1] as RequestInit;
 /**
  * Thin adapter for the tests: `makeRequest` takes a single `MakeRequestParams` object with a
- * required `logger`. Every test still exercises `makeRequest` directly — this only folds in the
- * (now-required) silent logger so the error-path tests stay quiet.
+ * required `logger` and `serviceLabel`. Every test still exercises `makeRequest` directly — this
+ * folds in the (required) silent logger so the error-path tests stay quiet, plus a fixed label.
  */
 const run = <T>(endpoint: string, config: RequestConfig, overrideConfig?: RequestOverrideConfig): Promise<T> =>
-  makeRequest<T>({ endpoint, config, overrideConfig, logger: silentLogger });
+  makeRequest<T>({ endpoint, config, overrideConfig, logger: silentLogger, serviceLabel: 'TestService' });
 
 beforeEach(() => mockFetch.mockReset());
 afterEach(() => vi.restoreAllMocks());
@@ -235,6 +235,20 @@ describe('makeRequest error handling', () => {
     mockFetch.mockResolvedValueOnce(httpErrorResponse(404, 'Not Found'));
     await caught(run('/foo', { method: 'GET', baseURL: BASE }));
     expect(clearTimeoutSpy).toHaveBeenCalled();
+  });
+
+  it('prefixes error logs with the caller-provided serviceLabel (not a hardcoded service name)', async () => {
+    const logger: SodaxLogger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    mockFetch.mockRejectedValueOnce(new Error('Network down'));
+    await caught(
+      makeRequest({
+        endpoint: '/foo',
+        config: { method: 'GET', baseURL: BASE },
+        logger,
+        serviceLabel: 'SwapsApiService',
+      }),
+    );
+    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('[SwapsApiService]'), expect.any(Error));
   });
 });
 

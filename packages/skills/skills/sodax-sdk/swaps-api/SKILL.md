@@ -8,7 +8,7 @@ description: 'Granular skill for the @sodax/sdk v2 Swaps API client — `sodax.a
 Granular skill for `sodax.api.swaps` (class `SwapsApiService`) — the typed HTTP client for the backend
 **Swaps API v2** (`/swaps/*`). `sodax.api` is an alias for `sodax.backendApi`; `.swaps` is the swaps
 client. 21 endpoints, one method each; every method returns `Promise<Result<T>>` (never throws) and
-validates the response. Errors carry `feature: 'backend'`, `context.api: 'backend'`, `context.endpoint`.
+validates the response. Errors carry `feature: 'backend'`, `context.api: 'swaps'`, `context.endpoint`.
 
 > Lower-level than `sodax.swaps`: this is the raw backend HTTP surface. For the end-to-end
 > create→relay→post-execution swap orchestrator, use the [`swap`](../swap/SKILL.md) skill.
