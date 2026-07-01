@@ -591,8 +591,8 @@ export class BridgeService {
       // delivery (destination) must clear the 546-sat dust limit. Bridging is vault-1:1 across 8-decimal
       // BTC-family tokens, so `amount` equals the satoshi value on both sides.
       if (
-        isNativeBitcoinTransfer(params.srcChainKey, srcToken) ||
-        isNativeBitcoinTransfer(params.dstChainKey, dstToken)
+        isNativeBitcoinTransfer(this.config, params.srcChainKey, srcToken) ||
+        isNativeBitcoinTransfer(this.config, params.dstChainKey, dstToken)
       ) {
         bridgeInvariant(
           params.amount >= BITCOIN_DUST_SATS,

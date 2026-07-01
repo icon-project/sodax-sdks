@@ -1,11 +1,12 @@
 import { invariant } from './tiny-invariant.js';
-import { isPartnerFeeAmount, isPartnerFeePercentage } from '../guards.js';
+import { isBitcoinChainKeyType, isPartnerFeeAmount, isPartnerFeePercentage } from '../guards.js';
+import type { ConfigService } from '../config/ConfigService.js';
 import {
   type SpokeChainKey,
   type Hex,
   type XToken,
   getChainType,
-  isBitcoinChainKey,
+  isNativeBitcoinToken,
   DEFAULT_MAX_RETRY,
   DEFAULT_RETRY_DELAY_MS,
   FEE_PERCENTAGE_SCALE,
@@ -23,8 +24,14 @@ import { Cl, cvToString, deserializeCV, serializeCV } from '@sodax/libs/stacks/c
  * denominated in satoshis and therefore subject to `BITCOIN_DUST_SATS`. BTC-family tokens are 8-decimal,
  * so a base-unit amount equals its satoshi value on both the deposit (source) and delivery (destination) side.
  */
-export function isNativeBitcoinTransfer(chainKey: SpokeChainKey, token: XToken | undefined): boolean {
-  return isBitcoinChainKey(chainKey) && token?.symbol === 'BTC';
+export function isNativeBitcoinTransfer(
+  config: ConfigService,
+  chainKey: SpokeChainKey,
+  token: XToken | undefined,
+): boolean {
+  return (
+    isBitcoinChainKeyType(chainKey) && !!token && isNativeBitcoinToken(config.getChainConfig(chainKey), token.address)
+  );
 }
 
 export async function retry<T>(

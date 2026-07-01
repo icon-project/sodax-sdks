@@ -13,6 +13,7 @@ import {
   ChainKeys,
   detectBitcoinAddressType,
   getIntentRelayChainId,
+  isNativeBitcoinToken,
   usesBip322MessageSigning,
 } from '@sodax/types';
 import * as ecc from '@bitcoinerlab/secp256k1';
@@ -536,13 +537,7 @@ export class BitcoinSpokeService {
   ): Promise<Psbt> {
     const chainConfig = this.config.getChainConfig(srcChainKey);
     const assetManagerAddress = chainConfig.addresses.assetManager;
-    const normalizedToken = token.toLocaleLowerCase();
-    const nativeBtcTokens = new Set(
-      ['btc', chainConfig.nativeToken, chainConfig.supportedTokens.BTC?.address]
-        .filter((value): value is string => !!value)
-        .map(value => value.toLocaleLowerCase()),
-    );
-    const isNativeBtc = nativeBtcTokens.has(normalizedToken);
+    const isNativeBtc = isNativeBitcoinToken(chainConfig, token);
 
     if (isNativeBtc) {
       const OP_RETURN = opcodes.OP_RETURN;

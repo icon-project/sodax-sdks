@@ -846,7 +846,7 @@ export class SwapService {
       // / `outputToken` are original asset addresses (native BTC is '0:0'), so resolve them to token
       // descriptors and match on symbol rather than comparing the address against the 'BTC' string.
       const inputTokenInfo = this.config.getSpokeTokenFromOriginalAssetAddress(params.srcChainKey, params.inputToken);
-      if (isNativeBitcoinTransfer(params.srcChainKey, inputTokenInfo)) {
+      if (isNativeBitcoinTransfer(this.config, params.srcChainKey, inputTokenInfo)) {
         swapInvariant(
           params.inputAmount >= BITCOIN_DUST_SATS,
           `Invalid inputAmount (${params.inputAmount}): below the Bitcoin dust limit of ${BITCOIN_DUST_SATS} sats`,
@@ -854,7 +854,7 @@ export class SwapService {
         );
       }
       const outputTokenInfo = this.config.getSpokeTokenFromOriginalAssetAddress(params.dstChainKey, params.outputToken);
-      if (isNativeBitcoinTransfer(params.dstChainKey, outputTokenInfo)) {
+      if (isNativeBitcoinTransfer(this.config, params.dstChainKey, outputTokenInfo)) {
         swapInvariant(
           params.minOutputAmount >= BITCOIN_DUST_SATS,
           `Invalid minOutputAmount (${params.minOutputAmount}): below the Bitcoin dust limit of ${BITCOIN_DUST_SATS} sats`,
