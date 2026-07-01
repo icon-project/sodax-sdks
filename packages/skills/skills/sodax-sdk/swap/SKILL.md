@@ -41,7 +41,7 @@ Read in order. Skipping `ai-rules.md` is the most common cause of agents reverti
 
 - **`try { await sodax.swaps.swap(...) } catch` for SDK-level failures.** v2 returns `Result<T>` — branch on `result.ok`. `catch` only fires for thrown exceptions (e.g. missing `walletProvider`), not for `RELAY_TIMEOUT` or `EXECUTION_FAILED`.
 - **Forgetting the discriminator.** `raw: false` is required on signed swaps; without it TypeScript rejects `walletProvider`.
-- **Calling `submitSwapTx` with the full `relayData` object.** The backend expects the `payload: string` field, not the wrapper.
+- **Calling `sodax.api.swaps.submitTx` with the full `relayData` object.** The backend expects the `payload: string` field, not the wrapper.
 
 ## Migration workflow (port v1 swap to v2)
 
@@ -62,7 +62,8 @@ Read in order. Skipping `ai-rules.md` is the most common cause of agents reverti
 - [`../money-market/SKILL.md`](../money-market/SKILL.md) — if the swap is followed by a supply/borrow action.
 - [`../partner/SKILL.md`](../partner/SKILL.md) — partner fees on swap.
 - [`../recovery/SKILL.md`](../recovery/SKILL.md) — stuck-asset recovery for failed swaps.
-- [`../backend-api/SKILL.md`](../backend-api/SKILL.md) — `submitSwapTx` and intent / orderbook lookups (step-by-step swap flow + diagnostics).
+- [`../backend-api/SKILL.md`](../backend-api/SKILL.md) — `sodax.api.swaps.submitTx` and intent / orderbook lookups (step-by-step swap flow + diagnostics).
+- [`../swaps-api/SKILL.md`](../swaps-api/SKILL.md) — the typed Swaps API v2 backend client (`sodax.api.swaps`: quote, create-intent, submit-tx, fees) the swap flow calls under the hood.
 
 For tasks spanning multiple features, load the broad [`sodax-sdk` skill](../SKILL.md) instead.
 

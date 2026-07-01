@@ -69,12 +69,21 @@ if (!result.ok) {
 
 ### `ApiConfig` Type
 
+`ApiConfig` is either a flat `BaseApiConfig` (shared by `sodax.backendApi` and the swaps client `sodax.api.swaps`) or a nested `CustomApiConfig` that points the swaps API at its own endpoint:
+
 ```typescript
-type ApiConfig = {
+type BaseApiConfig = {
   baseURL: string;                   // API endpoint URL (default: 'https://api.sodax.com/v1/be')
   timeout: number;                   // Request timeout in milliseconds (default: 30000)
   headers: Record<string, string>;   // Request headers (default: Content-Type and Accept)
 };
+
+// Point the swaps API at its own host, separate from the base backend API (at least one slice required):
+type CustomApiConfig =
+  | { baseApiConfig: BaseApiConfig; swapsApiConfig?: BaseApiConfig }
+  | { baseApiConfig?: BaseApiConfig; swapsApiConfig: BaseApiConfig };
+
+type ApiConfig = BaseApiConfig | CustomApiConfig;
 ```
 
 ### `RequestOverrideConfig` Type
@@ -111,6 +120,8 @@ type Result<T, E = Error | unknown> =
 ```
 
 **Never use `try/catch` around `backendApi` calls** — errors are always captured in the `Result`.
+
+**Response validation.** Data, token, and money-market responses are validated at runtime against valibot schemas (mirroring `sodax.api.swaps`): a 2xx body that fails the contract resolves to `EXTERNAL_API_ERROR` with `context.reason: 'invalid_response_shape'`, not a mistyped value. The config/relay reads — `getAllConfig`, `getSpokeChainConfig`, `getRelayChainIdMap` — are not schema-validated (`SodaxConfig` is too large to mirror faithfully, and `ConfigService` already version-gates and falls back to packaged defaults).
 
 ### Checking results
 
@@ -254,58 +265,12 @@ interface UserIntentsResponse {
 
 ## Swap Endpoints
 
-### Submit Swap Transaction
-
-Submits a signed spoke-chain swap transaction to the backend for relay processing. The backend relays the transaction to the hub chain, posts execution data to the solver, and advances the intent through its lifecycle.
-
-```typescript
-const result = await sodax.backendApi.submitSwapTx({
-  txHash: '0x123...abc',
-  srcChainKey: 'arbitrum',
-  // ... other SubmitSwapTxRequest fields
-});
-if (result.ok) {
-  console.log(result.value.success, result.value.message);
-}
-```
-
-**Signature:**
-```typescript
-submitSwapTx(
-  params: SubmitSwapTxRequest,
-  config?: RequestOverrideConfig,
-): Promise<Result<SubmitSwapTxResponse>>
-```
-
-- **Method:** POST
-- **Endpoint:** `/swaps/submit-tx`
-
-### Get Submit Swap Transaction Status
-
-Polls the backend relay pipeline for the current status of a previously submitted swap transaction.
-
-Status progresses through: `pending` → `verifying` → `verified` → `relaying` → `relayed` → `posting_execution` → `executed` (or `failed`).
-
-```typescript
-const result = await sodax.backendApi.getSubmitSwapTxStatus({
-  txHash: '0x123...abc',
-  srcChainKey: 'arbitrum',
-});
-if (result.ok) {
-  console.log(result.value.status, result.value.failureReason, result.value.dstIntentTxHash);
-}
-```
-
-**Signature:**
-```typescript
-getSubmitSwapTxStatus(
-  params: GetSubmitSwapTxStatusParams,
-  config?: RequestOverrideConfig,
-): Promise<Result<SubmitSwapTxStatusResponse>>
-```
-
-- **Method:** GET
-- **Endpoint:** `/swaps/submit-tx/status?txHash=…&srcChainKey=…`
+Swap-tx submission and the rest of the typed Swaps API v2 moved off `BackendApiService` onto the swaps
+client — `sodax.api.swaps` (`SwapsApiService`). Submit a signed spoke-chain swap transaction with
+`sodax.api.swaps.submitTx(...)` and poll it with
+`sodax.api.swaps.getSubmitTxStatus({ txHash, srcChainKey })` (both fields required). See
+[`SWAPS_API.md`](SWAPS_API.md) for the full 21-endpoint reference (quote, create-intent, submit-tx,
+status, fees, …).
 
 ## Solver Endpoints
 

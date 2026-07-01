@@ -115,12 +115,12 @@ See [`../breaking-changes/type-system.md`](../breaking-changes/type-system.md) �
 
 ### Pitfall
 
-If you previously injected a custom `ConfigService` for testing (a v1 escape hatch), v2 doesn't accept one at the top level — and unlike what earlier doc versions claimed, **v2 also doesn't expose a typed slot to inject a custom `IConfigApi`**. The realistic options:
+If you previously injected a custom `ConfigService` for testing (a v1 escape hatch), v2 doesn't accept one at the top level — and unlike what earlier doc versions claimed, **v2 also doesn't expose a typed slot to inject a custom `IConfigApiV1`**. The realistic options:
 
 - Point `SodaxConfig.api.baseURL` at a local mock backend server.
 - Construct your own `BackendApiService`-compatible object in your app/test bootstrap and swap it in where you control the `Sodax` instance.
 
-The `SodaxConfig.api` field is `ApiConfig` (`{ baseURL, timeout, headers }`) — there is no `api.api` sub-field for IConfigApi injection.
+The `SodaxConfig.api` field is `ApiConfig` (`{ baseURL, timeout, headers }`) — there is no `api.api` sub-field for IConfigApiV1 injection.
 
 ### Pitfall — module-scope reads
 

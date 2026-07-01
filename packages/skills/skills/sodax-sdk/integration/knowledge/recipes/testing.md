@@ -75,7 +75,7 @@ if (!result.ok) {
 
 ### Point tests at a sandbox backend
 
-There is no constructor slot to inject a custom `IConfigApi` — the only backend knob is `api.baseURL` (`ApiConfig = { baseURL, timeout?, headers? }`). To run tests against a sandbox or local mock server, set `api.baseURL` and let `initialize()` fetch config from it:
+There is no constructor slot to inject a custom `IConfigApiV1` — the only backend knob is `api` (`ApiConfig = BaseApiConfig | CustomApiConfig`: pass a flat `{ baseURL, timeout?, headers? }`, or a `CustomApiConfig` with separate `baseApiConfig` / `swapsApiConfig` endpoints). To run tests against a sandbox or local mock server, set `api.baseURL` and let `initialize()` fetch config from it:
 
 ```ts
 import { Sodax } from '@sodax/sdk';

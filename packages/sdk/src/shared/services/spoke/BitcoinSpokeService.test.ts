@@ -506,6 +506,70 @@ describe('BitcoinSpokeService.encodeWithdrawalData', () => {
 // 10. deposit — TRADING happy path, raw, unsupported token, USER+raw blocked
 // =========================================================================
 
+describe('BitcoinSpokeService.signAndSubmitRawTransaction', () => {
+  // Client-side completion of the TRADING deposit: sign the Bound-built PSBT then have Bound
+  // co-sign + broadcast. Mirrors the second half of deposit(raw:false).
+  const RAW_TX = { from: USER_ADDR, to: BTC_ASSET_MGR, value: 50_000n, data: 'cHNidA==' };
+  const RELAY = { address: HUB_WALLET, payload: '0x' as Hex };
+
+  it('signs the PSBT (finalize=false) then submits to Bound, returning the broadcast txid', async () => {
+    (mockBtcProvider.signTransaction as ReturnType<typeof vi.fn>).mockResolvedValueOnce('signedhex');
+    const sigSpy = vi.spyOn(btcSpoke.radfi, 'requestRadfiSignature').mockResolvedValueOnce(TX_HASH as never);
+
+    const result = await btcSpoke.signAndSubmitRawTransaction({
+      rawTx: RAW_TX,
+      walletProvider: mockBtcProvider,
+      relayData: RELAY,
+      accessToken: 'user-token',
+    });
+
+    expect(result).toBe(TX_HASH);
+    expect(mockBtcProvider.signTransaction).toHaveBeenCalledWith('cHNidA==', false);
+    expect(sigSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ userAddress: USER_ADDR, relayData: RELAY }),
+      'user-token',
+    );
+  });
+
+  it('defaults the access token to the radfi session token when none is supplied', async () => {
+    (mockBtcProvider.signTransaction as ReturnType<typeof vi.fn>).mockResolvedValueOnce('signedhex');
+    const sigSpy = vi.spyOn(btcSpoke.radfi, 'requestRadfiSignature').mockResolvedValueOnce(TX_HASH as never);
+
+    await btcSpoke.signAndSubmitRawTransaction({ rawTx: RAW_TX, walletProvider: mockBtcProvider });
+
+    expect(sigSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ userAddress: USER_ADDR }),
+      btcSpoke.radfi.accessToken,
+    );
+  });
+
+  it('throws when not in TRADING wallet mode', async () => {
+    const original = btcSpoke.walletMode;
+    Object.defineProperty(btcSpoke, 'walletMode', { value: 'USER', configurable: true });
+    try {
+      await expect(
+        btcSpoke.signAndSubmitRawTransaction({ rawTx: RAW_TX, walletProvider: mockBtcProvider }),
+      ).rejects.toThrow(/requires TRADING wallet mode/);
+    } finally {
+      Object.defineProperty(btcSpoke, 'walletMode', { value: original, configurable: true });
+    }
+  });
+
+  it('throws a clear error when the raw tx is missing data/from (Bitcoin is not schema-validated)', async () => {
+    const sigSpy = vi.spyOn(btcSpoke.radfi, 'requestRadfiSignature');
+
+    await expect(
+      btcSpoke.signAndSubmitRawTransaction({
+        rawTx: { from: USER_ADDR, to: BTC_ASSET_MGR, value: 50_000n, data: '' },
+        walletProvider: mockBtcProvider,
+      }),
+    ).rejects.toThrow(/rawTx\.data \(PSBT\) and rawTx\.from are required/);
+
+    expect(mockBtcProvider.signTransaction).not.toHaveBeenCalled();
+    expect(sigSpy).not.toHaveBeenCalled();
+  });
+});
+
 describe('BitcoinSpokeService.deposit', () => {
   // The TRADING flow needs both createWithdrawTransaction (returns a base64 PSBT) and the
   // optional requestRadfiSignature (returns the broadcast txid). For raw=true we skip both

@@ -58,8 +58,8 @@ export const RelayChainIdMap = {
 export type IntentChainId = (typeof RelayChainIdMap)[keyof typeof RelayChainIdMap];
 export const INTENT_CHAIN_IDS = Object.values(RelayChainIdMap);
 
-export const IntentRelayChainIdToChainKey: Map<IntentRelayChainId, ChainKey> = Object.fromEntries(
-  Object.entries(RelayChainIdMap).map(([chainKey, chainId]) => [chainId, chainKey]),
+export const IntentRelayChainIdToChainKey = new Map<IntentRelayChainId, ChainKey>(
+  Object.entries(RelayChainIdMap).map(([chainKey, chainId]) => [chainId, chainKey as ChainKey]),
 );
 
 /**

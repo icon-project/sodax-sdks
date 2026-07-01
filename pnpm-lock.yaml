@@ -615,6 +615,9 @@ importers:
       rlp:
         specifier: 3.0.0
         version: 3.0.0
+      valibot:
+        specifier: '>=1.2.0'
+        version: 1.4.0(typescript@5.5.4)
       viem:
         specifier: 'catalog:'
         version: 2.29.2(bufferutil@4.1.0)(typescript@5.5.4)(utf-8-validate@6.0.6)(zod@3.25.76)

@@ -28,15 +28,14 @@ import {
   useSodaxContext,
   loadRadfiSession,
   useTradingWalletBalance,
-  useBackendSubmitSwapTx,
+  useSwapsApiSubmitTx,
   useXBalances,
   useNearStorageGate,
-  type CreateIntentParams,
   getSupportedSolverTokens,
+  type CreateIntentParams,
   type SolverIntentQuoteRequest,
   type GetWalletProviderType,
-  type SubmitSwapTxRequest,
-  type SwapIntentData,
+  type SubmitTxRequestV2,
   type SpokeChainKey,
   type XToken,
   type ChainType,
@@ -44,7 +43,7 @@ import {
   type StellarChainKey,
   ChainKeys,
   HookKind,
-  isHookSupportedToken
+  isHookSupportedToken,
 } from '@sodax/dapp-kit';
 import {
   getXChainType,
@@ -52,7 +51,6 @@ import {
   useXAccount,
   useXDisconnect,
   useWalletProvider,
-  useXConnection,
   useXService,
 } from '@sodax/wallet-sdk-react';
 import type { Order } from '@/components/swaps/OrderStatus';
@@ -121,27 +119,9 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const [slippage, setSlippage] = useState<string>('0.5');
   const [useSubmitTxApi, setUseSubmitTxApi] = useState(false);
   const [hyperCoreDeposit, setHyperCoreDeposit] = useState(false);
-  const { mutateAsyncSafe: submitSwapTx, isPending: isSubmitting } = useBackendSubmitSwapTx();
+  const { mutateAsyncSafe: submitSwapTx, isPending: isSubmitting } = useSwapsApiSubmitTx();
   const [isBitcoinReady, setIsBitcoinReady] = useState(false);
   const [isDestBitcoinReady, setIsDestBitcoinReady] = useState(false);
-
-  // Bitcoin connector info for fund dialog (source)
-  const sourceChainType = getXChainType(src.chain);
-  const sourceBtcConnection = useXConnection({ xChainType: sourceChainType });
-  const sourceBtcService = useXService({ xChainType: sourceChainType });
-  const sourceBtcConnector =
-    sourceChainType === 'BITCOIN' && sourceBtcConnection?.xConnectorId && sourceBtcService
-      ? sourceBtcService.getXConnectorById(sourceBtcConnection.xConnectorId)
-      : undefined;
-
-  // Bitcoin connector info (dest)
-  const destChainType = getXChainType(dst.chain);
-  const destBtcConnection = useXConnection({ xChainType: destChainType });
-  const destBtcService = useXService({ xChainType: destChainType });
-  const destBtcConnector =
-    destChainType === 'BITCOIN' && destBtcConnection?.xConnectorId && destBtcService
-      ? destBtcService.getXConnectorById(destBtcConnection.xConnectorId)
-      : undefined;
 
   // HyperCore deposit is available only when the destination chain/token is accepted by the registered
   // hook (HyperEVM + USDC today). The registry — not this component — owns those constraints.
@@ -346,28 +326,11 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     const { tx: spokeTxHash, intent, relayData } = createIntentResult.value;
     console.log('Intent created. Spoke tx hash:', spokeTxHash);
 
-    const swapIntentData: SwapIntentData = {
-      intentId: intent.intentId.toString(),
-      creator: intent.creator,
-      inputToken: intent.inputToken,
-      outputToken: intent.outputToken,
-      inputAmount: intent.inputAmount.toString(),
-      minOutputAmount: intent.minOutputAmount.toString(),
-      deadline: intent.deadline.toString(),
-      allowPartialFill: intent.allowPartialFill,
-      srcChain: Number(intent.srcChain),
-      dstChain: Number(intent.dstChain),
-      srcAddress: intent.srcAddress,
-      dstAddress: intent.dstAddress,
-      solver: intent.solver,
-      data: intent.data,
-    };
-
-    const request: SubmitSwapTxRequest = {
+    const request: SubmitTxRequestV2 = {
       txHash: spokeTxHash as string,
       srcChainKey: src.chain,
       walletAddress: sourceAccount.address ?? '',
-      intent: swapIntentData,
+      intent,
       relayData: relayData.payload,
     };
 
@@ -535,8 +498,6 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
             walletProvider={sourceBitcoinWallet}
             onReadyChange={setIsBitcoinReady}
             nativeBalance={sourceTokenBalance}
-            connectorName={sourceBtcConnector?.name}
-            connectorIcon={sourceBtcConnector?.icon}
           />
         )}
 
@@ -622,8 +583,6 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
             walletProvider={destBitcoinWallet}
             onReadyChange={setIsDestBitcoinReady}
             nativeBalance={destTokenBalance}
-            connectorName={destBtcConnector?.name}
-            connectorIcon={destBtcConnector?.icon}
             isDestination
           />
         )}

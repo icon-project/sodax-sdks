@@ -30,6 +30,7 @@ type SodaxFeature =
   | 'dex'
   | 'partner'
   | 'recovery'
+  | 'backend' // HTTP-client layer (BackendApiService / SwapsApiService) — not a domain feature
   | 'leverageYield';
 ```
 
@@ -157,6 +158,10 @@ type LookupErrorCode = 'VALIDATION_FAILED' | 'LOOKUP_FAILED' | 'UNKNOWN';
 ### Partner (`feature: 'partner'`) and Recovery (`feature: 'recovery'`)
 
 Both follow the same shape: action methods get the full exec union (`'EXECUTION_FAILED' \| 'INTENT_CREATION_FAILED' \| ...`), read methods get `LookupErrorCode`, approve methods get `ApproveErrorCode`.
+
+### Backend / Swaps API (`feature: 'backend'`)
+
+`BackendApiService` (`sodax.backendApi`) and the Swaps API v2 client (`sodax.api.swaps`) are the HTTP-client layer — not domain features. Every method returns `Result<T, SodaxError<'EXTERNAL_API_ERROR'>>` with `context.endpoint`, and the transport failure (timeout / non-2xx / response-shape mismatch) preserved on `error.cause`. `context.api` distinguishes the two clients: `'backend'` for `BackendApiService`, `'swaps'` for the `sodax.api.swaps` client.
 
 ### Leverage Yield (`feature: 'leverageYield'`)
 
