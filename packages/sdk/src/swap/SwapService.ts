@@ -840,13 +840,21 @@ export class SwapService {
         `Invalid spoke chain (params.dstChain): ${params.dstChainKey}`,
         { ...baseCtx, field: 'dstChainKey' },
       );
-      //if dstChain is Bitcoin and token is BTC, check minOutputToken should be higher than 546 sats
-      if (isBitcoinChainKey(params.dstChainKey) && params.outputToken === 'BTC') {
-        swapInvariant(
-          params.minOutputAmount >= 546n,
-          `Invalid minOutputAmount (params.minOutputAmount): ${params.minOutputAmount}`,
-          { ...baseCtx, field: 'minOutputAmount' },
+      // Native-BTC output on Bitcoin must clear the 546-sat dust limit. `outputToken` is an original
+      // asset address (native BTC is '0:0'), so resolve it to its token descriptor and match on symbol
+      // instead of comparing the address against the 'BTC' string.
+      if (isBitcoinChainKey(params.dstChainKey)) {
+        const outputTokenInfo = this.config.getSpokeTokenFromOriginalAssetAddress(
+          params.dstChainKey,
+          params.outputToken,
         );
+        if (outputTokenInfo?.symbol === 'BTC') {
+          swapInvariant(
+            params.minOutputAmount >= 546n,
+            `Invalid minOutputAmount (${params.minOutputAmount}): below the Bitcoin dust limit of 546 sats`,
+            { ...baseCtx, field: 'minOutputAmount' },
+          );
+        }
       }
       if (isStacksChainKeyType(params.srcChainKey) && _params.raw === true) {
         swapInvariant(

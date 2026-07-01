@@ -1093,11 +1093,13 @@ describe('SwapService.createIntent', () => {
       }
     });
 
-    it('rejects when dstChain is Bitcoin + outputToken is BTC and minOutputAmount is below the 546 sat dust limit', async () => {
+    it('rejects when dstChain is Bitcoin + outputToken is native BTC and minOutputAmount is below the 546 sat dust limit', async () => {
+      // `outputToken` is an original asset address, not a symbol — native BTC on Bitcoin is '0:0'.
+      // The guard must resolve the address to its token descriptor, so the real address has to be used.
       const bitcoinDstParams = {
         ...intentInput(ChainKeys.BSC_MAINNET),
         dstChainKey: ChainKeys.BITCOIN_MAINNET,
-        outputToken: 'BTC' as const,
+        outputToken: spokeChainConfig[ChainKeys.BITCOIN_MAINNET].supportedTokens.BTC.address,
         minOutputAmount: 100n,
       };
 
@@ -1113,6 +1115,7 @@ describe('SwapService.createIntent', () => {
         expect(isSodaxError(caughtError)).toBe(true);
         expect(caughtError.code).toBe('VALIDATION_FAILED');
         expect(caughtError.message).toContain('Invalid minOutputAmount');
+        expect(caughtError.message).toContain('dust limit');
       }
     });
   });
