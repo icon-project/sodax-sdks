@@ -45,16 +45,17 @@ import {
   useSwapsApiQuote,
   useSwapsApiSubmitTx,
   useSwapsApiTokens,
-  useTradingWalletBalance,
+  useBitcoinTradingSetup,
   useXBalances,
   ChainKeys,
+  isBitcoinChainKey,
+  isStacksChainKey,
 } from '@sodax/dapp-kit';
 import {
   getXChainType,
   useEvmSwitchChain,
   useWalletProvider,
   useXAccount,
-  useXConnection,
   useXDisconnect,
   useXService,
 } from '@sodax/wallet-sdk-react';
@@ -100,6 +101,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const [nearStorageError, setNearStorageError] = useState<string | null>(null);
   const [isApproving, setIsApproving] = useState(false);
   const [isSwapping, setIsSwapping] = useState(false);
+  const [isSourceBitcoinReady, setIsSourceBitcoinReady] = useState(false);
   const [isDestBitcoinReady, setIsDestBitcoinReady] = useState(false);
 
   // Supported chains + tokens straight from the Swaps API.
@@ -149,27 +151,18 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   });
   const destTokenBalance = destBalances?.[dst.token?.address ?? ''] ?? 0n;
 
-  // Bitcoin destination delivers to the Bound Exchange trading wallet — a client-side
-  // prerequisite the Swaps API doesn't cover. (Bitcoin as a source chain is unsupported,
-  // see lib/signAndBroadcast.ts.)
-  const destTradingAddress =
-    dst.chain === ChainKeys.BITCOIN_MAINNET && destAccount.address
-      ? loadRadfiSession(destAccount.address)?.tradingAddress
-      : undefined;
-  const destBitcoinWallet =
-    dst.chain === ChainKeys.BITCOIN_MAINNET
-      ? (destWalletProvider as GetWalletProviderType<typeof ChainKeys.BITCOIN_MAINNET> | undefined)
-      : undefined;
-  const { data: destTradingBal } = useTradingWalletBalance({
-    params: { walletProvider: destBitcoinWallet, tradingAddress: destTradingAddress },
+  // Bitcoin trading setup — each side routes through a Bound Exchange (Radfi) trading wallet; the
+  // hook is inert unless its chain is Bitcoin.
+  const sourceBitcoin = useBitcoinTradingSetup({
+    chainKey: srcChainKey,
+    walletProvider: sourceWalletProvider,
+    address: sourceAccount.address,
   });
-  const destChainType = getXChainType(dstChainKey);
-  const destBtcConnection = useXConnection({ xChainType: destChainType });
-  const destBtcService = useXService({ xChainType: destChainType });
-  const destBtcConnector =
-    destChainType === 'BITCOIN' && destBtcConnection?.xConnectorId && destBtcService
-      ? destBtcService.getXConnectorById(destBtcConnection.xConnectorId)
-      : undefined;
+  const destBitcoin = useBitcoinTradingSetup({
+    chainKey: dstChainKey,
+    walletProvider: destWalletProvider,
+    address: destAccount.address,
+  });
 
   // Quote via the Swaps API (debounced so we don't hit the endpoint per keystroke).
   const debouncedAmount = useDebouncedValue(sourceAmount);
@@ -253,6 +246,15 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     const freshDeadline = await deadlineQuery.refetch();
     const deadline = freshDeadline.data?.deadline ?? String(Math.floor(Date.now() / 1000) + 300);
 
+    // Source-chain swap extras the Swaps API only needs for specific chain families:
+    //  - Stacks:  the signer public key, which a Stacks address can't derive on its own.
+    //  - Bitcoin: the Bound Exchange (Radfi) access token for TRADING-mode intents.
+    // Both stay undefined for every other source chain.
+    const srcPublicKey = isStacksChainKey(srcChainKey) ? sourceAccount.publicKey : undefined;
+    const bound = isBitcoinChainKey(srcChainKey)
+      ? { accessToken: loadRadfiSession(sourceAccount.address)?.accessToken }
+      : undefined;
+
     setIntentParams({
       srcChainKey: src.chain,
       dstChainKey: dst.chain,
@@ -264,6 +266,8 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       allowPartialFill: false,
       srcAddress: sourceAccount.address,
       dstAddress,
+      srcPublicKey,
+      bound,
     });
   };
 
@@ -501,7 +505,15 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
         </div>
         <div className="mix-blend-multiply text-black text-(length:--body-comfortable) font-medium font-['InterRegular'] flex gap-1">
           <span className="hidden sm:inline">Balance:</span>
-          <span className="inline">{formatTokenAmount(sourceTokenBalance, src.token?.decimals ?? 0, 5)}</span>
+          <span className="inline">
+            {formatTokenAmount(
+              src.chain === ChainKeys.BITCOIN_MAINNET && sourceBitcoin.tradingBalance
+                ? sourceBitcoin.tradingBalance.btcSatoshi
+                : sourceTokenBalance,
+              src.token?.decimals ?? 0,
+              5,
+            )}
+          </span>
         </div>
         <div className="grow">
           <Label htmlFor="fromAddress">Source address</Label>
@@ -514,6 +526,14 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
             )}
           </div>
         </div>
+
+        {sourceBitcoin.wallet && (
+          <BitcoinSetupPanel
+            walletProvider={sourceBitcoin.wallet}
+            onReadyChange={setIsSourceBitcoinReady}
+            nativeBalance={sourceTokenBalance}
+          />
+        )}
 
         {!isSourceSignable && (
           <div className="text-amber-600 text-sm">
@@ -571,7 +591,9 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
           <span className="hidden sm:inline">Balance:</span>
           <span className="inline">
             {formatTokenAmount(
-              dst.chain === ChainKeys.BITCOIN_MAINNET && destTradingBal ? destTradingBal.btcSatoshi : destTokenBalance,
+              dst.chain === ChainKeys.BITCOIN_MAINNET && destBitcoin.tradingBalance
+                ? destBitcoin.tradingBalance.btcSatoshi
+                : destTokenBalance,
               dst.token?.decimals ?? 0,
               4,
             )}
@@ -599,13 +621,11 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
           </div>
         </div>
 
-        {destBitcoinWallet && (
+        {destBitcoin.wallet && (
           <BitcoinSetupPanel
-            walletProvider={destBitcoinWallet}
+            walletProvider={destBitcoin.wallet}
             onReadyChange={setIsDestBitcoinReady}
             nativeBalance={destTokenBalance}
-            connectorName={destBtcConnector?.name}
-            connectorIcon={destBtcConnector?.icon}
             isDestination
           />
         )}
@@ -719,6 +739,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
                       !isSourceSignable ||
                       !hasAllowed ||
                       isSwapping ||
+                      (src.chain === ChainKeys.BITCOIN_MAINNET && !isSourceBitcoinReady) ||
                       (dst.chain === ChainKeys.BITCOIN_MAINNET && !isDestBitcoinReady) ||
                       nearStorage.blocksAction
                     }
