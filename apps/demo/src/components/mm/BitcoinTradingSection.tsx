@@ -1,6 +1,6 @@
 import React from 'react';
 import { useBitcoinBalance, ChainKeys, type IBitcoinWalletProvider } from '@sodax/dapp-kit';
-import { getXChainType, useWalletProvider, useXAccount, useXConnection, useXService } from '@sodax/wallet-sdk-react';
+import { useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -19,12 +19,6 @@ export function BitcoinTradingSection() {
   const { address } = useXAccount({ xChainId: ChainKeys.BITCOIN_MAINNET });
   const { data: nativeBalance, isLoading: isNativeBalanceLoading } = useBitcoinBalance({ params: { address } });
 
-  const chainType = getXChainType(ChainKeys.BITCOIN_MAINNET);
-  const connection = useXConnection({ xChainType: chainType });
-  const service = useXService({ xChainType: chainType });
-  const connector =
-    connection?.xConnectorId && service ? service.getXConnectorById(connection.xConnectorId) : undefined;
-
   if (!walletProvider) return null;
 
   return (
@@ -42,8 +36,6 @@ export function BitcoinTradingSection() {
           onReadyChange={noop}
           nativeBalance={nativeBalance}
           isNativeBalanceLoading={isNativeBalanceLoading}
-          connectorName={connector?.name}
-          connectorIcon={connector?.icon}
         />
       </CardContent>
     </Card>
