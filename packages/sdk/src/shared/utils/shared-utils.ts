@@ -3,7 +3,9 @@ import { isPartnerFeeAmount, isPartnerFeePercentage } from '../guards.js';
 import {
   type SpokeChainKey,
   type Hex,
+  type XToken,
   getChainType,
+  isBitcoinChainKey,
   DEFAULT_MAX_RETRY,
   DEFAULT_RETRY_DELAY_MS,
   FEE_PERCENTAGE_SCALE,
@@ -15,6 +17,15 @@ import { bcs } from '@mysten/sui/bcs';
 import { PublicKey } from '@solana/web3.js';
 import { Address as StellarAddress, xdr } from '@stellar/stellar-sdk';
 import { Cl, cvToString, deserializeCV, serializeCV } from '@sodax/libs/stacks/core';
+
+/**
+ * True when `(chainKey, token)` denotes native BTC on the Bitcoin chain — the only transfer whose amount is
+ * denominated in satoshis and therefore subject to `BITCOIN_DUST_SATS`. BTC-family tokens are 8-decimal,
+ * so a base-unit amount equals its satoshi value on both the deposit (source) and delivery (destination) side.
+ */
+export function isNativeBitcoinTransfer(chainKey: SpokeChainKey, token: XToken | undefined): boolean {
+  return isBitcoinChainKey(chainKey) && token?.symbol === 'BTC';
+}
 
 export async function retry<T>(
   action: (retryCount: number) => Promise<T>,

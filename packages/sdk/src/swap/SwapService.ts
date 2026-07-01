@@ -33,6 +33,7 @@ import {
   type RelayExtraData,
   type TxHashPair,
   isStacksChainKeyType,
+  isNativeBitcoinTransfer,
 } from '../shared/index.js';
 import { SolverApiService } from './SolverApiService.js';
 import { EvmSolverService } from './EvmSolverService.js';
@@ -74,7 +75,6 @@ import {
   type Hash,
   type HttpUrl,
   getIntentRelayChainId,
-  isBitcoinChainKey,
   type FeeAmount,
   type GetWalletProviderType,
   type PartnerFee,
@@ -101,6 +101,7 @@ import {
   type StellarChainKey,
   type SpokeExecActionParams,
   type SonicChainKey,
+  BITCOIN_DUST_SATS,
 } from '@sodax/types';
 
 export type GetIntentSubmitTxExtraDataParams = { txHash: Hash } | { intent: Intent };
@@ -840,21 +841,25 @@ export class SwapService {
         `Invalid spoke chain (params.dstChain): ${params.dstChainKey}`,
         { ...baseCtx, field: 'dstChainKey' },
       );
-      // Native-BTC output on Bitcoin must clear the 546-sat dust limit. `outputToken` is an original
-      // asset address (native BTC is '0:0'), so resolve it to its token descriptor and match on symbol
-      // instead of comparing the address against the 'BTC' string.
-      if (isBitcoinChainKey(params.dstChainKey)) {
-        const outputTokenInfo = this.config.getSpokeTokenFromOriginalAssetAddress(
-          params.dstChainKey,
-          params.outputToken,
+      // Native BTC on the Bitcoin chain is denominated in satoshis and must clear the 546-sat dust limit —
+      // the BTC deposit on a Bitcoin source and the BTC delivery to a Bitcoin destination alike. `inputToken`
+      // / `outputToken` are original asset addresses (native BTC is '0:0'), so resolve them to token
+      // descriptors and match on symbol rather than comparing the address against the 'BTC' string.
+      const inputTokenInfo = this.config.getSpokeTokenFromOriginalAssetAddress(params.srcChainKey, params.inputToken);
+      if (isNativeBitcoinTransfer(params.srcChainKey, inputTokenInfo)) {
+        swapInvariant(
+          params.inputAmount >= BITCOIN_DUST_SATS,
+          `Invalid inputAmount (${params.inputAmount}): below the Bitcoin dust limit of ${BITCOIN_DUST_SATS} sats`,
+          { ...baseCtx, field: 'inputAmount' },
         );
-        if (outputTokenInfo?.symbol === 'BTC') {
-          swapInvariant(
-            params.minOutputAmount >= 546n,
-            `Invalid minOutputAmount (${params.minOutputAmount}): below the Bitcoin dust limit of 546 sats`,
-            { ...baseCtx, field: 'minOutputAmount' },
-          );
-        }
+      }
+      const outputTokenInfo = this.config.getSpokeTokenFromOriginalAssetAddress(params.dstChainKey, params.outputToken);
+      if (isNativeBitcoinTransfer(params.dstChainKey, outputTokenInfo)) {
+        swapInvariant(
+          params.minOutputAmount >= BITCOIN_DUST_SATS,
+          `Invalid minOutputAmount (${params.minOutputAmount}): below the Bitcoin dust limit of ${BITCOIN_DUST_SATS} sats`,
+          { ...baseCtx, field: 'minOutputAmount' },
+        );
       }
       if (isStacksChainKeyType(params.srcChainKey) && _params.raw === true) {
         swapInvariant(

@@ -1118,6 +1118,27 @@ describe('SwapService.createIntent', () => {
         expect(caughtError.message).toContain('dust limit');
       }
     });
+
+    it('rejects when srcChain is Bitcoin + inputToken is native BTC and inputAmount is below the 546 sat dust limit', async () => {
+      // The dust rule applies to the BTC deposit on a Bitcoin source too. `inputToken` is the native BTC
+      // original asset address ('0:0'); the raw path lets the invariant trip before any wallet step.
+      const bitcoinSrcParams = {
+        ...intentInput(ChainKeys.BITCOIN_MAINNET),
+        inputToken: spokeChainConfig[ChainKeys.BITCOIN_MAINNET].supportedTokens.BTC.address,
+        inputAmount: 100n,
+      };
+
+      const result = await sodax.swaps.createIntent({ params: bitcoinSrcParams, raw: true });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        const caughtError = result.error;
+        expect(isSodaxError(caughtError)).toBe(true);
+        expect(caughtError.code).toBe('VALIDATION_FAILED');
+        expect(caughtError.message).toContain('Invalid inputAmount');
+        expect(caughtError.message).toContain('dust limit');
+      }
+    });
   });
 
   // Error propagation — failures from collaborators inside the try/catch must be surfaced

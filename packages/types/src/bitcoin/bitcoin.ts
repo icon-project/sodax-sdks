@@ -1,5 +1,13 @@
 import type { ICoreWallet } from '../wallet/wallet.js';
 
+/**
+ * Bitcoin protocol dust limit, in satoshis. Any native-BTC output below this is "dust" — economically
+ * unspendable, and nodes/relays reject transactions that create it. Native-BTC deposits (Bitcoin as the
+ * source) and deliveries (Bitcoin as the destination) must clear this threshold. Single source of truth
+ * for the value; number-based UTXO math converts it with `Number(...)`.
+ */
+export const BITCOIN_DUST_SATS = 546n;
+
 /** Check whether an AddressType is supported for signing/spending. */
 export function isSupportedBitcoinAddressType(addressType: string): addressType is BtcAddressType {
   return (BTC_ADDRESS_TYPES as readonly string[]).includes(addressType);

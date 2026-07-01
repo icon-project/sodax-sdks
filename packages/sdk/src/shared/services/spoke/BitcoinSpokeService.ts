@@ -8,7 +8,13 @@ import type {
   TxReturnType,
 } from '@sodax/types';
 import type { RelayExtraData } from '../../types/relay-types.js';
-import { ChainKeys, detectBitcoinAddressType, getIntentRelayChainId, usesBip322MessageSigning } from '@sodax/types';
+import {
+  BITCOIN_DUST_SATS,
+  ChainKeys,
+  detectBitcoinAddressType,
+  getIntentRelayChainId,
+  usesBip322MessageSigning,
+} from '@sodax/types';
 import * as ecc from '@bitcoinerlab/secp256k1';
 import { keccak256, stringToBytes } from 'viem';
 import type { OnDemandRelayData } from '../../types/types.js';
@@ -62,7 +68,8 @@ export interface OnDemandBtcPayload {
 }
 
 const BITCOIN_DEFAULT_FEE_RATE = 3;
-const DUST_THRESHOLD = 546;
+// UTXO math (bitcoinjs-lib) is number-based; convert the canonical bigint sats value once.
+const DUST_THRESHOLD = Number(BITCOIN_DUST_SATS);
 
 export class BitcoinSpokeService {
   private readonly config: ConfigService;

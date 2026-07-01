@@ -197,6 +197,22 @@ describe('BridgeService.createBridgeIntent — Bitcoin USER mode', () => {
       expect.objectContaining({ srcAddress: BTC_USER_ADDR }),
     );
   });
+
+  it('rejects a native-BTC deposit below the 546 sat dust limit', async () => {
+    const dustInput = btcBridgeInput();
+    const result = await sodax.bridge.createBridgeIntent({
+      ...dustInput,
+      params: { ...dustInput.params, amount: 100n },
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toBeInstanceOf(SodaxError);
+      expect(result.error.code).toBe('VALIDATION_FAILED');
+      expect(result.error.message).toContain('Invalid amount');
+      expect(result.error.message).toContain('dust limit');
+    }
+  });
 });
 
 // =========================================================================
