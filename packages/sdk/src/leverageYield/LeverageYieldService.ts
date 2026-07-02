@@ -288,7 +288,8 @@ export type LeverageYieldSwapDepositParams = {
   solver?: Address;
   /**
    * Partner fee for this deposit, carried on the payload as the swap layer's per-intent
-   * fee override. Defaults to the globally configured `config.swaps.partnerFee`.
+   * fee override. Defaults to the effective swap fee (`config.swapPartnerFee` = the `swaps`
+   * override if set, else the global `fee`).
    */
   partnerFee?: PartnerFee;
 };
@@ -347,7 +348,7 @@ export type LeverageYieldSwapPayload = {
  *   user's hub wallet — `srcChainKey` is then the chain the user *signs* on, and the
  *   intent is created by authorising the hub wallet via a `Connection.sendMessage`
  *   instead of a spoke-side AssetManager deposit.
- * - `partnerFee` overrides the globally configured `config.swaps.partnerFee` for this
+ * - `partnerFee` overrides the effective swap fee (`config.swapPartnerFee`) for this
  *   intent only.
  */
 export type VaultSwapActionParams<K extends SpokeChainKey, Raw extends boolean = false> = SpokeExecActionParams<
@@ -626,8 +627,8 @@ export class LeverageYieldService {
   public async createVaultIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: VaultSwapActionParams<K, Raw>,
   ): Promise<Result<CreateVaultIntentResult<K, Raw>, LeverageYieldCreateIntentError>> {
-    // Per-intent partnerFee override beats the globally configured fee (undefined = no fee).
-    const { params, skipSimulation, hubWalletSwap, partnerFee = this.config.swaps.partnerFee } = _params;
+    // Per-intent partnerFee override beats the effective swap fee (per-feature override, else global). undefined = no fee.
+    const { params, skipSimulation, hubWalletSwap, partnerFee = this.config.swapPartnerFee } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
 
     try {
@@ -864,79 +865,98 @@ export class LeverageYieldService {
     const { params } = _params;
     const srcChainKey = params.srcChainKey;
     const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'vaultSwap' satisfies LeverageYieldAction };
-    try {
-      const timeout = _params.timeout;
-      const createIntentResult = await this.createVaultIntent(_params);
-      if (!createIntentResult.ok) {
-        // LeverageYieldCreateIntentErrorCode ⊂ LeverageYieldSwapErrorCode by definition.
-        return { ok: false, error: createIntentResult.error };
-      }
+    return this.config.analytics.trackResult('leverageYield', 'vaultSwap', async () => {
+      try {
+        const timeout = _params.timeout;
+        const createIntentResult = await this.createVaultIntent(_params);
+        if (!createIntentResult.ok) {
+          // LeverageYieldCreateIntentErrorCode ⊂ LeverageYieldSwapErrorCode by definition.
+          return { ok: false, error: createIntentResult.error };
+        }
 
-      const { tx: spokeTxHash, intent, relayData } = createIntentResult.value;
+        const { tx: spokeTxHash, intent, relayData } = createIntentResult.value;
 
-      const verifyTxHashResult = await this.spoke.verifyTxHash({
-        txHash: spokeTxHash,
-        chainKey: srcChainKey,
-      });
-      if (!verifyTxHashResult.ok) {
-        return {
-          ok: false,
-          error: verifyFailed('leverageYield', verifyTxHashResult.error, baseCtx),
-        };
-      }
-
-      let dstIntentTxHash: string;
-      if (isHubChainKeyType(srcChainKey)) {
-        dstIntentTxHash = spokeTxHash;
-      } else {
-        const packet = await relayTxAndWaitPacket({
-          srcTxHash: spokeTxHash,
-          data: relayData,
+        const verifyTxHashResult = await this.spoke.verifyTxHash({
+          txHash: spokeTxHash,
           chainKey: srcChainKey,
-          relayerApiEndpoint: this.config.relay.relayerApiEndpoint,
-          timeout,
         });
-        if (!packet.ok) {
+        if (!verifyTxHashResult.ok) {
           return {
             ok: false,
-            error: mapRelayFailure(packet.error, { feature: 'leverageYield', ...baseCtx }),
+            error: verifyFailed('leverageYield', verifyTxHashResult.error, baseCtx),
           };
         }
-        dstIntentTxHash = packet.value.dst_tx_hash;
-      }
 
-      const postExecResult = await this.notifySolver({
-        intent_tx_hash: dstIntentTxHash as `0x${string}`,
-      });
-      if (!postExecResult.ok) {
-        // LeverageYieldPostExecutionErrorCode ⊂ LeverageYieldSwapErrorCode by definition.
-        return { ok: false, error: postExecResult.error };
-      }
-
-      return {
-        ok: true,
-        value: {
-          solverExecutionResponse: postExecResult.value,
-          intent,
-          intentDeliveryInfo: {
-            srcChainKey,
+        let dstIntentTxHash: string;
+        if (isHubChainKeyType(srcChainKey)) {
+          dstIntentTxHash = spokeTxHash;
+        } else {
+          const packet = await relayTxAndWaitPacket({
             srcTxHash: spokeTxHash,
-            srcAddress: params.srcAddress,
-            dstChainKey: params.dstChainKey,
-            dstTxHash: dstIntentTxHash,
-            dstAddress: params.dstAddress,
-          } satisfies IntentDeliveryInfo,
-        },
-      };
-    } catch (error) {
-      // Narrow guard: preserve SodaxErrors whose code is in the vault-swap union; wrap
-      // unknown codes (e.g. an accidental cross-feature code) as UNKNOWN.
-      if (isLeverageYieldSwapError(error)) return { ok: false, error };
-      return {
-        ok: false,
-        error: unknownFailed('leverageYield', error, baseCtx),
-      };
-    }
+            data: relayData,
+            chainKey: srcChainKey,
+            relayerApiEndpoint: this.config.relay.relayerApiEndpoint,
+            timeout,
+          });
+          if (!packet.ok) {
+            return {
+              ok: false,
+              error: mapRelayFailure(packet.error, { feature: 'leverageYield', ...baseCtx }),
+            };
+          }
+          dstIntentTxHash = packet.value.dst_tx_hash;
+        }
+
+        const postExecResult = await this.notifySolver({
+          intent_tx_hash: dstIntentTxHash as `0x${string}`,
+        });
+        if (!postExecResult.ok) {
+          // LeverageYieldPostExecutionErrorCode ⊂ LeverageYieldSwapErrorCode by definition.
+          return { ok: false, error: postExecResult.error };
+        }
+
+        return {
+          ok: true,
+          value: {
+            solverExecutionResponse: postExecResult.value,
+            intent,
+            intentDeliveryInfo: {
+              srcChainKey,
+              srcTxHash: spokeTxHash,
+              srcAddress: params.srcAddress,
+              dstChainKey: params.dstChainKey,
+              dstTxHash: dstIntentTxHash,
+              dstAddress: params.dstAddress,
+            } satisfies IntentDeliveryInfo,
+          },
+        };
+      } catch (error) {
+        // Narrow guard: preserve SodaxErrors whose code is in the vault-swap union; wrap
+        // unknown codes (e.g. an accidental cross-feature code) as UNKNOWN.
+        if (isLeverageYieldSwapError(error)) return { ok: false, error };
+        return {
+          ok: false,
+          error: unknownFailed('leverageYield', error, baseCtx),
+        };
+      }
+    },
+    {
+      start: () => ({
+        srcChainKey: _params.params.srcChainKey,
+        dstChainKey: _params.params.dstChainKey,
+        srcAddress: _params.params.srcAddress,
+        dstAddress: _params.params.dstAddress,
+        inputToken: _params.params.inputToken,
+        outputToken: _params.params.outputToken,
+        inputAmount: _params.params.inputAmount,
+      }),
+      success: value => ({
+        intentId: value.intent.intentId,
+        srcTxHash: value.intentDeliveryInfo.srcTxHash,
+        dstTxHash: value.intentDeliveryInfo.dstTxHash,
+      }),
+      failure: error => ({ code: error.code }),
+    });
   }
 
   /**

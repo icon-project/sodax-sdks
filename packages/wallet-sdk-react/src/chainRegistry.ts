@@ -28,6 +28,7 @@ import { BitcoinXService } from './xchains/bitcoin/index.js';
 import { UnisatXConnector } from './xchains/bitcoin/UnisatXConnector.js';
 import { XverseXConnector } from './xchains/bitcoin/XverseXConnector.js';
 import { OKXXConnector } from './xchains/bitcoin/OKXXConnector.js';
+import { BitcoinHanaXConnector } from './xchains/bitcoin/BitcoinHanaXConnector.js';
 import { BitcoinXConnector } from './xchains/bitcoin/BitcoinXConnector.js';
 import { hasSignBip322, hasSignEcdsa } from './xchains/bitcoin/bitcoinSignGuards.js';
 import { NearXService } from './xchains/near/NearXService.js';
@@ -181,7 +182,12 @@ export const chainRegistry: Record<string, ChainServiceFactory> = {
       const defaults = getEntryDefaults<typeof ChainKeys.BITCOIN_MAINNET>(
         walletConfig?.BITCOIN?.chains?.[ChainKeys.BITCOIN_MAINNET],
       );
-      return [new UnisatXConnector(defaults), new XverseXConnector(defaults), new OKXXConnector(defaults)];
+      return [
+        new UnisatXConnector(defaults),
+        new XverseXConnector(defaults),
+        new OKXXConnector(defaults),
+        new BitcoinHanaXConnector(defaults),
+      ];
     },
     providerManaged: false,
     createActions: (service, getStore) => ({

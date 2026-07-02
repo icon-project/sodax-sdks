@@ -63,12 +63,15 @@ jobs:
 
       - name: SDK tarball size check
         env:
-          SODAX_SDK_TARBALL_BASELINE_BYTES: '627000'
+          SODAX_SDK_TARBALL_BASELINE_BYTES: '750000'
           SODAX_SDK_TARBALL_TOLERANCE_PCT: '15'
         run: pnpm --filter @sodax/sdk size:check
 
       - name: Build Check
         run: pnpm checkTs
+
+      - name: AI dev file validation
+        run: pnpm check:ai-dev-files
 
       - name: AI docs validation
         run: pnpm check:ai

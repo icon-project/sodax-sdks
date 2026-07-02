@@ -14,12 +14,13 @@ Access: `sodax.migration`. Service class: `MigrationService` (with sub-services 
 
 All three sub-services follow the same pattern: deposit on a spoke chain → relay to hub → execute hub-side migration contract → deliver new token.
 
-`MigrationService` exposes 11 async public methods:
+The `MigrationService` facade exposes 10 async public methods:
 
 - 4 orchestrators (full execution): `migratebnUSD`, `migrateIcxToSoda`, `revertMigrateSodaToIcx`, `migrateBaln`.
-- 4 intent creators (raw or signed spoke tx, no full lifecycle): `createMigrateBnUSDIntent`, `createMigrateIcxToSodaIntent`, `createRevertMigrateSodaToIcxIntent`, `createMigrateBalnIntent`.
+- 4 intent creators (raw or signed spoke tx, no full lifecycle): `createMigratebnUSDIntent`, `createMigrateIcxToSodaIntent`, `createRevertSodaToIcxMigrationIntent`, `createMigrateBalnIntent`.
 - `approve`, `isAllowanceValid` (action-discriminated like staking and money market).
-- `getAvailableAmount` (read-only; `IcxMigrationService` only — checks how much SODA the user can claim from a partial migration).
+
+One more read-only method, `getAvailableAmount`, lives on the `icxMigration` sub-service (not the facade). It reads the migration contract's **total available SODA liquidity** on the hub chain and takes **no arguments** — it is not a per-user "claimable from a partial migration" amount.
 
 `BalnSwapService` has additional lock-management methods that **still throw** (do not return `Result<T>`): `claim`, `claimUnstaked`, `stake`, `unstake`, `cancelUnstake`, `getDetailedUserLocks`. This is deliberate tech debt; future cleanup. Wrap them in `try/catch` until then.
 
@@ -31,11 +32,11 @@ sodax.migration.migrateIcxToSoda<K>(action): Promise<Result<TxHashPair, SodaxErr
 sodax.migration.revertMigrateSodaToIcx<K>(action): Promise<Result<TxHashPair, SodaxError>>;
 sodax.migration.migrateBaln<K>(action): Promise<Result<TxHashPair, SodaxError>>;
 
-sodax.migration.createMigrateBnUSDIntent<K, Raw>(...): Promise<Result<...>>;
+sodax.migration.createMigratebnUSDIntent<K, Raw>(...): Promise<Result<...>>;
 // + 3 other createXxxIntent methods
 
-sodax.migration.approve<K, Raw>(args): Promise<Result<TxReturnType<K, Raw>, SodaxError>>;
-sodax.migration.isAllowanceValid<K, Raw>(args): Promise<Result<boolean, SodaxError>>;
+sodax.migration.approve<K, Raw>(actionParams, action): Promise<Result<TxReturnType<K, Raw>, SodaxError>>;
+sodax.migration.isAllowanceValid<K>(params, action): Promise<Result<boolean, SodaxError>>;
 
 sodax.migration.icxMigration.getAvailableAmount(): Promise<Result<bigint, SodaxError>>;
 
@@ -50,23 +51,47 @@ sodax.migration.balnSwapService.getDetailedUserLocks(...): Promise<DetailedUserL
 
 ## Action params shape
 
+`MigrationParams<K>` is **not** a shared base record — it is a union of the three concrete param types:
+
 ```ts
-type MigrationParams<K extends SpokeChainKey> = {
+type MigrationParams<K extends SpokeChainKey> =
+  | IcxMigrateParams
+  | UnifiedBnUSDMigrateParams<K>
+  | BalnMigrateParams;
+
+type UnifiedBnUSDMigrateParams<K extends SpokeChainKey> = {
   srcChainKey: K;
-  srcAddress: GetAddressType<K>;
+  srcAddress: string;
+  srcbnUSD: string;              // legacy or new bnUSD; SDK detects direction from address
+  dstChainKey: SpokeChainKey;    // required
+  dstbnUSD: string;              // the other side
   amount: bigint;
-  dstAddress?: string;
+  dstAddress: string;
 };
 
-type UnifiedBnUSDMigrateParams<K> = MigrationParams<K> & {
-  srcToken: `0x${string}`;       // legacy or new bnUSD; SDK detects direction from address
-  dstToken: `0x${string}`;       // the other side
+// ICX and BALN param types are NOT generic over <K>.
+type IcxMigrateParams = {
+  srcChainKey: IconChainKey;
+  srcAddress: IconAddress;
+  address: IcxTokenType;         // the ICX or wICX token to migrate (required)
+  amount: bigint;
+  dstAddress: Address;
 };
 
-type IcxToSodaMigrateParams<K> = MigrationParams<K>;
-type RevertSodaToIcxParams<K> = MigrationParams<K>;
-type BalnSwapParams<K> = MigrationParams<K> & {
-  lockPeriodMonths: 0 | 1 | 2 | 3 | 6 | 12 | 18 | 24;  // reward multiplier 0.5x – 1.5x
+type IcxCreateRevertMigrationParams = {
+  srcChainKey: SonicChainKey;
+  srcAddress: Address;
+  amount: bigint;
+  dstAddress: IconEoaAddress;    // ICON EOA that receives the reverted ICX (required)
+};
+
+type BalnMigrateParams = {
+  srcChainKey: IconChainKey;
+  srcAddress: IconAddress;
+  amount: bigint;
+  lockupPeriod: LockupPeriod;    // enum in SECONDS: NO_LOCKUP | SIX_MONTHS | TWELVE_MONTHS | EIGHTEEN_MONTHS | TWENTY_FOUR_MONTHS (→ 0/6/12/18/24 months)
+  dstAddress: Address;
+  stake: boolean;                // required
 };
 ```
 
@@ -79,8 +104,9 @@ const result = await sodax.migration.migratebnUSD({
   params: {
     srcChainKey: ChainKeys.ICON_MAINNET,
     srcAddress: 'hx…',
-    srcToken: '0x…',  // legacy bnUSD on ICON
-    dstToken: '0x…',  // new bnUSD on BASE
+    srcbnUSD: '0x…',                    // legacy bnUSD on ICON
+    dstChainKey: ChainKeys.BASE_MAINNET, // required
+    dstbnUSD: '0x…',                    // new bnUSD on BASE
     amount: parseUnits('100', 18),
     dstAddress: '0x…',
   },
@@ -92,13 +118,19 @@ if (!result.ok) return;
 const { srcChainTxHash, dstChainTxHash } = result.value;
 ```
 
-The SDK auto-detects direction from `(srcToken, dstToken)` addresses; the `direction` field surfaces on `error.context` if it fails (`'forward' | 'reverse'`).
+The SDK auto-detects direction from `(srcbnUSD, dstbnUSD)` addresses; the `direction` field surfaces on `error.context` if it fails (`'forward' | 'reverse'`).
 
 ### ICX → SODA
 
 ```ts
 await sodax.migration.migrateIcxToSoda({
-  params: { srcChainKey: ChainKeys.ICON_MAINNET, srcAddress: 'hx…', amount },
+  params: {
+    srcChainKey: ChainKeys.ICON_MAINNET,
+    srcAddress: 'hx…',
+    address: icxTokenType, // IcxTokenType — the ICX or wICX token to migrate (required)
+    amount,
+    dstAddress: '0x…',     // required
+  },
   raw: false,
   walletProvider: iconWp,
 });
@@ -108,7 +140,12 @@ await sodax.migration.migrateIcxToSoda({
 
 ```ts
 await sodax.migration.revertMigrateSodaToIcx({
-  params: { srcChainKey: ChainKeys.SONIC_MAINNET, srcAddress: '0x…', amount },
+  params: {
+    srcChainKey: ChainKeys.SONIC_MAINNET,
+    srcAddress: '0x…',
+    amount,
+    dstAddress: 'hx…',     // ICON EOA that receives the reverted ICX (required)
+  },
   raw: false,
   walletProvider: sonicWp,
 });
@@ -122,7 +159,9 @@ await sodax.migration.migrateBaln({
     srcChainKey: ChainKeys.ICON_MAINNET,
     srcAddress: 'hx…',
     amount: parseUnits('1000', 18),
-    lockPeriodMonths: 12,    // 1.0x base; 24 is 1.5x; 0 is 0.5x
+    lockupPeriod: LockupPeriod.TWELVE_MONTHS, // 1.0x base; TWENTY_FOUR_MONTHS is 1.5x; NO_LOCKUP is 0.5x
+    dstAddress: '0x…',                        // required
+    stake: false,                             // required
   },
   raw: false,
   walletProvider: iconWp,
@@ -131,12 +170,18 @@ await sodax.migration.migrateBaln({
 
 ### Approve / allowance — action-discriminated
 
+`action` is the **second positional argument** (`MigrationAction = 'migrate' | 'revert'`), not a field inside `params`:
+
 ```ts
-await sodax.migration.approve({
-  params: { srcChainKey, srcAddress, amount, action: 'migratebnUSD' /* or 'migrateIcxToSoda' | 'revertMigrateSodaToIcx' | 'migrateBaln' */ },
-  raw: false,
-  walletProvider,
-});
+// approve takes the action-wrapped params, then the action arg:
+await sodax.migration.approve(
+  { params: bnUSDParams, raw: false, walletProvider },
+  'migrate', // or 'revert'
+);
+
+// isAllowanceValid takes the BARE migration params (no { params, raw, walletProvider } wrapper,
+// no `raw` flag — it is not Raw-generic) plus the action arg:
+const allowed = await sodax.migration.isAllowanceValid(bnUSDParams, 'migrate');
 ```
 
 ### BALN lock management (carve-out — still throws)
@@ -154,7 +199,7 @@ try {
 | Method | Success type |
 |---|---|
 | 4 orchestrators (`migratebnUSD`, `migrateIcxToSoda`, `revertMigrateSodaToIcx`, `migrateBaln`) | `TxHashPair` |
-| 4 intent creators | `CreateIntentResult<K, Raw>` |
+| 4 intent creators | `IntentTxResult<K, Raw>` (`{ tx, relayData }`) |
 | `approve` | `TxReturnType<K, Raw>` |
 | `isAllowanceValid` | `boolean` |
 | `getAvailableAmount` | `bigint` |

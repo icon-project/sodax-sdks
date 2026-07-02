@@ -17,7 +17,7 @@ All 5 packages must be updated to the same version:
 - `@sodax/wallet-sdk-react` — `packages/wallet-sdk-react/package.json`
 - `@sodax/dapp-kit` — `packages/dapp-kit/package.json`
 
-Additionally, `CONFIG_VERSION` in `packages/types/src/constants/index.ts` must be incremented by 1.
+Additionally, `CONFIG_VERSION` in `packages/types/src/index.ts` must be incremented by 1.
 
 ---
 
@@ -57,7 +57,7 @@ Run ALL of these checks before making any changes:
 
 6. **Read current version**: Read `packages/sdk/package.json` and extract the current `"version"` value. Save this as `CURRENT_VERSION`.
 
-7. **Read current CONFIG_VERSION**: Read `packages/types/src/constants/index.ts` and find the line with `CONFIG_VERSION = <number>`. Extract the number. Save as `CURRENT_CONFIG_VERSION`.
+7. **Read current CONFIG_VERSION**: Read `packages/types/src/index.ts` and find the line with `CONFIG_VERSION = <number>`. Extract the number. Save as `CURRENT_CONFIG_VERSION`.
 
 8. **Tag conflict check**: Run `git tag -l "@sodax/sdk@$ARGUMENTS"`. If a tag already exists, say "Tag @sodax/sdk@$ARGUMENTS already exists. This version has already been released." and STOP.
 
@@ -84,7 +84,7 @@ SDK Release Plan:
     - packages/wallet-sdk-core/package.json
     - packages/wallet-sdk-react/package.json
     - packages/dapp-kit/package.json
-    - packages/types/src/constants/index.ts
+    - packages/types/src/index.ts
 ```
 
 Options: "Proceed with release" / "Abort"
@@ -114,7 +114,7 @@ Edit these 6 files using the Edit tool. For each package.json, change only the `
 3. Edit `packages/wallet-sdk-core/package.json`: change `"version": "{CURRENT_VERSION}"` to `"version": "$ARGUMENTS"`
 4. Edit `packages/wallet-sdk-react/package.json`: change `"version": "{CURRENT_VERSION}"` to `"version": "$ARGUMENTS"`
 5. Edit `packages/dapp-kit/package.json`: change `"version": "{CURRENT_VERSION}"` to `"version": "$ARGUMENTS"`
-6. Edit `packages/types/src/constants/index.ts`: change `CONFIG_VERSION = {CURRENT_CONFIG_VERSION}` to `CONFIG_VERSION = {CURRENT_CONFIG_VERSION + 1}`
+6. Edit `packages/types/src/index.ts`: change `CONFIG_VERSION = {CURRENT_CONFIG_VERSION}` to `CONFIG_VERSION = {CURRENT_CONFIG_VERSION + 1}`
 
 After all edits, run `git diff` and show the user the changes to verify correctness.
 
@@ -125,7 +125,7 @@ After all edits, run `git diff` and show the user the changes to verify correctn
 Stage only the 6 changed files and create a commit:
 
 ```bash
-git add packages/sdk/package.json packages/dapp-kit/package.json packages/types/package.json packages/wallet-sdk-core/package.json packages/wallet-sdk-react/package.json packages/types/src/constants/index.ts
+git add packages/sdk/package.json packages/dapp-kit/package.json packages/types/package.json packages/wallet-sdk-core/package.json packages/wallet-sdk-react/package.json packages/types/src/index.ts
 git commit -m "chore(sdks): bump versions to $ARGUMENTS"
 ```
 

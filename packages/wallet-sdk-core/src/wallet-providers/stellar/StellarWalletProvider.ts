@@ -1,5 +1,5 @@
-import type { IStellarWalletProvider, StellarRawTransactionReceipt, XDR } from '@sodax/types';
-import { Networks, Horizon, Transaction, Keypair } from '@stellar/stellar-sdk';
+import type { IStellarWalletProvider, StellarRawTransaction, StellarRawTransactionReceipt, XDR } from '@sodax/types';
+import { Networks, Horizon, Transaction, TransactionBuilder, Keypair, rpc } from '@stellar/stellar-sdk';
 import { BaseWalletProvider } from '../BaseWalletProvider.js';
 import type {
   BrowserExtensionStellarWalletConfig,
@@ -15,6 +15,11 @@ import type {
 const STELLAR_HORIZON_URLS: { [key in StellarNetwork]: string } = {
   TESTNET: 'https://horizon-testnet.stellar.org',
   PUBLIC: 'https://horizon.stellar.org',
+};
+
+const STELLAR_SOROBAN_URLS: { [key in StellarNetwork]: string } = {
+  TESTNET: 'https://soroban-testnet.stellar.org',
+  PUBLIC: 'https://rpc.ankr.com/stellar_soroban',
 };
 
 const STELLAR_NETWORK_PASSPHRASES: { [key in StellarNetwork]: string } = {
@@ -81,6 +86,7 @@ export class StellarWalletProvider extends BaseWalletProvider<StellarWalletDefau
   public readonly chainType = 'STELLAR' as const;
   private readonly wallet: StellarWallet;
   private readonly server: Horizon.Server;
+  private readonly sorobanServer: rpc.Server;
   private readonly networkPassphrase: string;
 
   constructor(config: StellarWalletConfig) {
@@ -91,6 +97,9 @@ export class StellarWalletProvider extends BaseWalletProvider<StellarWalletDefau
 
     this.networkPassphrase = this.defaults.networkPassphrase ?? STELLAR_NETWORK_PASSPHRASES[config.network];
     this.server = new Horizon.Server(config.rpcUrl ?? STELLAR_HORIZON_URLS[config.network]);
+    this.sorobanServer = new rpc.Server(config.sorobanRpcUrl ?? STELLAR_SOROBAN_URLS[config.network], {
+      allowHttp: true,
+    });
 
     if (isPrivateKeyStellarWalletConfig(config)) {
       if (!isValidStellarPrivateKey(config.privateKey)) {
@@ -148,6 +157,40 @@ export class StellarWalletProvider extends BaseWalletProvider<StellarWalletDefau
         'SIGN_TX_ERROR',
       );
     }
+  }
+
+  /**
+   * Broadcasts an already-signed XDR transaction via the Soroban RPC server.
+   * @returns The transaction hash.
+   * @throws {StellarWalletError} with code `SEND_TX_ERROR` if submission fails or the RPC returns an error status.
+   */
+  public async sendTransaction(signedTx: XDR): Promise<string> {
+    try {
+      const tx = TransactionBuilder.fromXDR(signedTx, this.networkPassphrase);
+      const response = await this.sorobanServer.sendTransaction(tx);
+      if (response.status === 'ERROR') {
+        throw new StellarWalletError(`Failed to submit transaction: ${JSON.stringify(response)}`, 'SEND_TX_ERROR');
+      }
+      return response.hash;
+    } catch (error) {
+      if (error instanceof StellarWalletError) {
+        throw error;
+      }
+      throw new StellarWalletError(
+        error instanceof Error ? error.message : 'Failed to send transaction',
+        'SEND_TX_ERROR',
+      );
+    }
+  }
+
+  /**
+   * Signs and broadcasts an unsigned `StellarRawTransaction` (e.g. from the Swaps API).
+   * @returns The transaction hash.
+   * @throws {StellarWalletError} with code `SIGN_TX_ERROR` if signing fails, or `SEND_TX_ERROR` if broadcasting fails.
+   */
+  public async signAndSendTransaction(params: StellarRawTransaction): Promise<string> {
+    const signedXdr = await this.signTransaction(params.data);
+    return this.sendTransaction(signedXdr);
   }
 
   /**

@@ -104,4 +104,8 @@ export interface IStellarWalletProvider extends ICoreWallet {
   readonly chainType: 'STELLAR';
   signTransaction: (tx: XDR) => Promise<XDR>;
   waitForTransactionReceipt: (txHash: string) => Promise<StellarRawTransactionReceipt>;
+  /** Broadcast an already-signed XDR transaction via the Soroban RPC server. Returns the tx hash. */
+  sendTransaction?: (signedTx: XDR) => Promise<string>;
+  /** Sign and broadcast an unsigned `StellarRawTransaction` (e.g. from the Swaps API). Returns the tx hash. */
+  signAndSendTransaction?: (params: StellarRawTransaction) => Promise<string>;
 }

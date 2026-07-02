@@ -13,7 +13,7 @@ High-level React hooks library for dApp developers. Wraps `@sodax/sdk` with Reac
 - **Bitcoin (Bound Exchange)** — `useRadfiAuth`, `useRadfiSession`, `useTradingWallet`, `useTradingWalletBalance`, `useBitcoinBalance`, `useFundTradingWallet`, `useRadfiWithdraw`, `useExpiredUtxos`, `useRenewUtxos`
 - **Partner** — `useFetchAssetsBalances`, `useGetAutoSwapPreferences`, `useIsTokenApproved`, `useApproveToken`, `useSetSwapPreference`, `useFeeClaimSwap`
 - **Recovery** — `useHubAssetBalances`, `useWithdrawHubAsset`
-- **Backend Queries** — Intent tracking, orderbook, money market position queries
+- **Backend Queries** — Intent tracking, swap-tx submission + status, orderbook, money market position queries
 - **Shared** — `useXBalances`, `useDeriveUserWalletAddress`, `useGetUserHubWalletAddress`, `useStellarTrustlineCheck`, `useRequestTrustline`, `useEstimateGas`
 
 ## Installation
@@ -35,11 +35,11 @@ RPC URLs are injected through `config.chains`. `SodaxProvider` is the outermost 
 import { QueryClientProvider } from '@tanstack/react-query';
 import { SodaxProvider, createSodaxQueryClient } from '@sodax/dapp-kit';
 import { SodaxWalletProvider, type SodaxWalletConfig } from '@sodax/wallet-sdk-react';
-import { ChainKeys, type DeepPartial, type SodaxConfig } from '@sodax/sdk';
+import { ChainKeys, type SodaxOptions } from '@sodax/sdk';
 
 const queryClient = createSodaxQueryClient();
 
-const sodaxConfig: DeepPartial<SodaxConfig> = {
+const sodaxConfig: SodaxOptions = {
   chains: {
     [ChainKeys.SONIC_MAINNET]: { rpcUrl: 'https://sonic-rpc.publicnode.com' },
     [ChainKeys.BSC_MAINNET]: { rpcUrl: 'https://bsc-dataseed.binance.org' },
@@ -125,7 +125,7 @@ function SwapButton({ intentParams }: { intentParams: CreateIntentParams }) {
 
 ### Provider
 
-- [`SodaxProvider`](src/providers/SodaxProvider.tsx) — Wraps your app, creates the `Sodax` SDK instance. Accepts `config?: DeepPartial<SodaxConfig>`.
+- [`SodaxProvider`](src/providers/SodaxProvider.tsx) — Wraps your app, creates the `Sodax` SDK instance. Accepts `config?: SodaxOptions`.
 - [`createSodaxQueryClient()`](src/providers/createSodaxQueryClient.ts) — Factory for a `QueryClient` with global mutation observability (`onMutationError` hook, `meta.silent` opt-out).
 
 ### Swap Hooks
@@ -262,8 +262,17 @@ function SwapButton({ intentParams }: { intentParams: CreateIntentParams }) {
 - [`useBackendMoneyMarketAssetBorrowers()`](src/hooks/backend/useBackendMoneyMarketAssetBorrowers.ts) — Asset borrowers
 - [`useBackendMoneyMarketAssetSuppliers()`](src/hooks/backend/useBackendMoneyMarketAssetSuppliers.ts) — Asset suppliers
 - [`useBackendAllMoneyMarketBorrowers()`](src/hooks/backend/useBackendAllMoneyMarketBorrowers.ts) — All borrowers
-- [`useBackendSubmitSwapTx()`](src/hooks/backend/useBackendSubmitSwapTx.ts) — Submit swap tx to backend
-- [`useBackendSubmitSwapTxStatus()`](src/hooks/backend/useBackendSubmitSwapTxStatus.ts) — Check submitted swap status
+
+### Swaps API Hooks (`sodax.api.swaps`)
+
+Typed wrappers over the backend Swaps API v2 — one `useSwapsApi*` hook per endpoint (21 total). Highlights:
+
+- [`useSwapsApiQuote()`](src/hooks/swapsApi/useSwapsApiQuote.ts) — Solver quote for a cross-chain swap
+- [`useSwapsApiCreateIntent()`](src/hooks/swapsApi/useSwapsApiCreateIntent.ts) — Build an unsigned create-intent tx
+- [`useSwapsApiSubmitTx()`](src/hooks/swapsApi/useSwapsApiSubmitTx.ts) — Submit swap tx to backend
+- [`useSwapsApiSubmitTxStatus()`](src/hooks/swapsApi/useSwapsApiSubmitTxStatus.ts) — Check submitted swap status
+
+See [`src/hooks/swapsApi/`](src/hooks/swapsApi/) for the full set (tokens, deadline, allowance, approve, submit/cancel intent, status, hash, packet, extra-data, intent lookups, limit orders, gas, fees).
 
 ### DEX Utils
 

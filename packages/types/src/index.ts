@@ -6,6 +6,7 @@ export * from './backend/index.js';
 export * from './bitcoin/index.js';
 export * from './dex/index.js';
 export * from './evm/index.js';
+export * from './hooks/index.js';
 export * from './icon/index.js';
 export * from './injective/index.js';
 export * from './moneyMarket/index.js';

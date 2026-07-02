@@ -116,7 +116,8 @@ Sodax
  ├── migration       — MigrationService       (ICX/bnUSD/BALN migration)
  ├── partners        — PartnerService         (partner fee claiming)
  ├── recovery        — RecoveryService        (withdraw stuck hub-wallet assets)
- ├── backendApi      — BackendApiService      (intent lookup, swap submission, config fetching)
+ ├── backendApi      — BackendApiService      (intent lookup, orderbook, money-market reads, config fetching)
+ ├── api             — alias for backendApi; `api.swaps` is SwapsApiService (typed Swaps API v2 client)
  ├── config          — ConfigService          (dynamic config; see § 4)
  ├── hubProvider     — HubProvider            (hub contract interactions; concrete impl `EvmHubProvider`)
  └── spoke           — SpokeService           (per-chain-family router; see § 2)
@@ -132,18 +133,18 @@ import { Sodax, type SodaxOptions } from '@sodax/sdk';
 new Sodax(config?: SodaxOptions): Sodax;
 ```
 
-`SodaxOptions` is `DeepPartial<SodaxConfig> & { logger?: SodaxLoggerOption }` — a deep-partial override of the `SodaxConfig` data contract, plus the client-side `logger` sink (kept off `SodaxConfig` itself; see [`recipes/logging.md`](recipes/logging.md)).
+`SodaxOptions` is `DeepPartial<SodaxDefaultConfig> & { logger?: SodaxLoggerOption; fee?: PartnerFee }` — a deep-partial override of the `SodaxDefaultConfig` data contract, plus the client-side options (`logger` sink + global partner `fee`) kept off `SodaxDefaultConfig` itself: the integrator sets them, they are resolved once, and the backend never fetches or overwrites them. Read the resolved global fee back via `sodax.config.fee`. The global `fee` is the **default applied to any feature whose own `partnerFee` is unset** — the effective fee is `featureFee ?? fee`, resolved via `sodax.config.swapPartnerFee` / `moneyMarketPartnerFee` / `bridgePartnerFee` / `leverageYieldPartnerFee`. (See [`recipes/logging.md`](recipes/logging.md) for the `logger` precedent.)
 
-`SodaxConfig` has exactly **10 fields** (all required at the type level, but `DeepPartial` makes every leaf optional):
+`SodaxDefaultConfig` has exactly **10 fields** (all required at the type level, but `DeepPartial` makes every leaf optional):
 
-- `fee: PartnerFee | undefined` — global partner fee, applied unless a feature-level config overrides.
 - `chains: Record<SpokeChainKey, SpokeChainConfig>` — per-spoke-chain config. Each entry carries `rpcUrl`, polling config, and chain-family-specific extras (`BitcoinSpokeChainConfig`, `StellarSpokeChainConfig`, etc.).
-- `swaps: SwapsConfig` — supported solver tokens per chain.
-- `moneyMarket: MoneyMarketConfig` — money market contracts + supported tokens.
+- `swaps: SwapsConfig` — supported solver tokens per chain (+ optional per-feature `partnerFee` override).
+- `moneyMarket: MoneyMarketConfig` — money market contracts + supported tokens (+ optional per-feature `partnerFee` override).
 - `bridge: BridgeConfig` — bridge `{ partnerFee }` override.
 - `dex: DexConfig` — DEX pool/asset config.
+- `leverageYield: LeverageYieldConfig` — registry of leverage-yield ERC-4626 vaults on the hub.
 - `hub: HubConfig` — hub-chain (Sonic) full address map + RPC URL + polling config.
-- `api: ApiConfig` — backend API endpoint (`{ baseURL, timeout, headers }`).
+- `api: ApiConfig` — backend API config: flat `BaseApiConfig` (`{ baseURL, timeout, headers }`, shared by `sodax.backendApi` and the swaps client `sodax.api.swaps`) or nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig? }`) to point the swaps API at its own endpoint.
 - `solver: SolverConfig` — `{ intentsContract, solverApiEndpoint, protocolIntentsContract }`.
 - `relay: RelayConfig` — intent relay endpoint + chain-id map.
 
@@ -190,7 +191,7 @@ const sodax = new Sodax({
 });
 ```
 
-`SodaxConfig.api` is `ApiConfig` (`{ baseURL, timeout, headers }`) — pass any subset via `DeepPartial`. v2 does not provide a typed slot to inject a custom `IConfigApi` implementation at construction; if you need to mock the backend for tests, point `baseURL` at a local mock server, or construct your own `BackendApiService`-compatible mock and inject it where you control the `Sodax` instance (e.g. dependency-injected in your app layer).
+`SodaxConfig.api` is `ApiConfig` — the flat `BaseApiConfig` (`{ baseURL, timeout, headers }`) shared by both backend clients, or the nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig? }`) to point the swaps API (`sodax.api.swaps`) at its own endpoint. Pass any subset via `DeepPartial`. v2 does not provide a typed slot to inject a custom `IConfigApiV1` implementation at construction; if you need to mock the backend for tests, point `baseURL` at a local mock server, or construct your own `BackendApiService`-compatible mock and inject it where you control the `Sodax` instance (e.g. dependency-injected in your app layer).
 
 ---
 
@@ -231,7 +232,7 @@ This is what allows `sodax.swaps.createIntent({ params: { srcChainKey: ChainKeys
 ```ts
 import { getChainType, isEvmChainKeyType, isSolanaChainKeyType, isBitcoinChainKeyType, /* … */ } from '@sodax/sdk';
 
-getChainType(chainKey);        // 'EVM' | 'BITCOIN' | 'SOLANA' | 'STELLAR' | 'SUI' | 'ICON' | 'INJECTIVE' | 'STACKS' | 'NEAR' | 'SONIC'
+getChainType(chainKey);        // 'EVM' | 'BITCOIN' | 'SOLANA' | 'STELLAR' | 'SUI' | 'ICON' | 'INJECTIVE' | 'STACKS' | 'NEAR'
 isEvmChainKeyType(chainKey);   // boolean (with type guard)
 ```
 
@@ -348,7 +349,7 @@ The canonical error class. Every SDK-emitted error is a `SodaxError<C>` paramete
 ```ts
 class SodaxError<C extends SodaxErrorCode = SodaxErrorCode> extends Error {
   readonly code: C;                 // closed 13-code reason union
-  readonly feature: SodaxFeature;   // 'swap' | 'moneyMarket' | 'bridge' | 'staking' | 'migration' | 'dex' | 'partner' | 'recovery'
+  readonly feature: SodaxFeature;   // 'swap' | 'moneyMarket' | 'bridge' | 'staking' | 'migration' | 'dex' | 'partner' | 'recovery' | 'backend' | 'leverageYield'
   readonly cause?: unknown;
   readonly context?: SodaxErrorContext;
 
@@ -450,8 +451,8 @@ Use these in cross-bundle code (apps with mixed ESM/CJS resolution, monorepos wi
 
 Cross-chain coordination is exposed as two top-level functions (re-exported from `@sodax/sdk`'s barrel):
 
-- `submitTransaction({ relayerApiEndpoint, srcChainKey, txHash, payload })` — POSTs the spoke transaction to the relay submit endpoint and resolves the relay's first-stage acknowledgement.
-- `relayTxAndWaitPacket({ relayerApiEndpoint, srcChainKey, dstChainKey, txHash, payload, timeout? })` — runs `submitTransaction` and then polls until the destination packet reaches `executed`.
+- `submitTransaction(payload, apiUrl)` — TWO positional args: `payload: IntentRelayRequest<'submit'>` and `apiUrl: HttpUrl` (not an options object). POSTs the spoke transaction to the relay submit endpoint and resolves the relay's first-stage acknowledgement.
+- `relayTxAndWaitPacket({ srcTxHash, data, chainKey, relayerApiEndpoint, timeout, pollTxHash? })` — `RelayAndWaitParams`: `data` is the whole `RelayExtraData` / `OnDemandRelayData` object and `chainKey` is the source `SpokeChainKey`. Runs `submitTransaction` and then polls until the destination packet reaches `executed`.
 
 These functions are **not** exposed on the `Sodax` instance. Consumers don't call them directly — every feature service (`swaps.swap`, `bridge.bridge`, `staking.stake`, …) wraps the spoke→hub leg internally. If you genuinely need custom relay orchestration (rare), import `relayTxAndWaitPacket` / `submitTransaction` from `@sodax/sdk` and pass the same `relayerApiEndpoint` your `Sodax` instance uses.
 
@@ -477,7 +478,7 @@ The single shared mapper from a relay-layer error to a `SodaxError`. Every featu
 import { mapRelayFailure, relayTxAndWaitPacket } from '@sodax/sdk';
 
 try {
-  await relayTxAndWaitPacket({ /* relayerApiEndpoint, srcChainKey, dstChainKey, txHash, payload, timeout? */ });
+  await relayTxAndWaitPacket({ /* srcTxHash, data, chainKey, relayerApiEndpoint, timeout, pollTxHash? */ });
 } catch (e) {
   const sodaxError = mapRelayFailure(e, {
     feature: 'swap',

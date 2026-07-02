@@ -21,32 +21,45 @@ import {
   type DexConfig,
   type PoolKey,
   type Result,
-  CONFIG_VERSION,
   type SwapsConfig,
   type BridgeConfig,
   type GetSpokeChainConfigType,
-  type DeepPartial,
   type SodaxLogger,
+  type PartnerFee,
+  type SodaxOptions,
+  type LeverageYieldConfig,
 } from '@sodax/types';
 import { isAddress } from 'viem';
 import type { BackendApiService } from '../../backendApi/BackendApiService.js';
-import { mergeSodaxConfig } from './mergeSodaxConfig.js';
+// import { mergeSodaxConfig } from './mergeSodaxConfig.js'; // TODO(config-v2): restore when initialize() dynamic fetch is re-enabled
 import { resolveLogger } from '../logger.js';
+import { noopAnalytics, type ResolvedAnalytics } from '../analytics.js';
 
 export type ConfigServiceConstructorParams = {
   api: BackendApiService;
   config: SodaxConfig;
   /**
-   * The raw user-provided config override (the `DeepPartial<SodaxConfig>` passed to `new Sodax(...)`),
+   * The raw user-provided config override (the `SodaxOptions` passed to `new Sodax(...)`),
    * NOT the merged result. Re-applied on top of dynamic config in {@link ConfigService.initialize} so
    * that a remote config fetch never clobbers explicit user overrides.
    */
-  userConfig?: DeepPartial<SodaxConfig>;
+  userConfig?: SodaxOptions;
   /**
    * Pre-resolved SDK log sink. Held outside the swappable `SodaxConfig` so a dynamic config fetch
    * in {@link ConfigService.initialize} never replaces it. Defaults to the console logger when omitted.
    */
   logger?: SodaxLogger;
+  /**
+   * Pre-resolved analytics emitter. Like {@link logger}, held outside the swappable `SodaxConfig` so a
+   * dynamic config fetch never replaces it. Defaults to the no-op (disabled) emitter when omitted.
+   */
+  analytics?: ResolvedAnalytics;
+  /**
+   * Global partner fee (the `fee` option passed to `new Sodax(...)`). Held outside the swappable
+   * `SodaxConfig` — like {@link logger} — so a dynamic config fetch never replaces it. The backend
+   * never supplies it; it is purely a client-side option.
+   */
+  fee?: PartnerFee;
 };
 
 /**
@@ -54,14 +67,29 @@ export type ConfigServiceConstructorParams = {
  */
 export class ConfigService {
   private sodax: SodaxConfig;
-  private readonly api: BackendApiService;
-  private readonly userConfig?: DeepPartial<SodaxConfig>;
+  // TODO(config-v2): restore `api` / `userConfig` when initialize() dynamic fetch is re-enabled.
+  // private readonly api: BackendApiService;
+  // private readonly userConfig?: SodaxOptions;
 
   /**
    * SDK log sink. Resolved once at construction and kept independent of {@link sodax} so that
    * {@link initialize}'s dynamic-config swap never clobbers it. Read by services via `config.logger`.
    */
   public readonly logger: SodaxLogger;
+
+  /**
+   * Analytics emitter. Resolved once at construction and kept independent of {@link sodax} so that
+   * {@link initialize}'s dynamic-config swap never clobbers it. Read by services via `config.analytics`;
+   * disabled (no-op) unless the consumer passed an `analytics` config to `new Sodax(...)`.
+   */
+  public readonly analytics: ResolvedAnalytics;
+
+  /**
+   * Global partner fee. Resolved once at construction and kept independent of {@link sodax} so that
+   * {@link initialize}'s dynamic-config swap never clobbers it. The backend never supplies it — it is
+   * a client-side option set via `new Sodax({ fee })`. Per-feature overrides live on the feature config.
+   */
+  public readonly fee: PartnerFee | undefined;
 
   private initialized = false;
 
@@ -76,34 +104,38 @@ export class ConfigService {
   private chainToSupportedTokenAddressMap!: Map<SpokeChainKey, Set<string>>;
   private hubAssetToXTokenMap!: Map<Address, XToken>;
 
-  constructor({ api, config, userConfig, logger }: ConfigServiceConstructorParams) {
-    this.api = api;
+  // `api` / `userConfig` are accepted but unused while initialize()'s dynamic fetch is disabled
+  // (see TODO(config-v2) below); restore their assignments when re-enabling.
+  constructor({ api, config, userConfig, logger, analytics, fee }: ConfigServiceConstructorParams) {
     this.sodax = config;
-    this.userConfig = userConfig;
     this.logger = logger ?? resolveLogger(undefined);
+    this.analytics = analytics ?? noopAnalytics;
+    this.fee = fee;
     this.loadSodaxConfigDataStructures(config);
   }
 
   public async initialize(): Promise<Result<void>> {
     try {
-      const result = await this.api.getAllConfig();
-      if (!result.ok) return result;
-      const response = result.value;
+      // TODO(config-v2): enable once the config v2 endpoint is live. The dynamic fetch + re-layer is
+      // intentionally disabled — initialize() is a no-op that keeps the constructor-merged config.
+      // const result = await this.api.getAllConfig();
+      // if (!result.ok) return result;
+      // const response = result.value;
 
-      if (!response.version || response.version < CONFIG_VERSION) {
-        this.logger.warn(
-          `Dynamic config version is less than the current version, resorting to the default one. Current version: ${CONFIG_VERSION}, response version: ${response.version}`,
-        );
-      } else {
-        // Dynamic config replaces the static defaults, but explicit user overrides must still win —
-        // re-layer them on top so initialize() never clobbers config the caller passed to `new Sodax(...)`.
-        const next = this.userConfig ? mergeSodaxConfig(response.config, this.userConfig) : response.config;
-        // Rebuild the lookup structures from `next` before committing it, so a failure here leaves the
-        // previously committed config and its derived maps intact (no torn state).
-        this.loadSodaxConfigDataStructures(next);
-        this.sodax = next;
-        this.initialized = true;
-      }
+      // if (!response.version || response.version < CONFIG_VERSION) {
+      //   this.logger.warn(
+      //     `Dynamic config version is less than the current version, resorting to the default one. Current version: ${CONFIG_VERSION}, response version: ${response.version}`,
+      //   );
+      // } else {
+      //   // Dynamic config replaces the static defaults, but explicit user overrides must still win —
+      //   // re-layer them on top so initialize() never clobbers config the caller passed to `new Sodax(...)`.
+      //   const next = this.userConfig ? mergeSodaxConfig(response.config, this.userConfig) : response.config;
+      //   // Rebuild the lookup structures from `next` before committing it, so a failure here leaves the
+      //   // previously committed config and its derived maps intact (no torn state).
+      //   this.loadSodaxConfigDataStructures(next);
+      //   this.sodax = next;
+      //   this.initialized = true;
+      // }
 
       return { ok: true, value: undefined };
     } catch (error) {
@@ -145,6 +177,17 @@ export class ConfigService {
 
   public getOriginalAssetAddress(chainId: SpokeChainKey, hubAsset: Address): OriginalAssetAddress | undefined {
     return this.hubAssetToXTokenMap.get(hubAsset.toLowerCase() as Address)?.address;
+  }
+
+  /**
+   * Resolves the {@link XToken} descriptor (hub asset, vault, decimals) for a hub-asset address.
+   *
+   * Useful when a caller holds a hub asset directly on Sonic that has no spoke-token entry under
+   * the hub chain — e.g. a partner BTC fee held as the BTC hub asset, which only exists as a spoke
+   * token on Bitcoin. Returns `undefined` when the address is not a known hub asset.
+   */
+  public getXTokenFromHubAsset(hubAsset: string): XToken | undefined {
+    return this.hubAssetToXTokenMap.get(hubAsset.toLowerCase() as Address);
   }
 
   public getSpokeTokenFromOriginalAssetAddress(
@@ -380,6 +423,29 @@ export class ConfigService {
 
   get moneyMarket(): MoneyMarketConfig {
     return this.sodax.moneyMarket;
+  }
+
+  get leverageYield(): LeverageYieldConfig {
+    return this.sodax.leverageYield;
+  }
+
+  // Effective partner fee per feature: the feature-specific override if set, otherwise the global
+  // `fee` client option ({@link fee}). The global fee is the default, overridable per-feature. `??`
+  // (never a merge) keeps the chosen PartnerFee variant intact — no discriminated-union hybrid.
+  get swapPartnerFee(): PartnerFee | undefined {
+    return this.swaps.partnerFee ?? this.fee;
+  }
+
+  get moneyMarketPartnerFee(): PartnerFee | undefined {
+    return this.moneyMarket.partnerFee ?? this.fee;
+  }
+
+  get bridgePartnerFee(): PartnerFee | undefined {
+    return this.bridge.partnerFee ?? this.fee;
+  }
+  
+  get leverageYieldPartnerFee(): PartnerFee | undefined {
+    return this.leverageYield.partnerFee ?? this.fee;
   }
 
   get dex(): DexConfig {

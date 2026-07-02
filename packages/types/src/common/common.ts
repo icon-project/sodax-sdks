@@ -81,23 +81,24 @@ export type Result<T, E = Error | unknown> = { ok: true; value: T } | { ok: fals
 
 export type GetTokenAddressType<C extends SpokeChainKey | ChainType> = GetChainType<C> extends 'EVM' ? Address : string;
 
-export type GetAddressType<C extends SpokeChainKey | ChainType> = GetChainType<C> extends 'EVM'
-  ? Address
-  : GetChainType<C> extends 'INJECTIVE'
-    ? string
-    : GetChainType<C> extends 'STELLAR'
-      ? Hex
-      : GetChainType<C> extends 'ICON'
-        ? IconAddress
-        : GetChainType<C> extends 'SUI'
-          ? Hex
-          : GetChainType<C> extends 'SOLANA'
+export type GetAddressType<C extends SpokeChainKey | ChainType> =
+  GetChainType<C> extends 'EVM'
+    ? Address
+    : GetChainType<C> extends 'INJECTIVE'
+      ? string
+      : GetChainType<C> extends 'STELLAR'
+        ? Hex
+        : GetChainType<C> extends 'ICON'
+          ? IconAddress
+          : GetChainType<C> extends 'SUI'
             ? Hex
-            : GetChainType<C> extends 'STACKS'
-              ? string
-              : GetChainType<C> extends 'NEAR'
-                ? Address
-                : string;
+            : GetChainType<C> extends 'SOLANA'
+              ? Hex
+              : GetChainType<C> extends 'STACKS'
+                ? string
+                : GetChainType<C> extends 'NEAR'
+                  ? Address
+                  : string;
 
 export type QuoteType = 'exact_input';
 
@@ -198,25 +199,26 @@ export type GetDefaultTxReturnType<Raw extends boolean> = Raw extends true ? Raw
  * Return type for a transaction based on the given ChainId or ChainType.
  * Default to GetDefaultTxReturnType<Raw>
  */
-export type TxReturnType<C extends SpokeChainKey | ChainType, Raw extends boolean> = GetChainType<C> extends 'EVM'
-  ? EvmReturnType<Raw>
-  : GetChainType<C> extends 'SOLANA'
-    ? SolanaReturnType<Raw>
-    : GetChainType<C> extends 'STELLAR'
-      ? StellarReturnType<Raw>
-      : GetChainType<C> extends 'ICON'
-        ? IconReturnType<Raw>
-        : GetChainType<C> extends 'SUI'
-          ? SuiReturnType<Raw>
-          : GetChainType<C> extends 'INJECTIVE'
-            ? InjectiveReturnType<Raw>
-            : GetChainType<C> extends 'STACKS'
-              ? StacksReturnType<Raw>
-              : GetChainType<C> extends 'NEAR'
-                ? NearReturnType<Raw>
-                : GetChainType<C> extends 'BITCOIN'
-                  ? BitcoinReturnType<Raw>
-                  : GetDefaultTxReturnType<Raw>;
+export type TxReturnType<C extends SpokeChainKey | ChainType, Raw extends boolean> =
+  GetChainType<C> extends 'EVM'
+    ? EvmReturnType<Raw>
+    : GetChainType<C> extends 'SOLANA'
+      ? SolanaReturnType<Raw>
+      : GetChainType<C> extends 'STELLAR'
+        ? StellarReturnType<Raw>
+        : GetChainType<C> extends 'ICON'
+          ? IconReturnType<Raw>
+          : GetChainType<C> extends 'SUI'
+            ? SuiReturnType<Raw>
+            : GetChainType<C> extends 'INJECTIVE'
+              ? InjectiveReturnType<Raw>
+              : GetChainType<C> extends 'STACKS'
+                ? StacksReturnType<Raw>
+                : GetChainType<C> extends 'NEAR'
+                  ? NearReturnType<Raw>
+                  : GetChainType<C> extends 'BITCOIN'
+                    ? BitcoinReturnType<Raw>
+                    : GetDefaultTxReturnType<Raw>;
 
 export type Prettify<T> = {
   [K in keyof T]: T[K];
@@ -269,25 +271,26 @@ export type GasEstimateType =
   | SuiGasEstimate
   | InjectiveGasEstimate;
 
-export type GetEstimateGasReturnTypeForSpokeChainId<C extends SpokeChainKey | ChainType> = GetChainType<C> extends 'EVM'
-  ? EvmGasEstimate
-  : GetChainType<C> extends 'SOLANA'
-    ? SolanaGasEstimate
-    : GetChainType<C> extends 'STELLAR'
-      ? StellarGasEstimate
-      : GetChainType<C> extends 'ICON'
-        ? IconGasEstimate
-        : GetChainType<C> extends 'SUI'
-          ? SuiGasEstimate
-          : GetChainType<C> extends 'INJECTIVE'
-            ? InjectiveGasEstimate
-            : GetChainType<C> extends 'NEAR'
-              ? NearGasEstimate
-              : GetChainType<C> extends 'BITCOIN'
-                ? BitcoinGasEstimate
-                : GetChainType<C> extends 'STACKS'
-                  ? FeeEstimateTransaction
-                  : GasEstimateType;
+export type GetEstimateGasReturnTypeForSpokeChainId<C extends SpokeChainKey | ChainType> =
+  GetChainType<C> extends 'EVM'
+    ? EvmGasEstimate
+    : GetChainType<C> extends 'SOLANA'
+      ? SolanaGasEstimate
+      : GetChainType<C> extends 'STELLAR'
+        ? StellarGasEstimate
+        : GetChainType<C> extends 'ICON'
+          ? IconGasEstimate
+          : GetChainType<C> extends 'SUI'
+            ? SuiGasEstimate
+            : GetChainType<C> extends 'INJECTIVE'
+              ? InjectiveGasEstimate
+              : GetChainType<C> extends 'NEAR'
+                ? NearGasEstimate
+                : GetChainType<C> extends 'BITCOIN'
+                  ? BitcoinGasEstimate
+                  : GetChainType<C> extends 'STACKS'
+                    ? FeeEstimateTransaction
+                    : GasEstimateType;
 
 export type GetEstimateGasReturnTypeForChainType<C extends ChainType> = C extends 'EVM'
   ? EvmGasEstimate
@@ -382,7 +385,11 @@ export type AssetInfo = {
   spokeAddress: `0x${string}`;
 };
 
-export type MoneyMarketConfig = {
+export type MoneyMarketOptions = {
+  partnerFee?: PartnerFee; // enables override of global partner fee
+};
+
+export type MoneyMarketDefaultConfig = {
   supportedTokens: Record<SpokeChainKey, readonly XToken[]>;
   supportedReserveAssets: readonly Address[];
   uiPoolDataProvider: Address;
@@ -391,8 +398,9 @@ export type MoneyMarketConfig = {
   bnUSD: Address;
   bnUSDVault: Address;
   bnUSDAToken: Address;
-  partnerFee: PartnerFee | undefined; // enables override of global partner fee
 };
+
+export type MoneyMarketConfig = Prettify<MoneyMarketDefaultConfig & MoneyMarketOptions>;
 
 export type TokenInfo = {
   decimals: number;
@@ -410,19 +418,23 @@ export type BridgeLimit = {
 
 export type SpokeChainConfigMap = Record<SpokeChainKey, SpokeChainConfig>;
 
-export type WalletProviderSlot<K extends SpokeChainKey | ChainType, Raw extends boolean = false> =
-  Raw extends true
-    ? { raw: true; walletProvider?: never }
-    : { raw?: false; walletProvider: GetWalletProviderType<K> };
+export type WalletProviderSlot<K extends SpokeChainKey | ChainType, Raw extends boolean = false> = Raw extends true
+  ? { raw: true; walletProvider?: never }
+  : { raw?: false; walletProvider: GetWalletProviderType<K> };
 
 /**
- * Standard exec-mode wrapper for hub/spoke flows: bounded `params`, optional relay toggles,
- * plus {@link WalletProviderSlot} (`raw: true` for unsigned payloads, otherwise `walletProvider` required).
- * Compose feature-specific extras at the alias site, e.g.
- * `SpokeExecActionParams<K, Raw, P> & { fee?: PartnerFee }`.
+ * Standard exec-mode wrapper for hub/spoke flows: bounded `params`, optional per-action `extras`,
+ * optional relay toggles, plus {@link WalletProviderSlot} (`raw: true` for unsigned payloads,
+ * otherwise `walletProvider` required).
+ *
+ * Per-action data beyond `params` goes in the typed `extras` slot (`E`), parameterized like
+ * `params` so a feature can key it off `K`, e.g. `SpokeExecActionParams<K, Raw, P, MyExtras<K>>`.
+ * `E` defaults to `never`, so callers that don't opt in get `extras?: never` (effectively absent).
+ * Simple one-off modifiers may still be intersected at the alias site instead.
  */
-export type SpokeExecActionParams<K extends SpokeChainKey, Raw extends boolean, P> = {
+export type SpokeExecActionParams<K extends SpokeChainKey, Raw extends boolean, P, E = never> = {
   params: P;
+  extras?: E;
   skipSimulation?: boolean;
   timeout?: number;
 } & WalletProviderSlot<K, Raw>;
