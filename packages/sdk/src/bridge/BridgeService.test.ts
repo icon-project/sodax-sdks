@@ -146,9 +146,9 @@ describe('BridgeService.createBridgeIntent — Bitcoin USER mode', () => {
     Object.defineProperty(sodax.spoke.bitcoin, 'walletMode', { value: 'USER', configurable: true });
 
     vi.spyOn(sodax.spoke.bitcoin, 'getEffectiveWalletAddress').mockResolvedValue(BTC_USER_ADDR);
-    ensureRadfiSpy = vi.spyOn(sodax.spoke.bitcoin.radfi, 'ensureRadfiAccessToken').mockResolvedValue(
-      undefined as never,
-    );
+    ensureRadfiSpy = vi
+      .spyOn(sodax.spoke.bitcoin.radfi, 'ensureRadfiAccessToken')
+      .mockResolvedValue(undefined as never);
     vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockResolvedValue(HUB_BTC_WALLET);
     vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValue({
       address: BTC_TOKEN,
@@ -177,9 +177,7 @@ describe('BridgeService.createBridgeIntent — Bitcoin USER mode', () => {
 
   it('passes skipSimulation=true so the hub skips EVM simulation for Bitcoin USER deposits', async () => {
     await sodax.bridge.createBridgeIntent(btcBridgeInput());
-    expect(depositSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ skipSimulation: true }),
-    );
+    expect(depositSpy).toHaveBeenCalledWith(expect.objectContaining({ skipSimulation: true }));
   });
 
   it('derives hub wallet from personal address, not a trading address', async () => {
@@ -193,9 +191,7 @@ describe('BridgeService.createBridgeIntent — Bitcoin USER mode', () => {
     // The returned personal address (not a trading address) is forwarded to hub wallet derivation
     expect(getHubSpy).toHaveBeenCalledWith(BTC_USER_ADDR, BTC);
     // The spoke deposit srcAddress also uses the personal address
-    expect(depositSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ srcAddress: BTC_USER_ADDR }),
-    );
+    expect(depositSpy).toHaveBeenCalledWith(expect.objectContaining({ srcAddress: BTC_USER_ADDR }));
   });
 
   it('rejects a native-BTC deposit below the 546 sat dust limit', async () => {
@@ -212,6 +208,66 @@ describe('BridgeService.createBridgeIntent — Bitcoin USER mode', () => {
       expect(result.error.message).toContain('Invalid amount');
       expect(result.error.message).toContain('dust limit');
     }
+  });
+});
+
+// =========================================================================
+// Stacks raw source — srcPublicKey pre-flight guard (parity with SwapService.createIntent)
+// =========================================================================
+
+const STACKS = ChainKeys.STACKS_MAINNET;
+const STACKS_SRC_ADDR = 'SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7';
+const STACKS_TOKEN = 'SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7.token-abtc::abtc';
+
+const stacksRawBridgeInput = (extras?: { srcPublicKey?: string }): BridgeParams<typeof STACKS, true> =>
+  ({
+    raw: true,
+    extras,
+    params: {
+      srcAddress: STACKS_SRC_ADDR,
+      srcChainKey: STACKS,
+      srcToken: STACKS_TOKEN,
+      amount: 1_000_000n,
+      dstChainKey: BSC,
+      dstToken: SAMPLE_TOKEN,
+      recipient: SAMPLE_DST,
+    },
+  }) as BridgeParams<typeof STACKS, true>;
+
+describe('BridgeService.createBridgeIntent — Stacks raw srcPublicKey guard', () => {
+  beforeEach(() => {
+    // Reach the guard: both endpoint tokens must resolve so the token invariants pass. The guard
+    // sits after the token/dust invariants and before hub-wallet derivation + deposit.
+    vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValue({
+      address: STACKS_TOKEN,
+      vault: '0xvault',
+      symbol: 'aBTC',
+    } as never);
+    vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockResolvedValue(HUB_WALLET);
+    vi.spyOn(sodax.bridge, 'buildBridgeData').mockReturnValue('0xdata' as never);
+  });
+
+  it('rejects a Stacks raw intent when extras.srcPublicKey is missing', async () => {
+    const result = await sodax.bridge.createBridgeIntent(stacksRawBridgeInput());
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toBeInstanceOf(SodaxError);
+      expect(result.error.code).toBe('VALIDATION_FAILED');
+      expect(result.error.message).toContain('srcPublicKey');
+    }
+  });
+
+  it('passes extras.srcPublicKey through to the spoke deposit for a Stacks raw intent', async () => {
+    const srcPublicKey = '025259f813b57dd5c3fcac09776d767a49f6dd77bba5895823b891e31b10a96a5d';
+    const depositSpy = vi
+      .spyOn(sodax.spoke, 'deposit')
+      .mockResolvedValue({ ok: true, value: { payload: '0xraw' } } as never);
+
+    const result = await sodax.bridge.createBridgeIntent(stacksRawBridgeInput({ srcPublicKey }));
+
+    expect(result.ok).toBe(true);
+    expect(depositSpy).toHaveBeenCalledWith(expect.objectContaining({ srcPublicKey }));
   });
 });
 
@@ -360,7 +416,9 @@ describe('BridgeService.bridge — integration error-path coverage', () => {
     // pinning that path here so a future regression that widens isBridgeOrchestrationError
     // (or accidentally narrows the catch behavior) surfaces immediately. Mirrors the 4 MM
     // out-of-union wrap-tests added in the previous review.
-    const outOfUnion = new SodaxError('SWAP_RELAY_TIMEOUT' as never, 'foreign code thrown into bridge', { feature: 'bridge' });
+    const outOfUnion = new SodaxError('SWAP_RELAY_TIMEOUT' as never, 'foreign code thrown into bridge', {
+      feature: 'bridge',
+    });
     vi.spyOn(sodax.bridge, 'createBridgeIntent').mockRejectedValueOnce(outOfUnion);
 
     const result = await sodax.bridge.bridge(bridgeInput(BSC, ARBITRUM));
@@ -406,7 +464,13 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
       ok: true,
       value: {
         success: true,
-        data: { txHash: '0xspokeTx', srcChainKey: BSC, status: 'executed', processingAttempts: 1, result: { dstIntentTxHash: '0xDST' } },
+        data: {
+          txHash: '0xspokeTx',
+          srcChainKey: BSC,
+          status: 'executed',
+          processingAttempts: 1,
+          result: { dstIntentTxHash: '0xDST' },
+        },
       },
     } as never);
 
@@ -489,7 +553,10 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
       // Backend never reaches `executed` → submitTx polls until its reserved cutoff, then falls back.
       vi.spyOn(sodaxBE.api.bridge, 'getSubmitTxStatus').mockResolvedValue({
         ok: true,
-        value: { success: true, data: { txHash: '0xspokeTx', srcChainKey: BSC, status: 'pending', processingAttempts: 1 } },
+        value: {
+          success: true,
+          data: { txHash: '0xspokeTx', srcChainKey: BSC, status: 'pending', processingAttempts: 1 },
+        },
       } as never);
       mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
 

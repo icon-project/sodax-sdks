@@ -11,6 +11,7 @@ import {
   encodeAddress,
   wrappedSonicAbi,
   isHubChainKeyType,
+  isStacksChainKeyType,
   isStellarChainKeyType,
   type SpokeIsAllowanceValidParamsHub,
   type SpokeIsAllowanceValidParamsEvmSpoke,
@@ -598,6 +599,17 @@ export class BridgeService {
           params.amount >= BITCOIN_DUST_SATS,
           `Invalid amount (${params.amount}): below the Bitcoin dust limit of ${BITCOIN_DUST_SATS} sats`,
           { ...baseCtx, field: 'amount' },
+        );
+      }
+
+      // Stacks addresses can't yield the signer public key at raw-tx build time, so a raw Stacks
+      // deposit must carry it up front — mirrors SwapService.createIntent. Without this guard a
+      // missing key only surfaces deep in StacksSpokeService.deposit as INTENT_CREATION_FAILED.
+      if (isStacksChainKeyType(params.srcChainKey) && _params.raw === true) {
+        bridgeInvariant(
+          extras?.srcPublicKey !== undefined,
+          'srcPublicKey is required for Stacks createBridgeIntent (raw) — the source tx is built unsigned and needs the signer public key',
+          { ...baseCtx, field: 'srcPublicKey' },
         );
       }
 
