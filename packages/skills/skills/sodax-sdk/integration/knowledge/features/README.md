@@ -14,9 +14,11 @@ One file per feature service. Each file documents the v2 API surface, common cal
 | [`partner.md`](partner.md) | `PartnerService` | Partner-fee handling: token approval, auto-swap preferences, fee-claim flows. |
 | [`recovery.md`](recovery.md) | `RecoveryService` | Withdraw stuck hub-wallet assets back to a spoke chain. |
 | [`backend-api.md`](backend-api.md) | `BackendApiService` | HTTP client for backend services: swap-tx submission, intent / orderbook lookups, money-market reads. |
+| [`swaps-api.md`](swaps-api.md) | `SwapsApiService` | Typed HTTP client for the backend Swaps API v2 (`sodax.api.swaps`): quote, deadline, allowance/approve, create-intent, intent lifecycle (submit/status/cancel/hash/packet/extra-data), limit orders, gas, fees, submit-tx + status. |
+| [`leverage-yield-api.md`](leverage-yield-api.md) | `LeverageYieldApiService` | Typed HTTP client for the backend Leverage Yield API v2 (`sodax.api.leverageYield`): vault registry, vault reads (asset/position/APR/effective-APR/LSD-APR/total-assets/previews/share-balance/max-withdraw), deposit & withdraw quote, allowance/approve, create-deposit/withdraw-intent, intent lifecycle, gas, fees, submit-tx + status. |
 
 All feature services are constructed and wired by the `Sodax` facade. You don't instantiate them directly — access them via `sodax.swaps`, `sodax.moneyMarket`, etc. See [`../architecture.md`](../architecture.md) for the service graph.
 
 ## Cross-references to migration
 
-For the v1 → v2 port playbook on each feature, see the matching file in [`features/`](../../../migration-v1-to-v2/knowledge/features/) — same filename, different angle. **Exception:** features introduced in v2 with no v1 equivalent (`leverage-yield.md`) have no migration sibling — there is nothing to port.
+For the v1 → v2 port playbook on each feature, see the matching file in [`features/`](../../../migration-v1-to-v2/knowledge/features/) — same filename, different angle. **Exception:** features introduced in v2 with no v1 equivalent (`leverage-yield.md`, `leverage-yield-api.md`, `swaps-api.md`) have no migration sibling — there is nothing to port.

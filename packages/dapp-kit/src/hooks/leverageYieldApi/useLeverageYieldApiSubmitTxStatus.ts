@@ -1,0 +1,53 @@
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import type { RequestOverrideConfig, SubmitTxStatusResponseV2 } from '@sodax/sdk';
+import { useSodaxContext } from '../shared/useSodaxContext.js';
+import { unwrapResult } from '../shared/unwrapResult.js';
+import type { ReadHookParams } from '../shared/types.js';
+
+export type UseLeverageYieldApiSubmitTxStatusParams = ReadHookParams<
+  SubmitTxStatusResponseV2 | undefined,
+  {
+    txHash: string | undefined;
+    srcChainKey?: string;
+    apiConfig?: RequestOverrideConfig;
+  }
+>;
+
+/**
+ * React hook for polling the processing status of a submitted vault-swap transaction via the
+ * leverage-yield API — `sodax.api.leverageYield.getSubmitTxStatus`. Both `txHash` and `srcChainKey`
+ * are required for the query to run.
+ *
+ * @example
+ * const { data: status } = useLeverageYieldApiSubmitTxStatus({
+ *   params: { txHash: '0x123...', srcChainKey: 'sonic' },
+ * });
+ *
+ * @remarks
+ * - Default refetch interval is 1 second; stops on 'executed' or 'failed' status.
+ */
+export const useLeverageYieldApiSubmitTxStatus = ({
+  params,
+  queryOptions,
+}: UseLeverageYieldApiSubmitTxStatusParams = {}): UseQueryResult<SubmitTxStatusResponseV2 | undefined, Error> => {
+  const { sodax } = useSodaxContext();
+  const txHash = params?.txHash;
+  const srcChainKey = params?.srcChainKey;
+  const apiConfig = params?.apiConfig;
+
+  return useQuery({
+    queryKey: ['leverageYieldApi', 'submitTx', 'status', txHash, srcChainKey],
+    queryFn: async (): Promise<SubmitTxStatusResponseV2 | undefined> => {
+      if (!txHash || !srcChainKey) return undefined;
+      return unwrapResult(await sodax.api.leverageYield.getSubmitTxStatus({ txHash, srcChainKey }, apiConfig));
+    },
+    enabled: !!txHash && txHash.length > 0 && !!srcChainKey,
+    retry: 3,
+    refetchInterval: query => {
+      const status = query.state.data?.data?.status;
+      if (status === 'executed' || status === 'failed') return false;
+      return 1000;
+    },
+    ...queryOptions,
+  });
+};

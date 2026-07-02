@@ -55,6 +55,8 @@ export class Sodax {
     // Like `logger`, swaps options are client-side runtime toggles read off `SodaxOptions` —
     // never merged into the backend-fetched `SodaxConfig`/`instanceConfig`.
     const useBackendSubmitTx = options?.swapsOptions?.useBackendSubmitTx ?? false;
+    // Same for the leverage-yield backend submit-tx toggle (from its own client-options slot).
+    const useLeverageYieldBackendSubmitTx = options?.leverageYieldOptions?.useBackendSubmitTx ?? false;
     this.instanceConfig = options ? mergeSodaxConfig(sodaxConfig, options) : sodaxConfig;
     this.backendApi = new BackendApiService(this.instanceConfig.api, logger);
     this.api = this.backendApi;
@@ -110,6 +112,8 @@ export class Sodax {
       hubProvider: this.hubProvider,
       config: this.config,
       spoke: this.spoke,
+      backendApi: this.backendApi,
+      useBackendSubmitTx: useLeverageYieldBackendSubmitTx,
     });
   }
 

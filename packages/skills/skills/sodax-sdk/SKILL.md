@@ -35,6 +35,7 @@ If the user has already picked a single feature, load the matching granular skil
 | Stuck-asset recovery | [`./recovery/SKILL.md`](./recovery/SKILL.md) | "recover stuck assets on Sonic", "RecoveryService", "withdrawHubAsset" |
 | Backend HTTP client (intents, orderbook, MM reads) | [`./backend-api/SKILL.md`](./backend-api/SKILL.md) | "getIntentByHash", "Sodax backend API", "orderbook", "custom IConfigApiV1" |
 | Swaps API v2 client (quote, create-intent, submit-tx, fees) | [`./swaps-api/SKILL.md`](./swaps-api/SKILL.md) | "sodax.api.swaps", "swap quote from backend", "submit swap tx", "swaps API v2" |
+| Leverage Yield API v2 client (vault reads, APR, deposit/withdraw quote + intents) | [`./leverage-yield-api/SKILL.md`](./leverage-yield-api/SKILL.md) | "sodax.api.leverageYield", "vault APR from backend", "vault position from API", "leverage-yield API v2" |
 
 Load this broad skill (keep reading below) when:
 
@@ -76,7 +77,7 @@ Follow in order. Skipping `ai-rules.md` is the most common cause of agents rever
 
 1. Read [`integration/knowledge/ai-rules.md`](./integration/knowledge/ai-rules.md) — DO / DO NOT / workflow / stop conditions.
 2. Read [`integration/knowledge/quickstart.md`](./integration/knowledge/quickstart.md) — install, initialize, first-run troubleshooting.
-3. For your feature, read [`integration/knowledge/features/`](./integration/knowledge/features/) — `swap.md`, `money-market.md`, `staking.md`, `bridge.md`, `dex.md`, `migration.md`, `partner.md`, `recovery.md`, `backend-api.md`, `swaps-api.md`.
+3. For your feature, read [`integration/knowledge/features/`](./integration/knowledge/features/) — `swap.md`, `money-market.md`, `staking.md`, `bridge.md`, `dex.md`, `leverage-yield.md`, `migration.md`, `partner.md`, `recovery.md`, `backend-api.md`, `swaps-api.md`, `leverage-yield-api.md`.
 4. For specific patterns (init, raw vs signed, chain narrowing, gas, testing, errors, logging), read [`integration/knowledge/recipes/`](./integration/knowledge/recipes/).
 5. Lookups (chain keys, error codes, public API surface, wallet provider types, glossary) → [`integration/knowledge/reference/`](./integration/knowledge/reference/).
 6. Non-EVM quirks (Stellar trustline, BTC PSBT, Solana PDA, ICON, NEAR) → [`integration/knowledge/chain-specifics.md`](./integration/knowledge/chain-specifics.md).

@@ -72,6 +72,7 @@ export type SodaxOptionalConfig = {
   bridge?: BridgeOptions;
   leverageYield?: LeverageYieldOptions;
   swapsOptions?: SwapsClientOptions; // client-side swap behavior toggles (e.g. useBackendSubmitTx). Resolved client-side; distinct key so it never collides with the data `swaps` slot.
+  leverageYieldOptions?: LeverageYieldClientOptions; // client-side leverage-yield behavior toggles (e.g. useBackendSubmitTx). Resolved client-side; distinct key so it never collides with the data `leverageYield` slot.
 };
 
 /**
@@ -111,6 +112,21 @@ export type SwapsClientOptions = {
    * Opt-in: route `swap()` through the backend submit-tx 2-step flow (the backend relays +
    * post-executes server-side). On ANY non-success the SDK falls back to the client-side relay so
    * the swap still completes. Default `false` (the current fully client-side flow).
+   */
+  useBackendSubmitTx?: boolean;
+};
+
+/**
+ * Client-side leverage-yield behavior options. The leverage-yield counterpart to
+ * {@link SwapsClientOptions}: runtime toggles resolved once at construction — NOT part of the
+ * backend-fetched {@link SodaxDefaultConfig} data (they live on {@link SodaxOptionalConfig}).
+ */
+export type LeverageYieldClientOptions = {
+  /**
+   * Opt-in: route the leverage-yield vault swap (`deposit`/`withdraw`) through the backend
+   * submit-tx 2-step flow (the backend relays + post-executes server-side). On ANY non-success
+   * the SDK falls back to the client-side relay so the action still completes. Default `false`
+   * (the current fully client-side flow). Mirrors {@link SwapsClientOptions.useBackendSubmitTx}.
    */
   useBackendSubmitTx?: boolean;
 };

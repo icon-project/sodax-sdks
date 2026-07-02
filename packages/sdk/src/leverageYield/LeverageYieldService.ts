@@ -15,13 +15,14 @@ import {
   type IntentDeliveryInfo,
 } from '../shared/index.js';
 import type { HubProvider } from '../shared/types/types.js';
-import { isBitcoinChainKey } from '@sodax/types';
+import { DEFAULT_RELAY_TX_TIMEOUT, isBitcoinChainKey } from '@sodax/types';
 import type {
   Address,
   FeeAmount,
   GetAddressType,
   GetTokenAddressType,
   GetWalletProviderType,
+  Hex,
   HubChainKey,
   IEvmWalletProvider,
   LeverageYieldVault,
@@ -34,6 +35,7 @@ import type {
   SpokeExecActionParams,
   TxReturnType,
 } from '@sodax/types';
+import type { BackendApiService } from '../backendApi/index.js';
 import { erc20Abi, parseAbi } from 'viem';
 import type { ConfigService } from '../shared/config/ConfigService.js';
 import type { CreateIntentParams, Intent } from '../shared/types/intent-types.js';
@@ -396,6 +398,9 @@ export type LeverageYieldServiceConstructorParams = {
   hubProvider: HubProvider;
   config: ConfigService;
   spoke: SpokeService;
+  backendApi: BackendApiService;
+  /** Opt-in backend submit-tx 2-step flow (from `SodaxOptions.leverageYieldOptions.useBackendSubmitTx`). Default off. */
+  useBackendSubmitTx?: boolean;
 };
 
 /**
@@ -428,11 +433,15 @@ export class LeverageYieldService {
   private readonly hubProvider: HubProvider;
   private readonly config: ConfigService;
   private readonly spoke: SpokeService;
+  private readonly backendApi: BackendApiService;
+  private readonly useBackendSubmitTx: boolean;
 
-  constructor({ hubProvider, config, spoke }: LeverageYieldServiceConstructorParams) {
+  constructor({ hubProvider, config, spoke, backendApi, useBackendSubmitTx }: LeverageYieldServiceConstructorParams) {
     this.hubProvider = hubProvider;
     this.config = config;
     this.spoke = spoke;
+    this.backendApi = backendApi;
+    this.useBackendSubmitTx = useBackendSubmitTx ?? false;
   }
 
   // ─── Registry ──────────────────────────────────────────────────────────
@@ -867,69 +876,32 @@ export class LeverageYieldService {
     const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'vaultSwap' satisfies LeverageYieldAction };
     return this.config.analytics.trackResult('leverageYield', 'vaultSwap', async () => {
       try {
-        const timeout = _params.timeout;
         const createIntentResult = await this.createVaultIntent(_params);
         if (!createIntentResult.ok) {
           // LeverageYieldCreateIntentErrorCode ⊂ LeverageYieldSwapErrorCode by definition.
           return { ok: false, error: createIntentResult.error };
         }
 
-        const { tx: spokeTxHash, intent, relayData } = createIntentResult.value;
+        const created = createIntentResult.value;
 
-        const verifyTxHashResult = await this.spoke.verifyTxHash({
-          txHash: spokeTxHash,
-          chainKey: srcChainKey,
-        });
-        if (!verifyTxHashResult.ok) {
-          return {
-            ok: false,
-            error: verifyFailed('leverageYield', verifyTxHashResult.error, baseCtx),
-          };
+        // One shared budget for the rest of the vault swap: the backend submit-tx poll and the
+        // client-side relay fallback split this single deadline, so total wall-clock never exceeds
+        // one `timeout` (mirrors SwapService.swap).
+        const deadline = Date.now() + (_params.timeout ?? DEFAULT_RELAY_TX_TIMEOUT);
+
+        // Opt-in backend 2-step flow: hand the broadcast intent tx to the leverage-yield API, which
+        // relays + post-executes server-side. On ANY non-success we fall back to the client-side
+        // relay so the vault swap still completes — safe because re-relay / re-post are idempotent.
+        if (this.useBackendSubmitTx) {
+          const submitted = await this.submitTx(_params, created, deadline);
+          if (submitted.ok) return submitted;
+          this.config.logger.warn(
+            '[leverageYield] backend submit-tx did not complete; falling back to the client-side relay',
+            { error: submitted.error },
+          );
         }
 
-        let dstIntentTxHash: string;
-        if (isHubChainKeyType(srcChainKey)) {
-          dstIntentTxHash = spokeTxHash;
-        } else {
-          const packet = await relayTxAndWaitPacket({
-            srcTxHash: spokeTxHash,
-            data: relayData,
-            chainKey: srcChainKey,
-            relayerApiEndpoint: this.config.relay.relayerApiEndpoint,
-            timeout,
-          });
-          if (!packet.ok) {
-            return {
-              ok: false,
-              error: mapRelayFailure(packet.error, { feature: 'leverageYield', ...baseCtx }),
-            };
-          }
-          dstIntentTxHash = packet.value.dst_tx_hash;
-        }
-
-        const postExecResult = await this.notifySolver({
-          intent_tx_hash: dstIntentTxHash as `0x${string}`,
-        });
-        if (!postExecResult.ok) {
-          // LeverageYieldPostExecutionErrorCode ⊂ LeverageYieldSwapErrorCode by definition.
-          return { ok: false, error: postExecResult.error };
-        }
-
-        return {
-          ok: true,
-          value: {
-            solverExecutionResponse: postExecResult.value,
-            intent,
-            intentDeliveryInfo: {
-              srcChainKey,
-              srcTxHash: spokeTxHash,
-              srcAddress: params.srcAddress,
-              dstChainKey: params.dstChainKey,
-              dstTxHash: dstIntentTxHash,
-              dstAddress: params.dstAddress,
-            } satisfies IntentDeliveryInfo,
-          },
-        };
+        return this.fallbackVaultSwapSteps(_params, created, deadline);
       } catch (error) {
         // Narrow guard: preserve SodaxErrors whose code is in the vault-swap union; wrap
         // unknown codes (e.g. an accidental cross-feature code) as UNKNOWN.
@@ -957,6 +929,154 @@ export class LeverageYieldService {
       }),
       failure: error => ({ code: error.code }),
     });
+  }
+
+  /**
+   * Client-side vault-swap completion (the default path): verify the broadcast intent tx landed,
+   * relay it to the hub (Sonic) — or use it directly when the source IS the hub — then notify the
+   * solver via {@link LeverageYieldService.notifySolver} and build the {@link VaultSwapResponse}.
+   * Extracted from `vaultSwap()` so the opt-in backend 2-step path ({@link LeverageYieldService.submitTx})
+   * can fall back to it on any non-success. Leverage-yield copy of `SwapService.fallbackSwapSteps`.
+   */
+  private async fallbackVaultSwapSteps<K extends SpokeChainKey>(
+    _params: VaultSwapActionParams<K, false>,
+    created: CreateVaultIntentResult<K, false>,
+    deadline: number,
+  ): Promise<Result<VaultSwapResponse, LeverageYieldSwapError>> {
+    const { params } = _params;
+    const srcChainKey = params.srcChainKey;
+    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'vaultSwap' satisfies LeverageYieldAction };
+    const { tx: spokeTxHash, intent, relayData } = created;
+
+    const verifyTxHashResult = await this.spoke.verifyTxHash({
+      txHash: spokeTxHash,
+      chainKey: srcChainKey,
+    });
+    if (!verifyTxHashResult.ok) {
+      return { ok: false, error: verifyFailed('leverageYield', verifyTxHashResult.error, baseCtx) };
+    }
+
+    let dstIntentTxHash: string;
+    if (isHubChainKeyType(srcChainKey)) {
+      dstIntentTxHash = spokeTxHash;
+    } else {
+      const packet = await relayTxAndWaitPacket({
+        srcTxHash: spokeTxHash,
+        data: relayData,
+        chainKey: srcChainKey,
+        relayerApiEndpoint: this.config.relay.relayerApiEndpoint,
+        // Remaining shared budget: ≈ full `timeout` on the flag-off path (called immediately), or
+        // the reserve `submitTx` left on the backend path. Floor keeps a stalled-backend fallback viable.
+        timeout: Math.max(deadline - Date.now(), 5_000),
+      });
+      if (!packet.ok) {
+        return { ok: false, error: mapRelayFailure(packet.error, { feature: 'leverageYield', ...baseCtx }) };
+      }
+      dstIntentTxHash = packet.value.dst_tx_hash;
+    }
+
+    const postExecResult = await this.notifySolver({
+      intent_tx_hash: dstIntentTxHash as `0x${string}`,
+    });
+    if (!postExecResult.ok) {
+      // LeverageYieldPostExecutionErrorCode ⊂ LeverageYieldSwapErrorCode by definition.
+      return { ok: false, error: postExecResult.error };
+    }
+
+    return {
+      ok: true,
+      value: {
+        solverExecutionResponse: postExecResult.value,
+        intent,
+        intentDeliveryInfo: {
+          srcChainKey,
+          srcTxHash: spokeTxHash,
+          srcAddress: params.srcAddress,
+          dstChainKey: params.dstChainKey,
+          dstTxHash: dstIntentTxHash,
+          dstAddress: params.dstAddress,
+        } satisfies IntentDeliveryInfo,
+      },
+    };
+  }
+
+  /**
+   * Backend 2-step vault-swap path (opt-in via `leverageYieldOptions.useBackendSubmitTx`): hand the
+   * broadcast intent tx to the leverage-yield API (`POST /leverage-yield/submit-tx`); the backend
+   * relays + post-executes server-side. Polls `getSubmitTxStatus` until `executed`, then reconstructs
+   * the same {@link VaultSwapResponse} the client-side path returns. Leverage-yield copy of
+   * `SwapService.submitTx`.
+   *
+   * Never throws — returns `{ ok: false }` on any non-success (submit `!ok`, terminal `failed` /
+   * abandoned, or poll timeout) so `vaultSwap()` falls back to {@link LeverageYieldService.fallbackVaultSwapSteps}.
+   * Falling back is safe: re-relaying / re-posting an already-processed vault swap is idempotent (the
+   * relay dedups the `executed` packet and the solver re-affirms the intent — no double-fill). Polling
+   * stops at `deadline - reserve` so the fallback keeps a guaranteed slice of the shared budget.
+   */
+  private async submitTx<K extends SpokeChainKey>(
+    _params: VaultSwapActionParams<K, false>,
+    created: CreateVaultIntentResult<K, false>,
+    deadline: number,
+  ): Promise<Result<VaultSwapResponse, LeverageYieldSwapError>> {
+    const { params } = _params;
+    const srcChainKey = params.srcChainKey;
+    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'vaultSwap' satisfies LeverageYieldAction };
+    const { tx: spokeTxHash, intent, relayData } = created;
+    const submitTxFailed = (cause: unknown): Result<VaultSwapResponse, LeverageYieldSwapError> => ({
+      ok: false,
+      error: executionFailed('leverageYield', cause, baseCtx),
+    });
+
+    try {
+      const submitted = await this.backendApi.leverageYield.submitTx({
+        txHash: spokeTxHash,
+        srcChainKey,
+        walletAddress: params.srcAddress,
+        intent,
+        relayData: relayData.payload,
+      });
+      // Backend submission rejected — wrap its error as the cause so vaultSwap() falls back.
+      if (!submitted.ok) return submitTxFailed(submitted.error);
+
+      // Reserve up to a third of the remaining shared budget (capped at 20s) for the fallback, so a
+      // stalled backend can't consume the whole `timeout` before the client-side relay gets a turn.
+      const reserveMs = Math.min(Math.ceil((deadline - Date.now()) / 3), 20_000);
+      const pollDeadline = deadline - reserveMs;
+      const pollIntervalMs = 1_000;
+      while (Date.now() < pollDeadline) {
+        const statusResult = await this.backendApi.leverageYield.getSubmitTxStatus({ txHash: spokeTxHash, srcChainKey });
+        if (statusResult.ok) {
+          const { status, result, failureReason, abandonedAt } = statusResult.value.data;
+          if (status === 'executed' && result?.dstIntentTxHash && result.intent_hash) {
+            return {
+              ok: true,
+              value: {
+                // Backend serializes the hex intent_hash as a plain string; brand it at the boundary.
+                solverExecutionResponse: { answer: 'OK', intent_hash: result.intent_hash as Hex },
+                intent,
+                intentDeliveryInfo: {
+                  srcChainKey,
+                  srcTxHash: spokeTxHash,
+                  srcAddress: params.srcAddress,
+                  dstChainKey: params.dstChainKey,
+                  dstTxHash: result.dstIntentTxHash,
+                  dstAddress: params.dstAddress,
+                } satisfies IntentDeliveryInfo,
+              },
+            };
+          }
+          if (status === 'failed' || abandonedAt) {
+            const reason = failureReason ? `: ${failureReason}` : '';
+            return submitTxFailed(new Error(`backend submit-tx ${status}${reason}`));
+          }
+        }
+        // transient !ok / pending / relaying / relayed / posting_execution → keep polling
+        await new Promise<void>(resolve => setTimeout(resolve, pollIntervalMs));
+      }
+      return submitTxFailed(new Error('backend submit-tx polling timed out before reaching executed'));
+    } catch (error) {
+      return { ok: false, error: unknownFailed('leverageYield', error, baseCtx) };
+    }
   }
 
   /**
