@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useBackendSubmitSwapTxStatus, type SolverIntentStatusCode } from '@sodax/dapp-kit';
+import { useSwapsApiSubmitTxStatus, type SolverIntentStatusCode } from '@sodax/dapp-kit';
 import { formatUnits } from 'viem';
 import { ArrowRight, Check, Copy, ExternalLink, X } from 'lucide-react';
 import { Card } from '@/components/ui/card';
@@ -345,7 +345,7 @@ function SolverLiveCard({
   );
 }
 
-type SubmitTxData = NonNullable<ReturnType<typeof useBackendSubmitSwapTxStatus>['data']>;
+type SubmitTxData = NonNullable<ReturnType<typeof useSwapsApiSubmitTxStatus>['data']>;
 
 /** Derives label / error / terminal-only rows from a BES submit-tx status response. */
 function deriveSubmitTx(response: SubmitTxData | undefined): {
@@ -383,7 +383,7 @@ function SubmitTxLiveCard({
   onSettle: SettleFn;
 }) {
   const apiConfig = useMemo(() => (order.apiBaseURL ? { baseURL: order.apiBaseURL } : undefined), [order.apiBaseURL]);
-  const { data: statusResponse } = useBackendSubmitSwapTxStatus({
+  const { data: statusResponse } = useSwapsApiSubmitTxStatus({
     params: { txHash: order.txHash, srcChainKey: order.srcChainKey, apiConfig },
   });
 

@@ -71,6 +71,7 @@ export type SodaxOptionalConfig = {
   moneyMarket?: MoneyMarketOptions;
   bridge?: BridgeOptions;
   leverageYield?: LeverageYieldOptions;
+  swapsOptions?: SwapsClientOptions; // client-side swap behavior toggles (e.g. useBackendSubmitTx). Resolved client-side; distinct key so it never collides with the data `swaps` slot.
 };
 
 /**
@@ -102,8 +103,19 @@ export type SodaxDefaultConfig = {
 };
 
 /**
- * Sodax default static data object which can always be overriden through Sodax instance (i.e. new Sodax(...config))
+ * Client-side swap behavior options. Like {@link SodaxOptionalConfig.logger}, these are runtime toggles
+ * resolved once at construction — NOT part of the backend-fetched {@link SodaxDefaultConfig} data.
  */
+export type SwapsClientOptions = {
+  /**
+   * Opt-in: route `swap()` through the backend submit-tx 2-step flow (the backend relays +
+   * post-executes server-side). On ANY non-success the SDK falls back to the client-side relay so
+   * the swap still completes. Default `false` (the current fully client-side flow).
+   */
+  useBackendSubmitTx?: boolean;
+};
+
+// default sodax config object which can always be overriden through Sodax instance (i.e. new Sodax(...config))
 export const sodaxConfig = {
   chains: spokeChainConfig,
   swaps: swapsConfig,

@@ -21,7 +21,6 @@ import {
   type DexConfig,
   type PoolKey,
   type Result,
-  CONFIG_VERSION,
   type SwapsConfig,
   type BridgeConfig,
   type GetSpokeChainConfigType,
@@ -32,7 +31,7 @@ import {
 } from '@sodax/types';
 import { isAddress } from 'viem';
 import type { BackendApiService } from '../../backendApi/BackendApiService.js';
-import { mergeSodaxConfig } from './mergeSodaxConfig.js';
+// import { mergeSodaxConfig } from './mergeSodaxConfig.js'; // TODO(config-v2): restore when initialize() dynamic fetch is re-enabled
 import { resolveLogger } from '../logger.js';
 import { noopAnalytics, type ResolvedAnalytics } from '../analytics.js';
 
@@ -68,8 +67,9 @@ export type ConfigServiceConstructorParams = {
  */
 export class ConfigService {
   private sodax: SodaxConfig;
-  private readonly api: BackendApiService;
-  private readonly userConfig?: SodaxOptions;
+  // TODO(config-v2): restore `api` / `userConfig` when initialize() dynamic fetch is re-enabled.
+  // private readonly api: BackendApiService;
+  // private readonly userConfig?: SodaxOptions;
 
   /**
    * SDK log sink. Resolved once at construction and kept independent of {@link sodax} so that
@@ -104,10 +104,10 @@ export class ConfigService {
   private chainToSupportedTokenAddressMap!: Map<SpokeChainKey, Set<string>>;
   private hubAssetToXTokenMap!: Map<Address, XToken>;
 
+  // `api` / `userConfig` are accepted but unused while initialize()'s dynamic fetch is disabled
+  // (see TODO(config-v2) below); restore their assignments when re-enabling.
   constructor({ api, config, userConfig, logger, analytics, fee }: ConfigServiceConstructorParams) {
-    this.api = api;
     this.sodax = config;
-    this.userConfig = userConfig;
     this.logger = logger ?? resolveLogger(undefined);
     this.analytics = analytics ?? noopAnalytics;
     this.fee = fee;
@@ -116,24 +116,26 @@ export class ConfigService {
 
   public async initialize(): Promise<Result<void>> {
     try {
-      const result = await this.api.getAllConfig();
-      if (!result.ok) return result;
-      const response = result.value;
+      // TODO(config-v2): enable once the config v2 endpoint is live. The dynamic fetch + re-layer is
+      // intentionally disabled — initialize() is a no-op that keeps the constructor-merged config.
+      // const result = await this.api.getAllConfig();
+      // if (!result.ok) return result;
+      // const response = result.value;
 
-      if (!response.version || response.version < CONFIG_VERSION) {
-        this.logger.warn(
-          `Dynamic config version is less than the current version, resorting to the default one. Current version: ${CONFIG_VERSION}, response version: ${response.version}`,
-        );
-      } else {
-        // Dynamic config replaces the static defaults, but explicit user overrides must still win —
-        // re-layer them on top so initialize() never clobbers config the caller passed to `new Sodax(...)`.
-        const next = this.userConfig ? mergeSodaxConfig(response.config, this.userConfig) : response.config;
-        // Rebuild the lookup structures from `next` before committing it, so a failure here leaves the
-        // previously committed config and its derived maps intact (no torn state).
-        this.loadSodaxConfigDataStructures(next);
-        this.sodax = next;
-        this.initialized = true;
-      }
+      // if (!response.version || response.version < CONFIG_VERSION) {
+      //   this.logger.warn(
+      //     `Dynamic config version is less than the current version, resorting to the default one. Current version: ${CONFIG_VERSION}, response version: ${response.version}`,
+      //   );
+      // } else {
+      //   // Dynamic config replaces the static defaults, but explicit user overrides must still win —
+      //   // re-layer them on top so initialize() never clobbers config the caller passed to `new Sodax(...)`.
+      //   const next = this.userConfig ? mergeSodaxConfig(response.config, this.userConfig) : response.config;
+      //   // Rebuild the lookup structures from `next` before committing it, so a failure here leaves the
+      //   // previously committed config and its derived maps intact (no torn state).
+      //   this.loadSodaxConfigDataStructures(next);
+      //   this.sodax = next;
+      //   this.initialized = true;
+      // }
 
       return { ok: true, value: undefined };
     } catch (error) {
@@ -175,6 +177,17 @@ export class ConfigService {
 
   public getOriginalAssetAddress(chainId: SpokeChainKey, hubAsset: Address): OriginalAssetAddress | undefined {
     return this.hubAssetToXTokenMap.get(hubAsset.toLowerCase() as Address)?.address;
+  }
+
+  /**
+   * Resolves the {@link XToken} descriptor (hub asset, vault, decimals) for a hub-asset address.
+   *
+   * Useful when a caller holds a hub asset directly on Sonic that has no spoke-token entry under
+   * the hub chain — e.g. a partner BTC fee held as the BTC hub asset, which only exists as a spoke
+   * token on Bitcoin. Returns `undefined` when the address is not a known hub asset.
+   */
+  public getXTokenFromHubAsset(hubAsset: string): XToken | undefined {
+    return this.hubAssetToXTokenMap.get(hubAsset.toLowerCase() as Address);
   }
 
   public getSpokeTokenFromOriginalAssetAddress(

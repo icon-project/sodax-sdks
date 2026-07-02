@@ -147,10 +147,10 @@ export type { MsgBroadcaster } from '@injectivelabs/wallet-core';
 export { Networks } from '@stellar/stellar-sdk';
 
 // Stacks (also re-exports the `PostConditionMode` enum)
-export { PostConditionMode } from '@stacks/transactions';
-export type { ClarityValue, PostConditionModeName } from '@stacks/transactions';
-export type { StacksNetwork } from '@stacks/network';
-export type { StacksProvider } from '@stacks/connect';
+export { PostConditionMode } from '@sodax/libs/stacks/core';
+export type { ClarityValue, PostConditionModeName } from '@sodax/libs/stacks/core';
+export type { StacksNetwork } from '@sodax/libs/stacks/core';
+export type { StacksProvider } from '@sodax/libs/stacks/connect';
 
 // Near
 export type { KeyPairString } from 'near-api-js';
@@ -207,6 +207,6 @@ For the full interface signatures, see [`reference/interfaces.md`](./reference/i
 - **`getEvmViemChain(key)` is exhaustively typed.** The default branch is a `never`-assertion — if `@sodax/types` adds a new `EvmChainKey` value, this function fails to typecheck until the case is added. That's by design.
 - **Sui browser-extension mode requires THREE objects** — `client`, `wallet`, and `account`. Many wallet adapters expose the first two but not the third. See [`features/sui.md`](./features/sui.md).
 - **Stellar requires `rpcUrl` in both modes** (technically optional, but defaults to a public RPC). Use a private RPC for production.
-- **Bitcoin in private-key mode also takes an optional `addressType`** (P2WPKH / P2TR / …). Browser-extension mode infers it from the wallet kit.
+- **Bitcoin in private-key mode also takes an optional `addressType`** (P2WPKH / P2TR / …), defaulting to the `P2WPKH` constant when omitted. Browser-extension mode has no `addressType` field — the address returned by the wallet kit already has whatever type the wallet uses.
 
 Everything else is covered by [`features/`](./features/) on a per-chain basis.

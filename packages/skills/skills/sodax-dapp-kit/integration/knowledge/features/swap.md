@@ -91,7 +91,7 @@ type UseStatusParams = ReadHookParams<
 1. **`Intent.srcChain` and `Intent.dstChain` keep their v1 names.** Even though request-side params use `srcChainKey`/`dstChainKey`, the read-side `Intent` type didn't rename. Don't blanket-replace these names.
 2. **Default `mutationKey` is `['swap']`.** Use `useIsMutating({ mutationKey: ['swap'] })` to get a global "any swap in flight" state. Override via `mutationOptions.mutationKey` if you want narrower scoping per-call.
 3. **Quotes auto-refresh every 3s** — pause polling by setting `queryOptions.refetchInterval: false` if the quote is in a non-visible UI.
-4. **Token list has duplicate addresses across chains.** `sodax.swaps.getSupportedSwapTokens()` returns `Record<SpokeChainKey, readonly XToken[]>`. Flattening it (e.g. `Object.values(...).flat()`) yields multiple tokens that share a contract address (same token deployed on different chains). When rendering a flat token list, use a composite key like `${token.address}-${token.blockchain_id}` — not `token.address` alone.
+4. **Token list has duplicate addresses across chains.** `sodax.swaps.getSupportedSwapTokens()` returns `Record<SpokeChainKey, readonly XToken[]>`. Flattening it (e.g. `Object.values(...).flat()`) yields multiple tokens that share a contract address (same token deployed on different chains). When rendering a flat token list, use a composite key like `${token.address}-${token.chainKey}` — not `token.address` alone. (`XToken` carries `chainKey`; there is no `blockchain_id` field.)
 
 ## Cross-references
 

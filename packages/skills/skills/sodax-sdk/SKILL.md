@@ -33,7 +33,8 @@ If the user has already picked a single feature, load the matching granular skil
 | ICX / bnUSD / BALN token migration to SODAX | [`./migration/SKILL.md`](./migration/SKILL.md) | "migrate ICX", "legacy bnUSD", "BALN lockup" (NOT v1→v2 SDK porting) |
 | Partner fees | [`./partner/SKILL.md`](./partner/SKILL.md) | "claim partner fee", "partner auto-swap preference", "approve partner fee token" |
 | Stuck-asset recovery | [`./recovery/SKILL.md`](./recovery/SKILL.md) | "recover stuck assets on Sonic", "RecoveryService", "withdrawHubAsset" |
-| Backend HTTP client (intents, orderbook, MM reads) | [`./backend-api/SKILL.md`](./backend-api/SKILL.md) | "submit swap tx to backend", "getIntentByHash", "Sodax backend API", "custom IConfigApi" |
+| Backend HTTP client (intents, orderbook, MM reads) | [`./backend-api/SKILL.md`](./backend-api/SKILL.md) | "getIntentByHash", "Sodax backend API", "orderbook", "custom IConfigApiV1" |
+| Swaps API v2 client (quote, create-intent, submit-tx, fees) | [`./swaps-api/SKILL.md`](./swaps-api/SKILL.md) | "sodax.api.swaps", "swap quote from backend", "submit swap tx", "swaps API v2" |
 
 Load this broad skill (keep reading below) when:
 
@@ -55,7 +56,7 @@ This skill documents the **SDK call sites** — what to import, how to construct
 
 - **Multi-user state** (Telegram bot per-user wallets, dApp session storage, custodial vs non-custodial design). Hold one wallet-provider instance per user/chain at the app layer and pass it into each call — the SDK is stateless.
 - **UI**, framework wiring, route handlers, webhooks. Pick your own framework (telegraf/grammy for bots, Next.js / Vite for web, etc.) — the SDK has no opinion.
-- **Token discovery beyond `sodax.config`**. The SDK exposes `sodax.config.findSupportedTokenBySymbol(chainKey, symbol)` for per-chain lookups and `sodax.bridge.getBridgeableTokens(from, to, srcAddress)` / `sodax.bridge.isBridgeable({ from, to })` for vault-pair checks. There is no exhaustive "all bridgeable pairs across all chains" table — derive it at runtime if needed.
+- **Token discovery beyond `sodax.config`**. The SDK exposes `sodax.config.findSupportedTokenBySymbol(chainKey, symbol)` for per-chain lookups and `sodax.bridge.getBridgeableTokens(from, to, token)` / `sodax.bridge.isBridgeable({ from, to })` for vault-pair checks. There is no exhaustive "all bridgeable pairs across all chains" table — derive it at runtime if needed.
 
 If the consumer needs a runnable end-to-end app (Node bot, CLI, full dApp), the right combination is: this skill (for SDK call sites) + `sodax-wallet-sdk-core` (for wallet providers) + the consumer's chosen framework code. The SDK does not ship an app skeleton.
 
@@ -75,7 +76,7 @@ Follow in order. Skipping `ai-rules.md` is the most common cause of agents rever
 
 1. Read [`integration/knowledge/ai-rules.md`](./integration/knowledge/ai-rules.md) — DO / DO NOT / workflow / stop conditions.
 2. Read [`integration/knowledge/quickstart.md`](./integration/knowledge/quickstart.md) — install, initialize, first-run troubleshooting.
-3. For your feature, read [`integration/knowledge/features/`](./integration/knowledge/features/) — `swap.md`, `money-market.md`, `staking.md`, `bridge.md`, `dex.md`, `migration.md`, `partner.md`, `recovery.md`, `backend-api.md`.
+3. For your feature, read [`integration/knowledge/features/`](./integration/knowledge/features/) — `swap.md`, `money-market.md`, `staking.md`, `bridge.md`, `dex.md`, `migration.md`, `partner.md`, `recovery.md`, `backend-api.md`, `swaps-api.md`.
 4. For specific patterns (init, raw vs signed, chain narrowing, gas, testing, errors, logging), read [`integration/knowledge/recipes/`](./integration/knowledge/recipes/).
 5. Lookups (chain keys, error codes, public API surface, wallet provider types, glossary) → [`integration/knowledge/reference/`](./integration/knowledge/reference/).
 6. Non-EVM quirks (Stellar trustline, BTC PSBT, Solana PDA, ICON, NEAR) → [`integration/knowledge/chain-specifics.md`](./integration/knowledge/chain-specifics.md).
@@ -110,7 +111,7 @@ If the consumer has v1 fingerprints AND also wants new features: **do migration 
 1. Read [`migration-v1-to-v2/knowledge/ai-rules.md`](./migration-v1-to-v2/knowledge/ai-rules.md) — DO / DO NOT / workflow / stop conditions. **Read first** — prevents the most common porting mistakes.
 2. Read [`migration-v1-to-v2/knowledge/README.md`](./migration-v1-to-v2/knowledge/README.md) — overview, reading order, cross-cutting checklist, v1↔v2 glossary.
 3. **Cross-cutting first.** In order:
-   - [`breaking-changes/type-system.md`](./migration-v1-to-v2/knowledge/breaking-changes/type-system.md) — renames at `@sodax/types`, `ChainKeys`, `WalletProviderSlot`, `RpcConfig`, `IConfigApi` Result.
+   - [`breaking-changes/type-system.md`](./migration-v1-to-v2/knowledge/breaking-changes/type-system.md) — renames at `@sodax/types`, `ChainKeys`, `WalletProviderSlot`, `RpcConfig`, `IConfigApiV1` Result.
    - [`breaking-changes/architecture.md`](./migration-v1-to-v2/knowledge/breaking-changes/architecture.md) — `*SpokeProvider` deletion, `ConfigService`, relay reshape.
    - [`breaking-changes/result-and-errors.md`](./migration-v1-to-v2/knowledge/breaking-changes/result-and-errors.md) — throws → `Result<T>`; module errors → `SodaxError<C>`; v1↔v2 code crosswalk.
 4. **Per-feature playbooks** under [`features/`](./migration-v1-to-v2/knowledge/features/) — `swap.md`, `money-market.md`, `staking.md`, `bridge.md`, `dex.md`, `migration.md`, `partner.md`, `recovery.md`, `backend-api.md` — read only the ones the consumer uses.

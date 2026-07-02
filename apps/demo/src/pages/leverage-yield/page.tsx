@@ -20,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChainSelector } from '@/components/shared/ChainSelector';
 import {
-  useBackendSubmitSwapTx,
+  useSwapsApiSubmitTx,
   useQuote,
   useSodaxContext,
   useSwapAllowance,
@@ -42,8 +42,7 @@ import {
   type PartnerFee,
   type SolverIntentQuoteRequest,
   type SpokeChainKey,
-  type SubmitSwapTxRequest,
-  type SwapIntentData,
+  type SubmitTxRequestV2,
   type XToken,
 } from '@sodax/dapp-kit';
 import {
@@ -280,7 +279,7 @@ export default function LeverageYieldPage() {
   });
 
   const { mutateAsyncSafe: approve, isPending: isApproving } = useSwapApprove();
-  const { mutateAsyncSafe: submitSwapTx, isPending: isSubmitting } = useBackendSubmitSwapTx();
+  const { mutateAsyncSafe: submitSwapTx, isPending: isSubmitting } = useSwapsApiSubmitTx();
   const { mutateAsync: vaultSwap, isPending: isSwapping } = useLeverageYieldVaultSwap();
 
   // Leverage-yield intent builders. `mutateAsyncSafe` returns `Result<LeverageYieldSwapPayload>`
@@ -490,30 +489,13 @@ export default function LeverageYieldPage() {
     }
     const { tx: spokeTxHash, intent, relayData } = createResult.value;
 
-    const swapIntentData: SwapIntentData = {
-      intentId: intent.intentId.toString(),
-      creator: intent.creator,
-      inputToken: intent.inputToken,
-      outputToken: intent.outputToken,
-      inputAmount: intent.inputAmount.toString(),
-      minOutputAmount: intent.minOutputAmount.toString(),
-      deadline: intent.deadline.toString(),
-      allowPartialFill: intent.allowPartialFill,
-      srcChain: Number(intent.srcChain),
-      dstChain: Number(intent.dstChain),
-      srcAddress: intent.srcAddress,
-      dstAddress: intent.dstAddress,
-      solver: intent.solver,
-      data: intent.data,
-    };
-
     // BES locates the tx on `srcChainKey` — the spoke chain the user signed on (`userChain`
     // for both tabs; withdraw signs a `sendMessage` there).
-    const request: SubmitSwapTxRequest = {
+    const request: SubmitTxRequestV2 = {
       txHash: spokeTxHash as string,
       srcChainKey: userChain,
       walletAddress: intentOrderPayload.params.srcAddress,
-      intent: swapIntentData,
+      intent,
       relayData: relayData.payload,
     };
     const submitResult = await submitSwapTx({ request, apiConfig: SUBMIT_TX_API_CONFIG });

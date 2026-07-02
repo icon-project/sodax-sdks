@@ -71,7 +71,7 @@ The package keeps connection state in a Zustand store keyed by `ChainType`. The 
 // @ai-snippets-skip
 // internal shape — do NOT import
 {
-  xServices:     Partial<Record<ChainType, IXService>>,
+  xServices:     Partial<Record<ChainType, XService>>,
   xConnections:  Partial<Record<ChainType, XConnection>>,
   // …plus internal mutations
 }
@@ -90,7 +90,7 @@ You should **not** read the store directly. Use the public hooks. The store hook
 
 For EVM, available wallets are discovered via [EIP-6963](https://eips.ethereum.org/EIPS/eip-6963) — browser extensions broadcast their metadata and `useXConnectors({ xChainType: 'EVM' })` builds the list at runtime. No hardcoded wallet registry; new wallets installed by the user appear without an SDK update.
 
-Other chains ship a curated connector list (Bitcoin: Xverse / Unisat / OKX, Sui: dapp-kit's standard connectors, Solana: wallet-adapter's standard connectors, etc.). For each connector, `isInstalled` reflects whether the underlying extension/wallet is detected. `sortConnectors(list, { preferred })` puts installed connectors first — call it once in your render path; the result is stable per render.
+Other chains ship a curated connector list (Bitcoin: Xverse / Unisat / OKX / Hana, Sui: dapp-kit's standard connectors, Solana: wallet-adapter's standard connectors, etc.). For each connector, `isInstalled` reflects whether the underlying extension/wallet is detected. `sortConnectors(list, { preferred })` puts installed connectors first — call it once in your render path; the result is stable per render.
 
 ---
 
@@ -99,7 +99,7 @@ Other chains ship a curated connector list (Bitcoin: Xverse / Unisat / OKX, Sui:
 Two parallel addressing schemes:
 
 - **`xChainType: ChainType`** — family-level (`'EVM'`, `'SOLANA'`, `'BITCOIN'`, …). 9 values total.
-- **`xChainId: SpokeChainKey`** — chain-specific key from `@sodax/types` (`ChainKeys.ETHEREUM_MAINNET`, `ChainKeys.BSC_MAINNET`, …). 20 values today.
+- **`xChainId: SpokeChainKey`** — chain-specific key from `@sodax/types` (`ChainKeys.ETHEREUM_MAINNET`, `ChainKeys.BSC_MAINNET`, …). Inspect `@sodax/types` for the current set.
 
 Hooks that accept both enforce **exactly one** at runtime *and* at the type level. Passing both, neither, or `undefined` for both throws.
 

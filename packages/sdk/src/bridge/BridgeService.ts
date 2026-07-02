@@ -423,8 +423,8 @@ export class BridgeService {
     const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
     try {
       bridgeInvariant(params.amount > 0n, 'Amount must be greater than 0', { ...baseCtx, field: 'amount' });
-      const srcToken = this.config.getSpokeTokenFromOriginalAssetAddress(params.srcChainKey, params.srcToken);
-      const dstToken = this.config.getSpokeTokenFromOriginalAssetAddress(params.dstChainKey, params.dstToken);
+      const srcToken = this.resolveBridgeEndpointToken(params.srcChainKey, params.srcToken);
+      const dstToken = this.resolveBridgeEndpointToken(params.dstChainKey, params.dstToken);
 
       // Vault can only be used on Sonic
       bridgeInvariant(srcToken, `Unsupported spoke chain (${params.srcChainKey}) token: ${params.srcToken}`,
@@ -503,6 +503,21 @@ export class BridgeService {
         error: intentCreationFailed('bridge', error, baseCtx),
       };
     }
+  }
+
+  /**
+   * Resolves a bridge endpoint's {@link XToken} descriptor from a chain key + token address.
+   *
+   * Spoke endpoints (and hub-native tokens such as USDC/WETH/S whose on-chain address equals their
+   * hub asset) resolve by original asset address. On the hub a caller may instead hold a hub asset
+   * that has no spoke-token entry under the hub chain — e.g. a partner BTC fee held as the BTC hub
+   * asset, whose only spoke-token entry lives on Bitcoin. Resolve those by hub-asset address so the
+   * Sonic-sourced "withdraw directly" bridge can find the matching vault/decimals.
+   */
+  private resolveBridgeEndpointToken(chainKey: SpokeChainKey, token: string): XToken | undefined {
+    const spokeToken = this.config.getSpokeTokenFromOriginalAssetAddress(chainKey, token);
+    if (spokeToken) return spokeToken;
+    return isHubChainKeyType(chainKey) ? this.config.getXTokenFromHubAsset(token) : undefined;
   }
 
   /**

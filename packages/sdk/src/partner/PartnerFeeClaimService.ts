@@ -30,6 +30,7 @@ import {
   type SpokeApproveParams,
   type SpokeService,
 } from '../shared/index.js';
+import type { Intent } from '../shared/types/intent-types.js';
 
 export type PartnerFeeClaimAssetBalance = {
   symbol: string;
@@ -93,6 +94,25 @@ export type PartnerFeeClaimSwapAction<K extends SpokeChainKey, Raw extends boole
   Raw,
   PartnerFeeClaimSwapParams
 >;
+
+export type PartnerFeeClaimCancelParams = {
+  srcChainKey: HubChainKey;
+  srcAddress: Address;
+  fromToken: Address; // input (fee) token of the stuck intent — hub-chain address
+  toToken: Address; // output token of the stuck intent — hub-chain address
+};
+
+export type PartnerFeeClaimCancelAction<K extends SpokeChainKey, Raw extends boolean> = SpokeExecActionParams<
+  K,
+  Raw,
+  PartnerFeeClaimCancelParams
+>;
+
+export type GetUserIntentParams = {
+  user: Address;
+  fromToken: Address;
+  toToken: Address;
+};
 
 export type PartnerFeeClaimServiceConstructorParams = {
   config: ConfigService;
@@ -517,6 +537,11 @@ export class PartnerFeeClaimService {
    * This is the low-level building block. Use `swap` for the full flow that also waits for
    * the solver to execute the intent.
    *
+   * Guards against same-token intents: if the configured output token equals `fromToken` the solver
+   * cannot fill the swap, so the call is rejected with `VALIDATION_FAILED` before any transaction is
+   * built. The guard fails closed — if the preference lookup fails the call returns that error rather
+   * than submitting an intent that may become unfillable.
+   *
    * @param _params - Action descriptor containing:
    *   - `params.srcChainKey` — must be the hub chain key (Sonic).
    *   - `params.srcAddress` — partner's EVM address; also used as the intent creator.
@@ -542,6 +567,32 @@ export class PartnerFeeClaimService {
         this.config.solver.protocolIntentsContract,
         'protocolIntentsContract is not configured in solver config',
       );
+
+      // Same-token guard: the solver cannot fill a swap whose output token equals its input token.
+      // Creating the intent anyway pulls the partner's funds into an unfillable intent (deadline 0,
+      // no auto-refund). This is enforced here — the method that actually encodes and submits the
+      // ProtocolIntents call — so direct callers are protected, not only the `swap` flow.
+      // Fail closed: if the preference lookup fails we cannot prove the pair is safe, so block rather
+      // than risk recreating the stuck-funds scenario this guard exists to prevent.
+      const prefs = await this.getAutoSwapPreferences(params.srcAddress);
+      if (!prefs.ok) return prefs;
+      if (prefs.value.outputToken.toLowerCase() === params.fromToken.toLowerCase()) {
+        return {
+          ok: false,
+          error: new SodaxError(
+            'VALIDATION_FAILED',
+            'Auto-swap output token equals the fee token; the solver cannot swap a token into itself. Withdraw the fee token directly (bridge/transfer) or change the swap preference before claiming.',
+            {
+              feature: 'partner',
+              context: {
+                action: 'createIntentAutoSwap',
+                fromToken: params.fromToken,
+                outputToken: prefs.value.outputToken,
+              },
+            },
+          ),
+        };
+      }
 
       // currently we only allow Sodax solver to fille the intent using best price
       // IMPORTANT: if this is changed, quote needs to be used to create slippage based min output amount
@@ -598,7 +649,9 @@ export class PartnerFeeClaimService {
    *
    *   On failure the `error` is tagged:
    *   - `WAIT_INTENT_AUTO_SWAP_FAILED` — transaction was submitted but receipt polling failed.
-   *   - Error from `createIntentAutoSwap` — if the initial submission failed.
+   *   - Error from `createIntentAutoSwap` — if the initial submission failed, including
+   *     `VALIDATION_FAILED` when the output token equals the fee token (same-token guard) or the
+   *     preference lookup that backs the guard fails.
    *   - Error from `SolverApiService.postExecution` — if the solver notification failed.
    */
   public async swap(
@@ -606,6 +659,8 @@ export class PartnerFeeClaimService {
   ): Promise<Result<IntentAutoSwapResult>> {
     return this.config.analytics.trackResult('partner', 'swap', async () => {
       try {
+        // The same-token guard (output token === fee token) is enforced inside `createIntentAutoSwap`,
+        // which this flow delegates to, so it applies here too without duplication.
         const txHash = await this.createIntentAutoSwap(_params);
 
         if (!txHash.ok) {
@@ -655,6 +710,171 @@ export class PartnerFeeClaimService {
       }),
       failure: error => ({ code: isSodaxError(error) ? error.code : undefined }),
     });
+  }
+
+  /**
+   * Cancels a partner fee-claim auto-swap intent and refunds the input token to the partner.
+   *
+   * This targets the ProtocolIntents contract's own `cancelIntent(fromToken, toToken)`, which is
+   * the only authorized cancel path for partner auto-swap intents: the intent's `creator` is the
+   * ProtocolIntents contract (not the partner), so the generic `SwapService.cancelIntent` reverts
+   * with `Unauthorized()`. ProtocolIntents looks up the caller's intent for the token pair, cancels
+   * it in the main intents contract (as the creator), and transfers the locked `inputAmount` back
+   * to the partner (`msg.sender`).
+   *
+   * Use this to recover funds stuck in an unfillable intent — most commonly a same-token claim
+   * (`fromToken === toToken`) the solver refused to fill (see the guard in {@link swap}).
+   *
+   * @param _params - Action descriptor containing:
+   *   - `params.srcChainKey` — must be the hub chain key (Sonic).
+   *   - `params.srcAddress` — the partner's EVM address; must match the intent's owner.
+   *   - `params.fromToken` — the stuck intent's input (fee) token, hub-chain address.
+   *   - `params.toToken` — the stuck intent's output token, hub-chain address.
+   *   - `raw` — when `true`, returns the unsigned transaction object instead of submitting it.
+   *   - `walletProvider` — required when `raw` is `false`; must be an EVM wallet provider.
+   * @returns A `Result` containing the submitted transaction hash (`raw: false`) or the unsigned
+   *   raw transaction (`raw: true`).
+   */
+  public async cancelIntent<Raw extends boolean>(
+    _params: PartnerFeeClaimCancelAction<HubChainKey, Raw>,
+  ): Promise<Result<TxReturnType<HubChainKey, Raw>>> {
+    return this.config.analytics.trackResult('partner', 'cancelIntent', async () => {
+      const { params } = _params;
+      try {
+        invariant(isHubChainKeyType(params.srcChainKey), 'PartnerFeeClaimService only supports Hub srcChainKey');
+        invariant(
+          isOptionalEvmWalletProviderType(_params.walletProvider),
+          'PartnerFeeClaimService only supports Evm wallet provider',
+        );
+        invariant(this.protocolIntentsContract, 'protocolIntentsContract is not configured in solver config');
+
+        const rawTx = {
+          from: params.srcAddress,
+          to: this.protocolIntentsContract,
+          value: 0n,
+          data: encodeFunctionData({
+            abi: ProtocolIntentsAbi,
+            functionName: 'cancelIntent',
+            args: [params.fromToken, params.toToken],
+          }),
+        };
+
+        if (_params.raw) {
+          return {
+            ok: true,
+            value: rawTx satisfies TxReturnType<HubChainKey, true> as TxReturnType<HubChainKey, Raw>,
+          };
+        }
+
+        const txHash = await _params.walletProvider.sendTransaction(rawTx);
+
+        return {
+          ok: true,
+          value: txHash satisfies TxReturnType<HubChainKey, false> as TxReturnType<HubChainKey, Raw>,
+        };
+      } catch (error) {
+        return { ok: false, error };
+      }
+    },
+    {
+      start: () => ({
+        srcChainKey: _params.params.srcChainKey,
+        srcAddress: _params.params.srcAddress,
+        fromToken: _params.params.fromToken,
+        toToken: _params.params.toToken,
+      }),
+      success: value => ({ txHash: value }),
+      failure: error => ({ code: isSodaxError(error) ? error.code : undefined }),
+    });
+  }
+
+  /**
+   * Returns the stored intent hash for a partner's `(user, fromToken, toToken)` token pair.
+   *
+   * A non-zero hash means an auto-swap intent currently exists for that pair (e.g. an unfilled
+   * same-token claim) and can be cancelled via {@link cancelIntent}. A zero hash
+   * (`0x000…0`) means there is no open intent for the pair.
+   *
+   * @param params.user - The partner's EVM address on Sonic.
+   * @param params.fromToken - Input (fee) token, hub-chain address.
+   * @param params.toToken - Output token, hub-chain address.
+   * @returns A `Result` containing the intent hash, or an `Error` tagged `LOOKUP_FAILED`.
+   */
+  public async getUserIntent({ user, fromToken, toToken }: GetUserIntentParams): Promise<Result<Hex, Error>> {
+    try {
+      invariant(this.protocolIntentsContract, 'protocolIntentsContract is not configured in solver config');
+
+      const intentHash = await this.hubProvider.publicClient.readContract({
+        address: this.protocolIntentsContract,
+        abi: ProtocolIntentsAbi,
+        functionName: 'getUserIntent',
+        args: [user, fromToken, toToken],
+      });
+
+      return { ok: true, value: intentHash };
+    } catch (error) {
+      return { ok: false, error: lookupFailed('partner', 'getUserIntent', error) };
+    }
+  }
+
+  /**
+   * Reads the full {@link Intent} details for a stored intent hash from the ProtocolIntents contract.
+   *
+   * Useful for displaying a stuck intent before cancelling it — e.g. the locked `inputAmount` and
+   * `inputToken`. Pair with {@link getUserIntent} to resolve the hash from a token pair.
+   *
+   * @param intentHash - The intent hash (from {@link getUserIntent}).
+   * @returns A `Result` containing the `Intent`, or an `Error` tagged `LOOKUP_FAILED`.
+   */
+  public async getIntentDetails(intentHash: Hex): Promise<Result<Intent, Error>> {
+    try {
+      invariant(this.protocolIntentsContract, 'protocolIntentsContract is not configured in solver config');
+
+      const intent = await this.hubProvider.publicClient.readContract({
+        address: this.protocolIntentsContract,
+        abi: ProtocolIntentsAbi,
+        functionName: 'getIntentDetails',
+        args: [intentHash],
+      });
+
+      // Narrow the on-chain uint256 chain ids (viem returns plain bigint) to the branded
+      // IntentRelayChainId union so the result satisfies the public Intent type.
+      if (
+        !this.config.isValidIntentRelayChainId(intent.srcChain) ||
+        !this.config.isValidIntentRelayChainId(intent.dstChain)
+      ) {
+        return {
+          ok: false,
+          error: lookupFailed(
+            'partner',
+            'getIntentDetails',
+            new Error(`Invalid intent relay chain id: ${intent.srcChain} or ${intent.dstChain}`),
+          ),
+        };
+      }
+
+      return {
+        ok: true,
+        value: {
+          intentId: intent.intentId,
+          creator: intent.creator,
+          inputToken: intent.inputToken,
+          outputToken: intent.outputToken,
+          inputAmount: intent.inputAmount,
+          minOutputAmount: intent.minOutputAmount,
+          deadline: intent.deadline,
+          allowPartialFill: intent.allowPartialFill,
+          srcChain: intent.srcChain,
+          dstChain: intent.dstChain,
+          srcAddress: intent.srcAddress,
+          dstAddress: intent.dstAddress,
+          solver: intent.solver,
+          data: intent.data,
+        } satisfies Intent,
+      };
+    } catch (error) {
+      return { ok: false, error: lookupFailed('partner', 'getIntentDetails', error) };
+    }
   }
 }
 
