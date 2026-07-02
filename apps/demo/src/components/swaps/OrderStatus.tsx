@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useSwapsApiSubmitTxStatus, type SolverIntentStatusCode } from '@sodax/dapp-kit';
+import { useSwapsApiSubmitTxStatus } from '@sodax/dapp-kit';
 import { formatUnits } from 'viem';
 import { ArrowRight, Check, Copy, ExternalLink, X } from 'lucide-react';
 import { Card } from '@/components/ui/card';
@@ -293,9 +293,14 @@ function OrderCard({
 
 type SettleFn = (id: string, final: FinalStatus) => void;
 
+/** A terminal, cached order renders statically — the guard also narrows `final` to non-optional. */
+function isSettled(order: Order): order is Order & { final: FinalStatus } {
+  return !!order.final && TERMINAL_LABELS.has(order.final.label);
+}
+
 /** Renders a settled order from its cached snapshot — no status polling, no network. */
-function StaticOrderCard({ order, onDismiss }: { order: Order; onDismiss?: () => void }) {
-  const final = order.final as FinalStatus;
+function StaticOrderCard({ order, onDismiss }: { order: Order & { final: FinalStatus }; onDismiss?: () => void }) {
+  const final = order.final;
   return (
     <OrderCard
       title={order.mode === 'solver' ? 'Swap' : 'Submit Tx'}
@@ -324,7 +329,7 @@ function SolverLiveCard({
   const endpoint = order.statusEndpoint ?? solverApiEndpointForEnv(currentEnv);
   const { data: status } = useSolverStatus(order.dstTxHash, endpoint);
 
-  const label = status ? statusCodeToMessage(status.status as SolverIntentStatusCode) : 'pending';
+  const label = status ? statusCodeToMessage(status.status) : 'pending';
 
   const isTerminal = TERMINAL_LABELS.has(label);
   useEffect(() => {
@@ -420,7 +425,7 @@ export default function OrderStatus({
 }) {
   // Only short-circuit to the static card for a genuinely terminal cache; a non-terminal `final`
   // (e.g. a stale NOT_FOUND from an older build) falls through to the live card and re-polls.
-  if (order.final && TERMINAL_LABELS.has(order.final.label)) {
+  if (isSettled(order)) {
     return <StaticOrderCard order={order} onDismiss={onDismiss} />;
   }
   const settle: SettleFn = onSettle ?? (() => {});
