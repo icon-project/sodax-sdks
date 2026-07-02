@@ -19,6 +19,7 @@ import {
   isEvmSpokeOnlyChainKeyType,
   isBitcoinChainKeyType,
   isBitcoinWalletProviderType,
+  isUndefinedOrValidWalletProviderForChainKey,
   isOptionalEvmWalletProviderType,
   isOptionalStellarWalletProviderType,
   type SpokeApproveParams,
@@ -573,6 +574,11 @@ export class BridgeService {
     const { params, skipSimulation, extras } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
     try {
+      bridgeInvariant(
+        isUndefinedOrValidWalletProviderForChainKey(params.srcChainKey, _params.walletProvider),
+        `Invalid wallet provider for chain key: ${params.srcChainKey}`,
+        baseCtx,
+      );
       bridgeInvariant(params.amount > 0n, 'Amount must be greater than 0', { ...baseCtx, field: 'amount' });
       const srcToken = this.resolveBridgeEndpointToken(params.srcChainKey, params.srcToken);
       const dstToken = this.resolveBridgeEndpointToken(params.dstChainKey, params.dstToken);
@@ -587,6 +593,19 @@ export class BridgeService {
         ...baseCtx,
         field: 'dstToken',
       });
+      // Reject unregistered chain keys up front (parity with SwapService.createIntent). Redundant with
+      // token resolution for most inputs, but gives a VALIDATION_FAILED tagged with the chain-key field
+      // for JS/cast consumers instead of a deeper, less specific failure.
+      bridgeInvariant(
+        this.config.isValidSpokeChainKey(params.srcChainKey),
+        `Invalid spoke chain (srcChainKey): ${params.srcChainKey}`,
+        { ...baseCtx, field: 'srcChainKey' },
+      );
+      bridgeInvariant(
+        this.config.isValidSpokeChainKey(params.dstChainKey),
+        `Invalid spoke chain (dstChainKey): ${params.dstChainKey}`,
+        { ...baseCtx, field: 'dstChainKey' },
+      );
 
       // Native BTC on the Bitcoin chain is denominated in satoshis, so a BTC deposit (source) or BTC
       // delivery (destination) must clear the 546-sat dust limit. Bridging is vault-1:1 across 8-decimal

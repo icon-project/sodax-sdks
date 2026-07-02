@@ -272,6 +272,68 @@ describe('BridgeService.createBridgeIntent — Stacks raw srcPublicKey guard', (
 });
 
 // =========================================================================
+// createBridgeIntent front-loaded validation invariants (parity with SwapService.createIntent)
+// =========================================================================
+
+describe('BridgeService.createBridgeIntent — validation invariants', () => {
+  it('rejects raw=false when the wallet provider family mismatches the source chain', async () => {
+    // BSC is EVM; a Bitcoin provider (via cast, as a JS consumer might pass) must fail up front as
+    // VALIDATION_FAILED rather than routing to a wrong-chain deposit that fails deep as
+    // INTENT_CREATION_FAILED.
+    const result = await sodax.bridge.createBridgeIntent({
+      raw: false,
+      walletProvider: mockBtcProvider,
+      params: {
+        srcAddress: SAMPLE_USER,
+        srcChainKey: BSC,
+        srcToken: SAMPLE_TOKEN,
+        amount: 1_000_000n,
+        dstChainKey: ARBITRUM,
+        dstToken: SAMPLE_TOKEN,
+        recipient: SAMPLE_DST,
+      },
+    } as BridgeParams<typeof BSC, false>);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toBeInstanceOf(SodaxError);
+      expect(result.error.code).toBe('VALIDATION_FAILED');
+      expect(result.error.message).toContain('Invalid wallet provider');
+    }
+  });
+
+  it('rejects an unregistered spoke chain key up front as VALIDATION_FAILED', async () => {
+    // Stub token resolution to succeed so the chain-key guard — not the token invariant — is what
+    // rejects the unregistered key (reachable via casts / JS consumers).
+    vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValue({
+      address: SAMPLE_TOKEN,
+      vault: '0xvault',
+      symbol: 'X',
+    } as never);
+
+    const result = await sodax.bridge.createBridgeIntent({
+      raw: true,
+      params: {
+        srcAddress: SAMPLE_USER,
+        srcChainKey: 'unregistered.chain' as SpokeChainKey,
+        srcToken: SAMPLE_TOKEN,
+        amount: 1_000_000n,
+        dstChainKey: BSC,
+        dstToken: SAMPLE_TOKEN,
+        recipient: SAMPLE_DST,
+      },
+    } as BridgeParams<SpokeChainKey, true>);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toBeInstanceOf(SodaxError);
+      expect(result.error.code).toBe('VALIDATION_FAILED');
+      expect(result.error.message).toContain('Invalid spoke chain');
+    }
+  });
+});
+
+// =========================================================================
 // Sonic-sourced "withdraw directly" — hub-asset token resolution
 // =========================================================================
 //
