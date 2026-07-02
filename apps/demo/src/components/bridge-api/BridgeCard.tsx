@@ -44,9 +44,7 @@ import {
   useEvmSwitchChain,
   useWalletProvider,
   useXAccount,
-  useXConnection,
   useXDisconnect,
-  useXService,
 } from '@sodax/wallet-sdk-react';
 import { ArrowDownUp, ArrowLeftRight, Loader2 } from 'lucide-react';
 import { formatUnits, parseUnits } from 'viem';
@@ -97,20 +95,6 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
   const toWalletProvider = useWalletProvider({ xChainId: toChainKey });
   const fromChainType = getXChainType(fromChainKey);
   const toChainType = getXChainType(toChainKey);
-
-  const fromBtcConnection = useXConnection({ xChainType: fromChainType });
-  const fromBtcService = useXService({ xChainType: fromChainType });
-  const fromBtcConnector =
-    fromChainType === 'BITCOIN' && fromBtcConnection?.xConnectorId && fromBtcService
-      ? fromBtcService.getXConnectorById(fromBtcConnection.xConnectorId)
-      : undefined;
-
-  const toBtcConnection = useXConnection({ xChainType: toChainType });
-  const toBtcService = useXService({ xChainType: toChainType });
-  const toBtcConnector =
-    toChainType === 'BITCOIN' && toBtcConnection?.xConnectorId && toBtcService
-      ? toBtcService.getXConnectorById(toBtcConnection.xConnectorId)
-      : undefined;
 
   // Client-side token discovery + bridgeable math (no backend endpoint — same as the on-chain page).
   const { data: bridgeableTokens, isLoading: isLoadingBridgeableTokens } = useGetBridgeableTokens({
@@ -529,12 +513,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
           </div>
 
           {fromBtcWalletProvider && fromChainKey === ChainKeys.BITCOIN_MAINNET && (
-            <BitcoinSetupPanel
-              walletProvider={fromBtcWalletProvider}
-              onReadyChange={setIsFromBtcReady}
-              connectorName={fromBtcConnector?.name}
-              connectorIcon={fromBtcConnector?.icon ?? ''}
-            />
+            <BitcoinSetupPanel walletProvider={fromBtcWalletProvider} onReadyChange={setIsFromBtcReady} />
           )}
 
           {toBtcWalletProvider && toChainKey === ChainKeys.BITCOIN_MAINNET && toBtcBalance !== undefined && (
@@ -542,8 +521,6 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
               walletProvider={toBtcWalletProvider}
               onReadyChange={setIsToBtcReady}
               nativeBalance={toBtcBalance}
-              connectorName={toBtcConnector?.name}
-              connectorIcon={toBtcConnector?.icon ?? ''}
               isDestination
             />
           )}
