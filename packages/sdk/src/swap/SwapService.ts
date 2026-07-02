@@ -38,6 +38,7 @@ import {
 import { SolverApiService } from './SolverApiService.js';
 import { EvmSolverService } from './EvmSolverService.js';
 import type { BackendApiService } from '../backendApi/index.js';
+import { pollBackendSubmitTx } from '../backendApi/pollBackendSubmitTx.js';
 import { selectSolvedIntentPacket } from './selectSolvedIntentPacket.js';
 import { SodaxError } from '../errors/SodaxError.js';
 import { mapRelayFailure } from '../errors/relay-error-mapping.js';
@@ -586,19 +587,12 @@ export class SwapService {
       // Backend submission rejected — wrap its error as the cause so swap() falls back.
       if (!submitted.ok) return submitTxFailed(submitted.error);
 
-      // Reserve up to a third of the remaining shared budget (capped at 20s) for the fallback, so a
-      // stalled backend can't consume the whole `timeout` before the client-side relay gets a turn.
-      const reserveMs = Math.min(Math.ceil((deadline - Date.now()) / 3), 20_000);
-      const pollDeadline = deadline - reserveMs;
-      const pollIntervalMs = 1_000;
-      while (Date.now() < pollDeadline) {
-        const statusResult = await this.backendApi.swaps.getSubmitTxStatus({ txHash: spokeTxHash, srcChainKey });
-        if (statusResult.ok) {
-          const { status, result, failureReason, abandonedAt } = statusResult.value.data;
-          if (status === 'executed' && result?.dstIntentTxHash && result.intent_hash) {
-            return {
-              ok: true,
-              value: {
+      const polled = await pollBackendSubmitTx({
+        deadline,
+        getStatus: () => this.backendApi.swaps.getSubmitTxStatus({ txHash: spokeTxHash, srcChainKey }),
+        onExecuted: (result): SwapResponse | undefined =>
+          result?.dstIntentTxHash && result.intent_hash
+            ? {
                 // Backend serializes the hex intent_hash as a plain string; brand it at the boundary.
                 solverExecutionResponse: { answer: 'OK', intent_hash: result.intent_hash as Hex },
                 intent,
@@ -610,18 +604,10 @@ export class SwapService {
                   dstTxHash: result.dstIntentTxHash,
                   dstAddress: params.dstAddress,
                 } satisfies IntentDeliveryInfo,
-              },
-            };
-          }
-          if (status === 'failed' || abandonedAt) {
-            const reason = failureReason ? `: ${failureReason}` : '';
-            return submitTxFailed(new Error(`backend submit-tx ${status}${reason}`));
-          }
-        }
-        // transient !ok / pending / relaying / relayed / posting_execution → keep polling
-        await new Promise<void>(resolve => setTimeout(resolve, pollIntervalMs));
-      }
-      return submitTxFailed(new Error('backend submit-tx polling timed out before reaching executed'));
+              }
+            : undefined,
+      });
+      return polled.ok ? { ok: true, value: polled.value } : submitTxFailed(polled.cause);
     } catch (error) {
       return { ok: false, error: unknownFailed('swap', error, { ...baseCtx, action: 'swap' }) };
     }
