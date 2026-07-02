@@ -1,6 +1,6 @@
 # EVM — `EvmWalletProvider`
 
-Backed by [viem](https://viem.sh). One class covers all **12** SODAX EVM spoke chains via `getEvmViemChain()`.
+Backed by [viem](https://viem.sh). One class covers **every** SODAX EVM spoke chain via `getEvmViemChain()` (see the table below).
 
 | | |
 |---|---|

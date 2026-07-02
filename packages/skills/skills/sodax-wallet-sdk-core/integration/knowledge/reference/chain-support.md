@@ -4,7 +4,7 @@ Chain families and spoke chain keys this package can sign for. Keys live in `@so
 
 ---
 
-## EVM (one provider, 12 chains)
+## EVM (one provider, 13 chains)
 
 `EvmWalletProvider` covers every EVM spoke chain via `getEvmViemChain()`. The provider is exhaustive — adding a new `EvmChainKey` to `@sodax/types` requires updating `getEvmViemChain` (caught at compile time via a `never` assertion in the default branch).
 
