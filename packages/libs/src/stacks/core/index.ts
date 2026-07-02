@@ -37,6 +37,9 @@ export {
   fetchFeeEstimateTransaction,
   validateStacksAddress,
   serializePayloadBytes,
+  deserializePayload,
+  addressToString,
+  PayloadType,
   privateKeyToPublic,
   publicKeyToHex
 } from '@stacks/transactions';

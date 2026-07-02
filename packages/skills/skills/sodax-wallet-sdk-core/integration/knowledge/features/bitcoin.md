@@ -20,7 +20,7 @@ type PrivateKeyBitcoinWalletConfig = {
   type: 'PRIVATE_KEY';
   privateKey: Hex;                     // `0x…` from @sodax/types
   network: 'TESTNET' | 'MAINNET';
-  addressType?: BtcAddressType;        // P2WPKH / P2TR / P2SH / P2PKH — default chosen by lib
+  addressType?: BtcAddressType;        // P2WPKH / P2TR / P2SH / P2PKH — defaults to P2WPKH (constant, same on testnet/mainnet)
   defaults?: BitcoinWalletDefaults;
 };
 
@@ -89,7 +89,7 @@ Read directly via `this.defaults.defaultFinalize` — no `mergePolicy` / `mergeD
 ## Gotchas
 
 - **The discriminant is `type`, uppercase.** Bitcoin and Stellar use this style — every other chain uses field presence. Easy to confuse.
-- **`addressType` is optional in PK mode.** If you omit it, bitcoinjs picks a default (typically P2WPKH on mainnet). Browser-extension mode infers it from the wallet kit.
+- **`addressType` is optional in PK mode.** If you omit it, the provider defaults it to `P2WPKH` (a constant — the same on testnet and mainnet, not network-dependent); set it explicitly for P2TR / P2SH / P2PKH. Browser-extension mode has no `addressType` field — the provider just uses the address `walletsKit.getAccounts()` returns, which carries whatever type the wallet uses.
 - **PSBT inputs are base64-encoded** when passed to `signTransaction`. In browser-extension mode the same base64 string is forwarded to `walletsKit.signPsbt`; the kit's parameter is misleadingly named `psbtHex` but receives base64. The kit returns a signed PSBT which the provider parses as hex when finalising.
 - **`sendBitcoin` is optional on the wallet kit.** Some browser-extension wallets (Xverse / Unisat) implement it; others don't. Guard on its presence.
 - **`signEcdsaMessage` vs `signBip322Message`** — choose based on what your verifier expects. BIP-322 is the more modern, structured signature spec; ECDSA is the legacy `signmessage` RPC behavior.

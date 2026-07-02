@@ -31,6 +31,8 @@ import { getEvmViemChain } from '../../utils/constant-utils.js';
 import { Erc20Service, type Erc20IsAllowanceParams } from '../erc-20/Erc20Service.js';
 import { wrappedSonicAbi, sonicWalletFactoryAbi } from '../../abis/index.js';
 import { EvmSolverService } from '../../../swap/EvmSolverService.js';
+import { HookService } from '../../../swap/HookService.js';
+import { IntentDataService } from '../../../swap/IntentDataService.js';
 import { isSonicChainKeyType } from '../../guards.js';
 import type {
   WaitForTxReceiptParams,
@@ -302,7 +304,11 @@ export class SonicSpokeService {
       `hub asset not found for spoke chain token (intent.outputToken): ${createIntentParams.outputToken}`,
     );
 
-    const [feeData, feeAmount] = EvmSolverService.createIntentFeeData(fee, createIntentParams.inputAmount);
+    // Apply the delivery hook (if any): may override dstAddress and derive deliveryData.
+    const { dstAddress, deliveryData } = HookService.resolveDelivery(createIntentParams);
+    // Encode the partner fee, then fold it together with any delivery payload into the intent `data`.
+    const [feeEnvelope, feeAmount] = EvmSolverService.createIntentFeeData(fee, createIntentParams.inputAmount);
+    const intentData = IntentDataService.composeIntentData(feeEnvelope, deliveryData);
 
     const intentsContract = solverConfig.intentsContract;
     const intent = {
@@ -317,9 +323,9 @@ export class SonicSpokeService {
       srcChain: getIntentRelayChainId(createIntentParams.srcChainKey),
       dstChain: getIntentRelayChainId(createIntentParams.dstChainKey),
       srcAddress: encodeAddress(createIntentParams.srcChainKey, createIntentParams.srcAddress),
-      dstAddress: encodeAddress(createIntentParams.dstChainKey, createIntentParams.dstAddress),
+      dstAddress: encodeAddress(createIntentParams.dstChainKey, dstAddress),
       solver: createIntentParams.solver ?? '0x0000000000000000000000000000000000000000',
-      data: feeData, // fee amount will be deducted from the input amount
+      data: intentData, // fee amount will be deducted from the input amount; may also carry delivery data
     } satisfies Intent;
 
     const txData = EvmSolverService.encodeCreateIntent(intent, intentsContract);

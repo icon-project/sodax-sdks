@@ -36,7 +36,7 @@
 | Type | What it is |
 |---|---|
 | `ChainKey` | Union of all `ChainKeys.*` values (20 chains). |
-| `SpokeChainKey` | `ChainKey` minus `'sonic'` (19 spoke chains). |
+| `SpokeChainKey` | The full union of all 20 chain keys, **including** `'sonic'` — identical to `ChainKey` (see the note at the top of this file). |
 | `EvmChainKey` | Subset of `ChainKey` for the 12 EVM chains. |
 | `HubChainKey` | The literal `'sonic'`. |
 
@@ -57,6 +57,41 @@ import {
   isHubChainKeyType,
 } from '@sodax/sdk';
 ```
+
+---
+
+## Chain metadata (`baseChainInfo`)
+
+`baseChainInfo` (exported from `@sodax/sdk`, re-exported from `@sodax/types`) maps every `ChainKey` to a static `BaseChainInfo` record:
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` | `string` | Human-readable chain name. |
+| `key` | `ChainKey` | The chain key (equals the map key). |
+| `chainId` | `string \| number` | Native chain id — number for EVM, string for non-EVM. |
+| `type` | `ChainType` | Chain family — same value as `getChainType(key)`. |
+| `mainnet` | `boolean` | Whether the entry is a mainnet chain. |
+| `logo` | `string` | Default chain logo URL (see below). |
+| `explorer` | `{ baseUrl; txUrl; addressUrl; contractUrl }` | Block-explorer URL templates. |
+
+```ts
+import { baseChainInfo, ChainKeys } from '@sodax/sdk';
+
+const { name, logo, explorer } = baseChainInfo[ChainKeys.BASE_MAINNET];
+```
+
+### Chain logos
+
+Each entry's `logo` is a default logo URL — **read `baseChainInfo[key].logo` for chain icons; never hardcode icon paths.** The URL is built from the exported `CHAIN_LOGO_BASE_URL` as `${CHAIN_LOGO_BASE_URL}/${key}.png`:
+
+```ts
+import { baseChainInfo, CHAIN_LOGO_BASE_URL, ChainKeys } from '@sodax/sdk';
+
+baseChainInfo[ChainKeys.SONIC_MAINNET].logo;
+// → `${CHAIN_LOGO_BASE_URL}/sonic.png`
+```
+
+The PNGs are hosted in the repo's `@sodax/assets` package and served from `main` via `raw.githubusercontent.com` — so a newly added logo only resolves once merged to `main`. They are not bundled into the SDK.
 
 ---
 

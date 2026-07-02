@@ -9,11 +9,11 @@ Defined in `@sodax/types` (`packages/types/src/sodax-config/sodax-config.ts`). T
 ```ts
 type SodaxDefaultConfig = {
   chains: Record<SpokeChainKey, SpokeChainConfig>;   // per-spoke-chain config (rpcUrl + tx polling + chain-specific shape)
-  swaps: SwapsConfig;                                // supported swap tokens per chain (+ per-feature partnerFee override)
-  moneyMarket: MoneyMarketConfig;                    // money market service config (+ per-feature partnerFee override)
-  bridge: BridgeConfig;                              // bridge partner-fee override
-  dex: DexConfig;                                    // DEX service config
-  leverageYield: LeverageYieldConfig;                // leverage-yield ERC-4626 vault registry (+ per-feature partnerFee override)
+  swaps: SwapsDefaultConfig;                         // supported swap tokens per chain (+ per-feature partnerFee override)
+  moneyMarket: MoneyMarketDefaultConfig;             // money market service config (+ per-feature partnerFee override)
+  bridge: BridgeDefaultConfig;                       // bridge partner-fee override
+  dex: DexDefaultConfig;                             // DEX service config
+  leverageYield: LeverageYieldDefaultConfig;         // leverage-yield ERC-4626 vault registry (+ per-feature partnerFee override)
   hub: HubConfig;                                    // hub-chain (Sonic) provider config
   api: ApiConfig;                                    // backend API endpoint
   solver: SolverConfig;                              // intent solver endpoint + contracts
@@ -115,12 +115,12 @@ See [`../breaking-changes/type-system.md`](../breaking-changes/type-system.md) �
 
 ### Pitfall
 
-If you previously injected a custom `ConfigService` for testing (a v1 escape hatch), v2 doesn't accept one at the top level — and unlike what earlier doc versions claimed, **v2 also doesn't expose a typed slot to inject a custom `IConfigApi`**. The realistic options:
+If you previously injected a custom `ConfigService` for testing (a v1 escape hatch), v2 doesn't accept one at the top level — and unlike what earlier doc versions claimed, **v2 also doesn't expose a typed slot to inject a custom `IConfigApiV1`**. The realistic options:
 
 - Point `SodaxConfig.api.baseURL` at a local mock backend server.
 - Construct your own `BackendApiService`-compatible object in your app/test bootstrap and swap it in where you control the `Sodax` instance.
 
-The `SodaxConfig.api` field is `ApiConfig` (`{ baseURL, timeout, headers }`) — there is no `api.api` sub-field for IConfigApi injection.
+The `SodaxConfig.api` field is `ApiConfig` (`{ baseURL, timeout, headers }`) — there is no `api.api` sub-field for IConfigApiV1 injection.
 
 ### Pitfall — module-scope reads
 

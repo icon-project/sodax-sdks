@@ -38,7 +38,7 @@ Pair: [`features/staking.md`](../../../integration/knowledge/features/staking.md
 ### Renamed / re-shaped (not deleted)
 
 - v1 `getStakingInfo(spokeProvider)` had implicit spoke-side resolution. v2 surfaces two public reads instead:
-  - `getStakingInfoFromSpoke(srcAddress, srcChainKey)` — for the spoke-side flow; derives the hub wallet via `HubService.getUserHubWalletAddress` internally.
+  - `getStakingInfoFromSpoke(srcAddress, srcChainKey)` — for the spoke-side flow; derives the hub wallet via `hubProvider.getUserHubWalletAddress` internally.
   - `getStakingInfo(hubAddress: Address)` — direct hub-side read, kept public for when the hub address is already known.
 
 ### v1 → v2 error code crosswalk (staking-specific)
@@ -124,7 +124,7 @@ Cross-cutting traps (Result destructuring, error-model migration, srcChain/dstCh
 1. **Wrong return shape for actions.** Treating `stake/unstake/etc.` as returning `Result<TxReturnType<K, false>>` (single hash) is **wrong** — they return `Result<TxHashPair>` because they always relay spoke→hub. Only `approve` returns a single hash.
 2. **Forgetting `raw: true` on the allowance query.** TypeScript error: `Property 'walletProvider' is missing`. `isAllowanceValid` requires `WalletProviderSlot<K, Raw>`; `raw: false` would force a wallet provider. Use `raw: true` for read-only.
 3. **Forgetting to remove the v1 `account` field from params.** v2 uses `srcAddress`. If both are set, TypeScript rejects the literal.
-4. **Confusing `getStakingInfo` and `getStakingInfoFromSpoke`.** Both are public in v2 — pick by which address you have. `getStakingInfo(hubAddress: Address)` reads the hub wallet directly; `getStakingInfoFromSpoke(srcAddress, srcChainKey)` derives the hub wallet from a spoke address via `HubService.getUserHubWalletAddress`, then delegates. Passing a spoke address into `getStakingInfo` returns wrong data (no hub-wallet resolution); always use the spoke variant when starting from a spoke address.
+4. **Confusing `getStakingInfo` and `getStakingInfoFromSpoke`.** Both are public in v2 — pick by which address you have. `getStakingInfo(hubAddress: Address)` reads the hub wallet directly; `getStakingInfoFromSpoke(srcAddress, srcChainKey)` derives the hub wallet from a spoke address via `hubProvider.getUserHubWalletAddress`, then delegates. Passing a spoke address into `getStakingInfo` returns wrong data (no hub-wallet resolution); always use the spoke variant when starting from a spoke address.
 5. **`UnstakingInfo` no longer accepts `userAddress` separately.** v1 took both `spokeProvider` and `userAddress` props but ignored `userAddress` inside. v2 takes `srcAddress` and uses it.
 
 ## Verification

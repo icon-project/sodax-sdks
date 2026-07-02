@@ -64,21 +64,35 @@ useBackendMoneyMarketAssetBorrowers({ params, queryOptions });
 useBackendAllMoneyMarketBorrowers({ params: { pagination: { offset, limit } }, queryOptions });
 ```
 
-### Swap submission
+### Swaps API (`sodax.api.swaps`)
+
+Typed React Query wrappers over the backend **Swaps API v2** — one `useSwapsApi*` hook per endpoint of `sodax.api.swaps.*` (21 total: tokens, quote, deadline, allowance, approve, create / submit / cancel intent, status, intent hash / packet / extra-data, intent lookups, limit orders, gas estimate, fees, submit-tx + status). They call the backend HTTP API and are distinct from the on-chain `swap/` hooks (`useQuote`/`useStatus`/`useSwap`/…), which drive `sodax.swaps` (the on-chain `SwapService`). Reads take `{ params, queryOptions }`; the six actions (`approve`, `createIntent`, `submitIntent`, `cancelIntent`, `createLimitOrder`, `submitTx`) are mutations taking `{ mutationOptions }`, with domain inputs flowing through `mutate(vars)`.
 
 ```ts
 // @ai-snippets-skip
-useBackendSubmitSwapTx({ mutationOptions });           // Mutation
-useBackendSubmitSwapTxStatus({ params, queryOptions }); // Query — check submitted status
+useSwapsApiQuote({ params: { body }, queryOptions });   // query    → sodax.api.swaps.getQuote
+useSwapsApiSubmitTx({ mutationOptions });               // mutation → sodax.api.swaps.submitTx
+useSwapsApiSubmitTxStatus({ params, queryOptions });    // query    → sodax.api.swaps.getSubmitTxStatus
 ```
 
-`useBackendSubmitSwapTx` is a mutation hook — per-call config (e.g. backend base URL) flows through `mutate(vars)`:
+`useSwapsApiSubmitTx` is a mutation hook — per-call config (e.g. backend base URL) flows through `mutate(vars)`. The `request` is a `SubmitTxRequestV2` (`{ txHash, srcChainKey, walletAddress, intent, relayData }`):
 
 ```ts
 // @ai-snippets-skip
-const { mutateAsync: submitSwapTx } = useBackendSubmitSwapTx();
-await submitSwapTx({ request: swapPayload, apiConfig: { baseURL: 'https://...' } });
+const { mutateAsync: submitSwapTx } = useSwapsApiSubmitTx();
+// request: SubmitTxRequestV2 — relayData is the string payload; intent carries bigint fields
+await submitSwapTx({ request, apiConfig: { baseURL: 'https://...' } });
 ```
+
+`useSwapsApiSubmitTxStatus` polls the processing status and returns `SubmitTxStatusResponseV2 | undefined`. Its query runs only when **both** `txHash` and `srcChainKey` are supplied — the v2 status endpoint requires the source chain key:
+
+```ts
+// @ai-snippets-skip
+const { data: status } = useSwapsApiSubmitTxStatus({ params: { txHash, srcChainKey } });
+// status?.data?.status: 'pending' | 'relaying' | 'relayed' | 'posting_execution' | 'executed' | 'failed'
+```
+
+> The full `useSwapsApi*` hook list (with polling + types) is in [hooks-index.md](../reference/hooks-index.md); key shapes in [querykey-conventions.md](../reference/querykey-conventions.md). For non-React callers, `sodax.api.swaps` is documented in the `sodax-sdk` skill (integration mode).
 
 ## Shared utilities
 
@@ -194,7 +208,8 @@ The underlying SDK methods (`isStorageRegistered` / `registerStorage` on the NEA
 | Hook | Polling | Notes |
 |---|---|---|
 | `useBackendIntentByTxHash` | 1s | once a `txHash` is supplied (refetch is unconditional, not "while pending") |
-| `useBackendSubmitSwapTxStatus` | varies | poll stops on `executed` / `failed` |
+| `useSwapsApiSubmitTxStatus` | 1s | requires `txHash` + `srcChainKey`; stops on `executed` / `failed` |
+| `useSwapsApiStatus` | 1s | solver intent status; stops on status `3` / `4` |
 | `useBackendOrderbook` | none | `staleTime: 30s` — fresh-window, no background refetch |
 | `useExpiredUtxos` (bitcoin) | 60s | refetchInterval |
 | `useQuote` (swap) | 3s | refetchInterval |

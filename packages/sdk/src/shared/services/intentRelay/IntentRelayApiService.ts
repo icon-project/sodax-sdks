@@ -252,6 +252,8 @@ async function pollTransactionPackets(
  * requires coordinated updates across all callers — prefer adding a new code to
  * {@link RELAY_ERROR_CODES} over renaming.
  *
+ * NOTE: if transaction was already relayed, post request will return { success: true, message: 'Transaction registered' }
+ *
  * @param payload - The request payload containing the 'submit' action type and parameters.
  * @param apiUrl - The URL of the intent relay service.
  * @returns The response from the intent relay service.

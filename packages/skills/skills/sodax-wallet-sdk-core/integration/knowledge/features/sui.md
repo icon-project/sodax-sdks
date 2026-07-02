@@ -33,7 +33,7 @@ type BrowserExtensionSuiWalletConfig = {
 | Mode discriminant | How to detect |
 |---|---|
 | Private-key | `'mnemonics' in config` |
-| Browser-extension | `'client' in config` (also requires `wallet` + `account`) |
+| Browser-extension | `'wallet' in config && 'account' in config` |
 
 Note the name — `PrivateKeySuiWalletConfig` is still called "PrivateKey" for consistency, even though the credential is a mnemonic. The library derives an Ed25519 keypair from the mnemonic phrase.
 

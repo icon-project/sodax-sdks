@@ -60,7 +60,7 @@ type NearTxExecutionStatus =
 | `getRawTransaction` | `(params: CallContractParams) => Promise<NearRawTransaction>` | unsigned tx — useful for inspection |
 | `signAndSubmitTxn` | `(transaction: NearRawTransaction, options?: NearWalletDefaults) => Promise<string>` | tx hash |
 
-`signAndSubmitTxn` merges `defaults` (flat) over per-call `options`.
+`signAndSubmitTxn` merges per-call `options` over `defaults` (flat, shallow).
 
 ---
 
