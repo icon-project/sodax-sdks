@@ -164,7 +164,13 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
     data: allowance,
     isLoading: isAllowanceLoading,
     refetch: refetchAllowance,
-  } = useBridgeApiAllowance({ params: { body: bridgeBody, apiConfig: BRIDGE_API_CONFIG } });
+  } = useBridgeApiAllowance({
+    // Gate the allowance body behind the review dialog (mirrors the swaps-api card, whose intent params
+    // are undefined until the dialog builds them). The hook enables itself on `!!body`, so passing an
+    // undefined body while the dialog is closed stops `checkAllowance` firing on every amount keystroke;
+    // the amount is fixed once the dialog is open, so it runs once.
+    params: { body: dialogOpen ? bridgeBody : undefined, apiConfig: BRIDGE_API_CONFIG },
+  });
   const hasAllowance = allowance?.valid === true;
 
   const { mutateAsyncSafe: approve } = useBridgeApiApprove();
