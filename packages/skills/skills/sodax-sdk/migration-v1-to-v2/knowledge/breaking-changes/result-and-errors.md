@@ -126,7 +126,7 @@ A `try { await sodax.<method>(...) } catch` block in v2 only catches **exception
 ```ts
 class SodaxError<C extends SodaxErrorCode = SodaxErrorCode> extends Error {
   readonly code: C;                 // closed 13-code reason union
-  readonly feature: SodaxFeature;   // 'swap' | 'moneyMarket' | 'bridge' | 'staking' | 'migration' | 'dex' | 'partner' | 'recovery' | 'backend'
+  readonly feature: SodaxFeature;   // 'swap' | 'moneyMarket' | 'bridge' | 'staking' | 'migration' | 'dex' | 'partner' | 'recovery' | 'backend' | 'leverageYield'
   readonly cause?: unknown;
   readonly context?: SodaxErrorContext;
 

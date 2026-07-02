@@ -17,7 +17,8 @@ Granular skill for `BackendApiService` — `sodax.backendApi`. HTTP client used 
 2. **Which category?**
    - **Swap-related reads:** `getOrderbook`, `getIntentByHash`, `getIntentByTxHash`, `getUserIntents`. (Swap-tx submission — `sodax.api.swaps.submitTx` / `getSubmitTxStatus` — is on the swaps API client.)
    - **Money-market position reads:** `getMoneyMarketPosition`, `getAllMoneyMarketAssets`, `getMoneyMarketAsset`, `getMoneyMarketAssetBorrowers`, `getMoneyMarketAssetSuppliers`, `getAllMoneyMarketBorrowers`.
-   - **Config-API methods (implements `IConfigApiV1`):** `getAllConfig`, `getChains`, `getSwapTokens`, `getSwapTokensByChainId`, `getMoneyMarketTokens`, `getMoneyMarketReserveAssets`, `getMoneyMarketTokensByChainId`, `getRelayChainIdMap`.
+   - **`IConfigApiV1` interface methods (exactly 5):** `getChains`, `getSwapTokens`, `getSwapTokensByChainId`, `getMoneyMarketTokens`, `getMoneyMarketTokensByChainId`.
+   - **Other `BackendApiService` config reads (NOT part of `IConfigApiV1`):** `getAllConfig`, `getMoneyMarketReserveAssets`, `getRelayChainIdMap`.
 3. **Custom `IConfigApiV1` for sandbox / fixtures?** Every method must return `Promise<Result<T>>` in v2.
 
 ## Integration workflow

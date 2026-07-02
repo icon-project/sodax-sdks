@@ -1,6 +1,6 @@
 # ICON — `IconWalletProvider`
 
-Backed by `icon-sdk-js`. Browser-extension mode targets the Hana wallet's `postMessage` JSON-RPC bridge.
+Backed by `icon-sdk-js`. Browser-extension mode talks to the Hana wallet over the ICONEX relay — an in-page message bridge built on `window.dispatchEvent(new CustomEvent('ICONEX_RELAY_REQUEST', …))` + `window.addEventListener('ICONEX_RELAY_RESPONSE', …)`.
 
 | | |
 |---|---|
@@ -23,7 +23,7 @@ type PrivateKeyIconWalletConfig = {
 };
 
 type BrowserExtensionIconWalletConfig = {
-  walletAddress?: IconEoaAddress;      // `hx…` — optional; resolved at first sign call if omitted
+  walletAddress?: IconEoaAddress;      // `hx…` — supplied by the consumer (the provider never auto-resolves it)
   rpcUrl: `http${string}`;
   defaults?: IconWalletDefaults;
 };
@@ -32,7 +32,7 @@ type BrowserExtensionIconWalletConfig = {
 | Mode discriminant | How to detect |
 |---|---|
 | Private-key | `'privateKey' in config` |
-| Browser-extension | `'walletAddress' in config` OR `!('privateKey' in config)` (defaults to browser-extension when key absent) |
+| Browser-extension | `'walletAddress' in config` |
 
 > `rpcUrl` is **required in both modes** — ICON has no public-RPC fallback in the provider.
 
@@ -74,8 +74,8 @@ type IconWalletDefaults = {
 
 ## Gotchas
 
-- **Browser-extension mode talks to Hana via `window.postMessage`.** Events use a request-ID — collisions can occur if you fire many parallel calls; tune `defaults.jsonRpcId` if you control the consumer.
-- **`walletAddress` is optional in browser-extension mode.** When omitted, the provider issues a `REQUEST_ADDRESS` event on first use to resolve it. For deterministic behavior in scripts, pass it explicitly.
+- **Browser-extension mode talks to Hana via the ICONEX relay** — `window.dispatchEvent(new CustomEvent('ICONEX_RELAY_REQUEST', …))` + `window.addEventListener('ICONEX_RELAY_RESPONSE', …)`, not `window.postMessage`. Relay messages use a request-ID — collisions can occur if you fire many parallel calls; tune `defaults.jsonRpcId` if you control the consumer.
+- **`walletAddress` is optional in browser-extension mode, but the provider never auto-resolves it.** The consumer must supply it (or resolve it themselves via the exported `requestAddress` helper, which performs the ICONEX `REQUEST_ADDRESS` round-trip). If the wallet isn't set, `getWalletAddress()` throws `Error('Wallet not initialized')`.
 - **Address type is branded — `IconEoaAddress` (`hx…`) vs `IconAddress` (`hx… | cx…`).** EOA only at the wallet level; contracts (`cx…`) appear inside tx params, not as the signer.
 - **Timestamps are microseconds.** `timestampProvider` returns microseconds, not milliseconds — the default is `Date.now() * 1000`.
 

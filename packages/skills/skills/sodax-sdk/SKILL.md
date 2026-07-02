@@ -57,7 +57,7 @@ This skill documents the **SDK call sites** — what to import, how to construct
 
 - **Multi-user state** (Telegram bot per-user wallets, dApp session storage, custodial vs non-custodial design). Hold one wallet-provider instance per user/chain at the app layer and pass it into each call — the SDK is stateless.
 - **UI**, framework wiring, route handlers, webhooks. Pick your own framework (telegraf/grammy for bots, Next.js / Vite for web, etc.) — the SDK has no opinion.
-- **Token discovery beyond `sodax.config`**. The SDK exposes `sodax.config.findSupportedTokenBySymbol(chainKey, symbol)` for per-chain lookups and `sodax.bridge.getBridgeableTokens(from, to, srcAddress)` / `sodax.bridge.isBridgeable({ from, to })` for vault-pair checks. There is no exhaustive "all bridgeable pairs across all chains" table — derive it at runtime if needed.
+- **Token discovery beyond `sodax.config`**. The SDK exposes `sodax.config.findSupportedTokenBySymbol(chainKey, symbol)` for per-chain lookups and `sodax.bridge.getBridgeableTokens(from, to, token)` / `sodax.bridge.isBridgeable({ from, to })` for vault-pair checks. There is no exhaustive "all bridgeable pairs across all chains" table — derive it at runtime if needed.
 
 If the consumer needs a runnable end-to-end app (Node bot, CLI, full dApp), the right combination is: this skill (for SDK call sites) + `sodax-wallet-sdk-core` (for wallet providers) + the consumer's chosen framework code. The SDK does not ship an app skeleton.
 

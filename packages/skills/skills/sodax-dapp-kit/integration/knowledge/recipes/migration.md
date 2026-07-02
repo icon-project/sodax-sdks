@@ -208,5 +208,5 @@ function BnUSDMigration({ srcAddress }: { srcAddress: string }) {
 
 - **ICX and BALN forward migrations** don't require approval — ICON has no ERC-20 allowance mechanism.
 - **SODA → ICX revert** and **EVM/Stellar bnUSD sources** require approval before migrating.
-- **BALN lock periods**: `0` = 0.5x reward, `6` = 0.75x, `12` = 1.0x, `24` = 1.5x (months).
+- **BALN lock periods** (months → reward multiplier): `0` = 0.5x, `6` = 0.75x, `12` = 1.0x, `18` = 1.25x, `24` = 1.5x. Pass the `LockupPeriod` enum (whose values are in seconds), not the raw month number.
 - `useMigratebnUSD` is bidirectional — swap `srcbnUSD`/`dstbnUSD` and `srcChainKey`/`dstChainKey` to go the other direction.

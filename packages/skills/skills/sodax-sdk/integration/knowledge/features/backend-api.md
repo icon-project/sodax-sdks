@@ -8,10 +8,10 @@ Access: `sodax.backendApi`. Service class: `BackendApiService`. **Feature tag fo
 
 ```ts
 // Swap-related reads
-sodax.backendApi.getOrderbook(...): Promise<Result<OrderbookEntry[]>>;
+sodax.backendApi.getOrderbook(...): Promise<Result<OrderbookResponse>>; // object: { total: number; data: Array<{ intentState, intentData }> } — NOT an array
 sodax.backendApi.getIntentByHash(intentHash, config?): Promise<Result<IntentResponse>>;
 sodax.backendApi.getIntentByTxHash(txHash, config?): Promise<Result<IntentResponse>>;
-sodax.backendApi.getUserIntents(...): Promise<Result<IntentResponse[]>>;
+sodax.backendApi.getUserIntents(...): Promise<Result<UserIntentsResponse>>; // { total, offset, limit, items: IntentResponse[] } — intents under .items
 
 // Swap-tx submission — on the swaps API client (sodax.api.swaps), not BackendApiService
 sodax.api.swaps.submitTx(request, config?): Promise<Result<SubmitTxResponseV2>>;

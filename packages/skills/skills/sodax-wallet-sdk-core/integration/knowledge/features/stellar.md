@@ -1,6 +1,6 @@
 # Stellar — `StellarWalletProvider`
 
-Backed by `@stellar/stellar-sdk` (`Horizon.Server` + Soroban primitives).
+Backed by `@stellar/stellar-sdk` (`Horizon.Server` only — classic `Transaction` signing + Horizon polling; no Soroban surface).
 
 | | |
 |---|---|
@@ -65,7 +65,7 @@ Merge strategy: flat (`mergeDefaults`).
 |---|---|---|
 | `getWalletAddress` | `() => Promise<string>` | Stellar address |
 | `signTransaction` | `(tx: XDR) => Promise<XDR>` | signed XDR |
-| `waitForTransactionReceipt` | `(hash: string, options?: Partial<StellarWalletDefaults>) => Promise<…>` | tx result; respects `pollInterval` / `pollTimeout` |
+| `waitForTransactionReceipt` | `(hash: string, options?: Pick<StellarWalletDefaults, 'pollInterval' \| 'pollTimeout'>) => Promise<…>` | tx result; respects `pollInterval` / `pollTimeout` (`networkPassphrase` is NOT accepted per-call) |
 
 ---
 

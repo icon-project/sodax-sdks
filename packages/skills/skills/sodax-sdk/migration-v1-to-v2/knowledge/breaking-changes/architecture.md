@@ -175,8 +175,8 @@ If you pass a config override to `new Sodax({ ... })`, put solver endpoints in `
 
 v1 had per-feature relay helpers (each feature module had its own `*WaitForRelay()` or `relay*Tx()` function). v2 centralises this into `IntentRelayApiService` with two public entry points:
 
-- `submitTransaction({ srcChainKey, txHash, payload })` — POSTs the spoke transaction to the relay submit endpoint and resolves the relay's first-stage acknowledgement.
-- `relayTxAndWaitPacket({ srcChainKey, dstChainKey, txHash, payload, timeout? })` — runs `submitTransaction` and then polls until the destination packet reaches `executed`. Resolves with `{ srcTxHash, dstTxHash, packet }` on success.
+- `submitTransaction(payload, apiUrl)` — TWO positional args (`payload: IntentRelayRequest<'submit'>`, `apiUrl: HttpUrl`), not an options object. POSTs the spoke transaction to the relay submit endpoint and resolves the relay's first-stage acknowledgement.
+- `relayTxAndWaitPacket({ srcTxHash, data, chainKey, relayerApiEndpoint, timeout, pollTxHash? })` — `RelayAndWaitParams`: `data` is the whole `RelayExtraData` / `OnDemandRelayData` object, `chainKey` is the source `SpokeChainKey`. Runs `submitTransaction` and then polls until the destination packet reaches `executed`. Resolves with `{ srcTxHash, dstTxHash, packet }` on success.
 
 Internally, every feature service now calls `relayTxAndWaitPacket` for the spoke→hub leg. Failures from this layer surface to consumers via `mapRelayFailure`.
 

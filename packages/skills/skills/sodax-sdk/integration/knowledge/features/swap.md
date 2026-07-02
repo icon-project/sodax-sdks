@@ -40,8 +40,8 @@ sodax.swaps.createLimitOrder<K, Raw>(
 
 sodax.swaps.createLimitOrderIntent<K, Raw>(/* same as createIntent shape with limit-order params */): /* same return */;
 
-sodax.swaps.cancelIntent<K, Raw>(/* … */): Promise<Result<TxReturnType<K, Raw>, SodaxError>>;
-sodax.swaps.cancelLimitOrder<K, Raw>(/* … */): Promise<Result<TxReturnType<K, Raw>, SodaxError>>;
+sodax.swaps.cancelIntent<K>(/* … */): Promise<Result<TxHashPair, SodaxError>>;        // not generic over Raw (only false)
+sodax.swaps.cancelLimitOrder<K>(/* … */): Promise<Result<TxHashPair, SodaxError>>;    // TxHashPair = { srcChainTxHash, dstChainTxHash }
 
 sodax.swaps.approve<K, Raw>(/* … */): Promise<Result<TxReturnType<K, Raw>, SodaxError>>;
 sodax.swaps.isAllowanceValid<K, Raw>(/* … */): Promise<Result<boolean, SodaxError>>;
@@ -80,20 +80,20 @@ type BitcoinBoundExtras = {
 type CreateIntentParams<K extends SpokeChainKey> = {
   srcChainKey: K;
   dstChainKey: SpokeChainKey;
-  srcAddress: GetAddressType<K>;
+  srcAddress: string;       // source-chain address (chain-specific format)
   dstAddress: string;       // chain-specific format on the destination side
-  inputToken: XToken;       // must have chainKey === srcChainKey
-  outputToken: XToken;      // must have chainKey === dstChainKey
+  inputToken: string;       // token ADDRESS on srcChainKey (the XToken's .address)
+  outputToken: string;      // token ADDRESS on dstChainKey (the XToken's .address)
   inputAmount: bigint;
   minOutputAmount: bigint;
   deadline: bigint;         // unix seconds
   allowPartialFill: boolean;
-  solver: `0x${string}`;    // solver address; '0x0…0' for default
+  solver?: `0x${string}`;   // optional solver address; '0x0…0' for default
   data: `0x${string}`;      // arbitrary calldata; '0x' for default
 };
 ```
 
-`CreateLimitOrderParams<K>` is `Omit<CreateIntentParams<K>, 'deadline'>` (limit orders have a different expiry mechanism).
+`CreateLimitOrderParams<K>` is `Omit<CreateIntentParams<K>, 'deadline'> & { deadline?: bigint }` — it makes `deadline` optional rather than removing it; when omitted the SDK forces it to `0n` internally (limit orders use a different expiry mechanism).
 
 ## Common call shapes
 
@@ -125,7 +125,7 @@ const { quoted_amount } = quote.value;   // bigint output amount in dst-token un
 
 ### Signed swap (full flow)
 
-`inputToken` / `outputToken` are full `XToken` objects (with `chainKey`, `address`, `decimals`, `symbol`). Look them up from config — do **not** hand-construct:
+`inputToken` / `outputToken` on `CreateIntentParams` are token **addresses** (`string`), not `XToken` objects. Look the `XToken` up from config (do **not** hand-construct) and pass its `.address` — the looked-up object also gives you `decimals` for `parseUnits`:
 
 ```ts
 const inputToken  = sodax.config.findSupportedTokenBySymbol(ChainKeys.ARBITRUM_MAINNET, 'USDC');
@@ -138,8 +138,8 @@ const result = await sodax.swaps.swap({
     dstChainKey: ChainKeys.STELLAR_MAINNET,
     srcAddress: '0x…',
     dstAddress: 'G…',
-    inputToken,                                     // XToken; chainKey === srcChainKey
-    outputToken,                                    // XToken; chainKey === dstChainKey
+    inputToken: inputToken.address,                 // token ADDRESS on srcChainKey
+    outputToken: outputToken.address,               // token ADDRESS on dstChainKey
     inputAmount: parseUnits('1', inputToken.decimals),   // 1 USDC
     minOutputAmount: parseUnits('50', outputToken.decimals), // 50 XLM floor
     deadline: BigInt(Math.floor(Date.now() / 1000) + 300),
@@ -172,8 +172,8 @@ const result = await sodax.swaps.swap({
     dstChainKey: ChainKeys.BASE_MAINNET,
     srcAddress: (await evmWp.getWalletAddress()) as `0x${string}`,
     dstAddress: recipientOnBase,
-    inputToken: sodaSonic,
-    outputToken: sodaBase,
+    inputToken: sodaSonic.address,
+    outputToken: sodaBase.address,
     inputAmount: parseUnits('1', sodaSonic.decimals),
     minOutputAmount: parseUnits('0.99', sodaBase.decimals),   // tighten with getQuote() in production
     deadline: BigInt(Math.floor(Date.now() / 1000) + 300),
@@ -200,7 +200,7 @@ if (!result.ok) return;
 
 const { tx: spokeTxHash, intent, relayData } = result.value;
 //   tx is the spoke tx hash (TxReturnType<K, false>) for raw: false
-//   relayData is { payload: string }; submit relayData.payload to your backend
+//   relayData is { address: Hex; payload: Hex }; submit relayData.payload to your backend
 ```
 
 ### Backend submit-tx flow
@@ -251,7 +251,7 @@ await sodax.swaps.cancelIntent({
 | `createIntent` | `CreateIntentResult<K, Raw>` = `{ tx: TxReturnType<K, Raw>, intent: Intent & FeeAmount, relayData: RelayExtraData }` |
 | `postExecution` | `SwapResponse` |
 | `createLimitOrder` / `createLimitOrderIntent` | Same as `createIntent` |
-| `cancelIntent` / `cancelLimitOrder` | `TxReturnType<K, Raw>` |
+| `cancelIntent` / `cancelLimitOrder` | `TxHashPair` = `{ srcChainTxHash, dstChainTxHash }` (not generic over `Raw`) |
 | `approve` | `TxReturnType<K, Raw>` |
 | `isAllowanceValid` | `boolean` |
 
@@ -259,7 +259,8 @@ await sodax.swaps.cancelIntent({
 
 ```ts
 type RelayExtraData = {
-  payload: string;     // pass this string to backend submit-tx as `relayData`
+  address: Hex;        // relay address
+  payload: Hex;        // pass this to backend submit-tx as `relayData`
 };
 ```
 
@@ -279,8 +280,8 @@ type RelayExtraData = {
 Solver-specific context on `EXTERNAL_API_ERROR`:
 
 - `error.context.api === 'solver'`
-- `error.context.solverCode` — the solver's own error code (e.g. `'INSUFFICIENT_LIQUIDITY'`)
-- `error.context.solverDetail` — the solver's human-readable message
+- `error.context.solverCode` — the solver's own error code as a **numeric** `SolverIntentErrorCode` enum value (e.g. `-5` = `NO_PRIVATE_LIQUIDITY`, `-999` = `UNKNOWN`), not a string
+- `error.context.solverDetail` — the solver's full detail object `{ code, message }`
 
 ## Cross-references
 

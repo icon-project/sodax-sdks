@@ -16,8 +16,8 @@ Pair: [`features/backend-api.md`](../../../integration/knowledge/features/backen
 | `submitSwapTx` → `sodax.api.swaps.submitTx` | `Promise<SubmitSwapTxResponse>` | `Promise<Result<SubmitTxResponseV2>>` |
 | `getIntentByHash` | `Promise<IntentResponse>` | `Promise<Result<IntentResponse>>` |
 | `getIntentByTxHash` | (n/a in v1) | `Promise<Result<IntentResponse>>` (v2-new) |
-| `getOrderbook` (was `getSolverOrderbook`) | `Promise<OrderbookEntry[]>` | `Promise<Result<OrderbookEntry[]>>` |
-| `getUserIntents` (was `getUserSwapHistory`) | `Promise<IntentResponse[]>` | `Promise<Result<IntentResponse[]>>` |
+| `getOrderbook` (was `getSolverOrderbook`) | `Promise<OrderbookResponse>` | `Promise<Result<OrderbookResponse>>` (object `{ total, data: Array<{ intentState, intentData }> }`, not an array) |
+| `getUserIntents` (was `getUserSwapHistory`) | `Promise<UserIntentsResponse>` | `Promise<Result<UserIntentsResponse>>` (`{ total, offset, limit, items: IntentResponse[] }` — intents under `.items`) |
 | `getChains` | `Promise<ChainConfig[]>` | `Promise<Result<GetChainsApiResponse>>` |
 | `getSwapTokens` | `Promise<SwapTokenConfig>` | `Promise<Result<GetSwapTokensApiResponse>>` |
 | `getSwapTokensByChainId` | `Promise<XToken[]>` | `Promise<Result<XToken[]>>` |
@@ -39,7 +39,7 @@ Pair: [`features/backend-api.md`](../../../integration/knowledge/features/backen
 +   relayData: relayData.payload,            // was: relayData (object)
 + });
 + if (!result.ok) {
-+   // result.error: SodaxError with feature: 'backend', context.api: 'backend'
++   // result.error: SodaxError with feature: 'backend', context.api: 'swaps'
 +   return;
 + }
 + const response = result.value;            // SubmitTxResponseV2
@@ -57,10 +57,10 @@ If you implemented `IConfigApiV1` for a sandbox or test fixture, two things chan
 -     return [/* fixture */];
 -   },
 -   async getSwapTokens(): Promise<SwapTokenConfig> { /* … */ },
-+   async getChains(): Promise<Result<ChainConfig[], unknown>> {
-+     return { ok: true, value: [/* fixture */] };
++   async getChains(): Promise<Result<readonly SpokeChainKey[]>> {
++     return { ok: true, value: [/* fixture: chain KEYS, not configs */] };
 +   },
-+   async getSwapTokens(): Promise<Result<SwapTokenConfig, unknown>> { /* … */ },
++   async getSwapTokens(): Promise<Result<Record<SpokeChainKey, readonly XToken[]>>> { /* … */ },
     // …5 methods total
   };
 ```
@@ -70,7 +70,7 @@ If you implemented `IConfigApiV1` for a sandbox or test fixture, two things chan
 ## Pitfalls
 
 1. **`SubmitTxRequestV2.relayData` is `string`, not the `RelayExtraData` object.** v1 took the object; v2 takes the `payload` field as a string.
-2. **Backend + swaps-API errors carry `feature: 'backend'`** with `error.context.api === 'backend'` and `context.endpoint`. The domain feature tags (`'swap'`, `'moneyMarket'`, …) come from the on-chain feature services, not the HTTP clients. Use `(feature, context.api)` for logger tag pairs.
+2. **Backend + swaps-API errors both carry `feature: 'backend'`** with `context.endpoint`, but the `error.context.api` differs by client: `'backend'` for `BackendApiService` reads, `'swaps'` for `SwapsApiService` (`sodax.api.swaps`) calls. The domain feature tags (`'swap'`, `'moneyMarket'`, …) come from the on-chain feature services, not the HTTP clients. Use `(feature, context.api)` for logger tag pairs.
 3. **Custom `IConfigApiV1` implementations must return `Result<T>`** — old throw-on-error implementations will compile-error against the v2 interface.
 
 ## Verification
