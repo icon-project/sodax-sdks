@@ -5,6 +5,7 @@ import { readJson, writeJson } from '@/lib/storage';
 // panels remember independently.
 export const SOLVER_PANEL_KEY = 'sodax-demo:solver:history-collapsed';
 export const LEVERAGE_YIELD_PANEL_KEY = 'sodax-demo:leverage-yield:history-collapsed';
+export const SWAPS_API_PANEL_KEY = 'sodax-demo:swaps-api:history-collapsed';
 
 export function loadPanelCollapsed(storageKey: string): boolean {
   return readJson<boolean>(storageKey) === true;
