@@ -18,6 +18,31 @@ const { tx, intent, relayData } = result.value;
 //   - …
 ```
 
+### Chain-specific raw inputs (`extras`)
+
+Some chains need a per-action input on the **raw** path, supplied via the chain-key-gated `extras` slot:
+
+- **Stacks** (`raw: true`): `extras.srcPublicKey` is **required** — the unsigned source tx is built from the signer public key (a `SP…` address can't yield it). Omitting it fails fast with a `VALIDATION_FAILED` `SodaxError` before any network call.
+- **Bitcoin** TRADING mode (`raw: true`): `extras.bound.accessToken` carries a Bound Exchange token so the PSBT build authenticates (`bound` is the Bitcoin-gated slot that groups Bound/Radfi inputs). It falls back to the RadfiProvider instance token (`new Sodax({ ... })` with `radfi.accessToken`, or `radfi.setRadfiAccessToken(token)`) when omitted; with no token anywhere the call fails with a legible `RadfiApiError`.
+
+```ts
+// Stacks raw intent — srcPublicKey is mandatory:
+await sodax.swaps.createIntent({
+  params: { ...params, srcChainKey: ChainKeys.STACKS_MAINNET },
+  extras: { srcPublicKey },
+  raw: true,
+});
+
+// Bitcoin raw intent (TRADING) — bound.accessToken (or a seeded radfi token):
+await sodax.swaps.createIntent({
+  params: { ...params, srcChainKey: ChainKeys.BITCOIN_MAINNET },
+  extras: { bound: { accessToken } },
+  raw: true,
+});
+```
+
+> **Note (Bitcoin):** even on the `raw: true` path, a Bitcoin TRADING intent makes a live Bound Exchange call to resolve the trading-wallet address (`getEffectiveWalletAddress`) before the PSBT is built. The unsigned PSBT is returned for you to sign offline, but the address lookup is **not** offline — Bound must be reachable, and a valid `accessToken` (per-action or seeded) is required for it.
+
 Submit the raw tx via your own signing infrastructure. Once you have the spoke tx hash, you'll typically need to manually call the relay to complete the cross-chain flow:
 
 ```ts
@@ -31,10 +56,9 @@ const spokeTxHash = await mySigningInfra.signAndBroadcast(tx);
 // the relay payload returned by `createIntent`.
 const relayResult = await relayTxAndWaitPacket({
   relayerApiEndpoint,
-  srcChainKey: params.srcChainKey,
-  dstChainKey: params.dstChainKey,
-  txHash: spokeTxHash,
-  payload: relayData.payload,
+  chainKey: params.srcChainKey,
+  srcTxHash: spokeTxHash,
+  data: relayData,            // the whole RelayExtraData ({ address, payload }), not just .payload
   timeout: 60_000,
 });
 ```

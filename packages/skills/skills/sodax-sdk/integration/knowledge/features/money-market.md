@@ -8,7 +8,7 @@ Access: `sodax.moneyMarket`. Service class: `MoneyMarketService`. Feature tag fo
 
 A user supplies on a spoke chain; the SDK relays the deposit to the hub, where the position is recorded against the user's hub wallet abstraction. Borrow can deliver funds back to the same chain (same-chain borrow) or to a different spoke chain (cross-chain borrow). Withdraw and repay reverse the flow.
 
-aTokens (ERC4626 receipt tokens) live on the hub and represent the user's share of each reserve. Use `sodax.moneyMarket.getAToken(...)` to look them up.
+aTokens (ERC4626 receipt tokens) live on the hub and represent the user's share of each reserve. Use `sodax.moneyMarket.data.getATokenData(aToken)` to fetch their ERC-20 metadata — it returns a plain `Erc20Token` = `{ name, symbol, decimals, address }`.
 
 ## Public methods
 
@@ -44,37 +44,31 @@ sodax.moneyMarket.buildWithdrawData(...): Hex;
 sodax.moneyMarket.buildRepayData(...): Hex;
 ```
 
-For per-position user reads (reserves data, user reserves data, formatted summaries, aToken balances, etc.) the entrypoint is `sodax.backendApi`, not `MoneyMarketService` — see [`backend-api.md`](backend-api.md) for `getMoneyMarketPosition`, `getAllMoneyMarketAssets`, `getMoneyMarketAsset`, `getMoneyMarketAssetBorrowers`, `getMoneyMarketAssetSuppliers`, `getAllMoneyMarketBorrowers`.
+For per-reserve and per-user data (reserves data, user reserves data, formatted summaries, aToken balances, etc.) the entrypoint is `sodax.moneyMarket.data` — `getReservesData`, `getUserReservesData`, `getATokensBalances`, `getReservesHumanized`, `getUserReservesHumanized`, `formatUserSummary`. For backend-indexed user position and asset lists use `sodax.backendApi` — see [`backend-api.md`](backend-api.md) for `getMoneyMarketPosition`, `getAllMoneyMarketAssets`, `getMoneyMarketAsset`, `getMoneyMarketAssetBorrowers`, `getMoneyMarketAssetSuppliers`, `getAllMoneyMarketBorrowers`.
 
 ## Action params shape
 
-`MoneyMarketParams<K>` is the shared base:
+`MoneyMarketParams<K>` is the **union** of the four action param types. Each is an independent type (NOT an extension of a shared base), and all four carry the same shape — differing only in the `action` literal. Every action (including supply/withdraw) carries optional `dstChainKey?` / `dstAddress?`:
 
 ```ts
-type MoneyMarketParams<K extends SpokeChainKey> = {
+type MoneyMarketSupplyParams<K extends SpokeChainKey> = {
   srcChainKey: K;
-  srcAddress: GetAddressType<K>;
-  token: `0x${string}`;     // hub asset address
+  srcAddress: string;
+  token: string;                 // spoke-chain original asset address; hub asset derived internally
   amount: bigint;
-};
-```
-
-Per-action params:
-
-```ts
-type MoneyMarketSupplyParams<K> = MoneyMarketParams<K> & { action: 'supply' };
-type MoneyMarketWithdrawParams<K> = MoneyMarketParams<K> & { action: 'withdraw' };
-
-type MoneyMarketBorrowParams<K> = MoneyMarketParams<K> & {
-  action: 'borrow';
-  dstChainKey?: SpokeChainKey;   // delivery chain; defaults to srcChainKey
+  action: 'supply';
+  dstChainKey?: SpokeChainKey;   // delivery/debt chain; defaults to srcChainKey
   dstAddress?: string;
 };
-type MoneyMarketRepayParams<K> = MoneyMarketParams<K> & {
-  action: 'repay';
-  dstChainKey?: SpokeChainKey;   // debt chain; defaults to srcChainKey
-  dstAddress?: string;
-};
+type MoneyMarketBorrowParams<K extends SpokeChainKey>   = { /* …same fields… */ action: 'borrow' };
+type MoneyMarketWithdrawParams<K extends SpokeChainKey> = { /* …same fields… */ action: 'withdraw' };
+type MoneyMarketRepayParams<K extends SpokeChainKey>    = { /* …same fields… */ action: 'repay' };
+
+type MoneyMarketParams<K extends SpokeChainKey> =
+  | MoneyMarketSupplyParams<K>
+  | MoneyMarketBorrowParams<K>
+  | MoneyMarketWithdrawParams<K>
+  | MoneyMarketRepayParams<K>;
 ```
 
 ## Common call shapes
@@ -159,7 +153,7 @@ The `action` field routes to the right token under the hood — relevant for rep
 | Method | Success type |
 |---|---|
 | `supply`, `borrow`, `withdraw`, `repay` | `TxHashPair` = `{ srcChainTxHash, dstChainTxHash }` |
-| `create*Intent` | `CreateIntentResult<K, Raw>` |
+| `create*Intent` | `IntentTxResult<K, Raw>` = `{ tx, relayData }` |
 | `approve` | `TxReturnType<K, Raw>` |
 | `isAllowanceValid` | `boolean` |
 | `estimateGas` | `GetEstimateGasReturnType<K>` (chain-family-specific) |

@@ -9,7 +9,7 @@ Pair: [`features/dex.md`](../../../integration/knowledge/features/dex.md).
 1. **All mutations** (`useDexDeposit`, `useDexWithdraw`, `useSupplyLiquidity`, `useDecreaseLiquidity`, `useClaimRewards`, `useDexApprove`) — single-object hook init + `mutate({ params, walletProvider })`. SDK-leakage adds required `srcChainKey` + `srcAddress` to all action params.
 2. **`useSupplyLiquidity` handles both mint-new and increase-existing** — pass `tokenId` in params for increase, omit for mint. Use `useCreateSupplyLiquidityParams` to handle the routing.
 3. **`usePools` returns synchronously** in the SDK. The hook still returns `UseQueryResult` but the underlying call is config-derived (no RPC) — `staleTime: Infinity`, no auto-refresh.
-4. **Param builders take a FLAT props object** — `useCreateDepositParams`, `useCreateWithdrawParams`, `useCreateSupplyLiquidityParams`, `useCreateDecreaseLiquidityParams` — NOT `{ params: { ... } }`-wrapped. Their inputs use `srcChainKey` (not `srcChainId`); the result is spread into the mutation's `params` field at the call site.
+4. **Param builders take a FLAT props object** — `useCreateDepositParams`, `useCreateWithdrawParams`, `useCreateSupplyLiquidityParams`, `useCreateDecreaseLiquidityParams` — NOT `{ params: { ... } }`-wrapped. The builders take **no** `srcChainKey`/`srcAddress` input — you add those (using v2's `srcChainKey`, not v1's `srcChainId`) when spreading the builder's result into the mutation's `params` field at the call site.
 
 ## Per-method delta
 

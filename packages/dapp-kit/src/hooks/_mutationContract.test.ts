@@ -13,7 +13,7 @@ const HOOKS_DIR = resolve(fileURLToPath(import.meta.url), '..');
  * registration so the contract is enforced from day one.
  */
 const HOOKS: Array<{ path: string; nativeThrow?: true }> = [
-  { path: 'backend/useBackendSubmitSwapTx.ts' },
+  { path: 'bitcoin/useEnsureRadfiAccessToken.ts', nativeThrow: true },
   { path: 'bitcoin/useFundTradingWallet.ts', nativeThrow: true },
   { path: 'bitcoin/useRadfiAuth.ts', nativeThrow: true },
   { path: 'bitcoin/useRadfiWithdraw.ts', nativeThrow: true },
@@ -42,6 +42,8 @@ const HOOKS: Array<{ path: string; nativeThrow?: true }> = [
   { path: 'mm/useWithdraw.ts' },
   { path: 'partner/useApproveToken.ts' },
   { path: 'partner/useFeeClaimSwap.ts' },
+  { path: 'partner/useFeeClaimWithdraw.ts' },
+  { path: 'partner/usePartnerCancelIntent.ts' },
   { path: 'partner/useSetSwapPreference.ts' },
   { path: 'recovery/useWithdrawHubAsset.ts' },
   { path: 'shared/useEstimateGas.ts' },
@@ -59,6 +61,12 @@ const HOOKS: Array<{ path: string; nativeThrow?: true }> = [
   { path: 'swap/useCreateLimitOrder.ts' },
   { path: 'swap/useSwap.ts' },
   { path: 'swap/useSwapApprove.ts' },
+  { path: 'swapsApi/useSwapsApiApprove.ts' },
+  { path: 'swapsApi/useSwapsApiCancelIntent.ts' },
+  { path: 'swapsApi/useSwapsApiCreateIntent.ts' },
+  { path: 'swapsApi/useSwapsApiCreateLimitOrder.ts' },
+  { path: 'swapsApi/useSwapsApiSubmitIntent.ts' },
+  { path: 'swapsApi/useSwapsApiSubmitTx.ts' },
 ];
 
 describe.each(HOOKS)('mutation hook contract: $path', ({ path, nativeThrow }) => {

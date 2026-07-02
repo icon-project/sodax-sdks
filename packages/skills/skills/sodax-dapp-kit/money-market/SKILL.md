@@ -33,7 +33,7 @@ Granular skill for the lending/borrowing hooks of `@sodax/dapp-kit` v2. queryKey
 - **Treating `useMMAllowance` `undefined` as "not approved" for borrow/withdraw.** The query is `enabled: false` for those actions — `undefined` means "approval not required."
 - **Passing the MM params directly under `params` on `useMMAllowance`.** They nest under `params.payload`.
 - **Treating mutation `data` as `Result<T>`.** `data` is the unwrapped `TxHashPair = { srcChainTxHash, dstChainTxHash }`.
-- **Skipping a health-factor warning.** Render a warning when `useUserFormattedSummary().healthFactor` is near/below 1.0.
+- **Skipping a health-factor warning, or comparing it wrong.** `healthFactor` is a **string**, and a no-debt position returns the sentinel `'-1'` — so `Number(hf)` it and exclude `-1` before warning: `const hf = Number(summary.healthFactor); if (hf !== -1 && hf < 1.05) { /* warn */ }`. A raw `healthFactor < 1.05` is a TS error and would also flag a debt-free user.
 
 ## Migration workflow (port v1 MM hooks to v2)
 

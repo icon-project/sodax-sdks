@@ -593,7 +593,7 @@ export class SpokeService {
           const verify = await this.verifyDepositSimulation(params);
           if (!verify.ok) return verify;
           const value = (await this.bitcoin.deposit(
-            params as DepositParams<BitcoinChainKey, R> & { accessToken?: string },
+            params as DepositParams<BitcoinChainKey, R>,
           )) satisfies TxReturnType<BitcoinChainKey, R> as TxReturnType<K, R>;
           return { ok: true, value };
         }

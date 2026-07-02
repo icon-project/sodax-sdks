@@ -1,5 +1,5 @@
 // currently supported spoke chain tokens for solver
-import type { PartnerFee } from '../common/common.js';
+import type { PartnerFee, Prettify } from '../common/common.js';
 import type { SpokeChainKey } from '../chains/chains.js';
 import { type XToken, SodaTokens, LsodaTokens } from '../chains/tokens.js';
 import { spokeChainConfig, ChainKeys } from '../chains/chains.js';
@@ -173,8 +173,11 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.SUI_MAINNET].supportedTokens.WAL,
     spokeChainConfig[ChainKeys.SUI_MAINNET].supportedTokens.NAVX,
   ] as const satisfies XToken[],
-  // Injective is currently staging-only — see stagingSwapSupportedTokens
-  [ChainKeys.INJECTIVE_MAINNET]: [] as const satisfies XToken[],
+  [ChainKeys.INJECTIVE_MAINNET]: [
+    spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.INJ,
+    spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.bnUSD,
+    spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.USDC,
+  ] as const satisfies XToken[],
   [ChainKeys.NEAR_MAINNET]: [
     spokeChainConfig[ChainKeys.NEAR_MAINNET].supportedTokens.NEAR,
     spokeChainConfig[ChainKeys.NEAR_MAINNET].supportedTokens.bnUSD,
@@ -249,7 +252,7 @@ export const swapSupportedTokens = {
 // `getStagingSolverTokens` for the full staging set. The two lists are disjoint per chain;
 // a token lives in exactly one of them. It is upon the user to provide a token valid for
 // their target environment — validation accepts either (see `isSwapSupportedToken`).
-// Derived from the production solver oracle (tokens absent there). 
+// Derived from the production solver oracle (tokens absent there).
 export const stagingSwapSupportedTokens = {
   [ChainKeys.SONIC_MAINNET]: [SodaTokens.sodaUSDS] as const satisfies XToken[],
   [ChainKeys.AVALANCHE_MAINNET]: [],
@@ -272,12 +275,7 @@ export const stagingSwapSupportedTokens = {
   [ChainKeys.ICON_MAINNET]: [],
   [ChainKeys.STELLAR_MAINNET]: [],
   [ChainKeys.SUI_MAINNET]: [spokeChainConfig[ChainKeys.SUI_MAINNET].supportedTokens.USDT] as const satisfies XToken[],
-  [ChainKeys.INJECTIVE_MAINNET]: [
-    spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.INJ,
-    spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.bnUSD,
-    spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.USDC,
-    // spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.SODA, // NOTE: not in solver wiki
-  ] as const satisfies XToken[],
+  [ChainKeys.INJECTIVE_MAINNET]: [] as const satisfies XToken[],
   [ChainKeys.NEAR_MAINNET]: [],
   [ChainKeys.BITCOIN_MAINNET]: [],
   [ChainKeys.ETHEREUM_MAINNET]: [
@@ -295,15 +293,19 @@ export const stagingSwapSupportedTokens = {
   ] as const satisfies XToken[],
 } as const satisfies Record<SpokeChainKey, readonly XToken[]>;
 
-export type SwapsConfig = {
-  partnerFee: PartnerFee | undefined; // enables override of global partner fee
+export type SwapsOptions = {
+  partnerFee?: PartnerFee; // enables override of global partner fee
+};
+
+export type SwapsDefaultConfig = {
   supportedTokens: Record<SpokeChainKey, readonly XToken[]>;
 };
 
+export type SwapsConfig = Prettify<SwapsDefaultConfig & SwapsOptions>;
+
 export const swapsConfig = {
-  partnerFee: undefined,
   supportedTokens: swapSupportedTokens,
-} satisfies SwapsConfig;
+} satisfies SwapsDefaultConfig;
 
 // get production supported spoke chain tokens for solver
 export const getSupportedSolverTokens = (chainId: SpokeChainKey): readonly XToken[] => swapSupportedTokens[chainId];

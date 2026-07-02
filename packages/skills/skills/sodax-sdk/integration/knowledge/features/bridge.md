@@ -14,7 +14,7 @@ A bridge call deposits the source token into its vault on the hub, then triggers
 
 ```ts
 sodax.bridge.bridge<K>(action: BridgeAction<K, false>): Promise<Result<TxHashPair, SodaxError>>;
-sodax.bridge.createBridgeIntent<K, Raw>(action): Promise<Result<CreateBridgeIntentResult<K, Raw>, SodaxError>>;
+sodax.bridge.createBridgeIntent<K, Raw>(action): Promise<Result<IntentTxResult<K, Raw>, SodaxError>>;
 sodax.bridge.approve<K, Raw>(args): Promise<Result<TxReturnType<K, Raw>, SodaxError>>;
 sodax.bridge.isAllowanceValid<K, Raw>(args): Promise<Result<boolean, SodaxError>>;
 
@@ -28,14 +28,14 @@ sodax.bridge.getFee(inputAmount: bigint): bigint;
 ## Action params shape
 
 ```ts
-type CreateBridgeParams<K extends SpokeChainKey> = {
+type CreateBridgeIntentParams<K extends SpokeChainKey> = {
   srcChainKey: K;
-  srcAddress: GetAddressType<K>;
-  srcAsset: `0x${string}`;       // source token address (spoke chain)
+  srcAddress: string;            // source wallet (spoke chain)
+  srcToken: string;              // source token address (spoke chain)
   amount: bigint;
   dstChainKey: SpokeChainKey;
-  dstAddress: string;            // destination wallet (chain-specific format)
-  dstAsset: `0x${string}`;       // destination token address (must share vault with srcAsset)
+  dstToken: string;              // destination token address (must share vault with srcToken)
+  recipient: string;             // destination receiver (chain-specific format)
 };
 ```
 
@@ -48,11 +48,11 @@ const result = await sodax.bridge.bridge({
   params: {
     srcChainKey: ChainKeys.ARBITRUM_MAINNET,
     srcAddress: '0x…',
-    srcAsset: USDC_ARBITRUM.address,
+    srcToken: USDC_ARBITRUM.address,
     amount: parseUnits('100', 6),
     dstChainKey: ChainKeys.STELLAR_MAINNET,
-    dstAddress: 'G…',
-    dstAsset: USDC_STELLAR.address,
+    dstToken: USDC_STELLAR.address,
+    recipient: 'G…',
   },
   raw: false,
   walletProvider: evmWp,
@@ -72,7 +72,7 @@ const result = await sodax.bridge.createBridgeIntent({
 });
 
 if (!result.ok) return;
-const { tx, intent, relayData } = result.value;
+const { tx, relayData } = result.value;
 // Submit relayData.payload via your own relay infrastructure if needed.
 ```
 
@@ -99,11 +99,11 @@ const result = await sodax.bridge.bridge({
   params: {
     srcChainKey: ChainKeys.SONIC_MAINNET,
     srcAddress: (await evmWp.getWalletAddress()) as `0x${string}`,
-    srcAsset: sodaSonic.address,
+    srcToken: sodaSonic.address,
     amount: parseUnits('1', sodaSonic.decimals),
     dstChainKey: ChainKeys.BASE_MAINNET,
-    dstAddress: recipientOnBase,
-    dstAsset: sodaBase.address,
+    dstToken: sodaBase.address,
+    recipient: recipientOnBase,
   },
   raw: false,
   walletProvider: evmWp,
@@ -147,7 +147,7 @@ if (result.ok) {
 | Method | Success type |
 |---|---|
 | `bridge` | `TxHashPair` |
-| `createBridgeIntent` | `CreateBridgeIntentResult<K, Raw>` = `{ tx: TxReturnType<K, Raw>, intent, relayData }` |
+| `createBridgeIntent` | `IntentTxResult<K, Raw>` = `{ tx: TxReturnType<K, Raw>, relayData }` |
 | `approve` | `TxReturnType<K, Raw>` |
 | `isAllowanceValid` | `boolean` |
 | `getBridgeableAmount` | `BridgeLimit = { amount, decimals, type }` |

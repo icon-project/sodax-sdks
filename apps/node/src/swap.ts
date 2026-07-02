@@ -1,22 +1,15 @@
 import 'dotenv/config';
 import {
   Sodax,
-  EvmSpokeProvider,
-  ARBITRUM_MAINNET_CHAIN_ID,
-  POLYGON_MAINNET_CHAIN_ID,
+  ChainKeys,
   spokeChainConfig,
   type CreateIntentParams,
   type SolverIntentQuoteRequest,
   type SolverIntentStatusRequest,
   SolverIntentStatusCode,
-  isIntentCreationFailedError,
-  isIntentSubmitTxFailedError,
-  isIntentPostExecutionFailedError,
-  isWaitUntilIntentExecutedFailed,
-  type EvmSpokeChainConfig,
 } from '@sodax/sdk';
 import { EvmWalletProvider } from '@sodax/wallet-sdk-core';
-import type { Address, Hash, Hex } from '@sodax/types';
+import type { Hex } from '@sodax/types';
 
 // Load configuration from environment
 const privateKey: string | undefined = process.env.EVM_PRIVATE_KEY;
@@ -28,7 +21,7 @@ if (!privateKey) {
 // Initialize wallet provider for Arbitrum
 const arbWalletProvider: EvmWalletProvider = new EvmWalletProvider({
   privateKey: privateKey as Hex,
-  chainId: ARBITRUM_MAINNET_CHAIN_ID,
+  chainId: ChainKeys.ARBITRUM_MAINNET,
   rpcUrl: 'https://arb1.arbitrum.io/rpc',
 });
 
@@ -36,12 +29,6 @@ const arbWalletProvider: EvmWalletProvider = new EvmWalletProvider({
 const sodax: Sodax = new Sodax();
 
 await sodax.initialize();
-
-// Create spoke provider for Arbitrum
-const arbSpokeProvider: EvmSpokeProvider = new EvmSpokeProvider(
-  arbWalletProvider,
-  spokeChainConfig[ARBITRUM_MAINNET_CHAIN_ID] as EvmSpokeChainConfig,
-);
 
 /**
  * Execute a full EVM swap from Arbitrum ETH to Polygon POL
@@ -52,20 +39,20 @@ async function executeSwap(inputAmount: bigint): Promise<void> {
     // Step 1: Initialize Sodax (done above)
     console.log('Step 1: Sodax initialized');
 
-    // Step 2: Create Spoke Provider (done above)
-    console.log('Step 2: Spoke provider created');
+    // Step 2: Wallet provider ready (created above)
+    console.log('Step 2: Wallet provider ready');
 
-    // Token addresses
-    const arbEthToken: Address = spokeChainConfig[ARBITRUM_MAINNET_CHAIN_ID].nativeToken; // ETH on Arbitrum
-    const polygonPolToken: Address = spokeChainConfig[POLYGON_MAINNET_CHAIN_ID].nativeToken; // POL on Polygon
+    // Token addresses (native gas token on each chain)
+    const arbEthToken: string = spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].nativeToken; // ETH on Arbitrum
+    const polygonPolToken: string = spokeChainConfig[ChainKeys.POLYGON_MAINNET].nativeToken; // POL on Polygon
 
     // Step 3: Get Quote
     console.log('Step 3: Getting quote...');
     const quoteRequest: SolverIntentQuoteRequest = {
       token_src: arbEthToken,
       token_dst: polygonPolToken,
-      token_src_blockchain_id: ARBITRUM_MAINNET_CHAIN_ID,
-      token_dst_blockchain_id: POLYGON_MAINNET_CHAIN_ID,
+      token_src_blockchain_id: ChainKeys.ARBITRUM_MAINNET,
+      token_dst_blockchain_id: ChainKeys.POLYGON_MAINNET,
       amount: inputAmount,
       quote_type: 'exact_input',
     };
@@ -84,17 +71,22 @@ async function executeSwap(inputAmount: bigint): Promise<void> {
     const walletAddress: string = await arbWalletProvider.getWalletAddress();
     // Five minutes in seconds (300 seconds)
     const fiveMinutesInSeconds: bigint = 300n;
-    const deadline: bigint = await sodax.swaps.getSwapDeadline(fiveMinutesInSeconds);
+    const deadlineResult = await sodax.swaps.getSwapDeadline(fiveMinutesInSeconds);
+    if (!deadlineResult.ok) {
+      console.error('Failed to compute swap deadline:', deadlineResult.error);
+      return;
+    }
+    const deadline: bigint = deadlineResult.value;
 
-    const createIntentParams: CreateIntentParams = {
+    const createIntentParams: CreateIntentParams<typeof ChainKeys.ARBITRUM_MAINNET> = {
       inputToken: arbEthToken,
       outputToken: polygonPolToken,
       inputAmount: inputAmount,
       minOutputAmount: (quotedAmount * 95n) / 100n, // 5% slippage tolerance
       deadline: deadline,
       allowPartialFill: false,
-      srcChain: ARBITRUM_MAINNET_CHAIN_ID,
-      dstChain: POLYGON_MAINNET_CHAIN_ID,
+      srcChainKey: ChainKeys.ARBITRUM_MAINNET,
+      dstChainKey: ChainKeys.POLYGON_MAINNET,
       srcAddress: walletAddress,
       dstAddress: walletAddress,
       solver: '0x0000000000000000000000000000000000000000',
@@ -102,8 +94,9 @@ async function executeSwap(inputAmount: bigint): Promise<void> {
     };
 
     const allowanceResult = await sodax.swaps.isAllowanceValid({
-      intentParams: createIntentParams,
-      spokeProvider: arbSpokeProvider,
+      params: createIntentParams,
+      raw: false,
+      walletProvider: arbWalletProvider,
     });
 
     if (!allowanceResult.ok) {
@@ -114,9 +107,10 @@ async function executeSwap(inputAmount: bigint): Promise<void> {
     // Step 5: Approve if Needed
     if (!allowanceResult.value) {
       console.log('Step 5: Approving tokens...');
-      const approveResult = await sodax.swaps.approve({
-        intentParams: createIntentParams,
-        spokeProvider: arbSpokeProvider,
+      const approveResult = await sodax.swaps.approve<typeof ChainKeys.ARBITRUM_MAINNET, false>({
+        params: createIntentParams,
+        raw: false,
+        walletProvider: arbWalletProvider,
       });
 
       if (!approveResult.ok) {
@@ -124,11 +118,11 @@ async function executeSwap(inputAmount: bigint): Promise<void> {
         return;
       }
 
-      const approvalTxHash: Hash = approveResult.value;
+      const approvalTxHash = approveResult.value;
       console.log('Approval transaction hash:', approvalTxHash);
 
       // Wait for approval confirmation
-      await arbSpokeProvider.walletProvider.waitForTransactionReceipt(approvalTxHash);
+      await arbWalletProvider.waitForTransactionReceipt(approvalTxHash);
       console.log('Approval confirmed');
     } else {
       console.log('Step 5: Approval not needed');
@@ -137,41 +131,48 @@ async function executeSwap(inputAmount: bigint): Promise<void> {
     // Step 6: Execute Swap
     console.log('Step 6: Executing swap...');
     const swapResult = await sodax.swaps.swap({
-      intentParams: createIntentParams,
-      spokeProvider: arbSpokeProvider,
+      params: createIntentParams,
+      raw: false,
+      walletProvider: arbWalletProvider,
     });
 
-    // Step 7: Handle Result
+    // Step 7: Handle Result. swap() returns Result<SwapResponse, SwapError>; on failure the error
+    // is a SodaxError discriminated by `code`, with the original cause on `cause` and operation
+    // detail on `context` (e.g. relayCode / solverCode).
     if (!swapResult.ok) {
-      console.error('Step 7: Swap failed');
       const error = swapResult.error;
+      console.error('Step 7: Swap failed —', error.code, error.message);
 
-      if (isIntentCreationFailedError(error)) {
-        console.error('Intent creation failed');
-        console.error('Payload:', error.data.payload);
-        console.error('Original error:', error.data.error);
-      } else if (isIntentSubmitTxFailedError(error)) {
-        console.error('Submit transaction failed');
-        console.error('Payload:', error.data.payload);
-        console.error('Original error:', error.data.error);
-        console.error('CRITICAL: Transaction created but not submitted to relay. Retry submission!');
-      } else if (isWaitUntilIntentExecutedFailed(error)) {
-        console.error('Intent execution timeout');
-        console.error('Payload:', error.data.payload);
-        console.error('Original error:', error.data.error);
-      } else if (isIntentPostExecutionFailedError(error)) {
-        console.error('Post execution failed');
-        console.error('Error data:', error.data);
-      } else {
-        console.error('Unknown error:', error);
-        console.error('Error code:', error.code);
-        console.error('Error data:', error.data);
+      switch (error.code) {
+        case 'INTENT_CREATION_FAILED':
+          console.error('Spoke-side intent creation/deposit failed.');
+          break;
+        case 'TX_VERIFICATION_FAILED':
+          console.error('Spoke transaction could not be verified on-chain.');
+          break;
+        case 'TX_SUBMIT_FAILED':
+          console.error('CRITICAL: spoke tx landed but relay submission failed. Retry submission!');
+          break;
+        case 'RELAY_TIMEOUT':
+          console.error('Relay packet did not arrive within the timeout.');
+          break;
+        case 'RELAY_FAILED':
+          console.error('Relay failed.');
+          break;
+        case 'EXTERNAL_API_ERROR':
+          console.error('Solver returned a typed error response.');
+          break;
+        case 'EXECUTION_FAILED':
+          console.error('Solver notify (postExecution) failed.');
+          break;
       }
+      if (error.context) console.error('Context:', error.context);
+      if (error.cause) console.error('Caused by:', error.cause);
       return;
     }
 
     // Success!
-    const [solverExecutionResponse, intent, intentDeliveryInfo] = swapResult.value;
+    const { solverExecutionResponse, intent, intentDeliveryInfo } = swapResult.value;
     console.log('Step 7: Swap transaction submitted successfully!');
     console.log('Solver execution response:', solverExecutionResponse);
     console.log('Intent:', intent);

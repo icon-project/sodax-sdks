@@ -1,19 +1,19 @@
 # `SodaxConfig` constructor reshape
 
-The v2 `Sodax` constructor accepts a `DeepPartial<SodaxConfig>`. Several config fields renamed, moved, or were added between v1 and v2; if your project passed a custom config, check these.
+The v2 `Sodax` constructor accepts a `SodaxOptions` (`DeepPartial<SodaxDefaultConfig> & SodaxOptionalConfig`). Several config fields renamed, moved, or were added between v1 and v2; if your project passed a custom config, check these.
 
-## v2 `SodaxConfig` shape (source of truth)
+## v2 config data shape (`SodaxDefaultConfig`, source of truth)
 
-Defined in `@sodax/types` (`packages/types/src/sodax-config/sodax-config.ts`):
+Defined in `@sodax/types` (`packages/types/src/sodax-config/sodax-config.ts`). This is the static data contract the backend serves and the packaged defaults are built from; `SodaxConfig` is the merged result (`SodaxDefaultConfig & SodaxOptionalConfig`):
 
 ```ts
-type SodaxConfig = {
-  fee: PartnerFee | undefined;                       // global partner fee (overridable per-feature)
+type SodaxDefaultConfig = {
   chains: Record<SpokeChainKey, SpokeChainConfig>;   // per-spoke-chain config (rpcUrl + tx polling + chain-specific shape)
-  swaps: SwapsConfig;                                // supported swap tokens per chain
-  moneyMarket: MoneyMarketConfig;                    // money market service config
-  bridge: BridgeConfig;                              // bridge partner-fee override
-  dex: DexConfig;                                    // DEX service config
+  swaps: SwapsDefaultConfig;                         // supported swap tokens per chain (+ per-feature partnerFee override)
+  moneyMarket: MoneyMarketDefaultConfig;             // money market service config (+ per-feature partnerFee override)
+  bridge: BridgeDefaultConfig;                       // bridge partner-fee override
+  dex: DexDefaultConfig;                             // DEX service config
+  leverageYield: LeverageYieldDefaultConfig;         // leverage-yield ERC-4626 vault registry (+ per-feature partnerFee override)
   hub: HubConfig;                                    // hub-chain (Sonic) provider config
   api: ApiConfig;                                    // backend API endpoint
   solver: SolverConfig;                              // intent solver endpoint + contracts
@@ -21,7 +21,9 @@ type SodaxConfig = {
 };
 ```
 
-A matching default `sodaxConfig` const is exported from the same module — `new Sodax()` deep-merges your `DeepPartial<SodaxConfig>` over it.
+A matching default `sodaxConfig` const is exported from the same module — `new Sodax()` deep-merges your `DeepPartial<SodaxDefaultConfig>` over it.
+
+The `new Sodax(...)` argument is actually `SodaxOptions = DeepPartial<SodaxDefaultConfig> & SodaxOptionalConfig`, where `SodaxOptionalConfig` carries the client-side options `{ logger?; fee? }` plus the per-feature option objects. The global partner `fee` and `logger` are **client-side options, NOT `SodaxDefaultConfig` data fields**: the integrator sets them, they are resolved once, and they are never fetched from or overwritten by the backend config. Read the resolved global fee back via `sodax.config.fee`. It is the **fallback applied to any feature whose own `partnerFee` is unset** (effective fee = `featureFee ?? fee`, via `sodax.config.swapPartnerFee` / `moneyMarketPartnerFee` / `bridgePartnerFee` / `leverageYieldPartnerFee`). (Per-feature partner-fee overrides — `swaps.partnerFee`, `moneyMarket.partnerFee`, `bridge.partnerFee`, `leverageYield.partnerFee` — live on the feature options.)
 
 ## v1 shape (for reference)
 
@@ -47,7 +49,7 @@ All v1 fields were **optional**. v1 had **no** top-level `rpcConfig` on `SodaxCo
 
 | v1 location | v2 location | Notes |
 |---|---|---|
-| `SodaxConfig.swaps` (`SolverConfigParams` — `{ intentsContract, solverApiEndpoint, protocolIntentsContract?, partnerFee? }`) | **Split into two:** `SodaxConfig.solver: SolverConfig` (`{ intentsContract, solverApiEndpoint, protocolIntentsContract }`) and `SodaxConfig.swaps: SwapsConfig` (supported tokens per chain — new in v2). | v1 partner-fee inside `SolverConfigParams` moves to the global `SodaxConfig.fee` slot or per-feature configs. |
+| `SodaxConfig.swaps` (`SolverConfigParams` — `{ intentsContract, solverApiEndpoint, protocolIntentsContract?, partnerFee? }`) | **Split into two:** `SodaxConfig.solver: SolverConfig` (`{ intentsContract, solverApiEndpoint, protocolIntentsContract }`) and `SodaxConfig.swaps: SwapsConfig` (supported tokens per chain — new in v2). | v1 partner-fee inside `SolverConfigParams` moves to the global `SodaxOptions.fee` option or per-feature configs. |
 | `SodaxConfig.hubProviderConfig` (`EvmHubProviderConfig` — `{ hubRpcUrl, chainConfig }`) | **`SodaxConfig.hub`** (`HubConfig` — full hub addresses + native token + bnUSD + polling + RPC URL). | Field renamed `hubProviderConfig` → `hub`. Shape expanded: v1 just had RPC URL + chain config; v2 ships the full hub-contract address map. |
 | `SodaxConfig.moneyMarket` (`MoneyMarketConfigParams`) | `SodaxConfig.moneyMarket` (`MoneyMarketConfig` — required, shape changed). | Reshape, see `@sodax/types/src/common/common.ts` MoneyMarketConfig. |
 | `SodaxConfig.bridge` (`BridgeServiceConfig`) | `SodaxConfig.bridge` (`BridgeConfig` — `{ partnerFee }`). | Reshape; smaller. |
@@ -58,7 +60,7 @@ All v1 fields were **optional**. v1 had **no** top-level `rpcConfig` on `SodaxCo
 | `SodaxConfig.migration` (`MigrationServiceConfig`) | **Removed.** Migration service runs with hard-coded defaults. | No replacement on `SodaxConfig`. v2 surfaces customization via per-method params on `sodax.migration.*`, not constructor config — see [`../features/migration.md`](../features/migration.md). |
 | `SodaxConfig.partners` (`PartnerServiceConfig`) | **Removed.** Partner service runs with defaults. | Per-claim partner-fee config now flows via call-level params on `sodax.partners.*` methods. |
 | `SodaxConfig.sharedConfig` (`typeof defaultSharedConfig`) | **Removed.** | Absorbed into `ConfigService` + per-chain `SpokeChainConfig`. Override individual chains via `SodaxConfig.chains[key]`. |
-| (none in v1) | **`SodaxConfig.fee: PartnerFee \| undefined`** (new). | Global partner-fee, applies to all features unless overridden by feature-level config (`bridge.partnerFee`, money market, etc.). |
+| (none in v1) | **`SodaxOptions.fee?: PartnerFee`** (new — a client-side option, NOT a `SodaxConfig` data field). | Global partner fee, set via `new Sodax({ fee })` and read back on `sodax.config.fee`. A client option like `logger` — never fetched from or overwritten by the backend. Per-feature overrides still live on `SodaxConfig` (`bridge.partnerFee`, `swaps.partnerFee`, `moneyMarket.partnerFee`). |
 | (v1 had no top-level `configService` injection slot on `SodaxConfig` — `ConfigService` was always constructed internally from `backendApiConfig` + `sharedConfig`.) | Same — `ConfigService` is internal. v2 does **not** expose a typed slot to inject a custom `IConfigApi` either. To swap the backend in tests, point `SodaxConfig.api.baseURL` at a mock server. | See Pitfall below. |
 
 Migration:
@@ -79,7 +81,7 @@ Migration:
 - // RPC URLs were passed as a SEPARATE prop on the framework-layer SodaxProvider
 - // (alongside the sodaxConfig). The Sodax constructor itself never saw rpcConfig.
 
-+ // v2 — DeepPartial<SodaxConfig> passed directly to new Sodax(...)
++ // v2 — SodaxOptions (DeepPartial<SodaxDefaultConfig> & client options) passed directly to new Sodax(...)
 + const sodax = new Sodax({
 +   hub: { /* HubConfig — usually omit, default ships full hub addresses */ },
 +   solver: {
@@ -91,7 +93,7 @@ Migration:
 +     supportedTokens: { /* per-chain table */ },
 +   },
 +   relay: { /* RelayConfig — relayer URL + chain-id map */ },
-+   fee: { address: '0x…', percentage: 10 },  // global partner fee (moved out of swaps)
++   fee: { address: '0x…', percentage: 10 },  // global partner fee — a SodaxOptions client option (not SodaxConfig data)
 +   chains: {
 +     [ChainKeys.SONIC_MAINNET]: { rpcUrl: 'https://…' },
 +     [ChainKeys.ARBITRUM_MAINNET]: { rpcUrl: 'https://…' },
@@ -113,12 +115,12 @@ See [`../breaking-changes/type-system.md`](../breaking-changes/type-system.md) �
 
 ### Pitfall
 
-If you previously injected a custom `ConfigService` for testing (a v1 escape hatch), v2 doesn't accept one at the top level — and unlike what earlier doc versions claimed, **v2 also doesn't expose a typed slot to inject a custom `IConfigApi`**. The realistic options:
+If you previously injected a custom `ConfigService` for testing (a v1 escape hatch), v2 doesn't accept one at the top level — and unlike what earlier doc versions claimed, **v2 also doesn't expose a typed slot to inject a custom `IConfigApiV1`**. The realistic options:
 
 - Point `SodaxConfig.api.baseURL` at a local mock backend server.
 - Construct your own `BackendApiService`-compatible object in your app/test bootstrap and swap it in where you control the `Sodax` instance.
 
-The `SodaxConfig.api` field is `ApiConfig` (`{ baseURL, timeout, headers }`) — there is no `api.api` sub-field for IConfigApi injection.
+The `SodaxConfig.api` field is `ApiConfig` (`{ baseURL, timeout, headers }`) — there is no `api.api` sub-field for IConfigApiV1 injection.
 
 ### Pitfall — module-scope reads
 

@@ -1,11 +1,13 @@
 import { initEccLib, networks, Transaction, Psbt, payments, opcodes, script } from 'bitcoinjs-lib';
 import type {
   BitcoinChainKey,
+  BitcoinRawTransaction,
   BitcoinRawTransactionReceipt,
   IBitcoinWalletProvider,
   Result,
   TxReturnType,
 } from '@sodax/types';
+import type { RelayExtraData } from '../../types/relay-types.js';
 import { ChainKeys, detectBitcoinAddressType, getIntentRelayChainId, usesBip322MessageSigning } from '@sodax/types';
 import * as ecc from '@bitcoinerlab/secp256k1';
 import { keccak256, stringToBytes } from 'viem';
@@ -112,6 +114,7 @@ export class BitcoinSpokeService {
    */
   public async getEffectiveWalletAddress(personalAddress: string): Promise<string> {
     if (this.walletMode === 'TRADING') {
+      // The trading-wallet lookup is a public GET — no access token required.
       const tradingWallet = await this.radfi.getTradingWallet(personalAddress);
       return tradingWallet.tradingAddress;
     }
@@ -375,7 +378,7 @@ export class BitcoinSpokeService {
    * Deposit operation - transfer BTC to the asset manager
    */
   public async deposit<Raw extends boolean = false>(
-    params: DepositParams<BitcoinChainKey, Raw> & { accessToken?: string },
+    params: DepositParams<BitcoinChainKey, Raw>,
   ): Promise<TxReturnType<BitcoinChainKey, Raw>> {
     try {
       const {
@@ -476,6 +479,40 @@ export class BitcoinSpokeService {
       this.config.logger.error('Error during deposit', error);
       throw error;
     }
+  }
+
+  /**
+   * Sign and submit a TRADING-wallet raw transaction — the Bound-built *unsigned* PSBT returned by
+   * `deposit({ raw: true })` / the Swaps API (`createIntent().tx.data`). Signs it with the wallet
+   * provider's key, then sends it to Bound Exchange to co-sign with the second 2-of-2 key and
+   * broadcast. Returns the broadcast tx id.
+   *
+   * This is the client-side completion of the TRADING deposit flow: the backend builds the PSBT
+   * (it can't broadcast — the user's signature is missing), the client signs here, and Bound
+   * co-signs + broadcasts. `relayData` ({ address, payload }) is the relay identity returned by
+   * `createIntent()`; forwarding it lets Bound auto-resubmit a stuck relay. It is **not** recoverable
+   * from `rawTx` (whose `to` is the asset manager, not the hub wallet), so callers must supply it.
+   *
+   * @throws if the chain is not in `TRADING` wallet mode (raw txs only exist in TRADING mode).
+   */
+  public async signAndSubmitRawTransaction(params: {
+    rawTx: BitcoinRawTransaction;
+    walletProvider: IBitcoinWalletProvider;
+    relayData?: RelayExtraData;
+    accessToken?: string;
+  }): Promise<string> {
+    if (this.walletMode !== 'TRADING') {
+      throw new Error('signAndSubmitRawTransaction requires TRADING wallet mode.');
+    }
+    const { rawTx, walletProvider, relayData, accessToken = this.radfi.accessToken } = params;
+    // Bitcoin is the one chain whose Swaps API raw tx isn't schema-validated upstream (it hits the
+    // permissive `AnyRawTxSchema`), so guard the fields this flow depends on before signing.
+    if (!rawTx?.data || !rawTx?.from) {
+      throw new Error('signAndSubmitRawTransaction: rawTx.data (PSBT) and rawTx.from are required.');
+    }
+    const signedTx = await walletProvider.signTransaction(rawTx.data, false);
+    const signedBase64Tx = normalizePsbtToBase64(signedTx);
+    return this.radfi.requestRadfiSignature({ userAddress: rawTx.from, signedBase64Tx, relayData }, accessToken);
   }
 
   /**

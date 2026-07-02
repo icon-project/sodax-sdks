@@ -45,7 +45,7 @@ The **complete list** of services whose public methods return `Result<T>`:
 - `RecoveryService`
 - `BackendApiService`
 - `SpokeService` (router-level helpers)
-- `IConfigApi` implementations (every method)
+- `IConfigApiV1` implementations (every method)
 
 Private helpers may still throw; the outer `try/catch` at each public method's boundary absorbs those and converts them to `{ ok: false, error }`.
 
@@ -126,7 +126,7 @@ A `try { await sodax.<method>(...) } catch` block in v2 only catches **exception
 ```ts
 class SodaxError<C extends SodaxErrorCode = SodaxErrorCode> extends Error {
   readonly code: C;                 // closed 13-code reason union
-  readonly feature: SodaxFeature;   // 'swap' | 'moneyMarket' | 'bridge' | 'staking' | 'migration' | 'dex' | 'partner' | 'recovery'
+  readonly feature: SodaxFeature;   // 'swap' | 'moneyMarket' | 'bridge' | 'staking' | 'migration' | 'dex' | 'partner' | 'recovery' | 'backend' | 'leverageYield'
   readonly cause?: unknown;
   readonly context?: SodaxErrorContext;
 

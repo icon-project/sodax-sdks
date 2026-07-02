@@ -12,10 +12,6 @@ export { useBackendIntentByTxHash } from './useBackendIntentByTxHash.js';
 export { useBackendIntentByHash } from './useBackendIntentByHash.js';
 export { useBackendUserIntents } from './useBackendUserIntents.js';
 
-// Swap submit-tx hooks
-export { useBackendSubmitSwapTx } from './useBackendSubmitSwapTx.js';
-export { useBackendSubmitSwapTxStatus } from './useBackendSubmitSwapTxStatus.js';
-
 // Solver hooks
 export { useBackendOrderbook } from './useBackendOrderbook.js';
 

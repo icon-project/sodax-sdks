@@ -20,7 +20,8 @@ Do not hardcode supported chain counts or chain lists in agent guidance. When ex
 | `packages/wallet-sdk-core` | Multi-chain wallet providers for signing and broadcasting | [`packages/wallet-sdk-core/AGENTS.md`](packages/wallet-sdk-core/AGENTS.md) |
 | `packages/wallet-sdk-react` | React wallet state layer, connectors, providers, wallet modal primitives | [`packages/wallet-sdk-react/AGENTS.md`](packages/wallet-sdk-react/AGENTS.md) |
 | `packages/dapp-kit` | React hooks combining SDK services, wallet providers, and React Query | [`packages/dapp-kit/AGENTS.md`](packages/dapp-kit/AGENTS.md) |
-| `packages/skills` | Consumer-facing AI skills and knowledge for `@sodax/*` SDK users | [`packages/skills/AGENTS.md`](packages/skills/AGENTS.md) |
+| `packages/skills` | Consumer-facing AI skills and knowledge for `@sodax/*` SDK users, plus the cross-cutting `sodax-build` front-door ideation skill | [`packages/skills/AGENTS.md`](packages/skills/AGENTS.md) |
+| `packages/assets` | Static brand assets (chain logos) served by URL, never bundled into runtime packages | [`packages/assets/AGENTS.md`](packages/assets/AGENTS.md) |
 
 ### Apps
 

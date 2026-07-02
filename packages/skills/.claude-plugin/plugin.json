@@ -1,6 +1,7 @@
 {
   "name": "sodax-skills",
   "skills": [
+    "./skills/sodax-build",
     "./skills/sodax-sdk",
     "./skills/sodax-wallet-sdk-core",
     "./skills/sodax-wallet-sdk-react",

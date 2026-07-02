@@ -126,13 +126,13 @@ describe('StacksXConnector.connect', () => {
     request.mockResolvedValueOnce({
       addresses: [
         { address: 'bc1q...', purpose: 'payment' },
-        { address: 'SP1USERSTACKS', purpose: 'stacks' },
+        { address: 'SP1USERSTACKS', purpose: 'stacks', publicKey: '02deadbeef' },
       ],
     });
 
     const result = await new StacksXConnector(CONFIG).connect();
 
-    expect(result).toEqual({ address: 'SP1USERSTACKS', xChainType: 'STACKS' });
+    expect(result).toEqual({ address: 'SP1USERSTACKS', publicKey: '02deadbeef', xChainType: 'STACKS' });
     // `request` should be called with the provider bound and the JSON-RPC method name.
     expect(request).toHaveBeenCalledWith({ provider: { fake: true } }, 'stx_getAddresses');
   });

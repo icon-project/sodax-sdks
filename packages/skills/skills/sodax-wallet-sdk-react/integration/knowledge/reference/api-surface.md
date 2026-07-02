@@ -112,7 +112,7 @@ Concrete chain classes live behind sub-paths. Default to barrel imports; opt int
 
 ### Default pattern (most chains)
 
-`/xchains/{bitcoin, evm, icon, injective, near, solana, stacks, sui}` re-export the chain's `XService` + `XConnector` classes — `EvmXService`/`EvmXConnector`, `SolanaXService`/`SolanaXConnector`, `BitcoinXService`/`BitcoinXConnector`, `StacksXService`/`StacksXConnector`, etc. Icon also exports `IconHanaXConnector` (the connector for the Hana wallet).
+`/xchains/{bitcoin, evm, icon, injective, near, solana, stacks, stellar, sui}` re-export the chain's `XService` + `XConnector` classes — `EvmXService`/`EvmXConnector`, `SolanaXService`/`SolanaXConnector`, `BitcoinXService`/`BitcoinXConnector`, `StacksXService`/`StacksXConnector`, `StellarXService`/`StellarWalletsKitXConnector`, etc. Icon also exports `IconHanaXConnector` (the connector for the Hana wallet).
 
 ```ts
 // @ai-snippets-skip
@@ -133,7 +133,7 @@ import { IconHanaXConnector } from '@sodax/wallet-sdk-react/xchains/icon';
 
 | Sub-path | Notes |
 |---|---|
-| `/xchains/stellar` | **No concrete classes re-exported.** Stellar uses `@creit.tech/stellar-wallets-kit` directly via an `XConnector` registered through the chain registry — no public class to `instanceof`-check. |
+| `/xchains/stellar` | Re-exports `StellarXService` + `StellarWalletsKitXConnector` (the concrete connector wrapping `@creit.tech/stellar-wallets-kit`). |
 
 If unsure what a sub-path exports, check the published `dist/`:
 
