@@ -361,6 +361,7 @@ export const baseChainInfo = {
     type: 'EVM',
     chainId: 295,
     mainnet: true,
+    logo: chainLogo(ChainKeys.HEDERA_MAINNET),
     explorer: {
       baseUrl: 'https://hashscan.io/mainnet/',
       txUrl: 'https://hashscan.io/mainnet/transaction/',
