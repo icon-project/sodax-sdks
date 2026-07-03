@@ -42,7 +42,7 @@ import { pollBackendSubmitTx } from '../backendApi/pollBackendSubmitTx.js';
 import { selectSolvedIntentPacket } from './selectSolvedIntentPacket.js';
 import { SodaxError } from '../errors/SodaxError.js';
 import { mapRelayFailure } from '../errors/relay-error-mapping.js';
-import { verifyFailed, intentCreationFailed, executionFailed, unknownFailed } from '../errors/wrappers.js';
+import { verifyFailed, intentCreationFailed, executionFailed, unknownFailed, approveFailed } from '../errors/wrappers.js';
 import {
   type SwapCreateIntentError,
   type PostExecutionError,
@@ -688,6 +688,7 @@ export class SwapService {
     _params: SwapActionParams<K, Raw>,
   ): Promise<Result<TxReturnType<K, Raw>>> {
     const { params } = _params;
+    const wrapApproveFailure = (cause: unknown) => approveFailed('swap', cause);
 
     try {
       if (isHubChainKeyType(params.srcChainKey) || isEvmSpokeOnlyChainKeyType(params.srcChainKey)) {
@@ -713,7 +714,7 @@ export class SwapService {
         });
 
         if (!result.ok) {
-          return result;
+          return { ok: false, error: wrapApproveFailure(result.error) };
         }
 
         return {
@@ -747,7 +748,7 @@ export class SwapService {
               },
         );
 
-        if (!result.ok) return result;
+        if (!result.ok) return { ok: false, error: wrapApproveFailure(result.error) };
 
         return {
           ok: true,
@@ -1112,14 +1113,15 @@ export class SwapService {
 
       const txResult = await this.spoke.sendMessage(sendMessageParams);
 
-      if (!txResult.ok) return txResult;
+      if (!txResult.ok) return { ok: false, error: intentCreationFailed('swap', txResult.error) };
 
       return {
         ok: true,
         value: txResult.value satisfies TxReturnType<K, boolean> as TxReturnType<K, Raw>,
       };
     } catch (error) {
-      return { ok: false, error };
+      if (isSwapCreateIntentError(error)) return { ok: false, error };
+      return { ok: false, error: intentCreationFailed('swap', error) };
     }
   }
 
@@ -1183,7 +1185,8 @@ export class SwapService {
 
       return { ok: true, value: { srcChainTxHash: cancelTxHash, dstChainTxHash: dstIntentTxHash } };
     } catch (error) {
-      return { ok: false, error };
+      if (isSwapError(error)) return { ok: false, error };
+      return { ok: false, error: executionFailed('swap', error, { action: 'cancelIntent' }) };
     }
   }
 

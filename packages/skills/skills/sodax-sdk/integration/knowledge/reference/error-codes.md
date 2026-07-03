@@ -1,9 +1,10 @@
 # Error codes
 
-All 13 codes the SDK can emit. Each error is `SodaxError<C>` where `C` is one of these. The producing feature is on `error.feature`.
+All 14 codes the SDK can emit. Each error is `SodaxError<C>` where `C` is one of these. The producing feature is on `error.feature`.
 
 | Code | Meaning | Common `error.context` fields | Retry advice |
 |---|---|---|---|
+| `USER_REJECTED` | User cancelled the wallet prompt (signing / approval / connection). Classified at the source by `intentCreationFailed` / `approveFailed` wrappers via a built-in detector that recognises viem `4001` / `UserRejectedRequestError`, ICON Hana `CANCEL_SIGNING` / `-31002`, and name + message patterns from Solana / Sui / Stellar / Stacks / NEAR / Injective wallets. | `phase` (set to whichever phase the wrapper was wrapping: `'intentCreation'` or `'approve'`), `action` | No — user-initiated. Render a "Cancelled" UI, not a failure. |
 | `VALIDATION_FAILED` | Pre-flight invariant tripped (input shape, unsupported chain, etc.). | `field`, `reason`, `phase: 'validate'` | No — fix the input. |
 | `INTENT_CREATION_FAILED` | Building the intent / payload failed. | `phase: 'intentCreation'`, `action` | Sometimes — depends on root cause (`error.cause`). |
 | `EXECUTION_FAILED` | Orchestrator-level catch-all (multi-step op didn't complete). | `action`, `phase: 'execution'` or `'postExecution'` | Sometimes — inspect cause. |
@@ -77,10 +78,10 @@ Narrow code unions per public method. Use these for exhaustive `switch` discrimi
 
 ```ts
 // 'create*Intent' methods
-type CreateIntentErrorCode = 'VALIDATION_FAILED' | 'INTENT_CREATION_FAILED' | 'UNKNOWN';
+type CreateIntentErrorCode = 'USER_REJECTED' | 'VALIDATION_FAILED' | 'INTENT_CREATION_FAILED' | 'UNKNOWN';
 
 // 'approve' methods
-type ApproveErrorCode = 'VALIDATION_FAILED' | 'APPROVE_FAILED' | 'UNKNOWN';
+type ApproveErrorCode = 'USER_REJECTED' | 'VALIDATION_FAILED' | 'APPROVE_FAILED' | 'UNKNOWN';
 
 // 'isAllowanceValid' methods
 type AllowanceCheckErrorCode = 'VALIDATION_FAILED' | 'ALLOWANCE_CHECK_FAILED' | 'UNKNOWN';
@@ -97,7 +98,7 @@ type LookupErrorCode = 'VALIDATION_FAILED' | 'LOOKUP_FAILED' | 'UNKNOWN';
 | Method | Narrow code union |
 |---|---|
 | `createIntent` | `CreateIntentErrorCode` |
-| `swap` | All of {`VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `EXECUTION_FAILED`, `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXTERNAL_API_ERROR`, `UNKNOWN`} |
+| `swap` | All of {`USER_REJECTED`, `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `EXECUTION_FAILED`, `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXTERNAL_API_ERROR`, `UNKNOWN`} |
 | `postExecution` | `EXECUTION_FAILED \| EXTERNAL_API_ERROR \| UNKNOWN` (with `phase: 'postExecution'`) |
 | `createLimitOrder`, `createLimitOrderIntent` | `CreateIntentErrorCode` |
 | `cancelIntent`, `cancelLimitOrder` | `EXECUTION_FAILED \| VALIDATION_FAILED \| UNKNOWN` |
@@ -106,7 +107,7 @@ type LookupErrorCode = 'VALIDATION_FAILED' | 'LOOKUP_FAILED' | 'UNKNOWN';
 
 | Method | Narrow code union |
 |---|---|
-| `supply`, `borrow`, `withdraw`, `repay` | `VALIDATION_FAILED \| INTENT_CREATION_FAILED \| EXECUTION_FAILED \| TX_VERIFICATION_FAILED \| TX_SUBMIT_FAILED \| RELAY_TIMEOUT \| RELAY_FAILED \| UNKNOWN` (with `action` discriminator) |
+| `supply`, `borrow`, `withdraw`, `repay` | `USER_REJECTED \| VALIDATION_FAILED \| INTENT_CREATION_FAILED \| EXECUTION_FAILED \| TX_VERIFICATION_FAILED \| TX_SUBMIT_FAILED \| RELAY_TIMEOUT \| RELAY_FAILED \| UNKNOWN` (with `action` discriminator) |
 | `createSupplyIntent`, `createBorrowIntent`, `createWithdrawIntent`, `createRepayIntent` | `CreateIntentErrorCode` |
 | `approve` | `ApproveErrorCode` |
 | `isAllowanceValid` | `AllowanceCheckErrorCode` |
@@ -157,7 +158,7 @@ type LookupErrorCode = 'VALIDATION_FAILED' | 'LOOKUP_FAILED' | 'UNKNOWN';
 
 ### Partner (`feature: 'partner'`) and Recovery (`feature: 'recovery'`)
 
-Both follow the same shape: action methods get the full exec union (`'EXECUTION_FAILED' \| 'INTENT_CREATION_FAILED' \| ...`), read methods get `LookupErrorCode`, approve methods get `ApproveErrorCode`.
+Both follow the same shape: action methods get the full exec union (`'EXECUTION_FAILED' \| 'INTENT_CREATION_FAILED' \| ...`), read methods get `LookupErrorCode`, approve methods get `ApproveErrorCode` (so partner's `approve` can emit `'USER_REJECTED'`).
 
 ### Backend / Swaps API (`feature: 'backend'`)
 
