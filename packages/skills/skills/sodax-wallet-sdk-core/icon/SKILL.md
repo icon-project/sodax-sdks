@@ -1,6 +1,6 @@
 ---
 name: sodax-wallet-sdk-core-icon
-description: 'Granular skill for the @sodax/wallet-sdk-core v2 ICON wallet provider only — `IconWalletProvider` (backed by icon-sdk-js; browser-extension mode targets Hana''s postMessage bridge). Use when a backend / Node script / CI / bot / non-React browser flow needs to instantiate an ICON provider directly and sign + broadcast — e.g. "instantiate IconWalletProvider", "ICON private-key signing in Node", "send an IcxCallTransaction", "Hana wallet bridge". Covers BOTH integration (write new v2 code) and migration (port v1 — almost a no-op at this surface: deep-import → barrel). Picks via Step 1. Links into the parent sodax-wallet-sdk-core knowledge tree. For React dapps use the sodax-wallet-sdk-react skill instead (get the typed provider via useWalletProvider).'
+description: 'Granular skill for the @sodax/wallet-sdk-core v2 ICON wallet provider only — `IconWalletProvider` (backed by icon-sdk-js; browser-extension mode talks to Hana via the ICONEX `CustomEvent` relay — an in-page message bridge). Use when a backend / Node script / CI / bot / non-React browser flow needs to instantiate an ICON provider directly and sign + broadcast — e.g. "instantiate IconWalletProvider", "ICON private-key signing in Node", "send an IcxCallTransaction", "Hana wallet bridge". Covers BOTH integration (write new v2 code) and migration (port v1 — almost a no-op at this surface: deep-import → barrel). Picks via Step 1. Links into the parent sodax-wallet-sdk-core knowledge tree. For React dapps use the sodax-wallet-sdk-react skill instead (get the typed provider via useWalletProvider).'
 license: MIT
 metadata:
   version: '0.0.1'
@@ -14,8 +14,8 @@ Granular skill for `IconWalletProvider` — the low-level ICON wallet for backen
 ## Step 1 — Clarify with user before coding
 
 1. **New code or v1 → v2 port?** New → § Integration. Port v1 → § Migration (almost always a no-op here).
-2. **Private-key or browser-extension config?** ICON discriminates by **field presence** (no `type`): PK = `{ privateKey, rpcUrl }`; browser-extension = `{ walletAddress?, rpcUrl }` (targets Hana via `postMessage`). `rpcUrl` is **required in both modes** — no public-RPC fallback.
-3. **Scripted determinism?** In browser-extension mode pass `walletAddress` explicitly (else the provider issues a `REQUEST_ADDRESS` event on first use).
+2. **Private-key or browser-extension config?** ICON discriminates by **field presence** (no `type`): PK = `{ privateKey, rpcUrl }`; browser-extension = `{ walletAddress?, rpcUrl }` (talks to Hana via the ICONEX `CustomEvent` relay). `rpcUrl` is **required in both modes** — no public-RPC fallback.
+3. **Scripted determinism?** In browser-extension mode supply `walletAddress` yourself — the consumer provides it (or resolves it via the exported `requestAddress` helper). The provider never auto-resolves it; `getWalletAddress()` throws `Error('Wallet not initialized')` if it isn't set.
 
 ## Integration workflow (new v2 code)
 
@@ -29,7 +29,7 @@ Granular skill for `IconWalletProvider` — the low-level ICON wallet for backen
 
 - **Omitting `rpcUrl`.** Required in both modes — there is no provider-level public-RPC fallback.
 - **Assuming millisecond timestamps.** `timestampProvider` returns **microseconds** (default `Date.now() * 1000`).
-- **Firing many parallel browser-extension calls.** Hana's `postMessage` events use a request-ID — collisions occur; tune `defaults.jsonRpcId` if you control the consumer.
+- **Firing many parallel browser-extension calls.** Hana's ICONEX `CustomEvent` relay messages use a request-ID — collisions occur; tune `defaults.jsonRpcId` if you control the consumer.
 - **Treating a contract (`cx…`) as the signer.** The wallet level is EOA-only (`IconEoaAddress`, `hx…`); contracts appear in tx params, not as the signer.
 - **Mixing PK + browser-extension fields.** Discriminated union — don't `as`.
 

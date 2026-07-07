@@ -12,6 +12,7 @@ import type { HubProvider } from '../types/types.js';
 import { ConfigService } from '../config/index.js';
 import { mergeSodaxConfig } from '../config/mergeSodaxConfig.js';
 import { resolveLogger } from '../logger.js';
+import { resolveAnalytics } from '../analytics.js';
 import { PartnerService } from '../../partner/PartnerService.js';
 import { RecoveryService } from '../../recovery/RecoveryService.js';
 import { LeverageYieldService } from '../../leverageYield/LeverageYieldService.js';
@@ -28,6 +29,7 @@ export class Sodax {
   public readonly moneyMarket: MoneyMarketService; // Money Market service enabling cross-chain lending and borrowing
   public readonly migration: MigrationService; // ICX migration service enabling ICX migration to SODA
   public readonly backendApi: BackendApiService; // backend API service enabling backend API endpoints
+  public readonly api: BackendApiService; // syntactic sugar for backend API service
   public readonly bridge: BridgeService; // Bridge service enabling cross-chain transfers
   public readonly staking: StakingService; // Staking service enabling SODA staking operations
   public readonly partners: PartnerService; // Partner service enabling partner fee claim and other partner operations
@@ -40,20 +42,28 @@ export class Sodax {
   public readonly spoke: SpokeService; // spoke service enabling spoke chain operations
 
   constructor(options?: SodaxOptions) {
-    // Resolve the client-side options (`logger`, `fee`) once, up front, and hand them to the services
-    // so they survive the dynamic-config swap in `config.initialize()`. Both live on `SodaxOptions`,
+    // Resolve the client-side options (`logger`, `analytics`, `fee`) once, up front, and hand them to the
+    // services so they survive the dynamic-config swap in `config.initialize()`. All live on `SodaxOptions`,
     // not on the `DeepPartial<SodaxDefaultConfig>` data contract, so they keep their exact types and need no
     // cast. `mergeSodaxConfig` / `userConfig` ignore these extra keys (they are never read off the data
-    // config; services read them via `config.logger` / `config.fee`).
+    // config; services read them via `config.logger` / `config.analytics` / `config.fee`).
     const logger = resolveLogger(options?.logger);
+    // Analytics is opt-in: `resolveAnalytics` returns a no-op emitter unless `options.analytics` is set,
+    // so feature services can call `config.analytics.emit(...)` unconditionally with zero cost when off.
+    const analytics = resolveAnalytics(options?.analytics);
     const fee = options?.fee;
+    // Like `logger`, swaps options are client-side runtime toggles read off `SodaxOptions` —
+    // never merged into the backend-fetched `SodaxConfig`/`instanceConfig`.
+    const useBackendSubmitTx = options?.swapsOptions?.useBackendSubmitTx ?? false;
     this.instanceConfig = options ? mergeSodaxConfig(sodaxConfig, options) : sodaxConfig;
     this.backendApi = new BackendApiService(this.instanceConfig.api, logger);
+    this.api = this.backendApi;
     this.config = new ConfigService({
       api: this.backendApi,
       config: this.instanceConfig,
       userConfig: options,
       logger,
+      analytics,
       fee,
     });
 
@@ -63,6 +73,8 @@ export class Sodax {
       config: this.config,
       hubProvider: this.hubProvider,
       spoke: this.spoke,
+      backendApi: this.backendApi,
+      useBackendSubmitTx,
     });
 
     this.moneyMarket = new MoneyMarketService({

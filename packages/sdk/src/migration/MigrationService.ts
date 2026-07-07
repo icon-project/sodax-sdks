@@ -514,84 +514,102 @@ export class MigrationService {
   async migratebnUSD<K extends SpokeChainKey>(
     _params: UnifiedBnUSDMigrateAction<K, false>,
   ): Promise<Result<TxHashPair, MigrateOrchestrationError>> {
-    const { params, timeout } = _params;
-    const baseCtx = {
-      srcChainKey: params.srcChainKey,
-      dstChainKey: params.dstChainKey,
-      action: 'migratebnUSD' as const,
-    };
-    try {
-      const intentResult = await this.createMigratebnUSDIntent(_params);
-      // CreateMigrateIntentErrorCode ⊂ MigrateOrchestrationErrorCode (subset narrowing).
-      if (!intentResult.ok) return { ok: false, error: intentResult.error };
+    return this.config.analytics.trackResult('migration', 'migratebnUSD', async () => {
+      const { params, timeout } = _params;
+      const baseCtx = {
+        srcChainKey: params.srcChainKey,
+        dstChainKey: params.dstChainKey,
+        action: 'migratebnUSD' as const,
+      };
+      try {
+        const intentResult = await this.createMigratebnUSDIntent(_params);
+        // CreateMigrateIntentErrorCode ⊂ MigrateOrchestrationErrorCode (subset narrowing).
+        if (!intentResult.ok) return { ok: false, error: intentResult.error };
 
-      const { tx: spokeTxHash, relayData: extraData } = intentResult.value;
+        const { tx: spokeTxHash, relayData: extraData } = intentResult.value;
 
-      // verify the spoke tx hash exists on chain
-      const verifyTxHashResult = await this.spoke.verifyTxHash({
-        txHash: spokeTxHash,
-        chainKey: params.srcChainKey,
-      });
-
-      if (!verifyTxHashResult.ok) {
-        return {
-          ok: false,
-          error: verifyFailed('migration', verifyTxHashResult.error, baseCtx),
-        };
-      }
-
-      const packetResult = await relayTxAndWaitPacket({
-        srcTxHash: spokeTxHash,
-        data: extraData,
-        chainKey: params.srcChainKey,
-        relayerApiEndpoint: this.relayerApiEndpoint,
-        timeout,
-      });
-
-      if (!packetResult.ok) {
-        return {
-          ok: false,
-          error: mapRelayFailure(packetResult.error, {
-            feature: 'migration',
-            action: baseCtx.action,
-            srcChainKey: baseCtx.srcChainKey,
-            dstChainKey: baseCtx.dstChainKey,
-          }),
-        };
-      }
-
-      // Secondary destination-spoke watcher — fires when bnUSD's destination is not Sonic
-      // (i.e. when the hub leg additionally bridges out to another spoke). Failures here are
-      // wrapped with phase='destinationExecution' to distinguish from primary-relay failures.
-      if (!(params.srcChainKey === ChainKeys.SONIC_MAINNET || params.dstChainKey === ChainKeys.SONIC_MAINNET)) {
-        const execResult = await waitUntilIntentExecuted({
-          intentRelayChainId: getIntentRelayChainId(ChainKeys.SONIC_MAINNET).toString(),
-          srcTxHash: packetResult.value.dst_tx_hash,
-          timeout: timeout,
-          apiUrl: this.relayerApiEndpoint,
+        // verify the spoke tx hash exists on chain
+        const verifyTxHashResult = await this.spoke.verifyTxHash({
+          txHash: spokeTxHash,
+          chainKey: params.srcChainKey,
         });
-        if (!execResult.ok) {
+
+        if (!verifyTxHashResult.ok) {
           return {
             ok: false,
-            error: mapRelayFailure(execResult.error, {
+            error: verifyFailed('migration', verifyTxHashResult.error, baseCtx),
+          };
+        }
+
+        const packetResult = await relayTxAndWaitPacket({
+          srcTxHash: spokeTxHash,
+          data: extraData,
+          chainKey: params.srcChainKey,
+          relayerApiEndpoint: this.relayerApiEndpoint,
+          timeout,
+        });
+
+        if (!packetResult.ok) {
+          return {
+            ok: false,
+            error: mapRelayFailure(packetResult.error, {
               feature: 'migration',
               action: baseCtx.action,
               srcChainKey: baseCtx.srcChainKey,
               dstChainKey: baseCtx.dstChainKey,
-              phase: 'destinationExecution',
             }),
           };
         }
-      }
 
-      return { ok: true, value: { srcChainTxHash: spokeTxHash, dstChainTxHash: packetResult.value.dst_tx_hash } };
-    } catch (error) {
-      if (isMigrateOrchestrationError(error)) return { ok: false, error };
-      return {
-        ok: false,
-        error: executionFailed('migration', error, baseCtx),
-      };
-    }
+        // Secondary destination-spoke watcher — fires when bnUSD's destination is not Sonic
+        // (i.e. when the hub leg additionally bridges out to another spoke). Failures here are
+        // wrapped with phase='destinationExecution' to distinguish from primary-relay failures.
+        if (!(params.srcChainKey === ChainKeys.SONIC_MAINNET || params.dstChainKey === ChainKeys.SONIC_MAINNET)) {
+          const execResult = await waitUntilIntentExecuted({
+            intentRelayChainId: getIntentRelayChainId(ChainKeys.SONIC_MAINNET).toString(),
+            srcTxHash: packetResult.value.dst_tx_hash,
+            timeout: timeout,
+            apiUrl: this.relayerApiEndpoint,
+          });
+          if (!execResult.ok) {
+            return {
+              ok: false,
+              error: mapRelayFailure(execResult.error, {
+                feature: 'migration',
+                action: baseCtx.action,
+                srcChainKey: baseCtx.srcChainKey,
+                dstChainKey: baseCtx.dstChainKey,
+                phase: 'destinationExecution',
+              }),
+            };
+          }
+        }
+
+        return { ok: true, value: { srcChainTxHash: spokeTxHash, dstChainTxHash: packetResult.value.dst_tx_hash } };
+      } catch (error) {
+        if (isMigrateOrchestrationError(error)) return { ok: false, error };
+        return {
+          ok: false,
+          error: executionFailed('migration', error, baseCtx),
+        };
+      }
+    },
+    {
+      start: () => ({
+        srcChainKey: _params.params.srcChainKey,
+        dstChainKey: _params.params.dstChainKey,
+        srcAddress: _params.params.srcAddress,
+        dstAddress: _params.params.dstAddress,
+        srcbnUSD: _params.params.srcbnUSD,
+        dstbnUSD: _params.params.dstbnUSD,
+        amount: _params.params.amount,
+      }),
+      success: value => ({
+        srcChainTxHash: value.srcChainTxHash,
+        dstChainTxHash: value.dstChainTxHash,
+      }),
+      failure: error => ({ code: error.code }),
+    });
   }
 
   /**
@@ -607,35 +625,51 @@ export class MigrationService {
    *   check fails, the deposit reverts, or the relay times out.
    */
   async migrateIcxToSoda(_params: IcxMigrateAction<false>): Promise<Result<TxHashPair, MigrateOrchestrationError>> {
-    const { timeout } = _params;
-    const baseCtx = { srcChainKey: _params.params.srcChainKey, action: 'migrateIcxToSoda' as const };
-    try {
-      const txResult = await this.createMigrateIcxToSodaIntent(_params);
-      // CreateMigrateIntentErrorCode ⊂ MigrateOrchestrationErrorCode.
-      if (!txResult.ok) return { ok: false, error: txResult.error };
+    return this.config.analytics.trackResult('migration', 'migrateIcxToSoda', async () => {
+      const { timeout } = _params;
+      const baseCtx = { srcChainKey: _params.params.srcChainKey, action: 'migrateIcxToSoda' as const };
+      try {
+        const txResult = await this.createMigrateIcxToSodaIntent(_params);
+        // CreateMigrateIntentErrorCode ⊂ MigrateOrchestrationErrorCode.
+        if (!txResult.ok) return { ok: false, error: txResult.error };
 
-      const { tx, relayData } = txResult.value;
+        const { tx, relayData } = txResult.value;
 
-      const packetResult = await relayTxAndWaitPacket({
-        srcTxHash: tx,
-        data: relayData,
-        chainKey: _params.params.srcChainKey,
-        relayerApiEndpoint: this.relayerApiEndpoint,
-        timeout: timeout,
-      });
+        const packetResult = await relayTxAndWaitPacket({
+          srcTxHash: tx,
+          data: relayData,
+          chainKey: _params.params.srcChainKey,
+          relayerApiEndpoint: this.relayerApiEndpoint,
+          timeout: timeout,
+        });
 
-      if (!packetResult.ok) {
-        return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'migration', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey }) };
+        if (!packetResult.ok) {
+          return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'migration', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey }) };
+        }
+
+        return { ok: true, value: { srcChainTxHash: tx, dstChainTxHash: packetResult.value.dst_tx_hash } };
+      } catch (error) {
+        if (isMigrateOrchestrationError(error)) return { ok: false, error };
+        return {
+          ok: false,
+          error: executionFailed('migration', error, baseCtx),
+        };
       }
-
-      return { ok: true, value: { srcChainTxHash: tx, dstChainTxHash: packetResult.value.dst_tx_hash } };
-    } catch (error) {
-      if (isMigrateOrchestrationError(error)) return { ok: false, error };
-      return {
-        ok: false,
-        error: executionFailed('migration', error, baseCtx),
-      };
-    }
+    },
+    {
+      start: () => ({
+        srcChainKey: _params.params.srcChainKey,
+        srcAddress: _params.params.srcAddress,
+        dstAddress: _params.params.dstAddress,
+        address: _params.params.address,
+        amount: _params.params.amount,
+      }),
+      success: value => ({
+        srcChainTxHash: value.srcChainTxHash,
+        dstChainTxHash: value.dstChainTxHash,
+      }),
+      failure: error => ({ code: error.code }),
+    });
   }
 
   /**
@@ -656,35 +690,50 @@ export class MigrationService {
   async revertMigrateSodaToIcx(
     _params: IcxRevertMigrationAction<false>,
   ): Promise<Result<TxHashPair, RevertMigrationOrchestrationError>> {
-    const { timeout } = _params;
-    const baseCtx = { srcChainKey: ChainKeys.SONIC_MAINNET, action: 'revertMigrateSodaToIcx' as const };
-    try {
-      const txResult = await this.createRevertSodaToIcxMigrationIntent(_params);
-      // CreateRevertMigrationIntentErrorCode ⊂ RevertMigrationOrchestrationErrorCode.
-      if (!txResult.ok) return { ok: false, error: txResult.error };
+    return this.config.analytics.trackResult('migration', 'revertMigrateSodaToIcx', async () => {
+      const { timeout } = _params;
+      const baseCtx = { srcChainKey: ChainKeys.SONIC_MAINNET, action: 'revertMigrateSodaToIcx' as const };
+      try {
+        const txResult = await this.createRevertSodaToIcxMigrationIntent(_params);
+        // CreateRevertMigrationIntentErrorCode ⊂ RevertMigrationOrchestrationErrorCode.
+        if (!txResult.ok) return { ok: false, error: txResult.error };
 
-      const { tx, relayData } = txResult.value;
+        const { tx, relayData } = txResult.value;
 
-      const packetResult = await relayTxAndWaitPacket({
-        srcTxHash: tx,
-        data: relayData,
-        chainKey: ChainKeys.SONIC_MAINNET,
-        relayerApiEndpoint: this.relayerApiEndpoint,
-        timeout: timeout,
-      });
+        const packetResult = await relayTxAndWaitPacket({
+          srcTxHash: tx,
+          data: relayData,
+          chainKey: ChainKeys.SONIC_MAINNET,
+          relayerApiEndpoint: this.relayerApiEndpoint,
+          timeout: timeout,
+        });
 
-      if (!packetResult.ok) {
-        return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'migration', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey }) };
+        if (!packetResult.ok) {
+          return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'migration', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey }) };
+        }
+
+        return { ok: true, value: { srcChainTxHash: tx, dstChainTxHash: packetResult.value.dst_tx_hash } };
+      } catch (error) {
+        if (isRevertMigrationOrchestrationError(error)) return { ok: false, error };
+        return {
+          ok: false,
+          error: executionFailed('migration', error, baseCtx),
+        };
       }
-
-      return { ok: true, value: { srcChainTxHash: tx, dstChainTxHash: packetResult.value.dst_tx_hash } };
-    } catch (error) {
-      if (isRevertMigrationOrchestrationError(error)) return { ok: false, error };
-      return {
-        ok: false,
-        error: executionFailed('migration', error, baseCtx),
-      };
-    }
+    },
+    {
+      start: () => ({
+        srcChainKey: _params.params.srcChainKey,
+        srcAddress: _params.params.srcAddress,
+        dstAddress: _params.params.dstAddress,
+        amount: _params.params.amount,
+      }),
+      success: value => ({
+        srcChainTxHash: value.srcChainTxHash,
+        dstChainTxHash: value.dstChainTxHash,
+      }),
+      failure: error => ({ code: error.code }),
+    });
   }
 
   /**
@@ -702,35 +751,52 @@ export class MigrationService {
    *   ICON deposit transaction and `dstChainTxHash` is the hub-side packet receipt.
    */
   async migrateBaln(_params: BalnMigrateAction<false>): Promise<Result<TxHashPair, MigrateOrchestrationError>> {
-    const { timeout } = _params;
-    const baseCtx = { srcChainKey: ChainKeys.ICON_MAINNET, action: 'migrateBaln' as const };
-    try {
-      const txResult = await this.createMigrateBalnIntent(_params);
-      // CreateMigrateIntentErrorCode ⊂ MigrateOrchestrationErrorCode.
-      if (!txResult.ok) return { ok: false, error: txResult.error };
+    return this.config.analytics.trackResult('migration', 'migrateBaln', async () => {
+      const { timeout } = _params;
+      const baseCtx = { srcChainKey: ChainKeys.ICON_MAINNET, action: 'migrateBaln' as const };
+      try {
+        const txResult = await this.createMigrateBalnIntent(_params);
+        // CreateMigrateIntentErrorCode ⊂ MigrateOrchestrationErrorCode.
+        if (!txResult.ok) return { ok: false, error: txResult.error };
 
-      const { tx, relayData } = txResult.value;
+        const { tx, relayData } = txResult.value;
 
-      const packetResult = await relayTxAndWaitPacket({
-        srcTxHash: tx,
-        data: relayData,
-        chainKey: ChainKeys.ICON_MAINNET,
-        relayerApiEndpoint: this.relayerApiEndpoint,
-        timeout: timeout,
-      });
+        const packetResult = await relayTxAndWaitPacket({
+          srcTxHash: tx,
+          data: relayData,
+          chainKey: ChainKeys.ICON_MAINNET,
+          relayerApiEndpoint: this.relayerApiEndpoint,
+          timeout: timeout,
+        });
 
-      if (!packetResult.ok) {
-        return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'migration', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey }) };
+        if (!packetResult.ok) {
+          return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'migration', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey }) };
+        }
+
+        return { ok: true, value: { srcChainTxHash: tx, dstChainTxHash: packetResult.value.dst_tx_hash } };
+      } catch (error) {
+        if (isMigrateOrchestrationError(error)) return { ok: false, error };
+        return {
+          ok: false,
+          error: executionFailed('migration', error, baseCtx),
+        };
       }
-
-      return { ok: true, value: { srcChainTxHash: tx, dstChainTxHash: packetResult.value.dst_tx_hash } };
-    } catch (error) {
-      if (isMigrateOrchestrationError(error)) return { ok: false, error };
-      return {
-        ok: false,
-        error: executionFailed('migration', error, baseCtx),
-      };
-    }
+    },
+    {
+      start: () => ({
+        srcChainKey: _params.params.srcChainKey,
+        srcAddress: _params.params.srcAddress,
+        dstAddress: _params.params.dstAddress,
+        amount: _params.params.amount,
+        lockupPeriod: _params.params.lockupPeriod,
+        stake: _params.params.stake,
+      }),
+      success: value => ({
+        srcChainTxHash: value.srcChainTxHash,
+        dstChainTxHash: value.dstChainTxHash,
+      }),
+      failure: error => ({ code: error.code }),
+    });
   }
 
   /**

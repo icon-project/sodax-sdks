@@ -40,8 +40,13 @@ const mocks = vi.hoisted(() => ({
   // which calls `encodeTransferFrom` to prepend a transfer call to the wallet-router payload.
   erc20IsAllowanceValid: vi.fn(),
   erc20EncodeTransferFrom: vi.fn(),
-  // EvmSolverService — `createSwapIntent` calls `createIntentFeeData(fee, inputAmount)` and
-  // `encodeCreateIntent(intent, intentsContract)` to assemble the on-hub intent calldata.
+  // HookService — `createSwapIntent` calls `resolveDelivery(params)` to apply any delivery hook.
+  resolveDelivery: vi.fn(),
+  // IntentDataService — `createSwapIntent` calls `composeIntentData(feeEnvelope, deliveryData)` to fold
+  // the fee + delivery into the intent `data`.
+  composeIntentData: vi.fn(),
+  // EvmSolverService — `createSwapIntent` calls `createIntentFeeData(fee, inputAmount)` (fee envelope +
+  // amount) and `encodeCreateIntent(intent, intentsContract)` for the on-hub calldata.
   createIntentFeeData: vi.fn(),
   encodeCreateIntent: vi.fn(),
   // `randomUint256` mints the intentId. Mocking it makes the resulting intent deterministic so
@@ -67,6 +72,26 @@ vi.mock('../../../swap/EvmSolverService.js', async () => {
     EvmSolverService: {
       createIntentFeeData: mocks.createIntentFeeData,
       encodeCreateIntent: mocks.encodeCreateIntent,
+    },
+  };
+});
+
+vi.mock('../../../swap/HookService.js', async () => {
+  const actual = await vi.importActual<object>('../../../swap/HookService.js');
+  return {
+    ...actual,
+    HookService: {
+      resolveDelivery: mocks.resolveDelivery,
+    },
+  };
+});
+
+vi.mock('../../../swap/IntentDataService.js', async () => {
+  const actual = await vi.importActual<object>('../../../swap/IntentDataService.js');
+  return {
+    ...actual,
+    IntentDataService: {
+      composeIntentData: mocks.composeIntentData,
     },
   };
 });
@@ -137,7 +162,13 @@ beforeEach(() => {
   vi.clearAllMocks();
   // Sensible defaults — individual tests override per-call.
   mocks.erc20EncodeTransferFrom.mockReturnValue(fakeTransferFromCall);
-  mocks.createIntentFeeData.mockReturnValue(['0xfeedata', 0n]);
+  // Default: no hook — pass dstAddress through and forward the low-level deliveryData (if any).
+  mocks.resolveDelivery.mockImplementation((p: CreateIntentParams) => ({
+    dstAddress: p.dstAddress,
+    deliveryData: p.deliveryData,
+  }));
+  mocks.createIntentFeeData.mockReturnValue(['0xfeeenvelope', 0n]);
+  mocks.composeIntentData.mockReturnValue('0xfeedata');
   mocks.encodeCreateIntent.mockReturnValue({
     address: '0x6382D6ccD780758C5e8A6123c33ee8F4472F96ef' as Address,
     value: 0n,
@@ -490,9 +521,7 @@ describe('SonicSpokeService.deposit (static)', () => {
 
   describe('native token branch', () => {
     it('prepends a wrap-native call and forwards `value: amount` when raw=true', async () => {
-      const result = await sonicSpoke.deposit(
-        depositParams<true>({ token: SONIC_NATIVE, raw: true }),
-      );
+      const result = await sonicSpoke.deposit(depositParams<true>({ token: SONIC_NATIVE, raw: true }));
 
       // Erc20Service.encodeTransferFrom must NOT be touched on the native path.
       expect(mocks.erc20EncodeTransferFrom).not.toHaveBeenCalled();
@@ -570,9 +599,7 @@ describe('SonicSpokeService.deposit (static)', () => {
         [[{ address: extraCall.address, value: extraCall.value, data: extraCall.data }]],
       );
 
-      const result = await sonicSpoke.deposit(
-        depositParams<true>({ raw: true, data: dataWithExtra }),
-      );
+      const result = await sonicSpoke.deposit(depositParams<true>({ raw: true, data: dataWithExtra }));
 
       // Reconstruct the expected route() calldata: [transferFromCall, extraCall].
       expect(result).toMatchObject({
@@ -581,7 +608,11 @@ describe('SonicSpokeService.deposit (static)', () => {
           functionName: 'route',
           args: [
             [
-              { addr: fakeTransferFromCall.address, value: fakeTransferFromCall.value, data: fakeTransferFromCall.data },
+              {
+                addr: fakeTransferFromCall.address,
+                value: fakeTransferFromCall.value,
+                data: fakeTransferFromCall.data,
+              },
               { addr: extraCall.address, value: extraCall.value, data: extraCall.data },
             ],
           ],
@@ -629,7 +660,10 @@ describe('SonicSpokeService.createSwapIntent (static)', () => {
     chainConfig: sodax.config.getHubChainConfig(),
   };
 
-  const baseCreateIntentParams = <K extends SpokeChainKey>(srcChainKey: K, overrides?: Partial<CreateIntentParams<K>>) =>
+  const baseCreateIntentParams = <K extends SpokeChainKey>(
+    srcChainKey: K,
+    overrides?: Partial<CreateIntentParams<K>>,
+  ) =>
     ({
       inputToken: ERC20_TOKEN,
       outputToken: '0x4444444444444444444444444444444444444444' as Address,
@@ -693,7 +727,8 @@ describe('SonicSpokeService.createSwapIntent (static)', () => {
     });
 
     it('returns `inputAmount - feeAmount` as the intent inputAmount when a partner fee is configured', async () => {
-      mocks.createIntentFeeData.mockReturnValueOnce(['0xpartnerfee' as Hex, 12_345n]);
+      mocks.createIntentFeeData.mockReturnValueOnce(['0xfeeenvelope' as Hex, 12_345n]);
+      mocks.composeIntentData.mockReturnValueOnce('0xpartnerfee' as Hex);
       const fee: PartnerFee = {
         address: '0x9999999999999999999999999999999999999999' as Address,
         amount: 12_345n,
@@ -709,6 +744,7 @@ describe('SonicSpokeService.createSwapIntent (static)', () => {
       });
 
       expect(mocks.createIntentFeeData).toHaveBeenCalledWith(fee, 1_000_000n);
+      expect(mocks.composeIntentData).toHaveBeenCalledWith('0xfeeenvelope', undefined);
       expect(feeAmount).toBe(12_345n);
       expect(intent.inputAmount).toBe(1_000_000n - 12_345n);
       expect(intent.data).toBe('0xpartnerfee');

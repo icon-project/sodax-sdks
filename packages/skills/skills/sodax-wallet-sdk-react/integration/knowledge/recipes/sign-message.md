@@ -25,9 +25,9 @@ const signature = await sign.mutateAsync({
 | `xChainType` | `ChainType` | Which chain to sign with (`'EVM'`, `'BITCOIN'`, …) |
 | `message` | `string` | Plain UTF-8; per-chain wrappers handle encoding |
 
-Return type is the discriminated union `` `0x${string}` | Uint8Array | string | undefined `` because each chain returns its native signature shape (hex for EVM, base64 for Stellar, base58 for Solana, etc.). Cast or branch on `xChainType` when consuming.
+Return type is the discriminated union `` `0x${string}` | Uint8Array | string | undefined `` because each chain returns its native signature shape (hex for EVM, base64 for Stellar and Solana, etc.). Cast or branch on `xChainType` when consuming.
 
-`undefined` is returned (not thrown) when the chain doesn't implement `signMessage` — currently only ICON. A one-time `console.warn` accompanies the `undefined`.
+`undefined` is returned (not thrown) when the chain doesn't implement `signMessage` — ICON, NEAR, and Stacks. A one-time `console.warn` accompanies the `undefined`.
 
 ---
 
@@ -36,13 +36,13 @@ Return type is the discriminated union `` `0x${string}` | Uint8Array | string | 
 | Chain | Implementation | Signature shape |
 |-------|----------------|-----------------|
 | EVM | `signMessageAsync` from wagmi → personal_sign | `` `0x${string}` `` |
-| Solana | `signMessage` from `@solana/wallet-adapter` | `Uint8Array` |
-| Sui | `signPersonalMessage` from `@mysten/dapp-kit` | `string` (base64 signature + bytes) |
+| Solana | `signMessage` from `@solana/wallet-adapter` | `string` (base64) |
+| Sui | `signPersonalMessage` from `@mysten/dapp-kit` | `string` (base64 signature) |
 | Bitcoin | Auto-detect: BIP-322 (P2WPKH/P2TR) or ECDSA (P2SH/P2PKH) | `string` |
 | Stellar | `walletsKit.signMessage` from `@creit.tech/stellar-wallets-kit` | `string` (base64) |
 | Injective | `walletStrategy.signArbitrary` from `@injectivelabs/wallet-base` | `string` |
-| NEAR | NEAR connector's `signMessage` | `string` |
-| Stacks | `signMessage` from `@stacks/connect` | `string` |
+| **NEAR** | **Not supported** — registers no `signMessage` action | `undefined` |
+| **Stacks** | **Not supported** — registers no `signMessage` action | `undefined` |
 | **ICON** | **Not supported** — Hana wallet does not expose a signing API | `undefined` |
 
 ---
@@ -53,10 +53,10 @@ Bitcoin's signing flow inspects the connected address and picks the right method
 
 | Address type | Signing method | Connectors that support it |
 |--------------|----------------|----------------------------|
-| P2WPKH (native segwit, `bc1q…`) | BIP-322 | Unisat, Xverse, OKX |
-| P2TR (taproot, `bc1p…`) | BIP-322 | Unisat, Xverse, OKX |
-| P2SH (legacy multi-sig, `3…`) | ECDSA | Unisat, Xverse, OKX |
-| P2PKH (legacy, `1…`) | ECDSA | Unisat, Xverse, OKX |
+| P2WPKH (native segwit, `bc1q…`) | BIP-322 | Unisat, Xverse, OKX, Hana |
+| P2TR (taproot, `bc1p…`) | BIP-322 | Unisat, Xverse, OKX, Hana |
+| P2SH (legacy multi-sig, `3…`) | ECDSA | Unisat, Xverse, OKX, Hana |
+| P2PKH (legacy, `1…`) | ECDSA | Unisat, Xverse, OKX, Hana |
 
 If a custom connector implements only one of the two methods, calling `signMessage` from a wrongly-typed address surfaces the error inline.
 

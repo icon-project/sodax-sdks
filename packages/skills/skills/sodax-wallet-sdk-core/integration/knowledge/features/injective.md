@@ -59,9 +59,11 @@ type InjectiveWalletDefaults = {
 | Method | Signature | Returns |
 |---|---|---|
 | `getWalletAddress` | `() => Promise<InjectiveEoaAddress>` | `inj1…` address |
-| `getWalletPubKey` | `() => Promise<string>` | hex pubkey |
+| `getWalletPubKey` | `() => Promise<string>` | pubkey string |
 | `getRawTransaction` | `(…) => Promise<…>` | unsigned tx — useful for inspection / external signing |
 | `execute` | `(…) => Promise<…>` | broadcast result |
+| `sendTransaction` | `(signedTxRaw: Uint8Array) => Promise<string>` | tx hash — broadcasts an already-signed proto-encoded Cosmos `TxRaw` |
+| `signAndSendTransaction` | `(tx: InjectiveRawTransaction) => Promise<string>` | tx hash — signs + broadcasts an unsigned raw tx (the Swaps-API / SDK-handoff path) |
 
 `getRawTransaction` and `execute` merge `defaults.defaultFunds`, `defaults.defaultMemo`, `defaults.sequence`, `defaults.accountNumber` into the produced tx where the caller omits them.
 
@@ -80,7 +82,7 @@ type InjectiveWalletDefaults = {
 
 - **`secret` is mandatory in the PK variant.** A top-level `privateKey` field is **not** accepted — wrap in `{ secret: { privateKey } }`. Same shape in v1 and v2; if you see top-level `privateKey` in user code, it was always wrong.
 - **`evmOptions` is reserved.** It is declared in the type but **not currently read** by the provider. It exists to keep the config shape stable while EVM sidecar support on Injective is in development.
-- **`chainId` and `network` must agree.** Pass `Mainnet` + `injective-1` for mainnet, `Testnet` + `injective-888` for testnet. Mismatched pairs cause broadcasting errors that look like RPC failures.
+- **`chainId` is required by the `SecretInjectiveWalletConfig` type, but only `network` drives endpoint selection.** The constructor reads `config.network` (`getNetworkEndpoints(config.network)`, `MsgBroadcasterWithPk({ network })`) — `config.chainId` is checked by the type guard but never consumed for network/endpoint selection, so a `chainId`/`network` mismatch does not itself produce a runtime RPC failure. Still pass a coherent pair (e.g. `Mainnet` + `injective-1`).
 - **`sequence` / `accountNumber` defaults are zero.** Override via `defaults` or per call when the on-chain account state differs (otherwise broadcasting fails with "incorrect account sequence").
 
 ---

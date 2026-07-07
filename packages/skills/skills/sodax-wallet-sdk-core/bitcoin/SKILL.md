@@ -30,7 +30,7 @@ Granular skill for `BitcoinWalletProvider` — the low-level Bitcoin wallet for 
 - **Forgetting the `type` discriminant.** Bitcoin and Stellar use an **uppercase `type` field** — every other chain uses field presence. Easy to confuse.
 - **Passing PSBT as hex to `signTransaction`.** Inputs are **base64**-encoded; in browser-extension mode the same base64 is forwarded to `walletsKit.signPsbt` (whose param is misleadingly named `psbtHex`).
 - **Calling `sendBitcoin` unconditionally.** It's optional on the wallet kit — guard on its presence (Xverse / Unisat implement it; others don't).
-- **Assuming a default `addressType`.** Optional in PK mode; bitcoinjs picks one (typically P2WPKH on mainnet) — set it explicitly if it matters.
+- **Assuming the `addressType` default is network-dependent.** Optional in PK mode; when omitted the provider defaults it to `P2WPKH` (a constant — same on testnet and mainnet). Set it explicitly for P2TR / P2SH / P2PKH.
 - **Mixing PK + browser-extension fields.** Discriminated union — don't `as`.
 
 ## Migration workflow (port v1 → v2)

@@ -234,4 +234,6 @@ export interface IStacksWalletProvider extends ICoreWallet {
   getPublicKey: () => Promise<string>;
   getBalance: (address: string) => Promise<bigint>;
   sendTransaction: (txParams: StacksTransactionParams) => Promise<string>;
+  /** Sign and broadcast an unsigned `StacksRawTransaction` (e.g. from the Swaps API). Returns the tx id. */
+  signAndSendTransaction?: (params: StacksRawTransaction) => Promise<string>;
 }

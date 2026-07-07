@@ -591,9 +591,9 @@ The 4 orchestrators (`supply`/`borrow`/`withdraw`/`repay`) share **one** type â€
 
 | Method | Error type | Codes |
 |---|---|---|
-| `supply` / `borrow` / `withdraw` / `repay` | `MoneyMarketOrchestrationError` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `UNKNOWN` |
-| `createSupplyIntent` / `createBorrowIntent` / `createWithdrawIntent` / `createRepayIntent` | `MoneyMarketCreateIntentError` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
-| `approve` | `MoneyMarketApproveError` | `VALIDATION_FAILED`, `APPROVE_FAILED`, `UNKNOWN` |
+| `supply` / `borrow` / `withdraw` / `repay` | `MoneyMarketOrchestrationError` | `USER_REJECTED`, `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `UNKNOWN` |
+| `createSupplyIntent` / `createBorrowIntent` / `createWithdrawIntent` / `createRepayIntent` | `MoneyMarketCreateIntentError` | `USER_REJECTED`, `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
+| `approve` | `MoneyMarketApproveError` | `USER_REJECTED`, `VALIDATION_FAILED`, `APPROVE_FAILED`, `UNKNOWN` |
 | `isAllowanceValid` | `MoneyMarketAllowanceCheckError` | `VALIDATION_FAILED`, `ALLOWANCE_CHECK_FAILED`, `UNKNOWN` |
 | `estimateGas` | `MoneyMarketGasEstimationError` | `VALIDATION_FAILED`, `GAS_ESTIMATION_FAILED`, `UNKNOWN` |
 

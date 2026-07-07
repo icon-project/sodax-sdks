@@ -12,7 +12,7 @@ Pair: [`features/money-market.md`](../../../integration/knowledge/features/money
 4. **`MoneyMarketSupplyParams` etc. are now generic** (`MoneyMarketSupplyParams<K extends SpokeChainKey>`). Add a chain-key generic to your params variables, or let TS infer from a literal `srcChainKey`.
 5. **Replace `moneyMarketSupportedTokens[chainId]` with `sodax.moneyMarket.getSupportedTokensByChainId(chainKey)`.**
 6. **Replace `hubAssets[chainId][address]?.vault` with `token.vault`** (now baked into `XToken`). Same for `token.hubAsset`.
-7. **`sodax.moneyMarket.getAToken(...)` returns `Erc20Token & { chainKey }`, not a full `XToken`.** No `hubAsset` / `vault` on the result — look up the full `XToken` via `sodax.config.getMoneyMarketToken(chainKey, address)` if needed.
+7. **`sodax.moneyMarket.data.getATokenData(aToken)` returns a plain `Erc20Token`** (`{ name, symbol, decimals, address }`), not a full `XToken`. No `chainKey` / `hubAsset` / `vault` on the result — look up the full `XToken` via `sodax.config.getMoneyMarketToken(chainKey, address)` if needed.
 8. **Errors → `SodaxError` + `Result<T>`.** v1's `MoneyMarketError<MoneyMarketErrorCode>` is gone. The CODE moved from `error.code` to `error.message`-style? **No** — it's still on `error.code`, but the union changed (see crosswalk below).
 
 ## Type / symbol cheat sheet
@@ -192,7 +192,7 @@ Cross-cutting traps (Result destructuring, error-model migration, srcChain/dstCh
 
 1. **Forgetting `srcChainKey` + `srcAddress` in params.** TypeScript surfaces this as `error TS1360: Type '{ token, amount, action }' does not satisfy the expected type 'MoneyMarketSupplyParams'`. Add both required fields.
 2. **Borrow/repay default delivery to source.** Omit `dstChainKey`/`dstAddress` if you want same-chain. Don't pass them as the same value as `srcChainKey` / `srcAddress` — let the default kick in.
-3. **`sodax.moneyMarket.getAToken(...)` returns a partial token.** `Erc20Token & { chainKey }`, not a full `XToken` — no `vault` / `hubAsset` on the result. Look up the full `XToken` via `sodax.config.getMoneyMarketToken(chainKey, address)` separately if you need those fields.
+3. **`sodax.moneyMarket.data.getATokenData(aToken)` returns a plain `Erc20Token`.** `{ name, symbol, decimals, address }`, not a full `XToken` — no `chainKey` / `vault` / `hubAsset` on the result. Look up the full `XToken` via `sodax.config.getMoneyMarketToken(chainKey, address)` separately if you need those fields.
 4. **`hubAssets` is gone.** Anything that walked it for vault lookup must use `token.vault` directly.
 5. **`baseChainInfo[chain].id` is gone — entries have `.key`.** Common in `ChainSelector`-style components.
 6. **`spokeProvider.chainConfig.chain.type === 'EVM'`** is gone. Use `getChainType(chainKey) === 'EVM'` from `@sodax/sdk`.

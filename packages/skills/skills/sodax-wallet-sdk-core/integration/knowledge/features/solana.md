@@ -63,7 +63,7 @@ type SolanaWalletDefaults = {
 | `getWalletAddress` | `() => Promise<string>` | base58 public key |
 | `getWalletBase58PublicKey` | `() => SolanaBase58PublicKey` | synchronous public key |
 | `sendTransaction` | `(rawTx: SolanaSerializedTransaction, options?: SendOptions) => Promise<string>` | signature |
-| `sendTransactionWithConfirmation` | `(rawTx, sendOptions?, confirmCommitment?) => Promise<string>` | signature, after confirmation |
+| `sendTransactionWithConfirmation` | `(rawTx, optionsOrCommitment?: Commitment \| { send?: SendOptions; commitment?: Commitment }) => Promise<string>` | signature, after confirmation |
 | `waitForConfirmation` | `(signature, commitment?) => Promise<…>` | confirmation status |
 | `buildV0Txn` | `(rawInstructions: SolanaRawTransactionInstruction[]) => Promise<SolanaSerializedTransaction>` | serialised v0 transaction |
 | `getAssociatedTokenAddress` | `(mint) => Promise<SolanaBase58PublicKey>` | derived ATA |
@@ -72,7 +72,7 @@ type SolanaWalletDefaults = {
 
 Default slice merging:
 - `defaults.sendOptions` → merged into `sendTransaction(_, options)`.
-- `defaults.confirmCommitment` → falls back when `sendTransactionWithConfirmation(_, _, commit)` is undefined.
+- `defaults.confirmCommitment` → falls back when the commitment resolved from `sendTransactionWithConfirmation`'s 2nd arg (the object's `commitment`, or a bare `Commitment`) is undefined.
 - `defaults.connectionCommitment` / `defaults.connectionConfig` → used at construction time only.
 
 ---

@@ -1,4 +1,4 @@
-import { type SolverConfig, spokeChainConfig, ChainKeys, type SpokeChainKey } from '@sodax/dapp-kit';
+import { type SolverConfig, spokeChainConfig, baseChainInfo, ChainKeys, type SpokeChainKey } from '@sodax/dapp-kit';
 
 declare global {
   interface Window {
@@ -8,6 +8,11 @@ declare global {
 
 export function chainIdToChainName(chainId: SpokeChainKey): string {
   return spokeChainConfig[chainId].chain.name;
+}
+
+/** Default chain logo URL from @sodax/types (baseChainInfo). */
+export function chainIdToChainLogo(chainId: SpokeChainKey): string {
+  return spokeChainConfig[chainId].chain.logo;
 }
 
 export const stagingSolverConfig = {
@@ -34,43 +39,44 @@ export interface ChainUI {
   icon: string;
 }
 
+// Chain logos are sourced from @sodax/types (baseChainInfo[key].logo), keyed by ChainKeys value.
 export const EVM_CHAIN_ICONS = [
-  '/chain/ethereum.png',
-  '/chain/0x2105.base.png',
-  '/chain/0x38.bsc.png',
-  '/chain/0xa86a.avax.png',
-  '/chain/0x89.polygon.png',
-  '/chain/0xa.optimism.png',
-  '/chain/0xa4b1.arbitrum.png',
-  '/chain/sonic.png',
-  '/chain/lightlink.png',
-  '/chain/hyper.png',
-  '/chain/0x2019.kaia.png',
-  '/chain/redbelly.png',
-];
+  ChainKeys.ETHEREUM_MAINNET,
+  ChainKeys.BASE_MAINNET,
+  ChainKeys.BSC_MAINNET,
+  ChainKeys.AVALANCHE_MAINNET,
+  ChainKeys.POLYGON_MAINNET,
+  ChainKeys.OPTIMISM_MAINNET,
+  ChainKeys.ARBITRUM_MAINNET,
+  ChainKeys.SONIC_MAINNET,
+  ChainKeys.LIGHTLINK_MAINNET,
+  ChainKeys.HYPEREVM_MAINNET,
+  ChainKeys.KAIA_MAINNET,
+  ChainKeys.REDBELLY_MAINNET,
+].map(key => baseChainInfo[key].logo);
 
 /**
- * Available chains for UI components with display information
- * Maps SPOKE_CHAIN_IDS to human-readable names and icon paths
+ * Available chains for UI components with display information.
+ * Names + logos come from @sodax/types (baseChainInfo) so the SDK is the single source of truth.
  */
 export const availableChains: ChainUI[] = [
-  { id: ChainKeys.SONIC_MAINNET, name: 'Sonic', icon: '/chain/sonic.png' },
-  { id: ChainKeys.ETHEREUM_MAINNET, name: 'Ethereum', icon: '/chain/ethereum.png' },
-  { id: ChainKeys.SOLANA_MAINNET, name: 'Solana', icon: '/chain/solana.png' },
-  { id: ChainKeys.BASE_MAINNET, name: 'Base', icon: '/chain/0x2105.base.png' },
-  { id: ChainKeys.ARBITRUM_MAINNET, name: 'Arbitrum', icon: '/chain/0xa4b1.arbitrum.png' },
-  { id: ChainKeys.SUI_MAINNET, name: 'Sui', icon: '/chain/sui.png' },
-  { id: ChainKeys.BSC_MAINNET, name: 'BNB Chain', icon: '/chain/0x38.bsc.png' },
-  { id: ChainKeys.POLYGON_MAINNET, name: 'Polygon', icon: '/chain/0x89.polygon.png' },
-  { id: ChainKeys.AVALANCHE_MAINNET, name: 'Avalanche', icon: '/chain/0xa86a.avax.png' },
-  { id: ChainKeys.OPTIMISM_MAINNET, name: 'Optimism', icon: '/chain/0xa.optimism.png' },
-  { id: ChainKeys.STELLAR_MAINNET, name: 'Stellar', icon: '/chain/stellar.png' },
-  { id: ChainKeys.ICON_MAINNET, name: 'ICON', icon: '/chain/0x1.icon.png' },
-  { id: ChainKeys.LIGHTLINK_MAINNET, name: 'LightLink', icon: '/chain/lightlink.png' },
-  { id: ChainKeys.HYPEREVM_MAINNET, name: 'Hyper', icon: '/chain/hyper.png' },
-  { id: ChainKeys.KAIA_MAINNET, name: 'Kaia', icon: '/chain/0x2019.kaia.png' },
-  { id: ChainKeys.REDBELLY_MAINNET, name: 'Redbelly', icon: '/chain/redbelly.png' },
-];
+  ChainKeys.SONIC_MAINNET,
+  ChainKeys.ETHEREUM_MAINNET,
+  ChainKeys.SOLANA_MAINNET,
+  ChainKeys.BASE_MAINNET,
+  ChainKeys.ARBITRUM_MAINNET,
+  ChainKeys.SUI_MAINNET,
+  ChainKeys.BSC_MAINNET,
+  ChainKeys.POLYGON_MAINNET,
+  ChainKeys.AVALANCHE_MAINNET,
+  ChainKeys.OPTIMISM_MAINNET,
+  ChainKeys.STELLAR_MAINNET,
+  ChainKeys.ICON_MAINNET,
+  ChainKeys.LIGHTLINK_MAINNET,
+  ChainKeys.HYPEREVM_MAINNET,
+  ChainKeys.KAIA_MAINNET,
+  ChainKeys.REDBELLY_MAINNET,
+].map(key => ({ id: key, name: baseChainInfo[key].name, icon: baseChainInfo[key].logo }));
 
 /**
  * Helper function to get chain UI data by chain ID
