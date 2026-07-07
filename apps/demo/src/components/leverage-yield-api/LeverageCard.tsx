@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatMutationFailureMessage } from '@/lib/utils';
-import { parseUnits } from 'viem';
+import { formatUnits, parseUnits } from 'viem';
 import type {
   CreateDepositIntentParamsV2,
   CreateWithdrawIntentParamsV2,
@@ -23,6 +23,8 @@ import {
   ChainKeys,
   getSupportedSolverTokens,
   useSodaxContext,
+  useXBalances,
+  useGetUserHubWalletAddress,
   useLeverageYieldApiAllowance,
   useLeverageYieldApiApprove,
   useLeverageYieldApiCreateDepositIntent,
@@ -37,7 +39,13 @@ import {
   useLeverageYieldApiWithdrawQuote,
   useLeverageYieldApiSubmitTx,
 } from '@sodax/dapp-kit';
-import { getXChainType, useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
+import {
+  getXChainType,
+  useEvmSwitchChain,
+  useWalletProvider,
+  useXAccount,
+  useXService,
+} from '@sodax/wallet-sdk-react';
 import type { LeverageYieldApiOrder } from '@/components/leverage-yield-api/OrderStatus';
 import { LEVERAGE_YIELD_API_CONFIG } from '@/components/leverage-yield-api/lib/config';
 import { toIntentRequest } from '@/components/swaps-api/lib/mappers';
@@ -61,6 +69,19 @@ function applySlippageMinOut(quotedAmount: string, slippagePct: string): string 
 function formatRayPct(ray: string | undefined): string {
   if (ray === undefined) return '—';
   return `${(Number(ray) / 1e25).toFixed(2)}%`;
+}
+
+/** 18-decimal fixed-point (wei / WAD / vault shares) → trimmed human string. */
+function formatUnits18(value: string | undefined, dp = 4): string {
+  if (value === undefined) return '—';
+  return Number(formatUnits(BigInt(value), 18)).toFixed(dp);
+}
+
+/** WAD health factor → human string; `type(uint256).max` (no debt) shows as ∞. */
+function formatHealthFactor(wad: string | undefined): string {
+  if (wad === undefined) return '—';
+  const hf = Number(formatUnits(BigInt(wad), 18));
+  return hf > 1e9 ? '∞' : hf.toFixed(2);
 }
 
 /** A token dropdown backed by the solver-supported token list for a chain. */
@@ -118,6 +139,8 @@ export default function LeverageCard({
   const supportedChains = useMemo(() => sodax.config.getSupportedSpokeChains() as string[], [sodax]);
 
   const [slippage, setSlippage] = useState<string>('0.5');
+  // Controlled so the footer can show ONLY the active tab's action (deposit vs. withdraw).
+  const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw'>('deposit');
 
   // ── Vault registry ──
   const { data: vaults } = useLeverageYieldApiVaults({ params: { apiConfig } });
@@ -149,6 +172,18 @@ export default function LeverageCard({
   const { isWrongChain: isDepositWrongChain, handleSwitchChain: handleDepositSwitchChain } = useEvmSwitchChain({
     xChainId: depositChain as SpokeChainKey,
   });
+
+  // Input-token balance is a wallet-layer read (not part of the Leverage Yield API).
+  const depositXService = useXService({ xChainType: getXChainType(depositChain as SpokeChainKey) });
+  const { data: depositBalances } = useXBalances({
+    params: {
+      xService: depositXService,
+      xChainId: depositChain as SpokeChainKey,
+      xTokens: depositToken ? [depositToken] : [],
+      address: depositAccount.address,
+    },
+  });
+  const depositTokenBalance = depositBalances?.[depositToken?.address ?? ''] ?? 0n;
 
   const depositQuoteBody: LeverageYieldDepositQuoteRequestV2 | undefined = useMemo(() => {
     if (!selectedVault || !depositToken || !debouncedDepositAmount || Number(debouncedDepositAmount) <= 0) {
@@ -194,8 +229,14 @@ export default function LeverageCard({
   });
   const hasAllowed = allowance?.valid === true;
 
+  // lsoda* shares are minted to the user's derived HUB WALLET, not the EOA (see the SDK `deposit()`
+  // `dstAddress: hubWallet`). Querying `balanceOf(vault, EOA)` always returns 0 — resolve the hub
+  // wallet and read the balance there.
+  const { data: depositHubWallet } = useGetUserHubWalletAddress({
+    params: { spokeChainId: depositChain as SpokeChainKey, spokeAddress: depositAccount.address },
+  });
   const { data: shareBalance } = useLeverageYieldApiShareBalance({
-    params: { vault: selectedVault?.vault, owner: depositAccount.address, apiConfig },
+    params: { vault: selectedVault?.vault, owner: depositHubWallet, apiConfig },
   });
 
   const { mutateAsyncSafe: approve } = useLeverageYieldApiApprove();
@@ -275,61 +316,68 @@ export default function LeverageCard({
   };
 
   // ══════════════════════════════ WITHDRAW ══════════════════════════════
-  const [withdrawSignChain, setWithdrawSignChain] = useState<string>(ChainKeys.ARBITRUM_MAINNET);
-  const [withdrawDstChain, setWithdrawDstChain] = useState<string>(ChainKeys.ARBITRUM_MAINNET);
+  // One chain for the whole withdraw: the user signs the hub-wallet spend on it AND receives the
+  // swapped-out token there. It must be the chain the position was deposited from — that's where the
+  // lsoda*-holding hub wallet is derived.
+  const [withdrawChain, setWithdrawChain] = useState<string>(ChainKeys.ARBITRUM_MAINNET);
   const withdrawTokens = useMemo(
-    () => (withdrawDstChain ? getSupportedSolverTokens(withdrawDstChain as SpokeChainKey) : []),
-    [withdrawDstChain],
+    () => (withdrawChain ? getSupportedSolverTokens(withdrawChain as SpokeChainKey) : []),
+    [withdrawChain],
   );
   const [withdrawToken, setWithdrawToken] = useState<XToken | undefined>(undefined);
   const [withdrawShares, setWithdrawShares] = useState<string>('');
   const debouncedWithdrawShares = useDebouncedValue(withdrawShares);
 
-  const withdrawSignAccount = useXAccount({ xChainId: withdrawSignChain as SpokeChainKey });
-  const withdrawSignWalletProvider = useWalletProvider({ xChainId: withdrawSignChain as SpokeChainKey });
-  const withdrawDstAccount = useXAccount({ xChainId: withdrawDstChain as SpokeChainKey });
+  const withdrawAccount = useXAccount({ xChainId: withdrawChain as SpokeChainKey });
+  const withdrawWalletProvider = useWalletProvider({ xChainId: withdrawChain as SpokeChainKey });
   const { isWrongChain: isWithdrawWrongChain, handleSwitchChain: handleWithdrawSwitchChain } = useEvmSwitchChain({
-    xChainId: withdrawSignChain as SpokeChainKey,
+    xChainId: withdrawChain as SpokeChainKey,
+  });
+
+  // The withdraw spends lsoda* from the hub wallet derived on this chain — show that balance/Max.
+  const { data: withdrawHubWallet } = useGetUserHubWalletAddress({
+    params: { spokeChainId: withdrawChain as SpokeChainKey, spokeAddress: withdrawAccount.address },
+  });
+  const { data: withdrawShareBalance } = useLeverageYieldApiShareBalance({
+    params: { vault: selectedVault?.vault, owner: withdrawHubWallet, apiConfig },
   });
 
   const withdrawQuoteBody: LeverageYieldWithdrawQuoteRequestV2 | undefined = useMemo(() => {
-    if (!selectedVault || !withdrawToken || !withdrawSignChain || Number(debouncedWithdrawShares) <= 0) return undefined;
+    if (!selectedVault || !withdrawToken || !withdrawChain || Number(debouncedWithdrawShares) <= 0) return undefined;
     return {
       vault: selectedVault.vault,
-      srcChainKey: withdrawSignChain,
+      srcChainKey: withdrawChain,
       tokenDst: withdrawToken.address,
-      tokenDstChainKey: withdrawDstChain,
+      tokenDstChainKey: withdrawChain,
       amount: parseUnits(debouncedWithdrawShares, SHARE_DECIMALS).toString(),
       quoteType: 'exact_input',
     };
-  }, [selectedVault, withdrawToken, withdrawSignChain, withdrawDstChain, debouncedWithdrawShares]);
+  }, [selectedVault, withdrawToken, withdrawChain, debouncedWithdrawShares]);
 
   const { data: withdrawQuote, isFetching: isWithdrawQuoting } = useLeverageYieldApiWithdrawQuote({
     params: { body: withdrawQuoteBody, apiConfig },
   });
 
   const withdrawIntentParams: CreateWithdrawIntentParamsV2 | undefined = useMemo(() => {
-    if (!selectedVault || !withdrawToken || !withdrawSignAccount.address || !withdrawDstAccount.address) return undefined;
+    if (!selectedVault || !withdrawToken || !withdrawAccount.address) return undefined;
     if (!withdrawQuote?.quotedAmount) return undefined;
     return {
       vault: selectedVault.vault,
-      srcChainKey: withdrawSignChain,
-      srcAddress: withdrawSignAccount.address,
-      dstChainKey: withdrawDstChain,
+      srcChainKey: withdrawChain,
+      srcAddress: withdrawAccount.address,
+      dstChainKey: withdrawChain,
       outputToken: withdrawToken.address,
       inputAmount: parseUnits(debouncedWithdrawShares, SHARE_DECIMALS).toString(),
       minOutputAmount: applySlippageMinOut(withdrawQuote.quotedAmount, slippage),
-      recipient: withdrawDstAccount.address,
+      recipient: withdrawAccount.address,
       deadline: deadlineData?.deadline,
     };
   }, [
     selectedVault,
     withdrawToken,
-    withdrawSignAccount.address,
-    withdrawDstAccount.address,
+    withdrawAccount.address,
     withdrawQuote,
-    withdrawSignChain,
-    withdrawDstChain,
+    withdrawChain,
     debouncedWithdrawShares,
     slippage,
     deadlineData,
@@ -340,7 +388,7 @@ export default function LeverageCard({
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
 
   const handleWithdraw = async (): Promise<void> => {
-    if (!withdrawIntentParams || !withdrawSignWalletProvider || !withdrawSignAccount.address) return;
+    if (!withdrawIntentParams || !withdrawWalletProvider || !withdrawAccount.address) return;
     setWithdrawError(null);
     setIsWithdrawing(true);
     try {
@@ -354,15 +402,15 @@ export default function LeverageCard({
       const { tx, intent, relayData } = created.value;
 
       const spokeTxHash = await signAndBroadcastSwapsApiTx({
-        chainKey: withdrawSignChain as SpokeChainKey,
+        chainKey: withdrawChain as SpokeChainKey,
         tx,
-        walletProvider: withdrawSignWalletProvider,
+        walletProvider: withdrawWalletProvider,
       });
 
       const request: SubmitTxRequestV2 = {
         txHash: spokeTxHash,
-        srcChainKey: withdrawSignChain,
-        walletAddress: withdrawSignAccount.address,
+        srcChainKey: withdrawChain,
+        walletAddress: withdrawAccount.address,
         intent: toIntentRequest(intent),
         relayData: relayData.payload,
       };
@@ -373,7 +421,7 @@ export default function LeverageCard({
       }
       setOrders(prev => [
         ...prev,
-        { txHash: spokeTxHash, srcChainKey: withdrawSignChain, apiBaseURL: apiConfig.baseURL, kind: 'withdraw' },
+        { txHash: spokeTxHash, srcChainKey: withdrawChain, apiBaseURL: apiConfig.baseURL, kind: 'withdraw' },
       ]);
     } catch (error) {
       setWithdrawError(formatMutationFailureMessage(error, 'Withdraw signing failed'));
@@ -383,7 +431,7 @@ export default function LeverageCard({
   };
 
   const depositSignable = !depositChain || isSignableSwapsApiChain(depositChain as SpokeChainKey) || getXChainType(depositChain as SpokeChainKey) === 'EVM';
-  const withdrawSignable = !withdrawSignChain || isSignableSwapsApiChain(withdrawSignChain as SpokeChainKey);
+  const withdrawSignable = !withdrawChain || isSignableSwapsApiChain(withdrawChain as SpokeChainKey);
 
   return (
     <Card className="w-full max-w-lg">
@@ -411,14 +459,19 @@ export default function LeverageCard({
         {selectedVault && (
           <div className="rounded-md border p-3 text-sm space-y-1">
             <div>Effective APR: {formatRayPct(effectiveApr?.effectiveNetAprRay)}</div>
-            <div>Total Assets: {totalAssets?.totalAssets ?? '—'}</div>
+            <div>Total Assets: {formatUnits18(totalAssets?.totalAssets)}</div>
             {position && (
               <>
                 <div>LTV: {(Number(position.ltv) / 100).toFixed(2)}%</div>
-                <div>Health Factor (WAD): {position.healthFactor}</div>
+                <div>Health Factor: {formatHealthFactor(position.healthFactor)}</div>
               </>
             )}
-            <div>Your Shares: {shareBalance?.balance ?? '—'}</div>
+            <div>Your Shares: {formatUnits18(shareBalance?.balance, 6)}</div>
+            {depositHubWallet && (
+              <div className="pt-1 text-xs text-muted-foreground break-all">
+                Position wallet (holds lsoda*): {depositHubWallet}
+              </div>
+            )}
           </div>
         )}
 
@@ -427,7 +480,7 @@ export default function LeverageCard({
           <Input id="slippage" value={slippage} onChange={e => setSlippage(e.target.value)} />
         </div>
 
-        <Tabs defaultValue="deposit">
+        <Tabs value={activeTab} onValueChange={v => setActiveTab(v as 'deposit' | 'withdraw')}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="deposit">Deposit</TabsTrigger>
             <TabsTrigger value="withdraw">Withdraw</TabsTrigger>
@@ -461,9 +514,24 @@ export default function LeverageCard({
                 onChange={e => setDepositAmount(e.target.value)}
                 placeholder="0.0"
               />
+              {depositToken && depositAccount.address && (
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>
+                    Balance: {formatUnits(depositTokenBalance, depositToken.decimals)} {depositToken.symbol}
+                  </span>
+                  <button
+                    type="button"
+                    className="underline"
+                    onClick={() => setDepositAmount(formatUnits(depositTokenBalance, depositToken.decimals))}
+                  >
+                    Max
+                  </button>
+                </div>
+              )}
             </div>
             <div className="text-sm text-muted-foreground">
-              Quoted shares: {isDepositQuoting ? 'quoting…' : (depositQuote?.quotedAmount ?? '—')}
+              Quoted shares:{' '}
+              {isDepositQuoting ? 'quoting…' : depositQuote ? formatUnits18(depositQuote.quotedAmount, 6) : '—'}
             </div>
             {depositError && <div className="text-red-500 text-sm">{depositError}</div>}
           </TabsContent>
@@ -472,22 +540,14 @@ export default function LeverageCard({
           <TabsContent value="withdraw" className="space-y-4">
             <SelectChain
               chainList={supportedChains}
-              value={withdrawSignChain}
-              setChain={setWithdrawSignChain}
-              placeholder="Sign chain (hub-wallet source)"
-              id="withdraw-sign-chain"
-              label="Sign chain"
-            />
-            <SelectChain
-              chainList={supportedChains}
-              value={withdrawDstChain}
+              value={withdrawChain}
               setChain={c => {
-                setWithdrawDstChain(c);
+                setWithdrawChain(c);
                 setWithdrawToken(undefined);
               }}
-              placeholder="Destination chain"
-              id="withdraw-dst-chain"
-              label="Destination chain"
+              placeholder="Chain (must match your deposit chain)"
+              id="withdraw-chain"
+              label="Chain"
             />
             <SelectToken
               tokens={withdrawTokens}
@@ -497,16 +557,33 @@ export default function LeverageCard({
               label="Output token"
             />
             <div className="space-y-2">
-              <Label htmlFor="withdraw-shares">Shares (lsoda*, 18 decimals)</Label>
+              <Label htmlFor="withdraw-shares">Shares (lsoda*)</Label>
               <Input
                 id="withdraw-shares"
                 value={withdrawShares}
                 onChange={e => setWithdrawShares(e.target.value)}
                 placeholder="0.0"
               />
+              {withdrawShareBalance && withdrawAccount.address && (
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Your shares: {formatUnits18(withdrawShareBalance.balance, 6)}</span>
+                  <button
+                    type="button"
+                    className="underline"
+                    onClick={() => setWithdrawShares(formatUnits(BigInt(withdrawShareBalance.balance), SHARE_DECIMALS))}
+                  >
+                    Max
+                  </button>
+                </div>
+              )}
             </div>
             <div className="text-sm text-muted-foreground">
-              Quoted output: {isWithdrawQuoting ? 'quoting…' : (withdrawQuote?.quotedAmount ?? '—')}
+              Quoted output:{' '}
+              {isWithdrawQuoting
+                ? 'quoting…'
+                : withdrawQuote && withdrawToken
+                  ? `${formatUnits(BigInt(withdrawQuote.quotedAmount), withdrawToken.decimals)} ${withdrawToken.symbol}`
+                  : '—'}
             </div>
             {withdrawError && <div className="text-red-500 text-sm">{withdrawError}</div>}
           </TabsContent>
@@ -514,42 +591,43 @@ export default function LeverageCard({
       </CardContent>
 
       <CardFooter className="flex flex-col gap-2">
-        {/* Deposit actions */}
-        {isDepositWrongChain ? (
-          <Button className="w-full" onClick={handleDepositSwitchChain}>
-            Switch network
-          </Button>
-        ) : (
-          <>
-            {!hasAllowed && depositIntentParams && (
-              <Button className="w-full" onClick={handleApprove} disabled={isApproving || !depositSignable}>
-                {isApproving ? <Loader2 className="animate-spin" /> : 'Approve (deposit)'}
+        {/* Only the active tab's actions are shown. */}
+        {activeTab === 'deposit' &&
+          (isDepositWrongChain ? (
+            <Button className="w-full" onClick={handleDepositSwitchChain}>
+              Switch network
+            </Button>
+          ) : (
+            <>
+              {!hasAllowed && depositIntentParams && (
+                <Button className="w-full" onClick={handleApprove} disabled={isApproving || !depositSignable}>
+                  {isApproving ? <Loader2 className="animate-spin" /> : 'Approve'}
+                </Button>
+              )}
+              <Button
+                className="w-full"
+                onClick={handleDeposit}
+                disabled={!depositIntentParams || !hasAllowed || isDepositing || !depositSignable}
+              >
+                {isDepositing ? <Loader2 className="animate-spin" /> : 'Deposit'}
               </Button>
-            )}
+            </>
+          ))}
+
+        {activeTab === 'withdraw' &&
+          (isWithdrawWrongChain ? (
+            <Button className="w-full" onClick={handleWithdrawSwitchChain}>
+              Switch network
+            </Button>
+          ) : (
             <Button
               className="w-full"
-              onClick={handleDeposit}
-              disabled={!depositIntentParams || !hasAllowed || isDepositing || !depositSignable}
+              onClick={handleWithdraw}
+              disabled={!withdrawIntentParams || isWithdrawing || !withdrawSignable}
             >
-              {isDepositing ? <Loader2 className="animate-spin" /> : 'Deposit'}
+              {isWithdrawing ? <Loader2 className="animate-spin" /> : 'Withdraw'}
             </Button>
-          </>
-        )}
-
-        {/* Withdraw actions */}
-        {isWithdrawWrongChain ? (
-          <Button className="w-full" onClick={handleWithdrawSwitchChain}>
-            Switch network (withdraw)
-          </Button>
-        ) : (
-          <Button
-            className="w-full"
-            onClick={handleWithdraw}
-            disabled={!withdrawIntentParams || isWithdrawing || !withdrawSignable}
-          >
-            {isWithdrawing ? <Loader2 className="animate-spin" /> : 'Withdraw'}
-          </Button>
-        )}
+          ))}
       </CardFooter>
     </Card>
   );
