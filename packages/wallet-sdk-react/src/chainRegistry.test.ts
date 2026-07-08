@@ -81,9 +81,9 @@ describe('createChainServices', () => {
   it('uses default connectors for non-provider chains when no override is given', () => {
     const result = createChainServices({ BITCOIN: {} }, makeStore());
 
-    // BITCOIN defaults: Unisat, Xverse, OKX
+    // BITCOIN defaults: Unisat, Xverse, OKX, Hana
     expect(result.xConnectorsByChain.BITCOIN).toBeDefined();
-    expect(result.xConnectorsByChain.BITCOIN?.length).toBe(3);
+    expect(result.xConnectorsByChain.BITCOIN?.length).toBe(4);
   });
 
   it('respects custom connectors override for non-provider chains', () => {
@@ -192,7 +192,7 @@ describe('createChainServices', () => {
 
 describe('chainRegistry — defaults forwarding to provider constructors', () => {
   describe('BITCOIN.defaultConnectors', () => {
-    it('forwards `defaults` to all 3 connectors (Unisat/Xverse/OKX)', () => {
+    it('forwards `defaults` to all 4 connectors (Unisat/Xverse/OKX/Hana)', () => {
       const walletConfig: SodaxWalletConfig = {
         BITCOIN: {
           chains: {
@@ -207,7 +207,7 @@ describe('chainRegistry — defaults forwarding to provider constructors', () =>
       };
 
       const connectors = chainRegistry.BITCOIN.defaultConnectors(walletConfig);
-      expect(connectors).toHaveLength(3);
+      expect(connectors).toHaveLength(4);
       for (const connector of connectors) {
         expect((connector as unknown as { defaults?: unknown }).defaults).toEqual({ defaultFinalize: true });
       }

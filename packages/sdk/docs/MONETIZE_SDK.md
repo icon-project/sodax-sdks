@@ -259,6 +259,61 @@ if (claimResult.ok) {
 Use `createIntentAutoSwap` instead of `swap` when you need manual control over the solver
 notification step (e.g. to retry independently).
 
+### Step 5 — Same-token claims (no conversion) and recovery
+
+The solver cannot fill a swap whose output token equals its input token. If a partner's configured
+output token is the same asset as the fee token they are claiming (e.g. claiming BTC fees while the
+auto-swap output is BTC), `swap` rejects it up front with `VALIDATION_FAILED` instead of creating an
+unfillable intent that would lock the funds.
+
+To deliver such a fee **as-is**, skip the swap and move the wrapped fee token off Sonic with the
+bridge — to its native chain, or to a Sonic address for same-chain delivery:
+
+```typescript
+const withdrawResult = await sodax.bridge.bridge({
+  params: {
+    srcChainKey: ChainKeys.SONIC_MAINNET,
+    srcAddress: '0xYourSonicAddress',
+    srcToken: '0xFeeTokenHubAddress', // the wrapped fee token's address on Sonic
+    amount: 1_000_000n,
+    dstChainKey: ChainKeys.SONIC_MAINNET, // or the fee token's native chain
+    dstToken: '0xFeeTokenHubAddress', // same hub asset for Sonic; the original token address on a native chain
+    recipient: '0xRecipient',
+  },
+  walletProvider,
+});
+```
+
+Bridging from Sonic pulls the token via the partner's hub-wallet router, so it needs a bridge
+allowance first (`sodax.bridge.isAllowanceValid` / `sodax.bridge.approve`) — a different spender than
+the ProtocolIntents approval used by `swap`.
+
+If a same-token claim was already submitted before this guard existed, the funds sit in an unfillable
+intent. Recover them with `cancelIntent`, which calls ProtocolIntents' own `cancelIntent(fromToken,
+toToken)` and refunds the locked amount to the partner. This is the only authorized cancel path: the
+intent's creator is the ProtocolIntents contract, so the generic `SwapService.cancelIntent` reverts
+`Unauthorized()`.
+
+```typescript
+// Detect a stuck intent for a token pair (0x0…0 == none):
+const intentHash = await sodax.partners.feeClaim.getUserIntent({
+  user: '0xYourSonicAddress',
+  fromToken: '0xFeeTokenHubAddress',
+  toToken: '0xOutputTokenHubAddress', // same as fromToken for a same-token claim
+});
+
+// Recover (refunds the locked tokens to your wallet):
+const recoverResult = await sodax.partners.feeClaim.cancelIntent({
+  params: {
+    srcChainKey: ChainKeys.SONIC_MAINNET,
+    srcAddress: '0xYourSonicAddress',
+    fromToken: '0xFeeTokenHubAddress',
+    toToken: '0xOutputTokenHubAddress',
+  },
+  walletProvider,
+});
+```
+
 ### Error handling
 
 All `partners.feeClaim` methods return `Promise<Result<T, SodaxError<PartnerErrorCode>>>` from
@@ -278,6 +333,7 @@ if (!result.ok) {
     case 'LOOKUP_FAILED':
       // Read failed — context.method is one of:
       //   'fetchAssetsBalances' | 'getAutoSwapPreferences' | 'isTokenApproved'
+      //   | 'getUserIntent' | 'getIntentDetails'
       break;
     case 'APPROVE_FAILED':
       // approveToken transaction failed.

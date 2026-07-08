@@ -1,0 +1,69 @@
+{
+  "name": "@sodax/swaps-api",
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "version": "0.0.1-rc.0",
+  "description": "Minimal type-safe HTTP client for the SODAX backend Swaps API v2",
+  "license": "MIT",
+  "keywords": ["sodax", "swaps", "api", "sdk", "valibot", "multichain"],
+  "homepage": "https://github.com/icon-project/sodax-sdks/tree/main/packages/swaps-api",
+  "bugs": {
+    "url": "https://github.com/icon-project/sodax-sdks/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/icon-project/sodax-sdks"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=20.12.0"
+  },
+  "files": ["dist", "!dist/**/*.map"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "ci": "pnpm run pretty && pnpm run build && pnpm run test",
+    "checkTs": "tsc --noEmit",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "pretty": "biome format . --write",
+    "lint": "biome lint . --write",
+    "check-exports": "attw --pack",
+    "check:circular-deps": "madge --circular $(find ./src -name '*.ts')",
+    "check:knip": "knip",
+    "clean": "rm -rf node_modules && rm -rf dist && rm -rf .turbo"
+  },
+  "dependencies": {
+    "@sodax/types": "workspace:*",
+    "valibot": "catalog:"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "catalog:",
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "knip": "catalog:",
+    "madge": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

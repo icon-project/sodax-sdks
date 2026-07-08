@@ -56,10 +56,9 @@ const spokeTxHash = await mySigningInfra.signAndBroadcast(tx);
 // the relay payload returned by `createIntent`.
 const relayResult = await relayTxAndWaitPacket({
   relayerApiEndpoint,
-  srcChainKey: params.srcChainKey,
-  dstChainKey: params.dstChainKey,
-  txHash: spokeTxHash,
-  payload: relayData.payload,
+  chainKey: params.srcChainKey,
+  srcTxHash: spokeTxHash,
+  data: relayData,            // the whole RelayExtraData ({ address, payload }), not just .payload
   timeout: 60_000,
 });
 ```

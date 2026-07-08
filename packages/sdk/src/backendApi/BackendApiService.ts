@@ -11,51 +11,21 @@ import type {
   GetSpokeChainConfigApiResponse,
   GetSwapTokensApiResponse,
   GetSwapTokensByChainIdApiResponse,
-  IConfigApi,
+  IConfigApiV1,
   Result,
   SpokeChainKey,
-  SubmitSwapTxRequest,
-  SubmitSwapTxResponse,
-  GetSubmitSwapTxStatusParams,
-  SubmitSwapTxStatusResponse,
   ApiConfig,
+  BaseApiConfig,
   SodaxLogger,
 } from '@sodax/types';
-
-import { isSubmitSwapTxResponse, isSubmitSwapTxStatusResponse } from '../shared/guards.js';
 import { consoleLogger } from '../shared/logger.js';
 
-/**
- * Shape used to type certain backend responses that include a `data` envelope.
- * Not all endpoints use this wrapper — the `request` method parses raw JSON
- * directly as `T` without any envelope. Use this interface only when a specific
- * endpoint is documented to return `{ data, status, message? }`.
- */
-export interface ApiResponse<T = unknown> {
-  data: T;
-  status: number;
-  message?: string;
-}
-
-/** Shape passed to `makeRequest` to configure a single HTTP call. */
-export interface RequestConfig {
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
-  headers?: Record<string, string>;
-  body?: string;
-  timeout?: number;
-  baseURL?: string;
-}
-
-/**
- * Per-call overrides that take precedence over the `ApiConfig` the service
- * was constructed with. Useful for directing a single request to a different
- * host or applying request-specific headers (e.g. auth tokens, tracing IDs).
- */
-export type RequestOverrideConfig = {
-  baseURL?: string;
-  timeout?: number;
-  headers?: Record<string, string>;
-};
+import * as v from 'valibot';
+import { makeRequest, type RequestConfig, type RequestOverrideConfig } from './api-utils.js';
+import { SwapsApiService } from './SwapsApiService.js';
+import { resolveBaseApiConfig, resolveSwapsApiConfig } from './apiConfig.js';
+import * as schemas from './backendApiSchemas.js';
+import { SodaxError } from '../errors/SodaxError.js';
 
 /** Full details of a single swap intent as stored and returned by the backend. */
 export interface IntentResponse {
@@ -68,16 +38,16 @@ export interface IntentResponse {
   intent: {
     intentId: string;
     creator: string;
-    inputToken: `0x${string}`;
-    outputToken: `0x${string}`;
+    inputToken: string;
+    outputToken: string;
     inputAmount: string;
     minOutputAmount: string;
     deadline: string;
     allowPartialFill: boolean;
     srcChain: number;
     dstChain: number;
-    srcAddress: `0x${string}`;
-    dstAddress: `0x${string}`;
+    srcAddress: string;
+    dstAddress: string;
     solver: string;
     data: string;
   };
@@ -198,78 +168,32 @@ export interface MoneyMarketBorrowers {
  * - **Money market** — query per-user positions, per-reserve asset stats,
  *   and paginated borrower/supplier lists.
  *
- * All public methods return `Promise<Result<T>>` — they never throw. On
- * network failure, timeout, or a non-2xx HTTP response the returned Result
- * has `ok: false` with a descriptive `Error` in the `error` field.
+ * All public methods return `Promise<Result<T>>` — they never throw. On network
+ * failure, timeout, non-2xx HTTP response, or unexpected response shape the
+ * returned Result has `ok: false` with a canonical `SodaxError<'EXTERNAL_API_ERROR'>`
+ * (`feature: 'backend'`, `context.api: 'backend'`) in the `error` field; the
+ * underlying failure is preserved on `error.cause`.
  *
  * Per-call request overrides (base URL, timeout, headers) can be passed as
  * the optional last argument to any method via `RequestOverrideConfig`.
  */
-export class BackendApiService implements IConfigApi {
+export class BackendApiService implements IConfigApiV1 {
+  // sub-services exposing domain-specific APIs
+  public readonly swaps: SwapsApiService;
 
+  // resolved base-API slice of the ApiConfig union (flat config, or its `baseApiConfig`)
+  private readonly config: BaseApiConfig;
   private readonly headers: Record<string, string>;
   private readonly logger: SodaxLogger;
 
-  constructor(
-    private readonly config: ApiConfig,
-    logger: SodaxLogger = consoleLogger,
-  ) {
-    this.headers = { ...config.headers };
+  constructor(config: ApiConfig, logger: SodaxLogger = consoleLogger) {
+    this.config = resolveBaseApiConfig(config);
+    this.headers = { ...this.config.headers };
     this.logger = logger;
-  }
-
-  /**
-   * Execute a single HTTP request and return the parsed JSON body.
-   *
-   * Applies an `AbortController`-backed timeout (falls back to `this.config.timeout`
-   * when `config.timeout` is absent). Throws on non-2xx status codes or when the
-   * request exceeds the timeout, so callers should use {@link request} instead of
-   * calling this directly.
-   *
-   * @throws `Error('HTTP_REQUEST_FAILED')` on non-2xx responses.
-   * @throws `Error('REQUEST_TIMEOUT')` when the request exceeds the timeout.
-   * @throws `Error('UNKNOWN_REQUEST_ERROR')` for any other unexpected failure.
-   */
-  private async makeRequest<T>(endpoint: string, config: RequestConfig): Promise<T> {
-    const url = config.baseURL ? `${config.baseURL}${endpoint}` : `${this.config.baseURL}${endpoint}`;
-    const headers = { ...this.headers, ...config.headers };
-
-    // Create AbortController for timeout
-    const controller = new AbortController();
-    const timeout = config.timeout ?? this.config.timeout;
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-    try {
-      const response = await fetch(url, {
-        method: config.method,
-        headers,
-        body: config.body,
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error('HTTP_REQUEST_FAILED', { cause: new Error(`HTTP ${response.status}: ${errorText}`) });
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      clearTimeout(timeoutId);
-
-      if (error instanceof Error) {
-        if (error.name === 'AbortError') {
-          throw new Error('REQUEST_TIMEOUT', { cause: new Error(`Request timeout after ${timeout}ms`) });
-        }
-        this.logger.error('[BackendApiService] Request error', error);
-        throw error;
-      }
-
-      this.logger.error('[BackendApiService] Unknown error', error);
-      throw new Error('UNKNOWN_REQUEST_ERROR', { cause: error });
-    }
+    // Resolve the swaps slice here (where the ApiConfig union is available) and hand the
+    // sub-service its concrete SwapsApiConfig plus the shared logger — it does not see the union,
+    // and must route diagnostics through the same consumer-selected sink as the rest of the SDK.
+    this.swaps = new SwapsApiService(resolveSwapsApiConfig(config), this.logger);
   }
 
   /**
@@ -277,12 +201,87 @@ export class BackendApiService implements IConfigApi {
    * than propagated as thrown exceptions. Every public endpoint method delegates
    * here instead of calling `makeRequest` directly.
    */
-  private async request<T>(endpoint: string, config: RequestConfig): Promise<Result<T>> {
+  /**
+   * Fold any per-call override (carried on `config` alongside `method`/`body`) over the service
+   * defaults: baseURL truthy-fallback (an empty-string override defers to the default), timeout
+   * nullish-fallback, headers merged (override wins per key). Mirrors the original makeRequest merge.
+   */
+  private resolveRequestConfig(config: RequestConfig): RequestConfig {
+    const { baseURL, timeout, headers, ...rest } = config;
+    return {
+      ...rest,
+      baseURL: baseURL || this.config.baseURL,
+      timeout: timeout ?? this.config.timeout,
+      headers: { ...this.headers, ...headers },
+    };
+  }
+
+  /**
+   * Wrap a thrown transport failure (HTTP_REQUEST_FAILED / REQUEST_TIMEOUT / network error) as the
+   * canonical backend `SodaxError` — identical shape to SwapsApiService; the underlying failure is
+   * preserved on `error.cause`.
+   */
+  private toExternalApiError(endpoint: string, error: unknown): SodaxError<'EXTERNAL_API_ERROR'> {
+    return new SodaxError(
+      'EXTERNAL_API_ERROR',
+      error instanceof Error ? error.message : `Backend API request to ${endpoint} failed`,
+      { feature: 'backend', cause: error, context: { api: 'backend', endpoint } },
+    );
+  }
+
+  /**
+   * Issue a request and validate the JSON body against `schema`, wrapping the result in `Result<T>`.
+   * Mirrors {@link SwapsApiService}: a 2xx body that fails the schema is surfaced as
+   * `EXTERNAL_API_ERROR` (`context.reason: 'invalid_response_shape'`) rather than returned untyped.
+   * Every data/token/money-market method delegates here; the config/relay reads use
+   * {@link requestUnvalidated} instead.
+   */
+  private async request<S extends v.GenericSchema>(
+    endpoint: string,
+    config: RequestConfig,
+    schema: S,
+  ): Promise<Result<v.InferOutput<S>, SodaxError<'EXTERNAL_API_ERROR'>>> {
     try {
-      const value = await this.makeRequest<T>(endpoint, config);
+      const raw = await makeRequest<unknown>({
+        endpoint,
+        config: this.resolveRequestConfig(config),
+        logger: this.logger,
+        serviceLabel: 'BackendApiService',
+      });
+      const parsed = v.safeParse(schema, raw);
+      if (!parsed.success) {
+        return {
+          ok: false,
+          error: new SodaxError('EXTERNAL_API_ERROR', `Invalid response shape from backend API for ${endpoint}`, {
+            feature: 'backend',
+            context: { api: 'backend', endpoint, reason: 'invalid_response_shape', issues: v.flatten(parsed.issues) },
+          }),
+        };
+      }
+      return { ok: true, value: parsed.output };
+    } catch (error) {
+      return { ok: false, error: this.toExternalApiError(endpoint, error) };
+    }
+  }
+
+  /**
+   * Issue a request WITHOUT response-shape validation (passthrough typing). Reserved for the
+   * config/relay reads whose shapes are too large/brittle to schema-validate (`SodaxConfig` via
+   * `getAllConfig`, `SpokeChainConfigMap` via `getSpokeChainConfig`) or carry `bigint` values that
+   * cannot survive JSON validation (`getRelayChainIdMap`). `ConfigService` version-gates and falls
+   * back to packaged defaults, so it relies on no response-shape guarantee from these endpoints.
+   */
+  private async requestUnvalidated<T>(endpoint: string, config: RequestConfig): Promise<Result<T>> {
+    try {
+      const value = await makeRequest<T>({
+        endpoint,
+        config: this.resolveRequestConfig(config),
+        logger: this.logger,
+        serviceLabel: 'BackendApiService',
+      });
       return { ok: true, value };
     } catch (error) {
-      return { ok: false, error };
+      return { ok: false, error: this.toExternalApiError(endpoint, error) };
     }
   }
 
@@ -298,7 +297,7 @@ export class BackendApiService implements IConfigApi {
    *   open/closed state, token amounts, and any fill events.
    */
   public async getIntentByTxHash(txHash: string, config?: RequestOverrideConfig): Promise<Result<IntentResponse>> {
-    return this.request<IntentResponse>(`/intent/tx/${txHash}`, { ...config, method: 'GET' });
+    return this.request(`/intent/tx/${txHash}`, { ...config, method: 'GET' }, schemas.IntentResponseSchema);
   }
 
   /**
@@ -308,67 +307,7 @@ export class BackendApiService implements IConfigApi {
    * @returns `Result<IntentResponse>` — on success, the full intent details.
    */
   public async getIntentByHash(intentHash: string, config?: RequestOverrideConfig): Promise<Result<IntentResponse>> {
-    return this.request<IntentResponse>(`/intent/${intentHash}`, { ...config, method: 'GET' });
-  }
-
-  // Swap submit-tx endpoints
-  /**
-   * Submit a signed spoke-chain swap transaction to the backend for processing.
-   *
-   * The backend relays the transaction to the hub chain, posts execution data
-   * to the solver, and advances the intent through its lifecycle. The response
-   * shape is validated at runtime via a type guard; an invalid shape is
-   * returned as `{ ok: false }`.
-   *
-   * @param params - The signed transaction hash, source chain key, sender wallet
-   *   address, intent data, and relay data required to process the swap.
-   * @returns `Result<SubmitSwapTxResponse>` — on success, a confirmation object
-   *   with `success: true` and a human-readable `message`.
-   */
-  public async submitSwapTx(
-    params: SubmitSwapTxRequest,
-    config?: RequestOverrideConfig,
-  ): Promise<Result<SubmitSwapTxResponse>> {
-    const result = await this.request<unknown>('/swaps/submit-tx', {
-      ...config,
-      method: 'POST',
-      body: JSON.stringify(params),
-    });
-    if (!result.ok) return result;
-    if (!isSubmitSwapTxResponse(result.value)) {
-      return { ok: false, error: new Error('Invalid submitSwapTx response: unexpected response shape') };
-    }
-    return { ok: true, value: result.value };
-  }
-
-  /**
-   * Poll the backend relay pipeline for the current status of a previously
-   * submitted swap transaction.
-   *
-   * Status progresses through: `pending` → `verifying` → `verified` →
-   * `relaying` → `relayed` → `posting_execution` → `executed` (or `failed`).
-   *
-   * @param params - Object containing the source-chain transaction hash and,
-   *   optionally, the source chain key to disambiguate cross-chain hashes.
-   * @returns `Result<SubmitSwapTxStatusResponse>` — on success, includes the
-   *   current `status`, any `failureReason`, and (once executed) the
-   *   `dstIntentTxHash` on the hub chain.
-   */
-  public async getSubmitSwapTxStatus(
-    params: GetSubmitSwapTxStatusParams,
-    config?: RequestOverrideConfig,
-  ): Promise<Result<SubmitSwapTxStatusResponse>> {
-    const queryParams = new URLSearchParams();
-    queryParams.append('txHash', params.txHash);
-    if (params.srcChainKey) queryParams.append('srcChainKey', params.srcChainKey);
-
-    const endpoint = `/swaps/submit-tx/status?${queryParams.toString()}`;
-    const result = await this.request<unknown>(endpoint, { ...config, method: 'GET' });
-    if (!result.ok) return result;
-    if (!isSubmitSwapTxStatusResponse(result.value)) {
-      return { ok: false, error: new Error('Invalid submitSwapTxStatus response: unexpected response shape') };
-    }
-    return { ok: true, value: result.value };
+    return this.request(`/intent/${intentHash}`, { ...config, method: 'GET' }, schemas.IntentResponseSchema);
   }
 
   // Solver endpoints
@@ -391,7 +330,7 @@ export class BackendApiService implements IConfigApi {
     const queryString = queryParams.toString();
     const endpoint = `/solver/orderbook?${queryString}`;
 
-    return this.request<OrderbookResponse>(endpoint, { ...config, method: 'GET' });
+    return this.request(endpoint, { ...config, method: 'GET' }, schemas.OrderbookResponseSchema);
   }
 
   /**
@@ -430,7 +369,7 @@ export class BackendApiService implements IConfigApi {
     const endpoint =
       queryString.length > 0 ? `/intent/user/${userAddress}?${queryString}` : `/intent/user/${userAddress}`;
 
-    return this.request<UserIntentsResponse>(endpoint, { ...config, method: 'GET' });
+    return this.request(endpoint, { ...config, method: 'GET' }, schemas.UserIntentsResponseSchema);
   }
 
   // Money Market endpoints
@@ -449,7 +388,11 @@ export class BackendApiService implements IConfigApi {
     userAddress: string,
     config?: RequestOverrideConfig,
   ): Promise<Result<MoneyMarketPosition>> {
-    return this.request<MoneyMarketPosition>(`/moneymarket/position/${userAddress}`, { ...config, method: 'GET' });
+    return this.request(
+      `/moneymarket/position/${userAddress}`,
+      { ...config, method: 'GET' },
+      schemas.MoneyMarketPositionSchema,
+    );
   }
 
   /**
@@ -459,7 +402,7 @@ export class BackendApiService implements IConfigApi {
    *   snapshots including interest rates, liquidity indices, and participant counts.
    */
   public async getAllMoneyMarketAssets(config?: RequestOverrideConfig): Promise<Result<MoneyMarketAsset[]>> {
-    return this.request<MoneyMarketAsset[]>('/moneymarket/asset/all', { ...config, method: 'GET' });
+    return this.request('/moneymarket/asset/all', { ...config, method: 'GET' }, schemas.MoneyMarketAssetsSchema);
   }
 
   /**
@@ -469,8 +412,15 @@ export class BackendApiService implements IConfigApi {
    * @returns `Result<MoneyMarketAsset>` — on success, the reserve snapshot
    *   including interest rates, total balances, and liquidity indices.
    */
-  public async getMoneyMarketAsset(reserveAddress: string, config?: RequestOverrideConfig): Promise<Result<MoneyMarketAsset>> {
-    return this.request<MoneyMarketAsset>(`/moneymarket/asset/${reserveAddress}`, { ...config, method: 'GET' });
+  public async getMoneyMarketAsset(
+    reserveAddress: string,
+    config?: RequestOverrideConfig,
+  ): Promise<Result<MoneyMarketAsset>> {
+    return this.request(
+      `/moneymarket/asset/${reserveAddress}`,
+      { ...config, method: 'GET' },
+      schemas.MoneyMarketAssetSchema,
+    );
   }
 
   /**
@@ -494,7 +444,7 @@ export class BackendApiService implements IConfigApi {
     const queryString = queryParams.toString();
     const endpoint = `/moneymarket/asset/${reserveAddress}/borrowers?${queryString}`;
 
-    return this.request<MoneyMarketAssetBorrowers>(endpoint, { ...config, method: 'GET' });
+    return this.request(endpoint, { ...config, method: 'GET' }, schemas.MoneyMarketAssetBorrowersSchema);
   }
 
   /**
@@ -518,7 +468,7 @@ export class BackendApiService implements IConfigApi {
     const queryString = queryParams.toString();
     const endpoint = `/moneymarket/asset/${reserveAddress}/suppliers?${queryString}`;
 
-    return this.request<MoneyMarketAssetSuppliers>(endpoint, { ...config, method: 'GET' });
+    return this.request(endpoint, { ...config, method: 'GET' }, schemas.MoneyMarketAssetSuppliersSchema);
   }
 
   /**
@@ -540,7 +490,7 @@ export class BackendApiService implements IConfigApi {
     const queryString = queryParams.toString();
     const endpoint = `/moneymarket/borrowers?${queryString}`;
 
-    return this.request<MoneyMarketBorrowers>(endpoint, { ...config, method: 'GET' });
+    return this.request(endpoint, { ...config, method: 'GET' }, schemas.MoneyMarketBorrowersSchema);
   }
 
   /**
@@ -554,7 +504,7 @@ export class BackendApiService implements IConfigApi {
    *   `config` is the current `SodaxConfig` used by all SDK services.
    */
   public async getAllConfig(config?: RequestOverrideConfig): Promise<Result<GetAllConfigApiResponse>> {
-    return this.request<GetAllConfigApiResponse>('/config/all', { ...config, method: 'GET' });
+    return this.requestUnvalidated<GetAllConfigApiResponse>('/config/all', { ...config, method: 'GET' });
   }
 
   /**
@@ -568,7 +518,7 @@ export class BackendApiService implements IConfigApi {
    *   `SpokeChainKey` strings (e.g. `["ethereum", "arbitrum", "solana", …]`).
    */
   public async getChains(config?: RequestOverrideConfig): Promise<Result<GetChainsApiResponse>> {
-    return this.request<GetChainsApiResponse>('/config/spoke/chains', { ...config, method: 'GET' });
+    return this.request('/config/spoke/chains', { ...config, method: 'GET' }, schemas.GetChainsResponseSchema);
   }
 
   /**
@@ -581,7 +531,7 @@ export class BackendApiService implements IConfigApi {
    *   supported spoke chain key to its list of swappable `XToken` definitions.
    */
   public async getSwapTokens(config?: RequestOverrideConfig): Promise<Result<GetSwapTokensApiResponse>> {
-    return this.request<GetSwapTokensApiResponse>('/config/swap/tokens', { ...config, method: 'GET' });
+    return this.request('/config/swap/tokens', { ...config, method: 'GET' }, schemas.TokensByChainMapSchema);
   }
 
   /**
@@ -597,10 +547,7 @@ export class BackendApiService implements IConfigApi {
     chainId: SpokeChainKey,
     config?: RequestOverrideConfig,
   ): Promise<Result<GetSwapTokensByChainIdApiResponse>> {
-    return this.request<GetSwapTokensByChainIdApiResponse>(`/config/swap/${chainId}/tokens`, {
-      ...config,
-      method: 'GET',
-    });
+    return this.request(`/config/swap/${chainId}/tokens`, { ...config, method: 'GET' }, schemas.TokensListSchema);
   }
 
   /**
@@ -613,10 +560,7 @@ export class BackendApiService implements IConfigApi {
    *   each supported spoke chain key to its list of money-market `XToken` definitions.
    */
   public async getMoneyMarketTokens(config?: RequestOverrideConfig): Promise<Result<GetMoneyMarketTokensApiResponse>> {
-    return this.request<GetMoneyMarketTokensApiResponse>('/config/money-market/tokens', {
-      ...config,
-      method: 'GET',
-    });
+    return this.request('/config/money-market/tokens', { ...config, method: 'GET' }, schemas.TokensByChainMapSchema);
   }
 
   /**
@@ -633,10 +577,11 @@ export class BackendApiService implements IConfigApi {
   public async getMoneyMarketReserveAssets(
     config?: RequestOverrideConfig,
   ): Promise<Result<GetMoneyMarketReserveAssetsApiResponse>> {
-    return this.request<GetMoneyMarketReserveAssetsApiResponse>('/config/money-market/reserve-assets', {
-      ...config,
-      method: 'GET',
-    });
+    return this.request(
+      '/config/money-market/reserve-assets',
+      { ...config, method: 'GET' },
+      schemas.ReserveAssetsSchema,
+    );
   }
 
   /**
@@ -653,9 +598,10 @@ export class BackendApiService implements IConfigApi {
     chainId: SpokeChainKey,
     config?: RequestOverrideConfig,
   ): Promise<Result<GetMoneyMarketTokensByChainIdApiResponse>> {
-    return this.request<GetMoneyMarketTokensByChainIdApiResponse>(
+    return this.request(
       `/config/money-market/${chainId}/tokens`,
       { ...config, method: 'GET' },
+      schemas.TokensListSchema,
     );
   }
 
@@ -671,7 +617,7 @@ export class BackendApiService implements IConfigApi {
    *   `IntentRelayChainIdMap` record mapping each spoke chain key to its relay chain ID.
    */
   public async getRelayChainIdMap(config?: RequestOverrideConfig): Promise<Result<GetRelayChainIdMapApiResponse>> {
-    return this.request<GetRelayChainIdMapApiResponse>('/config/relay/chain-id-map', {
+    return this.requestUnvalidated<GetRelayChainIdMapApiResponse>('/config/relay/chain-id-map', {
       ...config,
       method: 'GET',
     });
@@ -689,7 +635,7 @@ export class BackendApiService implements IConfigApi {
    *   `SpokeChainConfigMap` for all currently enabled spoke chains.
    */
   public async getSpokeChainConfig(config?: RequestOverrideConfig): Promise<Result<GetSpokeChainConfigApiResponse>> {
-    return this.request<GetSpokeChainConfigApiResponse>('/config/spoke/all-chains-configs', {
+    return this.requestUnvalidated<GetSpokeChainConfigApiResponse>('/config/spoke/all-chains-configs', {
       ...config,
       method: 'GET',
     });
@@ -702,12 +648,17 @@ export class BackendApiService implements IConfigApi {
    * without constructing a new service instance. Existing header keys are
    * overwritten; keys absent from `headers` are preserved.
    *
+   * The headers are also fanned out to the sub-services (`swaps`), which hold
+   * their own header copies — so a token set here applies to every request made
+   * through this client, including `swaps.*`.
+   *
    * @param headers - Key-value pairs to add or overwrite in the default headers.
    */
   public setHeaders(headers: Record<string, string>): void {
     Object.entries(headers).forEach(([key, value]) => {
       this.headers[key] = value;
     });
+    this.swaps.setHeaders(headers);
   }
 
   /**

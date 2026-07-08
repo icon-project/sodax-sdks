@@ -25,6 +25,7 @@ import {
   ethereumSupportedTokens,
   kaiaSupportedTokens,
   stacksSupportedTokens,
+  hederaSupportedTokens,
 } from './tokens.js';
 
 import { ChainKeys, CHAIN_KEYS, type ChainKey, type ChainType } from './chain-keys.js';
@@ -53,13 +54,14 @@ export const RelayChainIdMap = {
   [ChainKeys.REDBELLY_MAINNET]: 726564n,
   [ChainKeys.KAIA_MAINNET]: 27489n,
   [ChainKeys.STACKS_MAINNET]: 60n,
+  [ChainKeys.HEDERA_MAINNET]: 18501n,
 } as const satisfies Record<ChainKey, bigint>;
 
 export type IntentChainId = (typeof RelayChainIdMap)[keyof typeof RelayChainIdMap];
 export const INTENT_CHAIN_IDS = Object.values(RelayChainIdMap);
 
-export const IntentRelayChainIdToChainKey: Map<IntentRelayChainId, ChainKey> = Object.fromEntries(
-  Object.entries(RelayChainIdMap).map(([chainKey, chainId]) => [chainId, chainKey]),
+export const IntentRelayChainIdToChainKey = new Map<IntentRelayChainId, ChainKey>(
+  Object.entries(RelayChainIdMap).map(([chainKey, chainId]) => [chainId, chainKey as ChainKey]),
 );
 
 /**
@@ -351,6 +353,20 @@ export const baseChainInfo = {
       txUrl: 'https://explorer.hiro.so/txid/',
       addressUrl: 'https://explorer.hiro.so/address/',
       contractUrl: 'https://explorer.hiro.so/txid/',
+    },
+  },
+  [ChainKeys.HEDERA_MAINNET]: {
+    name: 'Hedera',
+    key: ChainKeys.HEDERA_MAINNET,
+    type: 'EVM',
+    chainId: 295,
+    mainnet: true,
+    logo: chainLogo(ChainKeys.HEDERA_MAINNET),
+    explorer: {
+      baseUrl: 'https://hashscan.io/mainnet/',
+      txUrl: 'https://hashscan.io/mainnet/transaction/',
+      addressUrl: 'https://hashscan.io/mainnet/account/',
+      contractUrl: 'https://hashscan.io/mainnet/contract/',
     },
   },
 } as const satisfies Record<ChainKey, BaseChainInfo<ChainType>>;
@@ -990,6 +1006,21 @@ export const spokeChainConfig = {
       maxTimeoutMs: 120_000,
     },
   } as const satisfies StacksSpokeChainConfig,
+  [ChainKeys.HEDERA_MAINNET]: {
+    chain: baseChainInfo[ChainKeys.HEDERA_MAINNET] satisfies BaseChainInfo<'EVM'>,
+    rpcUrl: 'https://mainnet.hashio.io/api',
+    addresses: {
+      assetManager: '0x0df73542cC68bDC01b361d231c60F726B0e0bC05',
+      connection: '0x4555aC13D7338D9E671584C1D118c06B2a3C88eD',
+    },
+    nativeToken: '0x0000000000000000000000000000000000000000' as const,
+    bnUSD: '0x0000000000000000000000000000000000a0286a',
+    supportedTokens: hederaSupportedTokens,
+    pollingConfig: {
+      pollingIntervalMs: 2000,
+      maxTimeoutMs: 60_000,
+    },
+  } as const satisfies EvmSpokeChainConfig,
 } as const satisfies Record<SpokeChainKey, SpokeChainConfig>;
 
 export const supportedSpokeChains: SpokeChainKey[] = Object.keys(spokeChainConfig) as SpokeChainKey[];

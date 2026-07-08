@@ -1,6 +1,6 @@
 ---
 name: sodax-dapp-kit-auxiliary-services
-description: 'Granular skill for the @sodax/dapp-kit v2 auxiliary surfaces — partner fee claiming (useFeeClaimSwap, useApproveToken, useSetSwapPreference, useGetAutoSwapPreferences, useIsTokenApproved), recovery (useHubAssetBalances, useWithdrawHubAsset), read-only backend queries (useBackendIntentByTxHash, useBackendUserIntents, useBackendOrderbook, useBackendMoneyMarketPosition, useBackendSubmitSwapTx), and shared utilities (useSodaxContext, useHubProvider, useXBalances, useDeriveUserWalletAddress, useEstimateGas, useStellarTrustlineCheck, useRequestTrustline). Use when a React dapp task is partner fees, recovering stuck hub assets, backend data reads (intent tracking / orderbook / MM data, no wallet), or cross-cutting utilities (token balances, gas estimation, Stellar trustlines). Covers BOTH integration and migration. Links into the parent sodax-dapp-kit knowledge tree.'
+description: 'Granular skill for the @sodax/dapp-kit v2 auxiliary surfaces — partner fee claiming (useFeeClaimSwap, useApproveToken, useSetSwapPreference, useGetAutoSwapPreferences, useIsTokenApproved), recovery (useHubAssetBalances, useWithdrawHubAsset), read-only backend queries (useBackendIntentByTxHash, useBackendUserIntents, useBackendOrderbook, useBackendMoneyMarketPosition), the Swaps API v2 client hooks (useSwapsApiQuote, useSwapsApiSubmitTx, useSwapsApiStatus), and shared utilities (useSodaxContext, useHubProvider, useXBalances, useDeriveUserWalletAddress, useEstimateGas, useStellarTrustlineCheck, useRequestTrustline). Use when a React dapp task is partner fees, recovering stuck hub assets, backend data reads (intent tracking / orderbook / MM data, no wallet), or cross-cutting utilities (token balances, gas estimation, Stellar trustlines). Covers BOTH integration and migration. Links into the parent sodax-dapp-kit knowledge tree.'
 license: MIT
 metadata:
   version: '0.0.1'
@@ -17,7 +17,7 @@ Granular skill for the smaller `@sodax/dapp-kit` v2 surfaces grouped together: *
 2. **Which surface?**
    - **Partner fees:** `useIsTokenApproved` → `useApproveToken` → `useSetSwapPreference` → `useFeeClaimSwap` (returns `IntentAutoSwapResult`, NOT `SwapResponse`); `useGetAutoSwapPreferences`, `useFetchAssetsBalances` for reads.
    - **Recovery:** `useHubAssetBalances` (list stuck hub assets) → `useWithdrawHubAsset` (withdraw one back to a spoke). Follows a *known* failed cross-chain op — investigate the failure first.
-   - **Backend reads (no wallet):** intent tracking (`useBackendIntentByTxHash` polls 1s, `useBackendIntentByHash`, `useBackendUserIntents`), orderbook (`useBackendOrderbook` — `pagination` nests under `params`), MM data (`useBackendMoneyMarketPosition` etc.), swap submission (`useBackendSubmitSwapTx` mutation + `useBackendSubmitSwapTxStatus`).
+   - **Backend reads (no wallet):** intent tracking (`useBackendIntentByTxHash` polls 1s, `useBackendIntentByHash`, `useBackendUserIntents`), orderbook (`useBackendOrderbook` — `pagination` nests under `params`), MM data (`useBackendMoneyMarketPosition` etc.), and the Swaps API v2 client (`useSwapsApi*` — e.g. `useSwapsApiSubmitTx`, `useSwapsApiSubmitTxStatus`, `useSwapsApiQuote`).
    - **Shared utilities:** `useSodaxContext`, `useHubProvider`, `useXBalances` (needs `xService` from wallet-sdk-react), `useDeriveUserWalletAddress` / `useGetUserHubWalletAddress`, `useEstimateGas`, `useStellarTrustlineCheck` / `useRequestTrustline`.
 
 ## Integration workflow (new v2 code)
@@ -55,7 +55,7 @@ Granular skill for the smaller `@sodax/dapp-kit` v2 surfaces grouped together: *
 
 ## Related granular skills (same family)
 
-- [`../swap/SKILL.md`](../swap/SKILL.md) — `useBackendSubmitSwapTx` + intent tracking are the backend half of the step-by-step swap flow; partner fee-claim reuses the swap intent layer.
+- [`../swap/SKILL.md`](../swap/SKILL.md) — `useSwapsApiSubmitTx` + intent tracking are the backend half of the step-by-step swap flow; partner fee-claim reuses the swap intent layer.
 - [`../money-market/SKILL.md`](../money-market/SKILL.md) — backend MM reads complement the on-chain MM action hooks.
 
 For multi-feature tasks, load the broad [`sodax-dapp-kit` skill](../SKILL.md).
