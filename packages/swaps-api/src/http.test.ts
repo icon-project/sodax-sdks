@@ -24,6 +24,7 @@ describe('buildUrl', () => {
   it('joins base and path, trimming a trailing slash and adding a leading one', () => {
     expect(buildUrl('https://h', '/p')).toBe('https://h/p');
     expect(buildUrl('https://h/', '/p')).toBe('https://h/p');
+    expect(buildUrl('https://h//', '/p')).toBe('https://h/p');
     expect(buildUrl('https://h', 'p')).toBe('https://h/p');
   });
 
