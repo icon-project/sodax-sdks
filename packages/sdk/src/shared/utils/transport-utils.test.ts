@@ -21,43 +21,57 @@ function inspectTransport(cfg: EvmRpcConfig) {
   return createPublicClient({ transport: buildEvmRpcTransport(cfg) }).transport;
 }
 
+// The flattened fallback transport exposes each inner endpoint's URL at `transports[i].value.url`.
+// Asserting the URLs (not just the count) proves the right endpoints landed in the right order.
+function endpointUrls(cfg: EvmRpcConfig): string[] {
+  return inspectTransport(cfg).transports.map((t: { value: { url: string } }) => t.value.url);
+}
+
 describe('buildEvmRpcTransport', () => {
   it('builds a fallback transport from the single rpcUrl when rpcUrls is absent', () => {
     const transport = inspectTransport({ rpcUrl: A });
     expect(transport.type).toBe('fallback');
-    expect(transport.transports).toHaveLength(1);
+    expect(endpointUrls({ rpcUrl: A })).toEqual([A]);
   });
 
   it('falls back to the single rpcUrl when rpcUrls is empty — never builds an empty transport', () => {
-    const transport = inspectTransport({ rpcUrl: A, rpcUrls: [] });
-    expect(transport.transports).toHaveLength(1);
+    expect(endpointUrls({ rpcUrl: A, rpcUrls: [] })).toEqual([A]);
   });
 
   it('drops blank rpcUrls entries and keeps the healthy primary when none remain', () => {
     // A malformed all-blank list (e.g. unset env vars) must not suppress the working rpcUrl.
-    const transport = inspectTransport({ rpcUrl: A, rpcUrls: ['', ''] });
-    expect(transport.transports).toHaveLength(1);
+    expect(endpointUrls({ rpcUrl: A, rpcUrls: ['', ''] })).toEqual([A]);
+  });
+
+  it('treats whitespace-only rpcUrls entries as blank and preserves the primary', () => {
+    // A stray space/tab/newline from a shell-interpolated env var must not become a live endpoint.
+    expect(endpointUrls({ rpcUrl: A, rpcUrls: ['   ', '\t', '\n'] })).toEqual([A]);
   });
 
   it('drops blank entries but still lets a usable rpcUrls supersede the primary', () => {
-    const transport = inspectTransport({ rpcUrl: A, rpcUrls: ['', B] });
-    expect(transport.transports).toHaveLength(1);
+    // Proves supersession (not "ignore rpcUrls"): the surviving endpoint is B, and A is gone.
+    expect(endpointUrls({ rpcUrl: A, rpcUrls: ['', B] })).toEqual([B]);
+    expect(endpointUrls({ rpcUrl: A, rpcUrls: ['  ', B] })).toEqual([B]);
   });
 
-  it('includes one inner transport per unique endpoint', () => {
+  it('trims surrounding whitespace off usable endpoints', () => {
+    expect(endpointUrls({ rpcUrl: A, rpcUrls: [`  ${B}  `] })).toEqual([B]);
+  });
+
+  it('includes one inner transport per unique endpoint, primary first, in listed order', () => {
     const transport = inspectTransport({ rpcUrl: A, rpcUrls: [A, B, C] });
     expect(transport.type).toBe('fallback');
-    expect(transport.transports).toHaveLength(3);
+    expect(endpointUrls({ rpcUrl: A, rpcUrls: [A, B, C] })).toEqual([A, B, C]);
   });
 
-  it('dedupes duplicate endpoints', () => {
-    const transport = inspectTransport({ rpcUrl: A, rpcUrls: [A, A, B, B] });
-    expect(transport.transports).toHaveLength(2);
+  it('dedupes duplicate endpoints while preserving first-seen order', () => {
+    expect(endpointUrls({ rpcUrl: A, rpcUrls: [A, A, B, B] })).toEqual([A, B]);
   });
 
-  it('threads rpcOptions (retryCount) into the fallback transport', () => {
-    const transport = inspectTransport({ rpcUrl: A, rpcUrls: [A, B], rpcOptions: { retryCount: 7 } });
+  it('threads rpcOptions (retryCount + retryDelay) into the fallback transport', () => {
+    const transport = inspectTransport({ rpcUrl: A, rpcUrls: [A, B], rpcOptions: { retryCount: 7, retryDelay: 250 } });
     expect(transport.retryCount).toBe(7);
+    expect(transport.retryDelay).toBe(250);
   });
 });
 

@@ -12,7 +12,7 @@ export type EvmRpcConfig = { rpcUrl: string } & RpcFailoverConfig;
  * callers get a uniform type.
  */
 export function buildEvmRpcTransport(cfg: EvmRpcConfig): Transport {
-  const configured = (cfg.rpcUrls ?? []).filter(url => url.length > 0);
+  const configured = (cfg.rpcUrls ?? []).map(url => url.trim()).filter(url => url.length > 0);
   const urls = [...new Set(configured.length > 0 ? configured : [cfg.rpcUrl])];
   // `rank` latency-ranks endpoints via a perpetual background poll; that is pointless (and a dangling
   // timer) with a single endpoint, so only honor it when more than one endpoint survives.
