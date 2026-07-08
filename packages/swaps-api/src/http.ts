@@ -51,7 +51,10 @@ export function buildQuery(query: QueryParams | undefined): string {
 
 /** Join `baseUrl` + `path` + query. `path` is expected to be pre-encoded by the caller. */
 export function buildUrl(baseUrl: string, path: string, query?: QueryParams): string {
-  const base = baseUrl.replace(/\/+$/, '');
+  // Linear trailing-slash trim (avoids a polynomial `/\/+$/` regex over library-supplied input).
+  let end = baseUrl.length;
+  while (end > 0 && baseUrl.codePointAt(end - 1) === 47 /* '/' */) end--;
+  const base = baseUrl.slice(0, end);
   const rel = path.startsWith('/') ? path : `/${path}`;
   return `${base}${rel}${buildQuery(query)}`;
 }
