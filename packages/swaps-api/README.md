@@ -3,21 +3,16 @@
 Minimal, type-safe HTTP client for the SODAX backend **Swaps API v2**.
 
 - Implements the `ISwapsApiV2` contract from `@sodax/types` over `fetch`.
-- Validates responses at runtime with [valibot](https://valibot.dev).
+- Validates every response at runtime with [valibot](https://valibot.dev), and
+  transforms each chain-specific unsigned `tx` back to its domain shape
+  (decimal-string → `bigint`, Injective index-object bytes → `Uint8Array`).
 - Zero dependency on `@sodax/sdk`, viem, or wallet providers — only
   `@sodax/types` (types) and `valibot`.
 
-## Status
-
-**In development (scaffolding stage).** Today the package exposes only the
-contract type:
-
-```ts
-import type { ISwapsApiV2 } from '@sodax/swaps-api';
-```
-
-The runtime client (`SwapsApi`), `SwapsApiError`, and `SwapsApiConfig` are being
-implemented in stages and are **not shipped yet**.
+It is the single source of the swaps wire client: `@sodax/sdk`'s `SwapsApiService`
+(`sodax.api.swaps`) is a thin adapter over this package, adding the SDK's
+`Result<T>` contract, logger, and config resolution on top. Use `@sodax/swaps-api`
+directly when you want just the swaps backend without pulling in the full SDK.
 
 ## Install
 
@@ -25,17 +20,37 @@ implemented in stages and are **not shipped yet**.
 pnpm add @sodax/swaps-api valibot
 ```
 
-## Planned API
-
-The target surface once the runtime client lands:
+## Usage
 
 ```ts
-// Not available yet — shown for direction only.
-import { SwapsApi } from '@sodax/swaps-api';
+import { SwapsApi, SwapsApiError } from '@sodax/swaps-api';
 
 const api = new SwapsApi({ baseUrl: 'https://<swaps-api-host>' });
+
 const tokens = await api.getTokens();
+const quote = await api.getQuote({
+  tokenSrc,
+  tokenSrcChainKey,
+  tokenDst,
+  tokenDstChainKey,
+  amount,
+  quoteType: 'exact_input',
+});
 ```
 
-`baseUrl` will be required and injected by the caller — the package never
-hardcodes environment URLs.
+`baseUrl` is required and injected by the caller — the package never hardcodes
+environment URLs. Optionally set `timeout` (ms — an overall per-call deadline that
+includes retries; on expiry the call throws `TIMEOUT_ERROR`), a custom `fetch` (for
+tests or non-standard runtimes; it receives the timeout `AbortSignal`), and extra `headers`.
+
+## Errors
+
+Every method **throws** a `SwapsApiError` on failure — a single typed error whose
+`code` is one of `NETWORK_ERROR` / `TIMEOUT_ERROR` / `HTTP_ERROR` / `PARSE_ERROR` /
+`VALIDATION_ERROR`, with diagnostic `context` (endpoint, method, path, HTTP status,
+validation issues) and the underlying failure on `.cause`. Idempotent calls (reads,
+polls, pure-compute POSTs like `getQuote`) are retried a few times on transient HTTP /
+network failures; a `timeout` and mutating calls are never retried.
+
+> Note: this throwing contract is intentional and distinct from `@sodax/sdk`'s
+> `sodax.api.swaps`, which wraps these calls and returns `Result<T>` instead of throwing.

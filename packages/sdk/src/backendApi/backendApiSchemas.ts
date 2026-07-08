@@ -6,7 +6,7 @@
 // (The config/relay reads — getAllConfig, getSpokeChainConfig, getRelayChainIdMap — are
 // intentionally NOT validated here; see BackendApiService.requestUnvalidated.)
 //
-// Mirrors swapsApiSchemas.ts: schemas are intentionally NOT pinned with `v.GenericSchema<…>`
+// Same convention as `@sodax/swaps-api`'s response schemas: schemas are intentionally NOT pinned with `v.GenericSchema<…>`
 // (that forces the schema INPUT type to equal the readonly declared type, which trips on
 // covariance for `v.record`/`v.array`). Type fidelity is enforced where each schema is consumed —
 // BackendApiService methods declare their return type, so a schema whose inferred output drifts is
@@ -21,9 +21,9 @@ import * as v from 'valibot';
 import type { Address, ChainKey, GetSwapTokensApiResponse, SpokeChainKey } from '@sodax/types';
 
 // Nominal scalars: validated as strings at runtime, typed as the branded @sodax/types type.
-const ChainKeySchema = v.custom<ChainKey>((input) => typeof input === 'string');
-const SpokeChainKeySchema = v.custom<SpokeChainKey>((input) => typeof input === 'string');
-const AddressSchema = v.custom<Address>((input) => typeof input === 'string');
+const ChainKeySchema = v.custom<ChainKey>(input => typeof input === 'string');
+const SpokeChainKeySchema = v.custom<SpokeChainKey>(input => typeof input === 'string');
+const AddressSchema = v.custom<Address>(input => typeof input === 'string');
 
 /** Cross-chain token descriptor (`XToken`). Shared across the swap/money-market token reads. */
 export const XTokenSchema = v.object({
@@ -183,10 +183,10 @@ export const GetChainsResponseSchema = v.array(SpokeChainKeySchema);
  * `GetMoneyMarketTokensApiResponse` are the same shape, so one schema serves both endpoints.
  */
 export const TokensByChainMapSchema = v.custom<GetSwapTokensApiResponse>(
-  (input) =>
+  input =>
     typeof input === 'object' &&
     input !== null &&
-    Object.values(input).every((tokens) => Array.isArray(tokens) && tokens.every((t) => v.is(XTokenSchema, t))),
+    Object.values(input).every(tokens => Array.isArray(tokens) && tokens.every(t => v.is(XTokenSchema, t))),
 );
 
 /** GET /config/swap/:chainId/tokens · /config/money-market/:chainId/tokens (`readonly XToken[]`). */

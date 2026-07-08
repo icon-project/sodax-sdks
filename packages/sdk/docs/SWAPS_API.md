@@ -151,17 +151,34 @@ The swaps slice layers over the base slice over the defaults (per field) — a c
 
 Every method returns `Result<T, SodaxError<'EXTERNAL_API_ERROR'>>`. On any failure (network, timeout,
 non-2xx HTTP, or response-shape mismatch), the result is `{ ok: false }` with a `SodaxError` carrying
-`feature: 'backend'`, `context.api: 'backend'`, and `context.endpoint` (the path); the underlying
-transport failure is preserved on `error.cause`.
+`feature: 'backend'`, `context.api: 'swaps'`, and `context.endpoint` (the path); the underlying failure
+is preserved on `error.cause`.
 
 ```typescript
 const r = await sodax.api.swaps.getQuote(body);
 if (!r.ok) {
   // r.error.feature === 'backend'; r.error.context.endpoint === '/swaps/quote'
-  // r.error.cause: the HTTP_REQUEST_FAILED / REQUEST_TIMEOUT / validation failure
+  // r.error.context.code / (r.error.cause as SwapsApiError).code:
+  //   NETWORK_ERROR | TIMEOUT_ERROR | HTTP_ERROR | PARSE_ERROR | VALIDATION_ERROR
   return;
 }
 ```
+
+### Implementation note
+
+`SwapsApiService` is a thin adapter over the standalone [`@sodax/swaps-api`](../../swaps-api/README.md)
+package — the single source of the swaps wire client (request building, per-chain `tx`
+validation/transform, response schemas, HTTP). This service adds the SDK conventions on top: the
+`Result<T>` contract, the `SodaxLogger`, `ApiConfig`/`CustomApiConfig` resolution, and per-call
+`RequestOverrideConfig`. Two consequences worth noting:
+
+- **`error.cause` is a `SwapsApiError`** (from `@sodax/swaps-api`), not the raw transport error — read
+  its `code` (`NETWORK_ERROR` | `TIMEOUT_ERROR` | `HTTP_ERROR` | `PARSE_ERROR` | `VALIDATION_ERROR`) to
+  distinguish failure kinds; the same code is mirrored onto `error.context.code`. Both `SwapsApiError`
+  and the `SwapsApiErrorCode` union are re-exported from `@sodax/sdk`, so you can narrow `error.cause`
+  and type `error.context.code` without a direct `@sodax/swaps-api` import.
+- **Idempotent calls retry transient failures.** Reads, polls, and pure-compute POSTs (e.g. `getQuote`)
+  are retried a few times on transient statuses / network errors; mutating calls are never retried.
 
 ## See also
 

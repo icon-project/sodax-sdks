@@ -47,7 +47,7 @@
     "coverage": "vitest run --coverage",
     "pretty": "biome format . --write",
     "lint": "biome lint . --write",
-    "check-exports": "attw --pack --ignore-rules=cjs-resolves-to-esm",
+    "check-exports": "attw --pack",
     "check:circular-deps": "madge --circular $(find ./src -name '*.ts')",
     "check:knip": "knip",
     "clean": "rm -rf node_modules && rm -rf dist && rm -rf .turbo"

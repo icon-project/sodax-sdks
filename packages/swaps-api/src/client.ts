@@ -21,7 +21,7 @@ import type { SwapsApiConfig } from './config.js';
 import { type RequestContext, request } from './http.js';
 import { rawTxSchemaForChainKey } from './rawTxSchemas.js';
 import * as s from './schemas.js';
-import { serializeIntentRequest } from './serialize.js';
+import { serializeBigints, serializeIntentRequest } from './serialize.js';
 
 /** Endpoint paths. Path params are `encodeURIComponent`-escaped here so call sites stay drift-free. */
 const PATHS = {
@@ -66,6 +66,7 @@ export class SwapsApi implements ISwapsApiV2 {
       // caller-provided fetch is used as-is — they own its binding.
       fetchImpl: config.fetch ?? globalThis.fetch.bind(globalThis),
       defaultHeaders: config.headers,
+      timeout: config.timeout,
     };
   }
 
@@ -96,7 +97,9 @@ export class SwapsApi implements ISwapsApiV2 {
       path: PATHS.quote,
       endpoint: 'getQuote',
       idempotent: true,
-      query: { includeTxData: query?.includeTxData },
+      // Only send the flag when truthy — a literal `?includeTxData=false` can read as truthy on a
+      // backend that keys off param presence; absence is the unambiguous "off".
+      query: { includeTxData: query?.includeTxData || undefined },
       body,
       parse: raw => v.parse(s.makeQuoteResponseSchema(txSchema), raw),
     });
@@ -248,7 +251,10 @@ export class SwapsApi implements ISwapsApiV2 {
       path: PATHS.gasEstimate,
       endpoint: 'estimateGas',
       idempotent: true,
-      body,
+      // `tx` is chain-specific and may carry bigint numerics (e.g. an EVM `value` reused from a
+      // create-intent response); deep-serialize them to decimal strings so the rejectBigint body
+      // guard doesn't (correctly) trip on the natural build-tx → estimate-gas flow.
+      body: serializeBigints(body),
       parse: raw => v.parse(s.GasEstimateResponseSchema, raw),
     });
   }

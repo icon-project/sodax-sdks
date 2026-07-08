@@ -661,6 +661,9 @@ importers:
       '@sodax/libs':
         specifier: workspace:*
         version: link:../libs
+      '@sodax/swaps-api':
+        specifier: workspace:*
+        version: link:../swaps-api
       '@sodax/types':
         specifier: workspace:*
         version: link:../types

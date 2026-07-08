@@ -12,6 +12,8 @@ export interface RequestContext {
   baseUrl: string;
   fetchImpl: typeof globalThis.fetch;
   defaultHeaders?: Record<string, string>;
+  /** Overall per-call deadline (ms), enforced across all retries. Omit for no timeout. */
+  timeout?: number;
 }
 
 /** Everything one endpoint call needs. `parse` validates+narrows the response (valibot lives here). */
@@ -67,7 +69,9 @@ async function readBodySafe(response: Response): Promise<unknown> {
 /**
  * Perform one endpoint call: build the URL, send via the injected `fetch`, and on success parse +
  * validate the JSON. Always throws {@link SwapsApiError} on failure (per the throwing contract).
- * Retries only idempotent calls on transient statuses / network errors.
+ * Retries only idempotent calls on transient statuses / network errors. When `ctx.timeout` is set,
+ * a single `AbortController` bounds the WHOLE call (all retries) — a hard latency ceiling — and its
+ * expiry surfaces as `TIMEOUT_ERROR` without consuming the retry budget.
  */
 export async function request<T>(ctx: RequestContext, spec: RequestSpec<T>): Promise<T> {
   const url = buildUrl(ctx.baseUrl, spec.path, spec.query);
@@ -81,47 +85,75 @@ export async function request<T>(ctx: RequestContext, spec: RequestSpec<T>): Pro
     bodyText = JSON.stringify(spec.body, rejectBigint);
   }
 
+  // One deadline for the whole call (shared across retries), so `timeout` is a hard ceiling on total
+  // latency rather than a per-attempt window. No `timeout` → no controller, no abort.
+  const controller = ctx.timeout === undefined ? undefined : new AbortController();
+  const timeoutId = controller ? setTimeout(() => controller.abort(), ctx.timeout) : undefined;
+  // Our deadline fired mid-flight: any in-progress await rejects, so classify as TIMEOUT_ERROR
+  // regardless of which await caught it (signal.aborted is true only when OUR controller aborted).
+  const timedOut = (): boolean => controller?.signal.aborted === true;
+  const timeoutError = (cause?: unknown): SwapsApiError =>
+    new SwapsApiError('TIMEOUT_ERROR', `${spec.endpoint} timed out after ${ctx.timeout}ms`, context, { cause });
+
   const maxAttempts = spec.idempotent ? MAX_RETRIES + 1 : 1;
   let lastError: SwapsApiError | undefined;
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    let response: Response;
-    try {
-      response = await ctx.fetchImpl(url, { method: spec.method, headers, body: bodyText });
-    } catch (cause) {
-      lastError = new SwapsApiError('NETWORK_ERROR', `Request to ${spec.endpoint} failed`, context, { cause });
-      if (attempt < maxAttempts) continue;
-      throw lastError;
+  try {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      let response: Response;
+      try {
+        response = await ctx.fetchImpl(url, {
+          method: spec.method,
+          headers,
+          body: bodyText,
+          signal: controller?.signal,
+        });
+      } catch (cause) {
+        // Our deadline fired: surface a distinct TIMEOUT_ERROR and stop. The budget is spent, and the
+        // already-tripped signal would abort every remaining attempt instantly anyway.
+        if (timedOut()) throw timeoutError(cause);
+        lastError = new SwapsApiError('NETWORK_ERROR', `Request to ${spec.endpoint} failed`, context, { cause });
+        if (attempt < maxAttempts) continue;
+        throw lastError;
+      }
+
+      if (!response.ok) {
+        const body = await readBodySafe(response);
+        // A deadline that fired during the (best-effort) error-body read is still a timeout, not an
+        // HTTP error — and must stop the call rather than fall through to the retry check below.
+        if (timedOut()) throw timeoutError();
+        lastError = new SwapsApiError('HTTP_ERROR', `${spec.endpoint} responded with ${response.status}`, {
+          ...context,
+          status: response.status,
+          body,
+        });
+        if (attempt < maxAttempts && RETRYABLE_STATUS.has(response.status)) continue;
+        throw lastError;
+      }
+
+      let raw: unknown;
+      try {
+        raw = await response.json();
+      } catch (cause) {
+        // The deadline can fire mid-body-read: a rejected json() with the signal aborted is a timeout,
+        // not a malformed body.
+        if (timedOut()) throw timeoutError(cause);
+        throw new SwapsApiError('PARSE_ERROR', `${spec.endpoint} returned a non-JSON body`, context, { cause });
+      }
+
+      try {
+        return spec.parse(raw);
+      } catch (cause) {
+        throw new SwapsApiError('VALIDATION_ERROR', `${spec.endpoint} response failed validation`, {
+          ...context,
+          issues: cause,
+        });
+      }
     }
 
-    if (!response.ok) {
-      const body = await readBodySafe(response);
-      lastError = new SwapsApiError('HTTP_ERROR', `${spec.endpoint} responded with ${response.status}`, {
-        ...context,
-        status: response.status,
-        body,
-      });
-      if (attempt < maxAttempts && RETRYABLE_STATUS.has(response.status)) continue;
-      throw lastError;
-    }
-
-    let raw: unknown;
-    try {
-      raw = await response.json();
-    } catch (cause) {
-      throw new SwapsApiError('PARSE_ERROR', `${spec.endpoint} returned a non-JSON body`, context, { cause });
-    }
-
-    try {
-      return spec.parse(raw);
-    } catch (cause) {
-      throw new SwapsApiError('VALIDATION_ERROR', `${spec.endpoint} response failed validation`, {
-        ...context,
-        issues: cause,
-      });
-    }
+    // Unreachable (maxAttempts >= 1), but keeps the function total for the type checker.
+    throw lastError ?? new SwapsApiError('NETWORK_ERROR', `${spec.endpoint} failed`, context);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
   }
-
-  // Unreachable (maxAttempts >= 1), but keeps the function total for the type checker.
-  throw lastError ?? new SwapsApiError('NETWORK_ERROR', `${spec.endpoint} failed`, context);
 }

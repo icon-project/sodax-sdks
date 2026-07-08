@@ -145,4 +145,90 @@ describe('request', () => {
     ).rejects.toMatchObject({ code: 'HTTP_ERROR' });
     expect(fetchImpl).toHaveBeenCalledOnce();
   });
+
+  it('aborts the whole call as TIMEOUT_ERROR when the deadline elapses, without retrying', async () => {
+    // A fetch that only settles when its signal aborts — i.e. it hangs until the timeout fires.
+    const fetchImpl = vi.fn(
+      (_url: string | URL | Request, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            const err = new Error('aborted');
+            err.name = 'AbortError';
+            reject(err);
+          });
+        }),
+    );
+    await expect(
+      request(
+        { baseUrl: 'https://api.test', fetchImpl, timeout: 5 },
+        { method: 'GET', path: '/x', endpoint: 'getStatus', parse: identity, idempotent: true },
+      ),
+    ).rejects.toMatchObject({ code: 'TIMEOUT_ERROR' });
+    // Timeout is an overall deadline: it stops the call rather than burning the idempotent retry budget.
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
+  it('surfaces TIMEOUT_ERROR (not PARSE_ERROR) when the deadline fires during body read', async () => {
+    // Headers arrive (ok:true) but the body read hangs until the deadline aborts the signal.
+    const fetchImpl = vi.fn((_url: string | URL | Request, init?: RequestInit) =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => {
+              const err = new Error('aborted');
+              err.name = 'AbortError';
+              reject(err);
+            });
+          }),
+      } as unknown as Response),
+    );
+    await expect(
+      request(
+        { baseUrl: 'https://api.test', fetchImpl, timeout: 5 },
+        { method: 'GET', path: '/x', endpoint: 'getTokens', parse: identity, idempotent: true },
+      ),
+    ).rejects.toMatchObject({ code: 'TIMEOUT_ERROR' });
+    // The deadline stops the call; a timeout is never retried.
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
+  it('surfaces TIMEOUT_ERROR when the deadline fires during a non-ok body read', async () => {
+    // A non-2xx response whose error-body read hangs until the deadline aborts the signal.
+    const fetchImpl = vi.fn((_url: string | URL | Request, init?: RequestInit) =>
+      Promise.resolve({
+        ok: false,
+        status: 503,
+        text: () =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => {
+              const err = new Error('aborted');
+              err.name = 'AbortError';
+              reject(err);
+            });
+          }),
+      } as unknown as Response),
+    );
+    await expect(
+      request(
+        { baseUrl: 'https://api.test', fetchImpl, timeout: 5 },
+        { method: 'GET', path: '/x', endpoint: 'getStatus', parse: identity, idempotent: true },
+      ),
+    ).rejects.toMatchObject({ code: 'TIMEOUT_ERROR' });
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
+  it('passes no abort signal and never times out when timeout is unset', async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({ ok: true }));
+    const out = await request(ctx(fetchImpl), {
+      method: 'GET',
+      path: '/x',
+      endpoint: 'getTokens',
+      parse: identity,
+      idempotent: true,
+    });
+    expect(out).toEqual({ ok: true });
+    expect(fetchImpl.mock.calls[0]?.[1]?.signal).toBeUndefined();
+  });
 });

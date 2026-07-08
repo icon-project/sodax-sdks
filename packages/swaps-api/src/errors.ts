@@ -1,6 +1,7 @@
 /** Failure category for every {@link SwapsApiError}. */
 export type SwapsApiErrorCode =
-  | 'NETWORK_ERROR' // fetch threw (offline, DNS, aborted).
+  | 'NETWORK_ERROR' // fetch threw (offline, DNS).
+  | 'TIMEOUT_ERROR' // the request exceeded the configured `timeout` (aborted).
   | 'HTTP_ERROR' // server returned a non-2xx status.
   | 'PARSE_ERROR' // 2xx body was missing or not valid JSON.
   | 'VALIDATION_ERROR'; // body did not match the expected schema (or a request was malformed).

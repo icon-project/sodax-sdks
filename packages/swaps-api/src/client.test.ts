@@ -186,6 +186,21 @@ describe('SwapsApi request shaping', () => {
     await makeApi(fetchImpl2).getQuote(quoteBody, { includeTxData: true });
     expect(fetchImpl2.mock.calls[0]?.[0]).toBe(`${BASE}/swaps/quote?includeTxData=true`);
   });
+
+  it('omits includeTxData when explicitly false (absence is the unambiguous "off")', async () => {
+    const fetchImpl = vi.fn(async () => json({ quotedAmount: '5' }));
+    await makeApi(fetchImpl).getQuote(quoteBody, { includeTxData: false });
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe(`${BASE}/swaps/quote`);
+  });
+
+  it('deep-serializes bigint tx values in estimateGas instead of throwing on them', async () => {
+    const fetchImpl = vi.fn(async () => json({ gas: '21000' }));
+    await makeApi(fetchImpl)
+      .estimateGas({ chainKey: 'sonic', tx: { from: '0xf', to: '0xt', value: 1000n, data: '0x' } })
+      .catch(() => {});
+    const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body));
+    expect(body.tx.value).toBe('1000'); // bigint → decimal string on the wire, no VALIDATION_ERROR
+  });
 });
 
 describe('SwapsApi response handling', () => {

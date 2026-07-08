@@ -12,15 +12,23 @@ import * as v from 'valibot';
 const AddressSchema = v.custom<Address>(input => typeof input === 'string');
 const HexSchema = v.custom<Hex>(input => typeof input === 'string');
 
-/** Decimal-string wire numeric → `bigint` (fails the parse cleanly on a malformed value). */
-const BigintFromString = v.pipe(v.string(), v.toBigint());
+/**
+ * Decimal-string wire numeric → `bigint`. The `^\d+$` gate rejects inputs that `v.toBigint`'s
+ * underlying `BigInt()` would otherwise coerce silently — `''`/whitespace → `0n`, `'0x1f'` → `31n`,
+ * `'1.5'` already throws — so a malformed or non-decimal amount fails the parse instead of yielding a
+ * wrong value. Every field this validates (tx `value`, Injective `accountNumber`, NEAR `gas`/`deposit`)
+ * is a non-negative integer on the wire.
+ */
+const BigintFromString = v.pipe(v.string(), v.regex(/^\d+$/), v.toBigint());
 
 /**
  * Injective `bodyBytes`/`authInfoBytes`: wire `{ "0": N, "1": N, … }` index object → `Uint8Array`.
- * V8 enumerates integer-like keys in ascending numeric order, so `Object.values` is ordered.
+ * V8 enumerates integer-like keys in ascending numeric order, so `Object.values` is ordered. Each
+ * value is validated as a byte (0–255 integer) so an out-of-range/negative/fractional entry fails the
+ * parse rather than being silently wrapped/truncated by `Uint8Array.from`.
  */
 const BytesFromIndexRecord = v.pipe(
-  v.record(v.string(), v.number()),
+  v.record(v.string(), v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(255))),
   v.transform(indexed => Uint8Array.from(Object.values(indexed))),
 );
 

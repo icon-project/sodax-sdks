@@ -9,8 +9,13 @@ response is validated at runtime against a valibot schema, so a backend contract
 Access: `sodax.api.swaps`. Service class: `SwapsApiService`. **Errors:** every failure (network, timeout,
 non-2xx HTTP, or response-shape mismatch) returns `Result<T, SodaxError<'EXTERNAL_API_ERROR'>>` with
 `feature: 'backend'`, `context.api: 'swaps'`, and `context.endpoint` (the path). The underlying failure
-is preserved on `error.cause`. This differs from the feature services (`sodax.swaps`, etc.), whose errors
-carry their own `feature` (`'swap'`, …) — the swaps **HTTP client** is uniformly `feature: 'backend'`.
+is preserved on `error.cause` — a `SwapsApiError` from the `@sodax/swaps-api` client this service wraps
+(read its `code`: `NETWORK_ERROR` | `TIMEOUT_ERROR` | `HTTP_ERROR` | `PARSE_ERROR` | `VALIDATION_ERROR`;
+the same code is mirrored on `error.context.code`, and both `SwapsApiError` and the `SwapsApiErrorCode`
+union are re-exported from `@sodax/sdk`). Idempotent
+reads/polls (and pure-compute POSTs like `getQuote`) retry transient failures; mutating calls do not.
+This differs from the feature services (`sodax.swaps`, etc.), whose errors carry their own `feature`
+(`'swap'`, …) — the swaps **HTTP client** is uniformly `feature: 'backend'`.
 
 ## Methods
 

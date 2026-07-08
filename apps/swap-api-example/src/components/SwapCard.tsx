@@ -1,15 +1,9 @@
 import type {
-  ChainType,
   CreateIntentParamsV2,
   EvmRawTransaction,
   IEvmWalletProvider,
-  IIconWalletProvider,
-  ISolanaWalletProvider,
-  IStacksWalletProvider,
-  ISuiWalletProvider,
   IntentRequestV2,
   IntentResponseV2,
-  RawTxReturnType,
   SpokeChainKey,
   SwapTokenV2,
 } from '@sodax/types';
@@ -21,6 +15,11 @@ import { Button } from '@/components/ui/button';
 import { type Option, SearchSelect } from '@/components/ui/SearchSelect';
 import { swapsApi } from '@/lib/swapsApi';
 import { cn, fromSmallestUnit, toSmallestUnit } from '@/lib/utils';
+
+// This example executes EVM sources only (its README says so): the EVM unsigned tx is the one path
+// verified end-to-end. Quotes work for every chain; a non-EVM source is quote-only here. Signing the
+// other chains' unsigned txs needs their wallet-provider's chain-specific sign→broadcast method — see
+// `sodax.api.swaps` in @sodax/sdk for the full multi-chain flow.
 
 type Token = SwapTokenV2;
 
@@ -34,47 +33,6 @@ function toIntentRequest(r: IntentResponseV2): IntentRequestV2 {
     srcChain: BigInt(r.srcChain),
     dstChain: BigInt(r.dstChain),
   };
-}
-
-// `tx` is now a typed `RawTxReturnType` (value already a bigint); just narrow the union to its EVM
-// variant. The union is structurally ambiguous (EVM/Solana/Sui/Stellar share a shape); this app is EVM-only.
-function asEvmRawTx(tx: RawTxReturnType): EvmRawTransaction {
-  return tx as EvmRawTransaction;
-}
-
-/** Chains whose signing is wired here. EVM is verified end-to-end; the others call the right provider
- *  method but the backend types `tx` as `unknown` (chain-specific), so their casts are assumptions to
- *  verify with a real wallet. Bitcoin/Stellar/Injective/NEAR need a sign→broadcast flow not wired yet. */
-const SIGNABLE: readonly ChainType[] = ['EVM', 'SOLANA', 'SUI', 'STACKS', 'ICON'];
-
-/** Sign + broadcast one unsigned tx through the source chain's wallet — the per-chain `if/else`.
- *  Returns the tx hash / signature. */
-async function signTx(provider: object, chainType: ChainType, tx: unknown): Promise<string> {
-  switch (chainType) {
-    case 'EVM':
-      return (provider as IEvmWalletProvider).sendTransaction(asEvmRawTx(tx as RawTxReturnType));
-    case 'SOLANA': {
-      const p = provider as ISolanaWalletProvider;
-      return p.sendTransaction(tx as Parameters<typeof p.sendTransaction>[0]);
-    }
-    case 'SUI': {
-      const p = provider as ISuiWalletProvider;
-      return p.signAndExecuteTxn(tx as Parameters<typeof p.signAndExecuteTxn>[0]);
-    }
-    case 'STACKS': {
-      const p = provider as IStacksWalletProvider;
-      return p.sendTransaction(tx as Parameters<typeof p.sendTransaction>[0]);
-    }
-    case 'ICON': {
-      const p = provider as IIconWalletProvider;
-      return p.sendTransaction(tx as Parameters<typeof p.sendTransaction>[0]);
-    }
-    default:
-      throw new Error(
-        `This example doesn't wire ${chainType} signing yet — it needs a chain-specific sign→broadcast flow. ` +
-          `The unsigned tx from createIntent is available; sign it with a ${chainType} wallet.`,
-      );
-  }
 }
 
 function errorText(e: unknown): string {
@@ -170,7 +128,7 @@ export function SwapCard() {
   }, [quote, slippage]);
   const minReceived = minOutputAmount && dst ? fromSmallestUnit(minOutputAmount, dst.decimals) : undefined;
 
-  const signable = Boolean(srcChainType && SIGNABLE.includes(srcChainType));
+  const signable = srcChainType === 'EVM';
   const canSwap = Boolean(account.address && walletProvider && src && dst && amount && minOutputAmount && signable);
 
   async function onSwap() {
@@ -199,21 +157,21 @@ export function SwapCard() {
       if (!allowance.valid) {
         setSwapLog('Approve the source token in your wallet…');
         const approve = await swapsApi.approve(params);
-        const approveHash = await signTx(walletProvider, srcChainType, approve.tx);
-        // Wait until the approval is mined (EVM) — otherwise createIntent's tx can revert on a stale allowance.
-        if (srcChainType === 'EVM') {
-          setSwapLog('Waiting for approval to confirm…');
-          await (walletProvider as IEvmWalletProvider).waitForTransactionReceipt(
-            approveHash as Parameters<IEvmWalletProvider['waitForTransactionReceipt']>[0],
-          );
-        }
+        const approveHash = await (walletProvider as IEvmWalletProvider).sendTransaction(
+          approve.tx as EvmRawTransaction,
+        );
+        // Wait until the approval is mined — otherwise createIntent's tx can revert on a stale allowance.
+        setSwapLog('Waiting for approval to confirm…');
+        await (walletProvider as IEvmWalletProvider).waitForTransactionReceipt(
+          approveHash as Parameters<IEvmWalletProvider['waitForTransactionReceipt']>[0],
+        );
       }
 
       setSwapLog('Building the swap…');
       const created = await swapsApi.createIntent(params);
 
       setSwapLog('Confirm the swap in your wallet…');
-      const txHash = await signTx(walletProvider, srcChainType, created.tx);
+      const txHash = await (walletProvider as IEvmWalletProvider).sendTransaction(created.tx as EvmRawTransaction);
 
       setSwapLog('Submitting to the relay…');
       await swapsApi.submitTx({
@@ -336,8 +294,8 @@ export function SwapCard() {
 
       {srcChain && !signable && (
         <p className="mt-2 text-center text-xs text-muted-foreground">
-          Quotes work for any network. Signing is wired for EVM, Solana, Sui, Stacks, and ICON;{' '}
-          {srcChainType ?? 'this network'} isn't wired yet.
+          Quotes work for any network, but on-chain execution in this example is EVM-only —{' '}
+          {srcChainType ?? 'this network'} is quote-only here.
         </p>
       )}
       {swapLog && (
