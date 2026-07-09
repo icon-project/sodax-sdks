@@ -12,6 +12,7 @@ import type {
   CreateLimitOrderResponseV2,
   DeadlineQueryV2,
   DeadlineResponseV2,
+  FeeAmount,
   FeeQueryV2,
   FeeResponseV2,
   GasEstimateRequestV2,
@@ -25,6 +26,7 @@ import type {
   IntentHashResponseV2,
   IntentPacketRequestV2,
   IntentPacketResponseV2,
+  IntentRequestV2,
   IntentStateV2,
   ISwapsApiV2,
   QuoteQueryV2,
@@ -157,6 +159,17 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
     }
   }
 
+  /**
+   * Drop the SDK-only display field `feeAmount` before an intent reaches the strict wire serializer.
+   * `sodax.swaps.createIntent` returns `Intent & FeeAmount`, which is structurally assignable to the
+   * wire `IntentRequestV2` and so gets passed straight into the intent-carrying endpoints; the extra
+   * bigint would trip `serializeIntentRequest`. This is a no-op for an already-clean `IntentRequestV2`.
+   */
+  private static toWireIntent(intent: IntentRequestV2): IntentRequestV2 {
+    const { feeAmount: _feeAmount, ...rest }: IntentRequestV2 & Partial<FeeAmount> = intent;
+    return rest;
+  }
+
   // ──────────────────────────────────────────────────────────────────────
   // Tokens
   // ──────────────────────────────────────────────────────────────────────
@@ -245,7 +258,11 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
     body: CancelIntentRequestV2,
     config?: RequestOverrideConfig,
   ): Promise<Result<CancelIntentResponseV2>> {
-    return this.toResult('/swaps/intents/cancel', c => c.cancelIntent(body), config);
+    return this.toResult(
+      '/swaps/intents/cancel',
+      c => c.cancelIntent({ ...body, intent: SwapsApiService.toWireIntent(body.intent) }),
+      config,
+    );
   }
 
   /** Compute the keccak256 hash of an Intent struct (bigint numerics serialize to strings). */
@@ -253,7 +270,11 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
     body: IntentHashRequestV2,
     config?: RequestOverrideConfig,
   ): Promise<Result<IntentHashResponseV2>> {
-    return this.toResult('/swaps/intents/hash', c => c.getIntentHash(body), config);
+    return this.toResult(
+      '/swaps/intents/hash',
+      c => c.getIntentHash({ ...body, intent: SwapsApiService.toWireIntent(body.intent) }),
+      config,
+    );
   }
 
   /** Long-poll the relayer until the fill packet lands on the destination chain. */
@@ -269,7 +290,8 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
     body: IntentExtraDataRequestV2,
     config?: RequestOverrideConfig,
   ): Promise<Result<IntentExtraDataResponseV2>> {
-    return this.toResult('/swaps/intents/extra-data', c => c.getIntentSubmitTxExtraData(body), config);
+    const normalized = body.intent ? { ...body, intent: SwapsApiService.toWireIntent(body.intent) } : body;
+    return this.toResult('/swaps/intents/extra-data', c => c.getIntentSubmitTxExtraData(normalized), config);
   }
 
   /** Get the on-chain fill state for an intent by its hub-chain tx hash. */
@@ -318,7 +340,11 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
 
   /** Submit a swap transaction to be processed (relay, post-execution, etc.). Idempotent on `(txHash, srcChainKey)`. */
   public async submitTx(body: SubmitTxRequestV2, config?: RequestOverrideConfig): Promise<Result<SubmitTxResponseV2>> {
-    return this.toResult('/swaps/submit-tx', c => c.submitTx(body), config);
+    return this.toResult(
+      '/swaps/submit-tx',
+      c => c.submitTx({ ...body, intent: SwapsApiService.toWireIntent(body.intent) }),
+      config,
+    );
   }
 
   /** Get the processing status of a submitted swap transaction by `(txHash, srcChainKey)`. */

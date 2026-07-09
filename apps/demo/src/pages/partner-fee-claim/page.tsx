@@ -682,8 +682,8 @@ export default function PartnerFeeClaimPage() {
 
             {isSameTokenSwap && (
               <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
-                Your configured output token equals this fee token — the solver cannot swap a token into
-                itself, and claiming would lock the funds in an unfillable intent. Use{' '}
+                Your configured output token equals this fee token — the solver cannot swap a token into itself, and
+                claiming would lock the funds in an unfillable intent. Use{' '}
                 <span className="font-semibold">Withdraw Directly</span> below instead, or change your swap preference.
               </div>
             )}
@@ -720,9 +720,9 @@ export default function PartnerFeeClaimPage() {
           <CardHeader>
             <CardTitle>Withdraw Directly (No Swap)</CardTitle>
             <CardDescription>
-              Send a fee token to your wallet as-is, bypassing the solver. Use this when you want the fee
-              token itself (no conversion) — e.g. claiming BTC fees as BTC. Bridges the wrapped token from
-              Sonic to its native chain, or transfers it on Sonic.
+              Send a fee token to your wallet as-is, bypassing the solver. Use this when you want the fee token itself
+              (no conversion) — e.g. claiming BTC fees as BTC. Bridges the wrapped token from Sonic to its native chain,
+              or transfers it on Sonic.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -843,9 +843,9 @@ export default function PartnerFeeClaimPage() {
           <CardHeader>
             <CardTitle>Recover Stuck Claim</CardTitle>
             <CardDescription>
-              Cancel an unfillable auto-swap intent and return the locked tokens to your wallet. This happens
-              when a claim's output token equals its input token (same-token swap). Enter the claim's from/to
-              tokens — for a same-token claim they are identical.
+              Cancel an unfillable auto-swap intent and return the locked tokens to your wallet. This happens when a
+              claim's output token equals its input token (same-token swap). Enter the claim's from/to tokens — for a
+              same-token claim they are identical.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -868,8 +868,8 @@ export default function PartnerFeeClaimPage() {
                 </Button>
               </div>
               <p className="text-xs text-cream/60">
-                Optional shortcut — reads the intent from the transaction and fills the From/To tokens below.
-                The cancel itself uses the token pair, not the hash.
+                Optional shortcut — reads the intent from the transaction and fills the From/To tokens below. The cancel
+                itself uses the token pair, not the hash.
               </p>
             </div>
 
@@ -918,7 +918,9 @@ export default function PartnerFeeClaimPage() {
             {recoverPairValid && (
               <div
                 className={`p-3 rounded-lg border text-sm ${
-                  hasStuckIntent ? 'bg-yellow-50 border-yellow-200 text-yellow-800' : 'bg-gray-50 border-gray-200 text-gray-700'
+                  hasStuckIntent
+                    ? 'bg-yellow-50 border-yellow-200 text-yellow-800'
+                    : 'bg-gray-50 border-gray-200 text-gray-700'
                 }`}
               >
                 {hasStuckIntent ? (

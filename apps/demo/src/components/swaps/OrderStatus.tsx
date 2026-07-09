@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { useStatus, useSwapsApiSubmitTxStatus, type Hex, type Intent, type IntentDeliveryInfo } from '@sodax/dapp-kit';
 import { statusCodeToMessage } from '@/lib/utils';
 
@@ -13,7 +13,6 @@ export type SubmitTxOrder = {
   mode: 'submit-tx';
   txHash: string;
   srcChainKey: string;
-  apiBaseURL?: string;
 };
 
 export type Order = SolverOrder | SubmitTxOrder;
@@ -46,12 +45,8 @@ function SolverOrderStatus({ order }: { order: SolverOrder }) {
 }
 
 function SubmitTxOrderStatus({ order }: { order: SubmitTxOrder }) {
-  const apiConfig = useMemo(
-    () => (order.apiBaseURL ? { baseURL: order.apiBaseURL } : undefined),
-    [order.apiBaseURL],
-  );
   const { data: statusResponse } = useSwapsApiSubmitTxStatus({
-    params: { txHash: order.txHash, srcChainKey: order.srcChainKey, apiConfig },
+    params: { txHash: order.txHash, srcChainKey: order.srcChainKey },
   });
 
   if (!statusResponse) {

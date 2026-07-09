@@ -1,17 +1,15 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { useSwapsApiSubmitTxStatus } from '@sodax/dapp-kit';
 
 export type SwapsApiOrder = {
   txHash: string;
   srcChainKey: string;
-  apiBaseURL: string;
 };
 
 export default function OrderStatus({ order }: { order: SwapsApiOrder }) {
-  const apiConfig = useMemo(() => ({ baseURL: order.apiBaseURL }), [order.apiBaseURL]);
   // Polls /swaps/submit-tx/status every second and stops on 'executed' | 'failed'.
   const { data: statusResponse } = useSwapsApiSubmitTxStatus({
-    params: { txHash: order.txHash, srcChainKey: order.srcChainKey, apiConfig },
+    params: { txHash: order.txHash, srcChainKey: order.srcChainKey },
   });
 
   if (!statusResponse) {

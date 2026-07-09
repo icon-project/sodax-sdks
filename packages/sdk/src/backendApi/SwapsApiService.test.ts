@@ -414,6 +414,53 @@ describe('SwapsApiService bigint body serialization', () => {
 });
 
 // =========================================================================
+// feeAmount stripping at the SDK↔wire boundary. `sodax.swaps.createIntent` returns
+// `Intent & FeeAmount`; callers pass that intent straight into the intent-carrying
+// endpoints. SwapsApiService drops the SDK-only `feeAmount` so the strict wire
+// serializer never sees the extra bigint. The augmented intent is built as a variable
+// (structurally assignable to IntentRequestV2 — the runtime path). Each case fails if
+// the strip is removed: serializeIntentRequest would throw before fetch, so no request
+// body would exist and result.ok would be false.
+// =========================================================================
+
+describe('SwapsApiService strips the SDK-only feeAmount before the wire serializer', () => {
+  const intentWithFee = { ...sampleIntentRequest, feeAmount: 12345n };
+
+  it('submitTx drops feeAmount from the serialized intent', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse({ success: true, data: { status: 'inserted', message: 'ok' } }));
+
+    const result = await sodax.api.swaps.submitTx({ ...sampleSubmitTxRequest, intent: intentWithFee });
+
+    expect(result.ok).toBe(true);
+    const parsed = JSON.parse(mockFetch.mock.calls[0]?.[1]?.body as string);
+    expect(parsed.intent.feeAmount).toBeUndefined();
+    expect(parsed.intent.minOutputAmount).toBe('1965353839071625320'); // allowlisted bigint still a string
+  });
+
+  it('cancelIntent drops feeAmount from the serialized intent', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse({ tx: { from: '0x1', to: '0x2', value: '0', data: '0x' } }));
+
+    const result = await sodax.api.swaps.cancelIntent({ srcChainKey: '0x38.bsc', intent: intentWithFee });
+
+    expect(result.ok).toBe(true);
+    const parsed = JSON.parse(mockFetch.mock.calls[0]?.[1]?.body as string);
+    expect(parsed.intent.feeAmount).toBeUndefined();
+    expect(parsed.intent.intentId).toBe('123456789');
+  });
+
+  it('getIntentHash drops feeAmount from the serialized intent', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse({ hash: '0xabc' }));
+
+    const result = await sodax.api.swaps.getIntentHash({ intent: intentWithFee });
+
+    expect(result.ok).toBe(true);
+    const parsed = JSON.parse(mockFetch.mock.calls[0]?.[1]?.body as string);
+    expect(parsed.intent.feeAmount).toBeUndefined();
+    expect(parsed.intent.deadline).toBe('0');
+  });
+});
+
+// =========================================================================
 // valibot validation failures — malformed bodies resolve to ok:false.
 // =========================================================================
 

@@ -58,8 +58,6 @@ import type { Order } from '@/components/swaps/OrderStatus';
 import { DEFAULT_SELECTED_CHAIN, SolverEnv, useAppStore } from '@/zustand/useAppStore';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
 
-const SUBMIT_TX_API_CONFIG = { baseURL: 'https://canary-api.sodax.com/v1/bes' } as const;
-
 export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAction<Order[]>) => void }) {
   const { sodax } = useSodaxContext();
   //chain and account states
@@ -341,7 +339,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       relayData: relayData.payload,
     };
 
-    const submitResult = await submitSwapTx({ request, apiConfig: SUBMIT_TX_API_CONFIG });
+    const submitResult = await submitSwapTx({ request });
     if (!submitResult.ok) {
       console.error('Submit swap tx failed:', submitResult.error);
       return;
@@ -354,7 +352,6 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
         mode: 'submit-tx',
         txHash: spokeTxHash as string,
         srcChainKey: src.chain,
-        apiBaseURL: SUBMIT_TX_API_CONFIG.baseURL,
       },
     ]);
   };
