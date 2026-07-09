@@ -1,14 +1,34 @@
-# Chain specifics — Non-EVM quirks
+# Chain specifics — chain quirks
 
-EVM chains (12 of them) work uniformly through `IEvmWalletProvider`. Non-EVM chains have particularities you need to handle. This file documents each chain family's quirks.
+EVM chains mostly work uniformly through `IEvmWalletProvider`, with **one** native-value exception (Hedera, below). Non-EVM chains have more particularities you need to handle. This file documents each chain family's quirks.
 
 ## Section index
+
+EVM:
+
+0. [Hedera HBAR msg.value scaling](#0-hedera-hbar-msgvalue-scaling) — `HEDERA_MAINNET`. The only EVM-family quirk: native deposits scale `msg.value` by 10^10. Handled automatically by the SDK.
+
+Non-EVM:
 
 1. [Stellar trustline](#1-stellar-trustline) — `STELLAR_MAINNET`. Required before receiving any non-XLM asset.
 2. [Bitcoin PSBT and Bound Exchange](#2-bitcoin-psbt-and-radfi) — `BITCOIN_MAINNET`. PSBT signing; trading wallet; Bound Exchange auth/session.
 3. [Solana PDA derivation](#3-solana-pda-derivation) — `SOLANA_MAINNET`. Deterministic addresses; one-time setup utilities.
 4. [ICON Hana wallet](#4-icon-hana-wallet) — `ICON_MAINNET`. Low-level Hana-extension helpers; chain key string vs numeric ID.
 5. [NEAR connector discovery](#5-near-connector-discovery) — `NEAR_MAINNET`. Account-id semantics; multiple wallet variants.
+
+---
+
+## 0. Hedera HBAR msg.value scaling
+
+**Quirk:** HBAR is tracked with **8 decimals** in SODAX spoke accounting, but Hedera's EVM layer treats native `msg.value` as **18 decimals**. So for a native-HBAR deposit the on-chain `msg.value` must be the 8-decimal amount multiplied by **10^10**, even though the asset-manager `transfer` argument stays in 8 decimals.
+
+### How v2 handles it
+
+**Nothing to do — it's automatic.** `EvmSpokeService` scales `msg.value` internally when the source chain is `HEDERA_MAINNET` and the deposit is native; every other EVM chain passes the amount through unchanged. You always pass the canonical 8-decimal HBAR amount to the deposit / swap / bridge call, exactly as you would any other chain's native amount — the spoke service applies the 10^10 factor only to the transaction's `value` field.
+
+### Pitfall
+
+Do **not** pre-scale the amount yourself. Pass the plain 8-decimal HBAR amount; multiplying by 10^10 before handing it to the SDK double-scales and overpays. The scaling applies only to the native token (HBAR) — HTS / ERC-20 token deposits on Hedera carry `value: 0` and are unaffected.
 
 ---
 

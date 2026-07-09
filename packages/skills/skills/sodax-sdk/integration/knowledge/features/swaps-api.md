@@ -9,8 +9,13 @@ response is validated at runtime against a valibot schema, so a backend contract
 Access: `sodax.api.swaps`. Service class: `SwapsApiService`. **Errors:** every failure (network, timeout,
 non-2xx HTTP, or response-shape mismatch) returns `Result<T, SodaxError<'EXTERNAL_API_ERROR'>>` with
 `feature: 'backend'`, `context.api: 'swaps'`, and `context.endpoint` (the path). The underlying failure
-is preserved on `error.cause`. This differs from the feature services (`sodax.swaps`, etc.), whose errors
-carry their own `feature` (`'swap'`, …) — the swaps **HTTP client** is uniformly `feature: 'backend'`.
+is preserved on `error.cause` — a `SwapsApiError` from the `@sodax/swaps-api` client this service wraps
+(read its `code`: `NETWORK_ERROR` | `TIMEOUT_ERROR` | `HTTP_ERROR` | `PARSE_ERROR` | `VALIDATION_ERROR`;
+the same code is mirrored on `error.context.code`, and both `SwapsApiError` and the `SwapsApiErrorCode`
+union are re-exported from `@sodax/sdk`). Idempotent
+reads/polls (and pure-compute POSTs like `getQuote`) retry transient failures; mutating calls do not.
+This differs from the feature services (`sodax.swaps`, etc.), whose errors carry their own `feature`
+(`'swap'`, …) — the swaps **HTTP client** is uniformly `feature: 'backend'`.
 
 ## Methods
 
@@ -103,8 +108,8 @@ if (!submit.ok) return;
 
 // Both txHash AND srcChainKey are required by the status endpoint.
 const status = await sodax.api.swaps.getSubmitTxStatus({ txHash, srcChainKey });
-if (status.ok && status.value.data.status === 'executed') { /* settled */ }
-// Lifecycle: 'pending' → 'relaying' → 'relayed' → 'posting_execution' → 'executed' | 'failed'.
+if (status.ok && status.value.data.status === 'solved') { /* settled */ }
+// Lifecycle: 'pending' → 'relaying' → 'relayed' → 'posting_execution' → 'posted_execution' → 'solved' | 'failed'.
 ```
 
 ## Status fields — three distinct `status` values (don't conflate)
@@ -113,9 +118,9 @@ if (status.ok && status.value.data.status === 'executed') { /* settled */ }
 |---|---|---|---|
 | `getStatus` | `StatusResponseV2.status` | **number** (`SwapIntentStatusCodeV2`) | `-1` NOT_FOUND · `1` NOT_STARTED_YET · `2` STARTED_NOT_FINISHED · `3` SOLVED (terminal) · `4` FAILED (terminal). `fillTxHash` is set only when `status === 3`. |
 | `submitTx` | `SubmitTxResponseV2.data.status` | string | `'inserted'` (new) or `'duplicate'` (already submitted — submit-tx is idempotent on `(txHash, srcChainKey)`). |
-| `getSubmitTxStatus` | `SubmitTxStatusResponseV2.data.status` | string | `'pending'` / `'relaying'` / `'relayed'` / `'posting_execution'` / `'executed'` / `'failed'` (`'executed'` / `'failed'` terminal). |
+| `getSubmitTxStatus` | `SubmitTxStatusResponseV2.data.status` | string | `'pending'` / `'relaying'` / `'relayed'` / `'posting_execution'` / `'posted_execution'` / `'solved'` / `'failed'` (`'solved'` / `'failed'` terminal). |
 
-`getStatus` reports the **solver** intent status as a numeric code; the two submit-tx calls report **string** statuses (submission result vs relay-processing lifecycle). They are unrelated — don't treat one as the other.
+`getStatus` reports the **solver** intent status as a numeric code (`3` = `SOLVED`); the two submit-tx calls report **string** statuses (submission result vs relay-processing lifecycle, whose success terminal is the string `'solved'`). They are unrelated — don't treat one as the other; note the numeric solver `SOLVED` (`3`) is distinct from the submit-tx string `'solved'`.
 
 ## Per-call overrides
 

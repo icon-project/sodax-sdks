@@ -62,10 +62,6 @@ import { SolverEnv, useAppStore } from '@/zustand/useAppStore';
 const SONIC = ChainKeys.SONIC_MAINNET satisfies SpokeChainKey;
 const DEFAULT_SLIPPAGE = '0.5'; // %
 
-// Backend Execution Service — submits the spoke tx to the relay/solver and exposes a
-// status endpoint we can poll. Same canary host the solver page uses.
-const SUBMIT_TX_API_CONFIG = { baseURL: 'https://canary-api.sodax.com/v1/bes' } as const;
-
 // Partner fee charged on leverage-vault DEPOSITS only (100 bps = 1%, the max). Rides on the
 // deposit payload as the swap layer's per-intent fee override, so withdraws and ordinary
 // swaps stay on the global `config.swaps.partnerFee` (unset in this demo).
@@ -473,7 +469,7 @@ export default function LeverageYieldPage() {
       intent,
       relayData: relayData.payload,
     };
-    const submitResult = await submitSwapTx({ request, apiConfig: SUBMIT_TX_API_CONFIG });
+    const submitResult = await submitSwapTx({ request });
     if (!submitResult.ok) {
       setActionError(`BES submit failed: ${(submitResult.error as Error)?.message ?? 'unknown'}`);
       return;
@@ -485,7 +481,6 @@ export default function LeverageYieldPage() {
         mode: 'submit-tx',
         txHash: spokeTxHash as string,
         srcChainKey: userChain,
-        apiBaseURL: SUBMIT_TX_API_CONFIG.baseURL,
       },
     ]);
     resetAfterSubmit();
@@ -541,7 +536,7 @@ export default function LeverageYieldPage() {
   return (
     <div className="flex flex-col items-center justify-start min-h-screen p-4 gap-4">
       {/* Live status print-out for every submitted intent — same component the solver page
-          uses. Each order polls the BES status endpoint and shows progress until executed. */}
+          uses. Each order polls the BES status endpoint and shows progress until solved. */}
       {orders.map((order, index) => (
         <OrderStatus key={index} order={order} />
       ))}

@@ -60,12 +60,18 @@ export function BorrowAssetsListItem({
   if (metrics.formattedReserve && aToken) {
     availableLiquidity =
       metrics.formattedReserve.borrowCap === '0'
-        ? truncateToDecimals(Number(formatUnits(BigInt(metrics.formattedReserve.availableLiquidity), aToken.decimals)), AMOUNT_DISPLAY_DECIMALS)
-        : truncateToDecimals(Math.min(
-            Number.parseFloat(formatUnits(BigInt(metrics.formattedReserve.availableLiquidity), aToken.decimals)),
-            Number.parseFloat(metrics.formattedReserve.borrowCap) -
-              Number.parseFloat(metrics.formattedReserve.totalVariableDebt),
-          ), AMOUNT_DISPLAY_DECIMALS);
+        ? truncateToDecimals(
+            Number(formatUnits(BigInt(metrics.formattedReserve.availableLiquidity), aToken.decimals)),
+            AMOUNT_DISPLAY_DECIMALS,
+          )
+        : truncateToDecimals(
+            Math.min(
+              Number.parseFloat(formatUnits(BigInt(metrics.formattedReserve.availableLiquidity), aToken.decimals)),
+              Number.parseFloat(metrics.formattedReserve.borrowCap) -
+                Number.parseFloat(metrics.formattedReserve.totalVariableDebt),
+            ),
+            AMOUNT_DISPLAY_DECIMALS,
+          );
   }
 
   let maxBorrow = '0';

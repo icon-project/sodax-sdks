@@ -53,10 +53,10 @@ Bitcoin's signing flow inspects the connected address and picks the right method
 
 | Address type | Signing method | Connectors that support it |
 |--------------|----------------|----------------------------|
-| P2WPKH (native segwit, `bc1q…`) | BIP-322 | Unisat, Xverse, OKX |
-| P2TR (taproot, `bc1p…`) | BIP-322 | Unisat, Xverse, OKX |
-| P2SH (legacy multi-sig, `3…`) | ECDSA | Unisat, Xverse, OKX |
-| P2PKH (legacy, `1…`) | ECDSA | Unisat, Xverse, OKX |
+| P2WPKH (native segwit, `bc1q…`) | BIP-322 | Unisat, Xverse, OKX, Hana |
+| P2TR (taproot, `bc1p…`) | BIP-322 | Unisat, Xverse, OKX, Hana |
+| P2SH (legacy multi-sig, `3…`) | ECDSA | Unisat, Xverse, OKX, Hana |
+| P2PKH (legacy, `1…`) | ECDSA | Unisat, Xverse, OKX, Hana |
 
 If a custom connector implements only one of the two methods, calling `signMessage` from a wrongly-typed address surfaces the error inline.
 

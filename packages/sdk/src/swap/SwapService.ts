@@ -40,7 +40,7 @@ import type { BackendApiService } from '../backendApi/index.js';
 import { selectSolvedIntentPacket } from './selectSolvedIntentPacket.js';
 import { SodaxError } from '../errors/SodaxError.js';
 import { mapRelayFailure } from '../errors/relay-error-mapping.js';
-import { verifyFailed, intentCreationFailed, executionFailed, unknownFailed } from '../errors/wrappers.js';
+import { verifyFailed, intentCreationFailed, executionFailed, unknownFailed, approveFailed } from '../errors/wrappers.js';
 import {
   type SwapCreateIntentError,
   type PostExecutionError,
@@ -548,7 +548,7 @@ export class SwapService {
   /**
    * Backend 2-step swap path (opt-in via `swapsOptions.useBackendSubmitTx`): hand the broadcast
    * intent tx to the swaps API (`POST /swaps/submit-tx`); the backend relays + post-executes
-   * server-side. Polls `getSubmitTxStatus` until `executed`, then reconstructs the same
+   * server-side. Polls `getSubmitTxStatus` until `solved`, then reconstructs the same
    * {@link SwapResponse} the client-side path returns (`result.dstIntentTxHash` → delivery info,
    * `result.intent_hash` → solver response).
    *
@@ -594,7 +594,7 @@ export class SwapService {
         const statusResult = await this.backendApi.swaps.getSubmitTxStatus({ txHash: spokeTxHash, srcChainKey });
         if (statusResult.ok) {
           const { status, result, failureReason, abandonedAt } = statusResult.value.data;
-          if (status === 'executed' && result?.dstIntentTxHash && result.intent_hash) {
+          if (status === 'solved' && result?.dstIntentTxHash && result.intent_hash) {
             return {
               ok: true,
               value: {
@@ -617,10 +617,10 @@ export class SwapService {
             return submitTxFailed(new Error(`backend submit-tx ${status}${reason}`));
           }
         }
-        // transient !ok / pending / relaying / relayed / posting_execution → keep polling
+        // transient !ok / pending / relaying / relayed / posting_execution / posted_execution → keep polling
         await new Promise<void>(resolve => setTimeout(resolve, pollIntervalMs));
       }
-      return submitTxFailed(new Error('backend submit-tx polling timed out before reaching executed'));
+      return submitTxFailed(new Error('backend submit-tx polling timed out before reaching solved'));
     } catch (error) {
       return { ok: false, error: unknownFailed('swap', error, { ...baseCtx, action: 'swap' }) };
     }
@@ -701,6 +701,7 @@ export class SwapService {
     _params: SwapActionParams<K, Raw>,
   ): Promise<Result<TxReturnType<K, Raw>>> {
     const { params } = _params;
+    const wrapApproveFailure = (cause: unknown) => approveFailed('swap', cause);
 
     try {
       if (isHubChainKeyType(params.srcChainKey) || isEvmSpokeOnlyChainKeyType(params.srcChainKey)) {
@@ -726,7 +727,7 @@ export class SwapService {
         });
 
         if (!result.ok) {
-          return result;
+          return { ok: false, error: wrapApproveFailure(result.error) };
         }
 
         return {
@@ -760,7 +761,7 @@ export class SwapService {
               },
         );
 
-        if (!result.ok) return result;
+        if (!result.ok) return { ok: false, error: wrapApproveFailure(result.error) };
 
         return {
           ok: true,
@@ -1113,14 +1114,15 @@ export class SwapService {
 
       const txResult = await this.spoke.sendMessage(sendMessageParams);
 
-      if (!txResult.ok) return txResult;
+      if (!txResult.ok) return { ok: false, error: intentCreationFailed('swap', txResult.error) };
 
       return {
         ok: true,
         value: txResult.value satisfies TxReturnType<K, boolean> as TxReturnType<K, Raw>,
       };
     } catch (error) {
-      return { ok: false, error };
+      if (isSwapCreateIntentError(error)) return { ok: false, error };
+      return { ok: false, error: intentCreationFailed('swap', error) };
     }
   }
 
@@ -1184,7 +1186,8 @@ export class SwapService {
 
       return { ok: true, value: { srcChainTxHash: cancelTxHash, dstChainTxHash: dstIntentTxHash } };
     } catch (error) {
-      return { ok: false, error };
+      if (isSwapError(error)) return { ok: false, error };
+      return { ok: false, error: executionFailed('swap', error, { action: 'cancelIntent' }) };
     }
   }
 

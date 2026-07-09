@@ -37,7 +37,7 @@ const connectors = useXConnectors({ xChainType: 'EVM' });
 // IXConnector[] — already filtered to enabled chain
 ```
 
-For the per-chain class names (only needed for `instanceof` or custom-connector-list use cases), see [`api-surface.md`](./api-surface.md) § "Sub-path exports" and the worked example in [`../recipes/sub-path-imports.md`](../recipes/sub-path-imports.md). Bitcoin's `BitcoinXConnector` is the only abstract base — its concrete subclasses (Unisat, Xverse, OKX) override per-wallet signing methods (see [`sign-message.md`](../recipes/sign-message.md)).
+For the per-chain class names (only needed for `instanceof` or custom-connector-list use cases), see [`api-surface.md`](./api-surface.md) § "Sub-path exports" and the worked example in [`../recipes/sub-path-imports.md`](../recipes/sub-path-imports.md). Bitcoin's `BitcoinXConnector` is the only abstract base — its concrete subclasses (Unisat, Xverse, OKX, Hana) override per-wallet signing methods (see [`sign-message.md`](../recipes/sign-message.md)).
 
 ---
 

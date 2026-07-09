@@ -34,6 +34,7 @@ export const ChainKeys = {
   REDBELLY_MAINNET: 'redbelly',
   KAIA_MAINNET: '0x2019.kaia',
   STACKS_MAINNET: 'stacks',
+  HEDERA_MAINNET: 'hedera',
 } as const;
 
 export type ChainKey = (typeof ChainKeys)[keyof typeof ChainKeys];

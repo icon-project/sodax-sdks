@@ -151,7 +151,7 @@ function SubmitButton({ request, baseURL }: { request: SubmitTxRequestV2; baseUR
 }
 ```
 
-Poll the processing status with `useSwapsApiSubmitTxStatus` — it requires **both** `txHash` and `srcChainKey` (the v2 status endpoint needs the source chain key) and stops polling on `executed` / `failed`:
+Poll the processing status with `useSwapsApiSubmitTxStatus` — it requires **both** `txHash` and `srcChainKey` (the v2 status endpoint needs the source chain key) and stops polling on `solved` / `failed`:
 
 ```tsx
 import { useSwapsApiSubmitTxStatus } from '@sodax/dapp-kit';
@@ -167,6 +167,6 @@ function SwapStatus({ txHash, srcChainKey }: { txHash: string; srcChainKey: stri
 | Hook | Interval |
 |------|---------|
 | `useBackendIntentByTxHash` | 1s |
-| `useSwapsApiSubmitTxStatus` | 1s (stops on `executed` / `failed`) |
+| `useSwapsApiSubmitTxStatus` | 1s (stops on `solved` / `failed`) |
 | `useBackendOrderbook` | none (`staleTime: 30s`, no auto-refetch) |
 | Others | No auto-refresh |

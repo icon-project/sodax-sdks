@@ -47,6 +47,7 @@ v1 exported one constant per chain (`SONIC_MAINNET_CHAIN_ID`, `ARBITRUM_MAINNET_
 | `BASE_MAINNET_CHAIN_ID` | `ChainKeys.BASE_MAINNET` | `'0x2105.base'` |
 | `BSC_MAINNET_CHAIN_ID` | `ChainKeys.BSC_MAINNET` | `'0x38.bsc'` |
 | `ETHEREUM_MAINNET_CHAIN_ID` | `ChainKeys.ETHEREUM_MAINNET` | `'ethereum'` |
+| `HEDERA_MAINNET_CHAIN_ID` | `ChainKeys.HEDERA_MAINNET` | `'hedera'` |
 | `HYPEREVM_MAINNET_CHAIN_ID` | `ChainKeys.HYPEREVM_MAINNET` | `'hyper'` |
 | `ICON_MAINNET_CHAIN_ID` | `ChainKeys.ICON_MAINNET` | `'0x1.icon'` |
 | `INJECTIVE_MAINNET_CHAIN_ID` | `ChainKeys.INJECTIVE_MAINNET` | `'injective-1'` |
