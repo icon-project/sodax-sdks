@@ -548,7 +548,7 @@ export class SwapService {
   /**
    * Backend 2-step swap path (opt-in via `swapsOptions.useBackendSubmitTx`): hand the broadcast
    * intent tx to the swaps API (`POST /swaps/submit-tx`); the backend relays + post-executes
-   * server-side. Polls `getSubmitTxStatus` until `executed`, then reconstructs the same
+   * server-side. Polls `getSubmitTxStatus` until `solved`, then reconstructs the same
    * {@link SwapResponse} the client-side path returns (`result.dstIntentTxHash` → delivery info,
    * `result.intent_hash` → solver response).
    *
@@ -594,7 +594,7 @@ export class SwapService {
         const statusResult = await this.backendApi.swaps.getSubmitTxStatus({ txHash: spokeTxHash, srcChainKey });
         if (statusResult.ok) {
           const { status, result, failureReason, abandonedAt } = statusResult.value.data;
-          if (status === 'executed' && result?.dstIntentTxHash && result.intent_hash) {
+          if (status === 'solved' && result?.dstIntentTxHash && result.intent_hash) {
             return {
               ok: true,
               value: {
@@ -617,10 +617,10 @@ export class SwapService {
             return submitTxFailed(new Error(`backend submit-tx ${status}${reason}`));
           }
         }
-        // transient !ok / pending / relaying / relayed / posting_execution → keep polling
+        // transient !ok / pending / relaying / relayed / posting_execution / posted_execution → keep polling
         await new Promise<void>(resolve => setTimeout(resolve, pollIntervalMs));
       }
-      return submitTxFailed(new Error('backend submit-tx polling timed out before reaching executed'));
+      return submitTxFailed(new Error('backend submit-tx polling timed out before reaching solved'));
     } catch (error) {
       return { ok: false, error: unknownFailed('swap', error, { ...baseCtx, action: 'swap' }) };
     }

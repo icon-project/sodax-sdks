@@ -154,7 +154,8 @@ const SubmitSwapTxStatusSchema = v.picklist([
   'relaying',
   'relayed',
   'posting_execution',
-  'executed',
+  'posted_execution',
+  'solved',
   'failed',
 ]);
 

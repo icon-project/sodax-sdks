@@ -6,6 +6,7 @@ import {
   GetSwapTokensByChainResponseSchema,
   GetSwapTokensResponseSchema,
   StatusResponseSchema,
+  SubmitTxStatusResponseSchema,
   makeCreateIntentResponseSchema,
   makeQuoteResponseSchema,
 } from './schemas.js';
@@ -100,6 +101,27 @@ describe('StatusResponseSchema', () => {
 
   it('rejects a status code outside the picklist', () => {
     expect(v.safeParse(StatusResponseSchema, { status: 99 }).success).toBe(false);
+  });
+});
+
+describe('SubmitTxStatusResponseSchema', () => {
+  // Minimal valid submit-tx status envelope; `status` (a SubmitSwapTxStatusV2 string, distinct from
+  // the numeric solver status above) is the field under test.
+  const envelope = (status: string) => ({
+    success: true,
+    data: { txHash: '0xabc', srcChainKey: 'sonic', status, processingAttempts: 1 },
+  });
+
+  it('parses the terminal-success status "solved"', () => {
+    expect(v.parse(SubmitTxStatusResponseSchema, envelope('solved')).data.status).toBe('solved');
+  });
+
+  it('parses the non-terminal status "posted_execution"', () => {
+    expect(v.parse(SubmitTxStatusResponseSchema, envelope('posted_execution')).data.status).toBe('posted_execution');
+  });
+
+  it('rejects the removed legacy status "executed"', () => {
+    expect(v.safeParse(SubmitTxStatusResponseSchema, envelope('executed')).success).toBe(false);
   });
 });
 

@@ -108,8 +108,8 @@ if (!submit.ok) return;
 
 // Both txHash AND srcChainKey are required by the status endpoint.
 const status = await sodax.api.swaps.getSubmitTxStatus({ txHash, srcChainKey });
-if (status.ok && status.value.data.status === 'executed') { /* settled */ }
-// Lifecycle: 'pending' → 'relaying' → 'relayed' → 'posting_execution' → 'executed' | 'failed'.
+if (status.ok && status.value.data.status === 'solved') { /* settled */ }
+// Lifecycle: 'pending' → 'relaying' → 'relayed' → 'posting_execution' → 'posted_execution' → 'solved' | 'failed'.
 ```
 
 ## Status fields — three distinct `status` values (don't conflate)
@@ -118,9 +118,9 @@ if (status.ok && status.value.data.status === 'executed') { /* settled */ }
 |---|---|---|---|
 | `getStatus` | `StatusResponseV2.status` | **number** (`SwapIntentStatusCodeV2`) | `-1` NOT_FOUND · `1` NOT_STARTED_YET · `2` STARTED_NOT_FINISHED · `3` SOLVED (terminal) · `4` FAILED (terminal). `fillTxHash` is set only when `status === 3`. |
 | `submitTx` | `SubmitTxResponseV2.data.status` | string | `'inserted'` (new) or `'duplicate'` (already submitted — submit-tx is idempotent on `(txHash, srcChainKey)`). |
-| `getSubmitTxStatus` | `SubmitTxStatusResponseV2.data.status` | string | `'pending'` / `'relaying'` / `'relayed'` / `'posting_execution'` / `'executed'` / `'failed'` (`'executed'` / `'failed'` terminal). |
+| `getSubmitTxStatus` | `SubmitTxStatusResponseV2.data.status` | string | `'pending'` / `'relaying'` / `'relayed'` / `'posting_execution'` / `'posted_execution'` / `'solved'` / `'failed'` (`'solved'` / `'failed'` terminal). |
 
-`getStatus` reports the **solver** intent status as a numeric code; the two submit-tx calls report **string** statuses (submission result vs relay-processing lifecycle). They are unrelated — don't treat one as the other.
+`getStatus` reports the **solver** intent status as a numeric code (`3` = `SOLVED`); the two submit-tx calls report **string** statuses (submission result vs relay-processing lifecycle, whose success terminal is the string `'solved'`). They are unrelated — don't treat one as the other; note the numeric solver `SOLVED` (`3`) is distinct from the submit-tx string `'solved'`.
 
 ## Per-call overrides
 

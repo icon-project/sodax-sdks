@@ -536,7 +536,7 @@ export default function LeverageYieldPage() {
   return (
     <div className="flex flex-col items-center justify-start min-h-screen p-4 gap-4">
       {/* Live status print-out for every submitted intent — same component the solver page
-          uses. Each order polls the BES status endpoint and shows progress until executed. */}
+          uses. Each order polls the BES status endpoint and shows progress until solved. */}
       {orders.map((order, index) => (
         <OrderStatus key={index} order={order} />
       ))}

@@ -104,8 +104,8 @@ if (!submit.ok) return;
 
 // Both txHash AND srcChainKey are required.
 const status = await sodax.api.swaps.getSubmitTxStatus({ txHash, srcChainKey });
-if (status.ok && status.value.data.status === 'executed') { /* settled */ }
-// Lifecycle: 'pending' → 'relaying' → 'relayed' → 'posting_execution' → 'executed' | 'failed'.
+if (status.ok && status.value.data.status === 'solved') { /* settled */ }
+// Lifecycle: 'pending' → 'relaying' → 'relayed' → 'posting_execution' → 'posted_execution' → 'solved' | 'failed'.
 ```
 
 ## Status fields — three distinct `status` values
@@ -116,7 +116,7 @@ These are unrelated; don't treat one as another:
 |---|---|---|---|
 | `getStatus` | `StatusResponseV2.status` | **number** (`SwapIntentStatusCodeV2`) | `-1` NOT_FOUND · `1` NOT_STARTED_YET · `2` STARTED_NOT_FINISHED · `3` SOLVED (terminal) · `4` FAILED (terminal). `fillTxHash` set only when `status === 3`. |
 | `submitTx` | `SubmitTxResponseV2.data.status` | string | `'inserted'` (new) or `'duplicate'` (already submitted — idempotent on `(txHash, srcChainKey)`). |
-| `getSubmitTxStatus` | `SubmitTxStatusResponseV2.data.status` | string | `'pending'` / `'relaying'` / `'relayed'` / `'posting_execution'` / `'executed'` / `'failed'` (last two terminal). |
+| `getSubmitTxStatus` | `SubmitTxStatusResponseV2.data.status` | string | `'pending'` / `'relaying'` / `'relayed'` / `'posting_execution'` / `'posted_execution'` / `'solved'` / `'failed'` (`'solved'` / `'failed'` terminal). |
 
 ## Configuration
 

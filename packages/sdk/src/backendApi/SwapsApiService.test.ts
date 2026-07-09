@@ -362,7 +362,7 @@ describe('SwapsApiService happy paths (validated responses)', () => {
       data: {
         txHash: '0xabc',
         srcChainKey: '0x38.bsc',
-        status: 'executed',
+        status: 'solved',
         processingAttempts: 1,
         result: { dstIntentTxHash: '0xdst' },
       },

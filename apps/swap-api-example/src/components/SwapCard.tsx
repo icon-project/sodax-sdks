@@ -186,7 +186,7 @@ export function SwapCard() {
       for (let i = 0; i < 30; i++) {
         const status = await swapsApi.getSubmitTxStatus({ txHash, srcChainKey: src.chainKey });
         setSwapLog(`Status: ${status.data.status}`);
-        if (status.data.status === 'executed' || status.data.status === 'failed') break;
+        if (status.data.status === 'solved' || status.data.status === 'failed') break;
         await new Promise(r => setTimeout(r, 3000));
       }
     } catch (e) {

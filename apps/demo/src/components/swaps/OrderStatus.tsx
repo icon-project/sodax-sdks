@@ -65,8 +65,8 @@ function SubmitTxOrderStatus({ order }: { order: SubmitTxOrder }) {
       <div>Tx Hash: {order.txHash}</div>
       <div>Src Chain ID: {order.srcChainKey}</div>
       <div>Status: {status}</div>
-      {status === 'executed' && result?.dstIntentTxHash && <div>Dst Intent Tx Hash: {result.dstIntentTxHash}</div>}
-      {status === 'executed' && result?.intent_hash && <div>Intent Hash: {result.intent_hash}</div>}
+      {status === 'solved' && result?.dstIntentTxHash && <div>Dst Intent Tx Hash: {result.dstIntentTxHash}</div>}
+      {status === 'solved' && result?.intent_hash && <div>Intent Hash: {result.intent_hash}</div>}
       {status === 'failed' && failedAtStep && <div className="text-red-500">Failed at: {failedAtStep}</div>}
       {status === 'failed' && failureReason && <div className="text-red-500">Reason: {failureReason}</div>}
     </div>
