@@ -7,4 +7,5 @@ export * from './constants.js';
 export * from './guards.js';
 export * from './logger.js';
 export * from './analytics.js';
+export * from './gasless-config.js';
 export * from './types/index.js';

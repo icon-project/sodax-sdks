@@ -25,6 +25,7 @@ import {
   hubConfig,
   type SpokeChainConfig,
   type SpokeChainKey,
+  type EvmSpokeOnlyChainKey,
 } from '../chains/chains.js';
 
 // -- Per-chain shared config types (user-overridable runtime config) --
@@ -63,6 +64,25 @@ export type BridgeDefaultConfig = {}; // kept for future extension
 
 export const bridgeConfig = {} satisfies BridgeDefaultConfig;
 
+// -- Gasless (EIP-7702 sponsored spoke deposit) config --
+// Client-side runtime only: paymaster/bundler endpoints embed the Pimlico API key and encode the
+// gas-sponsorship policy, so these are secrets that must never live on the backend data contract
+// (`SodaxDefaultConfig`). They follow the `fee`/`analytics`/`logger` option pattern: passed to
+// `new Sodax(...)`, resolved once, and held on `ConfigService` outside the swappable config.
+
+/** Per-chain gasless endpoints + support flag. `supports7702` gates whether the chain is eligible. */
+export type GaslessChainConfig = {
+  paymasterUrl: string; // ERC-7677 paymaster endpoint (Pimlico) — sponsors the batched user operation
+  bundlerUrl: string; // ERC-4337 bundler endpoint (Pimlico) — submits the user operation
+  supports7702: boolean; // EIP-7702 is live on this chain (Simple7702 delegate + EntryPoint available)
+};
+
+/** `gasless` option accepted by `new Sodax(...)`. Omit to leave gasless deposits disabled. */
+export type GaslessOptions = {
+  pimlicoApiKey?: string; // secret; reserved for templating default endpoints when per-chain URLs are omitted
+  chains?: Partial<Record<EvmSpokeOnlyChainKey, GaslessChainConfig>>; // per-chain gasless endpoints
+};
+
 export type SodaxOptionalConfig = {
   logger?: SodaxLoggerOption;
   analytics?: AnalyticsOption; // Opt-in user-action analytics: an AnalyticsConfig or false (default, disabled). Resolved client-side; never fetched from or overwritten by the backend config.
@@ -71,6 +91,7 @@ export type SodaxOptionalConfig = {
   moneyMarket?: MoneyMarketOptions;
   bridge?: BridgeOptions;
   leverageYield?: LeverageYieldOptions;
+  gasless?: GaslessOptions; // gasless (EIP-7702 sponsored) spoke-deposit endpoints. Client-side secrets; never fetched from or overwritten by the backend config.
   swapsOptions?: SwapsClientOptions; // client-side swap behavior toggles (e.g. useBackendSubmitTx). Resolved client-side; distinct key so it never collides with the data `swaps` slot.
 };
 

@@ -34,6 +34,7 @@ import type { BackendApiService } from '../../backendApi/BackendApiService.js';
 // import { mergeSodaxConfig } from './mergeSodaxConfig.js'; // TODO(config-v2): restore when initialize() dynamic fetch is re-enabled
 import { resolveLogger } from '../logger.js';
 import { noopAnalytics, type ResolvedAnalytics } from '../analytics.js';
+import { resolveGasless, type ResolvedGaslessConfig } from '../gasless-config.js';
 
 export type ConfigServiceConstructorParams = {
   api: BackendApiService;
@@ -60,6 +61,12 @@ export type ConfigServiceConstructorParams = {
    * never supplies it; it is purely a client-side option.
    */
   fee?: PartnerFee;
+  /**
+   * Pre-resolved gasless (EIP-7702 sponsored deposit) config. Like {@link logger}, held outside the
+   * swappable `SodaxConfig` so a dynamic config fetch never replaces it. Its endpoints are client-side
+   * secrets never supplied by the backend. Defaults to unconfigured (gasless disabled) when omitted.
+   */
+  gasless?: ResolvedGaslessConfig;
 };
 
 /**
@@ -91,6 +98,14 @@ export class ConfigService {
    */
   public readonly fee: PartnerFee | undefined;
 
+  /**
+   * Gasless (EIP-7702 sponsored deposit) config. Resolved once at construction and kept independent of
+   * {@link sodax} so that {@link initialize}'s dynamic-config swap never clobbers it. Read by
+   * {@link GaslessService} via `config.gasless`; unconfigured (gasless disabled) unless the consumer
+   * passed a `gasless` config to `new Sodax(...)`.
+   */
+  public readonly gasless: ResolvedGaslessConfig;
+
   private initialized = false;
 
   // data structures for quick lookup
@@ -106,11 +121,12 @@ export class ConfigService {
 
   // `api` / `userConfig` are accepted but unused while initialize()'s dynamic fetch is disabled
   // (see TODO(config-v2) below); restore their assignments when re-enabling.
-  constructor({ api, config, userConfig, logger, analytics, fee }: ConfigServiceConstructorParams) {
+  constructor({ api, config, userConfig, logger, analytics, fee, gasless }: ConfigServiceConstructorParams) {
     this.sodax = config;
     this.logger = logger ?? resolveLogger(undefined);
     this.analytics = analytics ?? noopAnalytics;
     this.fee = fee;
+    this.gasless = gasless ?? resolveGasless(undefined);
     this.loadSodaxConfigDataStructures(config);
   }
 
@@ -443,7 +459,7 @@ export class ConfigService {
   get bridgePartnerFee(): PartnerFee | undefined {
     return this.bridge.partnerFee ?? this.fee;
   }
-  
+
   get leverageYieldPartnerFee(): PartnerFee | undefined {
     return this.leverageYield.partnerFee ?? this.fee;
   }

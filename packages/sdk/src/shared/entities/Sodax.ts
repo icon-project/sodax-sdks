@@ -13,9 +13,11 @@ import { ConfigService } from '../config/index.js';
 import { mergeSodaxConfig } from '../config/mergeSodaxConfig.js';
 import { resolveLogger } from '../logger.js';
 import { resolveAnalytics } from '../analytics.js';
+import { resolveGasless } from '../gasless-config.js';
 import { PartnerService } from '../../partner/PartnerService.js';
 import { RecoveryService } from '../../recovery/RecoveryService.js';
 import { LeverageYieldService } from '../../leverageYield/LeverageYieldService.js';
+import { GaslessService } from '../../gasless/GaslessService.js';
 
 /**
  * Sodax class is used to interact with the Sodax.
@@ -36,6 +38,7 @@ export class Sodax {
   public readonly recovery: RecoveryService; // Recovery service for withdrawing stuck hub-wallet assets back to a spoke chain
   public readonly dex: DexService; // Dex service enabling DEX operations
   public readonly leverageYield: LeverageYieldService; // Leverage-yield service: cross-chain deposits / withdrawals into ERC-4626 leverage vaults on Sonic
+  public readonly gasless: GaslessService; // Gasless service: EIP-7702 sponsored (gas-free) ERC20 spoke deposits
   public readonly config: ConfigService; // Config service enabling configuration data fetching from the backend API or fallbacking to default values
 
   public readonly hubProvider: HubProvider; // hub provider for the hub chain (e.g. Sonic mainnet)
@@ -52,6 +55,9 @@ export class Sodax {
     // so feature services can call `config.analytics.emit(...)` unconditionally with zero cost when off.
     const analytics = resolveAnalytics(options?.analytics);
     const fee = options?.fee;
+    // Gasless (EIP-7702 sponsored deposit) endpoints are client-side secrets — resolved here and held on
+    // `config.gasless`, never merged into the backend-fetched `SodaxConfig`.
+    const gasless = resolveGasless(options?.gasless);
     // Like `logger`, swaps options are client-side runtime toggles read off `SodaxOptions` —
     // never merged into the backend-fetched `SodaxConfig`/`instanceConfig`.
     const useBackendSubmitTx = options?.swapsOptions?.useBackendSubmitTx ?? false;
@@ -65,6 +71,7 @@ export class Sodax {
       logger,
       analytics,
       fee,
+      gasless,
     });
 
     this.hubProvider = new EvmHubProvider({ config: this.config }); // default to Sonic mainnet
@@ -111,6 +118,7 @@ export class Sodax {
       config: this.config,
       spoke: this.spoke,
     });
+    this.gasless = new GaslessService({ hubProvider: this.hubProvider, config: this.config, spoke: this.spoke });
   }
 
   /**

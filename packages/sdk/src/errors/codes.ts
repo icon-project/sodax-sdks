@@ -220,4 +220,5 @@ export const SODAX_FEATURES = [
   'recovery',
   'backend',
   'leverageYield',
+  'gasless',
 ] as const satisfies ReadonlyArray<SodaxFeature>;

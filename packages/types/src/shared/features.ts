@@ -16,4 +16,5 @@ export type SodaxFeature =
   | 'partner'
   | 'recovery'
   | 'backend' // backend-API HTTP client layer (BackendApiService / SwapsApiService), not a domain feature
-  | 'leverageYield';
+  | 'leverageYield'
+  | 'gasless'; // gasless (EIP-7702 sponsored) spoke deposits
