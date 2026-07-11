@@ -1,5 +1,5 @@
 import type { PrivateKeyAccount } from 'viem';
-import type { Address, EvmSpokeOnlyChainKey, HubAddress, Hex } from '@sodax/types';
+import type { Address, EvmSpokeOnlyChainKey, HubAddress, Hex, IGaslessCapableEvmWalletProvider } from '@sodax/types';
 import type { RelayExtraData } from '../shared/types/types.js';
 
 /**
@@ -10,15 +10,16 @@ import type { RelayExtraData } from '../shared/types/types.js';
  * batches `approve(assetManager, amount)` + `assetManager.transfer(token, to, amount, data)` into
  * one sponsored user operation and relays the resulting on-chain tx.
  *
- * Phase 1 supports **Mode B only** (SDK-managed keys): `owner` is a viem {@link PrivateKeyAccount}
- * that signs the EIP-7702 authorization and the user operation. Mode A (external wallets via
- * EIP-5792) is a future addition; when it lands, an external-wallet channel is added and `owner`
- * becomes optional (additive, non-breaking).
+ * Provide **exactly one** signer:
+ * - `owner` — **Mode B** (SDK-managed key): a viem {@link PrivateKeyAccount} signs the EIP-7702
+ *   authorization + user operation, submitted through a bundler.
+ * - `walletProvider` — **Mode A** (external wallet): an EIP-5792-capable EVM wallet provider
+ *   (MetaMask/Rabby/Coinbase) executes the atomic batch with a sponsoring paymaster.
  */
 export type GaslessDepositParams = {
   /** Source EVM spoke chain. Must be gasless-configured (see `Sodax({ gasless })`). */
   srcChainKey: EvmSpokeOnlyChainKey;
-  /** User EOA on the spoke chain. Must equal `owner.address` (EIP-7702 preserves the EOA address). */
+  /** User EOA on the spoke chain. Must equal the signer's address (EIP-7702 preserves the EOA address). */
   srcAddress: Address;
   /** ERC20 token to deposit. Native token is rejected (gasless has no approve/value story for it). */
   token: Address;
@@ -28,8 +29,17 @@ export type GaslessDepositParams = {
   to: HubAddress;
   /** Hub action payload built by the caller (bridge/supply/etc.). */
   data: Hex;
-  /** Mode B signer: signs the EIP-7702 authorization + user operation. */
-  owner: PrivateKeyAccount;
+  /** Mode B signer (SDK-managed key). Mutually exclusive with {@link walletProvider}. */
+  owner?: PrivateKeyAccount;
+  /** Mode A signer (external EIP-5792 wallet). Mutually exclusive with {@link owner}. */
+  walletProvider?: IGaslessCapableEvmWalletProvider;
+  /**
+   * When gasless is unavailable (chain unconfigured, or the wallet lacks atomic-batch / paymaster
+   * support), opt into degrading to the normal **user-paid** approve+deposit flow instead of
+   * returning an error. Only meaningful in Mode A (requires a `walletProvider` to sign). Default
+   * `false` — an unsupported deposit returns a typed error.
+   */
+  allowGasFallback?: boolean;
   /** Relay wait timeout in ms. Defaults to the relay helper's `DEFAULT_RELAY_TX_TIMEOUT`. */
   timeout?: number;
 };
@@ -42,4 +52,27 @@ export type GaslessDepositParams = {
 export type GaslessDepositIntent = {
   srcChainTxHash: string;
   relayData: RelayExtraData;
+};
+
+/** How a gasless deposit resolves at runtime for a given chain + signer. */
+export type GaslessMode = 'walletCalls' | 'smartAccount' | 'unsupported';
+
+/** Result of capability detection — lets a dApp decide whether to offer the gasless option. */
+export type GaslessCapabilities = {
+  chainKey: EvmSpokeOnlyChainKey;
+  /** Chain is gasless-configured (EIP-7702 live + endpoints available). */
+  configured: boolean;
+  /** Mode A: the wallet advertises atomic batching (or Mode B, which is atomic by construction). */
+  atomicSupported: boolean;
+  /** Mode A: the wallet advertises ERC-7677 paymaster support (or Mode B, always sponsored). */
+  paymasterSupported: boolean;
+  /** The mode `deposit()` would actually use. `unsupported` → gasless not possible for this input. */
+  resolvedMode: GaslessMode;
+};
+
+/** Inputs for capability detection (does not execute anything). */
+export type GaslessCapabilitiesParams = {
+  chainKey: EvmSpokeOnlyChainKey;
+  owner?: PrivateKeyAccount;
+  walletProvider?: IGaslessCapableEvmWalletProvider;
 };

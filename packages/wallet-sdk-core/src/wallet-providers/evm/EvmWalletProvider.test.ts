@@ -252,4 +252,76 @@ describe('EvmWalletProvider', () => {
       void provider.sendTransaction(RAW_TX, { data: '0xdead' });
     });
   });
+
+  describe('EIP-5792 capability methods', () => {
+    it('getCapabilities delegates to the wallet client for the given chain', async () => {
+      const config = makeBrowserExtensionConfig();
+      const provider = new EvmWalletProvider(config);
+      const caps = { atomic: { status: 'supported' }, paymasterService: { supported: true } };
+      const spy = vi.spyOn(config.walletClient, 'getCapabilities').mockResolvedValue(caps as never);
+
+      const result = await provider.getCapabilities(146);
+
+      expect(spy).toHaveBeenCalledWith({ account: config.walletClient.account, chainId: 146 });
+      expect(result).toEqual(caps);
+    });
+
+    it('sendCalls forwards the batch, sets forceAtomic, strips the atomic marker, and returns the bundle id', async () => {
+      const config = makeBrowserExtensionConfig();
+      const provider = new EvmWalletProvider(config);
+      const spy = vi.spyOn(config.walletClient, 'sendCalls').mockResolvedValue({ id: '0xbundle' });
+
+      const result = await provider.sendCalls({
+        calls: [{ to: '0x0000000000000000000000000000000000000010', data: '0xapprove', value: 0n }],
+        capabilities: { paymasterService: { url: 'https://pm' }, atomic: { status: 'required' } },
+      });
+
+      expect(result).toEqual({ id: '0xbundle' });
+      // `atomic` is translated to `forceAtomic`, not forwarded as a capability.
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          forceAtomic: true,
+          calls: [{ to: '0x0000000000000000000000000000000000000010', data: '0xapprove', value: 0n }],
+          capabilities: { paymasterService: { url: 'https://pm' }, atomic: undefined },
+        }),
+      );
+    });
+
+    it('waitForCallsStatus maps status + receipts to the local shape', async () => {
+      const config = makeBrowserExtensionConfig();
+      const provider = new EvmWalletProvider(config);
+      vi.spyOn(config.walletClient, 'waitForCallsStatus').mockResolvedValue({
+        id: '0xbundle',
+        status: 'success',
+        statusCode: 200,
+        receipts: [{ transactionHash: '0xhash1' }, { transactionHash: '0xhash2' }],
+      } as never);
+
+      const result = await provider.waitForCallsStatus('0xbundle');
+
+      expect(result).toEqual({
+        status: 'success',
+        statusCode: 200,
+        receipts: [{ transactionHash: '0xhash1' }, { transactionHash: '0xhash2' }],
+      });
+    });
+
+    it('sendCalls rejects (without submitting) when chainId differs from the wallet active chain', async () => {
+      const config = makeBrowserExtensionConfig();
+      const provider = new EvmWalletProvider(config);
+      const spy = vi.spyOn(config.walletClient, 'sendCalls').mockResolvedValue({ id: '0xbundle' });
+
+      await expect(provider.sendCalls({ calls: [], chainId: 999 })).rejects.toThrow();
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('sendCalls proceeds when chainId matches the wallet active chain', async () => {
+      const config = makeBrowserExtensionConfig();
+      const provider = new EvmWalletProvider(config);
+      vi.spyOn(config.walletClient, 'sendCalls').mockResolvedValue({ id: '0xbundle' });
+
+      const result = await provider.sendCalls({ calls: [], chainId: config.walletClient.chain.id });
+      expect(result).toEqual({ id: '0xbundle' });
+    });
+  });
 });

@@ -16,6 +16,7 @@ const navLinks = [
   { to: '/dex', label: 'Dex' },
   { to: '/recovery', label: 'Recovery' },
   { to: '/leverage-yield', label: 'Leverage Yield' },
+  { to: '/gasless', label: 'Gasless' },
 ];
 
 const getNavLinkClass = (isActive: boolean) =>

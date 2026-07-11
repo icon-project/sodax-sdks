@@ -12,3 +12,4 @@ export * from './recovery/index.js';
 export * from './migrate/index.js';
 export * from './dex/index.js';
 export * from './leverageYield/index.js';
+export * from './gasless/index.js';

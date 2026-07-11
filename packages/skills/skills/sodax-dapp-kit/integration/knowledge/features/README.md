@@ -12,6 +12,7 @@ Per-feature reference docs. Each file documents the hooks, params types, return 
 | [`leverage-yield.md`](leverage-yield.md) | Leveraged-yield ERC-4626 vaults: `useLeverageYieldDeposit`/`Withdraw` (build) + `useLeverageYieldVaultSwap` (execute), effective APR / position / TVL / share-balance reads. |
 | [`migration.md`](migration.md) | Token migration: `useMigrateIcxToSoda`, `useRevertMigrateSodaToIcx`, `useMigratebnUSD`, `useMigrateBaln`, allowance/approve. |
 | [`bitcoin.md`](bitcoin.md) | Bound Exchange (dapp-kit-unique): session, trading wallet, fund/withdraw, UTXOs. |
+| [`gasless.md`](gasless.md) | Gasless (EIP-7702 sponsored) spoke deposits: `useGaslessDeposit`, `useGaslessCapabilities`, Mode A (external wallet) / Mode B (SDK key), opt-in gas fallback. |
 | [`auxiliary-services.md`](auxiliary-services.md) | Partner fee claiming, recovery, backend queries (intent tracking, orderbook, MM data), shared utilities (xBalances, gas, trustlines). |
 
 ## Reference vs recipes
@@ -21,7 +22,7 @@ Per-feature reference docs. Each file documents the hooks, params types, return 
 
 ## Pair-completeness
 
-Every file in this directory has a sibling in [`features/`](../../../migration-v1-to-v2/knowledge/features/) with the same filename — the v1→v2 porting playbook for that feature. When you're deep in one, the other is one path-swap away. **Exception:** features introduced in v2 with no v1 equivalent (`leverage-yield.md`) have no migration sibling — there is nothing to port.
+Every file in this directory has a sibling in [`features/`](../../../migration-v1-to-v2/knowledge/features/) with the same filename — the v1→v2 porting playbook for that feature. When you're deep in one, the other is one path-swap away. **Exception:** features introduced in v2 with no v1 equivalent (`leverage-yield.md`, `gasless.md`) have no migration sibling — there is nothing to port.
 
 ## Cross-references
 

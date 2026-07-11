@@ -72,15 +72,17 @@ export const bridgeConfig = {} satisfies BridgeDefaultConfig;
 
 /** Per-chain gasless endpoints + support flag. `supports7702` gates whether the chain is eligible. */
 export type GaslessChainConfig = {
-  paymasterUrl: string; // ERC-7677 paymaster endpoint (Pimlico) — sponsors the batched user operation
-  bundlerUrl: string; // ERC-4337 bundler endpoint (Pimlico) — submits the user operation
+  paymasterUrl?: string; // ERC-7677 paymaster endpoint (Pimlico). Optional: synthesized from `pimlicoApiKey` + chainId when omitted.
+  bundlerUrl?: string; // ERC-4337 bundler endpoint (Pimlico). Optional: synthesized from `pimlicoApiKey` + chainId when omitted.
   supports7702: boolean; // EIP-7702 is live on this chain (Simple7702 delegate + EntryPoint available)
+  sponsorshipPolicyId?: string; // Pimlico sponsorship policy id → merged into the paymaster context (both modes)
+  paymasterContext?: Record<string, unknown>; // arbitrary ERC-7677 paymaster context (escape hatch; takes precedence)
 };
 
 /** `gasless` option accepted by `new Sodax(...)`. Omit to leave gasless deposits disabled. */
 export type GaslessOptions = {
-  pimlicoApiKey?: string; // secret; reserved for templating default endpoints when per-chain URLs are omitted
-  chains?: Partial<Record<EvmSpokeOnlyChainKey, GaslessChainConfig>>; // per-chain gasless endpoints
+  pimlicoApiKey?: string; // secret; used to synthesize default Pimlico v2 endpoints when a chain omits paymaster/bundler URLs
+  chains?: Partial<Record<EvmSpokeOnlyChainKey, GaslessChainConfig>>; // per-chain gasless config
 };
 
 export type SodaxOptionalConfig = {

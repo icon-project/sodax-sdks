@@ -1,20 +1,21 @@
 /**
- * Unit tests for GaslessService (Mode B).
+ * Unit tests for GaslessService (Mode A + Mode B).
  *
- * Mirrors BridgeService.test.ts: the viem account-abstraction layer is isolated behind the
- * `executeUserOp` seam and `vi.mock`ed, and the relay (`relayTxAndWaitPacket`) is `vi.mock`ed, so
- * the tests exercise validation + orchestration offline. A real `Sodax` (configured with gasless
- * endpoints for BSC) backs every test; `buildDepositCalls` and EVM `verifyTxHash` run for real.
+ * Mirrors BridgeService.test.ts: the executors (`executeUserOp` Mode B, `executeSendCalls` Mode A)
+ * and the relay (`relayTxAndWaitPacket`) are `vi.mock`ed, so the tests exercise validation, mode
+ * detection, and orchestration offline. A real `Sodax` (configured with gasless endpoints for BSC)
+ * backs every test; `buildDepositCalls` and EVM `verifyTxHash` run for real.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { privateKeyToAccount } from 'viem/accounts';
-import type { Address, EvmSpokeOnlyChainKey, Hex } from '@sodax/types';
+import type { Address, EvmSpokeOnlyChainKey, Hex, IGaslessCapableEvmWalletProvider } from '@sodax/types';
 import { Sodax } from '../shared/entities/Sodax.js';
 import type { GaslessDepositParams } from './GaslessTypes.js';
 
 const mocks = vi.hoisted(() => ({
   executeUserOp: vi.fn(),
+  executeSendCalls: vi.fn(),
   relayTxAndWaitPacket: vi.fn(),
 }));
 
@@ -22,10 +23,28 @@ vi.mock('./internal/userOpExecutor.js', () => ({
   executeUserOp: mocks.executeUserOp,
 }));
 
+vi.mock('./internal/sendCallsExecutor.js', () => ({
+  executeSendCalls: mocks.executeSendCalls,
+}));
+
 vi.mock('../shared/services/intentRelay/IntentRelayApiService.js', async () => {
   const actual = await vi.importActual<object>('../shared/services/intentRelay/IntentRelayApiService.js');
   return { ...actual, relayTxAndWaitPacket: mocks.relayTxAndWaitPacket };
 });
+
+/** Mock external EIP-5792 wallet. `caps` controls what `wallet_getCapabilities` advertises. */
+const makeCapableWallet = (
+  caps: unknown = { atomic: { status: 'supported' }, paymasterService: { supported: true } },
+): IGaslessCapableEvmWalletProvider =>
+  ({
+    chainType: 'EVM',
+    getCapabilities: vi.fn().mockResolvedValue(caps),
+    sendCalls: vi.fn(),
+    waitForCallsStatus: vi.fn(),
+    getWalletAddress: vi.fn().mockResolvedValue(OWNER.address),
+    sendTransaction: vi.fn(),
+    waitForTransactionReceipt: vi.fn(),
+  }) as unknown as IGaslessCapableEvmWalletProvider;
 
 const BSC = '0x38.bsc' satisfies EvmSpokeOnlyChainKey;
 const ARBITRUM = '0xa4b1.arbitrum' satisfies EvmSpokeOnlyChainKey; // intentionally NOT gasless-configured
@@ -170,5 +189,110 @@ describe('GaslessService.createGaslessDepositIntent', () => {
     }
     expect(mocks.executeUserOp).toHaveBeenCalledTimes(1);
     expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
+  });
+});
+
+describe('GaslessService.deposit — Mode A (external wallet)', () => {
+  it('runs sendCalls and relays the extracted hash when the wallet is capable', async () => {
+    mocks.executeSendCalls.mockResolvedValue({ srcChainTxHash: SRC_TX });
+    mocks.relayTxAndWaitPacket.mockResolvedValue({ ok: true, value: { dst_tx_hash: DST_TX } });
+    const wallet = makeCapableWallet();
+
+    const result = await sodax.gasless.deposit(params({ owner: undefined, walletProvider: wallet }));
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toEqual({ srcChainTxHash: SRC_TX, dstChainTxHash: DST_TX });
+
+    expect(mocks.executeSendCalls).toHaveBeenCalledTimes(1);
+    const call = mocks.executeSendCalls.mock.calls[0][0];
+    expect(call.wallet).toBe(wallet);
+    expect(call.paymasterUrl).toBe(PAYMASTER_URL);
+    expect(call.calls).toHaveLength(2);
+    expect(call.chainId).toBe(Number(sodax.config.getChainConfig(BSC).chain.chainId)); // forwarded for the wrong-chain guard
+    expect(mocks.executeUserOp).not.toHaveBeenCalled();
+  });
+
+  it('returns a typed error when the wallet lacks atomic/paymaster support (no fallback)', async () => {
+    const wallet = makeCapableWallet({ atomic: { status: 'unsupported' } });
+
+    const result = await sodax.gasless.deposit(params({ owner: undefined, walletProvider: wallet }));
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('VALIDATION_FAILED');
+      expect(result.error.context?.reason).toBe('gasless-unsupported');
+    }
+    expect(mocks.executeSendCalls).not.toHaveBeenCalled();
+  });
+});
+
+describe('GaslessService.deposit — signer invariant', () => {
+  it('rejects when both owner and walletProvider are provided', async () => {
+    const result = await sodax.gasless.deposit(params({ walletProvider: makeCapableWallet() }));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('VALIDATION_FAILED');
+  });
+
+  it('rejects when neither owner nor walletProvider is provided', async () => {
+    const result = await sodax.gasless.deposit(params({ owner: undefined }));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('VALIDATION_FAILED');
+  });
+});
+
+describe('GaslessService.deposit — allowGasFallback', () => {
+  it('degrades to the normal approve+deposit flow when gasless is unavailable', async () => {
+    const wallet = makeCapableWallet({ atomic: { status: 'unsupported' } });
+    vi.spyOn(sodax.spoke, 'isAllowanceValid').mockResolvedValue({ ok: true, value: false });
+    const approveSpy = vi.spyOn(sodax.spoke, 'approve').mockResolvedValue({ ok: true, value: '0xapprovetx' } as never);
+    const depositSpy = vi.spyOn(sodax.spoke, 'deposit').mockResolvedValue({ ok: true, value: SRC_TX } as never);
+    mocks.relayTxAndWaitPacket.mockResolvedValue({ ok: true, value: { dst_tx_hash: DST_TX } });
+
+    const result = await sodax.gasless.deposit(
+      params({ owner: undefined, walletProvider: wallet, allowGasFallback: true }),
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toEqual({ srcChainTxHash: SRC_TX, dstChainTxHash: DST_TX });
+    expect(approveSpy).toHaveBeenCalledTimes(1);
+    expect(depositSpy).toHaveBeenCalledTimes(1);
+    expect(mocks.executeSendCalls).not.toHaveBeenCalled();
+    expect(mocks.executeUserOp).not.toHaveBeenCalled();
+  });
+
+  it('skips approve in the fallback when allowance is already valid', async () => {
+    const wallet = makeCapableWallet({ atomic: { status: 'unsupported' } });
+    vi.spyOn(sodax.spoke, 'isAllowanceValid').mockResolvedValue({ ok: true, value: true });
+    const approveSpy = vi.spyOn(sodax.spoke, 'approve');
+    const depositSpy = vi.spyOn(sodax.spoke, 'deposit').mockResolvedValue({ ok: true, value: SRC_TX } as never);
+    mocks.relayTxAndWaitPacket.mockResolvedValue({ ok: true, value: { dst_tx_hash: DST_TX } });
+
+    const result = await sodax.gasless.deposit(
+      params({ owner: undefined, walletProvider: wallet, allowGasFallback: true }),
+    );
+
+    expect(result.ok).toBe(true);
+    expect(approveSpy).not.toHaveBeenCalled();
+    expect(depositSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('GaslessService.getGaslessCapabilities', () => {
+  it('reports walletCalls for a capable wallet on a configured chain', async () => {
+    const result = await sodax.gasless.getGaslessCapabilities({ chainKey: BSC, walletProvider: makeCapableWallet() });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.resolvedMode).toBe('walletCalls');
+  });
+
+  it('reports smartAccount for an owner on a configured chain', async () => {
+    const result = await sodax.gasless.getGaslessCapabilities({ chainKey: BSC, owner: OWNER });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.resolvedMode).toBe('smartAccount');
+  });
+
+  it('reports unsupported for an unconfigured chain', async () => {
+    const result = await sodax.gasless.getGaslessCapabilities({ chainKey: ARBITRUM, owner: OWNER });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.resolvedMode).toBe('unsupported');
   });
 });

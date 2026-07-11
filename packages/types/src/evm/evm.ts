@@ -1,12 +1,11 @@
 import type { Address, Hex, Hash } from '../shared/shared.js';
 import type { ICoreWallet } from '../wallet/wallet.js';
 
-export type EvmReturnType<Raw extends boolean> =
-  Raw extends true
-    ? EvmRawTransaction
-    : Raw extends false
-      ? Hex
-      : Hex | EvmRawTransaction;
+export type EvmReturnType<Raw extends boolean> = Raw extends true
+  ? EvmRawTransaction
+  : Raw extends false
+    ? Hex
+    : Hex | EvmRawTransaction;
 
 export type EvmRawTransaction = {
   from: Address;
@@ -57,4 +56,54 @@ export interface IEvmWalletProvider extends ICoreWallet {
   getWalletAddress: () => Promise<Address>;
   sendTransaction: (evmRawTx: EvmRawTransaction) => Promise<Hash>;
   waitForTransactionReceipt: (txHash: Hash) => Promise<EvmRawTransactionReceipt>;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EIP-5792 (`wallet_sendCalls`) + ERC-7677 paymaster capability surface.
+//
+// Local, viem-free shapes (mirroring EvmRawTransaction/EvmRawTransactionReceipt) so `@sodax/types`
+// keeps its zero-third-party-type rule. Used by the OPTIONAL {@link IGaslessCapableEvmWalletProvider}
+// sub-interface for external wallets (MetaMask/Rabby/Coinbase) that can batch calls atomically and
+// accept a sponsoring paymaster — the base {@link IEvmWalletProvider} stays unchanged.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A single call in an EIP-5792 batch (viem `Call` shape). */
+export type EvmBatchCall = { to: Address; data: Hex; value?: bigint };
+
+/** Capabilities passed to `wallet_sendCalls` (ERC-7677 paymaster + EIP-5792 atomic). Open for wallet-specific keys. */
+export type EvmSendCallsCapabilities = {
+  paymasterService?: { url: string; context?: Record<string, unknown> };
+  atomic?: { status?: string };
+  [capability: string]: unknown;
+};
+
+/** Response of `wallet_getCapabilities` for a chain — an opaque per-EIP-5792 map read defensively by callers. */
+export type EvmWalletCapabilities = Record<string, unknown>;
+
+/** Result of `wallet_sendCalls`: a bundle identifier (not a tx hash — poll {@link EvmCallsStatus} for that). */
+export type EvmSendCallsResult = { id: string; capabilities?: Record<string, unknown> };
+
+/** Status + receipts of a call bundle, from `wallet_getCallsStatus` / viem `waitForCallsStatus`. */
+export type EvmCallsStatus = {
+  status?: string; // viem: 'pending' | 'success' | 'failure'
+  statusCode?: number; // EIP-5792 numeric status (e.g. 200 = confirmed)
+  atomic?: boolean;
+  receipts?: { transactionHash: Hash }[];
+};
+
+/**
+ * Optional EIP-5792 capability surface for EVM wallets that can batch calls atomically and accept an
+ * ERC-7677 paymaster. Implemented by browser-extension wallet providers (e.g. `EvmWalletProvider` in
+ * browser mode). Kept as a sub-interface so non-5792 wallets and the base contract are unaffected;
+ * consumers narrow via a runtime guard before using it.
+ */
+export interface IGaslessCapableEvmWalletProvider extends IEvmWalletProvider {
+  getCapabilities: (chainId: number) => Promise<EvmWalletCapabilities>;
+  sendCalls: (params: {
+    calls: EvmBatchCall[];
+    capabilities?: EvmSendCallsCapabilities;
+    /** Expected chain id. The provider rejects if the wallet's active chain differs (prevents wrong-chain submits). */
+    chainId?: number;
+  }) => Promise<EvmSendCallsResult>;
+  waitForCallsStatus: (id: string) => Promise<EvmCallsStatus>;
 }

@@ -13,6 +13,8 @@ export type UserOpExecutorParams = {
   bundlerUrl: string;
   /** Pimlico ERC-7677 paymaster endpoint (sponsors the gas). */
   paymasterUrl: string;
+  /** Optional paymaster context (e.g. Pimlico `sponsorshipPolicyId`) passed to the paymaster client. */
+  paymasterContext?: Record<string, unknown>;
 };
 
 /**
@@ -27,7 +29,7 @@ export type UserOpExecutorParams = {
  * @throws if the user operation reverts on-chain.
  */
 export async function executeUserOp(params: UserOpExecutorParams): Promise<{ srcChainTxHash: string }> {
-  const { publicClient, owner, calls, bundlerUrl, paymasterUrl } = params;
+  const { publicClient, owner, calls, bundlerUrl, paymasterUrl, paymasterContext } = params;
 
   const account = await toSimple7702SmartAccount({ client: publicClient, owner });
   const paymaster = createPaymasterClient({ transport: http(paymasterUrl) });
@@ -36,6 +38,7 @@ export async function executeUserOp(params: UserOpExecutorParams): Promise<{ src
     client: publicClient,
     transport: http(bundlerUrl),
     paymaster,
+    ...(paymasterContext ? { paymasterContext } : {}),
   });
 
   const hash = await bundlerClient.sendUserOperation({ calls });

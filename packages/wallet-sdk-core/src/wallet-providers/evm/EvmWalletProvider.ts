@@ -1,9 +1,14 @@
 import {
   ChainKeys,
+  type EvmBatchCall,
+  type EvmCallsStatus,
   type EvmChainKey,
   type EvmRawTransaction,
   type EvmRawTransactionReceipt,
-  type IEvmWalletProvider,
+  type EvmSendCallsCapabilities,
+  type EvmSendCallsResult,
+  type EvmWalletCapabilities,
+  type IGaslessCapableEvmWalletProvider,
 } from '@sodax/types';
 import type { Account, Address, Chain, Hash, PublicClient, TransactionReceipt, Transport, WalletClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -115,7 +120,10 @@ export function isBrowserExtensionEvmWalletConfig(config: EvmWalletConfig): conf
  * All 13 supported EVM chains are covered via {@link getEvmViemChain}; HyperEVM is defined
  * locally as {@link hyper} because it is absent from `viem/chains`.
  */
-export class EvmWalletProvider extends BaseWalletProvider<EvmWalletDefaults> implements IEvmWalletProvider {
+export class EvmWalletProvider
+  extends BaseWalletProvider<EvmWalletDefaults>
+  implements IGaslessCapableEvmWalletProvider
+{
   public readonly chainType = 'EVM' as const;
   public readonly publicClient: PublicClient;
   private readonly walletClient: WalletClient<Transport, Chain, Account>;
@@ -172,6 +180,50 @@ export class EvmWalletProvider extends BaseWalletProvider<EvmWalletDefaults> imp
     const policy = this.mergePolicy('waitForTransactionReceipt', options);
     const receipt = await this.publicClient.waitForTransactionReceipt({ hash: txHash, ...policy });
     return EvmWalletProvider.serializeReceipt(receipt);
+  }
+
+  // ── EIP-5792 capability surface (browser wallets) ─────────────────────────────
+  // Thin delegation to the underlying viem wallet client. In browser-extension mode the injected
+  // wagmi client implements `wallet_*`; in private-key mode over a raw RPC these reject (no wallet),
+  // which the SDK's capability detection treats as "gasless unsupported".
+
+  /** EIP-5792 `wallet_getCapabilities` for a chain. */
+  async getCapabilities(chainId: number): Promise<EvmWalletCapabilities> {
+    return this.walletClient.getCapabilities({ account: this.walletClient.account, chainId });
+  }
+
+  /** EIP-5792 `wallet_sendCalls`: submit an atomic batch with optional ERC-7677 paymaster sponsorship. */
+  async sendCalls(params: {
+    calls: EvmBatchCall[];
+    capabilities?: EvmSendCallsCapabilities;
+    chainId?: number;
+  }): Promise<EvmSendCallsResult> {
+    const { calls, capabilities, chainId } = params;
+    // Guard against submitting on the wrong chain: EIP-5792 executes on the wallet's active chain,
+    // so a mismatch would silently send the batch elsewhere. The caller must switch chains first.
+    if (chainId !== undefined && chainId !== this.walletClient.chain.id) {
+      throw new Error(
+        `Wallet is on chain ${this.walletClient.chain.id}, expected ${chainId}. Switch chains before the gasless deposit.`,
+      );
+    }
+    // The `atomic` capability is our cross-wallet request marker; viem expresses "must be atomic"
+    // via the top-level `forceAtomic` flag, so translate it and forward the remaining capabilities.
+    const forceAtomic = capabilities?.atomic?.status === 'required';
+    const viemCapabilities = capabilities
+      ? ({ ...capabilities, atomic: undefined } as Parameters<typeof this.walletClient.sendCalls>[0]['capabilities'])
+      : undefined;
+    const { id } = await this.walletClient.sendCalls({ calls, forceAtomic, capabilities: viemCapabilities });
+    return { id };
+  }
+
+  /** Poll EIP-5792 `wallet_getCallsStatus` until the bundle settles; returns status + receipts. */
+  async waitForCallsStatus(id: string): Promise<EvmCallsStatus> {
+    const result = await this.walletClient.waitForCallsStatus({ id });
+    return {
+      status: result.status,
+      statusCode: result.statusCode,
+      receipts: result.receipts?.map(receipt => ({ transactionHash: receipt.transactionHash })),
+    };
   }
 
   private static serializeReceipt(receipt: TransactionReceipt): EvmRawTransactionReceipt {

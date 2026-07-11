@@ -53,6 +53,13 @@ Comprehensive hook table across 12 feature domains. Use this when you know the f
 | `useGetBridgeableAmount` | Query | Max bridgeable amount between two `XToken`s |
 | `useGetBridgeableTokens` | Query | Tokens bridgeable to a destination chain |
 
+## Gasless
+
+| Hook | Type | Purpose |
+|---|---|---|
+| `useGaslessDeposit` | Mutation | Gasless (EIP-7702 sponsored) spoke deposit — Mode A (external wallet) or Mode B (SDK key); opt-in gas fallback |
+| `useGaslessCapabilities` | Query | Resolve whether a chain + signer supports gasless (`resolvedMode`), to gate the UI |
+
 ## Staking
 
 | Hook | Type | Purpose |

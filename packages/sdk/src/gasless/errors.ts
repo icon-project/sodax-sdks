@@ -1,13 +1,13 @@
 /**
  * Gasless module narrow error types.
  *
- * Single user-facing action (`'deposit'`). The batched approve+transfer is executed as one
- * sponsored EIP-7702 user operation, so there is no separate `approve` / `isAllowanceValid`
- * surface — the reachable codes are the create-intent subset plus the orchestration (relay)
- * codes, mirroring `bridge/errors.ts` minus the approve/allowance/lookup variants.
+ * Single user-facing action (`'deposit'`). The batch runs as one sponsored operation (Mode B user
+ * operation / Mode A `wallet_sendCalls`), so there is no standalone `approve` surface — but the
+ * opt-in gas-fallback path does approve+deposit, so `APPROVE_FAILED` / `ALLOWANCE_CHECK_FAILED` are
+ * reachable there. `getGaslessCapabilities` is a read-only lookup (`LOOKUP_FAILED`).
  */
 
-import { CREATE_INTENT_CODES, type CreateIntentErrorCode, type SodaxErrorCode } from '../errors/codes.js';
+import type { SodaxErrorCode } from '../errors/codes.js';
 import { isCodeMember } from '../errors/guards.js';
 import { createInvariant, type FeatureInvariant } from '../errors/invariant.js';
 import type { SodaxError } from '../errors/SodaxError.js';
@@ -26,14 +26,13 @@ export type GaslessOrchestrationErrorCode = Extract<
   | 'RELAY_TIMEOUT'
   | 'RELAY_FAILED'
   | 'EXECUTION_FAILED'
+  | 'APPROVE_FAILED'
+  | 'ALLOWANCE_CHECK_FAILED'
   | 'UNKNOWN'
 >;
 
-export type GaslessCreateIntentErrorCode = CreateIntentErrorCode;
-
 export type GaslessOrchestrationError = SodaxError<GaslessOrchestrationErrorCode>;
-export type GaslessCreateIntentError = SodaxError<GaslessCreateIntentErrorCode>;
-export type GaslessError = GaslessOrchestrationError;
+export type GaslessLookupError = SodaxError<Extract<SodaxErrorCode, 'VALIDATION_FAILED' | 'LOOKUP_FAILED' | 'UNKNOWN'>>;
 
 const ORCHESTRATION_CODES: ReadonlySet<GaslessOrchestrationErrorCode> = new Set([
   'USER_REJECTED',
@@ -44,8 +43,9 @@ const ORCHESTRATION_CODES: ReadonlySet<GaslessOrchestrationErrorCode> = new Set(
   'RELAY_TIMEOUT',
   'RELAY_FAILED',
   'EXECUTION_FAILED',
+  'APPROVE_FAILED',
+  'ALLOWANCE_CHECK_FAILED',
   'UNKNOWN',
 ]);
 
 export const isGaslessOrchestrationError = isCodeMember<GaslessOrchestrationErrorCode>(ORCHESTRATION_CODES);
-export const isGaslessCreateIntentError = isCodeMember<GaslessCreateIntentErrorCode>(CREATE_INTENT_CODES);

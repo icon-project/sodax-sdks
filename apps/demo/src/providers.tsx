@@ -128,6 +128,19 @@ export default function Providers({ children }: { children: ReactNode }) {
       // leaves the SDK on its default (analytics off).
       analytics: createDemoAnalytics() ?? false,
       solver: configMap[solverEnvironment],
+      // Gasless (EIP-7702 sponsored) deposits. Client-side secret: set VITE_PIMLICO_API_KEY to enable —
+      // paymaster/bundler URLs are synthesized per chain from it. Chains without EIP-7702 stay disabled.
+      gasless: {
+        pimlicoApiKey: import.meta.env.VITE_PIMLICO_API_KEY,
+        chains: {
+          [ChainKeys.BASE_MAINNET]: { supports7702: true },
+          [ChainKeys.ARBITRUM_MAINNET]: { supports7702: true },
+          [ChainKeys.OPTIMISM_MAINNET]: { supports7702: true },
+          [ChainKeys.POLYGON_MAINNET]: { supports7702: true },
+          [ChainKeys.BSC_MAINNET]: { supports7702: true },
+          [ChainKeys.ETHEREUM_MAINNET]: { supports7702: true },
+        },
+      },
       chains: {
         [ChainKeys.SONIC_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.SONIC_MAINNET] },
         [ChainKeys.AVALANCHE_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.AVALANCHE_MAINNET] },

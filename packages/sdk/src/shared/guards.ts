@@ -26,6 +26,7 @@ import type {
   IBitcoinWalletProvider,
   GetWalletProviderType,
   IEvmWalletProvider,
+  IGaslessCapableEvmWalletProvider,
   IStellarWalletProvider,
 } from '@sodax/types';
 import {
@@ -231,6 +232,23 @@ export function isBitcoinWalletProviderType(wp: IWalletProvider): wp is IBitcoin
 
 export function isEvmWalletProviderType(walletProvider: IWalletProvider): walletProvider is IEvmWalletProvider {
   return walletProvider.chainType === 'EVM';
+}
+
+/**
+ * Refines an EVM wallet provider to the EIP-5792 capability subtype by duck-typing the three
+ * optional methods. Used by the gasless service to decide whether an external wallet can do a
+ * `wallet_sendCalls` (Mode A) atomic sponsored batch.
+ */
+export function isGaslessCapableEvmWalletProviderType(
+  walletProvider: IWalletProvider,
+): walletProvider is IGaslessCapableEvmWalletProvider {
+  if (walletProvider.chainType !== 'EVM') return false;
+  const candidate = walletProvider as Partial<IGaslessCapableEvmWalletProvider>;
+  return (
+    typeof candidate.getCapabilities === 'function' &&
+    typeof candidate.sendCalls === 'function' &&
+    typeof candidate.waitForCallsStatus === 'function'
+  );
 }
 
 export function isStellarWalletProviderType(walletProvider: IWalletProvider): walletProvider is IStellarWalletProvider {
