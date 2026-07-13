@@ -4,6 +4,10 @@ Gasless (EIP-7702 sponsored) ERC20 spoke deposits. Batches `approve` + `assetMan
 one atomic, paymaster-sponsored operation so a user with zero native balance can deposit. v2-only —
 no v1 equivalent.
 
+**Depositors are EOA wallets only.** EIP-7702 delegates the EOA to a smart-account implementation
+only for the batch (its address stays the EOA); deployed smart-contract accounts (Safe / native
+ERC-4337) are not supported as depositors.
+
 ## When to use
 
 The wrapped feature is a **spoke deposit** — the same on-chain action that powers `bridge` /

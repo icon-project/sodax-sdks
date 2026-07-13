@@ -49,9 +49,16 @@ export type GaslessServiceConstructorParams = {
  * future `bridge.bridgeGasless`) build `data` via a feature's existing helper and derive `to` via
  * `hubProvider.getUserHubWalletAddress(EOA, chainKey)`.
  *
+ * **Depositors are EOA wallets only.** Both modes act on a user-controlled EOA; the EIP-7702
+ * delegation to a smart-account implementation is transient (for the batch), and the account
+ * address stays the EOA. Deployed smart-contract accounts (Safe / native ERC-4337) are out of
+ * scope as depositors — Mode B is an EOA by the `owner: PrivateKeyAccount` type, and a contract
+ * wallet in Mode A does not advertise the EIP-5792 capabilities, so it resolves to `unsupported`.
+ *
  * Two modes, selected by which signer is provided:
- * - **Mode B** (`owner`): SDK-managed key via a viem Simple7702 smart account + bundler.
- * - **Mode A** (`walletProvider`): external EIP-5792 wallet via `wallet_sendCalls` + paymaster.
+ * - **Mode B** (`owner`): SDK-managed EOA key, 7702-delegated to a viem Simple7702 implementation
+ *   and submitted as a user operation through a bundler.
+ * - **Mode A** (`walletProvider`): external EOA wallet via EIP-5792 `wallet_sendCalls` + paymaster.
  *
  * When gasless is unavailable, `deposit` returns a typed error unless `allowGasFallback` opts into
  * the normal (user-paid) approve+deposit flow. Use {@link getGaslessCapabilities} to gate the UI.

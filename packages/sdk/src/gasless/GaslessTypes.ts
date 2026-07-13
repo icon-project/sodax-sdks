@@ -10,10 +10,14 @@ import type { RelayExtraData } from '../shared/types/types.js';
  * batches `approve(assetManager, amount)` + `assetManager.transfer(token, to, amount, data)` into
  * one sponsored user operation and relays the resulting on-chain tx.
  *
+ * The depositor is always a user-controlled **EOA** (deployed smart-contract accounts are not
+ * supported) — EIP-7702 only delegates that EOA to a smart-account implementation for the batch;
+ * its address, and `msg.sender` for the transfer, stay the EOA.
+ *
  * Provide **exactly one** signer:
- * - `owner` — **Mode B** (SDK-managed key): a viem {@link PrivateKeyAccount} signs the EIP-7702
- *   authorization + user operation, submitted through a bundler.
- * - `walletProvider` — **Mode A** (external wallet): an EIP-5792-capable EVM wallet provider
+ * - `owner` — **Mode B** (SDK-managed key): a viem {@link PrivateKeyAccount} (an EOA) signs the
+ *   EIP-7702 authorization + user operation, submitted through a bundler.
+ * - `walletProvider` — **Mode A** (external wallet): an EIP-5792-capable EVM **EOA** wallet
  *   (MetaMask/Rabby/Coinbase) executes the atomic batch with a sponsoring paymaster.
  */
 export type GaslessDepositParams = {
