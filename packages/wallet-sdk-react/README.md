@@ -4,7 +4,7 @@ React layer over [`@sodax/wallet-sdk-core`](https://github.com/icon-project/soda
 
 ## Features
 
-- **Unified wallet connectivity** for 9 chain families across 21 chains
+- **Unified wallet connectivity** across every supported chain family
   - EVM (Sonic hub, Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia, Hedera) — EIP-6963 + WalletConnect
   - Solana, Sui, Stellar, ICON, Injective, Bitcoin, NEAR, Stacks
 - **Single-store state** — `useXAccount`, `useXConnection`, `useXAccounts` all read the same Zustand slice; persisted to `localStorage`

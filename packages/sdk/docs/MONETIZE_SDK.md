@@ -3,7 +3,7 @@
 Learn how to configure fees and monetize your Sodax SDK integration.
 
 When using the SODAX SDK, you can monetize your integration by collecting fees from the transactions processed through your application.
-Fees are configured globally per feature when creating the `Sodax` instance, and the swap feature additionally accepts a per-action override: `getQuote()` takes an optional `partnerFee` argument, and `swap()` / `createIntent()` read `extras.partnerFee`. When omitted, the configured fee applies.
+Fees are configured globally per feature when creating the `Sodax` instance, and the swap feature additionally accepts a per-action override: `getQuote()` takes a single payload object with an optional `partnerFee` field, and `swap()` / `createIntent()` read `extras.partnerFee`. When omitted, the configured fee applies.
 
 ## Defining Fee
 
@@ -62,7 +62,7 @@ The swap feature supports a per-action fee override that beats the configured `s
 
 ### Quote request
 
-`SwapService.getQuote()` deducts the partner fee from the `amount` before forwarding to the solver, so `quoted_amount` reflects the net output. No fee field appears in the request payload. Pass an optional `partnerFee` second argument to match a per-action override used on `createIntent` / `swap`; omit it to use the configured swap fee.
+`SwapService.getQuote()` deducts the partner fee from the `amount` before forwarding to the solver, so `quoted_amount` reflects the net output. No fee field appears in the request payload. Pass an optional `partnerFee` field on the request payload to match a per-action override used on `createIntent` / `swap`; omit it to use the configured swap fee.
 
 ```typescript
 import {

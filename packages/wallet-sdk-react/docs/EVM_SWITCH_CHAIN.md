@@ -121,18 +121,11 @@ Keplr and Leap on Injective don't have this constraint — `isWrongChain` is `fa
 
 ## `useEthereumChainId` — read the wagmi/MetaMask chain id
 
-A read-only helper that returns the **active Ethereum chain id** when MetaMask is the Injective wallet, otherwise `null`. Used internally by `useEvmSwitchChain`; expose-able for custom UIs that need to display the network state independently.
-
-```typescript
-import useEthereumChainId from '@sodax/wallet-sdk-react/hooks/useEthereumChainId';
-
-const ethereumChainId = useEthereumChainId();
-// number (e.g. 1 for mainnet) or null
-```
+A read-only helper that returns the **active Ethereum chain id** when MetaMask is the Injective wallet, otherwise `null`. Used internally by `useEvmSwitchChain`.
 
 It subscribes to MetaMask's `onChainIdChanged` event so the value stays fresh when the user switches networks outside the dApp. For non-MetaMask Injective wallets (Keplr, Leap) and non-Injective use cases, it returns `null`.
 
-This hook is rarely needed in app code — `useEvmSwitchChain` already consumes it internally.
+This hook is an internal implementation detail — it is not part of the package's public export surface (`useEvmSwitchChain` already consumes it internally). App code should use `useEvmSwitchChain`, which exposes the switch behavior it powers.
 
 ---
 

@@ -185,7 +185,7 @@ function isSodaxError(e: unknown): e is SodaxError;
 | Method | Error type | Codes |
 |---|---|---|
 | `swap` | `SwapError` | `USER_REJECTED`, `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `EXTERNAL_API_ERROR`, `UNKNOWN` |
-| `createIntent` / `createLimitOrderIntent` | `CreateIntentError` | `USER_REJECTED`, `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
+| `createIntent` / `createLimitOrderIntent` | `SwapCreateIntentError` | `USER_REJECTED`, `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
 | `postExecution` | `PostExecutionError` | `EXECUTION_FAILED`, `EXTERNAL_API_ERROR`, `UNKNOWN` |
 | `createLimitOrder` | `SwapError` | (same as `swap`) |
 
@@ -1002,7 +1002,7 @@ if (!swapResult.ok) {
 
 ### Handling `createIntent` Errors
 
-`createIntent` returns `Result<CreateIntentResult, CreateIntentError>`. The narrow union is `'VALIDATION_FAILED' | 'INTENT_CREATION_FAILED' | 'UNKNOWN'`:
+`createIntent` returns `Result<CreateIntentResult, SwapCreateIntentError>`. The narrow union is `'VALIDATION_FAILED' | 'INTENT_CREATION_FAILED' | 'UNKNOWN'`:
 
 ```typescript
 const createIntentResult = await sodax.swaps.createIntent({

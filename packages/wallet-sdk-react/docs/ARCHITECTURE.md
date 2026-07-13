@@ -61,6 +61,7 @@ type XWalletStore = {
   chainActions: Partial<Record<ChainType, ChainActions>>;   // connect/disconnect/signMessage
   walletProviders: Partial<Record<ChainType, IWalletProvider>>;  // bridge to wallet-sdk-core
   walletConfig: SodaxWalletConfig | undefined;              // user-supplied config snapshot
+  userDisconnected: Partial<Record<ChainType, boolean>>;    // PERSISTED — user-disconnect intent
 
   setXConnection(chainType, conn): void;
   unsetXConnection(chainType): void;
@@ -81,15 +82,18 @@ devtools(persist(immer((set, get) => ({...})), { ... }))
 | Layer | Role |
 |-------|------|
 | `immer` | Lets `set(state => { state.xConnections.EVM = ... })` work without manual spreading |
-| `persist` | Mirrors `xConnections` to `localStorage` (key `'xwagmi-store'`); rehydrates on first mount |
+| `persist` | Mirrors `xConnections` and `userDisconnected` to `localStorage` (key `'xwagmi-store'`); rehydrates on first mount |
 | `devtools` | Redux DevTools integration for debugging |
 
 ### What's persisted
 
-Only `xConnections`. The rest (services, connectors, actions, wallet providers) is reconstructed on every page load — these contain SDK class instances that don't survive `JSON.stringify`.
+Only `xConnections` and `userDisconnected`. The rest (services, connectors, actions, wallet providers) is reconstructed on every page load — these contain SDK class instances that don't survive `JSON.stringify`.
 
 ```typescript
-partialize: state => ({ xConnections: state.xConnections })
+partialize: state => ({
+  xConnections: state.xConnections,
+  userDisconnected: state.userDisconnected,
+})
 ```
 
 Storage key is **`'xwagmi-store'`** (kept from v1 for backward compat — existing users don't lose connections on upgrade).
@@ -213,7 +217,7 @@ The registration runs once on mount; calling `signMessageRef.current(...)` alway
 
 ## Persistence and hydration
 
-Zustand's `persist` middleware writes `xConnections` to `localStorage` synchronously on every change and rehydrates on first mount. The lifecycle:
+Zustand's `persist` middleware writes `xConnections` and `userDisconnected` to `localStorage` synchronously on every change and rehydrates on first mount. The lifecycle:
 
 ```
 mount

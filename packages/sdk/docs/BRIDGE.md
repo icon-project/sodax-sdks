@@ -546,16 +546,16 @@ ChainKeys.POLYGON_MAINNET   // '0x89.polygon'
 ChainKeys.SONIC_MAINNET     // hub chain
 ChainKeys.ETHEREUM_MAINNET
 ChainKeys.ARBITRUM_MAINNET
-// ... all 20 supported chains
+// ... other supported chains (see ChainKeys)
 ```
 
 The chain key in the request payload (e.g. `srcChainKey`) drives both TypeScript narrowing — so `walletProvider` is automatically typed to the correct interface — and runtime routing inside the SDK.
 
 ## Supported Chains
 
-The service supports all 21 chains in the SODAX network:
-- **EVM (13):** Sonic (hub), Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia, Hedera
-- **Non-EVM (8):** Solana, Sui, Stellar, ICON, Injective, NEAR, Stacks, Bitcoin
+The service supports every chain in the SODAX network (see `ChainKeys` in `@sodax/types` for the authoritative list):
+- **EVM:** Sonic (hub), Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia, Hedera
+- **Non-EVM:** Solana, Sui, Stellar, ICON, Injective, NEAR, Stacks, Bitcoin
 
 ## Partner Fees
 

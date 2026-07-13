@@ -1,6 +1,6 @@
 # Relayer API Endpoints
 
-> **Error handling conventions:** Relay-layer failures emit one of two stable strings on `error.message`: `'SUBMIT_TX_FAILED'` or `'RELAY_TIMEOUT'`, also exported as `RELAY_ERROR_CODES` from `@sodax/sdk`. Modules other than swap propagate these errors raw. The **swap module** wraps them into `SodaxError<SwapErrorCode>` with `context.relayCode` (see [SWAPS.md](./SWAPS.md) Error Handling).
+> **Error handling conventions:** Relay-layer failures emit one of these stable strings on `error.message`: `'SUBMIT_TX_FAILED'`, `'RELAY_TIMEOUT'`, or `'RELAY_POLLING_FAILED'`, also exported as `RELAY_ERROR_CODES` from `@sodax/sdk`. Modules other than swap propagate these errors raw. The **swap module** wraps them into `SodaxError<SwapErrorCode>` with `context.relayCode` (see [SWAPS.md](./SWAPS.md) Error Handling).
 
 The intent relay service bridges spoke-chain transactions to the SODAX hub (Sonic). All cross-chain operations — swaps, bridges, money market deposits/withdrawals, staking — submit a spoke-chain transaction hash to the relay, then poll until the hub confirms execution.
 
@@ -26,7 +26,7 @@ Pass this URL as the `relayerApiEndpoint` override in your `SodaxConfig` when ta
 - `sodax.bridge.bridge(...)` — similarly manages the full relay lifecycle
 - `sodax.moneyMarket.*`, `sodax.staking.*`, and related methods do the same
 
-All of these methods return `Promise<Result<T>>`. On relay failure the `Result` carries an error whose `message` is `'RELAY_TIMEOUT'` or `'SUBMIT_TX_FAILED'` (CODE form — see [error convention](#error-message-convention)).
+All of these methods return `Promise<Result<T>>`. On relay failure the `Result` carries an error whose `message` is `'RELAY_TIMEOUT'`, `'SUBMIT_TX_FAILED'`, or `'RELAY_POLLING_FAILED'` (CODE form — see [error convention](#error-message-convention)).
 
 ---
 
@@ -192,9 +192,9 @@ These are exported from `IntentRelayApiService` for callers that need direct rel
 | `relayTxAndWaitPacket` | `(params: RelayAndWaitParams) => Promise<Result<PacketData>>` | Submit + poll in one call. Handles `getIntentRelayChainId` conversion and split-tx chains automatically. |
 
 All functions return `Promise<Result<T>>` — no throws across service boundaries. Check `result.ok` before using `result.value`. On failure, `result.error` is an `Error` instance:
-- `result.error.message === 'RELAY_TIMEOUT'` — packet did not arrive within the timeout (default: 120 000 ms)
-- `result.error.message === 'SUBMIT_TX_FAILED'` — the relay rejected the submission; check `result.error.cause.message` for the relay's rejection reason
-- `result.error.message === 'HTTP_REQUEST_FAILED'` — network-level failure; check `result.error.cause` for details
+- `result.error.message === 'RELAY_TIMEOUT'` — packet did not arrive within the timeout (default: 120 000 ms); polling worked, the relay just didn't deliver in time
+- `result.error.message === 'SUBMIT_TX_FAILED'` — the relay rejected the submission (HTTP error, malformed response, or `success: false`); check `result.error.cause.message` for the relay's rejection reason
+- `result.error.message === 'RELAY_POLLING_FAILED'` — polling itself never recovered (persistent network errors or exceptions during the wait window); the packet's status is unknown. Check `result.error.cause` for details
 
 `RelayAndWaitParams`:
 
