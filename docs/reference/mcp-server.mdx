@@ -1,5 +1,199 @@
 ---
 title: "SODAX MCP Server"
+description: "Connect AI coding assistants to live SODAX cross-network DeFi API data and auto-syncing SDK documentation through one MCP endpoint."
 ---
 
-<Note>Placeholder — content lands in a later phase of the docs migration (#283).</Note>
+### What can you ask?
+
+Common prompts for AI agents connected to this cross-network DeFi MCP server.
+
+#### Supported Networks
+
+"What networks does SODAX support for cross-chain swaps?"
+
+#### Solver Volume
+
+"Show me cross-network solver volume for today"
+
+#### Cross-Network Swaps
+
+"Get available swap tokens across chains on Base"
+
+#### Intent History
+
+"Look up this intent transaction hash"
+
+#### Money Market Rates
+
+"What are the lending rates on SODAX money market?"
+
+#### Cross-Chain SDK Docs
+
+"How do I integrate cross-chain swaps with the SODAX SDK?"
+
+### Available Tools
+
+32 tools: cross-network API data, AMM analytics, money market insights, and SDK documentation — all in one connection.
+
+#### Network Configuration
+
+Chains, swap tokens, hub assets, relay mappings, and full protocol config
+
+8 tools — SODAX API
+
+* `sodax_get_supported_chains` — List 17+ supported networks
+* `sodax_get_swap_tokens` — Cross-network swap tokens by chain
+* `sodax_get_all_config` — Full config (chains + tokens) in one call
+* `sodax_get_all_chains_configs` — Detailed spoke chain configs
+* `sodax_get_relay_chain_id_map` — Chain ID to relay ID mapping
+* `sodax_get_hub_assets` — Hub (Sonic) assets for spoke tokens
+* `sodax_get_money_market_tokens` — Money market supported tokens
+* `sodax_get_money_market_reserve_assets` — Money market reserve assets
+
+#### Intents & Solver
+
+Intent transactions, solver volume, orderbook, and fill history
+
+6 tools — SODAX API
+
+* `sodax_get_transaction` — Intent lookup by transaction hash
+* `sodax_get_intent` — Intent lookup by intent hash
+* `sodax_get_user_transactions` — Wallet intent history
+* `sodax_get_volume` — Solver volume (filled intents)
+* `sodax_get_orderbook` — Cross-chain orderbook
+* `sodax_get_solver_intent` — Solver-side intent details & fill history
+
+#### AMM & Liquidity
+
+LP positions and OHLCV candlestick data for AMM pools
+
+2 tools — SODAX API
+
+* `sodax_get_amm_positions` — AMM LP NFT positions by owner
+* `sodax_get_amm_pool_candles` — OHLCV candle data for any pool
+
+#### Money Market
+
+Lending/borrowing assets, user positions, borrower and supplier analytics
+
+6 tools — SODAX API
+
+* `sodax_get_money_market_assets` — All lending/borrowing assets
+* `sodax_get_money_market_asset` — Single asset by reserve address
+* `sodax_get_user_position` — User's lending/borrowing position
+* `sodax_get_asset_borrowers` — Borrowers for a specific asset
+* `sodax_get_asset_suppliers` — Suppliers for a specific asset
+* `sodax_get_all_borrowers` — All borrowers across assets
+
+#### Partners & Token
+
+Integration partners, partner summaries, and SODA token supply data
+
+6 tools — SODAX API
+
+* `sodax_get_partners` — Integration partners list
+* `sodax_get_partner_summary` — Partner volume & activity summary
+* `sodax_get_token_supply` — Full SODA token supply info
+* `sodax_get_total_supply` — Total supply (plain number)
+* `sodax_get_circulating_supply` — Circulating supply (plain number)
+* `sodax_refresh_cache` — Clear cached data
+
+#### Cross-Chain SDK Documentation
+
+Auto-synced from docs.sodax.com — integration guides, code examples
+
+4 tools — GitBook
+
+* `docs_searchDocumentation` — Search SDK docs, examples, guides
+* `docs_list_tools` — List available doc tools
+* `docs_health` — Check docs connection
+* `docs_refresh` — Refresh tools list
+
+### Data Sources
+
+1. **SODAX API**
+
+   Live data from api.sodax.com
+
+   Live
+2. **Aggregator**
+
+   Token data from aggregator
+
+   Live
+3. **GitBook**
+
+   SDK docs from docs.sodax.com
+
+   Auto-sync
+4. **Smart Cache**
+
+   2-min API, 10-min docs
+
+   Optimized
+
+Works with these agents & more
+
+[![Claude](https://builders.sodax.com/images/agents/claude-code.svg)](https://claude.ai/) [![ChatGPT](https://builders.sodax.com/images/agents/codex.svg)](https://chatgpt.com/) [![Cursor](https://builders.sodax.com/images/agents/cursor.svg)](https://cursor.com/) [![VS Code](https://builders.sodax.com/images/agents/vscode.svg)](https://code.visualstudio.com/) [![Windsurf](https://builders.sodax.com/images/agents/windsurf.svg)](https://codeium.com/windsurf) [![Cline](https://builders.sodax.com/images/agents/cline.svg)](https://cline.bot/) [![Gemini](https://builders.sodax.com/images/agents/gemini.svg)](https://gemini.google.com/) [![Goose](https://builders.sodax.com/images/agents/goose.svg)](https://block.github.io/goose) [![Roo Code](https://builders.sodax.com/images/agents/roocode.svg)](https://roocode.com/)
+
+### Get started. One connection.
+
+Connect your AI coding assistant to live cross-network DeFi data and cross-chain SDK documentation with one simple configuration.
+
+```json
+{
+  "mcpServers": {
+    "sodax-builders": {
+      "url": "https://builders.sodax.com/mcp"
+    }
+  }
+}
+```
+
+SDK docs from [docs.sodax.com](https://docs.sodax.com/) are included automatically via GitBook proxy
+
+Using a client that doesn't support streamable HTTP (e.g. Gemini CLI)? Use the SSE endpoint instead: `https://builders.sodax.com/sse`
+
+### Frequently Asked Questions
+
+Common questions about the SODAX MCP server and cross-chain developer tools.
+
+<details>
+
+<summary>What is the SODAX MCP server?</summary>
+
+The SODAX Builders MCP server gives AI coding assistants live access to cross-network DeFi API data across 17+ blockchain networks. Query swap tokens, money market rates, solver volume, intent history, and auto-updating SDK documentation directly from tools like Claude, Cursor, VS Code, and ChatGPT.
+
+</details>
+
+<details>
+
+<summary>What is a cross-chain swap and how does SODAX handle it?</summary>
+
+A cross-chain swap lets you exchange tokens between different blockchain networks without traditional bridging. SODAX uses an intent-based execution model with a decentralized solver network to fill swaps across 17+ networks with unified cross-chain liquidity. The MCP server lets you query available swap tokens, look up intent transactions, and check solver volume programmatically.
+
+</details>
+
+<details>
+
+<summary>Which networks does the cross-chain SDK support?</summary>
+
+SODAX supports 17+ blockchain networks for cross-network swaps and DeFi operations. Use the `sodax_get_supported_chains` tool to get the live list, or search the auto-syncing SDK documentation for integration guides per network.
+
+</details>
+
+<details>
+
+<summary>How do I connect this MCP server to my AI coding assistant?</summary>
+
+Add the SODAX MCP server URL (`https://builders.sodax.com/mcp`) to your AI coding assistant's MCP configuration. It works with Claude, Cursor, VS Code, Windsurf, ChatGPT, and other MCP-compatible agents. One connection gives you access to all cross-network API tools and SDK documentation. If your client doesn't support streamable HTTP (e.g. Gemini CLI), use the legacy SSE endpoint instead: `https://builders.sodax.com/sse`
+
+</details>
+
+<details>
+
+<summary>What cross-chain developer tools does this MCP server provide?</summary>
+
+The server provides cross-network API tools for querying swap tokens, solver volume, orderbook data, money market lending and borrowing rates, intent transaction history, and SODA token supply. It also includes auto-syncing cross-chain SDK documentation with integration guides, code examples, and API reference — everything you need to build cross-network DeFi integrations.
+
+</details>

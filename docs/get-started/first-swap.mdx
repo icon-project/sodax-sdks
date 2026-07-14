@@ -1,5 +1,109 @@
 ---
-title: "Your first swap"
+title: "Your First Swap"
+description: "A concise quickstart: install the SDK and execute a minimal cross-chain swap with SODAX."
 ---
 
-<Note>Placeholder — content lands in a later phase of the docs migration (#283).</Note>
+<Note>
+This is a condensed getting-started quickstart assembled from the "Build with SODAX" overview and the [Make a Swap](/guides/make-a-swap) guide for the Mintlify migration. It trims the full walkthrough down to the essentials; review before publishing, and see [Make a Swap](/guides/make-a-swap) for the complete, production-ready flow.
+</Note>
+
+SODAX is execution infrastructure for modern money. You integrate one SDK, and your app can exchange, lend, borrow, and settle across blockchain networks. This page gets you from install to a first cross-chain swap in a few steps.
+
+## Install
+
+Install the core SDK and a wallet provider package:
+
+<CodeGroup>
+
+```bash npm
+npm install @sodax/sdk @sodax/wallet-sdk-core
+```
+
+```bash yarn
+yarn add @sodax/sdk @sodax/wallet-sdk-core
+```
+
+```bash pnpm
+pnpm add @sodax/sdk @sodax/wallet-sdk-core
+```
+
+</CodeGroup>
+
+For the full package stack (React adapter, dApp Kit), see [Installation](/get-started/install).
+
+## Minimal swap
+
+The example below swaps native ETH on Arbitrum for native POL on Polygon. The `swap` method orchestrates the full lifecycle: it creates the intent on the source chain, relays it to the hub (Sonic), and notifies the solver to fill it.
+
+```typescript
+import {
+  Sodax,
+  ChainKeys,
+  type CreateIntentParams,
+  type IEvmWalletProvider,
+  type Hex,
+} from "@sodax/sdk";
+import { EvmWalletProvider } from "@sodax/wallet-sdk-core";
+
+// 1. Create a Sodax instance (defaults to mainnet config)
+const sodax = new Sodax();
+
+// 2. Set up a wallet provider for the source chain
+const evmWalletProvider: IEvmWalletProvider = new EvmWalletProvider({
+  privateKey: "0x..." as Hex,
+  chainId: ChainKeys.ARBITRUM_MAINNET,
+  rpcUrl: "https://arb1.arbitrum.io/rpc",
+});
+
+const walletAddress = await evmWalletProvider.getWalletAddress();
+
+// 3. Resolve tokens from the instance config
+const arbEthToken = sodax.config.spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].nativeToken;
+const polygonPolToken = sodax.config.spokeChainConfig[ChainKeys.POLYGON_MAINNET].nativeToken;
+
+// 4. Build the intent params (amounts are in the token's smallest unit)
+const params: CreateIntentParams<typeof ChainKeys.ARBITRUM_MAINNET> = {
+  inputToken: arbEthToken,
+  outputToken: polygonPolToken,
+  inputAmount: 100000000000000n, // 0.0001 ETH (18 decimals)
+  minOutputAmount: 900000n,      // set from a quote in production
+  deadline: 0n,                  // 0 = no deadline
+  allowPartialFill: false,
+  srcChainKey: ChainKeys.ARBITRUM_MAINNET,
+  dstChainKey: ChainKeys.POLYGON_MAINNET,
+  srcAddress: walletAddress,
+  dstAddress: walletAddress,
+  solver: "0x0000000000000000000000000000000000000000", // address(0) = any solver
+  data: "0x",
+};
+
+// 5. Approve the input token if needed
+const allowance = await sodax.swaps.isAllowanceValid({ params, walletProvider: evmWalletProvider });
+if (allowance.ok && !allowance.value) {
+  const approve = await sodax.swaps.approve({ params, walletProvider: evmWalletProvider });
+  if (approve.ok) {
+    await evmWalletProvider.waitForTransactionReceipt(approve.value);
+  }
+}
+
+// 6. Execute the swap
+const swapResult = await sodax.swaps.swap({ params, walletProvider: evmWalletProvider });
+
+if (!swapResult.ok) {
+  console.error("Swap failed:", swapResult.error);
+} else {
+  const { intentDeliveryInfo } = swapResult.value;
+  console.log("Source tx:", intentDeliveryInfo.srcTxHash);
+  console.log("Destination tx:", intentDeliveryInfo.dstTxHash);
+}
+```
+
+<Tip>
+In production, call `sodax.initialize()` to fetch the latest supported tokens and chains, fetch a quote with `sodax.swaps.getQuote()` to set a realistic `minOutputAmount`, and poll `sodax.swaps.getStatus()` until the intent reaches a terminal state.
+</Tip>
+
+## Next steps
+
+* Read the full [Make a Swap](/guides/make-a-swap) guide for quotes, status polling, and error handling.
+* Configure the SDK with [Configure SDK](/guides/configure-sdk).
+* Set up wallet providers for other chains in [Setup Wallet Providers](/guides/wallet-providers).

@@ -1,6 +1,6 @@
 ---
-title: "Use Sodax SDKs with your AI coding agent"
-description: "Install and configure @sodax/skills so your AI coding agent writes v2-correct SODAX SDK code."
+title: "AI Integration"
+description: "Install and wire SODAX agent-native skills (@sodax/skills) so AI coding agents generate v2-correct SODAX code."
 ---
 
 SODAX ships agent-native documentation as [`@sodax/skills`](https://github.com/icon-project/sodax-sdks/tree/main/packages/skills) — four mode-gated skills (one per `@sodax/*` SDK package, each bundling `integration/knowledge/` for new v2 code and `migration-v1-to-v2/knowledge/` for v1→v2 porting). The goal is v2-correct code on the first try instead of stale training-data APIs.
@@ -9,14 +9,14 @@ LLM training data drifts; public docs at [docs.sodax.com](https://docs.sodax.com
 
 ## Pick a setup
 
-| You are… | Do this | Entry point |
-|---|---|---|
-| Using Claude Code, Cursor, Copilot, Codex, etc. with the [skills CLI](https://github.com/vercel-labs/skills) | `npx skills@latest add icon-project/sodax-sdks/packages/skills` | Auto-discovered — each `.<agent>/skills/sodax-<pkg>/SKILL.md` is loaded by the agent via its frontmatter `description`. No `AGENTS.md` lands in the install path; SKILL.md mode-gates internally (integration vs migration). |
-| Any project; npm from the registry | `pnpm add -D @sodax/skills` | `node_modules/@sodax/skills/AGENTS.md` |
-| Unreleased docs; app lives **inside** the sodax-sdks pnpm workspace | `pnpm add -D @sodax/skills@workspace:*` | `node_modules/@sodax/skills/AGENTS.md` |
-| Unreleased docs; sodax-sdks is a **sibling repo, submodule, or separate clone** | `pnpm add -D @sodax/skills@file:../sodax-sdks/packages/skills` (not `workspace:*`) | `node_modules/@sodax/skills/AGENTS.md` |
-| Sodax-sdks clone on disk, no install | Point your agent rules at the checkout | `/path/to/sodax-sdks/packages/skills/AGENTS.md` |
-| Web chat (ChatGPT, Claude.ai, etc.) | Attach files to the conversation | `AGENTS.md` + one relevant `skills/sodax-<pkg>/SKILL.md` |
+| You are…                                                                                                     | Do this                                                                            | Entry point                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Using Claude Code, Cursor, Copilot, Codex, etc. with the [skills CLI](https://github.com/vercel-labs/skills) | `npx skills@latest add icon-project/sodax-sdks/packages/skills`                    | Auto-discovered — each `.<agent>/skills/sodax-<pkg>/SKILL.md` is loaded by the agent via its frontmatter `description`. No `AGENTS.md` lands in the install path; SKILL.md mode-gates internally (integration vs migration). |
+| Any project; npm from the registry                                                                           | `pnpm add -D @sodax/skills`                                                        | `node_modules/@sodax/skills/AGENTS.md`                                                                                                                                                                                       |
+| Unreleased docs; app lives **inside** the sodax-sdks pnpm workspace                                          | `pnpm add -D @sodax/skills@workspace:*`                                            | `node_modules/@sodax/skills/AGENTS.md`                                                                                                                                                                                       |
+| Unreleased docs; sodax-sdks is a **sibling repo, submodule, or separate clone**                              | `pnpm add -D @sodax/skills@file:../sodax-sdks/packages/skills` (not `workspace:*`) | `node_modules/@sodax/skills/AGENTS.md`                                                                                                                                                                                       |
+| Sodax-sdks clone on disk, no install                                                                         | Point your agent rules at the checkout                                             | `/path/to/sodax-sdks/packages/skills/AGENTS.md`                                                                                                                                                                              |
+| Web chat (ChatGPT, Claude.ai, etc.)                                                                          | Attach files to the conversation                                                   | `AGENTS.md` + one relevant `skills/sodax-<pkg>/SKILL.md`                                                                                                                                                                     |
 
 **Canonical entry point:** [`AGENTS.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/AGENTS.md) — tool-neutral router (shipped on npm). [`CLAUDE.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/CLAUDE.md) in `packages/skills/` is optional and **git-only** (not in the npm package); use it when you maintain sodax-sdks or want maintainer layout context. You can also paste a one-line pointer into your own project `CLAUDE.md`.
 
@@ -34,8 +34,8 @@ The CLI detects your tool and installs the four mode-gated skill directories int
 
 Useful flags:
 
-- `-a <agent>` — target a specific agent (e.g. `-a cursor`).
-- `-g, --global` — install into your user-global agent directory instead of the project.
+* `-a <agent>` — target a specific agent (e.g. `-a cursor`).
+* `-g, --global` — install into your user-global agent directory instead of the project.
 
 ### npm from the registry
 
@@ -77,12 +77,12 @@ Load only the skills it routes you to; each SKILL.md mode-gates internally
 (integration for new v2 code, migration for v1 → v2 porting).
 ```
 
-| Tool | How |
-|---|---|
-| **Claude Code** | Prefer the skills CLI (skills auto-discovered from `.claude/skills/`). For npm install, add the block above to project `CLAUDE.md` with `node_modules/@sodax/skills/AGENTS.md`. |
-| **Cursor** | Prefer `npx skills@latest add ... -a cursor` (skills auto-discovered from `.cursor/skills/`). For npm install, add `.cursor/rules` with the same pointer. |
-| **Codex / Copilot** | Prefer the skills CLI. For npm install, use a rules file or repo `AGENTS.md` symlink/copy pointing at the installed bundle. |
-| **Web UIs** | Attach `AGENTS.md`; add one `SKILL.md` if the task is narrow (e.g. swap only). |
+| Tool                | How                                                                                                                                                                             |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Claude Code**     | Prefer the skills CLI (skills auto-discovered from `.claude/skills/`). For npm install, add the block above to project `CLAUDE.md` with `node_modules/@sodax/skills/AGENTS.md`. |
+| **Cursor**          | Prefer `npx skills@latest add ... -a cursor` (skills auto-discovered from `.cursor/skills/`). For npm install, add `.cursor/rules` with the same pointer.                       |
+| **Codex / Copilot** | Prefer the skills CLI. For npm install, use a rules file or repo `AGENTS.md` symlink/copy pointing at the installed bundle.                                                     |
+| **Web UIs**         | Attach `AGENTS.md`; add one `SKILL.md` if the task is narrow (e.g. swap only).                                                                                                  |
 
 For non-CLI installs, your agent must read **`AGENTS.md` from your install path** (e.g. `node_modules/@sodax/skills/AGENTS.md`) — not the live `main` branch on GitHub. That file routes by intent; each skill links into its own `integration/knowledge/` or `migration-v1-to-v2/knowledge/` subtree as needed. Don't read knowledge top-to-bottom. **Web chat with no install:** attach `AGENTS.md` (and any needed `SKILL.md` files) from your checkout or a Git ref that matches your SDK version. **Browse only:** [router source on GitHub (`main`)](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/AGENTS.md).
 
@@ -96,13 +96,13 @@ For v1 → v2 ports, say something like “migrate my project to Sodax v2” —
 
 ## Tips
 
-- **Keep agent docs in sync when you upgrade `@sodax/*`** — docs should match the SDKs you ship. **skills CLI:** re-run `npx skills@latest add icon-project/sodax-sdks/packages/skills`. **npm / local package install:** bump `@sodax/skills` (e.g. `pnpm add -D @sodax/skills@1.2.3`). Using both CLI and npm is optional; if you use only the CLI, you do not need `@sodax/skills` in `package.json`.
-- **Start from `AGENTS.md`** (or, on CLI installs, let the agent pick a skill via its frontmatter) — not random files under `integration/knowledge/` or `migration-v1-to-v2/knowledge/`.
-- **Don’t add `@sodax/types` as a separate dependency** — types are re-exported from `@sodax/sdk`.
+* **Keep agent docs in sync when you upgrade `@sodax/*`** — docs should match the SDKs you ship. **skills CLI:** re-run `npx skills@latest add icon-project/sodax-sdks/packages/skills`. **npm / local package install:** bump `@sodax/skills` (e.g. `pnpm add -D @sodax/skills@1.2.3`). Using both CLI and npm is optional; if you use only the CLI, you do not need `@sodax/skills` in `package.json`.
+* **Start from `AGENTS.md`** (or, on CLI installs, let the agent pick a skill via its frontmatter) — not random files under `integration/knowledge/` or `migration-v1-to-v2/knowledge/`.
+* **Don’t add `@sodax/types` as a separate dependency** — types are re-exported from `@sodax/sdk`.
 
 ## Further reading and feedback
 
-- Bundle overview: [packages/skills/README.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/README.md)
-- Router (agents): [packages/skills/AGENTS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/AGENTS.md)
+* Bundle overview: [packages/skills/README.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/README.md)
+* Router (agents): [packages/skills/AGENTS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/AGENTS.md)
 
 Wrong output despite the skills? That’s a doc bug — [open an issue](https://github.com/icon-project/sodax-sdks/issues) with the prompt and what the agent generated.

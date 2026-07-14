@@ -1,5 +1,107 @@
 ---
-title: "Install"
+title: "Installation"
+description: "Install the SODAX SDK stack — the @sodax/sdk foundation plus the optional connection and experience layers."
 ---
 
-<Note>Placeholder — content lands in a later phase of the docs migration (#283).</Note>
+<Note>
+This page was composed from the "Build with SODAX" overview and the SDK package install instructions for the Mintlify migration. It is faithful to what the source documents state; please review before publishing.
+</Note>
+
+The SODAX developer suite is a dependency stack. Integrate at the foundation for maximum control, or use the higher layers for speed. You integrate one SDK and your app can exchange, lend, borrow, and settle across blockchain networks as if there were no boundaries.
+
+## The SDK stack
+
+### 1. Foundation: @sodax/sdk
+
+The core logic layer that powers everything else. Raw functional modules to build with SODAX programmatically — [Swaps](/sdk/swaps), [Lend / Borrow](/sdk/money-market), [Bridge](/sdk/bridge), [Staking](/sdk/staking), and [Migration](/sdk/migration), plus tooling modules for the [Backend API](/sdk/backend-api) and [Intent Relay API](/sdk/intent-relay-api).
+
+<CodeGroup>
+
+```bash npm
+npm install @sodax/sdk
+```
+
+```bash yarn
+yarn add @sodax/sdk
+```
+
+```bash pnpm
+pnpm add @sodax/sdk
+```
+
+</CodeGroup>
+
+<Note>
+Don't add `@sodax/types` as a separate dependency — types are re-exported from `@sodax/sdk`.
+</Note>
+
+### 2. Connection layer
+
+Manages connecting user wallets across heterogeneous networks (EVM, SVM, and non-EVM blockchain networks). Two flavors:
+
+* **@sodax/wallet-sdk-core (TypeScript)** — a pure TypeScript implementation of wallet providers. Use this for a custom frontend framework or a non-React app.
+* **@sodax/wallet-sdk-react (React adapter)** — an opinionated wrapper for React, with pre-built context providers and state management for wallet connections.
+
+<CodeGroup>
+
+```bash npm
+npm install @sodax/wallet-sdk-core
+```
+
+```bash yarn
+yarn add @sodax/wallet-sdk-core
+```
+
+```bash pnpm
+pnpm add @sodax/wallet-sdk-core
+```
+
+</CodeGroup>
+
+For React applications, install the React adapter instead:
+
+<CodeGroup>
+
+```bash npm
+npm install @sodax/wallet-sdk-react
+```
+
+```bash yarn
+yarn add @sodax/wallet-sdk-react
+```
+
+```bash pnpm
+pnpm add @sodax/wallet-sdk-react
+```
+
+</CodeGroup>
+
+### 3. Experience layer: @sodax/dapp-kit
+
+The highest-level layer, built for speed. An opinionated set of UI components, hooks, and utilities built on the layers below.
+
+* Under the hood: automatically wires @sodax/wallet-sdk for connection and @sodax/sdk for execution.
+* What it offers: React hooks, contexts, and utilities for SODAX features.
+
+<CodeGroup>
+
+```bash npm
+npm install @sodax/dapp-kit
+```
+
+```bash yarn
+yarn add @sodax/dapp-kit
+```
+
+```bash pnpm
+pnpm add @sodax/dapp-kit
+```
+
+</CodeGroup>
+
+## Next steps
+
+* Follow [Your First Swap](/get-started/first-swap) to ship your first cross-network action.
+* See [Configure SDK](/guides/configure-sdk) for the full configuration surface.
+* Set up wallet providers with [Setup Wallet Providers](/guides/wallet-providers).
+* Or scope it first: run the [Builders MCP](https://builders.sodax.com/) against your repo.
