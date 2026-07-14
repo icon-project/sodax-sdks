@@ -31,6 +31,28 @@ export type XToken = {
   readonly access?: XTokenAccess;
 };
 
+/**
+ * Base URL for default token logos hosted in the `@sodax/assets` package.
+ * Each logo is served from `main` via raw.githubusercontent and named by the
+ * token's slugified symbol, so the full URL is `${TOKEN_LOGO_BASE_URL}/<slug>.png`.
+ */
+export const TOKEN_LOGO_BASE_URL =
+  'https://raw.githubusercontent.com/icon-project/sodax-sdks/main/packages/assets/token';
+
+/**
+ * Filename slug for a token logo: the symbol lowercased with every run of
+ * non-alphanumeric characters collapsed to a single `-` (so `bnUSD (legacy)` →
+ * `bnusd-legacy`, `AVAX.LL` → `avax-ll`). Keeps filenames URL- and path-safe.
+ */
+export const tokenLogoSlug = (symbol: string): string =>
+  symbol
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+/** Default logo URL for a token, resolved from its symbol (hosted in @sodax/assets). */
+export const tokenLogo = (symbol: string): string => `${TOKEN_LOGO_BASE_URL}/${tokenLogoSlug(symbol)}.png`;
+
 export const StatATokenAddresses = {
   '0xac8540fee419c7ceb985889eaba1e84b42a53e8a': '0x21685E341DE7844135329914Be6Bd8D16982d834',
   '0x8ade79c255761971f4057253712b916ab2494275': '0x7A1A5555842Ad2D0eD274d09b5c4406a95799D5d',
