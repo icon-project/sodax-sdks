@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { tokenLogo } from '@sodax/dapp-kit';
 import { cn } from '@/lib/utils';
 
@@ -8,9 +8,9 @@ import { cn } from '@/lib/utils';
  * (e.g. an icon not yet merged to `main`, so the raw.githubusercontent URL 404s).
  */
 export function TokenIcon({ symbol, className }: { symbol: string; className?: string }) {
-  const [failed, setFailed] = useState(false);
-  // reset when the symbol changes so a reused instance re-attempts the new logo
-  useEffect(() => setFailed(false), [symbol]);
+  // track which symbol failed to load, so changing the symbol re-attempts the new logo
+  const [failedSymbol, setFailedSymbol] = useState<string | null>(null);
+  const failed = failedSymbol === symbol;
 
   const base = cn('h-5 w-5 shrink-0 rounded-full', className);
   if (failed) {
@@ -29,7 +29,7 @@ export function TokenIcon({ symbol, className }: { symbol: string; className?: s
       alt=""
       aria-hidden
       className={cn(base, 'object-contain')}
-      onError={() => setFailed(true)}
+      onError={() => setFailedSymbol(symbol)}
     />
   );
 }
