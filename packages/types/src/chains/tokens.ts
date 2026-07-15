@@ -48,7 +48,7 @@ export const tokenLogoSlug = (symbol: string): string =>
   symbol
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/^-|-$/g, '');
 
 /** Default logo URL for a token, resolved from its symbol (hosted in @sodax/assets). */
 export const tokenLogo = (symbol: string): string => `${TOKEN_LOGO_BASE_URL}/${tokenLogoSlug(symbol)}.png`;
