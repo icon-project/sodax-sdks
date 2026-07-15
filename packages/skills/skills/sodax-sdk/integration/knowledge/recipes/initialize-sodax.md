@@ -41,6 +41,33 @@ const sodax = new Sodax(config);
 await sodax.config.initialize();
 ```
 
+### Hub RPC failover (multiple endpoints)
+
+The Sonic hub is read through two clients — the hub provider (wallet-address lookups, contract reads) and the Sonic spoke service (hub-chain allowance checks, gas estimation, intent creation). Each accepts an ordered `rpcUrls` list, wrapped internally in a viem `fallback()` transport that advances to the next endpoint on 5xx/52x/transport errors. The single `rpcUrl` stays the default; `rpcUrls` is opt-in and, when set and non-empty, takes precedence (first entry is primary). Optional `rpcOptions` tunes the fallback (`rank` / `retryCount` / `retryDelay`).
+
+```ts
+import { Sodax, ChainKeys, type SodaxOptions } from '@sodax/sdk';
+
+const SONIC_RPCS = ['https://rpc.soniclabs.com', 'https://sonic-backup.example.com'];
+
+const config: SodaxOptions = {
+  // Hub provider failover.
+  hub: {
+    rpcUrls: SONIC_RPCS,
+    rpcOptions: { retryCount: 3 }, // optional viem fallback() tuning
+  },
+  // Sonic spoke failover — same physical chain, separate client/knob.
+  chains: {
+    [ChainKeys.SONIC_MAINNET]: { rpcUrls: SONIC_RPCS },
+  },
+};
+
+const sodax = new Sodax(config);
+await sodax.config.initialize();
+```
+
+> Both knobs target the same physical chain (Sonic) but back distinct clients, so set **both** for end-to-end hub resilience — `hub.rpcUrls` covers the hub provider and `chains.[SONIC_MAINNET].rpcUrls` covers the swap/intent path. Omit them to keep the single-endpoint default (fully backward compatible). The endpoint list is read once at `new Sodax(...)` time.
+
 ### Lazy initialization
 
 `config.initialize()` is idempotent — calling it twice is a no-op. The first call fetches; subsequent calls return cached data. Treat it as "make sure config is loaded before any feature method".

@@ -1,9 +1,10 @@
-import { type HttpTransport, type PublicClient, createPublicClient, http } from 'viem';
+import { type PublicClient, createPublicClient } from 'viem';
 import type { ConfigService } from '../config/ConfigService.js';
 
 import { SonicSpokeService } from '../services/spoke/SonicSpokeService.js';
 import { getIntentRelayChainId, type Address, type HubAddress, type HubConfig, type SpokeChainKey } from '@sodax/types';
 import { getEvmViemChain } from '../utils/constant-utils.js';
+import { buildEvmRpcTransport } from '../utils/transport-utils.js';
 import { sonicWalletFactoryAbi } from '../abis/sonicWalletFactory.abi.js';
 import { encodeAddress } from '../utils/shared-utils.js';
 import { walletFactoryAbi } from '../abis/walletFactory.abi.js';
@@ -14,7 +15,7 @@ export type EvmHubProviderConstructorParams = {
 
 type SrcAddressSpokeChainKeyPair = `${string}:${SpokeChainKey}`;
 export class EvmHubProvider {
-  public readonly publicClient: PublicClient<HttpTransport>;
+  public readonly publicClient: PublicClient;
   public readonly chainConfig: HubConfig;
   public readonly config: ConfigService;
   public readonly service: SonicSpokeService;
@@ -22,7 +23,7 @@ export class EvmHubProvider {
 
   constructor({ config }: EvmHubProviderConstructorParams) {
     this.publicClient = createPublicClient({
-      transport: http(config.sodaxConfig.hub.rpcUrl),
+      transport: buildEvmRpcTransport(config.sodaxConfig.hub),
       chain: getEvmViemChain(config.sodaxConfig.hub.chain.key),
     });
     this.chainConfig = config.sodaxConfig.hub;

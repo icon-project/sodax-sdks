@@ -156,7 +156,9 @@ export function SimplePoolManager(): JSX.Element {
       const { dstChainTxHash } = txHashPair;
       const mintPositionEventResult = await sodax.dex.clService.getMintPositionEvent(dstChainTxHash as Hash);
       if (!mintPositionEventResult.ok) {
-        setError(`Failed to get position event: ${mintPositionEventResult.error instanceof Error ? mintPositionEventResult.error.message : 'Unknown error'}`);
+        setError(
+          `Failed to get position event: ${mintPositionEventResult.error instanceof Error ? mintPositionEventResult.error.message : 'Unknown error'}`,
+        );
         return;
       }
       saveTokenIdToLocalStorage(srcAddress, selectedChainId, mintPositionEventResult.value.tokenId.toString());

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { useStatus, useSwapsApiSubmitTxStatus, type Hex, type Intent, type IntentDeliveryInfo } from '@sodax/dapp-kit';
 import { statusCodeToMessage } from '@/lib/utils';
 
@@ -13,7 +13,6 @@ export type SubmitTxOrder = {
   mode: 'submit-tx';
   txHash: string;
   srcChainKey: string;
-  apiBaseURL?: string;
 };
 
 export type Order = SolverOrder | SubmitTxOrder;
@@ -46,12 +45,8 @@ function SolverOrderStatus({ order }: { order: SolverOrder }) {
 }
 
 function SubmitTxOrderStatus({ order }: { order: SubmitTxOrder }) {
-  const apiConfig = useMemo(
-    () => (order.apiBaseURL ? { baseURL: order.apiBaseURL } : undefined),
-    [order.apiBaseURL],
-  );
   const { data: statusResponse } = useSwapsApiSubmitTxStatus({
-    params: { txHash: order.txHash, srcChainKey: order.srcChainKey, apiConfig },
+    params: { txHash: order.txHash, srcChainKey: order.srcChainKey },
   });
 
   if (!statusResponse) {
@@ -70,8 +65,8 @@ function SubmitTxOrderStatus({ order }: { order: SubmitTxOrder }) {
       <div>Tx Hash: {order.txHash}</div>
       <div>Src Chain ID: {order.srcChainKey}</div>
       <div>Status: {status}</div>
-      {status === 'executed' && result?.dstIntentTxHash && <div>Dst Intent Tx Hash: {result.dstIntentTxHash}</div>}
-      {status === 'executed' && result?.intent_hash && <div>Intent Hash: {result.intent_hash}</div>}
+      {status === 'solved' && result?.dstIntentTxHash && <div>Dst Intent Tx Hash: {result.dstIntentTxHash}</div>}
+      {status === 'solved' && result?.intent_hash && <div>Intent Hash: {result.intent_hash}</div>}
       {status === 'failed' && failedAtStep && <div className="text-red-500">Failed at: {failedAtStep}</div>}
       {status === 'failed' && failureReason && <div className="text-red-500">Reason: {failureReason}</div>}
     </div>

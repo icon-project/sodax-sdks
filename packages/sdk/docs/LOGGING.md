@@ -34,7 +34,7 @@ type SodaxLoggerOption = SodaxLogger | 'console' | 'silent';
 ```
 
 `error()` takes the thrown value separately from structured `data`, so adapters can attach it as the
-exception. SDK errors are [`SodaxError`](../src/errors/SodaxError.ts) instances whose `toJSON()` is the
+exception. SDK errors are [`SodaxError`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/src/errors/SodaxError.ts) instances whose `toJSON()` is the
 canonical serialization surface — see [error handling in the package README](../CLAUDE.md#error-handling).
 
 ## Custom logger example (Sentry)

@@ -9,12 +9,10 @@
  * (`BackendApiService.test.ts`, `SwapsApiService.test.ts`) cover how each
  * service's private `request` wrapper folds config + wraps the outcome in
  * `Result<T>`; the generic plumbing invariants live here.
- *
- * `toJsonBody` is the bigint-safe request-body serializer.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_BACKEND_API_TIMEOUT, type SodaxLogger } from '@sodax/types';
-import { makeRequest, toJsonBody, type RequestConfig, type RequestOverrideConfig } from './api-utils.js';
+import { makeRequest, type RequestConfig, type RequestOverrideConfig } from './api-utils.js';
 import { silentLogger } from '../shared/logger.js';
 
 // --- fetch stub -----------------------------------------------------------
@@ -249,46 +247,5 @@ describe('makeRequest error handling', () => {
       }),
     );
     expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('[SwapsApiService]'), expect.any(Error));
-  });
-});
-
-// =========================================================================
-// toJsonBody — bigint-safe serialization
-// =========================================================================
-
-describe('toJsonBody', () => {
-  it('serializes a top-level bigint to a decimal string', () => {
-    expect(toJsonBody(123456789n)).toBe('"123456789"');
-  });
-
-  it('serializes bigint object fields to decimal strings', () => {
-    expect(toJsonBody({ a: 1n, b: 5000000000000000000n })).toBe('{"a":"1","b":"5000000000000000000"}');
-  });
-
-  it('serializes nested bigints inside objects and arrays', () => {
-    expect(toJsonBody({ nested: { values: [1n, 2n] } })).toBe('{"nested":{"values":["1","2"]}}');
-  });
-
-  it('leaves non-bigint primitives unchanged', () => {
-    expect(toJsonBody({ s: 'x', n: 1, b: true, z: null })).toBe('{"s":"x","n":1,"b":true,"z":null}');
-  });
-
-  it('preserves precision beyond Number.MAX_SAFE_INTEGER', () => {
-    expect(JSON.parse(toJsonBody({ big: 9007199254740993n }))).toEqual({ big: '9007199254740993' });
-  });
-
-  it('omits undefined fields (standard JSON.stringify behavior)', () => {
-    expect(toJsonBody({ a: undefined, b: 1 })).toBe('{"b":1}');
-  });
-
-  it('does not throw on a struct mixing bigint and plain fields', () => {
-    const intent = { intentId: 7n, creator: '0xabc', allowPartialFill: false, deadline: 0n };
-    expect(() => toJsonBody(intent)).not.toThrow();
-    expect(JSON.parse(toJsonBody(intent))).toEqual({
-      intentId: '7',
-      creator: '0xabc',
-      allowPartialFill: false,
-      deadline: '0',
-    });
   });
 });

@@ -11,6 +11,7 @@ import {
   mainnet,
   redbellyMainnet,
   kaia,
+  hedera,
 } from 'viem/chains';
 import { type Chain, defineChain } from 'viem';
 import { type EvmChainKey, ChainKeys } from '@sodax/types';
@@ -67,6 +68,8 @@ export function getEvmViemChain(key: EvmChainKey): Chain {
       return redbellyMainnet;
     case ChainKeys.KAIA_MAINNET:
       return kaia;
+    case ChainKeys.HEDERA_MAINNET:
+      return hedera;
     default: {
       const exhaustiveCheck: never = key; // The never type is used to ensure that the default case is exhaustive
       console.log(exhaustiveCheck);

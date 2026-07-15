@@ -216,7 +216,7 @@ Every public method declares a `<MethodName>ErrorCode` narrow union built via `E
 ```ts
 type CreateSupplyIntentErrorCode = Extract<
   SodaxErrorCode,
-  'VALIDATION_FAILED' | 'INTENT_CREATION_FAILED' | 'UNKNOWN'
+  'USER_REJECTED' | 'VALIDATION_FAILED' | 'INTENT_CREATION_FAILED' | 'UNKNOWN'
 >;
 
 // In the queryFn or call site:

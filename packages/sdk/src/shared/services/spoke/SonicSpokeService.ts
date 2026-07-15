@@ -4,8 +4,6 @@ import {
   decodeAbiParameters,
   encodeFunctionData,
   erc20Abi,
-  http,
-  type HttpTransport,
   type PublicClient,
 } from 'viem';
 import {
@@ -28,6 +26,7 @@ import {
 import { invariant } from '../../utils/tiny-invariant.js';
 import { encodeAddress, randomUint256 } from '../../utils/shared-utils.js';
 import { getEvmViemChain } from '../../utils/constant-utils.js';
+import { buildEvmRpcTransport } from '../../utils/transport-utils.js';
 import { Erc20Service, type Erc20IsAllowanceParams } from '../erc-20/Erc20Service.js';
 import { wrappedSonicAbi, sonicWalletFactoryAbi } from '../../abis/index.js';
 import { EvmSolverService } from '../../../swap/EvmSolverService.js';
@@ -73,7 +72,7 @@ export type CreateSonicSwapIntentParams<Raw extends boolean> = {
 export class SonicSpokeService {
   private readonly config: ConfigService;
   // since sonic is sole hub chain we only need one public client
-  public readonly publicClient: PublicClient<HttpTransport>;
+  public readonly publicClient: PublicClient;
   private readonly pollingIntervalMs: number;
   private readonly maxTimeoutMs: number;
 
@@ -81,7 +80,7 @@ export class SonicSpokeService {
     this.config = config;
     const chainConfig = config.getChainConfig(ChainKeys.SONIC_MAINNET);
     this.publicClient = createPublicClient({
-      transport: http(chainConfig.rpcUrl),
+      transport: buildEvmRpcTransport(chainConfig),
       chain: getEvmViemChain(ChainKeys.SONIC_MAINNET),
     });
     this.pollingIntervalMs = chainConfig.pollingConfig.pollingIntervalMs;
@@ -265,10 +264,7 @@ export class SonicSpokeService {
       from: params.srcAddress,
       to: chainConfig.addresses.walletRouter,
       data: txData,
-      value:
-        params.token.toLowerCase() === chainConfig.nativeToken.toLowerCase()
-          ? params.amount
-          : 0n,
+      value: params.token.toLowerCase() === chainConfig.nativeToken.toLowerCase() ? params.amount : 0n,
     };
 
     if (params.raw === true) {

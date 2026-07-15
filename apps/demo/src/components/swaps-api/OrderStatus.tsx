@@ -1,17 +1,15 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { useSwapsApiSubmitTxStatus } from '@sodax/dapp-kit';
 
 export type SwapsApiOrder = {
   txHash: string;
   srcChainKey: string;
-  apiBaseURL: string;
 };
 
 export default function OrderStatus({ order }: { order: SwapsApiOrder }) {
-  const apiConfig = useMemo(() => ({ baseURL: order.apiBaseURL }), [order.apiBaseURL]);
-  // Polls /swaps/submit-tx/status every second and stops on 'executed' | 'failed'.
+  // Polls /swaps/submit-tx/status every second and stops on 'solved' | 'failed'.
   const { data: statusResponse } = useSwapsApiSubmitTxStatus({
-    params: { txHash: order.txHash, srcChainKey: order.srcChainKey, apiConfig },
+    params: { txHash: order.txHash, srcChainKey: order.srcChainKey },
   });
 
   if (!statusResponse) {
@@ -30,8 +28,8 @@ export default function OrderStatus({ order }: { order: SwapsApiOrder }) {
       <div>Tx Hash: {order.txHash}</div>
       <div>Src Chain ID: {order.srcChainKey}</div>
       <div>Status: {status}</div>
-      {status === 'executed' && result?.dstIntentTxHash && <div>Dst Intent Tx Hash: {result.dstIntentTxHash}</div>}
-      {status === 'executed' && result?.intent_hash && <div>Intent Hash: {result.intent_hash}</div>}
+      {status === 'solved' && result?.dstIntentTxHash && <div>Dst Intent Tx Hash: {result.dstIntentTxHash}</div>}
+      {status === 'solved' && result?.intent_hash && <div>Intent Hash: {result.intent_hash}</div>}
       {status === 'failed' && failedAtStep && <div className="text-red-500">Failed at: {failedAtStep}</div>}
       {status === 'failed' && failureReason && <div className="text-red-500">Reason: {failureReason}</div>}
       {userMessage && <div className="text-muted-foreground">{userMessage}</div>}
