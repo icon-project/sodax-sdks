@@ -58,7 +58,7 @@ export const LsdSourceSchema = v.object({
 });
 
 /** A deployed leverage-yield vault descriptor (`LeverageVaultV2`). */
-export const LeverageVaultSchema = v.object({
+const LeverageVaultSchema = v.object({
   name: v.string(),
   vault: v.string(),
   asset: v.string(),
