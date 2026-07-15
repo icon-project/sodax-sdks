@@ -13,8 +13,11 @@ export type { ISwapsApiV2 } from '@sodax/types';
 // submit-tx response shapes — a leverage-yield deposit/withdraw IS an intent-based swap — instead
 // of re-declaring them. Leverage exposes `IntentStateSchema` under the name `IntentStateResponseSchema`.
 export {
-  IntentResponseSchema,
-  RelayExtraDataResponseSchema,
+  // `IntentResponseSchema` / `RelayExtraDataResponseSchema` are internal building blocks in
+  // schemas.ts; expose them under their public alias names (avoids a duplicate-export of the same
+  // value, which knip flags).
+  GetIntentResponseSchema as IntentResponseSchema,
+  IntentExtraDataResponseSchema as RelayExtraDataResponseSchema,
   makeCreateIntentResponseSchema,
   makeApproveResponseSchema,
   makeQuoteResponseSchema,

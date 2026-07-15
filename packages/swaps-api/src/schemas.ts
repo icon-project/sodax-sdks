@@ -42,7 +42,7 @@ const SwapTokenSchema = v.object({
   vault: v.string(),
 });
 
-export const IntentResponseSchema = v.object({
+const IntentResponseSchema = v.object({
   intentId: v.string(),
   creator: v.string(),
   inputToken: v.string(),
@@ -59,7 +59,7 @@ export const IntentResponseSchema = v.object({
   data: v.string(),
 });
 
-export const RelayExtraDataResponseSchema = v.object({
+const RelayExtraDataResponseSchema = v.object({
   address: v.string(),
   payload: v.string(),
 });
