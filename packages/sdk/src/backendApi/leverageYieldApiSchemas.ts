@@ -7,7 +7,7 @@
 //
 // A leverage-yield deposit/withdraw IS an intent-based swap, so the intent-relay, gas,
 // fee, and submit-tx response shapes are IDENTICAL to the swaps API. Those schemas are
-// REUSED verbatim from `swapsApiSchemas.ts` (re-exported here for a single import site)
+// REUSED verbatim from `@sodax/swaps-api` (re-exported here for a single import site)
 // rather than re-declared — the same reuse strategy the wire types use. Only the
 // vault-registry and vault-read schemas are leverage-yield-specific.
 //
@@ -18,7 +18,9 @@
 
 import * as v from 'valibot';
 
-// Reused swaps schemas — the intent-relay / gas / fee / submit-tx lifecycle is shared.
+// Reused swaps schemas — the intent-relay / gas / fee / submit-tx lifecycle is shared. Sourced from
+// @sodax/swaps-api, which owns the canonical swaps valibot schemas (main #254 centralized them there).
+// `IntentStateSchema` is that package's name for what leverage exposes as `IntentStateResponseSchema`.
 export {
   IntentResponseSchema,
   RelayExtraDataResponseSchema,
@@ -32,12 +34,17 @@ export {
   StatusResponseSchema,
   IntentHashResponseSchema,
   IntentPacketResponseSchema,
-  IntentStateResponseSchema,
+  IntentStateSchema as IntentStateResponseSchema,
   GasEstimateResponseSchema,
   FeeResponseSchema,
   SubmitTxResponseSchema,
   SubmitTxStatusResponseSchema,
-} from './swapsApiSchemas.js';
+} from '@sodax/swaps-api';
+
+// Per-chain raw-tx schema factory (parameterizes the create-intent / approve / quote response
+// schemas). Also owned by @sodax/swaps-api; re-exported here so the service imports it from this
+// single SDK-local hub rather than reaching into the package directly.
+export { rawTxSchemaForChainKey } from '@sodax/swaps-api';
 
 // ──────────────────────────────────────────────────────────────────────
 // Vault registry — GET /leverage-yield/vaults · /vaults/:name

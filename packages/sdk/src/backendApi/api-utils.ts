@@ -42,6 +42,13 @@ export type MakeRequestParams = {
 };
 
 /**
+ * Serialize a request body to JSON, encoding `bigint` values as decimal strings (JSON has no
+ * bigint). Used by request builders that POST bodies carrying bigint numerics.
+ */
+export const toJsonBody = (value: unknown): string =>
+  JSON.stringify(value, (_key, val) => (typeof val === 'bigint' ? val.toString() : val));
+
+/**
  * Execute a single HTTP request and return the parsed JSON body.
  *
  * Resolves the effective base URL, headers, and timeout from `config` (the

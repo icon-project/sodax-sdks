@@ -1034,6 +1034,8 @@ export class LeverageYieldService {
         walletAddress: params.srcAddress,
         intent,
         relayData: relayData.payload,
+        // `withdraw` sets `hubWalletSwap: true` (spends the hub-wallet lsoda*); a plain deposit doesn't.
+        operation: _params.hubWalletSwap ? 'withdraw' : 'deposit',
       });
       // Backend submission rejected — wrap its error as the cause so vaultSwap() falls back.
       if (!submitted.ok) return submitTxFailed(submitted.error);
@@ -1047,7 +1049,7 @@ export class LeverageYieldService {
         const statusResult = await this.backendApi.leverageYield.getSubmitTxStatus({ txHash: spokeTxHash, srcChainKey });
         if (statusResult.ok) {
           const { status, result, failureReason, abandonedAt } = statusResult.value.data;
-          if (status === 'executed' && result?.dstIntentTxHash && result.intent_hash) {
+          if (status === 'solved' && result?.dstIntentTxHash && result.intent_hash) {
             return {
               ok: true,
               value: {

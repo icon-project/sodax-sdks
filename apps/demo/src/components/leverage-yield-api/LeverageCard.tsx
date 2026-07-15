@@ -14,7 +14,7 @@ import type {
   LeverageYieldDepositQuoteRequestV2,
   LeverageYieldWithdrawQuoteRequestV2,
   SpokeChainKey,
-  SubmitTxRequestV2,
+  LeverageYieldSubmitTxRequestV2,
   XToken,
 } from '@sodax/dapp-kit';
 import { Loader2 } from 'lucide-react';
@@ -292,12 +292,13 @@ export default function LeverageCard({
       });
 
       // 3. Hand the tx back to the API for relay + solver post-execution.
-      const request: SubmitTxRequestV2 = {
+      const request: LeverageYieldSubmitTxRequestV2 = {
         txHash: spokeTxHash,
         srcChainKey: depositChain,
         walletAddress: depositAccount.address,
         intent: toIntentRequest(intent),
         relayData: relayData.payload,
+        operation: 'deposit',
       };
       const submitted = await submitTx({ request, apiConfig });
       if (!submitted.ok) {
@@ -407,12 +408,13 @@ export default function LeverageCard({
         walletProvider: withdrawWalletProvider,
       });
 
-      const request: SubmitTxRequestV2 = {
+      const request: LeverageYieldSubmitTxRequestV2 = {
         txHash: spokeTxHash,
         srcChainKey: withdrawChain,
         walletAddress: withdrawAccount.address,
         intent: toIntentRequest(intent),
         relayData: relayData.payload,
+        operation: 'withdraw',
       };
       const submitted = await submitTx({ request, apiConfig });
       if (!submitted.ok) {

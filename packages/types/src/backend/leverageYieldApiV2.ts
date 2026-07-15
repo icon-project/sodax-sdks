@@ -445,7 +445,19 @@ export interface ILeverageYieldApiV2 {
 
   // ── Backend submit-tx flow (reused swaps wire types) ──
   /** POST /leverage-yield/submit-tx */
-  submitTx(body: SubmitTxRequestV2): Promise<SubmitTxResponseV2>;
+  submitTx(body: LeverageYieldSubmitTxRequestV2): Promise<SubmitTxResponseV2>;
   /** GET /leverage-yield/submit-tx/status */
   getSubmitTxStatus(query: SubmitTxStatusQueryV2): Promise<SubmitTxStatusResponseV2>;
+}
+
+/** Which vault operation a leverage-yield submit-tx represents. */
+export type LeverageYieldSubmitTxOperation = 'deposit' | 'withdraw';
+
+/**
+ * Leverage-yield submit-tx request body. Extends the shared swaps {@link SubmitTxRequestV2} with the
+ * required `operation` discriminator the backend needs to record the queued row as a vault
+ * `deposit`/`withdraw` (mapped server-side to the row-level `leverage_deposit`/`leverage_withdraw`).
+ */
+export interface LeverageYieldSubmitTxRequestV2 extends SubmitTxRequestV2 {
+  operation: LeverageYieldSubmitTxOperation;
 }

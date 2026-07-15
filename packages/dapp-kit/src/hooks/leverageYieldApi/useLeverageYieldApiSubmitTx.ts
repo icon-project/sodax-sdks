@@ -1,4 +1,4 @@
-import type { SubmitTxRequestV2, SubmitTxResponseV2, RequestOverrideConfig } from '@sodax/sdk';
+import type { LeverageYieldSubmitTxRequestV2, SubmitTxResponseV2, RequestOverrideConfig } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import { unwrapResult } from '../shared/unwrapResult.js';
 import type { MutationHookParams } from '../shared/types.js';
@@ -10,7 +10,7 @@ import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMu
  * endpoints without re-rendering.
  */
 export type UseLeverageYieldApiSubmitTxVars = {
-  request: SubmitTxRequestV2;
+  request: LeverageYieldSubmitTxRequestV2;
   apiConfig?: RequestOverrideConfig;
 };
 

@@ -6,5 +6,6 @@ import type { RequestOverrideConfig } from '@sodax/dapp-kit';
  * `useLeverageYieldApi*` hook's `apiConfig` without touching the app-wide SDK config.
  */
 export const LEVERAGE_YIELD_API_CONFIG = {
-  baseURL: 'https://canary-api.sodax.com/v1',
+  // baseURL: 'https://canary-api.sodax.com/v1',
+  baseURL: 'http://localhost:3008',
 } as const satisfies RequestOverrideConfig;

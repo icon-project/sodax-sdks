@@ -46,7 +46,7 @@ import type {
   StatusResponseV2,
   SubmitIntentRequestV2,
   SubmitIntentResponseV2,
-  SubmitTxRequestV2,
+  LeverageYieldSubmitTxRequestV2,
   SubmitTxResponseV2,
   SubmitTxStatusQueryV2,
   SubmitTxStatusResponseV2,
@@ -60,7 +60,7 @@ import type {
 
 import { makeRequest, toJsonBody, type RequestConfig, type RequestOverrideConfig } from './api-utils.js';
 import * as schemas from './leverageYieldApiSchemas.js';
-import { rawTxSchemaForChainKey } from './rawTxSchemas.js';
+import { rawTxSchemaForChainKey } from './leverageYieldApiSchemas.js';
 import { SodaxError } from '../errors/SodaxError.js';
 import { consoleLogger } from '../shared/logger.js';
 
@@ -708,7 +708,10 @@ export class LeverageYieldApiService implements ResultifiedLeverageYieldApiV2 {
    *
    * @returns `Result<SubmitTxResponseV2>` — `{ success, data: { status, message } }`.
    */
-  public async submitTx(body: SubmitTxRequestV2, config?: RequestOverrideConfig): Promise<Result<SubmitTxResponseV2>> {
+  public async submitTx(
+    body: LeverageYieldSubmitTxRequestV2,
+    config?: RequestOverrideConfig,
+  ): Promise<Result<SubmitTxResponseV2>> {
     return this.request(
       '/leverage-yield/submit-tx',
       { method: 'POST', body: toJsonBody(body) },
