@@ -1,4 +1,5 @@
 import { SelectChain } from '@/components/swaps/SelectChain';
+import { TokenIcon } from '@/components/shared/TokenIcon';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -469,7 +470,10 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
             <SelectContent>
               {getSolverTokens(src.chain).map(token => (
                 <SelectItem key={`${token.address}-${token.symbol}`} value={token.symbol}>
-                  {token.symbol}
+                  <span className="flex items-center gap-2">
+                    <TokenIcon symbol={token.symbol} />
+                    {token.symbol}
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -544,7 +548,10 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
             <SelectContent>
               {getSolverTokens(dst.chain).map(token => (
                 <SelectItem key={`${token.address}-${token.symbol}`} value={token.symbol}>
-                  {token.symbol}
+                  <span className="flex items-center gap-2">
+                    <TokenIcon symbol={token.symbol} />
+                    {token.symbol}
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>
