@@ -1,3 +1,4 @@
+import React from 'react';
 import { tokenLogo } from '@sodax/dapp-kit';
 import { cn } from '@/lib/utils';
 
