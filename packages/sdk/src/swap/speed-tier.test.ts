@@ -23,8 +23,7 @@ const isSodaAsset = (hubAsset: Address): boolean => hubAsset.toLowerCase() === S
 describe('estimateSwapSpeedTier', () => {
   it('both tokens sodaAsset-related (non-ETH) → 15s / fast', () => {
     const result = estimateSwapSpeedTier(
-      token(ChainKeys.SONIC_MAINNET, SODA_HUB),
-      token(ChainKeys.BSC_MAINNET, SODA_HUB),
+      { srcToken: token(ChainKeys.SONIC_MAINNET, SODA_HUB), dstToken: token(ChainKeys.BSC_MAINNET, SODA_HUB) },
       isSodaAsset,
     );
     expect(result).toEqual({ tier: 'fast', estimatedSeconds: SPEED_TIER_SECONDS.sodaAsset });
@@ -32,15 +31,13 @@ describe('estimateSwapSpeedTier', () => {
 
   it('either token sodaAsset-related (non-ETH) → 15s / fast', () => {
     const srcOnly = estimateSwapSpeedTier(
-      token(ChainKeys.SONIC_MAINNET, SODA_HUB),
-      token(ChainKeys.BSC_MAINNET, PLAIN_HUB),
+      { srcToken: token(ChainKeys.SONIC_MAINNET, SODA_HUB), dstToken: token(ChainKeys.BSC_MAINNET, PLAIN_HUB) },
       isSodaAsset,
     );
     expect(srcOnly).toEqual({ tier: 'fast', estimatedSeconds: SPEED_TIER_SECONDS.sodaAsset });
 
     const dstOnly = estimateSwapSpeedTier(
-      token(ChainKeys.SONIC_MAINNET, PLAIN_HUB),
-      token(ChainKeys.BSC_MAINNET, SODA_HUB),
+      { srcToken: token(ChainKeys.SONIC_MAINNET, PLAIN_HUB), dstToken: token(ChainKeys.BSC_MAINNET, SODA_HUB) },
       isSodaAsset,
     );
     expect(dstOnly).toEqual({ tier: 'fast', estimatedSeconds: SPEED_TIER_SECONDS.sodaAsset });
@@ -48,8 +45,7 @@ describe('estimateSwapSpeedTier', () => {
 
   it('neither token sodaAsset-related → default 35s', () => {
     const result = estimateSwapSpeedTier(
-      token(ChainKeys.SONIC_MAINNET, PLAIN_HUB),
-      token(ChainKeys.BSC_MAINNET, PLAIN_HUB),
+      { srcToken: token(ChainKeys.SONIC_MAINNET, PLAIN_HUB), dstToken: token(ChainKeys.BSC_MAINNET, PLAIN_HUB) },
       isSodaAsset,
     );
     expect(result.estimatedSeconds).toBe(SPEED_TIER_SECONDS.default);
@@ -57,16 +53,14 @@ describe('estimateSwapSpeedTier', () => {
 
   it('adds the Ethereum penalty once when either leg is on Ethereum', () => {
     const srcEth = estimateSwapSpeedTier(
-      token(ChainKeys.ETHEREUM_MAINNET, SODA_HUB),
-      token(ChainKeys.BSC_MAINNET, SODA_HUB),
+      { srcToken: token(ChainKeys.ETHEREUM_MAINNET, SODA_HUB), dstToken: token(ChainKeys.BSC_MAINNET, SODA_HUB) },
       isSodaAsset,
     );
     expect(srcEth.estimatedSeconds).toBe(SPEED_TIER_SECONDS.sodaAsset + SPEED_TIER_SECONDS.ethereumPenalty);
 
     // Both legs Ethereum — penalty still applied only once.
     const bothEth = estimateSwapSpeedTier(
-      token(ChainKeys.ETHEREUM_MAINNET, SODA_HUB),
-      token(ChainKeys.ETHEREUM_MAINNET, SODA_HUB),
+      { srcToken: token(ChainKeys.ETHEREUM_MAINNET, SODA_HUB), dstToken: token(ChainKeys.ETHEREUM_MAINNET, SODA_HUB) },
       isSodaAsset,
     );
     expect(bothEth.estimatedSeconds).toBe(SPEED_TIER_SECONDS.sodaAsset + SPEED_TIER_SECONDS.ethereumPenalty);

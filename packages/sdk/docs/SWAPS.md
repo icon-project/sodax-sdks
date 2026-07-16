@@ -88,6 +88,7 @@ On **any** non-success (submission rejected, terminal `failed`/abandoned, or pol
 - `getSupportedSwapTokensByChainId(chainId)` — Get supported swap tokens for a spoke chain
 - `getSupportedSwapTokens()` — Get all supported swap tokens per chain
 - `estimateGas(params)` — Estimate gas for a raw transaction on any spoke chain
+- `getSwapSpeedTier({ srcToken, dstToken })` — Offline estimate of how fast a token pair will settle
 
 ## Core Concepts
 
@@ -435,6 +436,21 @@ if (customDeadlineResult.ok) {
 ```
 
 For limit orders, pass `deadline: 0n` directly to `createIntent` (or use `createLimitOrder` / `createLimitOrderIntent` which force `0n` automatically).
+
+---
+
+## Get Swap Speed Tier
+
+Offline, rule-based estimate of how fast a `srcToken` → `dstToken` swap will settle. It is derived purely from SDK config — **no network, on-chain, or backend call** — so it is safe to call synchronously while rendering a quote. Tokens tied to a money-market-reserve (sodaAsset) settle faster, and an Ethereum leg adds a fixed penalty.
+
+```typescript
+const { tier, estimatedSeconds } = sodax.swaps.getSwapSpeedTier({ srcToken, dstToken });
+
+console.log(tier); // 'fast' | 'normal' | 'slow'
+console.log(estimatedSeconds); // e.g. 15
+```
+
+`estimatedSeconds` is the source of truth; `tier` is bucketed from it. The rules: a fast base (15s) applies when **either** token is sodaAsset-related, otherwise the base is 35s; an Ethereum leg on either side adds a fixed penalty. See `estimateSwapSpeedTier` in the SDK source for the exact constants.
 
 ---
 
