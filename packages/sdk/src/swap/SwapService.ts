@@ -38,10 +38,16 @@ import { SolverApiService } from './SolverApiService.js';
 import { EvmSolverService } from './EvmSolverService.js';
 import type { BackendApiService } from '../backendApi/index.js';
 import { selectSolvedIntentPacket } from './selectSolvedIntentPacket.js';
-import { estimateSwapSpeedTier, type SwapSpeedTierResult } from './speed-tier.js';
+import { estimateSwapSpeedTier, type SwapSpeedTierParams, type SwapSpeedTierResult } from './speed-tier.js';
 import { SodaxError } from '../errors/SodaxError.js';
 import { mapRelayFailure } from '../errors/relay-error-mapping.js';
-import { verifyFailed, intentCreationFailed, executionFailed, unknownFailed, approveFailed } from '../errors/wrappers.js';
+import {
+  verifyFailed,
+  intentCreationFailed,
+  executionFailed,
+  unknownFailed,
+  approveFailed,
+} from '../errors/wrappers.js';
 import {
   type SwapCreateIntentError,
   type PostExecutionError,
@@ -1392,13 +1398,12 @@ export class SwapService {
    *
    * Derived purely from SDK config (no network / on-chain / backend call): tokens tied to a
    * money-market-reserve sodaAsset settle faster, and an Ethereum leg adds a fixed penalty. See
-   * {@link estimateSwapSpeedTier} for the rules and the open assumptions being tracked in #192.
+   * {@link estimateSwapSpeedTier} for the rules.
    *
-   * @param srcToken source spoke token
-   * @param dstToken destination spoke token
+   * @param params `{ srcToken, dstToken }` spoke token pair to estimate
    * @returns the estimated `tier` bucket and `estimatedSeconds`
    */
-  public getSwapSpeedTier(srcToken: XToken, dstToken: XToken): SwapSpeedTierResult {
-    return estimateSwapSpeedTier(srcToken, dstToken, hubAsset => this.config.isMoneyMarketReserveHubAsset(hubAsset));
+  public getSwapSpeedTier(params: SwapSpeedTierParams): SwapSpeedTierResult {
+    return estimateSwapSpeedTier(params, hubAsset => this.config.isMoneyMarketReserveHubAsset(hubAsset));
   }
 }
