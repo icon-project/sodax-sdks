@@ -144,7 +144,7 @@ Four read hooks expose the same store data at different granularities:
 | Hook | Returns | Use case |
 |------|---------|----------|
 | `useXAccount({ xChainId })` | `XAccount` for the chain's family (resolves chain id → chain type) | Signing/reading at chain-id level (e.g. `useXAccount({ xChainId: ChainKeys.BSC_MAINNET })`) |
-| `useXAccount({ xChainType })` | `XAccount` for that family | Family-level UI (e.g. EVM badge — one wagmi connection covers all 12 EVM chains) |
+| `useXAccount({ xChainType })` | `XAccount` for that family | Family-level UI (e.g. EVM badge — one wagmi connection covers all 13 EVM chains) |
 | `useXAccounts()` | `Partial<Record<ChainType, XAccount>>` for every enabled chain | Account list / multi-chain dashboard |
 | `useXConnection({ xChainType })` | `XConnection \| undefined` | When you also need `xConnectorId` (e.g. to drive disconnect UX) |
 | `useXConnections()` | `Partial<Record<ChainType, XConnection>>` | Aggregate UIs that care about connector identity per chain |

@@ -31,7 +31,7 @@ const { tx, intent, relayData } = result.value;
 When you know the method, the narrow code union from its declaration enables an exhaustive switch:
 
 ```ts
-type CreateSupplyIntentErrorCode = 'VALIDATION_FAILED' | 'INTENT_CREATION_FAILED' | 'UNKNOWN';
+type CreateSupplyIntentErrorCode = 'USER_REJECTED' | 'VALIDATION_FAILED' | 'INTENT_CREATION_FAILED' | 'UNKNOWN';
 
 const result = await sodax.moneyMarket.createSupplyIntent({ params, raw: true });
 if (!result.ok) {

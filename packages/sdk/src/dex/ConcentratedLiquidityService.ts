@@ -1,4 +1,4 @@
-import type { Hex, PublicClient, HttpTransport } from 'viem';
+import type { Hex, PublicClient } from 'viem';
 import {
   type SpokeService,
   encodeContractCalls,
@@ -12,8 +12,8 @@ import {
   type SendMessageParams,
 } from '../shared/index.js';
 import { SodaxError, isSodaxError } from '../errors/SodaxError.js';
-import { lookupFailed } from '../errors/wrappers.js';
-import { dexInvariant } from './errors.js';
+import { intentCreationFailed, lookupFailed } from '../errors/wrappers.js';
+import { dexInvariant, isDexCreateIntentError } from './errors.js';
 import type { MintPositionEventLog } from '../swap/EvmSolverService.js';
 import type {
   Address,
@@ -435,7 +435,7 @@ export class ClService {
         this.config.logger.error('executeSupplyLiquidity error', txResult.error);
         return {
           ok: false,
-          error: txResult.error,
+          error: intentCreationFailed('dex', txResult.error),
         };
       }
 
@@ -448,10 +448,8 @@ export class ClService {
       };
     } catch (error) {
       this.config.logger.error('executeSupplyLiquidity error', error);
-      return {
-        ok: false,
-        error,
-      };
+      if (isDexCreateIntentError(error)) return { ok: false, error };
+      return { ok: false, error: intentCreationFailed('dex', error) };
     }
   }
 
@@ -580,7 +578,7 @@ export class ClService {
       if (!txResult.ok) {
         return {
           ok: false,
-          error: txResult.error,
+          error: intentCreationFailed('dex', txResult.error),
         };
       }
 
@@ -592,10 +590,8 @@ export class ClService {
         },
       };
     } catch (error) {
-      return {
-        ok: false,
-        error,
-      };
+      if (isDexCreateIntentError(error)) return { ok: false, error };
+      return { ok: false, error: intentCreationFailed('dex', error) };
     }
   }
 
@@ -666,7 +662,7 @@ export class ClService {
       if (!txResult.ok) {
         return {
           ok: false,
-          error: txResult.error,
+          error: intentCreationFailed('dex', txResult.error),
         };
       }
 
@@ -678,10 +674,8 @@ export class ClService {
         },
       };
     } catch (error) {
-      return {
-        ok: false,
-        error,
-      };
+      if (isDexCreateIntentError(error)) return { ok: false, error };
+      return { ok: false, error: intentCreationFailed('dex', error) };
     }
   }
 
@@ -736,57 +730,59 @@ export class ClService {
   public async supplyLiquidity<K extends SpokeChainKey>(
     _params: ClSupplyAction<K, false>,
   ): Promise<Result<TxHashPair>> {
-    return this.config.analytics.trackResult('dex', 'supplyLiquidity', async () => {
-      const { params, timeout } = _params;
-      try {
-        const txResult = await this.executeSupplyLiquidity(_params);
+    return this.config.analytics.trackResult(
+      'dex',
+      'supplyLiquidity',
+      async () => {
+        const { params, timeout } = _params;
+        try {
+          const txResult = await this.executeSupplyLiquidity(_params);
 
-        if (!txResult.ok) {
-          return txResult;
+          if (!txResult.ok) {
+            return txResult;
+          }
+
+          let hubTxHash: string;
+          if (!isHubChainKeyType(params.srcChainKey)) {
+            const packetResult = await relayTxAndWaitPacket({
+              srcTxHash: txResult.value.tx,
+              data: txResult.value.relayData,
+              chainKey: params.srcChainKey,
+              relayerApiEndpoint: this.relayerApiEndpoint,
+              timeout: timeout,
+            });
+
+            if (!packetResult.ok) return packetResult;
+
+            hubTxHash = packetResult.value.dst_tx_hash;
+          } else {
+            hubTxHash = txResult.value.tx;
+          }
+
+          return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
+        } catch (error) {
+          this.config.logger.error('supplyLiquidity error', error);
+          if (isDexCreateIntentError(error)) return { ok: false, error };
+          return { ok: false, error: intentCreationFailed('dex', error) };
         }
-
-        let hubTxHash: string;
-        if (!isHubChainKeyType(params.srcChainKey)) {
-          const packetResult = await relayTxAndWaitPacket({
-            srcTxHash: txResult.value.tx,
-            data: txResult.value.relayData,
-            chainKey: params.srcChainKey,
-            relayerApiEndpoint: this.relayerApiEndpoint,
-            timeout: timeout,
-          });
-
-          if (!packetResult.ok) return packetResult;
-
-          hubTxHash = packetResult.value.dst_tx_hash;
-        } else {
-          hubTxHash = txResult.value.tx;
-        }
-
-        return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
-      } catch (error) {
-        this.config.logger.error('supplyLiquidity error', error);
-        return {
-          ok: false,
-          error,
-        };
-      }
-    },
-    {
-      start: () => ({
-        srcChainKey: _params.params.srcChainKey,
-        srcAddress: _params.params.srcAddress,
-        currency0: _params.params.poolKey.currency0,
-        currency1: _params.params.poolKey.currency1,
-        fee: _params.params.poolKey.fee,
-        tickLower: _params.params.tickLower,
-        tickUpper: _params.params.tickUpper,
-        liquidity: _params.params.liquidity,
-        amount0Max: _params.params.amount0Max,
-        amount1Max: _params.params.amount1Max,
-      }),
-      success: value => ({ srcChainTxHash: value.srcChainTxHash, dstChainTxHash: value.dstChainTxHash }),
-      failure: error => ({ code: isSodaxError(error) ? error.code : undefined }),
-    });
+      },
+      {
+        start: () => ({
+          srcChainKey: _params.params.srcChainKey,
+          srcAddress: _params.params.srcAddress,
+          currency0: _params.params.poolKey.currency0,
+          currency1: _params.params.poolKey.currency1,
+          fee: _params.params.poolKey.fee,
+          tickLower: _params.params.tickLower,
+          tickUpper: _params.params.tickUpper,
+          liquidity: _params.params.liquidity,
+          amount0Max: _params.params.amount0Max,
+          amount1Max: _params.params.amount1Max,
+        }),
+        success: value => ({ srcChainTxHash: value.srcChainTxHash, dstChainTxHash: value.dstChainTxHash }),
+        failure: error => ({ code: isSodaxError(error) ? error.code : undefined }),
+      },
+    );
   }
 
   /**
@@ -804,57 +800,59 @@ export class ClService {
   public async increaseLiquidity<K extends SpokeChainKey>(
     _params: ClLiquidityIncreaseLiquidityAction<K, false>,
   ): Promise<Result<TxHashPair>> {
-    return this.config.analytics.trackResult('dex', 'increaseLiquidity', async () => {
-      const { params, timeout } = _params;
-      try {
-        const txResult = await this.executeIncreaseLiquidity(_params);
+    return this.config.analytics.trackResult(
+      'dex',
+      'increaseLiquidity',
+      async () => {
+        const { params, timeout } = _params;
+        try {
+          const txResult = await this.executeIncreaseLiquidity(_params);
 
-        if (!txResult.ok) {
-          return txResult;
+          if (!txResult.ok) {
+            return txResult;
+          }
+
+          let hubTxHash: string;
+          if (!isHubChainKeyType(params.srcChainKey)) {
+            const packetResult = await relayTxAndWaitPacket({
+              srcTxHash: txResult.value.tx,
+              data: txResult.value.relayData,
+              chainKey: params.srcChainKey,
+              relayerApiEndpoint: this.relayerApiEndpoint,
+              timeout: timeout,
+            });
+
+            if (!packetResult.ok) return packetResult;
+
+            hubTxHash = packetResult.value.dst_tx_hash;
+          } else {
+            hubTxHash = txResult.value.tx;
+          }
+
+          return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
+        } catch (error) {
+          if (isDexCreateIntentError(error)) return { ok: false, error };
+          return { ok: false, error: intentCreationFailed('dex', error) };
         }
-
-        let hubTxHash: string;
-        if (!isHubChainKeyType(params.srcChainKey)) {
-          const packetResult = await relayTxAndWaitPacket({
-            srcTxHash: txResult.value.tx,
-            data: txResult.value.relayData,
-            chainKey: params.srcChainKey,
-            relayerApiEndpoint: this.relayerApiEndpoint,
-            timeout: timeout,
-          });
-
-          if (!packetResult.ok) return packetResult;
-
-          hubTxHash = packetResult.value.dst_tx_hash;
-        } else {
-          hubTxHash = txResult.value.tx;
-        }
-
-        return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
-      } catch (error) {
-        return {
-          ok: false,
-          error,
-        };
-      }
-    },
-    {
-      start: () => ({
-        srcChainKey: _params.params.srcChainKey,
-        srcAddress: _params.params.srcAddress,
-        currency0: _params.params.poolKey.currency0,
-        currency1: _params.params.poolKey.currency1,
-        fee: _params.params.poolKey.fee,
-        tokenId: _params.params.tokenId,
-        tickLower: _params.params.tickLower,
-        tickUpper: _params.params.tickUpper,
-        liquidity: _params.params.liquidity,
-        amount0Max: _params.params.amount0Max,
-        amount1Max: _params.params.amount1Max,
-      }),
-      success: value => ({ srcChainTxHash: value.srcChainTxHash, dstChainTxHash: value.dstChainTxHash }),
-      failure: error => ({ code: isSodaxError(error) ? error.code : undefined }),
-    });
+      },
+      {
+        start: () => ({
+          srcChainKey: _params.params.srcChainKey,
+          srcAddress: _params.params.srcAddress,
+          currency0: _params.params.poolKey.currency0,
+          currency1: _params.params.poolKey.currency1,
+          fee: _params.params.poolKey.fee,
+          tokenId: _params.params.tokenId,
+          tickLower: _params.params.tickLower,
+          tickUpper: _params.params.tickUpper,
+          liquidity: _params.params.liquidity,
+          amount0Max: _params.params.amount0Max,
+          amount1Max: _params.params.amount1Max,
+        }),
+        success: value => ({ srcChainTxHash: value.srcChainTxHash, dstChainTxHash: value.dstChainTxHash }),
+        failure: error => ({ code: isSodaxError(error) ? error.code : undefined }),
+      },
+    );
   }
 
   /**
@@ -872,55 +870,57 @@ export class ClService {
   public async decreaseLiquidity<K extends SpokeChainKey>(
     _params: ClLiquidityDecreaseLiquidityAction<K, false>,
   ): Promise<Result<TxHashPair>> {
-    return this.config.analytics.trackResult('dex', 'decreaseLiquidity', async () => {
-      const { params, timeout } = _params;
-      try {
-        const txResult = await this.executeDecreaseLiquidity(_params);
+    return this.config.analytics.trackResult(
+      'dex',
+      'decreaseLiquidity',
+      async () => {
+        const { params, timeout } = _params;
+        try {
+          const txResult = await this.executeDecreaseLiquidity(_params);
 
-        if (!txResult.ok) {
-          return txResult;
+          if (!txResult.ok) {
+            return txResult;
+          }
+
+          let hubTxHash: string;
+          if (!isHubChainKeyType(params.srcChainKey)) {
+            const packetResult = await relayTxAndWaitPacket({
+              srcTxHash: txResult.value.tx,
+              data: txResult.value.relayData,
+              chainKey: params.srcChainKey,
+              relayerApiEndpoint: this.relayerApiEndpoint,
+              timeout: timeout,
+            });
+
+            if (!packetResult.ok) return packetResult;
+
+            hubTxHash = packetResult.value.dst_tx_hash;
+          } else {
+            hubTxHash = txResult.value.tx;
+          }
+
+          return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
+        } catch (error) {
+          if (isDexCreateIntentError(error)) return { ok: false, error };
+          return { ok: false, error: intentCreationFailed('dex', error) };
         }
-
-        let hubTxHash: string;
-        if (!isHubChainKeyType(params.srcChainKey)) {
-          const packetResult = await relayTxAndWaitPacket({
-            srcTxHash: txResult.value.tx,
-            data: txResult.value.relayData,
-            chainKey: params.srcChainKey,
-            relayerApiEndpoint: this.relayerApiEndpoint,
-            timeout: timeout,
-          });
-
-          if (!packetResult.ok) return packetResult;
-
-          hubTxHash = packetResult.value.dst_tx_hash;
-        } else {
-          hubTxHash = txResult.value.tx;
-        }
-
-        return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
-      } catch (error) {
-        return {
-          ok: false,
-          error,
-        };
-      }
-    },
-    {
-      start: () => ({
-        srcChainKey: _params.params.srcChainKey,
-        srcAddress: _params.params.srcAddress,
-        currency0: _params.params.poolKey.currency0,
-        currency1: _params.params.poolKey.currency1,
-        fee: _params.params.poolKey.fee,
-        tokenId: _params.params.tokenId,
-        liquidity: _params.params.liquidity,
-        amount0Min: _params.params.amount0Min,
-        amount1Min: _params.params.amount1Min,
-      }),
-      success: value => ({ srcChainTxHash: value.srcChainTxHash, dstChainTxHash: value.dstChainTxHash }),
-      failure: error => ({ code: isSodaxError(error) ? error.code : undefined }),
-    });
+      },
+      {
+        start: () => ({
+          srcChainKey: _params.params.srcChainKey,
+          srcAddress: _params.params.srcAddress,
+          currency0: _params.params.poolKey.currency0,
+          currency1: _params.params.poolKey.currency1,
+          fee: _params.params.poolKey.fee,
+          tokenId: _params.params.tokenId,
+          liquidity: _params.params.liquidity,
+          amount0Min: _params.params.amount0Min,
+          amount1Min: _params.params.amount1Min,
+        }),
+        success: value => ({ srcChainTxHash: value.srcChainTxHash, dstChainTxHash: value.dstChainTxHash }),
+        failure: error => ({ code: isSodaxError(error) ? error.code : undefined }),
+      },
+    );
   }
 
   /**
@@ -936,10 +936,7 @@ export class ClService {
    * @returns `Result<PoolRewardConfig>` — on success, contains the reward token address,
    *   reward rate per second, and the timestamp of the last position-affecting action.
    */
-  public async getPoolRewardConfig(
-    poolKey: PoolKey,
-    publicClient: PublicClient<HttpTransport>,
-  ): Promise<Result<PoolRewardConfig>> {
+  public async getPoolRewardConfig(poolKey: PoolKey, publicClient: PublicClient): Promise<Result<PoolRewardConfig>> {
     try {
       const hookAddress = poolKey.hooks;
 
@@ -1064,7 +1061,7 @@ export class ClService {
         this.config.logger.error('executeClaimRewards error', txResult.error);
         return {
           ok: false,
-          error: txResult.error,
+          error: intentCreationFailed('dex', txResult.error),
         };
       }
 
@@ -1077,10 +1074,8 @@ export class ClService {
       };
     } catch (error) {
       this.config.logger.error('executeClaimRewards error', error);
-      return {
-        ok: false,
-        error,
-      };
+      if (isDexCreateIntentError(error)) return { ok: false, error };
+      return { ok: false, error: intentCreationFailed('dex', error) };
     }
   }
 
@@ -1099,55 +1094,57 @@ export class ClService {
   public async claimRewards<K extends SpokeChainKey>(
     _params: ClLiquidityClaimRewardsAction<K, false>,
   ): Promise<Result<TxHashPair>> {
-    return this.config.analytics.trackResult('dex', 'claimRewards', async () => {
-      const { params, timeout } = _params;
-      try {
-        const txResult = await this.executeClaimRewards(_params);
+    return this.config.analytics.trackResult(
+      'dex',
+      'claimRewards',
+      async () => {
+        const { params, timeout } = _params;
+        try {
+          const txResult = await this.executeClaimRewards(_params);
 
-        if (!txResult.ok) {
-          return txResult;
+          if (!txResult.ok) {
+            return txResult;
+          }
+
+          let hubTxHash: string;
+          if (!isHubChainKeyType(params.srcChainKey)) {
+            const packetResult = await relayTxAndWaitPacket({
+              srcTxHash: txResult.value.tx,
+              data: txResult.value.relayData,
+              chainKey: params.srcChainKey,
+              relayerApiEndpoint: this.relayerApiEndpoint,
+              timeout: timeout,
+            });
+
+            if (!packetResult.ok) return packetResult;
+
+            hubTxHash = packetResult.value.dst_tx_hash;
+          } else {
+            hubTxHash = txResult.value.tx;
+          }
+
+          return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
+        } catch (error) {
+          this.config.logger.error('claimRewards error', error);
+          if (isDexCreateIntentError(error)) return { ok: false, error };
+          return { ok: false, error: intentCreationFailed('dex', error) };
         }
-
-        let hubTxHash: string;
-        if (!isHubChainKeyType(params.srcChainKey)) {
-          const packetResult = await relayTxAndWaitPacket({
-            srcTxHash: txResult.value.tx,
-            data: txResult.value.relayData,
-            chainKey: params.srcChainKey,
-            relayerApiEndpoint: this.relayerApiEndpoint,
-            timeout: timeout,
-          });
-
-          if (!packetResult.ok) return packetResult;
-
-          hubTxHash = packetResult.value.dst_tx_hash;
-        } else {
-          hubTxHash = txResult.value.tx;
-        }
-
-        return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
-      } catch (error) {
-        this.config.logger.error('claimRewards error', error);
-        return {
-          ok: false,
-          error,
-        };
-      }
-    },
-    {
-      start: () => ({
-        srcChainKey: _params.params.srcChainKey,
-        srcAddress: _params.params.srcAddress,
-        currency0: _params.params.poolKey.currency0,
-        currency1: _params.params.poolKey.currency1,
-        fee: _params.params.poolKey.fee,
-        tokenId: _params.params.tokenId,
-        tickLower: _params.params.tickLower,
-        tickUpper: _params.params.tickUpper,
-      }),
-      success: value => ({ srcChainTxHash: value.srcChainTxHash, dstChainTxHash: value.dstChainTxHash }),
-      failure: error => ({ code: isSodaxError(error) ? error.code : undefined }),
-    });
+      },
+      {
+        start: () => ({
+          srcChainKey: _params.params.srcChainKey,
+          srcAddress: _params.params.srcAddress,
+          currency0: _params.params.poolKey.currency0,
+          currency1: _params.params.poolKey.currency1,
+          fee: _params.params.poolKey.fee,
+          tokenId: _params.params.tokenId,
+          tickLower: _params.params.tickLower,
+          tickUpper: _params.params.tickUpper,
+        }),
+        success: value => ({ srcChainTxHash: value.srcChainTxHash, dstChainTxHash: value.dstChainTxHash }),
+        failure: error => ({ code: isSodaxError(error) ? error.code : undefined }),
+      },
+    );
   }
 
   /**
@@ -1168,7 +1165,7 @@ export class ClService {
    */
   private async getTokenInfo(
     tokenAddress: Address,
-    publicClient: PublicClient<HttpTransport>,
+    publicClient: PublicClient,
   ): Promise<ConcentratedLiquidityTokenInfo> {
     try {
       const [symbol, name, decimals] = await Promise.all([
@@ -1239,10 +1236,7 @@ export class ClService {
   /**
    * Get enriched token data with StatAToken conversion information
    */
-  private async getTokenEnrichmentData(
-    token: Token,
-    publicClient: PublicClient<HttpTransport>,
-  ): Promise<EnrichedToken> {
+  private async getTokenEnrichmentData(token: Token, publicClient: PublicClient): Promise<EnrichedToken> {
     const isStatAToken = this.isStatAToken(token.address);
 
     if (!isStatAToken) {
@@ -1301,10 +1295,7 @@ export class ClService {
    *   fee tiers, token metadata with optional StatAToken enrichment, and optional
    *   reward configuration. `isActive` is `true` when `sqrtPriceX96 > 0`.
    */
-  public async getPoolData(
-    poolKey: PoolKey<'CL'>,
-    publicClient: PublicClient<HttpTransport>,
-  ): Promise<Result<PoolData>> {
+  public async getPoolData(poolKey: PoolKey<'CL'>, publicClient: PublicClient): Promise<Result<PoolData>> {
     try {
       // Get pool ID
       const poolId = getPoolId(poolKey);
@@ -1434,10 +1425,7 @@ export class ClService {
    *   current token amounts, tick-boundary prices, unclaimed fees, and optional
    *   underlying amounts for StatAToken pools.
    */
-  public async getPositionInfo(
-    tokenId: bigint,
-    publicClient: PublicClient<HttpTransport>,
-  ): Promise<Result<ClPositionInfo>> {
+  public async getPositionInfo(tokenId: bigint, publicClient: PublicClient): Promise<Result<ClPositionInfo>> {
     try {
       // Read position data from the position manager using PancakeSwap SDK ABI
       const positionData = await publicClient.readContract({

@@ -114,6 +114,14 @@ export default function Providers({ children }: { children: ReactNode }) {
     // Opt-in observability sink (Sentry + Datadog), enabled via VITE_ENABLE_OBSERVABILITY.
     // `undefined` when off, which leaves the SDK on its default console logger.
     return {
+      api: {
+        baseApiConfig: {
+          baseURL: 'https://api.sodax.com/v1/be',
+        },
+        swapsApiConfig: {
+          baseURL: 'https://canary-api.sodax.com/v1',
+        },
+      },
       logger: createDatadogLogger(),
       // Opt-in user-action analytics (issue #175). Enabled by default in the demo; the sink logs each
       // event and re-emits it as a `sodax:analytics` window CustomEvent. `false` when disabled, which

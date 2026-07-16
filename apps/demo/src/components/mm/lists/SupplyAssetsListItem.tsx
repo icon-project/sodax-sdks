@@ -1,5 +1,6 @@
 import React, { type ReactElement, useMemo } from 'react';
 import { TableCell, TableRow } from '@/components/ui/table';
+import { TokenIcon } from '@/components/shared/TokenIcon';
 import {
   ChainKeys,
   type XToken,
@@ -148,6 +149,7 @@ export function SupplyAssetsListItem({
       {/* Asset */}
       <TableCell className="px-6 py-5">
         <div className="flex items-center gap-3">
+          <TokenIcon symbol={token.symbol} />
           <span className="font-bold text-cherry-dark">{token.symbol}</span>
         </div>
       </TableCell>

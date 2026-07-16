@@ -1,11 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { RadfiMaxSpentResponse } from '@sodax/dapp-kit';
@@ -101,9 +95,7 @@ export const WithdrawTradingWalletDialog = ({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Withdraw to wallet</DialogTitle>
-          <DialogDescription>
-            Withdraw BTC from your trading wallet to any Bitcoin address
-          </DialogDescription>
+          <DialogDescription>Withdraw BTC from your trading wallet to any Bitcoin address</DialogDescription>
         </DialogHeader>
 
         {/* From -> To visual */}
@@ -117,9 +109,7 @@ export const WithdrawTradingWalletDialog = ({
             <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded">
               {truncateAddress(tradingAddress)}
             </span>
-            <span className="text-xs text-muted-foreground">
-              {formatUnits(tradingBalance, 8)} BTC
-            </span>
+            <span className="text-xs text-muted-foreground">{formatUnits(tradingBalance, 8)} BTC</span>
           </div>
 
           {/* Arrow */}
@@ -148,9 +138,7 @@ export const WithdrawTradingWalletDialog = ({
             onChange={e => setWithdrawTo(e.target.value)}
             className="h-9 text-sm font-mono"
           />
-          <span className="text-xs text-muted-foreground">
-            SegWit address recommended for lower fees
-          </span>
+          <span className="text-xs text-muted-foreground">SegWit address recommended for lower fees</span>
         </div>
 
         {/* Amount + Max */}
@@ -201,20 +189,14 @@ export const WithdrawTradingWalletDialog = ({
           Withdraw
         </Button>
 
-        {success && (
-          <p className="text-xs text-green-500 text-center">Withdrawal submitted successfully!</p>
-        )}
+        {success && <p className="text-xs text-green-500 text-center">Withdrawal submitted successfully!</p>}
 
-        {error && (
-          <p className="text-xs text-red-500 text-center">{error}</p>
-        )}
+        {error && <p className="text-xs text-red-500 text-center">{error}</p>}
 
         {/* Info */}
         <div className="flex items-start gap-2 text-xs text-muted-foreground">
           <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-          <span>
-            Network fee is deducted from the trading wallet balance. The recipient receives the full amount.
-          </span>
+          <span>Network fee is deducted from the trading wallet balance. The recipient receives the full amount.</span>
         </div>
       </DialogContent>
     </Dialog>

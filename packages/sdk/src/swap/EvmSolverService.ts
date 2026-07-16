@@ -3,7 +3,6 @@ import { invariant } from '../shared/utils/tiny-invariant.js';
 import {
   type Address,
   type GetLogsReturnType,
-  type HttpTransport,
   type PublicClient,
   decodeAbiParameters,
   encodeAbiParameters,
@@ -276,11 +275,7 @@ export class EvmSolverService {
    * @throws If the transaction contains no matching `IntentCreated` event, or if the
    *   intent's chain IDs are not recognized.
    */
-  public static async getIntent(
-    txHash: Hash,
-    config: ConfigService,
-    publicClient: PublicClient<HttpTransport>,
-  ): Promise<Intent> {
+  public static async getIntent(txHash: Hash, config: ConfigService, publicClient: PublicClient): Promise<Intent> {
     const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
     const logs: IntentCreatedEventLog[] = parseEventLogs({
       abi: IntentsAbi,
@@ -339,7 +334,7 @@ export class EvmSolverService {
   public static async getFilledIntent(
     txHash: Hash,
     solverConfig: SolverConfig,
-    publicClient: PublicClient<HttpTransport>,
+    publicClient: PublicClient,
   ): Promise<IntentState> {
     const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
     const logs: IntentFilledEventLog[] = parseEventLogs({

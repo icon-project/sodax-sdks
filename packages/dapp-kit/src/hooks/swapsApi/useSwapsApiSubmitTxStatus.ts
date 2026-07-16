@@ -24,7 +24,7 @@ export type UseSwapsApiSubmitTxStatusParams = ReadHookParams<
  * });
  *
  * @remarks
- * - Default refetch interval is 1 second; stops on 'executed' or 'failed' status.
+ * - Default refetch interval is 1 second; stops on 'solved' or 'failed' status.
  */
 export const useSwapsApiSubmitTxStatus = ({
   params,
@@ -47,7 +47,7 @@ export const useSwapsApiSubmitTxStatus = ({
     retry: 3,
     refetchInterval: query => {
       const status = query.state.data?.data?.status;
-      if (status === 'executed' || status === 'failed') return false;
+      if (status === 'solved' || status === 'failed') return false;
       return 1000;
     },
     ...queryOptions,

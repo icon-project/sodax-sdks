@@ -152,7 +152,7 @@ Partner fees for swaps belong in **`swaps.partnerFee`**, not inside `solver`.
 const sodax = new Sodax({ swapsOptions: { useBackendSubmitTx: true } });
 ```
 
-If the backend path does not reach `executed` for **any** reason (submission rejected, terminal `failed`/abandoned status, or poll timeout), `swap()` automatically falls back to the fully client-side relay + post-execution so the swap still completes — **safely**, because re-relaying / re-posting an already-processed swap is idempotent (no double-fill; verified by `e2e-tests/e2e-relay.test.ts`), and the backend poll + fallback share one `timeout` budget (total latency ≤ one `timeout`). Default is `false`. See [SWAPS.md](./SWAPS.md#backend-2-step-submit-opt-in) for the flow.
+If the backend path does not reach `solved` for **any** reason (submission rejected, terminal `failed`/abandoned status, or poll timeout), `swap()` automatically falls back to the fully client-side relay + post-execution so the swap still completes — **safely**, because re-relaying / re-posting an already-processed swap is idempotent (no double-fill; verified by `e2e-tests/e2e-relay.test.ts`), and the backend poll + fallback share one `timeout` budget (total latency ≤ one `timeout`). Default is `false`. See [SWAPS.md](./SWAPS.md#backend-2-step-submit-opt-in) for the flow.
 
 ### Money market (`moneyMarket`)
 

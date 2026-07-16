@@ -27,6 +27,7 @@ import {
   lightlinkPhoenix,
   redbellyMainnet,
   kaia,
+  hedera,
 } from 'wagmi/chains';
 type WagmiOptions = {
   reconnectOnMount?: boolean;
@@ -37,6 +38,12 @@ type WagmiOptions = {
    */
   persistKey?: string;
 };
+
+// Hedera's JSON-RPC relay reports native HBAR in 18-decimal "weibar" via eth_getBalance,
+// but HBAR is configured with its canonical 8 decimals. Scale the raw balance down by 10^10
+// so it matches token.decimals. Mirrors `scaleNativeMsgValue` in the SDK's EvmSpokeService,
+// which scales outgoing msg.value up by the same factor.
+const HEDERA_NATIVE_BALANCE_SCALE = 10n ** 10n;
 
 // HyperEVM chain is not supported by viem, so we need to define it manually
 export const hyper = /*#__PURE__*/ defineChain({
@@ -82,6 +89,7 @@ export const createWagmiConfig = (
       lightlinkPhoenix,
       kaia,
       redbellyMainnet,
+      hedera,
     ],
     connectors: options?.connectors ?? [],
     // NOTE: wagmi's `ssr` is a hydration-timing flag, not an "is host app SSR"
@@ -104,6 +112,7 @@ export const createWagmiConfig = (
       [lightlinkPhoenix.id]: http(getRpcUrl(evmChains?.[ChainKeys.LIGHTLINK_MAINNET])),
       [redbellyMainnet.id]: http(getRpcUrl(evmChains?.[ChainKeys.REDBELLY_MAINNET])),
       [kaia.id]: http(getRpcUrl(evmChains?.[ChainKeys.KAIA_MAINNET])),
+      [hedera.id]: http(getRpcUrl(evmChains?.[ChainKeys.HEDERA_MAINNET])),
     },
     storage: createStorage({
       storage: cookieStorage,
@@ -173,7 +182,11 @@ export class EvmXService extends XService {
     const chainId = getWagmiChainId(xToken.chainKey);
 
     if (isNativeToken(xToken)) {
-      return this._getChainBalance(address, chainId);
+      const balance = await this._getChainBalance(address, chainId);
+      if (xToken.chainKey === ChainKeys.HEDERA_MAINNET) {
+        return balance / HEDERA_NATIVE_BALANCE_SCALE;
+      }
+      return balance;
     }
 
     throw new Error(`Unsupported token: ${xToken.symbol}`);

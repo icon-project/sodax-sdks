@@ -1,4 +1,5 @@
 import { SelectChain } from '@/components/swaps/SelectChain';
+import { TokenIcon } from '@/components/shared/TokenIcon';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -32,6 +33,7 @@ import {
   useXBalances,
   useNearStorageGate,
   getSupportedSolverTokens,
+  getStagingSolverTokens,
   type CreateIntentParams,
   type SolverIntentQuoteRequest,
   type GetWalletProviderType,
@@ -54,10 +56,8 @@ import {
   useXService,
 } from '@sodax/wallet-sdk-react';
 import type { Order } from '@/components/swaps/OrderStatus';
-import { DEFAULT_SELECTED_CHAIN, useAppStore } from '@/zustand/useAppStore';
+import { DEFAULT_SELECTED_CHAIN, SolverEnv, useAppStore } from '@/zustand/useAppStore';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
-
-const SUBMIT_TX_API_CONFIG = { baseURL: 'https://canary-api.sodax.com/v1/bes' } as const;
 
 export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAction<Order[]>) => void }) {
   const { sodax } = useSodaxContext();
@@ -74,7 +74,13 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const sourceWalletProvider = useWalletProvider({ xChainId: src.chain });
   const destAccount = useXAccount({ xChainId: dst.chain });
   const destWalletProvider = useWalletProvider({ xChainId: dst.chain });
-  const { openWalletModal } = useAppStore();
+  const { openWalletModal, solverEnvironment } = useAppStore();
+  // Staging solver supports the production tokens PLUS the staging-only ones (getStagingSolverTokens);
+  // production/dev expose only the production set. Drive the token dropdowns off the selected env tab.
+  const getSolverTokens = useMemo(
+    () => (solverEnvironment === SolverEnv.Staging ? getStagingSolverTokens : getSupportedSolverTokens),
+    [solverEnvironment],
+  );
   const { mutateAsync: swap } = useSwap();
   const [sourceAmount, setSourceAmount] = useState<string>('');
   const [intentOrderPayload, setIntentOrderPayload] = useState<CreateIntentParams | undefined>(undefined);
@@ -131,11 +137,11 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   };
 
   const onSrcChainChange = (chainId: SpokeChainKey) => {
-    setSrc({ chain: chainId, token: getSupportedSolverTokens(chainId)[0] });
+    setSrc({ chain: chainId, token: getSolverTokens(chainId)[0] });
   };
 
   const onDestChainChange = (chainId: SpokeChainKey) => {
-    setDst({ chain: chainId, token: getSupportedSolverTokens(chainId)[0] });
+    setDst({ chain: chainId, token: getSolverTokens(chainId)[0] });
   };
 
   // Balance fetching- Fetch source token balance for the connected wallet
@@ -331,7 +337,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       relayData: relayData.payload,
     };
 
-    const submitResult = await submitSwapTx({ request, apiConfig: SUBMIT_TX_API_CONFIG });
+    const submitResult = await submitSwapTx({ request });
     if (!submitResult.ok) {
       console.error('Submit swap tx failed:', submitResult.error);
       return;
@@ -344,7 +350,6 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
         mode: 'submit-tx',
         txHash: spokeTxHash as string,
         srcChainKey: src.chain,
-        apiBaseURL: SUBMIT_TX_API_CONFIG.baseURL,
       },
     ]);
   };
@@ -452,7 +457,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
             onValueChange={v => {
               setSrc(prev => ({
                 ...prev,
-                token: getSupportedSolverTokens(src.chain).find(token => token.symbol === v) as XToken,
+                token: getSolverTokens(src.chain).find(token => token.symbol === v) as XToken,
               }));
             }}
           >
@@ -460,9 +465,12 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
               <SelectValue placeholder="Token" />
             </SelectTrigger>
             <SelectContent>
-              {getSupportedSolverTokens(src.chain).map(token => (
+              {getSolverTokens(src.chain).map(token => (
                 <SelectItem key={`${token.address}-${token.symbol}`} value={token.symbol}>
-                  {token.symbol}
+                  <span className="flex items-center gap-2">
+                    <TokenIcon symbol={token.symbol} />
+                    {token.symbol}
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -527,7 +535,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
             onValueChange={v => {
               setDst(prev => ({
                 ...prev,
-                token: getSupportedSolverTokens(dst.chain).find(token => token.symbol === v) as XToken,
+                token: getSolverTokens(dst.chain).find(token => token.symbol === v) as XToken,
               }));
             }}
           >
@@ -535,9 +543,12 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
               <SelectValue placeholder="Token" />
             </SelectTrigger>
             <SelectContent>
-              {getSupportedSolverTokens(dst.chain).map(token => (
+              {getSolverTokens(dst.chain).map(token => (
                 <SelectItem key={`${token.address}-${token.symbol}`} value={token.symbol}>
-                  {token.symbol}
+                  <span className="flex items-center gap-2">
+                    <TokenIcon symbol={token.symbol} />
+                    {token.symbol}
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>

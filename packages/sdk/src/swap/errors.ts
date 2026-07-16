@@ -22,6 +22,7 @@ export type PostExecutionErrorCode = Extract<SodaxErrorCode, 'EXECUTION_FAILED' 
 
 export type SwapErrorCode = Extract<
   SodaxErrorCode,
+  | 'USER_REJECTED'
   | 'VALIDATION_FAILED'
   | 'INTENT_CREATION_FAILED'
   | 'TX_VERIFICATION_FAILED'
@@ -44,6 +45,7 @@ const POST_EXECUTION_ERROR_CODES: ReadonlySet<PostExecutionErrorCode> = new Set(
 ]);
 
 const SWAP_ERROR_CODES: ReadonlySet<SwapErrorCode> = new Set([
+  'USER_REJECTED',
   'VALIDATION_FAILED',
   'INTENT_CREATION_FAILED',
   'TX_VERIFICATION_FAILED',

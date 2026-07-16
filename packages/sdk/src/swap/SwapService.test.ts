@@ -2039,7 +2039,7 @@ describe('SwapService.approve — additional branches', () => {
     }
   });
 
-  it('forwards a failure Result from spoke.approve on an EVM spoke (ok:false not re-wrapped)', async () => {
+  it('wraps a failure Result from spoke.approve on an EVM spoke as SodaxError(APPROVE_FAILED) with the original error preserved as cause', async () => {
     const approveError = new Error('APPROVE_REJECTED');
     vi.spyOn(sodax.spoke, 'approve').mockResolvedValueOnce({ ok: false, error: approveError });
 
@@ -2049,7 +2049,12 @@ describe('SwapService.approve — additional branches', () => {
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: approveError });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error)).toBe(true);
+    expect((result.error as SodaxError).code).toBe('APPROVE_FAILED');
+    expect((result.error as SodaxError).feature).toBe('swap');
+    expect((result.error as SodaxError).cause).toBe(approveError);
   });
 
   it('returns ok:false when spoke.approve rejects (thrown)', async () => {
@@ -2462,7 +2467,7 @@ describe('SwapService.createCancelIntent', () => {
     }
   });
 
-  it('forwards a failure Result from spoke.sendMessage unchanged', async () => {
+  it('wraps a failure Result from spoke.sendMessage as SodaxError(INTENT_CREATION_FAILED) with the original error preserved as cause', async () => {
     const intent = makeIntent(ChainKeys.BSC_MAINNET);
     const sendError = new Error('SEND_REJECTED');
     vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: false, error: sendError });
@@ -2476,10 +2481,15 @@ describe('SwapService.createCancelIntent', () => {
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: sendError });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error)).toBe(true);
+    expect((result.error as SodaxError).code).toBe('INTENT_CREATION_FAILED');
+    expect((result.error as SodaxError).feature).toBe('swap');
+    expect((result.error as SodaxError).cause).toBe(sendError);
   });
 
-  it('returns ok:false when spoke.sendMessage rejects', async () => {
+  it('wraps a thrown spoke.sendMessage failure as SodaxError(INTENT_CREATION_FAILED, swap) with .cause', async () => {
     const intent = makeIntent(ChainKeys.BSC_MAINNET);
     const thrownError = new Error('SEND_THROWS');
     vi.spyOn(sodax.spoke, 'sendMessage').mockRejectedValueOnce(thrownError);
@@ -2493,7 +2503,12 @@ describe('SwapService.createCancelIntent', () => {
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: thrownError });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error)).toBe(true);
+    expect((result.error as SodaxError).code).toBe('INTENT_CREATION_FAILED');
+    expect((result.error as SodaxError).feature).toBe('swap');
+    expect((result.error as SodaxError).cause).toBe(thrownError);
   });
 });
 
@@ -2721,7 +2736,7 @@ describe('SwapService.swap — backend 2-step (useBackendSubmitTx)', () => {
     vi.spyOn(sodaxBE.spoke, 'verifyTxHash').mockResolvedValueOnce({ ok: true, value: true });
   };
 
-  it('on backend "executed", returns a SwapResponse reconstructed from the backend (no client-side relay)', async () => {
+  it('on backend "solved", returns a SwapResponse reconstructed from the backend (no client-side relay)', async () => {
     stubCreatedAndVerified(ChainKeys.BSC_MAINNET);
     const submitSpy = vi.spyOn(sodaxBE.api.swaps, 'submitTx').mockResolvedValueOnce({
       ok: true,
@@ -2734,7 +2749,7 @@ describe('SwapService.swap — backend 2-step (useBackendSubmitTx)', () => {
         data: {
           txHash: '0xspokeTx',
           srcChainKey: ChainKeys.BSC_MAINNET,
-          status: 'executed',
+          status: 'solved',
           processingAttempts: 1,
           result: { dstIntentTxHash: '0xDST', intent_hash: '0xHASH' },
         },
@@ -2756,6 +2771,54 @@ describe('SwapService.swap — backend 2-step (useBackendSubmitTx)', () => {
     // The backend owns relay + post-execution — the client-side relay/postExecution must NOT run.
     expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
     expect(mocks.solverPostExecution).not.toHaveBeenCalled();
+  });
+
+  it('treats "posted_execution" as non-terminal: keeps polling (never completes on it), then falls back', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    try {
+      stubCreatedAndVerified(ChainKeys.BSC_MAINNET);
+      vi.spyOn(sodaxBE.api.swaps, 'submitTx').mockResolvedValueOnce({
+        ok: true,
+        value: { success: true, data: { status: 'inserted', message: 'accepted' } },
+      } as never);
+      // `posted_execution` is a mid-lifecycle state, not the `solved` terminal. Even with the result
+      // fields already populated, the success gate keys off `status === 'solved'` — so submitTx must
+      // keep polling until its reserved cutoff and fall back, never reconstructing a SwapResponse here.
+      vi.spyOn(sodaxBE.api.swaps, 'getSubmitTxStatus').mockResolvedValue({
+        ok: true,
+        value: {
+          success: true,
+          data: {
+            txHash: '0xspokeTx',
+            srcChainKey: ChainKeys.BSC_MAINNET,
+            status: 'posted_execution',
+            processingAttempts: 1,
+            result: { dstIntentTxHash: '0xDST', intent_hash: '0xHASH' },
+          },
+        },
+      } as never);
+      mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
+      mocks.solverPostExecution.mockResolvedValueOnce({ ok: true, value: { answer: 'OK' } as never });
+
+      const overallTimeout = 30_000;
+      const swapPromise = sodaxBE.swaps.swap({
+        params: intentInput(ChainKeys.BSC_MAINNET),
+        raw: false,
+        walletProvider: mockEvmProvider,
+        timeout: overallTimeout,
+      });
+      await vi.advanceTimersByTimeAsync(overallTimeout);
+      const result = await swapPromise;
+
+      expect(result.ok).toBe(true);
+      // Fell back to the client-side relay (0xFALLBACKDST, not the backend's 0xDST) — proving
+      // `posted_execution` did NOT satisfy the terminal-success gate.
+      expect(mocks.relayTxAndWaitPacket).toHaveBeenCalled();
+      if (result.ok) expect(result.value.intentDeliveryInfo.dstTxHash).toBe('0xFALLBACKDST');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('falls back to the client-side relay when the backend submit POST is rejected', async () => {
@@ -2851,7 +2914,7 @@ describe('SwapService.swap — backend 2-step (useBackendSubmitTx)', () => {
         ok: true,
         value: { success: true, data: { status: 'inserted', message: 'accepted' } },
       } as never);
-      // Backend never reaches `executed` → submitTx polls until its reserved cutoff, then falls back.
+      // Backend never reaches `solved` → submitTx polls until its reserved cutoff, then falls back.
       vi.spyOn(sodaxBE.api.swaps, 'getSubmitTxStatus').mockResolvedValue({
         ok: true,
         value: {

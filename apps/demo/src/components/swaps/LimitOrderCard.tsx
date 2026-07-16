@@ -1,4 +1,5 @@
 import { SelectChain } from '@/components/swaps/SelectChain';
+import { TokenIcon } from '@/components/shared/TokenIcon';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -285,7 +286,10 @@ export default function LimitOrderCard() {
               <SelectContent>
                 {getSupportedSolverTokens(sourceChain).map(token => (
                   <SelectItem key={`${token.address}-${token.symbol}`} value={token.symbol}>
-                    {token.symbol}
+                    <span className="flex items-center gap-2">
+                      <TokenIcon symbol={token.symbol} />
+                      {token.symbol}
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -336,7 +340,10 @@ export default function LimitOrderCard() {
               <SelectContent>
                 {getSupportedSolverTokens(destChain).map(token => (
                   <SelectItem key={`${token.address}-${token.symbol}`} value={token.symbol}>
-                    {token.symbol}
+                    <span className="flex items-center gap-2">
+                      <TokenIcon symbol={token.symbol} />
+                      {token.symbol}
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
