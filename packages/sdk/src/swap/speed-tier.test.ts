@@ -30,9 +30,25 @@ describe('estimateSwapSpeedTier', () => {
     expect(result).toEqual({ tier: 'fast', estimatedSeconds: SPEED_TIER_SECONDS.sodaAsset });
   });
 
-  it('one side not sodaAsset-related → default 35s', () => {
-    const result = estimateSwapSpeedTier(
+  it('either token sodaAsset-related (non-ETH) → 15s / fast', () => {
+    const srcOnly = estimateSwapSpeedTier(
       token(ChainKeys.SONIC_MAINNET, SODA_HUB),
+      token(ChainKeys.BSC_MAINNET, PLAIN_HUB),
+      isSodaAsset,
+    );
+    expect(srcOnly).toEqual({ tier: 'fast', estimatedSeconds: SPEED_TIER_SECONDS.sodaAsset });
+
+    const dstOnly = estimateSwapSpeedTier(
+      token(ChainKeys.SONIC_MAINNET, PLAIN_HUB),
+      token(ChainKeys.BSC_MAINNET, SODA_HUB),
+      isSodaAsset,
+    );
+    expect(dstOnly).toEqual({ tier: 'fast', estimatedSeconds: SPEED_TIER_SECONDS.sodaAsset });
+  });
+
+  it('neither token sodaAsset-related → default 35s', () => {
+    const result = estimateSwapSpeedTier(
+      token(ChainKeys.SONIC_MAINNET, PLAIN_HUB),
       token(ChainKeys.BSC_MAINNET, PLAIN_HUB),
       isSodaAsset,
     );
@@ -56,6 +72,6 @@ describe('estimateSwapSpeedTier', () => {
     expect(bothEth.estimatedSeconds).toBe(SPEED_TIER_SECONDS.sodaAsset + SPEED_TIER_SECONDS.ethereumPenalty);
   });
 
-  // TODO(#192): once the spec doc pins the either-vs-both rule and the tier thresholds, tighten
-  // these into exact-value assertions (e.g. slow-tier boundary at 45s for non-soda + ETH).
+  // TODO: once the spec doc pins the exact seconds and tier thresholds, tighten these into
+  // exact-value assertions (e.g. slow-tier boundary at 45s for non-soda + ETH).
 });

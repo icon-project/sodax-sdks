@@ -3,8 +3,8 @@ import { ChainKeys, type Address, type XToken } from '@sodax/types';
 /**
  * Estimated settlement-speed bucket for a swap token pair.
  *
- * TODO(#192): confirm the label set (slow / normal / fast) against the referenced spec doc —
- * the issue mentions "slow, normal, fast, etc." without pinning the exact enum.
+ * TODO: confirm the label set (slow / normal / fast) against the referenced spec doc, which
+ * mentions "slow, normal, fast, etc." without pinning the exact enum.
  */
 export type SwapSpeedTier = 'fast' | 'normal' | 'slow';
 
@@ -20,14 +20,14 @@ export type SwapSpeedTierResult = {
 /**
  * Hardcoded base estimates (seconds) for the rule-based speed tier.
  *
- * These are fixed rule constants from #192 — derived once from observed solver settlement
+ * These are fixed rule constants — derived once from observed solver settlement
  * behavior, NOT measured at runtime. The optional future enhancement (analyzing public intents
  * data) would refine them; for the base feature they are intentionally hardcoded.
  *
- * TODO(#192): confirm the exact numbers against the referenced spec doc.
+ * TODO: confirm the exact numbers against the referenced spec doc.
  */
 export const SPEED_TIER_SECONDS = {
-  /** Both tokens map to a money-market-reserve (sodaAsset) hub asset — hub-to-hub fast path. */
+  /** Either token maps to a money-market-reserve (sodaAsset) hub asset. */
   sodaAsset: 15,
   /** Anything else / default. */
   default: 35,
@@ -38,7 +38,7 @@ export const SPEED_TIER_SECONDS = {
 /**
  * Provisional second→tier boundaries (inclusive upper bounds).
  *
- * TODO(#192): confirm labels and boundaries — the possible totals under the current rules are
+ * TODO: confirm labels and boundaries — the possible totals under the current rules are
  * 15 / 25 / 35 / 45, so these thresholds bucket them as fast(15) · normal(25) · slow(35, 45).
  */
 export const SPEED_TIER_THRESHOLDS = {
@@ -64,19 +64,16 @@ const secondsToTier = (seconds: number): SwapSpeedTier => {
  *   (sodaAsset)?". In the service this is wired to `config.isMoneyMarketReserveHubAsset`; the
  *   predicate is injected so this function stays pure and unit-testable without a ConfigService.
  *
- * ASSUMPTION (#192 — needs confirmation): the fast 15s base applies only when BOTH tokens are
- * sodaAsset-related (the hub-to-hub fast path). If either side is "other", the base is 35s. The
- * issue wording ("Any token related to a sodaAsset → 15 sec | Any other → 35 sec") is ambiguous
- * about either-vs-both; flip `&&` to `||` here if the intended rule is "either".
+ * The fast 15s base applies when either token is sodaAsset-related; otherwise the base is 35s.
  */
 export function estimateSwapSpeedTier(
   srcToken: XToken,
   dstToken: XToken,
   isSodaAssetRelated: (hubAsset: Address) => boolean,
 ): SwapSpeedTierResult {
-  const bothSodaAsset = isSodaAssetRelated(srcToken.hubAsset) && isSodaAssetRelated(dstToken.hubAsset);
+  const eitherSodaAsset = isSodaAssetRelated(srcToken.hubAsset) || isSodaAssetRelated(dstToken.hubAsset);
 
-  let estimatedSeconds = bothSodaAsset ? SPEED_TIER_SECONDS.sodaAsset : SPEED_TIER_SECONDS.default;
+  let estimatedSeconds = eitherSodaAsset ? SPEED_TIER_SECONDS.sodaAsset : SPEED_TIER_SECONDS.default;
 
   if (isEthereumToken(srcToken) || isEthereumToken(dstToken)) {
     estimatedSeconds += SPEED_TIER_SECONDS.ethereumPenalty;
