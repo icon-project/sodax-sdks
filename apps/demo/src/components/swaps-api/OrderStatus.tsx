@@ -1,5 +1,6 @@
 import React from 'react';
-import { useSwapsApiSubmitTxStatus } from '@sodax/dapp-kit';
+import { useQuery } from '@tanstack/react-query';
+import { swapsApi } from '@/components/swaps-api/lib/swapsApi';
 
 export type SwapsApiOrder = {
   txHash: string;
@@ -8,8 +9,14 @@ export type SwapsApiOrder = {
 
 export default function OrderStatus({ order }: { order: SwapsApiOrder }) {
   // Polls /swaps/submit-tx/status every second and stops on 'solved' | 'failed'.
-  const { data: statusResponse } = useSwapsApiSubmitTxStatus({
-    params: { txHash: order.txHash, srcChainKey: order.srcChainKey },
+  const { data: statusResponse } = useQuery({
+    queryKey: ['swapsApi', 'submitTx', 'status', order.txHash, order.srcChainKey],
+    queryFn: () => swapsApi.getSubmitTxStatus({ txHash: order.txHash, srcChainKey: order.srcChainKey }),
+    retry: 3,
+    refetchInterval: query => {
+      const status = query.state.data?.data?.status;
+      return status === 'solved' || status === 'failed' ? false : 1000;
+    },
   });
 
   if (!statusResponse) {

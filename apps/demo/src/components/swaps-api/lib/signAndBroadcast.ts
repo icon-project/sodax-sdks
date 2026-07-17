@@ -8,12 +8,12 @@
 //    SDK's BitcoinSpokeService.signAndSubmitRawTransaction (sign → Bound co-sign + broadcast), which
 //    SwapCard calls directly with the client's Bound session.
 // b. No `IntentResponseV2` → `IntentRequestV2` converter (see ./mappers.ts).
-// c. `useSwapsApiApprove` cannot auto-invalidate `['swapsApi','allowance']` — confirmation
-//    happens client-side after the hook resolves, so callers refetch allowance manually.
+// c. `approve` cannot auto-invalidate the `['swapsApi','allowance']` query — confirmation
+//    happens client-side after the API call resolves, so callers refetch allowance manually.
 //
-// `tx` is the typed `RawTxReturnType` union: the SDK validates each response against the
-// chain-specific schema and reconstructs bigints, so no structural validation or numeric
-// coercion is needed here — narrowing to a per-chain variant is driven by the chain type.
+// `tx` is the typed `RawTxReturnType` union: the @sodax/swaps-api client validates each response
+// against the chain-specific schema and reconstructs bigints, so no structural validation or
+// numeric coercion is needed here — narrowing to a per-chain variant is driven by the chain type.
 
 import type {
   EvmRawTransaction,
