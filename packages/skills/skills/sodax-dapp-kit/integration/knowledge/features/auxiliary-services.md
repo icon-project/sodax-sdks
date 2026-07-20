@@ -89,7 +89,7 @@ await submitSwapTx({ request, apiConfig: { baseURL: 'https://...' } });
 ```ts
 // @ai-snippets-skip
 const { data: status } = useSwapsApiSubmitTxStatus({ params: { txHash, srcChainKey } });
-// status?.data?.status: 'pending' | 'relaying' | 'relayed' | 'posting_execution' | 'executed' | 'failed'
+// status?.data?.status: 'pending' | 'relaying' | 'relayed' | 'posting_execution' | 'posted_execution' | 'solved' | 'failed'
 ```
 
 > The full `useSwapsApi*` hook list (with polling + types) is in [hooks-index.md](../reference/hooks-index.md); key shapes in [querykey-conventions.md](../reference/querykey-conventions.md). For non-React callers, `sodax.api.swaps` is documented in the `sodax-sdk` skill (integration mode).
@@ -207,7 +207,7 @@ The underlying SDK methods (`isStorageRegistered` / `registerStorage` on the NEA
 | Hook | Polling | Notes |
 |---|---|---|
 | `useBackendIntentByTxHash` | 1s | once a `txHash` is supplied (refetch is unconditional, not "while pending") |
-| `useSwapsApiSubmitTxStatus` | 1s | requires `txHash` + `srcChainKey`; stops on `executed` / `failed` |
+| `useSwapsApiSubmitTxStatus` | 1s | requires `txHash` + `srcChainKey`; stops on `solved` / `failed` |
 | `useSwapsApiStatus` | 1s | solver intent status; stops on status `3` / `4` |
 | `useBackendOrderbook` | none | `staleTime: 30s` — fresh-window, no background refetch |
 | `useExpiredUtxos` (bitcoin) | 60s | refetchInterval |

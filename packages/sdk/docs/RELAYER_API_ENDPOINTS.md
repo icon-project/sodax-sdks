@@ -59,6 +59,7 @@ Full mapping (`RelayChainIdMap` in `@sodax/sdk`):
 | `BITCOIN_MAINNET` | `627463n` |
 | `REDBELLY_MAINNET` | `726564n` |
 | `KAIA_MAINNET` | `27489n` |
+| `HEDERA_MAINNET` | `18501n` |
 | `STACKS_MAINNET` | `60n` |
 
 ---

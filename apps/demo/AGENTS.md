@@ -41,6 +41,7 @@ src/
 - **Providers.** `providers.tsx` is the canonical stack to copy when integrating: `SodaxProvider` → `QueryClientProvider` (via `createSodaxQueryClient`) → `SodaxWalletProvider`. RPC URLs are read from `process.env.*` with public-RPC fallbacks. WalletConnect is opt-in via `VITE_WALLETCONNECT_PROJECT_ID`.
 - **Solver env switcher.** `useAppStore.solverEnvironment` picks between `productionSolverConfig` / `stagingSolverConfig` / `devSolverConfig` from `constants.ts`. The `Providers` component re-memoizes the SDK config when this changes.
 - **UI.** Tailwind v4 + Radix primitives + shadcn-style components in `src/components/ui/`.
+- **Logos.** Chain logos come from `baseChainInfo[key].logo` (see `chainIdToChainLogo` in `constants.ts`); token logos render via `<TokenIcon symbol=… />` (`components/shared/TokenIcon.tsx`), which resolves the URL with `tokenLogo(symbol)` from the SDK and falls back to the symbol initials. Don't hardcode icon paths.
 
 ## What this app is for
 

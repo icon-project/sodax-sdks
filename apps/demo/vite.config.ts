@@ -51,7 +51,7 @@ export default defineConfig(({ command, mode }: ConfigEnv) => {
         '/__intake': {
           target: env.MOCK_INTAKE_URL || 'http://localhost:9009',
           changeOrigin: true,
-          rewrite: (p) => p.replace(/^\/__intake/, ''),
+          rewrite: p => p.replace(/^\/__intake/, ''),
         },
       },
     },

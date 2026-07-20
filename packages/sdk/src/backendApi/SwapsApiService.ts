@@ -1,6 +1,5 @@
 // packages/sdk/src/backendApi/SwapsApiService.ts
 
-import * as v from 'valibot';
 import type {
   AllowanceCheckResponseV2,
   SwapsApiConfig,
@@ -13,6 +12,7 @@ import type {
   CreateLimitOrderResponseV2,
   DeadlineQueryV2,
   DeadlineResponseV2,
+  FeeAmount,
   FeeQueryV2,
   FeeResponseV2,
   GasEstimateRequestV2,
@@ -26,6 +26,7 @@ import type {
   IntentHashResponseV2,
   IntentPacketRequestV2,
   IntentPacketResponseV2,
+  IntentRequestV2,
   IntentStateV2,
   ISwapsApiV2,
   QuoteQueryV2,
@@ -42,10 +43,11 @@ import type {
   SubmitTxStatusResponseV2,
   SodaxLogger,
 } from '@sodax/types';
+import { DEFAULT_BACKEND_API_TIMEOUT } from '@sodax/types';
+import { SwapsApi, SwapsApiError } from '@sodax/swaps-api';
+import * as v from 'valibot';
 
-import { makeRequest, toJsonBody, type RequestConfig, type RequestOverrideConfig } from './api-utils.js';
-import * as schemas from './swapsApiSchemas.js';
-import { rawTxSchemaForChainKey } from './rawTxSchemas.js';
+import type { RequestOverrideConfig } from './api-utils.js';
 import { SodaxError } from '../errors/SodaxError.js';
 import { consoleLogger } from '../shared/logger.js';
 
@@ -66,19 +68,18 @@ type ResultifiedSwapsApiV2 = {
 /**
  * HTTP client for the backend **Swaps API v2** (`/swaps/*`).
  *
- * Mirrors every endpoint of {@link ISwapsApiV2} (one method per route) and
- * validates each response at runtime with a valibot schema (see
- * `swapsApiSchemas.ts`). On a contract drift, the response is rejected as
- * `{ ok: false }` with a descriptive error rather than returned untyped.
+ * A thin adapter over the standalone `@sodax/swaps-api` package (the single source of the wire
+ * client — request building, per-chain `tx` validation/transform, response schemas, HTTP + retry).
+ * This service adds the SDK conventions on top: `Result<T>` (it never throws), a `SodaxLogger`,
+ * `SwapsApiConfig`/`ApiConfig` resolution, and per-call `RequestOverrideConfig`.
  *
- * All public methods return `Promise<Result<T>>` — they never throw. On network
- * failure, timeout, non-2xx HTTP response, or response-shape validation failure,
- * the returned Result has `ok: false` with a canonical
- * `SodaxError<'EXTERNAL_API_ERROR'>` (`feature: 'backend'`, `context.api: 'swaps'`)
- * in the `error` field; the underlying failure is preserved on `error.cause`.
+ * All public methods return `Promise<Result<T>>`. On network failure, timeout, non-2xx HTTP
+ * response, or response-shape validation failure, the returned Result has `ok: false` with a
+ * canonical `SodaxError<'EXTERNAL_API_ERROR'>` (`feature: 'backend'`, `context.api: 'swaps'`,
+ * `context.endpoint`); the underlying `SwapsApiError` is preserved on `error.cause`.
  *
- * Per-call request overrides (base URL, timeout, headers) can be passed as the
- * optional last argument to any method via `RequestOverrideConfig`.
+ * Per-call request overrides (base URL, timeout, headers) can be passed as the optional last
+ * argument to any method via `RequestOverrideConfig`.
  *
  * Reachable on the Sodax facade as `sodax.api.swaps`.
  */
@@ -96,85 +97,94 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
   }
 
   /**
-   * Issues a single HTTP request, validates the JSON body against `schema`, and
-   * wraps the result in `Result<T>`. The service-level `baseURL`/`timeout`/
-   * `headers` are merged with the optional per-call `overrideConfig` (which takes
-   * precedence) inside {@link makeRequest}. Every public method delegates here.
+   * Build a `@sodax/swaps-api` client for a single call. Maps the SDK's `SwapsApiConfig`
+   * (`baseURL`/`timeout`/`headers`) to the package's config (`baseUrl`/`timeout`/`headers`), layering
+   * the optional per-call `RequestOverrideConfig` on top (override wins per field; headers merge).
+   * `timeout` falls back to the backend-API default so a config that omits it still gets a ceiling
+   * rather than an unbounded request. Constructed per call so `setHeaders` mutations and per-call
+   * overrides both take effect without caching stale state.
    */
-  private async request<S extends v.GenericSchema>(
-    endpoint: string,
-    config: RequestConfig,
-    schema: S,
-    overrideConfig?: RequestOverrideConfig,
-  ): Promise<Result<v.InferOutput<S>, SodaxError<'EXTERNAL_API_ERROR'>>> {
-    try {
-      const raw = await makeRequest<unknown>({
-        endpoint,
-        config: { baseURL: this.config.baseURL, timeout: this.config.timeout, headers: this.headers, ...config },
-        overrideConfig,
-        logger: this.logger,
-        serviceLabel: 'SwapsApiService',
-      });
+  private buildClient(overrideConfig?: RequestOverrideConfig): SwapsApi {
+    const baseUrl = overrideConfig?.baseURL || this.config.baseURL;
+    const timeout = overrideConfig?.timeout ?? this.config.timeout ?? DEFAULT_BACKEND_API_TIMEOUT;
+    const headers = { ...this.headers, ...overrideConfig?.headers };
+    return new SwapsApi({ baseUrl, headers, timeout });
+  }
 
-      const parsed = v.safeParse(schema, raw);
-      if (!parsed.success) {
-        // Backend returned a 2xx body that doesn't match the v2 contract — an upstream-API problem.
-        return {
-          ok: false,
-          error: new SodaxError('EXTERNAL_API_ERROR', `Invalid response shape from swaps API for ${endpoint}`, {
-            feature: 'backend',
-            context: { api: 'swaps', endpoint, reason: 'invalid_response_shape', issues: v.flatten(parsed.issues) },
-          }),
-        };
-      }
-      return { ok: true, value: parsed.output };
+  /**
+   * Run one delegated `SwapsApi` call and wrap it in `Result<T>`. A thrown `SwapsApiError`
+   * (network/timeout/HTTP/parse/validation) becomes `{ ok: false }` with a canonical
+   * `SodaxError<'EXTERNAL_API_ERROR'>`; the original error is kept as `cause`, and its
+   * `code`/`status`/`issues` are projected into `context` so consumers can discriminate failure
+   * kinds without unwrapping `cause`. Only a RESPONSE-shape validation failure is tagged
+   * `reason: 'invalid_response_shape'` — a request-side validation error is a caller bug, not a
+   * backend fault.
+   */
+  private async toResult<T>(
+    endpoint: string,
+    call: (client: SwapsApi) => Promise<T>,
+    overrideConfig?: RequestOverrideConfig,
+  ): Promise<Result<T, SodaxError<'EXTERNAL_API_ERROR'>>> {
+    try {
+      const value = await call(this.buildClient(overrideConfig));
+      return { ok: true, value };
     } catch (error) {
-      // Network failure, timeout, or non-2xx HTTP status thrown by makeRequest. Preserve the
-      // underlying error as `cause` (carries HTTP_REQUEST_FAILED / REQUEST_TIMEOUT / etc.).
+      const context: Record<string, unknown> = { api: 'swaps', endpoint };
+      if (error instanceof SwapsApiError) {
+        // Surface the wire code (TIMEOUT_ERROR / NETWORK_ERROR / HTTP_ERROR / PARSE_ERROR /
+        // VALIDATION_ERROR) so consumers can branch without reaching into `cause`.
+        context.code = error.code;
+        // `issues` is present only for RESPONSE-shape validation failures (set in http.ts). A
+        // request-side VALIDATION_ERROR (serializeIntentRequest / rejectBigint) carries none, so
+        // only the former is tagged as a backend response-shape problem.
+        if (error.code === 'VALIDATION_ERROR' && error.context.issues !== undefined) {
+          context.reason = 'invalid_response_shape';
+          // swaps-api stores the thrown ValiError here; flatten it to the same `v.flatten(issues)`
+          // shape BackendApiService emits so both backend clients report identical `context.issues`,
+          // and so the detail survives SodaxError.toJSON (which reduces a raw Error to name+message).
+          const issues = error.context.issues;
+          context.issues = issues instanceof v.ValiError ? v.flatten(issues.issues) : issues;
+        }
+        if (error.context.status !== undefined) context.status = error.context.status;
+      }
+      this.logger.error(`[SwapsApiService] Request to ${endpoint} failed`, error);
       return {
         ok: false,
         error: new SodaxError(
           'EXTERNAL_API_ERROR',
           error instanceof Error ? error.message : `Request to ${endpoint} failed`,
-          {
-            feature: 'backend',
-            cause: error,
-            context: { api: 'swaps', endpoint },
-          },
+          { feature: 'backend', cause: error, context },
         ),
       };
     }
+  }
+
+  /**
+   * Drop the SDK-only display field `feeAmount` before an intent reaches the strict wire serializer.
+   * `sodax.swaps.createIntent` returns `Intent & FeeAmount`, which is structurally assignable to the
+   * wire `IntentRequestV2` and so gets passed straight into the intent-carrying endpoints; the extra
+   * bigint would trip `serializeIntentRequest`. This is a no-op for an already-clean `IntentRequestV2`.
+   */
+  private static toWireIntent(intent: IntentRequestV2): IntentRequestV2 {
+    const { feeAmount: _feeAmount, ...rest }: IntentRequestV2 & Partial<FeeAmount> = intent;
+    return rest;
   }
 
   // ──────────────────────────────────────────────────────────────────────
   // Tokens
   // ──────────────────────────────────────────────────────────────────────
 
-  /**
-   * Fetch all supported swap tokens grouped by SpokeChainKey.
-   *
-   * @returns `Result<GetSwapTokensResponseV2>` — map of chain key → token list.
-   */
+  /** Fetch all supported swap tokens grouped by SpokeChainKey. */
   public async getTokens(config?: RequestOverrideConfig): Promise<Result<GetSwapTokensResponseV2>> {
-    return this.request('/swaps/tokens', { method: 'GET' }, schemas.GetSwapTokensResponseSchema, config);
+    return this.toResult('/swaps/tokens', c => c.getTokens(), config);
   }
 
-  /**
-   * Fetch supported swap tokens for a single SpokeChainKey.
-   *
-   * @param chainKey - SODAX SpokeChainKey (e.g. `0xa4b1.arbitrum`, `solana`).
-   * @returns `Result<GetSwapTokensByChainResponseV2>` — token list for the chain.
-   */
+  /** Fetch supported swap tokens for a single SpokeChainKey. */
   public async getTokensByChain(
     chainKey: string,
     config?: RequestOverrideConfig,
   ): Promise<Result<GetSwapTokensByChainResponseV2>> {
-    return this.request(
-      `/swaps/tokens/${chainKey}`,
-      { method: 'GET' },
-      schemas.GetSwapTokensByChainResponseSchema,
-      config,
-    );
+    return this.toResult(`/swaps/tokens/${chainKey}`, c => c.getTokensByChain(chainKey), config);
   }
 
   // ──────────────────────────────────────────────────────────────────────
@@ -182,330 +192,167 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
   // ──────────────────────────────────────────────────────────────────────
 
   /**
-   * Get a solver quote for a cross-chain swap.
-   *
-   * Pass `query.includeTxData = true` to also build an unsigned create-intent
-   * transaction (`txData`) using the quoted amount as `minOutputAmount`; in that
-   * case `srcAddress`/`dstAddress` are required in the body.
-   *
-   * @returns `Result<QuoteResponseV2>` — `quotedAmount` (decimal string) and optional `txData`.
+   * Get a solver quote for a cross-chain swap. Pass `query.includeTxData = true` to also build an
+   * unsigned create-intent transaction (`txData`); in that case `srcAddress`/`dstAddress` are required.
    */
   public async getQuote(
     body: QuoteRequestV2,
     query?: QuoteQueryV2,
     config?: RequestOverrideConfig,
   ): Promise<Result<QuoteResponseV2>> {
-    const endpoint = query?.includeTxData ? '/swaps/quote?includeTxData=true' : '/swaps/quote';
-    const txSchema = rawTxSchemaForChainKey(body.tokenSrcChainKey);
-    return this.request(
-      endpoint,
-      { method: 'POST', body: toJsonBody(body) },
-      schemas.makeQuoteResponseSchema(txSchema),
-      config,
-    );
+    return this.toResult('/swaps/quote', c => c.getQuote(body, query), config);
   }
 
-  /**
-   * Compute a swap deadline (hub timestamp + `offsetSeconds`, default 300s).
-   *
-   * @returns `Result<DeadlineResponseV2>` — unix-seconds deadline (decimal string).
-   */
+  /** Compute a swap deadline (hub timestamp + `offsetSeconds`, default 300s). */
   public async getDeadline(
     query?: DeadlineQueryV2,
     config?: RequestOverrideConfig,
   ): Promise<Result<DeadlineResponseV2>> {
-    const queryParams = new URLSearchParams();
-    if (query?.offsetSeconds !== undefined) queryParams.append('offsetSeconds', String(query.offsetSeconds));
-    const queryString = queryParams.toString();
-    const endpoint = queryString.length > 0 ? `/swaps/deadline?${queryString}` : '/swaps/deadline';
-    return this.request(endpoint, { method: 'GET' }, schemas.DeadlineResponseSchema, config);
+    return this.toResult('/swaps/deadline', c => c.getDeadline(query), config);
   }
 
   // ──────────────────────────────────────────────────────────────────────
   // Allowance · approve · create intent
   // ──────────────────────────────────────────────────────────────────────
 
-  /**
-   * Check whether the source token allowance is already sufficient for the intent.
-   *
-   * @returns `Result<AllowanceCheckResponseV2>` — `{ valid }`.
-   */
+  /** Check whether the source token allowance is already sufficient for the intent. */
   public async checkAllowance(
     body: CreateIntentParamsV2,
     config?: RequestOverrideConfig,
   ): Promise<Result<AllowanceCheckResponseV2>> {
-    return this.request(
-      '/swaps/allowance/check',
-      { method: 'POST', body: toJsonBody(body) },
-      schemas.AllowanceCheckResponseSchema,
-      config,
-    );
+    return this.toResult('/swaps/allowance/check', c => c.checkAllowance(body), config);
   }
 
-  /**
-   * Build an unsigned token-approval transaction for the source token.
-   *
-   * @returns `Result<ApproveResponseV2>` — `{ tx }` (chain-specific unsigned tx).
-   */
+  /** Build an unsigned token-approval transaction for the source token. */
   public async approve(body: CreateIntentParamsV2, config?: RequestOverrideConfig): Promise<Result<ApproveResponseV2>> {
-    const txSchema = rawTxSchemaForChainKey(body.srcChainKey);
-    return this.request(
-      '/swaps/approve',
-      { method: 'POST', body: toJsonBody(body) },
-      schemas.makeApproveResponseSchema(txSchema),
-      config,
-    );
+    return this.toResult('/swaps/approve', c => c.approve(body), config);
   }
 
-  /**
-   * Build an unsigned create-intent transaction.
-   *
-   * @returns `Result<CreateIntentResponseV2>` — `{ tx, intent, relayData }`.
-   */
+  /** Build an unsigned create-intent transaction. */
   public async createIntent(
     body: CreateIntentParamsV2,
     config?: RequestOverrideConfig,
   ): Promise<Result<CreateIntentResponseV2>> {
-    const txSchema = rawTxSchemaForChainKey(body.srcChainKey);
-    return this.request(
-      '/swaps/intents',
-      { method: 'POST', body: toJsonBody(body) },
-      schemas.makeCreateIntentResponseSchema(txSchema),
-      config,
-    );
+    return this.toResult('/swaps/intents', c => c.createIntent(body), config);
   }
 
   // ──────────────────────────────────────────────────────────────────────
   // Intent lifecycle: submit · status · cancel · hash · packet · extra-data
   // ──────────────────────────────────────────────────────────────────────
 
-  /**
-   * Submit the broadcast intent tx to the relay.
-   *
-   * @returns `Result<SubmitIntentResponseV2>` — `{ result }` (opaque relay response).
-   */
+  /** Submit the broadcast intent tx to the relay. */
   public async submitIntent(
     body: SubmitIntentRequestV2,
     config?: RequestOverrideConfig,
   ): Promise<Result<SubmitIntentResponseV2>> {
-    return this.request(
-      '/swaps/intents/submit',
-      { method: 'POST', body: toJsonBody(body) },
-      schemas.SubmitIntentResponseSchema,
-      config,
-    );
+    return this.toResult('/swaps/intents/submit', c => c.submitIntent(body), config);
   }
 
-  /**
-   * Poll the solver for intent execution status.
-   *
-   * @returns `Result<StatusResponseV2>` — `{ status, fillTxHash? }` (`fillTxHash` set when `status === 3`).
-   */
+  /** Poll the solver for intent execution status. */
   public async getStatus(body: StatusRequestV2, config?: RequestOverrideConfig): Promise<Result<StatusResponseV2>> {
-    return this.request(
-      '/swaps/intents/status',
-      { method: 'POST', body: toJsonBody(body) },
-      schemas.StatusResponseSchema,
-      config,
-    );
+    return this.toResult('/swaps/intents/status', c => c.getStatus(body), config);
   }
 
-  /**
-   * Build an unsigned cancel-intent transaction. The `intent` field carries
-   * `bigint` numerics — {@link toJsonBody} serializes them to decimal strings.
-   *
-   * @returns `Result<CancelIntentResponseV2>` — `{ tx }`.
-   */
+  /** Build an unsigned cancel-intent transaction (the `intent` bigint numerics serialize to strings). */
   public async cancelIntent(
     body: CancelIntentRequestV2,
     config?: RequestOverrideConfig,
   ): Promise<Result<CancelIntentResponseV2>> {
-    const txSchema = rawTxSchemaForChainKey(body.srcChainKey);
-    return this.request(
+    return this.toResult(
       '/swaps/intents/cancel',
-      { method: 'POST', body: toJsonBody(body) },
-      schemas.makeCancelIntentResponseSchema(txSchema),
+      c => c.cancelIntent({ ...body, intent: SwapsApiService.toWireIntent(body.intent) }),
       config,
     );
   }
 
-  /**
-   * Compute the keccak256 hash of an Intent struct. The `intent` field carries
-   * `bigint` numerics — {@link toJsonBody} serializes them to decimal strings.
-   *
-   * @returns `Result<IntentHashResponseV2>` — `{ hash }`.
-   */
+  /** Compute the keccak256 hash of an Intent struct (bigint numerics serialize to strings). */
   public async getIntentHash(
     body: IntentHashRequestV2,
     config?: RequestOverrideConfig,
   ): Promise<Result<IntentHashResponseV2>> {
-    return this.request(
+    return this.toResult(
       '/swaps/intents/hash',
-      { method: 'POST', body: toJsonBody(body) },
-      schemas.IntentHashResponseSchema,
+      c => c.getIntentHash({ ...body, intent: SwapsApiService.toWireIntent(body.intent) }),
       config,
     );
   }
 
-  /**
-   * Long-poll the relayer until the fill packet lands on the destination chain.
-   *
-   * @returns `Result<IntentPacketResponseV2>` — delivered packet data.
-   */
+  /** Long-poll the relayer until the fill packet lands on the destination chain. */
   public async getSolvedIntentPacket(
     body: IntentPacketRequestV2,
     config?: RequestOverrideConfig,
   ): Promise<Result<IntentPacketResponseV2>> {
-    return this.request(
-      '/swaps/intents/packet',
-      { method: 'POST', body: toJsonBody(body) },
-      schemas.IntentPacketResponseSchema,
-      config,
-    );
+    return this.toResult('/swaps/intents/packet', c => c.getSolvedIntentPacket(body), config);
   }
 
-  /**
-   * Recover the relay extra data needed by `/swaps/intents/submit`. Provide
-   * EITHER `txHash` OR `intent` (whose `bigint` numerics {@link toJsonBody} serializes).
-   *
-   * @returns `Result<IntentExtraDataResponseV2>` — `{ address, payload }`.
-   */
+  /** Recover the relay extra data needed by `/swaps/intents/submit` (provide EITHER `txHash` OR `intent`). */
   public async getIntentSubmitTxExtraData(
     body: IntentExtraDataRequestV2,
     config?: RequestOverrideConfig,
   ): Promise<Result<IntentExtraDataResponseV2>> {
-    return this.request(
-      '/swaps/intents/extra-data',
-      { method: 'POST', body: toJsonBody(body) },
-      schemas.RelayExtraDataResponseSchema,
-      config,
-    );
+    const normalized = body.intent ? { ...body, intent: SwapsApiService.toWireIntent(body.intent) } : body;
+    return this.toResult('/swaps/intents/extra-data', c => c.getIntentSubmitTxExtraData(normalized), config);
   }
 
-  /**
-   * Get the on-chain fill state for an intent by its hub-chain tx hash.
-   *
-   * @returns `Result<IntentStateV2>` — `{ exists, remainingInput, receivedOutput, pendingPayment }`.
-   */
+  /** Get the on-chain fill state for an intent by its hub-chain tx hash. */
   public async getFilledIntent(txHash: string, config?: RequestOverrideConfig): Promise<Result<IntentStateV2>> {
-    return this.request(`/swaps/intents/${txHash}/fill`, { method: 'GET' }, schemas.IntentStateResponseSchema, config);
+    return this.toResult(`/swaps/intents/${txHash}/fill`, c => c.getFilledIntent(txHash), config);
   }
 
-  /**
-   * Look up an Intent struct by its hub-chain creation tx hash.
-   *
-   * @returns `Result<GetIntentResponseV2>` — the decoded intent (bigint fields as decimal strings).
-   */
+  /** Look up an Intent struct by its hub-chain creation tx hash. */
   public async getIntent(txHash: string, config?: RequestOverrideConfig): Promise<Result<GetIntentResponseV2>> {
-    return this.request(`/swaps/intents/${txHash}`, { method: 'GET' }, schemas.IntentResponseSchema, config);
+    return this.toResult(`/swaps/intents/${txHash}`, c => c.getIntent(txHash), config);
   }
 
   // ──────────────────────────────────────────────────────────────────────
   // Limit orders · gas · fees
   // ──────────────────────────────────────────────────────────────────────
 
-  /**
-   * Build an unsigned create-limit-order-intent transaction (same as create-intent
-   * but `deadline` is optional).
-   *
-   * @returns `Result<CreateLimitOrderResponseV2>` — `{ tx, intent, relayData }`.
-   */
+  /** Build an unsigned create-limit-order-intent transaction (create-intent with optional `deadline`). */
   public async createLimitOrderIntent(
     body: CreateLimitOrderParamsV2,
     config?: RequestOverrideConfig,
   ): Promise<Result<CreateLimitOrderResponseV2>> {
-    const txSchema = rawTxSchemaForChainKey(body.srcChainKey);
-    return this.request(
-      '/swaps/limit-orders',
-      { method: 'POST', body: toJsonBody(body) },
-      schemas.makeCreateIntentResponseSchema(txSchema),
-      config,
-    );
+    return this.toResult('/swaps/limit-orders', c => c.createLimitOrderIntent(body), config);
   }
 
-  /**
-   * Estimate gas for a raw transaction on a spoke chain.
-   *
-   * @returns `Result<GasEstimateResponseV2>` — `{ gas }` (chain-specific shape).
-   */
+  /** Estimate gas for a raw transaction on a spoke chain (bigint `tx` numerics serialize to strings). */
   public async estimateGas(
     body: GasEstimateRequestV2,
     config?: RequestOverrideConfig,
   ): Promise<Result<GasEstimateResponseV2>> {
-    return this.request(
-      '/swaps/gas/estimate',
-      { method: 'POST', body: toJsonBody(body) },
-      schemas.GasEstimateResponseSchema,
-      config,
-    );
+    return this.toResult('/swaps/gas/estimate', c => c.estimateGas(body), config);
   }
 
-  /**
-   * Compute the partner fee for a given input amount.
-   *
-   * @returns `Result<FeeResponseV2>` — `{ fee }` (decimal string).
-   */
+  /** Compute the partner fee for a given input amount. */
   public async getPartnerFee(query: FeeQueryV2, config?: RequestOverrideConfig): Promise<Result<FeeResponseV2>> {
-    const queryParams = new URLSearchParams({ amount: query.amount });
-    return this.request(
-      `/swaps/fees/partner?${queryParams.toString()}`,
-      { method: 'GET' },
-      schemas.FeeResponseSchema,
-      config,
-    );
+    return this.toResult('/swaps/fees/partner', c => c.getPartnerFee(query), config);
   }
 
-  /**
-   * Compute the protocol (solver) fee for a given input amount.
-   *
-   * @returns `Result<FeeResponseV2>` — `{ fee }` (decimal string).
-   */
+  /** Compute the protocol (solver) fee for a given input amount. */
   public async getSolverFee(query: FeeQueryV2, config?: RequestOverrideConfig): Promise<Result<FeeResponseV2>> {
-    const queryParams = new URLSearchParams({ amount: query.amount });
-    return this.request(
-      `/swaps/fees/solver?${queryParams.toString()}`,
-      { method: 'GET' },
-      schemas.FeeResponseSchema,
-      config,
-    );
+    return this.toResult('/swaps/fees/solver', c => c.getSolverFee(query), config);
   }
 
   // ──────────────────────────────────────────────────────────────────────
   // Submit-tx state machine
   // ──────────────────────────────────────────────────────────────────────
 
-  /**
-   * Submit a swap transaction to be processed (relay, post-execution, etc.). The
-   * `intent` field carries `bigint` numerics — {@link toJsonBody} serializes them.
-   * Idempotent on `(txHash, srcChainKey)`.
-   *
-   * @returns `Result<SubmitTxResponseV2>` — `{ success, data: { status, message } }`.
-   */
+  /** Submit a swap transaction to be processed (relay, post-execution, etc.). Idempotent on `(txHash, srcChainKey)`. */
   public async submitTx(body: SubmitTxRequestV2, config?: RequestOverrideConfig): Promise<Result<SubmitTxResponseV2>> {
-    return this.request(
+    return this.toResult(
       '/swaps/submit-tx',
-      { method: 'POST', body: toJsonBody(body) },
-      schemas.SubmitTxResponseSchema,
+      c => c.submitTx({ ...body, intent: SwapsApiService.toWireIntent(body.intent) }),
       config,
     );
   }
 
-  /**
-   * Get the processing status of a submitted swap transaction by `(txHash, srcChainKey)`.
-   *
-   * @returns `Result<SubmitTxStatusResponseV2>` — `{ success, data }` (processing state).
-   */
+  /** Get the processing status of a submitted swap transaction by `(txHash, srcChainKey)`. */
   public async getSubmitTxStatus(
     query: SubmitTxStatusQueryV2,
     config?: RequestOverrideConfig,
   ): Promise<Result<SubmitTxStatusResponseV2>> {
-    const queryParams = new URLSearchParams({ txHash: query.txHash, srcChainKey: query.srcChainKey });
-    return this.request(
-      `/swaps/submit-tx/status?${queryParams.toString()}`,
-      { method: 'GET' },
-      schemas.SubmitTxStatusResponseSchema,
-      config,
-    );
+    return this.toResult('/swaps/submit-tx/status', c => c.getSubmitTxStatus(query), config);
   }
 
   // ──────────────────────────────────────────────────────────────────────
@@ -514,7 +361,8 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
 
   /**
    * Merge additional headers into the service's default header set. Existing
-   * keys are overwritten; keys absent from `headers` are preserved.
+   * keys are overwritten; keys absent from `headers` are preserved. Applied to
+   * every subsequent call (the delegated client is rebuilt per call).
    */
   public setHeaders(headers: Record<string, string>): void {
     Object.entries(headers).forEach(([key, value]) => {

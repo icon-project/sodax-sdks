@@ -77,6 +77,21 @@ to `chainLogo(ChainKeys.<NAME>)`. Invariants are covered by
 [`src/chains/chains-logo.test.ts`](src/chains/chains-logo.test.ts). Consumers
 (demo, web app) must read `baseChainInfo[key].logo`, not hardcode icon paths.
 
+## Token logos
+
+Token logos mirror chain logos but resolve by symbol instead of a stored field.
+The binaries live in [`packages/assets`](../assets/AGENTS.md) under `token/` and
+are served via `raw.githubusercontent.com`. `TOKEN_LOGO_BASE_URL` (exported from
+[`src/chains/tokens.ts`](src/chains/tokens.ts)) is the directory base, and
+`tokenLogo(symbol)` returns `${TOKEN_LOGO_BASE_URL}/${tokenLogoSlug(symbol)}.png`.
+`tokenLogoSlug` lowercases the symbol and collapses non-alphanumeric runs to `-`
+(so `bnUSD (legacy)` → `bnusd-legacy`), keeping filenames URL- and path-safe.
+Adding a token logo: drop `<tokenLogoSlug(symbol)>.png` in `packages/assets/token/`
+— no per-token config edit is needed. Invariants (URL shape, slug safety, no
+slug collisions across symbols) are covered by
+[`src/chains/tokens-logo.test.ts`](src/chains/tokens-logo.test.ts). Consumers
+must resolve icons with `tokenLogo(token.symbol)`, not hardcode icon paths.
+
 ## Build
 
 Built with `tsc` (other workspace packages bundle with tsup — this one doesn't bundle). ESM only (`"type": "module"`). Output: `dist/` with `.js` + `.d.ts` files.

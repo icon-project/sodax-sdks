@@ -4,7 +4,7 @@ import { erc20Abi, encodeFunctionData, isAddress, type Address } from 'viem';
 import type { ConfigService } from '../shared/config/ConfigService.js';
 import type { HubProvider } from '../shared/types/types.js';
 import { SodaxError, isSodaxError } from '../errors/SodaxError.js';
-import { lookupFailed } from '../errors/wrappers.js';
+import { lookupFailed, approveFailed } from '../errors/wrappers.js';
 import { SolverApiService } from '../swap/SolverApiService.js';
 import { ProtocolIntentsAbi } from '../shared/abis/protocolIntents.abi.js';
 import {
@@ -344,73 +344,78 @@ export class PartnerFeeClaimService {
   public async setSwapPreference<K extends SpokeChainKey, Raw extends boolean>(
     _params: SetSwapPreferenceAction<K, Raw>,
   ): Promise<Result<TxReturnType<K, Raw>>> {
-    return this.config.analytics.trackResult('partner', 'setSwapPreference', async () => {
-      const { params, walletProvider, raw } = _params;
-      try {
-        invariant(isHubChainKeyType(params.srcChainKey), 'PartnerFeeClaimService only supports Sonic spoke provider');
-        invariant(this.protocolIntentsContract, 'protocolIntentsContract is not configured in solver config');
+    return this.config.analytics.trackResult(
+      'partner',
+      'setSwapPreference',
+      async () => {
+        const { params, walletProvider, raw } = _params;
+        try {
+          invariant(isHubChainKeyType(params.srcChainKey), 'PartnerFeeClaimService only supports Sonic spoke provider');
+          invariant(this.protocolIntentsContract, 'protocolIntentsContract is not configured in solver config');
 
-        const outputToken =
-          params.dstChainKey !== this.hubProvider.chainConfig.chain.key
-            ? this.hubProvider.config.getSpokeTokenFromOriginalAssetAddress(params.dstChainKey, params.outputToken)?.hubAsset
-            : params.outputToken;
+          const outputToken =
+            params.dstChainKey !== this.hubProvider.chainConfig.chain.key
+              ? this.hubProvider.config.getSpokeTokenFromOriginalAssetAddress(params.dstChainKey, params.outputToken)
+                  ?.hubAsset
+              : params.outputToken;
 
-        invariant(
-          outputToken,
-          `hub asset not found for spoke chain token (params.outputToken): ${params.outputToken} with chain key: ${params.dstChainKey}`,
-        );
+          invariant(
+            outputToken,
+            `hub asset not found for spoke chain token (params.outputToken): ${params.outputToken} with chain key: ${params.dstChainKey}`,
+          );
 
-        const rawTx = {
-          from: params.srcAddress,
-          to: this.protocolIntentsContract,
-          value: 0n,
-          data: encodeFunctionData({
-            abi: ProtocolIntentsAbi,
-            functionName: 'setAutoSwapPreferences',
-            args: [
-              outputToken,
-              BigInt(getIntentRelayChainId(params.dstChainKey)),
-              encodeAddress(params.dstChainKey, params.dstAddress),
-            ],
-          }),
-        } satisfies TxReturnType<HubChainKey, true>;
+          const rawTx = {
+            from: params.srcAddress,
+            to: this.protocolIntentsContract,
+            value: 0n,
+            data: encodeFunctionData({
+              abi: ProtocolIntentsAbi,
+              functionName: 'setAutoSwapPreferences',
+              args: [
+                outputToken,
+                BigInt(getIntentRelayChainId(params.dstChainKey)),
+                encodeAddress(params.dstChainKey, params.dstAddress),
+              ],
+            }),
+          } satisfies TxReturnType<HubChainKey, true>;
 
-        if (raw) {
+          if (raw) {
+            return {
+              ok: true,
+              value: rawTx satisfies TxReturnType<HubChainKey, true> as TxReturnType<K, Raw>,
+            };
+          }
+
+          invariant(
+            isEvmWalletProviderType(walletProvider),
+            'PartnerFeeClaimService only supports Evm (sonic) wallet provider',
+          );
+
+          const txHash = await walletProvider.sendTransaction(rawTx);
+
           return {
             ok: true,
-            value: rawTx satisfies TxReturnType<HubChainKey, true> as TxReturnType<K, Raw>,
+            value: txHash satisfies TxReturnType<HubChainKey, false> as TxReturnType<K, Raw>,
+          };
+        } catch (error) {
+          return {
+            ok: false,
+            error,
           };
         }
-
-        invariant(
-          isEvmWalletProviderType(walletProvider),
-          'PartnerFeeClaimService only supports Evm (sonic) wallet provider',
-        );
-
-        const txHash = await walletProvider.sendTransaction(rawTx);
-
-        return {
-          ok: true,
-          value: txHash satisfies TxReturnType<HubChainKey, false> as TxReturnType<K, Raw>,
-        };
-      } catch (error) {
-        return {
-          ok: false,
-          error,
-        };
-      }
-    },
-    {
-      start: () => ({
-        srcChainKey: _params.params.srcChainKey,
-        srcAddress: _params.params.srcAddress,
-        outputToken: _params.params.outputToken,
-        dstChainKey: _params.params.dstChainKey,
-        dstAddress: _params.params.dstAddress,
-      }),
-      success: value => ({ txHash: value }),
-      failure: error => ({ code: isSodaxError(error) ? error.code : undefined }),
-    });
+      },
+      {
+        start: () => ({
+          srcChainKey: _params.params.srcChainKey,
+          srcAddress: _params.params.srcAddress,
+          outputToken: _params.params.outputToken,
+          dstChainKey: _params.params.dstChainKey,
+          dstAddress: _params.params.dstAddress,
+        }),
+        success: value => ({ txHash: value }),
+        failure: error => ({ code: isSodaxError(error) ? error.code : undefined }),
+      },
+    );
   }
 
   /**
@@ -522,7 +527,7 @@ export class PartnerFeeClaimService {
     } catch (error) {
       return {
         ok: false,
-        error: new SodaxError('APPROVE_FAILED', error instanceof Error ? error.message : 'approveToken failed', { feature: 'partner', cause: error, context: { phase: 'approve' } }),
+        error: approveFailed('partner', error),
       };
     }
   }
@@ -654,62 +659,71 @@ export class PartnerFeeClaimService {
    *     preference lookup that backs the guard fails.
    *   - Error from `SolverApiService.postExecution` — if the solver notification failed.
    */
-  public async swap(
-    _params: PartnerFeeClaimSwapAction<HubChainKey, false>,
-  ): Promise<Result<IntentAutoSwapResult>> {
-    return this.config.analytics.trackResult('partner', 'swap', async () => {
-      try {
-        // The same-token guard (output token === fee token) is enforced inside `createIntentAutoSwap`,
-        // which this flow delegates to, so it applies here too without duplication.
-        const txHash = await this.createIntentAutoSwap(_params);
-
-        if (!txHash.ok) {
-          return txHash;
-        }
-
-        let intentTxHash: Hex;
+  public async swap(_params: PartnerFeeClaimSwapAction<HubChainKey, false>): Promise<Result<IntentAutoSwapResult>> {
+    return this.config.analytics.trackResult(
+      'partner',
+      'swap',
+      async () => {
         try {
-          const receipt = await this.hubProvider.publicClient.waitForTransactionReceipt({ hash: txHash.value });
-          intentTxHash = receipt.transactionHash;
+          // The same-token guard (output token === fee token) is enforced inside `createIntentAutoSwap`,
+          // which this flow delegates to, so it applies here too without duplication.
+          const txHash = await this.createIntentAutoSwap(_params);
+
+          if (!txHash.ok) {
+            return txHash;
+          }
+
+          let intentTxHash: Hex;
+          try {
+            const receipt = await this.hubProvider.publicClient.waitForTransactionReceipt({ hash: txHash.value });
+            intentTxHash = receipt.transactionHash;
+          } catch (error) {
+            return {
+              ok: false,
+              error: new SodaxError(
+                'EXECUTION_FAILED',
+                error instanceof Error ? error.message : 'waitIntentAutoSwap failed',
+                { feature: 'partner', cause: error, context: { action: 'waitAutoSwap', phase: 'execution' } },
+              ),
+            };
+          }
+
+          const solverExecutionResponse = await SolverApiService.postExecution(
+            { intent_tx_hash: intentTxHash },
+            this.config.solver,
+            this.config.logger,
+          );
+
+          if (!solverExecutionResponse.ok) {
+            return solverExecutionResponse;
+          }
+
+          return {
+            ok: true,
+            value: {
+              srcTxHash: txHash.value,
+              solverExecutionResponse: solverExecutionResponse.value,
+              intentTxHash,
+            },
+          };
         } catch (error) {
-          return { ok: false, error: new SodaxError('EXECUTION_FAILED', error instanceof Error ? error.message : 'waitIntentAutoSwap failed', { feature: 'partner', cause: error, context: { action: 'waitAutoSwap', phase: 'execution' } }) };
+          return { ok: false, error };
         }
-
-        const solverExecutionResponse = await SolverApiService.postExecution(
-          { intent_tx_hash: intentTxHash },
-          this.config.solver,
-          this.config.logger,
-        );
-
-        if (!solverExecutionResponse.ok) {
-          return solverExecutionResponse;
-        }
-
-        return {
-          ok: true,
-          value: {
-            srcTxHash: txHash.value,
-            solverExecutionResponse: solverExecutionResponse.value,
-            intentTxHash,
-          },
-        };
-      } catch (error) {
-        return { ok: false, error };
-      }
-    },
-    {
-      start: () => ({
-        srcChainKey: _params.params.srcChainKey,
-        srcAddress: _params.params.srcAddress,
-        fromToken: _params.params.fromToken,
-        amount: _params.params.amount,
-      }),
-      success: value => ({
-        srcTxHash: value.srcTxHash,
-        intentTxHash: value.intentTxHash,
-      }),
-      failure: error => ({ code: isSodaxError(error) ? error.code : undefined }),
-    });
+      },
+      {
+        start: () => ({
+          srcChainKey: _params.params.srcChainKey,
+          srcAddress: _params.params.srcAddress,
+          fromToken: _params.params.fromToken,
+          amount: _params.params.amount,
+        }),
+        success: value => ({
+          srcTxHash: value.srcTxHash,
+          intentTxHash: value.intentTxHash,
+        }),
+        failure: error => ({ code: isSodaxError(error) ? error.code : undefined }),
+      },
+    );
   }
 
   /**
@@ -738,54 +752,58 @@ export class PartnerFeeClaimService {
   public async cancelIntent<Raw extends boolean>(
     _params: PartnerFeeClaimCancelAction<HubChainKey, Raw>,
   ): Promise<Result<TxReturnType<HubChainKey, Raw>>> {
-    return this.config.analytics.trackResult('partner', 'cancelIntent', async () => {
-      const { params } = _params;
-      try {
-        invariant(isHubChainKeyType(params.srcChainKey), 'PartnerFeeClaimService only supports Hub srcChainKey');
-        invariant(
-          isOptionalEvmWalletProviderType(_params.walletProvider),
-          'PartnerFeeClaimService only supports Evm wallet provider',
-        );
-        invariant(this.protocolIntentsContract, 'protocolIntentsContract is not configured in solver config');
+    return this.config.analytics.trackResult(
+      'partner',
+      'cancelIntent',
+      async () => {
+        const { params } = _params;
+        try {
+          invariant(isHubChainKeyType(params.srcChainKey), 'PartnerFeeClaimService only supports Hub srcChainKey');
+          invariant(
+            isOptionalEvmWalletProviderType(_params.walletProvider),
+            'PartnerFeeClaimService only supports Evm wallet provider',
+          );
+          invariant(this.protocolIntentsContract, 'protocolIntentsContract is not configured in solver config');
 
-        const rawTx = {
-          from: params.srcAddress,
-          to: this.protocolIntentsContract,
-          value: 0n,
-          data: encodeFunctionData({
-            abi: ProtocolIntentsAbi,
-            functionName: 'cancelIntent',
-            args: [params.fromToken, params.toToken],
-          }),
-        };
+          const rawTx = {
+            from: params.srcAddress,
+            to: this.protocolIntentsContract,
+            value: 0n,
+            data: encodeFunctionData({
+              abi: ProtocolIntentsAbi,
+              functionName: 'cancelIntent',
+              args: [params.fromToken, params.toToken],
+            }),
+          };
 
-        if (_params.raw) {
+          if (_params.raw) {
+            return {
+              ok: true,
+              value: rawTx satisfies TxReturnType<HubChainKey, true> as TxReturnType<HubChainKey, Raw>,
+            };
+          }
+
+          const txHash = await _params.walletProvider.sendTransaction(rawTx);
+
           return {
             ok: true,
-            value: rawTx satisfies TxReturnType<HubChainKey, true> as TxReturnType<HubChainKey, Raw>,
+            value: txHash satisfies TxReturnType<HubChainKey, false> as TxReturnType<HubChainKey, Raw>,
           };
+        } catch (error) {
+          return { ok: false, error };
         }
-
-        const txHash = await _params.walletProvider.sendTransaction(rawTx);
-
-        return {
-          ok: true,
-          value: txHash satisfies TxReturnType<HubChainKey, false> as TxReturnType<HubChainKey, Raw>,
-        };
-      } catch (error) {
-        return { ok: false, error };
-      }
-    },
-    {
-      start: () => ({
-        srcChainKey: _params.params.srcChainKey,
-        srcAddress: _params.params.srcAddress,
-        fromToken: _params.params.fromToken,
-        toToken: _params.params.toToken,
-      }),
-      success: value => ({ txHash: value }),
-      failure: error => ({ code: isSodaxError(error) ? error.code : undefined }),
-    });
+      },
+      {
+        start: () => ({
+          srcChainKey: _params.params.srcChainKey,
+          srcAddress: _params.params.srcAddress,
+          fromToken: _params.params.fromToken,
+          toToken: _params.params.toToken,
+        }),
+        success: value => ({ txHash: value }),
+        failure: error => ({ code: isSodaxError(error) ? error.code : undefined }),
+      },
+    );
   }
 
   /**
@@ -877,4 +895,3 @@ export class PartnerFeeClaimService {
     }
   }
 }
-

@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import type { XToken } from '@sodax/dapp-kit';
 import { useRadixSearchInput } from '@/hooks/useRadixSearchInput';
+import { TokenIcon } from '@/components/shared/TokenIcon';
 
 export function SelectToken({
   tokens,
@@ -43,7 +44,10 @@ export function SelectToken({
         ) : (
           filtered.map(token => (
             <SelectItem key={`${token.address}-${token.symbol}`} value={token.symbol}>
-              {token.symbol}
+              <span className="flex items-center gap-2">
+                <TokenIcon symbol={token.symbol} />
+                {token.symbol}
+              </span>
             </SelectItem>
           ))
         )}

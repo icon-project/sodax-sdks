@@ -1,6 +1,6 @@
 # Chain keys
 
-20 supported chains. The `ChainKey` type is the union of every `ChainKeys.*` value. **`SpokeChainKey` is the same union — it includes Sonic.** The "spoke" naming refers to how feature services type their `srcChainKey` parameter (they accept the hub too — bridge / swap / staking etc. all run from Sonic as source via the hub-wallet abstraction). When you specifically need "EVM chains excluding the hub" use `EVM_SPOKE_ONLY_CHAIN_KEYS` / `isEvmSpokeOnlyChainKeyType`.
+21 supported chains. The `ChainKey` type is the union of every `ChainKeys.*` value. **`SpokeChainKey` is the same union — it includes Sonic.** The "spoke" naming refers to how feature services type their `srcChainKey` parameter (they accept the hub too — bridge / swap / staking etc. all run from Sonic as source via the hub-wallet abstraction). When you specifically need "EVM chains excluding the hub" use `EVM_SPOKE_ONLY_CHAIN_KEYS` / `isEvmSpokeOnlyChainKeyType`.
 
 | `ChainKeys.*` | String value | Family | Hub vs spoke | Address type |
 |---|---|---|---|---|
@@ -16,6 +16,7 @@
 | `LIGHTLINK_MAINNET` | `'lightlink'` | EVM | spoke | `0x${string}` |
 | `REDBELLY_MAINNET` | `'redbelly'` | EVM | spoke | `0x${string}` |
 | `KAIA_MAINNET` | `'0x2019.kaia'` | EVM | spoke | `0x${string}` |
+| `HEDERA_MAINNET` | `'hedera'` | EVM | spoke | `0x${string}` |
 | `SOLANA_MAINNET` | `'solana'` | SOLANA | spoke | base58 PublicKey string |
 | `SUI_MAINNET` | `'sui'` | SUI | spoke | `0x${string}` (32-byte) |
 | `STELLAR_MAINNET` | `'stellar'` | STELLAR | spoke | `G…` |
@@ -35,9 +36,9 @@
 
 | Type | What it is |
 |---|---|
-| `ChainKey` | Union of all `ChainKeys.*` values (20 chains). |
-| `SpokeChainKey` | The full union of all 20 chain keys, **including** `'sonic'` — identical to `ChainKey` (see the note at the top of this file). |
-| `EvmChainKey` | Subset of `ChainKey` for the 12 EVM chains. |
+| `ChainKey` | Union of all `ChainKeys.*` values (21 chains). |
+| `SpokeChainKey` | Same union as `ChainKey` — includes Sonic (21 chains). For "EVM chains excluding the hub" use `EvmSpokeOnlyChainKey`. |
+| `EvmChainKey` | Subset of `ChainKey` for the 13 EVM chains. |
 | `HubChainKey` | The literal `'sonic'`. |
 
 ### Chain-family helpers

@@ -62,7 +62,6 @@ import {
 import { buildOrderSummary, type Order } from '@/components/swaps/OrderStatus';
 import { appendOrder } from '@/lib/orderHistory';
 import { loadSwapsApiSelection, saveSwapsApiSelection } from '@/components/swaps-api/lib/lastSelection';
-import { SWAPS_API_CONFIG } from '@/components/swaps-api/lib/config';
 import { toIntentRequest, toXToken } from '@/components/swaps-api/lib/mappers';
 import {
   isSignableSwapsApiChain,
@@ -107,7 +106,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const [isDestBitcoinReady, setIsDestBitcoinReady] = useState(false);
 
   // Supported chains + tokens straight from the Swaps API.
-  const { data: tokensByChain } = useSwapsApiTokens({ params: { apiConfig: SWAPS_API_CONFIG } });
+  const { data: tokensByChain } = useSwapsApiTokens();
   const chainList = useMemo(() => Object.keys(tokensByChain ?? {}), [tokensByChain]);
 
   // Seed tokens once the map arrives — preferring the last-used symbol per chain, else the first.
@@ -205,7 +204,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     }
   }, [src.token, dst.token, src.chain, dst.chain, debouncedAmount]);
 
-  const quoteQuery = useSwapsApiQuote({ params: { body: quoteBody, apiConfig: SWAPS_API_CONFIG } });
+  const quoteQuery = useSwapsApiQuote({ params: { body: quoteBody } });
   const quote = quoteQuery.data;
 
   const exchangeRate = useMemo(() => {
@@ -227,7 +226,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
 
   // Deadline anchored to the hub clock — refetched when the intent is built.
   const deadlineQuery = useSwapsApiDeadline({
-    params: { query: { offsetSeconds: 300 }, apiConfig: SWAPS_API_CONFIG },
+    params: { query: { offsetSeconds: 300 } },
   });
 
   const buildIntentParams = async () => {
@@ -292,7 +291,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     data: allowance,
     isLoading: isAllowanceLoading,
     refetch: refetchAllowance,
-  } = useSwapsApiAllowance({ params: { body: intentParams, apiConfig: SWAPS_API_CONFIG } });
+  } = useSwapsApiAllowance({ params: { body: intentParams } });
   const hasAllowed = allowance?.valid === true;
 
   const { mutateAsyncSafe: approve } = useSwapsApiApprove();
@@ -345,7 +344,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     setIsApproving(true);
     try {
       // The API only builds the unsigned approval tx — signing and broadcasting happen here.
-      const result = await approve({ body: intentParams, apiConfig: SWAPS_API_CONFIG });
+      const result = await approve({ body: intentParams });
       if (!result.ok) {
         setApproveError(formatMutationFailureMessage(result.error, 'Approve failed'));
         return;
@@ -377,7 +376,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     setIsSwapping(true);
     try {
       // 1. The API builds the unsigned create-intent tx + intent + relay data.
-      const created = await createIntent({ body: intentParams, apiConfig: SWAPS_API_CONFIG });
+      const created = await createIntent({ body: intentParams });
       if (!created.ok) {
         setSwapError(formatMutationFailureMessage(created.error, 'Create intent failed'));
         return;
@@ -418,7 +417,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
         intent: toIntentRequest(intent),
         relayData: relayData.payload,
       };
-      const submitted = await submitTx({ request, apiConfig: SWAPS_API_CONFIG });
+      const submitted = await submitTx({ request });
       if (!submitted.ok) {
         setSwapError(formatMutationFailureMessage(submitted.error, 'Submit tx failed'));
         return;
@@ -429,7 +428,6 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
           mode: 'submit-tx',
           txHash: spokeTxHash,
           srcChainKey: src.chain,
-          apiBaseURL: SWAPS_API_CONFIG.baseURL,
           createdAt: Date.now(),
           summary: buildOrderSummary(
             src,

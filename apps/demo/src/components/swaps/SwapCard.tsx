@@ -32,6 +32,7 @@ import {
   useXBalances,
   useNearStorageGate,
   getSupportedSolverTokens,
+  getStagingSolverTokens,
   type CreateIntentParams,
   type SolverIntentQuoteRequest,
   type GetWalletProviderType,
@@ -54,14 +55,12 @@ import {
   useXService,
 } from '@sodax/wallet-sdk-react';
 import type { Order } from '@/components/swaps/OrderStatus';
-import { DEFAULT_SELECTED_CHAIN, useAppStore } from '@/zustand/useAppStore';
+import { DEFAULT_SELECTED_CHAIN, SolverEnv, useAppStore } from '@/zustand/useAppStore';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
 import { loadLastSelection, saveLastSelection } from '@/lib/lastSelection';
 import { appendOrder } from '@/lib/orderHistory';
 import { buildOrderSummary } from '@/components/swaps/OrderStatus';
 import { solverApiEndpointForEnv } from '@/constants';
-
-const SUBMIT_TX_API_CONFIG = { baseURL: 'https://canary-api.sodax.com/v1/bes' } as const;
 
 export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAction<Order[]>) => void }) {
   const { sodax } = useSodaxContext();
@@ -90,6 +89,12 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const destAccount = useXAccount({ xChainId: dst.chain });
   const destWalletProvider = useWalletProvider({ xChainId: dst.chain });
   const { openWalletModal, solverEnvironment } = useAppStore();
+  // Staging solver supports the production tokens PLUS the staging-only ones (getStagingSolverTokens);
+  // production/dev expose only the production set. Drive the token dropdowns off the selected env tab.
+  const getSolverTokens = useMemo(
+    () => (solverEnvironment === SolverEnv.Staging ? getStagingSolverTokens : getSupportedSolverTokens),
+    [solverEnvironment],
+  );
   const { mutateAsync: swap } = useSwap();
   const [sourceAmount, setSourceAmount] = useState<string>('');
   const [intentOrderPayload, setIntentOrderPayload] = useState<CreateIntentParams | undefined>(undefined);
@@ -149,11 +154,11 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   };
 
   const onSrcChainChange = (chainId: SpokeChainKey) => {
-    setSrc({ chain: chainId, token: getSupportedSolverTokens(chainId)[0] });
+    setSrc({ chain: chainId, token: getSolverTokens(chainId)[0] });
   };
 
   const onDestChainChange = (chainId: SpokeChainKey) => {
-    setDst({ chain: chainId, token: getSupportedSolverTokens(chainId)[0] });
+    setDst({ chain: chainId, token: getSolverTokens(chainId)[0] });
   };
 
   // Balance fetching- Fetch source token balance for the connected wallet
@@ -349,7 +354,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       relayData: relayData.payload,
     };
 
-    const submitResult = await submitSwapTx({ request, apiConfig: SUBMIT_TX_API_CONFIG });
+    const submitResult = await submitSwapTx({ request });
     if (!submitResult.ok) {
       console.error('Submit swap tx failed:', submitResult.error);
       return;
@@ -361,7 +366,6 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
         mode: 'submit-tx',
         txHash: spokeTxHash as string,
         srcChainKey: src.chain,
-        apiBaseURL: SUBMIT_TX_API_CONFIG.baseURL,
         createdAt: Date.now(),
         summary: buildOrderSummary(src, dst, sourceAmount, quote?.quoted_amount),
       }),
@@ -479,7 +483,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
             />
           </div>
           <SelectToken
-            tokens={getSupportedSolverTokens(src.chain)}
+            tokens={getSolverTokens(src.chain)}
             value={src.token?.symbol}
             onSelect={token => setSrc(prev => ({ ...prev, token }))}
             className="w-[110px]"
@@ -540,7 +544,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
             />
           </div>
           <SelectToken
-            tokens={getSupportedSolverTokens(dst.chain)}
+            tokens={getSolverTokens(dst.chain)}
             value={dst.token?.symbol}
             onSelect={token => setDst(prev => ({ ...prev, token }))}
             className="w-[110px]"

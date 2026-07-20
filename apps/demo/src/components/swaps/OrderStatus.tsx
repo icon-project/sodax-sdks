@@ -39,7 +39,6 @@ export type SubmitTxOrder = {
   mode: 'submit-tx';
   txHash: string;
   srcChainKey: string;
-  apiBaseURL?: string;
   createdAt?: number;
   summary: OrderSummary;
   final?: FinalStatus;
@@ -91,10 +90,10 @@ const TONE: Record<StatusTone, { pill: string; accent: string; dot: string }> = 
 // Only states that never change again. NOT_FOUND / error / *_NOT_FINISHED are transient (the solver
 // returns NOT_FOUND for a few seconds before it indexes a fresh intent), so they must keep polling —
 // caching them would freeze the card on a stale status.
-const TERMINAL_LABELS = new Set(['SOLVED', 'FAILED', 'executed', 'failed']);
+const TERMINAL_LABELS = new Set(['SOLVED', 'FAILED', 'solved', 'failed']);
 
 function toneFromLabel(label: string): StatusTone {
-  if (label === 'SOLVED' || label === 'executed') {
+  if (label === 'SOLVED' || label === 'solved') {
     return 'green';
   }
   if (label === 'FAILED' || label === 'NOT_FOUND' || label === 'failed' || label === 'error') {
@@ -362,16 +361,16 @@ function deriveSubmitTx(response: SubmitTxData | undefined): {
   if (!response) {
     return { label: 'pending', extraRows };
   }
-  const { status, result, failedAtStep, failureReason } = response.data;
-  if (status === 'executed' && result?.dstIntentTxHash) {
+  const { status, result, failedAtStep, failureReason, userMessage } = response.data;
+  if (status === 'solved' && result?.dstIntentTxHash) {
     extraRows.push({ label: 'Dst Intent Tx', value: result.dstIntentTxHash });
   }
-  if (status === 'executed' && result?.intent_hash) {
+  if (status === 'solved' && result?.intent_hash) {
     extraRows.push({ label: 'Intent Hash', value: result.intent_hash });
   }
   const error =
     status === 'failed'
-      ? [failedAtStep && `Failed at: ${failedAtStep}`, failureReason && `Reason: ${failureReason}`]
+      ? [failedAtStep && `Failed at: ${failedAtStep}`, failureReason && `Reason: ${failureReason}`, userMessage]
           .filter(Boolean)
           .join(' · ') || undefined
       : undefined;
@@ -387,9 +386,8 @@ function SubmitTxLiveCard({
   onDismiss?: () => void;
   onSettle: SettleFn;
 }) {
-  const apiConfig = useMemo(() => (order.apiBaseURL ? { baseURL: order.apiBaseURL } : undefined), [order.apiBaseURL]);
   const { data: statusResponse } = useSwapsApiSubmitTxStatus({
-    params: { txHash: order.txHash, srcChainKey: order.srcChainKey, apiConfig },
+    params: { txHash: order.txHash, srcChainKey: order.srcChainKey },
   });
 
   // Derive once (memoized on the React-Query data ref) and reuse in both render and the settle effect.

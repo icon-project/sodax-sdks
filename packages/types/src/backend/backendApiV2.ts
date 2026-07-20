@@ -594,7 +594,14 @@ export interface SubmitTxStatusQueryV2 {
 }
 
 /** Lifecycle status of a submitted swap tx. */
-export type SubmitSwapTxStatusV2 = 'pending' | 'relaying' | 'relayed' | 'posting_execution' | 'executed' | 'failed';
+export type SubmitSwapTxStatusV2 =
+  | 'pending'
+  | 'relaying'
+  | 'relayed'
+  | 'posting_execution'
+  | 'posted_execution'
+  | 'solved'
+  | 'failed';
 
 /** Lifecycle status of a cross-chain relay packet. */
 export type PacketDataStatusV2 = 'pending' | 'validating' | 'executing' | 'executed';
@@ -623,7 +630,7 @@ export interface PacketDataV2 {
   payload: string;
 }
 
-/** Processing result for a submitted swap tx (present when executed). */
+/** Processing result for a submitted swap tx (present when solved). */
 export interface SubmitTxStatusResultV2 {
   /** Destination intent tx hash. */
   dstIntentTxHash: string;
@@ -649,7 +656,7 @@ export interface SubmitTxStatusDataV2 {
   processingAttempts: number;
   /** ISO 8601 timestamp set when the swap exhausted its processing budget and was abandoned. */
   abandonedAt?: string;
-  /** Processing result (present when executed). */
+  /** Processing result (present when solved). */
   result?: SubmitTxStatusResultV2;
   /** User-facing hint when status is failed or the swap was abandoned. */
   userMessage?: string;

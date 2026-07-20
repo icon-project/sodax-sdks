@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import type { SwapTokenV2 } from '@sodax/dapp-kit';
 import { useRadixSearchInput } from '@/hooks/useRadixSearchInput';
+import { TokenIcon } from '@/components/shared/TokenIcon';
 
 // Searchable token dropdown for the Swaps API token map (SwapTokenV2). Mirrors
 // components/swaps/SelectToken but typed to the Swaps API token shape.
@@ -45,7 +46,10 @@ export function SelectToken({
         ) : (
           filtered.map(token => (
             <SelectItem key={`${token.address}-${token.symbol}`} value={token.symbol}>
-              {token.symbol}
+              <span className="flex items-center gap-2">
+                <TokenIcon symbol={token.symbol} />
+                {token.symbol}
+              </span>
             </SelectItem>
           ))
         )}

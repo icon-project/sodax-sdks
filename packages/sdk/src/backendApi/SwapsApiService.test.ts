@@ -5,10 +5,10 @@
  *   1. A single module-scope `new Sodax()` backs every test — `sodax.api.swaps` is the
  *      service under test. `vi.stubGlobal('fetch', ...)` intercepts every outbound call.
  *   2. URL construction, HTTP method, default vs override headers, query-string params,
- *      request-body serialization (incl. bigint → decimal string via `toJsonBody`), and
- *      valibot response validation are all asserted explicitly.
+ *      request-body serialization (incl. bigint → decimal string), and response validation
+ *      are all asserted explicitly. The service delegates the wire work to `@sodax/swaps-api`.
  *   3. Every method returns `Result<T>` — happy paths assert `{ ok: true, value }`,
- *      failures assert `{ ok: false }` with the expected error.
+ *      failures assert `{ ok: false }` with the expected error (a `SwapsApiError` on `cause`).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -22,6 +22,7 @@ import {
 import { Sodax } from '../shared/entities/Sodax.js';
 import { SwapsApiService } from './SwapsApiService.js';
 import { SodaxError } from '../errors/SodaxError.js';
+import { SwapsApiError } from '@sodax/swaps-api';
 
 // --- fetch stub -----------------------------------------------------------
 const mockFetch = vi.fn();
@@ -361,7 +362,7 @@ describe('SwapsApiService happy paths (validated responses)', () => {
       data: {
         txHash: '0xabc',
         srcChainKey: '0x38.bsc',
-        status: 'executed',
+        status: 'solved',
         processingAttempts: 1,
         result: { dstIntentTxHash: '0xdst' },
       },
@@ -381,8 +382,9 @@ describe('SwapsApiService happy paths (validated responses)', () => {
 });
 
 // =========================================================================
-// bigint request bodies — toJsonBody serializes bigint → decimal string so
-// JSON.stringify does not throw, and the backend receives string numerics.
+// bigint request bodies — the intent struct's bigint numerics serialize to
+// decimal strings so JSON.stringify does not throw and the backend receives
+// string numerics.
 // =========================================================================
 
 describe('SwapsApiService bigint body serialization', () => {
@@ -412,6 +414,53 @@ describe('SwapsApiService bigint body serialization', () => {
 });
 
 // =========================================================================
+// feeAmount stripping at the SDK↔wire boundary. `sodax.swaps.createIntent` returns
+// `Intent & FeeAmount`; callers pass that intent straight into the intent-carrying
+// endpoints. SwapsApiService drops the SDK-only `feeAmount` so the strict wire
+// serializer never sees the extra bigint. The augmented intent is built as a variable
+// (structurally assignable to IntentRequestV2 — the runtime path). Each case fails if
+// the strip is removed: serializeIntentRequest would throw before fetch, so no request
+// body would exist and result.ok would be false.
+// =========================================================================
+
+describe('SwapsApiService strips the SDK-only feeAmount before the wire serializer', () => {
+  const intentWithFee = { ...sampleIntentRequest, feeAmount: 12345n };
+
+  it('submitTx drops feeAmount from the serialized intent', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse({ success: true, data: { status: 'inserted', message: 'ok' } }));
+
+    const result = await sodax.api.swaps.submitTx({ ...sampleSubmitTxRequest, intent: intentWithFee });
+
+    expect(result.ok).toBe(true);
+    const parsed = JSON.parse(mockFetch.mock.calls[0]?.[1]?.body as string);
+    expect(parsed.intent.feeAmount).toBeUndefined();
+    expect(parsed.intent.minOutputAmount).toBe('1965353839071625320'); // allowlisted bigint still a string
+  });
+
+  it('cancelIntent drops feeAmount from the serialized intent', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse({ tx: { from: '0x1', to: '0x2', value: '0', data: '0x' } }));
+
+    const result = await sodax.api.swaps.cancelIntent({ srcChainKey: '0x38.bsc', intent: intentWithFee });
+
+    expect(result.ok).toBe(true);
+    const parsed = JSON.parse(mockFetch.mock.calls[0]?.[1]?.body as string);
+    expect(parsed.intent.feeAmount).toBeUndefined();
+    expect(parsed.intent.intentId).toBe('123456789');
+  });
+
+  it('getIntentHash drops feeAmount from the serialized intent', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse({ hash: '0xabc' }));
+
+    const result = await sodax.api.swaps.getIntentHash({ intent: intentWithFee });
+
+    expect(result.ok).toBe(true);
+    const parsed = JSON.parse(mockFetch.mock.calls[0]?.[1]?.body as string);
+    expect(parsed.intent.feeAmount).toBeUndefined();
+    expect(parsed.intent.deadline).toBe('0');
+  });
+});
+
+// =========================================================================
 // valibot validation failures — malformed bodies resolve to ok:false.
 // =========================================================================
 
@@ -430,6 +479,10 @@ describe('SwapsApiService response validation', () => {
         endpoint: '/swaps/tokens',
         reason: 'invalid_response_shape',
       });
+      // issues are flattened (v.flatten) to match BackendApiService — a plain object that survives
+      // SodaxError.toJSON, not a raw ValiError (which would sanitize down to just name + message).
+      expect(err.context?.issues).toBeTypeOf('object');
+      expect(err.context?.issues).not.toBeInstanceOf(Error);
     }
   });
 
@@ -455,15 +508,32 @@ describe('SwapsApiService response validation', () => {
       expect(err.feature).toBe('backend');
     }
   });
+
+  it('does NOT mislabel a request-side validation error (stray bigint) as invalid_response_shape', async () => {
+    // A bigint planted in a non-numeric intent field makes serializeIntentRequest throw
+    // VALIDATION_ERROR before any HTTP call — a caller bug, not a backend response-shape fault.
+    const badIntent = { ...sampleIntentRequest, creator: 5n as unknown as string };
+    const result = await sodax.api.swaps.cancelIntent({ srcChainKey: '0x38.bsc', intent: badIntent });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const err = result.error as SodaxError;
+      expect(err.code).toBe('EXTERNAL_API_ERROR');
+      expect(err.context?.code).toBe('VALIDATION_ERROR');
+      expect(err.context?.reason).toBeUndefined(); // not tagged as a response-shape problem
+    }
+    expect(mockFetch).not.toHaveBeenCalled(); // failed before reaching the network
+  });
 });
 
 // =========================================================================
-// Error propagation — HTTP + timeout failures resolve to ok:false.
+// Error propagation — HTTP, timeout, and network failures resolve to ok:false
+// with a canonical SodaxError whose `cause` is the underlying SwapsApiError.
+// Idempotent calls retry transient failures (delegated to @sodax/swaps-api).
 // =========================================================================
 
 describe('SwapsApiService error propagation', () => {
-  it('wraps a non-2xx response as EXTERNAL_API_ERROR (cause carries HTTP_REQUEST_FAILED)', async () => {
-    mockFetch.mockResolvedValueOnce(httpErrorResponse(502, 'Bad Gateway'));
+  it('wraps a non-retryable non-2xx response as EXTERNAL_API_ERROR (cause is a SwapsApiError HTTP_ERROR)', async () => {
+    mockFetch.mockResolvedValueOnce(httpErrorResponse(400, 'Bad Request'));
     const result = await sodax.api.swaps.getTokens();
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -473,33 +543,51 @@ describe('SwapsApiService error propagation', () => {
       expect(err.feature).toBe('backend');
       // Distinguish swaps-client errors from BackendApiService errors on the transport (catch) path.
       expect(err.context?.api).toBe('swaps');
-      expect(err.message).toBe('HTTP_REQUEST_FAILED');
-      expect((err.cause as Error).message).toBe('HTTP_REQUEST_FAILED');
+      expect(err.context?.status).toBe(400);
+      expect(err.cause).toBeInstanceOf(SwapsApiError);
+      expect((err.cause as SwapsApiError).code).toBe('HTTP_ERROR');
     }
+    expect(mockFetch).toHaveBeenCalledOnce(); // 400 is not retryable
   });
 
-  it('wraps a timeout abort as EXTERNAL_API_ERROR (message REQUEST_TIMEOUT)', async () => {
-    mockFetch.mockImplementationOnce(abortFetchImpl);
+  it('retries an idempotent call on a transient 503, then succeeds', async () => {
+    mockFetch
+      .mockResolvedValueOnce(httpErrorResponse(503, 'Service Unavailable'))
+      .mockResolvedValueOnce(okResponse(tokensResponse));
+    const result = await sodax.api.swaps.getTokens();
+    expect(result).toEqual({ ok: true, value: tokensResponse });
+    expect(mockFetch).toHaveBeenCalledTimes(2); // one retry after the 503
+  });
+
+  it('wraps a timed-out call as EXTERNAL_API_ERROR with a TIMEOUT_ERROR cause, without retrying', async () => {
+    mockFetch.mockImplementation(abortFetchImpl);
     const result = await sodax.api.swaps.getTokens({ timeout: 5 });
     expect(result.ok).toBe(false);
     if (!result.ok) {
       const err = result.error as SodaxError;
       expect(err.code).toBe('EXTERNAL_API_ERROR');
-      expect(err.message).toBe('REQUEST_TIMEOUT');
+      // The wire code is surfaced in context so a timeout is distinguishable from a network drop.
+      expect(err.context?.code).toBe('TIMEOUT_ERROR');
+      expect(err.cause).toBeInstanceOf(SwapsApiError);
+      expect((err.cause as SwapsApiError).code).toBe('TIMEOUT_ERROR');
     }
+    // timeout is an overall deadline: it stops the call rather than burning the idempotent retry budget
+    expect(mockFetch).toHaveBeenCalledOnce();
   });
 
-  it('wraps a raw network error as EXTERNAL_API_ERROR with the original error as cause', async () => {
+  it('wraps a raw network error as EXTERNAL_API_ERROR, preserving the original error on the cause chain', async () => {
     const networkError = new Error('Network down');
-    mockFetch.mockRejectedValueOnce(networkError);
+    mockFetch.mockRejectedValue(networkError);
     const result = await sodax.api.swaps.getTokens();
     expect(result.ok).toBe(false);
     if (!result.ok) {
       const err = result.error as SodaxError;
       expect(err.code).toBe('EXTERNAL_API_ERROR');
-      expect(err.cause).toBe(networkError);
-      expect(err.message).toBe('Network down');
+      expect(err.cause).toBeInstanceOf(SwapsApiError);
+      // The original fetch error is preserved one level deeper, on the SwapsApiError's cause.
+      expect((err.cause as SwapsApiError).cause).toBe(networkError);
     }
+    expect(mockFetch).toHaveBeenCalledTimes(3); // network errors are retryable for idempotent calls
   });
 });
 
