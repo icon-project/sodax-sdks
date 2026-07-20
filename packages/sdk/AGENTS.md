@@ -29,7 +29,8 @@ src/
 ├── migration/               # legacy ecosystem token migration flows
 ├── partner/                 # partner fee operations
 ├── recovery/                # hub-wallet asset recovery
-├── backendApi/              # backend API client
+├── gasless/                 # gasless (EIP-7702 + ERC-4337) EOA spoke deposits — prepare/submit brain
+├── backendApi/              # backend API client (incl. sodax.api.gasless HTTP client)
 └── e2e-tests/               # SDK-level E2E tests
 ```
 

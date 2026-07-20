@@ -1,4 +1,4 @@
-import { DEFAULT_BACKEND_API_TIMEOUT, type SodaxLogger } from '@sodax/types';
+import { DEFAULT_BACKEND_API_TIMEOUT, type Result, type SodaxLogger } from '@sodax/types';
 
 /**
  * Shape used to type certain backend responses that include a `data` envelope.
@@ -30,6 +30,18 @@ export type RequestOverrideConfig = {
   baseURL?: string;
   timeout?: number;
   headers?: Record<string, string>;
+};
+
+/** Map an API interface (methods `(...args) => Promise<R>`) to the SDK-side shape where each returns `Promise<Result<R>>` (backend clients never throw), kept in lockstep with the wire interface. */
+export type Resultified<T> = {
+  [K in keyof T]: T[K] extends (...args: infer A) => Promise<infer R> ? (...args: A) => Promise<Result<R>> : never;
+};
+
+/** {@link Resultified} plus an optional trailing {@link RequestOverrideConfig} on every method (per-call base URL / headers / timeout); stays assignable to {@link Resultified}. */
+export type ResultifiedWithConfig<T> = {
+  [K in keyof T]: T[K] extends (...args: infer A) => Promise<infer R>
+    ? (...args: [...A, config?: RequestOverrideConfig]) => Promise<Result<R>>
+    : never;
 };
 
 export type MakeRequestParams = {

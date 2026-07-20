@@ -16,10 +16,12 @@
     "lint": "biome lint . --write",
     "start:prod": "pnpm run build && serve -s dist",
     "mock-intake": "node scripts/mock-intake.mjs",
+    "paymaster-proxy": "node scripts/paymaster-proxy.mjs",
     "clean": "rm -rf node_modules && rm -rf dist && rm -rf .turbo"
   },
   "dependencies": {
     "@bangjelkoski/node-stdlib-browser": "^0.0.1",
+    "@metamask/delegation-toolkit": "0.13.0",
     "@radix-ui/react-dialog": "^1.1.14",
     "@radix-ui/react-label": "^2.1.0",
     "@radix-ui/react-scroll-area": "^1.2.3",

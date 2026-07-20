@@ -6,7 +6,6 @@ export type SendCallsExecutorParams = {
   wallet: IGaslessCapableEvmWalletProvider;
   /** The atomic batch — `[approve, transfer]`. */
   calls: readonly GaslessCall[];
-  /** ERC-7677 paymaster endpoint (sponsors the gas). */
   paymasterUrl: string;
   /** Optional paymaster context (e.g. Pimlico `sponsorshipPolicyId`). */
   paymasterContext?: Record<string, unknown>;
@@ -14,14 +13,7 @@ export type SendCallsExecutorParams = {
   chainId: number;
 };
 
-/**
- * Mode A execution: submit the batched `[approve, transfer]` through the connected wallet via
- * EIP-5792 `wallet_sendCalls`, requesting atomic execution and ERC-7677 paymaster sponsorship, then
- * poll `wallet_getCallsStatus` for the on-chain tx hash.
- *
- * @returns the on-chain transaction hash of the confirmed bundle, for relay submission.
- * @throws if the bundle does not confirm (never returns a hash for a partial/failed batch).
- */
+/** Mode A execution: submit the `[approve, transfer]` batch through the connected wallet via EIP-5792 `wallet_sendCalls` (atomic + ERC-7677 paymaster), then poll `wallet_getCallsStatus`. Returns the confirmed bundle's on-chain tx hash; throws if it does not confirm. */
 export async function executeSendCalls(params: SendCallsExecutorParams): Promise<{ srcChainTxHash: string }> {
   const { wallet, calls, paymasterUrl, paymasterContext, chainId } = params;
 
@@ -35,8 +27,7 @@ export async function executeSendCalls(params: SendCallsExecutorParams): Promise
   });
 
   const status = await wallet.waitForCallsStatus(id);
-  // Confirmed on the string status; `statusCode === 200` is a defensive fallback for wallets that
-  // omit the string field. A reverted batch reports 'failure' / 500 and is rejected below.
+  // `statusCode === 200` is a defensive fallback for wallets that omit the string status.
   const confirmed = status.status === 'success' || status.statusCode === 200;
   const receipt = status.receipts?.at(-1);
   if (!confirmed || !receipt?.transactionHash) {

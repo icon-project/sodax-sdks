@@ -234,11 +234,7 @@ export function isEvmWalletProviderType(walletProvider: IWalletProvider): wallet
   return walletProvider.chainType === 'EVM';
 }
 
-/**
- * Refines an EVM wallet provider to the EIP-5792 capability subtype by duck-typing the three
- * optional methods. Used by the gasless service to decide whether an external wallet can do a
- * `wallet_sendCalls` (Mode A) atomic sponsored batch.
- */
+/** Refine an EVM wallet provider to the EIP-5792 capability subtype by duck-typing its three optional methods (for the gasless Mode-A `wallet_sendCalls` path). */
 export function isGaslessCapableEvmWalletProviderType(
   walletProvider: IWalletProvider,
 ): walletProvider is IGaslessCapableEvmWalletProvider {

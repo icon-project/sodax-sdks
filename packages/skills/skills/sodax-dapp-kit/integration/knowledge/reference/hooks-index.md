@@ -57,8 +57,12 @@ Comprehensive hook table across 12 feature domains. Use this when you know the f
 
 | Hook | Type | Purpose |
 |---|---|---|
-| `useGaslessDeposit` | Mutation | Gasless (EIP-7702 sponsored) spoke deposit — Mode A (external wallet) or Mode B (SDK key); opt-in gas fallback |
-| `useGaslessCapabilities` | Query | Resolve whether a chain + signer supports gasless (`resolvedMode`), to gate the UI |
+| `useGaslessPrepare` | Mutation | Build the sponsored UserOp and return the EOA sign-requests (hash + optional EIP-7702 authorization); `source: 'brain' \| 'api'` |
+| `useGaslessSubmit` | Mutation | Attach the EOA signature(s) and broadcast; verifies recovery to the sender; returns the spoke tx hash |
+| `useGaslessSendCalls` | Mutation | Mode A — external EIP-5792 wallet executes the sponsored batch (`wallet_sendCalls`) |
+| `useGaslessRelay` | Mutation | Complete the hub-delivery tail after an execution-only submit / sendCalls |
+| `useGaslessCapabilities` | Query | EOA eligibility for a chain + sender (prepare/submit gating); `source: 'brain' \| 'api'` |
+| `useGaslessWalletCapabilities` | Query | Mode A: whether an external EIP-5792 wallet supports atomic + paymaster (`resolvedMode`) |
 
 ## Staking
 

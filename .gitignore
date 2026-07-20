@@ -30,3 +30,7 @@ scripts/find_malicious_npm_packages.sh
 skills-lock.json
 
 Audits/sdk
+
+# Local package tarballs from scripts/pack-sodax-local.sh (installable file: deps for out-of-repo testing)
+sodax-pack/
+*.tgz

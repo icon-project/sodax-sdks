@@ -6,6 +6,8 @@
 export type { ApiResponse, RequestConfig, RequestOverrideConfig } from './api-utils.js';
 export * from './BackendApiService.js';
 export * from './SwapsApiService.js';
+export * from './GaslessApiService.js';
+export * from './GaslessSwapApiService.js';
 
 // Re-export the swaps wire failure taxonomy from the wrapped @sodax/swaps-api client so consumers
 // can narrow the failure `SwapsApiService` surfaces — `error.context.code` (a `SwapsApiErrorCode`)

@@ -113,6 +113,25 @@ export default function Providers({ children }: { children: ReactNode }) {
   const sodaxConfig: SodaxOptions = useMemo(() => {
     // Opt-in observability sink (Sentry + Datadog), enabled via VITE_ENABLE_OBSERVABILITY.
     // `undefined` when off, which leaves the SDK on its default console logger.
+
+    // Gasless (EIP-7702) Mode-A sponsorship endpoint — two ways to supply it:
+    //  - DIRECT: VITE_PIMLICO_API_KEY → the Pimlico paymaster URL is synthesized IN THE BROWSER (key exposed).
+    //  - PROXY:  VITE_PAYMASTER_PROXY_URL (absolute URL) → the wallet hits YOUR backend proxy, which adds the
+    //            key server-side and forwards to Pimlico (key never in the browser). Run the reference proxy
+    //            with `pnpm paymaster-proxy` (see apps/demo/AGENTS.md). Set one or the other.
+    const paymasterProxyUrl = import.meta.env.VITE_PAYMASTER_PROXY_URL;
+    const gaslessChains = {
+      [ChainKeys.BASE_MAINNET]: { supports7702: true },
+      [ChainKeys.ARBITRUM_MAINNET]: { supports7702: true },
+      [ChainKeys.OPTIMISM_MAINNET]: { supports7702: true },
+      [ChainKeys.POLYGON_MAINNET]: { supports7702: true },
+      [ChainKeys.BSC_MAINNET]: { supports7702: true },
+      [ChainKeys.ETHEREUM_MAINNET]: { supports7702: true },
+    };
+    const gasless = paymasterProxyUrl
+      ? { paymasterProxyUrl, chains: gaslessChains }
+      : { pimlicoApiKey: import.meta.env.VITE_PIMLICO_API_KEY, chains: gaslessChains };
+
     return {
       api: {
         baseApiConfig: {
@@ -128,19 +147,13 @@ export default function Providers({ children }: { children: ReactNode }) {
       // leaves the SDK on its default (analytics off).
       analytics: createDemoAnalytics() ?? false,
       solver: configMap[solverEnvironment],
-      // Gasless (EIP-7702 sponsored) deposits. Client-side secret: set VITE_PIMLICO_API_KEY to enable —
-      // paymaster/bundler URLs are synthesized per chain from it. Chains without EIP-7702 stay disabled.
-      gasless: {
-        pimlicoApiKey: import.meta.env.VITE_PIMLICO_API_KEY,
-        chains: {
-          [ChainKeys.BASE_MAINNET]: { supports7702: true },
-          [ChainKeys.ARBITRUM_MAINNET]: { supports7702: true },
-          [ChainKeys.OPTIMISM_MAINNET]: { supports7702: true },
-          [ChainKeys.POLYGON_MAINNET]: { supports7702: true },
-          [ChainKeys.BSC_MAINNET]: { supports7702: true },
-          [ChainKeys.ETHEREUM_MAINNET]: { supports7702: true },
-        },
-      },
+      // Gasless (EIP-7702) config — direct (Pimlico key in browser) or proxy (key on your backend); see above.
+      gasless,
+      // Opt-in: make the Solver page's `useSwap` run gasless (EIP-5792 Mode A) when the connected
+      // wallet + chain + token are eligible — otherwise it transparently runs the normal swap. OFF by
+      // default so normal swap QA is unaffected when Pimlico isn't configured/funded (once the gasless
+      // path commits it does NOT fall back). Set VITE_ENABLE_GASLESS_SWAPS=true (with VITE_PIMLICO_API_KEY).
+      swapsOptions: { gasless: import.meta.env.VITE_ENABLE_GASLESS_SWAPS === 'true' },
       chains: {
         [ChainKeys.SONIC_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.SONIC_MAINNET] },
         [ChainKeys.AVALANCHE_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.AVALANCHE_MAINNET] },

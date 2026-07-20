@@ -2948,3 +2948,307 @@ describe('SwapService.swap — backend 2-step (useBackendSubmitTx)', () => {
     }
   });
 });
+
+// =========================================================================
+// Batch 8: swap — opt-in gasless Mode A (swapsOptions.gasless).
+// =========================================================================
+
+describe('SwapService.swap — gasless Mode A (swapsOptions.gasless)', () => {
+  // Flag ON + a gasless-configured chain (pimlicoApiKey + supports7702) so `config.gasless.isSupported`
+  // passes. The gasless path relays via the SAME `spoke.verifyTxHash` + `relayTxAndWaitPacket` +
+  // `postExecution` primitives as the client-side path, so per-test we stub createIntent (raw), the
+  // gasless brain (getWalletCapabilities/sendCalls), verifyTxHash, and the module-level relay/postExec mocks.
+  const sodaxGL = new Sodax({
+    logger: 'silent',
+    swapsOptions: { gasless: true },
+    gasless: { pimlicoApiKey: 'test-key', chains: { [ChainKeys.BASE_MAINNET]: { supports7702: true } } },
+  });
+
+  // A wallet that passes `isGaslessCapableEvmWalletProviderType` (has the three EIP-5792 methods).
+  const mockGaslessWallet = {
+    chainType: 'EVM',
+    sendTransaction: vi.fn(),
+    getWalletAddress: vi.fn().mockResolvedValue('0x1111111111111111111111111111111111111111'),
+    waitForTransactionReceipt: vi.fn(),
+    getCapabilities: vi.fn(),
+    sendCalls: vi.fn(),
+    waitForCallsStatus: vi.fn(),
+  } as unknown as IEvmWalletProvider;
+
+  it('routes an eligible swap through Mode A (createIntent raw → sendCalls → verify → relay → postExecution), forwarding extras + skipSimulation, no client-side broadcast', async () => {
+    const partnerFee = { address: '0x9999999999999999999999999999999999999999', percentage: 100 } as const;
+    const intent = makeIntent(ChainKeys.BASE_MAINNET);
+    const createIntentSpy = vi.spyOn(sodaxGL.swaps, 'createIntent').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        tx: '0xraw' as never,
+        intent: { ...intent, feeAmount: 0n },
+        relayData: { address: intent.creator, payload: '0xpay' } as never,
+      },
+    } as never);
+    vi.spyOn(sodaxGL.gasless, 'getWalletCapabilities').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        chainKey: ChainKeys.BASE_MAINNET,
+        configured: true,
+        atomicSupported: true,
+        paymasterSupported: true,
+        resolvedMode: 'walletCalls',
+      },
+    });
+    const sendCallsSpy = vi.spyOn(sodaxGL.gasless, 'sendCalls').mockResolvedValueOnce({
+      ok: true,
+      value: { srcChainTxHash: '0xGLsrc', relayData: { address: intent.creator, payload: '0xpay' } as never },
+    });
+    const verifySpy = vi.spyOn(sodaxGL.spoke, 'verifyTxHash').mockResolvedValueOnce({ ok: true, value: true });
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xGLdst' } });
+    mocks.solverPostExecution.mockResolvedValueOnce({
+      ok: true,
+      value: { answer: 'OK', intent_hash: '0xGLHASH' } as never,
+    });
+
+    const params = intentInput(ChainKeys.BASE_MAINNET);
+    const result = await sodaxGL.swaps.swap({
+      params,
+      raw: false,
+      walletProvider: mockGaslessWallet,
+      skipSimulation: true,
+      extras: { partnerFee },
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.intentDeliveryInfo.srcTxHash).toBe('0xGLsrc');
+      expect(result.value.intentDeliveryInfo.dstTxHash).toBe('0xGLdst');
+      expect(result.value.solverExecutionResponse.intent_hash).toBe('0xGLHASH');
+    }
+    // extras (per-call partnerFee override) + skipSimulation must reach the raw createIntent — otherwise the
+    // sponsored deposit encodes the default fee, diverging from the quote the user agreed to.
+    expect(createIntentSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ raw: true, skipSimulation: true, extras: { partnerFee } }),
+    );
+    // The sponsored deposit must carry the INPUT token + amount and the hub to/data from the raw intent.
+    expect(sendCallsSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        srcChainKey: ChainKeys.BASE_MAINNET,
+        srcAddress: params.srcAddress,
+        token: params.inputToken,
+        amount: params.inputAmount,
+        to: intent.creator,
+        data: '0xpay',
+      }),
+    );
+    // Relay uses the sponsored deposit's spoke tx hash, verified first.
+    expect(verifySpy).toHaveBeenCalledWith(expect.objectContaining({ txHash: '0xGLsrc' }));
+    expect(mocks.relayTxAndWaitPacket).toHaveBeenCalledWith(expect.objectContaining({ srcTxHash: '0xGLsrc' }));
+  });
+
+  it('is terminal on a sendCalls failure — returns the error and does NOT fall back to a client-side broadcast (no double-deposit)', async () => {
+    const intent = makeIntent(ChainKeys.BASE_MAINNET);
+    const createIntentSpy = vi.spyOn(sodaxGL.swaps, 'createIntent').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        tx: '0xraw' as never,
+        intent: { ...intent, feeAmount: 0n },
+        relayData: { address: intent.creator, payload: '0xpay' } as never,
+      },
+    } as never);
+    vi.spyOn(sodaxGL.gasless, 'getWalletCapabilities').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        chainKey: ChainKeys.BASE_MAINNET,
+        configured: true,
+        atomicSupported: true,
+        paymasterSupported: true,
+        resolvedMode: 'walletCalls',
+      },
+    });
+    const sendCallsSpy = vi.spyOn(sodaxGL.gasless, 'sendCalls').mockResolvedValueOnce({
+      ok: false,
+      error: new SodaxError('EXECUTION_FAILED', 'user rejected sendCalls', { feature: 'gasless' }),
+    } as never);
+
+    const result = await sodaxGL.swaps.swap({
+      params: intentInput(ChainKeys.BASE_MAINNET),
+      raw: false,
+      walletProvider: mockGaslessWallet,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(sendCallsSpy).toHaveBeenCalledOnce();
+    // createIntent ran ONLY in raw mode (never a second raw:false broadcast) and no relay/postExec fallback fired.
+    expect(createIntentSpy).toHaveBeenCalledTimes(1);
+    expect(createIntentSpy).toHaveBeenCalledWith(expect.objectContaining({ raw: true }));
+    expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
+    expect(mocks.solverPostExecution).not.toHaveBeenCalled();
+  });
+
+  it('surfaces the relay code (RELAY_TIMEOUT) unchanged on a gasless relay failure and does not notify the solver', async () => {
+    const intent = makeIntent(ChainKeys.BASE_MAINNET);
+    vi.spyOn(sodaxGL.swaps, 'createIntent').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        tx: '0xraw' as never,
+        intent: { ...intent, feeAmount: 0n },
+        relayData: { address: intent.creator, payload: '0xpay' } as never,
+      },
+    } as never);
+    vi.spyOn(sodaxGL.gasless, 'getWalletCapabilities').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        chainKey: ChainKeys.BASE_MAINNET,
+        configured: true,
+        atomicSupported: true,
+        paymasterSupported: true,
+        resolvedMode: 'walletCalls',
+      },
+    });
+    vi.spyOn(sodaxGL.gasless, 'sendCalls').mockResolvedValueOnce({
+      ok: true,
+      value: { srcChainTxHash: '0xGLsrc', relayData: { address: intent.creator, payload: '0xpay' } as never },
+    });
+    vi.spyOn(sodaxGL.spoke, 'verifyTxHash').mockResolvedValueOnce({ ok: true, value: true });
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: false, error: new Error('RELAY_TIMEOUT') });
+
+    const result = await sodaxGL.swaps.swap({
+      params: intentInput(ChainKeys.BASE_MAINNET),
+      raw: false,
+      walletProvider: mockGaslessWallet,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      // Must stay RELAY_TIMEOUT (feature 'swap') — same contract as the client-side path — not collapse to EXECUTION_FAILED.
+      expect(result.error.code).toBe('RELAY_TIMEOUT');
+      expect(result.error.context?.relayCode).toBe('RELAY_TIMEOUT');
+    }
+    // Terminal: no solver notify after a failed relay.
+    expect(mocks.solverPostExecution).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the normal client-side swap when the wallet is not EIP-5792 capable', async () => {
+    const intent = makeIntent(ChainKeys.BASE_MAINNET);
+    vi.spyOn(sodaxGL.swaps, 'createIntent').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        tx: '0xspokeTx' as never,
+        intent: { ...intent, feeAmount: 0n },
+        relayData: { address: intent.creator, payload: '0xpay' } as never,
+      },
+    } as never);
+    vi.spyOn(sodaxGL.spoke, 'verifyTxHash').mockResolvedValueOnce({ ok: true, value: true });
+    const sendCallsSpy = vi.spyOn(sodaxGL.gasless, 'sendCalls');
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xNORMdst' } });
+    mocks.solverPostExecution.mockResolvedValueOnce({ ok: true, value: { answer: 'OK' } as never });
+
+    const result = await sodaxGL.swaps.swap({
+      params: intentInput(ChainKeys.BASE_MAINNET),
+      raw: false,
+      walletProvider: mockEvmProvider, // lacks the EIP-5792 methods → ineligible
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.intentDeliveryInfo.dstTxHash).toBe('0xNORMdst');
+    expect(sendCallsSpy).not.toHaveBeenCalled();
+    expect(mocks.relayTxAndWaitPacket).toHaveBeenCalledOnce();
+  });
+
+  it('does not go gasless when the input token is the native token (ERC20-only gate) — takes the normal path', async () => {
+    const nativeToken = sodaxGL.config.getChainConfig(ChainKeys.BASE_MAINNET).nativeToken;
+    const intent = makeIntent(ChainKeys.BASE_MAINNET);
+    vi.spyOn(sodaxGL.swaps, 'createIntent').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        tx: '0xspokeTx' as never,
+        intent: { ...intent, feeAmount: 0n },
+        relayData: { address: intent.creator, payload: '0xpay' } as never,
+      },
+    } as never);
+    vi.spyOn(sodaxGL.spoke, 'verifyTxHash').mockResolvedValueOnce({ ok: true, value: true });
+    const capsSpy = vi.spyOn(sodaxGL.gasless, 'getWalletCapabilities');
+    const sendCallsSpy = vi.spyOn(sodaxGL.gasless, 'sendCalls');
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xNORMdst' } });
+    mocks.solverPostExecution.mockResolvedValueOnce({ ok: true, value: { answer: 'OK' } as never });
+
+    const result = await sodaxGL.swaps.swap({
+      params: { ...intentInput(ChainKeys.BASE_MAINNET), inputToken: nativeToken },
+      raw: false,
+      walletProvider: mockGaslessWallet,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.intentDeliveryInfo.dstTxHash).toBe('0xNORMdst');
+    // Native input fails the ERC20 gate before the wallet-capability probe even runs → normal path.
+    expect(capsSpy).not.toHaveBeenCalled();
+    expect(sendCallsSpy).not.toHaveBeenCalled();
+    expect(mocks.relayTxAndWaitPacket).toHaveBeenCalledOnce();
+  });
+
+  it('does not go gasless on a chain that is not gasless-configured (isSupported gate) — takes the normal path', async () => {
+    // sodaxGL only configures BASE for gasless; ARBITRUM is an EVM spoke but not gasless-configured.
+    const intent = makeIntent(ChainKeys.ARBITRUM_MAINNET);
+    vi.spyOn(sodaxGL.swaps, 'createIntent').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        tx: '0xspokeTx' as never,
+        intent: { ...intent, feeAmount: 0n },
+        relayData: { address: intent.creator, payload: '0xpay' } as never,
+      },
+    } as never);
+    vi.spyOn(sodaxGL.spoke, 'verifyTxHash').mockResolvedValueOnce({ ok: true, value: true });
+    const capsSpy = vi.spyOn(sodaxGL.gasless, 'getWalletCapabilities');
+    const sendCallsSpy = vi.spyOn(sodaxGL.gasless, 'sendCalls');
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xNORMdst' } });
+    mocks.solverPostExecution.mockResolvedValueOnce({ ok: true, value: { answer: 'OK' } as never });
+
+    const result = await sodaxGL.swaps.swap({
+      params: intentInput(ChainKeys.ARBITRUM_MAINNET),
+      raw: false,
+      walletProvider: mockGaslessWallet,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.intentDeliveryInfo.dstTxHash).toBe('0xNORMdst');
+    expect(capsSpy).not.toHaveBeenCalled();
+    expect(sendCallsSpy).not.toHaveBeenCalled();
+    expect(mocks.relayTxAndWaitPacket).toHaveBeenCalledOnce();
+  });
+
+  it('never attempts gasless when swapsOptions.gasless is false — even on a gasless-configured chain with a capable wallet', async () => {
+    // Gasless is fully CONFIGURED (pimlicoApiKey + supports7702) but the swaps toggle is OFF, so the flag
+    // itself is what gates the path — not a missing config. A regression defaulting gaslessSwap to true
+    // would make this fail (the weaker default-instance form couldn't catch that).
+    const sodaxGLoff = new Sodax({
+      logger: 'silent',
+      swapsOptions: { gasless: false },
+      gasless: { pimlicoApiKey: 'test-key', chains: { [ChainKeys.BASE_MAINNET]: { supports7702: true } } },
+    });
+    const intent = makeIntent(ChainKeys.BASE_MAINNET);
+    vi.spyOn(sodaxGLoff.swaps, 'createIntent').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        tx: '0xspokeTx' as never,
+        intent: { ...intent, feeAmount: 0n },
+        relayData: { address: intent.creator, payload: '0xpay' } as never,
+      },
+    } as never);
+    vi.spyOn(sodaxGLoff.spoke, 'verifyTxHash').mockResolvedValueOnce({ ok: true, value: true });
+    const capsSpy = vi.spyOn(sodaxGLoff.gasless, 'getWalletCapabilities');
+    const sendCallsSpy = vi.spyOn(sodaxGLoff.gasless, 'sendCalls');
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xNORMdst' } });
+    mocks.solverPostExecution.mockResolvedValueOnce({ ok: true, value: { answer: 'OK' } as never });
+
+    const result = await sodaxGLoff.swaps.swap({
+      params: intentInput(ChainKeys.BASE_MAINNET),
+      raw: false,
+      walletProvider: mockGaslessWallet,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.intentDeliveryInfo.dstTxHash).toBe('0xNORMdst');
+    // Flag off short-circuits before the eligibility probe even runs, and the sponsored send never happens.
+    expect(capsSpy).not.toHaveBeenCalled();
+    expect(sendCallsSpy).not.toHaveBeenCalled();
+    expect(mocks.relayTxAndWaitPacket).toHaveBeenCalledOnce();
+  });
+});

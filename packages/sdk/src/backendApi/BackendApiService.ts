@@ -23,7 +23,9 @@ import { consoleLogger } from '../shared/logger.js';
 import * as v from 'valibot';
 import { makeRequest, type RequestConfig, type RequestOverrideConfig } from './api-utils.js';
 import { SwapsApiService } from './SwapsApiService.js';
-import { resolveBaseApiConfig, resolveSwapsApiConfig } from './apiConfig.js';
+import { GaslessApiService } from './GaslessApiService.js';
+import { GaslessSwapApiService } from './GaslessSwapApiService.js';
+import { resolveBaseApiConfig, resolveGaslessApiConfig, resolveSwapsApiConfig } from './apiConfig.js';
 import * as schemas from './backendApiSchemas.js';
 import { SodaxError } from '../errors/SodaxError.js';
 
@@ -180,6 +182,8 @@ export interface MoneyMarketBorrowers {
 export class BackendApiService implements IConfigApiV1 {
   // sub-services exposing domain-specific APIs
   public readonly swaps: SwapsApiService;
+  public readonly gasless: GaslessApiService;
+  public readonly gaslessSwap: GaslessSwapApiService;
 
   // resolved base-API slice of the ApiConfig union (flat config, or its `baseApiConfig`)
   private readonly config: BaseApiConfig;
@@ -194,6 +198,13 @@ export class BackendApiService implements IConfigApiV1 {
     // sub-service its concrete SwapsApiConfig plus the shared logger — it does not see the union,
     // and must route diagnostics through the same consumer-selected sink as the rest of the SDK.
     this.swaps = new SwapsApiService(resolveSwapsApiConfig(config), this.logger);
+    // Same wiring for the gasless API — sub-service gets its concrete GaslessApiConfig + shared logger.
+    // The gasless-swap endpoints (`/gasless-swap/*`) are served by the same gasless backend, so both
+    // sub-services share ONE resolved GaslessApiConfig (each copies its own headers in its ctor and only
+    // reads baseURL/timeout, so sharing the object is safe).
+    const gaslessApiConfig = resolveGaslessApiConfig(config);
+    this.gasless = new GaslessApiService(gaslessApiConfig, this.logger);
+    this.gaslessSwap = new GaslessSwapApiService(gaslessApiConfig, this.logger);
   }
 
   /**
@@ -648,9 +659,9 @@ export class BackendApiService implements IConfigApiV1 {
    * without constructing a new service instance. Existing header keys are
    * overwritten; keys absent from `headers` are preserved.
    *
-   * The headers are also fanned out to the sub-services (`swaps`), which hold
+   * The headers are also fanned out to the sub-services (`swaps`, `gasless`, `gaslessSwap`), which hold
    * their own header copies — so a token set here applies to every request made
-   * through this client, including `swaps.*`.
+   * through this client, including `swaps.*`, `gasless.*`, and `gaslessSwap.*`.
    *
    * @param headers - Key-value pairs to add or overwrite in the default headers.
    */
@@ -659,6 +670,8 @@ export class BackendApiService implements IConfigApiV1 {
       this.headers[key] = value;
     });
     this.swaps.setHeaders(headers);
+    this.gasless.setHeaders(headers);
+    this.gaslessSwap.setHeaders(headers);
   }
 
   /**

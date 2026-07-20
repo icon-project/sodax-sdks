@@ -18,6 +18,7 @@ import { PartnerService } from '../../partner/PartnerService.js';
 import { RecoveryService } from '../../recovery/RecoveryService.js';
 import { LeverageYieldService } from '../../leverageYield/LeverageYieldService.js';
 import { GaslessService } from '../../gasless/GaslessService.js';
+import { GaslessSwapService } from '../../gaslessSwap/GaslessSwapService.js';
 
 /**
  * Sodax class is used to interact with the Sodax.
@@ -39,6 +40,7 @@ export class Sodax {
   public readonly dex: DexService; // Dex service enabling DEX operations
   public readonly leverageYield: LeverageYieldService; // Leverage-yield service: cross-chain deposits / withdrawals into ERC-4626 leverage vaults on Sonic
   public readonly gasless: GaslessService; // Gasless service: EIP-7702 sponsored (gas-free) ERC20 spoke deposits
+  public readonly gaslessSwap: GaslessSwapService; // Gasless-swap brain: swap-aware gasless (both modes) composing swaps + gasless (IGaslessSwapApi)
   public readonly config: ConfigService; // Config service enabling configuration data fetching from the backend API or fallbacking to default values
 
   public readonly hubProvider: HubProvider; // hub provider for the hub chain (e.g. Sonic mainnet)
@@ -55,12 +57,13 @@ export class Sodax {
     // so feature services can call `config.analytics.emit(...)` unconditionally with zero cost when off.
     const analytics = resolveAnalytics(options?.analytics);
     const fee = options?.fee;
-    // Gasless (EIP-7702 sponsored deposit) endpoints are client-side secrets — resolved here and held on
-    // `config.gasless`, never merged into the backend-fetched `SodaxConfig`.
+    // Gasless endpoints are client-side secrets — resolved here onto `config.gasless`, never merged into the backend-fetched `SodaxConfig`.
     const gasless = resolveGasless(options?.gasless);
     // Like `logger`, swaps options are client-side runtime toggles read off `SodaxOptions` —
     // never merged into the backend-fetched `SodaxConfig`/`instanceConfig`.
     const useBackendSubmitTx = options?.swapsOptions?.useBackendSubmitTx ?? false;
+    // Opt-in Mode-A gasless swaps (EIP-5792); resolved here, threaded into SwapService like `useBackendSubmitTx`.
+    const gaslessSwap = options?.swapsOptions?.gasless ?? false;
     this.instanceConfig = options ? mergeSodaxConfig(sodaxConfig, options) : sodaxConfig;
     this.backendApi = new BackendApiService(this.instanceConfig.api, logger);
     this.api = this.backendApi;
@@ -76,13 +79,20 @@ export class Sodax {
 
     this.hubProvider = new EvmHubProvider({ config: this.config }); // default to Sonic mainnet
     this.spoke = new SpokeService({ config: this.config, hubProvider: this.hubProvider });
+    // Constructed before `swaps` so the swap feature can drive gasless (Mode A) when `swapsOptions.gasless` is set.
+    this.gasless = new GaslessService({ config: this.config, spoke: this.spoke });
     this.swaps = new SwapService({
       config: this.config,
       hubProvider: this.hubProvider,
       spoke: this.spoke,
       backendApi: this.backendApi,
       useBackendSubmitTx,
+      gaslessService: this.gasless,
+      gaslessSwap,
     });
+    // In-process brain for the swap-aware gasless contract (IGaslessSwapApi): composes `swaps` + `gasless`,
+    // the same seam the HTTP client `api.gaslessSwap` satisfies. Constructed after both dependencies.
+    this.gaslessSwap = new GaslessSwapService({ swaps: this.swaps, gasless: this.gasless });
 
     this.moneyMarket = new MoneyMarketService({
       config: this.config,
@@ -118,7 +128,6 @@ export class Sodax {
       config: this.config,
       spoke: this.spoke,
     });
-    this.gasless = new GaslessService({ hubProvider: this.hubProvider, config: this.config, spoke: this.spoke });
   }
 
   /**

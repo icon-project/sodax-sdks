@@ -128,7 +128,7 @@ export type SodaxErrorContext = {
   srcChainKey?: string;
   dstChainKey?: string;
   relayCode?: RelayCode;
-  api?: 'solver' | 'backend' | 'swaps';
+  api?: 'solver' | 'backend' | 'swaps' | 'gasless' | 'gasless-swap';
   method?: string;
   direction?: 'forward' | 'reverse';
   field?: string;

@@ -61,11 +61,7 @@ export type ConfigServiceConstructorParams = {
    * never supplies it; it is purely a client-side option.
    */
   fee?: PartnerFee;
-  /**
-   * Pre-resolved gasless (EIP-7702 sponsored deposit) config. Like {@link logger}, held outside the
-   * swappable `SodaxConfig` so a dynamic config fetch never replaces it. Its endpoints are client-side
-   * secrets never supplied by the backend. Defaults to unconfigured (gasless disabled) when omitted.
-   */
+  /** Pre-resolved gasless config, held outside the swappable `SodaxConfig` (client-side secrets, never from the backend); defaults to unconfigured (disabled) when omitted. */
   gasless?: ResolvedGaslessConfig;
 };
 
@@ -98,12 +94,7 @@ export class ConfigService {
    */
   public readonly fee: PartnerFee | undefined;
 
-  /**
-   * Gasless (EIP-7702 sponsored deposit) config. Resolved once at construction and kept independent of
-   * {@link sodax} so that {@link initialize}'s dynamic-config swap never clobbers it. Read by
-   * {@link GaslessService} via `config.gasless`; unconfigured (gasless disabled) unless the consumer
-   * passed a `gasless` config to `new Sodax(...)`.
-   */
+  /** Gasless config, resolved once at construction and kept independent of {@link sodax} so {@link initialize}'s dynamic swap never clobbers it; read by {@link GaslessService} via `config.gasless`. */
   public readonly gasless: ResolvedGaslessConfig;
 
   private initialized = false;

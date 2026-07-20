@@ -47,23 +47,17 @@ import { DEFAULT_BACKEND_API_TIMEOUT } from '@sodax/types';
 import { SwapsApi, SwapsApiError } from '@sodax/swaps-api';
 import * as v from 'valibot';
 
-import type { RequestOverrideConfig } from './api-utils.js';
+import type { RequestOverrideConfig, ResultifiedWithConfig } from './api-utils.js';
 import { SodaxError } from '../errors/SodaxError.js';
 import { consoleLogger } from '../shared/logger.js';
 
 /**
- * {@link ISwapsApiV2} with every method's return wrapped in `Result<T>` and an
- * optional trailing `RequestOverrideConfig`. `SwapsApiService` implements this
- * (rather than `ISwapsApiV2` directly) because it never throws — like
- * `BackendApiService`, it returns `{ ok: false }` on failure instead of
- * `Promise<T>` rejection. The mapped type keeps the class in lockstep with the
- * canonical interface: every endpoint is covered with its exact payload types.
+ * {@link ISwapsApiV2} with every method's return wrapped in `Result<T>` and an optional trailing
+ * `RequestOverrideConfig`. `SwapsApiService` implements this (rather than `ISwapsApiV2` directly)
+ * because it never throws — like `BackendApiService`, it returns `{ ok: false }` on failure instead
+ * of `Promise<T>` rejection. Keeps the class in lockstep with the canonical interface.
  */
-type ResultifiedSwapsApiV2 = {
-  [K in keyof ISwapsApiV2]: ISwapsApiV2[K] extends (...args: infer A) => Promise<infer R>
-    ? (...args: [...A, config?: RequestOverrideConfig]) => Promise<Result<R>>
-    : never;
-};
+type ResultifiedSwapsApiV2 = ResultifiedWithConfig<ISwapsApiV2>;
 
 /**
  * HTTP client for the backend **Swaps API v2** (`/swaps/*`).

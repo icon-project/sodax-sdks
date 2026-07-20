@@ -1,41 +1,33 @@
-// packages/dapp-kit/src/hooks/gasless/useGaslessCapabilities.ts
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
-import type { GaslessCapabilities, GaslessCapabilitiesParams } from '@sodax/sdk';
+import type { GaslessCapabilitiesRequest, GaslessCapabilitiesResponse } from '@sodax/sdk';
 import type { ReadHookParams } from '../shared/types.js';
+import { unwrapResult } from '../shared/unwrapResult.js';
+import { type GaslessSource, resolveGaslessClient } from './gaslessClient.js';
 
-/**
- * Params for {@link useGaslessCapabilities}: a `chainKey` plus the signer to probe (`walletProvider`
- * for Mode A, `owner` for Mode B). Lets a dApp decide whether to offer the gasless option.
- */
-export type UseGaslessCapabilitiesParams = ReadHookParams<GaslessCapabilities, GaslessCapabilitiesParams>;
+/** Params for {@link useGaslessCapabilities}: the `{ srcChainKey, srcAddress }` request plus an optional `source` (`'brain'` or `'api'`); gates the gasless UI. */
+export type UseGaslessCapabilitiesParams = ReadHookParams<
+  GaslessCapabilitiesResponse,
+  GaslessCapabilitiesRequest & { source?: GaslessSource }
+>;
 
-/** React hook that resolves whether a chain + connected signer can do a gasless deposit. */
+/** React hook that resolves whether a chain + EOA sender is eligible for a gasless deposit. */
 export function useGaslessCapabilities({
   params,
   queryOptions,
-}: UseGaslessCapabilitiesParams = {}): UseQueryResult<GaslessCapabilities, Error> {
+}: UseGaslessCapabilitiesParams = {}): UseQueryResult<GaslessCapabilitiesResponse, Error> {
   const { sodax } = useSodaxContext();
-  const chainKey = params?.chainKey;
+  const srcChainKey = params?.srcChainKey;
+  const srcAddress = params?.srcAddress;
+  const source = params?.source ?? 'brain';
 
-  return useQuery<GaslessCapabilities, Error>({
-    queryKey: [
-      'gasless',
-      'capabilities',
-      chainKey,
-      params?.owner?.address ?? (params?.walletProvider ? 'wallet' : undefined),
-    ],
+  return useQuery<GaslessCapabilitiesResponse, Error>({
+    queryKey: ['gasless', 'capabilities', srcChainKey, srcAddress, source],
     queryFn: async () => {
-      if (!chainKey) throw new Error('chainKey is required');
-      const result = await sodax.gasless.getGaslessCapabilities({
-        chainKey,
-        owner: params?.owner,
-        walletProvider: params?.walletProvider,
-      });
-      if (!result.ok) throw result.error;
-      return result.value;
+      if (!srcChainKey || !srcAddress) throw new Error('srcChainKey and srcAddress are required');
+      return unwrapResult(await resolveGaslessClient(sodax, source).getCapabilities({ srcChainKey, srcAddress }));
     },
-    enabled: chainKey != null,
+    enabled: srcChainKey != null && srcAddress != null,
     ...queryOptions,
   });
 }

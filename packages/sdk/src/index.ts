@@ -12,4 +12,5 @@ export * from './recovery/index.js';
 export * from './dex/index.js';
 export * from './leverageYield/index.js';
 export * from './gasless/index.js';
+export * from './gaslessSwap/index.js';
 export * from '@sodax/types';

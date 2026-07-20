@@ -12,7 +12,7 @@ Per-feature reference docs. Each file documents the hooks, params types, return 
 | [`leverage-yield.md`](leverage-yield.md) | Leveraged-yield ERC-4626 vaults: `useLeverageYieldDeposit`/`Withdraw` (build) + `useLeverageYieldVaultSwap` (execute), effective APR / position / TVL / share-balance reads. |
 | [`migration.md`](migration.md) | Token migration: `useMigrateIcxToSoda`, `useRevertMigrateSodaToIcx`, `useMigratebnUSD`, `useMigrateBaln`, allowance/approve. |
 | [`bitcoin.md`](bitcoin.md) | Bound Exchange (dapp-kit-unique): session, trading wallet, fund/withdraw, UTXOs. |
-| [`gasless.md`](gasless.md) | Gasless (EIP-7702 sponsored) spoke deposits: `useGaslessDeposit`, `useGaslessCapabilities`, Mode A (external wallet) / Mode B (SDK key), opt-in gas fallback. |
+| [`gasless.md`](gasless.md) | Gasless (EIP-7702 + ERC-4337, Pimlico-sponsored) EOA spoke deposits: stateless `useGaslessPrepare` → (external sign) → `useGaslessSubmit` (`source: 'brain' \| 'api'`), Mode A `useGaslessSendCalls`, `useGaslessRelay`, capability gating. |
 | [`auxiliary-services.md`](auxiliary-services.md) | Partner fee claiming, recovery, backend queries (intent tracking, orderbook, MM data), shared utilities (xBalances, gas, trustlines). |
 
 ## Reference vs recipes

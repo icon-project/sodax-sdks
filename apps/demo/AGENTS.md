@@ -87,6 +87,23 @@ pnpm dev                      # terminal B
 
 Requires `@sentry/react` installed (listed in `package.json`). To send to the **real** services instead, set `VITE_DD_INTAKE_URL` / `VITE_SENTRY_DSN` (drop the tunnel) — then DNS is required, as expected.
 
+## Local paymaster proxy (gasless Mode A, no Pimlico key in the browser)
+
+By default the demo's gasless config uses `VITE_PIMLICO_API_KEY`, so the synthesized Pimlico paymaster URL (with the key) is handed to the browser wallet. To keep the key server-side, run the reference ERC-7677 **paymaster proxy** and point the SDK at it instead.
+
+- `scripts/paymaster-proxy.mjs` — zero-dep Node server (`pnpm paymaster-proxy`, port 9010) that reads `PIMLICO_API_KEY` and forwards ERC-7677 `pm_getPaymasterStubData` / `pm_getPaymasterData` (arriving as `POST /<chainId>`) to Pimlico. Demo-only forwarder; a production proxy must validate the UserOperation (only sponsor SODAX `[approve, transfer]`), authenticate, and own the sponsorship policy.
+- `providers.tsx` picks the mode: when `VITE_PAYMASTER_PROXY_URL` is set it configures `gasless.paymasterProxyUrl` (no `pimlicoApiKey` in the browser); otherwise it uses `pimlicoApiKey` (direct).
+
+**Unlike the observability harness, this is NOT same-origin.** In Mode A the *wallet* (not the page) fetches the paymaster URL, so `VITE_PAYMASTER_PROXY_URL` must be an **absolute** URL (e.g. `http://localhost:9010`), not a `/__…` Vite-proxy path, and the proxy sends permissive CORS.
+
+**Run:**
+
+```bash
+PIMLICO_API_KEY=…  pnpm paymaster-proxy                 # terminal A — the local proxy
+VITE_PAYMASTER_PROXY_URL=http://localhost:9010 pnpm dev # terminal B — leave VITE_PIMLICO_API_KEY unset
+# Connect an EIP-5792 wallet, run a gasless swap; the wallet hits localhost:9010, never Pimlico.
+```
+
 ## Analytics tracking
 
 The demo enables the SDK's opt-in user-action analytics so every feature flow it exercises is tracked.

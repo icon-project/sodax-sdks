@@ -23,15 +23,16 @@ import {
   type ApiConfig,
   type BaseApiConfig,
   type CustomApiConfig,
+  type GaslessApiConfig,
   type SwapsApiConfig,
 } from '@sodax/types';
 
 /**
- * True when `config` is the nested {@link CustomApiConfig} variant (carries a
- * `baseApiConfig` and/or `swapsApiConfig` slice) rather than a flat {@link BaseApiConfig}.
+ * True when `config` is the nested {@link CustomApiConfig} variant (carries a `baseApiConfig`,
+ * `swapsApiConfig`, and/or `gaslessApiConfig` slice) rather than a flat {@link BaseApiConfig}.
  */
 export function isCustomApiConfig(config: ApiConfig): config is CustomApiConfig {
-  return 'baseApiConfig' in config || 'swapsApiConfig' in config;
+  return 'baseApiConfig' in config || 'swapsApiConfig' in config || 'gaslessApiConfig' in config;
 }
 
 /**
@@ -82,6 +83,14 @@ export function resolveBaseApiConfig(config: ApiConfig): BaseApiConfig {
 export function resolveSwapsApiConfig(config: ApiConfig): SwapsApiConfig {
   if (isCustomApiConfig(config)) {
     return layerConfigs(config.baseApiConfig, config.swapsApiConfig);
+  }
+  return layerConfigs(config);
+}
+
+/** Resolve the effective gasless-API config: a flat {@link BaseApiConfig} is shared with the base API; a {@link CustomApiConfig} layers `gaslessApiConfig` over `baseApiConfig` (fields gasless → base → default; headers defaults → base → gasless, so a base auth/tracing header reaches gasless calls unless overridden). */
+export function resolveGaslessApiConfig(config: ApiConfig): GaslessApiConfig {
+  if (isCustomApiConfig(config)) {
+    return layerConfigs(config.baseApiConfig, config.gaslessApiConfig);
   }
   return layerConfigs(config);
 }

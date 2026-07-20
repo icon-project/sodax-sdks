@@ -24,6 +24,7 @@ import {
   type SpokeIsAllowanceValidParamsHub,
   type SpokeIsAllowanceValidParamsStellar,
   isEvmSpokeOnlyChainKeyType,
+  isGaslessCapableEvmWalletProviderType,
   isStellarChainKeyType,
   isUndefinedOrValidWalletProviderForChainKey,
   relayTxAndWaitPacket,
@@ -37,6 +38,7 @@ import {
 import { SolverApiService } from './SolverApiService.js';
 import { EvmSolverService } from './EvmSolverService.js';
 import type { BackendApiService } from '../backendApi/index.js';
+import type { GaslessService } from '../gasless/GaslessService.js';
 import { selectSolvedIntentPacket } from './selectSolvedIntentPacket.js';
 import { SodaxError } from '../errors/SodaxError.js';
 import { mapRelayFailure } from '../errors/relay-error-mapping.js';
@@ -70,10 +72,12 @@ import type {
 } from '../shared/types/intent-types.js';
 import {
   type SpokeChainKey,
+  type Address,
   type Hex,
   type Hash,
   type HttpUrl,
   getIntentRelayChainId,
+  isNativeToken,
   isBitcoinChainKey,
   type FeeAmount,
   type GetWalletProviderType,
@@ -98,6 +102,7 @@ import {
   type GetTokenAddressType,
   type HubChainKey,
   type EvmSpokeOnlyChainKey,
+  type IGaslessCapableEvmWalletProvider,
   type StellarChainKey,
   type SpokeExecActionParams,
   type SonicChainKey,
@@ -168,6 +173,18 @@ export type SwapServiceConstructorParams = {
   backendApi: BackendApiService;
   /** Opt-in backend submit-tx 2-step flow (from `SodaxOptions.swapsOptions.useBackendSubmitTx`). Default off. */
   useBackendSubmitTx?: boolean;
+  /** Gasless brain (EIP-7702/ERC-4337) used to run Mode-A gasless swaps when `gaslessSwap` is set. */
+  gaslessService?: GaslessService;
+  /** Opt-in Mode-A gasless swaps (from `SodaxOptions.swapsOptions.gasless`). Default off. */
+  gaslessSwap?: boolean;
+};
+
+/** Narrowed context returned by {@link SwapService.resolveGaslessEligibility} — the gasless brain plus the
+ *  EVM-spoke chain key and EIP-5792 wallet, so {@link SwapService.gaslessSwapSteps} needs no re-narrowing. */
+type GaslessEligibility = {
+  gaslessService: GaslessService;
+  srcChainKey: EvmSpokeOnlyChainKey;
+  walletProvider: IGaslessCapableEvmWalletProvider;
 };
 
 /**
@@ -201,7 +218,19 @@ export class SwapService {
   readonly backendApi: BackendApiService;
   readonly useBackendSubmitTx: boolean;
 
-  public constructor({ config, hubProvider, spoke, backendApi, useBackendSubmitTx }: SwapServiceConstructorParams) {
+  // gasless (Mode A / EIP-5792) brain + opt-in flag
+  readonly gaslessService: GaslessService | undefined;
+  readonly gaslessSwap: boolean;
+
+  public constructor({
+    config,
+    hubProvider,
+    spoke,
+    backendApi,
+    useBackendSubmitTx,
+    gaslessService,
+    gaslessSwap,
+  }: SwapServiceConstructorParams) {
     this.solver = config.solver;
     this.partnerFee = config.swapPartnerFee;
     this.relayerApiEndpoint = config.relay.relayerApiEndpoint;
@@ -210,6 +239,8 @@ export class SwapService {
     this.spoke = spoke;
     this.backendApi = backendApi;
     this.useBackendSubmitTx = useBackendSubmitTx ?? false;
+    this.gaslessService = gaslessService;
+    this.gaslessSwap = gaslessSwap ?? false;
   }
 
   /**
@@ -421,6 +452,15 @@ export class SwapService {
       'swap',
       async () => {
         try {
+          // Opt-in gasless (Mode A / EIP-5792): when the wallet + chain + token are gasless-eligible, run a
+          // sponsored swap so the user needs no native gas. Decided up-front on a read-only probe; once it
+          // commits it is terminal — a broadcast `sendCalls` must not be followed by a second `createIntent`
+          // broadcast (that would double-deposit). Ineligible → fall through to the normal client-side flow.
+          if (this.gaslessSwap) {
+            const eligibility = await this.resolveGaslessEligibility(_params);
+            if (eligibility) return await this.gaslessSwapSteps(_params, eligibility);
+          }
+
           const createIntentResult = await this.createIntent(_params);
           if (!createIntentResult.ok) {
             // CreateIntentErrorCode ⊂ SwapErrorCode by definition; the cast is structural, not a
@@ -432,6 +472,7 @@ export class SwapService {
 
           // One shared budget for the rest of the swap: the backend submit-tx poll and the client-side
           // relay fallback split this single deadline, so total wall-clock never exceeds one `timeout`.
+          // Computed AFTER createIntent so the deposit broadcast + wallet-confirmation time is excluded.
           const deadline = Date.now() + (_params.timeout ?? DEFAULT_RELAY_TX_TIMEOUT);
 
           // Opt-in backend 2-step flow: hand the broadcast intent tx to the swaps API, which relays +
@@ -478,6 +519,76 @@ export class SwapService {
   }
 
   /**
+   * Read-only gate for the gasless (Mode A) path. Every check is side-effect-free (no broadcast): a
+   * gasless brain is injected, the source is an EVM spoke, the wallet is EIP-5792-capable, the chain is
+   * gasless-configured, the input token is an ERC20 (gasless batches an `approve`), and the
+   * wallet-capability probe resolves to `walletCalls`. Returns the narrowed {@link GaslessEligibility}
+   * context on success (so {@link gaslessSwapSteps} needs no re-narrowing) or `null` to take the normal path.
+   */
+  private async resolveGaslessEligibility<K extends SpokeChainKey>(
+    _params: SwapActionParams<K, false>,
+  ): Promise<GaslessEligibility | null> {
+    const { params, walletProvider } = _params;
+    const srcChainKey = params.srcChainKey;
+    if (!this.gaslessService) return null;
+    if (!isEvmSpokeOnlyChainKeyType(srcChainKey)) return null;
+    if (!isGaslessCapableEvmWalletProviderType(walletProvider)) return null;
+    if (!this.config.gasless.isSupported(srcChainKey)) return null;
+    // Gasless batches an ERC20 `approve`; the native token has no approve step and is rejected.
+    if (isNativeToken(srcChainKey, params.inputToken)) return null;
+    const caps = await this.gaslessService.getWalletCapabilities({ chainKey: srcChainKey, walletProvider });
+    if (!caps.ok || caps.value.resolvedMode !== 'walletCalls') return null;
+    return { gaslessService: this.gaslessService, srcChainKey, walletProvider };
+  }
+
+  /**
+   * Gasless (Mode A / EIP-5792) swap completion: build the raw swap intent (no broadcast), execute the
+   * sponsored `[approve, transfer]` deposit through the EIP-5792 wallet, relay to the hub, then notify
+   * the solver — assembling the same {@link SwapResponse} the client-side path returns. Terminal: on any
+   * failure it returns a `SwapError` rather than falling back, because the sponsored deposit may already
+   * be on-chain and a second `createIntent` broadcast would double-deposit (the relay is retryable
+   * out-of-band). Only reached after {@link isGaslessEligible}.
+   */
+  private async gaslessSwapSteps<K extends SpokeChainKey>(
+    _params: SwapActionParams<K, false>,
+    eligibility: GaslessEligibility,
+  ): Promise<Result<SwapResponse, SwapError>> {
+    const { params, skipSimulation, extras } = _params;
+    const { gaslessService, srcChainKey, walletProvider } = eligibility;
+    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey };
+
+    // 1) Raw swap intent → hub recipient (`to`) + payload (`data`) + the intent, without broadcasting.
+    //    Forward `extras` (per-call partnerFee override) and `skipSimulation` so the sponsored deposit
+    //    encodes the same fee/settings the normal path would.
+    const created = await this.createIntent({ params, raw: true, skipSimulation, extras });
+    if (!created.ok) return { ok: false, error: created.error };
+    const { intent, relayData } = created.value;
+
+    // 2) Sponsored source deposit via the EIP-5792 wallet (Mode A) — batches `approve` + `transfer`.
+    const sent = await gaslessService.sendCalls({
+      srcChainKey,
+      srcAddress: params.srcAddress as Address,
+      token: params.inputToken as Address,
+      amount: params.inputAmount,
+      to: relayData.address,
+      data: relayData.payload,
+      walletProvider,
+    });
+    if (!sent.ok) return { ok: false, error: executionFailed('swap', sent.error, { ...baseCtx, action: 'swap' }) };
+
+    // 3) Complete via the shared tail (verify → relay → post-execution → SwapResponse), which uses the
+    //    same feature-'swap' relay-error mapping as the client-side path so relay codes (RELAY_TIMEOUT, …)
+    //    survive. Terminal on failure — the sponsored deposit is already on-chain, so we never fall back
+    //    to a second broadcast. The relay gets the full `timeout` (no submit-tx poll shares this budget).
+    return this.completeSpokeSwap(_params, {
+      intent,
+      spokeTxHash: sent.value.srcChainTxHash,
+      relayData: sent.value.relayData,
+      relayTimeoutMs: _params.timeout ?? DEFAULT_RELAY_TX_TIMEOUT,
+    });
+  }
+
+  /**
    * Client-side swap completion (the default path): relay the broadcast intent tx to the hub — or
    * use it directly when the source IS the hub — then notify the solver via post-execution and
    * build the {@link SwapResponse}. Extracted verbatim from `swap()` so the opt-in backend 2-step
@@ -488,15 +599,35 @@ export class SwapService {
     created: CreateIntentResult<K, false>,
     deadline: number,
   ): Promise<Result<SwapResponse, SwapError>> {
+    // Delegate to the shared completion tail. `Math.max(deadline - Date.now(), 5_000)` = ≈ the full
+    // `timeout` on the flag-off path (called immediately), or the reserve `submitTx` left on the backend
+    // path; the floor keeps a stalled-backend fallback viable.
+    return this.completeSpokeSwap(_params, {
+      intent: created.intent,
+      spokeTxHash: created.tx,
+      relayData: created.relayData,
+      relayTimeoutMs: Math.max(deadline - Date.now(), 5_000),
+    });
+  }
+
+  /**
+   * Shared swap completion tail: verify the spoke deposit tx → relay it to the hub (or use it directly
+   * when the source IS the hub) → notify the solver via post-execution → build the {@link SwapResponse}.
+   * Used by both the client-side path ({@link fallbackSwapSteps}, after a broadcast deposit) and the
+   * gasless path ({@link gaslessSwapSteps}, after a sponsored `sendCalls`); they differ only in how the
+   * spoke tx is produced and the relay budget, both passed in. Relay failures carry feature-'swap' relay
+   * codes via {@link mapRelayFailure}.
+   */
+  private async completeSpokeSwap<K extends SpokeChainKey>(
+    _params: SwapActionParams<K, false>,
+    args: { intent: Intent; spokeTxHash: string; relayData: RelayExtraData; relayTimeoutMs: number },
+  ): Promise<Result<SwapResponse, SwapError>> {
     const { params } = _params;
     const srcChainKey = params.srcChainKey;
     const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey };
-    const { tx: spokeTxHash, intent, relayData } = created;
+    const { intent, spokeTxHash, relayData, relayTimeoutMs } = args;
 
-    const verifyTxHashResult = await this.spoke.verifyTxHash({
-      txHash: created.tx,
-      chainKey: srcChainKey,
-    });
+    const verifyTxHashResult = await this.spoke.verifyTxHash({ txHash: spokeTxHash, chainKey: srcChainKey });
     if (!verifyTxHashResult.ok) {
       return { ok: false, error: verifyFailed('swap', verifyTxHashResult.error, { ...baseCtx, action: 'swap' }) };
     }
@@ -510,9 +641,7 @@ export class SwapService {
         data: relayData,
         chainKey: srcChainKey,
         relayerApiEndpoint: this.relayerApiEndpoint,
-        // Remaining shared budget: ≈ full `timeout` on the flag-off path (called immediately), or
-        // the reserve `submitTx` left on the backend path. Floor keeps a stalled-backend fallback viable.
-        timeout: Math.max(deadline - Date.now(), 5_000),
+        timeout: relayTimeoutMs,
       });
       if (!packet.ok) {
         return { ok: false, error: mapRelayFailure(packet.error, { feature: 'swap', action: 'swap', ...baseCtx }) };
@@ -520,9 +649,7 @@ export class SwapService {
       dstIntentTxHash = packet.value.dst_tx_hash;
     }
 
-    const postExecResult = await this.postExecution({
-      intent_tx_hash: dstIntentTxHash as `0x${string}`,
-    });
+    const postExecResult = await this.postExecution({ intent_tx_hash: dstIntentTxHash as `0x${string}` });
     if (!postExecResult.ok) {
       // PostExecutionErrorCode ⊂ SwapErrorCode by definition.
       return { ok: false, error: postExecResult.error };

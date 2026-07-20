@@ -31,9 +31,17 @@ import {
   useSwapsApiSubmitTx,
   useXBalances,
   useNearStorageGate,
+  useGaslessSendCalls,
+  useGaslessRelay,
+  useGaslessWalletCapabilities,
+  isGaslessCapableEvmWalletProviderType,
+  isNativeToken,
   getSupportedSolverTokens,
   getStagingSolverTokens,
+  type Address,
   type CreateIntentParams,
+  type EvmSpokeOnlyChainKey,
+  type Hex,
   type SolverIntentQuoteRequest,
   type GetWalletProviderType,
   type SubmitTxRequestV2,
@@ -123,10 +131,34 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const [nearStorageError, setNearStorageError] = useState<string | null>(null);
   const [slippage, setSlippage] = useState<string>('0.5');
   const [useSubmitTxApi, setUseSubmitTxApi] = useState(false);
+  const [useGasless, setUseGasless] = useState(false);
   const [hyperCoreDeposit, setHyperCoreDeposit] = useState(false);
   const { mutateAsyncSafe: submitSwapTx, isPending: isSubmitting } = useSwapsApiSubmitTx();
   const [isBitcoinReady, setIsBitcoinReady] = useState(false);
   const [isDestBitcoinReady, setIsDestBitcoinReady] = useState(false);
+
+  // Gasless (Mode A / EIP-5792 browser wallet): needs an EIP-5792-capable EVM wallet on the source chain.
+  const { mutateAsyncSafe: gaslessSendCalls } = useGaslessSendCalls();
+  const { mutateAsyncSafe: gaslessRelay } = useGaslessRelay();
+  const capableWallet =
+    sourceWalletProvider && isGaslessCapableEvmWalletProviderType(sourceWalletProvider)
+      ? sourceWalletProvider
+      : undefined;
+  // Probe the wallet's EIP-5792 atomic + paymaster support (resolves to `walletCalls` when gasless is possible).
+  const { data: gaslessWalletCapabilities } = useGaslessWalletCapabilities({
+    params:
+      capableWallet && sourceAccount.address
+        ? { chainKey: src.chain as EvmSpokeOnlyChainKey, walletProvider: capableWallet, srcAddress: sourceAccount.address }
+        : undefined,
+  });
+  // Gasless batches an ERC20 `approve`, so the input token must be a non-native ERC20, and the chain + wallet
+  // must resolve to the EIP-5792 `walletCalls` mode. Otherwise the gasless checkbox is disabled.
+  const gaslessEligible = Boolean(
+    capableWallet &&
+      src.token &&
+      !isNativeToken(src.chain, src.token) &&
+      gaslessWalletCapabilities?.resolvedMode === 'walletCalls',
+  );
 
   // HyperCore deposit is available only when the destination chain/token is accepted by the registered
   // hook (HyperEVM + USDC today). The registry — not this component — owns those constraints.
@@ -356,7 +388,85 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     ]);
   };
 
+  // Gasless (Mode A): replicate the SDK's `gaslessSwapSteps` in the browser — build the raw intent, execute the
+  // sponsored [approve, transfer] via the EIP-5792 wallet (no native gas), relay to the hub, then notify the
+  // solver (post-execution) so the intent is actually filled. The `/gasless` page omits that final step.
+  const handleGaslessSwap = async (intentOrderPayload: CreateIntentParams) => {
+    if (!capableWallet) {
+      setSwapError('Connected wallet is not EIP-5792 capable (gasless Mode A).');
+      return;
+    }
+    setOpen(false);
+    setSwapError(null);
+    try {
+      // 1) Raw swap intent → hub recipient (`to`) + payload (`data`), without broadcasting.
+      const created = await sodax.swaps.createIntent({ raw: true, params: intentOrderPayload });
+      if (!created.ok) {
+        setSwapError(formatMutationFailureMessage(created.error, 'Gasless swap failed (create intent)'));
+        return;
+      }
+      const { intent, relayData } = created.value;
+
+      // 2) Sponsored source deposit via the EIP-5792 wallet — batches approve + transfer.
+      const sent = await gaslessSendCalls({
+        srcChainKey: src.chain as EvmSpokeOnlyChainKey,
+        srcAddress: intentOrderPayload.srcAddress as Address,
+        token: intentOrderPayload.inputToken as Address,
+        amount: intentOrderPayload.inputAmount,
+        to: relayData.address,
+        data: relayData.payload,
+        walletProvider: capableWallet,
+      });
+      if (!sent.ok) {
+        setSwapError(formatMutationFailureMessage(sent.error, 'Gasless swap failed (send calls)'));
+        return;
+      }
+
+      // 3) Relay the spoke tx to the hub.
+      const relayed = await gaslessRelay({
+        srcChainKey: src.chain as EvmSpokeOnlyChainKey,
+        srcChainTxHash: sent.value.srcChainTxHash,
+        relayData: sent.value.relayData,
+      });
+      if (!relayed.ok) {
+        setSwapError(formatMutationFailureMessage(relayed.error, 'Gasless swap failed (relay)'));
+        return;
+      }
+
+      // 4) Notify the solver so the intent is filled (the step the /gasless page omits).
+      const posted = await sodax.swaps.postExecution({ intent_tx_hash: relayed.value.dstChainTxHash as Hex });
+      if (!posted.ok) {
+        setSwapError(formatMutationFailureMessage(posted.error, 'Gasless swap failed (post-execution)'));
+        return;
+      }
+
+      setOrders(prev => [
+        ...prev,
+        {
+          mode: 'solver',
+          intentHash: posted.value.intent_hash,
+          intent,
+          intentDeliveryInfo: {
+            srcChainKey: src.chain,
+            srcTxHash: sent.value.srcChainTxHash,
+            srcAddress: intentOrderPayload.srcAddress,
+            dstChainKey: dst.chain,
+            dstTxHash: relayed.value.dstChainTxHash,
+            dstAddress: intentOrderPayload.dstAddress,
+          },
+        },
+      ]);
+    } catch (error) {
+      console.error('Error running gasless swap:', error);
+      setSwapError(formatMutationFailureMessage(error, 'Gasless swap failed'));
+    }
+  };
+
   const handleSwap = async (intentOrderPayload: CreateIntentParams) => {
+    if (useGasless) {
+      await handleGaslessSwap(intentOrderPayload);
+      return;
+    }
     if (useSubmitTxApi) {
       await handleSubmitTxSwap(intentOrderPayload);
       return;
@@ -620,17 +730,44 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
           {quoteQuery.data?.ok === false && <div className="text-red-500">{quoteQuery.data.error.detail.message}</div>}
         </div>
 
-        <div className="flex items-center gap-2 w-full">
-          <label htmlFor="submit-tx-toggle" className="text-sm font-medium cursor-pointer">
-            Submit tx to API
-          </label>
-          <input
-            id="submit-tx-toggle"
-            type="checkbox"
-            checked={useSubmitTxApi}
-            onChange={e => setUseSubmitTxApi(e.target.checked)}
-            className="h-4 w-4 cursor-pointer"
-          />
+        <div className="flex items-center gap-6 w-full">
+          <div className="flex items-center gap-2">
+            <label htmlFor="submit-tx-toggle" className="text-sm font-medium cursor-pointer">
+              Submit tx to API
+            </label>
+            <input
+              id="submit-tx-toggle"
+              type="checkbox"
+              checked={useSubmitTxApi}
+              onChange={e => {
+                setUseSubmitTxApi(e.target.checked);
+                if (e.target.checked) setUseGasless(false);
+              }}
+              className="h-4 w-4 cursor-pointer"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label htmlFor="gasless-toggle" className="text-sm font-medium cursor-pointer">
+              Gasless (browser wallet)
+            </label>
+            <input
+              id="gasless-toggle"
+              type="checkbox"
+              checked={useGasless}
+              disabled={!gaslessEligible}
+              onChange={e => {
+                setUseGasless(e.target.checked);
+                if (e.target.checked) setUseSubmitTxApi(false);
+              }}
+              className="h-4 w-4 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+              title={
+                gaslessEligible
+                  ? 'Run this swap gasless (Mode A): the connected EIP-5792 wallet sponsors an atomic [approve, transfer] — no native gas'
+                  : 'Gasless (Mode A) needs an EIP-5792-capable EVM wallet on a gasless-configured chain and a non-native ERC20 input token'
+              }
+            />
+          </div>
         </div>
 
         {canHyperCoreDeposit && (

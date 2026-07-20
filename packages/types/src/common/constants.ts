@@ -24,17 +24,20 @@ export type BaseApiConfig = {
 };
 /** Per-endpoint config for the swaps API. Structurally identical to {@link BaseApiConfig}. */
 export type SwapsApiConfig = BaseApiConfig;
+/** Per-endpoint config for the gasless API (`sodax.api.gasless`); identical to {@link BaseApiConfig}, typically given its own `baseURL` + auth headers via a {@link CustomApiConfig} slice. */
+export type GaslessApiConfig = BaseApiConfig;
 
 /**
- * Nested config that points the base (backend) API and the swaps API at independent endpoints.
- * At least one slice must be provided — an empty custom config is meaningless (pass a flat
- * {@link BaseApiConfig} instead). Requiring a slice keeps the two members disjoint from
+ * Nested config that points the base (backend) API, the swaps API, and the gasless API at
+ * independent endpoints. At least one slice must be provided — an empty custom config is meaningless
+ * (pass a flat {@link BaseApiConfig} instead). Requiring a slice keeps the members disjoint from
  * `BaseApiConfig` (which carries `baseURL`), so {@link ApiConfig} can be discriminated by the
- * presence of a `baseApiConfig` / `swapsApiConfig` slice.
+ * presence of a `baseApiConfig` / `swapsApiConfig` / `gaslessApiConfig` slice.
  */
 export type CustomApiConfig =
-  | { baseApiConfig: BaseApiConfig; swapsApiConfig?: SwapsApiConfig }
-  | { baseApiConfig?: BaseApiConfig; swapsApiConfig: SwapsApiConfig };
+  | { baseApiConfig: BaseApiConfig; swapsApiConfig?: SwapsApiConfig; gaslessApiConfig?: GaslessApiConfig }
+  | { baseApiConfig?: BaseApiConfig; swapsApiConfig: SwapsApiConfig; gaslessApiConfig?: GaslessApiConfig }
+  | { baseApiConfig?: BaseApiConfig; swapsApiConfig?: SwapsApiConfig; gaslessApiConfig: GaslessApiConfig };
 
 export type ApiConfig = BaseApiConfig | CustomApiConfig;
 

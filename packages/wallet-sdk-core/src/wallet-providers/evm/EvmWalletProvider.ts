@@ -182,10 +182,7 @@ export class EvmWalletProvider
     return EvmWalletProvider.serializeReceipt(receipt);
   }
 
-  // ── EIP-5792 capability surface (browser wallets) ─────────────────────────────
-  // Thin delegation to the underlying viem wallet client. In browser-extension mode the injected
-  // wagmi client implements `wallet_*`; in private-key mode over a raw RPC these reject (no wallet),
-  // which the SDK's capability detection treats as "gasless unsupported".
+  // EIP-5792 capability surface — thin delegation to the viem wallet client. Browser-extension mode implements `wallet_*`; private-key mode over a raw RPC rejects, which capability detection reads as "gasless unsupported".
 
   /** EIP-5792 `wallet_getCapabilities` for a chain. */
   async getCapabilities(chainId: number): Promise<EvmWalletCapabilities> {
@@ -199,15 +196,13 @@ export class EvmWalletProvider
     chainId?: number;
   }): Promise<EvmSendCallsResult> {
     const { calls, capabilities, chainId } = params;
-    // Guard against submitting on the wrong chain: EIP-5792 executes on the wallet's active chain,
-    // so a mismatch would silently send the batch elsewhere. The caller must switch chains first.
+    // EIP-5792 executes on the wallet's active chain, so a mismatch would silently send the batch elsewhere — reject; the caller switches first.
     if (chainId !== undefined && chainId !== this.walletClient.chain.id) {
       throw new Error(
         `Wallet is on chain ${this.walletClient.chain.id}, expected ${chainId}. Switch chains before the gasless deposit.`,
       );
     }
-    // The `atomic` capability is our cross-wallet request marker; viem expresses "must be atomic"
-    // via the top-level `forceAtomic` flag, so translate it and forward the remaining capabilities.
+    // Our cross-wallet `atomic` marker maps to viem's top-level `forceAtomic`; forward the remaining capabilities.
     const forceAtomic = capabilities?.atomic?.status === 'required';
     const viemCapabilities = capabilities
       ? ({ ...capabilities, atomic: undefined } as Parameters<typeof this.walletClient.sendCalls>[0]['capabilities'])

@@ -1,14 +1,12 @@
 import type { EvmSpokeOnlyChainKey, EvmWalletCapabilities, IGaslessCapableEvmWalletProvider } from '@sodax/types';
-import type { PrivateKeyAccount } from 'viem';
-import type { GaslessCapabilities } from '../GaslessTypes.js';
+import type { GaslessWalletCapabilities } from '../GaslessTypes.js';
 
-export type DetectGaslessArgs = {
+export type DetectWalletCapabilitiesArgs = {
   chainKey: EvmSpokeOnlyChainKey;
   chainId: number;
   /** Chain is gasless-configured (from `config.gasless.isSupported`). */
   configured: boolean;
-  owner?: PrivateKeyAccount;
-  walletProvider?: IGaslessCapableEvmWalletProvider;
+  walletProvider: IGaslessCapableEvmWalletProvider;
 };
 
 /** EIP-5792 `atomic.status` values that mean the wallet can execute an atomic batch. */
@@ -22,42 +20,26 @@ function isPaymasterSupported(caps: EvmWalletCapabilities): boolean {
   return paymaster?.supported === true;
 }
 
-/**
- * Resolve which gasless mode a chain + signer supports.
- *
- * - Not configured → `unsupported`.
- * - `walletProvider` (Mode A) → probe `wallet_getCapabilities`; needs both atomic batching and
- *   paymaster support. A throwing probe (e.g. a wallet without EIP-5792) resolves to `unsupported`.
- * - `owner` (Mode B) → `smartAccount`; atomic + sponsored by construction.
- */
-export async function detectGaslessCapabilities(args: DetectGaslessArgs): Promise<GaslessCapabilities> {
-  const { chainKey, chainId, configured, walletProvider, owner } = args;
+/** Resolve whether a chain + external EIP-5792 wallet supports the Mode-A (`sendCalls`) path: not configured → `unsupported`; else probe `wallet_getCapabilities` (needs atomic batching + paymaster; a throwing probe → `unsupported`). */
+export async function detectWalletCapabilities(args: DetectWalletCapabilitiesArgs): Promise<GaslessWalletCapabilities> {
+  const { chainKey, chainId, configured, walletProvider } = args;
   const base = { chainKey, configured };
 
   if (!configured) {
     return { ...base, atomicSupported: false, paymasterSupported: false, resolvedMode: 'unsupported' };
   }
 
-  if (walletProvider) {
-    try {
-      const caps = await walletProvider.getCapabilities(chainId);
-      const atomicSupported = isAtomicSupported(caps);
-      const paymasterSupported = isPaymasterSupported(caps);
-      return {
-        ...base,
-        atomicSupported,
-        paymasterSupported,
-        resolvedMode: atomicSupported && paymasterSupported ? 'walletCalls' : 'unsupported',
-      };
-    } catch {
-      return { ...base, atomicSupported: false, paymasterSupported: false, resolvedMode: 'unsupported' };
-    }
+  try {
+    const caps = await walletProvider.getCapabilities(chainId);
+    const atomicSupported = isAtomicSupported(caps);
+    const paymasterSupported = isPaymasterSupported(caps);
+    return {
+      ...base,
+      atomicSupported,
+      paymasterSupported,
+      resolvedMode: atomicSupported && paymasterSupported ? 'walletCalls' : 'unsupported',
+    };
+  } catch {
+    return { ...base, atomicSupported: false, paymasterSupported: false, resolvedMode: 'unsupported' };
   }
-
-  if (owner) {
-    // Mode B is atomic (single user operation) and sponsored (paymaster) by construction.
-    return { ...base, atomicSupported: true, paymasterSupported: true, resolvedMode: 'smartAccount' };
-  }
-
-  return { ...base, atomicSupported: false, paymasterSupported: false, resolvedMode: 'unsupported' };
 }

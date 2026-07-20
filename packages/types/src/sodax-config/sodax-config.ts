@@ -64,11 +64,7 @@ export type BridgeDefaultConfig = {}; // kept for future extension
 
 export const bridgeConfig = {} satisfies BridgeDefaultConfig;
 
-// -- Gasless (EIP-7702 sponsored spoke deposit) config --
-// Client-side runtime only: paymaster/bundler endpoints embed the Pimlico API key and encode the
-// gas-sponsorship policy, so these are secrets that must never live on the backend data contract
-// (`SodaxDefaultConfig`). They follow the `fee`/`analytics`/`logger` option pattern: passed to
-// `new Sodax(...)`, resolved once, and held on `ConfigService` outside the swappable config.
+// Gasless (EIP-7702 sponsored deposit) config — client-side secrets (endpoints embed the Pimlico key + sponsorship policy), kept off the backend data contract and resolved once onto `ConfigService` like `fee`/`analytics`/`logger`.
 
 /** Per-chain gasless endpoints + support flag. `supports7702` gates whether the chain is eligible. */
 export type GaslessChainConfig = {
@@ -82,7 +78,16 @@ export type GaslessChainConfig = {
 /** `gasless` option accepted by `new Sodax(...)`. Omit to leave gasless deposits disabled. */
 export type GaslessOptions = {
   pimlicoApiKey?: string; // secret; used to synthesize default Pimlico v2 endpoints when a chain omits paymaster/bundler URLs
-  chains?: Partial<Record<EvmSpokeOnlyChainKey, GaslessChainConfig>>; // per-chain gasless config
+  /**
+   * Base URL of an ERC-7677 paymaster PROXY (your backend), used to keep the Pimlico key server-side.
+   * Applied to every `supports7702` chain as the Mode-A (browser-wallet) paymaster endpoint, with the
+   * chain id appended: `<paymasterProxyUrl>/<chainId>`. The wallet POSTs `pm_getPaymasterStubData` /
+   * `pm_getPaymasterData` there and your backend adds the key + forwards to Pimlico. An explicit per-chain
+   * `paymasterUrl` overrides it. Provides NO bundler — Mode A uses the wallet's own; Mode B (prepare/submit)
+   * still needs `pimlicoApiKey` or a per-chain `bundlerUrl`.
+   */
+  paymasterProxyUrl?: string;
+  chains?: Partial<Record<EvmSpokeOnlyChainKey, GaslessChainConfig>>;
 };
 
 export type SodaxOptionalConfig = {
@@ -136,6 +141,15 @@ export type SwapsClientOptions = {
    * the swap still completes. Default `false` (the current fully client-side flow).
    */
   useBackendSubmitTx?: boolean;
+  /**
+   * Opt-in: run `swap()` gasless (EIP-7702 + ERC-4337 Mode A, via an EIP-5792 wallet) when eligible —
+   * the source deposit is sponsored, so the user needs no native gas. Requires the `gasless` option
+   * (`pimlicoApiKey`) to be configured. When the wallet/chain/token is NOT gasless-eligible, `swap()`
+   * transparently runs the normal client-side flow. Note: once the gasless path has committed (the
+   * sponsored deposit is broadcast) it does NOT fall back — a second broadcast would double-deposit.
+   * Default `false`.
+   */
+  gasless?: boolean;
 };
 
 // default sodax config object which can always be overriden through Sodax instance (i.e. new Sodax(...config))

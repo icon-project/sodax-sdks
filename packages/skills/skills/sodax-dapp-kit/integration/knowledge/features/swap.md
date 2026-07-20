@@ -92,10 +92,12 @@ type UseStatusParams = ReadHookParams<
 2. **Default `mutationKey` is `['swap']`.** Use `useIsMutating({ mutationKey: ['swap'] })` to get a global "any swap in flight" state. Override via `mutationOptions.mutationKey` if you want narrower scoping per-call.
 3. **Quotes auto-refresh every 3s** — pause polling by setting `queryOptions.refetchInterval: false` if the quote is in a non-visible UI.
 4. **Token list has duplicate addresses across chains.** `sodax.swaps.getSupportedSwapTokens()` returns `Record<SpokeChainKey, readonly XToken[]>`. Flattening it (e.g. `Object.values(...).flat()`) yields multiple tokens that share a contract address (same token deployed on different chains). When rendering a flat token list, use a composite key like `${token.address}-${token.chainKey}` — not `token.address` alone. (`XToken` carries `chainKey`; there is no `blockchain_id` field.)
+5. **Gasless swaps via config.** Set `swapsOptions: { gasless: true }` on `new Sodax(...)` / `SodaxProvider` (with the `gasless` option / `pimlicoApiKey`) and `useSwap` runs gasless (EIP-5792 Mode A) with **no call-site change** when the wallet + chain + token are eligible — otherwise it transparently runs the normal swap. See [`gasless.md`](gasless.md).
 
 ## Cross-references
 
 - [`../recipes/swap.md`](../recipes/swap.md) — full worked example.
 - [`../recipes/mutation-error-handling.md`](../recipes/mutation-error-handling.md) — call-shape patterns.
+- [`gasless.md`](gasless.md) — make `useSwap` gasless via `swapsOptions: { gasless: true }`.
 - [`features/swap.md`](../../../migration-v1-to-v2/knowledge/features/swap.md) — v1 → v2 porting.
 - `sodax-sdk`: `integration/knowledge/features/swap.md` — underlying SDK swap surface.

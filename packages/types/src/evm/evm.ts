@@ -58,14 +58,7 @@ export interface IEvmWalletProvider extends ICoreWallet {
   waitForTransactionReceipt: (txHash: Hash) => Promise<EvmRawTransactionReceipt>;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// EIP-5792 (`wallet_sendCalls`) + ERC-7677 paymaster capability surface.
-//
-// Local, viem-free shapes (mirroring EvmRawTransaction/EvmRawTransactionReceipt) so `@sodax/types`
-// keeps its zero-third-party-type rule. Used by the OPTIONAL {@link IGaslessCapableEvmWalletProvider}
-// sub-interface for external wallets (MetaMask/Rabby/Coinbase) that can batch calls atomically and
-// accept a sponsoring paymaster — the base {@link IEvmWalletProvider} stays unchanged.
-// ─────────────────────────────────────────────────────────────────────────────
+// Local, viem-free EIP-5792 (`wallet_sendCalls`) + ERC-7677 paymaster shapes (zero-third-party-type rule) for the optional {@link IGaslessCapableEvmWalletProvider} sub-interface.
 
 /** A single call in an EIP-5792 batch (viem `Call` shape). */
 export type EvmBatchCall = { to: Address; data: Hex; value?: bigint };
@@ -91,12 +84,7 @@ export type EvmCallsStatus = {
   receipts?: { transactionHash: Hash }[];
 };
 
-/**
- * Optional EIP-5792 capability surface for EVM wallets that can batch calls atomically and accept an
- * ERC-7677 paymaster. Implemented by browser-extension wallet providers (e.g. `EvmWalletProvider` in
- * browser mode). Kept as a sub-interface so non-5792 wallets and the base contract are unaffected;
- * consumers narrow via a runtime guard before using it.
- */
+/** Optional EIP-5792 + ERC-7677 capability surface for EVM wallets that can batch calls atomically with a paymaster; a sub-interface consumers narrow into via a runtime guard, leaving non-5792 wallets unaffected. */
 export interface IGaslessCapableEvmWalletProvider extends IEvmWalletProvider {
   getCapabilities: (chainId: number) => Promise<EvmWalletCapabilities>;
   sendCalls: (params: {

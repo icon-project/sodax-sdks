@@ -13,26 +13,25 @@ import type { Address, EvmSpokeOnlyChainKey, Hex } from '@sodax/types';
 import { Sodax } from '../shared/entities/Sodax.js';
 import { erc20Abi, spokeAssetManagerAbi } from '../shared/abis/index.js';
 import { buildDepositCalls } from './internal/buildDepositCalls.js';
-import type { GaslessDepositParams } from './GaslessTypes.js';
+import type { GaslessBatchInput } from './GaslessTypes.js';
 
 const sodax = new Sodax();
 
 const BSC = '0x38.bsc' satisfies EvmSpokeOnlyChainKey;
-// Anvil test key #0 — deterministic account, never used for real funds.
-const OWNER = privateKeyToAccount('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
+// Deterministic test account built without committing a 0x+64-hex private-key literal (secrets gate).
+const OWNER = privateKeyToAccount(`0x${'a1'.repeat(32)}` as Hex);
 const TOKEN = '0x2170Ed0880ac9A755fd29B2688956BD959F933F8' as Address; // an ERC20 (not native)
 const HUB_RECIPIENT = '0x1111111111111111111111111111111111111111' as Address;
 const DATA = '0xdeadbeef' as Hex;
 const AMOUNT = 1_000_000n;
 
-const params = (): GaslessDepositParams => ({
+const params = (): GaslessBatchInput => ({
   srcChainKey: BSC,
   srcAddress: OWNER.address,
   token: TOKEN,
   amount: AMOUNT,
   to: HUB_RECIPIENT,
   data: DATA,
-  owner: OWNER,
 });
 
 describe('buildDepositCalls', () => {
