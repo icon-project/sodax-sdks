@@ -212,7 +212,7 @@ Typed React Query wrappers over the backend Bridge API v2 (`sodax.api.bridge.*`)
 |---|---|
 | `useBridgeApiTokens` | Query; all supported bridge tokens by chain |
 | `useBridgeApiAllowance` | Query; `{ valid }` allowance check (wire-named body) |
-| `useBridgeApiFee` | Query; `{ fee }` config-driven partner fee for an amount |
+| `useBridgeApiFee` | Query; `{ fee }` partner fee for an amount (per-request `partnerFee` override or configured default) |
 | `useBridgeApiBridgeableAmount` | Query; `{ limit }` deposit capacity / withdrawal liquidity for a pair |
 | `useBridgeApiIsBridgeable` | Query; `{ bridgeable }` whether a (from, to) pair is bridgeable |
 | `useBridgeApiSubmitTxStatus` | Query (1s); requires `txHash` + `srcChainKey`; polls until `executed` / `failed` |

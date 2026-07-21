@@ -290,6 +290,22 @@ describe('toCreateBridgeIntentParamsV2', () => {
     expect(wire.bound).toEqual({ accessToken: 'tok' });
   });
 
+  it('threads an optional per-request partnerFee', () => {
+    const wire = toCreateBridgeIntentParamsV2(
+      {
+        srcChainKey: '0xa4b1.arbitrum',
+        dstChainKey: '0x2105.base',
+        srcToken: '0xsrc',
+        dstToken: '0xdst',
+        amount: 1n,
+        srcAddress: '0xfrom',
+        recipient: '0xto',
+      },
+      { partnerFee: { address: '0xfee', percentage: 30 } },
+    );
+    expect(wire.partnerFee).toEqual({ address: '0xfee', percentage: 30 });
+  });
+
   it('omits the optional extras when not provided', () => {
     const wire = toCreateBridgeIntentParamsV2({
       srcChainKey: '0xa4b1.arbitrum',

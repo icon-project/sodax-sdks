@@ -4,6 +4,7 @@ import * as v from 'valibot';
 import type {
   BaseApiConfig,
   BitcoinBoundExtrasV2,
+  PartnerFeeV2,
   BridgeAllowanceCheckResponseV2,
   BridgeApproveResponseV2,
   BridgeFeeRequestV2,
@@ -63,7 +64,7 @@ export function toCreateBridgeIntentParamsV2(
     srcAddress: string;
     recipient: string;
   },
-  extras?: { srcPublicKey?: string; bound?: BitcoinBoundExtrasV2 },
+  extras?: { srcPublicKey?: string; bound?: BitcoinBoundExtrasV2; partnerFee?: PartnerFeeV2 },
 ): CreateBridgeIntentParamsV2 {
   return {
     srcChainKey: params.srcChainKey,
@@ -75,6 +76,7 @@ export function toCreateBridgeIntentParamsV2(
     dstAddress: params.recipient,
     ...(extras?.srcPublicKey !== undefined ? { srcPublicKey: extras.srcPublicKey } : {}),
     ...(extras?.bound !== undefined ? { bound: extras.bound } : {}),
+    ...(extras?.partnerFee !== undefined ? { partnerFee: extras.partnerFee } : {}),
   };
 }
 
@@ -298,7 +300,8 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
   // ──────────────────────────────────────────────────────────────────────
 
   /**
-   * Config-driven bridge partner fee for an input amount. NOTE: this is a pure client-side computation
+   * Bridge partner fee for an input amount (per-request `partnerFee` override, else the configured default).
+   * NOTE: this is a pure client-side computation
    * in the SDK core (`sodax.bridge.getFee`) — prefer that (no round-trip); this HTTP variant exists for
    * parity with the backend `/bridge/fee` endpoint (for consumers using only `sodax.api.bridge`).
    *

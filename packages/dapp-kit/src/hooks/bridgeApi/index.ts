@@ -5,7 +5,7 @@ export * from './useBridgeApiAllowance.js'; // query
 export * from './useBridgeApiApprove.js'; // mutation
 export * from './useBridgeApiBridgeableAmount.js'; // query (deposit capacity / withdrawal liquidity)
 export * from './useBridgeApiCreateBridgeIntent.js'; // mutation
-export * from './useBridgeApiFee.js'; // query (config-driven partner fee)
+export * from './useBridgeApiFee.js'; // query (partner fee — per-request override or configured default)
 export * from './useBridgeApiIsBridgeable.js'; // query (pair bridgeable?)
 export * from './useBridgeApiSubmitTx.js'; // mutation
 export * from './useBridgeApiSubmitTxStatus.js'; // query (poll)

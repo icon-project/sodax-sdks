@@ -89,8 +89,8 @@ export type CreateBridgeIntentParams<K extends SpokeChainKey = SpokeChainKey> = 
 
 /**
  * Per-action extras for bridge intent creation, supplied via the `extras` slot of the bridge
- * action params. Mirrors `SwapExtras` chain-keyed slots but WITHOUT `partnerFee` — the bridge
- * partner fee is config-driven (`ConfigService.bridgePartnerFee`), not a per-request override.
+ * action params. Mirrors `SwapExtras` chain-keyed slots, plus a chain-agnostic `partnerFee` per-action
+ * override that takes precedence over the config-level `bridgePartnerFee` (omit it to use the configured fee).
  *
  * - `srcPublicKey` — only for Stacks sources (their address can't yield the signer public key at
  *   raw-tx build time); keyed off `K` so non-Stacks actions can't set it.
@@ -100,7 +100,14 @@ export type CreateBridgeIntentParams<K extends SpokeChainKey = SpokeChainKey> = 
 export type BridgeExtras<K extends SpokeChainKey = SpokeChainKey> = (GetChainType<K> extends 'STACKS'
   ? { srcPublicKey?: string }
   : { srcPublicKey?: never }) &
-  (GetChainType<K> extends 'BITCOIN' ? { bound?: BitcoinBoundExtras } : { bound?: never });
+  (GetChainType<K> extends 'BITCOIN' ? { bound?: BitcoinBoundExtras } : { bound?: never }) & {
+    /**
+     * Per-action partner-fee override. When present, takes precedence over the config-level
+     * `bridgePartnerFee` for this call, so an integrator can charge (and route) its own fee per bridge.
+     * Omit to use the configured fee. Chain-agnostic (unlike `srcPublicKey`/`bound`).
+     */
+    partnerFee?: PartnerFee;
+  };
 
 export type BridgeParams<ChainKey extends SpokeChainKey, Raw extends boolean> = SpokeExecActionParams<
   ChainKey,
@@ -159,12 +166,12 @@ export class BridgeService {
    * @param inputAmount - Gross amount being bridged, in vault token base units.
    * @returns Fee amount to be deducted, in the same units as `inputAmount`.
    */
-  public getFee(inputAmount: bigint): bigint {
-    if (!this.config.bridgePartnerFee) {
+  public getFee(inputAmount: bigint, partnerFee: PartnerFee | undefined = this.config.bridgePartnerFee): bigint {
+    if (!partnerFee) {
       return 0n;
     }
 
-    return calculateFeeAmount(inputAmount, this.config.bridgePartnerFee);
+    return calculateFeeAmount(inputAmount, partnerFee);
   }
 
   /**
@@ -643,7 +650,8 @@ export class BridgeService {
       const effectiveSkipSimulation =
         skipSimulation || (isBitcoinChainKeyType(params.srcChainKey) && this.spoke.bitcoin.walletMode === 'USER');
 
-      const data: Hex = this.buildBridgeData(params, srcToken, dstToken, this.config.bridgePartnerFee);
+      // Per-action `extras.partnerFee` wins over the config-level `bridgePartnerFee` (undefined = no fee).
+      const data: Hex = this.buildBridgeData(params, srcToken, dstToken, extras?.partnerFee ?? this.config.bridgePartnerFee);
 
       const coreParams = {
         srcChainKey: params.srcChainKey,

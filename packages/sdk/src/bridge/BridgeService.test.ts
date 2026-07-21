@@ -136,6 +136,14 @@ describe('BridgeService.getFee — global-fee fallback', () => {
 
     expect(sodaxWithGlobalFee.bridge.getFee(1_000_000n)).toBeGreaterThan(0n);
   });
+
+  it('uses the per-call partnerFee over the configured fee', () => {
+    // `sodax` has no configured fee (getFee(1M) === 0n above); a per-call partnerFee is charged instead.
+    // 100 bps (1%) of 1_000_000 = 10_000.
+    const perCall = { address: '0x4444444444444444444444444444444444444444', percentage: 100 } as const;
+    expect(sodax.bridge.getFee(1_000_000n, perCall)).toBe(10_000n);
+    expect(sodax.bridge.getFee(1_000_000n)).toBe(0n);
+  });
 });
 
 describe('BridgeService.createBridgeIntent — Bitcoin USER mode', () => {

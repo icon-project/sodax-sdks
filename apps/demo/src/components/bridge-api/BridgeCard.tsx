@@ -21,6 +21,7 @@ import {
   useBridgeApiAllowance,
   useBridgeApiApprove,
   useBridgeApiCreateBridgeIntent,
+  useBridgeApiFee,
   useBridgeApiSubmitTx,
   useGetBridgeableAmount,
   useGetBridgeableTokens,
@@ -87,6 +88,9 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
   const [isBridging, setIsBridging] = useState(false);
   const [isFromBtcReady, setIsFromBtcReady] = useState(false);
   const [isToBtcReady, setIsToBtcReady] = useState(false);
+  // Optional per-request partner fee (demo): a receiver address + fee percent (0.3 = 0.3%, max 1%).
+  const [feeAddress, setFeeAddress] = useState('');
+  const [feePct, setFeePct] = useState('');
 
   const fromAccount = useXAccount({ xChainId: fromChainKey });
   const toAccount = useXAccount({ xChainId: toChainKey });
@@ -142,6 +146,16 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
       : toAccount.address;
   }, [toChainKey, toAccount.address]);
 
+  // Optional per-request partnerFee — routes a % of the input to `feeAddress`. Omit to use the backend default.
+  const partnerFee = useMemo(() => {
+    // Input is a PERCENT (e.g. 0.3 = 0.3%); convert to basis points (backend caps at 100 bps = 1%).
+    const pct = Number(feePct);
+    if (!feeAddress || !Number.isFinite(pct) || pct <= 0) return undefined;
+    const bps = Math.round(pct * 100);
+    if (bps <= 0 || bps > 100) return undefined;
+    return { address: feeAddress, percentage: bps };
+  }, [feeAddress, feePct]);
+
   // The wire DTO sent to every Bridge API call (swaps naming; built from the client-side selection).
   const bridgeBody = useMemo((): CreateBridgeIntentParamsV2 | undefined => {
     if (!fromToken || !toToken || !fromAccount.address || !recipient || parsedAmount === undefined) return undefined;
@@ -159,8 +173,26 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
       const accessToken = loadRadfiSession(fromAccount.address)?.accessToken;
       if (accessToken) body.bound = { accessToken };
     }
+    // Per-request partner fee — routed to `partnerFee.address`; omit to use the backend-configured fee.
+    if (partnerFee) body.partnerFee = partnerFee;
     return body;
-  }, [fromToken, toToken, fromAccount.address, recipient, parsedAmount, fromChainKey, toChainKey, fromChainType]);
+  }, [fromToken, toToken, fromAccount.address, recipient, parsedAmount, fromChainKey, toChainKey, fromChainType, partnerFee]);
+
+  // Live fee quote via the HTTP API — shows the fee that will be charged for the current amount + partnerFee.
+  const { data: feeQuote } = useBridgeApiFee({
+    params: {
+      body: parsedAmount !== undefined ? { inputAmount: parsedAmount.toString(), partnerFee } : undefined,
+      apiConfig: BRIDGE_API_CONFIG,
+    },
+  });
+
+  // Net the recipient receives = input − fee: the bridge deducts the partner fee before withdrawing
+  // (`withdrawAmount = translatedAmount - feeAmount`), so the destination gets the post-fee amount.
+  const receiveAmount = useMemo(() => {
+    if (parsedAmount === undefined || !fromToken) return fromAmount;
+    const net = parsedAmount - (feeQuote ? BigInt(feeQuote.fee) : 0n);
+    return net > 0n ? formatUnits(net, fromToken.decimals) : '0';
+  }, [parsedAmount, fromToken, feeQuote, fromAmount]);
 
   const {
     data: allowance,
@@ -393,6 +425,32 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
           </div>
 
           <div className="grow">
+            <Label>Partner fee (optional)</Label>
+            <div className="flex space-x-2">
+              <Input
+                type="text"
+                placeholder="Fee receiver address (0x…)"
+                value={feeAddress}
+                onChange={e => setFeeAddress(e.target.value)}
+              />
+              <Input
+                type="number"
+                step="0.1"
+                className="w-[130px]"
+                placeholder="% (max 1)"
+                value={feePct}
+                onChange={e => setFeePct(e.target.value)}
+              />
+            </div>
+            {feeQuote && fromToken ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Fee: {formatUnits(BigInt(feeQuote.fee), fromToken.decimals)} {fromToken.symbol}
+                {partnerFee ? ` → ${partnerFee.address}` : ' (backend default)'}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="grow">
             <Label htmlFor="fromAddress">Source address</Label>
             <div className="flex items-center gap-2">
               <Input id="fromAddress" type="text" value={fromAccount.address ?? ''} disabled />
@@ -428,7 +486,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
 
           <div className="flex space-x-2">
             <div className="grow">
-              <Input type="number" placeholder="0.0" value={fromAmount} readOnly />
+              <Input type="number" placeholder="0.0" value={receiveAmount} readOnly />
             </div>
             {isLoadingBridgeableTokens ? (
               <Skeleton className="w-[110px] h-10" />

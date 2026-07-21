@@ -22,7 +22,7 @@
 //     are read-only discovery/quote — computable client-side, mirrored here for HTTP parity).
 
 import type { RawTxReturnType } from '../common/index.js';
-import type { BitcoinBoundExtrasV2, PacketDataV2, RelayExtraDataResponseV2 } from './backendApiV2.js';
+import type { BitcoinBoundExtrasV2, PacketDataV2, PartnerFeeV2, RelayExtraDataResponseV2 } from './backendApiV2.js';
 
 // ──────────────────────────────────────────────────────────────────────
 // GET /bridge/tokens · GET /bridge/tokens/:chainKey
@@ -71,8 +71,9 @@ export type GetBridgeTokensByChainResponseV2 = readonly BridgeTokenV2[] &
  * `CreateBridgeIntentParams` (`srcToken`/`dstToken`/`amount`/`recipient`) onto these
  * wire names before the POST.
  *
- * Unlike swaps there is NO partner-fee field (bridge fee is config-driven). The Bitcoin
- * Bound token is carried as `bound.accessToken`, mirroring the SDK's grouped `extras.bound`.
+ * Carries an optional `partnerFee` per-request override (defaults to the backend's configured
+ * `bridgePartnerFee`), mirroring `SwapExtrasV2.partnerFee`. The Bitcoin Bound token is carried as
+ * `bound.accessToken`, mirroring the SDK's grouped `extras.bound`.
  */
 export interface CreateBridgeIntentParamsV2 {
   /** Source spoke chain key (SODAX SpokeChainKey). */
@@ -99,6 +100,12 @@ export interface CreateBridgeIntentParamsV2 {
    * Only used for raw Bitcoin TRADING-mode intents.
    */
   bound?: BitcoinBoundExtrasV2;
+  /**
+   * Per-request partner-fee override (address + amount|percentage). Defaults to the backend's
+   * configured `bridgePartnerFee` when omitted, so an integrator can charge its own fee per request
+   * (e.g. route the fee to its own wallet). Mirrors `SwapExtrasV2.partnerFee`.
+   */
+  partnerFee?: PartnerFeeV2;
 }
 
 /** POST /bridge/allowance/check — response body. */
@@ -233,9 +240,11 @@ export interface BridgeSubmitTxStatusResponseV2 {
 export interface BridgeFeeRequestV2 {
   /** Input amount in smallest unit of the input token (bigint → decimal string). */
   inputAmount: string;
+  /** Per-request partner-fee override; defaults to the backend's configured `bridgePartnerFee`. */
+  partnerFee?: PartnerFeeV2;
 }
 
-/** POST /bridge/fee — response body. The bridge partner fee is config-driven (a fixed % of the amount, token-independent). */
+/** POST /bridge/fee — response body. The partner fee is a fixed %/amount of the input (token-independent); it uses the per-request `partnerFee` when supplied, else the configured `bridgePartnerFee`. */
 export interface BridgeFeeResponseV2 {
   /** Partner fee in smallest unit (decimal string; `'0'` when no partner fee is configured). */
   fee: string;
@@ -311,7 +320,7 @@ export interface IBridgeApiV2 {
   getTokens(): Promise<GetBridgeTokensResponseV2>;
   /** GET /bridge/tokens/:chainKey */
   getTokensByChain(chainKey: string): Promise<GetBridgeTokensByChainResponseV2>;
-  /** POST /bridge/fee — config-driven partner fee for an amount (computable client-side; here for HTTP parity). */
+  /** POST /bridge/fee — partner fee for an amount (per-request `body.partnerFee` override or the configured default; computable client-side, here for HTTP parity). */
   getFee(body: BridgeFeeRequestV2): Promise<BridgeFeeResponseV2>;
   /** POST /bridge/bridgeable-amount — deposit capacity / withdrawal liquidity for a pair. */
   getBridgeableAmount(body: BridgeQuoteRequestV2): Promise<BridgeableAmountResponseV2>;
