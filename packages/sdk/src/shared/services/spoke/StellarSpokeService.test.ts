@@ -50,6 +50,14 @@
  *  15. getAddressBCSBytes / getTsWalletBytes — pure static helpers
  *  16. waitForTransactionReceipt            — SUCCESS / FAILED / NOT_FOUND / transient throw /
  *                                             custom polling overrides
+ *  17. requiresTrustline                    — native/legacy exemptions, case-insensitivity,
+ *                                             trustline-requiring token
+ *  18. hasValidStellarAccount               — on-ledger, not-on-ledger (NotFoundError), other
+ *                                             Horizon failure
+ *  19. requestSponsoredAccountCreation      — sponsorship sandwich construction, sponsor service
+ *                                             POST contract, non-ok response
+ *  20. SpokeService Stellar wiring          — isAllowanceValid account gate; approve funding-first
+ *                                             then trustline sequencing (raw-mode error, XLM skip)
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -57,6 +65,7 @@ import {
   Address as StellarAddress,
   Contract,
   Networks,
+  NotFoundError,
   SorobanDataBuilder,
   TransactionBuilder,
   nativeToScVal,
@@ -113,6 +122,8 @@ const STELLAR_POLLING_MS = stellarConfig.pollingConfig.pollingIntervalMs;
 const STELLAR_TIMEOUT_MS = stellarConfig.pollingConfig.maxTimeoutMs;
 const STELLAR_PRIORITY_FEE = stellarConfig.priorityFee;
 const STELLAR_BASE_FEE = stellarConfig.baseFee;
+const STELLAR_SPONSOR_URL = stellarConfig.sponsorUrl;
+const STELLAR_SPONSOR_PK = stellarConfig.sponsorPublicKey;
 const STELLAR_TRUSTLINE_USDC = stellarConfig.trustlineConfigs.find(t => t.contractId === STELLAR_USDC);
 if (!STELLAR_TRUSTLINE_USDC) throw new Error('test setup: USDC trustline config missing');
 
@@ -212,6 +223,9 @@ describe('StellarSpokeService — constructor', () => {
     expect(typeof stellarSpoke.submitOrRestoreAndRetry).toBe('function');
     expect(typeof stellarSpoke.deposit).toBe('function');
     expect(typeof stellarSpoke.hasSufficientTrustline).toBe('function');
+    expect(typeof stellarSpoke.requiresTrustline).toBe('function');
+    expect(typeof stellarSpoke.hasValidStellarAccount).toBe('function');
+    expect(typeof stellarSpoke.requestSponsoredAccountCreation).toBe('function');
     expect(typeof stellarSpoke.requestTrustline).toBe('function');
     expect(typeof stellarSpoke.estimateGas).toBe('function');
     expect(typeof stellarSpoke.getDeposit).toBe('function');
@@ -1083,5 +1097,275 @@ describe('StellarSpokeService.waitForTransactionReceipt', () => {
 
     // 50 / 10 = 5 attempts.
     expect(getSpy).toHaveBeenCalledTimes(5);
+  });
+});
+
+// =========================================================================
+// 17. requiresTrustline — exemptions and trustline-requiring tokens
+// =========================================================================
+
+describe('StellarSpokeService.requiresTrustline', () => {
+  it('native XLM does not require a trustline', () => {
+    expect(stellarSpoke.requiresTrustline(STELLAR_NATIVE)).toBe(false);
+  });
+
+  it('legacy bnUSD does not require a trustline', () => {
+    expect(stellarSpoke.requiresTrustline(STELLAR_LEGACY_BNUSD)).toBe(false);
+  });
+
+  it('case-insensitive match — lowercased native token address is still exempt', () => {
+    expect(stellarSpoke.requiresTrustline(STELLAR_NATIVE.toLowerCase())).toBe(false);
+  });
+
+  it('a trustline-configured asset (USDC) requires a trustline', () => {
+    expect(stellarSpoke.requiresTrustline(STELLAR_USDC)).toBe(true);
+  });
+});
+
+// =========================================================================
+// 18. hasValidStellarAccount — on-ledger / not-on-ledger / other failure
+// =========================================================================
+
+describe('StellarSpokeService.hasValidStellarAccount', () => {
+  it('returns ok:true value:true when Horizon loads the account (activated on ledger)', async () => {
+    const loadSpy = vi
+      .spyOn(stellarSpoke.server, 'loadAccount')
+      .mockResolvedValueOnce(makeAccountResponse(SRC_ADDR));
+
+    const result = await stellarSpoke.hasValidStellarAccount(SRC_ADDR);
+
+    expect(result).toEqual({ ok: true, value: true });
+    expect(loadSpy).toHaveBeenCalledWith(SRC_ADDR);
+  });
+
+  it('returns ok:true value:false on NotFoundError (address not yet in ledger)', async () => {
+    vi.spyOn(stellarSpoke.server, 'loadAccount').mockRejectedValueOnce(
+      new NotFoundError('Resource Missing', { status: 404 } as never),
+    );
+
+    const result = await stellarSpoke.hasValidStellarAccount(SRC_ADDR);
+
+    expect(result).toEqual({ ok: true, value: false });
+  });
+
+  it('returns ok:false on any other Horizon failure (network blip is NOT "account missing")', async () => {
+    const failure = new Error('connection reset');
+    vi.spyOn(stellarSpoke.server, 'loadAccount').mockRejectedValueOnce(failure);
+
+    const result = await stellarSpoke.hasValidStellarAccount(SRC_ADDR);
+
+    if (result.ok) throw new Error('expected error result');
+    expect(result.error).toBe(failure);
+  });
+});
+
+// =========================================================================
+// 19. requestSponsoredAccountCreation — sandwich construction + sponsor service POST
+// =========================================================================
+
+describe('StellarSpokeService.requestSponsoredAccountCreation', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const stubFetch = (response: { ok: boolean; status: number; body: string }): ReturnType<typeof vi.fn> => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: response.ok,
+      status: response.status,
+      text: async () => response.body,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  };
+
+  it('builds the sponsorship sandwich from the sponsor account, signs with the wallet, posts to the sponsor service and returns the hash', async () => {
+    vi.spyOn(stellarSpoke.sorobanServer, 'getNetwork').mockResolvedValueOnce(NETWORK_RESPONSE);
+    const loadSpy = vi
+      .spyOn(stellarSpoke.server, 'loadAccount')
+      .mockResolvedValueOnce(makeAccountResponse(STELLAR_SPONSOR_PK));
+    (mockStellarProvider.signTransaction as ReturnType<typeof vi.fn>).mockImplementation(
+      async (xdrStr: string) => xdrStr,
+    );
+    const fetchMock = stubFetch({ ok: true, status: 200, body: TX_HASH });
+
+    const hash = await stellarSpoke.requestSponsoredAccountCreation(SRC_ADDR, mockStellarProvider);
+
+    expect(hash).toBe(TX_HASH);
+    // The sequence source is the sponsor account from config, NOT the user address.
+    expect(loadSpy).toHaveBeenCalledWith(STELLAR_SPONSOR_PK);
+
+    // Decode the XDR handed to the wallet and pin the sandwich: begin (sponsor pays) →
+    // createAccount with zero starting balance → end (signed by the sponsored address).
+    const signedXdr = (mockStellarProvider.signTransaction as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+    const tx = TransactionBuilder.fromXDR(signedXdr, NETWORK_PASSPHRASE);
+    if (!('operations' in tx)) throw new Error('expected a Transaction, not a FeeBumpTransaction');
+    expect(tx.source).toBe(STELLAR_SPONSOR_PK);
+    const ops = tx.operations as unknown as [
+      { type: string; sponsoredId: string },
+      { type: string; destination: string; startingBalance: string },
+      { type: string; source: string },
+    ];
+    expect(ops.length).toBe(3);
+    expect(ops[0].type).toBe('beginSponsoringFutureReserves');
+    expect(ops[0].sponsoredId).toBe(SRC_ADDR);
+    expect(ops[1].type).toBe('createAccount');
+    expect(ops[1].destination).toBe(SRC_ADDR);
+    expect(Number(ops[1].startingBalance)).toBe(0);
+    expect(ops[2].type).toBe('endSponsoringFutureReserves');
+    expect(ops[2].source).toBe(SRC_ADDR);
+
+    // POST contract of the sponsor service: JSON body with the signed XDR under `data`.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, { method: string; body: string }];
+    expect(url).toBe(STELLAR_SPONSOR_URL);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body)).toEqual({ data: signedXdr });
+  });
+
+  it('throws when the sponsor service responds non-ok (body included for diagnosis)', async () => {
+    vi.spyOn(stellarSpoke.sorobanServer, 'getNetwork').mockResolvedValueOnce(NETWORK_RESPONSE);
+    vi.spyOn(stellarSpoke.server, 'loadAccount').mockResolvedValueOnce(makeAccountResponse(STELLAR_SPONSOR_PK));
+    (mockStellarProvider.signTransaction as ReturnType<typeof vi.fn>).mockImplementation(
+      async (xdrStr: string) => xdrStr,
+    );
+    stubFetch({ ok: false, status: 400, body: 'Source account does not match' });
+
+    await expect(stellarSpoke.requestSponsoredAccountCreation(SRC_ADDR, mockStellarProvider)).rejects.toThrow(
+      /Sponsored account creation failed with status 400: Source account does not match/,
+    );
+  });
+
+  it('propagates wallet signing failures without calling the sponsor service', async () => {
+    vi.spyOn(stellarSpoke.sorobanServer, 'getNetwork').mockResolvedValueOnce(NETWORK_RESPONSE);
+    vi.spyOn(stellarSpoke.server, 'loadAccount').mockResolvedValueOnce(makeAccountResponse(STELLAR_SPONSOR_PK));
+    (mockStellarProvider.signTransaction as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error('user rejected'),
+    );
+    const fetchMock = stubFetch({ ok: true, status: 200, body: TX_HASH });
+
+    await expect(stellarSpoke.requestSponsoredAccountCreation(SRC_ADDR, mockStellarProvider)).rejects.toThrow(
+      'user rejected',
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+// =========================================================================
+// 20. SpokeService Stellar wiring — account gate + funding-first approve sequencing
+// =========================================================================
+
+describe('SpokeService Stellar wiring (isAllowanceValid / approve)', () => {
+  const allowanceParams = { srcChainKey: STELLAR, token: STELLAR_USDC, amount: 1_000n, owner: SRC_ADDR } as const;
+
+  describe('isAllowanceValid', () => {
+    it('returns false without a trustline check when the account is not on ledger', async () => {
+      vi.spyOn(stellarSpoke, 'hasValidStellarAccount').mockResolvedValueOnce({ ok: true, value: false });
+      const trustlineSpy = vi.spyOn(stellarSpoke, 'hasSufficientTrustline');
+
+      const result = await sodax.spoke.isAllowanceValid(allowanceParams);
+
+      expect(result).toEqual({ ok: true, value: false });
+      expect(trustlineSpy).not.toHaveBeenCalled();
+    });
+
+    it('delegates to the trustline check when the account exists', async () => {
+      vi.spyOn(stellarSpoke, 'hasValidStellarAccount').mockResolvedValueOnce({ ok: true, value: true });
+      const trustlineSpy = vi.spyOn(stellarSpoke, 'hasSufficientTrustline').mockResolvedValueOnce(true);
+
+      const result = await sodax.spoke.isAllowanceValid(allowanceParams);
+
+      expect(result).toEqual({ ok: true, value: true });
+      expect(trustlineSpy).toHaveBeenCalledWith(STELLAR_USDC, 1_000n, SRC_ADDR);
+    });
+
+    it('propagates an error Result from the account check', async () => {
+      const failure = new Error('horizon down');
+      vi.spyOn(stellarSpoke, 'hasValidStellarAccount').mockResolvedValueOnce({ ok: false, error: failure });
+
+      const result = await sodax.spoke.isAllowanceValid(allowanceParams);
+
+      if (result.ok) throw new Error('expected error result');
+      expect(result.error).toBe(failure);
+    });
+  });
+
+  describe('approve', () => {
+    const CREATION_HASH = 'c'.repeat(64);
+
+    it('funding first, trustline second: creates the missing account, then requests the trustline', async () => {
+      vi.spyOn(stellarSpoke, 'hasValidStellarAccount').mockResolvedValueOnce({ ok: true, value: false });
+      const creationSpy = vi
+        .spyOn(stellarSpoke, 'requestSponsoredAccountCreation')
+        .mockResolvedValueOnce(CREATION_HASH);
+      const trustlineSpy = vi.spyOn(stellarSpoke, 'requestTrustline').mockResolvedValueOnce(TX_HASH as never);
+
+      const result = await sodax.spoke.approve({
+        srcChainKey: STELLAR,
+        token: STELLAR_USDC,
+        amount: 1_000n,
+        owner: SRC_ADDR,
+        raw: false,
+        walletProvider: mockStellarProvider,
+      });
+
+      expect(result).toEqual({ ok: true, value: TX_HASH });
+      expect(creationSpy).toHaveBeenCalledWith(SRC_ADDR, mockStellarProvider);
+      expect(trustlineSpy).toHaveBeenCalledTimes(1);
+      // funding must happen before the trustline request
+      expect(creationSpy.mock.invocationCallOrder[0]).toBeLessThan(trustlineSpy.mock.invocationCallOrder[0] ?? 0);
+    });
+
+    it('returns the creation hash and skips the trustline for tokens that do not need one (native XLM)', async () => {
+      vi.spyOn(stellarSpoke, 'hasValidStellarAccount').mockResolvedValueOnce({ ok: true, value: false });
+      vi.spyOn(stellarSpoke, 'requestSponsoredAccountCreation').mockResolvedValueOnce(CREATION_HASH);
+      const trustlineSpy = vi.spyOn(stellarSpoke, 'requestTrustline');
+
+      const result = await sodax.spoke.approve({
+        srcChainKey: STELLAR,
+        token: STELLAR_NATIVE,
+        amount: 1_000n,
+        owner: SRC_ADDR,
+        raw: false,
+        walletProvider: mockStellarProvider,
+      });
+
+      expect(result).toEqual({ ok: true, value: CREATION_HASH });
+      expect(trustlineSpy).not.toHaveBeenCalled();
+    });
+
+    it('returns an error Result in raw mode when the account is missing (creation needs a wallet provider)', async () => {
+      vi.spyOn(stellarSpoke, 'hasValidStellarAccount').mockResolvedValueOnce({ ok: true, value: false });
+      const creationSpy = vi.spyOn(stellarSpoke, 'requestSponsoredAccountCreation');
+
+      const result = await sodax.spoke.approve({
+        srcChainKey: STELLAR,
+        token: STELLAR_USDC,
+        amount: 1_000n,
+        owner: SRC_ADDR,
+        raw: true,
+      });
+
+      if (result.ok) throw new Error('expected error result');
+      expect(String(result.error)).toContain('sponsored account creation requires a wallet provider');
+      expect(creationSpy).not.toHaveBeenCalled();
+    });
+
+    it('goes straight to the trustline request when the account already exists', async () => {
+      vi.spyOn(stellarSpoke, 'hasValidStellarAccount').mockResolvedValueOnce({ ok: true, value: true });
+      const creationSpy = vi.spyOn(stellarSpoke, 'requestSponsoredAccountCreation');
+      vi.spyOn(stellarSpoke, 'requestTrustline').mockResolvedValueOnce(TX_HASH as never);
+
+      const result = await sodax.spoke.approve({
+        srcChainKey: STELLAR,
+        token: STELLAR_USDC,
+        amount: 1_000n,
+        owner: SRC_ADDR,
+        raw: false,
+        walletProvider: mockStellarProvider,
+      });
+
+      expect(result).toEqual({ ok: true, value: TX_HASH });
+      expect(creationSpy).not.toHaveBeenCalled();
+    });
   });
 });

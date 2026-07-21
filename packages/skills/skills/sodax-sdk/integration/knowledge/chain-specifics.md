@@ -10,7 +10,7 @@ EVM:
 
 Non-EVM:
 
-1. [Stellar trustline](#1-stellar-trustline) — `STELLAR_MAINNET`. Required before receiving any non-XLM asset.
+1. [Stellar account activation and trustline](#1-stellar-account-activation-and-trustline) — `STELLAR_MAINNET`. The account must exist on ledger (sponsored creation covers new 0-XLM wallets) and, for non-XLM assets, hold a trustline before it can receive.
 2. [Bitcoin PSBT and Bound Exchange](#2-bitcoin-psbt-and-radfi) — `BITCOIN_MAINNET`. PSBT signing; trading wallet; Bound Exchange auth/session.
 3. [Solana PDA derivation](#3-solana-pda-derivation) — `SOLANA_MAINNET`. Deterministic addresses; one-time setup utilities.
 4. [ICON Hana wallet](#4-icon-hana-wallet) — `ICON_MAINNET`. Low-level Hana-extension helpers; chain key string vs numeric ID.
@@ -32,30 +32,33 @@ Do **not** pre-scale the amount yourself. Pass the plain 8-decimal HBAR amount; 
 
 ---
 
-## 1. Stellar trustline
+## 1. Stellar account activation and trustline
 
-**Requirement:** before a Stellar account can hold or receive a non-XLM asset, it must establish a trustline to the asset issuer. SODAX's bridge / swap / money-market deliver stablecoin assets to Stellar — the destination Stellar account must have an active trustline for the asset, or the operation fails.
+**Requirement:** a Stellar address only becomes an account once it exists on ledger (it must be "activated" by an account-creation transaction — a plain balance check is not a valid substitute). On top of that, before an account can hold or receive a non-XLM asset, it must establish a trustline to the asset issuer. SODAX's bridge / swap / money-market deliver assets to Stellar — the destination account must exist and (for non-XLM assets) have an active trustline, or the operation fails.
 
 ### How v2 handles it
 
-`BridgeService` and other feature services delegate Stellar trustline / allowance handling to the Stellar spoke service internally — there is **no** public `checkStellarTrustline` / `requestStellarTrustline` method on `BridgeService`. When you call `sodax.bridge.approve({ params, raw: false, walletProvider })` with a Stellar `walletProvider`, the spoke service handles the trustline operation for you.
+Feature services delegate Stellar readiness handling to the Stellar spoke service internally — there is **no** public `checkStellarTrustline` / `requestStellarTrustline` method on `BridgeService`. The unified allowance/approve flow covers both conditions:
 
-For direct trustline interaction outside the standard `approve` flow, reach for the Stellar spoke service:
+- `isAllowanceValid` for a Stellar chain key returns `false` when the account is not on ledger yet **or** the trustline is insufficient.
+- `approve` runs **funding first, trustline second**: if the account does not exist, it is created with a zero starting balance through the SDK's sponsored account creation service (the sponsor account pays the base reserves; the user's wallet only signs), and then a trustline is requested unless the token doesn't need one (native XLM and legacy bnUSD are exempt). Sponsored account creation needs a signing wallet provider, so this path is not available with `raw: true`.
+
+For direct interaction outside the standard `approve` flow, reach for the Stellar spoke service:
 
 ```ts
 import { ChainKeys, type StellarSpokeService } from '@sodax/sdk';
 
 const stellarSpoke = sodax.spoke.getSpokeService(ChainKeys.STELLAR_MAINNET) as StellarSpokeService;
-// Use the spoke service's typed methods for Stellar-specific operations.
+// hasValidStellarAccount / requestSponsoredAccountCreation / hasSufficientTrustline / requestTrustline
 ```
 
 ### When to gate
 
-Before any swap / bridge / money-market operation that **delivers** a non-XLM asset to a Stellar destination, the destination wallet must already trust the asset. Failed trustline checks surface as `VALIDATION_FAILED` errors; use `error.context.reason` to disambiguate. The standard pattern for app code is to call `sodax.bridge.approve(...)` (or the matching feature's approve) on the Stellar wallet first, which establishes the trustline as a side effect.
+Before any swap / bridge / money-market operation that **delivers** an asset to a Stellar destination, the destination account must exist on ledger, and for non-XLM assets must already trust the asset. Failed checks surface as `VALIDATION_FAILED` errors; use `error.context.reason` to disambiguate. The standard pattern for app code is to call `sodax.bridge.approve(...)` (or the matching feature's approve) on the Stellar wallet first, which activates the account and establishes the trustline as a side effect.
 
 ### Pitfall
 
-Stellar accounts that have never held the asset have **no** trustline — receiving will fail. The error surfaces as `VALIDATION_FAILED` with `context.reason: 'trustlineMissing'` (or similar). Treat the missing-trustline state as a one-time setup step gated by the standard `approve` flow.
+A brand-new Stellar wallet (never funded) has **no on-ledger account** — receiving anything fails until it is created. Sponsored creation handles the account itself, but a freshly created account still holds 0 XLM: establishing a trustline afterwards requires the account to cover the trustline reserve and fee, so trustline-requiring assets may still need the account to hold some XLM first. Treat both conditions as one-time setup steps gated by the standard `approve` flow.
 
 ---
 

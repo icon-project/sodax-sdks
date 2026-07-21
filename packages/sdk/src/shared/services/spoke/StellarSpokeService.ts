@@ -17,6 +17,7 @@ import {
   Address,
   FeeBumpTransaction,
   nativeToScVal,
+  NotFoundError,
   TimeoutInfinite,
   scValToBigInt,
   Horizon,
@@ -436,6 +437,95 @@ export class StellarSpokeService {
   }
 
   /**
+   * Check whether the token needs a Horizon trustline before it can be held or received.
+   * Native XLM and legacy bnUSD are exempt.
+   * @param token - The token address to check.
+   * @returns True if a trustline is required for the token, false otherwise.
+   */
+  public requiresTrustline(token: string): boolean {
+    const legacyBnUSD = this.chainConfig.supportedTokens.legacybnUSD;
+    return !(
+      token.toLowerCase() === this.chainConfig.nativeToken.toLowerCase() ||
+      (legacyBnUSD !== undefined && token.toLowerCase() === legacyBnUSD.address.toLowerCase())
+    );
+  }
+
+  /**
+   * Check if the Stellar account exists on ledger (has been activated).
+   * A Stellar address only becomes a receivable account after it has been funded/created on ledger,
+   * so a plain balance check is not a valid substitute.
+   * @param address - The Stellar account address to check.
+   * @returns Result with `true` if the account exists, `false` if it is not on ledger yet,
+   *   or an error Result for any other Horizon failure.
+   */
+  public async hasValidStellarAccount(address: string): Promise<Result<boolean>> {
+    try {
+      await this.server.loadAccount(address);
+      return { ok: true, value: true };
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        return { ok: true, value: false };
+      }
+      this.config.logger.error('Error during hasValidStellarAccount', error);
+      return { ok: false, error };
+    }
+  }
+
+  /**
+   * Create the account on ledger with zero starting balance via the sponsor service, so the
+   * base reserves are paid by the sponsor account rather than the user.
+   *
+   * Builds the sponsorship transaction (beginSponsoringFutureReserves → createAccount →
+   * endSponsoringFutureReserves) sourced from the sponsor account, has the user's wallet sign it
+   * (the endSponsoringFutureReserves operation requires the sponsored account's signature), and
+   * posts the signed XDR to the sponsor service, which adds the sponsor signature, submits, and
+   * only responds once the transaction has succeeded on ledger.
+   * @param address - The Stellar account address to create.
+   * @param walletProvider - The wallet provider used to sign as the sponsored account.
+   * @returns The hash of the applied account-creation transaction.
+   */
+  public async requestSponsoredAccountCreation(
+    address: string,
+    walletProvider: IStellarWalletProvider,
+  ): Promise<string> {
+    try {
+      const { sponsorUrl, sponsorPublicKey } = this.chainConfig;
+      const [network, sponsorAccountResponse] = await Promise.all([
+        this.sorobanServer.getNetwork(),
+        this.server.loadAccount(sponsorPublicKey),
+      ]);
+      const sponsorAccount = new CustomStellarAccount(sponsorAccountResponse);
+
+      const transaction = new TransactionBuilder(sponsorAccount.getAccountClone(), {
+        fee: this.baseFee,
+        networkPassphrase: network.passphrase,
+      })
+        .addOperation(Operation.beginSponsoringFutureReserves({ sponsoredId: address }))
+        .addOperation(Operation.createAccount({ destination: address, startingBalance: '0' }))
+        .addOperation(Operation.endSponsoringFutureReserves({ source: address }))
+        .setTimeout(this.maxTimeoutMs)
+        .build();
+
+      const signedXdr = await walletProvider.signTransaction(transaction.toXDR());
+
+      const response = await fetch(sponsorUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: signedXdr }),
+      });
+      const body = await response.text();
+      if (!response.ok) {
+        throw new Error(`Sponsored account creation failed with status ${response.status}: ${body}`);
+      }
+
+      return body;
+    } catch (error) {
+      this.config.logger.error('Error during requestSponsoredAccountCreation', error);
+      throw error;
+    }
+  }
+
+  /**
    * Check if the user has sufficient trustline established for the token.
    * @param token - The token address to check the trustline for.
    * @param amount - The amount of tokens to check the trustline for.
@@ -444,12 +534,7 @@ export class StellarSpokeService {
    */
   public async hasSufficientTrustline(token: string, amount: bigint, walletAddress: string): Promise<boolean> {
     const stellarChainConfig = this.chainConfig;
-    // native token and legacy bnUSD do not require trustline
-    const legacyBnUSD = stellarChainConfig.supportedTokens.legacybnUSD;
-    if (
-      token.toLowerCase() === stellarChainConfig.nativeToken.toLowerCase() ||
-      (legacyBnUSD !== undefined && token.toLowerCase() === legacyBnUSD.address.toLowerCase())
-    ) {
+    if (!this.requiresTrustline(token)) {
       return true;
     }
 

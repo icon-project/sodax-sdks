@@ -287,5 +287,5 @@ Solver-specific context on `EXTERNAL_API_ERROR`:
 
 - v1 → v2 swap migration: [`features/swap.md`](../../../migration-v1-to-v2/knowledge/features/swap.md).
 - Error model: [`../architecture.md`](../architecture.md) § 8 and [`../reference/`](../reference/) § 3.
-- Stellar destinations require a trustline first: [`../chain-specifics.md`](../chain-specifics.md) § "Stellar trustline".
+- Stellar destinations require an activated account and a trustline first: [`../chain-specifics.md`](../chain-specifics.md) § "Stellar account activation and trustline".
 - NEAR destinations require NEP-141 storage registration first: [`../chain-specifics.md`](../chain-specifics.md) § "Receiving tokens: NEP-141 storage registration".

@@ -4,15 +4,15 @@ Stellar blockchain requires trustlines to be established before you can receive 
 
 ## Overview
 
-In Stellar, trustlines are required to:
+In Stellar, two conditions gate receiving tokens:
 
-- **Receive tokens**: You must establish a trustline before receiving any token on Stellar
-- **Hold tokens**: You cannot hold tokens without an active trustline
+- **Account activation**: A Stellar address only becomes an account once it exists on the ledger. An address that has never been funded/created cannot receive anything — and a plain balance check is not a valid activation check.
+- **Trustlines**: You must establish a trustline before receiving or holding any non-XLM token on Stellar.
 
-The SDK handles trustlines differently depending on whether Stellar is used as the source chain or destination chain:
+The SDK handles these differently depending on whether Stellar is used as the source chain or destination chain:
 
-- **Source Chain (Stellar)**: The SDK automatically handles trustlines through the standard `isAllowanceValid` and `approve` methods on each feature service (e.g. `sodax.swaps.isAllowanceValid`, `sodax.bridge.isAllowanceValid`).
-- **Destination Chain (Stellar)**: You must manually check and establish trustlines before executing operations.
+- **Source Chain (Stellar)**: The SDK automatically handles both through the standard `isAllowanceValid` and `approve` methods on each feature service (e.g. `sodax.swaps.isAllowanceValid`, `sodax.bridge.isAllowanceValid`). `approve` runs **funding first, trustline second**: a missing account is created with zero starting balance via the sponsored account creation service (the sponsor pays the base reserves), then the trustline is requested for tokens that need one.
+- **Destination Chain (Stellar)**: You must manually check account activation and trustlines before executing operations.
 
 ## Architecture
 
@@ -22,7 +22,36 @@ The Stellar wallet provider is `IStellarWalletProvider` (from `@sodax/wallet-sdk
 
 ## StellarSpokeService Methods
 
-`StellarSpokeService` (accessed via `sodax.spoke.stellar`) provides three methods for managing Stellar trustlines.
+`StellarSpokeService` (accessed via `sodax.spoke.stellar`) provides the following methods for managing Stellar account activation and trustlines.
+
+### hasValidStellarAccount
+
+Checks whether a Stellar address exists on the ledger (has been activated).
+
+```typescript
+const accountResult = await sodax.spoke.stellar.hasValidStellarAccount(walletAddress);
+
+if (accountResult.ok && !accountResult.value) {
+  // The address is not on ledger yet — it must be created before it can receive anything
+}
+```
+
+**Returns:** `Promise<Result<boolean>>` — `ok: true, value: true` when the account exists, `ok: true, value: false` when the address is not on ledger yet, and `ok: false` for any other Horizon failure (a network error is not treated as "account missing").
+
+### requestSponsoredAccountCreation
+
+Creates a not-yet-activated account on ledger with a **zero** starting balance via the SDK's sponsored account creation service, so the base reserves are paid by the sponsor account instead of the user. The user's wallet signs the sponsorship transaction (`endSponsoringFutureReserves` requires the sponsored account's signature); the sponsor service adds the sponsor signature, submits, and responds once the transaction has succeeded on ledger.
+
+```typescript
+const txHash = await sodax.spoke.stellar.requestSponsoredAccountCreation(
+  walletAddress,          // The Stellar address to create
+  stellarWalletProvider,  // IStellarWalletProvider — signs as the sponsored account
+);
+```
+
+**Returns:** `Promise<string>` — the hash of the applied account-creation transaction. Throws when the wallet rejects signing or the sponsor service rejects the transaction.
+
+> **Note:** a freshly created account holds 0 XLM. Establishing a trustline afterwards still requires the account to cover the trustline reserve and transaction fee, so trustline-requiring assets may need the account to hold some XLM first. Receiving native XLM works immediately.
 
 ### hasSufficientTrustline
 
@@ -74,7 +103,7 @@ const rawTx = await sodax.spoke.stellar.requestTrustline({
 
 ## Source-Chain Trustline Flow (Automated)
 
-When Stellar is the **source chain**, `isAllowanceValid` delegates to `hasSufficientTrustline` and `approve` delegates to `requestTrustline` internally. The exact signatures for swaps and bridge are shown below.
+When Stellar is the **source chain**, `isAllowanceValid` returns `false` when the account is not on ledger yet or the trustline is insufficient (`hasValidStellarAccount` + `hasSufficientTrustline` internally). `approve` then runs funding first, trustline second: it creates a missing account via `requestSponsoredAccountCreation` (this needs a signing wallet provider, so it is not available with `raw: true`) and requests the trustline via `requestTrustline` for tokens that need one — for exempt tokens (native XLM, legacy bnUSD) it returns the account-creation hash directly. The exact signatures for swaps and bridge are shown below.
 
 ### SwapService
 
