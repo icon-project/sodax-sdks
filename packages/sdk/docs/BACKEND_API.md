@@ -276,10 +276,10 @@ status, fees, …).
 
 The Bridge API v2 is a sibling typed client — `sodax.api.bridge` (`BridgeApiService`), also reached via the
 `sodax.api` alias and sharing the same backend host (`/bridge/*` sub-paths). It mirrors the swaps client
-minus the solver/intent surface: allowance/approve/create-bridge-intent, submit-tx + status, and tokens.
-Submit a signed spoke-deposit with `sodax.api.bridge.submitTx(...)` (passing the FULL `relayData
-{ address, payload }` envelope, not just the payload). See [`BRIDGE_API.md`](BRIDGE_API.md) for the
-full 7-endpoint reference.
+minus the solver/intent surface: allowance/approve/create-bridge-intent, submit-tx + status, tokens, and
+the fee/bridgeable-amount/bridgeable discovery quotes. Submit a signed spoke-deposit with
+`sodax.api.bridge.submitTx(...)` (passing the FULL `relayData { address, payload }` envelope, not just the
+payload). See [`BRIDGE_API.md`](BRIDGE_API.md) for the full reference.
 
 ## Solver Endpoints
 

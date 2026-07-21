@@ -206,12 +206,15 @@ Typed React Query wrappers over the backend Swaps API v2 (`sodax.api.swaps.*`), 
 
 ## Bridge API (`sodax.api.bridge`)
 
-Typed React Query wrappers over the backend Bridge API v2 (`sodax.api.bridge.*`). Distinct from the on-chain `bridge/` hooks (`useBridge`/`useBridgeAllowance`/…), which drive `sodax.bridge` (the `BridgeService`). Smaller than the swaps family (no intent/solver surface); the token *list* is backend-served but bridgeable-**amount** stays client-side (`useGetBridgeableAmount`).
+Typed React Query wrappers over the backend Bridge API v2 (`sodax.api.bridge.*`). Distinct from the on-chain `bridge/` hooks (`useBridge`/`useBridgeAllowance`/…), which drive `sodax.bridge` (the `BridgeService`). Smaller than the swaps family (no intent/solver surface). The fee / bridgeable-amount / bridgeable quotes are computable client-side (prefer the on-chain `useGetBridgeableAmount` / `sodax.bridge.*` — no round-trip), but are also mirrored here as HTTP hooks for parity.
 
 | Hook | Type / Polling |
 |---|---|
 | `useBridgeApiTokens` | Query; all supported bridge tokens by chain |
 | `useBridgeApiAllowance` | Query; `{ valid }` allowance check (wire-named body) |
+| `useBridgeApiFee` | Query; `{ fee }` config-driven partner fee for an amount |
+| `useBridgeApiBridgeableAmount` | Query; `{ limit }` deposit capacity / withdrawal liquidity for a pair |
+| `useBridgeApiIsBridgeable` | Query; `{ bridgeable }` whether a (from, to) pair is bridgeable |
 | `useBridgeApiSubmitTxStatus` | Query (1s); requires `txHash` + `srcChainKey`; polls until `executed` / `failed` |
 | `useBridgeApiApprove` | Mutation; builds unsigned approval tx |
 | `useBridgeApiCreateBridgeIntent` | Mutation; builds `{ tx, relayData }` (no intent) |

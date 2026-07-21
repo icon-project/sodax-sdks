@@ -62,8 +62,9 @@ import {
 /**
  * Bridge-api demo card — the existing on-chain bridge UI (chain/token selection, max-bridgeable,
  * route-availability gate) wired to the HTTP Bridge API (`sodax.api.bridge.*`) via the `bridgeApi/`
- * hooks, mirroring how the swaps-api demo wires swaps. Token discovery + bridgeable math stay
- * client-side (no backend endpoint); only allowance/approve/create/submit go through the API.
+ * hooks, mirroring how the swaps-api demo wires swaps. Token discovery (no HTTP hook) + bridgeable
+ * math stay client-side (prefer no round-trip; bridgeable math also has an HTTP mirror now); only
+ * allowance/approve/create/submit go through the API.
  */
 export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateAction<BridgeApiOrder[]>) => void }) {
   const { sodax } = useSodaxContext();
@@ -96,7 +97,8 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
   const fromChainType = getXChainType(fromChainKey);
   const toChainType = getXChainType(toChainKey);
 
-  // Client-side token discovery + bridgeable math (no backend endpoint — same as the on-chain page).
+  // Client-side token discovery (no HTTP hook) + bridgeable math (kept client-side, prefer no round-trip;
+  // also mirrored by useBridgeApiBridgeableAmount) — same as the on-chain page.
   const { data: bridgeableTokens, isLoading: isLoadingBridgeableTokens } = useGetBridgeableTokens({
     params: { from: fromToken?.chainKey, to: toChainKey, token: fromToken?.address },
   });

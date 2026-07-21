@@ -35,7 +35,7 @@ If the user has already picked a single feature, load the matching granular skil
 | Stuck-asset recovery | [`./recovery/SKILL.md`](./recovery/SKILL.md) | "recover stuck assets on Sonic", "RecoveryService", "withdrawHubAsset" |
 | Backend HTTP client (intents, orderbook, MM reads) | [`./backend-api/SKILL.md`](./backend-api/SKILL.md) | "getIntentByHash", "Sodax backend API", "orderbook", "custom IConfigApiV1" |
 | Swaps API v2 client (quote, create-intent, submit-tx, fees) | [`./swaps-api/SKILL.md`](./swaps-api/SKILL.md) | "sodax.api.swaps", "swap quote from backend", "submit swap tx", "swaps API v2" |
-| Bridge API v2 client (allowance/approve, create-intent, submit-tx, tokens) | [`./bridge-api/SKILL.md`](./bridge-api/SKILL.md) | "sodax.api.bridge", "createBridgeIntent via backend", "submit bridge tx", "bridge API v2" |
+| Bridge API v2 client (allowance/approve, create-intent, submit-tx, tokens, fee/bridgeable discovery) | [`./bridge-api/SKILL.md`](./bridge-api/SKILL.md) | "sodax.api.bridge", "createBridgeIntent via backend", "submit bridge tx", "bridge API v2" |
 
 Load this broad skill (keep reading below) when:
 

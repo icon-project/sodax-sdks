@@ -17,8 +17,9 @@
 //     `status === 'executed' && result.dstIntentTxHash`.
 //   - `submit-tx` carries the FULL `relayData { address, payload }` envelope: with no
 //     `intent.creator` the backend cannot rebuild the relay address, so the client sends it.
-//   - Smaller surface (7 methods): checkAllowance, approve, createBridgeIntent,
-//     submitTx, getSubmitTxStatus, getTokens, getTokensByChain.
+//   - Surface: checkAllowance, approve, createBridgeIntent, submitTx, getSubmitTxStatus,
+//     getTokens, getTokensByChain, getFee, getBridgeableAmount, isBridgeable (the last 3
+//     are read-only discovery/quote — computable client-side, mirrored here for HTTP parity).
 
 import type { RawTxReturnType } from '../common/index.js';
 import type { BitcoinBoundExtrasV2, PacketDataV2, RelayExtraDataResponseV2 } from './backendApiV2.js';
@@ -221,6 +222,63 @@ export interface BridgeSubmitTxStatusResponseV2 {
 }
 
 // ──────────────────────────────────────────────────────────────────────
+// POST /bridge/fee · POST /bridge/bridgeable-amount · POST /bridge/bridgeable/check
+// (read-only discovery/quote. These are computable CLIENT-SIDE from config + vault
+//  reserves — an SDK consumer should prefer the local `sodax.bridge.getFee` /
+//  `getBridgeableAmount` / `isBridgeable` (no round-trip). The backend also exposes them
+//  as HTTP endpoints for NON-SDK clients; the client methods below mirror those for parity.)
+// ──────────────────────────────────────────────────────────────────────
+
+/** POST /bridge/fee — request body. */
+export interface BridgeFeeRequestV2 {
+  /** Input amount in smallest unit of the input token (bigint → decimal string). */
+  inputAmount: string;
+}
+
+/** POST /bridge/fee — response body. The bridge partner fee is config-driven (a fixed % of the amount, token-independent). */
+export interface BridgeFeeResponseV2 {
+  /** Partner fee in smallest unit (decimal string; `'0'` when no partner fee is configured). */
+  fee: string;
+}
+
+/**
+ * Shared request body for `/bridge/bridgeable-amount` and `/bridge/bridgeable/check` — the (from, to)
+ * token pair by `(chainKey, tokenAddress)`. The backend resolves each pair to an XToken from chain config.
+ */
+export interface BridgeQuoteRequestV2 {
+  /** Source spoke chain key. */
+  srcChainKey: string;
+  /** Destination spoke chain key. */
+  dstChainKey: string;
+  /** Input token address on the source spoke chain. */
+  inputToken: string;
+  /** Output token address on the destination spoke chain. */
+  outputToken: string;
+}
+
+/** A bridge limit (`BridgeLimit` projected to JSON: bigint `amount` → decimal string). */
+export interface BridgeLimitV2 {
+  /** Limit amount in smallest unit (bigint → decimal string). */
+  amount: string;
+  /** Token decimals. */
+  decimals: number;
+  /** Whether the limit is the deposit capacity or the withdrawal liquidity. */
+  type: 'DEPOSIT_LIMIT' | 'WITHDRAWAL_LIMIT';
+}
+
+/** POST /bridge/bridgeable-amount — response body. */
+export interface BridgeableAmountResponseV2 {
+  /** Deposit capacity / withdrawal liquidity limit for the pair. */
+  limit: BridgeLimitV2;
+}
+
+/** POST /bridge/bridgeable/check — response body. */
+export interface BridgeableCheckResponseV2 {
+  /** True when the (from, to) token pair is bridgeable. */
+  bridgeable: boolean;
+}
+
+// ──────────────────────────────────────────────────────────────────────
 // Aggregating client interface — one method per endpoint
 // ──────────────────────────────────────────────────────────────────────
 
@@ -234,7 +292,9 @@ export interface BridgeSubmitTxStatusResponseV2 {
  * on the NestJS controller: handlers return pre-serialization domain types and the
  * response interceptor serializes them into these wire shapes afterwards.
  *
- * Bridgeable-amount stays CLIENT-SIDE (vault math; no backend endpoint).
+ * `getFee`/`getBridgeableAmount`/`isBridgeable` are read-only quotes computable client-side (config +
+ * vault math); an SDK consumer should prefer the local `sodax.bridge.*` equivalents (no round-trip).
+ * They also have backend endpoints (for non-SDK HTTP clients), mirrored here for client parity.
  */
 export interface IBridgeApiV2 {
   /** POST /bridge/allowance/check */
@@ -251,6 +311,12 @@ export interface IBridgeApiV2 {
   getTokens(): Promise<GetBridgeTokensResponseV2>;
   /** GET /bridge/tokens/:chainKey */
   getTokensByChain(chainKey: string): Promise<GetBridgeTokensByChainResponseV2>;
+  /** POST /bridge/fee — config-driven partner fee for an amount (computable client-side; here for HTTP parity). */
+  getFee(body: BridgeFeeRequestV2): Promise<BridgeFeeResponseV2>;
+  /** POST /bridge/bridgeable-amount — deposit capacity / withdrawal liquidity for a pair. */
+  getBridgeableAmount(body: BridgeQuoteRequestV2): Promise<BridgeableAmountResponseV2>;
+  /** POST /bridge/bridgeable/check — whether a (from, to) pair is bridgeable. */
+  isBridgeable(body: BridgeQuoteRequestV2): Promise<BridgeableCheckResponseV2>;
 }
 
 // ──────────────────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@
 
 Typed HTTP client for the backend **Bridge API v2** (`/bridge/*`). Reachable as `sodax.api.bridge`
 (`sodax.api` is an alias for `sodax.backendApi`; `.bridge` is the `BridgeApiService` instance). One method
-per endpoint (7 total). Every method returns `Promise<Result<T>>` — it **never throws** — and every
+per endpoint. Every method returns `Promise<Result<T>>` — it **never throws** — and every
 response is validated at runtime against a valibot schema, so a backend contract drift surfaces as
 `{ ok: false }` rather than an untyped object.
 
@@ -31,6 +31,11 @@ sodax.api.bridge.createBridgeIntent(body: CreateBridgeIntentParamsV2, config?): 
 // Submit-tx state machine
 sodax.api.bridge.submitTx(body: BridgeSubmitTxRequestV2, config?): Promise<Result<BridgeSubmitTxResponseV2>>;
 sodax.api.bridge.getSubmitTxStatus(query: BridgeSubmitTxStatusQueryV2, config?): Promise<Result<BridgeSubmitTxStatusResponseV2>>;
+
+// Discovery / quote — read-only (computable client-side via sodax.bridge.*; mirrored here for HTTP parity)
+sodax.api.bridge.getFee(body: BridgeFeeRequestV2, config?): Promise<Result<BridgeFeeResponseV2>>;
+sodax.api.bridge.getBridgeableAmount(body: BridgeQuoteRequestV2, config?): Promise<Result<BridgeableAmountResponseV2>>;
+sodax.api.bridge.isBridgeable(body: BridgeQuoteRequestV2, config?): Promise<Result<BridgeableCheckResponseV2>>;
 ```
 
 The optional trailing `config?: RequestOverrideConfig` (`{ baseURL?, timeout?, headers? }`) on every method
@@ -52,9 +57,10 @@ Bridge is **vault-backed, not solver-based**, so the surface is smaller and a fe
   `dstAddress`), NOT the SDK-domain `srcToken`/`dstToken`/`amount`/`recipient`. The mapper
   `toCreateBridgeIntentParamsV2(params, extras?)` converts SDK-domain params (and serializes the `bigint`
   amount) to this wire DTO.
-- **Bridgeable-amount stays client-side** — there is no backend bridgeable-amount endpoint. Use
-  `sodax.bridge.getBridgeableAmount(...)` + `sodax.bridge.isBridgeable({ from, to })`. The token *list* is
-  backend-served via `getTokens` / `getTokensByChain`.
+- **Discovery quotes (`getFee` / `getBridgeableAmount` / `isBridgeable`) are computable client-side** — prefer
+  `sodax.bridge.getFee(...)` / `getBridgeableAmount(...)` / `isBridgeable({ from, to })` (no round-trip). They
+  *also* have backend endpoints (listed above), mirrored on this client for non-SDK HTTP callers / parity.
+  The token *list* is backend-served via `getTokens` / `getTokensByChain`.
 
 ## Common call shapes
 

@@ -96,7 +96,7 @@ const { data: status } = useSwapsApiSubmitTxStatus({ params: { txHash, srcChainK
 
 ### Bridge API (`sodax.api.bridge`)
 
-Typed React Query wrappers over the backend **Bridge API v2** — six `useBridgeApi*` hooks over `sodax.api.bridge.*` (tokens, allowance, approve, create-bridge-intent, submit-tx + status). They are the HTTP-API parallel of the on-chain `bridge/` hooks (`useBridge`/`useBridgeAllowance`/…, which drive `sodax.bridge`). Mirrors the swaps family minus the solver/intent surface; reads take `{ params, queryOptions }`, the three actions (`approve`, `createBridgeIntent`, `submitTx`) are mutations taking `{ mutationOptions }`.
+Typed React Query wrappers over the backend **Bridge API v2** — `useBridgeApi*` hooks over `sodax.api.bridge.*` (tokens, allowance, approve, create-bridge-intent, submit-tx + status, plus the fee / bridgeable-amount / bridgeable discovery quotes). They are the HTTP-API parallel of the on-chain `bridge/` hooks (`useBridge`/`useBridgeAllowance`/…, which drive `sodax.bridge`). Mirrors the swaps family minus the solver/intent surface; reads take `{ params, queryOptions }`, the three actions (`approve`, `createBridgeIntent`, `submitTx`) are mutations taking `{ mutationOptions }`.
 
 ```ts
 // @ai-snippets-skip
@@ -114,7 +114,7 @@ const { mutateAsync: submitBridgeTx } = useBridgeApiSubmitTx();
 await submitBridgeTx({ request, apiConfig: { baseURL: 'https://...' } });
 ```
 
-`useBridgeApiSubmitTxStatus` polls (1s) and returns `BridgeSubmitTxStatusResponseV2 | undefined`, running only when **both** `txHash` and `srcChainKey` are supplied; terminal states are `executed` / `failed` (no `posting_execution`). The bridgeable-**amount** has no API hook — keep using `useGetBridgeableAmount` (client-side vault math).
+`useBridgeApiSubmitTxStatus` polls (1s) and returns `BridgeSubmitTxStatusResponseV2 | undefined`, running only when **both** `txHash` and `srcChainKey` are supplied; terminal states are `executed` / `failed` (no `posting_execution`). The fee / bridgeable-amount / bridgeable quotes are computable client-side (config + vault math) — prefer the on-chain `useGetBridgeableAmount` / `sodax.bridge.*` for a no-round-trip read; `useBridgeApiFee` / `useBridgeApiBridgeableAmount` / `useBridgeApiIsBridgeable` mirror the backend endpoints for HTTP parity.
 
 > Full list in [hooks-index.md](../reference/hooks-index.md); key shapes in [querykey-conventions.md](../reference/querykey-conventions.md). For non-React callers, `sodax.api.bridge` is documented in the `sodax-sdk` skill (integration mode).
 

@@ -6,6 +6,11 @@ import type {
   BitcoinBoundExtrasV2,
   BridgeAllowanceCheckResponseV2,
   BridgeApproveResponseV2,
+  BridgeFeeRequestV2,
+  BridgeFeeResponseV2,
+  BridgeQuoteRequestV2,
+  BridgeableAmountResponseV2,
+  BridgeableCheckResponseV2,
   BridgeSubmitTxRequestV2,
   BridgeSubmitTxResponseV2,
   BridgeSubmitTxStatusQueryV2,
@@ -284,6 +289,60 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
       `/bridge/submit-tx/status?${queryParams.toString()}`,
       { method: 'GET' },
       schemas.BridgeSubmitTxStatusResponseSchema,
+      config,
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Fee · bridgeable quote (read-only; mirror the SDK-core client-side methods)
+  // ──────────────────────────────────────────────────────────────────────
+
+  /**
+   * Config-driven bridge partner fee for an input amount. NOTE: this is a pure client-side computation
+   * in the SDK core (`sodax.bridge.getFee`) — prefer that (no round-trip); this HTTP variant exists for
+   * parity with the backend `/bridge/fee` endpoint (for consumers using only `sodax.api.bridge`).
+   *
+   * @returns `Result<BridgeFeeResponseV2>` — `{ fee }` (decimal string).
+   */
+  public async getFee(
+    body: BridgeFeeRequestV2,
+    config?: RequestOverrideConfig,
+  ): Promise<Result<BridgeFeeResponseV2>> {
+    return this.request('/bridge/fee', { method: 'POST', body: toJsonBody(body) }, schemas.BridgeFeeResponseSchema, config);
+  }
+
+  /**
+   * Deposit capacity / withdrawal liquidity for a (from, to) token pair. Computable client-side in the
+   * SDK core (`sodax.bridge.getBridgeableAmount`); this HTTP variant mirrors `/bridge/bridgeable-amount`.
+   *
+   * @returns `Result<BridgeableAmountResponseV2>` — `{ limit }`.
+   */
+  public async getBridgeableAmount(
+    body: BridgeQuoteRequestV2,
+    config?: RequestOverrideConfig,
+  ): Promise<Result<BridgeableAmountResponseV2>> {
+    return this.request(
+      '/bridge/bridgeable-amount',
+      { method: 'POST', body: toJsonBody(body) },
+      schemas.BridgeableAmountResponseSchema,
+      config,
+    );
+  }
+
+  /**
+   * Whether a (from, to) token pair is bridgeable. Computable client-side in the SDK core
+   * (`sodax.bridge.isBridgeable`); this HTTP variant mirrors `/bridge/bridgeable/check`.
+   *
+   * @returns `Result<BridgeableCheckResponseV2>` — `{ bridgeable }`.
+   */
+  public async isBridgeable(
+    body: BridgeQuoteRequestV2,
+    config?: RequestOverrideConfig,
+  ): Promise<Result<BridgeableCheckResponseV2>> {
+    return this.request(
+      '/bridge/bridgeable/check',
+      { method: 'POST', body: toJsonBody(body) },
+      schemas.BridgeableCheckResponseSchema,
       config,
     );
   }

@@ -91,7 +91,7 @@ beforeEach(() => mockFetch.mockReset());
 afterEach(() => vi.restoreAllMocks());
 
 // =========================================================================
-// URL + HTTP method coverage for all 7 endpoints. Asserts the exact path
+// URL + HTTP method coverage for every endpoint. Asserts the exact path
 // and verb so a refactor that flips a route string surfaces immediately.
 // =========================================================================
 
@@ -134,6 +134,36 @@ describe('BridgeApiService endpoint routing', () => {
       invoke: () => sodax.api.bridge.getSubmitTxStatus({ txHash: '0xabc', srcChainKey: '0xa4b1.arbitrum' }),
       method: 'GET',
       url: `${BASE}/bridge/submit-tx/status?txHash=0xabc&srcChainKey=0xa4b1.arbitrum`,
+    },
+    {
+      name: 'getFee',
+      invoke: () => sodax.api.bridge.getFee({ inputAmount: '1000000' }),
+      method: 'POST',
+      url: `${BASE}/bridge/fee`,
+    },
+    {
+      name: 'getBridgeableAmount',
+      invoke: () =>
+        sodax.api.bridge.getBridgeableAmount({
+          srcChainKey: '0xa4b1.arbitrum',
+          dstChainKey: '0x89.polygon',
+          inputToken: '0x1',
+          outputToken: '0x2',
+        }),
+      method: 'POST',
+      url: `${BASE}/bridge/bridgeable-amount`,
+    },
+    {
+      name: 'isBridgeable',
+      invoke: () =>
+        sodax.api.bridge.isBridgeable({
+          srcChainKey: '0xa4b1.arbitrum',
+          dstChainKey: '0x89.polygon',
+          inputToken: '0x1',
+          outputToken: '0x2',
+        }),
+      method: 'POST',
+      url: `${BASE}/bridge/bridgeable/check`,
     },
   ];
 

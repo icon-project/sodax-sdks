@@ -13,8 +13,8 @@ export type UseBridgeApiTokensParams = ReadHookParams<
 
 /**
  * React hook to fetch all supported bridge tokens grouped by SpokeChainKey via the bridge API —
- * `sodax.api.bridge.getTokens` (the token list is backend-served; bridgeable-amount stays
- * client-side via `useGetBridgeableAmount`).
+ * `sodax.api.bridge.getTokens`. The token list is backend-served; the bridgeable-amount quote is
+ * computable client-side via `useGetBridgeableAmount` (also mirrored by `useBridgeApiBridgeableAmount`).
  *
  * @example
  * const { data: tokensByChain } = useBridgeApiTokens();

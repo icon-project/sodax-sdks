@@ -112,3 +112,19 @@ export const BridgeSubmitTxStatusResponseSchema = v.object({
   success: v.boolean(),
   data: BridgeSubmitTxStatusDataSchema,
 });
+
+/** POST /bridge/fee (`BridgeFeeResponseV2`). */
+export const BridgeFeeResponseSchema = v.object({ fee: v.string() });
+
+/** A bridge limit (`BridgeLimitV2`) — bigint `amount` serialized as a decimal string. */
+const BridgeLimitSchema = v.object({
+  amount: v.string(),
+  decimals: v.number(),
+  type: v.picklist(['DEPOSIT_LIMIT', 'WITHDRAWAL_LIMIT']),
+});
+
+/** POST /bridge/bridgeable-amount (`BridgeableAmountResponseV2`). */
+export const BridgeableAmountResponseSchema = v.object({ limit: BridgeLimitSchema });
+
+/** POST /bridge/bridgeable/check (`BridgeableCheckResponseV2`). */
+export const BridgeableCheckResponseSchema = v.object({ bridgeable: v.boolean() });
