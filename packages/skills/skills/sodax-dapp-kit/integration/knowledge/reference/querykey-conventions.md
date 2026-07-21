@@ -190,7 +190,7 @@ Typed wrappers over `sodax.api.bridge.*` (one per Bridge API v2 endpoint), all k
 |---|---|
 | `['bridgeApi', 'tokens']` | `useBridgeApiTokens` |
 | `['bridgeApi', 'allowance', …]` | `useBridgeApiAllowance` |
-| `['bridgeApi', 'fee', inputAmount]` | `useBridgeApiFee` |
+| `['bridgeApi', 'fee', inputAmount, partnerFee]` | `useBridgeApiFee` |
 | `['bridgeApi', 'bridgeableAmount', srcChainKey, dstChainKey, inputToken, outputToken]` | `useBridgeApiBridgeableAmount` |
 | `['bridgeApi', 'bridgeable', srcChainKey, dstChainKey, inputToken, outputToken]` | `useBridgeApiIsBridgeable` |
 | `['bridgeApi', 'submitTx', 'status', txHash, srcChainKey]` | `useBridgeApiSubmitTxStatus` — both identifiers required |

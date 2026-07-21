@@ -32,7 +32,7 @@ export const useBridgeApiFee = ({
   const apiConfig = params?.apiConfig;
 
   return useQuery({
-    queryKey: ['bridgeApi', 'fee', body?.inputAmount],
+    queryKey: ['bridgeApi', 'fee', body?.inputAmount, body?.partnerFee],
     queryFn: async (): Promise<BridgeFeeResponseV2 | undefined> => {
       if (!body) return undefined;
       return unwrapResult(await sodax.api.bridge.getFee(body, apiConfig));

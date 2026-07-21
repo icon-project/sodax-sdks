@@ -13,8 +13,8 @@ is on `error.cause`. Like `sodax.api.swaps`, the bridge **HTTP client** is unifo
 (with a per-service `context.api` tag — `'bridge'`).
 
 > Lower-level than `sodax.bridge` (the `BridgeService` orchestrator that deposits + relays end-to-end).
-> Use `sodax.api.bridge` for a single backend call, or when building your own flow. The Bridge API shares
-> the swaps host — its routes are `/bridge/*` sub-paths under the same base URL.
+> Use `sodax.api.bridge` for a single backend call, or when building your own flow. The Bridge API is
+> served on the base backend host — its routes are `/bridge/*` sub-paths under the same base URL.
 
 ## Methods
 

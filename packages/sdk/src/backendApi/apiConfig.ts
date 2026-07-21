@@ -87,10 +87,11 @@ export function resolveSwapsApiConfig(config: ApiConfig): SwapsApiConfig {
 }
 
 /**
- * Resolve the effective config for the bridge API. The Bridge API shares the swaps host —
- * its routes are reached as `/bridge/*` sub-paths under the same base URL — so there is no
+ * Resolve the effective config for the bridge API. The Bridge API is served on the BASE backend
+ * host — its routes are reached as `/bridge/*` sub-paths under the same base URL — so there is no
  * separate `bridgeApiConfig` slice on {@link CustomApiConfig} and no `BridgeApiConfig` type:
- * this is an unconditional alias of {@link resolveBaseApiConfig}.
+ * this is an unconditional alias of {@link resolveBaseApiConfig} (NOT the swaps-host resolver; a
+ * custom swaps host does not move the bridge routes).
  */
 export function resolveBridgeApiConfig(config: ApiConfig): BaseApiConfig {
   return resolveBaseApiConfig(config);

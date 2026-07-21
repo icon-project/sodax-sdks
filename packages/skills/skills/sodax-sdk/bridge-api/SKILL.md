@@ -8,7 +8,7 @@ description: 'Granular skill for the @sodax/sdk v2 Bridge API client — `sodax.
 Granular skill for `sodax.api.bridge` (class `BridgeApiService`) — the typed HTTP client for the backend
 **Bridge API v2** (`/bridge/*`). `sodax.api` is an alias for `sodax.backendApi`; `.bridge` is the bridge
 client. One method per endpoint; every method returns `Promise<Result<T>>` (never throws) and
-validates the response. Errors carry `feature: 'backend'`, `context.api: 'backend'`, `context.endpoint`.
+validates the response. Errors carry `feature: 'backend'`, `context.api: 'bridge'`, `context.endpoint`.
 
 > Lower-level than `sodax.bridge`: this is the raw backend HTTP surface. For the end-to-end
 > deposit→relay bridge orchestrator, use the [`bridge`](../bridge/SKILL.md) skill. The Bridge API mirrors

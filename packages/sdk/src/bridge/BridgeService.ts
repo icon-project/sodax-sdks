@@ -606,13 +606,20 @@ export class BridgeService {
       // Native BTC on the Bitcoin chain is denominated in satoshis, so a BTC deposit (source) or BTC
       // delivery (destination) must clear the 546-sat dust limit. Bridging is vault-1:1 across 8-decimal
       // BTC-family tokens, so `amount` equals the satoshi value on both sides.
-      if (
-        isNativeBitcoinTransfer(this.config, params.srcChainKey, srcToken) ||
-        isNativeBitcoinTransfer(this.config, params.dstChainKey, dstToken)
-      ) {
+      if (isNativeBitcoinTransfer(this.config, params.srcChainKey, srcToken)) {
         bridgeInvariant(
           params.amount >= BITCOIN_DUST_SATS,
           `Invalid amount (${params.amount}): below the Bitcoin dust limit of ${BITCOIN_DUST_SATS} sats`,
+          { ...baseCtx, field: 'amount' },
+        );
+      }
+      if (isNativeBitcoinTransfer(this.config, params.dstChainKey, dstToken)) {
+        // The partner fee is deducted before withdrawal, so the DELIVERED (post-fee) amount — not the gross
+        // input — is what must clear dust on the destination side.
+        const delivered = params.amount - calculateFeeAmount(params.amount, extras?.partnerFee ?? this.config.bridgePartnerFee);
+        bridgeInvariant(
+          delivered >= BITCOIN_DUST_SATS,
+          `Post-fee BTC delivery (${delivered}) is below the Bitcoin dust limit of ${BITCOIN_DUST_SATS} sats`,
           { ...baseCtx, field: 'amount' },
         );
       }
