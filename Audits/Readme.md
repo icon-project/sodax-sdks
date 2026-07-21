@@ -11,3 +11,4 @@ This directory contains all audit reports for the Sodax project.
 - [Sodax Collaborative Audit (August 2025)](https://github.com/icon-project/sodax-sdks/tree/main/Audits/2025.08.01%20-%20Final%20-%20Sodax%20Collaborative%20Audit%20Report%201754078902%20(1)%20(1).pdf)
 - [Sodax (Near) Smart Contract Audit](https://github.com/icon-project/sodax-sdks/tree/main/Audits/Final%20Report-%20Near%20Sodax%20contracts%20audit.pdf)
 - [Sodax (Stacks) Smart Contract Audit](https://github.com/icon-project/sodax-sdks/tree/main/Audits/2026.02.26%20-%20Final%20-%20Sodax%20Collaborative%20Audit%20Report%201772065303.pdf)
+- [Sodax Collaborative Audit (LST / Leverage Yield Vault, May 2026)](https://github.com/icon-project/sodax-sdks/tree/main/Audits/2026.05.29%20-%20Final%20-%20Sodax%20Collaborative%20Audit%20Report%20Sherlock.pdf)

@@ -43,6 +43,12 @@ catalog:
   "tslib": "2.8.1"
   "cross-env": "7.0.3"
   "valibot": "1.4.1"
+  # Pin exact: pancake's parents transitively exact-pin @pancakeswap/swap-sdk-evm,
+  # so floating v3-sdk->3.10.1 / infinity-sdk->1.0.9 pulls sdk 5.9.1 -> swap-sdk-evm 1.2.1.
+  # Hold at 3.10.0 / 1.0.8 to keep swap-sdk-evm at 1.2.0. Bump all three together.
+  "@pancakeswap/infinity-sdk": "1.0.8"
+  "@pancakeswap/swap-sdk-core": "1.6.0"
+  "@pancakeswap/v3-sdk": "3.10.0"
 
 # pnpm-managed dep tree tweaks. Kept in workspace.yaml (not root package.json)
 # so each entry can carry an inline comment explaining the reason.

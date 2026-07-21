@@ -191,7 +191,7 @@ Typed React Query wrappers over the backend Swaps API v2 (`sodax.api.swaps.*`), 
 | `useSwapsApiIntentExtraData` | Query; relay extra-data for submit |
 | `useSwapsApiFilledIntent` | Query; on-chain fill state by tx hash |
 | `useSwapsApiIntent` | Query; decoded intent struct by tx hash |
-| `useSwapsApiSubmitTxStatus` | Query (1s); requires `txHash` + `srcChainKey`; polls until `executed` / `failed` |
+| `useSwapsApiSubmitTxStatus` | Query (1s); requires `txHash` + `srcChainKey`; polls until `solved` / `failed` |
 
 ### Actions (mutations)
 

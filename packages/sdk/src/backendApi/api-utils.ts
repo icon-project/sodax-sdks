@@ -42,11 +42,10 @@ export type MakeRequestParams = {
 };
 
 /**
- * `JSON.stringify` that is safe for request bodies containing `bigint` values
- * (e.g. the Swaps API v2 `IntentRequestV2` struct, whose numeric fields are
- * `bigint`). Plain `JSON.stringify` throws `TypeError` on a `bigint`; this
- * serializes each `bigint` to its decimal string form, matching the wire shape
- * the backend expects.
+ * `JSON.stringify` that is safe for request bodies containing `bigint` values (e.g. the Bridge API v2
+ * quote/fee bodies whose numeric amounts are serialized as decimal strings). Plain `JSON.stringify`
+ * throws `TypeError` on a `bigint`; this serializes each `bigint` to its decimal string form, matching
+ * the wire shape the backend expects.
  */
 export const toJsonBody = (value: unknown): string =>
   JSON.stringify(value, (_key, val) => (typeof val === 'bigint' ? val.toString() : val));

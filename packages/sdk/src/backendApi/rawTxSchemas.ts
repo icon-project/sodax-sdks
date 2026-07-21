@@ -1,6 +1,6 @@
 // Valibot schemas for the chain-specific unsigned `tx` payloads returned by the
-// backend Swaps API v2 (`approve`, `createIntent`, `cancelIntent`,
-// `createLimitOrderIntent`, and `getQuote`'s `txData.tx`).
+// backend Bridge API v2 (`approve` and `createBridgeIntent` response `tx`). (Originally shared with
+// the swaps client, which has since moved to the standalone `@sodax/swaps-api` package.)
 //
 // Each schema validates the WIRE shape and transforms it back to the SDK domain
 // `RawTxReturnType` variant — the inverse of the backend's `stringifyBigInts`:
@@ -123,9 +123,9 @@ const AnyRawTxSchema = v.custom<RawTxReturnType>(input => typeof input === 'obje
 /**
  * Select the precise raw-tx schema for a source chain key. The return type is pinned to
  * `v.GenericSchema<unknown, RawTxReturnType>` so every branch's inferred output collapses to the
- * domain union — the tx-bearing response factories in `swapsApiSchemas.ts` stay unpinned yet their
+ * domain union — the tx-bearing response factories in `bridgeApiSchemas.ts` stay unpinned yet their
  * inferred `tx` is exactly `RawTxReturnType`. Never throws: an unmapped key falls back to the
- * permissive schema, preserving `SwapsApiService`'s never-throw contract.
+ * permissive schema, preserving `BridgeApiService`'s never-throw contract.
  */
 export function rawTxSchemaForChainKey(chainKey: string): v.GenericSchema<unknown, RawTxReturnType> {
   let chainType: string | undefined;

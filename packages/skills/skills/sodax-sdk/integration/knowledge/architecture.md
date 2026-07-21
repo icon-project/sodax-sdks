@@ -4,7 +4,7 @@ Every v2 design concept the SDK rests on, in a single TOC-navigable file. Read e
 
 ## Section index
 
-1. [Hub-and-spoke model](#1-hub-and-spoke-model) — Sonic is the hub; 19 spoke chains route through it.
+1. [Hub-and-spoke model](#1-hub-and-spoke-model) — Sonic is the hub; 20 spoke chains route through it.
 2. [`SpokeService` router](#2-spokeservice-router) — single internal dispatcher; no per-chain provider classes.
 3. [`Sodax` facade and service graph](#3-sodax-facade-and-service-graph) — one instance owns every feature service.
 4. [`ConfigService`](#4-configservice) — dynamic config from backend with packaged-defaults fallback.
@@ -50,7 +50,7 @@ For most consumers, this whole pipeline is one method call (`sodax.swaps.swap(..
 
 ### Supported chains
 
-20 total. EVM (12): Sonic (hub), Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia. Non-EVM (8): Solana, Sui, Stellar, ICON, Injective, NEAR, Stacks, Bitcoin. See [`reference/`](reference/) § "Chain keys" for the full table with relay IDs and address-type mapping.
+21 total. EVM (13): Sonic (hub), Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia, Hedera. Non-EVM (8): Solana, Sui, Stellar, ICON, Injective, NEAR, Stacks, Bitcoin. See [`reference/`](reference/) § "Chain keys" for the full table with relay IDs and address-type mapping.
 
 ---
 
@@ -62,7 +62,7 @@ Instead, the SDK has **one** `SpokeService` instance (owned by `Sodax`) which ho
 
 ```
 SpokeService
- ├── EvmSpokeService        (handles all 12 EVM chains)
+ ├── EvmSpokeService        (handles all 13 EVM chains)
  ├── SonicSpokeService      (special-cased for the hub)
  ├── SolanaSpokeService
  ├── SuiSpokeService
@@ -137,13 +137,13 @@ new Sodax(config?: SodaxOptions): Sodax;
 
 `SodaxDefaultConfig` has exactly **10 fields** (all required at the type level, but `DeepPartial` makes every leaf optional):
 
-- `chains: Record<SpokeChainKey, SpokeChainConfig>` — per-spoke-chain config. Each entry carries `rpcUrl`, polling config, and chain-family-specific extras (`BitcoinSpokeChainConfig`, `StellarSpokeChainConfig`, etc.).
+- `chains: Record<SpokeChainKey, SpokeChainConfig>` — per-spoke-chain config. Each entry carries `rpcUrl`, polling config, and chain-family-specific extras (`BitcoinSpokeChainConfig`, `StellarSpokeChainConfig`, etc.). EVM hub/Sonic entries also accept an optional `rpcUrls` failover list (see [`recipes/initialize-sodax.md`](recipes/initialize-sodax.md)).
 - `swaps: SwapsConfig` — supported solver tokens per chain (+ optional per-feature `partnerFee` override).
 - `moneyMarket: MoneyMarketConfig` — money market contracts + supported tokens (+ optional per-feature `partnerFee` override).
 - `bridge: BridgeConfig` — bridge `{ partnerFee }` override.
 - `dex: DexConfig` — DEX pool/asset config.
 - `leverageYield: LeverageYieldConfig` — registry of leverage-yield ERC-4626 vaults on the hub.
-- `hub: HubConfig` — hub-chain (Sonic) full address map + RPC URL + polling config.
+- `hub: HubConfig` — hub-chain (Sonic) full address map + RPC URL + polling config. Accepts an optional `rpcUrls` failover list (and `rpcOptions` tuning) — see [`recipes/initialize-sodax.md`](recipes/initialize-sodax.md).
 - `api: ApiConfig` — backend API config: flat `BaseApiConfig` (`{ baseURL, timeout, headers }`, shared by `sodax.backendApi` and the swaps client `sodax.api.swaps`) or nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig? }`) to point the swaps API at its own endpoint.
 - `solver: SolverConfig` — `{ intentsContract, solverApiEndpoint, protocolIntentsContract }`.
 - `relay: RelayConfig` — intent relay endpoint + chain-id map.

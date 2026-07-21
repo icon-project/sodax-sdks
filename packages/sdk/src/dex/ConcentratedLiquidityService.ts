@@ -1,4 +1,4 @@
-import type { Hex, PublicClient, HttpTransport } from 'viem';
+import type { Hex, PublicClient } from 'viem';
 import {
   type SpokeService,
   encodeContractCalls,
@@ -936,10 +936,7 @@ export class ClService {
    * @returns `Result<PoolRewardConfig>` — on success, contains the reward token address,
    *   reward rate per second, and the timestamp of the last position-affecting action.
    */
-  public async getPoolRewardConfig(
-    poolKey: PoolKey,
-    publicClient: PublicClient<HttpTransport>,
-  ): Promise<Result<PoolRewardConfig>> {
+  public async getPoolRewardConfig(poolKey: PoolKey, publicClient: PublicClient): Promise<Result<PoolRewardConfig>> {
     try {
       const hookAddress = poolKey.hooks;
 
@@ -1168,7 +1165,7 @@ export class ClService {
    */
   private async getTokenInfo(
     tokenAddress: Address,
-    publicClient: PublicClient<HttpTransport>,
+    publicClient: PublicClient,
   ): Promise<ConcentratedLiquidityTokenInfo> {
     try {
       const [symbol, name, decimals] = await Promise.all([
@@ -1239,10 +1236,7 @@ export class ClService {
   /**
    * Get enriched token data with StatAToken conversion information
    */
-  private async getTokenEnrichmentData(
-    token: Token,
-    publicClient: PublicClient<HttpTransport>,
-  ): Promise<EnrichedToken> {
+  private async getTokenEnrichmentData(token: Token, publicClient: PublicClient): Promise<EnrichedToken> {
     const isStatAToken = this.isStatAToken(token.address);
 
     if (!isStatAToken) {
@@ -1301,10 +1295,7 @@ export class ClService {
    *   fee tiers, token metadata with optional StatAToken enrichment, and optional
    *   reward configuration. `isActive` is `true` when `sqrtPriceX96 > 0`.
    */
-  public async getPoolData(
-    poolKey: PoolKey<'CL'>,
-    publicClient: PublicClient<HttpTransport>,
-  ): Promise<Result<PoolData>> {
+  public async getPoolData(poolKey: PoolKey<'CL'>, publicClient: PublicClient): Promise<Result<PoolData>> {
     try {
       // Get pool ID
       const poolId = getPoolId(poolKey);
@@ -1434,10 +1425,7 @@ export class ClService {
    *   current token amounts, tick-boundary prices, unclaimed fees, and optional
    *   underlying amounts for StatAToken pools.
    */
-  public async getPositionInfo(
-    tokenId: bigint,
-    publicClient: PublicClient<HttpTransport>,
-  ): Promise<Result<ClPositionInfo>> {
+  public async getPositionInfo(tokenId: bigint, publicClient: PublicClient): Promise<Result<ClPositionInfo>> {
     try {
       // Read position data from the position manager using PancakeSwap SDK ABI
       const positionData = await publicClient.readContract({

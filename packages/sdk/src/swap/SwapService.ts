@@ -550,7 +550,7 @@ export class SwapService {
   /**
    * Backend 2-step swap path (opt-in via `swapsOptions.useBackendSubmitTx`): hand the broadcast
    * intent tx to the swaps API (`POST /swaps/submit-tx`); the backend relays + post-executes
-   * server-side. Polls `getSubmitTxStatus` until `executed`, then reconstructs the same
+   * server-side. Polls `getSubmitTxStatus` until `solved`, then reconstructs the same
    * {@link SwapResponse} the client-side path returns (`result.dstIntentTxHash` → delivery info,
    * `result.intent_hash` → solver response).
    *
@@ -589,6 +589,8 @@ export class SwapService {
 
       const polled = await pollBackendSubmitTx({
         deadline,
+        // Swaps terminal success is `solved` (solver filled) — not the bridge `executed`.
+        terminalStatus: 'solved',
         getStatus: () => this.backendApi.swaps.getSubmitTxStatus({ txHash: spokeTxHash, srcChainKey }),
         onExecuted: (result): SwapResponse | undefined =>
           result?.dstIntentTxHash && result.intent_hash

@@ -3,8 +3,8 @@
 // One schema per response shape declared in `@sodax/types`'s `backendBridgeApiV2.ts`.
 // `BridgeApiService` validates every HTTP response against these before returning it,
 // so a backend contract drift surfaces as a `Result` error rather than an untyped
-// runtime surprise. Mirrors `swapsApiSchemas.ts`; the relay-envelope schema is reused
-// from there rather than re-declared.
+// runtime surprise. The relay-envelope schema is declared locally below (the swaps client
+// moved to the standalone `@sodax/swaps-api` package, so its schemas are no longer shared here).
 //
 // Bridge deltas vs swaps:
 //   - create-intent response is `{ tx, relayData }` (NO `intent`).
@@ -19,7 +19,15 @@
 
 import * as v from 'valibot';
 import type { RawTxReturnType } from '@sodax/types';
-import { RelayExtraDataResponseSchema } from './swapsApiSchemas.js';
+
+/**
+ * Relay envelope (`{ address, payload }`) attached to the create-intent response. Declared locally
+ * because the bridge is the sole remaining consumer after the swaps client moved to `@sodax/swaps-api`.
+ */
+const RelayExtraDataResponseSchema = v.object({
+  address: v.string(),
+  payload: v.string(),
+});
 
 /** A supported bridge token descriptor (`BridgeTokenV2`). */
 export const BridgeTokenSchema = v.object({

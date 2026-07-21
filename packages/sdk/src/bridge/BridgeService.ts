@@ -523,6 +523,8 @@ export class BridgeService {
 
       const polled = await pollBackendSubmitTx({
         deadline,
+        // Bridge terminal success is `executed` (hub-settled) — not the swaps `solved`.
+        terminalStatus: 'executed',
         getStatus: () => this.backendApi.bridge.getSubmitTxStatus({ txHash: spokeTxHash, srcChainKey }),
         onExecuted: (result): TxHashPair | undefined =>
           result?.dstIntentTxHash ? { srcChainTxHash: spokeTxHash, dstChainTxHash: result.dstIntentTxHash } : undefined,

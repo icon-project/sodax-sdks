@@ -1,4 +1,5 @@
 import { SelectChain } from '@/components/swaps/SelectChain';
+import { SelectToken } from '@/components/swaps/SelectToken';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -12,12 +13,11 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { calculateExchangeRate, formatMutationFailureMessage, formatTokenAmount } from '@/lib/utils';
 import { parseUnits, formatUnits } from 'viem';
 import BigNumber from 'bignumber.js';
 import { ArrowDownUp, ArrowLeftRight, Loader2 } from 'lucide-react';
-import React, { type SetStateAction, useMemo, useState } from 'react';
+import React, { type SetStateAction, useEffect, useMemo, useState } from 'react';
 import {
   useQuote,
   useSwapAllowance,
@@ -32,6 +32,7 @@ import {
   useXBalances,
   useNearStorageGate,
   getSupportedSolverTokens,
+  getStagingSolverTokens,
   type CreateIntentParams,
   type SolverIntentQuoteRequest,
   type GetWalletProviderType,
@@ -54,27 +55,46 @@ import {
   useXService,
 } from '@sodax/wallet-sdk-react';
 import type { Order } from '@/components/swaps/OrderStatus';
-import { DEFAULT_SELECTED_CHAIN, useAppStore } from '@/zustand/useAppStore';
+import { DEFAULT_SELECTED_CHAIN, SolverEnv, useAppStore } from '@/zustand/useAppStore';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
-
-const SUBMIT_TX_API_CONFIG = { baseURL: 'https://canary-api.sodax.com/v1/bes' } as const;
+import { loadLastSelection, saveLastSelection } from '@/lib/lastSelection';
+import { appendOrder } from '@/lib/orderHistory';
+import { buildOrderSummary } from '@/components/swaps/OrderStatus';
+import { solverApiEndpointForEnv } from '@/constants';
 
 export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAction<Order[]>) => void }) {
   const { sodax } = useSodaxContext();
-  //chain and account states
-  const [src, setSrc] = useState<{ chain: SpokeChainKey; token: XToken }>({
-    chain: DEFAULT_SELECTED_CHAIN,
-    token: getSupportedSolverTokens(DEFAULT_SELECTED_CHAIN)[0],
-  });
-  const [dst, setDst] = useState<{ chain: SpokeChainKey; token: XToken }>({
-    chain: ChainKeys.POLYGON_MAINNET,
-    token: getSupportedSolverTokens(ChainKeys.POLYGON_MAINNET)[0],
-  });
+  //chain and account states — restore last picked chain/token from localStorage, falling back to defaults
+  const [src, setSrc] = useState<{ chain: SpokeChainKey; token: XToken }>(
+    () =>
+      loadLastSelection().src ?? {
+        chain: DEFAULT_SELECTED_CHAIN,
+        token: getSupportedSolverTokens(DEFAULT_SELECTED_CHAIN)[0],
+      },
+  );
+  const [dst, setDst] = useState<{ chain: SpokeChainKey; token: XToken }>(
+    () =>
+      loadLastSelection().dst ?? {
+        chain: ChainKeys.POLYGON_MAINNET,
+        token: getSupportedSolverTokens(ChainKeys.POLYGON_MAINNET)[0],
+      },
+  );
+
+  // Persist the latest chain/token picks (symbol only) so they restore on reload.
+  useEffect(() => {
+    saveLastSelection(src, dst);
+  }, [src, dst]);
   const sourceAccount = useXAccount({ xChainId: src.chain });
   const sourceWalletProvider = useWalletProvider({ xChainId: src.chain });
   const destAccount = useXAccount({ xChainId: dst.chain });
   const destWalletProvider = useWalletProvider({ xChainId: dst.chain });
-  const { openWalletModal } = useAppStore();
+  const { openWalletModal, solverEnvironment } = useAppStore();
+  // Staging solver supports the production tokens PLUS the staging-only ones (getStagingSolverTokens);
+  // production/dev expose only the production set. Drive the token dropdowns off the selected env tab.
+  const getSolverTokens = useMemo(
+    () => (solverEnvironment === SolverEnv.Staging ? getStagingSolverTokens : getSupportedSolverTokens),
+    [solverEnvironment],
+  );
   const { mutateAsync: swap } = useSwap();
   const [sourceAmount, setSourceAmount] = useState<string>('');
   const [intentOrderPayload, setIntentOrderPayload] = useState<CreateIntentParams | undefined>(undefined);
@@ -134,11 +154,11 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   };
 
   const onSrcChainChange = (chainId: SpokeChainKey) => {
-    setSrc({ chain: chainId, token: getSupportedSolverTokens(chainId)[0] });
+    setSrc({ chain: chainId, token: getSolverTokens(chainId)[0] });
   };
 
   const onDestChainChange = (chainId: SpokeChainKey) => {
-    setDst({ chain: chainId, token: getSupportedSolverTokens(chainId)[0] });
+    setDst({ chain: chainId, token: getSolverTokens(chainId)[0] });
   };
 
   // Balance fetching- Fetch source token balance for the connected wallet
@@ -334,22 +354,22 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       relayData: relayData.payload,
     };
 
-    const submitResult = await submitSwapTx({ request, apiConfig: SUBMIT_TX_API_CONFIG });
+    const submitResult = await submitSwapTx({ request });
     if (!submitResult.ok) {
       console.error('Submit swap tx failed:', submitResult.error);
       return;
     }
     console.log('Submit swap tx result:', submitResult.value);
 
-    setOrders(prev => [
-      ...prev,
-      {
+    setOrders(prev =>
+      appendOrder(prev, {
         mode: 'submit-tx',
         txHash: spokeTxHash as string,
         srcChainKey: src.chain,
-        apiBaseURL: SUBMIT_TX_API_CONFIG.baseURL,
-      },
-    ]);
+        createdAt: Date.now(),
+        summary: buildOrderSummary(src, dst, sourceAmount, quote?.quoted_amount),
+      }),
+    );
   };
 
   const handleSwap = async (intentOrderPayload: CreateIntentParams) => {
@@ -366,7 +386,19 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     try {
       const swapResponse = await swap({ params: intentOrderPayload, walletProvider: sourceWalletProvider });
       const { solverExecutionResponse: response, intent, intentDeliveryInfo } = swapResponse;
-      setOrders(prev => [...prev, { mode: 'solver', intentHash: response.intent_hash, intent, intentDeliveryInfo }]);
+      setOrders(prev =>
+        appendOrder(prev, {
+          mode: 'solver',
+          intentHash: response.intent_hash,
+          orderId: intent.intentId.toString(),
+          dstTxHash: intentDeliveryInfo.dstTxHash as string,
+          srcTxHash: intentDeliveryInfo.srcTxHash,
+          srcChainKey: intentDeliveryInfo.srcChainKey,
+          statusEndpoint: solverApiEndpointForEnv(solverEnvironment),
+          createdAt: Date.now(),
+          summary: buildOrderSummary(src, dst, sourceAmount, quote?.quoted_amount),
+        }),
+      );
     } catch (error) {
       console.error('Error creating and submitting intent:', error);
       setSwapError(formatMutationFailureMessage(error, 'Swap failed'));
@@ -450,26 +482,12 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
               onChange={e => onSourceAmountChange(e.target.value)}
             />
           </div>
-          <Select
+          <SelectToken
+            tokens={getSolverTokens(src.chain)}
             value={src.token?.symbol}
-            onValueChange={v => {
-              setSrc(prev => ({
-                ...prev,
-                token: getSupportedSolverTokens(src.chain).find(token => token.symbol === v) as XToken,
-              }));
-            }}
-          >
-            <SelectTrigger className="w-[110px]">
-              <SelectValue placeholder="Token" />
-            </SelectTrigger>
-            <SelectContent>
-              {getSupportedSolverTokens(src.chain).map(token => (
-                <SelectItem key={`${token.address}-${token.symbol}`} value={token.symbol}>
-                  {token.symbol}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onSelect={token => setSrc(prev => ({ ...prev, token }))}
+            className="w-[110px]"
+          />
         </div>
         <div className="mix-blend-multiply text-black text-(length:--body-comfortable) font-medium font-['InterRegular'] flex gap-1">
           <span className="hidden sm:inline">Balance:</span>
@@ -525,26 +543,12 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
               readOnly
             />
           </div>
-          <Select
+          <SelectToken
+            tokens={getSolverTokens(dst.chain)}
             value={dst.token?.symbol}
-            onValueChange={v => {
-              setDst(prev => ({
-                ...prev,
-                token: getSupportedSolverTokens(dst.chain).find(token => token.symbol === v) as XToken,
-              }));
-            }}
-          >
-            <SelectTrigger className="w-[110px]">
-              <SelectValue placeholder="Token" />
-            </SelectTrigger>
-            <SelectContent>
-              {getSupportedSolverTokens(dst.chain).map(token => (
-                <SelectItem key={`${token.address}-${token.symbol}`} value={token.symbol}>
-                  {token.symbol}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onSelect={token => setDst(prev => ({ ...prev, token }))}
+            className="w-[110px]"
+          />
         </div>
         <div className="mix-blend-multiply text-black text-(length:--body-comfortable) font-medium font-['InterRegular'] flex gap-1">
           <span className="hidden sm:inline">Balance:</span>

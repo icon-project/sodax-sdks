@@ -7,9 +7,9 @@ This repository contains the SDK packages and demo applications for the Sodax pr
 
 ## Architecture
 
-SODAX is a cross-chain DeFi platform built on a **hub-and-spoke architecture**, with **Sonic** as the hub chain. It supports swaps (intent-based via solver), lending/borrowing (money market), staking, bridging, DEX (concentrated liquidity), token migration, partner fee operations, and recovery (withdrawing stuck hub-wallet assets) across 20 blockchains:
+SODAX is a cross-chain DeFi platform built on a **hub-and-spoke architecture**, with **Sonic** as the hub chain. It supports swaps (intent-based via solver), lending/borrowing (money market), staking, bridging, DEX (concentrated liquidity), token migration, partner fee operations, and recovery (withdrawing stuck hub-wallet assets) across 21 blockchains:
 
-- **EVM (12):** Sonic, Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia
+- **EVM (13):** Sonic, Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia, Hedera
 - **Non-EVM (8):** Solana, Sui, Stellar, ICON, Injective, NEAR, Stacks, Bitcoin
 
 See the [Sodax SDK README](./packages/sdk/README.md) for a deeper architectural overview.

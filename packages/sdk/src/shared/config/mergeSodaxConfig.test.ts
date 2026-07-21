@@ -240,3 +240,56 @@ describe('mergeSodaxConfig — api ApiConfig union resolves correctly per servic
     expect(base.api).toEqual(before);
   });
 });
+
+// Hub RPC failover fields (issue #225). The contract that matters: an `rpcUrls` array replaces
+// wholesale (ordered failover list — element-wise merge would be wrong), an absent `rpcUrls`
+// preserves whatever the base carries (backend payloads may omit it), and the single-endpoint
+// `rpcUrl` plus sibling hub fields survive a failover-only override.
+describe('mergeSodaxConfig — hub RPC failover fields', () => {
+  const A = 'https://a.example';
+  const B = 'https://b.example';
+
+  it('lands rpcUrls onto a base that has none and preserves the single-endpoint rpcUrl', () => {
+    const base = freshConfig();
+    expect(base.hub.rpcUrls).toBeUndefined();
+
+    const merged = mergeSodaxConfig(base, { hub: { rpcUrls: [A, B] } });
+
+    expect(merged.hub.rpcUrls).toEqual([A, B]);
+    expect(merged.hub.rpcUrl).toBe(base.hub.rpcUrl);
+  });
+
+  it('replaces a pre-seeded rpcUrls wholesale (no element-wise merge)', () => {
+    const base = mergeSodaxConfig(freshConfig(), { hub: { rpcUrls: [A, B] } });
+
+    const merged = mergeSodaxConfig(base, { hub: { rpcUrls: [B] } });
+
+    expect(merged.hub.rpcUrls).toEqual([B]);
+  });
+
+  it('preserves a pre-seeded rpcUrls when the override omits it', () => {
+    const base = mergeSodaxConfig(freshConfig(), { hub: { rpcUrls: [A, B] } });
+
+    const merged = mergeSodaxConfig(base, { hub: { rpcUrl: 'https://primary.example' } });
+
+    expect(merged.hub.rpcUrl).toBe('https://primary.example'); // overridden
+    expect(merged.hub.rpcUrls).toEqual([A, B]); // absent key preserves the array
+  });
+
+  it('preserves sibling hub fields when only rpcUrls is overridden', () => {
+    const base = freshConfig();
+    const originalWallet = base.hub.addresses.hubWallet;
+
+    const merged = mergeSodaxConfig(base, { hub: { rpcUrls: [A] } });
+
+    expect(merged.hub.addresses.hubWallet).toBe(originalWallet);
+  });
+
+  it('deep-merges rpcOptions key-by-key', () => {
+    const base = mergeSodaxConfig(freshConfig(), { hub: { rpcOptions: { retryCount: 5, rank: false } } });
+
+    const merged = mergeSodaxConfig(base, { hub: { rpcOptions: { rank: true } } });
+
+    expect(merged.hub.rpcOptions).toEqual({ retryCount: 5, rank: true });
+  });
+});

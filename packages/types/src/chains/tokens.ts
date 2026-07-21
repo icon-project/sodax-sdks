@@ -31,6 +31,28 @@ export type XToken = {
   readonly access?: XTokenAccess;
 };
 
+/**
+ * Base URL for default token logos hosted in the `@sodax/assets` package.
+ * Each logo is served from `main` via raw.githubusercontent and named by the
+ * token's slugified symbol, so the full URL is `${TOKEN_LOGO_BASE_URL}/<slug>.png`.
+ */
+export const TOKEN_LOGO_BASE_URL =
+  'https://raw.githubusercontent.com/icon-project/sodax-sdks/main/packages/assets/token';
+
+/**
+ * Filename slug for a token logo: the symbol lowercased with every run of
+ * non-alphanumeric characters collapsed to a single `-` (so `bnUSD (legacy)` →
+ * `bnusd-legacy`, `AVAX.LL` → `avax-ll`). Keeps filenames URL- and path-safe.
+ */
+export const tokenLogoSlug = (symbol: string): string =>
+  symbol
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+
+/** Default logo URL for a token, resolved from its symbol (hosted in @sodax/assets). */
+export const tokenLogo = (symbol: string): string => `${TOKEN_LOGO_BASE_URL}/${tokenLogoSlug(symbol)}.png`;
+
 export const StatATokenAddresses = {
   '0xac8540fee419c7ceb985889eaba1e84b42a53e8a': '0x21685E341DE7844135329914Be6Bd8D16982d834',
   '0x8ade79c255761971f4057253712b916ab2494275': '0x7A1A5555842Ad2D0eD274d09b5c4406a95799D5d',
@@ -63,6 +85,7 @@ export const HubVaultSymbols = [
   'sodaKAIA',
   'sodaSTX',
   'sodaUSDS',
+  'sodaHBAR',
   'sodaJITOSOL',
 ] as const;
 
@@ -293,6 +316,15 @@ export const SodaTokens = {
     chainKey: ChainKeys.SONIC_MAINNET,
     hubAsset: '0x243b0c26c8b38793908d7C64e8510f21B19B4613',
     vault: '0x243b0c26c8b38793908d7C64e8510f21B19B4613',
+  },
+  sodaHBAR: {
+    symbol: 'sodaHBAR',
+    name: 'Soda HBAR',
+    decimals: 18,
+    address: '0x3BB956cc8922E1Ba4148dc10eD1b4Fa19aa599c4',
+    chainKey: ChainKeys.SONIC_MAINNET,
+    hubAsset: '0x3BB956cc8922E1Ba4148dc10eD1b4Fa19aa599c4',
+    vault: '0x3BB956cc8922E1Ba4148dc10eD1b4Fa19aa599c4',
   },
   sodaJITOSOL: {
     symbol: 'sodaJITOSOL',
@@ -2314,6 +2346,45 @@ export const kaiaSupportedTokens = {
   },
 } as const satisfies Record<string, XToken>;
 
+export const hederaSupportedTokens = {
+  HBAR: {
+    symbol: 'HBAR',
+    name: 'HBAR',
+    decimals: 8,
+    address: '0x0000000000000000000000000000000000000000',
+    chainKey: ChainKeys.HEDERA_MAINNET,
+    hubAsset: '0x5c18c543b6B6EA97dE739F48C49CfC291B3AD465',
+    vault: SodaTokens.sodaHBAR.address,
+  },
+  bnUSD: {
+    symbol: 'bnUSD',
+    name: 'bnUSD',
+    decimals: 8,
+    address: '0x0000000000000000000000000000000000a0286a',
+    chainKey: ChainKeys.HEDERA_MAINNET,
+    hubAsset: '0x44be1984cd279334a630469fa357305c7dba2837',
+    vault: SodaTokens.bnUSD.address,
+  },
+  SODA: {
+    symbol: 'SODA',
+    name: 'SODAX',
+    decimals: 8,
+    address: '0x0000000000000000000000000000000000a02869',
+    chainKey: ChainKeys.HEDERA_MAINNET,
+    hubAsset: '0x1217721376839dbffe78093ddd5d8e50d0239b3f',
+    vault: SodaTokens.sodaSODA.address,
+  },
+  USDC: {
+    symbol: 'USDC',
+    name: 'USD Coin',
+    decimals: 6,
+    address: '0x000000000000000000000000000000000006f89a',
+    chainKey: ChainKeys.HEDERA_MAINNET,
+    hubAsset: '0xafafae0c1476424c4b81f09095bd7dcb858047c8',
+    vault: SodaTokens.sodaUSDC.address,
+  },
+} as const satisfies Record<string, XToken>;
+
 export const stacksSupportedTokens = {
   STX: {
     symbol: 'STX',
@@ -2385,4 +2456,5 @@ export const supportedTokensByChain = {
   [ChainKeys.ETHEREUM_MAINNET]: ethereumSupportedTokens,
   [ChainKeys.KAIA_MAINNET]: kaiaSupportedTokens,
   [ChainKeys.STACKS_MAINNET]: stacksSupportedTokens,
+  [ChainKeys.HEDERA_MAINNET]: hederaSupportedTokens,
 } as const satisfies Record<ChainKey, Record<string, XToken>>;
