@@ -116,10 +116,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       token: intentOrderPayload?.outputToken,
       amount: BigInt(intentOrderPayload?.minOutputAmount ?? 0n),
       chainId: intentOrderPayload?.dstChainKey,
-      walletProvider:
-        dst.chain === ChainKeys.STELLAR_MAINNET
-          ? (destWalletProvider as GetWalletProviderType<typeof ChainKeys.STELLAR_MAINNET> | undefined)
-          : undefined,
+      walletAddress: destAccount.address,
     },
   });
   if (trustlineError) {

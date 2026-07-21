@@ -76,7 +76,13 @@ export type EvmAdapterFields = {
    * you know you need otherwise. @default true
    */
   ssr?: boolean;
-  /** Wagmi SSR hydration state — pass `cookieToInitialState()` to avoid disconnect flash on first load (Next.js only). */
+  /**
+   * Base key for wagmi's cookie storage (state cookie = `<persistKey>.store`). @default 'sodax'.
+   * SSR server and client must build from the same key, else the server reads the wrong cookie.
+   * The cookie is plaintext and unsigned; `persistKey` only namespaces it — it does not authenticate or encrypt it.
+   */
+  persistKey?: string;
+  /** Wagmi SSR hydration state — pass `tryCookieToInitialState()` to avoid disconnect flash on first load (Next.js only). */
   initialState?: WagmiState;
   /** WalletConnect configuration. Adds a WalletConnect connector when provided. */
   walletConnect?: WalletConnectParameters;

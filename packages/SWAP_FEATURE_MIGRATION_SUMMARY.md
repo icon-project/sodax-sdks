@@ -148,10 +148,7 @@ useStellarTrustlineCheck({
     token: intentParams?.outputToken,
     amount: intentParams?.minOutputAmount,
     chainId: intentParams?.dstChainKey,
-    walletProvider:
-      dst.chain === ChainKeys.STELLAR_MAINNET
-        ? (destWalletProvider as GetWalletProviderType<typeof ChainKeys.STELLAR_MAINNET> | undefined)
-        : undefined,
+    walletAddress: destAccount.address, // resolved address keys the cache per account
   },
 });
 
@@ -217,7 +214,7 @@ which returns `Promise<Result<T>>` and never rejects for SDK failure — see dem
 
 **Shared**
 
-- **`useStellarTrustlineCheck.ts`** — `ReadHookParams` wrapper: **`{ params: { token, amount, chainId, walletProvider }, queryOptions }`**. (`chainId` parameter name is legacy; type is **`SpokeChainKey**`.)
+- **`useStellarTrustlineCheck.ts`** — `ReadHookParams` wrapper: **`{ params: { token, amount, chainId, walletAddress }, queryOptions }`**. Pass the resolved **`walletAddress`** (e.g. `useXAccount('STELLAR').address`) — it keys the cache per account. **Breaking vs the earlier RC**: the param is now `walletAddress`, not `walletProvider`. (`chainId` type is **`SpokeChainKey`**.)
 - **`useRequestTrustline.ts`** — imperative `requestTrustline({ token, amount, srcChainKey, walletProvider })` (`srcChainKey: StellarChainKey`).
 - **`useBackendSubmitSwapTx.ts`** (`hooks/backend/`) — `mutate({ request: SubmitSwapTxRequest, apiConfig? })`; uses `unwrapResult` from **`packages/dapp-kit/src/hooks/backend/unwrapResult.ts`**. Swap feature mutations use **`packages/dapp-kit/src/hooks/shared/unwrapResult.ts`** instead.
 

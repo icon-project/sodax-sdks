@@ -48,7 +48,7 @@ These keep their name but their TypeScript signature is different. Usually requi
 | `useXBalances` | Params: positional → `{ params: { xService, xChainId, xTokens, address } }`. All four required. `xService` injected from `@sodax/wallet-sdk-react`. |
 | `useEstimateGas` | Mutation; vars: `EstimateGasParams<C>` (flat, not `{ params, walletProvider }`-wrapped). |
 | `useDeriveUserWalletAddress`, `useGetUserHubWalletAddress` | Single-object query shape. |
-| `useStellarTrustlineCheck` | Single-object shape with `{ token, amount, chainId, walletProvider }` under `params`. |
+| `useStellarTrustlineCheck` | Single-object shape under `params`: `{ token, amount, chainId, walletAddress }`. Pass the resolved Stellar address (e.g. `useXAccount('STELLAR').address`), not a wallet provider — it keys the cache per account. |
 | `useRequestTrustline` | Custom utility hook (NOT a canonical mutation). Takes `(token: string \| undefined)` positionally, returns `{ requestTrustline, isLoading, isRequested, error, data }`. The `requestTrustline` callback takes `{ token, amount, srcChainKey, walletProvider }`. |
 | `useBackendOrderbook` / `useBackendAllMoneyMarketBorrowers` | Pagination MUST be nested under `params`: `{ params: { pagination: { offset, limit } } }`. |
 | `useBackendUserIntents` | Data is `UserIntentsResponse = { items: IntentResponse[], total, offset, limit }` — NOT a bare array. Access `data?.items`. |
