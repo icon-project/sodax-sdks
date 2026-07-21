@@ -22,6 +22,7 @@ import {
   getIntentRelayChainId,
   type TxReturnType,
   isBitcoinChainKey,
+  type IStellarWalletProvider,
   type Result,
 } from '@sodax/types';
 import { encodeAddress } from '../../utils/shared-utils.js';
@@ -190,7 +191,8 @@ export class SpokeService {
   }
 
   /**
-   * Check ERC-20 allowance (EVM / hub) or Stellar trustline sufficiency using unified params.
+   * Check ERC-20 allowance (EVM / hub) or Stellar readiness (account activated on ledger and
+   * trustline sufficiency) using unified params.
    * Feature services map their action payloads into {@link SpokeIsAllowanceValidParams}.
    */
   public async isAllowanceValid(params: SpokeIsAllowanceValidParams): Promise<Result<boolean>> {
@@ -220,6 +222,14 @@ export class SpokeService {
 
       if (isSpokeIsAllowanceValidParamsStellar(params)) {
         const { token, amount, owner } = params;
+        // an account not yet on ledger cannot receive tokens, so approval (sponsored creation) is needed
+        const accountResult = await this.stellar.hasValidStellarAccount(owner);
+        if (!accountResult.ok) {
+          return accountResult;
+        }
+        if (!accountResult.value) {
+          return { ok: true, value: false };
+        }
         return {
           ok: true,
           value: await this.stellar.hasSufficientTrustline(token, amount, owner),
@@ -233,7 +243,11 @@ export class SpokeService {
   }
 
   /**
-   * Approve ERC-20 spending on hub / EVM spoke or request a Stellar trustline using unified params.
+   * Approve ERC-20 spending on hub / EVM spoke, or make a Stellar account receivable using
+   * unified params. For Stellar this runs funding first, trustline second: an address not yet on
+   * ledger is created with zero balance via the sponsored account creation service (requires a
+   * wallet provider; not available in raw mode), then a trustline is requested unless the token
+   * does not need one.
    * Feature services map their action payloads into {@link SpokeApproveParams}.
    */
   public async approve<K extends SpokeChainKey, Raw extends boolean>(
@@ -275,6 +289,38 @@ export class SpokeService {
       }
 
       if (isSpokeApproveParamsStellar(params)) {
+        // funding first: an account not yet on ledger must be created (sponsored) before a
+        // trustline can be established on it
+        const accountResult = await this.stellar.hasValidStellarAccount(params.owner);
+        if (!accountResult.ok) {
+          return accountResult;
+        }
+
+        if (!accountResult.value) {
+          const walletProvider = params.walletProvider;
+          if (params.raw === true || walletProvider === undefined) {
+            return {
+              ok: false,
+              error: new Error(
+                '[SpokeService.approve] Stellar sponsored account creation requires a wallet provider and is not supported in raw mode',
+              ),
+            };
+          }
+
+          const creationHash = await this.stellar.requestSponsoredAccountCreation(
+            params.owner,
+            walletProvider as IStellarWalletProvider,
+          );
+
+          // trustline second — skipped entirely for tokens that do not need one (e.g. native XLM)
+          if (!this.stellar.requiresTrustline(params.token)) {
+            return {
+              ok: true,
+              value: creationHash satisfies TxReturnType<StellarChainKey, false> as TxReturnType<K, Raw>,
+            };
+          }
+        }
+
         const result = await this.stellar.requestTrustline<Raw>({
           ...params,
           srcAddress: params.owner,

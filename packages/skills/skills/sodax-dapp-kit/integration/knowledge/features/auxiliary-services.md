@@ -106,6 +106,8 @@ useXBalances({ params, queryOptions });             // Cross-chain token balance
 useDeriveUserWalletAddress({ params, queryOptions }); // Hub wallet address (CREATE3)
 useGetUserHubWalletAddress({ params, queryOptions }); // Hub wallet via wallet router
 useEstimateGas({ mutationOptions });                // Gas estimation for raw tx
+useStellarAccountCheck({ params, queryOptions });   // Stellar account activated on ledger? (Stellar)
+useSponsorStellarAccount({ mutationOptions });      // Sponsored zero-balance account creation (Stellar)
 useStellarTrustlineCheck({ params, queryOptions });
 useRequestTrustline({ mutationOptions });
 useNearStorageCheck({ params, queryOptions });      // NEP-141 storage registration check (NEAR)
@@ -137,15 +139,35 @@ const xService = useXService({ xChainType: getXChainType(xChainId) });
 const { data: balances } = useXBalances({ params: { xService, xChainId, xTokens, address } });
 ```
 
-### Stellar trustlines
+### Stellar account activation & trustlines
 
-Stellar accounts that have never held an asset have no trustline — receiving will fail. Pre-flight with `useStellarTrustlineCheck`; fix with `useRequestTrustline`:
+Two receive-side gates on Stellar, checked in order — **funding first, trustline second**:
+
+1. A Stellar address that has never been funded/created does not exist on ledger and cannot receive anything. Pre-flight with `useStellarAccountCheck`; fix with `useSponsorStellarAccount` (sponsored, zero-balance account creation — the user's wallet only signs).
+2. Accounts that have never held an asset have no trustline — receiving non-XLM assets will fail. Pre-flight with `useStellarTrustlineCheck`; fix with `useRequestTrustline`.
 
 ```ts
 // @ai-snippets-skip — illustrative only; real types pulled into agents below.
+// useStellarAccountCheck takes { address, chainId } under params. `chainId` is a
+// `SpokeChainKey`; the hook returns `true` for non-Stellar chains, making it safe to
+// gate on conditionally.
+const { data: hasAccount } = useStellarAccountCheck({
+  params: { address, chainId: ChainKeys.STELLAR_MAINNET },
+});
+
+// useSponsorStellarAccount is a canonical mutation hook; pass { address, walletProvider }
+// to mutate(...). Resolves with the account-creation tx hash and invalidates the matching
+// useStellarAccountCheck query.
+const { mutateAsyncSafe: sponsorAccount } = useSponsorStellarAccount();
+if (hasAccount === false) {
+  await sponsorAccount({ address, walletProvider });
+}
+
 // useStellarTrustlineCheck takes { token, amount, chainId, walletProvider } under params.
 // `chainId` here is a `SpokeChainKey` (typed loosely so consumers can pass any chain key —
 // the hook returns `true` for non-Stellar chains, making it safe to gate on conditionally).
+// NOTE: it queries the account's balance lines, so it errors while the account is not on
+// ledger yet — run the account gate first and refetch after sponsoring.
 const { data: hasTrustline } = useStellarTrustlineCheck({
   params: { token, amount, chainId: ChainKeys.STELLAR_MAINNET, walletProvider },
 });
@@ -161,6 +183,8 @@ if (hasTrustline === false) {
   await requestTrustline({ token, amount, srcChainKey: ChainKeys.STELLAR_MAINNET, walletProvider });
 }
 ```
+
+> A freshly sponsored account holds 0 XLM; the `changeTrust` transaction still needs the account to cover the trustline reserve and fee, so trustline-requiring assets may need the account funded with some XLM first. Receiving native XLM works immediately after activation.
 
 ### NEAR storage registration
 

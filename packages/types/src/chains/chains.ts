@@ -519,6 +519,10 @@ export type StellarSpokeChainConfig = BaseSpokeChainConfig<'STELLAR'> & {
   trustlineConfigs: StellarAssetTrustline[];
   priorityFee: string;
   baseFee: string;
+  /** Sponsored account creation service: signs (as sponsor) and submits account-creation transactions. */
+  sponsorUrl: string;
+  /** Public key of the sponsor account paying the reserves for sponsored account creation. */
+  sponsorPublicKey: string;
 };
 
 export type BitcoinSpokeChainConfig = BaseSpokeChainConfig<'BITCOIN'> & {
@@ -894,6 +898,8 @@ export const spokeChainConfig = {
     bnUSD: 'CD6YBFFWMU2UJHX2NGRJ7RN76IJVTCC7MRA46DUBXNB7E6W7H7JRJ2CX',
     horizonRpcUrl: 'https://horizon.stellar.org',
     sorobanRpcUrl: 'https://rpc.ankr.com/stellar_soroban',
+    sponsorUrl: 'https://ciihnqaqiomjdoicuy5rgwmy5m0vxanz.lambda-url.us-east-1.on.aws',
+    sponsorPublicKey: 'GCV5PJ4H57MZFRH5GM3E3CNFLWQURNFNIHQOYGRQ7JHGWJLAR2SFVZO6',
     chain: baseChainInfo[ChainKeys.STELLAR_MAINNET] satisfies BaseChainInfo<'STELLAR'>,
     pollingConfig: {
       pollingIntervalMs: 500,
