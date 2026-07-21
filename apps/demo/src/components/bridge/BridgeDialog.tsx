@@ -12,6 +12,8 @@ import {
   useBridge,
   useBridgeAllowance,
   useBridgeApprove,
+  useStellarAccountCheck,
+  useSponsorStellarAccount,
   useStellarTrustlineCheck,
   useRequestTrustline,
   useBitcoinBalance,
@@ -86,7 +88,16 @@ export function BridgeDialog({
 
   const stellarWalletProvider =
     toWalletProvider?.chainType === 'STELLAR' ? (toWalletProvider as IStellarWalletProvider) : undefined;
-  const { data: hasSufficientTrustline, isPending: isTrustlineLoading } = useStellarTrustlineCheck({
+  // funding first: the recipient account must exist on ledger before a trustline can be established
+  const { data: hasStellarAccount, isPending: isStellarAccountLoading } = useStellarAccountCheck({
+    params: { address: toAccount.address, chainId: toChainKey },
+  });
+  const { mutateAsyncSafe: sponsorStellarAccount, isPending: isSponsoringAccount } = useSponsorStellarAccount();
+  const {
+    data: hasSufficientTrustline,
+    isPending: isTrustlineLoading,
+    refetch: refetchTrustline,
+  } = useStellarTrustlineCheck({
     params: {
       token: order.dstToken,
       amount: order.amount,
@@ -125,6 +136,21 @@ export function BridgeDialog({
     onClose();
   };
 
+  const handleSponsorStellarAccount = async () => {
+    if (!stellarWalletProvider || !toAccount.address) return;
+    const result = await sponsorStellarAccount({
+      address: toAccount.address,
+      walletProvider: stellarWalletProvider,
+    });
+    if (!result.ok) {
+      setBridgeError(formatMutationFailureMessage(result.error, 'Stellar account activation failed'));
+      return;
+    }
+    setBridgeError(null);
+    // the trustline check 404s while the account is missing — re-run it now the account exists
+    refetchTrustline();
+  };
+
   const handleRequestTrustline = async () => {
     if (!stellarWalletProvider) return;
     await requestTrustline({
@@ -143,14 +169,19 @@ export function BridgeDialog({
   };
 
   const isDestinationStellar = toChainKey === ChainKeys.STELLAR_MAINNET;
+  const needsStellarAccount = isDestinationStellar && !isStellarAccountLoading && !hasStellarAccount;
   const needsTrustline = isDestinationStellar && !isTrustlineLoading && !hasSufficientTrustline;
+  // Block the action while the Stellar receive-side checks are still running or unmet.
+  const stellarBlocksAction =
+    isDestinationStellar &&
+    (isStellarAccountLoading || isTrustlineLoading || !hasStellarAccount || !hasSufficientTrustline);
 
   const isBridgeDisabled =
     isBridging ||
     (fromChainType === 'EVM' && !hasAllowance) ||
     (order.srcChainKey === ChainKeys.BITCOIN_MAINNET && !isFromBtcReady) ||
     (toChainKey === ChainKeys.BITCOIN_MAINNET && !isToBtcReady) ||
-    needsTrustline ||
+    stellarBlocksAction ||
     nearStorage.blocksAction;
 
   return (
@@ -171,7 +202,13 @@ export function BridgeDialog({
           <div>Amount: {formatUnits(order.amount, fromToken?.decimals ?? 0)}</div>
           <div className="break-all">Recipient: {order.recipient}</div>
 
-          {needsTrustline && (
+          {needsStellarAccount && (
+            <div className="text-red-500">
+              Recipient Stellar account is not on ledger yet — activate it (sponsored) to proceed.
+            </div>
+          )}
+
+          {!needsStellarAccount && needsTrustline && (
             <div className="text-red-500">Insufficient Stellar trustline — request trustline to proceed.</div>
           )}
 
@@ -213,9 +250,17 @@ export function BridgeDialog({
             </Button>
           )}
 
-          {isDestinationStellar && isTrustlineLoading && <span className="text-sm">Checking trustline…</span>}
+          {isDestinationStellar && (isStellarAccountLoading || isTrustlineLoading) && (
+            <span className="text-sm">Checking Stellar account & trustline…</span>
+          )}
 
-          {needsTrustline && (
+          {needsStellarAccount && (
+            <Button className="w-full" onClick={handleSponsorStellarAccount} disabled={isSponsoringAccount}>
+              {isSponsoringAccount ? 'Activating…' : 'Activate Stellar Account'}
+            </Button>
+          )}
+
+          {!needsStellarAccount && needsTrustline && (
             <Button className="w-full" onClick={handleRequestTrustline} disabled={isRequestingTrustline}>
               {isRequestingTrustline ? 'Requesting…' : 'Request Trustline'}
             </Button>

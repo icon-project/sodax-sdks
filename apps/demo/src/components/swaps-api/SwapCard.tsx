@@ -37,6 +37,8 @@ import {
   useSodaxContext,
   useNearStorageGate,
   useRequestTrustline,
+  useSponsorStellarAccount,
+  useStellarAccountCheck,
   useStellarTrustlineCheck,
   useSwapsApiAllowance,
   useSwapsApiApprove,
@@ -306,12 +308,18 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
 
   const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: srcChainKey });
 
-  // Client-side prerequisites the Swaps API doesn't cover: Stellar trustline and NEAR
-  // storage registration on the destination chain.
+  // Client-side prerequisites the Swaps API doesn't cover: Stellar account activation +
+  // trustline and NEAR storage registration on the destination chain.
+  // funding first: the recipient account must exist on ledger before a trustline can be established
+  const { data: hasStellarAccount, isPending: isStellarAccountLoading } = useStellarAccountCheck({
+    params: { address: destAccount.address, chainId: dst.chain },
+  });
+  const { mutateAsyncSafe: sponsorStellarAccount, isPending: isSponsoringAccount } = useSponsorStellarAccount();
   const {
     data: hasSufficientTrustline,
     isPending: isTrustlineLoading,
     error: trustlineError,
+    refetch: refetchTrustline,
   } = useStellarTrustlineCheck({
     params: {
       token: intentParams?.outputToken,
@@ -327,6 +335,12 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     console.error('trustlineError', trustlineError);
   }
   const { requestTrustline } = useRequestTrustline(dst.token?.address);
+  const needsStellarAccount =
+    dst.chain === ChainKeys.STELLAR_MAINNET && !isStellarAccountLoading && !hasStellarAccount;
+  // Block the swap while the Stellar receive-side checks are still running or unmet.
+  const stellarBlocksAction =
+    dst.chain === ChainKeys.STELLAR_MAINNET &&
+    (isStellarAccountLoading || isTrustlineLoading || !hasStellarAccount || !hasSufficientTrustline);
   const nearStorage = useNearStorageGate({
     dstChainKey,
     token: intentParams?.outputToken,
@@ -452,6 +466,26 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
 
   const handleDestAccountDisconnect = () => {
     disconnect({ xChainType: getXChainType(dstChainKey) as ChainType });
+  };
+
+  const handleSponsorStellarAccount = async () => {
+    // funding first: create the recipient's Stellar account (sponsored) before any trustline
+    if (dst.chain !== ChainKeys.STELLAR_MAINNET || !destWalletProvider || !destAccount.address) {
+      console.error('destChain is not Stellar or destWalletProvider/address undefined');
+      return;
+    }
+
+    const result = await sponsorStellarAccount({
+      address: destAccount.address,
+      walletProvider: destWalletProvider as IStellarWalletProvider,
+    });
+    if (!result.ok) {
+      setSwapError(formatMutationFailureMessage(result.error, 'Stellar account activation failed'));
+      return;
+    }
+    setSwapError(null);
+    // the trustline check 404s while the account is missing — re-run it now the account exists
+    refetchTrustline();
   };
 
   const handleRequestTrustline = async () => {
@@ -697,9 +731,17 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
                     Source-chain signing for {src.chain} is not yet supported by the wallet-provider interfaces.
                   </div>
                 )}
-                {dst.chain === ChainKeys.STELLAR_MAINNET && !isTrustlineLoading && !hasSufficientTrustline && (
-                  <div className="text-red-500">Insufficient Stellar trustline (request trustline to proceed)</div>
+                {needsStellarAccount && (
+                  <div className="text-red-500">
+                    Recipient Stellar account is not on ledger yet (activate it — sponsored — to proceed)
+                  </div>
                 )}
+                {dst.chain === ChainKeys.STELLAR_MAINNET &&
+                  !needsStellarAccount &&
+                  !isTrustlineLoading &&
+                  !hasSufficientTrustline && (
+                    <div className="text-red-500">Insufficient Stellar trustline (request trustline to proceed)</div>
+                  )}
                 {nearStorage.needsRegistration && (
                   <div className="text-red-500">
                     Recipient is not storage-registered for this token on NEAR (register storage to proceed)
@@ -738,6 +780,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
                       isSwapping ||
                       (src.chain === ChainKeys.BITCOIN_MAINNET && !isSourceBitcoinReady) ||
                       (dst.chain === ChainKeys.BITCOIN_MAINNET && !isDestBitcoinReady) ||
+                      stellarBlocksAction ||
                       nearStorage.blocksAction
                     }
                   >
@@ -746,12 +789,22 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
                 ) : (
                   <span>Intent Order undefined</span>
                 ))}
-              {isTrustlineLoading && dst.chain === ChainKeys.STELLAR_MAINNET && <span>Checking trustline...</span>}
-              {dst.chain === ChainKeys.STELLAR_MAINNET && !isTrustlineLoading && !hasSufficientTrustline && (
-                <Button className="w-full" onClick={handleRequestTrustline} disabled={isTrustlineLoading}>
-                  Request Trustline
+              {(isStellarAccountLoading || isTrustlineLoading) && dst.chain === ChainKeys.STELLAR_MAINNET && (
+                <span>Checking Stellar account & trustline...</span>
+              )}
+              {needsStellarAccount && (
+                <Button className="w-full" onClick={handleSponsorStellarAccount} disabled={isSponsoringAccount}>
+                  {isSponsoringAccount ? 'Activating...' : 'Activate Stellar Account'}
                 </Button>
               )}
+              {dst.chain === ChainKeys.STELLAR_MAINNET &&
+                !needsStellarAccount &&
+                !isTrustlineLoading &&
+                !hasSufficientTrustline && (
+                  <Button className="w-full" onClick={handleRequestTrustline} disabled={isTrustlineLoading}>
+                    Request Trustline
+                  </Button>
+                )}
               {nearStorage.isNear && (nearStorage.isChecking || nearStorage.needsRegistration) && (
                 <Button
                   className="w-full"
