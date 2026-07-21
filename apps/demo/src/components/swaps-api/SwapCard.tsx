@@ -312,7 +312,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   // trustline and NEAR storage registration on the destination chain.
   // funding first: the recipient account must exist on ledger before a trustline can be established
   const { data: hasStellarAccount, isPending: isStellarAccountLoading } = useStellarAccountCheck({
-    params: { address: destAccount.address, chainId: dst.chain },
+    params: { address: destAccount.address, chainId: dstChainKey },
   });
   const { mutateAsyncSafe: sponsorStellarAccount, isPending: isSponsoringAccount } = useSponsorStellarAccount();
   const {
