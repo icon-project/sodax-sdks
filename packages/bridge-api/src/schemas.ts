@@ -148,8 +148,10 @@ export const BridgeableCheckResponseSchema = v.object({ bridgeable: v.boolean() 
 
 // ── Compile-time drift guards ─────────────────────────────────────────
 // Each entry fails `tsc` if a schema's inferred output stops matching its contract type. `Equal` is
-// strict; `Extends` is one-way for the `readonly` array/record responses and the tx-bearing factories
-// (their inferred `tx` is `RawTxReturnType`, which `extends` this branch's contract `tx`).
+// strict; `Extends` is one-way, used only for the `readonly` array/record responses (their element
+// type is `Equal`-guarded via `BridgeTokenSchema`). The tx-bearing factories use `Equal`: both
+// contract types declare `tx: RawTxReturnType` exactly, so a field REMOVED from the contract
+// (which one-way `Extends` would miss) also trips at `tsc` time.
 
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 type Extends<A, B> = [A] extends [B] ? true : false;
@@ -166,8 +168,8 @@ export type SchemaDriftGuards = [
   Expect<Extends<v.InferOutput<typeof BridgeTokensResponseSchema>, GetBridgeTokensResponseV2>>,
   Expect<Extends<v.InferOutput<typeof BridgeTokensByChainResponseSchema>, GetBridgeTokensByChainResponseV2>>,
   Expect<Equal<v.InferOutput<typeof BridgeAllowanceCheckResponseSchema>, BridgeAllowanceCheckResponseV2>>,
-  Expect<Extends<v.InferOutput<ReturnType<typeof makeBridgeApproveResponseSchema>>, BridgeApproveResponseV2>>,
-  Expect<Extends<v.InferOutput<ReturnType<typeof makeCreateBridgeIntentResponseSchema>>, CreateBridgeIntentResponseV2>>,
+  Expect<Equal<v.InferOutput<ReturnType<typeof makeBridgeApproveResponseSchema>>, BridgeApproveResponseV2>>,
+  Expect<Equal<v.InferOutput<ReturnType<typeof makeCreateBridgeIntentResponseSchema>>, CreateBridgeIntentResponseV2>>,
   Expect<Equal<v.InferOutput<typeof BridgeSubmitTxResponseSchema>, BridgeSubmitTxResponseV2>>,
   Expect<Equal<v.InferOutput<typeof BridgeSubmitTxStatusResponseSchema>, BridgeSubmitTxStatusResponseV2>>,
   Expect<Equal<v.InferOutput<typeof BridgeFeeResponseSchema>, BridgeFeeResponseV2>>,

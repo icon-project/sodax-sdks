@@ -361,6 +361,23 @@ describe('BridgeApiService response validation', () => {
       expect(err.context?.endpoint).toBe('/bridge/submit-tx/status');
     }
   });
+
+  it('does NOT tag a request-side VALIDATION_ERROR (stray bigint in the body) as invalid_response_shape', async () => {
+    // Simulates an untyped JS caller passing a runtime bigint in a wire DTO. rejectBigint throws
+    // before fetch; the failure is the caller's, so it must not be labeled a backend
+    // response-shape problem (`reason`/`issues` are reserved for response validation).
+    const badParams = { ...sampleCreateBridgeIntentParams, inputAmount: 1n } as unknown as CreateBridgeIntentParamsV2;
+    const result = await sodax.api.bridge.checkAllowance(badParams);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const err = result.error as SodaxError;
+      expect(err.code).toBe('EXTERNAL_API_ERROR');
+      expect(err.context?.code).toBe('VALIDATION_ERROR');
+      expect(err.context?.reason).toBeUndefined();
+      expect(err.context?.issues).toBeUndefined();
+      expect(mockFetch).not.toHaveBeenCalled();
+    }
+  });
 });
 
 // =========================================================================

@@ -20,9 +20,10 @@
 // - `Hex` / `Address` / `Hash` / `SpokeChainKey` are plain `string` everywhere.
 // - The unsigned `tx` is typed as the SDK domain union `RawTxReturnType`. It
 //   travels as pure JSON (bigints stringified; Injective byte arrays as
-//   `{ "0": N, … }` index objects), and the SDK client's response schema
-//   (`@sodax/sdk` `rawTxSchemas`) rebuilds the domain shape (`bigint`,
-//   `Uint8Array`) on parse — the inverse of the backend's `stringifyBigInts`.
+//   `{ "0": N, … }` index objects), and the wire clients' response schemas
+//   (the `rawTxSchemas` module in `@sodax/swaps-api` / `@sodax/bridge-api`)
+//   rebuild the domain shape (`bigint`, `Uint8Array`) on parse — the inverse
+//   of the backend's `stringifyBigInts`.
 // - The remaining chain-specific opaque payloads (gas estimate, raw relay
 //   `result`) stay `unknown` because their shape varies by chain family.
 //

@@ -26,9 +26,17 @@ const quoteBody = {
 };
 const relayData = { address: '0xrelay', payload: '0xpayload' };
 
-// Each endpoint → how to invoke it, the URL + method it must hit, and whether it is
-// idempotent (retried on transient failures) — mutations must NEVER be.
-const ROUTES = [
+// Each endpoint → how to invoke it, the URL + method it must hit, whether it is idempotent
+// (retried on transient failures) — mutations must NEVER be — and the exact JSON body it must
+// send (`undefined` for bodyless GETs).
+const ROUTES: Array<{
+  name: string;
+  run: (a: BridgeApi) => Promise<unknown>;
+  method: 'GET' | 'POST';
+  path: string;
+  idempotent: boolean;
+  body?: Record<string, unknown>;
+}> = [
   {
     name: 'getTokens',
     run: (a: BridgeApi) => a.getTokens(),
@@ -49,6 +57,7 @@ const ROUTES = [
     method: 'POST',
     path: '/bridge/allowance/check',
     idempotent: true,
+    body: params,
   },
   {
     name: 'approve',
@@ -56,6 +65,7 @@ const ROUTES = [
     method: 'POST',
     path: '/bridge/approve',
     idempotent: false,
+    body: params,
   },
   {
     name: 'createBridgeIntent',
@@ -63,6 +73,7 @@ const ROUTES = [
     method: 'POST',
     path: '/bridge/intents',
     idempotent: false,
+    body: params,
   },
   {
     name: 'submitTx',
@@ -70,6 +81,7 @@ const ROUTES = [
     method: 'POST',
     path: '/bridge/submit-tx',
     idempotent: false,
+    body: { txHash: '0xabc', srcChainKey: 'sonic', walletAddress: '0xw', relayData },
   },
   {
     name: 'getSubmitTxStatus',
@@ -84,6 +96,7 @@ const ROUTES = [
     method: 'POST',
     path: '/bridge/fee',
     idempotent: true,
+    body: { inputAmount: '1000000' },
   },
   {
     name: 'getBridgeableAmount',
@@ -91,6 +104,7 @@ const ROUTES = [
     method: 'POST',
     path: '/bridge/bridgeable-amount',
     idempotent: true,
+    body: quoteBody,
   },
   {
     name: 'isBridgeable',
@@ -98,17 +112,22 @@ const ROUTES = [
     method: 'POST',
     path: '/bridge/bridgeable/check',
     idempotent: true,
+    body: quoteBody,
   },
 ];
 
-describe('BridgeApi routing (every endpoint hits the right method + URL)', () => {
-  it.each(ROUTES)('$name → $method $path', async ({ run, method, path }) => {
+describe('BridgeApi routing (every endpoint hits the right method + URL + body)', () => {
+  it.each(ROUTES)('$name → $method $path', async ({ run, method, path, body }) => {
     const fetchImpl = vi.fn(async () => json({}));
     await run(makeApi(fetchImpl)).catch(() => {}); // response may fail validation; we only assert the request
     expect(fetchImpl).toHaveBeenCalledOnce();
     const [url, init] = fetchImpl.mock.calls[0] ?? [];
     expect(url).toBe(BASE + path);
     expect(init?.method).toBe(method);
+    // Pin the outgoing body per route — a dropped/renamed request field would otherwise ship a
+    // broken request while the mocked responses keep every test green.
+    if (body) expect(JSON.parse(String(init?.body))).toEqual(body);
+    else expect(init?.body).toBeUndefined();
   });
 });
 
@@ -160,6 +179,28 @@ describe('BridgeApi response handling', () => {
     const out = await api.createBridgeIntent(params);
     expect(out.tx).toMatchObject({ value: 1000000000000000000n });
     expect(out.relayData).toEqual(relayData);
+  });
+
+  it('transforms the approve tx to its chain variant (value string→bigint)', async () => {
+    // The approve response is `{ tx }` only — no relayData. This is the one test that executes
+    // makeBridgeApproveResponseSchema against a valid body, so a schema mix-up (e.g. reusing the
+    // create-intent schema, which requires relayData) fails here instead of in production.
+    const evmTx = { from: '0xf', to: '0xt', value: '5000', data: '0x' };
+    const api = makeApi(vi.fn(async () => json({ tx: evmTx })));
+    const out = await api.approve(params);
+    expect(out.tx).toMatchObject({ value: 5000n });
+  });
+
+  it('picks the raw-tx schema by SOURCE chain key (near → NEAR transform), not the destination', async () => {
+    const nearTx = {
+      signerId: 'alice.near',
+      params: { contractId: 'intents.near', method: 'ft_transfer_call', args: {}, gas: '30000000000000', deposit: '1' },
+    };
+    const api = makeApi(vi.fn(async () => json({ tx: nearTx, relayData })));
+    // srcChainKey 'near' (NEAR family) with an EVM destination: the NEAR schema must apply.
+    // Selecting by dstChainKey — or hardcoding the EVM schema — would reject this tx outright.
+    const out = await api.createBridgeIntent({ ...params, srcChainKey: 'near', dstChainKey: '0xa86a.avax' });
+    expect(out.tx).toMatchObject({ signerId: 'alice.near', params: { gas: 30000000000000n, deposit: 1n } });
   });
 
   it('throws a typed BridgeApiError on a non-2xx', async () => {

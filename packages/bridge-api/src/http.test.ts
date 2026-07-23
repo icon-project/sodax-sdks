@@ -115,6 +115,32 @@ describe('request', () => {
     ).rejects.toMatchObject({ code: 'NETWORK_ERROR' });
   });
 
+  it('retries an idempotent call on a thrown fetch (network error) then succeeds', async () => {
+    const fetchImpl = vi
+      .fn<typeof globalThis.fetch>()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(jsonResponse({ ok: true }));
+    const out = await request(ctx(fetchImpl), {
+      method: 'GET',
+      path: '/x',
+      endpoint: 'getTokens',
+      parse: identity,
+      idempotent: true,
+    });
+    expect(out).toEqual({ ok: true });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('gives up after the retry budget on a persistent network error', async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new Error('offline');
+    });
+    await expect(
+      request(ctx(fetchImpl), { method: 'GET', path: '/x', endpoint: 'getTokens', parse: identity, idempotent: true }),
+    ).rejects.toMatchObject({ code: 'NETWORK_ERROR' });
+    expect(fetchImpl).toHaveBeenCalledTimes(3); // 1 + MAX_RETRIES(2)
+  });
+
   it('retries an idempotent call on a transient 503 then succeeds', async () => {
     const fetchImpl = vi
       .fn<typeof globalThis.fetch>()
