@@ -221,7 +221,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
       token: toToken?.address,
       amount: parsedAmount,
       chainId: toChainKey,
-      walletProvider: stellarWalletProvider,
+      walletAddress: toChainType === 'STELLAR' ? toAccount.address : undefined,
     },
   });
   const { requestTrustline, isLoading: isRequestingTrustline } = useRequestTrustline(toToken?.address);
