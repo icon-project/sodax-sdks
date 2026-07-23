@@ -647,6 +647,55 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
       vi.useRealTimers();
     }
   });
+
+  it('honors a caller timeout below 5s on the default path (no relay floor)', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    try {
+      vi.spyOn(sodax.bridge, 'createBridgeIntent').mockResolvedValueOnce({
+        ok: true,
+        value: { tx: '0xspokeTx' as never, relayData: { address: HUB_WALLET, payload: '0x' } },
+      } as never);
+      vi.spyOn(sodax.spoke, 'verifyTxHash').mockResolvedValueOnce({ ok: true, value: undefined });
+      mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xdstTx' } });
+
+      const result = await sodax.bridge.bridge(bridgeInput(BSC, ARBITRUM, 2_000));
+
+      expect(result.ok).toBe(true);
+      const relayTimeout = mocks.relayTxAndWaitPacket.mock.calls.at(-1)?.[0]?.timeout as number;
+      expect(relayTimeout).toBeGreaterThan(0);
+      expect(relayTimeout).toBeLessThanOrEqual(2_000);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('fails fast as RELAY_TIMEOUT when the shared budget is exhausted before the relay (never stretches past `timeout`)', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    try {
+      vi.spyOn(sodax.bridge, 'createBridgeIntent').mockResolvedValueOnce({
+        ok: true,
+        value: { tx: '0xspokeTx' as never, relayData: { address: HUB_WALLET, payload: '0x' } },
+      } as never);
+      // Earlier steps consume the entire caller budget before the relay gets a turn.
+      vi.spyOn(sodax.spoke, 'verifyTxHash').mockImplementationOnce(async () => {
+        vi.setSystemTime(10_000);
+        return { ok: true, value: undefined };
+      });
+
+      const result = await sodax.bridge.bridge(bridgeInput(BSC, ARBITRUM, 2_000));
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('RELAY_TIMEOUT');
+        expect(result.error.context?.relayCode).toBe('RELAY_TIMEOUT');
+      }
+      expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 // =========================================================================

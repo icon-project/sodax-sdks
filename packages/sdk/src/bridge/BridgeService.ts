@@ -3,6 +3,7 @@ import {
   Erc20Service,
   type HubProvider,
   relayTxAndWaitPacket,
+  RELAY_ERROR_CODES,
   EvmVaultTokenService,
   EvmAssetManagerService,
   encodeContractCalls,
@@ -462,14 +463,29 @@ export class BridgeService {
       return { ok: false, error: verifyFailed('bridge', verifyTxHashResult.error, baseCtx) };
     }
 
+    // Remaining shared budget: ≈ full `timeout` on the flag-off path (called immediately), or the
+    // reserve `submitTx` left on the backend path (`pollBackendSubmitTx` holds back up to a third,
+    // capped at 20s). No floor — the caller's `timeout` is a hard ceiling, so an exhausted budget
+    // fails as RELAY_TIMEOUT here instead of stretching total wall-clock past one `timeout`.
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
+      return {
+        ok: false,
+        error: mapRelayFailure(new Error(RELAY_ERROR_CODES.RELAY_TIMEOUT), {
+          feature: 'bridge',
+          action: 'bridge',
+          srcChainKey: baseCtx.srcChainKey,
+          dstChainKey: baseCtx.dstChainKey,
+        }),
+      };
+    }
+
     const packetResult = await relayTxAndWaitPacket({
       srcTxHash: created.tx,
       data: created.relayData,
       chainKey: params.srcChainKey,
       relayerApiEndpoint: this.config.relay.relayerApiEndpoint,
-      // Remaining shared budget: ≈ full `timeout` on the flag-off path (called immediately), or the
-      // reserve `submitTx` left on the backend path. Floor keeps a stalled-backend fallback viable.
-      timeout: Math.max(deadline - Date.now(), 5_000),
+      timeout: remaining,
     });
     if (!packetResult.ok) {
       return {
