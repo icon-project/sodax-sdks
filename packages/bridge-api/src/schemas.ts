@@ -1,36 +1,43 @@
-// Valibot response schemas for the backend Bridge API v2.
-//
-// One schema per response shape declared in `@sodax/types`'s `backendBridgeApiV2.ts`.
-// `BridgeApiService` validates every HTTP response against these before returning it,
-// so a backend contract drift surfaces as a `Result` error rather than an untyped
-// runtime surprise. The relay-envelope schema is declared locally below (the swaps client
-// moved to the standalone `@sodax/swaps-api` package, so its schemas are no longer shared here).
+import type {
+  BridgeAllowanceCheckResponseV2,
+  BridgeApproveResponseV2,
+  BridgeSubmitTxResponseV2,
+  BridgeSubmitTxStatusResponseV2,
+  BridgeTokenV2,
+  BridgeableAmountResponseV2,
+  BridgeableCheckResponseV2,
+  BridgeFeeResponseV2,
+  CreateBridgeIntentResponseV2,
+  GetBridgeTokensByChainResponseV2,
+  GetBridgeTokensResponseV2,
+  PacketDataV2,
+  RawTxReturnType,
+  RelayExtraDataResponseV2,
+} from '@sodax/types';
+import * as v from 'valibot';
+
+// Internal response schemas mirroring `backendBridgeApiV2.ts`; `v.object` ignores additive backend
+// fields. The unsigned `tx` is validated+transformed per source chain via `rawTxSchemas.ts`
+// (tx-bearing responses are `make*ResponseSchema(txSchema)` factories).
 //
 // Bridge deltas vs swaps:
-//   - create-intent response is `{ tx, relayData }` (NO `intent`).
-//   - submit-tx-status `status` is TOLERANT (`v.string()`, not a picklist) so a future
-//     backend lifecycle state never breaks parse; the SDK relies on an inline terminal
-//     check (`status === 'executed' | 'failed'`) instead.
+//   - create-intent response is `{ tx, relayData }` (NO `intent` struct — bridge is vault-backed,
+//     not solver-based).
+//   - submit-tx-status `status` is TOLERANT (`v.string()`, not a picklist) so a future backend
+//     lifecycle state never breaks parse; callers compare against the known terminal literals
+//     (`'executed'` / `'failed'`) instead.
 //   - submit-tx-status `result` has NO `intent_hash` (no solver).
-//
-// As in swaps, schemas are intentionally NOT pinned with `v.GenericSchema<…V2>`; type
-// fidelity is enforced where each schema is consumed — `BridgeApiService` methods
-// declare their return as `Promise<Result<…V2>>`, so a drift is a compile error there.
 
-import * as v from 'valibot';
-import type { RawTxReturnType } from '@sodax/types';
+// ── Shared building blocks ────────────────────────────────────────────
 
-/**
- * Relay envelope (`{ address, payload }`) attached to the create-intent response. Declared locally
- * because the bridge is the sole remaining consumer after the swaps client moved to `@sodax/swaps-api`.
- */
+/** Relay envelope (`{ address, payload }`) attached to the create-intent response. */
 const RelayExtraDataResponseSchema = v.object({
   address: v.string(),
   payload: v.string(),
 });
 
 /** A supported bridge token descriptor (`BridgeTokenV2`). */
-export const BridgeTokenSchema = v.object({
+const BridgeTokenSchema = v.object({
   symbol: v.string(),
   name: v.string(),
   decimals: v.number(),
@@ -39,6 +46,8 @@ export const BridgeTokenSchema = v.object({
   hubAsset: v.string(),
   vault: v.string(),
 });
+
+// ── Per-endpoint response schemas ─────────────────────────────────────
 
 /** GET /bridge/tokens (`GetBridgeTokensResponseV2`). */
 export const BridgeTokensResponseSchema = v.record(v.string(), v.array(BridgeTokenSchema));
@@ -61,7 +70,7 @@ export const makeBridgeApproveResponseSchema = (txSchema: v.GenericSchema<unknow
 
 /**
  * POST /bridge/intents (`CreateBridgeIntentResponseV2`). `{ tx, relayData }` — no `intent`
- * struct (bridge is vault-backed, not solver-based). Reuses the swaps relay-envelope schema.
+ * struct (bridge is vault-backed, not solver-based).
  */
 export const makeCreateBridgeIntentResponseSchema = (txSchema: v.GenericSchema<unknown, RawTxReturnType>) =>
   v.object({
@@ -136,3 +145,34 @@ export const BridgeableAmountResponseSchema = v.object({ limit: BridgeLimitSchem
 
 /** POST /bridge/bridgeable/check (`BridgeableCheckResponseV2`). */
 export const BridgeableCheckResponseSchema = v.object({ bridgeable: v.boolean() });
+
+// ── Compile-time drift guards ─────────────────────────────────────────
+// Each entry fails `tsc` if a schema's inferred output stops matching its contract type. `Equal` is
+// strict; `Extends` is one-way, used only for the `readonly` array/record responses (their element
+// type is `Equal`-guarded via `BridgeTokenSchema`). The tx-bearing factories use `Equal`: both
+// contract types declare `tx: RawTxReturnType` exactly, so a field REMOVED from the contract
+// (which one-way `Extends` would miss) also trips at `tsc` time.
+
+type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
+type Extends<A, B> = [A] extends [B] ? true : false;
+type Expect<T extends true> = T;
+
+/**
+ * @public Compile-time only. Each entry fails `tsc` if a schema drifts from its contract type.
+ * Intentionally exported — un-exporting trips TS6196 (declared but never used).
+ */
+export type SchemaDriftGuards = [
+  Expect<Equal<v.InferOutput<typeof BridgeTokenSchema>, BridgeTokenV2>>,
+  Expect<Equal<v.InferOutput<typeof RelayExtraDataResponseSchema>, RelayExtraDataResponseV2>>,
+  Expect<Equal<v.InferOutput<typeof BridgePacketDataSchema>, PacketDataV2>>,
+  Expect<Extends<v.InferOutput<typeof BridgeTokensResponseSchema>, GetBridgeTokensResponseV2>>,
+  Expect<Extends<v.InferOutput<typeof BridgeTokensByChainResponseSchema>, GetBridgeTokensByChainResponseV2>>,
+  Expect<Equal<v.InferOutput<typeof BridgeAllowanceCheckResponseSchema>, BridgeAllowanceCheckResponseV2>>,
+  Expect<Equal<v.InferOutput<ReturnType<typeof makeBridgeApproveResponseSchema>>, BridgeApproveResponseV2>>,
+  Expect<Equal<v.InferOutput<ReturnType<typeof makeCreateBridgeIntentResponseSchema>>, CreateBridgeIntentResponseV2>>,
+  Expect<Equal<v.InferOutput<typeof BridgeSubmitTxResponseSchema>, BridgeSubmitTxResponseV2>>,
+  Expect<Equal<v.InferOutput<typeof BridgeSubmitTxStatusResponseSchema>, BridgeSubmitTxStatusResponseV2>>,
+  Expect<Equal<v.InferOutput<typeof BridgeFeeResponseSchema>, BridgeFeeResponseV2>>,
+  Expect<Equal<v.InferOutput<typeof BridgeableAmountResponseSchema>, BridgeableAmountResponseV2>>,
+  Expect<Equal<v.InferOutput<typeof BridgeableCheckResponseSchema>, BridgeableCheckResponseV2>>,
+];
