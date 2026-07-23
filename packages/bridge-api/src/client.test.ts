@@ -1,0 +1,178 @@
+import { describe, expect, it, vi } from 'vitest';
+import { BridgeApi } from './client.js';
+import { BridgeApiError } from './errors.js';
+
+const BASE = 'https://api.test/v1';
+const json = (data: unknown, status = 200): Response =>
+  new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
+
+const makeApi = (fetchImpl: typeof globalThis.fetch) => new BridgeApi({ baseUrl: BASE, fetch: fetchImpl });
+
+// Fixtures.
+const params = {
+  srcChainKey: 'sonic',
+  dstChainKey: '0xa86a.avax',
+  inputToken: '0xi',
+  outputToken: '0xo',
+  inputAmount: '1000000',
+  srcAddress: '0xs',
+  dstAddress: '0xd',
+};
+const quoteBody = {
+  srcChainKey: 'sonic',
+  dstChainKey: '0xa86a.avax',
+  inputToken: '0xi',
+  outputToken: '0xo',
+};
+const relayData = { address: '0xrelay', payload: '0xpayload' };
+
+// Each endpoint → how to invoke it, the URL + method it must hit, and whether it is
+// idempotent (retried on transient failures) — mutations must NEVER be.
+const ROUTES = [
+  {
+    name: 'getTokens',
+    run: (a: BridgeApi) => a.getTokens(),
+    method: 'GET',
+    path: '/bridge/tokens',
+    idempotent: true,
+  },
+  {
+    name: 'getTokensByChain',
+    run: (a: BridgeApi) => a.getTokensByChain('sonic'),
+    method: 'GET',
+    path: '/bridge/tokens/sonic',
+    idempotent: true,
+  },
+  {
+    name: 'checkAllowance',
+    run: (a: BridgeApi) => a.checkAllowance(params),
+    method: 'POST',
+    path: '/bridge/allowance/check',
+    idempotent: true,
+  },
+  {
+    name: 'approve',
+    run: (a: BridgeApi) => a.approve(params),
+    method: 'POST',
+    path: '/bridge/approve',
+    idempotent: false,
+  },
+  {
+    name: 'createBridgeIntent',
+    run: (a: BridgeApi) => a.createBridgeIntent(params),
+    method: 'POST',
+    path: '/bridge/intents',
+    idempotent: false,
+  },
+  {
+    name: 'submitTx',
+    run: (a: BridgeApi) => a.submitTx({ txHash: '0xabc', srcChainKey: 'sonic', walletAddress: '0xw', relayData }),
+    method: 'POST',
+    path: '/bridge/submit-tx',
+    idempotent: false,
+  },
+  {
+    name: 'getSubmitTxStatus',
+    run: (a: BridgeApi) => a.getSubmitTxStatus({ txHash: 'abc', srcChainKey: 'sonic' }),
+    method: 'GET',
+    path: '/bridge/submit-tx/status?txHash=abc&srcChainKey=sonic',
+    idempotent: true,
+  },
+  {
+    name: 'getFee',
+    run: (a: BridgeApi) => a.getFee({ inputAmount: '1000000' }),
+    method: 'POST',
+    path: '/bridge/fee',
+    idempotent: true,
+  },
+  {
+    name: 'getBridgeableAmount',
+    run: (a: BridgeApi) => a.getBridgeableAmount(quoteBody),
+    method: 'POST',
+    path: '/bridge/bridgeable-amount',
+    idempotent: true,
+  },
+  {
+    name: 'isBridgeable',
+    run: (a: BridgeApi) => a.isBridgeable(quoteBody),
+    method: 'POST',
+    path: '/bridge/bridgeable/check',
+    idempotent: true,
+  },
+];
+
+describe('BridgeApi routing (every endpoint hits the right method + URL)', () => {
+  it.each(ROUTES)('$name → $method $path', async ({ run, method, path }) => {
+    const fetchImpl = vi.fn(async () => json({}));
+    await run(makeApi(fetchImpl)).catch(() => {}); // response may fail validation; we only assert the request
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    const [url, init] = fetchImpl.mock.calls[0] ?? [];
+    expect(url).toBe(BASE + path);
+    expect(init?.method).toBe(method);
+  });
+});
+
+describe('BridgeApi retry safety at the method layer (pins the whole idempotency map)', () => {
+  // A persistent 503 exposes each method's idempotency flag through its attempt count:
+  // idempotent → 1 + MAX_RETRIES(2) = 3 attempts; mutation → exactly 1 (a transient failure
+  // must never replay approve/createBridgeIntent/submitTx — the backend could build duplicate
+  // deposit/approve txs). A flag flipped either way in client.ts fails this table.
+  it.each(ROUTES)('$name (idempotent: $idempotent) makes the expected attempts on a persistent 503', async route => {
+    const fetchImpl = vi.fn(async () => json({ message: 'unavailable' }, 503));
+    await expect(route.run(makeApi(fetchImpl))).rejects.toMatchObject({ code: 'HTTP_ERROR' });
+    expect(fetchImpl).toHaveBeenCalledTimes(route.idempotent ? 3 : 1);
+  });
+});
+
+describe('BridgeApi request shaping', () => {
+  it('encodeURIComponent-escapes path params', async () => {
+    const fetchImpl = vi.fn(async () => json([]));
+    await makeApi(fetchImpl)
+      .getTokensByChain('0x/weird?key')
+      .catch(() => {});
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe(`${BASE}/bridge/tokens/0x%2Fweird%3Fkey`);
+  });
+
+  it('sends the string-typed wire body as-is (no field renames or transforms)', async () => {
+    const fetchImpl = vi.fn(async () => json({ valid: true }));
+    await makeApi(fetchImpl).checkAllowance({ ...params, srcPublicKey: '02aa' });
+    const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body));
+    expect(body).toEqual({ ...params, srcPublicKey: '02aa' });
+  });
+
+  it('submitTx carries the FULL relayData envelope (address + payload), not just the payload', async () => {
+    const fetchImpl = vi.fn(async () => json({ success: true, data: { status: 'inserted', message: 'ok' } }));
+    await makeApi(fetchImpl).submitTx({ txHash: '0xabc', srcChainKey: 'sonic', walletAddress: '0xw', relayData });
+    const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body));
+    expect(body.relayData).toEqual({ address: '0xrelay', payload: '0xpayload' });
+  });
+});
+
+describe('BridgeApi response handling', () => {
+  it('returns the validated, typed response', async () => {
+    const api = makeApi(vi.fn(async () => json({ fee: '42' })));
+    expect((await api.getFee({ inputAmount: '1000000' })).fee).toBe('42');
+  });
+
+  it('transforms the create-intent tx to its chain variant (value string→bigint)', async () => {
+    const evmTx = { from: '0xf', to: '0xt', value: '1000000000000000000', data: '0x' };
+    const api = makeApi(vi.fn(async () => json({ tx: evmTx, relayData })));
+    const out = await api.createBridgeIntent(params);
+    expect(out.tx).toMatchObject({ value: 1000000000000000000n });
+    expect(out.relayData).toEqual(relayData);
+  });
+
+  it('throws a typed BridgeApiError on a non-2xx', async () => {
+    const api = makeApi(vi.fn(async () => json({ message: 'nope' }, 400)));
+    await expect(api.getFee({ inputAmount: '1' })).rejects.toBeInstanceOf(BridgeApiError);
+    await expect(api.getFee({ inputAmount: '1' })).rejects.toMatchObject({
+      code: 'HTTP_ERROR',
+      context: { status: 400 },
+    });
+  });
+
+  it('throws VALIDATION_ERROR when the response shape is wrong', async () => {
+    const api = makeApi(vi.fn(async () => json({ fee: 123 }))); // number, schema wants string
+    await expect(api.getFee({ inputAmount: '1' })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  });
+});
