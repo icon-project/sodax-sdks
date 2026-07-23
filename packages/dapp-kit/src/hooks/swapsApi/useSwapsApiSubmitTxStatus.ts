@@ -24,7 +24,8 @@ export type UseSwapsApiSubmitTxStatusParams = ReadHookParams<
  * });
  *
  * @remarks
- * - Default refetch interval is 1 second; stops on 'solved' or 'failed' status.
+ * - Default refetch interval is 1 second; stops on 'solved' or 'failed' status, or when the
+ *   backend marks the submission abandoned (`abandonedAt`) while `status` stays non-terminal.
  */
 export const useSwapsApiSubmitTxStatus = ({
   params,
@@ -46,8 +47,10 @@ export const useSwapsApiSubmitTxStatus = ({
     enabled: !!txHash && txHash.length > 0 && !!srcChainKey,
     retry: 3,
     refetchInterval: query => {
-      const status = query.state.data?.data?.status;
-      if (status === 'solved' || status === 'failed') return false;
+      const data = query.state.data?.data;
+      // `abandonedAt` is terminal even when `status` is still non-terminal — same rule as the
+      // SDK's pollBackendSubmitTx and the bridge-api status hook.
+      if (data?.status === 'solved' || data?.status === 'failed' || data?.abandonedAt) return false;
       return 1000;
     },
     ...queryOptions,

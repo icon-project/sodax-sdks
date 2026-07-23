@@ -3,6 +3,7 @@ import {
   Erc20Service,
   type HubProvider,
   relayTxAndWaitPacket,
+  RELAY_ERROR_CODES,
   EvmVaultTokenService,
   EvmAssetManagerService,
   encodeContractCalls,
@@ -160,10 +161,12 @@ export class BridgeService {
   /**
    * Calculates the partner fee deducted from a given bridge input amount.
    *
-   * Returns `0n` when no partner fee is configured. The fee is denominated in the
-   * same units as `inputAmount` (vault token decimals, 18 dp).
+   * Returns `0n` when no partner fee is configured. `inputAmount` must be in 18-dp hub/vault
+   * units — the units the hub deducts the fee in (see `buildBridgeData`) — NOT the spoke token's
+   * native base units. This matters for a fixed `PartnerFee.amount`, which is wei-denominated
+   * (18 dp); a percentage fee is unit-agnostic.
    *
-   * @param inputAmount - Gross amount being bridged, in vault token base units.
+   * @param inputAmount - Gross amount being bridged, in 18-dp hub/vault units.
    * @returns Fee amount to be deducted, in the same units as `inputAmount`.
    */
   public getFee(inputAmount: bigint, partnerFee: PartnerFee | undefined = this.config.bridgePartnerFee): bigint {
@@ -462,14 +465,29 @@ export class BridgeService {
       return { ok: false, error: verifyFailed('bridge', verifyTxHashResult.error, baseCtx) };
     }
 
+    // Remaining shared budget: ≈ full `timeout` on the flag-off path (called immediately), or the
+    // reserve `submitTx` left on the backend path (`pollBackendSubmitTx` holds back up to a third,
+    // capped at 20s). No floor — the caller's `timeout` is a hard ceiling, so an exhausted budget
+    // fails as RELAY_TIMEOUT here instead of stretching total wall-clock past one `timeout`.
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
+      return {
+        ok: false,
+        error: mapRelayFailure(new Error(RELAY_ERROR_CODES.RELAY_TIMEOUT), {
+          feature: 'bridge',
+          action: 'bridge',
+          srcChainKey: baseCtx.srcChainKey,
+          dstChainKey: baseCtx.dstChainKey,
+        }),
+      };
+    }
+
     const packetResult = await relayTxAndWaitPacket({
       srcTxHash: created.tx,
       data: created.relayData,
       chainKey: params.srcChainKey,
       relayerApiEndpoint: this.config.relay.relayerApiEndpoint,
-      // Remaining shared budget: ≈ full `timeout` on the flag-off path (called immediately), or the
-      // reserve `submitTx` left on the backend path. Floor keeps a stalled-backend fallback viable.
-      timeout: Math.max(deadline - Date.now(), 5_000),
+      timeout: remaining,
     });
     if (!packetResult.ok) {
       return {
@@ -614,9 +632,18 @@ export class BridgeService {
         );
       }
       if (isNativeBitcoinTransfer(this.config, params.dstChainKey, dstToken)) {
-        // The partner fee is deducted before withdrawal, so the DELIVERED (post-fee) amount — not the gross
-        // input — is what must clear dust on the destination side.
-        const delivered = params.amount - calculateFeeAmount(params.amount, extras?.partnerFee ?? this.config.bridgePartnerFee);
+        // The partner fee is deducted on the hub in 18-dp vault units (see buildBridgeData): a fixed
+        // `PartnerFee.amount` is denominated in wei, NOT sats. Mirror buildBridgeData's math exactly —
+        // translate to hub units (skip when the endpoint already IS the 18-dp vault asset), take the
+        // fee there, translate back to destination units — so the DELIVERED (post-fee) sats are what
+        // must clear dust.
+        const hubAmount = this.config.isSodaVaultHubAsset(srcToken.hubAsset)
+          ? params.amount
+          : EvmVaultTokenService.translateIncomingDecimals(srcToken.decimals, params.amount);
+        const hubDelivered = hubAmount - calculateFeeAmount(hubAmount, extras?.partnerFee ?? this.config.bridgePartnerFee);
+        const delivered = this.config.isSodaVaultHubAsset(dstToken.hubAsset)
+          ? hubDelivered
+          : EvmVaultTokenService.translateOutgoingDecimals(dstToken.decimals, hubDelivered);
         bridgeInvariant(
           delivered >= BITCOIN_DUST_SATS,
           `Post-fee BTC delivery (${delivered}) is below the Bitcoin dust limit of ${BITCOIN_DUST_SATS} sats`,
