@@ -220,6 +220,88 @@ describe('BridgeService.createBridgeIntent — Bitcoin USER mode', () => {
 });
 
 // =========================================================================
+// BTC destination — post-fee dust check runs its fee math in hub units
+// =========================================================================
+
+describe('BridgeService.createBridgeIntent — BTC destination post-fee dust', () => {
+  // The partner fee is charged on the hub in 18-dp vault units (buildBridgeData), so the dust
+  // estimate must translate sats → hub units, take the fee there, and translate back. A fixed
+  // `PartnerFee.amount` is wei-denominated — treating it as sats either trips the
+  // fee<=inputAmount invariant (fee wei >> sats) or inflates the fee by 10^10.
+  const btcDestInput = (
+    amount: bigint,
+    partnerFee?: { address: Address; percentage: number } | { address: Address; amount: bigint },
+  ): BridgeParams<typeof BSC, false> =>
+    ({
+      raw: false,
+      walletProvider: mockEvmProvider,
+      ...(partnerFee ? { extras: { partnerFee } } : {}),
+      params: {
+        srcAddress: SAMPLE_USER,
+        srcChainKey: BSC,
+        srcToken: SAMPLE_TOKEN,
+        amount,
+        dstChainKey: BTC,
+        dstToken: BTC_TOKEN,
+        recipient: BTC_USER_ADDR,
+      },
+    }) as BridgeParams<typeof BSC, false>;
+
+  const FEE_ADDR = '0x6666666666666666666666666666666666666666' as Address;
+
+  beforeEach(() => {
+    // Full XToken shape: the hub-unit dust math reads `decimals` and `hubAsset` off both endpoints.
+    vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValue({
+      address: BTC_TOKEN,
+      vault: '0xvault',
+      symbol: 'BTC',
+      decimals: 8,
+      hubAsset: '0xbtchub',
+    } as never);
+    vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockResolvedValue(HUB_BTC_WALLET);
+    vi.spyOn(sodax.bridge, 'buildBridgeData').mockReturnValue('0xdata' as never);
+    vi.spyOn(sodax.spoke, 'deposit').mockResolvedValue({ ok: true, value: '0xtxhash' } as never);
+  });
+
+  it('passes when the post-fee delivery clears dust (percentage fee)', async () => {
+    // 100 bps of 600 sats → 6 sats fee → delivered 594 ≥ 546.
+    const result = await sodax.bridge.createBridgeIntent(btcDestInput(600n, { address: FEE_ADDR, percentage: 100 }));
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects when the post-fee delivery falls below dust (percentage fee)', async () => {
+    // 100 bps of 550 sats → delivered 544 < 546.
+    const result = await sodax.bridge.createBridgeIntent(btcDestInput(550n, { address: FEE_ADDR, percentage: 100 }));
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('VALIDATION_FAILED');
+      expect(result.error.message).toContain('Post-fee');
+    }
+  });
+
+  it('treats a fixed-amount fee as wei, not sats (regression: previously threw the fee invariant)', async () => {
+    // 10^10 wei = exactly 1 sat worth. 547 sats − 1 sat = 546 ≥ 546 → passes. Before the hub-unit
+    // fix this path threw `fee.amount <= inputAmount` (10^10 wei vs 547 "sats") for EVERY
+    // BTC-destination bridge with a fixed-amount fee.
+    const result = await sodax.bridge.createBridgeIntent(btcDestInput(547n, { address: FEE_ADDR, amount: 10n ** 10n }));
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects with the dust message when a large fixed wei fee pushes delivery below dust', async () => {
+    // 100 sats worth of fee (100 × 10^10 wei): 600 − 100 = 500 < 546 → the specific post-fee
+    // dust invariant, not a generic fee-invariant failure.
+    const result = await sodax.bridge.createBridgeIntent(
+      btcDestInput(600n, { address: FEE_ADDR, amount: 100n * 10n ** 10n }),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('VALIDATION_FAILED');
+      expect(result.error.message).toContain('Post-fee');
+    }
+  });
+});
+
+// =========================================================================
 // Stacks raw source — srcPublicKey pre-flight guard (parity with SwapService.createIntent)
 // =========================================================================
 
