@@ -1,6 +1,6 @@
 // packages/sdk/src/backendApi/BridgeApiService.ts
 
-import * as v from 'valibot';
+import { BridgeApi, BridgeApiError } from '@sodax/bridge-api';
 import type {
   BaseApiConfig,
   BitcoinBoundExtrasV2,
@@ -24,10 +24,10 @@ import type {
   Result,
   SodaxLogger,
 } from '@sodax/types';
+import { DEFAULT_BACKEND_API_TIMEOUT } from '@sodax/types';
+import * as v from 'valibot';
 
-import { makeRequest, toJsonBody, type RequestConfig, type RequestOverrideConfig } from './api-utils.js';
-import * as schemas from './bridgeApiSchemas.js';
-import { rawTxSchemaForChainKey } from './rawTxSchemas.js';
+import type { RequestOverrideConfig } from './api-utils.js';
 import { SodaxError } from '../errors/SodaxError.js';
 import { consoleLogger } from '../shared/logger.js';
 
@@ -83,19 +83,18 @@ export function toCreateBridgeIntentParamsV2(
 /**
  * HTTP client for the backend **Bridge API v2** (`/bridge/*`).
  *
- * Mirrors every endpoint of {@link IBridgeApiV2} (one method per route) and
- * validates each response at runtime with a valibot schema (see
- * `bridgeApiSchemas.ts`). On a contract drift, the response is rejected as
- * `{ ok: false }` with a descriptive error rather than returned untyped.
+ * A thin adapter over the standalone `@sodax/bridge-api` package (the single source of the wire
+ * client — request building, per-chain `tx` validation/transform, response schemas, HTTP + retry).
+ * This service adds the SDK conventions on top: `Result<T>` (it never throws), a `SodaxLogger`,
+ * config resolution, and per-call `RequestOverrideConfig`.
  *
- * All public methods return `Promise<Result<T>>` — they never throw. On network
- * failure, timeout, non-2xx HTTP response, or response-shape validation failure,
- * the returned Result has `ok: false` with a canonical
- * `SodaxError<'EXTERNAL_API_ERROR'>` (`feature: 'backend'`, `context.api: 'bridge'`)
- * in the `error` field; the underlying failure is preserved on `error.cause`.
+ * All public methods return `Promise<Result<T>>`. On network failure, timeout, non-2xx HTTP
+ * response, or response-shape validation failure, the returned Result has `ok: false` with a
+ * canonical `SodaxError<'EXTERNAL_API_ERROR'>` (`feature: 'backend'`, `context.api: 'bridge'`,
+ * `context.endpoint`); the underlying `BridgeApiError` is preserved on `error.cause`.
  *
- * Per-call request overrides (base URL, timeout, headers) can be passed as the
- * optional last argument to any method via `RequestOverrideConfig`.
+ * Per-call request overrides (base URL, timeout, headers) can be passed as the optional last
+ * argument to any method via `RequestOverrideConfig`.
  *
  * The Bridge API shares the swaps host — its config is resolved by
  * `resolveBridgeApiConfig` (an alias of `resolveBaseApiConfig`), so it is typed as a flat
@@ -117,51 +116,63 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
   }
 
   /**
-   * Issues a single HTTP request, validates the JSON body against `schema`, and
-   * wraps the result in `Result<T>`. The service-level `baseURL`/`timeout`/
-   * `headers` are merged with the optional per-call `overrideConfig` (which takes
-   * precedence) inside {@link makeRequest}. Every public method delegates here.
+   * Build a `@sodax/bridge-api` client for a single call. Maps the SDK's {@link BaseApiConfig}
+   * (`baseURL`/`timeout`/`headers`) to the package's config (`baseUrl`/`timeout`/`headers`), layering
+   * the optional per-call `RequestOverrideConfig` on top (override wins per field; headers merge).
+   * `timeout` falls back to the backend-API default so a config that omits it still gets a ceiling
+   * rather than an unbounded request. Constructed per call so `setHeaders` mutations and per-call
+   * overrides both take effect without caching stale state.
    */
-  private async request<S extends v.GenericSchema>(
-    endpoint: string,
-    config: RequestConfig,
-    schema: S,
-    overrideConfig?: RequestOverrideConfig,
-  ): Promise<Result<v.InferOutput<S>, SodaxError<'EXTERNAL_API_ERROR'>>> {
-    try {
-      const raw = await makeRequest<unknown>({
-        endpoint,
-        config: { baseURL: this.config.baseURL, timeout: this.config.timeout, headers: this.headers, ...config },
-        overrideConfig,
-        logger: this.logger,
-        serviceLabel: 'BridgeApiService',
-      });
+  private buildClient(overrideConfig?: RequestOverrideConfig): BridgeApi {
+    const baseUrl = overrideConfig?.baseURL || this.config.baseURL;
+    const timeout = overrideConfig?.timeout ?? this.config.timeout ?? DEFAULT_BACKEND_API_TIMEOUT;
+    const headers = { ...this.headers, ...overrideConfig?.headers };
+    return new BridgeApi({ baseUrl, headers, timeout });
+  }
 
-      const parsed = v.safeParse(schema, raw);
-      if (!parsed.success) {
-        // Backend returned a 2xx body that doesn't match the v2 contract — an upstream-API problem.
-        return {
-          ok: false,
-          error: new SodaxError('EXTERNAL_API_ERROR', `Invalid response shape from bridge API for ${endpoint}`, {
-            feature: 'backend',
-            context: { api: 'bridge', endpoint, reason: 'invalid_response_shape', issues: v.flatten(parsed.issues) },
-          }),
-        };
-      }
-      return { ok: true, value: parsed.output };
+  /**
+   * Run one delegated `BridgeApi` call and wrap it in `Result<T>`. A thrown `BridgeApiError`
+   * (network/timeout/HTTP/parse/validation) becomes `{ ok: false }` with a canonical
+   * `SodaxError<'EXTERNAL_API_ERROR'>`; the original error is kept as `cause`, and its
+   * `code`/`status`/`issues` are projected into `context` so consumers can discriminate failure
+   * kinds without unwrapping `cause`. Only a RESPONSE-shape validation failure is tagged
+   * `reason: 'invalid_response_shape'` — a request-side validation error is a caller bug, not a
+   * backend fault.
+   */
+  private async toResult<T>(
+    endpoint: string,
+    call: (client: BridgeApi) => Promise<T>,
+    overrideConfig?: RequestOverrideConfig,
+  ): Promise<Result<T, SodaxError<'EXTERNAL_API_ERROR'>>> {
+    try {
+      const value = await call(this.buildClient(overrideConfig));
+      return { ok: true, value };
     } catch (error) {
-      // Network failure, timeout, or non-2xx HTTP status thrown by makeRequest. Preserve the
-      // underlying error as `cause` (carries HTTP_REQUEST_FAILED / REQUEST_TIMEOUT / etc.).
+      const context: Record<string, unknown> = { api: 'bridge', endpoint };
+      if (error instanceof BridgeApiError) {
+        // Surface the wire code (TIMEOUT_ERROR / NETWORK_ERROR / HTTP_ERROR / PARSE_ERROR /
+        // VALIDATION_ERROR) so consumers can branch without reaching into `cause`.
+        context.code = error.code;
+        // `issues` is present only for RESPONSE-shape validation failures (set in http.ts). A
+        // request-side VALIDATION_ERROR (rejectBigint) carries none, so only the former is tagged
+        // as a backend response-shape problem.
+        if (error.code === 'VALIDATION_ERROR' && error.context.issues !== undefined) {
+          context.reason = 'invalid_response_shape';
+          // bridge-api stores the thrown ValiError here; flatten it to the same `v.flatten(issues)`
+          // shape BackendApiService emits so both backend clients report identical `context.issues`,
+          // and so the detail survives SodaxError.toJSON (which reduces a raw Error to name+message).
+          const issues = error.context.issues;
+          context.issues = issues instanceof v.ValiError ? v.flatten(issues.issues) : issues;
+        }
+        if (error.context.status !== undefined) context.status = error.context.status;
+      }
+      this.logger.error(`[BridgeApiService] Request to ${endpoint} failed`, error);
       return {
         ok: false,
         error: new SodaxError(
           'EXTERNAL_API_ERROR',
           error instanceof Error ? error.message : `Request to ${endpoint} failed`,
-          {
-            feature: 'backend',
-            cause: error,
-            context: { api: 'bridge', endpoint },
-          },
+          { feature: 'backend', cause: error, context },
         ),
       };
     }
@@ -177,7 +188,7 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
    * @returns `Result<GetBridgeTokensResponseV2>` — map of chain key → token list.
    */
   public async getTokens(config?: RequestOverrideConfig): Promise<Result<GetBridgeTokensResponseV2>> {
-    return this.request('/bridge/tokens', { method: 'GET' }, schemas.BridgeTokensResponseSchema, config);
+    return this.toResult('/bridge/tokens', c => c.getTokens(), config);
   }
 
   /**
@@ -190,12 +201,7 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
     chainKey: string,
     config?: RequestOverrideConfig,
   ): Promise<Result<GetBridgeTokensByChainResponseV2>> {
-    return this.request(
-      `/bridge/tokens/${chainKey}`,
-      { method: 'GET' },
-      schemas.BridgeTokensByChainResponseSchema,
-      config,
-    );
+    return this.toResult(`/bridge/tokens/${chainKey}`, c => c.getTokensByChain(chainKey), config);
   }
 
   // ──────────────────────────────────────────────────────────────────────
@@ -211,12 +217,7 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
     body: CreateBridgeIntentParamsV2,
     config?: RequestOverrideConfig,
   ): Promise<Result<BridgeAllowanceCheckResponseV2>> {
-    return this.request(
-      '/bridge/allowance/check',
-      { method: 'POST', body: toJsonBody(body) },
-      schemas.BridgeAllowanceCheckResponseSchema,
-      config,
-    );
+    return this.toResult('/bridge/allowance/check', c => c.checkAllowance(body), config);
   }
 
   /**
@@ -228,13 +229,7 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
     body: CreateBridgeIntentParamsV2,
     config?: RequestOverrideConfig,
   ): Promise<Result<BridgeApproveResponseV2>> {
-    const txSchema = rawTxSchemaForChainKey(body.srcChainKey);
-    return this.request(
-      '/bridge/approve',
-      { method: 'POST', body: toJsonBody(body) },
-      schemas.makeBridgeApproveResponseSchema(txSchema),
-      config,
-    );
+    return this.toResult('/bridge/approve', c => c.approve(body), config);
   }
 
   /**
@@ -246,13 +241,7 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
     body: CreateBridgeIntentParamsV2,
     config?: RequestOverrideConfig,
   ): Promise<Result<CreateBridgeIntentResponseV2>> {
-    const txSchema = rawTxSchemaForChainKey(body.srcChainKey);
-    return this.request(
-      '/bridge/intents',
-      { method: 'POST', body: toJsonBody(body) },
-      schemas.makeCreateBridgeIntentResponseSchema(txSchema),
-      config,
-    );
+    return this.toResult('/bridge/intents', c => c.createBridgeIntent(body), config);
   }
 
   // ──────────────────────────────────────────────────────────────────────
@@ -269,12 +258,7 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
     body: BridgeSubmitTxRequestV2,
     config?: RequestOverrideConfig,
   ): Promise<Result<BridgeSubmitTxResponseV2>> {
-    return this.request(
-      '/bridge/submit-tx',
-      { method: 'POST', body: toJsonBody(body) },
-      schemas.BridgeSubmitTxResponseSchema,
-      config,
-    );
+    return this.toResult('/bridge/submit-tx', c => c.submitTx(body), config);
   }
 
   /**
@@ -286,13 +270,7 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
     query: BridgeSubmitTxStatusQueryV2,
     config?: RequestOverrideConfig,
   ): Promise<Result<BridgeSubmitTxStatusResponseV2>> {
-    const queryParams = new URLSearchParams({ txHash: query.txHash, srcChainKey: query.srcChainKey });
-    return this.request(
-      `/bridge/submit-tx/status?${queryParams.toString()}`,
-      { method: 'GET' },
-      schemas.BridgeSubmitTxStatusResponseSchema,
-      config,
-    );
+    return this.toResult('/bridge/submit-tx/status', c => c.getSubmitTxStatus(query), config);
   }
 
   // ──────────────────────────────────────────────────────────────────────
@@ -311,7 +289,7 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
     body: BridgeFeeRequestV2,
     config?: RequestOverrideConfig,
   ): Promise<Result<BridgeFeeResponseV2>> {
-    return this.request('/bridge/fee', { method: 'POST', body: toJsonBody(body) }, schemas.BridgeFeeResponseSchema, config);
+    return this.toResult('/bridge/fee', c => c.getFee(body), config);
   }
 
   /**
@@ -324,12 +302,7 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
     body: BridgeQuoteRequestV2,
     config?: RequestOverrideConfig,
   ): Promise<Result<BridgeableAmountResponseV2>> {
-    return this.request(
-      '/bridge/bridgeable-amount',
-      { method: 'POST', body: toJsonBody(body) },
-      schemas.BridgeableAmountResponseSchema,
-      config,
-    );
+    return this.toResult('/bridge/bridgeable-amount', c => c.getBridgeableAmount(body), config);
   }
 
   /**
@@ -342,12 +315,7 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
     body: BridgeQuoteRequestV2,
     config?: RequestOverrideConfig,
   ): Promise<Result<BridgeableCheckResponseV2>> {
-    return this.request(
-      '/bridge/bridgeable/check',
-      { method: 'POST', body: toJsonBody(body) },
-      schemas.BridgeableCheckResponseSchema,
-      config,
-    );
+    return this.toResult('/bridge/bridgeable/check', c => c.isBridgeable(body), config);
   }
 
   // ──────────────────────────────────────────────────────────────────────
@@ -356,7 +324,8 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
 
   /**
    * Merge additional headers into the service's default header set. Existing
-   * keys are overwritten; keys absent from `headers` are preserved.
+   * keys are overwritten; keys absent from `headers` are preserved. Applied to
+   * every subsequent call (the delegated client is rebuilt per call).
    */
   public setHeaders(headers: Record<string, string>): void {
     Object.entries(headers).forEach(([key, value]) => {

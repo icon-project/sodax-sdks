@@ -15,3 +15,8 @@ export * from './BridgeApiService.js';
 // feature-agnostic error bag), so importing this union is how callers type/switch on it.
 export { SwapsApiError } from '@sodax/swaps-api';
 export type { SwapsApiErrorCode, SwapsApiErrorContext } from '@sodax/swaps-api';
+
+// Same for the bridge wire failure taxonomy from the wrapped @sodax/bridge-api client, which
+// `BridgeApiService` surfaces the same way (`error.context.code` / `error.cause`).
+export { BridgeApiError } from '@sodax/bridge-api';
+export type { BridgeApiErrorCode, BridgeApiErrorContext } from '@sodax/bridge-api';
