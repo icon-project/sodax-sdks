@@ -24,8 +24,10 @@ export type UseBridgeApiSubmitTxStatusParams = ReadHookParams<
  * });
  *
  * @remarks
- * - Default refetch interval is 1 second; stops on 'executed' or 'failed' status (no solver
- *   `posting_execution` state — bridge has no post-execution).
+ * - Default refetch interval is 1 second; stops on 'executed' or 'failed' status, or when the
+ *   backend marks the submission abandoned (`abandonedAt`) while `status` stays non-terminal —
+ *   mirroring the SDK's backend submit-tx poll (no solver `posting_execution` state — bridge has
+ *   no post-execution).
  */
 export const useBridgeApiSubmitTxStatus = ({
   params,
@@ -47,8 +49,10 @@ export const useBridgeApiSubmitTxStatus = ({
     enabled: !!txHash && txHash.length > 0 && !!srcChainKey,
     retry: 3,
     refetchInterval: query => {
-      const status = query.state.data?.data?.status;
-      if (status === 'executed' || status === 'failed') return false;
+      const data = query.state.data?.data;
+      // `abandonedAt` is terminal even when `status` is still non-terminal (e.g. 'relayed') —
+      // same rule as the SDK's pollBackendSubmitTx.
+      if (data?.status === 'executed' || data?.status === 'failed' || data?.abandonedAt) return false;
       return 1000;
     },
     ...queryOptions,
