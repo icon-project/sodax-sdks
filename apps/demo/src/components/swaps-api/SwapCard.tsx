@@ -19,7 +19,6 @@ import type {
   BitcoinRawTransaction,
   ChainType,
   CreateIntentParamsV2,
-  GetWalletProviderType,
   Hex,
   IBitcoinWalletProvider,
   IStellarWalletProvider,
@@ -317,10 +316,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       token: intentParams?.outputToken,
       amount: intentParams ? BigInt(intentParams.minOutputAmount) : undefined,
       chainId: intentParams?.dstChainKey as SpokeChainKey | undefined,
-      walletProvider:
-        dst.chain === ChainKeys.STELLAR_MAINNET
-          ? (destWalletProvider as GetWalletProviderType<typeof ChainKeys.STELLAR_MAINNET> | undefined)
-          : undefined,
+      walletAddress: dst.chain === ChainKeys.STELLAR_MAINNET ? destAccount.address : undefined,
     },
   });
   if (trustlineError) {

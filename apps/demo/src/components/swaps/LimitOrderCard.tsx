@@ -19,7 +19,6 @@ import { parseUnits, formatUnits } from 'viem';
 import {
   type CreateLimitOrderParams,
   getSupportedSolverTokens,
-  type SolverIntentQuoteRequest,
   useSwapAllowance,
   useSwapApprove,
   useCreateLimitOrder,
@@ -83,10 +82,7 @@ export default function LimitOrderCard() {
       token: limitOrderPayload?.outputToken,
       amount: BigInt(limitOrderPayload?.minOutputAmount ?? 0n),
       chainId: limitOrderPayload?.dstChainKey,
-      walletProvider:
-        destChain === ChainKeys.STELLAR_MAINNET
-          ? (destWalletProvider as IStellarWalletProvider | undefined)
-          : undefined,
+      walletAddress: destAccount.address,
     },
   });
   if (trustlineError) {

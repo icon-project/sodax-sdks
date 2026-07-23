@@ -7,6 +7,7 @@ import type { XConnection, IWalletProvider } from './types/index.js';
 import type { ChainActions } from './types/chainActions.js';
 import type { SodaxWalletConfig } from './types/config.js';
 import { chainRegistry, createChainServices } from './chainRegistry.js';
+import { sanitizePersistedXWalletState } from './persistSanitize.js';
 
 /** Empty slot in `walletProviders` is normal before a wallet is connected. */
 export type GetWalletProviderReturnType<K extends ChainType | undefined> = K extends ChainType
@@ -169,6 +170,9 @@ export const useXWalletStore = create<XWalletStore>()(
           xConnections: state.xConnections,
           userDisconnected: state.userDisconnected,
         }),
+        // Untrusted localStorage: sanitize on every hydrate (drop malformed/unknown-chain entries).
+        // Schema-hardening/robustness only — see persistSanitize.ts.
+        merge: (persisted, current) => ({ ...current, ...sanitizePersistedXWalletState(persisted) }),
       },
     ),
     { name: 'xwagmi-store' },
