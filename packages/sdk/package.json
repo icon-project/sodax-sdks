@@ -61,10 +61,11 @@
     "@injectivelabs/networks": "catalog:",
     "@injectivelabs/sdk-ts": "catalog:",
     "@mysten/sui": "catalog:",
-    "@pancakeswap/infinity-sdk": "^1.0.0",
-    "@pancakeswap/swap-sdk-core": "^1.5.1",
-    "@pancakeswap/v3-sdk": "^3.9.7",
+    "@pancakeswap/infinity-sdk": "catalog:",
+    "@pancakeswap/swap-sdk-core": "catalog:",
+    "@pancakeswap/v3-sdk": "catalog:",
     "@sodax/libs": "workspace:*",
+    "@sodax/swaps-api": "workspace:*",
     "@sodax/types": "workspace:*",
     "@solana/spl-token": "catalog:",
     "@solana/web3.js": "catalog:",
@@ -76,7 +77,8 @@
     "icon-sdk-js": "catalog:",
     "near-api-js": "catalog:",
     "rlp": "3.0.0",
-    "viem": "catalog:"
+    "viem": "catalog:",
+    "valibot": "catalog:"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "catalog:",

@@ -147,13 +147,11 @@ Comprehensive hook table across 12 feature domains. Use this when you know the f
 | `useBackendIntentByHash` | none |
 | `useBackendUserIntents` | none |
 
-### Orderbook + swap submission
+### Orderbook
 
 | Hook | Type / Polling |
 |---|---|
 | `useBackendOrderbook` | Query; `staleTime: 30s` — fresh-window only, no background refetch |
-| `useBackendSubmitSwapTx` | Mutation |
-| `useBackendSubmitSwapTxStatus` | Query; polls until `executed` / `failed` |
 
 ### Money market data
 
@@ -166,6 +164,46 @@ Comprehensive hook table across 12 feature domains. Use this when you know the f
 | `useBackendMoneyMarketAssetBorrowers` | Borrowers for an asset |
 | `useBackendAllMoneyMarketBorrowers` | All borrowers |
 
+## Swaps API (`sodax.api.swaps`)
+
+Typed React Query wrappers over the backend Swaps API v2 (`sodax.api.swaps.*`), one per endpoint. Distinct from the on-chain `swap/` hooks (`useQuote`/`useStatus`/`useSwap`/…), which drive `sodax.swaps` (the `SwapService`).
+
+### Tokens · quote · fees · gas (reads)
+
+| Hook | Type / Polling |
+|---|---|
+| `useSwapsApiTokens` | Query; all supported swap tokens by chain |
+| `useSwapsApiTokensByChain` | Query; tokens for one chain |
+| `useSwapsApiQuote` | Query; solver quote (set `query.includeTxData` for `txData`) |
+| `useSwapsApiDeadline` | Query; computed swap deadline |
+| `useSwapsApiPartnerFee` | Query; partner fee for an amount |
+| `useSwapsApiSolverFee` | Query; protocol (solver) fee for an amount |
+| `useSwapsApiEstimateGas` | Query; gas estimate for a raw tx |
+
+### Intent lifecycle (reads)
+
+| Hook | Type / Polling |
+|---|---|
+| `useSwapsApiAllowance` | Query; `{ valid }` allowance check |
+| `useSwapsApiStatus` | Query (1s); polls until status `3` (SOLVED) / `4` (FAILED) |
+| `useSwapsApiIntentHash` | Query; keccak256 of an intent struct |
+| `useSwapsApiIntentPacket` | Query; long-polls the relayer for the fill packet (no client interval) |
+| `useSwapsApiIntentExtraData` | Query; relay extra-data for submit |
+| `useSwapsApiFilledIntent` | Query; on-chain fill state by tx hash |
+| `useSwapsApiIntent` | Query; decoded intent struct by tx hash |
+| `useSwapsApiSubmitTxStatus` | Query (1s); requires `txHash` + `srcChainKey`; polls until `solved` / `failed` |
+
+### Actions (mutations)
+
+| Hook | Type |
+|---|---|
+| `useSwapsApiApprove` | Mutation; builds unsigned approval tx |
+| `useSwapsApiCreateIntent` | Mutation; builds `{ tx, intent, relayData }` |
+| `useSwapsApiSubmitIntent` | Mutation; submits broadcast intent to the relay |
+| `useSwapsApiCancelIntent` | Mutation; builds unsigned cancel tx |
+| `useSwapsApiCreateLimitOrder` | Mutation; builds limit-order intent tx |
+| `useSwapsApiSubmitTx` | Mutation; `request: SubmitTxRequestV2` |
+
 ## Partner
 
 | Hook | Type | Purpose |
@@ -173,9 +211,13 @@ Comprehensive hook table across 12 feature domains. Use this when you know the f
 | `useFetchAssetsBalances` | Query | Fetch partner asset balances |
 | `useGetAutoSwapPreferences` | Query | Get auto-swap preferences |
 | `useIsTokenApproved` | Query | Check token approval |
+| `useGetUserIntent` | Query | Look up a partner's stored intent hash for a token pair (`0x0…0` = none) |
+| `useGetIntentDetails` | Query | Read full intent details for an intent hash |
 | `useApproveToken` | Mutation | Approve token |
 | `useSetSwapPreference` | Mutation | Set swap preference |
 | `useFeeClaimSwap` | Mutation | Claim partner fees via swap |
+| `useFeeClaimWithdraw` | Mutation | Withdraw a fee token directly (no swap) via the bridge |
+| `usePartnerCancelIntent` | Mutation | Cancel a stuck same-token claim and recover the locked tokens |
 
 ## Recovery
 

@@ -57,12 +57,13 @@ const setters = {
   setWalletProvider: vi.fn(),
   setXConnectors: vi.fn(),
   userDisconnected: {} as Partial<Record<'EVM', boolean>>,
+  xConnections: {} as Partial<Record<'EVM', { xAccount: { address: string; xChainType: 'EVM' }; xConnectorId: string }>>,
 };
 vi.mock('@/useXWalletStore.js', () => ({
   useXWalletStore: Object.assign((s: (st: unknown) => unknown) => s(setters), {
     getState: () => ({
       setXConnectors: setters.setXConnectors,
-      xConnections: {},
+      xConnections: setters.xConnections,
       userDisconnected: setters.userDisconnected,
     }),
     persist: {
@@ -249,9 +250,34 @@ describe('EvmHydrator → EvmWalletProvider', () => {
       expect(providerCalls.every(([, p]) => p === undefined)).toBe(true);
     });
 
+    // #9: a persisted connection whose reconnect fails must be cleared, not left stale for the session.
+    it('clears a stale persisted EVM connection when reconnect ends in disconnected', () => {
+      setters.xConnections = { EVM: { xAccount: { address: '0xold', xChainType: 'EVM' }, xConnectorId: 'metamask' } };
+      wagmiState.account = { address: undefined, status: 'disconnected', connector: undefined };
+      const { rerender } = renderWith({ EVM: {} });
+      // Initial disconnected must not clear yet — reconnect hasn't been attempted/resolved.
+      expect(setters.unsetXConnection).not.toHaveBeenCalled();
+
+      const rerenderHydrator = () =>
+        rerender(
+          <WalletConfigProvider value={{ EVM: {} }}>
+            <EvmHydrator />
+          </WalletConfigProvider>,
+        );
+
+      wagmiState.account = { address: undefined, status: 'reconnecting', connector: undefined };
+      rerenderHydrator();
+      expect(setters.unsetXConnection).not.toHaveBeenCalled();
+
+      wagmiState.account = { address: undefined, status: 'disconnected', connector: undefined };
+      rerenderHydrator();
+      expect(setters.unsetXConnection).toHaveBeenCalledWith('EVM');
+    });
+
     afterEach(() => {
       wagmiState.account = { address: undefined, status: 'disconnected', connector: undefined };
       setters.userDisconnected = {};
+      setters.xConnections = {};
     });
   });
 });

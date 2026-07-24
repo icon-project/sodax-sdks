@@ -113,8 +113,11 @@ v2 ships these primitives so the consumer focuses only on UI rendering.
 import {
   useWalletModal,
   useChainGroups,
+  useXConnectors,
   sortConnectors,
+  type IXConnector,
 } from '@sodax/wallet-sdk-react';
+import type { ChainType } from '@sodax/types';
 
 export function WalletModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const modal = useWalletModal({
@@ -132,40 +135,27 @@ export function WalletModal({ open, onClose }: { open: boolean; onClose: () => v
           <h2>Select a chain</h2>
           {chainGroups.map((group) => (
             <button
-              key={group.id}
-              onClick={() => modal.openChain(group.xChainType)}
+              key={group.chainType}
+              onClick={() => modal.selectChain(group.chainType)}
             >
-              {group.label}
+              {group.displayName}
             </button>
           ))}
         </Dialog>
       );
 
-    case 'walletSelect': {
-      const sorted = sortConnectors(modal.state.connectors, {
-        preferred: ['MetaMask', 'Phantom'],
-      });
+    case 'walletSelect':
+      // The wallet list is NOT on modal.state — pull it from useXConnectors for
+      // the chosen chain. A hook can't be called inside a switch case, so render
+      // a child component keyed off modal.state.chainType.
       return (
-        <Dialog onClose={onClose}>
-          <button onClick={() => modal.back()}>← back</button>
-          <h2>Connect to {modal.state.xChainType}</h2>
-          {sorted.map((connector) => (
-            <button
-              key={connector.id}
-              disabled={!connector.isInstalled}
-              onClick={() => modal.connect(connector)}
-            >
-              {connector.name}
-              {!connector.isInstalled && (
-                <a href={connector.installUrl} target="_blank" rel="noreferrer">
-                  Install
-                </a>
-              )}
-            </button>
-          ))}
-        </Dialog>
+        <WalletPicker
+          chainType={modal.state.chainType}
+          onPick={modal.selectWallet}
+          onBack={modal.back}
+          onClose={onClose}
+        />
       );
-    }
 
     case 'connecting':
       return (
@@ -189,6 +179,42 @@ export function WalletModal({ open, onClose }: { open: boolean; onClose: () => v
       return null;
   }
 }
+
+function WalletPicker({
+  chainType,
+  onPick,
+  onBack,
+  onClose,
+}: {
+  chainType: ChainType;
+  onPick: (c: IXConnector) => void;
+  onBack: () => void;
+  onClose: () => void;
+}) {
+  const connectors = sortConnectors(useXConnectors({ xChainType: chainType }), {
+    preferred: ['metamask', 'phantom'],
+  });
+  return (
+    <Dialog onClose={onClose}>
+      <button onClick={onBack}>← back</button>
+      <h2>Connect to {chainType}</h2>
+      {connectors.map((connector) => (
+        <button
+          key={connector.id}
+          disabled={!connector.isInstalled}
+          onClick={() => onPick(connector)}
+        >
+          {connector.name}
+          {!connector.isInstalled && (
+            <a href={connector.installUrl} target="_blank" rel="noreferrer">
+              Install
+            </a>
+          )}
+        </button>
+      ))}
+    </Dialog>
+  );
+}
 ```
 
 ---
@@ -199,7 +225,7 @@ export function WalletModal({ open, onClose }: { open: boolean; onClose: () => v
 |---|---|---|
 | Track which chain is picked | `useState<ChainType \| null>` | `useWalletModal().state.kind === 'walletSelect'` |
 | List enabled chains | hardcoded `SUPPORTED_CHAINS` | `useChainGroups()` (driven by `walletConfig`) |
-| List connectors per chain | one `useXConnectors` per chain | `modal.state.connectors` when `kind === 'walletSelect'` |
+| List connectors per chain | one `useXConnectors` per chain | one `useXConnectors({ xChainType: modal.state.chainType })` in the `walletSelect` branch |
 | Connecting / error state | `useState` for `connectingId`, `error` | `modal.state.kind` with discriminated union |
 | Retry on error | re-trigger click manually | `modal.retry()` |
 | Filter to installed wallets | n/a | `connector.isInstalled` + `connector.installUrl` |
@@ -213,9 +239,9 @@ export function WalletModal({ open, onClose }: { open: boolean; onClose: () => v
 
 1. **Find the v1 modal file.** Search for `useState<ChainType` or multiple `useXConnectors` calls in the same component.
 2. **Replace state-tracking with `useWalletModal`.** Remove `useState` for picked chain, connectingId, error.
-3. **Replace hardcoded chain list with `useChainGroups`.** Use the `xChainType` field on each group entry.
+3. **Replace hardcoded chain list with `useChainGroups`.** Use the `chainType` field on each group entry (pass it to `modal.selectChain`); render `displayName` for the label.
 4. **Switch on `modal.state.kind`.** Render branches: `'closed'` / `'chainSelect'` / `'walletSelect'` / `'connecting'` / `'error'` / `'success'`.
-5. **Use connector metadata.** `connector.isInstalled` / `connector.installUrl` for install CTA. `sortConnectors` to rank installed wallets first.
+5. **Render the wallet list from `useXConnectors`, not the modal.** In the `'walletSelect'` branch, read `modal.state.chainType` and call `useXConnectors({ xChainType })` (in a child component, since hooks can't run inside a `switch`). Connect with `modal.selectWallet(connector)`. Use `connector.isInstalled` / `connector.installUrl` for the install CTA and `sortConnectors` to rank installed wallets first.
 6. **Keep your existing `<Dialog>` primitive.** v2 is **headless** — bring your own UI components.
 
 ---
@@ -238,8 +264,8 @@ grep -nE "useState.*connectingId|useState.*pickedChain" <user-modal-file>
 
 ## Edge cases
 
-- **Modal opens on a specific chain (skip chain select).** Call `modal.openChain('EVM')` directly in your trigger button instead of going through chain select. The state machine starts at `'walletSelect'` for that chain.
-- **App needs to know which chain the user picked even before connecting.** Read `modal.state.xChainType` inside the `'walletSelect'` / `'connecting'` branches.
+- **Modal opens on a specific chain (skip chain select).** Call `modal.selectChain('EVM')` directly in your trigger button instead of going through chain select. The state machine starts at `'walletSelect'` for that chain.
+- **App needs to know which chain the user picked even before connecting.** Read `modal.state.chainType` inside the `'walletSelect'` / `'connecting'` branches.
 - **Multiple modal trigger buttons (e.g. chain-specific CTAs).** Reuse one `useWalletModal` instance — do not create one per button.
 
 For a full integration walkthrough (without v1 baggage), see [`recipes/multi-chain-modal.md`](../../../integration/knowledge/recipes/multi-chain-modal.md).

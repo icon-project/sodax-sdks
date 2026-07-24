@@ -11,7 +11,7 @@ Every type-level rename and shape change introduced by v2. Fix these first — o
 3. [Wallet-provider typing](#3-wallet-provider-typing) — `GetWalletProviderType<K>` and `WalletProviderSlot<K, Raw>` replace ad-hoc spoke-provider classes.
 4. [`Token` / `XToken` field renames](#4-token--xtoken-field-renames) — `xChainId` → `chainKey`; `Token` → `XToken`.
 5. [`RpcConfig` reshape](#5-rpcconfig-reshape) — now keyed by `ChainKey` values; chain-family-specific shapes for Bitcoin and Stellar.
-6. [`IConfigApi` Result-wrapping](#6-iconfigapi-result-wrapping) — every method returns `Promise<Result<T>>`.
+6. [`IConfigApiV1` Result-wrapping](#6-iconfigapiv1-result-wrapping) — every method returns `Promise<Result<T>>`.
 7. [Address-type rename](#7-address-type-rename) — `AddressType` → `BtcAddressType`.
 8. [Wallet-provider `chainType` discriminant](#8-wallet-provider-chaintype-discriminant) — every `I*WalletProvider` declares a literal field.
 9. [`ChainId` / `SpokeChainId` → `SpokeChainKey`](#9-chainid--spokechainid--spokechainkey) — type alias rename.
@@ -47,6 +47,7 @@ v1 exported one constant per chain (`SONIC_MAINNET_CHAIN_ID`, `ARBITRUM_MAINNET_
 | `BASE_MAINNET_CHAIN_ID` | `ChainKeys.BASE_MAINNET` | `'0x2105.base'` |
 | `BSC_MAINNET_CHAIN_ID` | `ChainKeys.BSC_MAINNET` | `'0x38.bsc'` |
 | `ETHEREUM_MAINNET_CHAIN_ID` | `ChainKeys.ETHEREUM_MAINNET` | `'ethereum'` |
+| `HEDERA_MAINNET_CHAIN_ID` | `ChainKeys.HEDERA_MAINNET` | `'hedera'` |
 | `HYPEREVM_MAINNET_CHAIN_ID` | `ChainKeys.HYPEREVM_MAINNET` | `'hyper'` |
 | `ICON_MAINNET_CHAIN_ID` | `ChainKeys.ICON_MAINNET` | `'0x1.icon'` |
 | `INJECTIVE_MAINNET_CHAIN_ID` | `ChainKeys.INJECTIVE_MAINNET` | `'injective-1'` |
@@ -192,7 +193,7 @@ v1 consumers reached into a global `hubAssets[chainId][address]` map to get the 
 
 ### Pitfall
 
-Read shapes like `Intent` and `IntentResponse` from the backend keep `srcChain` / `dstChain` as the **relay** chain id (numeric, `IntentRelayChainId`). They are **not** chain keys and were **not** renamed to `srcChainKey`/`dstChainKey`. Only **request** types (`CreateIntentParams`, `CreateLimitOrderParams`, `SubmitSwapTxRequest`) gained the `*ChainKey` field names.
+Read shapes like `Intent` and `IntentResponse` from the backend keep `srcChain` / `dstChain` as the **relay** chain id (numeric, `IntentRelayChainId`). They are **not** chain keys and were **not** renamed to `srcChainKey`/`dstChainKey`. Only **request** types (`CreateIntentParams`, `CreateLimitOrderParams`, `SubmitTxRequestV2`) gained the `*ChainKey` field names.
 
 ### Exception — partner module read shapes DID rename
 
@@ -244,9 +245,9 @@ Bitcoin and Stellar have richer RPC needs than other chains (multiple endpoints,
 
 ---
 
-## 6. `IConfigApi` Result-wrapping
+## 6. `IConfigApiV1` Result-wrapping
 
-Every method on the `IConfigApi` contract changed signature in v2. v1 returned plain `Promise<T>` and threw on failure; v2 returns `Promise<Result<T>>` and never throws.
+Every method on the `IConfigApiV1` contract changed signature in v2. v1 returned plain `Promise<T>` and threw on failure; v2 returns `Promise<Result<T>>` and never throws.
 
 | Method | v1 return | v2 return |
 |---|---|---|
@@ -257,7 +258,7 @@ Every method on the `IConfigApi` contract changed signature in v2. v1 returned p
 | `getMoneyMarketTokensByChainId` | `Promise<XToken[]>` | `Promise<Result<XToken[]>>` |
 | `getRelayChainIdMap` | (n/a in v1) | `Promise<Result<GetRelayChainIdMapApiResponse>>` (v2-new) |
 
-If you implemented a custom `IConfigApi` (e.g. for a sandbox or test fixture), update every method signature. If you only consumed the default implementation through `Sodax.config`, the SDK already uses `Result` internally — your consumer-side code doesn't see the wrapping.
+If you implemented a custom `IConfigApiV1` (e.g. for a sandbox or test fixture), update every method signature. If you only consumed the default implementation through `Sodax.config`, the SDK already uses `Result` internally — your consumer-side code doesn't see the wrapping.
 
 ---
 

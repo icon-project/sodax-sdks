@@ -48,11 +48,11 @@ These keep their name but their TypeScript signature is different. Usually requi
 | `useXBalances` | Params: positional → `{ params: { xService, xChainId, xTokens, address } }`. All four required. `xService` injected from `@sodax/wallet-sdk-react`. |
 | `useEstimateGas` | Mutation; vars: `EstimateGasParams<C>` (flat, not `{ params, walletProvider }`-wrapped). |
 | `useDeriveUserWalletAddress`, `useGetUserHubWalletAddress` | Single-object query shape. |
-| `useStellarTrustlineCheck` | Single-object shape with `{ token, amount, chainId, walletProvider }` under `params`. |
+| `useStellarTrustlineCheck` | Single-object shape under `params`: `{ token, amount, chainId, walletAddress }`. Pass the resolved Stellar address (e.g. `useXAccount('STELLAR').address`), not a wallet provider — it keys the cache per account. |
 | `useRequestTrustline` | Custom utility hook (NOT a canonical mutation). Takes `(token: string \| undefined)` positionally, returns `{ requestTrustline, isLoading, isRequested, error, data }`. The `requestTrustline` callback takes `{ token, amount, srcChainKey, walletProvider }`. |
 | `useBackendOrderbook` / `useBackendAllMoneyMarketBorrowers` | Pagination MUST be nested under `params`: `{ params: { pagination: { offset, limit } } }`. |
 | `useBackendUserIntents` | Data is `UserIntentsResponse = { items: IntentResponse[], total, offset, limit }` — NOT a bare array. Access `data?.items`. |
-| `useBackendSubmitSwapTx` | Mutation. `apiConfig` moved from hook init to `mutate(vars)`. |
+| `useSwapsApiSubmitTx` / `useSwapsApiSubmitTxStatus` (v1: `useBackendSubmitSwapTx` / `useBackendSubmitSwapTxStatus`) | Renamed + moved to the `swapsApi/` namespace (keys now `['swapsApi', …]`). Mutation `apiConfig` moved from hook init to `mutate(vars)`; the status query now requires `srcChainKey`. The rest of the Swaps API v2 is newly wrapped as `useSwapsApi*` hooks. |
 | All migration hooks | **NEW**: 6 per-action hooks replacing v1's single `useMigrate`. See [`deleted-hooks.md`](deleted-hooks.md). |
 | `useMigrationAllowance` | Query params nest under `params` with inner field literally named `params` (NOT `payload`): `{ params: { params: <migration-params>, action: 'migrate' \| 'revert' } }`. |
 | `BalnMigrateParams` (used by `useMigrateBaln`) | NEW required field `stake: boolean`. `lockupPeriod` is the `LockupPeriod` enum (5 members; values in seconds, not months). |

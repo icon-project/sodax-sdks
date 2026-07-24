@@ -10,15 +10,21 @@
 // - Outbound (response) types are pure JSON: every bigint-derived value (intent
 //   ids, amounts, deadlines, fees, relay chain ids) is a decimal `string`, and
 //   every `Date` is an ISO 8601 `string` (e.g. `abandonedAt`). A response NEVER
-//   contains `bigint` — JSON cannot represent it.
+//   contains `bigint` on the wire — JSON cannot represent it (the one typed
+//   exception is the unsigned `tx`; see below).
 // - Inbound (request) types mirror the server's parsed request DTOs: the Intent
 //   struct (`IntentRequestV2`) carries `bigint` for its numeric fields, matching
 //   the backend `IntentDto`. Other request fields (amounts/deadlines on
 //   `CreateIntentParamsV2`/`QuoteRequestV2`, fees, relay chain ids, etc.) are
 //   decimal `string`, matching their `@IsNumberString` DTO fields.
 // - `Hex` / `Address` / `Hash` / `SpokeChainKey` are plain `string` everywhere.
-// - Chain-specific opaque payloads (unsigned `tx`, gas estimate, raw relay
-//   `result`) are `unknown` because their shape varies by chain family.
+// - The unsigned `tx` is typed as the SDK domain union `RawTxReturnType`. It
+//   travels as pure JSON (bigints stringified; Injective byte arrays as
+//   `{ "0": N, … }` index objects), and the SDK client's response schema
+//   (`@sodax/sdk` `rawTxSchemas`) rebuilds the domain shape (`bigint`,
+//   `Uint8Array`) on parse — the inverse of the backend's `stringifyBigInts`.
+// - The remaining chain-specific opaque payloads (gas estimate, raw relay
+//   `result`) stay `unknown` because their shape varies by chain family.
 //
 // Shapes used in both directions are split into a `*RequestV2` (client → server)
 // and a `*ResponseV2` (server → client) interface. `IntentRequestV2` (bigint
@@ -35,6 +41,8 @@ import type { XToken } from '../chains/tokens.js';
 import type { RelayConfig } from '../common/constants.js';
 import type { ConcentratedLiquidityConfig, DexDefaultConfig } from '../dex/dex.js';
 import type { SodaxDefaultConfig } from '../sodax-config/sodax-config.js';
+
+import type { RawTxReturnType } from '../common/index.js';
 
 // ──────────────────────────────────────────────────────────────────────
 // Shared building blocks
@@ -323,14 +331,14 @@ export interface AllowanceCheckResponseV2 {
 
 /** POST /swaps/approve — response body. */
 export interface ApproveResponseV2 {
-  /** Unsigned approval transaction (chain-specific shape). For EVM: `{ from, to, value, data }`. */
-  tx: unknown;
+  /** Unsigned approval transaction — the `RawTxReturnType` variant for the request's `srcChainKey`. */
+  tx: RawTxReturnType;
 }
 
 /** POST /swaps/intents — response body. */
 export interface CreateIntentResponseV2 {
-  /** Unsigned create-intent transaction (chain-specific shape). For EVM: `{ from, to, value, data }`. */
-  tx: unknown;
+  /** Unsigned create-intent transaction — the `RawTxReturnType` variant for the request's `srcChainKey`. */
+  tx: RawTxReturnType;
   /** Built intent struct (hub representation). */
   intent: IntentResponseV2;
   /** Extra data required when calling `POST /swaps/intents/submit`. */
@@ -389,8 +397,8 @@ export interface CancelIntentRequestV2 {
 
 /** POST /swaps/intents/cancel — response body. */
 export interface CancelIntentResponseV2 {
-  /** Unsigned cancel transaction (chain-specific shape). For EVM: `{ from, to, value, data }`. */
-  tx: unknown;
+  /** Unsigned cancel-intent transaction — the `RawTxReturnType` variant for the request's `srcChainKey`. */
+  tx: RawTxReturnType;
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -586,7 +594,14 @@ export interface SubmitTxStatusQueryV2 {
 }
 
 /** Lifecycle status of a submitted swap tx. */
-export type SubmitSwapTxStatusV2 = 'pending' | 'relaying' | 'relayed' | 'posting_execution' | 'executed' | 'failed';
+export type SubmitSwapTxStatusV2 =
+  | 'pending'
+  | 'relaying'
+  | 'relayed'
+  | 'posting_execution'
+  | 'posted_execution'
+  | 'solved'
+  | 'failed';
 
 /** Lifecycle status of a cross-chain relay packet. */
 export type PacketDataStatusV2 = 'pending' | 'validating' | 'executing' | 'executed';
@@ -615,7 +630,7 @@ export interface PacketDataV2 {
   payload: string;
 }
 
-/** Processing result for a submitted swap tx (present when executed). */
+/** Processing result for a submitted swap tx (present when solved). */
 export interface SubmitTxStatusResultV2 {
   /** Destination intent tx hash. */
   dstIntentTxHash: string;
@@ -641,7 +656,7 @@ export interface SubmitTxStatusDataV2 {
   processingAttempts: number;
   /** ISO 8601 timestamp set when the swap exhausted its processing budget and was abandoned. */
   abandonedAt?: string;
-  /** Processing result (present when executed). */
+  /** Processing result (present when solved). */
   result?: SubmitTxStatusResultV2;
   /** User-facing hint when status is failed or the swap was abandoned. */
   userMessage?: string;

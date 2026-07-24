@@ -1,6 +1,6 @@
 # Chain keys
 
-20 supported chains. The `ChainKey` type is the union of every `ChainKeys.*` value. **`SpokeChainKey` is the same union — it includes Sonic.** The "spoke" naming refers to how feature services type their `srcChainKey` parameter (they accept the hub too — bridge / swap / staking etc. all run from Sonic as source via the hub-wallet abstraction). When you specifically need "EVM chains excluding the hub" use `EVM_SPOKE_ONLY_CHAIN_KEYS` / `isEvmSpokeOnlyChainKeyType`.
+21 supported chains. The `ChainKey` type is the union of every `ChainKeys.*` value. **`SpokeChainKey` is the same union — it includes Sonic.** The "spoke" naming refers to how feature services type their `srcChainKey` parameter (they accept the hub too — bridge / swap / staking etc. all run from Sonic as source via the hub-wallet abstraction). When you specifically need "EVM chains excluding the hub" use `EVM_SPOKE_ONLY_CHAIN_KEYS` / `isEvmSpokeOnlyChainKeyType`.
 
 | `ChainKeys.*` | String value | Family | Hub vs spoke | Address type |
 |---|---|---|---|---|
@@ -16,6 +16,7 @@
 | `LIGHTLINK_MAINNET` | `'lightlink'` | EVM | spoke | `0x${string}` |
 | `REDBELLY_MAINNET` | `'redbelly'` | EVM | spoke | `0x${string}` |
 | `KAIA_MAINNET` | `'0x2019.kaia'` | EVM | spoke | `0x${string}` |
+| `HEDERA_MAINNET` | `'hedera'` | EVM | spoke | `0x${string}` |
 | `SOLANA_MAINNET` | `'solana'` | SOLANA | spoke | base58 PublicKey string |
 | `SUI_MAINNET` | `'sui'` | SUI | spoke | `0x${string}` (32-byte) |
 | `STELLAR_MAINNET` | `'stellar'` | STELLAR | spoke | `G…` |
@@ -35,9 +36,9 @@
 
 | Type | What it is |
 |---|---|
-| `ChainKey` | Union of all `ChainKeys.*` values (20 chains). |
-| `SpokeChainKey` | `ChainKey` minus `'sonic'` (19 spoke chains). |
-| `EvmChainKey` | Subset of `ChainKey` for the 12 EVM chains. |
+| `ChainKey` | Union of all `ChainKeys.*` values (21 chains). |
+| `SpokeChainKey` | Same union as `ChainKey` — includes Sonic (21 chains). For "EVM chains excluding the hub" use `EvmSpokeOnlyChainKey`. |
+| `EvmChainKey` | Subset of `ChainKey` for the 13 EVM chains. |
 | `HubChainKey` | The literal `'sonic'`. |
 
 ### Chain-family helpers
@@ -57,6 +58,41 @@ import {
   isHubChainKeyType,
 } from '@sodax/sdk';
 ```
+
+---
+
+## Chain metadata (`baseChainInfo`)
+
+`baseChainInfo` (exported from `@sodax/sdk`, re-exported from `@sodax/types`) maps every `ChainKey` to a static `BaseChainInfo` record:
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` | `string` | Human-readable chain name. |
+| `key` | `ChainKey` | The chain key (equals the map key). |
+| `chainId` | `string \| number` | Native chain id — number for EVM, string for non-EVM. |
+| `type` | `ChainType` | Chain family — same value as `getChainType(key)`. |
+| `mainnet` | `boolean` | Whether the entry is a mainnet chain. |
+| `logo` | `string` | Default chain logo URL (see below). |
+| `explorer` | `{ baseUrl; txUrl; addressUrl; contractUrl }` | Block-explorer URL templates. |
+
+```ts
+import { baseChainInfo, ChainKeys } from '@sodax/sdk';
+
+const { name, logo, explorer } = baseChainInfo[ChainKeys.BASE_MAINNET];
+```
+
+### Chain logos
+
+Each entry's `logo` is a default logo URL — **read `baseChainInfo[key].logo` for chain icons; never hardcode icon paths.** The URL is built from the exported `CHAIN_LOGO_BASE_URL` as `${CHAIN_LOGO_BASE_URL}/${key}.png`:
+
+```ts
+import { baseChainInfo, CHAIN_LOGO_BASE_URL, ChainKeys } from '@sodax/sdk';
+
+baseChainInfo[ChainKeys.SONIC_MAINNET].logo;
+// → `${CHAIN_LOGO_BASE_URL}/sonic.png`
+```
+
+The PNGs are hosted in the repo's `@sodax/assets` package and served from `main` via `raw.githubusercontent.com` — so a newly added logo only resolves once merged to `main`. They are not bundled into the SDK.
 
 ---
 

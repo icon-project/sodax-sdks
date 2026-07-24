@@ -1,6 +1,6 @@
 # EVM — `EvmWalletProvider`
 
-Backed by [viem](https://viem.sh). One class covers all **12** SODAX EVM spoke chains via `getEvmViemChain()`.
+Backed by [viem](https://viem.sh). One class covers **every** SODAX EVM spoke chain via `getEvmViemChain()` (see the table below).
 
 | | |
 |---|---|
@@ -8,7 +8,7 @@ Backed by [viem](https://viem.sh). One class covers all **12** SODAX EVM spoke c
 | Interface | `IEvmWalletProvider` (from `@sodax/types`) |
 | Discriminant style | **Field presence** (no `type` field) |
 | Underlying SDK | `viem` |
-| Supported chains | Sonic (hub), Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia |
+| Supported chains | Sonic (hub), Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia, Hedera |
 
 ---
 

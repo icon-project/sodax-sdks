@@ -42,6 +42,7 @@ import {
 import {
   ChainKeys,
   FEE_PERCENTAGE_SCALE,
+  HookKind,
   type PartnerFee,
   type SolverConfig,
   type XToken,
@@ -51,6 +52,9 @@ import type { ConfigService } from '../shared/config/ConfigService.js';
 import { IntentDataType, type CreateIntentParams, type Intent } from '../shared/types/intent-types.js';
 import { calculatePercentageFeeAmount } from '../shared/utils/shared-utils.js';
 import { EvmSolverService } from './EvmSolverService.js';
+import { HookService } from './HookService.js';
+import { IntentDataService } from './IntentDataService.js';
+import { Sodax } from '../index.js';
 
 // --- fixtures -------------------------------------------------------------
 
@@ -153,8 +157,7 @@ const encodeIntentFilledLog = (
 // Wrap a list of pseudo-logs in the minimal shape `waitForTransactionReceipt`
 // returns — `parseEventLogs` only reads the `logs` array, so we don't bother
 // populating the rest of the receipt.
-const receiptWith = (logs: ReadonlyArray<unknown>): TransactionReceipt =>
-  ({ logs }) as unknown as TransactionReceipt;
+const receiptWith = (logs: ReadonlyArray<unknown>): TransactionReceipt => ({ logs }) as unknown as TransactionReceipt;
 
 // =========================================================================
 // constructCreateIntentData — hub-asset resolution + multicall encoding
@@ -216,7 +219,11 @@ describe('EvmSolverService.constructCreateIntentData', () => {
     // Only the *output* lookup runs; the input is the hub asset directly.
     vi.mocked(mockConfig.getSpokeTokenFromOriginalAssetAddress).mockReturnValueOnce(hubOutputXToken);
 
-    const params: CreateIntentParams = { ...baseParams(), srcChainKey: ChainKeys.SONIC_MAINNET, inputToken: HUB_INPUT_ASSET };
+    const params: CreateIntentParams = {
+      ...baseParams(),
+      srcChainKey: ChainKeys.SONIC_MAINNET,
+      inputToken: HUB_INPUT_ASSET,
+    };
     const [, intent] = EvmSolverService.constructCreateIntentData(params, HUB_WALLET, mockConfig, undefined);
 
     expect(intent.inputToken).toBe(HUB_INPUT_ASSET);
@@ -227,7 +234,11 @@ describe('EvmSolverService.constructCreateIntentData', () => {
   it('treats the output token as already-on-hub when dstChainKey is the hub chain (skips lookup)', () => {
     vi.mocked(mockConfig.getSpokeTokenFromOriginalAssetAddress).mockReturnValueOnce(hubInputXToken);
 
-    const params: CreateIntentParams = { ...baseParams(), dstChainKey: ChainKeys.SONIC_MAINNET, outputToken: HUB_OUTPUT_ASSET };
+    const params: CreateIntentParams = {
+      ...baseParams(),
+      dstChainKey: ChainKeys.SONIC_MAINNET,
+      outputToken: HUB_OUTPUT_ASSET,
+    };
     const [, intent] = EvmSolverService.constructCreateIntentData(params, HUB_WALLET, mockConfig, undefined);
 
     expect(intent.outputToken).toBe(HUB_OUTPUT_ASSET);
@@ -256,12 +267,7 @@ describe('EvmSolverService.constructCreateIntentData', () => {
       .mockReturnValueOnce(hubOutputXToken);
 
     const fee: PartnerFee = { address: FEE_RECEIVER, percentage: 100 }; // 1%
-    const [, intent, feeAmount] = EvmSolverService.constructCreateIntentData(
-      baseParams(),
-      HUB_WALLET,
-      mockConfig,
-      fee,
-    );
+    const [, intent, feeAmount] = EvmSolverService.constructCreateIntentData(baseParams(), HUB_WALLET, mockConfig, fee);
 
     const expectedFee = calculatePercentageFeeAmount(1_000_000n, 100);
     expect(feeAmount).toBe(expectedFee);
@@ -421,6 +427,25 @@ describe('EvmSolverService.decodeIntentFeeAmount', () => {
     expect(EvmSolverService.decodeIntentFeeAmount(bogus)).toBe(0n);
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Unknown IntentData type byte'));
   });
+
+  it('recovers the fee from a TYPE_ARRAY envelope carrying fee + delivery', () => {
+    const [feeEnvelope] = EvmSolverService.createIntentFeeData({ address: FEE_RECEIVER, amount: 1_234n }, 1_000_000n);
+    const data = IntentDataService.composeIntentData(
+      feeEnvelope,
+      HookService.encodeDeliveryData({ kind: HookKind.HYPERCORE_DEPOSIT }, FEE_RECEIVER),
+    );
+    expect(EvmSolverService.decodeIntentFeeAmount(data)).toBe(1_234n);
+  });
+
+  it('returns 0n (no log) for a delivery-only envelope', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const data = IntentDataService.composeIntentData(
+      '0x',
+      HookService.encodeDeliveryData({ kind: HookKind.HYPERCORE_DEPOSIT }, FEE_RECEIVER),
+    );
+    expect(EvmSolverService.decodeIntentFeeAmount(data)).toBe(0n);
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
 });
 
 // =========================================================================
@@ -449,6 +474,37 @@ describe('EvmSolverService.reconstructCreateIntentData', () => {
       .mocked(mockConfig.getSpokeTokenFromOriginalAssetAddress)
       .mockReturnValueOnce(hubInputXToken)
       .mockReturnValueOnce(hubOutputXToken);
+
+  it('reconstruct actual solana relay data', () => {
+    const sodax = new Sodax();
+
+    const intent = {
+      intentId: BigInt('83488095412101173390950552028345512257870714538704893067132536316339680419144'),
+      creator: '0x502a1ff98CaE3E596BBaa3586ffb9cD58826C140',
+      inputToken: '0x0c09e69a4528945de6d16c7E469deA6996Fdf636',
+      outputToken: '0x9Ee17486571917837210824b0d4CAdfe3B324D12',
+      inputAmount: BigInt('2500000'),
+      minOutputAmount: BigInt('2112617738149668914'),
+      deadline: BigInt('1781199633'),
+      allowPartialFill: false,
+      srcChain: 1n,
+      dstChain: 5n,
+      srcAddress: '0xcea4dc7d8fd9f14b68c0611cc46c984838f78a506420c22ee40427377464f191',
+      dstAddress: '0x0ab764ab3816cd036ea951be973098510d8105a6',
+      solver: '0x0000000000000000000000000000000000000000',
+      data: '0x',
+    } satisfies Intent;
+    const actualData =
+      '0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000001200000000000000000000000000c09e69a4528945de6d16c7e469dea6996fdf636000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044095ea7b30000000000000000000000006382d6ccd780758c5e8a6123c33ee8f4472f96ef00000000000000000000000000000000000000000000000000000000002625a0000000000000000000000000000000000000000000000000000000000000000000000000000000006382d6ccd780758c5e8a6123c33ee8f4472f96ef000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000284016f02e30000000000000000000000000000000000000000000000000000000000000020b89496621e10855e7ca566b16484c70234e14287966fe17cd7e57fc142539d48000000000000000000000000502a1ff98cae3e596bbaa3586ffb9cd58826c1400000000000000000000000000c09e69a4528945de6d16c7e469dea6996fdf6360000000000000000000000009ee17486571917837210824b0d4cadfe3b324d1200000000000000000000000000000000000000000000000000000000002625a00000000000000000000000000000000000000000000000001d5186a3c499a832000000000000000000000000000000000000000000000000000000006a2af31100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000500000000000000000000000000000000000000000000000000000000000001c00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002400000000000000000000000000000000000000000000000000000000000000020cea4dc7d8fd9f14b68c0611cc46c984838f78a506420c22ee40427377464f19100000000000000000000000000000000000000000000000000000000000000140Ab764AB3816cD036Ea951bE973098510D8105A6000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000';
+
+    const reconstructResult = sodax.swaps.reconstructRelayData(intent);
+    if (!reconstructResult.ok) {
+      throw new Error('Failed to reconstruct relay data');
+    }
+    expect(reconstructResult.ok).toBe(true);
+
+    expect(reconstructResult.ok && reconstructResult.value.payload.toLowerCase()).toBe(actualData.toLowerCase());
+  });
 
   // The canonical proof: the payload `constructCreateIntentData` produced for a spoke source must be
   // reproducible from the resulting `Intent` alone (same intents contract, isHubSource = false).

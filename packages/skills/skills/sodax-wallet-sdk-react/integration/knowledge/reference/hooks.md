@@ -21,9 +21,10 @@ Hooks do **not** throw when their chain isn't enabled — each picks its own no-
 | `useEvmSwitchChain` | Returns `{ isWrongChain: false, handleSwitchChain: () => {} }` (no-op) |
 | `useEnabledChains` | Returns the list of slots actually present (does not include the disabled one) |
 | `useChainGroups`, `useConnectedChains` | Excludes the chain from output |
-| `useXConnect`, `useXDisconnect`, `useXSignMessage` | Mutation rejects when invoked with an unsupported `xChainType` |
+| `useXConnect` | Mutation rejects (throws) when invoked with an unsupported `xChainType` |
+| `useXDisconnect`, `useXSignMessage` | Resolve (to `void` / `undefined`) with a `console.warn` — they do **not** reject |
 
-Rule of thumb: read-hooks degrade silently to "empty"; mutation-hooks reject. Both cases are safe to call unconditionally.
+Rule of thumb: read-hooks and `useXDisconnect`/`useXSignMessage` degrade silently (empty / `undefined` + warning); only `useXConnect` rejects. All are safe to call unconditionally.
 
 ---
 
@@ -161,8 +162,8 @@ if (isWrongChain) handleSwitchChain();
 
 | Hook | Signature | Returns |
 |---|---|---|
-| `useXService` | `useXService({ xChainType })` | `IXService \| undefined` |
-| `useXServices` | `useXServices()` | `Partial<Record<ChainType, IXService>>` |
+| `useXService` | `useXService({ xChainType })` | `XService \| undefined` |
+| `useXServices` | `useXServices()` | `Partial<Record<ChainType, XService>>` |
 | `useEnabledChains` | `useEnabledChains()` | `ChainType[]` |
 | `useInitChainServices` | (internal — handled by `SodaxWalletProvider`) | — |
 

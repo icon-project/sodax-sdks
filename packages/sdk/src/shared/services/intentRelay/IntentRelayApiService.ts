@@ -1,5 +1,7 @@
 import {
+  DEFAULT_MAX_RETRY,
   DEFAULT_RELAY_TX_TIMEOUT,
+  DEFAULT_RETRY_DELAY_MS,
   type HttpUrl,
   type Result,
   type SpokeChainKey,
@@ -143,6 +145,33 @@ export type RelayAndWaitParams = {
   pollTxHash?: string;
 };
 
+/** Per-attempt HTTP budget — caps a hung connection so it can't hold the polling loop hostage. */
+const RELAY_REQUEST_TIMEOUT_MS = 15_000;
+
+/** Matches the `AbortError` raised when a request is cut off by its per-attempt/deadline budget. */
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
+// Reads a relay HTTP response: HTTP error → `HttpRelayError` Result; otherwise the parsed JSON body.
+// `response.json()` may reject (malformed body or an aborted stream) — callers decide how to treat it.
+async function parseRelayResponse<T extends RelayAction>(response: Response): Promise<Result<GetRelayResponse<T>>> {
+  // Guard against HTTP-level failures: a 4xx/5xx that returns a JSON body shaped like
+  // `{ success: true, ... }` (buggy gateway, CDN, middleware) would otherwise be treated
+  // as a relay success. Aligns with `SolverApiService`, which has always checked this.
+  if (!response.ok) {
+    const statusText = response.statusText || 'unknown';
+    let body = '';
+    try {
+      body = await response.text();
+    } catch {
+      // Body read failures are non-fatal — preserve the status info even without it.
+    }
+    return { ok: false, error: new HttpRelayError(response.status, statusText, body) };
+  }
+  return { ok: true, value: await response.json() };
+}
+
 async function postRequest<T extends RelayAction>(
   payload: IntentRelayRequest<T>,
   apiUrl: string,
@@ -151,31 +180,62 @@ async function postRequest<T extends RelayAction>(
     const response = await retry(() =>
       fetch(apiUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       }),
     );
-
-    // Guard against HTTP-level failures: a 4xx/5xx that returns a JSON body shaped like
-    // `{ success: true, ... }` (buggy gateway, CDN, middleware) would otherwise be treated
-    // as a relay success. Aligns with `SolverApiService`, which has always checked this.
-    if (!response.ok) {
-      const statusText = response.statusText || 'unknown';
-      let body = '';
-      try {
-        body = await response.text();
-      } catch {
-        // Body read failures are non-fatal — preserve the status info even without it.
-      }
-      return { ok: false, error: new HttpRelayError(response.status, statusText, body) };
-    }
-
-    return { ok: true, value: await response.json() };
+    return await parseRelayResponse<T>(response);
   } catch (error) {
     return { ok: false, error };
   }
+}
+
+// Polling-only `get_transaction_packets`: bounds each attempt AND its body read with an `AbortSignal`
+// + `deadline`, so a hung connection or a stalled body can't block the wait loop. Retries only
+// transport rejects and aborts; an HTTP error or a genuine parse error is surfaced without retry
+// (submit/getPacket keep the legacy {@link postRequest}, where re-POSTing a delivered request is unsafe).
+async function pollTransactionPackets(
+  payload: IntentRelayRequest<'get_transaction_packets'>,
+  apiUrl: string,
+  deadline: number,
+): Promise<Result<GetRelayResponse<'get_transaction_packets'>>> {
+  invariant(payload.params.chain_id.length > 0, 'Invalid input parameters. source_chain_id empty');
+  invariant(payload.params.tx_hash.length > 0, 'Invalid input parameters. tx_hash empty');
+
+  let lastError: unknown;
+  for (let attempt = 0; attempt < DEFAULT_MAX_RETRY; attempt++) {
+    if (Date.now() >= deadline) break;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), Math.min(RELAY_REQUEST_TIMEOUT_MS, deadline - Date.now()));
+    let response: Response | undefined;
+    try {
+      // The timer covers `parseRelayResponse` too — a response can resolve headers but stall the body.
+      response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      return await parseRelayResponse<'get_transaction_packets'>(response);
+    } catch (error) {
+      lastError = error;
+      // Retry a transport reject (fetch threw, no response) or an abort (hung connection / hung body).
+      // A genuine parse error after a delivered response is not retriable.
+      if (response !== undefined && !isAbortError(error)) {
+        return { ok: false, error };
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (attempt < DEFAULT_MAX_RETRY - 1 && Date.now() < deadline) {
+      const backoffMs = Math.min(DEFAULT_RETRY_DELAY_MS, deadline - Date.now());
+      if (backoffMs > 0) await new Promise(resolve => setTimeout(resolve, backoffMs));
+    }
+  }
+
+  return { ok: false, error: lastError ?? new Error('Relay polling request failed') };
 }
 
 /**
@@ -191,6 +251,8 @@ async function postRequest<T extends RelayAction>(
  * moneyMarket, bridge, dex, migration, and staking for error discrimination. Renaming
  * requires coordinated updates across all callers — prefer adding a new code to
  * {@link RELAY_ERROR_CODES} over renaming.
+ *
+ * NOTE: if transaction was already relayed, post request will return { success: true, message: 'Transaction registered' }
  *
  * @param payload - The request payload containing the 'submit' action type and parameters.
  * @param apiUrl - The URL of the intent relay service.
@@ -272,8 +334,8 @@ export async function getPacket(
  */
 type PollOutcome = { kind: 'found'; packet: PacketData } | { kind: 'continue' } | { kind: 'hardError'; error: unknown };
 
-async function pollForExecutedPacket(payload: WaitUntilIntentExecutedPayload): Promise<PollOutcome> {
-  const txPacketsResult = await getTransactionPackets(
+async function pollForExecutedPacket(payload: WaitUntilIntentExecutedPayload, deadline: number): Promise<PollOutcome> {
+  const txPacketsResult = await pollTransactionPackets(
     {
       action: 'get_transaction_packets',
       params: {
@@ -282,6 +344,7 @@ async function pollForExecutedPacket(payload: WaitUntilIntentExecutedPayload): P
       },
     },
     payload.apiUrl,
+    deadline,
   );
 
   if (!txPacketsResult.ok) {
@@ -292,20 +355,27 @@ async function pollForExecutedPacket(payload: WaitUntilIntentExecutedPayload): P
     if (txPacketsResult.error instanceof HttpRelayError && txPacketsResult.error.status === 404) {
       return { kind: 'continue' };
     }
+    // An abort, or any failure once the deadline has elapsed, is a timeout — not a relay outage.
+    // Keep polling so the wall-clock loop ends as RELAY_TIMEOUT, not RELAY_POLLING_FAILED.
+    if (isAbortError(txPacketsResult.error) || Date.now() >= deadline) {
+      return { kind: 'continue' };
+    }
     return { kind: 'hardError', error: txPacketsResult.error };
   }
 
   const txPackets = txPacketsResult.value;
   if (txPackets.success && txPackets.data.length > 0) {
-    // A single src tx can emit multiple relay packets that all share `src_tx_hash`. Filter to the
-    // candidates, then let `selectPacket` disambiguate (defaults to first — the legacy behavior).
-    // The executed gate runs against the *selected* packet so we wait for the right packet to
-    // execute, rather than returning early when a sibling packet executes first.
+    // Filter by (src_tx_hash, src_chain_id) before selecting; string-guard the hash so a malformed
+    // entry is skipped (not thrown). `selectPacket` disambiguates siblings (defaults to first).
     const candidates = txPackets.data.filter(
-      packet => packet.src_tx_hash.toLowerCase() === payload.srcTxHash.toLowerCase(),
+      packet =>
+        typeof packet?.src_tx_hash === 'string' &&
+        packet.src_tx_hash.toLowerCase() === payload.srcTxHash.toLowerCase() &&
+        packet.src_chain_id === Number(payload.intentRelayChainId),
     );
     const packet = payload.selectPacket ? payload.selectPacket(candidates) : candidates[0];
-    if (packet?.status === 'executed') {
+    // dst_tx_hash guard hardens against a malformed executed packet (untrusted runtime input).
+    if (packet?.status === 'executed' && typeof packet.dst_tx_hash === 'string' && packet.dst_tx_hash.length > 0) {
       return { kind: 'found', packet };
     }
   }
@@ -316,6 +386,9 @@ export async function waitUntilIntentExecuted(payload: WaitUntilIntentExecutedPa
   try {
     const timeout = payload.timeout ?? DEFAULT_RELAY_TX_TIMEOUT;
     const startTime = Date.now();
+    // End-to-end budget for this poll: bounds every fetch, retry back-off, and inter-poll sleep so
+    // the call never overruns `timeout`. Submit is separate (single round-trip, not covered here).
+    const deadline = startTime + timeout;
     // Track the last observed polling-side failure so the post-loop emit path can distinguish
     // a genuine RELAY_TIMEOUT (polling worked, packet didn't land) from RELAY_POLLING_FAILED
     // (polling never recovered). Without this, both surface identically as RELAY_TIMEOUT.
@@ -323,7 +396,7 @@ export async function waitUntilIntentExecuted(payload: WaitUntilIntentExecutedPa
 
     while (Date.now() - startTime < timeout) {
       try {
-        const outcome = await pollForExecutedPacket(payload);
+        const outcome = await pollForExecutedPacket(payload, deadline);
         if (outcome.kind === 'found') {
           return { ok: true, value: outcome.packet };
         }
@@ -337,7 +410,9 @@ export async function waitUntilIntentExecuted(payload: WaitUntilIntentExecutedPa
         // instead of a misleading RELAY_TIMEOUT.
         lastPollingError = e;
       }
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Inter-poll back-off, capped so we never sleep past the deadline.
+      const sleepMs = Math.min(2000, deadline - Date.now());
+      if (sleepMs > 0) await new Promise(resolve => setTimeout(resolve, sleepMs));
     }
 
     if (lastPollingError !== undefined) {
