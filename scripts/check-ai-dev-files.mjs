@@ -99,7 +99,7 @@ for (const path of routedGuides) {
 }
 
 // Dev skills are the ones our AGENTS.md files point at (.claude/skills/<name>/);
-// vendored skills (cloudflare/resend/…) and tool-native command skills (release-sdk) aren't referenced, so they're out of this gate.
+// vendored skills (cloudflare/resend/…) and any skill no AGENTS.md points at aren't referenced, so they're out of this gate.
 const sodaxDevSkills = [
   ...new Set(
     agentFiles

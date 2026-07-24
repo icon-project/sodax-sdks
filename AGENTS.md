@@ -99,6 +99,8 @@ These guide every change. Where a rule maps to tooling (types, lint, tests, `che
 
 To review a change against these rules, use the `review-core-sdk` skill (`.claude/skills/review-core-sdk/`).
 
+To author or validate changesets and govern a release (SemVer bumps, changelogs, `CONFIG_VERSION`), use the `release-governance` skill (`.claude/skills/release-governance/`).
+
 ## AI File Maintenance
 
 - `AGENTS.md` is the canonical shared agent guidance. `CLAUDE.md` files should be thin Claude-specific shims that import the sibling `AGENTS.md`.
