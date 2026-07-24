@@ -50,7 +50,6 @@
     "check-exports": "attw --pack",
     "check:knip": "knip",
     "prepublishOnly": "pnpm run ci",
-    "local-release": "changeset version && changeset publish",
     "clean": "rm -rf node_modules && rm -rf dist && rm -rf .turbo"
   },
   "dependencies": {

@@ -31,9 +31,12 @@ npm publish (see `.github/workflows/sdks-publish.yml`).
 # 1. Consume pending changesets: bump every package version + write CHANGELOG.md files.
 #    (edits files only — no git, no tag)
 pnpm version:packages
+pnpm install # refresh pnpm-lock.yaml for the bumped workspace versions
 
-# 2. Commit and push the version bump + changelogs.
-git commit -am "chore: version packages"
+# 2. Stage the complete release output, then commit + push.
+#    This includes package changes, new changelogs, consumed changesets, prerelease state, and the lockfile.
+git add -A packages .changeset pnpm-lock.yaml
+git commit -m "chore: version packages"
 git push
 
 # 3. Create the umbrella tag — THIS is what triggers the npm publish.

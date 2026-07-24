@@ -18,7 +18,7 @@ on `main`.
     changesets group): `types`, `libs`, `wallet-sdk-core`, `sdk`, `wallet-sdk-react`, `dapp-kit`, `skills`;
   - writes/updates each package's `CHANGELOG.md` from the merged changeset notes;
   - increments `CONFIG_VERSION` in [`packages/types/src/index.ts`](../packages/types/src/index.ts)
-    (via the chained `scripts/bump-config-version.mjs`).
+    (after `scripts/bump-config-version.mjs` confirms that Changesets changed a package version).
 
   The new version is derived from the accumulated changesets — you do **not** pick it by hand.
   (The legacy `scripts/bump-versions.sh` is superseded by this flow; do not use it, as it bumps
@@ -44,8 +44,16 @@ on `main`.
   first `.`), so all `rc.N` releases land under a single `rc` dist-tag and consumers can install
   `@sodax/sdk@rc` to get the latest RC. Stable releases (no `-` suffix) publish under `latest`.
 - [ ] 5. Run `pnpm install` to refresh `pnpm-lock.yaml` against the bumped versions
-- [ ] 6. Commit the bumped `package.json` files, generated `CHANGELOG.md` files, and the
-  `CONFIG_VERSION` change: `git commit -m "chore: version packages"`
+- [ ] 6. **Stage** the release output, then commit. Staging explicitly is required — new `CHANGELOG.md`
+  files and the consumed-changeset deletions are otherwise left behind, which leaves release state
+  uncommitted and lets a consumed changeset be reprocessed on the next release. This covers the bumped
+  `package.json` files, generated `CHANGELOG.md` files, the `CONFIG_VERSION` bump in
+  `packages/types/src/index.ts`, the consumed changesets (and `.changeset/pre.json` on an rc line), and
+  the refreshed `pnpm-lock.yaml`:
+  ```bash
+  git add -A packages .changeset pnpm-lock.yaml
+  git commit -m "chore: version packages"
+  ```
 - [ ] 7. Push all merged and newly created commits using `git push -u origin release/sdk`
 - [ ] 8. Cut a **single unified release tag** — this publishes ALL 7 packages in one workflow run:
   - [ ] 8.1 Go to [Github sodax-sdks/releases](https://github.com/icon-project/sodax-sdks/releases) and click "Draft a new release"

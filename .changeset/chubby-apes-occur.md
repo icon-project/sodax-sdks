@@ -23,7 +23,7 @@ Changesets setup
 
 CONFIG_VERSION automation
 
-- version:packages now runs changeset version && node scripts/bump-config-version.mjs, so CONFIG_VERSION in @sodax/types keeps bumping on release (changesets doesn't touch source constants). Replaces what bump-versions.sh used to do.
+- version:packages now runs a resumable wrapper that invokes changeset version and increments CONFIG_VERSION in @sodax/types only when package versions change. Interrupted runs retain recovery state so a retry can finish the configuration bump without advancing it on an ordinary no-op. Replaces what bump-versions.sh used to do.
 
 Version baseline alignment
 
