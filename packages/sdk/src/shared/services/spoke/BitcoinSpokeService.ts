@@ -8,7 +8,13 @@ import type {
   TxReturnType,
 } from '@sodax/types';
 import type { RelayExtraData } from '../../types/relay-types.js';
-import { ChainKeys, detectBitcoinAddressType, getIntentRelayChainId, usesBip322MessageSigning } from '@sodax/types';
+import {
+  ChainKeys,
+  detectBitcoinAddressType,
+  getIntentRelayChainId,
+  isNativeToken,
+  usesBip322MessageSigning,
+} from '@sodax/types';
 import * as ecc from '@bitcoinerlab/secp256k1';
 import { keccak256, stringToBytes } from 'viem';
 import type { OnDemandRelayData } from '../../types/types.js';
@@ -16,6 +22,8 @@ import type {
   DepositParams,
   EstimateGasParams,
   GetDepositParams,
+  GetBalanceParams,
+  GetBalancesParams,
   SendMessageParams,
   WaitForTxReceiptParams,
   WaitForTxReceiptReturnType,
@@ -95,6 +103,37 @@ export class BitcoinSpokeService {
       return BigInt(totalBalance);
     }
     throw new Error('Token balance queries not yet implemented for non-BTC assets');
+  }
+
+  /**
+   * Get the user's own wallet balance of a token on Bitcoin, in satoshis. Only native BTC is
+   * supported (summed from confirmed/unconfirmed UTXOs); non-native tokens resolve to 0n, matching
+   * the wallet-layer reader this replaces (Bitcoin has no supported spoke token standard).
+   * @param {GetBalanceParams<BitcoinChainKey>} params - The chain key, user address, and token.
+   * @returns {Promise<bigint>} The balance in satoshis.
+   */
+  public async getWalletBalance(params: GetBalanceParams<BitcoinChainKey>): Promise<bigint> {
+    const { srcChainKey, srcAddress, token } = params;
+
+    if (isNativeToken(srcChainKey, token)) {
+      const utxos = await this.fetchUTXOs(srcAddress);
+      return BigInt(utxos.reduce((sum, utxo) => sum + utxo.value, 0));
+    }
+
+    return 0n;
+  }
+
+  /**
+   * Get the user's own wallet balances of multiple tokens on Bitcoin, in satoshis.
+   * @param {GetBalancesParams<BitcoinChainKey>} params - The chain key, user address, and tokens.
+   * @returns {Promise<Record<string, bigint>>} A map of token address to balance.
+   */
+  public async getWalletBalances(params: GetBalancesParams<BitcoinChainKey>): Promise<Record<string, bigint>> {
+    const { srcChainKey, srcAddress, tokens } = params;
+    const entries = await Promise.all(
+      tokens.map(async token => [token.address, await this.getWalletBalance({ srcChainKey, srcAddress, token })] as const),
+    );
+    return Object.fromEntries(entries);
   }
 
   public async fetchScriptPubKey(utxo: BitcoinUTXO): Promise<string> {

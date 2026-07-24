@@ -4,6 +4,8 @@ import type {
   DepositParams,
   EstimateGasParams,
   GetDepositParams,
+  GetBalanceParams,
+  GetBalancesParams,
   SendMessageParams,
   WaitForTxReceiptParams,
   WaitForTxReceiptReturnType,
@@ -209,6 +211,47 @@ export class NearSpokeService {
     }
 
     return BigInt(bal);
+  }
+
+  /**
+   * Get the user's own wallet balance of a token on NEAR, in smallest units (yoctoNEAR for the
+   * native coin). Native NEAR via the account's `viewAccount().amount`; NEP-141 tokens via the
+   * token contract's `ft_balance_of` view. Reads the balance held by `srcAddress` (the user
+   * wallet), not the protocol asset manager. Uses this service's own configured RPC provider.
+   * @param {GetBalanceParams<NearChainKey>} params - The chain key, user address, and token.
+   * @returns {Promise<bigint>} The token balance in smallest units.
+   */
+  public async getWalletBalance(params: GetBalanceParams<NearChainKey>): Promise<bigint> {
+    if (isNativeToken(params.srcChainKey, params.token)) {
+      const account = await this.rpcProvider.viewAccount({ accountId: params.srcAddress });
+      return BigInt(account.amount);
+    }
+
+    const bal = await this.queryContract(params.token.address, 'ft_balance_of', {
+      account_id: params.srcAddress,
+    });
+
+    if (typeof bal !== 'string') {
+      throw new Error('[NearSpokeService.getWalletBalance] Failed to get balance. Unexpected response type.');
+    }
+
+    return BigInt(bal);
+  }
+
+  /**
+   * Get the user's own wallet balances of multiple tokens on NEAR, in smallest units. Fans out
+   * over {@link getWalletBalance}, keyed by `token.address`.
+   * @param {GetBalancesParams<NearChainKey>} params - The chain key, user address, and tokens.
+   * @returns {Promise<Record<string, bigint>>} A map of token address to balance.
+   */
+  public async getWalletBalances(params: GetBalancesParams<NearChainKey>): Promise<Record<string, bigint>> {
+    const { srcChainKey, srcAddress, tokens } = params;
+    const entries = await Promise.all(
+      tokens.map(
+        async token => [token.address, await this.getWalletBalance({ srcChainKey, srcAddress, token })] as const,
+      ),
+    );
+    return Object.fromEntries(entries);
   }
 
   /**

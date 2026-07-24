@@ -19,9 +19,9 @@ import {
   useDexDeposit,
   useDexWithdraw,
   useSodaxContext,
-  useXBalances,
+  useBalances,
 } from '@sodax/dapp-kit';
-import { type IWalletProvider, type XAccount, getXChainType, useXService } from '@sodax/wallet-sdk-react';
+import { type IWalletProvider, type XAccount } from '@sodax/wallet-sdk-react';
 import { UserPositions } from '@/components/dex/UserPositions';
 import { NavLink } from 'react-router';
 
@@ -99,12 +99,10 @@ export function ManageLiquidity({
     () => sodax.dex.clService.getAssetsForPool(selectedChainId, pools[selectedPoolIndex]),
     [sodax, selectedChainId, pools, selectedPoolIndex],
   );
-  const xService = useXService({ xChainType: getXChainType(selectedChainId) });
-  const { data: sourceBalances } = useXBalances({
+  const { data: sourceBalances } = useBalances({
     params: {
-      xService,
-      xChainId: selectedChainId,
-      xTokens: [poolSpokeAssets.token0, poolSpokeAssets.token1],
+      chainKey: selectedChainId,
+      tokens: [poolSpokeAssets.token0, poolSpokeAssets.token1],
       address: xAccount.address,
     },
   });

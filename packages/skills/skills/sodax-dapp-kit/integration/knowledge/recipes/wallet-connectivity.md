@@ -12,7 +12,8 @@ Connect wallets and pass wallet providers to feature hooks.
 | `useHubProvider` | `@sodax/dapp-kit` | Utility | Access the hub chain (Sonic) provider |
 | `useDeriveUserWalletAddress` | `@sodax/dapp-kit` | Query | Derive hub wallet address from spoke address (CREATE3) |
 | `useGetUserHubWalletAddress` | `@sodax/dapp-kit` | Query | Derive hub wallet address via wallet router |
-| `useXBalances` | `@sodax/dapp-kit` | Query | Cross-chain token balances for an address |
+| `useBalances` | `@sodax/dapp-kit` | Query | SDK-backed wallet token balances (no `xService`) |
+| `useXBalances` | `@sodax/dapp-kit` | Query | Cross-chain token balances for an address (needs `xService`) |
 | `useEstimateGas` | `@sodax/dapp-kit` | Mutation | Estimate gas for raw transactions |
 | `useStellarTrustlineCheck` | `@sodax/dapp-kit` | Query | Check if Stellar account has sufficient trustline |
 | `useRequestTrustline` | `@sodax/dapp-kit` | Mutation | Request a Stellar trustline for a token |
@@ -77,6 +78,23 @@ function TokenBalance({ address, xTokens }: { address: string; xTokens: readonly
   });
 
   // balances is a map of token address → balance (bigint)
+}
+```
+
+### SDK-backed alternative: `useBalances`
+
+`useBalances` reads the same wallet balances straight from the core SDK (`sodax.spoke.getWalletBalances`) via the `SodaxProvider` context, so it drops the `xService` requirement — no `@sodax/wallet-sdk-react` hook needed. Prefer it when the app already has a `SodaxProvider`; the params collapse to the token-side `chainKey`, the `tokens` list, and the `address`:
+
+```tsx
+import { useBalances } from '@sodax/dapp-kit';
+import { ChainKeys, type XToken } from '@sodax/sdk';
+
+function TokenBalanceViaSdk({ address, tokens }: { address: string; tokens: readonly XToken[] }) {
+  const chainKey = ChainKeys.BSC_MAINNET;
+  // No `xService` — the hook reads the SDK instance from the SodaxProvider context.
+  const { data: balances } = useBalances({ params: { chainKey, address, tokens } });
+
+  // balances is a map of token address → balance (bigint), refetched every 5s
 }
 ```
 

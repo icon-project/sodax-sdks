@@ -19,6 +19,7 @@ import {
   type TxReturnType,
   type EvmContractCall,
   isSonicChainKey,
+  isNativeToken,
   type WalletProviderSlot,
   type EvmReturnType,
   type HubConfig,
@@ -38,6 +39,8 @@ import type {
   WaitForTxReceiptReturnType,
   EstimateGasParams,
   GetDepositParams,
+  GetBalanceParams,
+  GetBalancesParams,
   SendMessageParams,
   DepositParams,
 } from '../../types/spoke-types.js';
@@ -362,6 +365,84 @@ export class SonicSpokeService {
       functionName: 'balanceOf',
       args: [params.token],
     });
+  }
+
+  /**
+   * Get the user's own wallet balance of a token on the hub (Sonic) chain, in smallest units.
+   * Native coin via `eth_getBalance`; erc20 via `balanceOf`.
+   * @param {GetBalanceParams<SonicChainKey>} params - The chain key, user address, and token.
+   * @returns {Promise<bigint>} The token balance in smallest units.
+   */
+  public async getWalletBalance(params: GetBalanceParams<SonicChainKey>): Promise<bigint> {
+    const { srcChainKey, srcAddress, token } = params;
+
+    if (isNativeToken(srcChainKey, token)) {
+      return this.publicClient.getBalance({ address: srcAddress });
+    }
+
+    const balance = await this.publicClient.readContract({
+      address: token.address as Address,
+      abi: erc20Abi,
+      functionName: 'balanceOf',
+      args: [srcAddress],
+    });
+    return balance ?? 0n;
+  }
+
+  /**
+   * Get the user's own wallet balances of multiple tokens on the hub (Sonic) chain, in smallest
+   * units. Non-native tokens are batched via multicall3 when the chain supports it, otherwise
+   * read in parallel.
+   * @param {GetBalancesParams<SonicChainKey>} params - The chain key, user address, and tokens.
+   * @returns {Promise<Record<string, bigint>>} A map of token address to balance.
+   */
+  public async getWalletBalances(params: GetBalancesParams<SonicChainKey>): Promise<Record<string, bigint>> {
+    const { srcChainKey, srcAddress, tokens } = params;
+    const balances: Record<string, bigint> = {};
+
+    const nativeTokens = tokens.filter(token => isNativeToken(srcChainKey, token));
+    const nonNativeTokens = tokens.filter(token => !isNativeToken(srcChainKey, token));
+
+    await Promise.all(
+      nativeTokens.map(async token => {
+        balances[token.address] = await this.getWalletBalance({ srcChainKey, srcAddress, token });
+      }),
+    );
+
+    if (nonNativeTokens.length === 0) {
+      return balances;
+    }
+
+    if (getEvmViemChain(srcChainKey).contracts?.multicall3) {
+      const results = await this.publicClient.multicall({
+        contracts: nonNativeTokens.map(token => ({
+          abi: erc20Abi,
+          address: token.address as Address,
+          functionName: 'balanceOf',
+          args: [srcAddress],
+        })),
+      });
+      nonNativeTokens.forEach((token, index) => {
+        const result = results[index]?.result;
+        balances[token.address] = result != null ? BigInt(result) : 0n;
+      });
+      return balances;
+    }
+
+    const nonNativeBalances = await Promise.all(
+      nonNativeTokens.map(token =>
+        this.publicClient.readContract({
+          address: token.address as Address,
+          abi: erc20Abi,
+          functionName: 'balanceOf',
+          args: [srcAddress],
+        }),
+      ),
+    );
+    nonNativeTokens.forEach((token, index) => {
+      balances[token.address] = nonNativeBalances[index] ?? 0n;
+    });
+    return balances;
   }
 
   /**

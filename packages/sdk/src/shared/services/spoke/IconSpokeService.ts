@@ -8,6 +8,8 @@ import type {
   DepositParams,
   EstimateGasParams,
   GetDepositParams,
+  GetBalanceParams,
+  GetBalancesParams,
   WaitForTxReceiptParams,
   WaitForTxReceiptReturnType,
 } from '../../types/spoke-types.js';
@@ -117,6 +119,74 @@ export class IconSpokeService {
       .build();
     const result = await this.iconService.call(transaction).execute();
     return BigInt(result.value);
+  }
+
+  /**
+   * Get the user's own wallet balance of a token on ICON, in smallest units. Native ICX is read
+   * via `iconService.getBalance`; IRC-2 tokens via a `balanceOf(_owner)` call on the token contract.
+   * @param {GetBalanceParams<IconChainKey>} params - The chain key, user address, and token.
+   * @returns {Promise<bigint>} The token balance in smallest units.
+   */
+  public async getWalletBalance(params: GetBalanceParams<IconChainKey>): Promise<bigint> {
+    const { srcChainKey, srcAddress, token } = params;
+
+    if (isNativeToken(srcChainKey, token)) {
+      const balance = await this.iconService.getBalance(srcAddress).execute();
+      return BigInt(balance.toFixed());
+    }
+
+    const transaction = new CallBuilder().to(token.address).method('balanceOf').params({ _owner: srcAddress }).build();
+    const result = await this.iconService.call(transaction).execute();
+    return BigInt(result.value);
+  }
+
+  /**
+   * Get the user's own wallet balances of multiple tokens on ICON, in smallest units. Native ICX
+   * is read via `iconService.getBalance`; IRC-2 balances are batched into a single `tryAggregate`
+   * multicall so every `balanceOf(_owner)` read shares one round-trip.
+   * @param {GetBalancesParams<IconChainKey>} params - The chain key, user address, and tokens.
+   * @returns {Promise<Record<string, bigint>>} A map of token address to balance.
+   */
+  public async getWalletBalances(params: GetBalancesParams<IconChainKey>): Promise<Record<string, bigint>> {
+    const { srcChainKey, srcAddress, tokens } = params;
+    const balances: Record<string, bigint> = {};
+
+    const nativeToken = tokens.find(token => isNativeToken(srcChainKey, token));
+    const nonNativeTokens = tokens.filter(token => !isNativeToken(srcChainKey, token));
+
+    if (nativeToken) {
+      const balance = await this.iconService.getBalance(srcAddress).execute();
+      balances[nativeToken.address] = BigInt(balance.toFixed());
+    }
+
+    if (nonNativeTokens.length === 0) {
+      return balances;
+    }
+
+    // ICON multicall (`tryAggregate`) contract on mainnet, mirroring the wallet-sdk-react
+    // IconXService balance reader — batches every IRC-2 `balanceOf` into a single round-trip.
+    // requireSuccess=0x0 lets an individual failing read resolve as a skipped entry (0n) instead
+    // of reverting the whole batch.
+    const multicallAddress = 'cxa4aa9185e23558cff990f494c1fd2845f6cbf741';
+    const calls = nonNativeTokens.map(token => ({
+      target: token.address,
+      method: 'balanceOf',
+      params: [srcAddress],
+    }));
+    const transaction = new CallBuilder()
+      .to(multicallAddress)
+      .method('tryAggregate')
+      .params({ requireSuccess: Converter.toHex(0), calls })
+      .build();
+    const result = await this.iconService.call(transaction).execute();
+    const aggregated: { success: string; returnData: string }[] = result.returnData ?? [];
+
+    nonNativeTokens.forEach((token, index) => {
+      const agg = aggregated[index];
+      balances[token.address] = agg && agg.success !== '0x0' ? BigInt(agg.returnData) : 0n;
+    });
+
+    return balances;
   }
 
   /**

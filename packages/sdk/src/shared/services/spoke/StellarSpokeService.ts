@@ -2,6 +2,8 @@ import { fromHex, toHex, type Hex } from 'viem';
 import type {
   EstimateGasParams,
   GetDepositParams,
+  GetBalanceParams,
+  GetBalancesParams,
   DepositParams,
   SendMessageParams,
   WaitForTxReceiptParams,
@@ -29,6 +31,7 @@ import {
 import {
   ChainKeys,
   getIntentRelayChainId,
+  isNativeToken,
   type IStellarWalletProvider,
   type Result,
   type StellarChainKey,
@@ -38,6 +41,15 @@ import {
   type TxReturnType,
   type WalletProviderSlot,
 } from '@sodax/types';
+
+/** Base reserve in stroops (0.5 XLM). Each subentry (trustline, signer, data entry, offer) adds one base reserve. */
+const STELLAR_BASE_RESERVE_STROOPS = 5_000_000n;
+
+/** Parse an XLM balance string (e.g. "198.8944970") to stroops (1 XLM = 10^7 stroops). */
+function parseXlmBalanceToStroops(balanceStr: string): bigint {
+  const [whole = '0', frac = ''] = balanceStr.split('.');
+  return BigInt(whole + frac.padEnd(7, '0').slice(0, 7));
+}
 
 export class CustomStellarAccount {
   private readonly accountId: string;
@@ -147,6 +159,70 @@ export class StellarSpokeService {
     }
 
     throw new Error('result undefined');
+  }
+
+  /**
+   * Get the user's own wallet balance of a token on Stellar, in smallest units. Native XLM returns
+   * the spendable amount (total minus the minimum reserve and selling liabilities) via Horizon;
+   * other assets return the Soroban token contract's `balance` for the user.
+   * @param {GetBalanceParams<StellarChainKey>} params - The chain key, user address, and token.
+   * @returns {Promise<bigint>} The token balance in smallest units.
+   */
+  public async getWalletBalance(params: GetBalanceParams<StellarChainKey>): Promise<bigint> {
+    const { srcChainKey, srcAddress, token } = params;
+
+    if (isNativeToken(srcChainKey, token)) {
+      const account = await this.server.loadAccount(srcAddress);
+      const nativeBalance = account.balances.find(
+        (balance): balance is Horizon.HorizonApi.BalanceLineNative => balance.asset_type === 'native',
+      );
+      if (!nativeBalance) {
+        return 0n;
+      }
+
+      const rawStroops = parseXlmBalanceToStroops(nativeBalance.balance);
+      const sellingLiabilitiesStroops = nativeBalance.selling_liabilities
+        ? parseXlmBalanceToStroops(nativeBalance.selling_liabilities)
+        : 0n;
+      // Minimum balance = (2 + subentry_count + num_sponsoring - num_sponsored) * base_reserve + selling_liabilities.
+      // Sponsored reserves are paid by the sponsor, so they are not subtracted.
+      const reserveCount = Math.max(0, 2 + account.subentry_count + account.num_sponsoring - account.num_sponsored);
+      const minStroops = BigInt(reserveCount) * STELLAR_BASE_RESERVE_STROOPS + sellingLiabilitiesStroops;
+      return rawStroops > minStroops ? rawStroops - minStroops : 0n;
+    }
+
+    const contract = new Contract(token.address);
+    const [network, sourceAccount] = await Promise.all([
+      this.sorobanServer.getNetwork(),
+      this.sorobanServer.getAccount(srcAddress),
+    ]);
+    const tx = new TransactionBuilder(sourceAccount, {
+      fee: this.baseFee,
+      networkPassphrase: network.passphrase,
+    })
+      .addOperation(contract.call('balance', nativeToScVal(srcAddress, { type: 'address' })))
+      .setTimeout(TimeoutInfinite)
+      .build();
+
+    const result = await this.sorobanServer.simulateTransaction(tx);
+    // Also throws on restore responses — invalid for a read-only balance simulation.
+    if (!rpc.Api.isSimulationSuccess(result)) {
+      throw new Error('Failed to simulate transaction');
+    }
+    return result.result ? scValToBigInt(result.result.retval) : 0n;
+  }
+
+  /**
+   * Get the user's own wallet balances of multiple tokens on Stellar, in smallest units.
+   * @param {GetBalancesParams<StellarChainKey>} params - The chain key, user address, and tokens.
+   * @returns {Promise<Record<string, bigint>>} A map of token address to balance.
+   */
+  public async getWalletBalances(params: GetBalancesParams<StellarChainKey>): Promise<Record<string, bigint>> {
+    const { srcChainKey, srcAddress, tokens } = params;
+    const entries = await Promise.all(
+      tokens.map(async token => [token.address, await this.getWalletBalance({ srcChainKey, srcAddress, token })] as const),
+    );
+    return Object.fromEntries(entries);
   }
 
   public async buildPriorityStellarTransaction(

@@ -28,6 +28,7 @@ import {
   spokeChainConfig,
   type Hex,
   type IBitcoinWalletProvider,
+  type XToken,
 } from '@sodax/types';
 import { keccak256, stringToBytes } from 'viem';
 
@@ -212,6 +213,57 @@ describe('BitcoinSpokeService.getBalance', () => {
 
   it('throws for non-BTC tokens (not implemented)', async () => {
     await expect(btcSpoke.getBalance('USDT', USER_ADDR)).rejects.toThrow(/not yet implemented/);
+  });
+});
+
+// =========================================================================
+// 4b. getWalletBalance / getWalletBalances — user wallet balance (native only)
+// =========================================================================
+
+describe('BitcoinSpokeService.getWalletBalance / getWalletBalances', () => {
+  const xtoken = (address: string, symbol = 'TKN'): XToken => ({
+    symbol,
+    name: symbol,
+    decimals: 8,
+    address,
+    chainKey: BTC,
+    hubAsset: '0x0000000000000000000000000000000000000000',
+    vault: '0x0000000000000000000000000000000000000000',
+  });
+  const NATIVE = btcConfig.nativeToken; // 'BTC'
+
+  it("sums the user's UTXO values for native BTC", async () => {
+    setFetch(() =>
+      json([
+        { txid: 'a', vout: 0, value: 100, status: { confirmed: true } },
+        { txid: 'b', vout: 1, value: 250, status: { confirmed: false } },
+      ]),
+    );
+    const result = await btcSpoke.getWalletBalance({
+      srcChainKey: BTC,
+      srcAddress: USER_ADDR,
+      token: xtoken(NATIVE, 'BTC'),
+    });
+    expect(result).toBe(350n);
+  });
+
+  it('returns 0n for non-native tokens (Bitcoin has no supported spoke token standard)', async () => {
+    const result = await btcSpoke.getWalletBalance({
+      srcChainKey: BTC,
+      srcAddress: USER_ADDR,
+      token: xtoken('some-non-btc-asset', 'USDT'),
+    });
+    expect(result).toBe(0n);
+  });
+
+  it('getWalletBalances maps native to its UTXO sum and non-native to 0n', async () => {
+    setFetch(() => json([{ txid: 'a', vout: 0, value: 500, status: { confirmed: true } }]));
+    const result = await btcSpoke.getWalletBalances({
+      srcChainKey: BTC,
+      srcAddress: USER_ADDR,
+      tokens: [xtoken(NATIVE, 'BTC'), xtoken('some-non-btc-asset', 'USDT')],
+    });
+    expect(result).toEqual({ [NATIVE]: 500n, 'some-non-btc-asset': 0n });
   });
 });
 

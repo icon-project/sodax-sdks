@@ -11,6 +11,8 @@ import { getEvmViemChain } from '../../utils/constant-utils.js';
 import type {
   DepositParams,
   GetDepositParams,
+  GetBalanceParams,
+  GetBalancesParams,
   SendMessageParams,
   EstimateGasParams,
   WaitForTxReceiptParams,
@@ -24,6 +26,7 @@ import {
   type Result,
   type TxReturnType,
   getIntentRelayChainId,
+  isNativeToken,
   type EvmReturnType,
 } from '@sodax/types';
 
@@ -38,6 +41,15 @@ import {
 const HEDERA_NATIVE_VALUE_SCALE = 10n ** 10n;
 function scaleNativeMsgValue(chainKey: EvmSpokeOnlyChainKey, amount: bigint): bigint {
   return chainKey === ChainKeys.HEDERA_MAINNET ? amount * HEDERA_NATIVE_VALUE_SCALE : amount;
+}
+
+/**
+ * Inverse of {@link scaleNativeMsgValue}: scales a native balance read from the EVM layer back
+ * to the token's canonical decimals. `eth_getBalance` returns HBAR in 18-decimal "weibar", but
+ * HBAR is tracked as 8 decimals, so divide by 10^10 on Hedera.
+ */
+function scaleNativeBalance(chainKey: EvmSpokeOnlyChainKey, amount: bigint): bigint {
+  return chainKey === ChainKeys.HEDERA_MAINNET ? amount / HEDERA_NATIVE_VALUE_SCALE : amount;
 }
 
 export type CreateViemPublicClientParams = {
@@ -179,6 +191,88 @@ export class EvmSpokeService {
       functionName: 'balanceOf',
       args: [this.config.getChainConfig(params.srcChainKey).addresses.assetManager],
     });
+  }
+
+  /**
+   * Get the user's own wallet balance of a token on an EVM spoke chain, in smallest units.
+   * Native coin via `eth_getBalance` (Hedera scaled to canonical decimals); erc20 via `balanceOf`.
+   * @param {GetBalanceParams<EvmSpokeOnlyChainKey>} params - The chain key, user address, and token.
+   * @returns {Promise<bigint>} The token balance in smallest units.
+   */
+  public async getWalletBalance(params: GetBalanceParams<EvmSpokeOnlyChainKey>): Promise<bigint> {
+    const { srcChainKey, srcAddress, token } = params;
+    const publicClient = this.getPublicClient(srcChainKey);
+
+    if (isNativeToken(srcChainKey, token)) {
+      const balance = await publicClient.getBalance({ address: srcAddress });
+      return scaleNativeBalance(srcChainKey, balance);
+    }
+
+    const balance = await publicClient.readContract({
+      address: token.address as Address,
+      abi: erc20Abi,
+      functionName: 'balanceOf',
+      args: [srcAddress],
+    });
+    return balance ?? 0n;
+  }
+
+  /**
+   * Get the user's own wallet balances of multiple tokens on an EVM spoke chain, in smallest
+   * units. Non-native tokens are batched via multicall3 when the chain supports it, otherwise
+   * read in parallel.
+   * @param {GetBalancesParams<EvmSpokeOnlyChainKey>} params - The chain key, user address, and tokens.
+   * @returns {Promise<Record<string, bigint>>} A map of token address to balance.
+   */
+  public async getWalletBalances(params: GetBalancesParams<EvmSpokeOnlyChainKey>): Promise<Record<string, bigint>> {
+    const { srcChainKey, srcAddress, tokens } = params;
+    const balances: Record<string, bigint> = {};
+
+    const nativeTokens = tokens.filter(token => isNativeToken(srcChainKey, token));
+    const nonNativeTokens = tokens.filter(token => !isNativeToken(srcChainKey, token));
+
+    await Promise.all(
+      nativeTokens.map(async token => {
+        balances[token.address] = await this.getWalletBalance({ srcChainKey, srcAddress, token });
+      }),
+    );
+
+    if (nonNativeTokens.length === 0) {
+      return balances;
+    }
+
+    const publicClient = this.getPublicClient(srcChainKey);
+
+    if (getEvmViemChain(srcChainKey).contracts?.multicall3) {
+      const results = await publicClient.multicall({
+        contracts: nonNativeTokens.map(token => ({
+          abi: erc20Abi,
+          address: token.address as Address,
+          functionName: 'balanceOf',
+          args: [srcAddress],
+        })),
+      });
+      nonNativeTokens.forEach((token, index) => {
+        const result = results[index]?.result;
+        balances[token.address] = result != null ? BigInt(result) : 0n;
+      });
+      return balances;
+    }
+
+    const nonNativeBalances = await Promise.all(
+      nonNativeTokens.map(token =>
+        publicClient.readContract({
+          address: token.address as Address,
+          abi: erc20Abi,
+          functionName: 'balanceOf',
+          args: [srcAddress],
+        }),
+      ),
+    );
+    nonNativeTokens.forEach((token, index) => {
+      balances[token.address] = nonNativeBalances[index] ?? 0n;
+    });
+    return balances;
   }
 
   /**

@@ -45,7 +45,7 @@ import {
   useSwapsApiSubmitTx,
   useSwapsApiTokens,
   useBitcoinTradingSetup,
-  useXBalances,
+  useBalances,
   ChainKeys,
   isBitcoinChainKey,
   isStacksChainKey,
@@ -56,7 +56,6 @@ import {
   useWalletProvider,
   useXAccount,
   useXDisconnect,
-  useXService,
 } from '@sodax/wallet-sdk-react';
 import { buildOrderSummary, type Order } from '@/components/swaps/OrderStatus';
 import { appendOrder } from '@/lib/orderHistory';
@@ -143,23 +142,19 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   };
 
   // Balance fetching is wallet-layer (not covered by the Swaps API).
-  const sourceXService = useXService({ xChainType: getXChainType(srcChainKey) });
-  const { data: sourceBalances } = useXBalances({
+  const { data: sourceBalances } = useBalances({
     params: {
-      xService: sourceXService,
-      xChainId: srcChainKey,
-      xTokens: src.token ? [toXToken(src.token)] : [],
+      chainKey: srcChainKey,
+      tokens: src.token ? [toXToken(src.token)] : [],
       address: sourceAccount.address,
     },
   });
   const sourceTokenBalance = sourceBalances?.[src.token?.address ?? ''] ?? 0n;
 
-  const destXService = useXService({ xChainType: getXChainType(dstChainKey) });
-  const { data: destBalances } = useXBalances({
+  const { data: destBalances } = useBalances({
     params: {
-      xService: destXService,
-      xChainId: dstChainKey,
-      xTokens: dst.token ? [toXToken(dst.token)] : [],
+      chainKey: dstChainKey,
+      tokens: dst.token ? [toXToken(dst.token)] : [],
       address: destAccount.address,
     },
   });

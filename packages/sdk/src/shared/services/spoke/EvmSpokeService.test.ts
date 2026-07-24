@@ -35,6 +35,7 @@ import {
   type EvmSpokeOnlyChainKey,
   type Hex,
   type IEvmWalletProvider,
+  type XToken,
 } from '@sodax/types';
 import { encodeFunctionData } from 'viem';
 import { connectionAbi, erc20Abi, spokeAssetManagerAbi } from '../../abis/index.js';
@@ -910,5 +911,85 @@ describe('EvmSpokeService — cross-chain independence', () => {
     for (const chainKey of TEST_CHAINS) {
       expect(spy).toHaveBeenCalledWith(chainKey);
     }
+  });
+});
+
+// getWalletBalance / getWalletBalances read the USER's wallet holdings (native + erc20), in
+// contrast to getDeposit which reads the asset-manager holding. The native-vs-token branch and
+// the multicall batching are chain-independent, so they run on ARB (plus a Hedera native-scale
+// case), matching this file's chain-independent-branch convention.
+describe('EvmSpokeService.getWalletBalance / getWalletBalances', () => {
+  const xtoken = (address: Address, chainKey: EvmSpokeOnlyChainKey, symbol = 'TKN'): XToken => ({
+    symbol,
+    name: symbol,
+    decimals: 18,
+    address,
+    chainKey,
+    hubAsset: address,
+    vault: address,
+  });
+
+  it('reads the native coin via publicClient.getBalance on the user address', async () => {
+    const spy = vi.spyOn(arbClient, 'getBalance').mockResolvedValueOnce(1_234n);
+
+    const result = await evmSpoke.getWalletBalance({
+      srcChainKey: ARB,
+      srcAddress: SRC_ADDR,
+      token: xtoken(ARB_NATIVE, ARB),
+    });
+
+    expect(result).toBe(1_234n);
+    expect(spy).toHaveBeenCalledWith({ address: SRC_ADDR });
+  });
+
+  it('reads erc20 balanceOf with the USER as holder for a non-native token', async () => {
+    const spy = vi.spyOn(arbClient, 'readContract').mockResolvedValueOnce(5_000n);
+
+    const result = await evmSpoke.getWalletBalance({
+      srcChainKey: ARB,
+      srcAddress: SRC_ADDR,
+      token: xtoken(ARB_TOKEN, ARB),
+    });
+
+    expect(result).toBe(5_000n);
+    // Holder is srcAddress (the user), NOT the asset manager — the key difference from getDeposit.
+    expect(spy).toHaveBeenCalledWith({
+      address: ARB_TOKEN,
+      abi: erc20Abi,
+      functionName: 'balanceOf',
+      args: [SRC_ADDR],
+    });
+  });
+
+  it('scales the native balance down by 10^10 on Hedera', async () => {
+    const hederaClient = evmSpoke.getPublicClient(HEDERA);
+    vi.spyOn(hederaClient, 'getBalance').mockResolvedValueOnce(50_000_000_000n); // 5 HBAR in 18-dec weibar
+
+    const result = await evmSpoke.getWalletBalance({
+      srcChainKey: HEDERA,
+      srcAddress: SRC_ADDR,
+      token: xtoken(HEDERA_NATIVE, HEDERA),
+    });
+
+    expect(result).toBe(5n); // 50_000_000_000 / 10^10
+  });
+
+  it('batches non-native tokens through multicall3 and merges native balances', async () => {
+    const nativeSpy = vi.spyOn(arbClient, 'getBalance').mockResolvedValueOnce(100n);
+    const multicallSpy = vi
+      .spyOn(arbClient, 'multicall')
+      .mockResolvedValueOnce([{ status: 'success', result: 700n }] as never);
+
+    const result = await evmSpoke.getWalletBalances({
+      srcChainKey: ARB,
+      srcAddress: SRC_ADDR,
+      tokens: [xtoken(ARB_NATIVE, ARB, 'ETH'), xtoken(ARB_TOKEN, ARB, 'bnUSD')],
+    });
+
+    expect(result).toEqual({ [ARB_NATIVE]: 100n, [ARB_TOKEN]: 700n });
+    expect(nativeSpy).toHaveBeenCalledWith({ address: SRC_ADDR });
+    expect(multicallSpy).toHaveBeenCalledWith({
+      contracts: [{ abi: erc20Abi, address: ARB_TOKEN, functionName: 'balanceOf', args: [SRC_ADDR] }],
+    });
   });
 });

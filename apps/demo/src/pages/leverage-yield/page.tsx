@@ -25,7 +25,7 @@ import {
   useSodaxContext,
   useSwapAllowance,
   useSwapApprove,
-  useXBalances,
+  useBalances,
   useLeverageYieldDeposit,
   useLeverageYieldVaultSwap,
   useLeverageYieldWithdraw,
@@ -51,7 +51,6 @@ import {
   useWalletProvider,
   useXAccount,
   useXAccounts,
-  useXService,
 } from '@sodax/wallet-sdk-react';
 import { type FinalStatus, type Order, buildOrderSummary, orderId } from '@/components/swaps/OrderStatus';
 import OrderStatusPanel from '@/components/swaps/OrderStatusPanel';
@@ -198,12 +197,10 @@ export default function LeverageYieldPage() {
 
   // ─── Balances (single — user's token on user chain) ──────────────────────
 
-  const userXService = useXService({ xChainType: userChainType });
-  const { data: userBalances } = useXBalances({
+  const { data: userBalances } = useBalances({
     params: {
-      xService: userXService,
-      xChainId: userChain,
-      xTokens: userToken ? [userToken] : [],
+      chainKey: userChain,
+      tokens: userToken ? [userToken] : [],
       address: userAccount.address,
     },
   });
@@ -375,7 +372,7 @@ export default function LeverageYieldPage() {
     setSourceAmount('');
     setIntentOrderPayload(undefined);
     queryClient.invalidateQueries({ queryKey: ['leverageYield'] });
-    queryClient.invalidateQueries({ queryKey: ['shared', 'xBalances'] });
+    queryClient.invalidateQueries({ queryKey: ['shared', 'balances'] });
   };
 
   // Builds the swap payload via the SDK's leverage-yield builders, then stashes it for

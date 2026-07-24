@@ -7,14 +7,14 @@ import { Label } from '@/components/ui/label';
 import { ChainSelector } from '@/components/shared/ChainSelector';
 import { Skeleton } from '@/components/ui/skeleton';
 
-import { getXChainType, useEvmSwitchChain, useWalletProvider, useXAccount, useXService } from '@sodax/wallet-sdk-react';
+import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
 import { formatUnits, parseUnits } from 'viem';
 import {
   useMMAllowance,
   useMMApprove,
   useSodaxContext,
   useSupply,
-  useXBalances,
+  useBalances,
   type SpokeChainKey,
   type XToken,
   type MoneyMarketSupplyParams,
@@ -71,9 +71,8 @@ export function SupplyModal({ open, onOpenChange, token, onSuccess, inlineSucces
 
   const sourceWalletProvider = useWalletProvider({ xChainId: srcChainKey });
 
-  const xService = useXService({ xChainType: getXChainType(srcChainKey) });
-  const { data: sourceBalances, isLoading: isBalanceLoading } = useXBalances({
-    params: { xService, xChainId: srcChainKey, xTokens: [sourceToken], address: srcAddress },
+  const { data: sourceBalances, isLoading: isBalanceLoading } = useBalances({
+    params: { chainKey: srcChainKey, tokens: [sourceToken], address: srcAddress },
   });
 
   const { mutateAsync: supply, isPending, error, reset: resetSupply } = useSupply();

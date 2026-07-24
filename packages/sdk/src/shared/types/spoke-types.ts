@@ -1,6 +1,7 @@
 import type {
   Address,
   GetTokenAddressType,
+  XToken,
   Hex,
   HubAddress,
   HubChainKey,
@@ -52,6 +53,31 @@ export type GetDepositParams<ChainKey extends SpokeChainKey = SpokeChainKey> = {
   srcChainKey: ChainKey; // The chain key of the spoke (origin) chain
   srcAddress: GetAddressType<ChainKey>; // The address of the user on the spoke (origin) chain
   token: GetTokenAddressType<ChainKey>;
+};
+
+/**
+ * Parameters for reading a user's own wallet balance of a single token on a spoke chain.
+ *
+ * Unlike {@link GetDepositParams} (which reads the protocol asset-manager holding and keys
+ * the token by raw address), this reads the balance held by `srcAddress` itself. `token` is
+ * the full {@link XToken} so the reader can detect the native coin and resolve chain-specific
+ * token identifiers (EVM erc20 address, Solana mint, Sui coinType, Soroban contract, …).
+ */
+export type GetBalanceParams<ChainKey extends SpokeChainKey = SpokeChainKey> = {
+  srcChainKey: ChainKey; // The chain key of the spoke (origin) chain
+  srcAddress: GetAddressType<ChainKey>; // The address of the user whose balance is read
+  token: XToken; // The token to read the balance of
+};
+
+/**
+ * Parameters for reading a user's own wallet balances of multiple tokens on a spoke chain.
+ * Returns a `Record<tokenAddress, bigint>` in smallest units. Per-chain implementations may
+ * batch the reads (e.g. EVM multicall3, ICON aggregated call data).
+ */
+export type GetBalancesParams<ChainKey extends SpokeChainKey = SpokeChainKey> = {
+  srcChainKey: ChainKey; // The chain key of the spoke (origin) chain
+  srcAddress: GetAddressType<ChainKey>; // The address of the user whose balances are read
+  tokens: readonly XToken[]; // The tokens to read the balances of
 };
 
 export type DepositSimulationParams = {

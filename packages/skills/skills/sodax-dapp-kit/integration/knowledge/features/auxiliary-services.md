@@ -102,7 +102,8 @@ Cross-cutting hooks used by other features.
 // @ai-snippets-skip
 useSodaxContext();                                  // Access the Sodax SDK instance
 useHubProvider();                                   // Hub chain (Sonic) provider
-useXBalances({ params, queryOptions });             // Cross-chain token balances
+useBalances({ params, queryOptions });              // SDK-backed wallet balances (no xService)
+useXBalances({ params, queryOptions });             // Cross-chain token balances (needs xService)
 useDeriveUserWalletAddress({ params, queryOptions }); // Hub wallet address (CREATE3)
 useGetUserHubWalletAddress({ params, queryOptions }); // Hub wallet via wallet router
 useEstimateGas({ mutationOptions });                // Gas estimation for raw tx
@@ -135,6 +136,28 @@ Consumer must supply `xService` from `@sodax/wallet-sdk-react`:
 import { useXService, getXChainType } from '@sodax/wallet-sdk-react';
 const xService = useXService({ xChainType: getXChainType(xChainId) });
 const { data: balances } = useXBalances({ params: { xService, xChainId, xTokens, address } });
+```
+
+### `useBalances` shape (SDK-backed, no `xService`)
+
+`useBalances` is the SDK-backed successor to `useXBalances`: it reads wallet balances straight from the core SDK (`sodax.spoke.getWalletBalances`) via the `SodaxProvider` context, so it needs **no** `xService` from `@sodax/wallet-sdk-react`. Both hooks still exist — prefer `useBalances` when the app already has a `SodaxProvider`; keep `useXBalances` when you're wiring balances through the wallet layer.
+
+```ts
+// @ai-snippets-skip
+type UseBalancesParams = ReadHookParams<Record<string, bigint>, {
+  chainKey: SpokeChainKey | undefined;       // token-side chain key (no separate xChainId)
+  tokens: readonly XToken[];                 // tokens to fetch balances for
+  address: string | undefined;
+}>;
+```
+
+The query runs only when `chainKey`, `address`, and `tokens.length > 0` are all present, refetching every 5s (same interval as `useXBalances`). `data` is a `Record<string, bigint>` mapping each token address to its balance in smallest units. queryKey: `['shared', 'balances', chainKey, tokens.map(t => [t.symbol, t.address]), address]`.
+
+```tsx
+// @ai-snippets-skip
+// No `xService` — just the SodaxProvider context the hook reads internally.
+const { data: balances } = useBalances({ params: { chainKey, address, tokens } });
+const usdcBalance = balances?.[usdc.address] ?? 0n;
 ```
 
 ### Stellar trustlines
@@ -224,6 +247,6 @@ All overridable via `queryOptions.refetchInterval`.
 ## Cross-references
 
 - [`../recipes/backend-queries.md`](../recipes/backend-queries.md) — worked examples for intent tracking, orderbook, MM data.
-- [`../recipes/wallet-connectivity.md`](../recipes/wallet-connectivity.md) — `useXBalances` worked example.
+- [`../recipes/wallet-connectivity.md`](../recipes/wallet-connectivity.md) — `useBalances` / `useXBalances` worked examples.
 - [`features/auxiliary-services.md`](../../../migration-v1-to-v2/knowledge/features/auxiliary-services.md) — v1 → v2 porting.
 - `sodax-sdk`: `integration/knowledge/features/auxiliary-services.md` — underlying SDK auxiliary surfaces (partner, recovery, backendApi).

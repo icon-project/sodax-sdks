@@ -32,6 +32,8 @@ import type {
   DepositParams,
   EstimateGasParams,
   GetDepositParams,
+  GetBalanceParams,
+  GetBalancesParams,
   SendMessageParams,
   WaitForTxReceiptParams,
   WaitForTxReceiptReturnType,
@@ -183,6 +185,43 @@ export class StacksSpokeService {
       return this.getSTXBalance(params.srcAddress);
     }
     return this.readTokenBalance(params.token, assetManager);
+  }
+
+  /**
+   * Get the user's own wallet balance of a token on Stacks, in smallest units. Native STX via the
+   * Hiro REST `/extended/v1/address/{addr}/balances` endpoint; SIP-010 fungible tokens via the
+   * read-only `get-balance` contract call. Unlike {@link getDeposit}, this reads the holding of
+   * `srcAddress` (the user), not the protocol asset manager.
+   * @param {GetBalanceParams<StacksChainKey>} params - The chain key, user address, and token.
+   * @returns {Promise<bigint>} The token balance in smallest units, or `0n` on any read failure.
+   */
+  public async getWalletBalance(params: GetBalanceParams<StacksChainKey>): Promise<bigint> {
+    try {
+      if (isNativeToken(params.srcChainKey, params.token)) {
+        return await this.getSTXBalance(params.srcAddress);
+      }
+      return await this.readTokenBalance(params.token.address, params.srcAddress);
+    } catch {
+      // Match the wallet-sdk xService: network / contract-read failures resolve to 0n so one
+      // unreachable token never fails a whole balances fan-out. Callers that must distinguish
+      // "zero balance" from "read failed" should re-fetch on their own error path.
+      return 0n;
+    }
+  }
+
+  /**
+   * Get the user's own wallet balances of multiple tokens on Stacks, in smallest units.
+   * @param {GetBalancesParams<StacksChainKey>} params - The chain key, user address, and tokens.
+   * @returns {Promise<Record<string, bigint>>} A map of token address to balance in smallest units.
+   */
+  public async getWalletBalances(params: GetBalancesParams<StacksChainKey>): Promise<Record<string, bigint>> {
+    const { srcChainKey, srcAddress, tokens } = params;
+    const entries = await Promise.all(
+      tokens.map(
+        async token => [token.address, await this.getWalletBalance({ srcChainKey, srcAddress, token })] as const,
+      ),
+    );
+    return Object.fromEntries(entries);
   }
 
   /**
