@@ -142,7 +142,7 @@ That is this skill's whole job: the token is defined and wired in the **right pl
 and the checks pass.
 
 **Out of scope — do not do these here:** versioning / releasing / publishing and any
-`CONFIG_VERSION` bump are the separate **`release-sdk`** skill. This change only edits
+`CONFIG_VERSION` bump are the separate **`release-governance`** skill. This change only edits
 `@sodax/types` source; it bumps nothing.
 
 ## Reference
