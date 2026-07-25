@@ -65,4 +65,4 @@ spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.GOOGLx,
 
 ## Scope
 This change is purely the `@sodax/types` token wiring shown above (2 files). Releasing/publishing
-it is a **separate concern** — the `release-sdk` skill — and bumps no versions or `CONFIG_VERSION` here.
+it is a **separate concern** — the `release-governance` skill — and bumps no versions or `CONFIG_VERSION` here.

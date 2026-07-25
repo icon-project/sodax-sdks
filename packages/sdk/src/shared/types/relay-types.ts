@@ -41,8 +41,9 @@ export type WaitUntilIntentExecutedPayload = {
   apiUrl: HttpUrl;
   /**
    * Disambiguates when a single src tx emits multiple relay packets. Receives the candidates
-   * already filtered by `srcTxHash` and returns the desired one (or undefined to keep polling).
-   * Defaults to "first candidate" — the legacy behavior for single-packet flows.
+   * already filtered by `srcTxHash` and `src_chain_id` (so only packets for the awaited
+   * transaction and source chain reach it) and returns the desired one (or undefined to keep
+   * polling). Defaults to "first candidate" — the legacy behavior for single-packet flows.
    */
   selectPacket?: (packets: PacketData[]) => PacketData | undefined;
 };

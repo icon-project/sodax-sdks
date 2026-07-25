@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { TokenIcon } from '@/components/shared/TokenIcon';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -255,7 +256,10 @@ export function SupplyModal({ open, onOpenChange, token, onSuccess, inlineSucces
                 onChange={e => setAmount(e.target.value)}
                 disabled={isBusy}
               />
-              <span>{token.symbol}</span>
+              <span className="flex items-center gap-1">
+                <TokenIcon symbol={token.symbol} className="h-4 w-4" />
+                {token.symbol}
+              </span>
               <Button
                 type="button"
                 variant="outline"
