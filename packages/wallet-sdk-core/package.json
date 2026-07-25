@@ -78,7 +78,6 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "catalog:",
-    "@changesets/cli": "catalog:",
     "@types/node": "catalog:",
     "@types/secp256k1": "^4.0.7",
     "@vitest/coverage-v8": "catalog:",

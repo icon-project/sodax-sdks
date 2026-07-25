@@ -15,7 +15,6 @@ catalog:
   "icon-sdk-js": "1.5.3"
   "@vitest/coverage-v8": "3.2.4"
   "tsup": "8.5.0"
-  "@changesets/cli": "2.29.7"
   "@arethetypeswrong/cli": "0.17.4"
   "vitest": "3.2.6"
   "bignumber.js": "9.3.1"
