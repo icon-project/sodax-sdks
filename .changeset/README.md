@@ -15,7 +15,7 @@ pnpm changeset
 Pick the affected packages and the bump type (`patch` / `minor` / `major`), then write a short,
 user-facing summary. This writes a markdown file into `.changeset/` — commit it with your PR.
 
-The seven published packages are configured as a **fixed** group in `config.json`, so a bump to
+The eight published packages are configured as a **fixed** group in `config.json`, so a bump to
 any one of them bumps all of them to the same version. This mirrors the existing umbrella
 `@sdks@x.y.z` release model. The private `apps/*` workspaces are excluded via
 `"privatePackages": { "version": false, "tag": false }` in `config.json`, so they are never
