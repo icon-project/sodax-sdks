@@ -9,6 +9,7 @@
     [
       "@sodax/types",
       "@sodax/libs",
+      "@sodax/swaps-api",
       "@sodax/wallet-sdk-core",
       "@sodax/sdk",
       "@sodax/wallet-sdk-react",

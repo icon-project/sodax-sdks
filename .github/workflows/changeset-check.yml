@@ -29,7 +29,7 @@ jobs:
           CHANGED=$(git diff --name-only "$BASE_SHA"...HEAD)
 
           # Did the PR touch any publishable @sodax/* package?
-          TOUCHED_PKG=$(echo "$CHANGED" | grep -E '^packages/(types|libs|wallet-sdk-core|sdk|wallet-sdk-react|dapp-kit|skills)/' || true)
+          TOUCHED_PKG=$(echo "$CHANGED" | grep -E '^packages/(types|libs|swaps-api|wallet-sdk-core|sdk|wallet-sdk-react|dapp-kit|skills)/' || true)
 
           # Did the PR add a changeset file?
           ADDED_CS=$(git diff --name-only --diff-filter=A "$BASE_SHA"...HEAD -- '.changeset/*.md' | grep -v '/README.md$' || true)

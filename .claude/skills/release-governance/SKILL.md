@@ -20,7 +20,7 @@ description: 'Use when preparing a Changesets-based release of the SODAX `@sodax
 `git diff --name-only origin/main...HEAD`. A published package changed iff a path matches the
 fixed-group allow-list — the same one `changeset-check.yml` enforces:
 ```
-^packages/(types|libs|wallet-sdk-core|sdk|wallet-sdk-react|dapp-kit|skills)/
+^packages/(types|libs|swaps-api|wallet-sdk-core|sdk|wallet-sdk-react|dapp-kit|skills)/
 ```
 Classify each hit: real source/behavior change · test/doc/config-only · carried along only because
 the group is fixed. Only real source/behavior changes earn a changelog entry.
