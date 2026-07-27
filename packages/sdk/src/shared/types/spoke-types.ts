@@ -63,9 +63,12 @@ export type GetDepositParams<ChainKey extends SpokeChainKey = SpokeChainKey> = {
  * the full {@link XToken} so the reader can detect the native coin and resolve chain-specific
  * token identifiers (EVM erc20 address, Solana mint, Sui coinType, Soroban contract, …).
  *
- * Invariant TypeScript cannot express: `token.chainKey` MUST equal `srcChainKey`. The reader picks
- * its RPC provider from `srcChainKey` and the on-chain identifier from `token.address`, so a
- * divergence would read the wrong chain; the router rejects it with an unsuccessful `Result`.
+ * The reader picks its RPC provider from `srcChainKey` and the on-chain identifier from
+ * `token.address`; it never consults `token.chainKey`. Passing a token that does not live on
+ * `srcChainKey` therefore reads the wrong chain and — on an EVM target — resolves to `0n` rather
+ * than an error, so keep the chain key and the token list in step. This is NOT enforced: a few
+ * config entries carry a `chainKey` that disagrees with where the address actually lives, so the
+ * field is not reliable enough to validate against.
  *
  * Failure contract: this single-token read REJECTS on a network, RPC, or contract-read failure, and
  * the router turns that into an unsuccessful `Result`. The batch variant is deliberately more
@@ -87,10 +90,10 @@ export type GetBalanceParams<ChainKey extends SpokeChainKey = SpokeChainKey> = {
  * did resolve. Callers therefore cannot tell a failed read from an empty wallet; the direction is
  * deliberately conservative — under-reporting blocks a spend, it never permits one.
  *
- * The `Result` fails when the whole batch is unusable: an invalid chain key, the `token.chainKey`
- * invariant on {@link GetBalanceParams} being violated, a shared round-trip every token depends on
- * (ICON `tryAggregate`, Injective's portfolio fetch), or a batch in which NO token could be read —
- * a dead or rate-limited RPC would otherwise render as "this wallet is empty on every asset".
+ * The `Result` fails when the whole batch is unusable: an invalid chain key, a shared round-trip
+ * every token depends on (ICON `tryAggregate`, Injective's portfolio fetch), or a batch in which NO
+ * token could be read — a dead or rate-limited RPC would otherwise render as "this wallet is empty
+ * on every asset".
  */
 export type GetBalancesParams<ChainKey extends SpokeChainKey = SpokeChainKey> = {
   srcChainKey: ChainKey; // The chain key of the spoke (origin) chain

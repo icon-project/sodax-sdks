@@ -87,7 +87,7 @@ function TokenBalance({ address, xTokens }: { address: string; xTokens: readonly
 
 The two hooks are not drop-in equivalents — check these before migrating a screen:
 
-- `chainKey` decides the chain read, and a token whose `chainKey` differs is rejected. `useXBalances` instead derives the chain from `xTokens[0].chainKey` and ignores the `xChainId` you pass.
+- `chainKey` decides the chain read; `token.chainKey` is ignored, so a token from another chain reads as `0n` rather than erroring. `useXBalances` is the opposite: it derives the chain from `xTokens[0].chainKey` and ignores the `xChainId` you pass.
 - A token that could not be read is logged by the SDK and reported as `0n`, so it is indistinguishable from an empty wallet. The query errors only when the entire batch is unusable.
 - Stellar XLM is the *spendable* amount (total minus minimum reserve and selling liabilities); Bitcoin Rune tokens read as `0n` because the UTXO endpoint carries no rune amounts.
 

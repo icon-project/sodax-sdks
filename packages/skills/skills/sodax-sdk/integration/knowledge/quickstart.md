@@ -105,7 +105,7 @@ coin, Soroban contract, IRC-2, NEP-141, SIP-010, Injective bank denom, Bitcoin U
 const one = await sodax.spoke.getWalletBalance({
   srcChainKey: ChainKeys.ARBITRUM_MAINNET,
   srcAddress: '0x…',          // the user
-  token: usdc,                // a full XToken; token.chainKey MUST equal srcChainKey
+  token: usdc,                // a full XToken living on srcChainKey (token.chainKey is ignored)
 });
 // one: Result<bigint> — smallest units
 
@@ -124,10 +124,10 @@ Contract worth internalising:
   discards the balances that did resolve. The flip side: a caller cannot tell a failed read from an
   empty wallet. The direction is deliberately conservative — under-reporting blocks a spend, it
   never permits one. Wire a `logger` into `new Sodax({ logger })` to surface those failures.
-- The `Result` fails when the whole batch is unusable — an unknown chain key, a `token.chainKey` that
-  disagrees with `srcChainKey`, a single shared round-trip every token depends on (ICON's
-  `tryAggregate`, Injective's portfolio fetch), or a batch in which NO token could be read, which
-  would otherwise render as "this wallet is empty on every asset".
+- The `Result` fails when the whole batch is unusable — an unknown chain key, a single shared
+  round-trip every token depends on (ICON's `tryAggregate`, Injective's portfolio fetch), or a batch
+  in which NO token could be read, which would otherwise render as "this wallet is empty on every
+  asset".
 - Batching is per chain: EVM/Sonic use multicall3, ICON one `tryAggregate`, Injective one portfolio
   fetch, Stellar one shared network + account fetch; the rest fan out per token.
 - **Chain-specific values.** Stellar XLM reports the *spendable* amount (total minus the minimum

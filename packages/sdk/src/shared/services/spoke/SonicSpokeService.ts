@@ -413,9 +413,9 @@ export class SonicSpokeService {
     }
 
     if (getEvmViemChain(srcChainKey).contracts?.multicall3) {
-      // allowFailure keeps a single reverting token (or a rate-limited aggregate3 chunk, which viem
-      // fans out as a failure entry per call) from discarding the balances that did resolve — but
-      // each failure must surface as such, never as a zero the UI would render as a real balance.
+      // allowFailure (viem's default) keeps a single reverting token — or a rate-limited aggregate3
+      // chunk, which viem fans out as a failure entry per call — from discarding the balances that
+      // did resolve. Each failure still goes through the collector so it is logged, not silent.
       const results = await this.publicClient.multicall({
         contracts: nonNativeTokens.map(token => ({
           abi: erc20Abi,

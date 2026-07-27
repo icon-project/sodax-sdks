@@ -23,7 +23,6 @@ import {
   type TxReturnType,
   isBitcoinChainKey,
   type Result,
-  type XToken,
 } from '@sodax/types';
 import type { WalletBalanceMap } from './balance-utils.js';
 import { encodeAddress } from '../../utils/shared-utils.js';
@@ -112,15 +111,6 @@ export type SpokeServiceConstructorParams = {
   config: ConfigService;
   hubProvider: EvmHubProvider;
 };
-
-/**
- * Balance readers pick the RPC provider from `srcChainKey` and the on-chain identifier from
- * `token.address`; they never consult `token.chainKey`. A divergence therefore reads the wrong
- * chain and, on an EVM target, resolves to a failed call rather than an error the caller can see.
- */
-function findChainKeyMismatch(srcChainKey: SpokeChainKey, tokens: readonly XToken[]): XToken | undefined {
-  return tokens.find(token => token.chainKey !== srcChainKey);
-}
 
 /**
  * SpokeService is a main class that provides functionalities for dealing with spoke chains (including hub chain).
@@ -725,16 +715,6 @@ export class SpokeService {
    */
   public async getWalletBalance<C extends SpokeChainKey>(params: GetBalanceParams<C>): Promise<Result<bigint>> {
     try {
-      const mismatch = findChainKeyMismatch(params.srcChainKey, [params.token]);
-      if (mismatch) {
-        return {
-          ok: false,
-          error: new Error(
-            `[getWalletBalance] token ${mismatch.symbol} (${mismatch.address}) belongs to chain ${mismatch.chainKey}, not srcChainKey ${params.srcChainKey}`,
-          ),
-        };
-      }
-
       if (isHubChainKeyType(params.srcChainKey)) {
         const value = await this.sonic.getWalletBalance(params as GetBalanceParams<SonicChainKey>);
         return { ok: true, value };
@@ -799,25 +779,13 @@ export class SpokeService {
    * @param {GetBalancesParams<C>} params - The chain key, user address, and tokens.
    * @returns {Promise<Result<WalletBalanceMap>>} A map of token address to balance in smallest
    * units. A token that could not be read is logged and reported as `0n`; the `Result` fails when
-   * the whole batch is unusable — invalid chain, chain-key mismatch, a shared round-trip every
-   * token depends on, or a batch in which no token could be read at all.
+   * the whole batch is unusable — invalid chain, a shared round-trip every token depends on, or a
+   * batch in which no token could be read at all.
    */
   public async getWalletBalances<C extends SpokeChainKey>(
     params: GetBalancesParams<C>,
   ): Promise<Result<WalletBalanceMap>> {
     try {
-      // Reject the whole batch on the first offender: dropping the token instead would resurface
-      // at the call site as `?? 0n`, i.e. the silent wrong balance this guard exists to prevent.
-      const mismatch = findChainKeyMismatch(params.srcChainKey, params.tokens);
-      if (mismatch) {
-        return {
-          ok: false,
-          error: new Error(
-            `[getWalletBalances] token ${mismatch.symbol} (${mismatch.address}) belongs to chain ${mismatch.chainKey}, not srcChainKey ${params.srcChainKey}`,
-          ),
-        };
-      }
-
       if (isHubChainKeyType(params.srcChainKey)) {
         const value = await this.sonic.getWalletBalances(params as GetBalancesParams<SonicChainKey>);
         return { ok: true, value };

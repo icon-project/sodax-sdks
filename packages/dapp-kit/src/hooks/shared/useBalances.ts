@@ -8,8 +8,8 @@ import type { ReadHookParams } from './types.js';
  * Domain inputs for {@link useBalances}. `chainKey` is optional so the hook can be mounted before a
  * chain is selected; `enabled` gates execution on every required field being present.
  *
- * Every `token.chainKey` must equal `chainKey` — the SDK reads the chain named by `chainKey` and
- * ignores the one on the token, and rejects the call rather than reading the wrong chain.
+ * The SDK reads the chain named by `chainKey` and ignores `token.chainKey`, so a token that does
+ * not live on that chain reads as `0n` rather than erroring — keep the two in step.
  */
 export interface BalancesInputs {
   chainKey: SpokeChainKey | undefined;
@@ -54,8 +54,8 @@ export function getBalancesQueryOptions(sodax: Sodax, { chainKey, tokens, addres
  * Failure model: a token that could not be read is logged by the SDK and reported as `0n`, so a
  * flaky RPC is indistinguishable from an empty wallet — always the conservative direction, since
  * under-reporting blocks a spend rather than permitting one. The query only errors when the whole
- * batch is unusable: a mismatched `token.chainKey`, a shared round-trip every token depends on, or
- * a batch in which no token could be read at all.
+ * batch is unusable: a shared round-trip every token depends on, or a batch in which no token
+ * could be read at all.
  *
  * Chain-specific notes: Stellar XLM reports the *spendable* amount (total minus the minimum reserve
  * and selling liabilities); Bitcoin returns `0n` for Rune tokens, whose amounts are not exposed by
