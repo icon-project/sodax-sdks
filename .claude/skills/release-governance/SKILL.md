@@ -1,6 +1,6 @@
 ---
 name: release-governance
-description: 'Use when preparing a Changesets-based release of the SODAX `@sodax/*` packages — either authoring and validating a changeset for a change about to merge, or auditing the accumulated changesets and running the version bump before a release is cut. Recommends the SemVer bump with reasoning, writes concise consumer-focused changelog entries, flags likely-breaking TypeScript API changes and requires migration notes for majors, and verifies CONFIG_VERSION and version alignment. Triggers on "add a changeset", "what version bump", "semver for this change", "is this a breaking change", "review the changelog", "cut a release", "prepare a release", "release governance", "version the packages". Runs on a working branch (author/validate) or on release/sdk (audit + bump); hands the commit, push and @sdks@ tag to packages/RELEASE_INSTRUCTIONS.md.'
+description: 'Use when preparing a Changesets-based release of the SODAX `@sodax/*` packages — either authoring and validating a changeset for a change about to merge, or auditing the accumulated changesets and running the version bump before a release is cut. Recommends the SemVer bump with reasoning, writes concise consumer-focused changelog entries, flags likely-breaking TypeScript API changes and requires migration notes for majors, and verifies CONFIG_VERSION and version alignment. Triggers on "add a changeset", "what version bump", "semver for this change", "is this a breaking change", "review the changelog", "cut a release", "prepare a release", "release governance", "version the packages". Runs on a working branch (author/validate) or on release (audit + bump); hands the commit, push and @sdks@ tag to packages/RELEASE_INSTRUCTIONS.md.'
 ---
 
 # Governing a Changesets Release
@@ -13,7 +13,7 @@ description: 'Use when preparing a Changesets-based release of the SODAX `@sodax
 
 ## 0. Pick the mode — STOP if the branch doesn't match
 - **Mode A — author / validate** a changeset: you are on a working branch about to merge into `main`.
-- **Mode B — audit + bump** before a release cut: you are on `release/sdk` with `main` merged in.
+- **Mode B — audit + bump** before a release cut: you are on `release` with `main` merged in.
 - Base for every diff is `origin/main`; `git fetch origin main` first.
 
 ## 1. Scope the change (both modes)
@@ -60,10 +60,10 @@ policy file for format and voice.
 - **Quality?** Bump type matches the actual change; not vague ("fixes", "updates"); consumer-facing voice, not an internal commit message; every `major` has a migration note.
 - `pnpm changeset status --since=origin/main` previews the pending release read-only.
 
-## 5. Pre-cut audit + bump (Mode B, on `release/sdk`)
+## 5. Pre-cut audit + bump (Mode B, on `release`)
 Pre-flight — **STOP and report** on any failure:
-- `gh auth status` clean; current branch is `release/sdk`; working tree clean.
-- `main` fully merged: `git fetch` then `git log release/sdk..origin/main` is empty (else `git pull --no-ff origin main` first).
+- `gh auth status` clean; current branch is `release`; working tree clean.
+- `main` fully merged: `git fetch` then `git log release..origin/main` is empty (else `git pull --no-ff origin main` first).
 - No existing `@sdks@<version>` tag for the version about to ship — `git tag -l "@sdks@<version>"` is empty (npm rejects a republish).
 - `GITHUB_TOKEN` is set — `@changesets/changelog-github` needs it to link PRs/authors while generating changelogs.
 - **RC decision:** `.changeset/pre.json` present ⇒ already in `rc` pre-mode. If an RC is intended and it is absent, STOP and have the human run `pnpm changeset pre enter rc` (and `pnpm changeset pre exit` before the stable release). Never guess pre-mode.
@@ -76,7 +76,7 @@ pnpm version:packages   # consumes changesets → bumps the fixed group, writes 
 Review the result read-only and report: each generated `CHANGELOG.md` reads cleanly for a consumer;
 `CONFIG_VERSION` incremented by exactly 1; every fixed-group `package.json` holds the same new
 version. Then **STOP** — the remaining steps are manual and outward-facing:
-> `pnpm install` → commit `"chore: version packages"` → push `release/sdk` → cut the `@sdks@<version>` tag (this triggers `sdks-publish.yml`) → `npm deprecate @sodax/libs@<version> "…"` → announce. Full checklist: `packages/RELEASE_INSTRUCTIONS.md`.
+> `pnpm install` → commit `"chore: version packages"` → push `release` → cut the `@sdks@<version>` tag (this triggers `sdks-publish.yml`) → `npm deprecate @sodax/libs@<version> "…"` → announce. Full checklist: `packages/RELEASE_INSTRUCTIONS.md`.
 
 Do **not** commit, push, or create the tag.
 
