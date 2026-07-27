@@ -59,7 +59,6 @@
     "check-exports": "attw --pack",
     "check:knip": "knip",
     "prepublishOnly": "pnpm run ci",
-    "local-release": "changeset version && changeset publish",
     "clean": "rm -rf node_modules && rm -rf dist && rm -rf .turbo"
   },
   "dependencies": {
@@ -88,7 +87,6 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "catalog:",
-    "@changesets/cli": "catalog:",
     "@types/node": "catalog:",
     "@types/secp256k1": "^4.0.7",
     "@vitest/coverage-v8": "catalog:",

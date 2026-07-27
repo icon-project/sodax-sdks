@@ -26,6 +26,7 @@
 
 ### Patch Changes
 
+- Validate ICON address type and length in `encodeAddress` (SWAP-M-1) — reject malformed ICON destinations before hex-decoding.
 - Updated dependencies []:
   - @sodax/libs@2.0.0
   - @sodax/swaps-api@2.0.0
