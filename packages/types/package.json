@@ -4,7 +4,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "version": "2.0.0-rc.21",
+  "version": "2.0.0",
   "description": "Sodax Common Types",
   "main": "dist/index.js",
   "homepage": "https://github.com/icon-project/sodax-sdks/tree/main/packages/types",
@@ -18,7 +18,10 @@
   "engines": {
     "node": ">=20.12.0"
   },
-  "files": ["dist", "!dist/**/*.map"],
+  "files": [
+    "dist",
+    "!dist/**/*.map"
+  ],
   "type": "module",
   "exports": {
     ".": {
@@ -35,7 +38,9 @@
   },
   "typesVersions": {
     "*": {
-      "dex": ["./dist/dex/index.d.ts"]
+      "dex": [
+        "./dist/dex/index.d.ts"
+      ]
     }
   },
   "scripts": {
@@ -61,6 +66,12 @@
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
-  "keywords": ["sodax", "types", "typescript", "multichain", "wallet-providers"],
+  "keywords": [
+    "sodax",
+    "types",
+    "typescript",
+    "multichain",
+    "wallet-providers"
+  ],
   "license": "MIT"
 }
