@@ -7,7 +7,7 @@ need one. This checklist covers cutting and publishing a release once changesets
 on `main`.
 
 - [ ] 1. Make sure all of the code to be published (and its changesets) is merged into the `main` branch
-- [ ] 2. Checkout `release/sdk` branch using `git checkout release/sdk`
+- [ ] 2. Checkout `release` branch using `git checkout release`
 - [ ] 3. Pull from main with --no-ff merge strategy using `git pull --no-ff origin main`
 - [ ] 4. Consume the pending changesets and bump versions:
   ```bash
@@ -54,11 +54,11 @@ on `main`.
   git add -A packages .changeset pnpm-lock.yaml
   git commit -m "chore: version packages"
   ```
-- [ ] 7. Push all merged and newly created commits using `git push -u origin release/sdk`
+- [ ] 7. Push all merged and newly created commits using `git push -u origin release`
 - [ ] 8. Cut a **single unified release tag** — this publishes ALL 8 packages in one workflow run:
   - [ ] 8.1 Go to [Github sodax-sdks/releases](https://github.com/icon-project/sodax-sdks/releases) and click "Draft a new release"
   - [ ] 8.2 Input the tag in the form `@sdks@<version>` (use the version `pnpm version:packages` wrote into the `package.json` files, e.g. `@sdks@1.0.0` or `@sdks@1.0.0-rc.1`)
-  - [ ] 8.3 Select `Target: release/sdk`
+  - [ ] 8.3 Select `Target: release`
   - [ ] 8.4 Click `Generate release notes`
   - [ ] 8.5 Mark `Set as a pre-release` if you are creating an RC
   - [ ] 8.6 Click `Publish release`
