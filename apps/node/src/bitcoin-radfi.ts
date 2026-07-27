@@ -57,6 +57,52 @@ function requireRefreshToken(): string {
   return refreshTokenValue;
 }
 
+/** The shape of a private key pasted where a normal positional argument now belongs. */
+const PRIVATE_KEY_HEX = /^[0-9a-fA-F]{64}$/;
+
+/**
+ * Guards the commands that used to take the key as `argv[3]`. Those slots now hold ordinary values
+ * that get logged and sent to the API, so a key pasted from an old command line would leak again
+ * rather than fail. Never echo the offending value — it is already in shell history and `ps`.
+ *
+ * A bare 64-hex string is not always a key (a txid has the same shape), so the warning is worded
+ * conditionally rather than telling every caller to rotate. `ambiguity` names the innocent reading.
+ */
+function rejectKeyShapedArgs(command: string, positionals: readonly string[], ambiguity?: string): void {
+  if (!positionals.some(argument => PRIVATE_KEY_HEX.test(argument))) return;
+  console.error(`Error: '${command}' received a bare 64-character hex value as a positional argument.`);
+  console.error('The private key is no longer a CLI argument — export BITCOIN_RADFI_PRIVATE_KEY instead.');
+  if (ambiguity) console.error(ambiguity);
+  console.error('If it was your private key it is now in your shell history and process list —');
+  console.error('rotate it before reusing it.');
+  process.exit(1);
+}
+
+/**
+ * Refuses to emit key material anywhere but an interactive terminal. A redirected stdout lands in a
+ * file, a pipe or a CI log, where the key outlives the session under nobody's permissions.
+ *
+ * It cannot catch a pty recorder (`script`, `ssh -t`, tmux, asciinema) — from in here those are
+ * indistinguishable from a terminal, so the printed warning has to cover that case instead.
+ */
+function requireInteractiveStdout(command: string): void {
+  if (process.stdout.isTTY) return;
+  console.error(`Error: '${command}' prints key material — refusing redirected stdout (file, pipe or CI log).`);
+  console.error('Run it in an interactive terminal.');
+  process.exit(1);
+}
+
+/**
+ * Enforces exact arity. Legacy call shapes carried one extra leading argument, so a presence-only
+ * check would silently shift every value one slot left instead of failing.
+ */
+function requireExactArgs(command: string, positionals: readonly string[], expected: number, usage: string[]): void {
+  if (positionals.length === expected) return;
+  console.error(`Error: '${command}' takes exactly ${expected} argument(s), received ${positionals.length}.`);
+  for (const line of usage) console.log(line);
+  process.exit(1);
+}
+
 /**
  * Create Bitcoin wallet from private key (HEX format)
  * @param privateKeyHex - Private key in HEX format (64 characters)
@@ -730,7 +776,7 @@ async function getExpiredUtxos(tradingAddress: string): Promise<{ txId: string; 
       }
       console.log('\nTo renew, run:');
       const txIdVouts = utxos.map((u: { txId: string; vout: number }) => `${u.txId}:${u.vout}`).join(',');
-      console.log(`  pnpm run bitcoin-radfi renew <private_key_hex> ${txIdVouts}`);
+      console.log(`  BITCOIN_RADFI_PRIVATE_KEY=… pnpm run bitcoin-radfi renew ${txIdVouts}`);
     }
 
     return utxos;
@@ -821,26 +867,41 @@ async function renewUtxos(privateKeyHex: string, txIdVoutsStr: string): Promise<
  */
 async function main(): Promise<void> {
   const command = process.argv[2];
+  const positionals = process.argv.slice(3);
 
   if (command === 'generate') {
+    // The key exists only in memory, so stdout is its single delivery channel — printing it is the
+    // whole point of the command, unlike `dump`, where the key already lives elsewhere. Both checks
+    // run before the wallet exists: a run that cannot disclose the key must not leave behind a
+    // spendable-looking address nobody holds the key for.
+    if (process.env.SHOW_PRIVATE_KEY !== 'true') {
+      console.error('Error: `generate` produces a private key that is stored nowhere else.');
+      console.error('Set SHOW_PRIVATE_KEY=true to have it printed, then move it into a secret manager.');
+      process.exit(1);
+    }
+    requireInteractiveStdout('generate');
+
     const privateKey = generatePrivateKey();
     const { address, publicKey } = createBitcoinWallet(privateKey);
 
     console.log('Generated Bitcoin Wallet:');
+    console.log('Private Key (HEX):', privateKey);
     console.log('Public Key (HEX):', publicKey);
     console.log('Bitcoin Address:', address);
-    // Never print the private key by default — stdout is captured by terminals, CI logs and
-    // observability. Opt in explicitly, and rotate the key if it was exposed. Prefer storing it
-    // in a secret manager and exporting it as BITCOIN_RADFI_PRIVATE_KEY for the other commands.
-    if (process.env.SHOW_PRIVATE_KEY === 'true') {
-      console.warn('WARNING: printing the private key because SHOW_PRIVATE_KEY=true — avoid this on shared/CI shells.');
-      console.log('Private Key (HEX):', privateKey);
-    } else {
-      console.log('Private Key: hidden (set SHOW_PRIVATE_KEY=true to print it).');
-    }
+    console.warn('\nWARNING: the private key was printed to this terminal. Avoid shared shells, and note');
+    console.warn('that a pty recorder (script, ssh -t, tmux, asciinema) captures it despite the TTY check.');
+    console.log('Store it in a secret manager now and export it as BITCOIN_RADFI_PRIVATE_KEY for the other');
+    console.log('commands — this script writes it nowhere, so it is unrecoverable once the process exits.');
   } else if (command === 'dump') {
+    rejectKeyShapedArgs('dump', positionals);
+    requireExactArgs('dump', positionals, 0, ['Usage: BITCOIN_RADFI_PRIVATE_KEY=… pnpm run bitcoin-radfi dump']);
+    // `dump` prints the key in HEX and WIF — the same disclosure `generate` makes, so it gets the
+    // same stdout guard. No opt-in flag: naming the command is already the explicit intent.
+    requireInteractiveStdout('dump');
     dumpKeyInfo(requirePrivateKeyHex('dump'));
   } else if (command === 'create') {
+    rejectKeyShapedArgs('create', positionals);
+    requireExactArgs('create', positionals, 0, ['Usage: BITCOIN_RADFI_PRIVATE_KEY=… pnpm run bitcoin-radfi create']);
     await createTradingWallet(requirePrivateKeyHex('create'));
   } else if (command === 'check') {
     const address = process.argv[3];
@@ -868,20 +929,33 @@ async function main(): Promise<void> {
     }
     await getWalletBalance(walletAddress);
   } else if (command === 'withdraw') {
-    const privateKeyHex = requirePrivateKeyHex('withdraw');
-    const amount = process.argv[3];
-    const tokenId = process.argv[4];
-    const withdrawTo = process.argv[5];
-    const authToken = process.env.RADFI_API_KEY;
+    rejectKeyShapedArgs('withdraw', positionals);
+    requireExactArgs('withdraw', positionals, 3, [
+      'Usage: BITCOIN_RADFI_PRIVATE_KEY=… pnpm run bitcoin-radfi withdraw <amount> <token_id> <withdraw_to>',
+      'Example: BITCOIN_RADFI_PRIVATE_KEY=… pnpm run bitcoin-radfi withdraw 10000 0:0 tb1q...',
+    ]);
+    const [amount, tokenId, withdrawTo] = positionals;
 
-    if (!amount || !tokenId || !withdrawTo) {
-      console.error('Error: Missing required parameters for withdraw command');
-      console.log(
-        'Usage: BITCOIN_RADFI_PRIVATE_KEY=… pnpm run bitcoin-radfi withdraw <amount> <token_id> <withdraw_to>',
-      );
-      console.log('Example: BITCOIN_RADFI_PRIVATE_KEY=… pnpm run bitcoin-radfi withdraw 10000 0:0 tb1q...');
+    // Validate before anything is logged or sent: `withdrawWithSign` echoes these and forwards them
+    // to the transactions API.
+    if (!/^\d+$/.test(amount)) {
+      console.error('Error: <amount> must be a whole number of sats.');
       process.exit(1);
     }
+    if (!/^\d+:\d+$/.test(tokenId)) {
+      console.error("Error: <token_id> must look like '2904354:3119' (or '0:0' for BTC).");
+      process.exit(1);
+    }
+    try {
+      // Also catches a mistyped destination before anything is signed and broadcast.
+      bitcoin.address.toOutputScript(withdrawTo, network);
+    } catch {
+      console.error(`Error: <withdraw_to> is not a valid ${IS_TESTNET ? 'signet/testnet' : 'mainnet'} address.`);
+      process.exit(1);
+    }
+
+    const privateKeyHex = requirePrivateKeyHex('withdraw');
+    const authToken = process.env.RADFI_API_KEY;
     await withdrawWithSign(privateKeyHex, amount, tokenId, withdrawTo, authToken);
   } else if (command === 'sign-withdraw') {
     const userAddress = process.argv[3];
@@ -895,8 +969,13 @@ async function main(): Promise<void> {
     }
     await signAndBroadcastWithdraw(userAddress, signedBase64Tx, authToken);
   } else if (command === 'auth') {
+    rejectKeyShapedArgs('auth', positionals);
+    requireExactArgs('auth', positionals, 0, ['Usage: BITCOIN_RADFI_PRIVATE_KEY=… pnpm run bitcoin-radfi auth']);
     await authenticate(requirePrivateKeyHex('auth'));
   } else if (command === 'refresh-token') {
+    requireExactArgs('refresh-token', positionals, 0, [
+      'Usage: BITCOIN_RADFI_REFRESH_TOKEN=… pnpm run bitcoin-radfi refresh-token',
+    ]);
     await refreshToken(requireRefreshToken());
   } else if (command === 'expired') {
     const tradingAddress = process.argv[3];
@@ -907,24 +986,38 @@ async function main(): Promise<void> {
     }
     await getExpiredUtxos(tradingAddress);
   } else if (command === 'renew') {
-    const privateKeyHex = requirePrivateKeyHex('renew');
-    const txIdVoutsStr = process.argv[3];
-    if (!txIdVoutsStr) {
-      console.error('Error: Missing required parameters for renew command');
-      console.log('Usage: BITCOIN_RADFI_PRIVATE_KEY=… pnpm run bitcoin-radfi renew <txId:vout,txId:vout,...>');
-      console.log('Example: BITCOIN_RADFI_PRIVATE_KEY=… pnpm run bitcoin-radfi renew txid1:0,txid2:1');
-      console.log('\nTip: Run "pnpm run bitcoin-radfi expired <trading_address>" first to find expired UTXOs');
+    rejectKeyShapedArgs(
+      'renew',
+      positionals,
+      'A txid is 64 hex characters too — it needs its vout suffix, e.g. <txid>:0.',
+    );
+    requireExactArgs('renew', positionals, 1, [
+      'Usage: BITCOIN_RADFI_PRIVATE_KEY=… pnpm run bitcoin-radfi renew <txId:vout,txId:vout,...>',
+      'Example: BITCOIN_RADFI_PRIVATE_KEY=… pnpm run bitcoin-radfi renew txid1:0,txid2:1',
+      '\nTip: Run "pnpm run bitcoin-radfi expired <trading_address>" first to find expired UTXOs',
+    ]);
+    const txIdVoutsStr = positionals[0];
+
+    // Validate before anything is logged or sent: `renewUtxos` echoes these and puts them in the
+    // transactions API request body.
+    const invalid = txIdVoutsStr.split(',').filter(pair => !/^[0-9a-fA-F]{64}:\d+$/.test(pair.trim()));
+    if (invalid.length > 0) {
+      console.error(`Error: ${invalid.length} malformed txId:vout pair(s) — expected <64-hex txid>:<vout>.`);
       process.exit(1);
     }
+
+    const privateKeyHex = requirePrivateKeyHex('renew');
     await renewUtxos(privateKeyHex, txIdVoutsStr);
   } else {
     console.log(`Usage: (network: ${IS_TESTNET ? 'SIGNET' : 'MAINNET staging'})`);
-    console.log('  Secrets come from the environment, never CLI args (avoids shell history / ps / CI-log leaks):');
+    console.log('  Environment (secrets never come from CLI args — avoids shell history / ps / CI-log leaks):');
     console.log('    BITCOIN_RADFI_PRIVATE_KEY   - private key (HEX) for dump/create/withdraw/auth/renew');
     console.log('    BITCOIN_RADFI_REFRESH_TOKEN - refresh token for refresh-token');
+    console.log('    SHOW_PRIVATE_KEY=true       - required by `generate`; its key is stored nowhere else');
+    console.log('  `generate` and `dump` print key material and refuse a redirected stdout — run them in a TTY.');
     console.log('');
     console.log('  pnpm run bitcoin-radfi generate                   - Generate a new Bitcoin private key and wallet');
-    console.log('  pnpm run bitcoin-radfi dump                       - Dump all key information and address formats');
+    console.log('  pnpm run bitcoin-radfi dump                       - Dump key + address formats (TTY only)');
     console.log('  pnpm run bitcoin-radfi create                     - Create a trading wallet using private key');
     console.log('  pnpm run bitcoin-radfi fetch <wallet_address>     - Fetch trading wallet information');
     console.log('  pnpm run bitcoin-radfi balance <wallet_address>   - Get trading wallet balance');
