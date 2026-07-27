@@ -22,7 +22,7 @@
   - Breaking changes: [type-system](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/skills/sodax-sdk/migration-v1-to-v2/knowledge/breaking-changes/type-system.md) · [architecture](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/skills/sodax-sdk/migration-v1-to-v2/knowledge/breaking-changes/architecture.md) · [result-and-errors](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/skills/sodax-sdk/migration-v1-to-v2/knowledge/breaking-changes/result-and-errors.md)
   - Reference: [deleted exports](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/skills/sodax-sdk/migration-v1-to-v2/knowledge/reference/deleted-exports.md) · [error-code crosswalk](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/skills/sodax-sdk/migration-v1-to-v2/knowledge/reference/error-code-crosswalk.md) · [chain-id map](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/CHAIN_ID_MIGRATION.md)
 
-  **Migration (before → after):** `const spoke = new EvmSpokeProvider(...); await sodax.swap.createIntent(params, spoke)` → `const r = await sodax.swap.createIntent({ ...params, srcChainKey: ChainKeys.ETHEREUM_MAINNET, walletProvider, raw: false }); if (!r.ok) handle(r.error)`.
+  **Migration (before → after):** `const spoke = new EvmSpokeProvider(...); await sodax.swaps.createIntent(params, spoke)` → `const r = await sodax.swaps.createIntent({ ...params, srcChainKey: ChainKeys.ETHEREUM_MAINNET, walletProvider, raw: false }); if (!r.ok) handle(r.error)`.
 
 ### Patch Changes
 
