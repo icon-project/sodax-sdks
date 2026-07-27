@@ -9,6 +9,7 @@ import type {
   WaitForTxReceiptParams,
   WaitForTxReceiptReturnType,
 } from '../../types/spoke-types.js';
+import type { WalletBalanceMap } from './balance-utils.js';
 import type { ConfigService } from '../../config/ConfigService.js';
 import { sleep } from '../../utils/shared-utils.js';
 import {
@@ -248,19 +249,21 @@ export class InjectiveSpokeService {
   /**
    * Get the user's own wallet balances of multiple tokens on Injective, in smallest units.
    * @param {GetBalancesParams<InjectiveChainKey>} params - The chain key, user address, and tokens.
-   * @returns {Promise<Record<string, bigint>>} A map of token address to balance in smallest units.
+   * @returns {Promise<WalletBalanceMap>} A map of token address to balance in smallest units.
    */
-  public async getWalletBalances(params: GetBalancesParams<InjectiveChainKey>): Promise<Record<string, bigint>> {
+  public async getWalletBalances(params: GetBalancesParams<InjectiveChainKey>): Promise<WalletBalanceMap> {
     const { srcChainKey, srcAddress, tokens } = params;
     // One portfolio fetch returns every bank balance, so read once and match each token by denom
-    // instead of fanning out a full portfolio request per token.
+    // instead of fanning out a full portfolio request per token. A failure here is batch-wide —
+    // there is no per-token read to isolate — so it propagates to the router.
     const portfolio = await this.indexerGrpcAccountPortfolioApi.fetchAccountPortfolioBalances(srcAddress);
     const amountByDenom = new Map(portfolio.bankBalancesList.map(balance => [balance.denom, BigInt(balance.amount)]));
     const nativeDenom = this.config.getChainConfig(srcChainKey).nativeToken;
 
-    const balances: Record<string, bigint> = {};
+    const balances: WalletBalanceMap = {};
     for (const token of tokens) {
       const denom = isNativeToken(srcChainKey, token) ? nativeDenom : token.address;
+      // The bank module omits zero-balance denoms, so an absent denom is a confirmed zero.
       balances[token.address] = amountByDenom.get(denom) ?? 0n;
     }
     return balances;

@@ -13,8 +13,9 @@ import type {
   WaitForTxReceiptParams,
   WaitForTxReceiptReturnType,
 } from '../../types/spoke-types.js';
+import { createBalanceCollector, type WalletBalanceMap } from './balance-utils.js';
 import type { ConfigService } from '../../config/ConfigService.js';
-import { sleep, BigIntToHex, encodeAddress } from '../../utils/shared-utils.js';
+import { sleep, BigIntToHex, encodeAddress, hexToBigInt } from '../../utils/shared-utils.js';
 import {
   type IconChainKey,
   type IconTransactionResult,
@@ -117,8 +118,19 @@ export class IconSpokeService {
       .method('balanceOf')
       .params({ _owner: this.config.getChainConfig(srcChainKey).addresses.assetManager })
       .build();
-    const result = await this.iconService.call(transaction).execute();
-    return BigInt(result.value);
+    return this.readIrc2Balance(transaction);
+  }
+
+  /**
+   * Read an int-returning SCORE call. `iconService.call(...)` registers no result converter, so
+   * `execute()` resolves the raw JSON-RPC `result` — a bare hex string for an int, not `{ value }`.
+   */
+  private async readIrc2Balance(transaction: Parameters<IconService['call']>[0]): Promise<bigint> {
+    const result = (await this.iconService.call(transaction).execute()) as unknown;
+    if (typeof result !== 'string') {
+      throw new Error(`[IconSpokeService] Unexpected balanceOf response: ${JSON.stringify(result)}`);
+    }
+    return hexToBigInt(result);
   }
 
   /**
@@ -136,8 +148,7 @@ export class IconSpokeService {
     }
 
     const transaction = new CallBuilder().to(token.address).method('balanceOf').params({ _owner: srcAddress }).build();
-    const result = await this.iconService.call(transaction).execute();
-    return BigInt(result.value);
+    return this.readIrc2Balance(transaction);
   }
 
   /**
@@ -145,28 +156,37 @@ export class IconSpokeService {
    * is read via `iconService.getBalance`; IRC-2 balances are batched into a single `tryAggregate`
    * multicall so every `balanceOf(_owner)` read shares one round-trip.
    * @param {GetBalancesParams<IconChainKey>} params - The chain key, user address, and tokens.
-   * @returns {Promise<Record<string, bigint>>} A map of token address to balance.
+   * @returns {Promise<WalletBalanceMap>} A map of token address to balance in smallest units.
    */
-  public async getWalletBalances(params: GetBalancesParams<IconChainKey>): Promise<Record<string, bigint>> {
+  public async getWalletBalances(params: GetBalancesParams<IconChainKey>): Promise<WalletBalanceMap> {
     const { srcChainKey, srcAddress, tokens } = params;
-    const balances: Record<string, bigint> = {};
 
-    const nativeToken = tokens.find(token => isNativeToken(srcChainKey, token));
+    const nativeTokens = tokens.filter(token => isNativeToken(srcChainKey, token));
     const nonNativeTokens = tokens.filter(token => !isNativeToken(srcChainKey, token));
 
-    if (nativeToken) {
-      const balance = await this.iconService.getBalance(srcAddress).execute();
-      balances[nativeToken.address] = BigInt(balance.toFixed());
+    const collector = createBalanceCollector({ logger: this.config.logger, chainKey: srcChainKey });
+    if (nativeTokens.length > 0) {
+      // Every native entry resolves from the same read, so ask once and share the outcome.
+      try {
+        const balance = await this.iconService.getBalance(srcAddress).execute();
+        for (const token of nativeTokens) {
+          collector.ok(token.address, BigInt(balance.toFixed()));
+        }
+      } catch (error) {
+        for (const token of nativeTokens) {
+          collector.fail(token.address, error);
+        }
+      }
     }
 
     if (nonNativeTokens.length === 0) {
-      return balances;
+      return collector.finish();
     }
 
     // ICON multicall (`tryAggregate`) contract on mainnet, mirroring the wallet-sdk-react
     // IconXService balance reader — batches every IRC-2 `balanceOf` into a single round-trip.
-    // requireSuccess=0x0 lets an individual failing read resolve as a skipped entry (0n) instead
-    // of reverting the whole batch.
+    // requireSuccess=0x0 keeps one failing read from reverting the batch; it is reported as a
+    // failed entry for that token rather than a zero balance.
     const multicallAddress = 'cxa4aa9185e23558cff990f494c1fd2845f6cbf741';
     const calls = nonNativeTokens.map(token => ({
       target: token.address,
@@ -178,15 +198,25 @@ export class IconSpokeService {
       .method('tryAggregate')
       .params({ requireSuccess: Converter.toHex(0), calls })
       .build();
-    const result = await this.iconService.call(transaction).execute();
-    const aggregated: { success: string; returnData: string }[] = result.returnData ?? [];
+    const result = (await this.iconService.call(transaction).execute()) as { returnData?: unknown };
+    const aggregated = result.returnData;
+    if (!Array.isArray(aggregated) || aggregated.length !== nonNativeTokens.length) {
+      // A short or absent list would silently zero the missing tail; the whole batch is unusable.
+      throw new Error(
+        `[IconSpokeService] tryAggregate returned ${Array.isArray(aggregated) ? aggregated.length : 'no'} entries for ${nonNativeTokens.length} tokens`,
+      );
+    }
 
     nonNativeTokens.forEach((token, index) => {
-      const agg = aggregated[index];
-      balances[token.address] = agg && agg.success !== '0x0' ? BigInt(agg.returnData) : 0n;
+      const agg = aggregated[index] as { success?: string; returnData?: string } | undefined;
+      if (agg && agg.success !== '0x0' && typeof agg.returnData === 'string') {
+        collector.ok(token.address, hexToBigInt(agg.returnData));
+      } else {
+        collector.fail(token.address, new Error(`balanceOf failed for ${token.address}: ${agg?.returnData}`));
+      }
     });
 
-    return balances;
+    return collector.finish();
   }
 
   /**

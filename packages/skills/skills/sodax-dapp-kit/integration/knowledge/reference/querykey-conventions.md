@@ -77,7 +77,8 @@ queryKey: ['staking', 'allowance', srcChainKey, action, srcAddress, amount.toStr
 // User position reads
 queryKey: ['mm', 'userReservesData', spokeChainKey, userAddress]
 queryKey: ['staking', 'info', srcChainKey, srcAddress]              // useStakingInfo — second segment is 'info', not 'stakingInfo'
-queryKey: ['shared', 'xBalances', xChainId, tokens, address]
+queryKey: ['shared', 'balances', chainKey, tokens, address]        // useBalances (SDK-backed)
+queryKey: ['shared', 'xBalances', xChainId, tokens, address]       // useXBalances (wallet-layer)
 queryKey: ['shared', 'nearStorageCheck', chainId, token, accountId] // useNearStorageCheck
 
 // Mutation default keys

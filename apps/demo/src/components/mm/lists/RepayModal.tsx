@@ -73,7 +73,11 @@ export function RepayModal({
   const dstChainKey: SpokeChainKey = selectedChainId;
 
   const supportedSourceChains = getChainsWithThisToken(sodax, token);
-  const sourceToken = getTokenOnChain(sodax, token.symbol, srcChainKey) ?? token;
+  // Falls back to the originally-selected token so the rest of the form keeps rendering, but the
+  // balance read must only ever receive a token that actually lives on `srcChainKey` — the SDK
+  // reads the chain named by `chainKey` and rejects a token from a different one.
+  const sourceTokenOnChain = getTokenOnChain(sodax, token.symbol, srcChainKey);
+  const sourceToken = sourceTokenOnChain ?? token;
 
   const { address: srcAddress } = useXAccount({ xChainId: srcChainKey });
   const { address: dstAddress } = useXAccount({ xChainId: dstChainKey });
@@ -81,7 +85,7 @@ export function RepayModal({
   const sourceWalletProvider = useWalletProvider({ xChainId: srcChainKey });
 
   const { data: sourceBalances, isLoading: isBalanceLoading } = useBalances({
-    params: { chainKey: srcChainKey, tokens: [sourceToken], address: srcAddress },
+    params: { chainKey: srcChainKey, tokens: sourceTokenOnChain ? [sourceTokenOnChain] : [], address: srcAddress },
   });
 
   const { mutateAsync: repay, isPending, error, reset: resetRepay } = useRepay();

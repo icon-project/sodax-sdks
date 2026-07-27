@@ -92,6 +92,8 @@ describe('NearSpokeService — constructor', () => {
     expect(typeof nearSpoke.fillIntent).toBe('function');
     expect(typeof nearSpoke.deposit).toBe('function');
     expect(typeof nearSpoke.getDeposit).toBe('function');
+    expect(typeof nearSpoke.getWalletBalance).toBe('function');
+    expect(typeof nearSpoke.getWalletBalances).toBe('function');
     expect(typeof nearSpoke.isStorageRegistered).toBe('function');
     expect(typeof nearSpoke.registerStorage).toBe('function');
     expect(typeof nearSpoke.sendMessage).toBe('function');
@@ -323,6 +325,149 @@ describe('NearSpokeService.getDeposit', () => {
     await expect(
       nearSpoke.getDeposit({ srcChainKey: NEAR, srcAddress: SRC_ADDR, token: NEAR_BNUSD }),
     ).rejects.toThrow('Failed to get balance');
+  });
+});
+
+// =========================================================================
+// 7b. getWalletBalance / getWalletBalances — the user's own holdings
+// =========================================================================
+
+describe('NearSpokeService.getWalletBalance', () => {
+  // Real config tokens only: a synthesised address would be classified against a nativeToken it
+  // never appears next to in production, so the native/NEP-141 split would prove nothing.
+  const NEAR_TOKEN = nearConfig.supportedTokens.NEAR;
+  const BNUSD_TOKEN = nearConfig.supportedTokens.bnUSD;
+
+  it('native NEAR → reads the user account amount in yoctoNEAR and issues no contract view', async () => {
+    const viewAccountSpy = vi
+      .spyOn(nearSpoke.rpcProvider, 'viewAccount')
+      .mockResolvedValueOnce({ amount: 1_500_000_000_000_000_000_000_000n } as never);
+    const callSpy = vi.spyOn(nearSpoke.rpcProvider, 'callFunction');
+
+    const result = await nearSpoke.getWalletBalance({
+      srcChainKey: NEAR,
+      srcAddress: SRC_ADDR,
+      token: NEAR_TOKEN,
+    });
+
+    expect(result).toBe(1_500_000_000_000_000_000_000_000n);
+    expect(viewAccountSpy).toHaveBeenCalledWith({ accountId: SRC_ADDR });
+    expect(callSpy).not.toHaveBeenCalled();
+  });
+
+  it('NEP-141 → ft_balance_of with account_id = the user, not the assetManager getDeposit reads', async () => {
+    const spy = vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockResolvedValueOnce('7500' as never);
+
+    const result = await nearSpoke.getWalletBalance({
+      srcChainKey: NEAR,
+      srcAddress: SRC_ADDR,
+      token: BNUSD_TOKEN,
+    });
+
+    expect(result).toBe(7500n);
+    expect(spy).toHaveBeenCalledWith({
+      contractId: BNUSD_TOKEN.address,
+      method: 'ft_balance_of',
+      args: { account_id: SRC_ADDR },
+    });
+    // The inverse of the getDeposit test above — the holder is the only difference between them.
+    expect(spy).not.toHaveBeenCalledWith(expect.objectContaining({ args: { account_id: NEAR_ASSET_MGR } }));
+  });
+
+  it('rejects when ft_balance_of returns a non-string — an unread balance must never become 0n', async () => {
+    vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockResolvedValueOnce(7500 as never);
+
+    await expect(
+      nearSpoke.getWalletBalance({ srcChainKey: NEAR, srcAddress: SRC_ADDR, token: BNUSD_TOKEN }),
+    ).rejects.toThrow('[NearSpokeService.getWalletBalance] Failed to get balance. Unexpected response type.');
+  });
+
+  it('propagates an RPC rejection rather than swallowing it into a zero', async () => {
+    vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockRejectedValueOnce(new Error('rpc 503'));
+
+    await expect(
+      nearSpoke.getWalletBalance({ srcChainKey: NEAR, srcAddress: SRC_ADDR, token: BNUSD_TOKEN }),
+    ).rejects.toThrow('rpc 503');
+  });
+});
+
+describe('NearSpokeService.getWalletBalances', () => {
+  const NEAR_TOKEN = nearConfig.supportedTokens.NEAR;
+  const BNUSD_TOKEN = nearConfig.supportedTokens.bnUSD;
+  const USDT_TOKEN = nearConfig.supportedTokens.USDT;
+
+  const ftBalances = (byContractId: Record<string, string | Error>): void => {
+    vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockImplementation((({ contractId }: { contractId: string }) => {
+      const outcome = byContractId[contractId];
+      return outcome instanceof Error ? Promise.reject(outcome) : Promise.resolve(outcome);
+    }) as never);
+  };
+
+  it('keys every token by token.address with the balance in smallest units', async () => {
+    vi.spyOn(nearSpoke.rpcProvider, 'viewAccount').mockResolvedValueOnce({ amount: 42n } as never);
+    ftBalances({ [BNUSD_TOKEN.address]: '7500', [USDT_TOKEN.address]: '0' });
+    const warnSpy = vi.spyOn(sodax.config.logger, 'warn');
+
+    const result = await nearSpoke.getWalletBalances({
+      srcChainKey: NEAR,
+      srcAddress: SRC_ADDR,
+      tokens: [NEAR_TOKEN, BNUSD_TOKEN, USDT_TOKEN],
+    });
+
+    expect(result).toEqual({
+      [NEAR_TOKEN.address]: 42n,
+      [BNUSD_TOKEN.address]: 7500n,
+      // A confirmed on-chain zero. The flat map renders it exactly like the failure below, so the
+      // silence of the logger is what keeps the two apart.
+      [USDT_TOKEN.address]: 0n,
+    });
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('isolates a failing token as a logged 0n instead of discarding the batch', async () => {
+    ftBalances({ [BNUSD_TOKEN.address]: '7500', [USDT_TOKEN.address]: new Error('rpc 503') });
+    const warnSpy = vi.spyOn(sodax.config.logger, 'warn');
+
+    const result = await nearSpoke.getWalletBalances({
+      srcChainKey: NEAR,
+      srcAddress: SRC_ADDR,
+      tokens: [BNUSD_TOKEN, USDT_TOKEN],
+    });
+
+    expect(result[BNUSD_TOKEN.address]).toBe(7500n);
+    expect(result[USDT_TOKEN.address]).toBe(0n);
+    // The fallback zero is only safe while it is reported — a silent one is indistinguishable
+    // from an empty wallet.
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('balance read failed'),
+      expect.objectContaining({ chainKey: NEAR, token: USDT_TOKEN.address, error: 'rpc 503' }),
+    );
+  });
+
+  it('rejects when no token in a non-empty batch could be read — a dead RPC is not an empty wallet', async () => {
+    ftBalances({
+      [BNUSD_TOKEN.address]: new Error('rpc 503'),
+      [USDT_TOKEN.address]: new Error('rpc 503'),
+    });
+
+    await expect(
+      nearSpoke.getWalletBalances({
+        srcChainKey: NEAR,
+        srcAddress: SRC_ADDR,
+        tokens: [BNUSD_TOKEN, USDT_TOKEN],
+      }),
+    ).rejects.toThrow(`every balance read failed on ${NEAR}`);
+  });
+
+  it('returns an empty map for an empty token list without touching the RPC', async () => {
+    const callSpy = vi.spyOn(nearSpoke.rpcProvider, 'callFunction');
+    const viewAccountSpy = vi.spyOn(nearSpoke.rpcProvider, 'viewAccount');
+
+    const result = await nearSpoke.getWalletBalances({ srcChainKey: NEAR, srcAddress: SRC_ADDR, tokens: [] });
+
+    expect(result).toEqual({});
+    expect(callSpy).not.toHaveBeenCalled();
+    expect(viewAccountSpy).not.toHaveBeenCalled();
   });
 });
 

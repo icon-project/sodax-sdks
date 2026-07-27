@@ -25,6 +25,7 @@ import type {
   WaitForTxReceiptParams,
   WaitForTxReceiptReturnType,
 } from '../../types/spoke-types.js';
+import { createBalanceCollector, settleWalletBalances, type WalletBalanceMap } from './balance-utils.js';
 import type { ConfigService } from '../../config/ConfigService.js';
 
 type SuiNativeCoinResult = { $kind: 'NestedResult'; NestedResult: [number, number] };
@@ -310,16 +311,15 @@ export class SuiSpokeService {
   /**
    * Get the user's own wallet balances of multiple tokens on Sui, in smallest units.
    * @param {GetBalancesParams<SuiChainKey>} params - The chain key, user address, and tokens.
-   * @returns {Promise<Record<string, bigint>>} A map of token address to balance.
+   * @returns {Promise<WalletBalanceMap>} A map of token address to balance in smallest units.
    */
-  public async getWalletBalances(params: GetBalancesParams<SuiChainKey>): Promise<Record<string, bigint>> {
+  public async getWalletBalances(params: GetBalancesParams<SuiChainKey>): Promise<WalletBalanceMap> {
     const { srcChainKey, srcAddress, tokens } = params;
-    const entries = await Promise.all(
-      tokens.map(
-        async token => [token.address, await this.getWalletBalance({ srcChainKey, srcAddress, token })] as const,
-      ),
+    const collector = createBalanceCollector({ logger: this.config.logger, chainKey: srcChainKey });
+    await settleWalletBalances(collector, tokens, token =>
+      this.getWalletBalance({ srcChainKey, srcAddress, token }),
     );
-    return Object.fromEntries(entries);
+    return collector.finish();
   }
 
   /**

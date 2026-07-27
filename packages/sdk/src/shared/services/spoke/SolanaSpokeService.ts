@@ -31,6 +31,7 @@ import type {
   WaitForTxReceiptParams,
   WaitForTxReceiptReturnType,
 } from '../../types/spoke-types.js';
+import { createBalanceCollector, settleWalletBalances, type WalletBalanceMap } from './balance-utils.js';
 import type { ConfigService } from '../../config/ConfigService.js';
 import { sleep } from '../../utils/shared-utils.js';
 import {
@@ -259,14 +260,15 @@ export class SolanaSpokeService {
   /**
    * Get the user's own wallet balances of multiple tokens on Solana, in smallest units.
    * @param {GetBalancesParams<SolanaChainKey>} params - The chain key, user address, and tokens.
-   * @returns {Promise<Record<string, bigint>>} A map of token address to balance.
+   * @returns {Promise<WalletBalanceMap>} A map of token address to balance in smallest units.
    */
-  public async getWalletBalances(params: GetBalancesParams<SolanaChainKey>): Promise<Record<string, bigint>> {
+  public async getWalletBalances(params: GetBalancesParams<SolanaChainKey>): Promise<WalletBalanceMap> {
     const { srcChainKey, srcAddress, tokens } = params;
-    const entries = await Promise.all(
-      tokens.map(async token => [token.address, await this.getWalletBalance({ srcChainKey, srcAddress, token })] as const),
+    const collector = createBalanceCollector({ logger: this.config.logger, chainKey: srcChainKey });
+    await settleWalletBalances(collector, tokens, token =>
+      this.getWalletBalance({ srcChainKey, srcAddress, token }),
     );
-    return Object.fromEntries(entries);
+    return collector.finish();
   }
 
   /**

@@ -9,6 +9,7 @@ import type {
   WaitForTxReceiptParams,
   WaitForTxReceiptReturnType,
 } from '../../types/spoke-types.js';
+import { createBalanceCollector, settleWalletBalances, type WalletBalanceMap } from './balance-utils.js';
 import type { ConfigService } from '../../config/ConfigService.js';
 import { CustomSorobanServer } from '../../entities/stellar/CustomSorobanServer.js';
 import { parseToStroops, sleep } from '../../utils/shared-utils.js';
@@ -172,34 +173,59 @@ export class StellarSpokeService {
     const { srcChainKey, srcAddress, token } = params;
 
     if (isNativeToken(srcChainKey, token)) {
-      const account = await this.server.loadAccount(srcAddress);
-      const nativeBalance = account.balances.find(
-        (balance): balance is Horizon.HorizonApi.BalanceLineNative => balance.asset_type === 'native',
-      );
-      if (!nativeBalance) {
-        return 0n;
-      }
-
-      const rawStroops = parseXlmBalanceToStroops(nativeBalance.balance);
-      const sellingLiabilitiesStroops = nativeBalance.selling_liabilities
-        ? parseXlmBalanceToStroops(nativeBalance.selling_liabilities)
-        : 0n;
-      // Minimum balance = (2 + subentry_count + num_sponsoring - num_sponsored) * base_reserve + selling_liabilities.
-      // Sponsored reserves are paid by the sponsor, so they are not subtracted.
-      const reserveCount = Math.max(0, 2 + account.subentry_count + account.num_sponsoring - account.num_sponsored);
-      const minStroops = BigInt(reserveCount) * STELLAR_BASE_RESERVE_STROOPS + sellingLiabilitiesStroops;
-      return rawStroops > minStroops ? rawStroops - minStroops : 0n;
+      return StellarSpokeService.spendableXlmStroops(await this.server.loadAccount(srcAddress));
     }
 
-    const contract = new Contract(token.address);
     const [network, sourceAccount] = await Promise.all([
       this.sorobanServer.getNetwork(),
       this.sorobanServer.getAccount(srcAddress),
     ]);
-    const tx = new TransactionBuilder(sourceAccount, {
-      fee: this.baseFee,
-      networkPassphrase: network.passphrase,
-    })
+    return this.simulateTokenBalance(
+      token.address,
+      srcAddress,
+      new CustomStellarAccount({ account_id: sourceAccount.accountId(), sequence: sourceAccount.sequenceNumber() }),
+      network.passphrase,
+    );
+  }
+
+  /**
+   * Spendable XLM in stroops: the account's native balance minus its minimum reserve and selling
+   * liabilities. Reporting the raw balance would let a user try to spend reserves the network
+   * refuses to release.
+   */
+  private static spendableXlmStroops(account: Horizon.AccountResponse): bigint {
+    const nativeBalance = account.balances.find(
+      (balance): balance is Horizon.HorizonApi.BalanceLineNative => balance.asset_type === 'native',
+    );
+    if (!nativeBalance) {
+      return 0n;
+    }
+
+    const rawStroops = parseXlmBalanceToStroops(nativeBalance.balance);
+    const sellingLiabilitiesStroops = nativeBalance.selling_liabilities
+      ? parseXlmBalanceToStroops(nativeBalance.selling_liabilities)
+      : 0n;
+    // Minimum balance = (2 + subentry_count + num_sponsoring - num_sponsored) * base_reserve + selling_liabilities.
+    // Sponsored reserves are paid by the sponsor, so they are not subtracted.
+    const reserveCount = Math.max(0, 2 + account.subentry_count + account.num_sponsoring - account.num_sponsored);
+    const minStroops = BigInt(reserveCount) * STELLAR_BASE_RESERVE_STROOPS + sellingLiabilitiesStroops;
+    return rawStroops > minStroops ? rawStroops - minStroops : 0n;
+  }
+
+  /**
+   * Simulate a Soroban token `balance` call. Takes the network passphrase and source account so a
+   * batch can fetch them once; `getAccountClone()` hands each builder its own `Account`, because
+   * `TransactionBuilder.build()` increments the source's sequence number and concurrent builders
+   * would otherwise interleave on a shared one.
+   */
+  private async simulateTokenBalance(
+    tokenAddress: string,
+    srcAddress: string,
+    account: CustomStellarAccount,
+    networkPassphrase: string,
+  ): Promise<bigint> {
+    const contract = new Contract(tokenAddress);
+    const tx = new TransactionBuilder(account.getAccountClone(), { fee: this.baseFee, networkPassphrase })
       .addOperation(contract.call('balance', nativeToScVal(srcAddress, { type: 'address' })))
       .setTimeout(TimeoutInfinite)
       .build();
@@ -209,20 +235,62 @@ export class StellarSpokeService {
     if (!rpc.Api.isSimulationSuccess(result)) {
       throw new Error('Failed to simulate transaction');
     }
-    return result.result ? scValToBigInt(result.result.retval) : 0n;
+    // A success response with no return value is a malformed read, not a zero balance — and `0n`
+    // now carries the meaning "confirmed zero on chain". Throw, as the sibling `getBalance` does.
+    if (!result.result) {
+      throw new Error('Failed to read token balance: simulation returned no result');
+    }
+    return scValToBigInt(result.result.retval);
   }
 
   /**
    * Get the user's own wallet balances of multiple tokens on Stellar, in smallest units.
+   *
+   * The network passphrase and the source account are the same for every token, so they are
+   * fetched once per batch instead of once per token — and only when a partition actually needs
+   * them, so an all-native request issues no Soroban calls at all.
    * @param {GetBalancesParams<StellarChainKey>} params - The chain key, user address, and tokens.
-   * @returns {Promise<Record<string, bigint>>} A map of token address to balance.
+   * @returns {Promise<WalletBalanceMap>} A map of token address to balance in smallest units.
    */
-  public async getWalletBalances(params: GetBalancesParams<StellarChainKey>): Promise<Record<string, bigint>> {
+  public async getWalletBalances(params: GetBalancesParams<StellarChainKey>): Promise<WalletBalanceMap> {
     const { srcChainKey, srcAddress, tokens } = params;
-    const entries = await Promise.all(
-      tokens.map(async token => [token.address, await this.getWalletBalance({ srcChainKey, srcAddress, token })] as const),
+
+    const nativeTokens = tokens.filter(token => isNativeToken(srcChainKey, token));
+    const sorobanTokens = tokens.filter(token => !isNativeToken(srcChainKey, token));
+
+    const collector = createBalanceCollector({ logger: this.config.logger, chainKey: srcChainKey });
+
+    if (nativeTokens.length > 0) {
+      // Every native entry resolves from the same Horizon read, so ask once and share the outcome.
+      try {
+        const spendable = StellarSpokeService.spendableXlmStroops(await this.server.loadAccount(srcAddress));
+        for (const token of nativeTokens) {
+          collector.ok(token.address, spendable);
+        }
+      } catch (error) {
+        for (const token of nativeTokens) {
+          collector.fail(token.address, error);
+        }
+      }
+    }
+
+    if (sorobanTokens.length === 0) {
+      return collector.finish();
+    }
+
+    const [network, sourceAccount] = await Promise.all([
+      this.sorobanServer.getNetwork(),
+      this.sorobanServer.getAccount(srcAddress),
+    ]);
+    const account = new CustomStellarAccount({
+      account_id: sourceAccount.accountId(),
+      sequence: sourceAccount.sequenceNumber(),
+    });
+
+    await settleWalletBalances(collector, sorobanTokens, token =>
+      this.simulateTokenBalance(token.address, srcAddress, account, network.passphrase),
     );
-    return Object.fromEntries(entries);
+    return collector.finish();
   }
 
   public async buildPriorityStellarTransaction(

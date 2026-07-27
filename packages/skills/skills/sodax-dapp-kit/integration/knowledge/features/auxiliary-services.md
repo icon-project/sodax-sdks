@@ -145,7 +145,7 @@ const { data: balances } = useXBalances({ params: { xService, xChainId, xTokens,
 ```ts
 // @ai-snippets-skip
 type UseBalancesParams = ReadHookParams<Record<string, bigint>, {
-  chainKey: SpokeChainKey | undefined;       // token-side chain key (no separate xChainId)
+  chainKey: SpokeChainKey | undefined;       // the chain the read executes against
   tokens: readonly XToken[];                 // tokens to fetch balances for
   address: string | undefined;
 }>;
@@ -153,12 +153,20 @@ type UseBalancesParams = ReadHookParams<Record<string, bigint>, {
 
 The query runs only when `chainKey`, `address`, and `tokens.length > 0` are all present, refetching every 5s (same interval as `useXBalances`). `data` is a `Record<string, bigint>` mapping each token address to its balance in smallest units. queryKey: `['shared', 'balances', chainKey, tokens.map(t => [t.symbol, t.address]), address]`.
 
+**Every `token.chainKey` must equal `chainKey`.** The SDK reads the chain you name and ignores the one on the token, and rejects the call outright rather than reading the wrong chain — so commit the chain and the token list in the same state update. (`useXBalances` is the opposite: it derives the chain from `xTokens[0].chainKey`.)
+
+**Failure model.** A token that could not be read is logged by the SDK and reported as `0n` — a flaky RPC and an empty wallet look the same, always in the conservative direction (under-reporting blocks a spend, never permits one). The query errors only when the whole batch is unusable: a mismatched `token.chainKey`, an RPC every token depends on, or a batch in which no token could be read at all.
+
+**Chain-specific values.** Stellar XLM reports the *spendable* amount — total minus the minimum reserve and selling liabilities, not the raw balance. Bitcoin returns `0n` for Rune tokens, whose amounts the UTXO endpoint does not carry.
+
 ```tsx
 // @ai-snippets-skip
 // No `xService` — just the SodaxProvider context the hook reads internally.
 const { data: balances } = useBalances({ params: { chainKey, address, tokens } });
 const usdcBalance = balances?.[usdc.address] ?? 0n;
 ```
+
+After a mutation, invalidate with the `invalidateBalances(queryClient, chainKey)` helper exported from `@sodax/dapp-kit` — it covers both `['shared','balances']` and `['shared','xBalances']`, which never match each other. Every dapp-kit mutation hook already calls it.
 
 ### Stellar trustlines
 
@@ -240,6 +248,8 @@ The underlying SDK methods (`isStorageRegistered` / `registerStorage` on the NEA
 | `useSwapAllowance` (swap) | 2s | refetchInterval |
 | `useMMAllowance` (mm) | 5s | refetchInterval; `enabled: false` for borrow/withdraw actions |
 | Reserves data (mm) | 5s | `useReservesData` / `useReservesHumanized` / user position hooks |
+| `useBalances` | 5s | refetchInterval |
+| `useXBalances` | 5s | refetchInterval |
 | Most others | None | |
 
 All overridable via `queryOptions.refetchInterval`.

@@ -15,9 +15,9 @@
  * balances) are fabricated.
  *
  * `@mysten/sui` is NOT module-mocked: real `Transaction`, `bcs`, and `SuiClient` constructors run.
- * `tx.serialize()` is a local-only operation (no network). Only the four
+ * `tx.serialize()` is a local-only operation (no network). Only the five
  * `publicClient` network methods used by the SUT are spied per-test:
- *   - getCoins, getObject, devInspectTransactionBlock, waitForTransaction.
+ *   - getCoins, getObject, getBalance, devInspectTransactionBlock, waitForTransaction.
  *
  * The cached `assetManagerAddress` field persists for the file lifetime, so `beforeEach` resets it
  * to `undefined` to keep cache-hit/cache-miss tests independent.
@@ -140,6 +140,8 @@ describe('SuiSpokeService — constructor', () => {
     expect(typeof suiSpoke.sendMessage).toBe('function');
     expect(typeof suiSpoke.estimateGas).toBe('function');
     expect(typeof suiSpoke.getDeposit).toBe('function');
+    expect(typeof suiSpoke.getWalletBalance).toBe('function');
+    expect(typeof suiSpoke.getWalletBalances).toBe('function');
     expect(typeof suiSpoke.fetchAssetManagerAddress).toBe('function');
     expect(typeof suiSpoke.fetchLatestAssetManagerPackageId).toBe('function');
     expect(typeof suiSpoke.waitForTransactionReceipt).toBe('function');
@@ -150,6 +152,7 @@ describe('SuiSpokeService — constructor', () => {
     expect(suiSpoke.publicClient).toBeDefined();
     expect(typeof suiSpoke.publicClient.getCoins).toBe('function');
     expect(typeof suiSpoke.publicClient.getObject).toBe('function');
+    expect(typeof suiSpoke.publicClient.getBalance).toBe('function');
     expect(typeof suiSpoke.publicClient.devInspectTransactionBlock).toBe('function');
     expect(typeof suiSpoke.publicClient.waitForTransaction).toBe('function');
   });
@@ -791,7 +794,201 @@ describe('SuiSpokeService.getDeposit', () => {
 });
 
 // =========================================================================
-// 15. waitForTransactionReceipt — every result branch + polling defaults
+// 15. getWalletBalance / getWalletBalances — the USER's own coins
+// =========================================================================
+
+describe('SuiSpokeService.getWalletBalance', () => {
+  // REAL config tokens — the coinType strings the SUT must map are exactly these.
+  const SUI_TOKEN = suiConfig.supportedTokens.SUI;
+  const USDC_TOKEN = suiConfig.supportedTokens.USDC;
+  const LEGACY_BNUSD_TOKEN = suiConfig.supportedTokens.legacybnUSD;
+
+  // The coinType the Sui fullnode actually indexes for legacy bnUSD: the config package id carries
+  // a leading zero the on-chain type does not. Pinned as a literal, not derived from config, so a
+  // config-side address change surfaces here instead of silently following the SUT's stale remap.
+  const LEGACY_BNUSD_ONCHAIN =
+    '0x3917a812fe4a6d6bc779c5ab53f8a80ba741f8af04121193fc44e0f662e2ceb::balanced_dollar::BALANCED_DOLLAR';
+
+  // CoinBalance is the on-wire shape returned by publicClient.getBalance.
+  const makeCoinBalance = (coinType: string, totalBalance: string) =>
+    ({ coinType, coinObjectCount: 1, totalBalance, lockedBalance: {} }) as never;
+
+  it('queries the canonical short 0x2::sui::SUI coinType for the native coin', async () => {
+    const spy = vi
+      .spyOn(suiSpoke.publicClient, 'getBalance')
+      .mockResolvedValueOnce(makeCoinBalance('0x2::sui::SUI', '1234'));
+
+    const result = await suiSpoke.getWalletBalance({
+      srcChainKey: SUI,
+      srcAddress: SRC_ADDR,
+      token: SUI_TOKEN,
+    });
+
+    expect(result).toBe(1_234n);
+    // Config stores the zero-padded 32-byte form; the fullnode only indexes the short form, so the
+    // normalisation is what makes the native read return anything but zero.
+    expect(SUI_TOKEN.address).toBe(SUI_NATIVE);
+    expect(spy).toHaveBeenCalledWith({ owner: SRC_ADDR, coinType: '0x2::sui::SUI' });
+  });
+
+  it('remaps legacy bnUSD to the on-chain coinType that drops the package-id leading zero', async () => {
+    const spy = vi
+      .spyOn(suiSpoke.publicClient, 'getBalance')
+      .mockResolvedValueOnce(makeCoinBalance(LEGACY_BNUSD_ONCHAIN, '4321'));
+
+    const result = await suiSpoke.getWalletBalance({
+      srcChainKey: SUI,
+      srcAddress: SRC_ADDR,
+      token: LEGACY_BNUSD_TOKEN,
+    });
+
+    expect(result).toBe(4_321n);
+    expect(spy).toHaveBeenCalledWith({ owner: SRC_ADDR, coinType: LEGACY_BNUSD_ONCHAIN });
+  });
+
+  it('passes a plain non-native coinType through unchanged, owned by the user', async () => {
+    const spy = vi
+      .spyOn(suiSpoke.publicClient, 'getBalance')
+      .mockResolvedValueOnce(makeCoinBalance(USDC_TOKEN.address, '5000'));
+
+    const result = await suiSpoke.getWalletBalance({
+      srcChainKey: SUI,
+      srcAddress: SRC_ADDR,
+      token: USDC_TOKEN,
+    });
+
+    expect(result).toBe(5_000n);
+    // Owner is srcAddress (the user), NOT the asset manager — the key difference from getDeposit.
+    expect(spy).toHaveBeenCalledWith({ owner: SRC_ADDR, coinType: USDC_TOKEN.address });
+  });
+
+  it('returns 0n only for a balance the fullnode confirmed as zero', async () => {
+    vi.spyOn(suiSpoke.publicClient, 'getBalance').mockResolvedValueOnce(makeCoinBalance(USDC_TOKEN.address, '0'));
+
+    await expect(
+      suiSpoke.getWalletBalance({ srcChainKey: SUI, srcAddress: SRC_ADDR, token: USDC_TOKEN }),
+    ).resolves.toBe(0n);
+  });
+
+  it('rejects rather than reporting zero when the fullnode read fails', async () => {
+    vi.spyOn(suiSpoke.publicClient, 'getBalance').mockRejectedValueOnce(new Error('HTTP 429'));
+
+    await expect(
+      suiSpoke.getWalletBalance({ srcChainKey: SUI, srcAddress: SRC_ADDR, token: USDC_TOKEN }),
+    ).rejects.toThrow('HTTP 429');
+  });
+});
+
+describe('SuiSpokeService.getWalletBalances', () => {
+  const SUI_TOKEN = suiConfig.supportedTokens.SUI;
+  const USDC_TOKEN = suiConfig.supportedTokens.USDC;
+  const BNUSD_TOKEN = suiConfig.supportedTokens.bnUSD;
+
+  const byCoinType = (balances: Record<string, string>) => (params: { coinType?: string | null | undefined }) => {
+    const total = params.coinType ? balances[params.coinType] : undefined;
+    if (total === undefined) return Promise.reject(new Error(`unexpected coinType=${params.coinType}`));
+    return Promise.resolve({
+      coinType: params.coinType,
+      coinObjectCount: 1,
+      totalBalance: total,
+      lockedBalance: {},
+    } as never);
+  };
+
+  it('keys each balance by the config token.address, not by the queried coinType', async () => {
+    vi.spyOn(suiSpoke.publicClient, 'getBalance').mockImplementation(
+      byCoinType({
+        // native is queried as the short form, but keyed by the padded config address
+        '0x2::sui::SUI': '100',
+        [BNUSD_TOKEN.address]: '200',
+        [USDC_TOKEN.address]: '300',
+      }),
+    );
+
+    const result = await suiSpoke.getWalletBalances({
+      srcChainKey: SUI,
+      srcAddress: SRC_ADDR,
+      tokens: [SUI_TOKEN, BNUSD_TOKEN, USDC_TOKEN],
+    });
+
+    expect(result).toEqual({
+      [SUI_TOKEN.address]: 100n,
+      [BNUSD_TOKEN.address]: 200n,
+      [USDC_TOKEN.address]: 300n,
+    });
+  });
+
+  it('reports a failing token as 0n via the logger and keeps the rest', async () => {
+    // A flat map cannot carry the failure, so the SDK logger is the only channel an integrator has
+    // to tell a fabricated 0n apart from a real empty balance — assert it actually fired.
+    const warnSpy = vi.spyOn(sodax.config.logger, 'warn');
+    const rpcError = new Error('HTTP 429');
+    vi.spyOn(suiSpoke.publicClient, 'getBalance').mockImplementation(params =>
+      params.coinType === BNUSD_TOKEN.address
+        ? Promise.reject(rpcError)
+        : byCoinType({ '0x2::sui::SUI': '100', [USDC_TOKEN.address]: '300' })(params),
+    );
+
+    const result = await suiSpoke.getWalletBalances({
+      srcChainKey: SUI,
+      srcAddress: SRC_ADDR,
+      tokens: [SUI_TOKEN, BNUSD_TOKEN, USDC_TOKEN],
+    });
+
+    expect(result[SUI_TOKEN.address]).toBe(100n);
+    expect(result[USDC_TOKEN.address]).toBe(300n);
+    expect(result[BNUSD_TOKEN.address]).toBe(0n);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('balance read failed'),
+      expect.objectContaining({ chainKey: SUI, token: BNUSD_TOKEN.address, error: rpcError.message }),
+    );
+  });
+
+  it('rejects when every token in a non-empty batch fails', async () => {
+    // An all-zero map from a dead fullnode is indistinguishable from an empty wallet, so the
+    // collector refuses to return one.
+    vi.spyOn(suiSpoke.publicClient, 'getBalance').mockRejectedValue(new Error('HTTP 503'));
+
+    await expect(
+      suiSpoke.getWalletBalances({
+        srcChainKey: SUI,
+        srcAddress: SRC_ADDR,
+        tokens: [SUI_TOKEN, BNUSD_TOKEN, USDC_TOKEN],
+      }),
+    ).rejects.toThrow(`every balance read failed on ${SUI}`);
+  });
+
+  it('treats a fullnode-confirmed 0n as a successful read, not a failure', async () => {
+    // The all-failed guard keys off read outcomes, not values: a wallet empty on every token must
+    // still resolve, and must log nothing.
+    const warnSpy = vi.spyOn(sodax.config.logger, 'warn');
+    vi.spyOn(suiSpoke.publicClient, 'getBalance').mockImplementation(
+      byCoinType({ [BNUSD_TOKEN.address]: '0', [USDC_TOKEN.address]: '0' }),
+    );
+
+    const result = await suiSpoke.getWalletBalances({
+      srcChainKey: SUI,
+      srcAddress: SRC_ADDR,
+      tokens: [BNUSD_TOKEN, USDC_TOKEN],
+    });
+
+    expect(result).toEqual({ [BNUSD_TOKEN.address]: 0n, [USDC_TOKEN.address]: 0n });
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('returns an empty map for an empty token list without touching the fullnode', async () => {
+    // `attempted === 0` must not trip the all-failed guard.
+    const spy = vi.spyOn(suiSpoke.publicClient, 'getBalance');
+
+    const result = await suiSpoke.getWalletBalances({ srcChainKey: SUI, srcAddress: SRC_ADDR, tokens: [] });
+
+    expect(result).toEqual({});
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+// =========================================================================
+// 16. waitForTransactionReceipt — every result branch + polling defaults
 // =========================================================================
 
 describe('SuiSpokeService.waitForTransactionReceipt', () => {

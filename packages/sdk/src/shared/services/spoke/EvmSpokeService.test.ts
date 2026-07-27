@@ -986,10 +986,68 @@ describe('EvmSpokeService.getWalletBalance / getWalletBalances', () => {
       tokens: [xtoken(ARB_NATIVE, ARB, 'ETH'), xtoken(ARB_TOKEN, ARB, 'bnUSD')],
     });
 
-    expect(result).toEqual({ [ARB_NATIVE]: 100n, [ARB_TOKEN]: 700n });
+    expect(result).toEqual({
+      [ARB_NATIVE]: 100n,
+      [ARB_TOKEN]: 700n,
+    });
     expect(nativeSpy).toHaveBeenCalledWith({ address: SRC_ADDR });
     expect(multicallSpy).toHaveBeenCalledWith({
       contracts: [{ abi: erc20Abi, address: ARB_TOKEN, functionName: 'balanceOf', args: [SRC_ADDR] }],
     });
+  });
+
+  it('reports a failed multicall entry as 0n and logs it, keeping the tokens that did resolve', async () => {
+    const warnSpy = vi.spyOn(sodax.config.logger, 'warn').mockImplementation(() => {});
+    vi.spyOn(arbClient, 'getBalance').mockResolvedValueOnce(100n);
+    // viem fans a rejected aggregate3 chunk out as one failure entry per call in that chunk.
+    const rpcError = new Error('HTTP 429');
+    vi.spyOn(arbClient, 'multicall').mockResolvedValueOnce([
+      { status: 'failure', error: rpcError, result: undefined },
+    ] as never);
+
+    const result = await evmSpoke.getWalletBalances({
+      srcChainKey: ARB,
+      srcAddress: SRC_ADDR,
+      tokens: [xtoken(ARB_NATIVE, ARB, 'ETH'), xtoken(ARB_TOKEN, ARB, 'bnUSD')],
+    });
+
+    expect(result[ARB_NATIVE]).toBe(100n);
+    expect(result[ARB_TOKEN]).toBe(0n);
+    // The zero is indistinguishable from an empty wallet, so the log line is the only signal a
+    // read failed — assert it fired for that token, or a silent zero could regress unnoticed.
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('balance read failed'),
+      expect.objectContaining({ chainKey: ARB, token: ARB_TOKEN, error: rpcError.message }),
+    );
+  });
+
+  it('rejects when no token in the batch could be read (a dead RPC must not look like an empty wallet)', async () => {
+    vi.spyOn(sodax.config.logger, 'warn').mockImplementation(() => {});
+    vi.spyOn(arbClient, 'getBalance').mockRejectedValueOnce(new Error('HTTP 429'));
+    vi.spyOn(arbClient, 'multicall').mockResolvedValueOnce([
+      { status: 'failure', error: new Error('HTTP 429'), result: undefined },
+    ] as never);
+
+    await expect(
+      evmSpoke.getWalletBalances({
+        srcChainKey: ARB,
+        srcAddress: SRC_ADDR,
+        tokens: [xtoken(ARB_NATIVE, ARB, 'ETH'), xtoken(ARB_TOKEN, ARB, 'bnUSD')],
+      }),
+    ).rejects.toThrow(`every balance read failed on ${ARB}`);
+  });
+
+  it('keeps a genuine on-chain zero as a successful read', async () => {
+    // An empty wallet returns 0n from every read; that must not trip the all-failed rule.
+    vi.spyOn(arbClient, 'getBalance').mockResolvedValueOnce(0n);
+    vi.spyOn(arbClient, 'multicall').mockResolvedValueOnce([{ status: 'success', result: 0n }] as never);
+
+    const result = await evmSpoke.getWalletBalances({
+      srcChainKey: ARB,
+      srcAddress: SRC_ADDR,
+      tokens: [xtoken(ARB_NATIVE, ARB, 'ETH'), xtoken(ARB_TOKEN, ARB, 'bnUSD')],
+    });
+
+    expect(result).toEqual({ [ARB_NATIVE]: 0n, [ARB_TOKEN]: 0n });
   });
 });

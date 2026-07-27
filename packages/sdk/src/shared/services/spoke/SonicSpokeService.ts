@@ -44,6 +44,7 @@ import type {
   SendMessageParams,
   DepositParams,
 } from '../../types/spoke-types.js';
+import { createBalanceCollector, settleWalletBalances, type WalletBalanceMap } from './balance-utils.js';
 import type { CreateIntentParams, Intent } from '../../types/intent-types.js';
 import type { ConfigService } from '../../config/ConfigService.js';
 
@@ -394,26 +395,27 @@ export class SonicSpokeService {
    * units. Non-native tokens are batched via multicall3 when the chain supports it, otherwise
    * read in parallel.
    * @param {GetBalancesParams<SonicChainKey>} params - The chain key, user address, and tokens.
-   * @returns {Promise<Record<string, bigint>>} A map of token address to balance.
+   * @returns {Promise<WalletBalanceMap>} A map of token address to balance in smallest units.
    */
-  public async getWalletBalances(params: GetBalancesParams<SonicChainKey>): Promise<Record<string, bigint>> {
+  public async getWalletBalances(params: GetBalancesParams<SonicChainKey>): Promise<WalletBalanceMap> {
     const { srcChainKey, srcAddress, tokens } = params;
-    const balances: Record<string, bigint> = {};
 
     const nativeTokens = tokens.filter(token => isNativeToken(srcChainKey, token));
     const nonNativeTokens = tokens.filter(token => !isNativeToken(srcChainKey, token));
 
-    await Promise.all(
-      nativeTokens.map(async token => {
-        balances[token.address] = await this.getWalletBalance({ srcChainKey, srcAddress, token });
-      }),
+    const collector = createBalanceCollector({ logger: this.config.logger, chainKey: srcChainKey });
+    await settleWalletBalances(collector, nativeTokens, token =>
+      this.getWalletBalance({ srcChainKey, srcAddress, token }),
     );
 
     if (nonNativeTokens.length === 0) {
-      return balances;
+      return collector.finish();
     }
 
     if (getEvmViemChain(srcChainKey).contracts?.multicall3) {
+      // allowFailure keeps a single reverting token (or a rate-limited aggregate3 chunk, which viem
+      // fans out as a failure entry per call) from discarding the balances that did resolve — but
+      // each failure must surface as such, never as a zero the UI would render as a real balance.
       const results = await this.publicClient.multicall({
         contracts: nonNativeTokens.map(token => ({
           abi: erc20Abi,
@@ -423,26 +425,25 @@ export class SonicSpokeService {
         })),
       });
       nonNativeTokens.forEach((token, index) => {
-        const result = results[index]?.result;
-        balances[token.address] = result != null ? BigInt(result) : 0n;
+        const result = results[index];
+        if (result?.status === 'success') {
+          collector.ok(token.address, BigInt(result.result));
+        } else {
+          collector.fail(token.address, result?.error ?? new Error(`missing multicall result for ${token.address}`));
+        }
       });
-      return balances;
+      return collector.finish();
     }
 
-    const nonNativeBalances = await Promise.all(
-      nonNativeTokens.map(token =>
-        this.publicClient.readContract({
-          address: token.address as Address,
-          abi: erc20Abi,
-          functionName: 'balanceOf',
-          args: [srcAddress],
-        }),
-      ),
+    await settleWalletBalances(collector, nonNativeTokens, token =>
+      this.publicClient.readContract({
+        address: token.address as Address,
+        abi: erc20Abi,
+        functionName: 'balanceOf',
+        args: [srcAddress],
+      }),
     );
-    nonNativeTokens.forEach((token, index) => {
-      balances[token.address] = nonNativeBalances[index] ?? 0n;
-    });
-    return balances;
+    return collector.finish();
   }
 
   /**

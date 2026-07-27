@@ -132,6 +132,7 @@ import {
   useSodaxContext,
   useSafeMutation,
   unwrapResult,
+  invalidateBalances,
   type MutationHookParams,
   type SafeUseMutationResult,
 } from '@sodax/dapp-kit';
@@ -149,8 +150,8 @@ export function useSwap<K extends SpokeChainKey = SpokeChainKey>({
     ...mutationOptions,
     mutationFn: async vars => unwrapResult(await sodax.swaps.swap({ ...vars, raw: false })),
     onSuccess: async (data, vars, ctx) => {
-      queryClient.invalidateQueries({ queryKey: ['shared', 'xBalances', vars.params.srcChainKey] });
-      queryClient.invalidateQueries({ queryKey: ['shared', 'xBalances', vars.params.dstChainKey] });
+      // Covers both balance query families; they never prefix-match each other.
+      invalidateBalances(queryClient, vars.params.srcChainKey, vars.params.dstChainKey);
       await mutationOptions?.onSuccess?.(data, vars, ctx);
     },
   });
@@ -232,7 +233,8 @@ Worked examples:
 // @ai-snippets-skip
 queryKey: ['mm', 'userReservesData', spokeChainKey, userAddress]
 queryKey: ['mm', 'allowance', srcChainKey, token, action]
-queryKey: ['shared', 'xBalances', xChainId, tokens, address]
+queryKey: ['shared', 'balances', chainKey, tokens, address]   // useBalances
+queryKey: ['shared', 'xBalances', xChainId, tokens, address] // useXBalances
 mutationKey: ['mm', 'supply']
 queryClient.invalidateQueries({ queryKey: ['dex', 'positionInfo', tokenId, poolKey] });
 ```
@@ -244,7 +246,8 @@ Hooks organized by feature domain in `src/hooks/`:
 ```
 hooks/
 ├── shared/     # useSodaxContext, useSafeMutation, unwrapResult, useEstimateGas,
-│               # useDeriveUserWalletAddress, useGetUserHubWalletAddress, useXBalances,
+│               # useDeriveUserWalletAddress, useGetUserHubWalletAddress,
+│               # useBalances, useXBalances, invalidateBalances,
 │               # useStellarTrustlineCheck, useRequestTrustline
 ├── provider/   # useHubProvider
 ├── swap/       # useQuote, useSwap, useStatus, useSwapAllowance, useSwapApprove,

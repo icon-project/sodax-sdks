@@ -81,17 +81,17 @@ describe('getBalancesQueryOptions', () => {
   });
 
   it('queryFn delegates to sodax.spoke.getWalletBalances and unwraps the Result value', async () => {
-    const expected = { '0xaaa': 42n };
+    const expected = { '0xaaa': 42n, '0xbbb': 0n };
     const sodax = makeSodax({ ok: true, value: expected });
 
-    const opts = getBalancesQueryOptions(sodax, { chainKey: 'sonic', tokens: [tokenA], address: '0xuser' });
+    const opts = getBalancesQueryOptions(sodax, { chainKey: 'sonic', tokens: [tokenA, tokenB], address: '0xuser' });
 
     const result = await opts.queryFn();
     expect(result).toEqual(expected);
     expect(sodax.spoke.getWalletBalances).toHaveBeenCalledWith({
       srcChainKey: 'sonic',
       srcAddress: '0xuser',
-      tokens: [tokenA],
+      tokens: [tokenA, tokenB],
     });
   });
 

@@ -83,7 +83,14 @@ function TokenBalance({ address, xTokens }: { address: string; xTokens: readonly
 
 ### SDK-backed alternative: `useBalances`
 
-`useBalances` reads the same wallet balances straight from the core SDK (`sodax.spoke.getWalletBalances`) via the `SodaxProvider` context, so it drops the `xService` requirement — no `@sodax/wallet-sdk-react` hook needed. Prefer it when the app already has a `SodaxProvider`; the params collapse to the token-side `chainKey`, the `tokens` list, and the `address`:
+`useBalances` reads wallet balances straight from the core SDK (`sodax.spoke.getWalletBalances`) via the `SodaxProvider` context, so it drops the `xService` requirement — no `@sodax/wallet-sdk-react` hook needed. Prefer it when the app already has a `SodaxProvider`; the params collapse to `chainKey`, the `tokens` list, and the `address`.
+
+The two hooks are not drop-in equivalents — check these before migrating a screen:
+
+- `chainKey` decides the chain read, and a token whose `chainKey` differs is rejected. `useXBalances` instead derives the chain from `xTokens[0].chainKey` and ignores the `xChainId` you pass.
+- A token that could not be read is logged by the SDK and reported as `0n`, so it is indistinguishable from an empty wallet. The query errors only when the entire batch is unusable.
+- Stellar XLM is the *spendable* amount (total minus minimum reserve and selling liabilities); Bitcoin Rune tokens read as `0n` because the UTXO endpoint carries no rune amounts.
+
 
 ```tsx
 import { useBalances } from '@sodax/dapp-kit';

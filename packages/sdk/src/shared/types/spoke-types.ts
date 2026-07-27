@@ -62,6 +62,14 @@ export type GetDepositParams<ChainKey extends SpokeChainKey = SpokeChainKey> = {
  * the token by raw address), this reads the balance held by `srcAddress` itself. `token` is
  * the full {@link XToken} so the reader can detect the native coin and resolve chain-specific
  * token identifiers (EVM erc20 address, Solana mint, Sui coinType, Soroban contract, …).
+ *
+ * Invariant TypeScript cannot express: `token.chainKey` MUST equal `srcChainKey`. The reader picks
+ * its RPC provider from `srcChainKey` and the on-chain identifier from `token.address`, so a
+ * divergence would read the wrong chain; the router rejects it with an unsuccessful `Result`.
+ *
+ * Failure contract: this single-token read REJECTS on a network, RPC, or contract-read failure, and
+ * the router turns that into an unsuccessful `Result`. The batch variant is deliberately more
+ * forgiving — see {@link GetBalancesParams}.
  */
 export type GetBalanceParams<ChainKey extends SpokeChainKey = SpokeChainKey> = {
   srcChainKey: ChainKey; // The chain key of the spoke (origin) chain
@@ -71,8 +79,18 @@ export type GetBalanceParams<ChainKey extends SpokeChainKey = SpokeChainKey> = {
 
 /**
  * Parameters for reading a user's own wallet balances of multiple tokens on a spoke chain.
- * Returns a `Record<tokenAddress, bigint>` in smallest units. Per-chain implementations may
- * batch the reads (e.g. EVM multicall3, ICON aggregated call data).
+ * Per-chain implementations batch the reads where the chain supports it (EVM multicall3, ICON
+ * `tryAggregate`, Injective portfolio).
+ *
+ * Returns `Record<tokenAddress, bigint>` in smallest units. A token that could not be read is logged
+ * through the SDK logger and reported as `0n`, so one flaky token never discards the balances that
+ * did resolve. Callers therefore cannot tell a failed read from an empty wallet; the direction is
+ * deliberately conservative — under-reporting blocks a spend, it never permits one.
+ *
+ * The `Result` fails when the whole batch is unusable: an invalid chain key, the `token.chainKey`
+ * invariant on {@link GetBalanceParams} being violated, a shared round-trip every token depends on
+ * (ICON `tryAggregate`, Injective's portfolio fetch), or a batch in which NO token could be read —
+ * a dead or rate-limited RPC would otherwise render as "this wallet is empty on every asset".
  */
 export type GetBalancesParams<ChainKey extends SpokeChainKey = SpokeChainKey> = {
   srcChainKey: ChainKey; // The chain key of the spoke (origin) chain
