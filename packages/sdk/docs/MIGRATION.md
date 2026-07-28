@@ -23,7 +23,7 @@ const iconChainKey: SpokeChainKey = ChainKeys.ICON_MAINNET;
 const migrationTokens = ['ICX', 'bnUSD', 'BALN'] as const;
 ```
 
-Please refer to [SDK ChainKeys](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/constants/index.ts) for more. For a direct mapping from old `*_CHAIN_ID` constants to `ChainKeys.*` see `packages/sdk/CHAIN_ID_MIGRATION.md`.
+Please refer to [SDK ChainKeys](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/chains/chain-keys.ts) for more. For a direct mapping from old `*_CHAIN_ID` constants to `ChainKeys.*` see `packages/sdk/CHAIN_ID_MIGRATION.md`.
 
 ### Wallet Providers
 

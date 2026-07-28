@@ -13,7 +13,7 @@ const sodax = new Sodax();
 const quote = await sodax.swaps.getQuote(quoteRequest);
 ```
 
-> **`sodax.swaps` vs `sodax.api.swaps`.** This page documents `sodax.swaps` (`SwapService`) — the end-to-end intent orchestrator that creates, relays, and finalizes swaps on-chain. The lower-level typed HTTP client for the backend Swaps API v2 (quote, create-intent, submit-tx, status, fees — 21 endpoints) is `sodax.api.swaps` (`SwapsApiService`); see [`SWAPS_API.md`](SWAPS_API.md).
+> **`sodax.swaps` vs `sodax.api.swaps`.** This page documents `sodax.swaps` (`SwapService`) — the end-to-end intent orchestrator that creates, relays, and finalizes swaps on-chain. The lower-level typed HTTP client for the backend Swaps API v2 (quote, create-intent, submit-tx, status, fees — 21 endpoints) is `sodax.api.swaps` (`SwapsApiService`); see [`SWAPS_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS_API.md).
 
 ## Using SDK Config and Constants
 
@@ -64,7 +64,7 @@ All swap methods are accessible through `sodax.swaps`:
 
 By default `swap()` relays + post-executes entirely client-side. Opt into a backend-driven 2-step flow with `new Sodax({ swapsOptions: { useBackendSubmitTx: true } })`: after creating + verifying the intent tx, `swap()` hands it to the backend (`sodax.api.swaps.submitTx`), which relays + post-executes server-side; the SDK polls submit-tx status and returns the same `SwapResponse`.
 
-On **any** non-success (submission rejected, terminal `failed`/abandoned, or poll timeout) `swap()` **falls back** to the client-side relay so the swap still completes — identical `SwapResponse` either way. This is **safe**: re-relaying / re-posting an already-processed swap is idempotent — the relay dedups and returns the existing `executed` packet, and the solver re-affirms the intent (no double-fill), verified live by `e2e-tests/e2e-relay.test.ts`. The backend poll and the fallback also share one `timeout` budget, so total latency never exceeds a single `timeout`. `swapsOptions` is a client-side runtime option (like `logger`), not part of the backend `SodaxConfig`. See [CONFIGURE_SDK.md](./CONFIGURE_SDK.md#backend-submit-tx-2-step-swapsoptionsusebackendsubmittx).
+On **any** non-success (submission rejected, terminal `failed`/abandoned, or poll timeout) `swap()` **falls back** to the client-side relay so the swap still completes — identical `SwapResponse` either way. This is **safe**: re-relaying / re-posting an already-processed swap is idempotent — the relay dedups and returns the existing `executed` packet, and the solver re-affirms the intent (no double-fill), verified live by `e2e-tests/e2e-relay.test.ts`. The backend poll and the fallback also share one `timeout` budget, so total latency never exceeds a single `timeout`. `swapsOptions` is a client-side runtime option (like `logger`), not part of the backend `SodaxConfig`. See [CONFIGURE_SDK.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md#backend-submit-tx-2-step-swapsoptionsusebackendsubmittx).
 
 ### Intent Management
 
