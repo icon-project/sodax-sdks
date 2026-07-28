@@ -140,7 +140,7 @@ const sodax = new Sodax({
 });
 ```
 
-Each event carries `feature` + `action` + `phase` (`'start' | 'success' | 'failure'`) + `level` + an optional `data` payload — the same `(feature, action)` taxonomy the error layer uses, so events line up with `SodaxError`s downstream. The `tracker` is treated as fire-and-forget: it is not awaited and any error it throws is swallowed, so analytics can never break a feature flow. Types (`AnalyticsConfig`, `AnalyticsTracker`, `AnalyticsEvent`, `AnalyticsFeatures`, `AnalyticsOption`) live in [`@sodax/types`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/shared/analytics.ts).
+Each event carries `feature` + `action` + `phase` (`'start' | 'success' | 'failure'`) + `level` + an optional `data` payload — the same `(feature, action)` taxonomy the error layer uses, so events line up with `SodaxError`s downstream. The `tracker` is treated as fire-and-forget: it is not awaited, and any **synchronous** exception it throws is swallowed, so a throwing tracker cannot break a feature flow. The `AnalyticsTracker` contract requires the tracker to be cheap and non-throwing — if your adapter is `async`, handle rejections inside it, because the SDK does not observe the returned promise. Types (`AnalyticsConfig`, `AnalyticsTracker`, `AnalyticsEvent`, `AnalyticsFeatures`, `AnalyticsOption`) live in [`@sodax/types`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/shared/analytics.ts).
 
 ## Custom configuration
 

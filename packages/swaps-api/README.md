@@ -20,8 +20,10 @@ directly when you want just the swaps backend without pulling in the full SDK.
 pnpm add @sodax/swaps-api
 ```
 
-`valibot` is a bundled runtime dependency, not a peer — you don't need to install
-it separately.
+`valibot` is an ordinary runtime dependency, not a peer — your package manager
+installs it automatically, so there is no separate install step. The build keeps
+it **external** rather than inlining it, so it stays a single shared copy in your
+dependency graph instead of a second one baked into `dist`.
 
 ## Usage
 
