@@ -1,6 +1,6 @@
 # Swaps (Solver)
 
-The swap module provides abstractions for interacting with cross-chain Intent Smart Contracts, the Solver API, and the Relay API.
+The swap module provides abstractions for interacting with cross-chain Intent Smart Contracts, the solver API, and the Relay API.
 
 All swap operations are accessed through the `swaps` property of a `Sodax` instance:
 
