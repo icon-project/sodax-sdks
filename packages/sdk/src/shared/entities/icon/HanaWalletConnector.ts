@@ -39,108 +39,108 @@ export type RelayRequestSigning = {
   };
 };
 
-
 interface RelayResponseEventDetail {
   type: HanaWalletResponseEvent;
   payload: unknown;
 }
 
-export function requestAddress(): Promise<Result<IconAddress>> {
-  return new Promise(resolve => {
-    const eventHandler = (event: Event) => {
-      const customEvent = event as CustomEvent<RelayResponseEventDetail>;
-      const response = customEvent.detail;
-      if (isResponseAddressType(response)) {
-        window.removeEventListener('ICONEX_RELAY_RESPONSE', eventHandler as EventListener, false);
-        resolve({
-          ok: true,
-          value: response.payload,
-        });
-      }
-    };
+const ICONEX_RELAY_REQUEST = 'ICONEX_RELAY_REQUEST';
+const ICONEX_RELAY_RESPONSE = 'ICONEX_RELAY_RESPONSE';
+const DEFAULT_JSON_RPC_ID = 99999;
+// Upper bound for a single ICONEX round-trip. Deliberately generous because signing/tx
+// approval is user-interactive; its purpose is to release the serialization queue and the
+// response listener when the wallet never answers (e.g. the popup is closed), not to rush
+// the user.
+const ICONEX_REQUEST_TIMEOUT_MS = 300_000;
 
-    window.removeEventListener('ICONEX_RELAY_RESPONSE', eventHandler, false);
-    window.addEventListener('ICONEX_RELAY_RESPONSE', eventHandler, false);
-    window.dispatchEvent(
-      new CustomEvent<RelayRequestDetail>('ICONEX_RELAY_REQUEST', {
-        detail: {
-          type: 'REQUEST_ADDRESS',
-        },
-      }),
-    );
-  });
+type IconexMatch<T> =
+  | { readonly kind: 'resolve'; readonly value: T }
+  | { readonly kind: 'reject'; readonly error: Error }
+  | { readonly kind: 'wait' };
+
+// The ICONEX relay is a single shared window-event channel with no per-request correlation
+// id. Serializing requests guarantees at most one is in flight, so a response can never
+// resolve a different request's promise. Each request times out and removes its listener on
+// settle. (Security audit WALLET-L-1.)
+let iconexQueue: Promise<unknown> = Promise.resolve();
+
+function sendIconexRequest<T>(
+  request: RelayRequestDetail | RelayRequestSigning,
+  match: (detail: RelayResponseEventDetail) => IconexMatch<T>,
+): Promise<T> {
+  const run = (): Promise<T> =>
+    new Promise<T>((resolve, reject) => {
+      if (typeof window === 'undefined') {
+        reject(new Error('ICONEX relay requests require a browser environment'));
+        return;
+      }
+      let settled = false;
+      let timer: ReturnType<typeof setTimeout>;
+      const settle = (apply: () => void): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        window.removeEventListener(ICONEX_RELAY_RESPONSE, handler as EventListener, false);
+        apply();
+      };
+      const handler = (event: Event): void => {
+        const result = match((event as CustomEvent<RelayResponseEventDetail>).detail);
+        if (result.kind === 'wait') return;
+        settle(result.kind === 'resolve' ? () => resolve(result.value) : () => reject(result.error));
+      };
+      timer = setTimeout(
+        () => settle(() => reject(new Error('ICONEX relay request timed out'))),
+        ICONEX_REQUEST_TIMEOUT_MS,
+      );
+      window.addEventListener(ICONEX_RELAY_RESPONSE, handler as EventListener, false);
+      window.dispatchEvent(new CustomEvent(ICONEX_RELAY_REQUEST, { detail: request }));
+    });
+
+  // Serialize: run after the previous request settles. The tail swallows outcomes so the
+  // queue promise never rejects — hence a single `.then(run)` is enough and a failed request
+  // can't poison the ones behind it.
+  const result = iconexQueue.then(run);
+  iconexQueue = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
+
+export function requestAddress(): Promise<Result<IconAddress>> {
+  return sendIconexRequest<Result<IconAddress>>({ type: 'REQUEST_ADDRESS' }, detail =>
+    isResponseAddressType(detail) ? { kind: 'resolve', value: { ok: true, value: detail.payload } } : { kind: 'wait' },
+  );
 }
 
 export function requestSigning(from: IconAddress, hash: string): Promise<Result<string>> {
-  return new Promise((resolve, reject) => {
-    const signRequest = new CustomEvent<RelayRequestSigning>('ICONEX_RELAY_REQUEST', {
-      detail: {
-        type: 'REQUEST_SIGNING',
-        payload: {
-          from,
-          hash,
-        },
-      },
-    });
-
-    const eventHandler = (event: Event) => {
-      const customEvent = event as CustomEvent<RelayResponseEventDetail>;
-      const response = customEvent.detail;
-      if (isResponseSigningType(response)) {
-        window.removeEventListener('ICONEX_RELAY_RESPONSE', eventHandler as EventListener, false);
-
-        // resolve signature
-        resolve({
-          ok: true,
-          value: response.payload,
-        });
-      } else if (response.type === 'CANCEL_SIGNING') {
-        reject(new Error('CANCEL_SIGNING'));
-      }
-    };
-
-    window.removeEventListener('ICONEX_RELAY_RESPONSE', eventHandler as EventListener, false);
-    window.addEventListener('ICONEX_RELAY_RESPONSE', eventHandler as EventListener, false);
-    window.dispatchEvent(signRequest);
+  return sendIconexRequest<Result<string>>({ type: 'REQUEST_SIGNING', payload: { from, hash } }, detail => {
+    if (isResponseSigningType(detail)) return { kind: 'resolve', value: { ok: true, value: detail.payload } };
+    if (detail.type === 'CANCEL_SIGNING') return { kind: 'reject', error: new Error('CANCEL_SIGNING') };
+    return { kind: 'wait' };
   });
 }
 
-export function requestJsonRpc(rawTransaction: unknown, id = 99999): Promise<Result<JsonRpcPayloadResponse>> {
-  return new Promise((resolve, reject) => {
-    const eventHandler = (event: Event) => {
-      const customEvent = event as CustomEvent<RelayResponseEventDetail>;
-      const { type, payload } = customEvent.detail;
+export function requestJsonRpc(
+  rawTransaction: unknown,
+  id = DEFAULT_JSON_RPC_ID,
+): Promise<Result<JsonRpcPayloadResponse>> {
+  return sendIconexRequest<Result<JsonRpcPayloadResponse>>(
+    {
+      type: 'REQUEST_JSON-RPC',
+      payload: { jsonrpc: '2.0', method: 'icx_sendTransaction', params: rawTransaction, id },
+    },
+    detail => {
+      const { type, payload } = detail;
       if (type === 'RESPONSE_JSON-RPC') {
-        window.removeEventListener('ICONEX_RELAY_RESPONSE', eventHandler as EventListener, false);
-
-        if (isJsonRpcPayloadResponse(payload)) {
-          resolve({
-            ok: true,
-            value: payload,
-          });
-        } else {
-          reject(new Error('Invalid payload response type (expected JsonRpcPayloadResponse)'));
-        }
-      } else if (type === 'CANCEL_JSON-RPC') {
-        window.removeEventListener('ICONEX_RELAY_RESPONSE', eventHandler as EventListener, false);
-        reject(new Error('CANCEL_JSON-RPC'));
+        // Serialization guarantees this is a response to the one in-flight request. Accept a
+        // well-formed payload; a malformed RESPONSE_JSON-RPC is a hard error (fail fast rather
+        // than hang until the timeout).
+        if (isJsonRpcPayloadResponse(payload)) return { kind: 'resolve', value: { ok: true, value: payload } };
+        return { kind: 'reject', error: new Error('Invalid payload response type (expected JsonRpcPayloadResponse)') };
       }
-    };
-
-    window.removeEventListener('ICONEX_RELAY_RESPONSE', eventHandler as EventListener, false);
-    window.addEventListener('ICONEX_RELAY_RESPONSE', eventHandler as EventListener, false);
-    window.dispatchEvent(
-      new CustomEvent<RelayRequestDetail>('ICONEX_RELAY_REQUEST', {
-        detail: {
-          type: 'REQUEST_JSON-RPC',
-          payload: {
-            jsonrpc: '2.0',
-            method: 'icx_sendTransaction',
-            params: rawTransaction,
-            id: id,
-          },
-        },
-      }),
-    );
-  });
+      if (type === 'CANCEL_JSON-RPC') return { kind: 'reject', error: new Error('CANCEL_JSON-RPC') };
+      return { kind: 'wait' };
+    },
+  );
 }
