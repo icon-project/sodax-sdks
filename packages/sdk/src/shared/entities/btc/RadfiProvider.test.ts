@@ -250,4 +250,52 @@ describe('RadfiProvider — signer hook (x-api-signature, gh-831)', () => {
     const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
     expect(headers['x-api-signature']).toBeUndefined();
   });
+
+  it('invokes the signer per request, never caching its result', async () => {
+    // Bound's signature embeds a timestamp valid for 60s. A provider outlives that window, so the
+    // hook must be re-invoked on every call — caching would start replaying an expired signature.
+    let call = 0;
+    const signer = vi.fn(() => ({ 'x-api-signature': `sig_${++call}` }));
+    fetchMock.mockResolvedValue(
+      makeResponse(200, JSON.stringify({ data: { tradingAddress: 'bc1ptrade', userAddress: 'bc1puser' } })),
+    );
+    const radfi = new RadfiProvider(baseConfig, signer);
+
+    await radfi.getTradingWallet('bc1puser');
+    await radfi.getTradingWallet('bc1puser');
+
+    expect(signer).toHaveBeenCalledTimes(2);
+    const headerOf = (i: number) =>
+      ((fetchMock.mock.calls[i][1] as RequestInit).headers as Record<string, string>)['x-api-signature'];
+    expect(headerOf(0)).toBe('sig_1');
+    expect(headerOf(1)).toBe('sig_2');
+  });
+
+  it('propagates a throwing signer instead of sending the request unsigned', async () => {
+    // A misconfigured backend credential must fail loudly here; silently dropping the header would
+    // surface as an opaque 403 from Bound's gateway with no local trace of the cause.
+    const signer = vi.fn(() => {
+      throw new Error('credential unavailable');
+    });
+    fetchMock.mockResolvedValue(makeResponse(200, JSON.stringify({ data: { base64Psbt: 'x', txId: 'y' } })));
+    const radfi = new RadfiProvider(baseConfig, signer);
+
+    await expect(radfi.createWithdrawTransaction(withdrawParams, 'tok')).rejects.toThrow('credential unavailable');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('lets signer headers win over per-call headers — so a signer must not return Authorization', async () => {
+    // Pinning the documented precedence: `request()` spreads the signer LAST. That is what lets a
+    // signer set transport-level headers, but it also means a signer returning `Authorization` would
+    // silently replace the per-user bearer. Callers own that constraint; this test makes it visible.
+    const signer = vi.fn().mockReturnValue({ 'x-api-signature': 'sig', Authorization: 'Bearer signer-wins' });
+    fetchMock.mockResolvedValue(makeResponse(200, JSON.stringify({ data: { base64Psbt: 'x', txId: 'y' } })));
+    const radfi = new RadfiProvider(baseConfig, signer);
+
+    await radfi.createWithdrawTransaction(withdrawParams, 'user-access-token');
+
+    const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer signer-wins');
+    expect(headers['Content-Type']).toBe('application/json');
+  });
 });
