@@ -28,6 +28,7 @@ export type StakingActionType = 'stake' | 'unstake' | 'instantUnstake' | 'claim'
 /** Codes the `stake` orchestrator can return — only one that calls `verifyTxHash`. */
 export type StakeOrchestrationErrorCode = Extract<
   SodaxErrorCode,
+  | 'USER_REJECTED'
   | 'VALIDATION_FAILED'
   | 'INTENT_CREATION_FAILED'
   | 'TX_VERIFICATION_FAILED'
@@ -61,6 +62,7 @@ export type StakingInfoFetchError = SodaxError<StakingInfoFetchErrorCode>;
 export type StakingError = SodaxError<StakingErrorCode>;
 
 const STAKE_ORCHESTRATION_CODES: ReadonlySet<StakeOrchestrationErrorCode> = new Set([
+  'USER_REJECTED',
   'VALIDATION_FAILED',
   'INTENT_CREATION_FAILED',
   'TX_VERIFICATION_FAILED',
@@ -72,6 +74,7 @@ const STAKE_ORCHESTRATION_CODES: ReadonlySet<StakeOrchestrationErrorCode> = new 
 ]);
 
 const STAKING_ORCHESTRATION_CODES: ReadonlySet<StakingOrchestrationErrorCode> = new Set([
+  'USER_REJECTED',
   'VALIDATION_FAILED',
   'INTENT_CREATION_FAILED',
   'TX_SUBMIT_FAILED',
@@ -82,6 +85,7 @@ const STAKING_ORCHESTRATION_CODES: ReadonlySet<StakingOrchestrationErrorCode> = 
 ]);
 
 const STAKING_CODES: ReadonlySet<StakingErrorCode> = new Set<StakingErrorCode>([
+  'USER_REJECTED',
   'VALIDATION_FAILED',
   'INTENT_CREATION_FAILED',
   'TX_VERIFICATION_FAILED',

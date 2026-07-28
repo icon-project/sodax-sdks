@@ -3,8 +3,8 @@
   "private": true,
   "version": "0.0.1",
   "license": "MIT",
-  "description": "Static brand assets (chain logos) for @sodax/* SDKs, served via raw.githubusercontent.com — never bundled into the SDK packages",
-  "keywords": ["sodax", "assets", "logos", "chains"],
+  "description": "Static brand assets (chain and token logos) for @sodax/* SDKs, served via raw.githubusercontent.com — never bundled into the SDK packages",
+  "keywords": ["sodax", "assets", "logos", "chains", "tokens"],
   "homepage": "https://github.com/icon-project/sodax-sdks/tree/main/packages/assets",
   "bugs": {
     "url": "https://github.com/icon-project/sodax-sdks/issues"
@@ -17,7 +17,7 @@
   "engines": {
     "node": ">=20.0.0"
   },
-  "files": ["chain", "AGENTS.md", "README.md"],
+  "files": ["chain", "token", "AGENTS.md", "README.md"],
   "scripts": {
     "clean": "rm -rf node_modules && rm -rf .turbo"
   }

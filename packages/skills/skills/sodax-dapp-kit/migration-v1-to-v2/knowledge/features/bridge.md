@@ -151,7 +151,7 @@ The hook equivalence in code:
 1. **`useGetBridgeableAmount` data shape changed.** v1 returned bare `bigint`; v2 returns `Result<BridgeLimit>` where `BridgeLimit = { amount, decimals, type }`. UI code that displayed the bigint directly needs `.value.amount`.
 2. **Tokens must share the same vault** to be bridgeable. Use `useGetBridgeableTokens` to enumerate compatible destinations — passing an incompatible pair to `bridge()` rejects with `VALIDATION_FAILED`.
 3. **`useBridge` return is `TxHashPair`** — destructure as `{ srcChainTxHash, dstChainTxHash }`, not `[a, b]`.
-4. **`recipient` field renamed to `dstAddress`** for consistency with the rest of the SDK.
+4. **`recipient` is NOT renamed.** It stays `recipient` in v2 (the destination receiver). Don't be tempted to rename it to `dstAddress` — that field shape lives on money-market params, not bridge. The genuinely new field is `srcAddress` (the spoke-side sender), which v1 didn't require.
 
 ## Cross-references
 

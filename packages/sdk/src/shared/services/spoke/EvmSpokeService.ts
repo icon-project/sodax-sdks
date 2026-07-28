@@ -19,12 +19,26 @@ import type {
 import { Erc20Service, type Erc20IsAllowanceParams } from '../erc-20/Erc20Service.js';
 import type { ConfigService } from '../../config/ConfigService.js';
 import {
+  ChainKeys,
   type EvmSpokeOnlyChainKey,
   type Result,
   type TxReturnType,
   getIntentRelayChainId,
   type EvmReturnType,
 } from '@sodax/types';
+
+/**
+ * Scales a native-token amount from the token's canonical decimals to the EVM
+ * msg.value decimals for chains where they differ (currently only Hedera).
+ *
+ * Why: HBAR is tracked as 8 decimals in spoke accounting, but Hedera's EVM
+ * layer treats native value as 18 decimals — so msg.value must be multiplied
+ * by 10^10 even though the asset-manager `transfer` argument stays in 8.
+ */
+const HEDERA_NATIVE_VALUE_SCALE = 10n ** 10n;
+function scaleNativeMsgValue(chainKey: EvmSpokeOnlyChainKey, amount: bigint): bigint {
+  return chainKey === ChainKeys.HEDERA_MAINNET ? amount * HEDERA_NATIVE_VALUE_SCALE : amount;
+}
 
 export type CreateViemPublicClientParams = {
   chainId: EvmSpokeOnlyChainKey;
@@ -132,10 +146,11 @@ export class EvmSpokeService {
   ): Promise<TxReturnType<EvmSpokeOnlyChainKey, Raw>> {
     const { srcChainKey, srcAddress: from, token, to, amount, data = '0x' } = params;
     const chainConfig = this.config.getChainConfig(srcChainKey);
+    const isNative = token.toLowerCase() === chainConfig.nativeToken.toLowerCase();
     const rawTx: EvmReturnType<true> = {
       from: from,
       to: chainConfig.addresses.assetManager,
-      value: token.toLowerCase() === chainConfig.nativeToken.toLowerCase() ? amount : 0n,
+      value: isNative ? scaleNativeMsgValue(srcChainKey, amount) : 0n,
       data: encodeFunctionData({
         abi: spokeAssetManagerAbi,
         functionName: 'transfer',

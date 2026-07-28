@@ -31,12 +31,14 @@ Read-only data hooks. No wallet connection required.
 | `useBackendMoneyMarketAssetBorrowers` | Borrowers for an asset |
 | `useBackendAllMoneyMarketBorrowers` | All borrowers |
 
-### Swap Submission
+### Swaps API (`sodax.api.swaps`)
 
 | Hook | Purpose |
 |------|---------|
-| `useBackendSubmitSwapTx` | Submit swap tx to backend |
-| `useBackendSubmitSwapTxStatus` | Check submitted swap status |
+| `useSwapsApiSubmitTx` | Submit swap tx to backend |
+| `useSwapsApiSubmitTxStatus` | Check submitted swap status |
+
+The full Swaps API v2 surface (quote, allowance, approve, create/submit/cancel intent, fees, gas, …) is wrapped one hook per endpoint under the `useSwapsApi*` prefix — see [hooks-index.md](../reference/hooks-index.md).
 
 ## Track Intent
 
@@ -126,19 +128,20 @@ const { data } = useBackendIntentByTxHash({
 
 ## Submit a Swap Tx
 
-`useBackendSubmitSwapTx` is a mutation hook. Per-call config (e.g. backend base URL) flows through `mutate(vars)`; TanStack Query knobs flow through the optional `mutationOptions` slot:
+`useSwapsApiSubmitTx` is a mutation hook. The `request` is a `SubmitTxRequestV2`; per-call config (e.g. backend base URL) flows through `mutate(vars)`, and TanStack Query knobs through the optional `mutationOptions` slot:
 
 ```tsx
-import { useBackendSubmitSwapTx } from '@sodax/dapp-kit';
+import { useSwapsApiSubmitTx } from '@sodax/dapp-kit';
+import type { SubmitTxRequestV2 } from '@sodax/sdk';
 
-function SubmitButton({ swapPayload, baseURL }) {
-  const { mutateAsync: submitSwapTx, isPending } = useBackendSubmitSwapTx({
+function SubmitButton({ request, baseURL }: { request: SubmitTxRequestV2; baseURL: string }) {
+  const { mutateAsync: submitSwapTx, isPending } = useSwapsApiSubmitTx({
     mutationOptions: { retry: 5 }, // overrides default retry: 3
   });
 
   const handleSubmit = async () => {
     const response = await submitSwapTx({
-      request: swapPayload,
+      request,
       apiConfig: { baseURL }, // per-call backend override
     });
     console.log('Submitted:', response);
@@ -148,10 +151,22 @@ function SubmitButton({ swapPayload, baseURL }) {
 }
 ```
 
+Poll the processing status with `useSwapsApiSubmitTxStatus` — it requires **both** `txHash` and `srcChainKey` (the v2 status endpoint needs the source chain key) and stops polling on `solved` / `failed`:
+
+```tsx
+import { useSwapsApiSubmitTxStatus } from '@sodax/dapp-kit';
+
+function SwapStatus({ txHash, srcChainKey }: { txHash: string; srcChainKey: string }) {
+  const { data } = useSwapsApiSubmitTxStatus({ params: { txHash, srcChainKey } });
+  return <span>{data?.data?.status ?? 'idle'}</span>;
+}
+```
+
 ## Default Polling
 
 | Hook | Interval |
 |------|---------|
 | `useBackendIntentByTxHash` | 1s |
+| `useSwapsApiSubmitTxStatus` | 1s (stops on `solved` / `failed`) |
 | `useBackendOrderbook` | none (`staleTime: 30s`, no auto-refetch) |
 | Others | No auto-refresh |

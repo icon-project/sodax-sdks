@@ -11,10 +11,10 @@ Pair: [`features/recovery.md`](../../../integration/knowledge/features/recovery.
 If you have v1 code that worked around the absence (e.g. manually walked the hub wallet abstraction to find stuck assets), replace it with `fetchHubAssetBalances` + `withdrawHubAsset`:
 
 ```ts
-const balances = await sodax.recovery.fetchHubAssetBalances({ /* user / hub-wallet args */ });
+const balances = await sodax.recovery.fetchHubAssetBalances({ chainKey, srcAddress });
 if (balances.ok && balances.value.length > 0) {
   await sodax.recovery.withdrawHubAsset({
-    params: { /* hub-asset address, amount, destination spoke chain + address */ },
+    params: { /* token (the spoke-side token address, i.e. spokeTokenAddress), amount, srcChainKey, srcAddress (also the withdrawal destination) */ },
     raw: false,
     walletProvider: sonicWp,
   });

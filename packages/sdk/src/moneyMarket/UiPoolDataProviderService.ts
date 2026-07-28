@@ -213,6 +213,16 @@ export class UiPoolDataProviderService implements UiPoolDataProviderInterface {
       // User debt is stored scaled by bnUSD's index, so reading it back requires the same index.
       // Using the vault's index here would inflate the displayed debt amount.
       variableBorrowIndex: bnUSDReserve.variableBorrowIndex,
+      // The debt index/rate are only meaningful paired with the debt token's OWN lastUpdateTimestamp.
+      // Downstream formatters accrue debt as
+      //   scaledDebt × variableBorrowIndex × compound(variableBorrowRate, now − lastUpdateTimestamp).
+      // The spread above inherits the *vault's* lastUpdateTimestamp, which is typically much staler
+      // than the debt token's (the vault is low-activity), so the debt index gets compounded over the
+      // wrong (too-long) window — injecting phantom interest and over-stating displayed debt. Pin the
+      // timestamp to the debt reserve so the (index, rate, lastUpdateTimestamp) triple is consistent.
+      // The vault supply side is unaffected: its liquidityRate is 0, so liquidityIndex does not accrue
+      // over time and is independent of lastUpdateTimestamp.
+      lastUpdateTimestamp: bnUSDReserve.lastUpdateTimestamp,
       borrowingEnabled: bnUSDReserve.borrowingEnabled,
     };
 

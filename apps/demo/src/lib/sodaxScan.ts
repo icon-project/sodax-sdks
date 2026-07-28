@@ -4,6 +4,15 @@
 /** Base URL for SodaxScan; change here if the domain or path changes. */
 export const SODAX_SCAN_BASE_URL = 'https://sodaxscan.com';
 
+/**
+ * Direct SodaxScan message URL that resolves a tx hash client-side — no API call from our app.
+ * The /messages/search page looks the hash up itself (src/dest/intent tx), so the link works
+ * without us hitting /api/search (which is CORS-locked) or knowing the numeric message id.
+ */
+export function sodaxScanSearchUrl(value: string): string {
+  return `${SODAX_SCAN_BASE_URL}/messages/search?value=${encodeURIComponent(value)}`;
+}
+
 /** SodaxScan search API path (used to resolve hash to message id). */
 const SODAX_SCAN_SEARCH_PATH = '/api/search';
 

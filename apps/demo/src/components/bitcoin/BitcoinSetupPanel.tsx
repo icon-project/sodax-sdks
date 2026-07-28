@@ -28,15 +28,19 @@ interface BitcoinSetupPanelProps {
   onReadyChange: (isReady: boolean) => void;
   nativeBalance?: bigint;
   isNativeBalanceLoading?: boolean;
-  connectorName?: string;
-  connectorIcon?: string;
   /** When true, skip balance > 0 check (destination side doesn't need existing balance) */
   isDestination?: boolean;
 }
 
 type BtcAddressType = BtcWalletAddressType;
 
-export const BitcoinSetupPanel = ({ walletProvider, onReadyChange, nativeBalance, isNativeBalanceLoading, connectorName = 'Wallet', connectorIcon = '', isDestination = false }: BitcoinSetupPanelProps) => {
+export const BitcoinSetupPanel = ({
+  walletProvider,
+  onReadyChange,
+  nativeBalance,
+  isNativeBalanceLoading,
+  isDestination = false,
+}: BitcoinSetupPanelProps) => {
   const { sodax } = useSodaxContext();
   const { walletAddress, isAuthed, tradingAddress, login, isLoginPending } = useRadfiSession(walletProvider);
 
@@ -69,24 +73,31 @@ export const BitcoinSetupPanel = ({ walletProvider, onReadyChange, nativeBalance
   const activeConnector = xConnectors.find(c => c.id === xConnection?.xConnectorId);
   const isXverse = activeConnector instanceof XverseXConnector;
 
+  // Wallet name/icon for the fund/withdraw dialogs, from the active Bitcoin connector.
+  const connectorLabel = activeConnector?.name ?? 'Wallet';
+  const connectorLogo = activeConnector?.icon ?? '';
+
   // Detect current address type from connected address
   const detectedAddressType = walletAddress ? detectBitcoinAddressType(walletAddress) : null;
   const currentAddressType: BtcAddressType = detectedAddressType === 'P2TR' ? 'taproot' : 'segwit';
 
-  const handleAddressTypeChange = useCallback(async (newType: BtcAddressType) => {
-    if (!isXverse || !activeConnector || newType === currentAddressType) return;
-    setIsSwitching(true);
-    try {
-      const xverseConnector = activeConnector as XverseXConnector;
-      xverseConnector.setAddressPurpose(newType);
-      xDisconnect({ xChainType: 'BITCOIN' });
-      await xConnect(xverseConnector);
-    } catch (e) {
-      console.error('Failed to switch address type', e);
-    } finally {
-      setIsSwitching(false);
-    }
-  }, [isXverse, activeConnector, currentAddressType, xConnect, xDisconnect]);
+  const handleAddressTypeChange = useCallback(
+    async (newType: BtcAddressType) => {
+      if (!isXverse || !activeConnector || newType === currentAddressType) return;
+      setIsSwitching(true);
+      try {
+        const xverseConnector = activeConnector as XverseXConnector;
+        xverseConnector.setAddressPurpose(newType);
+        xDisconnect({ xChainType: 'BITCOIN' });
+        await xConnect(xverseConnector);
+      } catch (e) {
+        console.error('Failed to switch address type', e);
+      } finally {
+        setIsSwitching(false);
+      }
+    },
+    [isXverse, activeConnector, currentAddressType, xConnect, xDisconnect],
+  );
 
   const copyAddress = () => {
     if (!tradingAddress) return;
@@ -98,27 +109,28 @@ export const BitcoinSetupPanel = ({ walletProvider, onReadyChange, nativeBalance
   // Destination side: only needs auth + trading wallet (receiving BTC, no spend required).
   // Source side: additionally needs balance > 0 and no expired UTXOs (spending from trading wallet).
   useEffect(() => {
-    const isReady = isAuthed && !!tradingAddress && (
-      isDestination || (
-        (tradingBalance?.btcSatoshi ?? 0n) > 0n &&
-        (!expiredUtxos || expiredUtxos.length === 0)
-      )
-    );
+    const isReady =
+      isAuthed &&
+      !!tradingAddress &&
+      (isDestination || ((tradingBalance?.btcSatoshi ?? 0n) > 0n && (!expiredUtxos || expiredUtxos.length === 0)));
     onReadyChange(isReady);
   }, [isAuthed, tradingAddress, tradingBalance, expiredUtxos, isDestination, onReadyChange]);
 
-  const handleFetchMax = useCallback(async (withdrawTo: string) => {
-    if (!walletProvider || !walletAddress) return undefined;
-    const session = loadRadfiSession(walletAddress);
-    const accessToken = session?.accessToken;
-    if (!accessToken) return undefined;
-    const balance = tradingBalance?.btcSatoshi ?? 0n;
-    if (balance <= 0n) return undefined;
-    return sodax.spoke.bitcoin.radfi.getMaxWithdrawable(
-      { userAddress: walletAddress, amount: balance.toString(), tokenId: '0:0', withdrawTo },
-      accessToken,
-    );
-  }, [sodax, walletProvider, walletAddress, tradingBalance]);
+  const handleFetchMax = useCallback(
+    async (withdrawTo: string) => {
+      if (!walletProvider || !walletAddress) return undefined;
+      const session = loadRadfiSession(walletAddress);
+      const accessToken = session?.accessToken;
+      if (!accessToken) return undefined;
+      const balance = tradingBalance?.btcSatoshi ?? 0n;
+      if (balance <= 0n) return undefined;
+      return sodax.spoke.bitcoin.radfi.getMaxWithdrawable(
+        { userAddress: walletAddress, amount: balance.toString(), tokenId: '0:0', withdrawTo },
+        accessToken,
+      );
+    },
+    [sodax, walletProvider, walletAddress, tradingBalance],
+  );
 
   const handleRenewUtxos = async () => {
     if (!expiredUtxos?.length) return;
@@ -175,20 +187,22 @@ export const BitcoinSetupPanel = ({ walletProvider, onReadyChange, nativeBalance
       {/* Trading Wallet (shown after auth — sign in step hidden) */}
       {isAuthed && (
         <div className="flex flex-col gap-3">
-
           {/* Trading wallet address + Top Up */}
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">
-                Trading Wallet
-              </span>
+              <span className="text-sm font-medium">Trading Wallet</span>
               {tradingAddress && (
                 <div className="flex items-center gap-1.5">
                   <Button size="sm" onClick={() => setShowFundDialog(true)} disabled={isFunding}>
                     {isFunding ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : null}
                     Top Up
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => setShowWithdrawDialog(true)} disabled={isWithdrawing}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowWithdrawDialog(true)}
+                    disabled={isWithdrawing}
+                  >
                     {isWithdrawing ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : null}
                     Withdraw
                   </Button>
@@ -200,10 +214,21 @@ export const BitcoinSetupPanel = ({ walletProvider, onReadyChange, nativeBalance
                 <span className="text-xs text-muted-foreground font-mono" title={tradingAddress}>
                   {tradingAddress.slice(0, 8)}...{tradingAddress.slice(-6)}
                 </span>
-                <button type="button" onClick={copyAddress} className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors" title="Copy address">
+                <button
+                  type="button"
+                  onClick={copyAddress}
+                  className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors"
+                  title="Copy address"
+                >
                   {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
                 </button>
-                <a href={`${baseChainInfo[ChainKeys.BITCOIN_MAINNET].explorer.addressUrl}${tradingAddress}`} target="_blank" rel="noopener noreferrer" className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors" title="View on mempool.space">
+                <a
+                  href={`${baseChainInfo[ChainKeys.BITCOIN_MAINNET].explorer.addressUrl}${tradingAddress}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors"
+                  title="View on mempool.space"
+                >
                   <ExternalLink className="h-3 w-3" />
                 </a>
               </div>
@@ -228,7 +253,9 @@ export const BitcoinSetupPanel = ({ walletProvider, onReadyChange, nativeBalance
                 </div>
                 <div className="flex flex-col gap-1 rounded-md border border-border bg-background p-2">
                   <span className="text-xs text-muted-foreground">Trading Wallet</span>
-                  <span className={`text-sm font-medium ${tradingBalance && tradingBalance.btcSatoshi > 0n ? 'text-green-500' : ''}`}>
+                  <span
+                    className={`text-sm font-medium ${tradingBalance && tradingBalance.btcSatoshi > 0n ? 'text-green-500' : ''}`}
+                  >
                     {isBalanceLoading ? (
                       <Loader2 className="h-3 w-3 animate-spin" />
                     ) : (
@@ -247,9 +274,9 @@ export const BitcoinSetupPanel = ({ walletProvider, onReadyChange, nativeBalance
                   tradingAddress={tradingAddress}
                   walletBalance={nativeBalance ?? 0n}
                   tradingBalance={tradingBalance?.btcSatoshi ?? 0n}
-                  connectorName={connectorName}
-                  connectorIcon={connectorIcon}
-                  onFund={async (amount) => {
+                  connectorName={connectorLabel}
+                  connectorIcon={connectorLogo}
+                  onFund={async amount => {
                     await fundWallet({ amount, walletProvider });
                   }}
                   isFunding={isFunding}
@@ -263,8 +290,8 @@ export const BitcoinSetupPanel = ({ walletProvider, onReadyChange, nativeBalance
                   onOpenChange={setShowWithdrawDialog}
                   tradingAddress={tradingAddress}
                   tradingBalance={tradingBalance?.btcSatoshi ?? 0n}
-                  connectorName={connectorName}
-                  connectorIcon={connectorIcon}
+                  connectorName={connectorLabel}
+                  connectorIcon={connectorLogo}
                   onWithdraw={async (amount, withdrawTo) => {
                     return withdrawFromTradingWallet({
                       amount,
@@ -305,18 +332,22 @@ export const BitcoinSetupPanel = ({ walletProvider, onReadyChange, nativeBalance
                     These UTXOs have expired or are within 2 weeks of expiry. Renew them to continue trading.
                   </p>
                   <div className="max-h-32 overflow-y-auto space-y-1">
-                    {expiredUtxos.map((utxo) => (
-                      <div key={utxo.txidVout ?? `${utxo.txid}:${utxo.vout}`} className="flex items-center justify-between text-xs bg-background rounded px-2 py-1 border border-border">
-                        <span className="font-mono text-muted-foreground truncate max-w-[200px]" title={utxo.txidVout ?? `${utxo.txid}:${utxo.vout}`}>
+                    {expiredUtxos.map(utxo => (
+                      <div
+                        key={utxo.txidVout ?? `${utxo.txid}:${utxo.vout}`}
+                        className="flex items-center justify-between text-xs bg-background rounded px-2 py-1 border border-border"
+                      >
+                        <span
+                          className="font-mono text-muted-foreground truncate max-w-[200px]"
+                          title={utxo.txidVout ?? `${utxo.txid}:${utxo.vout}`}
+                        >
                           {utxo.txid.slice(0, 8)}...:{utxo.vout}
                         </span>
                         <span className="font-medium">{utxo.amount} BTC</span>
                       </div>
                     ))}
                   </div>
-                  {renewError && (
-                    <p className="text-xs text-red-500">{renewError}</p>
-                  )}
+                  {renewError && <p className="text-xs text-red-500">{renewError}</p>}
                 </div>
               )}
             </div>

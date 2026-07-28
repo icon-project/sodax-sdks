@@ -5,6 +5,7 @@ export * from './useFundTradingWallet.js';
 export * from './useBitcoinBalance.js';
 export * from './useTradingWallet.js';
 export * from './useTradingWalletBalance.js';
+export * from './useBitcoinTradingSetup.js';
 export * from './useExpiredUtxos.js';
 export * from './useRenewUtxos.js';
 export * from './useRadfiWithdraw.js';

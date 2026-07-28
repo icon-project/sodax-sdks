@@ -13,6 +13,8 @@ const sodax = new Sodax();
 const quote = await sodax.swaps.getQuote(quoteRequest);
 ```
 
+> **`sodax.swaps` vs `sodax.api.swaps`.** This page documents `sodax.swaps` (`SwapService`) — the end-to-end intent orchestrator that creates, relays, and finalizes swaps on-chain. The lower-level typed HTTP client for the backend Swaps API v2 (quote, create-intent, submit-tx, status, fees — 21 endpoints) is `sodax.api.swaps` (`SwapsApiService`); see [`SWAPS_API.md`](SWAPS_API.md).
+
 ## Using SDK Config and Constants
 
 The SDK includes predefined configurations of supported chains, tokens, and other relevant information.
@@ -57,6 +59,12 @@ All swap methods are accessible through `sodax.swaps`:
 - `createLimitOrderIntent(params)` — Create a limit order intent only (no relay/solver notify); supports raw and signed modes
 - `submitIntent(payload)` — Submit a spoke tx to the relay API (low-level, called automatically by `swap`)
 - `postExecution(request)` — Notify the solver that an intent is live on the hub chain (low-level, called automatically by `swap`)
+
+#### Backend 2-step submit (opt-in)
+
+By default `swap()` relays + post-executes entirely client-side. Opt into a backend-driven 2-step flow with `new Sodax({ swapsOptions: { useBackendSubmitTx: true } })`: after creating + verifying the intent tx, `swap()` hands it to the backend (`sodax.api.swaps.submitTx`), which relays + post-executes server-side; the SDK polls submit-tx status and returns the same `SwapResponse`.
+
+On **any** non-success (submission rejected, terminal `failed`/abandoned, or poll timeout) `swap()` **falls back** to the client-side relay so the swap still completes — identical `SwapResponse` either way. This is **safe**: re-relaying / re-posting an already-processed swap is idempotent — the relay dedups and returns the existing `executed` packet, and the solver re-affirms the intent (no double-fill), verified live by `e2e-tests/e2e-relay.test.ts`. The backend poll and the fallback also share one `timeout` budget, so total latency never exceeds a single `timeout`. `swapsOptions` is a client-side runtime option (like `logger`), not part of the backend `SodaxConfig`. See [CONFIGURE_SDK.md](./CONFIGURE_SDK.md#backend-submit-tx-2-step-swapsoptionsusebackendsubmittx).
 
 ### Intent Management
 
@@ -176,8 +184,8 @@ function isSodaxError(e: unknown): e is SodaxError;
 
 | Method | Error type | Codes |
 |---|---|---|
-| `swap` | `SwapError` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `EXTERNAL_API_ERROR`, `UNKNOWN` |
-| `createIntent` / `createLimitOrderIntent` | `CreateIntentError` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
+| `swap` | `SwapError` | `USER_REJECTED`, `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `EXTERNAL_API_ERROR`, `UNKNOWN` |
+| `createIntent` / `createLimitOrderIntent` | `CreateIntentError` | `USER_REJECTED`, `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
 | `postExecution` | `PostExecutionError` | `EXECUTION_FAILED`, `EXTERNAL_API_ERROR`, `UNKNOWN` |
 | `createLimitOrder` | `SwapError` | (same as `swap`) |
 

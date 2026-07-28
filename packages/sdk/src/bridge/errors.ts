@@ -26,6 +26,7 @@ export type BridgeAction = 'bridge';
 
 export type BridgeOrchestrationErrorCode = Extract<
   SodaxErrorCode,
+  | 'USER_REJECTED'
   | 'VALIDATION_FAILED'
   | 'INTENT_CREATION_FAILED'
   | 'TX_VERIFICATION_FAILED'
@@ -43,6 +44,7 @@ export type BridgeLookupErrorCode = LookupErrorCode;
 
 export type BridgeErrorCode = Extract<
   SodaxErrorCode,
+  | 'USER_REJECTED'
   | 'VALIDATION_FAILED'
   | 'INTENT_CREATION_FAILED'
   | 'TX_VERIFICATION_FAILED'
@@ -64,6 +66,7 @@ export type BridgeLookupError = SodaxError<BridgeLookupErrorCode>;
 export type BridgeError = SodaxError<BridgeErrorCode>;
 
 const ORCHESTRATION_CODES: ReadonlySet<BridgeOrchestrationErrorCode> = new Set([
+  'USER_REJECTED',
   'VALIDATION_FAILED',
   'INTENT_CREATION_FAILED',
   'TX_VERIFICATION_FAILED',
@@ -75,6 +78,7 @@ const ORCHESTRATION_CODES: ReadonlySet<BridgeOrchestrationErrorCode> = new Set([
 ]);
 
 const BRIDGE_CODES: ReadonlySet<BridgeErrorCode> = new Set<BridgeErrorCode>([
+  'USER_REJECTED',
   'VALIDATION_FAILED',
   'INTENT_CREATION_FAILED',
   'TX_VERIFICATION_FAILED',

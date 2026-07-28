@@ -17,6 +17,7 @@ Do not hardcode supported chain counts or chain lists in agent guidance. When ex
 | `packages/types` | Shared TypeScript types, chain IDs, chain configs, wallet/API interfaces | [`packages/types/AGENTS.md`](packages/types/AGENTS.md) |
 | `packages/libs` | Internal dependency isolation and stable third-party re-export subpaths | [`packages/libs/AGENTS.md`](packages/libs/AGENTS.md) |
 | `packages/sdk` | Core `Sodax` facade, hub-and-spoke services, intent relay | [`packages/sdk/AGENTS.md`](packages/sdk/AGENTS.md) |
+| `packages/swaps-api` | Standalone type-safe HTTP client for the backend Swaps API v2; the wire source the SDK's `sodax.api.swaps` wraps | [`packages/swaps-api/README.md`](packages/swaps-api/README.md) |
 | `packages/wallet-sdk-core` | Multi-chain wallet providers for signing and broadcasting | [`packages/wallet-sdk-core/AGENTS.md`](packages/wallet-sdk-core/AGENTS.md) |
 | `packages/wallet-sdk-react` | React wallet state layer, connectors, providers, wallet modal primitives | [`packages/wallet-sdk-react/AGENTS.md`](packages/wallet-sdk-react/AGENTS.md) |
 | `packages/dapp-kit` | React hooks combining SDK services, wallet providers, and React Query | [`packages/dapp-kit/AGENTS.md`](packages/dapp-kit/AGENTS.md) |
@@ -31,11 +32,13 @@ Do not hardcode supported chain counts or chain lists in agent guidance. When ex
 | `apps/node` | Node.js mainnet smoke scripts and E2E-style reproductions | [`apps/node/AGENTS.md`](apps/node/AGENTS.md) |
 | `apps/node-cjs` | CommonJS interop regression harness for `@sodax/sdk` | [`apps/node-cjs/AGENTS.md`](apps/node-cjs/AGENTS.md) |
 | `apps/wallet-modal-example` | Headless wallet-modal reference app for wallet-sdk-react primitives | [`apps/wallet-modal-example/AGENTS.md`](apps/wallet-modal-example/AGENTS.md) |
+| `apps/swap-api-example` | Vite + React reference app driving `@sodax/swaps-api` end to end (wallet SDK for signing) | [`apps/swap-api-example/README.md`](apps/swap-api-example/README.md) |
 
 ## Dependency Direction
 
 - `@sodax/types` has no package dependencies.
-- `@sodax/sdk` depends on `@sodax/types` and re-exports public shared types.
+- `@sodax/swaps-api` depends on `@sodax/types` (and `valibot`) — a standalone swaps-API wire client with no dependency on `@sodax/sdk`.
+- `@sodax/sdk` depends on `@sodax/types` and `@sodax/swaps-api` (its `SwapsApiService` wraps the latter) and re-exports public shared types.
 - `@sodax/wallet-sdk-core` depends on `@sodax/types`.
 - `@sodax/wallet-sdk-react` depends on `@sodax/types` and `@sodax/wallet-sdk-core`.
 - `@sodax/dapp-kit` depends on `@sodax/sdk` and imports wallet-provider contracts through SDK/type exports.
@@ -99,6 +102,8 @@ These guide every change. Where a rule maps to tooling (types, lint, tests, `che
 **Definition of done:** scoped diff · behavior verified against `src/` · relevant `test`/`checkTs`/`lint`/`check:ai` green · `packages/skills` updated when public behavior changed · no unrelated refactor.
 
 To review a change against these rules, use the `review-core-sdk` skill (`.claude/skills/review-core-sdk/`).
+
+To author or validate changesets and govern a release (SemVer bumps, changelogs, `CONFIG_VERSION`), use the `release-governance` skill (`.claude/skills/release-governance/`).
 
 ## AI File Maintenance
 

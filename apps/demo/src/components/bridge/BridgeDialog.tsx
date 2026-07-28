@@ -40,8 +40,6 @@ interface BridgeDialogProps {
   walletProvider: GetWalletProviderType<SpokeChainKey>;
   fromChainType: ChainType | undefined;
   toChainKey: SpokeChainKey;
-  fromBtcConnector?: { name: string; icon: string };
-  toBtcConnector?: { name: string; icon: string };
 }
 
 export function BridgeDialog({
@@ -53,8 +51,6 @@ export function BridgeDialog({
   walletProvider,
   fromChainType,
   toChainKey,
-  fromBtcConnector,
-  toBtcConnector,
 }: BridgeDialogProps) {
   const [isFromBtcReady, setIsFromBtcReady] = useState(false);
   const [isToBtcReady, setIsToBtcReady] = useState(false);
@@ -95,7 +91,7 @@ export function BridgeDialog({
       token: order.dstToken,
       amount: order.amount,
       chainId: toChainKey,
-      walletProvider: stellarWalletProvider,
+      walletAddress: toAccount.address,
     },
   });
   const { requestTrustline, isLoading: isRequestingTrustline } = useRequestTrustline(order.dstToken);
@@ -187,12 +183,7 @@ export function BridgeDialog({
         </div>
 
         {fromBtcWalletProvider && order.srcChainKey === ChainKeys.BITCOIN_MAINNET && (
-          <BitcoinSetupPanel
-            walletProvider={fromBtcWalletProvider}
-            onReadyChange={setIsFromBtcReady}
-            connectorName={fromBtcConnector?.name}
-            connectorIcon={fromBtcConnector?.icon}
-          />
+          <BitcoinSetupPanel walletProvider={fromBtcWalletProvider} onReadyChange={setIsFromBtcReady} />
         )}
 
         {toBtcWalletProvider && toChainKey === ChainKeys.BITCOIN_MAINNET && toBtcBalance !== undefined && (
@@ -200,8 +191,6 @@ export function BridgeDialog({
             walletProvider={toBtcWalletProvider}
             onReadyChange={setIsToBtcReady}
             nativeBalance={toBtcBalance}
-            connectorName={toBtcConnector?.name}
-            connectorIcon={toBtcConnector?.icon}
             isDestination
           />
         )}

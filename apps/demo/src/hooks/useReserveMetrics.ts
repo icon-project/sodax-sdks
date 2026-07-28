@@ -77,8 +77,7 @@ export function useReserveMetrics({
         Number(formatUnits(BigInt(formattedReserve.availableLiquidity), 18)) + totalVariableDebt;
 
       const ltValue = Number(formattedReserve.formattedReserveLiquidationThreshold);
-      const liquidationThreshold =
-        Number.isFinite(ltValue) && ltValue > 0 ? `${(ltValue * 100).toFixed(2)}%` : '-';
+      const liquidationThreshold = Number.isFinite(ltValue) && ltValue > 0 ? `${(ltValue * 100).toFixed(2)}%` : '-';
 
       let supplyBalanceUSD = '-';
       if (userReserve) {

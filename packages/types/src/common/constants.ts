@@ -17,11 +17,26 @@ export const DEFAULT_BACKEND_API_HEADERS = {
 export const DEFAULT_RELAYER_API_ENDPOINT = 'https://xcall-relay.nw.iconblockchain.xyz';
 export const VAULT_TOKEN_DECIMALS = 18;
 
-export type ApiConfig = {
+export type BaseApiConfig = {
   baseURL: HttpUrl;
   timeout: number;
   headers: Record<string, string>;
 };
+/** Per-endpoint config for the swaps API. Structurally identical to {@link BaseApiConfig}. */
+export type SwapsApiConfig = BaseApiConfig;
+
+/**
+ * Nested config that points the base (backend) API and the swaps API at independent endpoints.
+ * At least one slice must be provided — an empty custom config is meaningless (pass a flat
+ * {@link BaseApiConfig} instead). Requiring a slice keeps the two members disjoint from
+ * `BaseApiConfig` (which carries `baseURL`), so {@link ApiConfig} can be discriminated by the
+ * presence of a `baseApiConfig` / `swapsApiConfig` slice.
+ */
+export type CustomApiConfig =
+  | { baseApiConfig: BaseApiConfig; swapsApiConfig?: SwapsApiConfig }
+  | { baseApiConfig?: BaseApiConfig; swapsApiConfig: SwapsApiConfig };
+
+export type ApiConfig = BaseApiConfig | CustomApiConfig;
 
 export const apiConfig = {
   baseURL: DEFAULT_BACKEND_API_ENDPOINT,

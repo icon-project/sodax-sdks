@@ -1,0 +1,186 @@
+# Swaps API — `SwapsApiService`
+
+Typed HTTP client for the backend **Swaps API v2** (`/swaps/*`). Reached on the `Sodax` facade as
+`sodax.api.swaps` — `sodax.api` is an alias for `sodax.backendApi`, and `.swaps` is the `SwapsApiService`
+instance.
+
+It mirrors `ISwapsApiV2` (from `@sodax/types`) one method per endpoint (21 total). Every method:
+
+- returns `Promise<Result<T>>` — it **never throws**;
+- validates the JSON response at runtime against a valibot schema (a contract drift is surfaced as
+  `{ ok: false }`, not returned untyped);
+- accepts an optional trailing `RequestOverrideConfig` (`{ baseURL?, timeout?, headers? }`) for per-call
+  overrides.
+
+> This is the lower-level backend HTTP surface. For the end-to-end create→relay→post-execution swap
+> orchestrator, use `sodax.swaps` (see [`SWAPS.md`](SWAPS.md)).
+
+## Methods
+
+```typescript
+// Tokens
+sodax.api.swaps.getTokens(config?): Promise<Result<GetSwapTokensResponseV2>>;
+sodax.api.swaps.getTokensByChain(chainKey, config?): Promise<Result<GetSwapTokensByChainResponseV2>>;
+
+// Quote · deadline
+sodax.api.swaps.getQuote(body: QuoteRequestV2, query?: QuoteQueryV2, config?): Promise<Result<QuoteResponseV2>>;
+sodax.api.swaps.getDeadline(query?: DeadlineQueryV2, config?): Promise<Result<DeadlineResponseV2>>;
+
+// Allowance · approve · create intent — all three share the CreateIntentParamsV2 body
+sodax.api.swaps.checkAllowance(body: CreateIntentParamsV2, config?): Promise<Result<AllowanceCheckResponseV2>>;
+sodax.api.swaps.approve(body: CreateIntentParamsV2, config?): Promise<Result<ApproveResponseV2>>;
+sodax.api.swaps.createIntent(body: CreateIntentParamsV2, config?): Promise<Result<CreateIntentResponseV2>>;
+
+// Intent lifecycle
+sodax.api.swaps.submitIntent(body: SubmitIntentRequestV2, config?): Promise<Result<SubmitIntentResponseV2>>;
+sodax.api.swaps.getStatus(body: StatusRequestV2, config?): Promise<Result<StatusResponseV2>>;
+sodax.api.swaps.cancelIntent(body: CancelIntentRequestV2, config?): Promise<Result<CancelIntentResponseV2>>;
+sodax.api.swaps.getIntentHash(body: IntentHashRequestV2, config?): Promise<Result<IntentHashResponseV2>>;
+sodax.api.swaps.getSolvedIntentPacket(body: IntentPacketRequestV2, config?): Promise<Result<IntentPacketResponseV2>>;
+sodax.api.swaps.getIntentSubmitTxExtraData(body: IntentExtraDataRequestV2, config?): Promise<Result<IntentExtraDataResponseV2>>;
+sodax.api.swaps.getFilledIntent(txHash, config?): Promise<Result<IntentStateV2>>;
+sodax.api.swaps.getIntent(txHash, config?): Promise<Result<GetIntentResponseV2>>;
+
+// Limit orders · gas · fees
+sodax.api.swaps.createLimitOrderIntent(body: CreateLimitOrderParamsV2, config?): Promise<Result<CreateLimitOrderResponseV2>>;
+sodax.api.swaps.estimateGas(body: GasEstimateRequestV2, config?): Promise<Result<GasEstimateResponseV2>>;
+sodax.api.swaps.getPartnerFee(query: FeeQueryV2, config?): Promise<Result<FeeResponseV2>>;
+sodax.api.swaps.getSolverFee(query: FeeQueryV2, config?): Promise<Result<FeeResponseV2>>;
+
+// Submit-tx state machine
+sodax.api.swaps.submitTx(body: SubmitTxRequestV2, config?): Promise<Result<SubmitTxResponseV2>>;
+sodax.api.swaps.getSubmitTxStatus(query: SubmitTxStatusQueryV2, config?): Promise<Result<SubmitTxStatusResponseV2>>;
+```
+
+## Wire shapes — `bigint` vs decimal strings
+
+Request bodies that carry an `intent` struct (`cancelIntent`, `getIntentHash`,
+`getIntentSubmitTxExtraData`, `submitTx`) take `IntentRequestV2`, whose numeric fields (`intentId`,
+`inputAmount`, `minOutputAmount`, `deadline`, `srcChain`, `dstChain`) are **`bigint`**; the client
+serializes them to decimal strings on the wire. Server-returned intents (`IntentResponseV2`) come back
+with those fields as decimal **`string`**. The `amount` / `inputAmount` fields on the quote /
+create-intent bodies are already decimal strings.
+
+> **Never pass `bigint` to `JSON.stringify`** in your own code — it throws. The client uses a bigint-safe
+> serializer internally; pass the `IntentRequestV2` through unmodified.
+
+## Long-polling — `getSolvedIntentPacket`
+
+`getSolvedIntentPacket` is a **server-side long-poll**: it issues a single request that the backend holds
+open until the fill packet lands on the destination chain (or `body.timeout` ms elapses, default ~60s).
+Call it once and `await` the result — do **not** poll it client-side in a loop. Every other read
+(`getStatus`, `getSubmitTxStatus`, …) is an ordinary point-in-time read that you poll yourself.
+
+## Examples
+
+```typescript
+import { Sodax } from '@sodax/sdk';
+
+const sodax = new Sodax();
+
+// Quote
+const quote = await sodax.api.swaps.getQuote({
+  tokenSrc, tokenSrcChainKey, tokenDst, tokenDstChainKey,
+  amount: '1000000',
+  quoteType: 'exact_input',
+});
+if (!quote.ok) return;
+quote.value.quotedAmount; // decimal string
+
+// Create intent → submit tx → poll status
+const created = await sodax.api.swaps.createIntent({
+  srcChainKey, dstChainKey, inputToken, outputToken,
+  inputAmount: '1000000', minOutputAmount: '990000', deadline: '0',
+  allowPartialFill: false, srcAddress, dstAddress,
+});
+if (!created.ok) return;
+const { tx, intent, relayData } = created.value;
+
+const submit = await sodax.api.swaps.submitTx({
+  txHash, srcChainKey, walletAddress, intent,
+  relayData: relayData.payload, // string payload, not the RelayExtraData object
+});
+if (!submit.ok) return;
+
+// Both txHash AND srcChainKey are required.
+const status = await sodax.api.swaps.getSubmitTxStatus({ txHash, srcChainKey });
+if (status.ok && status.value.data.status === 'solved') { /* settled */ }
+// Lifecycle: 'pending' → 'relaying' → 'relayed' → 'posting_execution' → 'posted_execution' → 'solved' | 'failed'.
+```
+
+## Status fields — three distinct `status` values
+
+These are unrelated; don't treat one as another:
+
+| Call | Field | Type | Values |
+|---|---|---|---|
+| `getStatus` | `StatusResponseV2.status` | **number** (`SwapIntentStatusCodeV2`) | `-1` NOT_FOUND · `1` NOT_STARTED_YET · `2` STARTED_NOT_FINISHED · `3` SOLVED (terminal) · `4` FAILED (terminal). `fillTxHash` set only when `status === 3`. |
+| `submitTx` | `SubmitTxResponseV2.data.status` | string | `'inserted'` (new) or `'duplicate'` (already submitted — idempotent on `(txHash, srcChainKey)`). |
+| `getSubmitTxStatus` | `SubmitTxStatusResponseV2.data.status` | string | `'pending'` / `'relaying'` / `'relayed'` / `'posting_execution'` / `'posted_execution'` / `'solved'` / `'failed'` (`'solved'` / `'failed'` terminal). |
+
+## Configuration
+
+`sodax.api.swaps` shares the backend API config. By default the swaps endpoints are `/swaps/*` sub-paths
+under the same base URL as `sodax.backendApi`. `SodaxConfig.api` is `ApiConfig`:
+
+```typescript
+// Flat — shared by the base backend API and the swaps client (the common case):
+type BaseApiConfig = { baseURL: string; timeout: number; headers: Record<string, string> };
+
+// Nested — point the swaps API at its own host, separate from the base backend API:
+type CustomApiConfig =
+  | { baseApiConfig: BaseApiConfig; swapsApiConfig?: BaseApiConfig }
+  | { baseApiConfig?: BaseApiConfig; swapsApiConfig: BaseApiConfig };
+
+type ApiConfig = BaseApiConfig | CustomApiConfig;
+```
+
+```typescript
+const sodax = new Sodax({
+  api: {
+    baseApiConfig: { baseURL: 'https://api.example/v1/be' },
+    swapsApiConfig: { baseURL: 'https://swaps.example/v1' },
+  },
+});
+```
+
+The swaps slice layers over the base slice over the defaults (per field) — a cross-cutting header on
+`baseApiConfig` (auth/tracing) still reaches swaps calls unless `swapsApiConfig` overrides that key.
+
+## Result\<T\> and Error Handling
+
+Every method returns `Result<T, SodaxError<'EXTERNAL_API_ERROR'>>`. On any failure (network, timeout,
+non-2xx HTTP, or response-shape mismatch), the result is `{ ok: false }` with a `SodaxError` carrying
+`feature: 'backend'`, `context.api: 'swaps'`, and `context.endpoint` (the path); the underlying failure
+is preserved on `error.cause`.
+
+```typescript
+const r = await sodax.api.swaps.getQuote(body);
+if (!r.ok) {
+  // r.error.feature === 'backend'; r.error.context.endpoint === '/swaps/quote'
+  // r.error.context.code / (r.error.cause as SwapsApiError).code:
+  //   NETWORK_ERROR | TIMEOUT_ERROR | HTTP_ERROR | PARSE_ERROR | VALIDATION_ERROR
+  return;
+}
+```
+
+### Implementation note
+
+`SwapsApiService` is a thin adapter over the standalone [`@sodax/swaps-api`](../../swaps-api/README.md)
+package — the single source of the swaps wire client (request building, per-chain `tx`
+validation/transform, response schemas, HTTP). This service adds the SDK conventions on top: the
+`Result<T>` contract, the `SodaxLogger`, `ApiConfig`/`CustomApiConfig` resolution, and per-call
+`RequestOverrideConfig`. Two consequences worth noting:
+
+- **`error.cause` is a `SwapsApiError`** (from `@sodax/swaps-api`), not the raw transport error — read
+  its `code` (`NETWORK_ERROR` | `TIMEOUT_ERROR` | `HTTP_ERROR` | `PARSE_ERROR` | `VALIDATION_ERROR`) to
+  distinguish failure kinds; the same code is mirrored onto `error.context.code`. Both `SwapsApiError`
+  and the `SwapsApiErrorCode` union are re-exported from `@sodax/sdk`, so you can narrow `error.cause`
+  and type `error.context.code` without a direct `@sodax/swaps-api` import.
+- **Idempotent calls retry transient failures.** Reads, polls, and pure-compute POSTs (e.g. `getQuote`)
+  are retried a few times on transient statuses / network errors; mutating calls are never retried.
+
+## See also
+
+- [`BACKEND_API.md`](BACKEND_API.md) — `sodax.backendApi`, the sibling client for intent/orderbook/money-market reads + config.
+- [`SWAPS.md`](SWAPS.md) — `sodax.swaps` (`SwapService`), the end-to-end intent orchestrator.
