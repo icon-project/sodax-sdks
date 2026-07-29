@@ -20,6 +20,13 @@
               "get-started/first-swap",
               "get-started/ai-integration"
             ]
+          },
+          {
+            "group": "Solana",
+            "pages": [
+              "get-started/solana",
+              "guides/solana-quickstart"
+            ]
           }
         ]
       },
@@ -49,7 +56,7 @@
         "tab": "Guides & Protocol",
         "groups": [
           {
-            "group": "Guides",
+            "group": "General Guides",
             "pages": [
               "guides/make-a-swap",
               "guides/configure-sdk",
@@ -58,6 +65,16 @@
               "guides/stellar-trustline",
               "guides/bitcoin-integration",
               "guides/monetize-sdk"
+            ]
+          },
+          {
+            "group": "Solana Guides",
+            "pages": [
+              "guides/solana-swaps",
+              "guides/solana-money-market",
+              "guides/solana-wallets",
+              "guides/solana-networks-assets",
+              "guides/solana-faq"
             ]
           },
           {

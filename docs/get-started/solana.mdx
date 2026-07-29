@@ -1,0 +1,56 @@
+---
+title: "SODAX for Solana"
+description: "Reach the users and liquidity of every SODAX network from your Solana product. No new programs, your entire integration is TypeScript."
+---
+
+<Note>
+  **No new programs.** On Solana, smart contracts are called programs, and SODAX's are already live and independently audited; your entire integration is TypeScript. Your users sign familiar Solana transactions, and SODAX coordinates cross-network execution, routing, and recovery behind the scenes.
+</Note>
+
+You keep shipping on Solana. SODAX absorbs the cross-network execution layer, so your product can offer trading and lending against every asset in the SODAX System, 137 across all supported networks as of July 2026, without leaving your stack. Integration happens in TypeScript, at the SDK or React layer. There is nothing to deploy, audit, or maintain on-chain.
+
+Using SODAX is free. Trades carry a fixed 0.1% base fee taken by the protocol, and you set your own platform fee on top. That part is fully yours, both the rate and the revenue. See [Monetize SDK](/guides/monetize-sdk).
+
+Not sure where SODAX fits in your product? Paste your protocol's URL into the generator and get a guide written for your stack: [Generate your integration guide →](https://sodax.com/solana)
+
+## What you can build
+
+Two SODAX modules are relevant to Solana builders:
+
+<CardGroup>
+  <Card title="Swaps" icon="rotate" href="/guides/solana-swaps">
+    Intent-based cross-network swaps. Users trade between SPL assets and assets on any supported network with one signed transaction on Solana. Solvers compete to fill; unified pricing across networks.
+  </Card>
+  <Card title="Money Market" icon="sack-dollar" href="/guides/solana-money-market">
+    Cross-network lending and borrowing. Depositors source collateral from any supported network and settle into positions that back Solana-native flows: supply, borrow, repay, withdraw.
+  </Card>
+</CardGroup>
+
+## Choose your integration path
+
+| Path | Best for | Start here |
+| --- | --- | --- |
+| [`@sodax/sdk`](/sdk/index) | Full control from any TypeScript backend or frontend | [Quickstart](/guides/solana-quickstart) |
+| [`@sodax/dapp-kit`](/sdk/dapp-kit) + [`@sodax/wallet-sdk-react`](/sdk/wallet-sdk-react) | React apps that want hooks and wallet connectivity out of the box | [Solana Wallets](/guides/solana-wallets) |
+| [Builders MCP](https://builders.sodax.com) | Building with AI agents against the full SODAX stack | See below |
+
+## Scope and build with AI
+
+Point your AI coding assistant at the [SODAX Builders MCP](https://builders.sodax.com/) and it gains live access to the whole SODAX System: supported chains and tokens, real swap quotes, money market rates, intent history, and these docs. 40 tools in all, working in Claude, Cursor, VS Code, Windsurf, and any other MCP-capable client.
+
+```json
+{
+  "mcpServers": {
+    "sodax-builders": {
+      "url": "https://builders.sodax.com/mcp"
+    }
+  }
+}
+```
+
+## Next steps
+
+- [Quickstart](/guides/solana-quickstart) — 5 minutes from install to first cross-network swap
+- [Swaps on Solana](/guides/solana-swaps) — quoting modes, fees, limit orders, manual orchestration
+- [Money Market on Solana](/guides/solana-money-market) — supply and borrow with cross-network collateral
+- [Solana FAQ](/guides/solana-faq) — the questions Solana engineers ask
