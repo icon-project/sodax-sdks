@@ -1,33 +1,39 @@
 # packages/assets
 
-Static brand assets (chain logos) served by URL, not imported. This package is a
-**file host only** — it ships no JavaScript and is `private` (never published to
-npm). Its sole purpose is to keep binary logos out of the runtime packages while
-still giving `@sodax/types` a stable default logo URL per chain.
+Static brand assets (chain and token logos) served by URL, not imported. This
+package is a **file host only** — it ships no JavaScript and is `private` (never
+published to npm). Its sole purpose is to keep binary logos out of the runtime
+packages while still giving `@sodax/types` stable default logo URLs.
 
 ## Structure
 
 ```
 chain/<chainKey>.png   # one logo per chain, filename === the ChainKeys value
+token/<slug>.png       # one logo per token, filename === tokenLogoSlug(symbol)
 ```
 
 All files are PNG, sourced from CoinGecko's CDN.
 
 ## How it wires up
 
-- `@sodax/types` holds `CHAIN_LOGO_BASE_URL` (pointing at this directory on
-  `main` via `raw.githubusercontent.com`) and sets each chain's `logo` field on
-  `baseChainInfo` to `${CHAIN_LOGO_BASE_URL}/<chainKey>.png`.
-- Consumers (demo, web app) read `baseChainInfo[key].logo` — they must not
-  hardcode chain icon paths.
+- **Chains:** `@sodax/types` holds `CHAIN_LOGO_BASE_URL` (pointing at the `chain/`
+  directory on `main` via `raw.githubusercontent.com`) and sets each chain's
+  `logo` field on `baseChainInfo` to `${CHAIN_LOGO_BASE_URL}/<chainKey>.png`.
+  Consumers read `baseChainInfo[key].logo`.
+- **Tokens:** `@sodax/types` holds `TOKEN_LOGO_BASE_URL` (pointing at the `token/`
+  directory) and exposes `tokenLogo(symbol)` → `${TOKEN_LOGO_BASE_URL}/<slug>.png`,
+  where `<slug>` is `tokenLogoSlug(symbol)`. Consumers resolve icons with
+  `tokenLogo(token.symbol)`.
+- Consumers (demo, web app) must not hardcode chain or token icon paths.
 
 ## Rules
 
 - **No runtime dependencies and no source code.** Images only.
-- **Filename must equal the `ChainKeys` value** for that chain so the
-  base-URL + key convention in `@sodax/types` resolves.
-- **Don't import these files** into app/package code — reference the `logo` URL
-  from `@sodax/types` instead. Importing would re-bundle the binary, defeating
-  the purpose of hosting them.
+- **Chain filename must equal the `ChainKeys` value**, and **token filename must
+  equal `tokenLogoSlug(symbol)`**, so the base-URL + key convention in
+  `@sodax/types` resolves.
+- **Don't import these files** into app/package code — reference the URL from
+  `@sodax/types` instead. Importing would re-bundle the binary, defeating the
+  purpose of hosting them.
 - A new logo only resolves after it is merged to `main` (raw.githubusercontent
   serves the branch you point at).

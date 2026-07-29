@@ -122,7 +122,7 @@ Then point your agent at `node_modules/@sodax/skills/AGENTS.md`. See [docs/ai-in
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](https://github.com/icon-project/sodax-document/blob/main/developers/packages/sdk/CONTRIBUTING.md) for details.
+We welcome contributions! Please see our [Contributing Guide](https://github.com/icon-project/sodax-sdks/blob/main/CONTRIBUTING.md) for details.
 
 ***
 
@@ -152,7 +152,7 @@ pnpm lint
 
 ## License
 
-* [MIT](https://github.com/icon-project/sodax-document/blob/main/developers/packages/sdk/LICENSE/README.md)
+* [MIT](https://github.com/icon-project/sodax-sdks/blob/main/LICENSE)
 
 ***
 

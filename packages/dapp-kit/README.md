@@ -126,188 +126,188 @@ function SwapButton({ intentParams }: { intentParams: CreateIntentParams }) {
 
 ### Provider
 
-- [`SodaxProvider`](src/providers/SodaxProvider.tsx) — Wraps your app, creates the `Sodax` SDK instance. Accepts `config?: SodaxOptions`.
-- [`createSodaxQueryClient()`](src/providers/createSodaxQueryClient.ts) — Factory for a `QueryClient` with global mutation observability (`onMutationError` hook, `meta.silent` opt-out).
+- [`SodaxProvider`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/providers/SodaxProvider.tsx) — Wraps your app, creates the `Sodax` SDK instance. Accepts `config?: SodaxOptions`.
+- [`createSodaxQueryClient()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/providers/createSodaxQueryClient.ts) — Factory for a `QueryClient` with global mutation observability (`onMutationError` hook, `meta.silent` opt-out).
 
 ### Swap Hooks
 
-- [`useQuote()`](src/hooks/swap/useQuote.ts) — Real-time quote (auto-refreshes every 3s)
-- [`useSwap()`](src/hooks/swap/useSwap.ts) — Submit a cross-chain swap intent
-- [`useSwapAllowance()`](src/hooks/swap/useSwapAllowance.ts) — Check token approval
-- [`useSwapApprove()`](src/hooks/swap/useSwapApprove.ts) — Approve token spending
-- [`useStatus()`](src/hooks/swap/useStatus.ts) — Track intent execution status
-- [`useCancelSwap()`](src/hooks/swap/useCancelSwap.ts) — Cancel a pending swap
-- [`useCreateLimitOrder()`](src/hooks/swap/useCreateLimitOrder.ts) — Create a limit order (no deadline)
-- [`useCancelLimitOrder()`](src/hooks/swap/useCancelLimitOrder.ts) — Cancel a limit order
+- [`useQuote()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/swap/useQuote.ts) — Real-time quote (auto-refreshes every 3s)
+- [`useSwap()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/swap/useSwap.ts) — Submit a cross-chain swap intent
+- [`useSwapAllowance()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/swap/useSwapAllowance.ts) — Check token approval
+- [`useSwapApprove()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/swap/useSwapApprove.ts) — Approve token spending
+- [`useStatus()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/swap/useStatus.ts) — Track intent execution status
+- [`useCancelSwap()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/swap/useCancelSwap.ts) — Cancel a pending swap
+- [`useCreateLimitOrder()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/swap/useCreateLimitOrder.ts) — Create a limit order (no deadline)
+- [`useCancelLimitOrder()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/swap/useCancelLimitOrder.ts) — Cancel a limit order
 
 ### Money Market Hooks
 
-- [`useSupply()`](src/hooks/mm/useSupply.ts) — Supply collateral
-- [`useWithdraw()`](src/hooks/mm/useWithdraw.ts) — Withdraw supplied tokens
-- [`useBorrow()`](src/hooks/mm/useBorrow.ts) — Borrow against collateral
-- [`useRepay()`](src/hooks/mm/useRepay.ts) — Repay borrowed tokens
-- [`useMMAllowance()`](src/hooks/mm/useMMAllowance.ts) — Check approval (auto-skips for borrow/withdraw)
-- [`useMMApprove()`](src/hooks/mm/useMMApprove.ts) — Approve token spending
-- [`useReservesData()`](src/hooks/mm/useReservesData.ts) — All reserve data
-- [`useReservesHumanized()`](src/hooks/mm/useReservesHumanized.ts) — Reserves in decimal-normalized format
-- [`useReservesList()`](src/hooks/mm/useReservesList.ts) — List of reserve asset addresses
-- [`useReservesUsdFormat()`](src/hooks/mm/useReservesUsdFormat.ts) — Reserves with USD values
-- [`useUserFormattedSummary()`](src/hooks/mm/useUserFormattedSummary.ts) — User portfolio summary (health factor, collateral, debt)
-- [`useUserReservesData()`](src/hooks/mm/useUserReservesData.ts) — User reserve positions
-- [`useAToken()`](src/hooks/mm/useAToken.ts) — aToken metadata
-- [`useATokensBalances()`](src/hooks/mm/useATokensBalances.ts) — aToken balances
+- [`useSupply()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/mm/useSupply.ts) — Supply collateral
+- [`useWithdraw()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/mm/useWithdraw.ts) — Withdraw supplied tokens
+- [`useBorrow()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/mm/useBorrow.ts) — Borrow against collateral
+- [`useRepay()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/mm/useRepay.ts) — Repay borrowed tokens
+- [`useMMAllowance()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/mm/useMMAllowance.ts) — Check approval (auto-skips for borrow/withdraw)
+- [`useMMApprove()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/mm/useMMApprove.ts) — Approve token spending
+- [`useReservesData()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/mm/useReservesData.ts) — All reserve data
+- [`useReservesHumanized()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/mm/useReservesHumanized.ts) — Reserves in decimal-normalized format
+- [`useReservesList()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/mm/useReservesList.ts) — List of reserve asset addresses
+- [`useReservesUsdFormat()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/mm/useReservesUsdFormat.ts) — Reserves with USD values
+- [`useUserFormattedSummary()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/mm/useUserFormattedSummary.ts) — User portfolio summary (health factor, collateral, debt)
+- [`useUserReservesData()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/mm/useUserReservesData.ts) — User reserve positions
+- [`useAToken()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/mm/useAToken.ts) — aToken metadata
+- [`useATokensBalances()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/mm/useATokensBalances.ts) — aToken balances
 
 ### Bridge Hooks
 
-- [`useBridge()`](src/hooks/bridge/useBridge.ts) — Execute a cross-chain bridge transfer
-- [`useBridgeAllowance()`](src/hooks/bridge/useBridgeAllowance.ts) — Check token approval
-- [`useBridgeApprove()`](src/hooks/bridge/useBridgeApprove.ts) — Approve token spending
-- [`useGetBridgeableAmount()`](src/hooks/bridge/useGetBridgeableAmount.ts) — Max bridgeable amount between two tokens
-- [`useGetBridgeableTokens()`](src/hooks/bridge/useGetBridgeableTokens.ts) — Tokens bridgeable to a destination chain
+- [`useBridge()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/bridge/useBridge.ts) — Execute a cross-chain bridge transfer
+- [`useBridgeAllowance()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/bridge/useBridgeAllowance.ts) — Check token approval
+- [`useBridgeApprove()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/bridge/useBridgeApprove.ts) — Approve token spending
+- [`useGetBridgeableAmount()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/bridge/useGetBridgeableAmount.ts) — Max bridgeable amount between two tokens
+- [`useGetBridgeableTokens()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/bridge/useGetBridgeableTokens.ts) — Tokens bridgeable to a destination chain
 
 ### Staking Hooks
 
-- [`useStake()`](src/hooks/staking/useStake.ts) — Stake SODA, receive xSODA
-- [`useUnstake()`](src/hooks/staking/useUnstake.ts) — Request unstake (waiting period)
-- [`useInstantUnstake()`](src/hooks/staking/useInstantUnstake.ts) — Instant unstake with slippage
-- [`useClaim()`](src/hooks/staking/useClaim.ts) — Claim SODA after waiting period
-- [`useCancelUnstake()`](src/hooks/staking/useCancelUnstake.ts) — Cancel pending unstake
-- [`useStakeApprove()`](src/hooks/staking/useStakeApprove.ts) — Approve SODA for staking
-- [`useUnstakeApprove()`](src/hooks/staking/useUnstakeApprove.ts) — Approve xSODA for unstaking
-- [`useInstantUnstakeApprove()`](src/hooks/staking/useInstantUnstakeApprove.ts) — Approve xSODA for instant unstaking
-- [`useStakeAllowance()`](src/hooks/staking/useStakeAllowance.ts) — Check SODA approval
-- [`useUnstakeAllowance()`](src/hooks/staking/useUnstakeAllowance.ts) — Check xSODA approval for unstaking
-- [`useInstantUnstakeAllowance()`](src/hooks/staking/useInstantUnstakeAllowance.ts) — Check xSODA approval for instant unstaking
-- [`useStakingInfo()`](src/hooks/staking/useStakingInfo.ts) — User staking position
-- [`useUnstakingInfo()`](src/hooks/staking/useUnstakingInfo.ts) — Pending unstake requests
-- [`useUnstakingInfoWithPenalty()`](src/hooks/staking/useUnstakingInfoWithPenalty.ts) — Unstake requests with penalty calcs
-- [`useStakingConfig()`](src/hooks/staking/useStakingConfig.ts) — Unstaking period, max penalty
-- [`useStakeRatio()`](src/hooks/staking/useStakeRatio.ts) — SODA-to-xSODA exchange rate
-- [`useInstantUnstakeRatio()`](src/hooks/staking/useInstantUnstakeRatio.ts) — Instant unstake rate
-- [`useConvertedAssets()`](src/hooks/staking/useConvertedAssets.ts) — xSODA to SODA conversion
+- [`useStake()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/staking/useStake.ts) — Stake SODA, receive xSODA
+- [`useUnstake()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/staking/useUnstake.ts) — Request unstake (waiting period)
+- [`useInstantUnstake()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/staking/useInstantUnstake.ts) — Instant unstake with slippage
+- [`useClaim()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/staking/useClaim.ts) — Claim SODA after waiting period
+- [`useCancelUnstake()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/staking/useCancelUnstake.ts) — Cancel pending unstake
+- [`useStakeApprove()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/staking/useStakeApprove.ts) — Approve SODA for staking
+- [`useUnstakeApprove()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/staking/useUnstakeApprove.ts) — Approve xSODA for unstaking
+- [`useInstantUnstakeApprove()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/staking/useInstantUnstakeApprove.ts) — Approve xSODA for instant unstaking
+- [`useStakeAllowance()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/staking/useStakeAllowance.ts) — Check SODA approval
+- [`useUnstakeAllowance()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/staking/useUnstakeAllowance.ts) — Check xSODA approval for unstaking
+- [`useInstantUnstakeAllowance()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/staking/useInstantUnstakeAllowance.ts) — Check xSODA approval for instant unstaking
+- [`useStakingInfo()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/staking/useStakingInfo.ts) — User staking position
+- [`useUnstakingInfo()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/staking/useUnstakingInfo.ts) — Pending unstake requests
+- [`useUnstakingInfoWithPenalty()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/staking/useUnstakingInfoWithPenalty.ts) — Unstake requests with penalty calcs
+- [`useStakingConfig()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/staking/useStakingConfig.ts) — Unstaking period, max penalty
+- [`useStakeRatio()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/staking/useStakeRatio.ts) — SODA-to-xSODA exchange rate
+- [`useInstantUnstakeRatio()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/staking/useInstantUnstakeRatio.ts) — Instant unstake rate
+- [`useConvertedAssets()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/staking/useConvertedAssets.ts) — xSODA to SODA conversion
 
 ### DEX Hooks
 
-- [`usePools()`](src/hooks/dex/usePools.ts) — List available pools
-- [`usePoolData()`](src/hooks/dex/usePoolData.ts) — Pool details (price, tick, liquidity)
-- [`usePoolBalances()`](src/hooks/dex/usePoolBalances.ts) — User pool token balances
-- [`usePositionInfo()`](src/hooks/dex/usePositionInfo.ts) — Position details by token ID
-- [`useDexDeposit()`](src/hooks/dex/useDexDeposit.ts) — Deposit assets into pool tokens
-- [`useDexWithdraw()`](src/hooks/dex/useDexWithdraw.ts) — Withdraw assets from pool tokens
-- [`useDexAllowance()`](src/hooks/dex/useDexAllowance.ts) — Check approval for deposit
-- [`useDexApprove()`](src/hooks/dex/useDexApprove.ts) — Approve token spending
-- [`useLiquidityAmounts()`](src/hooks/dex/useLiquidityAmounts.ts) — Token amounts for a tick range
-- [`useSupplyLiquidity()`](src/hooks/dex/useSupplyLiquidity.ts) — Supply liquidity to a position
-- [`useDecreaseLiquidity()`](src/hooks/dex/useDecreaseLiquidity.ts) — Remove liquidity
-- [`useClaimRewards()`](src/hooks/dex/useClaimRewards.ts) — Claim trading fees
-- [`useCreateDepositParams()`](src/hooks/dex/useCreateDepositParams.ts) — Build deposit params with ERC-4626 conversion
-- [`useCreateWithdrawParams()`](src/hooks/dex/useCreateWithdrawParams.ts) — Build withdraw params
-- [`useCreateSupplyLiquidityParams()`](src/hooks/dex/useCreateSupplyLiquidityParams.ts) — Build tick range + liquidity params
-- [`useCreateDecreaseLiquidityParams()`](src/hooks/dex/useCreateDecreaseLiquidityParams.ts) — Build decrease params from position state
+- [`usePools()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/dex/usePools.ts) — List available pools
+- [`usePoolData()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/dex/usePoolData.ts) — Pool details (price, tick, liquidity)
+- [`usePoolBalances()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/dex/usePoolBalances.ts) — User pool token balances
+- [`usePositionInfo()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/dex/usePositionInfo.ts) — Position details by token ID
+- [`useDexDeposit()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/dex/useDexDeposit.ts) — Deposit assets into pool tokens
+- [`useDexWithdraw()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/dex/useDexWithdraw.ts) — Withdraw assets from pool tokens
+- [`useDexAllowance()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/dex/useDexAllowance.ts) — Check approval for deposit
+- [`useDexApprove()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/dex/useDexApprove.ts) — Approve token spending
+- [`useLiquidityAmounts()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/dex/useLiquidityAmounts.ts) — Token amounts for a tick range
+- [`useSupplyLiquidity()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/dex/useSupplyLiquidity.ts) — Supply liquidity to a position
+- [`useDecreaseLiquidity()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/dex/useDecreaseLiquidity.ts) — Remove liquidity
+- [`useClaimRewards()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/dex/useClaimRewards.ts) — Claim trading fees
+- [`useCreateDepositParams()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/dex/useCreateDepositParams.ts) — Build deposit params with ERC-4626 conversion
+- [`useCreateWithdrawParams()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/dex/useCreateWithdrawParams.ts) — Build withdraw params
+- [`useCreateSupplyLiquidityParams()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/dex/useCreateSupplyLiquidityParams.ts) — Build tick range + liquidity params
+- [`useCreateDecreaseLiquidityParams()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/dex/useCreateDecreaseLiquidityParams.ts) — Build decrease params from position state
 
 ### Leverage Yield Hooks
 
-- [`useLeverageYieldEffectiveApr()`](src/hooks/leverageYield/useLeverageYieldEffectiveApr.ts) — Vault effective APR (AAVE rates + LSD yield, leverage-adjusted; refreshes 60s)
-- [`useLeverageYieldPosition()`](src/hooks/leverageYield/useLeverageYieldPosition.ts) — Live position snapshot: collateral, debt, LTV, health factor, idle assets (refreshes 30s)
-- [`useLeverageYieldTotalAssets()`](src/hooks/leverageYield/useLeverageYieldTotalAssets.ts) — Vault total underlying assets (TVL)
-- [`useLeverageYieldPreviewRedeem()`](src/hooks/leverageYield/useLeverageYieldPreviewRedeem.ts) — Assets received for redeeming shares (ERC-4626 `previewRedeem`)
-- [`useLeverageYieldShareBalances()`](src/hooks/leverageYield/useLeverageYieldShareBalances.ts) — User `lsoda*` share balances across every chain they may hold a position under
-- [`useLeverageYieldDeposit()`](src/hooks/leverageYield/useLeverageYieldDeposit.ts) — Build the deposit payload (any token → `lsoda*` shares) for `useLeverageYieldVaultSwap`
-- [`useLeverageYieldWithdraw()`](src/hooks/leverageYield/useLeverageYieldWithdraw.ts) — Build the withdraw payload (`lsoda*` shares → any token) for `useLeverageYieldVaultSwap`
-- [`useLeverageYieldVaultSwap()`](src/hooks/leverageYield/useLeverageYieldVaultSwap.ts) — Execute an end-to-end vault swap (deposit or withdraw): create intent → verify → relay → notify solver
-- [`useLeverageYieldNotifySolver()`](src/hooks/leverageYield/useLeverageYieldNotifySolver.ts) — Notify the solver that a vault intent landed on the hub (standalone step for manual relay flows)
+- [`useLeverageYieldEffectiveApr()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useLeverageYieldEffectiveApr.ts) — Vault effective APR (AAVE rates + LSD yield, leverage-adjusted; refreshes 60s)
+- [`useLeverageYieldPosition()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useLeverageYieldPosition.ts) — Live position snapshot: collateral, debt, LTV, health factor, idle assets (refreshes 30s)
+- [`useLeverageYieldTotalAssets()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useLeverageYieldTotalAssets.ts) — Vault total underlying assets (TVL)
+- [`useLeverageYieldPreviewRedeem()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useLeverageYieldPreviewRedeem.ts) — Assets received for redeeming shares (ERC-4626 `previewRedeem`)
+- [`useLeverageYieldShareBalances()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useLeverageYieldShareBalances.ts) — User `lsoda*` share balances across every chain they may hold a position under
+- [`useLeverageYieldDeposit()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useLeverageYieldDeposit.ts) — Build the deposit payload (any token → `lsoda*` shares) for `useLeverageYieldVaultSwap`
+- [`useLeverageYieldWithdraw()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useLeverageYieldWithdraw.ts) — Build the withdraw payload (`lsoda*` shares → any token) for `useLeverageYieldVaultSwap`
+- [`useLeverageYieldVaultSwap()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useLeverageYieldVaultSwap.ts) — Execute an end-to-end vault swap (deposit or withdraw): create intent → verify → relay → notify solver
+- [`useLeverageYieldNotifySolver()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useLeverageYieldNotifySolver.ts) — Notify the solver that a vault intent landed on the hub (standalone step for manual relay flows)
 
 ### Migration Hooks
 
-- [`useMigrateIcxToSoda()`](src/hooks/migrate/useMigrateIcxToSoda.ts) — ICX/wICX (ICON) → SODA (Sonic)
-- [`useRevertMigrateSodaToIcx()`](src/hooks/migrate/useRevertMigrateSodaToIcx.ts) — SODA (Sonic) → wICX (ICON)
-- [`useMigratebnUSD()`](src/hooks/migrate/useMigratebnUSD.ts) — Legacy bnUSD ↔ new bnUSD (bidirectional)
-- [`useMigrateBaln()`](src/hooks/migrate/useMigrateBaln.ts) — BALN (ICON) → SODA with optional lock period
-- [`useMigrationApprove()`](src/hooks/migrate/useMigrationApprove.ts) — Approve token spending before migration
-- [`useMigrationAllowance()`](src/hooks/migrate/useMigrationAllowance.ts) — Check if approval is needed
+- [`useMigrateIcxToSoda()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/migrate/useMigrateIcxToSoda.ts) — ICX/wICX (ICON) → SODA (Sonic)
+- [`useRevertMigrateSodaToIcx()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/migrate/useRevertMigrateSodaToIcx.ts) — SODA (Sonic) → wICX (ICON)
+- [`useMigratebnUSD()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/migrate/useMigratebnUSD.ts) — Legacy bnUSD ↔ new bnUSD (bidirectional)
+- [`useMigrateBaln()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/migrate/useMigrateBaln.ts) — BALN (ICON) → SODA with optional lock period
+- [`useMigrationApprove()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/migrate/useMigrationApprove.ts) — Approve token spending before migration
+- [`useMigrationAllowance()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/migrate/useMigrationAllowance.ts) — Check if approval is needed
 
 ### Bitcoin (Bound Exchange) Hooks
 
-- [`useRadfiSession()`](src/hooks/bitcoin/useRadfiSession.ts) — Manage Bound Exchange session (login, auto-refresh)
-- [`useRadfiAuth()`](src/hooks/bitcoin/useRadfiAuth.ts) — Authenticate with Bound Exchange via BIP322 signing
-- [`useEnsureRadfiAccessToken()`](src/hooks/bitcoin/useEnsureRadfiAccessToken.ts) — Ensure a valid Bound Exchange access token (refresh, or full re-auth), returning it for a Bitcoin-source createIntent
-- [`useTradingWallet()`](src/hooks/bitcoin/useTradingWallet.ts) — Get trading wallet address from persisted session
-- [`useBitcoinBalance()`](src/hooks/bitcoin/useBitcoinBalance.ts) — BTC balance for any address
-- [`useTradingWalletBalance()`](src/hooks/bitcoin/useTradingWalletBalance.ts) — Trading wallet balance from Bound Exchange API
-- [`useBitcoinTradingSetup()`](src/hooks/bitcoin/useBitcoinTradingSetup.ts) — Bitcoin trading-wallet setup for one side of a cross-chain flow (inert unless the chain is Bitcoin)
-- [`useFundTradingWallet()`](src/hooks/bitcoin/useFundTradingWallet.ts) — Fund trading wallet from personal wallet
-- [`useRadfiWithdraw()`](src/hooks/bitcoin/useRadfiWithdraw.ts) — Withdraw from trading wallet
-- [`useExpiredUtxos()`](src/hooks/bitcoin/useExpiredUtxos.ts) — Fetch expired UTXOs (polls every 60s)
-- [`useRenewUtxos()`](src/hooks/bitcoin/useRenewUtxos.ts) — Renew expired UTXOs
+- [`useRadfiSession()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/bitcoin/useRadfiSession.ts) — Manage Bound Exchange session (login, auto-refresh)
+- [`useRadfiAuth()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/bitcoin/useRadfiAuth.ts) — Authenticate with Bound Exchange via BIP322 signing
+- [`useEnsureRadfiAccessToken()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/bitcoin/useEnsureRadfiAccessToken.ts) — Ensure a valid Bound Exchange access token (refresh, or full re-auth), returning it for a Bitcoin-source createIntent
+- [`useTradingWallet()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/bitcoin/useTradingWallet.ts) — Get trading wallet address from persisted session
+- [`useBitcoinBalance()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/bitcoin/useBitcoinBalance.ts) — BTC balance for any address
+- [`useTradingWalletBalance()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/bitcoin/useTradingWalletBalance.ts) — Trading wallet balance from Bound Exchange API
+- [`useBitcoinTradingSetup()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/bitcoin/useBitcoinTradingSetup.ts) — Bitcoin trading-wallet setup for one side of a cross-chain flow (inert unless the chain is Bitcoin)
+- [`useFundTradingWallet()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/bitcoin/useFundTradingWallet.ts) — Fund trading wallet from personal wallet
+- [`useRadfiWithdraw()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/bitcoin/useRadfiWithdraw.ts) — Withdraw from trading wallet
+- [`useExpiredUtxos()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/bitcoin/useExpiredUtxos.ts) — Fetch expired UTXOs (polls every 60s)
+- [`useRenewUtxos()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/bitcoin/useRenewUtxos.ts) — Renew expired UTXOs
 
 ### Partner Hooks
 
-- [`useFetchAssetsBalances()`](src/hooks/partner/useFetchAssetsBalances.ts) — Fetch partner asset balances
-- [`useGetAutoSwapPreferences()`](src/hooks/partner/useGetAutoSwapPreferences.ts) — Get auto-swap preferences
-- [`useIsTokenApproved()`](src/hooks/partner/useIsTokenApproved.ts) — Check token approval
-- [`useApproveToken()`](src/hooks/partner/useApproveToken.ts) — Approve token
-- [`useSetSwapPreference()`](src/hooks/partner/useSetSwapPreference.ts) — Set swap preference
-- [`useFeeClaimSwap()`](src/hooks/partner/useFeeClaimSwap.ts) — Claim partner fees via swap
-- [`useFeeClaimWithdraw()`](src/hooks/partner/useFeeClaimWithdraw.ts) — Withdraw a partner fee balance via a Sonic-sourced bridge to the destination chain
-- [`usePartnerCancelIntent()`](src/hooks/partner/usePartnerCancelIntent.ts) — Cancel a stuck partner fee-claim auto-swap intent and recover the locked tokens
-- [`useGetUserIntent()`](src/hooks/partner/useGetUserIntent.ts) — Look up the stored intent hash for a partner `(user, fromToken, toToken)` pair
-- [`useGetIntentDetails()`](src/hooks/partner/useGetIntentDetails.ts) — Fetch the full intent details for a ProtocolIntents intent hash
+- [`useFetchAssetsBalances()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/partner/useFetchAssetsBalances.ts) — Fetch partner asset balances
+- [`useGetAutoSwapPreferences()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/partner/useGetAutoSwapPreferences.ts) — Get auto-swap preferences
+- [`useIsTokenApproved()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/partner/useIsTokenApproved.ts) — Check token approval
+- [`useApproveToken()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/partner/useApproveToken.ts) — Approve token
+- [`useSetSwapPreference()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/partner/useSetSwapPreference.ts) — Set swap preference
+- [`useFeeClaimSwap()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/partner/useFeeClaimSwap.ts) — Claim partner fees via swap
+- [`useFeeClaimWithdraw()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/partner/useFeeClaimWithdraw.ts) — Withdraw a partner fee balance via a Sonic-sourced bridge to the destination chain
+- [`usePartnerCancelIntent()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/partner/usePartnerCancelIntent.ts) — Cancel a stuck partner fee-claim auto-swap intent and recover the locked tokens
+- [`useGetUserIntent()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/partner/useGetUserIntent.ts) — Look up the stored intent hash for a partner `(user, fromToken, toToken)` pair
+- [`useGetIntentDetails()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/partner/useGetIntentDetails.ts) — Fetch the full intent details for a ProtocolIntents intent hash
 
 ### Recovery Hooks
 
-- [`useHubAssetBalances()`](src/hooks/recovery/useHubAssetBalances.ts) — Get hub asset balances
-- [`useWithdrawHubAsset()`](src/hooks/recovery/useWithdrawHubAsset.ts) — Withdraw hub asset
+- [`useHubAssetBalances()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/recovery/useHubAssetBalances.ts) — Get hub asset balances
+- [`useWithdrawHubAsset()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/recovery/useWithdrawHubAsset.ts) — Withdraw hub asset
 
 ### Shared Hooks
 
-- [`useSodaxContext()`](src/hooks/shared/useSodaxContext.ts) — Access the `Sodax` SDK instance
-- [`useHubProvider()`](src/hooks/provider/useHubProvider.ts) — Access the hub chain (Sonic) provider
-- [`useXBalances()`](src/hooks/shared/useXBalances.ts) — Cross-chain token balances for an address
-- [`useDeriveUserWalletAddress()`](src/hooks/shared/useDeriveUserWalletAddress.ts) — Derive hub wallet address (CREATE3)
-- [`useGetUserHubWalletAddress()`](src/hooks/shared/useGetUserHubWalletAddress.ts) — Derive hub wallet address (wallet router)
-- [`useEstimateGas()`](src/hooks/shared/useEstimateGas.ts) — Estimate gas for transactions
-- [`useStellarTrustlineCheck()`](src/hooks/shared/useStellarTrustlineCheck.ts) — Check Stellar trustline
-- [`useRequestTrustline()`](src/hooks/shared/useRequestTrustline.ts) — Request Stellar trustline
-- [`useNearStorageCheck()`](src/hooks/shared/useNearStorageCheck.ts) — Check NEP-141 storage registration for a token on NEAR (NEAR's analogue of a Stellar trustline)
-- [`useRegisterNearStorage()`](src/hooks/shared/useRegisterNearStorage.ts) — Submit a NEP-141 `storage_deposit` so a NEAR account can receive a token
-- [`useNearStorageGate()`](src/hooks/shared/useNearStorageGate.ts) — Derive the NEP-141 storage-registration UI gate state for a NEAR delivery
+- [`useSodaxContext()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/shared/useSodaxContext.ts) — Access the `Sodax` SDK instance
+- [`useHubProvider()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/provider/useHubProvider.ts) — Access the hub chain (Sonic) provider
+- [`useXBalances()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/shared/useXBalances.ts) — Cross-chain token balances for an address
+- [`useDeriveUserWalletAddress()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/shared/useDeriveUserWalletAddress.ts) — Derive hub wallet address (CREATE3)
+- [`useGetUserHubWalletAddress()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/shared/useGetUserHubWalletAddress.ts) — Derive hub wallet address (wallet router)
+- [`useEstimateGas()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/shared/useEstimateGas.ts) — Estimate gas for transactions
+- [`useStellarTrustlineCheck()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/shared/useStellarTrustlineCheck.ts) — Check Stellar trustline
+- [`useRequestTrustline()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/shared/useRequestTrustline.ts) — Request Stellar trustline
+- [`useNearStorageCheck()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/shared/useNearStorageCheck.ts) — Check NEP-141 storage registration for a token on NEAR (NEAR's analogue of a Stellar trustline)
+- [`useRegisterNearStorage()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/shared/useRegisterNearStorage.ts) — Submit a NEP-141 `storage_deposit` so a NEAR account can receive a token
+- [`useNearStorageGate()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/shared/useNearStorageGate.ts) — Derive the NEP-141 storage-registration UI gate state for a NEAR delivery
 
 ### Backend Query Hooks
 
-- [`useBackendIntentByTxHash()`](src/hooks/backend/useBackendIntentByTxHash.ts) — Get intent by hub tx hash (polls 1s)
-- [`useBackendIntentByHash()`](src/hooks/backend/useBackendIntentByHash.ts) — Get intent by intent hash
-- [`useBackendUserIntents()`](src/hooks/backend/useBackendUserIntents.ts) — All intents for a user with date filtering
-- [`useBackendOrderbook()`](src/hooks/backend/useBackendOrderbook.ts) — Solver orderbook (cached 30s, no auto-refetch)
-- [`useBackendMoneyMarketPosition()`](src/hooks/backend/useBackendMoneyMarketPosition.ts) — User money market position
-- [`useBackendAllMoneyMarketAssets()`](src/hooks/backend/useBackendAllMoneyMarketAssets.ts) — All MM assets
-- [`useBackendMoneyMarketAsset()`](src/hooks/backend/useBackendMoneyMarketAsset.ts) — Single MM asset details
-- [`useBackendMoneyMarketAssetBorrowers()`](src/hooks/backend/useBackendMoneyMarketAssetBorrowers.ts) — Asset borrowers
-- [`useBackendMoneyMarketAssetSuppliers()`](src/hooks/backend/useBackendMoneyMarketAssetSuppliers.ts) — Asset suppliers
-- [`useBackendAllMoneyMarketBorrowers()`](src/hooks/backend/useBackendAllMoneyMarketBorrowers.ts) — All borrowers
+- [`useBackendIntentByTxHash()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/backend/useBackendIntentByTxHash.ts) — Get intent by hub tx hash (polls 1s)
+- [`useBackendIntentByHash()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/backend/useBackendIntentByHash.ts) — Get intent by intent hash
+- [`useBackendUserIntents()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/backend/useBackendUserIntents.ts) — All intents for a user with date filtering
+- [`useBackendOrderbook()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/backend/useBackendOrderbook.ts) — Solver orderbook (cached 30s, no auto-refetch)
+- [`useBackendMoneyMarketPosition()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/backend/useBackendMoneyMarketPosition.ts) — User money market position
+- [`useBackendAllMoneyMarketAssets()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/backend/useBackendAllMoneyMarketAssets.ts) — All MM assets
+- [`useBackendMoneyMarketAsset()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/backend/useBackendMoneyMarketAsset.ts) — Single MM asset details
+- [`useBackendMoneyMarketAssetBorrowers()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/backend/useBackendMoneyMarketAssetBorrowers.ts) — Asset borrowers
+- [`useBackendMoneyMarketAssetSuppliers()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/backend/useBackendMoneyMarketAssetSuppliers.ts) — Asset suppliers
+- [`useBackendAllMoneyMarketBorrowers()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/backend/useBackendAllMoneyMarketBorrowers.ts) — All borrowers
 
 ### Swaps API Hooks (`sodax.api.swaps`)
 
 Typed wrappers over the backend Swaps API v2 — one `useSwapsApi*` hook per endpoint (21 total). Highlights:
 
-- [`useSwapsApiQuote()`](src/hooks/swapsApi/useSwapsApiQuote.ts) — Solver quote for a cross-chain swap
-- [`useSwapsApiCreateIntent()`](src/hooks/swapsApi/useSwapsApiCreateIntent.ts) — Build an unsigned create-intent tx
-- [`useSwapsApiSubmitTx()`](src/hooks/swapsApi/useSwapsApiSubmitTx.ts) — Submit swap tx to backend
-- [`useSwapsApiSubmitTxStatus()`](src/hooks/swapsApi/useSwapsApiSubmitTxStatus.ts) — Check submitted swap status
+- [`useSwapsApiQuote()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/swapsApi/useSwapsApiQuote.ts) — Solver quote for a cross-chain swap
+- [`useSwapsApiCreateIntent()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/swapsApi/useSwapsApiCreateIntent.ts) — Build an unsigned create-intent tx
+- [`useSwapsApiSubmitTx()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/swapsApi/useSwapsApiSubmitTx.ts) — Submit swap tx to backend
+- [`useSwapsApiSubmitTxStatus()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/swapsApi/useSwapsApiSubmitTxStatus.ts) — Check submitted swap status
 
-See [`src/hooks/swapsApi/`](src/hooks/swapsApi/) for the full set (tokens, deadline, allowance, approve, submit/cancel intent, status, hash, packet, extra-data, intent lookups, limit orders, gas, fees).
+See [`src/hooks/swapsApi/`](https://github.com/icon-project/sodax-sdks/tree/main/packages/dapp-kit/src/hooks/swapsApi) for the full set (tokens, deadline, allowance, approve, submit/cancel intent, status, hash, packet, extra-data, intent lookups, limit orders, gas, fees).
 
 ### Utils
 
 DEX param builders:
 
-- [`createDepositParamsProps()`](src/utils/dex-utils.ts) — Build deposit params from pool data and spoke asset info
-- [`createWithdrawParamsProps()`](src/utils/dex-utils.ts) — Build withdraw params with optional destination info
-- [`createSupplyLiquidityParamsProps()`](src/utils/dex-utils.ts) — Build concentrated liquidity supply params
-- [`createDecreaseLiquidityParamsProps()`](src/utils/dex-utils.ts) — Build decrease liquidity params
+- [`createDepositParamsProps()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/utils/dex-utils.ts) — Build deposit params from pool data and spoke asset info
+- [`createWithdrawParamsProps()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/utils/dex-utils.ts) — Build withdraw params with optional destination info
+- [`createSupplyLiquidityParamsProps()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/utils/dex-utils.ts) — Build concentrated liquidity supply params
+- [`createDecreaseLiquidityParamsProps()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/utils/dex-utils.ts) — Build decrease liquidity params
 
 NEAR storage gate:
 
-- [`resolveNearStorageGate()`](src/utils/nearStorageGate.ts) — Derive the NEP-141 storage-registration UI gate state (hook-free counterpart of `useNearStorageGate`)
+- [`resolveNearStorageGate()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/utils/nearStorageGate.ts) — Derive the NEP-141 storage-registration UI gate state (hook-free counterpart of `useNearStorageGate`)
 
 ## Development
 
@@ -341,7 +341,7 @@ Then point your agent at `node_modules/@sodax/skills/AGENTS.md`. See [docs/ai-in
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/LICENSE)
 
 ## Support
 

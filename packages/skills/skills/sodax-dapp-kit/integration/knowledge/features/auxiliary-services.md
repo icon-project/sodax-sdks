@@ -143,11 +143,12 @@ Stellar accounts that have never held an asset have no trustline — receiving w
 
 ```ts
 // @ai-snippets-skip — illustrative only; real types pulled into agents below.
-// useStellarTrustlineCheck takes { token, amount, chainId, walletProvider } under params.
-// `chainId` here is a `SpokeChainKey` (typed loosely so consumers can pass any chain key —
-// the hook returns `true` for non-Stellar chains, making it safe to gate on conditionally).
+// useStellarTrustlineCheck reads a trustline (no signing). Pass the resolved Stellar account
+// `walletAddress` (e.g. useXAccount('STELLAR').address) — it keys the cache per account, so the
+// verdict is never reused across accounts. `chainId` is a `SpokeChainKey` (typed loosely — the hook
+// returns `true` for non-Stellar chains, making it safe to gate on conditionally).
 const { data: hasTrustline } = useStellarTrustlineCheck({
-  params: { token, amount, chainId: ChainKeys.STELLAR_MAINNET, walletProvider },
+  params: { token, amount, chainId: ChainKeys.STELLAR_MAINNET, walletAddress },
 });
 
 // useRequestTrustline is NOT a canonical mutation hook — it takes a single positional

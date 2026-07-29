@@ -98,10 +98,13 @@ These guide every change. Where a rule maps to tooling (types, lint, tests, `che
 - **Comment sparingly — why, not what.** Explain a non-obvious constraint or decision in a line or two; don't narrate what the code or config already says, and don't leave commented-out code.
 - **Cover new code with meaningful tests.** Add or extend tests for core flows, invariants, edge cases, and chain/feature matrices beside the changed code; don't rely on superficial coverage.
 - **Keep AI docs faithful.** When public behavior, imports, signatures, examples, chains, tokens, or feature support change, update `packages/skills` so agents can implement from code + docs without guessing; run `pnpm check:ai`.
+- **Docs mirrored to GitBook keep absolute links.** `scripts/gitbook-sync-map.json` lists the READMEs and `packages/sdk/docs` pages that `sodax-document` mirrors to docs.sodax.com, moving and renaming them. In those files a link may stay relative only when the target is mirrored into the same destination directory under the same filename; every other target (moved doc, unmirrored doc, source file, directory) needs an absolute `https://github.com/icon-project/sodax-sdks/blob/main/…` URL, and never a `sodax-document` URL. Gate: `pnpm check:doc-links`.
 
 **Definition of done:** scoped diff · behavior verified against `src/` · relevant `test`/`checkTs`/`lint`/`check:ai` green · `packages/skills` updated when public behavior changed · no unrelated refactor.
 
 To review a change against these rules, use the `review-core-sdk` skill (`.claude/skills/review-core-sdk/`).
+
+To author or validate changesets and govern a release (SemVer bumps, changelogs, `CONFIG_VERSION`), use the `release-governance` skill (`.claude/skills/release-governance/`).
 
 ## AI File Maintenance
 
@@ -110,7 +113,8 @@ To review a change against these rules, use the `review-core-sdk` skill (`.claud
 - Root guidance is for information every domain needs. Put package/app-specific architecture, patterns, commands, and pitfalls in that subtree's `AGENTS.md`.
 - Prefer broad durable patterns over volatile enumerations. When exact values matter, point agents to source files or package docs rather than copying values.
 - Validate changes to these files with `pnpm check:ai-dev-files`.
+- When a mirrored doc is added, renamed, or removed, update `scripts/gitbook-sync-map.json` and `sodax-document/sync-sodax-sdks.sh` together — that script is the upstream authority, and a stale mapping breaks the sync.
 
 ## CI Shape
 
-GitHub Actions install dependencies with a frozen lockfile, lint, check circular dependencies, build packages, typecheck, validate dev AI files, validate AI consumer docs, build apps, run smoke checks, and run tests. When changing `packages/skills`, run `pnpm check:ai` locally.
+GitHub Actions install dependencies with a frozen lockfile, lint, check circular dependencies, build packages, typecheck, validate dev AI files, validate AI consumer docs, validate mirrored doc links, build apps, run smoke checks, and run tests. When changing `packages/skills`, run `pnpm check:ai` locally; when changing a mirrored doc, run `pnpm check:doc-links`.

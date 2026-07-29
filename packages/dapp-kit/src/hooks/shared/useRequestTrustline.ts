@@ -53,7 +53,7 @@ export function useRequestTrustline(token: string | undefined): {
         });
         setData(result);
         setIsRequested(true);
-        queryClient.invalidateQueries({ queryKey: ['shared', 'stellarTrustlineCheck', token] });
+        queryClient.invalidateQueries({ queryKey: ['shared', 'stellarTrustlineCheck', srcChainKey, token, srcAddress] });
         return result;
       } catch (err) {
         const error = err instanceof Error ? err : new Error('Unknown error occurred');

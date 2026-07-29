@@ -1,4 +1,5 @@
 import { SelectChain } from '@/components/swaps-api/SelectChain';
+import { SelectToken } from '@/components/swaps-api/SelectToken';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -12,14 +13,12 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { calculateExchangeRate, formatMutationFailureMessage, formatTokenAmount } from '@/lib/utils';
 import { parseUnits, formatUnits } from 'viem';
 import type {
   BitcoinRawTransaction,
   ChainType,
   CreateIntentParamsV2,
-  GetWalletProviderType,
   Hex,
   IBitcoinWalletProvider,
   IStellarWalletProvider,
@@ -59,7 +58,9 @@ import {
   useXDisconnect,
   useXService,
 } from '@sodax/wallet-sdk-react';
-import type { SwapsApiOrder } from '@/components/swaps-api/OrderStatus';
+import { buildOrderSummary, type Order } from '@/components/swaps/OrderStatus';
+import { appendOrder } from '@/lib/orderHistory';
+import { loadSwapsApiSelection, saveSwapsApiSelection } from '@/components/swaps-api/lib/lastSelection';
 import { toIntentRequest, toXToken } from '@/components/swaps-api/lib/mappers';
 import {
   isSignableSwapsApiChain,
@@ -70,17 +71,17 @@ import { useDebouncedValue } from '@/components/swaps-api/lib/useDebouncedValue'
 import { useAppStore } from '@/zustand/useAppStore';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
 
-export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAction<SwapsApiOrder[]>) => void }) {
+export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAction<Order[]>) => void }) {
   // Chain + token state. Chains and tokens come from the Swaps API token map, so chain keys
   // are plain strings; wallet-layer hooks get them cast to SpokeChainKey.
-  const [src, setSrc] = useState<{ chain: string; token: SwapTokenV2 | undefined }>({
-    chain: ChainKeys.ARBITRUM_MAINNET,
+  const [src, setSrc] = useState<{ chain: string; token: SwapTokenV2 | undefined }>(() => ({
+    chain: loadSwapsApiSelection().src?.chain ?? ChainKeys.ARBITRUM_MAINNET,
     token: undefined,
-  });
-  const [dst, setDst] = useState<{ chain: string; token: SwapTokenV2 | undefined }>({
-    chain: ChainKeys.POLYGON_MAINNET,
+  }));
+  const [dst, setDst] = useState<{ chain: string; token: SwapTokenV2 | undefined }>(() => ({
+    chain: loadSwapsApiSelection().dst?.chain ?? ChainKeys.POLYGON_MAINNET,
     token: undefined,
-  });
+  }));
   const srcChainKey = src.chain as SpokeChainKey;
   const dstChainKey = dst.chain as SpokeChainKey;
 
@@ -107,12 +108,26 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const { data: tokensByChain } = useSwapsApiTokens();
   const chainList = useMemo(() => Object.keys(tokensByChain ?? {}), [tokensByChain]);
 
-  // Seed default tokens once the token map arrives.
+  // Seed tokens once the map arrives — preferring the last-used symbol per chain, else the first.
   useEffect(() => {
     if (!tokensByChain) return;
-    setSrc(prev => (prev.token ? prev : { ...prev, token: tokensByChain[prev.chain]?.[0] }));
-    setDst(prev => (prev.token ? prev : { ...prev, token: tokensByChain[prev.chain]?.[0] }));
+    const saved = loadSwapsApiSelection();
+    const pick = (chain: string, symbol?: string) => {
+      const list = tokensByChain[chain];
+      return (symbol ? list?.find(t => t.symbol === symbol) : undefined) ?? list?.[0];
+    };
+    setSrc(prev => (prev.token ? prev : { ...prev, token: pick(prev.chain, saved.src?.tokenSymbol) }));
+    setDst(prev => (prev.token ? prev : { ...prev, token: pick(prev.chain, saved.dst?.tokenSymbol) }));
   }, [tokensByChain]);
+
+  // Persist the latest chain/token picks (symbol only) so From/To restore on reload.
+  useEffect(() => {
+    if (!src.token || !dst.token) return;
+    saveSwapsApiSelection({
+      src: { chain: src.chain, tokenSymbol: src.token.symbol },
+      dst: { chain: dst.chain, tokenSymbol: dst.token.symbol },
+    });
+  }, [src, dst]);
 
   const onChangeDirection = () => {
     setSrc(dst);
@@ -301,10 +316,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       token: intentParams?.outputToken,
       amount: intentParams ? BigInt(intentParams.minOutputAmount) : undefined,
       chainId: intentParams?.dstChainKey as SpokeChainKey | undefined,
-      walletProvider:
-        dst.chain === ChainKeys.STELLAR_MAINNET
-          ? (destWalletProvider as GetWalletProviderType<typeof ChainKeys.STELLAR_MAINNET> | undefined)
-          : undefined,
+      walletAddress: dst.chain === ChainKeys.STELLAR_MAINNET ? destAccount.address : undefined,
     },
   });
   if (trustlineError) {
@@ -407,7 +419,20 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
         return;
       }
 
-      setOrders(prev => [...prev, { txHash: spokeTxHash, srcChainKey: src.chain }]);
+      setOrders(prev =>
+        appendOrder(prev, {
+          mode: 'submit-tx',
+          txHash: spokeTxHash,
+          srcChainKey: src.chain,
+          createdAt: Date.now(),
+          summary: buildOrderSummary(
+            src,
+            dst,
+            debouncedAmount,
+            quote?.quotedAmount ? BigInt(quote.quotedAmount) : undefined,
+          ),
+        }),
+      );
       setOpen(false);
     } catch (error) {
       setSwapError(formatMutationFailureMessage(error, 'Swap signing failed'));
@@ -478,26 +503,12 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
               onChange={e => setSourceAmount(e.target.value)}
             />
           </div>
-          <Select
+          <SelectToken
+            tokens={tokensByChain?.[src.chain] ?? []}
             value={src.token?.symbol}
-            onValueChange={v => {
-              setSrc(prev => ({
-                ...prev,
-                token: tokensByChain?.[src.chain]?.find(token => token.symbol === v),
-              }));
-            }}
-          >
-            <SelectTrigger className="w-[110px]">
-              <SelectValue placeholder="Token" />
-            </SelectTrigger>
-            <SelectContent>
-              {(tokensByChain?.[src.chain] ?? []).map(token => (
-                <SelectItem key={`${token.address}-${token.symbol}`} value={token.symbol}>
-                  {token.symbol}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onSelect={token => setSrc(prev => ({ ...prev, token }))}
+            className="w-[110px]"
+          />
         </div>
         <div className="mix-blend-multiply text-black text-(length:--body-comfortable) font-medium font-['InterRegular'] flex gap-1">
           <span className="hidden sm:inline">Balance:</span>
@@ -562,26 +573,12 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
               readOnly
             />
           </div>
-          <Select
+          <SelectToken
+            tokens={tokensByChain?.[dst.chain] ?? []}
             value={dst.token?.symbol}
-            onValueChange={v => {
-              setDst(prev => ({
-                ...prev,
-                token: tokensByChain?.[dst.chain]?.find(token => token.symbol === v),
-              }));
-            }}
-          >
-            <SelectTrigger className="w-[110px]">
-              <SelectValue placeholder="Token" />
-            </SelectTrigger>
-            <SelectContent>
-              {(tokensByChain?.[dst.chain] ?? []).map(token => (
-                <SelectItem key={`${token.address}-${token.symbol}`} value={token.symbol}>
-                  {token.symbol}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onSelect={token => setDst(prev => ({ ...prev, token }))}
+            className="w-[110px]"
+          />
         </div>
         <div className="mix-blend-multiply text-black text-(length:--body-comfortable) font-medium font-['InterRegular'] flex gap-1">
           <span className="hidden sm:inline">Balance:</span>

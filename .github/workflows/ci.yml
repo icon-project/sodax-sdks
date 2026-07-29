@@ -76,6 +76,9 @@ jobs:
       - name: AI docs validation
         run: pnpm check:ai
 
+      - name: Doc link validation
+        run: pnpm check:doc-links
+
       - name: Build Apps
         run: pnpm turbo run build --filter='./apps/*' --filter='!./apps/node'
 

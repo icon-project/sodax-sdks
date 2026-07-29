@@ -31,6 +31,28 @@ export type XToken = {
   readonly access?: XTokenAccess;
 };
 
+/**
+ * Base URL for default token logos hosted in the `@sodax/assets` package.
+ * Each logo is served from `main` via raw.githubusercontent and named by the
+ * token's slugified symbol, so the full URL is `${TOKEN_LOGO_BASE_URL}/<slug>.png`.
+ */
+export const TOKEN_LOGO_BASE_URL =
+  'https://raw.githubusercontent.com/icon-project/sodax-sdks/main/packages/assets/token';
+
+/**
+ * Filename slug for a token logo: the symbol lowercased with every run of
+ * non-alphanumeric characters collapsed to a single `-` (so `bnUSD (legacy)` →
+ * `bnusd-legacy`, `AVAX.LL` → `avax-ll`). Keeps filenames URL- and path-safe.
+ */
+export const tokenLogoSlug = (symbol: string): string =>
+  symbol
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+
+/** Default logo URL for a token, resolved from its symbol (hosted in @sodax/assets). */
+export const tokenLogo = (symbol: string): string => `${TOKEN_LOGO_BASE_URL}/${tokenLogoSlug(symbol)}.png`;
+
 export const StatATokenAddresses = {
   '0xac8540fee419c7ceb985889eaba1e84b42a53e8a': '0x21685E341DE7844135329914Be6Bd8D16982d834',
   '0x8ade79c255761971f4057253712b916ab2494275': '0x7A1A5555842Ad2D0eD274d09b5c4406a95799D5d',
@@ -62,9 +84,11 @@ export const HubVaultSymbols = [
   'sodaNEAR',
   'sodaKAIA',
   'sodaSTX',
-  'sodaUSDS',
+  'sodaSUSDS',
   'sodaHBAR',
   'sodaJITOSOL',
+  'sodaUSDS',
+  'sodaUSSD',
 ] as const;
 
 export type HubVaultSymbol = (typeof HubVaultSymbols)[number];
@@ -286,9 +310,9 @@ export const SodaTokens = {
     hubAsset: '0x1Fbe5229e9d189F26bEE77E5bFa24309FdA90483',
     vault: '0x1Fbe5229e9d189F26bEE77E5bFa24309FdA90483',
   },
-  sodaUSDS: {
-    symbol: 'sodaUSDS',
-    name: 'Soda USDS',
+  sodaSUSDS: {
+    symbol: 'sodaSUSDS',
+    name: 'SODA sUSDS',
     decimals: 18,
     address: '0x243b0c26c8b38793908d7C64e8510f21B19B4613',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -312,7 +336,25 @@ export const SodaTokens = {
     chainKey: ChainKeys.SONIC_MAINNET,
     hubAsset: '0xe1bad4400d947Bc4fa66f9c0A143D800002083a0',
     vault: '0xe1bad4400d947Bc4fa66f9c0A143D800002083a0',
-  }
+  },
+  sodaUSDS: {
+    symbol: 'sodaUSDS',
+    name: 'Soda USDS',
+    decimals: 18,
+    address: '0xA3AeFa2BAfEAB479c4Aca6024A16906bbC75566e',
+    chainKey: ChainKeys.SONIC_MAINNET,
+    hubAsset: '0xA3AeFa2BAfEAB479c4Aca6024A16906bbC75566e',
+    vault: '0xA3AeFa2BAfEAB479c4Aca6024A16906bbC75566e',
+  },
+  sodaUSSD: {
+    symbol: 'sodaUSSD',
+    name: 'Soda USSD',
+    decimals: 18,
+    address: '0xb780e09576C2667ba9F5B80FbAb2e6b8A0a21e37',
+    chainKey: ChainKeys.SONIC_MAINNET,
+    hubAsset: '0xb780e09576C2667ba9F5B80FbAb2e6b8A0a21e37',
+    vault: '0xb780e09576C2667ba9F5B80FbAb2e6b8A0a21e37',
+  },
 } as const satisfies Record<HubVaultSymbol, XToken>;
 
 /**
@@ -423,6 +465,15 @@ export const sonicSupportedTokens = {
     chainKey: ChainKeys.SONIC_MAINNET,
     hubAsset: '0x7c7d53EEcda37a87ce0D5bf8E0b24512A48dC963',
     vault: SodaTokens.sodaSODA.address,
+  },
+  USSD: {
+    symbol: 'USSD',
+    name: 'US Sonic Dollar',
+    decimals: 18,
+    address: '0x000000000eCcFf26B795F73fb0A70d48da657fEf',
+    chainKey: ChainKeys.SONIC_MAINNET,
+    hubAsset: '0x000000000eCcFf26B795F73fb0A70d48da657fEf',
+    vault: SodaTokens.sodaUSSD.address,
   },
   ...SodaTokens,
   ...LsodaTokens,
@@ -915,6 +966,15 @@ export const arbitrumSupportedTokens = {
     address: '0xddb46999f8891663a8f2828d25298f70416d7610',
     chainKey: ChainKeys.ARBITRUM_MAINNET,
     hubAsset: '0x8794A87979efA70bBE29Ed3357e9A93932B48675',
+    vault: SodaTokens.sodaSUSDS.address,
+  },
+  USDS: {
+    symbol: 'USDS',
+    name: 'USDS Stablecoin',
+    decimals: 18,
+    address: '0x6491c05A82219b8D1479057361ff1654749b876b',
+    chainKey: ChainKeys.ARBITRUM_MAINNET,
+    hubAsset: '0x856c02acdD01947788dc5D218A3cb2c4C9BdEed2',
     vault: SodaTokens.sodaUSDS.address,
   },
   ARB: {
@@ -1018,6 +1078,15 @@ export const baseSupportedTokens = {
     chainKey: ChainKeys.BASE_MAINNET,
     hubAsset: '0x72E852545B024ddCbc5b70C1bCBDAA025164259C',
     vault: SodaTokens.sodaUSDC.address,
+  },
+  USDS: {
+    symbol: 'USDS',
+    name: 'USDS Stablecoin',
+    decimals: 18,
+    address: '0x820C137fa70C8691f0e44Dc420a5e53c168921Dc',
+    chainKey: ChainKeys.BASE_MAINNET,
+    hubAsset: '0xFE9b81eF40419Ef9Ce62cCff197345D78c552945',
+    vault: SodaTokens.sodaUSDS.address,
   },
   wstETH: {
     symbol: 'wstETH',
@@ -2083,6 +2152,15 @@ export const ethereumSupportedTokens = {
     chainKey: ChainKeys.ETHEREUM_MAINNET,
     hubAsset: '0x46bd0ce9b2b455ac4377cd142ecb8b719715197d',
     vault: SodaTokens.sodaUSDC.address,
+  },
+  USDS: {
+    symbol: 'USDS',
+    name: 'USDS Stablecoin',
+    decimals: 18,
+    address: '0xdC035D45d973E3EC169d2276DDab16f1e407384F',
+    chainKey: ChainKeys.ETHEREUM_MAINNET,
+    hubAsset: '0x31D3a9319C76EC4A474721966dA65b94e6bFc9eF',
+    vault: SodaTokens.sodaUSDS.address,
   },
   LL: {
     symbol: 'LL',

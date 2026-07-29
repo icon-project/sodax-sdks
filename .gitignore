@@ -28,3 +28,9 @@ public/dist
 scripts/find_malicious_npm_packages.sh
 .pnpm-store/
 skills-lock.json
+
+# In-progress package-version recovery state
+.changeset/.version-packages-state.json*
+
+# Local SDK audit scratch — the shared Audits/ reports are tracked; the sdk/ subdir stays local.
+Audits/sdk

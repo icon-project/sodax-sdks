@@ -24,6 +24,7 @@ export const moneyMarketSupportedTokens = {
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.USDC,
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.SODA,
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.sUSDS,
+    spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.USDS,
   ] as const satisfies XToken[],
   [ChainKeys.BASE_MAINNET]: [
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.ETH,
@@ -34,6 +35,7 @@ export const moneyMarketSupportedTokens = {
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.cbBTC,
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.SODA,
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.USDT,
+    spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.USDS,
   ] as const satisfies XToken[],
   [ChainKeys.OPTIMISM_MAINNET]: [
     spokeChainConfig[ChainKeys.OPTIMISM_MAINNET].supportedTokens.ETH,
@@ -130,6 +132,7 @@ export const moneyMarketSupportedTokens = {
     spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.USDT,
     spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.wS,
     spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.SODA,
+    spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.USSD,
     ...Object.values(SodaTokens),
   ] as const satisfies XToken[],
   [ChainKeys.NEAR_MAINNET]: [
@@ -150,6 +153,7 @@ export const moneyMarketSupportedTokens = {
     spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.WBTC,
     spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.WBTC_LEGACY,
     spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.LL,
+    spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.USDS,
   ] as const,
   [ChainKeys.REDBELLY_MAINNET]: [
     spokeChainConfig[ChainKeys.REDBELLY_MAINNET].supportedTokens.bnUSD,

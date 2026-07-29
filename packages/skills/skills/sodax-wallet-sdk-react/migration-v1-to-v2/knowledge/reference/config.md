@@ -215,7 +215,7 @@ v1 accepted a top-level `initialState` prop (`WagmiState`) for SSR hydration. v2
 }}>
 ```
 
-If you previously derived `initialState` via `cookieToInitialState(...)` in a server component, keep that logic — just pass the result into `EVM.initialState` instead of the top-level prop. See [`../recipes/ssr-setup.md`](../recipes/ssr-setup.md) for a full Next.js example.
+If you previously derived `initialState` via wagmi's `cookieToInitialState(...)` in a server component, switch to `tryCookieToInitialState(...)` (from `@sodax/wallet-sdk-react/xchains/evm`, so a malformed cookie can't throw during SSR) and pass the result into `EVM.initialState` instead of the top-level prop. Build the server's `createWagmiConfig` from the **same** `chains`/`persistKey` as the client, or the SSR read hits the wrong cookie. See [`../recipes/ssr-setup.md`](../recipes/ssr-setup.md) for a full Next.js example.
 
 ---
 
