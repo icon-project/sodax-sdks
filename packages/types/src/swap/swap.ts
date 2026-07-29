@@ -251,6 +251,7 @@ export const swapSupportedTokens = {
   ] as const satisfies XToken[],
   // Hedera is currently staging-only — see stagingSwapSupportedTokens
   [ChainKeys.HEDERA_MAINNET]: [],
+  [ChainKeys.ROBINHOOD_MAINNET]: [], // staging-first rollout — see stagingOnlySwapTokens
 } as const satisfies Record<SpokeChainKey, readonly XToken[]>;
 
 // Tokens supported ONLY in the staging solver environment.
@@ -296,6 +297,12 @@ export const stagingSwapSupportedTokens = {
     spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.bnUSD,
     spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.USDC,
     spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.SODA,
+  ] as const satisfies XToken[],
+  [ChainKeys.ROBINHOOD_MAINNET]: [
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.ETH,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.bnUSD,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.SODA,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.USDG,
   ] as const satisfies XToken[],
 } as const satisfies Record<SpokeChainKey, readonly XToken[]>;
 

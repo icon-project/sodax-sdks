@@ -26,6 +26,7 @@ import {
   kaiaSupportedTokens,
   stacksSupportedTokens,
   hederaSupportedTokens,
+  robinhoodSupportedTokens,
 } from './tokens.js';
 
 import { ChainKeys, CHAIN_KEYS, type ChainKey, type ChainType } from './chain-keys.js';
@@ -55,6 +56,7 @@ export const RelayChainIdMap = {
   [ChainKeys.KAIA_MAINNET]: 27489n,
   [ChainKeys.STACKS_MAINNET]: 60n,
   [ChainKeys.HEDERA_MAINNET]: 18501n,
+  [ChainKeys.ROBINHOOD_MAINNET]: 21071n,
 } as const satisfies Record<ChainKey, bigint>;
 
 export type IntentChainId = (typeof RelayChainIdMap)[keyof typeof RelayChainIdMap];
@@ -367,6 +369,20 @@ export const baseChainInfo = {
       txUrl: 'https://hashscan.io/mainnet/transaction/',
       addressUrl: 'https://hashscan.io/mainnet/account/',
       contractUrl: 'https://hashscan.io/mainnet/contract/',
+    },
+  },
+  [ChainKeys.ROBINHOOD_MAINNET]: {
+    name: 'Robinhood Chain',
+    key: ChainKeys.ROBINHOOD_MAINNET,
+    type: 'EVM',
+    chainId: 4663,
+    mainnet: true,
+    logo: chainLogo(ChainKeys.ROBINHOOD_MAINNET),
+    explorer: {
+      baseUrl: 'https://robinhoodchain.blockscout.com/',
+      txUrl: 'https://robinhoodchain.blockscout.com/tx/',
+      addressUrl: 'https://robinhoodchain.blockscout.com/address/',
+      contractUrl: 'https://robinhoodchain.blockscout.com/address/',
     },
   },
 } as const satisfies Record<ChainKey, BaseChainInfo<ChainType>>;
@@ -1018,6 +1034,21 @@ export const spokeChainConfig = {
     supportedTokens: hederaSupportedTokens,
     pollingConfig: {
       pollingIntervalMs: 2000,
+      maxTimeoutMs: 60_000,
+    },
+  } as const satisfies EvmSpokeChainConfig,
+  [ChainKeys.ROBINHOOD_MAINNET]: {
+    chain: baseChainInfo[ChainKeys.ROBINHOOD_MAINNET] satisfies BaseChainInfo<'EVM'>,
+    rpcUrl: 'https://rpc.mainnet.chain.robinhood.com',
+    addresses: {
+      assetManager: '0x0df73542cC68bDC01b361d231c60F726B0e0bC05',
+      connection: '0x4555aC13D7338D9E671584C1D118c06B2a3C88eD',
+    },
+    nativeToken: '0x0000000000000000000000000000000000000000' as const,
+    bnUSD: '0x3cd95C469be0EDFD12Bd4F3a4436B132B7908DF4',
+    supportedTokens: robinhoodSupportedTokens,
+    pollingConfig: {
+      pollingIntervalMs: 1000,
       maxTimeoutMs: 60_000,
     },
   } as const satisfies EvmSpokeChainConfig,
