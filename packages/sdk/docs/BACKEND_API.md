@@ -269,7 +269,7 @@ Swap-tx submission and the rest of the typed Swaps API v2 moved off `BackendApiS
 client — `sodax.api.swaps` (`SwapsApiService`). Submit a signed spoke-chain swap transaction with
 `sodax.api.swaps.submitTx(...)` and poll it with
 `sodax.api.swaps.getSubmitTxStatus({ txHash, srcChainKey })` (both fields required). See
-[`SWAPS_API.md`](SWAPS_API.md) for the full 21-endpoint reference (quote, create-intent, submit-tx,
+[`SWAPS_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS_API.md) for the full 21-endpoint reference (quote, create-intent, submit-tx,
 status, fees, …).
 
 ## Bridge Endpoints
@@ -279,7 +279,7 @@ The Bridge API v2 is a sibling typed client — `sodax.api.bridge` (`BridgeApiSe
 minus the solver/intent surface: allowance/approve/create-bridge-intent, submit-tx + status, tokens, and
 the fee/bridgeable-amount/bridgeable discovery quotes. Submit a signed spoke-deposit with
 `sodax.api.bridge.submitTx(...)` (passing the FULL `relayData { address, payload }` envelope, not just the
-payload). See [`BRIDGE_API.md`](BRIDGE_API.md) for the full reference.
+payload). See [`BRIDGE_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BRIDGE_API.md) for the full reference.
 
 ## Solver Endpoints
 

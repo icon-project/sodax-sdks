@@ -1,6 +1,6 @@
 # How to Make a Swap
 
-> **Error handling conventions:** The swap module returns `SodaxError<SwapErrorCode>` from `swap`, `createIntent`, `postExecution`, `createLimitOrder`, and `createLimitOrderIntent`. Discriminate on `result.error.code` (e.g. `'RELAY_TIMEOUT'`) — not `result.error.message`. See [SWAPS.md](./SWAPS.md#error-handling) for the full per-method code unions. The lower-level methods (`getQuote`, `getStatus`, `submitIntent`, `getSolvedIntentPacket`, `cancelIntent`, …) still return `Result<T, SolverErrorResponse>` or `Result<T, Error | unknown>` — `cancelIntent`/`cancelLimitOrder` were not migrated to `SodaxError`, so don't `switch (error.code)` on those.
+> **Error handling conventions:** The swap module returns `SodaxError<SwapErrorCode>` from `swap`, `createIntent`, `postExecution`, `createLimitOrder`, and `createLimitOrderIntent`. Discriminate on `result.error.code` (e.g. `'RELAY_TIMEOUT'`) — not `result.error.message`. See [SWAPS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md#error-handling) for the full per-method code unions. The lower-level methods (`getQuote`, `getStatus`, `submitIntent`, `getSolvedIntentPacket`, `cancelIntent`, …) still return `Result<T, SolverErrorResponse>` or `Result<T, Error | unknown>` — `cancelIntent`/`cancelLimitOrder` were not migrated to `SodaxError`, so don't `switch (error.code)` on those.
 
 This guide provides a step-by-step walkthrough for executing a cross-chain swap using the Sodax SDK. It covers everything from initializing the SDK to handling errors during the swap process.
 
@@ -431,7 +431,7 @@ await checkIntentStatus(sodax, intentDeliveryInfo.dstTxHash);
 
 All swap methods return `Result<T, SodaxError<SwapErrorCode>>`. Discriminate on **`result.error.code`** (a closed reason-only union), never on `error.message` (human-readable, may change). The original lower-level failure is preserved on `error.cause`; structured metadata is on `error.context`.
 
-See [SWAPS.md](./SWAPS.md#error-handling) for the full per-method code unions and `context` schema.
+See [SWAPS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md#error-handling) for the full per-method code unions and `context` schema.
 
 ```typescript
 if (!swapResult.ok) {
@@ -476,7 +476,7 @@ if (!swapResult.ok) {
 }
 ```
 
-**Note**: The swap module exports narrow guards `isSwapError`, `isSwapCreateIntentError`, `isPostExecutionError` from `@sodax/sdk`. Use them in `catch` blocks for cross-bundle type safety; see [SWAPS.md](./SWAPS.md#error-handling).
+**Note**: The swap module exports narrow guards `isSwapError`, `isSwapCreateIntentError`, `isPostExecutionError` from `@sodax/sdk`. Use them in `catch` blocks for cross-bundle type safety; see [SWAPS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md#error-handling).
 
 ## Complete Example
 
