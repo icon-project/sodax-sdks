@@ -599,22 +599,18 @@ async function executeSwap(
 
     // Step 7: Handle Swap Result
     if (!swapResult.ok) {
-      const error = swapResult.error;
+      const error = swapResult.error; // SwapError = SodaxError<SwapErrorCode>
       console.error('Swap failed');
 
-      if (error instanceof Error) {
-        switch (error.message) {
-          case 'POST_EXECUTION_FAILED':
-            console.error('Post execution failed. Cause:', error.cause);
-            break;
-          case 'RELAY_TIMEOUT':
-            console.error('Hub relay timed out. Cause:', error.cause);
-            break;
-          default:
-            console.error('Error:', error.message, error.cause ?? '');
-        }
-      } else {
-        console.error('Non-Error failure:', error);
+      switch (error.code) {
+        case 'EXECUTION_FAILED':
+          console.error('Swap orchestration failed. Cause:', error.cause);
+          break;
+        case 'RELAY_TIMEOUT':
+          console.error('Hub relay timed out. Cause:', error.cause);
+          break;
+        default:
+          console.error('Error:', error.code, error.cause ?? '');
       }
       return;
     }

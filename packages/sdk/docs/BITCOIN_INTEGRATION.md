@@ -39,7 +39,7 @@ Add `BITCOIN: {}` to `SodaxWalletProvider`. Defaults already point at production
 import { SodaxProvider } from "@sodax/dapp-kit";
 import { SodaxWalletProvider } from "@sodax/wallet-sdk-react";
 
-<SodaxProvider testnet={false}>
+<SodaxProvider>
   <QueryClientProvider client={queryClient}>
     <SodaxWalletProvider config={{ BITCOIN: {} }}>
       {children}

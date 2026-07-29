@@ -219,9 +219,9 @@ const swapResult = await sodax.swaps.swap({
 });
 
 if (!swapResult.ok) {
-  // result.error.message is a phase tag: 'POST_EXECUTION_FAILED' | 'RELAY_TIMEOUT'
-  // result.error.cause holds the underlying error
-  console.error(swapResult.error);
+  // swapResult.error is SodaxError<SwapErrorCode> — discriminate on result.error.code
+  // (e.g. 'EXECUTION_FAILED' | 'RELAY_TIMEOUT'); result.error.cause holds the underlying error
+  console.error(swapResult.error.code, swapResult.error.cause);
   return;
 }
 

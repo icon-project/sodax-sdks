@@ -30,7 +30,7 @@ Package can be locally installed by following this steps:
 How to setup local development
 
 1. Clone repository.
-2. Make sure you have [Node.js](https://nodejs.org/en/download/package-manager) v18+ and corresponding npm installed on your system.
+2. Make sure you have [Node.js](https://nodejs.org/en/download/package-manager) v20.12.0+ and corresponding npm installed on your system.
 3. Execute `pnpm install` command (from root of the project) in your CLI to install dependencies.
 4. Make code changes.
    1. Do not forget to export TS files in same folder `index.ts`.
@@ -89,6 +89,10 @@ How to setup local development
 * Injective ✅
 * NEAR ✅
 * Stacks ✅
+
+<a href="https://docs.sodax.com/developers/packages/sdk/dex" class="button secondary" data-icon="chart-line">DEX</a>- Concentrated-liquidity DEX asset operations on the Sonic hub
+
+<a href="https://docs.sodax.com/developers/packages/sdk/leverage_yield" class="button secondary" data-icon="chart-line-up">Leverage Yield</a>- Leveraged-yield ERC-4626 vaults on the Sonic hub
 
 ### Tooling Modules inside the SDK
 

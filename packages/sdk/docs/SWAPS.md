@@ -185,7 +185,7 @@ function isSodaxError(e: unknown): e is SodaxError;
 | Method | Error type | Codes |
 |---|---|---|
 | `swap` | `SwapError` | `USER_REJECTED`, `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `EXTERNAL_API_ERROR`, `UNKNOWN` |
-| `createIntent` / `createLimitOrderIntent` | `CreateIntentError` | `USER_REJECTED`, `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
+| `createIntent` / `createLimitOrderIntent` | `SwapCreateIntentError` | `USER_REJECTED`, `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
 | `postExecution` | `PostExecutionError` | `EXECUTION_FAILED`, `EXTERNAL_API_ERROR`, `UNKNOWN` |
 | `createLimitOrder` | `SwapError` | (same as `swap`) |
 
@@ -197,7 +197,7 @@ function isSodaxError(e: unknown): e is SodaxError;
 {
   srcChainKey?: SpokeChainKey;
   dstChainKey?: SpokeChainKey;
-  phase?: 'validate' | 'createIntent' | 'verify' | 'submit' | 'relay' | 'postExecution';
+  phase?: 'validate' | 'intentCreation' | 'verify' | 'submit' | 'relay' | 'postExecution';
   // Only on EXTERNAL_API_ERROR:
   api?: 'solver';                // discriminator for upstream API errors (used as Sentry/Datadog tag)
   solverCode?: SolverIntentErrorCode;
@@ -952,6 +952,10 @@ if (!swapResult.ok) {
   const error = swapResult.error; // SwapError = SodaxError<SwapErrorCode>
 
   switch (error.code) {
+    case 'USER_REJECTED':
+      // User cancelled the wallet prompt. Not a failure — reset the UI, don't show an error.
+      break;
+
     case 'EXECUTION_FAILED':
       // Solver notification failed — the intent may have been created and relayed
       // successfully. Check intent status manually, then retry postExecution.
@@ -1002,7 +1006,7 @@ if (!swapResult.ok) {
 
 ### Handling `createIntent` Errors
 
-`createIntent` returns `Result<CreateIntentResult, CreateIntentError>`. The narrow union is `'VALIDATION_FAILED' | 'INTENT_CREATION_FAILED' | 'UNKNOWN'`:
+`createIntent` returns `Result<CreateIntentResult, SwapCreateIntentError>`. The narrow union is `'USER_REJECTED' | 'VALIDATION_FAILED' | 'INTENT_CREATION_FAILED' | 'UNKNOWN'`:
 
 ```typescript
 const createIntentResult = await sodax.swaps.createIntent({
@@ -1013,6 +1017,9 @@ const createIntentResult = await sodax.swaps.createIntent({
 if (!createIntentResult.ok) {
   const error = createIntentResult.error;
   switch (error.code) {
+    case 'USER_REJECTED':
+      // User cancelled the wallet prompt. Not a failure — reset the UI, don't show an error.
+      break;
     case 'VALIDATION_FAILED':
       // Unsupported token / invalid chain key / Bitcoin dust below 546 sats / wallet provider mismatch
       console.error('Validation failed:', error.message);
@@ -1024,6 +1031,9 @@ if (!createIntentResult.ok) {
     case 'UNKNOWN':
       console.error('Unexpected:', error.cause);
       break;
+    default:
+      // Keeps the switch honest if the union gains a code in a future release.
+      console.error('Unhandled createIntent code:', error.code);
   }
 }
 ```

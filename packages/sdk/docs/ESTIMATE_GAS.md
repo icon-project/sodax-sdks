@@ -154,7 +154,7 @@ const supplyResult = await sodax.moneyMarket.createSupplyIntent({
 if (supplyResult.ok) {
   // Step 2: Estimate gas
   const gasResult = await sodax.moneyMarket.estimateGas({
-    tx: supplyResult.value,
+    tx: supplyResult.value.tx,
     chainKey: ChainKeys.ETHEREUM_MAINNET,
   });
 
