@@ -3,16 +3,95 @@
   "name": "SODAX SDKs",
   "theme": "mint",
   "colors": {
-    "primary": "#0EA5E9",
-    "light": "#38BDF8",
-    "dark": "#0284C7"
+    "primary": "#A55C55",
+    "light": "#C36C65",
+    "dark": "#964D48"
   },
   "navigation": {
-    "groups": [
+    "tabs": [
       {
-        "group": "Getting Started",
-        "pages": ["index"]
+        "tab": "Get Started",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "index",
+              "get-started/install",
+              "get-started/first-swap",
+              "get-started/ai-integration"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "SDK",
+        "groups": [
+          { "group": "Overview", "pages": ["sdk/index"] },
+          {
+            "group": "Foundation",
+            "pages": [
+              "sdk/swaps",
+              "sdk/money-market",
+              "sdk/leverage-yield",
+              "sdk/leverage-yield/effective-apr",
+              "sdk/bridge",
+              "sdk/staking",
+              "sdk/migration",
+              "sdk/backend-api",
+              "sdk/intent-relay-api"
+            ]
+          },
+          { "group": "Connection", "pages": ["sdk/wallet-sdk-core", "sdk/wallet-sdk-react"] },
+          { "group": "Experience", "pages": ["sdk/dapp-kit"] }
+        ]
+      },
+      {
+        "tab": "Guides & Protocol",
+        "groups": [
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/make-a-swap",
+              "guides/configure-sdk",
+              "guides/wallet-providers",
+              "guides/estimate-gas",
+              "guides/stellar-trustline",
+              "guides/bitcoin-integration",
+              "guides/monetize-sdk"
+            ]
+          },
+          {
+            "group": "Protocol",
+            "pages": [
+              "protocol/asset-manager",
+              "protocol/vault-token",
+              "protocol/hub-wallet-abstraction",
+              "protocol/intents",
+              "protocol/messaging-protocol"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Reference",
+        "groups": [
+          {
+            "group": "Deployments",
+            "pages": [
+              "reference/deployments/index",
+              "reference/deployments/mainnet",
+              "reference/deployments/relayer-api",
+              "reference/deployments/solver-api",
+              "reference/deployments/xcall-scanner",
+              "reference/deployments/compatible-assets"
+            ]
+          },
+          { "group": "Resources", "pages": ["reference/audits", "reference/faq", "reference/mcp-server", "contact"] }
+        ]
       }
     ]
+  },
+  "integrations": {
+    "ga4": { "measurementId": "G-Z10HMBQ0V9" }
   }
 }
