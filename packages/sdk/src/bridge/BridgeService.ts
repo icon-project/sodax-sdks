@@ -550,7 +550,7 @@ export class BridgeService {
         deadline,
         // Bridge terminal success is `executed` (hub-settled) — not the swaps `solved`.
         terminalStatus: 'executed',
-        getStatus: () => this.backendApi.bridge.getSubmitTxStatus({ txHash: spokeTxHash, srcChainKey }),
+        getStatus: override => this.backendApi.bridge.getSubmitTxStatus({ txHash: spokeTxHash, srcChainKey }, override),
         onExecuted: (result): TxHashPair | undefined =>
           result?.dstIntentTxHash ? { srcChainTxHash: spokeTxHash, dstChainTxHash: result.dstIntentTxHash } : undefined,
       });

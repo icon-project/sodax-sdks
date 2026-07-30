@@ -1,4 +1,5 @@
 import type { Result } from '@sodax/types';
+import type { RequestOverrideConfig } from './api-utils.js';
 
 /**
  * Minimal structural view of a `getSubmitTxStatus` response `data` envelope, shared by the swaps and
@@ -24,10 +25,18 @@ export type BackendSubmitTxPollResult<TValue> = { ok: true; value: TValue } | { 
  * relay. Reserves up to a third of the remaining shared budget (capped at 20s) for that fallback, so a
  * stalled backend can't consume the whole `deadline` before the fallback gets a turn. Never throws.
  *
+ * The sleep never runs past that cutoff, and neither does a request whose caller forwards the
+ * `getStatus` override. Without that override the service-level request timeout (30s default)
+ * outlives the reserve, so one stalled status request overruns both the reserve and the caller's
+ * `timeout` ceiling before the loop condition is re-checked again.
+ *
  * @param deadline - Absolute `Date.now()`-based ms timestamp shared with the client-side fallback.
  * @param terminalStatus - The feature's terminal-success status literal (`'solved'` for swaps,
  *   `'executed'` for bridge); `onExecuted` runs only once the status reaches it.
  * @param getStatus - Fetches one status snapshot (e.g. `backendApi.<feature>.getSubmitTxStatus`).
+ *   Receives a per-call override carrying the budget left before the cutoff; forward it to bound the
+ *   request by that budget. Bridge forwards it because `fallbackBridgeSteps` has no relay floor to
+ *   absorb an overrun; swaps keeps the service default, its floor covers the stalled case.
  * @param onExecuted - Builds the success value from a terminal-status result; returns `undefined` when
  *   the result is not yet complete so polling continues.
  * @param intervalMs - Poll interval in ms (default 1000).
@@ -41,14 +50,14 @@ export async function pollBackendSubmitTx<TResult, TValue>({
 }: {
   deadline: number;
   terminalStatus: string;
-  getStatus: () => Promise<Result<{ data: BackendSubmitTxStatusEnvelope<TResult> }>>;
+  getStatus: (override?: RequestOverrideConfig) => Promise<Result<{ data: BackendSubmitTxStatusEnvelope<TResult> }>>;
   onExecuted: (result: TResult | undefined) => TValue | undefined;
   intervalMs?: number;
 }): Promise<BackendSubmitTxPollResult<TValue>> {
   const reserveMs = Math.min(Math.ceil((deadline - Date.now()) / 3), 20_000);
   const pollDeadline = deadline - reserveMs;
   while (Date.now() < pollDeadline) {
-    const statusResult = await getStatus();
+    const statusResult = await getStatus({ timeout: pollDeadline - Date.now() });
     if (statusResult.ok) {
       const { status, result, failureReason, abandonedAt } = statusResult.value.data;
       if (status === terminalStatus) {
@@ -60,8 +69,8 @@ export async function pollBackendSubmitTx<TResult, TValue>({
         return { ok: false, cause: new Error(`backend submit-tx ${status}${reason}`) };
       }
     }
-    // transient !ok / pending / relaying / relayed / posting_execution → keep polling
-    await new Promise<void>(resolve => setTimeout(resolve, intervalMs));
+    // transient !ok / pending / relaying / relayed / posting_execution → keep polling, never past the cutoff
+    await new Promise<void>(resolve => setTimeout(resolve, Math.min(intervalMs, pollDeadline - Date.now())));
   }
   return { ok: false, cause: new Error(`backend submit-tx polling timed out before reaching ${terminalStatus}`) };
 }
