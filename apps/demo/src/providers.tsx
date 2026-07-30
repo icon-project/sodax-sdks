@@ -119,7 +119,9 @@ export default function Providers({ children }: { children: ReactNode }) {
           baseURL: 'https://api.sodax.com/v1/be',
         },
         swapsApiConfig: {
-          baseURL: 'https://canary-api.sodax.com/v1',
+          // Point at a local swaps-api with VITE_SWAPS_API_BASE_URL (e.g. http://localhost:3009,
+          // which serves `/swaps/*` with no `/v1` prefix). Mirrors apps/swap-api-example.
+          baseURL: import.meta.env.VITE_SWAPS_API_BASE_URL ?? 'https://canary-api.sodax.com/v1',
         },
       },
       logger: createDatadogLogger(),
