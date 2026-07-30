@@ -76,7 +76,6 @@ export const bridgeConfig = {} satisfies BridgeDefaultConfig;
 export type RadfiSignContext = {
   method: string; // HTTP method of the outbound RadFi request
   path: string; // request endpoint, e.g. `/sodax/transaction`
-  body?: unknown; // parsed request body when present (Bound's HMAC does not sign it, but it is exposed here)
 };
 export type RadfiSigner = (ctx: RadfiSignContext) => Record<string, string> | Promise<Record<string, string>>;
 export type RadfiOptions = {
