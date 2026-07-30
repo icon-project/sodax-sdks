@@ -35,6 +35,12 @@ src/
 
 Detailed feature docs live in `docs/`. Read the relevant feature doc before changing public behavior.
 
+### Links In `docs/` And `README.md`
+
+`sodax-document` mirrors most of `docs/` plus `README.md` into GitBook (docs.sodax.com) and **moves and renames them** on the way — the feature docs (`SWAPS.md`, `MONEY_MARKET.md`, `BRIDGE.md`, `STAKING.md`, `MIGRATION.md`, `LEVERAGE_YIELD*.md`) land in `functional-modules/` lowercased, `BACKEND_API.md` / `INTENT_RELAY_API.md` in `tooling-modules/`, `BITCOIN_INTEGRATION.md` under `how-to/`, and only the how-to set (`CONFIGURE_SDK`, `ESTIMATE_GAS`, `HOW_TO_MAKE_A_SWAP`, `MONETIZE_SDK`, `WALLET_PROVIDERS`, `STELLAR_TRUSTLINE`, `RELAYER_API_ENDPOINTS`, `SOLVER_API_ENDPOINTS`) keeps its directory and filenames. `scripts/gitbook-sync-map.json` holds the full mapping; some docs (`SWAPS_API.md`, `LOGGING.md`, `DEX.md`, `ARCHITECTURE_REFACTOR_SUMMARY.md`) are not mirrored at all.
+
+So a relative link may only point at a doc mirrored into the same directory under the same name — in practice how-to → how-to, e.g. `HOW_TO_MAKE_A_SWAP.md` → `./CONFIGURE_SDK.md`. Everything else, including the reverse direction (`SWAPS.md` → `CONFIGURE_SDK.md`), needs an absolute `https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/<FILE>.md` URL (`/tree/main/` for a directory). Relative links that break here render as 404s on docs.sodax.com and get rewritten to dead `sodax-document` URLs on every sync. Run `pnpm check:doc-links`.
+
 ## Service Pattern
 
 Feature modules use service classes with constructor dependency injection.

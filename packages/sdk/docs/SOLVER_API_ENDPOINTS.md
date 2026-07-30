@@ -1,6 +1,6 @@
 # Solver API endpoints
 
-> **Error handling conventions:** Direct callers of `SolverApiService` (used by lower-level scripts and tests) still receive `SolverErrorResponse` with `detail.code` / `detail.message`. The **swap module's** `postExecution` wraps these into `SodaxError` with code `EXTERNAL_API_ERROR`; the original `SolverIntentErrorCode` is on `result.error.context.solverCode` and the full `detail` is on `result.error.context.solverDetail` — see [SWAPS.md](./SWAPS.md) Error Handling.
+> **Error handling conventions:** Direct callers of `SolverApiService` (used by lower-level scripts and tests) still receive `SolverErrorResponse` with `detail.code` / `detail.message`. The **swap module's** `postExecution` wraps these into `SodaxError` with code `EXTERNAL_API_ERROR`; the original `SolverIntentErrorCode` is on `result.error.context.solverCode` and the full `detail` is on `result.error.context.solverDetail` — see [SWAPS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md) Error Handling.
 
 ## Mainnet production
 
@@ -16,7 +16,7 @@ URL: [https://staging-new-world.iconblockchain.xyz](https://staging-new-world.ic
 
 ## Overview
 
-The SODAX solver API drives the intent-based swap feature. `SwapService` (accessed via `sodax.swaps`) is the public entry point — it delegates all HTTP communication to the stateless `SolverApiService` class. External callers should use `SwapService` rather than calling `SolverApiService` directly.
+The solver API drives the intent-based swap feature. `SwapService` (accessed via `sodax.swaps`) is the public entry point — it delegates all HTTP communication to the stateless `SolverApiService` class. External callers should use `SwapService` rather than calling `SolverApiService` directly.
 
 Three endpoints are exposed:
 
