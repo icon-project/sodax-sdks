@@ -73,9 +73,10 @@ export function RepayModal({
   const dstChainKey: SpokeChainKey = selectedChainId;
 
   const supportedSourceChains = getChainsWithThisToken(sodax, token);
-  // Falls back to the originally-selected token so the rest of the form keeps rendering, but the
-  // balance read must only ever receive a token that actually lives on `srcChainKey` — the SDK
-  // reads the chain named by `chainKey` and rejects a token from a different one.
+  // Falls back to the originally-selected token so the rest of the form keeps rendering, but only
+  // `sourceTokenOnChain` may reach the balance read below — the SDK reads the chain named by
+  // `chainKey` and never consults `token.chainKey`, so a token from a different chain reads as
+  // `0n` with no error, i.e. a wrong balance rather than a caught mistake.
   const sourceTokenOnChain = getTokenOnChain(sodax, token.symbol, srcChainKey);
   const sourceToken = sourceTokenOnChain ?? token;
 

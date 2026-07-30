@@ -160,8 +160,9 @@ export default function LeverageYieldPage() {
   const userTokens = useMemo(() => getSupportedSolverTokens(userChain), [userChain]);
   // Store the SYMBOL and derive the token during render. Holding the token in its own state and
   // re-resolving it from an effect left one committed render pairing the new `userChain` with the
-  // previous chain's token — a mismatch `useBalances` now rejects outright. Deriving from
-  // `userTokens`, which recomputes in the same render as `userChain`, closes that window.
+  // previous chain's token — a mismatch `useBalances` reads as `0n` instead of rejecting, so it
+  // surfaces as a phantom empty balance. Deriving from `userTokens`, which recomputes in the same
+  // render as `userChain`, closes that window.
   const [userTokenSymbol, setUserTokenSymbol] = useState<string | undefined>(userTokens[0]?.symbol);
   const userToken = useMemo(
     () => userTokens.find(t => t.symbol === userTokenSymbol) ?? userTokens[0],
