@@ -204,6 +204,9 @@ importers:
       '@sodax/dapp-kit':
         specifier: workspace:*
         version: link:../../packages/dapp-kit
+      '@sodax/swaps-api':
+        specifier: workspace:*
+        version: link:../../packages/swaps-api
       '@sodax/wallet-sdk-react':
         specifier: workspace:*
         version: link:../../packages/wallet-sdk-react

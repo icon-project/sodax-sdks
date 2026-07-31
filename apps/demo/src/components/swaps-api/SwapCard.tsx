@@ -37,19 +37,13 @@ import {
   useNearStorageGate,
   useRequestTrustline,
   useStellarTrustlineCheck,
-  useSwapsApiAllowance,
-  useSwapsApiApprove,
-  useSwapsApiCreateIntent,
-  useSwapsApiDeadline,
-  useSwapsApiQuote,
-  useSwapsApiSubmitTx,
-  useSwapsApiTokens,
   useBitcoinTradingSetup,
   useXBalances,
   ChainKeys,
   isBitcoinChainKey,
   isStacksChainKey,
 } from '@sodax/dapp-kit';
+import { useQuery } from '@tanstack/react-query';
 import {
   getXChainType,
   useEvmSwitchChain,
@@ -62,6 +56,7 @@ import { buildOrderSummary, type Order } from '@/components/swaps/OrderStatus';
 import { appendOrder } from '@/lib/orderHistory';
 import { loadSwapsApiSelection, saveSwapsApiSelection } from '@/components/swaps-api/lib/lastSelection';
 import { toIntentRequest, toXToken } from '@/components/swaps-api/lib/mappers';
+import { formatSwapsApiError, swapsApi } from '@/components/swaps-api/lib/swapsApi';
 import {
   isSignableSwapsApiChain,
   signAndBroadcastSwapsApiTx,
@@ -105,7 +100,11 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const [isDestBitcoinReady, setIsDestBitcoinReady] = useState(false);
 
   // Supported chains + tokens straight from the Swaps API.
-  const { data: tokensByChain } = useSwapsApiTokens();
+  const { data: tokensByChain } = useQuery({
+    queryKey: ['swapsApi', 'tokens'],
+    queryFn: () => swapsApi.getTokens(),
+    retry: 3,
+  });
   const chainList = useMemo(() => Object.keys(tokensByChain ?? {}), [tokensByChain]);
 
   // Seed tokens once the map arrives — preferring the last-used symbol per chain, else the first.
@@ -203,7 +202,14 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     }
   }, [src.token, dst.token, src.chain, dst.chain, debouncedAmount]);
 
-  const quoteQuery = useSwapsApiQuote({ params: { body: quoteBody } });
+  // The whole request body is the cache key so every quote input is a cache dimension
+  // (QuoteRequestV2 is bigint-free, so React Query's default key hashing handles it).
+  const quoteQuery = useQuery({
+    queryKey: ['swapsApi', 'quote', quoteBody],
+    queryFn: () => (quoteBody ? swapsApi.getQuote(quoteBody) : undefined),
+    enabled: !!quoteBody,
+    retry: 3,
+  });
   const quote = quoteQuery.data;
 
   const exchangeRate = useMemo(() => {
@@ -222,11 +228,6 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
           .toFixed(0)
       : undefined;
   }, [quote, slippage]);
-
-  // Deadline anchored to the hub clock — refetched when the intent is built.
-  const deadlineQuery = useSwapsApiDeadline({
-    params: { query: { offsetSeconds: 300 } },
-  });
 
   const buildIntentParams = async () => {
     if (!quote?.quotedAmount || !minOutputAmount) {
@@ -257,8 +258,11 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       dstAddress = tradingAddress;
     }
 
-    const freshDeadline = await deadlineQuery.refetch();
-    const deadline = freshDeadline.data?.deadline ?? String(Math.floor(Date.now() / 1000) + 300);
+    // Deadline anchored to the hub clock, fetched fresh as the intent is built.
+    const deadline = await swapsApi
+      .getDeadline({ offsetSeconds: 300 })
+      .then(response => response.deadline)
+      .catch(() => String(Math.floor(Date.now() / 1000) + 300));
 
     // Source-chain swap extras the Swaps API only needs for specific chain families:
     //  - Stacks:  the signer public key, which a Stacks address can't derive on its own.
@@ -290,12 +294,20 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     data: allowance,
     isLoading: isAllowanceLoading,
     refetch: refetchAllowance,
-  } = useSwapsApiAllowance({ params: { body: intentParams } });
+  } = useQuery({
+    queryKey: [
+      'swapsApi',
+      'allowance',
+      intentParams?.srcChainKey,
+      intentParams?.inputToken,
+      intentParams?.inputAmount,
+      intentParams?.srcAddress,
+    ],
+    queryFn: () => (intentParams ? swapsApi.checkAllowance(intentParams) : undefined),
+    enabled: !!intentParams,
+    retry: 3,
+  });
   const hasAllowed = allowance?.valid === true;
-
-  const { mutateAsyncSafe: approve } = useSwapsApiApprove();
-  const { mutateAsyncSafe: createIntent } = useSwapsApiCreateIntent();
-  const { mutateAsyncSafe: submitTx } = useSwapsApiSubmitTx();
 
   // Whether the dispatcher can sign+broadcast on the selected source chain (see
   // lib/signAndBroadcast.ts for the chains the wallet-provider interfaces can't serve yet).
@@ -340,23 +352,18 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     setIsApproving(true);
     try {
       // The API only builds the unsigned approval tx — signing and broadcasting happen here.
-      const result = await approve({ body: intentParams });
-      if (!result.ok) {
-        setApproveError(formatMutationFailureMessage(result.error, 'Approve failed'));
-        return;
-      }
+      const { tx } = await swapsApi.approve(intentParams);
 
       const txHash = await signAndBroadcastSwapsApiTx({
         chainKey: srcChainKey,
-        tx: result.value.tx,
+        tx,
         walletProvider: sourceWalletProvider,
       });
       await waitForTxFinality(srcChainKey, sourceWalletProvider, txHash);
-      // The approve hook can't invalidate the allowance query (confirmation happened
-      // client-side, outside the hook) — refetch manually.
+      // Confirmation happened client-side, so the allowance query can't know — refetch manually.
       await refetchAllowance();
     } catch (error) {
-      setApproveError(formatMutationFailureMessage(error, 'Approve signing failed'));
+      setApproveError(formatSwapsApiError(error, 'Approve failed'));
     } finally {
       setIsApproving(false);
     }
@@ -372,12 +379,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     setIsSwapping(true);
     try {
       // 1. The API builds the unsigned create-intent tx + intent + relay data.
-      const created = await createIntent({ body: intentParams });
-      if (!created.ok) {
-        setSwapError(formatMutationFailureMessage(created.error, 'Create intent failed'));
-        return;
-      }
-      const { tx, intent, relayData } = created.value;
+      const { tx, intent, relayData } = await swapsApi.createIntent(intentParams);
 
       // 2. Sign + broadcast on the source chain.
       let spokeTxHash: string;
@@ -413,11 +415,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
         intent: toIntentRequest(intent),
         relayData: relayData.payload,
       };
-      const submitted = await submitTx({ request });
-      if (!submitted.ok) {
-        setSwapError(formatMutationFailureMessage(submitted.error, 'Submit tx failed'));
-        return;
-      }
+      await swapsApi.submitTx(request);
 
       setOrders(prev =>
         appendOrder(prev, {
@@ -435,7 +433,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       );
       setOpen(false);
     } catch (error) {
-      setSwapError(formatMutationFailureMessage(error, 'Swap signing failed'));
+      setSwapError(formatSwapsApiError(error, 'Swap failed'));
     } finally {
       setIsSwapping(false);
     }
@@ -648,7 +646,11 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
           </div>
         </div>
 
-        <div className="">{quoteQuery.error && <div className="text-red-500">{quoteQuery.error.message}</div>}</div>
+        <div className="">
+          {quoteQuery.error && (
+            <div className="text-red-500">{formatSwapsApiError(quoteQuery.error, 'Quote failed')}</div>
+          )}
+        </div>
 
         <Dialog
           open={open}
