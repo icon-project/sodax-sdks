@@ -15,6 +15,7 @@ import { bcs } from '@mysten/sui/bcs';
 import { PublicKey } from '@solana/web3.js';
 import { Address as StellarAddress, xdr } from '@stellar/stellar-sdk';
 import { Cl, cvToString, deserializeCV, serializeCV } from '@sodax/libs/stacks/core';
+import { aleoAddressToHex } from './aleo-utils.js';
 
 export async function retry<T>(
   action: (retryCount: number) => Promise<T>,
@@ -150,6 +151,8 @@ export function encodeAddress(spokeChainId: SpokeChainKey, address: string): Hex
     case 'NEAR':
     case 'INJECTIVE':
       return toHex(Buffer.from(address, 'utf-8'));
+    case 'ALEO':
+      return aleoAddressToHex(address);
     default: {
       const exhaustiveCheck: never = chainType;
       throw new Error(`Invalid spoke chain id: ${exhaustiveCheck}`);
@@ -200,6 +203,9 @@ export function reverseEncodeAddress(spokeChainId: SpokeChainKey, encoded: Hex):
     case 'NEAR':
     case 'INJECTIVE':
       return Buffer.from(hexToBytes(encoded)).toString('utf8');
+    case 'ALEO':
+      // Aleo addresses are bech32m-encoded; reverse-decoding from raw hex is not supported.
+      throw new Error('reverseEncodeAddress not supported for ALEO');
     default: {
       const exhaustiveCheck: never = chainType;
       throw new Error(`Invalid spoke chain id: ${exhaustiveCheck}`);

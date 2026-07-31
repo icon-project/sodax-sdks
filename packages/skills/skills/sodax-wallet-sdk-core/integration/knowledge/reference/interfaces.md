@@ -123,6 +123,17 @@ Plus public fields (PK mode only): `account?: Account`, `rpcProvider?: JsonRpcPr
 
 ---
 
+## `IAleoWalletProvider`
+
+| Method | Signature (abridged) |
+|---|---|
+| `getWalletAddress` | `() => Promise<string>` |
+| `execute` | `(options: AleoExecuteOptions) => Promise<AleoExecutionResult>` |
+| `waitForTransactionReceipt` | `(transactionId: string, options?: AleoWaitForReceiptOptions) => Promise<AleoTransactionReceipt>` |
+| `executeAndWait` | `(options: AleoExecuteOptions, receiptOptions?) => Promise<{ result: AleoExecutionResult; receipt: AleoTransactionReceipt }>` |
+
+---
+
 ## Authoritative source
 
 These tables are summarised. For the full, current type-level signatures (including generics, branded types, and union narrowings) read:

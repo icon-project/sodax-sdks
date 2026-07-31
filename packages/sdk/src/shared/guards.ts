@@ -18,11 +18,13 @@ import type {
   StellarChainKey,
   SuiChainKey,
   SonicChainKey,
+  AleoChainKey,
   HubChainKey,
   PartnerFeeAmount,
   PartnerFeePercentage,
   EvmSpokeOnlyChainKey,
   IWalletProvider,
+  IAleoWalletProvider,
   IBitcoinWalletProvider,
   GetWalletProviderType,
   IEvmWalletProvider,
@@ -41,6 +43,7 @@ import {
   isIconChainKey,
   isSuiChainKey,
   isStacksChainKey,
+  isAleoChainKey,
   isHubChainKey,
   isEvmChainKey,
   isEvmSpokeOnlyChainKey,
@@ -167,6 +170,10 @@ export function isStacksChainKeyType(value: SpokeChainKey): value is StacksChain
   return isStacksChainKey(value);
 }
 
+export function isAleoChainKeyType(value: SpokeChainKey): value is AleoChainKey {
+  return isAleoChainKey(value);
+}
+
 /** Same runtime check as `isHubChainKeyType(params.srcChainKey)`; narrows the full `params` object. */
 export function isSpokeIsAllowanceValidParamsHub(
   params: SpokeIsAllowanceValidParams,
@@ -227,6 +234,10 @@ export function isRawDestinationParams(value: unknown): value is RawDestinationP
 // `isValidWalletProviderForChainKey<K>` can't refine past `GetWalletProviderType<K>`.
 export function isBitcoinWalletProviderType(wp: IWalletProvider): wp is IBitcoinWalletProvider {
   return wp.chainType === 'BITCOIN';
+}
+
+export function isAleoWalletProviderType(wp: IWalletProvider): wp is IAleoWalletProvider {
+  return wp.chainType === 'ALEO';
 }
 
 export function isEvmWalletProviderType(walletProvider: IWalletProvider): walletProvider is IEvmWalletProvider {

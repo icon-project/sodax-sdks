@@ -1,4 +1,5 @@
 import type { SpokeChainKey, ChainType, GetChainType } from '../chains/chains.js';
+import type { IAleoWalletProvider } from '../aleo/index.js';
 import type { IBitcoinWalletProvider } from '../bitcoin/bitcoin.js';
 import type { IEvmWalletProvider } from '../evm/evm.js';
 import type { IIconWalletProvider } from '../icon/icon.js';
@@ -23,7 +24,8 @@ export type IWalletProvider =
   | IBitcoinWalletProvider
   | ISolanaWalletProvider
   | IStacksWalletProvider
-  | INearWalletProvider;
+  | INearWalletProvider
+  | IAleoWalletProvider;
 
 /**
  * Wallet provider type for a chain key or abstract {@link ChainType}. Maps `C` to the matching
@@ -49,4 +51,6 @@ export type GetWalletProviderType<C extends SpokeChainKey | ChainType> = GetChai
                 ? INearWalletProvider
                 : GetChainType<C> extends 'BITCOIN'
                   ? IBitcoinWalletProvider
-                  : IWalletProvider;
+                  : GetChainType<C> extends 'ALEO'
+                    ? IAleoWalletProvider
+                    : IWalletProvider;

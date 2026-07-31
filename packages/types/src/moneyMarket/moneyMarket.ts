@@ -192,6 +192,9 @@ export const moneyMarketSupportedTokens = {
     spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.SODA,
     spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.USDC,
   ] as const satisfies XToken[],
+  // Aleo has no money-market assets yet — its hub vault is not deployed on mainnet
+  // (ALEO/VUSDC carry a placeholder `vault: '0x'`). Add tokens here once the vault ships.
+  [ChainKeys.ALEO_MAINNET]: [] as const satisfies XToken[],
 } as const satisfies Record<SpokeChainKey, readonly XToken[]>;
 
 export const moneyMarketReserveAssets = [

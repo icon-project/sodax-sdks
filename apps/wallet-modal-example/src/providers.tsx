@@ -46,6 +46,11 @@ const walletConfig: SodaxWalletConfig = {
   INJECTIVE: {},
   NEAR: {},
   STACKS: { chains: { [ChainKeys.STACKS_MAINNET]: 'mainnet' } },
+  ALEO: {
+    autoConnect: true,
+    network: 'mainnet',
+    chains: { [ChainKeys.ALEO_MAINNET]: {} },
+  },
 };
 
 export default function Providers({ children }: { children: ReactNode }) {

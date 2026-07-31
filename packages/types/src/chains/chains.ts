@@ -26,6 +26,7 @@ import {
   kaiaSupportedTokens,
   stacksSupportedTokens,
   hederaSupportedTokens,
+  aleoSupportedTokens,
 } from './tokens.js';
 
 import { ChainKeys, CHAIN_KEYS, type ChainKey, type ChainType } from './chain-keys.js';
@@ -55,6 +56,7 @@ export const RelayChainIdMap = {
   [ChainKeys.KAIA_MAINNET]: 27489n,
   [ChainKeys.STACKS_MAINNET]: 60n,
   [ChainKeys.HEDERA_MAINNET]: 18501n,
+  [ChainKeys.ALEO_MAINNET]: 6694886634401n,
 } as const satisfies Record<ChainKey, bigint>;
 
 export type IntentChainId = (typeof RelayChainIdMap)[keyof typeof RelayChainIdMap];
@@ -369,6 +371,20 @@ export const baseChainInfo = {
       contractUrl: 'https://hashscan.io/mainnet/contract/',
     },
   },
+  [ChainKeys.ALEO_MAINNET]: {
+    name: 'Aleo',
+    key: ChainKeys.ALEO_MAINNET,
+    type: 'ALEO',
+    chainId: 'aleo',
+    mainnet: true,
+    logo: chainLogo(ChainKeys.ALEO_MAINNET),
+    explorer: {
+      baseUrl: 'https://explorer.provable.com/',
+      txUrl: 'https://explorer.provable.com/transaction/',
+      addressUrl: 'https://explorer.provable.com/address/',
+      contractUrl: 'https://explorer.provable.com/program/',
+    },
+  },
 } as const satisfies Record<ChainKey, BaseChainInfo<ChainType>>;
 
 type ChainKeysByType<T extends ChainType> = {
@@ -391,6 +407,7 @@ export type SuiChainKey = ChainKeysByType<'SUI'>;
 export type StacksChainKey = ChainKeysByType<'STACKS'>;
 export type NearChainKey = ChainKeysByType<'NEAR'> & keyof typeof spokeChainConfig;
 export type BitcoinChainKey = ChainKeysByType<'BITCOIN'>;
+export type AleoChainKey = ChainKeysByType<'ALEO'> & keyof typeof spokeChainConfig;
 
 const filterChainKeysByType = <T extends ChainType>(type: T) =>
   CHAIN_KEYS.filter((key): key is ChainKeysByType<T> => baseChainInfo[key].type === type);
@@ -420,6 +437,8 @@ export const NEAR_CHAIN_KEYS = filterChainKeysByType('NEAR');
 export const NEAR_CHAIN_KEYS_SET = new Set(NEAR_CHAIN_KEYS);
 export const BITCOIN_CHAIN_KEYS = filterChainKeysByType('BITCOIN');
 export const BITCOIN_CHAIN_KEYS_SET = new Set(BITCOIN_CHAIN_KEYS);
+export const ALEO_CHAIN_KEYS = filterChainKeysByType('ALEO');
+export const ALEO_CHAIN_KEYS_SET = new Set(ALEO_CHAIN_KEYS);
 export type HubChainKey = typeof HUB_CHAIN_KEY;
 export type HubChainType = 'EVM';
 export type SpokeChainKey = (typeof CHAIN_KEYS)[number];
@@ -576,6 +595,26 @@ export type NearSpokeChainConfig = BaseSpokeChainConfig<'NEAR'> & {
   rpcUrl: string;
 };
 
+export type AleoAddress = `aleo1${string}`;
+export type AleoSpokeChainConfig = BaseSpokeChainConfig<'ALEO'> & {
+  rpcUrl: string;
+  addresses: {
+    assetManager: string;
+    connection: string;
+    xTokenManager: string;
+    rateLimit: string;
+    creditsProgram: string;
+    tokenRegistry: string;
+  };
+  mappings: {
+    messages: string;
+    account: string;
+    authorizedBalances: string;
+  };
+  nativeToken: string;
+  gasPrice: string;
+};
+
 export type SpokeChainConfig =
   | EvmSpokeChainConfig
   | SonicSpokeChainConfig
@@ -586,7 +625,8 @@ export type SpokeChainConfig =
   | BitcoinSpokeChainConfig
   | SolanaChainConfig
   | StacksSpokeChainConfig
-  | NearSpokeChainConfig;
+  | NearSpokeChainConfig
+  | AleoSpokeChainConfig;
 
 export type GetSpokeChainConfigType<T extends SpokeChainKey> = T extends SonicChainKey
   ? SonicSpokeChainConfig
@@ -608,7 +648,9 @@ export type GetSpokeChainConfigType<T extends SpokeChainKey> = T extends SonicCh
                   ? StacksSpokeChainConfig
                   : GetChainType<T> extends 'BITCOIN'
                     ? BitcoinSpokeChainConfig
-                    : SpokeChainConfig;
+                    : GetChainType<T> extends 'ALEO'
+                      ? AleoSpokeChainConfig
+                      : SpokeChainConfig;
 
 export type IconAddress = `hx${string}` | `cx${string}`;
 export type IconSpokeChainConfig = BaseSpokeChainConfig<'ICON'> & {
@@ -1021,6 +1063,31 @@ export const spokeChainConfig = {
       maxTimeoutMs: 60_000,
     },
   } as const satisfies EvmSpokeChainConfig,
+  [ChainKeys.ALEO_MAINNET]: {
+    chain: baseChainInfo[ChainKeys.ALEO_MAINNET] satisfies BaseChainInfo<'ALEO'>,
+    addresses: {
+      assetManager: 'gmp_asset_manager_core_v02.aleo',
+      connection: 'gmp_connection_v02.aleo',
+      xTokenManager: '',
+      rateLimit: 'gmp_rate_limit_v02.aleo',
+      creditsProgram: 'credits.aleo',
+      tokenRegistry: 'token_registry.aleo',
+    },
+    mappings: {
+      messages: 'messages',
+      account: 'account',
+      authorizedBalances: 'authorized_balances',
+    },
+    nativeToken: '3443843282313283355522573239085696902919850365217539366784739393210722344986' as const,
+    bnUSD: '',
+    rpcUrl: 'https://api.provable.com/v2',
+    gasPrice: '0',
+    supportedTokens: aleoSupportedTokens,
+    pollingConfig: {
+      pollingIntervalMs: 5_000,
+      maxTimeoutMs: 120_000,
+    },
+  } as const satisfies AleoSpokeChainConfig,
 } as const satisfies Record<SpokeChainKey, SpokeChainConfig>;
 
 export const supportedSpokeChains: SpokeChainKey[] = Object.keys(spokeChainConfig) as SpokeChainKey[];

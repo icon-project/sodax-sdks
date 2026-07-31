@@ -136,6 +136,7 @@ describe('e2e', () => {
     [ChainKeys.KAIA_MAINNET]: [],
     [ChainKeys.STACKS_MAINNET]: [],
     [ChainKeys.HEDERA_MAINNET]: [],
+    [ChainKeys.ALEO_MAINNET]: [],
   };
 
   it('Verify money market supported tokens as hub assets are contained in the Soda token vaults', async () => {

@@ -29,6 +29,8 @@ import {
   type INJECTIVE_CHAIN_KEYS,
   STACKS_CHAIN_KEYS_SET,
   type STACKS_CHAIN_KEYS,
+  ALEO_CHAIN_KEYS_SET,
+  type ALEO_CHAIN_KEYS,
   baseChainInfo,
   RelayChainIdMap,
   type IntentRelayChainId,
@@ -94,6 +96,10 @@ export function isInjectiveChainKey(chainId: SpokeChainKey): boolean {
 
 export function isStacksChainKey(chainId: SpokeChainKey): boolean {
   return STACKS_CHAIN_KEYS_SET.has(chainId as (typeof STACKS_CHAIN_KEYS)[number]);
+}
+
+export function isAleoChainKey(chainId: SpokeChainKey): boolean {
+  return ALEO_CHAIN_KEYS_SET.has(chainId as (typeof ALEO_CHAIN_KEYS)[number]);
 }
 
 export function getChainType<K extends SpokeChainKey>(chainId: K): GetChainType<K> {

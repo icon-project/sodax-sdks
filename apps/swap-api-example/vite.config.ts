@@ -13,6 +13,16 @@ export default defineConfig(({ mode }: ConfigEnv) => {
     resolve: {
       alias: { '@': path.resolve(__dirname, './src') },
     },
+    optimizeDeps: {
+      exclude: ['@provablehq/wasm'],
+      esbuildOptions: {
+        target: 'esnext',
+      },
+    },
+    // Aleo's WASM loader uses top-level await, which the default browser target rejects.
+    build: {
+      target: 'esnext',
+    },
     define: {
       global: 'globalThis',
       'process.env': env,

@@ -85,12 +85,12 @@ Top-level:
 | `ChainTypeOf<K>` | generic type |
 | `WalletDefaultsByKey<K>` | generic type |
 
-Per-chain aliases follow two naming patterns — one alias per chain family (9 each):
+Per-chain aliases follow two naming patterns — one alias per chain family (10 each):
 
 - `<Chain>TypeConfig` — per-slot config (e.g. `EvmTypeConfig`, `SolanaTypeConfig`)
 - `<Chain>ChainEntry` — per-chain-key entry (e.g. `EvmChainEntry`, `BitcoinChainEntry`)
 
-Replace `<Chain>` with `Evm | Solana | Sui | Bitcoin | Stellar | Injective | Icon | Near | Stacks`. Most consumers can derive these from `ChainTypeConfig<T>` / `ChainEntry<K>` instead of importing the per-chain alias directly.
+Replace `<Chain>` with `Evm | Solana | Sui | Bitcoin | Stellar | Injective | Icon | Near | Stacks | Aleo`. Most consumers can derive these from `ChainTypeConfig<T>` / `ChainEntry<K>` instead of importing the per-chain alias directly.
 
 Adapter-field types (only chains with React adapters):
 
@@ -99,6 +99,7 @@ Adapter-field types (only chains with React adapters):
 | `EvmAdapterFields` | type |
 | `SolanaAdapterFields` | type |
 | `SuiAdapterFields` | type |
+| `AleoAdapterFields` | type |
 
 ### Hook option / result types
 
@@ -112,11 +113,12 @@ Concrete chain classes live behind sub-paths. Default to barrel imports; opt int
 
 ### Default pattern (most chains)
 
-`/xchains/{bitcoin, evm, icon, injective, near, solana, stacks, stellar, sui}` re-export the chain's `XService` + `XConnector` classes — `EvmXService`/`EvmXConnector`, `SolanaXService`/`SolanaXConnector`, `BitcoinXService`/`BitcoinXConnector`, `StacksXService`/`StacksXConnector`, `StellarXService`/`StellarWalletsKitXConnector`, etc. Icon also exports `IconHanaXConnector` (the connector for the Hana wallet).
+`/xchains/{aleo, bitcoin, evm, icon, injective, near, solana, stacks, stellar, sui}` re-export the chain's `XService` + `XConnector` classes — `EvmXService`/`EvmXConnector`, `SolanaXService`/`SolanaXConnector`, `AleoXService`/`AleoXConnector`, `BitcoinXService`/`BitcoinXConnector`, `StacksXService`/`StacksXConnector`, `StellarXService`/`StellarWalletsKitXConnector`, etc. Icon also exports `IconHanaXConnector` (the connector for the Hana wallet).
 
 ```ts
 // @ai-snippets-skip
 import { EvmXService, EvmXConnector } from '@sodax/wallet-sdk-react/xchains/evm';
+import { AleoXService, AleoXConnector } from '@sodax/wallet-sdk-react/xchains/aleo';
 import { IconHanaXConnector } from '@sodax/wallet-sdk-react/xchains/icon';
 ```
 

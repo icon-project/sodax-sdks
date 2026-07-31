@@ -9,7 +9,7 @@ import { /* … */ } from '@sodax/wallet-sdk-core';
 
 ---
 
-## Provider classes (9)
+## Provider classes (10)
 
 | Export | Chain family | File |
 |---|---|---|
@@ -22,6 +22,7 @@ import { /* … */ } from '@sodax/wallet-sdk-core';
 | `InjectiveWalletProvider` | Injective | `wallet-providers/injective/InjectiveWalletProvider.ts` |
 | `NearWalletProvider` | NEAR | `wallet-providers/near/NearWalletProvider.ts` |
 | `StacksWalletProvider` | Stacks | `wallet-providers/stacks/StacksWalletProvider.ts` |
+| `AleoWalletProvider` | Aleo | `wallet-providers/aleo/AleoWalletProvider.ts` |
 
 Plus the abstract base:
 
@@ -55,6 +56,7 @@ Full list:
 | Injective | `InjectiveWalletConfig` | `SecretInjectiveWalletConfig` ⚠     | `BrowserExtensionInjectiveWalletConfig` | `InjectiveWalletDefaults` |
 | NEAR      | `NearWalletConfig`      | `PrivateKeyNearWalletConfig`        | `BrowserExtensionNearWalletConfig`      | `NearWalletDefaults` |
 | Stacks    | `StacksWalletConfig`    | `PrivateKeyStacksWalletConfig`      | `BrowserExtensionStacksWalletConfig`    | `StacksWalletDefaults` |
+| Aleo      | `AleoWalletConfig`      | `PrivateKeyAleoWalletConfig`        | `BrowserExtensionAleoWalletConfig`      | `AleoWalletDefaults` |
 
 ⚠ **Injective uses `Secret*`, not `PrivateKey*`** — see [`../features/injective.md`](../features/injective.md).
 
@@ -87,6 +89,11 @@ Full list:
 | `InjectiveWallet` | Injective | Internal runtime-wallet shape. |
 | `NearTxExecutionStatus` | NEAR | `'NONE' \| 'INCLUDED' \| 'EXECUTED_OPTIMISTIC' \| 'INCLUDED_FINAL' \| 'EXECUTED' \| 'FINAL'` |
 | `StacksPkWallet` / `StacksBrowserExtensionWallet` / `StacksWallet` | Stacks | Internal runtime-wallet union. |
+| `isPrivateKeyConfig` / `isBrowserExtensionConfig` | Aleo | Predicates for narrowing `AleoWalletConfig`. |
+| `DelegateProvingConfig` | Aleo | Delegated-proving config (`apiKey` / `consumerId` / `url?`) — private-key wallets only. |
+| `AleoSDK` | Aleo | `typeof import('@provablehq/sdk')` — the lazily-loaded SDK module type. |
+| `PkAleoWallet` / `BrowserExtensionAleoWallet` / `AleoWallet` | Aleo | Internal runtime-wallet union. |
+| `isPkAleoWallet` / `isBrowserExtensionAleoWallet` | Aleo | Predicates for narrowing `AleoWallet`. |
 
 ---
 

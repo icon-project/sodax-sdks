@@ -64,6 +64,7 @@
     "@pancakeswap/infinity-sdk": "catalog:",
     "@pancakeswap/swap-sdk-core": "catalog:",
     "@pancakeswap/v3-sdk": "catalog:",
+    "@provablehq/sdk": "catalog:",
     "@sodax/libs": "workspace:*",
     "@sodax/swaps-api": "workspace:*",
     "@sodax/types": "workspace:*",

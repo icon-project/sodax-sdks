@@ -145,6 +145,7 @@ import { useXConnect, useXAccount, type IXConnector } from '@sodax/wallet-sdk-re
 
 // ✅ Advanced — concrete class via deep import
 import { XverseXConnector } from '@sodax/wallet-sdk-react/xchains/bitcoin';
+import { AleoXConnector } from '@sodax/wallet-sdk-react/xchains/aleo';
 if (connector instanceof XverseXConnector) {
   connector.setAddressPurpose('payment');
 }

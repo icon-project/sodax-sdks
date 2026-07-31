@@ -38,6 +38,10 @@ export default defineConfig(({ command, mode }: ConfigEnv) => {
 
     optimizeDeps: {
       include: ['buffer'],
+      exclude: ['@provablehq/wasm'],
+      esbuildOptions: {
+        target: 'esnext',
+      },
     },
     server: {
       // this ensures that the browser opens upon server start
@@ -54,6 +58,9 @@ export default defineConfig(({ command, mode }: ConfigEnv) => {
           rewrite: p => p.replace(/^\/__intake/, ''),
         },
       },
+    },
+    build: {
+      target: 'esnext',
     },
     define: {
       global: 'globalThis',

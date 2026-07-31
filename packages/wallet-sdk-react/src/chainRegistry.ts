@@ -34,6 +34,7 @@ import { hasSignBip322, hasSignEcdsa } from './xchains/bitcoin/bitcoinSignGuards
 import { NearXService } from './xchains/near/NearXService.js';
 import { NearXConnector } from './xchains/near/NearXConnector.js';
 import { StacksXService, StacksXConnector, STACKS_PROVIDERS } from './xchains/stacks/index.js';
+import { AleoXService } from './xchains/aleo/index.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -380,6 +381,13 @@ export const chainRegistry: Record<string, ChainServiceFactory> = {
       );
       return new StacksWalletProvider({ address, provider, defaults });
     },
+  }),
+  ALEO: defineChain({
+    createService: () => AleoXService.getInstance(),
+    displayName: 'Aleo',
+    // Connectors come from `@provablehq/aleo-wallet-adaptor-react` via AleoHydrator.
+    defaultConnectors: () => [],
+    providerManaged: true,
   }),
 };
 

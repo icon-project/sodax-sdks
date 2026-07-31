@@ -47,7 +47,7 @@ Granular skill for `EvmWalletProvider` — the low-level EVM wallet for backend 
 
 ## Related skills (same family)
 
-Sibling chain skills follow the same shape — bitcoin, solana, sui, stellar, icon, injective, near, stacks. For multi-chain or undecided work, load the broad [`sodax-wallet-sdk-core` skill](../SKILL.md).
+Sibling chain skills follow the same shape — bitcoin, solana, sui, stellar, icon, injective, near, stacks, aleo. For multi-chain or undecided work, load the broad [`sodax-wallet-sdk-core` skill](../SKILL.md).
 
 ## Passing the provider into the SDK (different package family)
 

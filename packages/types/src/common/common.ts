@@ -11,6 +11,7 @@ import type { SolanaRawTransaction, SolanaReturnType } from '../solana/solana.js
 import type { StacksRawTransaction, StacksReturnType } from '../stacks/stacks.js';
 import type { StellarRawTransaction, StellarReturnType } from '../stellar/stellar.js';
 import type { SuiRawTransaction, SuiReturnType } from '../sui/sui.js';
+import type { AleoRawTransaction, AleoReturnType } from '../aleo/index.js';
 import type { GetWalletProviderType } from '../wallet/providers.js';
 
 export type Default = {
@@ -181,7 +182,8 @@ export type HashTxReturnType =
   | InjectiveReturnType<false>
   | StellarReturnType<false>
   | StacksReturnType<false>
-  | NearReturnType<false>;
+  | NearReturnType<false>
+  | AleoReturnType<false>;
 
 export type RawTxReturnType =
   | EvmRawTransaction
@@ -191,7 +193,8 @@ export type RawTxReturnType =
   | SuiRawTransaction
   | StellarRawTransaction
   | StacksRawTransaction
-  | NearRawTransaction;
+  | NearRawTransaction
+  | AleoRawTransaction;
 
 export type GetDefaultTxReturnType<Raw extends boolean> = Raw extends true ? RawTxReturnType : HashTxReturnType;
 
@@ -218,7 +221,9 @@ export type TxReturnType<C extends SpokeChainKey | ChainType, Raw extends boolea
                   ? NearReturnType<Raw>
                   : GetChainType<C> extends 'BITCOIN'
                     ? BitcoinReturnType<Raw>
-                    : GetDefaultTxReturnType<Raw>;
+                    : GetChainType<C> extends 'ALEO'
+                      ? AleoReturnType<Raw>
+                      : GetDefaultTxReturnType<Raw>;
 
 export type Prettify<T> = {
   [K in keyof T]: T[K];
@@ -262,6 +267,7 @@ export type FeeEstimateTransaction = {
 };
 
 export type NearGasEstimate = bigint;
+export type AleoGasEstimate = bigint;
 
 export type GasEstimateType =
   | EvmGasEstimate
@@ -269,7 +275,8 @@ export type GasEstimateType =
   | StellarGasEstimate
   | IconGasEstimate
   | SuiGasEstimate
-  | InjectiveGasEstimate;
+  | InjectiveGasEstimate
+  | AleoGasEstimate;
 
 export type GetEstimateGasReturnTypeForSpokeChainId<C extends SpokeChainKey | ChainType> =
   GetChainType<C> extends 'EVM'
@@ -290,7 +297,9 @@ export type GetEstimateGasReturnTypeForSpokeChainId<C extends SpokeChainKey | Ch
                   ? BitcoinGasEstimate
                   : GetChainType<C> extends 'STACKS'
                     ? FeeEstimateTransaction
-                    : GasEstimateType;
+                    : GetChainType<C> extends 'ALEO'
+                      ? AleoGasEstimate
+                      : GasEstimateType;
 
 export type GetEstimateGasReturnTypeForChainType<C extends ChainType> = C extends 'EVM'
   ? EvmGasEstimate
@@ -310,7 +319,9 @@ export type GetEstimateGasReturnTypeForChainType<C extends ChainType> = C extend
                 ? FeeEstimateTransaction
                 : C extends 'NEAR'
                   ? NearGasEstimate
-                  : GasEstimateType;
+                  : C extends 'ALEO'
+                    ? AleoGasEstimate
+                    : GasEstimateType;
 
 export type GetEstimateGasReturnType<C extends SpokeChainKey | ChainType> = C extends SpokeChainKey
   ? GetEstimateGasReturnTypeForSpokeChainId<C>

@@ -8,7 +8,7 @@ If you are upgrading from an older version of the package instead, see [`sodax-w
 
 ## What this package does
 
-`@sodax/wallet-sdk-core` is a **low-level multi-chain wallet provider layer**. For each of the 9 chain families that SODAX supports it ships **one provider class** that:
+`@sodax/wallet-sdk-core` is a **low-level multi-chain wallet provider layer**. For each of the 10 chain families that SODAX supports it ships **one provider class** that:
 
 - Accepts a **discriminated union config** — `PrivateKey*WalletConfig | BrowserExtension*WalletConfig`.
 - Extends a small `BaseWalletProvider` to merge per-call options over a typed `defaults` shape.
@@ -27,6 +27,7 @@ It is intentionally framework-agnostic — Node ≥ 20.12, browser, edge runtime
 | Injective              | `InjectiveWalletProvider` | `@injectivelabs/sdk-ts` + `@injectivelabs/wallet-core` |
 | NEAR                   | `NearWalletProvider`      | `near-api-js` + `@hot-labs/near-connect` |
 | Stacks                 | `StacksWalletProvider`    | `@stacks/transactions` + `@stacks/connect` |
+| Aleo                   | `AleoWalletProvider`      | `@provablehq/sdk` (lazy) + `@provablehq/aleo-wallet-standard` |
 
 ---
 
@@ -70,8 +71,8 @@ Every provider class supports **two** construction modes. Picking the wrong one 
 
 | Mode | When to use | Discriminant style |
 |---|---|---|
-| **Private-key** | Node scripts, CI tests, indexers, bots — anywhere you possess the raw key | Either field presence (EVM, Solana, Sui, ICON, Injective, NEAR, Stacks) OR `type: 'PRIVATE_KEY'` (Bitcoin, Stellar) |
-| **Browser-extension** | Consumer dApps where a wallet extension provides a pre-built client / signer | Either field presence (different fields from PK variant) OR `type: 'BROWSER_EXTENSION'` (Bitcoin, Stellar) |
+| **Private-key** | Node scripts, CI tests, indexers, bots — anywhere you possess the raw key | Field presence (EVM, Solana, Sui, ICON, Injective, NEAR, Stacks), `type: 'PRIVATE_KEY'` (Bitcoin, Stellar), or `type: 'privateKey'` (Aleo — camelCase) |
+| **Browser-extension** | Consumer dApps where a wallet extension provides a pre-built client / signer | Field presence (different fields from PK variant), `type: 'BROWSER_EXTENSION'` (Bitcoin, Stellar), or `type: 'browserExtension'` (Aleo — camelCase) |
 
 For a chain-by-chain breakdown of the exact discriminant shape, see [`features/`](./features/) and [`architecture.md`](./architecture.md) § "Discriminant variants".
 

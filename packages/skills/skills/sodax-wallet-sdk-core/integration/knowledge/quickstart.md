@@ -248,6 +248,34 @@ See [`features/stacks.md`](./features/stacks.md).
 
 ---
 
+## Aleo
+
+```ts
+import { AleoWalletProvider } from '@sodax/wallet-sdk-core';
+
+// Private-key (Node / scripts / CI) — `network` is required
+const aleoPk = new AleoWalletProvider({
+  type: 'privateKey',
+  rpcUrl: 'https://api.explorer.provable.com/v1',
+  privateKey: 'APrivateKey1…',
+  network: 'mainnet',
+  // delegate: { apiKey: '…', consumerId: '…' },   // optional remote proving
+});
+
+// Browser-extension — Provable wallet adapter; `network` optional (defaults 'mainnet')
+const aleoBrowser = new AleoWalletProvider({
+  type: 'browserExtension',
+  rpcUrl: 'https://api.explorer.provable.com/v1',
+  provableAdapter: myProvableAdapter,               // WalletAdapter from @provablehq/aleo-wallet-standard
+});
+```
+
+> The `@provablehq/sdk` WASM build lazy-loads on the first method call, not at construction.
+
+See [`features/aleo.md`](./features/aleo.md).
+
+---
+
 ## Next steps
 
 After construction:

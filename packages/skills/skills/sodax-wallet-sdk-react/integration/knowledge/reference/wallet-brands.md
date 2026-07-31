@@ -19,10 +19,11 @@ The identifiers are **open**: any string works. The table below lists every bran
 | `'leather'` | Stacks | id `LeatherProvider` |
 | `'asigna'` | Stacks | id `AsignaProvider` |
 | `'fordefi'` | Stacks | id `FordefiProviders.UtxoProvider` |
+| `'shield'` | Aleo | name `Shield` (from `@provablehq/aleo-wallet-adaptor-shield`) |
 | `'solflare'`, `'backpack'`, `'coinbase'`, `'trust'`, `'ledger'`, … | Solana | Adapter names from `@solana/wallet-adapter-wallets` |
 | `'freighter'`, `'albedo'`, `'lobstr'`, `'xbull'`, … | Stellar | Names from `@creit.tech/stellar-wallets-kit` |
 
-EVM (via EIP-6963), Solana, Sui, Stellar, and Injective surface connectors **dynamically** — the actual ids depend on what's installed in the user's browser. The table reflects names the upstream libraries ship by default.
+EVM (via EIP-6963), Solana, Sui, Aleo, Stellar, and Injective surface connectors **dynamically** — the actual ids depend on what's installed in the user's browser. The table reflects names the upstream libraries ship by default.
 
 ---
 
@@ -46,7 +47,7 @@ The table above is a guide, not authoritative. Browser extensions evolve and RDN
 import { useXConnectors } from '@sodax/wallet-sdk-react';
 import type { ChainType } from '@sodax/types';
 
-const CHAINS: ChainType[] = ['EVM', 'SOLANA', 'SUI', 'BITCOIN', 'STELLAR', 'ICON', 'INJECTIVE', 'NEAR', 'STACKS'];
+const CHAINS: ChainType[] = ['EVM', 'SOLANA', 'SUI', 'ALEO', 'BITCOIN', 'STELLAR', 'ICON', 'INJECTIVE', 'NEAR', 'STACKS'];
 
 export function DevConnectorLister() {
   return (

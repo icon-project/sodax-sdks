@@ -13,8 +13,9 @@ One row per chain. Use this when you know the chain and need to look up everythi
 | Injective | `InjectiveWalletProvider` | `InjectiveWalletConfig` | `IInjectiveWalletProvider` | `mergeDefaults` (flat)       | Field presence — PK variant uses `secret` wrapper |
 | NEAR      | `NearWalletProvider`      | `NearWalletConfig`      | `INearWalletProvider`      | `mergeDefaults` (flat)       | Field presence (no `type`) |
 | Stacks    | `StacksWalletProvider`    | `StacksWalletConfig`    | `IStacksWalletProvider`    | `mergeDefaults` (flat)       | Field presence (no `type`) |
+| Aleo      | `AleoWalletProvider`      | `AleoWalletConfig`      | `IAleoWalletProvider`      | `mergePolicy` (`waitForReceipt`) | **`type` field** (`'privateKey' \| 'browserExtension'`) |
 
-> EVM and Sui group their `defaults` per method (e.g. `defaults.sendTransaction`, `defaults.signAndExecuteTxn`) via `mergePolicy`. Every other chain (incl. Solana) has a flat `defaults` object. See [`../architecture.md`](../architecture.md) § `BaseWalletProvider`.
+> EVM and Sui group their `defaults` per method (e.g. `defaults.sendTransaction`, `defaults.signAndExecuteTxn`) via `mergePolicy`. Aleo is mixed — `defaults.waitForReceipt` is a per-method slice (`mergePolicy`) while `priorityFee` / `privateFee` are read flat. Every other chain (incl. Solana) has a flat `defaults` object. See [`../architecture.md`](../architecture.md) § `BaseWalletProvider`.
 
 ---
 
@@ -31,6 +32,7 @@ One row per chain. Use this when you know the chain and need to look up everythi
 | `InjectiveWalletProvider` | `'INJECTIVE'` |
 | `NearWalletProvider` | `'NEAR'` |
 | `StacksWalletProvider` | `'STACKS'` |
+| `AleoWalletProvider` | `'ALEO'` |
 
 These match `ChainType` values in `@sodax/types`. Useful for runtime discrimination of a generic `IXxxWalletProvider`.
 
@@ -48,7 +50,8 @@ BaseWalletProvider<TDefaults>           ← abstract base from this package
 ├── IconWalletProvider      implements IIconWalletProvider
 ├── InjectiveWalletProvider implements IInjectiveWalletProvider
 ├── NearWalletProvider      implements INearWalletProvider
-└── StacksWalletProvider    implements IStacksWalletProvider
+├── StacksWalletProvider    implements IStacksWalletProvider
+└── AleoWalletProvider      implements IAleoWalletProvider
 ```
 
 Subclassing `BaseWalletProvider` is **maintainer-only** — it implies adding a new chain to the package.
