@@ -113,6 +113,17 @@ export type RadfiMaxSpentResponse = {
   fee: number;
 };
 
+/**
+ * Runtime wiring for {@link RadfiProvider} — everything that is a live object rather than
+ * serializable config (which belongs on {@link RadfiConfig}). An object, not a positional
+ * parameter, because this is a public class and the next such dependency would otherwise be
+ * a third argument. gh-831.
+ */
+export type RadfiProviderOptions = {
+  /** Attaches per-request headers to outbound Bound `apiUrl` calls, e.g. a backend's HMAC closure. */
+  signer?: RadfiSigner;
+};
+
 export class RadfiProvider {
   private readonly config: RadfiConfig;
   // Client-side runtime signer (e.g. a backend's HMAC closure). Holds no credential itself — the SDK
@@ -121,9 +132,9 @@ export class RadfiProvider {
   public accessToken = '';
   public refreshToken = '';
 
-  constructor(config: RadfiConfig, signer?: RadfiSigner) {
+  constructor(config: RadfiConfig, options?: RadfiProviderOptions) {
     this.config = config;
-    this.signer = signer;
+    this.signer = options?.signer;
     // Seed any pre-provisioned Bound Exchange session from config. `RadfiConfig` declares
     // `accessToken` / `refreshToken` precisely so a server-side caller — which never runs the
     // interactive BIP322 sign-in — can inject a token via `new Sodax({ ... })` and have the

@@ -206,7 +206,7 @@ describe('RadfiProvider — signer hook (x-api-signature, gh-831)', () => {
   it('merges the signer headers onto an authenticated POST and keeps the user Authorization', async () => {
     const signer = vi.fn().mockReturnValue({ 'x-api-signature': 'sig_abc_1719396000000' });
     fetchMock.mockResolvedValue(makeResponse(200, JSON.stringify({ data: { base64Psbt: 'cHNidP8=', txId: 'abc' } })));
-    const radfi = new RadfiProvider(baseConfig, signer);
+    const radfi = new RadfiProvider(baseConfig, { signer });
 
     await radfi.createWithdrawTransaction(withdrawParams, 'user-access-token');
 
@@ -221,7 +221,7 @@ describe('RadfiProvider — signer hook (x-api-signature, gh-831)', () => {
     const signer = vi.fn().mockReturnValue({ 'x-api-signature': 'sig_get' });
     const wallet = { tradingAddress: 'bc1ptrade', userAddress: 'bc1puser', userPublicKey: '02ab' };
     fetchMock.mockResolvedValue(makeResponse(200, JSON.stringify({ data: wallet })));
-    const radfi = new RadfiProvider(baseConfig, signer);
+    const radfi = new RadfiProvider(baseConfig, { signer });
 
     await radfi.getTradingWallet('bc1puser');
 
@@ -233,7 +233,7 @@ describe('RadfiProvider — signer hook (x-api-signature, gh-831)', () => {
   it('awaits an async signer', async () => {
     const signer = vi.fn().mockResolvedValue({ 'x-api-signature': 'sig_async' });
     fetchMock.mockResolvedValue(makeResponse(200, JSON.stringify({ data: { base64Psbt: 'x', txId: 'y' } })));
-    const radfi = new RadfiProvider(baseConfig, signer);
+    const radfi = new RadfiProvider(baseConfig, { signer });
 
     await radfi.createWithdrawTransaction(withdrawParams, 'tok');
 
@@ -259,7 +259,7 @@ describe('RadfiProvider — signer hook (x-api-signature, gh-831)', () => {
     fetchMock.mockResolvedValue(
       makeResponse(200, JSON.stringify({ data: { tradingAddress: 'bc1ptrade', userAddress: 'bc1puser' } })),
     );
-    const radfi = new RadfiProvider(baseConfig, signer);
+    const radfi = new RadfiProvider(baseConfig, { signer });
 
     await radfi.getTradingWallet('bc1puser');
     await radfi.getTradingWallet('bc1puser');
@@ -278,7 +278,7 @@ describe('RadfiProvider — signer hook (x-api-signature, gh-831)', () => {
       throw new Error('credential unavailable');
     });
     fetchMock.mockResolvedValue(makeResponse(200, JSON.stringify({ data: { base64Psbt: 'x', txId: 'y' } })));
-    const radfi = new RadfiProvider(baseConfig, signer);
+    const radfi = new RadfiProvider(baseConfig, { signer });
 
     await expect(radfi.createWithdrawTransaction(withdrawParams, 'tok')).rejects.toThrow('credential unavailable');
     expect(fetchMock).not.toHaveBeenCalled();
@@ -290,7 +290,7 @@ describe('RadfiProvider — signer hook (x-api-signature, gh-831)', () => {
     // silently replace the per-user bearer. Callers own that constraint; this test makes it visible.
     const signer = vi.fn().mockReturnValue({ 'x-api-signature': 'sig', Authorization: 'Bearer signer-wins' });
     fetchMock.mockResolvedValue(makeResponse(200, JSON.stringify({ data: { base64Psbt: 'x', txId: 'y' } })));
-    const radfi = new RadfiProvider(baseConfig, signer);
+    const radfi = new RadfiProvider(baseConfig, { signer });
 
     await radfi.createWithdrawTransaction(withdrawParams, 'user-access-token');
 
