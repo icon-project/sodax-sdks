@@ -288,6 +288,9 @@ export class RadfiProvider {
     return body.data;
   }
 
+  // UMS call: goes out unsigned even when a signer is configured. Bound scopes the backend
+  // credential to the Sodax endpoints on `apiUrl`, so a signature here is unverified — this
+  // deliberately does not go through `request()`. Same for `getExpiredUtxos` below. See gh-831.
   public async getBalance(address: string): Promise<RadfiWalletBalance> {
     if (!this.config.umsUrl) {
       throw new Error('RadfiConfig.umsUrl is required for getBalance');
@@ -399,6 +402,9 @@ export class RadfiProvider {
 
   /**
    * Fetch expired (or near-expiry) UTXOs for a trading wallet address from UMS API.
+   *
+   * UMS call — unsigned by design, like `getBalance`: the backend credential is scoped to the
+   * Sodax endpoints on `apiUrl`, so a configured signer intentionally does not reach here.
    */
   public async getExpiredUtxos(
     tradingAddress: string,
