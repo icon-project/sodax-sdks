@@ -13,7 +13,7 @@ It mirrors `ISwapsApiV2` (from `@sodax/types`) one method per endpoint (21 total
   overrides.
 
 > This is the lower-level backend HTTP surface. For the end-to-end create→relay→post-execution swap
-> orchestrator, use `sodax.swaps` (see [`SWAPS.md`](SWAPS.md)).
+> orchestrator, use `sodax.swaps` (see [`SWAPS.md`](https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/swaps)).
 
 ## Methods
 
@@ -166,7 +166,7 @@ if (!r.ok) {
 
 ### Implementation note
 
-`SwapsApiService` is a thin adapter over the standalone [`@sodax/swaps-api`](../../swaps-api/README.md)
+`SwapsApiService` is a thin adapter over the standalone [`@sodax/swaps-api`](https://docs.sodax.com/developers/packages/foundation/swaps-api)
 package — the single source of the swaps wire client (request building, per-chain `tx`
 validation/transform, response schemas, HTTP). This service adds the SDK conventions on top: the
 `Result<T>` contract, the `SodaxLogger`, `ApiConfig`/`CustomApiConfig` resolution, and per-call
@@ -182,5 +182,5 @@ validation/transform, response schemas, HTTP). This service adds the SDK convent
 
 ## See also
 
-- [`BACKEND_API.md`](BACKEND_API.md) — `sodax.backendApi`, the sibling client for intent/orderbook/money-market reads + config.
-- [`SWAPS.md`](SWAPS.md) — `sodax.swaps` (`SwapService`), the end-to-end intent orchestrator.
+- [`BACKEND_API.md`](https://docs.sodax.com/developers/packages/foundation/sdk/tooling-modules/backend_api) — `sodax.backendApi`, the sibling client for intent/orderbook/money-market reads + config.
+- [`SWAPS.md`](https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/swaps) — `sodax.swaps` (`SwapService`), the end-to-end intent orchestrator.

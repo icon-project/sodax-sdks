@@ -117,7 +117,7 @@ await sodax.config.initialize(); // fetch dynamic config from backend; falls bac
 
 ### The discriminated union: `WalletProviderSlot<K, Raw>`
 
-The discriminated union lives in [`packages/types/src/common/common.ts`](../../types/src/common/common.ts):
+The discriminated union lives in [`packages/types/src/common/common.ts`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/common/common.ts):
 
 ```ts
 export type WalletProviderSlot<K extends SpokeChainKey | ChainType, Raw extends boolean> =
@@ -256,7 +256,7 @@ return { ok: false, error: new Error('Approve only supported for EVM/Stellar spo
 
 Attach `cause` whenever a lower-level error exists (most CODE-form sites). Omit only when the failure is boolean/status-derived with no wrapped throw.
 
-See [`packages/sdk/CLAUDE.md`](../CLAUDE.md) for the full convention with worked examples.
+See [Errors And Results](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/AGENTS.md#errors-and-results) for the full convention with worked examples.
 
 ---
 

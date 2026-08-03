@@ -102,17 +102,18 @@ The full guide lives in [`docs/`](https://github.com/icon-project/sodax-sdks/tre
 
 | Topic | What it covers |
 |-------|----------------|
-| [Configure SodaxWalletProvider](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONFIGURE_PROVIDER.md) | `SodaxWalletConfig` shape, opt-in chain mounting, per-chain RPC + wallet defaults, breaking changes from v1 |
-| [Connect Flow](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONNECT_FLOW.md) | Discover connectors, connect, read account, disconnect; provider-managed vs non-provider chains; persisted reconnect |
-| [Wallet Provider Bridge](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/WALLET_PROVIDER_BRIDGE.md) | `useWalletProvider` → typed `IXxxWalletProvider` for `@sodax/sdk` calls; `useXService` / `useXServices` |
-| [Wallet Modal](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/WALLET_MODAL.md) | Headless state machine for multi-chain modal UIs; `useConnectionFlow` non-modal alternative |
-| [WalletConnect](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/WALLETCONNECT.md) | Enterprise custody integration (Fireblocks, Ledger); `qrModalOptions` filtering |
-| [Batch Operations](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/BATCH_OPERATIONS.md) | Sequential multi-chain connect/disconnect by wallet identifier |
-| [Chain Detection](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CHAIN_DETECTION.md) | `useChainGroups`, `useConnectedChains`, `useIsWalletInstalled`, `useEnabledChains`; hydration status |
-| [Sign Message](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/SIGN_MESSAGE.md) | `useXSignMessage` cross-chain; Bitcoin BIP-322 vs ECDSA auto-detect |
-| [EVM Switch Chain](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/EVM_SWITCH_CHAIN.md) | Single wagmi connection across all configured EVM networks |
-| [Connectors](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONNECTORS.md) | `IXConnector` contract, deep-import concrete classes, custom connectors |
-| [Architecture](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/ARCHITECTURE.md) | Zustand store, Provider/Hydrator/Actions trio, persist hydration caveat |
+| [Configure SodaxWalletProvider](docs/CONFIGURE_PROVIDER.md) | `SodaxWalletConfig` shape, opt-in chain mounting, per-chain RPC + wallet defaults, breaking changes from v1 |
+| [Connect Flow](docs/CONNECT_FLOW.md) | Discover connectors, connect, read account, disconnect; provider-managed vs non-provider chains; persisted reconnect |
+| [Wallet Provider Bridge](docs/WALLET_PROVIDER_BRIDGE.md) | `useWalletProvider` → typed `IXxxWalletProvider` for `@sodax/sdk` calls; `useXService` / `useXServices` |
+| [Wallet Modal](docs/WALLET_MODAL.md) | Headless state machine for multi-chain modal UIs; `useConnectionFlow` non-modal alternative |
+| [WalletConnect](docs/WALLETCONNECT.md) | Enterprise custody integration (Fireblocks, Ledger); `qrModalOptions` filtering |
+| [Batch Operations](docs/BATCH_OPERATIONS.md) | Sequential multi-chain connect/disconnect by wallet identifier |
+| [Chain Detection](docs/CHAIN_DETECTION.md) | `useChainGroups`, `useConnectedChains`, `useIsWalletInstalled`, `useEnabledChains`; hydration status |
+| [Sign Message](docs/SIGN_MESSAGE.md) | `useXSignMessage` cross-chain; Bitcoin BIP-322 vs ECDSA auto-detect |
+| [EVM Switch Chain](docs/EVM_SWITCH_CHAIN.md) | Single wagmi connection across all configured EVM networks |
+| [Sub-path Exports](docs/SUB_PATH_EXPORTS.md) | Barrel vs `@sodax/wallet-sdk-react/xchains/<chain>` entry points; `instanceof` semantics across them |
+| [Connectors](docs/CONNECTORS.md) | `IXConnector` contract, deep-import concrete classes, custom connectors |
+| [Architecture](docs/ARCHITECTURE.md) | Zustand store, Provider/Hydrator/Actions trio, persist hydration caveat |
 | [Adding a New Chain](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/ADDING_A_NEW_CHAIN.md) | `ChainMeta` extension, chain registry, sub-path export wiring |
 
 ## AI agent docs
@@ -150,7 +151,7 @@ if (connector instanceof XverseXConnector) {
 }
 ```
 
-See [Connectors](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONNECTORS.md) for the full list of deep-import sub-paths.
+See [Connectors](docs/CONNECTORS.md) for the full list of deep-import sub-paths.
 
 ## Requirements
 

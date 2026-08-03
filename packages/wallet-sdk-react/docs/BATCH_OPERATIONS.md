@@ -261,7 +261,7 @@ Reach for `useXConnect` / `useXDisconnect` directly when:
 
 ## Related docs
 
-- [Connect Flow](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONNECT_FLOW.md) — `useXConnect` / `useXDisconnect` underlying primitives
-- [Wallet Modal](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/WALLET_MODAL.md) — multi-chain modal that internally drives `useBatchConnect` for "connect all" flows
-- [Chain Detection](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CHAIN_DETECTION.md) — `useChainGroups`, `useConnectedChains` for surfacing batch results
-- [Connectors](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONNECTORS.md) — `IXConnector` shape, exact `id` matching for fine-grained control
+- [Connect Flow](./CONNECT_FLOW.md) — `useXConnect` / `useXDisconnect` underlying primitives
+- [Wallet Modal](./WALLET_MODAL.md) — multi-chain modal that internally drives `useBatchConnect` for "connect all" flows
+- [Chain Detection](./CHAIN_DETECTION.md) — `useChainGroups`, `useConnectedChains` for surfacing batch results
+- [Connectors](./CONNECTORS.md) — `IXConnector` shape, exact `id` matching for fine-grained control

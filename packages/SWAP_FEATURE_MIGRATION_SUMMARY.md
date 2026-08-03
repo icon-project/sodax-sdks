@@ -5,7 +5,7 @@
  * SDK shape (per-chain `*SpokeProvider` instances) to the v2 SDK shape (chain-key + chain-narrowed
  * wallet provider).
  * For the upstream SDK rationale and concept definitions, see:
- *   - `packages/sdk/docs/ARCHITECTURE_REFACTOR_SUMMARY.md` — Concepts 1-6 + types-package breaking
+ *   - `packages/sdk/docs/ARCHITECTURE.md` — Concepts 1-6 + types-package breaking
  *     changes.
  *   - `packages/sdk/CHAIN_ID_MIGRATION.md` — full `*_MAINNET_CHAIN_ID` → `ChainKeys.*` mapping table.
  * Diff scope: `sdk-v2-main..HEAD` for `apps/demo/src/{components/swaps,components/bitcoin,
@@ -56,7 +56,7 @@ discriminator on every `I*WalletProvider` (no `as` needed) when you don't have t
 
 ## Type / Symbol Rename Cheat Sheet
 
-For full upstream rationale, see `ARCHITECTURE_REFACTOR_SUMMARY.md` "Types package: most significant
+For full upstream rationale, see `ARCHITECTURE.md` "Types package: most significant
 breaking changes" and Concepts 1, 4. Demo-specific deltas:
 
 ### Field-level renames (the easy-to-miss kind)

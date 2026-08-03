@@ -153,9 +153,9 @@ The conditional hook call (early-return before `useEvmSwitchChainInner` runs) is
 
 ## Related docs
 
-- [Configure SodaxWalletProvider](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONFIGURE_PROVIDER.md) — opt in / out of EVM
-- [Wallet Provider Bridge](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/WALLET_PROVIDER_BRIDGE.md) — `useWalletProvider` returns the same provider for all EVM chain ids
-- [Chain Detection](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CHAIN_DETECTION.md) — EVM collapses to one row in `useChainGroups` / `useConnectedChains` for the same reason
-- [Connect Flow](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONNECT_FLOW.md) — connect once; chain switching is a separate UX
+- [Configure SodaxWalletProvider](./CONFIGURE_PROVIDER.md) — opt in / out of EVM
+- [Wallet Provider Bridge](./WALLET_PROVIDER_BRIDGE.md) — `useWalletProvider` returns the same provider for all EVM chain ids
+- [Chain Detection](./CHAIN_DETECTION.md) — EVM collapses to one row in `useChainGroups` / `useConnectedChains` for the same reason
+- [Connect Flow](./CONNECT_FLOW.md) — connect once; chain switching is a separate UX
 - [wagmi `useSwitchChain` docs](https://wagmi.sh/react/api/hooks/useSwitchChain)
 - [EIP-3326 — `wallet_switchEthereumChain`](https://eips.ethereum.org/EIPS/eip-3326)

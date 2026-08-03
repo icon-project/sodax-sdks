@@ -206,8 +206,8 @@ Common error messages by chain:
 
 ## Related docs
 
-- [Connect Flow](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONNECT_FLOW.md) — must connect a wallet before signing
-- [Configure SodaxWalletProvider](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONFIGURE_PROVIDER.md) — chain must be enabled in config to dispatch
-- [Connectors](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONNECTORS.md) — Bitcoin connector classes for `instanceof` checks
+- [Connect Flow](./CONNECT_FLOW.md) — must connect a wallet before signing
+- [Configure SodaxWalletProvider](./CONFIGURE_PROVIDER.md) — chain must be enabled in config to dispatch
+- [Connectors](./CONNECTORS.md) — Bitcoin connector classes for `instanceof` checks
 - [SDK Wallet Providers Reference](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/WALLET_PROVIDERS.md) — Bitcoin's lower-level `signTransaction` / `signEcdsaMessage` / `signBip322Message` interface
 - [BIP-322 specification](https://github.com/bitcoin/bips/blob/master/bip-0322.mediawiki) — generic signed-message format for all Bitcoin address types

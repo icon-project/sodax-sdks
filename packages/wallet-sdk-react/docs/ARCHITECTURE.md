@@ -2,7 +2,7 @@
 
 `@sodax/wallet-sdk-react` is structured around five core ideas: a single Zustand store as source of truth, a chain registry that abstracts over heterogeneous wallet SDKs, a Provider/Hydrator/Actions trio for chains that need React context, async persistence with cleanup for stale connections, and store-first hooks that never call native chain SDK hooks directly.
 
-This document covers how these pieces fit together. For consumer-facing API, see [`CONNECT_FLOW.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONNECT_FLOW.md) and friends.
+This document covers how these pieces fit together. For consumer-facing API, see [`CONNECT_FLOW.md`](./CONNECT_FLOW.md) and friends.
 
 ## Table of contents
 
@@ -182,7 +182,7 @@ Provider-managed chains use a 3-component pattern:
 
 Only the Hydrator writes connection state for provider-managed chains. The Actions component **does not** call `setXConnection` after a successful native connect — the Hydrator observes the wagmi/adapter status flip and handles it.
 
-This is why `useXConnect.mutateAsync(connector)` resolves with `undefined` for EVM/Solana/Sui ([Connect Flow caveat](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONNECT_FLOW.md#provider-managed-chains-caveat)). The mutation kicks off `wagmi.connect()` and resolves; the Hydrator independently observes the status change and writes the account.
+This is why `useXConnect.mutateAsync(connector)` resolves with `undefined` for EVM/Solana/Sui ([Connect Flow caveat](./CONNECT_FLOW.md#provider-managed-chains-caveat)). The mutation kicks off `wagmi.connect()` and resolves; the Hydrator independently observes the status change and writes the account.
 
 The split prevents two failure modes:
 
@@ -241,7 +241,7 @@ Persist restores `xConnections` from `localStorage` blind to the current `enable
 
 ### Hydration flag for UI
 
-`useConnectedChains` exposes `status: 'loading' | 'ready'` derived from `useXWalletStore.persist.hasHydrated()`. Use it to gate "Connect wallet" → "Connected" UIs and avoid first-paint flicker. See [`CHAIN_DETECTION.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CHAIN_DETECTION.md#hydration-status--gating-reload-flicker).
+`useConnectedChains` exposes `status: 'loading' | 'ready'` derived from `useXWalletStore.persist.hasHydrated()`. Use it to gate "Connect wallet" → "Connected" UIs and avoid first-paint flicker. See [`CHAIN_DETECTION.md`](./CHAIN_DETECTION.md#hydration-status--gating-reload-flicker).
 
 ### Provider-managed reconnect
 
@@ -284,8 +284,8 @@ The provider classes live in `@sodax/wallet-sdk-core`, **not** here. This packag
 
 ## Related docs
 
-- [Configure SodaxWalletProvider](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONFIGURE_PROVIDER.md) — config schema for the lifecycle described here
-- [Connect Flow](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONNECT_FLOW.md) — consumer-facing API
-- [Wallet Provider Bridge](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/WALLET_PROVIDER_BRIDGE.md) — `useWalletProvider` consumes the `walletProviders` slice
+- [Configure SodaxWalletProvider](./CONFIGURE_PROVIDER.md) — config schema for the lifecycle described here
+- [Connect Flow](./CONNECT_FLOW.md) — consumer-facing API
+- [Wallet Provider Bridge](./WALLET_PROVIDER_BRIDGE.md) — `useWalletProvider` consumes the `walletProviders` slice
 - [Adding a New Chain](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/ADDING_A_NEW_CHAIN.md) — chain-onboarding workflow
-- [Sub-path Exports](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/SUB_PATH_EXPORTS.md) — barrel vs deep-import boundary
+- [Sub-path Exports](./SUB_PATH_EXPORTS.md) — barrel vs deep-import boundary

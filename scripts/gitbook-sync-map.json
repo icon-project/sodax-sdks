@@ -58,6 +58,68 @@
     { "src": "packages/wallet-sdk-core/README.md", "dest": "developers/packages/connection/wallet-sdk-core.md" },
     { "src": "packages/wallet-sdk-react/README.md", "dest": "developers/packages/connection/wallet-sdk-react.md" },
     { "src": "packages/dapp-kit/README.md", "dest": "developers/packages/experience/dapp-kit.md" },
-    { "src": "packages/skills/README.md", "dest": "developers/packages/experience/skills.md" }
+    { "src": "packages/skills/README.md", "dest": "developers/packages/experience/skills.md" },
+    { "src": "packages/sdk/docs/DEX.md", "dest": "developers/packages/foundation/sdk/functional-modules/dex.md" },
+    {
+      "src": "packages/sdk/docs/SWAPS_API.md",
+      "dest": "developers/packages/foundation/sdk/tooling-modules/swaps_api.md"
+    },
+    { "src": "packages/sdk/docs/LOGGING.md", "dest": "developers/packages/sdk/docs/LOGGING.md" },
+    { "src": "packages/sdk/docs/ARCHITECTURE.md", "dest": "developers/packages/sdk/docs/ARCHITECTURE.md" },
+    { "src": "packages/sdk/CHAIN_ID_MIGRATION.md", "dest": "developers/packages/sdk/CHAIN_ID_MIGRATION.md" },
+    { "src": "packages/types/README.md", "dest": "developers/packages/foundation/types.md" },
+    { "src": "apps/swap-api-example/README.md", "dest": "developers/packages/foundation/swaps-api/example.md" },
+    {
+      "src": "packages/dapp-kit/src/hooks/backend/README.md",
+      "dest": "developers/packages/experience/dapp-kit/backend-hooks.md"
+    },
+    {
+      "src": "packages/wallet-sdk-react/docs/CONFIGURE_PROVIDER.md",
+      "dest": "developers/packages/connection/docs/CONFIGURE_PROVIDER.md"
+    },
+    {
+      "src": "packages/wallet-sdk-react/docs/CONNECT_FLOW.md",
+      "dest": "developers/packages/connection/docs/CONNECT_FLOW.md"
+    },
+    {
+      "src": "packages/wallet-sdk-react/docs/WALLET_PROVIDER_BRIDGE.md",
+      "dest": "developers/packages/connection/docs/WALLET_PROVIDER_BRIDGE.md"
+    },
+    {
+      "src": "packages/wallet-sdk-react/docs/WALLET_MODAL.md",
+      "dest": "developers/packages/connection/docs/WALLET_MODAL.md"
+    },
+    {
+      "src": "packages/wallet-sdk-react/docs/CHAIN_DETECTION.md",
+      "dest": "developers/packages/connection/docs/CHAIN_DETECTION.md"
+    },
+    {
+      "src": "packages/wallet-sdk-react/docs/CONNECTORS.md",
+      "dest": "developers/packages/connection/docs/CONNECTORS.md"
+    },
+    {
+      "src": "packages/wallet-sdk-react/docs/BATCH_OPERATIONS.md",
+      "dest": "developers/packages/connection/docs/BATCH_OPERATIONS.md"
+    },
+    {
+      "src": "packages/wallet-sdk-react/docs/SIGN_MESSAGE.md",
+      "dest": "developers/packages/connection/docs/SIGN_MESSAGE.md"
+    },
+    {
+      "src": "packages/wallet-sdk-react/docs/EVM_SWITCH_CHAIN.md",
+      "dest": "developers/packages/connection/docs/EVM_SWITCH_CHAIN.md"
+    },
+    {
+      "src": "packages/wallet-sdk-react/docs/WALLETCONNECT.md",
+      "dest": "developers/packages/connection/docs/WALLETCONNECT.md"
+    },
+    {
+      "src": "packages/wallet-sdk-react/docs/SUB_PATH_EXPORTS.md",
+      "dest": "developers/packages/connection/docs/SUB_PATH_EXPORTS.md"
+    },
+    {
+      "src": "packages/wallet-sdk-react/docs/ARCHITECTURE.md",
+      "dest": "developers/packages/connection/docs/ARCHITECTURE.md"
+    }
   ]
 }

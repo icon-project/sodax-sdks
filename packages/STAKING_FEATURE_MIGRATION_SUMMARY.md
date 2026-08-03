@@ -15,7 +15,7 @@
  *   - `packages/DEX_FEATURE_MIGRATION_SUMMARY.md` — DEX migration; reference for cross-chain
  *     mutations that return `Result<[SpokeTxHash, HubTxHash]>` and the `raw: true` allowance trick.
  * For upstream rationale, see:
- *   - `packages/sdk/docs/ARCHITECTURE_REFACTOR_SUMMARY.md` — Concepts 1-6.
+ *   - `packages/sdk/docs/ARCHITECTURE.md` — Concepts 1-6.
  *   - `packages/sdk/CHAIN_ID_MIGRATION.md` — `*_MAINNET_CHAIN_ID` → `ChainKeys.*` table.
  * Diff scope: `apps/demo/src/{App.tsx,components/shared/header.tsx,pages/staking/page.tsx,
  *   components/staking/**,hooks/useSodaBalance.ts}` and a peer rewrite of

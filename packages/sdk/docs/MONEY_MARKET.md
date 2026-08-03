@@ -60,7 +60,7 @@ const moneyMarketTokensFromConfig = sodax.config.getSupportedMoneyMarketTokensBy
 const allMoneyMarketTokensFromConfig = sodax.config.getSupportedMoneyMarketTokens();
 ```
 
-Chain constants are available under the `ChainKeys` namespace (e.g. `ChainKeys.BSC_MAINNET`, `ChainKeys.SONIC_MAINNET`). The old `*_CHAIN_ID` constants have been replaced — see `packages/sdk/CHAIN_ID_MIGRATION.md` for the full rename mapping.
+Chain constants are available under the `ChainKeys` namespace (e.g. `ChainKeys.BSC_MAINNET`, `ChainKeys.SONIC_MAINNET`). The old `*_CHAIN_ID` constants have been replaced — see the [Chain ID migration table](https://docs.sodax.com/developers/packages/foundation/sdk/chain_id_migration).
 
 ## Available Methods
 

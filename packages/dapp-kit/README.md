@@ -252,6 +252,8 @@ function SwapButton({ intentParams }: { intentParams: CreateIntentParams }) {
 
 ### Backend Query Hooks
 
+Full reference with parameters and usage snippets: [Backend Query Hooks](https://docs.sodax.com/developers/packages/experience/dapp-kit/backend-hooks).
+
 - [`useBackendIntentByTxHash()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/backend/useBackendIntentByTxHash.ts) — Get intent by hub tx hash (polls 1s)
 - [`useBackendIntentByHash()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/backend/useBackendIntentByHash.ts) — Get intent by intent hash
 - [`useBackendUserIntents()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/backend/useBackendUserIntents.ts) — All intents for a user with date filtering

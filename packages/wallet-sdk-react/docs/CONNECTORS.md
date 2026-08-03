@@ -125,7 +125,7 @@ The `package.json` `exports` field maps `./xchains/*` to `dist/xchains/*/index.{
 | NEAR | `NearXConnector` | `@hot-labs/near-connect` | `near-api-js` |
 | Stacks | `StacksXConnector` × N (one per registered provider) | provider list + `window.LeatherProvider` probe | `@stacks/connect` |
 
-The `BitcoinXConnector` is an abstract base — concrete subclasses (Unisat, Xverse, OKX) implement `signEcdsaMessage` / `signBip322Message` per wallet's API. See [`SIGN_MESSAGE.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/SIGN_MESSAGE.md) for the dispatch logic.
+The `BitcoinXConnector` is an abstract base — concrete subclasses (Unisat, Xverse, OKX) implement `signEcdsaMessage` / `signBip322Message` per wallet's API. See [`SIGN_MESSAGE.md`](./SIGN_MESSAGE.md) for the dispatch logic.
 
 ---
 
@@ -163,7 +163,7 @@ function ConnectorList() {
 }
 ```
 
-`preferred` matches by exact `connector.id`. For substring/case-insensitive matching across chains (matches the batch-operation API), use [`useIsWalletInstalled`](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CHAIN_DETECTION.md#useiswalletinstalled--install-detection) instead.
+`preferred` matches by exact `connector.id`. For substring/case-insensitive matching across chains (matches the batch-operation API), use [`useIsWalletInstalled`](./CHAIN_DETECTION.md#useiswalletinstalled--install-detection) instead.
 
 ---
 
@@ -239,9 +239,9 @@ For chains with custom `signMessage` requirements (Bitcoin, Injective), implemen
 
 ## Related docs
 
-- [Configure SodaxWalletProvider](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONFIGURE_PROVIDER.md) — `connectors` slot field for overriding defaults
-- [Connect Flow](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONNECT_FLOW.md) — how `useXConnectors` returns these connectors
-- [Sign Message](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/SIGN_MESSAGE.md) — Bitcoin connector subclass dispatch (BIP-322 vs ECDSA)
-- [Batch Operations](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/BATCH_OPERATIONS.md) — identifier-based connector matching
-- [Wallet Modal](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/WALLET_MODAL.md) — `selectWallet(connector)` consumes `IXConnector`
+- [Configure SodaxWalletProvider](./CONFIGURE_PROVIDER.md) — `connectors` slot field for overriding defaults
+- [Connect Flow](./CONNECT_FLOW.md) — how `useXConnectors` returns these connectors
+- [Sign Message](./SIGN_MESSAGE.md) — Bitcoin connector subclass dispatch (BIP-322 vs ECDSA)
+- [Batch Operations](./BATCH_OPERATIONS.md) — identifier-based connector matching
+- [Wallet Modal](./WALLET_MODAL.md) — `selectWallet(connector)` consumes `IXConnector`
 - [SDK Wallet Providers Reference](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/WALLET_PROVIDERS.md) — the `IXxxWalletProvider` interfaces these connectors back into

@@ -276,5 +276,5 @@ ChainKeys.BSC_MAINNET
 - `packages/sdk/src/swap/SwapService.ts` — public service facade; use `sodax.swaps`
 - `packages/sdk/src/swap/EvmSolverService.ts` — EVM-level intent ABI encoding/decoding and event parsing
 - `packages/sdk/docs/SWAPS.md` — full swap feature documentation
-- `packages/sdk/docs/ARCHITECTURE_REFACTOR_SUMMARY.md` — v2 architecture reference (chain keys, `Result<T>`, error convention)
-- `packages/sdk/CHAIN_ID_MIGRATION.md` — mapping from old `*_CHAIN_ID` constants to `ChainKeys.*`
+- [SDK Architecture Reference](./ARCHITECTURE.md) — v2 architecture reference (chain keys, `Result<T>`, error convention)
+- [Chain ID migration table](../CHAIN_ID_MIGRATION.md) — mapping from old `*_CHAIN_ID` constants to `ChainKeys.*`

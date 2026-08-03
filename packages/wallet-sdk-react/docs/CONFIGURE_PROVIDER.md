@@ -242,7 +242,7 @@ walletConnect: {
 }
 ```
 
-If `projectId` is missing, the WalletConnect connector is silently skipped and a warning is logged. See [`WALLETCONNECT.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/WALLETCONNECT.md) for the partner integration guide.
+If `projectId` is missing, the WalletConnect connector is silently skipped and a warning is logged. See [`WALLETCONNECT.md`](./WALLETCONNECT.md) for the partner integration guide.
 
 ---
 
@@ -353,8 +353,8 @@ If a previous session connected a chain that is no longer in `config`, the persi
 
 ## Related docs
 
-- [Connect Flow](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONNECT_FLOW.md) — discover connectors, connect, read account, disconnect
-- [Wallet Provider Bridge](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/WALLET_PROVIDER_BRIDGE.md) — `useWalletProvider` → typed `IXxxWalletProvider` for SDK calls
-- [WalletConnect](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/WALLETCONNECT.md) — enterprise/custody wallet setup (Fireblocks, etc.)
+- [Connect Flow](./CONNECT_FLOW.md) — discover connectors, connect, read account, disconnect
+- [Wallet Provider Bridge](./WALLET_PROVIDER_BRIDGE.md) — `useWalletProvider` → typed `IXxxWalletProvider` for SDK calls
+- [WalletConnect](./WALLETCONNECT.md) — enterprise/custody wallet setup (Fireblocks, etc.)
 - [Adding a New Chain](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/ADDING_A_NEW_CHAIN.md) — `ChainMeta` extension and chain registry
 - [SDK Wallet Providers Reference](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/WALLET_PROVIDERS.md) — per-chain `defaults` shape reference

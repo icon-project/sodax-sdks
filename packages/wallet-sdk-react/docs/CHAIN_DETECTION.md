@@ -39,7 +39,7 @@ Use cases:
 
 ## `useChainGroups` — picker model
 
-Returns one `ChainGroup` per enabled chain type, with display metadata + connection status. Designed for chain-picker UIs (the "select a chain" step in [`useWalletModal`](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/WALLET_MODAL.md)).
+Returns one `ChainGroup` per enabled chain type, with display metadata + connection status. Designed for chain-picker UIs (the "select a chain" step in [`useWalletModal`](./WALLET_MODAL.md)).
 
 ```tsx
 import { useChainGroups } from '@sodax/wallet-sdk-react';
@@ -71,7 +71,7 @@ function ChainPicker({ onPick }: { onPick: (chainType: ChainType) => void }) {
 
 ### EVM collapses
 
-EVM's `chainIds` lists every configured EVM `ChainKey`, but the group itself is **one row**. wagmi maintains a single connection across all those networks — there's no "per-network connection state" to render. If a user needs to switch the active EVM network, that's [`useEvmSwitchChain`](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/EVM_SWITCH_CHAIN.md), not a separate group.
+EVM's `chainIds` lists every configured EVM `ChainKey`, but the group itself is **one row**. wagmi maintains a single connection across all those networks — there's no "per-network connection state" to render. If a user needs to switch the active EVM network, that's [`useEvmSwitchChain`](./EVM_SWITCH_CHAIN.md), not a separate group.
 
 ### Custom display order
 
@@ -141,7 +141,7 @@ type UseConnectedChainsResult = {
 
 ## `useIsWalletInstalled` — install detection
 
-Read hook that pairs with the [batch operation](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/BATCH_OPERATIONS.md) hooks. Use it to gate "Connect" buttons on actual installation:
+Read hook that pairs with the [batch operation](./BATCH_OPERATIONS.md) hooks. Use it to gate "Connect" buttons on actual installation:
 
 ```typescript
 import { useIsWalletInstalled } from '@sodax/wallet-sdk-react';
@@ -160,7 +160,7 @@ Filters AND together. The type union enforces at compile time that **at least on
 
 `connectors: []` is explicit "match nothing" — returns `false`.
 
-See [Identifier matching](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/BATCH_OPERATIONS.md#identifier-matching) for the substring-match rules.
+See [Identifier matching](./BATCH_OPERATIONS.md#identifier-matching) for the substring-match rules.
 
 ---
 
@@ -209,8 +209,8 @@ For custom-stable UIs (e.g. a header chain list that must not reflow on reload),
 
 ## Related docs
 
-- [Configure SodaxWalletProvider](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONFIGURE_PROVIDER.md) — which slots show up in `useEnabledChains`
-- [Connect Flow](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONNECT_FLOW.md) — populates `xConnections` consumed here
-- [Wallet Modal](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/WALLET_MODAL.md) — drives chain picker from `useChainGroups`
-- [Batch Operations](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/BATCH_OPERATIONS.md) — `useIsWalletInstalled` shares the same identifier matcher
-- [EVM Switch Chain](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/EVM_SWITCH_CHAIN.md) — the per-network EVM control absent from `useChainGroups`
+- [Configure SodaxWalletProvider](./CONFIGURE_PROVIDER.md) — which slots show up in `useEnabledChains`
+- [Connect Flow](./CONNECT_FLOW.md) — populates `xConnections` consumed here
+- [Wallet Modal](./WALLET_MODAL.md) — drives chain picker from `useChainGroups`
+- [Batch Operations](./BATCH_OPERATIONS.md) — `useIsWalletInstalled` shares the same identifier matcher
+- [EVM Switch Chain](./EVM_SWITCH_CHAIN.md) — the per-network EVM control absent from `useChainGroups`
