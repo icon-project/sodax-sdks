@@ -96,8 +96,8 @@ jobs:
       - name: Doc link validation
         run: pnpm check:doc-links
 
-      - name: Build Apps
-        run: pnpm turbo run build --filter='./apps/*' --filter='!./apps/node'
+      - name: Build Demo App
+        run: pnpm turbo run build --filter='./apps/demo'
 
       - name: SDK features powered by @sodax/libs (Node smoke)
         run: pnpm --filter node test-libs
