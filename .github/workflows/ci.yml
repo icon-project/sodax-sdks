@@ -15,7 +15,7 @@ concurrency:
 jobs:
   build:
     name: Build and Test
-    timeout-minutes: 10
+    timeout-minutes: 15
     runs-on: ubuntu-latest
 
     strategy:
@@ -96,8 +96,9 @@ jobs:
       - name: Doc link validation
         run: pnpm check:doc-links
 
-      - name: Build Demo App
-        run: pnpm turbo run build --filter='./apps/demo'
+      - name: Build Apps
+        timeout-minutes: 10
+        run: pnpm turbo run build --filter='./apps/demo' --filter='./apps/example-next-js-16'
 
       - name: SDK features powered by @sodax/libs (Node smoke)
         run: pnpm --filter node test-libs
