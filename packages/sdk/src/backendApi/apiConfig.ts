@@ -5,16 +5,26 @@ import {
   DEFAULT_SPONSORING_API_ENDPOINT,
   type ApiConfig,
   type BaseApiConfig,
-  type CustomApiConfig,
   type HttpUrl,
   type SponsoringApiConfig,
   type SwapsApiConfig,
 } from '@sodax/types';
 import { trimTrailingSlashes } from './api-utils.js';
 
-/** Whether config uses per-service slices. */
-export function isCustomApiConfig(config: ApiConfig): config is CustomApiConfig {
-  return 'baseApiConfig' in config || 'swapsApiConfig' in config || 'sponsoringApiConfig' in config;
+/**
+ * Runtime shape of a resolved `api` config. `mergeSodaxConfig` deep-merges an override into the flat
+ * default, so per-service slices arrive alongside surviving top-level flat fields. `ApiConfig` is
+ * assignable to this, letting resolution read both without narrowing to one variant.
+ */
+type LayeredApiConfig = Partial<BaseApiConfig> & {
+  baseApiConfig?: Partial<BaseApiConfig>;
+  swapsApiConfig?: Partial<SwapsApiConfig>;
+  sponsoringApiConfig?: Partial<SponsoringApiConfig>;
+};
+
+/** The top-level flat fields, which layer underneath any per-service slice. */
+function flatLayer({ baseURL, timeout, headers }: LayeredApiConfig): Partial<BaseApiConfig> {
+  return { baseURL, timeout, headers };
 }
 
 /**
@@ -41,18 +51,14 @@ function layerConfigs(...slices: Array<Partial<BaseApiConfig> | undefined>): Bas
 
 /** Resolve base API config with global defaults. */
 export function resolveBaseApiConfig(config: ApiConfig): BaseApiConfig {
-  if (isCustomApiConfig(config)) {
-    return layerConfigs(config.baseApiConfig);
-  }
-  return layerConfigs(config);
+  const layers: LayeredApiConfig = config;
+  return layerConfigs(flatLayer(layers), layers.baseApiConfig);
 }
 
 /** Resolve swaps config over base config and global defaults. */
 export function resolveSwapsApiConfig(config: ApiConfig): SwapsApiConfig {
-  if (isCustomApiConfig(config)) {
-    return layerConfigs(config.baseApiConfig, config.swapsApiConfig);
-  }
-  return layerConfigs(config);
+  const layers: LayeredApiConfig = config;
+  return layerConfigs(flatLayer(layers), layers.baseApiConfig, layers.swapsApiConfig);
 }
 
 function isHttpUrl(value: string): value is HttpUrl {
@@ -73,11 +79,11 @@ function normalizeBaseURL(baseURL: HttpUrl): HttpUrl {
  * Normalize the URL because callers observe it and config caching keys on it.
  */
 export function resolveSponsoringApiConfig(config: ApiConfig): SponsoringApiConfig {
-  const slice = isCustomApiConfig(config) ? config.sponsoringApiConfig : undefined;
-  const base = isCustomApiConfig(config) ? config.baseApiConfig : config;
+  const layers: LayeredApiConfig = config;
+  const slice = layers.sponsoringApiConfig;
   return {
     baseURL: normalizeBaseURL(slice?.baseURL ?? DEFAULT_SPONSORING_API_ENDPOINT),
-    timeout: slice?.timeout ?? base?.timeout ?? DEFAULT_BACKEND_API_TIMEOUT,
+    timeout: slice?.timeout ?? resolveBaseApiConfig(config).timeout,
     headers: { ...DEFAULT_BACKEND_API_HEADERS, ...slice?.headers },
     ...(slice?.apiKey === undefined ? {} : { apiKey: slice.apiKey }),
   };

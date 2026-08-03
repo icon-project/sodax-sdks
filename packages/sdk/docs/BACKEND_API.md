@@ -90,6 +90,13 @@ type CustomApiConfig =
 type ApiConfig = BaseApiConfig | CustomApiConfig;
 ```
 
+Slices layer on top of the flat fields rather than replacing them: an `api` object that carries both a
+top-level `baseURL`/`timeout`/`headers` and a slice keeps applying those flat values wherever the slice
+does not define its own, so adding `swapsApiConfig` or `sponsoringApiConfig` to an existing flat config
+never silently re-routes the base API back to the packaged default. The resolution order is
+defaults → top-level flat fields → `baseApiConfig` → `swapsApiConfig`, so the most specific slice wins
+per field.
+
 The sponsoring slice resolves differently from the others on purpose: its `baseURL` never inherits
 from `baseApiConfig` (the service is routed to its own host, so inheriting would 404), and neither do
 its `headers` — a credential is scoped to the origin it was set for, so a base-API token is not

@@ -190,7 +190,7 @@ export class BackendApiService implements IConfigApiV1 {
   public readonly swaps: SwapsApiService;
   public readonly sponsoring: SponsoringApiService;
 
-  // resolved base-API slice of the ApiConfig union (flat config, or its `baseApiConfig`)
+  // resolved base-API config: the flat fields of the ApiConfig union with any `baseApiConfig` layered on top
   private readonly config: BaseApiConfig;
   private readonly headers: Record<string, string>;
   private readonly logger: SodaxLogger;
