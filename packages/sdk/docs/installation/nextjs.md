@@ -210,7 +210,7 @@ The cause was upstream Turbopack scope-hoisting bugs in three transitive depende
 fresh Next 16 app, no SODAX code involved), `@stacks/connect`, and
 `@injectivelabs/wallet-ledger`.
 
-**You do not need a workaround.** Those dependencies are now isolated inside
+No workaround is needed on the consumer side. Those dependencies are isolated inside
 [`@sodax/libs`](https://github.com/icon-project/sodax-sdks/blob/main/packages/libs/README.md), which
 sits at the bottom of the dependency chain and re-exports each one through its own pre-bundled
 subpath. `@sodax/sdk`, `@sodax/wallet-sdk-core` and `@sodax/wallet-sdk-react` consume those subpaths,

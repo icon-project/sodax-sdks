@@ -604,7 +604,7 @@ failures through `mapRelayFailure`, so the relay-waiting variants (`deposit`, `w
 own error unchanged — a plain `Error` whose `.message` is one of `RELAY_ERROR_CODES`:
 `SUBMIT_TX_FAILED`, `RELAY_TIMEOUT`, `RELAY_POLLING_FAILED`.
 
-Branch defensively:
+Handle both shapes:
 
 ```typescript
 import { isSodaxError, isDexCreateIntentError } from "@sodax/sdk";
@@ -629,28 +629,26 @@ if (!result.ok) {
 }
 ```
 
-The relay branch matters operationally: those three mean the source-chain transaction **succeeded**
-and only the cross-chain delivery is unresolved, so the correct response is to keep polling or
-reconcile — never to resubmit.
+The distinction matters operationally. All three relay codes mean the source-chain transaction
+landed and only cross-chain delivery is unresolved, so the response is to keep polling or to
+reconcile, not to resubmit.
 
-> Aligning DEX with the other modules (routing relay failures through `mapRelayFailure` so they too
-> arrive as `SodaxError`) is expected; write the `isSodaxError` check first and the relay branch as
-> the fallback, and that migration will be a no-op for your code.
+Ordering the `isSodaxError` check first also keeps this code correct if DEX later routes relay
+failures through `mapRelayFailure`: the relay branch simply stops being reached.
 
 ### Guards
 
 `@sodax/sdk` exports three narrowing guards for DEX, each matching a code set:
 
-| Guard | Codes | Use on |
+| Guard | Code set | Use on |
 | --- | --- | --- |
 | `isDexApproveError` | `USER_REJECTED`, `VALIDATION_FAILED`, `APPROVE_FAILED`, `UNKNOWN` | `assetService.approve` |
 | `isDexCreateIntentError` | `USER_REJECTED`, `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` | every `execute*` method |
 | `isDexError` | `VALIDATION_FAILED`, `LOOKUP_FAILED`, `UNKNOWN` | every read/lookup method |
 
-`USER_REJECTED` is worth handling first everywhere it can appear: the `approveFailed` and
-`intentCreationFailed` wrappers test `isWalletRejection(cause)` before anything else, so a dismissed
-wallet popup always arrives as `USER_REJECTED` rather than the generic failure code. It is the most
-common non-bug failure in a DEX flow and should not surface as an error toast.
+`USER_REJECTED` takes precedence wherever it can appear. The `approveFailed` and
+`intentCreationFailed` wrappers test `isWalletRejection(cause)` first, so a dismissed wallet prompt
+arrives as `USER_REJECTED` rather than the generic failure code for that phase.
 
 ### Codes per method
 
@@ -659,13 +657,16 @@ common non-bug failure in a DEX flow and should not surface as an error toast.
 | `assetService.approve` | `USER_REJECTED`, `VALIDATION_FAILED`, `APPROVE_FAILED`, `UNKNOWN` | `isDexApproveError` |
 | `assetService.executeDeposit` / `executeWithdraw` | `USER_REJECTED`, `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` | `isDexCreateIntentError` |
 | `assetService.deposit` / `withdraw` | the above **plus** a raw relay `Error` | both, plus the `instanceof Error` fallback |
-| `assetService.getWrappedAmount` / `getUnwrappedAmount` / `getDeposit` | `VALIDATION_FAILED`, `LOOKUP_FAILED`, `UNKNOWN` | `isDexError` |
+| `assetService.getWrappedAmount` / `getUnwrappedAmount` / `getDeposit` | `LOOKUP_FAILED`, `UNKNOWN` | `isDexError` |
 | `assetService.isAllowanceValid` | **untyped** — see below | none |
 | `clService.executeSupplyLiquidity` / `executeIncreaseLiquidity` / `executeDecreaseLiquidity` / `executeClaimRewards` | `USER_REJECTED`, `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` | `isDexCreateIntentError` |
 | `clService.supplyLiquidity` / `increaseLiquidity` / `decreaseLiquidity` / `claimRewards` | the above **plus** a raw relay `Error` | both |
 | `clService.getMintPositionEvent` | `LOOKUP_FAILED`, `UNKNOWN` | `isDexError` |
 | `clService.getPoolData` / `getPositionInfo` | `LOOKUP_FAILED`, `UNKNOWN` | `isDexError` |
 | `clService.getPoolRewardConfig` | `VALIDATION_FAILED` (`'Pool has no hook configured'`), `LOOKUP_FAILED`, `UNKNOWN` | `isDexError` |
+
+Codes listed here are the ones these methods actually produce; `UNKNOWN` is the forward-compatible
+catch-all. The guards narrow to a wider code set than any single method emits.
 
 `LOOKUP_FAILED` does not vary by method — the method name is carried on `error.context.method`
 (`'getPoolData'`, `'getPositionInfo'`, `'getPoolRewardConfig'`, `'getMintPositionEvent'`,
@@ -676,7 +677,7 @@ code.
 
 `assetService.isAllowanceValid` still returns its raw failure — the thrown `tiny-invariant` `Error`,
 or a forwarded spoke-service error — without wrapping it in a `SodaxError`. Treat its error channel
-as `unknown` and do not assume a `code`. This is the last un-migrated method in the module.
+as `unknown` and do not assume a `code`. It is the one method in the module still on this shape.
 
 ### Precondition failures are not uniformly `VALIDATION_FAILED`
 
@@ -688,14 +689,14 @@ DEX uses two different assertion helpers and they produce different codes:
 - plain `invariant(...)` throws a bare `Error`, which the enclosing catch then re-wraps with
   `approveFailed` / `intentCreationFailed`.
 
-So the **same message surfaces under different codes depending on the method**: `'Amount must be
+The same message therefore surfaces under different codes depending on the method: `'Amount must be
 greater than 0'` arrives as `APPROVE_FAILED` from `approve()` and as `INTENT_CREATION_FAILED` from
 `executeDeposit()`. Do not key user-facing copy on `VALIDATION_FAILED` alone; read
 `error.message` / `error.cause` when you need the specific precondition.
 
 ### Methods that throw instead of returning `Result`
 
-A few helpers are synchronous or unwrapped and throw directly — wrap them in `try`/`catch`:
+These helpers throw rather than returning a `Result`, so wrap them in `try`/`catch`:
 
 - `assetService.isSodaAsXSodaInPool()` — `[isSodaDepositToXSoda] Spoke token not found for asset …`
 - `assetService.getTokenWrapAction()` / `getTokenUnwrapAction()` — `[withdrawData] Hub asset not found`

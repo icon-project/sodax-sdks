@@ -4,16 +4,13 @@ The SDK routes all of its internal diagnostics through a single `SodaxLogger` in
 `console.*` directly. This lets you silence SDK output or forward it to a structured sink (Sentry,
 Pino, Datadog, etc.) without patching globals.
 
-> There are **two** observability seams and they do different jobs. This page covers `logger`, the
-> SDK's own diagnostics. React apps also have `createSodaxQueryClient({ onMutationError })` in
-> `@sodax/dapp-kit`, which catches failed React Query mutations — see
-> [React mutation errors](#not-this-page-react-mutation-errors) at the end. A dApp usually wants both.
+React apps have a second, unrelated seam for failed React Query mutations. See
+[React mutation errors](#react-mutation-errors) below; most dApps wire both.
 
 ## Select a logger at construction
 
-`logger` is a field on `SodaxOptions` — the `Sodax` constructor's parameter type — and is kept off
-the `SodaxConfig` data contract because it is a client-side sink, not backend-fetched config. It
-accepts a preset name or a custom implementation:
+`logger` is a field on `SodaxOptions`, the `Sodax` constructor's parameter type. It accepts a preset
+name or a custom implementation:
 
 ```typescript
 import { Sodax } from '@sodax/sdk';
@@ -24,12 +21,7 @@ new Sodax({ logger: 'silent' });   // drop all SDK logs
 new Sodax({ logger: myLogger });   // forward to your own sink
 ```
 
-The logger is resolved **once** at construction and held on `ConfigService` outside the swappable
-dynamic config. Read it back as `sodax.config.logger`. `await sodax.config.initialize()` refreshes
-chain config but **never** replaces the logger — the backend cannot set or overwrite it.
-
-Combine `logger` with the other constructor options freely; the constructor splits it off the data
-override before merging, so it never lands in `sodax.instanceConfig`:
+Pass it alongside any other constructor option:
 
 ```typescript
 const sodax = new Sodax({
@@ -37,6 +29,12 @@ const sodax = new Sodax({
   api: { baseApiConfig: { baseURL: 'https://api.sodax.com/v1/be' } },
 });
 ```
+
+The logger is resolved once at construction and held on `ConfigService` independently of the
+swappable dynamic config, so `sodax.config.initialize()` cannot replace it and the backend can
+neither set nor overwrite it. Read the resolved sink back as `sodax.config.logger`. Note that
+`sodax.instanceConfig` is the merged options object and carries the `logger` key too; the sink the
+services use is `sodax.config.logger`.
 
 ## Interface
 
@@ -51,25 +49,22 @@ interface SodaxLogger {
 type SodaxLoggerOption = SodaxLogger | 'console' | 'silent';
 ```
 
-Note the asymmetry: `error()` takes the thrown value as a **separate second argument**, before
-structured `data`, so adapters can attach it as the exception. `warn` / `info` / `debug` take only
-`(message, data?)`.
+`error()` takes the thrown value as a separate second argument, before structured `data`, so adapters
+can attach it as the exception. `warn`, `info` and `debug` take only `(message, data?)`.
 
-## What the SDK actually logs
+## What the SDK emits
 
-The SDK emits far more `error` than anything else, and currently never calls `info`:
+| Level | Call sites | Content | Typical adapter mapping |
+| --- | --- | --- | --- |
+| `error` | 29 | Service-level failures, already wrapped as `SodaxError` | `captureException` |
+| `warn` | 10 | Recoverable or degraded paths | `captureMessage`, warning level |
+| `debug` | 6 | Verbose flow tracing | breadcrumb |
+| `info` | 0 | Not emitted today; implement the method anyway | breadcrumb |
 
-| Level   | Call sites | What shows up                                           | Typical adapter mapping         |
-| ------- | ---------- | ------------------------------------------------------- | ------------------------------- |
-| `error` | 29         | Service-level failures, already wrapped as `SodaxError`  | `captureException`              |
-| `warn`  | 10         | Recoverable or degraded paths                            | `captureMessage`, warning level |
-| `debug` | 6          | Verbose flow tracing                                     | breadcrumb                      |
-| `info`  | 0          | Not currently emitted — implement it, expect no traffic  | breadcrumb                      |
+Counts cover the non-test sources under `packages/sdk/src`.
 
-Counts are across the non-test sources in `packages/sdk/src`; re-derive them with
-`grep -rn --include='*.ts' 'logger\.error(' packages/sdk/src | grep -v test | wc -l`.
-
-**There is no level-filtering knob.** Every call reaches your sink; filtering is the adapter's job:
+There is no level filter. Every call reaches the configured sink, so filtering belongs in the
+adapter:
 
 ```typescript
 import type { SodaxLogger } from '@sodax/sdk';
@@ -84,21 +79,23 @@ const atLeast = (min: keyof typeof ORDER, sink: SodaxLogger): SodaxLogger => ({
 });
 ```
 
-## Errors reaching your sink
+## Errors reaching the sink
 
 SDK failures arrive as [`SodaxError`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/src/errors/SodaxError.ts)
-instances. Tag them on `error.feature`, `error.code`, and `error.context.action` rather than parsing
-messages. `toJSON()` is the canonical serialization surface and `JSON.stringify(error)` invokes it
-automatically, so Pino, Datadog and Winston pick it up with no extra configuration — including the
-`bigint` values inside `context`.
+instances. Tag them on `error.feature`, `error.code` and `error.context.action` rather than parsing
+`error.message`, which is human-readable and may change.
+
+`error.toJSON()` is the canonical serialization surface, and `JSON.stringify(error)` invokes it
+automatically — including the `bigint` values inside `context`, which it coerces to strings. Pino,
+Datadog and Winston therefore need no extra configuration.
 
 See [Errors And Results](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/AGENTS.md#errors-and-results)
-for the error contract itself.
+for the error contract.
 
-## Built-in loggers and resolver
+## Built-in loggers
 
-`consoleLogger`, `silentLogger`, and `resolveLogger(option)` are exported from `@sodax/sdk` for
-composition — e.g. wrapping the console logger to add a prefix, or resolving a preset name yourself:
+`consoleLogger`, `silentLogger` and `resolveLogger(option)` are exported from `@sodax/sdk` for
+composition — wrapping the console logger to add a prefix, or resolving a preset name directly:
 
 ```typescript
 import { consoleLogger, resolveLogger, type SodaxLogger } from '@sodax/sdk';
@@ -113,7 +110,7 @@ const prefixed: SodaxLogger = {
 const resolved = resolveLogger('silent'); // → silentLogger
 ```
 
-## Example: Sentry (browser)
+## Example: Sentry in the browser
 
 ```typescript
 import * as Sentry from '@sentry/react';
@@ -134,13 +131,8 @@ const sodax = new Sodax({ logger: sentryLogger });
 
 ## Example: structured JSON on a backend
 
-The runnable version of this lives at
-[`apps/node/src/logging.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/logging.ts)
-(`pnpm --filter node logging`). It needs no private key, no RPC and no network — the backend base URL
-points at a closed local port, so you can watch a real internal SDK error travel through the sink.
-
-Newline-delimited JSON on stdout is the wire shape Pino, Winston and the Datadog/CloudWatch agents
-consume, so this adapter is dependency-free and swapping in a real logger is a one-line change:
+Newline-delimited JSON on stdout is the wire shape Pino, Winston and the Datadog and CloudWatch
+agents consume, so this adapter needs no dependencies:
 
 ```typescript
 import { Sodax, type SodaxLogger } from '@sodax/sdk';
@@ -160,51 +152,68 @@ const ndjsonLogger: SodaxLogger = {
 const sodax = new Sodax({ logger: ndjsonLogger });
 ```
 
-## Example: HTTP intake, no vendor SDK
+A runnable version lives at
+[`apps/node/src/logging.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/logging.ts)
+(`pnpm --filter node logging`). It requires no private key, RPC or network access: the backend base
+URL points at a closed local port, so a real internal SDK failure reaches the sink immediately.
 
-The demo app ships two production-shaped adapters at
+```
+logger wired: true
+{"level":"info","message":"starting backend read","endpoint":"getChains"}
+{"level":"error","message":"[BackendApiService] Request error","err":{"name":"TypeError","message":"fetch failed",…}}
+{"level":"warn","message":"backend read failed as expected","reason":"SodaxError: fetch failed"}
+```
+
+## Example: HTTP intake without a vendor SDK
+
+The demo app ships two adapters at
 [`apps/demo/src/lib/loggers`](https://github.com/icon-project/sodax-sdks/tree/main/apps/demo/src/lib/loggers):
-`createDatadogLogger()` (plain HTTP logs intake — no Datadog SDK, no agent) and
-`createSentryLogger()` (real `@sentry/react`, lazy-imported, tunnelled).
+`createDatadogLogger()` uses the plain HTTP logs intake with no Datadog SDK and no agent, and
+`createSentryLogger()` uses a lazily imported `@sentry/react` behind a tunnel.
 
-Three details in `datadogLogger.ts` are what make an adapter safe in production, and they are easy to
-miss:
+`datadogLogger.ts` shows the three constraints a transport-backed adapter has to satisfy:
 
-1. **Coerce `bigint` before serializing.** SDK `data` records routinely carry `bigint` token amounts
-   and chain IDs. Without a replacer, `JSON.stringify` throws a `TypeError` — and a log call must
-   never throw:
+1. **Coerce `bigint` before serializing.** SDK `data` records carry `bigint` token amounts and chain
+   IDs. Without a replacer `JSON.stringify` throws a `TypeError`, and a log call must never throw.
 
    ```typescript
    const bigintReplacer = (_key: string, value: unknown): unknown =>
      typeof value === 'bigint' ? value.toString() : value;
    ```
 
-2. **Serialize the thrown value explicitly**, preferring `toJSON()` so `SodaxError` keeps its
-   `feature` / `code` / `context`, and falling back to `{ name, message, stack }` for a plain `Error`.
+2. **Serialize the thrown value explicitly.** Prefer `toJSON()` so a `SodaxError` keeps its
+   `feature`, `code` and `context`, and fall back to `{ name, message, stack }` for a plain `Error`.
 
-3. **Fire and forget.** Never `await` the transport inside a log call, and swallow its failures —
-   an unreachable intake should drop the line, not surface as an SDK error:
+3. **Send fire-and-forget.** Never `await` the transport inside a log call, and swallow its
+   failures — an unreachable intake should drop the line rather than surface as an SDK error.
 
    ```typescript
    void fetch(intakeUrl, { method: 'POST', body, keepalive: true }).catch(() => {});
    ```
 
-To exercise them locally without DNS or a vendor account, the demo runs a zero-dependency mock intake
-(`pnpm mock-intake`, port 9009) that the Vite dev server proxies at the same-origin path
-`/__intake/*` — same origin means no CORS preflight, localhost means no DNS lookup.
+The demo exercises these locally without DNS or a vendor account: a zero-dependency mock intake
+(`pnpm mock-intake`, port 9009) sits behind the Vite dev server's same-origin `/__intake/*` proxy, so
+there is no CORS preflight and no DNS lookup.
 
-## Coverage and known gaps
+## Coverage
 
-All instance services (swap, bridge, money market, DEX, staking, partner, recovery, the spoke
-services), `BackendApiService`, and the solver API client route through the configured logger. A small
-number of pure utility/static-helper functions (e.g. `shared/utils/*`, `entities/btc/RadfiProvider`,
-`entities/solana/utils`) still call `console.*` directly because they have no access to the instance
-logger; threading the logger into those is tracked as follow-up.
+These route through the configured logger:
 
-## Not this page: React mutation errors
+- `SwapService` and `SolverApiService`
+- `BridgeService`, `LeverageYieldService`, `PartnerFeeClaimService`
+- `MoneyMarketDataService` and `ConcentratedLiquidityService`
+- `BackendApiService`, `SwapsApiService` and the shared request helper
+- `SpokeService`, `StellarSpokeService`, `BitcoinSpokeService`, and `ConfigService`
+
+Staking, migration, recovery and the DEX `AssetService` emit nothing today. Some pure utility and
+static-helper functions — `shared/utils/*`, `entities/btc/RadfiProvider`, `entities/solana/utils` —
+still call `console.*` directly because they hold no instance logger; threading it through is tracked
+as follow-up.
+
+## React mutation errors
 
 `@sodax/dapp-kit` re-exports `SodaxLogger` and forwards `SodaxOptions` through `SodaxProvider`, so
-everything above applies unchanged in React. It also has a **second, separate** seam:
+everything above applies unchanged. It also has a separate seam for React Query mutation failures:
 
 ```tsx
 import { createSodaxQueryClient } from '@sodax/dapp-kit';
@@ -214,13 +223,13 @@ const queryClient = createSodaxQueryClient({
 });
 ```
 
-`onMutationError` fires for every failed React Query **mutation** — a UI-level concern — while
-`logger` carries the SDK's internal diagnostics. They do not overlap, and a single mutation can opt
-out of the global hook with `meta: { silent: true }`. Wire both.
+`onMutationError` fires for every failed mutation, which is a UI-level concern, while `logger`
+carries the SDK's internal diagnostics. The two do not overlap. A single mutation opts out of the
+global hook with `meta: { silent: true }`.
 
 ## See also
 
-- [Configure SDK](./CONFIGURE_SDK.md) — the full `SodaxOptions` shape `logger` belongs to.
+- [Configure SDK](./CONFIGURE_SDK.md) — the full `SodaxOptions` shape.
 - [SDK Architecture Reference](./ARCHITECTURE.md) — `Result<T>` and the error convention.
-- `analytics` — a different option again: structured, **opt-in** product events, off by default,
-  whereas `logger` carries free-form diagnostics and is on by default.
+- `analytics`, the adjacent option on `SodaxOptions`, carries structured product events and is off by
+  default, where `logger` carries free-form diagnostics and is on.
