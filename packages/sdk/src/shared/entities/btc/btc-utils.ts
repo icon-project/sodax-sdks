@@ -64,7 +64,9 @@ export function estimateBitcoinTxSize(
       inputWeight = 68;
       break;
   }
-  return Math.ceil(10.5 + opReturnOutputVbytes + BITCOIN_FEE_SAFETY_VBYTES + inputCount * inputWeight + outputCount * 31);
+  return Math.ceil(
+    10.5 + opReturnOutputVbytes + BITCOIN_FEE_SAFETY_VBYTES + inputCount * inputWeight + outputCount * 31,
+  );
 }
 
 export function encodeBtcPayloadToBytes(payload: BtcPayload): string {

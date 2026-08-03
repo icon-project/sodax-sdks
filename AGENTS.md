@@ -33,6 +33,7 @@ Do not hardcode supported chain counts or chain lists in agent guidance. When ex
 | `apps/node-cjs` | CommonJS interop regression harness for `@sodax/sdk` | [`apps/node-cjs/AGENTS.md`](apps/node-cjs/AGENTS.md) |
 | `apps/wallet-modal-example` | Headless wallet-modal reference app for wallet-sdk-react primitives | [`apps/wallet-modal-example/AGENTS.md`](apps/wallet-modal-example/AGENTS.md) |
 | `apps/swap-api-example` | Vite + React reference app driving `@sodax/swaps-api` end to end (wallet SDK for signing) | [`apps/swap-api-example/README.md`](apps/swap-api-example/README.md) |
+| `apps/stellar-sponsor-example` | Vite + React reference app for the Stellar sponsored-activation journey (dapp-kit hooks), plus an offline test lab with a bundled mock backend | [`apps/stellar-sponsor-example/AGENTS.md`](apps/stellar-sponsor-example/AGENTS.md) |
 
 ## Dependency Direction
 
@@ -70,6 +71,14 @@ cd packages/<pkg> && pnpm coverage
 cd packages/<pkg> && npx vitest run path/to/test.test.ts
 ```
 
+To try unreleased `@sodax/*` packages in a project outside this repo, pack them into local
+tarballs — plain `pnpm pack` is not enough, because it rewrites `workspace:*` to a registry
+version. See [`docs/local-package-testing.md`](docs/local-package-testing.md).
+
+```bash
+pnpm pack:local --version 2.0.0-local.1 --packages @sodax/sdk
+```
+
 ## Repo-Wide Rules
 
 - Keep changes scoped to the requested task. Do not refactor, restyle, rename, or expand nearby code unless it is required for correctness.
@@ -98,6 +107,7 @@ These guide every change. Where a rule maps to tooling (types, lint, tests, `che
 - **Comment sparingly — why, not what.** Explain a non-obvious constraint or decision in a line or two; don't narrate what the code or config already says, and don't leave commented-out code.
 - **Cover new code with meaningful tests.** Add or extend tests for core flows, invariants, edge cases, and chain/feature matrices beside the changed code; don't rely on superficial coverage.
 - **Keep AI docs faithful.** When public behavior, imports, signatures, examples, chains, tokens, or feature support change, update `packages/skills` so agents can implement from code + docs without guessing; run `pnpm check:ai`.
+- **Docs mirrored to GitBook keep absolute links.** `scripts/gitbook-sync-map.json` lists the READMEs and `packages/sdk/docs` pages that `sodax-document` mirrors to docs.sodax.com, moving and renaming them. In those files a link may stay relative only when the target is mirrored into the same destination directory under the same filename; every other target (moved doc, unmirrored doc, source file, directory) needs an absolute `https://github.com/icon-project/sodax-sdks/blob/main/…` URL, and never a `sodax-document` URL. Gate: `pnpm check:doc-links`.
 
 **Definition of done:** scoped diff · behavior verified against `src/` · relevant `test`/`checkTs`/`lint`/`check:ai` green · `packages/skills` updated when public behavior changed · no unrelated refactor.
 
@@ -112,7 +122,10 @@ To author or validate changesets and govern a release (SemVer bumps, changelogs,
 - Root guidance is for information every domain needs. Put package/app-specific architecture, patterns, commands, and pitfalls in that subtree's `AGENTS.md`.
 - Prefer broad durable patterns over volatile enumerations. When exact values matter, point agents to source files or package docs rather than copying values.
 - Validate changes to these files with `pnpm check:ai-dev-files`.
+- When a mirrored doc is added, renamed, or removed, update `scripts/gitbook-sync-map.json` and `sodax-document/sync-sodax-sdks.sh` together — that script is the upstream authority, and a stale mapping breaks the sync.
 
 ## CI Shape
 
-GitHub Actions install dependencies with a frozen lockfile, lint, check circular dependencies, build packages, typecheck, validate dev AI files, validate AI consumer docs, build apps, run smoke checks, and run tests. When changing `packages/skills`, run `pnpm check:ai` locally.
+GitHub Actions install dependencies with a frozen lockfile, lint, check circular dependencies, build packages, typecheck, validate dev AI files, validate AI consumer docs, validate mirrored doc links, build apps, run smoke checks, and run tests. When changing `packages/skills`, run `pnpm check:ai` locally; when changing a mirrored doc, run `pnpm check:doc-links`.
+
+`pnpm check:sponsoring-contract` is a **manual** gate, deliberately outside CI: it diffs the SDK's hand-authored sponsoring wire types against the backend's OpenAPI document, and CI has no sponsoring service to fetch it from. Run it whenever the sponsoring contract moves on either side, and before a release. See [`packages/sdk/AGENTS.md`](packages/sdk/AGENTS.md) for how to obtain the spec without booting a signer.

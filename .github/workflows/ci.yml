@@ -46,6 +46,23 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Resolve Turborepo version
+        id: turbo
+        run: echo "version=$(node -p 'require("turbo/package.json").version')" >> "$GITHUB_OUTPUT"
+
+      # Local Turborepo cache, persisted between runs (no remote cache). Task hashes already
+      # cover sources, turbo.json, globalDependencies, the lockfile and declared env, so a
+      # restored entry can never be replayed for changed inputs. The key carries what turbo
+      # does not hash: runner OS, Node major, and the turbo release whose on-disk cache format
+      # wrote the entries. Bump `v1` to force a cold cache.
+      - name: Restore Turborepo cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-node${{ matrix.node-version }}-turbo${{ steps.turbo.outputs.version }}-${{ github.sha }}-${{ github.run_attempt }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-node${{ matrix.node-version }}-turbo${{ steps.turbo.outputs.version }}-
+
       - name: Lint
         run: pnpm lint
 
@@ -76,6 +93,9 @@ jobs:
       - name: AI docs validation
         run: pnpm check:ai
 
+      - name: Doc link validation
+        run: pnpm check:doc-links
+
       - name: Build Apps
         run: pnpm turbo run build --filter='./apps/*' --filter='!./apps/node'
 
@@ -83,11 +103,34 @@ jobs:
         run: pnpm --filter node test-libs
 
       - name: Next.js 16 Turbopack regression check
-        # Skip `next build` — the previous `Build Apps` step already built it.
+        # Skip `next build` — the previous `Build Apps` step already built it, and a turbo
+        # cache hit restores `.next/**` (only `.next/cache/**` is excluded), so `next start`
+        # has everything it needs to serve the production build.
         run: pnpm --filter example-next-js-16 verify-only
 
       - name: Run Tests
         run: pnpm test
+
+      # restore-keys makes each run inherit the previous run's entries and add its own, so the
+      # artifact grows without a cap until restore + save costs more than the rebuild it saves.
+      # Keep the newest 150 entries (~500 MB at current task sizes); one full run needs ~55.
+      - name: Prune Turborepo cache
+        if: always()
+        run: |
+          cd .turbo/cache || exit 0
+          ls -t -- *.tar.zst 2>/dev/null | tail -n +151 | sed 's/\.tar\.zst$//' \
+            | xargs -r -I{} rm -f -- '{}.tar.zst' '{}-meta.json' '{}-manifest.json'
+          echo "turbo cache: $(ls -1 -- *.tar.zst 2>/dev/null | wc -l) entries, $(du -sh . | cut -f1)"
+
+      # Saved even on failure so a red run still banks the packages it did build. Deliberately
+      # not added to the e2e job: `test:e2e` is a cacheable task, and a restored green entry
+      # would skip the live mainnet run.
+      - name: Save Turborepo cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-node${{ matrix.node-version }}-turbo${{ steps.turbo.outputs.version }}-${{ github.sha }}-${{ github.run_attempt }}
 
   e2e:
     name: E2E Tests (live mainnet)

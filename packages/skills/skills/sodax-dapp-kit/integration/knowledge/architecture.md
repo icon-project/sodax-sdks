@@ -245,7 +245,7 @@ Hooks organized by feature domain in `src/hooks/`:
 hooks/
 ├── shared/     # useSodaxContext, useSafeMutation, unwrapResult, useEstimateGas,
 │               # useDeriveUserWalletAddress, useGetUserHubWalletAddress, useXBalances,
-│               # useStellarTrustlineCheck, useRequestTrustline
+│               # useStellarTrustlineCheck, useEstablishTrustline (+ deprecated useRequestTrustline)
 ├── provider/   # useHubProvider
 ├── swap/       # useQuote, useSwap, useStatus, useSwapAllowance, useSwapApprove,
 │               # useCancelSwap, useCreateLimitOrder, useCancelLimitOrder

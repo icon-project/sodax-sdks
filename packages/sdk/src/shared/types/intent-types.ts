@@ -11,7 +11,6 @@ export type HookRequest = { kind: typeof HookKind.HYPERCORE_DEPOSIT };
 // Future hooks that need extra params become additional union members, e.g.
 //   | { kind: typeof HookKind.SOME_HOOK; someParam: Address };
 
-
 export type CreateIntentParams<K extends SpokeChainKey = SpokeChainKey> = {
   inputToken: string;
   outputToken: string;

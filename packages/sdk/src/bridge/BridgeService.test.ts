@@ -141,9 +141,9 @@ describe('BridgeService.createBridgeIntent — Bitcoin USER mode', () => {
     Object.defineProperty(sodax.spoke.bitcoin, 'walletMode', { value: 'USER', configurable: true });
 
     vi.spyOn(sodax.spoke.bitcoin, 'getEffectiveWalletAddress').mockResolvedValue(BTC_USER_ADDR);
-    ensureRadfiSpy = vi.spyOn(sodax.spoke.bitcoin.radfi, 'ensureRadfiAccessToken').mockResolvedValue(
-      undefined as never,
-    );
+    ensureRadfiSpy = vi
+      .spyOn(sodax.spoke.bitcoin.radfi, 'ensureRadfiAccessToken')
+      .mockResolvedValue(undefined as never);
     vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockResolvedValue(HUB_BTC_WALLET);
     vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValue({
       address: BTC_TOKEN,
@@ -172,9 +172,7 @@ describe('BridgeService.createBridgeIntent — Bitcoin USER mode', () => {
 
   it('passes skipSimulation=true so the hub skips EVM simulation for Bitcoin USER deposits', async () => {
     await sodax.bridge.createBridgeIntent(btcBridgeInput());
-    expect(depositSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ skipSimulation: true }),
-    );
+    expect(depositSpy).toHaveBeenCalledWith(expect.objectContaining({ skipSimulation: true }));
   });
 
   it('derives hub wallet from personal address, not a trading address', async () => {
@@ -188,9 +186,7 @@ describe('BridgeService.createBridgeIntent — Bitcoin USER mode', () => {
     // The returned personal address (not a trading address) is forwarded to hub wallet derivation
     expect(getHubSpy).toHaveBeenCalledWith(BTC_USER_ADDR, BTC);
     // The spoke deposit srcAddress also uses the personal address
-    expect(depositSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ srcAddress: BTC_USER_ADDR }),
-    );
+    expect(depositSpy).toHaveBeenCalledWith(expect.objectContaining({ srcAddress: BTC_USER_ADDR }));
   });
 });
 
@@ -339,7 +335,9 @@ describe('BridgeService.bridge — integration error-path coverage', () => {
     // pinning that path here so a future regression that widens isBridgeOrchestrationError
     // (or accidentally narrows the catch behavior) surfaces immediately. Mirrors the 4 MM
     // out-of-union wrap-tests added in the previous review.
-    const outOfUnion = new SodaxError('SWAP_RELAY_TIMEOUT' as never, 'foreign code thrown into bridge', { feature: 'bridge' });
+    const outOfUnion = new SodaxError('SWAP_RELAY_TIMEOUT' as never, 'foreign code thrown into bridge', {
+      feature: 'bridge',
+    });
     vi.spyOn(sodax.bridge, 'createBridgeIntent').mockRejectedValueOnce(outOfUnion);
 
     const result = await sodax.bridge.bridge(bridgeInput(BSC, ARBITRUM));

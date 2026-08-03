@@ -76,7 +76,9 @@ describe('SuiHydrator → SuiWalletProvider', () => {
     renderWith({
       SUI: {
         chains: {
-          [ChainKeys.SUI_MAINNET]: { defaults: { signAndExecuteTxn: { response: { showEffects: true, showEvents: true } } } },
+          [ChainKeys.SUI_MAINNET]: {
+            defaults: { signAndExecuteTxn: { response: { showEffects: true, showEvents: true } } },
+          },
         },
       },
     });
@@ -113,7 +115,9 @@ describe('SuiHydrator → SuiWalletProvider', () => {
   it('writes the constructed provider into the SUI slot of the store', () => {
     connect();
     renderWith({
-      SUI: { chains: { [ChainKeys.SUI_MAINNET]: { defaults: { signAndExecuteTxn: { response: { showEffects: true } } } } } },
+      SUI: {
+        chains: { [ChainKeys.SUI_MAINNET]: { defaults: { signAndExecuteTxn: { response: { showEffects: true } } } } },
+      },
     });
     const [chain, provider] = setters.setWalletProvider.mock.calls.at(-1) ?? [];
     expect(chain).toBe('SUI');

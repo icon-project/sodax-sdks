@@ -164,10 +164,7 @@ export type UseWalletModalResult = {
  *   case 'error':        return <ErrorView error={modal.state.error} onRetry={modal.retry} onBack={modal.back} />;
  * }
  */
-export function useWalletModal({
-  onConnected,
-  hydrationTimeoutMs,
-}: UseWalletModalOptions = {}): UseWalletModalResult {
+export function useWalletModal({ onConnected, hydrationTimeoutMs }: UseWalletModalOptions = {}): UseWalletModalResult {
   const state = useWalletModalStore(s => s.walletModal);
   const open = useWalletModalStore(s => s.open);
   const close = useWalletModalStore(s => s.close);
@@ -199,11 +196,7 @@ export function useWalletModal({
       // up-front so the modal renders an actionable error immediately.
       if (!connector.isInstalled) {
         const installHint = connector.installUrl ? ' Install the extension and reload the page.' : '';
-        setError(
-          connector.xChainType,
-          connector,
-          new Error(`${connector.name} is not installed.${installHint}`),
-        );
+        setError(connector.xChainType, connector, new Error(`${connector.name} is not installed.${installHint}`));
         return undefined;
       }
 

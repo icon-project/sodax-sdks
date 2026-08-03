@@ -44,7 +44,7 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "rm -rf dist && tsc",
     "dev": "tsc --watch",
     "ci": "pnpm run pretty && pnpm run build && pnpm run test",
     "checkTs": "tsc",

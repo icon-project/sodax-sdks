@@ -78,13 +78,31 @@ type BaseApiConfig = {
   headers: Record<string, string>;   // Request headers (default: Content-Type and Accept)
 };
 
-// Point the swaps API at its own host, separate from the base backend API (at least one slice required):
+// Point the swaps and/or sponsoring APIs at their own hosts, separate from the base backend API
+// (at least one slice required):
+type SponsoringApiConfig = BaseApiConfig & { apiKey?: string };
+
 type CustomApiConfig =
-  | { baseApiConfig: BaseApiConfig; swapsApiConfig?: BaseApiConfig }
-  | { baseApiConfig?: BaseApiConfig; swapsApiConfig: BaseApiConfig };
+  | { baseApiConfig: BaseApiConfig; swapsApiConfig?: BaseApiConfig; sponsoringApiConfig?: SponsoringApiConfig }
+  | { baseApiConfig?: BaseApiConfig; swapsApiConfig: BaseApiConfig; sponsoringApiConfig?: SponsoringApiConfig }
+  | { baseApiConfig?: BaseApiConfig; swapsApiConfig?: BaseApiConfig; sponsoringApiConfig: SponsoringApiConfig };
 
 type ApiConfig = BaseApiConfig | CustomApiConfig;
 ```
+
+Slices layer on top of the flat fields rather than replacing them: an `api` object that carries both a
+top-level `baseURL`/`timeout`/`headers` and a slice keeps applying those flat values wherever the slice
+does not define its own, so adding `swapsApiConfig` or `sponsoringApiConfig` to an existing flat config
+never silently re-routes the base API back to the packaged default. The resolution order is
+defaults → top-level flat fields → `baseApiConfig` → `swapsApiConfig`, so the most specific slice wins
+per field.
+
+The sponsoring slice resolves differently from the others on purpose: its `baseURL` never inherits
+from `baseApiConfig` (the service is routed to its own host, so inheriting would 404), and neither do
+its `headers` — a credential is scoped to the origin it was set for, so a base-API token is not
+transmitted to the sponsoring host. `timeout` does inherit. For the same reason,
+`backendApi.setHeaders(...)` reaches `swaps` but NOT `sponsoring`; set sponsoring headers on the
+slice, or via `sodax.api.sponsoring.setHeaders(...)`.
 
 ### `RequestOverrideConfig` Type
 
@@ -269,7 +287,7 @@ Swap-tx submission and the rest of the typed Swaps API v2 moved off `BackendApiS
 client — `sodax.api.swaps` (`SwapsApiService`). Submit a signed spoke-chain swap transaction with
 `sodax.api.swaps.submitTx(...)` and poll it with
 `sodax.api.swaps.getSubmitTxStatus({ txHash, srcChainKey })` (both fields required). See
-[`SWAPS_API.md`](SWAPS_API.md) for the full 21-endpoint reference (quote, create-intent, submit-tx,
+[`SWAPS_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS_API.md) for the full 21-endpoint reference (quote, create-intent, submit-tx,
 status, fees, …).
 
 ## Solver Endpoints
