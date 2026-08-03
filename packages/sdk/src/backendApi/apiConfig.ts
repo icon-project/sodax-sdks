@@ -1,44 +1,25 @@
-// Resolution of the `ApiConfig` union into the concrete per-service config used
-// by `BackendApiService` (base/backend API) and `SwapsApiService` (swaps API).
-//
-// `ApiConfig` (from `@sodax/types`) is one of two shapes:
-//   - `BaseApiConfig` — flat `{ baseURL, timeout, headers }`. Both services share it;
-//     the swaps endpoints are reached as `/swaps/*` sub-paths under the same base URL.
-//   - `CustomApiConfig` — `{ baseApiConfig?, swapsApiConfig? }`. Lets each service point
-//     at its own base URL / timeout / headers. Either slice may be omitted.
-//
-// Both resolvers fill any omitted field from the global backend-API defaults and always
-// include the default headers (so a JSON `Content-Type`/`Accept` is present unless
-// explicitly overridden). In custom mode the swaps resolver layers `swapsApiConfig` over
-// `baseApiConfig` over the defaults, so swaps inherits the base config (including any
-// cross-cutting auth/tracing header) for every field `swapsApiConfig` does not override.
-// They also normalise the hybrid objects that `mergeSodaxConfig`'s deep-merge can produce
-// when a `CustomApiConfig` override is layered onto the flat default — the custom slices
-// win and any leftover top-level flat fields (which equal the defaults) are ignored.
-
 import {
   DEFAULT_BACKEND_API_ENDPOINT,
   DEFAULT_BACKEND_API_HEADERS,
   DEFAULT_BACKEND_API_TIMEOUT,
+  DEFAULT_SPONSORING_API_ENDPOINT,
   type ApiConfig,
   type BaseApiConfig,
   type CustomApiConfig,
+  type HttpUrl,
+  type SponsoringApiConfig,
   type SwapsApiConfig,
 } from '@sodax/types';
+import { trimTrailingSlashes } from './api-utils.js';
 
-/**
- * True when `config` is the nested {@link CustomApiConfig} variant (carries a
- * `baseApiConfig` and/or `swapsApiConfig` slice) rather than a flat {@link BaseApiConfig}.
- */
+/** Whether config uses per-service slices. */
 export function isCustomApiConfig(config: ApiConfig): config is CustomApiConfig {
-  return 'baseApiConfig' in config || 'swapsApiConfig' in config;
+  return 'baseApiConfig' in config || 'swapsApiConfig' in config || 'sponsoringApiConfig' in config;
 }
 
 /**
- * Layer config slices left→right over the global backend-API defaults (later slices win
- * per field). `baseURL`/`timeout`: the last defined value wins; `headers`: merged across
- * every layer, so a cross-cutting header from an earlier slice (e.g. `baseApiConfig`) is
- * kept unless a later slice overrides that key. The default headers are always present.
+ * Layer slices left to right. Scalar values use the latest definition while
+ * headers merge by key.
  */
 function layerConfigs(...slices: Array<Partial<BaseApiConfig> | undefined>): BaseApiConfig {
   return slices.reduce<BaseApiConfig>(
@@ -58,12 +39,7 @@ function layerConfigs(...slices: Array<Partial<BaseApiConfig> | undefined>): Bas
   );
 }
 
-/**
- * Resolve the effective config for the base (backend) API:
- * - flat {@link BaseApiConfig} → used directly,
- * - {@link CustomApiConfig} → its `baseApiConfig` slice,
- * with omitted fields filled from the defaults.
- */
+/** Resolve base API config with global defaults. */
 export function resolveBaseApiConfig(config: ApiConfig): BaseApiConfig {
   if (isCustomApiConfig(config)) {
     return layerConfigs(config.baseApiConfig);
@@ -71,17 +47,38 @@ export function resolveBaseApiConfig(config: ApiConfig): BaseApiConfig {
   return layerConfigs(config);
 }
 
-/**
- * Resolve the effective config for the swaps API:
- * - flat {@link BaseApiConfig} → shared with the base API (swaps endpoints are sub-paths),
- * - {@link CustomApiConfig} → its `swapsApiConfig` slice **layered over `baseApiConfig`** (the
- *   shared foundation): each field falls back swaps → base → default, and headers merge
- *   defaults → base → swaps so a cross-cutting `baseApiConfig` header (auth/tracing) reaches
- *   swaps calls unless `swapsApiConfig` overrides that key.
- */
+/** Resolve swaps config over base config and global defaults. */
 export function resolveSwapsApiConfig(config: ApiConfig): SwapsApiConfig {
   if (isCustomApiConfig(config)) {
     return layerConfigs(config.baseApiConfig, config.swapsApiConfig);
   }
   return layerConfigs(config);
+}
+
+function isHttpUrl(value: string): value is HttpUrl {
+  return value.startsWith('http://') || value.startsWith('https://');
+}
+
+/** Normalize an observable base URL while preserving its `HttpUrl` type. */
+function normalizeBaseURL(baseURL: HttpUrl): HttpUrl {
+  const trimmed = trimTrailingSlashes(baseURL);
+  return isHttpUrl(trimmed) ? trimmed : baseURL;
+}
+
+/**
+ * Resolve the effective config for the sponsoring API.
+ *
+ * Base URL and headers never inherit from the base API because sponsoring uses
+ * a separate origin; inheriting could leak credentials. Timeout may inherit.
+ * Normalize the URL because callers observe it and config caching keys on it.
+ */
+export function resolveSponsoringApiConfig(config: ApiConfig): SponsoringApiConfig {
+  const slice = isCustomApiConfig(config) ? config.sponsoringApiConfig : undefined;
+  const base = isCustomApiConfig(config) ? config.baseApiConfig : config;
+  return {
+    baseURL: normalizeBaseURL(slice?.baseURL ?? DEFAULT_SPONSORING_API_ENDPOINT),
+    timeout: slice?.timeout ?? base?.timeout ?? DEFAULT_BACKEND_API_TIMEOUT,
+    headers: { ...DEFAULT_BACKEND_API_HEADERS, ...slice?.headers },
+    ...(slice?.apiKey === undefined ? {} : { apiKey: slice.apiKey }),
+  };
 }

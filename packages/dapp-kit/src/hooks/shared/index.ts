@@ -10,5 +10,6 @@ export * from './useRequestTrustline.js';
 export * from './useNearStorageCheck.js';
 export * from './useRegisterNearStorage.js';
 export * from './useNearStorageGate.js';
+export * from './useStellarGate.js';
 export * from './useGetUserHubWalletAddress.js';
 export * from './useXBalances.js';

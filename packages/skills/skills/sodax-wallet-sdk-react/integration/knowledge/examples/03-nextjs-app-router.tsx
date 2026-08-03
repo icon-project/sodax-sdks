@@ -89,7 +89,7 @@ export function Home() {
 
   return (
     <ul>
-      {chains.map((c) => (
+      {chains.map(c => (
         <li key={c.chainType}>
           {c.chainType}: <code>{c.account.address}</code>
         </li>

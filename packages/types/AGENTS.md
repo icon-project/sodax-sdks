@@ -96,6 +96,8 @@ must resolve icons with `tokenLogo(token.symbol)`, not hardcode icon paths.
 
 Built with `tsc` (other workspace packages bundle with tsup — this one doesn't bundle). ESM only (`"type": "module"`). Output: `dist/` with `.js` + `.d.ts` files.
 
+`build` is `rm -rf dist && tsc`, and the `rm -rf` is load-bearing: plain `tsc` never deletes an output whose source has been removed or renamed, so a stale `.d.ts` survives every later build and gets packed into `pnpm pack:local` tarballs — where a consumer reading `node_modules` cannot distinguish a stale emit from a real export. The tsup-built packages get this from `clean: true` in their `tsup.config.ts`; this one has no bundler to do it. Published releases were never affected (CI publishes from a fresh checkout with no turbo remote cache), but local builds and local packs were.
+
 Relative imports inside source must use `.js` extensions (see [`src/index.ts`](src/index.ts) for the pattern).
 
 ## Rules

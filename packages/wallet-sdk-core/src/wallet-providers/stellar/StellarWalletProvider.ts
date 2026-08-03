@@ -138,17 +138,27 @@ export class StellarWalletProvider extends BaseWalletProvider<StellarWalletDefau
    * Signs the given XDR-encoded transaction and returns the signed XDR.
    * @throws {StellarWalletError} with code `SIGN_TX_ERROR` if signing fails.
    */
-  public async signTransaction(tx: XDR): Promise<XDR> {
+  public async signTransaction(tx: XDR, options?: { address?: string }): Promise<XDR> {
     try {
       if (isStellarPkWallet(this.wallet)) {
+        const publicKey = this.wallet.keypair.publicKey();
+        // Never silently sign with a different key than the caller requested.
+        if (options?.address !== undefined && options.address !== publicKey) {
+          throw new StellarWalletError(
+            `Cannot sign as ${options.address}: this provider holds the key for ${publicKey}`,
+            'SIGN_TX_ERROR',
+          );
+        }
         // Parse the XDR transaction
         const transaction = new Transaction(tx, this.networkPassphrase);
         transaction.sign(this.wallet.keypair);
         return transaction.toXDR();
       }
 
+      // Otherwise the extension may sign with a different active account.
       const { signedTxXdr } = await this.wallet.walletsKit.signTransaction(tx, {
         networkPassphrase: this.networkPassphrase,
+        ...(options?.address !== undefined ? { address: options.address } : {}),
       });
       return signedTxXdr;
     } catch (error) {

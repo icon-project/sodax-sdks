@@ -82,7 +82,12 @@ for (const file of walk(distDir)) {
   while ((m = namedImportRe.exec(src)) !== null) {
     const names = m[1]
       .split(',')
-      .map((s) => s.trim().split(/\s+as\s+/)[0].trim())
+      .map(s =>
+        s
+          .trim()
+          .split(/\s+as\s+/)[0]
+          .trim(),
+      )
       .filter(Boolean);
     for (const n of names) {
       found.add(n);

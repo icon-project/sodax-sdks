@@ -42,6 +42,7 @@ Browse them on [skills.sh](https://www.skills.sh/icon-project/sodax-sdks). See t
 - **node** (`/apps/node`) — Node.js scripts for E2E testing chain operations, with per-chain entry points.
 - **node-cjs** (`/apps/node-cjs`) — CommonJS consumer regression test (verifies SDK CJS output works).
 - **wallet-modal-example** (`/apps/wallet-modal-example`) — Vite + React demo for the Wallet React SDK.
+- **stellar-sponsor-example** (`/apps/stellar-sponsor-example`) — Vite + React demo for the Stellar sponsored-activation journey (activate → fund → trustline), with an offline test lab that exercises every sponsoring failure class against a bundled mock backend.
 
 ## Common Commands
 

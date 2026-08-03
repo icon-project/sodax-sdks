@@ -137,31 +137,53 @@ const xService = useXService({ xChainType: getXChainType(xChainId) });
 const { data: balances } = useXBalances({ params: { xService, xChainId, xTokens, address } });
 ```
 
-### Stellar trustlines
+### Stellar prerequisites — use `useStellarGate`
 
-Stellar accounts that have never held an asset have no trustline — receiving will fail. Pre-flight with `useStellarTrustlineCheck`; fix with `useRequestTrustline`:
+Stellar has ordered prerequisites for a destination account, and they are invisible until they bite:
+the account must **exist** on-chain, must **trust** the destination token, and — only if it does not —
+must be able to **pay** for the trustline it needs. `useStellarGate` sequences them; prefer it over
+wiring the pieces yourself.
 
 ```ts
 // @ai-snippets-skip — illustrative only; real types pulled into agents below.
-// useStellarTrustlineCheck reads a trustline (no signing). Pass the resolved Stellar account
-// `walletAddress` (e.g. useXAccount('STELLAR').address) — it keys the cache per account, so the
-// verdict is never reused across accounts. `chainId` is a `SpokeChainKey` (typed loosely — the hook
-// returns `true` for non-Stellar chains, making it safe to gate on conditionally).
-const { data: hasTrustline } = useStellarTrustlineCheck({
-  params: { token, amount, chainId: ChainKeys.STELLAR_MAINNET, walletAddress },
-});
+// Mirrors useNearStorageGate. Pass the DESTINATION chain/token/amount/account plus the destination
+// wallet provider; the gate owns the `=== STELLAR_MAINNET` test and the native-token exemption.
+const stellar = useStellarGate({ dstChainKey, token, amount, address, walletProvider });
 
-// useRequestTrustline is NOT a canonical mutation hook — it takes a single positional
-// `token` arg and returns { requestTrustline, isLoading, isRequested, error, data }.
-// The `requestTrustline` callback signature is:
-//   ({ token, amount, srcChainKey, walletProvider }) => Promise<string>
-// NOTE: fields are `token` / `amount` / `srcChainKey` / `walletProvider` — NOT
-// `account` / `asset`. Pass a StellarChainKey for srcChainKey.
-const { requestTrustline, isLoading } = useRequestTrustline(token);
-if (hasTrustline === false) {
-  await requestTrustline({ token, amount, srcChainKey: ChainKeys.STELLAR_MAINNET, walletProvider });
-}
+// Exactly one of these is ever true, in this order:
+if (stellar.needsActivation) await stellar.activate();        // account does not exist — sponsor pays
+if (stellar.needsFunding) { /* send it XLM — needs no trustline */ }
+if (stellar.needsTrustline) await stellar.requestTrustline();
+
+// A check FAILED — state unknown, not unmet. Say so and offer the retry; otherwise the action is
+// disabled with nothing on screen explaining why.
+if (stellar.checkFailed) { /* render stellar.error?.message + a button calling stellar.retry() */ }
+
+// Gate the downstream action on the whole gate, which also covers the checking and errored windows.
+const disabled = stellar.blocksAction || /* … */ false;
 ```
+
+Affordability is checked **after** the trustline, and the order matters: an account that already trusts
+the asset needs no XLM, because the sender pays the fee and the subentry reserve is already locked.
+Checking affordability first blocks a correctly-configured user who has merely spent their spendable
+XLM, and tells them to fund an account that needs nothing.
+
+`blocksAction` is fail-closed on an unknown state, deliberately: a payment to a non-existent account, or
+of an untrusted asset, fails on-chain, so letting the action through on a failed check risks stranding
+funds. That makes `checkFailed` load-bearing — it is the only way a UI can tell "we could not check"
+apart from "you are missing something", and without it a transient Horizon failure reads to the user as
+an inexplicably dead button.
+
+Do NOT hand-roll this as `useStellarTrustlineCheck` + `useRequestTrustline`. `hasSufficientTrustline`
+**throws** for an account that does not exist, so a `!data` test reads a missing account as "needs a
+trustline" and offers a button that cannot work. Read `isLoading`, never `isPending` — `isPending` stays
+`true` for a disabled query and blocks forever.
+
+The lower-level pieces remain available for custom wiring: `useStellarAccountStatus` (existence,
+`canAffordTrustline`, and `trustlineMinXlmStroops` — the XLM one more trustline needs at the network's
+current base reserve — from one Horizon account read), `useStellarAccountActive` (existence only),
+`useStellarTrustlineCheck`, and `useRequestTrustline` — a canonical mutation hook whose vars are
+`{ token, amount, srcChainKey, walletProvider }` (NOT `account` / `asset`).
 
 ### NEAR storage registration
 
@@ -202,6 +224,68 @@ const { needsRegistration, blocksAction } = resolveNearStorageGate(dstChainKey, 
 ```
 
 The underlying SDK methods (`isStorageRegistered` / `registerStorage` on the NEAR spoke service, and the `NEAR_STORAGE_DEPOSIT` constant) are documented in the `sodax-sdk` skill (integration mode).
+
+## Stellar account activation (sponsoring)
+
+A Stellar account must exist on-chain before it can hold or receive anything, and a brand-new user
+holds 0 XLM. The SODAX sponsoring service pays the account's base reserve via Stellar's
+sponsored-reserve flow. **The user's own wallet must sign** — their signature is what authorises the
+`endSponsoringFutureReserves` operation — so this can never be a server-only call.
+
+```ts
+// @ai-snippets-skip
+useStellarAccountActive({ params: { address }, queryOptions });   // does the account exist on-chain?
+useSponsorConfig({ queryOptions });                               // sponsor account, network, fee band
+useActivateStellarAccount({ mutationOptions });                   // activate via the sponsor
+```
+
+Mutation vars:
+
+```ts
+// @ai-snippets-skip
+// An alias for the SDK's own params — every option the service accepts is accepted here.
+type UseActivateStellarAccountVars = ActivateStellarAccountParams;
+//   address: string                        // must be the account walletProvider signs with
+//   walletProvider: IStellarWalletProvider // useWalletProvider({ xChainId: ChainKeys.STELLAR_MAINNET })
+//   allowSequenceRetry?: boolean           // default true — one rebuild + re-sign on a sequence conflict
+//   maxHorizonRetries?: number             // default 2 — no-prompt re-submits of the SAME payload
+//   onSignatureRequired?: (info: { attempt: 1 | 2; reason: 'initial' | 'sequenceConflict' }) => void
+//   forceConfigRefresh?: boolean
+//   requestConfig?: RequestOverrideConfig
+```
+
+Four things consumers get wrong:
+
+1. **Activation makes the account able to RECEIVE, not to SEND.** A freshly activated account holds
+   **zero spendable XLM** (the sponsor covers its reserve; `startingBalance` is `0`), so it cannot pay a
+   fee or the reserve its own first trustline would lock. Use `useStellarGate`, which sequences
+   activation → trustline → funding; pairing `useStellarTrustlineCheck` with `useRequestTrustline`
+   directly conflates "account missing" with "trustline missing" and offers a button that cannot work.
+   Always render `checkFailed` / `error` / `retry` too — a fail-closed gate that cannot explain itself
+   is a dead button.
+
+2. **`alreadyActive` is a SUCCESS, not a no-op failure.** The result is
+   `{ status: 'submitted', hash, attempts }` or `{ status: 'alreadyActive', hash: null, attempts }`.
+   Render the second as "already active", not as an error. `attempts: 0` means the client pre-flight
+   caught it and the user was never prompted.
+3. **A sequence conflict costs a SECOND wallet prompt.** The sponsor's sequence number is baked into
+   the signed payload, so if another activation lands first the transaction must be rebuilt and
+   re-signed. Wire `onSignatureRequired` and show the explanation *before* the wallet steals focus —
+   it fires immediately before each prompt.
+4. **Never hardcode the sponsor account.** It comes from `useSponsorConfig` / the SDK's own fetch,
+   which is what makes sponsor rotation a config change instead of a client release.
+
+Failure handling: `error.context.nextAction` carries the caller's next step —
+`fixIntegration` | `checkApiKey` | `rebuildAndResign` | `retrySameRequest` | `backoff` |
+`contactOperator` | `abort` — alongside `retryable` and `requiresNewSignature`. Branch on those
+rather than on the HTTP status.
+
+When the server rate-limits a key it also supplies `error.context.retryAfterSeconds`; render "try again
+in Ns" instead of a generic "try later". The SDK never auto-retries a rate limit.
+
+Requires `api.sponsoringApiConfig` (at minimum `apiKey`) on the `SodaxProvider` config. An api key
+in a browser bundle is public by nature; the service's per-key quotas, fleet cap, per-IP throttle,
+and origin gating are the real controls. Proxy through your own backend if that is not acceptable.
 
 ## Default polling intervals
 

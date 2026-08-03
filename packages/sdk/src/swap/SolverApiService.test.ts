@@ -84,20 +84,16 @@ beforeEach(() => {
   // Default: every token address is supported, and resolves to the matching hub asset. Individual
   // tests override these to drive the invariant branches.
   vi.mocked(mockConfigService.isValidOriginalAssetAddress).mockReturnValue(true);
-  vi.mocked(mockConfigService.getSpokeTokenFromOriginalAssetAddress).mockImplementation(
-    (_chainId, asset) => {
-      if (asset === SRC_TOKEN_ADDRESS) return srcXToken;
-      if (asset === DST_TOKEN_ADDRESS) return dstXToken;
-      return undefined;
-    },
-  );
+  vi.mocked(mockConfigService.getSpokeTokenFromOriginalAssetAddress).mockImplementation((_chainId, asset) => {
+    if (asset === SRC_TOKEN_ADDRESS) return srcXToken;
+    if (asset === DST_TOKEN_ADDRESS) return dstXToken;
+    return undefined;
+  });
 });
 
 // Helpers — small Response-like fakes so we don't depend on `undici`.
-const okResponse = (body: unknown): Response =>
-  ({ ok: true, json: async () => body }) as unknown as Response;
-const errorResponse = (body: unknown): Response =>
-  ({ ok: false, json: async () => body }) as unknown as Response;
+const okResponse = (body: unknown): Response => ({ ok: true, json: async () => body }) as unknown as Response;
+const errorResponse = (body: unknown): Response => ({ ok: false, json: async () => body }) as unknown as Response;
 
 // =========================================================================
 // getQuote — invariant guards + happy path + error branches
@@ -118,8 +114,8 @@ describe('SolverApiService.getQuote', () => {
     });
 
     it('rejects unsupported token_src for src chain', async () => {
-      vi.mocked(mockConfigService.isValidOriginalAssetAddress).mockImplementation((_chain, asset) =>
-        asset !== SRC_TOKEN_ADDRESS,
+      vi.mocked(mockConfigService.isValidOriginalAssetAddress).mockImplementation(
+        (_chain, asset) => asset !== SRC_TOKEN_ADDRESS,
       );
 
       await expect(SolverApiService.getQuote(QUOTE_REQUEST, SOLVER_CONFIG, mockConfigService)).rejects.toThrow(
@@ -129,8 +125,8 @@ describe('SolverApiService.getQuote', () => {
     });
 
     it('rejects unsupported token_dst for dst chain', async () => {
-      vi.mocked(mockConfigService.isValidOriginalAssetAddress).mockImplementation((_chain, asset) =>
-        asset !== DST_TOKEN_ADDRESS,
+      vi.mocked(mockConfigService.isValidOriginalAssetAddress).mockImplementation(
+        (_chain, asset) => asset !== DST_TOKEN_ADDRESS,
       );
 
       await expect(SolverApiService.getQuote(QUOTE_REQUEST, SOLVER_CONFIG, mockConfigService)).rejects.toThrow(
@@ -310,9 +306,9 @@ describe('SolverApiService.getStatus', () => {
   const request: SolverIntentStatusRequest = { intent_tx_hash: INTENT_TX_HASH };
 
   it('rejects an empty intent_tx_hash before issuing any fetch', async () => {
-    await expect(
-      SolverApiService.getStatus({ intent_tx_hash: '' as Hex }, SOLVER_CONFIG),
-    ).rejects.toThrow('Empty intent_tx_hash');
+    await expect(SolverApiService.getStatus({ intent_tx_hash: '' as Hex }, SOLVER_CONFIG)).rejects.toThrow(
+      'Empty intent_tx_hash',
+    );
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

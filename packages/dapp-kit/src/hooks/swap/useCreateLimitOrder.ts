@@ -33,7 +33,6 @@ export function useCreateLimitOrder<K extends SpokeChainKey = SpokeChainKey>({
   return useSafeMutation<SwapResponse, Error, UseCreateLimitOrderVars<K>>({
     mutationKey: ['swap', 'limitOrder', 'create'],
     ...mutationOptions,
-    mutationFn: async vars =>
-      unwrapResult(await sodax.swaps.createLimitOrder({ ...vars, raw: false })),
+    mutationFn: async vars => unwrapResult(await sodax.swaps.createLimitOrder({ ...vars, raw: false })),
   });
 }

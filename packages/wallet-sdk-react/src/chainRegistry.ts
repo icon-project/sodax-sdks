@@ -1,4 +1,10 @@
-import { type ChainType, ChainKeys, ChainTypeArr, detectBitcoinAddressType, usesBip322MessageSigning } from '@sodax/types';
+import {
+  type ChainType,
+  ChainKeys,
+  ChainTypeArr,
+  detectBitcoinAddressType,
+  usesBip322MessageSigning,
+} from '@sodax/types';
 import {
   IconWalletProvider,
   InjectiveWalletProvider,
@@ -122,7 +128,10 @@ function narrowConnectors(items: readonly IXConnector[], chainType: ChainType): 
 }
 
 /** Read `connectors` override from the matching chain-type slot, if any. */
-function readConnectorsOverride(chainType: ChainType, walletConfig: SodaxWalletConfig | undefined): readonly IXConnector[] | undefined {
+function readConnectorsOverride(
+  chainType: ChainType,
+  walletConfig: SodaxWalletConfig | undefined,
+): readonly IXConnector[] | undefined {
   return walletConfig?.[chainType]?.connectors;
 }
 
@@ -385,10 +394,7 @@ export const chainRegistry: Record<string, ChainServiceFactory> = {
 
 // ─── createChainServices ─────────────────────────────────────────────────────
 
-export const createChainServices = (
-  walletConfig: SodaxWalletConfig,
-  getStore: StoreAccessor,
-): ChainServicesResult => {
+export const createChainServices = (walletConfig: SodaxWalletConfig, getStore: StoreAccessor): ChainServicesResult => {
   const xServices: Partial<Record<ChainType, XService>> = {};
   const xConnectorsByChain: Partial<Record<ChainType, IXConnector[]>> = {};
   const enabledChains: ChainType[] = [];
@@ -405,9 +411,7 @@ export const createChainServices = (
 
     if (!factory.providerManaged) {
       const override = readConnectorsOverride(chainType, walletConfig);
-      const connectors = override
-        ? narrowConnectors(override, chainType)
-        : factory.defaultConnectors(walletConfig);
+      const connectors = override ? narrowConnectors(override, chainType) : factory.defaultConnectors(walletConfig);
       service.setXConnectors(connectors);
       xConnectorsByChain[chainType] = connectors;
 

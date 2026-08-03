@@ -14,7 +14,8 @@ High-level React hooks library for dApp developers. Wraps `@sodax/sdk` with Reac
 - **Partner** — `useFetchAssetsBalances`, `useGetAutoSwapPreferences`, `useIsTokenApproved`, `useApproveToken`, `useSetSwapPreference`, `useFeeClaimSwap`
 - **Recovery** — `useHubAssetBalances`, `useWithdrawHubAsset`
 - **Backend Queries** — Intent tracking, swap-tx submission + status, orderbook, money market position queries
-- **Shared** — `useXBalances`, `useDeriveUserWalletAddress`, `useGetUserHubWalletAddress`, `useStellarTrustlineCheck`, `useRequestTrustline`, `useEstimateGas`
+- **Shared** — `useXBalances`, `useDeriveUserWalletAddress`, `useGetUserHubWalletAddress`, `useStellarTrustlineCheck`, `useRequestTrustline`, `useStellarGate`, `useEstimateGas`
+- **Sponsoring** — `useStellarAccountActive`, `useStellarAccountStatus`, `useSponsorConfig`, `useActivateStellarAccount`
 
 ## Installation
 
@@ -249,6 +250,17 @@ function SwapButton({ intentParams }: { intentParams: CreateIntentParams }) {
 - [`useEstimateGas()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/shared/useEstimateGas.ts) — Estimate gas for transactions
 - [`useStellarTrustlineCheck()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/shared/useStellarTrustlineCheck.ts) — Check Stellar trustline
 - [`useRequestTrustline()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/shared/useRequestTrustline.ts) — Request Stellar trustline
+- [`useStellarGate()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/shared/useStellarGate.ts) — Sequences the Stellar destination prerequisites (activation → funding → trustline)
+
+### Sponsoring Hooks
+
+Stellar accounts must exist on-chain before they can hold or receive anything, and a new user holds 0 XLM.
+These drive sponsored activation, where the SODAX sponsor pays the account's base reserve.
+
+- [`useStellarAccountActive()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/sponsoring/useStellarAccountActive.ts) — Whether a Stellar account exists on-chain
+- [`useStellarAccountStatus()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/sponsoring/useStellarAccountStatus.ts) — Existence plus whether the account can afford a trustline
+- [`useSponsorConfig()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/sponsoring/useSponsorConfig.ts) — Sponsor account, network, fee band, max time bounds
+- [`useActivateStellarAccount()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/sponsoring/useActivateStellarAccount.ts) — Activate a Stellar account via the sponsor
 
 ### Backend Query Hooks
 
