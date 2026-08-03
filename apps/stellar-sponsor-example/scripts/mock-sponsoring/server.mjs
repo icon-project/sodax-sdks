@@ -237,7 +237,6 @@ server.listen(PORT, () => {
   console.log(`${C.dim}  sponsoring -> ${SPONSORING_BASE}/config, ${SPONSORING_BASE}/accounts (or /vN-prefixed)`);
   console.log(`  horizon    -> /__horizon/accounts/:accountId`);
   console.log(`  control    -> /__control/{health,reset,stats,horizon}`);
-  console.log(`  api key    -> ${REQUIRE_API_KEY ? `required (${API_KEY})` : 'not required'}`);
   console.log(`  scenarios  -> ${names.config.length} config, ${names.accounts.length} accounts`);
   console.log(`  Browser reaches this through the Vite proxy at /__sponsor/* and /__horizon/*.${C.reset}`);
 });
