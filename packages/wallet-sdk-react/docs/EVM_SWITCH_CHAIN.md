@@ -12,7 +12,7 @@ Source: [`useEvmSwitchChain.ts`](https://github.com/icon-project/sodax-sdks/blob
 2. [`useEvmSwitchChain` API](#useevmswitchchain-api)
 3. [Standard EVM switch flow](#standard-evm-switch-flow)
 4. [Injective MetaMask special case](#injective-metamask-special-case)
-5. [`useEthereumChainId` — read the wagmi/MetaMask chain id](#useethereumchainid--read-the-wagmimetamask-chain-id)
+5. [`useEthereumChainId` (internal) — how the MetaMask chain id is read](#useethereumchainid-internal--how-the-metamask-chain-id-is-read)
 6. [Safe to call when EVM is disabled](#safe-to-call-when-evm-is-disabled)
 
 ---
@@ -119,20 +119,13 @@ Keplr and Leap on Injective don't have this constraint — `isWrongChain` is `fa
 
 ---
 
-## `useEthereumChainId` — read the wagmi/MetaMask chain id
+## `useEthereumChainId` (internal) — how the MetaMask chain id is read
 
-A read-only helper that returns the **active Ethereum chain id** when MetaMask is the Injective wallet, otherwise `null`. Used internally by `useEvmSwitchChain`; expose-able for custom UIs that need to display the network state independently.
+`useEthereumChainId` is an implementation detail of `useEvmSwitchChain`, not part of the public API. `@sodax/wallet-sdk-react` declares only the `.` and `./xchains/*` export entries, so there is no `./hooks/*` subpath to import from and no top-level `useEthereumChainId`. It is described here only to explain where the `ethereumChainId` in the check above comes from.
 
-```typescript
-import useEthereumChainId from '@sodax/wallet-sdk-react/hooks/useEthereumChainId';
+The hook returns the active Ethereum chain id when MetaMask is the Injective wallet, otherwise `null`. It subscribes to MetaMask's `onChainIdChanged` event so the value stays fresh when the user switches networks outside the dApp. For non-MetaMask Injective wallets (Keplr, Leap) and non-Injective use cases, it returns `null`.
 
-const ethereumChainId = useEthereumChainId();
-// number (e.g. 1 for mainnet) or null
-```
-
-It subscribes to MetaMask's `onChainIdChanged` event so the value stays fresh when the user switches networks outside the dApp. For non-MetaMask Injective wallets (Keplr, Leap) and non-Injective use cases, it returns `null`.
-
-This hook is rarely needed in app code — `useEvmSwitchChain` already consumes it internally.
+To read the raw EVM chain id in app code, use wagmi's `useAccount().chainId`. The wrong-network UX is already folded into `useEvmSwitchChain`.
 
 ---
 

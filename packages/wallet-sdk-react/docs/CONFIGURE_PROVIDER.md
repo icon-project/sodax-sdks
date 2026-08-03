@@ -74,7 +74,7 @@ Top-level keys are `ChainType` strings — one slot per chain family. **Every sl
 
 **Provider-managed vs non-provider** — EVM, Solana, and Sui need React context providers from their native SDKs (Hydrator components sync state into the Zustand store). The remaining six chains use direct browser-extension APIs and skip the React adapter layer; their actions are registered during `initChainServices()` after the provider mounts.
 
-Each slot also accepts an optional `connectors?: IXConnector[]` array to override the default connectors registered by `chainRegistry`.
+Every slot declares an optional `connectors?: IXConnector[]` array, but it only takes effect on the six non-provider slots (`ICON`, `NEAR`, `STELLAR`, `BITCOIN`, `INJECTIVE`, `STACKS`), where it replaces the default connectors registered by `chainRegistry`. `EVM`, `SOLANA`, and `SUI` ignore it — their connector lists are written by the Hydrators from wagmi, `@solana/wallet-adapter`, and `@mysten/dapp-kit`, so passing `connectors` there type-checks but has no effect. Supplied connectors must extend the abstract `XConnector` class; entries that only implement `IXConnector` are filtered out with a console warning.
 
 ---
 
@@ -87,7 +87,7 @@ const walletConfig: SodaxWalletConfig = {
   // Adapter fields only — wagmi mounts with the bundled chain set, no custom RPCs
   EVM: { ssr: true },
 
-  // Per-chain entries only — wagmi adapter uses defaults
+  // Per-chain entries only — @solana/wallet-adapter-react uses defaults (autoConnect: true)
   SOLANA: { chains: { [ChainKeys.SOLANA_MAINNET]: { rpcUrl: 'https://...' } } },
 
   // Both
@@ -163,9 +163,11 @@ const walletConfig: SodaxWalletConfig = {
 
 ### Stacks — preset name OR network object
 
-Stacks accepts either a preset name string (`'mainnet' | 'testnet'`) or a full `StacksNetworkLike` object:
+Stacks accepts either a `StacksNetworkName` preset string (`'mainnet' | 'testnet' | 'devnet' | 'mocknet'`) or a full `StacksNetworkLike` object:
 
 ```typescript
+import { PostConditionMode } from '@sodax/wallet-sdk-core';
+
 const walletConfig: SodaxWalletConfig = {
   STACKS: {
     chains: {
@@ -180,7 +182,7 @@ const advanced: SodaxWalletConfig = {
     chains: {
       [ChainKeys.STACKS_MAINNET]: {
         // StacksNetworkLike fields...
-        defaults: { network: 'mainnet', postConditionMode: 'deny' },
+        defaults: { network: 'mainnet', postConditionMode: PostConditionMode.Deny },
       },
     },
   },

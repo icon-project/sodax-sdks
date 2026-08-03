@@ -1,8 +1,8 @@
 # Wallet Provider Bridge
 
-`@sodax/wallet-sdk-react` is the bridge between the connected browser wallet and the chain-agnostic SDK call surface in `@sodax/sdk`. After a user connects a wallet, `useWalletProvider` returns a typed `IXxxWalletProvider` (from `@sodax/sdk`) that you pass directly into any SDK method — the SDK signs and broadcasts via that provider.
+`@sodax/wallet-sdk-react` is the bridge between the connected browser wallet and the chain-agnostic SDK call surface in `@sodax/sdk`. After a user connects a wallet, `useWalletProvider` returns a typed `IXxxWalletProvider` (from `@sodax/types`) that you pass directly into any SDK method — the SDK signs and broadcasts via that provider.
 
-The canonical interfaces are defined in [`@sodax/sdk`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/src/index.ts) (`IEvmWalletProvider`, `ISolanaWalletProvider`, …) and re-exported through `@sodax/wallet-sdk-core`.
+The canonical interfaces (`IEvmWalletProvider`, `ISolanaWalletProvider`, …) are defined in [`@sodax/types`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/wallet/providers.ts) and re-exported by [`@sodax/sdk`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/src/index.ts) via `export * from '@sodax/types'` — import them from either package. `@sodax/wallet-sdk-core` exports the concrete provider classes (`EvmWalletProvider`, `SolanaWalletProvider`, …), not the interfaces.
 
 ## Table of contents
 
@@ -69,10 +69,10 @@ Use this when the surrounding component is family-level (e.g. an EVM dashboard t
 
 ```typescript
 const wp = useWalletProvider();
-// wp: undefined — no chain specified
+// wp: IWalletProvider | undefined — TypeScript falls back to the full provider union
 ```
 
-Both fields are optional but at least one must be set for the hook to return anything.
+Both fields are optional but at least one must be set for the hook to return anything: with neither, the hook returns `undefined` on every render even though the static type stays wide. The same overload also accepts an `xChainType` that is itself `ChainType | undefined`, which is why the type cannot narrow — refine the result on the provider's `chainType` discriminant.
 
 ---
 
@@ -112,7 +112,7 @@ function SwapButton({ params }: { params: CreateIntentParams<typeof ChainKeys.BS
 }
 ```
 
-The same pattern works for every SDK feature service — `sodax.bridge.bridge`, `sodax.moneyMarket.supply`, `sodax.staking.stake`, `sodax.dex.deposit`, etc. See [`packages/sdk/docs/`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/) for per-feature method signatures.
+The same pattern works for every SDK feature service — `sodax.bridge.bridge`, `sodax.moneyMarket.supply`, `sodax.staking.stake`, `sodax.dex.assetService.deposit`, etc. (`sodax.dex` is a composition root exposing the `assetService` and `clService` sub-services rather than methods of its own.) See [`packages/sdk/docs/`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/) for per-feature method signatures.
 
 ---
 
@@ -192,11 +192,13 @@ Skip the bridge in two cases:
 ```typescript
 import { Sodax } from '@sodax/sdk';
 import { EvmWalletProvider } from '@sodax/wallet-sdk-core';
-import { ChainKeys } from '@sodax/types';
+import { ChainKeys, type Hex } from '@sodax/types';
+
+const privateKey = process.env.PRIVATE_KEY as Hex; // `0x…`
 
 const sodax = new Sodax();
 const walletProvider = new EvmWalletProvider({
-  privateKey: process.env.PRIVATE_KEY!,
+  privateKey,
   chainId: ChainKeys.BSC_MAINNET,
   rpcUrl: 'https://bsc-dataseed.binance.org',
 });

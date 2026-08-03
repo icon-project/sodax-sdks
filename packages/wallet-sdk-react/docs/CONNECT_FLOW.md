@@ -38,7 +38,7 @@ useXAccount(xChainType) ←─────────────  Zustand stor
                                               ChainActions.disconnect()
                                                       │
                                                       ↓
-                                              clearXConnection(xChainType)
+                                              unsetXConnection(xChainType)
 ```
 
 **Single store, single source of truth** — every hook subscribes to the same Zustand slice. Connect mutations write through `setXConnection`; reads (`useXAccount`, `useXConnection`) reflect that immediately. Provider-managed chains (EVM/Solana/Sui) write via their Hydrator components instead of inside the mutation — see [Provider-managed chains caveat](#provider-managed-chains-caveat).
@@ -188,7 +188,9 @@ function DisconnectButton() {
 }
 ```
 
-The callback delegates to `ChainActions.disconnect()`. If no actions are registered (chain not enabled in config), it logs a warning and resolves silently — no throw. Connection state is cleared by the chain's action implementation (provider-managed) or by the store side-effect (non-provider).
+The callback delegates to `ChainActions.disconnect()`. If no actions are registered (chain not enabled in config), it logs a warning and resolves silently — no throw.
+
+Which layer clears the store differs by chain family. Non-provider chains clear it inside the action implementation: the default `disconnect` calls `unsetXConnection(xChainType)` in a `finally`, so the store clears even when the wallet's native disconnect throws (NEAR overrides `disconnect` with the same pattern). Solana and Sui actions only trigger the native adapter's disconnect and leave the write to their Hydrator. EVM is the exception to that single-writer rule — `EvmActions.disconnect` calls `unsetXConnection('EVM')` and `markUserDisconnected('EVM')` synchronously before awaiting wagmi's disconnect, so the UI stays consistent whether wagmi throws or hangs.
 
 ---
 
@@ -239,7 +241,7 @@ To detect when persisted state is ready (avoid disconnect flash on first paint),
 | Source | Message style |
 |--------|---------------|
 | User rejects in wallet popup | Wallet-specific (`"User rejected the request"`, `"User denied account authorization"`, etc.) |
-| Wallet not installed | `"Wallet extension not detected"` (varies by chain) |
+| Wallet not installed | Non-provider chains throw `"<Wallet> is not installed"` (Stacks and Stellar append an install hint); provider-managed chains surface the native SDK error |
 | Network mismatch | `"Chain not configured"` (wagmi) |
 
 Read `mutation.error.message` and surface to UI; for install CTA, fall back to `connector.installUrl`:
