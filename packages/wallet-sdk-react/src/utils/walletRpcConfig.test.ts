@@ -87,7 +87,9 @@ describe('getRpcUrl', () => {
 describe('resolveEvmDefaults', () => {
   const arbDefaults = { waitForTransactionReceipt: { confirmations: 1, timeout: 60_000 } };
   const ethDefaults = { waitForTransactionReceipt: { confirmations: 3, timeout: 180_000 } };
-  const evmChains: Partial<Record<typeof ChainKeys.ARBITRUM_MAINNET | typeof ChainKeys.ETHEREUM_MAINNET, EvmChainEntry>> = {
+  const evmChains: Partial<
+    Record<typeof ChainKeys.ARBITRUM_MAINNET | typeof ChainKeys.ETHEREUM_MAINNET, EvmChainEntry>
+  > = {
     [ChainKeys.ARBITRUM_MAINNET]: { rpcUrl: 'https://arb', defaults: arbDefaults },
     [ChainKeys.ETHEREUM_MAINNET]: { rpcUrl: 'https://eth', defaults: ethDefaults },
   };

@@ -4,8 +4,11 @@
 // them exported. The runtime helper (`makeRequest`) stays package-internal —
 // it was never part of the public API.
 export type { ApiResponse, RequestConfig, RequestOverrideConfig } from './api-utils.js';
+// Export the bundle-safe guard with the structured HTTP error.
+export { BackendHttpError, isBackendHttpError } from './api-utils.js';
 export * from './BackendApiService.js';
 export * from './SwapsApiService.js';
+export * from './SponsoringApiService.js';
 
 // Re-export the swaps wire failure taxonomy from the wrapped @sodax/swaps-api client so consumers
 // can narrow the failure `SwapsApiService` surfaces — `error.context.code` (a `SwapsApiErrorCode`)

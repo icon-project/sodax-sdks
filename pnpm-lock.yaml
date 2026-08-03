@@ -431,6 +431,58 @@ importers:
         specifier: 'catalog:'
         version: 5.5.4
 
+  apps/stellar-sponsor-example:
+    dependencies:
+      '@sodax/dapp-kit':
+        specifier: workspace:*
+        version: link:../../packages/dapp-kit
+      '@sodax/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@sodax/wallet-sdk-react':
+        specifier: workspace:*
+        version: link:../../packages/wallet-sdk-react
+      '@tanstack/react-query':
+        specifier: 5.87.4
+        version: 5.87.4(react@19.1.4)
+      react:
+        specifier: 19.1.4
+        version: 19.1.4
+      react-dom:
+        specifier: 19.1.4
+        version: 19.1.4(react@19.1.4)
+    devDependencies:
+      '@bangjelkoski/vite-plugin-node-polyfills':
+        specifier: ^0.0.2
+        version: 0.0.2(rollup@4.60.4)(vite@5.4.21(@types/node@22.18.1)(lightningcss@1.32.0)(terser@5.47.1))
+      '@tailwindcss/vite':
+        specifier: ^4.1.16
+        version: 4.3.0(vite@5.4.21(@types/node@22.18.1)(lightningcss@1.32.0)(terser@5.47.1))
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.18.1
+      '@types/react':
+        specifier: ^19.0.8
+        version: 19.2.15
+      '@types/react-dom':
+        specifier: ^19.0.3
+        version: 19.2.3(@types/react@19.2.15)
+      '@vitejs/plugin-react':
+        specifier: 4.2.1
+        version: 4.2.1(vite@5.4.21(@types/node@22.18.1)(lightningcss@1.32.0)(terser@5.47.1))
+      tailwindcss:
+        specifier: ^4.1.16
+        version: 4.3.0
+      typescript:
+        specifier: 'catalog:'
+        version: 5.5.4
+      vite:
+        specifier: ^5.4.11
+        version: 5.4.21(@types/node@22.18.1)(lightningcss@1.32.0)(terser@5.47.1)
+      vite-tsconfig-paths:
+        specifier: 4.3.1
+        version: 4.3.1(typescript@5.5.4)(vite@5.4.21(@types/node@22.18.1)(lightningcss@1.32.0)(terser@5.47.1))
+
   apps/swap-api-example:
     dependencies:
       '@radix-ui/react-dialog':
@@ -10241,6 +10293,7 @@ packages:
   tsconfck@3.1.6:
     resolution: {integrity: sha512-ks6Vjr/jEw0P1gmOVwutM3B7fWxoWBL2KRDb1JfqGVawBmO5UsvmWOQFGHBPl5yxYz4eERr19E6L7NMv+Fej4w==}
     engines: {node: ^18 || >=20}
+    deprecated: unmaintained
     hasBin: true
     peerDependencies:
       typescript: ^5.0.0

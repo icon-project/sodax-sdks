@@ -57,9 +57,15 @@
   },
   "typesVersions": {
     "*": {
-      "stacks/core": ["./dist/stacks/core/index.d.ts"],
-      "stacks/connect": ["./dist/stacks/connect/index.d.ts"],
-      "injective/wallet-strategy": ["./dist/injective/wallet-strategy/index.d.ts"]
+      "stacks/core": [
+        "./dist/stacks/core/index.d.ts"
+      ],
+      "stacks/connect": [
+        "./dist/stacks/connect/index.d.ts"
+      ],
+      "injective/wallet-strategy": [
+        "./dist/injective/wallet-strategy/index.d.ts"
+      ]
     }
   },
   "engines": {

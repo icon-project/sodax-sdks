@@ -17,6 +17,13 @@ export const DEFAULT_BACKEND_API_HEADERS = {
 export const DEFAULT_RELAYER_API_ENDPOINT = 'https://xcall-relay.nw.iconblockchain.xyz';
 export const VAULT_TOKEN_DECIMALS = 18;
 
+/**
+ * Gateway base URL, including its deployment-owned version prefix.
+ */
+export const DEFAULT_SPONSORING_API_ENDPOINT = 'https://api.sodax.com/v1';
+/** Stellar sponsorship route relative to the configured base URL. */
+export const SPONSORING_API_STELLAR_BASE_PATH = '/sponsorships/stellar';
+
 export type BaseApiConfig = {
   baseURL: HttpUrl;
   timeout: number;
@@ -26,15 +33,19 @@ export type BaseApiConfig = {
 export type SwapsApiConfig = BaseApiConfig;
 
 /**
- * Nested config that points the base (backend) API and the swaps API at independent endpoints.
- * At least one slice must be provided — an empty custom config is meaningless (pass a flat
- * {@link BaseApiConfig} instead). Requiring a slice keeps the two members disjoint from
- * `BaseApiConfig` (which carries `baseURL`), so {@link ApiConfig} can be discriminated by the
- * presence of a `baseApiConfig` / `swapsApiConfig` slice.
+ * Independently routed sponsoring config. `baseURL` includes any deployment
+ * prefix; `apiKey` becomes `x-api-key`. Browser-bundled keys are public.
+ */
+export type SponsoringApiConfig = BaseApiConfig & { apiKey?: string };
+
+/**
+ * Independent service configs. At least one slice is required to keep this
+ * union distinct from flat {@link BaseApiConfig}.
  */
 export type CustomApiConfig =
-  | { baseApiConfig: BaseApiConfig; swapsApiConfig?: SwapsApiConfig }
-  | { baseApiConfig?: BaseApiConfig; swapsApiConfig: SwapsApiConfig };
+  | { baseApiConfig: BaseApiConfig; swapsApiConfig?: SwapsApiConfig; sponsoringApiConfig?: SponsoringApiConfig }
+  | { baseApiConfig?: BaseApiConfig; swapsApiConfig: SwapsApiConfig; sponsoringApiConfig?: SponsoringApiConfig }
+  | { baseApiConfig?: BaseApiConfig; swapsApiConfig?: SwapsApiConfig; sponsoringApiConfig: SponsoringApiConfig };
 
 export type ApiConfig = BaseApiConfig | CustomApiConfig;
 

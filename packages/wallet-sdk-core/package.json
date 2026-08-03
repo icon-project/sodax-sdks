@@ -7,7 +7,13 @@
   "version": "2.0.0-rc.17",
   "license": "MIT",
   "description": "Sodax Wallet SDK Core",
-  "keywords": ["sodax", "wallet", "sdk", "frontend", "interface"],
+  "keywords": [
+    "sodax",
+    "wallet",
+    "sdk",
+    "frontend",
+    "interface"
+  ],
   "homepage": "https://github.com/icon-project/sodax-sdks/tree/main/packages/wallet-sdk-core",
   "bugs": {
     "url": "https://github.com/icon-project/sodax-sdks/issues"
@@ -35,7 +41,10 @@
   "engines": {
     "node": ">=20.12.0"
   },
-  "files": ["dist", "!dist/**/*.map"],
+  "files": [
+    "dist",
+    "!dist/**/*.map"
+  ],
   "sideEffects": false,
   "scripts": {
     "build": "tsup",

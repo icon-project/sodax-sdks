@@ -35,10 +35,11 @@ export class SuiXService extends XService {
 
   createWalletProvider(): ISuiWalletProvider | undefined {
     if (!this.suiClient || !this.suiWallet || !this.suiAccount) {
-      console.warn(
-        '[SuiXService] createWalletProvider: missing dependencies — wallet not connected yet',
-        { hasClient: !!this.suiClient, hasWallet: !!this.suiWallet, hasAccount: !!this.suiAccount },
-      );
+      console.warn('[SuiXService] createWalletProvider: missing dependencies — wallet not connected yet', {
+        hasClient: !!this.suiClient,
+        hasWallet: !!this.suiWallet,
+        hasAccount: !!this.suiAccount,
+      });
       return undefined;
     }
 

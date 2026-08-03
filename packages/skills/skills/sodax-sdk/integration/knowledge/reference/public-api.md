@@ -140,9 +140,38 @@ import {
   // Backend API config + per-call override
   type ApiConfig,               // BaseApiConfig | CustomApiConfig
   type BaseApiConfig,
-  type CustomApiConfig,         // point the swaps API at its own endpoint
+  type CustomApiConfig,         // point the swaps / sponsoring API at its own endpoint
   type SwapsApiConfig,
+  type SponsoringApiConfig,     // BaseApiConfig & { apiKey? } — own host, own x-api-key
+  DEFAULT_SPONSORING_API_ENDPOINT,
+  SPONSORING_API_STELLAR_BASE_PATH,
   type RequestOverrideConfig,   // per-call override on any backendApi / sodax.api.swaps method
+
+  // Sponsoring — sodax.sponsoring (Stellar account activation) + sodax.api.sponsoring (wire client)
+  SponsoringService,
+  SponsoringApiService,
+  SPONSOR_CONFIG_TTL_MS,        // 60s; mirrors the server's Cache-Control on GET /config
+  STELLAR_TRUSTLINE_MIN_XLM_STROOPS, // fallback minimum; prefer status.trustlineMinXlmStroops
+  type StellarAccountStatus,    // { exists, nativeBalanceStroops, availableBalanceStroops, canAffordTrustline, trustlineMinXlmStroops }
+  classifySponsorError,         // SodaxError -> { action, retryable, requiresNewSignature, ... }
+  type ActivateStellarAccountParams,
+  type ActivateStellarAccountResult, // discriminated on status: 'submitted' | 'alreadyActive'
+  type SponsorFailureAction,    // 'fixIntegration' | 'checkApiKey' | 'rebuildAndResign' | ...
+  type SponsorFailureClass,
+  type SponsoringOrchestrationError,
+  type SponsoringConfigError,
+  type SponsoringLookupError,
+  type IStellarSponsoringApi,
+  type StellarSponsorConfig,
+  type StellarSponsoredAccountRequest,
+  type StellarSponsoredAccountResponse,
+  type SponsoringApiErrorCode,  // the 7 wire codes
+  SPONSORING_API_ERROR_CODES,   // runtime array — membership-test before trusting body.error
+  type SponsoringApiErrorResponse,
+
+  // Structured non-2xx backend failure (on error.cause) — status + parsed body
+  BackendHttpError,
+  isBackendHttpError,           // bundle-safe guard; prefer over instanceof
 
   // Read shapes
   type Intent,

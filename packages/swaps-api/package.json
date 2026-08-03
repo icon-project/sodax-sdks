@@ -7,7 +7,14 @@
   "version": "2.0.0-rc.17",
   "description": "Minimal type-safe HTTP client for the SODAX backend Swaps API v2",
   "license": "MIT",
-  "keywords": ["sodax", "swaps", "api", "sdk", "valibot", "multichain"],
+  "keywords": [
+    "sodax",
+    "swaps",
+    "api",
+    "sdk",
+    "valibot",
+    "multichain"
+  ],
   "homepage": "https://github.com/icon-project/sodax-sdks/tree/main/packages/swaps-api",
   "bugs": {
     "url": "https://github.com/icon-project/sodax-sdks/issues"
@@ -36,7 +43,10 @@
   "engines": {
     "node": ">=20.12.0"
   },
-  "files": ["dist", "!dist/**/*.map"],
+  "files": [
+    "dist",
+    "!dist/**/*.map"
+  ],
   "sideEffects": false,
   "scripts": {
     "build": "tsup",

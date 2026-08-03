@@ -18,7 +18,10 @@
   "engines": {
     "node": ">=20.12.0"
   },
-  "files": ["dist", "!dist/**/*.map"],
+  "files": [
+    "dist",
+    "!dist/**/*.map"
+  ],
   "type": "module",
   "exports": {
     ".": {
@@ -35,11 +38,13 @@
   },
   "typesVersions": {
     "*": {
-      "dex": ["./dist/dex/index.d.ts"]
+      "dex": [
+        "./dist/dex/index.d.ts"
+      ]
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "rm -rf dist && tsc",
     "dev": "tsc --watch",
     "ci": "pnpm run pretty && pnpm run build && pnpm run test",
     "checkTs": "tsc",
@@ -61,6 +66,12 @@
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
-  "keywords": ["sodax", "types", "typescript", "multichain", "wallet-providers"],
+  "keywords": [
+    "sodax",
+    "types",
+    "typescript",
+    "multichain",
+    "wallet-providers"
+  ],
   "license": "MIT"
 }
