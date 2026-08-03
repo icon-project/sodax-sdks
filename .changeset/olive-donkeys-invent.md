@@ -3,6 +3,7 @@
 "@sodax/dapp-kit": minor
 "@sodax/types": minor
 "@sodax/sdk": minor
+"@sodax/skills": minor
 ---
 
 Added Stellar account activation via the sponsoring API: `sodax.sponsoring` (activate, check, config),
@@ -49,7 +50,7 @@ Reserve accounting follows the **network's** base reserve, read from the latest 
 for an hour, rather than assuming the 0.5 XLM that validators have voted since protocol 12 — that value
 is a network setting, so hardcoding it would silently mis-report `availableBalanceStroops` and
 `canAffordTrustline` after an upgrade. Render `status.trustlineMinXlmStroops` (the live requirement);
-`STELLAR_TRUSTLINE_MIN_XLM_STROOPS` remains exported as the value assumed when that read fails.
+the newly exported `STELLAR_TRUSTLINE_MIN_XLM_STROOPS` is the value assumed when that read fails.
 
 The sponsored-create builder now checks the published **per-operation** fee band
 (`minPerOperationFeeStroops` / `maxPerOperationFeeStroops`) as well as the total band, before the wallet
@@ -61,8 +62,6 @@ a signature and returned a `400`.
 
 - `SodaxFeature` gained a `'sponsoring'` member. An exhaustive `Record<SodaxFeature, …>` in consumer
   code needs a new entry; `Partial` records and the analytics `features` allowlist are unaffected.
-- `StellarAccountStatus` gained a required `trustlineMinXlmStroops`. Code that only *reads* the status
-  is unaffected; a test double or fixture that **constructs** the type needs the new field.
 - **`useEstablishTrustline` supersedes `useRequestTrustline`** — additively, so nothing breaks. The new
   hook is a standard mutation hook: `{ mutationOptions }` in, `{ mutate, mutateAsync, mutateAsyncSafe,
   isPending, … }` out, with the same vars (`{ token, amount, srcChainKey, walletProvider }`) and the

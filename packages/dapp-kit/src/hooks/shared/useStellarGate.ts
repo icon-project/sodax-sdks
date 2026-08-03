@@ -51,8 +51,14 @@ export function useStellarGate({
   const gatedAddress = isStellarDestination ? address : undefined;
 
   const statusCheck = useStellarAccountStatus({ params: { address: gatedAddress } });
+  // Withhold the address until the account is known to exist, which leaves the trustline query
+  // disabled: `hasSufficientTrustline` 404s on a missing account, and React Query would retry it
+  // and surface the failure on `error` while the gate is correctly reporting `needsActivation`.
+  // `resolveStellarGate` decides activation from `statusCheck` alone and reads the unresolved
+  // trustline query as blocking, so this never changes the gate's outcome.
+  const trustlineAddress = statusCheck.data?.exists === true ? gatedAddress : undefined;
   const trustlineCheck = useStellarTrustlineCheck({
-    params: { token, amount, chainId: dstChainKey, walletAddress: gatedAddress },
+    params: { token, amount, chainId: dstChainKey, walletAddress: trustlineAddress },
   });
 
   // Trustline exemptions come from chain config, not token symbols.
