@@ -18,8 +18,8 @@ Stellar's sponsorship sandwich requires the *sponsored* account to authorise
 `endSponsoringFutureReserves`, and only their wallet holds that key — so the client builds and signs,
 and the backend validates, co-signs as sponsor, and submits.
 
-Three methods, all returning `Result<T>` and never throwing:
-`activateStellarAccount`, `isStellarAccountActive`, `getStellarSponsorConfig`.
+Four methods, all returning `Result<T>` and never throwing: `activateStellarAccount`,
+`isStellarAccountActive`, `getStellarAccountStatus`, `getStellarSponsorConfig`.
 
 > **Activation makes the account able to RECEIVE, not to SEND.** The sponsor covers the account's own
 > reserve and `startingBalance` is `0`, so a freshly activated account holds **zero spendable XLM** — it
