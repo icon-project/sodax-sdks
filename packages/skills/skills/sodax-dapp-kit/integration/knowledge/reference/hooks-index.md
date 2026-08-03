@@ -235,7 +235,8 @@ Typed React Query wrappers over the backend Swaps API v2 (`sodax.api.swaps.*`), 
 | `useGetUserHubWalletAddress` | Query | Derive hub wallet (wallet router) |
 | `useEstimateGas` | Mutation | Estimate gas for raw tx |
 | `useStellarTrustlineCheck` | Query | Check Stellar trustline |
-| `useRequestTrustline` | Mutation | Request a Stellar trustline (the account pays — needs XLM) |
+| `useEstablishTrustline` | Mutation | Request a Stellar trustline (the account pays — needs XLM) |
+| `useRequestTrustline` | Deprecated | 2.0.0-shape wrapper over `useEstablishTrustline`; removed next major |
 | `useStellarGate` | Composite | Sequences the Stellar prerequisites: exists → trustline → can afford; `checkFailed`/`error`/`retry` for a failed check |
 | `useNearStorageCheck` | Query | Check NEP-141 storage registration (NEAR) |
 | `useRegisterNearStorage` | Mutation | Submit NEP-141 `storage_deposit` (NEAR) |

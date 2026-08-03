@@ -1,4 +1,4 @@
-import { ChainKeys, useRequestTrustline, type IStellarWalletProvider } from '@sodax/dapp-kit';
+import { ChainKeys, useEstablishTrustline, type IStellarWalletProvider } from '@sodax/dapp-kit';
 import Button from '../Button';
 import ErrorNote from '../ErrorNote';
 import HashLink from '../HashLink';
@@ -25,7 +25,7 @@ export default function TrustlineStage({
   /** Blocks a real-mainnet write built from mock Horizon state. */
   blocksSpokeWrites: boolean;
 }) {
-  const trustline = useRequestTrustline();
+  const trustline = useEstablishTrustline();
   const { symbol } = option.token;
 
   if (!requiresTrustline) {

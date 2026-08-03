@@ -57,7 +57,7 @@ balance side by side — the gap between them is the whole point.
 | `useSponsorConfig` | which sponsor account is funding this, read from the server rather than hardcoded |
 | `useStellarAccountStatus` | exists + balances + `canAffordTrustline` + `trustlineMinXlmStroops`, from one Horizon account read |
 | `useActivateStellarAccount` | the activation itself |
-| `useStellarTrustlineCheck` / `useRequestTrustline` | the step after activation |
+| `useStellarTrustlineCheck` / `useEstablishTrustline` | the step after activation |
 | `useStellarAccountActive` | in the lab, beside the status read — the contrast is the lesson |
 | `resolveStellarGate` | the ordering invariant, borrowed rather than re-derived |
 

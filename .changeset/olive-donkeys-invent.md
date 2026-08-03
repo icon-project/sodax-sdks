@@ -1,6 +1,6 @@
 ---
 "@sodax/wallet-sdk-core": minor
-"@sodax/dapp-kit": major
+"@sodax/dapp-kit": minor
 "@sodax/types": minor
 "@sodax/sdk": minor
 ---
@@ -36,7 +36,7 @@ checked before affordability on purpose: an account that already trusts the asse
 since the sender pays the fee and the reserve is already locked, so asking about affordability first
 would block a correctly-configured user and tell them to fund an account that needs nothing.
 
-Pairing `useStellarTrustlineCheck` with `useRequestTrustline`
+Pairing `useStellarTrustlineCheck` with `useEstablishTrustline`
 directly conflates "account missing" with "trustline missing", because `hasSufficientTrustline` throws
 for an account that does not exist. The gate also distinguishes **unknown** from **unmet**: a failed
 check sets `checkFailed` with the `error` and a `retry()` to re-run both reads, rather than leaving the
@@ -63,10 +63,12 @@ a signature and returned a `400`.
   code needs a new entry; `Partial` records and the analytics `features` allowlist are unaffected.
 - `StellarAccountStatus` gained a required `trustlineMinXlmStroops`. Code that only *reads* the status
   is unaffected; a test double or fixture that **constructs** the type needs the new field.
-- **`useRequestTrustline` is now a standard mutation hook.** It was hand-rolled state before. The
-  positional `token` argument is gone (it was never read), and the return shape is
-  `useSafeMutation`'s: `{ mutateAsync, mutateAsyncSafe, isPending, … }` instead of
-  `{ requestTrustline, isLoading, isRequested, error, data }`. Vars are unchanged
-  (`{ token, amount, srcChainKey, walletProvider }`), so
-  `const { mutateAsync: requestTrustline } = useRequestTrustline()` is a drop-in. It also no longer
-  rejects `amount: 0n` as missing.
+- **`useEstablishTrustline` supersedes `useRequestTrustline`** — additively, so nothing breaks. The new
+  hook is a standard mutation hook: `{ mutationOptions }` in, `{ mutate, mutateAsync, mutateAsyncSafe,
+  isPending, … }` out, with the same vars (`{ token, amount, srcChainKey, walletProvider }`) and the
+  same rejection of `amount: 0n`. `useRequestTrustline` keeps its released signature and return shape
+  (`{ requestTrustline, isLoading, isRequested, error, data }`, positional `token` still ignored) as a
+  deprecated wrapper over it, and will be removed in the next major. Migrate with
+  `const { mutateAsync: requestTrustline } = useEstablishTrustline()`, then swap `isLoading` →
+  `isPending` and `isRequested` → `isSuccess`; note `data` is `string | undefined` on the new hook,
+  where the wrapper reports `string | null`.

@@ -53,7 +53,7 @@ Primitive → component, so the mapping stays discoverable:
 | `useStellarAccountStatus` | `views/ShowcaseView.tsx`, `components/journey/AccountFactsCard.tsx` |
 | `useStellarAccountActive` | `lab/components/DiagnosticsPanel.tsx` (beside the status read — the contrast is the point) |
 | `useStellarTrustlineCheck` | `views/ShowcaseView.tsx` |
-| `useRequestTrustline` | `components/journey/TrustlineStage.tsx` |
+| `useEstablishTrustline` | `components/journey/TrustlineStage.tsx` |
 | `useSponsorConfig` | `components/SponsorConfigPanel.tsx` |
 | `resolveStellarGate` | `lib/journey.ts` |
 | `classifySponsorError` | `lab/components/ScenarioRunner.tsx` |

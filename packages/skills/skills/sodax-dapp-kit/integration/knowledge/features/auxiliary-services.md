@@ -107,7 +107,7 @@ useDeriveUserWalletAddress({ params, queryOptions }); // Hub wallet address (CRE
 useGetUserHubWalletAddress({ params, queryOptions }); // Hub wallet via wallet router
 useEstimateGas({ mutationOptions });                // Gas estimation for raw tx
 useStellarTrustlineCheck({ params, queryOptions });
-useRequestTrustline({ mutationOptions });
+useEstablishTrustline({ mutationOptions });         // useRequestTrustline is its deprecated 2.0.0 wrapper
 useNearStorageCheck({ params, queryOptions });      // NEP-141 storage registration check (NEAR)
 useRegisterNearStorage({ mutationOptions });        // NEP-141 storage_deposit (NEAR)
 useNearStorageGate({ dstChainKey, token, accountId, walletProvider }); // composite NEAR receive-side gate
@@ -174,7 +174,7 @@ funds. That makes `checkFailed` load-bearing — it is the only way a UI can tel
 apart from "you are missing something", and without it a transient Horizon failure reads to the user as
 an inexplicably dead button.
 
-Do NOT hand-roll this as `useStellarTrustlineCheck` + `useRequestTrustline`. `hasSufficientTrustline`
+Do NOT hand-roll this as `useStellarTrustlineCheck` + `useEstablishTrustline`. `hasSufficientTrustline`
 **throws** for an account that does not exist, so a `!data` test reads a missing account as "needs a
 trustline" and offers a button that cannot work. Read `isLoading`, never `isPending` — `isPending` stays
 `true` for a disabled query and blocks forever.
@@ -182,8 +182,10 @@ trustline" and offers a button that cannot work. Read `isLoading`, never `isPend
 The lower-level pieces remain available for custom wiring: `useStellarAccountStatus` (existence,
 `canAffordTrustline`, and `trustlineMinXlmStroops` — the XLM one more trustline needs at the network's
 current base reserve — from one Horizon account read), `useStellarAccountActive` (existence only),
-`useStellarTrustlineCheck`, and `useRequestTrustline` — a canonical mutation hook whose vars are
-`{ token, amount, srcChainKey, walletProvider }` (NOT `account` / `asset`).
+`useStellarTrustlineCheck`, and `useEstablishTrustline` — a canonical mutation hook whose vars are
+`{ token, amount, srcChainKey, walletProvider }` (NOT `account` / `asset`). `useRequestTrustline` still
+exists as a deprecated wrapper preserving the 2.0.0 shape (`{ requestTrustline, isLoading, isRequested,
+error, data }`, positional token ignored); write new code against `useEstablishTrustline`.
 
 ### NEAR storage registration
 
@@ -259,7 +261,7 @@ Four things consumers get wrong:
 1. **Activation makes the account able to RECEIVE, not to SEND.** A freshly activated account holds
    **zero spendable XLM** (the sponsor covers its reserve; `startingBalance` is `0`), so it cannot pay a
    fee or the reserve its own first trustline would lock. Use `useStellarGate`, which sequences
-   activation → trustline → funding; pairing `useStellarTrustlineCheck` with `useRequestTrustline`
+   activation → trustline → funding; pairing `useStellarTrustlineCheck` with `useEstablishTrustline`
    directly conflates "account missing" with "trustline missing" and offers a button that cannot work.
    Always render `checkFailed` / `error` / `retry` too — a fail-closed gate that cannot explain itself
    is a dead button.

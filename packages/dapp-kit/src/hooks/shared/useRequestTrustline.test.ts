@@ -1,63 +1,115 @@
 import { ChainKeys } from '@sodax/sdk';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const invalidateQueries = vi.fn();
+type MutationState = {
+  mutateAsync: (vars: unknown) => Promise<string>;
+  isPending: boolean;
+  isSuccess: boolean;
+  error: Error | null;
+  data: string | undefined;
+};
 
-// The hook is a pure options builder around useSafeMutation, so stubbing the three
-// React-side imports lets the real onSuccess run without a DOM.
-vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ invalidateQueries }) }));
-vi.mock('./useSodaxContext.js', () => ({
-  useSodaxContext: () => ({ sodax: { spoke: { stellar: { requestTrustline: vi.fn() } } } }),
+let mutation: MutationState;
+
+const refSlots: Array<{ current: unknown }> = [];
+let refCursor = 0;
+
+// Only useRef and useCallback are needed, and call order is stable, so this replays React's
+// slot semantics well enough to observe the deprecated hook across renders — no DOM, no renderer.
+vi.mock('react', () => ({
+  useRef: (initial: unknown) => {
+    const slot = refSlots[refCursor] ?? { current: initial };
+    refSlots[refCursor] = slot;
+    refCursor += 1;
+    return slot;
+  },
+  useCallback: (fn: unknown) => fn,
 }));
-vi.mock('./useSafeMutation.js', () => ({ useSafeMutation: (options: unknown) => options }));
+vi.mock('./useEstablishTrustline.js', () => ({ useEstablishTrustline: () => mutation }));
 
 const { useRequestTrustline } = await import('./useRequestTrustline.js');
 
 const TOKEN = 'CBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
-const ADDRESS = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
 
-type OnSuccess = (data: string, vars: unknown, ctx: unknown) => Promise<void>;
+const idle: MutationState = {
+  mutateAsync: async () => 'hash',
+  isPending: false,
+  isSuccess: false,
+  error: null,
+  data: undefined,
+};
 
-const vars = (getWalletAddress: () => Promise<string>) => ({
-  token: TOKEN,
-  amount: 1_000_000n,
-  srcChainKey: ChainKeys.STELLAR_MAINNET,
-  walletProvider: { getWalletAddress } as never,
-});
-
-const onSuccessOf = (): OnSuccess => (useRequestTrustline() as unknown as { onSuccess: OnSuccess }).onSuccess;
-
-const invalidatedKeys = () => invalidateQueries.mock.calls.map(([arg]) => arg.queryKey);
+/** One render of the hook, with the mutation in `state`. */
+const render = (state: Partial<MutationState> = {}) => {
+  mutation = { ...idle, ...state };
+  refCursor = 0;
+  // The positional argument was ignored in 2.0.0 and still is; passed here because keeping it
+  // callable is the point of this wrapper.
+  return useRequestTrustline(TOKEN);
+};
 
 beforeEach(() => {
-  invalidateQueries.mockReset();
+  refSlots.length = 0;
+  refCursor = 0;
 });
 
-describe('useRequestTrustline — invalidation after a broadcast trustline', () => {
-  it('invalidates the account-scoped keys when the address is readable', async () => {
-    await onSuccessOf()('hash', vars(async () => ADDRESS), undefined);
+describe('useRequestTrustline — 2.0.0 compatibility wrapper', () => {
+  it('exposes the released shape', () => {
+    const result = render();
 
-    expect(invalidatedKeys()).toEqual([
-      ['shared', 'stellarTrustlineCheck', ChainKeys.STELLAR_MAINNET, TOKEN, ADDRESS],
-      ['sponsoring', 'stellarAccountStatus', ADDRESS],
-      ['shared', 'xBalances', ChainKeys.STELLAR_MAINNET],
-    ]);
+    expect(Object.keys(result).sort()).toEqual(['data', 'error', 'isLoading', 'isRequested', 'requestTrustline']);
+    expect(result.data).toBeNull();
+    expect(result.error).toBeNull();
+    expect(result.isLoading).toBe(false);
+    expect(result.isRequested).toBe(false);
   });
 
-  it('SURVIVES a wallet that fails right after signing, and still invalidates', async () => {
-    // The trustline is already on-chain here: throwing would report success as an
-    // error and leave the gate showing "needs a trustline" until a manual refetch.
-    const rejecting = vars(async () => {
-      throw new Error('wallet is locked');
+  it('maps isLoading to the mutation pending state', () => {
+    expect(render({ isPending: true }).isLoading).toBe(true);
+  });
+
+  it('surfaces the mutation error', () => {
+    const error = new Error('trustline failed');
+
+    expect(render({ error }).error).toBe(error);
+  });
+
+  it('LATCHES isRequested and data, so a failed retry cannot un-report a live trustline', () => {
+    const first = render({ isSuccess: true, data: 'hash' });
+    expect(first.isRequested).toBe(true);
+    expect(first.data).toBe('hash');
+
+    // React Query clears data and isSuccess once the next attempt starts; 2.0.0 held both
+    // in component state and never cleared them.
+    const retrying = render({ isPending: true });
+    expect(retrying.isRequested).toBe(true);
+    expect(retrying.data).toBe('hash');
+
+    const failed = render({ error: new Error('nope') });
+    expect(failed.isRequested).toBe(true);
+    expect(failed.data).toBe('hash');
+  });
+
+  it('forwards vars to the canonical mutation and resolves to the hash', async () => {
+    const mutateAsync = vi.fn(async () => 'hash');
+    const vars = {
+      token: TOKEN,
+      amount: 1_000_000n,
+      srcChainKey: ChainKeys.STELLAR_MAINNET,
+      walletProvider: { getWalletAddress: async () => 'G…' } as never,
+    };
+
+    await expect(render({ mutateAsync }).requestTrustline(vars)).resolves.toBe('hash');
+    expect(mutateAsync).toHaveBeenCalledWith(vars);
+  });
+
+  it('rejects with an Error even when the mutation throws a non-Error', async () => {
+    const rejecting = render({
+      mutateAsync: async () => {
+        throw 'string failure';
+      },
     });
 
-    await expect(onSuccessOf()('hash', rejecting, undefined)).resolves.toBeUndefined();
-
-    // Falls back to the whole prefix, because the account is no longer identifiable.
-    expect(invalidatedKeys()).toEqual([
-      ['shared', 'stellarTrustlineCheck'],
-      ['sponsoring', 'stellarAccountStatus'],
-      ['shared', 'xBalances', ChainKeys.STELLAR_MAINNET],
-    ]);
+    await expect(rejecting.requestTrustline({} as never)).rejects.toThrow('Unknown error occurred');
   });
 });

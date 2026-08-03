@@ -8,7 +8,7 @@ import {
 import { resolveStellarGate, type StellarGateState } from '../../utils/stellarGate.js';
 import { useActivateStellarAccount } from '../sponsoring/useActivateStellarAccount.js';
 import { useStellarAccountStatus } from '../sponsoring/useStellarAccountStatus.js';
-import { useRequestTrustline } from './useRequestTrustline.js';
+import { useEstablishTrustline } from './useEstablishTrustline.js';
 import { useSodaxContext } from './useSodaxContext.js';
 import { useStellarTrustlineCheck } from './useStellarTrustlineCheck.js';
 
@@ -61,7 +61,7 @@ export function useStellarGate({
   const state = resolveStellarGate(dstChainKey, { statusCheck, trustlineCheck, isNativeToken });
 
   const { mutateAsyncSafe: activateAccount, isPending: isActivating } = useActivateStellarAccount();
-  const { mutateAsyncSafe: establishTrustline, isPending: isRequestingTrustline } = useRequestTrustline();
+  const { mutateAsyncSafe: establishTrustline, isPending: isRequestingTrustline } = useEstablishTrustline();
 
   const activate = async (): Promise<Result<ActivateStellarAccountResult> | undefined> => {
     if (!stellarWalletProvider || !address) return undefined;
