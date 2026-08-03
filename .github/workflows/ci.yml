@@ -97,13 +97,16 @@ jobs:
         run: pnpm check:doc-links
 
       - name: Build Apps
-        run: pnpm turbo run build --filter='./apps/demo'
+        run: pnpm turbo run build --filter='./apps/*' --filter='!./apps/node'
 
       - name: SDK features powered by @sodax/libs (Node smoke)
         run: pnpm --filter node test-libs
 
       - name: Next.js 16 Turbopack regression check
-        run: pnpm --filter example-next-js-16 build && pnpm --filter example-next-js-16 verify-only
+        # Skip `next build` — the previous `Build Apps` step already built it, and a turbo
+        # cache hit restores `.next/**` (only `.next/cache/**` is excluded), so `next start`
+        # has everything it needs to serve the production build.
+        run: pnpm --filter example-next-js-16 verify-only
 
       - name: Run Tests
         run: pnpm test
