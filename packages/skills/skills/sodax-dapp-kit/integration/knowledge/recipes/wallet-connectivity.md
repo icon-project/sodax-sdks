@@ -15,7 +15,7 @@ Connect wallets and pass wallet providers to feature hooks.
 | `useXBalances` | `@sodax/dapp-kit` | Query | Cross-chain token balances for an address |
 | `useEstimateGas` | `@sodax/dapp-kit` | Mutation | Estimate gas for raw transactions |
 | `useStellarTrustlineCheck` | `@sodax/dapp-kit` | Query | Check if Stellar account has sufficient trustline |
-| `useRequestTrustline` | `@sodax/dapp-kit` | Mutation | Request a Stellar trustline for a token |
+| `useEstablishTrustline` | `@sodax/dapp-kit` | Mutation | Request a Stellar trustline for a token |
 | `useNearStorageCheck` | `@sodax/dapp-kit` | Query | Check if a NEAR account is NEP-141 storage-registered for a token |
 | `useRegisterNearStorage` | `@sodax/dapp-kit` | Mutation | Submit a NEP-141 `storage_deposit` so a NEAR account can receive a token |
 | `useNearStorageGate` | `@sodax/dapp-kit` | Hook | Combine the NEAR storage check, registration mutation, and UI gate flags |

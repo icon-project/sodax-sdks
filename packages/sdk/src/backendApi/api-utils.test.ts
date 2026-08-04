@@ -12,7 +12,13 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_BACKEND_API_TIMEOUT, type SodaxLogger } from '@sodax/types';
-import { makeRequest, type RequestConfig, type RequestOverrideConfig } from './api-utils.js';
+import {
+  BackendHttpError,
+  isBackendHttpError,
+  makeRequest,
+  type RequestConfig,
+  type RequestOverrideConfig,
+} from './api-utils.js';
 import { silentLogger } from '../shared/logger.js';
 
 // --- fetch stub -----------------------------------------------------------
@@ -78,6 +84,22 @@ describe('makeRequest URL resolution', () => {
     mockFetch.mockResolvedValueOnce(okResponse({}));
     await run('/foo', { method: 'GET' });
     expect(mockFetch).toHaveBeenCalledWith('/foo', expect.any(Object));
+  });
+
+  it.each([
+    [`${BASE}/`, `${BASE}/foo`],
+    [`${BASE}///`, `${BASE}/foo`],
+    [`${BASE}/v1/`, `${BASE}/v1/foo`],
+  ])('trims trailing slashes off %s', async (baseURL, expected) => {
+    mockFetch.mockResolvedValueOnce(okResponse({}));
+    await run('/foo', { method: 'GET', baseURL });
+    expect(mockFetch).toHaveBeenCalledWith(expected, expect.any(Object));
+  });
+
+  it('trims trailing slashes off an override baseURL too', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse({}));
+    await run('/foo', { method: 'GET', baseURL: BASE }, { baseURL: 'https://override.example.com/v1/' });
+    expect(mockFetch).toHaveBeenCalledWith('https://override.example.com/v1/foo', expect.any(Object));
   });
 });
 
@@ -247,5 +269,64 @@ describe('makeRequest error handling', () => {
       }),
     );
     expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('[SwapsApiService]'), expect.any(Error));
+  });
+});
+
+describe('BackendHttpError', () => {
+  it('exposes the status and the parsed body so callers need not regex the cause message', async () => {
+    const body = { statusCode: 409, error: 'SPONSOR_SEQUENCE_CONFLICT', message: 'sequence conflict' };
+    mockFetch.mockResolvedValueOnce(httpErrorResponse(409, JSON.stringify(body)));
+
+    const err = (await caught(run('/foo', { method: 'GET', baseURL: BASE }))) as BackendHttpError;
+
+    expect(err).toBeInstanceOf(BackendHttpError);
+    expect(err.status).toBe(409);
+    expect(err.body).toEqual(body);
+    expect(err.bodyText).toBe(JSON.stringify(body));
+  });
+
+  it('keeps the legacy message and cause chain byte-identical, so existing callers are unaffected', () => {
+    const err = new BackendHttpError(500, 'Internal Server Error');
+    expect(err).toBeInstanceOf(Error);
+    expect(err.message).toBe('HTTP_REQUEST_FAILED');
+    expect((err.cause as Error).message).toBe('HTTP 500: Internal Server Error');
+  });
+
+  it('leaves `body` undefined for a non-JSON payload rather than throwing', () => {
+    const err = new BackendHttpError(502, '<html>Bad Gateway</html>');
+    expect(err.body).toBeUndefined();
+    expect(err.bodyText).toBe('<html>Bad Gateway</html>');
+  });
+
+  it('leaves `body` undefined for an empty payload', () => {
+    expect(new BackendHttpError(204, '').body).toBeUndefined();
+  });
+});
+
+describe('isBackendHttpError', () => {
+  it('recognises a real instance', () => {
+    expect(isBackendHttpError(new BackendHttpError(500, 'boom'))).toBe(true);
+  });
+
+  it('recognises a structurally-identical error from ANOTHER bundled copy of the SDK', () => {
+    class ForeignBackendHttpError extends Error {
+      readonly status = 503;
+      constructor() {
+        super('HTTP_REQUEST_FAILED');
+        this.name = 'BackendHttpError';
+      }
+    }
+    const foreign = new ForeignBackendHttpError();
+    expect(foreign instanceof BackendHttpError).toBe(false);
+    expect(isBackendHttpError(foreign)).toBe(true);
+  });
+
+  it.each([
+    ['a plain Error with the same message', new Error('HTTP_REQUEST_FAILED')],
+    ['a same-named error without a numeric status', Object.assign(new Error('x'), { name: 'BackendHttpError' })],
+    ['a bare object', { name: 'BackendHttpError', status: 500 }],
+    ['null', null],
+  ])('rejects %s', (_label, value) => {
+    expect(isBackendHttpError(value)).toBe(false);
   });
 });

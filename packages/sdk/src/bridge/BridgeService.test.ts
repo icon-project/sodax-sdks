@@ -743,16 +743,16 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
       // same AbortController behavior `makeRequest` applies. Left unclamped it would run for the 30s
       // service default — longer than the reserve — and consume the whole shared deadline, so the
       // poll must hand each request the budget remaining before its cutoff.
-      vi.spyOn(sodaxBE.api.bridge, 'getSubmitTxStatus').mockImplementation(((
-        _query: unknown,
-        config?: { timeout?: number },
-      ) =>
-        new Promise(resolve =>
-          setTimeout(
-            () => resolve({ ok: false, error: new SodaxError('EXTERNAL_API_ERROR', 'timeout', { feature: 'backend' }) }),
-            config?.timeout ?? 30_000,
-          ),
-        )) as never);
+      vi.spyOn(sodaxBE.api.bridge, 'getSubmitTxStatus').mockImplementation(
+        ((_query: unknown, config?: { timeout?: number }) =>
+          new Promise(resolve =>
+            setTimeout(
+              () =>
+                resolve({ ok: false, error: new SodaxError('EXTERNAL_API_ERROR', 'timeout', { feature: 'backend' }) }),
+              config?.timeout ?? 30_000,
+            ),
+          )) as never,
+      );
       let relayCalledAt = Number.POSITIVE_INFINITY;
       mocks.relayTxAndWaitPacket.mockImplementationOnce(async () => {
         relayCalledAt = Date.now();

@@ -33,6 +33,7 @@ Do not hardcode supported chain counts or chain lists in agent guidance. When ex
 | `apps/node-cjs` | CommonJS interop regression harness for `@sodax/sdk` | [`apps/node-cjs/AGENTS.md`](apps/node-cjs/AGENTS.md) |
 | `apps/wallet-modal-example` | Headless wallet-modal reference app for wallet-sdk-react primitives | [`apps/wallet-modal-example/AGENTS.md`](apps/wallet-modal-example/AGENTS.md) |
 | `apps/swap-api-example` | Vite + React reference app driving `@sodax/swaps-api` end to end (wallet SDK for signing) | [`apps/swap-api-example/README.md`](apps/swap-api-example/README.md) |
+| `apps/stellar-sponsor-example` | Vite + React reference app for the Stellar sponsored-activation journey (dapp-kit hooks), plus an offline test lab with a bundled mock backend | [`apps/stellar-sponsor-example/AGENTS.md`](apps/stellar-sponsor-example/AGENTS.md) |
 
 ## Dependency Direction
 
@@ -68,6 +69,14 @@ cd packages/<pkg> && pnpm test
 cd packages/<pkg> && pnpm test:e2e
 cd packages/<pkg> && pnpm coverage
 cd packages/<pkg> && npx vitest run path/to/test.test.ts
+```
+
+To try unreleased `@sodax/*` packages in a project outside this repo, pack them into local
+tarballs — plain `pnpm pack` is not enough, because it rewrites `workspace:*` to a registry
+version. See [`docs/local-package-testing.md`](docs/local-package-testing.md).
+
+```bash
+pnpm pack:local --version 2.0.0-local.1 --packages @sodax/sdk
 ```
 
 ## Repo-Wide Rules
@@ -118,3 +127,5 @@ To author or validate changesets and govern a release (SemVer bumps, changelogs,
 ## CI Shape
 
 GitHub Actions install dependencies with a frozen lockfile, lint, check circular dependencies, build packages, typecheck, validate dev AI files, validate AI consumer docs, validate mirrored doc links, build apps, run smoke checks, and run tests. When changing `packages/skills`, run `pnpm check:ai` locally; when changing a mirrored doc, run `pnpm check:doc-links`.
+
+`pnpm check:sponsoring-contract` is a **manual** gate, deliberately outside CI: it diffs the SDK's hand-authored sponsoring wire types against the backend's OpenAPI document, and CI has no sponsoring service to fetch it from. Run it whenever the sponsoring contract moves on either side, and before a release. See [`packages/sdk/AGENTS.md`](packages/sdk/AGENTS.md) for how to obtain the spec without booting a signer.

@@ -252,7 +252,7 @@ export const SodaTokens = {
     name: 'Soda RBNT',
     decimals: 18,
     address: '0x4B207114F9118dEAC56436e1aE3c45648783c7Ac',
-    chainKey: ChainKeys.REDBELLY_MAINNET,
+    chainKey: ChainKeys.SONIC_MAINNET,
     hubAsset: '0x4B207114F9118dEAC56436e1aE3c45648783c7Ac',
     vault: '0x4B207114F9118dEAC56436e1aE3c45648783c7Ac',
   },

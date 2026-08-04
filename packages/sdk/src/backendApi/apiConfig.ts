@@ -1,44 +1,35 @@
-// Resolution of the `ApiConfig` union into the concrete per-service config used
-// by `BackendApiService` (base/backend API) and `SwapsApiService` (swaps API).
-//
-// `ApiConfig` (from `@sodax/types`) is one of two shapes:
-//   - `BaseApiConfig` — flat `{ baseURL, timeout, headers }`. Both services share it;
-//     the swaps endpoints are reached as `/swaps/*` sub-paths under the same base URL.
-//   - `CustomApiConfig` — `{ baseApiConfig?, swapsApiConfig? }`. Lets each service point
-//     at its own base URL / timeout / headers. Either slice may be omitted.
-//
-// Both resolvers fill any omitted field from the global backend-API defaults and always
-// include the default headers (so a JSON `Content-Type`/`Accept` is present unless
-// explicitly overridden). In custom mode the swaps resolver layers `swapsApiConfig` over
-// `baseApiConfig` over the defaults, so swaps inherits the base config (including any
-// cross-cutting auth/tracing header) for every field `swapsApiConfig` does not override.
-// They also normalise the hybrid objects that `mergeSodaxConfig`'s deep-merge can produce
-// when a `CustomApiConfig` override is layered onto the flat default — the custom slices
-// win and any leftover top-level flat fields (which equal the defaults) are ignored.
-
 import {
   DEFAULT_BACKEND_API_ENDPOINT,
   DEFAULT_BACKEND_API_HEADERS,
   DEFAULT_BACKEND_API_TIMEOUT,
+  DEFAULT_SPONSORING_API_ENDPOINT,
   type ApiConfig,
   type BaseApiConfig,
-  type CustomApiConfig,
+  type HttpUrl,
+  type SponsoringApiConfig,
   type SwapsApiConfig,
 } from '@sodax/types';
+import { trimTrailingSlashes } from './api-utils.js';
 
 /**
- * True when `config` is the nested {@link CustomApiConfig} variant (carries a
- * `baseApiConfig` and/or `swapsApiConfig` slice) rather than a flat {@link BaseApiConfig}.
+ * Runtime shape of a resolved `api` config. `mergeSodaxConfig` deep-merges an override into the flat
+ * default, so per-service slices arrive alongside surviving top-level flat fields. `ApiConfig` is
+ * assignable to this, letting resolution read both without narrowing to one variant.
  */
-export function isCustomApiConfig(config: ApiConfig): config is CustomApiConfig {
-  return 'baseApiConfig' in config || 'swapsApiConfig' in config;
+type LayeredApiConfig = Partial<BaseApiConfig> & {
+  baseApiConfig?: Partial<BaseApiConfig>;
+  swapsApiConfig?: Partial<SwapsApiConfig>;
+  sponsoringApiConfig?: Partial<SponsoringApiConfig>;
+};
+
+/** The top-level flat fields, which layer underneath any per-service slice. */
+function flatLayer({ baseURL, timeout, headers }: LayeredApiConfig): Partial<BaseApiConfig> {
+  return { baseURL, timeout, headers };
 }
 
 /**
- * Layer config slices left→right over the global backend-API defaults (later slices win
- * per field). `baseURL`/`timeout`: the last defined value wins; `headers`: merged across
- * every layer, so a cross-cutting header from an earlier slice (e.g. `baseApiConfig`) is
- * kept unless a later slice overrides that key. The default headers are always present.
+ * Layer slices left to right. Scalar values use the latest definition while
+ * headers merge by key.
  */
 function layerConfigs(...slices: Array<Partial<BaseApiConfig> | undefined>): BaseApiConfig {
   return slices.reduce<BaseApiConfig>(
@@ -58,32 +49,44 @@ function layerConfigs(...slices: Array<Partial<BaseApiConfig> | undefined>): Bas
   );
 }
 
-/**
- * Resolve the effective config for the base (backend) API:
- * - flat {@link BaseApiConfig} → used directly,
- * - {@link CustomApiConfig} → its `baseApiConfig` slice,
- * with omitted fields filled from the defaults.
- */
+/** Resolve base API config with global defaults. */
 export function resolveBaseApiConfig(config: ApiConfig): BaseApiConfig {
-  if (isCustomApiConfig(config)) {
-    return layerConfigs(config.baseApiConfig);
-  }
-  return layerConfigs(config);
+  const layers: LayeredApiConfig = config;
+  return layerConfigs(flatLayer(layers), layers.baseApiConfig);
+}
+
+/** Resolve swaps config over base config and global defaults. */
+export function resolveSwapsApiConfig(config: ApiConfig): SwapsApiConfig {
+  const layers: LayeredApiConfig = config;
+  return layerConfigs(flatLayer(layers), layers.baseApiConfig, layers.swapsApiConfig);
+}
+
+function isHttpUrl(value: string): value is HttpUrl {
+  return value.startsWith('http://') || value.startsWith('https://');
+}
+
+/** Normalize an observable base URL while preserving its `HttpUrl` type. */
+function normalizeBaseURL(baseURL: HttpUrl): HttpUrl {
+  const trimmed = trimTrailingSlashes(baseURL);
+  return isHttpUrl(trimmed) ? trimmed : baseURL;
 }
 
 /**
- * Resolve the effective config for the swaps API:
- * - flat {@link BaseApiConfig} → shared with the base API (swaps endpoints are sub-paths),
- * - {@link CustomApiConfig} → its `swapsApiConfig` slice **layered over `baseApiConfig`** (the
- *   shared foundation): each field falls back swaps → base → default, and headers merge
- *   defaults → base → swaps so a cross-cutting `baseApiConfig` header (auth/tracing) reaches
- *   swaps calls unless `swapsApiConfig` overrides that key.
+ * Resolve the effective config for the sponsoring API.
+ *
+ * Base URL and headers never inherit from the base API because sponsoring uses
+ * a separate origin; inheriting could leak credentials. Timeout may inherit.
+ * Normalize the URL because callers observe it and config caching keys on it.
  */
-export function resolveSwapsApiConfig(config: ApiConfig): SwapsApiConfig {
-  if (isCustomApiConfig(config)) {
-    return layerConfigs(config.baseApiConfig, config.swapsApiConfig);
-  }
-  return layerConfigs(config);
+export function resolveSponsoringApiConfig(config: ApiConfig): SponsoringApiConfig {
+  const layers: LayeredApiConfig = config;
+  const slice = layers.sponsoringApiConfig;
+  return {
+    baseURL: normalizeBaseURL(slice?.baseURL ?? DEFAULT_SPONSORING_API_ENDPOINT),
+    timeout: slice?.timeout ?? resolveBaseApiConfig(config).timeout,
+    headers: { ...DEFAULT_BACKEND_API_HEADERS, ...slice?.headers },
+    ...(slice?.apiKey === undefined ? {} : { apiKey: slice.apiKey }),
+  };
 }
 
 /**

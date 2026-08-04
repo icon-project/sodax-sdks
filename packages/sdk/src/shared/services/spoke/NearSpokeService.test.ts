@@ -17,13 +17,7 @@
  *     receipts) are spied per-test on the live instance.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  ChainKeys,
-  getIntentRelayChainId,
-  spokeChainConfig,
-  type Hex,
-  type INearWalletProvider,
-} from '@sodax/types';
+import { ChainKeys, getIntentRelayChainId, spokeChainConfig, type Hex, type INearWalletProvider } from '@sodax/types';
 
 // --- hoisted mocks --------------------------------------------------------
 
@@ -126,9 +120,7 @@ describe('NearSpokeService.estimateGas', () => {
 
 describe('NearSpokeService.queryContract', () => {
   it('forwards contractId/method/args to rpcProvider.callFunction', async () => {
-    const spy = vi
-      .spyOn(nearSpoke.rpcProvider, 'callFunction')
-      .mockResolvedValueOnce('hello' as never);
+    const spy = vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockResolvedValueOnce('hello' as never);
 
     const result = await nearSpoke.queryContract('asset.near', 'get_x', { id: 1 });
 
@@ -209,10 +201,7 @@ describe('NearSpokeService.fillIntent', () => {
   });
 
   it('non-native → targets the token contract with ft_transfer_call and deposit=1 yoctoNEAR', async () => {
-    const tx = await nearSpoke.fillIntent(
-      { srcAddress: SRC_ADDR, srcChainKey: NEAR },
-      baseFill,
-    );
+    const tx = await nearSpoke.fillIntent({ srcAddress: SRC_ADDR, srcChainKey: NEAR }, baseFill);
 
     expect(tx.params.contractId).toBe(NEAR_BNUSD);
     expect(tx.params.method).toBe('ft_transfer_call');
@@ -245,9 +234,10 @@ describe('NearSpokeService.deposit', () => {
     }) as DepositParams<typeof NEAR, Raw>;
 
   it('native NEAR raw=true → transfer on assetManager with deposit=amount', async () => {
-    const tx = (await nearSpoke.deposit(
-      depositParams<true>({ token: NEAR_NATIVE, raw: true }),
-    )) as { signerId: string; params: { contractId: string; method: string; deposit: bigint; gas: bigint } };
+    const tx = (await nearSpoke.deposit(depositParams<true>({ token: NEAR_NATIVE, raw: true }))) as {
+      signerId: string;
+      params: { contractId: string; method: string; deposit: bigint; gas: bigint };
+    };
 
     expect(tx.signerId).toBe(SRC_ADDR);
     expect(tx.params.contractId).toBe(NEAR_ASSET_MGR);
@@ -257,9 +247,9 @@ describe('NearSpokeService.deposit', () => {
   });
 
   it('non-native raw=true → ft_transfer_call on the token contract with deposit=1 yoctoNEAR', async () => {
-    const tx = (await nearSpoke.deposit(
-      depositParams<true>({ token: NEAR_BNUSD, raw: true }),
-    )) as { params: { contractId: string; method: string; deposit: bigint; args: Record<string, unknown> } };
+    const tx = (await nearSpoke.deposit(depositParams<true>({ token: NEAR_BNUSD, raw: true }))) as {
+      params: { contractId: string; method: string; deposit: bigint; args: Record<string, unknown> };
+    };
 
     expect(tx.params.contractId).toBe(NEAR_BNUSD);
     expect(tx.params.method).toBe('ft_transfer_call');
@@ -320,9 +310,9 @@ describe('NearSpokeService.getDeposit', () => {
   it('throws when callFunction returns a non-string (defensive type check)', async () => {
     vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockResolvedValueOnce(123 as never);
 
-    await expect(
-      nearSpoke.getDeposit({ srcChainKey: NEAR, srcAddress: SRC_ADDR, token: NEAR_BNUSD }),
-    ).rejects.toThrow('Failed to get balance');
+    await expect(nearSpoke.getDeposit({ srcChainKey: NEAR, srcAddress: SRC_ADDR, token: NEAR_BNUSD })).rejects.toThrow(
+      'Failed to get balance',
+    );
   });
 });
 

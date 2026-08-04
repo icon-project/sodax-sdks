@@ -14,6 +14,7 @@ One file per feature service. Each file documents the v2 API surface, common cal
 | [`partner.md`](partner.md) | `PartnerService` | Partner-fee handling: token approval, auto-swap preferences, fee-claim flows. |
 | [`recovery.md`](recovery.md) | `RecoveryService` | Withdraw stuck hub-wallet assets back to a spoke chain. |
 | [`backend-api.md`](backend-api.md) | `BackendApiService` | HTTP client for backend services: swap-tx submission, intent / orderbook lookups, money-market reads. |
+| [`sponsoring.md`](sponsoring.md) | `SponsoringService` | Stellar account activation via sponsored reserves. The sponsor pays the base reserve; the user's wallet signs. |
 | [`swaps-api.md`](swaps-api.md) | `SwapsApiService` | Typed HTTP client for the backend Swaps API v2 (`sodax.api.swaps`, `/swaps/*`). Quote, create-intent, submit-tx + status, fees. |
 | [`bridge-api.md`](bridge-api.md) | `BridgeApiService` | Typed HTTP client for the backend Bridge API v2 (`sodax.api.bridge`, `/bridge/*`). Allowance/approve/create-intent, submit-tx + status, tokens. |
 

@@ -1,11 +1,6 @@
 /**
- * Unit tests for the `ApiConfig` union resolvers (`apiConfig.ts`).
- *
- * Exhaustively covers how each `ApiConfig` variant is reduced to a concrete
- * per-service config:
- *   - flat `BaseApiConfig` (full / partial / empty),
- *   - `CustomApiConfig` (both slices / base only / swaps only / partial slices),
- * plus the default-header merge and the swaps→base fallback.
+ * Tests flat and per-service API config resolution, including sponsoring's
+ * independent origin and credential scope.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -15,9 +10,9 @@ import {
   type ApiConfig,
 } from '@sodax/types';
 import {
-  isCustomApiConfig,
   resolveBaseApiConfig,
   resolveBridgeApiConfig,
+  resolveSponsoringApiConfig,
   resolveSwapsApiConfig,
 } from './apiConfig.js';
 
@@ -25,28 +20,6 @@ import {
 // `ApiConfig` type would reject but that arise at runtime via `DeepPartial` overrides.
 const asConfig = (c: unknown): ApiConfig => c as ApiConfig;
 const D = DEFAULT_BACKEND_API_HEADERS;
-
-describe('isCustomApiConfig', () => {
-  it('is false for a flat BaseApiConfig', () => {
-    expect(isCustomApiConfig(asConfig({ baseURL: 'https://x.example', timeout: 1, headers: {} }))).toBe(false);
-  });
-
-  it('is false for an empty object (treated as flat)', () => {
-    expect(isCustomApiConfig(asConfig({}))).toBe(false);
-  });
-
-  it('is true when baseApiConfig is present', () => {
-    expect(
-      isCustomApiConfig(asConfig({ baseApiConfig: { baseURL: 'https://b.example', timeout: 1, headers: {} } })),
-    ).toBe(true);
-  });
-
-  it('is true when swapsApiConfig is present', () => {
-    expect(
-      isCustomApiConfig(asConfig({ swapsApiConfig: { baseURL: 'https://s.example', timeout: 1, headers: {} } })),
-    ).toBe(true);
-  });
-});
 
 describe('resolveBaseApiConfig', () => {
   it('returns a full flat config, merging default headers underneath', () => {
@@ -94,6 +67,32 @@ describe('resolveBaseApiConfig', () => {
       timeout: DEFAULT_BACKEND_API_TIMEOUT,
       headers: { ...D },
     });
+  });
+
+  // A merged config carries the flat fields it started with alongside any slice the consumer added.
+  it('keeps top-level flat fields when a slice is present (post-merge shape)', () => {
+    const resolved = resolveBaseApiConfig(
+      asConfig({
+        baseURL: 'https://flat.example',
+        timeout: 11,
+        headers: { 'X-A': '1' },
+        sponsoringApiConfig: { apiKey: 'k' },
+      }),
+    );
+    expect(resolved).toEqual({ baseURL: 'https://flat.example', timeout: 11, headers: { ...D, 'X-A': '1' } });
+  });
+
+  it('lets baseApiConfig override the top-level flat fields it defines', () => {
+    const resolved = resolveBaseApiConfig(
+      asConfig({
+        baseURL: 'https://flat.example',
+        timeout: 11,
+        headers: { 'X-Flat': '1' },
+        baseApiConfig: { baseURL: 'https://base.example' },
+      }),
+    );
+    // slice wins on baseURL; the flat layer still supplies what the slice omits
+    expect(resolved).toEqual({ baseURL: 'https://base.example', timeout: 11, headers: { ...D, 'X-Flat': '1' } });
   });
 });
 
@@ -161,6 +160,107 @@ describe('resolveSwapsApiConfig', () => {
       timeout: DEFAULT_BACKEND_API_TIMEOUT,
       headers: { ...D },
     });
+  });
+
+  it('inherits top-level flat fields the swaps slice omits (post-merge shape)', () => {
+    const resolved = resolveSwapsApiConfig(
+      asConfig({
+        baseURL: 'https://flat.example',
+        timeout: 11,
+        headers: { Authorization: 'tok' },
+        swapsApiConfig: { headers: { 'X-S': '1' } },
+      }),
+    );
+    expect(resolved).toEqual({
+      baseURL: 'https://flat.example',
+      timeout: 11,
+      headers: { ...D, Authorization: 'tok', 'X-S': '1' },
+    });
+  });
+});
+
+describe('resolveSponsoringApiConfig', () => {
+  const SPONSORING_DEFAULT = 'https://api.sodax.com/v1';
+
+  it('defaults to the sponsoring endpoint when no slice is given', () => {
+    expect(resolveSponsoringApiConfig(asConfig({}))).toEqual({
+      baseURL: SPONSORING_DEFAULT,
+      timeout: DEFAULT_BACKEND_API_TIMEOUT,
+      headers: { ...D },
+    });
+  });
+
+  it('NEVER inherits baseURL from the base API — sponsoring is routed to its own host', () => {
+    for (const config of [
+      asConfig({ baseURL: 'https://backend.mydapp.com/sodax' }),
+      asConfig({ baseApiConfig: { baseURL: 'https://backend.mydapp.com/sodax' } }),
+      // post-merge shape: flat fields surviving beside the sponsoring slice
+      asConfig({ baseURL: 'https://backend.mydapp.com/sodax', sponsoringApiConfig: { apiKey: 'k' } }),
+    ]) {
+      expect(resolveSponsoringApiConfig(config).baseURL).toBe(SPONSORING_DEFAULT);
+    }
+  });
+
+  it('NEVER inherits headers from the base API — a credential is scoped to its origin', () => {
+    const withAuth = { headers: { Authorization: 'Bearer USER_JWT' } };
+    for (const config of [
+      asConfig({ baseURL: 'https://backend.mydapp.com/sodax', ...withAuth }),
+      asConfig({ baseApiConfig: { baseURL: 'https://backend.mydapp.com/sodax', ...withAuth } }),
+      asConfig({ baseURL: 'https://backend.mydapp.com/sodax', ...withAuth, sponsoringApiConfig: { apiKey: 'k' } }),
+    ]) {
+      expect(resolveSponsoringApiConfig(config).headers).toEqual({ ...D });
+      expect(resolveSponsoringApiConfig(config).headers).not.toHaveProperty('Authorization');
+    }
+  });
+
+  it('DOES inherit timeout — it carries no credential and is origin-agnostic', () => {
+    expect(resolveSponsoringApiConfig(asConfig({ baseApiConfig: { timeout: 1234 } })).timeout).toBe(1234);
+    expect(resolveSponsoringApiConfig(asConfig({ timeout: 4321 })).timeout).toBe(4321);
+    // post-merge shape: the flat timeout is still the one to inherit
+    expect(resolveSponsoringApiConfig(asConfig({ timeout: 4321, sponsoringApiConfig: {} })).timeout).toBe(4321);
+  });
+
+  it('takes baseURL, timeout and headers from its own slice, which the caller chose for this host', () => {
+    expect(
+      resolveSponsoringApiConfig(
+        asConfig({
+          baseApiConfig: { baseURL: 'https://backend.mydapp.com', timeout: 1000, headers: { Authorization: 'leak' } },
+          sponsoringApiConfig: { baseURL: 'http://localhost:3011', timeout: 5000, headers: { 'x-trace': 'abc' } },
+        }),
+      ),
+    ).toEqual({
+      baseURL: 'http://localhost:3011',
+      timeout: 5000,
+      headers: { ...D, 'x-trace': 'abc' },
+    });
+  });
+
+  it('carries apiKey through, and omits the key entirely when unset', () => {
+    expect(resolveSponsoringApiConfig(asConfig({ sponsoringApiConfig: { apiKey: 'k' } })).apiKey).toBe('k');
+    expect(
+      resolveSponsoringApiConfig(asConfig({ sponsoringApiConfig: { baseURL: 'https://x.example' } })),
+    ).not.toHaveProperty('apiKey');
+  });
+
+  it('leaves base and swaps on the defaults for a sponsoring-only config', () => {
+    const config = asConfig({ sponsoringApiConfig: { apiKey: 'k' } });
+    const expected = {
+      baseURL: DEFAULT_BACKEND_API_ENDPOINT,
+      timeout: DEFAULT_BACKEND_API_TIMEOUT,
+      headers: { ...D },
+    };
+    expect(resolveBaseApiConfig(config)).toEqual(expected);
+    expect(resolveSwapsApiConfig(config)).toEqual(expected);
+  });
+
+  it.each([
+    ['a trailing slash', 'https://api.sodax.com/v1/', 'https://api.sodax.com/v1'],
+    ['several trailing slashes', 'http://localhost:3011///', 'http://localhost:3011'],
+    ['no trailing slash (unchanged)', 'http://localhost:3011', 'http://localhost:3011'],
+  ])('normalizes %s on the resolved baseURL', (_label, configured, expected) => {
+    expect(resolveSponsoringApiConfig(asConfig({ sponsoringApiConfig: { baseURL: configured } })).baseURL).toBe(
+      expected,
+    );
   });
 });
 

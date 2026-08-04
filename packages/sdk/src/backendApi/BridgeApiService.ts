@@ -307,11 +307,13 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
    *
    * @returns `Result<BridgeFeeResponseV2>` — `{ fee }` (decimal string).
    */
-  public async getFee(
-    body: BridgeFeeRequestV2,
-    config?: RequestOverrideConfig,
-  ): Promise<Result<BridgeFeeResponseV2>> {
-    return this.request('/bridge/fee', { method: 'POST', body: toJsonBody(body) }, schemas.BridgeFeeResponseSchema, config);
+  public async getFee(body: BridgeFeeRequestV2, config?: RequestOverrideConfig): Promise<Result<BridgeFeeResponseV2>> {
+    return this.request(
+      '/bridge/fee',
+      { method: 'POST', body: toJsonBody(body) },
+      schemas.BridgeFeeResponseSchema,
+      config,
+    );
   }
 
   /**

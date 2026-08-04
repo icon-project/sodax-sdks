@@ -1,4 +1,6 @@
 import { DEFAULT_BACKEND_API_TIMEOUT, type SodaxLogger } from '@sodax/types';
+import type { SodaxErrorContext, SodaxFeature } from '../errors/codes.js';
+import { SodaxError } from '../errors/SodaxError.js';
 
 /**
  * Shape used to type certain backend responses that include a `data` envelope.
@@ -32,6 +34,53 @@ export type RequestOverrideConfig = {
   headers?: Record<string, string>;
 };
 
+/**
+ * Non-2xx failure with structured status and body. The legacy
+ * `HTTP_REQUEST_FAILED` message and cause chain are preserved.
+ */
+export class BackendHttpError extends Error {
+  readonly status: number;
+  readonly bodyText: string;
+  /** Parsed JSON, or `undefined` for empty or malformed bodies. */
+  readonly body: unknown;
+
+  constructor(status: number, bodyText: string) {
+    super('HTTP_REQUEST_FAILED', { cause: new Error(`HTTP ${status}: ${bodyText}`) });
+    this.name = 'BackendHttpError';
+    this.status = status;
+    this.bodyText = bodyText;
+    this.body = safeJsonParse(bodyText);
+  }
+}
+
+/** Bundle-safe guard that tolerates duplicate SDK copies. */
+export function isBackendHttpError(error: unknown): error is BackendHttpError {
+  if (error instanceof BackendHttpError) return true;
+  return (
+    error instanceof Error &&
+    error.name === 'BackendHttpError' &&
+    typeof (error as { status?: unknown }).status === 'number'
+  );
+}
+
+function safeJsonParse(text: string): unknown {
+  if (text.length === 0) return undefined;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Normalize base URLs before appending slash-prefixed endpoints.
+ */
+export function trimTrailingSlashes(baseURL: string): string {
+  let end = baseURL.length;
+  while (end > 0 && baseURL[end - 1] === '/') end -= 1;
+  return baseURL.slice(0, end);
+}
+
 export type MakeRequestParams = {
   endpoint: string;
   config: RequestConfig;
@@ -59,7 +108,7 @@ export const toJsonBody = (value: unknown): string =>
  * non-2xx status codes or when the request exceeds the timeout, so callers
  * should use {@link request} instead of calling this directly.
  *
- * @throws `Error('HTTP_REQUEST_FAILED')` on non-2xx responses.
+ * @throws {@link BackendHttpError} (message `'HTTP_REQUEST_FAILED'`) on non-2xx responses.
  * @throws `Error('REQUEST_TIMEOUT')` when the request exceeds the timeout.
  * @throws `Error('UNKNOWN_REQUEST_ERROR')` for any other unexpected failure.
  */
@@ -68,7 +117,7 @@ export async function makeRequest<T>(params: MakeRequestParams): Promise<T> {
   // Truthy (not nullish) fallback mirrors the original behavior: an empty-string
   // baseURL is treated as "not provided" and falls back to the service default.
   const baseURL = overrideConfig.baseURL || config.baseURL || '';
-  const url = `${baseURL}${endpoint}`;
+  const url = `${trimTrailingSlashes(baseURL)}${endpoint}`;
   // Per-call override headers take precedence over the service defaults.
   const headers = { ...config.headers, ...overrideConfig.headers };
 
@@ -89,7 +138,7 @@ export async function makeRequest<T>(params: MakeRequestParams): Promise<T> {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error('HTTP_REQUEST_FAILED', { cause: new Error(`HTTP ${response.status}: ${errorText}`) });
+      throw new BackendHttpError(response.status, errorText);
     }
 
     const data = await response.json();
@@ -108,4 +157,52 @@ export async function makeRequest<T>(params: MakeRequestParams): Promise<T> {
     logger.error(`[${serviceLabel}] Unknown error`, error);
     throw new Error('UNKNOWN_REQUEST_ERROR', { cause: error });
   }
+}
+
+/**
+ * Apply per-call config over service defaults. Headers merge with the override
+ * winning; an empty base URL falls back to the default.
+ */
+export function resolveRequestConfig(
+  config: RequestConfig,
+  defaults: { baseURL: string; timeout: number; headers: Record<string, string> },
+): RequestConfig {
+  const { baseURL, timeout, headers, ...rest } = config;
+  return {
+    ...rest,
+    baseURL: baseURL || defaults.baseURL,
+    timeout: timeout ?? defaults.timeout,
+    headers: { ...defaults.headers, ...headers },
+  };
+}
+
+/** Preserve a transport failure and lift its HTTP status into error context. */
+export function toExternalApiError(params: {
+  api: NonNullable<SodaxErrorContext['api']>;
+  feature: SodaxFeature;
+  endpoint: string;
+  error: unknown;
+}): SodaxError<'EXTERNAL_API_ERROR'> {
+  const { api, feature, endpoint, error } = params;
+  const context: SodaxErrorContext = { api, endpoint };
+  if (isBackendHttpError(error)) context.status = error.status;
+  return new SodaxError(
+    'EXTERNAL_API_ERROR',
+    error instanceof Error ? error.message : `Request to ${endpoint} failed`,
+    { feature, cause: error, context },
+  );
+}
+
+/** Report response-contract drift without a transport `cause`. */
+export function toInvalidResponseShapeError(params: {
+  api: NonNullable<SodaxErrorContext['api']>;
+  feature: SodaxFeature;
+  endpoint: string;
+  issues: unknown;
+}): SodaxError<'EXTERNAL_API_ERROR'> {
+  const { api, feature, endpoint, issues } = params;
+  return new SodaxError('EXTERNAL_API_ERROR', `Invalid response shape from ${api} API for ${endpoint}`, {
+    feature,
+    context: { api, endpoint, reason: 'invalid_response_shape', issues },
+  });
 }

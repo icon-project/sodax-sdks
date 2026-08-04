@@ -27,8 +27,7 @@ describe('e2e', () => {
     vault: string;
   };
 
-  const toMmTokenSyncKey = (chain: SpokeChainKey, address: string): string =>
-    `${chain}|${address.toLowerCase()}`;
+  const toMmTokenSyncKey = (chain: SpokeChainKey, address: string): string => `${chain}|${address.toLowerCase()}`;
 
   // Hub-side debt / bridge-only tokens that share MM vaults but are not money-market spoke assets.
   const mmTokenSyncExcludedFromTypes = new Set<string>([
@@ -199,15 +198,10 @@ describe('e2e', () => {
 
   it('Verify solver-compatible assets resolve to original spoke addresses', async () => {
     for (const [spokeChain, assets] of Object.entries(solverCompatibleAssets)) {
-      const supportedTokens = Object.values(
-        sodax.config.spokeChainConfig[spokeChain as SpokeChainKey].supportedTokens,
-      );
+      const supportedTokens = Object.values(sodax.config.spokeChainConfig[spokeChain as SpokeChainKey].supportedTokens);
       for (const asset of assets) {
         const match = supportedTokens.find(t => t.hubAsset.toLowerCase() === asset.toLowerCase());
-        expect(
-          match,
-          `${spokeChain}: hub asset ${asset} not found in spoke supportedTokens`,
-        ).toBeDefined();
+        expect(match, `${spokeChain}: hub asset ${asset} not found in spoke supportedTokens`).toBeDefined();
       }
     }
   });
@@ -228,9 +222,7 @@ describe('e2e', () => {
   };
 
   const formatSupportedTokenAccessor = (tokenKey: string): string =>
-    /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(tokenKey)
-      ? `.supportedTokens.${tokenKey}`
-      : `.supportedTokens['${tokenKey}']`;
+    /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(tokenKey) ? `.supportedTokens.${tokenKey}` : `.supportedTokens['${tokenKey}']`;
 
   const formatMoneyMarketSupportedTokenEntry = (spokeChain: SpokeChainKey, tokenKey: string): string =>
     `spokeChainConfig[ChainKeys.${getChainKeysConstantName(spokeChain)}]${formatSupportedTokenAccessor(tokenKey)},`;
@@ -269,25 +261,19 @@ describe('e2e', () => {
       return label;
     }
 
-    const details = mismatches
-      .map(m => `${m.chain} ${m.symbol} (${m.address}, vault=${m.vault})`)
-      .join(' | ');
+    const details = mismatches.map(m => `${m.chain} ${m.symbol} (${m.address}, vault=${m.vault})`).join(' | ');
 
     return `${label}: ${details}`;
   };
 
   it('Verify moneyMarketSupportedTokens is synced with on-chain reserves', async () => {
-    const reservesSet = new Set(
-      (await sodax.moneyMarket.data.getReservesList()).map(address => address.toLowerCase()),
-    );
+    const reservesSet = new Set((await sodax.moneyMarket.data.getReservesList()).map(address => address.toLowerCase()));
 
     const missingFromTypes: MmTokenSyncMismatch[] = [];
     const staleInTypes: MmTokenSyncMismatch[] = [];
 
     for (const spokeChain of sodax.config.getSupportedSpokeChains()) {
-      const mmAddresses = new Set(
-        moneyMarketSupportedTokens[spokeChain].map(token => token.address.toLowerCase()),
-      );
+      const mmAddresses = new Set(moneyMarketSupportedTokens[spokeChain].map(token => token.address.toLowerCase()));
 
       for (const token of Object.values(sodax.config.spokeChainConfig[spokeChain].supportedTokens)) {
         if (!reservesSet.has(token.vault.toLowerCase())) {
@@ -333,11 +319,17 @@ describe('e2e', () => {
 
     expect(
       missingFromTypes,
-      formatMmTokenSyncMismatches('reserve-backed spoke tokens missing from moneyMarketSupportedTokens', missingFromTypes),
+      formatMmTokenSyncMismatches(
+        'reserve-backed spoke tokens missing from moneyMarketSupportedTokens',
+        missingFromTypes,
+      ),
     ).toEqual([]);
     expect(
       staleInTypes,
-      formatMmTokenSyncMismatches('moneyMarketSupportedTokens entries with vault not in on-chain reserves', staleInTypes),
+      formatMmTokenSyncMismatches(
+        'moneyMarketSupportedTokens entries with vault not in on-chain reserves',
+        staleInTypes,
+      ),
     ).toEqual([]);
   }, 100_000);
 });

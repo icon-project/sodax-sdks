@@ -251,7 +251,9 @@ Typed React Query wrappers over the backend Bridge API v2 (`sodax.api.bridge.*`)
 | `useGetUserHubWalletAddress` | Query | Derive hub wallet (wallet router) |
 | `useEstimateGas` | Mutation | Estimate gas for raw tx |
 | `useStellarTrustlineCheck` | Query | Check Stellar trustline |
-| `useRequestTrustline` | Mutation | Request a Stellar trustline |
+| `useEstablishTrustline` | Mutation | Request a Stellar trustline (the account pays — needs XLM) |
+| `useRequestTrustline` | Deprecated | 2.0.0-shape wrapper over `useEstablishTrustline`; removed next major |
+| `useStellarGate` | Composite | Sequences the Stellar prerequisites: exists → trustline → can afford; `checkFailed`/`error`/`retry` for a failed check |
 | `useNearStorageCheck` | Query | Check NEP-141 storage registration (NEAR) |
 | `useRegisterNearStorage` | Mutation | Submit NEP-141 `storage_deposit` (NEAR) |
 | `useNearStorageGate` | Hook | Composite NEAR receive-side storage gate |
@@ -259,6 +261,18 @@ Typed React Query wrappers over the backend Bridge API v2 (`sodax.api.bridge.*`)
 | `useSafeMutation` | Internal | The wrapper every mutation hook calls |
 | `unwrapResult` | Internal | `Result<T>` → throw / return |
 | `toResult` | Internal | `Promise<T>` → `Result<T>` |
+
+## Sponsoring (`sponsoring/`)
+
+Stellar accounts must exist on-chain before they can hold or receive anything, and a new user holds 0 XLM.
+These hooks drive the sponsored-reserve activation flow, where the SODAX sponsor pays the base reserve.
+
+| Hook | Kind | Purpose |
+| --- | --- | --- |
+| `useStellarAccountActive` | Query | Whether a Stellar account already exists on-chain |
+| `useStellarAccountStatus` | Query | Existence + `canAffordTrustline` + `trustlineMinXlmStroops`, from one Horizon account read |
+| `useSponsorConfig` | Query | Sponsor account, network, fee band, max time bounds |
+| `useActivateStellarAccount` | Mutation | Activate a Stellar account via the sponsor |
 
 ## Cross-references
 

@@ -640,7 +640,8 @@ export class BridgeService {
         const hubAmount = this.config.isSodaVaultHubAsset(srcToken.hubAsset)
           ? params.amount
           : EvmVaultTokenService.translateIncomingDecimals(srcToken.decimals, params.amount);
-        const hubDelivered = hubAmount - calculateFeeAmount(hubAmount, extras?.partnerFee ?? this.config.bridgePartnerFee);
+        const hubDelivered =
+          hubAmount - calculateFeeAmount(hubAmount, extras?.partnerFee ?? this.config.bridgePartnerFee);
         const delivered = this.config.isSodaVaultHubAsset(dstToken.hubAsset)
           ? hubDelivered
           : EvmVaultTokenService.translateOutgoingDecimals(dstToken.decimals, hubDelivered);
@@ -685,7 +686,12 @@ export class BridgeService {
         skipSimulation || (isBitcoinChainKeyType(params.srcChainKey) && this.spoke.bitcoin.walletMode === 'USER');
 
       // Per-action `extras.partnerFee` wins over the config-level `bridgePartnerFee` (undefined = no fee).
-      const data: Hex = this.buildBridgeData(params, srcToken, dstToken, extras?.partnerFee ?? this.config.bridgePartnerFee);
+      const data: Hex = this.buildBridgeData(
+        params,
+        srcToken,
+        dstToken,
+        extras?.partnerFee ?? this.config.bridgePartnerFee,
+      );
 
       const coreParams = {
         srcChainKey: params.srcChainKey,
