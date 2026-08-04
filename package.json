@@ -10,7 +10,7 @@
     "build": "turbo run build --filter=!./apps/node",
     "build:packages": "turbo run build:packages",
     "dev": "turbo run dev",
-    "dev:demo": "turbo run dev --filter=demo",
+    "dev:demo": "turbo run dev --filter=./apps/demo",
     "mock-intake:demo": "pnpm --filter=./apps/demo mock-intake",
     "pretty": "turbo run pretty --filter=!./apps/node",
     "lint": "turbo run lint --filter=!./apps/node",
