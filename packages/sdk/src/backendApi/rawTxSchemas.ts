@@ -15,9 +15,9 @@
 //
 // `rawTxSchemaForChainKey` selects the precise variant schema from the request's
 // source chain key (every tx-returning endpoint carries one). This is required
-// because EVM / Solana / Sui / Stellar are wire-identical (`{ from, to, value,
-// data }`) and Icon's loose-dict shape structurally matches everything — a blind
-// `v.union` could not tell them apart.
+// because EVM / Solana / Sui / Stellar / Bitcoin are wire-identical (`{ from, to,
+// value, data }`) and Icon's loose-dict shape structurally matches everything — a
+// blind `v.union` could not tell them apart.
 //
 // Branded scalars (`Address`/`Hex`) and the opaque NEAR `args` union are typed
 // via `v.custom<T>` (mirrors `backendApiSchemas.ts`) so each schema's inferred
@@ -77,6 +77,20 @@ export const StellarRawTxSchema = v.object({
   data: v.string(),
 });
 
+/**
+ * `BitcoinRawTransaction` — the Bound-built deposit: `data` is the base64 PSBT, `from` the (trading)
+ * wallet address, and `value` the output amount in satoshis as a decimal string → `bigint`. Declared
+ * separately from the wire-identical Solana/Stellar schemas so the chain dispatch stays explicit; without
+ * this branch Bitcoin fell through to {@link AnyRawTxSchema} and `value` stayed a string while
+ * `BitcoinRawTransaction.value` is typed `bigint`.
+ */
+export const BitcoinRawTxSchema = v.object({
+  from: v.string(),
+  to: v.string(),
+  value: BigintFromString,
+  data: v.string(),
+});
+
 /** `InjectiveRawTransaction` — nested `signedDoc` with `Uint8Array` bytes + `bigint` account number. */
 export const InjectiveRawTxSchema = v.object({
   from: HexSchema,
@@ -114,9 +128,10 @@ export const StacksRawTxSchema = v.object({
 });
 
 /**
- * Permissive fallback for chains with no `RawTxReturnType` variant (Bitcoin) or an
- * unrecognised key: validates "is a non-null object", typed as `RawTxReturnType` so
- * the tx-bearing response factories compose cleanly.
+ * Permissive fallback for an unrecognised chain key: validates "is a non-null object", typed as
+ * `RawTxReturnType` so the tx-bearing response factories compose cleanly. Every chain type the SDK
+ * knows has its own branch below, so reaching this means the key is unmapped — no numeric field is
+ * transformed here, so a caller would see the backend's decimal strings verbatim.
  */
 const AnyRawTxSchema = v.custom<RawTxReturnType>(input => typeof input === 'object' && input !== null);
 
@@ -151,6 +166,8 @@ export function rawTxSchemaForChainKey(chainKey: string): v.GenericSchema<unknow
       return StacksRawTxSchema;
     case 'NEAR':
       return NearRawTxSchema;
+    case 'BITCOIN':
+      return BitcoinRawTxSchema;
     default:
       return AnyRawTxSchema;
   }

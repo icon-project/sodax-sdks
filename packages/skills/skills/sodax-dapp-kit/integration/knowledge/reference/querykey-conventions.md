@@ -189,6 +189,7 @@ Typed wrappers over `sodax.api.bridge.*` (one per Bridge API v2 endpoint), all k
 | Key | Hook |
 |---|---|
 | `['bridgeApi', 'tokens']` | `useBridgeApiTokens` |
+| `['bridgeApi', 'tokens', chainKey]` | `useBridgeApiTokensByChain` |
 | `['bridgeApi', 'allowance', …]` | `useBridgeApiAllowance` |
 | `['bridgeApi', 'fee', inputAmount, partnerFee]` | `useBridgeApiFee` |
 | `['bridgeApi', 'bridgeableAmount', srcChainKey, dstChainKey, inputToken, outputToken]` | `useBridgeApiBridgeableAmount` |

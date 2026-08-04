@@ -10,3 +10,4 @@ export * from './useBridgeApiIsBridgeable.js'; // query (pair bridgeable?)
 export * from './useBridgeApiSubmitTx.js'; // mutation
 export * from './useBridgeApiSubmitTxStatus.js'; // query (poll)
 export * from './useBridgeApiTokens.js'; // query (backend-served token list)
+export * from './useBridgeApiTokensByChain.js'; // query (backend-served token list for one chain)

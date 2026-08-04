@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as v from 'valibot';
+import { ChainKeys, type BitcoinRawTransaction } from '@sodax/types';
 import {
   EvmRawTxSchema,
   IconRawTxSchema,
@@ -153,6 +154,32 @@ describe('rawTxSchemaForChainKey — chain-key-driven selection', () => {
     const nearBody = { signerId: 'a.near', params: { contractId: 'c', method: 'm', args: {} } };
     expect(v.safeParse(rawTxSchemaForChainKey('0xa4b1.arbitrum'), nearBody).success).toBe(false);
     expect(v.safeParse(rawTxSchemaForChainKey('near'), nearBody).success).toBe(true);
+  });
+
+  // Regression: Bitcoin resolves to chain type BITCOIN, which had no `case` and therefore fell through
+  // to the permissive object-only fallback — leaving `value` a decimal string at runtime while
+  // `BitcoinRawTransaction.value` is declared `bigint`. Both tx-returning Bridge API methods
+  // (`approve`, `createBridgeIntent`) pick their schema from `srcChainKey`, so a Bitcoin-sourced bridge
+  // handed the caller an unconverted `value`.
+  it('selects the Bitcoin schema for a Bitcoin chain key (satoshi value → bigint)', () => {
+    const out = v.parse(rawTxSchemaForChainKey(ChainKeys.BITCOIN_MAINNET), {
+      from: 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
+      to: 'bc1qassetmanager',
+      value: '546',
+      data: 'cHNidP8BAP0=',
+    }) as BitcoinRawTransaction;
+    expect(out.value).toBe(546n);
+    expect(typeof out.value).toBe('bigint');
+    // The PSBT and addresses are opaque strings — they must survive untouched.
+    expect(out.data).toBe('cHNidP8BAP0=');
+    expect(out.from).toBe('bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4');
+  });
+
+  it('rejects a Bitcoin body with a non-numeric value instead of passing it through', () => {
+    const schema = rawTxSchemaForChainKey(ChainKeys.BITCOIN_MAINNET);
+    expect(v.safeParse(schema, { from: 'bc1q', to: 'bc1q', value: 'not-a-number', data: 'psbt' }).success).toBe(false);
+    // Pre-fix this shape parsed cleanly, since the fallback only checked "is a non-null object".
+    expect(v.safeParse(schema, { unexpected: 'shape' }).success).toBe(false);
   });
 
   it('falls back to a permissive object schema for an unmapped key (never throws)', () => {

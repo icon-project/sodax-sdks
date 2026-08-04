@@ -25,21 +25,25 @@ export type BackendSubmitTxPollResult<TValue> = { ok: true; value: TValue } | { 
  * relay. Reserves up to a third of the remaining shared budget (capped at 20s) for that fallback, so a
  * stalled backend can't consume the whole `deadline` before the fallback gets a turn. Never throws.
  *
- * The sleep never runs past that cutoff, and neither does a request whose caller forwards the
- * `getStatus` override. Without that override the service-level request timeout (30s default)
- * outlives the reserve, so one stalled status request overruns both the reserve and the caller's
- * `timeout` ceiling before the loop condition is re-checked again.
+ * The sleep never runs past that cutoff, and neither does a request when the caller supplies
+ * `requestTimeoutMs`: the per-call override is `min(budget left before the cutoff, requestTimeoutMs)`.
+ * Clamping matters in BOTH directions — `makeRequest` resolves `overrideConfig.timeout ?? config.timeout`,
+ * so an override is the effective timeout outright. Passing the raw remainder would RAISE the bound
+ * whenever it exceeds the service default (100s vs 30s on a default 120s bridge budget), letting one
+ * stalled request burn the whole poll window on a single attempt instead of retrying.
  *
  * @param deadline - Absolute `Date.now()`-based ms timestamp shared with the client-side fallback.
  * @param terminalStatus - The feature's terminal-success status literal (`'solved'` for swaps,
  *   `'executed'` for bridge); `onExecuted` runs only once the status reaches it.
  * @param getStatus - Fetches one status snapshot (e.g. `backendApi.<feature>.getSubmitTxStatus`).
- *   Receives a per-call override carrying the budget left before the cutoff; forward it to bound the
- *   request by that budget. Bridge forwards it because `fallbackBridgeSteps` has no relay floor to
- *   absorb an overrun; swaps keeps the service default, its floor covers the stalled case.
+ *   Receives the clamped per-call override when `requestTimeoutMs` is set, else no override at all.
  * @param onExecuted - Builds the success value from a terminal-status result; returns `undefined` when
  *   the result is not yet complete so polling continues.
  * @param intervalMs - Poll interval in ms (default 1000).
+ * @param requestTimeoutMs - The service's own effective request timeout (e.g.
+ *   `backendApi.bridge.getTimeout()`). Supply it to bound each request by the poll cutoff without ever
+ *   exceeding the service default; omit it to leave every request on the service default. Bridge
+ *   supplies it so a stalled request cannot eat the fallback's reserve.
  */
 export async function pollBackendSubmitTx<TResult, TValue>({
   deadline,
@@ -47,17 +51,23 @@ export async function pollBackendSubmitTx<TResult, TValue>({
   getStatus,
   onExecuted,
   intervalMs = 1_000,
+  requestTimeoutMs,
 }: {
   deadline: number;
   terminalStatus: string;
   getStatus: (override?: RequestOverrideConfig) => Promise<Result<{ data: BackendSubmitTxStatusEnvelope<TResult> }>>;
   onExecuted: (result: TResult | undefined) => TValue | undefined;
   intervalMs?: number;
+  requestTimeoutMs?: number;
 }): Promise<BackendSubmitTxPollResult<TValue>> {
   const reserveMs = Math.min(Math.ceil((deadline - Date.now()) / 3), 20_000);
   const pollDeadline = deadline - reserveMs;
+  // Clamped per-call override, or none when the caller opted out — see `requestTimeoutMs`.
+  const requestOverride = (): RequestOverrideConfig | undefined =>
+    requestTimeoutMs === undefined ? undefined : { timeout: Math.min(pollDeadline - Date.now(), requestTimeoutMs) };
+
   while (Date.now() < pollDeadline) {
-    const statusResult = await getStatus({ timeout: pollDeadline - Date.now() });
+    const statusResult = await getStatus(requestOverride());
     if (statusResult.ok) {
       const { status, result, failureReason, abandonedAt } = statusResult.value.data;
       if (status === terminalStatus) {

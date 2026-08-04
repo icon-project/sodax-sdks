@@ -212,7 +212,8 @@ export class BackendApiService implements IConfigApiV1 {
     this.swaps = new SwapsApiService(resolveSwapsApiConfig(config), this.logger);
     // Sponsoring uses an independent origin and credential scope.
     this.sponsoring = new SponsoringApiService(resolveSponsoringApiConfig(config), this.logger);
-    // Bridge shares the swaps host (`/bridge/*` sub-paths).
+    // Bridge is served on the base host as `/bridge/*` sub-paths — resolved from `baseApiConfig`, so a
+    // `swapsApiConfig` slice moves swaps only (see `resolveBridgeApiConfig`).
     this.bridge = new BridgeApiService(resolveBridgeApiConfig(config), this.logger);
   }
 

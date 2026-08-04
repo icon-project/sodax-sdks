@@ -211,6 +211,7 @@ Typed React Query wrappers over the backend Bridge API v2 (`sodax.api.bridge.*`)
 | Hook | Type / Polling |
 |---|---|
 | `useBridgeApiTokens` | Query; all supported bridge tokens by chain |
+| `useBridgeApiTokensByChain` | Query; supported bridge tokens for one `chainKey` |
 | `useBridgeApiAllowance` | Query; `{ valid }` allowance check (wire-named body) |
 | `useBridgeApiFee` | Query; `{ fee }` partner fee for an amount (per-request `partnerFee` override or configured default) |
 | `useBridgeApiBridgeableAmount` | Query; `{ limit }` deposit capacity / withdrawal liquidity for a pair |

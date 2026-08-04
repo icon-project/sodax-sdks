@@ -221,7 +221,7 @@ EVM spokes use `rpcUrl` on their spoke config; Stellar uses `horizonRpcUrl` and 
 
 ### Backend API (`api`)
 
-[`ApiConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/common/constants.ts) controls `baseURL`, `timeout`, and `headers` for `BackendApiService` (used by `ConfigService` and `initialize()`). It is either a flat `BaseApiConfig` (shown below — shared by `sodax.backendApi` and the swaps client `sodax.api.swaps`) or a nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig? }`) to point the swaps API at its own endpoint.
+[`ApiConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/common/constants.ts) controls `baseURL`, `timeout`, and `headers` for `BackendApiService` (used by `ConfigService` and `initialize()`). It is either a flat `BaseApiConfig` (shown below — shared by `sodax.backendApi`, the swaps client `sodax.api.swaps`, and the bridge client `sodax.api.bridge`) or a nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig?, sponsoringApiConfig? }`) to point an individual client at its own endpoint.
 
 ```typescript
 import { Sodax } from '@sodax/sdk';
@@ -234,6 +234,17 @@ const sodax = new Sodax({
   },
 });
 ```
+
+**Which slice moves which client.** The flat fields layer underneath every per-service slice, so a top-level `baseURL` moves all of them at once:
+
+| Client | Resolved from | Notes |
+|---|---|---|
+| `sodax.backendApi` | flat fields → `baseApiConfig` | |
+| `sodax.api.swaps` | flat fields → `baseApiConfig` → `swapsApiConfig` | Only client a `swapsApiConfig` slice affects. |
+| `sodax.api.bridge` | flat fields → `baseApiConfig` | Served as `/bridge/*` sub-paths on the base host. Defaults to the same host as swaps, but a `swapsApiConfig` slice does **not** move it — there is no `bridgeApiConfig` slice. |
+| `sodax.api.sponsoring` | `sponsoringApiConfig` (own origin; only `timeout` inherits) | Base URL and headers never inherit, so base credentials can't leak to another origin. |
+
+Every client method also takes a per-call `RequestOverrideConfig` (`{ baseURL?, timeout?, headers? }`) as its last argument, which wins over the resolved config — useful for pointing one call at a canary host without touching app-wide config. Note that a `timeout` override **replaces** the resolved value rather than capping it.
 
 ### Relayer (`relay`)
 

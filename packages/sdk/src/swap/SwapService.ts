@@ -34,6 +34,7 @@ import {
   type TxHashPair,
   isStacksChainKeyType,
   isNativeBitcoinTransfer,
+  RELAY_FALLBACK_FLOOR_MS,
 } from '../shared/index.js';
 import { SolverApiService } from './SolverApiService.js';
 import { EvmSolverService } from './EvmSolverService.js';
@@ -520,7 +521,7 @@ export class SwapService {
         relayerApiEndpoint: this.relayerApiEndpoint,
         // Remaining shared budget: ≈ full `timeout` on the flag-off path (called immediately), or
         // the reserve `submitTx` left on the backend path. Floor keeps a stalled-backend fallback viable.
-        timeout: Math.max(deadline - Date.now(), 5_000),
+        timeout: Math.max(deadline - Date.now(), RELAY_FALLBACK_FLOOR_MS),
       });
       if (!packet.ok) {
         return { ok: false, error: mapRelayFailure(packet.error, { feature: 'swap', action: 'swap', ...baseCtx }) };

@@ -3,7 +3,7 @@ import {
   Erc20Service,
   type HubProvider,
   relayTxAndWaitPacket,
-  RELAY_ERROR_CODES,
+  RELAY_FALLBACK_FLOOR_MS,
   EvmVaultTokenService,
   EvmAssetManagerService,
   encodeContractCalls,
@@ -465,29 +465,18 @@ export class BridgeService {
       return { ok: false, error: verifyFailed('bridge', verifyTxHashResult.error, baseCtx) };
     }
 
-    // Remaining shared budget: ≈ full `timeout` on the flag-off path (called immediately), or the
-    // reserve `submitTx` left on the backend path (`pollBackendSubmitTx` holds back up to a third,
-    // capped at 20s). No floor — the caller's `timeout` is a hard ceiling, so an exhausted budget
-    // fails as RELAY_TIMEOUT here instead of stretching total wall-clock past one `timeout`.
-    const remaining = deadline - Date.now();
-    if (remaining <= 0) {
-      return {
-        ok: false,
-        error: mapRelayFailure(new Error(RELAY_ERROR_CODES.RELAY_TIMEOUT), {
-          feature: 'bridge',
-          action: 'bridge',
-          srcChainKey: baseCtx.srcChainKey,
-          dstChainKey: baseCtx.dstChainKey,
-        }),
-      };
-    }
-
     const packetResult = await relayTxAndWaitPacket({
       srcTxHash: created.tx,
       data: created.relayData,
       chainKey: params.srcChainKey,
       relayerApiEndpoint: this.config.relay.relayerApiEndpoint,
-      timeout: remaining,
+      // Remaining shared budget: ≈ full `timeout` on the flag-off path minus the `verifyTxHash` wait,
+      // or the reserve `submitTx` left on the backend path (`pollBackendSubmitTx` holds back up to a
+      // third, capped at 20s). The floor matters because `relayTxAndWaitPacket` SUBMITS the tx to the
+      // relay before `timeout` bounds anything: a budget exhausted by a slow source-chain confirmation
+      // (Stacks polls for up to its full 120s `maxTimeoutMs`) would otherwise strand an already-landed
+      // deposit unrelayed. Re-relay is idempotent, so always spending the floor is safe.
+      timeout: Math.max(deadline - Date.now(), RELAY_FALLBACK_FLOOR_MS),
     });
     if (!packetResult.ok) {
       return {
@@ -553,6 +542,9 @@ export class BridgeService {
         getStatus: override => this.backendApi.bridge.getSubmitTxStatus({ txHash: spokeTxHash, srcChainKey }, override),
         onExecuted: (result): TxHashPair | undefined =>
           result?.dstIntentTxHash ? { srcChainTxHash: spokeTxHash, dstChainTxHash: result.dstIntentTxHash } : undefined,
+        // Bound each status request by the poll cutoff, never above the service default — so a stalled
+        // request can neither eat the fallback's reserve nor consume the window in one attempt.
+        requestTimeoutMs: this.backendApi.bridge.getTimeout(),
       });
       return polled.ok ? { ok: true, value: polled.value } : submitTxFailed(polled.cause);
     } catch (error) {
@@ -586,6 +578,9 @@ export class BridgeService {
     _params: BridgeParams<K, Raw>,
   ): Promise<Result<IntentTxResult<K, Raw>, BridgeCreateIntentError>> {
     const { params, skipSimulation, extras } = _params;
+    // Per-action `extras.partnerFee` wins over the config-level `bridgePartnerFee` (undefined = no fee).
+    // Resolved once so the dust guard below and `buildBridgeData` price the same fee.
+    const partnerFee = extras?.partnerFee ?? this.config.bridgePartnerFee;
     const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
     try {
       bridgeInvariant(
@@ -632,19 +627,11 @@ export class BridgeService {
         );
       }
       if (isNativeBitcoinTransfer(this.config, params.dstChainKey, dstToken)) {
-        // The partner fee is deducted on the hub in 18-dp vault units (see buildBridgeData): a fixed
-        // `PartnerFee.amount` is denominated in wei, NOT sats. Mirror buildBridgeData's math exactly —
-        // translate to hub units (skip when the endpoint already IS the 18-dp vault asset), take the
-        // fee there, translate back to destination units — so the DELIVERED (post-fee) sats are what
-        // must clear dust.
-        const hubAmount = this.config.isSodaVaultHubAsset(srcToken.hubAsset)
-          ? params.amount
-          : EvmVaultTokenService.translateIncomingDecimals(srcToken.decimals, params.amount);
-        const hubDelivered =
-          hubAmount - calculateFeeAmount(hubAmount, extras?.partnerFee ?? this.config.bridgePartnerFee);
-        const delivered = this.config.isSodaVaultHubAsset(dstToken.hubAsset)
-          ? hubDelivered
-          : EvmVaultTokenService.translateOutgoingDecimals(dstToken.decimals, hubDelivered);
+        // The DELIVERED (post-fee) sats are what must clear dust, and the partner fee is deducted on the
+        // hub in 18-dp vault units — a fixed `PartnerFee.amount` is wei-denominated, NOT sats. Share
+        // `buildBridgeData`'s pipeline rather than restating it, so the guard can't drift from the
+        // amount the encoded hub calls actually withdraw.
+        const { delivered } = this.computeBridgeAmounts(params.amount, srcToken, dstToken, partnerFee);
         bridgeInvariant(
           delivered >= BITCOIN_DUST_SATS,
           `Post-fee BTC delivery (${delivered}) is below the Bitcoin dust limit of ${BITCOIN_DUST_SATS} sats`,
@@ -685,13 +672,7 @@ export class BridgeService {
       const effectiveSkipSimulation =
         skipSimulation || (isBitcoinChainKeyType(params.srcChainKey) && this.spoke.bitcoin.walletMode === 'USER');
 
-      // Per-action `extras.partnerFee` wins over the config-level `bridgePartnerFee` (undefined = no fee).
-      const data: Hex = this.buildBridgeData(
-        params,
-        srcToken,
-        dstToken,
-        extras?.partnerFee ?? this.config.bridgePartnerFee,
-      );
+      const data: Hex = this.buildBridgeData(params, srcToken, dstToken, partnerFee);
 
       const coreParams = {
         srcChainKey: params.srcChainKey,
@@ -781,6 +762,36 @@ export class BridgeService {
    * @returns ABI-encoded `Hex` string representing the ordered call batch for the hub router.
    * @throws When `dstToken` cannot be resolved for the destination chain (invariant).
    */
+  /**
+   * Post-fee amounts for a bridge, in the units each hub step operates in. Single source for the fee +
+   * vault-decimal pipeline, so {@link buildBridgeData}'s encoded hub calls and the BTC-destination dust
+   * guard in {@link createBridgeIntent} can never disagree about what actually gets delivered.
+   *
+   * A spoke endpoint's amount is translated INTO 18-dp vault units on the way in (skipped when the
+   * endpoint already IS the vault asset), the partner fee is deducted there — so a fixed
+   * `PartnerFee.amount` is wei-denominated, never spoke-denominated — and the remainder is translated
+   * back OUT into the destination endpoint's own units.
+   *
+   * @returns `feeAmount` and `withdrawAmount` in 18-dp vault units (what the hub fee transfer and vault
+   *   withdrawal use), and `delivered` in the destination endpoint's units (what the recipient receives).
+   */
+  private computeBridgeAmounts(
+    amount: bigint,
+    srcToken: XToken,
+    dstToken: XToken,
+    partnerFee: PartnerFee | undefined,
+  ): { feeAmount: bigint; withdrawAmount: bigint; delivered: bigint } {
+    const translatedAmount = this.config.isSodaVaultHubAsset(srcToken.hubAsset)
+      ? amount
+      : EvmVaultTokenService.translateIncomingDecimals(srcToken.decimals, amount);
+    const feeAmount = calculateFeeAmount(translatedAmount, partnerFee);
+    const withdrawAmount = translatedAmount - feeAmount;
+    const delivered = this.config.isSodaVaultHubAsset(dstToken.hubAsset)
+      ? withdrawAmount
+      : EvmVaultTokenService.translateOutgoingDecimals(dstToken.decimals, withdrawAmount);
+    return { feeAmount, withdrawAmount, delivered };
+  }
+
   buildBridgeData(
     params: CreateBridgeIntentParams,
     srcToken: XToken,
@@ -788,28 +799,31 @@ export class BridgeService {
     partnerFee: PartnerFee | undefined,
   ): Hex {
     const calls: EvmContractCall[] = [];
-    let translatedAmount = params.amount;
-    let srcVault = params.srcToken as `0x${string}`;
+    const { feeAmount, withdrawAmount, delivered } = this.computeBridgeAmounts(
+      params.amount,
+      srcToken,
+      dstToken,
+      partnerFee,
+    );
+    // The hub-side asset the partner fee is transferred in: on the no-deposit path the hub asset the
+    // spoke deposit delivers to the wallet, overwritten with the vault below when a deposit runs.
+    // Never `params.srcToken`: for spoke sources that is a spoke-chain address (base58 on Solana; a
+    // codeless address on Sonic for EVM spokes), and only for hub sources does it equal the hub asset.
+    let srcVault: `0x${string}` = srcToken.hubAsset;
     // if src asset is not a vault token, we need to approve and deposit into the vault
     if (!this.config.isSodaVaultHubAsset(srcToken.hubAsset)) {
       calls.push(Erc20Service.encodeApprove(srcToken.hubAsset, srcToken.vault, params.amount));
       calls.push(EvmVaultTokenService.encodeDeposit(srcToken.vault, srcToken.hubAsset, params.amount));
-      translatedAmount = EvmVaultTokenService.translateIncomingDecimals(srcToken.decimals, params.amount);
       srcVault = srcToken.vault;
     }
-    const feeAmount = calculateFeeAmount(translatedAmount, partnerFee);
 
     if (partnerFee && feeAmount > 0n) {
       calls.push(Erc20Service.encodeTransfer(srcVault, partnerFee.address, feeAmount));
     }
 
-    const withdrawAmount = translatedAmount - feeAmount;
-    let translatedWithdrawAmount = withdrawAmount;
-
     // if dst asset is not a vault token, we need to withdraw from the vault
     if (!this.config.isSodaVaultHubAsset(dstToken.hubAsset)) {
       calls.push(EvmVaultTokenService.encodeWithdraw(dstToken.vault, dstToken.hubAsset, withdrawAmount));
-      translatedWithdrawAmount = EvmVaultTokenService.translateOutgoingDecimals(dstToken.decimals, withdrawAmount);
     }
 
     const encodedRecipientAddress = encodeAddress(params.dstChainKey, params.recipient);
@@ -823,11 +837,11 @@ export class BridgeService {
           data: encodeFunctionData({
             abi: wrappedSonicAbi,
             functionName: 'withdrawTo',
-            args: [encodedRecipientAddress, translatedWithdrawAmount],
+            args: [encodedRecipientAddress, delivered],
           }),
         });
       } else {
-        calls.push(Erc20Service.encodeTransfer(dstToken.hubAsset, encodedRecipientAddress, translatedWithdrawAmount));
+        calls.push(Erc20Service.encodeTransfer(dstToken.hubAsset, encodedRecipientAddress, delivered));
       }
     } else {
       bridgeInvariant(dstToken, `Unsupported hub chain (${params.dstChainKey}) token: ${params.dstToken}`, {
@@ -838,7 +852,7 @@ export class BridgeService {
         EvmAssetManagerService.encodeTransfer(
           dstToken.hubAsset,
           encodedRecipientAddress,
-          translatedWithdrawAmount,
+          delivered,
           this.hubProvider.chainConfig.addresses.assetManager,
         ),
       );

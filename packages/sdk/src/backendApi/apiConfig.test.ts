@@ -265,9 +265,9 @@ describe('resolveSponsoringApiConfig', () => {
 });
 
 describe('resolveBridgeApiConfig', () => {
-  // Bridge shares the swaps host: resolveBridgeApiConfig is an unconditional alias of
+  // Bridge is served on the base host: resolveBridgeApiConfig is an unconditional alias of
   // resolveBaseApiConfig — it ignores any swapsApiConfig slice and never reads a
-  // (non-existent) bridgeApiConfig slice.
+  // (non-existent) bridgeApiConfig slice. Same default host as swaps, different config source.
   it('shares a flat config with the base API', () => {
     const config = asConfig({ baseURL: 'https://base.example', timeout: 11, headers: { 'X-A': '1' } });
     expect(resolveBridgeApiConfig(config)).toEqual(resolveBaseApiConfig(config));

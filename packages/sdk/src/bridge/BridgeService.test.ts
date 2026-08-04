@@ -20,8 +20,11 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { decodeAbiParameters, decodeFunctionData, erc20Abi, parseAbiParameters } from 'viem';
 import type { Address, IBitcoinWalletProvider, IEvmWalletProvider, SpokeChainKey } from '@sodax/types';
-import { ChainKeys } from '@sodax/types';
+import { ChainKeys, DEFAULT_BACKEND_API_TIMEOUT, DEFAULT_RELAY_TX_TIMEOUT } from '@sodax/types';
+import { RELAY_FALLBACK_FLOOR_MS } from '../shared/services/intentRelay/IntentRelayApiService.js';
+import { EvmVaultTokenService } from '../shared/services/hub/EvmVaultTokenService.js';
 import { Sodax } from '../shared/entities/Sodax.js';
 import { SodaxError } from '../errors/SodaxError.js';
 import type { BridgeParams } from './BridgeService.js';
@@ -44,6 +47,7 @@ const sodax = new Sodax();
 // chain-config layout in @sodax/types.
 const BSC = '0x38.bsc' satisfies SpokeChainKey;
 const ARBITRUM = '0xa4b1.arbitrum' satisfies SpokeChainKey;
+const SOLANA = 'solana' satisfies SpokeChainKey;
 
 const HUB_WALLET = '0x1111111111111111111111111111111111111111' as Address;
 const SAMPLE_USER = '0x4444444444444444444444444444444444444444' as Address;
@@ -323,6 +327,210 @@ const stacksRawBridgeInput = (extras?: { srcPublicKey?: string }): BridgeParams<
       recipient: SAMPLE_DST,
     },
   }) as BridgeParams<typeof STACKS, true>;
+
+// =========================================================================
+// buildBridgeData and the BTC-destination dust guard share ONE fee/decimal
+// pipeline (`computeBridgeAmounts`). These pin the basis that sharing relies
+// on, using REAL config tokens and the real encoder (no buildBridgeData mock),
+// so a change to the fee basis or a decimal translation fails here rather than
+// silently desynchronizing the guard from what the hub calls withdraw.
+// =========================================================================
+
+describe('BridgeService.buildBridgeData — shared fee/decimal basis', () => {
+  const FEE_ADDR = '0x6666666666666666666666666666666666666666' as Address;
+  const realToken = (chainKey: SpokeChainKey, symbol: string) => {
+    const token = sodax.config.findSupportedTokenBySymbol(chainKey, symbol);
+    if (!token) throw new Error(`fixture missing: ${symbol} on ${chainKey}`);
+    return token;
+  };
+
+  it('charges the partner fee in 18-dp hub units, not the spoke token’s units', () => {
+    const src = realToken(ARBITRUM, 'USDC');
+    const dst = realToken(ChainKeys.SONIC_MAINNET, 'USDC');
+    const amount = 1_000_000n; // 1 USDC at 6 dp
+    const params = {
+      srcChainKey: src.chainKey,
+      srcAddress: SAMPLE_USER,
+      srcToken: src.address,
+      amount,
+      dstChainKey: dst.chainKey,
+      dstToken: dst.address,
+      recipient: SAMPLE_DST,
+    } as never;
+
+    // The fee basis is the amount AFTER the incoming vault translation, so 1% of 1 USDC is
+    // 1e16 hub-wei — not 1e4 spoke-base-units. A fixed fee of that exact size must therefore
+    // encode identically to the percentage that computes it.
+    const hubUnits = EvmVaultTokenService.translateIncomingDecimals(src.decimals, amount);
+    const percentageFee = { address: FEE_ADDR, percentage: 100 } as const;
+    const expectedFee = sodax.bridge.getFee(hubUnits, percentageFee);
+    expect(expectedFee).toBe(hubUnits / 100n);
+
+    expect(sodax.bridge.buildBridgeData(params, src, dst, percentageFee)).toBe(
+      sodax.bridge.buildBridgeData(params, src, dst, { address: FEE_ADDR, amount: expectedFee }),
+    );
+  });
+
+  it('encodes the delivered amount in the destination token’s units, not hub units', () => {
+    const src = realToken(ARBITRUM, 'USDC');
+    const dst = realToken(BTC, 'BTC');
+    const amount = 1_000_000n; // 1 USDC at 6 dp
+    const data = sodax.bridge.buildBridgeData(
+      {
+        srcChainKey: src.chainKey,
+        srcAddress: SAMPLE_USER,
+        srcToken: src.address,
+        amount,
+        dstChainKey: dst.chainKey,
+        dstToken: dst.address,
+        recipient: BTC_USER_ADDR,
+      } as never,
+      src,
+      dst,
+      undefined,
+    );
+
+    // 6 dp → 18 dp hub → 8 dp destination: 1e6 → 1e18 → 1e8. The destination transfer must carry the
+    // OUTGOING-translated value, which is exactly the `delivered` amount the BTC dust guard checks;
+    // encoding the untranslated hub amount would overpay by 10^10.
+    // (Hub units legitimately appear too — that is what the vault withdrawal is denominated in — so
+    // this asserts the translated value is present, which it never would be without the translation.)
+    const hubUnits = EvmVaultTokenService.translateIncomingDecimals(src.decimals, amount);
+    const delivered = EvmVaultTokenService.translateOutgoingDecimals(dst.decimals, hubUnits);
+    expect(delivered).toBe(100_000_000n);
+    expect(data).toContain(delivered.toString(16).padStart(64, '0'));
+  });
+
+  // Decode the `(address,uint256,bytes)[]` batch (see encodeContractCalls) and isolate the fee call —
+  // the ERC-20 `transfer` whose recipient is FEE_ADDR — so the assertions pin the fee call's own
+  // target rather than substring-matching a payload whose delivery call shares the same address.
+  const decodeFeeCall = (data: `0x${string}`, feeAmount: bigint) => {
+    const [calls] = decodeAbiParameters(parseAbiParameters('(address,uint256,bytes)[]'), data);
+    const decoded = calls.map(([target, , cd]) => {
+      try {
+        const fn = decodeFunctionData({ abi: erc20Abi, data: cd });
+        return { target, fn };
+      } catch {
+        return { target, fn: undefined };
+      }
+    });
+    const feeCalls = decoded.filter(c => c.fn?.functionName === 'transfer' && c.fn.args[0] === FEE_ADDR);
+    expect(feeCalls).toHaveLength(1);
+    expect(feeCalls[0]?.fn?.args[1]).toBe(feeAmount);
+    return { feeTarget: feeCalls[0]?.target as string, targets: decoded.map(c => c.target as string) };
+  };
+
+  // The fee-transfer target is the hub-side asset the wallet holds after step 1: the vault after a
+  // deposit, the hub asset itself when the source already IS a vault asset (no-deposit path). It was
+  // previously initialised from `params.srcToken` — a SPOKE-chain address, wrong on Sonic — kept
+  // correct only by the accident that every bridgeable token so far took the deposit branch.
+  it('targets the hub asset — never the spoke token address — for the fee on the no-deposit path', () => {
+    const src = realToken(ARBITRUM, 'ARB'); // hubAsset === vault → no-deposit branch
+    expect(src.hubAsset.toLowerCase()).toBe(src.vault.toLowerCase());
+    const dst = sodax.config.getXTokenFromHubAsset(src.hubAsset);
+    if (!dst) throw new Error('fixture missing: hub XToken for ARB hub asset');
+    const amount = 10n ** 18n;
+
+    const data = sodax.bridge.buildBridgeData(
+      {
+        srcChainKey: src.chainKey,
+        srcAddress: SAMPLE_USER,
+        srcToken: src.address,
+        amount,
+        dstChainKey: ChainKeys.SONIC_MAINNET,
+        dstToken: dst.address,
+        recipient: SAMPLE_DST,
+      } as never,
+      src,
+      dst,
+      { address: FEE_ADDR, percentage: 100 },
+    );
+
+    // No deposit → no decimal translation: 100 bps of the raw amount.
+    const { feeTarget, targets } = decodeFeeCall(data, amount / 100n);
+    expect(feeTarget.toLowerCase()).toBe(src.hubAsset.toLowerCase());
+    // The caller-supplied spoke address must appear NOWHERE in a batch executed on Sonic.
+    expect(targets.map(t => t.toLowerCase())).not.toContain(src.address.toLowerCase());
+  });
+
+  it('takes the fee in the SOURCE-side holding, not anything destination-derived', () => {
+    // sodaUSDC@sonic → USDC@arbitrum: no-deposit source, same vault, but dst.hubAsset differs from
+    // src.hubAsset — so this pins that the fee asset is the source hub asset the wallet holds, and
+    // would catch an implementation deriving the fee target from the destination token.
+    const src = realToken(ChainKeys.SONIC_MAINNET, 'sodaUSDC');
+    expect(src.hubAsset.toLowerCase()).toBe(src.vault.toLowerCase());
+    const dst = realToken(ARBITRUM, 'USDC');
+    expect(dst.hubAsset.toLowerCase()).not.toBe(src.hubAsset.toLowerCase());
+    expect(dst.vault.toLowerCase()).toBe(src.vault.toLowerCase());
+    const amount = 10n ** 18n;
+
+    const data = sodax.bridge.buildBridgeData(
+      {
+        srcChainKey: src.chainKey,
+        srcAddress: SAMPLE_USER,
+        srcToken: src.address,
+        amount,
+        dstChainKey: ARBITRUM,
+        dstToken: dst.address,
+        recipient: SAMPLE_DST,
+      } as never,
+      src,
+      dst,
+      { address: FEE_ADDR, percentage: 100 },
+    );
+
+    const { feeTarget } = decodeFeeCall(data, amount / 100n);
+    expect(feeTarget.toLowerCase()).toBe(src.hubAsset.toLowerCase());
+  });
+
+  it('builds a fee-bearing payload for a non-EVM no-deposit source instead of throwing', () => {
+    // BONK's spoke address is base58; as the fee target it threw `Address … is invalid` out of
+    // encodeContractCalls, failing every fee-bearing Solana→hub bridge of a vault-asset token.
+    const src = realToken(SOLANA, 'BONK');
+    expect(src.hubAsset.toLowerCase()).toBe(src.vault.toLowerCase());
+    const dst = sodax.config.getXTokenFromHubAsset(src.hubAsset);
+    if (!dst) throw new Error('fixture missing: hub XToken for BONK hub asset');
+    const params = {
+      srcChainKey: src.chainKey,
+      srcAddress: 'GHtXQBsoZHVnNFa9YevAzFr17DJjgHXk3ycTKD5xD3Zi',
+      srcToken: src.address,
+      amount: 10n ** 9n,
+      dstChainKey: ChainKeys.SONIC_MAINNET,
+      dstToken: dst.address,
+      recipient: SAMPLE_DST,
+    } as never;
+
+    expect(() => sodax.bridge.buildBridgeData(params, src, dst, { address: FEE_ADDR, percentage: 100 })).not.toThrow();
+  });
+
+  it('leaves the deposit path untouched: fee still targets the vault, spoke address still absent', () => {
+    const src = realToken(ARBITRUM, 'USDC'); // hubAsset !== vault → deposit branch
+    expect(src.hubAsset.toLowerCase()).not.toBe(src.vault.toLowerCase());
+    const dst = realToken(ChainKeys.SONIC_MAINNET, 'USDC');
+    const amount = 1_000_000n;
+
+    const data = sodax.bridge.buildBridgeData(
+      {
+        srcChainKey: src.chainKey,
+        srcAddress: SAMPLE_USER,
+        srcToken: src.address,
+        amount,
+        dstChainKey: ChainKeys.SONIC_MAINNET,
+        dstToken: dst.address,
+        recipient: SAMPLE_DST,
+      } as never,
+      src,
+      dst,
+      { address: FEE_ADDR, percentage: 100 },
+    );
+
+    // Deposit translates 6 dp → 18 dp before the fee: 100 bps of the hub-unit amount.
+    const hubUnits = EvmVaultTokenService.translateIncomingDecimals(src.decimals, amount);
+    const { feeTarget, targets } = decodeFeeCall(data, hubUnits / 100n);
+    expect(feeTarget.toLowerCase()).toBe(src.vault.toLowerCase());
+    expect(targets.map(t => t.toLowerCase())).not.toContain(src.address.toLowerCase());
+  });
+});
 
 describe('BridgeService.createBridgeIntent — Stacks raw srcPublicKey guard', () => {
   beforeEach(() => {
@@ -774,7 +982,7 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
     }
   });
 
-  it('honors a caller timeout below 5s on the default path (no relay floor)', async () => {
+  it('raises a sub-floor caller timeout to the relay floor on the default path', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
     try {
@@ -788,15 +996,16 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
       const result = await sodax.bridge.bridge(bridgeInput(BSC, ARBITRUM, 2_000));
 
       expect(result.ok).toBe(true);
+      // The floor deliberately outranks a sub-floor caller `timeout` (matching SwapService): the spoke
+      // deposit has already landed, and `relayTxAndWaitPacket` submits before `timeout` bounds the wait.
       const relayTimeout = mocks.relayTxAndWaitPacket.mock.calls.at(-1)?.[0]?.timeout as number;
-      expect(relayTimeout).toBeGreaterThan(0);
-      expect(relayTimeout).toBeLessThanOrEqual(2_000);
+      expect(relayTimeout).toBe(RELAY_FALLBACK_FLOOR_MS);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it('fails fast as RELAY_TIMEOUT when the shared budget is exhausted before the relay (never stretches past `timeout`)', async () => {
+  it('still submits to the relay when the shared budget is exhausted before the relay', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
     try {
@@ -804,20 +1013,63 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
         ok: true,
         value: { tx: '0xspokeTx' as never, relayData: { address: HUB_WALLET, payload: '0x' } },
       } as never);
-      // Earlier steps consume the entire caller budget before the relay gets a turn.
+      // A slow source-chain confirmation eats the entire caller budget (Stacks polls for up to its full
+      // 120s `maxTimeoutMs`, which equals the default `timeout`) before the relay gets a turn.
       vi.spyOn(sodax.spoke, 'verifyTxHash').mockImplementationOnce(async () => {
         vi.setSystemTime(10_000);
         return { ok: true, value: undefined };
       });
+      mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xdstTx' } });
 
       const result = await sodax.bridge.bridge(bridgeInput(BSC, ARBITRUM, 2_000));
 
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.error.code).toBe('RELAY_TIMEOUT');
-        expect(result.error.context?.relayCode).toBe('RELAY_TIMEOUT');
-      }
-      expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
+      // A zero/negative remainder must NOT skip the call: `relayTxAndWaitPacket` submits the already
+      // broadcast deposit to the relay before `timeout` bounds anything, so skipping it strands the
+      // deposit unrelayed and reports RELAY_TIMEOUT for an attempt that never happened.
+      expect(mocks.relayTxAndWaitPacket).toHaveBeenCalledOnce();
+      expect(mocks.relayTxAndWaitPacket.mock.calls.at(-1)?.[0]?.timeout).toBe(RELAY_FALLBACK_FLOOR_MS);
+      expect(result.ok).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('never lets a status request exceed the service timeout, so a stalled poll still retries', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    try {
+      stubCreatedAndVerified();
+      vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValueOnce({
+        ok: true,
+        value: { success: true, data: { status: 'inserted', message: 'accepted' } },
+      } as never);
+      // Same stalled backend as the clamp test above, but with the DEFAULT 120s budget: the remaining
+      // poll window (~100s) now EXCEEDS the 30s service default. A raw remainder would be handed
+      // straight to `makeRequest` (`overrideConfig.timeout ?? config.timeout`) and arm the abort at
+      // 100s, burning the whole window on one attempt.
+      const seenTimeouts: (number | undefined)[] = [];
+      vi.spyOn(sodaxBE.api.bridge, 'getSubmitTxStatus').mockImplementation(
+        ((_query: unknown, config?: { timeout?: number }) => {
+          seenTimeouts.push(config?.timeout);
+          return new Promise(resolve =>
+            setTimeout(
+              () =>
+                resolve({ ok: false, error: new SodaxError('EXTERNAL_API_ERROR', 'timeout', { feature: 'backend' }) }),
+              config?.timeout ?? 30_000,
+            ),
+          );
+        }) as never,
+      );
+      mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
+
+      const bridgePromise = sodaxBE.bridge.bridge(bridgeInput(BSC, ARBITRUM));
+      await vi.advanceTimersByTimeAsync(DEFAULT_RELAY_TX_TIMEOUT);
+      const result = await bridgePromise;
+
+      expect(result.ok).toBe(true);
+      expect(seenTimeouts.every(t => t !== undefined && t <= DEFAULT_BACKEND_API_TIMEOUT)).toBe(true);
+      // Bounded per request rather than per window ⇒ the stall retried instead of consuming it whole.
+      expect(seenTimeouts.length).toBeGreaterThan(1);
     } finally {
       vi.useRealTimers();
     }
