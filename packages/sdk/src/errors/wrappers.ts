@@ -166,11 +166,7 @@ export function intentCreationFailed(
 }
 
 /** `EXECUTION_FAILED` — orchestrator-level catch-all. `context.action` discriminates the op. */
-export function executionFailed(
-  feature: SodaxFeature,
-  cause: unknown,
-  context?: Ctx,
-): SodaxError<'EXECUTION_FAILED'> {
+export function executionFailed(feature: SodaxFeature, cause: unknown, context?: Ctx): SodaxError<'EXECUTION_FAILED'> {
   return new SodaxError('EXECUTION_FAILED', messageOf(cause, 'Execution failed'), {
     feature,
     cause,

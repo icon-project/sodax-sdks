@@ -145,7 +145,7 @@ describe('PartnerFeeClaimService.getIntentDetails', () => {
 
   it('fails with LOOKUP_FAILED when a relay chain id is not recognized', async () => {
     const readContract = vi.fn(async () => ({ ...onChainIntent, srcChain: 999_999n }));
-    const service = makeService({ readContract, isValidIntentRelayChainId: (id) => id !== 999_999n });
+    const service = makeService({ readContract, isValidIntentRelayChainId: id => id !== 999_999n });
 
     const result = await service.getIntentDetails(INTENT_HASH);
 

@@ -40,7 +40,13 @@ import type { BackendApiService } from '../backendApi/index.js';
 import { selectSolvedIntentPacket } from './selectSolvedIntentPacket.js';
 import { SodaxError } from '../errors/SodaxError.js';
 import { mapRelayFailure } from '../errors/relay-error-mapping.js';
-import { verifyFailed, intentCreationFailed, executionFailed, unknownFailed, approveFailed } from '../errors/wrappers.js';
+import {
+  verifyFailed,
+  intentCreationFailed,
+  executionFailed,
+  unknownFailed,
+  approveFailed,
+} from '../errors/wrappers.js';
 import {
   type SwapCreateIntentError,
   type PostExecutionError,

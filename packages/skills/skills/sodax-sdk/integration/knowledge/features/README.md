@@ -14,6 +14,7 @@ One file per feature service. Each file documents the v2 API surface, common cal
 | [`partner.md`](partner.md) | `PartnerService` | Partner-fee handling: token approval, auto-swap preferences, fee-claim flows. |
 | [`recovery.md`](recovery.md) | `RecoveryService` | Withdraw stuck hub-wallet assets back to a spoke chain. |
 | [`backend-api.md`](backend-api.md) | `BackendApiService` | HTTP client for backend services: swap-tx submission, intent / orderbook lookups, money-market reads. |
+| [`sponsoring.md`](sponsoring.md) | `SponsoringService` | Stellar account activation via sponsored reserves. The sponsor pays the base reserve; the user's wallet signs. |
 
 All feature services are constructed and wired by the `Sodax` facade. You don't instantiate them directly — access them via `sodax.swaps`, `sodax.moneyMarket`, etc. See [`../architecture.md`](../architecture.md) for the service graph.
 

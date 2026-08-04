@@ -28,6 +28,14 @@ Non-EVM chains take their own (`ICON_PRIVATE_KEY`, `SOLANA_PRIVATE_KEY`, `STELLA
 
 `logging.ts` is the exception: it needs no key, no RPC and no network.
 
+`stellar-sponsor.ts` is the exception whose extra vars are not inferable from its imports:
+
+```
+STELLAR_ACTIVATE_SEED=S…   # THROWAWAY Stellar secret seed of the account to activate
+SPONSORING_API_KEY=        # x-api-key registered with the sponsoring service
+# SPONSORING_API_URL=http://localhost:3011   # optional base-URL override (version prefix included)
+```
+
 ## Structure
 
 ```
@@ -37,6 +45,7 @@ src/
 ├── swap.ts                                 # intent-based swap E2E
 ├── soda-staking.ts
 ├── bitcoin-radfi.ts                        # Bitcoin trading-wallet provider
+├── stellar-sponsor.ts                      # sponsored Stellar account activation (tsx; headless)
 ├── config.ts                               # shared config (RPC URLs, addresses)
 └── tests/                                  # focused regression scripts
     ├── bnusd-migration.test.ts

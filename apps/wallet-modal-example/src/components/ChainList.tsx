@@ -51,9 +51,7 @@ export function ChainList({ onPick }: ChainListProps) {
                   {group.isConnected ? ' · connected' : ''}
                 </div>
               </div>
-              <span className="text-gray-400">
-                {isPending ? '…' : group.isConnected ? '−' : '→'}
-              </span>
+              <span className="text-gray-400">{isPending ? '…' : group.isConnected ? '−' : '→'}</span>
             </button>
           </li>
         );
