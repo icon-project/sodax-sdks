@@ -12,7 +12,7 @@
  * elimination logic, cast-at-boundary pattern, and `*_MAINNET_CHAIN_ID` → `ChainKeys.*` mapping
  * already applies. This document captures only the **MM-specific** deltas.
  * For upstream rationale, see:
- *   - `packages/sdk/docs/ARCHITECTURE_REFACTOR_SUMMARY.md` — Concepts 1-6.
+ *   - `packages/sdk/docs/ARCHITECTURE.md` — Concepts 1-6.
  *   - `packages/sdk/CHAIN_ID_MIGRATION.md` — `*_MAINNET_CHAIN_ID` → `ChainKeys.*` table.
  *   - `packages/SWAP_FEATURE_MIGRATION_SUMMARY.md` — sibling migration this complements.
  * Diff scope: `apps/demo/src/{App.tsx,components/shared/{ChainSelector,header}.tsx,

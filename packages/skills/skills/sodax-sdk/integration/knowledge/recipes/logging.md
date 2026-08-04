@@ -24,8 +24,9 @@ chain config from the backend but **never** replaces the logger — the backend 
 it.
 
 > Combine with the other constructor options freely — pass `logger` alongside `chains` / `api` /
-> `solver` overrides in the same object. The constructor splits `logger` off the data override before
-> merging, so it never lands in `sodax.instanceConfig`. See [`initialize-sodax.md`](initialize-sodax.md).
+> `solver` overrides in the same object. `sodax.instanceConfig` is the merged options object, so the
+> `logger` key is present there too; the sink the services actually use is `sodax.config.logger`,
+> which the dynamic config swap cannot touch. See [`initialize-sodax.md`](initialize-sodax.md).
 
 ## Custom sink
 

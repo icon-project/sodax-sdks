@@ -73,17 +73,17 @@ A self-contained harness for verifying `SodaxLogger` sinks (`new Sodax({ logger 
 
 - `scripts/mock-intake.mjs` — zero-dep Node server (`pnpm mock-intake`, port 9009) that pretty-prints every Sentry envelope / Datadog record it receives.
 - `src/lib/loggers/datadogLogger.ts` — `createDatadogLogger()`: plain HTTP-intake adapter (no Datadog SDK). One JSON POST per log line; `error()` serializes via `SodaxError.toJSON()`.
-- `src/lib/loggers/sentryLogger.ts` — `createSentryLogger()`: real `@sentry/react` (lazy-imported) with a dummy DSN + `tunnel`. `debug/info` → breadcrumbs, `warn` → `captureMessage`, `error` → `captureException`.
-- `src/lib/loggers/index.ts` — `getObservabilityLogger()`: fans out to console + Datadog + Sentry, gated on `VITE_ENABLE_OBSERVABILITY === 'true'` (else `undefined` → SDK keeps its default console logger). Also exposes the logger on `window.__sodaxLog` for manual triggering from the browser console. Wired into the SDK in `providers.tsx` via `sodaxConfig.logger`.
+- `src/lib/loggers/sentryLogger.ts` — `createSentryLogger()`: real `@sentry/react` (lazy-imported) with a dummy DSN + `tunnel`. `debug/info` → breadcrumbs, `warn` → `captureMessage`, `error` → `captureException`. **Not currently wired** — swap it in at the `sodaxConfig.logger` assignment to exercise the Sentry path.
+
+`providers.tsx` wires `sodaxConfig.logger = createDatadogLogger()` unconditionally, so the Datadog path is always on in the demo.
 
 **Run:**
 
 ```bash
-cp example.env .env           # sets VITE_ENABLE_OBSERVABILITY=true
+cp example.env .env           # optional — every var in it is optional
 pnpm mock-intake              # terminal A — the local intake
 pnpm dev                      # terminal B
-# In the browser console: window.__sodaxLog.error('boom', new Error('x'), { a: 1 })
-# …or exercise any SDK feature page; internal SDK logs flow through too.
+# Exercise any SDK feature page; internal SDK logs flow through to the intake.
 ```
 
 Requires `@sentry/react` installed (listed in `package.json`). To send to the **real** services instead, set `VITE_DD_INTAKE_URL` / `VITE_SENTRY_DSN` (drop the tunnel) — then DNS is required, as expected.

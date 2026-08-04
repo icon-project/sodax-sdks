@@ -74,7 +74,7 @@ Top-level keys are `ChainType` strings — one slot per chain family. **Every sl
 
 **Provider-managed vs non-provider** — EVM, Solana, and Sui need React context providers from their native SDKs (Hydrator components sync state into the Zustand store). The remaining six chains use direct browser-extension APIs and skip the React adapter layer; their actions are registered during `initChainServices()` after the provider mounts.
 
-Each slot also accepts an optional `connectors?: IXConnector[]` array to override the default connectors registered by `chainRegistry`.
+Every slot declares an optional `connectors?: IXConnector[]` array, but it only takes effect on the six non-provider slots (`ICON`, `NEAR`, `STELLAR`, `BITCOIN`, `INJECTIVE`, `STACKS`), where it replaces the default connectors registered by `chainRegistry`. `EVM`, `SOLANA`, and `SUI` ignore it — their connector lists are written by the Hydrators from wagmi, `@solana/wallet-adapter`, and `@mysten/dapp-kit`, so passing `connectors` there type-checks but has no effect. Supplied connectors must extend the abstract `XConnector` class; entries that only implement `IXConnector` are filtered out with a console warning.
 
 ---
 
@@ -87,7 +87,7 @@ const walletConfig: SodaxWalletConfig = {
   // Adapter fields only — wagmi mounts with the bundled chain set, no custom RPCs
   EVM: { ssr: true },
 
-  // Per-chain entries only — wagmi adapter uses defaults
+  // Per-chain entries only — @solana/wallet-adapter-react uses defaults (autoConnect: true)
   SOLANA: { chains: { [ChainKeys.SOLANA_MAINNET]: { rpcUrl: 'https://...' } } },
 
   // Both
@@ -163,9 +163,11 @@ const walletConfig: SodaxWalletConfig = {
 
 ### Stacks — preset name OR network object
 
-Stacks accepts either a preset name string (`'mainnet' | 'testnet'`) or a full `StacksNetworkLike` object:
+Stacks accepts either a `StacksNetworkName` preset string (`'mainnet' | 'testnet' | 'devnet' | 'mocknet'`) or a full `StacksNetworkLike` object:
 
 ```typescript
+import { PostConditionMode } from '@sodax/wallet-sdk-core';
+
 const walletConfig: SodaxWalletConfig = {
   STACKS: {
     chains: {
@@ -180,7 +182,7 @@ const advanced: SodaxWalletConfig = {
     chains: {
       [ChainKeys.STACKS_MAINNET]: {
         // StacksNetworkLike fields...
-        defaults: { network: 'mainnet', postConditionMode: 'deny' },
+        defaults: { network: 'mainnet', postConditionMode: PostConditionMode.Deny },
       },
     },
   },
@@ -242,7 +244,7 @@ walletConnect: {
 }
 ```
 
-If `projectId` is missing, the WalletConnect connector is silently skipped and a warning is logged. See [`WALLETCONNECT.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/WALLETCONNECT.md) for the partner integration guide.
+If `projectId` is missing, the WalletConnect connector is silently skipped and a warning is logged. See [`WALLETCONNECT.md`](./WALLETCONNECT.md) for the partner integration guide.
 
 ---
 
@@ -353,8 +355,8 @@ If a previous session connected a chain that is no longer in `config`, the persi
 
 ## Related docs
 
-- [Connect Flow](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONNECT_FLOW.md) — discover connectors, connect, read account, disconnect
-- [Wallet Provider Bridge](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/WALLET_PROVIDER_BRIDGE.md) — `useWalletProvider` → typed `IXxxWalletProvider` for SDK calls
-- [WalletConnect](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/WALLETCONNECT.md) — enterprise/custody wallet setup (Fireblocks, etc.)
+- [Connect Flow](./CONNECT_FLOW.md) — discover connectors, connect, read account, disconnect
+- [Wallet Provider Bridge](./WALLET_PROVIDER_BRIDGE.md) — `useWalletProvider` → typed `IXxxWalletProvider` for SDK calls
+- [WalletConnect](./WALLETCONNECT.md) — enterprise/custody wallet setup (Fireblocks, etc.)
 - [Adding a New Chain](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/ADDING_A_NEW_CHAIN.md) — `ChainMeta` extension and chain registry
 - [SDK Wallet Providers Reference](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/WALLET_PROVIDERS.md) — per-chain `defaults` shape reference

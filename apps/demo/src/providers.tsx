@@ -125,8 +125,6 @@ export default function Providers({ children }: { children: ReactNode }) {
 
   // override sodax config for rpc urls and solver config
   const sodaxConfig: SodaxOptions = useMemo(() => {
-    // Opt-in observability sink (Sentry + Datadog), enabled via VITE_ENABLE_OBSERVABILITY.
-    // `undefined` when off, which leaves the SDK on its default console logger.
     return {
       api: {
         baseApiConfig: {
@@ -137,6 +135,8 @@ export default function Providers({ children }: { children: ReactNode }) {
         },
         sponsoringApiConfig,
       },
+      // Observability sink for SDK diagnostics. Posts to the local mock intake by default
+      // (`pnpm mock-intake`); see apps/demo/AGENTS.md for the Sentry alternative.
       logger: createDatadogLogger(),
       // Opt-in user-action analytics (issue #175). Enabled by default in the demo; the sink logs each
       // event and re-emits it as a `sodax:analytics` window CustomEvent. `false` when disabled, which

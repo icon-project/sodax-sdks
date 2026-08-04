@@ -362,3 +362,13 @@ if (!result.ok) {
 ## Chain Keys
 
 Vaults live on the Sonic hub; `deposit` / `withdraw` route by the user's spoke-side chain (`srcChainKey`) and the output chain (`dstChainKey`). Use `ChainKeys` from `@sodax/sdk` for chain-key constants.
+
+## Runnable examples
+
+| Example | Run | What it covers |
+| --- | --- | --- |
+| [`apps/node/src/leverage-yield.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/leverage-yield.ts) | `pnpm leverage-yield` | A subcommand CLI over `sodax.leverageYield` — one subcommand per public surface; run `help` for the list |
+| [`apps/demo`](https://github.com/icon-project/sodax-sdks/tree/main/apps/demo/src/pages/leverage-yield) | `pnpm dev:demo` → `/leverage-yield` | Entering and exiting a position through `@sodax/dapp-kit` hooks |
+
+The CLI is parameterised by `SPOKE_CHAIN_KEY`, `SPOKE_TOKEN`, `SPOKE_RPC` and `SONIC_RPC` rather
+than hardcoding a chain, so it doubles as a way to check a vault on a chain the demo does not list.

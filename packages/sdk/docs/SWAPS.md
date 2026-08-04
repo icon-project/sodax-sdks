@@ -13,7 +13,7 @@ const sodax = new Sodax();
 const quote = await sodax.swaps.getQuote(quoteRequest);
 ```
 
-> **`sodax.swaps` vs `sodax.api.swaps`.** This page documents `sodax.swaps` (`SwapService`) — the end-to-end intent orchestrator that creates, relays, and finalizes swaps on-chain. The lower-level typed HTTP client for the backend Swaps API v2 (quote, create-intent, submit-tx, status, fees — 21 endpoints) is `sodax.api.swaps` (`SwapsApiService`); see [`SWAPS_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS_API.md).
+> **`sodax.swaps` vs `sodax.api.swaps`.** This page documents `sodax.swaps` (`SwapService`) — the end-to-end intent orchestrator that creates, relays, and finalizes swaps on-chain. The lower-level typed HTTP client for the backend Swaps API v2 (quote, create-intent, submit-tx, status, fees — 21 endpoints) is `sodax.api.swaps` (`SwapsApiService`); see [`SWAPS_API.md`](https://docs.sodax.com/developers/packages/foundation/sdk/tooling-modules/swaps_api).
 
 ## Using SDK Config and Constants
 
@@ -1057,3 +1057,14 @@ if (!quoteResult.ok) {
   console.error('Solver error message:', solverError.detail.message);
 }
 ```
+
+## Runnable examples
+
+| Example | Run | What it covers |
+| --- | --- | --- |
+| [`apps/node/src/swap.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/swap.ts) | `pnpm swap` | Quote → create intent → poll status, end to end from a backend script |
+| [`apps/demo`](https://github.com/icon-project/sodax-sdks/tree/main/apps/demo/src/pages/solver) | `pnpm dev:demo` → `/solver` | The same flow through `@sodax/dapp-kit`, plus the solver-environment switcher |
+
+The node script signs with `EVM_PRIVATE_KEY` and broadcasts to mainnet. For the step-by-step
+narrative version see
+[How to make a swap](https://docs.sodax.com/developers/how-to/how_to_make_a_swap).

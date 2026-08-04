@@ -88,7 +88,7 @@ import {
 } from '@sodax/wallet-sdk-react/xchains/stacks';
 ```
 
-For the full list, see [`CONNECTORS.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONNECTORS.md#sub-path-imports--concrete-classes).
+For the full list, see [`CONNECTORS.md`](./CONNECTORS.md#sub-path-imports--concrete-classes).
 
 ### Concrete chain symbols live only in sub-paths
 
@@ -187,7 +187,7 @@ The package is ESM-only — browser apps (Vite, Next.js) and Node consumers both
 ### `Cannot find module '@sodax/wallet-sdk-react/xchains/bitcoin'`
 
 - **TypeScript**: check `moduleResolution` is `"bundler"`, `"node16"`, or `"nodenext"`. Older `"node"` setting needs `typesVersions` (already provided in this package).
-- **Bundler**: check `package.json` is being read — some monorepos with custom resolvers ignore `exports`. Verify by adding a console.log of `require.resolve('@sodax/wallet-sdk-react/xchains/bitcoin')`.
+- **Bundler**: check `package.json` is being read — some monorepos with custom resolvers ignore `exports`. `require.resolve()` is not a valid probe here: the package is ESM-only and the `./xchains/*` entry declares only `types` and `import`, so CJS resolution throws `ERR_PACKAGE_PATH_NOT_EXPORTED` even against a correct install. Verify with `node --input-type=module -e "console.log(import.meta.resolve('@sodax/wallet-sdk-react/xchains/bitcoin'))"`, which prints the path to `dist/xchains/bitcoin/index.mjs`, or check that `node_modules/@sodax/wallet-sdk-react/dist/xchains/bitcoin/index.mjs` exists on disk.
 
 ### `XverseXConnector is not exported from '@sodax/wallet-sdk-react'`
 
@@ -211,8 +211,8 @@ Run `pnpm build:packages` — `dist/xchains/aptos/` only exists after a build. T
 
 ## Related docs
 
-- [Connectors](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONNECTORS.md) — full sub-path map per chain
+- [Connectors](./CONNECTORS.md) — full sub-path map per chain
 - [Adding a New Chain](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/ADDING_A_NEW_CHAIN.md) — Step 4 covers the barrel that powers a new sub-path
-- [Architecture](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/ARCHITECTURE.md) — store-first hooks consume only barrel exports
+- [Architecture](./ARCHITECTURE.md) — store-first hooks consume only barrel exports
 - [tsup reference](https://tsup.egoist.dev/) — bundler config reference
 - [Node.js subpath exports](https://nodejs.org/api/packages.html#subpath-exports) — the spec behind `package.json` `exports`

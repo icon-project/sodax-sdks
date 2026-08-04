@@ -1,6 +1,6 @@
 # example-next-js-16
 
-Regression test app for [icon-project/sodax-frontend#1070](https://github.com/icon-project/sodax-frontend/issues/1070).
+Regression test app for [icon-project/sodax-sdks#1070](https://github.com/icon-project/sodax-sdks/issues/1070).
 
 A minimal Next.js 16 (Turbopack) app that consumes `@sodax/sdk`,
 `@sodax/wallet-sdk-core`, `@sodax/wallet-sdk-react`, and `@sodax/dapp-kit`

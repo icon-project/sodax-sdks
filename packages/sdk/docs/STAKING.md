@@ -1010,3 +1010,10 @@ amount received depends on current pool conditions and is estimated by `getInsta
 
 Always call `getInstantUnstakeRatio` before `instantUnstake` to set an appropriate `minAmount` slippage
 guard.
+
+## Runnable examples
+
+| Example | Run | What it covers |
+| --- | --- | --- |
+| [`apps/node/src/soda-staking.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/soda-staking.ts) | `pnpm staking` | Staking from a backend script, signing with `EVM_PRIVATE_KEY` |
+| [`apps/demo`](https://github.com/icon-project/sodax-sdks/tree/main/apps/demo/src/pages/staking) | `pnpm dev:demo` → `/staking` | Stake, unstake and instant-unstake through `@sodax/dapp-kit` hooks |

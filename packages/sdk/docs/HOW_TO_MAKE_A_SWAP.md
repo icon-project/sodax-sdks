@@ -723,4 +723,4 @@ await executeSwap(evmWalletProvider, 100000000000000n); // 0.0001 ETH
 - Learn more about swap configuration and advanced features in [SWAPS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md)
 - Explore other SDK features like [Money Market](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/MONEY_MARKET.md), [Bridge](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BRIDGE.md), and [Staking](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/STAKING.md)
 - Check the [README.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/README.md) for general SDK usage and configuration
-- Read [ARCHITECTURE_REFACTOR_SUMMARY.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/ARCHITECTURE_REFACTOR_SUMMARY.md) for the full architecture reference
+- Read [ARCHITECTURE.md](./ARCHITECTURE.md) for the full architecture reference

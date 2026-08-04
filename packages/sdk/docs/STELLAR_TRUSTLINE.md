@@ -301,4 +301,11 @@ async function swapWithStellarDestination(
 - [Bridge](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BRIDGE.md) - Cross-chain token bridging
 - [Migration](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/MIGRATION.md) - Token migration
 - [Staking](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/STAKING.md) - SODA token staking
-- [Architecture Reference](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/ARCHITECTURE_REFACTOR_SUMMARY.md) - Full v2 architecture reference
+- [Architecture Reference](./ARCHITECTURE.md) - Full v2 architecture reference
+
+## Runnable example
+
+[`apps/node/src/stellar.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/stellar.ts)
+— `pnpm stellar` from `apps/node`. It reads `STELLAR_PRIVATE_KEY` plus optional
+`STELLAR_HORIZON_RPC_URL` / `STELLAR_SOROBAN_RPC_URL` overrides, and exercises the trustline checks
+described above against a real account before attempting a deposit.

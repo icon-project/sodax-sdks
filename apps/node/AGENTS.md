@@ -17,13 +17,16 @@ Or in one shot per script (each `pnpm run <x>` does `pnpm run build && node dist
 
 ### Prerequisites
 
-Create `.env` in `apps/node/` with:
+Create `.env` in `apps/node/`. There is no single key that covers every script — each reads the variables for the chain it drives:
 
 ```
-PRIVATE_KEY=0x…   # used by every script
+EVM_PRIVATE_KEY=0x…   # swap, moneyMarket, moneymarket-ops, staking, evm
+PRIVATE_KEY=0x…       # sonic, btc, stacks, injective, leverage-yield, evm
 ```
 
-Some scripts also expect chain-specific RPC URLs or extra keys — check the imports in the script you're running. Public RPCs are used as fallback where possible.
+Non-EVM chains take their own (`ICON_PRIVATE_KEY`, `SOLANA_PRIVATE_KEY`, `STELLAR_PRIVATE_KEY`, `SUI_MNEMONICS`, `NEAR_PRIVATE_KEY`…), and several scripts expect extra RPC URLs, addresses or amounts — the `process.env` reads in the script you're running are the authoritative list. Public RPCs are used as fallback where possible.
+
+`logging.ts` is the exception: it needs no key, no RPC and no network.
 
 `stellar-sponsor.ts` is the exception whose extra vars are not inferable from its imports:
 
@@ -50,11 +53,10 @@ src/
     ├── backend-api.test.ts
     ├── mm-cross-chain.test.ts
     ├── bridge-limits.test.ts
-    ├── raw-spoke-provider.test.ts
-    └── submit-swap-tx.test.ts
+    └── raw-spoke-provider.test.ts
 ```
 
-The files named `*.test.ts` are *not* Vitest — they're standalone scripts run via the matching `pnpm run <…>-test` script.
+The files named `*.test.ts` are *not* Vitest — they're standalone scripts run via the matching `pnpm run <…>-test` script. **All six are currently commented out in full**, so those scripts build and exit without doing anything; treat them as a record of the flow they used to exercise, and uncomment before relying on one.
 
 ## What this app is for
 

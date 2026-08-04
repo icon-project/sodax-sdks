@@ -16,7 +16,7 @@ import { Sodax } from '@sodax/sdk';
 const sodax = new Sodax();
 ```
 
-The constructor signature is `new Sodax(config?: SodaxOptions)`, where `SodaxOptions = DeepPartial<SodaxDefaultConfig> & SodaxOptionalConfig` — a deep-partial override of the `SodaxDefaultConfig` data contract plus the client-side options: the `logger` sink (see [LOGGING.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/LOGGING.md)), the global partner `fee`, per-feature `partnerFee` options, and `swapsOptions` (see [Backend submit-tx 2-step](#backend-submit-tx-2-step-swapsoptionsusebackendsubmittx)). The `logger`, global `fee`, and `swapsOptions` are kept off the data contract: they are resolved once and never fetched from or overwritten by the backend config. When called with no arguments the SDK merges your overrides with the packaged static defaults ([`sodaxConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/sodax-config/sodax-config.ts)) using a recursive `deepMerge`. Omitted keys keep their default values.
+The constructor signature is `new Sodax(config?: SodaxOptions)`, where `SodaxOptions = DeepPartial<SodaxDefaultConfig> & SodaxOptionalConfig` — a deep-partial override of the `SodaxDefaultConfig` data contract plus the client-side options: the `logger` sink (see [LOGGING.md](./LOGGING.md)), the global partner `fee`, per-feature `partnerFee` options, and `swapsOptions` (see [Backend submit-tx 2-step](#backend-submit-tx-2-step-swapsoptionsusebackendsubmittx)). The `logger`, global `fee`, and `swapsOptions` are kept off the data contract: they are resolved once and never fetched from or overwritten by the backend config. When called with no arguments the SDK merges your overrides with the packaged static defaults ([`sodaxConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/sodax-config/sodax-config.ts)) using a recursive `deepMerge`. Omitted keys keep their default values.
 
 ### Dynamic Configuration
 
@@ -307,7 +307,15 @@ ChainKeys.SOLANA_MAINNET;
 
 `SpokeChainKey` is the union type of all `ChainKeys` values. Use it to type any parameter that accepts a chain identifier.
 
+## Runnable examples
+
+| Example | Run | What it configures |
+| --- | --- | --- |
+| [`apps/demo/src/providers.tsx`](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/providers.tsx) | `pnpm dev:demo` | The React provider stack, RPC overrides, the solver-environment switcher and a `logger` sink |
+| [`apps/node/src/logging.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/logging.ts) | `pnpm logging` | The minimal non-React construction — one `new Sodax({ … })` with no key, RPC or network |
+
 ## Additional Resources
 
 - [Monetize SDK](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/MONETIZE_SDK.md) - Detailed fee configuration guide
-- [Architecture Reference](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/ARCHITECTURE_REFACTOR_SUMMARY.md) - Spoke services, raw tx handling, `Result<T>`, error conventions
+- [Architecture Reference](./ARCHITECTURE.md) - Spoke services, raw tx handling, `Result<T>`, error conventions
+- [Recovery](https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/recovery) - `sodax.recovery`, for assets stranded in a hub wallet

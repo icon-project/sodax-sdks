@@ -34,6 +34,7 @@
     "mm-cross-chain-test": "pnpm run build && node dist/tests/mm-cross-chain.test.js",
     "bridge-limits-test": "pnpm run build && node dist/tests/bridge-limits.test.js",
     "leverage-yield": "tsx src/leverage-yield.ts",
+    "logging": "tsx src/logging.ts",
     "stellar-sponsor": "tsx src/stellar-sponsor.ts",
     "build": "tsc",
     "checkTs": "tsc --noEmit",

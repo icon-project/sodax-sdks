@@ -287,7 +287,7 @@ Swap-tx submission and the rest of the typed Swaps API v2 moved off `BackendApiS
 client — `sodax.api.swaps` (`SwapsApiService`). Submit a signed spoke-chain swap transaction with
 `sodax.api.swaps.submitTx(...)` and poll it with
 `sodax.api.swaps.getSubmitTxStatus({ txHash, srcChainKey })` (both fields required). See
-[`SWAPS_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS_API.md) for the full 21-endpoint reference (quote, create-intent, submit-tx,
+[`SWAPS_API.md`](https://docs.sodax.com/developers/packages/foundation/sdk/tooling-modules/swaps_api) for the full 21-endpoint reference (quote, create-intent, submit-tx,
 status, fees, …).
 
 ## Solver Endpoints

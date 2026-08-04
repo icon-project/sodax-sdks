@@ -89,7 +89,9 @@ Reference implementation: `apps/wallet-modal-example`.
 
 ## Docs Links
 
-`README.md` is mirrored into GitBook (docs.sodax.com), which does not receive this package's `docs/` tree. Links from `README.md` into `docs/**` (and any other in-repo path) must be absolute `https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/…` URLs; relative ones 404 on the published page. Links between the `docs/**` guides themselves stay relative — those files are not mirrored. Gate: `pnpm check:doc-links`.
+`README.md` **and** the `docs/**` guides are mirrored into GitBook (docs.sodax.com): `README.md` → `developers/packages/connection/wallet-sdk-react.md`, and each `docs/<FILE>.md` → `developers/packages/connection/docs/<FILE>.md`. That `docs/` destination is deliberate — it is what keeps `README.md`'s `docs/<FILE>.md` links and the guides' `./<FILE>.md` sibling links relative and legal.
+
+So inside `README.md` and `docs/**`, a relative link is legal only when it points at another mirrored guide under the same filename. Everything else needs an absolute `https://github.com/icon-project/sodax-sdks/blob/main/…` URL — in particular `docs/ADDING_A_NEW_CHAIN.md`, which is a contributor workflow and deliberately **not** mirrored, and any link to source files or to another package's docs. Gate: `pnpm check:doc-links`.
 
 ## Build And Tests
 
