@@ -138,6 +138,21 @@ URL only resolves once merged to `main`. See [`packages/assets/README.md`](../..
 pnpm --filter @sodax/types test    # vitest → tokens-dedup.test.ts: no dup symbol/address (swap/MM lists only)
 pnpm checkTs                        # tsc → the `satisfies XToken` constraint catches a malformed entry (missing/wrong-typed field)
 ```
+
+For an ERC-20, also check whether it carries the USDT-class approve guard — a token that rejects an
+allowance change from one non-zero value to another needs two transactions per approval, which is
+worth knowing before it is listed rather than from a stuck user:
+```bash
+pnpm --filter node approve-guard-check -- --chain <chainKey> --token <address>
+```
+With no `--owner` it plants a synthetic stale allowance via an `eth_call` state override, so it
+answers for a token nobody has approved yet — the usual case when listing one. `GUARDED` means the
+token has it. If it reports inconclusive, the RPC does not support state overrides: pass `--rpc` for
+one that does, or `--owner` of a wallet that already holds a non-zero allowance (that path runs the
+shipped planner and is authoritative, but only for that wallet).
+
+The SDK handles a guarded token either way — `Erc20Service.planApproval` detects it at approval time
+— so this is information, not a blocker. Note it in the PR.
 That is this skill's whole job: the token is defined and wired in the **right place and format**,
 and the checks pass.
 

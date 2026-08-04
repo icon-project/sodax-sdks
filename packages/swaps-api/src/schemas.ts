@@ -93,7 +93,7 @@ export const DeadlineResponseSchema = v.object({ deadline: v.string() });
 export const AllowanceCheckResponseSchema = v.object({ valid: v.boolean() });
 
 export const makeApproveResponseSchema = (txSchema: v.GenericSchema<unknown, RawTxReturnType>) =>
-  v.object({ tx: txSchema });
+  v.object({ tx: txSchema, resetTx: v.optional(txSchema) });
 
 export const SubmitIntentResponseSchema = v.object({ result: v.unknown() });
 

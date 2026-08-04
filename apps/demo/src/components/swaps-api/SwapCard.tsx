@@ -35,7 +35,7 @@ import {
   useNearStorageGate,
   useStellarGate,
   useSwapsApiAllowance,
-  useSwapsApiApprove,
+  useSwapsApiApproveAndBroadcast,
   useSwapsApiCreateIntent,
   useSwapsApiDeadline,
   useSwapsApiQuote,
@@ -59,11 +59,7 @@ import { buildOrderSummary, type Order } from '@/components/swaps/OrderStatus';
 import { appendOrder } from '@/lib/orderHistory';
 import { loadSwapsApiSelection, saveSwapsApiSelection } from '@/components/swaps-api/lib/lastSelection';
 import { toIntentRequest, toXToken } from '@/components/swaps-api/lib/mappers';
-import {
-  isSignableSwapsApiChain,
-  signAndBroadcastSwapsApiTx,
-  waitForTxFinality,
-} from '@/components/swaps-api/lib/signAndBroadcast';
+import { isSignableSwapsApiChain, signAndBroadcastSwapsApiTx } from '@/components/swaps-api/lib/signAndBroadcast';
 import { useDebouncedValue } from '@/components/swaps-api/lib/useDebouncedValue';
 import { useAppStore } from '@/zustand/useAppStore';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
@@ -284,14 +280,14 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   };
 
   // Allowance check via the Swaps API; self-disabled until the dialog builds intentParams.
-  const {
-    data: allowance,
-    isLoading: isAllowanceLoading,
-    refetch: refetchAllowance,
-  } = useSwapsApiAllowance({ params: { body: intentParams } });
+  // No manual refetch: useSwapsApiApproveAndBroadcast confirms on-chain inside the hook, so it
+  // invalidates ['swapsApi','allowance'] itself.
+  const { data: allowance, isLoading: isAllowanceLoading } = useSwapsApiAllowance({
+    params: { body: intentParams },
+  });
   const hasAllowed = allowance?.valid === true;
 
-  const { mutateAsyncSafe: approve } = useSwapsApiApprove();
+  const { mutateAsyncSafe: approve } = useSwapsApiApproveAndBroadcast();
   const { mutateAsyncSafe: createIntent } = useSwapsApiCreateIntent();
   const { mutateAsyncSafe: submitTx } = useSwapsApiSubmitTx();
 
@@ -326,22 +322,15 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     setApproveError(null);
     setIsApproving(true);
     try {
-      // The API only builds the unsigned approval tx — signing and broadcasting happen here.
-      const result = await approve({ body: intentParams });
+      // The hook owns the whole approval: it asks the API for the transactions, then signs,
+      // broadcasts, and waits for each. A guarded source token needs its stale allowance cleared
+      // first, and that reset has to be mined before the approve is valid — ordering the package
+      // keeps so no integration has to re-derive it. It invalidates the allowance query itself.
+      const result = await approve({ body: intentParams, walletProvider: sourceWalletProvider });
       if (!result.ok) {
         setApproveError(formatMutationFailureMessage(result.error, 'Approve failed'));
         return;
       }
-
-      const txHash = await signAndBroadcastSwapsApiTx({
-        chainKey: srcChainKey,
-        tx: result.value.tx,
-        walletProvider: sourceWalletProvider,
-      });
-      await waitForTxFinality(srcChainKey, sourceWalletProvider, txHash);
-      // The approve hook can't invalidate the allowance query (confirmation happened
-      // client-side, outside the hook) — refetch manually.
-      await refetchAllowance();
     } catch (error) {
       setApproveError(formatMutationFailureMessage(error, 'Approve signing failed'));
     } finally {

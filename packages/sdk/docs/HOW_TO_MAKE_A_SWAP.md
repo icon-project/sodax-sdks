@@ -210,6 +210,13 @@ if (!allowanceResult.ok) {
 
 If the allowance check returned `false`, approve the Asset Manager contract to spend your tokens. The approval amount matches the `inputAmount` in your intent parameters (fees are automatically deducted from this amount).
 
+**Two signatures on some tokens.** A few ERC-20s of the 2017 TetherToken lineage — Ethereum USDT is
+the one in the SODAX token list today — reject an allowance change from one non-zero value to
+another. When the wallet already holds a stale allowance on such a token, `approve` sends
+`approve(0)` first, waits for it to be mined, then sends the real approval, so the user signs twice.
+The returned value is still a single hash — the **last** transaction's — so the code below is
+unchanged. If you show an "Approving…" state, expect a second wallet prompt on those tokens.
+
 **Example**: See how token approval is handled in the example file: [`apps/node/src/swap.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/swap.ts#L114-L135).
 
 ```typescript

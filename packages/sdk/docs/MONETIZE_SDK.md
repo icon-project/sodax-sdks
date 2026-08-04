@@ -200,6 +200,13 @@ unsigned transaction object instead.
 Before swapping, ensure the ProtocolIntents contract is approved to spend the fee token.
 Native tokens are pre-approved and always return `true` from `isTokenApproved`.
 
+**Some tokens take two transactions.** A few ERC-20s of the 2017 TetherToken lineage reject an
+allowance change from one non-zero value to another, so `approveToken` sends `approve(0)` first and
+waits for it to be mined before the real approval — the user signs twice. This applies here more
+often than elsewhere, because fee approval always requests an unlimited allowance, so a second claim
+is always a non-zero to non-zero change. The returned value is still a single transaction hash, the
+**last** one's.
+
 ```typescript
 const approvedResult = await sodax.partners.feeClaim.isTokenApproved({
   srcChainKey: ChainKeys.SONIC_MAINNET,

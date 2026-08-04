@@ -197,7 +197,8 @@ Typed React Query wrappers over the backend Swaps API v2 (`sodax.api.swaps.*`), 
 
 | Hook | Type |
 |---|---|
-| `useSwapsApiApprove` | Mutation; builds unsigned approval tx |
+| `useSwapsApiApprove` | Mutation; builds unsigned approval tx(s) — `{ tx, resetTx? }`, caller signs |
+| `useSwapsApiApproveAndBroadcast` | Mutation; builds **and** signs/broadcasts/waits — preferred; `{ approveTxHash, resetTxHash? }` |
 | `useSwapsApiCreateIntent` | Mutation; builds `{ tx, intent, relayData }` |
 | `useSwapsApiSubmitIntent` | Mutation; submits broadcast intent to the relay |
 | `useSwapsApiCancelIntent` | Mutation; builds unsigned cancel tx |

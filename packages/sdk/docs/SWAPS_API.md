@@ -52,6 +52,36 @@ sodax.api.swaps.submitTx(body: SubmitTxRequestV2, config?): Promise<Result<Submi
 sodax.api.swaps.getSubmitTxStatus(query: SubmitTxStatusQueryV2, config?): Promise<Result<SubmitTxStatusResponseV2>>;
 ```
 
+## `approve` can return two transactions
+
+`ApproveResponseV2` is `{ tx, resetTx? }`. `resetTx` is present only when the source token rejects an
+allowance change from one non-zero value to another — the 2017 TetherToken lineage, of which
+Ethereum USDT is the one in the SODAX token list today — and the wallet already holds a stale
+allowance. A wallet in that state cannot approve at all until the allowance is zeroed.
+
+When `resetTx` is present, broadcast it **first** and wait for it to be mined, then broadcast `tx`.
+The second approval is only valid once the reset has landed on-chain, so the two cannot be batched.
+
+```typescript
+const { tx, resetTx } = approveResponse;
+
+if (resetTx) {
+  const resetHash = await sendTransaction(resetTx);
+  await waitForTransactionReceipt(resetHash);
+}
+
+const approveHash = await sendTransaction(tx);
+await waitForTransactionReceipt(approveHash);
+```
+
+The field is optional and absent for every other token, so a client that ignores it keeps working
+exactly as before — it just cannot rescue a wallet stuck on a guarded token.
+
+**In a React app, don't hand-roll the sequence.** `@sodax/dapp-kit` ships
+`useSwapsApiApproveAndBroadcast`, which requests, signs, broadcasts and waits for both transactions
+and resolves with `{ approveTxHash, resetTxHash? }` only once the approval has landed — the ordering
+above lives in the package rather than in every integration.
+
 ## Wire shapes — `bigint` vs decimal strings
 
 Request bodies that carry an `intent` struct (`cancelIntent`, `getIntentHash`,

@@ -88,6 +88,25 @@ The chain key on the request payload (e.g. `srcChainKey: ChainKeys.ETHEREUM_MAIN
 
 The chain key is the bridge between the type system and runtime routing.
 
+### ERC-20 approval can take two transactions
+
+A few ERC-20s of the 2017 TetherToken lineage reject an allowance change from one non-zero value to
+another, so a wallet holding a stale allowance cannot approve at all until the allowance is zeroed.
+Before a signed approval, `SpokeService` simulates the approve and, when it reverts, sends
+`approve(0)` first, waits for it to be mined, then sends the real approval. The user signs twice.
+
+Detection is behavioural — the simulated approve either reverts or it does not — never a token list,
+so a token added or upgraded later is handled without a code change. Consumer impact:
+
+- **Signed flows (`raw: false`)** are unchanged. Every feature `approve` still resolves to a single
+  transaction hash: the hash of the **last** transaction. Show step progress in the UI if you want,
+  but nothing breaks if you do not.
+- **Unsigned flows (`raw: true`)** still return exactly one transaction from `approve`, which cannot
+  express a two-step plan. Use `sodax.swaps.buildApproveTxs({ params, raw: true })` instead — it
+  returns `{ approveTx, resetTx? }`. `resetTx` is present only for a guarded token holding a stale
+  allowance — broadcast it and wait for it to be mined first, because `approveTx` is not valid until
+  the reset has landed.
+
 ---
 
 ## 3. `Sodax` facade and service graph

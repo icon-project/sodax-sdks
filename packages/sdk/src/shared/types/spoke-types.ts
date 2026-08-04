@@ -208,6 +208,22 @@ export type SpokeApproveParamsStellar<K extends StellarChainKey, Raw extends boo
 };
 
 /**
+ * The unsigned transactions an approval needs, named rather than ordered.
+ *
+ * `resetTx` is present only for a token that rejects an allowance change from one non-zero value to
+ * another while a stale allowance exists. When it is, **broadcast it first and wait for it to be
+ * mined** — `approveTx` is not valid until the reset has landed.
+ *
+ * Deliberately not an array: the only consumers map these onto named fields anyway
+ * (`ApproveResponseV2.tx` / `resetTx`), and a positional contract crossing a package boundary
+ * invites a reader to guess which end is which.
+ */
+export type ApprovalTxs<K extends SpokeChainKey> = {
+  readonly resetTx?: TxReturnType<K, true>;
+  readonly approveTx: TxReturnType<K, true>;
+};
+
+/**
  * Plain union of approve-capable variants. Callers who want narrow-`K` typing should instantiate
  * the specific variant (e.g. `SpokeApproveParamsHub<R>`) directly.
  */

@@ -57,6 +57,29 @@ sodax.api.swaps.getSubmitTxStatus(query: SubmitTxStatusQueryV2, config?): Promis
 The optional trailing `config?: RequestOverrideConfig` (`{ baseURL?, timeout?, headers? }`) on every method
 applies per-call overrides that take precedence over the service config (see "Per-call overrides" below).
 
+## `approve` can return two transactions
+
+`ApproveResponseV2` is `{ tx, resetTx? }`. `resetTx` appears only when the source token rejects an
+allowance change from one non-zero value to another (the 2017 TetherToken lineage) **and** the wallet
+already holds a stale allowance — a wallet in that state cannot approve at all until it is zeroed.
+
+Broadcast `resetTx` first and wait for it to be mined, then broadcast `tx`. The two cannot be
+batched: the approval is only valid once the reset has landed on-chain.
+
+```ts
+const { tx, resetTx } = approveResponse;
+
+if (resetTx) {
+  const resetHash = await sendTransaction(resetTx);
+  await waitForTransactionReceipt(resetHash);
+}
+
+await sendTransaction(tx);
+```
+
+The field is optional and absent for every other token, so ignoring it keeps existing behaviour —
+it just cannot rescue a wallet stuck on a guarded token.
+
 ## Wire shapes — `bigint` vs decimal strings
 
 Request bodies that carry an `intent` struct (`cancelIntent`, `getIntentHash`,

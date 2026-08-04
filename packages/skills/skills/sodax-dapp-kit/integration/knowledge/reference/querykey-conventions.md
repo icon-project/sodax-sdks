@@ -176,6 +176,7 @@ Typed wrappers over `sodax.api.swaps.*` (one per Swaps API v2 endpoint), all key
 | `['swapsApi', 'solverFee', amount]` | `useSwapsApiSolverFee` |
 | `['swapsApi', 'submitTx', 'status', txHash, srcChainKey]` | `useSwapsApiSubmitTxStatus` — both identifiers required |
 | `['swapsApi', 'approve']` | `useSwapsApiApprove` mutation |
+| `['swapsApi', 'approveAndBroadcast']` | `useSwapsApiApproveAndBroadcast` mutation |
 | `['swapsApi', 'createIntent']` | `useSwapsApiCreateIntent` mutation |
 | `['swapsApi', 'submitIntent']` | `useSwapsApiSubmitIntent` mutation |
 | `['swapsApi', 'cancelIntent']` | `useSwapsApiCancelIntent` mutation |

@@ -155,8 +155,22 @@ export function SwapCard() {
 
       const allowance = await swapsApi.checkAllowance(params);
       if (!allowance.valid) {
-        setSwapLog('Approve the source token in your wallet…');
         const approve = await swapsApi.approve(params);
+
+        // A TetherToken-lineage source token rejects a non-zero -> non-zero allowance change, so the
+        // API returns a reset transaction to send first. It has to be mined before the approve.
+        if (approve.resetTx) {
+          setSwapLog('Clear the stale allowance in your wallet…');
+          const resetHash = await (walletProvider as IEvmWalletProvider).sendTransaction(
+            approve.resetTx as EvmRawTransaction,
+          );
+          setSwapLog('Waiting for the allowance reset to confirm…');
+          await (walletProvider as IEvmWalletProvider).waitForTransactionReceipt(
+            resetHash as Parameters<IEvmWalletProvider['waitForTransactionReceipt']>[0],
+          );
+        }
+
+        setSwapLog('Approve the source token in your wallet…');
         const approveHash = await (walletProvider as IEvmWalletProvider).sendTransaction(
           approve.tx as EvmRawTransaction,
         );
