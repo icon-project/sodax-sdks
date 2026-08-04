@@ -94,6 +94,8 @@ How to setup local development
 
 <a href="https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/dex" class="button secondary" data-icon="droplet">DEX (Concentrated Liquidity)</a>- Asset wrapping plus concentrated-liquidity positions and rewards
 
+<a href="https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/recovery" class="button secondary" data-icon="life-ring">Recovery</a>- Returning assets stranded in a user's hub wallet after a half-completed operation
+
 ### Tooling Modules inside the SDK
 
 <a href="https://docs.sodax.com/developers/packages/foundation/sdk/tooling-modules/backend_api" class="button secondary" data-icon="plug">Backend API</a>- Intent, orderbook and money-market reads, plus dynamic config

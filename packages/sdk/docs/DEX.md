@@ -719,3 +719,13 @@ that field only exists on modules whose relay failures go through `mapRelayFailu
 6. **Retrieve tokenId** from the mint event using `clService.getMintPositionEvent(dstChainTxHash)` if needed for subsequent operations
 7. **Manage position** using `increaseLiquidity` / `decreaseLiquidity` / `claimRewards`
 8. **Withdraw** using `assetService.withdraw()` to unwrap StatATokens back to the original asset
+
+## Runnable example
+
+[`apps/demo`](https://github.com/icon-project/sodax-sdks/tree/main/apps/demo/src/pages/dex) —
+`pnpm dev:demo`, then `/dex`. It walks the eight steps above in order, so it is the fastest way to
+see which of them need an approval and which return a position `tokenId`.
+
+There is no backend counterpart in
+[`apps/node`](https://github.com/icon-project/sodax-sdks/tree/main/apps/node) for the DEX module
+yet.

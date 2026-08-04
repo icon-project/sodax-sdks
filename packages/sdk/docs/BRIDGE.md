@@ -567,3 +567,15 @@ const netAmount = inputAmount - feeAmount;
 ```
 
 Fees are denominated in vault token decimals (18 dp).
+
+## Runnable example
+
+[`apps/demo`](https://github.com/icon-project/sodax-sdks/tree/main/apps/demo/src/pages/bridge) —
+`pnpm dev:demo`, then `/bridge`. It drives the full quote → approve → bridge sequence through
+`@sodax/dapp-kit` hooks, including the cross-chain status polling this page describes.
+
+There is no backend counterpart for bridging in
+[`apps/node`](https://github.com/icon-project/sodax-sdks/tree/main/apps/node) yet — the closest
+starting point for a server-side integration is
+[`apps/node/src/swap.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/swap.ts),
+which shares the spoke-deposit and relay-polling shape.

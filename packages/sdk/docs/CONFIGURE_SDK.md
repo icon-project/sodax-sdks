@@ -307,7 +307,15 @@ ChainKeys.SOLANA_MAINNET;
 
 `SpokeChainKey` is the union type of all `ChainKeys` values. Use it to type any parameter that accepts a chain identifier.
 
+## Runnable examples
+
+| Example | Run | What it configures |
+| --- | --- | --- |
+| [`apps/demo/src/providers.tsx`](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/providers.tsx) | `pnpm dev:demo` | The React provider stack, RPC overrides, the solver-environment switcher and a `logger` sink |
+| [`apps/node/src/logging.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/logging.ts) | `pnpm logging` | The minimal non-React construction — one `new Sodax({ … })` with no key, RPC or network |
+
 ## Additional Resources
 
 - [Monetize SDK](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/MONETIZE_SDK.md) - Detailed fee configuration guide
 - [Architecture Reference](./ARCHITECTURE.md) - Spoke services, raw tx handling, `Result<T>`, error conventions
+- [Recovery](https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/recovery) - `sodax.recovery`, for assets stranded in a hub wallet

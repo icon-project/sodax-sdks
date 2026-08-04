@@ -180,6 +180,16 @@ validation/transform, response schemas, HTTP). This service adds the SDK convent
 - **Idempotent calls retry transient failures.** Reads, polls, and pure-compute POSTs (e.g. `getQuote`)
   are retried a few times on transient statuses / network errors; mutating calls are never retried.
 
+## Runnable examples
+
+| Example | Run | What it covers |
+| --- | --- | --- |
+| [`apps/swap-api-example`](https://github.com/icon-project/sodax-sdks/tree/main/apps/swap-api-example) | `pnpm --filter swap-api-example dev` | A Vite + React app driving this client on its own — no `@sodax/sdk`, no `@sodax/dapp-kit` |
+| [`apps/demo`](https://github.com/icon-project/sodax-sdks/tree/main/apps/demo/src/pages/swaps-api) | `pnpm dev:demo` → `/swaps-api` | The same API reached through the SDK's `sodax.api.swaps` wrapper |
+
+The pair is the clearest way to see the boundary this page describes: the standalone app talks to
+the wire client directly, the demo page goes through the wrapper.
+
 ## See also
 
 - [`BACKEND_API.md`](https://docs.sodax.com/developers/packages/foundation/sdk/tooling-modules/backend_api) — `sodax.backendApi`, the sibling client for intent/orderbook/money-market reads + config.

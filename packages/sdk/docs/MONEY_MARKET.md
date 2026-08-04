@@ -898,3 +898,15 @@ const formattedRate = formatPercentage(rateValue, 27); // Returns "5.25%"
 const basisPointsValue = 250n; // 250 bps = 2.50%
 const formattedBasisPoints = formatBasisPoints(basisPointsValue); // Returns "2.50%"
 ```
+
+## Runnable examples
+
+| Example | Run | What it covers |
+| --- | --- | --- |
+| [`apps/node/src/moneymarket.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/moneymarket.ts) | `pnpm moneyMarket` | Reserve and user data reads from a backend script — no React |
+| [`apps/node/src/moneymarket-ops.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/moneymarket-ops.ts) | `pnpm moneymarket-ops` | Supply / borrow / repay / withdraw against mainnet |
+| [`apps/demo`](https://github.com/icon-project/sodax-sdks/tree/main/apps/demo/src/pages/money-market) | `pnpm dev:demo` → `/money-market` | The same flows through `@sodax/dapp-kit` hooks, per spoke chain |
+
+The node scripts sign with `EVM_PRIVATE_KEY` from `apps/node/.env` and broadcast to mainnet — use a
+dedicated wallet. See the
+[node examples README](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/README.md).

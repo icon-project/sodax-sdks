@@ -375,3 +375,9 @@ if (rawTxResult.ok) {
   // Sign and broadcast yourself
 }
 ```
+
+## Runnable example
+
+[`apps/demo`](https://github.com/icon-project/sodax-sdks/tree/main/apps/demo/src/pages/partner-fee-claim)
+— `pnpm dev:demo`, then `/partner-fee-claim`. It runs the claim lifecycle in the order documented
+above: read accrued balances, inspect and set auto-swap preferences, approve, then claim.

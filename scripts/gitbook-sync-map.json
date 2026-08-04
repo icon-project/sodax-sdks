@@ -120,6 +120,22 @@
     {
       "src": "packages/wallet-sdk-react/docs/ARCHITECTURE.md",
       "dest": "developers/packages/connection/docs/ARCHITECTURE.md"
+    },
+    {
+      "src": "packages/sdk/docs/RECOVERY.md",
+      "dest": "developers/packages/foundation/sdk/functional-modules/recovery.md"
+    },
+    {
+      "src": "apps/node/README.md",
+      "dest": "developers/packages/examples/node.md"
+    },
+    {
+      "src": "apps/demo/README.md",
+      "dest": "developers/packages/examples/demo.md"
+    },
+    {
+      "src": "apps/wallet-modal-example/README.md",
+      "dest": "developers/packages/examples/wallet-modal.md"
     }
   ]
 }

@@ -488,3 +488,11 @@ Requirements for a valid custom implementation:
    compile time.
 3. **No base class required** — extending `BaseWalletProvider` is optional; it only provides the
    `defaults` storage and merge helpers from `@sodax/wallet-sdk-core`.
+
+## Runnable examples
+
+| Example | Run | What it covers |
+| --- | --- | --- |
+| [`apps/wallet-modal-example`](https://github.com/icon-project/sodax-sdks/tree/main/apps/wallet-modal-example) | `pnpm --filter @sodax/wallet-modal-example dev` | The connect flow on its own — no design system, no DeFi logic, just the wallet primitives |
+| [`apps/demo`](https://github.com/icon-project/sodax-sdks/tree/main/apps/demo/src/providers.tsx) | `pnpm dev:demo` | `providers.tsx` is the full provider stack to copy: `SodaxProvider` → `QueryClientProvider` → `SodaxWalletProvider` |
+| [`apps/node`](https://github.com/icon-project/sodax-sdks/tree/main/apps/node/src) | see the app README | The non-React side: every per-chain script constructs a wallet provider directly |
