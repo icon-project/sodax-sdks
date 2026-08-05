@@ -21,6 +21,7 @@ import {
   DEFAULT_BACKEND_API_ENDPOINT,
   DEFAULT_BACKEND_API_HEADERS,
   DEFAULT_BACKEND_API_TIMEOUT,
+  DEFAULT_SPONSORING_API_ENDPOINT,
   sodaxConfig,
   type DeepPartial,
   type PartnerFee,
@@ -29,7 +30,7 @@ import {
 } from '@sodax/types';
 import { mergeSodaxConfig } from './mergeSodaxConfig.js';
 import { calculateFeeAmount } from '../utils/shared-utils.js';
-import { resolveBaseApiConfig, resolveSwapsApiConfig } from '../../backendApi/apiConfig.js';
+import { resolveBaseApiConfig, resolveSponsoringApiConfig, resolveSwapsApiConfig } from '../../backendApi/apiConfig.js';
 
 const USER_ADDR = '0x1111111111111111111111111111111111111111';
 const INPUT = 1_000_000n;
@@ -153,26 +154,31 @@ describe('mergeSodaxConfig — api ApiConfig union resolves correctly per servic
     headers: { ...D },
   };
 
-  const resolveBoth = (override: DeepPartial<SodaxConfig>) => {
+  const resolveServices = (override: DeepPartial<SodaxConfig>) => {
     const merged = mergeSodaxConfig(freshConfig(), override);
-    return { base: resolveBaseApiConfig(merged.api), swaps: resolveSwapsApiConfig(merged.api), mergedApi: merged.api };
+    return {
+      base: resolveBaseApiConfig(merged.api),
+      swaps: resolveSwapsApiConfig(merged.api),
+      sponsoring: resolveSponsoringApiConfig(merged.api),
+      mergedApi: merged.api,
+    };
   };
 
   it('no override → base and swaps both use the defaults', () => {
-    const { base, swaps } = resolveBoth({});
+    const { base, swaps } = resolveServices({});
     expect(base).toEqual(DEFAULT_RESOLVED);
     expect(swaps).toEqual(DEFAULT_RESOLVED);
   });
 
   it('flat partial override (timeout) → applied to both, sibling baseURL preserved', () => {
-    const { base, swaps } = resolveBoth({ api: { timeout: 99_999 } });
+    const { base, swaps } = resolveServices({ api: { timeout: 99_999 } });
     const expected = { baseURL: DEFAULT_BACKEND_API_ENDPOINT, timeout: 99_999, headers: { ...D } };
     expect(base).toEqual(expected);
     expect(swaps).toEqual(expected);
   });
 
   it('flat full override → applied to both (swaps shares the base)', () => {
-    const { base, swaps } = resolveBoth({
+    const { base, swaps } = resolveServices({
       api: { baseURL: 'https://flat.example', timeout: 7, headers: { 'X-A': '1' } },
     });
     const expected = { baseURL: 'https://flat.example', timeout: 7, headers: { ...D, 'X-A': '1' } };
@@ -181,7 +187,7 @@ describe('mergeSodaxConfig — api ApiConfig union resolves correctly per servic
   });
 
   it('CustomApiConfig with swapsApiConfig only → base = defaults, swaps = custom (slice not dropped by merge)', () => {
-    const { base, swaps, mergedApi } = resolveBoth({
+    const { base, swaps, mergedApi } = resolveServices({
       api: { swapsApiConfig: { baseURL: 'https://swaps.example', timeout: 2, headers: { 'X-S': '1' } } },
     });
     expect(base).toEqual(DEFAULT_RESOLVED);
@@ -195,7 +201,7 @@ describe('mergeSodaxConfig — api ApiConfig union resolves correctly per servic
   });
 
   it('CustomApiConfig with baseApiConfig only → base = custom, swaps falls back to it', () => {
-    const { base, swaps } = resolveBoth({
+    const { base, swaps } = resolveServices({
       api: { baseApiConfig: { baseURL: 'https://base.example', timeout: 3, headers: { 'X-B': '1' } } },
     });
     const expected = { baseURL: 'https://base.example', timeout: 3, headers: { ...D, 'X-B': '1' } };
@@ -204,7 +210,7 @@ describe('mergeSodaxConfig — api ApiConfig union resolves correctly per servic
   });
 
   it('CustomApiConfig with both slices → swaps overrides baseURL/timeout, headers layer base under swaps', () => {
-    const { base, swaps } = resolveBoth({
+    const { base, swaps } = resolveServices({
       api: {
         baseApiConfig: { baseURL: 'https://base.example', timeout: 3, headers: { 'X-B': '1' } },
         swapsApiConfig: { baseURL: 'https://swaps.example', timeout: 2, headers: { 'X-S': '1' } },
@@ -216,7 +222,7 @@ describe('mergeSodaxConfig — api ApiConfig union resolves correctly per servic
   });
 
   it('CustomApiConfig: swaps inherits a baseApiConfig header (auth) it does not override', () => {
-    const { base, swaps } = resolveBoth({
+    const { base, swaps } = resolveServices({
       api: {
         baseApiConfig: { baseURL: 'https://base.example', timeout: 3, headers: { Authorization: 'tok' } },
         swapsApiConfig: { headers: { 'X-Swaps': '1' } },
@@ -238,6 +244,68 @@ describe('mergeSodaxConfig — api ApiConfig union resolves correctly per servic
       api: { swapsApiConfig: { baseURL: 'https://swaps.example', timeout: 2, headers: {} } },
     });
     expect(base.api).toEqual(before);
+  });
+
+  // The merge deep-merges into the FLAT default `api`, so a slice-only override always arrives
+  // alongside surviving top-level flat fields. Those fields must keep applying: a consumer who adds
+  // a slice to an existing flat config would otherwise be silently re-routed to the packaged default.
+  describe('a slice override alongside top-level flat fields', () => {
+    it('keeps a custom flat baseURL on base and swaps when only sponsoringApiConfig is added', () => {
+      const { base, swaps, sponsoring } = resolveServices({
+        api: { baseURL: 'https://backend.mydapp.com/sodax', sponsoringApiConfig: { apiKey: 'k' } },
+      });
+      const expected = { baseURL: 'https://backend.mydapp.com/sodax', timeout: DEFAULT_BACKEND_API_TIMEOUT };
+      expect(base).toMatchObject(expected);
+      expect(swaps).toMatchObject(expected);
+      // sponsoring still routes to its own host and carries the key
+      expect(sponsoring.baseURL).toBe(DEFAULT_SPONSORING_API_ENDPOINT);
+      expect(sponsoring.apiKey).toBe('k');
+    });
+
+    it('keeps custom flat timeout and headers on base and swaps when swapsApiConfig is added', () => {
+      const { base, swaps } = resolveServices({
+        api: {
+          baseURL: 'https://backend.mydapp.com/sodax',
+          timeout: 4321,
+          headers: { Authorization: 'tok' },
+          swapsApiConfig: { headers: { 'X-S': '1' } },
+        },
+      });
+      expect(base).toEqual({
+        baseURL: 'https://backend.mydapp.com/sodax',
+        timeout: 4321,
+        headers: { ...D, Authorization: 'tok' },
+      });
+      // swaps inherits the flat layer it does not override
+      expect(swaps).toEqual({
+        baseURL: 'https://backend.mydapp.com/sodax',
+        timeout: 4321,
+        headers: { ...D, Authorization: 'tok', 'X-S': '1' },
+      });
+    });
+
+    it('lets sponsoring inherit a flat timeout, but never the flat baseURL or headers', () => {
+      const { sponsoring } = resolveServices({
+        api: {
+          baseURL: 'https://backend.mydapp.com/sodax',
+          timeout: 4321,
+          headers: { Authorization: 'Bearer USER_JWT' },
+          sponsoringApiConfig: { apiKey: 'k' },
+        },
+      });
+      expect(sponsoring).toEqual({
+        baseURL: DEFAULT_SPONSORING_API_ENDPOINT,
+        timeout: 4321,
+        headers: { ...D },
+        apiKey: 'k',
+      });
+    });
+
+    it('leaves base and swaps on the defaults for a sponsoring-only override', () => {
+      const { base, swaps } = resolveServices({ api: { sponsoringApiConfig: { apiKey: 'k' } } });
+      expect(base).toEqual(DEFAULT_RESOLVED);
+      expect(swaps).toEqual(DEFAULT_RESOLVED);
+    });
   });
 });
 

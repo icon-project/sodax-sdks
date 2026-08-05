@@ -17,10 +17,18 @@ export const SuiActions = () => {
   const signMessageRef = useRef(signPersonalMessage);
   const walletsRef = useRef(suiWallets);
 
-  useEffect(() => { connectRef.current = suiConnectAsync; }, [suiConnectAsync]);
-  useEffect(() => { disconnectRef.current = suiDisconnectAsync; }, [suiDisconnectAsync]);
-  useEffect(() => { signMessageRef.current = signPersonalMessage; }, [signPersonalMessage]);
-  useEffect(() => { walletsRef.current = suiWallets; }, [suiWallets]);
+  useEffect(() => {
+    connectRef.current = suiConnectAsync;
+  }, [suiConnectAsync]);
+  useEffect(() => {
+    disconnectRef.current = suiDisconnectAsync;
+  }, [suiDisconnectAsync]);
+  useEffect(() => {
+    signMessageRef.current = signPersonalMessage;
+  }, [signPersonalMessage]);
+  useEffect(() => {
+    walletsRef.current = suiWallets;
+  }, [suiWallets]);
 
   useEffect(() => {
     registerChainActions('SUI', {

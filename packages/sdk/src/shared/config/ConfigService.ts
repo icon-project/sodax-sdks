@@ -459,7 +459,7 @@ export class ConfigService {
   get bridgePartnerFee(): PartnerFee | undefined {
     return this.bridge.partnerFee ?? this.fee;
   }
-  
+
   get leverageYieldPartnerFee(): PartnerFee | undefined {
     return this.leverageYield.partnerFee ?? this.fee;
   }

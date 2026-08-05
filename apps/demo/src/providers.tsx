@@ -9,6 +9,7 @@ import {
   type SolverConfig,
   ChainKeys,
   type DeepPartial,
+  type HttpUrl,
   type RpcConfig,
 } from '@sodax/dapp-kit';
 import { productionSolverConfig, stagingSolverConfig, devSolverConfig } from './constants';
@@ -38,6 +39,19 @@ const rpcConfig: RpcConfig = {
     radfiUmsUrl: process.env.RADFI_UMS_URL ?? 'https://api.ums.bound.exchange/api',
     rpcUrl: process.env.BITCOIN_RPC_URL ?? 'https://mempool.space/api',
   },
+};
+
+function isHttpUrl(value: unknown): value is HttpUrl {
+  return typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://'));
+}
+
+// Read credentials through Vite-scoped env variables, not the inlined process environment.
+// The optional base URL includes any deployment prefix; the SDK appends the sponsoring path.
+const sponsoringApiBaseUrlEnv: unknown = import.meta.env.VITE_SPONSORING_API_BASE_URL;
+const sponsoringApiKeyEnv: unknown = import.meta.env.VITE_SPONSORING_API_KEY;
+const sponsoringApiConfig = {
+  ...(isHttpUrl(sponsoringApiBaseUrlEnv) ? { baseURL: sponsoringApiBaseUrlEnv } : {}),
+  ...(typeof sponsoringApiKeyEnv === 'string' && sponsoringApiKeyEnv.length > 0 ? { apiKey: sponsoringApiKeyEnv } : {}),
 };
 
 const configMap: Record<SolverEnv, SolverConfig> = {
@@ -123,6 +137,7 @@ export default function Providers({ children }: { children: ReactNode }) {
           // which serves `/swaps/*` with no `/v1` prefix). Mirrors apps/swap-api-example.
           baseURL: import.meta.env.VITE_SWAPS_API_BASE_URL ?? 'https://canary-api.sodax.com/v1',
         },
+        sponsoringApiConfig,
       },
       logger: createDatadogLogger(),
       // Opt-in user-action analytics (issue #175). Enabled by default in the demo; the sink logs each

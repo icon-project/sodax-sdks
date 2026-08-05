@@ -40,7 +40,14 @@ import {
   type SpokeExecActionParams,
   type EvmSpokeOnlyChainKey,
 } from '@sodax/types';
-import { lookupFailed, verifyFailed, intentCreationFailed, executionFailed, approveFailed, allowanceCheckFailed } from '../errors/wrappers.js';
+import {
+  lookupFailed,
+  verifyFailed,
+  intentCreationFailed,
+  executionFailed,
+  approveFailed,
+  allowanceCheckFailed,
+} from '../errors/wrappers.js';
 import {
   type StakeOrchestrationError,
   type StakingAllowanceCheckError,
@@ -391,66 +398,77 @@ export class StakingService {
   public async stake<K extends SpokeChainKey>(
     _params: StakeAction<K, false>,
   ): Promise<Result<TxHashPair, StakeOrchestrationError>> {
-    return this.config.analytics.trackResult('staking', 'stake', async () => {
-      const { params, timeout } = _params;
-      const baseCtx = { srcChainKey: params.srcChainKey, action: 'stake' as const };
-      try {
-        const txResult = await this.createStakeIntent(_params);
-        // CreateStakeIntentErrorCode ⊂ StakeErrorCode, so SodaxError narrows correctly.
-        if (!txResult.ok) return { ok: false, error: txResult.error };
+    return this.config.analytics.trackResult(
+      'staking',
+      'stake',
+      async () => {
+        const { params, timeout } = _params;
+        const baseCtx = { srcChainKey: params.srcChainKey, action: 'stake' as const };
+        try {
+          const txResult = await this.createStakeIntent(_params);
+          // CreateStakeIntentErrorCode ⊂ StakeErrorCode, so SodaxError narrows correctly.
+          if (!txResult.ok) return { ok: false, error: txResult.error };
 
-        // verify the spoke tx hash exists on chain
-        const verifyTxHashResult = await this.spoke.verifyTxHash({
-          txHash: txResult.value.tx,
-          chainKey: params.srcChainKey,
-        });
+          // verify the spoke tx hash exists on chain
+          const verifyTxHashResult = await this.spoke.verifyTxHash({
+            txHash: txResult.value.tx,
+            chainKey: params.srcChainKey,
+          });
 
-        if (!verifyTxHashResult.ok) {
+          if (!verifyTxHashResult.ok) {
+            return {
+              ok: false,
+              error: verifyFailed('staking', verifyTxHashResult.error, baseCtx),
+            };
+          }
+
+          let hubTxHash: string;
+          if (!isHubChainKeyType(params.srcChainKey)) {
+            const packetResult = await relayTxAndWaitPacket({
+              srcTxHash: txResult.value.tx,
+              data: txResult.value.relayData,
+              chainKey: params.srcChainKey,
+              relayerApiEndpoint: this.relayerApiEndpoint,
+              timeout,
+            });
+            if (!packetResult.ok) {
+              return {
+                ok: false,
+                error: mapRelayFailure(packetResult.error, {
+                  feature: 'staking',
+                  action: baseCtx.action,
+                  srcChainKey: baseCtx.srcChainKey,
+                }),
+              };
+            }
+            hubTxHash = packetResult.value.dst_tx_hash;
+          } else {
+            hubTxHash = txResult.value.tx;
+          }
+
+          return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
+        } catch (error) {
+          if (isStakeOrchestrationError(error)) return { ok: false, error };
           return {
             ok: false,
-            error: verifyFailed('staking', verifyTxHashResult.error, baseCtx),
+            error: executionFailed('staking', error, baseCtx),
           };
         }
-
-        let hubTxHash: string;
-        if (!isHubChainKeyType(params.srcChainKey)) {
-          const packetResult = await relayTxAndWaitPacket({
-            srcTxHash: txResult.value.tx,
-            data: txResult.value.relayData,
-            chainKey: params.srcChainKey,
-            relayerApiEndpoint: this.relayerApiEndpoint,
-            timeout,
-          });
-          if (!packetResult.ok) {
-            return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'staking', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey }) };
-          }
-          hubTxHash = packetResult.value.dst_tx_hash;
-        } else {
-          hubTxHash = txResult.value.tx;
-        }
-
-        return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
-      } catch (error) {
-        if (isStakeOrchestrationError(error)) return { ok: false, error };
-        return {
-          ok: false,
-          error: executionFailed('staking', error, baseCtx),
-        };
-      }
-    },
-    {
-      start: () => ({
-        srcChainKey: _params.params.srcChainKey,
-        srcAddress: _params.params.srcAddress,
-        amount: _params.params.amount,
-        minReceive: _params.params.minReceive,
-      }),
-      success: value => ({
-        srcChainTxHash: value.srcChainTxHash,
-        dstChainTxHash: value.dstChainTxHash,
-      }),
-      failure: error => ({ code: error.code }),
-    });
+      },
+      {
+        start: () => ({
+          srcChainKey: _params.params.srcChainKey,
+          srcAddress: _params.params.srcAddress,
+          amount: _params.params.amount,
+          minReceive: _params.params.minReceive,
+        }),
+        success: value => ({
+          srcChainTxHash: value.srcChainTxHash,
+          dstChainTxHash: value.dstChainTxHash,
+        }),
+        failure: error => ({ code: error.code }),
+      },
+    );
   }
 
   /**
@@ -571,52 +589,63 @@ export class StakingService {
   public async unstake<K extends SpokeChainKey>(
     _params: UnstakeAction<K, false>,
   ): Promise<Result<TxHashPair, StakingOrchestrationError>> {
-    return this.config.analytics.trackResult('staking', 'unstake', async () => {
-      const { params, timeout } = _params;
-      const baseCtx = { srcChainKey: params.srcChainKey, action: 'unstake' as const };
-      try {
-        const txResult = await this.createUnstakeIntent(_params);
-        // CreateUnstakeIntentErrorCode ⊂ UnstakeErrorCode, so SodaxError narrows correctly.
-        if (!txResult.ok) return { ok: false, error: txResult.error };
+    return this.config.analytics.trackResult(
+      'staking',
+      'unstake',
+      async () => {
+        const { params, timeout } = _params;
+        const baseCtx = { srcChainKey: params.srcChainKey, action: 'unstake' as const };
+        try {
+          const txResult = await this.createUnstakeIntent(_params);
+          // CreateUnstakeIntentErrorCode ⊂ UnstakeErrorCode, so SodaxError narrows correctly.
+          if (!txResult.ok) return { ok: false, error: txResult.error };
 
-        let hubTxHash: string;
-        if (!isHubChainKeyType(params.srcChainKey)) {
-          const packetResult = await relayTxAndWaitPacket({
-            srcTxHash: txResult.value.tx,
-            data: txResult.value.relayData,
-            chainKey: params.srcChainKey,
-            relayerApiEndpoint: this.relayerApiEndpoint,
-            timeout,
-          });
-          if (!packetResult.ok) {
-            return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'staking', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey }) };
+          let hubTxHash: string;
+          if (!isHubChainKeyType(params.srcChainKey)) {
+            const packetResult = await relayTxAndWaitPacket({
+              srcTxHash: txResult.value.tx,
+              data: txResult.value.relayData,
+              chainKey: params.srcChainKey,
+              relayerApiEndpoint: this.relayerApiEndpoint,
+              timeout,
+            });
+            if (!packetResult.ok) {
+              return {
+                ok: false,
+                error: mapRelayFailure(packetResult.error, {
+                  feature: 'staking',
+                  action: baseCtx.action,
+                  srcChainKey: baseCtx.srcChainKey,
+                }),
+              };
+            }
+            hubTxHash = packetResult.value.dst_tx_hash;
+          } else {
+            hubTxHash = txResult.value.tx;
           }
-          hubTxHash = packetResult.value.dst_tx_hash;
-        } else {
-          hubTxHash = txResult.value.tx;
-        }
 
-        return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
-      } catch (error) {
-        if (isStakingOrchestrationError(error)) return { ok: false, error };
-        return {
-          ok: false,
-          error: executionFailed('staking', error, baseCtx),
-        };
-      }
-    },
-    {
-      start: () => ({
-        srcChainKey: _params.params.srcChainKey,
-        srcAddress: _params.params.srcAddress,
-        amount: _params.params.amount,
-      }),
-      success: value => ({
-        srcChainTxHash: value.srcChainTxHash,
-        dstChainTxHash: value.dstChainTxHash,
-      }),
-      failure: error => ({ code: error.code }),
-    });
+          return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
+        } catch (error) {
+          if (isStakingOrchestrationError(error)) return { ok: false, error };
+          return {
+            ok: false,
+            error: executionFailed('staking', error, baseCtx),
+          };
+        }
+      },
+      {
+        start: () => ({
+          srcChainKey: _params.params.srcChainKey,
+          srcAddress: _params.params.srcAddress,
+          amount: _params.params.amount,
+        }),
+        success: value => ({
+          srcChainTxHash: value.srcChainTxHash,
+          dstChainTxHash: value.dstChainTxHash,
+        }),
+        failure: error => ({ code: error.code }),
+      },
+    );
   }
 
   /**
@@ -730,53 +759,64 @@ export class StakingService {
   public async instantUnstake<K extends SpokeChainKey>(
     _params: InstantUnstakeAction<K, false>,
   ): Promise<Result<TxHashPair, StakingOrchestrationError>> {
-    return this.config.analytics.trackResult('staking', 'instantUnstake', async () => {
-      const { params, timeout } = _params;
-      const baseCtx = { srcChainKey: params.srcChainKey, action: 'instantUnstake' as const };
-      try {
-        const txResult = await this.createInstantUnstakeIntent(_params);
-        // CreateInstantUnstakeIntentErrorCode ⊂ InstantUnstakeErrorCode.
-        if (!txResult.ok) return { ok: false, error: txResult.error };
+    return this.config.analytics.trackResult(
+      'staking',
+      'instantUnstake',
+      async () => {
+        const { params, timeout } = _params;
+        const baseCtx = { srcChainKey: params.srcChainKey, action: 'instantUnstake' as const };
+        try {
+          const txResult = await this.createInstantUnstakeIntent(_params);
+          // CreateInstantUnstakeIntentErrorCode ⊂ InstantUnstakeErrorCode.
+          if (!txResult.ok) return { ok: false, error: txResult.error };
 
-        let hubTxHash: string;
-        if (!isHubChainKeyType(params.srcChainKey)) {
-          const packetResult = await relayTxAndWaitPacket({
-            srcTxHash: txResult.value.tx,
-            data: txResult.value.relayData,
-            chainKey: params.srcChainKey,
-            relayerApiEndpoint: this.relayerApiEndpoint,
-            timeout,
-          });
-          if (!packetResult.ok) {
-            return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'staking', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey }) };
+          let hubTxHash: string;
+          if (!isHubChainKeyType(params.srcChainKey)) {
+            const packetResult = await relayTxAndWaitPacket({
+              srcTxHash: txResult.value.tx,
+              data: txResult.value.relayData,
+              chainKey: params.srcChainKey,
+              relayerApiEndpoint: this.relayerApiEndpoint,
+              timeout,
+            });
+            if (!packetResult.ok) {
+              return {
+                ok: false,
+                error: mapRelayFailure(packetResult.error, {
+                  feature: 'staking',
+                  action: baseCtx.action,
+                  srcChainKey: baseCtx.srcChainKey,
+                }),
+              };
+            }
+            hubTxHash = packetResult.value.dst_tx_hash;
+          } else {
+            hubTxHash = txResult.value.tx;
           }
-          hubTxHash = packetResult.value.dst_tx_hash;
-        } else {
-          hubTxHash = txResult.value.tx;
-        }
 
-        return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
-      } catch (error) {
-        if (isStakingOrchestrationError(error)) return { ok: false, error };
-        return {
-          ok: false,
-          error: executionFailed('staking', error, baseCtx),
-        };
-      }
-    },
-    {
-      start: () => ({
-        srcChainKey: _params.params.srcChainKey,
-        srcAddress: _params.params.srcAddress,
-        amount: _params.params.amount,
-        minAmount: _params.params.minAmount,
-      }),
-      success: value => ({
-        srcChainTxHash: value.srcChainTxHash,
-        dstChainTxHash: value.dstChainTxHash,
-      }),
-      failure: error => ({ code: error.code }),
-    });
+          return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
+        } catch (error) {
+          if (isStakingOrchestrationError(error)) return { ok: false, error };
+          return {
+            ok: false,
+            error: executionFailed('staking', error, baseCtx),
+          };
+        }
+      },
+      {
+        start: () => ({
+          srcChainKey: _params.params.srcChainKey,
+          srcAddress: _params.params.srcAddress,
+          amount: _params.params.amount,
+          minAmount: _params.params.minAmount,
+        }),
+        success: value => ({
+          srcChainTxHash: value.srcChainTxHash,
+          dstChainTxHash: value.dstChainTxHash,
+        }),
+        failure: error => ({ code: error.code }),
+      },
+    );
   }
 
   /**
@@ -907,53 +947,64 @@ export class StakingService {
   public async claim<K extends SpokeChainKey>(
     _params: ClaimAction<K, false>,
   ): Promise<Result<TxHashPair, StakingOrchestrationError>> {
-    return this.config.analytics.trackResult('staking', 'claim', async () => {
-      const { params, timeout } = _params;
-      const baseCtx = { srcChainKey: params.srcChainKey, action: 'claim' as const };
-      try {
-        const txResult = await this.createClaimIntent(_params);
-        // CreateClaimIntentErrorCode ⊂ ClaimErrorCode.
-        if (!txResult.ok) return { ok: false, error: txResult.error };
+    return this.config.analytics.trackResult(
+      'staking',
+      'claim',
+      async () => {
+        const { params, timeout } = _params;
+        const baseCtx = { srcChainKey: params.srcChainKey, action: 'claim' as const };
+        try {
+          const txResult = await this.createClaimIntent(_params);
+          // CreateClaimIntentErrorCode ⊂ ClaimErrorCode.
+          if (!txResult.ok) return { ok: false, error: txResult.error };
 
-        let hubTxHash: string;
-        if (!isHubChainKeyType(params.srcChainKey)) {
-          const packetResult = await relayTxAndWaitPacket({
-            srcTxHash: txResult.value.tx,
-            data: txResult.value.relayData,
-            chainKey: params.srcChainKey,
-            relayerApiEndpoint: this.relayerApiEndpoint,
-            timeout,
-          });
-          if (!packetResult.ok) {
-            return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'staking', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey }) };
+          let hubTxHash: string;
+          if (!isHubChainKeyType(params.srcChainKey)) {
+            const packetResult = await relayTxAndWaitPacket({
+              srcTxHash: txResult.value.tx,
+              data: txResult.value.relayData,
+              chainKey: params.srcChainKey,
+              relayerApiEndpoint: this.relayerApiEndpoint,
+              timeout,
+            });
+            if (!packetResult.ok) {
+              return {
+                ok: false,
+                error: mapRelayFailure(packetResult.error, {
+                  feature: 'staking',
+                  action: baseCtx.action,
+                  srcChainKey: baseCtx.srcChainKey,
+                }),
+              };
+            }
+            hubTxHash = packetResult.value.dst_tx_hash;
+          } else {
+            hubTxHash = txResult.value.tx;
           }
-          hubTxHash = packetResult.value.dst_tx_hash;
-        } else {
-          hubTxHash = txResult.value.tx;
-        }
 
-        return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
-      } catch (error) {
-        if (isStakingOrchestrationError(error)) return { ok: false, error };
-        return {
-          ok: false,
-          error: executionFailed('staking', error, baseCtx),
-        };
-      }
-    },
-    {
-      start: () => ({
-        srcChainKey: _params.params.srcChainKey,
-        srcAddress: _params.params.srcAddress,
-        requestId: _params.params.requestId,
-        amount: _params.params.amount,
-      }),
-      success: value => ({
-        srcChainTxHash: value.srcChainTxHash,
-        dstChainTxHash: value.dstChainTxHash,
-      }),
-      failure: error => ({ code: error.code }),
-    });
+          return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
+        } catch (error) {
+          if (isStakingOrchestrationError(error)) return { ok: false, error };
+          return {
+            ok: false,
+            error: executionFailed('staking', error, baseCtx),
+          };
+        }
+      },
+      {
+        start: () => ({
+          srcChainKey: _params.params.srcChainKey,
+          srcAddress: _params.params.srcAddress,
+          requestId: _params.params.requestId,
+          amount: _params.params.amount,
+        }),
+        success: value => ({
+          srcChainTxHash: value.srcChainTxHash,
+          dstChainTxHash: value.dstChainTxHash,
+        }),
+        failure: error => ({ code: error.code }),
+      },
+    );
   }
 
   /**
@@ -1091,52 +1142,63 @@ export class StakingService {
   public async cancelUnstake<K extends SpokeChainKey>(
     _params: CancelUnstakeAction<K, false>,
   ): Promise<Result<TxHashPair, StakingOrchestrationError>> {
-    return this.config.analytics.trackResult('staking', 'cancelUnstake', async () => {
-      const { params, timeout } = _params;
-      const baseCtx = { srcChainKey: params.srcChainKey, action: 'cancelUnstake' as const };
-      try {
-        const txResult = await this.createCancelUnstakeIntent(_params);
-        // CreateCancelUnstakeIntentErrorCode ⊂ CancelUnstakeErrorCode.
-        if (!txResult.ok) return { ok: false, error: txResult.error };
+    return this.config.analytics.trackResult(
+      'staking',
+      'cancelUnstake',
+      async () => {
+        const { params, timeout } = _params;
+        const baseCtx = { srcChainKey: params.srcChainKey, action: 'cancelUnstake' as const };
+        try {
+          const txResult = await this.createCancelUnstakeIntent(_params);
+          // CreateCancelUnstakeIntentErrorCode ⊂ CancelUnstakeErrorCode.
+          if (!txResult.ok) return { ok: false, error: txResult.error };
 
-        let hubTxHash: string;
-        if (!isHubChainKeyType(params.srcChainKey)) {
-          const packetResult = await relayTxAndWaitPacket({
-            srcTxHash: txResult.value.tx,
-            data: txResult.value.relayData,
-            chainKey: params.srcChainKey,
-            relayerApiEndpoint: this.relayerApiEndpoint,
-            timeout,
-          });
-          if (!packetResult.ok) {
-            return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'staking', action: baseCtx.action, srcChainKey: baseCtx.srcChainKey }) };
+          let hubTxHash: string;
+          if (!isHubChainKeyType(params.srcChainKey)) {
+            const packetResult = await relayTxAndWaitPacket({
+              srcTxHash: txResult.value.tx,
+              data: txResult.value.relayData,
+              chainKey: params.srcChainKey,
+              relayerApiEndpoint: this.relayerApiEndpoint,
+              timeout,
+            });
+            if (!packetResult.ok) {
+              return {
+                ok: false,
+                error: mapRelayFailure(packetResult.error, {
+                  feature: 'staking',
+                  action: baseCtx.action,
+                  srcChainKey: baseCtx.srcChainKey,
+                }),
+              };
+            }
+            hubTxHash = packetResult.value.dst_tx_hash;
+          } else {
+            hubTxHash = txResult.value.tx;
           }
-          hubTxHash = packetResult.value.dst_tx_hash;
-        } else {
-          hubTxHash = txResult.value.tx;
-        }
 
-        return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
-      } catch (error) {
-        if (isStakingOrchestrationError(error)) return { ok: false, error };
-        return {
-          ok: false,
-          error: executionFailed('staking', error, baseCtx),
-        };
-      }
-    },
-    {
-      start: () => ({
-        srcChainKey: _params.params.srcChainKey,
-        srcAddress: _params.params.srcAddress,
-        requestId: _params.params.requestId,
-      }),
-      success: value => ({
-        srcChainTxHash: value.srcChainTxHash,
-        dstChainTxHash: value.dstChainTxHash,
-      }),
-      failure: error => ({ code: error.code }),
-    });
+          return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: hubTxHash } };
+        } catch (error) {
+          if (isStakingOrchestrationError(error)) return { ok: false, error };
+          return {
+            ok: false,
+            error: executionFailed('staking', error, baseCtx),
+          };
+        }
+      },
+      {
+        start: () => ({
+          srcChainKey: _params.params.srcChainKey,
+          srcAddress: _params.params.srcAddress,
+          requestId: _params.params.requestId,
+        }),
+        success: value => ({
+          srcChainTxHash: value.srcChainTxHash,
+          dstChainTxHash: value.dstChainTxHash,
+        }),
+        failure: error => ({ code: error.code }),
+      },
+    );
   }
 
   /**

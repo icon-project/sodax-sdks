@@ -16,6 +16,7 @@ import { resolveAnalytics } from '../analytics.js';
 import { PartnerService } from '../../partner/PartnerService.js';
 import { RecoveryService } from '../../recovery/RecoveryService.js';
 import { LeverageYieldService } from '../../leverageYield/LeverageYieldService.js';
+import { SponsoringService } from '../../sponsoring/SponsoringService.js';
 
 /**
  * Sodax class is used to interact with the Sodax.
@@ -35,6 +36,7 @@ export class Sodax {
   public readonly partners: PartnerService; // Partner service enabling partner fee claim and other partner operations
   public readonly recovery: RecoveryService; // Recovery service for withdrawing stuck hub-wallet assets back to a spoke chain
   public readonly dex: DexService; // Dex service enabling DEX operations
+  public readonly sponsoring: SponsoringService;
   public readonly leverageYield: LeverageYieldService; // Leverage-yield service: cross-chain deposits / withdrawals into ERC-4626 leverage vaults on Sonic
   public readonly config: ConfigService; // Config service enabling configuration data fetching from the backend API or fallbacking to default values
 
@@ -114,6 +116,12 @@ export class Sodax {
       hubProvider: this.hubProvider,
       config: this.config,
       spoke: this.spoke,
+    });
+    // Sponsored activation never touches the hub.
+    this.sponsoring = new SponsoringService({
+      config: this.config,
+      spoke: this.spoke,
+      api: this.backendApi,
     });
   }
 

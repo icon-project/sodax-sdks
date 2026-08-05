@@ -150,7 +150,7 @@ export function isLegacybnUSDToken(token: XToken | string): boolean {
 }
 
 export function getbnUSDToken(chainId: SpokeChainKey): XToken | undefined {
-  if ("bnUSD" in spokeChainConfig[chainId].supportedTokens) {
+  if ('bnUSD' in spokeChainConfig[chainId].supportedTokens) {
     return spokeChainConfig[chainId].supportedTokens.bnUSD;
   }
 
