@@ -63,10 +63,30 @@ export type BridgeDefaultConfig = {}; // kept for future extension
 
 export const bridgeConfig = {} satisfies BridgeDefaultConfig;
 
+/**
+ * RadFi/Bound request signer — a client-side RUNTIME hook (like {@link SodaxOptionalConfig.logger}),
+ * deliberately kept OUT of the serializable {@link RadfiConfig} data contract so it is never fetched
+ * from or overwritten by the backend config, and so no credential ever lives on the SDK config object.
+ *
+ * The SDK invokes it once per outbound RadFi `apiUrl` request and merges the returned headers onto that
+ * request. The consumer (e.g. a backend) owns the credential and computes the signature; the SDK holds
+ * only the function reference. Used to add Bound's `x-api-signature` HMAC header for server-to-server
+ * callers (see swaps-api gh-831), keeping the per-user `accessToken` and the backend credential separate.
+ */
+export type RadfiSignContext = {
+  method: string; // HTTP method of the outbound RadFi request
+  path: string; // request endpoint, e.g. `/sodax/transaction`
+};
+export type RadfiSigner = (ctx: RadfiSignContext) => Record<string, string> | Promise<Record<string, string>>;
+export type RadfiOptions = {
+  signRequest?: RadfiSigner; // returns extra headers (e.g. `x-api-signature`) merged onto each RadFi apiUrl request
+};
+
 export type SodaxOptionalConfig = {
   logger?: SodaxLoggerOption;
   analytics?: AnalyticsOption; // Opt-in user-action analytics: an AnalyticsConfig or false (default, disabled). Resolved client-side; never fetched from or overwritten by the backend config.
   fee?: PartnerFee;
+  radfi?: RadfiOptions; // Client-side RadFi/Bound runtime hook (request signer). Like `logger`/`analytics`: never part of the backend data contract.
   swaps?: SwapsOptions;
   moneyMarket?: MoneyMarketOptions;
   bridge?: BridgeOptions;

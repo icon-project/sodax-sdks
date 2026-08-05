@@ -16,7 +16,7 @@ import { Sodax } from '@sodax/sdk';
 const sodax = new Sodax();
 ```
 
-The constructor signature is `new Sodax(config?: SodaxOptions)`, where `SodaxOptions = DeepPartial<SodaxDefaultConfig> & SodaxOptionalConfig` — a deep-partial override of the `SodaxDefaultConfig` data contract plus the client-side options: the `logger` sink (see [LOGGING.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/LOGGING.md)), the global partner `fee`, per-feature `partnerFee` options, and the client-side `swapsOptions` / `bridgeOptions` toggles (see [Backend submit-tx 2-step](#backend-submit-tx-2-step-swapsoptionsusebackendsubmittx)). The `logger`, global `fee`, and the `swapsOptions` / `bridgeOptions` toggles are kept off the data contract: they are resolved once and never fetched from or overwritten by the backend config. When called with no arguments the SDK merges your overrides with the packaged static defaults ([`sodaxConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/sodax-config/sodax-config.ts)) using a recursive `deepMerge`. Omitted keys keep their default values.
+The constructor signature is `new Sodax(config?: SodaxOptions)`, where `SodaxOptions = DeepPartial<SodaxDefaultConfig> & SodaxOptionalConfig` — a deep-partial override of the `SodaxDefaultConfig` data contract plus the client-side options: the `logger` sink (see [LOGGING.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/LOGGING.md)), the global partner `fee`, per-feature `partnerFee` options, the `swapsOptions` / `bridgeOptions` toggles (see [Backend submit-tx 2-step](#backend-submit-tx-2-step-swapsoptionsusebackendsubmittx)), and `radfi` (see [RadFi/Bound request signer](#radfibound-request-signer-radfisignrequest)). The `logger`, global `fee`, the `swapsOptions` / `bridgeOptions` toggles, and `radfi` are kept off the data contract: they are resolved once and never fetched from or overwritten by the backend config. When called with no arguments the SDK merges your overrides with the packaged static defaults ([`sodaxConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/sodax-config/sodax-config.ts)) using a recursive `deepMerge`. Omitted keys keep their default values.
 
 ### Dynamic Configuration
 
@@ -163,6 +163,27 @@ const sodax = new Sodax({ bridgeOptions: { useBackendSubmitTx: true } });
 ```
 
 On any non-success (submission rejected, terminal `failed`/abandoned, or poll timeout) `bridge()` falls back to the client-side `relayTxAndWaitPacket` flow so the bridge still completes — safe because re-relaying an already-relayed bridge tx is idempotent, and the poll + fallback share one `timeout` budget. Bridge has no solver post-execution, so unlike swaps there is no `'posting_execution'` step. Default is `false`. See [BRIDGE_API.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BRIDGE_API.md) for the API client.
+### RadFi/Bound request signer (`radfi.signRequest`)
+
+`radfi` is a **client-side runtime option** on `SodaxOptions` (like `logger`) — never part of the backend-fetched `SodaxConfig`. The SDK calls `signRequest` once per outbound Bound Exchange (RadFi) `apiUrl` request and merges the returned headers onto it, so a server-to-server caller can attach Bound's `x-api-signature` HMAC header without the SDK ever holding the credential.
+
+```typescript
+import { createHmac } from 'node:crypto';
+
+const sodax = new Sodax({
+  radfi: {
+    signRequest: () => {
+      const ts = `${Date.now()}`;
+      const signature = createHmac('sha256', secretKey).update(`${secretWord}_${ts}`).digest('hex');
+      return { 'x-api-signature': `${signature}_${ts}` };
+    },
+  },
+});
+```
+
+**Server-side only** — the closure holds a service credential, so never ship one in a browser bundle. Omit `radfi` and requests go out exactly as before.
+
+The signer receives `{ method, path }`, may be async, and is invoked per request (Bound's signature embeds a timestamp valid for 60 s, so a cached one would replay). Its headers are merged **last**, so it must not return `Authorization`: that carries the per-user Bound access token, which is separate and passed per call via `extras.bound.accessToken`.
 
 ### Money market (`moneyMarket`)
 
