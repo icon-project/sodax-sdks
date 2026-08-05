@@ -77,7 +77,9 @@ export class BitcoinSpokeService {
     // since we only support mainnet for now, we can hardcode the single bitcoin chain config
     const chainConfig = config.getChainConfig(ChainKeys.BITCOIN_MAINNET);
     this.rpcUrl = chainConfig.rpcUrl;
-    this.radfi = new RadfiProvider(chainConfig.radfi);
+    // Pass the client-side RadFi signer (if any) so server-to-server callers can attach Bound's
+    // `x-api-signature` HMAC header. `config.radfiSigner` is undefined for browser callers. See gh-831.
+    this.radfi = new RadfiProvider(chainConfig.radfi, { signer: config.radfiSigner });
     this.walletMode = chainConfig.radfi.walletMode ?? 'TRADING';
     this.pollingIntervalMs = chainConfig.pollingConfig.pollingIntervalMs;
     this.maxTimeoutMs = chainConfig.pollingConfig.maxTimeoutMs;
