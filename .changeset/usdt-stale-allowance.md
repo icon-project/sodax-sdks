@@ -27,5 +27,7 @@ express a two-step plan. Two additions cover them: `sodax.swaps.buildApproveTxs`
 is no index to map — and `ApproveResponseV2` gains an optional `resetTx` to carry the reset over the
 swaps API. dapp-kit adds `useSwapsApiApproveAndBroadcast`, which runs that whole sequence — request,
 sign, broadcast, wait — so an integration does not have to re-derive the ordering; it also
-invalidates `['swapsApi','allowance']` itself, which `useSwapsApiApprove` cannot. Both are additive — an existing raw
-integration is unaffected until it opts in.
+invalidates `['swapsApi','allowance']` itself, which `useSwapsApiApprove` cannot. Mined is not
+treated as succeeded: a transaction that reverts on chain rejects the mutation naming the step that
+failed, so the approval is never sent over a reset that did not take. Both are additive — an
+existing raw integration is unaffected until it opts in.

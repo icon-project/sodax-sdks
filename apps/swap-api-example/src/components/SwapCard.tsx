@@ -35,6 +35,29 @@ function toIntentRequest(r: IntentResponseV2): IntentRequestV2 {
   };
 }
 
+/**
+ * Broadcast, wait, and refuse to continue on a revert. Mined is not the same as succeeded: a paused
+ * or blacklisted token mines the allowance reset and reverts it, and the approve that follows would
+ * then be paid for and revert too. `EvmRawTransactionReceipt.status` documents the JSON-RPC hex flag
+ * while the wallet SDK forwards viem's word, so accept either spelling.
+ */
+async function sendAndConfirm(
+  provider: IEvmWalletProvider,
+  tx: EvmRawTransaction,
+  step: string,
+  onBroadcast?: () => void,
+): Promise<string> {
+  const hash = await provider.sendTransaction(tx);
+  onBroadcast?.();
+  const receipt = await provider.waitForTransactionReceipt(
+    hash as Parameters<IEvmWalletProvider['waitForTransactionReceipt']>[0],
+  );
+  if (receipt.status === 'reverted' || receipt.status === '0x0') {
+    throw new Error(`The ${step} transaction ${hash} reverted on chain.`);
+  }
+  return hash;
+}
+
 function errorText(e: unknown): string {
   if (e instanceof SwapsApiError) {
     const body = e.context.body as { message?: string } | undefined;
@@ -158,26 +181,22 @@ export function SwapCard() {
         const approve = await swapsApi.approve(params);
 
         // A TetherToken-lineage source token rejects a non-zero -> non-zero allowance change, so the
-        // API returns a reset transaction to send first. It has to be mined before the approve.
+        // API returns a reset transaction to send first. It has to succeed before the approve is
+        // even a valid state transition, so a reverted reset stops the flow here.
         if (approve.resetTx) {
           setSwapLog('Clear the stale allowance in your wallet…');
-          const resetHash = await (walletProvider as IEvmWalletProvider).sendTransaction(
+          await sendAndConfirm(
+            walletProvider as IEvmWalletProvider,
             approve.resetTx as EvmRawTransaction,
-          );
-          setSwapLog('Waiting for the allowance reset to confirm…');
-          await (walletProvider as IEvmWalletProvider).waitForTransactionReceipt(
-            resetHash as Parameters<IEvmWalletProvider['waitForTransactionReceipt']>[0],
+            'allowance reset',
+            () => setSwapLog('Waiting for the allowance reset to confirm…'),
           );
         }
 
         setSwapLog('Approve the source token in your wallet…');
-        const approveHash = await (walletProvider as IEvmWalletProvider).sendTransaction(
-          approve.tx as EvmRawTransaction,
-        );
         // Wait until the approval is mined — otherwise createIntent's tx can revert on a stale allowance.
-        setSwapLog('Waiting for approval to confirm…');
-        await (walletProvider as IEvmWalletProvider).waitForTransactionReceipt(
-          approveHash as Parameters<IEvmWalletProvider['waitForTransactionReceipt']>[0],
+        await sendAndConfirm(walletProvider as IEvmWalletProvider, approve.tx as EvmRawTransaction, 'approve', () =>
+          setSwapLog('Waiting for approval to confirm…'),
         );
       }
 

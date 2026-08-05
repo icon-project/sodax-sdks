@@ -25,6 +25,16 @@ export type SwapsApiApprovalHashes = {
   readonly approveTxHash: string;
 };
 
+/** Names the transaction in an error, so a revert says which of the two steps failed. */
+type ApprovalStep = 'allowance reset' | 'approve';
+
+/**
+ * `EvmRawTransactionReceipt.status` is documented as the JSON-RPC hex flag, but `EvmWalletProvider`
+ * passes viem's `'reverted'` through unchanged, so both spellings reach this hook. A receipt without
+ * a status is pre-Byzantium and inconclusive — not a revert.
+ */
+const isRevertedEvmReceiptStatus = (status: string | undefined): boolean => status === 'reverted' || status === '0x0';
+
 export type UseSwapsApiApproveAndBroadcastVars<K extends SpokeChainKey = SpokeChainKey> = {
   body: CreateIntentParamsV2;
   walletProvider: GetWalletProviderType<K>;
@@ -73,11 +83,16 @@ export const useSwapsApiApproveAndBroadcast = <K extends SpokeChainKey = SpokeCh
 
       // Broadcast and wait as one step: the next transaction is only valid once this one has landed,
       // so returning before confirmation would hand the caller back the same ordering hazard.
-      const sendAndWait = async (raw: RawTxReturnType): Promise<string> => {
+      const sendAndWait = async (raw: RawTxReturnType, step: ApprovalStep): Promise<string> => {
         if (isHubChainKeyType(srcChainKey) || isEvmSpokeOnlyChainKeyType(srcChainKey)) {
           const evm = walletProvider as IEvmWalletProvider;
           const hash = await evm.sendTransaction(raw as EvmRawTransaction);
-          await evm.waitForTransactionReceipt(hash as Hex);
+          const receipt = await evm.waitForTransactionReceipt(hash as Hex);
+          // Mined is not the same as succeeded: a paused or blacklisted token reverts on-chain, and
+          // waiting alone would let the next transaction go out over an allowance that never moved.
+          if (isRevertedEvmReceiptStatus(receipt.status)) {
+            throw new Error(`[useSwapsApiApproveAndBroadcast] the ${step} transaction ${hash} reverted on chain.`);
+          }
           return hash;
         }
 
@@ -90,7 +105,10 @@ export const useSwapsApiApproveAndBroadcast = <K extends SpokeChainKey = SpokeCh
             );
           }
           const hash = await stellar.signAndSendTransaction(raw as StellarRawTransaction);
-          await stellar.waitForTransactionReceipt(hash);
+          const receipt = await stellar.waitForTransactionReceipt(hash);
+          if (receipt.successful === false) {
+            throw new Error(`[useSwapsApiApproveAndBroadcast] the ${step} transaction ${hash} failed on chain.`);
+          }
           return hash;
         }
 
@@ -101,8 +119,8 @@ export const useSwapsApiApproveAndBroadcast = <K extends SpokeChainKey = SpokeCh
 
       // A throw here aborts before the approve is sent, which is the point: an unconfirmed reset
       // leaves the allowance untouched, so a retry re-plans and costs a single transaction.
-      const resetTxHash = resetTx === undefined ? undefined : await sendAndWait(resetTx);
-      const approveTxHash = await sendAndWait(tx);
+      const resetTxHash = resetTx === undefined ? undefined : await sendAndWait(resetTx, 'allowance reset');
+      const approveTxHash = await sendAndWait(tx, 'approve');
 
       return resetTxHash === undefined ? { approveTxHash } : { resetTxHash, approveTxHash };
     },

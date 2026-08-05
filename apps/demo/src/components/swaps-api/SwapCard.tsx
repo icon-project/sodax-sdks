@@ -706,7 +706,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
                 type="button"
                 variant="default"
                 onClick={handleApprove}
-                disabled={!isSourceSignable || isAllowanceLoading || hasAllowed || isApproving}
+                disabled={!isSourceSignable || isWrongChain || isAllowanceLoading || hasAllowed || isApproving}
               >
                 {isApproving ? 'Approving...' : hasAllowed ? 'Approved' : 'Approve'}
               </Button>

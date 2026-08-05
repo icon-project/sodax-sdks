@@ -54,6 +54,12 @@ const sponsoringApiConfig = {
   ...(typeof sponsoringApiKeyEnv === 'string' && sponsoringApiKeyEnv.length > 0 ? { apiKey: sponsoringApiKeyEnv } : {}),
 };
 
+// Retarget the swaps API, for running the demo against a locally started `swaps-api` instead of
+// canary. Same shape as the sponsoring override: the value is the base URL *including* any version
+// prefix, so a local service that mounts `/swaps/*` at the bare origin is `http://localhost:3008`.
+const swapsApiBaseUrlEnv: unknown = import.meta.env.VITE_SWAPS_API_BASE_URL;
+const swapsApiBaseURL = isHttpUrl(swapsApiBaseUrlEnv) ? swapsApiBaseUrlEnv : 'https://canary-api.sodax.com/v1';
+
 const configMap: Record<SolverEnv, SolverConfig> = {
   [SolverEnv.Production]: productionSolverConfig,
   [SolverEnv.Staging]: stagingSolverConfig,
@@ -133,7 +139,7 @@ export default function Providers({ children }: { children: ReactNode }) {
           baseURL: 'https://api.sodax.com/v1/be',
         },
         swapsApiConfig: {
-          baseURL: 'https://canary-api.sodax.com/v1',
+          baseURL: swapsApiBaseURL,
         },
         sponsoringApiConfig,
       },

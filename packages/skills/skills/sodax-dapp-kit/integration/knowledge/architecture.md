@@ -218,13 +218,16 @@ Nothing about the hook contract changes and there is no flag to set. What matter
 
 On the unsigned (swaps-API) path, prefer **`useSwapsApiApproveAndBroadcast`**: it asks the API for
 the transactions, then signs, broadcasts, and waits for each, resolving with
-`{ approveTxHash, resetTxHash? }` only once the final approval has landed. It also invalidates
-`['swapsApi','allowance']` itself, because confirmation now happens inside the hook.
+`{ approveTxHash, resetTxHash? }` only once the final approval has landed. A transaction that mines
+but reverts rejects the mutation naming that step, so the approve is never sent over a reset that
+did not take. It also invalidates `['swapsApi','allowance']` itself, because confirmation now
+happens inside the hook.
 
 `useSwapsApiApprove` still exists and returns the API's `{ tx, resetTx? }` verbatim — use it only
-when you need to own signing. If you do, broadcast `resetTx` **first and wait for it to be mined**;
+when you need to own signing. If you do, broadcast `resetTx` **first and wait for it to succeed**;
 the approve is not a valid state transition until the reset has landed, so sending both together
-spends the user's gas on a certain revert.
+spends the user's gas on a certain revert. Waiting is not enough on its own — check the receipt's
+status, because a mined-and-reverted reset leaves the allowance exactly where it was.
 
 ## queryKey / mutationKey conventions (mandatory)
 

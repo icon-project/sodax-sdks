@@ -38,8 +38,11 @@ const APPROVE_HASH = '0xapprove-hash';
 
 const body = (srcChainKey: string) => ({ srcChainKey, inputToken: '0xtoken', inputAmount: '1' });
 
-/** Records the interleaving of sends and waits so ordering can be asserted, not assumed. */
-function evmProvider(calls: string[], onWait?: (hash: string) => void) {
+/**
+ * Records the interleaving of sends and waits so ordering can be asserted, not assumed.
+ * `onWait` either throws (the receipt never arrives) or returns the mined status.
+ */
+function evmProvider(calls: string[], onWait?: (hash: string) => string | void) {
   return {
     sendTransaction: vi.fn(async (tx: { data: string }) => {
       calls.push(`send:${tx.data}`);
@@ -47,7 +50,7 @@ function evmProvider(calls: string[], onWait?: (hash: string) => void) {
     }),
     waitForTransactionReceipt: vi.fn(async (hash: string) => {
       calls.push(`wait:${hash}`);
-      onWait?.(hash);
+      return { status: onWait?.(hash) ?? 'success' };
     }),
   };
 }
@@ -90,6 +93,32 @@ describe('useSwapsApiApproveAndBroadcast', () => {
     expect(calls).toEqual(['send:0xreset', `wait:${RESET_HASH}`]);
   });
 
+  it('never sends the approve when the reset is mined but reverts', async () => {
+    approve.mockResolvedValue({ ok: true, value: { tx: APPROVE_TX, resetTx: RESET_TX } });
+    const calls: string[] = [];
+    // A paused or blacklisted token mines the reset and reverts it; the allowance never moved, so
+    // the approve that follows is certain to revert too and would be paid for.
+    const walletProvider = evmProvider(calls, hash => (hash === RESET_HASH ? 'reverted' : 'success'));
+
+    await expect(run({ body: body(ChainKeys.ARBITRUM_MAINNET), walletProvider })).rejects.toThrow(
+      /allowance reset transaction .* reverted/,
+    );
+
+    expect(walletProvider.sendTransaction).toHaveBeenCalledTimes(1);
+    expect(calls).toEqual(['send:0xreset', `wait:${RESET_HASH}`]);
+  });
+
+  it('reports a reverted approve, whichever spelling of the status the provider returns', async () => {
+    approve.mockResolvedValue({ ok: true, value: { tx: APPROVE_TX } });
+    // `EvmWalletProvider` forwards viem's `'reverted'`; a provider reading the JSON-RPC receipt
+    // directly returns `'0x0'`. Both mean the same thing.
+    const walletProvider = evmProvider([], () => '0x0');
+
+    await expect(run({ body: body(ChainKeys.ARBITRUM_MAINNET), walletProvider })).rejects.toThrow(
+      /approve transaction .* reverted/,
+    );
+  });
+
   it('sends one transaction and omits resetTxHash for an ordinary token', async () => {
     approve.mockResolvedValue({ ok: true, value: { tx: APPROVE_TX } });
     const calls: string[] = [];
@@ -115,13 +144,25 @@ describe('useSwapsApiApproveAndBroadcast', () => {
     approve.mockResolvedValue({ ok: true, value: { tx: trustlineTx } });
     const walletProvider = {
       signAndSendTransaction: vi.fn().mockResolvedValue('stellar-hash'),
-      waitForTransactionReceipt: vi.fn().mockResolvedValue(undefined),
+      waitForTransactionReceipt: vi.fn().mockResolvedValue({ successful: true }),
     };
 
     const result = await run({ body: body(ChainKeys.STELLAR_MAINNET), walletProvider });
 
     expect(result).toEqual({ approveTxHash: 'stellar-hash' });
     expect(walletProvider.signAndSendTransaction).toHaveBeenCalledWith(trustlineTx);
+  });
+
+  it('reports a Stellar trustline that Horizon records as unsuccessful', async () => {
+    approve.mockResolvedValue({ ok: true, value: { tx: { unsignedTx: 'AAAA' } } });
+    const walletProvider = {
+      signAndSendTransaction: vi.fn().mockResolvedValue('stellar-hash'),
+      waitForTransactionReceipt: vi.fn().mockResolvedValue({ successful: false }),
+    };
+
+    await expect(run({ body: body(ChainKeys.STELLAR_MAINNET), walletProvider })).rejects.toThrow(
+      /approve transaction .* failed on chain/,
+    );
   });
 
   it('names the missing capability when a Stellar wallet cannot sign', async () => {
