@@ -1093,11 +1093,13 @@ describe('SwapService.createIntent', () => {
       }
     });
 
-    it('rejects when dstChain is Bitcoin + outputToken is BTC and minOutputAmount is below the 546 sat dust limit', async () => {
+    it('rejects when dstChain is Bitcoin + outputToken is native BTC and minOutputAmount is below the 546 sat dust limit', async () => {
+      // `outputToken` is an original asset address, not a symbol — native BTC on Bitcoin is '0:0'.
+      // The guard must resolve the address to its token descriptor, so the real address has to be used.
       const bitcoinDstParams = {
         ...intentInput(ChainKeys.BSC_MAINNET),
         dstChainKey: ChainKeys.BITCOIN_MAINNET,
-        outputToken: 'BTC' as const,
+        outputToken: spokeChainConfig[ChainKeys.BITCOIN_MAINNET].supportedTokens.BTC.address,
         minOutputAmount: 100n,
       };
 
@@ -1113,6 +1115,28 @@ describe('SwapService.createIntent', () => {
         expect(isSodaxError(caughtError)).toBe(true);
         expect(caughtError.code).toBe('VALIDATION_FAILED');
         expect(caughtError.message).toContain('Invalid minOutputAmount');
+        expect(caughtError.message).toContain('dust limit');
+      }
+    });
+
+    it('rejects when srcChain is Bitcoin + inputToken is native BTC and inputAmount is below the 546 sat dust limit', async () => {
+      // The dust rule applies to the BTC deposit on a Bitcoin source too. `inputToken` is the native BTC
+      // original asset address ('0:0'); the raw path lets the invariant trip before any wallet step.
+      const bitcoinSrcParams = {
+        ...intentInput(ChainKeys.BITCOIN_MAINNET),
+        inputToken: spokeChainConfig[ChainKeys.BITCOIN_MAINNET].supportedTokens.BTC.address,
+        inputAmount: 100n,
+      };
+
+      const result = await sodax.swaps.createIntent({ params: bitcoinSrcParams, raw: true });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        const caughtError = result.error;
+        expect(isSodaxError(caughtError)).toBe(true);
+        expect(caughtError.code).toBe('VALIDATION_FAILED');
+        expect(caughtError.message).toContain('Invalid inputAmount');
+        expect(caughtError.message).toContain('dust limit');
       }
     });
   });

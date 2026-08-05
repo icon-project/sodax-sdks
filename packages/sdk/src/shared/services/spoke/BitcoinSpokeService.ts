@@ -8,7 +8,14 @@ import type {
   TxReturnType,
 } from '@sodax/types';
 import type { RelayExtraData } from '../../types/relay-types.js';
-import { ChainKeys, detectBitcoinAddressType, getIntentRelayChainId, usesBip322MessageSigning } from '@sodax/types';
+import {
+  BITCOIN_DUST_SATS,
+  ChainKeys,
+  detectBitcoinAddressType,
+  getIntentRelayChainId,
+  isNativeBitcoinToken,
+  usesBip322MessageSigning,
+} from '@sodax/types';
 import * as ecc from '@bitcoinerlab/secp256k1';
 import { keccak256, stringToBytes } from 'viem';
 import type { OnDemandRelayData } from '../../types/types.js';
@@ -62,7 +69,8 @@ export interface OnDemandBtcPayload {
 }
 
 const BITCOIN_DEFAULT_FEE_RATE = 3;
-const DUST_THRESHOLD = 546;
+// UTXO math (bitcoinjs-lib) is number-based; convert the canonical bigint sats value once.
+const DUST_THRESHOLD = Number(BITCOIN_DUST_SATS);
 
 export class BitcoinSpokeService {
   private readonly config: ConfigService;
@@ -77,7 +85,9 @@ export class BitcoinSpokeService {
     // since we only support mainnet for now, we can hardcode the single bitcoin chain config
     const chainConfig = config.getChainConfig(ChainKeys.BITCOIN_MAINNET);
     this.rpcUrl = chainConfig.rpcUrl;
-    this.radfi = new RadfiProvider(chainConfig.radfi);
+    // Pass the client-side RadFi signer (if any) so server-to-server callers can attach Bound's
+    // `x-api-signature` HMAC header. `config.radfiSigner` is undefined for browser callers. See gh-831.
+    this.radfi = new RadfiProvider(chainConfig.radfi, { signer: config.radfiSigner });
     this.walletMode = chainConfig.radfi.walletMode ?? 'TRADING';
     this.pollingIntervalMs = chainConfig.pollingConfig.pollingIntervalMs;
     this.maxTimeoutMs = chainConfig.pollingConfig.maxTimeoutMs;
@@ -529,13 +539,7 @@ export class BitcoinSpokeService {
   ): Promise<Psbt> {
     const chainConfig = this.config.getChainConfig(srcChainKey);
     const assetManagerAddress = chainConfig.addresses.assetManager;
-    const normalizedToken = token.toLocaleLowerCase();
-    const nativeBtcTokens = new Set(
-      ['btc', chainConfig.nativeToken, chainConfig.supportedTokens.BTC?.address]
-        .filter((value): value is string => !!value)
-        .map(value => value.toLocaleLowerCase()),
-    );
-    const isNativeBtc = nativeBtcTokens.has(normalizedToken);
+    const isNativeBtc = isNativeBitcoinToken(chainConfig, token);
 
     if (isNativeBtc) {
       const OP_RETURN = opcodes.OP_RETURN;

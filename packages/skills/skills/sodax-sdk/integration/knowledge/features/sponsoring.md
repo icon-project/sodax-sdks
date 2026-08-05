@@ -23,6 +23,8 @@ sponsor account can be rotated without a client release.
 ```ts
 // @ai-snippets-skip
 sodax.sponsoring.isStellarAccountActive({ address });        // Result<boolean>
+sodax.sponsoring.getStellarAccountStatus({ address });       // Result<StellarAccountStatus>
+// { exists, nativeBalanceStroops, availableBalanceStroops, canAffordTrustline, trustlineMinXlmStroops }
 sodax.sponsoring.getStellarSponsorConfig({ forceRefresh? }); // Result<StellarSponsorConfig>
 sodax.sponsoring.activateStellarAccount({
   address,                  // must be the account walletProvider signs with

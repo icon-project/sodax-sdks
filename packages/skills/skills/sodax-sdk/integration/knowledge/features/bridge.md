@@ -13,21 +13,29 @@ A bridge call deposits the source token into its vault on the hub, then triggers
 ## Public methods
 
 ```ts
-sodax.bridge.bridge<K>(action: BridgeAction<K, false>): Promise<Result<TxHashPair, SodaxError>>;
-sodax.bridge.createBridgeIntent<K, Raw>(action): Promise<Result<IntentTxResult<K, Raw>, SodaxError>>;
+sodax.bridge.bridge<K>(action: BridgeParams<K, false>): Promise<Result<TxHashPair, SodaxError>>;
+sodax.bridge.createBridgeIntent<K, Raw>(action: BridgeParams<K, Raw>): Promise<Result<IntentTxResult<K, Raw>, SodaxError>>;
 sodax.bridge.approve<K, Raw>(args): Promise<Result<TxReturnType<K, Raw>, SodaxError>>;
 sodax.bridge.isAllowanceValid<K, Raw>(args): Promise<Result<boolean, SodaxError>>;
 
 sodax.bridge.getBridgeableAmount(from: XToken, to: XToken): Promise<Result<BridgeLimit, SodaxError>>;
 sodax.bridge.getBridgeableTokens(from: SpokeChainKey, to: SpokeChainKey, token: string): Result<XToken[], SodaxError>;
-// Plus the sync helper:
+// Plus the sync helpers:
 sodax.bridge.isBridgeable({ from: XToken, to: XToken }): boolean;
-sodax.bridge.getFee(inputAmount: bigint): bigint;
+// partnerFee defaults to the configured `bridge.partnerFee`; pass one to preview an `extras.partnerFee` override.
+sodax.bridge.getFee(inputAmount: bigint, partnerFee?: PartnerFee): bigint;
 ```
 
 ## Action params shape
 
 ```ts
+type BridgeParams<K extends SpokeChainKey, Raw extends boolean> = {
+  params: CreateBridgeIntentParams<K>;
+  extras?: BridgeExtras<K>;
+  skipSimulation?: boolean;
+  timeout?: number;              // shared budget for relay/poll; defaults to DEFAULT_RELAY_TX_TIMEOUT
+} & WalletProviderSlot<K, Raw>;  // raw: true ⇒ no walletProvider; raw: false ⇒ required, chain-narrowed
+
 type CreateBridgeIntentParams<K extends SpokeChainKey> = {
   srcChainKey: K;
   srcAddress: string;            // source wallet (spoke chain)
@@ -38,6 +46,44 @@ type CreateBridgeIntentParams<K extends SpokeChainKey> = {
   recipient: string;             // destination receiver (chain-specific format)
 };
 ```
+
+### extras (per-action overrides)
+
+Chain-specific slots are keyed off `K`, so a non-Stacks action can't set `srcPublicKey` and a non-Bitcoin action can't set `bound`:
+
+```ts
+type BridgeExtras<K extends SpokeChainKey> = (GetChainType<K> extends 'STACKS'
+  ? { srcPublicKey?: string }
+  : { srcPublicKey?: never }) &
+  (GetChainType<K> extends 'BITCOIN' ? { bound?: { accessToken?: string } } : { bound?: never }) & {
+    partnerFee?: PartnerFee;
+  };
+```
+
+| Slot | When | Notes |
+|---|---|---|
+| `partnerFee` | any chain, optional | Takes precedence over the config-level `bridge.partnerFee` for this call. Omit to use the configured fee. |
+| `srcPublicKey` | Stacks source + `raw: true` — **required** | A Stacks address can't yield the signer public key at raw-tx build time. Omitting it fails `VALIDATION_FAILED` (`field: 'srcPublicKey'`). |
+| `bound` | raw Bitcoin TRADING source, optional | Bound Exchange (Radfi) access token; falls back to the `RadfiProvider` instance token. |
+
+```ts
+const result = await sodax.bridge.bridge({
+  params: { /* … */ },
+  raw: false,
+  walletProvider: evmWp,
+  extras: { partnerFee: { address: '0xPartner…', percentage: 100 } }, // 100 = 1%
+});
+```
+
+## Validation rules to respect
+
+- **Native BTC dust limit (`BITCOIN_DUST_SATS` = 546 sats).** Native BTC is denominated in satoshis, and outputs below the dust limit are unspendable/rejected by nodes. Bitcoin as **source**: `amount >= 546`. Bitcoin as **destination**: the *post-fee delivered* amount must clear 546 — the partner fee is deducted on the hub in 18-dp vault units, so a percentage fee or a wei-denominated fixed `PartnerFee.amount` can push a nominally valid `amount` under the limit. Both fail `VALIDATION_FAILED` on `field: 'amount'`.
+- **Stacks + `raw: true`** requires `extras.srcPublicKey` (above).
+- Amount must be `> 0n`; both chain keys must be registered spoke chains; both tokens must be supported on their chain and share a vault.
+
+## Routing the spoke deposit through the backend
+
+`bridge()` relays client-side by default. `new Sodax({ bridgeOptions: { useBackendSubmitTx: true } })` opts into handing the broadcast deposit to the backend Bridge API instead (`sodax.api.bridge`), which relays server-side and falls back to the client-side relay on any non-success — safe because re-relaying is idempotent. Default is OFF. See [`bridge-api.md`](bridge-api.md).
 
 ## Common call shapes
 
