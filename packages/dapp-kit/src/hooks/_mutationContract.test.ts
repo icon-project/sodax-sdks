@@ -69,6 +69,9 @@ const HOOKS: Array<{ path: string; nativeThrow?: true }> = [
   { path: 'swapsApi/useSwapsApiCreateLimitOrder.ts' },
   { path: 'swapsApi/useSwapsApiSubmitIntent.ts' },
   { path: 'swapsApi/useSwapsApiSubmitTx.ts' },
+  { path: 'bridgeApi/useBridgeApiApprove.ts' },
+  { path: 'bridgeApi/useBridgeApiCreateBridgeIntent.ts' },
+  { path: 'bridgeApi/useBridgeApiSubmitTx.ts' },
 ];
 
 describe.each(HOOKS)('mutation hook contract: $path', ({ path, nativeThrow }) => {

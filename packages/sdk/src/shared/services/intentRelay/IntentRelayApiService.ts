@@ -148,6 +148,15 @@ export type RelayAndWaitParams = {
 /** Per-attempt HTTP budget — caps a hung connection so it can't hold the polling loop hostage. */
 const RELAY_REQUEST_TIMEOUT_MS = 15_000;
 
+/**
+ * Minimum `timeout` a feature's client-side relay fallback passes to {@link relayTxAndWaitPacket} when
+ * its shared budget is spent. `relayTxAndWaitPacket` submits the tx to the relay BEFORE `timeout`
+ * bounds anything (only the packet wait is bounded), so a zero/negative remainder must never skip the
+ * call: the spoke deposit has already landed on chain and would otherwise sit unrelayed. Re-relay is
+ * idempotent, so spending this floor is always safe.
+ */
+export const RELAY_FALLBACK_FLOOR_MS = 5_000;
+
 /** Matches the `AbortError` raised when a request is cut off by its per-attempt/deadline budget. */
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError';

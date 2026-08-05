@@ -11,6 +11,12 @@ Three transfer directions are supported:
 - **Hub → Spoke** — withdrawal from hub vault
 - **Spoke → Spoke** — deposit on source + withdraw on destination
 
+> **Backend Bridge API.** For the typed HTTP client over the backend `/bridge/*` routes (`sodax.api.bridge`
+> — allowance/approve/create-intent, submit-tx + status, tokens), see [`BRIDGE_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BRIDGE_API.md). To
+> opt the `bridge()` orchestrator below into routing the spoke-deposit through that API (with a client-side
+> fallback), set `new Sodax({ bridgeOptions: { useBackendSubmitTx: true } })` (default OFF) — see
+> [`CONFIGURE_SDK.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md#backend-submit-tx-bridgeoptionsusebackendsubmittx).
+
 ## Methods
 
 ### isAllowanceValid
@@ -164,8 +170,13 @@ When `raw` is `true`, returns the encoded transaction without broadcasting (usef
 
 **Bitcoin note:** Bitcoin is only supported with `raw: false` because it requires the Bound Exchange trading wallet derivation flow.
 
+**Chain-specific preconditions** (both fail as `VALIDATION_FAILED` with the offending `context.field`):
+
+- **Native BTC and the dust limit.** Native BTC is denominated in satoshis and must clear the Bitcoin dust limit of `BITCOIN_DUST_SATS` (546) — outputs below it are economically unspendable and nodes reject transactions that create them. With Bitcoin as the **source**, `amount` must be at least 546. With Bitcoin as the **destination**, the *post-fee delivered* amount must clear 546: the partner fee is deducted on the hub in 18-dp vault units, so a percentage fee — or a fixed wei-denominated `PartnerFee.amount` — can push a nominally valid `amount` under the limit (`Post-fee BTC delivery (…) is below the Bitcoin dust limit`).
+- **Stacks with `raw: true`** requires `extras.srcPublicKey` — see [BridgeExtras](#bridgeextras).
+
 **Parameters:**
-- `_params`: `BridgeParams<K, Raw>` — bridge parameters including source/destination chain keys, token addresses, amount, recipient, wallet provider, `raw` flag, and optional `skipSimulation`
+- `_params`: `BridgeParams<K, Raw>` — bridge parameters including source/destination chain keys, token addresses, amount, recipient, wallet provider, `raw` flag, optional `extras` (see [BridgeExtras](#bridgeextras)), and optional `skipSimulation`
 
 **Returns:** `Promise<Result<IntentTxResult<K, Raw>>>` — on success, `{ tx, relayData }` where `tx` is the spoke deposit tx hash (or encoded call data when raw), and `relayData` contains the hub wallet address and encoded hub execution payload needed for relay.
 
@@ -204,17 +215,25 @@ if (result.ok) {
 
 Calculates the partner fee deducted from a given bridge input amount.
 
-Returns `0n` when no partner fee is configured. The fee is denominated in the same units as `inputAmount` (vault token decimals, 18 dp).
+Returns `0n` when no partner fee applies. The fee is denominated in the same units as `inputAmount` (vault token decimals, 18 dp).
 
 **Parameters:**
-- `inputAmount`: `bigint` — gross amount being bridged, in vault token base units
+- `inputAmount`: `bigint` — gross amount being bridged, in 18-dp hub/vault units (the units the hub deducts the fee in — **not** the spoke token's native base units). This matters for a fixed `PartnerFee.amount`, which is wei-denominated; a percentage fee is unit-agnostic.
+- `partnerFee` (optional): `PartnerFee | undefined` — fee to price against. Pass the same per-action override you will hand to `bridge()` / `createBridgeIntent()` via `extras.partnerFee` to preview its amount. Omitting the argument — or passing `undefined` explicitly, which triggers the same default — prices the configured `bridge.partnerFee`.
 
 **Returns:** `bigint` — fee amount to be deducted, in the same units as `inputAmount`
 
 **Example:**
 ```typescript
+// Configured fee
 const feeAmount = sodax.bridge.getFee(1000000000000000000n);
-console.log('Fee:', feeAmount.toString());
+
+// Preview a per-action override before passing the same fee to bridge()
+const previewed = sodax.bridge.getFee(1000000000000000000n, {
+  address: '0xPartner...',
+  percentage: 100, // 1%
+});
+console.log('Fee:', feeAmount.toString(), previewed.toString());
 ```
 
 ### getBridgeableAmount
@@ -355,13 +374,42 @@ export type CreateBridgeIntentParams<K extends SpokeChainKey = SpokeChainKey> = 
 export type BridgeParams<ChainKey extends SpokeChainKey, Raw extends boolean> = SpokeExecActionParams<
   ChainKey,
   Raw,
-  CreateBridgeIntentParams<ChainKey>
+  CreateBridgeIntentParams<ChainKey>,
+  BridgeExtras<ChainKey>
 >;
 ```
+
+`SpokeExecActionParams` contributes `params`, the optional `extras` slot (see below), `skipSimulation`, `timeout`, and the wallet-provider slot.
 
 The `WalletProviderSlot<K, Raw>` discriminant enforces at compile time:
 - `{ raw: true }` — `walletProvider` is **forbidden**; returns raw tx payload
 - `{ raw: false, walletProvider: GetWalletProviderType<K> }` — `walletProvider` is **required** and chain-narrowed; signs and broadcasts
+
+### BridgeExtras
+
+Per-action extras passed via the `extras` slot of `bridge()` / `createBridgeIntent()`. The chain-specific slots are keyed off `K`, so a non-Stacks action cannot set `srcPublicKey` and a non-Bitcoin action cannot set `bound`:
+
+```typescript
+export type BridgeExtras<K extends SpokeChainKey = SpokeChainKey> = (GetChainType<K> extends 'STACKS'
+  ? { srcPublicKey?: string }
+  : { srcPublicKey?: never }) &
+  (GetChainType<K> extends 'BITCOIN' ? { bound?: BitcoinBoundExtras } : { bound?: never }) & {
+    partnerFee?: PartnerFee;
+  };
+```
+
+- `partnerFee` — chain-agnostic per-action fee override. When present it takes precedence over the config-level `bridge.partnerFee` for that call, letting an integrator charge and route its own fee per bridge. Omit to use the configured fee. Preview the amount with `getFee(inputAmount, partnerFee)`.
+- `srcPublicKey` — **required** for Stacks sources with `raw: true`. A Stacks address cannot yield the signer public key at raw-tx build time, so the unsigned tx needs it up front; omitting it fails with `VALIDATION_FAILED` (`context.field: 'srcPublicKey'`).
+- `bound` — Bound Exchange (Radfi) inputs for raw Bitcoin TRADING-mode sources: `{ accessToken?: string }`, falling back to the `RadfiProvider` instance token when omitted.
+
+```typescript
+const result = await sodax.bridge.bridge({
+  params: { /* … */ },
+  raw: false,
+  walletProvider: evmWalletProvider,
+  extras: { partnerFee: { address: '0xPartner...', percentage: 100 } },
+});
+```
 
 ### BridgeLimit
 
@@ -384,10 +432,20 @@ type TxHashPair = {
 
 ### PartnerFee
 
+A percentage fee or a fixed amount:
+
 ```typescript
-type PartnerFee = {
+type PartnerFee = PartnerFeeAmount | PartnerFeePercentage;
+
+type PartnerFeePercentage = {
   address: string;
-  percentage: number; // e.g. 0.1 for 10%
+  percentage: number; // 100 = 1%, 10000 = 100% (FEE_PERCENTAGE_SCALE)
+};
+
+type PartnerFeeAmount = {
+  address: string;
+  amount: bigint; // fixed amount, subtracted directly — so it must be in the same units as the
+                  // amount it is charged against (for bridge: 18-dp hub/vault units, not spoke units)
 };
 ```
 
@@ -564,6 +622,20 @@ Partner fees are configured at `Sodax` construction time via `config.bridge.part
 ```typescript
 const feeAmount = sodax.bridge.getFee(inputAmount);
 const netAmount = inputAmount - feeAmount;
+```
+
+A single bridge can override the configured fee via `extras.partnerFee` (see [BridgeExtras](#bridgeextras)). Pass the same fee as `getFee`'s second argument to preview that override:
+
+```typescript
+const perActionFee = { address: '0xPartner...', percentage: 100 }; // 1%
+const feeAmount = sodax.bridge.getFee(inputAmount, perActionFee);
+
+const result = await sodax.bridge.bridge({
+  params: { /* … */ },
+  raw: false,
+  walletProvider: evmWalletProvider,
+  extras: { partnerFee: perActionFee },
+});
 ```
 
 Fees are denominated in vault token decimals (18 dp).

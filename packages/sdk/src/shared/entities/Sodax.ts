@@ -60,6 +60,9 @@ export class Sodax {
     // Like `logger`, swaps options are client-side runtime toggles read off `SodaxOptions` —
     // never merged into the backend-fetched `SodaxConfig`/`instanceConfig`.
     const useBackendSubmitTx = options?.swapsOptions?.useBackendSubmitTx ?? false;
+    // Distinct client-side bridge toggle, read off `SodaxOptions.bridgeOptions` (never collides with
+    // the swaps toggle or the data `bridge` partner-fee slot).
+    const bridgeUseBackendSubmitTx = options?.bridgeOptions?.useBackendSubmitTx ?? false;
     this.instanceConfig = options ? mergeSodaxConfig(sodaxConfig, options) : sodaxConfig;
     this.backendApi = new BackendApiService(this.instanceConfig.api, logger);
     this.api = this.backendApi;
@@ -100,7 +103,13 @@ export class Sodax {
       config: this.config,
       spoke: this.spoke,
     });
-    this.bridge = new BridgeService({ hubProvider: this.hubProvider, config: this.config, spoke: this.spoke });
+    this.bridge = new BridgeService({
+      hubProvider: this.hubProvider,
+      config: this.config,
+      spoke: this.spoke,
+      backendApi: this.backendApi,
+      useBackendSubmitTx: bridgeUseBackendSubmitTx,
+    });
     this.staking = new StakingService({ hubProvider: this.hubProvider, config: this.config, spoke: this.spoke });
     this.partners = new PartnerService({
       hubProvider: this.hubProvider,
