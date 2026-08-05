@@ -297,9 +297,9 @@ export interface BridgeableCheckResponseV2 {
  * sees it: all methods are async and all field types are the post-serialization wire
  * shapes above (bigint/Date → decimal/ISO `string`).
  *
- * As with {@link import('./backendApiV2.js').ISwapsApiV2}, do NOT `implements` this
- * on the NestJS controller: handlers return pre-serialization domain types and the
- * response interceptor serializes them into these wire shapes afterwards.
+ * As with {@link import('./backendApiV2.js').ISwapsApiV2}, the backend `BridgeController`
+ * `implements` this — declaring its handlers `async` and typed with the wire-shaped DTOs — so a
+ * request or response shape cannot drift from this contract without failing the build.
  *
  * `getFee`/`getBridgeableAmount`/`isBridgeable` are read-only quotes computable client-side (config +
  * vault math); an SDK consumer should prefer the local `sodax.bridge.*` equivalents (no round-trip).

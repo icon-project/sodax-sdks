@@ -742,27 +742,6 @@ export class BridgeService {
   }
 
   /**
-   * Encodes the hub-side execution payload for a bridge operation.
-   *
-   * Produces an ABI-encoded sequence of contract calls that the hub wallet router
-   * will execute on Sonic after receiving the cross-chain message. The sequence is:
-   * 1. (if src is not a vault token) `approve` + `deposit` into the source vault → vault shares
-   * 2. (if partner fee configured) `transfer` fee shares to the partner address
-   * 3. (if dst is not a vault token) `withdraw` from the destination vault → underlying tokens
-   * 4. Transfer to the destination: direct ERC-20 transfer (hub destination) or
-   *    asset manager cross-chain transfer (spoke destination), or native S unwrap via `withdrawTo`
-   *    when the destination token is the Sonic native token.
-   *
-   * @param params - Intent parameters carrying source/destination chain keys, token addresses,
-   *   amount, and recipient.
-   * @param srcToken - Resolved source `XToken` with hub asset and vault addresses.
-   * @param dstToken - Resolved destination `XToken` with hub asset and vault addresses.
-   * @param partnerFee - Optional partner fee config; if present and non-zero, a fee transfer
-   *   call is prepended before the withdrawal step.
-   * @returns ABI-encoded `Hex` string representing the ordered call batch for the hub router.
-   * @throws When `dstToken` cannot be resolved for the destination chain (invariant).
-   */
-  /**
    * Post-fee amounts for a bridge, in the units each hub step operates in. Single source for the fee +
    * vault-decimal pipeline, so {@link buildBridgeData}'s encoded hub calls and the BTC-destination dust
    * guard in {@link createBridgeIntent} can never disagree about what actually gets delivered.
@@ -792,6 +771,27 @@ export class BridgeService {
     return { feeAmount, withdrawAmount, delivered };
   }
 
+  /**
+   * Encodes the hub-side execution payload for a bridge operation.
+   *
+   * Produces an ABI-encoded sequence of contract calls that the hub wallet router
+   * will execute on Sonic after receiving the cross-chain message. The sequence is:
+   * 1. (if src is not a vault token) `approve` + `deposit` into the source vault → vault shares
+   * 2. (if partner fee configured) `transfer` fee shares to the partner address
+   * 3. (if dst is not a vault token) `withdraw` from the destination vault → underlying tokens
+   * 4. Transfer to the destination: direct ERC-20 transfer (hub destination) or
+   *    asset manager cross-chain transfer (spoke destination), or native S unwrap via `withdrawTo`
+   *    when the destination token is the Sonic native token.
+   *
+   * @param params - Intent parameters carrying source/destination chain keys, token addresses,
+   *   amount, and recipient.
+   * @param srcToken - Resolved source `XToken` with hub asset and vault addresses.
+   * @param dstToken - Resolved destination `XToken` with hub asset and vault addresses.
+   * @param partnerFee - Optional partner fee config; if present and non-zero, a fee transfer
+   *   call is prepended before the withdrawal step.
+   * @returns ABI-encoded `Hex` string representing the ordered call batch for the hub router.
+   * @throws When `dstToken` cannot be resolved for the destination chain (invariant).
+   */
   buildBridgeData(
     params: CreateBridgeIntentParams,
     srcToken: XToken,
