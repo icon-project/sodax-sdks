@@ -64,6 +64,7 @@
     "knip": "catalog:",
     "madge": "catalog:",
     "typescript": "catalog:",
+    "viem": "catalog:",
     "vitest": "catalog:"
   },
   "keywords": [
