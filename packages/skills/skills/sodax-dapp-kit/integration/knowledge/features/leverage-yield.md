@@ -22,6 +22,11 @@ useLeverageYieldShareBalances({ params, queryOptions }); // per-chain share bala
 
 `deposit` / `withdraw` are **builders** — they assemble a `LeverageYieldSwapPayload`, they do NOT broadcast. Spread the built payload into `useLeverageYieldVaultSwap`'s `mutate`, adding the `walletProvider`. There is no dedicated leverage-yield approve hook: the swap-style deposit approves the spoke-side asset manager, so reuse `useSwapApprove` / `useSwapAllowance` (see Approval pattern).
 
+`use*Approve` is unchanged and still resolves to one transaction hash, but the SDK may send **two**
+transactions on a token that rejects a non-zero to non-zero allowance change (Ethereum USDT today) —
+the user signs twice and the hash is the **last** one's. An `isPending`-driven "Approving…" should say
+so. See "Approve hooks can prompt the wallet twice" in [`architecture.md`](../architecture.md).
+
 ## Mutation TVars
 
 ```ts

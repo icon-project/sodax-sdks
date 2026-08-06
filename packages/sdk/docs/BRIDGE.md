@@ -66,6 +66,13 @@ if (result.ok && result.value) {
 
 Grants token spending approval required before executing a bridge.
 
+**Some tokens take two transactions.** A few ERC-20s of the 2017 TetherToken lineage — Ethereum USDT
+is the only one in the SODAX token list today — reject an allowance change from one non-zero value to
+another, so `approve` sends `approve(0)` first and waits for it to be mined before the real approval.
+The user signs twice; the returned value is still a single transaction hash, the **last** one's.
+Detection simulates the approval rather than consulting a token list, so a token listed later behaves
+the same way.
+
 Approval targets differ by chain:
 - **Hub (Sonic)**: approves the caller's hub wallet router contract.
 - **EVM spoke**: approves the spoke chain's asset manager contract.

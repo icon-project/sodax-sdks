@@ -41,6 +41,7 @@ const mocks = vi.hoisted(() => ({
   relayTxAndWaitPacket: vi.fn(),
   solverPostExecution: vi.fn(),
   erc20Approve: vi.fn(),
+  erc20PlanApproval: vi.fn(),
   erc4626GetMaxWithdraw: vi.fn(),
   erc4626GetTotalAssets: vi.fn(),
   erc4626PreviewDeposit: vi.fn(),
@@ -66,7 +67,7 @@ vi.mock('../shared/services/intentRelay/IntentRelayApiService.js', async () => {
 });
 vi.mock('../shared/services/erc-20/Erc20Service.js', async () => {
   const actual = await vi.importActual<object>('../shared/services/erc-20/Erc20Service.js');
-  return { ...actual, Erc20Service: { approve: mocks.erc20Approve } };
+  return { ...actual, Erc20Service: { approve: mocks.erc20Approve, planApproval: mocks.erc20PlanApproval } };
 });
 vi.mock('../shared/services/Erc4626Service.js', async () => {
   const actual = await vi.importActual<object>('../shared/services/Erc4626Service.js');
@@ -223,6 +224,12 @@ beforeEach(() => {
   vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockImplementation(mocks.getUserHubWalletAddress);
   mocks.getUserHubWalletAddress.mockResolvedValue(HUB_WALLET);
   (mockEvmProvider.getWalletAddress as ReturnType<typeof vi.fn>).mockResolvedValue(SAMPLE_USER);
+  // approve() now routes through SpokeService, which plans the approval first. Default to the
+  // ordinary single-transaction plan; the reset case is asserted explicitly.
+  mocks.erc20PlanApproval.mockImplementation(async ({ amount }: { amount: bigint }) => ({
+    approveAmount: amount,
+    reason: 'zero-allowance',
+  }));
   // deposit/withdraw default the intent deadline to the hub block timestamp (not the client
   // clock) — stub getBlock so the default resolves deterministically.
   vi.spyOn(sodax.hubProvider.publicClient, 'getBlock').mockResolvedValue({ timestamp: HUB_BLOCK_TIMESTAMP } as never);
@@ -961,6 +968,24 @@ describe('LeverageYieldService.approve', () => {
     expect(mocks.erc20Approve.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({ token: SODA_ASSET, spender: VAULT, from: SAMPLE_USER, amount: 100n, raw: false }),
     );
+  });
+
+  it('clears a stale allowance first when the vault asset needs it', async () => {
+    stubReadContract({ asset: SODA_ASSET });
+    mocks.erc20PlanApproval.mockResolvedValueOnce({ resetAmount: 0n, approveAmount: 100n, reason: 'reset-required' });
+    mocks.erc20Approve.mockResolvedValueOnce('0xresetTx').mockResolvedValueOnce('0xapproveTx');
+    vi.spyOn(sodax.spoke, 'waitForTxReceipt').mockResolvedValue({
+      ok: true,
+      value: { status: 'success', receipt: {} },
+    } as never);
+
+    const result = await sodax.leverageYield.approve({ vault: VAULT, amount: 100n, walletProvider: mockEvmProvider });
+
+    // Routing through SpokeService is what buys this — a direct Erc20Service.approve would
+    // dead-end on a USDT-class asset.
+    expect(result).toEqual({ ok: true, value: '0xapproveTx' });
+    expect(mocks.erc20Approve).toHaveBeenCalledTimes(2);
+    expect(mocks.erc20Approve.mock.calls[0]?.[0]).toEqual(expect.objectContaining({ amount: 0n }));
   });
 
   it('returns raw approve tx data when raw=true', async () => {

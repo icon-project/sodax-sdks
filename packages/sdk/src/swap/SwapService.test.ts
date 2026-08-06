@@ -2972,3 +2972,99 @@ describe('SwapService.swap — backend 2-step (useBackendSubmitTx)', () => {
     }
   });
 });
+
+// =========================================================================
+// buildApproveTxs: the unsigned entry point the swaps API calls. The only logic this layer owns
+// is resolving the spender, so that is what is asserted — the ordering of the plan itself is
+// covered in SpokeService.test.ts.
+// =========================================================================
+
+describe('SwapService.buildApproveTxs', () => {
+  const rawTx = { from: '0x1111111111111111111111111111111111111111', to: '0x0', value: 0n, data: '0x' } as never;
+
+  it('approves the intents contract on the hub (Sonic)', async () => {
+    const svc = sodax.swaps;
+    vi.spyOn(svc.spoke, 'buildApproveTxs').mockResolvedValueOnce({ ok: true, value: { approveTx: rawTx } });
+
+    const result = await svc.buildApproveTxs({ params: intentInput(ChainKeys.SONIC_MAINNET), raw: true });
+
+    expect(result).toEqual({ ok: true, value: { approveTx: rawTx } });
+    expect(svc.spoke.buildApproveTxs).toHaveBeenCalledWith(
+      expect.objectContaining({ srcChainKey: ChainKeys.SONIC_MAINNET, spender: intentsContract, raw: true }),
+    );
+  });
+
+  it('approves the asset manager on an EVM spoke', async () => {
+    const svc = sodax.swaps;
+    vi.spyOn(svc.spoke, 'buildApproveTxs').mockResolvedValueOnce({ ok: true, value: { approveTx: rawTx } });
+
+    const result = await svc.buildApproveTxs({ params: intentInput(ChainKeys.BSC_MAINNET), raw: true });
+
+    expect(result).toEqual({ ok: true, value: { approveTx: rawTx } });
+    expect(svc.spoke.buildApproveTxs).toHaveBeenCalledWith(
+      expect.objectContaining({
+        srcChainKey: ChainKeys.BSC_MAINNET,
+        spender: spokeChainConfig[ChainKeys.BSC_MAINNET].addresses.assetManager,
+        raw: true,
+      }),
+    );
+  });
+
+  it('passes the intent amount and token through as the approval target', async () => {
+    const svc = sodax.swaps;
+    const params = intentInput(ChainKeys.BSC_MAINNET);
+    vi.spyOn(svc.spoke, 'buildApproveTxs').mockResolvedValueOnce({ ok: true, value: { approveTx: rawTx } });
+
+    await svc.buildApproveTxs({ params, raw: true });
+
+    expect(svc.spoke.buildApproveTxs).toHaveBeenCalledWith(
+      expect.objectContaining({ token: params.inputToken, amount: params.inputAmount, owner: params.srcAddress }),
+    );
+  });
+
+  it('surfaces the reset under its own name when the plan needs one', async () => {
+    const svc = sodax.swaps;
+    const resetTx = { ...(rawTx as object), data: '0xreset' } as never;
+    vi.spyOn(svc.spoke, 'buildApproveTxs').mockResolvedValueOnce({ ok: true, value: { resetTx, approveTx: rawTx } });
+
+    const result = await svc.buildApproveTxs({ params: intentInput(ChainKeys.BSC_MAINNET), raw: true });
+
+    // Named, not ordered: no consumer has to know which index is which.
+    expect(result).toEqual({ ok: true, value: { resetTx, approveTx: rawTx } });
+  });
+
+  it('routes Stellar to the trustline branch without a spender', async () => {
+    const svc = sodax.swaps;
+    vi.spyOn(svc.spoke, 'buildApproveTxs').mockResolvedValueOnce({ ok: true, value: { approveTx: rawTx } });
+
+    await svc.buildApproveTxs({ params: intentInput(ChainKeys.STELLAR_MAINNET), raw: true });
+
+    expect(svc.spoke.buildApproveTxs).toHaveBeenCalledWith(
+      expect.not.objectContaining({ spender: expect.anything() }),
+    );
+  });
+
+  it('wraps a spoke failure as SodaxError(APPROVE_FAILED) with the cause preserved', async () => {
+    const svc = sodax.swaps;
+    const spokeError = new Error('BUILD_FAILED');
+    vi.spyOn(svc.spoke, 'buildApproveTxs').mockResolvedValueOnce({ ok: false, error: spokeError });
+
+    const result = await svc.buildApproveTxs({ params: intentInput(ChainKeys.BSC_MAINNET), raw: true });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error)).toBe(true);
+    expect((result.error as SodaxError).code).toBe('APPROVE_FAILED');
+    expect((result.error as SodaxError).feature).toBe('swap');
+    expect((result.error as SodaxError).cause).toBe(spokeError);
+  });
+
+  it('returns ok:false with an explanatory error for unsupported chains (Solana)', async () => {
+    const result = await sodax.swaps.buildApproveTxs({ params: intentInput(ChainKeys.SOLANA_MAINNET), raw: true });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(String(result.error)).toMatch(/Approve only supported/);
+    }
+  });
+});

@@ -1042,12 +1042,23 @@ export class LeverageYieldService {
         const tx = await Erc20Service.approve<true>({ ...baseApprove, raw: true });
         return { ok: true, value: tx as TxReturnType<HubChainKey, R> };
       }
-      const tx = await Erc20Service.approve<false>({
-        ...baseApprove,
+
+      // Route through SpokeService rather than calling Erc20Service directly, so a stale allowance
+      // on a USDT-class asset is reset before the approve instead of dead-ending.
+      const result = await this.spoke.approve<HubChainKey, false>({
+        srcChainKey: this.hubProvider.chainConfig.chain.key,
+        token: baseApprove.token,
+        amount: baseApprove.amount,
+        owner: from,
+        spender: baseApprove.spender,
         raw: false,
         walletProvider: params.walletProvider,
       });
-      return { ok: true, value: tx as TxReturnType<HubChainKey, R> };
+      if (!result.ok) {
+        return { ok: false, error: approveFailed('leverageYield', result.error, baseCtx) };
+      }
+
+      return { ok: true, value: result.value as TxReturnType<HubChainKey, R> };
     } catch (error) {
       if (isLeverageYieldApproveError(error)) return { ok: false, error };
       return { ok: false, error: approveFailed('leverageYield', error, baseCtx) };

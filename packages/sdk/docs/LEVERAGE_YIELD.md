@@ -215,7 +215,14 @@ Notifies the solver that a vault intent has landed on the hub, triggering it to 
 
 ### approve
 
-Approves the vault's underlying `asset` to the vault on Sonic. Resolves `asset()` on-chain, then delegates to `Erc20Service.approve`. With `raw: true` returns unsigned tx data and does not broadcast. **Returns:** `Promise<Result<TxReturnType<HubChainKey, R> | EvmReturnType<true>, LeverageYieldApproveError>>`. `context.action` is `'approve'`.
+Approves the vault's underlying `asset` to the vault on Sonic. Resolves `asset()` on-chain, then delegates to `SpokeService.approve` when signing, or to `Erc20Service.approve` with `raw: true`, which returns unsigned tx data and does not broadcast. **Returns:** `Promise<Result<TxReturnType<HubChainKey, R> | EvmReturnType<true>, LeverageYieldApproveError>>`. `context.action` is `'approve'`.
+
+**Some tokens take two transactions.** A few ERC-20s of the 2017 TetherToken lineage — Ethereum USDT
+is the only one in the SODAX token list today — reject an allowance change from one non-zero value to
+another, so a signed `approve` sends `approve(0)` first and waits for it to be mined before the real
+approval. The user signs twice; the returned value is still a single transaction hash, the **last**
+one's. Detection simulates the approval rather than consulting a token list, so a token listed later
+behaves the same way.
 
 ### isAllowanceValid
 
