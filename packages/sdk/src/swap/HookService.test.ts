@@ -24,6 +24,12 @@ describe('HookService.encodeDeliveryData', () => {
     expect((encoded.length - 2) / 2).toBe(32);
   });
 
+  it('encodes the Flint payload as abi.encode(address) (32 bytes)', () => {
+    const encoded = HookService.encodeDeliveryData({ kind: HookKind.FLINT_DEPOSIT }, HC_RECIPIENT);
+    expect(encoded).toBe(encodeAbiParameters([{ name: 'recipient', type: 'address' }], [HC_RECIPIENT]));
+    expect((encoded.length - 2) / 2).toBe(32);
+  });
+
   it('throws on an unknown hook kind', () => {
     expect(() =>
       HookService.encodeDeliveryData(
@@ -50,6 +56,16 @@ describe('HookService.resolveDeliveryHook', () => {
   it('throws when the requested hook is not deployed on the chain', () => {
     expect(() =>
       HookService.resolveDeliveryHook(ChainKeys.ETHEREUM_MAINNET, { kind: HookKind.HYPERCORE_DEPOSIT }, HC_RECIPIENT),
+    ).toThrow();
+  });
+
+  // FlintDepositHook is not deployed yet, so it is deliberately absent from the registry. Resolving
+  // it must throw rather than resolve to a placeholder address that would swallow real intent output.
+  // When the hook is deployed and registered, replace this with the positive resolution test.
+  it('throws for Flint until the hook is registered on Ethereum', () => {
+    expect(getSpokeHook(ChainKeys.ETHEREUM_MAINNET, HookKind.FLINT_DEPOSIT)).toBeUndefined();
+    expect(() =>
+      HookService.resolveDeliveryHook(ChainKeys.ETHEREUM_MAINNET, { kind: HookKind.FLINT_DEPOSIT }, HC_RECIPIENT),
     ).toThrow();
   });
 });

@@ -11,6 +11,10 @@ import type { CreateIntentParams, HookRequest } from '../shared/types/intent-typ
 const HOOK_DELIVERY_ABI = {
   // HyperCoreDepositHook expects `abi.encode(address)` — the HyperCore account to credit.
   [HookKind.HYPERCORE_DEPOSIT]: [{ name: 'recipient', type: 'address' }],
+  // FlintDepositHook expects `abi.encode(address)` — the ERC-7540 controller the deposit request is
+  // recorded against, i.e. the account that ends up owning the resulting flUSD shares. Same shape as
+  // HyperCore's today; kept as its own entry so the two can diverge without touching each other.
+  [HookKind.FLINT_DEPOSIT]: [{ name: 'recipient', type: 'address' }],
 } as const satisfies Record<HookKind, readonly { name: string; type: string }[]>;
 
 /**
@@ -36,6 +40,8 @@ export class HookService {
     switch (request.kind) {
       case HookKind.HYPERCORE_DEPOSIT:
         return encodeAbiParameters(HOOK_DELIVERY_ABI[HookKind.HYPERCORE_DEPOSIT], [recipient as Address]);
+      case HookKind.FLINT_DEPOSIT:
+        return encodeAbiParameters(HOOK_DELIVERY_ABI[HookKind.FLINT_DEPOSIT], [recipient as Address]);
     }
     // Reached only if a HookKind gains a HookRequest member without a case above — add one here.
     throw new Error(
