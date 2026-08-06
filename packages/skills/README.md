@@ -49,4 +49,4 @@ LLM training data drifts: snippets from chat often use stale method names, resha
 
 ## Feedback
 
-If your agent generates wrong code despite reading the docs, that's a doc bug — please open an issue on the [Sodax SDKs repo](https://github.com/icon-project/sodax-sdks/issues) with the prompt and the incorrect output. The per-skill `knowledge/` subtrees are structurally CI-guarded (frontmatter, link resolution); prose claims benefit from real-world feedback.
+If your agent generates wrong code despite reading the docs, that's a doc bug — please open an issue on the [SODAX SDKs repo](https://github.com/icon-project/sodax-sdks/issues) with the prompt and the incorrect output. The per-skill `knowledge/` subtrees are structurally CI-guarded (frontmatter, link resolution); prose claims benefit from real-world feedback.

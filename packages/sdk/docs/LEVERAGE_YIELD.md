@@ -67,7 +67,7 @@ Each vault is a deployed contract on the **Sonic hub** that follows the **ERC-46
 - **The share token address *is* the vault proxy address.** `vault` and the `lsoda*` token are the same address.
 - Standard ERC-4626 views (`previewDeposit`, `previewWithdraw`, `previewRedeem`, `maxWithdraw`, `totalAssets`) work, plus a non-standard `getPositionDetails()` that returns the live leveraged-position snapshot.
 
-The lending pool is a **Sodax fork of AAVE**; the vault reads its reserve rates to compute APR and manages collateral/debt through it.
+The lending pool is a **SODAX fork of AAVE**; the vault reads its reserve rates to compute APR and manages collateral/debt through it.
 
 ### A vault's descriptor
 
@@ -77,7 +77,7 @@ Each registered vault carries four static fields:
 |---|---|---|
 | `name` | Lookup key — the `lsoda*` share-token symbol | `'lsodaWEETH'` |
 | `vault` | Deployed vault proxy on Sonic — **also the `lsoda*` token address** | `0xD09d…701D` |
-| `asset` | Underlying collateral (a Sodax vault token) | `sodaWEETH` |
+| `asset` | Underlying collateral (a SODAX vault token) | `sodaWEETH` |
 | `borrowToken` | Token borrowed against `asset` | `sodaETH` |
 
 The registry lives in `@sodax/types` (`leverageYieldConfig`) and derives every address from the canonical `LsodaTokens` / `SodaTokens` registries, so a deployment-address change lives in exactly one place. Look vaults up with `listVaults()`, `getVault(name)`, or `getVaultByAddress(address)`.

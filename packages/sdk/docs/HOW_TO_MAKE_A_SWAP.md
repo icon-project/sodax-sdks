@@ -2,7 +2,7 @@
 
 > **Error handling conventions:** The swap module returns `SodaxError<SwapErrorCode>` from `swap`, `createIntent`, `postExecution`, `createLimitOrder`, and `createLimitOrderIntent`. Discriminate on `result.error.code` (e.g. `'RELAY_TIMEOUT'`) — not `result.error.message`. See [SWAPS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md#error-handling) for the full per-method code unions. The lower-level methods (`getQuote`, `getStatus`, `submitIntent`, `getSolvedIntentPacket`, `cancelIntent`, …) still return `Result<T, SolverErrorResponse>` or `Result<T, Error | unknown>` — `cancelIntent`/`cancelLimitOrder` were not migrated to `SodaxError`, so don't `switch (error.code)` on those.
 
-This guide provides a step-by-step walkthrough for executing a cross-chain swap using the Sodax SDK. It covers everything from initializing the SDK to handling errors during the swap process.
+This guide provides a step-by-step walkthrough for executing a cross-chain swap using the SODAX SDK. It covers everything from initializing the SDK to handling errors during the swap process.
 
 For detailed API reference, see [SWAPS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md).
 
@@ -12,11 +12,11 @@ For detailed API reference, see [SWAPS.md](https://github.com/icon-project/sodax
 
 Before you begin, ensure you have:
 
-- A wallet provider implementation (e.g., `IEvmWalletProvider` for EVM chains). You can use existing wallet provider implementations from the [`@sodax/wallet-sdk-core`](https://www.npmjs.com/package/@sodax/wallet-sdk-core) npm package, or use the local package [@wallet-sdk-core](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-core/README.md) if working within the Sodax monorepo.
+- A wallet provider implementation (e.g., `IEvmWalletProvider` for EVM chains). You can use existing wallet provider implementations from the [`@sodax/wallet-sdk-core`](https://www.npmjs.com/package/@sodax/wallet-sdk-core) npm package, or use the local package [@wallet-sdk-core](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-core/README.md) if working within the SODAX monorepo.
 - The `@sodax/sdk` package installed
 - Sufficient token balance to cover the swap amount and fees
 - RPC URLs for the chains you're interacting with (we recommend having a dedicated node provider like Alchemy, Quicknode, etc.)
-- Private key or wallet (browser) connection for signing transactions. For React applications, you can use the [`@sodax/wallet-sdk-react`](https://www.npmjs.com/package/@sodax/wallet-sdk-react) npm package, or use the local package [@wallet-sdk-react](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/README.md) if working within the Sodax monorepo.
+- Private key or wallet (browser) connection for signing transactions. For React applications, you can use the [`@sodax/wallet-sdk-react`](https://www.npmjs.com/package/@sodax/wallet-sdk-react) npm package, or use the local package [@wallet-sdk-react](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/README.md) if working within the SODAX monorepo.
 
 ## Step 1: Initialize Sodax Instance
 
