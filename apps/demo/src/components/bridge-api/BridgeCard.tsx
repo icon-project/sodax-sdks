@@ -173,10 +173,26 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
       const accessToken = loadRadfiSession(fromAccount.address)?.accessToken;
       if (accessToken) body.bound = { accessToken };
     }
+    // Stacks source: the tx is built unsigned and a Stacks address can't yield the signer public key,
+    // so it has to travel with the request (same extra the swaps showcase sends).
+    if (fromChainType === 'STACKS' && fromAccount.publicKey) {
+      body.srcPublicKey = fromAccount.publicKey;
+    }
     // Per-request partner fee — routed to `partnerFee.address`; omit to use the backend-configured fee.
     if (partnerFee) body.partnerFee = partnerFee;
     return body;
-  }, [fromToken, toToken, fromAccount.address, recipient, parsedAmount, fromChainKey, toChainKey, fromChainType, partnerFee]);
+  }, [
+    fromToken,
+    toToken,
+    fromAccount.address,
+    fromAccount.publicKey,
+    recipient,
+    parsedAmount,
+    fromChainKey,
+    toChainKey,
+    fromChainType,
+    partnerFee,
+  ]);
 
   // Live fee quote via the HTTP API — shows the fee that will be charged for the current amount + partnerFee.
   const { data: feeQuote } = useBridgeApiFee({
