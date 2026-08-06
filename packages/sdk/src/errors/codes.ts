@@ -40,7 +40,7 @@ import type { SodaxFeature } from '@sodax/types';
  *   because retry semantics differ — re-estimation is cheap, retry-on-failure is the norm).
  * - `LOOKUP_FAILED` — any other read-only on-chain query / off-chain config fetch.
  *   `context.method` partitions this code (`'getStakingInfo'`, `'getBridgeableAmount'`, …).
- * - `EXTERNAL_API_ERROR` — an upstream API call failed (e.g. solver, backend, swaps). `context.api`
+ * - `EXTERNAL_API_ERROR` — an upstream API call failed (e.g. solver, backend, swaps, bridge). `context.api`
  *   identifies which service.
  * - `UNKNOWN` — last-resort catch in an outer `try`. Should be extremely rare in production.
  */
@@ -129,7 +129,7 @@ export type SodaxErrorContext = {
   srcChainKey?: string;
   dstChainKey?: string;
   relayCode?: RelayCode;
-  api?: 'solver' | 'backend' | 'swaps' | 'sponsoring';
+  api?: 'solver' | 'backend' | 'swaps' | 'sponsoring' | 'bridge';
   method?: string;
   status?: number;
   nextAction?: string;

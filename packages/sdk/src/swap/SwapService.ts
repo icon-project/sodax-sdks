@@ -33,10 +33,13 @@ import {
   type RelayExtraData,
   type TxHashPair,
   isStacksChainKeyType,
+  isNativeBitcoinTransfer,
+  RELAY_FALLBACK_FLOOR_MS,
 } from '../shared/index.js';
 import { SolverApiService } from './SolverApiService.js';
 import { EvmSolverService } from './EvmSolverService.js';
 import type { BackendApiService } from '../backendApi/index.js';
+import { pollBackendSubmitTx } from '../backendApi/pollBackendSubmitTx.js';
 import type { ApprovalTxs } from '../shared/types/spoke-types.js';
 import { selectSolvedIntentPacket } from './selectSolvedIntentPacket.js';
 import { SodaxError } from '../errors/SodaxError.js';
@@ -81,7 +84,6 @@ import {
   type Hash,
   type HttpUrl,
   getIntentRelayChainId,
-  isBitcoinChainKey,
   type FeeAmount,
   type GetWalletProviderType,
   type PartnerFee,
@@ -108,6 +110,7 @@ import {
   type StellarChainKey,
   type SpokeExecActionParams,
   type SonicChainKey,
+  BITCOIN_DUST_SATS,
 } from '@sodax/types';
 
 export type GetIntentSubmitTxExtraDataParams = { txHash: Hash } | { intent: Intent };
@@ -519,7 +522,7 @@ export class SwapService {
         relayerApiEndpoint: this.relayerApiEndpoint,
         // Remaining shared budget: ≈ full `timeout` on the flag-off path (called immediately), or
         // the reserve `submitTx` left on the backend path. Floor keeps a stalled-backend fallback viable.
-        timeout: Math.max(deadline - Date.now(), 5_000),
+        timeout: Math.max(deadline - Date.now(), RELAY_FALLBACK_FLOOR_MS),
       });
       if (!packet.ok) {
         return { ok: false, error: mapRelayFailure(packet.error, { feature: 'swap', action: 'swap', ...baseCtx }) };
@@ -592,19 +595,14 @@ export class SwapService {
       // Backend submission rejected — wrap its error as the cause so swap() falls back.
       if (!submitted.ok) return submitTxFailed(submitted.error);
 
-      // Reserve up to a third of the remaining shared budget (capped at 20s) for the fallback, so a
-      // stalled backend can't consume the whole `timeout` before the client-side relay gets a turn.
-      const reserveMs = Math.min(Math.ceil((deadline - Date.now()) / 3), 20_000);
-      const pollDeadline = deadline - reserveMs;
-      const pollIntervalMs = 1_000;
-      while (Date.now() < pollDeadline) {
-        const statusResult = await this.backendApi.swaps.getSubmitTxStatus({ txHash: spokeTxHash, srcChainKey });
-        if (statusResult.ok) {
-          const { status, result, failureReason, abandonedAt } = statusResult.value.data;
-          if (status === 'solved' && result?.dstIntentTxHash && result.intent_hash) {
-            return {
-              ok: true,
-              value: {
+      const polled = await pollBackendSubmitTx({
+        deadline,
+        // Swaps terminal success is `solved` (solver filled) — not the bridge `executed`.
+        terminalStatus: 'solved',
+        getStatus: () => this.backendApi.swaps.getSubmitTxStatus({ txHash: spokeTxHash, srcChainKey }),
+        onExecuted: (result): SwapResponse | undefined =>
+          result?.dstIntentTxHash && result.intent_hash
+            ? {
                 // Backend serializes the hex intent_hash as a plain string; brand it at the boundary.
                 solverExecutionResponse: { answer: 'OK', intent_hash: result.intent_hash as Hex },
                 intent,
@@ -616,18 +614,10 @@ export class SwapService {
                   dstTxHash: result.dstIntentTxHash,
                   dstAddress: params.dstAddress,
                 } satisfies IntentDeliveryInfo,
-              },
-            };
-          }
-          if (status === 'failed' || abandonedAt) {
-            const reason = failureReason ? `: ${failureReason}` : '';
-            return submitTxFailed(new Error(`backend submit-tx ${status}${reason}`));
-          }
-        }
-        // transient !ok / pending / relaying / relayed / posting_execution / posted_execution → keep polling
-        await new Promise<void>(resolve => setTimeout(resolve, pollIntervalMs));
-      }
-      return submitTxFailed(new Error('backend submit-tx polling timed out before reaching solved'));
+              }
+            : undefined,
+      });
+      return polled.ok ? { ok: true, value: polled.value } : submitTxFailed(polled.cause);
     } catch (error) {
       return { ok: false, error: unknownFailed('swap', error, { ...baseCtx, action: 'swap' }) };
     }
@@ -921,11 +911,23 @@ export class SwapService {
         `Invalid spoke chain (params.dstChain): ${params.dstChainKey}`,
         { ...baseCtx, field: 'dstChainKey' },
       );
-      //if dstChain is Bitcoin and token is BTC, check minOutputToken should be higher than 546 sats
-      if (isBitcoinChainKey(params.dstChainKey) && params.outputToken === 'BTC') {
+      // Native BTC on the Bitcoin chain is denominated in satoshis and must clear the 546-sat dust limit —
+      // the BTC deposit on a Bitcoin source and the BTC delivery to a Bitcoin destination alike. `inputToken`
+      // / `outputToken` are original asset addresses (native BTC is '0:0'), so resolve them to token
+      // descriptors and match on symbol rather than comparing the address against the 'BTC' string.
+      const inputTokenInfo = this.config.getSpokeTokenFromOriginalAssetAddress(params.srcChainKey, params.inputToken);
+      if (isNativeBitcoinTransfer(this.config, params.srcChainKey, inputTokenInfo)) {
         swapInvariant(
-          params.minOutputAmount >= 546n,
-          `Invalid minOutputAmount (params.minOutputAmount): ${params.minOutputAmount}`,
+          params.inputAmount >= BITCOIN_DUST_SATS,
+          `Invalid inputAmount (${params.inputAmount}): below the Bitcoin dust limit of ${BITCOIN_DUST_SATS} sats`,
+          { ...baseCtx, field: 'inputAmount' },
+        );
+      }
+      const outputTokenInfo = this.config.getSpokeTokenFromOriginalAssetAddress(params.dstChainKey, params.outputToken);
+      if (isNativeBitcoinTransfer(this.config, params.dstChainKey, outputTokenInfo)) {
+        swapInvariant(
+          params.minOutputAmount >= BITCOIN_DUST_SATS,
+          `Invalid minOutputAmount (${params.minOutputAmount}): below the Bitcoin dust limit of ${BITCOIN_DUST_SATS} sats`,
           { ...baseCtx, field: 'minOutputAmount' },
         );
       }

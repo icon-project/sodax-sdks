@@ -88,3 +88,18 @@ export function resolveSponsoringApiConfig(config: ApiConfig): SponsoringApiConf
     ...(slice?.apiKey === undefined ? {} : { apiKey: slice.apiKey }),
   };
 }
+
+/**
+ * Resolve the effective config for the bridge API. The Bridge API is served on the BASE backend host —
+ * its routes are reached as `/bridge/*` sub-paths under the same base URL — so there is no separate
+ * `bridgeApiConfig` slice on {@link CustomApiConfig} and no `BridgeApiConfig` type: this is an
+ * unconditional alias of {@link resolveBaseApiConfig}.
+ *
+ * Bridge and swaps therefore sit on the same host by DEFAULT (both fall back to
+ * `DEFAULT_BACKEND_API_ENDPOINT`), but they are not configured together: a `swapsApiConfig` slice moves
+ * only `sodax.api.swaps`. To relocate the bridge routes, set the top-level `baseURL` or the
+ * `baseApiConfig` slice — or override per call via each method's `RequestOverrideConfig`.
+ */
+export function resolveBridgeApiConfig(config: ApiConfig): BaseApiConfig {
+  return resolveBaseApiConfig(config);
+}

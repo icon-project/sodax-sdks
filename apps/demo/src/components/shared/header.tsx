@@ -11,6 +11,7 @@ const navLinks = [
   { to: '/solver', label: 'Solver' },
   { to: '/swaps-api', label: 'Swaps API' },
   { to: '/bridge', label: 'Bridge' },
+  { to: '/bridge-api', label: 'Bridge API' },
   { to: '/staking', label: 'Staking' },
   { to: '/partner-fee-claim', label: 'Partner Fee Claim' },
   { to: '/dex', label: 'Dex' },

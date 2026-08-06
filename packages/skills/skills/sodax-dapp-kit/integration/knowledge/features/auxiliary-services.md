@@ -94,6 +94,30 @@ const { data: status } = useSwapsApiSubmitTxStatus({ params: { txHash, srcChainK
 
 > The full `useSwapsApi*` hook list (with polling + types) is in [hooks-index.md](../reference/hooks-index.md); key shapes in [querykey-conventions.md](../reference/querykey-conventions.md). For non-React callers, `sodax.api.swaps` is documented in the `sodax-sdk` skill (integration mode).
 
+### Bridge API (`sodax.api.bridge`)
+
+Typed React Query wrappers over the backend **Bridge API v2** — `useBridgeApi*` hooks over `sodax.api.bridge.*` (tokens, allowance, approve, create-bridge-intent, submit-tx + status, plus the fee / bridgeable-amount / bridgeable discovery quotes). They are the HTTP-API parallel of the on-chain `bridge/` hooks (`useBridge`/`useBridgeAllowance`/…, which drive `sodax.bridge`). Mirrors the swaps family minus the solver/intent surface; reads take `{ params, queryOptions }`, the three actions (`approve`, `createBridgeIntent`, `submitTx`) are mutations taking `{ mutationOptions }`.
+
+```ts
+// @ai-snippets-skip
+useBridgeApiTokens({ params, queryOptions });           // query    → sodax.api.bridge.getTokens
+useBridgeApiCreateBridgeIntent({ mutationOptions });    // mutation → sodax.api.bridge.createBridgeIntent
+useBridgeApiSubmitTxStatus({ params, queryOptions });   // query    → sodax.api.bridge.getSubmitTxStatus
+```
+
+Two deltas vs the swaps hooks: the allowance/approve/create body is the **wire DTO** `CreateBridgeIntentParamsV2` (`inputToken`/`inputAmount`/`dstAddress`, not the SDK-domain names), and `useBridgeApiSubmitTx`'s `request` is a `BridgeSubmitTxRequestV2` whose `relayData` is the **FULL `{ address, payload }` object** (no `intent` field):
+
+```ts
+// @ai-snippets-skip
+const { mutateAsync: submitBridgeTx } = useBridgeApiSubmitTx();
+// request: BridgeSubmitTxRequestV2 — { txHash, srcChainKey, walletAddress, relayData } (full envelope)
+await submitBridgeTx({ request, apiConfig: { baseURL: 'https://...' } });
+```
+
+`useBridgeApiSubmitTxStatus` polls (1s) and returns `BridgeSubmitTxStatusResponseV2 | undefined`, running only when **both** `txHash` and `srcChainKey` are supplied; terminal states are `executed` / `failed` (no `posting_execution`). The fee / bridgeable-amount / bridgeable quotes are computable client-side (config + vault math) — prefer the on-chain `useGetBridgeableAmount` / `sodax.bridge.*` for a no-round-trip read; `useBridgeApiFee` / `useBridgeApiBridgeableAmount` / `useBridgeApiIsBridgeable` mirror the backend endpoints for HTTP parity.
+
+> Full list in [hooks-index.md](../reference/hooks-index.md); key shapes in [querykey-conventions.md](../reference/querykey-conventions.md). For non-React callers, `sodax.api.bridge` is documented in the `sodax-sdk` skill (integration mode).
+
 ## Shared utilities
 
 Cross-cutting hooks used by other features.

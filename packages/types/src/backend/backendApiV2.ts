@@ -689,11 +689,13 @@ export interface SubmitTxStatusResponseV2 {
  * client sees it: all methods are async and all field types are the
  * post-serialization wire shapes above (bigint/Date → decimal/ISO `string`).
  *
- * Do NOT `implements` this on the NestJS `SwapsController`. Handlers return
- * pre-serialization domain types (`bigint`, `Date`, branded `Hex`/`Address`/
- * `SpokeChainKey`) and may be synchronous; the response interceptor serializes
- * them into these wire shapes afterwards. A single class cannot be both the
- * pre-serialization producer and the post-serialization contract.
+ * The backend `SwapsController` `implements` this, which is what keeps the two surfaces from
+ * drifting. Two things make that work: handlers are DECLARED with the wire-shaped response DTOs
+ * (what they hand back at runtime may still be pre-serialization domain values — `bigint`, `Date`,
+ * branded `Hex`/`Address`/`SpokeChainKey` — for the response interceptor to convert), and every
+ * handler is `async`. A handler needing a server-only trailing parameter (`@Req`, `@Ip`, …) takes
+ * the variadic-generic route of `IStellarSponsoringApi` in `sponsoringApi.ts` rather than dropping
+ * the `implements` clause.
  */
 export interface ISwapsApiV2 {
   /** GET /swaps/tokens */
@@ -880,9 +882,8 @@ export type GetRelayChainIdMapResponseV2 = Record<string, string>;
  * client sees it: all methods are async and all field types are the
  * post-serialization wire shapes above (bigint → decimal `string`).
  *
- * As with {@link ISwapsApiV2}, do NOT `implements` this on the NestJS controller:
- * handlers return pre-serialization domain types (`bigint`, branded values) and the
- * response interceptor serializes them into these wire shapes afterwards.
+ * As with {@link ISwapsApiV2}, a NestJS controller may `implements` this once its handlers are
+ * declared `async` and typed with the wire-shaped DTOs.
  */
 export interface IConfigApiV2 {
   /** GET /config/all */

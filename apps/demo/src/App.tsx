@@ -8,6 +8,7 @@ import SolverPage from './pages/solver/page';
 import SwapsApiPage from './pages/swaps-api/page';
 import MoneyMarketPage from './pages/money-market/page';
 import BridgePage from './pages/bridge/page';
+import BridgeApiPage from './pages/bridge-api/page';
 import DexPage from './pages/dex/page';
 import StakingPage from './pages/staking/page';
 import PartnerFeeClaimPage from './pages/partner-fee-claim/page';
@@ -47,6 +48,10 @@ const router = createBrowserRouter([
       {
         path: '/bridge',
         element: <BridgePage />,
+      },
+      {
+        path: '/bridge-api',
+        element: <BridgeApiPage />,
       },
       {
         path: '/dex',

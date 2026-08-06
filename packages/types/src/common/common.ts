@@ -3,7 +3,7 @@ import type { ChainKey, ChainKeys, ChainType } from '../chains/chain-keys.js';
 import type { GetChainType, SpokeChainConfig, spokeChainConfig, SpokeChainKey, IconAddress } from '../chains/chains.js';
 import type { XToken } from '../chains/tokens.js';
 import type { EvmRawTransaction, EvmReturnType } from '../evm/evm.js';
-import type { BitcoinReturnType } from '../bitcoin/bitcoin.js';
+import type { BitcoinRawTransaction, BitcoinReturnType } from '../bitcoin/bitcoin.js';
 import type { IconRawTransaction, IconReturnType } from '../icon/icon.js';
 import type { InjectiveRawTransaction, InjectiveReturnType } from '../injective/injective.js';
 import type { NearRawTransaction, NearReturnType } from '../near/near.js';
@@ -183,6 +183,17 @@ export type HashTxReturnType =
   | StacksReturnType<false>
   | NearReturnType<false>;
 
+/**
+ * Fallback raw-tx union for {@link TxReturnType} (which prefers a chain-keyed branch), and the declared
+ * shape of the backend APIs' unsigned `tx` response field, where the chain is only known from the
+ * request's `srcChainKey` at runtime.
+ *
+ * `BitcoinRawTransaction` is listed even though it is currently structurally identical to
+ * `SolanaRawTransaction` (both `{ from: string; to: string; value: bigint; data: string }`) and so would
+ * be absorbed by it: Bitcoin is a supported raw-tx source, and naming it keeps that a stated part of the
+ * contract rather than a coincidence that would silently lapse if the Solana member's string aliases were
+ * ever branded.
+ */
 export type RawTxReturnType =
   | EvmRawTransaction
   | SolanaRawTransaction
@@ -191,7 +202,8 @@ export type RawTxReturnType =
   | SuiRawTransaction
   | StellarRawTransaction
   | StacksRawTransaction
-  | NearRawTransaction;
+  | NearRawTransaction
+  | BitcoinRawTransaction;
 
 export type GetDefaultTxReturnType<Raw extends boolean> = Raw extends true ? RawTxReturnType : HashTxReturnType;
 

@@ -9,6 +9,7 @@ export { BackendHttpError, isBackendHttpError } from './api-utils.js';
 export * from './BackendApiService.js';
 export * from './SwapsApiService.js';
 export * from './SponsoringApiService.js';
+export * from './BridgeApiService.js';
 
 // Re-export the swaps wire failure taxonomy from the wrapped @sodax/swaps-api client so consumers
 // can narrow the failure `SwapsApiService` surfaces — `error.context.code` (a `SwapsApiErrorCode`)

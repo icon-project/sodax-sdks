@@ -183,6 +183,23 @@ Typed wrappers over `sodax.api.swaps.*` (one per Swaps API v2 endpoint), all key
 | `['swapsApi', 'createLimitOrder']` | `useSwapsApiCreateLimitOrder` mutation |
 | `['swapsApi', 'submitTx']` | `useSwapsApiSubmitTx` mutation |
 
+### Bridge API (`sodax.api.bridge`)
+
+Typed wrappers over `sodax.api.bridge.*` (one per Bridge API v2 endpoint), all keyed `['bridgeApi', action, ...]`.
+
+| Key | Hook |
+|---|---|
+| `['bridgeApi', 'tokens']` | `useBridgeApiTokens` |
+| `['bridgeApi', 'tokens', chainKey]` | `useBridgeApiTokensByChain` |
+| `['bridgeApi', 'allowance', …]` | `useBridgeApiAllowance` |
+| `['bridgeApi', 'fee', inputAmount, partnerFee]` | `useBridgeApiFee` |
+| `['bridgeApi', 'bridgeableAmount', srcChainKey, dstChainKey, inputToken, outputToken]` | `useBridgeApiBridgeableAmount` |
+| `['bridgeApi', 'bridgeable', srcChainKey, dstChainKey, inputToken, outputToken]` | `useBridgeApiIsBridgeable` |
+| `['bridgeApi', 'submitTx', 'status', txHash, srcChainKey]` | `useBridgeApiSubmitTxStatus` — both identifiers required |
+| `['bridgeApi', 'approve']` | `useBridgeApiApprove` mutation |
+| `['bridgeApi', 'createBridgeIntent']` | `useBridgeApiCreateBridgeIntent` mutation |
+| `['bridgeApi', 'submitTx']` | `useBridgeApiSubmitTx` mutation |
+
 ### Leverage Yield
 
 | Key | Hook |
