@@ -67,7 +67,7 @@ Each vault is a deployed contract on the **Sonic hub** that follows the **ERC-46
 - **The share token address *is* the vault proxy address.** `vault` and the `lsoda*` token are the same address.
 - Standard ERC-4626 views (`previewDeposit`, `previewWithdraw`, `previewRedeem`, `maxWithdraw`, `totalAssets`) work, plus a non-standard `getPositionDetails()` that returns the live leveraged-position snapshot.
 
-The lending pool is a **Sodax fork of AAVE**; the vault reads its reserve rates to compute APR and manages collateral/debt through it.
+The lending pool is a **SODAX fork of AAVE**; the vault reads its reserve rates to compute APR and manages collateral/debt through it.
 
 ### A vault's descriptor
 
@@ -77,7 +77,7 @@ Each registered vault carries four static fields:
 |---|---|---|
 | `name` | Lookup key — the `lsoda*` share-token symbol | `'lsodaWEETH'` |
 | `vault` | Deployed vault proxy on Sonic — **also the `lsoda*` token address** | `0xD09d…701D` |
-| `asset` | Underlying collateral (a Sodax vault token) | `sodaWEETH` |
+| `asset` | Underlying collateral (a SODAX vault token) | `sodaWEETH` |
 | `borrowToken` | Token borrowed against `asset` | `sodaETH` |
 
 The registry lives in `@sodax/types` (`leverageYieldConfig`) and derives every address from the canonical `LsodaTokens` / `SodaTokens` registries, so a deployment-address change lives in exactly one place. Look vaults up with `listVaults()`, `getVault(name)`, or `getVaultByAddress(address)`.
@@ -215,7 +215,14 @@ Notifies the solver that a vault intent has landed on the hub, triggering it to 
 
 ### approve
 
-Approves the vault's underlying `asset` to the vault on Sonic. Resolves `asset()` on-chain, then delegates to `Erc20Service.approve`. With `raw: true` returns unsigned tx data and does not broadcast. **Returns:** `Promise<Result<TxReturnType<HubChainKey, R> | EvmReturnType<true>, LeverageYieldApproveError>>`. `context.action` is `'approve'`.
+Approves the vault's underlying `asset` to the vault on Sonic. Resolves `asset()` on-chain, then delegates to `SpokeService.approve` when signing, or to `Erc20Service.approve` with `raw: true`, which returns unsigned tx data and does not broadcast. **Returns:** `Promise<Result<TxReturnType<HubChainKey, R> | EvmReturnType<true>, LeverageYieldApproveError>>`. `context.action` is `'approve'`.
+
+**Some tokens take two transactions.** A few ERC-20s of the 2017 TetherToken lineage — Ethereum USDT
+is the only one in the SODAX token list today — reject an allowance change from one non-zero value to
+another, so a signed `approve` sends `approve(0)` first and waits for it to be mined before the real
+approval. The user signs twice; the returned value is still a single transaction hash, the **last**
+one's. Detection simulates the approval rather than consulting a token list, so a token listed later
+behaves the same way.
 
 ### isAllowanceValid
 

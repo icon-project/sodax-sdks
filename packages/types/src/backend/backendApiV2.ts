@@ -333,6 +333,13 @@ export interface AllowanceCheckResponseV2 {
 export interface ApproveResponseV2 {
   /** Unsigned approval transaction — the `RawTxReturnType` variant for the request's `srcChainKey`. */
   tx: RawTxReturnType;
+  /**
+   * Present only when the source token rejects an allowance change from one non-zero value to
+   * another — the 2017 TetherToken lineage. Broadcast this first and wait for it to be mined, then
+   * broadcast `tx`; the second approve is only valid once the allowance has been zeroed on-chain.
+   * Absent for every other token, and for a wallet with nothing approved yet.
+   */
+  resetTx?: RawTxReturnType;
 }
 
 /** POST /swaps/intents — response body. */

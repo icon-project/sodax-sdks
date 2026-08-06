@@ -16,12 +16,27 @@ import { HookService } from './HookService.js';
 import type { CreateIntentParams } from '../shared/types/intent-types.js';
 
 const HC_RECIPIENT = '0x00000000000000000000000000000000000000Ad' as const;
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
 
 describe('HookService.encodeDeliveryData', () => {
   it('encodes the HyperCore payload as abi.encode(address) (32 bytes)', () => {
     const encoded = HookService.encodeDeliveryData({ kind: HookKind.HYPERCORE_DEPOSIT }, HC_RECIPIENT);
     expect(encoded).toBe(encodeAbiParameters([{ name: 'recipient', type: 'address' }], [HC_RECIPIENT]));
     expect((encoded.length - 2) / 2).toBe(32);
+  });
+
+  it('encodes the Flint payload as abi.encode(address) (32 bytes)', () => {
+    const encoded = HookService.encodeDeliveryData({ kind: HookKind.FLINT_DEPOSIT }, HC_RECIPIENT);
+    expect(encoded).toBe(encodeAbiParameters([{ name: 'recipient', type: 'address' }], [HC_RECIPIENT]));
+    expect((encoded.length - 2) / 2).toBe(32);
+  });
+
+  // A zero recipient makes the destination receiver revert, which wedges the cross-chain message
+  // unrecoverably — so it must fail here, before an intent exists.
+  it.each([HookKind.HYPERCORE_DEPOSIT, HookKind.FLINT_DEPOSIT])('rejects a zero-address recipient (%s)', kind => {
+    expect(() =>
+      HookService.encodeDeliveryData({ kind } as Parameters<typeof HookService.encodeDeliveryData>[0], ZERO_ADDRESS),
+    ).toThrow(/zero address/);
   });
 
   it('throws on an unknown hook kind', () => {
@@ -50,6 +65,16 @@ describe('HookService.resolveDeliveryHook', () => {
   it('throws when the requested hook is not deployed on the chain', () => {
     expect(() =>
       HookService.resolveDeliveryHook(ChainKeys.ETHEREUM_MAINNET, { kind: HookKind.HYPERCORE_DEPOSIT }, HC_RECIPIENT),
+    ).toThrow();
+  });
+
+  // FlintDepositHook is not deployed yet, so it is deliberately absent from the registry. Resolving
+  // it must throw rather than resolve to a placeholder address that would swallow real intent output.
+  // When the hook is deployed and registered, replace this with the positive resolution test.
+  it('throws for Flint until the hook is registered on Ethereum', () => {
+    expect(getSpokeHook(ChainKeys.ETHEREUM_MAINNET, HookKind.FLINT_DEPOSIT)).toBeUndefined();
+    expect(() =>
+      HookService.resolveDeliveryHook(ChainKeys.ETHEREUM_MAINNET, { kind: HookKind.FLINT_DEPOSIT }, HC_RECIPIENT),
     ).toThrow();
   });
 });

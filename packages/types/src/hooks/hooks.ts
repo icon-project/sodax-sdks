@@ -17,6 +17,12 @@ import { ChainKeys, spokeChainConfig } from '../chains/chains.js';
 export const HookKind = {
   /** Deposits delivered USDC into the recipient's HyperCore perps account (HyperEVM). */
   HYPERCORE_DEPOSIT: 'hyperCoreDeposit',
+  /**
+   * Requests an ERC-7540 deposit of delivered USDC into the Flint RWA vault (Ethereum), with the
+   * recipient as the request's controller. Asynchronous: the request mints no shares — Flint's
+   * curator settles a NAV and then claims the shares on the controller's behalf.
+   */
+  FLINT_DEPOSIT: 'flintDeposit',
 } as const;
 export type HookKind = (typeof HookKind)[keyof typeof HookKind];
 
@@ -44,6 +50,20 @@ export const spokeHooks = {
       supportedTokens: [spokeChainConfig[ChainKeys.HYPEREVM_MAINNET].supportedTokens.USDC.address], // USDC on HyperEVM
     },
   ],
+  // HookKind.FLINT_DEPOSIT is not registered yet: FlintDepositHook is not deployed to Ethereum
+  // mainnet (icon-project/sodax-contracts#693). Registering it with a placeholder address would
+  // route real intent output to that address, so the entry lands with the deployment:
+  //
+  //   [ChainKeys.ETHEREUM_MAINNET]: [
+  //     {
+  //       kind: HookKind.FLINT_DEPOSIT,
+  //       address: '0x…',
+  //       supportedTokens: [spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.USDC.address],
+  //     },
+  //   ],
+  //
+  // Until then `getSpokeHook` returns undefined and `resolveDeliveryHook` throws, which is the
+  // correct behaviour for a hook that does not exist on chain.
 } as const satisfies Partial<Record<SpokeChainKey, readonly SpokeHookConfig[]>>;
 
 /** Returns the deployed hook of the given kind on `chainKey`, or `undefined` if none is registered. */

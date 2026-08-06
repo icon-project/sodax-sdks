@@ -1,6 +1,6 @@
 # Monetize SDK
 
-Learn how to configure fees and monetize your Sodax SDK integration.
+Learn how to configure fees and monetize your SODAX SDK integration.
 
 When using the SODAX SDK, you can monetize your integration by collecting fees from the transactions processed through your application.
 Fees are configured globally per feature when creating the `Sodax` instance, and the swap and bridge features additionally accept a per-action override: swap's `getQuote()` takes an optional `partnerFee` argument, and swap's `swap()` / `createIntent()` and bridge's `bridge()` / `createBridgeIntent()` read `extras.partnerFee`. When omitted, the configured fee applies.
@@ -199,6 +199,13 @@ unsigned transaction object instead.
 
 Before swapping, ensure the ProtocolIntents contract is approved to spend the fee token.
 Native tokens are pre-approved and always return `true` from `isTokenApproved`.
+
+**Some tokens take two transactions.** A few ERC-20s of the 2017 TetherToken lineage reject an
+allowance change from one non-zero value to another, so `approveToken` sends `approve(0)` first and
+waits for it to be mined before the real approval — the user signs twice. This applies here more
+often than elsewhere, because fee approval always requests an unlimited allowance, so a second claim
+is always a non-zero to non-zero change. The returned value is still a single transaction hash, the
+**last** one's.
 
 ```typescript
 const approvedResult = await sodax.partners.feeClaim.isTokenApproved({

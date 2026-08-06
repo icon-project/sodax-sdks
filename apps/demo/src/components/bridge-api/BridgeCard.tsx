@@ -18,6 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   loadRadfiSession,
   useBitcoinBalance,
+  useBitcoinTradingSetup,
   useBridgeApiAllowance,
   useBridgeApiApprove,
   useBridgeApiCreateBridgeIntent,
@@ -173,10 +174,26 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
       const accessToken = loadRadfiSession(fromAccount.address)?.accessToken;
       if (accessToken) body.bound = { accessToken };
     }
+    // Stacks source: the tx is built unsigned and a Stacks address can't yield the signer public key,
+    // so it has to travel with the request (same extra the swaps showcase sends).
+    if (fromChainType === 'STACKS' && fromAccount.publicKey) {
+      body.srcPublicKey = fromAccount.publicKey;
+    }
     // Per-request partner fee — routed to `partnerFee.address`; omit to use the backend-configured fee.
     if (partnerFee) body.partnerFee = partnerFee;
     return body;
-  }, [fromToken, toToken, fromAccount.address, recipient, parsedAmount, fromChainKey, toChainKey, fromChainType, partnerFee]);
+  }, [
+    fromToken,
+    toToken,
+    fromAccount.address,
+    fromAccount.publicKey,
+    recipient,
+    parsedAmount,
+    fromChainKey,
+    toChainKey,
+    fromChainType,
+    partnerFee,
+  ]);
 
   // Live fee quote via the HTTP API — shows the fee that will be charged for the current amount + partnerFee.
   const { data: feeQuote } = useBridgeApiFee({
@@ -233,13 +250,24 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
     walletProvider: toWalletProvider,
   });
 
+  const fromBtcAddress = fromChainKey === ChainKeys.BITCOIN_MAINNET ? fromAccount.address : undefined;
+  const { data: fromBtcBalance } = useBitcoinBalance({ params: { address: fromBtcAddress } });
   const toBtcAddress = toChainKey === ChainKeys.BITCOIN_MAINNET ? toAccount.address : undefined;
   const { data: toBtcBalance } = useBitcoinBalance({ params: { address: toBtcAddress } });
 
-  const fromBtcWalletProvider =
-    sourceWalletProvider?.chainType === 'BITCOIN' ? (sourceWalletProvider as IBitcoinWalletProvider) : undefined;
-  const toBtcWalletProvider =
-    toWalletProvider?.chainType === 'BITCOIN' ? (toWalletProvider as IBitcoinWalletProvider) : undefined;
+  // Bitcoin trading setup — each side routes through a Bound Exchange (Radfi) trading wallet; the
+  // hook is inert unless its chain is Bitcoin. Keyed on the chain, so it does not depend on the
+  // wallet provider carrying a runtime `chainType`.
+  const sourceBitcoin = useBitcoinTradingSetup({
+    chainKey: fromChainKey,
+    walletProvider: sourceWalletProvider,
+    address: fromAccount.address,
+  });
+  const destBitcoin = useBitcoinTradingSetup({
+    chainKey: toChainKey,
+    walletProvider: toWalletProvider,
+    address: toAccount.address,
+  });
 
   const isSourceSignable = isSignableBridgeApiChain(fromChainKey) || fromChainType === 'BITCOIN';
 
@@ -462,6 +490,16 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
             </div>
           </div>
 
+          {/* A Bitcoin source spends from the Bound trading wallet, so funding it is a precondition for
+              bridging at all — not a confirmation step. Each panel sits with the side it belongs to. */}
+          {sourceBitcoin.wallet && (
+            <BitcoinSetupPanel
+              walletProvider={sourceBitcoin.wallet}
+              onReadyChange={setIsFromBtcReady}
+              nativeBalance={fromBtcBalance}
+            />
+          )}
+
           <div className="flex justify-center">
             <Button variant="outline" size="icon" onClick={handleSwitch}>
               <ArrowDownUp className="h-4 w-4" />
@@ -523,6 +561,15 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
               )}
             </div>
           </div>
+
+          {destBitcoin.wallet && (
+            <BitcoinSetupPanel
+              walletProvider={destBitcoin.wallet}
+              onReadyChange={setIsToBtcReady}
+              nativeBalance={toBtcBalance}
+              isDestination
+            />
+          )}
         </CardContent>
 
         <CardFooter className="flex flex-col space-y-4">
@@ -577,19 +624,6 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
               </div>
             )}
           </div>
-
-          {fromBtcWalletProvider && fromChainKey === ChainKeys.BITCOIN_MAINNET && (
-            <BitcoinSetupPanel walletProvider={fromBtcWalletProvider} onReadyChange={setIsFromBtcReady} />
-          )}
-
-          {toBtcWalletProvider && toChainKey === ChainKeys.BITCOIN_MAINNET && toBtcBalance !== undefined && (
-            <BitcoinSetupPanel
-              walletProvider={toBtcWalletProvider}
-              onReadyChange={setIsToBtcReady}
-              nativeBalance={toBtcBalance}
-              isDestination
-            />
-          )}
 
           {(approveError ?? bridgeError) && (
             <div className="text-red-500 text-sm space-y-1">

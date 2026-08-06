@@ -40,6 +40,7 @@ import { SolverApiService } from './SolverApiService.js';
 import { EvmSolverService } from './EvmSolverService.js';
 import type { BackendApiService } from '../backendApi/index.js';
 import { pollBackendSubmitTx } from '../backendApi/pollBackendSubmitTx.js';
+import type { ApprovalTxs } from '../shared/types/spoke-types.js';
 import { selectSolvedIntentPacket } from './selectSolvedIntentPacket.js';
 import { SodaxError } from '../errors/SodaxError.js';
 import { mapRelayFailure } from '../errors/relay-error-mapping.js';
@@ -686,9 +687,13 @@ export class SwapService {
    * - Stellar: approves the trustline (adds/increases it).
    * - Other chain types: returns an error — approval is not supported.
    *
-   * When `raw: true`, returns unsigned transaction data instead of broadcasting.
+   * When `raw: true`, returns unsigned transaction data instead of broadcasting. That is always a
+   * single transaction, which cannot express the two-step approval a TetherToken-lineage token
+   * needs when a stale allowance already exists — use {@link SwapService.buildApproveTxs} for the
+   * whole plan.
    * When `raw: false`, a matching wallet provider for `K` must be supplied and the transaction
-   * is signed and broadcast immediately.
+   * is signed and broadcast immediately. Such an approval can take **two** transactions, so the
+   * user may sign twice; the returned hash is the last one's.
    *
    * @param _params - Swap action params including the source chain key, input token, amount, and wallet provider.
    * @returns A `Result` wrapping the chain-specific transaction return type (`TxReturnType<K, Raw>`).
@@ -762,6 +767,75 @@ export class SwapService {
         return {
           ok: true,
           value: result.value satisfies TxReturnType<StellarChainKey, boolean> as TxReturnType<K, Raw>,
+        };
+      }
+
+      return {
+        ok: false,
+        error: new Error('Approve only supported for hub (Sonic), EVM spokes, and Stellar'),
+      };
+    } catch (error) {
+      return { ok: false, error };
+    }
+  }
+
+  /**
+   * The unsigned approval transactions for the swap's source token, in the order they must be
+   * broadcast.
+   *
+   * Two transactions when the source token needs its stale allowance cleared first, one otherwise.
+   * {@link SwapService.approve} is unchanged and still returns a single transaction; this is the
+   * entry point for unsigned callers that need to handle the two-step case. When `resetTx` is
+   * present, broadcast it and wait for it to be mined first — `approveTx` is not valid until the
+   * reset has landed.
+   */
+  public async buildApproveTxs<K extends SpokeChainKey>(
+    _params: SwapActionParams<K, true>,
+  ): Promise<Result<ApprovalTxs<K>>> {
+    const { params } = _params;
+    const wrapApproveFailure = (cause: unknown) => approveFailed('swap', cause);
+
+    try {
+      if (isHubChainKeyType(params.srcChainKey) || isEvmSpokeOnlyChainKeyType(params.srcChainKey)) {
+        const spender = isHubChainKeyType(params.srcChainKey)
+          ? this.solver.intentsContract
+          : this.config.getChainConfig(params.srcChainKey).addresses.assetManager;
+
+        const result = await this.spoke.buildApproveTxs<HubChainKey | EvmSpokeOnlyChainKey>({
+          srcChainKey: params.srcChainKey,
+          owner: params.srcAddress as GetAddressType<HubChainKey | EvmSpokeOnlyChainKey>,
+          token: params.inputToken as GetTokenAddressType<HubChainKey | EvmSpokeOnlyChainKey>,
+          amount: params.inputAmount,
+          spender,
+          raw: true,
+        });
+
+        if (!result.ok) {
+          return { ok: false, error: wrapApproveFailure(result.error) };
+        }
+
+        return {
+          ok: true,
+          value: result.value satisfies ApprovalTxs<HubChainKey | EvmSpokeOnlyChainKey> as ApprovalTxs<K>,
+        };
+      }
+
+      if (isStellarChainKeyType(params.srcChainKey)) {
+        const result = await this.spoke.buildApproveTxs<StellarChainKey>({
+          srcChainKey: params.srcChainKey,
+          token: params.inputToken,
+          amount: params.inputAmount,
+          owner: params.srcAddress as GetAddressType<StellarChainKey>,
+          raw: true,
+        });
+
+        if (!result.ok) {
+          return { ok: false, error: wrapApproveFailure(result.error) };
+        }
+
+        return {
+          ok: true,
+          value: result.value satisfies ApprovalTxs<StellarChainKey> as ApprovalTxs<K>,
         };
       }
 

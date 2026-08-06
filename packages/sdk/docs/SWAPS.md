@@ -501,6 +501,34 @@ if (approveResult.ok) {
 }
 ```
 
+`approve({ raw: true })` always returns exactly one transaction. That is not enough for an ERC-20 of
+the 2017 TetherToken lineage — Ethereum USDT is the one in the SODAX token list today — which
+rejects an allowance change from one non-zero value to another: a wallet holding a stale allowance
+has to send `approve(0)` first. Use `buildApproveTxs` when you build unsigned transactions and want
+that case handled:
+
+```typescript
+const result = await sodax.swaps.buildApproveTxs({
+  params: createIntentParams,
+  raw: true,
+});
+
+if (result.ok) {
+  const { resetTx, approveTx } = result.value;
+
+  if (resetTx) {
+    // The approve is not valid until the reset has landed on-chain, so wait for it.
+    await waitForTransactionReceipt(await sendTransaction(resetTx));
+  }
+
+  await waitForTransactionReceipt(await sendTransaction(approveTx));
+}
+```
+
+`resetTx` is absent for every other token and for a wallet with nothing approved yet, so the common
+path is a single transaction. The transactions are named rather than ordered — there is no index to
+map and no way to broadcast them the wrong way round.
+
 ### Stellar Trustline
 
 For Stellar as the source chain, `isAllowanceValid` checks trustline balance sufficiency and `approve` adds/increases the trustline. For Stellar as the **destination** chain, frontends must manually establish trustlines before executing swaps. See `packages/sdk/docs/STELLAR_TRUSTLINE.md` for details.
