@@ -1,6 +1,6 @@
 # Monetize SDK
 
-Learn how to configure fees and monetize your Sodax SDK integration.
+Learn how to configure fees and monetize your SODAX SDK integration.
 
 When using the SODAX SDK, you can monetize your integration by collecting fees from the transactions processed through your application.
 Fees are configured globally per feature when creating the `Sodax` instance, and the swap and bridge features additionally accept a per-action override: swap's `getQuote()` takes an optional `partnerFee` argument, and swap's `swap()` / `createIntent()` and bridge's `bridge()` / `createBridgeIntent()` read `extras.partnerFee`. When omitted, the configured fee applies.

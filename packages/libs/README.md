@@ -2,7 +2,7 @@
 
 Internal **dependency-isolation** package. Third-party libraries that need special build handling (bundling, stubbing, transformation) are re-exported through stable subpaths so the rest of the monorepo can consume them uniformly.
 
-> ⚠️ **Not part of the public Sodax API.** Application code should import from `@sodax/sdk`, `@sodax/wallet-sdk-core`, or `@sodax/wallet-sdk-react` — those packages consume `@sodax/libs` internally.
+> ⚠️ **Not part of the public SODAX API.** Application code should import from `@sodax/sdk`, `@sodax/wallet-sdk-core`, or `@sodax/wallet-sdk-react` — those packages consume `@sodax/libs` internally.
 
 ## When to use this package
 
