@@ -12,6 +12,10 @@
       {
         "group": "Getting Started",
         "pages": ["index"]
+      },
+      {
+        "group": "API",
+        "pages": ["api/index"]
       }
     ]
   }
