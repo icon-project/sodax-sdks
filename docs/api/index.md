@@ -5,7 +5,9 @@ description: "Wire-level reference for the public SODAX HTTP API — base URLs, 
 
 SODAX exposes a public HTTP API for protocol data and swap execution. This section documents it at the **wire level** — plain requests and responses, usable from any language.
 
-If you are building in TypeScript, use the SDK instead: it wraps these endpoints with typed clients, runtime response validation, and a `Result<T>` error channel. See [`BACKEND_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BACKEND_API.md) and [`SWAPS_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS_API.md). These pages are the reference underneath it.
+Some of these endpoints also have a typed TypeScript client in the SDK, which adds runtime response validation and a `Result<T>` error channel: `BackendApiService` covers intents, orderbook, money market and config ([`BACKEND_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BACKEND_API.md)), and `SwapsApiService` covers `/v1/swaps` ([`SWAPS_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS_API.md)). Prefer the client where one exists.
+
+Not every surface has one — oracle price candles, AMM data and SODA supply are HTTP-only today, and these pages are the reference for them.
 
 ## Base URLs
 
@@ -52,13 +54,21 @@ GET /v1/be/sodax/total_supply
 1499671267.8525950947157713
 ```
 
-Parse these with `BigInt` or a decimal library. `Number()` silently truncates: the supply figure above comes back as `1499671267.852595`, ten fractional digits short.
+Match the parser to the value. Integer strings — token amounts, block heights — take `BigInt`. Fractional strings need a decimal library: `BigInt("1499671267.8525950947157713")` throws a `SyntaxError`, and `Number()` silently truncates it to `1499671267.852595`, ten fractional digits short.
 
 Counts and timestamps that are safely within range stay JSON numbers — `{"filledCount": 141837}`.
 
 ### Timestamps
 
-UNIX **seconds**, not milliseconds.
+There is no single representation — read the unit off the endpoint you are calling.
+
+| Where | Representation |
+|---|---|
+| Oracle candle `timestamp`, and the `from` / `to` query parameters | UNIX **seconds** |
+| Date fields inside JSON bodies — e.g. `now` in the health response, `abandonedAt` on swap status | **ISO 8601** strings |
+| User-intent date filters (`startDate` / `endDate`) | **ISO 8601** on the wire |
+
+Note the last row if you are porting from the SDK: `getUserIntents` accepts milliseconds as an argument and converts them to ISO 8601 before sending. That conversion is a client-side convenience, not the wire format — calling the endpoint directly with a millisecond value will not work. Each page states the unit for its own fields.
 
 ### Caching
 
