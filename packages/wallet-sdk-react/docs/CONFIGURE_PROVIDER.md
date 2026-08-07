@@ -94,7 +94,7 @@ const walletConfig: SodaxWalletConfig = {
   SUI: {
     network: 'mainnet',
     autoConnect: true,
-    chains: { [ChainKeys.SUI_MAINNET]: { rpcUrl: 'https://fullnode.mainnet.sui.io' } },
+    chains: { [ChainKeys.SUI_MAINNET]: { rpcUrl: 'https://sui-rpc.publicnode.com' } },
   },
 
   // Empty object — opt in with SDK defaults
