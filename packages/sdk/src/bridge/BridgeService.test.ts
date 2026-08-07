@@ -40,7 +40,7 @@ vi.mock('../shared/services/intentRelay/IntentRelayApiService.js', async () => {
   };
 });
 
-const sodax = new Sodax();
+const sodax = new Sodax({ bridge: { useBackendSubmitTx: false } });
 
 // Local SpokeChainKey fixtures. Matches the relay-error-mapping.test.ts pattern: avoids
 // the `../../../types/src/...` deep import workaround so tests stay decoupled from the
@@ -793,16 +793,16 @@ describe('BridgeService.bridge — integration error-path coverage', () => {
 });
 
 // =========================================================================
-// bridge — opt-in backend submit-tx flow (bridgeOptions.useBackendSubmitTx).
+// bridge — backend submit-tx flow (bridge.useBackendSubmitTx, default ON).
 // Mirrors SwapService.test.ts Batch 7, with bridge deltas: no intent / intent_hash,
 // success value is TxHashPair, fallback relays (no post-execution).
 // =========================================================================
 
 describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () => {
-  // A separate Sodax instance with the opt-in flag ON. Per-test we stub createBridgeIntent +
+  // A separate Sodax instance with backend submit-tx ON (the default). Per-test we stub createBridgeIntent +
   // verifyTxHash on this instance and the backend bridge API it calls (submitTx / getSubmitTxStatus);
   // the module-level `mocks.relayTxAndWaitPacket` covers the client-side fallback path.
-  const sodaxBE = new Sodax({ logger: 'silent', bridgeOptions: { useBackendSubmitTx: true } });
+  const sodaxBE = new Sodax({ logger: 'silent' });
 
   // createBridgeIntent (broadcast) succeeds + on-chain verify succeeds, so bridge() reaches the
   // submit/fallback branch. verifyTxHash is only consumed on the fallback path.
@@ -885,8 +885,8 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
     expect(mocks.relayTxAndWaitPacket).toHaveBeenCalledOnce();
   });
 
-  it('does not touch the backend submit API when the flag is off (default instance)', async () => {
-    // The module-level `sodax` has useBackendSubmitTx=false → pure client-side flow.
+  it('does not touch the backend submit API when the flag is off', async () => {
+    // The module-level `sodax` opts out via `bridge.useBackendSubmitTx: false` → pure client-side flow.
     vi.spyOn(sodax.bridge, 'createBridgeIntent').mockResolvedValueOnce({
       ok: true,
       value: { tx: '0xspokeTx' as never, relayData: { address: HUB_WALLET, payload: '0x' } },
@@ -1077,24 +1077,42 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
 });
 
 // =========================================================================
-// Sodax wiring — bridgeOptions.useBackendSubmitTx flows into BridgeService,
+// Sodax wiring — bridge.useBackendSubmitTx flows into BridgeService,
 // and sodax.api.bridge is reachable.
 // =========================================================================
 
-describe('Sodax bridgeOptions wiring', () => {
-  it('defaults useBackendSubmitTx to false and exposes sodax.api.bridge', () => {
+describe('Sodax bridge.useBackendSubmitTx wiring', () => {
+  it('defaults useBackendSubmitTx to true and exposes sodax.api.bridge', () => {
     const s = new Sodax();
-    expect(s.bridge.useBackendSubmitTx).toBe(false);
+    expect(s.bridge.useBackendSubmitTx).toBe(true);
+    expect(s.swaps.useBackendSubmitTx).toBe(true);
     expect(s.api.bridge).toBeDefined();
   });
 
-  it('threads bridgeOptions.useBackendSubmitTx=true into the BridgeService', () => {
-    const s = new Sodax({ bridgeOptions: { useBackendSubmitTx: true } });
+  it('threads bridge.useBackendSubmitTx=false into the BridgeService', () => {
+    const s = new Sodax({ bridge: { useBackendSubmitTx: false } });
+    expect(s.bridge.useBackendSubmitTx).toBe(false);
+    expect(s.swaps.useBackendSubmitTx).toBe(true);
+  });
+
+  it('keeps the bridge toggle independent of swaps.useBackendSubmitTx', () => {
+    const s = new Sodax({ swaps: { useBackendSubmitTx: false } });
+    expect(s.swaps.useBackendSubmitTx).toBe(false);
     expect(s.bridge.useBackendSubmitTx).toBe(true);
   });
 
-  it('keeps the bridge toggle independent of swapsOptions', () => {
-    const s = new Sodax({ swapsOptions: { useBackendSubmitTx: true } });
-    expect(s.bridge.useBackendSubmitTx).toBe(false);
+  it('resolves the effective toggle on ConfigService, so config and behavior never disagree', () => {
+    const defaults = new Sodax();
+    // The raw slot is legitimately absent when the caller omits the flag; the effective accessor —
+    // the one the services read — is what reports the ON default.
+    expect(defaults.config.swaps.useBackendSubmitTx).toBeUndefined();
+    expect(defaults.config.swapUseBackendSubmitTx).toBe(true);
+    expect(defaults.config.bridgeUseBackendSubmitTx).toBe(true);
+
+    const optedOut = new Sodax({ swaps: { useBackendSubmitTx: false }, bridge: { useBackendSubmitTx: false } });
+    expect(optedOut.config.swapUseBackendSubmitTx).toBe(false);
+    expect(optedOut.config.bridgeUseBackendSubmitTx).toBe(false);
+    expect(optedOut.swaps.useBackendSubmitTx).toBe(false);
+    expect(optedOut.bridge.useBackendSubmitTx).toBe(false);
   });
 });

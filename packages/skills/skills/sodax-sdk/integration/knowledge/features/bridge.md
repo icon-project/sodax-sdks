@@ -83,7 +83,7 @@ const result = await sodax.bridge.bridge({
 
 ## Routing the spoke deposit through the backend
 
-`bridge()` relays client-side by default. `new Sodax({ bridgeOptions: { useBackendSubmitTx: true } })` opts into handing the broadcast deposit to the backend Bridge API instead (`sodax.api.bridge`), which relays server-side and falls back to the client-side relay on any non-success — safe because re-relaying is idempotent. Default is OFF. See [`bridge-api.md`](bridge-api.md).
+`bridge()` routes the spoke-deposit through the backend Bridge API by default (`bridge.useBackendSubmitTx`, default ON) — `sodax.api.bridge` relays server-side and falls back to the client-side relay on any non-success — safe because re-relaying is idempotent. Set `new Sodax({ bridge: { useBackendSubmitTx: false } })` to force the client-side path. Both halves share ONE `timeout` (default 120s), with a third of the remaining budget — capped at 20s — reserved for the fallback, same split as swaps. See [`bridge-api.md`](bridge-api.md).
 
 ## Common call shapes
 

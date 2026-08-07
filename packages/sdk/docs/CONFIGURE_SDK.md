@@ -16,7 +16,7 @@ import { Sodax } from '@sodax/sdk';
 const sodax = new Sodax();
 ```
 
-The constructor signature is `new Sodax(config?: SodaxOptions)`, where `SodaxOptions = DeepPartial<SodaxDefaultConfig> & SodaxOptionalConfig` — a deep-partial override of the `SodaxDefaultConfig` data contract plus the client-side options: the `logger` sink (see [LOGGING.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/LOGGING.md)), the global partner `fee`, per-feature `partnerFee` options, the `swapsOptions` / `bridgeOptions` toggles (see [Backend submit-tx 2-step](#backend-submit-tx-2-step-swapsoptionsusebackendsubmittx)), and `radfi` (see [RadFi/Bound request signer](#radfibound-request-signer-radfisignrequest)). The `logger`, global `fee`, the `swapsOptions` / `bridgeOptions` toggles, and `radfi` are kept off the data contract: they are resolved once and never fetched from or overwritten by the backend config. When called with no arguments the SDK merges your overrides with the packaged static defaults ([`sodaxConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/sodax-config/sodax-config.ts)) using a recursive `deepMerge`. Omitted keys keep their default values.
+The constructor signature is `new Sodax(config?: SodaxOptions)`, where `SodaxOptions = DeepPartial<SodaxDefaultConfig> & SodaxOptionalConfig` — a deep-partial override of the `SodaxDefaultConfig` data contract plus the client-side options: the `logger` sink (see [LOGGING.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/LOGGING.md)), the global partner `fee`, per-feature options on `swaps` / `bridge` / `moneyMarket` / `leverageYield` (including `partnerFee` and `useBackendSubmitTx` — see [Backend submit-tx 2-step](#backend-submit-tx-2-step-swapsusebackendsubmittx)), and `radfi` (see [RadFi/Bound request signer](#radfibound-request-signer-radfisignrequest)). The `logger`, global `fee`, and `radfi` are kept off the data contract: they are resolved once and never fetched from or overwritten by the backend config. `useBackendSubmitTx` lives on the feature option slots (`swaps` / `bridge`) alongside `partnerFee`; the effective value (default `true`) is resolved on `ConfigService` — `sodax.config.swapUseBackendSubmitTx` / `sodax.config.bridgeUseBackendSubmitTx`. When called with no arguments the SDK merges your overrides with the packaged static defaults ([`sodaxConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/sodax-config/sodax-config.ts)) using a recursive `deepMerge`. Omitted keys keep their default values.
 
 ### Dynamic Configuration
 
@@ -33,14 +33,14 @@ if (!initResult.ok) {
 
 ## SodaxConfig overview
 
-Top-level data keys (the `SodaxDefaultConfig` shape carried inside `SodaxConfig`):
+Top-level keys of the consolidated `SodaxConfig` — the `SodaxDefaultConfig` data contract plus the per-feature client-side options merged over it. The feature rows are typed `SwapsConfig` / `BridgeConfig` / … (`<Feature>DefaultConfig & <Feature>Options`), so `partnerFee` and `useBackendSubmitTx` appear there even though neither is part of `SodaxDefaultConfig` and neither is ever fetched from the backend:
 
 | Key | Type (summary) | Role |
 |-----|----------------|------|
 | `chains` | `Record<SpokeChainKey, SpokeChainConfig>` | Per-spoke chain addresses, tokens, RPC settings, polling. |
-| `swaps` | `SwapsConfig` | Per-chain solver-supported token lists, plus an optional per-feature `partnerFee`. |
+| `swaps` | `SwapsConfig` | Per-chain solver-supported token lists, plus optional per-feature `partnerFee` and `useBackendSubmitTx` (default ON). |
 | `moneyMarket` | `MoneyMarketConfig` | Lending pool addresses, reserve assets, supported tokens, plus an optional per-feature `partnerFee`. |
-| `bridge` | `BridgeConfig` | Optional bridge per-feature `partnerFee`. |
+| `bridge` | `BridgeConfig` | Optional bridge per-feature `partnerFee` and `useBackendSubmitTx` (default ON). |
 | `dex` | `DexConfig` | Concentrated liquidity contract set and pool keys (Sonic hub). |
 | `leverageYield` | `LeverageYieldConfig` | Registry of leverage-yield ERC-4626 vaults on the hub, plus an optional per-feature `partnerFee`. |
 | `hub` | `HubConfig` | Hub chain (Sonic) metadata, contract addresses, and `rpcUrl` used by `EvmHubProvider`. |
@@ -144,25 +144,33 @@ Partner fees for swaps belong in **`swaps.partnerFee`**, not inside `solver`.
 
 `SwapsConfig` includes `supportedTokens: Record<SpokeChainKey, readonly XToken[]>`. Normally you rely on the packaged lists. If you override them, remember that **`deepMerge` replaces arrays wholesale**—provide the full list for any chain you touch, or omit `supportedTokens` to keep defaults.
 
-### Backend submit-tx 2-step (`swapsOptions.useBackendSubmitTx`)
+### Backend submit-tx 2-step (`swaps.useBackendSubmitTx`)
 
-`swapsOptions` is a **client-side runtime option** on `SodaxOptions` (like `logger`) — it is NOT part of the backend-fetched `SodaxConfig`. Setting `useBackendSubmitTx: true` opts `sodax.swaps.swap()` into a backend-driven **2-step flow**: after the intent tx is created + verified on the source chain, the SDK hands it to the backend swaps API (`sodax.api.swaps.submitTx`), which relays and post-executes server-side; the SDK polls submit-tx status and returns the same `SwapResponse`.
-
-```typescript
-const sodax = new Sodax({ swapsOptions: { useBackendSubmitTx: true } });
-```
-
-If the backend path does not reach `solved` for **any** reason (submission rejected, terminal `failed`/abandoned status, or poll timeout), `swap()` automatically falls back to the fully client-side relay + post-execution so the swap still completes — **safely**, because re-relaying / re-posting an already-processed swap is idempotent (no double-fill; verified by `e2e-tests/e2e-relay.test.ts`), and the backend poll + fallback share one `timeout` budget (total latency ≤ one `timeout`). Default is `false`. See [SWAPS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md#backend-2-step-submit-opt-in) for the flow.
-
-### Backend submit-tx (`bridgeOptions.useBackendSubmitTx`)
-
-`bridgeOptions` is the bridge counterpart of `swapsOptions` — a **client-side runtime option** on `SodaxOptions`, distinct from the data `bridge` (partner-fee) slot. Setting `useBackendSubmitTx: true` opts `sodax.bridge.bridge()` into routing the spoke-deposit through the backend bridge API (`sodax.api.bridge.submitTx`), which relays server-side; the SDK polls submit-tx status and returns the same `TxHashPair`.
+`useBackendSubmitTx` on `swaps` is a **client-side runtime option** on `SodaxOptions` (same slot as `swaps.partnerFee`) — it is NOT part of the backend-fetched `SodaxDefaultConfig`. Default `true`: after `createIntent` broadcasts the intent tx on the source chain, `sodax.swaps.swap()` hands the tx hash to the backend swaps API (`sodax.api.swaps.submitTx`), which relays and post-executes server-side; the SDK polls submit-tx status and returns the same `SwapResponse`. The SDK does **not** verify the tx on-chain first — `verifyTxHash` runs only on the client-side path. Set `false` to force the fully client-side relay path.
 
 ```typescript
-const sodax = new Sodax({ bridgeOptions: { useBackendSubmitTx: true } });
+// Default — backend submit-tx ON
+const sodax = new Sodax();
+
+// Opt out
+const sodaxClientSide = new Sodax({ swaps: { useBackendSubmitTx: false } });
 ```
 
-On any non-success (submission rejected, terminal `failed`/abandoned, or poll timeout) `bridge()` falls back to the client-side `relayTxAndWaitPacket` flow so the bridge still completes — safe because re-relaying an already-relayed bridge tx is idempotent, and the poll + fallback share one `timeout` budget. Bridge has no solver post-execution, so unlike swaps there is no `'posting_execution'` step. Default is `false`. See [BRIDGE_API.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BRIDGE_API.md) for the API client.
+If the backend path does not reach `solved` for **any** reason (submission rejected, terminal `failed`/abandoned status, or poll timeout), `swap()` automatically falls back to the fully client-side relay + post-execution so the swap still completes — **safely**, because re-relaying / re-posting an already-processed swap is idempotent (no double-fill; verified by `e2e-tests/e2e-relay.test.ts`), and the backend poll + fallback share one `timeout` budget (total latency ≤ one `timeout`). The poll reserves a third of the remaining budget, capped at 20s, for that fallback — so on the default 120s `timeout` the fallback relay gets ~20s, not a fresh 120s. The default already hits that cap, so raising `timeout` grows only the backend's polling window; if you need more than ~20s on the client side, opt out with `swaps: { useBackendSubmitTx: false }` instead. See [SWAPS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md#backend-2-step-submit) for the flow and [How the shared `timeout` is split](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md#how-the-shared-timeout-is-split) for the full breakdown.
+
+### Backend submit-tx (`bridge.useBackendSubmitTx`)
+
+`useBackendSubmitTx` on `bridge` is the bridge counterpart — same slot as `bridge.partnerFee`, resolved live via `config.bridgeUseBackendSubmitTx`. Default `true`: `sodax.bridge.bridge()` routes the spoke-deposit through the backend bridge API (`sodax.api.bridge.submitTx`), which relays server-side; the SDK polls submit-tx status and returns the same `TxHashPair`. Set `false` to force the client-side `relayTxAndWaitPacket` path.
+
+```typescript
+// Default — backend submit-tx ON
+const sodax = new Sodax();
+
+// Opt out
+const sodaxClientSide = new Sodax({ bridge: { useBackendSubmitTx: false } });
+```
+
+On any non-success (submission rejected, terminal `failed`/abandoned, or poll timeout) `bridge()` falls back to the client-side `relayTxAndWaitPacket` flow so the bridge still completes — safe because re-relaying an already-relayed bridge tx is idempotent, and the poll + fallback share one `timeout` budget on the [same split as swaps](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md#how-the-shared-timeout-is-split) (a third of the remaining budget, capped at 20s, reserved for the fallback). Bridge has no solver post-execution, so unlike swaps there is no `'posting_execution'` step. See [BRIDGE_API.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BRIDGE_API.md) for the API client.
 ### RadFi/Bound request signer (`radfi.signRequest`)
 
 `radfi` is a **client-side runtime option** on `SodaxOptions` (like `logger`) — never part of the backend-fetched `SodaxConfig`. The SDK calls `signRequest` once per outbound Bound Exchange (RadFi) `apiUrl` request and merges the returned headers onto it, so a server-to-server caller can attach Bound's `x-api-signature` HMAC header without the SDK ever holding the credential.

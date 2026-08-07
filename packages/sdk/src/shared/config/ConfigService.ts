@@ -464,6 +464,17 @@ export class ConfigService {
     return this.leverageYield.partnerFee ?? this.fee;
   }
 
+  // Effective backend submit-tx toggle per feature. Read live off the same `swaps` / `bridge` slots as
+  // `partnerFee` so an omitted flag resolves to the ON default here, in one place, instead of leaving
+  // `config.swaps.useBackendSubmitTx === undefined` while the backend path is actually active.
+  get swapUseBackendSubmitTx(): boolean {
+    return this.swaps.useBackendSubmitTx ?? true;
+  }
+
+  get bridgeUseBackendSubmitTx(): boolean {
+    return this.bridge.useBackendSubmitTx ?? true;
+  }
+
   get dex(): DexConfig {
     return this.sodax.dex;
   }

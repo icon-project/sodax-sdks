@@ -13,7 +13,7 @@ Access: `sodax.swaps`. Service class: `SwapService`. Feature tag for errors: `'s
 
 Two execution paths:
 
-- **`swap`** — full flow in one call. Wraps `createIntent` + relay + `postExecution`. Returns `SwapResponse` on success. Opt into a **backend-driven 2-step** variant (the backend relays + post-executes server-side) with `new Sodax({ swapsOptions: { useBackendSubmitTx: true } })`; on any non-success it falls back to the client-side relay, returning the same `SwapResponse`.
+- **`swap`** — full flow in one call. Wraps `createIntent` + relay + `postExecution`. Returns `SwapResponse` on success. By default uses a **backend-driven 2-step** variant (`swaps.useBackendSubmitTx`, default `true` — the backend relays + post-executes server-side); on any non-success it falls back to the client-side relay, returning the same `SwapResponse`. Set `new Sodax({ swaps: { useBackendSubmitTx: false } })` to force client-side only. Both halves share ONE `timeout` (default 120s): the backend poll reserves a third of the remaining budget, capped at 20s, for the fallback — so the fallback relay gets ~20s, not a fresh full budget. The cap already binds at the default, so raising `timeout` grows only the backend's window; advise `useBackendSubmitTx: false` when a caller needs the full budget client-side.
 - **`createIntent` + backend submit** — break it apart for custom relay handling. `createIntent` returns `{ tx, intent, relayData }`; submit `relayData.payload` to the backend swap-tx endpoint via `sodax.api.swaps.submitTx`.
 
 ## Public methods
