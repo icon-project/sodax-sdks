@@ -32,6 +32,7 @@ validates the response. Errors carry `feature: 'backend'`, `context.api: 'swaps'
 
 ### Swaps-API-specific anti-patterns
 
+- **Omitting `partnerFee` on `getQuote` / `createIntent`.** It is optional in the type system only: the backend applies no default and the client never reads `new Sodax({ fee })` / `new Sodax({ swaps: { partnerFee } })` (that config reaches only the `sodax.swaps` orchestrator). A request without it charges nothing **and** is unattributable. Ask the user for a fee receiver whenever they monetize.
 - **`try/catch` for failures.** Every method returns `Result<T>` — branch on `result.ok`. `catch` won't fire for HTTP/timeout/validation failures.
 - **Passing the `RelayExtraData` object** to `submitTx`'s `relayData`. The field is a `string` — pass `relayData.payload`.
 - **Stringifying `intent` numerics yourself.** `IntentRequestV2` fields are `bigint`; the client serializes them to decimal strings — pass the bigint intent through as-is.
@@ -52,7 +53,8 @@ builds on are covered in the existing swap + backend-api migration docs:
 1. `pnpm tsc --noEmit` clean.
 2. Every `await sodax.api.swaps.<method>(...)` call site has `if (!result.ok)`.
 3. `submitTx.relayData` is `relayData.payload` (string); `getSubmitTxStatus` passes both `txHash` and `srcChainKey`.
-4. Intent-bearing bodies pass the `bigint` `IntentRequestV2` through unmodified (no manual `.toString()`).
+4. If the integration monetizes, every `getQuote` / `createIntent` body carries the same `partnerFee` (the SDK-level fee config does not apply here).
+5. Intent-bearing bodies pass the `bigint` `IntentRequestV2` through unmodified (no manual `.toString()`).
 
 ## Related granular skills (same family)
 

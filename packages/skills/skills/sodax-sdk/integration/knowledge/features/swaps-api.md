@@ -89,18 +89,41 @@ client serializes them to decimal strings on the wire. Server-returned intents (
 back with those fields as decimal **`string`** (outbound JSON can't carry bigint). The `amount` /
 `inputAmount` fields on the quote / create-intent request bodies are already decimal **strings**.
 
+## `partnerFee` — always send it, there is no default
+
+`partnerFee` is inherited from `SwapExtrasV2` by `QuoteRequestV2` and by the shared `CreateIntentParamsV2`
+body. It is **optional in the type system only** — nothing fills it in for you:
+
+- The **backend applies no default**; it cannot pick a fee receiver on the caller's behalf.
+- The **SDK config is not consulted on this path**. `new Sodax({ fee })` / `new Sodax({ swaps: { partnerFee } })`
+  are resolved client-side and only reach the `sodax.swaps` / `sodax.moneyMarket` / `sodax.bridge`
+  orchestrators. `sodax.api.swaps` (and `@sodax/swaps-api`) serialize the body as given.
+
+Omitting it produces a request that succeeds, charges nothing, **and is unattributable** — the partner
+receiver is decoded out of `intent.data`, which is `"0x"` when no fee was sent. If the integrator earns
+on swaps, this field is required in practice; generating an `sodax.api.swaps` integration without it is
+a monetization bug, not a stylistic one.
+
+Send the same value to the quote and the intent so the quoted output matches what the intent locks in.
+Use `amount` (decimal string, smallest unit) for a flat fee instead of `percentage`; if both are present
+the backend uses `amount`. Your own `data` does not clobber the fee envelope (the API builds
+`intent.data`), and the approval amount is unchanged — still the full input.
+
 ## Common call shapes
 
 ### Quote
 
 ```ts
+const partnerFee = { address: '0xSonicFeeReceiver', percentage: 10 }; // basis points: 10 = 0.1%
+
 const quote = await sodax.api.swaps.getQuote({
   tokenSrc, tokenSrcChainKey, tokenDst, tokenDstChainKey,
   amount: '1000000',          // smallest unit, decimal string
   quoteType: 'exact_input',
+  partnerFee,                 // no default — omit it and the swap earns nothing
 });
 if (!quote.ok) return;
-quote.value.quotedAmount;     // decimal string
+quote.value.quotedAmount;     // decimal string, net of the partner fee
 // Pass query `{ includeTxData: true }` (and srcAddress/dstAddress on the body) to also get `txData`.
 ```
 
@@ -114,9 +137,11 @@ const created = await sodax.api.swaps.createIntent({
   deadline: '0',              // "0" → no expiry (limit-order semantics)
   allowPartialFill: false,
   srcAddress, dstAddress,
+  partnerFee,                 // same value as the quote
 });
 if (!created.ok) return;
 const { tx, intent, relayData } = created.value;
+// created.value.intent.data carries the fee envelope; it is "0x" when no partnerFee was sent.
 ```
 
 ### Submit tx + poll status

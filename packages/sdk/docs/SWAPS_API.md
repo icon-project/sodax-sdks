@@ -52,6 +52,32 @@ sodax.api.swaps.submitTx(body: SubmitTxRequestV2, config?): Promise<Result<Submi
 sodax.api.swaps.getSubmitTxStatus(query: SubmitTxStatusQueryV2, config?): Promise<Result<SubmitTxStatusResponseV2>>;
 ```
 
+## `partnerFee` — the caller owns it
+
+`partnerFee` is inherited from `SwapExtrasV2` by `QuoteRequestV2` and by the shared
+`CreateIntentParamsV2` body. It is optional in the type system, but there is **no default behind it**:
+this client serializes the body you pass and never reads the SDK's `new Sodax({ fee })` /
+`new Sodax({ swaps: { partnerFee } })` options — those are resolved client-side and only reach the
+`sodax.swaps` orchestrator. The backend cannot supply one either, since only the caller knows which
+receiver to credit.
+
+So a request that omits `partnerFee` succeeds, charges no fee, and is **unattributable** — the partner
+receiver is decoded out of `intent.data`, which comes back as `"0x"` when no fee was sent.
+
+```typescript
+const partnerFee = { address: '0xYourSonicFeeReceiver', percentage: 10 }; // basis points: 10 = 0.1%
+
+// Send the same value to both, so the quoted output matches what the intent locks in.
+await sodax.api.swaps.getQuote({ ...quoteBody, partnerFee });    // quotedAmount is net of the fee
+await sodax.api.swaps.createIntent({ ...intentBody, partnerFee }); // inputAmount is net; data carries the fee
+```
+
+Use `amount` (decimal string, input token's smallest unit) for a flat fee instead of `percentage`; if
+both are present the backend uses `amount`. Passing your own `data` does not clobber the fee envelope
+(the API builds `intent.data`), and the approval amount is unaffected — it is still the full input.
+
+See [MONETIZE_SDK.md](MONETIZE_SDK.md) for the orchestrator path and fee claiming.
+
 ## `approve` can return two transactions
 
 `ApproveResponseV2` is `{ tx, resetTx? }`. `resetTx` is present only when the source token rejects an
@@ -108,20 +134,22 @@ import { Sodax } from '@sodax/sdk';
 
 const sodax = new Sodax();
 
-// Quote
+// Quote — omit partnerFee and the swap earns nothing and is attributed to nobody.
 const quote = await sodax.api.swaps.getQuote({
   tokenSrc, tokenSrcChainKey, tokenDst, tokenDstChainKey,
   amount: '1000000',
   quoteType: 'exact_input',
+  partnerFee,
 });
 if (!quote.ok) return;
-quote.value.quotedAmount; // decimal string
+quote.value.quotedAmount; // decimal string, net of the partner fee
 
 // Create intent → submit tx → poll status
 const created = await sodax.api.swaps.createIntent({
   srcChainKey, dstChainKey, inputToken, outputToken,
   inputAmount: '1000000', minOutputAmount: '990000', deadline: '0',
   allowPartialFill: false, srcAddress, dstAddress,
+  partnerFee, // same value as the quote
 });
 if (!created.ok) return;
 const { tx, intent, relayData } = created.value;

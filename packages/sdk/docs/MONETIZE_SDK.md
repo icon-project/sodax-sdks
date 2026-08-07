@@ -3,7 +3,26 @@
 Learn how to configure fees and monetize your SODAX SDK integration.
 
 When using the SODAX SDK, you can monetize your integration by collecting fees from the transactions processed through your application.
-Fees are configured globally per feature when creating the `Sodax` instance, and the swap and bridge features additionally accept a per-action override: swap's `getQuote()` takes an optional `partnerFee` argument, and swap's `swap()` / `createIntent()` and bridge's `bridge()` / `createBridgeIntent()` read `extras.partnerFee`. When omitted, the configured fee applies.
+
+## Two integration paths — pick the right one first
+
+How you attach a partner fee depends entirely on which surface you swap through, and the two behave
+in opposite ways when you say nothing:
+
+| | **Orchestrator** — `sodax.swaps`, `sodax.moneyMarket`, `sodax.bridge` | **Swaps API** — `sodax.api.swaps`, `@sodax/swaps-api`, raw `POST /swaps/*` |
+|---|---|---|
+| Where the fee comes from | `new Sodax({ … })` config, applied client-side | The `partnerFee` field on each request body |
+| Fee on the wire | No fee field in the payload; the SDK bakes it into the intent | `partnerFee` *is* the payload field |
+| You configured a fee but sent no `partnerFee` | Configured fee applies automatically | **Nothing happens** — the config is never read here |
+
+The second column is the one that costs money silently. **The Swaps API applies no default.** It
+cannot: only the caller knows which receiver to credit. `sodax.api.swaps` and `@sodax/swaps-api`
+serialize the body you hand them and never consult `SodaxConfig` for a fee, so a request without
+`partnerFee` succeeds, charges nothing, and is **unattributable** — the backend decodes the partner
+receiver out of `intent.data`, and there is nothing to decode.
+
+If you use the Swaps API, jump to [Swaps API monetization](#swaps-api-monetization). The sections
+immediately below describe the orchestrator path.
 
 ## Defining Fee
 
@@ -25,8 +44,8 @@ const partnerFeeAmount = {
 
 ## Global fee configuration
 
-The recommended approach is to configure fees globally per feature when creating your SDK config using `new Sodax({...configuration})`.
-This ensures all requests use the same fee configuration automatically:
+On the orchestrator path, the recommended approach is to configure fees globally per feature when creating your SDK config using `new Sodax({...configuration})`.
+This ensures every `sodax.swaps` / `sodax.moneyMarket` / `sodax.bridge` call uses the same fee configuration automatically (it has no effect on `sodax.api.*`):
 
 ```typescript
 import { Sodax, PartnerFee } from '@sodax/sdk';
@@ -62,7 +81,7 @@ The swap feature supports a per-action fee override that beats the configured `s
 
 ### Quote request
 
-`SwapService.getQuote()` deducts the partner fee from the `amount` before forwarding to the solver, so `quoted_amount` reflects the net output. No fee field appears in the request payload. Pass an optional `partnerFee` second argument to match a per-action override used on `createIntent` / `swap`; omit it to use the configured swap fee.
+`SwapService.getQuote()` deducts the partner fee from the `amount` before forwarding to the solver, so `quoted_amount` reflects the net output. No fee field appears in the solver request payload — the deduction happens client-side. Pass an optional `partnerFee` second argument to match a per-action override used on `createIntent` / `swap`; omit it to use the configured swap fee.
 
 ```typescript
 import {
@@ -95,7 +114,7 @@ if (result.ok) {
 
 ### Swap request
 
-The fee is applied automatically by the service. No fee field appears on the wire. Pass `extras.partnerFee` to override the configured `swaps.partnerFee` for this single action — omit `extras` (or `extras.partnerFee`) to use the configured fee.
+The fee is applied automatically by the service, which encodes it into the intent it builds, so no fee field appears on the wire. Pass `extras.partnerFee` to override the configured `swaps.partnerFee` for this single action — omit `extras` (or `extras.partnerFee`) to use the configured fee.
 
 ```typescript
 const swapResult = await sodax.swaps.swap({
@@ -119,6 +138,58 @@ const swapResult = await sodax.swaps.swap({
   skipSimulation, // optional - whether to skip transaction simulation (default: false)
 });
 ```
+
+## Swaps API monetization
+
+Everything above applies to the orchestrator. If you integrate through the Swaps API v2 — whether via
+`sodax.api.swaps`, the standalone `@sodax/swaps-api` package, or plain HTTP against `/swaps/*` — the
+fee is **a field you put on every request body**, and nothing else sets it for you.
+
+`partnerFee` lives on `SwapExtrasV2`, which both `QuoteRequestV2` (`POST /swaps/quote`) and
+`CreateIntentParamsV2` (`POST /swaps/allowance/check`, `/swaps/approve`, `/swaps/intents`) inherit.
+Send the same value to the quote and to the intent so the number you showed the user matches the
+number the intent locks in.
+
+```typescript
+const partnerFee = {
+  address: '0xYourSonicFeeReceiver', // EVM (Sonic) address to receive the fee
+  percentage: 10,                    // basis points: 10 = 0.1%, 100 = 1%
+};
+
+// Quote — quotedAmount comes back net of the fee.
+const quote = await sodax.api.swaps.getQuote({
+  tokenSrc, tokenSrcChainKey, tokenDst, tokenDstChainKey,
+  amount: '1000000000',
+  quoteType: 'exact_input',
+  partnerFee,
+});
+
+// Intent — inputAmount comes back net of the fee, and `data` carries the fee envelope.
+const created = await sodax.api.swaps.createIntent({
+  srcChainKey, dstChainKey, inputToken, outputToken,
+  inputAmount: '1000000000', minOutputAmount, deadline: '0',
+  allowPartialFill: false, srcAddress, dstAddress,
+  partnerFee,
+});
+```
+
+Send `partnerFee` and `createIntent` returns an `inputAmount` reduced by the fee with `data` set to
+the fee envelope (`0x01` + fee amount + receiver address). Omit it and you get the full `inputAmount`
+back with `data: "0x"` — a perfectly successful, completely unattributed swap.
+
+Two behaviors worth knowing, because both look like reasons to leave the field out:
+
+- **Your own `data` does not conflict with the fee.** The API builds `intent.data` itself, so passing
+  `data: '0x'` alongside `partnerFee` does not clobber the fee envelope.
+- **The approval amount does not change.** It is still the full input, so adding the fee to an
+  existing integration cannot break the allowance step.
+
+Use `amount` (decimal string, input token's smallest unit) instead of `percentage` for a flat fee. If
+both are present the backend uses `amount`, matching the SDK.
+
+Reference: [SWAPS_API.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS_API.md)
+for `sodax.api.swaps`, and the [`@sodax/swaps-api` README](https://github.com/icon-project/sodax-sdks/blob/main/packages/swaps-api/README.md)
+for the standalone client.
 
 ## Partner Fee Claiming
 
