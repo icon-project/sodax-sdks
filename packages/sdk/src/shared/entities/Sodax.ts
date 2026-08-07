@@ -57,6 +57,12 @@ export class Sodax {
     // RadFi/Bound request signer: another client-side runtime hook (like `logger`/`analytics`/`fee`),
     // held off the data config so the dynamic-config swap never touches it. See `RadfiOptions` / gh-831.
     const radfiSigner = options?.radfi?.signRequest;
+    // Like `logger`, swaps options are client-side runtime toggles read off `SodaxOptions` —
+    // never merged into the backend-fetched `SodaxConfig`/`instanceConfig`.
+    const useBackendSubmitTx = options?.swapsOptions?.useBackendSubmitTx ?? false;
+    // Distinct client-side bridge toggle, read off `SodaxOptions.bridgeOptions` (never collides with
+    // the swaps toggle or the data `bridge` partner-fee slot).
+    const bridgeUseBackendSubmitTx = options?.bridgeOptions?.useBackendSubmitTx ?? false;
     this.instanceConfig = options ? mergeSodaxConfig(sodaxConfig, options) : sodaxConfig;
     this.backendApi = new BackendApiService(this.instanceConfig.api, logger);
     this.api = this.backendApi;
@@ -77,6 +83,7 @@ export class Sodax {
       hubProvider: this.hubProvider,
       spoke: this.spoke,
       backendApi: this.backendApi,
+      useBackendSubmitTx,
     });
 
     this.moneyMarket = new MoneyMarketService({
@@ -101,6 +108,7 @@ export class Sodax {
       config: this.config,
       spoke: this.spoke,
       backendApi: this.backendApi,
+      useBackendSubmitTx: bridgeUseBackendSubmitTx,
     });
     this.staking = new StakingService({ hubProvider: this.hubProvider, config: this.config, spoke: this.spoke });
     this.partners = new PartnerService({

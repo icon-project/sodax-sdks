@@ -176,6 +176,8 @@ export type SwapServiceConstructorParams = {
   spoke: SpokeService;
   hubProvider: HubProvider;
   backendApi: BackendApiService;
+  /** Opt-in backend submit-tx 2-step flow (from `SodaxOptions.swapsOptions.useBackendSubmitTx`). Default off. */
+  useBackendSubmitTx?: boolean;
 };
 
 /**
@@ -205,18 +207,11 @@ export class SwapService {
   readonly partnerFee: PartnerFee | undefined;
   readonly relayerApiEndpoint: HttpUrl;
 
-  // backend swaps-API client
+  // backend swaps-API client + opt-in 2-step submit-tx flag
   readonly backendApi: BackendApiService;
+  readonly useBackendSubmitTx: boolean;
 
-  /**
-   * Effective 2-step submit-tx flow (`swaps.useBackendSubmitTx`, default on). Read live off
-   * `ConfigService` like `swapPartnerFee`, so the config object and the behavior can never disagree.
-   */
-  get useBackendSubmitTx(): boolean {
-    return this.config.swapUseBackendSubmitTx;
-  }
-
-  public constructor({ config, hubProvider, spoke, backendApi }: SwapServiceConstructorParams) {
+  public constructor({ config, hubProvider, spoke, backendApi, useBackendSubmitTx }: SwapServiceConstructorParams) {
     this.solver = config.solver;
     this.partnerFee = config.swapPartnerFee;
     this.relayerApiEndpoint = config.relay.relayerApiEndpoint;
@@ -224,6 +219,7 @@ export class SwapService {
     this.hubProvider = hubProvider;
     this.spoke = spoke;
     this.backendApi = backendApi;
+    this.useBackendSubmitTx = useBackendSubmitTx ?? false;
   }
 
   /**
@@ -393,11 +389,11 @@ export class SwapService {
    * the source spoke chain; completion then runs via one of two paths, both bounded by a single
    * shared `timeout` budget:
    *
-   * - **Client-side (opt-out via `swaps.useBackendSubmitTx: false`), {@link fallbackSwapSteps}:** verifies the spoke tx landed on-chain,
+   * - **Client-side (default), {@link fallbackSwapSteps}:** verifies the spoke tx landed on-chain,
    *   relays it to the hub (Sonic) and waits for the packet — skipped when `srcChainKey` is the hub,
    *   where the spoke tx already is the hub tx — then calls `postExecution` to notify the solver,
    *   triggering it to fill the intent.
-   * - **Backend 2-step (default via `swaps.useBackendSubmitTx`), {@link submitTx}:** hands the
+   * - **Backend 2-step (opt-in via `swapsOptions.useBackendSubmitTx`), {@link submitTx}:** hands the
    *   broadcast tx to the swaps API, which verifies, relays and post-executes server-side, then polls
    *   for completion. On ANY non-success it transparently falls back to the client-side path above —
    *   safe because re-relaying / re-posting an already-processed swap is idempotent (no double-fill).
@@ -448,7 +444,7 @@ export class SwapService {
           // relay fallback split this single deadline, so total wall-clock never exceeds one `timeout`.
           const deadline = Date.now() + (_params.timeout ?? DEFAULT_RELAY_TX_TIMEOUT);
 
-          // Backend 2-step flow (default on): hand the broadcast intent tx to the swaps API, which relays +
+          // Opt-in backend 2-step flow: hand the broadcast intent tx to the swaps API, which relays +
           // post-executes server-side. On ANY non-success we fall back to the client-side relay so the
           // swap still completes — safe because re-relay / re-post are idempotent (see `submitTx`).
           if (this.useBackendSubmitTx) {
@@ -492,9 +488,9 @@ export class SwapService {
   }
 
   /**
-   * Client-side swap completion (opt-out via `swaps.useBackendSubmitTx: false`): relay the broadcast intent tx to the hub — or
+   * Client-side swap completion (the default path): relay the broadcast intent tx to the hub — or
    * use it directly when the source IS the hub — then notify the solver via post-execution and
-   * build the {@link SwapResponse}. Extracted verbatim from `swap()` so the backend 2-step
+   * build the {@link SwapResponse}. Extracted verbatim from `swap()` so the opt-in backend 2-step
    * path ({@link submitTx}) can fall back to it on any non-success.
    */
   private async fallbackSwapSteps<K extends SpokeChainKey>(
@@ -560,7 +556,7 @@ export class SwapService {
   }
 
   /**
-   * Backend 2-step swap path (default via `swaps.useBackendSubmitTx`): hand the broadcast
+   * Backend 2-step swap path (opt-in via `swapsOptions.useBackendSubmitTx`): hand the broadcast
    * intent tx to the swaps API (`POST /swaps/submit-tx`); the backend relays + post-executes
    * server-side. Polls `getSubmitTxStatus` until `solved`, then reconstructs the same
    * {@link SwapResponse} the client-side path returns (`result.dstIntentTxHash` → delivery info,
@@ -603,7 +599,7 @@ export class SwapService {
         deadline,
         // Swaps terminal success is `solved` (solver filled) — not the bridge `executed`.
         terminalStatus: 'solved',
-        getStatus: override => this.backendApi.swaps.getSubmitTxStatus({ txHash: spokeTxHash, srcChainKey }, override),
+        getStatus: () => this.backendApi.swaps.getSubmitTxStatus({ txHash: spokeTxHash, srcChainKey }),
         onExecuted: (result): SwapResponse | undefined =>
           result?.dstIntentTxHash && result.intent_hash
             ? {
@@ -620,9 +616,6 @@ export class SwapService {
                 } satisfies IntentDeliveryInfo,
               }
             : undefined,
-        // Bound each status request by the poll cutoff, never above the service default — so a stalled
-        // request can neither eat the fallback's reserve nor consume the window in one attempt.
-        requestTimeoutMs: this.backendApi.swaps.getTimeout(),
       });
       return polled.ok ? { ok: true, value: polled.value } : submitTxFailed(polled.cause);
     } catch (error) {

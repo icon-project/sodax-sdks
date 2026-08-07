@@ -111,9 +111,8 @@ move the whole backend (bridge included) to a custom host, set the `baseApiConfi
 variant of `SodaxConfig.api` (see [`SWAPS_API.md`](SWAPS_API.md) § Configuration and
 [`BACKEND_API.md`](BACKEND_API.md)).
 
-The end-to-end orchestrator routes through this API by default via `bridge.useBackendSubmitTx`
-(default ON); set `new Sodax({ bridge: { useBackendSubmitTx: false } })` to force the client-side
-relay — see [`CONFIGURE_SDK.md`](CONFIGURE_SDK.md) and [`BRIDGE.md`](BRIDGE.md).
+The end-to-end orchestrator can opt into this API via `new Sodax({ bridgeOptions: { useBackendSubmitTx:
+true } })` (default OFF) — see [`CONFIGURE_SDK.md`](CONFIGURE_SDK.md) and [`BRIDGE.md`](BRIDGE.md).
 
 ## Result\<T\> and Error Handling
 

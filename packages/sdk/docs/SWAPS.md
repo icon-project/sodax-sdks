@@ -60,23 +60,11 @@ All swap methods are accessible through `sodax.swaps`:
 - `submitIntent(payload)` — Submit a spoke tx to the relay API (low-level, called automatically by `swap`)
 - `postExecution(request)` — Notify the solver that an intent is live on the hub chain (low-level, called automatically by `swap`)
 
-#### Backend 2-step submit
+#### Backend 2-step submit (opt-in)
 
-By default `swap()` uses a backend-driven 2-step flow (`swaps.useBackendSubmitTx`, default `true`): after `createIntent` broadcasts the intent tx, `swap()` hands the tx hash to the backend (`sodax.api.swaps.submitTx`), which relays + post-executes server-side; the SDK polls submit-tx status and returns the same `SwapResponse`. The SDK does **not** verify the tx on-chain first — `verifyTxHash` runs only on the client-side path. Set `new Sodax({ swaps: { useBackendSubmitTx: false } })` to force the fully client-side relay path.
+By default `swap()` relays + post-executes entirely client-side. Opt into a backend-driven 2-step flow with `new Sodax({ swapsOptions: { useBackendSubmitTx: true } })`: after creating + verifying the intent tx, `swap()` hands it to the backend (`sodax.api.swaps.submitTx`), which relays + post-executes server-side; the SDK polls submit-tx status and returns the same `SwapResponse`.
 
-On **any** non-success (submission rejected, terminal `failed`/abandoned, or poll timeout) `swap()` **falls back** to the client-side relay so the swap still completes — identical `SwapResponse` either way. This is **safe**: re-relaying / re-posting an already-processed swap is idempotent — the relay dedups and returns the existing `executed` packet, and the solver re-affirms the intent (no double-fill), verified live by `e2e-tests/e2e-relay.test.ts`. The backend poll and the fallback also share one `timeout` budget, so total latency never exceeds a single `timeout` — see [How the shared `timeout` is split](#how-the-shared-timeout-is-split) for what that leaves the fallback. `useBackendSubmitTx` lives on `swaps` alongside `partnerFee` (not part of the backend `SodaxDefaultConfig`). See [CONFIGURE_SDK.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md#backend-submit-tx-2-step-swapsusebackendsubmittx).
-
-#### How the shared `timeout` is split
-
-One `timeout` (default 120s) covers both halves. The backend poll stops early, holding back a reserve for the fallback: **a third of the remaining budget, capped at 20s**. Each status request is separately bounded by that cutoff and never exceeds the backend API's own timeout, so one stalled request cannot eat the reserve. Whatever is left when the poll gives up becomes the fallback's relay budget, floored at 5s.
-
-| `timeout` | Backend poll gets | Fallback relay gets |
-| --- | --- | --- |
-| 120s (default) | ~100s | ~20s (the cap) |
-| 60s | 40s | 20s (the cap) |
-| 30s | 20s | 10s (a third) |
-
-The fallback is a degraded path — it only runs when the backend did not finish — so the reserve is deliberately the smaller share. **Raising `timeout` does not grow it.** The cap binds from a 60s `timeout` upward, so at the 120s default the reserve is already pinned at 20s and every extra second goes to the backend's polling window. If your source chain's relay routinely needs more than ~20s, opt out with `new Sodax({ swaps: { useBackendSubmitTx: false } })` — the client path then gets the whole `timeout`. (Raising `timeout` helps only when you are *below* 60s, where the reserve is still a third of the budget.)
+On **any** non-success (submission rejected, terminal `failed`/abandoned, or poll timeout) `swap()` **falls back** to the client-side relay so the swap still completes — identical `SwapResponse` either way. This is **safe**: re-relaying / re-posting an already-processed swap is idempotent — the relay dedups and returns the existing `executed` packet, and the solver re-affirms the intent (no double-fill), verified live by `e2e-tests/e2e-relay.test.ts`. The backend poll and the fallback also share one `timeout` budget, so total latency never exceeds a single `timeout`. `swapsOptions` is a client-side runtime option (like `logger`), not part of the backend `SodaxConfig`. See [CONFIGURE_SDK.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md#backend-submit-tx-2-step-swapsoptionsusebackendsubmittx).
 
 ### Intent Management
 
@@ -201,7 +189,7 @@ function isSodaxError(e: unknown): e is SodaxError;
 | `postExecution` | `PostExecutionError` | `EXECUTION_FAILED`, `EXTERNAL_API_ERROR`, `UNKNOWN` |
 | `createLimitOrder` | `SwapError` | (same as `swap`) |
 
-**Important:** `postExecution` alone never emits relay/verify codes — those appear only on `swap` because only `swap` orchestrates verify + relay. Don't write a unified switch that handles both with the same union. Note that `swap` orchestrates verify + relay only on the **client-side path** (the fallback, or `useBackendSubmitTx: false`), so `TX_VERIFICATION_FAILED` and `phase: 'verify'` never surface on a swap the backend completes.
+**Important:** `postExecution` alone never emits relay/verify codes — those appear only on `swap` because only `swap` orchestrates verify + relay. Don't write a unified switch that handles both with the same union.
 
 #### Standard `context` fields
 

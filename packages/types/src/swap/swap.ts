@@ -301,12 +301,6 @@ export const stagingSwapSupportedTokens = {
 
 export type SwapsOptions = {
   partnerFee?: PartnerFee; // enables override of global partner fee
-  /**
-   * Route `swap()` through the backend submit-tx 2-step flow. Default `true`.
-   * Set `false` for the fully client-side relay. Client-side only — not part of backend SodaxDefaultConfig.
-   * Omitted here means the default, not off: read the effective value via `sodax.config.swapUseBackendSubmitTx`.
-   */
-  useBackendSubmitTx?: boolean;
 };
 
 export type SwapsDefaultConfig = {
