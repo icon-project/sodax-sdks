@@ -915,7 +915,7 @@ export const spokeChainConfig = {
     supportedTokens: suiSupportedTokens,
     nativeToken: '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI' as const,
     bnUSD: '0xff4de2b2b57dd7611d2812d231a467d007b702a101fd5c7ad3b278257cddb507::bnusd::BNUSD',
-    rpc_url: 'https://fullnode.mainnet.sui.io:443',
+    rpc_url: 'https://sui-rpc.publicnode.com',
     chain: baseChainInfo[ChainKeys.SUI_MAINNET] satisfies BaseChainInfo<'SUI'>,
     pollingConfig: {
       pollingIntervalMs: 500,
