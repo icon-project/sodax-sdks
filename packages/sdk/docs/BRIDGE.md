@@ -12,10 +12,11 @@ Three transfer directions are supported:
 - **Spoke → Spoke** — deposit on source + withdraw on destination
 
 > **Backend Bridge API.** For the typed HTTP client over the backend `/bridge/*` routes (`sodax.api.bridge`
-> — allowance/approve/create-intent, submit-tx + status, tokens), see [`BRIDGE_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BRIDGE_API.md). To
-> opt the `bridge()` orchestrator below into routing the spoke-deposit through that API (with a client-side
-> fallback), set `new Sodax({ bridgeOptions: { useBackendSubmitTx: true } })` (default OFF) — see
-> [`CONFIGURE_SDK.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md#backend-submit-tx-bridgeoptionsusebackendsubmittx).
+> — allowance/approve/create-intent, submit-tx + status, tokens), see [`BRIDGE_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BRIDGE_API.md). The
+> `bridge()` orchestrator routes the spoke-deposit through that API by default (`bridge.useBackendSubmitTx`,
+> default ON) with a client-side fallback; set `new Sodax({ bridge: { useBackendSubmitTx: false } })` to
+> force the client-side relay — see
+> [`CONFIGURE_SDK.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md#backend-submit-tx-bridgeusebackendsubmittx).
 
 ## Methods
 

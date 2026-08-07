@@ -42,8 +42,8 @@ export type BackendSubmitTxPollResult<TValue> = { ok: true; value: TValue } | { 
  * @param intervalMs - Poll interval in ms (default 1000).
  * @param requestTimeoutMs - The service's own effective request timeout (e.g.
  *   `backendApi.bridge.getTimeout()`). Supply it to bound each request by the poll cutoff without ever
- *   exceeding the service default; omit it to leave every request on the service default. Bridge
- *   supplies it so a stalled request cannot eat the fallback's reserve.
+ *   exceeding the service default; omit it to leave every request on the service default. Both callers
+ *   supply it so a stalled request cannot eat the fallback's reserve.
  */
 export async function pollBackendSubmitTx<TResult, TValue>({
   deadline,

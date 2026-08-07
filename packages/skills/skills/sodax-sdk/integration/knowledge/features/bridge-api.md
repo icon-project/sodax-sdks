@@ -115,12 +115,12 @@ The Bridge API has no dedicated config slice — it always shares the base backe
 move the whole backend (including bridge) to a custom host, use the `CustomApiConfig` `baseApiConfig` slice
 (see [`backend-api.md`](backend-api.md) § "Custom backend").
 
-## Orchestrator integration — `bridgeOptions.useBackendSubmitTx`
+## Orchestrator integration — `bridge.useBackendSubmitTx`
 
-`new Sodax({ bridgeOptions: { useBackendSubmitTx: true } })` opts the end-to-end `sodax.bridge.bridge()`
-into routing the spoke-deposit through this API (`submit-tx` + status poll) with an automatic fall back to
-the client-side relay on any non-success. **Default OFF.** This is a distinct key from
-`swapsOptions.useBackendSubmitTx`. See [`bridge.md`](bridge.md) and the `CONFIGURE_SDK` doc.
+`bridge.useBackendSubmitTx` (default `true`) routes the end-to-end `sodax.bridge.bridge()` through this
+API (`submit-tx` + status poll) with an automatic fall back to the client-side relay on any non-success.
+Set `new Sodax({ bridge: { useBackendSubmitTx: false } })` to force the client-side path. Independent of
+`swaps.useBackendSubmitTx`. See [`bridge.md`](bridge.md) and the `CONFIGURE_SDK` doc.
 
 ## Error handling
 

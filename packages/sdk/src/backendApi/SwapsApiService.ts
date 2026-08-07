@@ -374,4 +374,15 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
   public getBaseURL(): string {
     return this.config.baseURL;
   }
+
+  /**
+   * Return the effective per-request timeout (ms) — the same value {@link buildClient} resolves, so
+   * `SwapsApiConfig.timeout` being optional never leaks an `undefined` ceiling. Callers that bound a
+   * request tighter than the service default (e.g. `pollBackendSubmitTx` clamping to its poll cutoff)
+   * need this, because a `RequestOverrideConfig.timeout` REPLACES the service value rather than
+   * lowering it.
+   */
+  public getTimeout(): number {
+    return this.config.timeout ?? DEFAULT_BACKEND_API_TIMEOUT;
+  }
 }

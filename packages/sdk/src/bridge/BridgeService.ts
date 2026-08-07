@@ -122,8 +122,6 @@ export type BridgeServiceConstructorParams = {
   config: ConfigService;
   spoke: SpokeService;
   backendApi: BackendApiService;
-  /** Opt-in backend submit-tx flow (from `SodaxOptions.bridgeOptions.useBackendSubmitTx`). Default off. */
-  useBackendSubmitTx?: boolean;
 };
 
 /**
@@ -146,16 +144,22 @@ export class BridgeService {
   public readonly config: ConfigService;
   public readonly spoke: SpokeService;
 
-  // backend bridge-API client + opt-in backend submit-tx flag
+  // backend bridge-API client
   public readonly backendApi: BackendApiService;
-  readonly useBackendSubmitTx: boolean;
 
-  constructor({ hubProvider, config, spoke, backendApi, useBackendSubmitTx }: BridgeServiceConstructorParams) {
+  /**
+   * Effective backend submit-tx flow (`bridge.useBackendSubmitTx`, default on). Read live off
+   * `ConfigService` like `bridgePartnerFee`, so the config object and the behavior can never disagree.
+   */
+  get useBackendSubmitTx(): boolean {
+    return this.config.bridgeUseBackendSubmitTx;
+  }
+
+  constructor({ hubProvider, config, spoke, backendApi }: BridgeServiceConstructorParams) {
     this.config = config;
     this.hubProvider = hubProvider;
     this.spoke = spoke;
     this.backendApi = backendApi;
-    this.useBackendSubmitTx = useBackendSubmitTx ?? false;
   }
 
   /**
@@ -403,9 +407,9 @@ export class BridgeService {
           // one `timeout`.
           const deadline = Date.now() + (_params.timeout ?? DEFAULT_RELAY_TX_TIMEOUT);
 
-          // Opt-in backend submit-tx flow: hand the broadcast spoke-deposit tx to the bridge API, which
+          // Backend submit-tx flow (default on): hand the broadcast spoke-deposit tx to the bridge API, which
           // relays server-side. On ANY non-success we fall back to the client-side relay so the bridge
-          // still completes — safe because re-relay is idempotent. Default OFF.
+          // still completes — safe because re-relay is idempotent.
           if (this.useBackendSubmitTx) {
             const submitted = await this.submitTx(_params, created.value, deadline);
             if (submitted.ok) return submitted;
@@ -444,9 +448,9 @@ export class BridgeService {
   }
 
   /**
-   * Client-side bridge completion (the default path): verify the broadcast spoke-deposit tx, then
+   * Client-side bridge completion (opt-out via `bridge.useBackendSubmitTx: false`): verify the broadcast spoke-deposit tx, then
    * relay it to the hub and wait for the settlement packet. Extracted verbatim from `bridge()` so the
-   * opt-in backend submit-tx path ({@link submitTx}) can fall back to it on any non-success. Bridge
+   * backend submit-tx path ({@link submitTx}) can fall back to it on any non-success. Bridge
    * always relays — there is no hub-source short-circuit.
    */
   private async fallbackBridgeSteps<K extends SpokeChainKey>(
@@ -497,7 +501,7 @@ export class BridgeService {
   }
 
   /**
-   * Backend bridge path (opt-in via `bridgeOptions.useBackendSubmitTx`): hand the broadcast
+   * Backend bridge path (default via `bridge.useBackendSubmitTx`): hand the broadcast
    * spoke-deposit tx to the bridge API (`POST /bridge/submit-tx`) with the FULL `relayData`
    * envelope; the backend relays server-side. Polls `getSubmitTxStatus` until `executed`, then
    * returns the same {@link TxHashPair} the client-side path returns (`result.dstIntentTxHash` →
