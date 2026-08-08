@@ -12,7 +12,7 @@ import {
   type HttpUrl,
   type RpcConfig,
 } from '@sodax/dapp-kit';
-import { productionSolverConfig, stagingSolverConfig, devSolverConfig } from './constants';
+import { productionSolverConfig, stagingSolverConfig } from './constants';
 import { SolverEnv, useAppStore } from './zustand/useAppStore';
 import { createDatadogLogger } from './lib/loggers/datadogLogger';
 import { createDemoAnalytics } from './lib/analytics';
@@ -63,7 +63,6 @@ const swapsApiBaseURL = isHttpUrl(swapsApiBaseUrlEnv) ? swapsApiBaseUrlEnv : 'ht
 const configMap: Record<SolverEnv, SolverConfig> = {
   [SolverEnv.Production]: productionSolverConfig,
   [SolverEnv.Staging]: stagingSolverConfig,
-  [SolverEnv.Dev]: devSolverConfig,
 };
 
 export default function Providers({ children }: { children: ReactNode }) {

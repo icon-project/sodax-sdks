@@ -28,20 +28,12 @@ export const productionSolverConfig = {
   protocolIntentsContract: '0xaFf2EDb3057ed6f9C1dA6c930b8ddDf2beE573A5' as const,
 } satisfies SolverConfig;
 
-export const devSolverConfig = {
-  intentsContract: '0x6382D6ccD780758C5e8A6123c33ee8F4472F96ef',
-  solverApiEndpoint: 'https://sodax-solver-dev.iconblockchain.xyz',
-  protocolIntentsContract: '0xaFf2EDb3057ed6f9C1dA6c930b8ddDf2beE573A5' as const,
-} satisfies SolverConfig;
-
 /** Solver API endpoint for a given env — stored on each order so status is polled against the
  *  env it was created on, even after the env switcher / a reload changes the active env. */
 export function solverApiEndpointForEnv(env: SolverEnv): string {
   switch (env) {
     case SolverEnv.Staging:
       return stagingSolverConfig.solverApiEndpoint;
-    case SolverEnv.Dev:
-      return devSolverConfig.solverApiEndpoint;
     default:
       return productionSolverConfig.solverApiEndpoint;
   }
