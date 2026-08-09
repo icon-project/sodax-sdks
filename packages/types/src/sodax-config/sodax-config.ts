@@ -57,6 +57,12 @@ export type BridgeConfig = Prettify<BridgeDefaultConfig & BridgeOptions>;
 
 export type BridgeOptions = {
   partnerFee?: PartnerFee; // enables override of global partner fee
+  /**
+   * Route `bridge()` through the backend submit-tx flow. Default `true`.
+   * Set `false` for the fully client-side relay. Client-side only — not part of backend SodaxDefaultConfig.
+   * Omitted here means the default, not off: read the effective value via `sodax.config.bridgeUseBackendSubmitTx`.
+   */
+  useBackendSubmitTx?: boolean;
 };
 
 export type BridgeDefaultConfig = {}; // kept for future extension
@@ -82,6 +88,22 @@ export type RadfiOptions = {
   signRequest?: RadfiSigner; // returns extra headers (e.g. `x-api-signature`) merged onto each RadFi apiUrl request
 };
 
+/**
+ * @deprecated in favor of `swaps` property of SodaxOptionalConfig, kept for backward compatibility.
+ * Still honoured, but only when `swaps.useBackendSubmitTx` is omitted; the default is now `true`.
+ */
+export type SwapsClientOptions = {
+  useBackendSubmitTx?: boolean;
+};
+
+/**
+ * @deprecated in favor of `bridge` property of SodaxOptionalConfig, kept for backward compatibility.
+ * Still honoured, but only when `bridge.useBackendSubmitTx` is omitted; the default is now `true`.
+ */
+export type BridgeClientOptions = {
+  useBackendSubmitTx?: boolean;
+};
+
 export type SodaxOptionalConfig = {
   logger?: SodaxLoggerOption;
   analytics?: AnalyticsOption; // Opt-in user-action analytics: an AnalyticsConfig or false (default, disabled). Resolved client-side; never fetched from or overwritten by the backend config.
@@ -91,8 +113,10 @@ export type SodaxOptionalConfig = {
   moneyMarket?: MoneyMarketOptions;
   bridge?: BridgeOptions;
   leverageYield?: LeverageYieldOptions;
-  swapsOptions?: SwapsClientOptions; // client-side swap behavior toggles (e.g. useBackendSubmitTx). Resolved client-side; distinct key so it never collides with the data `swaps` slot.
-  bridgeOptions?: BridgeClientOptions; // client-side bridge behavior toggles (e.g. useBackendSubmitTx). Resolved client-side; distinct key so it never collides with the data `bridge` (partner-fee) slot.
+  /** @deprecated Use `swaps` instead — still honoured, but only when `swaps.useBackendSubmitTx` is absent. */
+  swapsOptions?: SwapsClientOptions;
+  /** @deprecated Use `bridge` instead — still honoured, but only when `bridge.useBackendSubmitTx` is absent. */
+  bridgeOptions?: BridgeClientOptions;
 };
 
 /**
@@ -121,33 +145,6 @@ export type SodaxDefaultConfig = {
   api: ApiConfig; // API config used to interact with the Backend API
   solver: SolverConfig;
   relay: RelayConfig; // Relayer config to relay intents/user actions to the hub and vice versa
-};
-
-/**
- * Client-side swap behavior options. Like {@link SodaxOptionalConfig.logger}, these are runtime toggles
- * resolved once at construction — NOT part of the backend-fetched {@link SodaxDefaultConfig} data.
- */
-export type SwapsClientOptions = {
-  /**
-   * Opt-in: route `swap()` through the backend submit-tx 2-step flow (the backend relays +
-   * post-executes server-side). On ANY non-success the SDK falls back to the client-side relay so
-   * the swap still completes. Default `false` (the current fully client-side flow).
-   */
-  useBackendSubmitTx?: boolean;
-};
-
-/**
- * Client-side bridge behavior options. Like {@link SwapsClientOptions}, these are runtime toggles
- * resolved once at construction — NOT part of the backend-fetched {@link SodaxDefaultConfig} data.
- */
-export type BridgeClientOptions = {
-  /**
-   * Opt-in: route `bridge()` through the backend submit-tx flow (the backend relays the spoke
-   * deposit server-side). On ANY non-success the SDK falls back to the client-side
-   * `relayTxAndWaitPacket` flow so the bridge still completes. Default `false` (the current fully
-   * client-side flow).
-   */
-  useBackendSubmitTx?: boolean;
 };
 
 // default sodax config object which can always be overriden through Sodax instance (i.e. new Sodax(...config))

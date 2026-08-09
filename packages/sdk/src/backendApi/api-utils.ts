@@ -134,8 +134,6 @@ export async function makeRequest<T>(params: MakeRequestParams): Promise<T> {
       signal: controller.signal,
     });
 
-    clearTimeout(timeoutId);
-
     if (!response.ok) {
       const errorText = await response.text();
       throw new BackendHttpError(response.status, errorText);
@@ -144,8 +142,6 @@ export async function makeRequest<T>(params: MakeRequestParams): Promise<T> {
     const data = await response.json();
     return data;
   } catch (error) {
-    clearTimeout(timeoutId);
-
     if (error instanceof Error) {
       if (error.name === 'AbortError') {
         throw new Error('REQUEST_TIMEOUT', { cause: new Error(`Request timeout after ${timeout}ms`) });
@@ -156,6 +152,10 @@ export async function makeRequest<T>(params: MakeRequestParams): Promise<T> {
 
     logger.error(`[${serviceLabel}] Unknown error`, error);
     throw new Error('UNKNOWN_REQUEST_ERROR', { cause: error });
+  } finally {
+    // Keep the deadline active while consuming the response body: fetch resolves as soon as headers
+    // arrive, but text()/json() can still stall indefinitely.
+    clearTimeout(timeoutId);
   }
 }
 

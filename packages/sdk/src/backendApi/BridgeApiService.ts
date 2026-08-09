@@ -373,9 +373,12 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
   }
 
   /**
-   * Return the effective per-request timeout (ms). Callers that bound a request tighter than the
-   * service default (e.g. `pollBackendSubmitTx` clamping to its poll cutoff) need this as the ceiling,
-   * because a `RequestOverrideConfig.timeout` REPLACES the service value rather than lowering it.
+   * Return the effective per-request timeout (ms).
+   *
+   * Callers bounding a request tighter than this need it as the CEILING, because a
+   * `RequestOverrideConfig.timeout` REPLACES the service value rather than lowering it: an override
+   * derived from a caller budget alone would raise the bound whenever that budget is the larger of the
+   * two. `SubmitTxAttempt.requestTimeout` clamps against both (`min(budget left in the attempt, this)`).
    */
   public getTimeout(): number {
     return this.config.timeout;

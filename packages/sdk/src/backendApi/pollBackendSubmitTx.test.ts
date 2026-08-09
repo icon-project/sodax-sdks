@@ -3,9 +3,12 @@
  *
  * Focus: the per-request timeout override. `makeRequest` resolves
  * `overrideConfig.timeout ?? config.timeout ?? DEFAULT_BACKEND_API_TIMEOUT`, so an override REPLACES the
- * service value rather than lowering it — handing it the raw remaining poll budget raises the bound
+ * service value rather than lowering it — handing it the raw remaining attempt budget raises the bound
  * whenever that budget exceeds the service default, and one stalled request then consumes the entire
- * poll window instead of retrying. The override must therefore clamp in both directions.
+ * attempt instead of retrying. The override must therefore clamp in both directions.
+ *
+ * The loop is bounded by the backend attempt alone; the client-side fallback holds its own fresh
+ * `timeout`, so nothing here is held back for it.
  *
  * Each test resolves `getStatus` with the terminal status on the first call, so the loop returns before
  * its first sleep; fake timers only pin `Date.now()` so the expected budgets are exact.
@@ -14,6 +17,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Result } from '@sodax/types';
 import { pollBackendSubmitTx, type BackendSubmitTxStatusEnvelope } from './pollBackendSubmitTx.js';
+import { createSubmitTxAttempt } from './submitTxAttempt.js';
 import type { RequestOverrideConfig } from './api-utils.js';
 
 const SERVICE_TIMEOUT_MS = 30_000;
@@ -35,9 +39,14 @@ function executedOnFirstCall(): {
   };
 }
 
-const poll = (deadline: number, getStatus: ReturnType<typeof executedOnFirstCall>['getStatus'], requestTimeoutMs?: number) =>
+/** `timeoutMs` is the caller's per-attempt budget; the attempt opens at the current (faked) clock. */
+const poll = (
+  timeoutMs: number,
+  getStatus: ReturnType<typeof executedOnFirstCall>['getStatus'],
+  requestTimeoutMs = SERVICE_TIMEOUT_MS,
+) =>
   pollBackendSubmitTx({
-    deadline,
+    attempt: createSubmitTxAttempt(timeoutMs),
     terminalStatus: 'executed',
     getStatus,
     onExecuted: result => result?.dstIntentTxHash,
@@ -54,33 +63,22 @@ afterEach(() => {
 });
 
 describe('pollBackendSubmitTx — per-request timeout override', () => {
-  it('clamps to the service timeout when the remaining poll budget is larger', async () => {
+  it('clamps to the service timeout when the remaining attempt budget is larger', async () => {
     const { getStatus, overrides } = executedOnFirstCall();
 
-    // Default bridge budget: reserve = min(ceil(120_000/3), 20_000) = 20_000 ⇒ 100_000 left to the
-    // cutoff, well above the 30s service default.
-    const result = await poll(120_000, getStatus, SERVICE_TIMEOUT_MS);
+    // Default budget: the whole 120_000 belongs to this attempt, well above the 30s service default.
+    const result = await poll(120_000, getStatus);
 
     expect(result).toEqual({ ok: true, value: '0xDST' });
     expect(overrides).toEqual([{ timeout: SERVICE_TIMEOUT_MS }]);
   });
 
-  it('clamps to the remaining poll budget when that is below the service timeout', async () => {
+  it('clamps to the remaining attempt budget when that is below the service timeout', async () => {
     const { getStatus, overrides } = executedOnFirstCall();
 
-    // reserve = min(ceil(15_000/3), 20_000) = 5_000 ⇒ 10_000 left before the cutoff.
-    await poll(15_000, getStatus, SERVICE_TIMEOUT_MS);
+    await poll(15_000, getStatus);
 
-    expect(overrides).toEqual([{ timeout: 10_000 }]);
-  });
-
-  it('passes no override when the caller omits requestTimeoutMs', async () => {
-    const { getStatus, overrides } = executedOnFirstCall();
-
-    await poll(120_000, getStatus);
-
-    // Swaps opts out: every request keeps the service default, and its relay floor absorbs a stall.
-    expect(overrides).toEqual([undefined]);
+    expect(overrides).toEqual([{ timeout: 15_000 }]);
   });
 });
 
@@ -95,7 +93,7 @@ describe('pollBackendSubmitTx — terminal states', () => {
       value: { data: statuses.shift() ?? { status: 'pending' } },
     });
 
-    const promise = poll(120_000, getStatus, SERVICE_TIMEOUT_MS);
+    const promise = poll(120_000, getStatus);
     await vi.advanceTimersByTimeAsync(2_000);
 
     expect(await promise).toEqual({ ok: true, value: '0xDST' });
@@ -107,7 +105,7 @@ describe('pollBackendSubmitTx — terminal states', () => {
       value: { data: { status: 'relaying', abandonedAt: '2026-08-04T00:00:00Z', failureReason: 'budget exhausted' } },
     });
 
-    const result = await poll(120_000, getStatus, SERVICE_TIMEOUT_MS);
+    const result = await poll(120_000, getStatus);
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.cause.message).toContain('budget exhausted');
@@ -119,7 +117,7 @@ describe('pollBackendSubmitTx — terminal states', () => {
       value: { data: { status: 'failed', failureReason: 'hub execution reverted' } },
     });
 
-    const result = await poll(120_000, getStatus, SERVICE_TIMEOUT_MS);
+    const result = await poll(120_000, getStatus);
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.cause.message).toBe('backend submit-tx failed: hub execution reverted');
@@ -133,7 +131,7 @@ describe('pollBackendSubmitTx — terminal states', () => {
     const getStatus = async (): Promise<Result<{ data: Envelope }>> =>
       results.shift() ?? { ok: false, error: new Error('exhausted') };
 
-    const promise = poll(120_000, getStatus, SERVICE_TIMEOUT_MS);
+    const promise = poll(120_000, getStatus);
     await vi.advanceTimersByTimeAsync(2_000);
 
     expect(await promise).toEqual({ ok: true, value: '0xDST' });
@@ -141,37 +139,131 @@ describe('pollBackendSubmitTx — terminal states', () => {
 });
 
 describe('pollBackendSubmitTx — budget boundaries', () => {
-  it('never polls past the cutoff, leaving the reserve for the caller fallback', async () => {
+  it('polls the whole attempt but never past it', async () => {
     const calledAt: number[] = [];
     const getStatus = async (): Promise<Result<{ data: Envelope }>> => {
       calledAt.push(Date.now());
       return { ok: true, value: { data: { status: 'pending' } } };
     };
 
-    const promise = poll(120_000, getStatus, SERVICE_TIMEOUT_MS);
+    const promise = poll(120_000, getStatus);
     await vi.advanceTimersByTimeAsync(120_000);
     const result = await promise;
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.cause.message).toContain('timed out before reaching executed');
-    // reserve = 20_000 ⇒ cutoff at 100_000; the fallback keeps everything after it.
-    expect(Math.max(...calledAt)).toBeLessThan(100_000);
+    // No reserve is held back — the fallback has its own budget — but nothing runs past the attempt.
+    expect(Math.max(...calledAt)).toBeLessThan(120_000);
+    expect(Math.max(...calledAt)).toBeGreaterThan(100_000);
   });
 
-  it('issues no request at all when the deadline has already passed', async () => {
-    vi.setSystemTime(50_000);
+  it('never issues a request or a sleep with no budget left', async () => {
+    const overrides: (RequestOverrideConfig | undefined)[] = [];
+    const getStatus = async (override?: RequestOverrideConfig): Promise<Result<{ data: Envelope }>> => {
+      overrides.push(override);
+      return { ok: true, value: { data: { status: 'pending' } } };
+    };
+
+    const promise = poll(2_500, getStatus);
+    await vi.advanceTimersByTimeAsync(2_500);
+    await promise;
+
+    // Every request got a positive budget: a zero override would arm `makeRequest`'s abort at 0ms,
+    // sending a request only to kill it.
+    expect(overrides.length).toBeGreaterThan(0);
+    expect(overrides.every(o => (o?.timeout ?? 0) > 0)).toBe(true);
+  });
+
+  it('stops instead of sleeping out the rest of the attempt', async () => {
+    const calledAt: number[] = [];
+    const getStatus = async (): Promise<Result<{ data: Envelope }>> => {
+      calledAt.push(Date.now());
+      return { ok: true, value: { data: { status: 'pending' } } };
+    };
+
+    // 2_500ms budget on the default 1_000ms interval: requests at 0, 1_000 and 2_000, each still bounded
+    // by what the attempt has left. After the third, 500ms remains — less than one interval, so sleeping
+    // it out could only be followed by a null bound. The loop must give up at 2_000 rather than spend
+    // that 500ms as dead wait standing between the caller and the client-side fallback.
+    let resolvedAt = -1;
+    const promise = poll(2_500, getStatus).then(r => {
+      resolvedAt = Date.now();
+      return r;
+    });
+    await vi.advanceTimersByTimeAsync(2_500);
+    const result = await promise;
+
+    expect(result.ok).toBe(false);
+    expect(calledAt).toEqual([0, 1_000, 2_000]);
+    // The assertion that matters: the loop hands control back at 2_000, not 2_500. No request is
+    // skipped — only the sleep that could not have been followed by one.
+    expect(resolvedAt).toBe(2_000);
+  });
+
+  it('issues no request at all when the attempt has no budget', async () => {
     let calls = 0;
     const getStatus = async (): Promise<Result<{ data: Envelope }>> => {
       calls += 1;
       return { ok: true, value: { data: { status: 'executed', result: { dstIntentTxHash: '0xDST' } } } };
     };
 
-    // A past deadline makes `reserveMs` negative, so `pollDeadline` lands AFTER `deadline` — but still
-    // before `now` (pollDeadline - now = ⅔·(deadline - now) < 0), so the loop must not run. Pins that:
-    // polling past the caller's exhausted budget is never allowed.
-    const result = await poll(41_000, getStatus, SERVICE_TIMEOUT_MS);
+    const result = await poll(0, getStatus);
 
     expect(calls).toBe(0);
     expect(result.ok).toBe(false);
+  });
+
+  it('issues no request when the attempt expires between the poll decision and the request bound', async () => {
+    let calls = 0;
+    const getStatus = async (): Promise<Result<{ data: Envelope }>> => {
+      calls += 1;
+      return { ok: true, value: { data: { status: 'executed', result: { dstIntentTxHash: '0xDST' } } } };
+    };
+    // The deadline passing between two readings of the clock: `remaining()` still reports budget, but
+    // the bound computed a moment later is already gone. The loop must decide from the SAME value it
+    // would send — testing `remaining()` first and deriving the timeout afterwards sends the request
+    // with `setTimeout(abort, 0)` armed, so it dies on arrival.
+    const expiredMidCheck = {
+      remaining: () => 5_000,
+      requestTimeout: () => null,
+    };
+
+    const result = await pollBackendSubmitTx({
+      attempt: expiredMidCheck,
+      terminalStatus: 'executed',
+      getStatus,
+      onExecuted: (r: { dstIntentTxHash: string } | undefined) => r?.dstIntentTxHash,
+      requestTimeoutMs: SERVICE_TIMEOUT_MS,
+    });
+
+    expect(calls).toBe(0);
+    expect(result.ok).toBe(false);
+  });
+
+  it('stops polling as soon as the request bound runs out, even with sleep budget left', async () => {
+    const overrides: (RequestOverrideConfig | undefined)[] = [];
+    const getStatus = async (override?: RequestOverrideConfig): Promise<Result<{ data: Envelope }>> => {
+      overrides.push(override);
+      return { ok: true, value: { data: { status: 'pending' } } };
+    };
+    // Budget for exactly one request, then nothing: `remaining()` still returns a positive number the
+    // sleep clamp would accept, so only the recomputed bound can end the loop.
+    let calls = 0;
+    const oneShot = {
+      remaining: () => 5_000,
+      requestTimeout: () => (calls++ === 0 ? 5_000 : null),
+    };
+
+    const promise = pollBackendSubmitTx({
+      attempt: oneShot,
+      terminalStatus: 'executed',
+      getStatus,
+      onExecuted: (r: { dstIntentTxHash: string } | undefined) => r?.dstIntentTxHash,
+      requestTimeoutMs: SERVICE_TIMEOUT_MS,
+    });
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect((await promise).ok).toBe(false);
+    expect(overrides).toEqual([{ timeout: 5_000 }]);
   });
 });
