@@ -338,7 +338,9 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
   // Submit-tx state machine
   // ──────────────────────────────────────────────────────────────────────
 
-  /** Submit a swap transaction to be processed (relay, post-execution, etc.). Idempotent on `(txHash, srcChainKey)`. */
+  /** Submit a swap transaction to be processed (relay, post-execution, etc.). Idempotent on `(txHash, srcChainKey)`.
+   *  Response is immediate after successful submission. Use getSubmitTxStatus to poll the status of the submission.
+   */
   public async submitTx(body: SubmitTxRequestV2, config?: RequestOverrideConfig): Promise<Result<SubmitTxResponseV2>> {
     return this.toResult(
       '/swaps/submit-tx',
@@ -377,10 +379,12 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
 
   /**
    * Return the effective per-request timeout (ms) — the same value {@link buildClient} resolves, so
-   * `SwapsApiConfig.timeout` being optional never leaks an `undefined` ceiling. Callers that bound a
-   * request tighter than the service default (e.g. `pollBackendSubmitTx` clamping to its poll cutoff)
-   * need this, because a `RequestOverrideConfig.timeout` REPLACES the service value rather than
-   * lowering it.
+   * `SwapsApiConfig.timeout` being optional never leaks an `undefined` ceiling.
+   *
+   * Callers bounding a request tighter than this need it as the CEILING, because a
+   * `RequestOverrideConfig.timeout` REPLACES the service value rather than lowering it: an override
+   * derived from a caller budget alone would raise the bound whenever that budget is the larger of the
+   * two. `SubmitTxAttempt.requestTimeout` clamps against both (`min(budget left in the attempt, this)`).
    */
   public getTimeout(): number {
     return this.config.timeout ?? DEFAULT_BACKEND_API_TIMEOUT;

@@ -3,9 +3,11 @@
 '@sodax/sdk': minor
 ---
 
-Move `useBackendSubmitTx` onto `swaps` / `bridge` (alongside `partnerFee`) and default it to `true`. Remove the redundant `swapsOptions` / `bridgeOptions` keys and `SwapsClientOptions` / `BridgeClientOptions` types. `new Sodax()` now uses the backend submit-tx path for swap and bridge unless you opt out.
+Move `useBackendSubmitTx` onto `swaps` / `bridge` (alongside `partnerFee`) and default it to `true`. `new Sodax()` now uses the backend submit-tx path for swap and bridge unless you opt out.
 
-**Breaking within the 2.x line** — deliberate, and not deferred to a major: the removed option keys and types no longer compile, and the runtime default flips from off to on.
+The redundant `swapsOptions` / `bridgeOptions` keys and the `SwapsClientOptions` / `BridgeClientOptions` types are **deprecated but still honoured**, so existing code keeps compiling and an existing explicit `useBackendSubmitTx: false` keeps the client-side path. The new `swaps` / `bridge` key wins when both are set.
+
+**Two behavior changes.** First: callers that never set the flag move from the client-side relay to the backend submit-tx path (which still falls back to the client-side relay on any non-success). Second — and this one reaches callers who explicitly opted out — `timeout` becomes a per-attempt budget instead of an end-to-end one: the client-side relay wait now starts fresh, after on-chain verification, rather than inheriting whatever a shared deadline had left. Nothing shortens that wait any more, but total wall-clock for a swap or bridge can now exceed a single `timeout`. If you sized an outer deadline or watchdog off `timeout`, re-check it — including on `useBackendSubmitTx: false`.
 
 **Migration:**
 

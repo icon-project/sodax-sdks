@@ -35,6 +35,7 @@ import type {
 import { Sodax } from '../shared/entities/Sodax.js';
 import { isSodaxError, SodaxError } from '../errors/SodaxError.js';
 import { adjustAmountByFee } from '../shared/utils/shared-utils.js';
+import { RELAY_FALLBACK_FLOOR_MS } from '../shared/services/intentRelay/IntentRelayApiService.js';
 
 // SwapService imports SonicSpokeService, EvmSolverService, etc. via the SDK barrel
 // (`../index.js`). Under Vitest's module graph the barrel's re-export ordering makes a direct
@@ -2763,7 +2764,7 @@ describe('SwapService.swap — backend 2-step (useBackendSubmitTx)', () => {
     });
     // Returned so a test can assert WHETHER it ran: on-chain verification belongs to the client-side
     // path only, so the backend happy path must never reach it (see SWAPS.md § Backend 2-step submit).
-    return vi.spyOn(sodaxBE.spoke, 'verifyTxHash').mockResolvedValueOnce({ ok: true, value: true });
+    return vi.spyOn(sodaxBE.spoke, 'verifyTxHash').mockResolvedValue({ ok: true, value: true });
   };
 
   it('on backend "solved", returns a SwapResponse reconstructed from the backend (no client-side relay)', async () => {
@@ -2802,8 +2803,31 @@ describe('SwapService.swap — backend 2-step (useBackendSubmitTx)', () => {
     expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
     expect(mocks.solverPostExecution).not.toHaveBeenCalled();
     // Nor does the SDK verify the tx on-chain before handing it over: `createIntent` broadcasts and
-    // `submitTx` goes out immediately. Keeps the documented ordering from silently drifting.
+    // `submitTx` goes out immediately. Verifying first would delay every backend success by the source
+    // chain's confirmation wait (up to its full `maxTimeoutMs`) and could fail a swap the backend's own
+    // infrastructure would have completed. Keeps the documented ordering from silently drifting.
     expect(verifySpy).not.toHaveBeenCalled();
+  });
+
+  it('verifies exactly once, on the fallback, when the backend attempt does not complete', async () => {
+    const verifySpy = stubCreatedAndVerified(ChainKeys.BSC_MAINNET);
+    vi.spyOn(sodaxBE.api.swaps, 'submitTx').mockResolvedValueOnce({
+      ok: false,
+      error: new SodaxError('EXTERNAL_API_ERROR', 'rejected', { feature: 'backend' }),
+    } as never);
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
+    mocks.solverPostExecution.mockResolvedValueOnce({ ok: true, value: { answer: 'OK' } as never });
+
+    const result = await sodaxBE.swaps.swap({
+      params: intentInput(ChainKeys.BSC_MAINNET),
+      raw: false,
+      walletProvider: mockEvmProvider,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(mocks.relayTxAndWaitPacket).toHaveBeenCalled();
+    // The backend attempt costs nothing in verification; the fallback pays for it once, and only then.
+    expect(verifySpy).toHaveBeenCalledOnce();
   });
 
   it('treats "posted_execution" as non-terminal: keeps polling (never completes on it), then falls back', async () => {
@@ -2871,6 +2895,7 @@ describe('SwapService.swap — backend 2-step (useBackendSubmitTx)', () => {
       params: intentInput(ChainKeys.BSC_MAINNET),
       raw: false,
       walletProvider: mockEvmProvider,
+      timeout: 30_000,
     });
 
     expect(result.ok).toBe(true);
@@ -2878,6 +2903,9 @@ describe('SwapService.swap — backend 2-step (useBackendSubmitTx)', () => {
     expect(statusSpy).not.toHaveBeenCalled(); // POST failed before any status polling
     expect(mocks.relayTxAndWaitPacket).toHaveBeenCalledOnce();
     expect(mocks.solverPostExecution).toHaveBeenCalledOnce();
+    // A backend that fails fast leaves the fallback the SAME full budget a stalled one does — the two
+    // paths never share a deadline. The stalled counterpart is asserted below.
+    expect(mocks.relayTxAndWaitPacket.mock.calls.at(-1)?.[0]?.timeout).toBe(30_000);
   });
 
   it('falls back when the backend reports a terminal "failed" status', async () => {
@@ -2938,23 +2966,27 @@ describe('SwapService.swap — backend 2-step (useBackendSubmitTx)', () => {
     expect(submitSpy).not.toHaveBeenCalled();
   });
 
-  it('shares one timeout budget: a stalled backend leaves the fallback a reduced (not fresh) relay budget', async () => {
+  /** Backend accepts the submission but never reaches `solved`, so the attempt runs to its full budget. */
+  const stubStalledBackend = () => {
+    vi.spyOn(sodaxBE.api.swaps, 'submitTx').mockResolvedValueOnce({
+      ok: true,
+      value: { success: true, data: { status: 'inserted', message: 'accepted' } },
+    } as never);
+    vi.spyOn(sodaxBE.api.swaps, 'getSubmitTxStatus').mockResolvedValue({
+      ok: true,
+      value: {
+        success: true,
+        data: { txHash: '0xspokeTx', srcChainKey: ChainKeys.BSC_MAINNET, status: 'pending', processingAttempts: 1 },
+      },
+    } as never);
+  };
+
+  it('gives the fallback a FRESH full timeout after a stalled backend consumed its own', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
     try {
       stubCreatedAndVerified(ChainKeys.BSC_MAINNET);
-      vi.spyOn(sodaxBE.api.swaps, 'submitTx').mockResolvedValueOnce({
-        ok: true,
-        value: { success: true, data: { status: 'inserted', message: 'accepted' } },
-      } as never);
-      // Backend never reaches `solved` → submitTx polls until its reserved cutoff, then falls back.
-      vi.spyOn(sodaxBE.api.swaps, 'getSubmitTxStatus').mockResolvedValue({
-        ok: true,
-        value: {
-          success: true,
-          data: { txHash: '0xspokeTx', srcChainKey: ChainKeys.BSC_MAINNET, status: 'pending', processingAttempts: 1 },
-        },
-      } as never);
+      stubStalledBackend();
       mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
       mocks.solverPostExecution.mockResolvedValueOnce({ ok: true, value: { answer: 'OK' } as never });
 
@@ -2965,116 +2997,106 @@ describe('SwapService.swap — backend 2-step (useBackendSubmitTx)', () => {
         walletProvider: mockEvmProvider,
         timeout: overallTimeout,
       });
-      // Drive the submit-tx poll past its `deadline - reserve` cutoff so swap() falls back.
+      // Drive the backend attempt past its own deadline so swap() falls back.
       await vi.advanceTimersByTimeAsync(overallTimeout);
       const result = await swapPromise;
 
       expect(result.ok).toBe(true);
-      expect(mocks.relayTxAndWaitPacket).toHaveBeenCalled();
-      // Shared deadline: the fallback relay got the leftover budget (≈ the reserve), NOT a fresh
-      // `overallTimeout` — proving submitTx + fallback split ONE timeout (no 2×). Pre-fix this was 30_000.
+      // `timeout` is per-attempt: the backend spending all of its own budget must not shorten the relay
+      // wait. Sharing one deadline left this at the ~5s floor, which is how a slow chain hit RELAY_TIMEOUT.
       const relayTimeout = mocks.relayTxAndWaitPacket.mock.calls.at(-1)?.[0]?.timeout as number;
-      expect(relayTimeout).toBeGreaterThan(0);
-      expect(relayTimeout).toBeLessThan(overallTimeout);
+      expect(relayTimeout).toBe(overallTimeout);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  // A status request left unclamped runs on the service default (30s), which outlasts the reserve the
-  // poll holds back for the fallback — so the reserve is only real if each request is bounded by the
-  // poll cutoff. Bridge has always done this; these two mirror its coverage for swaps.
-  it('clamps a stalled status request to the poll cutoff so the fallback keeps its reserve', async () => {
+  it('lets a relay slower than the backend attempt still succeed on the default timeout', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
     try {
       stubCreatedAndVerified(ChainKeys.BSC_MAINNET);
-      vi.spyOn(sodaxBE.api.swaps, 'submitTx').mockResolvedValueOnce({
-        ok: true,
-        value: { success: true, data: { status: 'inserted', message: 'accepted' } },
-      } as never);
-      // A stalled backend: the status request settles only when its own request timeout fires — the
-      // same AbortController behavior `makeRequest` applies.
-      vi.spyOn(sodaxBE.api.swaps, 'getSubmitTxStatus').mockImplementation(
-        ((_query: unknown, config?: { timeout?: number }) =>
+      stubStalledBackend();
+      // ~40s to deliver the packet: comfortably inside a fresh 120s budget, impossible within the ≤20s
+      // a shared deadline used to leave behind.
+      mocks.relayTxAndWaitPacket.mockImplementationOnce(
+        async ({ timeout }: { timeout: number }) =>
           new Promise(resolve =>
             setTimeout(
               () =>
-                resolve({ ok: false, error: new SodaxError('EXTERNAL_API_ERROR', 'timeout', { feature: 'backend' }) }),
-              config?.timeout ?? DEFAULT_BACKEND_API_TIMEOUT,
+                resolve(
+                  timeout >= 40_000
+                    ? { ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } }
+                    : { ok: false, error: new Error('RELAY_TIMEOUT') },
+                ),
+              Math.min(timeout, 40_000),
             ),
-          )) as never,
+          ),
       );
-      let relayCalledAt = Number.POSITIVE_INFINITY;
-      mocks.relayTxAndWaitPacket.mockImplementationOnce(async () => {
-        relayCalledAt = Date.now();
-        return { ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } };
-      });
       mocks.solverPostExecution.mockResolvedValueOnce({ ok: true, value: { answer: 'OK' } as never });
 
-      const overallTimeout = 30_000;
       const swapPromise = sodaxBE.swaps.swap({
         params: intentInput(ChainKeys.BSC_MAINNET),
         raw: false,
         walletProvider: mockEvmProvider,
-        timeout: overallTimeout,
       });
-      await vi.advanceTimersByTimeAsync(overallTimeout);
-      const result = await swapPromise;
+      await vi.advanceTimersByTimeAsync(DEFAULT_RELAY_TX_TIMEOUT * 2);
 
-      // The reserve survived the stall: the fallback still ran, inside the caller's budget.
-      expect(result.ok).toBe(true);
-      expect(relayCalledAt).toBeLessThan(overallTimeout);
-      const relayTimeout = mocks.relayTxAndWaitPacket.mock.calls.at(-1)?.[0]?.timeout as number;
-      expect(relayTimeout).toBeGreaterThan(0);
+      expect((await swapPromise).ok).toBe(true);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it('never lets a status request exceed the service timeout, so a stalled poll still retries', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(0);
-    try {
-      stubCreatedAndVerified(ChainKeys.BSC_MAINNET);
-      vi.spyOn(sodaxBE.api.swaps, 'submitTx').mockResolvedValueOnce({
-        ok: true,
-        value: { success: true, data: { status: 'inserted', message: 'accepted' } },
-      } as never);
-      // Same stall on the DEFAULT 120s budget: the remaining poll window (~100s) now EXCEEDS the 30s
-      // service default. A raw remainder would be handed straight to `makeRequest`
-      // (`overrideConfig.timeout ?? config.timeout`) and burn the whole window on one attempt.
-      const seenTimeouts: (number | undefined)[] = [];
-      vi.spyOn(sodaxBE.api.swaps, 'getSubmitTxStatus').mockImplementation(
-        ((_query: unknown, config?: { timeout?: number }) => {
-          seenTimeouts.push(config?.timeout);
-          return new Promise(resolve =>
-            setTimeout(
-              () =>
-                resolve({ ok: false, error: new SodaxError('EXTERNAL_API_ERROR', 'timeout', { feature: 'backend' }) }),
-              config?.timeout ?? DEFAULT_BACKEND_API_TIMEOUT,
-            ),
-          );
-        }) as never,
-      );
-      mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
-      mocks.solverPostExecution.mockResolvedValueOnce({ ok: true, value: { answer: 'OK' } as never });
+  it('skips the backend POST entirely when the caller leaves no budget', async () => {
+    stubCreatedAndVerified(ChainKeys.BSC_MAINNET);
+    // Stubbed even though the assertion is that it never runs: an unmocked spy calls through, so a
+    // regression in the budget guard would turn this unit test into a real POST to the live backend.
+    const submitSpy = vi.spyOn(sodaxBE.api.swaps, 'submitTx').mockResolvedValue({
+      ok: false,
+      error: new SodaxError('EXTERNAL_API_ERROR', 'unreachable', { feature: 'backend' }),
+    } as never);
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
+    mocks.solverPostExecution.mockResolvedValueOnce({ ok: true, value: { answer: 'OK' } as never });
 
-      const swapPromise = sodaxBE.swaps.swap({
-        params: intentInput(ChainKeys.BSC_MAINNET),
-        raw: false,
-        walletProvider: mockEvmProvider,
-      });
-      await vi.advanceTimersByTimeAsync(DEFAULT_RELAY_TX_TIMEOUT);
-      const result = await swapPromise;
+    const result = await sodaxBE.swaps.swap({
+      params: intentInput(ChainKeys.BSC_MAINNET),
+      raw: false,
+      walletProvider: mockEvmProvider,
+      timeout: 0,
+    });
 
-      expect(result.ok).toBe(true);
-      expect(seenTimeouts.every(t => t !== undefined && t <= DEFAULT_BACKEND_API_TIMEOUT)).toBe(true);
-      // Bounded per request rather than per window ⇒ the stall retried instead of consuming it whole.
-      expect(seenTimeouts.length).toBeGreaterThan(1);
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(result.ok).toBe(true);
+    // Firing the POST would only arm an abort at 0ms; the relay still runs on its floor because the
+    // intent tx has already landed on-chain.
+    expect(submitSpy).not.toHaveBeenCalled();
+    expect(mocks.relayTxAndWaitPacket.mock.calls.at(-1)?.[0]?.timeout).toBe(RELAY_FALLBACK_FLOOR_MS);
+  });
+
+  it('treats a non-finite caller timeout as the default rather than stranding the broadcast tx', async () => {
+    stubCreatedAndVerified(ChainKeys.BSC_MAINNET);
+    const submitSpy = vi.spyOn(sodaxBE.api.swaps, 'submitTx').mockResolvedValueOnce({
+      ok: false,
+      error: new SodaxError('EXTERNAL_API_ERROR', 'rejected', { feature: 'backend' }),
+    } as never);
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
+    mocks.solverPostExecution.mockResolvedValueOnce({ ok: true, value: { answer: 'OK' } as never });
+
+    // `Number(process.env.SWAP_TIMEOUT)` with the var unset. `?? DEFAULT` does not catch NaN, and an
+    // unresolved NaN would skip the POST entirely and hand the relay `Math.max(NaN, floor)` = NaN,
+    // which `waitUntilIntentExecuted` reads as an already-expired budget: RELAY_TIMEOUT in
+    // milliseconds on an intent tx that is live on-chain.
+    const result = await sodaxBE.swaps.swap({
+      params: intentInput(ChainKeys.BSC_MAINNET),
+      raw: false,
+      walletProvider: mockEvmProvider,
+      timeout: Number.NaN,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(submitSpy).toHaveBeenCalledOnce();
+    expect(submitSpy.mock.calls[0]?.[1]).toEqual({ timeout: DEFAULT_BACKEND_API_TIMEOUT });
+    expect(mocks.relayTxAndWaitPacket.mock.calls.at(-1)?.[0]?.timeout).toBe(DEFAULT_RELAY_TX_TIMEOUT);
   });
 });
 

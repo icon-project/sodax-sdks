@@ -133,12 +133,12 @@ For Stellar-based bridge operations, trustlines must be handled depending on whe
 
 Executes a full end-to-end bridge transfer: spoke deposit → relay → hub settlement.
 
-Internally calls `createBridgeIntent()` to submit the spoke-side deposit transaction, then waits for the cross-chain relay packet to be confirmed on the hub (Sonic). Use this method for the typical "fire and wait" bridge UX.
+Internally calls `createBridgeIntent()` to submit the spoke-side deposit transaction, then completes the transfer via one of two paths (see [Completion paths and `timeout`](#completion-paths-and-timeout) below). Use this method for the typical "fire and wait" bridge UX.
 
 This method is signed-execution only (`raw: false`). For raw transaction building, use `createBridgeIntent()` directly.
 
 **Parameters:**
-- `_params`: `BridgeParams<K, false>` — bridge parameters including source/destination chain keys, token addresses, amount, recipient, wallet provider, and optional `timeout`
+- `_params`: `BridgeParams<K, false>` — bridge parameters including source/destination chain keys, token addresses, amount, recipient, wallet provider, and optional `timeout` (a **per-attempt** budget — see below)
 
 **Returns:** `Promise<Result<TxHashPair>>` — `{ srcChainTxHash, dstChainTxHash }` on success, where `srcChainTxHash` is the spoke deposit tx and `dstChainTxHash` is the hub settlement tx.
 
@@ -157,7 +157,7 @@ const result = await sodax.bridge.bridge({
     recipient: '0x9876543210fedcba...',
   },
   walletProvider: evmWalletProvider,
-  timeout: 30_000, // optional, defaults to 120 000 ms
+  timeout: 30_000, // optional, per attempt; defaults to DEFAULT_RELAY_TX_TIMEOUT
 });
 
 if (result.ok) {
@@ -167,6 +167,26 @@ if (result.ok) {
   console.error('Bridge failed:', result.error.message);
 }
 ```
+
+#### Completion paths and `timeout`
+
+`bridge()` completes through the **backend submit-tx path by default** (`bridge.useBackendSubmitTx`, default `true`): it hands the broadcast deposit to the bridge API (`sodax.api.bridge.submitTx`), which relays server-side, and polls submit-tx status. On **any** non-success — submission rejected, terminal `failed`/abandoned, or the poll running out — it falls back to the client-side `relayTxAndWaitPacket` flow so the bridge still completes, returning the same `TxHashPair` either way. That is safe because re-relaying an already-relayed deposit is idempotent, and it matters in practice: the backend keeps processing at its own pace after the SDK gives up, so the two relays can race. Set `new Sodax({ bridge: { useBackendSubmitTx: false } })` to force the client-side path.
+
+On-chain verification (`verifyTxHash`) runs on the **client-side path only** — the backend runs its own, so verifying before handing the deposit over would delay every backend success by the source chain's confirmation wait and could fail a bridge the backend would have completed. `TX_VERIFICATION_FAILED` therefore never surfaces on a bridge the backend completes.
+
+`timeout` is a **per-attempt** budget, not an end-to-end deadline. Each phase is bounded by a different thing:
+
+| Phase | Bound |
+| --- | --- |
+| `createBridgeIntent` — build, sign, broadcast | **not** bounded by `timeout` |
+| Backend attempt — submit POST + status poll | `timeout` |
+| ↳ any single backend request within it | `min(budget left in the attempt, api.timeout)` |
+| On-chain verification — client-side path only | the source chain's `pollingConfig.maxTimeoutMs` |
+| Relay wait — client-side path only, starts after verification | `max(timeout, RELAY_FALLBACK_FLOOR_MS)` |
+
+So a stalled backend cannot shorten the fallback's relay wait, and raising `timeout` grows both attempts. Worst-case wall-clock is `createBridgeIntent + timeout + verification + max(timeout, RELAY_FALLBACK_FLOOR_MS)` — reached only when the backend accepts the submission and then never finishes. Bridge has no solver post-execution, so unlike swaps there is no `'posting_execution'` step and no post-execution term.
+
+Read the constants from source rather than memorising them: `DEFAULT_RELAY_TX_TIMEOUT`, `DEFAULT_BACKEND_API_TIMEOUT` and per-chain `pollingConfig` live in [`@sodax/types`](https://github.com/icon-project/sodax-sdks/tree/main/packages/types/src), and `RELAY_FALLBACK_FLOOR_MS` in [`IntentRelayApiService.ts`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/src/shared/services/intentRelay/IntentRelayApiService.ts). Verification timeouts differ widely by chain, so derive them per chain from `chains.ts`. The swaps side documents the identical model in more depth — see [How `timeout` bounds each attempt](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md#how-timeout-bounds-each-attempt) — and [BRIDGE_API.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BRIDGE_API.md) covers the API client itself.
 
 ### createBridgeIntent
 
@@ -387,7 +407,7 @@ export type BridgeParams<ChainKey extends SpokeChainKey, Raw extends boolean> = 
 >;
 ```
 
-`SpokeExecActionParams` contributes `params`, the optional `extras` slot (see below), `skipSimulation`, `timeout`, and the wallet-provider slot.
+`SpokeExecActionParams` contributes `params`, the optional `extras` slot (see below), `skipSimulation`, `timeout`, and the wallet-provider slot. `timeout` is a per-attempt budget — see [Completion paths and `timeout`](#completion-paths-and-timeout).
 
 The `WalletProviderSlot<K, Raw>` discriminant enforces at compile time:
 - `{ raw: true }` — `walletProvider` is **forbidden**; returns raw tx payload
@@ -494,6 +514,8 @@ class SodaxError<C extends string = string> extends Error {
 | `isAllowanceValid` | `VALIDATION_FAILED`, `ALLOWANCE_CHECK_FAILED`, `UNKNOWN` |
 | `getBridgeableAmount` | `VALIDATION_FAILED`, `LOOKUP_FAILED`, `UNKNOWN` |
 | `getBridgeableTokens` | `VALIDATION_FAILED`, `LOOKUP_FAILED`, `UNKNOWN` |
+
+**Important:** `bridge` orchestrates verify + relay only on the **client-side path** (the fallback, or `useBackendSubmitTx: false`), so `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT` and `RELAY_FAILED` never surface on a bridge the backend completes. When the backend attempt does not complete, its own error is logged and discarded — the fallback runs and its outcome is what you receive, so the code you see always describes the client-side attempt, never the backend one. Check the logs, not the `Result`, to tell why the backend path was abandoned. See [Completion paths and `timeout`](#completion-paths-and-timeout).
 
 The exported narrow types are `BridgeOrchestrationError` (for `bridge`), `BridgeCreateIntentError` (for `createBridgeIntent`), `BridgeApproveError`, `BridgeAllowanceCheckError`, and a single `BridgeLookupError` shared by `getBridgeableAmount` and `getBridgeableTokens` (discriminate them at runtime via `error.context.method`). Each has a matching narrow guard listed above.
 

@@ -467,12 +467,14 @@ export class ConfigService {
   // Effective backend submit-tx toggle per feature. Read live off the same `swaps` / `bridge` slots as
   // `partnerFee` so an omitted flag resolves to the ON default here, in one place, instead of leaving
   // `config.swaps.useBackendSubmitTx === undefined` while the backend path is actually active.
+  // The deprecated `swapsOptions` / `bridgeOptions` keys are still honoured as a second-precedence
+  // fallback, so a pre-existing explicit opt-out keeps the client-side path instead of silently flipping.
   get swapUseBackendSubmitTx(): boolean {
-    return this.swaps.useBackendSubmitTx ?? true;
+    return this.swaps.useBackendSubmitTx ?? this.sodax.swapsOptions?.useBackendSubmitTx ?? true;
   }
 
   get bridgeUseBackendSubmitTx(): boolean {
-    return this.bridge.useBackendSubmitTx ?? true;
+    return this.bridge.useBackendSubmitTx ?? this.sodax.bridgeOptions?.useBackendSubmitTx ?? true;
   }
 
   get dex(): DexConfig {

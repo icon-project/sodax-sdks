@@ -88,6 +88,22 @@ export type RadfiOptions = {
   signRequest?: RadfiSigner; // returns extra headers (e.g. `x-api-signature`) merged onto each RadFi apiUrl request
 };
 
+/**
+ * @deprecated in favor of `swaps` property of SodaxOptionalConfig, kept for backward compatibility.
+ * Still honoured, but only when `swaps.useBackendSubmitTx` is omitted; the default is now `true`.
+ */
+export type SwapsClientOptions = {
+  useBackendSubmitTx?: boolean;
+};
+
+/**
+ * @deprecated in favor of `bridge` property of SodaxOptionalConfig, kept for backward compatibility.
+ * Still honoured, but only when `bridge.useBackendSubmitTx` is omitted; the default is now `true`.
+ */
+export type BridgeClientOptions = {
+  useBackendSubmitTx?: boolean;
+};
+
 export type SodaxOptionalConfig = {
   logger?: SodaxLoggerOption;
   analytics?: AnalyticsOption; // Opt-in user-action analytics: an AnalyticsConfig or false (default, disabled). Resolved client-side; never fetched from or overwritten by the backend config.
@@ -97,6 +113,10 @@ export type SodaxOptionalConfig = {
   moneyMarket?: MoneyMarketOptions;
   bridge?: BridgeOptions;
   leverageYield?: LeverageYieldOptions;
+  /** @deprecated Use `swaps` instead — still honoured, but only when `swaps.useBackendSubmitTx` is absent. */
+  swapsOptions?: SwapsClientOptions;
+  /** @deprecated Use `bridge` instead — still honoured, but only when `bridge.useBackendSubmitTx` is absent. */
+  bridgeOptions?: BridgeClientOptions;
 };
 
 /**

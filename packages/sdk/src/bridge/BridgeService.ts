@@ -28,7 +28,9 @@ import {
 } from '../shared/index.js';
 import type { IntentTxResult, TxHashPair } from '../shared/types/types.js';
 import type { BackendApiService } from '../backendApi/index.js';
-import { pollBackendSubmitTx } from '../backendApi/pollBackendSubmitTx.js';
+import { runBackendSubmitTx } from '../backendApi/runBackendSubmitTx.js';
+import { createSubmitTxAttempt, type SubmitTxAttempt } from '../backendApi/submitTxAttempt.js';
+import { resolveTimeoutMs } from '../shared/utils/resolveTimeoutMs.js';
 import {
   type SpokeChainKey,
   type XToken,
@@ -356,15 +358,27 @@ export class BridgeService {
   /**
    * Executes a full end-to-end bridge transfer: spoke deposit → relay → hub settlement.
    *
-   * Internally calls `createBridgeIntent()` to submit the spoke-side deposit transaction,
-   * then waits for the cross-chain relay packet to be confirmed on the hub (Sonic).
-   * Use this method for the typical "fire and wait" bridge UX.
+   * Internally calls `createBridgeIntent()` to submit the spoke-side deposit transaction, then
+   * completes the transfer via one of two paths. Use this method for the typical "fire and wait" UX.
+   *
+   * - **Backend submit-tx (default, `bridge.useBackendSubmitTx`), {@link submitTx}:** hands the deposit
+   *   to the bridge API, which relays server-side, and polls until `executed`. On ANY non-success it
+   *   falls back to the path below — safe because re-relaying is idempotent.
+   * - **Client-side (opt-out with `useBackendSubmitTx: false`), {@link fallbackBridgeSteps}:** verifies
+   *   the deposit landed on-chain, then relays it and waits for the settlement packet. `verifyTxHash`
+   *   runs on this path only; the backend runs its own.
    *
    * For manual relay control (e.g. monitoring or batching), use `createBridgeIntent()` directly
    * and handle the relay step yourself.
    *
    * @param _params - Bridge parameters including source/destination chain keys, token addresses,
-   *   amount, recipient address, wallet provider, and optional timeout.
+   *   amount, recipient address, wallet provider, and an optional `timeout` — a PER-ATTEMPT budget,
+   *   not an end-to-end one. The backend attempt gets it, and if that attempt does not complete the
+   *   client-side relay wait gets a fresh one starting after verification, so neither a stalled backend
+   *   nor a slow source-chain confirmation can shorten it. Worst-case wall-clock is
+   *   `createBridgeIntent + timeout + verification + max(timeout, RELAY_FALLBACK_FLOOR_MS)`, where
+   *   verification is bounded by the source chain's `pollingConfig.maxTimeoutMs` and intent creation is
+   *   not bounded by `timeout` at all. See `docs/BRIDGE.md` § Completion paths and `timeout`.
    * @returns `Result<TxHashPair>` — `{ srcChainTxHash, dstChainTxHash }` on success,
    *   where `srcChainTxHash` is the spoke deposit tx and `dstChainTxHash` is the hub settlement tx.
    *
@@ -402,16 +416,18 @@ export class BridgeService {
           // CreateBridgeIntentErrorCode ⊂ BridgeOrchestrationErrorCode, so SodaxError narrows correctly.
           if (!created.ok) return { ok: false, error: created.error };
 
-          // One shared budget for the rest of the bridge: the backend submit-tx poll and the
-          // client-side relay fallback split this single deadline, so total wall-clock never exceeds
-          // one `timeout`.
-          const deadline = Date.now() + (_params.timeout ?? DEFAULT_RELAY_TX_TIMEOUT);
+          // `timeout` is a PER-ATTEMPT budget, not an end-to-end one: the backend attempt gets it, and if
+          // that attempt fails the client-side relay fallback gets a fresh one. Sharing a single deadline
+          // would leave the fallback whatever the backend had not spent, which is how a relay that needs
+          // longer than the leftovers ends in RELAY_TIMEOUT. Resolved (not just defaulted) so a non-finite
+          // caller value cannot reach either budget — see `resolveTimeoutMs`.
+          const timeoutMs = resolveTimeoutMs(_params.timeout, DEFAULT_RELAY_TX_TIMEOUT);
 
           // Backend submit-tx flow (default on): hand the broadcast spoke-deposit tx to the bridge API, which
           // relays server-side. On ANY non-success we fall back to the client-side relay so the bridge
           // still completes — safe because re-relay is idempotent.
           if (this.useBackendSubmitTx) {
-            const submitted = await this.submitTx(_params, created.value, deadline);
+            const submitted = await this.submitTx(_params, created.value, createSubmitTxAttempt(timeoutMs));
             if (submitted.ok) return submitted;
             this.config.logger.warn(
               '[bridge] backend submit-tx did not complete; falling back to the client-side relay',
@@ -419,7 +435,7 @@ export class BridgeService {
             );
           }
 
-          return this.fallbackBridgeSteps(_params, created.value, deadline);
+          return this.fallbackBridgeSteps(_params, created.value, timeoutMs);
         } catch (error) {
           if (isBridgeOrchestrationError(error)) return { ok: false, error };
           return {
@@ -448,15 +464,19 @@ export class BridgeService {
   }
 
   /**
-   * Client-side bridge completion (opt-out via `bridge.useBackendSubmitTx: false`): verify the broadcast spoke-deposit tx, then
-   * relay it to the hub and wait for the settlement packet. Extracted verbatim from `bridge()` so the
-   * backend submit-tx path ({@link submitTx}) can fall back to it on any non-success. Bridge
-   * always relays — there is no hub-source short-circuit.
+   * Client-side bridge completion (opt-out via `bridge.useBackendSubmitTx: false`): verify the broadcast
+   * spoke-deposit tx, then relay it to the hub and wait for the settlement packet. Extracted verbatim from
+   * `bridge()` so the backend submit-tx path ({@link submitTx}) can fall back to it on any non-success.
+   * Bridge always relays — there is no hub-source short-circuit.
+   *
+   * Verification belongs to THIS path only: the backend runs its own, so verifying before handing over
+   * would delay every backend success by the source chain's confirmation wait and could fail a bridge the
+   * backend would have completed.
    */
   private async fallbackBridgeSteps<K extends SpokeChainKey>(
     _params: BridgeParams<K, false>,
     created: IntentTxResult<K, false>,
-    deadline: number,
+    timeoutMs: number,
   ): Promise<Result<TxHashPair, BridgeOrchestrationError>> {
     const { params } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
@@ -474,13 +494,13 @@ export class BridgeService {
       data: created.relayData,
       chainKey: params.srcChainKey,
       relayerApiEndpoint: this.config.relay.relayerApiEndpoint,
-      // Remaining shared budget: ≈ full `timeout` on the flag-off path minus the `verifyTxHash` wait,
-      // or the reserve `submitTx` left on the backend path (`pollBackendSubmitTx` holds back up to a
-      // third, capped at 20s). The floor matters because `relayTxAndWaitPacket` SUBMITS the tx to the
-      // relay before `timeout` bounds anything: a budget exhausted by a slow source-chain confirmation
-      // (Stacks polls for up to its full 120s `maxTimeoutMs`) would otherwise strand an already-landed
-      // deposit unrelayed. Re-relay is idempotent, so always spending the floor is safe.
-      timeout: Math.max(deadline - Date.now(), RELAY_FALLBACK_FLOOR_MS),
+      // The caller's full `timeout`, starting HERE — after verification, and whether this runs as the only
+      // path or as the backend's fallback. Neither a stalled backend attempt nor a slow source-chain
+      // confirmation (Stacks polls for up to its full 120s `maxTimeoutMs`) may shorten the relay wait. The
+      // floor covers a sub-floor caller `timeout`: `relayTxAndWaitPacket` SUBMITS the tx to the relay
+      // before `timeout` bounds anything, so a zero budget would strand an already-landed deposit
+      // unrelayed. Re-relay is idempotent, so always spending the floor is safe.
+      timeout: Math.max(timeoutMs, RELAY_FALLBACK_FLOOR_MS),
     });
     if (!packetResult.ok) {
       return {
@@ -510,47 +530,49 @@ export class BridgeService {
    * Never throws — returns `{ ok: false }` on any non-success (submit `!ok`, terminal `failed` /
    * abandoned, or poll timeout) so `bridge()` falls back to {@link fallbackBridgeSteps}. Falling back
    * is safe: re-relaying an already-relayed bridge tx is idempotent — the relay dedups and returns the
-   * existing `executed` packet. Polling stops at `deadline - reserve` so the fallback keeps a
-   * guaranteed slice of the shared `bridge` budget.
+   * existing `executed` packet. It is also load-bearing rather than belt-and-braces: the backend keeps
+   * processing after this attempt gives up, so the fallback's relay can race the backend's own.
+   *
+   * The attempt itself — POST, budget clamps, status poll — is {@link runBackendSubmitTx}, shared with
+   * swaps. What is bridge-specific and lives here: the request body (the FULL `relayData` envelope), the
+   * `executed` terminal status, the mapping to a {@link TxHashPair}, and the bridge error taxonomy.
+   *
+   * `attempt` bounds this attempt alone — the POST and every status request draw on it, and the
+   * client-side fallback holds a separate fresh `timeout`.
    */
   private async submitTx<K extends SpokeChainKey>(
     _params: BridgeParams<K, false>,
     created: IntentTxResult<K, false>,
-    deadline: number,
+    attempt: SubmitTxAttempt,
   ): Promise<Result<TxHashPair, BridgeOrchestrationError>> {
     const { params } = _params;
     const srcChainKey = params.srcChainKey;
     const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey };
     const { tx: spokeTxHash, relayData } = created;
-    const submitTxFailed = (cause: unknown): Result<TxHashPair, BridgeOrchestrationError> => ({
-      ok: false,
-      error: executionFailed('bridge', cause, { ...baseCtx, action: 'bridge' }),
-    });
 
     try {
-      const submitted = await this.backendApi.bridge.submitTx({
-        txHash: spokeTxHash,
-        srcChainKey,
-        walletAddress: params.srcAddress,
-        // Send the FULL { address, payload } envelope — bridge has no intent.creator for the backend
-        // to rebuild the relay address, so dropping it would break split-tx-chain relay.
-        relayData,
-      });
-      // Backend submission rejected — wrap its error as the cause so bridge() falls back.
-      if (!submitted.ok) return submitTxFailed(submitted.error);
-
-      const polled = await pollBackendSubmitTx({
-        deadline,
+      const outcome = await runBackendSubmitTx({
+        attempt,
+        api: this.backendApi.bridge,
+        body: {
+          txHash: spokeTxHash,
+          srcChainKey,
+          walletAddress: params.srcAddress,
+          // Send the FULL { address, payload } envelope — bridge has no intent.creator for the backend
+          // to rebuild the relay address, so dropping it would break split-tx-chain relay.
+          relayData,
+        },
+        statusQuery: { txHash: spokeTxHash, srcChainKey },
         // Bridge terminal success is `executed` (hub-settled) — not the swaps `solved`.
         terminalStatus: 'executed',
-        getStatus: override => this.backendApi.bridge.getSubmitTxStatus({ txHash: spokeTxHash, srcChainKey }, override),
         onExecuted: (result): TxHashPair | undefined =>
           result?.dstIntentTxHash ? { srcChainTxHash: spokeTxHash, dstChainTxHash: result.dstIntentTxHash } : undefined,
-        // Bound each status request by the poll cutoff, never above the service default — so a stalled
-        // request can neither eat the fallback's reserve nor consume the window in one attempt.
-        requestTimeoutMs: this.backendApi.bridge.getTimeout(),
       });
-      return polled.ok ? { ok: true, value: polled.value } : submitTxFailed(polled.cause);
+      // Any non-success — rejected POST, terminal `failed`, spent attempt — becomes the cause bridge()
+      // logs before falling back to the client-side relay.
+      return outcome.ok
+        ? { ok: true, value: outcome.value }
+        : { ok: false, error: executionFailed('bridge', outcome.cause, { ...baseCtx, action: 'bridge' }) };
     } catch (error) {
       return { ok: false, error: unknownFailed('bridge', error, { ...baseCtx, action: 'bridge' }) };
     }
