@@ -3,7 +3,7 @@
 Learn how to configure fees and monetize your SODAX SDK integration.
 
 When using the SODAX SDK, you can monetize your integration by collecting fees from the transactions processed through your application.
-Fees are configured globally per feature when creating the `Sodax` instance, and the swap and bridge features additionally accept a per-action override: swap's `getQuote()` takes an optional `partnerFee` argument, and swap's `swap()` / `createIntent()` and bridge's `bridge()` / `createBridgeIntent()` read `extras.partnerFee`. When omitted, the configured fee applies.
+Fees are configured globally per feature when creating the `Sodax` instance, and the swap, bridge and leverage-yield features additionally accept a per-action override: swap's `getQuote()` and leverage-yield's `getQuote()` take an optional `partnerFee`, swap's `swap()` / `createIntent()` and bridge's `bridge()` / `createBridgeIntent()` read `extras.partnerFee`, and leverage-yield's `deposit()` / `vaultSwap()` / `createVaultIntent()` take `partnerFee` directly. When omitted, the configured fee applies.
 
 ## Defining Fee
 
@@ -48,13 +48,23 @@ const sodaxWithBridgeFees = new Sodax({
   bridge: { partnerFee: partnerFeePercentage },
 });
 
+// apply fee to leverage-yield vault deposits and withdrawals
+const sodaxWithLeverageYieldFees = new Sodax({
+  leverageYield: { partnerFee: partnerFeePercentage },
+});
+
 // apply fee to multiple features
 const sodaxWithFees = new Sodax({
   swaps: { partnerFee: partnerFeePercentage },
   moneyMarket: { partnerFee: partnerFeePercentage },
   bridge: { partnerFee: partnerFeePercentage },
+  leverageYield: { partnerFee: partnerFeePercentage },
 });
 ```
+
+Each feature's fee is independent: `swaps.partnerFee` applies to `sodax.swaps` only and does **not**
+apply to leverage-yield vault flows, even though those are executed as solver intents. A feature with
+no `partnerFee` of its own falls back to the global `fee`.
 
 ## Per-request fee configuration
 
@@ -117,6 +127,60 @@ const swapResult = await sodax.swaps.swap({
   walletProvider, // chain-narrowed wallet provider for the source chain
   timeout, // optional, request timeout in ms if needed
   skipSimulation, // optional - whether to skip transaction simulation (default: false)
+});
+```
+
+### Leverage-yield vault requests
+
+Vault deposits and withdrawals are solver intents, but they are priced off the **leverage-yield** fee
+(`leverageYield.partnerFee`, else the global `fee`) — never `swaps.partnerFee`. **Both directions are
+charged.** Pass `partnerFee` to `deposit()` or `withdraw()` (it rides on the returned payload), or
+directly to `vaultSwap()` / `createVaultIntent()`, to override the configured fee for one intent.
+
+The fee always comes out of `inputAmount`, so its denomination differs by direction: a deposit's input
+is the token being paid in, while a **withdraw's input is the vault itself — that fee is taken in
+`lsoda*` shares**, so the receiver accrues vault shares rather than the output token. Both are hub-side
+ERC20s and both show up in `sodax.partners.feeClaim`.
+
+Quote through `sodax.leverageYield.getQuote()`, not `sodax.swaps.getQuote()`: it deducts the same
+effective leverage-yield fee the intent will charge, so the quote and the intent agree. Quoting a
+vault flow through the swap service deducts the swap fee instead, and its `partnerFee` argument
+cannot express "no fee" — an explicit `undefined` falls back to the configured swap fee.
+
+**Pass the same `partnerFee` to the quote and to the deposit.** The fee is deducted from the input
+before the swap, so a quote taken with a different fee is sized on a different net input. If the
+intent's fee is the larger of the two, `minOutputAmount` derived from that quote is higher than the
+intent can deliver and the intent will not fill. Omitting `partnerFee` on both calls is equally
+safe — both then resolve the same effective leverage-yield fee.
+
+```typescript
+const vault = sodax.leverageYield.getVault('lsodaWEETH');
+if (!vault) return;
+
+const inputToken = '0x...';   // weETH on Arbitrum
+const inputAmount = 1_000_000n;
+const SLIPPAGE_BPS = 50n;     // 0.5%
+
+// Quote first — token_dst = vault for a deposit, token_src = vault for a withdraw.
+const quote = await sodax.leverageYield.getQuote({
+  token_src: inputToken,
+  token_src_blockchain_id: ChainKeys.ARBITRUM_MAINNET,
+  token_dst: vault.vault,     // the lsoda* vault proxy
+  token_dst_blockchain_id: ChainKeys.SONIC_MAINNET,
+  amount: inputAmount,
+  quote_type: 'exact_input',
+  partnerFee: partnerFeePercentage, // same value as the deposit below
+});
+if (!quote.ok) return;
+
+const built = await sodax.leverageYield.deposit({
+  vault: vault.vault,
+  srcChainKey: ChainKeys.ARBITRUM_MAINNET,
+  srcAddress: '0x...',
+  inputToken,
+  inputAmount,
+  minOutputAmount: (quote.value.quoted_amount * (10_000n - SLIPPAGE_BPS)) / 10_000n,
+  partnerFee: partnerFeePercentage, // same value as the quote above
 });
 ```
 
