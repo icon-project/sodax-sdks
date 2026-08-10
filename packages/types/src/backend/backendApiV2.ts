@@ -80,7 +80,10 @@ export interface SwapExtrasV2 {
    * / `fee` options are never consulted on this wire path (they only reach the `sodax.swaps`
    * orchestrator). Omitting the field therefore charges nothing AND leaves the swap unattributed,
    * because the backend decodes the partner receiver out of `intent.data`. Send the same value to
-   * `/swaps/quote` and `/swaps/intents` so the quote matches the built intent.
+   * `/swaps/quote` and `/swaps/intents` so the quote matches the built intent; `/swaps/allowance/check`
+   * and `/swaps/approve` inherit the field but ignore it (both size the allowance off the full
+   * `inputAmount`). Scoped to `/swaps/*`: the bridge counterpart (`CreateBridgeIntentParamsV2.partnerFee`
+   * in `backendBridgeApiV2.ts`) *does* fall back to the backend's configured `bridgePartnerFee`.
    */
   partnerFee?: PartnerFeeV2;
   /**

@@ -15,14 +15,17 @@ in opposite ways when you say nothing:
 | Fee on the wire | No fee field in the payload; the SDK bakes it into the intent | `partnerFee` *is* the payload field |
 | You configured a fee but sent no `partnerFee` | Configured fee applies automatically | **Nothing happens** — the config is never read here |
 
-The second column is the one that costs money silently. **The Swaps API applies no default.** It
-cannot: only the caller knows which receiver to credit. `sodax.api.swaps` and `@sodax/swaps-api`
-serialize the body you hand them and never consult `SodaxConfig` for a fee, so a request without
-`partnerFee` succeeds, charges nothing, and is **unattributable** — the backend decodes the partner
-receiver out of `intent.data`, and there is nothing to decode.
+The second column is the one that costs money silently: **the Swaps API applies no default**, so a
+request without `partnerFee` succeeds, charges nothing, and is unattributable.
+[Swaps API monetization](#swaps-api-monetization) covers that path in full.
 
-If you use the Swaps API, jump to [Swaps API monetization](#swaps-api-monetization). The sections
-immediately below describe the orchestrator path.
+Do not generalize "no default" to every `sodax.api.*` surface — the Bridge API v2 behaves the
+opposite way. On `CreateBridgeIntentParamsV2` (`/bridge/allowance/check`, `/bridge/approve`,
+`/bridge/intents`) and on `POST /bridge/fee`, `partnerFee` is a per-request *override* that falls
+back to the backend's configured `bridgePartnerFee` when omitted. The rule below is about `/swaps/*`
+only.
+
+The sections immediately below describe the orchestrator path.
 
 ## Defining Fee
 
@@ -31,13 +34,16 @@ import { PartnerFee } from '@sodax/sdk';
 
 // Partner fee can be defined as a percentage or a definite token amount.
 // Fee is optional, you can leave it empty/undefined.
+// `address` is a real EVM (Sonic) address you control. Nothing validates it — the SDK passes it
+// straight through as the fee receiver, so a placeholder or the zero address burns every fee
+// silently. Never copy one from an example; if you don't have the receiver yet, stop and get it.
 const partnerFeePercentage = {
-  address: '0x0000000000000000000000000000000000000000', // EVM (Sonic) address to receive fee
+  address: '0xYourFeeReceiverOnSonic', // EVM (Sonic) address to receive fee
   percentage: 100, // 100 = 1%, 10000 = 100%
 } satisfies PartnerFee;
 
 const partnerFeeAmount = {
-  address: '0x0000000000000000000000000000000000000000', // EVM (Sonic) address to receive fee
+  address: '0xYourFeeReceiverOnSonic', // EVM (Sonic) address to receive fee
   amount: 1000n, // definite amount denominated in token decimal precision
 } satisfies PartnerFee;
 ```
@@ -173,16 +179,20 @@ const created = await sodax.api.swaps.createIntent({
 });
 ```
 
-Send `partnerFee` and `createIntent` returns an `inputAmount` reduced by the fee with `data` set to
-the fee envelope (`0x01` + fee amount + receiver address). Omit it and you get the full `inputAmount`
-back with `data: "0x"` — a perfectly successful, completely unattributed swap.
+Send `partnerFee` and `createIntent` returns an `inputAmount` reduced by the fee, with the fee
+envelope encoded into `data`. Omit it and you get the full `inputAmount` back with `data: "0x"` — a
+perfectly successful, completely unattributed swap.
 
-Two behaviors worth knowing, because both look like reasons to leave the field out:
+Three behaviors worth knowing, because the first two look like reasons to leave the field out:
 
 - **Your own `data` does not conflict with the fee.** The API builds `intent.data` itself, so passing
   `data: '0x'` alongside `partnerFee` does not clobber the fee envelope.
 - **The approval amount does not change.** It is still the full input, so adding the fee to an
   existing integration cannot break the allowance step.
+- **Only the quote and the intent read the field.** `/swaps/allowance/check` and `/swaps/approve`
+  share the `CreateIntentParamsV2` body, so they accept `partnerFee`, but neither consults it — both
+  size the allowance off the full `inputAmount`. Sending it there is harmless and omitting it there
+  changes nothing; the two calls that must carry it are `/swaps/quote` and `/swaps/intents`.
 
 Use `amount` (decimal string, input token's smallest unit) instead of `percentage` for a flat fee. If
 both are present the backend uses `amount`, matching the SDK.

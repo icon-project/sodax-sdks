@@ -104,10 +104,23 @@ receiver is decoded out of `intent.data`, which is `"0x"` when no fee was sent. 
 on swaps, this field is required in practice; generating an `sodax.api.swaps` integration without it is
 a monetization bug, not a stylistic one.
 
+`address` must be a real Sonic address the integrator controls. Nothing validates it — the fee receiver
+is forwarded verbatim — so a placeholder or the zero address loses exactly as much money as omitting the
+field, and is harder to catch in review because the request looks complete. Ask for the receiver; never
+invent one.
+
 Send the same value to the quote and the intent so the quoted output matches what the intent locks in.
 Use `amount` (decimal string, smallest unit) for a flat fee instead of `percentage`; if both are present
 the backend uses `amount`. Your own `data` does not clobber the fee envelope (the API builds
 `intent.data`), and the approval amount is unchanged — still the full input.
+
+`getQuote` and `createIntent` are the only calls that read the field. `checkAllowance` / `approve`
+inherit it from the shared `CreateIntentParamsV2` body and ignore it, sizing the allowance off the full
+`inputAmount` — passing it there is harmless, omitting it there costs nothing.
+
+Scope this to `/swaps/*`. The bridge wire path is the opposite: on `CreateBridgeIntentParamsV2` and
+`POST /bridge/fee`, `partnerFee` is a per-request override that falls back to the backend's configured
+`bridgePartnerFee`, so omitting it there still charges the configured fee.
 
 ## Common call shapes
 

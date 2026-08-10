@@ -74,7 +74,9 @@ Two things that trip people up:
 - Passing `data: '0x'` alongside `partnerFee` does **not** clobber the fee — the API
   builds `intent.data` itself and your `data` does not overwrite the fee envelope.
 - The approval amount is unchanged (still the full input), so adding the fee never
-  breaks an existing allowance step.
+  breaks an existing allowance step. `checkAllowance` / `approve` accept `partnerFee`
+  only because they share the body — neither reads it, so `getQuote` and
+  `createIntent` are the two calls that have to carry it.
 
 Use `amount` (a decimal string in the input token's smallest unit) instead of
 `percentage` for a flat fee; if both are present the backend uses `amount`.

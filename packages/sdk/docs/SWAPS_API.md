@@ -23,10 +23,12 @@ sodax.api.swaps.getTokens(config?): Promise<Result<GetSwapTokensResponseV2>>;
 sodax.api.swaps.getTokensByChain(chainKey, config?): Promise<Result<GetSwapTokensByChainResponseV2>>;
 
 // Quote · deadline
+// getQuote: body.partnerFee has NO default — omit it and the swap earns nothing. See "partnerFee" below.
 sodax.api.swaps.getQuote(body: QuoteRequestV2, query?: QuoteQueryV2, config?): Promise<Result<QuoteResponseV2>>;
 sodax.api.swaps.getDeadline(query?: DeadlineQueryV2, config?): Promise<Result<DeadlineResponseV2>>;
 
-// Allowance · approve · create intent — all three share the CreateIntentParamsV2 body
+// Allowance · approve · create intent — all three share the CreateIntentParamsV2 body,
+// but only createIntent reads its partnerFee (again: no default). See "partnerFee" below.
 sodax.api.swaps.checkAllowance(body: CreateIntentParamsV2, config?): Promise<Result<AllowanceCheckResponseV2>>;
 sodax.api.swaps.approve(body: CreateIntentParamsV2, config?): Promise<Result<ApproveResponseV2>>;
 sodax.api.swaps.createIntent(body: CreateIntentParamsV2, config?): Promise<Result<CreateIntentResponseV2>>;
@@ -75,6 +77,8 @@ await sodax.api.swaps.createIntent({ ...intentBody, partnerFee }); // inputAmoun
 Use `amount` (decimal string, input token's smallest unit) for a flat fee instead of `percentage`; if
 both are present the backend uses `amount`. Passing your own `data` does not clobber the fee envelope
 (the API builds `intent.data`), and the approval amount is unaffected — it is still the full input.
+`checkAllowance` and `approve` inherit `partnerFee` from the shared `CreateIntentParamsV2` body but
+never read it, so `getQuote` and `createIntent` are the only two calls that have to carry it.
 
 See [MONETIZE_SDK.md](MONETIZE_SDK.md) for the orchestrator path and fee claiming.
 
