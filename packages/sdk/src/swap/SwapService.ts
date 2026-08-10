@@ -204,7 +204,6 @@ export class SwapService {
 
   // swap config
   readonly solver: SolverConfig;
-  readonly partnerFee: PartnerFee | undefined;
   readonly relayerApiEndpoint: HttpUrl;
 
   // backend swaps-API client
@@ -212,15 +211,25 @@ export class SwapService {
 
   /**
    * Effective 2-step submit-tx flow (`swaps.useBackendSubmitTx`, default on). Read live off
-   * `ConfigService` like `swapPartnerFee`, so the config object and the behavior can never disagree.
+   * `ConfigService`, like {@link SwapService.partnerFee}, so the config object and the behavior can
+   * never disagree.
    */
   get useBackendSubmitTx(): boolean {
     return this.config.swapUseBackendSubmitTx;
   }
 
+  /**
+   * Effective swap partner fee (`swaps.partnerFee`, else the global `fee`). Read live off
+   * `ConfigService` rather than snapshotted in the constructor, so it cannot diverge from
+   * `config.swapPartnerFee` if the config object is ever replaced (see `ConfigService.initialize`).
+   * `BridgeService` and `LeverageYieldService` resolve their fees the same way.
+   */
+  get partnerFee(): PartnerFee | undefined {
+    return this.config.swapPartnerFee;
+  }
+
   public constructor({ config, hubProvider, spoke, backendApi }: SwapServiceConstructorParams) {
     this.solver = config.solver;
-    this.partnerFee = config.swapPartnerFee;
     this.relayerApiEndpoint = config.relay.relayerApiEndpoint;
     this.config = config;
     this.hubProvider = hubProvider;
@@ -907,8 +916,8 @@ export class SwapService {
     _params: SwapActionParams<K, Raw>,
   ): Promise<Result<CreateIntentResult<K, Raw>, SwapCreateIntentError>> {
     const { params, skipSimulation, extras } = _params;
-    // Per-action `extras.partnerFee` is primary; `this.partnerFee` (constructor snapshot of the effective
-    // swap fee, `swaps.partnerFee ?? fee`) is the fallback default. undefined = no fee.
+    // Per-action `extras.partnerFee` is primary; `this.partnerFee` (the effective swap fee,
+    // `swaps.partnerFee ?? fee`, read live off config) is the fallback default. undefined = no fee.
     const partnerFee = extras?.partnerFee ?? this.partnerFee;
     const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
 
