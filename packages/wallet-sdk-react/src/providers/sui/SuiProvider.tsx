@@ -5,7 +5,7 @@ import { getFullnodeUrl } from '@mysten/sui/client';
 import type { SuiTypeConfig } from '@/types/config.js';
 import { SuiHydrator } from './SuiHydrator.js';
 import { SuiActions } from './SuiActions.js';
-import { SUI_DEFAULT_AUTO_CONNECT, SUI_DEFAULT_NETWORK } from '@/constants.js';
+import { SUI_DEFAULT_AUTO_CONNECT, SUI_DEFAULT_NETWORK, SUI_DEFAULT_RPC_URLS } from '@/constants.js';
 
 type SuiProviderProps = {
   children: ReactNode;
@@ -16,7 +16,8 @@ type SuiProviderProps = {
 export const SuiProvider = ({ children, config }: SuiProviderProps) => {
   const autoConnect = config.autoConnect ?? SUI_DEFAULT_AUTO_CONNECT;
   const network = config.network ?? SUI_DEFAULT_NETWORK;
-  const rpcUrl = config.chains?.[ChainKeys.SUI_MAINNET]?.rpcUrl ?? getFullnodeUrl(network);
+  const rpcUrl =
+    config.chains?.[ChainKeys.SUI_MAINNET]?.rpcUrl ?? SUI_DEFAULT_RPC_URLS[network] ?? getFullnodeUrl(network);
 
   return (
     <SuiClientProvider networks={{ [network]: { url: rpcUrl } }} defaultNetwork={network}>

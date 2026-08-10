@@ -42,6 +42,14 @@ const abortFetchImpl = (_url: string, init: { signal: AbortSignal }) =>
       reject(err);
     });
   });
+const stallUntilAbort = <T>(signal: AbortSignal | null | undefined): Promise<T> =>
+  new Promise((_resolve, reject) => {
+    signal?.addEventListener('abort', () => {
+      const err = new Error('The operation was aborted');
+      err.name = 'AbortError';
+      reject(err);
+    });
+  });
 /** Resolve to the thrown error instead of rejecting, so it can be inspected. */
 const caught = (p: Promise<unknown>): Promise<unknown> => p.then(v => v).catch(e => e);
 /** The `init` object passed to the most recent fetch call. */
@@ -214,6 +222,21 @@ describe('makeRequest success', () => {
     const result = await run<typeof body>('/foo', { method: 'GET', baseURL: BASE });
     expect(result).toEqual(body);
   });
+
+  it('times out when response headers arrive but the success body stalls', async () => {
+    mockFetch.mockImplementationOnce((_url: string, init: RequestInit) =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => stallUntilAbort(init.signal),
+      }),
+    );
+
+    const err = (await caught(run('/foo', { method: 'GET', baseURL: BASE, timeout: 5 }))) as Error;
+
+    expect(err.message).toBe('REQUEST_TIMEOUT');
+    expect((err.cause as Error).message).toBe('Request timeout after 5ms');
+  });
 });
 
 // =========================================================================
@@ -234,6 +257,21 @@ describe('makeRequest error handling', () => {
     const err = (await caught(run('/foo', { method: 'GET', baseURL: BASE, timeout: 5 }))) as Error;
     expect(err.message).toBe('REQUEST_TIMEOUT');
     expect((err.cause as Error).message).toMatch(/Request timeout after 5ms/);
+  });
+
+  it('times out when error response headers arrive but the error body stalls', async () => {
+    mockFetch.mockImplementationOnce((_url: string, init: RequestInit) =>
+      Promise.resolve({
+        ok: false,
+        status: 503,
+        text: () => stallUntilAbort(init.signal),
+      }),
+    );
+
+    const err = (await caught(run('/foo', { method: 'GET', baseURL: BASE, timeout: 5 }))) as Error;
+
+    expect(err.message).toBe('REQUEST_TIMEOUT');
+    expect((err.cause as Error).message).toBe('Request timeout after 5ms');
   });
 
   it('re-throws a non-abort Error verbatim (e.g. a network failure)', async () => {

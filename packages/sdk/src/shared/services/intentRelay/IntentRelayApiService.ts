@@ -8,6 +8,7 @@ import {
   getIntentRelayChainId,
 } from '@sodax/types';
 import { invariant } from '../../utils/tiny-invariant.js';
+import { resolveTimeoutMs } from '../../utils/resolveTimeoutMs.js';
 import { retry } from '../../utils/shared-utils.js';
 import type {
   RelayAction,
@@ -149,11 +150,20 @@ export type RelayAndWaitParams = {
 const RELAY_REQUEST_TIMEOUT_MS = 15_000;
 
 /**
- * Minimum `timeout` a feature's client-side relay fallback passes to {@link relayTxAndWaitPacket} when
- * its shared budget is spent. `relayTxAndWaitPacket` submits the tx to the relay BEFORE `timeout`
- * bounds anything (only the packet wait is bounded), so a zero/negative remainder must never skip the
- * call: the spoke deposit has already landed on chain and would otherwise sit unrelayed. Re-relay is
- * idempotent, so spending this floor is always safe.
+ * Minimum `timeout` a feature's client-side relay path passes to {@link relayTxAndWaitPacket}, applied
+ * as `Math.max(timeout, RELAY_FALLBACK_FLOOR_MS)` over the caller's own `timeout` — NOT over a remainder.
+ * The relay wait is a per-attempt budget that starts when this call does; nothing the caller spent
+ * earlier (a backend submit-tx attempt, an on-chain verification) is subtracted from it.
+ *
+ * The floor exists because `relayTxAndWaitPacket` submits the tx to the relay BEFORE `timeout` bounds
+ * anything (only the packet wait is bounded), so a caller passing 0 or a negative `timeout` must not
+ * cause the call to be skipped: the spoke tx has already landed on chain and would otherwise sit
+ * unrelayed. Re-relay is idempotent, so spending this floor is always safe.
+ *
+ * Do not reintroduce a `deadline - Date.now()` form here. Deriving the relay budget from elapsed time is
+ * what let a stalled backend attempt or a slow source-chain confirmation shrink the wait to this floor
+ * and fail chains whose relay legitimately needs longer — see `docs/SWAPS.md` § How `timeout` bounds
+ * each attempt.
  */
 export const RELAY_FALLBACK_FLOOR_MS = 5_000;
 
@@ -393,7 +403,10 @@ async function pollForExecutedPacket(payload: WaitUntilIntentExecutedPayload, de
 
 export async function waitUntilIntentExecuted(payload: WaitUntilIntentExecutedPayload): Promise<Result<PacketData>> {
   try {
-    const timeout = payload.timeout ?? DEFAULT_RELAY_TX_TIMEOUT;
+    // Resolved, not just defaulted: `??` lets a NaN through, and `while (… < NaN)` is false on the
+    // first check — an instant RELAY_TIMEOUT on a tx already broadcast. This is the single loop every
+    // feature's relay wait funnels into, so guarding it here covers every caller.
+    const timeout = resolveTimeoutMs(payload.timeout, DEFAULT_RELAY_TX_TIMEOUT);
     const startTime = Date.now();
     // End-to-end budget for this poll: bounds every fetch, retry back-off, and inter-poll sleep so
     // the call never overruns `timeout`. Submit is separate (single round-trip, not covered here).
@@ -474,7 +487,10 @@ export async function waitUntilIntentExecuted(payload: WaitUntilIntentExecutedPa
  */
 export async function relayTxAndWaitPacket(params: RelayAndWaitParams): Promise<Result<PacketData>> {
   try {
-    const { srcTxHash, data, chainKey, relayerApiEndpoint, timeout = DEFAULT_RELAY_TX_TIMEOUT, pollTxHash } = params;
+    const { srcTxHash, data, chainKey, relayerApiEndpoint, pollTxHash } = params;
+    // A destructuring default fires only on `undefined`, so it would pass a NaN straight through to
+    // the packet wait. Same guard as {@link waitUntilIntentExecuted}, which this also feeds.
+    const timeout = resolveTimeoutMs(params.timeout, DEFAULT_RELAY_TX_TIMEOUT);
     const intentRelayChainId = getIntentRelayChainId(chainKey).toString();
 
     const isSplitTxChain = isSolanaChainKeyType(chainKey) || isBitcoinChainKeyType(chainKey);

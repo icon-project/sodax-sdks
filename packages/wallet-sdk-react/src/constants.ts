@@ -10,6 +10,16 @@ export const STACKS_DEFAULT_NETWORK = 'mainnet' as const;
 // ─── Sui ────────────────────────────────────────────────────────────────────
 export const SUI_DEFAULT_NETWORK = 'mainnet' as const;
 export const SUI_DEFAULT_AUTO_CONNECT = true;
+/**
+ * Default JSON-RPC endpoint per Sui network. Mysten's own fullnodes
+ * (`getFullnodeUrl`) stopped serving JSON-RPC in July 2026 and answer every
+ * method with `-32601`, so they cannot be used as defaults. No devnet entry:
+ * every public devnet endpoint is JSON-RPC-disabled too.
+ */
+export const SUI_DEFAULT_RPC_URLS: Partial<Record<'mainnet' | 'testnet' | 'devnet', string>> = {
+  mainnet: 'https://sui-rpc.publicnode.com',
+  testnet: 'https://sui-testnet-rpc.publicnode.com',
+};
 
 // ─── EVM ────────────────────────────────────────────────────────────────────
 export const EVM_DEFAULT_RECONNECT_ON_MOUNT = false;
