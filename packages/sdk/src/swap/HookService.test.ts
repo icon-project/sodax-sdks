@@ -68,14 +68,18 @@ describe('HookService.resolveDeliveryHook', () => {
     ).toThrow();
   });
 
-  // FlintDepositHook is not deployed yet, so it is deliberately absent from the registry. Resolving
-  // it must throw rather than resolve to a placeholder address that would swallow real intent output.
-  // When the hook is deployed and registered, replace this with the positive resolution test.
-  it('throws for Flint until the hook is registered on Ethereum', () => {
-    expect(getSpokeHook(ChainKeys.ETHEREUM_MAINNET, HookKind.FLINT_DEPOSIT)).toBeUndefined();
-    expect(() =>
-      HookService.resolveDeliveryHook(ChainKeys.ETHEREUM_MAINNET, { kind: HookKind.FLINT_DEPOSIT }, HC_RECIPIENT),
-    ).toThrow();
+  it('resolves the Flint hook on Ethereum to the deployed FlintDepositHook', () => {
+    const hook = getSpokeHook(ChainKeys.ETHEREUM_MAINNET, HookKind.FLINT_DEPOSIT);
+    expect(hook?.address).toBe('0xDf376dE34e9f1474A025Dfe411b7EB5541793C5d');
+
+    const { dstAddress, deliveryData } = HookService.resolveDeliveryHook(
+      ChainKeys.ETHEREUM_MAINNET,
+      { kind: HookKind.FLINT_DEPOSIT },
+      HC_RECIPIENT,
+    );
+
+    expect(dstAddress).toBe(hook?.address);
+    expect(deliveryData).toBe(HookService.encodeDeliveryData({ kind: HookKind.FLINT_DEPOSIT }, HC_RECIPIENT));
   });
 });
 
