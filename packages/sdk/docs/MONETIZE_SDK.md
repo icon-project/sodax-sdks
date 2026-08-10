@@ -70,6 +70,15 @@ no `partnerFee` of its own falls back to the global `fee`.
 
 The swap feature supports a per-action fee override that beats the configured `swaps.partnerFee` (per-feature override, else global). When omitted, the configured fee applies. This is what lets a backend construct swap intents on behalf of partners whose fee differs per request.
 
+Precedence is the same for every feature that accepts an override: **per-action fee → feature fee → global `fee` → no fee.**
+
+Two consequences worth knowing:
+
+- **An override of `undefined` is not "no fee" — it falls back to the configured fee.** `partnerFee: undefined` and omitting `partnerFee` behave identically, so a lookup that misses (`partnerFee: feesByPartner[id]`) charges the configured fee rather than nothing. If you need a specific request to charge nothing while a fee is configured, pass a zero fee explicitly: `{ address, percentage: 0 }`.
+- **To read the fee without placing an order,** use `sodax.swaps.getPartnerFee(amount)` (or `sodax.bridge.getFee(amount)`) rather than quoting with a zero fee — quotes already return the net amount, so they cannot tell you the fee that was deducted.
+
+Money market is the exception: it has no per-action override, so every money-market flow charges the configured `moneyMarket.partnerFee` (else the global `fee`).
+
 ### Quote request
 
 `SwapService.getQuote()` deducts the partner fee from the `amount` before forwarding to the solver, so `quoted_amount` reflects the net output. No fee field appears in the request payload. Pass an optional `partnerFee` second argument to match a per-action override used on `createIntent` / `swap`; omit it to use the configured swap fee.
@@ -144,8 +153,11 @@ ERC20s and both show up in `sodax.partners.feeClaim`.
 
 Quote through `sodax.leverageYield.getQuote()`, not `sodax.swaps.getQuote()`: it deducts the same
 effective leverage-yield fee the intent will charge, so the quote and the intent agree. Quoting a
-vault flow through the swap service deducts the swap fee instead, and its `partnerFee` argument
-cannot express "no fee" — an explicit `undefined` falls back to the configured swap fee.
+vault flow through the swap service deducts the swap fee instead. You *can* make the two agree by
+passing the leverage-yield fee to `swaps.getQuote` explicitly — using a zero fee
+(`{ address, percentage: 0 }`) when that effective fee is `undefined`, because an explicit
+`undefined` falls back to the configured swap fee — but `leverageYield.getQuote()` resolves it for
+you and is the canonical path.
 
 **Pass the same `partnerFee` to the quote and to the deposit.** The fee is deducted from the input
 before the swap, so a quote taken with a different fee is sized on a different net input. If the

@@ -10,6 +10,7 @@ import {
   isBitcoinChainKeyType,
   isBitcoinWalletProviderType,
   isPartnerFeeAmount,
+  isPartnerFeePercentage,
   isUndefinedOrValidWalletProviderForChainKey,
   relayTxAndWaitPacket,
   retry,
@@ -17,7 +18,7 @@ import {
   type IntentDeliveryInfo,
 } from '../shared/index.js';
 import type { HubProvider } from '../shared/types/types.js';
-import { isBitcoinChainKey } from '@sodax/types';
+import { FEE_PERCENTAGE_SCALE, isBitcoinChainKey } from '@sodax/types';
 import type {
   Address,
   FeeAmount,
@@ -523,8 +524,10 @@ export class LeverageYieldService {
    * the effective **leverage-yield** fee, matching what {@link LeverageYieldService.createVaultIntent}
    * will charge. `sodax.swaps.getQuote` deducts the effective *swap* fee instead, so quoting a
    * vault flow through it makes the quote and the intent disagree whenever the two feature fees
-   * differ — and its `partnerFee` parameter cannot express "no fee" (an explicit `undefined`
-   * falls back to the configured swap fee), so that mismatch is not fixable at the call site.
+   * differ. Quoting a vault flow through the swap service can be made to agree — pass the same fee
+   * explicitly, using a zero fee (`{ address, percentage: 0 }`) where the effective leverage-yield
+   * fee is `undefined`, since an explicit `undefined` there falls back to the swap fee — but this
+   * method resolves it for you and is the canonical way to quote a vault flow.
    *
    * Pass the vault address as `token_dst` to quote a deposit, or as `token_src` to quote a
    * withdraw; subtract your slippage tolerance from `quoted_amount` to get `minOutputAmount`.
@@ -557,13 +560,24 @@ export class LeverageYieldService {
         ...baseCtx,
         field: 'amount',
       });
-      // The fee arithmetic below asserts that a fixed fee fits inside the amount, and the solver
-      // asserts the net amount is positive. Both are input/config problems, so assert them here as
-      // VALIDATION_FAILED instead of letting a bare invariant surface as LOOKUP_FAILED.
+      // The fee arithmetic below throws bare invariants for a malformed or oversized fee, and the
+      // solver throws for a non-positive net amount. Those are caller/config input problems, so
+      // assert them here as VALIDATION_FAILED rather than letting them surface as LOOKUP_FAILED.
       if (isPartnerFeeAmount(partnerFee)) {
         leverageYieldInvariant(
           partnerFee.amount < request.amount,
           `partnerFee amount (${partnerFee.amount}) must be less than the quote amount (${request.amount})`,
+          { ...baseCtx, field: 'partnerFee' },
+        );
+      } else if (isPartnerFeePercentage(partnerFee)) {
+        // Integer-ness matters beyond the bounds check: `calculatePercentageFeeAmount` does
+        // `BigInt(percentage)`, which throws a RangeError on a fractional value that is otherwise
+        // inside range (e.g. 0.5).
+        leverageYieldInvariant(
+          Number.isInteger(partnerFee.percentage) &&
+            partnerFee.percentage >= 0 &&
+            partnerFee.percentage <= Number(FEE_PERCENTAGE_SCALE),
+          `partnerFee percentage must be a whole number of basis points between 0 and ${FEE_PERCENTAGE_SCALE} (got ${partnerFee.percentage})`,
           { ...baseCtx, field: 'partnerFee' },
         );
       }

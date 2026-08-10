@@ -18,7 +18,7 @@ const sodax = new Sodax({ swaps: { partnerFee } });
 const sodax = new Sodax({ swaps: { partnerFee }, leverageYield: { partnerFee } });
 ```
 
-2. Re-point vault quotes from `sodax.swaps.getQuote` to the new `sodax.leverageYield.getQuote`. This is required, not optional: `swaps.getQuote` still deducts the *swap* fee, so once the two feature fees differ the quote and the intent disagree — and when the leverage-yield fee is the larger one, the `minOutputAmount` derived from that quote exceeds what the intent can deliver and the intent will not fill.
+2. Re-point vault quotes from `sodax.swaps.getQuote` to the new `sodax.leverageYield.getQuote`. Strongly recommended: `swaps.getQuote` still deducts the *swap* fee, so once the two feature fees differ the quote and the intent disagree — and when the leverage-yield fee is the larger one, the `minOutputAmount` derived from that quote exceeds what the intent can deliver and the intent will not fill. If you must keep using `swaps.getQuote`, pass the leverage-yield fee explicitly (a zero fee such as `{ address, percentage: 0 }` where it is `undefined`, since an explicit `undefined` falls back to the swap fee).
 
 ```ts
 // before — quote deducted swaps.partnerFee, which the intent no longer charges
