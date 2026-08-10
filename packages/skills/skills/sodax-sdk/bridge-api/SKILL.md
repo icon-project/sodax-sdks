@@ -1,6 +1,6 @@
 ---
 name: sodax-sdk-bridge-api
-description: 'Granular skill for the @sodax/sdk v2 Bridge API client — `sodax.api.bridge` (class BridgeApiService), a typed HTTP client for the backend Bridge API v2 (`/bridge/*`: tokens, allowance/approve, create-bridge-intent, submit-tx + status, fee/bridgeable-amount/bridgeable discovery). Every method returns Promise<Result<T>>, never throws, and validates the response. Use when the task calls the bridge backend directly (e.g. "sodax.api.bridge", "createBridgeIntent via the backend API", "submit bridge tx", "poll bridge submit-tx status", "bridge API v2", "point bridge at a custom endpoint", "bridgeOptions.useBackendSubmitTx"). For the higher-level end-to-end bridge orchestrator use the `bridge` skill instead. Skill links into the parent sodax-sdk knowledge tree.'
+description: 'Granular skill for the @sodax/sdk v2 Bridge API client — `sodax.api.bridge` (class BridgeApiService), a typed HTTP client for the backend Bridge API v2 (`/bridge/*`: tokens, allowance/approve, create-bridge-intent, submit-tx + status, fee/bridgeable-amount/bridgeable discovery). Every method returns Promise<Result<T>>, never throws, and validates the response. Use when the task calls the bridge backend directly (e.g. "sodax.api.bridge", "createBridgeIntent via the backend API", "submit bridge tx", "poll bridge submit-tx status", "bridge API v2", "point bridge at a custom endpoint", "bridge.useBackendSubmitTx"). For the higher-level end-to-end bridge orchestrator use the `bridge` skill instead. Skill links into the parent sodax-sdk knowledge tree.'
 ---
 
 # Bridge API (Core SDK granular skill)
@@ -25,7 +25,7 @@ validates the response. Errors carry `feature: 'backend'`, `context.api: 'bridge
 ## Integration workflow
 
 1. [`../integration/knowledge/ai-rules.md`](../integration/knowledge/ai-rules.md) — DO / DO NOT (read first).
-2. [`../integration/knowledge/features/bridge-api.md`](../integration/knowledge/features/bridge-api.md) — the full client: signatures, deltas vs swaps (no intent, FULL relayData envelope, 5-state tolerant status), common call shapes (create-intent, submit-tx + status), the read-only fee/bridgeable-amount/bridgeable discovery quotes, per-call overrides, `bridgeOptions.useBackendSubmitTx`.
+2. [`../integration/knowledge/features/bridge-api.md`](../integration/knowledge/features/bridge-api.md) — the full client: signatures, deltas vs swaps (no intent, FULL relayData envelope, 5-state tolerant status), common call shapes (create-intent, submit-tx + status), the read-only fee/bridgeable-amount/bridgeable discovery quotes, per-call overrides, `bridge.useBackendSubmitTx`.
 3. For the end-to-end bridge flow that wraps these calls → [`../integration/knowledge/features/bridge.md`](../integration/knowledge/features/bridge.md); for the sibling swaps client → [`../integration/knowledge/features/swaps-api.md`](../integration/knowledge/features/swaps-api.md); for the read client (`sodax.backendApi`) → [`../integration/knowledge/features/backend-api.md`](../integration/knowledge/features/backend-api.md).
 4. Errors are `Result<T, SodaxError<'EXTERNAL_API_ERROR'>>` → [`../integration/knowledge/recipes/result-and-errors.md`](../integration/knowledge/recipes/result-and-errors.md) and [`../integration/knowledge/reference/error-codes.md`](../integration/knowledge/reference/error-codes.md).
 
@@ -42,10 +42,10 @@ validates the response. Errors carry `feature: 'backend'`, `context.api: 'bridge
 ## Migration workflow (on-chain → API)
 
 There is **no v1 Bridge API** — the typed `sodax.api.bridge` client is v2-new. The relevant move is from the
-on-chain `sodax.bridge.bridge()` orchestrator to the API client (or to the orchestrator's opt-in backend
-path via `bridgeOptions.useBackendSubmitTx`):
+on-chain `sodax.bridge.bridge()` orchestrator to the API client (or to the orchestrator's default-on backend
+path via `bridge.useBackendSubmitTx`):
 
-1. [`../integration/knowledge/features/bridge.md`](../integration/knowledge/features/bridge.md) — the on-chain `BridgeService` orchestrator and the `bridgeOptions.useBackendSubmitTx` toggle that routes its spoke-deposit through this API with a client-side fallback.
+1. [`../integration/knowledge/features/bridge.md`](../integration/knowledge/features/bridge.md) — the on-chain `BridgeService` orchestrator and the `bridge.useBackendSubmitTx` toggle that routes its spoke-deposit through this API with a client-side fallback.
 2. For the v1 → v2 reshape of the on-chain bridge itself (chain-key routing, `Result<T>`, error unions) → [`../migration-v1-to-v2/knowledge/features/bridge.md`](../migration-v1-to-v2/knowledge/features/bridge.md).
 
 ## Verification

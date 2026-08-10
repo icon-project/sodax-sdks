@@ -14,6 +14,11 @@ Access: `sodax.leverageYield`. Service class: `LeverageYieldService`. Feature ta
 ## Public methods
 
 ```ts
+// Quote — solver quote sized with the effective leverage-yield fee (NOT sodax.swaps.getQuote)
+sodax.leverageYield.getQuote(payload: LeverageYieldQuoteParams): Promise<Result<SolverIntentQuoteResponse, SolverErrorResponse | LeverageYieldLookupError>>;
+//   token_dst = vault to quote a deposit, token_src = vault to quote a withdraw
+//   pass the same partnerFee here and to deposit()/withdraw()/vaultSwap(), or omit on all — never mix
+
 // Builders — assemble a LeverageYieldSwapPayload (spread into vaultSwap). Do NOT broadcast.
 sodax.leverageYield.deposit(params: LeverageYieldSwapDepositParams): Promise<Result<LeverageYieldSwapPayload, SodaxError>>;
 sodax.leverageYield.withdraw(params: LeverageYieldSwapWithdrawParams): Promise<Result<LeverageYieldSwapPayload, SodaxError>>;
@@ -76,13 +81,14 @@ type LeverageYieldSwapWithdrawParams = {
   recipient?: string;         // defaults to srcAddress
   deadline?: bigint;
   solver?: Address;
+  partnerFee?: PartnerFee;    // per-intent override; deducted from inputAmount, i.e. in lsoda* shares
 };
 
 // The execute-mode wrapper (createVaultIntent / vaultSwap). The two vault execution modifiers
 // live HERE, never on the generic swap surface:
 type VaultSwapActionParams<K, Raw> = SpokeExecActionParams<K, Raw, CreateIntentParams<K>> & {
   hubWalletSwap?: boolean;  // withdraw: inputToken is hub-wallet lsoda*, authorise via Connection.sendMessage
-  partnerFee?: PartnerFee;  // beats config.swaps.partnerFee for this intent only
+  partnerFee?: PartnerFee;  // beats config.leverageYield.partnerFee for this intent only
 };
 ```
 
@@ -97,7 +103,7 @@ const built = await sodax.leverageYield.deposit({
   srcAddress: '0x…',
   inputToken: '0x…weETHonArbitrum',
   inputAmount: parseUnits('1', 18),
-  minOutputAmount: 0n,                 // quote via sodax.swaps.getQuote (token_dst = vault), then apply slippage
+  minOutputAmount: 0n,                 // quote via sodax.leverageYield.getQuote (token_dst = vault), then apply slippage
   partnerFee: { address: '0x…', percentage: 100 }, // optional 1% per-intent fee
 });
 if (!built.ok) return;
@@ -117,7 +123,7 @@ const built = await sodax.leverageYield.withdraw({
   dstChainKey: ChainKeys.ARBITRUM_MAINNET, // token delivered here
   outputToken: '0x…weETHonArbitrum',
   inputAmount: shareBalance,               // lsoda* to burn
-  minOutputAmount: 0n,                     // quote via sodax.swaps.getQuote (token_src = vault)
+  minOutputAmount: 0n,                     // quote via sodax.leverageYield.getQuote (token_src = vault)
 });
 if (!built.ok) return;
 // built.value.hubWalletSwap === true — no spoke approval; the hub wallet authorises the spend
@@ -138,6 +144,7 @@ await sodax.leverageYield.notifySolver({ intent_tx_hash: hubIntentTxHash });
 
 | Method | Success type |
 |---|---|
+| `getQuote` | `SolverIntentQuoteResponse` (`{ quoted_amount }`) — error is `SolverErrorResponse \| LeverageYieldLookupError`, so discriminate with `isSodaxError(error)` before reading `.code` |
 | `deposit`, `withdraw` | `LeverageYieldSwapPayload` (`{ params: CreateIntentParams; hubWalletSwap?: true; partnerFee? }`) |
 | `createVaultIntent` | `CreateVaultIntentResult<K, Raw>` (`{ tx, intent & feeAmount, relayData }`) |
 | `vaultSwap` | `VaultSwapResponse` (`{ solverExecutionResponse, intent, intentDeliveryInfo }`) |
@@ -164,6 +171,7 @@ approval can take two transactions" in [`architecture.md`](../architecture.md).
 
 | Method | Narrow code union |
 |---|---|
+| `getQuote` | `VALIDATION_FAILED` (non-positive `amount`, or a partner fee that leaves nothing to quote) `\| LOOKUP_FAILED` (unsupported token — solver payload could not be assembled) `\| UNKNOWN`, **or** a non-SodaxError `SolverErrorResponse` (`{ detail: { code, message } }`) straight from the solver. Guard with `isSodaxError(error)`. Context uses `tokenSrcChainKey` / `tokenDstChainKey`, not `srcChainKey` / `dstChainKey` — a withdraw quote's `token_src` is the hub, not the signing chain |
 | `deposit`, `withdraw` | `VALIDATION_FAILED \| INTENT_CREATION_FAILED \| LOOKUP_FAILED \| UNKNOWN` (create-intent subset + `LOOKUP_FAILED` with `method: 'resolveDeadline'` when the default-deadline hub-block read fails) |
 | `createVaultIntent` | `VALIDATION_FAILED \| INTENT_CREATION_FAILED \| UNKNOWN` (create-intent subset) |
 | `vaultSwap` | `VALIDATION_FAILED \| INTENT_CREATION_FAILED \| TX_VERIFICATION_FAILED \| TX_SUBMIT_FAILED \| RELAY_TIMEOUT \| RELAY_FAILED \| EXECUTION_FAILED \| EXTERNAL_API_ERROR \| UNKNOWN` |

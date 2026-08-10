@@ -378,6 +378,36 @@ describe('waitUntilIntentExecuted', () => {
     apiUrl: API_URL,
   };
 
+  describe('non-finite caller timeout', () => {
+    // `payload.timeout ?? DEFAULT` catches only `undefined`, so a NaN used to reach
+    // `while (Date.now() - startTime < NaN)` — false on its first evaluation. The wait then returned
+    // RELAY_TIMEOUT within milliseconds, having polled zero times, on a tx already broadcast on-chain.
+    // This is the funnel every feature's relay wait passes through (money market, staking, migration,
+    // cancelIntent, and the swap/bridge fallbacks), so the guard belongs here rather than per caller.
+    it.each([
+      { label: 'NaN', value: Number.NaN },
+      { label: 'Infinity', value: Number.POSITIVE_INFINITY },
+    ])('polls normally on a $label timeout instead of giving up instantly', async ({ value }) => {
+      const packet = buildPacket({ status: 'executed' });
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse({ success: true, data: [packet] } satisfies GetTransactionPacketsResponse),
+      );
+
+      const result = await waitUntilIntentExecuted({ ...baseInput, timeout: value });
+
+      expect(result).toEqual({ ok: true, value: packet });
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('still honours an explicit zero timeout as no budget', async () => {
+      // 0 is finite and deliberate — it must keep meaning "do not wait", not fall back to the default.
+      const result = await waitUntilIntentExecuted({ ...baseInput, timeout: 0 });
+
+      expect(result.ok).toBe(false);
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+  });
+
   describe('happy paths', () => {
     it('returns ok:true with the executed packet on the first poll', async () => {
       const packet = buildPacket({ status: 'executed' });

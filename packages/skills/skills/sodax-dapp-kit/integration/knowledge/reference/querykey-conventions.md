@@ -204,6 +204,7 @@ Typed wrappers over `sodax.api.bridge.*` (one per Bridge API v2 endpoint), all k
 
 | Key | Hook |
 |---|---|
+| `['leverageYield', 'quote', payload]` | `useLeverageYieldQuote` (payload object with `amount` and any `partnerFee.amount` stringified — React Query hashes keys with `JSON.stringify`, which throws on bigint) |
 | `['leverageYield', 'effectiveApr', vault]` | `useLeverageYieldEffectiveApr` |
 | `['leverageYield', 'position', vault]` | `useLeverageYieldPosition` |
 | `['leverageYield', 'totalAssets', vault]` | `useLeverageYieldTotalAssets` |

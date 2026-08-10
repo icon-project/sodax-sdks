@@ -39,7 +39,9 @@ import {
 import { SolverApiService } from './SolverApiService.js';
 import { EvmSolverService } from './EvmSolverService.js';
 import type { BackendApiService } from '../backendApi/index.js';
-import { pollBackendSubmitTx } from '../backendApi/pollBackendSubmitTx.js';
+import { runBackendSubmitTx } from '../backendApi/runBackendSubmitTx.js';
+import { createSubmitTxAttempt, type SubmitTxAttempt } from '../backendApi/submitTxAttempt.js';
+import { resolveTimeoutMs } from '../shared/utils/resolveTimeoutMs.js';
 import type { ApprovalTxs } from '../shared/types/spoke-types.js';
 import { selectSolvedIntentPacket } from './selectSolvedIntentPacket.js';
 import { SodaxError } from '../errors/SodaxError.js';
@@ -176,8 +178,6 @@ export type SwapServiceConstructorParams = {
   spoke: SpokeService;
   hubProvider: HubProvider;
   backendApi: BackendApiService;
-  /** Opt-in backend submit-tx 2-step flow (from `SodaxOptions.swapsOptions.useBackendSubmitTx`). Default off. */
-  useBackendSubmitTx?: boolean;
 };
 
 /**
@@ -204,22 +204,37 @@ export class SwapService {
 
   // swap config
   readonly solver: SolverConfig;
-  readonly partnerFee: PartnerFee | undefined;
   readonly relayerApiEndpoint: HttpUrl;
 
-  // backend swaps-API client + opt-in 2-step submit-tx flag
+  // backend swaps-API client
   readonly backendApi: BackendApiService;
-  readonly useBackendSubmitTx: boolean;
 
-  public constructor({ config, hubProvider, spoke, backendApi, useBackendSubmitTx }: SwapServiceConstructorParams) {
+  /**
+   * Effective 2-step submit-tx flow (`swaps.useBackendSubmitTx`, default on). Read live off
+   * `ConfigService`, like {@link SwapService.partnerFee}, so the config object and the behavior can
+   * never disagree.
+   */
+  get useBackendSubmitTx(): boolean {
+    return this.config.swapUseBackendSubmitTx;
+  }
+
+  /**
+   * Effective swap partner fee (`swaps.partnerFee`, else the global `fee`). Read live off
+   * `ConfigService` rather than snapshotted in the constructor, so it cannot diverge from
+   * `config.swapPartnerFee` if the config object is ever replaced (see `ConfigService.initialize`).
+   * `BridgeService` and `LeverageYieldService` resolve their fees the same way.
+   */
+  get partnerFee(): PartnerFee | undefined {
+    return this.config.swapPartnerFee;
+  }
+
+  public constructor({ config, hubProvider, spoke, backendApi }: SwapServiceConstructorParams) {
     this.solver = config.solver;
-    this.partnerFee = config.swapPartnerFee;
     this.relayerApiEndpoint = config.relay.relayerApiEndpoint;
     this.config = config;
     this.hubProvider = hubProvider;
     this.spoke = spoke;
     this.backendApi = backendApi;
-    this.useBackendSubmitTx = useBackendSubmitTx ?? false;
   }
 
   /**
@@ -386,21 +401,26 @@ export class SwapService {
    * Executes a full end-to-end cross-chain swap.
    *
    * Orchestrates the complete swap lifecycle. `createIntent` first submits the intent transaction on
-   * the source spoke chain; completion then runs via one of two paths, both bounded by a single
-   * shared `timeout` budget:
+   * the source spoke chain; completion then runs via one of two paths, each bounded by its own `timeout`
+   * budget:
    *
-   * - **Client-side (default), {@link fallbackSwapSteps}:** verifies the spoke tx landed on-chain,
-   *   relays it to the hub (Sonic) and waits for the packet — skipped when `srcChainKey` is the hub,
-   *   where the spoke tx already is the hub tx — then calls `postExecution` to notify the solver,
-   *   triggering it to fill the intent.
-   * - **Backend 2-step (opt-in via `swapsOptions.useBackendSubmitTx`), {@link submitTx}:** hands the
+   * - **Client-side (opt-out via `swaps.useBackendSubmitTx: false`), {@link fallbackSwapSteps}:** verifies
+   *   the spoke tx landed on-chain, relays it to the hub (Sonic) and waits for the packet — skipped when
+   *   `srcChainKey` is the hub, where the spoke tx already is the hub tx — then calls `postExecution` to
+   *   notify the solver, triggering it to fill the intent.
+   * - **Backend 2-step (default via `swaps.useBackendSubmitTx`), {@link submitTx}:** hands the
    *   broadcast tx to the swaps API, which verifies, relays and post-executes server-side, then polls
    *   for completion. On ANY non-success it transparently falls back to the client-side path above —
    *   safe because re-relaying / re-posting an already-processed swap is idempotent (no double-fill).
    *
    * @param _params - Swap action params including intent parameters, wallet provider, and an optional
-   *   `timeout` — the single shared budget for the whole completion flow (relay/poll plus any
-   *   fallback), so total wall-clock never exceeds it.
+   *   `timeout` — a PER-ATTEMPT budget, not an end-to-end one. The backend attempt (submit POST + status
+   *   poll) gets it, and if that attempt does not complete the client-side relay wait gets a fresh one
+   *   starting after verification, so neither a stalled backend nor a slow source-chain confirmation can
+   *   shorten it. Worst-case wall-clock is `createIntent + timeout + verification +
+   *   max(timeout, RELAY_FALLBACK_FLOOR_MS) + postExecution`, where verification is bounded by the source
+   *   chain's `pollingConfig.maxTimeoutMs` and the first and last terms are not bounded by `timeout` at
+   *   all. See `docs/SWAPS.md` § How `timeout` bounds each attempt.
    * @returns A `Result<SwapResponse, SwapError>`. On success:
    *   - `solverExecutionResponse` — solver acknowledgement (`{ answer: 'OK', intent_hash }`).
    *   - `intent` — the on-chain intent object that was created.
@@ -440,15 +460,18 @@ export class SwapService {
 
           const created = createIntentResult.value;
 
-          // One shared budget for the rest of the swap: the backend submit-tx poll and the client-side
-          // relay fallback split this single deadline, so total wall-clock never exceeds one `timeout`.
-          const deadline = Date.now() + (_params.timeout ?? DEFAULT_RELAY_TX_TIMEOUT);
+          // `timeout` is a PER-ATTEMPT budget, not an end-to-end one: the backend attempt gets it, and if
+          // that attempt fails the client-side relay fallback gets a fresh one. Sharing a single deadline
+          // would leave the fallback whatever the backend had not spent, which is how a relay that needs
+          // longer than the leftovers ends in RELAY_TIMEOUT. Resolved (not just defaulted) so a non-finite
+          // caller value cannot reach either budget — see `resolveTimeoutMs`.
+          const timeoutMs = resolveTimeoutMs(_params.timeout, DEFAULT_RELAY_TX_TIMEOUT);
 
-          // Opt-in backend 2-step flow: hand the broadcast intent tx to the swaps API, which relays +
+          // Backend 2-step flow (default on): hand the broadcast intent tx to the swaps API, which relays +
           // post-executes server-side. On ANY non-success we fall back to the client-side relay so the
           // swap still completes — safe because re-relay / re-post are idempotent (see `submitTx`).
           if (this.useBackendSubmitTx) {
-            const submitted = await this.submitTx(_params, created, deadline);
+            const submitted = await this.submitTx(_params, created, createSubmitTxAttempt(timeoutMs));
             if (submitted.ok) return submitted;
             this.config.logger.warn(
               '[swap] backend submit-tx did not complete; falling back to the client-side relay',
@@ -458,7 +481,7 @@ export class SwapService {
             );
           }
 
-          return this.fallbackSwapSteps(_params, created, deadline);
+          return this.fallbackSwapSteps(_params, created, timeoutMs);
         } catch (error) {
           // Narrow guard: preserve SodaxErrors whose code is in the swap union; wrap unknown
           // codes (e.g. an accidental cross-feature code) as UNKNOWN.
@@ -488,15 +511,19 @@ export class SwapService {
   }
 
   /**
-   * Client-side swap completion (the default path): relay the broadcast intent tx to the hub — or
-   * use it directly when the source IS the hub — then notify the solver via post-execution and
-   * build the {@link SwapResponse}. Extracted verbatim from `swap()` so the opt-in backend 2-step
-   * path ({@link submitTx}) can fall back to it on any non-success.
+   * Client-side swap completion (opt-out via `swaps.useBackendSubmitTx: false`): verify the broadcast intent
+   * tx landed, then relay it to the hub — or use it directly when the source IS the hub — then notify the
+   * solver via post-execution and build the {@link SwapResponse}. Extracted verbatim from `swap()` so the
+   * backend 2-step path ({@link submitTx}) can fall back to it on any non-success.
+   *
+   * Verification belongs to THIS path only: the backend runs its own, so verifying before handing over
+   * would delay every backend success by the source chain's confirmation wait and could fail a swap the
+   * backend would have completed.
    */
   private async fallbackSwapSteps<K extends SpokeChainKey>(
     _params: SwapActionParams<K, false>,
     created: CreateIntentResult<K, false>,
-    deadline: number,
+    timeoutMs: number,
   ): Promise<Result<SwapResponse, SwapError>> {
     const { params } = _params;
     const srcChainKey = params.srcChainKey;
@@ -520,9 +547,12 @@ export class SwapService {
         data: relayData,
         chainKey: srcChainKey,
         relayerApiEndpoint: this.relayerApiEndpoint,
-        // Remaining shared budget: ≈ full `timeout` on the flag-off path (called immediately), or
-        // the reserve `submitTx` left on the backend path. Floor keeps a stalled-backend fallback viable.
-        timeout: Math.max(deadline - Date.now(), RELAY_FALLBACK_FLOOR_MS),
+        // The caller's full `timeout`, starting HERE — after verification, and whether this runs as the
+        // only path or as the backend's fallback. Neither a stalled backend attempt nor a slow source-chain
+        // confirmation may shorten the relay wait. The floor covers a sub-floor caller `timeout`:
+        // `relayTxAndWaitPacket` SUBMITS before `timeout` bounds anything, so a zero budget would strand an
+        // already-landed tx unrelayed. Re-relay is idempotent, so spending it is safe.
+        timeout: Math.max(timeoutMs, RELAY_FALLBACK_FLOOR_MS),
       });
       if (!packet.ok) {
         return { ok: false, error: mapRelayFailure(packet.error, { feature: 'swap', action: 'swap', ...baseCtx }) };
@@ -556,7 +586,7 @@ export class SwapService {
   }
 
   /**
-   * Backend 2-step swap path (opt-in via `swapsOptions.useBackendSubmitTx`): hand the broadcast
+   * Backend 2-step swap path (default via `swaps.useBackendSubmitTx`): hand the broadcast
    * intent tx to the swaps API (`POST /swaps/submit-tx`); the backend relays + post-executes
    * server-side. Polls `getSubmitTxStatus` until `solved`, then reconstructs the same
    * {@link SwapResponse} the client-side path returns (`result.dstIntentTxHash` → delivery info,
@@ -567,39 +597,41 @@ export class SwapService {
    *
    * Falling back is safe: re-relaying / re-posting an already-processed swap is idempotent — the
    * relay dedups and returns the existing `executed` packet, and the solver re-affirms the intent
-   * (no double-fill). Verified live by `e2e-tests/e2e-relay.test.ts`. Polling stops at
-   * `deadline - reserve` so the fallback keeps a guaranteed slice of the shared `swap` budget.
+   * (no double-fill). Verified live by `e2e-tests/e2e-relay.test.ts`. It is also load-bearing rather
+   * than belt-and-braces: the backend keeps processing after this attempt gives up, so the fallback's
+   * relay can race the backend's own.
+   *
+   * The attempt itself — POST, budget clamps, status poll — is {@link runBackendSubmitTx}, shared with
+   * bridge. What is swap-specific and lives here: the request body, the `solved` terminal status, the
+   * mapping from a terminal result to a {@link SwapResponse}, and the swap error taxonomy.
+   *
+   * `attempt` bounds this attempt alone — the POST and every status request draw on it, and the
+   * client-side fallback holds a separate fresh `timeout`.
    */
   private async submitTx<K extends SpokeChainKey>(
     _params: SwapActionParams<K, false>,
     created: CreateIntentResult<K, false>,
-    deadline: number,
+    attempt: SubmitTxAttempt,
   ): Promise<Result<SwapResponse, SwapError>> {
     const { params } = _params;
     const srcChainKey = params.srcChainKey;
     const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey };
     const { tx: spokeTxHash, intent, relayData } = created;
-    const submitTxFailed = (cause: unknown): Result<SwapResponse, SwapError> => ({
-      ok: false,
-      error: executionFailed('swap', cause, { ...baseCtx, action: 'swap' }),
-    });
 
     try {
-      const submitted = await this.backendApi.swaps.submitTx({
-        txHash: spokeTxHash,
-        srcChainKey,
-        walletAddress: params.srcAddress,
-        intent,
-        relayData: relayData.payload,
-      });
-      // Backend submission rejected — wrap its error as the cause so swap() falls back.
-      if (!submitted.ok) return submitTxFailed(submitted.error);
-
-      const polled = await pollBackendSubmitTx({
-        deadline,
+      const outcome = await runBackendSubmitTx({
+        attempt,
+        api: this.backendApi.swaps,
+        body: {
+          txHash: spokeTxHash,
+          srcChainKey,
+          walletAddress: params.srcAddress,
+          intent,
+          relayData: relayData.payload,
+        },
+        statusQuery: { txHash: spokeTxHash, srcChainKey },
         // Swaps terminal success is `solved` (solver filled) — not the bridge `executed`.
         terminalStatus: 'solved',
-        getStatus: () => this.backendApi.swaps.getSubmitTxStatus({ txHash: spokeTxHash, srcChainKey }),
         onExecuted: (result): SwapResponse | undefined =>
           result?.dstIntentTxHash && result.intent_hash
             ? {
@@ -617,7 +649,11 @@ export class SwapService {
               }
             : undefined,
       });
-      return polled.ok ? { ok: true, value: polled.value } : submitTxFailed(polled.cause);
+      // Any non-success — rejected POST, terminal `failed`, spent attempt — becomes the cause swap()
+      // logs before falling back to the client-side relay.
+      return outcome.ok
+        ? { ok: true, value: outcome.value }
+        : { ok: false, error: executionFailed('swap', outcome.cause, { ...baseCtx, action: 'swap' }) };
     } catch (error) {
       return { ok: false, error: unknownFailed('swap', error, { ...baseCtx, action: 'swap' }) };
     }
@@ -880,8 +916,8 @@ export class SwapService {
     _params: SwapActionParams<K, Raw>,
   ): Promise<Result<CreateIntentResult<K, Raw>, SwapCreateIntentError>> {
     const { params, skipSimulation, extras } = _params;
-    // Per-action `extras.partnerFee` is primary; `this.partnerFee` (constructor snapshot of the effective
-    // swap fee, `swaps.partnerFee ?? fee`) is the fallback default. undefined = no fee.
+    // Per-action `extras.partnerFee` is primary; `this.partnerFee` (the effective swap fee,
+    // `swaps.partnerFee ?? fee`, read live off config) is the fallback default. undefined = no fee.
     const partnerFee = extras?.partnerFee ?? this.partnerFee;
     const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
 

@@ -84,7 +84,7 @@ import { SuiWalletProvider } from '@sodax/wallet-sdk-core';
 
 // Private-key — DERIVED FROM MNEMONIC, not a raw key
 const suiPk = new SuiWalletProvider({
-  rpcUrl: 'https://fullnode.mainnet.sui.io:443',
+  rpcUrl: 'https://sui-rpc.publicnode.com',
   mnemonics: 'word1 word2 … word12',
 });
 
