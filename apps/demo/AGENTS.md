@@ -20,7 +20,7 @@ Requires `pnpm build:packages` first if the SDK packages haven't been built.
 src/
 ├── App.tsx              # react-router routes — one route per feature
 ├── providers.tsx        # SodaxProvider + SodaxWalletProvider + QueryClientProvider stack
-├── constants.ts         # solver env configs (production / staging / dev)
+├── constants.ts         # solver env configs (production / staging)
 ├── pages/               # one folder per feature
 │   ├── solver/          # intent-based swaps
 │   ├── money-market/    # cross-chain lending/borrowing (per-chain route param)
@@ -39,7 +39,7 @@ src/
 
 - **Routing.** `App.tsx` defines routes with react-router. `/` redirects to `/solver`. Money market uses a `:chainId` route param (defaults to Arbitrum).
 - **Providers.** `providers.tsx` is the canonical stack to copy when integrating: `SodaxProvider` → `QueryClientProvider` (via `createSodaxQueryClient`) → `SodaxWalletProvider`. RPC URLs are read from `process.env.*` with public-RPC fallbacks. WalletConnect is opt-in via `VITE_WALLETCONNECT_PROJECT_ID`.
-- **Solver env switcher.** `useAppStore.solverEnvironment` picks between `productionSolverConfig` / `stagingSolverConfig` / `devSolverConfig` from `constants.ts`. The `Providers` component re-memoizes the SDK config when this changes.
+- **Solver env switcher.** `useAppStore.solverEnvironment` picks between `productionSolverConfig` / `stagingSolverConfig` from `constants.ts`. The `Providers` component re-memoizes the SDK config when this changes.
 - **UI.** Tailwind v4 + Radix primitives + shadcn-style components in `src/components/ui/`.
 - **Logos.** Chain logos come from `baseChainInfo[key].logo` (see `chainIdToChainLogo` in `constants.ts`); token logos render via `<TokenIcon symbol=… />` (`components/shared/TokenIcon.tsx`), which resolves the URL with `tokenLogo(symbol)` from the SDK and falls back to the symbol initials. Don't hardcode icon paths.
 
