@@ -122,10 +122,13 @@ To author or validate changesets and govern a release (SemVer bumps, changelogs,
 - Root guidance is for information every domain needs. Put package/app-specific architecture, patterns, commands, and pitfalls in that subtree's `AGENTS.md`.
 - Prefer broad durable patterns over volatile enumerations. When exact values matter, point agents to source files or package docs rather than copying values.
 - Validate changes to these files with `pnpm check:ai-dev-files`.
+- When a pull request changes source that an AI file describes, a read-only agent compares that guidance against the source and reports guidance the current source disproves. Missing coverage is advisory, and so is the whole check until the `AI_DRIFT_ENFORCE` repository variable is set. Label a pull request `no-ai-drift` to skip it when a finding is wrong.
 - When a mirrored doc is added, renamed, or removed, update `scripts/gitbook-sync-map.json` and `sodax-document/sync-sodax-sdks.sh` together — that script is the upstream authority, and a stale mapping breaks the sync.
 
 ## CI Shape
 
 GitHub Actions install dependencies with a frozen lockfile, lint, check circular dependencies, build packages, typecheck, validate dev AI files, validate AI consumer docs, validate mirrored doc links, build apps, run smoke checks, and run tests. When changing `packages/skills`, run `pnpm check:ai` locally; when changing a mirrored doc, run `pnpm check:doc-links`.
+
+A separate `AI Files Drift Check` workflow runs per pull request. Those deterministic gates prove AI files are structurally sound and that their code blocks compile; this one covers the prose they wrap. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to read its findings.
 
 `pnpm check:sponsoring-contract` is a **manual** gate, deliberately outside CI: it diffs the SDK's hand-authored sponsoring wire types against the backend's OpenAPI document, and CI has no sponsoring service to fetch it from. Run it whenever the sponsoring contract moves on either side, and before a release. See [`packages/sdk/AGENTS.md`](packages/sdk/AGENTS.md) for how to obtain the spec without booting a signer.
