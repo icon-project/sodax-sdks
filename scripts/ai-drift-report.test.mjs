@@ -24,6 +24,10 @@ const AI_CONTENT = [
   '| --- | --- |',
   '| Sonic | EvmWalletProvider |',
   '| Solana | SolanaWalletProvider |',
+  '',
+  '```ts',
+  'const slippage = 100;',
+  '```',
 ];
 const SOURCE_CONTENT = ['export const HOOK_KINDS = [', "  'deposit',", "  'withdraw',", "  'flint-rwa',", '];'];
 
@@ -230,6 +234,53 @@ test('names the blocking findings and the escape hatch once enforcement is on', 
 
   const advisory = renderReport({ scope, result: { findings: [] }, verdict });
   assert.match(advisory, /advisory until `AI_DRIFT_ENFORCE` is set/);
+});
+
+test('shows the claim against the source as a diff, and folds the reasoning away', t => {
+  const verdict = verify(t, [finding({ ai_quote: 'Slippage defaults to 1%' })]);
+  const report = renderReport({ scope: SCOPE, result: { findings: [] }, verdict });
+
+  assert.match(report, /^```diff$/m);
+  assert.match(report, /^- doc {3}Slippage defaults to 1%$/m);
+  assert.match(report, /^\+ code {2}'flint-rwa'$/m);
+  assert.match(report, /<details><summary>Why<\/summary>/);
+  // Counts a reviewer can read before scrolling.
+  assert.match(report, /\*\*1 contradiction\*\* · 0 gaps · 0 discarded findings/);
+});
+
+// A quote carrying a fence would close a three-backtick block early and spill the rest of the
+// comment into the page as markdown.
+test('opens the diff fence wider than any backtick run inside the quotes', t => {
+  const verdict = verify(t, [finding({ ai_quote: '```ts const slippage = 100; ```' })]);
+  const report = renderReport({ scope: SCOPE, result: { findings: [] }, verdict });
+
+  assert.equal(verdict.discarded.length, 0);
+  assert.match(report, /^````diff$/m);
+  assert.doesNotMatch(report, /^```diff$/m);
+});
+
+test('links every citation to the exact line when running in Actions', t => {
+  const verdict = verify(t, [finding()]);
+  const base = 'https://github.com/icon-project/sodax-sdks/blob/abc123';
+
+  const linked = renderReport({ scope: SCOPE, result: { findings: [] }, verdict, blobBase: base });
+  assert.match(linked, new RegExp(`\\[\`${SOURCE_FILE}:4\`\\]\\(${base}/${SOURCE_FILE}#L4\\)`));
+
+  // Locally there is no commit to link to, so the path stays plain for an editor to jump to.
+  const plain = renderReport({ scope: SCOPE, result: { findings: [] }, verdict });
+  assert.doesNotMatch(plain, /\]\(https:/);
+  assert.match(plain, /`packages\/sdk\/src\/swap\/SwapService\.ts:4`/);
+});
+
+test('folds the auditor notes away instead of burying the findings under them', t => {
+  const scope = { aiFiles: [AI_FILE], dropped: [] };
+  const report = renderReport({
+    scope,
+    result: { findings: [], notes: 'Read the whole service.' },
+    verdict: verify(t, [], scope),
+  });
+
+  assert.match(report, /<details><summary>What the auditor checked<\/summary>\n\nRead the whole service\./);
 });
 
 // The auditor can go silent three ways, and they must not be treated the same: it declines to run on

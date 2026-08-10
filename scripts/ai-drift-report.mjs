@@ -153,21 +153,57 @@ export const auditCoverage = ({ scope, result }) => {
   };
 };
 
-const quoteBlock = text => `> ${collapse(text)}`;
+// Long enough to carry the claim, short enough that the diff block does not scroll sideways. The
+// permalink beside it goes to the untruncated line, so nothing is actually lost.
+const QUOTE_DISPLAY_LIMIT = 240;
 
-const renderFinding = finding =>
-  [
-    `**\`${finding.ai_file}:${finding.ai_line}\`** — ${finding.explanation ?? 'no explanation given'}`,
+const shorten = text => {
+  const flat = collapse(text);
+  return flat.length > QUOTE_DISPLAY_LIMIT ? `${flat.slice(0, QUOTE_DISPLAY_LIMIT - 1)}…` : flat;
+};
+
+// A quote containing backticks would close a three-backtick fence early and spill the rest of the
+// comment into the page as markdown. Open with one more backtick than the longest run inside.
+const fenceFor = (...texts) => {
+  const longest = texts.reduce(
+    (max, text) => (String(text).match(/`+/g) ?? []).reduce((run, match) => Math.max(run, match.length), max),
+    2,
+  );
+  return '`'.repeat(longest + 1);
+};
+
+const linkTo = (blobBase, path, line) =>
+  blobBase ? `[\`${path}:${line}\`](${blobBase}/${path}#L${line})` : `\`${path}:${line}\``;
+
+// Evidence first, reasoning last. A reviewer needs to see which line is wrong and what it should
+// say; the argument for why only matters once they disagree, so it goes behind a fold.
+const renderFinding = (finding, blobBase) => {
+  const fence = fenceFor(finding.ai_quote, finding.source_quote);
+  const icon = finding.severity === 'contradiction' ? '❌' : '⚠️';
+  const name = finding.ai_file.split('/').pop();
+
+  return [
+    `#### ${icon} \`${name}\` — ${finding.severity === 'contradiction' ? 'contradicted by the source' : 'not covered'}`,
     '',
-    quoteBlock(finding.ai_quote),
+    `${fence}diff`,
+    `- doc   ${shorten(finding.ai_quote)}`,
+    `+ code  ${shorten(finding.source_quote)}`,
+    fence,
     '',
-    `Source of truth: \`${finding.source_file}:${finding.source_line}\``,
+    `${linkTo(blobBase, finding.ai_file, finding.ai_line)} → ${linkTo(blobBase, finding.source_file, finding.source_line)}`,
+    ...(finding.suggested_fix ? ['', `**Fix:** ${finding.suggested_fix}`] : []),
     '',
-    quoteBlock(finding.source_quote),
-    ...(finding.suggested_fix ? ['', `Suggested fix: ${finding.suggested_fix}`] : []),
+    '<details><summary>Why</summary>',
+    '',
+    finding.explanation ?? 'no explanation given',
+    '',
+    '</details>',
   ].join('\n');
+};
 
-export const renderReport = ({ scope, result, verdict, coverage, enforcing = false }) => {
+const plural = (count, noun) => `${count} ${noun}${count === 1 ? '' : 's'}`;
+
+export const renderReport = ({ scope, result, verdict, coverage, enforcing = false, blobBase = null }) => {
   const { contradictions, gaps, discarded } = verdict;
   const { scoped, unaudited, unknown } = coverage ?? { scoped: scope.aiFiles ?? [], unaudited: [], unknown: false };
   const read = scoped.length - unaudited.length;
@@ -179,6 +215,23 @@ export const renderReport = ({ scope, result, verdict, coverage, enforcing = fal
     lines.push(`No drift found in the ${scoped.length} AI file(s) this change could affect.`);
   } else {
     lines.push(`Audited ${scoped.length} AI file(s) that this change could affect.`);
+  }
+
+  // One line a reviewer can read without scrolling, before any of the detail below it.
+  if (contradictions.length + gaps.length + discarded.length > 0) {
+    lines.push(
+      '',
+      [
+        contradictions.length > 0
+          ? `**${plural(contradictions.length, 'contradiction')}**`
+          : plural(0, 'contradiction'),
+        plural(gaps.length, 'gap'),
+        plural(discarded.length, 'discarded finding'),
+        contradictions.length > 0 && !enforcing ? 'reported only — `AI_DRIFT_ENFORCE` is not set' : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    );
   }
 
   if (contradictions.length > 0) {
@@ -193,13 +246,13 @@ export const renderReport = ({ scope, result, verdict, coverage, enforcing = fal
         : 'say in the thread that the finding is wrong, so the prompt can be tightened.',
       '',
     );
-    lines.push(contradictions.map(renderFinding).join('\n\n---\n\n'));
+    lines.push(contradictions.map(finding => renderFinding(finding, blobBase)).join('\n\n---\n\n'));
   }
 
   if (gaps.length > 0) {
     lines.push('', `### Coverage gaps — advisory (${gaps.length})`, '');
     lines.push('This change adds public surface no audited AI file mentions. Worth documenting, not blocking.', '');
-    lines.push(gaps.map(renderFinding).join('\n\n---\n\n'));
+    lines.push(gaps.map(finding => renderFinding(finding, blobBase)).join('\n\n---\n\n'));
   }
 
   if (discarded.length > 0) {
@@ -230,7 +283,12 @@ export const renderReport = ({ scope, result, verdict, coverage, enforcing = fal
     for (const path of scope.dropped) lines.push(`- \`${path}\``);
   }
 
-  if (result.notes) lines.push('', '### Auditor notes', '', result.notes);
+  // Worth keeping — it says what the auditor checked and found sound, not just what it flagged —
+  // but it runs to paragraphs, so it does not belong above the findings.
+  if (result.notes) {
+    lines.push('', '### Auditor notes', '', '<details><summary>What the auditor checked</summary>', '');
+    lines.push(result.notes, '', '</details>');
+  }
 
   return `${lines.join('\n')}\n`;
 };
@@ -270,6 +328,14 @@ if (isMain) {
   // Blocking is opt-in per repository, so the gate can run advisory for a cycle and be promoted by a
   // settings change rather than by a follow-up nobody re-reads.
   const enforcing = process.env.AI_DRIFT_ENFORCE === 'true';
+
+  // Every cited path becomes a link straight to the line. Absent outside Actions, where the report
+  // is printed to a terminal and plain `path:line` is what an editor can jump to anyway.
+  const { GITHUB_SERVER_URL, GITHUB_REPOSITORY, HEAD_SHA } = process.env;
+  const blobBase =
+    GITHUB_SERVER_URL && GITHUB_REPOSITORY && HEAD_SHA
+      ? `${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/${HEAD_SHA}`
+      : null;
 
   const publish = report => {
     if (args.comment) writeFileSync(args.comment, report);
@@ -322,7 +388,7 @@ if (isMain) {
     coverage = auditCoverage({ scope, result });
 
     annotate(verdict, enforcing);
-    publish(renderReport({ scope, result, verdict, coverage, enforcing }));
+    publish(renderReport({ scope, result, verdict, coverage, enforcing, blobBase }));
   } catch (error) {
     const message = `The drift report could not be produced: ${error.message}`;
     publish(renderNoAudit({ scope, message }));

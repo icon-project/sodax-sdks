@@ -115,6 +115,9 @@ jobs:
         env:
           AI_DRIFT_RESULT: ${{ steps.audit.outputs.structured_output }}
           AUDIT_OUTCOME: ${{ steps.audit.outcome }}
+          # Turns every cited `path:line` in the report into a permalink to that line. The head SHA
+          # rather than the merge commit, so the link still resolves after the branch moves on.
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           # Blocking is opt-in per repository. Leave `AI_DRIFT_ENFORCE` unset until the audit has run
           # advisory for a cycle and its verdicts have proved stable across re-runs; then set the
           # repository variable to `true`. Promotion is a reviewable settings change, not a habit.
