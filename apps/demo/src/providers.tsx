@@ -29,7 +29,7 @@ const rpcConfig: RpcConfig = {
   [ChainKeys.ETHEREUM_MAINNET]: process.env.ETHEREUM_RPC_URL ?? 'https://ethereum-rpc.publicnode.com',
   [ChainKeys.HYPEREVM_MAINNET]: process.env.HYPEREVM_RPC_URL ?? 'https://rpc.hyperliquid.xyz/evm',
   [ChainKeys.SOLANA_MAINNET]: process.env.SOLANA_RPC_URL ?? 'https://solana-rpc.publicnode.com',
-  [ChainKeys.SUI_MAINNET]: process.env.SUI_RPC_URL ?? 'https://sui-rpc.publicnode.com',
+  [ChainKeys.SUI_MAINNET]: process.env.SUI_GRPC_URL ?? 'https://fullnode.mainnet.sui.io',
   [ChainKeys.NEAR_MAINNET]: process.env.NEAR_RPC_URL ?? 'https://free.rpc.fastnear.com',
   [ChainKeys.STELLAR_MAINNET]: {
     horizonRpcUrl: process.env.STELLAR_HORIZON_RPC_URL ?? 'https://horizon.stellar.org',
@@ -108,7 +108,7 @@ export default function Providers({ children }: { children: ReactNode }) {
       },
       SUI: {
         chains: {
-          [ChainKeys.SUI_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.SUI_MAINNET] },
+          [ChainKeys.SUI_MAINNET]: { grpcUrl: rpcConfig[ChainKeys.SUI_MAINNET] },
         },
       },
       BITCOIN: {
@@ -164,7 +164,7 @@ export default function Providers({ children }: { children: ReactNode }) {
         [ChainKeys.ETHEREUM_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.ETHEREUM_MAINNET] },
         [ChainKeys.HYPEREVM_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.HYPEREVM_MAINNET] },
         [ChainKeys.SOLANA_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.SOLANA_MAINNET] },
-        [ChainKeys.SUI_MAINNET]: { rpc_url: rpcConfig[ChainKeys.SUI_MAINNET] },
+        [ChainKeys.SUI_MAINNET]: { grpc_url: rpcConfig[ChainKeys.SUI_MAINNET] },
         [ChainKeys.NEAR_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.NEAR_MAINNET] },
         [ChainKeys.STELLAR_MAINNET]: rpcConfig[ChainKeys.STELLAR_MAINNET],
         [ChainKeys.BITCOIN_MAINNET]: rpcConfig[ChainKeys.BITCOIN_MAINNET],

@@ -30,6 +30,15 @@ const iconChainConfig = spokeChainConfig[ChainKeys.ICON_MAINNET];
 console.log('iconWalletProvider loaded:', typeof iconWalletProvider);
 console.log('iconChainConfig loaded:', iconChainConfig.chain.name);
 
+// The Sui transport constructs a SuiGrpcClient in the Sodax ctor above, so reaching this line
+// at all proves `require('@mysten/sui/grpc')` resolved — the package is ESM-only.
+assert.strictEqual(
+  sdk.spoke.sui.transport.endpoint,
+  spokeChainConfig[ChainKeys.SUI_MAINNET].grpc_url,
+  'sdk → @mysten/sui/grpc (CJS): Sui transport endpoint regression',
+);
+console.log('Sui gRPC transport (CJS):', sdk.spoke.sui.transport.endpoint);
+
 // Verify the sdk → @sodax/libs/stacks/core path resolves correctly under CJS.
 // The libs bundle ships dual ESM (.mjs) + CJS (.cjs); ESM is exercised by
 // `apps/node/test-libs` + `packages/libs/scripts/verify-runtime-smoke.mjs`,
