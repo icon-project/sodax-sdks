@@ -23,6 +23,7 @@ export type SuiArgument = 'GasCoin' | { Input: number } | { Result: number } | {
 
 export interface SuiExecutionResult {
   mutableReferenceOutputs?: [SuiArgument, number[], string][];
+  /** `[bcsBytes, moveTypeTag]`. The type tag is always `''`: Sui's core client returns bytes only. */
   returnValues?: [number[], string][];
 }
 
@@ -31,7 +32,8 @@ export interface SuiCoinStruct {
   coinObjectId: string;
   coinType: string;
   digest: string;
-  previousTransaction: string;
+  /** Absent over gRPC — Sui's `Coin` message does not carry it. */
+  previousTransaction?: string;
   version: string;
 }
 export interface SuiPaginatedCoins {
