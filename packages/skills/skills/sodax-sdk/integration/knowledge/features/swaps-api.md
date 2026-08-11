@@ -151,20 +151,24 @@ Every method accepts a trailing `RequestOverrideConfig` to redirect a single cal
 attach request-specific headers (auth, tracing), overriding the service config:
 
 ```ts
-await sodax.api.swaps.getTokens({ baseURL: 'https://staging.example/v1/be', headers: { 'X-Trace': 'abc' } });
+// `baseURL` is the gateway ROOT — the SDK appends `/swaps/*` itself. Never include a service segment.
+await sodax.api.swaps.getTokens({ baseURL: 'https://staging.example/v1', headers: { 'X-Trace': 'abc' } });
 ```
 
 ## Custom endpoint for the swaps API
 
-By default the swaps endpoints are `/swaps/*` sub-paths under the same base URL as `sodax.backendApi`.
+`baseURL` is the gateway root, shared by every service; the swaps client appends `/swaps/*` below it just
+as `sodax.backendApi` appends its own `/be` mount. Never put a service segment in `baseURL` — a value
+ending in `/be` resolves swaps to `/v1/be/swaps/submit-tx`, which the gateway does not route (the SDK
+trims that suffix, but do not rely on it).
 To point the swaps API at its own host (separate from the base backend API), construct `Sodax` with the
 **`CustomApiConfig`** variant of `ApiConfig` (`{ baseApiConfig?, swapsApiConfig? }`) instead of the flat
-`BaseApiConfig`:
+`BackendApiConfig`:
 
 ```ts
 const sodax = new Sodax({
   api: {
-    baseApiConfig: { baseURL: 'https://api.example/v1/be' },
+    baseApiConfig: { baseURL: 'https://api.example/v1' },
     swapsApiConfig: { baseURL: 'https://swaps.example/v1' },
   },
 });

@@ -5,7 +5,7 @@ import { type FinalStatus, type Order, orderId } from '@/components/swaps/OrderS
 import OrderStatusPanel from '@/components/swaps/OrderStatusPanel';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SolverEnv, useAppStore } from '@/zustand/useAppStore';
-import { loadOrders, saveOrders, SOLVER_ORDERS_KEY } from '@/lib/orderHistory';
+import { loadOrders, saveOrders, SWAPS_SDK_ORDERS_KEY } from '@/lib/orderHistory';
 import { SOLVER_PANEL_KEY } from '@/lib/panelPrefs';
 
 enum OrderType {
@@ -13,13 +13,13 @@ enum OrderType {
   Limit = 'Limit',
 }
 
-export default function SolverPage() {
+export default function SwapsSdkPage() {
   const { solverEnvironment, setSolverEnvironment } = useAppStore();
-  const [orders, setOrders] = useState<Order[]>(() => loadOrders(SOLVER_ORDERS_KEY));
+  const [orders, setOrders] = useState<Order[]>(() => loadOrders(SWAPS_SDK_ORDERS_KEY));
 
   // Persist swap history so in-flight swaps survive a refresh and still show on completion.
   useEffect(() => {
-    saveOrders(SOLVER_ORDERS_KEY, orders);
+    saveOrders(SWAPS_SDK_ORDERS_KEY, orders);
   }, [orders]);
 
   const [orderType, setOrderType] = useState<OrderType>(OrderType.Market);

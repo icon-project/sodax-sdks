@@ -150,25 +150,20 @@ These are unrelated; don't treat one as another:
 
 ## Configuration
 
-`sodax.api.swaps` shares the backend API config. By default the swaps endpoints are `/swaps/*` sub-paths
-under the same base URL as `sodax.backendApi`. `SodaxConfig.api` is `ApiConfig`:
-
-```typescript
-// Flat — shared by the base backend API and the swaps client (the common case):
-type BaseApiConfig = { baseURL: string; timeout: number; headers: Record<string, string> };
-
-// Nested — point the swaps API at its own host, separate from the base backend API:
-type CustomApiConfig =
-  | { baseApiConfig: BaseApiConfig; swapsApiConfig?: BaseApiConfig }
-  | { baseApiConfig?: BaseApiConfig; swapsApiConfig: BaseApiConfig };
-
-type ApiConfig = BaseApiConfig | CustomApiConfig;
-```
+`sodax.api.swaps` shares the backend API config. `baseURL` is the **gateway root** — the same value every
+service resolves — and the swaps client appends `/swaps/*` below it, exactly as `sodax.backendApi` appends
+its own `/be` mount. So a `baseURL` must never carry a service segment: a value ending in `/be` (the
+previous packaged default) would put swaps at `/v1/be/swaps/submit-tx`, which the gateway does not route.
+The SDK trims that suffix — with a deprecation warning when it appears on the flat field or the
+`baseApiConfig` slice, silently on a `swapsApiConfig` slice (that combination never worked, so there is
+nothing to deprecate). For the `ApiConfig` type itself — including the `basePath` knob on the flat
+variant — see
+[BACKEND_API.md § `ApiConfig` Type](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BACKEND_API.md).
 
 ```typescript
 const sodax = new Sodax({
   api: {
-    baseApiConfig: { baseURL: 'https://api.example/v1/be' },
+    baseApiConfig: { baseURL: 'https://api.example/v1' },
     swapsApiConfig: { baseURL: 'https://swaps.example/v1' },
   },
 });

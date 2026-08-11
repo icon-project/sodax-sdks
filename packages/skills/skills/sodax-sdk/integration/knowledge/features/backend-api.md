@@ -76,12 +76,16 @@ You rarely build this DTO yourself: `sodax.swaps.createIntent` takes the token v
 
    ```ts
    const sodax = new Sodax({
-     api: { baseURL: 'http://localhost:4000' },
+     // `basePath: ''` because a local mock serves `/config/*` at its origin, with no `/be` mount.
+     api: { baseApiConfig: { baseURL: 'http://localhost:4000', basePath: '' } },
    });
    await sodax.config.initialize();
+   // → http://localhost:4000/config/all
    ```
 
-   `SodaxConfig.api` is `ApiConfig` — either the flat `BaseApiConfig` (`{ baseURL, timeout, headers }`, shared by the base API and the swaps client) or the nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig? }`) to point the swaps API at its own endpoint. Pass any subset via `DeepPartial`. See [`./swaps-api.md`](swaps-api.md) § "Custom endpoint for the swaps API".
+   `SodaxConfig.api` is `ApiConfig` — either the flat `BackendApiConfig` (`{ baseURL, basePath?, timeout, headers }`, shared by the base API and the swaps client) or the nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig? }`) to point the swaps API at its own endpoint. Pass any subset via `DeepPartial`. See [`./swaps-api.md`](swaps-api.md) § "Custom endpoint for the swaps API".
+
+   `baseURL` is the **gateway root** — each service appends its own path below it, so the backend data API requests `<baseURL>/be/config/all` by default. `basePath` is that mount, and the only reason to set it is a deployment that does not use the gateway. Never put a service segment (`/be`, `/swaps`, `/bridge`) in `baseURL` itself — it would also relocate the sibling services. A `baseURL` ending in `/be` is trimmed with a deprecation warning; do not rely on that.
 
 2. **Inject your own `BackendApiService`-compatible mock at the app layer** (dependency-injected where you control the `Sodax` instance), rather than via the constructor.
 

@@ -15,11 +15,7 @@
  * `toCreateBridgeIntentParamsV2` converts SDK names + bigint.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  DEFAULT_BACKEND_API_ENDPOINT,
-  type BridgeSubmitTxRequestV2,
-  type CreateBridgeIntentParamsV2,
-} from '@sodax/types';
+import { DEFAULT_API_BASE_URL, type BridgeSubmitTxRequestV2, type CreateBridgeIntentParamsV2 } from '@sodax/types';
 import { Sodax } from '../shared/entities/Sodax.js';
 import { BridgeApiService, toCreateBridgeIntentParamsV2 } from './BridgeApiService.js';
 import { SodaxError } from '../errors/SodaxError.js';
@@ -30,7 +26,7 @@ vi.stubGlobal('fetch', mockFetch);
 
 // --- fixtures -------------------------------------------------------------
 const sodax = new Sodax();
-const BASE = DEFAULT_BACKEND_API_ENDPOINT;
+const BASE = DEFAULT_API_BASE_URL;
 const TX_HASH = '0x46b053464f50836328b6158e1e33e5cf66c0e3ebe5004d30459b23acae5047a0';
 
 const sampleCreateBridgeIntentParams: CreateBridgeIntentParamsV2 = {
