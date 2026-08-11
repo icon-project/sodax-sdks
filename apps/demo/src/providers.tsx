@@ -139,9 +139,9 @@ export default function Providers({ children }: { children: ReactNode }) {
     // `undefined` when off, which leaves the SDK on its default console logger.
     return {
       api: {
-        baseApiConfig: {
-          baseURL: 'https://api.sodax.com/v1/be',
-        },
+        // No `baseApiConfig`: the packaged default already points at the production gateway root, and
+        // every service appends its own path below it (`/be`, `/swaps`, `/bridge`, `/sponsorships/*`).
+        // Never put a service segment in a base URL — that is what sent swaps to `/v1/be/swaps/*`.
         swapsApiConfig: {
           baseURL: swapsApiBaseURL,
         },

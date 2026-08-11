@@ -44,6 +44,7 @@ import type {
   SodaxLogger,
 } from '@sodax/types';
 import { DEFAULT_BACKEND_API_TIMEOUT } from '@sodax/types';
+import { stripLegacyBackendMount } from './apiConfig.js';
 import { SwapsApi, SwapsApiError } from '@sodax/swaps-api';
 import * as v from 'valibot';
 
@@ -105,7 +106,10 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
    * overrides both take effect without caching stale state.
    */
   private buildClient(overrideConfig?: RequestOverrideConfig): SwapsApi {
-    const baseUrl = overrideConfig?.baseURL || this.config.baseURL;
+    // A per-call override is normalized exactly like a configured base URL: it is the gateway root, so a
+    // legacy `/be`-suffixed value must not nest `/swaps/*` under the data API's mount. `this.config.baseURL`
+    // was already normalized during resolution.
+    const baseUrl = overrideConfig?.baseURL ? stripLegacyBackendMount(overrideConfig.baseURL) : this.config.baseURL;
     const timeout = overrideConfig?.timeout ?? this.config.timeout ?? DEFAULT_BACKEND_API_TIMEOUT;
     const headers = { ...this.headers, ...overrideConfig?.headers };
     return new SwapsApi({ baseUrl, headers, timeout });

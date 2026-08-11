@@ -44,7 +44,7 @@ Top-level keys of the consolidated `SodaxConfig` — the `SodaxDefaultConfig` da
 | `dex` | `DexConfig` | Concentrated liquidity contract set and pool keys (Sonic hub). |
 | `leverageYield` | `LeverageYieldConfig` | Registry of leverage-yield ERC-4626 vaults on the hub, plus an optional per-feature `partnerFee`. |
 | `hub` | `HubConfig` | Hub chain (Sonic) metadata, contract addresses, and `rpcUrl` used by `EvmHubProvider`. |
-| `api` | `ApiConfig` | Backend API config — flat `BaseApiConfig` (`{ baseURL, timeout, headers }`, shared by `sodax.api.swaps`) or `CustomApiConfig` to point swaps at its own endpoint. |
+| `api` | `ApiConfig` | Backend API config — flat `BackendApiConfig` (`{ baseURL, basePath?, timeout, headers }`, shared by `sodax.api.swaps`) or `CustomApiConfig` to point swaps at its own endpoint. |
 | `solver` | `SolverConfig` | Intents contract addresses and solver HTTP API endpoint. |
 | `relay` | `RelayConfig` | Relayer HTTP endpoint and spoke-to-intent relay chain ID map. |
 
@@ -252,30 +252,68 @@ EVM spokes use `rpcUrl` on their spoke config; Stellar uses `horizonRpcUrl` and 
 
 ### Backend API (`api`)
 
-[`ApiConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/common/constants.ts) controls `baseURL`, `timeout`, and `headers` for `BackendApiService` (used by `ConfigService` and `initialize()`). It is either a flat `BaseApiConfig` (shown below — shared by `sodax.backendApi`, the swaps client `sodax.api.swaps`, and the bridge client `sodax.api.bridge`) or a nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig?, sponsoringApiConfig? }`) to point an individual client at its own endpoint.
+[`ApiConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/common/constants.ts) controls `baseURL`, `timeout`, and `headers` for `BackendApiService` (used by `ConfigService` and `initialize()`). It is either a flat `BackendApiConfig` (shown below — shared by `sodax.backendApi`, the swaps client `sodax.api.swaps`, and the bridge client `sodax.api.bridge`) or a nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig?, sponsoringApiConfig? }`) to point an individual client at its own endpoint.
+
+#### How a request URL is composed
+
+```
+request URL  =  baseURL  +  service path  +  route
+                └─ gateway root: origin plus the deployment's version prefix
+                            └─ owned by the service — never put it in baseURL
+```
+
+`baseURL` is the **gateway root**. Every service appends its own path below it — and the base API, swaps
+and bridge all resolve the same root, so one value moves all three. Sponsoring is the exception: it
+defaults to the same root but reaches it independently, so retargeting `baseURL` does **not** move it (see
+the slice table below).
+
+| Service | Path | Default URL for one route |
+|---|---|---|
+| `sodax.backendApi` | `/be` (`basePath`, overridable) | `https://api.sodax.com/v1/be/config/all` |
+| `sodax.api.swaps` | `/swaps` | `https://api.sodax.com/v1/swaps/submit-tx` |
+| `sodax.api.bridge` | `/bridge` | `https://api.sodax.com/v1/bridge/submit-tx` |
+| `sodax.api.sponsoring` | `/sponsorships/stellar` | `https://api.sodax.com/v1/sponsorships/stellar/config` |
+
+The version prefix is **deployment-owned**, which is why it lives in `baseURL` rather than in the SDK's
+service paths: that is what lets a locally-run service be reached by swapping the host alone
+(`http://localhost:3008` mounts `/swaps/*` at its bare origin, with no version prefix at all). The
+corollary is that `https://api.sodax.com` on its own is an incomplete base URL — it resolves every service
+one segment short (`/be/config/all`, `/swaps/tokens`) and 404s. Only the data API has a `basePath` to
+compensate, so the SDK warns at construction when a base URL on the packaged host omits the prefix.
+
+So a `baseURL` must never end in a service segment. If it ends in `/be`, the SDK trims it and logs a warning — the previous packaged default was `https://api.sodax.com/v1/be`, which nested the sibling services one level too deep (`/v1/be/swaps/submit-tx`).
 
 ```typescript
 import { Sodax } from '@sodax/sdk';
 
 const sodax = new Sodax({
   api: {
-    baseURL: 'https://api.sodax.com/v1/be',
+    baseURL: 'https://api.sodax.com/v1',
     timeout: 30_000,
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
   },
 });
 ```
 
+Only the backend data API's path is deployment-owned, so only it is configurable. Set `basePath: ''` for a service addressed directly at its origin rather than through the gateway:
+
+```typescript
+const sodax = new Sodax({
+  api: { baseApiConfig: { baseURL: 'http://localhost:4000', basePath: '' } },
+});
+// → http://localhost:4000/config/all
+```
+
 **Which slice moves which client.** The flat fields layer underneath every per-service slice, so a top-level `baseURL` moves all of them at once:
 
 | Client | Resolved from | Notes |
 |---|---|---|
-| `sodax.backendApi` | flat fields → `baseApiConfig` | |
-| `sodax.api.swaps` | flat fields → `baseApiConfig` → `swapsApiConfig` | Only client a `swapsApiConfig` slice affects. |
-| `sodax.api.bridge` | flat fields → `baseApiConfig` | Served as `/bridge/*` sub-paths on the base host. Defaults to the same host as swaps, but a `swapsApiConfig` slice does **not** move it — there is no `bridgeApiConfig` slice. |
-| `sodax.api.sponsoring` | `sponsoringApiConfig` (own origin; only `timeout` inherits) | Base URL and headers never inherit, so base credentials can't leak to another origin. |
+| `sodax.backendApi` | flat fields → `baseApiConfig` | The only client that reads `basePath`. |
+| `sodax.api.swaps` | flat fields → `baseApiConfig` → `swapsApiConfig` | Only client a `swapsApiConfig` slice affects. Never inherits `basePath`. |
+| `sodax.api.bridge` | flat fields → `baseApiConfig` | Reached as `/bridge/*` on the shared root. Defaults to the same host as swaps, but a `swapsApiConfig` slice does **not** move it — there is no `bridgeApiConfig` slice. Never inherits `basePath`. |
+| `sodax.api.sponsoring` | `sponsoringApiConfig` (own origin; only `timeout` inherits) | Base URL and headers never inherit, so base credentials can't leak to another origin — and pointing the base API at a private proxy never drags sponsoring along. |
 
-Every client method also takes a per-call `RequestOverrideConfig` (`{ baseURL?, timeout?, headers? }`) as its last argument, which wins over the resolved config — useful for pointing one call at a canary host without touching app-wide config. Note that a `timeout` override **replaces** the resolved value rather than capping it.
+Every client method also takes a per-call `RequestOverrideConfig` (`{ baseURL?, timeout?, headers? }`) as its last argument, which wins over the resolved config — useful for pointing one call at a canary host without touching app-wide config. A `baseURL` override replaces the gateway root; the calling service's own path still applies, and a legacy `/be` suffix is trimmed from it just as it is from a configured base URL. Note that a `timeout` override **replaces** the resolved value rather than capping it.
 
 ### Relayer (`relay`)
 
