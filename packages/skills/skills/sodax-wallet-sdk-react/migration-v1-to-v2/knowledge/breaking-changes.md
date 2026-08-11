@@ -140,7 +140,7 @@ See [`reference/imports.md`](./reference/imports.md) for the sub-path map per ch
 
 ### What changed
 
-v1 mounted **every** chain adapter (wagmi, `@solana/wallet-adapter`, `@mysten/dapp-kit`) and registered services for every chain regardless of whether the consumer used them.
+v1 mounted **every** chain adapter (wagmi, `@solana/wallet-adapter`, `@mysten/dapp-kit-react`) and registered services for every chain regardless of whether the consumer used them.
 
 v2 mounts only the slots present in `walletConfig`. An app that only needs EVM + Sui passes `{ EVM: {...}, SUI: {...} }` and ships **none** of the Solana / Bitcoin / NEAR adapter code in the React tree.
 

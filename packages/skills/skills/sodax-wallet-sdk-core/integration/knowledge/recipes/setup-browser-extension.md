@@ -14,7 +14,7 @@ Each chain has its own browser-extension variant. See [`../features/<chain>.md`]
 |---|---|
 | EVM       | `walletClient` (viem `WalletClient<Transport, Chain, Account>`) + `publicClient` (viem `PublicClient`) |
 | Solana    | `wallet: { publicKey, signTransaction }` + `endpoint` |
-| Sui       | `client` (`SuiClient`) + `wallet` (`WalletWithFeatures<Partial<SuiWalletFeatures>>`) + `account` (`WalletAccount`) |
+| Sui       | `grpcUrl` + `address` + `signTransaction` (returns `{ bytes, signature }`) |
 | Bitcoin   | `type: 'BROWSER_EXTENSION'`, `walletsKit` (consumer-supplied adapter), `network` |
 | Stellar   | `type: 'BROWSER_EXTENSION'`, `walletsKit`, `network` |
 | ICON      | `walletAddress` (optional `hx…`) + `rpcUrl` |

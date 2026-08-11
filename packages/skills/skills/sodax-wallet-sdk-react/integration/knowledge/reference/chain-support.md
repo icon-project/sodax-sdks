@@ -12,7 +12,7 @@ Chains supported by `@sodax/wallet-sdk-react` v2 — their `ChainType` family an
 |---|---|---|
 | `EVM` | Sonic, Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia, Hedera | wagmi |
 | `SOLANA` | Solana mainnet | `@solana/wallet-adapter-react` |
-| `SUI` | Sui mainnet/testnet | `@mysten/dapp-kit` |
+| `SUI` | Sui mainnet/testnet | `@mysten/dapp-kit-react` |
 | `BITCOIN` | Bitcoin mainnet | (none — direct extension probes) |
 | `STELLAR` | Stellar mainnet | (none) |
 | `ICON` | ICON mainnet | (none) |

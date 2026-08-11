@@ -84,15 +84,15 @@ import { SuiWalletProvider } from '@sodax/wallet-sdk-core';
 
 // Private-key — DERIVED FROM MNEMONIC, not a raw key
 const suiPk = new SuiWalletProvider({
-  rpcUrl: 'https://sui-rpc.publicnode.com',
+  grpcUrl: 'https://fullnode.mainnet.sui.io',
   mnemonics: 'word1 word2 … word12',
 });
 
-// Browser-extension — wallet-standard wallet
+// Browser-extension — the provider owns the client; you supply the signer
 const suiBrowser = new SuiWalletProvider({
-  client: mySuiClient,                          // SuiClient
-  wallet: myWalletWithSuiFeatures,              // WalletWithFeatures<Partial<SuiWalletFeatures>>
-  account: myActiveWalletAccount,               // WalletAccount
+  grpcUrl: 'https://fullnode.mainnet.sui.io',
+  address: myActiveWalletAccount.address,       // string
+  signTransaction: dAppKit.signTransaction,     // (txn) => Promise<{ bytes, signature }>
 });
 ```
 

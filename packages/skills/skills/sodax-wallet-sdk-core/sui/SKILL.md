@@ -14,7 +14,7 @@ Granular skill for `SuiWalletProvider` — the low-level Sui wallet for backend 
 ## Step 1 — Clarify with user before coding
 
 1. **New code or v1 → v2 port?** New → § Integration. Port v1 → § Migration (almost always a no-op here).
-2. **Private-key or browser-extension config?** Sui discriminates by **field presence** (no `type`) but the PK credential is a **`mnemonics`** string (BIP-39), not a raw key: PK = `{ rpcUrl, mnemonics }`; browser-extension = `{ client, wallet, account }` (all THREE required). Mutually exclusive — pick one.
+2. **Private-key or browser-extension config?** Sui discriminates by **field presence** (no `type`) but the PK credential is a **`mnemonics`** string (BIP-39), not a raw key: PK = `{ grpcUrl, mnemonics }`; browser-extension = `{ grpcUrl, address, signTransaction }`. Mutually exclusive — pick one.
 3. **Dry-run?** `signAndExecuteTxn` runs a pre-flight dry-run **on by default**; disable only when paying gas for a doomed tx is acceptable.
 
 ## Integration workflow (new v2 code)

@@ -116,22 +116,22 @@ const btcBrowser = new BitcoinWalletProvider({
 
 ### Sui
 
-Sui uses `mnemonics` (not `privateKey`) for private-key mode. Browser extension requires a pre-constructed `SuiClient`, wallet object, and active `WalletAccount`.
+Sui uses `mnemonics` (not `privateKey`) for private-key mode. Both modes speak gRPC-web — Mysten removed JSON-RPC from their fullnodes in October 2026. Browser extension supplies the connected address plus a signer callback; the provider builds its own client.
 
 ```ts
 import { SuiWalletProvider } from '@sodax/wallet-sdk-core';
 
 // Private key (Node/scripts/CI) — field presence discriminant
 const suiPk = new SuiWalletProvider({
-  rpcUrl: 'https://...',
+  grpcUrl: 'https://fullnode.mainnet.sui.io',
   mnemonics: '...',
 });
 
 // Browser/extension
 const suiBrowser = new SuiWalletProvider({
-  client: mySuiClient,
-  wallet: myWalletWithFeatures,
-  account: myWalletAccount,
+  grpcUrl: 'https://fullnode.mainnet.sui.io',
+  address: myWalletAccount.address,
+  signTransaction: dAppKit.signTransaction,
 });
 ```
 
