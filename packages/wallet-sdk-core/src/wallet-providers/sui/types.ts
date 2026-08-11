@@ -1,15 +1,12 @@
-import type { SuiClient, SuiTransactionBlockResponseOptions } from '@mysten/sui/client';
 import type { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import type { SuiWalletFeatures, WalletAccount, WalletWithFeatures } from '@mysten/wallet-standard';
+import type { SuiTransaction } from '@sodax/types';
 
 /**
  * signAndExecuteTxn behavior. Pre-flight dry-run is enabled by default — disable only when
- * paying gas for a doomed tx is acceptable. `response` options forward to the underlying
- * SuiClient call (signAndExecuteTransaction in PK mode, executeTransactionBlock in browser-ext).
+ * paying gas for a doomed tx is acceptable.
  */
 export type SuiSignAndExecutePolicy = {
   dryRun?: { enabled?: boolean };
-  response?: SuiTransactionBlockResponseOptions;
 };
 
 /** getCoins pagination policy. */
@@ -23,18 +20,30 @@ export type SuiWalletDefaults = {
   getCoins?: SuiGetCoinsPolicy;
 };
 
+/** Base64 transaction bytes plus the wallet's signature, as returned by wallet-standard signers. */
+export type SuiSignedTransaction = {
+  bytes: string;
+  signature: string;
+};
+
 /** Configuration for constructing a `SuiWalletProvider` backed by a mnemonic-derived private key. */
 export type PrivateKeySuiWalletConfig = {
-  rpcUrl: string;
+  grpcUrl?: string;
+  /**
+   * @deprecated Renamed to `grpcUrl`. Still honored, and wins over `grpcUrl` when set. The endpoint
+   * must speak gRPC-web — a `sui-node` serves it on the same origin it served JSON-RPC on.
+   */
+  rpcUrl?: string;
   mnemonics: string;
   defaults?: SuiWalletDefaults;
 };
 
 /** Configuration for constructing a `SuiWalletProvider` backed by a browser-extension wallet. */
 export type BrowserExtensionSuiWalletConfig = {
-  client: SuiClient;
-  wallet: WalletWithFeatures<Partial<SuiWalletFeatures>>;
-  account: WalletAccount;
+  grpcUrl: string;
+  address: string;
+  /** Signs without broadcasting — pass `dAppKit.signTransaction` or any wallet-standard signer. */
+  signTransaction: (txn: SuiTransaction) => Promise<SuiSignedTransaction>;
   defaults?: SuiWalletDefaults;
 };
 
@@ -45,8 +54,8 @@ export type PkSuiWallet = {
 };
 
 export type BrowserExtensionSuiWallet = {
-  wallet: WalletWithFeatures<Partial<SuiWalletFeatures>>;
-  account: WalletAccount;
+  address: string;
+  signTransaction: (txn: SuiTransaction) => Promise<SuiSignedTransaction>;
 };
 
 export type SuiWallet = PkSuiWallet | BrowserExtensionSuiWallet;
