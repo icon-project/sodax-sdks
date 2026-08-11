@@ -36,8 +36,6 @@ const quote = await api.getQuote({
   tokenDstChainKey,
   amount,
   quoteType: 'exact_input',
-  // Send this on every quote and intent, or the swap earns nothing and is
-  // attributed to nobody. See "Partner fees" below.
   partnerFee: { address: partnerReceiverOnSonic, percentage: 10 }, // 10 bps = 0.1%
 });
 ```
@@ -49,43 +47,20 @@ tests or non-standard runtimes; it receives the timeout `AbortSignal`), and extr
 
 ## Partner fees
 
-`partnerFee` is an optional body field on `getQuote` (`POST /swaps/quote`) and on the
-shared `CreateIntentParamsV2` body used by `checkAllowance` / `approve` / `createIntent`
-— but **optional here means "the caller owns it", not "the backend fills it in"**.
-
-There is no default. The backend cannot pick one, because only the caller knows which
-receiver to credit, and this package sends the request body exactly as you pass it —
-it accepts no fee configuration of its own. Omitting the field means the swap charges
-no fee **and** is unattributable, since the partner receiver is decoded out of the
-`intent.data` the API builds. A quote without it returns the gross amount; the same
-quote with `percentage: 10` returns exactly 10 bps less.
+`partnerFee` has no default — this client forwards the body as given and does not read
+`new Sodax({ fee })` / `new Sodax({ swaps: { partnerFee } })`. Send the same value on
+quote and create-intent:
 
 ```ts
 const partnerFee = { address: partnerReceiverOnSonic, percentage: 10 }; // 10 = 0.1%, 100 = 1%
 
-// Pass the same value to the quote and to the intent, so the quoted output matches
-// what the intent actually locks in.
 const quote = await api.getQuote({ ...quoteBody, partnerFee });
 const intent = await api.createIntent({ ...intentBody, partnerFee });
 ```
 
-Two things that trip people up:
-
-- Passing `data: '0x'` alongside `partnerFee` does **not** clobber the fee — the API
-  builds `intent.data` itself and your `data` does not overwrite the fee envelope.
-- The approval amount is unchanged (still the full input), so adding the fee never
-  breaks an existing allowance step. `checkAllowance` / `approve` accept `partnerFee`
-  only because they share the body — neither reads it, so `getQuote` and
-  `createIntent` are the two calls that have to carry it.
-
-Use `amount` (a decimal string in the input token's smallest unit) instead of
-`percentage` for a flat fee; if both are present the backend uses `amount`.
-
-Note that the `Sodax` client options (`new Sodax({ fee })` /
-`new Sodax({ swaps: { partnerFee } })`) do **not** apply here. Those are resolved
-client-side and only reach the `sodax.swaps` orchestrator. See
+`checkAllowance` / `approve` inherit the field but ignore it. See
 [MONETIZE_SDK.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/MONETIZE_SDK.md)
-for the two integration paths side by side.
+for the orchestrator path.
 
 ## Errors
 

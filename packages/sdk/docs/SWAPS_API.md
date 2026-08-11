@@ -23,12 +23,10 @@ sodax.api.swaps.getTokens(config?): Promise<Result<GetSwapTokensResponseV2>>;
 sodax.api.swaps.getTokensByChain(chainKey, config?): Promise<Result<GetSwapTokensByChainResponseV2>>;
 
 // Quote · deadline
-// getQuote: body.partnerFee has NO default — omit it and the swap earns nothing. See "partnerFee" below.
 sodax.api.swaps.getQuote(body: QuoteRequestV2, query?: QuoteQueryV2, config?): Promise<Result<QuoteResponseV2>>;
 sodax.api.swaps.getDeadline(query?: DeadlineQueryV2, config?): Promise<Result<DeadlineResponseV2>>;
 
-// Allowance · approve · create intent — all three share the CreateIntentParamsV2 body,
-// but only createIntent reads its partnerFee (again: no default). See "partnerFee" below.
+// Allowance · approve · create intent — all three share the CreateIntentParamsV2 body
 sodax.api.swaps.checkAllowance(body: CreateIntentParamsV2, config?): Promise<Result<AllowanceCheckResponseV2>>;
 sodax.api.swaps.approve(body: CreateIntentParamsV2, config?): Promise<Result<ApproveResponseV2>>;
 sodax.api.swaps.createIntent(body: CreateIntentParamsV2, config?): Promise<Result<CreateIntentResponseV2>>;
@@ -54,33 +52,21 @@ sodax.api.swaps.submitTx(body: SubmitTxRequestV2, config?): Promise<Result<Submi
 sodax.api.swaps.getSubmitTxStatus(query: SubmitTxStatusQueryV2, config?): Promise<Result<SubmitTxStatusResponseV2>>;
 ```
 
-## `partnerFee` — the caller owns it
+## `partnerFee`
 
-`partnerFee` is inherited from `SwapExtrasV2` by `QuoteRequestV2` and by the shared
-`CreateIntentParamsV2` body. It is optional in the type system, but there is **no default behind it**:
-this client serializes the body you pass and never reads the SDK's `new Sodax({ fee })` /
-`new Sodax({ swaps: { partnerFee } })` options — those are resolved client-side and only reach the
-`sodax.swaps` orchestrator. The backend cannot supply one either, since only the caller knows which
-receiver to credit.
-
-So a request that omits `partnerFee` succeeds, charges no fee, and is **unattributable** — the partner
-receiver is decoded out of `intent.data`, which comes back as `"0x"` when no fee was sent.
+Optional on the type, but there is no default — the client forwards the body as given and never
+reads `new Sodax({ fee })` / `new Sodax({ swaps: { partnerFee } })`. Send the same value on quote
+and create-intent:
 
 ```typescript
-const partnerFee = { address: '0xYourSonicFeeReceiver', percentage: 10 }; // basis points: 10 = 0.1%
+const partnerFee = { address: '0xYourSonicFeeReceiver', percentage: 10 }; // 10 = 0.1% (bps)
 
-// Send the same value to both, so the quoted output matches what the intent locks in.
-await sodax.api.swaps.getQuote({ ...quoteBody, partnerFee });    // quotedAmount is net of the fee
-await sodax.api.swaps.createIntent({ ...intentBody, partnerFee }); // inputAmount is net; data carries the fee
+await sodax.api.swaps.getQuote({ ...quoteBody, partnerFee });
+await sodax.api.swaps.createIntent({ ...intentBody, partnerFee });
 ```
 
-Use `amount` (decimal string, input token's smallest unit) for a flat fee instead of `percentage`; if
-both are present the backend uses `amount`. Passing your own `data` does not clobber the fee envelope
-(the API builds `intent.data`), and the approval amount is unaffected — it is still the full input.
-`checkAllowance` and `approve` inherit `partnerFee` from the shared `CreateIntentParamsV2` body but
-never read it, so `getQuote` and `createIntent` are the only two calls that have to carry it.
-
-See [MONETIZE_SDK.md](MONETIZE_SDK.md) for the orchestrator path and fee claiming.
+`checkAllowance` / `approve` inherit the field but ignore it. See [MONETIZE_SDK.md](MONETIZE_SDK.md)
+for the orchestrator path and fee claiming.
 
 ## `approve` can return two transactions
 
@@ -138,7 +124,7 @@ import { Sodax } from '@sodax/sdk';
 
 const sodax = new Sodax();
 
-// Quote — omit partnerFee and the swap earns nothing and is attributed to nobody.
+// Quote
 const quote = await sodax.api.swaps.getQuote({
   tokenSrc, tokenSrcChainKey, tokenDst, tokenDstChainKey,
   amount: '1000000',
@@ -146,14 +132,14 @@ const quote = await sodax.api.swaps.getQuote({
   partnerFee,
 });
 if (!quote.ok) return;
-quote.value.quotedAmount; // decimal string, net of the partner fee
+quote.value.quotedAmount; // decimal string
 
 // Create intent → submit tx → poll status
 const created = await sodax.api.swaps.createIntent({
   srcChainKey, dstChainKey, inputToken, outputToken,
   inputAmount: '1000000', minOutputAmount: '990000', deadline: '0',
   allowPartialFill: false, srcAddress, dstAddress,
-  partnerFee, // same value as the quote
+  partnerFee,
 });
 if (!created.ok) return;
 const { tx, intent, relayData } = created.value;

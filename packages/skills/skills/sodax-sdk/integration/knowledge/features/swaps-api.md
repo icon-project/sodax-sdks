@@ -89,54 +89,29 @@ client serializes them to decimal strings on the wire. Server-returned intents (
 back with those fields as decimal **`string`** (outbound JSON can't carry bigint). The `amount` /
 `inputAmount` fields on the quote / create-intent request bodies are already decimal **strings**.
 
-## `partnerFee` — always send it, there is no default
+## `partnerFee`
 
-`partnerFee` is inherited from `SwapExtrasV2` by `QuoteRequestV2` and by the shared `CreateIntentParamsV2`
-body. It is **optional in the type system only** — nothing fills it in for you:
-
-- The **backend applies no default**; it cannot pick a fee receiver on the caller's behalf.
-- The **SDK config is not consulted on this path**. `new Sodax({ fee })` / `new Sodax({ swaps: { partnerFee } })`
-  are resolved client-side and only reach the `sodax.swaps` / `sodax.moneyMarket` / `sodax.bridge`
-  orchestrators. `sodax.api.swaps` (and `@sodax/swaps-api`) serialize the body as given.
-
-Omitting it produces a request that succeeds, charges nothing, **and is unattributable** — the partner
-receiver is decoded out of `intent.data`, which is `"0x"` when no fee was sent. If the integrator earns
-on swaps, this field is required in practice; generating an `sodax.api.swaps` integration without it is
-a monetization bug, not a stylistic one.
-
-`address` must be a real Sonic address the integrator controls. Nothing validates it — the fee receiver
-is forwarded verbatim — so a placeholder or the zero address loses exactly as much money as omitting the
-field, and is harder to catch in review because the request looks complete. Ask for the receiver; never
-invent one.
-
-Send the same value to the quote and the intent so the quoted output matches what the intent locks in.
-Use `amount` (decimal string, smallest unit) for a flat fee instead of `percentage`; if both are present
-the backend uses `amount`. Your own `data` does not clobber the fee envelope (the API builds
-`intent.data`), and the approval amount is unchanged — still the full input.
-
-`getQuote` and `createIntent` are the only calls that read the field. `checkAllowance` / `approve`
-inherit it from the shared `CreateIntentParamsV2` body and ignore it, sizing the allowance off the full
-`inputAmount` — passing it there is harmless, omitting it there costs nothing.
-
-Scope this to `/swaps/*`. The bridge wire path is the opposite: on `CreateBridgeIntentParamsV2` and
-`POST /bridge/fee`, `partnerFee` is a per-request override that falls back to the backend's configured
-`bridgePartnerFee`, so omitting it there still charges the configured fee.
+Optional on the type, but no default: the backend does not fill it in, and
+`new Sodax({ fee })` / `new Sodax({ swaps: { partnerFee } })` only reach the
+`sodax.swaps` orchestrator — not this wire path. Send the same value on quote and
+create-intent. `checkAllowance` / `approve` inherit the field but ignore it.
+Bridge API v2 is different: omitted `partnerFee` falls back to `bridgePartnerFee`.
 
 ## Common call shapes
 
 ### Quote
 
 ```ts
-const partnerFee = { address: '0xSonicFeeReceiver', percentage: 10 }; // basis points: 10 = 0.1%
+const partnerFee = { address: '0xSonicFeeReceiver', percentage: 10 }; // 10 = 0.1% (bps)
 
 const quote = await sodax.api.swaps.getQuote({
   tokenSrc, tokenSrcChainKey, tokenDst, tokenDstChainKey,
   amount: '1000000',          // smallest unit, decimal string
   quoteType: 'exact_input',
-  partnerFee,                 // no default — omit it and the swap earns nothing
+  partnerFee,
 });
 if (!quote.ok) return;
-quote.value.quotedAmount;     // decimal string, net of the partner fee
+quote.value.quotedAmount;     // decimal string
 // Pass query `{ includeTxData: true }` (and srcAddress/dstAddress on the body) to also get `txData`.
 ```
 
@@ -150,11 +125,10 @@ const created = await sodax.api.swaps.createIntent({
   deadline: '0',              // "0" → no expiry (limit-order semantics)
   allowPartialFill: false,
   srcAddress, dstAddress,
-  partnerFee,                 // same value as the quote
+  partnerFee,
 });
 if (!created.ok) return;
 const { tx, intent, relayData } = created.value;
-// created.value.intent.data carries the fee envelope; it is "0x" when no partnerFee was sent.
 ```
 
 ### Submit tx + poll status

@@ -75,15 +75,7 @@ export interface BitcoinBoundExtrasV2 {
  */
 export interface SwapExtrasV2 {
   /**
-   * Partner fee for this request — the only place the Swaps API reads one. There is no default: the
-   * backend cannot pick a receiver on the caller's behalf, and the SDK's client-side `swaps.partnerFee`
-   * / `fee` options are never consulted on this wire path (they only reach the `sodax.swaps`
-   * orchestrator). Omitting the field therefore charges nothing AND leaves the swap unattributed,
-   * because the backend decodes the partner receiver out of `intent.data`. Send the same value to
-   * `/swaps/quote` and `/swaps/intents` so the quote matches the built intent; `/swaps/allowance/check`
-   * and `/swaps/approve` inherit the field but ignore it (both size the allowance off the full
-   * `inputAmount`). Scoped to `/swaps/*`: the bridge counterpart (`CreateBridgeIntentParamsV2.partnerFee`
-   * in `backendBridgeApiV2.ts`) *does* fall back to the backend's configured `bridgePartnerFee`.
+   * No default on `/swaps/*` — omit and the swap charges nothing. SDK `fee` / `swaps.partnerFee` does not apply here.
    */
   partnerFee?: PartnerFeeV2;
   /**

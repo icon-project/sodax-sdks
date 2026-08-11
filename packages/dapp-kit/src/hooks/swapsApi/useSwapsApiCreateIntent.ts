@@ -18,11 +18,6 @@ export type UseSwapsApiCreateIntentVars = {
  * `sodax.api.swaps.createIntent`. Returns `{ tx, intent, relayData }` to sign and broadcast
  * yourself; it does not change state, so no queries are invalidated.
  *
- * The body is forwarded verbatim, so `partnerFee` has no default here and the SDK's client-side fee
- * config never reaches this path — see `SwapExtrasV2.partnerFee`. A monetizing app must put it in
- * `body`, matching the value it sent to {@link useSwapsApiQuote}, or the swap earns nothing and is
- * unattributable.
- *
  * @example
  * const { mutateAsync: createIntent } = useSwapsApiCreateIntent();
  * const { tx, intent, relayData } = await createIntent({ body: createIntentParams });

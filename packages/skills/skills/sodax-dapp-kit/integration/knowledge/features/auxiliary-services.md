@@ -75,16 +75,17 @@ useSwapsApiSubmitTx({ mutationOptions });               // mutation → sodax.ap
 useSwapsApiSubmitTxStatus({ params, queryOptions });    // query    → sodax.api.swaps.getSubmitTxStatus
 ```
 
-These hooks forward the request body verbatim, so the Swaps API's `partnerFee` rule applies unchanged: it is **optional in the type system only**, the backend applies no default, and `new Sodax({ fee })` / `new Sodax({ swaps: { partnerFee } })` never reach this path (that config only drives the on-chain `sodax.swaps` orchestrator behind `useSwap`/`useQuote`). A `useSwapsApiQuote` / `useSwapsApiCreateIntent` body without it produces a swap that succeeds, charges nothing, and is unattributable. If the app monetizes, put the same `partnerFee` in both bodies:
+These hooks forward the body verbatim, so `partnerFee` has no default (SDK fee config does not
+apply). Put the same value on quote and create-intent:
 
 ```ts
 // @ai-snippets-skip
-const partnerFee = { address: '0xSonicFeeReceiver', percentage: 10 }; // basis points: 10 = 0.1%
+const partnerFee = { address: '0xSonicFeeReceiver', percentage: 10 }; // 10 = 0.1% (bps)
 const { data: quote } = useSwapsApiQuote({ params: { body: { ...quoteBody, partnerFee } } });
 await createIntent({ body: { ...intentBody, partnerFee } });
 ```
 
-Only those two read it — `useSwapsApiAllowance` / `useSwapsApiApprove` / `useSwapsApiApproveAndBroadcast` inherit the field from the shared `CreateIntentParamsV2` body and ignore it (the allowance is sized off the full `inputAmount`). The full rationale is in the `sodax-sdk` skill (integration mode), under `swaps-api.md` § "`partnerFee` — always send it, there is no default".
+See the `sodax-sdk` skill (integration mode), `swaps-api.md` § `partnerFee`.
 
 `useSwapsApiSubmitTx` is a mutation hook — per-call config (e.g. backend base URL) flows through `mutate(vars)`. The `request` is a `SubmitTxRequestV2` (`{ txHash, srcChainKey, walletAddress, intent, relayData }`):
 

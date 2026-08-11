@@ -18,10 +18,6 @@ export type UseSwapsApiQuoteParams = ReadHookParams<
  * `sodax.api.swaps.getQuote`. Pass `query.includeTxData = true` to also build an unsigned
  * create-intent transaction (`txData`); `srcAddress`/`dstAddress` are then required in the body.
  *
- * The body is forwarded verbatim, so `partnerFee` has no default here and the SDK's client-side fee
- * config never reaches this path — see `SwapExtrasV2.partnerFee`. Monetizing apps must send the same
- * value here and to {@link useSwapsApiCreateIntent}.
- *
  * @example
  * const { data: quote } = useSwapsApiQuote({
  *   params: {
@@ -29,7 +25,7 @@ export type UseSwapsApiQuoteParams = ReadHookParams<
  *       tokenSrc: '0x...', tokenSrcChainKey: '0xa4b1.arbitrum',
  *       tokenDst: '0x...', tokenDstChainKey: 'sonic',
  *       amount: '1000000', quoteType: 'exact_input',
- *       partnerFee: { address: '0xSonicFeeReceiver', percentage: 10 }, // omit only if not monetizing
+ *       partnerFee: { address: '0xSonicFeeReceiver', percentage: 10 },
  *     },
  *   },
  * });
