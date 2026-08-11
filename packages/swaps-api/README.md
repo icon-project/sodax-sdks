@@ -11,8 +11,9 @@ Minimal, type-safe HTTP client for the SODAX backend **Swaps API v2**.
 
 It is the single source of the swaps wire client: `@sodax/sdk`'s `SwapsApiService`
 (`sodax.api.swaps`) is a thin adapter over this package, adding the SDK's
-`Result<T>` contract, logger, and config resolution on top. Use `@sodax/swaps-api`
-directly when you want just the swaps backend without pulling in the full SDK.
+`Result<T>` contract, logger, and transport-config resolution on top. Use
+`@sodax/swaps-api` directly when you want just the swaps backend without pulling in
+the full SDK.
 
 ## Install
 
@@ -35,6 +36,7 @@ const quote = await api.getQuote({
   tokenDstChainKey,
   amount,
   quoteType: 'exact_input',
+  partnerFee: { address: partnerReceiverOnSonic, percentage: 10 }, // 10 bps = 0.1%
 });
 ```
 
@@ -42,6 +44,23 @@ const quote = await api.getQuote({
 environment URLs. Optionally set `timeout` (ms — an overall per-call deadline that
 includes retries; on expiry the call throws `TIMEOUT_ERROR`), a custom `fetch` (for
 tests or non-standard runtimes; it receives the timeout `AbortSignal`), and extra `headers`.
+
+## Partner fees
+
+`partnerFee` has no default — this client forwards the body as given and does not read
+`new Sodax({ fee })` / `new Sodax({ swaps: { partnerFee } })`. Send the same value on
+quote and create-intent:
+
+```ts
+const partnerFee = { address: partnerReceiverOnSonic, percentage: 10 }; // 10 = 0.1%, 100 = 1%
+
+const quote = await api.getQuote({ ...quoteBody, partnerFee });
+const intent = await api.createIntent({ ...intentBody, partnerFee });
+```
+
+`checkAllowance` / `approve` inherit the field but ignore it. See
+[MONETIZE_SDK.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/MONETIZE_SDK.md)
+for the orchestrator path.
 
 ## Errors
 

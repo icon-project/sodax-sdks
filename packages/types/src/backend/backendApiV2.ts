@@ -75,8 +75,7 @@ export interface BitcoinBoundExtrasV2 {
  */
 export interface SwapExtrasV2 {
   /**
-   * Per-request partner-fee override; defaults to the backend's configured fee. Keeps the fee-adjusted
-   * quote and the built intent consistent with `createIntent`.
+   * No default on `/swaps/*` — omit and the swap charges nothing. SDK `fee` / `swaps.partnerFee` does not apply here.
    */
   partnerFee?: PartnerFeeV2;
   /**

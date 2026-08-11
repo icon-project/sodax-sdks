@@ -52,6 +52,22 @@ sodax.api.swaps.submitTx(body: SubmitTxRequestV2, config?): Promise<Result<Submi
 sodax.api.swaps.getSubmitTxStatus(query: SubmitTxStatusQueryV2, config?): Promise<Result<SubmitTxStatusResponseV2>>;
 ```
 
+## `partnerFee`
+
+Optional on the type, but there is no default — the client forwards the body as given and never
+reads `new Sodax({ fee })` / `new Sodax({ swaps: { partnerFee } })`. Send the same value on quote
+and create-intent:
+
+```typescript
+const partnerFee = { address: '0xYourSonicFeeReceiver', percentage: 10 }; // 10 = 0.1% (bps)
+
+await sodax.api.swaps.getQuote({ ...quoteBody, partnerFee });
+await sodax.api.swaps.createIntent({ ...intentBody, partnerFee });
+```
+
+`checkAllowance` / `approve` inherit the field but ignore it. See [MONETIZE_SDK.md](MONETIZE_SDK.md)
+for the orchestrator path and fee claiming.
+
 ## `approve` can return two transactions
 
 `ApproveResponseV2` is `{ tx, resetTx? }`. `resetTx` is present only when the source token rejects an
@@ -113,6 +129,7 @@ const quote = await sodax.api.swaps.getQuote({
   tokenSrc, tokenSrcChainKey, tokenDst, tokenDstChainKey,
   amount: '1000000',
   quoteType: 'exact_input',
+  partnerFee,
 });
 if (!quote.ok) return;
 quote.value.quotedAmount; // decimal string
@@ -122,6 +139,7 @@ const created = await sodax.api.swaps.createIntent({
   srcChainKey, dstChainKey, inputToken, outputToken,
   inputAmount: '1000000', minOutputAmount: '990000', deadline: '0',
   allowPartialFill: false, srcAddress, dstAddress,
+  partnerFee,
 });
 if (!created.ok) return;
 const { tx, intent, relayData } = created.value;

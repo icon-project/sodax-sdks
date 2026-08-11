@@ -89,15 +89,26 @@ client serializes them to decimal strings on the wire. Server-returned intents (
 back with those fields as decimal **`string`** (outbound JSON can't carry bigint). The `amount` /
 `inputAmount` fields on the quote / create-intent request bodies are already decimal **strings**.
 
+## `partnerFee`
+
+Optional on the type, but no default: the backend does not fill it in, and
+`new Sodax({ fee })` / `new Sodax({ swaps: { partnerFee } })` only reach the
+`sodax.swaps` orchestrator — not this wire path. Send the same value on quote and
+create-intent. `checkAllowance` / `approve` inherit the field but ignore it.
+Bridge API v2 is different: omitted `partnerFee` falls back to `bridgePartnerFee`.
+
 ## Common call shapes
 
 ### Quote
 
 ```ts
+const partnerFee = { address: '0xSonicFeeReceiver', percentage: 10 }; // 10 = 0.1% (bps)
+
 const quote = await sodax.api.swaps.getQuote({
   tokenSrc, tokenSrcChainKey, tokenDst, tokenDstChainKey,
   amount: '1000000',          // smallest unit, decimal string
   quoteType: 'exact_input',
+  partnerFee,
 });
 if (!quote.ok) return;
 quote.value.quotedAmount;     // decimal string
@@ -114,6 +125,7 @@ const created = await sodax.api.swaps.createIntent({
   deadline: '0',              // "0" → no expiry (limit-order semantics)
   allowPartialFill: false,
   srcAddress, dstAddress,
+  partnerFee,
 });
 if (!created.ok) return;
 const { tx, intent, relayData } = created.value;
