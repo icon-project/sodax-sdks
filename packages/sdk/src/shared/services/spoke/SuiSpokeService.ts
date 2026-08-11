@@ -14,7 +14,6 @@ import {
   type TxReturnType,
   type SuiGasEstimate,
 } from '@sodax/types';
-import { SuiClient } from '@mysten/sui/client';
 import type {
   DepositParams,
   EstimateGasParams,
@@ -24,13 +23,16 @@ import type {
   WaitForTxReceiptReturnType,
 } from '../../types/spoke-types.js';
 import type { ConfigService } from '../../config/ConfigService.js';
+import { SuiGrpcTransport, type SuiTransport, isTimeoutError } from './sui/index.js';
 
 type SuiNativeCoinResult = { $kind: 'NestedResult'; NestedResult: [number, number] };
 type SuiTxObject = { $kind: 'Input'; Input: number; type?: 'object' | undefined };
 
 export class SuiSpokeService {
   private readonly config: ConfigService;
-  public readonly publicClient: SuiClient;
+  public readonly transport: SuiTransport;
+  /** @deprecated Renamed to `transport`, and no longer a raw `@mysten/sui` client. */
+  public readonly publicClient: SuiTransport;
   public assetManagerAddress: string | undefined;
   private readonly pollingIntervalMs: number;
   private readonly maxTimeoutMs: number;
@@ -39,13 +41,16 @@ export class SuiSpokeService {
     this.config = config;
     // since we only support mainnet for now, we can hardcode the single sui chain config
     const chainConfig = config.getChainConfig(ChainKeys.SUI_MAINNET);
-    this.publicClient = new SuiClient({ url: chainConfig.rpc_url });
+    // The packaged config never sets `rpc_url`, so its presence means a consumer overrode it
+    // under the old name — honor it rather than silently ignoring their endpoint.
+    this.transport = new SuiGrpcTransport(chainConfig.rpc_url ?? chainConfig.grpc_url);
+    this.publicClient = this.transport;
     this.pollingIntervalMs = chainConfig.pollingConfig.pollingIntervalMs;
     this.maxTimeoutMs = chainConfig.pollingConfig.maxTimeoutMs;
   }
 
   async getCoins(address: string, token: string): Promise<SuiPaginatedCoins> {
-    return this.publicClient.getCoins({ owner: address, coinType: token, limit: 10 });
+    return this.transport.getCoins(address, token);
   }
 
   public async getCoin(
@@ -139,15 +144,7 @@ export class SuiSpokeService {
       typeArguments: typeArgs,
     });
 
-    const txResults = await this.publicClient.devInspectTransactionBlock({
-      transactionBlock: tx,
-      sender,
-    });
-
-    if (txResults.results && txResults.results[0] !== undefined) {
-      return txResults.results[0] as SuiExecutionResult;
-    }
-    throw Error(`transaction didn't return any values: ${JSON.stringify(txResults, null, 2)}`);
+    return this.transport.simulate(tx, sender);
   }
 
   /**
@@ -241,13 +238,7 @@ export class SuiSpokeService {
    * @returns {Promise<bigint>} The estimated computation cost.
    */
   public async estimateGas({ tx }: EstimateGasParams<SuiChainKey>): Promise<SuiGasEstimate> {
-    const txb = Transaction.from(tx.data);
-    const result = await this.publicClient.devInspectTransactionBlock({
-      sender: tx.from,
-      transactionBlock: txb,
-    });
-
-    return result.effects.gasUsed;
+    return this.transport.estimateGas(Transaction.from(tx.data), tx.from);
   }
 
   /**
@@ -296,51 +287,17 @@ export class SuiSpokeService {
    * @returns {Promise<string>} The latest asset manager package id.
    */
   public async fetchLatestAssetManagerPackageId(chainId: SuiChainKey): Promise<string> {
-    const configData = await this.publicClient.getObject({
-      id: this.config.getChainConfig(chainId).addresses.assetManagerConfigId,
-      options: {
-        showContent: true,
-      },
-    });
-
-    if (configData.error) {
-      throw new Error(`Failed to fetch asset manager id. Details: ${JSON.stringify(configData.error)}`);
-    }
-
-    if (!configData.data) {
-      throw new Error('Asset manager id not found (no data)');
-    }
-
-    if (configData.data.content?.dataType !== 'moveObject') {
-      throw new Error('Asset manager id not found (not a move object)');
-    }
-
-    if (!('latest_package_id' in configData.data.content.fields)) {
-      throw new Error('Asset manager id not found (no latest package id)');
-    }
-
-    const latestPackageId = configData.data.content.fields['latest_package_id'];
-
-    if (typeof latestPackageId !== 'string') {
-      throw new Error('Asset manager id invalid (latest package id is not a string)');
-    }
-
-    if (!latestPackageId) {
-      throw new Error('Asset manager id not found (no latest package id)');
-    }
-
-    return latestPackageId.toString();
+    return this.transport.fetchLatestPackageId(this.config.getChainConfig(chainId).addresses.assetManagerConfigId);
   }
 
   public async waitForTransactionReceipt(
     params: WaitForTxReceiptParams<SuiChainKey>,
   ): Promise<Result<WaitForTxReceiptReturnType<SuiChainKey>>> {
     try {
-      const result = await this.publicClient.waitForTransaction({
+      const result = await this.transport.waitForTransaction({
         digest: params.txHash,
-        timeout: params.maxTimeoutMs ?? this.maxTimeoutMs,
-        pollInterval: params.pollingIntervalMs ?? this.pollingIntervalMs,
-        options: { showEffects: true },
+        timeoutMs: params.maxTimeoutMs ?? this.maxTimeoutMs,
+        pollingIntervalMs: params.pollingIntervalMs ?? this.pollingIntervalMs,
       });
 
       if (!result.effects?.status) {
@@ -365,11 +322,10 @@ export class SuiSpokeService {
 
       return { ok: true, value: { status: 'success', receipt: result satisfies SuiRawTransactionReceipt } };
     } catch (error) {
-      const isTimeout = error instanceof Error && error.message.includes('timeout');
       return {
         ok: true,
         value: {
-          status: isTimeout ? 'timeout' : 'failure',
+          status: isTimeoutError(error) ? 'timeout' : 'failure',
           error: error instanceof Error ? error : new Error(String(error)),
         },
       };
