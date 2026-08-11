@@ -18,7 +18,7 @@ type SuiWalletConfig = PrivateKeySuiWalletConfig | BrowserExtensionSuiWalletConf
 
 type PrivateKeySuiWalletConfig = {
   grpcUrl?: string;                    // gRPC-web endpoint, e.g. https://fullnode.mainnet.sui.io
-  rpcUrl?: string;                     // deprecated alias for grpcUrl; wins when set
+  rpcUrl?: string;                     // deprecated alias — pass this OR grpcUrl, never both
   mnemonics: string;                   // BIP-39 mnemonic — NOT a raw private key
   defaults?: SuiWalletDefaults;
 };
@@ -85,7 +85,7 @@ The internal `client: SuiGrpcClient` and `wallet: SuiWallet` are private.
 - **Browser-extension mode takes a signer callback, not a wallet object.** The provider builds its own gRPC client and only asks you to sign — pass `dAppKit.signTransaction` from `@mysten/dapp-kit-react`, or any wallet-standard signer that returns `{ bytes, signature }`.
 - **Mnemonic is the only private-key option.** There is no raw-secret-key constructor. If you have a 32-byte key bytes you must convert it to a mnemonic upstream (or fork the provider).
 - **Dry-run is on by default for safety.** Production scripts almost never want to disable it.
-- **Sui speaks gRPC only.** Mysten removed JSON-RPC from their fullnodes in October 2026, so the endpoint must serve gRPC-web. `https://fullnode.mainnet.sui.io` does, free and without an API key. The old `rpcUrl` name still resolves, but one of the two must be set or the constructor throws.
+- **Sui speaks gRPC only.** Mysten removed JSON-RPC from their fullnodes in October 2026, so the endpoint must serve gRPC-web. `https://fullnode.mainnet.sui.io` does, free and without an API key. The old `rpcUrl` name still resolves. Exactly one of the two must be set: neither throws, and so does both.
 - **The public fullnode is rate-limited per IP.** Bursts past roughly 150 concurrent calls, or sustained load past roughly 20-25 req/s, return `RESOURCE_EXHAUSTED`; it recovers within seconds. Fine for a user's browser session. A server-side integration sharing one egress IP should pass its own node or a paid provider.
 
 ---

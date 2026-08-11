@@ -17,7 +17,11 @@ export const SuiProvider = ({ children, config }: SuiProviderProps) => {
   const autoConnect = config.autoConnect ?? SUI_DEFAULT_AUTO_CONNECT;
   const network = config.network ?? SUI_DEFAULT_NETWORK;
   const suiChain = config.chains?.[ChainKeys.SUI_MAINNET];
-  // `rpcUrl` is the pre-gRPC name, still honored so existing configs keep working.
+  // `rpcUrl` is the pre-gRPC name for the same endpoint. The entry type rejects both; this catches
+  // untyped callers, where silently picking one would send reads and signing to different nodes.
+  if (suiChain?.grpcUrl && suiChain?.rpcUrl) {
+    throw new Error('[SuiProvider] chains.sui accepts `grpcUrl` or `rpcUrl`, not both');
+  }
   const grpcUrl = suiChain?.grpcUrl ?? suiChain?.rpcUrl ?? SUI_DEFAULT_GRPC_URLS[network];
 
   if (!grpcUrl) {

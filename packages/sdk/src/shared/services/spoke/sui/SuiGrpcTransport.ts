@@ -59,6 +59,8 @@ export class SuiGrpcTransport implements SuiTransport {
 
   constructor(endpoint: string) {
     this.endpoint = endpoint;
+    // Only mainnet is supported — `spokeChainConfig` has a single Sui chain key. `network` feeds
+    // the client's default Move Registry URL, which nothing here uses.
     this.client = new SuiGrpcClient({ network: 'mainnet', baseUrl: endpoint });
   }
 

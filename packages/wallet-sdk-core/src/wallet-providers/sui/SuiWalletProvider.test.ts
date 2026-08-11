@@ -122,8 +122,23 @@ describe('SuiWalletProvider — endpoint config', () => {
     });
   });
 
+  // The config union already rejects both of these at compile time; the casts stand in for an
+  // untyped JS caller, where a silent wrong endpoint would be far worse than a throw.
+  it('rejects passing both endpoint names instead of picking a winner', () => {
+    expect(
+      () =>
+        new SuiWalletProvider({
+          grpcUrl: 'https://a.example',
+          rpcUrl: 'https://b.example',
+          mnemonics: 'a b c',
+        } as unknown as ConstructorParameters<typeof SuiWalletProvider>[0]),
+    ).toThrow(/`grpcUrl` or `rpcUrl`, not both/);
+  });
+
   it('throws when neither endpoint field is supplied', () => {
-    expect(() => new SuiWalletProvider({ mnemonics: 'a b c' })).toThrow(/requires a gRPC endpoint/);
+    expect(
+      () => new SuiWalletProvider({ mnemonics: 'a b c' } as unknown as ConstructorParameters<typeof SuiWalletProvider>[0]),
+    ).toThrow(/requires a gRPC endpoint/);
   });
 });
 

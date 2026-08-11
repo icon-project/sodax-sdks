@@ -62,13 +62,15 @@ describe('SuiProvider — endpoint resolution', () => {
     expect(resolvedEndpoint()).toBe('https://my-node.example');
   });
 
-  it('prefers grpcUrl when both names are set', () => {
-    renderWith({
-      chains: {
-        [ChainKeys.SUI_MAINNET]: { grpcUrl: 'https://my-grpc.example', rpcUrl: 'https://my-node.example' },
-      },
-    });
-    expect(resolvedEndpoint()).toBe('https://my-grpc.example');
+  // The entry type rejects this at compile time; the cast stands in for an untyped JS caller.
+  it('rejects both names instead of silently picking one', () => {
+    expect(() =>
+      renderWith({
+        chains: {
+          [ChainKeys.SUI_MAINNET]: { grpcUrl: 'https://my-grpc.example', rpcUrl: 'https://my-node.example' },
+        },
+      } as unknown as SuiTypeConfig),
+    ).toThrow(/`grpcUrl` or `rpcUrl`, not both/);
   });
 
   it('throws for a network with no packaged default and no configured endpoint', () => {

@@ -26,21 +26,23 @@ export type SuiSignedTransaction = {
   signature: string;
 };
 
+/**
+ * gRPC-web endpoint, under either the current or the pre-gRPC name. They are mutually exclusive:
+ * passing both is a configuration error, not a precedence question.
+ */
+export type SuiEndpointConfig =
+  | { grpcUrl: string; rpcUrl?: never }
+  /** @deprecated Renamed to `grpcUrl`. A `sui-node` serves gRPC-web on the origin it served JSON-RPC on. */
+  | { grpcUrl?: never; rpcUrl: string };
+
 /** Configuration for constructing a `SuiWalletProvider` backed by a mnemonic-derived private key. */
-export type PrivateKeySuiWalletConfig = {
-  grpcUrl?: string;
-  /**
-   * @deprecated Renamed to `grpcUrl`. Still honored, and wins over `grpcUrl` when set. The endpoint
-   * must speak gRPC-web — a `sui-node` serves it on the same origin it served JSON-RPC on.
-   */
-  rpcUrl?: string;
+export type PrivateKeySuiWalletConfig = SuiEndpointConfig & {
   mnemonics: string;
   defaults?: SuiWalletDefaults;
 };
 
 /** Configuration for constructing a `SuiWalletProvider` backed by a browser-extension wallet. */
-export type BrowserExtensionSuiWalletConfig = {
-  grpcUrl: string;
+export type BrowserExtensionSuiWalletConfig = SuiEndpointConfig & {
   address: string;
   /** Signs without broadcasting — pass `dAppKit.signTransaction` or any wallet-standard signer. */
   signTransaction: (txn: SuiTransaction) => Promise<SuiSignedTransaction>;

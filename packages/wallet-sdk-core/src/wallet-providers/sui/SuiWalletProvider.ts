@@ -21,6 +21,7 @@ import type {
   SuiGetCoinsPolicy,
   SuiSignAndExecutePolicy,
   SuiWallet,
+  SuiEndpointConfig,
   SuiWalletConfig,
   SuiWalletDefaults,
 } from './types.js';
@@ -40,6 +41,22 @@ function isBrowserExtensionSuiWalletConfig(
 
 export function isPkSuiWallet(wallet: SuiWallet): wallet is PkSuiWallet {
   return 'keyPair' in wallet;
+}
+
+/**
+ * `rpcUrl` is the pre-gRPC name for the same endpoint. The type union already rejects passing both,
+ * so this only catches untyped callers — but it turns a silent wrong-endpoint into a clear error.
+ */
+export function resolveSuiEndpoint(config: SuiEndpointConfig): string {
+  const { grpcUrl, rpcUrl } = config;
+  if (grpcUrl && rpcUrl) {
+    throw new Error('Sui wallet configuration accepts `grpcUrl` or `rpcUrl`, not both');
+  }
+  const endpoint = grpcUrl ?? rpcUrl;
+  if (!endpoint) {
+    throw new Error('Sui wallet configuration requires a gRPC endpoint (`grpcUrl`)');
+  }
+  return endpoint;
 }
 
 export function isBrowserExtensionSuiWallet(wallet: SuiWallet): wallet is BrowserExtensionSuiWallet {
@@ -64,13 +81,9 @@ export class SuiWalletProvider extends BaseWalletProvider<SuiWalletDefaults> imp
   constructor(walletConfig: SuiWalletConfig) {
     super(walletConfig.defaults);
 
-    // `rpcUrl` is the pre-gRPC name, still honored so existing configs keep working.
-    const endpoint = isPrivateKeySuiWalletConfig(walletConfig)
-      ? (walletConfig.rpcUrl ?? walletConfig.grpcUrl)
-      : walletConfig.grpcUrl;
-    if (!endpoint) {
-      throw new Error('Sui wallet configuration requires a gRPC endpoint (`grpcUrl`)');
-    }
+    const endpoint = resolveSuiEndpoint(walletConfig);
+    // Only mainnet is supported. `network` is not derived from the endpoint because the client
+    // reads it for one thing only — the default Move Registry URL — which nothing here uses.
     this.client = new SuiGrpcClient({ network: 'mainnet', baseUrl: endpoint });
 
     if (isPrivateKeySuiWalletConfig(walletConfig)) {
