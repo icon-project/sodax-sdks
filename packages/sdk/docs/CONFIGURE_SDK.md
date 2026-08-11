@@ -248,7 +248,7 @@ const sodax = new Sodax({
 });
 ```
 
-EVM spokes use `rpcUrl` on their spoke config; Stellar uses `horizonRpcUrl` and `sorobanRpcUrl`; Sui uses `grpc_url` because it speaks gRPC-web rather than JSON-RPC (`rpc_url` is still accepted as a deprecated alias and wins when set, but the endpoint must serve gRPC); Bitcoin includes `radfi` and related fields—mirror the shape of the default `SpokeChainConfig` for the chain you change.
+EVM spokes use `rpcUrl` on their spoke config; Stellar uses `horizonRpcUrl` and `sorobanRpcUrl`; Sui uses `grpc_url` because it speaks gRPC-web rather than JSON-RPC (`rpc_url` is still accepted as a deprecated alias and wins when set, but the endpoint must serve gRPC; the packaged default is Sui's public fullnode, which is rate-limited per IP, so override it for server-side traffic); Bitcoin includes `radfi` and related fields—mirror the shape of the default `SpokeChainConfig` for the chain you change.
 
 ### Backend API (`api`)
 
