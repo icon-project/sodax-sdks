@@ -64,7 +64,7 @@ Top-level keys are `ChainType` strings — one slot per chain family. **Every sl
 |-----|--------|----------------|-------------------|
 | `EVM` | wagmi (13 EVM chains) | `ssr`, `reconnectOnMount`, `initialState`, `persistKey`, `walletConnect` | `{ rpcUrl?, defaults? }` per `EvmChainKey` |
 | `SOLANA` | `@solana/wallet-adapter-react` | `autoConnect` | `{ rpcUrl?, defaults? }` per `SolanaChainKey` |
-| `SUI` | `@mysten/dapp-kit-react` | `autoConnect`, `network` | `{ grpcUrl?, defaults? }` per `SuiChainKey` |
+| `SUI` | `@mysten/dapp-kit-react` | `autoConnect`, `network` | `{ grpcUrl?, defaults? }` per `SuiChainKey` (`rpcUrl` is a deprecated alias) |
 | `ICON` | (no React adapter) | — | `{ rpcUrl?, defaults? }` per `IconChainKey` |
 | `NEAR` | (no React adapter) | — | `{ rpcUrl?, defaults? }` per `NearChainKey` |
 | `STELLAR` | (no React adapter) | — | `StellarRpcConfig & { defaults? }` per `StellarChainKey` |
