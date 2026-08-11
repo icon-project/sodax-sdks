@@ -279,7 +279,8 @@ service paths: that is what lets a locally-run service be reached by swapping th
 (`http://localhost:3008` mounts `/swaps/*` at its bare origin, with no version prefix at all). The
 corollary is that `https://api.sodax.com` on its own is an incomplete base URL — it resolves every service
 one segment short (`/be/config/all`, `/swaps/tokens`) and 404s. Only the data API has a `basePath` to
-compensate, so the SDK warns at construction when a base URL on the packaged host omits the prefix.
+compensate, so the SDK warns at construction, naming each service whose resolved root on the packaged host
+omits the prefix — including one reached through a `swapsApiConfig` or `sponsoringApiConfig` slice.
 
 So a `baseURL` must never end in a service segment. If it ends in `/be`, the SDK trims it and logs a warning — the previous packaged default was `https://api.sodax.com/v1/be`, which nested the sibling services one level too deep (`/v1/be/swaps/submit-tx`).
 

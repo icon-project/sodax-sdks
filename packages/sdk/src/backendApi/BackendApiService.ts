@@ -35,7 +35,7 @@ import { BridgeApiService } from './BridgeApiService.js';
 import {
   hasExplicitBasePath,
   hasLegacyBackendBaseURL,
-  hasMissingVersionPrefix,
+  isMissingVersionPrefix,
   stripLegacyBackendMount,
   resolveBaseApiConfig,
   resolveBridgeApiConfig,
@@ -219,9 +219,24 @@ export class BackendApiService implements IConfigApiV1 {
     this.headers = { ...this.config.headers };
     this.logger = logger;
     this.trimsLegacyOverrides = !hasExplicitBasePath(config);
-    if (hasMissingVersionPrefix(config)) {
+    // Resolve every slice up front: the diagnostics below inspect what each service will actually
+    // request, which is the only way to catch a base URL that reaches a service through its own slice.
+    const swapsConfig = resolveSwapsApiConfig(config);
+    const sponsoringConfig = resolveSponsoringApiConfig(config);
+    const bridgeConfig = resolveBridgeApiConfig(config);
+
+    const shortRoots = (
+      [
+        ['backendApi', this.config.baseURL],
+        ['api.swaps', swapsConfig.baseURL],
+        ['api.bridge', bridgeConfig.baseURL],
+        ['api.sponsoring', sponsoringConfig.baseURL],
+      ] as const
+    ).filter(([, baseURL]) => isMissingVersionPrefix(baseURL));
+    if (shortRoots.length > 0) {
+      const named = shortRoots.map(([service, baseURL]) => `${service} ("${baseURL}")`).join(', ');
       this.logger.warn(
-        `[BackendApiService] api.baseURL is missing the gateway's version prefix: "${this.config.baseURL}" resolves ${this.config.basePath}/… , /swaps/… and /bridge/… one segment short. Use "${DEFAULT_API_BASE_URL}" — the prefix is deployment-owned, so it belongs in baseURL, and only the data API has a basePath to compensate.`,
+        `[BackendApiService] api.baseURL is missing the gateway's version prefix for ${named}: every route resolves one segment short. Use "${DEFAULT_API_BASE_URL}" — the prefix is deployment-owned, so it belongs in baseURL, and only the data API has a basePath to compensate.`,
       );
     }
     if (hasLegacyBackendBaseURL(config)) {
@@ -229,15 +244,17 @@ export class BackendApiService implements IConfigApiV1 {
         `[BackendApiService] api.baseURL should be the gateway root, not the backend data API's mount: trimmed "${BACKEND_API_BASE_PATH}" to "${this.config.baseURL}". Drop the suffix — the SDK appends it, and sibling services (/swaps, /bridge) must not sit under it.`,
       );
     }
-    // Resolve the swaps slice here (where the ApiConfig union is available) and hand the
-    // sub-service its concrete SwapsApiConfig plus the shared logger — it does not see the union,
-    // and must route diagnostics through the same consumer-selected sink as the rest of the SDK.
-    this.swaps = new SwapsApiService(resolveSwapsApiConfig(config), this.logger);
-    // Sponsoring uses an independent origin and credential scope.
-    this.sponsoring = new SponsoringApiService(resolveSponsoringApiConfig(config), this.logger);
+    // Each sub-service gets its concrete resolved config plus the shared logger — none of them sees the
+    // `ApiConfig` union, and all must route diagnostics through the same consumer-selected sink. The
+    // legacy-trim decision travels with them so their per-call overrides match the config-level choice.
+    const overrideOptions = { trimLegacyOverrides: this.trimsLegacyOverrides };
+    this.swaps = new SwapsApiService(swapsConfig, this.logger, overrideOptions);
+    // Sponsoring uses an independent origin and credential scope, and never trims (its default never
+    // carried the data API's mount), so it takes no override option.
+    this.sponsoring = new SponsoringApiService(sponsoringConfig, this.logger);
     // Bridge hangs off the same gateway root as `/bridge/*` — resolved from `baseApiConfig` but without
     // this service's `basePath`, so a `swapsApiConfig` slice moves swaps only (see `resolveBridgeApiConfig`).
-    this.bridge = new BridgeApiService(resolveBridgeApiConfig(config), this.logger);
+    this.bridge = new BridgeApiService(bridgeConfig, this.logger, overrideOptions);
   }
 
   /**

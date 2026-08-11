@@ -131,6 +131,26 @@ describe('a legacy /be-suffixed per-call baseURL override', () => {
     expect(requestedUrl()).toBe('https://gw2.example/be/config/all');
   });
 
+  it('is left as given for swaps and bridge too when basePath opts the config out', async () => {
+    // Finding 1 from the PR review: `BackendApiService` honoured the opt-out but the decision never
+    // reached the sibling clients, so their per-call overrides had a real path segment trimmed away.
+    const gw = new Sodax({
+      api: { baseApiConfig: { baseURL: 'https://gw.example/be', basePath: '' } },
+      logger: silentLogger,
+    });
+    await gw.api.swaps.getTokens({ baseURL: 'https://gw2.example/be' });
+    expect(requestedUrl()).toBe('https://gw2.example/be/swaps/tokens');
+    await gw.api.bridge.getTokens({ baseURL: 'https://gw2.example/be' });
+    expect(requestedUrl()).toBe('https://gw2.example/be/bridge/tokens');
+  });
+
+  it('still trims for swaps and bridge when the config did not opt out', async () => {
+    await sodax.api.swaps.getTokens({ baseURL: legacy });
+    expect(requestedUrl()).toBe('https://api.sodax.com/v1/swaps/tokens');
+    await sodax.api.bridge.getTokens({ baseURL: legacy });
+    expect(requestedUrl()).toBe('https://api.sodax.com/v1/bridge/tokens');
+  });
+
   it('leaves a gateway-root override untouched for every service', async () => {
     const root = 'https://canary-api.sodax.com/v1';
     await sodax.backendApi.getAllConfig({ baseURL: root });
@@ -150,6 +170,30 @@ describe('a bare-origin baseURL on the packaged host', () => {
     new Sodax({ api: { baseURL: 'https://api.sodax.com' }, logger });
     expect(logger.warn).toHaveBeenCalledTimes(1);
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('missing the gateway'));
+  });
+
+  it.each([
+    ['swapsApiConfig', { swapsApiConfig: { baseURL: 'https://api.sodax.com' } }],
+    ['sponsoringApiConfig', { sponsoringApiConfig: { baseURL: 'https://api.sodax.com' } }],
+  ])('is reported when the short root arrives through the %s slice', (slice, api) => {
+    // Finding 2 from the PR review: the old check layered only the flat fields and `baseApiConfig`, so a
+    // root reaching its service through its own slice resolved one segment short with no warning.
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    new Sodax({ api, logger });
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('missing the gateway'));
+  });
+
+  it('names the offending service so the slice to fix is obvious', () => {
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    new Sodax({ api: { swapsApiConfig: { baseURL: 'https://api.sodax.com' } }, logger });
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('api.swaps'));
+  });
+
+  it('stays quiet for a per-service slice that carries the prefix', () => {
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    new Sodax({ api: { swapsApiConfig: { baseURL: 'https://canary-api.sodax.com/v1' } }, logger });
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 
   it('stays quiet for a local service at its bare origin', () => {

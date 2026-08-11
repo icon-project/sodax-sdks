@@ -8,7 +8,6 @@ import {
   type SodaxOptions,
   type SolverConfig,
   ChainKeys,
-  type DeepPartial,
   type HttpUrl,
   type RpcConfig,
 } from '@sodax/dapp-kit';
@@ -55,11 +54,12 @@ const sponsoringApiConfig = {
   ...(typeof sponsoringApiKeyEnv === 'string' && sponsoringApiKeyEnv.length > 0 ? { apiKey: sponsoringApiKeyEnv } : {}),
 };
 
-// Retarget the swaps API, for running the demo against a locally started `swaps-api` instead of
-// canary. Same shape as the sponsoring override: the value is the base URL *including* any version
-// prefix, so a local service that mounts `/swaps/*` at the bare origin is `http://localhost:3008`.
+// Retarget the swaps API at canary or a locally started `swaps-api`. Unset leaves swaps on the packaged
+// production gateway root, like every other service — it is not pinned to a different host by default.
+// Same shape as the sponsoring override: the value is the base URL *including* any version prefix, so a
+// local service that mounts `/swaps/*` at the bare origin is `http://localhost:3008`.
 const swapsApiBaseUrlEnv: unknown = import.meta.env.VITE_SWAPS_API_BASE_URL;
-const swapsApiBaseURL = isHttpUrl(swapsApiBaseUrlEnv) ? swapsApiBaseUrlEnv : 'https://canary-api.sodax.com/v1';
+const swapsApiConfig = isHttpUrl(swapsApiBaseUrlEnv) ? { baseURL: swapsApiBaseUrlEnv } : undefined;
 
 const configMap: Record<SolverEnv, SolverConfig> = {
   [SolverEnv.Production]: productionSolverConfig,
@@ -142,9 +142,8 @@ export default function Providers({ children }: { children: ReactNode }) {
         // No `baseApiConfig`: the packaged default already points at the production gateway root, and
         // every service appends its own path below it (`/be`, `/swaps`, `/bridge`, `/sponsorships/*`).
         // Never put a service segment in a base URL — that is what sent swaps to `/v1/be/swaps/*`.
-        swapsApiConfig: {
-          baseURL: swapsApiBaseURL,
-        },
+        // `undefined` slices are skipped by `deepMerge`, so an unset override is the same as no key.
+        swapsApiConfig,
         sponsoringApiConfig,
       },
       logger: createDatadogLogger(),

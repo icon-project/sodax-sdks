@@ -17,7 +17,7 @@ import {
 } from '@sodax/types';
 import {
   hasLegacyBackendBaseURL,
-  hasMissingVersionPrefix,
+  isMissingVersionPrefix,
   resolveBaseApiConfig,
   resolveBridgeApiConfig,
   resolveSponsoringApiConfig,
@@ -464,17 +464,17 @@ describe('legacy /be-suffixed baseURL', () => {
   });
 });
 
-describe('a base URL missing the gateway version prefix', () => {
+describe('isMissingVersionPrefix', () => {
   // `baseURL` is origin + the deployment's version prefix. Dropping the prefix but keeping the packaged
-  // host resolves every service one segment short, and only the data API has a `basePath` to compensate —
-  // so this is diagnosed rather than silently repaired.
+  // host resolves a service one segment short, and only the data API has a `basePath` to compensate — so
+  // this is diagnosed rather than silently repaired. The predicate takes a RESOLVED base URL, so it holds
+  // however that URL was layered (flat field, `baseApiConfig`, or a per-service slice).
   it.each([
     ['the bare packaged origin', 'https://api.sodax.com'],
     ['a trailing slash on the origin', 'https://api.sodax.com/'],
     ['the origin plus a service segment, no version', 'https://api.sodax.com/be'],
   ])('is reported for %s', (_label, baseURL) => {
-    expect(hasMissingVersionPrefix(asConfig({ baseURL }))).toBe(true);
-    expect(hasMissingVersionPrefix(asConfig({ baseApiConfig: { baseURL } }))).toBe(true);
+    expect(isMissingVersionPrefix(baseURL)).toBe(true);
   });
 
   it.each([
@@ -482,7 +482,7 @@ describe('a base URL missing the gateway version prefix', () => {
     ['the packaged default with a legacy mount', `${DEFAULT_API_BASE_URL}${BACKEND_API_BASE_PATH}`],
     ['a deeper path on the packaged host', `${DEFAULT_API_BASE_URL}/extra`],
   ])('is not reported for %s', (_label, baseURL) => {
-    expect(hasMissingVersionPrefix(asConfig({ baseURL }))).toBe(false);
+    expect(isMissingVersionPrefix(baseURL)).toBe(false);
   });
 
   it.each([
@@ -490,12 +490,36 @@ describe('a base URL missing the gateway version prefix', () => {
     ['a local swaps service at its bare origin', 'http://localhost:3008'],
     ['a self-hosted gateway at a bare origin', 'https://gw.mycorp.example'],
     ['a canary host', 'https://canary-api.sodax.com/v1'],
-  ])('never fires for %s — a bare origin off the packaged host is legitimate', (_label, baseURL) => {
-    expect(hasMissingVersionPrefix(asConfig({ baseURL }))).toBe(false);
+    ['a lookalike host that merely starts with the packaged origin', 'https://api.sodax.com.evil.example'],
+  ])('never fires for %s — off the packaged host it is not ours to judge', (_label, baseURL) => {
+    expect(isMissingVersionPrefix(baseURL)).toBe(false);
   });
 
-  it('is not reported for the packaged default config', () => {
-    expect(hasMissingVersionPrefix(asConfig({}))).toBe(false);
+  it('holds for a root reached through any slice, since it inspects the resolved value', () => {
+    for (const config of [
+      asConfig({ baseURL: 'https://api.sodax.com' }),
+      asConfig({ baseApiConfig: { baseURL: 'https://api.sodax.com' } }),
+    ]) {
+      expect(isMissingVersionPrefix(resolveBaseApiConfig(config).baseURL)).toBe(true);
+    }
+    expect(
+      isMissingVersionPrefix(
+        resolveSwapsApiConfig(asConfig({ swapsApiConfig: { baseURL: 'https://api.sodax.com' } })).baseURL,
+      ),
+    ).toBe(true);
+    expect(
+      isMissingVersionPrefix(
+        resolveSponsoringApiConfig(asConfig({ sponsoringApiConfig: { baseURL: 'https://api.sodax.com' } })).baseURL,
+      ),
+    ).toBe(true);
+  });
+
+  it('is not reported for the packaged default config on any service', () => {
+    const config = asConfig({});
+    expect(isMissingVersionPrefix(resolveBaseApiConfig(config).baseURL)).toBe(false);
+    expect(isMissingVersionPrefix(resolveSwapsApiConfig(config).baseURL)).toBe(false);
+    expect(isMissingVersionPrefix(resolveBridgeApiConfig(config).baseURL)).toBe(false);
+    expect(isMissingVersionPrefix(resolveSponsoringApiConfig(config).baseURL)).toBe(false);
   });
 });
 

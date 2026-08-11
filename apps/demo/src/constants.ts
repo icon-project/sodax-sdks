@@ -84,6 +84,19 @@ export const availableChains: ChainUI[] = [
   ChainKeys.REDBELLY_MAINNET,
 ].map(key => ({ id: key, name: baseChainInfo[key].name, icon: baseChainInfo[key].logo }));
 
+export const ROUTES = {
+  SWAPS_SDK: '/swaps-sdk',
+  SWAPS_API: '/swaps-api',
+  MONEY_MARKET: '/money-market',
+  BRIDGE: '/bridge',
+  BRIDGE_API: '/bridge-api',
+  DEX: '/dex',
+  STAKING: '/staking',
+  PARTNER_FEE_CLAIM: '/partner-fee-claim',
+  RECOVERY: '/recovery',
+  LEVERAGE_YIELD: '/leverage-yield',
+} as const;
+
 /**
  * Helper function to get chain UI data by chain ID
  */

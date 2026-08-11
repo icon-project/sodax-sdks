@@ -28,8 +28,12 @@ New exports from `@sodax/types` (re-exported by `@sodax/sdk`): `DEFAULT_API_BASE
 (`BaseApiConfig & { basePath?: string }`) — the backend data API's mount, which only it reads. Set
 `basePath: ''` for a backend addressed directly at its origin rather than through the gateway:
 `new Sodax({ api: { baseApiConfig: { baseURL: 'http://localhost:4000', basePath: '' } } })` requests
-`http://localhost:4000/config/all`. `DEFAULT_BACKEND_API_ENDPOINT` is deprecated (its value is unchanged);
-`DEFAULT_SPONSORING_API_ENDPOINT` is now an alias of `DEFAULT_API_BASE_URL`, same value as before.
+`http://localhost:4000/config/all`. `@sodax/sdk` additionally exports `SwapsApiServiceOptions` and
+`BridgeApiServiceOptions` — an optional third constructor argument on those two services, only relevant if
+you construct them directly instead of going through `Sodax`. `DEFAULT_BACKEND_API_ENDPOINT` is deprecated (its value is unchanged);
+`DEFAULT_SPONSORING_API_ENDPOINT` is unchanged and stays an independent constant — the same value as
+`DEFAULT_API_BASE_URL` today, but deliberately not tied to it, so retargeting the shared gateway root never
+moves the sponsoring default or the real-mainnet guard that compares against it.
 
 **Migration.** Drop the `/be` suffix from any `baseURL` you pass — `'https://api.sodax.com/v1/be'` becomes
 `'https://api.sodax.com/v1'`, and the SDK appends `/be` itself. The old value keeps working: the SDK trims
@@ -37,8 +41,9 @@ a trailing `/be` from the flat field, the `baseApiConfig`/`swapsApiConfig` slice
 overrides, warns once per `Sodax` construction naming the trimmed root, and resolves the data API to
 exactly the URLs it used before — while now also fixing the swaps and bridge routes it used to nest under
 `/be`. Two exceptions: `sponsoringApiConfig.baseURL` is never trimmed (it resolves independently and its
-default never carried the mount), and an explicit `basePath` stands the trim down entirely, so a deployment
-genuinely served under `/be` can say `{ baseURL: 'https://host/be', basePath: '' }` and keep it. The
+default never carried the mount), and an explicit `basePath` stands the trim down — for that config's
+resolved roots and for its per-call overrides on every client — so a deployment genuinely served under
+`/be` can say `{ baseURL: 'https://host/be', basePath: '' }` and keep it. The
 compatibility trim is scheduled for removal alongside the deprecated `DEFAULT_BACKEND_API_ENDPOINT` in the
 next major.
 
@@ -55,7 +60,9 @@ Three observable changes:
 The version prefix stays in `baseURL` because it is deployment-owned: a locally-run service is reached by
 swapping the host alone, with no prefix at all. `https://api.sodax.com` without `/v1` is therefore an
 incomplete base URL — it shortens every service path by one segment, and since only the data API has a
-`basePath` to compensate, the SDK warns at construction when a base URL on the packaged host omits it.
+`basePath` to compensate, the SDK warns at construction, naming each service whose resolved root on the
+packaged host omits the prefix (including one reached through a `swapsApiConfig` or `sponsoringApiConfig`
+slice).
 
 Sponsoring is otherwise unchanged: it still resolves its own base URL without inheriting, so pointing the
 base API at a private proxy or a staging root never drags it along.

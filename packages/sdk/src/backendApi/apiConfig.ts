@@ -141,20 +141,24 @@ function isOnPackagedOrigin(baseURL: string): boolean {
 }
 
 /**
- * True when the base URL points at the packaged gateway host but omits its version prefix.
+ * True when a RESOLVED base URL points at the packaged gateway host but omits its version prefix.
  *
  * `baseURL` is the origin plus the deployment's version prefix, so `https://api.sodax.com` on its own
- * resolves every service one segment short — `/be/config/all`, `/swaps/tokens`, `/bridge/tokens` — and
- * 404s on all of them. Only the data API has a `basePath` to compensate, so the siblings cannot be
- * rescued after the fact; the fix is always to put the prefix back in `baseURL`.
+ * resolves a service one segment short — `/be/config/all`, `/swaps/tokens` — and 404s. Only the data API
+ * has a `basePath` to compensate, so the others cannot be rescued after the fact; the fix is always to
+ * put the prefix back in `baseURL`.
+ *
+ * Takes the resolved value rather than the config so it holds for every service however its base URL was
+ * layered — a `swapsApiConfig` or `sponsoringApiConfig` slice reaches its service without passing through
+ * `baseApiConfig`, so a config-shaped check would miss exactly those.
  *
  * Deliberately scoped to the packaged origin: a self-hosted gateway or a local service mounted at a bare
  * origin (`http://localhost:3011`, `http://localhost:3008`) is legitimate and must not warn.
  */
-export function hasMissingVersionPrefix(layers: LayeredApiConfig): boolean {
-  const configured = normalizeBaseURL(layerConfigs(flatLayer(layers), layers.baseApiConfig).baseURL);
-  if (!isOnPackagedOrigin(configured)) return false;
-  return configured !== DEFAULT_API_BASE_URL && !configured.startsWith(`${DEFAULT_API_BASE_URL}/`);
+export function isMissingVersionPrefix(baseURL: string): boolean {
+  const normalized = trimTrailingSlashes(baseURL);
+  if (!isOnPackagedOrigin(normalized)) return false;
+  return normalized !== DEFAULT_API_BASE_URL && !normalized.startsWith(`${DEFAULT_API_BASE_URL}/`);
 }
 
 /** Normalize a service mount path: no surrounding whitespace, exactly one leading slash, no trailing slash. */
