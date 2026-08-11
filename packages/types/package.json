@@ -16,7 +16,7 @@
     "url": "https://github.com/icon-project/sodax-sdks"
   },
   "engines": {
-    "node": ">=20.12.0"
+    "node": ">=22.12.0"
   },
   "files": [
     "dist",
