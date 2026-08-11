@@ -46,7 +46,13 @@ type SimpleChainEntry<D> = {
 
 export type EvmChainEntry = SimpleChainEntry<EvmWalletDefaults>;
 export type SolanaChainEntry = SimpleChainEntry<SolanaWalletDefaults>;
-export type SuiChainEntry = SimpleChainEntry<SuiWalletDefaults>;
+/** Sui speaks gRPC-web, not JSON-RPC — hence `grpcUrl` rather than the shared `rpcUrl`. */
+export type SuiChainEntry = {
+  grpcUrl?: string;
+  /** @deprecated Renamed to `grpcUrl`. Still honored, and wins over `grpcUrl` when set. */
+  rpcUrl?: string;
+  defaults?: SuiWalletDefaults;
+};
 export type IconChainEntry = SimpleChainEntry<IconWalletDefaults>;
 export type NearChainEntry = SimpleChainEntry<NearWalletDefaults>;
 
@@ -94,10 +100,10 @@ export type SolanaAdapterFields = {
   autoConnect?: boolean;
 };
 
-/** `@mysten/dapp-kit` provider settings. */
+/** `@mysten/dapp-kit-react` provider settings. */
 export type SuiAdapterFields = {
   autoConnect?: boolean;
-  /** Default network for the SuiClientProvider. @default 'mainnet' */
+  /** Default network for the dApp Kit instance. @default 'mainnet' */
   network?: 'mainnet' | 'testnet' | 'devnet';
 };
 
