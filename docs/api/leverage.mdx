@@ -121,8 +121,16 @@ Withdraw: lsoda* shares        →  (solver)  →  any supported token
 
 ### Partner fees
 
-- **Deposit** can carry `partnerFee` (same shapes as swaps: fixed `amount` or `percentage` bps).  
-- **Withdraw** currently **cannot** carry a partner fee (SDK constraint on withdraw params). Partners earn on the way in only for vault flows.
+Same shapes as swaps: fixed `amount` or `percentage` (basis points).
+
+| Surface | Deposit | Withdraw |
+|---------|---------|----------|
+| **SDK** (`sodax.leverageYield`) | Yes | Yes — fee is taken from `inputAmount` (vault **`lsoda*` shares**), not the output token |
+| **HTTP** (this API) | Yes — `partnerFee` on `POST /quote/deposit` and `POST /intents/deposit` | **Not on the wire yet** — `POST /quote/withdraw` and `POST /intents/withdraw` request bodies omit `partnerFee` (backend DTO lag after the SDK added withdraw fees) |
+
+For TypeScript product integrations, use the SDK so both directions can monetize. On raw HTTP, only deposit requests currently accept `partnerFee`; a withdraw body field would be ignored / rejected until the backend DTOs catch up.
+
+Vault fees use the **leverage-yield** fee path (`leverageYield.partnerFee` / per-intent override), **not** `swaps.partnerFee`.
 
 ---
 
@@ -184,7 +192,7 @@ Do not invent multipliers client-side unless you reimplement the same formula.
 | Create intent | `/intents` | `/intents/deposit` · `/intents/withdraw` |
 | Submit machine | shared | shared (+ `operation`) |
 | Quote | pair quote | deposit/withdraw quote against vault |
-| Partner fee | either direction | deposit only |
+| Partner fee | either direction | SDK: either direction · HTTP: deposit only (withdraw field not on wire yet) |
 
 If you already integrated [Swaps submit-tx](/api/swaps), reuse the same polling, cancel-to-recover, and failure-field handling here.
 
