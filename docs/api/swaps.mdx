@@ -181,7 +181,15 @@ pending → relaying → relayed → posting_execution → posted_execution → 
 | `failed` | Terminal **failure** — act on `userMessage` / cancel if needed |
 | anything else | Keep polling (~3s) |
 
-On success, `result.fillTxHash` is the destination fill when available (optional — journal-confirmed fills may omit it). `result.dstIntentTxHash` / `intent_hash` / `packetData` appear depending on path.
+On success, treat these `result` fields as the contract for pollers:
+
+| Field | Role |
+|-------|------|
+| `dstIntentTxHash` | Hub intent-creation tx (present once relayed) |
+| `intent_hash` | Solver intent hash (after post-execution), when present |
+| `packetData` | Cross-chain relay packet, when present |
+
+Optional wire field: the backend **may** also return `result.fillTxHash` (solver destination-chain fill) when the solver reported a fill. It can be **absent** even on `solved` if the fill was confirmed via the on-chain journal instead. The typed TypeScript contract (`SubmitTxStatusResultV2` / `@sodax/swaps-api`) **does not include** `fillTxHash` — that client only types `dstIntentTxHash`, `packetData`, and `intent_hash`. For a typed fill hash, use `POST /intents/status` (numeric status `3` SOLVED → top-level `fillTxHash`) or the [on-chain journal](#5-optional-on-chain-journal).
 
 On failure, inspect `failedAtStep`, `failureReason`, `userMessage`, `intentCancelled`, `abandonedAt`.
 

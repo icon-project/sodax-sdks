@@ -46,9 +46,9 @@ curl -s 'https://api.sodax.com/v1/leverage-yield/vaults'
 | `GET` | `/apr/effective` | Effective (levered) APR |
 | `GET` | `/apr/lsd` | Underlying LSD APR (incl. off-chain source) |
 | `GET` | `/total-assets` | Vault TVL in asset units |
-| `GET` | `/preview/deposit` | Preview shares for assets |
-| `GET` | `/preview/withdraw` | Preview assets for shares out |
-| `GET` | `/preview/redeem` | Preview redeem |
+| `GET` | `/preview/deposit` | Assets in → shares out (ERC-4626 `previewDeposit`) |
+| `GET` | `/preview/withdraw` | Assets in → shares that would be **burned** (ERC-4626 `previewWithdraw`; query `assets`) |
+| `GET` | `/preview/redeem` | Shares in → assets out (ERC-4626 `previewRedeem`; query `shares`) |
 | `GET` | `/share-balance` | Share balance for owner |
 | `GET` | `/max-withdraw` | Max withdrawable for owner |
 
