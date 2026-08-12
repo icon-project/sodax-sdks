@@ -8,7 +8,8 @@ The **Swaps API v2** is the raw HTTP surface for intent-based swaps. Use it from
 | Path | Role |
 |------|------|
 | **HTTP** (this page) | `https://api.sodax.com/v1/swaps/*` |
-| **TypeScript client** | `@sodax/swaps-api` / `sodax.api.swaps` |
+| **Standalone TS client** | `@sodax/swaps-api` — thin wire client; methods **throw** `SwapsApiError` on failure |
+| **SDK adapter** | `sodax.api.swaps` — same endpoints, wraps the standalone client; returns `Result<T>` and **never throws** |
 | **SDK orchestrator** | `sodax.swaps` — end-to-end create → relay → settle ([Swaps module](https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/swaps)) |
 
 > The legacy path `/v1/bes/swaps` is retired (`route_not_found`). Always use `/v1/swaps`.
@@ -245,7 +246,16 @@ Exact field names follow the OpenAPI / `@sodax/types` `QuoteRequestV2` shapes �
 
 ---
 
-## TypeScript client (optional)
+## TypeScript clients (optional)
+
+Two packages hit the same HTTP API with **different error contracts**:
+
+| Client | Package / entry | Failure behaviour |
+|--------|-----------------|-------------------|
+| Standalone | `@sodax/swaps-api` → `new SwapsApi({ baseUrl })` | **Throws** `SwapsApiError` (network, timeout, HTTP, parse, validation) |
+| SDK adapter | `@sodax/sdk` → `sodax.api.swaps` | Returns `Result<T>` — **never throws** (wraps the standalone client) |
+
+### SDK adapter (`Result<T>`)
 
 ```ts
 import { Sodax } from '@sodax/sdk';
@@ -255,12 +265,34 @@ const sodax = new Sodax();
 // new Sodax({ api: { baseApiConfig: { baseURL: 'https://api.sodax.com/v1' } } })
 
 const quote = await sodax.api.swaps.getQuote({ /* … */ });
+if (!quote.ok) {
+  // handle quote.error — no try/catch required for API failures
+  return;
+}
 const created = await sodax.api.swaps.createIntent({ /* … */ });
 const submit = await sodax.api.swaps.submitTx({ /* … */ });
 const status = await sodax.api.swaps.getSubmitTxStatus({ txHash, srcChainKey });
 ```
 
-Every client method returns `Result<T>` and never throws.
+### Standalone client (throws)
+
+```ts
+import { SwapsApi, SwapsApiError } from '@sodax/swaps-api';
+
+const api = new SwapsApi({ baseUrl: 'https://api.sodax.com/v1' });
+
+try {
+  const quote = await api.getQuote({ /* … */ });
+  const created = await api.createIntent({ /* … */ });
+  await api.submitTx({ /* … */ });
+  const status = await api.getSubmitTxStatus({ txHash, srcChainKey });
+} catch (e) {
+  if (e instanceof SwapsApiError) {
+    // e.code: NETWORK_ERROR | TIMEOUT_ERROR | HTTP_ERROR | PARSE_ERROR | VALIDATION_ERROR
+  }
+  throw e;
+}
+```
 
 ---
 

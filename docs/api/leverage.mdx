@@ -139,7 +139,7 @@ Vault fees use the **leverage-yield** fee path (`leverageYield.partnerFee` / per
 | Situation | Recommendation |
 |-----------|----------------|
 | Product UI in React / TS | `sodax.leverageYield` + dapp-kit hooks |
-| Bot / non-TS on HTTP | This API: quote → approve → intents/deposit|withdraw → broadcast → submit-tx → poll |
+| Bot / non-TS on HTTP | This API: quote → approve → intents deposit or withdraw → broadcast → submit-tx → poll |
 | Display APR / TVL only | `GET /vaults`, `/apr*`, `/total-assets` |
 | Full risk / loop explanation | [SDK leverage yield docs](https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/leverage_yield) (how the loop works, multiplier, risk of inverted spread) |
 
