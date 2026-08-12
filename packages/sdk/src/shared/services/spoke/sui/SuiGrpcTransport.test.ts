@@ -183,11 +183,13 @@ describe('SuiGrpcTransport.fetchLatestPackageId', () => {
     expect(spy).toHaveBeenCalledWith({ objectId: SUI_ASSET_MGR_CONFIG_ID, include: { json: true } });
   });
 
-  it('throws when getObject rejects', async () => {
-    vi.spyOn(core, 'getObject').mockRejectedValueOnce(new Error('not found'));
+  it('throws when getObject rejects, keeping the transport error as cause', async () => {
+    const transportError = new Error('not found');
+    vi.spyOn(core, 'getObject').mockRejectedValueOnce(transportError);
 
+    // The cause is the only place the gRPC status survives — the wrapper message is fixed.
     await expect(transport.fetchLatestPackageId(SUI_ASSET_MGR_CONFIG_ID)).rejects.toThrow(
-      /Failed to fetch asset manager id/,
+      expect.objectContaining({ message: 'Failed to fetch asset manager id', cause: transportError }),
     );
   });
 

@@ -102,7 +102,7 @@ export class SuiGrpcTransport implements SuiTransport {
     try {
       ({ object } = await this.client.core.getObject({ objectId, include: { json: true } }));
     } catch (error) {
-      throw new Error(`Failed to fetch asset manager id. Details: ${JSON.stringify(error)}`);
+      throw new Error('Failed to fetch asset manager id', { cause: error });
     }
 
     if (!object) {
