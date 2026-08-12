@@ -7,6 +7,7 @@ export type { ApiResponse, RequestConfig, RequestOverrideConfig } from './api-ut
 // Export the bundle-safe guard with the structured HTTP error.
 export { BackendHttpError, isBackendHttpError } from './api-utils.js';
 export * from './BackendApiService.js';
+export { isFillEvent, type FillEvent } from './guards.js';
 export * from './SwapsApiService.js';
 export * from './SponsoringApiService.js';
 export * from './BridgeApiService.js';

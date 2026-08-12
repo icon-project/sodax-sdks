@@ -24,6 +24,7 @@ import {
   type IWalletProvider,
   DEFAULT_BACKEND_API_TIMEOUT,
   DEFAULT_RELAY_TX_TIMEOUT,
+  SolverIntentStatusCode,
   type Result,
   type SpokeChainKey,
 } from '@sodax/types';
@@ -1699,24 +1700,62 @@ describe('SwapService.getSolvedIntentPacket', () => {
 // =========================================================================
 
 describe('SwapService.getStatus', () => {
-  it('delegates to SolverApiService.getStatus with the solver config and returns the Result', async () => {
+  const request = { intent_tx_hash: '0xsome' } as never;
+  const FILL_HASH = '0xfill';
+  const fillEvent = { eventType: 'intent-filled', txHash: FILL_HASH };
+  const backendReturns = (events: unknown[]) =>
+    vi.spyOn(sodax.swaps.backendApi, 'getIntentByTxHash').mockResolvedValueOnce({
+      ok: true,
+      value: { events } as never,
+    });
+
+  it('returns a usable solver answer without querying the backend', async () => {
     const statusResult = { ok: true as const, value: { status: 3, intent_hash: '0xhash' } as never };
     mocks.solverGetStatus.mockResolvedValueOnce(statusResult);
-    const request = { intent_tx_hash: '0xsome' } as never;
+    const backendSpy = vi.spyOn(sodax.swaps.backendApi, 'getIntentByTxHash');
 
     const result = await sodax.swaps.getStatus(request);
 
     expect(result).toBe(statusResult);
     expect(mocks.solverGetStatus).toHaveBeenCalledWith(request, sodax.swaps.solver, sodax.swaps.config.logger);
+    expect(backendSpy).not.toHaveBeenCalled();
   });
 
-  it('forwards a SolverErrorResponse failure from SolverApiService.getStatus', async () => {
+  it('reconciles NOT_FOUND to SOLVED when the backend proves the fill', async () => {
+    mocks.solverGetStatus.mockResolvedValueOnce({ ok: true, value: { status: SolverIntentStatusCode.NOT_FOUND } });
+    backendReturns([fillEvent]);
+
+    const result = await sodax.swaps.getStatus(request);
+
+    expect(result).toEqual({ ok: true, value: { status: SolverIntentStatusCode.SOLVED, fill_tx_hash: FILL_HASH } });
+  });
+
+  it('recovers a solver failure when the backend proves the fill', async () => {
+    mocks.solverGetStatus.mockResolvedValueOnce({ ok: false, error: { code: 'BOOM' } as never });
+    backendReturns([fillEvent]);
+
+    const result = await sodax.swaps.getStatus(request);
+
+    expect(result).toEqual({ ok: true, value: { status: SolverIntentStatusCode.SOLVED, fill_tx_hash: FILL_HASH } });
+  });
+
+  it('preserves the solver result when the backend has no fill evidence', async () => {
+    const notFound = { ok: true as const, value: { status: SolverIntentStatusCode.NOT_FOUND } };
+    mocks.solverGetStatus.mockResolvedValueOnce(notFound);
+    backendReturns([{ eventType: 'intent-created' }]);
+
+    expect(await sodax.swaps.getStatus(request)).toBe(notFound);
+  });
+
+  it('preserves the solver result when the backend lookup fails', async () => {
     const solverError = { ok: false, error: { code: 'INTENT_NOT_FOUND' } } as never;
     mocks.solverGetStatus.mockResolvedValueOnce(solverError);
+    vi.spyOn(sodax.swaps.backendApi, 'getIntentByTxHash').mockResolvedValueOnce({
+      ok: false,
+      error: new Error('down'),
+    });
 
-    const result = await sodax.swaps.getStatus({ intent_tx_hash: '0xmissing' } as never);
-
-    expect(result).toBe(solverError);
+    expect(await sodax.swaps.getStatus(request)).toBe(solverError);
   });
 });
 

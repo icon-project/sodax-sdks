@@ -41,6 +41,7 @@ import { EvmSolverService } from './EvmSolverService.js';
 import type { BackendApiService } from '../backendApi/index.js';
 import { runBackendSubmitTx } from '../backendApi/runBackendSubmitTx.js';
 import { createSubmitTxAttempt, type SubmitTxAttempt } from '../backendApi/submitTxAttempt.js';
+import { isFillEvent } from '../backendApi/guards.js';
 import { resolveTimeoutMs } from '../shared/utils/resolveTimeoutMs.js';
 import type { ApprovalTxs } from '../shared/types/spoke-types.js';
 import { selectSolvedIntentPacket } from './selectSolvedIntentPacket.js';
@@ -96,6 +97,7 @@ import {
   type SolverIntentQuoteResponse,
   type SolverIntentStatusRequest,
   type SolverIntentStatusResponse,
+  SolverIntentStatusCode,
   type Result,
   type TxReturnType,
   type GetEstimateGasReturnType,
@@ -309,7 +311,8 @@ export class SwapService {
   }
 
   /**
-   * Polls the solver API for the current execution status of an intent.
+   * Polls the solver API for the current execution status of an intent. A `NOT_FOUND` or a failed
+   * request is cross-checked against the backend's durable intent record.
    *
    * The `intent_tx_hash` in the request must be the hub-chain (Sonic) transaction hash where
    * the intent was registered — this is the `dst_tx_hash` from the relay packet returned by
@@ -322,7 +325,17 @@ export class SwapService {
   public async getStatus(
     request: SolverIntentStatusRequest,
   ): Promise<Result<SolverIntentStatusResponse, SolverErrorResponse>> {
-    return SolverApiService.getStatus(request, this.solver, this.config.logger);
+    const solverResult = await SolverApiService.getStatus(request, this.solver, this.config.logger);
+    const forgotten = !solverResult.ok || solverResult.value.status === SolverIntentStatusCode.NOT_FOUND;
+    if (!forgotten) return solverResult;
+
+    // The solver keeps intent state in memory, so a restart makes it answer NOT_FOUND for intents it
+    // already filled. The backend's record is durable; without fill evidence the solver's answer stands.
+    const intent = await this.backendApi.getIntentByTxHash(request.intent_tx_hash, { timeout: 5_000 });
+    const fill = intent.ok ? intent.value.events.filter(isFillEvent).at(-1) : undefined;
+    return fill
+      ? { ok: true, value: { status: SolverIntentStatusCode.SOLVED, fill_tx_hash: fill.txHash } }
+      : solverResult;
   }
 
   /**

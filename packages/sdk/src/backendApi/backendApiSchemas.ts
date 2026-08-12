@@ -55,6 +55,13 @@ const IntentStructSchema = v.object({
   data: v.string(),
 });
 
+/** An `intent-filled` entry in `IntentResponse.events`. Narrow with `isFillEvent`. */
+export const FillEventSchema = v.object({
+  eventType: v.literal('intent-filled'),
+  // The hub-chain fill tx; an empty one is no use as `fill_tx_hash`.
+  txHash: v.pipe(v.string(), v.nonEmpty()),
+});
+
 /** GET /intent/tx/:txHash · GET /intent/:intentHash (`IntentResponse`). */
 export const IntentResponseSchema = v.object({
   intentHash: v.string(),
