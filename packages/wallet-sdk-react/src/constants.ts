@@ -3,6 +3,8 @@
  * Centralized so consumers and tests have a single source of truth.
  */
 
+import type { SuiAdapterFields } from './types/config.js';
+
 // ─── Stacks ─────────────────────────────────────────────────────────────────
 export const STACKS_DEFAULT_RPC_URL = 'https://api.mainnet.hiro.so';
 export const STACKS_DEFAULT_NETWORK = 'mainnet' as const;
@@ -10,8 +12,11 @@ export const STACKS_DEFAULT_NETWORK = 'mainnet' as const;
 // ─── Sui ────────────────────────────────────────────────────────────────────
 export const SUI_DEFAULT_NETWORK = 'mainnet' as const;
 export const SUI_DEFAULT_AUTO_CONNECT = true;
-/** Default gRPC-web endpoint per Sui network. No devnet entry: Mysten publishes none. */
-export const SUI_DEFAULT_GRPC_URLS: Partial<Record<'mainnet' | 'testnet' | 'devnet', string>> = {
+/**
+ * Default gRPC-web endpoint per Sui network. Keyed off the config union, so the networks we
+ * offer and the endpoints we ship cannot drift apart.
+ */
+export const SUI_DEFAULT_GRPC_URLS: Record<NonNullable<SuiAdapterFields['network']>, string> = {
   mainnet: 'https://fullnode.mainnet.sui.io',
   testnet: 'https://fullnode.testnet.sui.io',
 };

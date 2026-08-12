@@ -104,13 +104,25 @@ export type SuiTransactionEffects = {
   transactionDigest: string;
   gasObject: SuiOwnedObjectRef;
   dependencies?: string[];
+  /**
+   * Object-change buckets. All absent over gRPC: the effects message carries one flat
+   * `changedObjects` list keyed by `inputState` / `outputState` / `idOperation`, and the
+   * transport does not re-derive the buckets from it.
+   */
   created?: SuiOwnedObjectRef[];
+  /** Absent over gRPC — see `created`. */
   mutated?: SuiOwnedObjectRef[];
+  /** Absent over gRPC — see `created`. */
   deleted?: SuiObjectRef[];
+  /** Absent over gRPC — see `created`. */
   wrapped?: SuiObjectRef[];
+  /** Absent over gRPC — see `created`. */
   unwrapped?: SuiOwnedObjectRef[];
+  /** Absent over gRPC — see `created`. */
   unwrappedThenDeleted?: SuiObjectRef[];
+  /** Absent over gRPC — see `created`. */
   sharedObjects?: SuiObjectRef[];
+  /** Absent over gRPC — see `created`. */
   modifiedAtVersions?: SuiTransactionEffectsModifiedAtVersions[];
   eventsDigest?: string | null;
 };

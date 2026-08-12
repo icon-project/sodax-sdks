@@ -563,7 +563,7 @@ export type SuiSpokeChainConfig = BaseSpokeChainConfig<'SUI'> & {
     xTokenManager: string;
     rateLimit: string;
   };
-  /** gRPC-web endpoint. Sui removed JSON-RPC from fullnodes in October 2026. */
+  /** gRPC-web endpoint. Mysten's public fullnodes stopped serving JSON-RPC in July 2026; `sui-node` drops it in October 2026. */
   grpc_url: string;
   /**
    * @deprecated Renamed to `grpc_url`. Still honored so existing overrides keep working, and wins

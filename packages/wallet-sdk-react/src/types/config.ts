@@ -106,7 +106,7 @@ export type SolanaAdapterFields = {
 export type SuiAdapterFields = {
   autoConnect?: boolean;
   /** Default network for the dApp Kit instance. @default 'mainnet' */
-  network?: 'mainnet' | 'testnet' | 'devnet';
+  network?: 'mainnet' | 'testnet';
 };
 
 // ─── Central chain registry ─────────────────────────────────────────────────

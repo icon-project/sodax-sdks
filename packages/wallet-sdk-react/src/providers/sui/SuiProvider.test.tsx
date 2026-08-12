@@ -73,7 +73,13 @@ describe('SuiProvider — endpoint resolution', () => {
     ).toThrow(/`grpcUrl` or `rpcUrl`, not both/);
   });
 
-  it('throws for a network with no packaged default and no configured endpoint', () => {
-    expect(() => renderWith({ network: 'devnet' })).toThrow(/no default gRPC endpoint/);
+  it('has a packaged endpoint for every network the config type offers', () => {
+    renderWith({ network: 'testnet' });
+    expect(resolvedEndpoint()).toBe('https://fullnode.testnet.sui.io');
+  });
+
+  // The union rejects this at compile time; the cast stands in for an untyped JS caller.
+  it('throws for a network it ships no endpoint for', () => {
+    expect(() => renderWith({ network: 'devnet' } as unknown as SuiTypeConfig)).toThrow(/no default gRPC endpoint/);
   });
 });

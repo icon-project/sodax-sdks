@@ -44,7 +44,10 @@ export type PrivateKeySuiWalletConfig = SuiEndpointConfig & {
 /** Configuration for constructing a `SuiWalletProvider` backed by a browser-extension wallet. */
 export type BrowserExtensionSuiWalletConfig = SuiEndpointConfig & {
   address: string;
-  /** Signs without broadcasting — pass `dAppKit.signTransaction` or any wallet-standard signer. */
+  /**
+   * Signs without broadcasting; takes the transaction positionally. dApp Kit's and
+   * wallet-standard's signers are options-shaped, so they need a wrapper — see the README.
+   */
   signTransaction: (txn: SuiTransaction) => Promise<SuiSignedTransaction>;
   defaults?: SuiWalletDefaults;
 };

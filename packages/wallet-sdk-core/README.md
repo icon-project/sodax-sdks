@@ -116,7 +116,9 @@ const btcBrowser = new BitcoinWalletProvider({
 
 ### Sui
 
-Sui uses `mnemonics` (not `privateKey`) for private-key mode. Both modes speak gRPC-web — Mysten removed JSON-RPC from their fullnodes in October 2026. Browser extension supplies the connected address plus a signer callback; the provider builds its own client.
+Sui uses `mnemonics` (not `privateKey`) for private-key mode. Both modes speak gRPC-web — Mysten's public fullnodes stopped serving JSON-RPC in July 2026, and `sui-node` drops it in October 2026. Browser extension supplies the connected address plus a signer callback; the provider builds its own client.
+
+`signTransaction` takes the transaction positionally. `dAppKit.signTransaction` is options-shaped, so wrap it rather than assigning it directly — and pass `account` explicitly, since dApp Kit otherwise signs with whatever account is currently connected, which need not be the `address` given here. `myWalletAccount` is dApp Kit's own `UiWalletAccount`, from `useCurrentAccount()` in React.
 
 ```ts
 import { SuiWalletProvider } from '@sodax/wallet-sdk-core';
@@ -131,7 +133,10 @@ const suiPk = new SuiWalletProvider({
 const suiBrowser = new SuiWalletProvider({
   grpcUrl: 'https://fullnode.mainnet.sui.io',
   address: myWalletAccount.address,
-  signTransaction: dAppKit.signTransaction,
+  // The provider has already built the transaction against its client, so serializing it
+  // is all the adapter has to do.
+  signTransaction: async txn =>
+    dAppKit.signTransaction({ transaction: await txn.toJSON(), account: myWalletAccount }),
 });
 ```
 

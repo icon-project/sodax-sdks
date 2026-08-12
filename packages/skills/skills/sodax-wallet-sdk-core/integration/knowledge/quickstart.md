@@ -91,8 +91,12 @@ const suiPk = new SuiWalletProvider({
 // Browser-extension — the provider owns the client; you supply the signer
 const suiBrowser = new SuiWalletProvider({
   grpcUrl: 'https://fullnode.mainnet.sui.io',
-  address: myActiveWalletAccount.address,       // string
-  signTransaction: dAppKit.signTransaction,     // (txn) => Promise<{ bytes, signature }>
+  address: myActiveWalletAccount.address,       // string — from dApp Kit's UiWalletAccount
+  // `signTransaction` takes the transaction positionally; dApp Kit's is options-shaped,
+  // so wrap it. Name the account — otherwise dApp Kit signs with whichever one happens
+  // to be connected.
+  signTransaction: async txn =>
+    dAppKit.signTransaction({ transaction: await txn.toJSON(), account: myActiveWalletAccount }),
 });
 ```
 

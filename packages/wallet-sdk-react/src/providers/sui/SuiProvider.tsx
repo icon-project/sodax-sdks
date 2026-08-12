@@ -28,8 +28,9 @@ export const SuiProvider = ({ children, config }: SuiProviderProps) => {
     throw new Error(`[SuiProvider] no default gRPC endpoint for network "${network}" — pass chains.sui.grpcUrl`);
   }
 
-  // dApp Kit registers wallets as a side effect of creation, so it must be built once.
-  // `SodaxWalletProvider` freezes the wallet config on first render, so these deps are stable.
+  // Mysten builds this once at module scope; we can't, because the endpoint comes from config.
+  // Safe to rebuild anyway: dApp Kit de-dupes its wallet registration at module level and defers
+  // every subscription to store mount, which is what lets it survive StrictMode's double render.
   const dAppKit = useMemo(
     () =>
       createDAppKit({

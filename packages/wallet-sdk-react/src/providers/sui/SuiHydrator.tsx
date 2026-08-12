@@ -75,8 +75,9 @@ export const SuiHydrator = ({ grpcUrl }: SuiHydratorProps): null => {
     return new SuiWalletProvider({
       grpcUrl,
       address: suiAccount.address,
-      // Rehydrate into a concrete Transaction so dApp Kit resolves it against the client
-      // (gas, object refs) before handing it to the wallet.
+      // Shape adapter only: dApp Kit's signer is options-shaped, ours is positional. The
+      // provider has already built the transaction against its client by this point, and
+      // `account` is named so the wallet cannot sign with a different connected account.
       signTransaction: async (txn: SuiTransaction) =>
         dAppKit.signTransaction({ transaction: Transaction.from(await txn.toJSON()), account: suiAccount }),
       defaults: suiDefaults,
