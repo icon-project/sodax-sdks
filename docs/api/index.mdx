@@ -1,0 +1,89 @@
+---
+title: "HTTP API overview"
+description: "Public SODAX HTTP surfaces for partners — base URLs, route prefixes, conventions, and which API to use."
+---
+
+SODAX exposes partner-ready HTTP APIs behind a single edge host. Use this section when you are integrating over raw HTTP (any language), not only via `@sodax/sdk`.
+
+For TypeScript end-to-end flows (create intent → relay → settle), prefer the [SDK functional modules](https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules) on docs.sodax.com. The pages here are the **language-agnostic HTTP reference**.
+
+## Base URLs
+
+| Environment | Host | Use |
+|-------------|------|-----|
+| **Production** | `https://api.sodax.com` | Default for partners |
+| **Canary** | `https://canary-api.sodax.com` | Early features / soak |
+
+Always use these public hosts. Do not hard-code private infrastructure hostnames.
+
+## Route map
+
+| Prefix | Purpose | Auth |
+|--------|---------|------|
+| `/v1/swaps/*` | Swaps API v2 — quote, build intent, submit-tx, status | Unauthenticated (rate-limited writes) |
+| `/v1/leverage-yield/*` | Leveraged yield vaults over HTTP | Unauthenticated (same pattern as swaps) |
+| `/v1/be/oracle/*` | USD OHLC price candles for charts | Unauthenticated `GET` |
+| `/v1/be/solver/*` | Solver volume / orderbook / intent journal reads | Unauthenticated `GET` |
+| `/v1/be/config/*` | Chains, tokens, hub assets | Unauthenticated `GET` |
+| `/v1/be/partners/*` | Partner receivers + fee/volume summary | Unauthenticated `GET` |
+| `/v1/be/sodax/*` | SODA total / circulating supply | Unauthenticated `GET` |
+| `/v1/be/intent/*` | Intent lookup by hash / tx / user | Unauthenticated `GET` |
+| `/v1/be/moneymarket/*` | Money-market positions & reserves (read) | Unauthenticated `GET` |
+| `/v1/intent/*` | Solver service (quote / execute / status / oracle prices) | Unauthenticated |
+| `/v1/a/*` | Sonic data backend (pools, volume, prices) | Unauthenticated `GET` |
+| `/v1/sponsorships/*` | Stellar sponsoring | API key |
+
+This section documents the first four product surfaces in depth:
+
+- [Oracle](/api/oracle) — candles + live solver prices  
+- [Stats](/api/stats) — headline protocol metrics  
+- [Swaps](/api/swaps) — Swaps API v2  
+- [Leverage yield](/api/leverage) — vault deposit / withdraw over HTTP  
+
+## Shared conventions
+
+### BigInt as decimal strings
+
+Any amount, chain id field, or token quantity larger than a safe JSON integer is serialized as a **decimal string** on the wire (e.g. `"1000000"`, never a bare JS number for wei-scale values).
+
+```json
+{ "inputAmount": "1000000", "deadline": "1786500000" }
+```
+
+### Errors at the edge
+
+Unknown routes return:
+
+```json
+{ "ok": false, "error": "route_not_found" }
+```
+
+Service-level validation errors are typically HTTP `400` with a descriptive message body. Rate-limited writes return `429`.
+
+### Caching
+
+Read endpoints are often cached server-side (seconds to a minute). Polling faster than the cache TTL does not yield fresher data. Exact TTLs are noted per page where known.
+
+### Partner fees
+
+Partner monetization uses a per-request `partnerFee` object on quote/create-intent style endpoints — there is **no** global default fee. See [Swaps](/api/swaps#partner-fee) and the [Monetize SDK](https://docs.sodax.com/developers/how-to/monetize_sdk) guide for claiming.
+
+## Choose a path
+
+| You want to… | Use |
+|--------------|-----|
+| Chart USD prices for SODAX assets | [Oracle candles](/api/oracle) |
+| Show live hub token prices | [Solver oracle](/api/oracle#solver-oracle-live-prices) |
+| Show “networks / partners / volume / supply” on a site | [Stats](/api/stats) |
+| Run swaps from a bot or non-TS stack | [Swaps API](/api/swaps) |
+| Deposit into leverage vaults over HTTP | [Leverage yield](/api/leverage) |
+| Full wallet + multi-chain UX in React | `@sodax/sdk` + `@sodax/dapp-kit` (docs.sodax.com) |
+
+## OpenAPI
+
+Machine-readable OpenAPI for the backend API is available at:
+
+- `https://api.sodax.com/v1/be/docs` (interactive)  
+- `https://api.sodax.com/v1/be/docs-json`  
+
+Swaps / leverage share the swaps-api app OpenAPI when that service is enabled (`/docs` on the service origin; edge pathing is under `/v1/swaps` and `/v1/leverage-yield`).

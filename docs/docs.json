@@ -12,6 +12,16 @@
       {
         "group": "Getting Started",
         "pages": ["index"]
+      },
+      {
+        "group": "HTTP API",
+        "pages": [
+          "api/index",
+          "api/oracle",
+          "api/stats",
+          "api/swaps",
+          "api/leverage"
+        ]
       }
     ]
   }
