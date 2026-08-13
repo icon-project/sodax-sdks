@@ -90,10 +90,53 @@ type CreateIntentParams<K extends SpokeChainKey> = {
   allowPartialFill: boolean;
   solver?: `0x${string}`;   // optional solver address; '0x0…0' for default
   data: `0x${string}`;      // arbitrary calldata; '0x' for default
+  hook?: HookRequest;       // route the output through a registered delivery hook — see below
+  deliveryData?: `0x${string}`;  // low-level delivery payload; escape hatch, ignored when `hook` is set
 };
 ```
 
 `CreateLimitOrderParams<K>` is `Omit<CreateIntentParams<K>, 'deadline'> & { deadline?: bigint }` — it makes `deadline` optional rather than removing it; when omitted the SDK forces it to `0n` internally (limit orders use a different expiry mechanism).
+
+### Delivery hooks (`hook` / `deliveryData`)
+
+By default an intent's output is transferred straight to `dstAddress`. A **delivery hook** instead hands
+the output to a contract on the destination spoke: `SpokeAssetManager` calls
+`ISpokeReceiver(dstAddress).hook(token, amount, deliveryData)`.
+
+Prefer `hook` over `deliveryData`. With `hook` set the SDK overrides the on-chain `dstAddress` with the
+hook's deployed address and encodes `deliveryData` itself, both taken from the registry in
+`@sodax/types` — so the address and its payload codec can never drift. The `dstAddress` you pass stays
+the **recipient the hook credits**, not the delivery target.
+
+```ts
+import { ChainKeys, HookKind } from '@sodax/sdk';
+
+const params = {
+  // …the usual CreateIntentParams fields…
+  dstChainKey: ChainKeys.ETHEREUM_MAINNET,
+  dstAddress: recipient,                    // the account the hook credits, NOT the hook itself
+  hook: { kind: HookKind.FLINT_DEPOSIT },
+};
+```
+
+Registered kinds (`HookKind`): `HYPERCORE_DEPOSIT` — deposits delivered USDC into the recipient's
+HyperCore perps account (HyperEVM); `FLINT_DEPOSIT` — requests an ERC-7540 deposit of delivered USDC into
+the Flint RWA vault (Ethereum) with the recipient as the request's controller.
+
+Notes:
+
+- **Fails closed.** Selecting a kind not registered on `dstChainKey` throws at intent-construction time
+  (`getSpokeHook` returns `undefined`), before an intent exists. Check with
+  `getSpokeHook(chainKey, kind)` first if you need to branch.
+- **A zero-address recipient is rejected** for every hook — it would revert on arrival and wedge the
+  cross-chain message unrecoverably.
+- **Hooks are best-effort on-chain.** Each hook decides what to do with an unexpected token or a
+  refusing target, and typically falls back to delivering plain tokens to the recipient rather than
+  reverting. `supportedTokens` on the registry entry describes that on-chain behaviour; the SDK does not
+  currently reject a mismatched `outputToken` client-side.
+- `deliveryData` is the low-level escape hatch for a receiver **not** in the registry: opaque bytes whose
+  schema the destination receiver defines, and you must point `dstAddress` at that receiver yourself.
+  It is ignored when `hook` is set.
 
 ## Common call shapes
 

@@ -18,11 +18,12 @@ import type { Address, Hex } from '@sodax/types';
  * (Lagoon ERC-7540) via the FlintDepositHook, all as one intent.
  *
  * Usage:
- *   EVM_PRIVATE_KEY=0x… pnpm tsx src/flint-deposit.ts               # dry run: quote + built intent only
- *   EVM_PRIVATE_KEY=0x… pnpm tsx src/flint-deposit.ts --execute     # actually submit
+ *   EVM_PRIVATE_KEY=0x… pnpm flint-deposit               # dry run: quote + built intent only
+ *   EVM_PRIVATE_KEY=0x… pnpm flint-deposit --execute     # actually submit
  *
  * Optional env:
- *   AMOUNT_S    — S to swap, decimal (default "100", ~2.4 USDC at 2026-08 prices; the hook needs ≥1 USDC after slippage)
+ *   AMOUNT_S    — S to swap, decimal (default "100", ~2.4 USDC at 2026-08 prices; must clear the hook's
+ *                 on-chain minDeposit after slippage — 1 USDC at the time of writing, read live at runtime)
  *   RECIPIENT   — ERC-7540 controller the deposit request is recorded for (default: the wallet)
  *   ETH_RPC_URL — Ethereum RPC for the pre-flight check (default: publicnode)
  */
@@ -167,7 +168,8 @@ async function main(): Promise<void> {
     console.error('Swap failed —', code, message);
     if (context) console.error('Context:', context);
     if (cause) console.error('Caused by:', cause);
-    if (code === 'TX_SUBMIT_FAILED') console.error('CRITICAL: spoke tx landed but relay submission failed. Retry submission!');
+    if (code === 'TX_SUBMIT_FAILED')
+      console.error('CRITICAL: spoke tx landed but relay submission failed. Retry submission!');
     process.exitCode = 1;
     return;
   }
