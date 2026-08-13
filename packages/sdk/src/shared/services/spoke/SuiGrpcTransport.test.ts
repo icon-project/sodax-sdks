@@ -19,7 +19,7 @@ const OWNER = `0x${'11'.repeat(32)}`;
 const TX_DIGEST = '7g6sQdY5RrZ4kRzBz7VLgY3qX2vN6Y4mT8L1J5K9A2Bx';
 
 const transport = new SuiGrpcTransport(suiConfig.grpc_url);
-// biome-ignore lint/complexity/useLiteralKeys: `client` is private; the tests spy on its core methods.
+// `client` is private; the tests spy on its core methods.
 const core = (transport as unknown as { ['client']: { core: Record<string, never> } })['client'].core;
 
 // A locally-buildable transaction — nothing here touches the network.
@@ -119,6 +119,17 @@ describe('SuiGrpcTransport.simulate', () => {
     await transport.simulate(tx, OWNER);
 
     expect(tx.getData().sender).toBe(preset);
+  });
+
+  it('rebuilds a transaction that only exposes toJSON() — the SuiTransport contract guarantees nothing more', async () => {
+    const spy = vi.spyOn(core, 'simulateTransaction').mockResolvedValueOnce(commandResult(1n) as never);
+    const json = await makeTx().toJSON();
+
+    await transport.simulate({ toJSON: () => Promise.resolve(json) }, OWNER);
+
+    const { transaction } = (spy.mock.calls[0]?.[0] ?? {}) as unknown as { transaction: Transaction };
+    expect(transaction).toBeInstanceOf(Transaction);
+    expect(transaction.getData().sender).toBe(OWNER);
   });
 
   it('throws when the simulation produced no command results', async () => {

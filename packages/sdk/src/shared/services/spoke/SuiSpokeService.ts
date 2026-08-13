@@ -13,6 +13,7 @@ import {
   isNativeToken,
   type TxReturnType,
   type SuiGasEstimate,
+  type SuiTransport,
 } from '@sodax/types';
 import type {
   DepositParams,
@@ -23,7 +24,8 @@ import type {
   WaitForTxReceiptReturnType,
 } from '../../types/spoke-types.js';
 import type { ConfigService } from '../../config/ConfigService.js';
-import { SuiGrpcTransport, type SuiTransport, isTimeoutError } from './sui/index.js';
+import { isTimeoutError } from '../../utils/sui-utils.js';
+import { SuiGrpcTransport } from './SuiGrpcTransport.js';
 
 type SuiNativeCoinResult = { $kind: 'NestedResult'; NestedResult: [number, number] };
 type SuiTxObject = { $kind: 'Input'; Input: number; type?: 'object' | undefined };

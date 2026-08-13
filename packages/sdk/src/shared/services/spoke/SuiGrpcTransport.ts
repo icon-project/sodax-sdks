@@ -1,18 +1,20 @@
 import type { SuiClientTypes } from '@mysten/sui/client';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
-import type { Transaction } from '@mysten/sui/transactions';
 import {
   type SuiExecutionResult,
   type SuiGasEstimate,
   type SuiObjectOwner,
   type SuiPaginatedCoins,
   type SuiRawTransactionReceipt,
+  type SuiTransaction,
   type SuiTransactionEffects,
+  type SuiTransport,
+  type SuiWaitForTransactionParams,
   toSuiExecutionResult,
   toSuiExecutionStatus,
   toSuiPaginatedCoins,
 } from '@sodax/types';
-import type { SuiTransport, SuiWaitForTransactionParams } from './SuiTransport.js';
+import { toMystenTransaction } from '../../utils/sui-utils.js';
 
 const DEFAULT_GET_COINS_LIMIT = 10;
 
@@ -69,12 +71,13 @@ export class SuiGrpcTransport implements SuiTransport {
     return toSuiPaginatedCoins(response, coinType);
   }
 
-  async simulate(tx: Transaction, sender: string): Promise<SuiExecutionResult> {
-    tx.setSenderIfNotSet(sender);
+  async simulate(tx: SuiTransaction, sender: string): Promise<SuiExecutionResult> {
+    const transaction = await toMystenTransaction(tx);
+    transaction.setSenderIfNotSet(sender);
     // `checksEnabled: false` is what `devInspectTransactionBlock` did: it lets public non-entry
     // Move functions be called with no gas coin.
     const result = await this.client.core.simulateTransaction({
-      transaction: tx,
+      transaction,
       include: { commandResults: true },
       checksEnabled: false,
     });
@@ -86,9 +89,10 @@ export class SuiGrpcTransport implements SuiTransport {
     return toSuiExecutionResult(command);
   }
 
-  async estimateGas(tx: Transaction, sender: string): Promise<SuiGasEstimate> {
-    tx.setSenderIfNotSet(sender);
-    const result = await this.client.core.simulateTransaction({ transaction: tx, include: { effects: true } });
+  async estimateGas(tx: SuiTransaction, sender: string): Promise<SuiGasEstimate> {
+    const transaction = await toMystenTransaction(tx);
+    transaction.setSenderIfNotSet(sender);
+    const result = await this.client.core.simulateTransaction({ transaction, include: { effects: true } });
 
     const effects = (result.Transaction ?? result.FailedTransaction)?.effects;
     if (!effects) {
