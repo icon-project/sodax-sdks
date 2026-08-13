@@ -11,6 +11,7 @@ import {
   StellarWalletProvider,
   NearWalletProvider,
   StacksWalletProvider,
+  TronWalletProvider,
 } from '@sodax/wallet-sdk-core';
 import { Wallet } from '@injectivelabs/wallet-base';
 import { getEthereumAddress } from '@injectivelabs/sdk-ts';
@@ -40,6 +41,7 @@ import { hasSignBip322, hasSignEcdsa } from './xchains/bitcoin/bitcoinSignGuards
 import { NearXService } from './xchains/near/NearXService.js';
 import { NearXConnector } from './xchains/near/NearXConnector.js';
 import { StacksXService, StacksXConnector, STACKS_PROVIDERS } from './xchains/stacks/index.js';
+import { TronXService, TronXConnector } from './xchains/tron/index.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -388,6 +390,24 @@ export const chainRegistry: Record<string, ChainServiceFactory> = {
         store.walletConfig?.STACKS?.chains?.[ChainKeys.STACKS_MAINNET],
       );
       return new StacksWalletProvider({ address, provider, defaults });
+    },
+  }),
+  TRON: defineChain({
+    createService: walletConfig => TronXService.getInstance(walletConfig?.TRON?.chains?.[ChainKeys.TRON_MAINNET]),
+    displayName: 'Tron',
+    defaultConnectors: () => [new TronXConnector()],
+    providerManaged: false,
+    createWalletProvider: (service, getStore) => {
+      const store = getStore();
+      const connection = store.xConnections.TRON;
+      const address = connection?.xAccount.address;
+      if (!address) return undefined;
+      const connector = connection?.xConnectorId ? service.getXConnectorById(connection.xConnectorId) : undefined;
+      const tronWeb = connector instanceof TronXConnector ? connector.getTronWeb() : undefined;
+      if (!tronWeb) return undefined;
+      const entry = store.walletConfig?.TRON?.chains?.[ChainKeys.TRON_MAINNET];
+      const defaults = getEntryDefaults<typeof ChainKeys.TRON_MAINNET>(entry);
+      return new TronWalletProvider({ tronWeb, address, endpoint: entry?.rpcUrl, defaults });
     },
   }),
 };

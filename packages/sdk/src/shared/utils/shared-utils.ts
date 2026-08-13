@@ -14,6 +14,7 @@ import {
   type QuoteType,
 } from '@sodax/types';
 import { hexToBytes, toHex } from 'viem';
+import { tronHashToBase58, tronIdentityBytes } from '../services/spoke/tron-utils.js';
 import { bcs } from '@mysten/sui/bcs';
 import { PublicKey } from '@solana/web3.js';
 import { Address as StellarAddress, xdr } from '@stellar/stellar-sdk';
@@ -168,6 +169,10 @@ export function encodeAddress(spokeChainId: SpokeChainKey, address: string): Hex
     case 'NEAR':
     case 'INJECTIVE':
       return toHex(Buffer.from(address, 'utf-8'));
+    case 'TRON':
+      // Tron's hub-wallet identity (the `bytes user` for WalletFactory.getDeployedAddress) is the
+      // 20-byte address hash — the base58 payload with the 0x41 version byte dropped.
+      return tronIdentityBytes(address);
     default: {
       const exhaustiveCheck: never = chainType;
       throw new Error(`Invalid spoke chain id: ${exhaustiveCheck}`);
@@ -218,6 +223,9 @@ export function reverseEncodeAddress(spokeChainId: SpokeChainKey, encoded: Hex):
     case 'NEAR':
     case 'INJECTIVE':
       return Buffer.from(hexToBytes(encoded)).toString('utf8');
+    case 'TRON':
+      // Inverse of the identity encoding: 20-byte hash → base58check Tron address.
+      return tronHashToBase58(encoded);
     default: {
       const exhaustiveCheck: never = chainType;
       throw new Error(`Invalid spoke chain id: ${exhaustiveCheck}`);

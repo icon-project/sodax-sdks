@@ -14,6 +14,7 @@ import {
   type StellarChainKey,
   type StacksChainKey,
   type SuiChainKey,
+  type TronChainKey,
   getChainType,
   type EvmSpokeOnlyChainKey,
   ChainTypeArr,
@@ -35,6 +36,7 @@ import { SolanaSpokeService } from './SolanaSpokeService.js';
 import { IconSpokeService } from './IconSpokeService.js';
 import { EvmSpokeService } from './EvmSpokeService.js';
 import { InjectiveSpokeService } from './InjectiveSpokeService.js';
+import { TronSpokeService } from './TronSpokeService.js';
 import {
   isHubChainKeyType,
   isNearChainKeyType,
@@ -48,6 +50,8 @@ import {
   isSpokeApproveParamsStellar,
   isStacksChainKeyType,
   isSuiChainKeyType,
+  isMpcRelayChainKeyType,
+  isBitcoinChainKeyType,
   isEvmWalletProviderType,
   isUndefinedOrValidWalletProviderForChainKey,
 } from '../../guards.js';
@@ -69,7 +73,12 @@ import type {
   SpokeApproveParamsHub,
   SpokeApproveParamsStellar,
   SpokeApproveParamsEvmSpoke,
+  SettleParams,
+  SettlementFailure,
 } from '../../types/spoke-types.js';
+import type { TxHashPair } from '../../types/types.js';
+import { relayTxAndWaitPacket } from '../intentRelay/IntentRelayApiService.js';
+import type { MpcRelaySettlement } from '../mpcRelay/MpcRelayApiService.js';
 import { Erc20Service, type Erc20ApprovalPlan, type Erc20ApproveParams } from '../erc-20/Erc20Service.js';
 import type { RequestTrustlineParams } from './StellarSpokeService.js';
 import type { WalletMode } from './BitcoinSpokeService.js';
@@ -85,7 +94,8 @@ export type SpokeServiceType =
   | InjectiveSpokeService
   | StacksSpokeService
   | NearSpokeService
-  | BitcoinSpokeService;
+  | BitcoinSpokeService
+  | TronSpokeService;
 
 export type GetSpokeServiceType<C extends SpokeChainKey> = C extends EvmSpokeOnlyChainKey
   ? EvmSpokeService
@@ -107,7 +117,9 @@ export type GetSpokeServiceType<C extends SpokeChainKey> = C extends EvmSpokeOnl
                   ? NearSpokeService
                   : C extends BitcoinChainKey
                     ? BitcoinSpokeService
-                    : SpokeServiceType;
+                    : C extends TronChainKey
+                      ? TronSpokeService
+                      : SpokeServiceType;
 
 export type SpokeServiceConstructorParams = {
   config: ConfigService;
@@ -135,6 +147,7 @@ export class SpokeService {
   public readonly bitcoin: BitcoinSpokeService;
   public readonly near: NearSpokeService;
   public readonly stacks: StacksSpokeService;
+  public readonly tron: TronSpokeService;
 
   public constructor({ config, hubProvider }: SpokeServiceConstructorParams) {
     this.config = config;
@@ -149,6 +162,7 @@ export class SpokeService {
     this.bitcoin = new BitcoinSpokeService(this.config);
     this.near = new NearSpokeService(this.config);
     this.stacks = new StacksSpokeService(this.config);
+    this.tron = new TronSpokeService(this.config);
   }
 
   public getSpokeService<C extends SpokeChainKey>(chainKey: C): GetSpokeServiceType<C> {
@@ -185,6 +199,9 @@ export class SpokeService {
       }
       case 'NEAR': {
         return this.near satisfies GetSpokeServiceType<NearChainKey> as GetSpokeServiceType<C>;
+      }
+      case 'TRON': {
+        return this.tron satisfies GetSpokeServiceType<TronChainKey> as GetSpokeServiceType<C>;
       }
       default: {
         const exhaustiveCheck: never = chainType; // The never type is used to ensure that the default case is exhaustive
@@ -336,10 +353,10 @@ export class SpokeService {
           plan.resetAmount === undefined
             ? undefined
             : ((await encode(plan.resetAmount)) satisfies TxReturnType<EvmChainKey, true> as TxReturnType<K, true>);
-        const approveTx = (await encode(plan.approveAmount)) satisfies TxReturnType<
-          EvmChainKey,
+        const approveTx = (await encode(plan.approveAmount)) satisfies TxReturnType<EvmChainKey, true> as TxReturnType<
+          K,
           true
-        > as TxReturnType<K, true>;
+        >;
 
         return { ok: true, value: resetTx === undefined ? { approveTx } : { resetTx, approveTx } };
       }
@@ -466,9 +483,7 @@ export class SpokeService {
     plan: Erc20ApprovalPlan,
   ): void {
     const isNoteworthy =
-      plan.resetAmount !== undefined ||
-      plan.reason === 'reset-not-viable' ||
-      plan.reason === 'allowance-read-failed';
+      plan.resetAmount !== undefined || plan.reason === 'reset-not-viable' || plan.reason === 'allowance-read-failed';
     if (!isNoteworthy) {
       return;
     }
@@ -553,6 +568,12 @@ export class SpokeService {
           const value = (await this.near.estimateGas(
             params as EstimateGasParams<NearChainKey>,
           )) satisfies GetEstimateGasReturnType<NearChainKey> as GetEstimateGasReturnType<C>;
+          return { ok: true, value };
+        }
+        case 'TRON': {
+          const value = (await this.tron.estimateGas(
+            params as EstimateGasParams<TronChainKey>,
+          )) satisfies GetEstimateGasReturnType<TronChainKey> as GetEstimateGasReturnType<C>;
           return { ok: true, value };
         }
         default: {
@@ -790,6 +811,14 @@ export class SpokeService {
           > as TxReturnType<K, R>;
           return { ok: true, value };
         }
+        case 'TRON': {
+          // Tron rides the MPC relay in memo mode — no on-chain asset-manager simulation applies.
+          const value = (await this.tron.deposit(params as DepositParams<TronChainKey, R>)) satisfies TxReturnType<
+            TronChainKey,
+            R
+          > as TxReturnType<K, R>;
+          return { ok: true, value };
+        }
         default: {
           const exhaustiveCheck: never = chainType;
           this.config.logger.debug('Unhandled exhaustive case', { value: exhaustiveCheck });
@@ -870,6 +899,10 @@ export class SpokeService {
         }
         case 'NEAR': {
           const value = await this.near.getDeposit(params as GetDepositParams<NearChainKey>);
+          return { ok: true, value };
+        }
+        case 'TRON': {
+          const value = await this.tron.getDeposit(params as GetDepositParams<TronChainKey>);
           return { ok: true, value };
         }
         default: {
@@ -1001,6 +1034,13 @@ export class SpokeService {
           > as TxReturnType<K, Raw>;
           return { ok: true, value };
         }
+        case 'TRON': {
+          const value = (await this.tron.sendMessage(params as SendMessageParams<TronChainKey, Raw>)) as TxReturnType<
+            TronChainKey,
+            Raw
+          > as TxReturnType<K, Raw>;
+          return { ok: true, value };
+        }
         default: {
           const exhaustiveCheck: never = chainType;
           this.config.logger.debug('Unhandled exhaustive case', { value: exhaustiveCheck });
@@ -1120,6 +1160,95 @@ export class SpokeService {
     }
   }
 
+  /**
+   * Wait for a spoke action to settle on the other side of the bridge, and return both hashes.
+   *
+   * This is the single settlement seam for feature services: they hand over the value their
+   * `create*Intent` returned and the direction it travels, and the per-chain-family mechanics stay
+   * here — the same way {@link deposit} and {@link sendMessage} hide them for the send side.
+   *
+   *   intent relay (default)  verify the source tx → submit → wait for the delivery packet
+   *   Bitcoin outbound        no source tx at all: submit the signed payload on demand, poll `od:<hash>`
+   *   MPC relay (Tron)        already broadcast and notified: poll the deposit/withdrawal record
+   *
+   * Callers keep the decision of *whether* settlement is needed (a hub-to-hub action needs none) —
+   * that is feature policy, and hub chain keys never reach here.
+   *
+   * @returns `srcChainTxHash`/`dstChainTxHash`, or a {@link SettlementFailure} carrying the phase
+   *   that failed so the caller can map it onto its own error taxonomy.
+   */
+  /**
+   * The settlement service for a chain that rides the MPC relay, or `undefined` when the chain rides
+   * the intent relay. `MpcRelayChainMap` decides *whether*; this switch only says *which* — so
+   * adding XRP or Aptos is one case here plus a spoke service implementing {@link MpcRelaySettlement}.
+   */
+  private getMpcRelayService(chainKey: SpokeChainKey): MpcRelaySettlement | undefined {
+    if (!isMpcRelayChainKeyType(chainKey)) return undefined;
+
+    switch (getChainType(chainKey)) {
+      case 'TRON':
+        return this.tron;
+      default:
+        // Listed as an MPC-relay chain with no service to settle it. Failing loudly beats falling
+        // through to the intent relay, which would submit a packet no relay is waiting for.
+        throw new Error(`[SpokeService.settle] no MPC relay settlement service for chain ${chainKey}`);
+    }
+  }
+
+  public async settle(params: SettleParams): Promise<Result<TxHashPair, SettlementFailure>> {
+    const { chainKey, tx, direction, relayData, timeout } = params;
+
+    try {
+      const mpcRelay = this.getMpcRelayService(chainKey);
+      if (mpcRelay) {
+        // The relay reports the far leg only once it lands; fall back to the source id so a caller
+        // always has a handle to track, matching the intent-relay flows.
+        if (direction === 'inbound') {
+          const settled = await mpcRelay.waitForDeposit(tx, timeout);
+          if (!settled.ok) return { ok: false, error: { phase: 'relay', cause: settled.error } };
+          return {
+            ok: true,
+            value: { srcChainTxHash: tx, dstChainTxHash: settled.value.txs?.hubMint?.hash ?? tx },
+          };
+        }
+
+        const settled = await mpcRelay.waitForWithdrawal(tx, timeout);
+        if (!settled.ok) return { ok: false, error: { phase: 'relay', cause: settled.error } };
+        return {
+          ok: true,
+          value: { srcChainTxHash: tx, dstChainTxHash: settled.value.txs?.release?.hash ?? tx },
+        };
+      }
+
+      const verify = await this.verifyTxHash({ txHash: tx, chainKey });
+      if (!verify.ok) return { ok: false, error: { phase: 'verification', cause: verify.error } };
+
+      // Bitcoin borrow/withdraw are on-demand: the "tx" is a signed payload JSON that the relay
+      // submits under the literal "withdraw" tx_hash and tracks under a derived `od:<hash>` poll id.
+      const identity =
+        direction === 'outbound' && isBitcoinChainKeyType(chainKey)
+          ? this.bitcoin.getOnDemandRelayIdentity(tx)
+          : { srcTxHash: tx, data: relayData, pollTxHash: undefined };
+
+      const packet = await relayTxAndWaitPacket({
+        ...identity,
+        chainKey,
+        relayerApiEndpoint: this.config.relay.relayerApiEndpoint,
+        timeout,
+      });
+      if (!packet.ok) return { ok: false, error: { phase: 'relay', cause: packet.error } };
+
+      // On-demand relays expose the derived poll id as the source identifier — what the relay and
+      // SodaxScan track — not the opaque signed payload; other chains keep the spoke tx.
+      return {
+        ok: true,
+        value: { srcChainTxHash: identity.pollTxHash ?? tx, dstChainTxHash: packet.value.dst_tx_hash },
+      };
+    } catch (error) {
+      return { ok: false, error: { phase: 'relay', cause: error } };
+    }
+  }
+
   private async verifyReceiptStatus(receiptPromise: Promise<Result<{ status: string }>>): Promise<Result<boolean>> {
     const result = await receiptPromise;
     return result.ok && result.value.status === 'success'
@@ -1191,6 +1320,11 @@ export class SpokeService {
           return (await this.near.waitForTransactionReceipt(
             effectiveParams as WaitForTxReceiptParams<NearChainKey>,
           )) satisfies Result<WaitForTxReceiptReturnType<NearChainKey>> as Result<WaitForTxReceiptReturnType<C>>;
+        }
+        case 'TRON': {
+          return (await this.tron.waitForTransactionReceipt(
+            effectiveParams as WaitForTxReceiptParams<TronChainKey>,
+          )) satisfies Result<WaitForTxReceiptReturnType<TronChainKey>> as Result<WaitForTxReceiptReturnType<C>>;
         }
         default: {
           const exhaustiveCheck: never = chainType;

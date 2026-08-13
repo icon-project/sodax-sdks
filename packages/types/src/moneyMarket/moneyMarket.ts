@@ -192,6 +192,10 @@ export const moneyMarketSupportedTokens = {
     spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.SODA,
     spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.USDC,
   ] as const satisfies XToken[],
+  [ChainKeys.TRON_MAINNET]: [
+    spokeChainConfig[ChainKeys.TRON_MAINNET].supportedTokens.TRX,
+    spokeChainConfig[ChainKeys.TRON_MAINNET].supportedTokens.USDT,
+  ] as const satisfies XToken[],
 } as const satisfies Record<SpokeChainKey, readonly XToken[]>;
 
 export const moneyMarketReserveAssets = [

@@ -251,6 +251,7 @@ export const swapSupportedTokens = {
   ] as const satisfies XToken[],
   // Hedera is currently staging-only — see stagingSwapSupportedTokens
   [ChainKeys.HEDERA_MAINNET]: [],
+  [ChainKeys.TRON_MAINNET]: [],
 } as const satisfies Record<SpokeChainKey, readonly XToken[]>;
 
 // Tokens supported ONLY in the staging solver environment.
@@ -297,6 +298,7 @@ export const stagingSwapSupportedTokens = {
     spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.USDC,
     spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.SODA,
   ] as const satisfies XToken[],
+  [ChainKeys.TRON_MAINNET]: [],
 } as const satisfies Record<SpokeChainKey, readonly XToken[]>;
 
 export type SwapsOptions = {

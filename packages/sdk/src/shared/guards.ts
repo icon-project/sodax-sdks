@@ -18,6 +18,8 @@ import type {
   StellarChainKey,
   SuiChainKey,
   SonicChainKey,
+  TronChainKey,
+  MpcRelayChainKey,
   HubChainKey,
   PartnerFeeAmount,
   PartnerFeePercentage,
@@ -41,6 +43,8 @@ import {
   isIconChainKey,
   isSuiChainKey,
   isStacksChainKey,
+  isTronChainKey,
+  isMpcRelayChainKey,
   isHubChainKey,
   isEvmChainKey,
   isEvmSpokeOnlyChainKey,
@@ -165,6 +169,19 @@ export function isSuiChainKeyType(value: SpokeChainKey): value is SuiChainKey {
 
 export function isStacksChainKeyType(value: SpokeChainKey): value is StacksChainKey {
   return isStacksChainKey(value);
+}
+
+export function isTronChainKeyType(value: SpokeChainKey): value is TronChainKey {
+  return isTronChainKey(value);
+}
+
+/**
+ * Settles through the MPC relay rather than the intent relay — a capability that cuts across chain
+ * families (see `MpcRelayChainMap`). Prefer this over naming a chain when the question is how a
+ * chain settles, so XRP and Aptos need no new branch.
+ */
+export function isMpcRelayChainKeyType(value: SpokeChainKey): value is MpcRelayChainKey {
+  return isMpcRelayChainKey(value);
 }
 
 /** Same runtime check as `isHubChainKeyType(params.srcChainKey)`; narrows the full `params` object. */

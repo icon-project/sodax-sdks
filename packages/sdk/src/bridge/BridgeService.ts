@@ -2,7 +2,6 @@ import {
   type SpokeService,
   Erc20Service,
   type HubProvider,
-  relayTxAndWaitPacket,
   RELAY_FALLBACK_FLOOR_MS,
   EvmVaultTokenService,
   EvmAssetManagerService,
@@ -481,43 +480,36 @@ export class BridgeService {
     const { params } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
 
-    const verifyTxHashResult = await this.spoke.verifyTxHash({
-      txHash: created.tx,
+    const settled = await this.spoke.settle({
       chainKey: params.srcChainKey,
-    });
-    if (!verifyTxHashResult.ok) {
-      return { ok: false, error: verifyFailed('bridge', verifyTxHashResult.error, baseCtx) };
-    }
-
-    const packetResult = await relayTxAndWaitPacket({
-      srcTxHash: created.tx,
-      data: created.relayData,
-      chainKey: params.srcChainKey,
-      relayerApiEndpoint: this.config.relay.relayerApiEndpoint,
+      tx: created.tx,
+      direction: 'inbound',
+      relayData: created.relayData,
       // The caller's full `timeout`, starting HERE — after verification, and whether this runs as the only
       // path or as the backend's fallback. Neither a stalled backend attempt nor a slow source-chain
       // confirmation (Stacks polls for up to its full 120s `maxTimeoutMs`) may shorten the relay wait. The
-      // floor covers a sub-floor caller `timeout`: `relayTxAndWaitPacket` SUBMITS the tx to the relay
-      // before `timeout` bounds anything, so a zero budget would strand an already-landed deposit
-      // unrelayed. Re-relay is idempotent, so always spending the floor is safe.
+      // floor covers a sub-floor caller `timeout`: settlement SUBMITS the tx to the relay before `timeout`
+      // bounds anything, so a zero budget would strand an already-landed deposit unrelayed. Re-relay is
+      // idempotent, so always spending the floor is safe.
       timeout: Math.max(timeoutMs, RELAY_FALLBACK_FLOOR_MS),
     });
-    if (!packetResult.ok) {
+
+    if (!settled.ok) {
       return {
         ok: false,
-        error: mapRelayFailure(packetResult.error, {
-          feature: 'bridge',
-          action: 'bridge',
-          srcChainKey: baseCtx.srcChainKey,
-          dstChainKey: baseCtx.dstChainKey,
-        }),
+        error:
+          settled.error.phase === 'verification'
+            ? verifyFailed('bridge', settled.error.cause, baseCtx)
+            : mapRelayFailure(settled.error.cause, {
+                feature: 'bridge',
+                action: 'bridge',
+                srcChainKey: baseCtx.srcChainKey,
+                dstChainKey: baseCtx.dstChainKey,
+              }),
       };
     }
 
-    return {
-      ok: true,
-      value: { srcChainTxHash: created.tx, dstChainTxHash: packetResult.value.dst_tx_hash },
-    };
+    return settled;
   }
 
   /**
