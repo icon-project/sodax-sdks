@@ -176,6 +176,10 @@ import {
   BackendHttpError,
   isBackendHttpError,           // bundle-safe guard; prefer over instanceof
 
+  // Backend intent events — `IntentResponse.events` is `unknown[]`
+  isFillEvent,                  // narrows an events entry to a recorded `intent-filled`
+  type FillEvent,
+
   // Read shapes
   type Intent,
   type IntentResponse,

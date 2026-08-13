@@ -916,7 +916,7 @@ if (filledIntentResult.ok) {
 
 ## Get Intent Status
 
-Poll the solver API for the current execution status of an intent. The `intent_tx_hash` must be the hub-chain tx hash where the intent was registered.
+Poll the solver API for the current execution status of an intent. The `intent_tx_hash` must be the hub-chain tx hash where the intent was registered. If the solver returns `NOT_FOUND` or the request fails, the backend's durable intent record is checked for a recorded fill — see [SOLVER_API_ENDPOINTS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SOLVER_API_ENDPOINTS.md).
 
 ```typescript
 import { SolverIntentStatusCode } from '@sodax/sdk';
