@@ -18,7 +18,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  DEFAULT_BACKEND_API_ENDPOINT,
+  BACKEND_API_BASE_PATH,
+  DEFAULT_API_BASE_URL,
   DEFAULT_BACKEND_API_HEADERS,
   DEFAULT_BACKEND_API_TIMEOUT,
   DEFAULT_SPONSORING_API_ENDPOINT,
@@ -149,10 +150,12 @@ describe('mergeSodaxConfig — non-union fields still deep-merge', () => {
 describe('mergeSodaxConfig — api ApiConfig union resolves correctly per service', () => {
   const D = DEFAULT_BACKEND_API_HEADERS;
   const DEFAULT_RESOLVED = {
-    baseURL: DEFAULT_BACKEND_API_ENDPOINT,
+    baseURL: DEFAULT_API_BASE_URL,
     timeout: DEFAULT_BACKEND_API_TIMEOUT,
     headers: { ...D },
   };
+  // Every service resolves the same gateway root; only the backend data API appends a mount below it.
+  const withMount = <T extends object>(resolved: T) => ({ ...resolved, basePath: BACKEND_API_BASE_PATH });
 
   const resolveServices = (override: DeepPartial<SodaxConfig>) => {
     const merged = mergeSodaxConfig(freshConfig(), override);
@@ -166,14 +169,14 @@ describe('mergeSodaxConfig — api ApiConfig union resolves correctly per servic
 
   it('no override → base and swaps both use the defaults', () => {
     const { base, swaps } = resolveServices({});
-    expect(base).toEqual(DEFAULT_RESOLVED);
+    expect(base).toEqual(withMount(DEFAULT_RESOLVED));
     expect(swaps).toEqual(DEFAULT_RESOLVED);
   });
 
   it('flat partial override (timeout) → applied to both, sibling baseURL preserved', () => {
     const { base, swaps } = resolveServices({ api: { timeout: 99_999 } });
-    const expected = { baseURL: DEFAULT_BACKEND_API_ENDPOINT, timeout: 99_999, headers: { ...D } };
-    expect(base).toEqual(expected);
+    const expected = { baseURL: DEFAULT_API_BASE_URL, timeout: 99_999, headers: { ...D } };
+    expect(base).toEqual(withMount(expected));
     expect(swaps).toEqual(expected);
   });
 
@@ -182,7 +185,7 @@ describe('mergeSodaxConfig — api ApiConfig union resolves correctly per servic
       api: { baseURL: 'https://flat.example', timeout: 7, headers: { 'X-A': '1' } },
     });
     const expected = { baseURL: 'https://flat.example', timeout: 7, headers: { ...D, 'X-A': '1' } };
-    expect(base).toEqual(expected);
+    expect(base).toEqual(withMount(expected));
     expect(swaps).toEqual(expected);
   });
 
@@ -190,7 +193,7 @@ describe('mergeSodaxConfig — api ApiConfig union resolves correctly per servic
     const { base, swaps, mergedApi } = resolveServices({
       api: { swapsApiConfig: { baseURL: 'https://swaps.example', timeout: 2, headers: { 'X-S': '1' } } },
     });
-    expect(base).toEqual(DEFAULT_RESOLVED);
+    expect(base).toEqual(withMount(DEFAULT_RESOLVED));
     expect(swaps).toEqual({ baseURL: 'https://swaps.example', timeout: 2, headers: { ...D, 'X-S': '1' } });
     // the deep-merge must carry the override's custom slice through verbatim
     expect((mergedApi as { swapsApiConfig?: unknown }).swapsApiConfig).toEqual({
@@ -205,7 +208,7 @@ describe('mergeSodaxConfig — api ApiConfig union resolves correctly per servic
       api: { baseApiConfig: { baseURL: 'https://base.example', timeout: 3, headers: { 'X-B': '1' } } },
     });
     const expected = { baseURL: 'https://base.example', timeout: 3, headers: { ...D, 'X-B': '1' } };
-    expect(base).toEqual(expected);
+    expect(base).toEqual(withMount(expected));
     expect(swaps).toEqual(expected);
   });
 
@@ -216,7 +219,7 @@ describe('mergeSodaxConfig — api ApiConfig union resolves correctly per servic
         swapsApiConfig: { baseURL: 'https://swaps.example', timeout: 2, headers: { 'X-S': '1' } },
       },
     });
-    expect(base).toEqual({ baseURL: 'https://base.example', timeout: 3, headers: { ...D, 'X-B': '1' } });
+    expect(base).toEqual(withMount({ baseURL: 'https://base.example', timeout: 3, headers: { ...D, 'X-B': '1' } }));
     // swaps overrides baseURL/timeout; headers merge defaults → base → swaps (base 'X-B' inherited)
     expect(swaps).toEqual({ baseURL: 'https://swaps.example', timeout: 2, headers: { ...D, 'X-B': '1', 'X-S': '1' } });
   });
@@ -228,7 +231,9 @@ describe('mergeSodaxConfig — api ApiConfig union resolves correctly per servic
         swapsApiConfig: { headers: { 'X-Swaps': '1' } },
       },
     });
-    expect(base).toEqual({ baseURL: 'https://base.example', timeout: 3, headers: { ...D, Authorization: 'tok' } });
+    expect(base).toEqual(
+      withMount({ baseURL: 'https://base.example', timeout: 3, headers: { ...D, Authorization: 'tok' } }),
+    );
     // swaps inherits base's baseURL/timeout/Authorization, plus its own header
     expect(swaps).toEqual({
       baseURL: 'https://base.example',
@@ -271,11 +276,13 @@ describe('mergeSodaxConfig — api ApiConfig union resolves correctly per servic
           swapsApiConfig: { headers: { 'X-S': '1' } },
         },
       });
-      expect(base).toEqual({
-        baseURL: 'https://backend.mydapp.com/sodax',
-        timeout: 4321,
-        headers: { ...D, Authorization: 'tok' },
-      });
+      expect(base).toEqual(
+        withMount({
+          baseURL: 'https://backend.mydapp.com/sodax',
+          timeout: 4321,
+          headers: { ...D, Authorization: 'tok' },
+        }),
+      );
       // swaps inherits the flat layer it does not override
       expect(swaps).toEqual({
         baseURL: 'https://backend.mydapp.com/sodax',
@@ -303,7 +310,7 @@ describe('mergeSodaxConfig — api ApiConfig union resolves correctly per servic
 
     it('leaves base and swaps on the defaults for a sponsoring-only override', () => {
       const { base, swaps } = resolveServices({ api: { sponsoringApiConfig: { apiKey: 'k' } } });
-      expect(base).toEqual(DEFAULT_RESOLVED);
+      expect(base).toEqual(withMount(DEFAULT_RESOLVED));
       expect(swaps).toEqual(DEFAULT_RESOLVED);
     });
   });

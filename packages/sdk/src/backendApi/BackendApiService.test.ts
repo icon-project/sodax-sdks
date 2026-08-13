@@ -21,7 +21,7 @@
  *      / `.rejects` — matching the runtime contract of each method.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChainKeys, type Address, type ApiConfig, type SodaxLogger } from '@sodax/types';
+import { BACKEND_API_BASE_PATH, ChainKeys, type Address, type ApiConfig, type SodaxLogger } from '@sodax/types';
 import { Sodax } from '../shared/entities/Sodax.js';
 import { BackendApiService } from './BackendApiService.js';
 import { SodaxError } from '../errors/SodaxError.js';
@@ -38,7 +38,10 @@ vi.stubGlobal('fetch', mockFetch);
 // --- test fixtures --------------------------------------------------------
 
 const sodax = new Sodax();
-const DEFAULT_BASE_URL = 'https://api.sodax.com/v1/be';
+// `api.baseURL` is the gateway ROOT; the backend data API's own `/be` mount is appended by the service.
+// So request URLs are prefixed with DATA_API, while `getBaseURL()` reports ROOT.
+const ROOT = 'https://api.sodax.com/v1';
+const DATA_API = `${ROOT}${BACKEND_API_BASE_PATH}`;
 
 const SAMPLE_USER_ADDRESS = '0x1111111111111111111111111111111111111111' as Address;
 const SAMPLE_TX_HASH = '0x46b053464f50836328b6158e1e33e5cf66c0e3ebe5004d30459b23acae5047a0';
@@ -139,7 +142,7 @@ describe('BackendApiService.getIntentByTxHash', () => {
     expect(result).toEqual({ ok: true, value: intentBody });
     expect(mockFetch).toHaveBeenCalledTimes(1);
     expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/intent/tx/${SAMPLE_TX_HASH}`,
+      `${DATA_API}/intent/tx/${SAMPLE_TX_HASH}`,
       expect.objectContaining({
         method: 'GET',
         headers: expect.objectContaining({
@@ -210,7 +213,7 @@ describe('BackendApiService.getIntentByHash', () => {
 
     expect(result).toEqual({ ok: true, value: intentBody });
     expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/intent/${SAMPLE_INTENT_HASH}`,
+      `${DATA_API}/intent/${SAMPLE_INTENT_HASH}`,
       expect.objectContaining({ method: 'GET' }),
     );
   });
@@ -240,7 +243,7 @@ describe('BackendApiService.getOrderbook', () => {
     });
 
     expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/solver/orderbook?offset=0&limit=10`,
+      `${DATA_API}/solver/orderbook?offset=0&limit=10`,
       expect.objectContaining({ method: 'GET' }),
     );
   });
@@ -250,10 +253,7 @@ describe('BackendApiService.getOrderbook', () => {
 
     await sodax.backendApi.getOrderbook({ offset: '20', limit: '5' });
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/solver/orderbook?offset=20&limit=5`,
-      expect.any(Object),
-    );
+    expect(mockFetch).toHaveBeenCalledWith(`${DATA_API}/solver/orderbook?offset=20&limit=5`, expect.any(Object));
   });
 
   it('resolves to ok:false with HTTP_REQUEST_FAILED on a non-2xx response', async () => {
@@ -277,7 +277,7 @@ describe('BackendApiService.getUserIntents', () => {
     });
 
     expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/intent/user/${SAMPLE_USER_ADDRESS}`,
+      `${DATA_API}/intent/user/${SAMPLE_USER_ADDRESS}`,
       expect.objectContaining({ method: 'GET' }),
     );
   });
@@ -338,7 +338,7 @@ describe('BackendApiService.getMoneyMarketPosition', () => {
 
     expect(result).toEqual({ ok: true, value: position });
     expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/moneymarket/position/${SAMPLE_USER_ADDRESS}`,
+      `${DATA_API}/moneymarket/position/${SAMPLE_USER_ADDRESS}`,
       expect.objectContaining({ method: 'GET' }),
     );
   });
@@ -362,7 +362,7 @@ describe('BackendApiService.getAllMoneyMarketAssets', () => {
 
     expect(result).toEqual({ ok: true, value: assets });
     expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/moneymarket/asset/all`,
+      `${DATA_API}/moneymarket/asset/all`,
       expect.objectContaining({ method: 'GET' }),
     );
   });
@@ -377,7 +377,7 @@ describe('BackendApiService.getMoneyMarketAsset', () => {
 
     expect(result).toEqual({ ok: true, value: asset });
     expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/moneymarket/asset/${SAMPLE_RESERVE_ADDRESS}`,
+      `${DATA_API}/moneymarket/asset/${SAMPLE_RESERVE_ADDRESS}`,
       expect.objectContaining({ method: 'GET' }),
     );
   });
@@ -393,7 +393,7 @@ describe('BackendApiService.getMoneyMarketAssetBorrowers', () => {
     ).resolves.toEqual({ ok: true, value: borrowers });
 
     expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/moneymarket/asset/${SAMPLE_RESERVE_ADDRESS}/borrowers?offset=0&limit=10`,
+      `${DATA_API}/moneymarket/asset/${SAMPLE_RESERVE_ADDRESS}/borrowers?offset=0&limit=10`,
       expect.objectContaining({ method: 'GET' }),
     );
   });
@@ -417,7 +417,7 @@ describe('BackendApiService.getMoneyMarketAssetSuppliers', () => {
     ).resolves.toEqual({ ok: true, value: suppliers });
 
     expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/moneymarket/asset/${SAMPLE_RESERVE_ADDRESS}/suppliers?offset=0&limit=10`,
+      `${DATA_API}/moneymarket/asset/${SAMPLE_RESERVE_ADDRESS}/suppliers?offset=0&limit=10`,
       expect.objectContaining({ method: 'GET' }),
     );
   });
@@ -434,7 +434,7 @@ describe('BackendApiService.getAllMoneyMarketBorrowers', () => {
     });
 
     expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/moneymarket/borrowers?offset=0&limit=10`,
+      `${DATA_API}/moneymarket/borrowers?offset=0&limit=10`,
       expect.objectContaining({ method: 'GET' }),
     );
   });
@@ -444,10 +444,7 @@ describe('BackendApiService.getAllMoneyMarketBorrowers', () => {
 
     await sodax.backendApi.getAllMoneyMarketBorrowers({ offset: '20', limit: '5' });
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/moneymarket/borrowers?offset=20&limit=5`,
-      expect.any(Object),
-    );
+    expect(mockFetch).toHaveBeenCalledWith(`${DATA_API}/moneymarket/borrowers?offset=20&limit=5`, expect.any(Object));
   });
 });
 
@@ -531,10 +528,7 @@ describe('BackendApiService config endpoints', () => {
       const result = await invoke();
 
       expect(result).toEqual({ ok: true, value: body });
-      expect(mockFetch).toHaveBeenCalledWith(
-        `${DEFAULT_BASE_URL}${endpoint}`,
-        expect.objectContaining({ method: 'GET' }),
-      );
+      expect(mockFetch).toHaveBeenCalledWith(`${DATA_API}${endpoint}`, expect.objectContaining({ method: 'GET' }));
     });
 
     it(`${name}: returns ok:false with HTTP_REQUEST_FAILED on a non-2xx response`, async () => {
@@ -631,11 +625,21 @@ describe('BackendApiService.request config threading', () => {
     await sodax.backendApi.getOrderbook({ offset: '0', limit: '5' });
 
     expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/solver/orderbook?offset=0&limit=5`,
+      `${DATA_API}/solver/orderbook?offset=0&limit=5`,
       expect.objectContaining({
         headers: expect.objectContaining({ 'Content-Type': 'application/json', Accept: 'application/json' }),
       }),
     );
+  });
+
+  it('normalizes a legacy /be-suffixed per-call baseURL override instead of double-mounting', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse({ total: 0, data: [] }));
+
+    // The value the pre-change docs told consumers to pass. Appending the mount to it verbatim would
+    // request `/v1/be/be/solver/orderbook`, which the gateway does not route.
+    await sodax.backendApi.getOrderbook({ offset: '0', limit: '5' }, { baseURL: DATA_API });
+
+    expect(mockFetch).toHaveBeenCalledWith(`${DATA_API}/solver/orderbook?offset=0&limit=5`, expect.anything());
   });
 
   it('threads a per-call override into the request: baseURL replaced, custom header merged with the defaults', async () => {
@@ -646,8 +650,9 @@ describe('BackendApiService.request config threading', () => {
       { baseURL: 'https://custom.example.com', headers: { 'X-Request-Id': '12345' } },
     );
 
+    // The override replaces the gateway root; the service's own `/be` mount still applies.
     expect(mockFetch).toHaveBeenCalledWith(
-      'https://custom.example.com/solver/orderbook?offset=0&limit=5',
+      'https://custom.example.com/be/solver/orderbook?offset=0&limit=5',
       expect.objectContaining({
         headers: expect.objectContaining({
           'Content-Type': 'application/json',
@@ -677,7 +682,7 @@ describe('BackendApiService.request config threading', () => {
 describe('BackendApiService.setHeaders', () => {
   it('persists the supplied headers and merges them into subsequent requests', async () => {
     const isolatedConfig: ApiConfig = {
-      baseURL: DEFAULT_BASE_URL,
+      baseURL: ROOT,
       timeout: 30_000,
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     };
@@ -702,7 +707,7 @@ describe('BackendApiService.setHeaders', () => {
 
   it('overwrites an existing header on subsequent setHeaders calls (last write wins)', async () => {
     const isolatedConfig: ApiConfig = {
-      baseURL: DEFAULT_BASE_URL,
+      baseURL: ROOT,
       timeout: 30_000,
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     };
@@ -721,7 +726,7 @@ describe('BackendApiService.setHeaders', () => {
 
   it('propagates the headers to the swaps sub-service (a token set here reaches swaps.* calls)', async () => {
     const isolatedConfig: ApiConfig = {
-      baseURL: DEFAULT_BASE_URL,
+      baseURL: ROOT,
       timeout: 30_000,
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     };
@@ -741,7 +746,7 @@ describe('BackendApiService.setHeaders', () => {
 describe('BackendApiService logger forwarding', () => {
   it('forwards the injected logger to the swaps sub-service (a swaps error path hits the same sink)', async () => {
     const spy: SodaxLogger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-    const isolatedService = new BackendApiService({ baseURL: DEFAULT_BASE_URL, timeout: 30_000, headers: {} }, spy);
+    const isolatedService = new BackendApiService({ baseURL: ROOT, timeout: 30_000, headers: {} }, spy);
     // A non-2xx on a swaps endpoint makes makeRequest call `logger.error(...)` before rethrowing.
     mockFetch.mockResolvedValueOnce(httpErrorResponse(502, 'Bad Gateway'));
 
@@ -756,9 +761,38 @@ describe('BackendApiService logger forwarding', () => {
   });
 });
 
+describe('BackendApiService legacy baseURL deprecation', () => {
+  const loggerSpy = (): SodaxLogger => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
+
+  it('warns once at construction, naming the trimmed gateway root', () => {
+    const spy = loggerSpy();
+    new BackendApiService({ baseURL: DATA_API, timeout: 30_000, headers: {} }, spy);
+    expect(spy.warn).toHaveBeenCalledTimes(1);
+    // `stringContaining(ROOT)` alone would also pass on the UNtrimmed message, since ROOT is a prefix
+    // of DATA_API — so assert the trimmed value is what the message reports.
+    const [message] = vi.mocked(spy.warn).mock.calls[0] as [string];
+    expect(message).toContain(`"${ROOT}"`);
+    expect(message).not.toContain(`"${DATA_API}"`);
+  });
+
+  it('does not warn when an explicit basePath says the base URL is already a root', () => {
+    const spy = loggerSpy();
+    new BackendApiService({ baseURL: DATA_API, basePath: '', timeout: 30_000, headers: {} }, spy);
+    expect(spy.warn).not.toHaveBeenCalled();
+  });
+
+  it('stays quiet for a gateway root', () => {
+    const spy = loggerSpy();
+    new BackendApiService({ baseURL: ROOT, timeout: 30_000, headers: {} }, spy);
+    expect(spy.warn).not.toHaveBeenCalled();
+  });
+});
+
 describe('BackendApiService.getBaseURL', () => {
-  it('returns the baseURL provided at construction time', () => {
-    expect(sodax.backendApi.getBaseURL()).toBe(DEFAULT_BASE_URL);
+  it('returns the gateway root, not the data API mount that requests are prefixed with', () => {
+    expect(sodax.backendApi.getBaseURL()).toBe(ROOT);
+    expect(sodax.backendApi.getBasePath()).toBe(BACKEND_API_BASE_PATH);
+    expect(`${sodax.backendApi.getBaseURL()}${sodax.backendApi.getBasePath()}`).toBe(DATA_API);
   });
 
   it('returns the overridden baseURL when an instance is constructed with a custom one', () => {
@@ -814,7 +848,7 @@ describe('BackendApiService ApiConfig variants', () => {
     mockFetch.mockResolvedValueOnce(okResponse({ intentHash: '0x1' }));
     await service.getIntentByTxHash('0xabc');
     expect(mockFetch).toHaveBeenLastCalledWith(
-      'https://base.example/intent/tx/0xabc',
+      'https://base.example/be/intent/tx/0xabc',
       expect.objectContaining({ method: 'GET' }),
     );
 
@@ -857,7 +891,7 @@ describe('BackendApiService ApiConfig variants', () => {
 
   it('via new Sodax({ api: { timeout } }): flat partial merge keeps the default baseURL for base and swaps', () => {
     const s = new Sodax({ api: { timeout: 12_345 } });
-    expect(s.backendApi.getBaseURL()).toBe(DEFAULT_BASE_URL);
-    expect(s.api.swaps.getBaseURL()).toBe(DEFAULT_BASE_URL);
+    expect(s.backendApi.getBaseURL()).toBe(ROOT);
+    expect(s.api.swaps.getBaseURL()).toBe(ROOT);
   });
 });

@@ -27,7 +27,6 @@ import {
   useSodaxContext,
   loadRadfiSession,
   useTradingWalletBalance,
-  useSwapsApiSubmitTx,
   useXBalances,
   useNearStorageGate,
   getSupportedSolverTokens,
@@ -35,7 +34,6 @@ import {
   type CreateIntentParams,
   type SolverIntentQuoteRequest,
   type GetWalletProviderType,
-  type SubmitTxRequestV2,
   type SpokeChainKey,
   type XToken,
   type ChainType,
@@ -125,9 +123,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const [nearStorageError, setNearStorageError] = useState<string | null>(null);
   const [stellarError, setStellarError] = useState<string | null>(null);
   const [slippage, setSlippage] = useState<string>('0.5');
-  const [useSubmitTxApi, setUseSubmitTxApi] = useState(false);
   const [deliveryHookEnabled, setDeliveryHookEnabled] = useState(false);
-  const { mutateAsyncSafe: submitSwapTx, isPending: isSubmitting } = useSwapsApiSubmitTx();
   const [isBitcoinReady, setIsBitcoinReady] = useState(false);
   const [isDestBitcoinReady, setIsDestBitcoinReady] = useState(false);
 
@@ -317,60 +313,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
 
   const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: src.chain });
 
-  const handleSubmitTxSwap = async (intentOrderPayload: CreateIntentParams) => {
-    if (!sourceWalletProvider) {
-      console.error('sourceWalletProvider undefined');
-      return;
-    }
-
-    setOpen(false);
-
-    const createIntentResult = await sodax.swaps.createIntent({
-      params: intentOrderPayload,
-      raw: false,
-      walletProvider: sourceWalletProvider,
-    });
-
-    if (!createIntentResult.ok) {
-      console.error('Error creating intent:', createIntentResult.error);
-      return;
-    }
-
-    const { tx: spokeTxHash, intent, relayData } = createIntentResult.value;
-    console.log('Intent created. Spoke tx hash:', spokeTxHash);
-
-    const request: SubmitTxRequestV2 = {
-      txHash: spokeTxHash as string,
-      srcChainKey: src.chain,
-      walletAddress: sourceAccount.address ?? '',
-      intent,
-      relayData: relayData.payload,
-    };
-
-    const submitResult = await submitSwapTx({ request });
-    if (!submitResult.ok) {
-      console.error('Submit swap tx failed:', submitResult.error);
-      return;
-    }
-    console.log('Submit swap tx result:', submitResult.value);
-
-    setOrders(prev =>
-      appendOrder(prev, {
-        mode: 'submit-tx',
-        txHash: spokeTxHash as string,
-        srcChainKey: src.chain,
-        createdAt: Date.now(),
-        summary: buildOrderSummary(src, dst, sourceAmount, quote?.quoted_amount),
-      }),
-    );
-  };
-
   const handleSwap = async (intentOrderPayload: CreateIntentParams) => {
-    if (useSubmitTxApi) {
-      await handleSubmitTxSwap(intentOrderPayload);
-      return;
-    }
-
     setOpen(false);
     console.log('intentOrderPayload', intentOrderPayload);
     console.log('wallet provider', sourceWalletProvider);
@@ -611,19 +554,6 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
           {quoteQuery.data?.ok === false && <div className="text-red-500">{quoteQuery.data.error.detail.message}</div>}
         </div>
 
-        <div className="flex items-center gap-2 w-full">
-          <label htmlFor="submit-tx-toggle" className="text-sm font-medium cursor-pointer">
-            Submit tx to API
-          </label>
-          <input
-            id="submit-tx-toggle"
-            type="checkbox"
-            checked={useSubmitTxApi}
-            onChange={e => setUseSubmitTxApi(e.target.checked)}
-            className="h-4 w-4 cursor-pointer"
-          />
-        </div>
-
         {availableHookKind && (
           <div className="flex items-center gap-2 w-full">
             <label htmlFor="delivery-hook-toggle" className="text-sm font-medium cursor-pointer">
@@ -736,7 +666,6 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
                     onClick={() => handleSwap(intentOrderPayload)}
                     disabled={
                       (src.chain !== ChainKeys.BITCOIN_MAINNET && !hasAllowed) ||
-                      isSubmitting ||
                       (src.chain === ChainKeys.BITCOIN_MAINNET && !isBitcoinReady) ||
                       (dst.chain === ChainKeys.BITCOIN_MAINNET && !isDestBitcoinReady) ||
                       stellar.blocksAction ||

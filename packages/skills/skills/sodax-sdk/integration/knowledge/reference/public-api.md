@@ -143,11 +143,14 @@ import {
   type IntentRelayChainId,
 
   // Backend API config + per-call override
-  type ApiConfig,               // BaseApiConfig | CustomApiConfig
-  type BaseApiConfig,
+  type ApiConfig,               // BackendApiConfig | CustomApiConfig
+  type BaseApiConfig,           // { baseURL, timeout, headers } — baseURL is the GATEWAY ROOT
+  type BackendApiConfig,        // BaseApiConfig & { basePath? } — the data API's mount, default '/be'
   type CustomApiConfig,         // point the swaps / sponsoring API at its own endpoint
   type SwapsApiConfig,
   type SponsoringApiConfig,     // BaseApiConfig & { apiKey? } — own host, own x-api-key
+  DEFAULT_API_BASE_URL,         // 'https://api.sodax.com/v1' — the root every service resolves
+  BACKEND_API_BASE_PATH,        // '/be'
   DEFAULT_SPONSORING_API_ENDPOINT,
   SPONSORING_API_STELLAR_BASE_PATH,
   type RequestOverrideConfig,   // per-call override on any backendApi / sodax.api.swaps method
