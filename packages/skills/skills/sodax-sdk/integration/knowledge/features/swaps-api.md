@@ -119,6 +119,12 @@ if (!created.ok) return;
 const { tx, intent, relayData } = created.value;
 ```
 
+**No delivery hooks on this path.** `CreateIntentParamsV2` has no `hook` field, so the API's own
+intent-building endpoints (`checkAllowance` / `approve` / `createIntent`) cannot express one. Build hooked
+intents with `sodax.swaps` instead: it constructs the intent client-side — hook already resolved into
+`dstAddress`/`data` — and under the default `useBackendSubmitTx` still hands the broadcast tx to this
+API's `submitTx`. See [`swap.md`](swap.md) § "Delivery hooks".
+
 ### Submit tx + poll status
 
 ```ts

@@ -100,43 +100,36 @@ type CreateIntentParams<K extends SpokeChainKey> = {
 ### Delivery hooks (`hook` / `deliveryData`)
 
 By default an intent's output is transferred straight to `dstAddress`. A **delivery hook** instead hands
-the output to a contract on the destination spoke: `SpokeAssetManager` calls
+it to a contract on the destination spoke that acts on the recipient's behalf — `SpokeAssetManager` calls
 `ISpokeReceiver(dstAddress).hook(token, amount, deliveryData)`.
 
-Prefer `hook` over `deliveryData`. With `hook` set the SDK overrides the on-chain `dstAddress` with the
-hook's deployed address and encodes `deliveryData` itself, both taken from the registry in
-`@sodax/types` — so the address and its payload codec can never drift. The `dstAddress` you pass stays
-the **recipient the hook credits**, not the delivery target.
+Prefer `hook` over `deliveryData`: the SDK resolves the hook's deployed address and encodes its payload
+from the registry (`spokeHooks` in `@sodax/types`), so the two can never drift.
 
 ```ts
-import { ChainKeys, HookKind } from '@sodax/sdk';
+import { HookKind, getSpokeHook } from '@sodax/sdk';
+
+// Which kinds exist, and on which chains, is registry data that grows — discover, don't hardcode.
+const kind = HookKind.HYPERCORE_DEPOSIT;        // any registered kind; see `HookKind` for the current set
+if (!getSpokeHook(dstChainKey, kind)) return;   // not deployed there → send a plain transfer instead
 
 const params = {
   // …the usual CreateIntentParams fields…
-  dstChainKey: ChainKeys.ETHEREUM_MAINNET,
-  dstAddress: recipient,                    // the account the hook credits, NOT the hook itself
-  hook: { kind: HookKind.FLINT_DEPOSIT },
+  dstAddress: recipient,  // the account the hook CREDITS — the SDK overwrites the on-chain
+                          // dstAddress with the hook's own address
+  hook: { kind },
 };
 ```
 
-Registered kinds (`HookKind`): `HYPERCORE_DEPOSIT` — deposits delivered USDC into the recipient's
-HyperCore perps account (HyperEVM); `FLINT_DEPOSIT` — requests an ERC-7540 deposit of delivered USDC into
-the Flint RWA vault (Ethereum) with the recipient as the request's controller.
-
-Notes:
-
-- **Fails closed.** Selecting a kind not registered on `dstChainKey` throws at intent-construction time
-  (`getSpokeHook` returns `undefined`), before an intent exists. Check with
-  `getSpokeHook(chainKey, kind)` first if you need to branch.
-- **A zero-address recipient is rejected** for every hook — it would revert on arrival and wedge the
-  cross-chain message unrecoverably.
-- **Hooks are best-effort on-chain.** Each hook decides what to do with an unexpected token or a
-  refusing target, and typically falls back to delivering plain tokens to the recipient rather than
-  reverting. `supportedTokens` on the registry entry describes that on-chain behaviour; the SDK does not
-  currently reject a mismatched `outputToken` client-side.
-- `deliveryData` is the low-level escape hatch for a receiver **not** in the registry: opaque bytes whose
-  schema the destination receiver defines, and you must point `dstAddress` at that receiver yourself.
-  It is ignored when `hook` is set.
+- **Fails closed** — a kind not registered on `dstChainKey` throws at intent-construction time, before an
+  intent exists. A zero-address recipient is rejected for every hook (it would revert on arrival and
+  wedge the cross-chain message unrecoverably).
+- **Best-effort on-chain** — a hook generally delivers plain tokens to the recipient rather than
+  reverting when it can't act (unsupported token, refusing target, amount below its minimum). Treat a
+  hooked intent as "the tokens arrive; the hook action may not". `supportedTokens` on a registry entry
+  describes that on-chain behaviour; the SDK does not reject a mismatched `outputToken` client-side.
+- `deliveryData` is the escape hatch for a receiver **not** in the registry: opaque bytes whose schema the
+  receiver defines, and you point `dstAddress` at that receiver yourself. Ignored when `hook` is set.
 
 ## Common call shapes
 
