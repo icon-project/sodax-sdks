@@ -5,6 +5,7 @@ import {
   Sodax,
   ChainKeys,
   HookKind,
+  getSpokeHook,
   spokeChainConfig,
   type CreateIntentParams,
   type SolverIntentQuoteRequest,
@@ -29,12 +30,14 @@ import type { Address, Hex } from '@sodax/types';
 const SONIC_RPC_URL = 'https://rpc.soniclabs.com';
 const ETH_RPC_URL = process.env.ETH_RPC_URL ?? 'https://ethereum-rpc.publicnode.com';
 
-/** Ethereum SpokeAssetManager proxy (UUPS) and its ERC-1967 implementation slot. */
-const ETH_SPOKE_ASSET_MANAGER: Address = '0x39E77f86C1B1f3fbAb362A82b49D2E86C09659B4';
+/** Ethereum SpokeAssetManager proxy (UUPS), source-derived — never hardcode the address. */
+const ETH_SPOKE_ASSET_MANAGER: Address = spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].addresses.assetManager;
 const ERC1967_IMPL_SLOT = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc' as const;
 
-/** The FlintDepositHook delivers to the vault only at or above this (1 USDC, 6 decimals). */
-const HOOK_MIN_DEPOSIT = 1_000_000n;
+/** Minimal ABI for the FlintDepositHook's owner-settable `minDeposit()` view. */
+const FLINT_HOOK_MIN_DEPOSIT_ABI = [
+  { type: 'function', name: 'minDeposit', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+] as const;
 
 const privateKey = process.env.EVM_PRIVATE_KEY;
 if (!privateKey) throw new Error('EVM_PRIVATE_KEY environment variable is required');
@@ -52,10 +55,13 @@ const sodax = new Sodax();
 await sodax.initialize();
 
 /**
- * HARD GATE. Until the Ethereum SpokeAssetManager implementation supports withdrawal hooks, a
- * hooked delivery transfers the USDC to the hook contract WITHOUT calling `hook()` — the funds
- * park there and only the owner Safe's `rescue` can move them. The hook-capable implementation
- * is the only one whose bytecode contains the `Hooked` event topic, so gate on that.
+ * HARD GATE, kept as a permanent pre-flight (not a temporary wait). The Ethereum SpokeAssetManager
+ * implementation has supported withdrawal hooks since the 2026-08-10 upgrade
+ * (icon-project/sodax-contracts#693) — if this ever fails again, it means the proxy's implementation
+ * regressed to a pre-hook build, and a hooked delivery would transfer the USDC to the hook contract
+ * WITHOUT calling `hook()`: the funds park there and only the owner Safe's `rescue` can move them.
+ * The hook-capable implementation is the only one whose bytecode contains the `Hooked` event topic,
+ * so gate on that rather than trusting a point-in-time deployment record.
  */
 async function assertEthSpokeSupportsHooks(): Promise<void> {
   const eth = createPublicClient({ chain: mainnet, transport: http(ETH_RPC_URL) });
@@ -68,10 +74,23 @@ async function assertEthSpokeSupportsHooks(): Promise<void> {
     throw new Error(
       `Ethereum SpokeAssetManager implementation ${impl} has NO hook support — ` +
         'a hooked intent would strand its USDC in the hook contract. ' +
-        'Wait for the SpokeAssetManager upgrade before running this.',
+        'This should not happen post-upgrade; treat as a critical regression, not a transient wait.',
     );
   }
   console.log(`Pre-flight OK: SpokeAssetManager impl ${impl} supports withdrawal hooks`);
+}
+
+/** Reads the FlintDepositHook's current on-chain `minDeposit()` rather than assuming a fixed value. */
+async function fetchFlintHookMinDeposit(): Promise<bigint> {
+  const hook = getSpokeHook(ChainKeys.ETHEREUM_MAINNET, HookKind.FLINT_DEPOSIT);
+  if (!hook) throw new Error('FlintDepositHook is not registered on Ethereum in this SDK build');
+
+  const eth = createPublicClient({ chain: mainnet, transport: http(ETH_RPC_URL) });
+  return eth.readContract({
+    address: hook.address,
+    abi: FLINT_HOOK_MIN_DEPOSIT_ABI,
+    functionName: 'minDeposit',
+  });
 }
 
 async function main(): Promise<void> {
@@ -102,9 +121,13 @@ async function main(): Promise<void> {
   console.log(`Quoted: ${formatUnits(quotedAmount, 6)} USDC (min after slippage ${formatUnits(minOutputAmount, 6)})`);
 
   // Below the hook's dust floor it delivers plain USDC to the recipient instead of depositing —
-  // harmless, but not what this script is for.
-  if (minOutputAmount < HOOK_MIN_DEPOSIT) {
-    throw new Error(`min output ${formatUnits(minOutputAmount, 6)} USDC is under the hook's 1 USDC minDeposit — raise AMOUNT_S`);
+  // harmless, but not what this script is for. Read live rather than assume a fixed floor: the
+  // owner can change minDeposit on the deployed hook at any time.
+  const hookMinDeposit = await fetchFlintHookMinDeposit();
+  if (minOutputAmount < hookMinDeposit) {
+    throw new Error(
+      `min output ${formatUnits(minOutputAmount, 6)} USDC is under the hook's current ${formatUnits(hookMinDeposit, 6)} USDC minDeposit — raise AMOUNT_S`,
+    );
   }
 
   const deadlineResult = await sodax.swaps.getSwapDeadline(600n);

@@ -37,6 +37,7 @@
     "approve-guard-check": "tsx src/approve-guard-check.ts",
     "leverage-yield": "tsx src/leverage-yield.ts",
     "stellar-sponsor": "tsx src/stellar-sponsor.ts",
+    "flint-deposit": "tsx src/flint-deposit.ts",
     "build": "tsc",
     "checkTs": "tsc --noEmit",
     "pretty": "biome format . --write",

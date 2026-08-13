@@ -112,4 +112,21 @@ describe('HookService.resolveDelivery', () => {
       deliveryData: HookService.encodeDeliveryData({ kind: HookKind.HYPERCORE_DEPOSIT }, HC_RECIPIENT),
     });
   });
+
+  // This is the function EvmSolverService/SonicSpokeService actually call to apply a hook — a
+  // FLINT_DEPOSIT case here exercises the same code path production intent construction uses,
+  // not just the lower-level resolveDeliveryHook lookup above.
+  it('overrides dstAddress with the Flint hook and derives deliveryData when hook: FLINT_DEPOSIT is set', () => {
+    const hook = getSpokeHook(ChainKeys.ETHEREUM_MAINNET, HookKind.FLINT_DEPOSIT);
+    const params = {
+      ...base(),
+      dstChainKey: ChainKeys.ETHEREUM_MAINNET,
+      hook: { kind: HookKind.FLINT_DEPOSIT } as const,
+    };
+
+    expect(HookService.resolveDelivery(params)).toEqual({
+      dstAddress: hook?.address,
+      deliveryData: HookService.encodeDeliveryData({ kind: HookKind.FLINT_DEPOSIT }, HC_RECIPIENT),
+    });
+  });
 });
