@@ -46,7 +46,10 @@ import {
   ChainKeys,
   isBitcoinChainKey,
   isStacksChainKey,
+  HookKind,
+  isHookSupportedToken,
 } from '@sodax/dapp-kit';
+import { HOOK_LABELS } from '@/lib/deliveryHooks';
 import {
   getXChainType,
   useEvmSwitchChain,
@@ -78,6 +81,16 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const srcChainKey = src.chain as SpokeChainKey;
   const dstChainKey = dst.chain as SpokeChainKey;
 
+  // The delivery hook — if any — the registry accepts for this destination chain + output token.
+  // Registry-driven, so a newly registered hook surfaces here without touching this component.
+  // NOTE: the API forwards `hook` to the SDK server-side, so resolution happens on the backend and
+  // needs a backend whose pinned SDK has this hook registered — see the checkbox hint below.
+  const availableHookKind = useMemo(() => {
+    const token = dst.token;
+    if (!token) return undefined;
+    return Object.values(HookKind).find(kind => isHookSupportedToken(dstChainKey, kind, token.address));
+  }, [dstChainKey, dst.token]);
+
   const sourceAccount = useXAccount({ xChainId: srcChainKey });
   const sourceWalletProvider = useWalletProvider({ xChainId: srcChainKey });
   const destAccount = useXAccount({ xChainId: dstChainKey });
@@ -95,6 +108,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const [stellarError, setStellarError] = useState<string | null>(null);
   const [isApproving, setIsApproving] = useState(false);
   const [isSwapping, setIsSwapping] = useState(false);
+  const [deliveryHookEnabled, setDeliveryHookEnabled] = useState(false);
   const [isSourceBitcoinReady, setIsSourceBitcoinReady] = useState(false);
   const [isDestBitcoinReady, setIsDestBitcoinReady] = useState(false);
 
@@ -276,6 +290,9 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       dstAddress,
       srcPublicKey,
       bound,
+      // Wire field: the backend forwards it to the SDK, which overrides the on-chain dstAddress with
+      // the hook's address and encodes the payload. `dstAddress` above stays the recipient.
+      ...(deliveryHookEnabled && availableHookKind ? { hook: { kind: availableHookKind } } : {}),
     });
   };
 
@@ -622,6 +639,21 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
             </span>
           </div>
         </div>
+
+        {availableHookKind && (
+          <div className="flex items-center gap-2 w-full">
+            <label htmlFor="swaps-api-delivery-hook-toggle" className="text-sm font-medium cursor-pointer">
+              {HOOK_LABELS[availableHookKind]}
+            </label>
+            <input
+              id="swaps-api-delivery-hook-toggle"
+              type="checkbox"
+              checked={deliveryHookEnabled}
+              onChange={e => setDeliveryHookEnabled(e.target.checked)}
+              className="h-4 w-4 cursor-pointer"
+            />
+          </div>
+        )}
 
         <div className="">{quoteQuery.error && <div className="text-red-500">{quoteQuery.error.message}</div>}</div>
 

@@ -119,11 +119,16 @@ if (!created.ok) return;
 const { tx, intent, relayData } = created.value;
 ```
 
-**No delivery hooks on this path.** `CreateIntentParamsV2` has no `hook` field, so the API's own
-intent-building endpoints (`checkAllowance` / `approve` / `createIntent`) cannot express one. Build hooked
-intents with `sodax.swaps` instead: it constructs the intent client-side — hook already resolved into
-`dstAddress`/`data` — and under the default `useBackendSubmitTx` still hands the broadcast tx to this
-API's `submitTx`. See [`swap.md`](swap.md) § "Delivery hooks".
+**Delivery hooks are deployment-dependent here.** `CreateIntentParamsV2` carries an optional
+`hook?: HookRequestV2` (`{ kind: HookKind }`), shared by `checkAllowance` / `approve` / `createIntent`.
+Unlike the SDK path, the hook is resolved **server-side**, so it only works when the backend forwards the
+field *and* its pinned SDK has that kind registered for `dstChainKey`; an unregistered kind fails the
+request rather than falling back to a plain transfer. `dstAddress` still means the recipient the hook
+credits — the backend substitutes the hook's own address on-chain.
+
+When you need hook support independent of the deployment, build with `sodax.swaps` instead: it resolves
+the hook client-side into `dstAddress`/`data`, and under the default `useBackendSubmitTx` still hands the
+broadcast tx to this API's `submitTx`. See [`swap.md`](swap.md) § "Delivery hooks".
 
 ### Submit tx + poll status
 

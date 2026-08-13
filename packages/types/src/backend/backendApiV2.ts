@@ -43,6 +43,7 @@ import type { ConcentratedLiquidityConfig, DexDefaultConfig } from '../dex/dex.j
 import type { SodaxDefaultConfig } from '../sodax-config/sodax-config.js';
 
 import type { RawTxReturnType } from '../common/index.js';
+import type { HookKind } from '../hooks/hooks.js';
 
 // ──────────────────────────────────────────────────────────────────────
 // Shared building blocks
@@ -321,6 +322,21 @@ export interface CreateIntentParamsV2 extends SwapExtrasV2 {
   solver?: string;
   /** Arbitrary calldata hex string. Defaults to `0x`. */
   data?: string;
+  /**
+   * Route the intent's output through a registered delivery hook instead of transferring it to
+   * `dstAddress`. The backend resolves the hook's deployed address and encodes its payload via the
+   * SDK, so `dstAddress` stays the recipient the hook credits. Omit for a plain transfer.
+   *
+   * Requires a backend new enough to forward this field, and one whose pinned SDK has the hook
+   * registered for `dstChainKey` — an unregistered kind fails the request rather than silently
+   * falling back to a plain transfer.
+   */
+  hook?: HookRequestV2;
+}
+
+/** Selects a delivery hook by kind. Mirrors the SDK's own `HookRequest`. */
+export interface HookRequestV2 {
+  kind: HookKind;
 }
 
 /** POST /swaps/allowance/check — response body. */

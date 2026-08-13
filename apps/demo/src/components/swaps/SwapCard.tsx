@@ -58,6 +58,7 @@ import { loadLastSelection, saveLastSelection } from '@/lib/lastSelection';
 import { appendOrder } from '@/lib/orderHistory';
 import { buildOrderSummary } from '@/components/swaps/OrderStatus';
 import { solverApiEndpointForEnv } from '@/constants';
+import { HOOK_LABELS, toHookRequest } from '@/lib/deliveryHooks';
 
 export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAction<Order[]>) => void }) {
   const { sodax } = useSodaxContext();
@@ -125,15 +126,19 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const [stellarError, setStellarError] = useState<string | null>(null);
   const [slippage, setSlippage] = useState<string>('0.5');
   const [useSubmitTxApi, setUseSubmitTxApi] = useState(false);
-  const [hyperCoreDeposit, setHyperCoreDeposit] = useState(false);
+  const [deliveryHookEnabled, setDeliveryHookEnabled] = useState(false);
   const { mutateAsyncSafe: submitSwapTx, isPending: isSubmitting } = useSwapsApiSubmitTx();
   const [isBitcoinReady, setIsBitcoinReady] = useState(false);
   const [isDestBitcoinReady, setIsDestBitcoinReady] = useState(false);
 
-  // HyperCore deposit is available only when the destination chain/token is accepted by the registered
-  // hook (HyperEVM + USDC today). The registry — not this component — owns those constraints.
-  const canHyperCoreDeposit =
-    !!dst.token && isHookSupportedToken(dst.chain, HookKind.HYPERCORE_DEPOSIT, dst.token.address);
+  // The delivery hook — if any — that the registry accepts for this destination chain + output token
+  // (HyperCore on HyperEVM+USDC, Flint on Ethereum+USDC today). Resolved from the registry rather than
+  // pinned to one kind, so a newly registered hook surfaces here without touching this component.
+  const availableHookKind = useMemo(() => {
+    const token = dst.token;
+    if (!token) return undefined;
+    return Object.values(HookKind).find(kind => isHookSupportedToken(dst.chain, kind, token.address));
+  }, [dst.chain, dst.token]);
 
   const onChangeDirection = () => {
     setSrc(dst);
@@ -285,9 +290,9 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       dstAddress = tradingAddress;
     }
 
-    // HyperCore deposit: select the hook by kind and keep dstAddress as the recipient (the user's own
-    // HyperEVM address). The SDK resolves the hook's deployed address and encodes the payload.
-    const useHyperCoreDeposit = hyperCoreDeposit && canHyperCoreDeposit;
+    // Delivery hook: select it by kind and keep dstAddress as the recipient (the user's own address on
+    // the destination chain). The SDK resolves the hook's deployed address and encodes the payload.
+    const hookRequest = deliveryHookEnabled && availableHookKind ? toHookRequest(availableHookKind) : undefined;
 
     const createIntentParams = {
       inputToken: src.token.address, // The address of the input token on hub chain
@@ -303,9 +308,10 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       solver: '0x0000000000000000000000000000000000000000', // Optional specific solver address (address(0) = any solver)
       data: '0x', // Additional arbitrary data
       // When set, the SDK routes the output through this hook (overrides dstAddress, encodes deliveryData).
-      hook: useHyperCoreDeposit ? { kind: HookKind.HYPERCORE_DEPOSIT } : undefined,
+      hook: hookRequest,
     } satisfies CreateIntentParams;
 
+    console.log('createIntentParams', createIntentParams);
     setIntentOrderPayload(createIntentParams);
   };
 
@@ -618,16 +624,16 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
           />
         </div>
 
-        {canHyperCoreDeposit && (
+        {availableHookKind && (
           <div className="flex items-center gap-2 w-full">
-            <label htmlFor="hypercore-deposit-toggle" className="text-sm font-medium cursor-pointer">
-              Deposit to HyperCore (perps)
+            <label htmlFor="delivery-hook-toggle" className="text-sm font-medium cursor-pointer">
+              {HOOK_LABELS[availableHookKind]}
             </label>
             <input
-              id="hypercore-deposit-toggle"
+              id="delivery-hook-toggle"
               type="checkbox"
-              checked={hyperCoreDeposit}
-              onChange={e => setHyperCoreDeposit(e.target.checked)}
+              checked={deliveryHookEnabled}
+              onChange={e => setDeliveryHookEnabled(e.target.checked)}
               className="h-4 w-4 cursor-pointer"
             />
           </div>
