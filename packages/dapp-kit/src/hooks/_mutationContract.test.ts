@@ -71,6 +71,7 @@ const HOOKS: Array<{ path: string; nativeThrow?: true }> = [
   { path: 'swapsApi/useSwapsApiSubmitIntent.ts' },
   { path: 'swapsApi/useSwapsApiSubmitTx.ts' },
   { path: 'bridgeApi/useBridgeApiApprove.ts' },
+  { path: 'bridgeApi/useBridgeApiApproveAndBroadcast.ts' },
   { path: 'bridgeApi/useBridgeApiCreateBridgeIntent.ts' },
   { path: 'bridgeApi/useBridgeApiSubmitTx.ts' },
 ];

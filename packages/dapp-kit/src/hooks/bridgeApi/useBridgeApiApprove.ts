@@ -15,13 +15,21 @@ export type UseBridgeApiApproveVars = {
 };
 
 /**
- * React hook to build an unsigned token-approval transaction for the source token via the bridge
- * API — `sodax.api.bridge.approve`. Returns `{ tx }` (chain-specific unsigned tx) to sign and
- * broadcast yourself; it does not change state, so no queries are invalidated.
+ * React hook to build the unsigned token-approval transaction(s) for the source token via the bridge
+ * API — `sodax.api.bridge.approve`. Returns `{ tx, resetTx? }` (chain-specific unsigned txs) to sign
+ * and broadcast yourself; it does not change state, so no queries are invalidated.
+ *
+ * **`resetTx` is not optional to handle.** It is present when the source token rejects an allowance
+ * change from one non-zero value to another (the 2017 TetherToken lineage), and `tx` is not a valid
+ * state transition until `resetTx` has been MINED. Broadcasting them out of order, or without
+ * waiting, spends the user's gas on a transaction certain to revert. Prefer
+ * {@link useBridgeApiApproveAndBroadcast}, which owns that ordering and invalidates the allowance
+ * query for you; reach for this hook only when you need the raw transactions.
  *
  * @example
  * const { mutateAsync: approve } = useBridgeApiApprove();
- * const { tx } = await approve({ body: createBridgeIntentParams });
+ * const { tx, resetTx } = await approve({ body: createBridgeIntentParams });
+ * // if resetTx: broadcast it and WAIT for the receipt before broadcasting tx
  */
 export const useBridgeApiApprove = ({
   mutationOptions,
