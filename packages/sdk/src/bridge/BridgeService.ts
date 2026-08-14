@@ -27,6 +27,7 @@ import {
   type BitcoinBoundExtras,
 } from '../shared/index.js';
 import type { IntentTxResult, TxHashPair } from '../shared/types/types.js';
+import type { ApprovalTxs } from '../shared/types/spoke-types.js';
 import type { BackendApiService } from '../backendApi/index.js';
 import { runBackendSubmitTx } from '../backendApi/runBackendSubmitTx.js';
 import { createSubmitTxAttempt, type SubmitTxAttempt } from '../backendApi/submitTxAttempt.js';
@@ -262,6 +263,9 @@ export class BridgeService {
    * When `raw` is `true` the encoded transaction is returned without broadcasting.
    * When `raw` is `false` the transaction is signed and submitted via the provided wallet provider.
    *
+   * Returns a SINGLE transaction, which is all the signed path needs when a stale allowance already
+   * exists — use {@link BridgeService.buildApproveTxs} for the unsigned two-step case.
+   *
    * @param _params - Bridge parameters including source chain, token, amount, wallet provider, and `raw` flag.
    * @returns `Result<TxReturnType<K, Raw>>` — encoded transaction data (raw) or submitted transaction hash.
    */
@@ -283,9 +287,7 @@ export class BridgeService {
           'Invalid wallet provider. Expected Evm wallet provider.',
           { ...baseCtx, field: 'walletProvider' },
         );
-        const spender = isHubChainKeyType(params.srcChainKey)
-          ? await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey)
-          : this.config.getChainConfig(params.srcChainKey).addresses.assetManager;
+        const spender = await this.resolveEvmApprovalSpender(params.srcChainKey, params.srcAddress);
 
         const coreParams = {
           srcChainKey: params.srcChainKey,
@@ -345,6 +347,95 @@ export class BridgeService {
 
       // Reached only for chains that don't support approval (Solana, NEAR, Bitcoin, etc.).
       // Surface as a validation failure rather than a generic Error so consumers can discriminate.
+      bridgeInvariant(false, 'Approval only supported for EVM spoke chains and Stellar', {
+        ...baseCtx,
+        field: 'srcChainKey',
+      });
+    } catch (error) {
+      if (isBridgeApproveError(error)) return { ok: false, error };
+      return { ok: false, error: wrapApproveFailure(error) };
+    }
+  }
+
+  /**
+   * The contract a bridge source token must be approved to, on the EVM approval path.
+   *
+   * A hub source approves the caller's OWN hub wallet router — not a protocol-wide contract — so the
+   * lookup is per-caller and asynchronous; an EVM spoke approves that chain's asset manager. Shared by
+   * {@link BridgeService.approve} and {@link BridgeService.buildApproveTxs} so the two can never drift
+   * onto different spenders. Note this is NOT the swaps spender (`solver.intentsContract` on the hub):
+   * the two features approve different contracts, which is why bridge cannot reuse
+   * `SwapService.buildApproveTxs`.
+   */
+  private async resolveEvmApprovalSpender(
+    srcChainKey: HubChainKey | EvmSpokeOnlyChainKey,
+    srcAddress: string,
+  ): Promise<GetAddressType<HubChainKey | EvmSpokeOnlyChainKey>> {
+    return isHubChainKeyType(srcChainKey)
+      ? await this.hubProvider.getUserHubWalletAddress(srcAddress, srcChainKey)
+      : this.config.getChainConfig(srcChainKey).addresses.assetManager;
+  }
+
+  /**
+   * The unsigned approval transactions for the bridge's source token, in the order they must be
+   * broadcast.
+   *
+   * Two transactions when the source token needs its stale allowance cleared first, one otherwise.
+   * {@link BridgeService.approve} is unchanged and still returns a single transaction; this is the
+   * entry point for unsigned callers that need to handle the two-step case. When `resetTx` is
+   * present, broadcast it and wait for it to be mined first — `approveTx` is not valid until the
+   * reset has landed.
+   */
+  public async buildApproveTxs<K extends SpokeChainKey>(
+    _params: BridgeParams<K, true>,
+  ): Promise<Result<ApprovalTxs<K>, BridgeApproveError>> {
+    const { params } = _params;
+    const baseCtx = { srcChainKey: params.srcChainKey };
+
+    const wrapApproveFailure = (cause: unknown) => approveFailed('bridge', cause, baseCtx);
+
+    try {
+      bridgeInvariant(params.amount > 0n, 'Amount must be greater than 0', { ...baseCtx, field: 'amount' });
+      bridgeInvariant(params.srcToken.length > 0, 'Source asset is required', { ...baseCtx, field: 'srcToken' });
+
+      if (isHubChainKeyType(params.srcChainKey) || isEvmSpokeOnlyChainKeyType(params.srcChainKey)) {
+        const spender = await this.resolveEvmApprovalSpender(params.srcChainKey, params.srcAddress);
+
+        const result = await this.spoke.buildApproveTxs<HubChainKey | EvmSpokeOnlyChainKey>({
+          srcChainKey: params.srcChainKey,
+          owner: params.srcAddress as GetAddressType<HubChainKey | EvmSpokeOnlyChainKey>,
+          token: params.srcToken as GetTokenAddressType<HubChainKey | EvmSpokeOnlyChainKey>,
+          amount: params.amount,
+          spender,
+          raw: true,
+        });
+
+        if (!result.ok) return { ok: false, error: wrapApproveFailure(result.error) };
+
+        return {
+          ok: true,
+          value: result.value satisfies ApprovalTxs<HubChainKey | EvmSpokeOnlyChainKey> as ApprovalTxs<K>,
+        };
+      }
+
+      if (isStellarChainKeyType(params.srcChainKey)) {
+        const result = await this.spoke.buildApproveTxs<StellarChainKey>({
+          srcChainKey: params.srcChainKey,
+          token: params.srcToken,
+          amount: params.amount,
+          owner: params.srcAddress as GetAddressType<StellarChainKey>,
+          raw: true,
+        });
+
+        if (!result.ok) return { ok: false, error: wrapApproveFailure(result.error) };
+
+        return {
+          ok: true,
+          value: result.value satisfies ApprovalTxs<StellarChainKey> as ApprovalTxs<K>,
+        };
+      }
+
+      // Same unsupported-chain set as `approve`, reported the same way.
       bridgeInvariant(false, 'Approval only supported for EVM spoke chains and Stellar', {
         ...baseCtx,
         field: 'srcChainKey',

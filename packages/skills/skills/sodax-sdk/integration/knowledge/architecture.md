@@ -102,10 +102,12 @@ so a token added or upgraded later is handled without a code change. Consumer im
   transaction hash: the hash of the **last** transaction. Show step progress in the UI if you want,
   but nothing breaks if you do not.
 - **Unsigned flows (`raw: true`)** still return exactly one transaction from `approve`, which cannot
-  express a two-step plan. Use `sodax.swaps.buildApproveTxs({ params, raw: true })` instead — it
-  returns `{ approveTx, resetTx? }`. `resetTx` is present only for a guarded token holding a stale
-  allowance — broadcast it and wait for it to be mined first, because `approveTx` is not valid until
-  the reset has landed.
+  express a two-step plan. Use `sodax.swaps.buildApproveTxs({ params, raw: true })` — or
+  `sodax.bridge.buildApproveTxs` for a bridge — instead; both return `{ approveTx, resetTx? }`.
+  `resetTx` is present only for a guarded token holding a stale allowance — broadcast it and wait for
+  it to be mined first, because `approveTx` is not valid until the reset has landed. Each feature
+  resolves its own spender (a bridge on the hub approves the caller's hub wallet router, a swap the
+  solver's intents contract), so call the one matching the action you are about to take.
 
 ---
 

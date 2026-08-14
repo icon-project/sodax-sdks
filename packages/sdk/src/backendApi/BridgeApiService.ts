@@ -241,7 +241,8 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
   /**
    * Build an unsigned token-approval transaction for the source token.
    *
-   * @returns `Result<BridgeApproveResponseV2>` — `{ tx }` (chain-specific unsigned tx).
+   * @returns `Result<BridgeApproveResponseV2>` — `{ tx }` (chain-specific unsigned tx), plus a
+   * `resetTx` to broadcast and mine FIRST when the source token needs its stale allowance zeroed.
    */
   public async approve(
     body: CreateBridgeIntentParamsV2,
