@@ -48,7 +48,7 @@ import { isFillEvent } from '../backendApi/guards.js';
 import { resolveTimeoutMs } from '../shared/utils/resolveTimeoutMs.js';
 import type { ApprovalTxs } from '../shared/types/spoke-types.js';
 import { selectSolvedIntentPacket } from './selectSolvedIntentPacket.js';
-import { SodaxError } from '../errors/SodaxError.js';
+import { isSodaxError, SodaxError } from '../errors/SodaxError.js';
 import { mapRelayFailure } from '../errors/relay-error-mapping.js';
 import {
   verifyFailed,
@@ -382,11 +382,20 @@ export class SwapService {
         srcChainKey: params.srcChainKey,
       });
 
-      if (record.ok && !isBackendSubmitTxAbandoned(record.value.data)) {
+      // `success: false` is the wire contract's "no record found", whatever `data` carries — `ok`
+      // only proves the request and schema succeeded. Same guard the relay envelope gets below.
+      if (record.ok && record.value.success && !isBackendSubmitTxAbandoned(record.value.data)) {
         return { ok: true, value: { source: 'backend', data: record.value.data } };
       }
 
-      const dstTxHash = await this.resolveHubTxHash(params);
+      // Did the backend *answer*? A record — even `success: false`, even abandoned — and a 404 are
+      // both definitive "nothing usable here". A 5xx or a transport failure is not: behind one we
+      // cannot tell a swap that will never resolve from a live one whose record we simply could not
+      // read. So a relay miss that follows an outage must stay an unbudgeted dependency failure,
+      // or a backend outage would stop the caller polling a swap that is still progressing.
+      const backendAnswered = record.ok || (isSodaxError(record.error) && record.error.context?.status === 404);
+
+      const dstTxHash = await this.resolveHubTxHash(params, backendAnswered);
       if (!dstTxHash.ok) return dstTxHash;
 
       // `this.getStatus`, not `SolverApiService.getStatus` — the durable-intent reconcile on
@@ -407,7 +416,12 @@ export class SwapService {
    * tx *is* the hub tx. Otherwise the delivered relay packet carries it, so an undelivered packet
    * is simply "no hash yet".
    */
-  private async resolveHubTxHash(key: DetailedSwapStatusKey): Promise<Result<Hex, DetailedStatusError>> {
+  private async resolveHubTxHash(
+    key: DetailedSwapStatusKey,
+    backendAnswered: boolean,
+  ): Promise<Result<Hex, DetailedStatusError>> {
+    // A relay miss only proves the swap is unresolvable if the backend also had nothing to say.
+    const missReason = backendAnswered ? DETAILED_STATUS_NOT_DELIVERED : undefined;
     let hubTxHash = key.srcTxHash;
 
     if (!isHubChainKeyType(key.srcChainKey)) {
@@ -427,11 +441,7 @@ export class SwapService {
         const notIndexed = packets.error instanceof HttpRelayError && packets.error.status === 404;
         return {
           ok: false,
-          error: this.detailedStatusLookupFailed(
-            packets.error,
-            key.srcChainKey,
-            notIndexed ? DETAILED_STATUS_NOT_DELIVERED : undefined,
-          ),
+          error: this.detailedStatusLookupFailed(packets.error, key.srcChainKey, notIndexed ? missReason : undefined),
         };
       }
 
@@ -466,7 +476,7 @@ export class SwapService {
           error: this.detailedStatusLookupFailed(
             new Error('relay has not delivered the intent to the hub yet'),
             key.srcChainKey,
-            DETAILED_STATUS_NOT_DELIVERED,
+            missReason,
           ),
         };
       }

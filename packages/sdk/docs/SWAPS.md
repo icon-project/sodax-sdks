@@ -981,7 +981,7 @@ Sometimes there is **no record**, and it reads 404 — you opted out with `useBa
 1. Read the backend record; return it while it is still in play.
 2. Otherwise resolve the hub tx hash — the source tx itself for hub-source swaps, else the delivered relay packet's `dst_tx_hash` — and return `getStatus`'s answer.
 
-A record the backend **gave up on** (`failed`, or `abandonedAt` set) takes step 2, and on the default path this is the *common* branch rather than an edge case: the record almost always exists, so abandonment — not a 404 — is what usually signals the fallback ran. It never self-heals, so keeping it would report `failed` for a swap the fallback went on to complete. A transport or server error routes on too, so a transient backend outage does not fail a swap the solver can still report on.
+A record the backend **gave up on** (`failed`, or `abandonedAt` set) takes step 2, and on the default path this is the *common* branch rather than an edge case: the record almost always exists, so abandonment — not a 404 — is what usually signals the fallback ran. It never self-heals, so keeping it would report `failed` for a swap the fallback went on to complete. A `success: false` envelope takes step 2 as well — that is the wire contract's "no record found", whatever `data` carries. A transport or server error routes on too, so a transient backend outage does not fail a swap the solver can still report on.
 
 Both payloads are already documented — the submit-tx record in [SWAPS_API.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS_API.md), the solver response under [Get Intent Status](#get-intent-status). Nothing is translated between them, so no field is dropped and no status code is reinterpreted.
 
@@ -989,7 +989,7 @@ Both payloads are already documented — the submit-tx record in [SWAPS_API.md](
 
 `LOOKUP_FAILED`, and only that. It means no source could answer — most often the relay has not delivered the packet, so there is no hub tx hash for the solver to be asked about. That is a miss, not a lifecycle step: the method will not invent an early status, and it will not fall back to a stale abandoned record.
 
-If you poll this yourself, branch on `error.context.reason`. It equals `DETAILED_STATUS_NOT_DELIVERED` when the relay has no packet for the source tx — whether it answers 404 for a tx it has not indexed, or returns no matching delivered packet. You cannot tell that apart from "still in flight", so bound it with a retry budget. Any other `LOOKUP_FAILED` is a dependency failing right now (relay 5xx or unreachable, malformed response, solver down); keep retrying those, since retrying is how the read recovers. `useDetailedStatus` applies exactly this split.
+If you poll this yourself, branch on `error.context.reason`. It equals `DETAILED_STATUS_NOT_DELIVERED` when the backend answered (a record, or a definitive 404) **and** the relay has no packet for the source tx — whether it answers 404 for a tx it has not indexed, or returns no matching delivered packet. You cannot tell that apart from "still in flight", so bound it with a retry budget. Any other `LOOKUP_FAILED` is a dependency failing right now — relay 5xx or unreachable, malformed response, solver down, or a backend outage that left the relay miss unprovable. Keep retrying those, since retrying is how the read recovers. `useDetailedStatus` applies exactly this split.
 
 ## Get Solved Intent Packet
 

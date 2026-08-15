@@ -1820,6 +1820,13 @@ describe('SwapService.getDetailedStatus', () => {
       .spyOn(sodax.swaps.backendApi.swaps, 'getSubmitTxStatus')
       .mockResolvedValueOnce({ ok: true, value: { success: true, data: submitTxData(data) } });
 
+  // Schema-valid, but the wire contract's `success: false` means no record was found — `data` is
+  // not authoritative status however healthy it looks.
+  const recordNotFound = (data: Partial<SubmitTxStatusDataV2>) =>
+    vi
+      .spyOn(sodax.swaps.backendApi.swaps, 'getSubmitTxStatus')
+      .mockResolvedValueOnce({ ok: true, value: { success: false, data: submitTxData(data) } });
+
   const backendFails = (message: string, status: number) =>
     vi.spyOn(sodax.swaps.backendApi.swaps, 'getSubmitTxStatus').mockResolvedValueOnce({
       ok: false,
@@ -1883,6 +1890,16 @@ describe('SwapService.getDetailedStatus', () => {
         data: { status: SolverIntentStatusCode.SOLVED, fill_tx_hash: '0xfill' },
       },
     });
+  });
+
+  it('routes to the solver on a success:false envelope instead of trusting its data', async () => {
+    recordNotFound({ status: 'posting_execution' });
+    packets(delivered);
+    solverSays(SolverIntentStatusCode.SOLVED, '0xfill');
+
+    const result = await sodax.swaps.getDetailedStatus(key);
+
+    expect(result.ok && result.value.source).toBe('solver');
   });
 
   it.each([500, 503])('routes to the solver when the backend fails with %s rather than 404', async status => {
@@ -2030,6 +2047,33 @@ describe('SwapService.getDetailedStatus', () => {
     mocks.getTransactionPackets.mockResolvedValueOnce({ ok: false, error: new Error('socket hang up') });
     const transport = await sodax.swaps.getDetailedStatus(key);
     expect(!transport.ok && isSodaxError(transport.error) && transport.error.context?.reason).toBeUndefined();
+  });
+
+  // A relay miss only proves the swap is unresolvable if the backend also had nothing to say. Behind
+  // a backend outage the record may be progressing unseen, so budgeting the miss would stop the
+  // caller polling a live swap. Both relay miss shapes must stay untagged here.
+  it.each([
+    ['the relay 404s', () => mocks.getTransactionPackets.mockResolvedValueOnce({ ok: false, error: new HttpRelayError(404, 'Not Found', '') })],
+    ['the relay has no packet', () => packets([])],
+  ])('leaves a relay miss unbudgeted when the backend never answered and %s', async (_label, relay) => {
+    backendErrors(503);
+    relay();
+
+    const result = await sodax.swaps.getDetailedStatus(key);
+
+    expect(!result.ok && isSodaxError(result.error) && result.error.code).toBe('LOOKUP_FAILED');
+    expect(!result.ok && isSodaxError(result.error) && result.error.context?.reason).toBeUndefined();
+  });
+
+  it('still budgets a relay miss when the backend definitively had no record', async () => {
+    noRecord();
+    packets([]);
+
+    const result = await sodax.swaps.getDetailedStatus(key);
+
+    expect(!result.ok && isSodaxError(result.error) && result.error.context?.reason).toBe(
+      DETAILED_STATUS_NOT_DELIVERED,
+    );
 
     noRecord();
     packets(delivered);

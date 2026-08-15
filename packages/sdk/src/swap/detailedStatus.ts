@@ -26,6 +26,10 @@ export type DetailedSwapStatus =
  * budget. Every other one (relay 5xx or unreachable, malformed response, solver down) is something
  * failing *right now* and should be retried until it recovers; spending a budget on those would
  * turn a transient outage into a permanently stuck read.
+ *
+ * It is set only when the **backend also answered** — a record, or a definitive 404. Behind a
+ * backend outage a relay miss proves nothing: the record may be progressing unseen, so the failure
+ * stays unbudgeted.
  */
 export const DETAILED_STATUS_NOT_DELIVERED = 'relay_not_delivered';
 
