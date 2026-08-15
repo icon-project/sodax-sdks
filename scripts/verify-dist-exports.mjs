@@ -57,15 +57,26 @@ if (declared.size === 0) {
  * Expand a subpath pattern (`./dist/xchains/*​/index.mjs`) to a map of `*` substitution → file.
  * Node's `*` matches any substring including `/`, so walk everything under the static prefix and
  * match the whole relative path, capturing what `*` stood for.
+ *
+ * A pattern carries exactly one `*`. That is Node's own rule for the subpath key, and every target
+ * this repo declares follows it — so a single substitution reconstructs a concrete path anywhere
+ * below. Anything else is rejected rather than half-supported: reconstructing a multi-wildcard path
+ * needs Node's "same value in every `*`" semantics, and silently getting that wrong would name the
+ * wrong file in a build-failure report.
  */
 function expandPattern(rel) {
+  if (rel.indexOf('*') !== rel.lastIndexOf('*')) {
+    console.error(`verify-dist-exports: unsupported multi-wildcard subpath pattern ${rel}`);
+    process.exit(1);
+  }
+
   const staticPrefix = rel.slice(0, rel.indexOf('*'));
   const rootRel = staticPrefix.slice(0, staticPrefix.lastIndexOf('/') + 1);
   const root = resolve(pkgDir, rootRel);
   if (!existsSync(root)) return new Map();
 
   const escaped = rel.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
-  const re = new RegExp(`^${escaped.replace(/\*/g, '(.+)')}$`);
+  const re = new RegExp(`^${escaped.replaceAll('*', '(.+)')}$`);
 
   const found = new Map();
   const walk = dir => {
@@ -74,7 +85,7 @@ function expandPattern(rel) {
       if (statSync(abs).isDirectory()) walk(abs);
       else {
         const match = re.exec(`./${posix.relative(pkgDir, abs)}`);
-        if (match) found.set(match.slice(1).join('/'), abs);
+        if (match) found.set(match[1], abs);
       }
     }
   };
@@ -125,7 +136,7 @@ for (const group of groups.values()) {
     for (const substitution of [...expected].sort()) {
       checked += 1;
       const abs = matches.get(substitution);
-      if (abs === undefined) missing.push(rel.replace('*', substitution));
+      if (abs === undefined) missing.push(rel.replaceAll('*', substitution));
       else if (statSync(abs).size === 0) empty.push(posix.relative(pkgDir, abs));
     }
   }
