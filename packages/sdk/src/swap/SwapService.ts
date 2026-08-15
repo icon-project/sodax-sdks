@@ -499,11 +499,7 @@ export class SwapService {
    * with a retry budget. Leaving it off marks a dependency that is failing right now, which a
    * caller should keep retrying rather than give up on.
    */
-  private detailedStatusLookupFailed(
-    cause: unknown,
-    srcChainKey: SpokeChainKey,
-    reason?: string,
-  ): DetailedStatusError {
+  private detailedStatusLookupFailed(cause: unknown, srcChainKey: SpokeChainKey, reason?: string): DetailedStatusError {
     return lookupFailed('swap', 'getDetailedStatus', cause, { srcChainKey, action: 'swap', reason });
   }
 

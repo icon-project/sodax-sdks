@@ -2053,7 +2053,14 @@ describe('SwapService.getDetailedStatus', () => {
   // a backend outage the record may be progressing unseen, so budgeting the miss would stop the
   // caller polling a live swap. Both relay miss shapes must stay untagged here.
   it.each([
-    ['the relay 404s', () => mocks.getTransactionPackets.mockResolvedValueOnce({ ok: false, error: new HttpRelayError(404, 'Not Found', '') })],
+    [
+      'the relay 404s',
+      () =>
+        mocks.getTransactionPackets.mockResolvedValueOnce({
+          ok: false,
+          error: new HttpRelayError(404, 'Not Found', ''),
+        }),
+    ],
     ['the relay has no packet', () => packets([])],
   ])('leaves a relay miss unbudgeted when the backend never answered and %s', async (_label, relay) => {
     backendErrors(503);

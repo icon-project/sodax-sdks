@@ -67,12 +67,15 @@ describe('getDetailedStatusRefetchInterval', () => {
     expect(getDetailedStatusRefetchInterval(ok(backend(status)), 0)).toBe(false);
   });
 
-  it.each(['pending', 'relaying', 'relayed', 'posting_execution', 'posted_execution'])(
-    'keeps polling a backend record at %s',
-    status => {
-      expect(getDetailedStatusRefetchInterval(ok(backend(status)), 0)).toBe(STATUS_POLL_MS);
-    },
-  );
+  it.each([
+    'pending',
+    'relaying',
+    'relayed',
+    'posting_execution',
+    'posted_execution',
+  ])('keeps polling a backend record at %s', status => {
+    expect(getDetailedStatusRefetchInterval(ok(backend(status)), 0)).toBe(STATUS_POLL_MS);
+  });
 
   // A backend record is never stopped by the solver's budget — different vocabulary.
   it('keeps polling an in-flight backend record even at the cutoff', () => {
@@ -83,12 +86,12 @@ describe('getDetailedStatusRefetchInterval', () => {
     expect(getDetailedStatusRefetchInterval(ok(solver(status)), 0)).toBe(false);
   });
 
-  it.each([SolverIntentStatusCode.NOT_STARTED_YET, SolverIntentStatusCode.STARTED_NOT_FINISHED])(
-    'never stops in-flight solver code %s, even at a high count',
-    status => {
-      expect(getDetailedStatusRefetchInterval(ok(solver(status)), 100)).toBe(STATUS_POLL_MS);
-    },
-  );
+  it.each([
+    SolverIntentStatusCode.NOT_STARTED_YET,
+    SolverIntentStatusCode.STARTED_NOT_FINISHED,
+  ])('never stops in-flight solver code %s, even at a high count', status => {
+    expect(getDetailedStatusRefetchInterval(ok(solver(status)), 100)).toBe(STATUS_POLL_MS);
+  });
 
   it('inherits the useStatus NOT_FOUND cutoff: polls below it, stops at it', () => {
     const notFound = ok(solver(SolverIntentStatusCode.NOT_FOUND));
@@ -168,16 +171,23 @@ describe('detailed-status budget', () => {
 
   // The backend answering mid-run is not an unresolved read, so the budget starts over.
   it('resets the budget when a backend record answers after a NOT_FOUND run', () => {
-    const state = advance({ pollKey: KEY_A, seenUpdates: 39, consecutiveNotFound: 39 }, [ok(backend('relaying'))], KEY_A, 40);
+    const state = advance(
+      { pollKey: KEY_A, seenUpdates: 39, consecutiveNotFound: 39 },
+      [ok(backend('relaying'))],
+      KEY_A,
+      40,
+    );
 
     expect(state.consecutiveNotFound).toBe(0);
     expect(getDetailedStatusRefetchInterval(ok(backend('relaying')), state.consecutiveNotFound)).toBe(STATUS_POLL_MS);
   });
 
   it('starts a fresh budget when the composite pollKey changes', () => {
-    const state = advance({ pollKey: KEY_A, seenUpdates: 39, consecutiveNotFound: 39 }, [
-      ok(solver(SolverIntentStatusCode.NOT_FOUND)),
-    ], KEY_B);
+    const state = advance(
+      { pollKey: KEY_A, seenUpdates: 39, consecutiveNotFound: 39 },
+      [ok(solver(SolverIntentStatusCode.NOT_FOUND))],
+      KEY_B,
+    );
 
     expect(state.consecutiveNotFound).toBe(1);
     expect(state.pollKey).toBe(KEY_B);
