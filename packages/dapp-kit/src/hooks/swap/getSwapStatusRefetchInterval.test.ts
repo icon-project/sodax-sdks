@@ -74,7 +74,7 @@ describe('advanceNotFoundStreak', () => {
 
   it('resets the streak when an in-flight status follows a long NOT_FOUND run', () => {
     const started = advanceNotFoundStreak(
-      { intentTxHash: HASH_A, seenUpdates: 39, consecutiveNotFound: 39 },
+      { pollKey: HASH_A, seenUpdates: 39, consecutiveNotFound: 39 },
       HASH_A,
       ok(SolverIntentStatusCode.STARTED_NOT_FINISHED),
       40,
@@ -92,14 +92,14 @@ describe('advanceNotFoundStreak', () => {
     );
   });
 
-  it('resets on intentTxHash change so a prior intent cannot consume the next budget', () => {
+  it('resets on pollKey change so a prior intent cannot consume the next budget', () => {
     const state = advanceNotFoundStreak(
-      { intentTxHash: HASH_A, seenUpdates: 39, consecutiveNotFound: 39 },
+      { pollKey: HASH_A, seenUpdates: 39, consecutiveNotFound: 39 },
       HASH_B,
       ok(SolverIntentStatusCode.NOT_FOUND),
       1,
     );
     expect(state.consecutiveNotFound).toBe(1);
-    expect(state.intentTxHash).toBe(HASH_B);
+    expect(state.pollKey).toBe(HASH_B);
   });
 });

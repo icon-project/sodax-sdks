@@ -45,7 +45,38 @@ sodax.swaps.cancelLimitOrder<K>(/* … */): Promise<Result<TxHashPair, SodaxErro
 
 sodax.swaps.approve<K, Raw>(/* … */): Promise<Result<TxReturnType<K, Raw>, SodaxError>>;
 sodax.swaps.isAllowanceValid<K, Raw>(/* … */): Promise<Result<boolean, SodaxError>>;
+
+sodax.swaps.getStatus(
+  request: SolverIntentStatusRequest,          // { intent_tx_hash } — the HUB (Sonic) tx hash
+): Promise<Result<SolverIntentStatusResponse, SolverErrorResponse>>;   // legacy error shape, NOT SodaxError
+
+sodax.swaps.getDetailedStatus(
+  params: { srcChainKey: SpokeChainKey; srcTxHash: string },   // the SOURCE-chain tx hash
+): Promise<Result<DetailedSwapStatus, SodaxError<'LOOKUP_FAILED'>>>;
+//   Routes to the backend submit-tx record or the solver. Does NOT define a new status vocabulary.
 ```
+
+## Reading swap status
+
+Three readers. Pick by which transaction hash you hold:
+
+- **`sodax.api.swaps.getSubmitTxStatus({ txHash, srcChainKey })`** — the backend worker record, keyed on the **source** tx. Answers **404** when no record exists (`useBackendSubmitTx: false`, or the submit never landed). Otherwise the record may be *stale*: `swap()` submits before falling back to the client-side relay, so a fallback-completed swap leaves a `pending`/`relaying`/abandoned record behind.
+- **`sodax.swaps.getStatus({ intent_tx_hash })`** — the solver's view of one intent, keyed on the **hub** tx hash (`intentDeliveryInfo.dstTxHash`). Returns the legacy `SolverErrorResponse` error shape, so do not `switch (error.code)` on it.
+- **`sodax.swaps.getDetailedStatus({ srcChainKey, srcTxHash })`** — routes between the two, keyed on the **source** tx. Use this when you only have the source hash and do not know which path the swap took.
+
+`getDetailedStatus` defines no status of its own. It returns whichever source can answer, tagged, with that source's payload unmodified. The union is discriminated on `source` — no type guards are exported, narrow on the field:
+
+```ts
+type DetailedSwapStatus =
+  | { source: 'backend'; data: SubmitTxStatusDataV2 }         // same as getSubmitTxStatus
+  | { source: 'solver'; dstTxHash: Hex; data: SolverIntentStatusResponse }; // same as getStatus
+
+if (status.source === 'backend') status.data.processingAttempts;
+```
+
+Routing: backend record while it is in play → `source: 'backend'`. **Any** unusable backend response — 404, transport/server error, or a record the backend gave up on (`failed` or `abandonedAt`) — resolves the hub tx hash and asks the solver → `source: 'solver'`. On the default path the abandoned-record branch is the common one, not the 404: the record usually exists, and abandonment is what signals the client-side fallback ran.
+
+The only error is `LOOKUP_FAILED`, meaning no source could answer — usually the relay has not delivered the packet, so there is no hub tx hash. When polling, branch on `error.context.reason`: `DETAILED_STATUS_NOT_DELIVERED` is the ambiguous miss (indistinguishable from "still in flight" — bound it with a retry budget); anything else is a dependency failing right now and should be retried until it recovers. Point-in-time — poll it yourself, or use dapp-kit's `useDetailedStatus`.
 
 ## Action params shape
 

@@ -1,3 +1,4 @@
+import { isHex } from 'viem';
 import { invariant } from '../shared/utils/tiny-invariant.js';
 import {
   submitTransaction,
@@ -35,6 +36,7 @@ import {
   isStacksChainKeyType,
   isNativeBitcoinTransfer,
   RELAY_FALLBACK_FLOOR_MS,
+  getTransactionPackets,
 } from '../shared/index.js';
 import { SolverApiService } from './SolverApiService.js';
 import { EvmSolverService } from './EvmSolverService.js';
@@ -53,11 +55,19 @@ import {
   executionFailed,
   unknownFailed,
   approveFailed,
+  lookupFailed,
 } from '../errors/wrappers.js';
+import {
+  DETAILED_STATUS_NOT_DELIVERED,
+  isBackendSubmitTxAbandoned,
+  type DetailedSwapStatus,
+  type DetailedSwapStatusKey,
+} from './detailedStatus.js';
 import {
   type SwapCreateIntentError,
   type PostExecutionError,
   type SwapError,
+  type DetailedStatusError,
   isSwapCreateIntentError,
   isPostExecutionError,
   isSwapError,
@@ -336,6 +346,135 @@ export class SwapService {
     return fill
       ? { ok: true, value: { status: SolverIntentStatusCode.SOLVED, fill_tx_hash: fill.txHash } }
       : solverResult;
+  }
+
+  /**
+   * Reads a swap's status from its source-chain transaction — the identifier a caller always holds.
+   *
+   * **Routes; does not translate.** Returns the backend submit-tx record while it is in play,
+   * otherwise the solver's answer via the hub tx hash resolved from the relay packet. The result is
+   * tagged with `source` (discriminate on it) and carries that source's payload unmodified.
+   *
+   * **Any** unusable backend response routes to the solver — a 404, a transport or server error, or
+   * a record the backend gave up on. See `docs/SWAPS.md` § Get Detailed Status for why.
+   *
+   * A point-in-time read; poll it yourself, or use dapp-kit's `useDetailedStatus`.
+   *
+   * @param params - `srcChainKey` and `srcTxHash` of the source-chain swap transaction.
+   * @returns A `Result` containing a {@link DetailedSwapStatus}. Fails with `LOOKUP_FAILED` when no
+   *   source can answer yet — usually the relay has not delivered the packet, so there is no hub tx
+   *   hash for the solver to be asked about.
+   */
+  public async getDetailedStatus(
+    params: DetailedSwapStatusKey,
+  ): Promise<Result<DetailedSwapStatus, DetailedStatusError>> {
+    try {
+      const record = await this.backendApi.swaps.getSubmitTxStatus({
+        txHash: params.srcTxHash,
+        srcChainKey: params.srcChainKey,
+      });
+
+      if (record.ok && !isBackendSubmitTxAbandoned(record.value.data)) {
+        return { ok: true, value: { source: 'backend', data: record.value.data } };
+      }
+
+      const dstTxHash = await this.resolveHubTxHash(params);
+      if (!dstTxHash.ok) return dstTxHash;
+
+      // `this.getStatus`, not `SolverApiService.getStatus` — the durable-intent reconcile on
+      // solver NOT_FOUND stays in one place.
+      const solver = await this.getStatus({ intent_tx_hash: dstTxHash.value });
+      if (!solver.ok) {
+        return { ok: false, error: this.detailedStatusLookupFailed(solver.error, params.srcChainKey) };
+      }
+      return { ok: true, value: { source: 'solver', dstTxHash: dstTxHash.value, data: solver.value } };
+    } catch (error) {
+      // The relay client asserts on empty identifiers rather than returning a Result.
+      return { ok: false, error: this.detailedStatusLookupFailed(error, params.srcChainKey) };
+    }
+  }
+
+  /**
+   * The hub-chain tx hash the solver is keyed on. A hub-source swap has no relay leg — the source
+   * tx *is* the hub tx. Otherwise the delivered relay packet carries it, so an undelivered packet
+   * is simply "no hash yet".
+   */
+  private async resolveHubTxHash(key: DetailedSwapStatusKey): Promise<Result<Hex, DetailedStatusError>> {
+    let hubTxHash = key.srcTxHash;
+
+    if (!isHubChainKeyType(key.srcChainKey)) {
+      const relayChainId = getIntentRelayChainId(key.srcChainKey);
+      const packets = await getTransactionPackets(
+        {
+          action: 'get_transaction_packets',
+          params: { chain_id: relayChainId.toString(), tx_hash: key.srcTxHash },
+        },
+        this.relayerApiEndpoint,
+      );
+      if (!packets.ok) {
+        return { ok: false, error: this.detailedStatusLookupFailed(packets.error, key.srcChainKey) };
+      }
+
+      // Same envelope, attribution and delivery guards `pollForExecutedPacket` applies. Relay
+      // responses are not schema-validated (`parseRelayResponse` casts `response.json()`), so
+      // `success`/`data` are checked before use — a 200 with no `data` would otherwise throw here
+      // and be reported as ordinary in-flight latency. A packet for another transaction would hand
+      // the solver the wrong intent hash, so match on (src_tx_hash, src_chain_id) rather than taking
+      // the first executed entry, and string-guard both hashes so a malformed entry is skipped.
+      if (!packets.value?.success || !Array.isArray(packets.value.data)) {
+        return {
+          ok: false,
+          error: this.detailedStatusLookupFailed(
+            new Error('relay returned no usable transaction packets'),
+            key.srcChainKey,
+          ),
+        };
+      }
+
+      const delivered = packets.value.data.find(
+        packet =>
+          typeof packet?.src_tx_hash === 'string' &&
+          packet.src_tx_hash.toLowerCase() === key.srcTxHash.toLowerCase() &&
+          packet.src_chain_id === Number(relayChainId) &&
+          packet.status === 'executed' &&
+          typeof packet.dst_tx_hash === 'string' &&
+          packet.dst_tx_hash.length > 0,
+      );
+      if (!delivered) {
+        return {
+          ok: false,
+          error: this.detailedStatusLookupFailed(
+            new Error('relay has not delivered the intent to the hub yet'),
+            key.srcChainKey,
+            DETAILED_STATUS_NOT_DELIVERED,
+          ),
+        };
+      }
+      hubTxHash = delivered.dst_tx_hash;
+    }
+
+    // Validate rather than cast — this hash reaches the solver next.
+    if (isHex(hubTxHash)) return { ok: true, value: hubTxHash };
+    return {
+      ok: false,
+      error: this.detailedStatusLookupFailed(
+        new Error(`hub tx hash is not a hex string: ${hubTxHash}`),
+        key.srcChainKey,
+      ),
+    };
+  }
+
+  /**
+   * `reason` is set only for {@link DETAILED_STATUS_NOT_DELIVERED} — the miss a caller can bound
+   * with a retry budget. Leaving it off marks a dependency that is failing right now, which a
+   * caller should keep retrying rather than give up on.
+   */
+  private detailedStatusLookupFailed(
+    cause: unknown,
+    srcChainKey: SpokeChainKey,
+    reason?: string,
+  ): DetailedStatusError {
+    return lookupFailed('swap', 'getDetailedStatus', cause, { srcChainKey, action: 'swap', reason });
   }
 
   /**

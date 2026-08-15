@@ -27,11 +27,13 @@ import {
   SolverIntentStatusCode,
   type Result,
   type SpokeChainKey,
+  type SubmitTxStatusDataV2,
 } from '@sodax/types';
-import type {
-  SpokeIsAllowanceValidParamsEvmSpoke,
-  SpokeIsAllowanceValidParamsHub,
-  WalletProviderSlot,
+import {
+  DETAILED_STATUS_NOT_DELIVERED,
+  type SpokeIsAllowanceValidParamsEvmSpoke,
+  type SpokeIsAllowanceValidParamsHub,
+  type WalletProviderSlot,
 } from '../index.js';
 import { Sodax } from '../shared/entities/Sodax.js';
 import { isSodaxError, SodaxError } from '../errors/SodaxError.js';
@@ -68,6 +70,7 @@ const mocks = vi.hoisted(() => ({
   submitTransaction: vi.fn(),
   waitUntilIntentExecuted: vi.fn(),
   relayTxAndWaitPacket: vi.fn(),
+  getTransactionPackets: vi.fn(),
   // SolverApiService static methods — same reasoning for getQuote / getStatus / postExecution.
   solverGetQuote: vi.fn(),
   solverGetStatus: vi.fn(),
@@ -102,6 +105,7 @@ vi.mock('../shared/services/intentRelay/IntentRelayApiService.js', async () => {
     submitTransaction: mocks.submitTransaction,
     waitUntilIntentExecuted: mocks.waitUntilIntentExecuted,
     relayTxAndWaitPacket: mocks.relayTxAndWaitPacket,
+    getTransactionPackets: mocks.getTransactionPackets,
   };
 });
 vi.mock('./SolverApiService.js', () => ({
@@ -1756,6 +1760,258 @@ describe('SwapService.getStatus', () => {
     });
 
     expect(await sodax.swaps.getStatus(request)).toBe(solverError);
+  });
+});
+
+describe('SwapService.getDetailedStatus', () => {
+  const SRC_CHAIN = ChainKeys.ARBITRUM_MAINNET;
+  // Real hex: the hub hash is validated before it reaches the solver, so a placeholder like
+  // '0xsrc' would be rejected as malformed rather than exercising the path under test.
+  const SRC_TX = '0xabc123';
+  const HUB_TX = '0xdef456';
+  const key = { srcChainKey: SRC_CHAIN, srcTxHash: SRC_TX } as const;
+
+  // Typed against the wire contract rather than cast through `as never`, so a change to
+  // `SubmitTxStatusDataV2` breaks these fixtures at compile time instead of silently drifting.
+  const submitTxData = (data: Partial<SubmitTxStatusDataV2>): SubmitTxStatusDataV2 => ({
+    txHash: SRC_TX,
+    srcChainKey: SRC_CHAIN,
+    status: 'relaying',
+    processingAttempts: 1,
+    ...data,
+  });
+  const record = (data: Partial<SubmitTxStatusDataV2>) =>
+    vi
+      .spyOn(sodax.swaps.backendApi.swaps, 'getSubmitTxStatus')
+      .mockResolvedValueOnce({ ok: true, value: { success: true, data: submitTxData(data) } });
+
+  const backendFails = (message: string, status: number) =>
+    vi.spyOn(sodax.swaps.backendApi.swaps, 'getSubmitTxStatus').mockResolvedValueOnce({
+      ok: false,
+      error: new SodaxError('EXTERNAL_API_ERROR', message, {
+        feature: 'backend',
+        context: { api: 'swaps', status },
+      }),
+    });
+
+  const noRecord = () => backendFails('not found', 404);
+  // Routing keys off "can the backend answer", not off the status code, so a non-404 failure has to
+  // fall through too — a transient 500 must not fail a swap the solver can still report on.
+  const backendErrors = (status: number) => backendFails('backend unavailable', status);
+
+  const packets = (data: unknown[]) =>
+    mocks.getTransactionPackets.mockResolvedValueOnce({ ok: true, value: { success: true, data } });
+  // Carries the identity fields the attribution guard matches on, so the happy paths exercise it.
+  const delivered = [
+    {
+      status: 'executed',
+      dst_tx_hash: HUB_TX,
+      src_tx_hash: SRC_TX,
+      src_chain_id: Number(getIntentRelayChainId(SRC_CHAIN)),
+    },
+  ];
+  const solverSays = (status: SolverIntentStatusCode, fill_tx_hash?: string) =>
+    mocks.solverGetStatus.mockResolvedValueOnce({ ok: true, value: { status, fill_tx_hash } });
+
+  // ── the backend record, while it is still in play ────────────────────────
+
+  it('returns the unmodified submit-tx record without touching the relay or the solver', async () => {
+    record({ status: 'posting_execution', userMessage: 'almost there', result: { dstIntentTxHash: HUB_TX } });
+
+    expect(await sodax.swaps.getDetailedStatus(key)).toEqual({
+      ok: true,
+      value: {
+        source: 'backend',
+        data: submitTxData({
+          status: 'posting_execution',
+          userMessage: 'almost there',
+          result: { dstIntentTxHash: HUB_TX },
+        }),
+      },
+    });
+    expect(mocks.getTransactionPackets).not.toHaveBeenCalled();
+    expect(mocks.solverGetStatus).not.toHaveBeenCalled();
+  });
+
+  // ── routing to the solver ────────────────────────────────────────────────
+
+  it('routes to the solver when the backend has no record', async () => {
+    noRecord();
+    packets(delivered);
+    solverSays(SolverIntentStatusCode.SOLVED, '0xfill');
+
+    expect(await sodax.swaps.getDetailedStatus(key)).toEqual({
+      ok: true,
+      value: {
+        source: 'solver',
+        dstTxHash: HUB_TX,
+        data: { status: SolverIntentStatusCode.SOLVED, fill_tx_hash: '0xfill' },
+      },
+    });
+  });
+
+  it.each([500, 503])('routes to the solver when the backend fails with %s rather than 404', async status => {
+    backendErrors(status);
+    packets(delivered);
+    solverSays(SolverIntentStatusCode.SOLVED, '0xfill');
+
+    const result = await sodax.swaps.getDetailedStatus(key);
+
+    expect(result.ok && result.value.source).toBe('solver');
+    expect(result.ok && result.value.source === 'solver' && result.value.data.status).toBe(
+      SolverIntentStatusCode.SOLVED,
+    );
+  });
+
+  // An abandoned record never self-heals, and the fallback runs exactly when the backend quits —
+  // so it has to route like a 404, or a fallback-completed swap reads `failed` forever.
+  it.each<[string, Partial<SubmitTxStatusDataV2>]>([
+    ['a terminally failed record', { status: 'failed', failureReason: 'relay timed out' }],
+    ['a record abandoned mid-flight', { status: 'relaying', abandonedAt: '2026-08-14T00:00:00.000Z' }],
+  ])('routes to the solver past %s', async (_label, data) => {
+    record(data);
+    packets(delivered);
+    solverSays(SolverIntentStatusCode.SOLVED, '0xfill');
+
+    const result = await sodax.swaps.getDetailedStatus(key);
+
+    expect(result.ok && result.value.source).toBe('solver');
+    expect(result.ok && result.value.source === 'solver' && result.value.data.status).toBe(
+      SolverIntentStatusCode.SOLVED,
+    );
+  });
+
+  it('returns a solver NOT_FOUND verbatim rather than reinterpreting it', async () => {
+    noRecord();
+    packets(delivered);
+    solverSays(SolverIntentStatusCode.NOT_FOUND);
+    vi.spyOn(sodax.swaps.backendApi, 'getIntentByTxHash').mockResolvedValueOnce({ ok: false, error: new Error('x') });
+
+    const result = await sodax.swaps.getDetailedStatus(key);
+
+    expect(result.ok && result.value.source === 'solver' && result.value.data.status).toBe(
+      SolverIntentStatusCode.NOT_FOUND,
+    );
+  });
+
+  it('uses the source tx as the hub tx for a hub-source swap', async () => {
+    noRecord();
+    solverSays(SolverIntentStatusCode.SOLVED, '0xfill');
+
+    const result = await sodax.swaps.getDetailedStatus({ srcChainKey: ChainKeys.SONIC_MAINNET, srcTxHash: SRC_TX });
+
+    expect(mocks.getTransactionPackets).not.toHaveBeenCalled();
+    expect(result.ok && result.value.source === 'solver' && result.value.dstTxHash).toBe(SRC_TX);
+  });
+
+  // ── no hub tx hash yet is a miss, not a lifecycle step ───────────────────
+
+  it.each([
+    ['the relay has not delivered the packet', [{ status: 'validating', dst_tx_hash: '' }]],
+    ['the relay knows nothing about the tx', []],
+  ])('fails with LOOKUP_FAILED when %s', async (_label, data) => {
+    noRecord();
+    packets(data);
+
+    const result = await sodax.swaps.getDetailedStatus(key);
+
+    expect(!result.ok && isSodaxError(result.error) && result.error.code).toBe('LOOKUP_FAILED');
+    expect(mocks.solverGetStatus).not.toHaveBeenCalled();
+  });
+
+  // The relay response is untrusted input. A packet for another transaction, another source chain,
+  // or with a malformed hash must never supply the hash the solver is then queried with.
+  it.each([
+    ['a packet for a different source tx', [{ ...delivered[0], src_tx_hash: '0xother' }]],
+    ['a packet from a different source chain', [{ ...delivered[0], src_chain_id: 999 }]],
+    ['a non-string src_tx_hash', [{ ...delivered[0], src_tx_hash: 42 }]],
+    ['a non-string dst_tx_hash', [{ ...delivered[0], dst_tx_hash: 42 }]],
+  ])('ignores %s', async (_label, data) => {
+    noRecord();
+    packets(data);
+
+    const result = await sodax.swaps.getDetailedStatus(key);
+
+    expect(!result.ok && isSodaxError(result.error) && result.error.code).toBe('LOOKUP_FAILED');
+    expect(mocks.solverGetStatus).not.toHaveBeenCalled();
+  });
+
+  it('fails with LOOKUP_FAILED when the delivered hash is not hex', async () => {
+    noRecord();
+    packets([{ ...delivered[0], dst_tx_hash: 'not-hex' }]);
+
+    const result = await sodax.swaps.getDetailedStatus(key);
+
+    expect(!result.ok && isSodaxError(result.error) && result.error.code).toBe('LOOKUP_FAILED');
+    expect(mocks.solverGetStatus).not.toHaveBeenCalled();
+  });
+
+  // Relay responses are not schema-validated, so a 200 whose body lacks a usable packet list must
+  // be rejected rather than dereferenced — `.find` on undefined would throw inside the try/catch and
+  // be misreported as ordinary in-flight latency.
+  it.each([
+    ['success is false', { success: false, data: [] }],
+    ['data is missing', { success: true }],
+    ['data is not an array', { success: true, data: { packets: [] } }],
+  ])('fails with LOOKUP_FAILED when the relay envelope is unusable: %s', async (_label, value) => {
+    noRecord();
+    mocks.getTransactionPackets.mockResolvedValueOnce({ ok: true, value });
+
+    const result = await sodax.swaps.getDetailedStatus(key);
+
+    expect(!result.ok && isSodaxError(result.error) && result.error.code).toBe('LOOKUP_FAILED');
+    expect(mocks.solverGetStatus).not.toHaveBeenCalled();
+  });
+
+  // dapp-kit reads this tag across the package boundary to tell an ambiguous miss (budget it) from a
+  // dependency outage (keep retrying), so which failures carry it is contract, not detail.
+  it('tags only the undelivered-packet miss as budgetable, not outages', async () => {
+    noRecord();
+    packets([]);
+    const miss = await sodax.swaps.getDetailedStatus(key);
+    expect(!miss.ok && isSodaxError(miss.error) && miss.error.context?.reason).toBe(DETAILED_STATUS_NOT_DELIVERED);
+
+    noRecord();
+    mocks.getTransactionPackets.mockResolvedValueOnce({ ok: false, error: new Error('relay down') });
+    const relayDown = await sodax.swaps.getDetailedStatus(key);
+    expect(!relayDown.ok && isSodaxError(relayDown.error) && relayDown.error.context?.reason).toBeUndefined();
+
+    noRecord();
+    packets(delivered);
+    mocks.solverGetStatus.mockResolvedValueOnce({ ok: false, error: { detail: { code: -999, message: 'down' } } });
+    vi.spyOn(sodax.swaps.backendApi, 'getIntentByTxHash').mockResolvedValueOnce({ ok: false, error: new Error('x') });
+    const solverDown = await sodax.swaps.getDetailedStatus(key);
+    expect(!solverDown.ok && isSodaxError(solverDown.error) && solverDown.error.context?.reason).toBeUndefined();
+  });
+
+  it('fails with LOOKUP_FAILED when the relay read itself fails', async () => {
+    noRecord();
+    mocks.getTransactionPackets.mockResolvedValueOnce({ ok: false, error: new Error('relay down') });
+
+    const result = await sodax.swaps.getDetailedStatus(key);
+
+    expect(!result.ok && isSodaxError(result.error) && result.error.code).toBe('LOOKUP_FAILED');
+  });
+
+  // No falling back to a stale abandoned record — the caller asked for a status, not a guess.
+  it('fails with LOOKUP_FAILED when the solver cannot be reached, even if a record exists', async () => {
+    record({ status: 'failed', failureReason: 'relay timed out' });
+    packets(delivered);
+    mocks.solverGetStatus.mockResolvedValueOnce({ ok: false, error: { detail: { code: -999, message: 'down' } } });
+    vi.spyOn(sodax.swaps.backendApi, 'getIntentByTxHash').mockResolvedValueOnce({ ok: false, error: new Error('x') });
+
+    const result = await sodax.swaps.getDetailedStatus(key);
+
+    expect(!result.ok && isSodaxError(result.error) && result.error.code).toBe('LOOKUP_FAILED');
+  });
+
+  it('returns a Result rather than rejecting when a dependency throws', async () => {
+    noRecord();
+    mocks.getTransactionPackets.mockRejectedValueOnce(new Error('Invalid input parameters. tx_hash empty'));
+
+    const result = await sodax.swaps.getDetailedStatus({ ...key, srcTxHash: '' });
+
+    expect(!result.ok && isSodaxError(result.error) && result.error.code).toBe('LOOKUP_FAILED');
   });
 });
 
