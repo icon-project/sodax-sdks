@@ -38,7 +38,7 @@ import {
 import { Sodax } from '../shared/entities/Sodax.js';
 import { isSodaxError, SodaxError } from '../errors/SodaxError.js';
 import { adjustAmountByFee } from '../shared/utils/shared-utils.js';
-import { RELAY_FALLBACK_FLOOR_MS } from '../shared/services/intentRelay/IntentRelayApiService.js';
+import { HttpRelayError, RELAY_FALLBACK_FLOOR_MS } from '../shared/services/intentRelay/IntentRelayApiService.js';
 
 // SwapService imports SonicSpokeService, EvmSolverService, etc. via the SDK barrel
 // (`../index.js`). Under Vitest's module graph the barrel's re-export ordering makes a direct
@@ -1971,10 +1971,30 @@ describe('SwapService.getDetailedStatus', () => {
     const miss = await sodax.swaps.getDetailedStatus(key);
     expect(!miss.ok && isSodaxError(miss.error) && miss.error.context?.reason).toBe(DETAILED_STATUS_NOT_DELIVERED);
 
+    // The relayer's 404 for an un-indexed tx is the same "no packet for this tx" state as an empty
+    // list — live-verified — so it must be budgetable too, or an unrelayable swap polls forever.
     noRecord();
-    mocks.getTransactionPackets.mockResolvedValueOnce({ ok: false, error: new Error('relay down') });
+    mocks.getTransactionPackets.mockResolvedValueOnce({
+      ok: false,
+      error: new HttpRelayError(404, 'Not Found', '{"success": false, "message": "requested packet not found"}'),
+    });
+    const notIndexed = await sodax.swaps.getDetailedStatus(key);
+    expect(!notIndexed.ok && isSodaxError(notIndexed.error) && notIndexed.error.context?.reason).toBe(
+      DETAILED_STATUS_NOT_DELIVERED,
+    );
+
+    noRecord();
+    mocks.getTransactionPackets.mockResolvedValueOnce({
+      ok: false,
+      error: new HttpRelayError(503, 'Service Unavailable', ''),
+    });
     const relayDown = await sodax.swaps.getDetailedStatus(key);
     expect(!relayDown.ok && isSodaxError(relayDown.error) && relayDown.error.context?.reason).toBeUndefined();
+
+    noRecord();
+    mocks.getTransactionPackets.mockResolvedValueOnce({ ok: false, error: new Error('socket hang up') });
+    const transport = await sodax.swaps.getDetailedStatus(key);
+    expect(!transport.ok && isSodaxError(transport.error) && transport.error.context?.reason).toBeUndefined();
 
     noRecord();
     packets(delivered);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ChainKeys } from '@sodax/types';
-import { isSodaxError, Sodax } from '../index.js';
+import { DETAILED_STATUS_NOT_DELIVERED, isSodaxError, Sodax } from '../index.js';
 
 /**
  * E2e contract pin for `SwapService.getDetailedStatus`, against live APIs.
@@ -32,10 +32,19 @@ describe('SwapService.getDetailedStatus (e2e, live backend + relay + solver)', (
 
   // With no record and no relay packet there is no hub tx hash, so there is nothing for the solver
   // to answer about — a miss, not a lifecycle step.
-  it('fails with LOOKUP_FAILED when no source can answer for the tx', async () => {
+  //
+  // The `reason` assertion is the point of this test, not a detail: the relayer answers 404 (not an
+  // empty packet list) for a tx it has not indexed, and only a 404 tagged
+  // `DETAILED_STATUS_NOT_DELIVERED` lets `useDetailedStatus` spend its budget and stop. If the
+  // relayer ever switched to a 200 with an empty list, or to a different status, this fails loudly
+  // instead of silently reverting an unrelayable swap to polling forever.
+  it('fails with a budgetable LOOKUP_FAILED when no source can answer for the tx', async () => {
     const result = await sodax.swaps.getDetailedStatus(key);
 
     expect(result.ok).toBe(false);
     expect(!result.ok && isSodaxError(result.error) && result.error.code).toBe('LOOKUP_FAILED');
+    expect(!result.ok && isSodaxError(result.error) && result.error.context?.reason).toBe(
+      DETAILED_STATUS_NOT_DELIVERED,
+    );
   });
 });

@@ -989,7 +989,7 @@ Both payloads are already documented — the submit-tx record in [SWAPS_API.md](
 
 `LOOKUP_FAILED`, and only that. It means no source could answer — most often the relay has not delivered the packet, so there is no hub tx hash for the solver to be asked about. That is a miss, not a lifecycle step: the method will not invent an early status, and it will not fall back to a stale abandoned record.
 
-If you poll this yourself, branch on `error.context.reason`. It equals `DETAILED_STATUS_NOT_DELIVERED` when the relay has no packet for the source tx — a state you cannot tell apart from "still in flight", so bound it with a retry budget. Any other `LOOKUP_FAILED` is a dependency failing right now (relay unreachable, malformed response, solver down); keep retrying those, since retrying is how the read recovers. `useDetailedStatus` applies exactly this split.
+If you poll this yourself, branch on `error.context.reason`. It equals `DETAILED_STATUS_NOT_DELIVERED` when the relay has no packet for the source tx — whether it answers 404 for a tx it has not indexed, or returns no matching delivered packet. You cannot tell that apart from "still in flight", so bound it with a retry budget. Any other `LOOKUP_FAILED` is a dependency failing right now (relay 5xx or unreachable, malformed response, solver down); keep retrying those, since retrying is how the read recovers. `useDetailedStatus` applies exactly this split.
 
 ## Get Solved Intent Packet
 

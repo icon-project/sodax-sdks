@@ -37,6 +37,7 @@ import {
   isNativeBitcoinTransfer,
   RELAY_FALLBACK_FLOOR_MS,
   getTransactionPackets,
+  HttpRelayError,
 } from '../shared/index.js';
 import { SolverApiService } from './SolverApiService.js';
 import { EvmSolverService } from './EvmSolverService.js';
@@ -412,7 +413,19 @@ export class SwapService {
         this.relayerApiEndpoint,
       );
       if (!packets.ok) {
-        return { ok: false, error: this.detailedStatusLookupFailed(packets.error, key.srcChainKey) };
+        // The relayer answers 404 for a source tx it has not indexed — verified live, and the same
+        // reading `pollForExecutedPacket` applies. That is the *same* "no packet for this tx" state
+        // as an empty list, and equally indistinguishable from a tx that will never relay, so it is
+        // budgetable. Anything else (5xx, transport, parse) is the relay failing right now.
+        const notIndexed = packets.error instanceof HttpRelayError && packets.error.status === 404;
+        return {
+          ok: false,
+          error: this.detailedStatusLookupFailed(
+            packets.error,
+            key.srcChainKey,
+            notIndexed ? DETAILED_STATUS_NOT_DELIVERED : undefined,
+          ),
+        };
       }
 
       // Same envelope, attribution and delivery guards `pollForExecutedPacket` applies. Relay
