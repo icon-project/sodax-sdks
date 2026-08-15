@@ -342,10 +342,17 @@ export class SwapService {
 
     // The solver keeps intent state in memory, so a restart makes it answer NOT_FOUND for intents it
     // already filled. The backend's record is durable; without fill evidence the solver's answer stands.
+    //
+    // A fill event is not by itself proof of completion: an intent created with `allowPartialFill`
+    // emits one per fill while input remains. Only a fill that consumed the remainder settles the
+    // whole intent, so `SOLVED` is claimed for that one alone — otherwise a partially filled swap
+    // would be reported complete, and `useStatus` would stop polling it for good.
     const intent = await this.backendApi.getIntentByTxHash(request.intent_tx_hash, { timeout: 5_000 });
-    const fill = intent.ok ? intent.value.events.filter(isFillEvent).at(-1) : undefined;
-    return fill
-      ? { ok: true, value: { status: SolverIntentStatusCode.SOLVED, fill_tx_hash: fill.txHash } }
+    const settled = intent.ok
+      ? intent.value.events.filter(isFillEvent).find(fill => fill.intentState.remainingInput === '0')
+      : undefined;
+    return settled
+      ? { ok: true, value: { status: SolverIntentStatusCode.SOLVED, fill_tx_hash: settled.txHash } }
       : solverResult;
   }
 

@@ -2,7 +2,7 @@
 "@sodax/sdk": minor
 ---
 
-Fix `sodax.swaps.getStatus` reporting `NOT_FOUND` for intents that were already filled. The solver keeps intent state in memory, so a restart makes it forget them; `getStatus` now cross-checks the backend's durable intent record when the solver returns `NOT_FOUND` or the request fails, and returns `SOLVED` with the recovered `fill_tx_hash` when a fill is recorded there. Without fill evidence the solver's result is returned unchanged.
+Fix `sodax.swaps.getStatus` reporting `NOT_FOUND` for intents that were already filled. The solver keeps intent state in memory, so a restart makes it forget them; `getStatus` now cross-checks the backend's durable intent record when the solver returns `NOT_FOUND` or the request fails, and returns `SOLVED` with the recovered `fill_tx_hash` when that record shows the input fully consumed. A partial fill (possible with `allowPartialFill`) is not reported as `SOLVED`, and without fill evidence the solver's result is returned unchanged.
 
 One observable transition to be aware of: when the solver request itself fails but the backend proves the fill, `getStatus` now resolves `ok: true` where it previously resolved `ok: false`. No caller has to change code — an error branch simply stops firing for a case that is now answerable.
 

@@ -178,7 +178,8 @@ import {
 
   // Backend intent events — `IntentResponse.events` is `unknown[]`
   isFillEvent,                  // narrows an events entry to a recorded `intent-filled`
-  type FillEvent,
+  type FillEvent,               // { txHash, intentState.remainingInput } — '0' means the fill settled
+                                // the whole intent; with allowPartialFill it can be non-zero
 
   // Read shapes
   type Intent,

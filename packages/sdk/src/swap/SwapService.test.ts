@@ -1706,7 +1706,13 @@ describe('SwapService.getSolvedIntentPacket', () => {
 describe('SwapService.getStatus', () => {
   const request = { intent_tx_hash: '0xsome' } as never;
   const FILL_HASH = '0xfill';
-  const fillEvent = { eventType: 'intent-filled', txHash: FILL_HASH };
+  // `remainingInput: '0'` is what makes a fill terminal; a partial fill leaves a remainder.
+  const fillEvent = { eventType: 'intent-filled', txHash: FILL_HASH, intentState: { remainingInput: '0' } };
+  const partialFill = (txHash: string, remainingInput: string) => ({
+    eventType: 'intent-filled',
+    txHash,
+    intentState: { remainingInput },
+  });
   const backendReturns = (events: unknown[]) =>
     vi.spyOn(sodax.swaps.backendApi, 'getIntentByTxHash').mockResolvedValueOnce({
       ok: true,
@@ -1747,6 +1753,35 @@ describe('SwapService.getStatus', () => {
     const notFound = { ok: true as const, value: { status: SolverIntentStatusCode.NOT_FOUND } };
     mocks.solverGetStatus.mockResolvedValueOnce(notFound);
     backendReturns([{ eventType: 'intent-created' }]);
+
+    expect(await sodax.swaps.getStatus(request)).toBe(notFound);
+  });
+
+  // allowPartialFill is caller-supplied on CreateIntentParams and passed straight through to the
+  // on-chain intent, so a fill event can legitimately leave input unfilled. Claiming SOLVED there
+  // would report an unfinished swap as complete and stop useStatus polling for good.
+  it('does not claim SOLVED from a partial fill that left input remaining', async () => {
+    const notFound = { ok: true as const, value: { status: SolverIntentStatusCode.NOT_FOUND } };
+    mocks.solverGetStatus.mockResolvedValueOnce(notFound);
+    backendReturns([partialFill('0xpartial', '1000000000000000000')]);
+
+    expect(await sodax.swaps.getStatus(request)).toBe(notFound);
+  });
+
+  it('claims SOLVED from the fill that consumed the remainder, past earlier partial fills', async () => {
+    mocks.solverGetStatus.mockResolvedValueOnce({ ok: true, value: { status: SolverIntentStatusCode.NOT_FOUND } });
+    backendReturns([partialFill('0xpartial1', '2000'), partialFill('0xpartial2', '1000'), fillEvent]);
+
+    const result = await sodax.swaps.getStatus(request);
+
+    expect(result).toEqual({ ok: true, value: { status: SolverIntentStatusCode.SOLVED, fill_tx_hash: FILL_HASH } });
+  });
+
+  // No `intentState` means no proof of completion — stay with the solver rather than guess.
+  it('preserves the solver result when a fill event carries no terminality evidence', async () => {
+    const notFound = { ok: true as const, value: { status: SolverIntentStatusCode.NOT_FOUND } };
+    mocks.solverGetStatus.mockResolvedValueOnce(notFound);
+    backendReturns([{ eventType: 'intent-filled', txHash: '0xfill' }]);
 
     expect(await sodax.swaps.getStatus(request)).toBe(notFound);
   });

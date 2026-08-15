@@ -60,6 +60,13 @@ export const FillEventSchema = v.object({
   eventType: v.literal('intent-filled'),
   // The hub-chain fill tx; an empty one is no use as `fill_tx_hash`.
   txHash: v.pipe(v.string(), v.nonEmpty()),
+  // Terminality. An intent created with `allowPartialFill` emits a fill event per fill, so the
+  // event alone does not mean the intent is done — only `remainingInput === '0'` does. Required:
+  // without it there is no proof of completion, and claiming SOLVED on a partial fill would report
+  // an unfinished swap as complete.
+  intentState: v.object({
+    remainingInput: v.string(),
+  }),
 });
 
 /** GET /intent/tx/:txHash · GET /intent/:intentHash (`IntentResponse`). */

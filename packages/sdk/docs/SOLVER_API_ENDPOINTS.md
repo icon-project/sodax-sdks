@@ -158,8 +158,11 @@ Called via `SwapService.getStatus(request)`.
 `SolverIntentStatusCode` is an enum in `@sodax/sdk`. The value `3` (`SOLVED`) indicates the solver has filled the intent.
 
 When the solver returns `NOT_FOUND` or the request fails, `sodax.swaps.getStatus` checks the backend's durable intent
-record: if a fill was recorded there it returns `SOLVED` with that hub-chain fill hash, otherwise the solver's result is
-returned unchanged. The static `SolverApiService.getStatus` does not do this.
+record: if a fill that **consumed the whole input** was recorded there (`intentState.remainingInput === '0'`) it returns
+`SOLVED` with that hub-chain fill hash, otherwise the solver's result is returned unchanged. An intent created with
+`allowPartialFill` emits a fill event per fill, so a partial fill is deliberately **not** reported as `SOLVED` — that
+would mark an unfinished swap complete and stop `useStatus` from polling it. The static `SolverApiService.getStatus`
+does not do any of this.
 
 ### Example
 
