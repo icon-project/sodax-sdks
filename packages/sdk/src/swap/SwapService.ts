@@ -194,6 +194,12 @@ export type SwapServiceConstructorParams = {
 };
 
 /**
+ * Ceiling for the durable-record lookup in {@link SwapService.getStatus}. A status read is polled on
+ * a short interval, so its secondary lookup must not inherit the much longer default request budget.
+ */
+const RECONCILE_TIMEOUT_MS = 5_000;
+
+/**
  * Main entry point for the SODAX swap feature.
  *
  * Implements the intent-based solver architecture: the user creates a `SwapIntent` on their
@@ -347,7 +353,11 @@ export class SwapService {
     // emits one per fill while input remains. Only a fill that consumed the remainder settles the
     // whole intent, so `SOLVED` is claimed for that one alone — otherwise a partially filled swap
     // would be reported complete, and `useStatus` would stop polling it for good.
-    const intent = await this.backendApi.getIntentByTxHash(request.intent_tx_hash, { timeout: 5_000 });
+    // Bound the reconcile so a status poll cannot hang on it — but clamp rather than override, since
+    // a per-call timeout *replaces* the configured one and would otherwise lengthen the request for
+    // a consumer who configured something stricter than this ceiling.
+    const timeout = Math.min(RECONCILE_TIMEOUT_MS, this.backendApi.requestTimeoutMs);
+    const intent = await this.backendApi.getIntentByTxHash(request.intent_tx_hash, { timeout });
     const settled = intent.ok
       ? intent.value.events.filter(isFillEvent).find(fill => fill.intentState.remainingInput === '0')
       : undefined;

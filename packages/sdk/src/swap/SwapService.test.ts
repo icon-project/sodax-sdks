@@ -31,6 +31,7 @@ import {
 } from '@sodax/types';
 import {
   DETAILED_STATUS_NOT_DELIVERED,
+  type IntentResponse,
   type SpokeIsAllowanceValidParamsEvmSpoke,
   type SpokeIsAllowanceValidParamsHub,
   type WalletProviderSlot,
@@ -1704,7 +1705,7 @@ describe('SwapService.getSolvedIntentPacket', () => {
 // =========================================================================
 
 describe('SwapService.getStatus', () => {
-  const request = { intent_tx_hash: '0xsome' } as never;
+  const request = { intent_tx_hash: '0xsome' } as const;
   const FILL_HASH = '0xfill';
   // `remainingInput: '0'` is what makes a fill terminal; a partial fill leaves a remainder.
   const fillEvent = { eventType: 'intent-filled', txHash: FILL_HASH, intentState: { remainingInput: '0' } };
@@ -1713,14 +1714,43 @@ describe('SwapService.getStatus', () => {
     txHash,
     intentState: { remainingInput },
   });
-  const backendReturns = (events: unknown[]) =>
-    vi.spyOn(sodax.swaps.backendApi, 'getIntentByTxHash').mockResolvedValueOnce({
-      ok: true,
-      value: { events } as never,
-    });
+
+  // Typed against `IntentResponse` rather than cast through `as never`, so a change to the wire
+  // shape breaks these fixtures at compile time. `allowPartialFill` is spelled out because it is
+  // what makes a partial fill a legitimate state rather than a malformed record.
+  const intentResponse = (events: unknown[], allowPartialFill = false): IntentResponse => ({
+    intentHash: '0xintent',
+    txHash: '0xhub',
+    logIndex: 0,
+    chainId: 146,
+    blockNumber: 1,
+    open: allowPartialFill,
+    intent: {
+      intentId: '1',
+      creator: '0xcreator',
+      inputToken: '0xin',
+      outputToken: '0xout',
+      inputAmount: '1000',
+      minOutputAmount: '900',
+      deadline: '0',
+      allowPartialFill,
+      srcChain: 1,
+      dstChain: 146,
+      srcAddress: '0xsrc',
+      dstAddress: '0xdst',
+      solver: '0xsolver',
+      data: '0x',
+    },
+    events,
+  });
+
+  const backendReturns = (events: unknown[], allowPartialFill = false) =>
+    vi
+      .spyOn(sodax.swaps.backendApi, 'getIntentByTxHash')
+      .mockResolvedValueOnce({ ok: true, value: intentResponse(events, allowPartialFill) });
 
   it('returns a usable solver answer without querying the backend', async () => {
-    const statusResult = { ok: true as const, value: { status: 3, intent_hash: '0xhash' } as never };
+    const statusResult = { ok: true as const, value: { status: 3, intent_hash: '0xhash' } };
     mocks.solverGetStatus.mockResolvedValueOnce(statusResult);
     const backendSpy = vi.spyOn(sodax.swaps.backendApi, 'getIntentByTxHash');
 
@@ -1741,7 +1771,7 @@ describe('SwapService.getStatus', () => {
   });
 
   it('recovers a solver failure when the backend proves the fill', async () => {
-    mocks.solverGetStatus.mockResolvedValueOnce({ ok: false, error: { code: 'BOOM' } as never });
+    mocks.solverGetStatus.mockResolvedValueOnce({ ok: false, error: { code: 'BOOM' } });
     backendReturns([fillEvent]);
 
     const result = await sodax.swaps.getStatus(request);
@@ -1763,14 +1793,14 @@ describe('SwapService.getStatus', () => {
   it('does not claim SOLVED from a partial fill that left input remaining', async () => {
     const notFound = { ok: true as const, value: { status: SolverIntentStatusCode.NOT_FOUND } };
     mocks.solverGetStatus.mockResolvedValueOnce(notFound);
-    backendReturns([partialFill('0xpartial', '1000000000000000000')]);
+    backendReturns([partialFill('0xpartial', '1000000000000000000')], true);
 
     expect(await sodax.swaps.getStatus(request)).toBe(notFound);
   });
 
   it('claims SOLVED from the fill that consumed the remainder, past earlier partial fills', async () => {
     mocks.solverGetStatus.mockResolvedValueOnce({ ok: true, value: { status: SolverIntentStatusCode.NOT_FOUND } });
-    backendReturns([partialFill('0xpartial1', '2000'), partialFill('0xpartial2', '1000'), fillEvent]);
+    backendReturns([partialFill('0xpartial1', '2000'), partialFill('0xpartial2', '1000'), fillEvent], true);
 
     const result = await sodax.swaps.getStatus(request);
 
@@ -1786,8 +1816,25 @@ describe('SwapService.getStatus', () => {
     expect(await sodax.swaps.getStatus(request)).toBe(notFound);
   });
 
+  // A per-call `timeout` REPLACES the configured one rather than capping it, so a fixed override
+  // would lengthen the reconcile for a consumer who configured something stricter than the ceiling.
+  it.each([
+    ['clamps to a stricter configured backend timeout', 1_000, 1_000],
+    ['keeps its own ceiling under the default backend timeout', undefined, 5_000],
+  ])('%s', async (_label, configured, expected) => {
+    const s = configured === undefined ? new Sodax() : new Sodax({ api: { timeout: configured } });
+    mocks.solverGetStatus.mockResolvedValueOnce({ ok: true, value: { status: SolverIntentStatusCode.NOT_FOUND } });
+    const lookup = vi
+      .spyOn(s.backendApi, 'getIntentByTxHash')
+      .mockResolvedValueOnce({ ok: false, error: new Error('down') });
+
+    await s.swaps.getStatus(request);
+
+    expect(lookup).toHaveBeenCalledWith(request.intent_tx_hash, { timeout: expected });
+  });
+
   it('preserves the solver result when the backend lookup fails', async () => {
-    const solverError = { ok: false, error: { code: 'INTENT_NOT_FOUND' } } as never;
+    const solverError = { ok: false, error: { code: 'INTENT_NOT_FOUND' } };
     mocks.solverGetStatus.mockResolvedValueOnce(solverError);
     vi.spyOn(sodax.swaps.backendApi, 'getIntentByTxHash').mockResolvedValueOnce({
       ok: false,
