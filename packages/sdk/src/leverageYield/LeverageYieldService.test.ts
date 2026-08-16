@@ -18,6 +18,10 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Address } from 'viem';
+// Import the barrel by relative path, not as `@sodax/sdk`. A self-referential package import
+// resolves through `package.json#exports` into `dist/`, which makes this unit test depend on a
+// build artifact — it then fails to resolve whenever `dist/` is absent or half-written, and turbo
+// can cache that state. Every other test in this package imports `../index.js`; keep it that way.
 import {
   ChainKeys,
   getIntentRelayChainId,
@@ -27,7 +31,7 @@ import {
   type PartnerFee,
   type SodaxOptions,
   type SpokeChainKey,
-} from '@sodax/sdk';
+} from '../index.js';
 import type { CreateIntentParams, Intent } from '../shared/types/intent-types.js';
 import { SodaxError } from '../errors/SodaxError.js';
 

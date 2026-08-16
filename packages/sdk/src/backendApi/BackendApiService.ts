@@ -207,6 +207,16 @@ export class BackendApiService implements IConfigApiV1 {
   private readonly config: ResolvedBackendApiConfig;
   private readonly headers: Record<string, string>;
   private readonly logger: SodaxLogger;
+
+  /**
+   * The resolved request timeout. Exposed so a caller wanting a *shorter* per-call budget can clamp
+   * to it: a `RequestOverrideConfig.timeout` replaces the configured value rather than capping it,
+   * so passing a fixed override would silently lengthen requests for a consumer who configured a
+   * stricter timeout.
+   */
+  public get requestTimeoutMs(): number {
+    return this.config.timeout;
+  }
   /**
    * Whether a legacy `/be` suffix is trimmed off a per-call `baseURL` override. Mirrors the config-level
    * decision: an explicit `basePath` means the consumer writes complete roots, so their per-call value is

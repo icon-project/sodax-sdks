@@ -33,7 +33,7 @@
     "url": "https://github.com/icon-project/sodax-sdks"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node ../../scripts/verify-dist-exports.mjs",
     "dev": "tsup --watch ./src",
     "test": "vitest run",
     "prepublishOnly": "pnpm run build",

@@ -101,6 +101,7 @@ Only the two `timeout` terms are yours to tune. Opting out with `useBackendSubmi
 - `getSolvedIntentPacket(params)` — Poll the relayer until a solved intent's fill packet arrives on the destination chain
 - `getIntentHash(intent)` — Compute the keccak256 hash of an intent (its on-chain ID)
 - `getStatus(request)` — Poll the solver API for current intent execution status
+- `getDetailedStatus(params)` — Read a swap's status from its **source-chain** tx hash; routes to the backend record or the solver, whichever can answer
 - `cancelIntent(params)` — Cancel an active intent and wait for hub confirmation
 - `createCancelIntent(params)` — Build (and optionally broadcast) only the cancel tx; supports raw and signed modes
 - `cancelLimitOrder(params)` — Alias for `cancelIntent` with domain-specific naming
@@ -320,7 +321,7 @@ If you were on the previous `Error.message`-based pattern:
 
 The full `SolverErrorResponse` payload is preserved on `error.context.solverDetail`, so anything you read from `.detail.*` previously is still reachable.
 
-Other swap methods (`getQuote`, `getStatus`, `submitIntent`, `cancelIntent`, etc.) and other modules (`moneyMarket`, `bridge`, `dex`, …) **remain unchanged in this release** — they still use the legacy `Error | unknown` / `SolverErrorResponse` patterns documented per-module.
+Other swap methods (`getQuote`, `getStatus`, `submitIntent`, `cancelIntent`, etc.) and other modules (`moneyMarket`, `bridge`, `dex`, …) **retain their legacy error shapes in this release** — they still use the `Error | unknown` / `SolverErrorResponse` patterns documented per-module, rather than migrating to `SodaxError`.
 
 ---
 
@@ -916,7 +917,7 @@ if (filledIntentResult.ok) {
 
 ## Get Intent Status
 
-Poll the solver API for the current execution status of an intent. The `intent_tx_hash` must be the hub-chain tx hash where the intent was registered.
+Poll the solver API for the current execution status of an intent. The `intent_tx_hash` must be the hub-chain tx hash where the intent was registered. If the solver returns `NOT_FOUND` or the request fails, the backend's durable intent record is checked for a recorded fill — see [SOLVER_API_ENDPOINTS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SOLVER_API_ENDPOINTS.md).
 
 ```typescript
 import { SolverIntentStatusCode } from '@sodax/sdk';
@@ -937,6 +938,62 @@ if (statusResult.ok) {
 ```
 
 ---
+
+## Get Detailed Status
+
+`getDetailedStatus` answers "what is the status of this swap?" from the **source-chain** tx — the one identifier you always hold. It does not define a new status: it routes to whichever of the two existing sources can answer, and returns that source's payload unmodified.
+
+```typescript
+const result = await sodax.swaps.getDetailedStatus({
+  srcChainKey: 'arb',
+  srcTxHash: swapResponse.intentDeliveryInfo.srcTxHash,
+});
+
+if (result.ok) {
+  if (result.value.source === 'backend') {
+    // `data` is the SubmitTxStatusDataV2 from sodax.api.swaps.getSubmitTxStatus
+    console.log(result.value.data.status, result.value.data.userMessage);
+  } else {
+    // `data` is the SolverIntentStatusResponse from sodax.swaps.getStatus
+    console.log(result.value.data.status, result.value.dstTxHash);
+  }
+}
+```
+
+`DetailedSwapStatus` is discriminated on `source`, so it narrows on its own — no type guards needed:
+
+```typescript
+type DetailedSwapStatus =
+  | { source: 'backend'; data: SubmitTxStatusDataV2 }
+  | { source: 'solver'; dstTxHash: Hex; data: SolverIntentStatusResponse };
+```
+
+A point-in-time read — poll it yourself, or use `@sodax/dapp-kit`'s `useDetailedStatus`.
+
+### Why it exists
+
+`sodax.api.swaps.getSubmitTxStatus` cannot answer for every swap, in two different ways.
+
+Sometimes there is **no record**, and it reads 404 — you opted out with `useBackendSubmitTx: false`, or the submit itself never landed. More often the record exists but is **stale**: [backend 2-step submit](#backend-2-step-submit) POSTs the tx *first* and only falls back to the client-side relay once that path stalls, so a fallback-completed swap leaves behind whatever state the backend last reached — `pending`, `relaying`, or a record it abandoned outright. Neither shape reflects what actually happened to the swap.
+
+`sodax.swaps.getStatus` can answer for it, but needs the **hub** tx hash, which the caller may not have. So the caller had to know which path ran and pick an API. This method makes that choice instead:
+
+1. Read the backend record; return it while it is still in play.
+2. Otherwise resolve the hub tx hash — the source tx itself for hub-source swaps, else the delivered relay packet's `dst_tx_hash` — and return `getStatus`'s answer.
+
+A record the backend **gave up on** (`failed`, or `abandonedAt` set) takes step 2, and on the default path this is the *common* branch rather than an edge case: the record almost always exists, so abandonment — not a 404 — is what usually signals the fallback ran. It never self-heals, so keeping it would report `failed` for a swap the fallback went on to complete. A `success: false` envelope takes step 2 as well — that is the wire contract's "no record found", whatever `data` carries. A transport or server error routes on too, so a transient backend outage does not fail a swap the solver can still report on.
+
+Both payloads are already documented — the submit-tx record in [SWAPS_API.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS_API.md), the solver response under [Get Intent Status](#get-intent-status). Nothing is translated between them, so no field is dropped and no status code is reinterpreted.
+
+### When it fails
+
+`LOOKUP_FAILED`, and only that. It means no source could answer — most often the relay has not delivered the packet, so there is no hub tx hash for the solver to be asked about. That is a miss, not a lifecycle step: the method will not invent an early status, and it will not fall back to a stale abandoned record.
+
+If you poll this yourself, branch on `error.context.reason`. It equals `DETAILED_STATUS_NOT_DELIVERED` when the backend answered (a record, or a definitive 404) **and** the relay has no packet for the source tx — whether it answers 404 for a tx it has not indexed, or returns no matching delivered packet. You cannot tell that apart from "still in flight", so bound it with a retry budget. Any other `LOOKUP_FAILED` is a dependency failing right now — relay 5xx or unreachable, malformed response, solver down, or a backend outage that left the relay miss unprovable. Keep retrying those, since retrying is how the read recovers. `useDetailedStatus` applies exactly this split.
+
+Because it is meant to be polled, each dependency read it makes — the relay packet lookup and the solver status call —
+carries its own budget and gives up rather than hanging. An expiry lands in that second group: it is a dependency
+failing right now, so it stays retryable and does not consume a not-delivered budget.
 
 ## Get Solved Intent Packet
 
@@ -1099,7 +1156,7 @@ if (!postExecResult.ok && postExecResult.error.code === 'EXTERNAL_API_ERROR') {
 }
 ```
 
-`getQuote` and `getStatus` are **unchanged in this release** — they still return `Result<T, SolverErrorResponse>`:
+`getQuote` and `getStatus` **retain the legacy error shape in this release** — they still return `Result<T, SolverErrorResponse>`:
 
 ```typescript
 import { SolverIntentErrorCode } from '@sodax/sdk';

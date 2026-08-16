@@ -21,7 +21,7 @@ These keep their name but their TypeScript signature is different. Usually requi
 | `useSwap` | Hook init: `(spokeProvider) → ({ mutationOptions })`. Vars: `{ params } → { params, walletProvider }`. |
 | `useSwapAllowance` | Query params: `(params, spokeProvider) → { params: { payload, srcChainKey, walletProvider } }`. SDK request nested under `params.payload`. Data unwrapped to `boolean`. |
 | `useSwapApprove` | Return: `{ approve, isLoading } → SafeUseMutationResult` (with `mutateAsync` / `isPending`). Vars accept `CreateIntentParams \| CreateLimitOrderParams`. TData is `TxReturnType<K, false>` (chain-keyed receipt union). |
-| `useStatus` | Now `useStatus({ params: { intentTxHash } })` — single-object shape AND key renamed from `intentHash` → `intentTxHash`. Data is `Result<SolverIntentStatusResponse, SolverErrorResponse> \| undefined` (Result-wrapped). Polls 3s. |
+| `useStatus` | Now `useStatus({ params: { intentTxHash } })` — single-object shape AND key renamed from `intentHash` → `intentTxHash`. Data is `Result<SolverIntentStatusResponse, SolverErrorResponse> \| undefined` (Result-wrapped). Polls 3s; stops on `3`/`4` and after 40 consecutive NOT_FOUND fetches. |
 | `useQuote` | Now `useQuote({ params: { payload } })` — SDK request nested under `params.payload` (NOT directly under `params`). Data is `Result<SolverIntentQuoteResponse, SolverErrorResponse> \| undefined`. Polls 3s. |
 | `useCancelSwap` / `useCancelLimitOrder` | TVars are FLAT (no `params` wrapper): `{ srcChainKey, intent, walletProvider }`. |
 | `useCreateLimitOrder` | Hook init: `(spokeProvider) → ({ mutationOptions })`. Vars: `{ params, walletProvider }`. mutationKey is `['swap', 'limitOrder', 'create']`. |
