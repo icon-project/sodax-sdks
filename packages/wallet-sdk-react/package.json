@@ -54,7 +54,7 @@
     "url": "https://github.com/icon-project/sodax-sdks"
   },
   "scripts": {
-    "build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 tsup",
+    "build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 tsup && node ../../scripts/verify-dist-exports.mjs",
     "dev": "tsup --watch ./src",
     "prepublishOnly": "pnpm run build",
     "clean": "rm -rf dist && rm -rf node_modules && rm -rf .turbo",

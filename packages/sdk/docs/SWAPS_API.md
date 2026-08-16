@@ -166,6 +166,13 @@ These are unrelated; don't treat one as another:
 | `submitTx` | `SubmitTxResponseV2.data.status` | string | `'inserted'` (new) or `'duplicate'` (already submitted — idempotent on `(txHash, srcChainKey)`). |
 | `getSubmitTxStatus` | `SubmitTxStatusResponseV2.data.status` | string | `'pending'` / `'relaying'` / `'relayed'` / `'posting_execution'` / `'posted_execution'` / `'solved'` / `'failed'` (`'solved'` / `'failed'` terminal). |
 
+This record tracks the backend submit path only. It answers **404** when no record exists
+(`useBackendSubmitTx: false`, or the submit never landed), and returns a **stale or abandoned** record for a
+swap `sodax.swaps.swap()` finished via its client-side relay fallback — that path submits first and falls
+back afterwards, so the record survives without reflecting the outcome. To cover every case from a source tx
+hash, use `sodax.swaps.getDetailedStatus` —
+[SWAPS.md § Get Detailed Status](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md).
+
 ## Configuration
 
 `sodax.api.swaps` shares the backend API config. `baseURL` is the **gateway root** — the same value every

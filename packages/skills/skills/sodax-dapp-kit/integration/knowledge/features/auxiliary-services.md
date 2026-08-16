@@ -335,7 +335,7 @@ and origin gating are the real controls. Proxy through your own backend if that 
 | `useBackendOrderbook` | none | `staleTime: 30s` — fresh-window, no background refetch |
 | `useExpiredUtxos` (bitcoin) | 60s | refetchInterval |
 | `useQuote` (swap) | 3s | refetchInterval |
-| `useStatus` (swap) | 3s | refetchInterval |
+| `useStatus` (swap) | 3s | stops on status `3`/`4`, and after 40 consecutive NOT_FOUND fetches |
 | `useSwapAllowance` (swap) | 2s | refetchInterval |
 | `useMMAllowance` (mm) | 5s | refetchInterval; `enabled: false` for borrow/withdraw actions |
 | Reserves data (mm) | 5s | `useReservesData` / `useReservesHumanized` / user position hooks |

@@ -550,6 +550,31 @@ describe('SwapsApiService error propagation', () => {
     expect(mockFetch).toHaveBeenCalledOnce(); // 400 is not retryable
   });
 
+  // `SwapService.getDetailedStatus` reads exactly these fields to tell a definitive "no record"
+  // (404) from a backend that could not answer, and routes and budgets its retries on the answer.
+  // Pinned on this endpoint specifically so drift in the error mapping fails here rather than
+  // silently turning a backend outage into a budgetable miss.
+  it('preserves HTTP 404 for submit-tx status lookup', async () => {
+    mockFetch.mockResolvedValueOnce(httpErrorResponse(404, 'Not Found'));
+
+    const result = await sodax.api.swaps.getSubmitTxStatus({
+      txHash: '0xabc',
+      srcChainKey: '0x38.bsc',
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: 'EXTERNAL_API_ERROR',
+        context: {
+          api: 'swaps',
+          code: 'HTTP_ERROR',
+          status: 404,
+        },
+      },
+    });
+  });
+
   it('retries an idempotent call on a transient 503, then succeeds', async () => {
     mockFetch
       .mockResolvedValueOnce(httpErrorResponse(503, 'Service Unavailable'))
