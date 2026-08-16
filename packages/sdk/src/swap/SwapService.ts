@@ -36,6 +36,7 @@ import {
   isStacksChainKeyType,
   isNativeBitcoinTransfer,
   RELAY_FALLBACK_FLOOR_MS,
+  RELAY_REQUEST_TIMEOUT_MS,
   getTransactionPackets,
   HttpRelayError,
 } from '../shared/index.js';
@@ -200,6 +201,25 @@ export type SwapServiceConstructorParams = {
 const RECONCILE_TIMEOUT_MS = 5_000;
 
 /**
+ * Budget for the solver status call behind {@link SwapService.getDetailedStatus}. Same reasoning as
+ * {@link RECONCILE_TIMEOUT_MS}: a polled read must not inherit the 30s backend default.
+ *
+ * The relay leg does **not** share this value — it takes {@link RELAY_REQUEST_TIMEOUT_MS}, the relay
+ * module's own per-request budget. One number for both reads was tempting, but 5s is a third of what
+ * the relay path already tolerates for a single request, so it would abort reads that succeed today.
+ * A budget that expires is untagged, which keeps the caller polling; a relay slower than the budget
+ * would therefore never resolve and never surface an error. Better slow than silently stuck.
+ *
+ * Worst case for one `getDetailedStatus` call is the sum of its legs, not this number: the backend
+ * record's own request budget, then 15s for the relay, then 5s here, plus a further
+ * {@link RECONCILE_TIMEOUT_MS} for the durable-record reconcile a failed solver read falls through
+ * to. That first leg is not a fixed 30s — `DEFAULT_BACKEND_API_TIMEOUT` is only its fallback, and a
+ * consumer configuring `api.timeout` higher raises it, and the whole tick with it. So a poll-count
+ * cutoff like dapp-kit's bounds attempts, not wall clock, and by a factor the consumer controls.
+ */
+const DETAILED_STATUS_SOLVER_TIMEOUT_MS = 5_000;
+
+/**
  * Main entry point for the SODAX swap feature.
  *
  * Implements the intent-based solver architecture: the user creates a `SwapIntent` on their
@@ -342,7 +362,23 @@ export class SwapService {
   public async getStatus(
     request: SolverIntentStatusRequest,
   ): Promise<Result<SolverIntentStatusResponse, SolverErrorResponse>> {
-    const solverResult = await SolverApiService.getStatus(request, this.solver, this.config.logger);
+    return this.resolveSolverStatus(request);
+  }
+
+  /**
+   * {@link SwapService.getStatus} with an optional budget for the solver leg. Public `getStatus` is a
+   * one-shot read a caller bounds however it likes, so it stays unbounded; `getDetailedStatus` is
+   * polled and passes {@link DETAILED_STATUS_SOLVER_TIMEOUT_MS}. Both go through here so the
+   * durable-intent reconcile below is written once.
+   *
+   * `timeoutMs` bounds the solver request alone. The reconcile that a failed or NOT_FOUND solver read
+   * falls through to carries its own {@link RECONCILE_TIMEOUT_MS}, so a bounded call can cost both.
+   */
+  private async resolveSolverStatus(
+    request: SolverIntentStatusRequest,
+    timeoutMs?: number,
+  ): Promise<Result<SolverIntentStatusResponse, SolverErrorResponse>> {
+    const solverResult = await SolverApiService.getStatus(request, this.solver, this.config.logger, timeoutMs);
     const forgotten = !solverResult.ok || solverResult.value.status === SolverIntentStatusCode.NOT_FOUND;
     if (!forgotten) return solverResult;
 
@@ -408,9 +444,12 @@ export class SwapService {
       const dstTxHash = await this.resolveHubTxHash(params, backendAnswered);
       if (!dstTxHash.ok) return dstTxHash;
 
-      // `this.getStatus`, not `SolverApiService.getStatus` — the durable-intent reconcile on
-      // solver NOT_FOUND stays in one place.
-      const solver = await this.getStatus({ intent_tx_hash: dstTxHash.value });
+      // `this.resolveSolverStatus`, not `SolverApiService.getStatus` — the durable-intent reconcile
+      // on solver NOT_FOUND stays in one place. Bounded, because this read is polled.
+      const solver = await this.resolveSolverStatus(
+        { intent_tx_hash: dstTxHash.value },
+        DETAILED_STATUS_SOLVER_TIMEOUT_MS,
+      );
       if (!solver.ok) {
         return { ok: false, error: this.detailedStatusLookupFailed(solver.error, params.srcChainKey) };
       }
@@ -442,12 +481,14 @@ export class SwapService {
           params: { chain_id: relayChainId.toString(), tx_hash: key.srcTxHash },
         },
         this.relayerApiEndpoint,
+        RELAY_REQUEST_TIMEOUT_MS,
       );
       if (!packets.ok) {
         // The relayer answers 404 for a source tx it has not indexed — verified live, and the same
         // reading `pollForExecutedPacket` applies. That is the *same* "no packet for this tx" state
         // as an empty list, and equally indistinguishable from a tx that will never relay, so it is
-        // budgetable. Anything else (5xx, transport, parse) is the relay failing right now.
+        // budgetable. Anything else (5xx, transport, parse, a read that outran its budget) is the
+        // relay failing right now.
         const notIndexed = packets.error instanceof HttpRelayError && packets.error.status === 404;
         return {
           ok: false,

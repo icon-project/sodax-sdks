@@ -164,6 +164,11 @@ record: if a fill that **consumed the whole input** was recorded there (`intentS
 would mark an unfinished swap complete and stop `useStatus` from polling it. The static `SolverApiService.getStatus`
 does not do any of this.
 
+`SolverApiService.getStatus(request, config, logger?, timeoutMs?)` takes an optional request budget. Omit it and the
+call is unbounded, as it has always been; supply it when a stalled solver must not hold the caller open. An expiry is
+reported as `UNKNOWN`, like any other failure. `sodax.swaps.getStatus` leaves it unset — a one-shot read is the
+caller's to bound — while `getDetailedStatus`, which is meant to be polled, sets it.
+
 ### Example
 
 ```ts

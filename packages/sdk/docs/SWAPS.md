@@ -991,6 +991,10 @@ Both payloads are already documented — the submit-tx record in [SWAPS_API.md](
 
 If you poll this yourself, branch on `error.context.reason`. It equals `DETAILED_STATUS_NOT_DELIVERED` when the backend answered (a record, or a definitive 404) **and** the relay has no packet for the source tx — whether it answers 404 for a tx it has not indexed, or returns no matching delivered packet. You cannot tell that apart from "still in flight", so bound it with a retry budget. Any other `LOOKUP_FAILED` is a dependency failing right now — relay 5xx or unreachable, malformed response, solver down, or a backend outage that left the relay miss unprovable. Keep retrying those, since retrying is how the read recovers. `useDetailedStatus` applies exactly this split.
 
+Because it is meant to be polled, each dependency read it makes — the relay packet lookup and the solver status call —
+carries its own budget and gives up rather than hanging. An expiry lands in that second group: it is a dependency
+failing right now, so it stays retryable and does not consume a not-delivered budget.
+
 ## Get Solved Intent Packet
 
 Poll the relayer until the solver's fill tx has been delivered to the destination chain. Call this after `getStatus` returns `SolverIntentStatusCode.SOLVED`.

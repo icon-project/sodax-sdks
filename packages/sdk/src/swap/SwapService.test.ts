@@ -1757,7 +1757,14 @@ describe('SwapService.getStatus', () => {
     const result = await sodax.swaps.getStatus(request);
 
     expect(result).toBe(statusResult);
-    expect(mocks.solverGetStatus).toHaveBeenCalledWith(request, sodax.swaps.solver, sodax.swaps.config.logger);
+    // Trailing `undefined` is the point: public `getStatus` is a one-shot read the caller bounds
+    // however it likes, so it forwards no budget. Only `getDetailedStatus`, which is polled, does.
+    expect(mocks.solverGetStatus).toHaveBeenCalledWith(
+      request,
+      sodax.swaps.solver,
+      sodax.swaps.config.logger,
+      undefined,
+    );
     expect(backendSpy).not.toHaveBeenCalled();
   });
 
@@ -1920,6 +1927,31 @@ describe('SwapService.getDetailedStatus', () => {
     });
     expect(mocks.getTransactionPackets).not.toHaveBeenCalled();
     expect(mocks.solverGetStatus).not.toHaveBeenCalled();
+  });
+
+  // ── bounding the dependency reads ────────────────────────────────────────
+
+  // This read is polled on a short interval, so neither dependency may hold it open. Without a
+  // budget a hung relay or solver leaves the query pending forever, and the outage-recovery polling
+  // in `useDetailedStatus` never gets another result to act on. The budget's *effect* is covered in
+  // the two client test suites; what matters here is that it is passed at all.
+  it('bounds both the relay and the solver read', async () => {
+    noRecord();
+    packets(delivered);
+    solverSays(SolverIntentStatusCode.SOLVED, '0xfill');
+
+    await sodax.swaps.getDetailedStatus(key);
+
+    // The relay takes its own module's per-request budget rather than a tighter one invented here:
+    // a budget below what the relay path already tolerates would abort reads that succeed today,
+    // and an expired read is untagged, so the caller would poll forever instead of resolving.
+    expect(mocks.getTransactionPackets).toHaveBeenCalledWith(expect.anything(), expect.anything(), 15_000);
+    expect(mocks.solverGetStatus).toHaveBeenCalledWith(
+      { intent_tx_hash: HUB_TX },
+      sodax.swaps.solver,
+      sodax.swaps.config.logger,
+      5_000,
+    );
   });
 
   // ── routing to the solver ────────────────────────────────────────────────
