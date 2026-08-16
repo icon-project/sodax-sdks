@@ -109,6 +109,7 @@ import {
   type SolverIntentQuoteResponse,
   type SolverIntentStatusRequest,
   type SolverIntentStatusResponse,
+  SolverIntentErrorCode,
   SolverIntentStatusCode,
   type Result,
   type TxReturnType,
@@ -383,7 +384,9 @@ export class SwapService {
     if (!forgotten) return solverResult;
 
     // The solver keeps intent state in memory, so a restart makes it answer NOT_FOUND for intents it
-    // already filled. The backend's record is durable; without fill evidence the solver's answer stands.
+    // already filled. The backend's record is durable; a read that *completes* without terminal fill
+    // evidence leaves the solver's answer standing. A read that could not complete proves nothing —
+    // see below.
     //
     // A fill event is not by itself proof of completion: an intent created with `allowPartialFill`
     // emits one per fill while input remains. Only a fill that consumed the remainder settles the
@@ -397,9 +400,28 @@ export class SwapService {
     const settled = intent.ok
       ? intent.value.events.filter(isFillEvent).find(fill => fill.intentState.remainingInput === '0')
       : undefined;
-    return settled
-      ? { ok: true, value: { status: SolverIntentStatusCode.SOLVED, fill_tx_hash: settled.txHash } }
-      : solverResult;
+    if (settled) return { ok: true, value: { status: SolverIntentStatusCode.SOLVED, fill_tx_hash: settled.txHash } };
+
+    // Same reading as `getDetailedStatus`: a record — or a 404, which is the backend saying it has
+    // none — answers the question, so the solver's NOT_FOUND stands and a caller may budget it. A
+    // 5xx, a transport failure or an unusable body does not: the fill may exist and simply be
+    // unreadable right now. Reporting NOT_FOUND there lets a poller spend a miss it never verified,
+    // and `useStatus`/`useDetailedStatus` stop after 40 of them — on a swap that did complete.
+    const backendAnswered = intent.ok || (isSodaxError(intent.error) && intent.error.context?.status === 404);
+    if (solverResult.ok && !backendAnswered) {
+      return {
+        ok: false,
+        error: {
+          detail: {
+            code: SolverIntentErrorCode.UNKNOWN,
+            message: 'solver reported NOT_FOUND and the durable intent record could not be read to verify it',
+          },
+        },
+      };
+    }
+
+    // Either the backend answered, or the solver's own error is the better diagnostic to return.
+    return solverResult;
   }
 
   /**

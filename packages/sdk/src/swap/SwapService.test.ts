@@ -24,6 +24,7 @@ import {
   type IWalletProvider,
   DEFAULT_BACKEND_API_TIMEOUT,
   DEFAULT_RELAY_TX_TIMEOUT,
+  SolverIntentErrorCode,
   SolverIntentStatusCode,
   type Result,
   type SpokeChainKey,
@@ -1704,6 +1705,36 @@ describe('SwapService.getSolvedIntentPacket', () => {
 // Batch 3: relayer / solver API facade methods.
 // =========================================================================
 
+// Typed against `IntentResponse` rather than cast through `as never`, so a change to the wire
+// shape breaks these fixtures at compile time. `allowPartialFill` is spelled out because it is
+// what makes a partial fill a legitimate state rather than a malformed record. Module-scoped
+// because the durable-record reconcile is reachable from both `getStatus` and `getDetailedStatus`.
+const intentResponse = (events: unknown[], allowPartialFill = false): IntentResponse => ({
+  intentHash: '0xintent',
+  txHash: '0xhub',
+  logIndex: 0,
+  chainId: 146,
+  blockNumber: 1,
+  open: allowPartialFill,
+  intent: {
+    intentId: '1',
+    creator: '0xcreator',
+    inputToken: '0xin',
+    outputToken: '0xout',
+    inputAmount: '1000',
+    minOutputAmount: '900',
+    deadline: '0',
+    allowPartialFill,
+    srcChain: 1,
+    dstChain: 146,
+    srcAddress: '0xsrc',
+    dstAddress: '0xdst',
+    solver: '0xsolver',
+    data: '0x',
+  },
+  events,
+});
+
 describe('SwapService.getStatus', () => {
   const request = { intent_tx_hash: '0xsome' } as const;
   const FILL_HASH = '0xfill';
@@ -1713,35 +1744,6 @@ describe('SwapService.getStatus', () => {
     eventType: 'intent-filled',
     txHash,
     intentState: { remainingInput },
-  });
-
-  // Typed against `IntentResponse` rather than cast through `as never`, so a change to the wire
-  // shape breaks these fixtures at compile time. `allowPartialFill` is spelled out because it is
-  // what makes a partial fill a legitimate state rather than a malformed record.
-  const intentResponse = (events: unknown[], allowPartialFill = false): IntentResponse => ({
-    intentHash: '0xintent',
-    txHash: '0xhub',
-    logIndex: 0,
-    chainId: 146,
-    blockNumber: 1,
-    open: allowPartialFill,
-    intent: {
-      intentId: '1',
-      creator: '0xcreator',
-      inputToken: '0xin',
-      outputToken: '0xout',
-      inputAmount: '1000',
-      minOutputAmount: '900',
-      deadline: '0',
-      allowPartialFill,
-      srcChain: 1,
-      dstChain: 146,
-      srcAddress: '0xsrc',
-      dstAddress: '0xdst',
-      solver: '0xsolver',
-      data: '0x',
-    },
-    events,
   });
 
   const backendReturns = (events: unknown[], allowPartialFill = false) =>
@@ -1840,6 +1842,8 @@ describe('SwapService.getStatus', () => {
     expect(lookup).toHaveBeenCalledWith(request.intent_tx_hash, { timeout: expected });
   });
 
+  // The solver already failed, so its own error is the better diagnostic — and a failed Result
+  // already resets the caller's NOT_FOUND budget, so nothing is gained by substituting ours.
   it('preserves the solver result when the backend lookup fails', async () => {
     const solverError = { ok: false, error: { code: 'INTENT_NOT_FOUND' } };
     mocks.solverGetStatus.mockResolvedValueOnce(solverError);
@@ -1849,6 +1853,40 @@ describe('SwapService.getStatus', () => {
     });
 
     expect(await sodax.swaps.getStatus(request)).toBe(solverError);
+  });
+
+  // A NOT_FOUND the durable record could not confirm is not a definitive miss. Reporting it as one
+  // lets a poller spend a budgeted read it never verified; failing instead keeps the read retryable.
+  it('fails rather than reporting an unverified NOT_FOUND when the backend is unreachable', async () => {
+    mocks.solverGetStatus.mockResolvedValueOnce({ ok: true, value: { status: SolverIntentStatusCode.NOT_FOUND } });
+    vi.spyOn(sodax.swaps.backendApi, 'getIntentByTxHash').mockResolvedValueOnce({
+      ok: false,
+      error: new Error('down'),
+    });
+
+    const result = await sodax.swaps.getStatus(request);
+
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.error.detail.code).toBe(SolverIntentErrorCode.UNKNOWN);
+    expect(!result.ok && result.error.detail.message).toBe(
+      'solver reported NOT_FOUND and the durable intent record could not be read to verify it',
+    );
+  });
+
+  // A 404 is the backend answering — it has no record, so there is no fill to find. That is as
+  // definitive as a 200 with no terminal fill, and must stay budgetable or nothing ever stops.
+  it('keeps the solver NOT_FOUND when the backend answers 404', async () => {
+    const notFound = { ok: true as const, value: { status: SolverIntentStatusCode.NOT_FOUND } };
+    mocks.solverGetStatus.mockResolvedValueOnce(notFound);
+    vi.spyOn(sodax.swaps.backendApi, 'getIntentByTxHash').mockResolvedValueOnce({
+      ok: false,
+      error: new SodaxError('EXTERNAL_API_ERROR', 'not found', {
+        feature: 'backend',
+        context: { api: 'backend', status: 404 },
+      }),
+    });
+
+    expect(await sodax.swaps.getStatus(request)).toBe(notFound);
   });
 });
 
@@ -2016,13 +2054,33 @@ describe('SwapService.getDetailedStatus', () => {
     noRecord();
     packets(delivered);
     solverSays(SolverIntentStatusCode.NOT_FOUND);
-    vi.spyOn(sodax.swaps.backendApi, 'getIntentByTxHash').mockResolvedValueOnce({ ok: false, error: new Error('x') });
+    // The durable record answered and showed no terminal fill, so the solver's NOT_FOUND is verified
+    // and passes through — this is the miss a caller is meant to budget.
+    vi.spyOn(sodax.swaps.backendApi, 'getIntentByTxHash').mockResolvedValueOnce({
+      ok: true,
+      value: intentResponse([]),
+    });
 
     const result = await sodax.swaps.getDetailedStatus(key);
 
     expect(result.ok && result.value.source === 'solver' && result.value.data.status).toBe(
       SolverIntentStatusCode.NOT_FOUND,
     );
+  });
+
+  // The counterpart: an unverifiable NOT_FOUND must NOT read as a definitive miss. It surfaces
+  // untagged, which is what makes `useDetailedStatus` reset its budget and keep polling — otherwise a
+  // backend outage spends all 40 reads on a swap that may well have filled.
+  it('does not report NOT_FOUND when the durable record could not be read to verify it', async () => {
+    noRecord();
+    packets(delivered);
+    solverSays(SolverIntentStatusCode.NOT_FOUND);
+    vi.spyOn(sodax.swaps.backendApi, 'getIntentByTxHash').mockResolvedValueOnce({ ok: false, error: new Error('x') });
+
+    const result = await sodax.swaps.getDetailedStatus(key);
+
+    expect(!result.ok && isSodaxError(result.error) && result.error.code).toBe('LOOKUP_FAILED');
+    expect(!result.ok && isSodaxError(result.error) && result.error.context?.reason).toBeUndefined();
   });
 
   it('uses the source tx as the hub tx for a hub-source swap', async () => {

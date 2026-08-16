@@ -159,7 +159,15 @@ Called via `SwapService.getStatus(request)`.
 
 When the solver returns `NOT_FOUND` or the request fails, `sodax.swaps.getStatus` checks the backend's durable intent
 record: if a fill that **consumed the whole input** was recorded there (`intentState.remainingInput === '0'`) it returns
-`SOLVED` with that hub-chain fill hash, otherwise the solver's result is returned unchanged. An intent created with
+`SOLVED` with that hub-chain fill hash.
+
+What happens otherwise depends on whether that check could be made. A record showing no such fill — or a 404, the
+backend saying it holds none — answers the question, so the solver's result is returned unchanged. If the record could
+not be read at all (5xx, transport failure, unusable body), a solver `NOT_FOUND` is reported as a failed `Result`
+instead: the fill may exist and simply be unreadable, so returning `NOT_FOUND` would present an unverified miss as a
+definitive one. A poller that stops after N consecutive `NOT_FOUND` reads would otherwise spend that budget during a
+backend outage and give up on a swap that had in fact completed. A failed solver request is returned as-is, since its
+own error is the more useful diagnostic. An intent created with
 `allowPartialFill` emits a fill event per fill, so a partial fill is deliberately **not** reported as `SOLVED` — that
 would mark an unfinished swap complete and stop `useStatus` from polling it. The static `SolverApiService.getStatus`
 does not do any of this.

@@ -321,7 +321,7 @@ If you were on the previous `Error.message`-based pattern:
 
 The full `SolverErrorResponse` payload is preserved on `error.context.solverDetail`, so anything you read from `.detail.*` previously is still reachable.
 
-Other swap methods (`getQuote`, `getStatus`, `submitIntent`, `cancelIntent`, etc.) and other modules (`moneyMarket`, `bridge`, `dex`, …) **remain unchanged in this release** — they still use the legacy `Error | unknown` / `SolverErrorResponse` patterns documented per-module.
+Other swap methods (`getQuote`, `getStatus`, `submitIntent`, `cancelIntent`, etc.) and other modules (`moneyMarket`, `bridge`, `dex`, …) **retain their legacy error shapes in this release** — they still use the `Error | unknown` / `SolverErrorResponse` patterns documented per-module, rather than migrating to `SodaxError`.
 
 ---
 
@@ -1156,7 +1156,7 @@ if (!postExecResult.ok && postExecResult.error.code === 'EXTERNAL_API_ERROR') {
 }
 ```
 
-`getQuote` and `getStatus` are **unchanged in this release** — they still return `Result<T, SolverErrorResponse>`:
+`getQuote` and `getStatus` **retain the legacy error shape in this release** — they still return `Result<T, SolverErrorResponse>`:
 
 ```typescript
 import { SolverIntentErrorCode } from '@sodax/sdk';
