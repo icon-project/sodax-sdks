@@ -5,7 +5,7 @@
     "access": "public"
   },
   "license": "MIT",
-  "version": "2.1.0-rc.5",
+  "version": "2.1.0-rc.6",
   "description": "Wallet SDK of Sodax",
   "keywords": [
     "sodax",
