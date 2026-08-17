@@ -883,6 +883,9 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 5.5.4
+      viem:
+        specifier: 'catalog:'
+        version: 2.29.2(bufferutil@4.1.0)(typescript@5.5.4)(utf-8-validate@6.0.6)(zod@3.25.76)
       vitest:
         specifier: 'catalog:'
         version: 3.2.6(@types/debug@4.1.13)(@types/node@22.18.1)(happy-dom@20.9.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(lightningcss@1.32.0)(terser@5.47.1)
