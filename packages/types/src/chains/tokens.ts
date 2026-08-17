@@ -89,8 +89,6 @@ export const HubVaultSymbols = [
   'sodaJITOSOL',
   'sodaUSDS',
   'sodaUSSD',
-  'sodaXRP',
-  'sodaTRX',
 ] as const;
 
 export type HubVaultSymbol = (typeof HubVaultSymbols)[number];
@@ -356,24 +354,6 @@ export const SodaTokens = {
     chainKey: ChainKeys.SONIC_MAINNET,
     hubAsset: '0xb780e09576C2667ba9F5B80FbAb2e6b8A0a21e37',
     vault: '0xb780e09576C2667ba9F5B80FbAb2e6b8A0a21e37',
-  },
-  sodaXRP: {
-    symbol: 'sodaXRP',
-    name: 'Soda XRP',
-    decimals: 18,
-    address: '0xb89B3a6633fb06CAB86b7d54e2f6913C51a73952',
-    chainKey: ChainKeys.SONIC_MAINNET,
-    hubAsset: '0xb89B3a6633fb06CAB86b7d54e2f6913C51a73952',
-    vault: '0xb89B3a6633fb06CAB86b7d54e2f6913C51a73952',
-  },
-  sodaTRX: {
-    symbol: 'sodaTRX',
-    name: 'Soda TRX',
-    decimals: 18,
-    address: '0x40931EA2e572bd298c371ea4312cA58DB2C3b646',
-    chainKey: ChainKeys.SONIC_MAINNET,
-    hubAsset: '0x40931EA2e572bd298c371ea4312cA58DB2C3b646',
-    vault: '0x40931EA2e572bd298c371ea4312cA58DB2C3b646',
   },
 } as const satisfies Record<HubVaultSymbol, XToken>;
 
@@ -1997,24 +1977,6 @@ export const stellarSupportedTokens = {
     hubAsset: '0xE36b8F88651004e29FD2001aEace777671731d65',
     vault: SodaTokens.sodaUSDS.address,
   },
-  TRX: {
-    symbol: 'TRX',
-    name: 'TRON',
-    decimals: 7,
-    address: 'CDK5WW6JG476XTIQAVVGYIBUR2ENPQXW7QG7ERSNTR4W6SW5XTUNA2UB',
-    chainKey: ChainKeys.STELLAR_MAINNET,
-    hubAsset: '0x00fe4CeF2c5e8b5Cb9448b64B7032Fca5b1C26DA',
-    vault: SodaTokens.sodaTRX.address,
-  },
-  XRP: {
-    symbol: 'XRP',
-    name: 'XRP',
-    decimals: 7,
-    address: 'CDTFWRWSQTOR2U6GCCGQFIXALROG5QLEQN3FR2PQGF4JX6AB277KVIA5',
-    chainKey: ChainKeys.STELLAR_MAINNET,
-    hubAsset: '0x585c1Ad1c92A2BefEA01eC61659e21E24A318337',
-    vault: SodaTokens.sodaXRP.address,
-  },
 } as const satisfies Record<string, XToken>;
 
 export const suiSupportedTokens = {
@@ -2683,24 +2645,6 @@ export const hederaSupportedTokens = {
     chainKey: ChainKeys.HEDERA_MAINNET,
     hubAsset: '0xf93035bede0a23442fc326e4211371e822751e1f',
     vault: SodaTokens.sodaUSDS.address,
-  },
-  TRX: {
-    symbol: 'TRX',
-    name: 'TRON',
-    decimals: 8,
-    address: '0x0000000000000000000000000000000000a4e80b',
-    chainKey: ChainKeys.HEDERA_MAINNET,
-    hubAsset: '0x61deef5a57e03e9e30776783a4f8e1cd4ddfbc54',
-    vault: SodaTokens.sodaTRX.address,
-  },
-  XRP: {
-    symbol: 'XRP',
-    name: 'XRP',
-    decimals: 8,
-    address: '0x0000000000000000000000000000000000a4e80c',
-    chainKey: ChainKeys.HEDERA_MAINNET,
-    hubAsset: '0x725aaf511d53f0600cf1e95aa376f1c5f06c5c61',
-    vault: SodaTokens.sodaXRP.address,
   },
   XLM: {
     symbol: 'XLM',
