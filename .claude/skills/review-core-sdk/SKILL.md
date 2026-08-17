@@ -16,7 +16,7 @@ description: 'Use when reviewing a change, diff, or PR to the SODAX core SDK (pa
 - `pnpm checkTs` · `pnpm lint` · `pnpm --filter @sodax/sdk test` (add `pnpm --filter @sodax/sdk test:e2e` if cross-chain logic changed; run the `apps/node` smoke script for the affected chain when relevant).
 - `pnpm check:ai-dev-files`, and `pnpm check:ai` if `packages/skills` changed.
 - `pnpm check:doc-links` if the diff touches a doc listed in `scripts/gitbook-sync-map.json` (`packages/sdk/docs/**`, package READMEs, `docs/ai-integration-guide.md`).
-- Docs Drift (job **Docs ship with code**): package `src/` changes need a *mirrored* doc (`scripts/gitbook-sync-map.json`), the package README, or `packages/<pkg>/docs/` (non-sdk). JSDoc, unmirrored sdk/docs pages, and `packages/skills` do not count. A new `packages/sdk/docs/` page must be in the map. The `docs-not-needed` label is the only skip.
+- Docs Drift (job **Docs ship with code**): each package whose `src/` changed needs a *related* mapped doc (`packages/<pkg>/…` in `scripts/gitbook-sync-map.json`, or a mapped `packages/sdk/docs/` page), the package README, or `packages/<pkg>/docs/` (non-sdk). JSDoc, unmirrored sdk/docs pages, `packages/skills`, and an unrelated mapped file do not count. A new `packages/sdk/docs/` page must be in the map. The `docs-not-needed` label is the only skip.
 - The Security workflow runs gitleaks + Semgrep — a new hardcoded `0x`+64-hex key or other secret is a hard reject.
 
 ## 3. Review dimensions

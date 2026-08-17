@@ -133,7 +133,14 @@ URL only resolves once merged to `main`. See [`packages/assets/README.md`](../..
 - The solver/relayer backend must recognize the hub asset to route intents. The SDK config
   only makes the SDK *aware* of the token; it does not create liquidity or routes.
 
-## 5. Verify
+## 5. Docs Drift
+Changing `packages/types/src` triggers Docs Drift. Update the matching *mapped*
+feature page (`packages/sdk/docs/SWAPS.md` for swap tokens, `MONEY_MARKET.md` for
+MM tokens) or `packages/types/README.md`. JSDoc and `packages/skills` do not
+pass. Ask a maintainer for the `docs-not-needed` label only when the change is
+truly not user-facing (checksum/casing, internal rename).
+
+## 6. Verify
 ```bash
 pnpm --filter @sodax/types test    # vitest → tokens-dedup.test.ts: no dup symbol/address (swap/MM lists only)
 pnpm checkTs                        # tsc → the `satisfies XToken` constraint catches a malformed entry (missing/wrong-typed field)

@@ -35,5 +35,8 @@ skills-lock.json
 # Local tarballs from `pnpm pack:local`
 pack-local-out/
 
+# Temp git fixtures from scripts/check-docs-drift.test.mjs
+.tmp-docs-drift-*/
+
 # Local SDK audit scratch — the shared Audits/ reports are tracked; the sdk/ subdir stays local.
 Audits/sdk

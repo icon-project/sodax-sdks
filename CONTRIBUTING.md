@@ -55,9 +55,9 @@ Mintlify). Never edit the docs site or the synced copies directly.
 
 ### Mirrored docs and the Mintlify site
 
-The files listed in `scripts/gitbook-sync-map.json` are mirrored to
-`sodax-document` by its `sync-sodax-sdks.sh` script and published on
-docs.sodax.com. For those files:
+The files listed in `scripts/gitbook-sync-map.json` are copied to
+`sodax-document` by its `sync-sodax-sdks.sh` script (the map is the copy
+list) and published on docs.sodax.com. For those files:
 
 - **Don't add frontmatter** (titles, icons, descriptions) — the sync injects it.
 - **Avoid raw HTML.** Mintlify compiles pages as MDX; HTML attributes like
@@ -66,26 +66,29 @@ docs.sodax.com. For those files:
   relative links are only allowed to targets mirrored into the same destination
   directory; everything else needs an absolute
   `https://github.com/icon-project/sodax-sdks/blob/main/…` URL.
-- **Adding, renaming, or removing a mirrored doc?** Update
-  `scripts/gitbook-sync-map.json` and `sodax-document/sync-sodax-sdks.sh`
-  together — the script is the upstream authority — and add or remove the
-  Mintlify nav entry in sodax-document. A new `packages/sdk/docs/` page that
-  is not in the map will fail Docs Drift, because the sync whitelist would
-  never copy it.
+- **Adding, renaming, or removing a mirrored doc?** Add, rename, or remove the
+  entry in `scripts/gitbook-sync-map.json`. That is enough for the file to be
+  copied. On the sodax-document docs-sync PR, add or remove the sidebar entry
+  (`SUMMARY.md` or `docs.json`). Optionally add an `inject_frontmatter` overlay
+  in `sync-sodax-sdks.sh` if the page should have an icon. A new
+  `packages/sdk/docs/` page that is not in the map will fail Docs Drift.
 
 Some `packages/sdk/docs/` pages are intentionally **not** mirrored (`DEX.md`,
 `SPONSORING.md`, `SWAPS_API.md`, `BRIDGE_API.md`, `LOGGING.md`,
 `ARCHITECTURE_REFACTOR_SUMMARY.md`). Editing them does not satisfy Docs Drift.
-To publish one, add it to the map and the sync script.
+To publish one, add it to the map (a follow-up when that page is ready to go
+live — not part of the Docs Drift gate itself).
 
 ### What CI enforces
 
 - The **Docs Drift** check (job name **Docs ship with code**) fails any PR
-  that changes package `src/` without a *publishable* docs signal: a file
-  listed in `scripts/gitbook-sync-map.json`, the package `README.md`, or
-  `packages/<pkg>/docs/` (non-sdk packages). JSDoc, unmirrored sdk/docs
-  pages, and `packages/skills` do not count. If your PR genuinely has no
-  user-facing change, ask a maintainer to apply the `docs-not-needed` label.
+  that changes package `src/` without a *related* publishable docs signal: a
+  mapped file under that package, a mapped `packages/sdk/docs/` page, the
+  package `README.md`, or `packages/<pkg>/docs/` (non-sdk). JSDoc, unmirrored
+  sdk/docs pages, `packages/skills`, and an unrelated mapped file (for example
+  touching `packages/skills/README.md` while changing `@sodax/sdk`) do not
+  count. If your PR genuinely has no user-facing change, ask a maintainer to
+  apply the `docs-not-needed` label.
 - `pnpm check:ai` validates that snippets and imports in `packages/skills`
   match the real source (partner-agent docs, separate from Docs Drift).
 - `pnpm check:doc-links` validates links in mirrored docs.

@@ -2,7 +2,7 @@ name: Docs Drift
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
 
 # The job only reads the repo; never grant the default (potentially write) token.
 permissions:

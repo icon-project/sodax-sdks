@@ -44,7 +44,13 @@ If the solver team says to add a token but **not activate it yet**, mark the par
 
 Confirm with the user which behavior the solver team intends, and match the comment style of the surrounding entries.
 
-## Step 4 — Verify
+## Step 4 — Docs Drift
+
+Changing `packages/types/src` triggers Docs Drift. Update
+`packages/sdk/docs/SWAPS.md` (or `packages/types/README.md` if there is no
+user-facing list change). JSDoc does not pass.
+
+## Step 5 — Verify
 
 - The invariants are covered by [packages/types/src/swap/swap.test.ts](../../../packages/types/src/swap/swap.test.ts) (disjointness, staging-superset accessor, union validation) and [packages/types/src/chains/tokens-dedup.test.ts](../../../packages/types/src/chains/tokens-dedup.test.ts) (no intra-list duplicates). Tests run in CI; do not run builds locally unless the user asks.
 - Remind the user that production additions should be confirmed against the production solver oracle (`https://sodax-solver.iconblockchain.xyz/oracle`) or with the solver team.

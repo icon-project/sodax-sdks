@@ -1,5 +1,5 @@
 {
-  "note": "Files that sodax-document mirrors into GitBook (docs.sodax.com). The upstream authority is sodax-document/sync-sodax-sdks.sh — keep 'mirrored' in step with that script when either side changes. Consumed by scripts/check-doc-links.mjs.",
+  "note": "Files that sodax-document copies onto docs.sodax.com. This list is the copy source of truth — sodax-document/sync-sodax-sdks.sh reads it and copies every src. A new page still needs a sidebar line (SUMMARY.md or docs.json) on the docs-sync PR; optional inject_frontmatter overlays in that script add icons. Consumed by scripts/check-doc-links.mjs and Docs Drift CI.",
   "sourceRepo": "icon-project/sodax-sdks",
   "docRepo": "icon-project/sodax-document",
   "mirrored": [

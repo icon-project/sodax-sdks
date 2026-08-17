@@ -109,7 +109,7 @@ These guide every change. Where a rule maps to tooling (types, lint, tests, `che
 - **Keep AI docs faithful.** `packages/skills` teaches *partner* agents how to call the public API; it is not where we introduce a feature (that is `.claude/skills/` plus `packages/sdk/docs/`). When public behavior, imports, signatures, examples, chains, tokens, or feature support change, update `packages/skills` and run `pnpm check:ai`. That does not satisfy Docs Drift.
 - **Docs mirrored to GitBook keep absolute links.** `scripts/gitbook-sync-map.json` lists the READMEs and `packages/sdk/docs` pages that `sodax-document` mirrors to docs.sodax.com, moving and renaming them. In those files a link may stay relative only when the target is mirrored into the same destination directory under the same filename; every other target (moved doc, unmirrored doc, source file, directory) needs an absolute `https://github.com/icon-project/sodax-sdks/blob/main/…` URL, and never a `sodax-document` URL. Gate: `pnpm check:doc-links`.
 
-**Definition of done:** scoped diff · behavior verified against `src/` · relevant `test`/`checkTs`/`lint`/`check:ai` green · `packages/skills` updated when public behavior changed · no unrelated refactor.
+**Definition of done:** scoped diff · behavior verified against `src/` · relevant `test`/`checkTs`/`lint`/`check:ai` green · mapped docs when package `src/` changed · `packages/skills` updated when public behavior changed · no unrelated refactor.
 
 To review a change against these rules, use the `review-core-sdk` skill (`.claude/skills/review-core-sdk/`).
 
@@ -122,13 +122,13 @@ To author or validate changesets and govern a release (SemVer bumps, changelogs,
 - Root guidance is for information every domain needs. Put package/app-specific architecture, patterns, commands, and pitfalls in that subtree's `AGENTS.md`.
 - Prefer broad durable patterns over volatile enumerations. When exact values matter, point agents to source files or package docs rather than copying values.
 - Validate changes to these files with `pnpm check:ai-dev-files`.
-- When a mirrored doc is added, renamed, or removed, update `scripts/gitbook-sync-map.json` and `sodax-document/sync-sodax-sdks.sh` together — that script is the upstream authority, and a stale mapping breaks the sync.
+- When a mirrored doc is added, renamed, or removed, update `scripts/gitbook-sync-map.json`. sodax-document copies every mapped src; add or remove the sidebar entry on the docs-sync PR.
 
 ## CI Shape
 
 GitHub Actions install dependencies with a frozen lockfile, lint, check circular dependencies, build packages, typecheck, validate dev AI files, validate AI consumer docs, validate mirrored doc links, build apps, run smoke checks, and run tests. When changing `packages/skills`, run `pnpm check:ai` locally; when changing a mirrored doc, run `pnpm check:doc-links`.
 
-A separate `Docs Drift` PR check (job name **Docs ship with code**, script `.github/scripts/check-docs-drift.sh`) fails when package runtime source changes without a publishable docs signal: a file listed in `scripts/gitbook-sync-map.json`, the package `README.md`, or `packages/<pkg>/docs/` (non-sdk). JSDoc, unmirrored `packages/sdk/docs/` pages, and `packages/skills` do not count. A newly added `packages/sdk/docs/**/*.md` must be added to the map (and to `sodax-document/sync-sodax-sdks.sh`). Maintainers bypass the check with the `docs-not-needed` label. Downstream publication is pulled by a scheduled sync workflow in `sodax-document`.
+A separate `Docs Drift` PR check (job name **Docs ship with code**, script `.github/scripts/check-docs-drift.sh`) fails when package runtime source changes without a *related* publishable docs signal: a mapped file under that package, a mapped `packages/sdk/docs/` page, the package `README.md`, or `packages/<pkg>/docs/` (non-sdk). JSDoc, unmirrored `packages/sdk/docs/` pages, `packages/skills`, and an unrelated mapped file do not count. A newly added `packages/sdk/docs/**/*.md` must be added to the map. Maintainers bypass the check with the `docs-not-needed` label. Downstream publication is pulled by a scheduled sync workflow in `sodax-document`.
 
 `pnpm test:e2e` runs in its own CI job **on push to `main` / `development` only**, never on pull requests: it hits live mainnet services, so it fails on state no PR controls (a solver that dropped an intent from memory, an unindexed relay tx, on-chain token/vault drift). Run it locally when you touch a flow it covers — a green PR does not mean the e2e suite passed.
 
