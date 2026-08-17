@@ -21,6 +21,12 @@ approve what swaps approves: on the hub it is the caller's own hub wallet router
 the solver's intents contract. That keeps `buildApproveTxs` and `isAllowanceValid` pointing at the same
 contract, so an allowance the SDK reports as insufficient is the allowance this grants.
 
+Both approve-and-broadcast hooks now take an optional `onProgress` listener in their mutation vars.
+It reports each transaction as `{ step, phase, index, total, hash?, error? }`, so a UI can say
+"Clearing old allowance 1/2 — sign in your wallet" instead of one undifferentiated "Approving…"
+across two signatures. Reporting is advisory: never awaited, and a listener that throws is ignored
+rather than aborting a broadcast the user has already paid for.
+
 dapp-kit adds `useBridgeApiApproveAndBroadcast`, the bridge counterpart of
 `useSwapsApiApproveAndBroadcast`: it requests the plan, signs, broadcasts and waits for each
 transaction, and invalidates `['bridgeApi','allowance']` once the approval has confirmed. A

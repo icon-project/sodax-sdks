@@ -35,6 +35,7 @@ import {
   type BridgeSubmitTxRequestV2,
   type CreateBridgeIntentParamsV2,
   type Hex,
+  type ApprovalProgress,
   type IBitcoinWalletProvider,
   type IStellarWalletProvider,
   type SpokeChainKey,
@@ -56,6 +57,16 @@ import { formatMutationFailureMessage } from '@/lib/utils';
 import type { BridgeApiOrder } from '@/components/bridge-api/OrderStatus';
 import { BRIDGE_API_CONFIG } from '@/components/bridge-api/lib/config';
 import { isSignableBridgeApiChain, signAndBroadcastBridgeApiTx } from '@/components/bridge-api/lib/signAndBroadcast';
+
+/** One-line label for the approval step the wallet is on, or `null` once that step has landed. */
+function approvalStepLabel({ step, phase, index, total }: ApprovalProgress): string | null {
+  if (phase !== 'signing' && phase !== 'broadcast') return null;
+
+  const position = total > 1 ? ` ${index}/${total}` : '';
+  const what = step === 'allowance-reset' ? 'Clearing old allowance' : 'Approving';
+
+  return `${what}${position} — ${phase === 'signing' ? 'sign in your wallet' : 'waiting for confirmation'}`;
+}
 
 /**
  * Bridge-api demo card — the existing on-chain bridge UI (chain/token selection, max-bridgeable,
@@ -82,6 +93,8 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
   const [approveError, setApproveError] = useState<string | null>(null);
   const [bridgeError, setBridgeError] = useState<string | null>(null);
   const [isApproving, setIsApproving] = useState(false);
+  // A guarded token needs two signatures; one flat "Approving…" across both looks like a double charge.
+  const [approvalStep, setApprovalStep] = useState<string | null>(null);
   const [isBridging, setIsBridging] = useState(false);
   const [isFromBtcReady, setIsFromBtcReady] = useState(false);
   const [isToBtcReady, setIsToBtcReady] = useState(false);
@@ -290,6 +303,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
         body: bridgeBody,
         walletProvider: sourceWalletProvider,
         apiConfig: BRIDGE_API_CONFIG,
+        onProgress: progress => setApprovalStep(approvalStepLabel(progress)),
       });
       if (!result.ok) {
         setApproveError(formatMutationFailureMessage(result.error, 'Approve failed'));
@@ -299,6 +313,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
       setApproveError(formatMutationFailureMessage(error, 'Approve signing failed'));
     } finally {
       setIsApproving(false);
+      setApprovalStep(null);
     }
   };
 
@@ -628,7 +643,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
                 onClick={handleApprove}
                 disabled={isAllowanceLoading || hasAllowance || isApproving}
               >
-                {isApproving ? 'Approving…' : hasAllowance ? 'Approved' : 'Approve'}
+                {isApproving ? (approvalStep ?? 'Approving…') : hasAllowance ? 'Approved' : 'Approve'}
               </Button>
             )}
 

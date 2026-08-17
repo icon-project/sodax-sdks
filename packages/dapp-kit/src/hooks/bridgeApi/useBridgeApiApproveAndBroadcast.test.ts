@@ -7,6 +7,7 @@
  */
 
 import { ChainKeys } from '@sodax/sdk';
+import type { ApprovalProgress } from '../../utils/approvalPlan.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const approve = vi.fn();
@@ -52,6 +53,13 @@ function evmProvider(calls: string[], onWait?: (hash: string) => string | void) 
     }),
   };
 }
+
+const onEvent = (sink: ApprovalProgress[]) => (progress: ApprovalProgress) => {
+  sink.push(progress);
+};
+
+/** Compact rendering, so a sequence can be asserted as one readable list. */
+const trace = (p: ApprovalProgress): string => `${p.step}:${p.phase}:${p.index}/${p.total}`;
 
 /** One render, then the captured `mutationFn` invoked with `vars`. */
 // biome-ignore lint/suspicious/noExplicitAny: vars mirror the hook's generic mutation variables.
@@ -162,5 +170,77 @@ describe('useBridgeApiApproveAndBroadcast', () => {
     await captured.onSuccess({ approveTxHash: APPROVE_HASH }, {}, undefined);
 
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['bridgeApi', 'allowance'] });
+  });
+
+  describe('onProgress', () => {
+    it('walks each transaction through its phases, numbered against the total', async () => {
+      approve.mockResolvedValue({ ok: true, value: { tx: APPROVE_TX, resetTx: RESET_TX } });
+      const events: ApprovalProgress[] = [];
+
+      await run({
+        body: body(ChainKeys.ARBITRUM_MAINNET),
+        walletProvider: evmProvider([]),
+        onProgress: onEvent(events),
+      });
+
+      expect(events.map(trace)).toEqual([
+        'allowance-reset:signing:1/2',
+        'allowance-reset:broadcast:1/2',
+        'allowance-reset:confirmed:1/2',
+        'approve:signing:2/2',
+        'approve:broadcast:2/2',
+        'approve:confirmed:2/2',
+      ]);
+      // The first report lands before the first wallet prompt, so "1/2" is on screen when it opens.
+      expect(events[0]?.phase).toBe('signing');
+    });
+
+    it('carries the hash from broadcast onwards', async () => {
+      approve.mockResolvedValue({ ok: true, value: { tx: APPROVE_TX } });
+      const events: ApprovalProgress[] = [];
+
+      await run({
+        body: body(ChainKeys.ARBITRUM_MAINNET),
+        walletProvider: evmProvider([]),
+        onProgress: onEvent(events),
+      });
+
+      expect(events.map(trace)).toEqual(['approve:signing:1/1', 'approve:broadcast:1/1', 'approve:confirmed:1/1']);
+      expect(events.map(e => e.hash)).toEqual([undefined, APPROVE_HASH, APPROVE_HASH]);
+    });
+
+    it('ends the failing step as failed, with its error, and reports nothing after it', async () => {
+      approve.mockResolvedValue({ ok: true, value: { tx: APPROVE_TX, resetTx: RESET_TX } });
+      const events: ApprovalProgress[] = [];
+      const walletProvider = evmProvider([], hash => (hash === RESET_HASH ? 'reverted' : 'success'));
+
+      await expect(
+        run({ body: body(ChainKeys.ARBITRUM_MAINNET), walletProvider, onProgress: onEvent(events) }),
+      ).rejects.toThrow(/reverted on chain/);
+
+      expect(events.map(trace)).toEqual([
+        'allowance-reset:signing:1/2',
+        'allowance-reset:broadcast:1/2',
+        'allowance-reset:failed:1/2',
+      ]);
+      const failed = events.at(-1) as ApprovalProgress;
+      expect(failed.error).toBeInstanceOf(Error);
+      // Broadcast before it failed, so the hash is the one thing a user can still look up.
+      expect(failed.hash).toBe(RESET_HASH);
+    });
+
+    it('survives a listener that throws — reporting must never cost the user a transaction', async () => {
+      approve.mockResolvedValue({ ok: true, value: { tx: APPROVE_TX, resetTx: RESET_TX } });
+
+      const result = await run({
+        body: body(ChainKeys.ARBITRUM_MAINNET),
+        walletProvider: evmProvider([]),
+        onProgress: () => {
+          throw new Error('UI bug');
+        },
+      });
+
+      expect(result).toEqual({ resetTxHash: RESET_HASH, approveTxHash: APPROVE_HASH });
+    });
   });
 });

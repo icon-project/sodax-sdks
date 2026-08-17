@@ -10,7 +10,7 @@ import { useSodaxContext } from '../shared/useSodaxContext.js';
 import { unwrapResult } from '../shared/unwrapResult.js';
 import type { MutationHookParams } from '../shared/types.js';
 import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
-import { runApprovalPlan, type ApprovalHashes } from '../../utils/approvalPlan.js';
+import { runApprovalPlan, type ApprovalHashes, type ApprovalProgressListener } from '../../utils/approvalPlan.js';
 
 /** Hashes of the transactions this hook broadcast, in the order they were sent. */
 export type SwapsApiApprovalHashes = ApprovalHashes;
@@ -19,6 +19,8 @@ export type UseSwapsApiApproveAndBroadcastVars<K extends SpokeChainKey = SpokeCh
   body: CreateIntentParamsV2;
   walletProvider: GetWalletProviderType<K>;
   apiConfig?: RequestOverrideConfig;
+  /** Per-step progress. In the vars, not the hook options, so it is never a stale closure. */
+  onProgress?: ApprovalProgressListener;
 };
 
 /**
@@ -57,7 +59,7 @@ export const useSwapsApiApproveAndBroadcast = <K extends SpokeChainKey = SpokeCh
   return useSafeMutation<SwapsApiApprovalHashes, Error, UseSwapsApiApproveAndBroadcastVars<K>>({
     mutationKey: ['swapsApi', 'approveAndBroadcast'],
     ...mutationOptions,
-    mutationFn: async ({ body, walletProvider, apiConfig }): Promise<SwapsApiApprovalHashes> => {
+    mutationFn: async ({ body, walletProvider, apiConfig, onProgress }): Promise<SwapsApiApprovalHashes> => {
       const plan: ApproveResponseV2 = unwrapResult(await sodax.api.swaps.approve(body, apiConfig));
 
       return runApprovalPlan({
@@ -65,6 +67,7 @@ export const useSwapsApiApproveAndBroadcast = <K extends SpokeChainKey = SpokeCh
         srcChainKey: body.srcChainKey as SpokeChainKey,
         walletProvider,
         hookName: 'useSwapsApiApproveAndBroadcast',
+        onProgress,
       });
     },
     onSuccess: async (data, vars, ctx) => {

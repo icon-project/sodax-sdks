@@ -10,7 +10,7 @@ import { useSodaxContext } from '../shared/useSodaxContext.js';
 import { unwrapResult } from '../shared/unwrapResult.js';
 import type { MutationHookParams } from '../shared/types.js';
 import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
-import { runApprovalPlan, type ApprovalHashes } from '../../utils/approvalPlan.js';
+import { runApprovalPlan, type ApprovalHashes, type ApprovalProgressListener } from '../../utils/approvalPlan.js';
 
 export type BridgeApiApprovalHashes = ApprovalHashes;
 
@@ -18,6 +18,8 @@ export type UseBridgeApiApproveAndBroadcastVars<K extends SpokeChainKey = SpokeC
   body: CreateBridgeIntentParamsV2;
   walletProvider: GetWalletProviderType<K>;
   apiConfig?: RequestOverrideConfig;
+  /** Per-step progress. In the vars, not the hook options, so it is never a stale closure. */
+  onProgress?: ApprovalProgressListener;
 };
 
 /**
@@ -31,9 +33,12 @@ export type UseBridgeApiApproveAndBroadcastVars<K extends SpokeChainKey = SpokeC
  * Supports the chains the bridge API can approve on — the hub (Sonic), EVM spokes, and Stellar.
  * Every other chain reports its allowance as always sufficient, so approval never runs for it.
  *
+ * `onProgress` reports each transaction as `{ step, phase, index, total }`, so the UI can name the
+ * wallet prompt the user is looking at instead of one flat "Approving…" across two signatures.
+ *
  * @example
  * const { mutateAsyncSafe: approve } = useBridgeApiApproveAndBroadcast();
- * const result = await approve({ body: createBridgeIntentParams, walletProvider });
+ * const result = await approve({ body: createBridgeIntentParams, walletProvider, onProgress: setStep });
  * if (!result.ok) return;
  * const { resetTxHash, approveTxHash } = result.value;   // resetTxHash only on a guarded token
  */
@@ -50,7 +55,7 @@ export const useBridgeApiApproveAndBroadcast = <K extends SpokeChainKey = SpokeC
   return useSafeMutation<BridgeApiApprovalHashes, Error, UseBridgeApiApproveAndBroadcastVars<K>>({
     mutationKey: ['bridgeApi', 'approveAndBroadcast'],
     ...mutationOptions,
-    mutationFn: async ({ body, walletProvider, apiConfig }): Promise<BridgeApiApprovalHashes> => {
+    mutationFn: async ({ body, walletProvider, apiConfig, onProgress }): Promise<BridgeApiApprovalHashes> => {
       const plan: BridgeApproveResponseV2 = unwrapResult(await sodax.api.bridge.approve(body, apiConfig));
 
       return runApprovalPlan({
@@ -58,6 +63,7 @@ export const useBridgeApiApproveAndBroadcast = <K extends SpokeChainKey = SpokeC
         srcChainKey: body.srcChainKey as SpokeChainKey,
         walletProvider,
         hookName: 'useBridgeApiApproveAndBroadcast',
+        onProgress,
       });
     },
     onSuccess: async (data, vars, ctx) => {

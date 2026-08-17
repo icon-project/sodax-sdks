@@ -9,6 +9,7 @@
  */
 
 import { ChainKeys } from '@sodax/sdk';
+import type { ApprovalProgress } from '../../utils/approvalPlan.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const approve = vi.fn();
@@ -188,5 +189,19 @@ describe('useSwapsApiApproveAndBroadcast', () => {
 
     // The hook owns confirmation now, so unlike useSwapsApiApprove it can refresh this itself.
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['swapsApi', 'allowance'] });
+  });
+
+  it('reports progress too — the runner is shared, so swaps must not be left without it', async () => {
+    approve.mockResolvedValue({ ok: true, value: { tx: APPROVE_TX, resetTx: RESET_TX } });
+    const events: ApprovalProgress[] = [];
+
+    await run({
+      body: body(ChainKeys.ARBITRUM_MAINNET),
+      walletProvider: evmProvider([]),
+      onProgress: (progress: ApprovalProgress) => events.push(progress),
+    });
+
+    expect(events).toHaveLength(6);
+    expect(events.at(-1)).toMatchObject({ step: 'approve', phase: 'confirmed', index: 2, total: 2 });
   });
 });
