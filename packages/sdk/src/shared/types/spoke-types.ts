@@ -23,6 +23,8 @@ import type {
   EvmChainKey,
   WalletProviderSlot,
 } from '@sodax/types';
+import type { RelayExtraData } from './relay-types.js';
+
 type OptionalSkipSimulation = { skipSimulation?: boolean };
 
 /*
@@ -239,3 +241,28 @@ export type RawDestinationParams = {
   dstChainKey: SpokeChainKey;
   dstAddress: string;
 };
+
+/**
+ * Direction of the cross-chain settlement a feature waits on. `inbound` is spoke→hub (a deposit the
+ * hub executes), `outbound` is hub→spoke (a borrow/withdraw released back to the spoke).
+ *
+ * The two are not symmetric per chain family: Bitcoin outbound is relayed on demand under a derived
+ * poll id, and Tron settles through the MPC relay's withdrawal record rather than its deposit record.
+ * Feature services pass the direction; {@link SpokeService.settle} owns the per-family behavior.
+ */
+export type SettlementDirection = 'inbound' | 'outbound';
+
+export type SettleParams = {
+  chainKey: SpokeChainKey;
+  /** What `create*Intent` returned: the spoke tx hash, or an MPC tracking id for a Tron withdrawal. */
+  tx: string;
+  direction: SettlementDirection;
+  relayData: RelayExtraData;
+  timeout?: number;
+};
+
+/**
+ * Why a settlement failed. `phase` lets a feature keep its own error taxonomy (a source tx that
+ * never landed vs a relay that never delivered) without knowing which settlement mechanism ran.
+ */
+export type SettlementFailure = { phase: 'verification' | 'relay'; cause: unknown };

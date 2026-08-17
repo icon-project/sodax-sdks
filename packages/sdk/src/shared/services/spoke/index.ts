@@ -9,3 +9,5 @@ export * from './SuiSpokeService.js';
 export * from './StacksSpokeService.js';
 export * from './BitcoinSpokeService.js';
 export * from './NearSpokeService.js';
+export * from './TronSpokeService.js';
+export * from './tron-utils.js';
