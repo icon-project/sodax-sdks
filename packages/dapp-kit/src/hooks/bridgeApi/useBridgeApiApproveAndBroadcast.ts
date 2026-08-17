@@ -12,7 +12,6 @@ import type { MutationHookParams } from '../shared/types.js';
 import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
 import { runApprovalPlan, type ApprovalHashes } from '../../utils/approvalPlan.js';
 
-/** Hashes of the transactions this hook broadcast, in the order they were sent. */
 export type BridgeApiApprovalHashes = ApprovalHashes;
 
 export type UseBridgeApiApproveAndBroadcastVars<K extends SpokeChainKey = SpokeChainKey> = {
@@ -25,14 +24,9 @@ export type UseBridgeApiApproveAndBroadcastVars<K extends SpokeChainKey = SpokeC
  * React hook that runs the whole bridge-API approval: asks the API for the transactions, then signs,
  * broadcasts, and waits for each one.
  *
- * Prefer this over {@link useBridgeApiApprove}, which returns the unsigned `{ tx, resetTx? }` and
- * leaves the rest to you. A source token of the 2017 TetherToken lineage rejects an allowance change
- * from one non-zero value to another, so the API can hand back a **reset** transaction that must be
- * mined **before** the approve is even a valid state transition. Broadcasting them out of order, or
- * without waiting, spends the user's gas on a transaction that is certain to revert.
- *
- * Because confirmation happens inside the hook, it invalidates `['bridgeApi','allowance']` itself;
- * callers of `useBridgeApiApprove` have to refetch by hand.
+ * Prefer this over {@link useBridgeApiApprove}, which hands back the unsigned `{ tx, resetTx? }` and
+ * leaves the ordering — reset mined first, then approve — to the caller. Confirmation happens inside
+ * the hook, so it invalidates `['bridgeApi','allowance']` itself.
  *
  * Supports the chains the bridge API can approve on — the hub (Sonic), EVM spokes, and Stellar.
  * Every other chain reports its allowance as always sufficient, so approval never runs for it.

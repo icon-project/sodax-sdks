@@ -119,12 +119,9 @@ export interface BridgeApproveResponseV2 {
   /** Unsigned approval transaction — the `RawTxReturnType` variant for the request's `srcChainKey`. */
   tx: RawTxReturnType;
   /**
-   * Unsigned transaction that zeroes the existing allowance, when one is needed first.
-   *
-   * Present only when the source token rejects an allowance change from one non-zero value to
-   * another — the 2017 TetherToken lineage. Broadcast this first and wait for it to be mined, then
-   * broadcast `tx`; the second approve is only valid once the allowance has been zeroed on-chain.
-   * Absent for every other token, and for a wallet with nothing approved yet.
+   * Unsigned transaction that zeroes a stale allowance, present only when the source token rejects an
+   * allowance change from one non-zero value to another (the 2017 TetherToken lineage). Broadcast it
+   * and wait for it to be mined before `tx` — the approve is not valid until the allowance reads zero.
    */
   resetTx?: RawTxReturnType;
 }

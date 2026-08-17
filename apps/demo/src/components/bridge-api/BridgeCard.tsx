@@ -20,7 +20,7 @@ import {
   useBitcoinBalance,
   useBitcoinTradingSetup,
   useBridgeApiAllowance,
-  useBridgeApiApprove,
+  useBridgeApiApproveAndBroadcast,
   useBridgeApiCreateBridgeIntent,
   useBridgeApiFee,
   useBridgeApiSubmitTx,
@@ -55,11 +55,7 @@ import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
 import { formatMutationFailureMessage } from '@/lib/utils';
 import type { BridgeApiOrder } from '@/components/bridge-api/OrderStatus';
 import { BRIDGE_API_CONFIG } from '@/components/bridge-api/lib/config';
-import {
-  isSignableBridgeApiChain,
-  signAndBroadcastBridgeApiTx,
-  waitForTxFinality,
-} from '@/components/bridge-api/lib/signAndBroadcast';
+import { isSignableBridgeApiChain, signAndBroadcastBridgeApiTx } from '@/components/bridge-api/lib/signAndBroadcast';
 
 /**
  * Bridge-api demo card — the existing on-chain bridge UI (chain/token selection, max-bridgeable,
@@ -211,11 +207,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
     return net > 0n ? formatUnits(net, fromToken.decimals) : '0';
   }, [parsedAmount, fromToken, feeQuote, fromAmount]);
 
-  const {
-    data: allowance,
-    isLoading: isAllowanceLoading,
-    refetch: refetchAllowance,
-  } = useBridgeApiAllowance({
+  const { data: allowance, isLoading: isAllowanceLoading } = useBridgeApiAllowance({
     // Gate the allowance body behind the review dialog (mirrors the swaps-api card, whose intent params
     // are undefined until the dialog builds them). The hook enables itself on `!!body`, so passing an
     // undefined body while the dialog is closed stops `checkAllowance` firing on every amount keystroke;
@@ -224,7 +216,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
   });
   const hasAllowance = allowance?.valid === true;
 
-  const { mutateAsyncSafe: approve } = useBridgeApiApprove();
+  const { mutateAsyncSafe: approve } = useBridgeApiApproveAndBroadcast();
   const { mutateAsyncSafe: createBridgeIntent } = useBridgeApiCreateBridgeIntent();
   const { mutateAsyncSafe: submitTx } = useBridgeApiSubmitTx();
 
@@ -292,20 +284,17 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
     setApproveError(null);
     setIsApproving(true);
     try {
-      // The API only builds the unsigned approval tx — signing and broadcasting happen here.
-      const result = await approve({ body: bridgeBody, apiConfig: BRIDGE_API_CONFIG });
+      // The hook owns plan → sign → broadcast → wait (stale-allowance reset included) and invalidates
+      // the allowance query itself.
+      const result = await approve({
+        body: bridgeBody,
+        walletProvider: sourceWalletProvider,
+        apiConfig: BRIDGE_API_CONFIG,
+      });
       if (!result.ok) {
         setApproveError(formatMutationFailureMessage(result.error, 'Approve failed'));
         return;
       }
-      const txHash = await signAndBroadcastBridgeApiTx({
-        chainKey: fromChainKey,
-        tx: result.value.tx,
-        walletProvider: sourceWalletProvider,
-      });
-      await waitForTxFinality(fromChainKey, sourceWalletProvider, txHash);
-      // The approve hook can't invalidate the allowance query (confirmation is client-side) — refetch.
-      await refetchAllowance();
     } catch (error) {
       setApproveError(formatMutationFailureMessage(error, 'Approve signing failed'));
     } finally {

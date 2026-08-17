@@ -263,8 +263,7 @@ export class BridgeService {
    * When `raw` is `true` the encoded transaction is returned without broadcasting.
    * When `raw` is `false` the transaction is signed and submitted via the provided wallet provider.
    *
-   * Returns a SINGLE transaction, which is all the signed path needs when a stale allowance already
-   * exists — use {@link BridgeService.buildApproveTxs} for the unsigned two-step case.
+   * Returns a SINGLE transaction — for the unsigned two-step case use {@link BridgeService.buildApproveTxs}.
    *
    * @param _params - Bridge parameters including source chain, token, amount, wallet provider, and `raw` flag.
    * @returns `Result<TxReturnType<K, Raw>>` — encoded transaction data (raw) or submitted transaction hash.
@@ -358,14 +357,9 @@ export class BridgeService {
   }
 
   /**
-   * The contract a bridge source token must be approved to, on the EVM approval path.
-   *
-   * A hub source approves the caller's OWN hub wallet router — not a protocol-wide contract — so the
-   * lookup is per-caller and asynchronous; an EVM spoke approves that chain's asset manager. Shared by
-   * {@link BridgeService.approve} and {@link BridgeService.buildApproveTxs} so the two can never drift
-   * onto different spenders. Note this is NOT the swaps spender (`solver.intentsContract` on the hub):
-   * the two features approve different contracts, which is why bridge cannot reuse
-   * `SwapService.buildApproveTxs`.
+   * The contract a bridge source token must be approved to, on the EVM approval path: the caller's own
+   * hub wallet router for a hub source (per-caller, hence async), the chain's asset manager on a spoke.
+   * NOT the swaps spender. Shared by `approve` and `buildApproveTxs` so the two cannot drift apart.
    */
   private async resolveEvmApprovalSpender(
     srcChainKey: HubChainKey | EvmSpokeOnlyChainKey,
@@ -377,14 +371,9 @@ export class BridgeService {
   }
 
   /**
-   * The unsigned approval transactions for the bridge's source token, in the order they must be
-   * broadcast.
-   *
-   * Two transactions when the source token needs its stale allowance cleared first, one otherwise.
-   * {@link BridgeService.approve} is unchanged and still returns a single transaction; this is the
-   * entry point for unsigned callers that need to handle the two-step case. When `resetTx` is
-   * present, broadcast it and wait for it to be mined first — `approveTx` is not valid until the
-   * reset has landed.
+   * The unsigned approval transactions for the bridge's source token: `approveTx`, preceded by a
+   * `resetTx` when a stale allowance must be zeroed first. Broadcast `resetTx` and wait for it to be
+   * mined — `approveTx` is not valid until it lands.
    */
   public async buildApproveTxs<K extends SpokeChainKey>(
     _params: BridgeParams<K, true>,

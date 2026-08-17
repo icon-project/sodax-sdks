@@ -1,5 +1,6 @@
 import type {
   EvmRawTransaction,
+  GetWalletProviderType,
   Hex,
   IEvmWalletProvider,
   IStellarWalletProvider,
@@ -22,7 +23,6 @@ export type ApprovalPlan = {
   readonly resetTx?: RawTxReturnType;
 };
 
-/** Names the transaction in an error, so a revert says which of the two steps failed. */
 type ApprovalStep = 'allowance reset' | 'approve';
 
 /**
@@ -33,18 +33,12 @@ type ApprovalStep = 'allowance reset' | 'approve';
 const isRevertedEvmReceiptStatus = (status: string | undefined): boolean => status === 'reverted' || status === '0x0';
 
 /**
- * Broadcasts an approval plan in the only order that can work, waiting for each transaction to be
- * mined before the next is sent.
+ * Broadcasts an approval plan in the only order that can work: `resetTx` mined first, then the
+ * approve, which is not a valid state transition until the allowance has been zeroed on-chain.
  *
- * A source token of the 2017 TetherToken lineage rejects an allowance change from one non-zero value
- * to another, so a backend approve route can hand back a **reset** transaction that must be mined
- * **before** the approve is even a valid state transition. Broadcasting them out of order, or without
- * waiting, spends the user's gas on a transaction that is certain to revert.
- *
- * Shared by the swaps and bridge approve-and-broadcast hooks: the two differ only in which route
- * produced the plan, never in how it must be sent, so keeping one implementation is what stops the
- * ordering from being re-derived (and mis-derived) per feature. `hookName` prefixes the errors so a
- * caller still learns which hook failed.
+ * Not a pure helper like its neighbours here — it signs and sends through the caller's wallet
+ * provider — but it is framework-free, and shared by the swaps and bridge approve-and-broadcast
+ * hooks so the ordering is not re-derived per feature. `hookName` prefixes the errors.
  *
  * Supports the chains a SODAX approve route can act on — the hub (Sonic), EVM spokes, and Stellar.
  * Every other chain reports its allowance as always sufficient, so approval never runs for it.
@@ -57,18 +51,16 @@ export async function runApprovalPlan({
 }: {
   plan: ApprovalPlan;
   srcChainKey: SpokeChainKey;
-  walletProvider: unknown;
+  walletProvider: GetWalletProviderType<SpokeChainKey>;
   hookName: string;
 }): Promise<ApprovalHashes> {
-  // Broadcast and wait as one step: the next transaction is only valid once this one has landed, so
-  // returning before confirmation would hand the caller back the same ordering hazard.
+  // Coupled deliberately: returning before confirmation would hand the ordering hazard back to the caller.
   const sendAndWait = async (raw: RawTxReturnType, step: ApprovalStep): Promise<string> => {
     if (isHubChainKeyType(srcChainKey) || isEvmSpokeOnlyChainKeyType(srcChainKey)) {
       const evm = walletProvider as IEvmWalletProvider;
       const hash = await evm.sendTransaction(raw as EvmRawTransaction);
       const receipt = await evm.waitForTransactionReceipt(hash as Hex);
-      // Mined is not the same as succeeded: a paused or blacklisted token reverts on-chain, and
-      // waiting alone would let the next transaction go out over an allowance that never moved.
+      // Mined is not succeeded: a revert here would let the approve go out over an unmoved allowance.
       if (isRevertedEvmReceiptStatus(receipt.status)) {
         throw new Error(`[${hookName}] the ${step} transaction ${hash} reverted on chain.`);
       }
@@ -94,8 +86,8 @@ export async function runApprovalPlan({
     );
   };
 
-  // A throw here aborts before the approve is sent, which is the point: an unconfirmed reset leaves
-  // the allowance untouched, so a retry re-plans and costs a single transaction.
+  // A throw aborts before the approve is sent: an unconfirmed reset leaves the allowance untouched,
+  // so a retry re-plans and costs a single transaction.
   const resetTxHash = plan.resetTx === undefined ? undefined : await sendAndWait(plan.resetTx, 'allowance reset');
   const approveTxHash = await sendAndWait(plan.tx, 'approve');
 

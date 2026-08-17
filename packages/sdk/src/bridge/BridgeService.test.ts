@@ -1147,9 +1147,7 @@ describe('Sodax bridge.useBackendSubmitTx wiring', () => {
 });
 
 // =========================================================================
-// buildApproveTxs: the unsigned entry point the bridge API calls. The only logic this layer owns
-// is resolving the spender, so that is what is asserted — the ordering of the plan itself is
-// covered in SpokeService.test.ts.
+// buildApproveTxs — spender resolution, the only logic this layer owns
 // =========================================================================
 
 describe('BridgeService.buildApproveTxs', () => {
@@ -1172,9 +1170,8 @@ describe('BridgeService.buildApproveTxs', () => {
     }) as BridgeParams<K, true>;
 
   it("approves the caller's own hub wallet on the hub (Sonic), not the swaps intents contract", async () => {
-    // The single most copy-prone line in this method: SwapService resolves the hub spender
-    // synchronously from `solver.intentsContract`, bridge resolves it per-user and asynchronously.
-    // Reusing the swaps resolver here would approve the wrong contract and still typecheck.
+    // Swaps resolves the hub spender synchronously from `solver.intentsContract`; reusing that here
+    // would approve the wrong contract and still typecheck.
     vi.spyOn(sodax.bridge.hubProvider, 'getUserHubWalletAddress').mockResolvedValueOnce(HUB_WALLET);
     vi.spyOn(sodax.bridge.spoke, 'buildApproveTxs').mockResolvedValueOnce({ ok: true, value: { approveTx: rawTx } });
 
@@ -1203,8 +1200,7 @@ describe('BridgeService.buildApproveTxs', () => {
   });
 
   it('resolves the same spender as approve() does, on both EVM branches', async () => {
-    // `approve` and `buildApproveTxs` share `resolveEvmApprovalSpender` precisely so these can never
-    // diverge; this pins the property rather than the shared call, so an inlined copy would fail it.
+    // Pins the property, not the shared call, so an inlined copy of the resolver would fail it.
     vi.spyOn(sodax.bridge.hubProvider, 'getUserHubWalletAddress').mockResolvedValue(HUB_WALLET);
     const buildSpy = vi
       .spyOn(sodax.bridge.spoke, 'buildApproveTxs')
@@ -1283,10 +1279,8 @@ describe('BridgeService.buildApproveTxs', () => {
   });
 
   it('ignores a raw:false forced past the type system and still builds unsigned', async () => {
-    // `BridgeParams<K, true>` rejects `raw: false` at compile time, but a JavaScript caller can still
-    // pass it. `raw` must be forced rather than carried through: `requestTrustlineForApproval` on the
-    // Stellar branch reads it at runtime, so carrying it would have this method BROADCAST — from
-    // something named "build". Same hazard SpokeService.buildApproveTxs documents.
+    // A JavaScript caller can still pass `raw: false`, and the Stellar branch reads it at runtime —
+    // carrying it through would have a method named "build" broadcast.
     const buildSpy = vi
       .spyOn(sodax.bridge.spoke, 'buildApproveTxs')
       .mockResolvedValue({ ok: true, value: { approveTx: rawTx } });

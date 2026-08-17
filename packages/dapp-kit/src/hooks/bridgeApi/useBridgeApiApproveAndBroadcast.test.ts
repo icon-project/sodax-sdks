@@ -1,8 +1,6 @@
 /**
  * The bridge API can return two approval transactions, and the second is only a valid state
- * transition once the first has been mined. That ordering is what this hook exists to own — the
- * swaps side of the same problem was re-implemented (and mis-implemented) in two separate apps
- * before its hook existed.
+ * transition once the first has been mined. That ordering is what this hook exists to own.
  *
  * Follows the package convention of testing hooks without a renderer: the React Query wrapper is
  * mocked so `mutationFn` can be captured and driven directly.

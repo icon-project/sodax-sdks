@@ -54,8 +54,7 @@ export const BridgeAllowanceCheckResponseSchema = v.object({
 /**
  * POST /bridge/approve (`BridgeApproveResponseV2`). Parameterized by the chain-specific
  * `tx` schema (see `rawTxSchemaForChainKey`) so `tx` is validated and transformed to its
- * domain variant. `resetTx` rides the same schema and is present only when the source token
- * needs its stale allowance zeroed first (the TetherToken lineage) — broadcast it before `tx`.
+ * domain variant. `resetTx` rides the same schema — see `BridgeApproveResponseV2` for when it appears.
  */
 export const makeBridgeApproveResponseSchema = (txSchema: v.GenericSchema<unknown, RawTxReturnType>) =>
   v.object({ tx: txSchema, resetTx: v.optional(txSchema) });
