@@ -12,7 +12,8 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.USDT,
     spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.wS,
     spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.SODA,
-    // spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.USSD, // NOTE: Not Implemented
+    // USSD is staging-only for now (see stagingSwapSupportedTokens); promote it here once the
+    // production solver fills it.
     // sodaSUSDS is staging-only; sodaUSDS / sodaUSSD are parked until the solver fills them
     ...Object.values(SodaTokens).filter(
       t => t !== SodaTokens.sodaSUSDS && t !== SodaTokens.sodaUSDS && t !== SodaTokens.sodaUSSD,
@@ -260,7 +261,10 @@ export const swapSupportedTokens = {
 // their target environment — validation accepts either (see `isSwapSupportedToken`).
 // Derived from the production solver oracle (tokens absent there).
 export const stagingSwapSupportedTokens = {
-  [ChainKeys.SONIC_MAINNET]: [SodaTokens.sodaSUSDS] as const satisfies XToken[],
+  [ChainKeys.SONIC_MAINNET]: [
+    SodaTokens.sodaSUSDS,
+    spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.USSD,
+  ] as const satisfies XToken[],
   [ChainKeys.AVALANCHE_MAINNET]: [],
   [ChainKeys.ARBITRUM_MAINNET]: [],
   [ChainKeys.BASE_MAINNET]: [
