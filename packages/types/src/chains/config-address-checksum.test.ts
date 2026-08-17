@@ -30,7 +30,7 @@ function collectEvmAddresses(root: Record<string, unknown>): { path: string; val
     visited.add(value);
 
     if (Array.isArray(value)) {
-      value.forEach((entry, index) => walk(entry, `${path}[${index}]`));
+      for (const [index, entry] of value.entries()) walk(entry, `${path}[${index}]`);
       return;
     }
     for (const [key, entry] of Object.entries(value)) walk(entry, `${path}.${key}`);
