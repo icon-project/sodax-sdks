@@ -58,14 +58,14 @@ import type { BridgeApiOrder } from '@/components/bridge-api/OrderStatus';
 import { BRIDGE_API_CONFIG } from '@/components/bridge-api/lib/config';
 import { isSignableBridgeApiChain, signAndBroadcastBridgeApiTx } from '@/components/bridge-api/lib/signAndBroadcast';
 
-/** One-line label for the approval step the wallet is on, or `null` once that step has landed. */
+/** Short button label for the step the wallet is on, or `null` once that step has landed. */
 function approvalStepLabel({ step, phase, index, total }: ApprovalProgress): string | null {
   if (phase !== 'signing' && phase !== 'broadcast') return null;
 
-  const position = total > 1 ? ` ${index}/${total}` : '';
-  const what = step === 'allowance-reset' ? 'Clearing old allowance' : 'Approving';
+  const counter = total > 1 ? ` (${index}/${total})` : '';
+  const [action, pending] = step === 'allowance-reset' ? ['Reset approval', 'Resetting…'] : ['Approve', 'Approving…'];
 
-  return `${what}${position} — ${phase === 'signing' ? 'sign in your wallet' : 'waiting for confirmation'}`;
+  return `${phase === 'signing' ? action : pending}${counter}`;
 }
 
 /**
@@ -643,7 +643,15 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
                 onClick={handleApprove}
                 disabled={isAllowanceLoading || hasAllowance || isApproving}
               >
-                {isApproving ? (approvalStep ?? 'Approving…') : hasAllowance ? 'Approved' : 'Approve'}
+                {isApproving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {approvalStep ?? 'Approving…'}
+                  </>
+                ) : hasAllowance ? (
+                  'Approved'
+                ) : (
+                  'Approve'
+                )}
               </Button>
             )}
 
