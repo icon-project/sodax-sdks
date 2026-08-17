@@ -18,15 +18,23 @@
 # skills package never trigger the gate. Escape hatch: the 'docs-not-needed'
 # PR label (checked by the workflow, not here).
 #
-# Usage: check-docs-drift.sh <base-ref>   e.g. check-docs-drift.sh origin/main
+# Usage: check-docs-drift.sh <base-ref> [head-ref]
+#   e.g. check-docs-drift.sh origin/main
+#        check-docs-drift.sh "$BASE_SHA" "$HEAD_SHA"
+#
+# Pass the PR head SHA as the second argument in CI. actions/checkout on
+# pull_request defaults to the merge commit, so diffing base...HEAD would
+# include every commit that landed on the base branch after this PR opened.
 
 set -euo pipefail
 
-BASE_REF="${1:?usage: check-docs-drift.sh <base-ref>}"
+BASE_REF="${1:?usage: check-docs-drift.sh <base-ref> [head-ref]}"
+HEAD_REF="${2:-HEAD}"
+RANGE="$BASE_REF...$HEAD_REF"
 MAP_FILE="scripts/gitbook-sync-map.json"
 
 # quotePath=false: C-quoted (non-ASCII) paths would dodge the ^packages/ anchors.
-CHANGED=$(git -c core.quotePath=false diff --name-only "$BASE_REF"...HEAD)
+CHANGED=$(git -c core.quotePath=false diff --name-only "$RANGE")
 
 PKGS=$(echo "$CHANGED" \
   | grep -E '^packages/[^/]+/src/' \
@@ -65,7 +73,7 @@ is_mirrored() {
 
 # A new feature page that is not in the map will never be copied downstream.
 ADDED_SDK_DOCS=$(git -c core.quotePath=false diff --name-only --diff-filter=A \
-  "$BASE_REF"...HEAD -- 'packages/sdk/docs' || true)
+  "$RANGE" -- 'packages/sdk/docs' || true)
 UNMAPPED_NEW=""
 while IFS= read -r added; do
   [ -z "$added" ] && continue

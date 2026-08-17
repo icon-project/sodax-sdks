@@ -34,10 +34,11 @@ jobs:
         # never interpolated into the script (GitHub script-injection hardening).
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           SKIP: ${{ contains(github.event.pull_request.labels.*.name, 'docs-not-needed') }}
         run: |
           if [ "$SKIP" = "true" ]; then
             echo "docs-not-needed label present — Docs Drift skipped."
             exit 0
           fi
-          bash .github/scripts/check-docs-drift.sh "$BASE_SHA"
+          bash .github/scripts/check-docs-drift.sh "$BASE_SHA" "$HEAD_SHA"
