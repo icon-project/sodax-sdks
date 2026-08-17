@@ -4,7 +4,8 @@
 # Docs signals, in order of checking:
 #   1. Global: packages/skills/**, packages/sdk/docs/**, or root docs/** touched.
 #   2. Per package: its README.md touched.
-#   3. Per package: JSDoc lines added in its source diff.
+#   3. Per package: JSDoc lines added in its runtime source diff
+#      (test / e2e files excluded — the same filters as the trigger).
 #
 # Test files and the docs-only skills package never trigger the gate.
 # Escape hatch: the 'docs-not-needed' PR label (checked by the workflow, not here).
@@ -46,7 +47,19 @@ for PKG in $PKGS; do
   if echo "$CHANGED" | grep -qxF "packages/$PKG/README.md"; then
     continue
   fi
-  if git diff "$BASE_REF"...HEAD -- ":(literal)packages/$PKG/src" \
+  # Same test/e2e exclusions as PKGS: a new *.test.ts with a /** header must
+  # not count as user-facing docs for a runtime source change.
+  if git diff "$BASE_REF"...HEAD -- \
+        ":(literal)packages/$PKG/src" \
+        ':(exclude,glob)**/*.test.ts' \
+        ':(exclude,glob)**/*.test.tsx' \
+        ':(exclude,glob)**/*.test.mts' \
+        ':(exclude,glob)**/*.test.cts' \
+        ':(exclude,glob)**/*.spec.ts' \
+        ':(exclude,glob)**/*.spec.tsx' \
+        ':(exclude,glob)**/*.spec.mts' \
+        ':(exclude,glob)**/*.spec.cts' \
+        ':(exclude,glob)**/e2e-tests/**' \
       | grep -qE '^\+\s*(/\*\*|\*\s*@(param|returns|example|remarks|see|throws|deprecated))'; then
     continue
   fi
