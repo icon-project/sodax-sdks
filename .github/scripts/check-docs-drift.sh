@@ -15,7 +15,8 @@ set -euo pipefail
 
 BASE_REF="${1:?usage: check-docs-drift.sh <base-ref>}"
 
-CHANGED=$(git diff --name-only "$BASE_REF"...HEAD)
+# quotePath=false: C-quoted (non-ASCII) paths would dodge the ^packages/ anchors.
+CHANGED=$(git -c core.quotePath=false diff --name-only "$BASE_REF"...HEAD)
 
 PKGS=$(echo "$CHANGED" \
   | grep -E '^packages/[^/]+/src/' \
@@ -35,10 +36,17 @@ fi
 
 MISSING=""
 for PKG in $PKGS; do
-  if echo "$CHANGED" | grep -q "^packages/$PKG/README.md$"; then
+  # Fail closed on unexpected names (regex metacharacters, split fragments of
+  # a space-containing path): never let a crafted directory skew the checks.
+  if ! [[ "$PKG" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+    MISSING="$MISSING $PKG"
     continue
   fi
-  if git diff "$BASE_REF"...HEAD -- "packages/$PKG/src" \
+  # -F: PKG must never be interpreted as a regex.
+  if echo "$CHANGED" | grep -qxF "packages/$PKG/README.md"; then
+    continue
+  fi
+  if git diff "$BASE_REF"...HEAD -- ":(literal)packages/$PKG/src" \
       | grep -qE '^\+\s*(/\*\*|\*\s*@(param|returns|example|remarks|see|throws|deprecated))'; then
     continue
   fi

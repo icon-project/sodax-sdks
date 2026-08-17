@@ -4,6 +4,10 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
 
+# The job only reads the repo; never grant the default (potentially write) token.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -21,8 +25,15 @@ jobs:
         with:
           # Full history: the check diffs against the PR base branch.
           fetch-depth: 0
+          # The drift step runs the PR's version of the check script;
+          # keep the token out of .git/config. Anonymous fetch works (public repo).
+          persist-credentials: false
 
       - name: Check for documentation drift
+        # Env indirection: expressions expand before shell parsing, so refs are
+        # never interpolated into the script (GitHub script-injection hardening).
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          git fetch origin "${{ github.base_ref }}"
-          bash .github/scripts/check-docs-drift.sh "origin/${{ github.base_ref }}"
+          git fetch origin "$BASE_REF"
+          bash .github/scripts/check-docs-drift.sh "origin/$BASE_REF"
