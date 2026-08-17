@@ -1,0 +1,28 @@
+name: Docs Drift
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs-drift:
+    name: Docs ship with code
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Maintainer-applied escape hatch for PRs with no user-facing change.
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'docs-not-needed') }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+        with:
+          # Full history: the check diffs against the PR base branch.
+          fetch-depth: 0
+
+      - name: Check for documentation drift
+        run: |
+          git fetch origin "${{ github.base_ref }}"
+          bash .github/scripts/check-docs-drift.sh "origin/${{ github.base_ref }}"
