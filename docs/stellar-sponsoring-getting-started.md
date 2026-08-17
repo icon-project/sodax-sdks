@@ -120,7 +120,7 @@ curl --fail-with-body -X POST https://api.sodax.com/v1/sponsorships/stellar/acco
 
 Interactive OpenAPI/swagger reference: https://api.sodax.com/v1/sponsorships/docs
 
-Without the SDK, you build that XDR yourself: a "sponsorship sandwich" of `beginSponsoringFutureReserves` (sponsor) → `createAccount` with `startingBalance: 0` (sponsor) → `endSponsoringFutureReserves` (the new account), using the fee band, network passphrase, and time bounds returned by `/config` — then have the new account sign it before POSTing. `sodax.sponsoring.activateStellarAccount` does exactly this construction for you, which is the main reason to prefer it over this path.
+Without the SDK, you build that XDR yourself: a "sponsorship sandwich" of `beginSponsoringFutureReserves` (sponsor) → `createAccount` with `startingBalance` from `/config` (currently `"0"`) (sponsor) → `endSponsoringFutureReserves` (the new account), using the fee band, network passphrase, and time bounds also returned by `/config` — then have the new account sign it before POSTing. `sodax.sponsoring.activateStellarAccount` does exactly this construction for you, which is the main reason to prefer it over this path.
 
 The `accounts` response is one of two shapes — `{ hash: string, alreadyActive: false }` for a submitted activation, or `{ hash: null, alreadyActive: true }` when the account already existed. Both are success. A TypeScript caller who wants to build the XDR by hand (as above) but skip raw `curl`/`fetch` boilerplate can call the same two operations through `sodax.api.sponsoring` — it's a typed wire client, not an orchestrator, so it still leaves the XDR construction, config caching, and retry policy to the caller.
 
