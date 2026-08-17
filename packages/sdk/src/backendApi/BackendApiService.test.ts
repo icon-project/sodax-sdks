@@ -171,6 +171,22 @@ describe('BackendApiService.getIntentByTxHash', () => {
     }
   });
 
+  // `SwapService.resolveSolverStatus` branches on exactly this: a 404 is the backend answering "no
+  // record", which lets a solver NOT_FOUND stand as a definitive miss, while any other failure leaves
+  // it unverified. The status therefore has to survive into `context`, and nothing else pins that.
+  it('lifts the HTTP status into error context on 404, so callers can tell a definitive miss apart', async () => {
+    mockFetch.mockResolvedValueOnce(httpErrorResponse(404, 'Not Found'));
+
+    const result = await sodax.backendApi.getIntentByTxHash(SAMPLE_TX_HASH);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const err = result.error as SodaxError;
+      expect(err.context?.status).toBe(404);
+      expect(err.context?.api).toBe('backend');
+    }
+  });
+
   it('returns ok:false wrapping a non-AbortError network error as EXTERNAL_API_ERROR (original on cause)', async () => {
     const networkError = new Error('Network down');
     mockFetch.mockRejectedValueOnce(networkError);
