@@ -4,17 +4,16 @@ Describe what you have done and which # issue this PR closes.
 
 ## Documentation
 
-<!-- Required for PRs touching package source. The "Docs Drift" CI check
-     enforces that at least one docs surface changed alongside the code.
-     See CONTRIBUTING.md#documentation for where docs live and how to write. -->
+<!-- Docs Drift (job "Docs ship with code") requires a publishable site
+     surface: a file in scripts/gitbook-sync-map.json, the package README,
+     or packages/<pkg>/docs/. JSDoc does not pass. packages/skills is
+     partner-agent docs, not this gate — see CONTRIBUTING.md#documentation. -->
 
 **Which docs did you update?** (check all that apply)
 
-- [ ] Module docs in `packages/sdk/docs/` (file: ______)
-- [ ] Package `README.md`
-- [ ] `packages/skills` (AI docs) — and `pnpm check:ai` passes locally
-- [ ] JSDoc on new/changed exports
-- [ ] None needed — no user-facing change (explain below)
+- [ ] Mirrored module docs in `packages/sdk/docs/` (file listed in `scripts/gitbook-sync-map.json`: ______)
+- [ ] Package `README.md` or `packages/<pkg>/docs/`
+- [ ] None needed — no user-facing change (explain below; needs the `docs-not-needed` label)
 
 **If "none needed", why?**
 
@@ -28,5 +27,6 @@ Describe what you have done and which # issue this PR closes.
 - [ ] I have added tests that prove my fix is effective or that my feature works
 - [ ] I have run the unit tests
 - [ ] If this adds, renames, or removes a mirrored doc, `scripts/gitbook-sync-map.json` and `sodax-document/sync-sodax-sdks.sh` were updated together
+- [ ] If this changes a public API partners call, `packages/skills` was updated and `pnpm check:ai` passes (partner-agent docs — not Docs Drift)
 - [ ] I only have one commit (if not, squash them into one commit).
 - [ ] I have a descriptive commit message that adheres to the [commit message guidelines](https://www.conventionalcommits.org/en/v1.0.0/)

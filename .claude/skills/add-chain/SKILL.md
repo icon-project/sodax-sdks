@@ -33,7 +33,8 @@ Each ✓ feature then drives its own touch points (e.g. money-market token wirin
 A chain *can* reach **every package** — but edit each **only when the family + feature matrix requires it** (`libs` only for a build workaround; `dapp-kit` only for a special gate). Checklist:
 - `types` · `libs` (only if build workaround) · `sdk` · `wallet-sdk-core` · `wallet-sdk-react`
 - `dapp-kit` — usually nothing (chain-agnostic); only a special-need hook (NEAR storage / Stellar trustline).
-- **`packages/skills`** — the **largest footprint and easiest to forget** (consumer docs). Update the skill knowledge that references chains (esp. `sodax-wallet-sdk-react`: config / hooks / imports / checklist), then run `pnpm check:ai`.
+- **`packages/skills`** — partner-facing agent docs (how integrators call the SDK), not the feature-introduction path. After the chain is wired, update the skill knowledge that references chains (esp. `sodax-wallet-sdk-react`: config / hooks / imports / checklist), then run `pnpm check:ai`. This does not satisfy Docs Drift.
+- **Mirrored docs** — Docs Drift CI requires a publishable site signal for every package whose `src/` changed. Update `packages/sdk/docs/WALLET_PROVIDERS.md` (and any other mapped feature doc the chain enables) plus the affected package README / `packages/wallet-sdk-react/docs/`. JSDoc is not enough. A new `packages/sdk/docs/` page must be added to `scripts/gitbook-sync-map.json` and `sodax-document/sync-sodax-sdks.sh`.
 - **apps** — `apps/node/src/<chain>.ts` smoke script; wire the chain into the demo / example apps that surface chains (e.g. `apps/demo`, `apps/wallet-modal-example`) as relevant.
 
 ## Per-family quirks — check these 4 dimensions for YOUR non-EVM chain
@@ -112,8 +113,10 @@ pnpm build:packages && pnpm checkTs
 pnpm test                            # unit — NOTE: excludes apps/node AND sdk e2e-tests
 pnpm --filter @sodax/sdk test:e2e    # the e2e you updated is a SEPARATE runner
 # apps/node `test` is a no-op → run the chain's smoke directly, e.g. tsx apps/node/src/<chain>.ts
-pnpm check:ai                        # ONLY if you changed packages/skills consumer docs
+pnpm check:ai                        # required when packages/skills consumer docs changed
 pnpm check:ai-dev-files
+# Docs Drift: a mirrored doc / package README / packages/<pkg>/docs/ must land with src/ changes
+# (or a maintainer applies the docs-not-needed label). JSDoc does not pass the gate.
 ```
 `pnpm test` does NOT cover `e2e-tests` or `apps/node` — run `test:e2e` and the smoke script explicitly.
 

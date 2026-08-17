@@ -33,10 +33,11 @@ Mintlify). Never edit the docs site or the synced copies directly.
 
 | You changed…                                                          | Update…                                                                    |
 | --------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| A functional module (swaps, money market, bridge, staking, migration, leverage yield) | The matching file in `packages/sdk/docs/` (e.g. `SWAPS.md`)                |
+| A functional module (swaps, money market, bridge, staking, migration, leverage yield) | The matching *mirrored* file in `packages/sdk/docs/` (e.g. `SWAPS.md`, listed in `scripts/gitbook-sync-map.json`) |
 | The public API of any package                                          | That package's `README.md`                                                  |
-| Anything AI agents implement against (features, signatures, examples)  | `packages/skills` — then run `pnpm check:ai`                                |
-| Exported types or function signatures                                  | JSDoc on the exports themselves                                             |
+| Exported types or function signatures                                  | JSDoc on the exports themselves (does not satisfy Docs Drift)               |
+
+`packages/skills` is **not** where we introduce a feature. It is the partner-facing agent bundle — how integrators' coding agents call APIs we already shipped. Update it when a public API, example, or chain/token surface changes so their agents stay correct, then run `pnpm check:ai`. That does not publish to docs.sodax.com and does not satisfy Docs Drift. How *we* add features lives in `.claude/skills/` (`add-feature`, `add-chain`, …).
 
 ### How to write
 
@@ -48,9 +49,9 @@ Mintlify). Never edit the docs site or the synced copies directly.
   existing section rather than adding a new one at the bottom.
 - **Keep headings stable.** The downstream sync and inbound links rely on them.
   If you must rename one, call it out in your PR description.
-- **JSDoc counts.** For small API additions, a thorough JSDoc block on the
-  export is legitimate documentation. Use your judgment: if a user would need to
-  read source to use the feature, it needs a markdown doc too.
+- **JSDoc is still required on public exports**, but it does **not** satisfy
+  CI. If a user would need to read source to use the feature, it needs a
+  markdown page that is listed in `scripts/gitbook-sync-map.json`.
 
 ### Mirrored docs and the Mintlify site
 
@@ -67,24 +68,37 @@ docs.sodax.com. For those files:
   `https://github.com/icon-project/sodax-sdks/blob/main/…` URL.
 - **Adding, renaming, or removing a mirrored doc?** Update
   `scripts/gitbook-sync-map.json` and `sodax-document/sync-sodax-sdks.sh`
-  together — the script is the upstream authority.
+  together — the script is the upstream authority — and add or remove the
+  Mintlify nav entry in sodax-document. A new `packages/sdk/docs/` page that
+  is not in the map will fail Docs Drift, because the sync whitelist would
+  never copy it.
+
+Some `packages/sdk/docs/` pages are intentionally **not** mirrored (`DEX.md`,
+`SPONSORING.md`, `SWAPS_API.md`, `BRIDGE_API.md`, `LOGGING.md`,
+`ARCHITECTURE_REFACTOR_SUMMARY.md`). Editing them does not satisfy Docs Drift.
+To publish one, add it to the map and the sync script.
 
 ### What CI enforces
 
-- The **Docs Drift** check fails any PR that changes package source without
-  touching a docs surface (`packages/sdk/docs/`, a package `README.md`,
-  `packages/skills`, root `docs/`, or JSDoc in the diff). If your PR genuinely
-  has no user-facing change, ask a maintainer to apply the `docs-not-needed`
-  label.
+- The **Docs Drift** check (job name **Docs ship with code**) fails any PR
+  that changes package `src/` without a *publishable* docs signal: a file
+  listed in `scripts/gitbook-sync-map.json`, the package `README.md`, or
+  `packages/<pkg>/docs/` (non-sdk packages). JSDoc, unmirrored sdk/docs
+  pages, and `packages/skills` do not count. If your PR genuinely has no
+  user-facing change, ask a maintainer to apply the `docs-not-needed` label.
 - `pnpm check:ai` validates that snippets and imports in `packages/skills`
-  match the real source.
+  match the real source (partner-agent docs, separate from Docs Drift).
 - `pnpm check:doc-links` validates links in mirrored docs.
+
+Publication to docs.sodax.com is a next-day pull from `sodax-document` (daily
+cron plus a manual **Run workflow** button). Nothing goes live until a human
+merges the sync PR.
 
 ### When docs genuinely aren't needed
 
 Refactors, test-only changes, and internal tooling don't need docs. Say so
 explicitly in the PR's Documentation section — "no user-facing change" is a
-perfectly good answer. Silence isn't.
+perfectly good answer — and get the `docs-not-needed` label. Silence isn't.
 
 ## Issue reports
 

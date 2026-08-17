@@ -45,7 +45,8 @@ If consumers call it from React, add a `packages/dapp-kit/src/hooks/<feature>/` 
 
 ## Tests & docs
 - `<Feature>Service.test.ts` for core flows, invariants, and edge cases; add an `e2e-tests/` entry if the flow is cross-chain.
-- Update `packages/sdk/docs/` and the consumer skills in `packages/skills` **only when public SDK behavior, imports, signatures, or examples changed** — then run `pnpm check:ai`.
+- **Docs Drift CI** fails the PR unless a *publishable* site doc changed (JSDoc is not enough). Update the matching file in `packages/sdk/docs/` that is listed in `scripts/gitbook-sync-map.json` (e.g. `SWAPS.md`). A brand-new page must be added to that map **and** to `sodax-document/sync-sodax-sdks.sh` (copy_file + frontmatter) **and** to the Mintlify nav in sodax-document, or it will never appear on docs.sodax.com.
+- **`packages/skills` is separate** — it teaches *partner* agents how to call the public API, not how we add the feature. After the feature is wired, update the consumer skills so integrators' agents can use it, then run `pnpm check:ai`. That does not satisfy Docs Drift.
 
 ## Verify
 - `cd packages/sdk && pnpm test && pnpm checkTs` (and `pnpm test:e2e` if you added a cross-chain e2e).

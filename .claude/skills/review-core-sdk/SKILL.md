@@ -16,6 +16,7 @@ description: 'Use when reviewing a change, diff, or PR to the SODAX core SDK (pa
 - `pnpm checkTs` · `pnpm lint` · `pnpm --filter @sodax/sdk test` (add `pnpm --filter @sodax/sdk test:e2e` if cross-chain logic changed; run the `apps/node` smoke script for the affected chain when relevant).
 - `pnpm check:ai-dev-files`, and `pnpm check:ai` if `packages/skills` changed.
 - `pnpm check:doc-links` if the diff touches a doc listed in `scripts/gitbook-sync-map.json` (`packages/sdk/docs/**`, package READMEs, `docs/ai-integration-guide.md`).
+- Docs Drift (job **Docs ship with code**): package `src/` changes need a *mirrored* doc (`scripts/gitbook-sync-map.json`), the package README, or `packages/<pkg>/docs/` (non-sdk). JSDoc, unmirrored sdk/docs pages, and `packages/skills` do not count. A new `packages/sdk/docs/` page must be in the map. The `docs-not-needed` label is the only skip.
 - The Security workflow runs gitleaks + Semgrep — a new hardcoded `0x`+64-hex key or other secret is a hard reject.
 
 ## 3. Review dimensions
@@ -26,7 +27,7 @@ Walk the diff against each:
 - **Source-derived config** — no chain/token lists hardcoded in feature code; config flows through `ConfigService` / `@sodax/types`.
 - **Tests** — new behavior has meaningful tests beside it (flows, invariants, edge cases, chain/feature matrix); no `.only` / `.skip` (lint blocks these); a new EVM spoke is added to `TEST_CHAINS`.
 - **Established pattern** — token / chain / wallet / feature work used the matching skill (`add-token` / `add-chain` / `add-wallet-provider` / `add-feature`), not ad-hoc wiring.
-- **AI docs faithful** — public behavior, imports, signatures, examples, chains, or tokens changed ⇒ `packages/skills` updated and `pnpm check:ai` green.
+- **AI docs faithful** — public behavior, imports, signatures, examples, chains, or tokens changed ⇒ `packages/skills` updated (partner-agent surface, not Docs Drift) and `pnpm check:ai` green.
 - **GitBook-safe doc links** — in a mirrored doc, a relative link is only valid when the target is mirrored into the same directory under the same name; anything else needs an absolute `sodax-sdks/blob/main/…` URL, never a `sodax-document` one.
 
 ## 4. Verdict
