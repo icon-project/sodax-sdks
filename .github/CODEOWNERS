@@ -1,7 +1,4 @@
-# CI enforcement is security-sensitive: a PR can rewrite workflow YAML, and
-# GitHub runs the merge-commit copy on pull_request. The Docs Drift job pins
-# the check script to the base branch; these owners still have to review
-# workflow/script changes so the pin itself cannot be removed unnoticed.
+# PRs can rewrite workflow YAML; owners must review .github CI changes.
 .github/workflows/ @icon-project/frontend-write
 .github/scripts/ @icon-project/frontend-write
 .github/CODEOWNERS @icon-project/frontend-write

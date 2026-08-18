@@ -1,38 +1,6 @@
 #!/usr/bin/env bash
-# Fails when package runtime source changed without a docs surface that can
-# reach docs.sodax.com (or in-repo package docs for packages that are not
-# mirrored as a docs tree).
-#
-# Docs signals, in order of checking, per changed package:
-#   1. A changed file listed in scripts/gitbook-sync-map.json whose src is
-#      under packages/<pkg>/, or under packages/sdk/docs/ (feature pages
-#      document types/sdk/dapp-kit changes). An unrelated mapped file
-#      (e.g. packages/skills/README.md) does not satisfy another package.
-#   2. That package's README.md added or updated (not deleted).
-#   3. Per package (except sdk): packages/<pkg>/docs/ added or updated.
-#      packages/sdk/docs/ only counts via (1) — unmirrored pages such as
-#      DEX.md / LOGGING.md do not satisfy the gate.
-#
-# A newly added or renamed packages/sdk/docs/**/*.md must be listed in the
-# map, or it will never be copied by sodax-document (that repo copies every
-# mapped src). Every mapped src must exist at the head ref. These map checks
-# run even on docs-only PRs (no package src change).
-#
-# JSDoc and packages/skills are not signals. Deleting a README, mapped page,
-# or packages/<pkg>/docs/ file is not a signal. Test files and the docs-only
-# skills package never trigger the gate. Escape hatch: the 'docs-not-needed'
-# PR label (checked by the workflow, not here).
-#
+# Fail PRs that change packages/*/src without a related mapped doc, README, or packages/<pkg>/docs/.
 # Usage: check-docs-drift.sh <base-ref> [head-ref]
-#   e.g. check-docs-drift.sh origin/main
-#        check-docs-drift.sh "$BASE_SHA" "$HEAD_SHA"
-#
-# Pass the PR head SHA as the second argument in CI. actions/checkout on
-# pull_request defaults to the merge commit, so diffing base...HEAD would
-# include every commit that landed on the base branch after this PR opened.
-#
-# CI runs this file from the PR base SHA when it exists there (see
-# docs-drift.yml) so a PR cannot no-op the gate by editing this script.
 
 set -euo pipefail
 
@@ -41,10 +9,10 @@ HEAD_REF="${2:-HEAD}"
 RANGE="$BASE_REF...$HEAD_REF"
 MAP_FILE="scripts/gitbook-sync-map.json"
 
-# quotePath=false: C-quoted (non-ASCII) paths would dodge the ^packages/ anchors.
+# Without this, non-ASCII paths are C-quoted and miss the ^packages/ anchors.
 CHANGED=$(git -c core.quotePath=false diff --name-only "$RANGE")
-# ACMR = added, copied, modified, renamed. Deletions must not count as docs.
-CHANGED_SIGNALS=$(git -c core.quotePath=false diff --name-only --diff-filter=ACMR "$RANGE")
+# ACMR = added/copied/modified/renamed. Deletions are not a docs signal.
+UPDATED=$(git -c core.quotePath=false diff --name-only --diff-filter=ACMR "$RANGE")
 
 PKGS=$(echo "$CHANGED" \
   | grep -E '^packages/[^/]+/src/' \
@@ -52,8 +20,6 @@ PKGS=$(echo "$CHANGED" \
   | grep -v '/e2e-tests/' \
   | cut -d/ -f2 | sort -u | grep -vx 'skills' || true)
 
-# A new or renamed feature page that is not in the map will never be copied
-# downstream. --diff-filter=A misses git mv (R); copies show up as A by default.
 NEW_OR_RENAMED_SDK_DOCS=$(git -c core.quotePath=false diff --name-only --diff-filter=AR \
   "$RANGE" -- 'packages/sdk/docs' || true)
 
@@ -61,9 +27,8 @@ is_mirrored() {
   printf '%s\n' "$MIRRORED_SRCS" | grep -qxF "$1"
 }
 
-# A mapped file only counts for the package it lives in, or for any package
-# when it is an SDK feature page (token/chain/API work is documented there).
-mirrored_satisfies_pkg() {
+# Mapped file for this package, or any mapped packages/sdk/docs/ page (covers types/sdk/dapp-kit).
+covers_pkg() {
   local path="$1" pkg="$2"
   is_mirrored "$path" || return 1
   case "$path" in
@@ -84,8 +49,6 @@ load_map() {
     exit 1
   fi
 
-  # Read the map from HEAD_REF (the PR head), not the merge-commit working tree.
-  # Reject newlines/NUL in src so a crafted JSON string cannot split grep -qxF.
   MIRRORED_SRCS=$(git show "$HEAD_REF:$MAP_FILE" | python3 -c '
 import json, sys
 data = json.load(sys.stdin)
@@ -144,28 +107,24 @@ fi
 
 MISSING=""
 for PKG in $PKGS; do
-  # Fail closed on unexpected names (regex metacharacters, split fragments of
-  # a space-containing path): never let a crafted directory skew the checks.
   if ! [[ "$PKG" =~ ^[A-Za-z0-9_.-]+$ ]]; then
     MISSING="$MISSING $PKG"
     continue
   fi
-  # -F: PKG must never be interpreted as a regex.
-  if echo "$CHANGED_SIGNALS" | grep -qxF "packages/$PKG/README.md"; then
+  if echo "$UPDATED" | grep -qxF "packages/$PKG/README.md"; then
     continue
   fi
-  # sdk/docs only counts when the file is in the mirror map (handled below).
-  if [ "$PKG" != "sdk" ] && echo "$CHANGED_SIGNALS" | grep -qE "^packages/${PKG}/docs/"; then
+  if [ "$PKG" != "sdk" ] && echo "$UPDATED" | grep -qE "^packages/${PKG}/docs/"; then
     continue
   fi
   HAS_RELATED_MIRROR=0
   while IFS= read -r path; do
     [ -z "$path" ] && continue
-    if mirrored_satisfies_pkg "$path" "$PKG"; then
+    if covers_pkg "$path" "$PKG"; then
       HAS_RELATED_MIRROR=1
       break
     fi
-  done <<< "$CHANGED_SIGNALS"
+  done <<< "$UPDATED"
   if [ "$HAS_RELATED_MIRROR" -eq 1 ]; then
     continue
   fi

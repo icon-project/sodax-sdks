@@ -4,7 +4,6 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
 
-# The job only reads the repo; never grant the default (potentially write) token.
 permissions:
   contents: read
 
@@ -17,25 +16,19 @@ jobs:
     name: Docs ship with code
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # Always run: a skipped job does not satisfy a required status check.
-    # The docs-not-needed label exits 0 inside the job instead of skipping it.
+    # Skip inside the job so a required check still reports (job-level if: would hide it).
     steps:
       - name: Check out code
         uses: actions/checkout@v6
         with:
-          # Full history: the check diffs base.sha...head.sha (merge commit parents).
           fetch-depth: 0
-          # Token is used for the initial fetch, then stripped from .git/config.
           persist-credentials: false
 
       - name: Check for documentation drift
-        # Env indirection: expressions expand before shell parsing, so refs are
-        # never interpolated into the script (GitHub script-injection hardening).
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          # toJSON + quoted name is an exact label match. contains() on a single
-          # label is a substring check, so "waiting-docs-not-needed" would skip.
+          # Exact match. contains() on a single label is substring, so "waiting-docs-not-needed" would skip.
           SKIP: ${{ contains(toJSON(github.event.pull_request.labels.*.name), '"docs-not-needed"') }}
         run: |
           if [ "$SKIP" = "true" ]; then
@@ -43,9 +36,6 @@ jobs:
             exit 0
           fi
 
-          # pull_request checkout is the merge commit; both SHAs should already
-          # be local. persist-credentials: false, so we cannot fetch extra objects
-          # — fail closed rather than silently diffing the wrong commits.
           if ! git cat-file -e "${BASE_SHA}^{commit}"; then
             echo "::error::PR base SHA $BASE_SHA is not in this clone (needed to diff)."
             exit 1
@@ -61,8 +51,7 @@ jobs:
             echo "::warning::This PR modifies Docs Drift enforcement ($GATE_CHANGED). Workflow YAML is PR-supplied; the check script is taken from the base branch when it exists there. Treat as security-sensitive."
           fi
 
-          # Tamper-evident: do not run a PR-rewritten check script. Bootstrap
-          # (first introduction, file not yet on the base branch) uses checkout.
+          # Run the base-branch script so a PR cannot no-op this gate. Fallback: file not on base yet.
           SCRIPT_BLOB="${BASE_SHA}:.github/scripts/check-docs-drift.sh"
           if git cat-file -e "$SCRIPT_BLOB" 2>/dev/null; then
             echo "Running Docs Drift script from base $BASE_SHA (ignoring PR edits to the script)."
