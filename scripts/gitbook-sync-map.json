@@ -54,6 +54,8 @@
       "dest": "developers/packages/sdk/docs/installation/nextjs.md"
     },
     { "src": "packages/sdk/docs/BITCOIN_INTEGRATION.md", "dest": "developers/how-to/bitcoin-integration.md" },
+    { "src": "docs/stellar-sponsoring-getting-started.md", "dest": "developers/how-to/stellar-sponsoring-getting-started.md" },
+    { "src": "docs/quick-sponsoring-stellar-guide.md", "dest": "developers/how-to/quick-sponsoring-stellar-guide.md" },
     { "src": "docs/ai-integration-guide.md", "dest": "developers/ai-integration/README.md" },
     { "src": "packages/wallet-sdk-core/README.md", "dest": "developers/packages/connection/wallet-sdk-core.md" },
     { "src": "packages/wallet-sdk-react/README.md", "dest": "developers/packages/connection/wallet-sdk-react.md" },
