@@ -81,7 +81,7 @@ The contract payload gives 4 fields; **supply the other 3 by hand**:
 | `access?` | omit unless restricted (`withdrawOnly` / `depositOnly`) |
 
 **Address format:**
-- **EVM addresses (`hubAsset`, `vault`, EVM `address`): use checksummed (EIP-55)** — viem's `getAddress(...)` or the explorer's mixed-case form. Convention only (lookups `.toLowerCase()`, not CI-enforced), but the preferred form for new entries.
+- **EVM addresses (`hubAsset`, `vault`, EVM `address`): a mixed-case value MUST carry a valid EIP-55 checksum** — copy the explorer's mixed-case form, or run it through viem's `getAddress(...)`. All-lowercase is also valid, and is what existing `hubAsset`/`vault` entries use. **CI-enforced** (`config-address-checksum.test.ts`): a hand-typed case flip is rejected by viem while encoding calldata, which fails a whole `multicall` batch and reads every balance in it as zero. Never "fix" a checksum by re-typing hex digits — re-checksum the lowercase form and confirm the bytes on the explorer.
 - **Non-EVM `address` keeps its native, case-sensitive form** (Solana **base58** like `XsueG8Bt…`, Sui,
   Stacks, …). Checksumming does not apply — **NEVER lowercase/uppercase or transform** it; re-casing
   base58 yields a different, wrong address. Store byte-for-byte from the contract/explorer.
@@ -143,6 +143,8 @@ truly not user-facing (checksum/casing, internal rename).
 ## 6. Verify
 ```bash
 pnpm --filter @sodax/types test    # vitest → tokens-dedup.test.ts: no dup symbol/address (swap/MM lists only)
+                                    #          config-address-checksum.test.ts: EVM addresses pass viem's isAddress
+                                    #          tokens-chain-key.test.ts: token.chainKey matches the list it is under
 pnpm checkTs                        # tsc → the `satisfies XToken` constraint catches a malformed entry (missing/wrong-typed field)
 ```
 
