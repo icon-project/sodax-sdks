@@ -35,9 +35,10 @@ CRCLx: {
 
 Authored names: Circle / Tesla / SP500 / NVIDIA / Nasdaq / MicroStrategy / Coinbase / Alphabet xStock.
 
-> **Casing note:** these `hubAsset` / `vault` values were stored **lowercase** (as the payload arrived).
-> The `add-token` skill now **requires checksummed (EIP-55)** for new EVM entries. SDK lookups are
-> case-insensitive, so the existing lowercase entries keep working — but new ones should be checksummed.
+> **Casing note:** these `hubAsset` / `vault` values were stored **lowercase** (as the payload arrived),
+> which stays valid — SDK lookups are case-insensitive and viem accepts an all-lowercase address. What
+> is **not** valid is mixed case whose EIP-55 checksum fails; `config-address-checksum.test.ts` rejects
+> it. Copy the explorer's mixed-case form or keep the payload's lowercase, never a hand-edited blend.
 
 ## File 2 — `packages/types/src/swap/swap.ts`
 

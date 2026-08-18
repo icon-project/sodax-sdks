@@ -39,7 +39,7 @@
     }
   },
   "engines": {
-    "node": ">=20.12.0"
+    "node": ">=22.12.0"
   },
   "files": [
     "dist",
@@ -69,7 +69,6 @@
     "@injectivelabs/ts-types": "catalog:",
     "@injectivelabs/wallet-core": "catalog:",
     "@mysten/sui": "catalog:",
-    "@mysten/wallet-standard": "catalog:",
     "@sodax/libs": "workspace:*",
     "@sodax/types": "workspace:*",
     "@solana/spl-token": "catalog:",

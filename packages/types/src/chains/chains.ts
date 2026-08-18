@@ -563,7 +563,14 @@ export type SuiSpokeChainConfig = BaseSpokeChainConfig<'SUI'> & {
     xTokenManager: string;
     rateLimit: string;
   };
-  rpc_url: string;
+  /** gRPC-web endpoint. Mysten's public fullnodes stopped serving JSON-RPC in July 2026; `sui-node` drops it in October 2026. */
+  grpc_url: string;
+  /**
+   * @deprecated Renamed to `grpc_url`. Still honored so existing overrides keep working, and wins
+   * over `grpc_url` when set. A `sui-node` serves gRPC-web on the same origin as JSON-RPC, so a
+   * self-hosted or full-service endpoint needs no change; a JSON-RPC-only provider does.
+   */
+  rpc_url?: string;
 };
 
 export type NearSpokeChainConfig = BaseSpokeChainConfig<'NEAR'> & {
@@ -915,7 +922,7 @@ export const spokeChainConfig = {
     supportedTokens: suiSupportedTokens,
     nativeToken: '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI' as const,
     bnUSD: '0xff4de2b2b57dd7611d2812d231a467d007b702a101fd5c7ad3b278257cddb507::bnusd::BNUSD',
-    rpc_url: 'https://sui-rpc.publicnode.com',
+    grpc_url: 'https://fullnode.mainnet.sui.io',
     chain: baseChainInfo[ChainKeys.SUI_MAINNET] satisfies BaseChainInfo<'SUI'>,
     pollingConfig: {
       pollingIntervalMs: 500,

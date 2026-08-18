@@ -24,7 +24,7 @@
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "engines": {
-    "node": ">=20.12.0"
+    "node": ">=22.12.0"
   },
   "files": [
     "dist",
@@ -75,7 +75,7 @@
     "@injectivelabs/wallet-base": "catalog:",
     "@injectivelabs/wallet-core": "catalog:",
     "@injectivelabs/wallet-cosmos": "catalog:",
-    "@mysten/dapp-kit": "catalog:",
+    "@mysten/dapp-kit-react": "catalog:",
     "@mysten/sui": "catalog:",
     "near-api-js": "catalog:",
     "@sodax/libs": "workspace:*",

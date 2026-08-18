@@ -3,6 +3,8 @@
  * Centralized so consumers and tests have a single source of truth.
  */
 
+import type { SuiAdapterFields } from './types/config.js';
+
 // ─── Stacks ─────────────────────────────────────────────────────────────────
 export const STACKS_DEFAULT_RPC_URL = 'https://api.mainnet.hiro.so';
 export const STACKS_DEFAULT_NETWORK = 'mainnet' as const;
@@ -11,14 +13,12 @@ export const STACKS_DEFAULT_NETWORK = 'mainnet' as const;
 export const SUI_DEFAULT_NETWORK = 'mainnet' as const;
 export const SUI_DEFAULT_AUTO_CONNECT = true;
 /**
- * Default JSON-RPC endpoint per Sui network. Mysten's own fullnodes
- * (`getFullnodeUrl`) stopped serving JSON-RPC in July 2026 and answer every
- * method with `-32601`, so they cannot be used as defaults. No devnet entry:
- * every public devnet endpoint is JSON-RPC-disabled too.
+ * Default gRPC-web endpoint per Sui network. Keyed off the config union, so the networks we
+ * offer and the endpoints we ship cannot drift apart.
  */
-export const SUI_DEFAULT_RPC_URLS: Partial<Record<'mainnet' | 'testnet' | 'devnet', string>> = {
-  mainnet: 'https://sui-rpc.publicnode.com',
-  testnet: 'https://sui-testnet-rpc.publicnode.com',
+export const SUI_DEFAULT_GRPC_URLS: Record<NonNullable<SuiAdapterFields['network']>, string> = {
+  mainnet: 'https://fullnode.mainnet.sui.io',
+  testnet: 'https://fullnode.testnet.sui.io',
 };
 
 // ─── EVM ────────────────────────────────────────────────────────────────────
