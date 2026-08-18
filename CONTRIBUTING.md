@@ -89,9 +89,11 @@ live — not part of the Docs Drift gate itself).
   that changes package `src/` without a *related* publishable docs signal: a
   mapped file under that package, a mapped `packages/sdk/docs/` page, the
   package `README.md`, or `packages/<pkg>/docs/` (non-sdk). JSDoc, unmirrored
-  sdk/docs pages, `packages/skills`, and an unrelated mapped file (for example
-  touching `packages/skills/README.md` while changing `@sodax/sdk`) do not
-  count. If your PR genuinely has no user-facing change, ask a maintainer to
+  sdk/docs pages, `packages/skills`, an unrelated mapped file (for example
+  touching `packages/skills/README.md` while changing `@sodax/sdk`), and
+  *deleting* a README or docs file do not count. A newly added
+  `packages/sdk/docs/**/*.md` page must be on the map even if `src/` did not
+  change. If your PR genuinely has no user-facing change, ask a maintainer to
   apply the `docs-not-needed` label.
 - `pnpm check:ai` validates that snippets and imports in `packages/skills`
   match the real source (partner-agent docs, separate from Docs Drift).

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -139,4 +139,83 @@ test('ignores test-only src changes', t => {
   const result = run(root, base, head);
   assert.equal(result.code, 0);
   assert.match(result.out, /docs check not applicable/);
+});
+
+test('fails when a docs-only PR adds an unmapped sdk page', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'packages/sdk/docs/NEW.md', '# New\n');
+  const head = commit(root, 'docs only unmapped');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 1);
+  assert.match(result.out, /not in scripts\/gitbook-sync-map.json/);
+  assert.match(result.out, /packages\/sdk\/docs\/NEW.md/);
+});
+
+test('passes when a docs-only PR adds an sdk page that is on the map', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'packages/sdk/docs/NEW.md', '# New\n');
+  write(
+    root,
+    'scripts/gitbook-sync-map.json',
+    `${JSON.stringify(
+      {
+        mirrored: [...MAP.mirrored, { src: 'packages/sdk/docs/NEW.md', dest: 'developers/new.md' }],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  const head = commit(root, 'docs only mapped');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 0);
+  assert.match(result.out, /docs check not applicable/);
+});
+
+test('fails when types src changes and the package README is deleted', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'packages/types/src/index.ts', 'export type T = number;\n');
+  unlinkSync(join(root, 'packages/types/README.md'));
+  const head = commit(root, 'types src + delete readme');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 1);
+  assert.match(result.out, /Source changed in: types/);
+  assert.match(result.out, /Deleting a README/);
+});
+
+test('fails when sdk src changes and a mapped page is deleted', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'packages/sdk/src/index.ts', 'export const n = 2;\n');
+  unlinkSync(join(root, 'packages/sdk/docs/SWAPS.md'));
+  const head = commit(root, 'sdk src + delete mapped page');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 1);
+  assert.match(result.out, /Source changed in: sdk/);
+});
+
+test('passes when types src changes with packages/types/docs/', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'packages/types/src/index.ts', 'export type T = number;\n');
+  write(root, 'packages/types/docs/API.md', '# types api\n');
+  const head = commit(root, 'types src + package docs');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 0);
+  assert.match(result.out, /docs signal/);
+});
+
+test('fails when sdk and types src change but only types has a docs signal', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'packages/sdk/src/index.ts', 'export const n = 2;\n');
+  write(root, 'packages/types/src/index.ts', 'export type T = number;\n');
+  write(root, 'packages/types/README.md', '# types\n\nUpdated.\n');
+  const head = commit(root, 'sdk+types src, types readme only');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 1);
+  assert.match(result.out, /Source changed in: sdk/);
+  assert.doesNotMatch(result.out, /Source changed in:.*types/);
 });

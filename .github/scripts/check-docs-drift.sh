@@ -8,15 +8,17 @@
 #      under packages/<pkg>/, or under packages/sdk/docs/ (feature pages
 #      document types/sdk/dapp-kit changes). An unrelated mapped file
 #      (e.g. packages/skills/README.md) does not satisfy another package.
-#   2. That package's README.md touched.
-#   3. Per package (except sdk): packages/<pkg>/docs/ touched.
+#   2. That package's README.md added or updated (not deleted).
+#   3. Per package (except sdk): packages/<pkg>/docs/ added or updated.
 #      packages/sdk/docs/ only counts via (1) — unmirrored pages such as
 #      DEX.md / LOGGING.md do not satisfy the gate.
 #
 # A newly added packages/sdk/docs/**/*.md must be listed in the map, or it
 # will never be copied by sodax-document (that repo copies every mapped src).
+# This map check runs even on docs-only PRs (no package src change).
 #
-# JSDoc and packages/skills are not signals. Test files and the docs-only
+# JSDoc and packages/skills are not signals. Deleting a README, mapped page,
+# or packages/<pkg>/docs/ file is not a signal. Test files and the docs-only
 # skills package never trigger the gate. Escape hatch: the 'docs-not-needed'
 # PR label (checked by the workflow, not here).
 #
@@ -37,6 +39,8 @@ MAP_FILE="scripts/gitbook-sync-map.json"
 
 # quotePath=false: C-quoted (non-ASCII) paths would dodge the ^packages/ anchors.
 CHANGED=$(git -c core.quotePath=false diff --name-only "$RANGE")
+# ACMR = added, copied, modified, renamed. Deletions must not count as docs.
+CHANGED_SIGNALS=$(git -c core.quotePath=false diff --name-only --diff-filter=ACMR "$RANGE")
 
 PKGS=$(echo "$CHANGED" \
   | grep -E '^packages/[^/]+/src/' \
@@ -44,30 +48,11 @@ PKGS=$(echo "$CHANGED" \
   | grep -v '/e2e-tests/' \
   | cut -d/ -f2 | sort -u | grep -vx 'skills' || true)
 
-if [ -z "$PKGS" ]; then
-  echo "No package source changes — docs check not applicable."
-  exit 0
-fi
-
-if [ ! -f "$MAP_FILE" ]; then
-  echo "::error::$MAP_FILE is missing — cannot verify mirrored docs."
-  exit 1
-fi
-
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "::error::python3 is required to read $MAP_FILE."
-  exit 1
-fi
-
-MIRRORED_SRCS=$(python3 -c '
-import json, sys
-with open(sys.argv[1], encoding="utf-8") as fh:
-    data = json.load(fh)
-for item in data.get("mirrored", []):
-    src = item.get("src")
-    if src:
-        print(src)
-' "$MAP_FILE")
+# A new feature page that is not in the map will never be copied downstream.
+# Run this before the source-only early exit so a docs-only PR cannot land an
+# unmapped packages/sdk/docs/*.md page.
+ADDED_SDK_DOCS=$(git -c core.quotePath=false diff --name-only --diff-filter=A \
+  "$RANGE" -- 'packages/sdk/docs' || true)
 
 is_mirrored() {
   printf '%s\n' "$MIRRORED_SRCS" | grep -qxF "$1"
@@ -85,27 +70,55 @@ mirrored_satisfies_pkg() {
   esac
 }
 
-# A new feature page that is not in the map will never be copied downstream.
-ADDED_SDK_DOCS=$(git -c core.quotePath=false diff --name-only --diff-filter=A \
-  "$RANGE" -- 'packages/sdk/docs' || true)
-UNMAPPED_NEW=""
-while IFS= read -r added; do
-  [ -z "$added" ] && continue
-  case "$added" in
-    *.md) ;;
-    *) continue ;;
-  esac
-  if ! is_mirrored "$added"; then
-    UNMAPPED_NEW="$UNMAPPED_NEW $added"
+load_map() {
+  if [ ! -f "$MAP_FILE" ]; then
+    echo "::error::$MAP_FILE is missing — cannot verify mirrored docs."
+    exit 1
   fi
-done <<< "$ADDED_SDK_DOCS"
 
-if [ -n "$UNMAPPED_NEW" ]; then
-  echo "::error::New SDK doc(s) are not in $MAP_FILE:$UNMAPPED_NEW"
-  echo "Add each file to $MAP_FILE — sodax-document copies every mapped src."
-  echo "Add a sidebar entry (SUMMARY.md or docs.json) on the docs-sync PR."
-  echo "See CONTRIBUTING.md#documentation."
-  exit 1
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "::error::python3 is required to read $MAP_FILE."
+    exit 1
+  fi
+
+  MIRRORED_SRCS=$(python3 -c '
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as fh:
+    data = json.load(fh)
+for item in data.get("mirrored", []):
+    src = item.get("src")
+    if src:
+        print(src)
+' "$MAP_FILE")
+}
+
+if [ -n "$PKGS" ] || [ -n "$ADDED_SDK_DOCS" ]; then
+  load_map
+
+  UNMAPPED_NEW=""
+  while IFS= read -r added; do
+    [ -z "$added" ] && continue
+    case "$added" in
+      *.md) ;;
+      *) continue ;;
+    esac
+    if ! is_mirrored "$added"; then
+      UNMAPPED_NEW="$UNMAPPED_NEW $added"
+    fi
+  done <<< "$ADDED_SDK_DOCS"
+
+  if [ -n "$UNMAPPED_NEW" ]; then
+    echo "::error::New SDK doc(s) are not in $MAP_FILE:$UNMAPPED_NEW"
+    echo "Add each file to $MAP_FILE — sodax-document copies every mapped src."
+    echo "Add a sidebar entry (SUMMARY.md or docs.json) on the docs-sync PR."
+    echo "See CONTRIBUTING.md#documentation."
+    exit 1
+  fi
+fi
+
+if [ -z "$PKGS" ]; then
+  echo "No package source changes — docs check not applicable."
+  exit 0
 fi
 
 MISSING=""
@@ -117,11 +130,11 @@ for PKG in $PKGS; do
     continue
   fi
   # -F: PKG must never be interpreted as a regex.
-  if echo "$CHANGED" | grep -qxF "packages/$PKG/README.md"; then
+  if echo "$CHANGED_SIGNALS" | grep -qxF "packages/$PKG/README.md"; then
     continue
   fi
   # sdk/docs only counts when the file is in the mirror map (handled below).
-  if [ "$PKG" != "sdk" ] && echo "$CHANGED" | grep -qE "^packages/${PKG}/docs/"; then
+  if [ "$PKG" != "sdk" ] && echo "$CHANGED_SIGNALS" | grep -qE "^packages/${PKG}/docs/"; then
     continue
   fi
   HAS_RELATED_MIRROR=0
@@ -131,7 +144,7 @@ for PKG in $PKGS; do
       HAS_RELATED_MIRROR=1
       break
     fi
-  done <<< "$CHANGED"
+  done <<< "$CHANGED_SIGNALS"
   if [ "$HAS_RELATED_MIRROR" -eq 1 ]; then
     continue
   fi
@@ -145,6 +158,7 @@ if [ -n "$MISSING" ]; then
   echo "packages/<pkg>/docs/ (non-sdk packages)."
   echo "JSDoc, packages/skills, and unmirrored sdk/docs pages (DEX.md, LOGGING.md, …) do not count."
   echo "An unrelated mapped file (e.g. packages/skills/README.md) does not satisfy another package."
+  echo "Deleting a README, mapped page, or packages/<pkg>/docs/ file does not count."
   echo "If this PR truly has no user-facing change, ask a maintainer for the 'docs-not-needed' label."
   echo "See CONTRIBUTING.md#documentation for guidance."
   exit 1
