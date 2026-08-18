@@ -8,8 +8,9 @@ Describe what you have done and which # issue this PR closes.
      surface: a file in scripts/gitbook-sync-map.json, the package README,
      or packages/<pkg>/docs/. JSDoc does not pass. packages/skills is
      partner-agent docs, not this gate — see CONTRIBUTING.md#documentation.
-     If you add a new mirrored doc, it must also be added to nav on the
-     downstream docs-sync PR (`SUMMARY.md` for GitBook, `docs.json` for Mintlify). -->
+     If you add, rename, or remove a mirrored doc, update the map and add
+     nav on the downstream docs-sync PR (`SUMMARY.md` for GitBook, `docs.json`
+     for Mintlify). -->
 
 **Which docs did you update?** (check all that apply)
 

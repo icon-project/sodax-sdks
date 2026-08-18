@@ -13,9 +13,10 @@
 #      packages/sdk/docs/ only counts via (1) — unmirrored pages such as
 #      DEX.md / LOGGING.md do not satisfy the gate.
 #
-# A newly added packages/sdk/docs/**/*.md must be listed in the map, or it
-# will never be copied by sodax-document (that repo copies every mapped src).
-# This map check runs even on docs-only PRs (no package src change).
+# A newly added or renamed packages/sdk/docs/**/*.md must be listed in the
+# map, or it will never be copied by sodax-document (that repo copies every
+# mapped src). Every mapped src must exist at the head ref. These map checks
+# run even on docs-only PRs (no package src change).
 #
 # JSDoc and packages/skills are not signals. Deleting a README, mapped page,
 # or packages/<pkg>/docs/ file is not a signal. Test files and the docs-only
@@ -29,6 +30,9 @@
 # Pass the PR head SHA as the second argument in CI. actions/checkout on
 # pull_request defaults to the merge commit, so diffing base...HEAD would
 # include every commit that landed on the base branch after this PR opened.
+#
+# CI runs this file from the PR base SHA when it exists there (see
+# docs-drift.yml) so a PR cannot no-op the gate by editing this script.
 
 set -euo pipefail
 
@@ -48,10 +52,9 @@ PKGS=$(echo "$CHANGED" \
   | grep -v '/e2e-tests/' \
   | cut -d/ -f2 | sort -u | grep -vx 'skills' || true)
 
-# A new feature page that is not in the map will never be copied downstream.
-# Run this before the source-only early exit so a docs-only PR cannot land an
-# unmapped packages/sdk/docs/*.md page.
-ADDED_SDK_DOCS=$(git -c core.quotePath=false diff --name-only --diff-filter=A \
+# A new or renamed feature page that is not in the map will never be copied
+# downstream. --diff-filter=A misses git mv (R); copies show up as A by default.
+NEW_OR_RENAMED_SDK_DOCS=$(git -c core.quotePath=false diff --name-only --diff-filter=AR \
   "$RANGE" -- 'packages/sdk/docs' || true)
 
 is_mirrored() {
@@ -71,8 +74,8 @@ mirrored_satisfies_pkg() {
 }
 
 load_map() {
-  if [ ! -f "$MAP_FILE" ]; then
-    echo "::error::$MAP_FILE is missing — cannot verify mirrored docs."
+  if ! git cat-file -e "$HEAD_REF:$MAP_FILE" 2>/dev/null; then
+    echo "::error::$MAP_FILE is missing at $HEAD_REF — cannot verify mirrored docs."
     exit 1
   fi
 
@@ -81,39 +84,57 @@ load_map() {
     exit 1
   fi
 
-  MIRRORED_SRCS=$(python3 -c '
+  # Read the map from HEAD_REF (the PR head), not the merge-commit working tree.
+  # Reject newlines/NUL in src so a crafted JSON string cannot split grep -qxF.
+  MIRRORED_SRCS=$(git show "$HEAD_REF:$MAP_FILE" | python3 -c '
 import json, sys
-with open(sys.argv[1], encoding="utf-8") as fh:
-    data = json.load(fh)
+data = json.load(sys.stdin)
 for item in data.get("mirrored", []):
     src = item.get("src")
-    if src:
-        print(src)
-' "$MAP_FILE")
+    if src is None or src == "":
+        continue
+    if not isinstance(src, str) or any(c in src for c in "\n\r\0"):
+        print("::error::scripts/gitbook-sync-map.json src must be a single-line path.", file=sys.stderr)
+        sys.exit(1)
+    print(src)
+')
 }
 
-if [ -n "$PKGS" ] || [ -n "$ADDED_SDK_DOCS" ]; then
-  load_map
+load_map
 
-  UNMAPPED_NEW=""
-  while IFS= read -r added; do
-    [ -z "$added" ] && continue
-    case "$added" in
-      *.md) ;;
-      *) continue ;;
-    esac
-    if ! is_mirrored "$added"; then
-      UNMAPPED_NEW="$UNMAPPED_NEW $added"
-    fi
-  done <<< "$ADDED_SDK_DOCS"
-
-  if [ -n "$UNMAPPED_NEW" ]; then
-    echo "::error::New SDK doc(s) are not in $MAP_FILE:$UNMAPPED_NEW"
-    echo "Add each file to $MAP_FILE — sodax-document copies every mapped src."
-    echo "Add a sidebar entry (SUMMARY.md or docs.json) on the docs-sync PR."
-    echo "See CONTRIBUTING.md#documentation."
-    exit 1
+MISSING_MAPPED=""
+while IFS= read -r src; do
+  [ -z "$src" ] && continue
+  if ! git cat-file -e "$HEAD_REF:$src" 2>/dev/null; then
+    MISSING_MAPPED="$MISSING_MAPPED $src"
   fi
+done <<< "$MIRRORED_SRCS"
+
+if [ -n "$MISSING_MAPPED" ]; then
+  echo "::error::Mapped src(s) are missing at $HEAD_REF:$MISSING_MAPPED"
+  echo "Add the file, or remove/update the src entry in $MAP_FILE."
+  echo "See CONTRIBUTING.md#documentation."
+  exit 1
+fi
+
+UNMAPPED_NEW=""
+while IFS= read -r added; do
+  [ -z "$added" ] && continue
+  case "$added" in
+    *.md) ;;
+    *) continue ;;
+  esac
+  if ! is_mirrored "$added"; then
+    UNMAPPED_NEW="$UNMAPPED_NEW $added"
+  fi
+done <<< "$NEW_OR_RENAMED_SDK_DOCS"
+
+if [ -n "$UNMAPPED_NEW" ]; then
+  echo "::error::New or renamed SDK doc(s) are not in $MAP_FILE:$UNMAPPED_NEW"
+  echo "Add each file to $MAP_FILE — sodax-document copies every mapped src."
+  echo "Add a sidebar entry (SUMMARY.md or docs.json) on the docs-sync PR."
+  echo "See CONTRIBUTING.md#documentation."
+  exit 1
 fi
 
 if [ -z "$PKGS" ]; then

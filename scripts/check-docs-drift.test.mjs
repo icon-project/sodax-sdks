@@ -44,6 +44,7 @@ const createRepo = t => {
   write(root, 'scripts/gitbook-sync-map.json', `${JSON.stringify(MAP, null, 2)}\n`);
   write(root, 'packages/sdk/src/index.ts', 'export const n = 1;\n');
   write(root, 'packages/sdk/docs/SWAPS.md', '# Swaps\n');
+  write(root, 'packages/sdk/docs/DEX.md', '# DEX\n');
   write(root, 'packages/sdk/README.md', '# sdk\n');
   write(root, 'packages/skills/README.md', '# skills\n');
   write(root, 'packages/types/src/index.ts', 'export type T = string;\n');
@@ -54,7 +55,11 @@ const createRepo = t => {
 
 const run = (root, base, head) => {
   try {
-    const out = execFileSync('bash', [SCRIPT, base, head], { cwd: root, encoding: 'utf8' });
+    const out = execFileSync('bash', [SCRIPT, base, head], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
     return { code: 0, out };
   } catch (error) {
     return {
@@ -185,15 +190,125 @@ test('fails when types src changes and the package README is deleted', t => {
   assert.match(result.out, /Deleting a README/);
 });
 
+test('fails when a mapped page is deleted but left on the map', t => {
+  const { root, base } = createRepo(t);
+  unlinkSync(join(root, 'packages/sdk/docs/SWAPS.md'));
+  const head = commit(root, 'delete mapped page');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 1);
+  assert.match(result.out, /Mapped src\(s\) are missing/);
+  assert.match(result.out, /packages\/sdk\/docs\/SWAPS.md/);
+});
+
 test('fails when sdk src changes and a mapped page is deleted', t => {
   const { root, base } = createRepo(t);
   write(root, 'packages/sdk/src/index.ts', 'export const n = 2;\n');
   unlinkSync(join(root, 'packages/sdk/docs/SWAPS.md'));
-  const head = commit(root, 'sdk src + delete mapped page');
+  write(
+    root,
+    'scripts/gitbook-sync-map.json',
+    `${JSON.stringify({ mirrored: MAP.mirrored.filter(item => item.src !== 'packages/sdk/docs/SWAPS.md') }, null, 2)}\n`,
+  );
+  const head = commit(root, 'sdk src + delete mapped page + drop map entry');
 
   const result = run(root, base, head);
   assert.equal(result.code, 1);
   assert.match(result.out, /Source changed in: sdk/);
+});
+
+test('fails when an unmapped sdk doc is renamed', t => {
+  const { root, base } = createRepo(t);
+  git(root, ['mv', 'packages/sdk/docs/DEX.md', 'packages/sdk/docs/NEW.md']);
+  const head = commit(root, 'rename unmapped dex');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 1);
+  assert.match(result.out, /New or renamed SDK doc/);
+  assert.match(result.out, /packages\/sdk\/docs\/NEW.md/);
+});
+
+test('fails when a mapped sdk doc is renamed without updating the map', t => {
+  const { root, base } = createRepo(t);
+  git(root, ['mv', 'packages/sdk/docs/SWAPS.md', 'packages/sdk/docs/NEW.md']);
+  const head = commit(root, 'rename mapped swaps');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 1);
+  assert.match(result.out, /Mapped src\(s\) are missing/);
+  assert.match(result.out, /packages\/sdk\/docs\/SWAPS.md/);
+});
+
+test('passes when a mapped sdk doc is renamed and the map is updated', t => {
+  const { root, base } = createRepo(t);
+  git(root, ['mv', 'packages/sdk/docs/SWAPS.md', 'packages/sdk/docs/NEW.md']);
+  write(
+    root,
+    'scripts/gitbook-sync-map.json',
+    `${JSON.stringify(
+      {
+        mirrored: MAP.mirrored.map(item =>
+          item.src === 'packages/sdk/docs/SWAPS.md'
+            ? { src: 'packages/sdk/docs/NEW.md', dest: 'developers/new.md' }
+            : item,
+        ),
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  const head = commit(root, 'rename mapped swaps + map');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 0);
+  assert.match(result.out, /docs check not applicable/);
+});
+
+test('fails when the map lists a file that does not exist', t => {
+  const { root, base } = createRepo(t);
+  write(
+    root,
+    'scripts/gitbook-sync-map.json',
+    `${JSON.stringify(
+      {
+        mirrored: [...MAP.mirrored, { src: 'packages/sdk/docs/MISSING.md', dest: 'developers/missing.md' }],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  const head = commit(root, 'ghost map entry');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 1);
+  assert.match(result.out, /Mapped src\(s\) are missing/);
+  assert.match(result.out, /packages\/sdk\/docs\/MISSING.md/);
+});
+
+test('fails closed when a map src contains a newline', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'packages/sdk/src/index.ts', 'export const n = 2;\n');
+  write(
+    root,
+    'scripts/gitbook-sync-map.json',
+    `${JSON.stringify(
+      {
+        mirrored: [
+          {
+            src: 'packages/sdk/docs/SWAPS.md\npackages/sdk/docs/FAKE.md',
+            dest: 'developers/swaps.md',
+          },
+        ],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  const head = commit(root, 'newline in map src');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 1);
+  assert.match(result.out, /single-line path/);
 });
 
 test('passes when types src changes with packages/types/docs/', t => {

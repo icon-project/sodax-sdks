@@ -26,8 +26,9 @@ Run tests with `pnpm test`.
 
 Docs ship with code — every feature PR includes its documentation. This repo is
 the source of truth for everything on docs.sodax.com: you write docs here, next
-to the code, and they sync downstream to `sodax-document` (rendered with
-Mintlify). Never edit the docs site or the synced copies directly.
+to the code, and they sync downstream to `sodax-document` (GitBook is still the live
+docs.sodax.com renderer; Mintlify nav is added on the docs-sync PR).
+Never edit the docs site or the synced copies directly.
 
 ### Where docs live
 
@@ -53,11 +54,12 @@ Mintlify). Never edit the docs site or the synced copies directly.
   CI. If a user would need to read source to use the feature, it needs a
   markdown page that is listed in `scripts/gitbook-sync-map.json`.
 
-### Mirrored docs and the Mintlify site
+### Mirrored docs and docs.sodax.com
 
 The files listed in `scripts/gitbook-sync-map.json` are copied to
 `sodax-document` by its `sync-sodax-sdks.sh` script (the map is the copy
-list) and published on docs.sodax.com. For those files:
+list) and published on docs.sodax.com (GitBook is still the live site;
+Mintlify nav is added on the docs-sync PR). For those files:
 
 - **Don't add frontmatter** (titles, icons, descriptions) — the sync injects it.
 - **Avoid raw HTML.** Mintlify compiles pages as MDX; HTML attributes like
@@ -74,8 +76,9 @@ list) and published on docs.sodax.com. For those files:
   (`SUMMARY.md` for GitBook, `docs.json` for Mintlify). Nav coverage is checked
   downstream and currently warns in the sync PR body rather than blocking the
   sync. Optionally add an `inject_frontmatter` overlay in
-  `sync-sodax-sdks.sh` if the page should have an icon. A new
-  `packages/sdk/docs/` page that is not in the map will fail Docs Drift.
+  `sync-sodax-sdks.sh` if the page should have an icon. A new or renamed
+  `packages/sdk/docs/` page that is not in the map, or a mapped src that no
+  longer exists, will fail Docs Drift.
 
 Some `packages/sdk/docs/` pages are intentionally **not** mirrored (`DEX.md`,
 `SPONSORING.md`, `SWAPS_API.md`, `BRIDGE_API.md`, `LOGGING.md`,
@@ -91,10 +94,10 @@ live — not part of the Docs Drift gate itself).
   package `README.md`, or `packages/<pkg>/docs/` (non-sdk). JSDoc, unmirrored
   sdk/docs pages, `packages/skills`, an unrelated mapped file (for example
   touching `packages/skills/README.md` while changing `@sodax/sdk`), and
-  *deleting* a README or docs file do not count. A newly added
+  *deleting* a README or docs file do not count. A newly added or renamed
   `packages/sdk/docs/**/*.md` page must be on the map even if `src/` did not
-  change. If your PR genuinely has no user-facing change, ask a maintainer to
-  apply the `docs-not-needed` label.
+  change, and every mapped src must exist. If your PR genuinely has no
+  user-facing change, ask a maintainer to apply the `docs-not-needed` label.
 - `pnpm check:ai` validates that snippets and imports in `packages/skills`
   match the real source (partner-agent docs, separate from Docs Drift).
 - `pnpm check:doc-links` validates links in mirrored docs.
