@@ -48,7 +48,7 @@ The wallet layer is two independent slices: **wallet-sdk-core** signs/broadcasts
 See `wallet-sdk-core/AGENTS.md` → "Adding a New Chain Provider" / "Config variants" for the full provider shape.
 
 ## Docs
-Docs Drift CI fails unless a related publishable site surface changed with `src/`. Update `packages/wallet-sdk-react/docs/` (Case A) or `packages/wallet-sdk-core/README.md` (Case B). JSDoc is not enough. `packages/skills` is partner-agent docs (how integrators connect/sign) — update it when that public surface changed, then run `pnpm check:ai`; it does not satisfy Docs Drift. An unrelated mapped file (for example `packages/skills/README.md`) does not satisfy a wallet-package source change.
+Docs Drift CI fails unless a related publishable site surface changed with `src/`. Update `packages/wallet-sdk-react/docs/` (Case A) or `packages/wallet-sdk-core/README.md` (Case B). JSDoc is not enough. If you add a brand-new mirrored page, add it to `scripts/gitbook-sync-map.json` and add the downstream nav entry on the docs-sync PR (`SUMMARY.md` for GitBook, `docs.json` for Mintlify); the downstream sync currently reports missing nav as a warning in the PR body rather than failing hard. `packages/skills` is partner-agent docs (how integrators connect/sign) — update it when that public surface changed, then run `pnpm check:ai`; it does not satisfy Docs Drift. An unrelated mapped file (for example `packages/skills/README.md`) does not satisfy a wallet-package source change.
 
 ## Verify
 - Case A: `cd packages/wallet-sdk-react && pnpm test && pnpm checkTs`. Case B: `cd packages/wallet-sdk-core && pnpm test && pnpm checkTs`.

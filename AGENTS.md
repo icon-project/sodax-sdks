@@ -108,6 +108,7 @@ These guide every change. Where a rule maps to tooling (types, lint, tests, `che
 - **Cover new code with meaningful tests.** Add or extend tests for core flows, invariants, edge cases, and chain/feature matrices beside the changed code; don't rely on superficial coverage.
 - **Keep AI docs faithful.** `packages/skills` teaches *partner* agents how to call the public API; it is not where we introduce a feature (that is `.claude/skills/` plus `packages/sdk/docs/`). When public behavior, imports, signatures, examples, chains, tokens, or feature support change, update `packages/skills` and run `pnpm check:ai`. That does not satisfy Docs Drift.
 - **Docs mirrored to GitBook keep absolute links.** `scripts/gitbook-sync-map.json` lists the READMEs and `packages/sdk/docs` pages that `sodax-document` mirrors to docs.sodax.com, moving and renaming them. In those files a link may stay relative only when the target is mirrored into the same destination directory under the same filename; every other target (moved doc, unmirrored doc, source file, directory) needs an absolute `https://github.com/icon-project/sodax-sdks/blob/main/…` URL, and never a `sodax-document` URL. Gate: `pnpm check:doc-links`.
+- **New mirrored docs must also be in nav.** Adding a page to `scripts/gitbook-sync-map.json` makes `sodax-document` copy it, but that alone does not make it discoverable. Add the nav entry on the downstream docs-sync PR (`SUMMARY.md` for GitBook, `docs.json` for Mintlify). The downstream sync currently reports missing nav as a warning in the PR body rather than failing hard.
 
 **Definition of done:** scoped diff · behavior verified against `src/` · relevant `test`/`checkTs`/`lint`/`check:ai` green · mapped docs when package `src/` changed · `packages/skills` updated when public behavior changed · no unrelated refactor.
 
@@ -122,7 +123,7 @@ To author or validate changesets and govern a release (SemVer bumps, changelogs,
 - Root guidance is for information every domain needs. Put package/app-specific architecture, patterns, commands, and pitfalls in that subtree's `AGENTS.md`.
 - Prefer broad durable patterns over volatile enumerations. When exact values matter, point agents to source files or package docs rather than copying values.
 - Validate changes to these files with `pnpm check:ai-dev-files`.
-- When a mirrored doc is added, renamed, or removed, update `scripts/gitbook-sync-map.json`. sodax-document copies every mapped src; add or remove the sidebar entry on the docs-sync PR.
+- When a mirrored doc is added, renamed, or removed, update `scripts/gitbook-sync-map.json`. sodax-document copies every mapped src; add or remove the nav entry on the downstream docs-sync PR (`SUMMARY.md` for GitBook, `docs.json` for Mintlify).
 
 ## CI Shape
 

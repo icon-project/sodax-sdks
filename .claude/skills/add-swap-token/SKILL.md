@@ -48,7 +48,11 @@ Confirm with the user which behavior the solver team intends, and match the comm
 
 Changing `packages/types/src` triggers Docs Drift. Update
 `packages/sdk/docs/SWAPS.md` (or `packages/types/README.md` if there is no
-user-facing list change). JSDoc does not pass.
+user-facing list change). JSDoc does not pass. If you add a brand-new mirrored
+page, also add it to `scripts/gitbook-sync-map.json` and add the downstream
+nav entry on the docs-sync PR (`SUMMARY.md` for GitBook, `docs.json` for
+Mintlify); the downstream sync currently reports missing nav as a warning in
+the PR body rather than failing hard.
 
 ## Step 5 — Verify
 

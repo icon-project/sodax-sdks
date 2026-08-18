@@ -45,7 +45,7 @@ If consumers call it from React, add a `packages/dapp-kit/src/hooks/<feature>/` 
 
 ## Tests & docs
 - `<Feature>Service.test.ts` for core flows, invariants, and edge cases; add an `e2e-tests/` entry if the flow is cross-chain.
-- **Docs Drift CI** fails the PR unless a *related* publishable site doc changed (JSDoc is not enough). Update the matching file in `packages/sdk/docs/` that is listed in `scripts/gitbook-sync-map.json` (e.g. `SWAPS.md`). A brand-new page must be added to that map — sodax-document copies every mapped src — and to the Mintlify/GitBook nav on the docs-sync PR, or it will never appear on docs.sodax.com. An unrelated mapped file (for example `packages/skills/README.md`) does not satisfy an SDK source change.
+- **Docs Drift CI** fails the PR unless a *related* publishable site doc changed (JSDoc is not enough). Update the matching file in `packages/sdk/docs/` that is listed in `scripts/gitbook-sync-map.json` (e.g. `SWAPS.md`). A brand-new page must be added to that map — sodax-document copies every mapped src — and to the downstream nav on the docs-sync PR (`SUMMARY.md` for GitBook, `docs.json` for Mintlify), or it will never appear on docs.sodax.com. The downstream sync currently reports missing nav as a warning in the PR body rather than failing hard. An unrelated mapped file (for example `packages/skills/README.md`) does not satisfy an SDK source change.
 - **`packages/skills` is separate** — it teaches *partner* agents how to call the public API, not how we add the feature. After the feature is wired, update the consumer skills so integrators' agents can use it, then run `pnpm check:ai`. That does not satisfy Docs Drift.
 
 ## Verify

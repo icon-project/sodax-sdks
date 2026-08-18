@@ -7,7 +7,9 @@ Describe what you have done and which # issue this PR closes.
 <!-- Docs Drift (job "Docs ship with code") requires a publishable site
      surface: a file in scripts/gitbook-sync-map.json, the package README,
      or packages/<pkg>/docs/. JSDoc does not pass. packages/skills is
-     partner-agent docs, not this gate — see CONTRIBUTING.md#documentation. -->
+     partner-agent docs, not this gate — see CONTRIBUTING.md#documentation.
+     If you add a new mirrored doc, it must also be added to nav on the
+     downstream docs-sync PR (`SUMMARY.md` for GitBook, `docs.json` for Mintlify). -->
 
 **Which docs did you update?** (check all that apply)
 
@@ -26,7 +28,7 @@ Describe what you have done and which # issue this PR closes.
 - [ ] My changes generate no new warnings
 - [ ] I have added tests that prove my fix is effective or that my feature works
 - [ ] I have run the unit tests
-- [ ] If this adds, renames, or removes a mirrored doc, `scripts/gitbook-sync-map.json` was updated (sodax-document copies from the map; add the sidebar entry on the docs-sync PR)
+- [ ] If this adds, renames, or removes a mirrored doc, `scripts/gitbook-sync-map.json` was updated and the downstream docs-sync PR adds/removes the nav entry (`SUMMARY.md` for GitBook, `docs.json` for Mintlify)
 - [ ] If this changes a public API partners call, `packages/skills` was updated and `pnpm check:ai` passes (partner-agent docs — not Docs Drift)
 - [ ] I only have one commit (if not, squash them into one commit).
 - [ ] I have a descriptive commit message that adheres to the [commit message guidelines](https://www.conventionalcommits.org/en/v1.0.0/)

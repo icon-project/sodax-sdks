@@ -67,10 +67,14 @@ list) and published on docs.sodax.com. For those files:
   directory; everything else needs an absolute
   `https://github.com/icon-project/sodax-sdks/blob/main/…` URL.
 - **Adding, renaming, or removing a mirrored doc?** Add, rename, or remove the
-  entry in `scripts/gitbook-sync-map.json`. That is enough for the file to be
-  copied. On the sodax-document docs-sync PR, add or remove the sidebar entry
-  (`SUMMARY.md` or `docs.json`). Optionally add an `inject_frontmatter` overlay
-  in `sync-sodax-sdks.sh` if the page should have an icon. A new
+  entry in `scripts/gitbook-sync-map.json`. The map is the copy list used by
+  `sodax-document`'s sync workflow, so that is enough for the file to be
+  copied into the downstream repo. **A new mirrored doc must also be added to
+  navigation**: on the generated docs-sync PR, add or remove the sidebar entry
+  (`SUMMARY.md` for GitBook, `docs.json` for Mintlify). Nav coverage is checked
+  downstream and currently warns in the sync PR body rather than blocking the
+  sync. Optionally add an `inject_frontmatter` overlay in
+  `sync-sodax-sdks.sh` if the page should have an icon. A new
   `packages/sdk/docs/` page that is not in the map will fail Docs Drift.
 
 Some `packages/sdk/docs/` pages are intentionally **not** mirrored (`DEX.md`,
