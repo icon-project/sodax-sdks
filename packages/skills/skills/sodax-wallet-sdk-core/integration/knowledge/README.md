@@ -20,7 +20,7 @@ It is intentionally framework-agnostic — Node ≥ 20.12, browser, edge runtime
 |---|---|---|
 | EVM (13 chains)        | `EvmWalletProvider`       | `viem` |
 | Solana                 | `SolanaWalletProvider`    | `@solana/web3.js` |
-| Sui                    | `SuiWalletProvider`       | `@mysten/sui` + `@mysten/wallet-standard` |
+| Sui                    | `SuiWalletProvider`       | `@mysten/sui` |
 | Bitcoin                | `BitcoinWalletProvider`   | `bitcoinjs-lib` (+ `ecpair`, `secp256k1`) |
 | Stellar                | `StellarWalletProvider`   | `@stellar/stellar-sdk` |
 | ICON                   | `IconWalletProvider`      | `icon-sdk-js` |
