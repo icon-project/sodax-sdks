@@ -247,22 +247,28 @@ new SolanaWalletProvider({
 ```ts
 // Private-key mode (mnemonic-derived)
 new SuiWalletProvider({
-  rpcUrl: 'https://…',
+  grpcUrl: 'https://fullnode.mainnet.sui.io',
   mnemonics: 'word1 word2 …',
   defaults?: SuiWalletDefaults,
 });
 
-// Browser-extension mode
+// Browser-extension mode — the provider builds its own client; you supply the signer
 new SuiWalletProvider({
-  client: suiClient,
-  wallet: walletWithFeatures,
-  account: walletAccount,
+  grpcUrl: 'https://fullnode.mainnet.sui.io',
+  address: walletAccount.address,
+  signTransaction: async txn =>
+    dAppKit.signTransaction({ transaction: await txn.toJSON(), account: walletAccount }),
   defaults?: SuiWalletDefaults,
 });
 ```
 
-`SuiWalletDefaults` accepts: `signAndExecuteTxn` (dry-run toggle + response options),
-`getCoins` (pagination limit).
+The endpoint must speak gRPC-web; `rpcUrl` still works as a deprecated alias for `grpcUrl`, and
+the two are mutually exclusive. `signTransaction` takes the transaction positionally, so an
+options-shaped signer such as `dAppKit.signTransaction` needs the wrapper above rather than a
+direct assignment; `walletAccount` is dApp Kit's `UiWalletAccount`, and naming it stops the wallet
+signing with whichever account happens to be connected.
+
+`SuiWalletDefaults` accepts: `signAndExecuteTxn` (dry-run toggle), `getCoins` (pagination limit).
 
 ### ICON (`IconWalletProvider`)
 

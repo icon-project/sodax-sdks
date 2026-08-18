@@ -224,17 +224,28 @@ export class MoneyMarketService {
   readonly spoke: SpokeService;
 
   // money market config (hoisted from config for ergonomics, mirrors SwapService)
-  readonly partnerFee: PartnerFee | undefined;
   readonly relayerApiEndpoint: HttpUrl;
 
   // sub-service
   readonly data: MoneyMarketDataService;
 
+  /**
+   * Effective money-market partner fee (`moneyMarket.partnerFee`, else the global `fee`). Read live
+   * off `ConfigService` rather than snapshotted in the constructor, so it cannot diverge from
+   * `config.moneyMarketPartnerFee` if the config object is ever replaced. Mirrors
+   * {@link SwapService.partnerFee}.
+   *
+   * Money market has no per-action override: unlike swap / bridge / leverage-yield, every flow here
+   * charges this configured fee.
+   */
+  get partnerFee(): PartnerFee | undefined {
+    return this.config.moneyMarketPartnerFee;
+  }
+
   public constructor({ config, hubProvider, spoke }: MoneyMarketServiceConstructorParams) {
     this.config = config;
     this.hubProvider = hubProvider;
     this.spoke = spoke;
-    this.partnerFee = config.moneyMarketPartnerFee;
     this.relayerApiEndpoint = config.relay.relayerApiEndpoint;
     this.data = new MoneyMarketDataService({ hubProvider, config: config });
   }

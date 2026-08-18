@@ -135,6 +135,12 @@ jobs:
 
   e2e:
     name: E2E Tests (live mainnet)
+    # Push-only (main / development). These hit live mainnet services, so they fail on state no PR
+    # controls — a solver that has dropped an intent from memory, an unindexed relay tx, token/vault
+    # config drift on chain. Gating merges on that blocks unrelated work and trains people to ignore
+    # a red check. Running on push still surfaces the drift, against the branch that actually moved.
+    # Run them locally with `pnpm test:e2e` when touching a flow they cover.
+    if: github.event_name != 'pull_request'
     timeout-minutes: 15
     runs-on: ubuntu-latest
 

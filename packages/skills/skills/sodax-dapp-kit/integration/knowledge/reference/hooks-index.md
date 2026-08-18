@@ -19,7 +19,8 @@ Comprehensive hook table across 12 feature domains. Use this when you know the f
 | `useSwap` | Mutation | Execute a complete cross-chain swap |
 | `useSwapAllowance` | Query | Check token approval status |
 | `useSwapApprove` | Mutation | Approve tokens for the swap contract |
-| `useStatus` | Query | Track intent execution status (polls 3s once `intentTxHash` supplied; Result-wrapped data) |
+| `useStatus` | Query | Track intent execution status (polls 3s once `intentTxHash` supplied; stops on `3`/`4` and after 40 consecutive NOT_FOUND fetches; Result-wrapped data) |
+| `useDetailedStatus` | Query | Track a swap from its source tx (`{ srcChainKey, srcTxHash }`; polls 3s; Result-wrapped; stops on the answering source's terminal state and after 40 consecutive ambiguous reads — solver NOT_FOUND, or a relay with no packet for the tx; outages keep polling). Returns a tagged union — backend submit-tx record or solver answer — narrow on `source`. Unlike `useSwapsApiSubmitTxStatus`, answers for both `swap()` completion paths |
 | `useCancelSwap` | Mutation | Cancel an active swap intent |
 | `useCreateLimitOrder` | Mutation | Create a limit order (no deadline) |
 | `useCancelLimitOrder` | Mutation | Cancel a limit order |

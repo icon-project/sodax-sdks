@@ -12,7 +12,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  DEFAULT_BACKEND_API_ENDPOINT,
+  DEFAULT_API_BASE_URL,
   type CreateIntentParamsV2,
   type CreateLimitOrderParamsV2,
   type IntentRequestV2,
@@ -30,7 +30,7 @@ vi.stubGlobal('fetch', mockFetch);
 
 // --- fixtures -------------------------------------------------------------
 const sodax = new Sodax();
-const BASE = DEFAULT_BACKEND_API_ENDPOINT;
+const BASE = DEFAULT_API_BASE_URL;
 const TX_HASH = '0x46b053464f50836328b6158e1e33e5cf66c0e3ebe5004d30459b23acae5047a0';
 
 const sampleIntentRequest: IntentRequestV2 = {
@@ -548,6 +548,31 @@ describe('SwapsApiService error propagation', () => {
       expect((err.cause as SwapsApiError).code).toBe('HTTP_ERROR');
     }
     expect(mockFetch).toHaveBeenCalledOnce(); // 400 is not retryable
+  });
+
+  // `SwapService.getDetailedStatus` reads exactly these fields to tell a definitive "no record"
+  // (404) from a backend that could not answer, and routes and budgets its retries on the answer.
+  // Pinned on this endpoint specifically so drift in the error mapping fails here rather than
+  // silently turning a backend outage into a budgetable miss.
+  it('preserves HTTP 404 for submit-tx status lookup', async () => {
+    mockFetch.mockResolvedValueOnce(httpErrorResponse(404, 'Not Found'));
+
+    const result = await sodax.api.swaps.getSubmitTxStatus({
+      txHash: '0xabc',
+      srcChainKey: '0x38.bsc',
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: 'EXTERNAL_API_ERROR',
+        context: {
+          api: 'swaps',
+          code: 'HTTP_ERROR',
+          status: 404,
+        },
+      },
+    });
   });
 
   it('retries an idempotent call on a transient 503, then succeeds', async () => {

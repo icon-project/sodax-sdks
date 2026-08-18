@@ -8,11 +8,10 @@ import {
   type SodaxOptions,
   type SolverConfig,
   ChainKeys,
-  type DeepPartial,
   type HttpUrl,
   type RpcConfig,
 } from '@sodax/dapp-kit';
-import { productionSolverConfig, stagingSolverConfig, devSolverConfig } from './constants';
+import { productionSolverConfig, stagingSolverConfig } from './constants';
 import { SolverEnv, useAppStore } from './zustand/useAppStore';
 import { createDatadogLogger } from './lib/loggers/datadogLogger';
 import { createDemoAnalytics } from './lib/analytics';
@@ -29,7 +28,7 @@ const rpcConfig: RpcConfig = {
   [ChainKeys.ETHEREUM_MAINNET]: process.env.ETHEREUM_RPC_URL ?? 'https://ethereum-rpc.publicnode.com',
   [ChainKeys.HYPEREVM_MAINNET]: process.env.HYPEREVM_RPC_URL ?? 'https://rpc.hyperliquid.xyz/evm',
   [ChainKeys.SOLANA_MAINNET]: process.env.SOLANA_RPC_URL ?? 'https://solana-rpc.publicnode.com',
-  [ChainKeys.SUI_MAINNET]: process.env.SUI_RPC_URL ?? 'https://sui-rpc.publicnode.com',
+  [ChainKeys.SUI_MAINNET]: process.env.SUI_GRPC_URL ?? 'https://fullnode.mainnet.sui.io',
   [ChainKeys.NEAR_MAINNET]: process.env.NEAR_RPC_URL ?? 'https://free.rpc.fastnear.com',
   [ChainKeys.TRON_MAINNET]: process.env.TRON_RPC_URL ?? 'https://api.trongrid.io',
   [ChainKeys.STELLAR_MAINNET]: {
@@ -56,16 +55,16 @@ const sponsoringApiConfig = {
   ...(typeof sponsoringApiKeyEnv === 'string' && sponsoringApiKeyEnv.length > 0 ? { apiKey: sponsoringApiKeyEnv } : {}),
 };
 
-// Retarget the swaps API, for running the demo against a locally started `swaps-api` instead of
-// canary. Same shape as the sponsoring override: the value is the base URL *including* any version
-// prefix, so a local service that mounts `/swaps/*` at the bare origin is `http://localhost:3008`.
+// Retarget the swaps API at canary or a locally started `swaps-api`. Unset leaves swaps on the packaged
+// production gateway root, like every other service — it is not pinned to a different host by default.
+// Same shape as the sponsoring override: the value is the base URL *including* any version prefix, so a
+// local service that mounts `/swaps/*` at the bare origin is `http://localhost:3008`.
 const swapsApiBaseUrlEnv: unknown = import.meta.env.VITE_SWAPS_API_BASE_URL;
-const swapsApiBaseURL = isHttpUrl(swapsApiBaseUrlEnv) ? swapsApiBaseUrlEnv : 'https://canary-api.sodax.com/v1';
+const swapsApiConfig = isHttpUrl(swapsApiBaseUrlEnv) ? { baseURL: swapsApiBaseUrlEnv } : undefined;
 
 const configMap: Record<SolverEnv, SolverConfig> = {
   [SolverEnv.Production]: productionSolverConfig,
   [SolverEnv.Staging]: stagingSolverConfig,
-  [SolverEnv.Dev]: devSolverConfig,
 };
 
 export default function Providers({ children }: { children: ReactNode }) {
@@ -109,7 +108,7 @@ export default function Providers({ children }: { children: ReactNode }) {
       },
       SUI: {
         chains: {
-          [ChainKeys.SUI_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.SUI_MAINNET] },
+          [ChainKeys.SUI_MAINNET]: { grpcUrl: rpcConfig[ChainKeys.SUI_MAINNET] },
         },
       },
       BITCOIN: {
@@ -146,12 +145,11 @@ export default function Providers({ children }: { children: ReactNode }) {
     // `undefined` when off, which leaves the SDK on its default console logger.
     return {
       api: {
-        baseApiConfig: {
-          baseURL: 'https://api.sodax.com/v1/be',
-        },
-        swapsApiConfig: {
-          baseURL: swapsApiBaseURL,
-        },
+        // No `baseApiConfig`: the packaged default already points at the production gateway root, and
+        // every service appends its own path below it (`/be`, `/swaps`, `/bridge`, `/sponsorships/*`).
+        // Never put a service segment in a base URL — that is what sent swaps to `/v1/be/swaps/*`.
+        // `undefined` slices are skipped by `deepMerge`, so an unset override is the same as no key.
+        swapsApiConfig,
         sponsoringApiConfig,
       },
       logger: createDatadogLogger(),
@@ -170,7 +168,7 @@ export default function Providers({ children }: { children: ReactNode }) {
         [ChainKeys.ETHEREUM_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.ETHEREUM_MAINNET] },
         [ChainKeys.HYPEREVM_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.HYPEREVM_MAINNET] },
         [ChainKeys.SOLANA_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.SOLANA_MAINNET] },
-        [ChainKeys.SUI_MAINNET]: { rpc_url: rpcConfig[ChainKeys.SUI_MAINNET] },
+        [ChainKeys.SUI_MAINNET]: { grpc_url: rpcConfig[ChainKeys.SUI_MAINNET] },
         [ChainKeys.NEAR_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.NEAR_MAINNET] },
         [ChainKeys.STELLAR_MAINNET]: rpcConfig[ChainKeys.STELLAR_MAINNET],
         [ChainKeys.BITCOIN_MAINNET]: rpcConfig[ChainKeys.BITCOIN_MAINNET],

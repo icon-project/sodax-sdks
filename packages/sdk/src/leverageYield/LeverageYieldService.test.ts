@@ -18,13 +18,20 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Address } from 'viem';
+// Import the barrel by relative path, not as `@sodax/sdk`. A self-referential package import
+// resolves through `package.json#exports` into `dist/`, which makes this unit test depend on a
+// build artifact — it then fails to resolve whenever `dist/` is absent or half-written, and turbo
+// can cache that state. Every other test in this package imports `../index.js`; keep it that way.
 import {
   ChainKeys,
   getIntentRelayChainId,
   type IBitcoinWalletProvider,
   type IEvmWalletProvider,
+  isSodaxError,
+  type PartnerFee,
+  type SodaxOptions,
   type SpokeChainKey,
-} from '@sodax/sdk';
+} from '../index.js';
 import type { CreateIntentParams, Intent } from '../shared/types/intent-types.js';
 import { SodaxError } from '../errors/SodaxError.js';
 
@@ -40,6 +47,7 @@ const mocks = vi.hoisted(() => ({
   sonicCreateSwapIntent: vi.fn(),
   relayTxAndWaitPacket: vi.fn(),
   solverPostExecution: vi.fn(),
+  solverGetQuote: vi.fn(),
   erc20Approve: vi.fn(),
   erc20PlanApproval: vi.fn(),
   erc4626GetMaxWithdraw: vi.fn(),
@@ -59,7 +67,7 @@ vi.mock('../swap/EvmSolverService.js', () => ({
   EvmSolverService: { constructCreateIntentData: mocks.constructCreateIntentData },
 }));
 vi.mock('../swap/SolverApiService.js', () => ({
-  SolverApiService: { postExecution: mocks.solverPostExecution },
+  SolverApiService: { postExecution: mocks.solverPostExecution, getQuote: mocks.solverGetQuote },
 }));
 vi.mock('../shared/services/intentRelay/IntentRelayApiService.js', async () => {
   const actual = await vi.importActual<object>('../shared/services/intentRelay/IntentRelayApiService.js');
@@ -400,6 +408,43 @@ describe('LeverageYieldService.withdraw — intent builder', () => {
     expect(result.value.hubWalletSwap).toBe(true); // routes vaultSwap() through the hub-wallet sendMessage path
   });
 
+  it('forwards a caller-supplied partnerFee on the payload (per-intent override)', async () => {
+    const partnerFee = { address: SAMPLE_USER, percentage: 100 } as const;
+
+    const result = await sodax.leverageYield.withdraw({
+      vault: VAULT,
+      srcChainKey: ARBITRUM,
+      srcAddress: SAMPLE_USER,
+      dstChainKey: ARBITRUM,
+      outputToken: SPOKE_TOKEN,
+      inputAmount: 1_000n,
+      minOutputAmount: 900n,
+      partnerFee,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.partnerFee).toEqual(partnerFee);
+  });
+
+  // Backward compatibility: pre-existing callers pass no partnerFee, so the key must stay absent
+  // and `createVaultIntent`'s default must keep resolving the configured leverage-yield fee.
+  it('omits partnerFee from the payload when the caller does not supply one', async () => {
+    const result = await sodax.leverageYield.withdraw({
+      vault: VAULT,
+      srcChainKey: ARBITRUM,
+      srcAddress: SAMPLE_USER,
+      dstChainKey: ARBITRUM,
+      outputToken: SPOKE_TOKEN,
+      inputAmount: 1_000n,
+      minOutputAmount: 900n,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect('partnerFee' in result.value).toBe(false);
+  });
+
   it('honours an explicit recipient', async () => {
     const result = await sodax.leverageYield.withdraw({
       vault: VAULT,
@@ -737,7 +782,7 @@ describe('LeverageYieldService.createVaultIntent', () => {
     expect((sodax.spoke.deposit as ReturnType<typeof vi.fn>).mock.calls[0]?.[0].raw).toBe(true);
   });
 
-  it('forwards a per-intent partnerFee override to intent construction (beating config.swaps.partnerFee)', async () => {
+  it('forwards a per-intent partnerFee override to intent construction', async () => {
     const partnerFee = { address: SAMPLE_USER, percentage: 100 } as const;
     mocks.constructCreateIntentData.mockReturnValueOnce(['0xdata', makeIntent(ARBITRUM), 0n]);
     vi.spyOn(sodax.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
@@ -797,6 +842,262 @@ describe('LeverageYieldService.createVaultIntent', () => {
     if (result.ok) return;
     expect(result.error.code).toBe('INTENT_CREATION_FAILED');
     expect(result.error.cause).toBe(depositError);
+  });
+});
+
+// ─── Partner-fee precedence ───────────────────────────────────────────────
+
+/**
+ * Vault intents are priced off the effective **leverage-yield** fee
+ * (`leverageYield.partnerFee ?? fee`), never the swap fee. Regression cover for the period
+ * when `createVaultIntent` read `config.swapPartnerFee`, which silently applied `swaps.partnerFee`
+ * to vault flows and made `leverageYield.partnerFee` a no-op.
+ */
+describe('LeverageYieldService — partner-fee precedence', () => {
+  const LY_FEE = { address: SAMPLE_USER, percentage: 100 } as const satisfies PartnerFee;
+  const SWAP_FEE = { address: HUB_WALLET, percentage: 50 } as const satisfies PartnerFee;
+  const GLOBAL_FEE = { address: POOL, percentage: 25 } as const satisfies PartnerFee;
+
+  // Each precedence case needs its own instance: the fee is resolved from config at call time.
+  // Re-applies the stubs `beforeEach` installs on the module-level `sodax`.
+  const makeSodax = (options: SodaxOptions): Sodax => {
+    const s = new Sodax(options);
+    vi.spyOn(s.config, 'isValidOriginalAssetAddress').mockReturnValue(true);
+    vi.spyOn(s.config, 'isValidSpokeChainKey').mockReturnValue(true);
+    vi.spyOn(s.hubProvider, 'getUserHubWalletAddress').mockResolvedValue(HUB_WALLET);
+    return s;
+  };
+
+  /** Runs the EVM-spoke deposit branch and returns the fee handed to intent construction. */
+  const feeForDeposit = async (s: Sodax, overrides: { partnerFee?: PartnerFee } = {}) => {
+    mocks.constructCreateIntentData.mockReturnValueOnce(['0xdata', makeIntent(ARBITRUM), 0n]);
+    vi.spyOn(s.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
+    await s.leverageYield.createVaultIntent({
+      params: vaultIntentParams(ARBITRUM),
+      walletProvider: mockEvmProvider,
+      raw: false,
+      ...overrides,
+    });
+    return mocks.constructCreateIntentData.mock.calls[0]?.[3];
+  };
+
+  it('applies the configured leverageYield.partnerFee', async () => {
+    expect(await feeForDeposit(makeSodax({ leverageYield: { partnerFee: LY_FEE } }))).toEqual(LY_FEE);
+  });
+
+  it('ignores swaps.partnerFee — the swap fee never applies to vault intents', async () => {
+    expect(await feeForDeposit(makeSodax({ swaps: { partnerFee: SWAP_FEE } }))).toBeUndefined();
+    // `calls[0]?.[3]` is also undefined when the mock was never called, so an early bail-out in
+    // createVaultIntent would pass the assertion above vacuously. Pin that the branch was reached.
+    expect(mocks.constructCreateIntentData).toHaveBeenCalledTimes(1);
+  });
+
+  it('leverageYield.partnerFee wins over swaps.partnerFee when both are set', async () => {
+    const s = makeSodax({ swaps: { partnerFee: SWAP_FEE }, leverageYield: { partnerFee: LY_FEE } });
+    expect(await feeForDeposit(s)).toEqual(LY_FEE);
+  });
+
+  it('falls back to the global fee when leverageYield.partnerFee is unset', async () => {
+    expect(await feeForDeposit(makeSodax({ fee: GLOBAL_FEE }))).toEqual(GLOBAL_FEE);
+  });
+
+  it('leverageYield.partnerFee beats the global fee', async () => {
+    expect(await feeForDeposit(makeSodax({ fee: GLOBAL_FEE, leverageYield: { partnerFee: LY_FEE } }))).toEqual(LY_FEE);
+  });
+
+  it('a per-intent partnerFee beats the configured leverageYield.partnerFee', async () => {
+    const perIntent = { address: HUB_WALLET, percentage: 10 } as const satisfies PartnerFee;
+    const s = makeSodax({ leverageYield: { partnerFee: LY_FEE } });
+    expect(await feeForDeposit(s, { partnerFee: perIntent })).toEqual(perIntent);
+  });
+
+  it('applies the leverage-yield fee on the Sonic-source branch', async () => {
+    const s = makeSodax({ swaps: { partnerFee: SWAP_FEE }, leverageYield: { partnerFee: LY_FEE } });
+    mocks.sonicCreateSwapIntent.mockResolvedValueOnce(['0xsonicTx', makeIntent(SONIC), 0n, '0xdata']);
+
+    await s.leverageYield.createVaultIntent({
+      params: vaultIntentParams(SONIC),
+      walletProvider: mockEvmProvider,
+      raw: false,
+    });
+
+    expect(mocks.sonicCreateSwapIntent.mock.calls[0]?.[0].fee).toEqual(LY_FEE);
+  });
+
+  it('applies the leverage-yield fee on the hub-wallet-swap (withdraw) branch', async () => {
+    const s = makeSodax({ swaps: { partnerFee: SWAP_FEE }, leverageYield: { partnerFee: LY_FEE } });
+    mocks.constructCreateIntentData.mockReturnValueOnce(['0xhubdata', makeIntent(ARBITRUM), 0n]);
+    vi.spyOn(s.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xmsgTx' });
+
+    await s.leverageYield.createVaultIntent({
+      params: vaultIntentParams(ARBITRUM, {
+        inputToken: VAULT,
+        outputToken: SPOKE_TOKEN,
+        dstChainKey: ARBITRUM as SpokeChainKey,
+        dstAddress: SAMPLE_USER,
+      }),
+      walletProvider: mockEvmProvider,
+      raw: false,
+      hubWalletSwap: true,
+    });
+
+    expect(mocks.constructCreateIntentData.mock.calls[0]?.[3]).toEqual(LY_FEE);
+  });
+});
+
+// ─── getQuote — vault-fee-aware solver quote ──────────────────────────────
+
+describe('LeverageYieldService.getQuote', () => {
+  const LY_FEE = { address: SAMPLE_USER, percentage: 100 } as const satisfies PartnerFee; // 1%
+  const SWAP_FEE = { address: HUB_WALLET, percentage: 50 } as const satisfies PartnerFee;
+
+  const quoteParams = {
+    token_src: SPOKE_TOKEN,
+    token_src_blockchain_id: ARBITRUM,
+    token_dst: VAULT,
+    token_dst_blockchain_id: HUB as SpokeChainKey,
+    amount: 1_000_000n,
+    quote_type: 'exact_input',
+  } as const;
+
+  /** Amount actually forwarded to the solver, i.e. gross minus the fee applied by getQuote. */
+  const quotedAmount = async (s: Sodax, overrides: { partnerFee?: PartnerFee } = {}) => {
+    mocks.solverGetQuote.mockResolvedValueOnce({ ok: true, value: { quoted_amount: 1n } });
+    await s.leverageYield.getQuote({ ...quoteParams, ...overrides });
+    expect(mocks.solverGetQuote).toHaveBeenCalledTimes(1);
+    return mocks.solverGetQuote.mock.calls[0]?.[0].amount;
+  };
+
+  it('deducts the configured leverageYield.partnerFee before quoting', async () => {
+    const amount = await quotedAmount(new Sodax({ leverageYield: { partnerFee: LY_FEE } }));
+    expect(amount).toBe(990_000n); // 1% of 1_000_000
+  });
+
+  it('deducts nothing when no leverage-yield or global fee is configured', async () => {
+    expect(await quotedAmount(new Sodax())).toBe(1_000_000n);
+  });
+
+  it('ignores swaps.partnerFee — matches what the vault intent will charge, not the swap fee', async () => {
+    expect(await quotedAmount(new Sodax({ swaps: { partnerFee: SWAP_FEE } }))).toBe(1_000_000n);
+  });
+
+  it('honours a per-call partnerFee override', async () => {
+    const s = new Sodax({ leverageYield: { partnerFee: LY_FEE } });
+    const amount = await quotedAmount(s, { partnerFee: { address: HUB_WALLET, percentage: 10 } });
+    expect(amount).toBe(999_000n); // 0.1% of 1_000_000
+  });
+
+  it('forwards the request fields unchanged and returns the solver response', async () => {
+    const s = new Sodax();
+    mocks.solverGetQuote.mockResolvedValueOnce({ ok: true, value: { quoted_amount: 4_242n } });
+    const result = await s.leverageYield.getQuote(quoteParams);
+
+    expect(result).toEqual({ ok: true, value: { quoted_amount: 4_242n } });
+    const [forwarded, solverConfig] = mocks.solverGetQuote.mock.calls[0] ?? [];
+    // partnerFee is stripped; every other field reaches the solver verbatim.
+    expect(forwarded).toEqual({ ...quoteParams });
+    expect(forwarded).not.toHaveProperty('partnerFee');
+    // The instance under test, not the module-level `sodax`: deepMerge happens to share the
+    // `solver` sub-object across instances, so asserting the other one would pass vacuously.
+    expect(solverConfig).toBe(s.config.solver);
+  });
+
+  it('propagates a solver error Result instead of throwing', async () => {
+    const error = { detail: { code: -4, message: 'no path' } };
+    mocks.solverGetQuote.mockResolvedValueOnce({ ok: false, error });
+
+    const result = await new Sodax().leverageYield.getQuote(quoteParams);
+
+    expect(result).toEqual({ ok: false, error });
+  });
+
+  // The other LY methods return a Result for bad input; getQuote must not be the one that throws.
+  it('returns VALIDATION_FAILED for a non-positive amount rather than rejecting', async () => {
+    const result = await new Sodax().leverageYield.getQuote({ ...quoteParams, amount: 0n });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error) && result.error.code).toBe('VALIDATION_FAILED');
+    expect(mocks.solverGetQuote).not.toHaveBeenCalled();
+  });
+
+  // A fee that leaves nothing to quote is an input/config problem, not a lookup failure — the
+  // underlying fee arithmetic throws a bare invariant, which would otherwise be wrapped as
+  // LOOKUP_FAILED and rendered as a retryable network-ish error.
+  it('returns VALIDATION_FAILED when a fixed partner fee exceeds the quote amount', async () => {
+    const s = new Sodax({ leverageYield: { partnerFee: { address: SAMPLE_USER, amount: 2_000_000n } } });
+
+    const result = await s.leverageYield.getQuote(quoteParams); // amount is 1_000_000n
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error) && result.error.code).toBe('VALIDATION_FAILED');
+    expect(mocks.solverGetQuote).not.toHaveBeenCalled();
+  });
+
+  it('returns VALIDATION_FAILED when a fixed partner fee equals the quote amount', async () => {
+    const s = new Sodax({ leverageYield: { partnerFee: { address: SAMPLE_USER, amount: 1_000_000n } } });
+
+    const result = await s.leverageYield.getQuote(quoteParams);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error) && result.error.code).toBe('VALIDATION_FAILED');
+    expect(mocks.solverGetQuote).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['above the 10_000 bp scale', 20_000],
+    ['negative', -5],
+    // Fractional passes calculateFeeAmount's bounds check, then BigInt(0.5) throws a RangeError.
+    ['fractional', 0.5],
+  ])('returns VALIDATION_FAILED for a %s percentage fee', async (_label, percentage) => {
+    const s = new Sodax({ leverageYield: { partnerFee: { address: SAMPLE_USER, percentage } } });
+
+    const result = await s.leverageYield.getQuote(quoteParams);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error) && result.error.code).toBe('VALIDATION_FAILED');
+    expect(mocks.solverGetQuote).not.toHaveBeenCalled();
+  });
+
+  it('returns VALIDATION_FAILED when a 100% percentage fee consumes the whole amount', async () => {
+    const s = new Sodax({ leverageYield: { partnerFee: { address: SAMPLE_USER, percentage: 10_000 } } });
+
+    const result = await s.leverageYield.getQuote(quoteParams);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error) && result.error.code).toBe('VALIDATION_FAILED');
+    expect(mocks.solverGetQuote).not.toHaveBeenCalled();
+  });
+
+  it('tags error context with token-side chain keys, not srcChainKey/dstChainKey', async () => {
+    const result = await new Sodax().leverageYield.getQuote({ ...quoteParams, amount: 0n });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    if (!isSodaxError(result.error)) throw new Error('expected a SodaxError');
+    // A withdraw quote's token_src lives on the hub, so `srcChainKey` would misreport the chain
+    // the user signs on. Neutral names keep the field meanings intact across both directions.
+    expect(result.error.context).toMatchObject({
+      method: 'getQuote',
+      tokenSrcChainKey: ARBITRUM,
+      tokenDstChainKey: HUB,
+    });
+    expect(result.error.context).not.toHaveProperty('srcChainKey');
+  });
+
+  it('returns LOOKUP_FAILED when the solver call rejects (unsupported token)', async () => {
+    // SolverApiService asserts its own preconditions as a rejection — it must not escape getQuote.
+    mocks.solverGetQuote.mockRejectedValueOnce(new Error('unsupported token_src for src chain'));
+
+    const result = await new Sodax().leverageYield.getQuote(quoteParams);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error) && result.error.code).toBe('LOOKUP_FAILED');
   });
 });
 
@@ -1216,4 +1517,90 @@ describe('LeverageYieldService — additional error paths', () => {
     expect(result.error.code).toBe('EXTERNAL_API_ERROR');
     expect(result.error.context?.solverCode).toBe(-999);
   });
+});
+
+// ─── Partner-fee precedence, end to end through both builders ─────────────
+
+/**
+ * The precedence chain is `per-intent ?? leverageYield.partnerFee ?? global fee ?? none`, resolved
+ * at a single point in `createVaultIntent`. These cases drive it through the **builders** —
+ * `deposit()` and `withdraw()` — because that hop is what differs per flow: each must forward a
+ * caller fee onto the payload and leave the key absent otherwise. Every case also sets
+ * `swaps.partnerFee` to a distinct value it must never pick up.
+ */
+describe('LeverageYieldService — partner-fee precedence end to end', () => {
+  const PARAM = { address: SAMPLE_USER, percentage: 10 } as const satisfies PartnerFee;
+  const FEATURE = { address: HUB_WALLET, percentage: 100 } as const satisfies PartnerFee;
+  const GLOBAL = { address: POOL, percentage: 25 } as const satisfies PartnerFee;
+  const SWAPS = { address: BORROW_TOKEN, percentage: 77 } as const satisfies PartnerFee;
+
+  const mk = (o: SodaxOptions) => {
+    const s = new Sodax(o);
+    vi.spyOn(s.config, 'isValidOriginalAssetAddress').mockReturnValue(true);
+    vi.spyOn(s.config, 'isValidSpokeChainKey').mockReturnValue(true);
+    vi.spyOn(s.hubProvider, 'getUserHubWalletAddress').mockResolvedValue(HUB_WALLET);
+    vi.spyOn(s.hubProvider.publicClient, 'getBlock').mockResolvedValue({ timestamp: 1n } as never);
+    return s;
+  };
+
+  const runDeposit = async (o: SodaxOptions, partnerFee?: PartnerFee) => {
+    const s = mk(o);
+    mocks.constructCreateIntentData.mockReturnValueOnce(['0xd', makeIntent(ARBITRUM), 0n]);
+    vi.spyOn(s.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: '0xtx' });
+    const built = await s.leverageYield.deposit({
+      vault: VAULT,
+      srcChainKey: ARBITRUM,
+      srcAddress: SAMPLE_USER,
+      inputToken: SPOKE_TOKEN,
+      inputAmount: 1_000n,
+      minOutputAmount: 900n,
+      ...(partnerFee && { partnerFee }),
+    });
+    if (!built.ok) throw new Error('deposit build failed');
+    await s.leverageYield.createVaultIntent({ ...built.value, walletProvider: mockEvmProvider, raw: false });
+    expect(mocks.constructCreateIntentData).toHaveBeenCalledTimes(1);
+    return mocks.constructCreateIntentData.mock.calls[0]?.[3];
+  };
+
+  const runWithdraw = async (o: SodaxOptions, partnerFee?: PartnerFee) => {
+    const s = mk(o);
+    mocks.constructCreateIntentData.mockReturnValueOnce(['0xd', makeIntent(ARBITRUM), 0n]);
+    vi.spyOn(s.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xmsg' });
+    const built = await s.leverageYield.withdraw({
+      vault: VAULT,
+      srcChainKey: ARBITRUM,
+      srcAddress: SAMPLE_USER,
+      dstChainKey: ARBITRUM,
+      outputToken: SPOKE_TOKEN,
+      inputAmount: 1_000n,
+      minOutputAmount: 900n,
+      ...(partnerFee && { partnerFee }),
+    });
+    if (!built.ok) throw new Error('withdraw build failed');
+    await s.leverageYield.createVaultIntent({ ...built.value, walletProvider: mockEvmProvider, raw: false });
+    expect(mocks.constructCreateIntentData).toHaveBeenCalledTimes(1);
+    return mocks.constructCreateIntentData.mock.calls[0]?.[3];
+  };
+
+  for (const [name, run] of [
+    ['deposit', runDeposit],
+    ['withdraw', runWithdraw],
+  ] as const) {
+    it(`${name}: 1) param fee wins over feature + global + swaps`, async () => {
+      expect(
+        await run({ fee: GLOBAL, swaps: { partnerFee: SWAPS }, leverageYield: { partnerFee: FEATURE } }, PARAM),
+      ).toEqual(PARAM);
+    });
+    it(`${name}: 2) feature fee wins over global + swaps`, async () => {
+      expect(await run({ fee: GLOBAL, swaps: { partnerFee: SWAPS }, leverageYield: { partnerFee: FEATURE } })).toEqual(
+        FEATURE,
+      );
+    });
+    it(`${name}: 3) global fee applies when feature unset`, async () => {
+      expect(await run({ fee: GLOBAL, swaps: { partnerFee: SWAPS } })).toEqual(GLOBAL);
+    });
+    it(`${name}: 4) no fee when nothing configured`, async () => {
+      expect(await run({ swaps: { partnerFee: SWAPS } })).toBeUndefined();
+    });
+  }
 });

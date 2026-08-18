@@ -130,6 +130,45 @@ pnpm checkTs
 
 The package builds dual ESM/CJS output with `tsup`. Relative imports in source use `.js` extensions.
 
+`build` runs `scripts/verify-dist-exports.mjs` after `tsup`, asserting every file named in
+`package.json#exports` was actually emitted. `tsup` runs with `clean: true` and writes JS about ten
+seconds before declarations, so a build that dies in that window leaves a `dist/` with runtime output
+and no `.d.ts` — a state nothing downstream can distinguish from success, and which turbo will cache
+because the task exited 0. The guard makes that exit code honest.
+
+`pnpm check-exports` (`attw --pack`) also fails on a missing `.d.ts`, so the two overlap on symptom
+but not on timing: it is a separate task that runs *after* the build, by which point turbo has
+already cached the partial `dist/`. This runs inside `build`, so the bad state is never cached.
+
+Two related rules:
+
+- **Never import `@sodax/sdk` from inside this package.** A self-referential package import resolves
+  through `exports` into `dist/`, which makes a unit test depend on a build artifact. Use the
+  relative barrel (`../index.js`) — that is what every test here does.
+- If a build ever *does* get cached in a partial state, the symptom is a `Failed to resolve entry for
+  package` error under `pnpm test` that vanishes when you run vitest directly on the same file.
+  Refresh the entry rather than chasing the test:
+
+```bash
+npx turbo build --force --filter=@sodax/sdk
+```
+
+### Backend API URLs
+
+`api.baseURL` is the **gateway root** — origin plus the deployment's version prefix. Each service appends
+its own path below it, so a base URL must never contain a service segment; folding one in relocates every
+sibling service too. The composed model is documented in
+[`docs/CONFIGURE_SDK.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md)
+§ "How a request URL is composed".
+
+`basePath` (`BackendApiConfig`) is the only configurable mount, because the data API's is the only one that
+varies by deployment — it disappears when that service is addressed directly rather than through the
+gateway. A new service puts its segment in its route strings, like `BridgeApiService` and
+`SponsoringApiService` do; it does not get a config knob it has no deployment variance to justify.
+Sponsoring is the one service that does **not** inherit the configured root — see `resolveSponsoringApiConfig`.
+`src/backendApi/defaultApiUrls.test.ts` pins one full request URL per service from a no-config
+`new Sodax()` and is the gate for all of this.
+
 ### Sponsoring Contract Gate
 
 Where the service is mounted belongs to the deployment, not to the SDK: `SPONSORING_API_STELLAR_BASE_PATH`
