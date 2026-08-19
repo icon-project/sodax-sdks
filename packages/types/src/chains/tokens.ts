@@ -2657,6 +2657,45 @@ export const hederaSupportedTokens = {
   },
 } as const satisfies Record<string, XToken>;
 
+export const robinhoodSupportedTokens = {
+  ETH: {
+    symbol: 'ETH',
+    name: 'ETH',
+    decimals: 18,
+    address: '0x0000000000000000000000000000000000000000',
+    chainKey: ChainKeys.ROBINHOOD_MAINNET,
+    hubAsset: '0x389f1c463438b548f430a9934e99cdedbf124c1f',
+    vault: SodaTokens.sodaETH.address,
+  },
+  bnUSD: {
+    symbol: 'bnUSD',
+    name: 'bnUSD',
+    decimals: 18,
+    address: '0x3cd95C469be0EDFD12Bd4F3a4436B132B7908DF4',
+    chainKey: ChainKeys.ROBINHOOD_MAINNET,
+    hubAsset: '0x95f8d76299ac77325b0bd154a1eeb8650367ce4d',
+    vault: SodaTokens.bnUSD.address,
+  },
+  SODA: {
+    symbol: 'SODA',
+    name: 'SODAX',
+    decimals: 18,
+    address: '0xA256dd181C3f6E5eC68C6869f5D50a712d47212e',
+    chainKey: ChainKeys.ROBINHOOD_MAINNET,
+    hubAsset: '0x06dd369f24623e331053baf31a5138f76eb44f11',
+    vault: SodaTokens.sodaSODA.address,
+  },
+  USDG: {
+    symbol: 'USDG',
+    name: 'Global Dollar',
+    decimals: 6,
+    address: '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168',
+    chainKey: ChainKeys.ROBINHOOD_MAINNET,
+    hubAsset: '0xb2e81dddffcc9e49e9c9ded644091dfecf4ff4e7',
+    vault: SodaTokens.sodaUSDC.address,
+  },
+} as const satisfies Record<string, XToken>;
+
 export const stacksSupportedTokens = {
   STX: {
     symbol: 'STX',
@@ -2729,4 +2768,5 @@ export const supportedTokensByChain = {
   [ChainKeys.KAIA_MAINNET]: kaiaSupportedTokens,
   [ChainKeys.STACKS_MAINNET]: stacksSupportedTokens,
   [ChainKeys.HEDERA_MAINNET]: hederaSupportedTokens,
+  [ChainKeys.ROBINHOOD_MAINNET]: robinhoodSupportedTokens,
 } as const satisfies Record<ChainKey, Record<string, XToken>>;

@@ -49,6 +49,21 @@ export const hyper = /*#__PURE__*/ defineChain({
 });
 
 /**
+ * Manually defined viem chain config for Robinhood Chain (not yet in `viem/chains`).
+ */
+export const robinhoodChain = /*#__PURE__*/ defineChain({
+  id: 4663,
+  name: 'Robinhood Chain',
+  nativeCurrency: { decimals: 18, name: 'Ether', symbol: 'ETH' },
+  rpcUrls: {
+    default: { http: ['https://rpc.mainnet.chain.robinhood.com'] },
+  },
+  blockExplorers: {
+    default: { name: 'Blockscout', url: 'https://robinhoodchain.blockscout.com' },
+  },
+});
+
+/**
  * Returns the viem `Chain` config for the given EVM chain key.
  *
  * @param key - An `EvmChainKey` constant (e.g. `ChainKeys.SONIC_MAINNET`).
@@ -83,6 +98,8 @@ export function getEvmViemChain(key: EvmChainKey): Chain {
       return kaia;
     case ChainKeys.HEDERA_MAINNET:
       return hedera;
+    case ChainKeys.ROBINHOOD_MAINNET:
+      return robinhoodChain;
     default: {
       const exhaustiveCheck: never = key; // The never type is used to ensure that the default case is exhaustive
       console.log(exhaustiveCheck);
@@ -112,8 +129,9 @@ export function isBrowserExtensionEvmWalletConfig(config: EvmWalletConfig): conf
  *   injected by the dApp's wallet adapter (e.g. wagmi). Transport/client defaults are ignored
  *   in this mode.
  *
- * All 13 supported EVM chains are covered via {@link getEvmViemChain}; HyperEVM is defined
- * locally as {@link hyper} because it is absent from `viem/chains`.
+ * All 14 supported EVM chains are covered via {@link getEvmViemChain}; HyperEVM and
+ * Robinhood Chain are defined locally ({@link hyper}, {@link robinhoodChain}) because they
+ * are absent from `viem/chains`.
  */
 export class EvmWalletProvider extends BaseWalletProvider<EvmWalletDefaults> implements IEvmWalletProvider {
   public readonly chainType = 'EVM' as const;
