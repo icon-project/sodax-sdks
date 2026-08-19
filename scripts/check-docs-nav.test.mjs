@@ -119,3 +119,21 @@ test('reports a missing docs.json instead of throwing', t => {
   assert.equal(failures.length, 1);
   assert.match(failures[0], /docs\.json is missing/);
 });
+
+test('flags a page claimed by two tabs, which makes the second tab look dead', t => {
+  const root = createWorkspace(t, {
+    navigation: {
+      tabs: [
+        { tab: 'Home', pages: ['index', { group: 'Start here', pages: ['introduction'] }] },
+        { tab: 'Get Started', groups: [{ group: 'Start here', pages: ['introduction'] }] },
+      ],
+    },
+    files: ['index.mdx', 'introduction.md'],
+  });
+
+  const { failures } = checkDocsNav({ root });
+
+  assert.equal(failures.length, 1);
+  assert.match(failures[0], /listed under tabs "Home" and "Get Started"/);
+  assert.match(failures[0], /renders under "Home"/);
+});

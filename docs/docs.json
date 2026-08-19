@@ -44,32 +44,7 @@
     "tabs": [
       {
         "tab": "Home",
-        "pages": [
-          "index",
-          "home/sdk-stack",
-          "home/how-execution-works",
-          "home/why-sodax",
-          {
-            "group": "Start here",
-            "icon": "rocket",
-            "pages": ["introduction", "quickstart", "ai-integration-guide", "contact-form"]
-          },
-          {
-            "group": "How To",
-            "icon": "book",
-            "pages": [
-              "developers/how-to/index",
-              "developers/packages/sdk/docs/HOW_TO_MAKE_A_SWAP",
-              "developers/packages/sdk/docs/CONFIGURE_SDK",
-              "developers/packages/sdk/docs/MONETIZE_SDK"
-            ]
-          },
-          {
-            "group": "DevRel",
-            "icon": "newspaper",
-            "pages": ["resources/index", "resources/videos", "resources/blog", "resources/changelog"]
-          }
-        ]
+        "pages": ["index", "home/sdk-stack", "home/how-execution-works", "home/why-sodax"]
       },
       {
         "tab": "Get Started",
@@ -212,8 +187,6 @@
               "developers/packages/sdk/docs/WALLET_PROVIDERS",
               "developers/packages/sdk/docs/ESTIMATE_GAS",
               "developers/packages/sdk/docs/STELLAR_TRUSTLINE",
-              "developers/how-to/stellar-sponsoring-getting-started",
-              "developers/how-to/quick-sponsoring-stellar-guide",
               "developers/how-to/testnet"
             ]
           },

@@ -61,6 +61,19 @@ const isIgnored = (relPath, rules) => {
   return ignored;
 };
 
+// A page listed under two tabs renders under the first one, so the other tab's navbar link
+// lands on a page that switches tabs back — the tab reads as dead.
+const collectTabOwners = navigation => {
+  const owners = new Map();
+  for (const tab of navigation.tabs ?? []) {
+    for (const page of collectNavPages(tab)) {
+      if (!owners.has(page)) owners.set(page, []);
+      if (tab.tab) owners.get(page).push(tab.tab);
+    }
+  }
+  return owners;
+};
+
 // Page references only live in "pages" arrays; other strings are labels, icons and tab names.
 const collectNavPages = node => {
   const pages = [];
@@ -123,6 +136,12 @@ export const checkDocsNav = ({ root, docsDir = DOCS_DIR } = {}) => {
   for (const page of navPages.filter(page => !fileSet.has(page)).sort()) {
     failures.push(
       `${docsDir}/${CONFIG_FILE} navigates to "${page}" but no ${docsDir}/${page}.mdx|.md exists — that is a 404 in the sidebar.`,
+    );
+  }
+  for (const [page, tabs] of collectTabOwners(config.navigation ?? {})) {
+    if (tabs.length < 2) continue;
+    failures.push(
+      `${docsDir}/${page} is listed under tabs ${tabs.map(tab => `"${tab}"`).join(' and ')} — it renders under "${tabs[0]}", which makes the other tab's navbar link look dead. Give every page one owning tab.`,
     );
   }
   for (const file of files.filter(file => !navSet.has(file)).sort()) {

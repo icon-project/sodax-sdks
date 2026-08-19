@@ -37,7 +37,9 @@ Renaming or moving a file changes its URL. When you do, add a `redirects` entry 
    icon: star
    ---
    ```
-3. **Register it in `docs.json`.** A page missing from `navigation` is still published and
+3. **Register it in `docs.json`, under exactly one tab.** A page listed under two tabs renders
+   under the first one, so the other tab's navbar link switches straight back and reads as
+   broken. A page missing from `navigation` is still published and
    still reachable by URL — it is just absent from the sidebar, site search, the sitemap
    and `llms.txt`, which is almost never what you want. `pnpm check:docs-nav` fails on it.
 4. **Preview and check** (below).
