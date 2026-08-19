@@ -35,6 +35,10 @@ Do not hardcode supported chain counts or chain lists in agent guidance. When ex
 | `apps/swap-api-example` | Vite + React reference app driving `@sodax/swaps-api` end to end (wallet SDK for signing) | [`apps/swap-api-example/README.md`](apps/swap-api-example/README.md) |
 | `apps/stellar-sponsor-example` | Vite + React reference app for the Stellar sponsored-activation journey (dapp-kit hooks), plus an offline test lab with a bundled mock backend | [`apps/stellar-sponsor-example/AGENTS.md`](apps/stellar-sponsor-example/AGENTS.md) |
 
+### Docs site
+
+`docs/` is the docs.sodax.com Mintlify site, built from this repo by Mintlify's GitHub App: a page merged here is published, and one pushed to a branch gets a preview URL on the PR. Read [`docs/AGENTS.md`](docs/AGENTS.md) before adding, moving or renaming a page — paths are URLs, and `docs.json` navigation is what makes a page reachable. Gates: `pnpm check:docs-nav` and `pnpm docs:validate`.
+
 ## Dependency Direction
 
 - `@sodax/types` has no package dependencies.

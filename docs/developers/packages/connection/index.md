@@ -7,7 +7,7 @@ icon: wallet
 ---
 
 
-<a href="https://docs.sodax.com/developers/packages/connection/wallet-sdk-core" class="button secondary" data-icon="wallet">Wallet SDK Core (Typescript)</a>
+<a href="/developers/packages/connection/wallet-sdk-core" class="button secondary" data-icon="wallet">Wallet SDK Core (Typescript)</a>
 
-<a href="https://docs.sodax.com/developers/packages/connection/wallet-sdk-react" class="button secondary" data-icon="react">Wallet SDK React</a>
+<a href="/developers/packages/connection/wallet-sdk-react" class="button secondary" data-icon="react">Wallet SDK React</a>
 

@@ -429,7 +429,7 @@ RLUSD asset note - 0x52D94FFC0EEfdc8B6521b19ff2C8c5ddF6E842B3
 |-------|---------|
 | wICX(18) | [0xb66cB7D841272AF6BaA8b8119007EdEE35d2C24F](https://sonicscan.org/address/0xb66cB7D841272AF6BaA8b8119007EdEE35d2C24F)  |
 | bnUSD(18)| [0x654dddf32a9a2ac53f5fb54bf1e93f66791f8047](https://sonicscan.org/address/0x654dddf32a9a2ac53f5fb54bf1e93f66791f8047)  |
-| [BALN(18)]((https://tracker.icon.community/contract/cxf61cd5a45dc9f91c15aa65831a30a90d59a09619))| [0xde8e19a099fedf9d617599f62c5f7f020d92b572](https://sonicscan.org/address/0xde8e19a099fedf9d617599f62c5f7f020d92b572)  |
+| [BALN(18)](https://tracker.icon.community/contract/cxf61cd5a45dc9f91c15aa65831a30a90d59a09619)| [0xde8e19a099fedf9d617599f62c5f7f020d92b572](https://sonicscan.org/address/0xde8e19a099fedf9d617599f62c5f7f020d92b572)  |
 | [OMM(18)](https://tracker.icon.community/contract/cx1a29259a59f463a67bb2ef84398b30ca56b5830a)| [0x730a6899f0153ea13c6910417a9f07f7d0f39a18](https://sonicscan.org/address/0x730a6899f0153ea13c6910417a9f07f7d0f39a18)  |
 
 ## Injective [Encoding=utf8]
@@ -567,7 +567,7 @@ RLUSD asset note - 0x52D94FFC0EEfdc8B6521b19ff2C8c5ddF6E842B3
 | Contract | Address |
 |----------|---------|
 | AssetManager (Staging) | [bc1pcz4pyrfgv7v6tx8a404mafyvt73cnm80yuv8tqwrywxmqxpja8ys4pjyl5](https://mempool.space/address/bc1pcz4pyrfgv7v6tx8a404mafyvt73cnm80yuv8tqwrywxmqxpja8ys4pjyl5) |
-| BTC_Registry | [0xe242683faACEB5D2586a6c89e30c533D41FAA2a2](0x0c09e69a4528945de6d16c7e469dea6996fdf636](https://sonicscan.org/address/0xe242683faACEB5D2586a6c89e30c533D41FAA2a2) |
+| BTC_Registry | [0xe242683faACEB5D2586a6c89e30c533D41FAA2a2](https://sonicscan.org/address/0xe242683faACEB5D2586a6c89e30c533D41FAA2a2) |
 
 #### Assets
 | Token | Radfi Id | Address |

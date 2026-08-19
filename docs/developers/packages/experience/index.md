@@ -6,4 +6,4 @@ description: >-
 icon: browser
 ---
 
-<a href="https://docs.sodax.com/developers/packages/experience/dapp-kit" class="button secondary" data-icon="browser">dApp kit</a>
+<a href="/developers/packages/experience/dapp-kit" class="button secondary" data-icon="browser">dApp kit</a>
