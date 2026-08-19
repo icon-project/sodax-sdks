@@ -51,7 +51,7 @@ Pick a solution first. Inside each hub you’ll choose the **HTTP API** or the *
   <Card title="Builders MCP" icon="terminal" href="https://builders.sodax.com/">
     Live chains, tokens, quotes, and SDK docs for AI coding agents.
   </Card>
-  <Card title="Talk to the team" icon="handshake" href="/contact-form">
-    Partnership or integration questions.
+  <Card title="Talk to the team" icon="handshake" href="/contact">
+    Integration help, SDK bugs, or partnership enquiries.
   </Card>
 </CardGroup>
