@@ -8,7 +8,12 @@ import type {
   SpokeChainKey,
   StellarRawTransaction,
 } from '@sodax/sdk';
-import { isEvmSpokeOnlyChainKeyType, isHubChainKeyType, isStellarChainKeyType } from '@sodax/sdk';
+import {
+  isApprovalSupportedChainKeyType,
+  isEvmSpokeOnlyChainKeyType,
+  isHubChainKeyType,
+  isStellarChainKeyType,
+} from '@sodax/sdk';
 
 /** Hashes of the transactions an approval plan broadcast, in the order they were sent. */
 export type ApprovalHashes = {
@@ -73,6 +78,15 @@ function resolveChainSender(
 ): ChainSender {
   const fail = (message: string): Error => new Error(`[${hookName}] ${message}`);
 
+  // Single SDK-exported source for "which chains support approval" — the same partition
+  // SpokeService's approve-params guards resolve to, so a chain added there isn't silently
+  // missed here too.
+  if (!isApprovalSupportedChainKeyType(srcChainKey)) {
+    throw fail(
+      `${srcChainKey} cannot be approved — SODAX approve routes support the hub (Sonic), EVM spokes, and Stellar.`,
+    );
+  }
+
   if (isHubChainKeyType(srcChainKey) || isEvmSpokeOnlyChainKeyType(srcChainKey)) {
     const evm = walletProvider as IEvmWalletProvider;
 
@@ -107,6 +121,9 @@ function resolveChainSender(
     };
   }
 
+  // Unreachable: isApprovalSupportedChainKeyType above already confirmed srcChainKey is hub, EVM-spoke,
+  // or Stellar, and the two branches above cover all three — kept only to satisfy TypeScript's
+  // return-path check (the guard is a plain boolean, so it doesn't narrow srcChainKey's type here).
   throw fail(
     `${srcChainKey} cannot be approved — SODAX approve routes support the hub (Sonic), EVM spokes, and Stellar.`,
   );

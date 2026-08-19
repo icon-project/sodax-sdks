@@ -94,7 +94,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
   const [bridgeError, setBridgeError] = useState<string | null>(null);
   const [isApproving, setIsApproving] = useState(false);
   // A guarded token needs two signatures; one flat "Approving…" across both looks like a double charge.
-  const [approvalStep, setApprovalStep] = useState<string | null>(null);
+  const [approvalProgress, setApprovalProgress] = useState<ApprovalProgress | null>(null);
   const [isBridging, setIsBridging] = useState(false);
   const [isFromBtcReady, setIsFromBtcReady] = useState(false);
   const [isToBtcReady, setIsToBtcReady] = useState(false);
@@ -303,7 +303,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
         body: bridgeBody,
         walletProvider: sourceWalletProvider,
         apiConfig: BRIDGE_API_CONFIG,
-        onProgress: progress => setApprovalStep(approvalStepLabel(progress)),
+        onProgress: setApprovalProgress,
       });
       if (!result.ok) {
         setApproveError(formatMutationFailureMessage(result.error, 'Approve failed'));
@@ -313,7 +313,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
       setApproveError(formatMutationFailureMessage(error, 'Approve signing failed'));
     } finally {
       setIsApproving(false);
-      setApprovalStep(null);
+      setApprovalProgress(null);
     }
   };
 
@@ -645,7 +645,8 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
               >
                 {isApproving ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {approvalStep ?? 'Approving…'}
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />{' '}
+                    {(approvalProgress && approvalStepLabel(approvalProgress)) ?? 'Approving…'}
                   </>
                 ) : hasAllowance ? (
                   'Approved'
