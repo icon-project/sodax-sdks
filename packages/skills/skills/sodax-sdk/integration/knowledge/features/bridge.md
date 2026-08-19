@@ -16,6 +16,8 @@ A bridge call deposits the source token into its vault on the hub, then triggers
 sodax.bridge.bridge<K>(action: BridgeParams<K, false>): Promise<Result<TxHashPair, SodaxError>>;
 sodax.bridge.createBridgeIntent<K, Raw>(action: BridgeParams<K, Raw>): Promise<Result<IntentTxResult<K, Raw>, SodaxError>>;
 sodax.bridge.approve<K, Raw>(args): Promise<Result<TxReturnType<K, Raw>, SodaxError>>;
+// Unsigned callers only: returns both transactions when a stale allowance must be cleared first.
+sodax.bridge.buildApproveTxs<K>(action: BridgeParams<K, true>): Promise<Result<ApprovalTxs<K>, SodaxError>>;
 sodax.bridge.isAllowanceValid<K, Raw>(args): Promise<Result<boolean, SodaxError>>;
 
 sodax.bridge.getBridgeableAmount(from: XToken, to: XToken): Promise<Result<BridgeLimit, SodaxError>>;
@@ -195,6 +197,7 @@ if (result.ok) {
 | `bridge` | `TxHashPair` |
 | `createBridgeIntent` | `IntentTxResult<K, Raw>` = `{ tx: TxReturnType<K, Raw>, relayData }` |
 | `approve` | `TxReturnType<K, Raw>` |
+| `buildApproveTxs` | `ApprovalTxs<K> = { approveTx, resetTx? }` |
 | `isAllowanceValid` | `boolean` |
 | `getBridgeableAmount` | `BridgeLimit = { amount, decimals, type }` |
 | `getBridgeableTokens` | `XToken[]` |
@@ -204,6 +207,13 @@ change (Ethereum USDT is the only listed one today): `approve(0)` is mined first
 approval, so the user signs twice. The returned value is unchanged — one hash, the **last**
 transaction's. Detection simulates the approval, so never gate on a token list. Full note: "ERC-20
 approval can take two transactions" in [`architecture.md`](../architecture.md).
+
+Unsigned callers cannot get that from `approve({ raw: true })`, which returns a single transaction.
+Use `buildApproveTxs` instead — it returns `{ approveTx, resetTx? }`, and when `resetTx` is present
+you must broadcast it and wait for it to be mined before `approveTx`. It resolves the same spender as
+`approve` and `isAllowanceValid` (the caller's own hub wallet router on the hub, the asset manager on
+an EVM spoke), so do not substitute `sodax.swaps.buildApproveTxs` for a bridge — swaps approves a
+different contract on the hub.
 
 ## Error codes
 

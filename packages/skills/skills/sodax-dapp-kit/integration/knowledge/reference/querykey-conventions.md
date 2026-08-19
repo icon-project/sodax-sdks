@@ -197,6 +197,7 @@ Typed wrappers over `sodax.api.bridge.*` (one per Bridge API v2 endpoint), all k
 | `['bridgeApi', 'bridgeable', srcChainKey, dstChainKey, inputToken, outputToken]` | `useBridgeApiIsBridgeable` |
 | `['bridgeApi', 'submitTx', 'status', txHash, srcChainKey]` | `useBridgeApiSubmitTxStatus` — both identifiers required |
 | `['bridgeApi', 'approve']` | `useBridgeApiApprove` mutation |
+| `['bridgeApi', 'approveAndBroadcast']` | `useBridgeApiApproveAndBroadcast` mutation |
 | `['bridgeApi', 'createBridgeIntent']` | `useBridgeApiCreateBridgeIntent` mutation |
 | `['bridgeApi', 'submitTx']` | `useBridgeApiSubmitTx` mutation |
 
