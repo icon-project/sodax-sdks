@@ -121,7 +121,7 @@ export const moneyMarketSupportedTokens = {
     spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.POL,
     spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.HYPE,
     spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.NEAR,
-    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.HBAR,
+    // HBAR omitted: sodaHBAR has no live money-market reserve on the hub yet (swap-only for now)
     spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.USDS,
   ] as const satisfies XToken[],
   [ChainKeys.SUI_MAINNET]: [
