@@ -7,7 +7,7 @@ icon: book-open
 
 How the Sonic hub coordinates spoke networks: asset movement, unified tokens, deterministic wallets, intent settlement, and cross-network messaging.
 
-<figure><img src="../../.gitbook/assets/image (1).png" alt="SODAX hub-and-spoke architecture"><figcaption></figcaption></figure>
+![SODAX hub-and-spoke architecture](/images/hub-and-spoke-architecture.png)
 
 ### Infra goals
 
