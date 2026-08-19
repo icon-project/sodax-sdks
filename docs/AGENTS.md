@@ -21,8 +21,17 @@ correct. The commands below are the gate.
   are still published and reachable by URL, but drop out of the sidebar, search, the
   sitemap and `llms.txt`.
 - **Every nav entry needs its file**, or the sidebar links to a 404.
+- **Every page has a `title` and an `icon`.** Without a title Mintlify derives one from the
+  filename; without an icon the page looks broken beside its siblings. Icons are Font
+  Awesome names — reuse the one already used for that concept.
 - **Body starts at `##`** — the H1 comes from frontmatter `title`. MDX comments are
-  `{/* ... */}`; HTML comments break the page.
+  `{/* ... */}`; HTML comments break the page. Angle-bracket autolinks (`<https://…>`) are
+  not valid MDX either; use `[text](url)`.
+- **Never edit a generated page.** Pages whose frontmatter says they are generated come from
+  a package source listed in `scripts/gitbook-sync-map.json`; edit that source and run
+  `pnpm docs:sync-pages`. `pnpm check:docs-pages` fails on drift.
+- **Each network is its own nav group** under Network guides, mirroring `solana/` page for
+  page. Do not add a network as a loose page beside the groups.
 - **Repo-internal docs do not belong here.** If one must live in this directory, add it to
   [`.mintignore`](.mintignore), which removes it from the site rather than leaving it
   reachable.

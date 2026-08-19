@@ -147,7 +147,7 @@ Full mapping: [Relayer API endpoints](/developers/deployments/relayer-api-endpoi
 
 From your project root run `npx skills@latest add icon-project/sodax-sdks/packages/skills`. The CLI detects your tool (Claude Code, Cursor, Codex, Copilot) and installs `AGENTS.md` plus per-feature `SKILL.md` files into the conventional location. Point your agent rules at the installed `AGENTS.md`, not the GitHub main branch, so version drift does not corrupt the routing.
 
-See [AI Integration](/developers/ai-integration).
+See [AI Integration](/ai-integration-guide).
 
 #### 21. What is hub wallet abstraction and when do I touch it directly?
 
@@ -159,7 +159,7 @@ See [Hub Wallet Abstraction](/developers/technical-overview/hub-wallet-abstracti
 
 Yes, two ways. This documentation site hosts an auto-generated MCP server at `docs.sodax.com/mcp` that exposes a search tool over these pages — add it to your agent's MCP config, or use the "Add to \[agent]" option in the contextual menu on any page. For deeper, code-aware assistance beyond doc search, SODAX also runs a dedicated MCP server at [builders.sodax.com](https://builders.sodax.com/).
 
-See [AI Integration](/developers/ai-integration).
+See [AI Integration](/ai-integration-guide).
 
 ***
 

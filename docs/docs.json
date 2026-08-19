@@ -1,7 +1,7 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "name": "SODAX Docs",
-  "description": "SODAX is non-custodial cross-network execution infrastructure (Sonic hub). Docs cover the open-source SDK and partner HTTP APIs for swaps, lending/borrowing, staking, bridging, and migration — SODAX routes and settles; solvers on the marketplace fill.",
+  "description": "SODAX is non-custodial cross-network execution infrastructure (Sonic hub). Docs cover the open-source SDK and partner HTTP APIs for swaps, lending/borrowing, staking, bridging, and migration \u2014 SODAX routes and settles; solvers on the marketplace fill.",
   "logo": "/sodax-logo-small.svg",
   "favicon": "/favicon.ico",
   "theme": "mint",
@@ -30,8 +30,14 @@
   },
   "navbar": {
     "links": [
-      { "label": "SODAX Scan", "href": "https://sodaxscan.com" },
-      { "label": "Support", "href": "https://support.sodax.com" }
+      {
+        "label": "SODAX Scan",
+        "href": "https://sodaxscan.com"
+      },
+      {
+        "label": "Support",
+        "href": "https://support.sodax.com"
+      }
     ]
   },
   "navigation": {
@@ -46,12 +52,7 @@
           {
             "group": "Start here",
             "icon": "rocket",
-            "pages": [
-              "introduction",
-              "quickstart",
-              "developers/ai-integration",
-              "contact-form"
-            ]
+            "pages": ["introduction", "quickstart", "ai-integration-guide", "contact-form"]
           },
           {
             "group": "How To",
@@ -66,12 +67,7 @@
           {
             "group": "DevRel",
             "icon": "newspaper",
-            "pages": [
-              "resources/index",
-              "resources/videos",
-              "resources/blog",
-              "resources/changelog"
-            ]
+            "pages": ["resources/index", "resources/videos", "resources/blog", "resources/changelog"]
           }
         ]
       },
@@ -81,12 +77,7 @@
           {
             "group": "Start here",
             "icon": "rocket",
-            "pages": [
-              "introduction",
-              "quickstart",
-              "developers/ai-integration",
-              "contact-form"
-            ]
+            "pages": ["introduction", "quickstart", "ai-integration-guide", "contact-form"]
           },
           {
             "group": "Network guides",
@@ -105,8 +96,19 @@
                   "solana/faq"
                 ]
               },
-              "developers/how-to/bitcoin-integration",
-              "developers/how-to/stellar-sponsoring-getting-started"
+              {
+                "group": "Bitcoin",
+                "icon": "bitcoin-sign",
+                "pages": ["developers/how-to/bitcoin-integration"]
+              },
+              {
+                "group": "Stellar",
+                "icon": "star",
+                "pages": [
+                  "developers/how-to/stellar-sponsoring-getting-started",
+                  "developers/how-to/quick-sponsoring-stellar-guide"
+                ]
+              }
             ]
           }
         ]
@@ -247,26 +249,17 @@
           {
             "group": "DevRel",
             "icon": "newspaper",
-            "pages": [
-              "resources/index",
-              "resources/videos",
-              "resources/blog",
-              "resources/changelog"
-            ]
+            "pages": ["resources/index", "resources/videos", "resources/blog", "resources/changelog"]
           },
           {
             "group": "Security",
             "icon": "shield-halved",
-            "pages": [
-              "developers/audits/index"
-            ]
+            "pages": ["developers/audits/index"]
           },
           {
             "group": "FAQ",
             "icon": "comment-question",
-            "pages": [
-              "developers/faq"
-            ]
+            "pages": ["developers/faq"]
           }
         ]
       }
@@ -412,6 +405,10 @@
     {
       "source": "/developers/deployments/solver-compatible-assets",
       "destination": "/developers/deployments/swaps-compatible-assets"
+    },
+    {
+      "source": "/developers/ai-integration",
+      "destination": "/ai-integration-guide"
     }
   ],
   "thumbnails": {
@@ -434,10 +431,12 @@
     "raiseIssue": true
   },
   "markdown": {
-    "instructions": "SODAX is mainnet-only (no testnet chains or RPC endpoints exist) with a hub-and-spoke architecture; Sonic is the hub. SODAX is non-custodial protocol/software: it routes and settles; independent solvers on the marketplace fill — never say 'our solver', 'the SODAX solver', that SODAX trades, takes custody, or fills orders. For frontend/React integrations, prefer @sodax/dapp-kit hooks over calling @sodax/sdk directly. SDK operations — the methods that build, submit or await a transaction, and the API/quote calls — return Result<T, E> ({ ok: true, value } or { ok: false, error }): check result.ok, never wrap them in try/catch or branch on error.message; discriminate on the narrow error.code union instead. Synchronous config getters (getPartnerFee, getSupportedSwapTokens, getVault, ...) return their value directly, not a Result."
+    "instructions": "SODAX is mainnet-only (no testnet chains or RPC endpoints exist) with a hub-and-spoke architecture; Sonic is the hub. SODAX is non-custodial protocol/software: it routes and settles; independent solvers on the marketplace fill \u2014 never say 'our solver', 'the SODAX solver', that SODAX trades, takes custody, or fills orders. For frontend/React integrations, prefer @sodax/dapp-kit hooks over calling @sodax/sdk directly. SDK operations \u2014 the methods that build, submit or await a transaction, and the API/quote calls \u2014 return Result<T, E> ({ ok: true, value } or { ok: false, error }): check result.ok, never wrap them in try/catch or branch on error.message; discriminate on the narrow error.code union instead. Synchronous config getters (getPartnerFee, getSupportedSwapTokens, getVault, ...) return their value directly, not a Result."
   },
   "integrations": {
-    "ga4": { "measurementId": "G-Z10HMBQ0V9" }
+    "ga4": {
+      "measurementId": "G-Z10HMBQ0V9"
+    }
   },
   "footer": {
     "socials": {
@@ -450,20 +449,47 @@
       {
         "header": "Cross-network products",
         "items": [
-          { "label": "Intent swaps for apps", "href": "https://docs.sodax.com/swap" },
-          { "label": "Lend / Borrow for apps", "href": "https://docs.sodax.com/money-market" },
-          { "label": "Bridge service", "href": "https://docs.sodax.com/bridge" },
-          { "label": "SODA Exchange", "href": "https://www.sodax.com/exchange/swap" }
+          {
+            "label": "Intent swaps for apps",
+            "href": "https://docs.sodax.com/swap"
+          },
+          {
+            "label": "Lend / Borrow for apps",
+            "href": "https://docs.sodax.com/money-market"
+          },
+          {
+            "label": "Bridge service",
+            "href": "https://docs.sodax.com/bridge"
+          },
+          {
+            "label": "SODA Exchange",
+            "href": "https://www.sodax.com/exchange/swap"
+          }
         ]
       },
       {
         "header": "Resources",
         "items": [
-          { "label": "sodax.com", "href": "https://www.sodax.com" },
-          { "label": "SODAX Scan — message tracker", "href": "https://sodaxscan.com" },
-          { "label": "Brand kit", "href": "https://www.sodax.com/brand" },
-          { "label": "Partner portal", "href": "https://www.sodax.com/partner-dashboard" },
-          { "label": "MiCA whitepaper", "href": "https://icon.foundation/projects/publications?view=soda-mica" }
+          {
+            "label": "sodax.com",
+            "href": "https://www.sodax.com"
+          },
+          {
+            "label": "SODAX Scan \u2014 message tracker",
+            "href": "https://sodaxscan.com"
+          },
+          {
+            "label": "Brand kit",
+            "href": "https://www.sodax.com/brand"
+          },
+          {
+            "label": "Partner portal",
+            "href": "https://www.sodax.com/partner-dashboard"
+          },
+          {
+            "label": "MiCA whitepaper",
+            "href": "https://icon.foundation/projects/publications?view=soda-mica"
+          }
         ]
       }
     ]

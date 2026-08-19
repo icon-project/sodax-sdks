@@ -43,9 +43,37 @@ Renaming or moving a file changes its URL. When you do, add a `redirects` entry 
 4. **Preview and check** (below).
 5. **Push.** The Mintlify check comments the preview URL on the PR.
 
+Every page carries a `title` and an `icon`: without a title Mintlify invents one from the
+filename ("Ai integration guide"), and a page without an icon looks broken next to its
+siblings. Icons are Font Awesome names — reuse one already in the sidebar for the same
+concept rather than introducing a second glyph for it.
+
 If a file must live here without being published — a contributor doc, a draft — add it to
 [`.mintignore`](.mintignore). That removes it from the site completely rather than leaving
 it reachable by URL.
+
+## Generated pages
+
+Package READMEs and the `packages/sdk/docs/` module docs stay with their package, because
+npm publishes them from there. `scripts/gitbook-sync-map.json` maps each one to its page
+path, and the copy under `docs/` is generated:
+
+```bash
+pnpm docs:sync-pages          # regenerate after editing a source
+pnpm check:docs-pages         # CI: fails when a copy has drifted
+```
+
+Every generated file says so in its frontmatter. **Edit the source, never the copy** — the
+next sync overwrites it. Adding a page this way means adding a map entry with its `dest`,
+`title` and `icon`, then a `docs.json` nav entry for that dest.
+
+## Adding a network guide
+
+Networks are uniform on purpose: each is its own nav group under **Network guides**, so a
+new one slots in without reshaping the sidebar. `solana/` is the reference shape — overview,
+quickstart, swaps, money market, wallets, networks and assets, FAQ. Start from the pages the
+network actually supports and keep the filenames identical, so readers moving between
+networks land on the same page in each one.
 
 ## The four rules that cause 404s
 
