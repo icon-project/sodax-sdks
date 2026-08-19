@@ -58,10 +58,10 @@ function SolanaConnect() {
 
 ## Scripts and backends: `SolanaWalletProvider`
 
-Outside React, construct the provider from `@sodax/sdk` directly:
+Outside React, construct the provider from `@sodax/wallet-sdk-core` directly:
 
 ```typescript
-import { SolanaWalletProvider } from '@sodax/sdk';
+import { SolanaWalletProvider } from '@sodax/wallet-sdk-core';
 
 const walletProvider = new SolanaWalletProvider({
   privateKey: keypairBytes, // Uint8Array; or pass `wallet` for extension mode

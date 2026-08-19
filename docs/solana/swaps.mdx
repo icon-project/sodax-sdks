@@ -45,13 +45,17 @@ Using SODAX is free to integrate. Two fees can apply to a trade:
 Prefer `swap()`. It creates the intent on Solana, verifies it landed, submits it to the relay, waits for the packet on the hub, and notifies the solver:
 
 ```typescript
+// `deadline` is an absolute Unix timestamp; getSwapDeadline turns an offset into one
+const deadlineResult = await sodax.swaps.getSwapDeadline(300n); // 5 minutes from now
+if (!deadlineResult.ok) throw deadlineResult.error;
+
 const result = await sodax.swaps.swap({
   params: {
     inputToken: sol.address,
     outputToken: usdc.address,
     inputAmount: 100_000_000n,
     minOutputAmount: minOut,
-    deadline: 300n,
+    deadline: deadlineResult.value,
     allowPartialFill: false,
     srcChainKey: ChainKeys.SOLANA_MAINNET,
     dstChainKey: ChainKeys.ARBITRUM_MAINNET,
@@ -87,7 +91,7 @@ await sodax.swaps.submitIntent({
 
 ## Error handling
 
-Every method returns `Result<T>` instead of throwing. The core methods (`swap`, `createIntent`, `postExecution`) return a typed `SodaxError` union you can `switch` on by `error.code`.
+Operations return `Result<T>` instead of throwing. The core methods (`swap`, `createIntent`, `postExecution`) return a typed `SodaxError` union you can `switch` on by `error.code`.
 
 ---
 

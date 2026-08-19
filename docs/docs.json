@@ -434,7 +434,7 @@
     "raiseIssue": true
   },
   "markdown": {
-    "instructions": "SODAX is mainnet-only (no testnet chains or RPC endpoints exist) with a hub-and-spoke architecture; Sonic is the hub. SODAX is non-custodial protocol/software: it routes and settles; independent solvers on the marketplace fill — never say 'our solver', 'the SODAX solver', that SODAX trades, takes custody, or fills orders. For frontend/React integrations, prefer @sodax/dapp-kit hooks over calling @sodax/sdk directly. Every public SDK method returns Result<T, E> ({ ok: true, value } or { ok: false, error }) — check result.ok, never wrap calls in try/catch or branch on error.message; discriminate on the narrow error.code union instead."
+    "instructions": "SODAX is mainnet-only (no testnet chains or RPC endpoints exist) with a hub-and-spoke architecture; Sonic is the hub. SODAX is non-custodial protocol/software: it routes and settles; independent solvers on the marketplace fill — never say 'our solver', 'the SODAX solver', that SODAX trades, takes custody, or fills orders. For frontend/React integrations, prefer @sodax/dapp-kit hooks over calling @sodax/sdk directly. SDK operations — the methods that build, submit or await a transaction, and the API/quote calls — return Result<T, E> ({ ok: true, value } or { ok: false, error }): check result.ok, never wrap them in try/catch or branch on error.message; discriminate on the narrow error.code union instead. Synchronous config getters (getPartnerFee, getSupportedSwapTokens, getVault, ...) return their value directly, not a Result."
   },
   "integrations": {
     "ga4": { "measurementId": "G-Z10HMBQ0V9" }

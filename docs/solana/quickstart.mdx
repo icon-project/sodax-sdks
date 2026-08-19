@@ -13,16 +13,16 @@ This page takes you from zero to a cross-network swap sourced from Solana. No ne
 ## 1. Install
 
 ```bash
-npm install @sodax/sdk
-# or: pnpm add @sodax/sdk / yarn add @sodax/sdk
+npm install @sodax/sdk @sodax/wallet-sdk-core
+# or: pnpm add / yarn add
 ```
 
 ## 2. Create a Solana wallet provider
 
-The SDK talks to Solana through `SolanaWalletProvider`, built on `@solana/web3.js`. Use private-key mode for scripts and bots, or browser-extension mode to wrap a connected wallet (Phantom, Backpack, Solflare, or anything exposing `publicKey` and `signTransaction`).
+The SDK talks to Solana through `SolanaWalletProvider` from `@sodax/wallet-sdk-core`, built on `@solana/web3.js`. Use private-key mode for scripts and bots, or browser-extension mode to wrap a connected wallet (Phantom, Backpack, Solflare, or anything exposing `publicKey` and `signTransaction`).
 
 ```typescript
-import { SolanaWalletProvider } from '@sodax/sdk';
+import { SolanaWalletProvider } from '@sodax/wallet-sdk-core';
 
 // Private-key mode (scripts / bots)
 const walletProvider = new SolanaWalletProvider({
@@ -76,6 +76,10 @@ const quoteResult = await sodax.swaps.getQuote({
 if (!quoteResult.ok) throw new Error('Quote failed');
 const { quoted_amount } = quoteResult.value;
 
+// `deadline` is an absolute Unix timestamp; getSwapDeadline turns an offset into one
+const deadlineResult = await sodax.swaps.getSwapDeadline(300n); // 5 minutes from now
+if (!deadlineResult.ok) throw new Error('Deadline lookup failed');
+
 // Execute
 const swapResult = await sodax.swaps.swap({
   params: {
@@ -83,7 +87,7 @@ const swapResult = await sodax.swaps.swap({
     outputToken: usdcArb.address,
     inputAmount: 100_000_000n,
     minOutputAmount: (quoted_amount * 99n) / 100n, // your slippage policy
-    deadline: 300n, // or use sodax.swaps.getSwapDeadline()
+    deadline: deadlineResult.value,
     allowPartialFill: false,
     srcChainKey: ChainKeys.SOLANA_MAINNET,
     dstChainKey: ChainKeys.ARBITRUM_MAINNET,
@@ -107,7 +111,7 @@ A few things you did not have to do:
 
 - **No approval step.** Allowances are an EVM and Stellar concept; on Solana `isAllowanceValid` passes without an on-chain transaction.
 - **No relay bookkeeping.** Manually orchestrated Solana intents need relay extra data (`getIntentSubmitTxExtraData`); `swap()` takes care of it.
-- **No error guessing.** Every method returns `Result<T>`. Check `result.ok` and branch on typed error codes instead of catching throws.
+- **No error guessing.** Operations return `Result<T>`. Check `result.ok` and branch on typed error codes instead of catching throws.
 
 ## Next steps
 
