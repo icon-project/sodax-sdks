@@ -37,9 +37,9 @@
 
 | Type | What it is |
 |---|---|
-| `ChainKey` | Union of all `ChainKeys.*` values (21 chains). |
-| `SpokeChainKey` | Same union as `ChainKey` — includes Sonic (21 chains). For "EVM chains excluding the hub" use `EvmSpokeOnlyChainKey`. |
-| `EvmChainKey` | Subset of `ChainKey` for the 13 EVM chains. |
+| `ChainKey` | Union of all `ChainKeys.*` values (22 chains). |
+| `SpokeChainKey` | Same union as `ChainKey` — includes Sonic (22 chains). For "EVM chains excluding the hub" use `EvmSpokeOnlyChainKey`. |
+| `EvmChainKey` | Subset of `ChainKey` for the 14 EVM chains. |
 | `HubChainKey` | The literal `'sonic'`. |
 
 ### Chain-family helpers
