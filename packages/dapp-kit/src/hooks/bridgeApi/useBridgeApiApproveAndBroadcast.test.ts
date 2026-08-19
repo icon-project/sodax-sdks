@@ -172,6 +172,27 @@ describe('useBridgeApiApproveAndBroadcast', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['bridgeApi', 'allowance'] });
   });
 
+  it('awaits the allowance refetch before resolving — a stale cache must not re-enable Approve', async () => {
+    useBridgeApiApproveAndBroadcast();
+    const order: string[] = [];
+    // A macrotask, not a microtask: any resolution that happens without awaiting invalidateQueries
+    // would land before this fires, so a regression here proves the mutation returned too early.
+    invalidateQueries.mockImplementationOnce(
+      () =>
+        new Promise<void>(resolve => {
+          setTimeout(() => {
+            order.push('invalidate:done');
+            resolve();
+          }, 0);
+        }),
+    );
+
+    await captured.onSuccess({ approveTxHash: APPROVE_HASH }, {}, undefined);
+    order.push('onSuccess:resolved');
+
+    expect(order).toEqual(['invalidate:done', 'onSuccess:resolved']);
+  });
+
   describe('onProgress', () => {
     it('walks each transaction through its phases, numbered against the total', async () => {
       approve.mockResolvedValue({ ok: true, value: { tx: APPROVE_TX, resetTx: RESET_TX } });

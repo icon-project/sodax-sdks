@@ -191,6 +191,27 @@ describe('useSwapsApiApproveAndBroadcast', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['swapsApi', 'allowance'] });
   });
 
+  it('awaits the allowance refetch before resolving — a stale cache must not re-enable Approve', async () => {
+    useSwapsApiApproveAndBroadcast();
+    const order: string[] = [];
+    // A macrotask, not a microtask: any resolution that happens without awaiting invalidateQueries
+    // would land before this fires, so a regression here proves the mutation returned too early.
+    invalidateQueries.mockImplementationOnce(
+      () =>
+        new Promise<void>(resolve => {
+          setTimeout(() => {
+            order.push('invalidate:done');
+            resolve();
+          }, 0);
+        }),
+    );
+
+    await captured.onSuccess({ approveTxHash: APPROVE_HASH }, {}, undefined);
+    order.push('onSuccess:resolved');
+
+    expect(order).toEqual(['invalidate:done', 'onSuccess:resolved']);
+  });
+
   it('reports progress too — the runner is shared, so swaps must not be left without it', async () => {
     approve.mockResolvedValue({ ok: true, value: { tx: APPROVE_TX, resetTx: RESET_TX } });
     const events: ApprovalProgress[] = [];

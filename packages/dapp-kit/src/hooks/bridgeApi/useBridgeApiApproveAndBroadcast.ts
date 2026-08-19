@@ -67,7 +67,9 @@ export const useBridgeApiApproveAndBroadcast = <K extends SpokeChainKey = SpokeC
       });
     },
     onSuccess: async (data, vars, ctx) => {
-      queryClient.invalidateQueries({ queryKey: ['bridgeApi', 'allowance'] });
+      // Awaited: the mutation must not resolve — re-enabling Approve — before the allowance query
+      // has actually refetched, or a stale cached `valid: false` re-enables a duplicate approval.
+      await queryClient.invalidateQueries({ queryKey: ['bridgeApi', 'allowance'] });
       await mutationOptions?.onSuccess?.(data, vars, ctx);
     },
   });

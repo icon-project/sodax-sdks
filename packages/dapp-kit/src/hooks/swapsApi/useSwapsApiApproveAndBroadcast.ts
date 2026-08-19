@@ -71,7 +71,9 @@ export const useSwapsApiApproveAndBroadcast = <K extends SpokeChainKey = SpokeCh
       });
     },
     onSuccess: async (data, vars, ctx) => {
-      queryClient.invalidateQueries({ queryKey: ['swapsApi', 'allowance'] });
+      // Awaited: the mutation must not resolve — re-enabling Approve — before the allowance query
+      // has actually refetched, or a stale cached `valid: false` re-enables a duplicate approval.
+      await queryClient.invalidateQueries({ queryKey: ['swapsApi', 'allowance'] });
       await mutationOptions?.onSuccess?.(data, vars, ctx);
     },
   });
