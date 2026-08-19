@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@10.32.1",
   "engines": {
-    "node": ">=20.12.0"
+    "node": ">=22.12.0"
   },
   "scripts": {
     "build": "turbo run build --filter=!./apps/node",
@@ -12,13 +12,14 @@
     "dev": "turbo run dev",
     "dev:demo": "turbo run dev --filter=demo",
     "mock-intake:demo": "pnpm --filter=./apps/demo mock-intake",
+    "mock-sponsoring:stellar": "pnpm --filter=./apps/stellar-sponsor-example mock-sponsoring",
     "pretty": "turbo run pretty --filter=!./apps/node",
     "lint": "turbo run lint --filter=!./apps/node",
     "lint:packages": "turbo run lint:packages",
     "checkTs": "turbo run checkTs --filter=!./apps/node",
     "checkTs:packages": "turbo run checkTs:packages",
     "test": "pnpm test:release-scripts && turbo run test --filter=!./apps/node",
-    "test:release-scripts": "node --test scripts/bump-config-version.test.mjs scripts/check-doc-links.test.mjs",
+    "test:release-scripts": "node --test scripts/bump-config-version.test.mjs scripts/check-doc-links.test.mjs scripts/pack-local.test.mjs",
     "test:e2e": "turbo run test:e2e --filter=!./apps/node",
     "test:packages": "turbo run test:packages",
     "check:circular-deps": "turbo run check:circular-deps",
@@ -29,9 +30,11 @@
     "check:doc-links": "node scripts/check-doc-links.mjs",
     "check:knip": "turbo run check:knip",
     "changeset": "changeset",
+    "pack:local": "node scripts/pack-local.mjs",
     "version:packages": "node scripts/bump-config-version.mjs",
     "clean": "turbo clean && rm -rf node_modules dist .turbo && rm -rf apps/*/node_modules apps/*/dist apps/*/.turbo && rm -rf packages/*/node_modules packages/*/dist packages/*/.turbo",
-    "prepare": "husky"
+    "prepare": "husky",
+    "check:sponsoring-contract": "node scripts/check-sponsoring-contract.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.15",

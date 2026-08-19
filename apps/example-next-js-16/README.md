@@ -21,7 +21,7 @@ Root causes (all upstream Turbopack scope-hoisting bugs):
 
 1. **`@stacks/transactions`** — Turbopack scope-hoists named imports and
    hits an internal cycle. Reproduces with a bare `import { Cl } from
-   '@stacks/transactions'` in a fresh Next 16 app — no Sodax code required.
+   '@stacks/transactions'` in a fresh Next 16 app — no SODAX code required.
 2. **`@stacks/connect`** — imports `@stacks/transactions` internally →
    same cycle in the client bundle.
 3. **`@injectivelabs/wallet-ledger`** — bundles CryptoJS UMD with dead

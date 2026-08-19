@@ -4,6 +4,7 @@ import {
   type IBitcoinWalletProvider,
   type RadfiConfig,
   type RadfiDepositTxResponse,
+  type RadfiSigner,
 } from '@sodax/types';
 import type { RelayExtraData } from '../../types/relay-types.js';
 
@@ -112,13 +113,28 @@ export type RadfiMaxSpentResponse = {
   fee: number;
 };
 
+/**
+ * Runtime wiring for {@link RadfiProvider} — everything that is a live object rather than
+ * serializable config (which belongs on {@link RadfiConfig}). An object, not a positional
+ * parameter, because this is a public class and the next such dependency would otherwise be
+ * a third argument. gh-831.
+ */
+export type RadfiProviderOptions = {
+  /** Attaches per-request headers to outbound Bound `apiUrl` calls, e.g. a backend's HMAC closure. */
+  signer?: RadfiSigner;
+};
+
 export class RadfiProvider {
   private readonly config: RadfiConfig;
+  // Client-side runtime signer (e.g. a backend's HMAC closure). Holds no credential itself — the SDK
+  // only keeps the reference and invokes it per outbound `apiUrl` request. See `RadfiOptions` / gh-831.
+  private readonly signer?: RadfiSigner;
   public accessToken = '';
   public refreshToken = '';
 
-  constructor(config: RadfiConfig) {
+  constructor(config: RadfiConfig, options?: RadfiProviderOptions) {
     this.config = config;
+    this.signer = options?.signer;
     // Seed any pre-provisioned Bound Exchange session from config. `RadfiConfig` declares
     // `accessToken` / `refreshToken` precisely so a server-side caller — which never runs the
     // interactive BIP322 sign-in — can inject a token via `new Sodax({ ... })` and have the
@@ -283,6 +299,9 @@ export class RadfiProvider {
     return body.data;
   }
 
+  // UMS call: goes out unsigned even when a signer is configured. Bound scopes the backend
+  // credential to the Sodax endpoints on `apiUrl`, so a signature here is unverified — this
+  // deliberately does not go through `request()`. Same for `getExpiredUtxos` below. See gh-831.
   public async getBalance(address: string): Promise<RadfiWalletBalance> {
     if (!this.config.umsUrl) {
       throw new Error('RadfiConfig.umsUrl is required for getBalance');
@@ -394,6 +413,9 @@ export class RadfiProvider {
 
   /**
    * Fetch expired (or near-expiry) UTXOs for a trading wallet address from UMS API.
+   *
+   * UMS call — unsigned by design, like `getBalance`: the backend credential is scoped to the
+   * Sodax endpoints on `apiUrl`, so a configured signer intentionally does not reach here.
    */
   public async getExpiredUtxos(
     tradingAddress: string,
@@ -626,11 +648,18 @@ export class RadfiProvider {
   }
 
   private async request(endpoint: string, options?: RequestInit): Promise<Response> {
+    // Let an injected signer add request headers (e.g. Bound's `x-api-signature` HMAC for a backend
+    // caller). Computed per request so a time-boxed signature stays inside its validity window. The
+    // signer owns the credential; this provider never sees it.
+    const signed = this.signer
+      ? await this.signer({ method: options?.method ?? 'GET', path: endpoint })
+      : undefined;
     return fetch(`${this.config.apiUrl}${endpoint}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
         ...(options?.headers || {}),
+        ...signed,
       },
     });
   }

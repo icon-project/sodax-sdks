@@ -16,9 +16,12 @@
     "url": "https://github.com/icon-project/sodax-sdks"
   },
   "engines": {
-    "node": ">=20.12.0"
+    "node": ">=22.12.0"
   },
-  "files": ["dist", "!dist/**/*.map"],
+  "files": [
+    "dist",
+    "!dist/**/*.map"
+  ],
   "type": "module",
   "exports": {
     ".": {
@@ -35,11 +38,13 @@
   },
   "typesVersions": {
     "*": {
-      "dex": ["./dist/dex/index.d.ts"]
+      "dex": [
+        "./dist/dex/index.d.ts"
+      ]
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "rm -rf dist && tsc && node ../../scripts/verify-dist-exports.mjs",
     "dev": "tsc --watch",
     "ci": "pnpm run pretty && pnpm run build && pnpm run test",
     "checkTs": "tsc",
@@ -59,8 +64,15 @@
     "knip": "catalog:",
     "madge": "catalog:",
     "typescript": "catalog:",
+    "viem": "catalog:",
     "vitest": "catalog:"
   },
-  "keywords": ["sodax", "types", "typescript", "multichain", "wallet-providers"],
+  "keywords": [
+    "sodax",
+    "types",
+    "typescript",
+    "multichain",
+    "wallet-providers"
+  ],
   "license": "MIT"
 }

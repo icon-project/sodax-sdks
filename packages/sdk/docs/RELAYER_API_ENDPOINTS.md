@@ -187,7 +187,7 @@ These are exported from `IntentRelayApiService` for callers that need direct rel
 | Function | Signature | Description |
 |---|---|---|
 | `submitTransaction` | `(payload, apiUrl) => Promise<Result<SubmitTxResponse>>` | Submit a tx to the relay. |
-| `getTransactionPackets` | `(payload, apiUrl) => Promise<Result<GetTransactionPacketsResponse>>` | Fetch packets for a tx hash. |
+| `getTransactionPackets` | `(payload, apiUrl, timeoutMs?) => Promise<Result<GetTransactionPacketsResponse>>` | Fetch packets for a tx hash. `timeoutMs` bounds the whole read — connection, retries and body parse. Omit it and the call is unbounded; `RELAY_REQUEST_TIMEOUT_MS` (15s) is the per-request budget the polling path uses. |
 | `getPacket` | `(payload, apiUrl) => Promise<Result<GetPacketResponse>>` | Fetch a single packet by `conn_sn`. |
 | `waitUntilIntentExecuted` | `(payload) => Promise<Result<PacketData>>` | Poll until a packet reaches `'executed'` status or times out. |
 | `relayTxAndWaitPacket` | `(params: RelayAndWaitParams) => Promise<Result<PacketData>>` | Submit + poll in one call. Handles `getIntentRelayChainId` conversion and split-tx chains automatically. |

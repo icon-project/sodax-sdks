@@ -40,7 +40,7 @@ import type { SodaxFeature } from '@sodax/types';
  *   because retry semantics differ — re-estimation is cheap, retry-on-failure is the norm).
  * - `LOOKUP_FAILED` — any other read-only on-chain query / off-chain config fetch.
  *   `context.method` partitions this code (`'getStakingInfo'`, `'getBridgeableAmount'`, …).
- * - `EXTERNAL_API_ERROR` — an upstream API call failed (e.g. solver, backend, swaps). `context.api`
+ * - `EXTERNAL_API_ERROR` — an upstream API call failed (e.g. solver, backend, swaps, bridge). `context.api`
  *   identifies which service.
  * - `UNKNOWN` — last-resort catch in an outer `try`. Should be extremely rare in production.
  */
@@ -115,6 +115,7 @@ export type RelayCode = 'SUBMIT_TX_FAILED' | 'RELAY_TIMEOUT' | 'RELAY_POLLING_FA
  * - `relayCode` — set on errors whose root cause is a relay-layer failure.
  * - `api` — set on `EXTERNAL_API_ERROR`. Identifies the upstream service.
  * - `method` — set on `LOOKUP_FAILED`. Names the read-only method that failed.
+ * - `status` / `nextAction` / retry fields — backend failure classification.
  * - `direction` — only set on migration's `migratebnUSD` (forward = legacy → new bnUSD;
  *   reverse = new → legacy bnUSD).
  * - `field` / `reason` — set on `VALIDATION_FAILED` to identify which precondition tripped.
@@ -128,8 +129,13 @@ export type SodaxErrorContext = {
   srcChainKey?: string;
   dstChainKey?: string;
   relayCode?: RelayCode;
-  api?: 'solver' | 'backend' | 'swaps';
+  api?: 'solver' | 'backend' | 'swaps' | 'sponsoring' | 'bridge';
   method?: string;
+  status?: number;
+  nextAction?: string;
+  retryable?: boolean;
+  retryAfterSeconds?: number;
+  sponsorSequence?: string;
   direction?: 'forward' | 'reverse';
   field?: string;
   reason?: string;
@@ -219,5 +225,6 @@ export const SODAX_FEATURES = [
   'partner',
   'recovery',
   'backend',
+  'sponsoring',
   'leverageYield',
 ] as const satisfies ReadonlyArray<SodaxFeature>;

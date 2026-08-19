@@ -69,22 +69,56 @@ if (!result.ok) {
 
 ### `ApiConfig` Type
 
-`ApiConfig` is either a flat `BaseApiConfig` (shared by `sodax.backendApi` and the swaps client `sodax.api.swaps`) or a nested `CustomApiConfig` that points the swaps API at its own endpoint:
+`ApiConfig` is either a flat `BackendApiConfig` (shared by `sodax.backendApi` and the swaps client `sodax.api.swaps`) or a nested `CustomApiConfig` that points the swaps API at its own endpoint:
 
 ```typescript
 type BaseApiConfig = {
-  baseURL: string;                   // API endpoint URL (default: 'https://api.sodax.com/v1/be')
+  baseURL: string;                   // Gateway ROOT — origin + version prefix (default: 'https://api.sodax.com/v1')
   timeout: number;                   // Request timeout in milliseconds (default: 30000)
   headers: Record<string, string>;   // Request headers (default: Content-Type and Accept)
 };
 
-// Point the swaps API at its own host, separate from the base backend API (at least one slice required):
-type CustomApiConfig =
-  | { baseApiConfig: BaseApiConfig; swapsApiConfig?: BaseApiConfig }
-  | { baseApiConfig?: BaseApiConfig; swapsApiConfig: BaseApiConfig };
+// The backend data API's routes are mounted below the gateway root; `basePath` is that mount.
+type BackendApiConfig = BaseApiConfig & { basePath?: string }; // default: '/be'
 
-type ApiConfig = BaseApiConfig | CustomApiConfig;
+// Point the swaps and/or sponsoring APIs at their own hosts, separate from the base backend API
+// (at least one slice required):
+type SponsoringApiConfig = BaseApiConfig & { apiKey?: string };
+
+type CustomApiConfig =
+  | { baseApiConfig: BackendApiConfig; swapsApiConfig?: BaseApiConfig; sponsoringApiConfig?: SponsoringApiConfig }
+  | { baseApiConfig?: BackendApiConfig; swapsApiConfig: BaseApiConfig; sponsoringApiConfig?: SponsoringApiConfig }
+  | { baseApiConfig?: BackendApiConfig; swapsApiConfig?: BaseApiConfig; sponsoringApiConfig: SponsoringApiConfig };
+
+type ApiConfig = BackendApiConfig | CustomApiConfig;
 ```
+
+**`baseURL` is the gateway root, never a service path.** Every service resolves the same root and appends
+its own path below it — `/be` here, `/swaps` for the swaps client, `/bridge` for the bridge client,
+`/sponsorships/stellar` for sponsoring. A `baseURL` ending in `/be` is trimmed with a warning: that was
+the previous packaged default, and inheriting it nested the sibling services a level too deep
+(`/v1/be/swaps/submit-tx`). See
+[CONFIGURE_SDK.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md)
+for the full URL model.
+
+`basePath` is read only by `sodax.backendApi`. Set it to `''` when addressing a backend directly at its
+origin instead of through the gateway (`{ baseURL: 'http://localhost:4000', basePath: '' }` →
+`http://localhost:4000/config/all`).
+
+Slices layer on top of the flat fields rather than replacing them: an `api` object that carries both a
+top-level `baseURL`/`timeout`/`headers` and a slice keeps applying those flat values wherever the slice
+does not define its own, so adding `swapsApiConfig` or `sponsoringApiConfig` to an existing flat config
+never silently re-routes the base API back to the packaged default. The resolution order is
+defaults → top-level flat fields → `baseApiConfig` → `swapsApiConfig`, so the most specific slice wins
+per field.
+
+The sponsoring slice resolves differently from the others on purpose: its `baseURL` never inherits
+from `baseApiConfig` (it defaults to the same gateway root but reaches it independently, so pointing the
+base API at a private proxy never drags sponsoring along), and neither do
+its `headers` — a credential is scoped to the origin it was set for, so a base-API token is not
+transmitted to the sponsoring host. `timeout` does inherit. For the same reason,
+`backendApi.setHeaders(...)` reaches `swaps` but NOT `sponsoring`; set sponsoring headers on the
+slice, or via `sodax.api.sponsoring.setHeaders(...)`.
 
 ### `RequestOverrideConfig` Type
 
@@ -92,7 +126,7 @@ Every public method accepts an optional `RequestOverrideConfig` as its last argu
 
 ```typescript
 type RequestOverrideConfig = {
-  baseURL?: string;
+  baseURL?: string;   // gateway root; the calling service's own path still applies
   timeout?: number;
   headers?: Record<string, string>;
 };
@@ -101,7 +135,8 @@ type RequestOverrideConfig = {
 ### Default Configuration
 
 ```typescript
-const DEFAULT_BACKEND_API_ENDPOINT = 'https://api.sodax.com/v1/be';
+const DEFAULT_API_BASE_URL = 'https://api.sodax.com/v1'; // gateway root, shared by every service
+const BACKEND_API_BASE_PATH = '/be';                      // this service's mount below that root
 const DEFAULT_BACKEND_API_TIMEOUT = 30000; // 30 seconds
 const DEFAULT_BACKEND_API_HEADERS = {
   'Content-Type': 'application/json',
@@ -271,6 +306,15 @@ client — `sodax.api.swaps` (`SwapsApiService`). Submit a signed spoke-chain sw
 `sodax.api.swaps.getSubmitTxStatus({ txHash, srcChainKey })` (both fields required). See
 [`SWAPS_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS_API.md) for the full 21-endpoint reference (quote, create-intent, submit-tx,
 status, fees, …).
+
+## Bridge Endpoints
+
+The Bridge API v2 is a sibling typed client — `sodax.api.bridge` (`BridgeApiService`), also reached via the
+`sodax.api` alias and sharing the same backend host (`/bridge/*` sub-paths). It mirrors the swaps client
+minus the solver/intent surface: allowance/approve/create-bridge-intent, submit-tx + status, tokens, and
+the fee/bridgeable-amount/bridgeable discovery quotes. Submit a signed spoke-deposit with
+`sodax.api.bridge.submitTx(...)` (passing the FULL `relayData { address, payload }` envelope, not just the
+payload). See [`BRIDGE_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BRIDGE_API.md) for the full reference.
 
 ## Solver Endpoints
 
@@ -562,11 +606,12 @@ sodax.backendApi.setHeaders({
 
 ### Get Base URL
 
-Returns the base URL the service is currently pointing at.
+Returns the gateway root the service is currently pointing at, and the data API's mount below it.
+Requests go to `getBaseURL() + getBasePath() + <route>`.
 
 ```typescript
-const baseURL = sodax.backendApi.getBaseURL();
-console.log('API Base URL:', baseURL);
+console.log('Gateway root:', sodax.backendApi.getBaseURL()); // 'https://api.sodax.com/v1'
+console.log('Data API mount:', sodax.backendApi.getBasePath()); // '/be'
 ```
 
 ## Complete Example
@@ -577,7 +622,7 @@ import { Sodax } from '@sodax/sdk';
 async function example() {
   const sodax = new Sodax({
     api: {
-      baseURL: 'https://api.sodax.com/v1/be',
+      baseURL: 'https://api.sodax.com/v1',
       timeout: 60000,
       headers: {
         'Content-Type': 'application/json',

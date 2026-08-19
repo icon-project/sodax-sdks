@@ -138,11 +138,48 @@ import {
   type IntentRelayChainId,
 
   // Backend API config + per-call override
-  type ApiConfig,               // BaseApiConfig | CustomApiConfig
-  type BaseApiConfig,
-  type CustomApiConfig,         // point the swaps API at its own endpoint
+  type ApiConfig,               // BackendApiConfig | CustomApiConfig
+  type BaseApiConfig,           // { baseURL, timeout, headers } — baseURL is the GATEWAY ROOT
+  type BackendApiConfig,        // BaseApiConfig & { basePath? } — the data API's mount, default '/be'
+  type CustomApiConfig,         // point the swaps / sponsoring API at its own endpoint
   type SwapsApiConfig,
+  type SponsoringApiConfig,     // BaseApiConfig & { apiKey? } — own host, own x-api-key
+  DEFAULT_API_BASE_URL,         // 'https://api.sodax.com/v1' — the root every service resolves
+  BACKEND_API_BASE_PATH,        // '/be'
+  DEFAULT_SPONSORING_API_ENDPOINT,
+  SPONSORING_API_STELLAR_BASE_PATH,
   type RequestOverrideConfig,   // per-call override on any backendApi / sodax.api.swaps method
+
+  // Sponsoring — sodax.sponsoring (Stellar account activation) + sodax.api.sponsoring (wire client)
+  SponsoringService,
+  SponsoringApiService,
+  SPONSOR_CONFIG_TTL_MS,        // 60s; mirrors the server's Cache-Control on GET /config
+  STELLAR_TRUSTLINE_MIN_XLM_STROOPS, // fallback minimum; prefer status.trustlineMinXlmStroops
+  type StellarAccountStatus,    // { exists, nativeBalanceStroops, availableBalanceStroops, canAffordTrustline, trustlineMinXlmStroops }
+  classifySponsorError,         // SodaxError -> { action, retryable, requiresNewSignature, ... }
+  type ActivateStellarAccountParams,
+  type ActivateStellarAccountResult, // discriminated on status: 'submitted' | 'alreadyActive'
+  type SponsorFailureAction,    // 'fixIntegration' | 'checkApiKey' | 'rebuildAndResign' | ...
+  type SponsorFailureClass,
+  type SponsoringOrchestrationError,
+  type SponsoringConfigError,
+  type SponsoringLookupError,
+  type IStellarSponsoringApi,
+  type StellarSponsorConfig,
+  type StellarSponsoredAccountRequest,
+  type StellarSponsoredAccountResponse,
+  type SponsoringApiErrorCode,  // the 7 wire codes
+  SPONSORING_API_ERROR_CODES,   // runtime array — membership-test before trusting body.error
+  type SponsoringApiErrorResponse,
+
+  // Structured non-2xx backend failure (on error.cause) — status + parsed body
+  BackendHttpError,
+  isBackendHttpError,           // bundle-safe guard; prefer over instanceof
+
+  // Backend intent events — `IntentResponse.events` is `unknown[]`
+  isFillEvent,                  // narrows an events entry to a recorded `intent-filled`
+  type FillEvent,               // { txHash, intentState.remainingInput } — '0' means the fill settled
+                                // the whole intent; with allowPartialFill it can be non-zero
 
   // Read shapes
   type Intent,

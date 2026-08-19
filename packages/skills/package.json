@@ -7,7 +7,13 @@
   "version": "2.0.0-rc.17",
   "license": "MIT",
   "description": "AI-agent skills and knowledge for consumers of @sodax/* SDKs (Claude Code, Codex, Cursor, …)",
-  "keywords": ["sodax", "skills", "ai", "claude-code", "agents"],
+  "keywords": [
+    "sodax",
+    "skills",
+    "ai",
+    "claude-code",
+    "agents"
+  ],
   "homepage": "https://github.com/icon-project/sodax-sdks/tree/main/packages/skills",
   "bugs": {
     "url": "https://github.com/icon-project/sodax-sdks/issues"
@@ -18,9 +24,14 @@
   },
   "type": "module",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.12.0"
   },
-  "files": [".claude-plugin", "skills", "AGENTS.md", "README.md"],
+  "files": [
+    ".claude-plugin",
+    "skills",
+    "AGENTS.md",
+    "README.md"
+  ],
   "scripts": {
     "lint": "biome lint . --write",
     "pretty": "biome format . --write",

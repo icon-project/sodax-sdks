@@ -162,6 +162,19 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.sodaETH,
     spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.sodaBTC,
     spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.sodaBNB,
+    // v3.2.0 direct-wrapped spoke assets
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.ETH,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.BTC,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.BNB,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.SOL,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.SUI,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.AVAX,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.INJ,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.POL,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.HYPE,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.NEAR,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.HBAR,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.USDS,
   ] as const satisfies XToken[],
   [ChainKeys.SUI_MAINNET]: [
     spokeChainConfig[ChainKeys.SUI_MAINNET].supportedTokens.SUI,
@@ -249,8 +262,25 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.STACKS_MAINNET].supportedTokens.sBTC,
     spokeChainConfig[ChainKeys.STACKS_MAINNET].supportedTokens.USDC,
   ] as const satisfies XToken[],
-  // Hedera is currently staging-only — see stagingSwapSupportedTokens
-  [ChainKeys.HEDERA_MAINNET]: [],
+  [ChainKeys.HEDERA_MAINNET]: [
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.HBAR,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.bnUSD,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.USDC,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.SODA,
+    // v3.2.0 direct-wrapped spoke assets
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.ETH,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.BTC,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.BNB,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.SOL,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.SUI,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.AVAX,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.INJ,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.POL,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.HYPE,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.NEAR,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.USDS,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.XLM,
+  ] as const satisfies XToken[],
   [ChainKeys.ROBINHOOD_MAINNET]: [], // staging-first rollout — see stagingOnlySwapTokens
 } as const satisfies Record<SpokeChainKey, readonly XToken[]>;
 
@@ -292,12 +322,8 @@ export const stagingSwapSupportedTokens = {
   [ChainKeys.REDBELLY_MAINNET]: [],
   [ChainKeys.KAIA_MAINNET]: [],
   [ChainKeys.STACKS_MAINNET]: [],
-  [ChainKeys.HEDERA_MAINNET]: [
-    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.HBAR,
-    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.bnUSD,
-    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.USDC,
-    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.SODA,
-  ] as const satisfies XToken[],
+  // Hedera promoted to production — see swapSupportedTokens
+  [ChainKeys.HEDERA_MAINNET]: [],
   [ChainKeys.ROBINHOOD_MAINNET]: [
     spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.ETH,
     spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.bnUSD,
@@ -308,6 +334,12 @@ export const stagingSwapSupportedTokens = {
 
 export type SwapsOptions = {
   partnerFee?: PartnerFee; // enables override of global partner fee
+  /**
+   * Route `swap()` through the backend submit-tx 2-step flow. Default `true`.
+   * Set `false` for the fully client-side relay. Client-side only — not part of backend SodaxDefaultConfig.
+   * Omitted here means the default, not off: read the effective value via `sodax.config.swapUseBackendSubmitTx`.
+   */
+  useBackendSubmitTx?: boolean;
 };
 
 export type SwapsDefaultConfig = {

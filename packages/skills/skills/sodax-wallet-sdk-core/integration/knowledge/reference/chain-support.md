@@ -52,7 +52,7 @@ Run-time deps each provider pulls in. See [`../recipes/library-exports.md`](../r
 |---|---|
 | `EvmWalletProvider`       | `viem` |
 | `SolanaWalletProvider`    | `@solana/web3.js`, `@solana/spl-token`, `@solana/wallet-adapter-base` |
-| `SuiWalletProvider`       | `@mysten/sui`, `@mysten/wallet-standard` |
+| `SuiWalletProvider`       | `@mysten/sui` |
 | `BitcoinWalletProvider`   | `bitcoinjs-lib`, `ecpair`, `secp256k1`, `@bitcoinerlab/secp256k1`, `bip322-js` |
 | `StellarWalletProvider`   | `@stellar/stellar-sdk` |
 | `IconWalletProvider`      | `icon-sdk-js` |

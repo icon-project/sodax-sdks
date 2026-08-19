@@ -200,7 +200,7 @@
 //     throw new Error('SUI_MNEMONICS environment variable is required');
 //   }
 //   const suiWalletProvider = new SuiWalletProvider({
-//     rpcUrl: 'https://fullnode.mainnet.sui.io',
+//     rpcUrl: 'https://sui-rpc.publicnode.com',
 //     mnemonics: suiWalletMnemonics,
 //   });
 //   const suiSpokeProvider = new SuiSpokeProvider(suiConfig, suiWalletProvider);

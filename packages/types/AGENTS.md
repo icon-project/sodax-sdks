@@ -96,12 +96,15 @@ must resolve icons with `tokenLogo(token.symbol)`, not hardcode icon paths.
 
 Built with `tsc` (other workspace packages bundle with tsup — this one doesn't bundle). ESM only (`"type": "module"`). Output: `dist/` with `.js` + `.d.ts` files.
 
+`build` is `rm -rf dist && tsc`, and the `rm -rf` is load-bearing: plain `tsc` never deletes an output whose source has been removed or renamed, so a stale `.d.ts` survives every later build and gets packed into `pnpm pack:local` tarballs — where a consumer reading `node_modules` cannot distinguish a stale emit from a real export. The tsup-built packages get this from `clean: true` in their `tsup.config.ts`; this one has no bundler to do it. Published releases were never affected (CI publishes from a fresh checkout with no turbo remote cache), but local builds and local packs were.
+
 Relative imports inside source must use `.js` extensions (see [`src/index.ts`](src/index.ts) for the pattern).
 
 ## Rules
 
 - **Zero runtime dependencies.** `package.json` has no `dependencies` block — only devDependencies. Never add a runtime dependency; all types must be self-contained.
 - **No re-exporting external types.** Do not import or re-export types from third-party packages (e.g. `viem`, `ethers`, `@solana/web3.js`). Define equivalent types locally so consumers don't pick up transitive type deps.
+- **EVM addresses must survive `isAddress`.** A mixed-case EVM address has to carry a valid EIP-55 checksum; all-lowercase is also valid and is what hub-side fields (`hubAsset`, `vault`) use. viem rejects a bad checksum while encoding calldata, so inside a `multicall` one typo fails the whole batch and every balance in it reads zero. Enforced by [`src/chains/config-address-checksum.test.ts`](src/chains/config-address-checksum.test.ts), which walks the barrel — viem is a devDependency there, so the zero-runtime-dependency rule is unaffected. **Never re-case a non-EVM identifier** (Solana base58, Sui, Stacks, Icon, Stellar) to satisfy anything; that changes the address.
 - **Prefer `import type`** wherever possible — this package should produce minimal runtime JavaScript (effectively just re-exports plus a small number of intentional runtime values, e.g. `CONFIG_VERSION`, chain key constants, Stacks enums).
 - **Add new types in their subdirectory**, then re-export through that subdirectory's `index.ts`. The root `src/index.ts` already re-exports each subdirectory's barrel, so nothing more is needed for the type to be importable from `@sodax/types`.
 - **Adding a token?** Use the `add-token` skill (`.claude/skills/add-token/`) — it has the verified end-to-end procedure (which chain map and feature lists to touch, the payload→`XToken` field mapping, and what is auto-handled). Do not wire token config ad hoc.

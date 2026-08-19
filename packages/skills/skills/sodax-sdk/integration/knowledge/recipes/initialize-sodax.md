@@ -18,16 +18,19 @@ const result = sodax.config.isValidSpokeChainKey(ChainKeys.ARBITRUM_MAINNET);   
 import { Sodax, ChainKeys, type SodaxOptions } from '@sodax/sdk';
 
 // `SodaxOptions` = `DeepPartial<SodaxDefaultConfig>` (the data override) plus the client-side options:
-// `logger`, the global `fee`, and `swapsOptions` (e.g. `{ useBackendSubmitTx: true }` — opt swap() into the backend 2-step flow).
+// `logger`, the global `fee`, and per-feature options on `swaps` / `bridge` (e.g. `{ useBackendSubmitTx: false }` — opt out of the default-on backend 2-step flow).
 const config: SodaxOptions = {
   // Per-chain overrides — merged with packaged defaults at the field level.
   chains: {
     [ChainKeys.SONIC_MAINNET]: { rpcUrl: process.env.SONIC_RPC_URL },
     [ChainKeys.ARBITRUM_MAINNET]: { rpcUrl: process.env.ARBITRUM_RPC_URL },
   },
-  // Backend API override (default: https://api.sodax.com/v1/be).
+  // Backend API override. `baseURL` is the gateway ROOT (default: https://api.sodax.com/v1); each
+  // service appends its own path below it (`/be`, `/swaps`, `/bridge`, `/sponsorships/stellar`).
+  // A sandbox that serves `/config/*` at its bare origin has no `/be` mount, so say so with
+  // `basePath: ''` — otherwise the data API requests `<origin>/be/config/all`.
   api: {
-    baseURL: 'https://my-sandbox-backend.example.com',
+    baseApiConfig: { baseURL: 'https://my-sandbox-backend.example.com', basePath: '' },
   },
   // Solver endpoints (default: https://api.sodax.com/v1/intent + production contracts).
   solver: {

@@ -7,7 +7,12 @@
   "version": "2.0.0-rc.17",
   "license": "MIT",
   "description": "Sodax SDK",
-  "keywords": ["sodax", "sdk", "frontend", "interface"],
+  "keywords": [
+    "sodax",
+    "sdk",
+    "frontend",
+    "interface"
+  ],
   "homepage": "https://github.com/icon-project/sodax-sdks/tree/main/packages/sdk",
   "bugs": {
     "url": "https://github.com/icon-project/sodax-sdks/issues"
@@ -34,12 +39,15 @@
     "./package.json": "./package.json"
   },
   "engines": {
-    "node": ">=20.12.0"
+    "node": ">=22.12.0"
   },
-  "files": ["dist", "!dist/**/*.map"],
+  "files": [
+    "dist",
+    "!dist/**/*.map"
+  ],
   "sideEffects": false,
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node ../../scripts/verify-dist-exports.mjs",
     "test": "vitest run --exclude ./src/e2e-tests",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "coverage": "vitest run --coverage",

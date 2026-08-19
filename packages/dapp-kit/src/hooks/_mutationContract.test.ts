@@ -46,8 +46,10 @@ const HOOKS: Array<{ path: string; nativeThrow?: true }> = [
   { path: 'partner/usePartnerCancelIntent.ts' },
   { path: 'partner/useSetSwapPreference.ts' },
   { path: 'recovery/useWithdrawHubAsset.ts' },
+  { path: 'shared/useEstablishTrustline.ts', nativeThrow: true },
   { path: 'shared/useEstimateGas.ts' },
   { path: 'shared/useRegisterNearStorage.ts', nativeThrow: true },
+  { path: 'sponsoring/useActivateStellarAccount.ts' },
   { path: 'staking/useCancelUnstake.ts' },
   { path: 'staking/useClaim.ts' },
   { path: 'staking/useInstantUnstake.ts' },
@@ -62,11 +64,15 @@ const HOOKS: Array<{ path: string; nativeThrow?: true }> = [
   { path: 'swap/useSwap.ts' },
   { path: 'swap/useSwapApprove.ts' },
   { path: 'swapsApi/useSwapsApiApprove.ts' },
+  { path: 'swapsApi/useSwapsApiApproveAndBroadcast.ts' },
   { path: 'swapsApi/useSwapsApiCancelIntent.ts' },
   { path: 'swapsApi/useSwapsApiCreateIntent.ts' },
   { path: 'swapsApi/useSwapsApiCreateLimitOrder.ts' },
   { path: 'swapsApi/useSwapsApiSubmitIntent.ts' },
   { path: 'swapsApi/useSwapsApiSubmitTx.ts' },
+  { path: 'bridgeApi/useBridgeApiApprove.ts' },
+  { path: 'bridgeApi/useBridgeApiCreateBridgeIntent.ts' },
+  { path: 'bridgeApi/useBridgeApiSubmitTx.ts' },
 ];
 
 describe.each(HOOKS)('mutation hook contract: $path', ({ path, nativeThrow }) => {
