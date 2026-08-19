@@ -131,3 +131,8 @@ the only check that catches rule 1.
   `pnpm check:ai`. It is not published to the site.
 - **Contributor and release docs.** Keep them outside `docs/`, or list them in
   `.mintignore`.
+- **Notes to the docs team.** "Add embeds here as they publish", "rewrite these", who owns a
+  section — every page is published, so a note like that ships to readers and tells them the
+  page is unfinished. Put it in the PR description, or here. `resources/` (Videos, Blog,
+  Changelog) is DevRel-owned: add an MDX page under `resources/` and register it in
+  `docs.json` under the Resources tab.

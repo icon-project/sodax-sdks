@@ -44,7 +44,32 @@
     "tabs": [
       {
         "tab": "Home",
-        "pages": ["index", "home/sdk-stack", "home/how-execution-works", "home/why-sodax"]
+        "pages": [
+          "index",
+          "home/sdk-stack",
+          "home/how-execution-works",
+          "home/why-sodax",
+          {
+            "group": "Start here",
+            "icon": "rocket",
+            "pages": ["quickstart", "ai-integration-guide", "contact-form"]
+          },
+          {
+            "group": "How To",
+            "icon": "book",
+            "pages": [
+              "developers/how-to/index",
+              "developers/packages/sdk/docs/HOW_TO_MAKE_A_SWAP",
+              "developers/packages/sdk/docs/CONFIGURE_SDK",
+              "developers/packages/sdk/docs/MONETIZE_SDK"
+            ]
+          },
+          {
+            "group": "Community",
+            "icon": "newspaper",
+            "pages": ["resources/videos", "resources/blog", "resources/changelog"]
+          }
+        ]
       },
       {
         "tab": "Get Started",
@@ -220,7 +245,7 @@
         "tab": "Resources",
         "groups": [
           {
-            "group": "DevRel",
+            "group": "Community",
             "icon": "newspaper",
             "pages": ["resources/index", "resources/videos", "resources/blog", "resources/changelog"]
           },

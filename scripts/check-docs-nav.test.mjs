@@ -120,20 +120,33 @@ test('reports a missing docs.json instead of throwing', t => {
   assert.match(failures[0], /docs\.json is missing/);
 });
 
-test('flags a page claimed by two tabs, which makes the second tab look dead', t => {
+test('flags a tab whose landing page an earlier tab already claims', t => {
   const root = createWorkspace(t, {
     navigation: {
       tabs: [
         { tab: 'Home', pages: ['index', { group: 'Start here', pages: ['introduction'] }] },
-        { tab: 'Get Started', groups: [{ group: 'Start here', pages: ['introduction'] }] },
+        { tab: 'Get Started', groups: [{ group: 'Start here', pages: ['introduction', 'solana/index'] }] },
       ],
     },
-    files: ['index.mdx', 'introduction.md'],
+    files: ['index.mdx', 'introduction.md', 'solana/index.mdx'],
   });
 
   const { failures } = checkDocsNav({ root });
 
   assert.equal(failures.length, 1);
-  assert.match(failures[0], /listed under tabs "Home" and "Get Started"/);
-  assert.match(failures[0], /renders under "Home"/);
+  assert.match(failures[0], /tab "Get Started" lands on "introduction", which tab "Home" already lists/);
+});
+
+test('a shortcut duplicated below a tab\'s landing page is allowed', t => {
+  const root = createWorkspace(t, {
+    navigation: {
+      tabs: [
+        { tab: 'Home', pages: ['index', { group: 'Start here', pages: ['quickstart'] }] },
+        { tab: 'Get Started', groups: [{ group: 'Start here', pages: ['introduction', 'quickstart'] }] },
+      ],
+    },
+    files: ['index.mdx', 'introduction.md', 'quickstart.md'],
+  });
+
+  assert.deepEqual(checkDocsNav({ root }).failures, []);
 });

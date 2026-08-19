@@ -30,8 +30,9 @@ correct. The commands below are the gate.
 - **Never edit a generated page.** Pages whose frontmatter says they are generated come from
   a package source listed in `scripts/gitbook-sync-map.json`; edit that source and run
   `pnpm docs:sync-pages`. `pnpm check:docs-pages` fails on drift.
-- **One page, one tab.** A page listed under two tabs renders under the first, so the other
-  tab's navbar link reads as dead. `pnpm check:docs-nav` fails on it.
+- **A tab must land on a page no earlier tab lists**, or the page renders under that earlier
+  tab and the navbar link goes nowhere. Repeating a page deeper in another sidebar as a
+  shortcut is fine; `pnpm check:docs-nav` enforces the landing rule.
 - **Each network is its own nav group** under Network guides, mirroring `solana/` page for
   page. Do not add a network as a loose page beside the groups.
 - **Repo-internal docs do not belong here.** If one must live in this directory, add it to

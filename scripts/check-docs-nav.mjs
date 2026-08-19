@@ -61,17 +61,20 @@ const isIgnored = (relPath, rules) => {
   return ignored;
 };
 
-// A page listed under two tabs renders under the first one, so the other tab's navbar link
-// lands on a page that switches tabs back — the tab reads as dead.
-const collectTabOwners = navigation => {
-  const owners = new Map();
+// A tab whose landing page an earlier tab also lists renders under that earlier tab, so its
+// navbar link goes nowhere. Shortcut duplicates deeper in a sidebar are fine.
+const findDeadTabs = navigation => {
+  const claimedBy = new Map();
+  const dead = [];
   for (const tab of navigation.tabs ?? []) {
-    for (const page of collectNavPages(tab)) {
-      if (!owners.has(page)) owners.set(page, []);
-      if (tab.tab) owners.get(page).push(tab.tab);
+    const pages = collectNavPages(tab);
+    const [landing] = pages;
+    if (landing && claimedBy.has(landing)) {
+      dead.push({ tab: tab.tab, landing, owner: claimedBy.get(landing) });
     }
+    for (const page of pages) if (!claimedBy.has(page)) claimedBy.set(page, tab.tab);
   }
-  return owners;
+  return dead;
 };
 
 // Page references only live in "pages" arrays; other strings are labels, icons and tab names.
@@ -138,10 +141,9 @@ export const checkDocsNav = ({ root, docsDir = DOCS_DIR } = {}) => {
       `${docsDir}/${CONFIG_FILE} navigates to "${page}" but no ${docsDir}/${page}.mdx|.md exists — that is a 404 in the sidebar.`,
     );
   }
-  for (const [page, tabs] of collectTabOwners(config.navigation ?? {})) {
-    if (tabs.length < 2) continue;
+  for (const { tab, landing, owner } of findDeadTabs(config.navigation ?? {})) {
     failures.push(
-      `${docsDir}/${page} is listed under tabs ${tabs.map(tab => `"${tab}"`).join(' and ')} — it renders under "${tabs[0]}", which makes the other tab's navbar link look dead. Give every page one owning tab.`,
+      `${CONFIG_FILE} tab "${tab}" lands on "${landing}", which tab "${owner}" already lists — the page renders under "${owner}", so the "${tab}" navbar link goes nowhere. Give "${tab}" a landing page no earlier tab lists.`,
     );
   }
   for (const file of files.filter(file => !navSet.has(file)).sort()) {
