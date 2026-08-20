@@ -121,10 +121,46 @@ type CreateIntentParams<K extends SpokeChainKey> = {
   allowPartialFill: boolean;
   solver?: `0x${string}`;   // optional solver address; '0x0…0' for default
   data: `0x${string}`;      // arbitrary calldata; '0x' for default
+  hook?: HookRequest;       // route the output through a registered delivery hook — see below
+  deliveryData?: `0x${string}`;  // low-level delivery payload; escape hatch, ignored when `hook` is set
 };
 ```
 
 `CreateLimitOrderParams<K>` is `Omit<CreateIntentParams<K>, 'deadline'> & { deadline?: bigint }` — it makes `deadline` optional rather than removing it; when omitted the SDK forces it to `0n` internally (limit orders use a different expiry mechanism).
+
+### Delivery hooks (`hook` / `deliveryData`)
+
+By default an intent's output is transferred straight to `dstAddress`. A **delivery hook** instead hands
+it to a contract on the destination spoke that acts on the recipient's behalf — `SpokeAssetManager` calls
+`ISpokeReceiver(dstAddress).hook(token, amount, deliveryData)`.
+
+Prefer `hook` over `deliveryData`: the SDK resolves the hook's deployed address and encodes its payload
+from the registry (`spokeHooks` in `@sodax/types`), so the two can never drift.
+
+```ts
+import { HookKind, getSpokeHook } from '@sodax/sdk';
+
+// Which kinds exist, and on which chains, is registry data that grows — discover, don't hardcode.
+const kind = HookKind.HYPERCORE_DEPOSIT;        // any registered kind; see `HookKind` for the current set
+if (!getSpokeHook(dstChainKey, kind)) return;   // not deployed there → send a plain transfer instead
+
+const params = {
+  // …the usual CreateIntentParams fields…
+  dstAddress: recipient,  // the account the hook CREDITS — the SDK overwrites the on-chain
+                          // dstAddress with the hook's own address
+  hook: { kind },
+};
+```
+
+- **Fails closed** — a kind not registered on `dstChainKey` throws at intent-construction time, before an
+  intent exists. A zero-address recipient is rejected for every hook (it would revert on arrival and
+  wedge the cross-chain message unrecoverably).
+- **Best-effort on-chain** — a hook generally delivers plain tokens to the recipient rather than
+  reverting when it can't act (unsupported token, refusing target, amount below its minimum). Treat a
+  hooked intent as "the tokens arrive; the hook action may not". `supportedTokens` on a registry entry
+  describes that on-chain behaviour; the SDK does not reject a mismatched `outputToken` client-side.
+- `deliveryData` is the escape hatch for a receiver **not** in the registry: opaque bytes whose schema the
+  receiver defines, and you point `dstAddress` at that receiver yourself. Ignored when `hook` is set.
 
 ## Common call shapes
 

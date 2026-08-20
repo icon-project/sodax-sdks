@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { HookKind } from '@sodax/types';
 import { SwapsApiError } from './errors.js';
 import { SwapsApi } from './client.js';
 
@@ -191,6 +192,21 @@ describe('SwapsApi request shaping', () => {
     const fetchImpl = vi.fn(async () => json({ quotedAmount: '5' }));
     await makeApi(fetchImpl).getQuote(quoteBody, { includeTxData: false });
     expect(fetchImpl.mock.calls[0]?.[0]).toBe(`${BASE}/swaps/quote`);
+  });
+
+  it('forwards an optional hook field on getQuote unmodified (client-side passthrough only)', async () => {
+    // Wire-client layer counterpart of the same-named assertion in
+    // packages/sdk/src/backendApi/SwapsApiService.test.ts — keep both in sync (this proves the
+    // request-shaping layer puts `hook` on the wire as-is, not that any backend forwards it).
+    const fetchImpl = vi.fn(async () => json({ quotedAmount: '5' }));
+    await makeApi(fetchImpl).getQuote(
+      { ...quoteBody, hook: { kind: HookKind.HYPERCORE_DEPOSIT } },
+      {
+        includeTxData: true,
+      },
+    );
+    const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body));
+    expect(body.hook).toEqual({ kind: HookKind.HYPERCORE_DEPOSIT });
   });
 
   it('deep-serializes bigint tx values in estimateGas instead of throwing on them', async () => {
