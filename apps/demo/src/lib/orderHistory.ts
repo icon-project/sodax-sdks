@@ -10,6 +10,7 @@ import { readJson, writeJson } from '@/lib/storage';
 export const SWAPS_SDK_ORDERS_KEY = 'sodax-demo:solver:orders';
 export const LEVERAGE_YIELD_ORDERS_KEY = 'sodax-demo:leverage-yield:orders';
 export const SWAPS_API_ORDERS_KEY = 'sodax-demo:swaps-api:orders';
+export const LEVERAGE_POSITIONS_ORDERS_KEY = 'sodax-demo:leverage-positions:orders';
 
 /** Keep at most the newest N swaps; a 16th evicts the oldest. */
 export const MAX_ORDERS = 15;
