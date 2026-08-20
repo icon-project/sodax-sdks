@@ -4,10 +4,16 @@
   "publishConfig": {
     "access": "public"
   },
-  "version": "0.0.1-rc.5",
+  "version": "2.0.0-rc.17",
   "license": "MIT",
   "description": "Sodax Wallet SDK Core",
-  "keywords": ["sodax", "wallet", "sdk", "frontend", "interface"],
+  "keywords": [
+    "sodax",
+    "wallet",
+    "sdk",
+    "frontend",
+    "interface"
+  ],
   "homepage": "https://github.com/icon-project/sodax-sdks/tree/main/packages/wallet-sdk-core",
   "bugs": {
     "url": "https://github.com/icon-project/sodax-sdks/issues"
@@ -33,12 +39,15 @@
     }
   },
   "engines": {
-    "node": ">=20.12.0"
+    "node": ">=22.12.0"
   },
-  "files": ["dist", "!dist/**/*.map"],
+  "files": [
+    "dist",
+    "!dist/**/*.map"
+  ],
   "sideEffects": false,
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node ../../scripts/verify-dist-exports.mjs",
     "test": "vitest run --exclude ./src/tests/e2e",
     "test:e2e": "vitest run --passWithNoTests ./src/tests/e2e",
     "coverage": "vitest run --coverage",
@@ -50,7 +59,6 @@
     "check-exports": "attw --pack",
     "check:knip": "knip",
     "prepublishOnly": "pnpm run ci",
-    "local-release": "changeset version && changeset publish",
     "clean": "rm -rf node_modules && rm -rf dist && rm -rf .turbo"
   },
   "dependencies": {
@@ -61,7 +69,6 @@
     "@injectivelabs/ts-types": "catalog:",
     "@injectivelabs/wallet-core": "catalog:",
     "@mysten/sui": "catalog:",
-    "@mysten/wallet-standard": "catalog:",
     "@sodax/libs": "workspace:*",
     "@sodax/types": "workspace:*",
     "@solana/spl-token": "catalog:",
@@ -79,7 +86,6 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "catalog:",
-    "@changesets/cli": "catalog:",
     "@types/node": "catalog:",
     "@types/secp256k1": "^4.0.7",
     "@vitest/coverage-v8": "catalog:",

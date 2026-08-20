@@ -25,7 +25,11 @@ export type UseWithdrawVars<K extends SpokeChainKey = SpokeChainKey> = Omit<
  */
 export function useWithdraw<K extends SpokeChainKey = SpokeChainKey>({
   mutationOptions,
-}: MutationHookParams<TxHashPair, UseWithdrawVars<K>> = {}): SafeUseMutationResult<TxHashPair, Error, UseWithdrawVars<K>> {
+}: MutationHookParams<TxHashPair, UseWithdrawVars<K>> = {}): SafeUseMutationResult<
+  TxHashPair,
+  Error,
+  UseWithdrawVars<K>
+> {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
 

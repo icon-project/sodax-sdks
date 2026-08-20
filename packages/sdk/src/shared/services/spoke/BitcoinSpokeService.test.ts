@@ -792,7 +792,14 @@ describe('BitcoinSpokeService.deposit', () => {
       }
       if (url.endsWith('/txs/mempool')) {
         // Both UTXOs already spent in mempool
-        return json([{ vin: [{ txid: 'aa', vout: 0 }, { txid: 'bb', vout: 1 }] }]);
+        return json([
+          {
+            vin: [
+              { txid: 'aa', vout: 0 },
+              { txid: 'bb', vout: 1 },
+            ],
+          },
+        ]);
       }
       return new Response(null, { status: 404 });
     });
@@ -832,9 +839,7 @@ describe('BitcoinSpokeService.deposit', () => {
       return new Response(null, { status: 404 });
     });
     const BTC_TOKEN = btcConfig.supportedTokens.BTC.address;
-    const buildSpy = vi
-      .spyOn(btcSpoke, 'buildDepositPsbt')
-      .mockResolvedValueOnce({ data: 'fakePsbt' } as never);
+    const buildSpy = vi.spyOn(btcSpoke, 'buildDepositPsbt').mockResolvedValueOnce({ data: 'fakePsbt' } as never);
     vi.spyOn(btcSpoke, 'signAndBroadcastTransaction').mockResolvedValueOnce(TX_HASH as never);
     try {
       await btcSpoke.deposit({
@@ -871,9 +876,7 @@ describe('BitcoinSpokeService.deposit', () => {
       return new Response(null, { status: 404 });
     });
     const BTC_TOKEN = btcConfig.supportedTokens.BTC.address;
-    const buildSpy = vi
-      .spyOn(btcSpoke, 'buildDepositPsbt')
-      .mockResolvedValueOnce({ data: 'fakePsbt' } as never);
+    const buildSpy = vi.spyOn(btcSpoke, 'buildDepositPsbt').mockResolvedValueOnce({ data: 'fakePsbt' } as never);
     vi.spyOn(btcSpoke, 'signAndBroadcastTransaction').mockResolvedValueOnce(TX_HASH as never);
     try {
       await btcSpoke.deposit({

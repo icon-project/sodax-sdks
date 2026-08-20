@@ -127,27 +127,31 @@ export type WalletSimulationParams = {
   payload: Hex;
 };
 
-export type VerifySimulationParams<ChainKey extends SpokeChainKey, Raw extends boolean> = SendMessageParams<ChainKey, Raw>;
+export type VerifySimulationParams<ChainKey extends SpokeChainKey, Raw extends boolean> = SendMessageParams<
+  ChainKey,
+  Raw
+>;
 
-export type GetTxReceiptType<C extends SpokeChainKey | ChainType> = GetChainType<C> extends 'EVM'
-  ? EvmRawTransactionReceipt
-  : GetChainType<C> extends 'SOLANA'
-    ? SolanaRawTransactionReceipt
-    : GetChainType<C> extends 'STELLAR'
-      ? StellarSorobanTransactionReceipt
-      : GetChainType<C> extends 'ICON'
-        ? IconTransactionResult
-        : GetChainType<C> extends 'SUI'
-          ? SuiRawTransactionReceipt
-          : GetChainType<C> extends 'INJECTIVE'
-            ? InjectiveRawTransactionReceipt
-            : GetChainType<C> extends 'NEAR'
-              ? NearRawTransactionReceipt
-              : GetChainType<C> extends 'STACKS'
-                ? StacksRawTransactionReceipt
-                : GetChainType<C> extends 'BITCOIN'
-                  ? BitcoinRawTransactionReceipt
-                  : unknown;
+export type GetTxReceiptType<C extends SpokeChainKey | ChainType> =
+  GetChainType<C> extends 'EVM'
+    ? EvmRawTransactionReceipt
+    : GetChainType<C> extends 'SOLANA'
+      ? SolanaRawTransactionReceipt
+      : GetChainType<C> extends 'STELLAR'
+        ? StellarSorobanTransactionReceipt
+        : GetChainType<C> extends 'ICON'
+          ? IconTransactionResult
+          : GetChainType<C> extends 'SUI'
+            ? SuiRawTransactionReceipt
+            : GetChainType<C> extends 'INJECTIVE'
+              ? InjectiveRawTransactionReceipt
+              : GetChainType<C> extends 'NEAR'
+                ? NearRawTransactionReceipt
+                : GetChainType<C> extends 'STACKS'
+                  ? StacksRawTransactionReceipt
+                  : GetChainType<C> extends 'BITCOIN'
+                    ? BitcoinRawTransactionReceipt
+                    : unknown;
 
 export type TxStatus = 'success' | 'failure' | 'timeout';
 export type WaitForTxReceiptParams<C extends SpokeChainKey> = {
@@ -235,14 +239,35 @@ export type SpokeApproveParamsHub<K extends HubChainKey, Raw extends boolean> = 
   spender: Address;
 };
 
-export type SpokeApproveParamsEvmSpoke<K extends EvmSpokeOnlyChainKey, Raw extends boolean> =
-  SpokeApproveParamsCommon<K, Raw> & {
-    srcChainKey: K;
-    spender: Address;
-  };
-
-export type SpokeApproveParamsStellar<K extends StellarChainKey, Raw extends boolean> = SpokeApproveParamsCommon<K, Raw> & {
+export type SpokeApproveParamsEvmSpoke<K extends EvmSpokeOnlyChainKey, Raw extends boolean> = SpokeApproveParamsCommon<
+  K,
+  Raw
+> & {
   srcChainKey: K;
+  spender: Address;
+};
+
+export type SpokeApproveParamsStellar<K extends StellarChainKey, Raw extends boolean> = SpokeApproveParamsCommon<
+  K,
+  Raw
+> & {
+  srcChainKey: K;
+};
+
+/**
+ * The unsigned transactions an approval needs, named rather than ordered.
+ *
+ * `resetTx` is present only for a token that rejects an allowance change from one non-zero value to
+ * another while a stale allowance exists. When it is, **broadcast it first and wait for it to be
+ * mined** — `approveTx` is not valid until the reset has landed.
+ *
+ * Deliberately not an array: the only consumers map these onto named fields anyway
+ * (`ApproveResponseV2.tx` / `resetTx`), and a positional contract crossing a package boundary
+ * invites a reader to guess which end is which.
+ */
+export type ApprovalTxs<K extends SpokeChainKey> = {
+  readonly resetTx?: TxReturnType<K, true>;
+  readonly approveTx: TxReturnType<K, true>;
 };
 
 /**

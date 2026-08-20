@@ -22,11 +22,7 @@ export type UseSwapVars<K extends SpokeChainKey = SpokeChainKey> = Omit<SwapActi
  */
 export function useSwap<K extends SpokeChainKey = SpokeChainKey>({
   mutationOptions,
-}: MutationHookParams<SwapResponse, UseSwapVars<K>> = {}): SafeUseMutationResult<
-  SwapResponse,
-  Error,
-  UseSwapVars<K>
-> {
+}: MutationHookParams<SwapResponse, UseSwapVars<K>> = {}): SafeUseMutationResult<SwapResponse, Error, UseSwapVars<K>> {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
 

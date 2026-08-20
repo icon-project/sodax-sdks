@@ -3,13 +3,16 @@ import {
   Erc20Service,
   type HubProvider,
   relayTxAndWaitPacket,
+  RELAY_FALLBACK_FLOOR_MS,
   EvmVaultTokenService,
   EvmAssetManagerService,
   encodeContractCalls,
   calculateFeeAmount,
+  isNativeBitcoinTransfer,
   encodeAddress,
   wrappedSonicAbi,
   isHubChainKeyType,
+  isStacksChainKeyType,
   isStellarChainKeyType,
   type SpokeIsAllowanceValidParamsHub,
   type SpokeIsAllowanceValidParamsEvmSpoke,
@@ -17,11 +20,18 @@ import {
   isEvmSpokeOnlyChainKeyType,
   isBitcoinChainKeyType,
   isBitcoinWalletProviderType,
+  isUndefinedOrValidWalletProviderForChainKey,
   isOptionalEvmWalletProviderType,
   isOptionalStellarWalletProviderType,
   type SpokeApproveParams,
+  type BitcoinBoundExtras,
 } from '../shared/index.js';
 import type { IntentTxResult, TxHashPair } from '../shared/types/types.js';
+import type { ApprovalTxs } from '../shared/types/spoke-types.js';
+import type { BackendApiService } from '../backendApi/index.js';
+import { runBackendSubmitTx } from '../backendApi/runBackendSubmitTx.js';
+import { createSubmitTxAttempt, type SubmitTxAttempt } from '../backendApi/submitTxAttempt.js';
+import { resolveTimeoutMs } from '../shared/utils/resolveTimeoutMs.js';
 import {
   type SpokeChainKey,
   type XToken,
@@ -40,11 +50,22 @@ import {
   type EvmSpokeOnlyChainKey,
   type GetTokenAddressType,
   type SpokeExecActionParams,
+  type GetChainType,
+  DEFAULT_RELAY_TX_TIMEOUT,
+  BITCOIN_DUST_SATS,
 } from '@sodax/types';
 import { encodeFunctionData } from 'viem';
 import type { ConfigService } from '../shared/config/ConfigService.js';
 import BigNumber from 'bignumber.js';
-import { lookupFailed, verifyFailed, intentCreationFailed, executionFailed, approveFailed, allowanceCheckFailed } from '../errors/wrappers.js';
+import {
+  lookupFailed,
+  verifyFailed,
+  intentCreationFailed,
+  executionFailed,
+  approveFailed,
+  allowanceCheckFailed,
+  unknownFailed,
+} from '../errors/wrappers.js';
 import { mapRelayFailure } from '../errors/relay-error-mapping.js';
 import {
   type BridgeAllowanceCheckError,
@@ -70,16 +91,40 @@ export type CreateBridgeIntentParams<K extends SpokeChainKey = SpokeChainKey> = 
   recipient: string; // non-encoded recipient address
 };
 
+/**
+ * Per-action extras for bridge intent creation, supplied via the `extras` slot of the bridge
+ * action params. Mirrors `SwapExtras` chain-keyed slots, plus a chain-agnostic `partnerFee` per-action
+ * override that takes precedence over the config-level `bridgePartnerFee` (omit it to use the configured fee).
+ *
+ * - `srcPublicKey` — only for Stacks sources (their address can't yield the signer public key at
+ *   raw-tx build time); keyed off `K` so non-Stacks actions can't set it.
+ * - `bound` — Bound Exchange (Radfi) inputs for raw Bitcoin TRADING-mode sources; keyed off `K`
+ *   so non-Bitcoin actions can't set it.
+ */
+export type BridgeExtras<K extends SpokeChainKey = SpokeChainKey> = (GetChainType<K> extends 'STACKS'
+  ? { srcPublicKey?: string }
+  : { srcPublicKey?: never }) &
+  (GetChainType<K> extends 'BITCOIN' ? { bound?: BitcoinBoundExtras } : { bound?: never }) & {
+    /**
+     * Per-action partner-fee override. When present, takes precedence over the config-level
+     * `bridgePartnerFee` for this call, so an integrator can charge (and route) its own fee per bridge.
+     * Omit to use the configured fee. Chain-agnostic (unlike `srcPublicKey`/`bound`).
+     */
+    partnerFee?: PartnerFee;
+  };
+
 export type BridgeParams<ChainKey extends SpokeChainKey, Raw extends boolean> = SpokeExecActionParams<
   ChainKey,
   Raw,
-  CreateBridgeIntentParams<ChainKey>
+  CreateBridgeIntentParams<ChainKey>,
+  BridgeExtras<ChainKey>
 >;
 
 export type BridgeServiceConstructorParams = {
   hubProvider: HubProvider;
   config: ConfigService;
   spoke: SpokeService;
+  backendApi: BackendApiService;
 };
 
 /**
@@ -102,27 +147,41 @@ export class BridgeService {
   public readonly config: ConfigService;
   public readonly spoke: SpokeService;
 
-  constructor({ hubProvider, config, spoke }: BridgeServiceConstructorParams) {
+  // backend bridge-API client
+  public readonly backendApi: BackendApiService;
+
+  /**
+   * Effective backend submit-tx flow (`bridge.useBackendSubmitTx`, default on). Read live off
+   * `ConfigService` like `bridgePartnerFee`, so the config object and the behavior can never disagree.
+   */
+  get useBackendSubmitTx(): boolean {
+    return this.config.bridgeUseBackendSubmitTx;
+  }
+
+  constructor({ hubProvider, config, spoke, backendApi }: BridgeServiceConstructorParams) {
     this.config = config;
     this.hubProvider = hubProvider;
     this.spoke = spoke;
+    this.backendApi = backendApi;
   }
 
   /**
    * Calculates the partner fee deducted from a given bridge input amount.
    *
-   * Returns `0n` when no partner fee is configured. The fee is denominated in the
-   * same units as `inputAmount` (vault token decimals, 18 dp).
+   * Returns `0n` when no partner fee is configured. `inputAmount` must be in 18-dp hub/vault
+   * units — the units the hub deducts the fee in (see `buildBridgeData`) — NOT the spoke token's
+   * native base units. This matters for a fixed `PartnerFee.amount`, which is wei-denominated
+   * (18 dp); a percentage fee is unit-agnostic.
    *
-   * @param inputAmount - Gross amount being bridged, in vault token base units.
+   * @param inputAmount - Gross amount being bridged, in 18-dp hub/vault units.
    * @returns Fee amount to be deducted, in the same units as `inputAmount`.
    */
-  public getFee(inputAmount: bigint): bigint {
-    if (!this.config.bridgePartnerFee) {
+  public getFee(inputAmount: bigint, partnerFee: PartnerFee | undefined = this.config.bridgePartnerFee): bigint {
+    if (!partnerFee) {
       return 0n;
     }
 
-    return calculateFeeAmount(inputAmount, this.config.bridgePartnerFee);
+    return calculateFeeAmount(inputAmount, partnerFee);
   }
 
   /**
@@ -204,6 +263,8 @@ export class BridgeService {
    * When `raw` is `true` the encoded transaction is returned without broadcasting.
    * When `raw` is `false` the transaction is signed and submitted via the provided wallet provider.
    *
+   * Returns a SINGLE transaction — for the unsigned two-step case use {@link BridgeService.buildApproveTxs}.
+   *
    * @param _params - Bridge parameters including source chain, token, amount, wallet provider, and `raw` flag.
    * @returns `Result<TxReturnType<K, Raw>>` — encoded transaction data (raw) or submitted transaction hash.
    */
@@ -225,9 +286,7 @@ export class BridgeService {
           'Invalid wallet provider. Expected Evm wallet provider.',
           { ...baseCtx, field: 'walletProvider' },
         );
-        const spender = isHubChainKeyType(params.srcChainKey)
-          ? await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey)
-          : this.config.getChainConfig(params.srcChainKey).addresses.assetManager;
+        const spender = await this.resolveEvmApprovalSpender(params.srcChainKey, params.srcAddress);
 
         const coreParams = {
           srcChainKey: params.srcChainKey,
@@ -287,11 +346,89 @@ export class BridgeService {
 
       // Reached only for chains that don't support approval (Solana, NEAR, Bitcoin, etc.).
       // Surface as a validation failure rather than a generic Error so consumers can discriminate.
-      bridgeInvariant(
-        false,
-        'Approval only supported for EVM spoke chains and Stellar',
-        { ...baseCtx, field: 'srcChainKey' },
-      );
+      bridgeInvariant(false, 'Approval only supported for EVM spoke chains and Stellar', {
+        ...baseCtx,
+        field: 'srcChainKey',
+      });
+    } catch (error) {
+      if (isBridgeApproveError(error)) return { ok: false, error };
+      return { ok: false, error: wrapApproveFailure(error) };
+    }
+  }
+
+  /**
+   * The contract a bridge source token must be approved to, on the EVM approval path: the caller's own
+   * hub wallet router for a hub source (per-caller, hence async), the chain's asset manager on a spoke.
+   * NOT the swaps spender. Shared by `approve` and `buildApproveTxs` so the two cannot drift apart.
+   */
+  private async resolveEvmApprovalSpender(
+    srcChainKey: HubChainKey | EvmSpokeOnlyChainKey,
+    srcAddress: string,
+  ): Promise<GetAddressType<HubChainKey | EvmSpokeOnlyChainKey>> {
+    return isHubChainKeyType(srcChainKey)
+      ? await this.hubProvider.getUserHubWalletAddress(srcAddress, srcChainKey)
+      : this.config.getChainConfig(srcChainKey).addresses.assetManager;
+  }
+
+  /**
+   * The unsigned approval transactions for the bridge's source token: `approveTx`, preceded by a
+   * `resetTx` when a stale allowance must be zeroed first. Broadcast `resetTx` and wait for it to be
+   * mined — `approveTx` is not valid until it lands.
+   */
+  public async buildApproveTxs<K extends SpokeChainKey>(
+    _params: BridgeParams<K, true>,
+  ): Promise<Result<ApprovalTxs<K>, BridgeApproveError>> {
+    const { params } = _params;
+    const baseCtx = { srcChainKey: params.srcChainKey };
+
+    const wrapApproveFailure = (cause: unknown) => approveFailed('bridge', cause, baseCtx);
+
+    try {
+      bridgeInvariant(params.amount > 0n, 'Amount must be greater than 0', { ...baseCtx, field: 'amount' });
+      bridgeInvariant(params.srcToken.length > 0, 'Source asset is required', { ...baseCtx, field: 'srcToken' });
+
+      if (isHubChainKeyType(params.srcChainKey) || isEvmSpokeOnlyChainKeyType(params.srcChainKey)) {
+        const spender = await this.resolveEvmApprovalSpender(params.srcChainKey, params.srcAddress);
+
+        const result = await this.spoke.buildApproveTxs<HubChainKey | EvmSpokeOnlyChainKey>({
+          srcChainKey: params.srcChainKey,
+          owner: params.srcAddress as GetAddressType<HubChainKey | EvmSpokeOnlyChainKey>,
+          token: params.srcToken as GetTokenAddressType<HubChainKey | EvmSpokeOnlyChainKey>,
+          amount: params.amount,
+          spender,
+          raw: true,
+        });
+
+        if (!result.ok) return { ok: false, error: wrapApproveFailure(result.error) };
+
+        return {
+          ok: true,
+          value: result.value satisfies ApprovalTxs<HubChainKey | EvmSpokeOnlyChainKey> as ApprovalTxs<K>,
+        };
+      }
+
+      if (isStellarChainKeyType(params.srcChainKey)) {
+        const result = await this.spoke.buildApproveTxs<StellarChainKey>({
+          srcChainKey: params.srcChainKey,
+          token: params.srcToken,
+          amount: params.amount,
+          owner: params.srcAddress as GetAddressType<StellarChainKey>,
+          raw: true,
+        });
+
+        if (!result.ok) return { ok: false, error: wrapApproveFailure(result.error) };
+
+        return {
+          ok: true,
+          value: result.value satisfies ApprovalTxs<StellarChainKey> as ApprovalTxs<K>,
+        };
+      }
+
+      // Same unsupported-chain set as `approve`, reported the same way.
+      bridgeInvariant(false, 'Approval only supported for EVM spoke chains and Stellar', {
+        ...baseCtx,
+        field: 'srcChainKey',
+      });
     } catch (error) {
       if (isBridgeApproveError(error)) return { ok: false, error };
       return { ok: false, error: wrapApproveFailure(error) };
@@ -301,15 +438,27 @@ export class BridgeService {
   /**
    * Executes a full end-to-end bridge transfer: spoke deposit → relay → hub settlement.
    *
-   * Internally calls `createBridgeIntent()` to submit the spoke-side deposit transaction,
-   * then waits for the cross-chain relay packet to be confirmed on the hub (Sonic).
-   * Use this method for the typical "fire and wait" bridge UX.
+   * Internally calls `createBridgeIntent()` to submit the spoke-side deposit transaction, then
+   * completes the transfer via one of two paths. Use this method for the typical "fire and wait" UX.
+   *
+   * - **Backend submit-tx (default, `bridge.useBackendSubmitTx`), {@link submitTx}:** hands the deposit
+   *   to the bridge API, which relays server-side, and polls until `executed`. On ANY non-success it
+   *   falls back to the path below — safe because re-relaying is idempotent.
+   * - **Client-side (opt-out with `useBackendSubmitTx: false`), {@link fallbackBridgeSteps}:** verifies
+   *   the deposit landed on-chain, then relays it and waits for the settlement packet. `verifyTxHash`
+   *   runs on this path only; the backend runs its own.
    *
    * For manual relay control (e.g. monitoring or batching), use `createBridgeIntent()` directly
    * and handle the relay step yourself.
    *
    * @param _params - Bridge parameters including source/destination chain keys, token addresses,
-   *   amount, recipient address, wallet provider, and optional timeout.
+   *   amount, recipient address, wallet provider, and an optional `timeout` — a PER-ATTEMPT budget,
+   *   not an end-to-end one. The backend attempt gets it, and if that attempt does not complete the
+   *   client-side relay wait gets a fresh one starting after verification, so neither a stalled backend
+   *   nor a slow source-chain confirmation can shorten it. Worst-case wall-clock is
+   *   `createBridgeIntent + timeout + verification + max(timeout, RELAY_FALLBACK_FLOOR_MS)`, where
+   *   verification is bounded by the source chain's `pollingConfig.maxTimeoutMs` and intent creation is
+   *   not bounded by `timeout` at all. See `docs/BRIDGE.md` § Completion paths and `timeout`.
    * @returns `Result<TxHashPair>` — `{ srcChainTxHash, dstChainTxHash }` on success,
    *   where `srcChainTxHash` is the spoke deposit tx and `dstChainTxHash` is the hub settlement tx.
    *
@@ -336,62 +485,177 @@ export class BridgeService {
   public async bridge<K extends SpokeChainKey>(
     _params: BridgeParams<K, false>,
   ): Promise<Result<TxHashPair, BridgeOrchestrationError>> {
-    return this.config.analytics.trackResult('bridge', 'bridge', async () => {
-      const { params, timeout } = _params;
-      const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
-      try {
-        const txResult = await this.createBridgeIntent(_params);
-        // CreateBridgeIntentErrorCode ⊂ BridgeOrchestrationErrorCode, so SodaxError narrows correctly.
-        if (!txResult.ok) return { ok: false, error: txResult.error };
+    return this.config.analytics.trackResult(
+      'bridge',
+      'bridge',
+      async () => {
+        const { params } = _params;
+        const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
+        try {
+          const created = await this.createBridgeIntent(_params);
+          // CreateBridgeIntentErrorCode ⊂ BridgeOrchestrationErrorCode, so SodaxError narrows correctly.
+          if (!created.ok) return { ok: false, error: created.error };
 
-        const verifyTxHashResult = await this.spoke.verifyTxHash({
-          txHash: txResult.value.tx,
-          chainKey: params.srcChainKey,
-        });
-        if (!verifyTxHashResult.ok) {
+          // `timeout` is a PER-ATTEMPT budget, not an end-to-end one: the backend attempt gets it, and if
+          // that attempt fails the client-side relay fallback gets a fresh one. Sharing a single deadline
+          // would leave the fallback whatever the backend had not spent, which is how a relay that needs
+          // longer than the leftovers ends in RELAY_TIMEOUT. Resolved (not just defaulted) so a non-finite
+          // caller value cannot reach either budget — see `resolveTimeoutMs`.
+          const timeoutMs = resolveTimeoutMs(_params.timeout, DEFAULT_RELAY_TX_TIMEOUT);
+
+          // Backend submit-tx flow (default on): hand the broadcast spoke-deposit tx to the bridge API, which
+          // relays server-side. On ANY non-success we fall back to the client-side relay so the bridge
+          // still completes — safe because re-relay is idempotent.
+          if (this.useBackendSubmitTx) {
+            const submitted = await this.submitTx(_params, created.value, createSubmitTxAttempt(timeoutMs));
+            if (submitted.ok) return submitted;
+            this.config.logger.warn(
+              '[bridge] backend submit-tx did not complete; falling back to the client-side relay',
+              { error: submitted.error },
+            );
+          }
+
+          return this.fallbackBridgeSteps(_params, created.value, timeoutMs);
+        } catch (error) {
+          if (isBridgeOrchestrationError(error)) return { ok: false, error };
           return {
             ok: false,
-            error: verifyFailed('bridge', verifyTxHashResult.error, baseCtx),
+            error: executionFailed('bridge', error, baseCtx),
           };
         }
+      },
+      {
+        start: () => ({
+          srcChainKey: _params.params.srcChainKey,
+          dstChainKey: _params.params.dstChainKey,
+          srcToken: _params.params.srcToken,
+          dstToken: _params.params.dstToken,
+          amount: _params.params.amount,
+          srcAddress: _params.params.srcAddress,
+          recipient: _params.params.recipient,
+        }),
+        success: value => ({
+          srcChainTxHash: value.srcChainTxHash,
+          dstChainTxHash: value.dstChainTxHash,
+        }),
+        failure: error => ({ code: error.code }),
+      },
+    );
+  }
 
-        const packetResult = await relayTxAndWaitPacket({
-          srcTxHash: txResult.value.tx,
-          data: txResult.value.relayData,
-          chainKey: params.srcChainKey,
-          relayerApiEndpoint: this.config.relay.relayerApiEndpoint,
-          timeout,
-        });
-        if (!packetResult.ok) return { ok: false, error: mapRelayFailure(packetResult.error, { feature: 'bridge', action: 'bridge', srcChainKey: baseCtx.srcChainKey, dstChainKey: baseCtx.dstChainKey }) };
+  /**
+   * Client-side bridge completion (opt-out via `bridge.useBackendSubmitTx: false`): verify the broadcast
+   * spoke-deposit tx, then relay it to the hub and wait for the settlement packet. Extracted verbatim from
+   * `bridge()` so the backend submit-tx path ({@link submitTx}) can fall back to it on any non-success.
+   * Bridge always relays — there is no hub-source short-circuit.
+   *
+   * Verification belongs to THIS path only: the backend runs its own, so verifying before handing over
+   * would delay every backend success by the source chain's confirmation wait and could fail a bridge the
+   * backend would have completed.
+   */
+  private async fallbackBridgeSteps<K extends SpokeChainKey>(
+    _params: BridgeParams<K, false>,
+    created: IntentTxResult<K, false>,
+    timeoutMs: number,
+  ): Promise<Result<TxHashPair, BridgeOrchestrationError>> {
+    const { params } = _params;
+    const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
 
-        return {
-          ok: true,
-          value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packetResult.value.dst_tx_hash },
-        };
-      } catch (error) {
-        if (isBridgeOrchestrationError(error)) return { ok: false, error };
-        return {
-          ok: false,
-          error: executionFailed('bridge', error, baseCtx),
-        };
-      }
-    },
-    {
-      start: () => ({
-        srcChainKey: _params.params.srcChainKey,
-        dstChainKey: _params.params.dstChainKey,
-        srcToken: _params.params.srcToken,
-        dstToken: _params.params.dstToken,
-        amount: _params.params.amount,
-        srcAddress: _params.params.srcAddress,
-        recipient: _params.params.recipient,
-      }),
-      success: value => ({
-        srcChainTxHash: value.srcChainTxHash,
-        dstChainTxHash: value.dstChainTxHash,
-      }),
-      failure: error => ({ code: error.code }),
+    const verifyTxHashResult = await this.spoke.verifyTxHash({
+      txHash: created.tx,
+      chainKey: params.srcChainKey,
     });
+    if (!verifyTxHashResult.ok) {
+      return { ok: false, error: verifyFailed('bridge', verifyTxHashResult.error, baseCtx) };
+    }
+
+    const packetResult = await relayTxAndWaitPacket({
+      srcTxHash: created.tx,
+      data: created.relayData,
+      chainKey: params.srcChainKey,
+      relayerApiEndpoint: this.config.relay.relayerApiEndpoint,
+      // The caller's full `timeout`, starting HERE — after verification, and whether this runs as the only
+      // path or as the backend's fallback. Neither a stalled backend attempt nor a slow source-chain
+      // confirmation (Stacks polls for up to its full 120s `maxTimeoutMs`) may shorten the relay wait. The
+      // floor covers a sub-floor caller `timeout`: `relayTxAndWaitPacket` SUBMITS the tx to the relay
+      // before `timeout` bounds anything, so a zero budget would strand an already-landed deposit
+      // unrelayed. Re-relay is idempotent, so always spending the floor is safe.
+      timeout: Math.max(timeoutMs, RELAY_FALLBACK_FLOOR_MS),
+    });
+    if (!packetResult.ok) {
+      return {
+        ok: false,
+        error: mapRelayFailure(packetResult.error, {
+          feature: 'bridge',
+          action: 'bridge',
+          srcChainKey: baseCtx.srcChainKey,
+          dstChainKey: baseCtx.dstChainKey,
+        }),
+      };
+    }
+
+    return {
+      ok: true,
+      value: { srcChainTxHash: created.tx, dstChainTxHash: packetResult.value.dst_tx_hash },
+    };
+  }
+
+  /**
+   * Backend bridge path (default via `bridge.useBackendSubmitTx`): hand the broadcast
+   * spoke-deposit tx to the bridge API (`POST /bridge/submit-tx`) with the FULL `relayData`
+   * envelope; the backend relays server-side. Polls `getSubmitTxStatus` until `executed`, then
+   * returns the same {@link TxHashPair} the client-side path returns (`result.dstIntentTxHash` →
+   * destination tx hash; bridge has no solver `intent_hash`).
+   *
+   * Never throws — returns `{ ok: false }` on any non-success (submit `!ok`, terminal `failed` /
+   * abandoned, or poll timeout) so `bridge()` falls back to {@link fallbackBridgeSteps}. Falling back
+   * is safe: re-relaying an already-relayed bridge tx is idempotent — the relay dedups and returns the
+   * existing `executed` packet. It is also load-bearing rather than belt-and-braces: the backend keeps
+   * processing after this attempt gives up, so the fallback's relay can race the backend's own.
+   *
+   * The attempt itself — POST, budget clamps, status poll — is {@link runBackendSubmitTx}, shared with
+   * swaps. What is bridge-specific and lives here: the request body (the FULL `relayData` envelope), the
+   * `executed` terminal status, the mapping to a {@link TxHashPair}, and the bridge error taxonomy.
+   *
+   * `attempt` bounds this attempt alone — the POST and every status request draw on it, and the
+   * client-side fallback holds a separate fresh `timeout`.
+   */
+  private async submitTx<K extends SpokeChainKey>(
+    _params: BridgeParams<K, false>,
+    created: IntentTxResult<K, false>,
+    attempt: SubmitTxAttempt,
+  ): Promise<Result<TxHashPair, BridgeOrchestrationError>> {
+    const { params } = _params;
+    const srcChainKey = params.srcChainKey;
+    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey };
+    const { tx: spokeTxHash, relayData } = created;
+
+    try {
+      const outcome = await runBackendSubmitTx({
+        attempt,
+        api: this.backendApi.bridge,
+        body: {
+          txHash: spokeTxHash,
+          srcChainKey,
+          walletAddress: params.srcAddress,
+          // Send the FULL { address, payload } envelope — bridge has no intent.creator for the backend
+          // to rebuild the relay address, so dropping it would break split-tx-chain relay.
+          relayData,
+        },
+        statusQuery: { txHash: spokeTxHash, srcChainKey },
+        // Bridge terminal success is `executed` (hub-settled) — not the swaps `solved`.
+        terminalStatus: 'executed',
+        onExecuted: (result): TxHashPair | undefined =>
+          result?.dstIntentTxHash ? { srcChainTxHash: spokeTxHash, dstChainTxHash: result.dstIntentTxHash } : undefined,
+      });
+      // Any non-success — rejected POST, terminal `failed`, spent attempt — becomes the cause bridge()
+      // logs before falling back to the client-side relay.
+      return outcome.ok
+        ? { ok: true, value: outcome.value }
+        : { ok: false, error: executionFailed('bridge', outcome.cause, { ...baseCtx, action: 'bridge' }) };
+    } catch (error) {
+      return { ok: false, error: unknownFailed('bridge', error, { ...baseCtx, action: 'bridge' }) };
+    }
   }
 
   /**
@@ -419,46 +683,109 @@ export class BridgeService {
   async createBridgeIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: BridgeParams<K, Raw>,
   ): Promise<Result<IntentTxResult<K, Raw>, BridgeCreateIntentError>> {
-    const { params, skipSimulation } = _params;
+    const { params, skipSimulation, extras } = _params;
+    // Per-action `extras.partnerFee` wins over the config-level `bridgePartnerFee` (undefined = no fee).
+    // Resolved once so the dust guard below and `buildBridgeData` price the same fee.
+    const partnerFee = extras?.partnerFee ?? this.config.bridgePartnerFee;
     const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
     try {
+      bridgeInvariant(
+        isUndefinedOrValidWalletProviderForChainKey(params.srcChainKey, _params.walletProvider),
+        `Invalid wallet provider for chain key: ${params.srcChainKey}`,
+        baseCtx,
+      );
       bridgeInvariant(params.amount > 0n, 'Amount must be greater than 0', { ...baseCtx, field: 'amount' });
       const srcToken = this.resolveBridgeEndpointToken(params.srcChainKey, params.srcToken);
       const dstToken = this.resolveBridgeEndpointToken(params.dstChainKey, params.dstToken);
 
       // Vault can only be used on Sonic
-      bridgeInvariant(srcToken, `Unsupported spoke chain (${params.srcChainKey}) token: ${params.srcToken}`,
-        { ...baseCtx, field: 'srcToken' });
+      bridgeInvariant(srcToken, `Unsupported spoke chain (${params.srcChainKey}) token: ${params.srcToken}`, {
+        ...baseCtx,
+        field: 'srcToken',
+      });
       // destination
-      bridgeInvariant(dstToken, `Unsupported spoke chain (${params.dstChainKey}) token: ${params.dstToken}`,
-        { ...baseCtx, field: 'dstToken' });
+      bridgeInvariant(dstToken, `Unsupported spoke chain (${params.dstChainKey}) token: ${params.dstToken}`, {
+        ...baseCtx,
+        field: 'dstToken',
+      });
+      // Reject unregistered chain keys up front (parity with SwapService.createIntent). Redundant with
+      // token resolution for most inputs, but gives a VALIDATION_FAILED tagged with the chain-key field
+      // for JS/cast consumers instead of a deeper, less specific failure.
+      bridgeInvariant(
+        this.config.isValidSpokeChainKey(params.srcChainKey),
+        `Invalid spoke chain (srcChainKey): ${params.srcChainKey}`,
+        { ...baseCtx, field: 'srcChainKey' },
+      );
+      bridgeInvariant(
+        this.config.isValidSpokeChainKey(params.dstChainKey),
+        `Invalid spoke chain (dstChainKey): ${params.dstChainKey}`,
+        { ...baseCtx, field: 'dstChainKey' },
+      );
+
+      // Native BTC on the Bitcoin chain is denominated in satoshis, so a BTC deposit (source) or BTC
+      // delivery (destination) must clear the 546-sat dust limit. Bridging is vault-1:1 across 8-decimal
+      // BTC-family tokens, so `amount` equals the satoshi value on both sides.
+      if (isNativeBitcoinTransfer(this.config, params.srcChainKey, srcToken)) {
+        bridgeInvariant(
+          params.amount >= BITCOIN_DUST_SATS,
+          `Invalid amount (${params.amount}): below the Bitcoin dust limit of ${BITCOIN_DUST_SATS} sats`,
+          { ...baseCtx, field: 'amount' },
+        );
+      }
+      if (isNativeBitcoinTransfer(this.config, params.dstChainKey, dstToken)) {
+        // The DELIVERED (post-fee) sats are what must clear dust, and the partner fee is deducted on the
+        // hub in 18-dp vault units — a fixed `PartnerFee.amount` is wei-denominated, NOT sats. Share
+        // `buildBridgeData`'s pipeline rather than restating it, so the guard can't drift from the
+        // amount the encoded hub calls actually withdraw.
+        const { delivered } = this.computeBridgeAmounts(params.amount, srcToken, dstToken, partnerFee);
+        bridgeInvariant(
+          delivered >= BITCOIN_DUST_SATS,
+          `Post-fee BTC delivery (${delivered}) is below the Bitcoin dust limit of ${BITCOIN_DUST_SATS} sats`,
+          { ...baseCtx, field: 'amount' },
+        );
+      }
+
+      // Stacks addresses can't yield the signer public key at raw-tx build time, so a raw Stacks
+      // deposit must carry it up front — mirrors SwapService.createIntent. Without this guard a
+      // missing key only surfaces deep in StacksSpokeService.deposit as INTENT_CREATION_FAILED.
+      if (isStacksChainKeyType(params.srcChainKey) && _params.raw === true) {
+        bridgeInvariant(
+          extras?.srcPublicKey !== undefined,
+          'srcPublicKey is required for Stacks createBridgeIntent (raw) — the source tx is built unsigned and needs the signer public key',
+          { ...baseCtx, field: 'srcPublicKey' },
+        );
+      }
 
       const personalAddress = params.srcAddress;
-      // Bitcoin TRADING mode uses the Bound trading wallet; USER mode sends directly from the
-      // connected Bitcoin wallet.
-      // NOTE: bitcoin is only enabled in non-raw execution mode == walletProvider is required.
+      // Bitcoin: derive the Bound trading wallet for raw and non-raw alike (raw TRADING needs the
+      // deposit address; the derivation is a public GET). Wallet-provider + Radfi auth stay non-raw only.
       let walletAddress: string = personalAddress;
-      if (isBitcoinChainKeyType(params.srcChainKey) && _params.raw === false) {
-        bridgeInvariant(
-          isBitcoinWalletProviderType(_params.walletProvider),
-          `Invalid wallet provider for chain key: ${params.srcChainKey}. Expected bitcoin wallet provider.`,
-          { ...baseCtx, field: 'walletProvider' },
-        );
-        walletAddress = await this.spoke.bitcoin.getEffectiveWalletAddress(personalAddress);
-        if (this.spoke.bitcoin.walletMode === 'TRADING') {
-          await this.spoke.bitcoin.radfi.ensureRadfiAccessToken(_params.walletProvider);
+      if (isBitcoinChainKeyType(params.srcChainKey)) {
+        if (_params.raw === false) {
+          bridgeInvariant(
+            isBitcoinWalletProviderType(_params.walletProvider),
+            `Invalid wallet provider for chain key: ${params.srcChainKey}. Expected bitcoin wallet provider.`,
+            { ...baseCtx, field: 'walletProvider' },
+          );
+          if (this.spoke.bitcoin.walletMode === 'TRADING') {
+            await this.spoke.bitcoin.radfi.ensureRadfiAccessToken(_params.walletProvider);
+          }
         }
+        walletAddress = await this.spoke.bitcoin.getEffectiveWalletAddress(personalAddress);
       }
 
       const hubWallet = await this.hubProvider.getUserHubWalletAddress(walletAddress, params.srcChainKey);
       const effectiveSkipSimulation =
         skipSimulation || (isBitcoinChainKeyType(params.srcChainKey) && this.spoke.bitcoin.walletMode === 'USER');
 
-      const data: Hex = this.buildBridgeData(params, srcToken, dstToken, this.config.bridgePartnerFee);
+      const data: Hex = this.buildBridgeData(params, srcToken, dstToken, partnerFee);
 
       const coreParams = {
         srcChainKey: params.srcChainKey,
         srcAddress: walletAddress as GetAddressType<K>,
+        srcPublicKey: extras?.srcPublicKey,
+        // Bitcoin Bound token; BitcoinSpokeService.deposit falls back to the RadfiProvider instance token when undefined.
+        accessToken: extras?.bound?.accessToken,
         to: hubWallet,
         token: params.srcToken as GetTokenAddressType<K>,
         amount: params.amount,
@@ -521,6 +848,36 @@ export class BridgeService {
   }
 
   /**
+   * Post-fee amounts for a bridge, in the units each hub step operates in. Single source for the fee +
+   * vault-decimal pipeline, so {@link buildBridgeData}'s encoded hub calls and the BTC-destination dust
+   * guard in {@link createBridgeIntent} can never disagree about what actually gets delivered.
+   *
+   * A spoke endpoint's amount is translated INTO 18-dp vault units on the way in (skipped when the
+   * endpoint already IS the vault asset), the partner fee is deducted there — so a fixed
+   * `PartnerFee.amount` is wei-denominated, never spoke-denominated — and the remainder is translated
+   * back OUT into the destination endpoint's own units.
+   *
+   * @returns `feeAmount` and `withdrawAmount` in 18-dp vault units (what the hub fee transfer and vault
+   *   withdrawal use), and `delivered` in the destination endpoint's units (what the recipient receives).
+   */
+  private computeBridgeAmounts(
+    amount: bigint,
+    srcToken: XToken,
+    dstToken: XToken,
+    partnerFee: PartnerFee | undefined,
+  ): { feeAmount: bigint; withdrawAmount: bigint; delivered: bigint } {
+    const translatedAmount = this.config.isSodaVaultHubAsset(srcToken.hubAsset)
+      ? amount
+      : EvmVaultTokenService.translateIncomingDecimals(srcToken.decimals, amount);
+    const feeAmount = calculateFeeAmount(translatedAmount, partnerFee);
+    const withdrawAmount = translatedAmount - feeAmount;
+    const delivered = this.config.isSodaVaultHubAsset(dstToken.hubAsset)
+      ? withdrawAmount
+      : EvmVaultTokenService.translateOutgoingDecimals(dstToken.decimals, withdrawAmount);
+    return { feeAmount, withdrawAmount, delivered };
+  }
+
+  /**
    * Encodes the hub-side execution payload for a bridge operation.
    *
    * Produces an ABI-encoded sequence of contract calls that the hub wallet router
@@ -548,28 +905,31 @@ export class BridgeService {
     partnerFee: PartnerFee | undefined,
   ): Hex {
     const calls: EvmContractCall[] = [];
-    let translatedAmount = params.amount;
-    let srcVault = params.srcToken as `0x${string}`;
+    const { feeAmount, withdrawAmount, delivered } = this.computeBridgeAmounts(
+      params.amount,
+      srcToken,
+      dstToken,
+      partnerFee,
+    );
+    // The hub-side asset the partner fee is transferred in: on the no-deposit path the hub asset the
+    // spoke deposit delivers to the wallet, overwritten with the vault below when a deposit runs.
+    // Never `params.srcToken`: for spoke sources that is a spoke-chain address (base58 on Solana; a
+    // codeless address on Sonic for EVM spokes), and only for hub sources does it equal the hub asset.
+    let srcVault: `0x${string}` = srcToken.hubAsset;
     // if src asset is not a vault token, we need to approve and deposit into the vault
     if (!this.config.isSodaVaultHubAsset(srcToken.hubAsset)) {
       calls.push(Erc20Service.encodeApprove(srcToken.hubAsset, srcToken.vault, params.amount));
       calls.push(EvmVaultTokenService.encodeDeposit(srcToken.vault, srcToken.hubAsset, params.amount));
-      translatedAmount = EvmVaultTokenService.translateIncomingDecimals(srcToken.decimals, params.amount);
       srcVault = srcToken.vault;
     }
-    const feeAmount = calculateFeeAmount(translatedAmount, partnerFee);
 
     if (partnerFee && feeAmount > 0n) {
       calls.push(Erc20Service.encodeTransfer(srcVault, partnerFee.address, feeAmount));
     }
 
-    const withdrawAmount = translatedAmount - feeAmount;
-    let translatedWithdrawAmount = withdrawAmount;
-
     // if dst asset is not a vault token, we need to withdraw from the vault
     if (!this.config.isSodaVaultHubAsset(dstToken.hubAsset)) {
       calls.push(EvmVaultTokenService.encodeWithdraw(dstToken.vault, dstToken.hubAsset, withdrawAmount));
-      translatedWithdrawAmount = EvmVaultTokenService.translateOutgoingDecimals(dstToken.decimals, withdrawAmount);
     }
 
     const encodedRecipientAddress = encodeAddress(params.dstChainKey, params.recipient);
@@ -583,20 +943,22 @@ export class BridgeService {
           data: encodeFunctionData({
             abi: wrappedSonicAbi,
             functionName: 'withdrawTo',
-            args: [encodedRecipientAddress, translatedWithdrawAmount],
+            args: [encodedRecipientAddress, delivered],
           }),
         });
       } else {
-        calls.push(Erc20Service.encodeTransfer(dstToken.hubAsset, encodedRecipientAddress, translatedWithdrawAmount));
+        calls.push(Erc20Service.encodeTransfer(dstToken.hubAsset, encodedRecipientAddress, delivered));
       }
     } else {
-      bridgeInvariant(dstToken, `Unsupported hub chain (${params.dstChainKey}) token: ${params.dstToken}`,
-        { dstChainKey: params.dstChainKey, field: 'dstToken' });
+      bridgeInvariant(dstToken, `Unsupported hub chain (${params.dstChainKey}) token: ${params.dstToken}`, {
+        dstChainKey: params.dstChainKey,
+        field: 'dstToken',
+      });
       calls.push(
         EvmAssetManagerService.encodeTransfer(
           dstToken.hubAsset,
           encodedRecipientAddress,
-          translatedWithdrawAmount,
+          delivered,
           this.hubProvider.chainConfig.addresses.assetManager,
         ),
       );
@@ -630,12 +992,17 @@ export class BridgeService {
       const fromToken = this.config.getSpokeTokenFromOriginalAssetAddress(from.chainKey, from.address);
       const toToken = this.config.getSpokeTokenFromOriginalAssetAddress(to.chainKey, to.address);
 
-      bridgeInvariant(fromToken, `Token not found for token ${from.address} on chain ${from.chainKey}`,
-        { ...baseCtx, field: 'from' });
-      bridgeInvariant(toToken, `Token not found for token ${to.address} on chain ${to.chainKey}`,
-        { ...baseCtx, field: 'to' });
-      bridgeInvariant(this.isBridgeable({ from, to }), `Tokens ${from.address} and ${to.address} are not bridgeable`,
-        { ...baseCtx });
+      bridgeInvariant(fromToken, `Token not found for token ${from.address} on chain ${from.chainKey}`, {
+        ...baseCtx,
+        field: 'from',
+      });
+      bridgeInvariant(toToken, `Token not found for token ${to.address} on chain ${to.chainKey}`, {
+        ...baseCtx,
+        field: 'to',
+      });
+      bridgeInvariant(this.isBridgeable({ from, to }), `Tokens ${from.address} and ${to.address} are not bridgeable`, {
+        ...baseCtx,
+      });
 
       // we need to check the max deposit of the token on the from chain and the asset manager balance on the to chain
       const [tokenInfos, reserves] = await Promise.all([
@@ -730,21 +1097,17 @@ export class BridgeService {
    *   checking theoretical bridgeability without requiring both chains to be in the active config.
    * @returns `true` if the tokens share the same hub vault; `false` otherwise.
    */
-  public isBridgeable({
-    from,
-    to,
-    unchecked = false,
-  }: {
-    from: XToken;
-    to: XToken;
-    unchecked?: boolean;
-  }): boolean {
+  public isBridgeable({ from, to, unchecked = false }: { from: XToken; to: XToken; unchecked?: boolean }): boolean {
     try {
       if (!unchecked) {
-        bridgeInvariant(this.config.isValidSpokeChainKey(from.chainKey), `Invalid spoke chain (${from.chainKey})`,
-          { srcChainKey: from.chainKey, field: 'from' });
-        bridgeInvariant(this.config.isValidSpokeChainKey(to.chainKey), `Invalid spoke chain (${to.chainKey})`,
-          { dstChainKey: to.chainKey, field: 'to' });
+        bridgeInvariant(this.config.isValidSpokeChainKey(from.chainKey), `Invalid spoke chain (${from.chainKey})`, {
+          srcChainKey: from.chainKey,
+          field: 'from',
+        });
+        bridgeInvariant(this.config.isValidSpokeChainKey(to.chainKey), `Invalid spoke chain (${to.chainKey})`, {
+          dstChainKey: to.chainKey,
+          field: 'to',
+        });
       }
 
       // Get hub asset info for both source and destination assets
@@ -752,10 +1115,14 @@ export class BridgeService {
       const dstToken = this.config.getSpokeTokenFromOriginalAssetAddress(to.chainKey, to.address);
 
       // Check if both assets are supported and have vault information
-      bridgeInvariant(srcToken, `Token not found for token ${from.address} on chain ${from.chainKey}`,
-        { srcChainKey: from.chainKey, field: 'from' });
-      bridgeInvariant(dstToken, `Token not found for token ${to.address} on chain ${to.chainKey}`,
-        { dstChainKey: to.chainKey, field: 'to' });
+      bridgeInvariant(srcToken, `Token not found for token ${from.address} on chain ${from.chainKey}`, {
+        srcChainKey: from.chainKey,
+        field: 'from',
+      });
+      bridgeInvariant(dstToken, `Token not found for token ${to.address} on chain ${to.chainKey}`, {
+        dstChainKey: to.chainKey,
+        field: 'to',
+      });
 
       // Check if the vault addresses are the same (case-insensitive comparison)
       return srcToken.vault.toLowerCase() === dstToken.vault.toLowerCase();
@@ -787,8 +1154,7 @@ export class BridgeService {
     const baseCtx = { srcChainKey: from, dstChainKey: to };
     try {
       const srcToken = this.config.getSpokeTokenFromOriginalAssetAddress(from, token);
-      bridgeInvariant(srcToken, `Token not found for token ${token} on chain ${from}`,
-        { ...baseCtx, field: 'token' });
+      bridgeInvariant(srcToken, `Token not found for token ${token} on chain ${from}`, { ...baseCtx, field: 'token' });
 
       return {
         ok: true,
@@ -852,8 +1218,10 @@ export class BridgeService {
    */
   public findTokenBalanceInReserves(reserves: VaultReserves, token: XToken): bigint {
     const hubAsset = this.config.getSpokeTokenFromOriginalAssetAddress(token.chainKey, token.address);
-    bridgeInvariant(hubAsset, `Token not found for token ${token.address} on chain ${token.chainKey}`,
-      { srcChainKey: token.chainKey, field: 'token' });
+    bridgeInvariant(hubAsset, `Token not found for token ${token.address} on chain ${token.chainKey}`, {
+      srcChainKey: token.chainKey,
+      field: 'token',
+    });
     const tokenIndex = reserves.tokens.findIndex(t => t.toLowerCase() === hubAsset.hubAsset.toLowerCase());
     bridgeInvariant(
       tokenIndex !== -1,

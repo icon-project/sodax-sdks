@@ -1,4 +1,4 @@
-# Use Sodax SDKs with your AI coding agent
+# Use SODAX SDKs with your AI coding agent
 
 SODAX ships agent-native documentation as [`@sodax/skills`](https://github.com/icon-project/sodax-sdks/tree/main/packages/skills) — four mode-gated skills (one per `@sodax/*` SDK package, each bundling `integration/knowledge/` for new v2 code and `migration-v1-to-v2/knowledge/` for v1→v2 porting). The goal is v2-correct code on the first try instead of stale training-data APIs.
 
@@ -89,7 +89,7 @@ Once wired, describe the task in plain language.
 
 > "Swap 100 USDC on Ethereum for SOL on Solana using `@sodax/sdk`."
 
-For v1 → v2 ports, say something like “migrate my project to Sodax v2” — each skill auto-gates into its **migration mode** when it sees v1 fingerprints (`useSpokeProvider`, `*_MAINNET_CHAIN_ID`, `useXWagmiStore`, etc.), and `AGENTS.md` (or frontmatter discovery, on CLI installs) handles skill selection.
+For v1 → v2 ports, say something like “migrate my project to SODAX v2” — each skill auto-gates into its **migration mode** when it sees v1 fingerprints (`useSpokeProvider`, `*_MAINNET_CHAIN_ID`, `useXWagmiStore`, etc.), and `AGENTS.md` (or frontmatter discovery, on CLI installs) handles skill selection.
 
 ## Tips
 

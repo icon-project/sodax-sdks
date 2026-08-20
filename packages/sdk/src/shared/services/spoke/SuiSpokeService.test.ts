@@ -4,7 +4,7 @@
  * Pattern: mirrors EvmSpokeService.test.ts (issue #109) but collapsed to a single chain. Sui has
  * one chain (`ChainKeys.SUI_MAINNET`), so there is no `describe.each` parametrisation, no per-chain
  * client cache, and no cross-chain independence section. The single-chain shape is closer to
- * `SonicSpokeService.test.ts`: one Sodax instance backs every test; `sodax.spoke.sui.publicClient`
+ * `SonicSpokeService.test.ts`: one Sodax instance backs every test; `sodax.spoke.sui.transport`
  * methods are spied per-test; `vi.restoreAllMocks` in `afterEach` tears them down.
  *
  * Real config data is used wherever possible — every Move type string, package id, module name,
@@ -14,10 +14,10 @@
  * identities (`SRC_ADDR`, `HUB_WALLET`, `DST_ADDR`) and per-test scratch data (digests, mock
  * balances) are fabricated.
  *
- * `@mysten/sui` is NOT module-mocked: real `Transaction`, `bcs`, and `SuiClient` constructors run.
- * `tx.serialize()` is a local-only operation (no network). Only the five
- * `publicClient` network methods used by the SUT are spied per-test:
- *   - getCoins, getObject, getBalance, devInspectTransactionBlock, waitForTransaction.
+ * `@mysten/sui` is NOT module-mocked: real `Transaction`, `bcs`, and `SuiGrpcClient` constructors
+ * run. `tx.serialize()` is a local-only operation (no network). Only the `SuiTransport` methods the
+ * SUT calls are spied per-test: getCoins, simulate, estimateGas, fetchLatestPackageId,
+ * waitForTransaction. The `client.core` translation itself is covered by SuiGrpcTransport.test.ts.
  *
  * The cached `assetManagerAddress` field persists for the file lifetime, so `beforeEach` resets it
  * to `undefined` to keep cache-hit/cache-miss tests independent.
@@ -34,6 +34,7 @@ import {
   type Hex,
   type ISuiWalletProvider,
   type SuiPaginatedCoins,
+  type SuiTransport,
 } from '@sodax/types';
 
 import { Sodax } from '../../entities/Sodax.js';
@@ -81,34 +82,20 @@ const mockSuiProvider = {
   getCoins: vi.fn(),
 } as unknown as ISuiWalletProvider;
 
-// SuiPaginatedCoins helper — the on-wire shape returned by publicClient.getCoins.
 const makeCoinsPage = (
   coins: Array<{ balance: string; coinObjectId: string }>,
   coinType: string = SUI_BNUSD,
-): SuiPaginatedCoins =>
-  ({
-    data: coins.map(c => ({
-      coinType,
-      coinObjectId: c.coinObjectId,
-      version: '1',
-      digest: 'deadbeef',
-      balance: c.balance,
-      previousTransaction: 'deadbeef',
-    })),
-    hasNextPage: false,
-    nextCursor: null,
-  }) as unknown as SuiPaginatedCoins;
-
-// Valid moveObject result from getObject — fields contain a real `latest_package_id`.
-const makeGetObjectResult = (latestPackageId: unknown) =>
-  ({
-    data: {
-      content: {
-        dataType: 'moveObject',
-        fields: { latest_package_id: latestPackageId },
-      },
-    },
-  }) as never;
+): SuiPaginatedCoins => ({
+  data: coins.map(c => ({
+    coinType,
+    coinObjectId: c.coinObjectId,
+    version: '1',
+    digest: 'deadbeef',
+    balance: c.balance,
+  })),
+  hasNextPage: false,
+  nextCursor: null,
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -147,14 +134,29 @@ describe('SuiSpokeService — constructor', () => {
     expect(typeof suiSpoke.waitForTransactionReceipt).toBe('function');
   });
 
-  it('wires a SuiClient with the methods the rest of the class consumes', () => {
-    // The transport URL is buried inside the @mysten/sui client; pin the method surface instead.
-    expect(suiSpoke.publicClient).toBeDefined();
-    expect(typeof suiSpoke.publicClient.getCoins).toBe('function');
-    expect(typeof suiSpoke.publicClient.getObject).toBe('function');
-    expect(typeof suiSpoke.publicClient.getBalance).toBe('function');
-    expect(typeof suiSpoke.publicClient.devInspectTransactionBlock).toBe('function');
-    expect(typeof suiSpoke.publicClient.waitForTransaction).toBe('function');
+  it('wires a gRPC transport, pointed at the configured endpoint, with the port surface', () => {
+    expect(suiSpoke.transport.endpoint).toBe(suiConfig.grpc_url);
+    expect(typeof suiSpoke.transport.getCoins).toBe('function');
+    expect(typeof suiSpoke.transport.simulate).toBe('function');
+    expect(typeof suiSpoke.transport.estimateGas).toBe('function');
+    expect(typeof suiSpoke.transport.fetchLatestPackageId).toBe('function');
+    expect(typeof suiSpoke.transport.waitForTransaction).toBe('function');
+  });
+
+  it('keeps `publicClient` as a deprecated alias of `transport`', () => {
+    expect(suiSpoke.publicClient).toBe(suiSpoke.transport);
+  });
+
+  it('honors a pre-gRPC `rpc_url` override so existing consumer config keeps working', () => {
+    const custom = new Sodax({ chains: { [SUI]: { rpc_url: 'https://my-node.example' } } });
+
+    expect(custom.spoke.sui.transport.endpoint).toBe('https://my-node.example');
+  });
+
+  it('prefers `grpc_url` from config over the packaged default', () => {
+    const custom = new Sodax({ chains: { [SUI]: { grpc_url: 'https://my-grpc.example' } } });
+
+    expect(custom.spoke.sui.transport.endpoint).toBe('https://my-grpc.example');
   });
 
   it('starts with an empty asset-manager cache', () => {
@@ -163,18 +165,18 @@ describe('SuiSpokeService — constructor', () => {
 });
 
 // =========================================================================
-// 2. getCoins — pass-through to publicClient.getCoins
+// 2. getCoins — pass-through to transport.getCoins
 // =========================================================================
 
 describe('SuiSpokeService.getCoins', () => {
-  it('forwards owner + coinType and the hardcoded limit:10 to publicClient.getCoins', async () => {
+  it('forwards owner + coinType to transport.getCoins', async () => {
     const page = makeCoinsPage([{ balance: '1000', coinObjectId: '0xa' }]);
-    const spy = vi.spyOn(suiSpoke.publicClient, 'getCoins').mockResolvedValueOnce(page);
+    const spy = vi.spyOn(suiSpoke.transport, 'getCoins').mockResolvedValueOnce(page);
 
     const result = await suiSpoke.getCoins(SRC_ADDR, SUI_BNUSD);
 
     expect(result).toBe(page);
-    expect(spy).toHaveBeenCalledWith({ owner: SRC_ADDR, coinType: SUI_BNUSD, limit: 10 });
+    expect(spy).toHaveBeenCalledWith(SRC_ADDR, SUI_BNUSD);
   });
 });
 
@@ -184,7 +186,7 @@ describe('SuiSpokeService.getCoins', () => {
 
 describe('SuiSpokeService.getCoin', () => {
   it('single coin with exact balance → tx.object (no merge, no split)', async () => {
-    vi.spyOn(suiSpoke.publicClient, 'getCoins').mockResolvedValueOnce(
+    vi.spyOn(suiSpoke.transport, 'getCoins').mockResolvedValueOnce(
       makeCoinsPage([{ balance: '1000', coinObjectId: '0xa' }]),
     );
     const tx = new Transaction();
@@ -200,7 +202,7 @@ describe('SuiSpokeService.getCoin', () => {
   });
 
   it('single coin with excess balance → tx.splitCoins for the exact amount', async () => {
-    vi.spyOn(suiSpoke.publicClient, 'getCoins').mockResolvedValueOnce(
+    vi.spyOn(suiSpoke.transport, 'getCoins').mockResolvedValueOnce(
       makeCoinsPage([{ balance: '5000', coinObjectId: '0xa' }]),
     );
     const tx = new Transaction();
@@ -212,7 +214,7 @@ describe('SuiSpokeService.getCoin', () => {
   });
 
   it('multiple coins summing above amount → mergeCoins then splitCoins', async () => {
-    vi.spyOn(suiSpoke.publicClient, 'getCoins').mockResolvedValueOnce(
+    vi.spyOn(suiSpoke.transport, 'getCoins').mockResolvedValueOnce(
       makeCoinsPage([
         { balance: '500', coinObjectId: '0xa' },
         { balance: '700', coinObjectId: '0xb' },
@@ -230,7 +232,7 @@ describe('SuiSpokeService.getCoin', () => {
   });
 
   it('multiple coins summing to exact amount → mergeCoins then tx.object (no split)', async () => {
-    vi.spyOn(suiSpoke.publicClient, 'getCoins').mockResolvedValueOnce(
+    vi.spyOn(suiSpoke.transport, 'getCoins').mockResolvedValueOnce(
       makeCoinsPage([
         { balance: '500', coinObjectId: '0xa' },
         { balance: '500', coinObjectId: '0xb' },
@@ -249,7 +251,7 @@ describe('SuiSpokeService.getCoin', () => {
   });
 
   it('stops iterating coins once totalAmount >= amount (third coin not included)', async () => {
-    vi.spyOn(suiSpoke.publicClient, 'getCoins').mockResolvedValueOnce(
+    vi.spyOn(suiSpoke.transport, 'getCoins').mockResolvedValueOnce(
       makeCoinsPage([
         { balance: '600', coinObjectId: '0xa' },
         { balance: '500', coinObjectId: '0xb' },
@@ -266,7 +268,7 @@ describe('SuiSpokeService.getCoin', () => {
   });
 
   it('throws when no coins exist for the address', async () => {
-    vi.spyOn(suiSpoke.publicClient, 'getCoins').mockResolvedValueOnce(makeCoinsPage([]));
+    vi.spyOn(suiSpoke.transport, 'getCoins').mockResolvedValueOnce(makeCoinsPage([]));
     const tx = new Transaction();
 
     await expect(suiSpoke.getCoin(tx, SUI_BNUSD, 1_000n, SRC_ADDR)).rejects.toThrow(
@@ -355,98 +357,51 @@ describe('SuiSpokeService.encodeSimulationParams', () => {
 // =========================================================================
 
 describe('SuiSpokeService.getAssetManagerAddress', () => {
-  it('first call fetches via getObject and composes pkg::asset_manager::configId', async () => {
+  it('first call fetches the package id and composes pkg::asset_manager::configId', async () => {
     // Use the REAL package id from config so the composed result round-trips against
     // suiConfig.addresses.assetManager.
-    const getObjectSpy = vi
-      .spyOn(suiSpoke.publicClient, 'getObject')
-      .mockResolvedValueOnce(makeGetObjectResult(SUI_ASSET_MGR_PKG));
+    const spy = vi.spyOn(suiSpoke.transport, 'fetchLatestPackageId').mockResolvedValueOnce(SUI_ASSET_MGR_PKG);
 
     const result = await suiSpoke.getAssetManagerAddress(SUI);
 
     expect(result).toBe(SUI_ASSET_MGR);
-    expect(getObjectSpy).toHaveBeenCalledTimes(1);
-    expect(getObjectSpy).toHaveBeenCalledWith({
-      id: SUI_ASSET_MGR_CONFIG_ID,
-      options: { showContent: true },
-    });
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith(SUI_ASSET_MGR_CONFIG_ID);
   });
 
   it('second call returns the cached value without re-fetching', async () => {
-    const getObjectSpy = vi
-      .spyOn(suiSpoke.publicClient, 'getObject')
-      .mockResolvedValueOnce(makeGetObjectResult(SUI_ASSET_MGR_PKG));
+    const spy = vi.spyOn(suiSpoke.transport, 'fetchLatestPackageId').mockResolvedValueOnce(SUI_ASSET_MGR_PKG);
 
     const first = await suiSpoke.getAssetManagerAddress(SUI);
     const second = await suiSpoke.getAssetManagerAddress(SUI);
 
     expect(second).toBe(first);
-    expect(getObjectSpy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 });
 
 // =========================================================================
-// 9. fetchLatestAssetManagerPackageId — every throw branch
+// 9. fetchLatestAssetManagerPackageId — delegation
+// Object-shape guards and their messages live in SuiGrpcTransport.test.ts.
 // =========================================================================
 
 describe('SuiSpokeService.fetchLatestAssetManagerPackageId', () => {
-  it('returns the latest_package_id from a valid moveObject', async () => {
-    vi.spyOn(suiSpoke.publicClient, 'getObject').mockResolvedValueOnce(makeGetObjectResult(SUI_ASSET_MGR_PKG));
+  it('resolves the config object id through the transport', async () => {
+    const spy = vi.spyOn(suiSpoke.transport, 'fetchLatestPackageId').mockResolvedValueOnce(SUI_ASSET_MGR_PKG);
 
     const result = await suiSpoke.fetchLatestAssetManagerPackageId(SUI);
 
     expect(result).toBe(SUI_ASSET_MGR_PKG);
+    expect(spy).toHaveBeenCalledWith(SUI_ASSET_MGR_CONFIG_ID);
   });
 
-  it('throws when getObject returns an error', async () => {
-    vi.spyOn(suiSpoke.publicClient, 'getObject').mockResolvedValueOnce({
-      error: { code: 'notExists', object_id: SUI_ASSET_MGR_CONFIG_ID },
-    } as never);
-
-    await expect(suiSpoke.fetchLatestAssetManagerPackageId(SUI)).rejects.toThrow(/Failed to fetch asset manager id/);
-  });
-
-  it('throws when data is missing', async () => {
-    vi.spyOn(suiSpoke.publicClient, 'getObject').mockResolvedValueOnce({} as never);
+  it('propagates transport failures', async () => {
+    vi.spyOn(suiSpoke.transport, 'fetchLatestPackageId').mockRejectedValueOnce(
+      new Error('Asset manager id not found (no data)'),
+    );
 
     await expect(suiSpoke.fetchLatestAssetManagerPackageId(SUI)).rejects.toThrow(
       'Asset manager id not found (no data)',
-    );
-  });
-
-  it('throws when content.dataType is not "moveObject"', async () => {
-    vi.spyOn(suiSpoke.publicClient, 'getObject').mockResolvedValueOnce({
-      data: { content: { dataType: 'package' } },
-    } as never);
-
-    await expect(suiSpoke.fetchLatestAssetManagerPackageId(SUI)).rejects.toThrow(
-      'Asset manager id not found (not a move object)',
-    );
-  });
-
-  it('throws when fields lack `latest_package_id`', async () => {
-    vi.spyOn(suiSpoke.publicClient, 'getObject').mockResolvedValueOnce({
-      data: { content: { dataType: 'moveObject', fields: {} } },
-    } as never);
-
-    await expect(suiSpoke.fetchLatestAssetManagerPackageId(SUI)).rejects.toThrow(
-      'Asset manager id not found (no latest package id)',
-    );
-  });
-
-  it('throws when latest_package_id is not a string', async () => {
-    vi.spyOn(suiSpoke.publicClient, 'getObject').mockResolvedValueOnce(makeGetObjectResult(12345));
-
-    await expect(suiSpoke.fetchLatestAssetManagerPackageId(SUI)).rejects.toThrow(
-      'Asset manager id invalid (latest package id is not a string)',
-    );
-  });
-
-  it('throws when latest_package_id is an empty string', async () => {
-    vi.spyOn(suiSpoke.publicClient, 'getObject').mockResolvedValueOnce(makeGetObjectResult(''));
-
-    await expect(suiSpoke.fetchLatestAssetManagerPackageId(SUI)).rejects.toThrow(
-      'Asset manager id not found (no latest package id)',
     );
   });
 });
@@ -456,13 +411,11 @@ describe('SuiSpokeService.fetchLatestAssetManagerPackageId', () => {
 // =========================================================================
 
 describe('SuiSpokeService.viewContract', () => {
-  it('queues a moveCall and returns the first inspect result', async () => {
+  it('queues a moveCall and returns the simulation result', async () => {
     const tx = new Transaction();
     const moveCallSpy = vi.spyOn(tx, 'moveCall');
-    const fakeResult = { returnValues: [[[1, 2, 3], 'u64']] };
-    const inspectSpy = vi
-      .spyOn(suiSpoke.publicClient, 'devInspectTransactionBlock')
-      .mockResolvedValueOnce({ results: [fakeResult] } as never);
+    const fakeResult = { returnValues: [[[1, 2, 3], '']] } satisfies SuiExecutionResult;
+    const simulateSpy = vi.spyOn(suiSpoke.transport, 'simulate').mockResolvedValueOnce(fakeResult);
 
     const out = await suiSpoke.viewContract(tx, 'pkg', 'mod', 'fn', [], ['u64'], SRC_ADDR);
 
@@ -472,15 +425,13 @@ describe('SuiSpokeService.viewContract', () => {
       arguments: [],
       typeArguments: ['u64'],
     });
-    expect(inspectSpy).toHaveBeenCalledWith({ transactionBlock: tx, sender: SRC_ADDR });
+    expect(simulateSpy).toHaveBeenCalledWith(tx, SRC_ADDR);
   });
 
   it('defaults typeArgs to [] when omitted', async () => {
     const tx = new Transaction();
     const moveCallSpy = vi.spyOn(tx, 'moveCall');
-    vi.spyOn(suiSpoke.publicClient, 'devInspectTransactionBlock').mockResolvedValueOnce({
-      results: [{ returnValues: [] }],
-    } as never);
+    vi.spyOn(suiSpoke.transport, 'simulate').mockResolvedValueOnce({ returnValues: [] });
 
     // Last arg `sender` is required; typeArgs (the 6th positional) defaults to [].
     await suiSpoke.viewContract(tx, 'pkg', 'mod', 'fn', [], undefined as never, SRC_ADDR);
@@ -488,19 +439,11 @@ describe('SuiSpokeService.viewContract', () => {
     expect(moveCallSpy).toHaveBeenCalledWith(expect.objectContaining({ typeArguments: [] }));
   });
 
-  it('throws with the stringified result when devInspect returns no results', async () => {
+  it('propagates the transport error when the simulation returns no values', async () => {
     const tx = new Transaction();
-    const inspectResult = { results: undefined };
-    vi.spyOn(suiSpoke.publicClient, 'devInspectTransactionBlock').mockResolvedValueOnce(inspectResult as never);
-
-    await expect(suiSpoke.viewContract(tx, 'pkg', 'mod', 'fn', [], [], SRC_ADDR)).rejects.toThrow(
-      /transaction didn't return any values/,
+    vi.spyOn(suiSpoke.transport, 'simulate').mockRejectedValueOnce(
+      new Error("transaction didn't return any values: {}"),
     );
-  });
-
-  it('throws when results is an empty array', async () => {
-    const tx = new Transaction();
-    vi.spyOn(suiSpoke.publicClient, 'devInspectTransactionBlock').mockResolvedValueOnce({ results: [] } as never);
 
     await expect(suiSpoke.viewContract(tx, 'pkg', 'mod', 'fn', [], [], SRC_ADDR)).rejects.toThrow(
       /transaction didn't return any values/,
@@ -549,7 +492,7 @@ describe('SuiSpokeService.deposit', () => {
 
   it('native raw=true does NOT call publicClient.getCoins (native path uses tx.gas)', async () => {
     suiSpoke.assetManagerAddress = SUI_ASSET_MGR;
-    const getCoinsSpy = vi.spyOn(suiSpoke.publicClient, 'getCoins');
+    const getCoinsSpy = vi.spyOn(suiSpoke.transport, 'getCoins');
 
     await suiSpoke.deposit(depositParams<true>({ token: SUI_NATIVE, raw: true }));
 
@@ -558,7 +501,7 @@ describe('SuiSpokeService.deposit', () => {
 
   it('ERC20 raw=true → fetches user coins and returns rawTx with value=amount', async () => {
     suiSpoke.assetManagerAddress = SUI_ASSET_MGR;
-    vi.spyOn(suiSpoke.publicClient, 'getCoins').mockResolvedValueOnce(
+    vi.spyOn(suiSpoke.transport, 'getCoins').mockResolvedValueOnce(
       makeCoinsPage([{ balance: '5000', coinObjectId: '0xa' }]),
     );
 
@@ -573,17 +516,17 @@ describe('SuiSpokeService.deposit', () => {
   it('ERC20 raw=true reads coins via publicClient.getCoins with the deposited coinType', async () => {
     suiSpoke.assetManagerAddress = SUI_ASSET_MGR;
     const getCoinsSpy = vi
-      .spyOn(suiSpoke.publicClient, 'getCoins')
+      .spyOn(suiSpoke.transport, 'getCoins')
       .mockResolvedValueOnce(makeCoinsPage([{ balance: '5000', coinObjectId: '0xa' }]));
 
     await suiSpoke.deposit(depositParams<true>({ token: SUI_BNUSD, raw: true }));
 
-    expect(getCoinsSpy).toHaveBeenCalledWith({ owner: SRC_ADDR, coinType: SUI_BNUSD, limit: 10 });
+    expect(getCoinsSpy).toHaveBeenCalledWith(SRC_ADDR, SUI_BNUSD);
   });
 
   it('raw=false → delegates to walletProvider.signAndExecuteTxn and returns its digest', async () => {
     suiSpoke.assetManagerAddress = SUI_ASSET_MGR;
-    vi.spyOn(suiSpoke.publicClient, 'getCoins').mockResolvedValueOnce(
+    vi.spyOn(suiSpoke.transport, 'getCoins').mockResolvedValueOnce(
       makeCoinsPage([{ balance: '5000', coinObjectId: '0xa' }]),
     );
     (mockSuiProvider.signAndExecuteTxn as ReturnType<typeof vi.fn>).mockResolvedValueOnce(TX_DIGEST);
@@ -610,18 +553,13 @@ describe('SuiSpokeService.deposit', () => {
     await expect(suiSpoke.deposit(params)).resolves.toMatchObject({ to: expectedTransferTarget });
   });
 
-  it('on uncached asset-manager, fetches via getObject before building the tx', async () => {
+  it('on uncached asset-manager, fetches the package id before building the tx', async () => {
     // Cache is reset in beforeEach. This must trigger the fetch path.
-    const getObjectSpy = vi
-      .spyOn(suiSpoke.publicClient, 'getObject')
-      .mockResolvedValueOnce(makeGetObjectResult(SUI_ASSET_MGR_PKG));
+    const spy = vi.spyOn(suiSpoke.transport, 'fetchLatestPackageId').mockResolvedValueOnce(SUI_ASSET_MGR_PKG);
 
     const result = await suiSpoke.deposit(depositParams<true>({ token: SUI_NATIVE, raw: true }));
 
-    expect(getObjectSpy).toHaveBeenCalledWith({
-      id: SUI_ASSET_MGR_CONFIG_ID,
-      options: { showContent: true },
-    });
+    expect(spy).toHaveBeenCalledWith(SUI_ASSET_MGR_CONFIG_ID);
     expect(result.to).toBe(expectedTransferTarget);
   });
 });
@@ -683,7 +621,7 @@ describe('SuiSpokeService.sendMessage', () => {
 // =========================================================================
 
 describe('SuiSpokeService.estimateGas', () => {
-  it('returns the gasUsed struct from devInspectTransactionBlock effects', async () => {
+  it('returns the gasUsed struct from the simulated effects', async () => {
     // Serialize a real Transaction to the @mysten/sui JSON so Transaction.from(tx.data) succeeds locally.
     const realTx = new Transaction();
     realTx.setSender(SRC_ADDR);
@@ -695,9 +633,7 @@ describe('SuiSpokeService.estimateGas', () => {
       storageRebate: '500',
       nonRefundableStorageFee: '100',
     };
-    const inspectSpy = vi
-      .spyOn(suiSpoke.publicClient, 'devInspectTransactionBlock')
-      .mockResolvedValueOnce({ effects: { gasUsed } } as never);
+    const spy = vi.spyOn(suiSpoke.transport, 'estimateGas').mockResolvedValueOnce(gasUsed);
 
     const result = await suiSpoke.estimateGas({
       chainKey: SUI,
@@ -705,8 +641,8 @@ describe('SuiSpokeService.estimateGas', () => {
     });
 
     expect(result).toBe(gasUsed);
-    // sender must come from tx.from — proves the SUT threads tx.from into devInspect.
-    expect(inspectSpy).toHaveBeenCalledWith(expect.objectContaining({ sender: SRC_ADDR }));
+    // sender must come from tx.from — proves the SUT threads tx.from into the simulation.
+    expect(spy).toHaveBeenCalledWith(expect.any(Transaction), SRC_ADDR);
   });
 });
 
@@ -722,18 +658,15 @@ function expectedTransferStub(): string {
 // =========================================================================
 
 describe('SuiSpokeService.getDeposit', () => {
-  // Builds the inner SuiExecutionResult shape devInspectTransactionBlock would return for a
-  // successful balance query. `bcs.U64.serialize(N).toBytes()` produces the same on-wire bytes
-  // the SUT consumes via `bcs.U64.parse(Uint8Array.from(val))` — avoids endianness drift.
-  const makeBalanceResult = (balance: bigint) => ({
-    returnValues: [[Array.from(bcs.U64.serialize(balance).toBytes()), 'u64']],
+  // `bcs.U64.serialize(N).toBytes()` produces the same on-wire bytes the SUT consumes via
+  // `bcs.U64.parse(Uint8Array.from(val))` — avoids endianness drift.
+  const makeBalanceResult = (balance: bigint): SuiExecutionResult => ({
+    returnValues: [[Array.from(bcs.U64.serialize(balance).toBytes()), '']],
   });
 
-  it('decodes a BCS-U64 balance from devInspectTransactionBlock results', async () => {
+  it('decodes a BCS-U64 balance from the simulation result', async () => {
     suiSpoke.assetManagerAddress = SUI_ASSET_MGR;
-    vi.spyOn(suiSpoke.publicClient, 'devInspectTransactionBlock').mockResolvedValueOnce({
-      results: [makeBalanceResult(7_500n)],
-    } as never);
+    vi.spyOn(suiSpoke.transport, 'simulate').mockResolvedValueOnce(makeBalanceResult(7_500n));
 
     const result = await suiSpoke.getDeposit({
       srcChainKey: SUI,
@@ -746,9 +679,7 @@ describe('SuiSpokeService.getDeposit', () => {
 
   it('handles a zero balance', async () => {
     suiSpoke.assetManagerAddress = SUI_ASSET_MGR;
-    vi.spyOn(suiSpoke.publicClient, 'devInspectTransactionBlock').mockResolvedValueOnce({
-      results: [makeBalanceResult(0n)],
-    } as never);
+    vi.spyOn(suiSpoke.transport, 'simulate').mockResolvedValueOnce(makeBalanceResult(0n));
 
     const result = await suiSpoke.getDeposit({
       srcChainKey: SUI,
@@ -761,9 +692,7 @@ describe('SuiSpokeService.getDeposit', () => {
 
   it('throws when returnValues is missing', async () => {
     suiSpoke.assetManagerAddress = SUI_ASSET_MGR;
-    vi.spyOn(suiSpoke.publicClient, 'devInspectTransactionBlock').mockResolvedValueOnce({
-      results: [{}],
-    } as never);
+    vi.spyOn(suiSpoke.transport, 'simulate').mockResolvedValueOnce({});
 
     await expect(suiSpoke.getDeposit({ srcChainKey: SUI, srcAddress: SRC_ADDR, token: SUI_BNUSD })).rejects.toThrow(
       'Failed to get Balance',
@@ -772,9 +701,9 @@ describe('SuiSpokeService.getDeposit', () => {
 
   it('throws when returnValues[0] is not an array', async () => {
     suiSpoke.assetManagerAddress = SUI_ASSET_MGR;
-    vi.spyOn(suiSpoke.publicClient, 'devInspectTransactionBlock').mockResolvedValueOnce({
-      results: [{ returnValues: ['not-an-array'] }],
-    } as never);
+    vi.spyOn(suiSpoke.transport, 'simulate').mockResolvedValueOnce({
+      returnValues: ['not-an-array'],
+    } as unknown as SuiExecutionResult);
 
     await expect(suiSpoke.getDeposit({ srcChainKey: SUI, srcAddress: SRC_ADDR, token: SUI_BNUSD })).rejects.toThrow(
       'Failed to get Balance',
@@ -783,9 +712,9 @@ describe('SuiSpokeService.getDeposit', () => {
 
   it('throws when returnValues[0][0] is undefined', async () => {
     suiSpoke.assetManagerAddress = SUI_ASSET_MGR;
-    vi.spyOn(suiSpoke.publicClient, 'devInspectTransactionBlock').mockResolvedValueOnce({
-      results: [{ returnValues: [[undefined, 'u64']] }],
-    } as never);
+    vi.spyOn(suiSpoke.transport, 'simulate').mockResolvedValueOnce({
+      returnValues: [[undefined, '']],
+    } as unknown as SuiExecutionResult);
 
     await expect(suiSpoke.getDeposit({ srcChainKey: SUI, srcAddress: SRC_ADDR, token: SUI_BNUSD })).rejects.toThrow(
       'Failed to get Balance',
@@ -809,14 +738,10 @@ describe('SuiSpokeService.getWalletBalance', () => {
   const LEGACY_BNUSD_ONCHAIN =
     '0x3917a812fe4a6d6bc779c5ab53f8a80ba741f8af04121193fc44e0f662e2ceb::balanced_dollar::BALANCED_DOLLAR';
 
-  // CoinBalance is the on-wire shape returned by publicClient.getBalance.
-  const makeCoinBalance = (coinType: string, totalBalance: string) =>
-    ({ coinType, coinObjectCount: 1, totalBalance, lockedBalance: {} }) as never;
-
   it('queries the canonical short 0x2::sui::SUI coinType for the native coin', async () => {
     const spy = vi
-      .spyOn(suiSpoke.publicClient, 'getBalance')
-      .mockResolvedValueOnce(makeCoinBalance('0x2::sui::SUI', '1234'));
+      .spyOn(suiSpoke.transport, 'getCoins')
+      .mockResolvedValueOnce(makeCoinsPage([{ balance: '1234', coinObjectId: '0xa' }], '0x2::sui::SUI'));
 
     const result = await suiSpoke.getWalletBalance({
       srcChainKey: SUI,
@@ -828,13 +753,13 @@ describe('SuiSpokeService.getWalletBalance', () => {
     // Config stores the zero-padded 32-byte form; the fullnode only indexes the short form, so the
     // normalisation is what makes the native read return anything but zero.
     expect(SUI_TOKEN.address).toBe(SUI_NATIVE);
-    expect(spy).toHaveBeenCalledWith({ owner: SRC_ADDR, coinType: '0x2::sui::SUI' });
+    expect(spy).toHaveBeenCalledWith(SRC_ADDR, '0x2::sui::SUI', undefined, undefined);
   });
 
   it('remaps legacy bnUSD to the on-chain coinType that drops the package-id leading zero', async () => {
     const spy = vi
-      .spyOn(suiSpoke.publicClient, 'getBalance')
-      .mockResolvedValueOnce(makeCoinBalance(LEGACY_BNUSD_ONCHAIN, '4321'));
+      .spyOn(suiSpoke.transport, 'getCoins')
+      .mockResolvedValueOnce(makeCoinsPage([{ balance: '4321', coinObjectId: '0xa' }], LEGACY_BNUSD_ONCHAIN));
 
     const result = await suiSpoke.getWalletBalance({
       srcChainKey: SUI,
@@ -843,13 +768,13 @@ describe('SuiSpokeService.getWalletBalance', () => {
     });
 
     expect(result).toBe(4_321n);
-    expect(spy).toHaveBeenCalledWith({ owner: SRC_ADDR, coinType: LEGACY_BNUSD_ONCHAIN });
+    expect(spy).toHaveBeenCalledWith(SRC_ADDR, LEGACY_BNUSD_ONCHAIN, undefined, undefined);
   });
 
   it('passes a plain non-native coinType through unchanged, owned by the user', async () => {
     const spy = vi
-      .spyOn(suiSpoke.publicClient, 'getBalance')
-      .mockResolvedValueOnce(makeCoinBalance(USDC_TOKEN.address, '5000'));
+      .spyOn(suiSpoke.transport, 'getCoins')
+      .mockResolvedValueOnce(makeCoinsPage([{ balance: '5000', coinObjectId: '0xa' }], USDC_TOKEN.address));
 
     const result = await suiSpoke.getWalletBalance({
       srcChainKey: SUI,
@@ -859,11 +784,45 @@ describe('SuiSpokeService.getWalletBalance', () => {
 
     expect(result).toBe(5_000n);
     // Owner is srcAddress (the user), NOT the asset manager — the key difference from getDeposit.
-    expect(spy).toHaveBeenCalledWith({ owner: SRC_ADDR, coinType: USDC_TOKEN.address });
+    expect(spy).toHaveBeenCalledWith(SRC_ADDR, USDC_TOKEN.address, undefined, undefined);
   });
 
-  it('returns 0n only for a balance the fullnode confirmed as zero', async () => {
-    vi.spyOn(suiSpoke.publicClient, 'getBalance').mockResolvedValueOnce(makeCoinBalance(USDC_TOKEN.address, '0'));
+  it('sums balance across every coin object on one page', async () => {
+    vi.spyOn(suiSpoke.transport, 'getCoins').mockResolvedValueOnce(
+      makeCoinsPage(
+        [
+          { balance: '1000', coinObjectId: '0xa' },
+          { balance: '2000', coinObjectId: '0xb' },
+          { balance: '3000', coinObjectId: '0xc' },
+        ],
+        USDC_TOKEN.address,
+      ),
+    );
+
+    await expect(
+      suiSpoke.getWalletBalance({ srcChainKey: SUI, srcAddress: SRC_ADDR, token: USDC_TOKEN }),
+    ).resolves.toBe(6_000n);
+  });
+
+  it('pages through the fullnode until hasNextPage is false, summing every page', async () => {
+    const spy = vi
+      .spyOn(suiSpoke.transport, 'getCoins')
+      .mockResolvedValueOnce({
+        data: [{ coinType: USDC_TOKEN.address, coinObjectId: '0xa', version: '1', digest: 'd1', balance: '1000' }],
+        hasNextPage: true,
+        nextCursor: 'cursor-1',
+      })
+      .mockResolvedValueOnce(makeCoinsPage([{ balance: '2500', coinObjectId: '0xb' }], USDC_TOKEN.address));
+
+    const result = await suiSpoke.getWalletBalance({ srcChainKey: SUI, srcAddress: SRC_ADDR, token: USDC_TOKEN });
+
+    expect(result).toBe(3_500n);
+    expect(spy).toHaveBeenNthCalledWith(1, SRC_ADDR, USDC_TOKEN.address, undefined, undefined);
+    expect(spy).toHaveBeenNthCalledWith(2, SRC_ADDR, USDC_TOKEN.address, undefined, 'cursor-1');
+  });
+
+  it('returns 0n only for a balance the fullnode confirmed as zero (no coin objects)', async () => {
+    vi.spyOn(suiSpoke.transport, 'getCoins').mockResolvedValueOnce(makeCoinsPage([], USDC_TOKEN.address));
 
     await expect(
       suiSpoke.getWalletBalance({ srcChainKey: SUI, srcAddress: SRC_ADDR, token: USDC_TOKEN }),
@@ -871,7 +830,7 @@ describe('SuiSpokeService.getWalletBalance', () => {
   });
 
   it('rejects rather than reporting zero when the fullnode read fails', async () => {
-    vi.spyOn(suiSpoke.publicClient, 'getBalance').mockRejectedValueOnce(new Error('HTTP 429'));
+    vi.spyOn(suiSpoke.transport, 'getCoins').mockRejectedValueOnce(new Error('HTTP 429'));
 
     await expect(
       suiSpoke.getWalletBalance({ srcChainKey: SUI, srcAddress: SRC_ADDR, token: USDC_TOKEN }),
@@ -884,19 +843,16 @@ describe('SuiSpokeService.getWalletBalances', () => {
   const USDC_TOKEN = suiConfig.supportedTokens.USDC;
   const BNUSD_TOKEN = suiConfig.supportedTokens.bnUSD;
 
-  const byCoinType = (balances: Record<string, string>) => (params: { coinType?: string | null | undefined }) => {
-    const total = params.coinType ? balances[params.coinType] : undefined;
-    if (total === undefined) return Promise.reject(new Error(`unexpected coinType=${params.coinType}`));
-    return Promise.resolve({
-      coinType: params.coinType,
-      coinObjectCount: 1,
-      totalBalance: total,
-      lockedBalance: {},
-    } as never);
-  };
+  const byCoinType =
+    (balances: Record<string, string>) =>
+    (_owner: string, coinType?: string | null): ReturnType<SuiTransport['getCoins']> => {
+      const total = coinType ? balances[coinType] : undefined;
+      if (total === undefined) return Promise.reject(new Error(`unexpected coinType=${coinType}`));
+      return Promise.resolve(makeCoinsPage([{ balance: total, coinObjectId: '0xa' }], coinType as string));
+    };
 
   it('keys each balance by the config token.address, not by the queried coinType', async () => {
-    vi.spyOn(suiSpoke.publicClient, 'getBalance').mockImplementation(
+    vi.spyOn(suiSpoke.transport, 'getCoins').mockImplementation(
       byCoinType({
         // native is queried as the short form, but keyed by the padded config address
         '0x2::sui::SUI': '100',
@@ -923,10 +879,10 @@ describe('SuiSpokeService.getWalletBalances', () => {
     // to tell a fabricated 0n apart from a real empty balance — assert it actually fired.
     const warnSpy = vi.spyOn(sodax.config.logger, 'warn');
     const rpcError = new Error('HTTP 429');
-    vi.spyOn(suiSpoke.publicClient, 'getBalance').mockImplementation(params =>
-      params.coinType === BNUSD_TOKEN.address
+    vi.spyOn(suiSpoke.transport, 'getCoins').mockImplementation((owner, coinType) =>
+      coinType === BNUSD_TOKEN.address
         ? Promise.reject(rpcError)
-        : byCoinType({ '0x2::sui::SUI': '100', [USDC_TOKEN.address]: '300' })(params),
+        : byCoinType({ '0x2::sui::SUI': '100', [USDC_TOKEN.address]: '300' })(owner, coinType),
     );
 
     const result = await suiSpoke.getWalletBalances({
@@ -947,7 +903,7 @@ describe('SuiSpokeService.getWalletBalances', () => {
   it('rejects when every token in a non-empty batch fails', async () => {
     // An all-zero map from a dead fullnode is indistinguishable from an empty wallet, so the
     // collector refuses to return one.
-    vi.spyOn(suiSpoke.publicClient, 'getBalance').mockRejectedValue(new Error('HTTP 503'));
+    vi.spyOn(suiSpoke.transport, 'getCoins').mockRejectedValue(new Error('HTTP 503'));
 
     await expect(
       suiSpoke.getWalletBalances({
@@ -962,7 +918,7 @@ describe('SuiSpokeService.getWalletBalances', () => {
     // The all-failed guard keys off read outcomes, not values: a wallet empty on every token must
     // still resolve, and must log nothing.
     const warnSpy = vi.spyOn(sodax.config.logger, 'warn');
-    vi.spyOn(suiSpoke.publicClient, 'getBalance').mockImplementation(
+    vi.spyOn(suiSpoke.transport, 'getCoins').mockImplementation(
       byCoinType({ [BNUSD_TOKEN.address]: '0', [USDC_TOKEN.address]: '0' }),
     );
 
@@ -978,7 +934,7 @@ describe('SuiSpokeService.getWalletBalances', () => {
 
   it('returns an empty map for an empty token list without touching the fullnode', async () => {
     // `attempted === 0` must not trip the all-failed guard.
-    const spy = vi.spyOn(suiSpoke.publicClient, 'getBalance');
+    const spy = vi.spyOn(suiSpoke.transport, 'getCoins');
 
     const result = await suiSpoke.getWalletBalances({ srcChainKey: SUI, srcAddress: SRC_ADDR, tokens: [] });
 
@@ -997,7 +953,7 @@ describe('SuiSpokeService.waitForTransactionReceipt', () => {
       digest: TX_DIGEST,
       effects: { status: { status: 'success' } },
     };
-    vi.spyOn(suiSpoke.publicClient, 'waitForTransaction').mockResolvedValueOnce(fakeReceipt as never);
+    vi.spyOn(suiSpoke.transport, 'waitForTransaction').mockResolvedValueOnce(fakeReceipt as never);
 
     const result = await suiSpoke.waitForTransactionReceipt({ chainKey: SUI, txHash: TX_DIGEST });
 
@@ -1007,7 +963,7 @@ describe('SuiSpokeService.waitForTransactionReceipt', () => {
   });
 
   it('returns status:failure when effects are missing entirely', async () => {
-    vi.spyOn(suiSpoke.publicClient, 'waitForTransaction').mockResolvedValueOnce({ digest: TX_DIGEST } as never);
+    vi.spyOn(suiSpoke.transport, 'waitForTransaction').mockResolvedValueOnce({ digest: TX_DIGEST } as never);
 
     const result = await suiSpoke.waitForTransactionReceipt({ chainKey: SUI, txHash: TX_DIGEST });
 
@@ -1018,7 +974,7 @@ describe('SuiSpokeService.waitForTransactionReceipt', () => {
   });
 
   it('returns status:failure when effects.status.status === "failure" with a known error', async () => {
-    vi.spyOn(suiSpoke.publicClient, 'waitForTransaction').mockResolvedValueOnce({
+    vi.spyOn(suiSpoke.transport, 'waitForTransaction').mockResolvedValueOnce({
       digest: TX_DIGEST,
       effects: { status: { status: 'failure', error: 'MoveAbort' } },
     } as never);
@@ -1031,7 +987,7 @@ describe('SuiSpokeService.waitForTransactionReceipt', () => {
   });
 
   it('falls back to "unknown" when effects.status.error is undefined (the `?? "unknown"` branch)', async () => {
-    vi.spyOn(suiSpoke.publicClient, 'waitForTransaction').mockResolvedValueOnce({
+    vi.spyOn(suiSpoke.transport, 'waitForTransaction').mockResolvedValueOnce({
       digest: TX_DIGEST,
       effects: { status: { status: 'failure' } },
     } as never);
@@ -1042,9 +998,9 @@ describe('SuiSpokeService.waitForTransactionReceipt', () => {
     expect(result.value.error.message).toBe('Transaction failed: unknown');
   });
 
-  it('returns status:timeout when the thrown error message contains "timeout"', async () => {
-    const timeoutErr = new Error('waitForTransaction timeout exceeded');
-    vi.spyOn(suiSpoke.publicClient, 'waitForTransaction').mockRejectedValueOnce(timeoutErr);
+  it('returns status:timeout when the transport aborts on the timeout signal', async () => {
+    const timeoutErr = new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+    vi.spyOn(suiSpoke.transport, 'waitForTransaction').mockRejectedValueOnce(timeoutErr);
 
     const result = await suiSpoke.waitForTransactionReceipt({ chainKey: SUI, txHash: TX_DIGEST });
 
@@ -1056,7 +1012,7 @@ describe('SuiSpokeService.waitForTransactionReceipt', () => {
 
   it('returns status:failure for non-timeout Error throws', async () => {
     const otherErr = new Error('connection refused');
-    vi.spyOn(suiSpoke.publicClient, 'waitForTransaction').mockRejectedValueOnce(otherErr);
+    vi.spyOn(suiSpoke.transport, 'waitForTransaction').mockRejectedValueOnce(otherErr);
 
     const result = await suiSpoke.waitForTransactionReceipt({ chainKey: SUI, txHash: TX_DIGEST });
 
@@ -1067,7 +1023,7 @@ describe('SuiSpokeService.waitForTransactionReceipt', () => {
   });
 
   it('wraps non-Error throws into a new Error(String(thrown))', async () => {
-    vi.spyOn(suiSpoke.publicClient, 'waitForTransaction').mockRejectedValueOnce('boom');
+    vi.spyOn(suiSpoke.transport, 'waitForTransaction').mockRejectedValueOnce('boom');
 
     const result = await suiSpoke.waitForTransactionReceipt({ chainKey: SUI, txHash: TX_DIGEST });
 
@@ -1079,7 +1035,7 @@ describe('SuiSpokeService.waitForTransactionReceipt', () => {
   });
 
   it('forwards real config-driven polling/timeout defaults when caller omits them', async () => {
-    const spy = vi.spyOn(suiSpoke.publicClient, 'waitForTransaction').mockResolvedValueOnce({
+    const spy = vi.spyOn(suiSpoke.transport, 'waitForTransaction').mockResolvedValueOnce({
       digest: TX_DIGEST,
       effects: { status: { status: 'success' } },
     } as never);
@@ -1090,14 +1046,13 @@ describe('SuiSpokeService.waitForTransactionReceipt', () => {
       digest: TX_DIGEST,
       // Pinned to the REAL suiConfig.pollingConfig values, not magic numbers — a config change
       // that drops or renames either field surfaces here.
-      timeout: SUI_TIMEOUT_MS,
-      pollInterval: SUI_POLLING_MS,
-      options: { showEffects: true },
+      timeoutMs: SUI_TIMEOUT_MS,
+      pollingIntervalMs: SUI_POLLING_MS,
     });
   });
 
   it('forwards custom pollingIntervalMs / maxTimeoutMs when caller provides them', async () => {
-    const spy = vi.spyOn(suiSpoke.publicClient, 'waitForTransaction').mockResolvedValueOnce({
+    const spy = vi.spyOn(suiSpoke.transport, 'waitForTransaction').mockResolvedValueOnce({
       digest: TX_DIGEST,
       effects: { status: { status: 'success' } },
     } as never);
@@ -1111,10 +1066,8 @@ describe('SuiSpokeService.waitForTransactionReceipt', () => {
 
     expect(spy).toHaveBeenCalledWith({
       digest: TX_DIGEST,
-      // Sui SDK names: `pollInterval` (not `pollingInterval`), `timeout` (same as viem).
-      timeout: 4_567,
-      pollInterval: 123,
-      options: { showEffects: true },
+      timeoutMs: 4_567,
+      pollingIntervalMs: 123,
     });
   });
 });

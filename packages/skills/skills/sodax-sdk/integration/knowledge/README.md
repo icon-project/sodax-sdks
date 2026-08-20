@@ -17,6 +17,7 @@ This tree documents v2 of the SDK for **new consumers** building against it. If 
 | [`features/partner.md`](features/partner.md) | `PartnerService` — partner-fee handling. |
 | [`features/recovery.md`](features/recovery.md) | `RecoveryService` — withdraw stuck hub-wallet assets. |
 | [`features/backend-api.md`](features/backend-api.md) | `BackendApiService` — HTTP client for backend reads + swap-tx submission. |
+| [`features/sponsoring.md`](features/sponsoring.md) | `SponsoringService` — Stellar account activation via sponsored reserves. |
 | [`recipes/`](recipes/) | Copy-pasteable patterns: SDK initialization, `Result` + error discrimination, raw-tx flow, signed-tx flow, chain-key narrowing + cast-at-boundary, testing (mocks/stubs), gas estimation, backend-server init. |
 | [`reference/`](reference/) | Lookup tables: 20-chain `ChainKeys` table with family + relay id, `I*WalletProvider` interfaces, 13 `SodaxErrorCode` meanings + per-feature narrow unions, public API surface (incl. `@sodax/types` re-export rule), glossary. |
 | [`chain-specifics.md`](chain-specifics.md) | Non-EVM quirks — Stellar trustline check/request, Bitcoin PSBT + Bound Exchange auth/session, Solana PDA derivation, ICON Hana wallet + chain-key string, NEAR connector discovery. |

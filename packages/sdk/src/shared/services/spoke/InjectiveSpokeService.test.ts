@@ -214,7 +214,14 @@ describe('InjectiveSpokeService.getRawTransaction', () => {
   });
 
   it('returns the real accountNumber threaded from the fetched account (not the hardcoded 0)', async () => {
-    const raw = await injSpoke.getRawTransaction(INJ_NETWORK_ID, SRC_ADDR, INJ_ASSET_MGR, { transfer: {} }, undefined, FUNDS);
+    const raw = await injSpoke.getRawTransaction(
+      INJ_NETWORK_ID,
+      SRC_ADDR,
+      INJ_ASSET_MGR,
+      { transfer: {} },
+      undefined,
+      FUNDS,
+    );
 
     expect(raw.signedDoc.accountNumber).toBe(7n);
     expect(raw.from).toBe(SRC_ADDR);
@@ -288,9 +295,7 @@ describe('InjectiveSpokeService.deposit', () => {
 
   it('raw=true → delegates to getRawTransaction with the asset-manager target and transfer msg', async () => {
     const fake = makeRawTx(INJ_ASSET_MGR);
-    const spy = vi
-      .spyOn(injSpoke, 'getRawTransaction')
-      .mockResolvedValueOnce(fake);
+    const spy = vi.spyOn(injSpoke, 'getRawTransaction').mockResolvedValueOnce(fake);
 
     const result = await injSpoke.deposit(depositParams<true>({ raw: true }));
 
@@ -328,9 +333,7 @@ describe('InjectiveSpokeService.deposit', () => {
   });
 
   it('defaults data to "0x" when omitted (no `data: undefined` in msg)', async () => {
-    const spy = vi
-      .spyOn(injSpoke, 'getRawTransaction')
-      .mockResolvedValueOnce(makeRawTx(INJ_ASSET_MGR));
+    const spy = vi.spyOn(injSpoke, 'getRawTransaction').mockResolvedValueOnce(makeRawTx(INJ_ASSET_MGR));
 
     const params = {
       srcAddress: SRC_ADDR,
@@ -580,7 +583,7 @@ describe('InjectiveSpokeService — admin methods', () => {
     await injSpoke.setConnection(INJ, SRC_ADDR, INJ_CONNECTION, mockInjProvider);
     await injSpoke.setOwner(SRC_ADDR, 'inj1newowner', INJ, mockInjProvider);
 
-    expect((mockInjProvider.execute as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(3);
+    expect(mockInjProvider.execute as ReturnType<typeof vi.fn>).toHaveBeenCalledTimes(3);
     for (const call of (mockInjProvider.execute as ReturnType<typeof vi.fn>).mock.calls) {
       expect(call[1]).toBe(INJ_ASSET_MGR);
     }

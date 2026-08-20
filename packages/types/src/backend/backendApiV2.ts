@@ -75,8 +75,7 @@ export interface BitcoinBoundExtrasV2 {
  */
 export interface SwapExtrasV2 {
   /**
-   * Per-request partner-fee override; defaults to the backend's configured fee. Keeps the fee-adjusted
-   * quote and the built intent consistent with `createIntent`.
+   * No default on `/swaps/*` — omit and the swap charges nothing. SDK `fee` / `swaps.partnerFee` does not apply here.
    */
   partnerFee?: PartnerFeeV2;
   /**
@@ -333,6 +332,13 @@ export interface AllowanceCheckResponseV2 {
 export interface ApproveResponseV2 {
   /** Unsigned approval transaction — the `RawTxReturnType` variant for the request's `srcChainKey`. */
   tx: RawTxReturnType;
+  /**
+   * Present only when the source token rejects an allowance change from one non-zero value to
+   * another — the 2017 TetherToken lineage. Broadcast this first and wait for it to be mined, then
+   * broadcast `tx`; the second approve is only valid once the allowance has been zeroed on-chain.
+   * Absent for every other token, and for a wallet with nothing approved yet.
+   */
+  resetTx?: RawTxReturnType;
 }
 
 /** POST /swaps/intents — response body. */
@@ -682,11 +688,13 @@ export interface SubmitTxStatusResponseV2 {
  * client sees it: all methods are async and all field types are the
  * post-serialization wire shapes above (bigint/Date → decimal/ISO `string`).
  *
- * Do NOT `implements` this on the NestJS `SwapsController`. Handlers return
- * pre-serialization domain types (`bigint`, `Date`, branded `Hex`/`Address`/
- * `SpokeChainKey`) and may be synchronous; the response interceptor serializes
- * them into these wire shapes afterwards. A single class cannot be both the
- * pre-serialization producer and the post-serialization contract.
+ * The backend `SwapsController` `implements` this, which is what keeps the two surfaces from
+ * drifting. Two things make that work: handlers are DECLARED with the wire-shaped response DTOs
+ * (what they hand back at runtime may still be pre-serialization domain values — `bigint`, `Date`,
+ * branded `Hex`/`Address`/`SpokeChainKey` — for the response interceptor to convert), and every
+ * handler is `async`. A handler needing a server-only trailing parameter (`@Req`, `@Ip`, …) takes
+ * the variadic-generic route of `IStellarSponsoringApi` in `sponsoringApi.ts` rather than dropping
+ * the `implements` clause.
  */
 export interface ISwapsApiV2 {
   /** GET /swaps/tokens */
@@ -873,9 +881,8 @@ export type GetRelayChainIdMapResponseV2 = Record<string, string>;
  * client sees it: all methods are async and all field types are the
  * post-serialization wire shapes above (bigint → decimal `string`).
  *
- * As with {@link ISwapsApiV2}, do NOT `implements` this on the NestJS controller:
- * handlers return pre-serialization domain types (`bigint`, branded values) and the
- * response interceptor serializes them into these wire shapes afterwards.
+ * As with {@link ISwapsApiV2}, a NestJS controller may `implements` this once its handlers are
+ * declared `async` and typed with the wire-shaped DTOs.
  */
 export interface IConfigApiV2 {
   /** GET /config/all */

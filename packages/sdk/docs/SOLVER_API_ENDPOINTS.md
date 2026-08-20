@@ -1,6 +1,6 @@
 # Solver API endpoints
 
-> **Error handling conventions:** Direct callers of `SolverApiService` (used by lower-level scripts and tests) still receive `SolverErrorResponse` with `detail.code` / `detail.message`. The **swap module's** `postExecution` wraps these into `SodaxError` with code `EXTERNAL_API_ERROR`; the original `SolverIntentErrorCode` is on `result.error.context.solverCode` and the full `detail` is on `result.error.context.solverDetail` — see [SWAPS.md](./SWAPS.md) Error Handling.
+> **Error handling conventions:** Direct callers of `SolverApiService` (used by lower-level scripts and tests) still receive `SolverErrorResponse` with `detail.code` / `detail.message`. The **swap module's** `postExecution` wraps these into `SodaxError` with code `EXTERNAL_API_ERROR`; the original `SolverIntentErrorCode` is on `result.error.context.solverCode` and the full `detail` is on `result.error.context.solverDetail` — see [SWAPS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md) Error Handling.
 
 ## Mainnet production
 
@@ -16,7 +16,7 @@ URL: [https://staging-new-world.iconblockchain.xyz](https://staging-new-world.ic
 
 ## Overview
 
-The SODAX solver API drives the intent-based swap feature. `SwapService` (accessed via `sodax.swaps`) is the public entry point — it delegates all HTTP communication to the stateless `SolverApiService` class. External callers should use `SwapService` rather than calling `SolverApiService` directly.
+The solver API drives the intent-based swap feature. `SwapService` (accessed via `sodax.swaps`) is the public entry point — it delegates all HTTP communication to the stateless `SolverApiService` class. External callers should use `SwapService` rather than calling `SolverApiService` directly.
 
 Three endpoints are exposed:
 
@@ -156,6 +156,26 @@ Called via `SwapService.getStatus(request)`.
 | `fill_tx_hash` | `string \| undefined` | Solver's fill tx hash — present only when `status === SolverIntentStatusCode.SOLVED (3)` |
 
 `SolverIntentStatusCode` is an enum in `@sodax/sdk`. The value `3` (`SOLVED`) indicates the solver has filled the intent.
+
+When the solver returns `NOT_FOUND` or the request fails, `sodax.swaps.getStatus` checks the backend's durable intent
+record: if a fill that **consumed the whole input** was recorded there (`intentState.remainingInput === '0'`) it returns
+`SOLVED` with that hub-chain fill hash.
+
+What happens otherwise depends on whether that check could be made. A record showing no such fill — or a 404, the
+backend saying it holds none — answers the question, so the solver's result is returned unchanged. If the record could
+not be read at all (5xx, transport failure, unusable body), a solver `NOT_FOUND` is reported as a failed `Result`
+instead: the fill may exist and simply be unreadable, so returning `NOT_FOUND` would present an unverified miss as a
+definitive one. A poller that stops after N consecutive `NOT_FOUND` reads would otherwise spend that budget during a
+backend outage and give up on a swap that had in fact completed. A failed solver request is returned as-is, since its
+own error is the more useful diagnostic. An intent created with
+`allowPartialFill` emits a fill event per fill, so a partial fill is deliberately **not** reported as `SOLVED` — that
+would mark an unfinished swap complete and stop `useStatus` from polling it. The static `SolverApiService.getStatus`
+does not do any of this.
+
+`SolverApiService.getStatus(request, config, logger?, timeoutMs?)` takes an optional request budget. Omit it and the
+call is unbounded, as it has always been; supply it when a stalled solver must not hold the caller open. An expiry is
+reported as `UNKNOWN`, like any other failure. `sodax.swaps.getStatus` leaves it unset — a one-shot read is the
+caller's to bound — while `getDetailedStatus`, which is meant to be polled, sets it.
 
 ### Example
 

@@ -60,9 +60,13 @@ export class NearSpokeService {
   }
 
   public async getRateLimit(token: string, srcChainKey: NearChainKey): Promise<RateLimitConfig> {
-    const res = (await this.queryContract(this.config.getChainConfig(srcChainKey).addresses.rateLimit, 'get_rate_limit', {
-      token: token,
-    })) as { max_available: number; available: number; rate_per_second: number } | undefined;
+    const res = (await this.queryContract(
+      this.config.getChainConfig(srcChainKey).addresses.rateLimit,
+      'get_rate_limit',
+      {
+        token: token,
+      },
+    )) as { max_available: number; available: number; rate_per_second: number } | undefined;
     if (res == null || res === undefined) {
       return {
         maxAvailable: 0,

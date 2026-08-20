@@ -21,7 +21,7 @@ import {
   useSodaxContext,
   useBalances,
 } from '@sodax/dapp-kit';
-import { type IWalletProvider, type XAccount } from '@sodax/wallet-sdk-react';
+import type { IWalletProvider, XAccount } from '@sodax/wallet-sdk-react';
 import { UserPositions } from '@/components/dex/UserPositions';
 import { NavLink } from 'react-router';
 

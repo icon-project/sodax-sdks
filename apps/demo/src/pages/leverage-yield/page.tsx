@@ -571,7 +571,6 @@ export default function LeverageYieldPage() {
         <TabsList>
           <TabsTrigger value={SolverEnv.Staging}>Staging</TabsTrigger>
           <TabsTrigger value={SolverEnv.Production}>Production</TabsTrigger>
-          <TabsTrigger value={SolverEnv.Dev}>Dev</TabsTrigger>
         </TabsList>
       </Tabs>
 

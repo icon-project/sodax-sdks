@@ -99,6 +99,12 @@ export class CustomStellarAccount {
   }
 }
 
+/**
+ * `TransactionBuilder.setTimeout` uses seconds, unlike this service's
+ * millisecond timeout fields.
+ */
+const TRUSTLINE_TX_TIMEOUT_SECONDS = 300;
+
 export type RequestTrustlineParams<S extends StellarChainKey, Raw extends boolean> = {
   srcAddress: string;
   srcChainKey: S;
@@ -405,9 +411,7 @@ export class StellarSpokeService {
     }
   }
 
-  private handleSendTransactionError(
-    response: rpc.Api.SendTransactionResponse,
-  ): rpc.Api.SendTransactionResponse {
+  private handleSendTransactionError(response: rpc.Api.SendTransactionResponse): rpc.Api.SendTransactionResponse {
     if (response.status === 'ERROR') {
       this.config.logger.error(JSON.stringify(response, null, 2));
       throw new Error(JSON.stringify(response, null, 2));
@@ -580,6 +584,18 @@ export class StellarSpokeService {
   }
 
   /**
+   * Whether a token requires a trustline. Native XLM and legacy bnUSD are
+   * exempt and therefore need no subentry reserve.
+   */
+  public requiresTrustline(token: string): boolean {
+    const stellarChainConfig = this.chainConfig;
+    const normalized = token.toLowerCase();
+    if (normalized === stellarChainConfig.nativeToken.toLowerCase()) return false;
+    const legacyBnUSD = stellarChainConfig.supportedTokens.legacybnUSD;
+    return legacyBnUSD === undefined || normalized !== legacyBnUSD.address.toLowerCase();
+  }
+
+  /**
    * Check if the user has sufficient trustline established for the token.
    * @param token - The token address to check the trustline for.
    * @param amount - The amount of tokens to check the trustline for.
@@ -588,12 +604,7 @@ export class StellarSpokeService {
    */
   public async hasSufficientTrustline(token: string, amount: bigint, walletAddress: string): Promise<boolean> {
     const stellarChainConfig = this.chainConfig;
-    // native token and legacy bnUSD do not require trustline
-    const legacyBnUSD = stellarChainConfig.supportedTokens.legacybnUSD;
-    if (
-      token.toLowerCase() === stellarChainConfig.nativeToken.toLowerCase() ||
-      (legacyBnUSD !== undefined && token.toLowerCase() === legacyBnUSD.address.toLowerCase())
-    ) {
+    if (!this.requiresTrustline(token)) {
       return true;
     }
 
@@ -642,9 +653,9 @@ export class StellarSpokeService {
   ): Promise<TxReturnType<StellarChainKey, Raw>> {
     try {
       const { srcAddress: from, srcChainKey, token, amount } = params;
-      const asset = this.config.getChainConfig(srcChainKey).trustlineConfigs.find(
-        t => t.contractId.toLowerCase() === token.toLowerCase(),
-      );
+      const asset = this.config
+        .getChainConfig(srcChainKey)
+        .trustlineConfigs.find(t => t.contractId.toLowerCase() === token.toLowerCase());
 
       if (!asset) {
         throw new Error(`Asset ${token} not found. Cannot proceed with trustline.`);
@@ -666,7 +677,7 @@ export class StellarSpokeService {
             asset: new Asset(asset?.assetCode, asset?.assetIssuer),
           }),
         )
-        .setTimeout(this.maxTimeoutMs)
+        .setTimeout(TRUSTLINE_TX_TIMEOUT_SECONDS)
         .build();
 
       if (params.raw) {

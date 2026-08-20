@@ -67,9 +67,7 @@ export class CustomSorobanServer extends rpc.Server {
     return response.json().then(json => rpc.parseRawSimulation(json.result));
   }
 
-  override async sendTransaction(
-    tx: Transaction | FeeBumpTransaction,
-  ): Promise<rpc.Api.SendTransactionResponse> {
+  override async sendTransaction(tx: Transaction | FeeBumpTransaction): Promise<rpc.Api.SendTransactionResponse> {
     const requestOptions = {
       method: 'POST',
       headers: {

@@ -1,9 +1,9 @@
 [![CI](https://github.com/icon-project/sodax-sdks/actions/workflows/ci.yml/badge.svg)](https://github.com/icon-project/sodax-sdks/actions/workflows/ci.yml)
 [![Security](https://github.com/icon-project/sodax-sdks/actions/workflows/security.yml/badge.svg)](https://github.com/icon-project/sodax-sdks/actions/workflows/security.yml)
 
-# Sodax SDKs
+# SODAX SDKs
 
-This repository contains the SDK packages and demo applications for the Sodax project, organized as a Turborepo + pnpm monorepo.
+This repository contains the SDK packages and demo applications for the SODAX project, organized as a Turborepo + pnpm monorepo.
 
 ## Architecture
 
@@ -12,7 +12,7 @@ SODAX is a cross-chain DeFi platform built on a **hub-and-spoke architecture**, 
 - **EVM (13):** Sonic, Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia, Hedera
 - **Non-EVM (8):** Solana, Sui, Stellar, ICON, Injective, NEAR, Stacks, Bitcoin
 
-See the [Sodax SDK README](./packages/sdk/README.md) for a deeper architectural overview.
+See the [SODAX SDK README](./packages/sdk/README.md) for a deeper architectural overview.
 
 ## AI Agent Skills
 
@@ -29,8 +29,8 @@ Browse them on [skills.sh](https://www.skills.sh/icon-project/sodax-sdks). See t
 ### Packages (`/packages`)
 
 - **types** (`/packages/types`) — Shared TypeScript type definitions: chain IDs, chain configs, wallet provider interfaces, backend API types. No runtime dependencies.
-- **libs** (`/packages/libs`): Internal dependency isolation package. Bundles selected third-party libraries and re-exports them via stable subpaths so Sodax SDKs and consuming apps don't need bundler-specific workarounds. [Libs Documentation](./packages/libs/README.md).
-- **sdk** (`/packages/sdk`) — Core SDK exposing the full Sodax feature set (swap, bridge, money market, staking, DEX, migration, partner) through a streamlined `Sodax` facade. [Sodax SDK Documentation](./packages/sdk/README.md).
+- **libs** (`/packages/libs`): Internal dependency isolation package. Bundles selected third-party libraries and re-exports them via stable subpaths so SODAX SDKs and consuming apps don't need bundler-specific workarounds. [Libs Documentation](./packages/libs/README.md).
+- **sdk** (`/packages/sdk`) — Core SDK exposing the full SODAX feature set (swap, bridge, money market, staking, DEX, migration, partner) through a streamlined `Sodax` facade. [SODAX SDK Documentation](./packages/sdk/README.md).
 - **wallet-sdk-core** (`/packages/wallet-sdk-core`) — Low-level multi-chain wallet providers (signing, broadcasting) for 9 chain types. Supports both private-key (scripts/testing) and browser-extension (production) configs.
 - **wallet-sdk-react** (`/packages/wallet-sdk-react`) — React layer over `wallet-sdk-core` with the `XService`/`XConnector` pattern, Zustand state persistence, and EIP-6963 wallet discovery. [Wallet SDK Documentation](./packages/wallet-sdk-react/README.md).
 - **dapp-kit** (`/packages/dapp-kit`) — High-level React hooks combining the SDK, `wallet-sdk-react`, and React Query. Modular, production-ready building blocks for dApp development. [dApp Kit Documentation](./packages/dapp-kit/README.md).
@@ -42,6 +42,7 @@ Browse them on [skills.sh](https://www.skills.sh/icon-project/sodax-sdks). See t
 - **node** (`/apps/node`) — Node.js scripts for E2E testing chain operations, with per-chain entry points.
 - **node-cjs** (`/apps/node-cjs`) — CommonJS consumer regression test (verifies SDK CJS output works).
 - **wallet-modal-example** (`/apps/wallet-modal-example`) — Vite + React demo for the Wallet React SDK.
+- **stellar-sponsor-example** (`/apps/stellar-sponsor-example`) — Vite + React demo for the Stellar sponsored-activation journey (activate → fund → trustline), with an offline test lab that exercises every sponsoring failure class against a bundled mock backend.
 
 ## Common Commands
 

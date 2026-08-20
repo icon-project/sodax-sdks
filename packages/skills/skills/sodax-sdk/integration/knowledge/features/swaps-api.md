@@ -57,6 +57,29 @@ sodax.api.swaps.getSubmitTxStatus(query: SubmitTxStatusQueryV2, config?): Promis
 The optional trailing `config?: RequestOverrideConfig` (`{ baseURL?, timeout?, headers? }`) on every method
 applies per-call overrides that take precedence over the service config (see "Per-call overrides" below).
 
+## `approve` can return two transactions
+
+`ApproveResponseV2` is `{ tx, resetTx? }`. `resetTx` appears only when the source token rejects an
+allowance change from one non-zero value to another (the 2017 TetherToken lineage) **and** the wallet
+already holds a stale allowance — a wallet in that state cannot approve at all until it is zeroed.
+
+Broadcast `resetTx` first and wait for it to be mined, then broadcast `tx`. The two cannot be
+batched: the approval is only valid once the reset has landed on-chain.
+
+```ts
+const { tx, resetTx } = approveResponse;
+
+if (resetTx) {
+  const resetHash = await sendTransaction(resetTx);
+  await waitForTransactionReceipt(resetHash);
+}
+
+await sendTransaction(tx);
+```
+
+The field is optional and absent for every other token, so ignoring it keeps existing behaviour —
+it just cannot rescue a wallet stuck on a guarded token.
+
 ## Wire shapes — `bigint` vs decimal strings
 
 Request bodies that carry an `intent` struct (`cancelIntent`, `getIntentHash`,
@@ -66,15 +89,26 @@ client serializes them to decimal strings on the wire. Server-returned intents (
 back with those fields as decimal **`string`** (outbound JSON can't carry bigint). The `amount` /
 `inputAmount` fields on the quote / create-intent request bodies are already decimal **strings**.
 
+## `partnerFee`
+
+Optional on the type, but no default: the backend does not fill it in, and
+`new Sodax({ fee })` / `new Sodax({ swaps: { partnerFee } })` only reach the
+`sodax.swaps` orchestrator — not this wire path. Send the same value on quote and
+create-intent. `checkAllowance` / `approve` inherit the field but ignore it.
+Bridge API v2 is different: omitted `partnerFee` falls back to `bridgePartnerFee`.
+
 ## Common call shapes
 
 ### Quote
 
 ```ts
+const partnerFee = { address: '0xSonicFeeReceiver', percentage: 10 }; // 10 = 0.1% (bps)
+
 const quote = await sodax.api.swaps.getQuote({
   tokenSrc, tokenSrcChainKey, tokenDst, tokenDstChainKey,
   amount: '1000000',          // smallest unit, decimal string
   quoteType: 'exact_input',
+  partnerFee,
 });
 if (!quote.ok) return;
 quote.value.quotedAmount;     // decimal string
@@ -91,6 +125,7 @@ const created = await sodax.api.swaps.createIntent({
   deadline: '0',              // "0" → no expiry (limit-order semantics)
   allowPartialFill: false,
   srcAddress, dstAddress,
+  partnerFee,
 });
 if (!created.ok) return;
 const { tx, intent, relayData } = created.value;
@@ -128,20 +163,24 @@ Every method accepts a trailing `RequestOverrideConfig` to redirect a single cal
 attach request-specific headers (auth, tracing), overriding the service config:
 
 ```ts
-await sodax.api.swaps.getTokens({ baseURL: 'https://staging.example/v1/be', headers: { 'X-Trace': 'abc' } });
+// `baseURL` is the gateway ROOT — the SDK appends `/swaps/*` itself. Never include a service segment.
+await sodax.api.swaps.getTokens({ baseURL: 'https://staging.example/v1', headers: { 'X-Trace': 'abc' } });
 ```
 
 ## Custom endpoint for the swaps API
 
-By default the swaps endpoints are `/swaps/*` sub-paths under the same base URL as `sodax.backendApi`.
+`baseURL` is the gateway root, shared by every service; the swaps client appends `/swaps/*` below it just
+as `sodax.backendApi` appends its own `/be` mount. Never put a service segment in `baseURL` — a value
+ending in `/be` resolves swaps to `/v1/be/swaps/submit-tx`, which the gateway does not route (the SDK
+trims that suffix, but do not rely on it).
 To point the swaps API at its own host (separate from the base backend API), construct `Sodax` with the
 **`CustomApiConfig`** variant of `ApiConfig` (`{ baseApiConfig?, swapsApiConfig? }`) instead of the flat
-`BaseApiConfig`:
+`BackendApiConfig`:
 
 ```ts
 const sodax = new Sodax({
   api: {
-    baseApiConfig: { baseURL: 'https://api.example/v1/be' },
+    baseApiConfig: { baseURL: 'https://api.example/v1' },
     swapsApiConfig: { baseURL: 'https://swaps.example/v1' },
   },
 });
