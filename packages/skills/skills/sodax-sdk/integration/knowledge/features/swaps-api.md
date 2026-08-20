@@ -133,13 +133,17 @@ const { tx, intent, relayData } = created.value;
 
 **Delivery hooks are deployment-dependent here.** `hook?: HookRequestV2` (`{ kind: HookKind }`) lives on
 `SwapExtrasV2`, so it's inherited by both `CreateIntentParamsV2` (`checkAllowance` / `approve` /
-`createIntent` / `createLimitOrderIntent`) and `QuoteRequestV2` (`getQuote`) — on `getQuote` it's only meaningful with
-`includeTxData: true`, since a bare quote never builds an intent. Unlike the SDK path, the hook is
-resolved **server-side**, so it only works when the backend forwards the field *and* its pinned SDK has
-that kind registered for `dstChainKey`; an unregistered kind fails the request rather than falling back
-to a plain transfer. `dstAddress` still means the recipient the hook credits — the backend substitutes
-the hook's own address on-chain. Whether the `getQuote` path forwards `hook` at all is a backend
-question this SDK can't verify — confirm with the deployment before relying on it there.
+`createIntent` / `createLimitOrderIntent`) and `QuoteRequestV2` (`getQuote`) — on `getQuote` it's only
+meaningful with `includeTxData: true`, since a bare quote never builds an intent. Unlike the SDK path,
+the hook is resolved **server-side**, so it only works when the backend forwards the field *and* its
+pinned SDK has that kind registered for the request's destination chain — `dstChainKey` everywhere
+except `getQuote`, which names it `tokenDstChainKey`; an unregistered kind fails the request rather
+than falling back to a plain transfer. `dstAddress` still means the recipient the hook credits — the
+backend substitutes the hook's own address on-chain. Whether the `getQuote` path forwards `hook` at all
+is a backend question this SDK can't verify — confirm with the deployment before relying on it there.
+The `deliveryData` payload encoding and the `supportedTokens` metadata-vs-enforcement distinction are
+the full canonical contract on `SwapExtrasV2.hook`'s own doc comment in `@sodax/types`
+(`backendApiV2.ts`) — read that before implementing server-side hook resolution.
 
 When you need hook support independent of the deployment, build with `sodax.swaps` instead: it resolves
 the hook client-side into `dstAddress`/`data`, and under the default `useBackendSubmitTx` still hands the

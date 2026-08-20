@@ -20,8 +20,14 @@ intent, mirroring how the inherited `srcPublicKey`/`bound` extras already work t
 
 This is the wire contract only. Whether a given deployment honours the field — on any of these
 endpoints — depends on the backend forwarding it, and on that backend's pinned SDK having the
-requested hook registered for `dstChainKey`; an unregistered kind fails the request rather than
+requested hook registered for the request's destination chain (`dstChainKey`, except `getQuote`,
+which names the same thing `tokenDstChainKey`); an unregistered kind fails the request rather than
 silently falling back to a plain transfer. In particular, `getQuote` support is unverified from this
 repo: the backend that implements `/swaps/quote` lives outside this monorepo, and nothing here proves
 its `includeTxData=true` handler forwards `hook` into intent construction the way `/swaps/intents`
 already does.
+
+`SwapExtrasV2.hook`'s own doc comment in `packages/types/src/backend/backendApiV2.ts` is the
+canonical spec for a backend integration to implement against: the `deliveryData` payload's
+per-`HookKind` ABI encoding, and that a registry entry's `supportedTokens` is metadata describing the
+hook's own on-chain fallback behaviour rather than something to enforce server-side.

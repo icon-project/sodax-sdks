@@ -91,14 +91,31 @@ export interface SwapExtrasV2 {
   bound?: BitcoinBoundExtrasV2;
   /**
    * Route the intent's output through a registered delivery hook instead of transferring it to
-   * `dstAddress`. The backend resolves the hook's deployed address and encodes its payload via the
-   * SDK, so `dstAddress` stays the recipient the hook credits. Omit for a plain transfer. Only used
-   * when building an intent — on {@link QuoteRequestV2} that means `includeTxData=true`; a bare quote
-   * never builds an intent, so `hook` has nowhere to apply there.
+   * `dstAddress`. The backend resolves the hook's deployed address (from its pinned SDK's
+   * `spokeHooks` registry in `@sodax/types`) and encodes its payload, so `dstAddress` stays the
+   * recipient the hook credits, not the delivery target. Omit for a plain transfer.
+   *
+   * Only used when building an intent — on {@link QuoteRequestV2} that means `includeTxData=true`;
+   * a bare quote never builds an intent, so `hook` is a no-op there without it. Look the registry
+   * entry up by *this request's own* destination-chain field, which is **not** spelled the same way
+   * on every DTO: `dstChainKey` on {@link CreateIntentParamsV2}/`CreateLimitOrderParamsV2`, but
+   * `tokenDstChainKey` on {@link QuoteRequestV2}.
+   *
+   * The `deliveryData` payload is a per-`HookKind` ABI encoding (see the SDK's `HookService` /
+   * `HOOK_DELIVERY_ABI`) — today every registered kind (`hyperCoreDeposit`, `flintDeposit`) encodes
+   * `abi.encode(address recipient)`, but that shape is not guaranteed to stay uniform as new kinds
+   * are added, so don't hardcode one shared ABI across kinds.
+   *
+   * A registry entry's `supportedTokens` describes the hook's own on-chain fallback behaviour (which
+   * output tokens it actually acts on, vs. passes through as a plain transfer) — it's metadata, not
+   * a constraint for the backend to enforce; don't reject a mismatched `outputToken` server-side
+   * because of it.
    *
    * Requires a backend new enough to forward this field, and one whose pinned SDK has the hook
-   * registered for `dstChainKey` — an unregistered kind fails the request rather than silently
-   * falling back to a plain transfer.
+   * registered for the destination chain. An unregistered kind is expected to fail the request
+   * rather than silently falling back to a plain transfer — that expectation (like `getQuote`
+   * forwarding above) describes what this backend needs to implement, not behavior this repo has
+   * observed, since the backend lives outside this monorepo.
    */
   hook?: HookRequestV2;
 }
