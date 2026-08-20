@@ -126,6 +126,7 @@ const TEST_CHAINS = [
   ChainKeys.REDBELLY_MAINNET,
   ChainKeys.KAIA_MAINNET,
   ChainKeys.HEDERA_MAINNET,
+  ChainKeys.ROBINHOOD_MAINNET,
 ] as const satisfies readonly EvmSpokeOnlyChainKey[];
 
 // Warm the publicClients cache for ARB so chain-independent test spies have a stable client

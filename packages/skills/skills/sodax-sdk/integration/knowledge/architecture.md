@@ -50,7 +50,7 @@ For most consumers, this whole pipeline is one method call (`sodax.swaps.swap(..
 
 ### Supported chains
 
-21 total. EVM (13): Sonic (hub), Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia, Hedera. Non-EVM (8): Solana, Sui, Stellar, ICON, Injective, NEAR, Stacks, Bitcoin. See [`reference/`](reference/) § "Chain keys" for the full table with relay IDs and address-type mapping.
+22 total. EVM (14): Sonic (hub), Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia, Hedera, Robinhood Chain. Non-EVM (8): Solana, Sui, Stellar, ICON, Injective, NEAR, Stacks, Bitcoin. See [`reference/`](reference/) § "Chain keys" for the full table with relay IDs and address-type mapping.
 
 ---
 
@@ -62,7 +62,7 @@ Instead, the SDK has **one** `SpokeService` instance (owned by `Sodax`) which ho
 
 ```
 SpokeService
- ├── EvmSpokeService        (handles all 13 EVM chains)
+ ├── EvmSpokeService        (handles all 14 EVM chains)
  ├── SonicSpokeService      (special-cased for the hub)
  ├── SolanaSpokeService
  ├── SuiSpokeService
@@ -102,10 +102,12 @@ so a token added or upgraded later is handled without a code change. Consumer im
   transaction hash: the hash of the **last** transaction. Show step progress in the UI if you want,
   but nothing breaks if you do not.
 - **Unsigned flows (`raw: true`)** still return exactly one transaction from `approve`, which cannot
-  express a two-step plan. Use `sodax.swaps.buildApproveTxs({ params, raw: true })` instead — it
-  returns `{ approveTx, resetTx? }`. `resetTx` is present only for a guarded token holding a stale
-  allowance — broadcast it and wait for it to be mined first, because `approveTx` is not valid until
-  the reset has landed.
+  express a two-step plan. Use `sodax.swaps.buildApproveTxs({ params, raw: true })` — or
+  `sodax.bridge.buildApproveTxs` for a bridge — instead; both return `{ approveTx, resetTx? }`.
+  `resetTx` is present only for a guarded token holding a stale allowance — broadcast it and wait for
+  it to be mined first, because `approveTx` is not valid until the reset has landed. Each feature
+  resolves its own spender (a bridge on the hub approves the caller's hub wallet router, a swap the
+  solver's intents contract), so call the one matching the action you are about to take.
 
 ---
 
@@ -163,7 +165,7 @@ new Sodax(config?: SodaxOptions): Sodax;
 - `dex: DexConfig` — DEX pool/asset config.
 - `leverageYield: LeverageYieldConfig` — registry of leverage-yield ERC-4626 vaults on the hub.
 - `hub: HubConfig` — hub-chain (Sonic) full address map + RPC URL + polling config. Accepts an optional `rpcUrls` failover list (and `rpcOptions` tuning) — see [`recipes/initialize-sodax.md`](recipes/initialize-sodax.md).
-- `api: ApiConfig` — backend API config: flat `BaseApiConfig` (`{ baseURL, timeout, headers }`, shared by `sodax.backendApi` and the swaps client `sodax.api.swaps`) or nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig? }`) to point the swaps API at its own endpoint.
+- `api: ApiConfig` — backend API config: flat `BackendApiConfig` (`{ baseURL, basePath?, timeout, headers }`, shared by `sodax.backendApi` and the swaps client `sodax.api.swaps`) or nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig? }`) to point the swaps API at its own endpoint. `baseURL` is the gateway root; each service appends its own path below it.
 - `solver: SolverConfig` — `{ intentsContract, solverApiEndpoint, protocolIntentsContract }`.
 - `relay: RelayConfig` — intent relay endpoint + chain-id map.
 
@@ -202,15 +204,16 @@ Chain configs (vault addresses, supported tokens, fee parameters) change between
 
 ### Custom backend
 
-Point at a custom backend URL via `SodaxConfig.api.baseURL`:
+Point at a custom backend URL via `SodaxConfig.api`. `baseURL` is the gateway root; the data API's `/be`
+mount is appended below it, so a sandbox serving `/config/*` at its bare origin needs `basePath: ''`:
 
 ```ts
 const sodax = new Sodax({
-  api: { baseURL: 'https://sandbox-api.example.com' },
+  api: { baseApiConfig: { baseURL: 'https://sandbox-api.example.com', basePath: '' } },
 });
 ```
 
-`SodaxConfig.api` is `ApiConfig` — the flat `BaseApiConfig` (`{ baseURL, timeout, headers }`) shared by both backend clients, or the nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig? }`) to point the swaps API (`sodax.api.swaps`) at its own endpoint. Pass any subset via `DeepPartial`. v2 does not provide a typed slot to inject a custom `IConfigApiV1` implementation at construction; if you need to mock the backend for tests, point `baseURL` at a local mock server, or construct your own `BackendApiService`-compatible mock and inject it where you control the `Sodax` instance (e.g. dependency-injected in your app layer).
+`SodaxConfig.api` is `ApiConfig` — the flat `BackendApiConfig` (`{ baseURL, basePath?, timeout, headers }`) shared by both backend clients, or the nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig? }`) to point the swaps API (`sodax.api.swaps`) at its own endpoint. `baseURL` is the gateway root and every service appends its own path below it (`/be`, `/swaps`, `/bridge`, `/sponsorships/stellar`), so it must never carry a service segment; `basePath` overrides the data API's mount for a non-gateway deployment. Pass any subset via `DeepPartial`. v2 does not provide a typed slot to inject a custom `IConfigApiV1` implementation at construction; if you need to mock the backend for tests, point `baseURL` at a local mock server (with `basePath: ''` when it serves the routes at its origin), or construct your own `BackendApiService`-compatible mock and inject it where you control the `Sodax` instance (e.g. dependency-injected in your app layer).
 
 ---
 

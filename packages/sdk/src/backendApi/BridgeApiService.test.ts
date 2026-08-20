@@ -15,11 +15,7 @@
  * `toCreateBridgeIntentParamsV2` converts SDK names + bigint.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  DEFAULT_BACKEND_API_ENDPOINT,
-  type BridgeSubmitTxRequestV2,
-  type CreateBridgeIntentParamsV2,
-} from '@sodax/types';
+import { DEFAULT_API_BASE_URL, type BridgeSubmitTxRequestV2, type CreateBridgeIntentParamsV2 } from '@sodax/types';
 import { Sodax } from '../shared/entities/Sodax.js';
 import { BridgeApiService, toCreateBridgeIntentParamsV2 } from './BridgeApiService.js';
 import { SodaxError } from '../errors/SodaxError.js';
@@ -30,7 +26,7 @@ vi.stubGlobal('fetch', mockFetch);
 
 // --- fixtures -------------------------------------------------------------
 const sodax = new Sodax();
-const BASE = DEFAULT_BACKEND_API_ENDPOINT;
+const BASE = DEFAULT_API_BASE_URL;
 const TX_HASH = '0x46b053464f50836328b6158e1e33e5cf66c0e3ebe5004d30459b23acae5047a0';
 
 const sampleCreateBridgeIntentParams: CreateBridgeIntentParamsV2 = {
@@ -199,6 +195,22 @@ describe('BridgeApiService happy paths (validated responses)', () => {
     expect(result).toEqual({ ok: true, value: { valid: true } });
   });
 
+  it('approve returns ok:true with { tx, resetTx } (both tx.value decimal strings → bigint)', async () => {
+    const approveResponse = {
+      tx: { from: '0x1', to: '0x2', value: '0', data: '0x' },
+      resetTx: { from: '0x1', to: '0x2', value: '0', data: '0xreset' },
+    };
+    mockFetch.mockResolvedValueOnce(okResponse(approveResponse));
+    const result = await sodax.api.bridge.approve(sampleCreateBridgeIntentParams);
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        tx: { ...approveResponse.tx, value: 0n },
+        resetTx: { ...approveResponse.resetTx, value: 0n },
+      },
+    });
+  });
+
   it('createBridgeIntent returns ok:true with { tx, relayData } (tx.value decimal string → bigint)', async () => {
     mockFetch.mockResolvedValueOnce(okResponse(createBridgeIntentResponse));
     const result = await sodax.api.bridge.createBridgeIntent(sampleCreateBridgeIntentParams);
@@ -340,6 +352,19 @@ describe('BridgeApiService response validation', () => {
         endpoint: '/bridge/tokens',
         reason: 'invalid_response_shape',
       });
+    }
+  });
+
+  it('rejects approve when resetTx is malformed', async () => {
+    mockFetch.mockResolvedValueOnce(
+      okResponse({ tx: { from: '0x1', to: '0x2', value: '0', data: '0x' }, resetTx: { from: '0x1' } }),
+    );
+    const result = await sodax.api.bridge.approve(sampleCreateBridgeIntentParams);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const err = result.error as SodaxError;
+      expect(err.code).toBe('EXTERNAL_API_ERROR');
+      expect(err.feature).toBe('backend');
     }
   });
 

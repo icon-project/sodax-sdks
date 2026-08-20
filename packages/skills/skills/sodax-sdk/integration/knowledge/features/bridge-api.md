@@ -62,6 +62,31 @@ Bridge is **vault-backed, not solver-based**, so the surface is smaller and a fe
   *also* have backend endpoints (listed above), mirrored on this client for non-SDK HTTP callers / parity.
   The token *list* is backend-served via `getTokens` / `getTokensByChain`.
 
+## `approve` can return two transactions
+
+`BridgeApproveResponseV2` is `{ tx, resetTx? }`. `resetTx` appears only when the source token rejects
+an allowance change from one non-zero value to another (the 2017 TetherToken lineage) **and** the
+wallet already holds a stale allowance — a wallet in that state cannot approve at all until it is
+zeroed.
+
+Broadcast `resetTx` first and wait for it to be mined, then broadcast `tx`. The two cannot be
+batched: the approval is only valid once the reset has landed on-chain. Submitting `tx` while a
+non-zero stale allowance remains is a guaranteed revert.
+
+```ts
+const { tx, resetTx } = approveResponse;
+
+if (resetTx) {
+  const resetHash = await sendTransaction(resetTx);
+  await waitForTransactionReceipt(resetHash);
+}
+
+await sendTransaction(tx);
+```
+
+The field is optional and absent for every other token, so ignoring it keeps existing behaviour —
+it just cannot rescue a wallet stuck on a guarded token.
+
 ## Common call shapes
 
 ### Allowance · approve · create intent (shared body)
@@ -77,7 +102,13 @@ const body = {
 
 const allowance = await sodax.api.bridge.checkAllowance(body);
 if (allowance.ok && !allowance.value.valid) {
-  const approved = await sodax.api.bridge.approve(body);   // { tx } — sign + broadcast yourself
+  const approved = await sodax.api.bridge.approve(body);
+  if (!approved.ok) return;
+  const { tx: approveTx, resetTx } = approved.value;   // broadcast resetTx first when present, then tx
+  if (resetTx) {
+    await waitForTransactionReceipt(await sendTransaction(resetTx));
+  }
+  await waitForTransactionReceipt(await sendTransaction(approveTx));
 }
 
 const created = await sodax.api.bridge.createBridgeIntent(body);
@@ -108,19 +139,21 @@ if (status.ok && status.value.data.status === 'executed') {
 Every method accepts a trailing `RequestOverrideConfig` to redirect a single call or attach headers:
 
 ```ts
-await sodax.api.bridge.getTokens({ baseURL: 'https://staging.example/v1/be', headers: { 'X-Trace': 'abc' } });
+// `baseURL` is the gateway ROOT — the SDK appends `/bridge/*` itself. Never include a service segment.
+await sodax.api.bridge.getTokens({ baseURL: 'https://staging.example/v1', headers: { 'X-Trace': 'abc' } });
 ```
 
-The Bridge API has no dedicated config slice — it always shares the base backend host (`/bridge/*`). To
+The Bridge API has no dedicated config slice — it always shares the base backend host, reached as
+`/bridge/*` on the gateway root (a sibling of the data API's `/be` mount, not a child of it). To
 move the whole backend (including bridge) to a custom host, use the `CustomApiConfig` `baseApiConfig` slice
 (see [`backend-api.md`](backend-api.md) § "Custom backend").
 
-## Orchestrator integration — `bridgeOptions.useBackendSubmitTx`
+## Orchestrator integration — `bridge.useBackendSubmitTx`
 
-`new Sodax({ bridgeOptions: { useBackendSubmitTx: true } })` opts the end-to-end `sodax.bridge.bridge()`
-into routing the spoke-deposit through this API (`submit-tx` + status poll) with an automatic fall back to
-the client-side relay on any non-success. **Default OFF.** This is a distinct key from
-`swapsOptions.useBackendSubmitTx`. See [`bridge.md`](bridge.md) and the `CONFIGURE_SDK` doc.
+`bridge.useBackendSubmitTx` (default `true`) routes the end-to-end `sodax.bridge.bridge()` through this
+API (`submit-tx` + status poll) with an automatic fall back to the client-side relay on any non-success.
+Set `new Sodax({ bridge: { useBackendSubmitTx: false } })` to force the client-side path. Independent of
+`swaps.useBackendSubmitTx`. See [`bridge.md`](bridge.md) and the `CONFIGURE_SDK` doc.
 
 ## Error handling
 

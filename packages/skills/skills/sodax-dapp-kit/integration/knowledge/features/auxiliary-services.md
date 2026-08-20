@@ -75,6 +75,18 @@ useSwapsApiSubmitTx({ mutationOptions });               // mutation → sodax.ap
 useSwapsApiSubmitTxStatus({ params, queryOptions });    // query    → sodax.api.swaps.getSubmitTxStatus
 ```
 
+These hooks forward the body verbatim, so `partnerFee` has no default (SDK fee config does not
+apply). Put the same value on quote and create-intent:
+
+```ts
+// @ai-snippets-skip
+const partnerFee = { address: '0xSonicFeeReceiver', percentage: 10 }; // 10 = 0.1% (bps)
+const { data: quote } = useSwapsApiQuote({ params: { body: { ...quoteBody, partnerFee } } });
+await createIntent({ body: { ...intentBody, partnerFee } });
+```
+
+See the `sodax-sdk` skill (integration mode), `swaps-api.md` § `partnerFee`.
+
 `useSwapsApiSubmitTx` is a mutation hook — per-call config (e.g. backend base URL) flows through `mutate(vars)`. The `request` is a `SubmitTxRequestV2` (`{ txHash, srcChainKey, walletAddress, intent, relayData }`):
 
 ```ts
@@ -323,7 +335,7 @@ and origin gating are the real controls. Proxy through your own backend if that 
 | `useBackendOrderbook` | none | `staleTime: 30s` — fresh-window, no background refetch |
 | `useExpiredUtxos` (bitcoin) | 60s | refetchInterval |
 | `useQuote` (swap) | 3s | refetchInterval |
-| `useStatus` (swap) | 3s | refetchInterval |
+| `useStatus` (swap) | 3s | stops on status `3`/`4`, and after 40 consecutive NOT_FOUND fetches |
 | `useSwapAllowance` (swap) | 2s | refetchInterval |
 | `useMMAllowance` (mm) | 5s | refetchInterval; `enabled: false` for borrow/withdraw actions |
 | Reserves data (mm) | 5s | `useReservesData` / `useReservesHumanized` / user position hooks |

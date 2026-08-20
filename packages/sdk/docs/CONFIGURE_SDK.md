@@ -16,7 +16,7 @@ import { Sodax } from '@sodax/sdk';
 const sodax = new Sodax();
 ```
 
-The constructor signature is `new Sodax(config?: SodaxOptions)`, where `SodaxOptions = DeepPartial<SodaxDefaultConfig> & SodaxOptionalConfig` — a deep-partial override of the `SodaxDefaultConfig` data contract plus the client-side options: the `logger` sink (see [LOGGING.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/LOGGING.md)), the global partner `fee`, per-feature `partnerFee` options, the `swapsOptions` / `bridgeOptions` toggles (see [Backend submit-tx 2-step](#backend-submit-tx-2-step-swapsoptionsusebackendsubmittx)), and `radfi` (see [RadFi/Bound request signer](#radfibound-request-signer-radfisignrequest)). The `logger`, global `fee`, the `swapsOptions` / `bridgeOptions` toggles, and `radfi` are kept off the data contract: they are resolved once and never fetched from or overwritten by the backend config. When called with no arguments the SDK merges your overrides with the packaged static defaults ([`sodaxConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/sodax-config/sodax-config.ts)) using a recursive `deepMerge`. Omitted keys keep their default values.
+The constructor signature is `new Sodax(config?: SodaxOptions)`, where `SodaxOptions = DeepPartial<SodaxDefaultConfig> & SodaxOptionalConfig` — a deep-partial override of the `SodaxDefaultConfig` data contract plus the client-side options: the `logger` sink (see [LOGGING.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/LOGGING.md)), the global partner `fee`, per-feature options on `swaps` / `bridge` / `moneyMarket` / `leverageYield` (including `partnerFee` and `useBackendSubmitTx` — see [Backend submit-tx 2-step](#backend-submit-tx-2-step-swapsusebackendsubmittx)), and `radfi` (see [RadFi/Bound request signer](#radfibound-request-signer-radfisignrequest)). The `logger`, global `fee`, and `radfi` are kept off the data contract: they are resolved once and never fetched from or overwritten by the backend config. `useBackendSubmitTx` lives on the feature option slots (`swaps` / `bridge`) alongside `partnerFee`; the effective value (default `true`) is resolved on `ConfigService` — `sodax.config.swapUseBackendSubmitTx` / `sodax.config.bridgeUseBackendSubmitTx`. When called with no arguments the SDK merges your overrides with the packaged static defaults ([`sodaxConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/sodax-config/sodax-config.ts)) using a recursive `deepMerge`. Omitted keys keep their default values.
 
 ### Dynamic Configuration
 
@@ -33,18 +33,18 @@ if (!initResult.ok) {
 
 ## SodaxConfig overview
 
-Top-level data keys (the `SodaxDefaultConfig` shape carried inside `SodaxConfig`):
+Top-level keys of the consolidated `SodaxConfig` — the `SodaxDefaultConfig` data contract plus the per-feature client-side options merged over it. The feature rows are typed `SwapsConfig` / `BridgeConfig` / … (`<Feature>DefaultConfig & <Feature>Options`), so `partnerFee` and `useBackendSubmitTx` appear there even though neither is part of `SodaxDefaultConfig` and neither is ever fetched from the backend:
 
 | Key | Type (summary) | Role |
 |-----|----------------|------|
 | `chains` | `Record<SpokeChainKey, SpokeChainConfig>` | Per-spoke chain addresses, tokens, RPC settings, polling. |
-| `swaps` | `SwapsConfig` | Per-chain solver-supported token lists, plus an optional per-feature `partnerFee`. |
+| `swaps` | `SwapsConfig` | Per-chain solver-supported token lists, plus optional per-feature `partnerFee` and `useBackendSubmitTx` (default ON). |
 | `moneyMarket` | `MoneyMarketConfig` | Lending pool addresses, reserve assets, supported tokens, plus an optional per-feature `partnerFee`. |
-| `bridge` | `BridgeConfig` | Optional bridge per-feature `partnerFee`. |
+| `bridge` | `BridgeConfig` | Optional bridge per-feature `partnerFee` and `useBackendSubmitTx` (default ON). |
 | `dex` | `DexConfig` | Concentrated liquidity contract set and pool keys (Sonic hub). |
 | `leverageYield` | `LeverageYieldConfig` | Registry of leverage-yield ERC-4626 vaults on the hub, plus an optional per-feature `partnerFee`. |
 | `hub` | `HubConfig` | Hub chain (Sonic) metadata, contract addresses, and `rpcUrl` used by `EvmHubProvider`. |
-| `api` | `ApiConfig` | Backend API config — flat `BaseApiConfig` (`{ baseURL, timeout, headers }`, shared by `sodax.api.swaps`) or `CustomApiConfig` to point swaps at its own endpoint. |
+| `api` | `ApiConfig` | Backend API config — flat `BackendApiConfig` (`{ baseURL, basePath?, timeout, headers }`, shared by `sodax.api.swaps`) or `CustomApiConfig` to point swaps at its own endpoint. |
 | `solver` | `SolverConfig` | Intents contract addresses and solver HTTP API endpoint. |
 | `relay` | `RelayConfig` | Relayer HTTP endpoint and spoke-to-intent relay chain ID map. |
 
@@ -144,25 +144,35 @@ Partner fees for swaps belong in **`swaps.partnerFee`**, not inside `solver`.
 
 `SwapsConfig` includes `supportedTokens: Record<SpokeChainKey, readonly XToken[]>`. Normally you rely on the packaged lists. If you override them, remember that **`deepMerge` replaces arrays wholesale**—provide the full list for any chain you touch, or omit `supportedTokens` to keep defaults.
 
-### Backend submit-tx 2-step (`swapsOptions.useBackendSubmitTx`)
+### Backend submit-tx 2-step (`swaps.useBackendSubmitTx`)
 
-`swapsOptions` is a **client-side runtime option** on `SodaxOptions` (like `logger`) — it is NOT part of the backend-fetched `SodaxConfig`. Setting `useBackendSubmitTx: true` opts `sodax.swaps.swap()` into a backend-driven **2-step flow**: after the intent tx is created + verified on the source chain, the SDK hands it to the backend swaps API (`sodax.api.swaps.submitTx`), which relays and post-executes server-side; the SDK polls submit-tx status and returns the same `SwapResponse`.
-
-```typescript
-const sodax = new Sodax({ swapsOptions: { useBackendSubmitTx: true } });
-```
-
-If the backend path does not reach `solved` for **any** reason (submission rejected, terminal `failed`/abandoned status, or poll timeout), `swap()` automatically falls back to the fully client-side relay + post-execution so the swap still completes — **safely**, because re-relaying / re-posting an already-processed swap is idempotent (no double-fill; verified by `e2e-tests/e2e-relay.test.ts`), and the backend poll + fallback share one `timeout` budget (total latency ≤ one `timeout`). Default is `false`. See [SWAPS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md#backend-2-step-submit-opt-in) for the flow.
-
-### Backend submit-tx (`bridgeOptions.useBackendSubmitTx`)
-
-`bridgeOptions` is the bridge counterpart of `swapsOptions` — a **client-side runtime option** on `SodaxOptions`, distinct from the data `bridge` (partner-fee) slot. Setting `useBackendSubmitTx: true` opts `sodax.bridge.bridge()` into routing the spoke-deposit through the backend bridge API (`sodax.api.bridge.submitTx`), which relays server-side; the SDK polls submit-tx status and returns the same `TxHashPair`.
+`useBackendSubmitTx` on `swaps` is a **client-side runtime option** on `SodaxOptions` (same slot as `swaps.partnerFee`) — it is NOT part of the backend-fetched `SodaxDefaultConfig`. Default `true`: after `createIntent` broadcasts the intent tx on the source chain, `sodax.swaps.swap()` hands the tx hash to the backend swaps API (`sodax.api.swaps.submitTx`), which relays and post-executes server-side; the SDK polls submit-tx status and returns the same `SwapResponse`. The SDK does **not** verify the tx on-chain first — the backend runs its own verification, so `verifyTxHash` would only delay every backend success. It runs on the client-side path only. Set `false` to force the fully client-side relay path.
 
 ```typescript
-const sodax = new Sodax({ bridgeOptions: { useBackendSubmitTx: true } });
+// Default — backend submit-tx ON
+const sodax = new Sodax();
+
+// Opt out
+const sodaxClientSide = new Sodax({ swaps: { useBackendSubmitTx: false } });
 ```
 
-On any non-success (submission rejected, terminal `failed`/abandoned, or poll timeout) `bridge()` falls back to the client-side `relayTxAndWaitPacket` flow so the bridge still completes — safe because re-relaying an already-relayed bridge tx is idempotent, and the poll + fallback share one `timeout` budget. Bridge has no solver post-execution, so unlike swaps there is no `'posting_execution'` step. Default is `false`. See [BRIDGE_API.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BRIDGE_API.md) for the API client.
+The earlier `swapsOptions` / `bridgeOptions` keys are **deprecated but still honoured**, so an existing explicit opt-out keeps working; they apply only when the matching `swaps` / `bridge` flag is omitted. Move to `swaps` / `bridge`.
+
+If the backend path does not reach `solved` for **any** reason (submission rejected, terminal `failed`/abandoned status, or poll timeout), `swap()` automatically falls back to the fully client-side relay + post-execution so the swap still completes — **safely**, because re-relaying / re-posting an already-processed swap is idempotent (no double-fill; verified by `e2e-tests/e2e-relay.test.ts`). `timeout` is a **per-attempt** budget: the backend attempt gets it, and the fallback relay then gets a fresh one that starts after on-chain verification, so neither a stalled backend nor a slow source-chain confirmation shortens the client-side wait, and raising `timeout` grows both. It does not bound intent creation, verification (the source chain's `pollingConfig.maxTimeoutMs`) or post-execution. See [SWAPS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md#backend-2-step-submit) for the flow and [How `timeout` bounds each attempt](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md#how-timeout-bounds-each-attempt) for the full breakdown.
+
+### Backend submit-tx (`bridge.useBackendSubmitTx`)
+
+`useBackendSubmitTx` on `bridge` is the bridge counterpart — same slot as `bridge.partnerFee`, resolved live via `config.bridgeUseBackendSubmitTx`. Default `true`: `sodax.bridge.bridge()` routes the spoke-deposit through the backend bridge API (`sodax.api.bridge.submitTx`), which relays server-side; the SDK polls submit-tx status and returns the same `TxHashPair`. Set `false` to force the client-side `relayTxAndWaitPacket` path.
+
+```typescript
+// Default — backend submit-tx ON
+const sodax = new Sodax();
+
+// Opt out
+const sodaxClientSide = new Sodax({ bridge: { useBackendSubmitTx: false } });
+```
+
+On any non-success (submission rejected, terminal `failed`/abandoned, or poll timeout) `bridge()` falls back to the client-side `relayTxAndWaitPacket` flow so the bridge still completes — safe because re-relaying an already-relayed bridge tx is idempotent. `timeout` is per-attempt on the [same terms as swaps](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md#how-timeout-bounds-each-attempt): the backend attempt gets it and the fallback relay gets a fresh one. Bridge has no solver post-execution, so unlike swaps there is no `'posting_execution'` step. See [BRIDGE_API.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BRIDGE_API.md) for the API client.
 ### RadFi/Bound request signer (`radfi.signRequest`)
 
 `radfi` is a **client-side runtime option** on `SodaxOptions` (like `logger`) — never part of the backend-fetched `SodaxConfig`. The SDK calls `signRequest` once per outbound Bound Exchange (RadFi) `apiUrl` request and merges the returned headers onto it, so a server-to-server caller can attach Bound's `x-api-signature` HMAC header without the SDK ever holding the credential.
@@ -238,34 +248,73 @@ const sodax = new Sodax({
 });
 ```
 
-EVM spokes use `rpcUrl` on their spoke config; Stellar uses `horizonRpcUrl` and `sorobanRpcUrl`; Bitcoin includes `radfi` and related fields—mirror the shape of the default `SpokeChainConfig` for the chain you change.
+EVM spokes use `rpcUrl` on their spoke config; Stellar uses `horizonRpcUrl` and `sorobanRpcUrl`; Sui uses `grpc_url` because it speaks gRPC-web rather than JSON-RPC (`rpc_url` is still accepted as a deprecated alias and wins when set — the packaged default always supplies `grpc_url`, so precedence rather than an either/or guard is what keeps overrides working — but the endpoint must serve gRPC; the packaged default is Sui's public fullnode, which is rate-limited per IP, so override it for server-side traffic); Bitcoin includes `radfi` and related fields—mirror the shape of the default `SpokeChainConfig` for the chain you change.
 
 ### Backend API (`api`)
 
-[`ApiConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/common/constants.ts) controls `baseURL`, `timeout`, and `headers` for `BackendApiService` (used by `ConfigService` and `initialize()`). It is either a flat `BaseApiConfig` (shown below — shared by `sodax.backendApi`, the swaps client `sodax.api.swaps`, and the bridge client `sodax.api.bridge`) or a nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig?, sponsoringApiConfig? }`) to point an individual client at its own endpoint.
+[`ApiConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/common/constants.ts) controls `baseURL`, `timeout`, and `headers` for `BackendApiService` (used by `ConfigService` and `initialize()`). It is either a flat `BackendApiConfig` (shown below — shared by `sodax.backendApi`, the swaps client `sodax.api.swaps`, and the bridge client `sodax.api.bridge`) or a nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig?, sponsoringApiConfig? }`) to point an individual client at its own endpoint.
+
+#### How a request URL is composed
+
+```
+request URL  =  baseURL  +  service path  +  route
+                └─ gateway root: origin plus the deployment's version prefix
+                            └─ owned by the service — never put it in baseURL
+```
+
+`baseURL` is the **gateway root**. Every service appends its own path below it — and the base API, swaps
+and bridge all resolve the same root, so one value moves all three. Sponsoring is the exception: it
+defaults to the same root but reaches it independently, so retargeting `baseURL` does **not** move it (see
+the slice table below).
+
+| Service | Path | Default URL for one route |
+|---|---|---|
+| `sodax.backendApi` | `/be` (`basePath`, overridable) | `https://api.sodax.com/v1/be/config/all` |
+| `sodax.api.swaps` | `/swaps` | `https://api.sodax.com/v1/swaps/submit-tx` |
+| `sodax.api.bridge` | `/bridge` | `https://api.sodax.com/v1/bridge/submit-tx` |
+| `sodax.api.sponsoring` | `/sponsorships/stellar` | `https://api.sodax.com/v1/sponsorships/stellar/config` |
+
+The version prefix is **deployment-owned**, which is why it lives in `baseURL` rather than in the SDK's
+service paths: that is what lets a locally-run service be reached by swapping the host alone
+(`http://localhost:3008` mounts `/swaps/*` at its bare origin, with no version prefix at all). The
+corollary is that `https://api.sodax.com` on its own is an incomplete base URL — it resolves every service
+one segment short (`/be/config/all`, `/swaps/tokens`) and 404s. Only the data API has a `basePath` to
+compensate, so the SDK warns at construction, naming each service whose resolved root on the packaged host
+omits the prefix — including one reached through a `swapsApiConfig` or `sponsoringApiConfig` slice.
+
+So a `baseURL` must never end in a service segment. If it ends in `/be`, the SDK trims it and logs a warning — the previous packaged default was `https://api.sodax.com/v1/be`, which nested the sibling services one level too deep (`/v1/be/swaps/submit-tx`).
 
 ```typescript
 import { Sodax } from '@sodax/sdk';
 
 const sodax = new Sodax({
   api: {
-    baseURL: 'https://api.sodax.com/v1/be',
+    baseURL: 'https://api.sodax.com/v1',
     timeout: 30_000,
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
   },
 });
 ```
 
+Only the backend data API's path is deployment-owned, so only it is configurable. Set `basePath: ''` for a service addressed directly at its origin rather than through the gateway:
+
+```typescript
+const sodax = new Sodax({
+  api: { baseApiConfig: { baseURL: 'http://localhost:4000', basePath: '' } },
+});
+// → http://localhost:4000/config/all
+```
+
 **Which slice moves which client.** The flat fields layer underneath every per-service slice, so a top-level `baseURL` moves all of them at once:
 
 | Client | Resolved from | Notes |
 |---|---|---|
-| `sodax.backendApi` | flat fields → `baseApiConfig` | |
-| `sodax.api.swaps` | flat fields → `baseApiConfig` → `swapsApiConfig` | Only client a `swapsApiConfig` slice affects. |
-| `sodax.api.bridge` | flat fields → `baseApiConfig` | Served as `/bridge/*` sub-paths on the base host. Defaults to the same host as swaps, but a `swapsApiConfig` slice does **not** move it — there is no `bridgeApiConfig` slice. |
-| `sodax.api.sponsoring` | `sponsoringApiConfig` (own origin; only `timeout` inherits) | Base URL and headers never inherit, so base credentials can't leak to another origin. |
+| `sodax.backendApi` | flat fields → `baseApiConfig` | The only client that reads `basePath`. |
+| `sodax.api.swaps` | flat fields → `baseApiConfig` → `swapsApiConfig` | Only client a `swapsApiConfig` slice affects. Never inherits `basePath`. |
+| `sodax.api.bridge` | flat fields → `baseApiConfig` | Reached as `/bridge/*` on the shared root. Defaults to the same host as swaps, but a `swapsApiConfig` slice does **not** move it — there is no `bridgeApiConfig` slice. Never inherits `basePath`. |
+| `sodax.api.sponsoring` | `sponsoringApiConfig` (own origin; only `timeout` inherits) | Base URL and headers never inherit, so base credentials can't leak to another origin — and pointing the base API at a private proxy never drags sponsoring along. |
 
-Every client method also takes a per-call `RequestOverrideConfig` (`{ baseURL?, timeout?, headers? }`) as its last argument, which wins over the resolved config — useful for pointing one call at a canary host without touching app-wide config. Note that a `timeout` override **replaces** the resolved value rather than capping it.
+Every client method also takes a per-call `RequestOverrideConfig` (`{ baseURL?, timeout?, headers? }`) as its last argument, which wins over the resolved config — useful for pointing one call at a canary host without touching app-wide config. A `baseURL` override replaces the gateway root; the calling service's own path still applies, and a legacy `/be` suffix is trimmed from it just as it is from a configured base URL. Note that a `timeout` override **replaces** the resolved value rather than capping it.
 
 ### Relayer (`relay`)
 

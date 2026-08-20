@@ -20,9 +20,9 @@ Requires `pnpm build:packages` first if the SDK packages haven't been built.
 src/
 ├── App.tsx              # react-router routes — one route per feature
 ├── providers.tsx        # SodaxProvider + SodaxWalletProvider + QueryClientProvider stack
-├── constants.ts         # solver env configs (production / staging / dev)
+├── constants.ts         # solver env configs (production / staging)
 ├── pages/               # one folder per feature
-│   ├── solver/          # intent-based swaps
+│   ├── swaps-sdk/       # intent-based swaps via the SDK (route `/swaps-sdk`)
 │   ├── money-market/    # cross-chain lending/borrowing (per-chain route param)
 │   ├── bridge/          # cross-chain token transfers
 │   ├── dex/             # concentrated liquidity / AMM
@@ -37,9 +37,9 @@ src/
 
 ## How it wires up
 
-- **Routing.** `App.tsx` defines routes with react-router. `/` redirects to `/solver`. Money market uses a `:chainId` route param (defaults to Arbitrum).
+- **Routing.** `App.tsx` defines routes with react-router, every path from the `ROUTES` table in `constants.ts` (named `ROUTES`, not `Routes`, because react-router exports a `Routes` component into the same file). `/` redirects to `ROUTES.SWAPS_SDK`; the legacy `/solver` path redirects there too, so links from before the rename keep working; a `*` catch-all redirects anything unknown rather than showing react-router's unstyled error boundary. All three use `replace` — without it the redirect pushes a history entry and Back bounces straight forward again. Money market uses a `:chainId` route param (defaults to Arbitrum).
 - **Providers.** `providers.tsx` is the canonical stack to copy when integrating: `SodaxProvider` → `QueryClientProvider` (via `createSodaxQueryClient`) → `SodaxWalletProvider`. RPC URLs are read from `process.env.*` with public-RPC fallbacks. WalletConnect is opt-in via `VITE_WALLETCONNECT_PROJECT_ID`.
-- **Solver env switcher.** `useAppStore.solverEnvironment` picks between `productionSolverConfig` / `stagingSolverConfig` / `devSolverConfig` from `constants.ts`. The `Providers` component re-memoizes the SDK config when this changes.
+- **Solver env switcher.** `useAppStore.solverEnvironment` picks between `productionSolverConfig` / `stagingSolverConfig` from `constants.ts`. The `Providers` component re-memoizes the SDK config when this changes.
 - **UI.** Tailwind v4 + Radix primitives + shadcn-style components in `src/components/ui/`.
 - **Logos.** Chain logos come from `baseChainInfo[key].logo` (see `chainIdToChainLogo` in `constants.ts`); token logos render via `<TokenIcon symbol=… />` (`components/shared/TokenIcon.tsx`), which resolves the URL with `tokenLogo(symbol)` from the SDK and falls back to the symbol initials. Don't hardcode icon paths.
 
@@ -100,6 +100,7 @@ The demo enables the SDK's opt-in user-action analytics so every feature flow it
 ## Common pitfalls
 
 - **Chain logos come from `@sodax/types`, not local files.** `baseChainInfo[key].logo` is the single source of truth (a `raw.githubusercontent.com` URL hosted in `packages/assets`). `src/constants.ts` derives `availableChains[].icon` / `EVM_CHAIN_ICONS` / `getChainIcon` / `chainIdToChainLogo` from it — don't reintroduce hardcoded `/chain/*.png` paths (the demo's `public/` has no `chain/` folder, so those 404). The logo URLs only resolve once `packages/assets` is on `main`; on a feature branch, point `CHAIN_LOGO_BASE_URL` at the branch to preview. (`src/lib/chains.ts` is an unused duplicate of the old logic — ignore it.)
+- **An API `baseURL` is the gateway root, never a service path.** `api.baseURL` (and every per-call `RequestOverrideConfig.baseURL`, e.g. `components/bridge-api/lib/config.ts`) is the origin plus the deployment's version prefix — `DEFAULT_API_BASE_URL` in `@sodax/types`, never a copied literal. The SDK appends each service's own path below it (`/be`, `/swaps`, `/bridge`, `/sponsorships/stellar`), so a segment in the base URL relocates the sibling services too. `providers.tsx` therefore sets **no** `baseApiConfig` — the packaged default is already correct — and sets `swapsApiConfig` / `sponsoringApiConfig` **only** when their `VITE_*` override is present, so with no env vars every service runs against the packaged production gateway (swaps included; it is no longer pinned to canary). A `baseURL` that still ends in `/be` is trimmed with a console warning.
 - **Node polyfills.** Uses `@bangjelkoski/vite-plugin-node-polyfills` (Bitcoin/Solana deps pull in `buffer`, `crypto`, etc.). If a new dependency requires a polyfill, add it there rather than in app code.
 - **Env vars.** `example.env` lists every var the app reads; all are optional. (Reversed name because the root `.gitignore` ignores `.env*` — a `.env.example` here would be untrackable.) Vite-side env vars must be `VITE_*` (e.g. `VITE_WALLETCONNECT_PROJECT_ID`) and be read via `import.meta.env`. The RPC overrides in `providers.tsx` read from `process.env.*` which is replaced at build time — leaving them unset is fine (public fallbacks). **Never put a credential in an unprefixed var:** `vite.config.ts` does `loadEnv(mode, cwd, '')` and inlines the result as `process.env`, so an unprefixed value is baked into the public bundle whenever it is present on the build machine.
 - **Sponsoring 401s mean no `x-api-key`.** Both sponsoring endpoints are key-gated, and the demo's `sponsoringApiConfig` omits `apiKey` when `VITE_SPONSORING_API_KEY` is unset — so a `401 Unauthorized` on `<baseURL>/sponsorships/stellar/*` (the Stellar activation path in the swap cards, via `useStellarGate`) is the service rejecting a keyless call. Set the key in `.env` and restart Vite; the env `define` is build-time, so HMR will not pick it up. `VITE_SPONSORING_API_BASE_URL` retargets the service and defaults to the SDK's packaged production endpoint — it is the base URL **including** any version prefix (`https://api.sodax.com/v1` on the gateway, `http://localhost:3011` for a local `sponsoring-api`, which mounts the routes at the bare origin), because the SDK appends only `/sponsorships/stellar/…`. Never hardcode a localhost URL in `providers.tsx`, the demo is deployed.

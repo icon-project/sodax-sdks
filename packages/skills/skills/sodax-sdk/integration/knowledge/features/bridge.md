@@ -16,6 +16,8 @@ A bridge call deposits the source token into its vault on the hub, then triggers
 sodax.bridge.bridge<K>(action: BridgeParams<K, false>): Promise<Result<TxHashPair, SodaxError>>;
 sodax.bridge.createBridgeIntent<K, Raw>(action: BridgeParams<K, Raw>): Promise<Result<IntentTxResult<K, Raw>, SodaxError>>;
 sodax.bridge.approve<K, Raw>(args): Promise<Result<TxReturnType<K, Raw>, SodaxError>>;
+// Unsigned callers only: returns both transactions when a stale allowance must be cleared first.
+sodax.bridge.buildApproveTxs<K>(action: BridgeParams<K, true>): Promise<Result<ApprovalTxs<K>, SodaxError>>;
 sodax.bridge.isAllowanceValid<K, Raw>(args): Promise<Result<boolean, SodaxError>>;
 
 sodax.bridge.getBridgeableAmount(from: XToken, to: XToken): Promise<Result<BridgeLimit, SodaxError>>;
@@ -33,7 +35,7 @@ type BridgeParams<K extends SpokeChainKey, Raw extends boolean> = {
   params: CreateBridgeIntentParams<K>;
   extras?: BridgeExtras<K>;
   skipSimulation?: boolean;
-  timeout?: number;              // shared budget for relay/poll; defaults to DEFAULT_RELAY_TX_TIMEOUT
+  timeout?: number;              // per-attempt budget (backend attempt, then fallback relay); defaults to DEFAULT_RELAY_TX_TIMEOUT
 } & WalletProviderSlot<K, Raw>;  // raw: true ⇒ no walletProvider; raw: false ⇒ required, chain-narrowed
 
 type CreateBridgeIntentParams<K extends SpokeChainKey> = {
@@ -83,7 +85,7 @@ const result = await sodax.bridge.bridge({
 
 ## Routing the spoke deposit through the backend
 
-`bridge()` relays client-side by default. `new Sodax({ bridgeOptions: { useBackendSubmitTx: true } })` opts into handing the broadcast deposit to the backend Bridge API instead (`sodax.api.bridge`), which relays server-side and falls back to the client-side relay on any non-success — safe because re-relaying is idempotent. Default is OFF. See [`bridge-api.md`](bridge-api.md).
+`bridge()` routes the spoke-deposit through the backend Bridge API by default (`bridge.useBackendSubmitTx`, default ON) — `sodax.api.bridge` relays server-side and falls back to the client-side relay on any non-success — safe because re-relaying is idempotent. Set `new Sodax({ bridge: { useBackendSubmitTx: false } })` to force the client-side path. As with swaps, the SDK does not verify the deposit on-chain before handing it over — the backend verifies itself, so `verifyTxHash` runs on the client-side path only. `timeout` (defaults to `DEFAULT_RELAY_TX_TIMEOUT`) is a PER-ATTEMPT budget, same terms as swaps: the backend attempt gets it and the fallback relay gets a fresh one starting after verification, so neither a stalled backend nor a slow confirmation shortens the fallback. Worst case is `createBridgeIntent + timeout + verification + max(timeout, RELAY_FALLBACK_FLOOR_MS)` — intent creation and verification (the source chain's `pollingConfig.maxTimeoutMs`) are not bounded by `timeout`. Bridge has no post-execution term. See [`bridge-api.md`](bridge-api.md).
 
 ## Common call shapes
 
@@ -195,6 +197,7 @@ if (result.ok) {
 | `bridge` | `TxHashPair` |
 | `createBridgeIntent` | `IntentTxResult<K, Raw>` = `{ tx: TxReturnType<K, Raw>, relayData }` |
 | `approve` | `TxReturnType<K, Raw>` |
+| `buildApproveTxs` | `ApprovalTxs<K> = { approveTx, resetTx? }` |
 | `isAllowanceValid` | `boolean` |
 | `getBridgeableAmount` | `BridgeLimit = { amount, decimals, type }` |
 | `getBridgeableTokens` | `XToken[]` |
@@ -204,6 +207,13 @@ change (Ethereum USDT is the only listed one today): `approve(0)` is mined first
 approval, so the user signs twice. The returned value is unchanged — one hash, the **last**
 transaction's. Detection simulates the approval, so never gate on a token list. Full note: "ERC-20
 approval can take two transactions" in [`architecture.md`](../architecture.md).
+
+Unsigned callers cannot get that from `approve({ raw: true })`, which returns a single transaction.
+Use `buildApproveTxs` instead — it returns `{ approveTx, resetTx? }`, and when `resetTx` is present
+you must broadcast it and wait for it to be mined before `approveTx`. It resolves the same spender as
+`approve` and `isAllowanceValid` (the caller's own hub wallet router on the hub, the asset manager on
+an EVM spoke), so do not substitute `sodax.swaps.buildApproveTxs` for a bridge — swaps approves a
+different contract on the hub.
 
 ## Error codes
 

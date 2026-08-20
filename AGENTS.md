@@ -129,6 +129,8 @@ To author or validate changesets and govern a release (SemVer bumps, changelogs,
 
 GitHub Actions install dependencies with a frozen lockfile, lint, check circular dependencies, build packages, typecheck, validate dev AI files, validate AI consumer docs, validate mirrored doc links, build apps, run smoke checks, and run tests. When changing `packages/skills`, run `pnpm check:ai` locally; when changing a mirrored doc, run `pnpm check:doc-links`.
 
+`pnpm test:e2e` runs in its own CI job **on push to `main` / `development` only**, never on pull requests: it hits live mainnet services, so it fails on state no PR controls (a solver that dropped an intent from memory, an unindexed relay tx, on-chain token/vault drift). Run it locally when you touch a flow it covers — a green PR does not mean the e2e suite passed.
+
 A separate `AI Files Drift Check` workflow runs per pull request. Those deterministic gates prove AI files are structurally sound and that their code blocks compile; this one covers the prose they wrap. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to read its findings.
 
 `pnpm check:sponsoring-contract` is a **manual** gate, deliberately outside CI: it diffs the SDK's hand-authored sponsoring wire types against the backend's OpenAPI document, and CI has no sponsoring service to fetch it from. Run it whenever the sponsoring contract moves on either side, and before a release. See [`packages/sdk/AGENTS.md`](packages/sdk/AGENTS.md) for how to obtain the spec without booting a signer.
