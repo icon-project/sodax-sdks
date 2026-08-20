@@ -95,11 +95,14 @@ export interface SwapExtrasV2 {
    * `spokeHooks` registry in `@sodax/types`) and encodes its payload, so `dstAddress` stays the
    * recipient the hook credits, not the delivery target. Omit for a plain transfer.
    *
-   * Only used when building an intent — on {@link QuoteRequestV2} that means `includeTxData=true`;
-   * a bare quote never builds an intent, so `hook` is a no-op there without it. Look the registry
-   * entry up by *this request's own* destination-chain field, which is **not** spelled the same way
-   * on every DTO: `dstChainKey` on {@link CreateIntentParamsV2}/`CreateLimitOrderParamsV2`, but
-   * `tokenDstChainKey` on {@link QuoteRequestV2}.
+   * Only used when building an intent: `createIntent`/`createLimitOrderIntent`, or `getQuote` with
+   * `includeTxData=true` — a bare quote never builds one, so `hook` is a no-op there without it.
+   * `checkAllowance`/`approve` inherit the field too (both extend {@link CreateIntentParamsV2}) but
+   * ignore it, same as `partnerFee`: allowance-checking and approval are source-side only and never
+   * touch `dstAddress`. Look the registry entry up by *this request's own* destination-chain field,
+   * which is **not** spelled the same way on every DTO: `dstChainKey` on
+   * {@link CreateIntentParamsV2}/`CreateLimitOrderParamsV2`, but `tokenDstChainKey` on
+   * {@link QuoteRequestV2}.
    *
    * The `deliveryData` payload is a per-`HookKind` ABI encoding (see the SDK's `HookService` /
    * `HOOK_DELIVERY_ABI`) — today every registered kind (`hyperCoreDeposit`, `flintDeposit`) encodes

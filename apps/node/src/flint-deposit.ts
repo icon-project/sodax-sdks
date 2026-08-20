@@ -96,10 +96,13 @@ async function fetchFlintHookMinDeposit(): Promise<bigint> {
 }
 
 async function main(): Promise<void> {
-  // Independent RPC reads on the same client — kick both off now rather than serializing them; each
-  // is awaited at the point its result is actually needed below.
-  const hookSupportCheck = assertEthSpokeSupportsHooks();
-  const hookMinDepositPromise = fetchFlintHookMinDeposit();
+  // Independent RPC reads on the same client — run them concurrently via Promise.all rather than
+  // serializing them. Both are awaited together right here (not kicked off and consumed later):
+  // fetchFlintHookMinDeposit can reject on its very first tick (no registry entry), and an unawaited
+  // rejection that only gets consumed after other real async work runs is "unhandled" under Node's
+  // default unhandled-rejections=throw mode — the process crashes instead of hitting the try/catch
+  // that was meant to report it.
+  const [, hookMinDeposit] = await Promise.all([assertEthSpokeSupportsHooks(), fetchFlintHookMinDeposit()]);
 
   const walletAddress = await sonicWallet.getWalletAddress();
   const recipient = (process.env.RECIPIENT ?? walletAddress) as Address;
@@ -109,8 +112,6 @@ async function main(): Promise<void> {
 
   console.log(`Swapping ${formatUnits(inputAmount, 18)} S -> Ethereum USDC -> Flint deposit`);
   console.log(`Wallet: ${walletAddress}, flUSD controller (recipient): ${recipient}`);
-
-  await hookSupportCheck;
 
   const quoteRequest: SolverIntentQuoteRequest = {
     token_src: sToken,
@@ -130,7 +131,6 @@ async function main(): Promise<void> {
   // Below the hook's dust floor it delivers plain USDC to the recipient instead of depositing —
   // harmless, but not what this script is for. Read live rather than assume a fixed floor: the
   // owner can change minDeposit on the deployed hook at any time.
-  const hookMinDeposit = await hookMinDepositPromise;
   if (minOutputAmount < hookMinDeposit) {
     throw new Error(
       `min output ${formatUnits(minOutputAmount, 6)} USDC is under the hook's current ${formatUnits(hookMinDeposit, 6)} USDC minDeposit — raise AMOUNT_S`,
