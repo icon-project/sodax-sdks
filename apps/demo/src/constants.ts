@@ -82,6 +82,8 @@ export const availableChains: ChainUI[] = [
   ChainKeys.HYPEREVM_MAINNET,
   ChainKeys.KAIA_MAINNET,
   ChainKeys.REDBELLY_MAINNET,
+  ChainKeys.HEDERA_MAINNET,
+  ChainKeys.ROBINHOOD_MAINNET,
 ].map(key => ({ id: key, name: baseChainInfo[key].name, icon: baseChainInfo[key].logo }));
 
 export const ROUTES = {

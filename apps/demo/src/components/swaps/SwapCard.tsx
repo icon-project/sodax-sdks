@@ -76,8 +76,12 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   );
 
   // Persist the latest chain/token picks (symbol only) so they restore on reload.
+  // Skip while a chain has no solver-supported token yet (e.g. Hedera in production/dev) —
+  // src.token/dst.token is undefined right after such a chain switch.
   useEffect(() => {
-    saveLastSelection(src, dst);
+    if (src.token && dst.token) {
+      saveLastSelection(src, dst);
+    }
   }, [src, dst]);
   const sourceAccount = useXAccount({ xChainId: src.chain });
   const sourceWalletProvider = useWalletProvider({ xChainId: src.chain });

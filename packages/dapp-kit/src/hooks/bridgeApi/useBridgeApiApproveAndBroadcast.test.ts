@@ -1,8 +1,6 @@
 /**
- * The swaps API can return two approval transactions, and the second is only a valid state
- * transition once the first has been mined. That ordering is what this hook exists to own — before
- * it, every integration re-implemented it and could drop the wait or the abort, which costs the user
- * gas on a transaction certain to revert.
+ * The bridge API can return two approval transactions, and the second is only a valid state
+ * transition once the first has been mined. That ordering is what this hook exists to own.
  *
  * Follows the package convention of testing hooks without a renderer: the React Query wrapper is
  * mocked so `mutationFn` can be captured and driven directly.
@@ -19,7 +17,7 @@ const invalidateQueries = vi.fn();
 let captured: any;
 
 vi.mock('../shared/useSodaxContext.js', () => ({
-  useSodaxContext: () => ({ sodax: { api: { swaps: { approve } } } }),
+  useSodaxContext: () => ({ sodax: { api: { bridge: { approve } } } }),
 }));
 vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ invalidateQueries }) }));
 vi.mock('../shared/useSafeMutation.js', () => ({
@@ -30,7 +28,7 @@ vi.mock('../shared/useSafeMutation.js', () => ({
   },
 }));
 
-const { useSwapsApiApproveAndBroadcast } = await import('./useSwapsApiApproveAndBroadcast.js');
+const { useBridgeApiApproveAndBroadcast } = await import('./useBridgeApiApproveAndBroadcast.js');
 
 const RESET_TX = { from: '0x1', to: '0x2', value: 0n, data: '0xreset' };
 const APPROVE_TX = { from: '0x1', to: '0x2', value: 0n, data: '0xapprove' };
@@ -56,10 +54,17 @@ function evmProvider(calls: string[], onWait?: (hash: string) => string | void) 
   };
 }
 
+const onEvent = (sink: ApprovalProgress[]) => (progress: ApprovalProgress) => {
+  sink.push(progress);
+};
+
+/** Compact rendering, so a sequence can be asserted as one readable list. */
+const trace = (p: ApprovalProgress): string => `${p.step}:${p.phase}:${p.index}/${p.total}`;
+
 /** One render, then the captured `mutationFn` invoked with `vars`. */
 // biome-ignore lint/suspicious/noExplicitAny: vars mirror the hook's generic mutation variables.
 const run = (vars: any) => {
-  useSwapsApiApproveAndBroadcast();
+  useBridgeApiApproveAndBroadcast();
   return captured.mutationFn(vars);
 };
 
@@ -67,7 +72,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('useSwapsApiApproveAndBroadcast', () => {
+describe('useBridgeApiApproveAndBroadcast', () => {
   it('broadcasts the reset, waits for it, then approves — and reports both hashes', async () => {
     approve.mockResolvedValue({ ok: true, value: { tx: APPROVE_TX, resetTx: RESET_TX } });
     const calls: string[] = [];
@@ -80,44 +85,18 @@ describe('useSwapsApiApproveAndBroadcast', () => {
     expect(calls).toEqual(['send:0xreset', `wait:${RESET_HASH}`, 'send:0xapprove', `wait:${APPROVE_HASH}`]);
   });
 
-  it('never sends the approve when the reset fails to confirm', async () => {
-    approve.mockResolvedValue({ ok: true, value: { tx: APPROVE_TX, resetTx: RESET_TX } });
-    const calls: string[] = [];
-    const walletProvider = evmProvider(calls, hash => {
-      if (hash === RESET_HASH) throw new Error('reset reverted');
-    });
-
-    await expect(run({ body: body(ChainKeys.ARBITRUM_MAINNET), walletProvider })).rejects.toThrow('reset reverted');
-
-    // A retry is cheap — the allowance is untouched, so the next plan is a single transaction.
-    expect(walletProvider.sendTransaction).toHaveBeenCalledTimes(1);
-    expect(calls).toEqual(['send:0xreset', `wait:${RESET_HASH}`]);
-  });
-
   it('never sends the approve when the reset is mined but reverts', async () => {
     approve.mockResolvedValue({ ok: true, value: { tx: APPROVE_TX, resetTx: RESET_TX } });
     const calls: string[] = [];
-    // A paused or blacklisted token mines the reset and reverts it; the allowance never moved, so
-    // the approve that follows is certain to revert too and would be paid for.
     const walletProvider = evmProvider(calls, hash => (hash === RESET_HASH ? 'reverted' : 'success'));
 
     await expect(run({ body: body(ChainKeys.ARBITRUM_MAINNET), walletProvider })).rejects.toThrow(
-      /allowance reset transaction .* reverted/,
+      /allowance reset transaction .* reverted on chain/,
     );
 
+    // Mined is not succeeded: the allowance never moved, so the approve would revert too.
     expect(walletProvider.sendTransaction).toHaveBeenCalledTimes(1);
     expect(calls).toEqual(['send:0xreset', `wait:${RESET_HASH}`]);
-  });
-
-  it('reports a reverted approve, whichever spelling of the status the provider returns', async () => {
-    approve.mockResolvedValue({ ok: true, value: { tx: APPROVE_TX } });
-    // `EvmWalletProvider` forwards viem's `'reverted'`; a provider reading the JSON-RPC receipt
-    // directly returns `'0x0'`. Both mean the same thing.
-    const walletProvider = evmProvider([], () => '0x0');
-
-    await expect(run({ body: body(ChainKeys.ARBITRUM_MAINNET), walletProvider })).rejects.toThrow(
-      /approve transaction .* reverted/,
-    );
   });
 
   it('sends one transaction and omits resetTxHash for an ordinary token', async () => {
@@ -128,37 +107,38 @@ describe('useSwapsApiApproveAndBroadcast', () => {
     const result = await run({ body: body(ChainKeys.ARBITRUM_MAINNET), walletProvider });
 
     expect(result).toEqual({ approveTxHash: APPROVE_HASH });
-    expect(walletProvider.sendTransaction).toHaveBeenCalledTimes(1);
+    expect(calls).toEqual(['send:0xapprove', `wait:${APPROVE_HASH}`]);
   });
 
   it('works on the hub chain, not just EVM spokes', async () => {
+    // Bridge approves the caller's own hub wallet router on Sonic — a different spender to swaps,
+    // but the same EVM broadcast path, so the hub must not fall through to the unsupported branch.
     approve.mockResolvedValue({ ok: true, value: { tx: APPROVE_TX } });
-    const walletProvider = evmProvider([]);
+    const calls: string[] = [];
 
-    const result = await run({ body: body(ChainKeys.SONIC_MAINNET), walletProvider });
+    const result = await run({ body: body(ChainKeys.SONIC_MAINNET), walletProvider: evmProvider(calls) });
 
     expect(result).toEqual({ approveTxHash: APPROVE_HASH });
   });
 
   it('signs a Stellar trustline through signAndSendTransaction', async () => {
-    const trustlineTx = { unsignedTx: 'AAAA' };
-    approve.mockResolvedValue({ ok: true, value: { tx: trustlineTx } });
+    approve.mockResolvedValue({ ok: true, value: { tx: APPROVE_TX } });
     const walletProvider = {
-      signAndSendTransaction: vi.fn().mockResolvedValue('stellar-hash'),
-      waitForTransactionReceipt: vi.fn().mockResolvedValue({ successful: true }),
+      signAndSendTransaction: vi.fn(async () => APPROVE_HASH),
+      waitForTransactionReceipt: vi.fn(async () => ({ successful: true })),
     };
 
     const result = await run({ body: body(ChainKeys.STELLAR_MAINNET), walletProvider });
 
-    expect(result).toEqual({ approveTxHash: 'stellar-hash' });
-    expect(walletProvider.signAndSendTransaction).toHaveBeenCalledWith(trustlineTx);
+    expect(result).toEqual({ approveTxHash: APPROVE_HASH });
+    expect(walletProvider.signAndSendTransaction).toHaveBeenCalledOnce();
   });
 
   it('reports a Stellar trustline that Horizon records as unsuccessful', async () => {
-    approve.mockResolvedValue({ ok: true, value: { tx: { unsignedTx: 'AAAA' } } });
+    approve.mockResolvedValue({ ok: true, value: { tx: APPROVE_TX } });
     const walletProvider = {
-      signAndSendTransaction: vi.fn().mockResolvedValue('stellar-hash'),
-      waitForTransactionReceipt: vi.fn().mockResolvedValue({ successful: false }),
+      signAndSendTransaction: vi.fn(async () => APPROVE_HASH),
+      waitForTransactionReceipt: vi.fn(async () => ({ successful: false })),
     };
 
     await expect(run({ body: body(ChainKeys.STELLAR_MAINNET), walletProvider })).rejects.toThrow(
@@ -166,33 +146,34 @@ describe('useSwapsApiApproveAndBroadcast', () => {
     );
   });
 
-  it('names the missing capability when a Stellar wallet cannot sign', async () => {
-    approve.mockResolvedValue({ ok: true, value: { tx: { unsignedTx: 'AAAA' } } });
-
-    await expect(
-      run({ body: body(ChainKeys.STELLAR_MAINNET), walletProvider: { waitForTransactionReceipt: vi.fn() } }),
-    ).rejects.toThrow(/signAndSendTransaction/);
-  });
-
-  it('rejects a chain the swaps API cannot approve on', async () => {
+  it('rejects a chain the bridge API cannot approve on', async () => {
     approve.mockResolvedValue({ ok: true, value: { tx: APPROVE_TX } });
 
     await expect(run({ body: body(ChainKeys.SOLANA_MAINNET), walletProvider: {} })).rejects.toThrow(
-      /the hub \(Sonic\), EVM spokes, and Stellar/,
+      /cannot be approved/,
     );
   });
 
-  it('invalidates the allowance query once the approval has confirmed', async () => {
-    useSwapsApiApproveAndBroadcast();
+  it('names this hook, not the swaps one, in an error from the shared plan runner', async () => {
+    // The runner is shared with useSwapsApiApproveAndBroadcast; a hard-coded prefix there would
+    // point a bridge integrator at the wrong hook.
+    approve.mockResolvedValue({ ok: true, value: { tx: APPROVE_TX } });
+
+    await expect(run({ body: body(ChainKeys.SOLANA_MAINNET), walletProvider: {} })).rejects.toThrow(
+      /\[useBridgeApiApproveAndBroadcast\]/,
+    );
+  });
+
+  it('invalidates the bridge allowance query once the approval has confirmed', async () => {
+    useBridgeApiApproveAndBroadcast();
 
     await captured.onSuccess({ approveTxHash: APPROVE_HASH }, {}, undefined);
 
-    // The hook owns confirmation now, so unlike useSwapsApiApprove it can refresh this itself.
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['swapsApi', 'allowance'] });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['bridgeApi', 'allowance'] });
   });
 
   it('awaits the allowance refetch before resolving — a stale cache must not re-enable Approve', async () => {
-    useSwapsApiApproveAndBroadcast();
+    useBridgeApiApproveAndBroadcast();
     const order: string[] = [];
     // A macrotask, not a microtask: any resolution that happens without awaiting invalidateQueries
     // would land before this fires, so a regression here proves the mutation returned too early.
@@ -212,17 +193,75 @@ describe('useSwapsApiApproveAndBroadcast', () => {
     expect(order).toEqual(['invalidate:done', 'onSuccess:resolved']);
   });
 
-  it('reports progress too — the runner is shared, so swaps must not be left without it', async () => {
-    approve.mockResolvedValue({ ok: true, value: { tx: APPROVE_TX, resetTx: RESET_TX } });
-    const events: ApprovalProgress[] = [];
+  describe('onProgress', () => {
+    it('walks each transaction through its phases, numbered against the total', async () => {
+      approve.mockResolvedValue({ ok: true, value: { tx: APPROVE_TX, resetTx: RESET_TX } });
+      const events: ApprovalProgress[] = [];
 
-    await run({
-      body: body(ChainKeys.ARBITRUM_MAINNET),
-      walletProvider: evmProvider([]),
-      onProgress: (progress: ApprovalProgress) => events.push(progress),
+      await run({
+        body: body(ChainKeys.ARBITRUM_MAINNET),
+        walletProvider: evmProvider([]),
+        onProgress: onEvent(events),
+      });
+
+      expect(events.map(trace)).toEqual([
+        'allowance-reset:signing:1/2',
+        'allowance-reset:broadcast:1/2',
+        'allowance-reset:confirmed:1/2',
+        'approve:signing:2/2',
+        'approve:broadcast:2/2',
+        'approve:confirmed:2/2',
+      ]);
+      // The first report lands before the first wallet prompt, so "1/2" is on screen when it opens.
+      expect(events[0]?.phase).toBe('signing');
     });
 
-    expect(events).toHaveLength(6);
-    expect(events.at(-1)).toMatchObject({ step: 'approve', phase: 'confirmed', index: 2, total: 2 });
+    it('carries the hash from broadcast onwards', async () => {
+      approve.mockResolvedValue({ ok: true, value: { tx: APPROVE_TX } });
+      const events: ApprovalProgress[] = [];
+
+      await run({
+        body: body(ChainKeys.ARBITRUM_MAINNET),
+        walletProvider: evmProvider([]),
+        onProgress: onEvent(events),
+      });
+
+      expect(events.map(trace)).toEqual(['approve:signing:1/1', 'approve:broadcast:1/1', 'approve:confirmed:1/1']);
+      expect(events.map(e => e.hash)).toEqual([undefined, APPROVE_HASH, APPROVE_HASH]);
+    });
+
+    it('ends the failing step as failed, with its error, and reports nothing after it', async () => {
+      approve.mockResolvedValue({ ok: true, value: { tx: APPROVE_TX, resetTx: RESET_TX } });
+      const events: ApprovalProgress[] = [];
+      const walletProvider = evmProvider([], hash => (hash === RESET_HASH ? 'reverted' : 'success'));
+
+      await expect(
+        run({ body: body(ChainKeys.ARBITRUM_MAINNET), walletProvider, onProgress: onEvent(events) }),
+      ).rejects.toThrow(/reverted on chain/);
+
+      expect(events.map(trace)).toEqual([
+        'allowance-reset:signing:1/2',
+        'allowance-reset:broadcast:1/2',
+        'allowance-reset:failed:1/2',
+      ]);
+      const failed = events.at(-1) as ApprovalProgress;
+      expect(failed.error).toBeInstanceOf(Error);
+      // Broadcast before it failed, so the hash is the one thing a user can still look up.
+      expect(failed.hash).toBe(RESET_HASH);
+    });
+
+    it('survives a listener that throws — reporting must never cost the user a transaction', async () => {
+      approve.mockResolvedValue({ ok: true, value: { tx: APPROVE_TX, resetTx: RESET_TX } });
+
+      const result = await run({
+        body: body(ChainKeys.ARBITRUM_MAINNET),
+        walletProvider: evmProvider([]),
+        onProgress: () => {
+          throw new Error('UI bug');
+        },
+      });
+
+      expect(result).toEqual({ resetTxHash: RESET_HASH, approveTxHash: APPROVE_HASH });
+    });
   });
 });
