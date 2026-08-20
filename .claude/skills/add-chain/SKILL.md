@@ -42,7 +42,7 @@ A new non-EVM chain follows §2; it is **not** a copy of an existing one. Ask wh
 | Quirk dimension | Trigger → what to add | Examples |
 | --- | --- | --- |
 | **Native SDK breaks the bundler** | → a `@sodax/libs/<chain>/…` subpath and/or force-bundle in wallet-core `tsup` | Stacks (`stacks/core`+`connect`), Injective (`wallet-strategy`), Near (`near-api-js` bundled) |
-| **Special on-chain gate before deposit/MM** | → a dedicated dapp-kit hook | Near (storage: `useRegisterNearStorage`/`useNearStorageCheck`), Stellar (trustline: `useStellarTrustlineCheck`/`useRequestTrustline`) |
+| **Special on-chain gate before deposit/MM** | → a dedicated dapp-kit hook | Near (storage: `useRegisterNearStorage`/`useNearStorageCheck`), Stellar (trustline: `useStellarTrustlineCheck`/`useEstablishTrustline`) |
 | **Native wallet SDK needs React context** | → `providerManaged: true` + a `providers/<chain>/` Provider/Hydrator/Actions trio | Solana, Sui (and EVM) |
 | **Needs a chain-specific helper** | → an `entities/<chain>/` helper | Stellar (`CustomSorobanServer`), Icon, Injective, Solana |
 
@@ -71,7 +71,7 @@ Template: read a recent same-shape chain end-to-end (`Stacks`, `Near`, `Sui`, �
 - **wallet-sdk-core:** `wallet-providers/<chain>/` provider — its "Adding a New Chain Provider" playbook.
 - **wallet-sdk-react:** `xchains/<chain>/` XService/XConnector + a `chainRegistry.ts` entry — its "Adding A New Chain Type" playbook.
 - **dapp-kit** — `@sodax/dapp-kit` is the React-Query hooks layer over `@sodax/sdk`; feature hooks (`useSwap`/`useBridge`/`useStake`/`useSupply`/…) are **chain-agnostic** — they take a `chainKey` + a `walletProvider` and route to the SDK.
-  **When to add:** by default **nothing** — a chain that uses the same deposit/swap/MM flow as existing chains works automatically. Add a hook **only** for a step the generic hooks don't cover: an extra on-chain pre-step (NEAR storage `useRegisterNearStorage`; Stellar trustline `useRequestTrustline`), a custodial/exchange flow (Bitcoin Bound: auth/session/trading-wallet/UTXO hooks), or chain-type-specific balance logic (`useXBalances`). (`useSpokeProvider` was removed in a refactor — don't reference it; confirm provider hooks in current `src/`.)
+  **When to add:** by default **nothing** — a chain that uses the same deposit/swap/MM flow as existing chains works automatically. Add a hook **only** for a step the generic hooks don't cover: an extra on-chain pre-step (NEAR storage `useRegisterNearStorage`; Stellar trustline `useEstablishTrustline`), a custodial/exchange flow (Bitcoin Bound: auth/session/trading-wallet/UTXO hooks), or chain-type-specific balance logic (`useXBalances`). (`useSpokeProvider` was removed in a refactor — don't reference it; confirm provider hooks in current `src/`.)
 - **libs:** a subpath only if the chain SDK needs a build workaround.
 - **Tokens:** run the **`add-token`** skill.
 

@@ -5,6 +5,9 @@ import {
   getAddressFromPrivateKey,
   makeContractCall,
   PostConditionMode,
+  deserializePayload,
+  addressToString,
+  PayloadType,
   privateKeyToPublic,
   publicKeyToHex,
   type ClarityValue,
@@ -12,7 +15,7 @@ import {
   type StacksNetwork,
 } from '@sodax/libs/stacks/core';
 import { request } from '@sodax/libs/stacks/connect';
-import type { IStacksWalletProvider, StacksTransactionParams } from '@sodax/types';
+import type { IStacksWalletProvider, StacksRawTransaction, StacksTransactionParams } from '@sodax/types';
 import { BaseWalletProvider } from '../BaseWalletProvider.js';
 import type {
   BrowserExtensionStacksWalletConfig,
@@ -82,6 +85,26 @@ export class StacksWalletProvider extends BaseWalletProvider<StacksWalletDefault
       return this.sendTransactionWithPrivateKey(finalParams, this.wallet);
     }
     return this.sendTransactionWithAdapter(finalParams, this.wallet);
+  }
+
+  /**
+   * Signs and broadcasts an unsigned `StacksRawTransaction` (e.g. from the Swaps API). The raw tx's
+   * `payload` is the hex-serialized contract-call payload; this deserializes it back into the
+   * contract-call params and routes through `sendTransaction` (which signs + broadcasts in both
+   * private-key and browser-extension modes). Returns the transaction id.
+   */
+  async signAndSendTransaction(params: StacksRawTransaction): Promise<string> {
+    const payload = deserializePayload(params.payload);
+    if (payload.payloadType !== PayloadType.ContractCall) {
+      throw new Error('signAndSendTransaction: expected a contract-call payload.');
+    }
+    return this.sendTransaction({
+      contractAddress: addressToString(payload.contractAddress),
+      contractName: payload.contractName.content,
+      functionName: payload.functionName.content,
+      functionArgs: payload.functionArgs,
+      postConditionMode: PostConditionMode.Allow, // matches how the spoke service builds the tx
+    });
   }
 
   private async sendTransactionWithPrivateKey(

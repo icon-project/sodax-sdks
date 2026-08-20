@@ -1,3 +1,4 @@
+export * from './isUserRejectedError.js';
 export * from './types.js';
 export * from './unwrapResult.js';
 export * from './useSafeMutation.js';
@@ -5,9 +6,11 @@ export * from './useSodaxContext.js';
 export * from './useEstimateGas.js';
 export * from './useDeriveUserWalletAddress.js';
 export * from './useStellarTrustlineCheck.js';
+export * from './useEstablishTrustline.js';
 export * from './useRequestTrustline.js';
 export * from './useNearStorageCheck.js';
 export * from './useRegisterNearStorage.js';
 export * from './useNearStorageGate.js';
+export * from './useStellarGate.js';
 export * from './useGetUserHubWalletAddress.js';
 export * from './useXBalances.js';

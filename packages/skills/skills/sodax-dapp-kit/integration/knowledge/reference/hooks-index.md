@@ -19,7 +19,8 @@ Comprehensive hook table across 12 feature domains. Use this when you know the f
 | `useSwap` | Mutation | Execute a complete cross-chain swap |
 | `useSwapAllowance` | Query | Check token approval status |
 | `useSwapApprove` | Mutation | Approve tokens for the swap contract |
-| `useStatus` | Query | Track intent execution status (polls 3s once `intentTxHash` supplied; Result-wrapped data) |
+| `useStatus` | Query | Track intent execution status (polls 3s once `intentTxHash` supplied; stops on `3`/`4` and after 40 consecutive NOT_FOUND fetches; Result-wrapped data) |
+| `useDetailedStatus` | Query | Track a swap from its source tx (`{ srcChainKey, srcTxHash }`; polls 3s; Result-wrapped; stops on the answering source's terminal state and after 40 consecutive ambiguous reads — solver NOT_FOUND, or a relay with no packet for the tx; outages keep polling). Returns a tagged union — backend submit-tx record or solver answer — narrow on `source`. Unlike `useSwapsApiSubmitTxStatus`, answers for both `swap()` completion paths |
 | `useCancelSwap` | Mutation | Cancel an active swap intent |
 | `useCreateLimitOrder` | Mutation | Create a limit order (no deadline) |
 | `useCancelLimitOrder` | Mutation | Cancel a limit order |
@@ -127,6 +128,7 @@ Comprehensive hook table across 12 feature domains. Use this when you know the f
 | Hook | Type | Purpose |
 |---|---|---|
 | `useRadfiAuth` | Mutation | Authenticate via BIP322 signing |
+| `useEnsureRadfiAccessToken` | Mutation | Ensure a fresh Bound access token (silent refresh or BIP322 re-auth) |
 | `useRadfiSession` | Utility | Manage full session lifecycle |
 | `useTradingWallet` | Utility | Synchronously read trading wallet from localStorage |
 | `useBitcoinBalance` | Query | BTC balance for any address |
@@ -146,13 +148,11 @@ Comprehensive hook table across 12 feature domains. Use this when you know the f
 | `useBackendIntentByHash` | none |
 | `useBackendUserIntents` | none |
 
-### Orderbook + swap submission
+### Orderbook
 
 | Hook | Type / Polling |
 |---|---|
 | `useBackendOrderbook` | Query; `staleTime: 30s` — fresh-window only, no background refetch |
-| `useBackendSubmitSwapTx` | Mutation |
-| `useBackendSubmitSwapTxStatus` | Query; polls until `executed` / `failed` |
 
 ### Money market data
 
@@ -165,6 +165,65 @@ Comprehensive hook table across 12 feature domains. Use this when you know the f
 | `useBackendMoneyMarketAssetBorrowers` | Borrowers for an asset |
 | `useBackendAllMoneyMarketBorrowers` | All borrowers |
 
+## Swaps API (`sodax.api.swaps`)
+
+Typed React Query wrappers over the backend Swaps API v2 (`sodax.api.swaps.*`), one per endpoint. Distinct from the on-chain `swap/` hooks (`useQuote`/`useStatus`/`useSwap`/…), which drive `sodax.swaps` (the `SwapService`).
+
+### Tokens · quote · fees · gas (reads)
+
+| Hook | Type / Polling |
+|---|---|
+| `useSwapsApiTokens` | Query; all supported swap tokens by chain |
+| `useSwapsApiTokensByChain` | Query; tokens for one chain |
+| `useSwapsApiQuote` | Query; solver quote (set `query.includeTxData` for `txData`) |
+| `useSwapsApiDeadline` | Query; computed swap deadline |
+| `useSwapsApiPartnerFee` | Query; partner fee for an amount |
+| `useSwapsApiSolverFee` | Query; protocol (solver) fee for an amount |
+| `useSwapsApiEstimateGas` | Query; gas estimate for a raw tx |
+
+### Intent lifecycle (reads)
+
+| Hook | Type / Polling |
+|---|---|
+| `useSwapsApiAllowance` | Query; `{ valid }` allowance check |
+| `useSwapsApiStatus` | Query (1s); polls until status `3` (SOLVED) / `4` (FAILED) |
+| `useSwapsApiIntentHash` | Query; keccak256 of an intent struct |
+| `useSwapsApiIntentPacket` | Query; long-polls the relayer for the fill packet (no client interval) |
+| `useSwapsApiIntentExtraData` | Query; relay extra-data for submit |
+| `useSwapsApiFilledIntent` | Query; on-chain fill state by tx hash |
+| `useSwapsApiIntent` | Query; decoded intent struct by tx hash |
+| `useSwapsApiSubmitTxStatus` | Query (1s); requires `txHash` + `srcChainKey`; polls until `solved` / `failed` |
+
+### Actions (mutations)
+
+| Hook | Type |
+|---|---|
+| `useSwapsApiApprove` | Mutation; builds unsigned approval tx(s) — `{ tx, resetTx? }`, caller signs |
+| `useSwapsApiApproveAndBroadcast` | Mutation; builds **and** signs/broadcasts/waits — preferred; `{ approveTxHash, resetTxHash? }`; optional `onProgress` per step |
+| `useSwapsApiCreateIntent` | Mutation; builds `{ tx, intent, relayData }` |
+| `useSwapsApiSubmitIntent` | Mutation; submits broadcast intent to the relay |
+| `useSwapsApiCancelIntent` | Mutation; builds unsigned cancel tx |
+| `useSwapsApiCreateLimitOrder` | Mutation; builds limit-order intent tx |
+| `useSwapsApiSubmitTx` | Mutation; `request: SubmitTxRequestV2` |
+
+## Bridge API (`sodax.api.bridge`)
+
+Typed React Query wrappers over the backend Bridge API v2 (`sodax.api.bridge.*`). Distinct from the on-chain `bridge/` hooks (`useBridge`/`useBridgeAllowance`/…), which drive `sodax.bridge` (the `BridgeService`). Smaller than the swaps family (no intent/solver surface). The fee / bridgeable-amount / bridgeable quotes are computable client-side (prefer the on-chain `useGetBridgeableAmount` / `sodax.bridge.*` — no round-trip), but are also mirrored here as HTTP hooks for parity.
+
+| Hook | Type / Polling |
+|---|---|
+| `useBridgeApiTokens` | Query; all supported bridge tokens by chain |
+| `useBridgeApiTokensByChain` | Query; supported bridge tokens for one `chainKey` |
+| `useBridgeApiAllowance` | Query; `{ valid }` allowance check (wire-named body) |
+| `useBridgeApiFee` | Query; `{ fee }` partner fee for an amount (per-request `partnerFee` override or configured default) |
+| `useBridgeApiBridgeableAmount` | Query; `{ limit }` deposit capacity / withdrawal liquidity for a pair |
+| `useBridgeApiIsBridgeable` | Query; `{ bridgeable }` whether a (from, to) pair is bridgeable |
+| `useBridgeApiSubmitTxStatus` | Query (1s); requires `txHash` + `srcChainKey`; polls until `executed` / `failed` |
+| `useBridgeApiApprove` | Mutation; builds the unsigned approval txs — `{ tx, resetTx? }`, ordering is yours to handle |
+| `useBridgeApiApproveAndBroadcast` | Mutation; builds **and** signs/broadcasts/waits — preferred; `{ approveTxHash, resetTxHash? }`; optional `onProgress` per step |
+| `useBridgeApiCreateBridgeIntent` | Mutation; builds `{ tx, relayData }` (no intent) |
+| `useBridgeApiSubmitTx` | Mutation; `request: BridgeSubmitTxRequestV2` (FULL relayData envelope) |
+
 ## Partner
 
 | Hook | Type | Purpose |
@@ -172,9 +231,13 @@ Comprehensive hook table across 12 feature domains. Use this when you know the f
 | `useFetchAssetsBalances` | Query | Fetch partner asset balances |
 | `useGetAutoSwapPreferences` | Query | Get auto-swap preferences |
 | `useIsTokenApproved` | Query | Check token approval |
+| `useGetUserIntent` | Query | Look up a partner's stored intent hash for a token pair (`0x0…0` = none) |
+| `useGetIntentDetails` | Query | Read full intent details for an intent hash |
 | `useApproveToken` | Mutation | Approve token |
 | `useSetSwapPreference` | Mutation | Set swap preference |
 | `useFeeClaimSwap` | Mutation | Claim partner fees via swap |
+| `useFeeClaimWithdraw` | Mutation | Withdraw a fee token directly (no swap) via the bridge |
+| `usePartnerCancelIntent` | Mutation | Cancel a stuck same-token claim and recover the locked tokens |
 
 ## Recovery
 
@@ -192,7 +255,9 @@ Comprehensive hook table across 12 feature domains. Use this when you know the f
 | `useGetUserHubWalletAddress` | Query | Derive hub wallet (wallet router) |
 | `useEstimateGas` | Mutation | Estimate gas for raw tx |
 | `useStellarTrustlineCheck` | Query | Check Stellar trustline |
-| `useRequestTrustline` | Mutation | Request a Stellar trustline |
+| `useEstablishTrustline` | Mutation | Request a Stellar trustline (the account pays — needs XLM) |
+| `useRequestTrustline` | Deprecated | 2.0.0-shape wrapper over `useEstablishTrustline`; removed next major |
+| `useStellarGate` | Composite | Sequences the Stellar prerequisites: exists → trustline → can afford; `checkFailed`/`error`/`retry` for a failed check |
 | `useNearStorageCheck` | Query | Check NEP-141 storage registration (NEAR) |
 | `useRegisterNearStorage` | Mutation | Submit NEP-141 `storage_deposit` (NEAR) |
 | `useNearStorageGate` | Hook | Composite NEAR receive-side storage gate |
@@ -200,6 +265,18 @@ Comprehensive hook table across 12 feature domains. Use this when you know the f
 | `useSafeMutation` | Internal | The wrapper every mutation hook calls |
 | `unwrapResult` | Internal | `Result<T>` → throw / return |
 | `toResult` | Internal | `Promise<T>` → `Result<T>` |
+
+## Sponsoring (`sponsoring/`)
+
+Stellar accounts must exist on-chain before they can hold or receive anything, and a new user holds 0 XLM.
+These hooks drive the sponsored-reserve activation flow, where the SODAX sponsor pays the base reserve.
+
+| Hook | Kind | Purpose |
+| --- | --- | --- |
+| `useStellarAccountActive` | Query | Whether a Stellar account already exists on-chain |
+| `useStellarAccountStatus` | Query | Existence + `canAffordTrustline` + `trustlineMinXlmStroops`, from one Horizon account read |
+| `useSponsorConfig` | Query | Sponsor account, network, fee band, max time bounds |
+| `useActivateStellarAccount` | Mutation | Activate a Stellar account via the sponsor |
 
 ## Cross-references
 

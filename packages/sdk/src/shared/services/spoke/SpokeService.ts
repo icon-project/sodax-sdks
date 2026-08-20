@@ -1,6 +1,6 @@
 // packages/sdk/src/shared/services/spoke/SpokeService.ts
 import * as rlp from 'rlp';
-import { encodeFunctionData, type Address } from 'viem';
+import { encodeFunctionData, type Address, type PublicClient } from 'viem';
 import {
   type Hex,
   type BitcoinChainKey,
@@ -48,6 +48,7 @@ import {
   isSpokeApproveParamsStellar,
   isStacksChainKeyType,
   isSuiChainKeyType,
+  isEvmWalletProviderType,
   isUndefinedOrValidWalletProviderForChainKey,
 } from '../../guards.js';
 import type { ConfigService } from '../../config/ConfigService.js';
@@ -64,8 +65,12 @@ import type {
   VerifyTxHashParams,
   SpokeIsAllowanceValidParams,
   SpokeApproveParams,
+  ApprovalTxs,
+  SpokeApproveParamsHub,
+  SpokeApproveParamsStellar,
+  SpokeApproveParamsEvmSpoke,
 } from '../../types/spoke-types.js';
-import { Erc20Service, type Erc20ApproveParams } from '../erc-20/Erc20Service.js';
+import { Erc20Service, type Erc20ApprovalPlan, type Erc20ApproveParams } from '../erc-20/Erc20Service.js';
 import type { RequestTrustlineParams } from './StellarSpokeService.js';
 import type { WalletMode } from './BitcoinSpokeService.js';
 import { invariant } from '../../utils/tiny-invariant.js';
@@ -235,6 +240,12 @@ export class SpokeService {
   /**
    * Approve ERC-20 spending on hub / EVM spoke or request a Stellar trustline using unified params.
    * Feature services map their action payloads into {@link SpokeApproveParams}.
+   *
+   * A signed ERC-20 approval can take **two** transactions: a token of the TetherToken lineage
+   * rejects an allowance change from one non-zero value to another, so a stale allowance is zeroed
+   * first and the user signs twice. The returned hash is always the last transaction's, so the
+   * contract callers see is unchanged. An unsigned caller still gets exactly one transaction — use
+   * {@link SpokeService.buildApproveTxs} to get the whole plan.
    */
   public async approve<K extends SpokeChainKey, Raw extends boolean>(
     params: SpokeApproveParams<K, Raw>,
@@ -245,43 +256,37 @@ export class SpokeService {
         `Invalid wallet provider for chain key: ${params.srcChainKey}, walletProvider.chainType: ${params.walletProvider?.chainType}`,
       );
 
-      if (isSpokeApproveParamsHub(params)) {
-        const result = await Erc20Service.approve<Raw>({
-          ...params,
-          token: params.token,
-          amount: params.amount,
-          from: params.owner,
-          spender: params.spender,
-        } as Erc20ApproveParams<Raw>);
+      // Hub and EVM spoke share one branch: `HubChainKey` is a subset of `EvmChainKey`, so both
+      // resolve `TxReturnType` to the same `EvmReturnType<Raw>`. Split them again if the hub ever
+      // needs different handling — the spender already differs, but that is resolved by the caller.
+      if (isSpokeApproveParamsHub(params) || isSpokeApproveParamsEvmSpoke(params)) {
+        if (params.raw) {
+          // A two-step plan cannot be expressed as a single `tx`, so the unsigned path is left
+          // exactly as it was; `buildApproveTxs` is the entry point that returns the whole plan.
+          const tx = await Erc20Service.approve<Raw>({
+            ...params,
+            token: params.token,
+            amount: params.amount,
+            from: params.owner,
+            spender: params.spender,
+          } as Erc20ApproveParams<Raw>);
+
+          return { ok: true, value: tx satisfies TxReturnType<EvmChainKey, Raw> as TxReturnType<K, Raw> };
+        }
+
+        const result = await this.executeErc20ApprovalPlan<Raw>(params);
+        if (!result.ok) {
+          return result;
+        }
 
         return {
           ok: true,
-          value: result satisfies TxReturnType<HubChainKey, Raw> as TxReturnType<K, Raw>,
-        };
-      }
-
-      if (isSpokeApproveParamsEvmSpoke(params)) {
-        const result = await Erc20Service.approve<Raw>({
-          ...params,
-          token: params.token,
-          amount: params.amount,
-          from: params.owner,
-          spender: params.spender,
-        } as Erc20ApproveParams<Raw>);
-        return {
-          ok: true,
-          value: result satisfies TxReturnType<EvmChainKey, Raw> as TxReturnType<K, Raw>,
+          value: result.value satisfies TxReturnType<EvmChainKey, Raw> as TxReturnType<K, Raw>,
         };
       }
 
       if (isSpokeApproveParamsStellar(params)) {
-        const result = await this.stellar.requestTrustline<Raw>({
-          ...params,
-          srcAddress: params.owner,
-          srcChainKey: params.srcChainKey,
-          token: params.token,
-          amount: params.amount,
-        } as RequestTrustlineParams<StellarChainKey, Raw>);
+        const result = await this.requestTrustlineForApproval<Raw>(params);
 
         return {
           ok: true,
@@ -296,6 +301,184 @@ export class SpokeService {
     } catch (error) {
       return { ok: false, error };
     }
+  }
+
+  /**
+   * The unsigned approval transactions, named rather than ordered (see {@link ApprovalTxs}).
+   *
+   * `resetTx` is present only when the token needs its stale allowance cleared first (see
+   * {@link Erc20Service.planApproval}); broadcast it and wait for it to be mined before `approveTx`,
+   * which is not valid until the reset has landed. Unsigned callers — the swaps API and the apps
+   * built on it — need this, because {@link SpokeService.approve} can only hand back a single `tx`.
+   *
+   * Deliberately separate from {@link SpokeService.approve} rather than a mode of it: the two return
+   * genuinely different shapes, and folding them together would put a union in the return type of
+   * the method every feature approves through.
+   */
+  public async buildApproveTxs<K extends SpokeChainKey>(
+    params: SpokeApproveParams<K, true>,
+  ): Promise<Result<ApprovalTxs<K>>> {
+    try {
+      if (isSpokeApproveParamsHub(params) || isSpokeApproveParamsEvmSpoke(params)) {
+        const plan = await this.planErc20Approval(params, 'buildApproveTxs');
+        // Encoding only — the raw path of `Erc20Service.approve` does no I/O.
+        const encode = (amount: bigint): Promise<TxReturnType<EvmChainKey, true>> =>
+          Erc20Service.approve<true>({
+            token: params.token,
+            amount,
+            from: params.owner,
+            spender: params.spender,
+            raw: true,
+          });
+
+        // Encoded in broadcast order so the code reads the way the caller must act.
+        const resetTx =
+          plan.resetAmount === undefined
+            ? undefined
+            : ((await encode(plan.resetAmount)) satisfies TxReturnType<EvmChainKey, true> as TxReturnType<K, true>);
+        const approveTx = (await encode(plan.approveAmount)) satisfies TxReturnType<
+          EvmChainKey,
+          true
+        > as TxReturnType<K, true>;
+
+        return { ok: true, value: resetTx === undefined ? { approveTx } : { resetTx, approveTx } };
+      }
+
+      if (isSpokeApproveParamsStellar(params)) {
+        // `raw` is forced rather than carried over from `params`, mirroring the ERC-20 branch above.
+        // `requestTrustline` reads it at runtime, so a JavaScript caller passing `raw: false` would
+        // otherwise have this method broadcast — from something named "build".
+        const tx = await this.requestTrustlineForApproval<true>({ ...params, raw: true });
+
+        // A trustline is always a single transaction — there is no allowance to reset.
+        return {
+          ok: true,
+          value: { approveTx: tx satisfies TxReturnType<StellarChainKey, true> as TxReturnType<K, true> },
+        };
+      }
+
+      return {
+        ok: false,
+        error: new Error('[SpokeService.buildApproveTxs] Only hub (Sonic), EVM spokes, and Stellar are supported'),
+      };
+    } catch (error) {
+      return { ok: false, error };
+    }
+  }
+
+  /**
+   * Sign and broadcast the approval plan for an ERC-20 on the hub or an EVM spoke.
+   *
+   * A token of the TetherToken lineage rejects an allowance change from one non-zero value to
+   * another, so a wallet holding a stale allowance needs `approve(0)` first. The transactions cannot
+   * be batched: each one is only valid once its predecessor has been mined. The hash of the last is
+   * returned, so the contract callers see is unchanged.
+   */
+  private async executeErc20ApprovalPlan<Raw extends boolean>(
+    params: SpokeApproveParamsHub<HubChainKey, Raw> | SpokeApproveParamsEvmSpoke<EvmSpokeOnlyChainKey, Raw>,
+  ): Promise<Result<TxReturnType<EvmChainKey, Raw>>> {
+    const { walletProvider } = params;
+    invariant(
+      walletProvider !== undefined && isEvmWalletProviderType(walletProvider),
+      '[SpokeService.approve] Expected an EVM wallet provider for a signed approval',
+    );
+
+    const plan = await this.planErc20Approval(params, 'approve');
+    const sendApprove = (amount: bigint): Promise<Hex> =>
+      Erc20Service.approve<false>({
+        token: params.token,
+        amount,
+        from: params.owner,
+        spender: params.spender,
+        raw: false,
+        walletProvider,
+      });
+
+    if (plan.resetAmount !== undefined) {
+      const resetHash = await sendApprove(plan.resetAmount);
+      const receipt = await this.waitForTxReceipt({ txHash: resetHash, chainKey: params.srcChainKey });
+
+      // The approve is not a valid state transition until the reset is on-chain, so stop rather
+      // than send a transaction that is certain to revert and be paid for.
+      if (!receipt.ok || receipt.value.status !== 'success') {
+        return {
+          ok: false,
+          error: new Error(
+            `[SpokeService.approve] allowance reset transaction ${resetHash} did not confirm. Retry the approval — once the reset has landed it takes a single transaction.`,
+          ),
+        };
+      }
+    }
+
+    const txHash = await sendApprove(plan.approveAmount);
+
+    return { ok: true, value: txHash satisfies TxReturnType<EvmChainKey, false> as TxReturnType<EvmChainKey, Raw> };
+  }
+
+  /**
+   * Stellar approves by adding a trustline — always a single transaction, with no allowance to plan
+   * around. Shared by both entry points so the param mapping and its cast live in one place.
+   */
+  private requestTrustlineForApproval<Raw extends boolean>(
+    params: SpokeApproveParamsStellar<StellarChainKey, Raw>,
+  ): Promise<TxReturnType<StellarChainKey, Raw>> {
+    return this.stellar.requestTrustline<Raw>({
+      ...params,
+      srcAddress: params.owner,
+      srcChainKey: params.srcChainKey,
+      token: params.token,
+      amount: params.amount,
+    } as RequestTrustlineParams<StellarChainKey, Raw>);
+  }
+
+  /** Resolve the chain-specific inputs {@link Erc20Service.planApproval} needs, and record the plan. */
+  private async planErc20Approval<Raw extends boolean>(
+    params: SpokeApproveParamsHub<HubChainKey, Raw> | SpokeApproveParamsEvmSpoke<EvmSpokeOnlyChainKey, Raw>,
+    caller: 'approve' | 'buildApproveTxs',
+  ): Promise<Erc20ApprovalPlan> {
+    const plan = await Erc20Service.planApproval({
+      token: params.token,
+      owner: params.owner,
+      spender: params.spender,
+      amount: params.amount,
+      nativeToken: this.config.getChainConfig(params.srcChainKey).nativeToken as Address,
+      publicClient: this.getEvmPublicClient(params.srcChainKey),
+    });
+
+    this.logApprovalPlan(caller, params.srcChainKey, params.token, plan);
+    return plan;
+  }
+
+  /** The read client for an EVM chain, whether it is the hub or a spoke. */
+  private getEvmPublicClient(chainKey: HubChainKey | EvmSpokeOnlyChainKey): PublicClient {
+    return isHubChainKeyType(chainKey) ? this.sonic.publicClient : this.evm.getPublicClient(chainKey);
+  }
+
+  /**
+   * Log a plan only when it says something: an extra transaction the user will have to sign, or a
+   * probe that could not reach a verdict. The ordinary single approve is the vast majority of calls
+   * and stays silent.
+   */
+  private logApprovalPlan(
+    caller: 'approve' | 'buildApproveTxs',
+    chainKey: SpokeChainKey,
+    token: string,
+    plan: Erc20ApprovalPlan,
+  ): void {
+    const isNoteworthy =
+      plan.resetAmount !== undefined ||
+      plan.reason === 'reset-not-viable' ||
+      plan.reason === 'allowance-read-failed';
+    if (!isNoteworthy) {
+      return;
+    }
+
+    this.config.logger.debug(`[SpokeService.${caller}] approval plan`, {
+      chainKey,
+      token,
+      needsReset: plan.resetAmount !== undefined,
+      reason: plan.reason,
+    });
   }
 
   /**
@@ -521,9 +704,10 @@ export class SpokeService {
   ): Promise<Result<TxReturnType<K, R>>> {
     try {
       if (isHubChainKeyType(params.srcChainKey)) {
-        const value = (await this.sonic.deposit(
-          params as DepositParams<SonicChainKey, R>,
-        )) satisfies TxReturnType<SonicChainKey, R> as TxReturnType<K, R>;
+        const value = (await this.sonic.deposit(params as DepositParams<SonicChainKey, R>)) satisfies TxReturnType<
+          SonicChainKey,
+          R
+        > as TxReturnType<K, R>;
         return { ok: true, value };
       }
 
@@ -593,7 +777,7 @@ export class SpokeService {
           const verify = await this.verifyDepositSimulation(params);
           if (!verify.ok) return verify;
           const value = (await this.bitcoin.deposit(
-            params as DepositParams<BitcoinChainKey, R> & { accessToken?: string },
+            params as DepositParams<BitcoinChainKey, R>,
           )) satisfies TxReturnType<BitcoinChainKey, R> as TxReturnType<K, R>;
           return { ok: true, value };
         }
@@ -936,9 +1120,7 @@ export class SpokeService {
     }
   }
 
-  private async verifyReceiptStatus(
-    receiptPromise: Promise<Result<{ status: string }>>,
-  ): Promise<Result<boolean>> {
+  private async verifyReceiptStatus(receiptPromise: Promise<Result<{ status: string }>>): Promise<Result<boolean>> {
     const result = await receiptPromise;
     return result.ok && result.value.status === 'success'
       ? { ok: true, value: true }

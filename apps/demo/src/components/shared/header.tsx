@@ -5,16 +5,19 @@ import { WalletModal } from '@/components/shared/wallet-modal';
 import { useXAccounts } from '@sodax/wallet-sdk-react';
 import { useAppStore } from '@/zustand/useAppStore';
 import { ChevronDown, Wallet } from 'lucide-react';
+import { ROUTES } from '@/constants';
 
 const navLinks = [
-  { to: '/money-market', label: 'Money Market' },
-  { to: '/solver', label: 'Solver' },
-  { to: '/bridge', label: 'Bridge' },
-  { to: '/staking', label: 'Staking' },
-  { to: '/partner-fee-claim', label: 'Partner Fee Claim' },
-  { to: '/dex', label: 'Dex' },
-  { to: '/recovery', label: 'Recovery' },
-  { to: '/leverage-yield', label: 'Leverage Yield' },
+  { to: ROUTES.MONEY_MARKET, label: 'Money Market' },
+  { to: ROUTES.SWAPS_SDK, label: 'Swaps (SDK)' },
+  { to: ROUTES.SWAPS_API, label: 'Swaps (API)' },
+  { to: ROUTES.BRIDGE, label: 'Bridge (SDK)' },
+  { to: ROUTES.BRIDGE_API, label: 'Bridge (API)' },
+  { to: ROUTES.STAKING, label: 'Staking' },
+  { to: ROUTES.PARTNER_FEE_CLAIM, label: 'Partner Fee Claim' },
+  { to: ROUTES.DEX, label: 'Dex' },
+  { to: ROUTES.RECOVERY, label: 'Recovery' },
+  { to: ROUTES.LEVERAGE_YIELD, label: 'Leverage Yield' },
 ];
 
 const getNavLinkClass = (isActive: boolean) =>

@@ -1,6 +1,6 @@
 ---
 name: sodax-dapp-kit-auxiliary-services
-description: 'Granular skill for the @sodax/dapp-kit v2 auxiliary surfaces — partner fee claiming (useFeeClaimSwap, useApproveToken, useSetSwapPreference, useGetAutoSwapPreferences, useIsTokenApproved), recovery (useHubAssetBalances, useWithdrawHubAsset), read-only backend queries (useBackendIntentByTxHash, useBackendUserIntents, useBackendOrderbook, useBackendMoneyMarketPosition, useBackendSubmitSwapTx), and shared utilities (useSodaxContext, useHubProvider, useXBalances, useDeriveUserWalletAddress, useEstimateGas, useStellarTrustlineCheck, useRequestTrustline). Use when a React dapp task is partner fees, recovering stuck hub assets, backend data reads (intent tracking / orderbook / MM data, no wallet), or cross-cutting utilities (token balances, gas estimation, Stellar trustlines). Covers BOTH integration and migration. Links into the parent sodax-dapp-kit knowledge tree.'
+description: 'Granular skill for the @sodax/dapp-kit v2 auxiliary surfaces — partner fee claiming (useFeeClaimSwap, useApproveToken, useSetSwapPreference, useGetAutoSwapPreferences, useIsTokenApproved), recovery (useHubAssetBalances, useWithdrawHubAsset), read-only backend queries (useBackendIntentByTxHash, useBackendUserIntents, useBackendOrderbook, useBackendMoneyMarketPosition), the Swaps API v2 client hooks (useSwapsApiQuote, useSwapsApiSubmitTx, useSwapsApiStatus), sponsored Stellar account activation (useStellarGate, useStellarAccountActive, useStellarAccountStatus, useSponsorConfig, useActivateStellarAccount), and shared utilities (useSodaxContext, useHubProvider, useXBalances, useDeriveUserWalletAddress, useEstimateGas, useStellarTrustlineCheck, useEstablishTrustline). Use when a React dapp task is partner fees, recovering stuck hub assets, backend data reads (intent tracking / orderbook / MM data, no wallet), activating a Stellar account for a user who holds no XLM, or cross-cutting utilities (token balances, gas estimation, Stellar trustlines). Covers BOTH integration and migration. Links into the parent sodax-dapp-kit knowledge tree.'
 license: MIT
 metadata:
   version: '0.0.1'
@@ -17,8 +17,9 @@ Granular skill for the smaller `@sodax/dapp-kit` v2 surfaces grouped together: *
 2. **Which surface?**
    - **Partner fees:** `useIsTokenApproved` → `useApproveToken` → `useSetSwapPreference` → `useFeeClaimSwap` (returns `IntentAutoSwapResult`, NOT `SwapResponse`); `useGetAutoSwapPreferences`, `useFetchAssetsBalances` for reads.
    - **Recovery:** `useHubAssetBalances` (list stuck hub assets) → `useWithdrawHubAsset` (withdraw one back to a spoke). Follows a *known* failed cross-chain op — investigate the failure first.
-   - **Backend reads (no wallet):** intent tracking (`useBackendIntentByTxHash` polls 1s, `useBackendIntentByHash`, `useBackendUserIntents`), orderbook (`useBackendOrderbook` — `pagination` nests under `params`), MM data (`useBackendMoneyMarketPosition` etc.), swap submission (`useBackendSubmitSwapTx` mutation + `useBackendSubmitSwapTxStatus`).
-   - **Shared utilities:** `useSodaxContext`, `useHubProvider`, `useXBalances` (needs `xService` from wallet-sdk-react), `useDeriveUserWalletAddress` / `useGetUserHubWalletAddress`, `useEstimateGas`, `useStellarTrustlineCheck` / `useRequestTrustline`.
+   - **Backend reads (no wallet):** intent tracking (`useBackendIntentByTxHash` polls 1s, `useBackendIntentByHash`, `useBackendUserIntents`), orderbook (`useBackendOrderbook` — `pagination` nests under `params`), MM data (`useBackendMoneyMarketPosition` etc.), and the Swaps API v2 client (`useSwapsApi*` — e.g. `useSwapsApiSubmitTx`, `useSwapsApiSubmitTxStatus`, `useSwapsApiQuote`).
+   - **Stellar prerequisites:** `useStellarGate` sequences the ordered prerequisites — the account must EXIST (sponsored activation, free to the user), must TRUST the token, and only then must be able to PAY for the trustline it needs. A freshly activated account holds zero XLM. An account that already holds the trustline needs no XLM at all, which is why affordability is checked last. A failed check sets `checkFailed` with `error`/`retry` — render it, or the fail-closed gate becomes an unexplained dead button. Lower-level: `useStellarAccountStatus`, `useStellarAccountActive`, `useSponsorConfig`, `useActivateStellarAccount`.
+   - **Shared utilities:** `useSodaxContext`, `useHubProvider`, `useXBalances` (needs `xService` from wallet-sdk-react), `useDeriveUserWalletAddress` / `useGetUserHubWalletAddress`, `useEstimateGas`, `useStellarTrustlineCheck` / `useEstablishTrustline`.
 
 ## Integration workflow (new v2 code)
 
@@ -35,7 +36,7 @@ Granular skill for the smaller `@sodax/dapp-kit` v2 surfaces grouped together: *
 - **Treating `useFeeClaimSwap` `data` as a `SwapResponse`.** It's `IntentAutoSwapResult`.
 - **Passing top-level `pagination` to `useBackendOrderbook` / `useBackendAllMoneyMarketBorrowers`.** It nests under `params`; without it those queries are disabled.
 - **Calling `useXBalances` without `xService`.** Supply `xService` from `@sodax/wallet-sdk-react`'s `useXService`; the request-side key is `xChainId` (the cross-chain abstraction), distinct from the token-side `chainKey`.
-- **Treating `useRequestTrustline` as a canonical mutation hook.** It takes a single positional `token` arg and returns `{ requestTrustline, isLoading, ... }`; the callback takes `{ token, amount, srcChainKey, walletProvider }` (NOT `account`/`asset`).
+- **Pairing `useStellarTrustlineCheck` with `useEstablishTrustline` by hand.** Use `useStellarGate`: `hasSufficientTrustline` THROWS for an account that does not exist, so a `!data` test offers a trustline button on a missing account. `useEstablishTrustline` is a canonical mutation hook — vars are `{ token, amount, srcChainKey, walletProvider }` (NOT `account`/`asset`). `useRequestTrustline` is its deprecated 2.0.0-shape wrapper; don't write new code against it.
 - **Running recovery on successful flows.** Recovery is a workaround for *failed* ops — `useHubAssetBalances` first, then withdraw the specific entry; investigate the original failure.
 - **Leaving `useBackendIntentByTxHash` polling (1s) running after the intent resolves.**
 
@@ -55,7 +56,7 @@ Granular skill for the smaller `@sodax/dapp-kit` v2 surfaces grouped together: *
 
 ## Related granular skills (same family)
 
-- [`../swap/SKILL.md`](../swap/SKILL.md) — `useBackendSubmitSwapTx` + intent tracking are the backend half of the step-by-step swap flow; partner fee-claim reuses the swap intent layer.
+- [`../swap/SKILL.md`](../swap/SKILL.md) — `useSwapsApiSubmitTx` + intent tracking are the backend half of the step-by-step swap flow; partner fee-claim reuses the swap intent layer.
 - [`../money-market/SKILL.md`](../money-market/SKILL.md) — backend MM reads complement the on-chain MM action hooks.
 
 For multi-feature tasks, load the broad [`sodax-dapp-kit` skill](../SKILL.md).

@@ -13,10 +13,10 @@
  * Mocking strategy:
  *   - `sleep` (shared-utils.js) is module-mocked at its source via `vi.mock` + `vi.hoisted`
  *     (with `vi.importActual` for the rest) so polling-loop tests don't actually wait.
- *   - To avoid hitting the gRPC endpoint inside `getRawTransaction` (which calls
- *     `createTransactionForAddressAndMsg` from `@injectivelabs/sdk-ts`), the test spies on the
- *     spoke service's own `getRawTransaction` method per-test. The shape returned by the SUT's
- *     `getRawTransaction` is well-defined; pinning that contract is the relevant assertion.
+ *   - The deposit/sendMessage tests spy on the spoke service's own `getRawTransaction` per-test to
+ *     avoid network I/O; the dedicated `getRawTransaction` block instead mocks `ChainRestAuthApi`,
+ *     `BaseAccount`, and `createTransaction` from `@injectivelabs/sdk-ts` to assert its
+ *     account-fetch / fee / funds / accountNumber wiring directly.
  *   - `chainGrpcWasmApi.fetchSmartContractState` and `txClient.simulate`/`.fetchTx` are spied on
  *     the live instances.
  */
@@ -35,10 +35,16 @@ import { toBase64 } from '@injectivelabs/sdk-ts';
 
 const mocks = vi.hoisted(() => ({
   sleep: vi.fn(),
-  // `@injectivelabs/sdk-ts` re-exports `CosmosTxV1Beta1TxPb` via a path that doesn't expose
-  // `TxRaw.fromPartial` cleanly under Vitest's ESM/CJS interop. Provide a minimal stand-in so
-  // `estimateGas` can build a TxRaw without touching the missing static.
+  // `TxRaw` is imported directly from cosmjs-types because the @injectivelabs namespace export
+  // does not expose the codec-style `fromPartial` helper in this runtime.
   txRawFromPartial: vi.fn(),
+  // Stub the account fetch + (pure) tx builder + msg constructor so `getRawTransaction` can be
+  // exercised directly (without spying on it) and its fee/funds/accountNumber wiring asserted.
+  fetchCosmosAccount: vi.fn(),
+  chainRestAuthApiEndpoints: [] as string[],
+  baseAccountFromRest: vi.fn(),
+  createTx: vi.fn(),
+  msgExecFromJSON: vi.fn(),
 }));
 
 vi.mock('../../utils/shared-utils.js', async () => {
@@ -50,12 +56,24 @@ vi.mock('@injectivelabs/sdk-ts', async () => {
   const actual = await vi.importActual<Record<string, unknown>>('@injectivelabs/sdk-ts');
   return {
     ...actual,
-    CosmosTxV1Beta1TxPb: {
-      ...(actual.CosmosTxV1Beta1TxPb as Record<string, unknown>),
-      TxRaw: { fromPartial: mocks.txRawFromPartial },
+    createTransaction: mocks.createTx,
+    ChainRestAuthApi: class {
+      constructor(endpoint: string) {
+        mocks.chainRestAuthApiEndpoints.push(endpoint);
+      }
+      fetchCosmosAccount = mocks.fetchCosmosAccount;
+    },
+    BaseAccount: { fromRestCosmosApi: mocks.baseAccountFromRest },
+    MsgExecuteContract: {
+      ...(actual.MsgExecuteContract as Record<string, unknown>),
+      fromJSON: mocks.msgExecFromJSON,
     },
   };
 });
+
+vi.mock('cosmjs-types/cosmos/tx/v1beta1/tx.js', () => ({
+  TxRaw: { fromPartial: mocks.txRawFromPartial },
+}));
 
 import { Sodax } from '../../entities/Sodax.js';
 import { InjectiveSpokeService } from './InjectiveSpokeService.js';
@@ -107,6 +125,16 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.sleep.mockResolvedValue(undefined);
   mocks.txRawFromPartial.mockReturnValue({ __fakeTxRaw: true });
+  mocks.msgExecFromJSON.mockImplementation((args: unknown) => ({ __msg: args }));
+  mocks.chainRestAuthApiEndpoints.length = 0;
+  mocks.fetchCosmosAccount.mockResolvedValue({ account: 'raw' });
+  mocks.baseAccountFromRest.mockReturnValue({ accountNumber: 7, sequence: 3, pubKey: { key: 'pk', type: '' } });
+  // `createTransaction` is pure; echo the accountNumber into signDoc so the test verifies the
+  // fetched account number flows through to the returned `signedDoc.accountNumber`.
+  mocks.createTx.mockImplementation((args: { accountNumber: number }) => ({
+    txRaw: { bodyBytes: new Uint8Array([10]), authInfoBytes: new Uint8Array([20]) },
+    signDoc: { accountNumber: BigInt(args.accountNumber) },
+  }));
   (mockInjProvider.execute as ReturnType<typeof vi.fn>).mockReset();
 });
 
@@ -166,6 +194,83 @@ describe('InjectiveSpokeService.estimateGas', () => {
 });
 
 // =========================================================================
+// 2b. getRawTransaction — self-broadcastable raw tx (accountNumber, fee, funds)
+// =========================================================================
+
+describe('InjectiveSpokeService.getRawTransaction', () => {
+  const GAS_USED = 500_000;
+  const EXPECTED_GAS = Math.ceil(GAS_USED * 1.2); // GAS_BUFFER_MULTIPLIER
+  // injConfig.gasPrice is '500000000inj' → price 500000000, denom 'inj'.
+  const EXPECTED_FEE_AMOUNT = (BigInt(EXPECTED_GAS) * 500_000_000n).toString();
+  const FUNDS = [{ amount: '1000', denom: INJ_BNUSD }];
+
+  beforeEach(() => {
+    vi.spyOn(injSpoke.txClient, 'simulate').mockResolvedValue({
+      gasInfo: { gasWanted: 600_000, gasUsed: GAS_USED, gasFee: { amount: [], gasLimit: 0 } },
+    } as never);
+  });
+
+  it('returns the real accountNumber threaded from the fetched account (not the hardcoded 0)', async () => {
+    const raw = await injSpoke.getRawTransaction(
+      INJ_NETWORK_ID,
+      SRC_ADDR,
+      INJ_ASSET_MGR,
+      { transfer: {} },
+      undefined,
+      FUNDS,
+    );
+
+    expect(raw.signedDoc.accountNumber).toBe(7n);
+    expect(raw.from).toBe(SRC_ADDR);
+    expect(raw.to).toBe(INJ_ASSET_MGR);
+  });
+
+  it('fetches the account once and threads sequence + pubKey into createTransaction', async () => {
+    await injSpoke.getRawTransaction(INJ_NETWORK_ID, SRC_ADDR, INJ_ASSET_MGR, { transfer: {} }, undefined, FUNDS);
+
+    expect(mocks.fetchCosmosAccount).toHaveBeenCalledTimes(1);
+    expect(mocks.fetchCosmosAccount).toHaveBeenCalledWith(SRC_ADDR);
+    expect(mocks.chainRestAuthApiEndpoints).toEqual([injSpoke.endpoints.rest]);
+    expect(mocks.createTx.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ pubKey: 'pk', sequence: 3, accountNumber: 7, chainId: INJ_NETWORK_ID }),
+    );
+  });
+
+  it('simulates once and rebuilds with an explicit self-pay fee from simulated gas + chain gasPrice', async () => {
+    await injSpoke.getRawTransaction(INJ_NETWORK_ID, SRC_ADDR, INJ_ASSET_MGR, { transfer: {} }, undefined, FUNDS);
+
+    expect(injSpoke.txClient.simulate).toHaveBeenCalledTimes(1);
+    // draft (no fee) then final (with fee) — both pure, single account fetch
+    expect(mocks.createTx).toHaveBeenCalledTimes(2);
+    expect(mocks.createTx.mock.calls[0]?.[0]?.fee).toBeUndefined();
+    expect(mocks.createTx.mock.calls[1]?.[0]?.fee).toEqual({
+      amount: [{ denom: 'inj', amount: EXPECTED_FEE_AMOUNT }],
+      gas: EXPECTED_GAS.toString(),
+    });
+  });
+
+  it('attaches the funds to the contract message', async () => {
+    await injSpoke.getRawTransaction(INJ_NETWORK_ID, SRC_ADDR, INJ_ASSET_MGR, { transfer: {} }, undefined, FUNDS);
+
+    expect(mocks.msgExecFromJSON).toHaveBeenCalledWith(expect.objectContaining({ funds: FUNDS }));
+  });
+
+  it('defaults funds to [] when not provided (e.g. sendMessage)', async () => {
+    await injSpoke.getRawTransaction(INJ_NETWORK_ID, SRC_ADDR, INJ_CONNECTION, { send_message: {} });
+
+    expect(mocks.msgExecFromJSON).toHaveBeenCalledWith(expect.objectContaining({ funds: [] }));
+  });
+
+  it('throws when the account has no on-chain pubKey', async () => {
+    mocks.baseAccountFromRest.mockReturnValueOnce({ accountNumber: 7, sequence: 3, pubKey: { key: '', type: '' } });
+
+    await expect(
+      injSpoke.getRawTransaction(INJ_NETWORK_ID, SRC_ADDR, INJ_ASSET_MGR, { transfer: {} }, undefined, FUNDS),
+    ).rejects.toThrow(/pubKey for .* is missing/);
+  });
+});
+
+// =========================================================================
 // 3. deposit — raw vs walletProvider, msg shape
 // =========================================================================
 
@@ -187,9 +292,7 @@ describe('InjectiveSpokeService.deposit', () => {
 
   it('raw=true → delegates to getRawTransaction with the asset-manager target and transfer msg', async () => {
     const fake = makeRawTx(INJ_ASSET_MGR);
-    const spy = vi
-      .spyOn(injSpoke, 'getRawTransaction')
-      .mockResolvedValueOnce(fake);
+    const spy = vi.spyOn(injSpoke, 'getRawTransaction').mockResolvedValueOnce(fake);
 
     const result = await injSpoke.deposit(depositParams<true>({ raw: true }));
 
@@ -227,9 +330,7 @@ describe('InjectiveSpokeService.deposit', () => {
   });
 
   it('defaults data to "0x" when omitted (no `data: undefined` in msg)', async () => {
-    const spy = vi
-      .spyOn(injSpoke, 'getRawTransaction')
-      .mockResolvedValueOnce(makeRawTx(INJ_ASSET_MGR));
+    const spy = vi.spyOn(injSpoke, 'getRawTransaction').mockResolvedValueOnce(makeRawTx(INJ_ASSET_MGR));
 
     const params = {
       srcAddress: SRC_ADDR,
@@ -376,7 +477,7 @@ describe('InjectiveSpokeService — admin methods', () => {
     await injSpoke.setConnection(INJ, SRC_ADDR, INJ_CONNECTION, mockInjProvider);
     await injSpoke.setOwner(SRC_ADDR, 'inj1newowner', INJ, mockInjProvider);
 
-    expect((mockInjProvider.execute as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(3);
+    expect(mockInjProvider.execute as ReturnType<typeof vi.fn>).toHaveBeenCalledTimes(3);
     for (const call of (mockInjProvider.execute as ReturnType<typeof vi.fn>).mock.calls) {
       expect(call[1]).toBe(INJ_ASSET_MGR);
     }

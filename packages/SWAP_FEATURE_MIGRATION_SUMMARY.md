@@ -92,7 +92,7 @@ breaking changes" and Concepts 1, 4. Demo-specific deltas:
 | `GetChainType<K>` | Chain-family discriminator (`'EVM' | 'BITCOIN' | …`). |
 | `WalletProviderSlot<K, Raw>` | Discriminated union: `raw: true` forbids `walletProvider`, `raw: false` requires the chain-narrowed one. Defined in `packages/types/src/common/common.ts`. |
 | `TxReturnType<K, Raw>` | Service return shape: `Raw=false` → tx-hash string; `Raw=true` → chain-specific raw-tx payload. |
-| `DeepPartial<T>` | Used for `SodaxConfig` overrides; `new Sodax(config?: DeepPartial<SodaxConfig>)`. |
+| `DeepPartial<T>` | Used to build the data-override portion of `SodaxOptions` (`= DeepPartial<SodaxDefaultConfig> & SodaxOptionalConfig`); `new Sodax(config?: SodaxOptions)`. |
 | `I*WalletProvider.chainType` | Each wallet-provider interface now declares a `readonly chainType: '<CHAIN>'` literal — usable for runtime narrowing without `instanceof`. |
 
 ### Other impacts
@@ -148,10 +148,7 @@ useStellarTrustlineCheck({
     token: intentParams?.outputToken,
     amount: intentParams?.minOutputAmount,
     chainId: intentParams?.dstChainKey,
-    walletProvider:
-      dst.chain === ChainKeys.STELLAR_MAINNET
-        ? (destWalletProvider as GetWalletProviderType<typeof ChainKeys.STELLAR_MAINNET> | undefined)
-        : undefined,
+    walletAddress: destAccount.address, // resolved address keys the cache per account
   },
 });
 
@@ -217,7 +214,7 @@ which returns `Promise<Result<T>>` and never rejects for SDK failure — see dem
 
 **Shared**
 
-- **`useStellarTrustlineCheck.ts`** — `ReadHookParams` wrapper: **`{ params: { token, amount, chainId, walletProvider }, queryOptions }`**. (`chainId` parameter name is legacy; type is **`SpokeChainKey**`.)
+- **`useStellarTrustlineCheck.ts`** — `ReadHookParams` wrapper: **`{ params: { token, amount, chainId, walletAddress }, queryOptions }`**. Pass the resolved **`walletAddress`** (e.g. `useXAccount('STELLAR').address`) — it keys the cache per account. **Breaking vs the earlier RC**: the param is now `walletAddress`, not `walletProvider`. (`chainId` type is **`SpokeChainKey`**.)
 - **`useRequestTrustline.ts`** — imperative `requestTrustline({ token, amount, srcChainKey, walletProvider })` (`srcChainKey: StellarChainKey`).
 - **`useBackendSubmitSwapTx.ts`** (`hooks/backend/`) — `mutate({ request: SubmitSwapTxRequest, apiConfig? })`; uses `unwrapResult` from **`packages/dapp-kit/src/hooks/backend/unwrapResult.ts`**. Swap feature mutations use **`packages/dapp-kit/src/hooks/shared/unwrapResult.ts`** instead.
 
@@ -314,7 +311,7 @@ runtime smoke-test (config wiring).
 - **`components/swaps/LimitOrderItem.tsx`** — gotcha: the `Intent` object literal you build for cancel keeps `srcChain`/`dstChain` (those are `IntentRelayChainId` bigints, not chain keys). Method renamed: `sodax.config.getSpokeChainIdFromIntentRelayChainId` → `getSpokeChainKeyFromIntentRelayChainId`. **dapp-kit** cancel: `useCancelLimitOrder()` then `mutate({ intent, srcChainKey, walletProvider [, timeout] })`.
 - **`components/swaps/SelectChain.tsx`, `LimitOrderList.tsx`, `OrderStatus.tsx`** — type / import alignment (`SpokeChainId` → `SpokeChainKey`) as needed.
 - **`components/bitcoin/BitcoinSetupPanel.tsx`** — prop rename `spokeProvider: BitcoinSpokeProvider` → `walletProvider: IBitcoinWalletProvider`. Internal Bound Exchange calls go through `sodax.spokeService.bitcoinSpokeService.radfi.*` (singleton owned by `Sodax`), not via the per-component provider.
-- **`providers.tsx`** — `SodaxProvider`'s `config` prop becomes `DeepPartial<SodaxConfig>`. Solver endpoints move from `SodaxConfig.swaps` to `SodaxConfig.solver`. (This is the easy-to-miss config-shape pitfall — `swaps` is now `SwapsConfig` for supported-tokens-per-chain; `solver` is the endpoint/contract config.)
+- **`providers.tsx`** — `SodaxProvider`'s `config` prop becomes `SodaxOptions`. Solver endpoints move from `SodaxConfig.swaps` to `SodaxConfig.solver`. (This is the easy-to-miss config-shape pitfall — `swaps` is now `SwapsConfig` for supported-tokens-per-chain; `solver` is the endpoint/contract config.)
 - **`zustand/useAppStore.tsx`** — `ChainId` → `SpokeChainKey`; replace string-literal default (`'stacks'`) with a typed `ChainKeys.X` constant.
 - **`constants.ts`, `lib/chains.ts`** — chain-ID constant migration (mechanical). `type CustomProvider` → `unknown` in window declaration.
 - **`lib/utils.ts`** — drop `hubAssets` import; any helper that walked `hubAssets[chainId]` for vault lookup must move to `sodax.config` lookups.

@@ -144,7 +144,7 @@ Four read hooks expose the same store data at different granularities:
 | Hook | Returns | Use case |
 |------|---------|----------|
 | `useXAccount({ xChainId })` | `XAccount` for the chain's family (resolves chain id → chain type) | Signing/reading at chain-id level (e.g. `useXAccount({ xChainId: ChainKeys.BSC_MAINNET })`) |
-| `useXAccount({ xChainType })` | `XAccount` for that family | Family-level UI (e.g. EVM badge — one wagmi connection covers all 12 EVM chains) |
+| `useXAccount({ xChainType })` | `XAccount` for that family | Family-level UI (e.g. EVM badge — one wagmi connection covers all 13 EVM chains) |
 | `useXAccounts()` | `Partial<Record<ChainType, XAccount>>` for every enabled chain | Account list / multi-chain dashboard |
 | `useXConnection({ xChainType })` | `XConnection \| undefined` | When you also need `xConnectorId` (e.g. to drive disconnect UX) |
 | `useXConnections()` | `Partial<Record<ChainType, XConnection>>` | Aggregate UIs that care about connector identity per chain |
@@ -194,7 +194,7 @@ The callback delegates to `ChainActions.disconnect()`. If no actions are registe
 
 ## Provider-managed chains caveat
 
-EVM, Solana, and Sui mount their native React adapters (wagmi, `@solana/wallet-adapter`, `@mysten/dapp-kit`) and use a **Provider/Hydrator/Actions trio**:
+EVM, Solana, and Sui mount their native React adapters (wagmi, `@solana/wallet-adapter`, `@mysten/dapp-kit-react`) and use a **Provider/Hydrator/Actions trio**:
 
 - `<ChainProvider>` — wraps native adapter context.
 - `<ChainHydrator>` — sole writer of connection state into the store, watching native adapter hooks.

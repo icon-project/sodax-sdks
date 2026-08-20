@@ -12,9 +12,11 @@ import type { HubProvider } from '../types/types.js';
 import { ConfigService } from '../config/index.js';
 import { mergeSodaxConfig } from '../config/mergeSodaxConfig.js';
 import { resolveLogger } from '../logger.js';
+import { resolveAnalytics } from '../analytics.js';
 import { PartnerService } from '../../partner/PartnerService.js';
 import { RecoveryService } from '../../recovery/RecoveryService.js';
 import { LeverageYieldService } from '../../leverageYield/LeverageYieldService.js';
+import { SponsoringService } from '../../sponsoring/SponsoringService.js';
 
 /**
  * Sodax class is used to interact with the Sodax.
@@ -28,27 +30,45 @@ export class Sodax {
   public readonly moneyMarket: MoneyMarketService; // Money Market service enabling cross-chain lending and borrowing
   public readonly migration: MigrationService; // ICX migration service enabling ICX migration to SODA
   public readonly backendApi: BackendApiService; // backend API service enabling backend API endpoints
+  public readonly api: BackendApiService; // syntactic sugar for backend API service
   public readonly bridge: BridgeService; // Bridge service enabling cross-chain transfers
   public readonly staking: StakingService; // Staking service enabling SODA staking operations
   public readonly partners: PartnerService; // Partner service enabling partner fee claim and other partner operations
   public readonly recovery: RecoveryService; // Recovery service for withdrawing stuck hub-wallet assets back to a spoke chain
   public readonly dex: DexService; // Dex service enabling DEX operations
+  public readonly sponsoring: SponsoringService;
   public readonly leverageYield: LeverageYieldService; // Leverage-yield service: cross-chain deposits / withdrawals into ERC-4626 leverage vaults on Sonic
   public readonly config: ConfigService; // Config service enabling configuration data fetching from the backend API or fallbacking to default values
 
   public readonly hubProvider: HubProvider; // hub provider for the hub chain (e.g. Sonic mainnet)
   public readonly spoke: SpokeService; // spoke service enabling spoke chain operations
 
-  constructor(config?: SodaxOptions) {
-    // Resolve the log sink once, up front, and hand it to the services so it survives the
-    // dynamic-config swap in `config.initialize()`. `logger` lives on `SodaxOptions`, not on the
-    // `DeepPartial<SodaxConfig>` data contract, so it keeps its exact type and needs no cast — the
-    // type-level conflation is gone. `mergeSodaxConfig` / `userConfig` ignore the extra `logger` key
-    // (it is never read off the data config; services read the resolved sink via `config.logger`).
-    const logger = resolveLogger(config?.logger);
-    this.instanceConfig = config ? mergeSodaxConfig(sodaxConfig, config) : sodaxConfig;
+  constructor(options?: SodaxOptions) {
+    // Resolve the client-side options (`logger`, `analytics`, `fee`) once, up front, and hand them to the
+    // services so they survive the dynamic-config swap in `config.initialize()`. All live on `SodaxOptions`,
+    // not on the `DeepPartial<SodaxDefaultConfig>` data contract, so they keep their exact types and need no
+    // cast. `mergeSodaxConfig` / `userConfig` ignore these extra keys (they are never read off the data
+    // config; services read them via `config.logger` / `config.analytics` / `config.fee`).
+    const logger = resolveLogger(options?.logger);
+    // Analytics is opt-in: `resolveAnalytics` returns a no-op emitter unless `options.analytics` is set,
+    // so feature services can call `config.analytics.emit(...)` unconditionally with zero cost when off.
+    const analytics = resolveAnalytics(options?.analytics);
+    const fee = options?.fee;
+    // RadFi/Bound request signer: another client-side runtime hook (like `logger`/`analytics`/`fee`),
+    // held off the data config so the dynamic-config swap never touches it. See `RadfiOptions` / gh-831.
+    const radfiSigner = options?.radfi?.signRequest;
+    this.instanceConfig = options ? mergeSodaxConfig(sodaxConfig, options) : sodaxConfig;
     this.backendApi = new BackendApiService(this.instanceConfig.api, logger);
-    this.config = new ConfigService({ api: this.backendApi, config: this.instanceConfig, userConfig: config, logger });
+    this.api = this.backendApi;
+    this.config = new ConfigService({
+      api: this.backendApi,
+      config: this.instanceConfig,
+      userConfig: options,
+      logger,
+      analytics,
+      fee,
+      radfiSigner,
+    });
 
     this.hubProvider = new EvmHubProvider({ config: this.config }); // default to Sonic mainnet
     this.spoke = new SpokeService({ config: this.config, hubProvider: this.hubProvider });
@@ -56,6 +76,7 @@ export class Sodax {
       config: this.config,
       hubProvider: this.hubProvider,
       spoke: this.spoke,
+      backendApi: this.backendApi,
     });
 
     this.moneyMarket = new MoneyMarketService({
@@ -75,7 +96,12 @@ export class Sodax {
       config: this.config,
       spoke: this.spoke,
     });
-    this.bridge = new BridgeService({ hubProvider: this.hubProvider, config: this.config, spoke: this.spoke });
+    this.bridge = new BridgeService({
+      hubProvider: this.hubProvider,
+      config: this.config,
+      spoke: this.spoke,
+      backendApi: this.backendApi,
+    });
     this.staking = new StakingService({ hubProvider: this.hubProvider, config: this.config, spoke: this.spoke });
     this.partners = new PartnerService({
       hubProvider: this.hubProvider,
@@ -91,6 +117,12 @@ export class Sodax {
       hubProvider: this.hubProvider,
       config: this.config,
       spoke: this.spoke,
+    });
+    // Sponsored activation never touches the hub.
+    this.sponsoring = new SponsoringService({
+      config: this.config,
+      spoke: this.spoke,
+      api: this.backendApi,
     });
   }
 

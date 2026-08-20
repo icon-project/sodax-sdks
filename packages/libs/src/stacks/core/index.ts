@@ -29,6 +29,7 @@ export {
   broadcastTransaction,
   fetchCallReadOnlyFunction,
   getAddressFromPrivateKey,
+  getAddressFromPublicKey,
   makeContractCall,
   makeSTXTokenTransfer,
   PostConditionMode,
@@ -36,8 +37,11 @@ export {
   fetchFeeEstimateTransaction,
   validateStacksAddress,
   serializePayloadBytes,
+  deserializePayload,
+  addressToString,
+  PayloadType,
   privateKeyToPublic,
-  publicKeyToHex
+  publicKeyToHex,
 } from '@stacks/transactions';
 
 // @stacks/transactions — types

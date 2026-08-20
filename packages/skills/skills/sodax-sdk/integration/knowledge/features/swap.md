@@ -13,15 +13,17 @@ Access: `sodax.swaps`. Service class: `SwapService`. Feature tag for errors: `'s
 
 Two execution paths:
 
-- **`swap`** — full flow in one call. Wraps `createIntent` + relay + `postExecution`. Returns `SwapResponse` on success.
-- **`createIntent` + backend submit** — break it apart for custom relay handling. `createIntent` returns `{ tx, intent, relayData }`; submit `relayData.payload` to the backend swap-tx endpoint via `BackendApiService.submitSwapTx`.
+- **`swap`** — full flow in one call. Wraps `createIntent` + relay + `postExecution`. Returns `SwapResponse` on success. By default uses a **backend-driven 2-step** variant (`swaps.useBackendSubmitTx`, default `true` — the backend relays + post-executes server-side); on any non-success it falls back to the client-side relay, returning the same `SwapResponse`. Set `new Sodax({ swaps: { useBackendSubmitTx: false } })` to force client-side only. The SDK does NOT verify the tx on-chain before handing it to the backend — the backend verifies itself, so `verifyTxHash` (and `TX_VERIFICATION_FAILED`) belong to the client-side path only. `timeout` (defaults to `DEFAULT_RELAY_TX_TIMEOUT`) is a PER-ATTEMPT budget, not end-to-end: the backend attempt (submit POST + status poll) gets it, and if that attempt does not complete the client-side relay wait gets a fresh one starting after verification — so neither a stalled backend nor a slow source-chain confirmation shortens the fallback, and raising `timeout` grows both. Each backend request is clamped to `min(budget left in the attempt, api.timeout)`; `api.timeout` is configurable (packaged default `DEFAULT_BACKEND_API_TIMEOUT`), and once the attempt's remainder drops below it a single stalled request can spend what is left — the clamp bounds a request by the attempt, it does not guarantee a retry. Worst case is `createIntent + timeout + verification + max(timeout, RELAY_FALLBACK_FLOOR_MS) + postExecution`; verification is bounded by the source chain's `pollingConfig.maxTimeoutMs` (varies widely — Stacks is several times Sui — read `chains.ts`, and it is a no-op on EVM), and intent creation and post-execution are not bounded by `timeout` at all.
+- **`createIntent` + backend submit** — break it apart for custom relay handling. `createIntent` returns `{ tx, intent, relayData }`; submit `relayData.payload` to the backend swap-tx endpoint via `sodax.api.swaps.submitTx`.
 
 ## Public methods
 
 ```ts
 sodax.swaps.swap<K extends SpokeChainKey>(action: SwapActionParams<K, false>): Promise<Result<SwapResponse, SodaxError>>;
 
-sodax.swaps.getQuote(payload: SolverIntentQuoteRequest): Promise<Result<SolverIntentQuoteResponse, SolverErrorResponse>>;
+sodax.swaps.getQuote(payload: GetQuoteParams): Promise<Result<SolverIntentQuoteResponse, SolverErrorResponse>>;
+//   GetQuoteParams = SolverIntentQuoteRequest & { partnerFee?: PartnerFee } — pass the request as before;
+//   optionally add `partnerFee` to override the configured swap fee for this quote (matches extras.partnerFee).
 //   Preview the output amount before signing — useful for UX confirmations / bot previews.
 
 sodax.swaps.createIntent<K extends SpokeChainKey, Raw extends boolean>(
@@ -38,12 +40,43 @@ sodax.swaps.createLimitOrder<K, Raw>(
 
 sodax.swaps.createLimitOrderIntent<K, Raw>(/* same as createIntent shape with limit-order params */): /* same return */;
 
-sodax.swaps.cancelIntent<K, Raw>(/* … */): Promise<Result<TxReturnType<K, Raw>, SodaxError>>;
-sodax.swaps.cancelLimitOrder<K, Raw>(/* … */): Promise<Result<TxReturnType<K, Raw>, SodaxError>>;
+sodax.swaps.cancelIntent<K>(/* … */): Promise<Result<TxHashPair, SodaxError>>;        // not generic over Raw (only false)
+sodax.swaps.cancelLimitOrder<K>(/* … */): Promise<Result<TxHashPair, SodaxError>>;    // TxHashPair = { srcChainTxHash, dstChainTxHash }
 
 sodax.swaps.approve<K, Raw>(/* … */): Promise<Result<TxReturnType<K, Raw>, SodaxError>>;
 sodax.swaps.isAllowanceValid<K, Raw>(/* … */): Promise<Result<boolean, SodaxError>>;
+
+sodax.swaps.getStatus(
+  request: SolverIntentStatusRequest,          // { intent_tx_hash } — the HUB (Sonic) tx hash
+): Promise<Result<SolverIntentStatusResponse, SolverErrorResponse>>;   // legacy error shape, NOT SodaxError
+
+sodax.swaps.getDetailedStatus(
+  params: { srcChainKey: SpokeChainKey; srcTxHash: string },   // the SOURCE-chain tx hash
+): Promise<Result<DetailedSwapStatus, SodaxError<'LOOKUP_FAILED'>>>;
+//   Routes to the backend submit-tx record or the solver. Does NOT define a new status vocabulary.
 ```
+
+## Reading swap status
+
+Three readers. Pick by which transaction hash you hold:
+
+- **`sodax.api.swaps.getSubmitTxStatus({ txHash, srcChainKey })`** — the backend worker record, keyed on the **source** tx. Answers **404** when no record exists (`useBackendSubmitTx: false`, or the submit never landed). Otherwise the record may be *stale*: `swap()` submits before falling back to the client-side relay, so a fallback-completed swap leaves a `pending`/`relaying`/abandoned record behind.
+- **`sodax.swaps.getStatus({ intent_tx_hash })`** — the solver's view of one intent, keyed on the **hub** tx hash (`intentDeliveryInfo.dstTxHash`). Returns the legacy `SolverErrorResponse` error shape, so do not `switch (error.code)` on it.
+- **`sodax.swaps.getDetailedStatus({ srcChainKey, srcTxHash })`** — routes between the two, keyed on the **source** tx. Use this when you only have the source hash and do not know which path the swap took.
+
+`getDetailedStatus` defines no status of its own. It returns whichever source can answer, tagged, with that source's payload unmodified. The union is discriminated on `source` — no type guards are exported, narrow on the field:
+
+```ts
+type DetailedSwapStatus =
+  | { source: 'backend'; data: SubmitTxStatusDataV2 }         // same as getSubmitTxStatus
+  | { source: 'solver'; dstTxHash: Hex; data: SolverIntentStatusResponse }; // same as getStatus
+
+if (status.source === 'backend') status.data.processingAttempts;
+```
+
+Routing: backend record while it is in play (`success: true` and not abandoned) → `source: 'backend'`. **Any** unusable backend response — 404, `success: false`, transport/server error, or a record the backend gave up on (`failed` or `abandonedAt`) — resolves the hub tx hash and asks the solver → `source: 'solver'`. On the default path the abandoned-record branch is the common one, not the 404: the record usually exists, and abandonment is what signals the client-side fallback ran.
+
+The only error is `LOOKUP_FAILED`, meaning no source could answer — usually the relay has not delivered the packet, so there is no hub tx hash. When polling, branch on `error.context.reason`: `DETAILED_STATUS_NOT_DELIVERED` is the ambiguous miss (indistinguishable from "still in flight" — bound it with a retry budget), set only when the backend also answered. Anything else, including a relay miss behind a backend outage, is a dependency failing right now and should be retried until it recovers. Point-in-time — poll it yourself, or use dapp-kit's `useDetailedStatus`.
 
 ## Action params shape
 
@@ -52,10 +85,24 @@ Generic `K extends SpokeChainKey` carries the literal source chain key. `WalletP
 ```ts
 type SwapActionParams<K extends SpokeChainKey, Raw extends boolean> = {
   params: CreateIntentParams<K>;
+  extras?: SwapExtras<K>;    // per-action overrides (optional)
   skipSimulation?: boolean;
   timeout?: number;
-  fee?: PartnerFee;
 } & WalletProviderSlot<K, Raw>;
+```
+
+`extras` and every field on it are optional. `partnerFee` overrides the configured swap fee for this single action (the same override `getQuote` accepts, below); `srcPublicKey` is chain-key-gated — only typeable when `K` is a Stacks chain (`never` elsewhere) and only needed for raw (`raw: true`) Stacks `createIntent`; `bound` is chain-key-gated to Bitcoin and groups the Bound Exchange (Radfi) inputs — its `accessToken` is only needed for raw Bitcoin TRADING-mode `createIntent`, overriding the RadfiProvider's configured token and falling back to that instance token when omitted. (Grouping keeps future Bound inputs — trading mode, refresh token — under one slot rather than spreading a new `extras` field per item.) `LimitOrderActionParams<K, Raw>` carries the same `SwapExtras<K>`.
+
+```ts
+type SwapExtras<K extends SpokeChainKey> = {
+  partnerFee?: PartnerFee;        // overrides the configured swap fee for this action; falls back to config
+  srcPublicKey?: string;          // Stacks only (raw createIntent): signer public key. Chain-key-gated — `never` on non-Stacks K.
+  bound?: BitcoinBoundExtras;     // Bitcoin only: grouped Bound Exchange (Radfi) inputs. Chain-key-gated — `never` on non-Bitcoin K.
+};
+
+type BitcoinBoundExtras = {
+  accessToken?: string;           // raw TRADING createIntent: Bound Exchange token; falls back to the RadfiProvider instance token.
+};
 ```
 
 `CreateIntentParams<K>`:
@@ -64,20 +111,20 @@ type SwapActionParams<K extends SpokeChainKey, Raw extends boolean> = {
 type CreateIntentParams<K extends SpokeChainKey> = {
   srcChainKey: K;
   dstChainKey: SpokeChainKey;
-  srcAddress: GetAddressType<K>;
+  srcAddress: string;       // source-chain address (chain-specific format)
   dstAddress: string;       // chain-specific format on the destination side
-  inputToken: XToken;       // must have chainKey === srcChainKey
-  outputToken: XToken;      // must have chainKey === dstChainKey
+  inputToken: string;       // token ADDRESS on srcChainKey (the XToken's .address)
+  outputToken: string;      // token ADDRESS on dstChainKey (the XToken's .address)
   inputAmount: bigint;
   minOutputAmount: bigint;
   deadline: bigint;         // unix seconds
   allowPartialFill: boolean;
-  solver: `0x${string}`;    // solver address; '0x0…0' for default
+  solver?: `0x${string}`;   // optional solver address; '0x0…0' for default
   data: `0x${string}`;      // arbitrary calldata; '0x' for default
 };
 ```
 
-`CreateLimitOrderParams<K>` is `Omit<CreateIntentParams<K>, 'deadline'>` (limit orders have a different expiry mechanism).
+`CreateLimitOrderParams<K>` is `Omit<CreateIntentParams<K>, 'deadline'> & { deadline?: bigint }` — it makes `deadline` optional rather than removing it; when omitted the SDK forces it to `0n` internally (limit orders use a different expiry mechanism).
 
 ## Common call shapes
 
@@ -109,7 +156,7 @@ const { quoted_amount } = quote.value;   // bigint output amount in dst-token un
 
 ### Signed swap (full flow)
 
-`inputToken` / `outputToken` are full `XToken` objects (with `chainKey`, `address`, `decimals`, `symbol`). Look them up from config — do **not** hand-construct:
+`inputToken` / `outputToken` on `CreateIntentParams` are token **addresses** (`string`), not `XToken` objects. Look the `XToken` up from config (do **not** hand-construct) and pass its `.address` — the looked-up object also gives you `decimals` for `parseUnits`:
 
 ```ts
 const inputToken  = sodax.config.findSupportedTokenBySymbol(ChainKeys.ARBITRUM_MAINNET, 'USDC');
@@ -122,8 +169,8 @@ const result = await sodax.swaps.swap({
     dstChainKey: ChainKeys.STELLAR_MAINNET,
     srcAddress: '0x…',
     dstAddress: 'G…',
-    inputToken,                                     // XToken; chainKey === srcChainKey
-    outputToken,                                    // XToken; chainKey === dstChainKey
+    inputToken: inputToken.address,                 // token ADDRESS on srcChainKey
+    outputToken: outputToken.address,               // token ADDRESS on dstChainKey
     inputAmount: parseUnits('1', inputToken.decimals),   // 1 USDC
     minOutputAmount: parseUnits('50', outputToken.decimals), // 50 XLM floor
     deadline: BigInt(Math.floor(Date.now() / 1000) + 300),
@@ -156,8 +203,8 @@ const result = await sodax.swaps.swap({
     dstChainKey: ChainKeys.BASE_MAINNET,
     srcAddress: (await evmWp.getWalletAddress()) as `0x${string}`,
     dstAddress: recipientOnBase,
-    inputToken: sodaSonic,
-    outputToken: sodaBase,
+    inputToken: sodaSonic.address,
+    outputToken: sodaBase.address,
     inputAmount: parseUnits('1', sodaSonic.decimals),
     minOutputAmount: parseUnits('0.99', sodaBase.decimals),   // tighten with getQuote() in production
     deadline: BigInt(Math.floor(Date.now() / 1000) + 300),
@@ -184,22 +231,22 @@ if (!result.ok) return;
 
 const { tx: spokeTxHash, intent, relayData } = result.value;
 //   tx is the spoke tx hash (TxReturnType<K, false>) for raw: false
-//   relayData is { payload: string }; submit relayData.payload to your backend
+//   relayData is { address: Hex; payload: Hex }; submit relayData.payload to your backend
 ```
 
 ### Backend submit-tx flow
 
 ```ts
-const submitResult = await sodax.backendApi.submitSwapTx({
+const submitResult = await sodax.api.swaps.submitTx({
   txHash: spokeTxHash as string,
   srcChainKey: ChainKeys.ARBITRUM_MAINNET,
   walletAddress: '0x…',
-  intent: /* SwapIntentData built from CreateIntentResult.value.intent */,
+  intent,                         // IntentRequestV2 — CreateIntentResult.value.intent passes through
   relayData: relayData.payload,   // string (not the object)
 });
 
 if (!submitResult.ok) {
-  // submitResult.error.code: 'EXTERNAL_API_ERROR' with context.api: 'backend'
+  // submitResult.error.code: 'EXTERNAL_API_ERROR' with context.api: 'swaps'
   return;
 }
 ```
@@ -235,7 +282,7 @@ await sodax.swaps.cancelIntent({
 | `createIntent` | `CreateIntentResult<K, Raw>` = `{ tx: TxReturnType<K, Raw>, intent: Intent & FeeAmount, relayData: RelayExtraData }` |
 | `postExecution` | `SwapResponse` |
 | `createLimitOrder` / `createLimitOrderIntent` | Same as `createIntent` |
-| `cancelIntent` / `cancelLimitOrder` | `TxReturnType<K, Raw>` |
+| `cancelIntent` / `cancelLimitOrder` | `TxHashPair` = `{ srcChainTxHash, dstChainTxHash }` (not generic over `Raw`) |
 | `approve` | `TxReturnType<K, Raw>` |
 | `isAllowanceValid` | `boolean` |
 
@@ -243,9 +290,16 @@ await sodax.swaps.cancelIntent({
 
 ```ts
 type RelayExtraData = {
-  payload: string;     // pass this string to backend submit-tx as `relayData`
+  address: Hex;        // relay address
+  payload: Hex;        // pass this to backend submit-tx as `relayData`
 };
 ```
+
+`approve` can send **two** transactions on a token that rejects a non-zero to non-zero allowance
+change (Ethereum USDT is the only listed one today): `approve(0)` is mined first, then the real
+approval, so the user signs twice. The returned value is unchanged — one hash, the **last**
+transaction's. Detection simulates the approval, so never gate on a token list. Full note: "ERC-20
+approval can take two transactions" in [`architecture.md`](../architecture.md).
 
 ## Error codes
 
@@ -263,8 +317,8 @@ type RelayExtraData = {
 Solver-specific context on `EXTERNAL_API_ERROR`:
 
 - `error.context.api === 'solver'`
-- `error.context.solverCode` — the solver's own error code (e.g. `'INSUFFICIENT_LIQUIDITY'`)
-- `error.context.solverDetail` — the solver's human-readable message
+- `error.context.solverCode` — the solver's own error code as a **numeric** `SolverIntentErrorCode` enum value (e.g. `-5` = `NO_PRIVATE_LIQUIDITY`, `-999` = `UNKNOWN`), not a string
+- `error.context.solverDetail` — the solver's full detail object `{ code, message }`
 
 ## Cross-references
 

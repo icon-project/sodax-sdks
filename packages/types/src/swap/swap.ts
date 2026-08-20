@@ -1,5 +1,5 @@
 // currently supported spoke chain tokens for solver
-import type { PartnerFee } from '../common/common.js';
+import type { PartnerFee, Prettify } from '../common/common.js';
 import type { SpokeChainKey } from '../chains/chains.js';
 import { type XToken, SodaTokens, LsodaTokens } from '../chains/tokens.js';
 import { spokeChainConfig, ChainKeys } from '../chains/chains.js';
@@ -12,8 +12,11 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.USDT,
     spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.wS,
     spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.SODA,
-    // sodaUSDS is staging-only — see stagingSwapSupportedTokens
-    ...Object.values(SodaTokens).filter(t => t !== SodaTokens.sodaUSDS),
+    // spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.USSD, // NOTE: Not Implemented
+    // sodaSUSDS is staging-only; sodaUSDS / sodaUSSD are parked until the solver fills them
+    ...Object.values(SodaTokens).filter(
+      t => t !== SodaTokens.sodaSUSDS && t !== SodaTokens.sodaUSDS && t !== SodaTokens.sodaUSSD,
+    ),
     ...Object.values(LsodaTokens),
   ] as const satisfies XToken[],
   [ChainKeys.AVALANCHE_MAINNET]: [
@@ -41,6 +44,7 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.PENDLE,
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.rETH,
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.SODA,
+    // spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.USDS, // NOTE: Not Implemented
   ] as const satisfies XToken[],
   [ChainKeys.BASE_MAINNET]: [
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.ETH,
@@ -51,6 +55,7 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.VIRTUAL,
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.cbETH,
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.SODA,
+    // spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.USDS, // NOTE: Not Implemented
   ] as const satisfies XToken[],
   [ChainKeys.OPTIMISM_MAINNET]: [
     spokeChainConfig[ChainKeys.OPTIMISM_MAINNET].supportedTokens.ETH,
@@ -157,6 +162,19 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.sodaETH,
     spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.sodaBTC,
     spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.sodaBNB,
+    // v3.2.0 direct-wrapped spoke assets
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.ETH,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.BTC,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.BNB,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.SOL,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.SUI,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.AVAX,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.INJ,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.POL,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.HYPE,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.NEAR,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.HBAR,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.USDS,
   ] as const satisfies XToken[],
   [ChainKeys.SUI_MAINNET]: [
     spokeChainConfig[ChainKeys.SUI_MAINNET].supportedTokens.SUI,
@@ -173,8 +191,11 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.SUI_MAINNET].supportedTokens.WAL,
     spokeChainConfig[ChainKeys.SUI_MAINNET].supportedTokens.NAVX,
   ] as const satisfies XToken[],
-  // Injective is currently staging-only — see stagingSwapSupportedTokens
-  [ChainKeys.INJECTIVE_MAINNET]: [] as const satisfies XToken[],
+  [ChainKeys.INJECTIVE_MAINNET]: [
+    spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.INJ,
+    spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.bnUSD,
+    spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.USDC,
+  ] as const satisfies XToken[],
   [ChainKeys.NEAR_MAINNET]: [
     spokeChainConfig[ChainKeys.NEAR_MAINNET].supportedTokens.NEAR,
     spokeChainConfig[ChainKeys.NEAR_MAINNET].supportedTokens.bnUSD,
@@ -209,6 +230,7 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.DAI,
     spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.cbBTC,
     spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.rETH,
+    // spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.USDS, // NOTE: Not Implemented
   ] as const,
   [ChainKeys.REDBELLY_MAINNET]: [
     spokeChainConfig[ChainKeys.REDBELLY_MAINNET].supportedTokens.RBNT,
@@ -240,6 +262,26 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.STACKS_MAINNET].supportedTokens.sBTC,
     spokeChainConfig[ChainKeys.STACKS_MAINNET].supportedTokens.USDC,
   ] as const satisfies XToken[],
+  [ChainKeys.HEDERA_MAINNET]: [
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.HBAR,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.bnUSD,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.USDC,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.SODA,
+    // v3.2.0 direct-wrapped spoke assets
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.ETH,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.BTC,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.BNB,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.SOL,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.SUI,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.AVAX,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.INJ,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.POL,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.HYPE,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.NEAR,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.USDS,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.XLM,
+  ] as const satisfies XToken[],
+  [ChainKeys.ROBINHOOD_MAINNET]: [], // staging-first rollout — see stagingOnlySwapTokens
 } as const satisfies Record<SpokeChainKey, readonly XToken[]>;
 
 // Tokens supported ONLY in the staging solver environment.
@@ -247,9 +289,9 @@ export const swapSupportedTokens = {
 // `getStagingSolverTokens` for the full staging set. The two lists are disjoint per chain;
 // a token lives in exactly one of them. It is upon the user to provide a token valid for
 // their target environment — validation accepts either (see `isSwapSupportedToken`).
-// Derived from the production solver oracle (tokens absent there). 
+// Derived from the production solver oracle (tokens absent there).
 export const stagingSwapSupportedTokens = {
-  [ChainKeys.SONIC_MAINNET]: [SodaTokens.sodaUSDS] as const satisfies XToken[],
+  [ChainKeys.SONIC_MAINNET]: [SodaTokens.sodaSUSDS] as const satisfies XToken[],
   [ChainKeys.AVALANCHE_MAINNET]: [],
   [ChainKeys.ARBITRUM_MAINNET]: [],
   [ChainKeys.BASE_MAINNET]: [
@@ -270,12 +312,7 @@ export const stagingSwapSupportedTokens = {
   [ChainKeys.ICON_MAINNET]: [],
   [ChainKeys.STELLAR_MAINNET]: [],
   [ChainKeys.SUI_MAINNET]: [spokeChainConfig[ChainKeys.SUI_MAINNET].supportedTokens.USDT] as const satisfies XToken[],
-  [ChainKeys.INJECTIVE_MAINNET]: [
-    spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.INJ,
-    spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.bnUSD,
-    spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.USDC,
-    // spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.SODA, // NOTE: not in solver wiki
-  ] as const satisfies XToken[],
+  [ChainKeys.INJECTIVE_MAINNET]: [] as const satisfies XToken[],
   [ChainKeys.NEAR_MAINNET]: [],
   [ChainKeys.BITCOIN_MAINNET]: [],
   [ChainKeys.ETHEREUM_MAINNET]: [
@@ -285,17 +322,35 @@ export const stagingSwapSupportedTokens = {
   [ChainKeys.REDBELLY_MAINNET]: [],
   [ChainKeys.KAIA_MAINNET]: [],
   [ChainKeys.STACKS_MAINNET]: [],
+  // Hedera promoted to production — see swapSupportedTokens
+  [ChainKeys.HEDERA_MAINNET]: [],
+  [ChainKeys.ROBINHOOD_MAINNET]: [
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.ETH,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.bnUSD,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.SODA,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.USDG,
+  ] as const satisfies XToken[],
 } as const satisfies Record<SpokeChainKey, readonly XToken[]>;
 
-export type SwapsConfig = {
-  partnerFee: PartnerFee | undefined; // enables override of global partner fee
+export type SwapsOptions = {
+  partnerFee?: PartnerFee; // enables override of global partner fee
+  /**
+   * Route `swap()` through the backend submit-tx 2-step flow. Default `true`.
+   * Set `false` for the fully client-side relay. Client-side only — not part of backend SodaxDefaultConfig.
+   * Omitted here means the default, not off: read the effective value via `sodax.config.swapUseBackendSubmitTx`.
+   */
+  useBackendSubmitTx?: boolean;
+};
+
+export type SwapsDefaultConfig = {
   supportedTokens: Record<SpokeChainKey, readonly XToken[]>;
 };
 
+export type SwapsConfig = Prettify<SwapsDefaultConfig & SwapsOptions>;
+
 export const swapsConfig = {
-  partnerFee: undefined,
   supportedTokens: swapSupportedTokens,
-} satisfies SwapsConfig;
+} satisfies SwapsDefaultConfig;
 
 // get production supported spoke chain tokens for solver
 export const getSupportedSolverTokens = (chainId: SpokeChainKey): readonly XToken[] => swapSupportedTokens[chainId];

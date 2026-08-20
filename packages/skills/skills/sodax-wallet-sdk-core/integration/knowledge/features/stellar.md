@@ -1,6 +1,6 @@
 # Stellar — `StellarWalletProvider`
 
-Backed by `@stellar/stellar-sdk` (`Horizon.Server` + Soroban primitives).
+Backed by `@stellar/stellar-sdk` (`Horizon.Server` only — classic `Transaction` signing + Horizon polling; no Soroban surface).
 
 | | |
 |---|---|
@@ -64,8 +64,8 @@ Merge strategy: flat (`mergeDefaults`).
 | Method | Signature | Returns |
 |---|---|---|
 | `getWalletAddress` | `() => Promise<string>` | Stellar address |
-| `signTransaction` | `(tx: XDR) => Promise<XDR>` | signed XDR |
-| `waitForTransactionReceipt` | `(hash: string, options?: Partial<StellarWalletDefaults>) => Promise<…>` | tx result; respects `pollInterval` / `pollTimeout` |
+| `signTransaction` | `(tx: XDR, options?: { address?: string }) => Promise<XDR>` | signed XDR. Pass `address` when a SPECIFIC account must sign (sponsored reserves, multisig) — without it a browser wallet signs with whatever account is active, yielding a well-formed envelope carrying the wrong signature. The private-key provider throws if `address` is not the key it holds. |
+| `waitForTransactionReceipt` | `(hash: string, options?: Pick<StellarWalletDefaults, 'pollInterval' \| 'pollTimeout'>) => Promise<…>` | tx result; respects `pollInterval` / `pollTimeout` (`networkPassphrase` is NOT accepted per-call) |
 
 ---
 

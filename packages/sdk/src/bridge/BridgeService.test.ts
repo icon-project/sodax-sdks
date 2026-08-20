@@ -20,8 +20,11 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { decodeAbiParameters, decodeFunctionData, erc20Abi, parseAbiParameters } from 'viem';
 import type { Address, IBitcoinWalletProvider, IEvmWalletProvider, SpokeChainKey } from '@sodax/types';
-import { ChainKeys } from '@sodax/types';
+import { ChainKeys, DEFAULT_BACKEND_API_TIMEOUT, DEFAULT_RELAY_TX_TIMEOUT } from '@sodax/types';
+import { RELAY_FALLBACK_FLOOR_MS } from '../shared/services/intentRelay/IntentRelayApiService.js';
+import { EvmVaultTokenService } from '../shared/services/hub/EvmVaultTokenService.js';
 import { Sodax } from '../shared/entities/Sodax.js';
 import { SodaxError } from '../errors/SodaxError.js';
 import type { BridgeParams } from './BridgeService.js';
@@ -37,13 +40,14 @@ vi.mock('../shared/services/intentRelay/IntentRelayApiService.js', async () => {
   };
 });
 
-const sodax = new Sodax();
+const sodax = new Sodax({ bridge: { useBackendSubmitTx: false } });
 
 // Local SpokeChainKey fixtures. Matches the relay-error-mapping.test.ts pattern: avoids
 // the `../../../types/src/...` deep import workaround so tests stay decoupled from the
 // chain-config layout in @sodax/types.
 const BSC = '0x38.bsc' satisfies SpokeChainKey;
 const ARBITRUM = '0xa4b1.arbitrum' satisfies SpokeChainKey;
+const SOLANA = 'solana' satisfies SpokeChainKey;
 
 const HUB_WALLET = '0x1111111111111111111111111111111111111111' as Address;
 const SAMPLE_USER = '0x4444444444444444444444444444444444444444' as Address;
@@ -57,10 +61,15 @@ const mockEvmProvider = {
   waitForTransactionReceipt: vi.fn(),
 } as unknown as IEvmWalletProvider;
 
-const bridgeInput = <K extends SpokeChainKey>(srcChainKey: K, dstChainKey: SpokeChainKey): BridgeParams<K, false> =>
+const bridgeInput = <K extends SpokeChainKey>(
+  srcChainKey: K,
+  dstChainKey: SpokeChainKey,
+  timeout?: number,
+): BridgeParams<K, false> =>
   ({
     raw: false,
     walletProvider: mockEvmProvider,
+    timeout,
     params: {
       srcAddress: SAMPLE_USER,
       srcChainKey,
@@ -116,6 +125,31 @@ const btcBridgeInput = (): BridgeParams<typeof BTC, false> =>
     },
   }) as BridgeParams<typeof BTC, false>;
 
+describe('BridgeService.getFee — global-fee fallback', () => {
+  it('returns 0n when neither a bridge nor a global fee is configured', () => {
+    expect(sodax.bridge.getFee(1_000_000n)).toBe(0n);
+  });
+
+  it('falls back to the global fee when no bridge-specific partnerFee is set', () => {
+    // Regression: a global `fee` with no `bridge.partnerFee` must still be charged — the effective
+    // bridge fee is `bridge.partnerFee ?? fee` (via config.bridgePartnerFee), so a global-only fee
+    // is no longer silently dropped. `fee` is a typed SodaxOptions slot — no cast needed.
+    const sodaxWithGlobalFee = new Sodax({
+      fee: { address: '0x3333333333333333333333333333333333333333', percentage: 100 },
+    });
+
+    expect(sodaxWithGlobalFee.bridge.getFee(1_000_000n)).toBeGreaterThan(0n);
+  });
+
+  it('uses the per-call partnerFee over the configured fee', () => {
+    // `sodax` has no configured fee (getFee(1M) === 0n above); a per-call partnerFee is charged instead.
+    // 100 bps (1%) of 1_000_000 = 10_000.
+    const perCall = { address: '0x4444444444444444444444444444444444444444', percentage: 100 } as const;
+    expect(sodax.bridge.getFee(1_000_000n, perCall)).toBe(10_000n);
+    expect(sodax.bridge.getFee(1_000_000n)).toBe(0n);
+  });
+});
+
 describe('BridgeService.createBridgeIntent — Bitcoin USER mode', () => {
   let ensureRadfiSpy: ReturnType<typeof vi.spyOn>;
   let depositSpy: ReturnType<typeof vi.spyOn>;
@@ -124,9 +158,9 @@ describe('BridgeService.createBridgeIntent — Bitcoin USER mode', () => {
     Object.defineProperty(sodax.spoke.bitcoin, 'walletMode', { value: 'USER', configurable: true });
 
     vi.spyOn(sodax.spoke.bitcoin, 'getEffectiveWalletAddress').mockResolvedValue(BTC_USER_ADDR);
-    ensureRadfiSpy = vi.spyOn(sodax.spoke.bitcoin.radfi, 'ensureRadfiAccessToken').mockResolvedValue(
-      undefined as never,
-    );
+    ensureRadfiSpy = vi
+      .spyOn(sodax.spoke.bitcoin.radfi, 'ensureRadfiAccessToken')
+      .mockResolvedValue(undefined as never);
     vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockResolvedValue(HUB_BTC_WALLET);
     vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValue({
       address: BTC_TOKEN,
@@ -155,9 +189,7 @@ describe('BridgeService.createBridgeIntent — Bitcoin USER mode', () => {
 
   it('passes skipSimulation=true so the hub skips EVM simulation for Bitcoin USER deposits', async () => {
     await sodax.bridge.createBridgeIntent(btcBridgeInput());
-    expect(depositSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ skipSimulation: true }),
-    );
+    expect(depositSpy).toHaveBeenCalledWith(expect.objectContaining({ skipSimulation: true }));
   });
 
   it('derives hub wallet from personal address, not a trading address', async () => {
@@ -171,9 +203,489 @@ describe('BridgeService.createBridgeIntent — Bitcoin USER mode', () => {
     // The returned personal address (not a trading address) is forwarded to hub wallet derivation
     expect(getHubSpy).toHaveBeenCalledWith(BTC_USER_ADDR, BTC);
     // The spoke deposit srcAddress also uses the personal address
-    expect(depositSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ srcAddress: BTC_USER_ADDR }),
+    expect(depositSpy).toHaveBeenCalledWith(expect.objectContaining({ srcAddress: BTC_USER_ADDR }));
+  });
+
+  it('rejects a native-BTC deposit below the 546 sat dust limit', async () => {
+    const dustInput = btcBridgeInput();
+    const result = await sodax.bridge.createBridgeIntent({
+      ...dustInput,
+      params: { ...dustInput.params, amount: 100n },
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toBeInstanceOf(SodaxError);
+      expect(result.error.code).toBe('VALIDATION_FAILED');
+      expect(result.error.message).toContain('Invalid amount');
+      expect(result.error.message).toContain('dust limit');
+    }
+  });
+});
+
+// =========================================================================
+// BTC destination — post-fee dust check runs its fee math in hub units
+// =========================================================================
+
+describe('BridgeService.createBridgeIntent — BTC destination post-fee dust', () => {
+  // The partner fee is charged on the hub in 18-dp vault units (buildBridgeData), so the dust
+  // estimate must translate sats → hub units, take the fee there, and translate back. A fixed
+  // `PartnerFee.amount` is wei-denominated — treating it as sats either trips the
+  // fee<=inputAmount invariant (fee wei >> sats) or inflates the fee by 10^10.
+  const btcDestInput = (
+    amount: bigint,
+    partnerFee?: { address: Address; percentage: number } | { address: Address; amount: bigint },
+  ): BridgeParams<typeof BSC, false> =>
+    ({
+      raw: false,
+      walletProvider: mockEvmProvider,
+      ...(partnerFee ? { extras: { partnerFee } } : {}),
+      params: {
+        srcAddress: SAMPLE_USER,
+        srcChainKey: BSC,
+        srcToken: SAMPLE_TOKEN,
+        amount,
+        dstChainKey: BTC,
+        dstToken: BTC_TOKEN,
+        recipient: BTC_USER_ADDR,
+      },
+    }) as BridgeParams<typeof BSC, false>;
+
+  const FEE_ADDR = '0x6666666666666666666666666666666666666666' as Address;
+
+  beforeEach(() => {
+    // Full XToken shape: the hub-unit dust math reads `decimals` and `hubAsset` off both endpoints.
+    vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValue({
+      address: BTC_TOKEN,
+      vault: '0xvault',
+      symbol: 'BTC',
+      decimals: 8,
+      hubAsset: '0xbtchub',
+    } as never);
+    vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockResolvedValue(HUB_BTC_WALLET);
+    vi.spyOn(sodax.bridge, 'buildBridgeData').mockReturnValue('0xdata' as never);
+    vi.spyOn(sodax.spoke, 'deposit').mockResolvedValue({ ok: true, value: '0xtxhash' } as never);
+  });
+
+  it('passes when the post-fee delivery clears dust (percentage fee)', async () => {
+    // 100 bps of 600 sats → 6 sats fee → delivered 594 ≥ 546.
+    const result = await sodax.bridge.createBridgeIntent(btcDestInput(600n, { address: FEE_ADDR, percentage: 100 }));
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects when the post-fee delivery falls below dust (percentage fee)', async () => {
+    // 100 bps of 550 sats → delivered 544 < 546.
+    const result = await sodax.bridge.createBridgeIntent(btcDestInput(550n, { address: FEE_ADDR, percentage: 100 }));
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('VALIDATION_FAILED');
+      expect(result.error.message).toContain('Post-fee');
+    }
+  });
+
+  it('treats a fixed-amount fee as wei, not sats (regression: previously threw the fee invariant)', async () => {
+    // 10^10 wei = exactly 1 sat worth. 547 sats − 1 sat = 546 ≥ 546 → passes. Before the hub-unit
+    // fix this path threw `fee.amount <= inputAmount` (10^10 wei vs 547 "sats") for EVERY
+    // BTC-destination bridge with a fixed-amount fee.
+    const result = await sodax.bridge.createBridgeIntent(btcDestInput(547n, { address: FEE_ADDR, amount: 10n ** 10n }));
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects with the dust message when a large fixed wei fee pushes delivery below dust', async () => {
+    // 100 sats worth of fee (100 × 10^10 wei): 600 − 100 = 500 < 546 → the specific post-fee
+    // dust invariant, not a generic fee-invariant failure.
+    const result = await sodax.bridge.createBridgeIntent(
+      btcDestInput(600n, { address: FEE_ADDR, amount: 100n * 10n ** 10n }),
     );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('VALIDATION_FAILED');
+      expect(result.error.message).toContain('Post-fee');
+    }
+  });
+});
+
+// =========================================================================
+// Stacks raw source — srcPublicKey pre-flight guard (parity with SwapService.createIntent)
+// =========================================================================
+
+const STACKS = ChainKeys.STACKS_MAINNET;
+const STACKS_SRC_ADDR = 'SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7';
+const STACKS_TOKEN = 'SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7.token-abtc::abtc';
+
+const stacksRawBridgeInput = (extras?: { srcPublicKey?: string }): BridgeParams<typeof STACKS, true> =>
+  ({
+    raw: true,
+    extras,
+    params: {
+      srcAddress: STACKS_SRC_ADDR,
+      srcChainKey: STACKS,
+      srcToken: STACKS_TOKEN,
+      amount: 1_000_000n,
+      dstChainKey: BSC,
+      dstToken: SAMPLE_TOKEN,
+      recipient: SAMPLE_DST,
+    },
+  }) as BridgeParams<typeof STACKS, true>;
+
+// =========================================================================
+// buildBridgeData and the BTC-destination dust guard share ONE fee/decimal
+// pipeline (`computeBridgeAmounts`). These pin the basis that sharing relies
+// on, using REAL config tokens and the real encoder (no buildBridgeData mock),
+// so a change to the fee basis or a decimal translation fails here rather than
+// silently desynchronizing the guard from what the hub calls withdraw.
+// =========================================================================
+
+describe('BridgeService.buildBridgeData — shared fee/decimal basis', () => {
+  const FEE_ADDR = '0x6666666666666666666666666666666666666666' as Address;
+  const realToken = (chainKey: SpokeChainKey, symbol: string) => {
+    const token = sodax.config.findSupportedTokenBySymbol(chainKey, symbol);
+    if (!token) throw new Error(`fixture missing: ${symbol} on ${chainKey}`);
+    return token;
+  };
+
+  it('charges the partner fee in 18-dp hub units, not the spoke token’s units', () => {
+    const src = realToken(ARBITRUM, 'USDC');
+    const dst = realToken(ChainKeys.SONIC_MAINNET, 'USDC');
+    const amount = 1_000_000n; // 1 USDC at 6 dp
+    const params = {
+      srcChainKey: src.chainKey,
+      srcAddress: SAMPLE_USER,
+      srcToken: src.address,
+      amount,
+      dstChainKey: dst.chainKey,
+      dstToken: dst.address,
+      recipient: SAMPLE_DST,
+    } as never;
+
+    // The fee basis is the amount AFTER the incoming vault translation, so 1% of 1 USDC is
+    // 1e16 hub-wei — not 1e4 spoke-base-units. A fixed fee of that exact size must therefore
+    // encode identically to the percentage that computes it.
+    const hubUnits = EvmVaultTokenService.translateIncomingDecimals(src.decimals, amount);
+    const percentageFee = { address: FEE_ADDR, percentage: 100 } as const;
+    const expectedFee = sodax.bridge.getFee(hubUnits, percentageFee);
+    expect(expectedFee).toBe(hubUnits / 100n);
+
+    expect(sodax.bridge.buildBridgeData(params, src, dst, percentageFee)).toBe(
+      sodax.bridge.buildBridgeData(params, src, dst, { address: FEE_ADDR, amount: expectedFee }),
+    );
+  });
+
+  it('encodes the delivered amount in the destination token’s units, not hub units', () => {
+    const src = realToken(ARBITRUM, 'USDC');
+    const dst = realToken(BTC, 'BTC');
+    const amount = 1_000_000n; // 1 USDC at 6 dp
+    const data = sodax.bridge.buildBridgeData(
+      {
+        srcChainKey: src.chainKey,
+        srcAddress: SAMPLE_USER,
+        srcToken: src.address,
+        amount,
+        dstChainKey: dst.chainKey,
+        dstToken: dst.address,
+        recipient: BTC_USER_ADDR,
+      } as never,
+      src,
+      dst,
+      undefined,
+    );
+
+    // 6 dp → 18 dp hub → 8 dp destination: 1e6 → 1e18 → 1e8. The destination transfer must carry the
+    // OUTGOING-translated value, which is exactly the `delivered` amount the BTC dust guard checks;
+    // encoding the untranslated hub amount would overpay by 10^10.
+    // (Hub units legitimately appear too — that is what the vault withdrawal is denominated in — so
+    // this asserts the translated value is present, which it never would be without the translation.)
+    const hubUnits = EvmVaultTokenService.translateIncomingDecimals(src.decimals, amount);
+    const delivered = EvmVaultTokenService.translateOutgoingDecimals(dst.decimals, hubUnits);
+    expect(delivered).toBe(100_000_000n);
+    expect(data).toContain(delivered.toString(16).padStart(64, '0'));
+  });
+
+  // Decode the `(address,uint256,bytes)[]` batch (see encodeContractCalls) and isolate the fee call —
+  // the ERC-20 `transfer` whose recipient is FEE_ADDR — so the assertions pin the fee call's own
+  // target rather than substring-matching a payload whose delivery call shares the same address.
+  const decodeFeeCall = (data: `0x${string}`, feeAmount: bigint) => {
+    const [calls] = decodeAbiParameters(parseAbiParameters('(address,uint256,bytes)[]'), data);
+    const decoded = calls.map(([target, , cd]) => {
+      try {
+        const fn = decodeFunctionData({ abi: erc20Abi, data: cd });
+        return { target, fn };
+      } catch {
+        return { target, fn: undefined };
+      }
+    });
+    const feeCalls = decoded.filter(c => c.fn?.functionName === 'transfer' && c.fn.args[0] === FEE_ADDR);
+    expect(feeCalls).toHaveLength(1);
+    expect(feeCalls[0]?.fn?.args[1]).toBe(feeAmount);
+    return { feeTarget: feeCalls[0]?.target as string, targets: decoded.map(c => c.target as string) };
+  };
+
+  // The fee-transfer target is the hub-side asset the wallet holds after step 1: the vault after a
+  // deposit, the hub asset itself when the source already IS a vault asset (no-deposit path). It was
+  // previously initialised from `params.srcToken` — a SPOKE-chain address, wrong on Sonic — kept
+  // correct only by the accident that every bridgeable token so far took the deposit branch.
+  it('targets the hub asset — never the spoke token address — for the fee on the no-deposit path', () => {
+    const src = realToken(ARBITRUM, 'ARB'); // hubAsset === vault → no-deposit branch
+    expect(src.hubAsset.toLowerCase()).toBe(src.vault.toLowerCase());
+    const dst = sodax.config.getXTokenFromHubAsset(src.hubAsset);
+    if (!dst) throw new Error('fixture missing: hub XToken for ARB hub asset');
+    const amount = 10n ** 18n;
+
+    const data = sodax.bridge.buildBridgeData(
+      {
+        srcChainKey: src.chainKey,
+        srcAddress: SAMPLE_USER,
+        srcToken: src.address,
+        amount,
+        dstChainKey: ChainKeys.SONIC_MAINNET,
+        dstToken: dst.address,
+        recipient: SAMPLE_DST,
+      } as never,
+      src,
+      dst,
+      { address: FEE_ADDR, percentage: 100 },
+    );
+
+    // No deposit → no decimal translation: 100 bps of the raw amount.
+    const { feeTarget, targets } = decodeFeeCall(data, amount / 100n);
+    expect(feeTarget.toLowerCase()).toBe(src.hubAsset.toLowerCase());
+    // The caller-supplied spoke address must appear NOWHERE in a batch executed on Sonic.
+    expect(targets.map(t => t.toLowerCase())).not.toContain(src.address.toLowerCase());
+  });
+
+  it('takes the fee in the SOURCE-side holding, not anything destination-derived', () => {
+    // sodaUSDC@sonic → USDC@arbitrum: no-deposit source, same vault, but dst.hubAsset differs from
+    // src.hubAsset — so this pins that the fee asset is the source hub asset the wallet holds, and
+    // would catch an implementation deriving the fee target from the destination token.
+    const src = realToken(ChainKeys.SONIC_MAINNET, 'sodaUSDC');
+    expect(src.hubAsset.toLowerCase()).toBe(src.vault.toLowerCase());
+    const dst = realToken(ARBITRUM, 'USDC');
+    expect(dst.hubAsset.toLowerCase()).not.toBe(src.hubAsset.toLowerCase());
+    expect(dst.vault.toLowerCase()).toBe(src.vault.toLowerCase());
+    const amount = 10n ** 18n;
+
+    const data = sodax.bridge.buildBridgeData(
+      {
+        srcChainKey: src.chainKey,
+        srcAddress: SAMPLE_USER,
+        srcToken: src.address,
+        amount,
+        dstChainKey: ARBITRUM,
+        dstToken: dst.address,
+        recipient: SAMPLE_DST,
+      } as never,
+      src,
+      dst,
+      { address: FEE_ADDR, percentage: 100 },
+    );
+
+    const { feeTarget } = decodeFeeCall(data, amount / 100n);
+    expect(feeTarget.toLowerCase()).toBe(src.hubAsset.toLowerCase());
+  });
+
+  it('builds a fee-bearing payload for a non-EVM no-deposit source instead of throwing', () => {
+    // BONK's spoke address is base58; as the fee target it threw `Address … is invalid` out of
+    // encodeContractCalls, failing every fee-bearing Solana→hub bridge of a vault-asset token.
+    const src = realToken(SOLANA, 'BONK');
+    expect(src.hubAsset.toLowerCase()).toBe(src.vault.toLowerCase());
+    const dst = sodax.config.getXTokenFromHubAsset(src.hubAsset);
+    if (!dst) throw new Error('fixture missing: hub XToken for BONK hub asset');
+    const params = {
+      srcChainKey: src.chainKey,
+      srcAddress: 'GHtXQBsoZHVnNFa9YevAzFr17DJjgHXk3ycTKD5xD3Zi',
+      srcToken: src.address,
+      amount: 10n ** 9n,
+      dstChainKey: ChainKeys.SONIC_MAINNET,
+      dstToken: dst.address,
+      recipient: SAMPLE_DST,
+    } as never;
+
+    expect(() => sodax.bridge.buildBridgeData(params, src, dst, { address: FEE_ADDR, percentage: 100 })).not.toThrow();
+  });
+
+  it('leaves the deposit path untouched: fee still targets the vault, spoke address still absent', () => {
+    const src = realToken(ARBITRUM, 'USDC'); // hubAsset !== vault → deposit branch
+    expect(src.hubAsset.toLowerCase()).not.toBe(src.vault.toLowerCase());
+    const dst = realToken(ChainKeys.SONIC_MAINNET, 'USDC');
+    const amount = 1_000_000n;
+
+    const data = sodax.bridge.buildBridgeData(
+      {
+        srcChainKey: src.chainKey,
+        srcAddress: SAMPLE_USER,
+        srcToken: src.address,
+        amount,
+        dstChainKey: ChainKeys.SONIC_MAINNET,
+        dstToken: dst.address,
+        recipient: SAMPLE_DST,
+      } as never,
+      src,
+      dst,
+      { address: FEE_ADDR, percentage: 100 },
+    );
+
+    // Deposit translates 6 dp → 18 dp before the fee: 100 bps of the hub-unit amount.
+    const hubUnits = EvmVaultTokenService.translateIncomingDecimals(src.decimals, amount);
+    const { feeTarget, targets } = decodeFeeCall(data, hubUnits / 100n);
+    expect(feeTarget.toLowerCase()).toBe(src.vault.toLowerCase());
+    expect(targets.map(t => t.toLowerCase())).not.toContain(src.address.toLowerCase());
+  });
+});
+
+describe('BridgeService.createBridgeIntent — Stacks raw srcPublicKey guard', () => {
+  beforeEach(() => {
+    // Reach the guard: both endpoint tokens must resolve so the token invariants pass. The guard
+    // sits after the token/dust invariants and before hub-wallet derivation + deposit.
+    vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValue({
+      address: STACKS_TOKEN,
+      vault: '0xvault',
+      symbol: 'aBTC',
+    } as never);
+    vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockResolvedValue(HUB_WALLET);
+    vi.spyOn(sodax.bridge, 'buildBridgeData').mockReturnValue('0xdata' as never);
+  });
+
+  it('rejects a Stacks raw intent when extras.srcPublicKey is missing', async () => {
+    const result = await sodax.bridge.createBridgeIntent(stacksRawBridgeInput());
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toBeInstanceOf(SodaxError);
+      expect(result.error.code).toBe('VALIDATION_FAILED');
+      expect(result.error.message).toContain('srcPublicKey');
+    }
+  });
+
+  it('passes extras.srcPublicKey through to the spoke deposit for a Stacks raw intent', async () => {
+    const srcPublicKey = '025259f813b57dd5c3fcac09776d767a49f6dd77bba5895823b891e31b10a96a5d';
+    const depositSpy = vi
+      .spyOn(sodax.spoke, 'deposit')
+      .mockResolvedValue({ ok: true, value: { payload: '0xraw' } } as never);
+
+    const result = await sodax.bridge.createBridgeIntent(stacksRawBridgeInput({ srcPublicKey }));
+
+    expect(result.ok).toBe(true);
+    expect(depositSpy).toHaveBeenCalledWith(expect.objectContaining({ srcPublicKey }));
+  });
+});
+
+// =========================================================================
+// createBridgeIntent front-loaded validation invariants (parity with SwapService.createIntent)
+// =========================================================================
+
+describe('BridgeService.createBridgeIntent — validation invariants', () => {
+  it('rejects raw=false when the wallet provider family mismatches the source chain', async () => {
+    // BSC is EVM; a Bitcoin provider (via cast, as a JS consumer might pass) must fail up front as
+    // VALIDATION_FAILED rather than routing to a wrong-chain deposit that fails deep as
+    // INTENT_CREATION_FAILED.
+    const result = await sodax.bridge.createBridgeIntent({
+      raw: false,
+      walletProvider: mockBtcProvider,
+      params: {
+        srcAddress: SAMPLE_USER,
+        srcChainKey: BSC,
+        srcToken: SAMPLE_TOKEN,
+        amount: 1_000_000n,
+        dstChainKey: ARBITRUM,
+        dstToken: SAMPLE_TOKEN,
+        recipient: SAMPLE_DST,
+      },
+    } as BridgeParams<typeof BSC, false>);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toBeInstanceOf(SodaxError);
+      expect(result.error.code).toBe('VALIDATION_FAILED');
+      expect(result.error.message).toContain('Invalid wallet provider');
+    }
+  });
+
+  it('rejects an unregistered spoke chain key up front as VALIDATION_FAILED', async () => {
+    // Stub token resolution to succeed so the chain-key guard — not the token invariant — is what
+    // rejects the unregistered key (reachable via casts / JS consumers).
+    vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValue({
+      address: SAMPLE_TOKEN,
+      vault: '0xvault',
+      symbol: 'X',
+    } as never);
+
+    const result = await sodax.bridge.createBridgeIntent({
+      raw: true,
+      params: {
+        srcAddress: SAMPLE_USER,
+        srcChainKey: 'unregistered.chain' as SpokeChainKey,
+        srcToken: SAMPLE_TOKEN,
+        amount: 1_000_000n,
+        dstChainKey: BSC,
+        dstToken: SAMPLE_TOKEN,
+        recipient: SAMPLE_DST,
+      },
+    } as BridgeParams<SpokeChainKey, true>);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toBeInstanceOf(SodaxError);
+      expect(result.error.code).toBe('VALIDATION_FAILED');
+      expect(result.error.message).toContain('Invalid spoke chain');
+    }
+  });
+});
+
+// =========================================================================
+// Sonic-sourced "withdraw directly" — hub-asset token resolution
+// =========================================================================
+//
+// Partner fees are held on Sonic as hub assets (e.g. the BTC hub asset), which have no
+// spoke-token entry under the hub chain — their only XToken lives on the native spoke
+// (Bitcoin). createBridgeIntent must resolve those by hub-asset address so the withdraw goes
+// through instead of throwing `Unsupported spoke chain (sonic) token: <hub asset>`.
+
+describe('BridgeService.createBridgeIntent — Sonic-sourced hub-asset resolution', () => {
+  const SONIC = ChainKeys.SONIC_MAINNET;
+  // BTC hub asset on Sonic (bitcoinSupportedTokens.BTC.hubAsset) — no Sonic spoke-token entry.
+  const BTC_HUB_ASSET = '0xeb0393893b5bf98a50073d6740738b08e575058b' as Address;
+  // sodaBTC vault — bitcoinSupportedTokens.BTC.vault.
+  const SODA_BTC_VAULT = '0x7A1A5555842Ad2D0eD274d09b5c4406a95799D5d';
+
+  const sonicWithdrawInput = (srcToken: Address, dstToken: Address): BridgeParams<typeof SONIC, false> =>
+    ({
+      raw: false,
+      walletProvider: mockEvmProvider,
+      params: {
+        srcAddress: SAMPLE_USER,
+        srcChainKey: SONIC,
+        srcToken,
+        amount: 100_000n,
+        dstChainKey: SONIC,
+        dstToken,
+        recipient: SAMPLE_DST,
+      },
+    }) as BridgeParams<typeof SONIC, false>;
+
+  beforeEach(() => {
+    vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockResolvedValue(HUB_WALLET);
+    vi.spyOn(sodax.spoke, 'deposit').mockResolvedValue({ ok: true, value: 'sonictxhash' } as never);
+  });
+
+  it('resolves a hub-asset srcToken/dstToken via the hub-asset map and bridges (no "Unsupported spoke chain")', async () => {
+    const buildSpy = vi.spyOn(sodax.bridge, 'buildBridgeData').mockReturnValue('0xdata' as never);
+
+    const result = await sodax.bridge.createBridgeIntent(sonicWithdrawInput(BTC_HUB_ASSET, BTC_HUB_ASSET));
+
+    expect(result.ok).toBe(true);
+    // Both endpoints resolved to the BTC descriptor (sodaBTC vault), proving the hub-asset fallback.
+    const [, srcToken, dstToken] = buildSpy.mock.calls[0];
+    expect(srcToken.vault.toLowerCase()).toBe(SODA_BTC_VAULT.toLowerCase());
+    expect(dstToken.vault.toLowerCase()).toBe(SODA_BTC_VAULT.toLowerCase());
+  });
+
+  it('still rejects an unknown hub token that is neither a Sonic spoke token nor a hub asset', async () => {
+    const result = await sodax.bridge.createBridgeIntent(sonicWithdrawInput(SAMPLE_TOKEN, SAMPLE_TOKEN));
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.message).toContain('Unsupported spoke chain');
+    }
   });
 });
 
@@ -264,7 +776,9 @@ describe('BridgeService.bridge — integration error-path coverage', () => {
     // pinning that path here so a future regression that widens isBridgeOrchestrationError
     // (or accidentally narrows the catch behavior) surfaces immediately. Mirrors the 4 MM
     // out-of-union wrap-tests added in the previous review.
-    const outOfUnion = new SodaxError('SWAP_RELAY_TIMEOUT' as never, 'foreign code thrown into bridge', { feature: 'bridge' });
+    const outOfUnion = new SodaxError('SWAP_RELAY_TIMEOUT' as never, 'foreign code thrown into bridge', {
+      feature: 'bridge',
+    });
     vi.spyOn(sodax.bridge, 'createBridgeIntent').mockRejectedValueOnce(outOfUnion);
 
     const result = await sodax.bridge.bridge(bridgeInput(BSC, ARBITRUM));
@@ -275,5 +789,522 @@ describe('BridgeService.bridge — integration error-path coverage', () => {
     expect(result.error.cause).toBe(outOfUnion);
     expect(result.error.context?.srcChainKey).toBe(BSC);
     expect(result.error.context?.dstChainKey).toBe(ARBITRUM);
+  });
+});
+
+// =========================================================================
+// bridge — backend submit-tx flow (bridge.useBackendSubmitTx, default ON).
+// Mirrors SwapService.test.ts Batch 7, with bridge deltas: no intent / intent_hash,
+// success value is TxHashPair, fallback relays (no post-execution).
+// =========================================================================
+
+describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () => {
+  // A separate Sodax instance with backend submit-tx ON (the default). Per-test we stub createBridgeIntent +
+  // verifyTxHash on this instance and the backend bridge API it calls (submitTx / getSubmitTxStatus);
+  // the module-level `mocks.relayTxAndWaitPacket` covers the client-side fallback path.
+  const sodaxBE = new Sodax({ logger: 'silent' });
+
+  // createBridgeIntent (broadcast) succeeds + on-chain verify succeeds, so bridge() reaches the
+  // submit/fallback branch. verifyTxHash is only consumed on the fallback path — returned so a test can
+  // assert whether it ran.
+  const stubCreatedAndVerified = () => {
+    vi.spyOn(sodaxBE.bridge, 'createBridgeIntent').mockResolvedValueOnce({
+      ok: true,
+      value: { tx: '0xspokeTx' as never, relayData: { address: HUB_WALLET, payload: '0x' } },
+    } as never);
+    return vi.spyOn(sodaxBE.spoke, 'verifyTxHash').mockResolvedValue({ ok: true, value: undefined });
+  };
+
+  it('on backend "executed", returns the TxHashPair from the backend (no client-side relay)', async () => {
+    stubCreatedAndVerified();
+    const submitSpy = vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValueOnce({
+      ok: true,
+      value: { success: true, data: { status: 'inserted', message: 'accepted' } },
+    } as never);
+    vi.spyOn(sodaxBE.api.bridge, 'getSubmitTxStatus').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        success: true,
+        data: {
+          txHash: '0xspokeTx',
+          srcChainKey: BSC,
+          status: 'executed',
+          processingAttempts: 1,
+          result: { dstIntentTxHash: '0xDST' },
+        },
+      },
+    } as never);
+
+    const result = await sodaxBE.bridge.bridge(bridgeInput(BSC, ARBITRUM));
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.srcChainTxHash).toBe('0xspokeTx');
+      expect(result.value.dstChainTxHash).toBe('0xDST');
+    }
+    // The backend owns the relay — the client-side relay must NOT run.
+    expect(submitSpy).toHaveBeenCalledOnce();
+    expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the client-side relay when the backend submit POST is rejected', async () => {
+    stubCreatedAndVerified();
+    vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValueOnce({
+      ok: false,
+      error: new SodaxError('EXTERNAL_API_ERROR', 'backend down', { feature: 'backend' }),
+    } as never);
+    const statusSpy = vi.spyOn(sodaxBE.api.bridge, 'getSubmitTxStatus');
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
+
+    const result = await sodaxBE.bridge.bridge(bridgeInput(BSC, ARBITRUM, 30_000));
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.dstChainTxHash).toBe('0xFALLBACKDST');
+    expect(statusSpy).not.toHaveBeenCalled(); // POST failed before any status polling
+    expect(mocks.relayTxAndWaitPacket).toHaveBeenCalledOnce();
+    // A backend that fails fast leaves the fallback the SAME full budget a stalled one does — the two
+    // paths never share a deadline. The stalled counterpart is asserted below.
+    expect(mocks.relayTxAndWaitPacket.mock.calls.at(-1)?.[0]?.timeout).toBe(30_000);
+  });
+
+  it('falls back when the backend reports a terminal "failed" status', async () => {
+    stubCreatedAndVerified();
+    vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValueOnce({
+      ok: true,
+      value: { success: true, data: { status: 'inserted', message: 'accepted' } },
+    } as never);
+    vi.spyOn(sodaxBE.api.bridge, 'getSubmitTxStatus').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        success: true,
+        data: { txHash: '0xspokeTx', srcChainKey: BSC, status: 'failed', processingAttempts: 1, failureReason: 'boom' },
+      },
+    } as never);
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
+
+    const result = await sodaxBE.bridge.bridge(bridgeInput(BSC, ARBITRUM));
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.dstChainTxHash).toBe('0xFALLBACKDST');
+    expect(mocks.relayTxAndWaitPacket).toHaveBeenCalledOnce();
+  });
+
+  it('does not touch the backend submit API when the flag is off', async () => {
+    // The module-level `sodax` opts out via `bridge.useBackendSubmitTx: false` → pure client-side flow.
+    vi.spyOn(sodax.bridge, 'createBridgeIntent').mockResolvedValueOnce({
+      ok: true,
+      value: { tx: '0xspokeTx' as never, relayData: { address: HUB_WALLET, payload: '0x' } },
+    } as never);
+    vi.spyOn(sodax.spoke, 'verifyTxHash').mockResolvedValueOnce({ ok: true, value: undefined });
+    const submitSpy = vi.spyOn(sodax.api.bridge, 'submitTx');
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xdstTx' } });
+
+    const result = await sodax.bridge.bridge(bridgeInput(BSC, ARBITRUM));
+
+    expect(result.ok).toBe(true);
+    expect(submitSpy).not.toHaveBeenCalled();
+  });
+
+  /** Backend accepts the submission but never reaches `executed`, so the attempt runs to its full budget. */
+  const stubStalledBackend = () => {
+    vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValueOnce({
+      ok: true,
+      value: { success: true, data: { status: 'inserted', message: 'accepted' } },
+    } as never);
+    vi.spyOn(sodaxBE.api.bridge, 'getSubmitTxStatus').mockResolvedValue({
+      ok: true,
+      value: {
+        success: true,
+        data: { txHash: '0xspokeTx', srcChainKey: BSC, status: 'pending', processingAttempts: 1 },
+      },
+    } as never);
+  };
+
+  it('gives the fallback a FRESH full timeout after a stalled backend consumed its own', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    try {
+      stubCreatedAndVerified();
+      stubStalledBackend();
+      mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
+
+      const overallTimeout = 30_000;
+      const bridgePromise = sodaxBE.bridge.bridge(bridgeInput(BSC, ARBITRUM, overallTimeout));
+      // Drive the backend attempt past its own deadline so bridge() falls back.
+      await vi.advanceTimersByTimeAsync(overallTimeout);
+      const result = await bridgePromise;
+
+      expect(result.ok).toBe(true);
+      // `timeout` is per-attempt: the backend spending all of its own budget must not shorten the relay
+      // wait. Sharing one deadline left this at the ~5s floor, which is how a slow chain hit RELAY_TIMEOUT.
+      const relayTimeout = mocks.relayTxAndWaitPacket.mock.calls.at(-1)?.[0]?.timeout as number;
+      expect(relayTimeout).toBe(overallTimeout);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('treats a non-finite caller timeout as the default rather than stranding the broadcast deposit', async () => {
+    stubCreatedAndVerified();
+    const submitSpy = vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValueOnce({
+      ok: false,
+      error: new SodaxError('EXTERNAL_API_ERROR', 'backend down', { feature: 'backend' }),
+    } as never);
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
+
+    // `?? DEFAULT` does not catch NaN; unresolved it would skip the POST and hand the relay
+    // `Math.max(NaN, floor)` = NaN, which reads as an already-expired budget — RELAY_TIMEOUT in
+    // milliseconds on a deposit that is live on-chain.
+    const result = await sodaxBE.bridge.bridge(bridgeInput(BSC, ARBITRUM, Number.NaN));
+
+    expect(result.ok).toBe(true);
+    expect(submitSpy).toHaveBeenCalledOnce();
+    expect(submitSpy.mock.calls[0]?.[1]).toEqual({ timeout: DEFAULT_BACKEND_API_TIMEOUT });
+    expect(mocks.relayTxAndWaitPacket.mock.calls.at(-1)?.[0]?.timeout).toBe(DEFAULT_RELAY_TX_TIMEOUT);
+  });
+
+  it('skips the backend POST entirely when the caller leaves no budget', async () => {
+    stubCreatedAndVerified();
+    // Stubbed even though the assertion is that it never runs: an unmocked spy calls through, so a
+    // regression in the budget guard would turn this unit test into a real POST to the live backend.
+    const submitSpy = vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValue({
+      ok: false,
+      error: new SodaxError('EXTERNAL_API_ERROR', 'unreachable', { feature: 'backend' }),
+    } as never);
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
+
+    const result = await sodaxBE.bridge.bridge(bridgeInput(BSC, ARBITRUM, 0));
+
+    expect(result.ok).toBe(true);
+    // Firing the POST would only arm an abort at 0ms; the relay still runs on its floor because the
+    // deposit has already landed on-chain.
+    expect(submitSpy).not.toHaveBeenCalled();
+    expect(mocks.relayTxAndWaitPacket.mock.calls.at(-1)?.[0]?.timeout).toBe(RELAY_FALLBACK_FLOOR_MS);
+  });
+
+  it('does not verify on-chain before handing the deposit to the backend', async () => {
+    const verifySpy = stubCreatedAndVerified();
+    vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValueOnce({
+      ok: true,
+      value: { success: true, data: { status: 'inserted', message: 'accepted' } },
+    } as never);
+    vi.spyOn(sodaxBE.api.bridge, 'getSubmitTxStatus').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        success: true,
+        data: {
+          txHash: '0xspokeTx',
+          srcChainKey: BSC,
+          status: 'executed',
+          processingAttempts: 1,
+          result: { dstIntentTxHash: '0xDST' },
+        },
+      },
+    } as never);
+
+    expect((await sodaxBE.bridge.bridge(bridgeInput(BSC, ARBITRUM))).ok).toBe(true);
+    // Backend success costs nothing in verification — verifying first would delay it by the source
+    // chain's confirmation wait (up to its full `maxTimeoutMs`) and could fail a bridge the backend's
+    // own infrastructure would have completed.
+    expect(verifySpy).not.toHaveBeenCalled();
+  });
+
+  it('verifies exactly once, on the fallback, when the backend attempt does not complete', async () => {
+    const verifySpy = stubCreatedAndVerified();
+    vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValueOnce({
+      ok: false,
+      error: new SodaxError('EXTERNAL_API_ERROR', 'backend down', { feature: 'backend' }),
+    } as never);
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
+
+    expect((await sodaxBE.bridge.bridge(bridgeInput(BSC, ARBITRUM))).ok).toBe(true);
+    // The backend attempt costs nothing in verification; the fallback pays for it once, and only then.
+    expect(verifySpy).toHaveBeenCalledOnce();
+  });
+
+  it('raises a sub-floor caller timeout to the relay floor on the default path', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    try {
+      vi.spyOn(sodax.bridge, 'createBridgeIntent').mockResolvedValueOnce({
+        ok: true,
+        value: { tx: '0xspokeTx' as never, relayData: { address: HUB_WALLET, payload: '0x' } },
+      } as never);
+      vi.spyOn(sodax.spoke, 'verifyTxHash').mockResolvedValueOnce({ ok: true, value: undefined });
+      mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xdstTx' } });
+
+      const result = await sodax.bridge.bridge(bridgeInput(BSC, ARBITRUM, 2_000));
+
+      expect(result.ok).toBe(true);
+      // The floor deliberately outranks a sub-floor caller `timeout` (matching SwapService): the spoke
+      // deposit has already landed, and `relayTxAndWaitPacket` submits before `timeout` bounds the wait.
+      const relayTimeout = mocks.relayTxAndWaitPacket.mock.calls.at(-1)?.[0]?.timeout as number;
+      expect(relayTimeout).toBe(RELAY_FALLBACK_FLOOR_MS);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not let a slow source-chain confirmation eat the relay budget', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    try {
+      vi.spyOn(sodax.bridge, 'createBridgeIntent').mockResolvedValueOnce({
+        ok: true,
+        value: { tx: '0xspokeTx' as never, relayData: { address: HUB_WALLET, payload: '0x' } },
+      } as never);
+      // A slow source-chain confirmation (Stacks polls for up to its full 120s `maxTimeoutMs`) used to
+      // come out of the relay's share, because the fallback's deadline started before `verifyTxHash`.
+      vi.spyOn(sodax.spoke, 'verifyTxHash').mockImplementationOnce(async () => {
+        vi.setSystemTime(10_000);
+        return { ok: true, value: undefined };
+      });
+      mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xdstTx' } });
+
+      const result = await sodax.bridge.bridge(bridgeInput(BSC, ARBITRUM, 30_000));
+
+      // Verification is now a separate phase, bounded by the chain's own `maxTimeoutMs`, so the relay
+      // wait gets the caller's `timeout` in full however long confirmation took.
+      expect(result.ok).toBe(true);
+      expect(mocks.relayTxAndWaitPacket).toHaveBeenCalledOnce();
+      expect(mocks.relayTxAndWaitPacket.mock.calls.at(-1)?.[0]?.timeout).toBe(30_000);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+// =========================================================================
+// Sodax wiring — bridge.useBackendSubmitTx flows into BridgeService,
+// and sodax.api.bridge is reachable.
+// =========================================================================
+
+describe('Sodax bridge.useBackendSubmitTx wiring', () => {
+  it('defaults useBackendSubmitTx to true and exposes sodax.api.bridge', () => {
+    const s = new Sodax();
+    expect(s.bridge.useBackendSubmitTx).toBe(true);
+    expect(s.swaps.useBackendSubmitTx).toBe(true);
+    expect(s.api.bridge).toBeDefined();
+  });
+
+  it('threads bridge.useBackendSubmitTx=false into the BridgeService', () => {
+    const s = new Sodax({ bridge: { useBackendSubmitTx: false } });
+    expect(s.bridge.useBackendSubmitTx).toBe(false);
+    expect(s.swaps.useBackendSubmitTx).toBe(true);
+  });
+
+  it('keeps the bridge toggle independent of swaps.useBackendSubmitTx', () => {
+    const s = new Sodax({ swaps: { useBackendSubmitTx: false } });
+    expect(s.swaps.useBackendSubmitTx).toBe(false);
+    expect(s.bridge.useBackendSubmitTx).toBe(true);
+  });
+
+  it('resolves the effective toggle on ConfigService, so config and behavior never disagree', () => {
+    const defaults = new Sodax();
+    // The raw slot is legitimately absent when the caller omits the flag; the effective accessor —
+    // the one the services read — is what reports the ON default.
+    expect(defaults.config.swaps.useBackendSubmitTx).toBeUndefined();
+    expect(defaults.config.swapUseBackendSubmitTx).toBe(true);
+    expect(defaults.config.bridgeUseBackendSubmitTx).toBe(true);
+
+    const optedOut = new Sodax({ swaps: { useBackendSubmitTx: false }, bridge: { useBackendSubmitTx: false } });
+    expect(optedOut.config.swapUseBackendSubmitTx).toBe(false);
+    expect(optedOut.config.bridgeUseBackendSubmitTx).toBe(false);
+    expect(optedOut.swaps.useBackendSubmitTx).toBe(false);
+    expect(optedOut.bridge.useBackendSubmitTx).toBe(false);
+  });
+
+  it('honours the deprecated swapsOptions / bridgeOptions opt-out', () => {
+    // Pre-existing callers that explicitly turned the flag OFF must keep the client-side path —
+    // the default flips to ON only for callers that never set it.
+    const legacyOff = new Sodax({
+      swapsOptions: { useBackendSubmitTx: false },
+      bridgeOptions: { useBackendSubmitTx: false },
+    });
+    expect(legacyOff.config.swapUseBackendSubmitTx).toBe(false);
+    expect(legacyOff.config.bridgeUseBackendSubmitTx).toBe(false);
+    expect(legacyOff.swaps.useBackendSubmitTx).toBe(false);
+    expect(legacyOff.bridge.useBackendSubmitTx).toBe(false);
+
+    const legacyOn = new Sodax({
+      swapsOptions: { useBackendSubmitTx: true },
+      bridgeOptions: { useBackendSubmitTx: true },
+    });
+    expect(legacyOn.swaps.useBackendSubmitTx).toBe(true);
+    expect(legacyOn.bridge.useBackendSubmitTx).toBe(true);
+  });
+
+  it('gives the new swaps / bridge keys precedence over the deprecated ones', () => {
+    const s = new Sodax({
+      swaps: { useBackendSubmitTx: true },
+      swapsOptions: { useBackendSubmitTx: false },
+      bridge: { useBackendSubmitTx: false },
+      bridgeOptions: { useBackendSubmitTx: true },
+    });
+    expect(s.swaps.useBackendSubmitTx).toBe(true);
+    expect(s.bridge.useBackendSubmitTx).toBe(false);
+  });
+});
+
+// =========================================================================
+// buildApproveTxs — spender resolution, the only logic this layer owns
+// =========================================================================
+
+describe('BridgeService.buildApproveTxs', () => {
+  const SONIC = ChainKeys.SONIC_MAINNET;
+  const STELLAR = ChainKeys.STELLAR_MAINNET;
+  const rawTx = { from: SAMPLE_USER, to: '0x0', value: 0n, data: '0x' } as never;
+
+  const approveInput = <K extends SpokeChainKey>(srcChainKey: K): BridgeParams<K, true> =>
+    ({
+      raw: true,
+      params: {
+        srcAddress: SAMPLE_USER,
+        srcChainKey,
+        srcToken: SAMPLE_TOKEN,
+        amount: 1_000_000n,
+        dstChainKey: ARBITRUM,
+        dstToken: SAMPLE_TOKEN,
+        recipient: SAMPLE_DST,
+      },
+    }) as BridgeParams<K, true>;
+
+  it("approves the caller's own hub wallet on the hub (Sonic), not the swaps intents contract", async () => {
+    // Swaps resolves the hub spender synchronously from `solver.intentsContract`; reusing that here
+    // would approve the wrong contract and still typecheck.
+    vi.spyOn(sodax.bridge.hubProvider, 'getUserHubWalletAddress').mockResolvedValueOnce(HUB_WALLET);
+    vi.spyOn(sodax.bridge.spoke, 'buildApproveTxs').mockResolvedValueOnce({ ok: true, value: { approveTx: rawTx } });
+
+    const result = await sodax.bridge.buildApproveTxs(approveInput(SONIC));
+
+    expect(result).toEqual({ ok: true, value: { approveTx: rawTx } });
+    expect(sodax.bridge.hubProvider.getUserHubWalletAddress).toHaveBeenCalledWith(SAMPLE_USER, SONIC);
+    expect(sodax.bridge.spoke.buildApproveTxs).toHaveBeenCalledWith(
+      expect.objectContaining({ srcChainKey: SONIC, spender: HUB_WALLET, raw: true }),
+    );
+  });
+
+  it('approves the asset manager on an EVM spoke', async () => {
+    vi.spyOn(sodax.bridge.spoke, 'buildApproveTxs').mockResolvedValueOnce({ ok: true, value: { approveTx: rawTx } });
+
+    const result = await sodax.bridge.buildApproveTxs(approveInput(BSC));
+
+    expect(result).toEqual({ ok: true, value: { approveTx: rawTx } });
+    expect(sodax.bridge.spoke.buildApproveTxs).toHaveBeenCalledWith(
+      expect.objectContaining({
+        srcChainKey: BSC,
+        spender: sodax.bridge.config.getChainConfig(BSC).addresses.assetManager,
+        raw: true,
+      }),
+    );
+  });
+
+  it('resolves the same spender as approve() does, on both EVM branches', async () => {
+    // Pins the property, not the shared call, so an inlined copy of the resolver would fail it.
+    vi.spyOn(sodax.bridge.hubProvider, 'getUserHubWalletAddress').mockResolvedValue(HUB_WALLET);
+    const buildSpy = vi
+      .spyOn(sodax.bridge.spoke, 'buildApproveTxs')
+      .mockResolvedValue({ ok: true, value: { approveTx: rawTx } });
+    const approveSpy = vi.spyOn(sodax.bridge.spoke, 'approve').mockResolvedValue({ ok: true, value: rawTx });
+
+    for (const chainKey of [SONIC, BSC] as const) {
+      await sodax.bridge.buildApproveTxs(approveInput(chainKey));
+      await sodax.bridge.approve({ ...approveInput(chainKey), raw: true } as BridgeParams<typeof chainKey, true>);
+    }
+
+    const spenderOf = (spy: typeof buildSpy | typeof approveSpy) =>
+      spy.mock.calls.map(([args]) => (args as { spender: string }).spender);
+    expect(spenderOf(buildSpy)).toEqual(spenderOf(approveSpy));
+    expect(spenderOf(buildSpy)).toEqual([HUB_WALLET, sodax.bridge.config.getChainConfig(BSC).addresses.assetManager]);
+  });
+
+  it('passes the bridge amount, source token and owner through as the approval target', async () => {
+    const input = approveInput(BSC);
+    vi.spyOn(sodax.bridge.spoke, 'buildApproveTxs').mockResolvedValueOnce({ ok: true, value: { approveTx: rawTx } });
+
+    await sodax.bridge.buildApproveTxs(input);
+
+    expect(sodax.bridge.spoke.buildApproveTxs).toHaveBeenCalledWith(
+      expect.objectContaining({
+        token: input.params.srcToken,
+        amount: input.params.amount,
+        owner: input.params.srcAddress,
+      }),
+    );
+  });
+
+  it('surfaces the reset under its own name when the plan needs one', async () => {
+    const resetTx = { ...(rawTx as object), data: '0xreset' } as never;
+    vi.spyOn(sodax.bridge.spoke, 'buildApproveTxs').mockResolvedValueOnce({
+      ok: true,
+      value: { resetTx, approveTx: rawTx },
+    });
+
+    const result = await sodax.bridge.buildApproveTxs(approveInput(BSC));
+
+    // Named, not ordered: no consumer has to know which index is which.
+    expect(result).toEqual({ ok: true, value: { resetTx, approveTx: rawTx } });
+  });
+
+  it('routes Stellar to the trustline branch without a spender', async () => {
+    vi.spyOn(sodax.bridge.spoke, 'buildApproveTxs').mockResolvedValueOnce({ ok: true, value: { approveTx: rawTx } });
+
+    await sodax.bridge.buildApproveTxs(approveInput(STELLAR));
+
+    expect(sodax.bridge.spoke.buildApproveTxs).toHaveBeenCalledWith(
+      expect.not.objectContaining({ spender: expect.anything() }),
+    );
+  });
+
+  it('wraps a spoke failure as SodaxError(APPROVE_FAILED) on the bridge feature, cause preserved', async () => {
+    const spokeError = new Error('BUILD_FAILED');
+    vi.spyOn(sodax.bridge.spoke, 'buildApproveTxs').mockResolvedValueOnce({ ok: false, error: spokeError });
+
+    const result = await sodax.bridge.buildApproveTxs(approveInput(BSC));
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toBeInstanceOf(SodaxError);
+    expect(result.error.code).toBe('APPROVE_FAILED');
+    expect(result.error.feature).toBe('bridge');
+    expect(result.error.cause).toBe(spokeError);
+  });
+
+  it('rejects an unsupported chain (Solana) rather than building a meaningless approval', async () => {
+    const result = await sodax.bridge.buildApproveTxs(approveInput(SOLANA));
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(String(result.error.message)).toMatch(/Approval only supported/);
+  });
+
+  it('ignores a raw:false forced past the type system and still builds unsigned', async () => {
+    // A JavaScript caller can still pass `raw: false`, and the Stellar branch reads it at runtime —
+    // carrying it through would have a method named "build" broadcast.
+    const buildSpy = vi
+      .spyOn(sodax.bridge.spoke, 'buildApproveTxs')
+      .mockResolvedValue({ ok: true, value: { approveTx: rawTx } });
+    const approveSpy = vi.spyOn(sodax.bridge.spoke, 'approve');
+
+    for (const chainKey of [BSC, STELLAR] as const) {
+      const forced = {
+        ...approveInput(chainKey),
+        raw: false,
+        walletProvider: mockEvmProvider,
+      } as unknown as BridgeParams<typeof chainKey, true>;
+      await expect(sodax.bridge.buildApproveTxs(forced)).resolves.toEqual({ ok: true, value: { approveTx: rawTx } });
+    }
+
+    for (const [args] of buildSpy.mock.calls) expect((args as { raw: boolean }).raw).toBe(true);
+    expect(approveSpy).not.toHaveBeenCalled(); // nothing took the signing path
+  });
+
+  it('rejects a zero amount, matching approve()', async () => {
+    const input = approveInput(BSC);
+    const result = await sodax.bridge.buildApproveTxs({ ...input, params: { ...input.params, amount: 0n } });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(String(result.error.message)).toMatch(/Amount must be greater than 0/);
   });
 });

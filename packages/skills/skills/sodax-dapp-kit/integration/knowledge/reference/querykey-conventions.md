@@ -150,10 +150,62 @@ Skip if you're writing a feature hook for the first time and want to align with 
 | `['staking', 'cancelUnstake']` | `useCancelUnstake` |
 | `['staking', 'approve', 'stake' \| 'unstake' \| 'instantUnstake']` | `useStakeApprove` / `useUnstakeApprove` / `useInstantUnstakeApprove` |
 
+### Backend (read)
+
+Backend read hooks (`useBackendIntentByTxHash`, `useBackendIntentByHash`, `useBackendUserIntents`, `useBackendOrderbook`, `useBackendMoneyMarketPosition`, …) follow the `['backend', action, ...]` shape — see the source hook files.
+
+### Swaps API (`sodax.api.swaps`)
+
+Typed wrappers over `sodax.api.swaps.*` (one per Swaps API v2 endpoint), all keyed `['swapsApi', action, ...]`.
+
+| Key | Hook |
+|---|---|
+| `['swapsApi', 'tokens']` | `useSwapsApiTokens` |
+| `['swapsApi', 'tokens', chainKey]` | `useSwapsApiTokensByChain` |
+| `['swapsApi', 'quote', …]` | `useSwapsApiQuote` |
+| `['swapsApi', 'deadline', …]` | `useSwapsApiDeadline` |
+| `['swapsApi', 'allowance', …]` | `useSwapsApiAllowance` |
+| `['swapsApi', 'status', …]` | `useSwapsApiStatus` |
+| `['swapsApi', 'intentHash', …]` | `useSwapsApiIntentHash` |
+| `['swapsApi', 'intentPacket', …]` | `useSwapsApiIntentPacket` |
+| `['swapsApi', 'intentExtraData', …]` | `useSwapsApiIntentExtraData` |
+| `['swapsApi', 'filledIntent', txHash]` | `useSwapsApiFilledIntent` |
+| `['swapsApi', 'intent', txHash]` | `useSwapsApiIntent` |
+| `['swapsApi', 'estimateGas', …]` | `useSwapsApiEstimateGas` |
+| `['swapsApi', 'partnerFee', amount]` | `useSwapsApiPartnerFee` |
+| `['swapsApi', 'solverFee', amount]` | `useSwapsApiSolverFee` |
+| `['swapsApi', 'submitTx', 'status', txHash, srcChainKey]` | `useSwapsApiSubmitTxStatus` — both identifiers required |
+| `['swapsApi', 'approve']` | `useSwapsApiApprove` mutation |
+| `['swapsApi', 'approveAndBroadcast']` | `useSwapsApiApproveAndBroadcast` mutation |
+| `['swapsApi', 'createIntent']` | `useSwapsApiCreateIntent` mutation |
+| `['swapsApi', 'submitIntent']` | `useSwapsApiSubmitIntent` mutation |
+| `['swapsApi', 'cancelIntent']` | `useSwapsApiCancelIntent` mutation |
+| `['swapsApi', 'createLimitOrder']` | `useSwapsApiCreateLimitOrder` mutation |
+| `['swapsApi', 'submitTx']` | `useSwapsApiSubmitTx` mutation |
+
+### Bridge API (`sodax.api.bridge`)
+
+Typed wrappers over `sodax.api.bridge.*` (one per Bridge API v2 endpoint), all keyed `['bridgeApi', action, ...]`.
+
+| Key | Hook |
+|---|---|
+| `['bridgeApi', 'tokens']` | `useBridgeApiTokens` |
+| `['bridgeApi', 'tokens', chainKey]` | `useBridgeApiTokensByChain` |
+| `['bridgeApi', 'allowance', …]` | `useBridgeApiAllowance` |
+| `['bridgeApi', 'fee', inputAmount, partnerFee]` | `useBridgeApiFee` |
+| `['bridgeApi', 'bridgeableAmount', srcChainKey, dstChainKey, inputToken, outputToken]` | `useBridgeApiBridgeableAmount` |
+| `['bridgeApi', 'bridgeable', srcChainKey, dstChainKey, inputToken, outputToken]` | `useBridgeApiIsBridgeable` |
+| `['bridgeApi', 'submitTx', 'status', txHash, srcChainKey]` | `useBridgeApiSubmitTxStatus` — both identifiers required |
+| `['bridgeApi', 'approve']` | `useBridgeApiApprove` mutation |
+| `['bridgeApi', 'approveAndBroadcast']` | `useBridgeApiApproveAndBroadcast` mutation |
+| `['bridgeApi', 'createBridgeIntent']` | `useBridgeApiCreateBridgeIntent` mutation |
+| `['bridgeApi', 'submitTx']` | `useBridgeApiSubmitTx` mutation |
+
 ### Leverage Yield
 
 | Key | Hook |
 |---|---|
+| `['leverageYield', 'quote', payload]` | `useLeverageYieldQuote` (payload object with `amount` and any `partnerFee.amount` stringified — React Query hashes keys with `JSON.stringify`, which throws on bigint) |
 | `['leverageYield', 'effectiveApr', vault]` | `useLeverageYieldEffectiveApr` |
 | `['leverageYield', 'position', vault]` | `useLeverageYieldPosition` |
 | `['leverageYield', 'totalAssets', vault]` | `useLeverageYieldTotalAssets` |

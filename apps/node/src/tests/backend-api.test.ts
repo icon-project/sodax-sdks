@@ -115,17 +115,6 @@
 //   } catch (err) {
 //     console.error('getOrderbook with headers override error:', err);
 //   }
-
-//   // getSubmitSwapTxStatus with config override
-//   try {
-//     const statusWithConfig = await sodax.backendApi.getSubmitSwapTxStatus(
-//       { txHash: '0xe6c9496781ef863e7d83ad86265076a633939384d6227bbe8154bea7028191d3' },
-//       { timeout: 10000 },
-//     );
-//     console.log('getSubmitSwapTxStatus with timeout override:', statusWithConfig);
-//   } catch (err) {
-//     console.error('getSubmitSwapTxStatus with config override error:', err);
-//   }
 // }
 
 // main();

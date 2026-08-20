@@ -11,6 +11,7 @@ import {
   mainnet,
   redbellyMainnet,
   kaia,
+  hedera,
 } from 'viem/chains';
 import { type Chain, defineChain } from 'viem';
 import { type EvmChainKey, ChainKeys } from '@sodax/types';
@@ -41,6 +42,26 @@ export const hyper = /*#__PURE__*/ defineChain({
   },
 });
 
+// Robinhood Chain is not yet in viem's bundled chain list, so define it manually
+export const robinhoodChain = /*#__PURE__*/ defineChain({
+  id: 4663,
+  name: 'Robinhood Chain',
+  nativeCurrency: {
+    decimals: 18,
+    name: 'Ether',
+    symbol: 'ETH',
+  },
+  rpcUrls: {
+    default: { http: ['https://rpc.mainnet.chain.robinhood.com'] },
+  },
+  blockExplorers: {
+    default: {
+      name: 'Blockscout',
+      url: 'https://robinhoodchain.blockscout.com',
+    },
+  },
+});
+
 export function getEvmViemChain(key: EvmChainKey): Chain {
   switch (key) {
     case ChainKeys.SONIC_MAINNET:
@@ -67,6 +88,10 @@ export function getEvmViemChain(key: EvmChainKey): Chain {
       return redbellyMainnet;
     case ChainKeys.KAIA_MAINNET:
       return kaia;
+    case ChainKeys.HEDERA_MAINNET:
+      return hedera;
+    case ChainKeys.ROBINHOOD_MAINNET:
+      return robinhoodChain;
     default: {
       const exhaustiveCheck: never = key; // The never type is used to ensure that the default case is exhaustive
       console.log(exhaustiveCheck);

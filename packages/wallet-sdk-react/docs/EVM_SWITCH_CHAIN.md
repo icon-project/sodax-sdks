@@ -1,6 +1,6 @@
 # EVM Switch Chain
 
-A single wagmi connection covers **every configured EVM network** (Sonic, Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia). The user picks a wallet once; switching the **active network** within that wallet is a separate concern handled by `useEvmSwitchChain`.
+A single wagmi connection covers **every configured EVM network** (Sonic, Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia, Hedera). The user picks a wallet once; switching the **active network** within that wallet is a separate concern handled by `useEvmSwitchChain`.
 
 The hook also covers Injective's MetaMask wallet path — when the user connected Injective via MetaMask, the underlying ethereum chain id must be Ethereum mainnet (chain id `1`). `useEvmSwitchChain` detects the mismatch and exposes a switch action.
 

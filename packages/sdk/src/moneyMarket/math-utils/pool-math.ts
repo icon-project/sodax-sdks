@@ -14,7 +14,8 @@ export function calculateCompoundedInterest({
   currentTimestamp,
   lastUpdateTimestamp,
 }: CalculateCompoundedInterestRequest): BigNumber {
-  const timeDelta = valueToZDBigNumber(currentTimestamp - lastUpdateTimestamp);
+  // Clamp: client clock (currentTimestamp) can lag chain block.timestamp → negative delta.
+  const timeDelta = valueToZDBigNumber(Math.max(0, currentTimestamp - lastUpdateTimestamp));
   const ratePerSecond = valueToZDBigNumber(rate).dividedBy(SECONDS_PER_YEAR);
   return RayMath.binomialApproximatedRayPow(ratePerSecond, timeDelta);
 }
@@ -61,7 +62,8 @@ export function calculateLinearInterest({
   currentTimestamp,
   lastUpdateTimestamp,
 }: LinearInterestRequest): BigNumber {
-  const timeDelta = RayMath.wadToRay(valueToZDBigNumber(currentTimestamp - lastUpdateTimestamp));
+  // Clamp: client clock can lag chain block.timestamp → negative delta would shrink the index.
+  const timeDelta = RayMath.wadToRay(valueToZDBigNumber(Math.max(0, currentTimestamp - lastUpdateTimestamp)));
   const timeDeltaInSeconds = RayMath.rayDiv(timeDelta, RayMath.wadToRay(SECONDS_PER_YEAR));
   const a = RayMath.rayMul(rate, timeDeltaInSeconds).plus(RayMath.RAY);
   return a;

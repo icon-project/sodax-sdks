@@ -24,9 +24,7 @@ export function ConnectionFlowDemo() {
           onClick={() => target && flow.connect(target)}
           className="rounded bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
         >
-          {flow.status === 'connecting'
-            ? 'Connecting…'
-            : `Connect ${target ? target.name : 'ICON (no connector)'}`}
+          {flow.status === 'connecting' ? 'Connecting…' : `Connect ${target ? target.name : 'ICON (no connector)'}`}
         </button>
 
         {flow.status === 'error' && (
@@ -54,8 +52,7 @@ export function ConnectionFlowDemo() {
       </div>
       {flow.activeConnector && (
         <div className="text-xs">
-          <span className="font-medium">activeConnector:</span> {flow.activeConnector.name} (
-          {flow.activeChainType})
+          <span className="font-medium">activeConnector:</span> {flow.activeConnector.name} ({flow.activeChainType})
         </div>
       )}
       {flow.error && (

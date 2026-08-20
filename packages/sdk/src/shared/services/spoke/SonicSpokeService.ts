@@ -4,8 +4,6 @@ import {
   decodeAbiParameters,
   encodeFunctionData,
   erc20Abi,
-  http,
-  type HttpTransport,
   type PublicClient,
 } from 'viem';
 import {
@@ -28,9 +26,12 @@ import {
 import { invariant } from '../../utils/tiny-invariant.js';
 import { encodeAddress, randomUint256 } from '../../utils/shared-utils.js';
 import { getEvmViemChain } from '../../utils/constant-utils.js';
+import { buildEvmRpcTransport } from '../../utils/transport-utils.js';
 import { Erc20Service, type Erc20IsAllowanceParams } from '../erc-20/Erc20Service.js';
 import { wrappedSonicAbi, sonicWalletFactoryAbi } from '../../abis/index.js';
 import { EvmSolverService } from '../../../swap/EvmSolverService.js';
+import { HookService } from '../../../swap/HookService.js';
+import { IntentDataService } from '../../../swap/IntentDataService.js';
 import { isSonicChainKeyType } from '../../guards.js';
 import type {
   WaitForTxReceiptParams,
@@ -71,7 +72,7 @@ export type CreateSonicSwapIntentParams<Raw extends boolean> = {
 export class SonicSpokeService {
   private readonly config: ConfigService;
   // since sonic is sole hub chain we only need one public client
-  public readonly publicClient: PublicClient<HttpTransport>;
+  public readonly publicClient: PublicClient;
   private readonly pollingIntervalMs: number;
   private readonly maxTimeoutMs: number;
 
@@ -79,7 +80,7 @@ export class SonicSpokeService {
     this.config = config;
     const chainConfig = config.getChainConfig(ChainKeys.SONIC_MAINNET);
     this.publicClient = createPublicClient({
-      transport: http(chainConfig.rpcUrl),
+      transport: buildEvmRpcTransport(chainConfig),
       chain: getEvmViemChain(ChainKeys.SONIC_MAINNET),
     });
     this.pollingIntervalMs = chainConfig.pollingConfig.pollingIntervalMs;
@@ -263,10 +264,7 @@ export class SonicSpokeService {
       from: params.srcAddress,
       to: chainConfig.addresses.walletRouter,
       data: txData,
-      value:
-        params.token.toLowerCase() === chainConfig.nativeToken.toLowerCase()
-          ? params.amount
-          : 0n,
+      value: params.token.toLowerCase() === chainConfig.nativeToken.toLowerCase() ? params.amount : 0n,
     };
 
     if (params.raw === true) {
@@ -302,7 +300,11 @@ export class SonicSpokeService {
       `hub asset not found for spoke chain token (intent.outputToken): ${createIntentParams.outputToken}`,
     );
 
-    const [feeData, feeAmount] = EvmSolverService.createIntentFeeData(fee, createIntentParams.inputAmount);
+    // Apply the delivery hook (if any): may override dstAddress and derive deliveryData.
+    const { dstAddress, deliveryData } = HookService.resolveDelivery(createIntentParams);
+    // Encode the partner fee, then fold it together with any delivery payload into the intent `data`.
+    const [feeEnvelope, feeAmount] = EvmSolverService.createIntentFeeData(fee, createIntentParams.inputAmount);
+    const intentData = IntentDataService.composeIntentData(feeEnvelope, deliveryData);
 
     const intentsContract = solverConfig.intentsContract;
     const intent = {
@@ -317,9 +319,9 @@ export class SonicSpokeService {
       srcChain: getIntentRelayChainId(createIntentParams.srcChainKey),
       dstChain: getIntentRelayChainId(createIntentParams.dstChainKey),
       srcAddress: encodeAddress(createIntentParams.srcChainKey, createIntentParams.srcAddress),
-      dstAddress: encodeAddress(createIntentParams.dstChainKey, createIntentParams.dstAddress),
+      dstAddress: encodeAddress(createIntentParams.dstChainKey, dstAddress),
       solver: createIntentParams.solver ?? '0x0000000000000000000000000000000000000000',
-      data: feeData, // fee amount will be deducted from the input amount
+      data: intentData, // fee amount will be deducted from the input amount; may also carry delivery data
     } satisfies Intent;
 
     const txData = EvmSolverService.encodeCreateIntent(intent, intentsContract);

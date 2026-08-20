@@ -1,3 +1,4 @@
+import { isHex } from 'viem';
 import { invariant } from '../shared/utils/tiny-invariant.js';
 import {
   submitTransaction,
@@ -32,17 +33,43 @@ import {
   isBitcoinWalletProviderType,
   type RelayExtraData,
   type TxHashPair,
+  isStacksChainKeyType,
+  isNativeBitcoinTransfer,
+  RELAY_FALLBACK_FLOOR_MS,
+  RELAY_REQUEST_TIMEOUT_MS,
+  getTransactionPackets,
+  HttpRelayError,
 } from '../shared/index.js';
 import { SolverApiService } from './SolverApiService.js';
 import { EvmSolverService } from './EvmSolverService.js';
+import type { BackendApiService } from '../backendApi/index.js';
+import { runBackendSubmitTx } from '../backendApi/runBackendSubmitTx.js';
+import { createSubmitTxAttempt, type SubmitTxAttempt } from '../backendApi/submitTxAttempt.js';
+import { isFillEvent } from '../backendApi/guards.js';
+import { resolveTimeoutMs } from '../shared/utils/resolveTimeoutMs.js';
+import type { ApprovalTxs } from '../shared/types/spoke-types.js';
 import { selectSolvedIntentPacket } from './selectSolvedIntentPacket.js';
-import { SodaxError } from '../errors/SodaxError.js';
+import { isSodaxError, SodaxError } from '../errors/SodaxError.js';
 import { mapRelayFailure } from '../errors/relay-error-mapping.js';
-import { verifyFailed, intentCreationFailed, executionFailed, unknownFailed } from '../errors/wrappers.js';
+import {
+  verifyFailed,
+  intentCreationFailed,
+  executionFailed,
+  unknownFailed,
+  approveFailed,
+  lookupFailed,
+} from '../errors/wrappers.js';
+import {
+  DETAILED_STATUS_NOT_DELIVERED,
+  isBackendSubmitTxAbandoned,
+  type DetailedSwapStatus,
+  type DetailedSwapStatusKey,
+} from './detailedStatus.js';
 import {
   type SwapCreateIntentError,
   type PostExecutionError,
   type SwapError,
+  type DetailedStatusError,
   isSwapCreateIntentError,
   isPostExecutionError,
   isSwapError,
@@ -55,16 +82,23 @@ export type {
   FeeData,
   IntentData,
   IntentState,
+  SwapExtras,
+  BitcoinBoundExtras,
 } from '../shared/types/intent-types.js';
 export { IntentDataType } from '../shared/types/intent-types.js';
-import type { CreateIntentParams, CreateLimitOrderParams, Intent, IntentState } from '../shared/types/intent-types.js';
+import type {
+  CreateIntentParams,
+  CreateLimitOrderParams,
+  Intent,
+  IntentState,
+  SwapExtras,
+} from '../shared/types/intent-types.js';
 import {
   type SpokeChainKey,
   type Hex,
   type Hash,
   type HttpUrl,
   getIntentRelayChainId,
-  isBitcoinChainKey,
   type FeeAmount,
   type GetWalletProviderType,
   type PartnerFee,
@@ -75,6 +109,8 @@ import {
   type SolverIntentQuoteResponse,
   type SolverIntentStatusRequest,
   type SolverIntentStatusResponse,
+  SolverIntentErrorCode,
+  SolverIntentStatusCode,
   type Result,
   type TxReturnType,
   type GetEstimateGasReturnType,
@@ -91,6 +127,7 @@ import {
   type StellarChainKey,
   type SpokeExecActionParams,
   type SonicChainKey,
+  BITCOIN_DUST_SATS,
 } from '@sodax/types';
 
 export type GetIntentSubmitTxExtraDataParams = { txHash: Hash } | { intent: Intent };
@@ -113,13 +150,15 @@ export type CreateIntentResult<K extends SpokeChainKey, Raw extends boolean> = {
 export type SwapActionParams<K extends SpokeChainKey, Raw extends boolean = false> = SpokeExecActionParams<
   K,
   Raw,
-  CreateIntentParams<K>
+  CreateIntentParams<K>,
+  SwapExtras<K>
 >;
 
 export type LimitOrderActionParams<K extends SpokeChainKey, Raw extends boolean = false> = SpokeExecActionParams<
   K,
   Raw,
-  CreateLimitOrderParams<K>
+  CreateLimitOrderParams<K>,
+  SwapExtras<K>
 >;
 
 /**
@@ -141,11 +180,45 @@ export type CancelIntentActionParams<K extends SpokeChainKey, Raw extends boolea
   CancelIntentParams<K>
 >;
 
+// Non-breaking superset of `SolverIntentQuoteRequest`: existing `getQuote(payload)` calls keep
+// working unchanged. `partnerFee` is an optional per-call override (matches `extras.partnerFee` on
+// createIntent/swap); it is stripped before the request is forwarded to the solver.
+export type GetQuoteParams = SolverIntentQuoteRequest & {
+  /** Optional per-call override of the configured swap partner fee. Falls back to config when omitted. */
+  partnerFee?: PartnerFee;
+};
+
 export type SwapServiceConstructorParams = {
   config: ConfigService;
   spoke: SpokeService;
   hubProvider: HubProvider;
+  backendApi: BackendApiService;
 };
+
+/**
+ * Ceiling for the durable-record lookup in {@link SwapService.getStatus}. A status read is polled on
+ * a short interval, so its secondary lookup must not inherit the much longer default request budget.
+ */
+const RECONCILE_TIMEOUT_MS = 5_000;
+
+/**
+ * Budget for the solver status call behind {@link SwapService.getDetailedStatus}. Same reasoning as
+ * {@link RECONCILE_TIMEOUT_MS}: a polled read must not inherit the 30s backend default.
+ *
+ * The relay leg does **not** share this value — it takes {@link RELAY_REQUEST_TIMEOUT_MS}, the relay
+ * module's own per-request budget. One number for both reads was tempting, but 5s is a third of what
+ * the relay path already tolerates for a single request, so it would abort reads that succeed today.
+ * A budget that expires is untagged, which keeps the caller polling; a relay slower than the budget
+ * would therefore never resolve and never surface an error. Better slow than silently stuck.
+ *
+ * Worst case for one `getDetailedStatus` call is the sum of its legs, not this number: the backend
+ * record's own request budget, then 15s for the relay, then 5s here, plus a further
+ * {@link RECONCILE_TIMEOUT_MS} for the durable-record reconcile a failed solver read falls through
+ * to. That first leg is not a fixed 30s — `DEFAULT_BACKEND_API_TIMEOUT` is only its fallback, and a
+ * consumer configuring `api.timeout` higher raises it, and the whole tick with it. So a poll-count
+ * cutoff like dapp-kit's bounds attempts, not wall clock, and by a factor the consumer controls.
+ */
+const DETAILED_STATUS_SOLVER_TIMEOUT_MS = 5_000;
 
 /**
  * Main entry point for the SODAX swap feature.
@@ -171,16 +244,37 @@ export class SwapService {
 
   // swap config
   readonly solver: SolverConfig;
-  readonly partnerFee: PartnerFee | undefined;
   readonly relayerApiEndpoint: HttpUrl;
 
-  public constructor({ config, hubProvider, spoke }: SwapServiceConstructorParams) {
+  // backend swaps-API client
+  readonly backendApi: BackendApiService;
+
+  /**
+   * Effective 2-step submit-tx flow (`swaps.useBackendSubmitTx`, default on). Read live off
+   * `ConfigService`, like {@link SwapService.partnerFee}, so the config object and the behavior can
+   * never disagree.
+   */
+  get useBackendSubmitTx(): boolean {
+    return this.config.swapUseBackendSubmitTx;
+  }
+
+  /**
+   * Effective swap partner fee (`swaps.partnerFee`, else the global `fee`). Read live off
+   * `ConfigService` rather than snapshotted in the constructor, so it cannot diverge from
+   * `config.swapPartnerFee` if the config object is ever replaced (see `ConfigService.initialize`).
+   * `BridgeService` and `LeverageYieldService` resolve their fees the same way.
+   */
+  get partnerFee(): PartnerFee | undefined {
+    return this.config.swapPartnerFee;
+  }
+
+  public constructor({ config, hubProvider, spoke, backendApi }: SwapServiceConstructorParams) {
     this.solver = config.solver;
-    this.partnerFee = config.swaps.partnerFee;
     this.relayerApiEndpoint = config.relay.relayerApiEndpoint;
     this.config = config;
     this.hubProvider = hubProvider;
     this.spoke = spoke;
+    this.backendApi = backendApi;
   }
 
   /**
@@ -198,10 +292,13 @@ export class SwapService {
   /**
    * Requests a price quote from the solver API for a given token pair and amount.
    *
-   * Adjusts `payload.amount` by the configured partner fee before forwarding to the solver,
-   * so the returned `quoted_amount` reflects the net output the user actually receives.
+   * Adjusts `payload.amount` by the partner fee before forwarding to the solver, so the returned
+   * `quoted_amount` reflects the net output the user actually receives. Pass `partnerFee` to match
+   * a per-action override supplied to `createIntent` (`extras.partnerFee`); omit it to use the
+   * configured swap fee.
    *
-   * @param payload - Source/destination tokens, chain IDs, input amount, and quote type.
+   * @param payload - The solver quote request, optionally carrying a per-call `partnerFee` override
+   *   (defaults to the configured swap partner fee). `partnerFee` is stripped before forwarding.
    * @returns A `Result` containing `{ quoted_amount: bigint }` on success, or a
    *   `SolverErrorResponse` (with a `SolverIntentErrorCode`) on failure.
    *
@@ -216,14 +313,13 @@ export class SwapService {
    * });
    * if (response.ok) console.log('Quoted amount:', response.value.quoted_amount);
    */
-  public async getQuote(
-    payload: SolverIntentQuoteRequest,
-  ): Promise<Result<SolverIntentQuoteResponse, SolverErrorResponse>> {
-    payload = {
-      ...payload,
-      amount: adjustAmountByFee(payload.amount, this.partnerFee, payload.quote_type),
+  public async getQuote(payload: GetQuoteParams): Promise<Result<SolverIntentQuoteResponse, SolverErrorResponse>> {
+    const { partnerFee = this.partnerFee, ...request } = payload;
+    const adjustedPayload = {
+      ...request,
+      amount: adjustAmountByFee(request.amount, partnerFee, request.quote_type),
     } satisfies SolverIntentQuoteRequest;
-    return SolverApiService.getQuote(payload, this.solver, this.config);
+    return SolverApiService.getQuote(adjustedPayload, this.solver, this.config);
   }
 
   /**
@@ -253,7 +349,8 @@ export class SwapService {
   }
 
   /**
-   * Polls the solver API for the current execution status of an intent.
+   * Polls the solver API for the current execution status of an intent. A `NOT_FOUND` or a failed
+   * request is cross-checked against the backend's durable intent record.
    *
    * The `intent_tx_hash` in the request must be the hub-chain (Sonic) transaction hash where
    * the intent was registered — this is the `dst_tx_hash` from the relay packet returned by
@@ -266,7 +363,217 @@ export class SwapService {
   public async getStatus(
     request: SolverIntentStatusRequest,
   ): Promise<Result<SolverIntentStatusResponse, SolverErrorResponse>> {
-    return SolverApiService.getStatus(request, this.solver, this.config.logger);
+    return this.resolveSolverStatus(request);
+  }
+
+  /**
+   * {@link SwapService.getStatus} with an optional budget for the solver leg. Public `getStatus` is a
+   * one-shot read a caller bounds however it likes, so it stays unbounded; `getDetailedStatus` is
+   * polled and passes {@link DETAILED_STATUS_SOLVER_TIMEOUT_MS}. Both go through here so the
+   * durable-intent reconcile below is written once.
+   *
+   * `timeoutMs` bounds the solver request alone. The reconcile that a failed or NOT_FOUND solver read
+   * falls through to carries its own {@link RECONCILE_TIMEOUT_MS}, so a bounded call can cost both.
+   */
+  private async resolveSolverStatus(
+    request: SolverIntentStatusRequest,
+    timeoutMs?: number,
+  ): Promise<Result<SolverIntentStatusResponse, SolverErrorResponse>> {
+    const solverResult = await SolverApiService.getStatus(request, this.solver, this.config.logger, timeoutMs);
+    const forgotten = !solverResult.ok || solverResult.value.status === SolverIntentStatusCode.NOT_FOUND;
+    if (!forgotten) return solverResult;
+
+    // The solver keeps intent state in memory, so a restart makes it answer NOT_FOUND for intents it
+    // already filled. The backend's record is durable; a read that *completes* without terminal fill
+    // evidence leaves the solver's answer standing. A read that could not complete proves nothing —
+    // see below.
+    //
+    // A fill event is not by itself proof of completion: an intent created with `allowPartialFill`
+    // emits one per fill while input remains. Only a fill that consumed the remainder settles the
+    // whole intent, so `SOLVED` is claimed for that one alone — otherwise a partially filled swap
+    // would be reported complete, and `useStatus` would stop polling it for good.
+    // Bound the reconcile so a status poll cannot hang on it — but clamp rather than override, since
+    // a per-call timeout *replaces* the configured one and would otherwise lengthen the request for
+    // a consumer who configured something stricter than this ceiling.
+    const timeout = Math.min(RECONCILE_TIMEOUT_MS, this.backendApi.requestTimeoutMs);
+    const intent = await this.backendApi.getIntentByTxHash(request.intent_tx_hash, { timeout });
+    const settled = intent.ok
+      ? intent.value.events.filter(isFillEvent).find(fill => fill.intentState.remainingInput === '0')
+      : undefined;
+    if (settled) return { ok: true, value: { status: SolverIntentStatusCode.SOLVED, fill_tx_hash: settled.txHash } };
+
+    // Same reading as `getDetailedStatus`: a record — or a 404, which is the backend saying it has
+    // none — answers the question, so the solver's NOT_FOUND stands and a caller may budget it. A
+    // 5xx, a transport failure or an unusable body does not: the fill may exist and simply be
+    // unreadable right now. Reporting NOT_FOUND there lets a poller spend a miss it never verified,
+    // and `useStatus`/`useDetailedStatus` stop after 40 of them — on a swap that did complete.
+    const backendAnswered = intent.ok || (isSodaxError(intent.error) && intent.error.context?.status === 404);
+    if (solverResult.ok && !backendAnswered) {
+      return {
+        ok: false,
+        error: {
+          detail: {
+            code: SolverIntentErrorCode.UNKNOWN,
+            message: 'solver reported NOT_FOUND and the durable intent record could not be read to verify it',
+          },
+        },
+      };
+    }
+
+    // Either the backend answered, or the solver's own error is the better diagnostic to return.
+    return solverResult;
+  }
+
+  /**
+   * Reads a swap's status from its source-chain transaction — the identifier a caller always holds.
+   *
+   * **Routes; does not translate.** Returns the backend submit-tx record while it is in play,
+   * otherwise the solver's answer via the hub tx hash resolved from the relay packet. The result is
+   * tagged with `source` (discriminate on it) and carries that source's payload unmodified.
+   *
+   * **Any** unusable backend response routes to the solver — a 404, a transport or server error, or
+   * a record the backend gave up on. See `docs/SWAPS.md` § Get Detailed Status for why.
+   *
+   * A point-in-time read; poll it yourself, or use dapp-kit's `useDetailedStatus`.
+   *
+   * @param params - `srcChainKey` and `srcTxHash` of the source-chain swap transaction.
+   * @returns A `Result` containing a {@link DetailedSwapStatus}. Fails with `LOOKUP_FAILED` when no
+   *   source can answer yet — usually the relay has not delivered the packet, so there is no hub tx
+   *   hash for the solver to be asked about.
+   */
+  public async getDetailedStatus(
+    params: DetailedSwapStatusKey,
+  ): Promise<Result<DetailedSwapStatus, DetailedStatusError>> {
+    try {
+      const record = await this.backendApi.swaps.getSubmitTxStatus({
+        txHash: params.srcTxHash,
+        srcChainKey: params.srcChainKey,
+      });
+
+      // `success: false` is the wire contract's "no record found", whatever `data` carries — `ok`
+      // only proves the request and schema succeeded. Same guard the relay envelope gets below.
+      if (record.ok && record.value.success && !isBackendSubmitTxAbandoned(record.value.data)) {
+        return { ok: true, value: { source: 'backend', data: record.value.data } };
+      }
+
+      // Did the backend *answer*? A record — even `success: false`, even abandoned — and a 404 are
+      // both definitive "nothing usable here". A 5xx or a transport failure is not: behind one we
+      // cannot tell a swap that will never resolve from a live one whose record we simply could not
+      // read. So a relay miss that follows an outage must stay an unbudgeted dependency failure,
+      // or a backend outage would stop the caller polling a swap that is still progressing.
+      const backendAnswered = record.ok || (isSodaxError(record.error) && record.error.context?.status === 404);
+
+      const dstTxHash = await this.resolveHubTxHash(params, backendAnswered);
+      if (!dstTxHash.ok) return dstTxHash;
+
+      // `this.resolveSolverStatus`, not `SolverApiService.getStatus` — the durable-intent reconcile
+      // on solver NOT_FOUND stays in one place. Bounded, because this read is polled.
+      const solver = await this.resolveSolverStatus(
+        { intent_tx_hash: dstTxHash.value },
+        DETAILED_STATUS_SOLVER_TIMEOUT_MS,
+      );
+      if (!solver.ok) {
+        return { ok: false, error: this.detailedStatusLookupFailed(solver.error, params.srcChainKey) };
+      }
+      return { ok: true, value: { source: 'solver', dstTxHash: dstTxHash.value, data: solver.value } };
+    } catch (error) {
+      // The relay client asserts on empty identifiers rather than returning a Result.
+      return { ok: false, error: this.detailedStatusLookupFailed(error, params.srcChainKey) };
+    }
+  }
+
+  /**
+   * The hub-chain tx hash the solver is keyed on. A hub-source swap has no relay leg — the source
+   * tx *is* the hub tx. Otherwise the delivered relay packet carries it, so an undelivered packet
+   * is simply "no hash yet".
+   */
+  private async resolveHubTxHash(
+    key: DetailedSwapStatusKey,
+    backendAnswered: boolean,
+  ): Promise<Result<Hex, DetailedStatusError>> {
+    // A relay miss only proves the swap is unresolvable if the backend also had nothing to say.
+    const missReason = backendAnswered ? DETAILED_STATUS_NOT_DELIVERED : undefined;
+    let hubTxHash = key.srcTxHash;
+
+    if (!isHubChainKeyType(key.srcChainKey)) {
+      const relayChainId = getIntentRelayChainId(key.srcChainKey);
+      const packets = await getTransactionPackets(
+        {
+          action: 'get_transaction_packets',
+          params: { chain_id: relayChainId.toString(), tx_hash: key.srcTxHash },
+        },
+        this.relayerApiEndpoint,
+        RELAY_REQUEST_TIMEOUT_MS,
+      );
+      if (!packets.ok) {
+        // The relayer answers 404 for a source tx it has not indexed — verified live, and the same
+        // reading `pollForExecutedPacket` applies. That is the *same* "no packet for this tx" state
+        // as an empty list, and equally indistinguishable from a tx that will never relay, so it is
+        // budgetable. Anything else (5xx, transport, parse, a read that outran its budget) is the
+        // relay failing right now.
+        const notIndexed = packets.error instanceof HttpRelayError && packets.error.status === 404;
+        return {
+          ok: false,
+          error: this.detailedStatusLookupFailed(packets.error, key.srcChainKey, notIndexed ? missReason : undefined),
+        };
+      }
+
+      // Same envelope, attribution and delivery guards `pollForExecutedPacket` applies. Relay
+      // responses are not schema-validated (`parseRelayResponse` casts `response.json()`), so
+      // `success`/`data` are checked before use — a 200 with no `data` would otherwise throw here
+      // and be reported as ordinary in-flight latency. A packet for another transaction would hand
+      // the solver the wrong intent hash, so match on (src_tx_hash, src_chain_id) rather than taking
+      // the first executed entry, and string-guard both hashes so a malformed entry is skipped.
+      if (!packets.value?.success || !Array.isArray(packets.value.data)) {
+        return {
+          ok: false,
+          error: this.detailedStatusLookupFailed(
+            new Error('relay returned no usable transaction packets'),
+            key.srcChainKey,
+          ),
+        };
+      }
+
+      const delivered = packets.value.data.find(
+        packet =>
+          typeof packet?.src_tx_hash === 'string' &&
+          packet.src_tx_hash.toLowerCase() === key.srcTxHash.toLowerCase() &&
+          packet.src_chain_id === Number(relayChainId) &&
+          packet.status === 'executed' &&
+          typeof packet.dst_tx_hash === 'string' &&
+          packet.dst_tx_hash.length > 0,
+      );
+      if (!delivered) {
+        return {
+          ok: false,
+          error: this.detailedStatusLookupFailed(
+            new Error('relay has not delivered the intent to the hub yet'),
+            key.srcChainKey,
+            missReason,
+          ),
+        };
+      }
+      hubTxHash = delivered.dst_tx_hash;
+    }
+
+    // Validate rather than cast — this hash reaches the solver next.
+    if (isHex(hubTxHash)) return { ok: true, value: hubTxHash };
+    return {
+      ok: false,
+      error: this.detailedStatusLookupFailed(
+        new Error(`hub tx hash is not a hex string: ${hubTxHash}`),
+        key.srcChainKey,
+      ),
+    };
+  }
+
+  /**
+   * `reason` is set only for {@link DETAILED_STATUS_NOT_DELIVERED} — the miss a caller can bound
+   * with a retry budget. Leaving it off marks a dependency that is failing right now, which a
+   * caller should keep retrying rather than give up on.
+   */
+  private detailedStatusLookupFailed(cause: unknown, srcChainKey: SpokeChainKey, reason?: string): DetailedStatusError {
+    return lookupFailed('swap', 'getDetailedStatus', cause, { srcChainKey, action: 'swap', reason });
   }
 
   /**
@@ -344,14 +651,27 @@ export class SwapService {
   /**
    * Executes a full end-to-end cross-chain swap.
    *
-   * Orchestrates the complete swap lifecycle:
-   * 1. Calls `createIntent` to submit the intent transaction on the source spoke chain.
-   * 2. Verifies the spoke transaction landed on-chain.
-   * 3. For non-hub source chains: submits the spoke tx to the relayer and waits for the
-   *    relay packet to land on the hub (Sonic). Skipped when `srcChainKey` is the hub.
-   * 4. Calls `postExecution` to notify the solver, triggering it to fill the intent.
+   * Orchestrates the complete swap lifecycle. `createIntent` first submits the intent transaction on
+   * the source spoke chain; completion then runs via one of two paths, each bounded by its own `timeout`
+   * budget:
    *
-   * @param _params - Swap action params including intent parameters, wallet provider, and optional timeout.
+   * - **Client-side (opt-out via `swaps.useBackendSubmitTx: false`), {@link fallbackSwapSteps}:** verifies
+   *   the spoke tx landed on-chain, relays it to the hub (Sonic) and waits for the packet — skipped when
+   *   `srcChainKey` is the hub, where the spoke tx already is the hub tx — then calls `postExecution` to
+   *   notify the solver, triggering it to fill the intent.
+   * - **Backend 2-step (default via `swaps.useBackendSubmitTx`), {@link submitTx}:** hands the
+   *   broadcast tx to the swaps API, which verifies, relays and post-executes server-side, then polls
+   *   for completion. On ANY non-success it transparently falls back to the client-side path above —
+   *   safe because re-relaying / re-posting an already-processed swap is idempotent (no double-fill).
+   *
+   * @param _params - Swap action params including intent parameters, wallet provider, and an optional
+   *   `timeout` — a PER-ATTEMPT budget, not an end-to-end one. The backend attempt (submit POST + status
+   *   poll) gets it, and if that attempt does not complete the client-side relay wait gets a fresh one
+   *   starting after verification, so neither a stalled backend nor a slow source-chain confirmation can
+   *   shorten it. Worst-case wall-clock is `createIntent + timeout + verification +
+   *   max(timeout, RELAY_FALLBACK_FLOOR_MS) + postExecution`, where verification is bounded by the source
+   *   chain's `pollingConfig.maxTimeoutMs` and the first and last terms are not bounded by `timeout` at
+   *   all. See `docs/SWAPS.md` § How `timeout` bounds each attempt.
    * @returns A `Result<SwapResponse, SwapError>`. On success:
    *   - `solverExecutionResponse` — solver acknowledgement (`{ answer: 'OK', intent_hash }`).
    *   - `intent` — the on-chain intent object that was created.
@@ -377,73 +697,216 @@ export class SwapService {
     const { params } = _params;
     const srcChainKey = params.srcChainKey;
     const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey };
-    try {
-      const timeout = _params.timeout;
-      const createIntentResult = await this.createIntent(_params);
-      if (!createIntentResult.ok) {
-        // CreateIntentErrorCode ⊂ SwapErrorCode by definition; the cast is structural, not a
-        // contract widening. (Verified at design time via the type alias relationship.)
-        return { ok: false, error: createIntentResult.error };
-      }
+    return this.config.analytics.trackResult(
+      'swap',
+      'swap',
+      async () => {
+        try {
+          const createIntentResult = await this.createIntent(_params);
+          if (!createIntentResult.ok) {
+            // CreateIntentErrorCode ⊂ SwapErrorCode by definition; the cast is structural, not a
+            // contract widening. (Verified at design time via the type alias relationship.)
+            return { ok: false, error: createIntentResult.error };
+          }
 
-      const { tx: spokeTxHash, intent, relayData } = createIntentResult.value;
+          const created = createIntentResult.value;
 
-      const verifyTxHashResult = await this.spoke.verifyTxHash({
-        txHash: spokeTxHash,
-        chainKey: srcChainKey,
-      });
-      if (!verifyTxHashResult.ok) {
-        return { ok: false, error: verifyFailed('swap', verifyTxHashResult.error, { ...baseCtx, action: 'swap' }) };
-      }
+          // `timeout` is a PER-ATTEMPT budget, not an end-to-end one: the backend attempt gets it, and if
+          // that attempt fails the client-side relay fallback gets a fresh one. Sharing a single deadline
+          // would leave the fallback whatever the backend had not spent, which is how a relay that needs
+          // longer than the leftovers ends in RELAY_TIMEOUT. Resolved (not just defaulted) so a non-finite
+          // caller value cannot reach either budget — see `resolveTimeoutMs`.
+          const timeoutMs = resolveTimeoutMs(_params.timeout, DEFAULT_RELAY_TX_TIMEOUT);
 
-      let dstIntentTxHash: string;
-      if (isHubChainKeyType(srcChainKey)) {
-        dstIntentTxHash = spokeTxHash;
-      } else {
-        const packet = await relayTxAndWaitPacket({
-          srcTxHash: spokeTxHash,
-          data: relayData,
-          chainKey: srcChainKey,
-          relayerApiEndpoint: this.relayerApiEndpoint,
-          timeout,
-        });
-        if (!packet.ok) {
-          return { ok: false, error: mapRelayFailure(packet.error, { feature: 'swap', action: 'swap', ...baseCtx }) };
+          // Backend 2-step flow (default on): hand the broadcast intent tx to the swaps API, which relays +
+          // post-executes server-side. On ANY non-success we fall back to the client-side relay so the
+          // swap still completes — safe because re-relay / re-post are idempotent (see `submitTx`).
+          if (this.useBackendSubmitTx) {
+            const submitted = await this.submitTx(_params, created, createSubmitTxAttempt(timeoutMs));
+            if (submitted.ok) return submitted;
+            this.config.logger.warn(
+              '[swap] backend submit-tx did not complete; falling back to the client-side relay',
+              {
+                error: submitted.error,
+              },
+            );
+          }
+
+          return this.fallbackSwapSteps(_params, created, timeoutMs);
+        } catch (error) {
+          // Narrow guard: preserve SodaxErrors whose code is in the swap union; wrap unknown
+          // codes (e.g. an accidental cross-feature code) as UNKNOWN.
+          if (isSwapError(error)) return { ok: false, error };
+          return {
+            ok: false,
+            error: unknownFailed('swap', error, { ...baseCtx, action: 'swap' }),
+          };
         }
-        dstIntentTxHash = packet.value.dst_tx_hash;
-      }
+      },
+      {
+        start: () => ({
+          srcChainKey,
+          dstChainKey: params.dstChainKey,
+          srcAddress: params.srcAddress,
+          dstAddress: params.dstAddress,
+        }),
+        success: value => ({
+          srcChainKey,
+          dstChainKey: params.dstChainKey,
+          srcTxHash: value.intentDeliveryInfo.srcTxHash,
+          dstTxHash: value.intentDeliveryInfo.dstTxHash,
+        }),
+        failure: error => ({ code: error.code }),
+      },
+    );
+  }
 
-      const postExecResult = await this.postExecution({
-        intent_tx_hash: dstIntentTxHash as `0x${string}`,
+  /**
+   * Client-side swap completion (opt-out via `swaps.useBackendSubmitTx: false`): verify the broadcast intent
+   * tx landed, then relay it to the hub — or use it directly when the source IS the hub — then notify the
+   * solver via post-execution and build the {@link SwapResponse}. Extracted verbatim from `swap()` so the
+   * backend 2-step path ({@link submitTx}) can fall back to it on any non-success.
+   *
+   * Verification belongs to THIS path only: the backend runs its own, so verifying before handing over
+   * would delay every backend success by the source chain's confirmation wait and could fail a swap the
+   * backend would have completed.
+   */
+  private async fallbackSwapSteps<K extends SpokeChainKey>(
+    _params: SwapActionParams<K, false>,
+    created: CreateIntentResult<K, false>,
+    timeoutMs: number,
+  ): Promise<Result<SwapResponse, SwapError>> {
+    const { params } = _params;
+    const srcChainKey = params.srcChainKey;
+    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey };
+    const { tx: spokeTxHash, intent, relayData } = created;
+
+    const verifyTxHashResult = await this.spoke.verifyTxHash({
+      txHash: created.tx,
+      chainKey: srcChainKey,
+    });
+    if (!verifyTxHashResult.ok) {
+      return { ok: false, error: verifyFailed('swap', verifyTxHashResult.error, { ...baseCtx, action: 'swap' }) };
+    }
+
+    let dstIntentTxHash: string;
+    if (isHubChainKeyType(srcChainKey)) {
+      dstIntentTxHash = spokeTxHash;
+    } else {
+      const packet = await relayTxAndWaitPacket({
+        srcTxHash: spokeTxHash,
+        data: relayData,
+        chainKey: srcChainKey,
+        relayerApiEndpoint: this.relayerApiEndpoint,
+        // The caller's full `timeout`, starting HERE — after verification, and whether this runs as the
+        // only path or as the backend's fallback. Neither a stalled backend attempt nor a slow source-chain
+        // confirmation may shorten the relay wait. The floor covers a sub-floor caller `timeout`:
+        // `relayTxAndWaitPacket` SUBMITS before `timeout` bounds anything, so a zero budget would strand an
+        // already-landed tx unrelayed. Re-relay is idempotent, so spending it is safe.
+        timeout: Math.max(timeoutMs, RELAY_FALLBACK_FLOOR_MS),
       });
-      if (!postExecResult.ok) {
-        // PostExecutionErrorCode ⊂ SwapErrorCode by definition.
-        return { ok: false, error: postExecResult.error };
+      if (!packet.ok) {
+        return { ok: false, error: mapRelayFailure(packet.error, { feature: 'swap', action: 'swap', ...baseCtx }) };
       }
+      dstIntentTxHash = packet.value.dst_tx_hash;
+    }
 
-      return {
-        ok: true,
-        value: {
-          solverExecutionResponse: postExecResult.value,
+    const postExecResult = await this.postExecution({
+      intent_tx_hash: dstIntentTxHash as `0x${string}`,
+    });
+    if (!postExecResult.ok) {
+      // PostExecutionErrorCode ⊂ SwapErrorCode by definition.
+      return { ok: false, error: postExecResult.error };
+    }
+
+    return {
+      ok: true,
+      value: {
+        solverExecutionResponse: postExecResult.value,
+        intent,
+        intentDeliveryInfo: {
+          srcChainKey,
+          srcTxHash: spokeTxHash,
+          srcAddress: params.srcAddress,
+          dstChainKey: params.dstChainKey,
+          dstTxHash: dstIntentTxHash,
+          dstAddress: params.dstAddress,
+        } satisfies IntentDeliveryInfo,
+      },
+    };
+  }
+
+  /**
+   * Backend 2-step swap path (default via `swaps.useBackendSubmitTx`): hand the broadcast
+   * intent tx to the swaps API (`POST /swaps/submit-tx`); the backend relays + post-executes
+   * server-side. Polls `getSubmitTxStatus` until `solved`, then reconstructs the same
+   * {@link SwapResponse} the client-side path returns (`result.dstIntentTxHash` → delivery info,
+   * `result.intent_hash` → solver response).
+   *
+   * Never throws — returns `{ ok: false }` on any non-success (submit `!ok`, terminal `failed` /
+   * abandoned, or poll timeout) so `swap()` falls back to {@link fallbackSwapSteps}.
+   *
+   * Falling back is safe: re-relaying / re-posting an already-processed swap is idempotent — the
+   * relay dedups and returns the existing `executed` packet, and the solver re-affirms the intent
+   * (no double-fill). Verified live by `e2e-tests/e2e-relay.test.ts`. It is also load-bearing rather
+   * than belt-and-braces: the backend keeps processing after this attempt gives up, so the fallback's
+   * relay can race the backend's own.
+   *
+   * The attempt itself — POST, budget clamps, status poll — is {@link runBackendSubmitTx}, shared with
+   * bridge. What is swap-specific and lives here: the request body, the `solved` terminal status, the
+   * mapping from a terminal result to a {@link SwapResponse}, and the swap error taxonomy.
+   *
+   * `attempt` bounds this attempt alone — the POST and every status request draw on it, and the
+   * client-side fallback holds a separate fresh `timeout`.
+   */
+  private async submitTx<K extends SpokeChainKey>(
+    _params: SwapActionParams<K, false>,
+    created: CreateIntentResult<K, false>,
+    attempt: SubmitTxAttempt,
+  ): Promise<Result<SwapResponse, SwapError>> {
+    const { params } = _params;
+    const srcChainKey = params.srcChainKey;
+    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey };
+    const { tx: spokeTxHash, intent, relayData } = created;
+
+    try {
+      const outcome = await runBackendSubmitTx({
+        attempt,
+        api: this.backendApi.swaps,
+        body: {
+          txHash: spokeTxHash,
+          srcChainKey,
+          walletAddress: params.srcAddress,
           intent,
-          intentDeliveryInfo: {
-            srcChainKey,
-            srcTxHash: spokeTxHash,
-            srcAddress: params.srcAddress,
-            dstChainKey: params.dstChainKey,
-            dstTxHash: dstIntentTxHash,
-            dstAddress: params.dstAddress,
-          } satisfies IntentDeliveryInfo,
+          relayData: relayData.payload,
         },
-      };
+        statusQuery: { txHash: spokeTxHash, srcChainKey },
+        // Swaps terminal success is `solved` (solver filled) — not the bridge `executed`.
+        terminalStatus: 'solved',
+        onExecuted: (result): SwapResponse | undefined =>
+          result?.dstIntentTxHash && result.intent_hash
+            ? {
+                // Backend serializes the hex intent_hash as a plain string; brand it at the boundary.
+                solverExecutionResponse: { answer: 'OK', intent_hash: result.intent_hash as Hex },
+                intent,
+                intentDeliveryInfo: {
+                  srcChainKey,
+                  srcTxHash: spokeTxHash,
+                  srcAddress: params.srcAddress,
+                  dstChainKey: params.dstChainKey,
+                  dstTxHash: result.dstIntentTxHash,
+                  dstAddress: params.dstAddress,
+                } satisfies IntentDeliveryInfo,
+              }
+            : undefined,
+      });
+      // Any non-success — rejected POST, terminal `failed`, spent attempt — becomes the cause swap()
+      // logs before falling back to the client-side relay.
+      return outcome.ok
+        ? { ok: true, value: outcome.value }
+        : { ok: false, error: executionFailed('swap', outcome.cause, { ...baseCtx, action: 'swap' }) };
     } catch (error) {
-      // Narrow guard: preserve SodaxErrors whose code is in the swap union; wrap unknown
-      // codes (e.g. an accidental cross-feature code) as UNKNOWN.
-      if (isSwapError(error)) return { ok: false, error };
-      return {
-        ok: false,
-        error: unknownFailed('swap', error, { ...baseCtx, action: 'swap' }),
-      };
+      return { ok: false, error: unknownFailed('swap', error, { ...baseCtx, action: 'swap' }) };
     }
   }
 
@@ -511,9 +974,13 @@ export class SwapService {
    * - Stellar: approves the trustline (adds/increases it).
    * - Other chain types: returns an error — approval is not supported.
    *
-   * When `raw: true`, returns unsigned transaction data instead of broadcasting.
+   * When `raw: true`, returns unsigned transaction data instead of broadcasting. That is always a
+   * single transaction, which cannot express the two-step approval a TetherToken-lineage token
+   * needs when a stale allowance already exists — use {@link SwapService.buildApproveTxs} for the
+   * whole plan.
    * When `raw: false`, a matching wallet provider for `K` must be supplied and the transaction
-   * is signed and broadcast immediately.
+   * is signed and broadcast immediately. Such an approval can take **two** transactions, so the
+   * user may sign twice; the returned hash is the last one's.
    *
    * @param _params - Swap action params including the source chain key, input token, amount, and wallet provider.
    * @returns A `Result` wrapping the chain-specific transaction return type (`TxReturnType<K, Raw>`).
@@ -522,6 +989,7 @@ export class SwapService {
     _params: SwapActionParams<K, Raw>,
   ): Promise<Result<TxReturnType<K, Raw>>> {
     const { params } = _params;
+    const wrapApproveFailure = (cause: unknown) => approveFailed('swap', cause);
 
     try {
       if (isHubChainKeyType(params.srcChainKey) || isEvmSpokeOnlyChainKeyType(params.srcChainKey)) {
@@ -547,7 +1015,7 @@ export class SwapService {
         });
 
         if (!result.ok) {
-          return result;
+          return { ok: false, error: wrapApproveFailure(result.error) };
         }
 
         return {
@@ -581,11 +1049,80 @@ export class SwapService {
               },
         );
 
-        if (!result.ok) return result;
+        if (!result.ok) return { ok: false, error: wrapApproveFailure(result.error) };
 
         return {
           ok: true,
           value: result.value satisfies TxReturnType<StellarChainKey, boolean> as TxReturnType<K, Raw>,
+        };
+      }
+
+      return {
+        ok: false,
+        error: new Error('Approve only supported for hub (Sonic), EVM spokes, and Stellar'),
+      };
+    } catch (error) {
+      return { ok: false, error };
+    }
+  }
+
+  /**
+   * The unsigned approval transactions for the swap's source token, in the order they must be
+   * broadcast.
+   *
+   * Two transactions when the source token needs its stale allowance cleared first, one otherwise.
+   * {@link SwapService.approve} is unchanged and still returns a single transaction; this is the
+   * entry point for unsigned callers that need to handle the two-step case. When `resetTx` is
+   * present, broadcast it and wait for it to be mined first — `approveTx` is not valid until the
+   * reset has landed.
+   */
+  public async buildApproveTxs<K extends SpokeChainKey>(
+    _params: SwapActionParams<K, true>,
+  ): Promise<Result<ApprovalTxs<K>>> {
+    const { params } = _params;
+    const wrapApproveFailure = (cause: unknown) => approveFailed('swap', cause);
+
+    try {
+      if (isHubChainKeyType(params.srcChainKey) || isEvmSpokeOnlyChainKeyType(params.srcChainKey)) {
+        const spender = isHubChainKeyType(params.srcChainKey)
+          ? this.solver.intentsContract
+          : this.config.getChainConfig(params.srcChainKey).addresses.assetManager;
+
+        const result = await this.spoke.buildApproveTxs<HubChainKey | EvmSpokeOnlyChainKey>({
+          srcChainKey: params.srcChainKey,
+          owner: params.srcAddress as GetAddressType<HubChainKey | EvmSpokeOnlyChainKey>,
+          token: params.inputToken as GetTokenAddressType<HubChainKey | EvmSpokeOnlyChainKey>,
+          amount: params.inputAmount,
+          spender,
+          raw: true,
+        });
+
+        if (!result.ok) {
+          return { ok: false, error: wrapApproveFailure(result.error) };
+        }
+
+        return {
+          ok: true,
+          value: result.value satisfies ApprovalTxs<HubChainKey | EvmSpokeOnlyChainKey> as ApprovalTxs<K>,
+        };
+      }
+
+      if (isStellarChainKeyType(params.srcChainKey)) {
+        const result = await this.spoke.buildApproveTxs<StellarChainKey>({
+          srcChainKey: params.srcChainKey,
+          token: params.inputToken,
+          amount: params.inputAmount,
+          owner: params.srcAddress as GetAddressType<StellarChainKey>,
+          raw: true,
+        });
+
+        if (!result.ok) {
+          return { ok: false, error: wrapApproveFailure(result.error) };
+        }
+
+        return {
+          ok: true,
+          value: result.value satisfies ApprovalTxs<StellarChainKey> as ApprovalTxs<K>,
         };
       }
 
@@ -629,7 +1166,10 @@ export class SwapService {
   public async createIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: SwapActionParams<K, Raw>,
   ): Promise<Result<CreateIntentResult<K, Raw>, SwapCreateIntentError>> {
-    const { params, skipSimulation } = _params;
+    const { params, skipSimulation, extras } = _params;
+    // Per-action `extras.partnerFee` is primary; `this.partnerFee` (the effective swap fee,
+    // `swaps.partnerFee ?? fee`, read live off config) is the fallback default. undefined = no fee.
+    const partnerFee = extras?.partnerFee ?? this.partnerFee;
     const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
 
     try {
@@ -658,27 +1198,52 @@ export class SwapService {
         `Invalid spoke chain (params.dstChain): ${params.dstChainKey}`,
         { ...baseCtx, field: 'dstChainKey' },
       );
-      //if dstChain is Bitcoin and token is BTC, check minOutputToken should be higher than 546 sats
-      if (isBitcoinChainKey(params.dstChainKey) && params.outputToken === 'BTC') {
+      // Native BTC on the Bitcoin chain is denominated in satoshis and must clear the 546-sat dust limit —
+      // the BTC deposit on a Bitcoin source and the BTC delivery to a Bitcoin destination alike. `inputToken`
+      // / `outputToken` are original asset addresses (native BTC is '0:0'), so resolve them to token
+      // descriptors and match on symbol rather than comparing the address against the 'BTC' string.
+      const inputTokenInfo = this.config.getSpokeTokenFromOriginalAssetAddress(params.srcChainKey, params.inputToken);
+      if (isNativeBitcoinTransfer(this.config, params.srcChainKey, inputTokenInfo)) {
         swapInvariant(
-          params.minOutputAmount >= 546n,
-          `Invalid minOutputAmount (params.minOutputAmount): ${params.minOutputAmount}`,
+          params.inputAmount >= BITCOIN_DUST_SATS,
+          `Invalid inputAmount (${params.inputAmount}): below the Bitcoin dust limit of ${BITCOIN_DUST_SATS} sats`,
+          { ...baseCtx, field: 'inputAmount' },
+        );
+      }
+      const outputTokenInfo = this.config.getSpokeTokenFromOriginalAssetAddress(params.dstChainKey, params.outputToken);
+      if (isNativeBitcoinTransfer(this.config, params.dstChainKey, outputTokenInfo)) {
+        swapInvariant(
+          params.minOutputAmount >= BITCOIN_DUST_SATS,
+          `Invalid minOutputAmount (${params.minOutputAmount}): below the Bitcoin dust limit of ${BITCOIN_DUST_SATS} sats`,
           { ...baseCtx, field: 'minOutputAmount' },
         );
       }
+      if (isStacksChainKeyType(params.srcChainKey) && _params.raw === true) {
+        swapInvariant(
+          extras?.srcPublicKey !== undefined,
+          'srcPublicKey is required for Stacks createIntent (raw) — the source tx is built unsigned and needs the signer public key',
+          { ...baseCtx, field: 'srcPublicKey' },
+        );
+      }
+
       const personalAddress = params.srcAddress;
 
-      // Bitcoin TRADING mode: use trading wallet for hub wallet derivation (see getEffectiveWalletAddress)
-      // NOTE: bitcoin is only enabled in non-raw execution mode == walletProvider is required
+      // Bitcoin TRADING mode: derive the hub wallet from the trading address (raw + non-raw), since
+      // deposits originate from the trading wallet, not the personal one.
       let walletAddress: string = personalAddress;
-      if (isBitcoinChainKeyType(params.srcChainKey) && _params.raw === false) {
-        swapInvariant(
-          isBitcoinWalletProviderType(_params.walletProvider),
-          `Invalid wallet provider for chain key: ${params.srcChainKey}`,
-          baseCtx,
-        );
+      if (isBitcoinChainKeyType(params.srcChainKey)) {
+        if (_params.raw === false) {
+          // Non-raw needs a provider to sign; only TRADING mode needs Bound auth (USER is self-custody).
+          swapInvariant(
+            isBitcoinWalletProviderType(_params.walletProvider),
+            `Invalid wallet provider for chain key: ${params.srcChainKey}`,
+            baseCtx,
+          );
+          if (this.spoke.bitcoin.walletMode === 'TRADING') {
+            await this.spoke.bitcoin.radfi.ensureRadfiAccessToken(_params.walletProvider);
+          }
+        }
         walletAddress = await this.spoke.bitcoin.getEffectiveWalletAddress(personalAddress);
-        await this.spoke.bitcoin.radfi.ensureRadfiAccessToken(_params.walletProvider);
       }
 
       // derive users hub wallet address
@@ -689,7 +1254,7 @@ export class SwapService {
           createIntentParams: params,
           creatorHubWalletAddress,
           solverConfig: this.solver,
-          fee: this.config.swaps.partnerFee,
+          fee: partnerFee,
           hubProvider: this.hubProvider,
         } as const;
 
@@ -722,12 +1287,15 @@ export class SwapService {
         },
         creatorHubWalletAddress,
         this.config,
-        this.config.swaps.partnerFee,
+        partnerFee,
       );
 
       const coreDepositParams = {
         srcChainKey: params.srcChainKey,
         srcAddress: walletAddress as GetAddressType<K>,
+        srcPublicKey: extras?.srcPublicKey,
+        // Bitcoin Bound token; BitcoinSpokeService.deposit falls back to the RadfiProvider instance token when undefined.
+        accessToken: extras?.bound?.accessToken,
         to: creatorHubWalletAddress,
         token: params.inputToken as GetTokenAddressType<K>,
         amount: params.inputAmount,
@@ -915,14 +1483,15 @@ export class SwapService {
 
       const txResult = await this.spoke.sendMessage(sendMessageParams);
 
-      if (!txResult.ok) return txResult;
+      if (!txResult.ok) return { ok: false, error: intentCreationFailed('swap', txResult.error) };
 
       return {
         ok: true,
         value: txResult.value satisfies TxReturnType<K, boolean> as TxReturnType<K, Raw>,
       };
     } catch (error) {
-      return { ok: false, error };
+      if (isSwapCreateIntentError(error)) return { ok: false, error };
+      return { ok: false, error: intentCreationFailed('swap', error) };
     }
   }
 
@@ -986,7 +1555,8 @@ export class SwapService {
 
       return { ok: true, value: { srcChainTxHash: cancelTxHash, dstChainTxHash: dstIntentTxHash } };
     } catch (error) {
-      return { ok: false, error };
+      if (isSwapError(error)) return { ok: false, error };
+      return { ok: false, error: executionFailed('swap', error, { action: 'cancelIntent' }) };
     }
   }
 

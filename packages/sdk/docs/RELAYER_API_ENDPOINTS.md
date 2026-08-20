@@ -1,6 +1,6 @@
 # Relayer API Endpoints
 
-> **Error handling conventions:** Relay-layer failures emit one of two stable strings on `error.message`: `'SUBMIT_TX_FAILED'` or `'RELAY_TIMEOUT'`, also exported as `RELAY_ERROR_CODES` from `@sodax/sdk`. Modules other than swap propagate these errors raw. The **swap module** wraps them into `SodaxError<SwapErrorCode>` with `context.relayCode` (see [SWAPS.md](./SWAPS.md) Error Handling).
+> **Error handling conventions:** Relay-layer failures emit one of two stable strings on `error.message`: `'SUBMIT_TX_FAILED'` or `'RELAY_TIMEOUT'`, also exported as `RELAY_ERROR_CODES` from `@sodax/sdk`. Modules other than swap propagate these errors raw. The **swap module** wraps them into `SodaxError<SwapErrorCode>` with `context.relayCode` (see [SWAPS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md) Error Handling).
 
 The intent relay service bridges spoke-chain transactions to the SODAX hub (Sonic). All cross-chain operations — swaps, bridges, money market deposits/withdrawals, staking — submit a spoke-chain transaction hash to the relay, then poll until the hub confirms execution.
 
@@ -59,6 +59,8 @@ Full mapping (`RelayChainIdMap` in `@sodax/sdk`):
 | `BITCOIN_MAINNET` | `627463n` |
 | `REDBELLY_MAINNET` | `726564n` |
 | `KAIA_MAINNET` | `27489n` |
+| `HEDERA_MAINNET` | `18501n` |
+| `ROBINHOOD_MAINNET` | `21071n` |
 | `STACKS_MAINNET` | `60n` |
 
 ---
@@ -185,7 +187,7 @@ These are exported from `IntentRelayApiService` for callers that need direct rel
 | Function | Signature | Description |
 |---|---|---|
 | `submitTransaction` | `(payload, apiUrl) => Promise<Result<SubmitTxResponse>>` | Submit a tx to the relay. |
-| `getTransactionPackets` | `(payload, apiUrl) => Promise<Result<GetTransactionPacketsResponse>>` | Fetch packets for a tx hash. |
+| `getTransactionPackets` | `(payload, apiUrl, timeoutMs?) => Promise<Result<GetTransactionPacketsResponse>>` | Fetch packets for a tx hash. `timeoutMs` bounds the whole read — connection, retries and body parse. Omit it and the call is unbounded; `RELAY_REQUEST_TIMEOUT_MS` (15s) is the per-request budget the polling path uses. |
 | `getPacket` | `(payload, apiUrl) => Promise<Result<GetPacketResponse>>` | Fetch a single packet by `conn_sn`. |
 | `waitUntilIntentExecuted` | `(payload) => Promise<Result<PacketData>>` | Poll until a packet reaches `'executed'` status or times out. |
 | `relayTxAndWaitPacket` | `(params: RelayAndWaitParams) => Promise<Result<PacketData>>` | Submit + poll in one call. Handles `getIntentRelayChainId` conversion and split-tx chains automatically. |

@@ -164,6 +164,15 @@ The `approve` method sets the allowance for the specified action. The spender ad
 - **Sonic (Hub) Chain**: The spender is the user's hub router contract
 - **Stellar**: Creates/updates the required trustline
 
+**Some tokens need two transactions.** A few ERC-20s of the 2017 TetherToken lineage — Ethereum
+USDT is the one in the SODAX token list today — reject an allowance change from one non-zero value
+to another. When a wallet already holds a stale allowance on such a token, `approve` sends
+`approve(0)` first, waits for it to be mined, then sends the real approval. The user signs twice.
+The SDK detects this by simulating the approval, not from a token list, so a token added or upgraded
+later is handled the same way. Nothing changes for callers: `approve` still resolves to a single
+transaction hash — the hash of the **last** transaction — and everything else is a single
+transaction as before.
+
 ```typescript
 import { type MoneyMarketSupplyParams, ChainKeys } from '@sodax/sdk';
 
@@ -591,9 +600,9 @@ The 4 orchestrators (`supply`/`borrow`/`withdraw`/`repay`) share **one** type �
 
 | Method | Error type | Codes |
 |---|---|---|
-| `supply` / `borrow` / `withdraw` / `repay` | `MoneyMarketOrchestrationError` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `UNKNOWN` |
-| `createSupplyIntent` / `createBorrowIntent` / `createWithdrawIntent` / `createRepayIntent` | `MoneyMarketCreateIntentError` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
-| `approve` | `MoneyMarketApproveError` | `VALIDATION_FAILED`, `APPROVE_FAILED`, `UNKNOWN` |
+| `supply` / `borrow` / `withdraw` / `repay` | `MoneyMarketOrchestrationError` | `USER_REJECTED`, `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `UNKNOWN` |
+| `createSupplyIntent` / `createBorrowIntent` / `createWithdrawIntent` / `createRepayIntent` | `MoneyMarketCreateIntentError` | `USER_REJECTED`, `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
+| `approve` | `MoneyMarketApproveError` | `USER_REJECTED`, `VALIDATION_FAILED`, `APPROVE_FAILED`, `UNKNOWN` |
 | `isAllowanceValid` | `MoneyMarketAllowanceCheckError` | `VALIDATION_FAILED`, `ALLOWANCE_CHECK_FAILED`, `UNKNOWN` |
 | `estimateGas` | `MoneyMarketGasEstimationError` | `VALIDATION_FAILED`, `GAS_ESTIMATION_FAILED`, `UNKNOWN` |
 

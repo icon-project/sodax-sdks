@@ -5,7 +5,16 @@ import { getRpcUrl, getWagmiChainId, isNativeToken } from '@/utils/index.js';
 
 import { type Address, type Chain, defineChain, erc20Abi } from 'viem';
 import { getPublicClient } from 'wagmi/actions';
-import { type Config, type CreateConnectorFn, createConfig, http, createStorage, cookieStorage } from 'wagmi';
+import {
+  type Config,
+  type CreateConnectorFn,
+  createConfig,
+  http,
+  createStorage,
+  cookieStorage,
+  cookieToInitialState,
+  type State,
+} from 'wagmi';
 import {
   mainnet,
   avalanche,
@@ -18,11 +27,23 @@ import {
   lightlinkPhoenix,
   redbellyMainnet,
   kaia,
+  hedera,
 } from 'wagmi/chains';
 type WagmiOptions = {
   reconnectOnMount?: boolean;
   ssr?: boolean;
+  /**
+   * Base key for wagmi's cookie storage (state cookie = `<persistKey>.store`). @default 'sodax'.
+   * SSR server and client must build from the same key, else the server reads the wrong cookie.
+   */
+  persistKey?: string;
 };
+
+// Hedera's JSON-RPC relay reports native HBAR in 18-decimal "weibar" via eth_getBalance,
+// but HBAR is configured with its canonical 8 decimals. Scale the raw balance down by 10^10
+// so it matches token.decimals. Mirrors `scaleNativeMsgValue` in the SDK's EvmSpokeService,
+// which scales outgoing msg.value up by the same factor.
+const HEDERA_NATIVE_BALANCE_SCALE = 10n ** 10n;
 
 // HyperEVM chain is not supported by viem, so we need to define it manually
 export const hyper = /*#__PURE__*/ defineChain({
@@ -50,6 +71,26 @@ export const hyper = /*#__PURE__*/ defineChain({
   },
 });
 
+// Robinhood Chain is not yet in viem/wagmi's bundled chain list, so define it manually
+export const robinhoodChain = /*#__PURE__*/ defineChain({
+  id: 4663,
+  name: 'Robinhood Chain',
+  nativeCurrency: {
+    decimals: 18,
+    name: 'Ether',
+    symbol: 'ETH',
+  },
+  rpcUrls: {
+    default: { http: ['https://rpc.mainnet.chain.robinhood.com'] },
+  },
+  blockExplorers: {
+    default: {
+      name: 'Blockscout',
+      url: 'https://robinhoodchain.blockscout.com',
+    },
+  },
+});
+
 export const createWagmiConfig = (
   evmChains?: EvmTypeConfig['chains'],
   options?: WagmiOptions & { connectors?: CreateConnectorFn[] },
@@ -68,6 +109,8 @@ export const createWagmiConfig = (
       lightlinkPhoenix,
       kaia,
       redbellyMainnet,
+      hedera,
+      robinhoodChain,
     ],
     connectors: options?.connectors ?? [],
     // NOTE: wagmi's `ssr` is a hydration-timing flag, not an "is host app SSR"
@@ -90,13 +133,28 @@ export const createWagmiConfig = (
       [lightlinkPhoenix.id]: http(getRpcUrl(evmChains?.[ChainKeys.LIGHTLINK_MAINNET])),
       [redbellyMainnet.id]: http(getRpcUrl(evmChains?.[ChainKeys.REDBELLY_MAINNET])),
       [kaia.id]: http(getRpcUrl(evmChains?.[ChainKeys.KAIA_MAINNET])),
+      [hedera.id]: http(getRpcUrl(evmChains?.[ChainKeys.HEDERA_MAINNET])),
+      [robinhoodChain.id]: http(getRpcUrl(evmChains?.[ChainKeys.ROBINHOOD_MAINNET])),
     },
     storage: createStorage({
       storage: cookieStorage,
-      key: 'sodax',
+      key: options?.persistKey ?? 'sodax',
     }),
   });
 };
+
+/**
+ * Wraps wagmi's `cookieToInitialState` so a malformed cookie returns `undefined` instead of throwing
+ * during SSR. NOT validation: a well-formed but attacker-controlled cookie still passes — the live
+ * wallet is authoritative once a connection is established. Errors are swallowed (not logged).
+ */
+export function tryCookieToInitialState(config: Config, cookie: string | null | undefined): State | undefined {
+  try {
+    return cookieToInitialState(config, cookie ?? undefined);
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Service class for handling EVM chain interactions.
@@ -146,7 +204,11 @@ export class EvmXService extends XService {
     const chainId = getWagmiChainId(xToken.chainKey);
 
     if (isNativeToken(xToken)) {
-      return this._getChainBalance(address, chainId);
+      const balance = await this._getChainBalance(address, chainId);
+      if (xToken.chainKey === ChainKeys.HEDERA_MAINNET) {
+        return balance / HEDERA_NATIVE_BALANCE_SCALE;
+      }
+      return balance;
     }
 
     throw new Error(`Unsupported token: ${xToken.symbol}`);
