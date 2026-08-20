@@ -131,12 +131,15 @@ if (!created.ok) return;
 const { tx, intent, relayData } = created.value;
 ```
 
-**Delivery hooks are deployment-dependent here.** `CreateIntentParamsV2` carries an optional
-`hook?: HookRequestV2` (`{ kind: HookKind }`), shared by `checkAllowance` / `approve` / `createIntent`.
-Unlike the SDK path, the hook is resolved **server-side**, so it only works when the backend forwards the
-field *and* its pinned SDK has that kind registered for `dstChainKey`; an unregistered kind fails the
-request rather than falling back to a plain transfer. `dstAddress` still means the recipient the hook
-credits — the backend substitutes the hook's own address on-chain.
+**Delivery hooks are deployment-dependent here.** `hook?: HookRequestV2` (`{ kind: HookKind }`) lives on
+`SwapExtrasV2`, so it's inherited by both `CreateIntentParamsV2` (`checkAllowance` / `approve` /
+`createIntent` / `createLimitOrderIntent`) and `QuoteRequestV2` (`getQuote`) — on `getQuote` it's only meaningful with
+`includeTxData: true`, since a bare quote never builds an intent. Unlike the SDK path, the hook is
+resolved **server-side**, so it only works when the backend forwards the field *and* its pinned SDK has
+that kind registered for `dstChainKey`; an unregistered kind fails the request rather than falling back
+to a plain transfer. `dstAddress` still means the recipient the hook credits — the backend substitutes
+the hook's own address on-chain. Whether the `getQuote` path forwards `hook` at all is a backend
+question this SDK can't verify — confirm with the deployment before relying on it there.
 
 When you need hook support independent of the deployment, build with `sodax.swaps` instead: it resolves
 the hook client-side into `dstAddress`/`data`, and under the default `useBackendSubmitTx` still hands the

@@ -38,8 +38,6 @@ import {
   type XToken,
   type ChainType,
   ChainKeys,
-  HookKind,
-  isHookSupportedToken,
 } from '@sodax/dapp-kit';
 import {
   getXChainType,
@@ -56,7 +54,7 @@ import { loadLastSelection, saveLastSelection } from '@/lib/lastSelection';
 import { appendOrder } from '@/lib/orderHistory';
 import { buildOrderSummary } from '@/components/swaps/OrderStatus';
 import { solverApiEndpointForEnv } from '@/constants';
-import { HOOK_LABELS, toHookRequest } from '@/lib/deliveryHooks';
+import { HOOK_LABELS, resolveAvailableHookKind, toHookRequest } from '@/lib/deliveryHooks';
 
 export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAction<Order[]>) => void }) {
   const { sodax } = useSodaxContext();
@@ -130,11 +128,19 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   // The delivery hook — if any — that the registry accepts for this destination chain + output token
   // (HyperCore on HyperEVM+USDC, Flint on Ethereum+USDC today). Resolved from the registry rather than
   // pinned to one kind, so a newly registered hook surfaces here without touching this component.
-  const availableHookKind = useMemo(() => {
-    const token = dst.token;
-    if (!token) return undefined;
-    return Object.values(HookKind).find(kind => isHookSupportedToken(dst.chain, kind, token.address));
-  }, [dst.chain, dst.token]);
+  const availableHookKind = useMemo(
+    () => resolveAvailableHookKind(dst.chain, dst.token?.address),
+    [dst.chain, dst.token],
+  );
+
+  // Reset the toggle whenever the resolved hook kind changes (including to/from `undefined`) — the
+  // checkbox must never carry an opt-in for a hook the user didn't see. Without this, checking the box
+  // for one destination and then switching to a different destination that resolves a different hook
+  // kind would silently submit that other hook instead.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: availableHookKind is the intentional reset trigger, not a value read in the effect
+  useEffect(() => {
+    setDeliveryHookEnabled(false);
+  }, [availableHookKind]);
 
   const onChangeDirection = () => {
     setSrc(dst);
@@ -307,7 +313,6 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       hook: hookRequest,
     } satisfies CreateIntentParams;
 
-    console.log('createIntentParams', createIntentParams);
     setIntentOrderPayload(createIntentParams);
   };
 

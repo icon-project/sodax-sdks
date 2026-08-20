@@ -68,6 +68,34 @@ await sodax.api.swaps.createIntent({ ...intentBody, partnerFee });
 `checkAllowance` / `approve` inherit the field but ignore it. See [MONETIZE_SDK.md](MONETIZE_SDK.md)
 for the orchestrator path and fee claiming.
 
+## Delivery hooks
+
+`hook?: HookRequestV2` (`{ kind: HookKind }`) lives on `SwapExtrasV2`, so it's inherited by every
+method whose body extends it: `getQuote`, `checkAllowance`, `approve`, `createIntent`, and
+`createLimitOrderIntent` (`CreateLimitOrderParamsV2` is `CreateIntentParamsV2` minus `deadline`, so it
+carries `hook` too). Setting it routes the intent's output through a registered delivery hook instead
+of a plain transfer to `dstAddress`
+— the backend resolves the hook's deployed address and encodes its payload, so `dstAddress` keeps
+meaning "the recipient the hook credits," not the delivery target.
+
+```typescript
+import { HookKind } from '@sodax/sdk';
+
+const created = await sodax.api.swaps.createIntent({
+  ...intentBody,
+  hook: { kind: HookKind.HYPERCORE_DEPOSIT },
+});
+```
+
+- **Server-side, deployment-dependent.** Unlike `sodax.swaps` (which resolves a hook client-side),
+  here the hook is resolved by the backend. It only works when the backend forwards the field *and*
+  its pinned SDK has that kind registered for `dstChainKey` — an unregistered kind fails the request
+  rather than silently falling back to a plain transfer.
+- **On `getQuote`, only meaningful with `includeTxData: true`** — a bare quote never builds an
+  intent, so there's nowhere for a hook to apply, mirroring how `srcPublicKey`/`bound` already work
+  on this endpoint. Whether a given backend forwards `hook` through that path at all is a deployment
+  question this SDK cannot verify from here.
+
 ## `approve` can return two transactions
 
 `ApproveResponseV2` is `{ tx, resetTx? }`. `resetTx` is present only when the source token rejects an

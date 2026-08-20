@@ -46,10 +46,8 @@ import {
   ChainKeys,
   isBitcoinChainKey,
   isStacksChainKey,
-  HookKind,
-  isHookSupportedToken,
 } from '@sodax/dapp-kit';
-import { HOOK_LABELS } from '@/lib/deliveryHooks';
+import { HOOK_LABELS, resolveAvailableHookKind } from '@/lib/deliveryHooks';
 import {
   getXChainType,
   useEvmSwitchChain,
@@ -85,11 +83,10 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   // Registry-driven, so a newly registered hook surfaces here without touching this component.
   // NOTE: the API forwards `hook` to the SDK server-side, so resolution happens on the backend and
   // needs a backend whose pinned SDK has this hook registered — see the checkbox hint below.
-  const availableHookKind = useMemo(() => {
-    const token = dst.token;
-    if (!token) return undefined;
-    return Object.values(HookKind).find(kind => isHookSupportedToken(dstChainKey, kind, token.address));
-  }, [dstChainKey, dst.token]);
+  const availableHookKind = useMemo(
+    () => resolveAvailableHookKind(dstChainKey, dst.token?.address),
+    [dstChainKey, dst.token],
+  );
 
   const sourceAccount = useXAccount({ xChainId: srcChainKey });
   const sourceWalletProvider = useWalletProvider({ xChainId: srcChainKey });
@@ -111,6 +108,15 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const [deliveryHookEnabled, setDeliveryHookEnabled] = useState(false);
   const [isSourceBitcoinReady, setIsSourceBitcoinReady] = useState(false);
   const [isDestBitcoinReady, setIsDestBitcoinReady] = useState(false);
+
+  // Reset the toggle whenever the resolved hook kind changes (including to/from `undefined`) — the
+  // checkbox must never carry an opt-in for a hook the user didn't see. Without this, checking the box
+  // for one destination and then switching to a different destination that resolves a different hook
+  // kind would silently submit that other hook instead.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: availableHookKind is the intentional reset trigger, not a value read in the effect
+  useEffect(() => {
+    setDeliveryHookEnabled(false);
+  }, [availableHookKind]);
 
   // Supported chains + tokens straight from the Swaps API.
   const { data: tokensByChain } = useSwapsApiTokens();

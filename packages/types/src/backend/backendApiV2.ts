@@ -89,6 +89,18 @@ export interface SwapExtrasV2 {
    * top-level field per item. Only used for raw Bitcoin TRADING-mode intents.
    */
   bound?: BitcoinBoundExtrasV2;
+  /**
+   * Route the intent's output through a registered delivery hook instead of transferring it to
+   * `dstAddress`. The backend resolves the hook's deployed address and encodes its payload via the
+   * SDK, so `dstAddress` stays the recipient the hook credits. Omit for a plain transfer. Only used
+   * when building an intent — on {@link QuoteRequestV2} that means `includeTxData=true`; a bare quote
+   * never builds an intent, so `hook` has nowhere to apply there.
+   *
+   * Requires a backend new enough to forward this field, and one whose pinned SDK has the hook
+   * registered for `dstChainKey` — an unregistered kind fails the request rather than silently
+   * falling back to a plain transfer.
+   */
+  hook?: HookRequestV2;
 }
 // JSON-safety (no `bigint`) is enforced at compile time by the `_AssertJsonSafe` guard intersected onto
 // `CreateLimitOrderParamsV2` below — the swaps-section counterpart to the `GetAllConfigResponseV2` guard.
@@ -233,9 +245,11 @@ export type GetSwapTokensByChainResponseV2 = readonly SwapTokenV2[];
 // ──────────────────────────────────────────────────────────────────────
 
 /**
- * POST /swaps/quote — request body. Inherits the swap extras (`partnerFee`, `srcPublicKey`, `bound`) from
- * {@link SwapExtrasV2}; the inherited `srcPublicKey`/`bound` are consumed only by the `includeTxData=true`
- * intent-building path (Stacks/Bitcoin sources), mirroring `srcAddress`/`dstAddress` below.
+ * POST /swaps/quote — request body. Inherits the swap extras (`partnerFee`, `srcPublicKey`, `bound`,
+ * `hook`) from {@link SwapExtrasV2}; the inherited `srcPublicKey`/`bound`/`hook` are consumed only by
+ * the `includeTxData=true` intent-building path (Stacks/Bitcoin sources; delivery hooks), mirroring
+ * `srcAddress`/`dstAddress` below. Whether a given backend actually forwards `hook` on this endpoint
+ * is a deployment question — see `hook`'s own doc comment on {@link SwapExtrasV2}.
  */
 export interface QuoteRequestV2 extends SwapExtrasV2 {
   /** Source token address on the source spoke chain. */
@@ -293,8 +307,9 @@ export interface DeadlineResponseV2 {
 
 /**
  * Shared request body for `/swaps/allowance/check`, `/swaps/approve`, and `/swaps/intents`. Inherits the
- * swap extras (`partnerFee`, `srcPublicKey`, `bound`) from {@link SwapExtrasV2}; the Bitcoin Bound token
- * is carried as `bound.accessToken` (not a flat `accessToken`), mirroring the SDK's grouped `extras.bound`.
+ * swap extras (`partnerFee`, `srcPublicKey`, `bound`, `hook`) from {@link SwapExtrasV2}; the Bitcoin Bound
+ * token is carried as `bound.accessToken` (not a flat `accessToken`), mirroring the SDK's grouped
+ * `extras.bound`.
  */
 export interface CreateIntentParamsV2 extends SwapExtrasV2 {
   /** Source spoke chain key (SODAX SpokeChainKey). */
@@ -321,16 +336,6 @@ export interface CreateIntentParamsV2 extends SwapExtrasV2 {
   solver?: string;
   /** Arbitrary calldata hex string. Defaults to `0x`. */
   data?: string;
-  /**
-   * Route the intent's output through a registered delivery hook instead of transferring it to
-   * `dstAddress`. The backend resolves the hook's deployed address and encodes its payload via the
-   * SDK, so `dstAddress` stays the recipient the hook credits. Omit for a plain transfer.
-   *
-   * Requires a backend new enough to forward this field, and one whose pinned SDK has the hook
-   * registered for `dstChainKey` — an unregistered kind fails the request rather than silently
-   * falling back to a plain transfer.
-   */
-  hook?: HookRequestV2;
 }
 
 /** Selects a delivery hook by kind. Mirrors the SDK's own `HookRequest`. */

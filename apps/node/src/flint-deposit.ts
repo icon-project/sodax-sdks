@@ -55,6 +55,9 @@ const sonicWallet = new EvmWalletProvider({
 const sodax = new Sodax();
 await sodax.initialize();
 
+/** Shared by both Ethereum pre-flight checks below — they hit the same RPC, so one client suffices. */
+const eth = createPublicClient({ chain: mainnet, transport: http(ETH_RPC_URL) });
+
 /**
  * HARD GATE, kept as a permanent pre-flight (not a temporary wait). The Ethereum SpokeAssetManager
  * implementation has supported withdrawal hooks since the 2026-08-10 upgrade
@@ -65,7 +68,6 @@ await sodax.initialize();
  * so gate on that rather than trusting a point-in-time deployment record.
  */
 async function assertEthSpokeSupportsHooks(): Promise<void> {
-  const eth = createPublicClient({ chain: mainnet, transport: http(ETH_RPC_URL) });
   const implWord = await eth.getStorageAt({ address: ETH_SPOKE_ASSET_MANAGER, slot: ERC1967_IMPL_SLOT });
   const impl = `0x${(implWord ?? '0x').slice(-40)}` as Address;
   const code = (await eth.getCode({ address: impl })) ?? '0x';
@@ -86,7 +88,6 @@ async function fetchFlintHookMinDeposit(): Promise<bigint> {
   const hook = getSpokeHook(ChainKeys.ETHEREUM_MAINNET, HookKind.FLINT_DEPOSIT);
   if (!hook) throw new Error('FlintDepositHook is not registered on Ethereum in this SDK build');
 
-  const eth = createPublicClient({ chain: mainnet, transport: http(ETH_RPC_URL) });
   return eth.readContract({
     address: hook.address,
     abi: FLINT_HOOK_MIN_DEPOSIT_ABI,
@@ -95,7 +96,10 @@ async function fetchFlintHookMinDeposit(): Promise<bigint> {
 }
 
 async function main(): Promise<void> {
-  await assertEthSpokeSupportsHooks();
+  // Independent RPC reads on the same client — kick both off now rather than serializing them; each
+  // is awaited at the point its result is actually needed below.
+  const hookSupportCheck = assertEthSpokeSupportsHooks();
+  const hookMinDepositPromise = fetchFlintHookMinDeposit();
 
   const walletAddress = await sonicWallet.getWalletAddress();
   const recipient = (process.env.RECIPIENT ?? walletAddress) as Address;
@@ -105,6 +109,8 @@ async function main(): Promise<void> {
 
   console.log(`Swapping ${formatUnits(inputAmount, 18)} S -> Ethereum USDC -> Flint deposit`);
   console.log(`Wallet: ${walletAddress}, flUSD controller (recipient): ${recipient}`);
+
+  await hookSupportCheck;
 
   const quoteRequest: SolverIntentQuoteRequest = {
     token_src: sToken,
@@ -124,7 +130,7 @@ async function main(): Promise<void> {
   // Below the hook's dust floor it delivers plain USDC to the recipient instead of depositing —
   // harmless, but not what this script is for. Read live rather than assume a fixed floor: the
   // owner can change minDeposit on the deployed hook at any time.
-  const hookMinDeposit = await fetchFlintHookMinDeposit();
+  const hookMinDeposit = await hookMinDepositPromise;
   if (minOutputAmount < hookMinDeposit) {
     throw new Error(
       `min output ${formatUnits(minOutputAmount, 6)} USDC is under the hook's current ${formatUnits(hookMinDeposit, 6)} USDC minDeposit — raise AMOUNT_S`,
