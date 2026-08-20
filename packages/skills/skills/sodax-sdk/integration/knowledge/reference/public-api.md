@@ -128,6 +128,11 @@ import {
   type LeverageYieldVault,
   // …
 
+  // Delivery hooks (CreateIntentParams.hook — see features/swap.md)
+  HookKind,
+  type HookRequest,
+  getSpokeHook,
+
   // Backend / relay
   type IConfigApiV1,
   type SubmitTxRequestV2,       // swaps API submit-tx request (sodax.api.swaps.submitTx)

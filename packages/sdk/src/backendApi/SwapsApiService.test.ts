@@ -13,6 +13,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_API_BASE_URL,
+  HookKind,
   type CreateIntentParamsV2,
   type CreateLimitOrderParamsV2,
   type IntentRequestV2,
@@ -333,6 +334,22 @@ describe('SwapsApiService happy paths (validated responses)', () => {
     );
   });
 
+  it('getQuote forwards an optional hook field on the outgoing request body (client-side passthrough only)', async () => {
+    // SDK-service layer counterpart of the same-named assertion in
+    // packages/swaps-api/src/client.test.ts — keep both in sync (this proves the SDK wrapper doesn't
+    // break passthrough, not that any backend forwards `hook` for its includeTxData=true handler).
+    const hookedQuoteRequest: QuoteRequestV2 = {
+      ...sampleQuoteRequest,
+      hook: { kind: HookKind.HYPERCORE_DEPOSIT },
+    };
+    mockFetch.mockResolvedValueOnce(okResponse({ quotedAmount: '987654', txData: createIntentResponse }));
+    await sodax.api.swaps.getQuote(hookedQuoteRequest, { includeTxData: true });
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${BASE}/swaps/quote?includeTxData=true`,
+      expect.objectContaining({ method: 'POST', body: JSON.stringify(hookedQuoteRequest) }),
+    );
+  });
+
   it('getStatus returns ok:true with a SOLVED status code and fill tx hash', async () => {
     mockFetch.mockResolvedValueOnce(okResponse({ status: 3, fillTxHash: '0xfill' }));
     const result = await sodax.api.swaps.getStatus({ intentTxHash: TX_HASH });
@@ -347,6 +364,44 @@ describe('SwapsApiService happy paths (validated responses)', () => {
       ok: true,
       value: { ...createIntentResponse, tx: { ...createIntentResponse.tx, value: 0n } },
     });
+  });
+
+  it.each([
+    {
+      name: 'checkAllowance',
+      path: 'allowance/check',
+      invoke: (body: CreateIntentParamsV2) => sodax.api.swaps.checkAllowance(body),
+      response: { valid: true },
+    },
+    {
+      name: 'approve',
+      path: 'approve',
+      invoke: (body: CreateIntentParamsV2) => sodax.api.swaps.approve(body),
+      response: { tx: createIntentResponse.tx },
+    },
+    {
+      name: 'createIntent',
+      path: 'intents',
+      invoke: (body: CreateIntentParamsV2) => sodax.api.swaps.createIntent(body),
+      response: createIntentResponse,
+    },
+  ])('$name forwards an optional hook field on the outgoing request body (client-side passthrough only)', async ({
+    path,
+    invoke,
+    response,
+  }) => {
+    // Proves the SDK client serializes `hook` onto the wire unmodified — it does NOT prove any
+    // backend actually reads/forwards `hook` when building the intent.
+    const hookedParams: CreateIntentParamsV2 = {
+      ...sampleCreateIntentParams,
+      hook: { kind: HookKind.HYPERCORE_DEPOSIT },
+    };
+    mockFetch.mockResolvedValueOnce(okResponse(response));
+    await invoke(hookedParams);
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${BASE}/swaps/${path}`,
+      expect.objectContaining({ method: 'POST', body: JSON.stringify(hookedParams) }),
+    );
   });
 
   it('getFilledIntent returns ok:true with the on-chain fill state', async () => {

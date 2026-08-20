@@ -14,11 +14,12 @@ The hook's `deliveryData` is `abi.encode(address recipient)`, the same 32-byte p
 uses, and `HookRequest` gains a `{ kind: FLINT_DEPOSIT }` member that needs no extra params — the
 recipient comes from `dstAddress`, and referral attribution is configured on the deployed contract.
 
-**The hook is not usable yet.** `FlintDepositHook` is not deployed to Ethereum mainnet, so it has no
-entry in the `spokeHooks` registry. Selecting it fails closed at intent-construction time:
-`getSpokeHook` returns `undefined`, `isHookSupportedToken` returns `false`, and `resolveDeliveryHook`
-throws. A placeholder address was deliberately not used, because a registry address becomes an intent's
-`dstAddress` and would receive real funds. The registry entry lands with the deployment.
+This changeset lands the hook kind and codec only; the Ethereum registry entry (`FlintDepositHook`'s
+deployed address) ships separately once the contract is deployed, so the two land together in the same
+release. Until the registry entry is present, selecting `FLINT_DEPOSIT` fails closed at
+intent-construction time: `getSpokeHook` returns `undefined`, `isHookSupportedToken` returns `false`, and
+`resolveDeliveryHook` throws. A placeholder address was deliberately not used, because a registry address
+becomes an intent's `dstAddress` and would receive real funds.
 
 `HookService.encodeDeliveryData` now rejects a zero-address recipient. This applies to every hook, not
 just Flint: a zero recipient makes the destination receiver revert, which rolls back the whole
