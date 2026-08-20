@@ -152,6 +152,12 @@ export default function Providers({ children }: { children: ReactNode }) {
       // leaves the SDK on its default (analytics off).
       analytics: createDemoAnalytics() ?? false,
       solver: configMap[solverEnvironment],
+      // No `leverageYield.positionFactory` override: the deployed factory now ships in
+      // `leverageYieldConfig`, and pinning the same address here would be a second source of truth
+      // that silently outlives a rotation of the packaged one. Worth knowing when it does rotate:
+      // clones bake in their implementation, so positions opened against an earlier factory keep
+      // working but stop appearing under the new one, and each of its hooks has to be whitelisted
+      // with the solver before an intent posted against it can be filled.
       chains: {
         [ChainKeys.SONIC_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.SONIC_MAINNET] },
         [ChainKeys.AVALANCHE_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.AVALANCHE_MAINNET] },

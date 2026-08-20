@@ -1,12 +1,17 @@
 import {
   type SpokeService,
+  type SendMessageParams,
   adjustAmountByFee,
   Erc20Service,
   Erc4626Service,
+  EvmVaultTokenService,
+  encodeContractCalls,
+  encodeAddress,
   poolAbi,
   SonicSpokeService,
   isSonicChainKeyType,
   isHubChainKeyType,
+  isEvmWalletProviderType,
   isBitcoinChainKeyType,
   isBitcoinWalletProviderType,
   isPartnerFeeAmount,
@@ -17,16 +22,28 @@ import {
   type RelayExtraData,
   type IntentDeliveryInfo,
 } from '../shared/index.js';
-import type { HubProvider } from '../shared/types/types.js';
-import { FEE_PERCENTAGE_SCALE, isBitcoinChainKey } from '@sodax/types';
+import type { HubProvider, TxHashPair } from '../shared/types/types.js';
+import {
+  DEFAULT_RELAY_TX_TIMEOUT,
+  FEE_PERCENTAGE_SCALE,
+  getIntentRelayChainId,
+  HUB_CHAIN_KEY,
+  isBitcoinChainKey,
+} from '@sodax/types';
 import type {
   Address,
+  EvmContractCall,
+  EvmRawTransaction,
   FeeAmount,
   GetAddressType,
   GetTokenAddressType,
   GetWalletProviderType,
   HubChainKey,
   IEvmWalletProvider,
+  IWalletProvider,
+  LeveragePosition,
+  LeveragePositionAccount,
+  LeveragePositionCollateral,
   LeverageYieldVault,
   PartnerFee,
   Result,
@@ -35,12 +52,15 @@ import type {
   SolverExecutionResponse,
   SolverIntentQuoteRequest,
   SolverIntentQuoteResponse,
+  LeveragePositionPendingState,
+  SolverIntentStatusRequest,
+  SolverIntentStatusResponse,
   SonicChainKey,
   SpokeChainKey,
   SpokeExecActionParams,
   TxReturnType,
 } from '@sodax/types';
-import { erc20Abi, parseAbi } from 'viem';
+import { encodeFunctionData, erc20Abi, parseAbi, zeroAddress, type Hex } from 'viem';
 import type { ConfigService } from '../shared/config/ConfigService.js';
 import type { CreateIntentParams, Intent } from '../shared/types/intent-types.js';
 import { EvmSolverService } from '../swap/EvmSolverService.js';
@@ -88,12 +108,122 @@ const leverageYieldVaultAbi = parseAbi([
   'function targetLTV() view returns (uint256)',
 ]);
 
+// Leverage positions are the unpooled counterpart to the vaults above: one owner-controlled
+// AAVE account per position, cloned by the factory. Neither contract keeps accounting of its
+// own — collateral, debt and health factor are read from the pool via `getUserAccountData`.
+const leveragePositionFactoryAbi = parseAbi([
+  'function positionsOf(address owner) view returns (address[])',
+  'function nextPositionIdFor(address owner) view returns (uint256)',
+  'function predictPosition(address creator, address owner, uint256 positionId) view returns (address)',
+  'function createPositionAndLeverage((address owner, address collateral, address borrowToken, uint8 eModeCategory, uint256 originChainId, bytes originAddress, address originAsset) cfg, uint256 initialAssets, uint256 borrowAmount, uint256 minCollateralOut) returns (address)',
+  'function createPositionFromDebtToken((address owner, address collateral, address borrowToken, uint8 eModeCategory, uint256 originChainId, bytes originAddress, address originAsset) cfg, uint256 contribution, uint256 totalInput, uint256 minCollateralOut) returns (address)',
+]);
+
+const leveragePositionAbi = parseAbi([
+  'function owner() view returns (address)',
+  'function collateral() view returns (address)',
+  'function borrowToken() view returns (address)',
+  'function eModeCategory() view returns (uint8)',
+  'function hasPendingOperation() view returns (bool)',
+  'function pendingKind() view returns (uint8)',
+  'function addLeverage(uint256 borrowAmount, uint256 minCollateralOut)',
+  'function decreaseLeverage(uint256 collateralIn, uint256 minDebtOut, address exitAsset)',
+  'function withdraw(uint256 amount, address to)',
+  'function cancel()',
+  'function settle()',
+]);
+
 /**
  * Seconds added to the hub-chain (Sonic) block timestamp for the default intent `deadline`
  * when the caller omits one. Anchored to block time — never the client clock — because the
  * deadline is enforced on-chain against the hub block timestamp.
  */
 const INTENT_DEADLINE_BUFFER_SECONDS = 5 * 60;
+
+/**
+ * Where a position's funds came from, and so where a failed intent refunds to.
+ *
+ * Given as a chain KEY rather than a number: the on-chain field is a SODAX relay chain id (Arbitrum
+ * is 23, not 42161), and `getIntentRelayChainId` is the map for that. Asking callers for the raw
+ * number invites passing an EVM id, which would route a refund nowhere.
+ */
+export type PositionOrigin = {
+  /** Chain the user funded from and is refunded on. */
+  chainKey: SpokeChainKey;
+  /** The user's address on `chainKey`. */
+  address: string;
+  /**
+   * Hub asset a cross-chain refund unwraps the reserve into. Required off-hub, since the
+   * AssetManager moves only its own registered assets and never vault tokens, and ignored on the
+   * hub, where a refund is a plain transfer.
+   */
+  asset?: Address;
+};
+
+/**
+ * Funding a position from whichever chain the user actually holds tokens on.
+ *
+ * Positions live on the hub, but nothing requires the user to. The deposit is relayed to their hub
+ * wallet and the position is opened from inside that relayed batch, so the whole thing is one
+ * signature on the source chain — and the hub is just another source chain here, not a special case.
+ *
+ * `token` is a token on `srcChainKey`, in that token's own decimals. Its hub reserve is what the
+ * position uses: the collateral for {@link LeverageYieldService.openPosition}, the borrow token for
+ * {@link LeverageYieldService.openPositionFromDebtToken}. Wrapping into that reserve is part of the
+ * relayed batch, so callers pass the amount they hold, not a vault-share amount.
+ */
+export type PositionFundingParams<K extends SpokeChainKey> = {
+  srcChainKey: K;
+  /** The user's address on `srcChainKey`. Funds come from here and a failed intent refunds to here. */
+  srcAddress: string;
+  /** Token on `srcChainKey` to fund with. */
+  token: string;
+  /** Amount of `token`, in its own decimals. */
+  amount: bigint;
+  // No `owner` override: the factory requires `cfg.owner == msg.sender`, and the caller at the factory
+  // is always the funder's own hub wallet. Naming anyone else would simply revert — and it used to be
+  // a theft path, since the creator also chose the refund address.
+  /** AAVE eMode category, fixed for the life of the position. Defaults to 0 (none). */
+  eModeCategory?: number;
+  /** Slippage floor on the collateral the solver must deliver, in the collateral reserve's units. */
+  minCollateralOut: bigint;
+};
+
+/** Opening from the collateral side: deposit collateral, borrow against it, swap into more collateral. */
+export type OpenPositionParams<K extends SpokeChainKey> = PositionFundingParams<K> & {
+  /** Hub reserve to borrow. */
+  borrowToken: Address;
+  /** Amount to borrow, in `borrowToken`'s units (hub reserves are 18-decimal). */
+  borrowAmount: bigint;
+};
+
+/**
+ * Opening from the debt side: the deposit IS the debt token, and the position ends up long
+ * `collateral` without the user ever having held it.
+ */
+export type OpenPositionFromDebtTokenParams<K extends SpokeChainKey> = PositionFundingParams<K> & {
+  /** Hub reserve the position ends up long. */
+  collateral: Address;
+  /** Total debt token paid to the solver. The hook borrows this minus the deposit's contribution. */
+  totalInput: bigint;
+};
+
+/**
+ * Operating an existing position from any chain. No funds move, so this is a bare message rather
+ * than a deposit — the calls execute as the user's hub wallet, which is what the position's
+ * `onlyOwner` requires.
+ */
+export type PositionOperationParams<K extends SpokeChainKey> = {
+  srcChainKey: K;
+  /** The user's address on `srcChainKey`; its hub wallet is what executes the calls. */
+  srcAddress: string;
+  /**
+   * Calls to run as the hub wallet, from the position builders
+   * ({@link LeverageYieldService.buildAddLeverage} and friends). More than one is allowed and they
+   * execute in order, which is how a settle-then-act sequence stays atomic.
+   */
+  calls: readonly EvmRawTransaction[];
+};
 
 /** Sentinel `solver` address meaning "any solver may fill this intent". */
 const ANY_SOLVER_ADDRESS: Address = '0x0000000000000000000000000000000000000000';
@@ -1085,7 +1215,12 @@ export class LeverageYieldService {
   }
 
   /**
-   * Notifies the solver that the vault intent landed on the hub, triggering it to fill.
+   * Notifies the solver that an intent landed on the hub, triggering it to fill.
+   *
+   * REQUIRED for anything that creates an intent, not an optimisation. An intent created on the hub
+   * is invisible to the solver until this call puts it in the task pool, so an unnotified intent
+   * simply expires. Leverage positions post their intents on-chain from the position contract, so
+   * the caller that sent the transaction is the only one who can report the hash.
    * Leverage-yield copy of the swap domain's `postExecution` — emits only
    * `EXECUTION_FAILED` / `EXTERNAL_API_ERROR` / `UNKNOWN` (relay/verify codes appear only
    * on {@link LeverageYieldService.vaultSwap}, which owns the verify + relay steps).
@@ -1130,6 +1265,48 @@ export class LeverageYieldService {
       // Narrow guard: only preserve SodaxErrors whose code is in the post-execution union.
       if (isLeverageYieldPostExecutionError(error)) return { ok: false, error };
       return { ok: false, error: executionFailed('leverageYield', error, { phase: 'postExecution' }) };
+    }
+  }
+
+  /**
+   * Polls the solver for the execution status of an intent this service created.
+   *
+   * Pair with {@link LeverageYieldService.notifySolver}: `notifySolver` puts the intent in the
+   * solver's task pool, this reports what became of it. `fill_tx_hash` is set only once
+   * `status === SolverIntentStatusCode.SOLVED`.
+   *
+   * A `NOT_FOUND` status usually means the notification never landed rather than that the intent
+   * does not exist — an intent created on the hub is invisible to the solver until it is told.
+   *
+   * @param request - `{ intent_tx_hash }` — the hub-chain (Sonic) tx hash the intent was
+   *   registered in. For a position that is the tx that called the factory or the position.
+   */
+  public async getIntentStatus(
+    request: SolverIntentStatusRequest,
+  ): Promise<Result<SolverIntentStatusResponse, LeverageYieldPostExecutionError>> {
+    try {
+      const result = await SolverApiService.getStatus(request, this.config.solver, this.config.logger);
+      if (result.ok) return result;
+
+      const detail = result.error?.detail ?? {
+        code: -999, // SolverIntentErrorCode.UNKNOWN
+        message: 'Solver returned malformed error response',
+      };
+      return {
+        ok: false,
+        error: new SodaxError('EXTERNAL_API_ERROR', detail.message, {
+          feature: 'leverageYield',
+          context: {
+            phase: 'lookup',
+            api: 'solver',
+            solverCode: detail.code,
+            solverDetail: detail,
+          },
+        }),
+      };
+    } catch (error) {
+      if (isLeverageYieldPostExecutionError(error)) return { ok: false, error };
+      return { ok: false, error: executionFailed('leverageYield', error, { phase: 'lookup' }) };
     }
   }
 
@@ -1493,5 +1670,1142 @@ export class LeverageYieldService {
       if (isLeverageYieldLookupError(error)) return { ok: false, error };
       return { ok: false, error: lookupFailed('leverageYield', 'getShareBalanceForUser', error, { srcChainKey }) };
     }
+  }
+
+  // ─── Leverage positions ────────────────────────────────────────────────
+
+  /**
+   * Resolves the `LeveragePositionFactory` address, or a validation error when it is missing.
+   *
+   * The deployed factory ships in `leverageYieldConfig`, so this only fails when an integrator
+   * overrides it with an empty value — which is what a bad env var produces. Failing closed there is
+   * deliberate: a placeholder address would post real intents at nothing.
+   */
+  private requireFactory(action: string): Result<Address, LeverageYieldLookupError> {
+    const factory = this.config.sodaxConfig.leverageYield.positionFactory;
+    if (!factory) {
+      return {
+        ok: false,
+        error: lookupFailed(
+          'leverageYield',
+          action,
+          new Error('leverageYield.positionFactory is not configured; supply the deployed factory address'),
+        ),
+      };
+    }
+    return { ok: true, value: factory };
+  }
+
+  /** Position clones owned by `owner`, in creation order. Empty when the owner has none. */
+  public async listPositions(owner: Address): Promise<Result<readonly Address[], LeverageYieldLookupError>> {
+    const factory = this.requireFactory('listPositions');
+    if (!factory.ok) return factory;
+    try {
+      const value = await this.hubProvider.publicClient.readContract({
+        address: factory.value,
+        abi: leveragePositionFactoryAbi,
+        functionName: 'positionsOf',
+        args: [owner],
+      });
+      return { ok: true, value };
+    } catch (error) {
+      if (isLeverageYieldLookupError(error)) return { ok: false, error };
+      return { ok: false, error: lookupFailed('leverageYield', 'listPositions', error) };
+    }
+  }
+
+  /**
+   * Positions belonging to a user, resolved by their spoke-side address rather than a hub address.
+   *
+   * Positions are owned by the user's hub wallet, so discovery goes through
+   * `getUserHubWalletAddress` — which returns the wallet router for a Sonic user and the
+   * cross-chain wallet for a spoke user, so the same call works on every chain. Prefer this over
+   * `listPositions` in user-facing code; passing a raw EOA finds nothing.
+   */
+  public async listPositionsForUser<K extends SpokeChainKey>(
+    srcChainKey: K,
+    srcAddress: string,
+  ): Promise<Result<readonly Address[], LeverageYieldLookupError>> {
+    try {
+      const hubWallet = await this.hubProvider.getUserHubWalletAddress(srcAddress, srcChainKey);
+      return await this.listPositions(hubWallet);
+    } catch (error) {
+      if (isLeverageYieldLookupError(error)) return { ok: false, error };
+      return { ok: false, error: lookupFailed('leverageYield', 'listPositionsForUser', error, { srcChainKey }) };
+    }
+  }
+
+  /** Static descriptor of a position — owner, both legs, and the fixed eMode category. */
+  public async getPositionInfo(position: Address): Promise<Result<LeveragePosition, LeverageYieldLookupError>> {
+    try {
+      const [owner, collateral, borrowToken, eModeCategory] = await Promise.all([
+        this.hubProvider.publicClient.readContract({
+          address: position,
+          abi: leveragePositionAbi,
+          functionName: 'owner',
+        }),
+        this.hubProvider.publicClient.readContract({
+          address: position,
+          abi: leveragePositionAbi,
+          functionName: 'collateral',
+        }),
+        this.hubProvider.publicClient.readContract({
+          address: position,
+          abi: leveragePositionAbi,
+          functionName: 'borrowToken',
+        }),
+        this.hubProvider.publicClient.readContract({
+          address: position,
+          abi: leveragePositionAbi,
+          functionName: 'eModeCategory',
+        }),
+      ]);
+      return { ok: true, value: { address: position, owner, collateral, borrowToken, eModeCategory } };
+    } catch (error) {
+      if (isLeverageYieldLookupError(error)) return { ok: false, error };
+      return { ok: false, error: lookupFailed('leverageYield', 'getPositionInfo', error) };
+    }
+  }
+
+  /**
+   * Live AAVE account snapshot for a position. Read from the pool, not the position: the
+   * position contract keeps no accounting of its own, so collateral, debt and health factor
+   * all come from `getUserAccountData`.
+   *
+   * The pool comes from `moneyMarket.lendingPool` config rather than the position's own
+   * `pool()` getter — same address, one fewer round trip, and it keeps the deployment address
+   * sourced from config like the rest of the SDK.
+   */
+  public async getPositionAccount(
+    position: Address,
+  ): Promise<Result<LeveragePositionAccount, LeverageYieldLookupError>> {
+    try {
+      const [totalCollateralBase, totalDebtBase, availableBorrowsBase, currentLiquidationThreshold, ltv, healthFactor] =
+        await this.hubProvider.publicClient.readContract({
+          address: this.config.sodaxConfig.moneyMarket.lendingPool,
+          abi: poolAbi,
+          functionName: 'getUserAccountData',
+          args: [position],
+        });
+      return {
+        ok: true,
+        value: {
+          totalCollateralBase,
+          totalDebtBase,
+          availableBorrowsBase,
+          currentLiquidationThreshold,
+          ltv,
+          healthFactor,
+        },
+      };
+    } catch (error) {
+      if (isLeverageYieldLookupError(error)) return { ok: false, error };
+      return { ok: false, error: lookupFailed('leverageYield', 'getPositionAccount', error) };
+    }
+  }
+
+  /**
+   * The position's collateral holding, as an exact aToken balance.
+   *
+   * Needed to size a full exit. {@link LeverageYieldService.getPositionAccount} reports collateral
+   * in the oracle's base currency at 8 decimals, which is fine to display but cannot name an amount:
+   * dividing it back out by a price lands near the balance, and a `decreaseLeverage` asking for more
+   * collateral than the position holds does not fail on submission — the hook's `transferFrom`
+   * reverts at fill time, so the intent silently expires instead.
+   *
+   * Safe to act on a slightly stale read: aToken balances only grow, since interest accrues into
+   * them, so a value from a few blocks ago is always still spendable. Selling it leaves interest
+   * dust behind rather than coming up short.
+   *
+   * @param collateral The position's collateral reserve. Read from the position when omitted; pass
+   *        it if you already hold a {@link LeveragePosition} to save the round trip.
+   */
+  public async getPositionCollateralBalance(
+    position: Address,
+    collateral?: Address,
+  ): Promise<Result<LeveragePositionCollateral, LeverageYieldLookupError>> {
+    try {
+      const asset =
+        collateral ??
+        (await this.hubProvider.publicClient.readContract({
+          address: position,
+          abi: leveragePositionAbi,
+          functionName: 'collateral',
+        }));
+      const reserve = await this.hubProvider.publicClient.readContract({
+        address: this.config.sodaxConfig.moneyMarket.lendingPool,
+        abi: poolAbi,
+        functionName: 'getReserveData',
+        args: [asset],
+      });
+      const aToken = reserve.aTokenAddress;
+      const balance = await this.hubProvider.publicClient.readContract({
+        address: aToken,
+        abi: erc20Abi,
+        functionName: 'balanceOf',
+        args: [position],
+      });
+      return { ok: true, value: { aToken, balance } };
+    } catch (error) {
+      if (isLeverageYieldLookupError(error)) return { ok: false, error };
+      return { ok: false, error: lookupFailed('leverageYield', 'getPositionCollateralBalance', error) };
+    }
+  }
+
+  /**
+   * The position's operation slot: which operation it recorded, and whether that intent is still
+   * live on `Intents`.
+   *
+   * Both are needed, because the interesting state is when they disagree. `isLive` false with a
+   * non-zero `kind` means the intent resolved — filled, expired, or cancelled by someone else — but
+   * the position has not been told, so its grant is still open and any debt-side contribution is
+   * still sitting there. That is what `needsSettle` flags, and `buildSettlePosition` clears. A live
+   * intent instead blocks any second operation until it resolves.
+   */
+  public async getPositionPendingState(
+    position: Address,
+  ): Promise<Result<LeveragePositionPendingState, LeverageYieldLookupError>> {
+    try {
+      const [isLive, kind] = await Promise.all([
+        this.hubProvider.publicClient.readContract({
+          address: position,
+          abi: leveragePositionAbi,
+          functionName: 'hasPendingOperation',
+        }),
+        this.hubProvider.publicClient.readContract({
+          address: position,
+          abi: leveragePositionAbi,
+          functionName: 'pendingKind',
+        }),
+      ]);
+      return { ok: true, value: { kind, isLive, needsSettle: kind !== 0 && !isLive } };
+    } catch (error) {
+      if (isLeverageYieldLookupError(error)) return { ok: false, error };
+      return { ok: false, error: lookupFailed('leverageYield', 'getPositionPendingState', error) };
+    }
+  }
+
+  /** Deterministic clone address for the next position a given creator opens for `owner`. */
+  public async predictPosition(
+    creator: Address,
+    owner: Address,
+    positionId?: bigint,
+  ): Promise<Result<Address, LeverageYieldLookupError>> {
+    const factory = this.requireFactory('predictPosition');
+    if (!factory.ok) return factory;
+    try {
+      const id =
+        positionId ??
+        (await this.hubProvider.publicClient.readContract({
+          address: factory.value,
+          abi: leveragePositionFactoryAbi,
+          functionName: 'nextPositionIdFor',
+          args: [owner],
+        }));
+      const value = await this.hubProvider.publicClient.readContract({
+        address: factory.value,
+        abi: leveragePositionFactoryAbi,
+        functionName: 'predictPosition',
+        args: [creator, owner, id],
+      });
+      return { ok: true, value };
+    } catch (error) {
+      if (isLeverageYieldLookupError(error)) return { ok: false, error };
+      return { ok: false, error: lookupFailed('leverageYield', 'predictPosition', error) };
+    }
+  }
+
+  // ─── Position transaction builders ─────────────────────────────────────
+  //
+  // Positions are driven by direct Sonic calls, not intents, so these return raw transactions
+  // for the caller to sign with a hub wallet provider. The leverage and deleverage calls only
+  // *post* an intent — a solver fills it afterwards, so poll `getPositionPendingState`
+  // rather than treating the receipt as completion.
+
+  /**
+   * Opens a new position and requests leverage on it in the same transaction — the standard way
+   * to open a leveraged position: one approve, then this.
+   *
+   * `initialAssets` of `collateral` is pulled from the signer, so the factory needs an allowance
+   * first. Control is assigned to `owner`, which may differ from the signer — pass a user's hub
+   * wallet address to have the existing cross-chain path drive the position.
+   *
+   * The leverage is still asynchronous: this posts the intent and a solver fills it afterwards,
+   * so on confirmation the position is funded with the request outstanding, not yet levered. If
+   * no solver fills it, `buildCancelPositionOperation` returns the deposit to the owner.
+   */
+  /**
+   * Turns a {@link PositionOrigin} into the tuple the factory takes, and refuses the combinations the
+   * contract would refuse anyway — better a rejected build than a transaction that reverts.
+   */
+  private resolveOrigin(
+    origin: PositionOrigin,
+    method: string,
+  ): Result<{ chainId: bigint; address: Hex; asset: Address }, LeverageYieldLookupError> {
+    // Unmapped keys come back undefined rather than throwing, and the failure then surfaces from
+    // inside viem as "Cannot convert undefined to a BigInt" — say what is actually wrong instead.
+    const chainId = getIntentRelayChainId(origin.chainKey);
+    if (chainId === undefined) {
+      return {
+        ok: false,
+        error: lookupFailed(
+          'leverageYield',
+          method,
+          new Error(`no relay chain id for origin chain ${origin.chainKey}`),
+        ),
+      };
+    }
+    const isHub = origin.chainKey === this.hubProvider.chainConfig.chain.key;
+    if (!isHub && !origin.asset) {
+      return {
+        ok: false,
+        error: lookupFailed(
+          'leverageYield',
+          method,
+          new Error(`origin.asset is required for a refund to ${origin.chainKey}`),
+        ),
+      };
+    }
+    return {
+      ok: true,
+      value: {
+        chainId,
+        // The chain's own encoding, not a 0x-prefixed string. `originAddress` is `bytes` on-chain and
+        // is handed to the AssetManager as the refund destination, so a Solana or Stellar address has
+        // to arrive in the form that chain's spoke expects — prefixing `0x` would produce a refund
+        // address that is merely well-formed hex. EVM addresses pass through unchanged.
+        address: encodeAddress(origin.chainKey, origin.address),
+        // Named on the hub as well, not just off it. The asset decides what a cancellation pays back,
+        // and zeroing it here is why someone who funded with USSD was refunded `sodaUSSD`. Callers pass
+        // the asset only when a wrap actually happened — when the reserve IS what was deposited there is
+        // nothing to unwrap and `address(0)` is the correct answer.
+        asset: (origin.asset ?? zeroAddress) as Address,
+      },
+    };
+  }
+
+  /** A hub transaction. Every builder below produces this shape and none of them sends value. */
+  private hubTx(from: Address, to: Address, data: Hex): EvmRawTransaction {
+    return { from, to, value: 0n, data };
+  }
+
+  /**
+   * The `PositionConfig` struct both factory entry points take, assembled from a resolved origin.
+   *
+   * Shared so the two create paths cannot drift: which side the funded reserve goes on is their only
+   * real difference, and a field silently spelled differently in one of them would be a
+   * mis-recorded refund destination rather than a compile error.
+   */
+  private positionConfig(args: {
+    owner: Address;
+    collateral: Address;
+    borrowToken: Address;
+    eModeCategory: number;
+    origin: { chainId: bigint; address: Hex; asset: Address };
+  }): {
+    owner: Address;
+    collateral: Address;
+    borrowToken: Address;
+    eModeCategory: number;
+    originChainId: bigint;
+    originAddress: Hex;
+    originAsset: Address;
+  } {
+    return {
+      owner: args.owner,
+      collateral: args.collateral,
+      borrowToken: args.borrowToken,
+      eModeCategory: args.eModeCategory,
+      originChainId: args.origin.chainId,
+      originAddress: args.origin.address,
+      originAsset: args.origin.asset,
+    };
+  }
+
+  public buildCreatePositionAndLeverage(params: {
+    from: Address;
+    owner: Address;
+    collateral: Address;
+    borrowToken: Address;
+    eModeCategory: number;
+    origin: PositionOrigin;
+    initialAssets: bigint;
+    borrowAmount: bigint;
+    minCollateralOut: bigint;
+  }): Result<EvmRawTransaction, LeverageYieldLookupError> {
+    const method = 'buildCreatePositionAndLeverage';
+    const factory = this.requireFactory(method);
+    if (!factory.ok) return factory;
+    const origin = this.resolveOrigin(params.origin, method);
+    if (!origin.ok) return origin;
+    return {
+      ok: true,
+      value: this.hubTx(
+        params.from,
+        factory.value,
+        encodeFunctionData({
+          abi: leveragePositionFactoryAbi,
+          functionName: 'createPositionAndLeverage',
+          args: [
+            this.positionConfig({ ...params, origin: origin.value }),
+            params.initialAssets,
+            params.borrowAmount,
+            params.minCollateralOut,
+          ],
+        }),
+      ),
+    };
+  }
+
+  /**
+   * Opens a levered position starting from the **debt** token, with no collateral of your own.
+   *
+   * Pulls `contribution` of `borrowToken` from the signer — not the collateral. On fill the hook
+   * supplies the solver's collateral, adds the contribution, borrows `totalInput - contribution`,
+   * and pays the solver the total, so a holder of the debt asset lands in a levered collateral
+   * position having never owned collateral. Requires the deployment's implementation to have a
+   * debt-side hook configured; otherwise the position reverts with `DebtSideHookUnavailable`.
+   */
+  public buildCreatePositionFromDebtToken(params: {
+    from: Address;
+    owner: Address;
+    collateral: Address;
+    borrowToken: Address;
+    eModeCategory: number;
+    origin: PositionOrigin;
+    contribution: bigint;
+    totalInput: bigint;
+    minCollateralOut: bigint;
+  }): Result<EvmRawTransaction, LeverageYieldLookupError> {
+    const method = 'buildCreatePositionFromDebtToken';
+    const factory = this.requireFactory(method);
+    if (!factory.ok) return factory;
+    const origin = this.resolveOrigin(params.origin, method);
+    if (!origin.ok) return origin;
+    return {
+      ok: true,
+      value: this.hubTx(
+        params.from,
+        factory.value,
+        encodeFunctionData({
+          abi: leveragePositionFactoryAbi,
+          functionName: 'createPositionFromDebtToken',
+          args: [
+            this.positionConfig({ ...params, origin: origin.value }),
+            params.contribution,
+            params.totalInput,
+            params.minCollateralOut,
+          ],
+        }),
+      ),
+    };
+  }
+
+  /** Borrows `borrowAmount` and swaps it into more collateral. `minCollateralOut` is the slippage floor. */
+  public buildAddLeverage(params: {
+    from: Address;
+    position: Address;
+    borrowAmount: bigint;
+    minCollateralOut: bigint;
+  }): EvmRawTransaction {
+    return this.hubTx(
+      params.from,
+      params.position,
+      encodeFunctionData({
+        abi: leveragePositionAbi,
+        functionName: 'addLeverage',
+        args: [params.borrowAmount, params.minCollateralOut],
+      }),
+    );
+  }
+
+  /**
+   * Gives up `collateralIn` of collateral to repay debt. `minDebtOut` is the slippage floor.
+   *
+   * CLOSING INTO THE DEBT TOKEN is this call with the position's whole collateral balance — there is
+   * no separate close entry point, because selling everything is the same operation as selling part.
+   * Size it with {@link LeverageYieldService.getPositionCollateralBalance}, never off
+   * `totalCollateralBase`, and quote the full amount so `minDebtOut` reflects what the solver will
+   * actually pay for all of it.
+   *
+   * What that leaves behind is worth knowing. The solver delivers more debt token than is owed, so
+   * the hook repays the debt and hands the surplus to the position, which is the owner's equity now
+   * denominated in the debt asset. It sits in the position until someone calls
+   * {@link LeverageYieldService.buildSettlePosition} — that sweep is what actually delivers it, and
+   * it goes to the position's `owner` (the hub wallet), not to whoever signed. Exiting into the
+   * *collateral* instead means repaying only the debt and then calling
+   * {@link LeverageYieldService.buildPositionWithdraw}, which can pay out to any address.
+   */
+  public buildDecreaseLeverage(params: {
+    from: Address;
+    position: Address;
+    collateralIn: bigint;
+    minDebtOut: bigint;
+    /**
+     * Underlying a surplus is delivered in, straight to the owner's own address on their origin chain.
+     * Only a full close produces a surplus, so this is ignored on a partial deleverage. Omit — or pass
+     * the zero address — to leave any surplus in the position for `buildSettlePosition` to sweep, which
+     * hands over the reserve rather than the token.
+     */
+    exitAsset?: Address;
+  }): EvmRawTransaction {
+    return this.hubTx(
+      params.from,
+      params.position,
+      encodeFunctionData({
+        abi: leveragePositionAbi,
+        functionName: 'decreaseLeverage',
+        args: [params.collateralIn, params.minDebtOut, params.exitAsset ?? zeroAddress],
+      }),
+    );
+  }
+
+  /**
+   * Withdraws collateral out of the position. The pool rejects a withdrawal that would drop
+   * the position below its liquidation threshold, so no client-side health check is applied
+   * here — but note that bound is health factor 1, not a safety buffer above it.
+   */
+  public buildPositionWithdraw(params: {
+    from: Address;
+    position: Address;
+    amount: bigint;
+    to: Address;
+  }): EvmRawTransaction {
+    return this.hubTx(
+      params.from,
+      params.position,
+      encodeFunctionData({
+        abi: leveragePositionAbi,
+        functionName: 'withdraw',
+        args: [params.amount, params.to],
+      }),
+    );
+  }
+
+  /**
+   * Clears an operation that has already resolved and returns anything the position is holding
+   * loose to its owner.
+   *
+   * PERMISSIONLESS, and deliberately so: it only ever tightens state, so a stranded balance can be
+   * pushed back by anyone rather than waiting on the owner to notice. That matters because an intent
+   * can be cancelled by a third party once past its deadline, which leaves the position resolved but
+   * un-swept if the hook's notification did not land.
+   *
+   * Reverts while the intent is still live — use {@link LeverageYieldService.buildCancelPositionOperation}
+   * to end one that has not resolved yet.
+   */
+  public buildSettlePosition(params: { from: Address; position: Address }): EvmRawTransaction {
+    return this.hubTx(
+      params.from,
+      params.position,
+      encodeFunctionData({ abi: leveragePositionAbi, functionName: 'settle' }),
+    );
+  }
+
+  /**
+   * Cancels the in-flight operation and returns the deposit.
+   *
+   * Nothing is escrowed when an intent is posted, so cancelling recovers nothing by itself — but
+   * a position carrying no debt withdraws its whole collateral balance back to the owner, which
+   * is what a leveraged open whose intent never filled needs. With debt outstanding the
+   * collateral stays put: the pool would reject the withdrawal on its health-factor check.
+   */
+  public buildCancelPositionOperation(params: { from: Address; position: Address }): EvmRawTransaction {
+    return this.hubTx(
+      params.from,
+      params.position,
+      encodeFunctionData({ abi: leveragePositionAbi, functionName: 'cancel' }),
+    );
+  }
+
+  // ─── Positions from any chain ──────────────────────────────────────────
+  //
+  // The builders above produce a transaction sent straight to the hub. That only works for a user
+  // signing on the hub, and even there it has to be routed so `msg.sender` is their hub wallet —
+  // a position's `onlyOwner` is that wallet, and an EOA cannot send as another address.
+  //
+  // These take over from there: the calls are encoded as a hub-wallet payload and carried by the
+  // spoke transport, which routes them locally on the hub and relays them from anywhere else. So one
+  // code path covers every chain, and the hub is not a special case.
+
+  /**
+   * Encodes position calls as a hub-wallet payload.
+   *
+   * Takes the raw transactions from the builders above and produces the `(address,uint256,bytes)[]`
+   * payload the hub wallet executes. Public because that payload is the unit the transport takes:
+   * pass it to `spoke.deposit` / `spoke.sendMessage` yourself when you want manual relay control,
+   * or use {@link LeverageYieldService.openPosition} / {@link LeverageYieldService.operatePosition},
+   * which do it for you.
+   */
+  public encodePositionCalls(txs: readonly EvmRawTransaction[]): Hex {
+    return encodeContractCalls(
+      txs.map(tx => ({ address: tx.to as Address, value: tx.value ?? 0n, data: tx.data }) satisfies EvmContractCall),
+    );
+  }
+
+  /**
+   * Resolves the hub reserve a spoke token funds, and the hub asset it arrives as.
+   *
+   * Three addresses per token and they are not interchangeable: `hubAsset` is what lands in the hub
+   * wallet, `vault` is the 18-decimal money-market reserve a position actually uses, and the spoke
+   * `address` is neither. Getting this wrong is silent — the wrong one is still a valid ERC-20.
+   */
+  private resolveFunding(
+    srcChainKey: SpokeChainKey,
+    token: string,
+    method: string,
+  ): Result<{ hubAsset: Address; vault: Address; decimals: number }, LeverageYieldLookupError> {
+    // Two lookups, because on the hub the token a user holds IS the hub asset. The spoke-original
+    // lookup is the right one off-hub, but on the hub it is both indirect and unreliable — the live
+    // registry's Sonic sUSDS entry carries an Arbitrum address, which has no code on Sonic, so a
+    // deposit keyed on it would revert. Falling back to the hub-asset lookup takes the address the
+    // user actually holds at face value.
+    const spokeToken =
+      this.config.getSpokeTokenFromOriginalAssetAddress(srcChainKey, token) ?? this.config.getXTokenFromHubAsset(token);
+    if (!spokeToken) {
+      return {
+        ok: false,
+        error: lookupFailed(
+          'leverageYield',
+          method,
+          new Error(`no hub asset registered for ${token} on ${srcChainKey}`),
+          { srcChainKey },
+        ),
+      };
+    }
+    return {
+      ok: true,
+      value: {
+        hubAsset: spokeToken.hubAsset as Address,
+        vault: spokeToken.vault as Address,
+        decimals: spokeToken.decimals,
+      },
+    };
+  }
+
+  /**
+   * What a refund should pay back: the asset the user actually funded with, or `undefined` when that IS
+   * the reserve and there is nothing to unwrap.
+   *
+   * A named asset makes `IntentRefund` unwrap before paying, on the hub as well as off it — so someone
+   * who deposited USSD is refunded USSD rather than `sodaUSSD`.
+   */
+  private refundAsset(funding: { hubAsset: Address; vault: Address }): Address | undefined {
+    return funding.hubAsset.toLowerCase() === funding.vault.toLowerCase() ? undefined : funding.hubAsset;
+  }
+
+  /**
+   * Encodes the wrap of an arriving deposit into its money-market reserve, and returns the reserve
+   * amount that produces.
+   *
+   * A hub asset that is already a soda vault token IS the reserve, so nothing is wrapped. Otherwise
+   * the vault mints 18-decimal shares one-for-one with the asset, which is what
+   * `translateIncomingDecimals` computes — the same conversion the asset manager applies to a spoke
+   * deposit, rather than a second implementation of it. A reserve carrying a non-zero deposit fee
+   * would mint fewer shares than this predicts and the factory's pull would revert; both reserves in
+   * use today are fee-free.
+   */
+  private encodeWrapIntoReserve(
+    funding: { hubAsset: Address; vault: Address; decimals: number },
+    amount: bigint,
+  ): { calls: EvmContractCall[]; reserveAmount: bigint } {
+    if (this.config.isSodaVaultHubAsset(funding.hubAsset)) {
+      return { calls: [], reserveAmount: amount };
+    }
+    return {
+      calls: [
+        Erc20Service.encodeApprove(funding.hubAsset, funding.vault, amount),
+        EvmVaultTokenService.encodeDeposit(funding.vault, funding.hubAsset, amount),
+      ],
+      reserveAmount: EvmVaultTokenService.translateIncomingDecimals(funding.decimals, amount),
+    };
+  }
+
+  /**
+   * Everything both opens do before they diverge: resolve the factory, the funding token's hub asset
+   * and reserve, and the origin to refund to; predict the address the position will be created at;
+   * and encode the wrap plus the transfer that funds it.
+   *
+   * Only the factory call itself differs between the collateral side and the debt side — which side
+   * the funded reserve lands on, and the two amounts — so everything up to that point lives here
+   * once. `calls` is returned ready to be appended to.
+   */
+  private async prepareOpen(
+    params: PositionFundingParams<SpokeChainKey> & { owner: Address },
+    method: string,
+  ): Promise<
+    Result<
+      {
+        factory: Address;
+        funding: { hubAsset: Address; vault: Address; decimals: number };
+        calls: EvmContractCall[];
+        reserveAmount: bigint;
+        origin: { chainId: bigint; address: Hex; asset: Address };
+      },
+      LeverageYieldLookupError
+    >
+  > {
+    const factory = this.requireFactory(method);
+    if (!factory.ok) return factory;
+    const funding = this.resolveFunding(params.srcChainKey, params.token, method);
+    if (!funding.ok) return funding;
+    const origin = this.resolveOrigin(
+      { chainKey: params.srcChainKey, address: params.srcAddress, asset: this.refundAsset(funding.value) },
+      method,
+    );
+    if (!origin.ok) return origin;
+    // Creator and owner are the same hub wallet — the factory requires it.
+    const predicted = await this.predictPosition(params.owner, params.owner);
+    if (!predicted.ok) return predicted;
+
+    const { calls, reserveAmount } = this.encodeWrapIntoReserve(funding.value, params.amount);
+    calls.push(Erc20Service.encodeTransfer(funding.value.vault, predicted.value, reserveAmount));
+    return {
+      ok: true,
+      value: { factory: factory.value, funding: funding.value, calls, reserveAmount, origin: origin.value },
+    };
+  }
+
+  /**
+   * Hub-side payload for opening a position from the collateral side.
+   *
+   * Wrap the arriving deposit into its reserve, TRANSFER it to the address the position will be
+   * created at, create the position and post its leverage intent — one batch, executed by the user's
+   * hub wallet. The position's collateral is the reserve behind `params.token`; `borrowToken` is
+   * borrowed against it.
+   *
+   * Nothing is ever approved to the factory: it holds no allowance and pulls from nobody, so funding
+   * is a transfer to `predictPosition(creator, owner, nextPositionIdFor(owner))` and the clone supplies
+   * whatever it finds. The id is per-owner, so an unrelated user creating a position cannot move the
+   * address out from under this batch — and because the transfer and the create are in the same batch,
+   * a stale prediction reverts both rather than stranding the tokens.
+   *
+   * The origin recorded on the position is `srcChainKey` / `srcAddress` / the deposited hub asset,
+   * so a leverage intent that never fills refunds to the user on the chain they funded from — not to
+   * the position, and not to the hub wallet.
+   */
+  public async buildOpenPositionData(
+    params: OpenPositionParams<SpokeChainKey> & { owner: Address },
+  ): Promise<Result<Hex, LeverageYieldLookupError>> {
+    const prep = await this.prepareOpen(params, 'buildOpenPositionData');
+    if (!prep.ok) return prep;
+    const { factory, funding, calls, reserveAmount, origin } = prep.value;
+    calls.push({
+      address: factory,
+      value: 0n,
+      data: encodeFunctionData({
+        abi: leveragePositionFactoryAbi,
+        functionName: 'createPositionAndLeverage',
+        args: [
+          this.positionConfig({
+            owner: params.owner,
+            collateral: funding.vault,
+            borrowToken: params.borrowToken,
+            eModeCategory: params.eModeCategory ?? 0,
+            origin,
+          }),
+          reserveAmount,
+          params.borrowAmount,
+          params.minCollateralOut,
+        ],
+      }),
+    });
+
+    return { ok: true, value: encodeContractCalls(calls) };
+  }
+
+  /**
+   * Hub-side payload for opening a position from the debt side.
+   *
+   * The mirror of {@link LeverageYieldService.buildOpenPositionData}: here the deposit is the
+   * position's *debt* token, contributed rather than supplied, and `collateral` is the reserve the
+   * position ends up long. The hook supplies the solver's collateral on fill and borrows only the
+   * shortfall, so the position legitimately starts with no collateral of its own.
+   */
+  public async buildOpenPositionFromDebtTokenData(
+    params: OpenPositionFromDebtTokenParams<SpokeChainKey> & { owner: Address },
+  ): Promise<Result<Hex, LeverageYieldLookupError>> {
+    const prep = await this.prepareOpen(params, 'buildOpenPositionFromDebtTokenData');
+    if (!prep.ok) return prep;
+    const { factory, funding, calls, reserveAmount, origin } = prep.value;
+    calls.push({
+      address: factory,
+      value: 0n,
+      data: encodeFunctionData({
+        abi: leveragePositionFactoryAbi,
+        functionName: 'createPositionFromDebtToken',
+        args: [
+          this.positionConfig({
+            owner: params.owner,
+            collateral: params.collateral,
+            // The deposited token IS the debt side, so its reserve is the borrow token.
+            borrowToken: funding.vault,
+            eModeCategory: params.eModeCategory ?? 0,
+            origin,
+          }),
+          reserveAmount,
+          params.totalInput,
+          params.minCollateralOut,
+        ],
+      }),
+    });
+
+    return { ok: true, value: encodeContractCalls(calls) };
+  }
+
+  /**
+   * Whether the funding token is already approved for an open from `srcChainKey`.
+   *
+   * The spender differs by chain and neither choice is guessable: on the hub the deposit is pulled
+   * by the user's own hub wallet, executing inside the routed batch; on an EVM spoke it is pulled by
+   * that spoke's asset manager. Chains with no allowance concept report `true`, and Stellar reports
+   * whether the trustline covers the amount.
+   */
+  public async isPositionFundingAllowanceValid<K extends SpokeChainKey>(params: {
+    srcChainKey: K;
+    srcAddress: string;
+    token: string;
+    amount: bigint;
+  }): Promise<Result<boolean, LeverageYieldAllowanceCheckError>> {
+    const baseCtx = { srcChainKey: params.srcChainKey, action: 'allowanceCheck' satisfies LeverageYieldAction };
+    try {
+      leverageYieldInvariant(params.amount > 0n, 'amount must be greater than 0', { ...baseCtx, field: 'amount' });
+      const spender = await this.resolveFundingSpender(params.srcChainKey, params.srcAddress);
+      const inner = await this.spoke.isAllowanceValid({
+        srcChainKey: params.srcChainKey,
+        token: params.token,
+        amount: params.amount,
+        owner: params.srcAddress,
+        ...(spender !== undefined && { spender }),
+      } as Parameters<SpokeService['isAllowanceValid']>[0]);
+      if (inner.ok) return inner;
+      return { ok: false, error: allowanceCheckFailed('leverageYield', inner.error, baseCtx) };
+    } catch (error) {
+      if (isLeverageYieldAllowanceCheckError(error)) return { ok: false, error };
+      return { ok: false, error: allowanceCheckFailed('leverageYield', error, baseCtx) };
+    }
+  }
+
+  /**
+   * Approves the funding token for an open, against the spender that chain's deposit actually uses —
+   * see {@link LeverageYieldService.isPositionFundingAllowanceValid} for which that is.
+   *
+   * WAITS FOR THE APPROVAL TO LAND before returning. `Erc20Service.approve` resolves with the hash the
+   * moment it is broadcast, so a caller that immediately re-reads the allowance sees the value from
+   * BEFORE the approval — a UI then keeps showing "approve" and the user signs a second, pointless
+   * approval. Returning early from a helper whose whole purpose is "the allowance is now sufficient" is
+   * a footgun, so the wait lives here rather than in each caller.
+   */
+  public async approvePositionFunding<K extends SpokeChainKey>(params: {
+    srcChainKey: K;
+    srcAddress: string;
+    token: string;
+    amount: bigint;
+    walletProvider?: GetWalletProviderType<K>;
+  }): Promise<Result<TxReturnType<K, false>, LeverageYieldApproveError>> {
+    const baseCtx = { srcChainKey: params.srcChainKey, action: 'approve' satisfies LeverageYieldAction };
+    try {
+      leverageYieldInvariant(params.amount > 0n, 'amount must be greater than 0', { ...baseCtx, field: 'amount' });
+      const spender = await this.resolveFundingSpender(params.srcChainKey, params.srcAddress);
+      const inner = await this.spoke.approve({
+        srcChainKey: params.srcChainKey,
+        token: params.token,
+        amount: params.amount,
+        owner: params.srcAddress,
+        ...(spender !== undefined && { spender }),
+        raw: false,
+        walletProvider: params.walletProvider,
+      } as Parameters<SpokeService['approve']>[0]);
+      if (!inner.ok) return { ok: false, error: approveFailed('leverageYield', inner.error, baseCtx) };
+
+      /**
+       * Wait for it to land. `spoke.verifyTxHash` is NOT enough on its own: it waits for Solana, NEAR,
+       * Stellar, Sui and Stacks, but on an EVM chain it falls through to `{ ok: true }` without
+       * waiting — so on the hub, where this is used most, it returned instantly and the caller's next
+       * allowance read still saw the pre-approval value. That was the second signature.
+       *
+       * An EVM wallet provider exposes the receipt wait directly, so use it there and fall back to
+       * `verifyTxHash` for the chains it genuinely covers. Narrowed on the provider's own `chainType`
+       * discriminant via `isEvmWalletProviderType` rather than sniffing for the method: duck-typing
+       * would also match any future non-EVM provider that happens to grow one.
+       */
+      if (params.walletProvider && isEvmWalletProviderType(params.walletProvider as IWalletProvider)) {
+        await (params.walletProvider as IEvmWalletProvider).waitForTransactionReceipt(inner.value as Hex);
+      } else {
+        const landed = await this.spoke.verifyTxHash({ txHash: inner.value as never, chainKey: params.srcChainKey });
+        if (!landed.ok) return { ok: false, error: approveFailed('leverageYield', landed.error, baseCtx) };
+      }
+
+      return inner as Result<TxReturnType<K, false>, never>;
+    } catch (error) {
+      if (isLeverageYieldApproveError(error)) return { ok: false, error };
+      return { ok: false, error: approveFailed('leverageYield', error, baseCtx) };
+    }
+  }
+
+  /**
+   * Who pulls the deposit on a given source chain.
+   *
+   * `undefined` lets the spoke layer apply its own default, which for an EVM spoke is that spoke's
+   * asset manager. Only the hub needs naming: there the pull happens inside the routed batch, so the
+   * spender is the user's own hub wallet rather than any protocol contract.
+   */
+  private async resolveFundingSpender(srcChainKey: SpokeChainKey, srcAddress: string): Promise<Address | undefined> {
+    if (!isHubChainKeyType(srcChainKey)) return undefined;
+    return await this.hubProvider.getUserHubWalletAddress(srcAddress, srcChainKey);
+  }
+
+  /**
+   * Opens a leveraged position, funded from any chain, in one signature.
+   *
+   * The deposit is carried to the user's hub wallet and the position is created from inside that
+   * same batch, so there is no window in which the funds sit on the hub unattached to a position.
+   * On the hub this routes locally; from a spoke it relays and this waits for the hub side to land.
+   *
+   * WHAT IS AND IS NOT DONE WHEN THIS RESOLVES: the position exists and its leverage intent is
+   * posted. The leverage itself is not applied — a solver fills that intent afterwards. And an
+   * intent is invisible to the solver until its hub transaction hash is reported, so pass the
+   * returned `dstChainTxHash` to {@link LeverageYieldService.notifySolver}; an unreported intent
+   * simply expires and the deposit comes back.
+   *
+   * Spoke tokens need the spoke asset manager approved first, the same as any other deposit.
+   */
+  public async openPosition<K extends SpokeChainKey>(
+    _params: SpokeExecActionParams<K, false, OpenPositionParams<K>>,
+  ): Promise<Result<TxHashPair, LeverageYieldSwapError | LeverageYieldLookupError>> {
+    return this.runPositionOpen(_params, 'openPosition', (owner, params) =>
+      this.buildOpenPositionData({ ...params, owner }),
+    );
+  }
+
+  /**
+   * Opens a leveraged position from the **debt** token, funded from any chain.
+   *
+   * Same transport and the same asynchronous settlement as
+   * {@link LeverageYieldService.openPosition} — see there for what is and is not done when this
+   * resolves. The difference is only which side the user funds: here they hand over debt token and
+   * end up long collateral they never held.
+   *
+   * Requires the deployed implementation to have a debt-side hook configured; without one the
+   * position reverts `DebtSideHookUnavailable`.
+   */
+  public async openPositionFromDebtToken<K extends SpokeChainKey>(
+    _params: SpokeExecActionParams<K, false, OpenPositionFromDebtTokenParams<K>>,
+  ): Promise<Result<TxHashPair, LeverageYieldSwapError | LeverageYieldLookupError>> {
+    return this.runPositionOpen(_params, 'openPositionFromDebtToken', (owner, params) =>
+      this.buildOpenPositionFromDebtTokenData({ ...params, owner }),
+    );
+  }
+
+  /**
+   * Shared body of the two open paths. They differ only in which factory call the payload ends with,
+   * so everything around it — owner resolution, deposit, verify, relay — lives here rather than
+   * being written twice and drifting.
+   */
+  /**
+   * Instrumentation for both opens. Wrapping the shared runner rather than each entry point keeps
+   * `openPosition` and `openPositionFromDebtToken` from drifting, and `action` is already threaded
+   * through for the error context, so it doubles as the analytics action.
+   *
+   * `start` carries only the fields common to both param shapes — the funding side's token and
+   * amount. The side-specific ones (`borrowToken`/`borrowAmount` vs `collateral`/`totalInput`) are
+   * not on `PositionFundingParams`, and inventing a cast to reach them would be worse than omitting
+   * them.
+   */
+  private async runPositionOpen<K extends SpokeChainKey, P extends PositionFundingParams<K>>(
+    _params: SpokeExecActionParams<K, false, P>,
+    action: Extract<LeverageYieldAction, 'openPosition' | 'openPositionFromDebtToken'>,
+    build: (owner: Address, params: P) => Promise<Result<Hex, LeverageYieldLookupError>>,
+  ): Promise<Result<TxHashPair, LeverageYieldSwapError | LeverageYieldLookupError>> {
+    return this.config.analytics.trackResult(
+      'leverageYield',
+      action,
+      () => this.executePositionOpen(_params, action, build),
+      {
+        start: () => ({
+          srcChainKey: _params.params.srcChainKey,
+          srcAddress: _params.params.srcAddress,
+          inputToken: _params.params.token,
+          inputAmount: _params.params.amount,
+          eModeCategory: _params.params.eModeCategory,
+        }),
+        success: value => ({ srcTxHash: value.srcChainTxHash, dstTxHash: value.dstChainTxHash }),
+        failure: error => ({ code: error.code }),
+      },
+    );
+  }
+
+  private async executePositionOpen<K extends SpokeChainKey, P extends PositionFundingParams<K>>(
+    _params: SpokeExecActionParams<K, false, P>,
+    action: 'openPosition' | 'openPositionFromDebtToken',
+    buildData: (owner: Address, params: P) => Promise<Result<Hex, LeverageYieldLookupError>>,
+  ): Promise<Result<TxHashPair, LeverageYieldSwapError | LeverageYieldLookupError>> {
+    const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;
+    const baseCtx: { srcChainKey: K; action: LeverageYieldAction } = {
+      srcChainKey: params.srcChainKey,
+      action,
+    };
+
+    try {
+      leverageYieldInvariant(params.amount > 0n, 'amount must be greater than 0', { ...baseCtx, field: 'amount' });
+      leverageYieldInvariant(params.minCollateralOut > 0n, 'minCollateralOut must be greater than 0', {
+        ...baseCtx,
+        field: 'minCollateralOut',
+      });
+      leverageYieldInvariant(
+        isUndefinedOrValidWalletProviderForChainKey(params.srcChainKey, _params.walletProvider),
+        `Invalid wallet provider for chain key: ${params.srcChainKey}`,
+        { ...baseCtx, field: 'walletProvider' },
+      );
+
+      // The deposit lands in this wallet, the position is created from inside it, and it is what the
+      // factory sees as `msg.sender` — so it is payer, creator and owner at once. There is no choice to
+      // make here, which is the point: the factory rejects any other owner.
+      const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
+      const data = await buildData(hubWallet, params);
+      if (!data.ok) return data;
+
+      const txResult = await this.spoke.deposit({
+        srcChainKey: params.srcChainKey,
+        srcAddress: params.srcAddress as GetAddressType<K>,
+        to: hubWallet,
+        token: params.token as GetTokenAddressType<K>,
+        amount: params.amount,
+        data: data.value,
+        skipSimulation: _params.skipSimulation ?? false,
+        raw: false,
+        walletProvider: _params.walletProvider as GetWalletProviderType<K>,
+      });
+      if (!txResult.ok) {
+        if (isLeverageYieldCreateIntentError(txResult.error)) return { ok: false, error: txResult.error };
+        return { ok: false, error: intentCreationFailed('leverageYield', txResult.error, baseCtx) };
+      }
+
+      return await this.settleHubWalletMessage(txResult.value, { address: hubWallet, payload: data.value }, baseCtx, {
+        timeout,
+      });
+    } catch (error) {
+      if (isLeverageYieldSwapError(error)) return { ok: false, error };
+      return { ok: false, error: executionFailed('leverageYield', error, { ...baseCtx, phase: 'intentCreation' }) };
+    }
+  }
+
+  /**
+   * Runs position calls as the user's hub wallet, from any chain.
+   *
+   * The write counterpart to the read hooks: add or decrease leverage, withdraw, settle, cancel. No
+   * funds move, so this is a bare message rather than a deposit — on the hub it routes locally, from
+   * a spoke it relays and this waits for the hub side to land.
+   *
+   * The leverage calls only *post* an intent, so a resolved promise means the intent is live, not
+   * that leverage moved. Report the returned `dstChainTxHash` to
+   * {@link LeverageYieldService.notifySolver} for those two; `withdraw`, `settle` and `cancel` are
+   * synchronous on the hub and need no notification.
+   */
+  public async operatePosition<K extends SpokeChainKey>(
+    _params: SpokeExecActionParams<K, false, PositionOperationParams<K>>,
+  ): Promise<Result<TxHashPair, LeverageYieldSwapError>> {
+    return this.config.analytics.trackResult(
+      'leverageYield',
+      'operatePosition',
+      () => this.executePositionOperation(_params),
+      {
+        // The calls themselves are not emitted — they are arbitrary hub calldata. The count is
+        // enough to tell a batched adjust from a single write.
+        start: () => ({
+          srcChainKey: _params.params.srcChainKey,
+          srcAddress: _params.params.srcAddress,
+          callCount: _params.params.calls.length,
+        }),
+        success: value => ({ srcTxHash: value.srcChainTxHash, dstTxHash: value.dstChainTxHash }),
+        failure: error => ({ code: error.code }),
+      },
+    );
+  }
+
+  private async executePositionOperation<K extends SpokeChainKey>(
+    _params: SpokeExecActionParams<K, false, PositionOperationParams<K>>,
+  ): Promise<Result<TxHashPair, LeverageYieldSwapError>> {
+    const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;
+    const baseCtx: { srcChainKey: K; action: LeverageYieldAction } = {
+      srcChainKey: params.srcChainKey,
+      action: 'operatePosition',
+    };
+
+    try {
+      leverageYieldInvariant(params.calls.length > 0, 'at least one call is required', {
+        ...baseCtx,
+        field: 'calls',
+      });
+      leverageYieldInvariant(
+        isUndefinedOrValidWalletProviderForChainKey(params.srcChainKey, _params.walletProvider),
+        `Invalid wallet provider for chain key: ${params.srcChainKey}`,
+        { ...baseCtx, field: 'walletProvider' },
+      );
+
+      const hubWallet = await this.hubProvider.getUserHubWalletAddress(params.srcAddress, params.srcChainKey);
+      const payload = this.encodePositionCalls(params.calls);
+
+      const txResult = await this.spoke.sendMessage({
+        srcChainKey: params.srcChainKey,
+        srcAddress: params.srcAddress as GetAddressType<K>,
+        dstChainKey: HUB_CHAIN_KEY,
+        dstAddress: hubWallet,
+        payload,
+        skipSimulation: _params.skipSimulation ?? false,
+        raw: false,
+        walletProvider: _params.walletProvider as GetWalletProviderType<K>,
+      } satisfies SendMessageParams<K, false>);
+      if (!txResult.ok) {
+        if (isLeverageYieldCreateIntentError(txResult.error)) return { ok: false, error: txResult.error };
+        return { ok: false, error: intentCreationFailed('leverageYield', txResult.error, baseCtx) };
+      }
+
+      return await this.settleHubWalletMessage(txResult.value, { address: hubWallet, payload }, baseCtx, { timeout });
+    } catch (error) {
+      if (isLeverageYieldSwapError(error)) return { ok: false, error };
+      return { ok: false, error: executionFailed('leverageYield', error, { ...baseCtx, phase: 'intentCreation' }) };
+    }
+  }
+
+  /**
+   * Verifies a submitted source transaction and, off the hub, relays it and waits for the hub side.
+   *
+   * Shared by both write paths because the tail is identical whether funds moved or not. The hub
+   * short-circuit is not an optimisation: a hub transaction has already executed the calls, so there
+   * is nothing to relay, and both hashes are the same transaction.
+   */
+  private async settleHubWalletMessage<K extends SpokeChainKey>(
+    srcTxHash: TxReturnType<K, false>,
+    relayData: RelayExtraData,
+    baseCtx: { srcChainKey: K; action: LeverageYieldAction },
+    opts: { timeout: number },
+  ): Promise<Result<TxHashPair, LeverageYieldSwapError>> {
+    const verify = await this.spoke.verifyTxHash({ txHash: srcTxHash, chainKey: baseCtx.srcChainKey });
+    if (!verify.ok) return { ok: false, error: verifyFailed('leverageYield', verify.error, baseCtx) };
+
+    if (isHubChainKeyType(baseCtx.srcChainKey)) {
+      return { ok: true, value: { srcChainTxHash: srcTxHash as Hex, dstChainTxHash: srcTxHash as Hex } };
+    }
+
+    const packet = await relayTxAndWaitPacket({
+      srcTxHash,
+      data: relayData,
+      chainKey: baseCtx.srcChainKey,
+      relayerApiEndpoint: this.config.relay.relayerApiEndpoint,
+      timeout: opts.timeout,
+    });
+    if (!packet.ok) {
+      return {
+        ok: false,
+        error: mapRelayFailure(packet.error, {
+          feature: 'leverageYield',
+          action: baseCtx.action,
+          srcChainKey: baseCtx.srcChainKey,
+        }),
+      };
+    }
+
+    return { ok: true, value: { srcChainTxHash: srcTxHash as Hex, dstChainTxHash: packet.value.dst_tx_hash } };
   }
 }

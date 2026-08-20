@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChainSelector } from '@/components/shared/ChainSelector';
+import { fmtBps, fmtHealthFactor } from '@/lib/utils';
 import {
   useSwapsApiSubmitTx,
   useQuote,
@@ -104,25 +105,6 @@ function fmtLeverage(multWad: bigint | undefined, digits = 2): string {
   if (multWad === undefined) return '—';
   const SCALE = 100_000n;
   const scaled = (multWad * SCALE) / 1_000_000_000_000_000_000n;
-  return (Number(scaled) / Number(SCALE)).toFixed(digits);
-}
-
-/** Format a basis-points value (e.g. `8500n`) as a percentage string. */
-function fmtBps(value: bigint | undefined, digits = 2): string {
-  if (value === undefined) return '—';
-  return `${(Number(value) / 100).toFixed(digits)}%`;
-}
-
-/**
- * Format a WAD-scaled health factor. The vault returns `type(uint256).max` when there
- * is no debt — display that as `∞` instead of a giant number.
- */
-function fmtHealthFactor(hfWad: bigint | undefined, digits = 2): string {
-  if (hfWad === undefined) return '—';
-  const UINT256_MAX = (1n << 256n) - 1n;
-  if (hfWad >= UINT256_MAX - 1n) return '∞';
-  const SCALE = 100_000n;
-  const scaled = (hfWad * SCALE) / 1_000_000_000_000_000_000n;
   return (Number(scaled) / Number(SCALE)).toFixed(digits);
 }
 

@@ -17,7 +17,8 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Address } from 'viem';
+import { decodeAbiParameters, type Address, type Hex } from 'viem';
+import { leverageYieldConfig } from '@sodax/types';
 // Import the barrel by relative path, not as `@sodax/sdk`. A self-referential package import
 // resolves through `package.json#exports` into `dist/`, which makes this unit test depend on a
 // build artifact — it then fails to resolve whenever `dist/` is absent or half-written, and turbo
@@ -74,8 +75,20 @@ vi.mock('../shared/services/intentRelay/IntentRelayApiService.js', async () => {
   return { ...actual, relayTxAndWaitPacket: mocks.relayTxAndWaitPacket };
 });
 vi.mock('../shared/services/erc-20/Erc20Service.js', async () => {
-  const actual = await vi.importActual<object>('../shared/services/erc-20/Erc20Service.js');
-  return { ...actual, Erc20Service: { approve: mocks.erc20Approve, planApproval: mocks.erc20PlanApproval } };
+  const actual = await vi.importActual<typeof import('../shared/services/erc-20/Erc20Service.js')>(
+    '../shared/services/erc-20/Erc20Service.js',
+  );
+  return {
+    ...actual,
+    Erc20Service: {
+      approve: mocks.erc20Approve,
+      planApproval: mocks.erc20PlanApproval,
+      // Left real: the position payload builders encode approvals and the funding transfer into the
+      // batch the hub wallet executes, and asserting that batch's shape is the point of those tests.
+      encodeApprove: actual.Erc20Service.encodeApprove,
+      encodeTransfer: actual.Erc20Service.encodeTransfer,
+    },
+  };
 });
 vi.mock('../shared/services/Erc4626Service.js', async () => {
   const actual = await vi.importActual<object>('../shared/services/Erc4626Service.js');
@@ -1603,4 +1616,752 @@ describe('LeverageYieldService — partner-fee precedence end to end', () => {
       expect(await run({ swaps: { partnerFee: SWAPS } })).toBeUndefined();
     });
   }
+});
+
+// ── Leverage positions ────────────────────────────────────────────────────────
+//
+// Positions are the unpooled counterpart to the vaults above. The deployed factory ships as a
+// packaged default, so the tests cover both halves of that: the default resolving with nothing
+// configured, and a blanked-out override still failing closed rather than reaching for a
+// placeholder.
+
+const POSITION = '0x1111111111111111111111111111111111111111' as Address;
+const POSITION_OWNER = '0x2222222222222222222222222222222222222222' as Address;
+const POSITION_FACTORY = '0x3333333333333333333333333333333333333333' as Address;
+const POS_COLLATERAL = '0x243b0c26c8b38793908d7C64e8510f21B19B4613' as Address;
+const POS_BORROW_TOKEN = '0xb780e09576C2667ba9F5B80FbAb2e6b8A0a21e37' as Address;
+
+/** A Sodax instance with the position factory configured, for the happy paths. */
+function sodaxWithFactory(): Sodax {
+  return new Sodax({ leverageYield: { positionFactory: POSITION_FACTORY } });
+}
+
+/**
+ * The factory now ships in `leverageYieldConfig`, so "not configured" is only reachable by
+ * overriding it with an empty value — which is exactly what a bad env var produces.
+ */
+function sodaxWithoutFactory(): Sodax {
+  return new Sodax({ leverageYield: { positionFactory: '' as Address } });
+}
+
+describe('LeverageYieldService.approvePositionFunding — waiting for the approve to land', () => {
+  /**
+   * The whole point of this method over a bare `spoke.approve`. `spoke.verifyTxHash` returns
+   * `{ ok: true }` for EVM WITHOUT waiting, so relying on it left the caller's next allowance read
+   * seeing the pre-approval value — the live symptom was being asked to approve twice.
+   */
+  it('waits on the EVM provider receipt, not on verifyTxHash', async () => {
+    vi.spyOn(sodax.spoke, 'approve').mockResolvedValue({ ok: true, value: '0xapproveTx' } as never);
+    const verify = vi.spyOn(sodax.spoke, 'verifyTxHash').mockResolvedValue({ ok: true, value: true });
+    const wait = mockEvmProvider.waitForTransactionReceipt as ReturnType<typeof vi.fn>;
+    wait.mockResolvedValueOnce({} as never);
+
+    const result = await sodax.leverageYield.approvePositionFunding({
+      srcChainKey: 'sonic',
+      srcAddress: SAMPLE_USER,
+      token: POS_COLLATERAL,
+      amount: 100n,
+      walletProvider: mockEvmProvider as never,
+    });
+
+    expect(result).toEqual({ ok: true, value: '0xapproveTx' });
+    expect(wait).toHaveBeenCalledWith('0xapproveTx');
+    // The non-waiting path must NOT be what gates the return on EVM.
+    expect(verify).not.toHaveBeenCalled();
+  });
+
+  it('falls back to verifyTxHash for a non-EVM provider, and fails closed when it reports failure', async () => {
+    vi.spyOn(sodax.spoke, 'approve').mockResolvedValue({ ok: true, value: '0xapproveTx' } as never);
+    vi.spyOn(sodax.spoke, 'verifyTxHash').mockResolvedValue({
+      ok: false,
+      error: new Error('reverted'),
+    } as never);
+
+    const result = await sodax.leverageYield.approvePositionFunding({
+      srcChainKey: 'sonic',
+      srcAddress: SAMPLE_USER,
+      token: POS_COLLATERAL,
+      amount: 100n,
+      walletProvider: mockBitcoinProvider as never,
+    });
+
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects a non-positive amount before touching the wallet', async () => {
+    const approve = vi.spyOn(sodax.spoke, 'approve');
+    const result = await sodax.leverageYield.approvePositionFunding({
+      srcChainKey: 'sonic',
+      srcAddress: SAMPLE_USER,
+      token: POS_COLLATERAL,
+      amount: 0n,
+      walletProvider: mockEvmProvider as never,
+    });
+    expect(result.ok).toBe(false);
+    expect(approve).not.toHaveBeenCalled();
+  });
+});
+
+describe('LeverageYieldService — positions, factory misconfigured', () => {
+  it('uses the deployed factory straight from the default config, with nothing supplied', () => {
+    const result = new Sodax().leverageYield.buildCreatePositionAndLeverage({
+      from: POSITION_OWNER,
+      owner: POSITION_OWNER,
+      collateral: POS_COLLATERAL,
+      borrowToken: POS_BORROW_TOKEN,
+      eModeCategory: 3,
+      origin: { chainKey: 'sonic', address: POSITION_OWNER },
+      initialAssets: 1n,
+      borrowAmount: 1n,
+      minCollateralOut: 1n,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.to).toBe(leverageYieldConfig.positionFactory);
+  });
+
+  it('still honours an explicit override, for a fork or a staging deployment', () => {
+    const result = sodaxWithFactory().leverageYield.buildCreatePositionAndLeverage({
+      from: POSITION_OWNER,
+      owner: POSITION_OWNER,
+      collateral: POS_COLLATERAL,
+      borrowToken: POS_BORROW_TOKEN,
+      eModeCategory: 3,
+      origin: { chainKey: 'sonic', address: POSITION_OWNER },
+      initialAssets: 1n,
+      borrowAmount: 1n,
+      minCollateralOut: 1n,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.to).toBe(POSITION_FACTORY);
+    expect(result.value.to).not.toBe(leverageYieldConfig.positionFactory);
+  });
+
+  it('listPositions fails closed rather than using a placeholder address', async () => {
+    const result = await sodaxWithoutFactory().leverageYield.listPositions(POSITION_OWNER);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('LOOKUP_FAILED');
+  });
+
+  it('predictPosition fails closed', async () => {
+    const result = await sodaxWithoutFactory().leverageYield.predictPosition(POSITION_OWNER, POSITION_OWNER);
+    expect(result.ok).toBe(false);
+  });
+
+  it('maps the origin chain key to its SODAX relay id, not the EVM one', () => {
+    const configured = sodaxWithFactory();
+    const result = configured.leverageYield.buildCreatePositionAndLeverage({
+      from: POSITION_OWNER,
+      owner: POSITION_OWNER,
+      collateral: POS_COLLATERAL,
+      borrowToken: POS_BORROW_TOKEN,
+      eModeCategory: 0,
+      // Arbitrum is 23 in the relay id space; 42161 would route a refund nowhere.
+      origin: { chainKey: '0xa4b1.arbitrum', address: POSITION_OWNER, asset: POS_BORROW_TOKEN },
+      initialAssets: 10n ** 18n,
+      borrowAmount: 1_000n,
+      minCollateralOut: 1n,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // 23 padded into the calldata word for originChainId.
+    expect(result.value.data).toContain((23).toString(16).padStart(64, '0'));
+    expect(result.value.data).not.toContain((42161).toString(16).padStart(64, '0'));
+  });
+
+  it('refuses a spoke origin with no refund asset', () => {
+    const configured = sodaxWithFactory();
+    const result = configured.leverageYield.buildCreatePositionAndLeverage({
+      from: POSITION_OWNER,
+      owner: POSITION_OWNER,
+      collateral: POS_COLLATERAL,
+      borrowToken: POS_BORROW_TOKEN,
+      eModeCategory: 0,
+      // Off-hub with nothing to unwrap into: the AssetManager moves only its own registered assets,
+      // so this would be a position whose refund could never be paid.
+      origin: { chainKey: '0xa4b1.arbitrum', address: POSITION_OWNER },
+      initialAssets: 10n ** 18n,
+      borrowAmount: 1_000n,
+      minCollateralOut: 1n,
+    });
+    expect(result.ok).toBe(false);
+  });
+
+  it('buildCreatePositionAndLeverage fails closed', () => {
+    const result = sodaxWithoutFactory().leverageYield.buildCreatePositionAndLeverage({
+      from: POSITION_OWNER,
+      owner: POSITION_OWNER,
+      collateral: POS_COLLATERAL,
+      borrowToken: POS_BORROW_TOKEN,
+      eModeCategory: 3,
+      origin: { chainKey: 'sonic', address: POSITION_OWNER },
+      initialAssets: 1n,
+      borrowAmount: 1n,
+      minCollateralOut: 1n,
+    });
+    expect(result.ok).toBe(false);
+  });
+
+  it('position-only reads do not need the factory', async () => {
+    // `sodax` has no factory configured, but this read targets the position directly, so it
+    // must still resolve — only factory-backed methods are gated.
+    vi.spyOn(sodax.hubProvider.publicClient, 'readContract').mockResolvedValue(true as never);
+    const result = await sodax.leverageYield.getPositionPendingState(POSITION);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.isLive).toBe(true);
+  });
+
+  it('flags a resolved-but-unswept slot as needing settlement', async () => {
+    // The state that strands funds: an operation is recorded but its intent is gone, so the grant
+    // is still open and any debt-side contribution is still sitting in the position.
+    vi.spyOn(sodax.hubProvider.publicClient, 'readContract').mockImplementation((async ({
+      functionName,
+    }: {
+      functionName: string;
+    }) => (functionName === 'hasPendingOperation' ? false : 3)) as never);
+
+    const result = await sodax.leverageYield.getPositionPendingState(POSITION);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual({ kind: 3, isLive: false, needsSettle: true });
+  });
+});
+
+describe('LeverageYieldService — position reads', () => {
+  it('listPositions returns the owner clones in creation order', async () => {
+    const configured = sodaxWithFactory();
+    const positions = [POSITION, '0x4444444444444444444444444444444444444444'] as const;
+    vi.spyOn(configured.hubProvider.publicClient, 'readContract').mockResolvedValue(positions as never);
+
+    const result = await configured.leverageYield.listPositions(POSITION_OWNER);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual(positions);
+  });
+
+  it('getPositionInfo assembles the static descriptor', async () => {
+    const configured = sodaxWithFactory();
+    vi.spyOn(configured.hubProvider.publicClient, 'readContract').mockImplementation((async (call: {
+      functionName: string;
+    }) => {
+      switch (call.functionName) {
+        case 'owner':
+          return POSITION_OWNER;
+        case 'collateral':
+          return POS_COLLATERAL;
+        case 'borrowToken':
+          return POS_BORROW_TOKEN;
+        case 'eModeCategory':
+          return 3;
+        default:
+          throw new Error(`unexpected read: ${call.functionName}`);
+      }
+    }) as never);
+
+    const result = await configured.leverageYield.getPositionInfo(POSITION);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual({
+      address: POSITION,
+      owner: POSITION_OWNER,
+      collateral: POS_COLLATERAL,
+      borrowToken: POS_BORROW_TOKEN,
+      eModeCategory: 3,
+    });
+  });
+
+  it('getPositionAccount reads getUserAccountData against the configured lending pool', async () => {
+    const configured = sodaxWithFactory();
+    const accountData = [1000n, 400n, 200n, 9700n, 9100n, 1_066_000_000_000_000_000n] as const;
+    const calls: { functionName: string; address: Address }[] = [];
+    vi.spyOn(configured.hubProvider.publicClient, 'readContract').mockImplementation((async (call: {
+      functionName: string;
+      address: Address;
+    }) => {
+      calls.push({ functionName: call.functionName, address: call.address });
+      if (call.functionName === 'getUserAccountData') return accountData;
+      throw new Error(`unexpected read: ${call.functionName}`);
+    }) as never);
+
+    const result = await configured.leverageYield.getPositionAccount(POSITION);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // One round trip, against the pool from config — not the position's own pool() getter.
+    expect(calls).toEqual([
+      { functionName: 'getUserAccountData', address: configured.config.sodaxConfig.moneyMarket.lendingPool },
+    ]);
+    expect(result.value.healthFactor).toBe(1_066_000_000_000_000_000n);
+    expect(result.value.currentLiquidationThreshold).toBe(9700n);
+  });
+
+  it('wraps a read failure as LOOKUP_FAILED', async () => {
+    const configured = sodaxWithFactory();
+    vi.spyOn(configured.hubProvider.publicClient, 'readContract').mockRejectedValue(new Error('rpc down'));
+    const result = await configured.leverageYield.getPositionInfo(POSITION);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('LOOKUP_FAILED');
+  });
+
+  it('getPositionCollateralBalance reads the aToken balance, taking the reserve from the configured pool', async () => {
+    const configured = sodaxWithFactory();
+    const aToken = '0x00000000000000000000000000000000000000a1' as Address;
+    const calls: { functionName: string; address: Address; args?: readonly unknown[] }[] = [];
+    vi.spyOn(configured.hubProvider.publicClient, 'readContract').mockImplementation((async (call: {
+      functionName: string;
+      address: Address;
+      args?: readonly unknown[];
+    }) => {
+      calls.push({ functionName: call.functionName, address: call.address, args: call.args });
+      if (call.functionName === 'getReserveData') return { aTokenAddress: aToken };
+      if (call.functionName === 'balanceOf') return 4_200n;
+      throw new Error(`unexpected read: ${call.functionName}`);
+    }) as never);
+
+    const result = await configured.leverageYield.getPositionCollateralBalance(POSITION, POS_COLLATERAL);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual({ aToken, balance: 4_200n });
+    // The reserve lookup goes to the pool from config; the balance is read off the aToken it names,
+    // for the position — not for the owner, which holds none of it.
+    expect(calls).toEqual([
+      {
+        functionName: 'getReserveData',
+        address: configured.config.sodaxConfig.moneyMarket.lendingPool,
+        args: [POS_COLLATERAL],
+      },
+      { functionName: 'balanceOf', address: aToken, args: [POSITION] },
+    ]);
+  });
+
+  it('getPositionCollateralBalance resolves the collateral off the position when not given one', async () => {
+    const configured = sodaxWithFactory();
+    const seen: string[] = [];
+    vi.spyOn(configured.hubProvider.publicClient, 'readContract').mockImplementation((async (call: {
+      functionName: string;
+      args?: readonly unknown[];
+    }) => {
+      seen.push(call.functionName);
+      if (call.functionName === 'collateral') return POS_COLLATERAL;
+      if (call.functionName === 'getReserveData') {
+        expect(call.args).toEqual([POS_COLLATERAL]);
+        return { aTokenAddress: POS_COLLATERAL };
+      }
+      return 1n;
+    }) as never);
+
+    const result = await configured.leverageYield.getPositionCollateralBalance(POSITION);
+    expect(result.ok).toBe(true);
+    expect(seen).toEqual(['collateral', 'getReserveData', 'balanceOf']);
+  });
+
+  it('wraps a collateral-balance read failure as LOOKUP_FAILED', async () => {
+    const configured = sodaxWithFactory();
+    vi.spyOn(configured.hubProvider.publicClient, 'readContract').mockRejectedValue(new Error('rpc down'));
+    const result = await configured.leverageYield.getPositionCollateralBalance(POSITION, POS_COLLATERAL);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('LOOKUP_FAILED');
+  });
+
+  it("predictPosition defaults to the OWNER's next id, not a global counter", async () => {
+    const configured = sodaxWithFactory();
+    const seen: Record<string, readonly unknown[] | undefined> = {};
+    vi.spyOn(configured.hubProvider.publicClient, 'readContract').mockImplementation((async (call: {
+      functionName: string;
+      args?: readonly unknown[];
+    }) => {
+      seen[call.functionName] = call.args;
+      if (call.functionName === 'nextPositionIdFor') return 7n;
+      return POSITION;
+    }) as never);
+
+    const result = await configured.leverageYield.predictPosition(POSITION_OWNER, POSITION_OWNER);
+    expect(result.ok).toBe(true);
+    // Per-owner, so another user creating a position cannot shift the address a funder predicted.
+    expect(seen.nextPositionIdFor).toEqual([POSITION_OWNER]);
+    expect(seen.predictPosition).toEqual([POSITION_OWNER, POSITION_OWNER, 7n]);
+  });
+});
+
+describe('LeverageYieldService — position transaction builders', () => {
+  it('leverage builders target the position itself', () => {
+    const configured = sodaxWithFactory();
+    const add = configured.leverageYield.buildAddLeverage({
+      from: POSITION_OWNER,
+      position: POSITION,
+      borrowAmount: 1_000n,
+      minCollateralOut: 1n,
+    });
+    const dec = configured.leverageYield.buildDecreaseLeverage({
+      from: POSITION_OWNER,
+      position: POSITION,
+      collateralIn: 500n,
+      minDebtOut: 1n,
+    });
+    expect(add.to).toBe(POSITION);
+    expect(dec.to).toBe(POSITION);
+    // Distinct selectors — guards against wiring both builders to the same function.
+    expect(add.data.slice(0, 10)).not.toBe(dec.data.slice(0, 10));
+  });
+
+  it('withdraw and cancel encode against the position', () => {
+    const configured = sodaxWithFactory();
+    const withdraw = configured.leverageYield.buildPositionWithdraw({
+      from: POSITION_OWNER,
+      position: POSITION,
+      amount: 1n,
+      to: POSITION_OWNER,
+    });
+    const cancel = configured.leverageYield.buildCancelPositionOperation({
+      from: POSITION_OWNER,
+      position: POSITION,
+    });
+    expect(withdraw.to).toBe(POSITION);
+    expect(cancel.to).toBe(POSITION);
+    expect(cancel.data.length).toBe(10); // no args
+  });
+});
+
+describe('LeverageYieldService — combined create + leverage', () => {
+  it('buildCreatePositionAndLeverage targets the factory and is distinct from the debt-side open', () => {
+    const configured = sodaxWithFactory();
+    const base = {
+      from: POSITION_OWNER,
+      owner: POSITION_OWNER,
+      collateral: POS_COLLATERAL,
+      borrowToken: POS_BORROW_TOKEN,
+      eModeCategory: 0,
+      // Hub origin: a refund is a plain transfer, so no unwrap asset is needed.
+      origin: { chainKey: 'sonic', address: POSITION_OWNER },
+    } as const;
+
+    const combined = configured.leverageYield.buildCreatePositionAndLeverage({
+      ...base,
+      initialAssets: 10n ** 18n,
+      borrowAmount: 1_000n,
+      minCollateralOut: 1n,
+    });
+    const debtSide = configured.leverageYield.buildCreatePositionFromDebtToken({
+      ...base,
+      contribution: 10n ** 18n,
+      totalInput: 2n * 10n ** 18n,
+      minCollateralOut: 1n,
+    });
+
+    expect(combined.ok).toBe(true);
+    expect(debtSide.ok).toBe(true);
+    if (!combined.ok || !debtSide.ok) return;
+    expect(combined.value.to).toBe(POSITION_FACTORY);
+    expect(combined.value.value).toBe(0n);
+    // Distinct selectors — the two opens pull different tokens, so crossing them would take the
+    // wrong asset from the caller.
+    expect(combined.value.data.slice(0, 10)).not.toBe(debtSide.value.data.slice(0, 10));
+  });
+
+  it('fails closed on a blanked-out factory override', () => {
+    const result = sodaxWithoutFactory().leverageYield.buildCreatePositionAndLeverage({
+      from: POSITION_OWNER,
+      owner: POSITION_OWNER,
+      collateral: POS_COLLATERAL,
+      borrowToken: POS_BORROW_TOKEN,
+      eModeCategory: 0,
+      origin: { chainKey: 'sonic', address: POSITION_OWNER },
+      initialAssets: 1n,
+      borrowAmount: 1n,
+      minCollateralOut: 1n,
+    });
+    expect(result.ok).toBe(false);
+  });
+});
+
+// ─── Positions from any chain: payload shape + transport ───────────────────────────────
+//
+// The payload is what the hub wallet executes, so these assert the sequence it encodes rather
+// than just that a call was made: getting the wrap or the approval wrong produces a batch that
+// looks fine and reverts on the hub, after the user has already paid for the deposit.
+
+describe('LeverageYieldService — opening a position from any chain', () => {
+  /** The address a position will be created at — what funding is transferred to. */
+  const PREDICTED = '0x00000000000000000000000000000000000000ff' as Address;
+
+  /** Stubs the two factory reads the data builders make to resolve the predicted address. */
+  function stubPrediction(sodaxInstance: Sodax): void {
+    vi.spyOn(sodaxInstance.hubProvider.publicClient, 'readContract').mockImplementation((async (call: {
+      functionName: string;
+    }) => {
+      if (call.functionName === 'nextPositionIdFor') return 0n;
+      if (call.functionName === 'predictPosition') return PREDICTED;
+      throw new Error(`unexpected read: ${call.functionName}`);
+    }) as never);
+  }
+
+  /** Decodes an `encodeContractCalls` payload back into the batch it represents. */
+  function decodeCalls(payload: Hex): { address: Address; value: bigint; data: Hex }[] {
+    const [calls] = decodeAbiParameters(
+      [
+        {
+          name: 'calls',
+          type: 'tuple[]',
+          components: [
+            { name: 'address', type: 'address' },
+            { name: 'value', type: 'uint256' },
+            { name: 'data', type: 'bytes' },
+          ],
+        },
+      ],
+      payload,
+    );
+    return calls as { address: Address; value: bigint; data: Hex }[];
+  }
+
+  it('encodes wrap → transfer to the predicted position → create, and never approves the factory', async () => {
+    const configured = sodaxWithFactory();
+    stubPrediction(configured);
+    const result = await configured.leverageYield.buildOpenPositionData({
+      srcChainKey: ARBITRUM,
+      srcAddress: SAMPLE_USER,
+      token: SPOKE_TOKEN,
+      amount: 10n ** 18n,
+      owner: HUB_WALLET,
+      borrowToken: POS_BORROW_TOKEN,
+      borrowAmount: 5n * 10n ** 17n,
+      minCollateralOut: 4n * 10n ** 17n,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const calls = decodeCalls(result.value);
+    // weETH is not itself a soda vault token, so it is wrapped: approve the vault, deposit into it,
+    // transfer the shares to the address the position will exist at, then create.
+    expect(calls).toHaveLength(4);
+    expect(calls[3]?.address).toBe(POSITION_FACTORY);
+    // The funding leg targets the predicted position and carries a plain ERC-20 transfer selector.
+    expect(calls[2]?.address).toBe(SODA_ASSET);
+    expect(calls[2]?.data.slice(0, 10)).toBe('0xa9059cbb'); // transfer(address,uint256)
+    expect(calls[2]?.data.toLowerCase()).toContain(PREDICTED.slice(2).toLowerCase());
+    // No approve(...) to the factory anywhere in the batch — it holds no allowance and pulls nothing.
+    expect(
+      calls.some(
+        c =>
+          c.data.slice(0, 10) === '0x095ea7b3' &&
+          c.data.toLowerCase().includes(POSITION_FACTORY.slice(2).toLowerCase()),
+      ),
+    ).toBe(false);
+    expect(calls.every(c => c.value === 0n)).toBe(true);
+  });
+
+  it('fails closed on a token with no hub asset, rather than encoding a batch that reverts on the hub', async () => {
+    const configured = sodaxWithFactory();
+    const result = await configured.leverageYield.buildOpenPositionData({
+      srcChainKey: ARBITRUM,
+      srcAddress: SAMPLE_USER,
+      token: '0x000000000000000000000000000000000000dEaD',
+      amount: 1n,
+      owner: HUB_WALLET,
+      borrowToken: POS_BORROW_TOKEN,
+      borrowAmount: 1n,
+      minCollateralOut: 1n,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('LOOKUP_FAILED');
+  });
+
+  it('records the funding chain and address as the position origin, so a failed intent refunds to the user', async () => {
+    const configured = sodaxWithFactory();
+    stubPrediction(configured);
+    const result = await configured.leverageYield.buildOpenPositionData({
+      srcChainKey: ARBITRUM,
+      srcAddress: SAMPLE_USER,
+      token: SPOKE_TOKEN,
+      amount: 10n ** 18n,
+      owner: HUB_WALLET,
+      borrowToken: POS_BORROW_TOKEN,
+      borrowAmount: 1n,
+      minCollateralOut: 1n,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const create = decodeCalls(result.value).at(-1);
+    // The SODAX relay id for Arbitrum (23), not the EVM chain id — a refund keyed on 42161 goes nowhere.
+    const relayId = getIntentRelayChainId(ARBITRUM);
+    expect(create?.data.toLowerCase()).toContain(relayId?.toString(16).padStart(64, '0'));
+    // …and the user's own address, not the hub wallet's and not the position's.
+    expect(create?.data.toLowerCase()).toContain(SAMPLE_USER.slice(2).toLowerCase());
+  });
+
+  it('the debt-side open makes the deposited reserve the borrow token', async () => {
+    const configured = sodaxWithFactory();
+    stubPrediction(configured);
+    const result = await configured.leverageYield.buildOpenPositionFromDebtTokenData({
+      srcChainKey: ARBITRUM,
+      srcAddress: SAMPLE_USER,
+      token: SPOKE_TOKEN,
+      amount: 10n ** 18n,
+      owner: HUB_WALLET,
+      collateral: POS_COLLATERAL,
+      totalInput: 2n * 10n ** 18n,
+      minCollateralOut: 1n,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const create = decodeCalls(result.value).at(-1);
+    expect(create?.address).toBe(POSITION_FACTORY);
+    // The collateral the caller asked for is in the config, and the deposited token's own reserve
+    // (sodaWEETH) is the borrow side — crossing these two would invert the position.
+    expect(create?.data.toLowerCase()).toContain(POS_COLLATERAL.slice(2).toLowerCase());
+    expect(create?.data.toLowerCase()).toContain(SODA_ASSET.slice(2).toLowerCase());
+  });
+
+  it('deposits to the hub wallet and waits for the relayed hub transaction', async () => {
+    const configured = sodaxWithFactory();
+    vi.spyOn(configured.hubProvider, 'getUserHubWalletAddress').mockResolvedValue(HUB_WALLET);
+    vi.spyOn(configured.spoke, 'verifyTxHash').mockResolvedValue({ ok: true, value: true });
+    stubPrediction(configured);
+    vi.spyOn(configured.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xhubTx' } });
+
+    const result = await configured.leverageYield.openPosition({
+      params: {
+        srcChainKey: ARBITRUM,
+        srcAddress: SAMPLE_USER,
+        token: SPOKE_TOKEN,
+        amount: 10n ** 18n,
+        borrowToken: POS_BORROW_TOKEN,
+        borrowAmount: 1n,
+        minCollateralOut: 1n,
+      },
+      walletProvider: mockEvmProvider,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Both hashes matter: the spoke one is what the user sees, the hub one is where the intent
+    // actually exists and so is what notifySolver has to be told about.
+    expect(result.value).toEqual({ srcChainTxHash: '0xspokeTx', dstChainTxHash: '0xhubTx' });
+    const deposit = vi.mocked(configured.spoke.deposit).mock.calls[0]?.[0];
+    // Funds land in the hub wallet, which is what the batch then spends.
+    expect(deposit?.to).toBe(HUB_WALLET);
+    expect(deposit?.amount).toBe(10n ** 18n);
+  });
+
+  it('on the hub there is nothing to relay, so both hashes are the one transaction', async () => {
+    const configured = sodaxWithFactory();
+    vi.spyOn(configured.hubProvider, 'getUserHubWalletAddress').mockResolvedValue(HUB_WALLET);
+    vi.spyOn(configured.spoke, 'verifyTxHash').mockResolvedValue({ ok: true, value: true });
+    stubPrediction(configured);
+    vi.spyOn(configured.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: '0xsonicTx' });
+    mocks.relayTxAndWaitPacket.mockClear();
+
+    const result = await configured.leverageYield.openPosition({
+      params: {
+        srcChainKey: SONIC,
+        srcAddress: SAMPLE_USER,
+        token: SODA_ASSET,
+        amount: 10n ** 18n,
+        borrowToken: POS_BORROW_TOKEN,
+        borrowAmount: 1n,
+        minCollateralOut: 1n,
+      },
+      walletProvider: mockEvmProvider,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual({ srcChainTxHash: '0xsonicTx', dstChainTxHash: '0xsonicTx' });
+    expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
+  });
+
+  it('rejects a zero amount before asking the user to sign anything', async () => {
+    const configured = sodaxWithFactory();
+    const deposit = vi.spyOn(configured.spoke, 'deposit');
+
+    const result = await configured.leverageYield.openPosition({
+      params: {
+        srcChainKey: ARBITRUM,
+        srcAddress: SAMPLE_USER,
+        token: SPOKE_TOKEN,
+        amount: 0n,
+        borrowToken: POS_BORROW_TOKEN,
+        borrowAmount: 1n,
+        minCollateralOut: 1n,
+      },
+      walletProvider: mockEvmProvider,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('VALIDATION_FAILED');
+    expect(deposit).not.toHaveBeenCalled();
+  });
+});
+
+describe('LeverageYieldService.operatePosition', () => {
+  it('relays the position calls as a hub-wallet message, with no deposit', async () => {
+    const configured = sodaxWithFactory();
+    vi.spyOn(configured.hubProvider, 'getUserHubWalletAddress').mockResolvedValue(HUB_WALLET);
+    vi.spyOn(configured.spoke, 'verifyTxHash').mockResolvedValue({ ok: true, value: true });
+    vi.spyOn(configured.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
+    const deposit = vi.spyOn(configured.spoke, 'deposit');
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xhubTx' } });
+
+    const add = configured.leverageYield.buildAddLeverage({
+      from: HUB_WALLET,
+      position: POSITION,
+      borrowAmount: 10n,
+      minCollateralOut: 9n,
+    });
+    const result = await configured.leverageYield.operatePosition({
+      params: { srcChainKey: ARBITRUM, srcAddress: SAMPLE_USER, calls: [add] },
+      walletProvider: mockEvmProvider,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual({ srcChainTxHash: '0xspokeTx', dstChainTxHash: '0xhubTx' });
+    expect(deposit).not.toHaveBeenCalled();
+    const message = vi.mocked(configured.spoke.sendMessage).mock.calls[0]?.[0];
+    // Addressed to the hub wallet, because that is what the position's onlyOwner checks.
+    expect(message?.dstAddress).toBe(HUB_WALLET);
+    expect(message?.payload).toBe(configured.leverageYield.encodePositionCalls([add]));
+  });
+
+  it('rejects an empty batch', async () => {
+    const configured = sodaxWithFactory();
+    const result = await configured.leverageYield.operatePosition({
+      params: { srcChainKey: ARBITRUM, srcAddress: SAMPLE_USER, calls: [] },
+      walletProvider: mockEvmProvider,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('VALIDATION_FAILED');
+  });
+
+  it('maps a relay timeout rather than reporting the operation as done', async () => {
+    const configured = sodaxWithFactory();
+    vi.spyOn(configured.hubProvider, 'getUserHubWalletAddress').mockResolvedValue(HUB_WALLET);
+    vi.spyOn(configured.spoke, 'verifyTxHash').mockResolvedValue({ ok: true, value: true });
+    vi.spyOn(configured.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeTx' });
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({
+      ok: false,
+      error: { code: 'TIMEOUT', data: { payload: {} } },
+    });
+
+    const result = await configured.leverageYield.operatePosition({
+      params: {
+        srcChainKey: ARBITRUM,
+        srcAddress: SAMPLE_USER,
+        calls: [configured.leverageYield.buildSettlePosition({ from: HUB_WALLET, position: POSITION })],
+      },
+      walletProvider: mockEvmProvider,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isSodaxError(result.error)).toBe(true);
+  });
 });

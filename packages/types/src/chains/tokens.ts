@@ -1152,6 +1152,15 @@ export const baseSupportedTokens = {
     hubAsset: '0x348e086ab6f424dfc575a325c28624ed23973173',
     vault: '0x348e086ab6f424dfc575a325c28624ed23973173',
   },
+  sUSDS: {
+    symbol: 'sUSDS',
+    name: 'staked USDS',
+    decimals: 18,
+    address: '0x5875eEE11Cf8398102FdAd704C9E96607675467a',
+    chainKey: ChainKeys.BASE_MAINNET,
+    hubAsset: '0x807cC73f69F1aCCC50511a0390A8544cEA71baA9',
+    vault: SodaTokens.sodaSUSDS.address,
+  },
 } as const satisfies Record<string, XToken>;
 
 export const optimismSupportedTokens = {
@@ -1235,6 +1244,15 @@ export const optimismSupportedTokens = {
     chainKey: ChainKeys.OPTIMISM_MAINNET,
     hubAsset: '0xd08375176410febee9cf4591532455a4cdfe4463',
     vault: '0xd08375176410febee9cf4591532455a4cdfe4463',
+  },
+  sUSDS: {
+    symbol: 'sUSDS',
+    name: 'staked USDS',
+    decimals: 18,
+    address: '0xb5B2dc7fd34C249F4be7fB1fCea07950784229e0',
+    chainKey: ChainKeys.OPTIMISM_MAINNET,
+    hubAsset: '0xb9a9cb8A61D30a8F6b7E24491ab83f43E817b0E2',
+    vault: SodaTokens.sodaSUSDS.address,
   },
 } as const satisfies Record<string, XToken>;
 
@@ -2360,6 +2378,15 @@ export const ethereumSupportedTokens = {
     chainKey: ChainKeys.ETHEREUM_MAINNET,
     hubAsset: '0x40bea4f921355a749f460760ba6f8edd78888164',
     vault: '0x40bea4f921355a749f460760ba6f8edd78888164',
+  },
+  sUSDS: {
+    symbol: 'sUSDS',
+    name: 'staked USDS',
+    decimals: 18,
+    address: '0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD',
+    chainKey: ChainKeys.ETHEREUM_MAINNET,
+    hubAsset: '0x1Bb5128A4837A78cb60bc52cc19079eD3F00A624',
+    vault: SodaTokens.sodaSUSDS.address,
   },
 } as const satisfies Record<string, XToken>;
 

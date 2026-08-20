@@ -122,17 +122,112 @@ export const leverageYieldVaults = [
   },
 ] as const satisfies readonly LeverageYieldVault[];
 
+/**
+ * A leverage position's operation slot.
+ *
+ * `kind` mirrors the contract's `PendingKind`: 0 none, 1 leverage, 2 deleverage, 3 debt-side open.
+ * The pair matters because they can disagree — see `needsSettle`.
+ */
+export type LeveragePositionPendingState = {
+  kind: number;
+  /** The intent is still registered on `Intents`, so no second operation is permitted. */
+  isLive: boolean;
+  /**
+   * An operation is recorded but its intent is gone, so the position still holds an open grant and
+   * any debt-side contribution. Cleared by `buildSettlePosition`, which anyone may call.
+   */
+  needsSettle: boolean;
+};
+
+/**
+ * Static descriptor of a single leverage position — one owner-controlled AAVE account
+ * deployed as a clone by `LeveragePositionFactory`.
+ *
+ * Positions are the unpooled counterpart to {@link LeverageYieldVault}: instead of many
+ * depositors sharing one ERC-4626 vault at a single target LTV, each position is its own
+ * AAVE account with its own eMode category, health factor and liquidation risk. That is
+ * what lets one owner hold several positions at different leverage tiers at once, which a
+ * pooled vault cannot express because AAVE allows one eMode category per address.
+ *
+ * Unlike vaults there is no registry of these: positions are created per user at runtime
+ * and discovered through `LeverageYieldService.listPositions(owner)`.
+ */
+export type LeveragePosition = {
+  /** Deployed `LeveragePosition` clone address on the Sonic hub. */
+  address: Address;
+  /** Address permitted to operate the position — a hub EOA, the solver, or a hub Wallet. */
+  owner: Address;
+  /** Hub-side collateral supplied to AAVE, a Sodax vault token (e.g. sodaSUSDS). */
+  collateral: Address;
+  /** Hub-side asset borrowed against the collateral, a Sodax vault token (e.g. sodaUSSD). */
+  borrowToken: Address;
+  /** AAVE eMode category, fixed at creation. `0` means no eMode. */
+  eModeCategory: number;
+};
+
+/**
+ * Live AAVE account snapshot for a leverage position. Read from the pool rather than the
+ * position contract, which holds no accounting of its own.
+ *
+ * All base-currency figures use the pool's oracle base unit (8 decimals on the Sodax fork).
+ */
+export type LeveragePositionAccount = {
+  /** Total collateral in the pool's base currency. */
+  totalCollateralBase: bigint;
+  /** Total debt in the pool's base currency. */
+  totalDebtBase: bigint;
+  /** Remaining borrowing power in the pool's base currency. */
+  availableBorrowsBase: bigint;
+  /** Liquidation threshold in basis points, reflecting the position's eMode category. */
+  currentLiquidationThreshold: bigint;
+  /** Current loan-to-value in basis points. */
+  ltv: bigint;
+  /** Health factor in WAD (1e18). Below 1e18 the position is liquidatable. */
+  healthFactor: bigint;
+};
+
+/**
+ * A position's collateral holding, read straight off the aToken.
+ *
+ * The counterpart to {@link LeveragePositionAccount}'s `totalCollateralBase`, which is an oracle
+ * base-currency figure at 8 decimals — right for display, useless for sizing a full exit, because
+ * converting it back through a price lands near the balance rather than on it.
+ */
+export type LeveragePositionCollateral = {
+  /** The reserve's aToken. Holding this *is* the collateral position. */
+  aToken: Address;
+  /** Exact aToken balance, in the collateral reserve's own decimals. */
+  balance: bigint;
+};
+
 // options for the leverage yield service to be configured by the integrator
 export type LeverageYieldOptions = {
   partnerFee?: PartnerFee; // enables override of global partner fee
+  /**
+   * Overrides the deployed `LeveragePositionFactory` in {@link leverageYieldConfig}.
+   *
+   * Only needed to point at a different deployment — a fork, a staging factory, or a new
+   * one before the default catches up. Omitting it (or passing `undefined`) keeps the
+   * default: config merging skips `undefined`, so an absent override cannot blank it.
+   */
+  positionFactory?: Address;
 };
 
 export type LeverageYieldConfig = Prettify<LeverageYieldDefaultConfig & LeverageYieldOptions>;
 
 export type LeverageYieldDefaultConfig = {
   vaults: readonly LeverageYieldVault[];
+  /**
+   * Deployed `LeveragePositionFactory` on the Sonic hub.
+   *
+   * Defaulted so the position methods work out of the box: they fail closed on a missing
+   * factory rather than guessing an address, which previously meant every integrator had
+   * to supply this before a single position call would run.
+   */
+  positionFactory: Address;
 };
 
 export const leverageYieldConfig = {
   vaults: leverageYieldVaults,
+  positionFactory: '0xE6b8ecEdDF7b6141a573Ee547b1661776b270dd6',
 } as const satisfies LeverageYieldDefaultConfig;

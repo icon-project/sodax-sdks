@@ -12,11 +12,11 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.USDT,
     spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.wS,
     spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.SODA,
-    // spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.USSD, // NOTE: Not Implemented
-    // sodaSUSDS is staging-only; sodaUSDS / sodaUSSD are parked until the solver fills them
-    ...Object.values(SodaTokens).filter(
-      t => t !== SodaTokens.sodaSUSDS && t !== SodaTokens.sodaUSDS && t !== SodaTokens.sodaUSSD,
-    ),
+    spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.USSD,
+    // sodaUSDS is the one wrapper the production solver still cannot route: a `/quote` against it
+    // returns `No path was found`, where USSD, sodaUSSD and sodaSUSDS all return real prices. Listing
+    // it would offer a swap that can only expire, so it stays out until the solver has a path.
+    ...Object.values(SodaTokens).filter(t => t !== SodaTokens.sodaUSDS),
     ...Object.values(LsodaTokens),
   ] as const satisfies XToken[],
   [ChainKeys.AVALANCHE_MAINNET]: [
@@ -36,6 +36,7 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.tBTC,
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.USDC,
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.USDT,
+    spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.sUSDS,
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.ARB,
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.AAVE,
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.LINK,
@@ -50,6 +51,7 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.ETH,
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.weETH,
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.USDC,
+    spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.sUSDS,
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.wstETH,
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.cbBTC,
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.VIRTUAL,
@@ -60,6 +62,7 @@ export const swapSupportedTokens = {
   [ChainKeys.OPTIMISM_MAINNET]: [
     spokeChainConfig[ChainKeys.OPTIMISM_MAINNET].supportedTokens.ETH,
     spokeChainConfig[ChainKeys.OPTIMISM_MAINNET].supportedTokens.USDC,
+    spokeChainConfig[ChainKeys.OPTIMISM_MAINNET].supportedTokens.sUSDS,
     spokeChainConfig[ChainKeys.OPTIMISM_MAINNET].supportedTokens.wstETH,
     // spokeChainConfig[OPTIMISM_MAINNET_CHAIN_ID].supportedTokens.weETH, // NOTE: Not Implemented
     spokeChainConfig[ChainKeys.OPTIMISM_MAINNET].supportedTokens.USDT,
@@ -198,6 +201,7 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.ETH,
     spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.bnUSD,
     spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.USDC,
+    spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.sUSDS,
     spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.USDT,
     spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.SODA,
     spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.LL,
@@ -260,7 +264,7 @@ export const swapSupportedTokens = {
 // their target environment — validation accepts either (see `isSwapSupportedToken`).
 // Derived from the production solver oracle (tokens absent there).
 export const stagingSwapSupportedTokens = {
-  [ChainKeys.SONIC_MAINNET]: [SodaTokens.sodaSUSDS] as const satisfies XToken[],
+  [ChainKeys.SONIC_MAINNET]: [],
   [ChainKeys.AVALANCHE_MAINNET]: [],
   [ChainKeys.ARBITRUM_MAINNET]: [],
   [ChainKeys.BASE_MAINNET]: [

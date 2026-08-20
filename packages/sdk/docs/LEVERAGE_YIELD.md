@@ -399,3 +399,137 @@ if (!result.ok) {
 ## Chain Keys
 
 Vaults live on the Sonic hub; `deposit` / `withdraw` route by the user's spoke-side chain (`srcChainKey`) and the output chain (`dstChainKey`). Use `ChainKeys` from `@sodax/sdk` for chain-key constants.
+
+## Leverage Positions
+
+A vault is one shared ERC-4626 position at a single `targetLTV`. A **leverage position** is the unpooled counterpart: one owner-controlled AAVE account per position, cloned by `LeveragePositionFactory`. Because AAVE allows one eMode category per address, a vault forces every depositor into one category and one leverage tier, while an owner can hold several positions at different tiers simultaneously.
+
+Positions have no static registry — discovery goes through the factory.
+
+### Configuration
+
+Position methods need the deployed factory, and it ships as a packaged default — `new Sodax()` can drive positions with no configuration at all.
+
+Override it only to point somewhere else, such as a fork or a staging deployment:
+
+```typescript
+const sodax = new Sodax({ leverageYield: { positionFactory: '0x…' } });
+```
+
+Config merging skips `undefined`, so an absent override cannot blank the default. Blanking it deliberately is honoured, and factory-backed methods then return a `LOOKUP_FAILED` error — they fail closed rather than falling back to a placeholder. Position-only reads (`getPositionInfo`, `getPositionAccount`, `getPositionCollateralBalance`, `getPositionPendingState`) target the position directly and never need the factory.
+
+### Reads
+
+| Method | Returns |
+|--------|---------|
+| `listPositions(owner)` | Position clones owned by `owner`, in creation order |
+| `listPositionsForUser({ srcChainKey, address })` | The same, resolved through a spoke address's hub wallet |
+| `getPositionInfo(position)` | Static descriptor — owner, both legs, fixed eMode category |
+| `getPositionAccount(position)` | Live AAVE snapshot — collateral, debt, LTV, health factor |
+| `getPositionCollateralBalance(position, collateral?)` | Exact aToken balance — what a full exit sells |
+| `getPositionPendingState(position)` | The operation slot: recorded kind, whether the intent is live, whether it needs settling |
+| `predictPosition(creator, owner, positionId?)` | Deterministic clone address; defaults to the next id |
+
+`getPositionAccount` reads `getUserAccountData` on the pool, not the position contract, which keeps no accounting of its own. The pool address comes from `moneyMarket.lendingPool` config rather than the position's `pool()` getter — one round trip instead of two, and the deployment address stays sourced from config. Health factor is WAD (1e18); base-currency figures use the pool oracle's 8-decimal base unit.
+
+Those base-currency figures are for display only. Any amount going into a transaction needs `getPositionCollateralBalance`: dividing base currency back out by a price lands *near* the balance, and a `decreaseLeverage` asking for more collateral than the position holds does not fail on submission — the hook's `transferFrom` reverts at fill time, so the intent silently expires. aToken balances only grow, so acting on a slightly stale read leaves interest dust rather than coming up short.
+
+### Writes
+
+Positions are driven by direct Sonic transactions rather than solver intents, so these are builders returning an `EvmRawTransaction` for the caller to sign with a hub wallet provider.
+
+| Builder | Effect |
+|---------|--------|
+| `buildCreatePositionAndLeverage(...)` | Clone and lever a position in one transaction. `initialAssets` must ALREADY be at the position's address — see the funding note below |
+| `buildCreatePositionFromDebtToken(...)` | Open from the **debt** token with no collateral of your own; the hook supplies the solver's collateral and borrows the shortfall |
+| `buildAddLeverage(...)` | Borrow and swap into more collateral |
+| `buildDecreaseLeverage(...)` | Give up collateral to repay debt — with the whole balance, this is a close into the debt token |
+| `buildPositionWithdraw(...)` | Withdraw collateral out, to any address |
+| `buildSettlePosition(...)` | Clear a resolved operation and sweep anything held loose to the owner. Permissionless |
+| `buildCancelPositionOperation(...)` | Cancel the in-flight operation |
+
+The two create builders return a `Result` because they need the factory address; the rest target the position directly and return the transaction unwrapped.
+
+**The factory never moves anyone's tokens.** It holds no allowance and pulls from nobody: fund a position by transferring to the address it will be created at — `predictPosition(creator, owner, nextPositionIdFor(owner))` — and the clone supplies whatever it finds. So no approval to a shared contract exists anywhere in the flow. Do the transfer and the create in one batch; if the prediction is stale the create reverts on the missing balance and takes the transfer with it rather than stranding the tokens. `openPosition` / `openPositionFromDebtToken` build that batch for you.
+
+**You can only create a position you own.** The factory requires `cfg.owner == msg.sender`, and the caller there is always the funder's own hub wallet, so there is nothing to choose — which is why `openPosition` takes no `owner`. The binding is what makes the refund address safe: `originAddress` decides where a cancelled operation's funds go and past a deadline anyone may trigger that cancel, so a third-party creator picking it was a standing claim on whatever the owner later contributed. It also means nobody else can advance the id your funding address is predicted from. To fund someone else, supply into a position they already own — `pool.supply(collateral, amount, position, 0)` — which sets no origin and takes nothing away.
+
+Every position write is `onlyOwner`, and the owner is the user's hub wallet — so these must execute *as* that wallet. Building with `from: owner` is not enough; an address cannot send as another address. The methods in the next section do that for you and are the ones to reach for; the builders are the unit they carry.
+
+Three behaviours worth designing around:
+
+- **Leverage changes are asynchronous.** `addLeverage` / `decreaseLeverage` only *post* an intent; a solver fills it afterwards. Poll `getPositionPendingState` instead of treating the transaction receipt as completion. A position refuses a second operation while one is in flight.
+- **An intent is invisible to the solver until its transaction hash is reported.** Pass the hash to `notifySolver` after routing, or the intent simply expires unfilled.
+- **Cancelling returns nothing, because nothing was escrowed.** Posting a position intent moves no funds; cancelling revokes the outstanding grant and clears the pending slot. A position carrying no debt also returns its whole collateral balance to the owner.
+
+### Sizing the leg — do not skip this
+
+`borrowAmount` and `minCollateralOut` are yours to supply, and computing them from oracle prices **does not work**. A position's leverage is bought through the solver, and the two legs do not trade at their oracle ratio. `LeverageHook` supplies whatever the solver actually paid and only *then* borrows against it, so the pool sees `deposit + solver output`, never `deposit x leverage`. Size from parity and the borrow reverts with Aave `'36'` (COLLATERAL_CANNOT_COVER_NEW_BORROW) — the intent is accepted, the solver fills, and the whole fill unwinds. It has happened twice on mainnet, once at 11.03x where parity predicted 84% LTV against a real 92.06% and a 91% cap.
+
+Use `sizeLeverageBorrow` and `projectLeverageLeg` (exported from `@sodax/sdk`) rather than reimplementing it:
+
+```ts
+import { sizeLeverageBorrow, projectLeverageLeg, type LeverageLegRequest } from '@sodax/sdk';
+
+const request: LeverageLegRequest = {
+  side: 'collateral',            // 'debt' when funding with the debt token instead
+  deposit: parseUnits('100', 18),
+  depositDecimals: 18,
+  collateralPriceUsd: Number(collateralReserve.priceInUSD),
+  borrowPriceUsd: Number(borrowReserve.priceInUSD),
+  borrowDecimals: borrowReserve.decimals,
+  leverage: 3,
+};
+
+// 1. Oracle-sized, because there is nothing else yet. Quote `intentInput`, not `borrowAmount`:
+//    on a debt-side open the user's contribution goes to the solver too.
+const { borrowAmount, intentInput } = sizeLeverageBorrow(request);
+const quoted = await getSolverQuote(intentInput);
+
+// 2. Now the honest numbers, from the quote.
+const p = projectLeverageLeg(request, { quotedCollateral: quoted, collateralDecimals: 18 }, riskParams, 1);
+if (p.exceedsMaxLtv) throw new Error(`too high at this price; max is ~${p.usableMaxLeverage.toFixed(2)}x`);
+
+await sodax.leverageYield.openPosition({ params: { ..., borrowAmount, minCollateralOut: p.minCollateralOut } });
+```
+
+Three things worth knowing about what comes back:
+
+- **`exceedsMaxLtv` is a hard gate, not a warning.** Post through it and the intent is accepted and then fails at fill.
+- **`usableMaxLeverage` is the real ceiling, and it is below `1 / (1 - ltv)`.** At `ltv` 91% with the solver returning 98.77% of parity it is 9.88x, so an 11.03x that looks fine against parity was never available.
+- **Everything is projected from the FLOOR, not the quote** — the floor is the worst fill the intent permits, so if the floor is safe every fill is. `haircut` and `costUsd` are the exception: they are the *expected* cost of the leg, measured from the quote, which is what a payback period should be measured against.
+
+**On a debt-side open the deposit is not collateral.** It is handed to the solver as part of the input, so the only collateral the position ends up with is what the solver delivers. Counting it on both sides is the other half of that 84%-vs-92% miss; `side: 'debt'` handles it.
+
+### Driving a position from any chain
+
+Positions live on the hub, but nothing requires the user to. These carry the work there and are the normal entry points:
+
+| Method | Effect |
+|--------|--------|
+| `openPosition({ params, walletProvider })` | Fund with collateral from `srcChainKey`, open, and post the leverage intent |
+| `openPositionFromDebtToken({ params, walletProvider })` | The same from the **debt** side |
+| `operatePosition({ params: { srcChainKey, srcAddress, calls } })` | Run position calls (add / decrease / withdraw / settle / cancel) as the hub wallet |
+| `isPositionFundingAllowanceValid(...)` / `approvePositionFunding(...)` | The approval the deposit needs, against the spender that chain actually uses |
+| `encodePositionCalls(txs)` | The hub-wallet payload, if you want to drive `spoke.deposit` / `spoke.sendMessage` yourself |
+
+The hub is not a special case: there the calls route locally through the wallet router, and from a spoke they are relayed and the promise resolves once the hub side lands. `amount` is always in the funding token's own decimals — wrapping into the 18-decimal money-market reserve happens inside the relayed batch, so the deposit and the position are created together and the funds are never sitting on the hub unattached to a position.
+
+Two details that are easy to get wrong:
+
+- **Which hash to report.** Both are returned. `srcChainTxHash` is what the user signed; `dstChainTxHash` is the hub transaction where the intent exists, and that is the one `notifySolver` needs. On the hub they are the same transaction; from a spoke they are not.
+- **Who can be paid.** The approve spender differs by chain — the user's own hub wallet on the hub, since the pull happens inside the routed batch, and the spoke asset manager elsewhere. `approvePositionFunding` resolves it; a hand-rolled approval against the wrong one leaves the deposit unpullable.
+
+The position's recorded origin is the funding chain and address, so a leverage intent that never fills refunds to the user where they funded from — not to the position, and not to their hub wallet.
+
+### Closing a position
+
+There are two exits, and they differ in which asset the owner ends up holding.
+
+**Into the collateral.** Sell only as much collateral as the debt is worth (`buildDecreaseLeverage`), wait for the fill, then `buildPositionWithdraw` the remainder. Two operations, and the withdrawal can pay out to any address. Overshoot the debt slightly — it accrues between quoting and filling, and dust debt left behind blocks the withdrawal entirely.
+
+**Into the debt token.** Sell the whole collateral balance in one `buildDecreaseLeverage`. The solver delivers more debt token than is owed, so the hook repays the debt and leaves the surplus — the owner's equity, now denominated in the debt asset — in the position. `buildSettlePosition` sweeps it, and it goes to the position's `owner`, not to whoever signed.
+
+A full exit cannot half-happen. The hook repays the debt and then withdraws all the collateral to pay the solver; were the delivered amount short of the debt, that withdrawal would leave debt standing against no collateral and the pool's health-factor check rejects it — the whole fill reverts and the position is untouched. So quote the full amount and check the floor would cover the debt before posting, rather than posting an intent that can only expire.
+
+Collateral top-ups and debt repayment need no SDK call — AAVE already accepts both against an arbitrary account (`pool.supply(collateral, amount, position, 0)` and `pool.repay(borrowToken, amount, 2, position)`), so defending a position never waits on a solver fill.
