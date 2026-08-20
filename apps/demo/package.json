@@ -42,7 +42,7 @@
     "lucide-react": "^0.456.0",
     "react": "19.1.4",
     "react-dom": "19.1.4",
-    "react-router": "^7.6.1",
+    "react-router": "^7.18.2",
     "tailwind-merge": "^2.5.4",
     "viem": "catalog:",
     "web-vitals": "^2.1.4",
