@@ -20,7 +20,7 @@ pnpm add @sodax/sdk
 
 ---
 
-## EVM (13 chains)
+## EVM (14 chains)
 
 ```ts
 import { EvmWalletProvider } from '@sodax/wallet-sdk-core';

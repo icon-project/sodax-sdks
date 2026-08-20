@@ -125,6 +125,43 @@ const result = await sodax.bridge.approve({
 });
 ```
 
+### buildApproveTxs
+
+The unsigned approval transactions for the bridge's source token, in the order they must be broadcast.
+
+`approve({ raw: true })` returns exactly one transaction, which cannot express the two-step plan a
+stale allowance on a USDT-class token requires (see the note under [approve](#approve)). This method
+returns both, named rather than ordered, so there is no index to map:
+
+**Parameters:**
+- `_params`: `BridgeParams<K, true>` — the same bridge parameters as `approve`; `raw` is pinned to `true` and no wallet provider is accepted
+
+**Returns:** `Promise<Result<ApprovalTxs<K>>>` — `{ approveTx, resetTx? }`
+
+`resetTx` is present only when the token needs its stale allowance cleared first. **Broadcast it and
+wait for it to be mined before `approveTx`** — the second approval is not valid until the reset has
+landed on chain, and a receipt that mined with a revert status must stop the sequence rather than
+advance it. Spender resolution is identical to `approve`, so an allowance checked with
+`isAllowanceValid` is the allowance this grants.
+
+```typescript
+const result = await sodax.bridge.buildApproveTxs({
+  params: { /* same shape as approve */ },
+  raw: true,
+});
+
+if (result.ok) {
+  const { resetTx, approveTx } = result.value;
+  if (resetTx) {
+    // sign, broadcast, and WAIT for the receipt before continuing
+  }
+  // then sign and broadcast approveTx
+}
+```
+
+`approve` is unchanged and still the right call for signed execution: `SpokeService.approve` already
+runs the reset internally, so a signed caller gets the two-step behaviour without handling it.
+
 ### Stellar Trustline Requirements
 
 For Stellar-based bridge operations, trustlines must be handled depending on whether Stellar is the source or destination chain. See the [Stellar Trustline Requirements](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/STELLAR_TRUSTLINE.md#bridge) doc for detailed information and code examples.
