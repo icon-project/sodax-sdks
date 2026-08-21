@@ -1,5 +1,5 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import type { QuoteQueryV2, QuoteRequestV2, QuoteResponseV2, RequestOverrideConfig } from '@sodax/sdk';
+import type { QuoteQueryV2, QuoteRequestV2, QuoteResponseV2, SwapsRequestOverrideConfig } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import { retryUnlessAuthFailure } from '../shared/retryUnlessAuthFailure.js';
 import { unwrapResult } from '../shared/unwrapResult.js';
@@ -10,7 +10,7 @@ export type UseSwapsApiQuoteParams = ReadHookParams<
   {
     body: QuoteRequestV2 | undefined;
     query?: QuoteQueryV2;
-    apiConfig?: RequestOverrideConfig;
+    apiConfig?: SwapsRequestOverrideConfig;
   }
 >;
 

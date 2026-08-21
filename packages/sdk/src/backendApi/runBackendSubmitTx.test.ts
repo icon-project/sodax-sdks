@@ -278,10 +278,8 @@ describe('runBackendSubmitTx — non-success outcomes', () => {
   });
 
   it('carries the last status error as the cause when polling never succeeded', async () => {
-    // A transport failure with no HTTP status: retryable, so the poll spends the attempt and reports
-    // the last error. Without the chain it would be indistinguishable from a backend that simply never
-    // finished — and the caller logs this cause and nothing else. (A terminal 401/403 is the separate
-    // case below, which stops instead of spending the attempt.)
+    // A statusless transport failure is retryable: the poll spends the attempt and hands back the last
+    // error as the cause, which is all the caller logs. The terminal 401/403 case is the next test.
     const unreachable = new Error('ECONNRESET');
     const api = fakeApi({ statusError: unreachable });
 

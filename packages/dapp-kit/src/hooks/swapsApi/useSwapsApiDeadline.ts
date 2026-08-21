@@ -1,5 +1,5 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import type { DeadlineQueryV2, DeadlineResponseV2, RequestOverrideConfig } from '@sodax/sdk';
+import type { DeadlineQueryV2, DeadlineResponseV2, SwapsRequestOverrideConfig } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import { retryUnlessAuthFailure } from '../shared/retryUnlessAuthFailure.js';
 import { unwrapResult } from '../shared/unwrapResult.js';
@@ -9,7 +9,7 @@ export type UseSwapsApiDeadlineParams = ReadHookParams<
   DeadlineResponseV2,
   {
     query?: DeadlineQueryV2;
-    apiConfig?: RequestOverrideConfig;
+    apiConfig?: SwapsRequestOverrideConfig;
   }
 >;
 

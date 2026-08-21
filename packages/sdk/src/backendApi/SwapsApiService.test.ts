@@ -722,12 +722,25 @@ describe('SwapsApiService RequestOverrideConfig', () => {
 });
 
 // =========================================================================
-// API key → x-api-key header. Precedence, highest first: per-call explicit
-// header > per-call apiKey > config headers > feature/global/slice apiKey
-// (the config-level winner is resolved by Sodax/BackendApiService).
+// API key → x-api-key. Precedence: per-call header > per-call apiKey > config headers > config apiKey.
 // =========================================================================
 
 const sentHeaders = (): Record<string, string> => mockFetch.mock.calls[0]?.[1]?.headers;
+
+// Type-level: the per-call `apiKey` is scoped to the guarded swaps API. `@ts-expect-error` is the
+// assertion — if a non-swaps service ever accepts the field again, the unused directive fails the build.
+describe('per-call apiKey is swaps-only (type-level)', () => {
+  it('is accepted by sodax.api.swaps and rejected by the unguarded services', () => {
+    void (() => sodax.api.swaps.getTokens({ apiKey: 'k' }));
+    // @ts-expect-error — bridge is unguarded and shares this transport; a swaps key must not reach it.
+    void (() => sodax.api.bridge.getTokens({ apiKey: 'k' }));
+    // @ts-expect-error — the data API is unguarded.
+    void (() => sodax.api.getIntentByTxHash(TX_HASH, { apiKey: 'k' }));
+    // @ts-expect-error — sponsoring holds its own credential scope for its own origin.
+    void (() => sodax.api.sponsoring.getStellarSponsorConfig({ apiKey: 'k' }));
+    expect(true).toBe(true); // the assertions above are compile-time
+  });
+});
 
 describe('SwapsApiService API key', () => {
   it('sends a configured apiKey as x-api-key on every request', async () => {

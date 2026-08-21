@@ -3,7 +3,12 @@
 // when they lived in BackendApiService.ts; the api-utils extraction must keep
 // them exported. The runtime helper (`makeRequest`) stays package-internal —
 // it was never part of the public API.
-export type { ApiResponse, RequestConfig, RequestOverrideConfig } from './api-utils.js';
+export type {
+  ApiResponse,
+  RequestConfig,
+  RequestOverrideConfig,
+  SwapsRequestOverrideConfig,
+} from './api-utils.js';
 // Export the bundle-safe guard with the structured HTTP error.
 export { BackendHttpError, isBackendHttpError } from './api-utils.js';
 export * from './BackendApiService.js';

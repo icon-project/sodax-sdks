@@ -1,4 +1,4 @@
-import type { RequestOverrideConfig, SubmitIntentRequestV2, SubmitIntentResponseV2 } from '@sodax/sdk';
+import type { SwapsRequestOverrideConfig, SubmitIntentRequestV2, SubmitIntentResponseV2 } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import { unwrapResult } from '../shared/unwrapResult.js';
 import type { MutationHookParams } from '../shared/types.js';
@@ -10,7 +10,7 @@ import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMu
  */
 export type UseSwapsApiSubmitIntentVars = {
   body: SubmitIntentRequestV2;
-  apiConfig?: RequestOverrideConfig;
+  apiConfig?: SwapsRequestOverrideConfig;
 };
 
 /**

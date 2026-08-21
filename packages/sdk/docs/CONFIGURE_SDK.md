@@ -132,7 +132,7 @@ const sodaxSwapsKey = new Sodax({ swaps: { apiKey: 'swaps-api-key' } });
 const sodaxSliced = new Sodax({ api: { swapsApiConfig: { apiKey: 'swaps-api-key' } } });
 ```
 
-Per request, pass `apiKey` in the trailing `RequestOverrideConfig` of any `sodax.api.swaps` method, or in `extras` on the high-level swap action:
+Per request, pass `apiKey` in the trailing `SwapsRequestOverrideConfig` of any `sodax.api.swaps` method, or in `extras` on the high-level swap action. The field is deliberately absent from the shared `RequestOverrideConfig`, so the unguarded services (data API, bridge, sponsoring) cannot accept a swaps key:
 
 ```typescript
 await sodax.api.swaps.getQuote(quoteBody, undefined, { apiKey: 'per-request-key' });

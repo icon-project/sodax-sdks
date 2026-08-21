@@ -1,5 +1,5 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import type { IntentPacketRequestV2, IntentPacketResponseV2, RequestOverrideConfig } from '@sodax/sdk';
+import type { IntentPacketRequestV2, IntentPacketResponseV2, SwapsRequestOverrideConfig } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import { retryUnlessAuthFailure } from '../shared/retryUnlessAuthFailure.js';
 import { unwrapResult } from '../shared/unwrapResult.js';
@@ -9,7 +9,7 @@ export type UseSwapsApiIntentPacketParams = ReadHookParams<
   IntentPacketResponseV2 | undefined,
   {
     body: IntentPacketRequestV2 | undefined;
-    apiConfig?: RequestOverrideConfig;
+    apiConfig?: SwapsRequestOverrideConfig;
   }
 >;
 

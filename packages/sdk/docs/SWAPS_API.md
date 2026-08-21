@@ -9,8 +9,9 @@ It mirrors `ISwapsApiV2` (from `@sodax/types`) one method per endpoint (21 total
 - returns `Promise<Result<T>>` — it **never throws**;
 - validates the JSON response at runtime against a valibot schema (a contract drift is surfaced as
   `{ ok: false }`, not returned untyped);
-- accepts an optional trailing `RequestOverrideConfig` (`{ baseURL?, timeout?, headers?, apiKey? }`) for
-  per-call overrides.
+- accepts an optional trailing `SwapsRequestOverrideConfig` (`{ baseURL?, timeout?, headers?, apiKey? }`)
+  for per-call overrides. `apiKey` lives on this swaps-specific type rather than the shared
+  `RequestOverrideConfig`, so an unguarded service cannot be handed a swaps credential by mistake.
 
 > This is the lower-level backend HTTP surface. For the end-to-end create→relay→post-execution swap
 > orchestrator, use `sodax.swaps` (see [`SWAPS.md`](SWAPS.md)).

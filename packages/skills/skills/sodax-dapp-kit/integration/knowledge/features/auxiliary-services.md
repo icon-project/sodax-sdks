@@ -92,7 +92,7 @@ See the `sodax-sdk` skill (integration mode), `swaps-api.md` § `partnerFee`.
 The backend guards `POST /swaps/*` with an API-key check. Configure the key once on the provider config
 — `<SodaxProvider config={{ apiKey }}>` (global) or `config={{ swaps: { apiKey } }}` (feature override)
 — and every `sodax.api.swaps` call these hooks make carries it. Override per request via the hooks'
-existing `apiConfig` param (`RequestOverrideConfig`), which also accepts `apiKey`:
+existing `apiConfig` param (`SwapsRequestOverrideConfig`), which also accepts `apiKey`:
 
 ```ts
 // @ai-snippets-skip

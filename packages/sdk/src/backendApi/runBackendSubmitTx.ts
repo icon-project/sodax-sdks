@@ -1,5 +1,5 @@
 import type { Result } from '@sodax/types';
-import type { RequestOverrideConfig } from './api-utils.js';
+import type { SwapsRequestOverrideConfig } from './api-utils.js';
 import { type BackendSubmitTxStatusEnvelope, pollBackendSubmitTx } from './pollBackendSubmitTx.js';
 import { noRequestBudgetCause, type SubmitTxAttempt } from './submitTxAttempt.js';
 
@@ -17,11 +17,11 @@ export interface BackendSubmitTxApi<TBody, TQuery, TResult> {
    */
   submitTx(
     body: TBody,
-    config?: RequestOverrideConfig,
+    config?: SwapsRequestOverrideConfig,
   ): Promise<Result<{ success: boolean; data: { message: string } }>>;
   getSubmitTxStatus(
     query: TQuery,
-    config?: RequestOverrideConfig,
+    config?: SwapsRequestOverrideConfig,
   ): Promise<Result<{ data: BackendSubmitTxStatusEnvelope<TResult> }>>;
 }
 
@@ -67,7 +67,7 @@ export async function runBackendSubmitTx<TBody, TQuery, TResult, TValue>({
    * Per-action request override (an `apiKey` from swap `extras`) applied to the POST and every status
    * request. Deliberately excludes `timeout`/`baseURL` — the attempt budget owns the deadline.
    */
-  overrideConfig?: Pick<RequestOverrideConfig, 'apiKey'>;
+  overrideConfig?: Pick<SwapsRequestOverrideConfig, 'apiKey'>;
 }): Promise<BackendSubmitTxResult<TValue>> {
   // Bound the POST and every status request by this attempt, never above the service's own timeout. The
   // API persists and returns immediately, so a slow POST means a degraded endpoint; it can cost this

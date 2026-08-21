@@ -32,15 +32,22 @@ export type RequestOverrideConfig = {
   baseURL?: string;
   timeout?: number;
   headers?: Record<string, string>;
+};
+
+/**
+ * Per-call overrides for the API-key-guarded swaps API (`sodax.api.swaps`), which is the only service
+ * whose routes the backend guards today.
+ *
+ * `apiKey` is deliberately NOT on the shared {@link RequestOverrideConfig}: the other services would
+ * either ignore it (the data API, sponsoring) or send a swaps credential to their own origin (bridge,
+ * which shares this transport but is unguarded). Keeping it here means a non-swaps call cannot even
+ * express it. Sponsoring holds its own credential scope via `api.sponsoringApiConfig.apiKey`; any
+ * service can still be handed a raw header through {@link RequestOverrideConfig.headers}.
+ */
+export type SwapsRequestOverrideConfig = RequestOverrideConfig & {
   /**
    * Per-call API key, sent as the `x-api-key` header. Wins over the service's configured key; an
    * explicit `headers['x-api-key']` on this same override wins over it.
-   *
-   * Honoured by the API-key-guarded services — `sodax.api.swaps` (and `sodax.api.bridge`, which shares
-   * this transport). `sodax.backendApi`'s own data-API routes and `sodax.api.sponsoring` ignore it:
-   * neither is guarded, and sponsoring deliberately holds an independent credential scope for its own
-   * origin (see `resolveSponsoringApiConfig`), so a key meant for swaps must never be forwarded there.
-   * Set the sponsoring key through `api.sponsoringApiConfig.apiKey` instead.
    */
   apiKey?: string;
 };
@@ -158,9 +165,9 @@ export async function makeRequest<T>(params: MakeRequestParams): Promise<T> {
   // baseURL is treated as "not provided" and falls back to the service default.
   const baseURL = overrideConfig.baseURL || config.baseURL || '';
   const url = `${trimTrailingSlashes(baseURL)}${endpoint}`;
-  // Per-call override headers take precedence over the service defaults; the `apiKey` convenience
-  // option expands first so an explicit override `x-api-key` header wins over it.
-  const headers = mergeHeaders(config.headers, apiKeyHeader(overrideConfig.apiKey), overrideConfig.headers);
+  // Per-call override headers take precedence over the service defaults. No `apiKey` expansion here:
+  // the guarded swaps API goes through `SwapsApiService.buildClient`, not this transport.
+  const headers = mergeHeaders(config.headers, overrideConfig.headers);
 
   // Create AbortController for timeout
   const controller = new AbortController();

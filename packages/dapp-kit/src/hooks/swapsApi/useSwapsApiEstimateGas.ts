@@ -1,5 +1,5 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import type { GasEstimateRequestV2, GasEstimateResponseV2, RequestOverrideConfig } from '@sodax/sdk';
+import type { GasEstimateRequestV2, GasEstimateResponseV2, SwapsRequestOverrideConfig } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import { retryUnlessAuthFailure } from '../shared/retryUnlessAuthFailure.js';
 import { unwrapResult } from '../shared/unwrapResult.js';
@@ -9,7 +9,7 @@ export type UseSwapsApiEstimateGasParams = ReadHookParams<
   GasEstimateResponseV2 | undefined,
   {
     body: GasEstimateRequestV2 | undefined;
-    apiConfig?: RequestOverrideConfig;
+    apiConfig?: SwapsRequestOverrideConfig;
   }
 >;
 

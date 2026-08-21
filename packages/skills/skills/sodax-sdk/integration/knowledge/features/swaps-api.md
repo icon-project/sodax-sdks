@@ -54,7 +54,7 @@ sodax.api.swaps.submitTx(body: SubmitTxRequestV2, config?): Promise<Result<Submi
 sodax.api.swaps.getSubmitTxStatus(query: SubmitTxStatusQueryV2, config?): Promise<Result<SubmitTxStatusResponseV2>>;
 ```
 
-The optional trailing `config?: RequestOverrideConfig` (`{ baseURL?, timeout?, headers?, apiKey? }`) on every method
+The optional trailing `config?: SwapsRequestOverrideConfig` (`{ baseURL?, timeout?, headers?, apiKey? }`) on every method
 applies per-call overrides that take precedence over the service config (see "Per-call overrides" below).
 
 ## `approve` can return two transactions

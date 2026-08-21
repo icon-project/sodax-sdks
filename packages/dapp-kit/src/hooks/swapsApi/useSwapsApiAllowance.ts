@@ -1,5 +1,5 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import type { AllowanceCheckResponseV2, CreateIntentParamsV2, RequestOverrideConfig } from '@sodax/sdk';
+import type { AllowanceCheckResponseV2, CreateIntentParamsV2, SwapsRequestOverrideConfig } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import { retryUnlessAuthFailure } from '../shared/retryUnlessAuthFailure.js';
 import { unwrapResult } from '../shared/unwrapResult.js';
@@ -9,7 +9,7 @@ export type UseSwapsApiAllowanceParams = ReadHookParams<
   AllowanceCheckResponseV2 | undefined,
   {
     body: CreateIntentParamsV2 | undefined;
-    apiConfig?: RequestOverrideConfig;
+    apiConfig?: SwapsRequestOverrideConfig;
   }
 >;
 

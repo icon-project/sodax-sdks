@@ -100,9 +100,8 @@ export async function pollBackendSubmitTx<TResult, TValue>({
       }
     } else {
       lastStatusError = statusResult.error;
-      // A rejected API key cannot become success by waiting, so spending the rest of the attempt on
-      // requests that will all be rejected only delays the caller's client-side fallback. Terminal
-      // auth only (401/403) — a timeout or any other transport failure stays retryable below.
+      // A rejected key cannot become success by waiting, so stop instead of burning the attempt the
+      // caller's client-side fallback is waiting on. Timeouts and other transport failures still retry.
       if (isAuthFailure(statusResult.error)) {
         return {
           ok: false,

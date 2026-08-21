@@ -48,14 +48,14 @@ import { stripLegacyBackendMount } from './apiConfig.js';
 import { SwapsApi, SwapsApiError } from '@sodax/swaps-api';
 import * as v from 'valibot';
 
-import { apiKeyHeader, mergeHeaders, type RequestOverrideConfig } from './api-utils.js';
+import { apiKeyHeader, mergeHeaders, type SwapsRequestOverrideConfig } from './api-utils.js';
 import { SodaxError } from '../errors/SodaxError.js';
 import { isAuthStatus } from '../errors/guards.js';
 import { consoleLogger } from '../shared/logger.js';
 
 /**
  * {@link ISwapsApiV2} with every method's return wrapped in `Result<T>` and an
- * optional trailing `RequestOverrideConfig`. `SwapsApiService` implements this
+ * optional trailing `SwapsRequestOverrideConfig`. `SwapsApiService` implements this
  * (rather than `ISwapsApiV2` directly) because it never throws — like
  * `BackendApiService`, it returns `{ ok: false }` on failure instead of
  * `Promise<T>` rejection. The mapped type keeps the class in lockstep with the
@@ -63,7 +63,7 @@ import { consoleLogger } from '../shared/logger.js';
  */
 type ResultifiedSwapsApiV2 = {
   [K in keyof ISwapsApiV2]: ISwapsApiV2[K] extends (...args: infer A) => Promise<infer R>
-    ? (...args: [...A, config?: RequestOverrideConfig]) => Promise<Result<R>>
+    ? (...args: [...A, config?: SwapsRequestOverrideConfig]) => Promise<Result<R>>
     : never;
 };
 
@@ -73,7 +73,7 @@ type ResultifiedSwapsApiV2 = {
  * A thin adapter over the standalone `@sodax/swaps-api` package (the single source of the wire
  * client — request building, per-chain `tx` validation/transform, response schemas, HTTP + retry).
  * This service adds the SDK conventions on top: `Result<T>` (it never throws), a `SodaxLogger`,
- * `SwapsApiConfig`/`ApiConfig` resolution, and per-call `RequestOverrideConfig`.
+ * `SwapsApiConfig`/`ApiConfig` resolution, and per-call `SwapsRequestOverrideConfig`.
  *
  * All public methods return `Promise<Result<T>>`. On network failure, timeout, non-2xx HTTP
  * response, or response-shape validation failure, the returned Result has `ok: false` with a
@@ -81,7 +81,7 @@ type ResultifiedSwapsApiV2 = {
  * `context.endpoint`); the underlying `SwapsApiError` is preserved on `error.cause`.
  *
  * Per-call request overrides (base URL, timeout, headers, API key) can be passed as the optional
- * last argument to any method via `RequestOverrideConfig`.
+ * last argument to any method via `SwapsRequestOverrideConfig`.
  *
  * Reachable on the Sodax facade as `sodax.api.swaps`.
  */
@@ -117,12 +117,12 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
   /**
    * Build a `@sodax/swaps-api` client for a single call. Maps the SDK's `SwapsApiConfig`
    * (`baseURL`/`timeout`/`headers`) to the package's config (`baseUrl`/`timeout`/`headers`), layering
-   * the optional per-call `RequestOverrideConfig` on top (override wins per field; headers merge).
+   * the optional per-call `SwapsRequestOverrideConfig` on top (override wins per field; headers merge).
    * `timeout` falls back to the backend-API default so a config that omits it still gets a ceiling
    * rather than an unbounded request. Constructed per call so `setHeaders` mutations and per-call
    * overrides both take effect without caching stale state.
    */
-  private buildClient(overrideConfig?: RequestOverrideConfig): SwapsApi {
+  private buildClient(overrideConfig?: SwapsRequestOverrideConfig): SwapsApi {
     // A per-call override is normalized exactly like a configured base URL: it is the gateway root, so a
     // legacy `/be`-suffixed value must not nest `/swaps/*` under the data API's mount. `this.config.baseURL`
     // was already normalized during resolution — including the opt-out, which is why the same decision
@@ -152,7 +152,7 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
   private async toResult<T>(
     endpoint: string,
     call: (client: SwapsApi) => Promise<T>,
-    overrideConfig?: RequestOverrideConfig,
+    overrideConfig?: SwapsRequestOverrideConfig,
   ): Promise<Result<T, SodaxError<'EXTERNAL_API_ERROR'>>> {
     try {
       const value = await call(this.buildClient(overrideConfig));
@@ -211,14 +211,14 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
   // ──────────────────────────────────────────────────────────────────────
 
   /** Fetch all supported swap tokens grouped by SpokeChainKey. */
-  public async getTokens(config?: RequestOverrideConfig): Promise<Result<GetSwapTokensResponseV2>> {
+  public async getTokens(config?: SwapsRequestOverrideConfig): Promise<Result<GetSwapTokensResponseV2>> {
     return this.toResult('/swaps/tokens', c => c.getTokens(), config);
   }
 
   /** Fetch supported swap tokens for a single SpokeChainKey. */
   public async getTokensByChain(
     chainKey: string,
-    config?: RequestOverrideConfig,
+    config?: SwapsRequestOverrideConfig,
   ): Promise<Result<GetSwapTokensByChainResponseV2>> {
     return this.toResult(`/swaps/tokens/${chainKey}`, c => c.getTokensByChain(chainKey), config);
   }
@@ -234,7 +234,7 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
   public async getQuote(
     body: QuoteRequestV2,
     query?: QuoteQueryV2,
-    config?: RequestOverrideConfig,
+    config?: SwapsRequestOverrideConfig,
   ): Promise<Result<QuoteResponseV2>> {
     return this.toResult('/swaps/quote', c => c.getQuote(body, query), config);
   }
@@ -242,7 +242,7 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
   /** Compute a swap deadline (hub timestamp + `offsetSeconds`, default 300s). */
   public async getDeadline(
     query?: DeadlineQueryV2,
-    config?: RequestOverrideConfig,
+    config?: SwapsRequestOverrideConfig,
   ): Promise<Result<DeadlineResponseV2>> {
     return this.toResult('/swaps/deadline', c => c.getDeadline(query), config);
   }
@@ -254,20 +254,20 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
   /** Check whether the source token allowance is already sufficient for the intent. */
   public async checkAllowance(
     body: CreateIntentParamsV2,
-    config?: RequestOverrideConfig,
+    config?: SwapsRequestOverrideConfig,
   ): Promise<Result<AllowanceCheckResponseV2>> {
     return this.toResult('/swaps/allowance/check', c => c.checkAllowance(body), config);
   }
 
   /** Build an unsigned token-approval transaction for the source token. */
-  public async approve(body: CreateIntentParamsV2, config?: RequestOverrideConfig): Promise<Result<ApproveResponseV2>> {
+  public async approve(body: CreateIntentParamsV2, config?: SwapsRequestOverrideConfig): Promise<Result<ApproveResponseV2>> {
     return this.toResult('/swaps/approve', c => c.approve(body), config);
   }
 
   /** Build an unsigned create-intent transaction. */
   public async createIntent(
     body: CreateIntentParamsV2,
-    config?: RequestOverrideConfig,
+    config?: SwapsRequestOverrideConfig,
   ): Promise<Result<CreateIntentResponseV2>> {
     return this.toResult('/swaps/intents', c => c.createIntent(body), config);
   }
@@ -279,20 +279,20 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
   /** Submit the broadcast intent tx to the relay. */
   public async submitIntent(
     body: SubmitIntentRequestV2,
-    config?: RequestOverrideConfig,
+    config?: SwapsRequestOverrideConfig,
   ): Promise<Result<SubmitIntentResponseV2>> {
     return this.toResult('/swaps/intents/submit', c => c.submitIntent(body), config);
   }
 
   /** Poll the solver for intent execution status. */
-  public async getStatus(body: StatusRequestV2, config?: RequestOverrideConfig): Promise<Result<StatusResponseV2>> {
+  public async getStatus(body: StatusRequestV2, config?: SwapsRequestOverrideConfig): Promise<Result<StatusResponseV2>> {
     return this.toResult('/swaps/intents/status', c => c.getStatus(body), config);
   }
 
   /** Build an unsigned cancel-intent transaction (the `intent` bigint numerics serialize to strings). */
   public async cancelIntent(
     body: CancelIntentRequestV2,
-    config?: RequestOverrideConfig,
+    config?: SwapsRequestOverrideConfig,
   ): Promise<Result<CancelIntentResponseV2>> {
     return this.toResult(
       '/swaps/intents/cancel',
@@ -304,7 +304,7 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
   /** Compute the keccak256 hash of an Intent struct (bigint numerics serialize to strings). */
   public async getIntentHash(
     body: IntentHashRequestV2,
-    config?: RequestOverrideConfig,
+    config?: SwapsRequestOverrideConfig,
   ): Promise<Result<IntentHashResponseV2>> {
     return this.toResult(
       '/swaps/intents/hash',
@@ -316,7 +316,7 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
   /** Long-poll the relayer until the fill packet lands on the destination chain. */
   public async getSolvedIntentPacket(
     body: IntentPacketRequestV2,
-    config?: RequestOverrideConfig,
+    config?: SwapsRequestOverrideConfig,
   ): Promise<Result<IntentPacketResponseV2>> {
     return this.toResult('/swaps/intents/packet', c => c.getSolvedIntentPacket(body), config);
   }
@@ -324,19 +324,19 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
   /** Recover the relay extra data needed by `/swaps/intents/submit` (provide EITHER `txHash` OR `intent`). */
   public async getIntentSubmitTxExtraData(
     body: IntentExtraDataRequestV2,
-    config?: RequestOverrideConfig,
+    config?: SwapsRequestOverrideConfig,
   ): Promise<Result<IntentExtraDataResponseV2>> {
     const normalized = body.intent ? { ...body, intent: SwapsApiService.toWireIntent(body.intent) } : body;
     return this.toResult('/swaps/intents/extra-data', c => c.getIntentSubmitTxExtraData(normalized), config);
   }
 
   /** Get the on-chain fill state for an intent by its hub-chain tx hash. */
-  public async getFilledIntent(txHash: string, config?: RequestOverrideConfig): Promise<Result<IntentStateV2>> {
+  public async getFilledIntent(txHash: string, config?: SwapsRequestOverrideConfig): Promise<Result<IntentStateV2>> {
     return this.toResult(`/swaps/intents/${txHash}/fill`, c => c.getFilledIntent(txHash), config);
   }
 
   /** Look up an Intent struct by its hub-chain creation tx hash. */
-  public async getIntent(txHash: string, config?: RequestOverrideConfig): Promise<Result<GetIntentResponseV2>> {
+  public async getIntent(txHash: string, config?: SwapsRequestOverrideConfig): Promise<Result<GetIntentResponseV2>> {
     return this.toResult(`/swaps/intents/${txHash}`, c => c.getIntent(txHash), config);
   }
 
@@ -347,7 +347,7 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
   /** Build an unsigned create-limit-order-intent transaction (create-intent with optional `deadline`). */
   public async createLimitOrderIntent(
     body: CreateLimitOrderParamsV2,
-    config?: RequestOverrideConfig,
+    config?: SwapsRequestOverrideConfig,
   ): Promise<Result<CreateLimitOrderResponseV2>> {
     return this.toResult('/swaps/limit-orders', c => c.createLimitOrderIntent(body), config);
   }
@@ -355,18 +355,18 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
   /** Estimate gas for a raw transaction on a spoke chain (bigint `tx` numerics serialize to strings). */
   public async estimateGas(
     body: GasEstimateRequestV2,
-    config?: RequestOverrideConfig,
+    config?: SwapsRequestOverrideConfig,
   ): Promise<Result<GasEstimateResponseV2>> {
     return this.toResult('/swaps/gas/estimate', c => c.estimateGas(body), config);
   }
 
   /** Compute the partner fee for a given input amount. */
-  public async getPartnerFee(query: FeeQueryV2, config?: RequestOverrideConfig): Promise<Result<FeeResponseV2>> {
+  public async getPartnerFee(query: FeeQueryV2, config?: SwapsRequestOverrideConfig): Promise<Result<FeeResponseV2>> {
     return this.toResult('/swaps/fees/partner', c => c.getPartnerFee(query), config);
   }
 
   /** Compute the protocol (solver) fee for a given input amount. */
-  public async getSolverFee(query: FeeQueryV2, config?: RequestOverrideConfig): Promise<Result<FeeResponseV2>> {
+  public async getSolverFee(query: FeeQueryV2, config?: SwapsRequestOverrideConfig): Promise<Result<FeeResponseV2>> {
     return this.toResult('/swaps/fees/solver', c => c.getSolverFee(query), config);
   }
 
@@ -377,7 +377,7 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
   /** Submit a swap transaction to be processed (relay, post-execution, etc.). Idempotent on `(txHash, srcChainKey)`.
    *  Response is immediate after successful submission. Use getSubmitTxStatus to poll the status of the submission.
    */
-  public async submitTx(body: SubmitTxRequestV2, config?: RequestOverrideConfig): Promise<Result<SubmitTxResponseV2>> {
+  public async submitTx(body: SubmitTxRequestV2, config?: SwapsRequestOverrideConfig): Promise<Result<SubmitTxResponseV2>> {
     return this.toResult(
       '/swaps/submit-tx',
       c => c.submitTx({ ...body, intent: SwapsApiService.toWireIntent(body.intent) }),
@@ -388,7 +388,7 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
   /** Get the processing status of a submitted swap transaction by `(txHash, srcChainKey)`. */
   public async getSubmitTxStatus(
     query: SubmitTxStatusQueryV2,
-    config?: RequestOverrideConfig,
+    config?: SwapsRequestOverrideConfig,
   ): Promise<Result<SubmitTxStatusResponseV2>> {
     return this.toResult('/swaps/submit-tx/status', c => c.getSubmitTxStatus(query), config);
   }
@@ -418,7 +418,7 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
    * `SwapsApiConfig.timeout` being optional never leaks an `undefined` ceiling.
    *
    * Callers bounding a request tighter than this need it as the CEILING, because a
-   * `RequestOverrideConfig.timeout` REPLACES the service value rather than lowering it: an override
+   * `SwapsRequestOverrideConfig.timeout` REPLACES the service value rather than lowering it: an override
    * derived from a caller budget alone would raise the bound whenever that budget is the larger of the
    * two. `SubmitTxAttempt.requestTimeout` clamps against both (`min(budget left in the attempt, this)`).
    */

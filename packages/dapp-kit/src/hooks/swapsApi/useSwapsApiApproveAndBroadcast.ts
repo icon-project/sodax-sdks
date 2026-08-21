@@ -2,7 +2,7 @@ import type {
   ApproveResponseV2,
   CreateIntentParamsV2,
   GetWalletProviderType,
-  RequestOverrideConfig,
+  SwapsRequestOverrideConfig,
   SpokeChainKey,
 } from '@sodax/sdk';
 import { useQueryClient } from '@tanstack/react-query';
@@ -18,7 +18,7 @@ export type SwapsApiApprovalHashes = ApprovalHashes;
 export type UseSwapsApiApproveAndBroadcastVars<K extends SpokeChainKey = SpokeChainKey> = {
   body: CreateIntentParamsV2;
   walletProvider: GetWalletProviderType<K>;
-  apiConfig?: RequestOverrideConfig;
+  apiConfig?: SwapsRequestOverrideConfig;
   /** Per-step progress. In the vars, not the hook options, so it is never a stale closure. */
   onProgress?: ApprovalProgressListener;
 };
