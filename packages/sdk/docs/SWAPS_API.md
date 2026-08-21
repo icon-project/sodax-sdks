@@ -52,6 +52,89 @@ sodax.api.swaps.submitTx(body: SubmitTxRequestV2, config?): Promise<Result<Submi
 sodax.api.swaps.getSubmitTxStatus(query: SubmitTxStatusQueryV2, config?): Promise<Result<SubmitTxStatusResponseV2>>;
 ```
 
+## `partnerFee`
+
+Optional on the type, but there is no default — the client forwards the body as given and never
+reads `new Sodax({ fee })` / `new Sodax({ swaps: { partnerFee } })`. Send the same value on quote
+and create-intent:
+
+```typescript
+const partnerFee = { address: '0xYourSonicFeeReceiver', percentage: 10 }; // 10 = 0.1% (bps)
+
+await sodax.api.swaps.getQuote({ ...quoteBody, partnerFee });
+await sodax.api.swaps.createIntent({ ...intentBody, partnerFee });
+```
+
+`checkAllowance` / `approve` inherit the field but ignore it. See [MONETIZE_SDK.md](MONETIZE_SDK.md)
+for the orchestrator path and fee claiming.
+
+## Delivery hooks
+
+`hook?: HookRequestV2` (`{ kind: HookKind }`) lives on `SwapExtrasV2`, so it's structurally present on
+every method whose body extends it: `getQuote`, `checkAllowance`, `approve`, `createIntent`, and
+`createLimitOrderIntent` (`CreateLimitOrderParamsV2` is `CreateIntentParamsV2` minus `deadline`, so it
+carries `hook` too). Only the endpoints that actually build a delivery target *consume* it, though —
+`createIntent`, `createLimitOrderIntent`, and `getQuote` with `includeTxData: true`. Setting it there
+routes the intent's output through a registered delivery hook instead of a plain transfer to
+`dstAddress` — the backend resolves the hook's deployed address and encodes its payload, so
+`dstAddress` keeps meaning "the recipient the hook credits," not the delivery target.
+
+```typescript
+import { HookKind } from '@sodax/sdk';
+
+const created = await sodax.api.swaps.createIntent({
+  ...intentBody,
+  hook: { kind: HookKind.HYPERCORE_DEPOSIT },
+});
+```
+
+- **`checkAllowance` / `approve` inherit the field but ignore it**, same as `partnerFee` above:
+  allowance-checking and approval are source-side only and never touch `dstAddress`, so there's
+  nothing for a hook to apply to.
+- **Server-side, deployment-dependent.** Unlike `sodax.swaps` (which resolves a hook client-side),
+  here the hook is resolved by the backend. It only works when the backend forwards the field *and*
+  its pinned SDK has that kind registered for the request's destination chain — `dstChainKey` on
+  every body above except `getQuote`, which names it `tokenDstChainKey` instead. An unregistered kind
+  fails the request rather than silently falling back to a plain transfer.
+- **On `getQuote`, only meaningful with `includeTxData: true`** — a bare quote never builds an
+  intent, so there's nowhere for a hook to apply, mirroring how `srcPublicKey`/`bound` already work
+  on this endpoint. Whether a given backend forwards `hook` through that path at all is a deployment
+  question this SDK cannot verify from here.
+- **Full contract lives on the type.** The `deliveryData` payload's per-`HookKind` ABI shape and the
+  `supportedTokens` metadata-vs-enforcement distinction aren't repeated here — see the `hook` field's
+  own doc comment on `SwapExtrasV2` in `@sodax/types` (`backendApiV2.ts`) for the complete, canonical
+  spec a backend integration should implement against.
+
+## `approve` can return two transactions
+
+`ApproveResponseV2` is `{ tx, resetTx? }`. `resetTx` is present only when the source token rejects an
+allowance change from one non-zero value to another — the 2017 TetherToken lineage, of which
+Ethereum USDT is the one in the SODAX token list today — and the wallet already holds a stale
+allowance. A wallet in that state cannot approve at all until the allowance is zeroed.
+
+When `resetTx` is present, broadcast it **first** and wait for it to be mined, then broadcast `tx`.
+The second approval is only valid once the reset has landed on-chain, so the two cannot be batched.
+
+```typescript
+const { tx, resetTx } = approveResponse;
+
+if (resetTx) {
+  const resetHash = await sendTransaction(resetTx);
+  await waitForTransactionReceipt(resetHash);
+}
+
+const approveHash = await sendTransaction(tx);
+await waitForTransactionReceipt(approveHash);
+```
+
+The field is optional and absent for every other token, so a client that ignores it keeps working
+exactly as before — it just cannot rescue a wallet stuck on a guarded token.
+
+**In a React app, don't hand-roll the sequence.** `@sodax/dapp-kit` ships
+`useSwapsApiApproveAndBroadcast`, which requests, signs, broadcasts and waits for both transactions
+and resolves with `{ approveTxHash, resetTxHash? }` only once the approval has landed — the ordering
+above lives in the package rather than in every integration.
+
 ## Wire shapes — `bigint` vs decimal strings
 
 Request bodies that carry an `intent` struct (`cancelIntent`, `getIntentHash`,
@@ -83,6 +166,7 @@ const quote = await sodax.api.swaps.getQuote({
   tokenSrc, tokenSrcChainKey, tokenDst, tokenDstChainKey,
   amount: '1000000',
   quoteType: 'exact_input',
+  partnerFee,
 });
 if (!quote.ok) return;
 quote.value.quotedAmount; // decimal string
@@ -92,6 +176,7 @@ const created = await sodax.api.swaps.createIntent({
   srcChainKey, dstChainKey, inputToken, outputToken,
   inputAmount: '1000000', minOutputAmount: '990000', deadline: '0',
   allowPartialFill: false, srcAddress, dstAddress,
+  partnerFee,
 });
 if (!created.ok) return;
 const { tx, intent, relayData } = created.value;
@@ -118,27 +203,29 @@ These are unrelated; don't treat one as another:
 | `submitTx` | `SubmitTxResponseV2.data.status` | string | `'inserted'` (new) or `'duplicate'` (already submitted — idempotent on `(txHash, srcChainKey)`). |
 | `getSubmitTxStatus` | `SubmitTxStatusResponseV2.data.status` | string | `'pending'` / `'relaying'` / `'relayed'` / `'posting_execution'` / `'posted_execution'` / `'solved'` / `'failed'` (`'solved'` / `'failed'` terminal). |
 
+This record tracks the backend submit path only. It answers **404** when no record exists
+(`useBackendSubmitTx: false`, or the submit never landed), and returns a **stale or abandoned** record for a
+swap `sodax.swaps.swap()` finished via its client-side relay fallback — that path submits first and falls
+back afterwards, so the record survives without reflecting the outcome. To cover every case from a source tx
+hash, use `sodax.swaps.getDetailedStatus` —
+[SWAPS.md § Get Detailed Status](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md).
+
 ## Configuration
 
-`sodax.api.swaps` shares the backend API config. By default the swaps endpoints are `/swaps/*` sub-paths
-under the same base URL as `sodax.backendApi`. `SodaxConfig.api` is `ApiConfig`:
-
-```typescript
-// Flat — shared by the base backend API and the swaps client (the common case):
-type BaseApiConfig = { baseURL: string; timeout: number; headers: Record<string, string> };
-
-// Nested — point the swaps API at its own host, separate from the base backend API:
-type CustomApiConfig =
-  | { baseApiConfig: BaseApiConfig; swapsApiConfig?: BaseApiConfig }
-  | { baseApiConfig?: BaseApiConfig; swapsApiConfig: BaseApiConfig };
-
-type ApiConfig = BaseApiConfig | CustomApiConfig;
-```
+`sodax.api.swaps` shares the backend API config. `baseURL` is the **gateway root** — the same value every
+service resolves — and the swaps client appends `/swaps/*` below it, exactly as `sodax.backendApi` appends
+its own `/be` mount. So a `baseURL` must never carry a service segment: a value ending in `/be` (the
+previous packaged default) would put swaps at `/v1/be/swaps/submit-tx`, which the gateway does not route.
+The SDK trims that suffix — with a deprecation warning when it appears on the flat field or the
+`baseApiConfig` slice, silently on a `swapsApiConfig` slice (that combination never worked, so there is
+nothing to deprecate). For the `ApiConfig` type itself — including the `basePath` knob on the flat
+variant — see
+[BACKEND_API.md § `ApiConfig` Type](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BACKEND_API.md).
 
 ```typescript
 const sodax = new Sodax({
   api: {
-    baseApiConfig: { baseURL: 'https://api.example/v1/be' },
+    baseApiConfig: { baseURL: 'https://api.example/v1' },
     swapsApiConfig: { baseURL: 'https://swaps.example/v1' },
   },
 });

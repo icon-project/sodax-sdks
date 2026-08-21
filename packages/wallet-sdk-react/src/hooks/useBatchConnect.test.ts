@@ -2,11 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ChainType } from '@sodax/types';
 import type { IXConnector } from '@/types/interfaces.js';
 import type { XAccount } from '@/types/index.js';
-import {
-  resolveBatchTargets,
-  runBatchConnect,
-  type BatchConnectProgressEvent,
-} from './useBatchConnect.js';
+import { resolveBatchTargets, runBatchConnect, type BatchConnectProgressEvent } from './useBatchConnect.js';
 
 const makeConnector = (chainType: ChainType, id: string, name = id): IXConnector =>
   ({

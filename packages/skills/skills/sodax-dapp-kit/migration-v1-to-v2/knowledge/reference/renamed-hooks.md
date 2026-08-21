@@ -21,7 +21,7 @@ These keep their name but their TypeScript signature is different. Usually requi
 | `useSwap` | Hook init: `(spokeProvider) → ({ mutationOptions })`. Vars: `{ params } → { params, walletProvider }`. |
 | `useSwapAllowance` | Query params: `(params, spokeProvider) → { params: { payload, srcChainKey, walletProvider } }`. SDK request nested under `params.payload`. Data unwrapped to `boolean`. |
 | `useSwapApprove` | Return: `{ approve, isLoading } → SafeUseMutationResult` (with `mutateAsync` / `isPending`). Vars accept `CreateIntentParams \| CreateLimitOrderParams`. TData is `TxReturnType<K, false>` (chain-keyed receipt union). |
-| `useStatus` | Now `useStatus({ params: { intentTxHash } })` — single-object shape AND key renamed from `intentHash` → `intentTxHash`. Data is `Result<SolverIntentStatusResponse, SolverErrorResponse> \| undefined` (Result-wrapped). Polls 3s. |
+| `useStatus` | Now `useStatus({ params: { intentTxHash } })` — single-object shape AND key renamed from `intentHash` → `intentTxHash`. Data is `Result<SolverIntentStatusResponse, SolverErrorResponse> \| undefined` (Result-wrapped). Polls 3s; stops on `3`/`4` and after 40 consecutive NOT_FOUND fetches. |
 | `useQuote` | Now `useQuote({ params: { payload } })` — SDK request nested under `params.payload` (NOT directly under `params`). Data is `Result<SolverIntentQuoteResponse, SolverErrorResponse> \| undefined`. Polls 3s. |
 | `useCancelSwap` / `useCancelLimitOrder` | TVars are FLAT (no `params` wrapper): `{ srcChainKey, intent, walletProvider }`. |
 | `useCreateLimitOrder` | Hook init: `(spokeProvider) → ({ mutationOptions })`. Vars: `{ params, walletProvider }`. mutationKey is `['swap', 'limitOrder', 'create']`. |
@@ -48,8 +48,8 @@ These keep their name but their TypeScript signature is different. Usually requi
 | `useXBalances` | Params: positional → `{ params: { xService, xChainId, xTokens, address } }`. All four required. `xService` injected from `@sodax/wallet-sdk-react`. |
 | `useEstimateGas` | Mutation; vars: `EstimateGasParams<C>` (flat, not `{ params, walletProvider }`-wrapped). |
 | `useDeriveUserWalletAddress`, `useGetUserHubWalletAddress` | Single-object query shape. |
-| `useStellarTrustlineCheck` | Single-object shape with `{ token, amount, chainId, walletProvider }` under `params`. |
-| `useRequestTrustline` | Custom utility hook (NOT a canonical mutation). Takes `(token: string \| undefined)` positionally, returns `{ requestTrustline, isLoading, isRequested, error, data }`. The `requestTrustline` callback takes `{ token, amount, srcChainKey, walletProvider }`. |
+| `useStellarTrustlineCheck` | Single-object shape under `params`: `{ token, amount, chainId, walletAddress }`. Pass the resolved Stellar address (e.g. `useXAccount('STELLAR').address`), not a wallet provider — it keys the cache per account. |
+| `useRequestTrustline` → `useEstablishTrustline` | Canonical mutation hook: `{ mutationOptions }` in, `SafeUseMutationResult` out, vars `{ token, amount, srcChainKey, walletProvider }`. `useRequestTrustline` remains as a deprecated wrapper with its 2.0.0 shape — positional `(token: string \| undefined)` (ignored) and `{ requestTrustline, isLoading, isRequested, error, data }` — and is removed in the next major. |
 | `useBackendOrderbook` / `useBackendAllMoneyMarketBorrowers` | Pagination MUST be nested under `params`: `{ params: { pagination: { offset, limit } } }`. |
 | `useBackendUserIntents` | Data is `UserIntentsResponse = { items: IntentResponse[], total, offset, limit }` — NOT a bare array. Access `data?.items`. |
 | `useSwapsApiSubmitTx` / `useSwapsApiSubmitTxStatus` (v1: `useBackendSubmitSwapTx` / `useBackendSubmitSwapTxStatus`) | Renamed + moved to the `swapsApi/` namespace (keys now `['swapsApi', …]`). Mutation `apiConfig` moved from hook init to `mutate(vars)`; the status query now requires `srcChainKey`. The rest of the Swaps API v2 is newly wrapped as `useSwapsApi*` hooks. |

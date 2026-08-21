@@ -1,87 +1,219 @@
-// Resolution of the `ApiConfig` union into the concrete per-service config used
-// by `BackendApiService` (base/backend API) and `SwapsApiService` (swaps API).
-//
-// `ApiConfig` (from `@sodax/types`) is one of two shapes:
-//   - `BaseApiConfig` — flat `{ baseURL, timeout, headers }`. Both services share it;
-//     the swaps endpoints are reached as `/swaps/*` sub-paths under the same base URL.
-//   - `CustomApiConfig` — `{ baseApiConfig?, swapsApiConfig? }`. Lets each service point
-//     at its own base URL / timeout / headers. Either slice may be omitted.
-//
-// Both resolvers fill any omitted field from the global backend-API defaults and always
-// include the default headers (so a JSON `Content-Type`/`Accept` is present unless
-// explicitly overridden). In custom mode the swaps resolver layers `swapsApiConfig` over
-// `baseApiConfig` over the defaults, so swaps inherits the base config (including any
-// cross-cutting auth/tracing header) for every field `swapsApiConfig` does not override.
-// They also normalise the hybrid objects that `mergeSodaxConfig`'s deep-merge can produce
-// when a `CustomApiConfig` override is layered onto the flat default — the custom slices
-// win and any leftover top-level flat fields (which equal the defaults) are ignored.
-
 import {
-  DEFAULT_BACKEND_API_ENDPOINT,
+  BACKEND_API_BASE_PATH,
+  DEFAULT_API_BASE_URL,
   DEFAULT_BACKEND_API_HEADERS,
   DEFAULT_BACKEND_API_TIMEOUT,
-  type ApiConfig,
+  DEFAULT_SPONSORING_API_ENDPOINT,
+  type BackendApiConfig,
   type BaseApiConfig,
-  type CustomApiConfig,
+  type HttpUrl,
+  type SponsoringApiConfig,
   type SwapsApiConfig,
 } from '@sodax/types';
+import { trimTrailingSlashes, type RequestOverrideConfig } from './api-utils.js';
 
 /**
- * True when `config` is the nested {@link CustomApiConfig} variant (carries a
- * `baseApiConfig` and/or `swapsApiConfig` slice) rather than a flat {@link BaseApiConfig}.
+ * Runtime shape of a resolved `api` config. `mergeSodaxConfig` deep-merges an override into the flat
+ * default, so per-service slices arrive alongside surviving top-level flat fields. `ApiConfig` (both of
+ * its variants) is assignable to this, so every resolver takes this shape and never narrows the union.
  */
-export function isCustomApiConfig(config: ApiConfig): config is CustomApiConfig {
-  return 'baseApiConfig' in config || 'swapsApiConfig' in config;
+type LayeredApiConfig = Partial<BackendApiConfig> & {
+  baseApiConfig?: Partial<BackendApiConfig>;
+  swapsApiConfig?: Partial<SwapsApiConfig>;
+  sponsoringApiConfig?: Partial<SponsoringApiConfig>;
+};
+
+/** A resolved backend data API config, whose `basePath` is always concrete. */
+export type ResolvedBackendApiConfig = Required<BackendApiConfig>;
+
+/** The top-level flat fields, which layer underneath any per-service slice. */
+function flatLayer({ baseURL, timeout, headers }: LayeredApiConfig): Partial<BaseApiConfig> {
+  return { baseURL, timeout, headers };
 }
 
 /**
- * Layer config slices left→right over the global backend-API defaults (later slices win
- * per field). `baseURL`/`timeout`: the last defined value wins; `headers`: merged across
- * every layer, so a cross-cutting header from an earlier slice (e.g. `baseApiConfig`) is
- * kept unless a later slice overrides that key. The default headers are always present.
+ * Layer slices left to right. Scalar values use the latest definition while
+ * headers merge by key.
  */
 function layerConfigs(...slices: Array<Partial<BaseApiConfig> | undefined>): BaseApiConfig {
   return slices.reduce<BaseApiConfig>(
     (acc, slice) =>
       slice
         ? {
-            baseURL: slice.baseURL ?? acc.baseURL,
+            // Truthy (not nullish) so a set-but-empty env var falls back, matching `makeRequest`.
+            baseURL: slice.baseURL || acc.baseURL,
             timeout: slice.timeout ?? acc.timeout,
             headers: { ...acc.headers, ...slice.headers },
           }
         : acc,
     {
-      baseURL: DEFAULT_BACKEND_API_ENDPOINT,
+      baseURL: DEFAULT_API_BASE_URL,
       timeout: DEFAULT_BACKEND_API_TIMEOUT,
       headers: { ...DEFAULT_BACKEND_API_HEADERS },
     },
   );
 }
 
-/**
- * Resolve the effective config for the base (backend) API:
- * - flat {@link BaseApiConfig} → used directly,
- * - {@link CustomApiConfig} → its `baseApiConfig` slice,
- * with omitted fields filled from the defaults.
- */
-export function resolveBaseApiConfig(config: ApiConfig): BaseApiConfig {
-  if (isCustomApiConfig(config)) {
-    return layerConfigs(config.baseApiConfig);
-  }
-  return layerConfigs(config);
+function isHttpUrl(value: string): value is HttpUrl {
+  return value.startsWith('http://') || value.startsWith('https://');
+}
+
+/** Normalize an observable base URL while preserving its `HttpUrl` type. */
+function normalizeBaseURL(baseURL: HttpUrl): HttpUrl {
+  const trimmed = trimTrailingSlashes(baseURL);
+  return isHttpUrl(trimmed) ? trimmed : baseURL;
 }
 
 /**
- * Resolve the effective config for the swaps API:
- * - flat {@link BaseApiConfig} → shared with the base API (swaps endpoints are sub-paths),
- * - {@link CustomApiConfig} → its `swapsApiConfig` slice **layered over `baseApiConfig`** (the
- *   shared foundation): each field falls back swaps → base → default, and headers merge
- *   defaults → base → swaps so a cross-cutting `baseApiConfig` header (auth/tracing) reaches
- *   swaps calls unless `swapsApiConfig` overrides that key.
+ * Strip the legacy backend mount from a base URL, or `undefined` when there is nothing to strip.
+ *
+ * Before the base URL became the shared gateway root it ended in `/be` — the backend data API's own
+ * mount — in the packaged default and in every doc example. Removing that suffix keeps those values
+ * working for the data API (which re-appends its `basePath`) and, unlike before, resolves the sibling
+ * services (`/swaps/*`, `/bridge/*`) correctly instead of nesting them under `/be`. Retire this
+ * alongside the deprecated `DEFAULT_BACKEND_API_ENDPOINT` on the next major.
+ *
+ * Returns `undefined` when the remainder would not be a valid absolute URL, so a host whose authority
+ * merely ends in `be` (`https://be`) is left alone.
  */
-export function resolveSwapsApiConfig(config: ApiConfig): SwapsApiConfig {
-  if (isCustomApiConfig(config)) {
-    return layerConfigs(config.baseApiConfig, config.swapsApiConfig);
-  }
-  return layerConfigs(config);
+function stripBackendMount(baseURL: string): HttpUrl | undefined {
+  const trimmed = trimTrailingSlashes(baseURL);
+  if (!trimmed.endsWith(BACKEND_API_BASE_PATH)) return undefined;
+  const root = trimmed.slice(0, -BACKEND_API_BASE_PATH.length);
+  return isHttpUrl(root) ? root : undefined;
+}
+
+/** Apply {@link stripBackendMount} to a per-call `baseURL` override, which is a plain string. */
+export function stripLegacyBackendMount(baseURL: string): string {
+  return stripBackendMount(baseURL) ?? baseURL;
+}
+
+/**
+ * Normalize a per-call override's `baseURL`, leaving its other fields alone.
+ *
+ * A per-call override carries the same meaning as a configured `baseURL` — the gateway root — so it gets
+ * the same legacy-mount trim. Without it, passing the old `…/v1/be` value per call nests every route
+ * under the data API's mount: `/be/be/config/all` for the data API, `/be/swaps/*` and `/be/bridge/*` for
+ * the siblings. Sponsoring is deliberately excluded, matching its config-level behaviour.
+ */
+export function normalizeOverrideBaseURL(override?: RequestOverrideConfig): RequestOverrideConfig | undefined {
+  if (!override?.baseURL) return override;
+  return { ...override, baseURL: stripLegacyBackendMount(override.baseURL) };
+}
+
+function toGatewayRoot(baseURL: HttpUrl): HttpUrl {
+  return stripBackendMount(baseURL) ?? normalizeBaseURL(baseURL);
+}
+
+/**
+ * The mount the consumer stated, if any. Its presence means a config written against the current
+ * contract, so the legacy trim must stand down: the `baseURL` is a deliberate root, and a `/be` at the
+ * end of it is a real path segment rather than the mount we would otherwise re-append.
+ */
+function configuredBasePath(layers: LayeredApiConfig): string | undefined {
+  return layers.baseApiConfig?.basePath ?? layers.basePath;
+}
+
+/**
+ * True when the consumer stated a mount explicitly, i.e. wrote this config against the current contract.
+ * Callers use it to keep per-call handling consistent with the config-level decision.
+ */
+export function hasExplicitBasePath(layers: LayeredApiConfig): boolean {
+  return configuredBasePath(layers) !== undefined;
+}
+
+/**
+ * True when the configured base URL still carries the legacy backend mount, i.e. when the trim fired.
+ * Only the flat / `baseApiConfig` value is inspected: a `/be`-suffixed `swapsApiConfig` is still
+ * trimmed, but silently — that combination never worked, so repairing it needs no deprecation notice.
+ */
+export function hasLegacyBackendBaseURL(layers: LayeredApiConfig): boolean {
+  if (configuredBasePath(layers) !== undefined) return false;
+  // Read the base URL through `layerConfigs` so slice-over-flat precedence is stated in one place.
+  return stripBackendMount(layerConfigs(flatLayer(layers), layers.baseApiConfig).baseURL) !== undefined;
+}
+
+/** Origin of the packaged gateway, so a base URL on that host can be checked for its version prefix. */
+const PACKAGED_API_ORIGIN = new URL(DEFAULT_API_BASE_URL).origin;
+
+function isOnPackagedOrigin(baseURL: string): boolean {
+  return baseURL === PACKAGED_API_ORIGIN || baseURL.startsWith(`${PACKAGED_API_ORIGIN}/`);
+}
+
+/**
+ * True when a RESOLVED base URL points at the packaged gateway host but omits its version prefix.
+ *
+ * `baseURL` is the origin plus the deployment's version prefix, so `https://api.sodax.com` on its own
+ * resolves a service one segment short — `/be/config/all`, `/swaps/tokens` — and 404s. Only the data API
+ * has a `basePath` to compensate, so the others cannot be rescued after the fact; the fix is always to
+ * put the prefix back in `baseURL`.
+ *
+ * Takes the resolved value rather than the config so it holds for every service however its base URL was
+ * layered — a `swapsApiConfig` or `sponsoringApiConfig` slice reaches its service without passing through
+ * `baseApiConfig`, so a config-shaped check would miss exactly those.
+ *
+ * Deliberately scoped to the packaged origin: a self-hosted gateway or a local service mounted at a bare
+ * origin (`http://localhost:3011`, `http://localhost:3008`) is legitimate and must not warn.
+ */
+export function isMissingVersionPrefix(baseURL: string): boolean {
+  const normalized = trimTrailingSlashes(baseURL);
+  if (!isOnPackagedOrigin(normalized)) return false;
+  return normalized !== DEFAULT_API_BASE_URL && !normalized.startsWith(`${DEFAULT_API_BASE_URL}/`);
+}
+
+/** Normalize a service mount path: no surrounding whitespace, exactly one leading slash, no trailing slash. */
+function normalizeBasePath(basePath: string): string {
+  const trimmed = trimTrailingSlashes(basePath.trim());
+  const withoutLeadingSlashes = trimmed.replace(/^\/+/, '');
+  return withoutLeadingSlashes.length === 0 ? '' : `/${withoutLeadingSlashes}`;
+}
+
+/** Layer flat fields, the `baseApiConfig` slice, then an optional per-service slice onto the shared root. */
+function resolveSharedApiConfig(layers: LayeredApiConfig, slice?: Partial<BaseApiConfig>): BaseApiConfig {
+  const layered = layerConfigs(flatLayer(layers), layers.baseApiConfig, slice);
+  const baseURL =
+    configuredBasePath(layers) === undefined ? toGatewayRoot(layered.baseURL) : normalizeBaseURL(layered.baseURL);
+  return { ...layered, baseURL };
+}
+
+/** Resolve base API config with global defaults, including the backend data API's own mount path. */
+export function resolveBaseApiConfig(layers: LayeredApiConfig): ResolvedBackendApiConfig {
+  return {
+    ...resolveSharedApiConfig(layers),
+    basePath: normalizeBasePath(configuredBasePath(layers) ?? BACKEND_API_BASE_PATH),
+  };
+}
+
+/** Resolve swaps config over base config and global defaults. */
+export function resolveSwapsApiConfig(layers: LayeredApiConfig): SwapsApiConfig {
+  return resolveSharedApiConfig(layers, layers.swapsApiConfig);
+}
+
+/**
+ * Resolve the effective config for the sponsoring API.
+ *
+ * Base URL and headers never inherit from the base API because sponsoring uses
+ * a separate origin; inheriting could leak credentials. Timeout may inherit.
+ * Normalize the URL because callers observe it and config caching keys on it. Its default is the same
+ * gateway root the other services resolve, reached without inheriting.
+ */
+export function resolveSponsoringApiConfig(layers: LayeredApiConfig): SponsoringApiConfig {
+  const slice = layers.sponsoringApiConfig;
+  return {
+    baseURL: normalizeBaseURL(slice?.baseURL ?? DEFAULT_SPONSORING_API_ENDPOINT),
+    timeout: slice?.timeout ?? resolveSharedApiConfig(layers).timeout,
+    headers: { ...DEFAULT_BACKEND_API_HEADERS, ...slice?.headers },
+    ...(slice?.apiKey === undefined ? {} : { apiKey: slice.apiKey }),
+  };
+}
+
+/**
+ * Resolve the effective config for the bridge API. Its `/bridge/*` routes hang off the shared gateway
+ * root, so it reads the same config as the base API but must NOT carry the data API's `basePath` —
+ * that would nest the bridge routes under `/be`. There is deliberately no `bridgeApiConfig` slice:
+ * relocate the bridge by setting the top-level `baseURL`, the `baseApiConfig` slice, or a per-call
+ * `RequestOverrideConfig`. A `swapsApiConfig` slice moves only `sodax.api.swaps`.
+ */
+export function resolveBridgeApiConfig(layers: LayeredApiConfig): BaseApiConfig {
+  return resolveSharedApiConfig(layers);
 }

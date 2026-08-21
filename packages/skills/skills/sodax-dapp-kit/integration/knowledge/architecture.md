@@ -198,6 +198,48 @@ After translating, the public hook signature is `SafeUseMutationResult<T, Error,
 
 The dual API means consumers never have to choose between React Query's error model and `Result<T>` ergonomics — both are exposed by the same hook.
 
+## Approve hooks can prompt the wallet twice
+
+Every `use*Approve` hook is unchanged and still resolves to a single transaction hash. But a few
+ERC-20s of the 2017 TetherToken lineage — Ethereum USDT is the only one in the SODAX token list today
+— reject an allowance change from one non-zero value to another. When the connected wallet already
+holds a stale allowance on such a token, the SDK sends `approve(0)` first, waits for it to be mined,
+and only then sends the real approval. The user therefore signs **twice**, and the hash the hook
+resolves with is the **last** transaction's.
+
+Nothing about the hook contract changes and there is no flag to set. What matters for UI:
+
+- An `isPending` that renders a single "Approving…" now spans two wallet prompts. Say so in the copy,
+  or the second prompt reads as a bug. On the unsigned paths, pass `onProgress` (below) and name the
+  step instead of guessing.
+- Anything estimating gas or counting transactions from "one approve = one transaction" is wrong on
+  that branch.
+- If the second signature is rejected after the reset landed, the allowance is now zero, so the next
+  attempt is a single transaction — retrying is always safe.
+
+On the unsigned (backend-API) paths, prefer **`useSwapsApiApproveAndBroadcast`** — or
+**`useBridgeApiApproveAndBroadcast`** for a bridge: each asks its API for the transactions, then
+signs, broadcasts, and waits for each, resolving with `{ approveTxHash, resetTxHash? }` only once the
+final approval has landed. A transaction that mines but reverts rejects the mutation naming that
+step, so the approve is never sent over a reset that did not take. Each also invalidates its own
+allowance query (`['swapsApi','allowance']` / `['bridgeApi','allowance']`), because confirmation now
+happens inside the hook. Pick the one matching the action you are about to take — swaps and bridge
+approve different spenders on the hub, so an approval built by one does not satisfy the other.
+
+Both accept an optional **`onProgress`** in their mutation vars. It reports each transaction as
+`{ step, phase, index, total, hash?, error? }` — `step` is `'allowance-reset'` or `'approve'`, `phase`
+walks `signing → broadcast → confirmed` (or `failed`), and `index`/`total` give "1 of 2" without the
+caller tracking anything. Advisory: the listener is never awaited, one that throws is ignored rather
+than aborting a broadcast, and the mutation's own result stays the source of truth. It lives in the
+vars rather than the hook options so it is never a stale closure.
+
+`useSwapsApiApprove` / `useBridgeApiApprove` still exist and return the API's `{ tx, resetTx? }`
+verbatim — use them only when you need to own signing. If you do, broadcast `resetTx` **first and
+wait for it to succeed**; the approve is not a valid state transition until the reset has landed, so
+sending both together spends the user's gas on a certain revert. Waiting is not enough on its own —
+check the receipt's status, because a mined-and-reverted reset leaves the allowance exactly where it
+was.
+
 ## queryKey / mutationKey conventions (mandatory)
 
 Every `queryKey` and `mutationKey` follows the same structural rule. Enforced by `_mutationContract.test.ts` for mutation keys; reviewer-enforced for query keys.
@@ -245,7 +287,7 @@ Hooks organized by feature domain in `src/hooks/`:
 hooks/
 ├── shared/     # useSodaxContext, useSafeMutation, unwrapResult, useEstimateGas,
 │               # useDeriveUserWalletAddress, useGetUserHubWalletAddress, useXBalances,
-│               # useStellarTrustlineCheck, useRequestTrustline
+│               # useStellarTrustlineCheck, useEstablishTrustline (+ deprecated useRequestTrustline)
 ├── provider/   # useHubProvider
 ├── swap/       # useQuote, useSwap, useStatus, useSwapAllowance, useSwapApprove,
 │               # useCancelSwap, useCreateLimitOrder, useCancelLimitOrder

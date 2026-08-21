@@ -5,9 +5,16 @@
     "access": "public"
   },
   "license": "MIT",
-  "version": "0.0.1-test",
+  "version": "2.0.0-rc.17",
   "description": "Wallet SDK of Sodax",
-  "keywords": ["sodax", "wallet", "sdk", "react", "multichain", "web3"],
+  "keywords": [
+    "sodax",
+    "wallet",
+    "sdk",
+    "react",
+    "multichain",
+    "web3"
+  ],
   "homepage": "https://github.com/icon-project/sodax-sdks/tree/main/packages/wallet-sdk-react",
   "bugs": {
     "url": "https://github.com/icon-project/sodax-sdks/issues"
@@ -17,9 +24,13 @@
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "engines": {
-    "node": ">=20.12.0"
+    "node": ">=22.12.0"
   },
-  "files": ["dist", "!dist/**/*.map", "README.md"],
+  "files": [
+    "dist",
+    "!dist/**/*.map",
+    "README.md"
+  ],
   "sideEffects": false,
   "exports": {
     ".": {
@@ -33,7 +44,9 @@
   },
   "typesVersions": {
     "*": {
-      "xchains/*": ["./dist/xchains/*/index.d.ts"]
+      "xchains/*": [
+        "./dist/xchains/*/index.d.ts"
+      ]
     }
   },
   "repository": {
@@ -41,7 +54,7 @@
     "url": "https://github.com/icon-project/sodax-sdks"
   },
   "scripts": {
-    "build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 tsup",
+    "build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 tsup && node ../../scripts/verify-dist-exports.mjs",
     "dev": "tsup --watch ./src",
     "prepublishOnly": "pnpm run build",
     "clean": "rm -rf dist && rm -rf node_modules && rm -rf .turbo",
@@ -62,7 +75,7 @@
     "@injectivelabs/wallet-base": "catalog:",
     "@injectivelabs/wallet-core": "catalog:",
     "@injectivelabs/wallet-cosmos": "catalog:",
-    "@mysten/dapp-kit": "catalog:",
+    "@mysten/dapp-kit-react": "catalog:",
     "@mysten/sui": "catalog:",
     "near-api-js": "catalog:",
     "@sodax/libs": "workspace:*",

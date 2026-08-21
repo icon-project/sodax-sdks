@@ -82,16 +82,23 @@ Note: the request param is still `xChainId` (not renamed to `chainKey`). This is
 + const result = await estimateGas({ tx, chainKey });   // TVars is EstimateGasParams<C> = { tx, chainKey } — no walletProvider
 ```
 
-### `useStellarTrustlineCheck` / `useRequestTrustline`
+### `useStellarTrustlineCheck` / `useEstablishTrustline`
 
 ```diff
-- const { data: hasTrustline } = useStellarTrustlineCheck(account, asset);
-+ const { data: hasTrustline } = useStellarTrustlineCheck({ params: { token, amount, chainId, walletProvider } });
+- // Positional args; `destProvider` carried both the signer and the destination chain.
+- const { data: hasTrustline } = useStellarTrustlineCheck(token, amount, destProvider, dstChainId);
++ // Single `params` object. Pass the resolved Stellar address (e.g. useXAccount('STELLAR').address),
++ // NOT a provider — the address keys the cache per account.
++ const { data: hasTrustline } = useStellarTrustlineCheck({
++   params: { token, amount, chainId, walletAddress },
++ });
 
-- const request = useRequestTrustline(walletProvider);
-- await request.mutateAsync({ account, asset });
-+ const { requestTrustline } = useRequestTrustline(token);   // positional token arg; NOT a mutation hook
-+ await requestTrustline({ token, amount, srcChainKey, walletProvider });
+- // The callback took a `spokeProvider`.
+- await requestTrustline({ token, amount, spokeProvider: destProvider });
++ // useEstablishTrustline is a canonical mutation; vars take `srcChainKey` + `walletProvider`.
++ const { mutateAsyncSafe: establishTrustline } = useEstablishTrustline();
++ await establishTrustline({ token, amount, srcChainKey, walletProvider });
++ // `useRequestTrustline(token)` still resolves, deprecated, with its 2.0.0 return shape.
 ```
 
 ### `useDeriveUserWalletAddress` / `useGetUserHubWalletAddress`

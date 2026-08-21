@@ -57,21 +57,66 @@ export type BridgeConfig = Prettify<BridgeDefaultConfig & BridgeOptions>;
 
 export type BridgeOptions = {
   partnerFee?: PartnerFee; // enables override of global partner fee
+  /**
+   * Route `bridge()` through the backend submit-tx flow. Default `true`.
+   * Set `false` for the fully client-side relay. Client-side only — not part of backend SodaxDefaultConfig.
+   * Omitted here means the default, not off: read the effective value via `sodax.config.bridgeUseBackendSubmitTx`.
+   */
+  useBackendSubmitTx?: boolean;
 };
 
 export type BridgeDefaultConfig = {}; // kept for future extension
 
 export const bridgeConfig = {} satisfies BridgeDefaultConfig;
 
+/**
+ * RadFi/Bound request signer — a client-side RUNTIME hook (like {@link SodaxOptionalConfig.logger}),
+ * deliberately kept OUT of the serializable {@link RadfiConfig} data contract so it is never fetched
+ * from or overwritten by the backend config, and so no credential ever lives on the SDK config object.
+ *
+ * The SDK invokes it once per outbound RadFi `apiUrl` request and merges the returned headers onto that
+ * request. The consumer (e.g. a backend) owns the credential and computes the signature; the SDK holds
+ * only the function reference. Used to add Bound's `x-api-signature` HMAC header for server-to-server
+ * callers (see swaps-api gh-831), keeping the per-user `accessToken` and the backend credential separate.
+ */
+export type RadfiSignContext = {
+  method: string; // HTTP method of the outbound RadFi request
+  path: string; // request endpoint, e.g. `/sodax/transaction`
+};
+export type RadfiSigner = (ctx: RadfiSignContext) => Record<string, string> | Promise<Record<string, string>>;
+export type RadfiOptions = {
+  signRequest?: RadfiSigner; // returns extra headers (e.g. `x-api-signature`) merged onto each RadFi apiUrl request
+};
+
+/**
+ * @deprecated in favor of `swaps` property of SodaxOptionalConfig, kept for backward compatibility.
+ * Still honoured, but only when `swaps.useBackendSubmitTx` is omitted; the default is now `true`.
+ */
+export type SwapsClientOptions = {
+  useBackendSubmitTx?: boolean;
+};
+
+/**
+ * @deprecated in favor of `bridge` property of SodaxOptionalConfig, kept for backward compatibility.
+ * Still honoured, but only when `bridge.useBackendSubmitTx` is omitted; the default is now `true`.
+ */
+export type BridgeClientOptions = {
+  useBackendSubmitTx?: boolean;
+};
+
 export type SodaxOptionalConfig = {
   logger?: SodaxLoggerOption;
   analytics?: AnalyticsOption; // Opt-in user-action analytics: an AnalyticsConfig or false (default, disabled). Resolved client-side; never fetched from or overwritten by the backend config.
   fee?: PartnerFee;
+  radfi?: RadfiOptions; // Client-side RadFi/Bound runtime hook (request signer). Like `logger`/`analytics`: never part of the backend data contract.
   swaps?: SwapsOptions;
   moneyMarket?: MoneyMarketOptions;
   bridge?: BridgeOptions;
   leverageYield?: LeverageYieldOptions;
-  swapsOptions?: SwapsClientOptions; // client-side swap behavior toggles (e.g. useBackendSubmitTx). Resolved client-side; distinct key so it never collides with the data `swaps` slot.
+  /** @deprecated Use `swaps` instead — still honoured, but only when `swaps.useBackendSubmitTx` is absent. */
+  swapsOptions?: SwapsClientOptions;
+  /** @deprecated Use `bridge` instead — still honoured, but only when `bridge.useBackendSubmitTx` is absent. */
+  bridgeOptions?: BridgeClientOptions;
 };
 
 /**
@@ -100,19 +145,6 @@ export type SodaxDefaultConfig = {
   api: ApiConfig; // API config used to interact with the Backend API
   solver: SolverConfig;
   relay: RelayConfig; // Relayer config to relay intents/user actions to the hub and vice versa
-};
-
-/**
- * Client-side swap behavior options. Like {@link SodaxOptionalConfig.logger}, these are runtime toggles
- * resolved once at construction — NOT part of the backend-fetched {@link SodaxDefaultConfig} data.
- */
-export type SwapsClientOptions = {
-  /**
-   * Opt-in: route `swap()` through the backend submit-tx 2-step flow (the backend relays +
-   * post-executes server-side). On ANY non-success the SDK falls back to the client-side relay so
-   * the swap still completes. Default `false` (the current fully client-side flow).
-   */
-  useBackendSubmitTx?: boolean;
 };
 
 // default sodax config object which can always be overriden through Sodax instance (i.e. new Sodax(...config))

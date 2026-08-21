@@ -4,9 +4,7 @@ import type { SolanaRawTransaction } from '@sodax/types';
 
 const sendRawTransaction = vi.fn().mockResolvedValue('sig-123');
 const confirmTransaction = vi.fn().mockResolvedValue({ value: { err: null }, context: { slot: 1 } });
-const getLatestBlockhash = vi
-  .fn()
-  .mockResolvedValue({ blockhash: 'blockhash-1', lastValidBlockHeight: 1000 });
+const getLatestBlockhash = vi.fn().mockResolvedValue({ blockhash: 'blockhash-1', lastValidBlockHeight: 1000 });
 const ConnectionCtorArgs: Array<{ endpoint: string; config: unknown }> = [];
 
 vi.mock('@solana/web3.js', () => {

@@ -46,7 +46,15 @@ type SimpleChainEntry<D> = {
 
 export type EvmChainEntry = SimpleChainEntry<EvmWalletDefaults>;
 export type SolanaChainEntry = SimpleChainEntry<SolanaWalletDefaults>;
-export type SuiChainEntry = SimpleChainEntry<SuiWalletDefaults>;
+/**
+ * Sui speaks gRPC-web, not JSON-RPC — hence `grpcUrl` rather than the shared `rpcUrl`. The two names
+ * are mutually exclusive; passing both is a configuration error, not a precedence question.
+ */
+export type SuiChainEntry = { defaults?: SuiWalletDefaults } & (
+  | { grpcUrl?: string; rpcUrl?: never }
+  /** @deprecated Renamed to `grpcUrl`. */
+  | { grpcUrl?: never; rpcUrl?: string }
+);
 export type IconChainEntry = SimpleChainEntry<IconWalletDefaults>;
 export type NearChainEntry = SimpleChainEntry<NearWalletDefaults>;
 
@@ -76,7 +84,13 @@ export type EvmAdapterFields = {
    * you know you need otherwise. @default true
    */
   ssr?: boolean;
-  /** Wagmi SSR hydration state — pass `cookieToInitialState()` to avoid disconnect flash on first load (Next.js only). */
+  /**
+   * Base key for wagmi's cookie storage (state cookie = `<persistKey>.store`). @default 'sodax'.
+   * SSR server and client must build from the same key, else the server reads the wrong cookie.
+   * The cookie is plaintext and unsigned; `persistKey` only namespaces it — it does not authenticate or encrypt it.
+   */
+  persistKey?: string;
+  /** Wagmi SSR hydration state — pass `tryCookieToInitialState()` to avoid disconnect flash on first load (Next.js only). */
   initialState?: WagmiState;
   /** WalletConnect configuration. Adds a WalletConnect connector when provided. */
   walletConnect?: WalletConnectParameters;
@@ -88,11 +102,11 @@ export type SolanaAdapterFields = {
   autoConnect?: boolean;
 };
 
-/** `@mysten/dapp-kit` provider settings. */
+/** `@mysten/dapp-kit-react` provider settings. */
 export type SuiAdapterFields = {
   autoConnect?: boolean;
-  /** Default network for the SuiClientProvider. @default 'mainnet' */
-  network?: 'mainnet' | 'testnet' | 'devnet';
+  /** Default network for the dApp Kit instance. @default 'mainnet' */
+  network?: 'mainnet' | 'testnet';
 };
 
 // ─── Central chain registry ─────────────────────────────────────────────────

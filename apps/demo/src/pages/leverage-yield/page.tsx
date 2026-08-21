@@ -11,7 +11,7 @@
  * direct deposit/withdraw against the vault.asset() but aren't exposed here.
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -53,11 +53,15 @@ import {
   useXAccounts,
   useXService,
 } from '@sodax/wallet-sdk-react';
-import OrderStatus, { type Order } from '@/components/swaps/OrderStatus';
+import { type FinalStatus, type Order, buildOrderSummary, orderId } from '@/components/swaps/OrderStatus';
+import OrderStatusPanel from '@/components/swaps/OrderStatusPanel';
+import { LEVERAGE_YIELD_ORDERS_KEY, appendOrder, loadOrders, saveOrders } from '@/lib/orderHistory';
+import { LEVERAGE_YIELD_PANEL_KEY } from '@/lib/panelPrefs';
 import BigNumber from 'bignumber.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatUnits, parseUnits } from 'viem';
 import { SolverEnv, useAppStore } from '@/zustand/useAppStore';
+import { solverApiEndpointForEnv } from '@/constants';
 
 const SONIC = ChainKeys.SONIC_MAINNET satisfies SpokeChainKey;
 const DEFAULT_SLIPPAGE = '0.5'; // %
@@ -348,7 +352,21 @@ export default function LeverageYieldPage() {
   // Accumulated orders — each one polls the BES status endpoint via <OrderStatus> and
   // shows live progress. Mirrors the solver page's pattern so users see the same UX
   // whether they deposit/withdraw via this page or swap via /solver.
-  const [orders, setOrders] = useState<Order[]>([]);
+  // Own localStorage key (separate from the solver page) since this is a different feature.
+  const [orders, setOrders] = useState<Order[]>(() => loadOrders(LEVERAGE_YIELD_ORDERS_KEY));
+
+  useEffect(() => {
+    saveOrders(LEVERAGE_YIELD_ORDERS_KEY, orders);
+  }, [orders]);
+
+  // Cache a swap's terminal status so it stops polling once SOLVED/FAILED (same as the solver page).
+  const handleSettleOrder = useCallback((id: string, final: FinalStatus) => {
+    setOrders(prev => prev.map(order => (orderId(order) === id ? { ...order, final } : order)));
+  }, []);
+
+  const handleDismissOrder = (id: string) => {
+    setOrders(prev => prev.filter(order => orderId(order) !== id));
+  };
 
   // Resets the form and refreshes balances after a successful submit. Invalidates rather
   // than waits — the share balance won't move until the solver fills (seconds-to-minutes),
@@ -426,21 +444,28 @@ export default function LeverageYieldPage() {
     if (!intentOrderPayload || !sourceWalletProvider) return;
     setActionError(null);
 
+    // "AMOUNT TOKEN (NETWORK) => AMOUNT TOKEN (NETWORK)" snapshot for the order card.
+    const summary = buildOrderSummary(src, dst, sourceAmount, quote?.quoted_amount);
+
     if (!useSubmitTxApi) {
       try {
         const { solverExecutionResponse, intent, intentDeliveryInfo } = await vaultSwap({
           ...intentOrderPayload,
           walletProvider: sourceWalletProvider,
         });
-        setOrders(prev => [
-          ...prev,
-          {
+        setOrders(prev =>
+          appendOrder(prev, {
             mode: 'solver',
             intentHash: solverExecutionResponse.intent_hash,
-            intent,
-            intentDeliveryInfo,
-          },
-        ]);
+            orderId: intent.intentId.toString(),
+            dstTxHash: intentDeliveryInfo.dstTxHash as string,
+            srcTxHash: intentDeliveryInfo.srcTxHash,
+            srcChainKey: intentDeliveryInfo.srcChainKey,
+            statusEndpoint: solverApiEndpointForEnv(solverEnvironment),
+            createdAt: Date.now(),
+            summary,
+          }),
+        );
         resetAfterSubmit();
       } catch (e) {
         setActionError(`Swap failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -475,14 +500,15 @@ export default function LeverageYieldPage() {
       return;
     }
 
-    setOrders(prev => [
-      ...prev,
-      {
+    setOrders(prev =>
+      appendOrder(prev, {
         mode: 'submit-tx',
         txHash: spokeTxHash as string,
         srcChainKey: userChain,
-      },
-    ]);
+        createdAt: Date.now(),
+        summary,
+      }),
+    );
     resetAfterSubmit();
   };
 
@@ -535,11 +561,13 @@ export default function LeverageYieldPage() {
 
   return (
     <div className="flex flex-col items-center justify-start min-h-screen p-4 gap-4">
-      {/* Live status print-out for every submitted intent — same component the solver page
-          uses. Each order polls the BES status endpoint and shows progress until solved. */}
-      {orders.map((order, index) => (
-        <OrderStatus key={index} order={order} />
-      ))}
+      {/* Swap history — fixed left sidebar on xl, in-flow below on smaller screens, same as /solver. */}
+      <OrderStatusPanel
+        orders={orders}
+        onDismiss={handleDismissOrder}
+        onSettle={handleSettleOrder}
+        storageKey={LEVERAGE_YIELD_PANEL_KEY}
+      />
 
       {/* Solver-environment switcher — same control as on /solver. Drives `solverEnvironment`
           in the app store; providers.tsx remaps the SDK's solver config on change. */}
@@ -547,7 +575,6 @@ export default function LeverageYieldPage() {
         <TabsList>
           <TabsTrigger value={SolverEnv.Staging}>Staging</TabsTrigger>
           <TabsTrigger value={SolverEnv.Production}>Production</TabsTrigger>
-          <TabsTrigger value={SolverEnv.Dev}>Dev</TabsTrigger>
         </TabsList>
       </Tabs>
 

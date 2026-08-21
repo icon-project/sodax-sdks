@@ -1,9 +1,12 @@
 import { invariant } from './tiny-invariant.js';
-import { isPartnerFeeAmount, isPartnerFeePercentage } from '../guards.js';
+import { isBitcoinChainKeyType, isIconAddress, isPartnerFeeAmount, isPartnerFeePercentage } from '../guards.js';
+import type { ConfigService } from '../config/ConfigService.js';
 import {
   type SpokeChainKey,
   type Hex,
+  type XToken,
   getChainType,
+  isNativeBitcoinToken,
   DEFAULT_MAX_RETRY,
   DEFAULT_RETRY_DELAY_MS,
   FEE_PERCENTAGE_SCALE,
@@ -15,6 +18,21 @@ import { bcs } from '@mysten/sui/bcs';
 import { PublicKey } from '@solana/web3.js';
 import { Address as StellarAddress, xdr } from '@stellar/stellar-sdk';
 import { Cl, cvToString, deserializeCV, serializeCV } from '@sodax/libs/stacks/core';
+
+/**
+ * True when `(chainKey, token)` denotes native BTC on the Bitcoin chain — the only transfer whose amount is
+ * denominated in satoshis and therefore subject to `BITCOIN_DUST_SATS`. BTC-family tokens are 8-decimal,
+ * so a base-unit amount equals its satoshi value on both the deposit (source) and delivery (destination) side.
+ */
+export function isNativeBitcoinTransfer(
+  config: ConfigService,
+  chainKey: SpokeChainKey,
+  token: XToken | undefined,
+): boolean {
+  return (
+    isBitcoinChainKeyType(chainKey) && !!token && isNativeBitcoinToken(config.getChainConfig(chainKey), token.address)
+  );
+}
 
 export async function retry<T>(
   action: (retryCount: number) => Promise<T>,
@@ -129,8 +147,15 @@ export function encodeAddress(spokeChainId: SpokeChainKey, address: string): Hex
   switch (chainType) {
     case 'EVM':
       return address as Hex;
-    case 'ICON':
-      return toHex(Buffer.from(address.replace('cx', '01').replace('hx', '00') ?? 'f8', 'hex'));
+    case 'ICON': {
+      // Validate type + length before decoding: `Buffer.from(str, 'hex')` silently stops at the
+      // first non-hex char, and an unanchored `.replace()` would rewrite any `hx`/`cx` inside the
+      // body — either lets a malformed ICON destination slip into an intent. Anchor the prefix to
+      // the leading two chars and map it to the version byte (`hx` -> 00, `cx` -> 01).
+      invariant(isIconAddress(address), `Invalid ICON address: ${address}`);
+      const version = address.slice(0, 2) === 'cx' ? '01' : '00';
+      return toHex(Buffer.from(`${version}${address.slice(2)}`, 'hex'));
+    }
     case 'SUI':
       return toHex(bcs.Address.serialize(address).toBytes());
     case 'SOLANA':

@@ -1,4 +1,4 @@
-# Contributing to the Sodax ecosystem
+# Contributing to the SODAX ecosystem
 
 Thanks for taking the time to contribute !
 
