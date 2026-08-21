@@ -12,6 +12,7 @@ import { SPONSORING_API_STELLAR_BASE_PATH } from '@sodax/types';
 import * as v from 'valibot';
 import {
   apiKeyHeader,
+  assignHeaders,
   makeRequest,
   mergeHeaders,
   resolveRequestConfig,
@@ -113,9 +114,7 @@ export class SponsoringApiService implements ResultifiedSponsoringApi {
   }
 
   public setHeaders(headers: Record<string, string>): void {
-    Object.entries(headers).forEach(([key, value]) => {
-      this.headers[key] = value;
-    });
+    assignHeaders(this.headers, headers);
   }
 
   public getBaseURL(): string {

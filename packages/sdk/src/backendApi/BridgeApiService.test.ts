@@ -489,4 +489,20 @@ describe('BridgeApiService utilities', () => {
       expect.objectContaining({ headers: expect.objectContaining({ 'X-API-Key': 'api-key-123' }) }),
     );
   });
+
+  it('a repeated mixed-casing update sends the newest value, not a stale case variant', async () => {
+    // Updating an existing object key does NOT move it in insertion order, so a raw
+    // `headers[name] = value` would leave the older casing last and let it win the merge.
+    const service = new BridgeApiService({ baseURL: BASE, timeout: 30_000, headers: {} });
+    service.setHeaders({ 'x-trace': 'v1' });
+    service.setHeaders({ 'X-Trace': 'v2' });
+    service.setHeaders({ 'x-trace': 'v3' });
+    mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
+
+    await service.getTokens();
+
+    const headers = mockFetch.mock.calls[0]?.[1]?.headers as Record<string, string>;
+    expect(Object.keys(headers).filter(h => h.toLowerCase() === 'x-trace')).toHaveLength(1);
+    expect(new Headers(headers).get('x-trace')).toBe('v3');
+  });
 });

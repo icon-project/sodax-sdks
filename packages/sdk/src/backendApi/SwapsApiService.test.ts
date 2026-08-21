@@ -866,4 +866,20 @@ describe('SwapsApiService utilities', () => {
       expect.objectContaining({ headers: expect.objectContaining({ 'X-API-Key': 'api-key-123' }) }),
     );
   });
+
+  it('a repeated mixed-casing update sends the newest value, not a stale case variant', async () => {
+    // Updating an existing object key does NOT move it in insertion order, so a raw
+    // `headers[name] = value` would leave the older `X-Api-Key` last and let it win the merge —
+    // silently shipping the superseded credential. setHeaders must be case-insensitively last-write-wins.
+    const service = new SwapsApiService({ baseURL: BASE, timeout: 30_000, headers: {}, apiKey: 'v1' });
+    service.setHeaders({ 'X-Api-Key': 'v2' });
+    service.setHeaders({ 'x-api-key': 'v3' });
+    mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
+
+    await service.getTokens();
+
+    const headers = mockFetch.mock.calls[0]?.[1]?.headers as Record<string, string>;
+    expect(Object.keys(headers).filter(h => h.toLowerCase() === 'x-api-key')).toHaveLength(1);
+    expect(new Headers(headers).get('x-api-key')).toBe('v3');
+  });
 });

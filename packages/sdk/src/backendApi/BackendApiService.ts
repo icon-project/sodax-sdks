@@ -22,6 +22,7 @@ import { consoleLogger } from '../shared/logger.js';
 
 import * as v from 'valibot';
 import {
+  assignHeaders,
   makeRequest,
   resolveRequestConfig,
   toExternalApiError,
@@ -726,9 +727,7 @@ export class BackendApiService implements IConfigApiV1 {
    * @param headers - Key-value pairs to add or overwrite in the default headers.
    */
   public setHeaders(headers: Record<string, string>): void {
-    Object.entries(headers).forEach(([key, value]) => {
-      this.headers[key] = value;
-    });
+    assignHeaders(this.headers, headers);
     this.swaps.setHeaders(headers);
     this.bridge.setHeaders(headers);
   }

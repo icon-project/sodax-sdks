@@ -721,6 +721,24 @@ describe('BackendApiService.setHeaders', () => {
     );
   });
 
+  it('a repeated mixed-casing update sends the newest value, and fans it out to swaps + bridge', async () => {
+    // Updating an existing object key does NOT move it in insertion order, so a raw
+    // `headers[name] = value` would leave the older casing last and let it win the merge.
+    const isolatedService = new BackendApiService({ baseURL: ROOT, timeout: 30_000, headers: {} });
+    isolatedService.setHeaders({ 'x-api-key': 'v1' });
+    isolatedService.setHeaders({ 'X-Api-Key': 'v2' });
+    isolatedService.setHeaders({ 'x-api-key': 'v3' });
+
+    for (const call of [() => isolatedService.getIntentByTxHash('0x123'), () => isolatedService.bridge.getTokens()]) {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(okResponse({ ok: true }));
+      await call();
+      const headers = mockFetch.mock.calls[0]?.[1]?.headers as Record<string, string>;
+      expect(Object.keys(headers).filter(h => h.toLowerCase() === 'x-api-key')).toHaveLength(1);
+      expect(new Headers(headers).get('x-api-key')).toBe('v3');
+    }
+  });
+
   it('overwrites an existing header on subsequent setHeaders calls (last write wins)', async () => {
     const isolatedConfig: ApiConfig = {
       baseURL: ROOT,

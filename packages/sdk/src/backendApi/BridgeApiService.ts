@@ -25,7 +25,7 @@ import type {
   SodaxLogger,
 } from '@sodax/types';
 
-import { makeRequest, toJsonBody, type RequestConfig, type RequestOverrideConfig } from './api-utils.js';
+import { assignHeaders, makeRequest, toJsonBody, type RequestConfig, type RequestOverrideConfig } from './api-utils.js';
 import { normalizeOverrideBaseURL } from './apiConfig.js';
 import * as schemas from './bridgeApiSchemas.js';
 import { rawTxSchemaForChainKey } from './rawTxSchemas.js';
@@ -381,9 +381,7 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
    * keys are overwritten; keys absent from `headers` are preserved.
    */
   public setHeaders(headers: Record<string, string>): void {
-    Object.entries(headers).forEach(([key, value]) => {
-      this.headers[key] = value;
-    });
+    assignHeaders(this.headers, headers);
   }
 
   /** Return the base URL the service is currently pointing at. */

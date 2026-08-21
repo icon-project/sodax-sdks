@@ -182,6 +182,21 @@ describe('api key handling', () => {
     expect(init.headers).not.toHaveProperty('Authorization');
   });
 
+  it('a repeated mixed-casing update sends the newest value, not a stale case variant', async () => {
+    // Updating an existing object key does NOT move it in insertion order, so a raw
+    // `headers[name] = value` would leave the older casing last and let it win the merge.
+    const service = makeService({ apiKey: 'v1' });
+    service.setHeaders({ 'X-Api-Key': 'v2' });
+    service.setHeaders({ 'x-api-key': 'v3' });
+    mockFetch.mockResolvedValueOnce(jsonOk(CONFIG_BODY));
+
+    await service.getStellarSponsorConfig();
+
+    const headers = mockFetch.mock.calls[0]?.[1]?.headers as Record<string, string>;
+    expect(Object.keys(headers).filter(h => h.toLowerCase() === 'x-api-key')).toHaveLength(1);
+    expect(new Headers(headers).get('x-api-key')).toBe('v3');
+  });
+
   it('applies setHeaders to subsequent calls', async () => {
     const service = makeService();
     service.setHeaders({ 'x-api-key': 'late-key' });

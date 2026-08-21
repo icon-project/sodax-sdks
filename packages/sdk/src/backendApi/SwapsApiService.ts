@@ -48,7 +48,7 @@ import { stripLegacyBackendMount } from './apiConfig.js';
 import { SwapsApi, SwapsApiError } from '@sodax/swaps-api';
 import * as v from 'valibot';
 
-import { apiKeyHeader, mergeHeaders, type SwapsRequestOverrideConfig } from './api-utils.js';
+import { apiKeyHeader, assignHeaders, mergeHeaders, type SwapsRequestOverrideConfig } from './api-utils.js';
 import { SodaxError } from '../errors/SodaxError.js';
 import { isAuthStatus } from '../errors/guards.js';
 import { consoleLogger } from '../shared/logger.js';
@@ -260,7 +260,10 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
   }
 
   /** Build an unsigned token-approval transaction for the source token. */
-  public async approve(body: CreateIntentParamsV2, config?: SwapsRequestOverrideConfig): Promise<Result<ApproveResponseV2>> {
+  public async approve(
+    body: CreateIntentParamsV2,
+    config?: SwapsRequestOverrideConfig,
+  ): Promise<Result<ApproveResponseV2>> {
     return this.toResult('/swaps/approve', c => c.approve(body), config);
   }
 
@@ -285,7 +288,10 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
   }
 
   /** Poll the solver for intent execution status. */
-  public async getStatus(body: StatusRequestV2, config?: SwapsRequestOverrideConfig): Promise<Result<StatusResponseV2>> {
+  public async getStatus(
+    body: StatusRequestV2,
+    config?: SwapsRequestOverrideConfig,
+  ): Promise<Result<StatusResponseV2>> {
     return this.toResult('/swaps/intents/status', c => c.getStatus(body), config);
   }
 
@@ -377,7 +383,10 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
   /** Submit a swap transaction to be processed (relay, post-execution, etc.). Idempotent on `(txHash, srcChainKey)`.
    *  Response is immediate after successful submission. Use getSubmitTxStatus to poll the status of the submission.
    */
-  public async submitTx(body: SubmitTxRequestV2, config?: SwapsRequestOverrideConfig): Promise<Result<SubmitTxResponseV2>> {
+  public async submitTx(
+    body: SubmitTxRequestV2,
+    config?: SwapsRequestOverrideConfig,
+  ): Promise<Result<SubmitTxResponseV2>> {
     return this.toResult(
       '/swaps/submit-tx',
       c => c.submitTx({ ...body, intent: SwapsApiService.toWireIntent(body.intent) }),
@@ -403,9 +412,7 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
    * every subsequent call (the delegated client is rebuilt per call).
    */
   public setHeaders(headers: Record<string, string>): void {
-    Object.entries(headers).forEach(([key, value]) => {
-      this.headers[key] = value;
-    });
+    assignHeaders(this.headers, headers);
   }
 
   /** Return the base URL the service is currently pointing at. */

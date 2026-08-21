@@ -82,6 +82,20 @@ export function mergeHeaders(...sources: Array<Record<string, string> | undefine
 }
 
 /**
+ * Merge `source` into `target` IN PLACE, with the same case-insensitive last-write-wins rule as
+ * {@link mergeHeaders}. Used by the services' `setHeaders`, where a plain `target[name] = value` is
+ * unsafe: updating an existing key does NOT move it in insertion order, so a caller who once wrote
+ * `X-Api-Key` and later rewrites `x-api-key` would leave the stale casing sitting last and win the
+ * merge — silently sending the superseded credential. Rebuilds in place so `headers` can stay
+ * `readonly` on the services that hold it.
+ */
+export function assignHeaders(target: Record<string, string>, source: Record<string, string>): void {
+  const merged = mergeHeaders(target, source);
+  for (const name of Object.keys(target)) delete target[name];
+  Object.assign(target, merged);
+}
+
+/**
  * Non-2xx failure with structured status and body. The legacy
  * `HTTP_REQUEST_FAILED` message and cause chain are preserved.
  */
