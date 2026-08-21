@@ -87,6 +87,43 @@ await createIntent({ body: { ...intentBody, partnerFee } });
 
 See the `sodax-sdk` skill (integration mode), `swaps-api.md` § `partnerFee`.
 
+### API key (`x-api-key`)
+
+The backend guards `POST /swaps/*` with an API-key check. Configure the key once on the provider config
+— `<SodaxProvider config={{ apiKey }}>` (global) or `config={{ swaps: { apiKey } }}` (feature override)
+— and every `sodax.api.swaps` call these hooks make carries it. Override per request via the hooks'
+existing `apiConfig` param (`RequestOverrideConfig`), which also accepts `apiKey`:
+
+```ts
+// @ai-snippets-skip
+const { data: quote } = useSwapsApiQuote({
+  params: { body: quoteBody, apiConfig: { apiKey: 'partner-api-key' } },
+});
+```
+
+Never put the key in a `queryKey` (the hooks already exclude `apiConfig` from their keys). Auth failures
+surface with `context.status` `401`/`403` — nothing but a corrected key fixes them, so treat them as
+terminal in your UI; the transient verification `503` is retried by the wire client. See the
+`sodax-sdk` skill (integration mode), `swaps-api.md` § API key, for the precedence order.
+
+Every `useSwapsApi*` hook already handles this: its default `retry` is `retryUnlessAuthFailure`
+(exported from `@sodax/dapp-kit`), which retries transport blips up to 3 times but never replays a
+401/403. `useSwapsApiStatus` and `useSwapsApiSubmitTxStatus` additionally stop their 1s poll on a
+rejected key, instead of re-requesting forever. So an invalid key surfaces once, fast, on `error`.
+
+Override or compose it through `queryOptions` / `mutationOptions` when you want different behaviour:
+
+```ts
+// @ai-snippets-skip
+const { data: quote } = useSwapsApiQuote({
+  params: { body: quoteBody },
+  queryOptions: { retry: (count, error) => !isAuthFailure(error) && count < 5 },
+});
+```
+
+`isAuthFailure` (re-exported from `@sodax/sdk`) is the same guard the default uses — prefer it over
+re-deriving `context.status`, so your UI and the hooks agree on what counts as terminal.
+
 `useSwapsApiSubmitTx` is a mutation hook — per-call config (e.g. backend base URL) flows through `mutate(vars)`. The `request` is a `SubmitTxRequestV2` (`{ txHash, srcChainKey, walletAddress, intent, relayData }`):
 
 ```ts

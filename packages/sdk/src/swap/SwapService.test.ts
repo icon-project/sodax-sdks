@@ -3369,6 +3369,39 @@ describe('SwapService.swap — backend 2-step (useBackendSubmitTx)', () => {
     expect(verifySpy).not.toHaveBeenCalled();
   });
 
+  it('threads extras.apiKey into the backend submit-tx leg as a per-request override', async () => {
+    stubCreatedAndVerified(ChainKeys.BSC_MAINNET);
+    const submitSpy = vi.spyOn(sodaxBE.api.swaps, 'submitTx').mockResolvedValueOnce({
+      ok: true,
+      value: { success: true, data: { status: 'inserted', message: 'accepted' } },
+    } as never);
+    const statusSpy = vi.spyOn(sodaxBE.api.swaps, 'getSubmitTxStatus').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        success: true,
+        data: {
+          txHash: '0xspokeTx',
+          srcChainKey: ChainKeys.BSC_MAINNET,
+          status: 'solved',
+          processingAttempts: 1,
+          result: { dstIntentTxHash: '0xDST', intent_hash: '0xHASH' },
+        },
+      },
+    } as never);
+
+    const result = await sodaxBE.swaps.swap({
+      params: intentInput(ChainKeys.BSC_MAINNET),
+      extras: { apiKey: 'per-action-key' },
+      raw: false,
+      walletProvider: mockEvmProvider,
+    });
+
+    expect(result.ok).toBe(true);
+    // Both the POST and the status poll carry the per-action key (as RequestOverrideConfig.apiKey).
+    expect(submitSpy.mock.calls[0]?.[1]).toMatchObject({ apiKey: 'per-action-key' });
+    expect(statusSpy.mock.calls[0]?.[1]).toMatchObject({ apiKey: 'per-action-key' });
+  });
+
   it('verifies exactly once, on the fallback, when the backend attempt does not complete', async () => {
     const verifySpy = stubCreatedAndVerified(ChainKeys.BSC_MAINNET);
     vi.spyOn(sodaxBE.api.swaps, 'submitTx').mockResolvedValueOnce({

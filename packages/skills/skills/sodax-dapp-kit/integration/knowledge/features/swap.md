@@ -38,10 +38,16 @@ const { mutateAsyncSafe: swap } = useSwap();
 
 // vars shape (TVars):
 type UseSwapVars<K extends SpokeChainKey = SpokeChainKey> = Omit<SwapActionParams<K, false>, 'raw'>;
-// = { params: CreateIntentParams; walletProvider: GetWalletProviderType<K> }
+// = { params: CreateIntentParams; walletProvider: GetWalletProviderType<K>;
+//     extras?; timeout?; skipSimulation? }  // extras: per-action partnerFee / apiKey overrides
 
 const result = await swap({ params: intentParams, walletProvider });
 ```
+
+`vars` also carries the SDK's optional exec fields: `timeout` (per-attempt relay budget),
+`skipSimulation`, and `extras` — per-action overrides of the configured swap `partnerFee` and the swaps
+API key (`extras.apiKey`, sent as `x-api-key` on the backend submit-tx leg). Both fall back to the
+`SodaxProvider` config when omitted.
 
 `useSwapApprove` follows the same `{ params, walletProvider }` shape via `mutate(vars)`, where `params` is `CreateIntentParams<K> | CreateLimitOrderParams<K>` (the union — limit-order params also flow through `useSwapApprove`).
 

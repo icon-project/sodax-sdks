@@ -160,6 +160,35 @@ describe('SwapsApi routing (all 21 endpoints hit the right method + URL)', () =>
 });
 
 describe('SwapsApi request shaping', () => {
+  it('sends a configured apiKey as the x-api-key header on every request', async () => {
+    const fetchImpl = vi.fn(async () => json([]));
+    const api = new SwapsApi({ baseUrl: BASE, fetch: fetchImpl, apiKey: 'k-123' });
+    await api.getTokens().catch(() => {});
+    await api.getQuote(quoteBody).catch(() => {});
+    for (const call of fetchImpl.mock.calls) {
+      expect((call[1]?.headers as Record<string, string>)['x-api-key']).toBe('k-123');
+    }
+  });
+
+  it('lets an explicit x-api-key header win over the apiKey option, in any casing', async () => {
+    // HTTP header names are case-insensitive and fetch folds two casings into one comma-joined value,
+    // so a case-variant header must REPLACE the expanded key rather than ride alongside it.
+    for (const name of ['x-api-key', 'X-Api-Key']) {
+      const fetchImpl = vi.fn(async () => json([]));
+      const api = new SwapsApi({ baseUrl: BASE, fetch: fetchImpl, apiKey: 'k-option', headers: { [name]: 'k-header' } });
+      await api.getTokens().catch(() => {});
+      const headers = fetchImpl.mock.calls[0]?.[1]?.headers as Record<string, string>;
+      expect(Object.keys(headers).filter(h => h.toLowerCase() === 'x-api-key')).toHaveLength(1);
+      expect(new Headers(headers).get('x-api-key')).toBe('k-header');
+    }
+  });
+
+  it('treats an empty apiKey as unset rather than sending a blank credential', async () => {
+    const fetchImpl = vi.fn(async () => json([]));
+    await new SwapsApi({ baseUrl: BASE, fetch: fetchImpl, apiKey: '' }).getTokens().catch(() => {});
+    expect((fetchImpl.mock.calls[0]?.[1]?.headers as Record<string, string>)['x-api-key']).toBeUndefined();
+  });
+
   it('encodeURIComponent-escapes path params', async () => {
     const fetchImpl = vi.fn(async () => json({}));
     await makeApi(fetchImpl)

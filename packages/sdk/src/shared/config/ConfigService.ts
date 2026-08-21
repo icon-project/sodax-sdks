@@ -32,6 +32,7 @@ import {
 } from '@sodax/types';
 import { isAddress } from 'viem';
 import type { BackendApiService } from '../../backendApi/BackendApiService.js';
+import { resolveSwapsApiConfig } from '../../backendApi/apiConfig.js';
 // import { mergeSodaxConfig } from './mergeSodaxConfig.js'; // TODO(config-v2): restore when initialize() dynamic fetch is re-enabled
 import { resolveLogger } from '../logger.js';
 import { noopAnalytics, type ResolvedAnalytics } from '../analytics.js';
@@ -61,6 +62,13 @@ export type ConfigServiceConstructorParams = {
    * never supplies it; it is purely a client-side option.
    */
   fee?: PartnerFee;
+  /**
+   * Global backend API key (the `apiKey` option passed to `new Sodax(...)`). Held outside the
+   * swappable `SodaxConfig` — like {@link fee} — so a dynamic config fetch never replaces it. Sent as
+   * the `x-api-key` header to API-key-guarded backend services (today the Swaps API v2); per-feature
+   * overrides live on the feature options (e.g. `swaps.apiKey`).
+   */
+  apiKey?: string;
   /**
    * RadFi/Bound request signer (the `radfi.signRequest` option passed to `new Sodax(...)`). Held
    * outside the swappable `SodaxConfig` — like {@link logger} — so a dynamic config fetch never
@@ -99,6 +107,14 @@ export class ConfigService {
   public readonly fee: PartnerFee | undefined;
 
   /**
+   * Global backend API key. Resolved once at construction and kept independent of {@link sodax} so
+   * that {@link initialize}'s dynamic-config swap never clobbers it. The backend never supplies it —
+   * it is a client-side option set via `new Sodax({ apiKey })`. Never logged; per-feature overrides
+   * live on the feature options (e.g. `swaps.apiKey`, read via {@link swapsApiKey}).
+   */
+  public readonly apiKey: string | undefined;
+
+  /**
    * RadFi/Bound request signer. Resolved once at construction and kept independent of {@link sodax}
    * so that {@link initialize}'s dynamic-config swap never clobbers it. Read by `BitcoinSpokeService`
    * via `config.radfiSigner`; `undefined` unless the consumer passed `radfi.signRequest` to
@@ -121,11 +137,21 @@ export class ConfigService {
 
   // `api` / `userConfig` are accepted but unused while initialize()'s dynamic fetch is disabled
   // (see TODO(config-v2) below); restore their assignments when re-enabling.
-  constructor({ api, config, userConfig, logger, analytics, fee, radfiSigner }: ConfigServiceConstructorParams) {
+  constructor({
+    api,
+    config,
+    userConfig,
+    logger,
+    analytics,
+    fee,
+    apiKey,
+    radfiSigner,
+  }: ConfigServiceConstructorParams) {
     this.sodax = config;
     this.logger = logger ?? resolveLogger(undefined);
     this.analytics = analytics ?? noopAnalytics;
     this.fee = fee;
+    this.apiKey = apiKey;
     this.radfiSigner = radfiSigner;
     this.loadSodaxConfigDataStructures(config);
   }
@@ -462,6 +488,18 @@ export class ConfigService {
 
   get leverageYieldPartnerFee(): PartnerFee | undefined {
     return this.leverageYield.partnerFee ?? this.fee;
+  }
+
+  /**
+   * Which configured key layer wins: the feature override, else the global `apiKey` ({@link apiKey}),
+   * else the `api.swapsApiConfig.apiKey` slice. `Sodax` computes the feature-or-global half inline
+   * when constructing `BackendApiService` — keep the two in lockstep.
+   *
+   * A raw `x-api-key` in configured `headers` outranks every layer on the wire but is deliberately not
+   * reported here: this answers "which key layer wins", not "what header will be sent".
+   */
+  get swapsApiKey(): string | undefined {
+    return this.swaps.apiKey || this.apiKey || resolveSwapsApiConfig(this.sodax.api).apiKey || undefined;
   }
 
   // Effective backend submit-tx toggle per feature. Read live off the same `swaps` / `bridge` slots as

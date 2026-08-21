@@ -18,7 +18,7 @@ const result = sodax.config.isValidSpokeChainKey(ChainKeys.ARBITRUM_MAINNET);   
 import { Sodax, ChainKeys, type SodaxOptions } from '@sodax/sdk';
 
 // `SodaxOptions` = `DeepPartial<SodaxDefaultConfig>` (the data override) plus the client-side options:
-// `logger`, the global `fee`, and per-feature options on `swaps` / `bridge` (e.g. `{ useBackendSubmitTx: false }` — opt out of the default-on backend 2-step flow).
+// `logger`, the global `fee`, the global `apiKey` (sent as `x-api-key` to the guarded Swaps API; override per feature via `swaps.apiKey`), and per-feature options on `swaps` / `bridge` (e.g. `{ useBackendSubmitTx: false }` — opt out of the default-on backend 2-step flow).
 const config: SodaxOptions = {
   // Per-chain overrides — merged with packaged defaults at the field level.
   chains: {

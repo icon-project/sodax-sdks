@@ -627,6 +627,7 @@ const swapResult = await sodax.swaps.swap({
   walletProvider: evmWalletProvider,
   timeout: 120_000,        // optional — relay timeout in ms (default: DEFAULT_RELAY_TX_TIMEOUT = 120 s)
   skipSimulation: false,   // optional — skip spoke tx simulation (default: false)
+  // extras: { partnerFee, apiKey }, // optional per-action overrides — see note below
 });
 
 if (!swapResult.ok) {
@@ -638,6 +639,11 @@ if (!swapResult.ok) {
   console.log('Hub tx hash:', intentDeliveryInfo.dstTxHash);
 }
 ```
+
+The optional `extras` slot carries per-action overrides: `extras.partnerFee` replaces the configured
+swap partner fee for this action, and `extras.apiKey` replaces the configured swaps API key
+(`x-api-key`) for the backend submit-tx leg. Both fall back to the `Sodax` config when omitted — see
+[CONFIGURE_SDK.md § API key](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md#api-key).
 
 ---
 

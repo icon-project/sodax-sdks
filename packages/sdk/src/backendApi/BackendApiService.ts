@@ -173,6 +173,16 @@ export interface MoneyMarketBorrowers {
   limit: number;
 }
 
+/** Construction options for {@link BackendApiService}. */
+export type BackendApiServiceOptions = {
+  /**
+   * Effective config-level API key for the swaps API — `swaps.apiKey ?? apiKey` from `SodaxOptions`,
+   * resolved by `Sodax` (which constructs this service before `ConfigService.swapsApiKey` exists).
+   * Wins over the `api.swapsApiConfig.apiKey` slice; sent as the `x-api-key` header.
+   */
+  swapsApiKey?: string;
+};
+
 /**
  * HTTP client for the SODAX backend API.
  *
@@ -224,7 +234,7 @@ export class BackendApiService implements IConfigApiV1 {
    */
   private readonly trimsLegacyOverrides: boolean;
 
-  constructor(config: ApiConfig, logger: SodaxLogger = consoleLogger) {
+  constructor(config: ApiConfig, logger: SodaxLogger = consoleLogger, options: BackendApiServiceOptions = {}) {
     this.config = resolveBaseApiConfig(config);
     this.headers = { ...this.config.headers };
     this.logger = logger;
@@ -258,7 +268,12 @@ export class BackendApiService implements IConfigApiV1 {
     // `ApiConfig` union, and all must route diagnostics through the same consumer-selected sink. The
     // legacy-trim decision travels with them so their per-call overrides match the config-level choice.
     const overrideOptions = { trimLegacyOverrides: this.trimsLegacyOverrides };
-    this.swaps = new SwapsApiService(swapsConfig, this.logger, overrideOptions);
+    this.swaps = new SwapsApiService(
+      // The Sodax-level key (feature ?? global) wins over the `api.swapsApiConfig.apiKey` slice.
+      { ...swapsConfig, apiKey: options.swapsApiKey ?? swapsConfig.apiKey },
+      this.logger,
+      overrideOptions,
+    );
     // Sponsoring uses an independent origin and credential scope, and never trims (its default never
     // carried the data API's mount), so it takes no override option.
     this.sponsoring = new SponsoringApiService(sponsoringConfig, this.logger);

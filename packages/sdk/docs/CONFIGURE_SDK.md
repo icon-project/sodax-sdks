@@ -38,7 +38,7 @@ Top-level keys of the consolidated `SodaxConfig` — the `SodaxDefaultConfig` da
 | Key | Type (summary) | Role |
 |-----|----------------|------|
 | `chains` | `Record<SpokeChainKey, SpokeChainConfig>` | Per-spoke chain addresses, tokens, RPC settings, polling. |
-| `swaps` | `SwapsConfig` | Per-chain solver-supported token lists, plus optional per-feature `partnerFee` and `useBackendSubmitTx` (default ON). |
+| `swaps` | `SwapsConfig` | Per-chain solver-supported token lists, plus optional per-feature `partnerFee`, `apiKey`, and `useBackendSubmitTx` (default ON). |
 | `moneyMarket` | `MoneyMarketConfig` | Lending pool addresses, reserve assets, supported tokens, plus an optional per-feature `partnerFee`. |
 | `bridge` | `BridgeConfig` | Optional bridge per-feature `partnerFee` and `useBackendSubmitTx` (default ON). |
 | `dex` | `DexConfig` | Concentrated liquidity contract set and pool keys (Sonic hub). |
@@ -114,6 +114,39 @@ const partnerFeeAmount: PartnerFee = {
   amount: 1000n, // fixed amount in token base units (decimals of the token being charged)
 };
 ```
+
+### API key
+
+The backend guards the Swaps API v2 (`POST /swaps/*`) with an `x-api-key` header check; keys are minted through the partner portal. Configure the key the same way as partner fees — globally, per feature, or per request — and the SDK attaches it to every Swaps API call, including the backend submit-tx leg of `sodax.swaps.swap()`:
+
+```typescript
+import { Sodax } from '@sodax/sdk';
+
+// Global: applies to every API-key-guarded backend service (today the Swaps API v2)
+const sodax = new Sodax({ apiKey: 'partner-api-key' });
+
+// Per feature: overrides the global key for swaps only
+const sodaxSwapsKey = new Sodax({ swaps: { apiKey: 'swaps-api-key' } });
+
+// Transport slice: alongside a custom swaps endpoint (see Backend API below)
+const sodaxSliced = new Sodax({ api: { swapsApiConfig: { apiKey: 'swaps-api-key' } } });
+```
+
+Per request, pass `apiKey` in the trailing `RequestOverrideConfig` of any `sodax.api.swaps` method, or in `extras` on the high-level swap action:
+
+```typescript
+await sodax.api.swaps.getQuote(quoteBody, undefined, { apiKey: 'per-request-key' });
+
+await sodax.swaps.swap({
+  params: createIntentParams,
+  extras: { apiKey: 'per-request-key' }, // applies to the backend submit-tx leg
+  walletProvider,
+});
+```
+
+Precedence, highest first: per-request explicit `headers['x-api-key']` → per-request `apiKey` → configured explicit `x-api-key` header → `swaps.apiKey` → global `apiKey` → `api.swapsApiConfig.apiKey`. The effective config-level value is readable on `sodax.config.swapsApiKey`.
+
+Like the global `fee`, the global `apiKey` is a `SodaxOptions` client-side option, never part of the backend-fetched data contract. Keys bundled into a browser app are public by nature. Auth failures come back as `EXTERNAL_API_ERROR` results with `context.status` `401` (missing/invalid key) or `403` (suspended organisation / missing scope) — terminal until the key is fixed — while the transient verification `503` is retried automatically by the wire client.
 
 ## Custom configuration
 

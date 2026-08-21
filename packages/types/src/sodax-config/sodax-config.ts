@@ -108,6 +108,13 @@ export type SodaxOptionalConfig = {
   logger?: SodaxLoggerOption;
   analytics?: AnalyticsOption; // Opt-in user-action analytics: an AnalyticsConfig or false (default, disabled). Resolved client-side; never fetched from or overwritten by the backend config.
   fee?: PartnerFee;
+  /**
+   * Global backend API key, sent as the `x-api-key` header to API-key-guarded backend services —
+   * today the Swaps API v2 (`/swaps/*`). A client-side runtime option like {@link fee}: held on
+   * `ConfigService`, never part of the backend data contract, and overridable per feature
+   * (`swaps.apiKey`) or per request. Browser-bundled keys are public.
+   */
+  apiKey?: string;
   radfi?: RadfiOptions; // Client-side RadFi/Bound runtime hook (request signer). Like `logger`/`analytics`: never part of the backend data contract.
   swaps?: SwapsOptions;
   moneyMarket?: MoneyMarketOptions;

@@ -868,11 +868,13 @@ export class SwapService {
     const srcChainKey = params.srcChainKey;
     const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey };
     const { tx: spokeTxHash, intent, relayData } = created;
-
     try {
       const outcome = await runBackendSubmitTx({
         attempt,
         api: this.backendApi.swaps,
+        // Config-level keys are already baked into the SwapsApiService headers, so only this
+        // per-action override (mirroring `extras.partnerFee`) travels per call.
+        overrideConfig: { apiKey: _params.extras?.apiKey },
         body: {
           txHash: spokeTxHash,
           srcChainKey,

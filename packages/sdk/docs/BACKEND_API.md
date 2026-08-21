@@ -83,12 +83,14 @@ type BackendApiConfig = BaseApiConfig & { basePath?: string }; // default: '/be'
 
 // Point the swaps and/or sponsoring APIs at their own hosts, separate from the base backend API
 // (at least one slice required):
+// `apiKey` becomes the `x-api-key` header the backend's API-key guard reads.
+type SwapsApiConfig = BaseApiConfig & { apiKey?: string };
 type SponsoringApiConfig = BaseApiConfig & { apiKey?: string };
 
 type CustomApiConfig =
-  | { baseApiConfig: BackendApiConfig; swapsApiConfig?: BaseApiConfig; sponsoringApiConfig?: SponsoringApiConfig }
-  | { baseApiConfig?: BackendApiConfig; swapsApiConfig: BaseApiConfig; sponsoringApiConfig?: SponsoringApiConfig }
-  | { baseApiConfig?: BackendApiConfig; swapsApiConfig?: BaseApiConfig; sponsoringApiConfig: SponsoringApiConfig };
+  | { baseApiConfig: BackendApiConfig; swapsApiConfig?: SwapsApiConfig; sponsoringApiConfig?: SponsoringApiConfig }
+  | { baseApiConfig?: BackendApiConfig; swapsApiConfig: SwapsApiConfig; sponsoringApiConfig?: SponsoringApiConfig }
+  | { baseApiConfig?: BackendApiConfig; swapsApiConfig?: SwapsApiConfig; sponsoringApiConfig: SponsoringApiConfig };
 
 type ApiConfig = BackendApiConfig | CustomApiConfig;
 ```

@@ -11,7 +11,9 @@ import { SPONSORING_API_STELLAR_BASE_PATH } from '@sodax/types';
 
 import * as v from 'valibot';
 import {
+  apiKeyHeader,
   makeRequest,
+  mergeHeaders,
   resolveRequestConfig,
   toExternalApiError,
   toInvalidResponseShapeError,
@@ -43,11 +45,8 @@ export class SponsoringApiService implements ResultifiedSponsoringApi {
 
   constructor(config: SponsoringApiConfig, logger: SodaxLogger = consoleLogger) {
     this.config = config;
-    // Explicit headers may override the `apiKey` convenience option.
-    this.headers = {
-      ...(config.apiKey !== undefined ? { 'x-api-key': config.apiKey } : {}),
-      ...config.headers,
-    };
+    // Explicit headers may override the `apiKey` convenience option, whatever casing they use.
+    this.headers = mergeHeaders(apiKeyHeader(config.apiKey), config.headers);
     this.logger = logger;
   }
 

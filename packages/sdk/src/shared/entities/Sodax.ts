@@ -54,11 +54,18 @@ export class Sodax {
     // so feature services can call `config.analytics.emit(...)` unconditionally with zero cost when off.
     const analytics = resolveAnalytics(options?.analytics);
     const fee = options?.fee;
+    // Backend API key: another client-side runtime option (like `fee`), sent as `x-api-key` to
+    // API-key-guarded backend services. The effective swaps-level key is computed below rather than
+    // read from `ConfigService.swapsApiKey`, because `BackendApiService` is built first — keep the two
+    // in lockstep.
+    const apiKey = options?.apiKey || undefined;
     // RadFi/Bound request signer: another client-side runtime hook (like `logger`/`analytics`/`fee`),
     // held off the data config so the dynamic-config swap never touches it. See `RadfiOptions` / gh-831.
     const radfiSigner = options?.radfi?.signRequest;
     this.instanceConfig = options ? mergeSodaxConfig(sodaxConfig, options) : sodaxConfig;
-    this.backendApi = new BackendApiService(this.instanceConfig.api, logger);
+    this.backendApi = new BackendApiService(this.instanceConfig.api, logger, {
+      swapsApiKey: options?.swaps?.apiKey || apiKey,
+    });
     this.api = this.backendApi;
     this.config = new ConfigService({
       api: this.backendApi,
@@ -67,6 +74,7 @@ export class Sodax {
       logger,
       analytics,
       fee,
+      apiKey,
       radfiSigner,
     });
 
