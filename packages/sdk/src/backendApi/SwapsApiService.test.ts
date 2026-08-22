@@ -722,50 +722,34 @@ describe('SwapsApiService RequestOverrideConfig', () => {
 });
 
 // =========================================================================
-// API key → x-api-key. Precedence: per-call header > per-call apiKey > config headers > config apiKey.
+// API key → x-api-key. Precedence: per-call header > per-call apiKey > configured header > configured key.
 // =========================================================================
 
 const sentHeaders = (): Record<string, string> => mockFetch.mock.calls[0]?.[1]?.headers;
 
-// Type-level: the per-call `apiKey` is scoped to the guarded swaps API. `@ts-expect-error` is the
-// assertion — if a non-swaps service ever accepts the field again, the unused directive fails the build.
-describe('per-call apiKey is swaps-only (type-level)', () => {
-  it('is accepted by sodax.api.swaps and rejected by the unguarded services', () => {
-    void (() => sodax.api.swaps.getTokens({ apiKey: 'k' }));
-    // @ts-expect-error — bridge is unguarded and shares this transport; a swaps key must not reach it.
-    void (() => sodax.api.bridge.getTokens({ apiKey: 'k' }));
-    // @ts-expect-error — the data API is unguarded.
-    void (() => sodax.api.getIntentByTxHash(TX_HASH, { apiKey: 'k' }));
-    // @ts-expect-error — sponsoring holds its own credential scope for its own origin.
-    void (() => sodax.api.sponsoring.getStellarSponsorConfig({ apiKey: 'k' }));
-    expect(true).toBe(true); // the assertions above are compile-time
-  });
-});
-
 describe('SwapsApiService API key', () => {
-  it('sends a configured apiKey as x-api-key on every request', async () => {
-    const service = new SwapsApiService({ baseURL: BASE, timeout: 30_000, headers: {}, apiKey: 'config-key' });
+  it('sends a configured x-api-key header on every request', async () => {
+    const service = new SwapsApiService({ baseURL: BASE, timeout: 30_000, headers: { 'x-api-key': 'config-key' } });
     mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
     await service.getTokens();
     expect(sentHeaders()['x-api-key']).toBe('config-key');
   });
 
-  it('lets an explicit configured x-api-key header win over the apiKey option', async () => {
-    const service = new SwapsApiService({
-      baseURL: BASE,
-      timeout: 30_000,
-      headers: { 'x-api-key': 'header-key' },
-      apiKey: 'config-key',
+  it('lets an explicit configured x-api-key header win over the instance key', async () => {
+    const keyed = new Sodax({
+      apiKey: 'global-key',
+      api: { swapsApiConfig: { headers: { 'x-api-key': 'header-key' } } },
+      logger: 'silent',
     });
     mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
-    await service.getTokens();
+    await keyed.api.swaps.getTokens();
     expect(sentHeaders()['x-api-key']).toBe('header-key');
   });
 
   it('lets a per-call apiKey win over the configured key', async () => {
-    const service = new SwapsApiService({ baseURL: BASE, timeout: 30_000, headers: {}, apiKey: 'config-key' });
+    const keyed = new Sodax({ apiKey: 'global-key', logger: 'silent' });
     mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
-    await service.getTokens({ apiKey: 'call-key' });
+    await keyed.api.swaps.getTokens({ apiKey: 'call-key' });
     expect(sentHeaders()['x-api-key']).toBe('call-key');
   });
 
@@ -774,7 +758,7 @@ describe('SwapsApiService API key', () => {
     // REPLACE the expanded key instead of being sent alongside it.
     for (const name of ['x-api-key', 'X-Api-Key']) {
       mockFetch.mockReset();
-      const service = new SwapsApiService({ baseURL: BASE, timeout: 30_000, headers: {}, apiKey: 'config-key' });
+      const service = new SwapsApiService({ baseURL: BASE, timeout: 30_000, headers: { 'x-api-key': 'config-key' } });
       mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
       await service.getTokens({ apiKey: 'call-key', headers: { [name]: 'call-header-key' } });
       const headers = sentHeaders();
@@ -783,11 +767,18 @@ describe('SwapsApiService API key', () => {
     }
   });
 
-  it('treats an empty configured apiKey as unset', async () => {
-    const service = new SwapsApiService({ baseURL: BASE, timeout: 30_000, headers: {}, apiKey: '' });
+  it('treats an empty per-call apiKey as unset and falls back to the configured key', async () => {
+    const service = new SwapsApiService({ baseURL: BASE, timeout: 30_000, headers: { 'x-api-key': 'config-key' } });
     mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
-    await service.getTokens();
-    expect(sentHeaders()['x-api-key']).toBeUndefined();
+    await service.getTokens({ apiKey: '' });
+    expect(sentHeaders()['x-api-key']).toBe('config-key');
+  });
+
+  it('sends a blank per-call x-api-key header verbatim rather than falling back', async () => {
+    const service = new SwapsApiService({ baseURL: BASE, timeout: 30_000, headers: { 'x-api-key': 'config-key' } });
+    mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
+    await service.getTokens({ apiKey: 'call-key', headers: { 'x-api-key': '' } });
+    expect(new Headers(sentHeaders()).get('x-api-key')).toBe('');
   });
 
   it('sends no x-api-key when nothing configures one', async () => {
@@ -797,46 +788,25 @@ describe('SwapsApiService API key', () => {
   });
 });
 
-describe('Sodax → swaps API key wiring (global / feature / slice)', () => {
+describe('Sodax → swaps API key wiring', () => {
   it('new Sodax({ apiKey }) reaches the swaps request header', async () => {
-    const keyed = new Sodax({ apiKey: 'global-key' });
+    const keyed = new Sodax({ apiKey: 'global-key', logger: 'silent' });
     mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
     await keyed.api.swaps.getTokens();
     expect(sentHeaders()['x-api-key']).toBe('global-key');
-    expect(keyed.config.swapsApiKey).toBe('global-key'); // Sodax wiring stays in lockstep with the getter
   });
 
-  it('new Sodax({ swaps: { apiKey } }) wins over the global apiKey', async () => {
-    const keyed = new Sodax({ apiKey: 'global-key', swaps: { apiKey: 'feature-key' } });
+  it('treats an empty apiKey as unset rather than sending a blank credential', async () => {
+    const keyed = new Sodax({ apiKey: '', logger: 'silent' });
     mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
     await keyed.api.swaps.getTokens();
-    expect(sentHeaders()['x-api-key']).toBe('feature-key');
-    expect(keyed.config.swapsApiKey).toBe('feature-key');
+    expect(sentHeaders()['x-api-key']).toBeUndefined();
   });
 
-  it('new Sodax({ api: { swapsApiConfig: { apiKey } } }) reaches the header and loses to feature/global', async () => {
-    const sliceOnly = new Sodax({ api: { swapsApiConfig: { apiKey: 'slice-key' } } });
-    mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
-    await sliceOnly.api.swaps.getTokens();
-    expect(sentHeaders()['x-api-key']).toBe('slice-key');
-
-    // The getter reports the winning CONFIG layer, so a slice-only key must be visible there too.
-    expect(sliceOnly.config.swapsApiKey).toBe('slice-key');
-
-    mockFetch.mockReset();
-    const layered = new Sodax({ apiKey: 'global-key', api: { swapsApiConfig: { apiKey: 'slice-key' } } });
-    mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
-    await layered.api.swaps.getTokens();
-    expect(sentHeaders()['x-api-key']).toBe('global-key');
-    expect(layered.config.swapsApiKey).toBe('global-key');
-  });
-
-  it('an empty feature apiKey falls back to the global key instead of sending a blank one', async () => {
-    const keyed = new Sodax({ apiKey: 'global-key', swaps: { apiKey: '' } });
-    mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
-    await keyed.api.swaps.getTokens();
-    expect(sentHeaders()['x-api-key']).toBe('global-key');
-    expect(keyed.config.swapsApiKey).toBe('global-key');
+  it('keeps the credential off the public instanceConfig', () => {
+    const keyed = new Sodax({ apiKey: 'global-key', logger: 'silent' });
+    expect(keyed.instanceConfig.apiKey).toBeUndefined();
+    expect(keyed.config.apiKey).toBe('global-key');
   });
 });
 
@@ -871,7 +841,7 @@ describe('SwapsApiService utilities', () => {
     // Updating an existing object key does NOT move it in insertion order, so a raw
     // `headers[name] = value` would leave the older `X-Api-Key` last and let it win the merge —
     // silently shipping the superseded credential. setHeaders must be case-insensitively last-write-wins.
-    const service = new SwapsApiService({ baseURL: BASE, timeout: 30_000, headers: {}, apiKey: 'v1' });
+    const service = new SwapsApiService({ baseURL: BASE, timeout: 30_000, headers: { 'x-api-key': 'v1' } });
     service.setHeaders({ 'X-Api-Key': 'v2' });
     service.setHeaders({ 'x-api-key': 'v3' });
     mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));

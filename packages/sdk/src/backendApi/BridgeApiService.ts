@@ -25,7 +25,14 @@ import type {
   SodaxLogger,
 } from '@sodax/types';
 
-import { assignHeaders, makeRequest, toJsonBody, type RequestConfig, type RequestOverrideConfig } from './api-utils.js';
+import {
+  assignHeaders,
+  makeRequest,
+  toExternalApiError,
+  toJsonBody,
+  type RequestConfig,
+  type RequestOverrideConfig,
+} from './api-utils.js';
 import { normalizeOverrideBaseURL } from './apiConfig.js';
 import * as schemas from './bridgeApiSchemas.js';
 import { rawTxSchemaForChainKey } from './rawTxSchemas.js';
@@ -95,7 +102,7 @@ export function toCreateBridgeIntentParamsV2(
  * `SodaxError<'EXTERNAL_API_ERROR'>` (`feature: 'backend'`, `context.api: 'bridge'`)
  * in the `error` field; the underlying failure is preserved on `error.cause`.
  *
- * Per-call request overrides (base URL, timeout, headers) can be passed as the
+ * Per-call request overrides (base URL, timeout, headers, API key) can be passed as the
  * optional last argument to any method via `RequestOverrideConfig`.
  *
  * The Bridge API hangs off the shared gateway root as `/bridge/*` — a sibling of the data API's `/be`
@@ -169,20 +176,9 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
       }
       return { ok: true, value: parsed.output };
     } catch (error) {
-      // Network failure, timeout, or non-2xx HTTP status thrown by makeRequest. Preserve the
-      // underlying error as `cause` (carries HTTP_REQUEST_FAILED / REQUEST_TIMEOUT / etc.).
-      return {
-        ok: false,
-        error: new SodaxError(
-          'EXTERNAL_API_ERROR',
-          error instanceof Error ? error.message : `Request to ${endpoint} failed`,
-          {
-            feature: 'backend',
-            cause: error,
-            context: { api: 'bridge', endpoint },
-          },
-        ),
-      };
+      // Network failure, timeout, or non-2xx HTTP status thrown by makeRequest. Preserves the
+      // underlying error as `cause` and lifts its status so `isAuthFailure` recognizes a 401/403.
+      return { ok: false, error: toExternalApiError({ api: 'bridge', feature: 'backend', endpoint, error }) };
     }
   }
 

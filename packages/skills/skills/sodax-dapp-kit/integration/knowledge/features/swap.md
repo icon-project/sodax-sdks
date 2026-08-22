@@ -45,9 +45,9 @@ const result = await swap({ params: intentParams, walletProvider });
 ```
 
 `vars` also carries the SDK's optional exec fields: `timeout` (per-attempt relay budget),
-`skipSimulation`, and `extras` — per-action overrides of the configured swap `partnerFee` and the swaps
-API key (`extras.apiKey`, sent as `x-api-key` on the backend submit-tx leg). Both fall back to the
-`SodaxProvider` config when omitted.
+`skipSimulation`, and `extras` — per-action overrides of the configured swap `partnerFee` and the
+backend API key (`extras.apiKey`, sent as `x-api-key` on the backend submit-tx leg). Both fall back to
+the `SodaxProvider` config when omitted.
 
 `useSwapApprove` follows the same `{ params, walletProvider }` shape via `mutate(vars)`, where `params` is `CreateIntentParams<K> | CreateLimitOrderParams<K>` (the union — limit-order params also flow through `useSwapApprove`).
 

@@ -66,8 +66,8 @@ const sponsoringApiConfig = {
 const swapsApiBaseUrlEnv: unknown = import.meta.env.VITE_SWAPS_API_BASE_URL;
 const swapsApiConfig = isHttpUrl(swapsApiBaseUrlEnv) ? { baseURL: swapsApiBaseUrlEnv } : undefined;
 
-// Global SODAX API key (issue #389): sent as `x-api-key` on every swaps API call. Unset is fine while
-// the backend rolls enforcement out (off → monitor → enforce); `undefined` is skipped by deepMerge.
+// Instance-wide SODAX API key: `x-api-key` on every backend call, sponsoring included while it targets
+// the packaged gateway (VITE_SPONSORING_API_KEY is only for an independently hosted one). Unset is fine.
 const sodaxApiKeyEnv: unknown = import.meta.env.VITE_SODAX_API_KEY;
 const sodaxApiKey = nonEmptyEnv(sodaxApiKeyEnv) ? sodaxApiKeyEnv : undefined;
 

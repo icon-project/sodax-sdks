@@ -214,14 +214,6 @@ describe('resolveSwapsApiConfig', () => {
       headers: { ...D, Authorization: 'tok', 'X-S': '1' },
     });
   });
-
-  it('passes the slice apiKey through and omits the property when unset', () => {
-    const withKey = resolveSwapsApiConfig(asConfig({ swapsApiConfig: { apiKey: 'slice-key' } }));
-    expect(withKey.apiKey).toBe('slice-key');
-
-    const withoutKey = resolveSwapsApiConfig(asConfig({ swapsApiConfig: { baseURL: 'https://swaps.example' } }));
-    expect('apiKey' in withoutKey).toBe(false);
-  });
 });
 
 describe('resolveSponsoringApiConfig', () => {

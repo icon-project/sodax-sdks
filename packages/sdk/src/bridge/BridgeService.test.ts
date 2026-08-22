@@ -847,6 +847,37 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
     expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
   });
 
+  it('threads extras.apiKey into the backend submit-tx leg as a per-request override', async () => {
+    stubCreatedAndVerified();
+    const submitSpy = vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValueOnce({
+      ok: true,
+      value: { success: true, data: { status: 'inserted', message: 'accepted' } },
+    } as never);
+    const statusSpy = vi.spyOn(sodaxBE.api.bridge, 'getSubmitTxStatus').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        success: true,
+        data: {
+          txHash: '0xspokeTx',
+          srcChainKey: BSC,
+          status: 'executed',
+          processingAttempts: 1,
+          result: { dstIntentTxHash: '0xDST' },
+        },
+      },
+    } as never);
+
+    const result = await sodaxBE.bridge.bridge({
+      ...bridgeInput(BSC, ARBITRUM),
+      extras: { apiKey: 'per-action-key' },
+    });
+
+    expect(result.ok).toBe(true);
+    // Both the POST and the status poll carry the per-action key (as RequestOverrideConfig.apiKey).
+    expect(submitSpy.mock.calls[0]?.[1]).toMatchObject({ apiKey: 'per-action-key' });
+    expect(statusSpy.mock.calls[0]?.[1]).toMatchObject({ apiKey: 'per-action-key' });
+  });
+
   it('falls back to the client-side relay when the backend submit POST is rejected', async () => {
     stubCreatedAndVerified();
     vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValueOnce({

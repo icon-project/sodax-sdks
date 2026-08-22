@@ -184,14 +184,9 @@ export function resolveBaseApiConfig(layers: LayeredApiConfig): ResolvedBackendA
   };
 }
 
-/** Resolve swaps config over base config and global defaults. `apiKey` never inherits from flat/base. */
+/** Resolve swaps config over base config and global defaults. */
 export function resolveSwapsApiConfig(layers: LayeredApiConfig): SwapsApiConfig {
-  const slice = layers.swapsApiConfig;
-  return {
-    ...resolveSharedApiConfig(layers, slice),
-    // `layerConfigs` carries only baseURL/timeout/headers, so the slice-only key is re-attached here.
-    ...(slice?.apiKey === undefined ? {} : { apiKey: slice.apiKey }),
-  };
+  return resolveSharedApiConfig(layers, layers.swapsApiConfig);
 }
 
 /**

@@ -17,7 +17,7 @@ import type {
   ApiConfig,
   SodaxLogger,
 } from '@sodax/types';
-import { BACKEND_API_BASE_PATH, DEFAULT_API_BASE_URL } from '@sodax/types';
+import { BACKEND_API_BASE_PATH, DEFAULT_API_BASE_URL, DEFAULT_SPONSORING_API_ENDPOINT } from '@sodax/types';
 import { consoleLogger } from '../shared/logger.js';
 
 import * as v from 'valibot';
@@ -27,6 +27,7 @@ import {
   resolveRequestConfig,
   toExternalApiError,
   toInvalidResponseShapeError,
+  withApiKey,
   type RequestConfig,
   type RequestOverrideConfig,
 } from './api-utils.js';
@@ -177,11 +178,10 @@ export interface MoneyMarketBorrowers {
 /** Construction options for {@link BackendApiService}. */
 export type BackendApiServiceOptions = {
   /**
-   * Effective config-level API key for the swaps API — `swaps.apiKey ?? apiKey` from `SodaxOptions`,
-   * resolved by `Sodax` (which constructs this service before `ConfigService.swapsApiKey` exists).
-   * Wins over the `api.swapsApiConfig.apiKey` slice; sent as the `x-api-key` header.
+   * Config-level API key for every gateway service (`new Sodax({ apiKey })`), sent as the `x-api-key`
+   * header. Sponsoring receives it only when its target is an allowed root — see the constructor.
    */
-  swapsApiKey?: string;
+  apiKey?: string;
 };
 
 /**
@@ -204,7 +204,7 @@ export type BackendApiServiceOptions = {
  * (`feature: 'backend'`, `context.api: 'backend'`) in the `error` field; the
  * underlying failure is preserved on `error.cause`.
  *
- * Per-call request overrides (base URL, timeout, headers) can be passed as
+ * Per-call request overrides (base URL, timeout, headers, API key) can be passed as
  * the optional last argument to any method via `RequestOverrideConfig`.
  */
 export class BackendApiService implements IConfigApiV1 {
@@ -236,7 +236,7 @@ export class BackendApiService implements IConfigApiV1 {
   private readonly trimsLegacyOverrides: boolean;
 
   constructor(config: ApiConfig, logger: SodaxLogger = consoleLogger, options: BackendApiServiceOptions = {}) {
-    this.config = resolveBaseApiConfig(config);
+    this.config = withApiKey(resolveBaseApiConfig(config), options.apiKey);
     this.headers = { ...this.config.headers };
     this.logger = logger;
     this.trimsLegacyOverrides = !hasExplicitBasePath(config);
@@ -269,18 +269,17 @@ export class BackendApiService implements IConfigApiV1 {
     // `ApiConfig` union, and all must route diagnostics through the same consumer-selected sink. The
     // legacy-trim decision travels with them so their per-call overrides match the config-level choice.
     const overrideOptions = { trimLegacyOverrides: this.trimsLegacyOverrides };
-    this.swaps = new SwapsApiService(
-      // The Sodax-level key (feature ?? global) wins over the `api.swapsApiConfig.apiKey` slice.
-      { ...swapsConfig, apiKey: options.swapsApiKey ?? swapsConfig.apiKey },
-      this.logger,
-      overrideOptions,
-    );
-    // Sponsoring uses an independent origin and credential scope, and never trims (its default never
-    // carried the data API's mount), so it takes no override option.
-    this.sponsoring = new SponsoringApiService(sponsoringConfig, this.logger);
+    // The config-level key is baked into every gateway service's headers; configured headers win.
+    this.swaps = new SwapsApiService(withApiKey(swapsConfig, options.apiKey), this.logger, overrideOptions);
+    // Sponsoring routes independently, so it never trims and takes no override option. Its inherited key
+    // stays UN-baked and is gated per request against these roots (see `inheritedApiKey`).
+    this.sponsoring = new SponsoringApiService(sponsoringConfig, this.logger, {
+      inheritedApiKey: options.apiKey,
+      inheritedApiKeyBaseURLs: [DEFAULT_SPONSORING_API_ENDPOINT, this.config.baseURL],
+    });
     // Bridge hangs off the same gateway root as `/bridge/*` — resolved from `baseApiConfig` but without
     // this service's `basePath`, so a `swapsApiConfig` slice moves swaps only (see `resolveBridgeApiConfig`).
-    this.bridge = new BridgeApiService(bridgeConfig, this.logger, overrideOptions);
+    this.bridge = new BridgeApiService(withApiKey(bridgeConfig, options.apiKey), this.logger, overrideOptions);
   }
 
   /**

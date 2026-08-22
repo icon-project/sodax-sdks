@@ -53,12 +53,8 @@ export type BaseApiConfig = {
  * service that serves `/config/*`, `/intent/*`, … at the bare origin.
  */
 export type BackendApiConfig = BaseApiConfig & { basePath?: string };
-/**
- * Per-endpoint config for the swaps API. `apiKey` becomes `x-api-key`, like
- * {@link SponsoringApiConfig}; an explicit `headers['x-api-key']` wins over it.
- * Browser-bundled keys are public.
- */
-export type SwapsApiConfig = BaseApiConfig & { apiKey?: string };
+/** Per-endpoint config for the swaps API. Structurally identical to {@link BaseApiConfig}. */
+export type SwapsApiConfig = BaseApiConfig;
 
 /**
  * Independently routed sponsoring config. `baseURL` includes any deployment

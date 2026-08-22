@@ -19,6 +19,7 @@ import { DEFAULT_API_BASE_URL, type BridgeSubmitTxRequestV2, type CreateBridgeIn
 import { Sodax } from '../shared/entities/Sodax.js';
 import { BridgeApiService, toCreateBridgeIntentParamsV2 } from './BridgeApiService.js';
 import { SodaxError } from '../errors/SodaxError.js';
+import { isAuthFailure, isSodaxError } from '../errors/guards.js';
 
 // --- fetch stub -----------------------------------------------------------
 const mockFetch = vi.fn();
@@ -418,6 +419,18 @@ describe('BridgeApiService error propagation', () => {
       expect(err.code).toBe('EXTERNAL_API_ERROR');
       expect(err.cause).toBe(networkError);
       expect(err.message).toBe('Network down');
+    }
+  });
+
+  it.each([401, 403])('lifts a %d onto error.context so isAuthFailure recognizes it', async status => {
+    // Without the lifted status a rejected key is indistinguishable from a transient failure, and a
+    // keyed bridge submit-tx burns its whole attempt budget re-sending it.
+    mockFetch.mockResolvedValueOnce(httpErrorResponse(status, 'Unauthorized'));
+    const result = await sodax.api.bridge.getTokens();
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(isSodaxError(result.error) && result.error.context?.status).toBe(status);
+      expect(isAuthFailure(result.error)).toBe(true);
     }
   });
 });

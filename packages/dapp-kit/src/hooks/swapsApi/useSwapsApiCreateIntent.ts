@@ -1,4 +1,4 @@
-import type { CreateIntentParamsV2, CreateIntentResponseV2, SwapsRequestOverrideConfig } from '@sodax/sdk';
+import type { CreateIntentParamsV2, CreateIntentResponseV2, RequestOverrideConfig } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import { retryUnlessAuthFailure } from '../shared/retryUnlessAuthFailure.js';
 import { unwrapResult } from '../shared/unwrapResult.js';
@@ -11,7 +11,7 @@ import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMu
  */
 export type UseSwapsApiCreateIntentVars = {
   body: CreateIntentParamsV2;
-  apiConfig?: SwapsRequestOverrideConfig;
+  apiConfig?: RequestOverrideConfig;
 };
 
 /**

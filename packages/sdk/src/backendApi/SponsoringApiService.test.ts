@@ -155,6 +155,19 @@ describe('api key handling', () => {
     expect(init.headers['x-api-key']).toBe('from-headers');
   });
 
+  it('sends a directly configured key to any target, including a per-call override', async () => {
+    // Direct construction carries no inherited-key gating (that applies only to the instance key
+    // `BackendApiService` passes in): this key is the consumer's own config for their own origin.
+    const service = makeService({ apiKey: 'secret-key' });
+    mockFetch.mockResolvedValueOnce(jsonOk(CONFIG_BODY));
+
+    await service.getStellarSponsorConfig({ baseURL: 'http://localhost:3011' });
+
+    const [url, init] = mockFetch.mock.calls[0] as [string, { headers: Record<string, string> }];
+    expect(url).toBe('http://localhost:3011/sponsorships/stellar/config');
+    expect(init.headers['x-api-key']).toBe('secret-key');
+  });
+
   it('sends no x-api-key when none is configured', async () => {
     const service = makeService();
     mockFetch.mockResolvedValueOnce(jsonOk(CONFIG_BODY));

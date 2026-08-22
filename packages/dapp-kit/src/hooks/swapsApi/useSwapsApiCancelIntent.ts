@@ -1,4 +1,4 @@
-import type { CancelIntentRequestV2, CancelIntentResponseV2, SwapsRequestOverrideConfig } from '@sodax/sdk';
+import type { CancelIntentRequestV2, CancelIntentResponseV2, RequestOverrideConfig } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import { retryUnlessAuthFailure } from '../shared/retryUnlessAuthFailure.js';
 import { unwrapResult } from '../shared/unwrapResult.js';
@@ -11,7 +11,7 @@ import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMu
  */
 export type UseSwapsApiCancelIntentVars = {
   body: CancelIntentRequestV2;
-  apiConfig?: SwapsRequestOverrideConfig;
+  apiConfig?: RequestOverrideConfig;
 };
 
 /**

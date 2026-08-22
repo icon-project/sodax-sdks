@@ -91,12 +91,12 @@ type SwapActionParams<K extends SpokeChainKey, Raw extends boolean> = {
 } & WalletProviderSlot<K, Raw>;
 ```
 
-`extras` and every field on it are optional. `partnerFee` overrides the configured swap fee for this single action (the same override `getQuote` accepts, below); `apiKey` overrides the configured swaps API key (`new Sodax({ apiKey })` / `swaps.apiKey`) for this action's backend submit-tx leg, sent as the `x-api-key` header; `srcPublicKey` is chain-key-gated — only typeable when `K` is a Stacks chain (`never` elsewhere) and only needed for raw (`raw: true`) Stacks `createIntent`; `bound` is chain-key-gated to Bitcoin and groups the Bound Exchange (Radfi) inputs — its `accessToken` is only needed for raw Bitcoin TRADING-mode `createIntent`, overriding the RadfiProvider's configured token and falling back to that instance token when omitted. (Grouping keeps future Bound inputs — trading mode, refresh token — under one slot rather than spreading a new `extras` field per item.) `LimitOrderActionParams<K, Raw>` carries the same `SwapExtras<K>`.
+`extras` and every field on it are optional. `partnerFee` overrides the configured swap fee for this single action (the same override `getQuote` accepts, below); `apiKey` overrides the configured backend API key (`new Sodax({ apiKey })`) for this action's backend submit-tx leg, sent as the `x-api-key` header; `srcPublicKey` is chain-key-gated — only typeable when `K` is a Stacks chain (`never` elsewhere) and only needed for raw (`raw: true`) Stacks `createIntent`; `bound` is chain-key-gated to Bitcoin and groups the Bound Exchange (Radfi) inputs — its `accessToken` is only needed for raw Bitcoin TRADING-mode `createIntent`, overriding the RadfiProvider's configured token and falling back to that instance token when omitted. (Grouping keeps future Bound inputs — trading mode, refresh token — under one slot rather than spreading a new `extras` field per item.) `LimitOrderActionParams<K, Raw>` carries the same `SwapExtras<K>`.
 
 ```ts
 type SwapExtras<K extends SpokeChainKey> = {
   partnerFee?: PartnerFee;        // overrides the configured swap fee for this action; falls back to config
-  apiKey?: string;                // overrides the configured swaps API key (x-api-key) for this action's backend submit-tx leg
+  apiKey?: string;                // overrides the configured backend API key (x-api-key) for this action's backend submit-tx leg
   srcPublicKey?: string;          // Stacks only (raw createIntent): signer public key. Chain-key-gated — `never` on non-Stacks K.
   bound?: BitcoinBoundExtras;     // Bitcoin only: grouped Bound Exchange (Radfi) inputs. Chain-key-gated — `never` on non-Bitcoin K.
 };

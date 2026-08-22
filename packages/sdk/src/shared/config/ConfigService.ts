@@ -32,7 +32,6 @@ import {
 } from '@sodax/types';
 import { isAddress } from 'viem';
 import type { BackendApiService } from '../../backendApi/BackendApiService.js';
-import { resolveSwapsApiConfig } from '../../backendApi/apiConfig.js';
 // import { mergeSodaxConfig } from './mergeSodaxConfig.js'; // TODO(config-v2): restore when initialize() dynamic fetch is re-enabled
 import { resolveLogger } from '../logger.js';
 import { noopAnalytics, type ResolvedAnalytics } from '../analytics.js';
@@ -65,8 +64,8 @@ export type ConfigServiceConstructorParams = {
   /**
    * Global backend API key (the `apiKey` option passed to `new Sodax(...)`). Held outside the
    * swappable `SodaxConfig` — like {@link fee} — so a dynamic config fetch never replaces it. Sent as
-   * the `x-api-key` header to API-key-guarded backend services (today the Swaps API v2); per-feature
-   * overrides live on the feature options (e.g. `swaps.apiKey`).
+   * the `x-api-key` header on every backend API request; read here by the swap, leverage-yield, and
+   * partner solver flows, whose transport does not go through `BackendApiService`.
    */
   apiKey?: string;
   /**
@@ -109,8 +108,8 @@ export class ConfigService {
   /**
    * Global backend API key. Resolved once at construction and kept independent of {@link sodax} so
    * that {@link initialize}'s dynamic-config swap never clobbers it. The backend never supplies it —
-   * it is a client-side option set via `new Sodax({ apiKey })`. Never logged; per-feature overrides
-   * live on the feature options (e.g. `swaps.apiKey`, read via {@link swapsApiKey}).
+   * it is a client-side option set via `new Sodax({ apiKey })`. Never logged; read here by the swap,
+   * leverage-yield, and partner solver flows, whose transport does not go through `BackendApiService`.
    */
   public readonly apiKey: string | undefined;
 
@@ -488,18 +487,6 @@ export class ConfigService {
 
   get leverageYieldPartnerFee(): PartnerFee | undefined {
     return this.leverageYield.partnerFee ?? this.fee;
-  }
-
-  /**
-   * Which configured key layer wins: the feature override, else the global `apiKey` ({@link apiKey}),
-   * else the `api.swapsApiConfig.apiKey` slice. `Sodax` computes the feature-or-global half inline
-   * when constructing `BackendApiService` — keep the two in lockstep.
-   *
-   * A raw `x-api-key` in configured `headers` outranks every layer on the wire but is deliberately not
-   * reported here: this answers "which key layer wins", not "what header will be sent".
-   */
-  get swapsApiKey(): string | undefined {
-    return this.swaps.apiKey || this.apiKey || resolveSwapsApiConfig(this.sodax.api).apiKey || undefined;
   }
 
   // Effective backend submit-tx toggle per feature. Read live off the same `swaps` / `bridge` slots as

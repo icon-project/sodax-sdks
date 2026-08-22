@@ -55,7 +55,8 @@ export function isAuthStatus(status: number | undefined): boolean {
  * Terminal: callers should surface it rather than retry or keep polling.
  *
  * Reads the status the service lifted onto `context`, so it works for any `SodaxError` carrying one.
- * `BridgeApiService` does not lift HTTP status onto its context today, so bridge failures never match.
+ * All `sodax.api` services lift HTTP status; the legacy solver transport retains `SolverErrorResponse`
+ * and is not recognized by `isAuthFailure`.
  */
 export function isAuthFailure(error: unknown): boolean {
   return isSodaxError(error) && isAuthStatus(error.context?.status);

@@ -1,5 +1,5 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import type { FeeResponseV2, SwapsRequestOverrideConfig } from '@sodax/sdk';
+import type { FeeResponseV2, RequestOverrideConfig } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import { retryUnlessAuthFailure } from '../shared/retryUnlessAuthFailure.js';
 import { unwrapResult } from '../shared/unwrapResult.js';
@@ -9,7 +9,7 @@ export type UseSwapsApiSolverFeeParams = ReadHookParams<
   FeeResponseV2 | undefined,
   {
     amount: string | undefined;
-    apiConfig?: SwapsRequestOverrideConfig;
+    apiConfig?: RequestOverrideConfig;
   }
 >;
 

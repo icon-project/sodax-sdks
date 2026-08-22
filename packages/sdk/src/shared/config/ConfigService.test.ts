@@ -110,24 +110,6 @@ describe('ConfigService — global apiKey is a held client option, not dynamic c
   });
 });
 
-describe('ConfigService — effective swaps apiKey falls back to the global apiKey', () => {
-  // Mirrors the partner-fee contract: `swaps.apiKey ?? apiKey`, never a merge.
-  it('uses the global apiKey when the swaps apiKey is unset', () => {
-    const { service } = makeService(undefined, ok(remoteConfig()), undefined, 'global-key');
-    expect(service.swapsApiKey).toBe('global-key');
-  });
-
-  it('the swaps apiKey overrides the global apiKey when both are set', () => {
-    const { service } = makeService({ swaps: { apiKey: 'swaps-key' } }, ok(remoteConfig()), undefined, 'global-key');
-    expect(service.swapsApiKey).toBe('swaps-key');
-  });
-
-  it('undefined when neither the swaps nor the global apiKey is set', () => {
-    const { service } = makeService(undefined, ok(remoteConfig()));
-    expect(service.swapsApiKey).toBeUndefined();
-  });
-});
-
 describe('ConfigService — effective per-feature fee falls back to the global fee', () => {
   // The bug this guards: a global `fee` with no per-feature override used to resolve to nothing.
   // Each effective-fee getter must be `featureFee ?? globalFee`.

@@ -175,7 +175,12 @@ describe('SwapsApi request shaping', () => {
     // so a case-variant header must REPLACE the expanded key rather than ride alongside it.
     for (const name of ['x-api-key', 'X-Api-Key']) {
       const fetchImpl = vi.fn(async () => json([]));
-      const api = new SwapsApi({ baseUrl: BASE, fetch: fetchImpl, apiKey: 'k-option', headers: { [name]: 'k-header' } });
+      const api = new SwapsApi({
+        baseUrl: BASE,
+        fetch: fetchImpl,
+        apiKey: 'k-option',
+        headers: { [name]: 'k-header' },
+      });
       await api.getTokens().catch(() => {});
       const headers = fetchImpl.mock.calls[0]?.[1]?.headers as Record<string, string>;
       expect(Object.keys(headers).filter(h => h.toLowerCase() === 'x-api-key')).toHaveLength(1);

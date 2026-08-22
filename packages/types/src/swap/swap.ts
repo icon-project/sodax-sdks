@@ -335,8 +335,6 @@ export const stagingSwapSupportedTokens = {
 
 export type SwapsOptions = {
   partnerFee?: PartnerFee; // enables override of global partner fee
-  /** Overrides the global `apiKey` for Swaps API calls; sent as the `x-api-key` header. */
-  apiKey?: string;
   /**
    * Route `swap()` through the backend submit-tx 2-step flow. Default `true`.
    * Set `false` for the fully client-side relay. Client-side only — not part of backend SodaxDefaultConfig.

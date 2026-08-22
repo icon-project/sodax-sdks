@@ -78,8 +78,8 @@ export type SwapExtras<K extends SpokeChainKey = SpokeChainKey> = {
   /** Overrides the configured swap partner fee for this action; falls back to config when omitted. */
   partnerFee?: PartnerFee;
   /**
-   * Overrides the configured API key (`swaps.apiKey` / global `apiKey`) for this action's backend
-   * submit-tx leg; sent as the `x-api-key` header. Falls back to config when omitted.
+   * Overrides the configured backend API key for this action's backend submit-tx leg; sent as the
+   * `x-api-key` header. Falls back to config when omitted.
    */
   apiKey?: string;
 } & SrcPublicKeySlot<K> &

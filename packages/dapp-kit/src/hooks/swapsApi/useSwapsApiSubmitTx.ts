@@ -1,4 +1,4 @@
-import type { SwapsRequestOverrideConfig, SubmitTxRequestV2, SubmitTxResponseV2 } from '@sodax/sdk';
+import type { RequestOverrideConfig, SubmitTxRequestV2, SubmitTxResponseV2 } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import { retryUnlessAuthFailure } from '../shared/retryUnlessAuthFailure.js';
 import { unwrapResult } from '../shared/unwrapResult.js';
@@ -12,7 +12,7 @@ import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMu
  */
 export type UseSwapsApiSubmitTxVars = {
   request: SubmitTxRequestV2;
-  apiConfig?: SwapsRequestOverrideConfig;
+  apiConfig?: RequestOverrideConfig;
 };
 
 /**

@@ -9,9 +9,8 @@ It mirrors `ISwapsApiV2` (from `@sodax/types`) one method per endpoint (21 total
 - returns `Promise<Result<T>>` — it **never throws**;
 - validates the JSON response at runtime against a valibot schema (a contract drift is surfaced as
   `{ ok: false }`, not returned untyped);
-- accepts an optional trailing `SwapsRequestOverrideConfig` (`{ baseURL?, timeout?, headers?, apiKey? }`)
-  for per-call overrides. `apiKey` lives on this swaps-specific type rather than the shared
-  `RequestOverrideConfig`, so an unguarded service cannot be handed a swaps credential by mistake.
+- accepts an optional trailing `RequestOverrideConfig` (`{ baseURL?, timeout?, headers?, apiKey? }`)
+  for per-call overrides — the same shared type every other backend client takes.
 
 > This is the lower-level backend HTTP surface. For the end-to-end create→relay→post-execution swap
 > orchestrator, use `sodax.swaps` (see [`SWAPS.md`](SWAPS.md)).
@@ -238,9 +237,8 @@ The swaps slice layers over the base slice over the defaults (per field) — a c
 ### API key
 
 The backend guards `POST /swaps/*` routes with an `x-api-key` header check. Configure the key once —
-`new Sodax({ apiKey })`, `new Sodax({ swaps: { apiKey } })`, or the `api.swapsApiConfig.apiKey` slice —
-and every `sodax.api.swaps` call carries it; override it per call via the trailing
-`RequestOverrideConfig`:
+`new Sodax({ apiKey })`, the same instance-wide key every backend client uses — and every
+`sodax.api.swaps` call carries it; override it per call via the trailing `RequestOverrideConfig`:
 
 ```typescript
 await sodax.api.swaps.createIntent(params, { apiKey: 'per-request-key' });

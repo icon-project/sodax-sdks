@@ -21,10 +21,20 @@
  *      / `.rejects` — matching the runtime contract of each method.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BACKEND_API_BASE_PATH, ChainKeys, type Address, type ApiConfig, type SodaxLogger } from '@sodax/types';
+import {
+  BACKEND_API_BASE_PATH,
+  ChainKeys,
+  DEFAULT_SPONSORING_API_ENDPOINT,
+  type Address,
+  type ApiConfig,
+  type HttpUrl,
+  type SodaxLogger,
+} from '@sodax/types';
 import { Sodax } from '../shared/entities/Sodax.js';
 import { BackendApiService } from './BackendApiService.js';
 import { SodaxError } from '../errors/SodaxError.js';
+import { silentLogger } from '../shared/logger.js';
+import type { RequestOverrideConfig } from './api-utils.js';
 
 // --- fetch stub -----------------------------------------------------------
 //
@@ -927,5 +937,152 @@ describe('BackendApiService ApiConfig variants', () => {
     const s = new Sodax({ api: { timeout: 12_345 } });
     expect(s.backendApi.getBaseURL()).toBe(ROOT);
     expect(s.api.swaps.getBaseURL()).toBe(ROOT);
+  });
+});
+
+// =========================================================================
+// API key — one `new Sodax({ apiKey })` for every backend service.
+//
+// Asserted on the wire (the style of defaultApiUrls.test.ts) rather than on resolved config: what a
+// gateway authenticates is the header it receives, and sponsoring's inherited key is deliberately
+// NOT baked into any config — it is selected per request from the target URL.
+// =========================================================================
+
+/** The `x-api-key` actually sent, read through `Headers` so any casing counts. */
+const sentApiKey = (): string | null => new Headers(mockFetch.mock.calls.at(-1)?.[1]?.headers).get('x-api-key');
+
+const CUSTOM_SPONSORING: HttpUrl = 'https://sponsoring.mydapp.example';
+/** A whole-stack retarget: one root every service is pointed at, distinct from the packaged one. */
+const STAGING_ROOT: HttpUrl = 'https://staging-api.sodax.example/v1';
+
+type ApiCall = (config?: RequestOverrideConfig) => Promise<unknown>;
+
+describe('one key, every service', () => {
+  const keyed = new Sodax({ apiKey: 'instance-key', logger: silentLogger });
+  const services: Array<[label: string, call: ApiCall]> = [
+    ['data', config => keyed.backendApi.getAllConfig(config)],
+    ['swaps', config => keyed.api.swaps.getTokens(config)],
+    ['bridge', config => keyed.api.bridge.getTokens(config)],
+    ['sponsoring', config => keyed.api.sponsoring.getStellarSponsorConfig(config)],
+  ];
+
+  it.each(services)('sends the instance key on the %s wire', async (_label, call) => {
+    mockFetch.mockResolvedValueOnce(okResponse({}));
+    await call();
+    expect(sentApiKey()).toBe('instance-key');
+  });
+
+  it.each(services)('lets a per-request apiKey win on the %s wire', async (_label, call) => {
+    mockFetch.mockResolvedValueOnce(okResponse({}));
+    await call({ apiKey: 'call-key' });
+    expect(sentApiKey()).toBe('call-key');
+  });
+
+  it.each(services)('treats an empty per-request apiKey as unset on the %s wire', async (_label, call) => {
+    mockFetch.mockResolvedValueOnce(okResponse({}));
+    await call({ apiKey: '' });
+    expect(sentApiKey()).toBe('instance-key');
+  });
+
+  it.each(services)('sends a blank per-request x-api-key header verbatim on the %s wire', async (_label, call) => {
+    mockFetch.mockResolvedValueOnce(okResponse({}));
+    await call({ apiKey: 'call-key', headers: { 'x-api-key': '' } });
+    expect(sentApiKey()).toBe('');
+  });
+
+  it('lets an explicitly configured x-api-key header win over the instance key', async () => {
+    // Sponsoring is excluded on purpose: it never inherits the shared headers.
+    const configured = new Sodax({
+      apiKey: 'instance-key',
+      api: { headers: { 'x-api-key': 'configured-header' } },
+      logger: silentLogger,
+    });
+    for (const call of [
+      () => configured.backendApi.getAllConfig(),
+      () => configured.api.swaps.getTokens(),
+      () => configured.api.bridge.getTokens(),
+    ]) {
+      mockFetch.mockResolvedValueOnce(okResponse({}));
+      await call();
+      expect(sentApiKey()).toBe('configured-header');
+    }
+  });
+});
+
+describe('sponsoring inherits the instance key only for an allowed root', () => {
+  /**
+   * Issue one sponsoring request and report the `x-api-key` it carried. The target is asserted here
+   * so a "no key sent" expectation can never pass because the request went somewhere else — or nowhere.
+   */
+  const keySentTo = async (target: string, sodax: Sodax, config?: RequestOverrideConfig): Promise<string | null> => {
+    mockFetch.mockResolvedValueOnce(okResponse({}));
+    await sodax.api.sponsoring.getStellarSponsorConfig(config);
+    expect(mockFetch.mock.calls.at(-1)?.[0]).toBe(`${target}/sponsorships/stellar/config`);
+    return sentApiKey();
+  };
+
+  const sliceOrigins: Array<[label: string, baseURL: HttpUrl | undefined]> = [
+    ['the packaged default root', undefined],
+    ['a custom origin', CUSTOM_SPONSORING],
+  ];
+
+  it.each(sliceOrigins)('lets the sponsoring slice key win over the instance key at %s', async (_label, baseURL) => {
+    const sodax = new Sodax({
+      apiKey: 'instance-key',
+      api: { sponsoringApiConfig: { ...(baseURL ? { baseURL } : {}), apiKey: 'slice-key' } },
+      logger: silentLogger,
+    });
+    expect(await keySentTo(baseURL ?? DEFAULT_SPONSORING_API_ENDPOINT, sodax)).toBe('slice-key');
+  });
+
+  it('inherits when only the shared root moved and sponsoring stayed on the packaged default', async () => {
+    const sodax = new Sodax({ apiKey: 'instance-key', api: { baseURL: STAGING_ROOT }, logger: silentLogger });
+    // Sponsoring never inherits a base URL, so it is still the origin the key belongs to.
+    expect(await keySentTo(DEFAULT_SPONSORING_API_ENDPOINT, sodax)).toBe('instance-key');
+  });
+
+  it('inherits when the sponsoring slice points at the retargeted shared root', async () => {
+    const sodax = new Sodax({
+      apiKey: 'instance-key',
+      api: { baseURL: STAGING_ROOT, sponsoringApiConfig: { baseURL: STAGING_ROOT } },
+      logger: silentLogger,
+    });
+    expect(await keySentTo(STAGING_ROOT, sodax)).toBe('instance-key');
+  });
+
+  it('withholds the instance key from a custom sponsoring origin', async () => {
+    const sodax = new Sodax({
+      apiKey: 'instance-key',
+      api: { sponsoringApiConfig: { baseURL: CUSTOM_SPONSORING } },
+      logger: silentLogger,
+    });
+    expect(await keySentTo(CUSTOM_SPONSORING, sodax)).toBeNull();
+  });
+
+  // The gate is re-evaluated per request because a `RequestOverrideConfig.baseURL` retargets the call
+  // while keeping the service defaults — a baked-in key would ride along to the new origin.
+  it('withholds the instance key when a per-request baseURL leaves the allowed roots', async () => {
+    const sodax = new Sodax({ apiKey: 'instance-key', logger: silentLogger });
+    expect(await keySentTo(CUSTOM_SPONSORING, sodax, { baseURL: CUSTOM_SPONSORING })).toBeNull();
+  });
+
+  const explicitOverrides: Array<[label: string, override: RequestOverrideConfig]> = [
+    ['a per-request apiKey', { apiKey: 'call-key' }],
+    ['a raw per-request x-api-key header', { headers: { 'X-Api-Key': 'call-key' } }],
+  ];
+
+  it.each(explicitOverrides)('still sends %s to that same custom target', async (_label, override) => {
+    const sodax = new Sodax({ apiKey: 'instance-key', logger: silentLogger });
+    expect(await keySentTo(CUSTOM_SPONSORING, sodax, { baseURL: CUSTOM_SPONSORING, ...override })).toBe('call-key');
+  });
+
+  it('inherits again when a per-request baseURL points back at an allowed root', async () => {
+    const sodax = new Sodax({
+      apiKey: 'instance-key',
+      api: { baseURL: STAGING_ROOT, sponsoringApiConfig: { baseURL: CUSTOM_SPONSORING } },
+      logger: silentLogger,
+    });
+    expect(await keySentTo(CUSTOM_SPONSORING, sodax)).toBeNull();
+    expect(await keySentTo(STAGING_ROOT, sodax, { baseURL: STAGING_ROOT })).toBe('instance-key');
   });
 });

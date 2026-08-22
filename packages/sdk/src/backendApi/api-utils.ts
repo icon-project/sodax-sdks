@@ -21,6 +21,8 @@ export interface RequestConfig {
   body?: string;
   timeout?: number;
   baseURL?: string;
+  /** Honoured only via {@link resolveRequestConfig}; `makeRequest` expands `overrideConfig.apiKey`, not this field. */
+  apiKey?: string;
 }
 
 /**
@@ -32,19 +34,6 @@ export type RequestOverrideConfig = {
   baseURL?: string;
   timeout?: number;
   headers?: Record<string, string>;
-};
-
-/**
- * Per-call overrides for the API-key-guarded swaps API (`sodax.api.swaps`), which is the only service
- * whose routes the backend guards today.
- *
- * `apiKey` is deliberately NOT on the shared {@link RequestOverrideConfig}: the other services would
- * either ignore it (the data API, sponsoring) or send a swaps credential to their own origin (bridge,
- * which shares this transport but is unguarded). Keeping it here means a non-swaps call cannot even
- * express it. Sponsoring holds its own credential scope via `api.sponsoringApiConfig.apiKey`; any
- * service can still be handed a raw header through {@link RequestOverrideConfig.headers}.
- */
-export type SwapsRequestOverrideConfig = RequestOverrideConfig & {
   /**
    * Per-call API key, sent as the `x-api-key` header. Wins over the service's configured key; an
    * explicit `headers['x-api-key']` on this same override wins over it.
@@ -79,6 +68,14 @@ export function mergeHeaders(...sources: Array<Record<string, string> | undefine
     for (const entry of Object.entries(source ?? {})) byName.set(entry[0].toLowerCase(), entry);
   }
   return Object.fromEntries(byName.values());
+}
+
+/**
+ * Bake a config-level `apiKey` into a service config's headers, so every request that service makes
+ * carries it. Explicitly configured headers still win, matching the per-call expansion's rule.
+ */
+export function withApiKey<T extends { headers: Record<string, string> }>(config: T, apiKey: string | undefined): T {
+  return { ...config, headers: mergeHeaders(apiKeyHeader(apiKey), config.headers) };
 }
 
 /**
@@ -179,9 +176,9 @@ export async function makeRequest<T>(params: MakeRequestParams): Promise<T> {
   // baseURL is treated as "not provided" and falls back to the service default.
   const baseURL = overrideConfig.baseURL || config.baseURL || '';
   const url = `${trimTrailingSlashes(baseURL)}${endpoint}`;
-  // Per-call override headers take precedence over the service defaults. No `apiKey` expansion here:
-  // the guarded swaps API goes through `SwapsApiService.buildClient`, not this transport.
-  const headers = mergeHeaders(config.headers, overrideConfig.headers);
+  // Per-call override headers take precedence over the service defaults, and an explicit override
+  // `x-api-key` header wins over the override's `apiKey` convenience option.
+  const headers = mergeHeaders(config.headers, apiKeyHeader(overrideConfig.apiKey), overrideConfig.headers);
 
   // Create AbortController for timeout
   const controller = new AbortController();
@@ -223,18 +220,19 @@ export async function makeRequest<T>(params: MakeRequestParams): Promise<T> {
 
 /**
  * Apply per-call config over service defaults. Headers merge with the override
- * winning; an empty base URL falls back to the default.
+ * winning; an empty base URL falls back to the default. The per-call `apiKey` is expanded here and
+ * dropped from the result, so the transport never re-applies it.
  */
 export function resolveRequestConfig(
   config: RequestConfig,
   defaults: { baseURL: string; timeout: number; headers: Record<string, string> },
 ): RequestConfig {
-  const { baseURL, timeout, headers, ...rest } = config;
+  const { baseURL, timeout, headers, apiKey, ...rest } = config;
   return {
     ...rest,
     baseURL: baseURL || defaults.baseURL,
     timeout: timeout ?? defaults.timeout,
-    headers: { ...defaults.headers, ...headers },
+    headers: mergeHeaders(defaults.headers, apiKeyHeader(apiKey), headers),
   };
 }
 

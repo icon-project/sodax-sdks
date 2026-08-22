@@ -1,5 +1,5 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import { isAuthFailure, type SwapsRequestOverrideConfig, type StatusResponseV2 } from '@sodax/sdk';
+import { isAuthFailure, type RequestOverrideConfig, type StatusResponseV2 } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import { retryUnlessAuthFailure } from '../shared/retryUnlessAuthFailure.js';
 import { unwrapResult } from '../shared/unwrapResult.js';
@@ -10,7 +10,7 @@ export type UseSwapsApiStatusParams = ReadHookParams<
   StatusResponseV2 | undefined,
   {
     intentTxHash: string | undefined;
-    apiConfig?: SwapsRequestOverrideConfig;
+    apiConfig?: RequestOverrideConfig;
   }
 >;
 

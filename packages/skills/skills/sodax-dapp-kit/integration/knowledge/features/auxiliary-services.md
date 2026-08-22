@@ -89,10 +89,10 @@ See the `sodax-sdk` skill (integration mode), `swaps-api.md` § `partnerFee`.
 
 ### API key (`x-api-key`)
 
-The backend guards `POST /swaps/*` with an API-key check. Configure the key once on the provider config
-— `<SodaxProvider config={{ apiKey }}>` (global) or `config={{ swaps: { apiKey } }}` (feature override)
-— and every `sodax.api.swaps` call these hooks make carries it. Override per request via the hooks'
-existing `apiConfig` param (`SwapsRequestOverrideConfig`), which also accepts `apiKey`:
+The backend guards `POST /swaps/*` with an API-key check. There is ONE instance-wide key: configure it
+once on the provider config — `<SodaxProvider config={{ apiKey }}>` — and every `sodax.api.*` call these
+hooks make carries it. Override per request via the hooks' existing `apiConfig` param
+(`RequestOverrideConfig`), which also accepts `apiKey`:
 
 ```ts
 // @ai-snippets-skip
@@ -106,7 +106,7 @@ surface with `context.status` `401`/`403` — nothing but a corrected key fixes 
 terminal in your UI; the transient verification `503` is retried by the wire client. See the
 `sodax-sdk` skill (integration mode), `swaps-api.md` § API key, for the precedence order.
 
-Every `useSwapsApi*` hook already handles this: its default `retry` is `retryUnlessAuthFailure`
+Every retrying `useSwapsApi*` hook already handles this: its default `retry` is `retryUnlessAuthFailure`
 (exported from `@sodax/dapp-kit`), which retries transport blips up to 3 times but never replays a
 401/403. `useSwapsApiStatus` and `useSwapsApiSubmitTxStatus` additionally stop their 1s poll on a
 rejected key, instead of re-requesting forever. So an invalid key surfaces once, fast, on `error`.
@@ -358,7 +358,10 @@ rather than on the HTTP status.
 When the server rate-limits a key it also supplies `error.context.retryAfterSeconds`; render "try again
 in Ns" instead of a generic "try later". The SDK never auto-retries a rate limit.
 
-Requires `api.sponsoringApiConfig` (at minimum `apiKey`) on the `SodaxProvider` config. An api key
+On the packaged gateway no sponsoring-specific credential is needed: the instance-wide key from
+`<SodaxProvider config={{ apiKey }}>` (`new Sodax({ apiKey })`) is inherited by sponsoring.
+`api.sponsoringApiConfig.apiKey` is the credential for an independently hosted sponsoring service, and
+wins wherever the slice points. An api key
 in a browser bundle is public by nature; the service's per-key quotas, fleet cap, per-IP throttle,
 and origin gating are the real controls. Proxy through your own backend if that is not acceptable.
 

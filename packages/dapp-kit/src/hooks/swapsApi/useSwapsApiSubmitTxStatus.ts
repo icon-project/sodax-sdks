@@ -1,5 +1,5 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import { isAuthFailure, type SwapsRequestOverrideConfig, type SubmitTxStatusResponseV2 } from '@sodax/sdk';
+import { isAuthFailure, type RequestOverrideConfig, type SubmitTxStatusResponseV2 } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import { retryUnlessAuthFailure } from '../shared/retryUnlessAuthFailure.js';
 import { unwrapResult } from '../shared/unwrapResult.js';
@@ -10,7 +10,7 @@ export type UseSwapsApiSubmitTxStatusParams = ReadHookParams<
   {
     txHash: string | undefined;
     srcChainKey?: string;
-    apiConfig?: SwapsRequestOverrideConfig;
+    apiConfig?: RequestOverrideConfig;
   }
 >;
 

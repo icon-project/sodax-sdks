@@ -1766,6 +1766,7 @@ describe('SwapService.getStatus', () => {
       sodax.swaps.solver,
       sodax.swaps.config.logger,
       undefined,
+      sodax.swaps.config.apiKey,
     );
     expect(backendSpy).not.toHaveBeenCalled();
   });
@@ -1989,6 +1990,7 @@ describe('SwapService.getDetailedStatus', () => {
       sodax.swaps.solver,
       sodax.swaps.config.logger,
       5_000,
+      sodax.swaps.config.apiKey,
     );
   });
 
@@ -2267,7 +2269,12 @@ describe('SwapService.postExecution', () => {
     const result = await sodax.swaps.postExecution(request);
 
     expect(result).toBe(execResult);
-    expect(mocks.solverPostExecution).toHaveBeenCalledWith(request, sodax.swaps.solver, sodax.swaps.config.logger);
+    expect(mocks.solverPostExecution).toHaveBeenCalledWith(
+      request,
+      sodax.swaps.solver,
+      sodax.swaps.config.logger,
+      sodax.swaps.config.apiKey,
+    );
   });
 
   it('wraps a SolverErrorResponse failure as SWAP_SOLVER_API_ERROR with solver code on context', async () => {
@@ -2345,6 +2352,28 @@ describe('SwapService.postExecution', () => {
       expect(result.error.message).toBe('Solver returned malformed error response');
       expect(result.error.context?.solverCode).toBe(-999);
     }
+  });
+});
+
+// The solver transport has no per-request override surface, so the configured instance key is the
+// only tier it can carry — asserted on a keyed instance, since the shared `sodax` holds none.
+describe('SwapService → solver API key', () => {
+  const keyed = new Sodax({ apiKey: 'instance-key', swaps: { useBackendSubmitTx: false }, logger: 'silent' });
+
+  it('forwards the configured key to the solver status read', async () => {
+    mocks.solverGetStatus.mockResolvedValueOnce({ ok: true, value: { status: SolverIntentStatusCode.SOLVED } });
+
+    await keyed.swaps.getStatus({ intent_tx_hash: '0xsome' } as never);
+
+    expect(mocks.solverGetStatus.mock.calls[0]?.[4]).toBe('instance-key');
+  });
+
+  it('forwards the configured key to the solver execution notice', async () => {
+    mocks.solverPostExecution.mockResolvedValueOnce({ ok: true, value: { answer: 'OK' } });
+
+    await keyed.swaps.postExecution({ intent_tx_hash: '0xsome' } as never);
+
+    expect(mocks.solverPostExecution.mock.calls[0]?.[3]).toBe('instance-key');
   });
 });
 
@@ -2740,6 +2769,7 @@ describe('SwapService.swap', () => {
       expect.objectContaining({ intent_tx_hash: '0xsonicTx' }),
       sodax.swaps.solver,
       sodax.swaps.config.logger,
+      sodax.swaps.config.apiKey,
     );
     // The relay path must NOT have been invoked for hub-chain srcChain.
     expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
@@ -2763,6 +2793,7 @@ describe('SwapService.swap', () => {
       expect.objectContaining({ intent_tx_hash: '0xdstTx' }),
       sodax.swaps.solver,
       sodax.swaps.config.logger,
+      sodax.swaps.config.apiKey,
     );
   });
 

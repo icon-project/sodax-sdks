@@ -558,6 +558,33 @@ describe('sponsor config caching', () => {
     expect(configRequests()).toHaveLength(2);
   });
 
+  it('keeps two per-request API keys on separate entries', async () => {
+    // A key scoped to another deployment selects another sponsor account; sharing one entry would
+    // serve one caller's config to the other.
+    const { sodax } = makeSodax();
+    mockFetch
+      .mockResolvedValueOnce(jsonOk({ ...SPONSOR_CONFIG, networkPassphrase: Networks.TESTNET }))
+      .mockResolvedValueOnce(jsonOk(SPONSOR_CONFIG));
+
+    const first = await sodax.sponsoring.getStellarSponsorConfig({ requestConfig: { apiKey: 'key-a' } });
+    const second = await sodax.sponsoring.getStellarSponsorConfig({ requestConfig: { apiKey: 'key-b' } });
+
+    expect(first.ok && first.value.networkPassphrase).toBe(Networks.TESTNET);
+    expect(second.ok && second.value.networkPassphrase).toBe(Networks.PUBLIC);
+    expect(configRequests()).toHaveLength(2);
+  });
+
+  it('shares one entry between apiKey and the equivalent raw x-api-key header', async () => {
+    // Both spell the same wire request, so the second must be served from the first one's entry.
+    const { sodax } = makeSodax();
+    mockFetch.mockResolvedValue(jsonOk(SPONSOR_CONFIG));
+
+    await sodax.sponsoring.getStellarSponsorConfig({ requestConfig: { apiKey: 'same-key' } });
+    await sodax.sponsoring.getStellarSponsorConfig({ requestConfig: { headers: { 'X-Api-Key': 'same-key' } } });
+
+    expect(configRequests()).toHaveLength(1);
+  });
+
   it('still caches per header set, so a repeated override is not refetched', async () => {
     const { sodax } = makeSodax();
     mockFetch.mockResolvedValue(jsonOk(SPONSOR_CONFIG));

@@ -1,5 +1,5 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import type { GetSwapTokensByChainResponseV2, SwapsRequestOverrideConfig } from '@sodax/sdk';
+import type { GetSwapTokensByChainResponseV2, RequestOverrideConfig } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import { retryUnlessAuthFailure } from '../shared/retryUnlessAuthFailure.js';
 import { unwrapResult } from '../shared/unwrapResult.js';
@@ -9,7 +9,7 @@ export type UseSwapsApiTokensByChainParams = ReadHookParams<
   GetSwapTokensByChainResponseV2 | undefined,
   {
     chainKey: string | undefined;
-    apiConfig?: SwapsRequestOverrideConfig;
+    apiConfig?: RequestOverrideConfig;
   }
 >;
 

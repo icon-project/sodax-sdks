@@ -379,7 +379,13 @@ export class SwapService {
     request: SolverIntentStatusRequest,
     timeoutMs?: number,
   ): Promise<Result<SolverIntentStatusResponse, SolverErrorResponse>> {
-    const solverResult = await SolverApiService.getStatus(request, this.solver, this.config.logger, timeoutMs);
+    const solverResult = await SolverApiService.getStatus(
+      request,
+      this.solver,
+      this.config.logger,
+      timeoutMs,
+      this.config.apiKey,
+    );
     const forgotten = !solverResult.ok || solverResult.value.status === SolverIntentStatusCode.NOT_FOUND;
     if (!forgotten) return solverResult;
 
@@ -599,7 +605,7 @@ export class SwapService {
     request: SolverExecutionRequest,
   ): Promise<Result<SolverExecutionResponse, PostExecutionError>> {
     try {
-      const result = await SolverApiService.postExecution(request, this.solver, this.config.logger);
+      const result = await SolverApiService.postExecution(request, this.solver, this.config.logger, this.config.apiKey);
       if (result.ok) return result;
 
       // Defensive: SolverApiService is contractually typed to return SolverErrorResponse,
@@ -872,7 +878,7 @@ export class SwapService {
       const outcome = await runBackendSubmitTx({
         attempt,
         api: this.backendApi.swaps,
-        // Config-level keys are already baked into the SwapsApiService headers, so only this
+        // The configured key is already baked into the SwapsApiService headers, so only this
         // per-action override (mirroring `extras.partnerFee`) travels per call.
         overrideConfig: { apiKey: _params.extras?.apiKey },
         body: {

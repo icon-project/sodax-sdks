@@ -82,9 +82,9 @@ type BaseApiConfig = {
 type BackendApiConfig = BaseApiConfig & { basePath?: string }; // default: '/be'
 
 // Point the swaps and/or sponsoring APIs at their own hosts, separate from the base backend API
-// (at least one slice required):
-// `apiKey` becomes the `x-api-key` header the backend's API-key guard reads.
-type SwapsApiConfig = BaseApiConfig & { apiKey?: string };
+// (at least one slice required). Only sponsoring carries a slice `apiKey` — it is routed
+// independently, so it owns its credential; every other service takes the instance-wide key.
+type SwapsApiConfig = BaseApiConfig;
 type SponsoringApiConfig = BaseApiConfig & { apiKey?: string };
 
 type CustomApiConfig =
@@ -122,6 +122,17 @@ transmitted to the sponsoring host. `timeout` does inherit. For the same reason,
 `backendApi.setHeaders(...)` reaches `swaps` but NOT `sponsoring`; set sponsoring headers on the
 slice, or via `sodax.api.sponsoring.setHeaders(...)`.
 
+### API key
+
+There is one instance-wide backend key: `new Sodax({ apiKey })`, sent as `x-api-key` on this client,
+`sodax.api.swaps`, and `sodax.api.bridge`. Override it for a single call with `apiKey` on the trailing
+`RequestOverrideConfig`. The key follows a per-call `baseURL` override on these three clients too —
+including a plaintext local target — so point one only at a trusted SODAX-related deployment.
+Sponsoring is the exception — its slice key wins there, and the instance-wide
+key reaches it only when the call targets a SODAX gateway root. See
+[CONFIGURE_SDK.md § API key](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md#api-key)
+for the full precedence order.
+
 ### `RequestOverrideConfig` Type
 
 Every public method accepts an optional `RequestOverrideConfig` as its last argument. These per-call overrides take precedence over the `ApiConfig` the service was constructed with.
@@ -131,6 +142,7 @@ type RequestOverrideConfig = {
   baseURL?: string;   // gateway root; the calling service's own path still applies
   timeout?: number;
   headers?: Record<string, string>;
+  apiKey?: string;    // per-call x-api-key; an explicit headers['x-api-key'] here still wins
 };
 ```
 
