@@ -1,5 +1,5 @@
 {
-  "note": "Files that sodax-document copies onto docs.sodax.com. This list is the copy source of truth — sodax-document/sync-sodax-sdks.sh reads it and copies every src. A new page still needs a sidebar line (SUMMARY.md or docs.json) on the docs-sync PR; optional inject_frontmatter overlays in that script add icons. Consumed by scripts/check-doc-links.mjs and Docs Drift CI.",
+  "note": "Files that sodax-document copies onto docs.sodax.com. This list is the copy source of truth — sodax-document/sync-sodax-sdks.sh reads it and copies every src. A new page still needs a sidebar line (SUMMARY.md or docs.json) on the docs-sync PR; optional inject_frontmatter overlays in that script add icons. Consumed by scripts/check-doc-links.mjs and Docs Drift CI. A root-level docs/ entry may declare pkgs: [\"<pkg>\", …] so updating it counts as the Docs Drift signal for those packages.",
   "sourceRepo": "icon-project/sodax-sdks",
   "docRepo": "icon-project/sodax-document",
   "mirrored": [
@@ -54,8 +54,16 @@
       "dest": "developers/packages/sdk/docs/installation/nextjs.md"
     },
     { "src": "packages/sdk/docs/BITCOIN_INTEGRATION.md", "dest": "developers/how-to/bitcoin-integration.md" },
-    { "src": "docs/stellar-sponsoring-getting-started.md", "dest": "developers/how-to/stellar-sponsoring-getting-started.md" },
-    { "src": "docs/quick-sponsoring-stellar-guide.md", "dest": "developers/how-to/quick-sponsoring-stellar-guide.md" },
+    {
+      "src": "docs/stellar-sponsoring-getting-started.md",
+      "dest": "developers/how-to/stellar-sponsoring-getting-started.md",
+      "pkgs": ["sdk", "dapp-kit"]
+    },
+    {
+      "src": "docs/quick-sponsoring-stellar-guide.md",
+      "dest": "developers/how-to/quick-sponsoring-stellar-guide.md",
+      "pkgs": ["sdk", "dapp-kit"]
+    },
     { "src": "docs/ai-integration-guide.md", "dest": "developers/ai-integration/README.md" },
     { "src": "packages/wallet-sdk-core/README.md", "dest": "developers/packages/connection/wallet-sdk-core.md" },
     { "src": "packages/wallet-sdk-react/README.md", "dest": "developers/packages/connection/wallet-sdk-react.md" },

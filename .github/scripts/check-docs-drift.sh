@@ -23,19 +23,22 @@ PKGS=$(echo "$CHANGED" \
 NEW_OR_RENAMED_SDK_DOCS=$(git -c core.quotePath=false diff --name-only --diff-filter=AR \
   "$RANGE" -- 'packages/sdk/docs' || true)
 
+# Membership checks use here-strings, not producer pipelines: under pipefail a
+# huge list can SIGPIPE the producer when grep -q exits early, faking a non-match.
 is_mirrored() {
-  printf '%s\n' "$MIRRORED_SRCS" | grep -qxF "$1"
+  grep -qxF "$1" <<< "$MIRRORED_SRCS"
 }
 
-# Mapped file for this package, or any mapped packages/sdk/docs/ page (covers types/sdk/dapp-kit).
+# Mapped file for this package, any mapped packages/sdk/docs/ page (covers types/sdk/dapp-kit),
+# or a mapped root docs/ page whose pkgs entry lists this package.
 covers_pkg() {
   local path="$1" pkg="$2"
   is_mirrored "$path" || return 1
   case "$path" in
     packages/"$pkg"/*) return 0 ;;
     packages/sdk/docs/*) return 0 ;;
-    *) return 1 ;;
   esac
+  grep -qxF "${pkg}"$'\t'"${path}" <<< "$PKG_COVERAGE"
 }
 
 load_map() {
@@ -56,10 +59,28 @@ for item in data.get("mirrored", []):
     src = item.get("src")
     if src is None or src == "":
         continue
-    if not isinstance(src, str) or any(c in src for c in "\n\r\0"):
-        print("::error::scripts/gitbook-sync-map.json src must be a single-line path.", file=sys.stderr)
+    if not isinstance(src, str) or any(c in src for c in "\n\r\t\0"):
+        print("::error::scripts/gitbook-sync-map.json src must be a single-line, tab-free path.", file=sys.stderr)
         sys.exit(1)
     print(src)
+')
+
+  # pkg<TAB>src pairs from entries that opt into package coverage via pkgs.
+  PKG_COVERAGE=$(git show "$HEAD_REF:$MAP_FILE" | python3 -c '
+import json, re, sys
+data = json.load(sys.stdin)
+for item in data.get("mirrored", []):
+    src = item.get("src")
+    pkgs = item.get("pkgs")
+    if not isinstance(src, str) or src == "" or pkgs is None:
+        continue
+    if not isinstance(pkgs, list) or not pkgs or not all(
+        isinstance(p, str) and re.fullmatch(r"[A-Za-z0-9_.-]+", p) for p in pkgs
+    ):
+        print("::error::scripts/gitbook-sync-map.json pkgs must be a non-empty array of package directory names.", file=sys.stderr)
+        sys.exit(1)
+    for p in pkgs:
+        print(f"{p}\t{src}")
 ')
 }
 
@@ -111,10 +132,10 @@ for PKG in $PKGS; do
     MISSING="$MISSING $PKG"
     continue
   fi
-  if echo "$UPDATED" | grep -qxF "packages/$PKG/README.md"; then
+  if grep -qxF "packages/$PKG/README.md" <<< "$UPDATED"; then
     continue
   fi
-  if [ "$PKG" != "sdk" ] && echo "$UPDATED" | grep -qE "^packages/${PKG}/docs/"; then
+  if [ "$PKG" != "sdk" ] && grep -qE "^packages/${PKG}/docs/" <<< "$UPDATED"; then
     continue
   fi
   HAS_RELATED_MIRROR=0
@@ -133,8 +154,9 @@ done
 
 if [ -n "$MISSING" ]; then
   echo "::error::Source changed in:$MISSING — but no publishable docs were updated."
-  echo "Update a mapped file for that package (packages/<pkg>/… in $MAP_FILE)"
-  echo "or a packages/sdk/docs/ page on the map, the package README, or"
+  echo "Update a mapped file for that package (packages/<pkg>/… in $MAP_FILE),"
+  echo "a packages/sdk/docs/ page on the map, a mapped root docs/ guide whose"
+  echo "pkgs entry lists the package, the package README, or"
   echo "packages/<pkg>/docs/ (non-sdk packages)."
   echo "JSDoc, packages/skills, and unmirrored sdk/docs pages (DEX.md, LOGGING.md, …) do not count."
   echo "An unrelated mapped file (e.g. packages/skills/README.md) does not satisfy another package."

@@ -36,6 +36,7 @@ Never edit the docs site or the synced copies directly.
 | --------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | A functional module (swaps, money market, bridge, staking, migration, leverage yield) | The matching *mirrored* file in `packages/sdk/docs/` (e.g. `SWAPS.md`, listed in `scripts/gitbook-sync-map.json`) |
 | The public API of any package                                          | That package's `README.md`                                                  |
+| A flow with a root-level `docs/` guide (e.g. Stellar sponsoring)       | That guide — it satisfies Docs Drift for the packages its `pkgs` entry lists in `scripts/gitbook-sync-map.json` |
 | Exported types or function signatures                                  | JSDoc on the exports themselves (does not satisfy Docs Drift)               |
 
 `packages/skills` is **not** where we introduce a feature. It is the partner-facing agent bundle — how integrators' coding agents call APIs we already shipped. Update it when a public API, example, or chain/token surface changes so their agents stay correct, then run `pnpm check:ai`. That does not publish to docs.sodax.com and does not satisfy Docs Drift. How *we* add features lives in `.claude/skills/` (`add-feature`, `add-chain`, …).

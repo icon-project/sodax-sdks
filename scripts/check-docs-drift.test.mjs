@@ -12,6 +12,8 @@ const MAP = {
     { src: 'packages/sdk/docs/SWAPS.md', dest: 'developers/swaps.md' },
     { src: 'packages/sdk/README.md', dest: 'developers/sdk.md' },
     { src: 'packages/skills/README.md', dest: 'developers/skills.md' },
+    { src: 'docs/guide.md', dest: 'developers/how-to/guide.md', pkgs: ['sdk'] },
+    { src: 'docs/meta.md', dest: 'developers/meta.md' },
   ],
 };
 
@@ -49,6 +51,8 @@ const createRepo = t => {
   write(root, 'packages/skills/README.md', '# skills\n');
   write(root, 'packages/types/src/index.ts', 'export type T = string;\n');
   write(root, 'packages/types/README.md', '# types\n');
+  write(root, 'docs/guide.md', '# Guide\n');
+  write(root, 'docs/meta.md', '# Meta\n');
   const base = commit(root, 'base');
   return { root, base };
 };
@@ -308,7 +312,7 @@ test('fails closed when a map src contains a newline', t => {
 
   const result = run(root, base, head);
   assert.equal(result.code, 1);
-  assert.match(result.out, /single-line path/);
+  assert.match(result.out, /single-line, tab-free path/);
 });
 
 test('passes when types src changes with packages/types/docs/', t => {
@@ -333,4 +337,74 @@ test('fails when sdk and types src change but only types has a docs signal', t =
   assert.equal(result.code, 1);
   assert.match(result.out, /Source changed in: sdk/);
   assert.doesNotMatch(result.out, /Source changed in:.*types/);
+});
+
+test('passes when sdk src changes with a mapped root doc listing sdk', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'packages/sdk/src/index.ts', 'export const n = 2;\n');
+  write(root, 'docs/guide.md', '# Guide\n\nUpdated.\n');
+  const head = commit(root, 'sdk + root guide');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 0);
+  assert.match(result.out, /docs signal/);
+});
+
+test('fails when types src changes with a root doc that does not list types', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'packages/types/src/index.ts', 'export type T = number;\n');
+  write(root, 'docs/guide.md', '# Guide\n\nUpdated.\n');
+  const head = commit(root, 'types + sdk-only root guide');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 1);
+  assert.match(result.out, /Source changed in: types/);
+});
+
+test('fails when sdk src changes with a mapped root doc that has no pkgs', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'packages/sdk/src/index.ts', 'export const n = 2;\n');
+  write(root, 'docs/meta.md', '# Meta\n\nUpdated.\n');
+  const head = commit(root, 'sdk + uncovering root doc');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 1);
+  assert.match(result.out, /Source changed in: sdk/);
+});
+
+test('fails closed when a map pkgs entry is malformed', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'packages/sdk/src/index.ts', 'export const n = 2;\n');
+  write(
+    root,
+    'scripts/gitbook-sync-map.json',
+    `${JSON.stringify(
+      {
+        mirrored: MAP.mirrored.map(item => (item.src === 'docs/guide.md' ? { ...item, pkgs: 'sdk' } : item)),
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  const head = commit(root, 'pkgs as string');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 1);
+  assert.match(result.out, /pkgs must be a non-empty array/);
+});
+
+test('passes when a huge changed-path list still matches the README', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'packages/types/src/index.ts', 'export type T = number;\n');
+  write(root, 'packages/types/README.md', '# types\n\nUpdated.\n');
+  // >64KB of paths sorting after the README: with a producer pipeline, grep -q
+  // matching early SIGPIPEs the echo under pipefail and fakes a non-match.
+  for (let i = 0; i < 3000; i += 1) {
+    write(root, `packages/types/src/gen/f${String(i).padStart(4, '0')}.ts`, 'export {};\n');
+  }
+  const head = commit(root, 'types + readme + generated files');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 0);
+  assert.match(result.out, /docs signal/);
 });
