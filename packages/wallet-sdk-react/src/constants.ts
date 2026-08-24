@@ -39,7 +39,7 @@ export const STELLAR_DEFAULT_HORIZON_RPC_URL = 'https://horizon.stellar.org';
 export const STELLAR_DEFAULT_SOROBAN_RPC_URL = 'https://rpc.ankr.com/stellar_soroban';
 
 // ─── NEAR ───────────────────────────────────────────────────────────────────
-export const NEAR_DEFAULT_RPC_URL = 'https://1rpc.io/near';
+export const NEAR_DEFAULT_RPC_URL = 'https://free.rpc.fastnear.com';
 
 // ─── Wallet metadata (install URLs + icons for extension-based wallets) ────
 // Keys are wallet-level, not per-connector: one OKX extension serves both
