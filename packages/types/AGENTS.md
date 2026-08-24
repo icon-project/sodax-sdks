@@ -100,6 +100,12 @@ Built with `tsc` (other workspace packages bundle with tsup — this one doesn't
 
 Relative imports inside source must use `.js` extensions (see [`src/index.ts`](src/index.ts) for the pattern).
 
+`checkTs` also typechecks test files — with a twist this package alone needs: the build tsconfig
+keeps excluding `**/*.test.ts` because its `tsc` run EMITS `dist/` (tests must never land in the
+published output), so a second config, `tsconfig.check.json`, extends it with tests included and
+`noEmit`, and `checkTs` runs both plus the shared `scripts/check-tests-typechecked.mjs` guard
+(test-in-program assert + `as unknown as` why-comment ratchet).
+
 ## Rules
 
 - **Zero runtime dependencies.** `package.json` has no `dependencies` block — only devDependencies. Never add a runtime dependency; all types must be self-contained.

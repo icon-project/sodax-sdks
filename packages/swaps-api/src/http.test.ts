@@ -35,7 +35,7 @@ describe('buildUrl', () => {
 
 describe('request', () => {
   it('returns the parsed body on success and calls the right URL/method', async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse({ quotedAmount: '5' }));
+    const fetchImpl = vi.fn<typeof globalThis.fetch>(async () => jsonResponse({ quotedAmount: '5' }));
     const out = await request(ctx(fetchImpl), {
       method: 'POST',
       path: '/swaps/quote',
@@ -53,7 +53,7 @@ describe('request', () => {
   });
 
   it('sends no body and no Content-Type for a bodyless GET', async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse([]));
+    const fetchImpl = vi.fn<typeof globalThis.fetch>(async () => jsonResponse([]));
     await request(ctx(fetchImpl), { method: 'GET', path: '/swaps/tokens', endpoint: 'getTokens', parse: identity });
     const [, init] = fetchImpl.mock.calls[0] ?? [];
     expect(init?.body).toBeUndefined();
@@ -61,7 +61,7 @@ describe('request', () => {
   });
 
   it('throws VALIDATION_ERROR (before fetch) when the body carries a stray bigint', async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse({}));
+    const fetchImpl = vi.fn<typeof globalThis.fetch>(async () => jsonResponse({}));
     await expect(
       request(ctx(fetchImpl), {
         method: 'POST',
@@ -75,7 +75,7 @@ describe('request', () => {
   });
 
   it('maps a non-2xx to HTTP_ERROR with status and parsed body', async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse({ message: 'bad request' }, 400));
+    const fetchImpl = vi.fn<typeof globalThis.fetch>(async () => jsonResponse({ message: 'bad request' }, 400));
     const err = await request(ctx(fetchImpl), {
       method: 'POST',
       path: '/x',
@@ -83,6 +83,7 @@ describe('request', () => {
       parse: identity,
     }).catch(e => e as SwapsApiError);
     expect(err).toBeInstanceOf(SwapsApiError);
+    if (!(err instanceof SwapsApiError)) throw new Error('expected a SwapsApiError');
     expect(err.code).toBe('HTTP_ERROR');
     expect(err.context.status).toBe(400);
     expect(err.context.body).toEqual({ message: 'bad request' });
@@ -97,7 +98,7 @@ describe('request', () => {
   });
 
   it('maps a parse/validation throw to VALIDATION_ERROR', async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse({ wrong: true }));
+    const fetchImpl = vi.fn<typeof globalThis.fetch>(async () => jsonResponse({ wrong: true }));
     const parse = () => {
       throw new Error('schema mismatch');
     };
@@ -132,7 +133,7 @@ describe('request', () => {
   });
 
   it('gives up after the retry budget for a persistently failing idempotent call', async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse({}, 503));
+    const fetchImpl = vi.fn<typeof globalThis.fetch>(async () => jsonResponse({}, 503));
     await expect(
       request(ctx(fetchImpl), { method: 'GET', path: '/x', endpoint: 'getStatus', parse: identity, idempotent: true }),
     ).rejects.toMatchObject({ code: 'HTTP_ERROR', context: { status: 503 } });
@@ -140,7 +141,7 @@ describe('request', () => {
   });
 
   it('never retries a non-idempotent call', async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse({}, 503));
+    const fetchImpl = vi.fn<typeof globalThis.fetch>(async () => jsonResponse({}, 503));
     await expect(
       request(ctx(fetchImpl), { method: 'POST', path: '/swaps/intents', endpoint: 'createIntent', parse: identity }),
     ).rejects.toMatchObject({ code: 'HTTP_ERROR' });
@@ -221,7 +222,7 @@ describe('request', () => {
   });
 
   it('passes no abort signal and never times out when timeout is unset', async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse({ ok: true }));
+    const fetchImpl = vi.fn<typeof globalThis.fetch>(async () => jsonResponse({ ok: true }));
     const out = await request(ctx(fetchImpl), {
       method: 'GET',
       path: '/x',

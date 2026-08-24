@@ -136,3 +136,9 @@ pnpm checkTs
 ```
 
 The package builds ESM with declarations. React, React DOM, and React Query are peer/external dependencies.
+
+`checkTs` typechecks test files too: `tsconfig.json` deliberately does not exclude them, and the
+shared `scripts/check-tests-typechecked.mjs` (repo root, the tail of `checkTs`) fails loudly if a
+future exclude hides them again. It also requires a one-line why-comment on every `as unknown as`
+in a test file, with pre-existing undocumented casts grandfathered in this package's
+`scripts/test-cast-comment-baseline.json`, which may only shrink.

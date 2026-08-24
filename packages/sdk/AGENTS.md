@@ -131,8 +131,8 @@ pnpm checkTs
 The package builds dual ESM/CJS output with `tsup`. Relative imports in source use `.js` extensions.
 
 `checkTs` typechecks test files too: `tsconfig.json` deliberately does not exclude `**/*.test.ts`,
-and `scripts/check-tests-typechecked.mjs` (the second half of `checkTs`) fails loudly if a future
-exclude hides them again. Casts in tests follow the no-escape-hatches rule: a stub cast (`as never`,
+and the shared `scripts/check-tests-typechecked.mjs` (repo root, the tail of `checkTs`) fails
+loudly if a future exclude hides them again. Casts in tests follow the no-escape-hatches rule: a stub cast (`as never`,
 `as unknown as …`) is allowed only while removing it breaks the typecheck — a cast that compiles
 away without it is dead weight that can hide fixture drift; delete it. Every `as unknown as` in a
 test also needs a one-line why-comment on or just above it — the same guard script enforces this
