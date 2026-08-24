@@ -587,6 +587,7 @@ describe('BridgeService.createBridgeIntent — validation invariants', () => {
         dstToken: SAMPLE_TOKEN,
         recipient: SAMPLE_DST,
       },
+      // Deliberate cast: the wrong-family provider above is exactly the case under test.
     } as unknown as BridgeParams<typeof BSC, false>);
 
     expect(result.ok).toBe(false);

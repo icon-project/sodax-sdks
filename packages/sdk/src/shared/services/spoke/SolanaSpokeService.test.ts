@@ -490,6 +490,7 @@ describe('SolanaSpokeService.getDeposit', () => {
 
     const result = await solanaSpoke.getDeposit({
       srcChainKey: SOL,
+      // Deliberate cast: same GetAddressType<'solana'> wart as the native-SOL case above.
       srcAddress: SRC_ADDR as unknown as `0x${string}`,
       token: SOL_BNUSD,
     });

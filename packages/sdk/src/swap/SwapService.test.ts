@@ -2524,6 +2524,8 @@ describe('SwapService.createIntent — extras (partnerFee + srcPublicKey)', () =
 });
 
 describe('SwapService.getQuote', () => {
+  // Deliberate cast: a partial wire-shape fixture — annotating as the real quote-request type
+  // would demand every field, and the tests only exercise amount/fee adjustment.
   const baseQuoteRequest = {
     token_src: '0x2170Ed0880ac9A755fd29B2688956BD959F933F8',
     token_dst: '0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f',

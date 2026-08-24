@@ -134,7 +134,10 @@ The package builds dual ESM/CJS output with `tsup`. Relative imports in source u
 and `scripts/check-tests-typechecked.mjs` (the second half of `checkTs`) fails loudly if a future
 exclude hides them again. Casts in tests follow the no-escape-hatches rule: a stub cast (`as never`,
 `as unknown as …`) is allowed only while removing it breaks the typecheck — a cast that compiles
-away without it is dead weight that can hide fixture drift; delete it.
+away without it is dead weight that can hide fixture drift; delete it. Every `as unknown as` in a
+test also needs a one-line why-comment on or just above it — the same guard script enforces this
+for new casts, with pre-existing undocumented ones grandfathered per file in
+`scripts/test-cast-comment-baseline.json`, which may only shrink (`--update-baseline` regenerates it).
 
 `build` runs `scripts/verify-dist-exports.mjs` after `tsup`, asserting every file named in
 `package.json#exports` was actually emitted. `tsup` runs with `clean: true` and writes JS about ten
