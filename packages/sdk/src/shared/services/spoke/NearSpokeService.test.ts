@@ -130,7 +130,7 @@ describe('NearSpokeService.estimateGas', () => {
 
 describe('NearSpokeService.queryContract', () => {
   it('forwards contractId/method/args to rpcProvider.callFunction', async () => {
-    const spy = vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockResolvedValueOnce('hello' as never);
+    const spy = vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockResolvedValueOnce('hello');
 
     const result = await nearSpoke.queryContract('asset.near', 'get_x', { id: 1 });
 
@@ -149,7 +149,7 @@ describe('NearSpokeService.getRateLimit', () => {
       max_available: 100,
       available: 80,
       rate_per_second: 5,
-    } as never);
+    });
 
     const result = await nearSpoke.getRateLimit(NEAR_BNUSD, NEAR);
     expect(result).toEqual({ maxAvailable: 100, available: 80, ratePerSecond: 5 });
@@ -163,7 +163,7 @@ describe('NearSpokeService.getRateLimit', () => {
   });
 
   it('returns zeroes when callFunction resolves to undefined', async () => {
-    vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockResolvedValueOnce(undefined as never);
+    vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockResolvedValueOnce(undefined);
 
     const result = await nearSpoke.getRateLimit(NEAR_BNUSD, NEAR);
     expect(result).toEqual({ maxAvailable: 0, available: 0, ratePerSecond: 0 });
@@ -172,7 +172,7 @@ describe('NearSpokeService.getRateLimit', () => {
   it('queries the per-chain rateLimit contract from config', async () => {
     const spy = vi
       .spyOn(nearSpoke.rpcProvider, 'callFunction')
-      .mockResolvedValueOnce({ max_available: 1, available: 1, rate_per_second: 1 } as never);
+      .mockResolvedValueOnce({ max_available: 1, available: 1, rate_per_second: 1 });
 
     await nearSpoke.getRateLimit(NEAR_BNUSD, NEAR);
     expect(spy).toHaveBeenCalledWith({
@@ -288,7 +288,7 @@ describe('NearSpokeService.deposit', () => {
 
 describe('NearSpokeService.getDeposit', () => {
   it('native → calls get_balance on assetManager with empty args', async () => {
-    const spy = vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockResolvedValueOnce('500' as never);
+    const spy = vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockResolvedValueOnce('500');
 
     const result = await nearSpoke.getDeposit({
       srcChainKey: NEAR,
@@ -301,7 +301,7 @@ describe('NearSpokeService.getDeposit', () => {
   });
 
   it('non-native → calls ft_balance_of on token with account_id=assetManager', async () => {
-    const spy = vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockResolvedValueOnce('7500' as never);
+    const spy = vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockResolvedValueOnce('7500');
 
     const result = await nearSpoke.getDeposit({
       srcChainKey: NEAR,
@@ -318,7 +318,7 @@ describe('NearSpokeService.getDeposit', () => {
   });
 
   it('throws when callFunction returns a non-string (defensive type check)', async () => {
-    vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockResolvedValueOnce(123 as never);
+    vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockResolvedValueOnce(123);
 
     await expect(nearSpoke.getDeposit({ srcChainKey: NEAR, srcAddress: SRC_ADDR, token: NEAR_BNUSD })).rejects.toThrow(
       'Failed to get balance',
@@ -341,7 +341,7 @@ describe('NearSpokeService.isStorageRegistered', () => {
   it('non-native registered → storage_balance_of returns an object → true', async () => {
     const spy = vi
       .spyOn(nearSpoke.rpcProvider, 'callFunction')
-      .mockResolvedValueOnce({ total: '1250000000000000000000', available: '0' } as never);
+      .mockResolvedValueOnce({ total: '1250000000000000000000', available: '0' });
 
     expect(await nearSpoke.isStorageRegistered(NEAR_BNUSD, SRC_ADDR)).toBe(true);
     expect(spy).toHaveBeenCalledWith({
@@ -460,7 +460,7 @@ describe('NearSpokeService.getLimit / getAvailable', () => {
       max_available: 42,
       available: 10,
       rate_per_second: 1,
-    } as never);
+    });
 
     expect(await nearSpoke.getLimit(NEAR_BNUSD, NEAR)).toBe(42n);
   });
@@ -470,7 +470,7 @@ describe('NearSpokeService.getLimit / getAvailable', () => {
       max_available: 42,
       available: 10,
       rate_per_second: 1,
-    } as never);
+    });
 
     expect(await nearSpoke.getAvailable(NEAR_BNUSD, NEAR)).toBe(10n);
   });

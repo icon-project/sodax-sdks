@@ -21,7 +21,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 import { decodeAbiParameters, decodeFunctionData, erc20Abi, parseAbiParameters } from 'viem';
-import type { Address, IBitcoinWalletProvider, IEvmWalletProvider, SpokeChainKey } from '@sodax/types';
+import type { Address, IEvmWalletProvider, SpokeChainKey } from '@sodax/types';
 import { ChainKeys, DEFAULT_BACKEND_API_TIMEOUT, DEFAULT_RELAY_TX_TIMEOUT } from '@sodax/types';
 import { RELAY_FALLBACK_FLOOR_MS } from '../shared/services/intentRelay/IntentRelayApiService.js';
 import { EvmVaultTokenService } from '../shared/services/hub/EvmVaultTokenService.js';
@@ -109,7 +109,7 @@ const mockBtcProvider = {
   sendBitcoin: vi.fn(),
   getWalletAddress: vi.fn(),
   getPublicKey: vi.fn(),
-} as unknown as IBitcoinWalletProvider;
+};
 
 const btcBridgeInput = (): BridgeParams<typeof BTC, false> =>
   ({
@@ -159,9 +159,7 @@ describe('BridgeService.createBridgeIntent — Bitcoin USER mode', () => {
     Object.defineProperty(sodax.spoke.bitcoin, 'walletMode', { value: 'USER', configurable: true });
 
     vi.spyOn(sodax.spoke.bitcoin, 'getEffectiveWalletAddress').mockResolvedValue(BTC_USER_ADDR);
-    ensureRadfiSpy = vi
-      .spyOn(sodax.spoke.bitcoin.radfi, 'ensureRadfiAccessToken')
-      .mockResolvedValue(undefined as never);
+    ensureRadfiSpy = vi.spyOn(sodax.spoke.bitcoin.radfi, 'ensureRadfiAccessToken').mockResolvedValue(undefined);
     vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockResolvedValue(HUB_BTC_WALLET);
     vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValue({
       address: BTC_TOKEN,
@@ -169,11 +167,11 @@ describe('BridgeService.createBridgeIntent — Bitcoin USER mode', () => {
       symbol: 'BTC',
     } as never);
     // Short-circuit data encoding — the test only cares about the Bitcoin wiring before buildBridgeData.
-    vi.spyOn(sodax.bridge, 'buildBridgeData').mockReturnValue('0xdata' as never);
+    vi.spyOn(sodax.bridge, 'buildBridgeData').mockReturnValue('0xdata');
     depositSpy = vi.spyOn(sodax.spoke, 'deposit').mockResolvedValue({
       ok: true,
       value: 'btctxhash',
-    } as never);
+    });
   });
 
   afterEach(() => {
@@ -264,8 +262,8 @@ describe('BridgeService.createBridgeIntent — BTC destination post-fee dust', (
       hubAsset: '0xbtchub',
     } as never);
     vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockResolvedValue(HUB_BTC_WALLET);
-    vi.spyOn(sodax.bridge, 'buildBridgeData').mockReturnValue('0xdata' as never);
-    vi.spyOn(sodax.spoke, 'deposit').mockResolvedValue({ ok: true, value: '0xtxhash' } as never);
+    vi.spyOn(sodax.bridge, 'buildBridgeData').mockReturnValue('0xdata');
+    vi.spyOn(sodax.spoke, 'deposit').mockResolvedValue({ ok: true, value: '0xtxhash' });
   });
 
   it('passes when the post-fee delivery clears dust (percentage fee)', async () => {
@@ -385,7 +383,7 @@ describe('BridgeService.buildBridgeData — shared fee/decimal basis', () => {
         dstChainKey: dst.chainKey,
         dstToken: dst.address,
         recipient: BTC_USER_ADDR,
-      } as never,
+      },
       src,
       dst,
       undefined,
@@ -441,7 +439,7 @@ describe('BridgeService.buildBridgeData — shared fee/decimal basis', () => {
         dstChainKey: ChainKeys.SONIC_MAINNET,
         dstToken: dst.address,
         recipient: SAMPLE_DST,
-      } as never,
+      },
       src,
       dst,
       { address: FEE_ADDR, percentage: 100 },
@@ -474,7 +472,7 @@ describe('BridgeService.buildBridgeData — shared fee/decimal basis', () => {
         dstChainKey: ARBITRUM,
         dstToken: dst.address,
         recipient: SAMPLE_DST,
-      } as never,
+      },
       src,
       dst,
       { address: FEE_ADDR, percentage: 100 },
@@ -519,7 +517,7 @@ describe('BridgeService.buildBridgeData — shared fee/decimal basis', () => {
         dstChainKey: ChainKeys.SONIC_MAINNET,
         dstToken: dst.address,
         recipient: SAMPLE_DST,
-      } as never,
+      },
       src,
       dst,
       { address: FEE_ADDR, percentage: 100 },
@@ -543,7 +541,7 @@ describe('BridgeService.createBridgeIntent — Stacks raw srcPublicKey guard', (
       symbol: 'aBTC',
     } as never);
     vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockResolvedValue(HUB_WALLET);
-    vi.spyOn(sodax.bridge, 'buildBridgeData').mockReturnValue('0xdata' as never);
+    vi.spyOn(sodax.bridge, 'buildBridgeData').mockReturnValue('0xdata');
   });
 
   it('rejects a Stacks raw intent when extras.srcPublicKey is missing', async () => {
@@ -559,9 +557,7 @@ describe('BridgeService.createBridgeIntent — Stacks raw srcPublicKey guard', (
 
   it('passes extras.srcPublicKey through to the spoke deposit for a Stacks raw intent', async () => {
     const srcPublicKey = '025259f813b57dd5c3fcac09776d767a49f6dd77bba5895823b891e31b10a96a5d';
-    const depositSpy = vi
-      .spyOn(sodax.spoke, 'deposit')
-      .mockResolvedValue({ ok: true, value: { payload: '0xraw' } } as never);
+    const depositSpy = vi.spyOn(sodax.spoke, 'deposit').mockResolvedValue({ ok: true, value: { payload: '0xraw' } });
 
     const result = await sodax.bridge.createBridgeIntent(stacksRawBridgeInput({ srcPublicKey }));
 
@@ -665,11 +661,11 @@ describe('BridgeService.createBridgeIntent — Sonic-sourced hub-asset resolutio
 
   beforeEach(() => {
     vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockResolvedValue(HUB_WALLET);
-    vi.spyOn(sodax.spoke, 'deposit').mockResolvedValue({ ok: true, value: 'sonictxhash' } as never);
+    vi.spyOn(sodax.spoke, 'deposit').mockResolvedValue({ ok: true, value: 'sonictxhash' });
   });
 
   it('resolves a hub-asset srcToken/dstToken via the hub-asset map and bridges (no "Unsupported spoke chain")', async () => {
-    const buildSpy = vi.spyOn(sodax.bridge, 'buildBridgeData').mockReturnValue('0xdata' as never);
+    const buildSpy = vi.spyOn(sodax.bridge, 'buildBridgeData').mockReturnValue('0xdata');
 
     const result = await sodax.bridge.createBridgeIntent(sonicWithdrawInput(BTC_HUB_ASSET, BTC_HUB_ASSET));
 
@@ -722,7 +718,7 @@ describe('BridgeService.bridge — integration error-path coverage', () => {
     vi.spyOn(sodax.bridge, 'createBridgeIntent').mockResolvedValueOnce({
       ok: true,
       value: {
-        tx: '0xspokeTxHash' as never,
+        tx: '0xspokeTxHash',
         relayData: { address: HUB_WALLET, payload: '0x' },
       },
     });
@@ -752,7 +748,7 @@ describe('BridgeService.bridge — integration error-path coverage', () => {
     vi.spyOn(sodax.bridge, 'createBridgeIntent').mockResolvedValueOnce({
       ok: true,
       value: {
-        tx: '0xspokeTxHash' as never,
+        tx: '0xspokeTxHash',
         relayData: { address: HUB_WALLET, payload: '0x' },
       },
     });
@@ -814,8 +810,8 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
   const stubCreatedAndVerified = () => {
     vi.spyOn(sodaxBE.bridge, 'createBridgeIntent').mockResolvedValueOnce({
       ok: true,
-      value: { tx: '0xspokeTx' as never, relayData: { address: HUB_WALLET, payload: '0x' } },
-    } as never);
+      value: { tx: '0xspokeTx', relayData: { address: HUB_WALLET, payload: '0x' } },
+    });
     return vi.spyOn(sodaxBE.spoke, 'verifyTxHash').mockResolvedValue({ ok: true, value: true });
   };
 
@@ -824,7 +820,7 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
     const submitSpy = vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValueOnce({
       ok: true,
       value: { success: true, data: { status: 'inserted', message: 'accepted' } },
-    } as never);
+    });
     vi.spyOn(sodaxBE.api.bridge, 'getSubmitTxStatus').mockResolvedValueOnce({
       ok: true,
       value: {
@@ -837,7 +833,7 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
           result: { dstIntentTxHash: '0xDST' },
         },
       },
-    } as never);
+    });
 
     const result = await sodaxBE.bridge.bridge(bridgeInput(BSC, ARBITRUM));
 
@@ -856,7 +852,7 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
     vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValueOnce({
       ok: false,
       error: new SodaxError('EXTERNAL_API_ERROR', 'backend down', { feature: 'backend' }),
-    } as never);
+    });
     const statusSpy = vi.spyOn(sodaxBE.api.bridge, 'getSubmitTxStatus');
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
 
@@ -876,14 +872,14 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
     vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValueOnce({
       ok: true,
       value: { success: true, data: { status: 'inserted', message: 'accepted' } },
-    } as never);
+    });
     vi.spyOn(sodaxBE.api.bridge, 'getSubmitTxStatus').mockResolvedValueOnce({
       ok: true,
       value: {
         success: true,
         data: { txHash: '0xspokeTx', srcChainKey: BSC, status: 'failed', processingAttempts: 1, failureReason: 'boom' },
       },
-    } as never);
+    });
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
 
     const result = await sodaxBE.bridge.bridge(bridgeInput(BSC, ARBITRUM));
@@ -897,8 +893,8 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
     // The module-level `sodax` opts out via `bridge.useBackendSubmitTx: false` → pure client-side flow.
     vi.spyOn(sodax.bridge, 'createBridgeIntent').mockResolvedValueOnce({
       ok: true,
-      value: { tx: '0xspokeTx' as never, relayData: { address: HUB_WALLET, payload: '0x' } },
-    } as never);
+      value: { tx: '0xspokeTx', relayData: { address: HUB_WALLET, payload: '0x' } },
+    });
     vi.spyOn(sodax.spoke, 'verifyTxHash').mockResolvedValueOnce({ ok: true, value: true });
     const submitSpy = vi.spyOn(sodax.api.bridge, 'submitTx');
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xdstTx' } });
@@ -914,14 +910,14 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
     vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValueOnce({
       ok: true,
       value: { success: true, data: { status: 'inserted', message: 'accepted' } },
-    } as never);
+    });
     vi.spyOn(sodaxBE.api.bridge, 'getSubmitTxStatus').mockResolvedValue({
       ok: true,
       value: {
         success: true,
         data: { txHash: '0xspokeTx', srcChainKey: BSC, status: 'pending', processingAttempts: 1 },
       },
-    } as never);
+    });
   };
 
   it('gives the fallback a FRESH full timeout after a stalled backend consumed its own', async () => {
@@ -953,7 +949,7 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
     const submitSpy = vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValueOnce({
       ok: false,
       error: new SodaxError('EXTERNAL_API_ERROR', 'backend down', { feature: 'backend' }),
-    } as never);
+    });
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
 
     // `?? DEFAULT` does not catch NaN; unresolved it would skip the POST and hand the relay
@@ -974,7 +970,7 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
     const submitSpy = vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValue({
       ok: false,
       error: new SodaxError('EXTERNAL_API_ERROR', 'unreachable', { feature: 'backend' }),
-    } as never);
+    });
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
 
     const result = await sodaxBE.bridge.bridge(bridgeInput(BSC, ARBITRUM, 0));
@@ -991,7 +987,7 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
     vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValueOnce({
       ok: true,
       value: { success: true, data: { status: 'inserted', message: 'accepted' } },
-    } as never);
+    });
     vi.spyOn(sodaxBE.api.bridge, 'getSubmitTxStatus').mockResolvedValueOnce({
       ok: true,
       value: {
@@ -1004,7 +1000,7 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
           result: { dstIntentTxHash: '0xDST' },
         },
       },
-    } as never);
+    });
 
     expect((await sodaxBE.bridge.bridge(bridgeInput(BSC, ARBITRUM))).ok).toBe(true);
     // Backend success costs nothing in verification — verifying first would delay it by the source
@@ -1018,7 +1014,7 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
     vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValueOnce({
       ok: false,
       error: new SodaxError('EXTERNAL_API_ERROR', 'backend down', { feature: 'backend' }),
-    } as never);
+    });
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
 
     expect((await sodaxBE.bridge.bridge(bridgeInput(BSC, ARBITRUM))).ok).toBe(true);
@@ -1032,8 +1028,8 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
     try {
       vi.spyOn(sodax.bridge, 'createBridgeIntent').mockResolvedValueOnce({
         ok: true,
-        value: { tx: '0xspokeTx' as never, relayData: { address: HUB_WALLET, payload: '0x' } },
-      } as never);
+        value: { tx: '0xspokeTx', relayData: { address: HUB_WALLET, payload: '0x' } },
+      });
       vi.spyOn(sodax.spoke, 'verifyTxHash').mockResolvedValueOnce({ ok: true, value: true });
       mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xdstTx' } });
 
@@ -1055,8 +1051,8 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
     try {
       vi.spyOn(sodax.bridge, 'createBridgeIntent').mockResolvedValueOnce({
         ok: true,
-        value: { tx: '0xspokeTx' as never, relayData: { address: HUB_WALLET, payload: '0x' } },
-      } as never);
+        value: { tx: '0xspokeTx', relayData: { address: HUB_WALLET, payload: '0x' } },
+      });
       // A slow source-chain confirmation (Stacks polls for up to its full 120s `maxTimeoutMs`) used to
       // come out of the relay's share, because the fallback's deadline started before `verifyTxHash`.
       vi.spyOn(sodax.spoke, 'verifyTxHash').mockImplementationOnce(async () => {
@@ -1238,7 +1234,7 @@ describe('BridgeService.buildApproveTxs', () => {
   });
 
   it('surfaces the reset under its own name when the plan needs one', async () => {
-    const resetTx = { ...(rawTx as object), data: '0xreset' } as never;
+    const resetTx = { ...(rawTx as object), data: '0xreset' };
     vi.spyOn(sodax.bridge.spoke, 'buildApproveTxs').mockResolvedValueOnce({
       ok: true,
       value: { resetTx, approveTx: rawTx },

@@ -1555,7 +1555,7 @@ describe('MoneyMarketService.createBorrowIntent', () => {
     });
 
     it('rejects when the dst money market token is unknown', async () => {
-      vi.spyOn(sodax.config, 'getMoneyMarketToken').mockReturnValueOnce(undefined as never);
+      vi.spyOn(sodax.config, 'getMoneyMarketToken').mockReturnValueOnce(undefined);
 
       const result = await sodax.moneyMarket.createBorrowIntent({
         raw: false,
@@ -1665,7 +1665,7 @@ describe('MoneyMarketService.createBorrowIntent (raw: true)', () => {
   });
 
   it('rejects when dst money market token is unknown', async () => {
-    vi.spyOn(sodax.config, 'getMoneyMarketToken').mockReturnValueOnce(undefined as never);
+    vi.spyOn(sodax.config, 'getMoneyMarketToken').mockReturnValueOnce(undefined);
 
     const result = await sodax.moneyMarket.createBorrowIntent({
       raw: true,
@@ -2296,7 +2296,7 @@ describe('MoneyMarketService.withdraw', () => {
       // APPROVE_FAILED is a valid moneyMarket code but not part of WithdrawErrorCode (which is
       // the orchestration-only union). The narrow `isMoneyMarketOrchestrationError` guard rejects it, so the
       // outer catch wraps it as EXECUTION_FAILED and preserves the typed contract.
-      const outOfUnion = new SodaxError('APPROVE_FAILED' as never, 'wrong-phase code', { feature: 'moneyMarket' });
+      const outOfUnion = new SodaxError('APPROVE_FAILED', 'wrong-phase code', { feature: 'moneyMarket' });
       vi.spyOn(sodax.moneyMarket, 'createWithdrawIntent').mockRejectedValueOnce(outOfUnion);
 
       const result = await sodax.moneyMarket.withdraw({
@@ -2763,7 +2763,7 @@ describe('MoneyMarketService.buildSupplyData', () => {
   });
 
   it('throws (caught upstream) when the hub asset cannot be resolved', () => {
-    vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValueOnce(undefined as never);
+    vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValueOnce(undefined);
 
     expect(() => sodax.moneyMarket.buildSupplyData(ChainKeys.BSC_MAINNET, SAMPLE_EVM_TOKEN, 1n, HUB_WALLET)).toThrow(
       /hub asset not found/,
@@ -2835,7 +2835,7 @@ describe('MoneyMarketService.buildBorrowData', () => {
   });
 
   it('throws when the target hub asset cannot be resolved', () => {
-    vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValueOnce(undefined as never);
+    vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValueOnce(undefined);
     vi.spyOn(sodax.config, 'getMoneyMarketToken').mockReturnValueOnce(fakeMoneyMarketToken as never);
 
     expect(() =>
@@ -2845,7 +2845,7 @@ describe('MoneyMarketService.buildBorrowData', () => {
 
   it('throws when the dst money-market token cannot be resolved', () => {
     vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValueOnce(fakeHubAsset() as never);
-    vi.spyOn(sodax.config, 'getMoneyMarketToken').mockReturnValueOnce(undefined as never);
+    vi.spyOn(sodax.config, 'getMoneyMarketToken').mockReturnValueOnce(undefined);
 
     expect(() =>
       sodax.moneyMarket.buildBorrowData(HUB_WALLET, SAMPLE_DST_ADDRESS, SAMPLE_EVM_TOKEN, 1n, ChainKeys.BSC_MAINNET),
@@ -2914,7 +2914,7 @@ describe('MoneyMarketService.buildWithdrawData', () => {
   });
 
   it('throws when the target hub asset cannot be resolved', () => {
-    vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValueOnce(undefined as never);
+    vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValueOnce(undefined);
     vi.spyOn(sodax.config, 'getMoneyMarketToken').mockReturnValueOnce(fakeMoneyMarketToken as never);
 
     expect(() =>
@@ -2972,7 +2972,7 @@ describe('MoneyMarketService.buildRepayData', () => {
   });
 
   it('throws when the source hub asset cannot be resolved', () => {
-    vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValueOnce(undefined as never);
+    vi.spyOn(sodax.config, 'getSpokeTokenFromOriginalAssetAddress').mockReturnValueOnce(undefined);
 
     expect(() => sodax.moneyMarket.buildRepayData(ChainKeys.BSC_MAINNET, SAMPLE_EVM_TOKEN, 1n, HUB_WALLET)).toThrow(
       /hub asset not found/,
@@ -3197,7 +3197,7 @@ describe('buildBorrowData / buildWithdrawData — remaining branch coverage', ()
     moneyMarket: {
       partnerFee: { address: '0x9999999999999999999999999999999999999999' as Address, percentage: 100 },
     },
-  } as unknown as ConstructorParameters<typeof Sodax>[0]);
+  });
 
   it('buildBorrowData: bnUSD-vault path with partner fee adds the fee transfer call', () => {
     const bnUSDVault = sodaxWithFee.config.moneyMarket.bnUSDVault;

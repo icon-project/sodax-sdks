@@ -194,33 +194,32 @@ type ReadContractStub = {
 };
 function stubReadContract(cfg: ReadContractStub): void {
   const asset = cfg.asset ?? SODA_ASSET;
-  vi.spyOn(sodax.hubProvider.publicClient, 'readContract').mockImplementation((async (call: {
-    functionName: string;
-    args?: readonly unknown[];
-  }) => {
-    switch (call.functionName) {
-      case 'pool':
-        return cfg.pool ?? POOL;
-      case 'asset':
-        return asset;
-      case 'borrowToken':
-        return cfg.borrowToken ?? BORROW_TOKEN;
-      case 'targetLTV':
-        return cfg.targetLtvBps;
-      case 'getReserveData':
-        return call.args?.[0] === asset
-          ? { currentLiquidityRate: cfg.supplyAprRay ?? 0n, currentVariableBorrowRate: 0n }
-          : { currentLiquidityRate: 0n, currentVariableBorrowRate: cfg.borrowAprRay ?? 0n };
-      case 'getPositionDetails':
-        return cfg.position;
-      case 'balanceOf':
-        return cfg.balance;
-      case 'allowance':
-        return cfg.allowance;
-      default:
-        throw new Error(`unexpected readContract: ${call.functionName}`);
-    }
-  }) as never);
+  vi.spyOn(sodax.hubProvider.publicClient, 'readContract').mockImplementation(
+    async (call: { functionName: string; args?: readonly unknown[] }) => {
+      switch (call.functionName) {
+        case 'pool':
+          return cfg.pool ?? POOL;
+        case 'asset':
+          return asset;
+        case 'borrowToken':
+          return cfg.borrowToken ?? BORROW_TOKEN;
+        case 'targetLTV':
+          return cfg.targetLtvBps;
+        case 'getReserveData':
+          return call.args?.[0] === asset
+            ? { currentLiquidityRate: cfg.supplyAprRay ?? 0n, currentVariableBorrowRate: 0n }
+            : { currentLiquidityRate: 0n, currentVariableBorrowRate: cfg.borrowAprRay ?? 0n };
+        case 'getPositionDetails':
+          return cfg.position;
+        case 'balanceOf':
+          return cfg.balance;
+        case 'allowance':
+          return cfg.allowance;
+        default:
+          throw new Error(`unexpected readContract: ${call.functionName}`);
+      }
+    },
+  );
 }
 
 beforeEach(() => {
@@ -1114,7 +1113,7 @@ describe('LeverageYieldService.vaultSwap', () => {
         intent: { ...intent, feeAmount: 0n },
         relayData: { address: intent.creator, payload: '0xdata' },
       },
-    } as never);
+    });
   };
 
   it('on an EVM spoke source: create → verify → relay → notify-solver, returning delivery info', async () => {
@@ -1278,7 +1277,7 @@ describe('LeverageYieldService.approve', () => {
     vi.spyOn(sodax.spoke, 'waitForTxReceipt').mockResolvedValue({
       ok: true,
       value: { status: 'success', receipt: {} },
-    } as never);
+    });
 
     const result = await sodax.leverageYield.approve({ vault: VAULT, amount: 100n, walletProvider: mockEvmProvider });
 
@@ -1503,7 +1502,7 @@ describe('LeverageYieldService — additional error paths', () => {
         intent: { ...intent, feeAmount: 0n },
         relayData: { address: intent.creator, payload: '0xdata' },
       },
-    } as never);
+    });
     // postExecution returns a failure with no `detail` — notifySolver substitutes a synthetic one.
     mocks.solverPostExecution.mockResolvedValueOnce({ ok: false, error: {} });
 

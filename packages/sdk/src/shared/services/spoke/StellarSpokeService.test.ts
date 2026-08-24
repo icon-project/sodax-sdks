@@ -238,7 +238,7 @@ describe('StellarSpokeService — constructor', () => {
     // because the SDK normalises trailing slashes etc.
     expect(stellarSpoke.sorobanServer.serverURL.toString()).toContain(new URL(STELLAR_SOROBAN_URL).host);
     // `Horizon.Server` exposes the URL via `serverURL` too (also a URL object).
-    const horizonUrl = (stellarSpoke.server as unknown as { serverURL: URL }).serverURL;
+    const horizonUrl = stellarSpoke.server.serverURL;
     expect(horizonUrl.toString()).toContain(new URL(STELLAR_HORIZON_URL).host);
   });
 });
@@ -309,7 +309,7 @@ describe('StellarSpokeService.getBalance', () => {
 
   it('returns the decoded bigint as a Number on a successful simulation with retval', async () => {
     vi.spyOn(stellarSpoke.sorobanServer, 'getNetwork').mockResolvedValueOnce(NETWORK_RESPONSE);
-    vi.spyOn(stellarSpoke.sorobanServer, 'getAccount').mockResolvedValueOnce(stubAccount() as never);
+    vi.spyOn(stellarSpoke.sorobanServer, 'getAccount').mockResolvedValueOnce(stubAccount());
     const retval = nativeToScVal(7_500n, { type: 'u128' });
     vi.spyOn(stellarSpoke.sorobanServer, 'simulateTransaction').mockResolvedValueOnce(makeSimSuccess(retval));
 
@@ -325,7 +325,7 @@ describe('StellarSpokeService.getBalance', () => {
 
   it('throws "Failed to simulate transaction" when the simulation is not a success', async () => {
     vi.spyOn(stellarSpoke.sorobanServer, 'getNetwork').mockResolvedValueOnce(NETWORK_RESPONSE);
-    vi.spyOn(stellarSpoke.sorobanServer, 'getAccount').mockResolvedValueOnce(stubAccount() as never);
+    vi.spyOn(stellarSpoke.sorobanServer, 'getAccount').mockResolvedValueOnce(stubAccount());
     vi.spyOn(stellarSpoke.sorobanServer, 'simulateTransaction').mockResolvedValueOnce(makeSimError('boom'));
 
     await expect(
@@ -335,7 +335,7 @@ describe('StellarSpokeService.getBalance', () => {
 
   it('throws "result undefined" when the simulation succeeds but carries no retval', async () => {
     vi.spyOn(stellarSpoke.sorobanServer, 'getNetwork').mockResolvedValueOnce(NETWORK_RESPONSE);
-    vi.spyOn(stellarSpoke.sorobanServer, 'getAccount').mockResolvedValueOnce(stubAccount() as never);
+    vi.spyOn(stellarSpoke.sorobanServer, 'getAccount').mockResolvedValueOnce(stubAccount());
     // Success shape without `result` — the SUT's `if (resultValue)` falls through to the throw.
     vi.spyOn(stellarSpoke.sorobanServer, 'simulateTransaction').mockResolvedValueOnce(makeSimSuccess(undefined));
 

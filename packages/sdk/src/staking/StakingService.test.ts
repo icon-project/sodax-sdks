@@ -70,7 +70,7 @@ type EvmSpokeFixture = (typeof EVM_SPOKES)[number];
 
 const SAMPLE_USER = '0x4444444444444444444444444444444444444444' as Address;
 const SAMPLE_TOKEN = '0x2170Ed0880ac9A755fd29B2688956BD959F933F8' as Address;
-const SPOKE_TX_HASH = '0xspokeTxHash' as never;
+const SPOKE_TX_HASH = '0xspokeTxHash';
 
 const mockEvmProvider = {
   chainType: 'EVM',

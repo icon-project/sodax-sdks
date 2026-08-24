@@ -246,7 +246,7 @@ describe('Sodax constructor — sub-services are instantiated as the correct cla
 
   it.each(FIELDS)('sodax.%s is a %s instance', (field, expectedType) => {
     const sodax = new Sodax();
-    const instance = (sodax as unknown as Record<string, unknown>)[field];
+    const instance = sodax[field];
     expect(asFake(instance).__type).toBe(expectedType);
   });
 });

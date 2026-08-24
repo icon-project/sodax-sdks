@@ -99,7 +99,7 @@ beforeEach(() => {
     vi.fn((url: string, init?: RequestInit) => Promise.resolve(activeHandler(url, init))),
   );
   for (const k of Object.keys(mockBtcProvider) as (keyof IBitcoinWalletProvider)[]) {
-    const v = (mockBtcProvider as unknown as Record<string, unknown>)[k];
+    const v = mockBtcProvider[k];
     if (typeof v === 'function' && 'mockReset' in (v as object)) {
       (v as ReturnType<typeof vi.fn>).mockReset();
     }
@@ -265,9 +265,7 @@ describe('BitcoinSpokeService.estimateGas', () => {
   });
 
   it('throws when tx is a string (raw mode not supported here)', async () => {
-    await expect(btcSpoke.estimateGas({ chainKey: BTC, tx: 'whatever' as never })).rejects.toThrow(
-      /string tx not supported/,
-    );
+    await expect(btcSpoke.estimateGas({ chainKey: BTC, tx: 'whatever' })).rejects.toThrow(/string tx not supported/);
   });
 });
 
@@ -747,7 +745,7 @@ describe('BitcoinSpokeService.deposit', () => {
     });
     const BTC_TOKEN = btcConfig.supportedTokens.BTC.address;
     const buildSpy = vi.spyOn(btcSpoke, 'buildDepositPsbt').mockResolvedValueOnce({ data: 'fakePsbt' } as never);
-    vi.spyOn(btcSpoke, 'signAndBroadcastTransaction').mockResolvedValueOnce(TX_HASH as never);
+    vi.spyOn(btcSpoke, 'signAndBroadcastTransaction').mockResolvedValueOnce(TX_HASH);
     try {
       await btcSpoke.deposit({
         srcChainKey: BTC,
@@ -785,7 +783,7 @@ describe('BitcoinSpokeService.deposit', () => {
     });
     const BTC_TOKEN = btcConfig.supportedTokens.BTC.address;
     const buildSpy = vi.spyOn(btcSpoke, 'buildDepositPsbt').mockResolvedValueOnce({ data: 'fakePsbt' } as never);
-    vi.spyOn(btcSpoke, 'signAndBroadcastTransaction').mockResolvedValueOnce(TX_HASH as never);
+    vi.spyOn(btcSpoke, 'signAndBroadcastTransaction').mockResolvedValueOnce(TX_HASH);
     try {
       await btcSpoke.deposit({
         srcChainKey: BTC,

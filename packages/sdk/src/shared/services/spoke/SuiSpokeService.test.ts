@@ -433,7 +433,7 @@ describe('SuiSpokeService.viewContract', () => {
     vi.spyOn(suiSpoke.transport, 'simulate').mockResolvedValueOnce({ returnValues: [] });
 
     // Last arg `sender` is required; typeArgs (the 6th positional) defaults to [].
-    await suiSpoke.viewContract(tx, 'pkg', 'mod', 'fn', [], undefined as never, SRC_ADDR);
+    await suiSpoke.viewContract(tx, 'pkg', 'mod', 'fn', [], undefined, SRC_ADDR);
 
     expect(moveCallSpy).toHaveBeenCalledWith(expect.objectContaining({ typeArguments: [] }));
   });
@@ -741,7 +741,7 @@ describe('SuiSpokeService.waitForTransactionReceipt', () => {
   });
 
   it('returns status:failure when effects are missing entirely', async () => {
-    vi.spyOn(suiSpoke.transport, 'waitForTransaction').mockResolvedValueOnce({ digest: TX_DIGEST } as never);
+    vi.spyOn(suiSpoke.transport, 'waitForTransaction').mockResolvedValueOnce({ digest: TX_DIGEST });
 
     const result = await suiSpoke.waitForTransactionReceipt({ chainKey: SUI, txHash: TX_DIGEST });
 

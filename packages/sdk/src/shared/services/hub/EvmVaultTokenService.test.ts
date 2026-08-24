@@ -117,7 +117,7 @@ describe('EvmVaultTokenService.getTokenInfos', () => {
   });
 
   it('preserves order: result[i] corresponds to tokens[i]', async () => {
-    vi.mocked(mockPublicClient.multicall).mockResolvedValueOnce([tokenInfoTupleB, tokenInfoTupleA] as never);
+    vi.mocked(mockPublicClient.multicall).mockResolvedValueOnce([tokenInfoTupleB, tokenInfoTupleA]);
 
     const result = await EvmVaultTokenService.getTokenInfos(VAULT, [TOKEN_B, TOKEN_A], mockPublicClient);
 

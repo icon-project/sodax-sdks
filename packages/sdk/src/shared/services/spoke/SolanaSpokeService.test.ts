@@ -187,8 +187,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   const transferChain = mocks.makeChain();
   const sendMessageChain = mocks.makeChain();
-  fakeAssetManagerProgram.methods.transfer = vi.fn(() => transferChain) as never;
-  fakeConnectionProgram.methods.sendMessage = vi.fn(() => sendMessageChain) as never;
+  fakeAssetManagerProgram.methods.transfer = vi.fn(() => transferChain);
+  fakeConnectionProgram.methods.sendMessage = vi.fn(() => sendMessageChain);
   // Default: returning a real TransactionInstruction so `convertTransactionInstructionToRaw` works.
   transferChain.instruction.mockResolvedValue(makeFakeInstruction(ASSET_MGR_PROGRAM_ID));
   sendMessageChain.instruction.mockResolvedValue(makeFakeInstruction(CONNECTION_PROGRAM_ID));
@@ -265,7 +265,7 @@ describe('SolanaSpokeService.estimateGas', () => {
     const simulateSpy = vi.spyOn(Connection.prototype, 'simulateTransaction').mockResolvedValueOnce({
       context: { slot: 1 },
       value: { err: null, logs: [], unitsConsumed: 12_345, accounts: null, returnData: null },
-    } as never);
+    });
 
     const result = await solanaSpoke.estimateGas({
       chainKey: SOL,
@@ -282,7 +282,7 @@ describe('SolanaSpokeService.estimateGas', () => {
     vi.spyOn(Connection.prototype, 'simulateTransaction').mockResolvedValueOnce({
       context: { slot: 1 },
       value: { err: simErr, logs: [], unitsConsumed: 0, accounts: null, returnData: null },
-    } as never);
+    });
 
     await expect(
       solanaSpoke.estimateGas({
@@ -486,7 +486,7 @@ describe('SolanaSpokeService.getDeposit', () => {
     const getTokenSpy = vi.spyOn(solanaSpoke.connection, 'getTokenAccountBalance').mockResolvedValueOnce({
       context: { slot: 1 },
       value: { amount: '4321', decimals: 9, uiAmount: 4.321, uiAmountString: '4.321' },
-    } as never);
+    });
 
     const result = await solanaSpoke.getDeposit({
       srcChainKey: SOL,
@@ -775,7 +775,7 @@ describe('SolanaSpokeService static helpers', () => {
     expect((await SolanaSpokeService.getMintTokenProgramId(conn, mint)).toBase58()).toBe(TOKEN_PROGRAM_ID.toBase58());
 
     // Unreadable mint account → fall back to the legacy program.
-    vi.spyOn(conn, 'getAccountInfo').mockResolvedValueOnce(null as never);
+    vi.spyOn(conn, 'getAccountInfo').mockResolvedValueOnce(null);
     expect((await SolanaSpokeService.getMintTokenProgramId(conn, mint)).toBase58()).toBe(TOKEN_PROGRAM_ID.toBase58());
   });
 
