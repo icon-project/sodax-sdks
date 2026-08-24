@@ -1026,7 +1026,7 @@ export const spokeChainConfig = {
     },
   } as const satisfies IconSpokeChainConfig,
   [ChainKeys.NEAR_MAINNET]: {
-    rpcUrl: 'https://1rpc.io/near',
+    rpcUrl: 'https://free.rpc.fastnear.com',
     chain: baseChainInfo[ChainKeys.NEAR_MAINNET] as BaseChainInfo<'NEAR'>,
     nativeToken: 'NEAR',
     addresses: {
