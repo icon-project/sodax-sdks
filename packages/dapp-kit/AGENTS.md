@@ -104,7 +104,8 @@ Prefer `mutateAsyncSafe` in imperative dApp flows where user rejection is an exp
 4. Add precise query keys and invalidations.
 5. Export from the feature barrel and `src/hooks/index.ts`.
 6. For mutations, add the hook to `_mutationContract.test.ts`.
-7. Update `packages/skills` docs when public hook signatures, keys, polling intervals, or examples change.
+7. For swapsApi/bridgeApi hooks that accept `apiConfig`, add a row to `src/hooks/_apiKeyWire.test.ts` so the key-on-wire coverage stays complete.
+8. Update `packages/skills` docs when public hook signatures, keys, polling intervals, or examples change.
 
 ## AI Docs Coupling
 

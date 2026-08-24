@@ -62,6 +62,13 @@ export type ConfigServiceConstructorParams = {
    */
   fee?: PartnerFee;
   /**
+   * Global backend API key (the `apiKey` option passed to `new Sodax(...)`). Held outside the
+   * swappable `SodaxConfig` — like {@link fee} — so a dynamic config fetch never replaces it. Sent as
+   * the `x-api-key` header on every backend API request; read here by the swap, leverage-yield, and
+   * partner solver flows, whose transport does not go through `BackendApiService`.
+   */
+  apiKey?: string;
+  /**
    * RadFi/Bound request signer (the `radfi.signRequest` option passed to `new Sodax(...)`). Held
    * outside the swappable `SodaxConfig` — like {@link logger} — so a dynamic config fetch never
    * replaces it. Read by {@link BitcoinSpokeService} to inject Bound `x-api-signature` headers.
@@ -99,6 +106,14 @@ export class ConfigService {
   public readonly fee: PartnerFee | undefined;
 
   /**
+   * Global backend API key. Resolved once at construction and kept independent of {@link sodax} so
+   * that {@link initialize}'s dynamic-config swap never clobbers it. The backend never supplies it —
+   * it is a client-side option set via `new Sodax({ apiKey })`. Never logged; read here by the swap,
+   * leverage-yield, and partner solver flows, whose transport does not go through `BackendApiService`.
+   */
+  public readonly apiKey: string | undefined;
+
+  /**
    * RadFi/Bound request signer. Resolved once at construction and kept independent of {@link sodax}
    * so that {@link initialize}'s dynamic-config swap never clobbers it. Read by `BitcoinSpokeService`
    * via `config.radfiSigner`; `undefined` unless the consumer passed `radfi.signRequest` to
@@ -121,11 +136,21 @@ export class ConfigService {
 
   // `api` / `userConfig` are accepted but unused while initialize()'s dynamic fetch is disabled
   // (see TODO(config-v2) below); restore their assignments when re-enabling.
-  constructor({ api, config, userConfig, logger, analytics, fee, radfiSigner }: ConfigServiceConstructorParams) {
+  constructor({
+    api,
+    config,
+    userConfig,
+    logger,
+    analytics,
+    fee,
+    apiKey,
+    radfiSigner,
+  }: ConfigServiceConstructorParams) {
     this.sodax = config;
     this.logger = logger ?? resolveLogger(undefined);
     this.analytics = analytics ?? noopAnalytics;
     this.fee = fee;
+    this.apiKey = apiKey;
     this.radfiSigner = radfiSigner;
     this.loadSodaxConfigDataStructures(config);
   }

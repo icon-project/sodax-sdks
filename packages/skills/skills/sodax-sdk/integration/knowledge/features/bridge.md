@@ -59,12 +59,14 @@ type BridgeExtras<K extends SpokeChainKey> = (GetChainType<K> extends 'STACKS'
   : { srcPublicKey?: never }) &
   (GetChainType<K> extends 'BITCOIN' ? { bound?: { accessToken?: string } } : { bound?: never }) & {
     partnerFee?: PartnerFee;
+    apiKey?: string;
   };
 ```
 
 | Slot | When | Notes |
 |---|---|---|
 | `partnerFee` | any chain, optional | Takes precedence over the config-level `bridge.partnerFee` for this call. Omit to use the configured fee. |
+| `apiKey` | any chain, optional | Overrides the configured backend API key (`x-api-key`) for this action's backend submit-tx leg. Omit to use `new Sodax({ apiKey })`. |
 | `srcPublicKey` | Stacks source + `raw: true` — **required** | A Stacks address can't yield the signer public key at raw-tx build time. Omitting it fails `VALIDATION_FAILED` (`field: 'srcPublicKey'`). |
 | `bound` | raw Bitcoin TRADING source, optional | Bound Exchange (Radfi) access token; falls back to the `RadfiProvider` instance token. |
 
