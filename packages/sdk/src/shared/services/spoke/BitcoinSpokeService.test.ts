@@ -30,6 +30,7 @@ import {
   type IBitcoinWalletProvider,
 } from '@sodax/types';
 import { keccak256, stringToBytes } from 'viem';
+import { invariant } from '../../utils/tiny-invariant.js';
 
 // --- hoisted mocks --------------------------------------------------------
 
@@ -582,7 +583,7 @@ describe('BitcoinSpokeService.deposit', () => {
 
     // The SUT identifies tokens by `address`, not symbol. BTC's address is '0:0'.
     const BTC_TOKEN = btcConfig.supportedTokens.BTC.address;
-    const result = await btcSpoke.deposit({
+    const result = await btcSpoke.deposit<true>({
       srcChainKey: BTC,
       srcAddress: USER_ADDR,
       to: HUB_WALLET,
@@ -631,7 +632,7 @@ describe('BitcoinSpokeService.deposit', () => {
 
   it('TRADING with unsupported token → throws "Unsupported token: …"', async () => {
     await expect(
-      btcSpoke.deposit({
+      btcSpoke.deposit<true>({
         srcChainKey: BTC,
         srcAddress: USER_ADDR,
         to: HUB_WALLET,
@@ -648,7 +649,7 @@ describe('BitcoinSpokeService.deposit', () => {
     Object.defineProperty(btcSpoke, 'walletMode', { value: 'USER', configurable: true });
     try {
       await expect(
-        btcSpoke.deposit({
+        btcSpoke.deposit<true>({
           srcChainKey: BTC,
           srcAddress: USER_ADDR,
           to: HUB_WALLET,
@@ -760,6 +761,7 @@ describe('BitcoinSpokeService.deposit', () => {
       });
       // buildDepositPsbt receives only the UTXOs that survived the filter
       const receivedUtxos = buildSpy.mock.calls[0]?.[6];
+      invariant(receivedUtxos, 'buildDepositPsbt was not called');
       expect(receivedUtxos).toHaveLength(1);
       expect(receivedUtxos[0]).toMatchObject({ txid: 'bb', vout: 1 });
     } finally {
@@ -797,6 +799,7 @@ describe('BitcoinSpokeService.deposit', () => {
       });
       // All UTXOs (including the one that could have been filtered) are forwarded
       const receivedUtxos = buildSpy.mock.calls[0]?.[6];
+      invariant(receivedUtxos, 'buildDepositPsbt was not called');
       expect(receivedUtxos).toHaveLength(1);
       expect(receivedUtxos[0]).toMatchObject({ txid: 'cc', vout: 0 });
     } finally {

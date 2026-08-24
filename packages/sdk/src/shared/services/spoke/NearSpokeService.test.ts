@@ -17,7 +17,15 @@
  *     receipts) are spied per-test on the live instance.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChainKeys, getIntentRelayChainId, spokeChainConfig, type Hex, type INearWalletProvider } from '@sodax/types';
+import {
+  ChainKeys,
+  getIntentRelayChainId,
+  spokeChainConfig,
+  type FTTransferCallArgs,
+  type Hex,
+  type INearWalletProvider,
+  type SendMsgArgs,
+} from '@sodax/types';
 
 // --- hoisted mocks --------------------------------------------------------
 
@@ -52,7 +60,9 @@ const NEAR_BNUSD = nearConfig.bnUSD;
 const NEAR_POLLING_MS = nearConfig.pollingConfig.pollingIntervalMs;
 const NEAR_TIMEOUT_MS = nearConfig.pollingConfig.maxTimeoutMs;
 
-const SRC_ADDR = 'user.near';
+// Deliberate cast: GetAddressType<'near…'> is declared as Address (0x-hex) in @sodax/types, but
+// real NEAR accounts are names like `user.near` and the service consumes them as such at runtime.
+const SRC_ADDR = 'user.near' as unknown as `0x${string}`;
 const HUB_WALLET = '0x2222222222222222222222222222222222222222' as `0x${string}`;
 const DST_ADDR = '0x3333333333333333333333333333333333333333' as `0x${string}`;
 const TX_HASH = '11111111111111111111111111111111';
@@ -206,10 +216,11 @@ describe('NearSpokeService.fillIntent', () => {
     expect(tx.params.contractId).toBe(NEAR_BNUSD);
     expect(tx.params.method).toBe('ft_transfer_call');
     expect(tx.params.deposit).toBe(1n);
-    expect((tx.params.args as Record<string, unknown>).receiver_id).toBe(NEAR_INTENT_FILLER);
-    expect((tx.params.args as Record<string, unknown>).amount).toBe('1000');
+    const args = tx.params.args as FTTransferCallArgs;
+    expect(args.receiver_id).toBe(NEAR_INTENT_FILLER);
+    expect(args.amount).toBe('1000');
     // msg is JSON-stringified FillIntent payload
-    expect(typeof (tx.params.args as Record<string, unknown>).msg).toBe('string');
+    expect(typeof args.msg).toBe('string');
   });
 });
 
@@ -247,17 +258,16 @@ describe('NearSpokeService.deposit', () => {
   });
 
   it('non-native raw=true → ft_transfer_call on the token contract with deposit=1 yoctoNEAR', async () => {
-    const tx = (await nearSpoke.deposit(depositParams<true>({ token: NEAR_BNUSD, raw: true }))) as {
-      params: { contractId: string; method: string; deposit: bigint; args: Record<string, unknown> };
-    };
+    const tx = await nearSpoke.deposit(depositParams<true>({ token: NEAR_BNUSD, raw: true }));
 
     expect(tx.params.contractId).toBe(NEAR_BNUSD);
     expect(tx.params.method).toBe('ft_transfer_call');
     expect(tx.params.deposit).toBe(1n);
-    expect(tx.params.args.receiver_id).toBe(NEAR_ASSET_MGR);
-    expect(tx.params.args.amount).toBe('1000');
+    const args = tx.params.args as FTTransferCallArgs;
+    expect(args.receiver_id).toBe(NEAR_ASSET_MGR);
+    expect(args.amount).toBe('1000');
     // msg encodes {to, data} as JSON.
-    const msg = JSON.parse(tx.params.args.msg as string);
+    const msg = JSON.parse(args.msg ?? '');
     expect(msg).toHaveProperty('to');
     expect(msg).toHaveProperty('data');
   });
@@ -349,15 +359,12 @@ describe('NearSpokeService.isStorageRegistered', () => {
 
 describe('NearSpokeService.registerStorage', () => {
   it('non-native raw=true → storage_deposit tx with registration_only and default 0.00125 NEAR bond', async () => {
-    const tx = (await nearSpoke.registerStorage({
+    const tx = await nearSpoke.registerStorage({
       token: NEAR_BNUSD,
       accountId: SRC_ADDR,
       walletProvider: mockNearProvider,
       raw: true,
-    })) as {
-      signerId: string;
-      params: { contractId: string; method: string; args: Record<string, unknown>; deposit: bigint; gas: bigint };
-    };
+    });
 
     expect(tx.signerId).toBe(SRC_ADDR);
     expect(tx.params.contractId).toBe(NEAR_BNUSD);
@@ -420,10 +427,7 @@ describe('NearSpokeService.sendMessage', () => {
     }) as SendMessageParams<typeof NEAR, Raw>;
 
   it('raw=true → returns tx targeting the connection contract with send_message', async () => {
-    const tx = (await nearSpoke.sendMessage(sendMessageParams<true>({ raw: true }))) as {
-      signerId: string;
-      params: { contractId: string; method: string; args: Record<string, unknown>; deposit: bigint; gas: bigint };
-    };
+    const tx = await nearSpoke.sendMessage(sendMessageParams<true>({ raw: true }));
 
     expect(tx.signerId).toBe(SRC_ADDR);
     expect(tx.params.contractId).toBe(NEAR_CONNECTION);
@@ -431,7 +435,7 @@ describe('NearSpokeService.sendMessage', () => {
     expect(tx.params.deposit).toBe(0n);
     expect(tx.params.gas).toBe(NEAR_DEFAULT_GAS);
     // dst_chain_id is the relay id parsed to a number
-    expect(tx.params.args.dst_chain_id).toBe(Number(getIntentRelayChainId(SONIC)));
+    expect((tx.params.args as SendMsgArgs).dst_chain_id).toBe(Number(getIntentRelayChainId(SONIC)));
   });
 
   it('raw=false → delegates to walletProvider.signAndSubmitTxn and returns hash', async () => {

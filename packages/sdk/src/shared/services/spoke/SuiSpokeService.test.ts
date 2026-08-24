@@ -33,6 +33,7 @@ import {
   type Address,
   type Hex,
   type ISuiWalletProvider,
+  type SuiExecutionResult,
   type SuiPaginatedCoins,
 } from '@sodax/types';
 
@@ -326,8 +327,9 @@ describe('SuiSpokeService.getNativeCoin', () => {
 
   it('rejects when tx.splitCoins yields an undefined element (defensive branch)', async () => {
     const tx = new Transaction();
-    // Force the only path the catch covers — splitCoins returning [undefined].
-    vi.spyOn(tx, 'splitCoins').mockReturnValueOnce([undefined as never]);
+    // Force the only path the catch covers — splitCoins returning [undefined]. Deliberately
+    // malformed: a real TransactionResult is an array-like with Result/$kind fields.
+    vi.spyOn(tx, 'splitCoins').mockReturnValueOnce([undefined] as unknown as ReturnType<Transaction['splitCoins']>);
 
     await expect(suiSpoke.getNativeCoin(tx, 5_000n)).rejects.toThrow('[SuiIntentService.getNativeCoin] coin undefined');
   });

@@ -173,8 +173,8 @@ describe('a bare-origin baseURL on the packaged host', () => {
   });
 
   it.each([
-    ['swapsApiConfig', { swapsApiConfig: { baseURL: 'https://api.sodax.com' } }],
-    ['sponsoringApiConfig', { sponsoringApiConfig: { baseURL: 'https://api.sodax.com' } }],
+    ['swapsApiConfig', { swapsApiConfig: { baseURL: 'https://api.sodax.com' } } as const],
+    ['sponsoringApiConfig', { sponsoringApiConfig: { baseURL: 'https://api.sodax.com' } } as const],
   ])('is reported when the short root arrives through the %s slice', (slice, api) => {
     // Finding 2 from the PR review: the old check layered only the flat fields and `baseApiConfig`, so a
     // root reaching its service through its own slice resolved one segment short with no warning.

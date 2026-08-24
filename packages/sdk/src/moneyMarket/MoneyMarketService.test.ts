@@ -1110,7 +1110,8 @@ describe('MoneyMarketService.createSupplyIntent', () => {
       const result = await sodax.moneyMarket.createSupplyIntent({
         raw: false,
         params: supplyParams(ChainKeys.BITCOIN_MAINNET),
-        walletProvider: undefined,
+        // Deliberate cast: the guard under test is exactly the missing-provider case.
+        walletProvider: undefined as unknown as IBitcoinWalletProvider,
       });
 
       expect(result.ok).toBe(false);
@@ -1342,7 +1343,9 @@ describe('MoneyMarketService.supply', () => {
 
   describe('propagates internal errors', () => {
     it('forwards a failure Result from createSupplyIntent', async () => {
-      const intentError = new Error('CREATE_INTENT_FAILED');
+      const intentError = new SodaxError('INTENT_CREATION_FAILED', 'create intent failed', {
+        feature: 'moneyMarket',
+      });
       vi.spyOn(sodax.moneyMarket, 'createSupplyIntent').mockResolvedValueOnce({
         ok: false,
         error: intentError,
@@ -1793,7 +1796,9 @@ describe('MoneyMarketService.borrow', () => {
 
   describe('propagates internal errors', () => {
     it('forwards createBorrowIntent failure', async () => {
-      const intentError = new Error('CREATE_INTENT_FAILED');
+      const intentError = new SodaxError('INTENT_CREATION_FAILED', 'create intent failed', {
+        feature: 'moneyMarket',
+      });
       vi.spyOn(sodax.moneyMarket, 'createBorrowIntent').mockResolvedValueOnce({
         ok: false,
         error: intentError,
@@ -2208,7 +2213,9 @@ describe('MoneyMarketService.withdraw', () => {
 
   describe('propagates internal errors', () => {
     it('forwards createWithdrawIntent failure', async () => {
-      const intentError = new SodaxError('CREATE_INTENT_FAILED', 'CREATE_INTENT_FAILED', { feature: 'moneyMarket' });
+      const intentError = new SodaxError('INTENT_CREATION_FAILED', 'create withdraw intent failed', {
+        feature: 'moneyMarket',
+      });
       vi.spyOn(sodax.moneyMarket, 'createWithdrawIntent').mockResolvedValueOnce({
         ok: false,
         error: intentError,
@@ -2404,7 +2411,8 @@ describe('MoneyMarketService.createRepayIntent', () => {
       const result = await sodax.moneyMarket.createRepayIntent({
         raw: false,
         params: repayParams(ChainKeys.BITCOIN_MAINNET),
-        walletProvider: undefined,
+        // Deliberate cast: the guard under test is exactly the missing-provider case.
+        walletProvider: undefined as unknown as IBitcoinWalletProvider,
       });
 
       expect(result.ok).toBe(false);
@@ -2619,7 +2627,9 @@ describe('MoneyMarketService.repay', () => {
 
   describe('propagates internal errors', () => {
     it('forwards createRepayIntent failure', async () => {
-      const intentError = new Error('CREATE_INTENT_FAILED');
+      const intentError = new SodaxError('INTENT_CREATION_FAILED', 'create intent failed', {
+        feature: 'moneyMarket',
+      });
       vi.spyOn(sodax.moneyMarket, 'createRepayIntent').mockResolvedValueOnce({
         ok: false,
         error: intentError,

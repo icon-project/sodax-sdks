@@ -121,7 +121,10 @@ if (!STELLAR_TRUSTLINE_USDC) throw new Error('test setup: USDC trustline config 
 // asset-issuer keys from the trustline config (publicly visible on the Stellar network) — they
 // are valid strkeys, which is the only property we need them for (Address.fromString and
 // new Account() both validate the checksum).
-const SRC_ADDR = 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
+// Deliberate cast: GetAddressType<'stellar…'> is declared as Hex in @sodax/types, but real Stellar
+// addresses are G… strkeys and the service consumes them as such at runtime (see buildDepositCall
+// pinning StellarAddress.fromScAddress(...) back to this exact strkey).
+const SRC_ADDR = 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN' as unknown as Hex;
 const OTHER_ADDR = 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA';
 const HUB_WALLET = '0x2222222222222222222222222222222222222222' as const;
 const DST_ADDR = '0x3333333333333333333333333333333333333333' as const;
@@ -763,7 +766,7 @@ describe('StellarSpokeService.requestTrustline', () => {
     vi.spyOn(stellarSpoke.sorobanServer, 'getNetwork').mockResolvedValueOnce(NETWORK_RESPONSE);
     vi.spyOn(stellarSpoke.server, 'loadAccount').mockResolvedValueOnce(makeAccountResponse(SRC_ADDR));
 
-    const result = await stellarSpoke.requestTrustline({
+    const result = await stellarSpoke.requestTrustline<true>({
       srcAddress: SRC_ADDR,
       srcChainKey: STELLAR,
       token: STELLAR_USDC,

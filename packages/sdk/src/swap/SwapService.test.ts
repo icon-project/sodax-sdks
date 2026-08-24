@@ -643,7 +643,6 @@ describe('SwapService.createLimitOrder / createLimitOrderIntent — same narrowi
 
 describe('SwapService.cancelIntent — narrows walletProvider from explicit srcChainKey', () => {
   const svc = sodax.swaps;
-  const _intent = makeIntent();
 
   it('EVM srcChainKey → walletProvider must be IEvmWalletProvider', () => {
     if (false as boolean) {
@@ -2532,7 +2531,7 @@ describe('SwapService.getQuote', () => {
     token_dst_blockchain_id: ChainKeys.ARBITRUM_MAINNET,
     amount: 1_000_000n,
     quote_type: 'exact_input',
-  } as never;
+  } as unknown as Parameters<typeof sodax.swaps.getQuote>[0];
 
   it('forwards the payload (after fee adjustment) to SolverApiService.getQuote and returns the Result', async () => {
     const quoteResponse = { ok: true as const, value: { quoted_amount: 900_000n } as never };
@@ -2784,7 +2783,7 @@ describe('SwapService.swap', () => {
   });
 
   it('returns the failure from createIntent when it fails', async () => {
-    const createError = new Error('CREATE_FAILED');
+    const createError = new SodaxError('INTENT_CREATION_FAILED', 'create intent failed', { feature: 'swap' });
     vi.spyOn(sodax.swaps, 'createIntent').mockResolvedValueOnce({ ok: false, error: createError });
 
     const result = await sodax.swaps.swap({
@@ -3251,7 +3250,7 @@ describe('SwapService.cancelLimitOrder', () => {
 
 describe('SwapService.createLimitOrder — error propagation', () => {
   it('forwards a failure Result from swap() unchanged', async () => {
-    const swapError = new Error('SWAP_FAILED');
+    const swapError = new SodaxError('EXECUTION_FAILED', 'swap failed', { feature: 'swap' });
     vi.spyOn(sodax.swaps, 'swap').mockResolvedValueOnce({ ok: false, error: swapError });
 
     const result = await sodax.swaps.createLimitOrder({
@@ -3288,7 +3287,7 @@ describe('SwapService.createLimitOrderIntent — additional coverage', () => {
   });
 
   it('forwards a failure Result from createIntent unchanged', async () => {
-    const createError = new Error('CREATE_INTENT_FAILED');
+    const createError = new SodaxError('INTENT_CREATION_FAILED', 'create intent failed', { feature: 'swap' });
     vi.spyOn(sodax.swaps, 'createIntent').mockResolvedValueOnce({ ok: false, error: createError });
 
     const result = await sodax.swaps.createLimitOrderIntent({

@@ -11,7 +11,7 @@
  *      services there is no static-helper layer to mock, so no `vi.mock` / `vi.hoisted` is needed.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { type Address, type Hash, type Hex, type HttpTransport, type PublicClient, encodeFunctionData } from 'viem';
+import { type Address, type Hash, type HttpTransport, type PublicClient, encodeFunctionData } from 'viem';
 import type { IEvmWalletProvider, TokenInfo } from '@sodax/types';
 import { vaultTokenAbi } from '../../abis/index.js';
 import { EvmVaultTokenService } from './EvmVaultTokenService.js';
