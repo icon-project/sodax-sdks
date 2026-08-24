@@ -847,6 +847,37 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
     expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
   });
 
+  it('threads extras.apiKey into the backend submit-tx leg as a per-request override', async () => {
+    stubCreatedAndVerified();
+    const submitSpy = vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValueOnce({
+      ok: true,
+      value: { success: true, data: { status: 'inserted', message: 'accepted' } },
+    } as never);
+    const statusSpy = vi.spyOn(sodaxBE.api.bridge, 'getSubmitTxStatus').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        success: true,
+        data: {
+          txHash: '0xspokeTx',
+          srcChainKey: BSC,
+          status: 'executed',
+          processingAttempts: 1,
+          result: { dstIntentTxHash: '0xDST' },
+        },
+      },
+    } as never);
+
+    const result = await sodaxBE.bridge.bridge({
+      ...bridgeInput(BSC, ARBITRUM),
+      extras: { apiKey: 'per-action-key' },
+    });
+
+    expect(result.ok).toBe(true);
+    // Both the POST and the status poll carry the per-action key (as RequestOverrideConfig.apiKey).
+    expect(submitSpy.mock.calls[0]?.[1]).toMatchObject({ apiKey: 'per-action-key' });
+    expect(statusSpy.mock.calls[0]?.[1]).toMatchObject({ apiKey: 'per-action-key' });
+  });
+
   it('falls back to the client-side relay when the backend submit POST is rejected', async () => {
     stubCreatedAndVerified();
     vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValueOnce({
@@ -1071,6 +1102,97 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+// =========================================================================
+// Backend submit-tx call-through: extras.apiKey on the wire. Same flow as above, but the real
+// BridgeApiService transport runs against a test-local global fetch stub, so the `x-api-key`
+// asserted is the header actually sent — not an argument recorded on a stubbed method.
+// =========================================================================
+
+describe('BridgeService.bridge — backend submit-tx extras.apiKey on the wire (call-through)', () => {
+  const sodaxKeyed = new Sodax({ apiKey: 'instance-key', logger: 'silent' });
+
+  // The same payloads the spied specs above return — they satisfy the real bridge response schemas.
+  const SUBMIT_TX_BODY = { success: true, data: { status: 'inserted', message: 'accepted' } };
+  const EXECUTED_STATUS_BODY = {
+    success: true,
+    data: {
+      txHash: '0xspokeTx',
+      srcChainKey: BSC,
+      status: 'executed',
+      processingAttempts: 1,
+      result: { dstIntentTxHash: '0xDST' },
+    },
+  };
+
+  const wireFetch = vi.fn();
+
+  beforeEach(() => {
+    wireFetch.mockReset();
+    // Only the two submit-tx legs may reach fetch; anything else fails the test loudly.
+    wireFetch.mockImplementation(async (url: unknown, init?: { method?: string }) => {
+      const { pathname } = new URL(String(url));
+      if (pathname === '/v1/bridge/submit-tx' && init?.method === 'POST') {
+        return { ok: true, status: 200, json: async () => SUBMIT_TX_BODY };
+      }
+      if (pathname === '/v1/bridge/submit-tx/status' && (init?.method ?? 'GET') === 'GET') {
+        return { ok: true, status: 200, json: async () => EXECUTED_STATUS_BODY };
+      }
+      throw new Error(`unexpected fetch: ${init?.method ?? 'GET'} ${String(url)}`);
+    });
+    vi.stubGlobal('fetch', wireFetch);
+  });
+
+  afterEach(() => {
+    // Scoped to this suite — no other suite in this file stubs fetch.
+    vi.unstubAllGlobals();
+  });
+
+  const stubKeyedCreated = () => {
+    vi.spyOn(sodaxKeyed.bridge, 'createBridgeIntent').mockResolvedValueOnce({
+      ok: true,
+      value: { tx: '0xspokeTx' as never, relayData: { address: HUB_WALLET, payload: '0x' } },
+    } as never);
+    vi.spyOn(sodaxKeyed.spoke, 'verifyTxHash').mockResolvedValue({ ok: true, value: undefined });
+  };
+
+  /** The `x-api-key` actually sent to (pathname, method), read through `Headers` so any casing counts. */
+  const keySentTo = (pathname: string, method: string): string | null => {
+    const matches = wireFetch.mock.calls.filter(
+      call => new URL(String(call[0])).pathname === pathname && (call[1]?.method ?? 'GET') === method,
+    );
+    expect(matches).toHaveLength(1);
+    return new Headers(matches[0]?.[1]?.headers).get('x-api-key');
+  };
+
+  const runKeyedBridge = async (extras?: { apiKey?: string }) => {
+    stubKeyedCreated();
+    const args = bridgeInput(BSC, ARBITRUM);
+    const result = await sodaxKeyed.bridge.bridge(extras ? { ...args, extras } : args);
+    expect(result.ok).toBe(true);
+    // The value round-tripped through the real transport + schemas, not a stubbed method.
+    if (result.ok) expect(result.value.dstChainTxHash).toBe('0xDST');
+    expect(wireFetch).toHaveBeenCalledTimes(2);
+  };
+
+  it('sends extras.apiKey over the instance key on both the submit POST and the status poll', async () => {
+    await runKeyedBridge({ apiKey: 'action-key' });
+    expect(keySentTo('/v1/bridge/submit-tx', 'POST')).toBe('action-key');
+    expect(keySentTo('/v1/bridge/submit-tx/status', 'GET')).toBe('action-key');
+  });
+
+  it('sends the instance key on both requests when extras is omitted', async () => {
+    await runKeyedBridge();
+    expect(keySentTo('/v1/bridge/submit-tx', 'POST')).toBe('instance-key');
+    expect(keySentTo('/v1/bridge/submit-tx/status', 'GET')).toBe('instance-key');
+  });
+
+  it('treats an empty extras.apiKey as unset: the instance key still rides both requests', async () => {
+    await runKeyedBridge({ apiKey: '' });
+    expect(keySentTo('/v1/bridge/submit-tx', 'POST')).toBe('instance-key');
+    expect(keySentTo('/v1/bridge/submit-tx/status', 'GET')).toBe('instance-key');
   });
 });
 

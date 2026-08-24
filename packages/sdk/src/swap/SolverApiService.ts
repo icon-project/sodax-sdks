@@ -1,6 +1,7 @@
 import { invariant } from '../shared/utils/tiny-invariant.js';
 import { retry } from '../shared/utils/shared-utils.js';
 import type { ConfigService } from '../shared/config/ConfigService.js';
+import { apiKeyHeader, mergeHeaders } from '../backendApi/api-utils.js';
 import { silentLogger } from '../shared/logger.js';
 import {
   SolverIntentErrorCode,
@@ -88,9 +89,7 @@ export class SolverApiService {
     try {
       const response = await fetch(`${config.solverApiEndpoint}/quote`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: mergeHeaders({ 'Content-Type': 'application/json' }, apiKeyHeader(configService.apiKey)),
         body: JSON.stringify({
           token_src: tokenSrc,
           token_dst: tokenDst,
@@ -140,20 +139,21 @@ export class SolverApiService {
    *
    * @param request - Object containing `intent_tx_hash` (the hub-chain tx hash of the created intent).
    * @param config - Solver endpoint configuration.
+   * @param logger - Diagnostics sink; defaults to the silent logger.
+   * @param apiKey - Configured backend API key (`config.apiKey`), sent as the `x-api-key` header.
    * @returns A `Result` containing `{ answer: 'OK', intent_hash: Hex }` on success.
    */
   public static async postExecution(
     request: SolverExecutionRequest,
     config: SolverConfig,
     logger: SodaxLogger = silentLogger,
+    apiKey?: string,
   ): Promise<Result<SolverExecutionResponse, SolverErrorResponse>> {
     try {
       const response = await retry(() =>
         fetch(`${config.solverApiEndpoint}/execute`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: mergeHeaders({ 'Content-Type': 'application/json' }, apiKeyHeader(apiKey)),
           body: JSON.stringify(request),
         }),
       );
@@ -200,6 +200,7 @@ export class SolverApiService {
    *   request instantly. A non-positive one is a real budget of zero: the request aborts at once.
    *   The relay's `getTransactionPackets` takes the same parameter but degrades a non-finite value
    *   to its own per-request budget instead; the divergence is deliberate, and explained inline.
+   * @param apiKey - Configured backend API key (`config.apiKey`), sent as the `x-api-key` header.
    * @returns A `Result` containing `{ status: SolverIntentStatusCode, fill_tx_hash?: string }`.
    *   `fill_tx_hash` is set only when `status === SolverIntentStatusCode.SOLVED (3)`.
    * @throws Invariant error if `intent_tx_hash` is empty (thrown before the async request).
@@ -209,6 +210,7 @@ export class SolverApiService {
     config: SolverConfig,
     logger: SodaxLogger = silentLogger,
     timeoutMs?: number,
+    apiKey?: string,
   ): Promise<Result<SolverIntentStatusResponse, SolverErrorResponse>> {
     invariant(request.intent_tx_hash.length > 0, 'Empty intent_tx_hash');
     // A budget only bounds anything if it is a usable number. `setTimeout` coerces `NaN`/`Infinity`
@@ -227,9 +229,7 @@ export class SolverApiService {
     try {
       const response = await fetch(`${config.solverApiEndpoint}/status`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: mergeHeaders({ 'Content-Type': 'application/json' }, apiKeyHeader(apiKey)),
         body: JSON.stringify(request),
         signal: controller?.signal,
       });

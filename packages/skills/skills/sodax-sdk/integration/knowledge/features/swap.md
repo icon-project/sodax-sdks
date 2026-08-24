@@ -46,6 +46,12 @@ sodax.swaps.cancelLimitOrder<K>(/* … */): Promise<Result<TxHashPair, SodaxErro
 sodax.swaps.approve<K, Raw>(/* … */): Promise<Result<TxReturnType<K, Raw>, SodaxError>>;
 sodax.swaps.isAllowanceValid<K, Raw>(/* … */): Promise<Result<boolean, SodaxError>>;
 
+sodax.swaps.getSwapSpeedTier(params: { srcToken: XToken; dstToken: XToken }): SwapSpeedTierResult;
+//   Synchronous, offline, no Result wrapper — estimates settlement speed from SDK config alone
+//   (no network / on-chain / backend call). SwapSpeedTierResult = { tier: 'fast'|'normal'|'slow', estimatedSeconds }.
+//   A token tied to a money-market-reserve (sodaAsset) settles faster; an Ethereum leg adds a fixed penalty.
+//   Safe to call synchronously while rendering a quote (e.g. an ETA badge next to the output amount).
+
 sodax.swaps.getStatus(
   request: SolverIntentStatusRequest,          // { intent_tx_hash } — the HUB (Sonic) tx hash
 ): Promise<Result<SolverIntentStatusResponse, SolverErrorResponse>>;   // legacy error shape, NOT SodaxError
@@ -91,11 +97,12 @@ type SwapActionParams<K extends SpokeChainKey, Raw extends boolean> = {
 } & WalletProviderSlot<K, Raw>;
 ```
 
-`extras` and every field on it are optional. `partnerFee` overrides the configured swap fee for this single action (the same override `getQuote` accepts, below); `srcPublicKey` is chain-key-gated — only typeable when `K` is a Stacks chain (`never` elsewhere) and only needed for raw (`raw: true`) Stacks `createIntent`; `bound` is chain-key-gated to Bitcoin and groups the Bound Exchange (Radfi) inputs — its `accessToken` is only needed for raw Bitcoin TRADING-mode `createIntent`, overriding the RadfiProvider's configured token and falling back to that instance token when omitted. (Grouping keeps future Bound inputs — trading mode, refresh token — under one slot rather than spreading a new `extras` field per item.) `LimitOrderActionParams<K, Raw>` carries the same `SwapExtras<K>`.
+`extras` and every field on it are optional. `partnerFee` overrides the configured swap fee for this single action (the same override `getQuote` accepts, below); `apiKey` overrides the configured backend API key (`new Sodax({ apiKey })`) for this action's backend submit-tx leg, sent as the `x-api-key` header; `srcPublicKey` is chain-key-gated — only typeable when `K` is a Stacks chain (`never` elsewhere) and only needed for raw (`raw: true`) Stacks `createIntent`; `bound` is chain-key-gated to Bitcoin and groups the Bound Exchange (Radfi) inputs — its `accessToken` is only needed for raw Bitcoin TRADING-mode `createIntent`, overriding the RadfiProvider's configured token and falling back to that instance token when omitted. (Grouping keeps future Bound inputs — trading mode, refresh token — under one slot rather than spreading a new `extras` field per item.) `LimitOrderActionParams<K, Raw>` carries the same `SwapExtras<K>`.
 
 ```ts
 type SwapExtras<K extends SpokeChainKey> = {
   partnerFee?: PartnerFee;        // overrides the configured swap fee for this action; falls back to config
+  apiKey?: string;                // overrides the configured backend API key (x-api-key) for this action's backend submit-tx leg
   srcPublicKey?: string;          // Stacks only (raw createIntent): signer public key. Chain-key-gated — `never` on non-Stacks K.
   bound?: BitcoinBoundExtras;     // Bitcoin only: grouped Bound Exchange (Radfi) inputs. Chain-key-gated — `never` on non-Bitcoin K.
 };
@@ -321,6 +328,7 @@ await sodax.swaps.cancelIntent({
 | `cancelIntent` / `cancelLimitOrder` | `TxHashPair` = `{ srcChainTxHash, dstChainTxHash }` (not generic over `Raw`) |
 | `approve` | `TxReturnType<K, Raw>` |
 | `isAllowanceValid` | `boolean` |
+| `getSwapSpeedTier` | `SwapSpeedTierResult` = `{ tier: 'fast' \| 'normal' \| 'slow', estimatedSeconds: number }` (synchronous, not a `Result`) |
 
 `RelayExtraData`:
 

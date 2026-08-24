@@ -87,6 +87,43 @@ await createIntent({ body: { ...intentBody, partnerFee } });
 
 See the `sodax-sdk` skill (integration mode), `swaps-api.md` § `partnerFee`.
 
+### API key (`x-api-key`)
+
+The backend guards `POST /swaps/*` with an API-key check. There is ONE instance-wide key: configure it
+once on the provider config — `<SodaxProvider config={{ apiKey }}>` — and every `sodax.api.*` call these
+hooks make carries it. Override per request via the hooks' existing `apiConfig` param
+(`RequestOverrideConfig`), which also accepts `apiKey`:
+
+```ts
+// @ai-snippets-skip
+const { data: quote } = useSwapsApiQuote({
+  params: { body: quoteBody, apiConfig: { apiKey: 'partner-api-key' } },
+});
+```
+
+Never put the key in a `queryKey` (the hooks already exclude `apiConfig` from their keys). Auth failures
+surface with `context.status` `401`/`403` — nothing but a corrected key fixes them, so treat them as
+terminal in your UI; the transient verification `503` is retried by the wire client. See the
+`sodax-sdk` skill (integration mode), `swaps-api.md` § API key, for the precedence order.
+
+Every retrying `useSwapsApi*` hook already handles this: its default `retry` is `retryUnlessAuthFailure`
+(exported from `@sodax/dapp-kit`), which retries transport blips up to 3 times but never replays a
+401/403. `useSwapsApiStatus` and `useSwapsApiSubmitTxStatus` additionally stop their 1s poll on a
+rejected key, instead of re-requesting forever. So an invalid key surfaces once, fast, on `error`.
+
+Override or compose it through `queryOptions` / `mutationOptions` when you want different behaviour:
+
+```ts
+// @ai-snippets-skip
+const { data: quote } = useSwapsApiQuote({
+  params: { body: quoteBody },
+  queryOptions: { retry: (count, error) => !isAuthFailure(error) && count < 5 },
+});
+```
+
+`isAuthFailure` (re-exported from `@sodax/sdk`) is the same guard the default uses — prefer it over
+re-deriving `context.status`, so your UI and the hooks agree on what counts as terminal.
+
 `useSwapsApiSubmitTx` is a mutation hook — per-call config (e.g. backend base URL) flows through `mutate(vars)`. The `request` is a `SubmitTxRequestV2` (`{ txHash, srcChainKey, walletAddress, intent, relayData }`):
 
 ```ts
@@ -321,7 +358,10 @@ rather than on the HTTP status.
 When the server rate-limits a key it also supplies `error.context.retryAfterSeconds`; render "try again
 in Ns" instead of a generic "try later". The SDK never auto-retries a rate limit.
 
-Requires `api.sponsoringApiConfig` (at minimum `apiKey`) on the `SodaxProvider` config. An api key
+On the packaged gateway no sponsoring-specific credential is needed: the instance-wide key from
+`<SodaxProvider config={{ apiKey }}>` (`new Sodax({ apiKey })`) is inherited by sponsoring.
+`api.sponsoringApiConfig.apiKey` is the credential for an independently hosted sponsoring service, and
+wins wherever the slice points. An api key
 in a browser bundle is public by nature; the service's per-key quotas, fleet cap, per-IP throttle,
 and origin gating are the real controls. Proxy through your own backend if that is not acceptable.
 
