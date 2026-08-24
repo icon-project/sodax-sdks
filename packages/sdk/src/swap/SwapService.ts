@@ -49,6 +49,7 @@ import { isFillEvent } from '../backendApi/guards.js';
 import { resolveTimeoutMs } from '../shared/utils/resolveTimeoutMs.js';
 import type { ApprovalTxs } from '../shared/types/spoke-types.js';
 import { selectSolvedIntentPacket } from './selectSolvedIntentPacket.js';
+import { estimateSwapSpeedTier, type SwapSpeedTierParams, type SwapSpeedTierResult } from './speed-tier.js';
 import { isSodaxError, SodaxError } from '../errors/SodaxError.js';
 import { mapRelayFailure } from '../errors/relay-error-mapping.js';
 import {
@@ -1753,5 +1754,19 @@ export class SwapService {
    */
   public getSupportedSwapTokens(): Record<SpokeChainKey, readonly XToken[]> {
     return this.config.getSupportedSwapTokens();
+  }
+
+  /**
+   * Offline, rule-based estimate of how fast a `srcToken`→`dstToken` swap will settle.
+   *
+   * Derived purely from SDK config (no network / on-chain / backend call): tokens tied to a
+   * money-market-reserve sodaAsset settle faster, and an Ethereum leg adds a fixed penalty. See
+   * {@link estimateSwapSpeedTier} for the rules.
+   *
+   * @param params `{ srcToken, dstToken }` spoke token pair to estimate
+   * @returns the estimated `tier` bucket and `estimatedSeconds`
+   */
+  public getSwapSpeedTier(params: SwapSpeedTierParams): SwapSpeedTierResult {
+    return estimateSwapSpeedTier(params, hubAsset => this.config.isMoneyMarketReserveHubAsset(hubAsset));
   }
 }

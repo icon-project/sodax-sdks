@@ -46,6 +46,12 @@ sodax.swaps.cancelLimitOrder<K>(/* … */): Promise<Result<TxHashPair, SodaxErro
 sodax.swaps.approve<K, Raw>(/* … */): Promise<Result<TxReturnType<K, Raw>, SodaxError>>;
 sodax.swaps.isAllowanceValid<K, Raw>(/* … */): Promise<Result<boolean, SodaxError>>;
 
+sodax.swaps.getSwapSpeedTier(params: { srcToken: XToken; dstToken: XToken }): SwapSpeedTierResult;
+//   Synchronous, offline, no Result wrapper — estimates settlement speed from SDK config alone
+//   (no network / on-chain / backend call). SwapSpeedTierResult = { tier: 'fast'|'normal'|'slow', estimatedSeconds }.
+//   A token tied to a money-market-reserve (sodaAsset) settles faster; an Ethereum leg adds a fixed penalty.
+//   Safe to call synchronously while rendering a quote (e.g. an ETA badge next to the output amount).
+
 sodax.swaps.getStatus(
   request: SolverIntentStatusRequest,          // { intent_tx_hash } — the HUB (Sonic) tx hash
 ): Promise<Result<SolverIntentStatusResponse, SolverErrorResponse>>;   // legacy error shape, NOT SodaxError
@@ -321,6 +327,7 @@ await sodax.swaps.cancelIntent({
 | `cancelIntent` / `cancelLimitOrder` | `TxHashPair` = `{ srcChainTxHash, dstChainTxHash }` (not generic over `Raw`) |
 | `approve` | `TxReturnType<K, Raw>` |
 | `isAllowanceValid` | `boolean` |
+| `getSwapSpeedTier` | `SwapSpeedTierResult` = `{ tier: 'fast' \| 'normal' \| 'slow', estimatedSeconds: number }` (synchronous, not a `Result`) |
 
 `RelayExtraData`:
 
