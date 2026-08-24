@@ -32,6 +32,7 @@ import {
 } from '@sodax/types';
 import {
   DETAILED_STATUS_NOT_DELIVERED,
+  SPEED_TIER_SECONDS,
   type IntentResponse,
   type SpokeIsAllowanceValidParamsEvmSpoke,
   type SpokeIsAllowanceValidParamsHub,
@@ -1472,6 +1473,44 @@ describe('SwapService.getSupportedSwapTokensByChainId', () => {
 
     expect(result).toBe(fakeTokens);
     expect(spy).toHaveBeenCalledWith(ChainKeys.BSC_MAINNET);
+  });
+});
+
+describe('SwapService.getSwapSpeedTier', () => {
+  it('recognizes a real packaged reserve asset despite its mixed-case checksummed config address', () => {
+    // Regression test for a case-sensitivity bug: packaged reserve addresses (from SodaTokens) are
+    // EIP-55 checksummed mixed-case, but ConfigService.isMoneyMarketReserveHubAsset lowercases its
+    // query — so the Set backing it must be normalized too, or every checksummed entry silently
+    // misses and every sodaAsset pair reports the slow default tier instead of the fast one.
+    const reserveHubAsset = sodax.config
+      .getMoneyMarketReserveAssets()
+      .find(address => address !== address.toLowerCase());
+    if (!reserveHubAsset) {
+      throw new Error('no mixed-case packaged reserve asset found — this test needs one to exercise the bug it guards');
+    }
+
+    const result = sodax.swaps.getSwapSpeedTier({
+      srcToken: {
+        symbol: 'RESERVE',
+        name: 'Reserve',
+        decimals: 18,
+        address: reserveHubAsset,
+        chainKey: ChainKeys.BSC_MAINNET,
+        hubAsset: reserveHubAsset,
+        vault: reserveHubAsset,
+      },
+      dstToken: {
+        symbol: 'PLAIN',
+        name: 'Plain',
+        decimals: 18,
+        address: '0x2222222222222222222222222222222222222222',
+        chainKey: ChainKeys.BSC_MAINNET,
+        hubAsset: '0x2222222222222222222222222222222222222222',
+        vault: '0x2222222222222222222222222222222222222222',
+      },
+    });
+
+    expect(result).toEqual({ tier: 'fast', estimatedSeconds: SPEED_TIER_SECONDS.sodaAsset });
   });
 });
 

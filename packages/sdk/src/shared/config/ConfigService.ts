@@ -395,7 +395,9 @@ export class ConfigService {
       ]),
     );
     this.loadSpokeChainConfigDataStructures(sodaxConfig);
-    this.moneyMarketReserveAssetsSet = new Set(sodaxConfig.moneyMarket.supportedReserveAssets);
+    this.moneyMarketReserveAssetsSet = new Set(
+      sodaxConfig.moneyMarket.supportedReserveAssets.map(address => address.toLowerCase() as Address),
+    );
     this.stakedATokenAddressesSet = new Set(
       Object.keys(sodaxConfig.dex.statATokenAddresses).map(address => address.toLowerCase() as Address),
     );
