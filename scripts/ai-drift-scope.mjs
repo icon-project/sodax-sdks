@@ -344,9 +344,10 @@ export const scopeAiDrift = ({ root, changedFiles, maxFiles = 40, maxBytes = 400
     shouldRun: kept.length > 0,
     // claude-code-action refuses to run when the workflow invoking it differs from the copy on the
     // default branch — otherwise a pull request could rewrite the workflow to exfiltrate its token.
-    // The prompt and these scripts get no such protection, so a pull request that edits any of them
-    // is one this gate cannot audit honestly, and the report step has to tell those silences apart:
-    // declined-to-run, versus an auditor that genuinely broke.
+    // The prompt and these scripts get no such protection: they run straight from the pull request's
+    // own checkout. So the workflow skips the audit on this flag rather than publishing a verdict the
+    // pull request wrote the rules for, and the report step tells that silence apart from an auditor
+    // that genuinely broke.
     gateSelfEdited: changed.some(path => GATE_PATHS.includes(path)),
     changedFiles: changed,
     aiFiles: kept,
@@ -369,6 +370,11 @@ export const scopeAiDrift = ({ root, changedFiles, maxFiles = 40, maxBytes = 400
       .sort((a, b) => a.label.localeCompare(b.label)),
   };
 };
+
+// Both flags the workflow branches on. gate_self_edited is not decoration: the prompt load and the
+// audit are skipped on it, so a pull request that edits the gate cannot audit itself. Exporting only
+// should_run left that skip unreachable.
+export const stepOutputs = scope => `should_run=${scope.shouldRun}\ngate_self_edited=${scope.gateSelfEdited}\n`;
 
 const parseArgs = argv => {
   const args = { base: null, out: 'drift-scope.json' };
@@ -397,11 +403,13 @@ if (isMain) {
   writeFileSync(out, `${JSON.stringify(scope, null, 2)}\n`);
 
   if (process.env.GITHUB_OUTPUT) {
-    appendFileSync(process.env.GITHUB_OUTPUT, `should_run=${scope.shouldRun}\n`);
+    appendFileSync(process.env.GITHUB_OUTPUT, stepOutputs(scope));
   }
 
   if (!scope.shouldRun) {
     console.log(`No AI files describe the ${scope.changedFiles.length} changed file(s); drift audit not needed.`);
+  } else if (scope.gateSelfEdited) {
+    console.log('This pull request edits the drift check itself; the audit is skipped. Review the AI files by hand.');
   } else {
     console.log(`Auditing ${scope.aiFiles.length} AI file(s), ${Math.round(scope.bytes / 1024)} KB:\n`);
     for (const group of scope.groups) {

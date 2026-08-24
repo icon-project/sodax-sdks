@@ -353,10 +353,10 @@ if (isMain) {
   if (!result || !Array.isArray(result.findings)) {
     // Three ways to end up here, and they are not the same event.
     //
-    // A pull request that edits this gate cannot be audited by it: claude-code-action only runs a
-    // workflow whose content matches the default branch, so a pull request cannot rewrite the
-    // workflow around its own token. Nothing here can change that, and failing forever would mean
-    // the gate can never be amended.
+    // A pull request that edits this gate cannot be audited by it: the workflow skips the audit on
+    // `gate_self_edited`, because the prompt and these scripts run from the pull request's own
+    // checkout and an audit reading them would be one the pull request wrote the rules for. Failing
+    // the check instead would mean the gate can never be amended.
     //
     // The audit step failing outright — a provider outage, an expired token, the job timeout — is
     // not evidence of drift either, and blocking every open pull request on someone else's incident
@@ -366,7 +366,7 @@ if (isMain) {
     // and a blocking check that passes in that case reports "no drift" for a run that never looked.
     const [message, level] = scope.gateSelfEdited
       ? [
-          'This pull request edits the drift check itself, so the auditor declined to run and nothing was audited. Review the AI files by hand; the gate resumes on the next pull request that leaves it alone.',
+          'This pull request edits the drift check itself, so the audit was skipped and nothing was audited. Review the AI files by hand; the gate resumes on the next pull request that leaves it alone.',
           'warning',
         ]
       : process.env.AUDIT_OUTCOME === 'failure'

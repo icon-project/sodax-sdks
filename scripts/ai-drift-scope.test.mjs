@@ -13,6 +13,7 @@ import {
   scopeAiDrift,
   SEGMENT_ALIASES,
   SKILL_BY_PACKAGE,
+  stepOutputs,
 } from './ai-drift-scope.mjs';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -219,6 +220,16 @@ test('a gate-only pull request still scopes root guidance rather than exiting si
   assert.equal(scope.shouldRun, true);
   assert.equal(scope.gateSelfEdited, true);
   assert.deepEqual(scope.aiFiles, ['AGENTS.md']);
+});
+
+// The workflow skips the prompt load and the audit on gate_self_edited. A flag computed here but
+// never exported is a skip that never happens, and the pull request audits its own rewritten rules.
+test('exports both flags the workflow branches on', t => {
+  assert.equal(stepOutputs(run(t, ['scripts/ai-drift-scope.mjs'])), 'should_run=true\ngate_self_edited=true\n');
+  assert.equal(
+    stepOutputs(run(t, ['packages/sdk/src/swap/HookService.ts'])),
+    'should_run=true\ngate_self_edited=false\n',
+  );
 });
 
 test('classifies AI files and leaves vendored skills and ordinary docs out', t => {

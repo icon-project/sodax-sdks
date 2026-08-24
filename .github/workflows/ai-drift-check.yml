@@ -64,11 +64,18 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: node scripts/ai-drift-scope.mjs --base "$BASE_SHA"
 
+      # Skipped when the pull request edits the gate. claude-code-action's token exchange refuses a
+      # workflow that differs from the copy on the default branch, but the prompt and the two scripts
+      # carry no such protection — they run from the pull request's own checkout. Without this
+      # condition a pull request could rewrite the rules it is judged by and still post a report that
+      # reads as an ordinary clean audit. The report step below still runs and says the audit
+      # declined, which is the contract CONTRIBUTING.md states.
+      #
       # The prompt file comes from the pull request's own checkout, so the heredoc delimiter has to be
       # unguessable: a fixed one lets a crafted prompt close the value early and have the rest of the
       # file parsed as further assignments — into the same job that holds the OAuth token below.
       - name: Load the audit prompt
-        if: steps.scope.outputs.should_run == 'true'
+        if: steps.scope.outputs.should_run == 'true' && steps.scope.outputs.gate_self_edited != 'true'
         run: |
           DELIM="AI_DRIFT_PROMPT_EOF_$(openssl rand -hex 16)"
           if grep -qxF "$DELIM" .github/ai-drift-prompt.md; then
@@ -92,7 +99,7 @@ jobs:
       # audit from one that only opened part of its scope.
       - name: Audit the AI files against the source
         id: audit
-        if: steps.scope.outputs.should_run == 'true'
+        if: steps.scope.outputs.should_run == 'true' && steps.scope.outputs.gate_self_edited != 'true'
         continue-on-error: true
         timeout-minutes: 10
         uses: anthropics/claude-code-action@v1

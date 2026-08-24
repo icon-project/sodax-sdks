@@ -57,9 +57,10 @@ requests from forks skip the audit; a maintainer runs it on a branch in this rep
 Three cases where no audit happens. The first two say so in the PR comment; the third costs nothing
 and stays quiet:
 
-- **Your PR edits the check itself** — its workflow, its prompt, or either of its scripts. The action
-  only runs a workflow whose content matches the default branch, so a pull request cannot rewrite the
-  check around its own token. Review such a PR's AI files by hand.
+- **Your PR edits the check itself** — its workflow, its prompt, or either of its scripts. The prompt
+  and the scripts run from your branch, so an audit that read them would be one you wrote the rules
+  for; the job skips it and says so. (A workflow edit never gets that far: the action refuses a
+  workflow whose content differs from the default branch.) Review such a PR's AI files by hand.
 - **The audit step did not complete** — a provider outage, an expired credential, the job timeout. An
   incident elsewhere is not evidence that your change drifted, so the job stays green and says why.
 - **Nothing you changed is described by an AI file.** The job exits before spending anything.
