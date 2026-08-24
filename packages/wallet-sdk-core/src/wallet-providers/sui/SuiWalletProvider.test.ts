@@ -131,13 +131,16 @@ describe('SuiWalletProvider — endpoint config', () => {
           grpcUrl: 'https://a.example',
           rpcUrl: 'https://b.example',
           mnemonics: 'a b c',
+          // Cast stands in for an untyped JS caller; the config union rejects this at compile time.
         } as unknown as ConstructorParameters<typeof SuiWalletProvider>[0]),
     ).toThrow(/`grpcUrl` or `rpcUrl`, not both/);
   });
 
   it('throws when neither endpoint field is supplied', () => {
     expect(
-      () => new SuiWalletProvider({ mnemonics: 'a b c' } as unknown as ConstructorParameters<typeof SuiWalletProvider>[0]),
+      // Cast stands in for an untyped JS caller; the config union rejects this at compile time.
+      () =>
+        new SuiWalletProvider({ mnemonics: 'a b c' } as unknown as ConstructorParameters<typeof SuiWalletProvider>[0]),
     ).toThrow(/requires a gRPC endpoint/);
   });
 });
