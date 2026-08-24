@@ -984,6 +984,21 @@ describe('one key, every service', () => {
     expect(sentApiKey()).toBe('instance-key');
   });
 
+  // `undefined` is exactly what runBackendSubmitTx passes when `extras` is omitted.
+  it.each(services)('treats an undefined per-request apiKey as unset on the %s wire', async (_label, call) => {
+    mockFetch.mockResolvedValueOnce(okResponse({}));
+    await call({ apiKey: undefined });
+    expect(sentApiKey()).toBe('instance-key');
+  });
+
+  it.each(services)('sends a mixed-case raw header as the ONLY key header on the %s wire', async (_label, call) => {
+    mockFetch.mockResolvedValueOnce(okResponse({}));
+    await call({ headers: { 'X-Api-Key': 'raw-key' } });
+    const headers = mockFetch.mock.calls.at(-1)?.[1]?.headers as Record<string, string>;
+    expect(Object.keys(headers).filter(h => h.toLowerCase() === 'x-api-key')).toHaveLength(1);
+    expect(new Headers(headers).get('x-api-key')).toBe('raw-key');
+  });
+
   it.each(services)('sends a blank per-request x-api-key header verbatim on the %s wire', async (_label, call) => {
     mockFetch.mockResolvedValueOnce(okResponse({}));
     await call({ apiKey: 'call-key', headers: { 'x-api-key': '' } });
@@ -1018,6 +1033,15 @@ describe('sponsoring inherits the instance key only for an allowed root', () => 
     mockFetch.mockResolvedValueOnce(okResponse({}));
     await sodax.api.sponsoring.getStellarSponsorConfig(config);
     expect(mockFetch.mock.calls.at(-1)?.[0]).toBe(`${target}/sponsorships/stellar/config`);
+    return sentApiKey();
+  };
+
+  /** POST twin of `keySentTo`: one `createStellarSponsoredAccount` call, target asserted the same way. */
+  const keySentToAccounts = async (target: string, sodax: Sodax, config?: RequestOverrideConfig): Promise<string | null> => {
+    mockFetch.mockResolvedValueOnce(okResponse({ hash: '0xhash', alreadyActive: false }));
+    await sodax.api.sponsoring.createStellarSponsoredAccount({ data: 'AAAA' }, config);
+    expect(mockFetch.mock.calls.at(-1)?.[0]).toBe(`${target}/sponsorships/stellar/accounts`);
+    expect(mockFetch.mock.calls.at(-1)?.[1]?.method).toBe('POST');
     return sentApiKey();
   };
 
@@ -1084,5 +1108,40 @@ describe('sponsoring inherits the instance key only for an allowed root', () => 
     });
     expect(await keySentTo(CUSTOM_SPONSORING, sodax)).toBeNull();
     expect(await keySentTo(STAGING_ROOT, sodax, { baseURL: STAGING_ROOT })).toBe('instance-key');
+  });
+
+  it('inherits when the configured sponsoring baseURL differs from an allowed root only by a trailing slash', async () => {
+    const sodax = new Sodax({
+      apiKey: 'instance-key',
+      api: { sponsoringApiConfig: { baseURL: `${DEFAULT_SPONSORING_API_ENDPOINT}/` } },
+      logger: silentLogger,
+    });
+    // The wire URL is built from the trimmed base, so the asserted target carries no slash.
+    expect(await keySentTo(DEFAULT_SPONSORING_API_ENDPOINT, sodax)).toBe('instance-key');
+  });
+
+  it('inherits when a per-request baseURL differs from an allowed root only by a trailing slash', async () => {
+    const sodax = new Sodax({ apiKey: 'instance-key', logger: silentLogger });
+    const config: RequestOverrideConfig = { baseURL: `${DEFAULT_SPONSORING_API_ENDPOINT}/` };
+    expect(await keySentTo(DEFAULT_SPONSORING_API_ENDPOINT, sodax, config)).toBe('instance-key');
+  });
+
+  it('sends the instance key on the account-creation POST at the packaged default root', async () => {
+    const sodax = new Sodax({ apiKey: 'instance-key', logger: silentLogger });
+    expect(await keySentToAccounts(DEFAULT_SPONSORING_API_ENDPOINT, sodax)).toBe('instance-key');
+  });
+
+  it('withholds the instance key from the account-creation POST at a custom sponsoring origin', async () => {
+    const sodax = new Sodax({
+      apiKey: 'instance-key',
+      api: { sponsoringApiConfig: { baseURL: CUSTOM_SPONSORING } },
+      logger: silentLogger,
+    });
+    expect(await keySentToAccounts(CUSTOM_SPONSORING, sodax)).toBeNull();
+  });
+
+  it('withholds the instance key when a per-request baseURL retargets the account-creation POST', async () => {
+    const sodax = new Sodax({ apiKey: 'instance-key', logger: silentLogger });
+    expect(await keySentToAccounts(CUSTOM_SPONSORING, sodax, { baseURL: CUSTOM_SPONSORING })).toBeNull();
   });
 });

@@ -3725,6 +3725,106 @@ describe('SwapService.swap — backend 2-step (useBackendSubmitTx)', () => {
 });
 
 // =========================================================================
+// Batch 7 call-through: extras.apiKey on the wire. Same 2-step flow as above, but the real
+// SwapsApiService transport runs against a test-local global fetch stub, so the `x-api-key`
+// asserted is the header actually sent — not an argument recorded on a stubbed method.
+// =========================================================================
+
+describe('SwapService.swap — backend 2-step extras.apiKey on the wire (call-through)', () => {
+  const sodaxKeyed = new Sodax({ apiKey: 'instance-key', logger: 'silent' });
+
+  // The same payloads the spied specs above return — they satisfy the real swaps-api validators.
+  const SUBMIT_TX_BODY = { success: true, data: { status: 'inserted', message: 'accepted' } };
+  const SOLVED_STATUS_BODY = {
+    success: true,
+    data: {
+      txHash: '0xspokeTx',
+      srcChainKey: ChainKeys.BSC_MAINNET,
+      status: 'solved',
+      processingAttempts: 1,
+      result: { dstIntentTxHash: '0xDST', intent_hash: '0xHASH' },
+    },
+  };
+
+  const wireFetch = vi.fn();
+
+  beforeEach(() => {
+    wireFetch.mockReset();
+    // Only the two submit-tx legs may reach fetch; anything else fails the test loudly.
+    wireFetch.mockImplementation(async (url: unknown, init?: { method?: string }) => {
+      const { pathname } = new URL(String(url));
+      if (pathname === '/v1/swaps/submit-tx' && init?.method === 'POST') {
+        return { ok: true, status: 200, json: async () => SUBMIT_TX_BODY };
+      }
+      if (pathname === '/v1/swaps/submit-tx/status' && (init?.method ?? 'GET') === 'GET') {
+        return { ok: true, status: 200, json: async () => SOLVED_STATUS_BODY };
+      }
+      throw new Error(`unexpected fetch: ${init?.method ?? 'GET'} ${String(url)}`);
+    });
+    vi.stubGlobal('fetch', wireFetch);
+  });
+
+  afterEach(() => {
+    // Scoped to this batch — no other suite in this file stubs fetch.
+    vi.unstubAllGlobals();
+  });
+
+  const stubKeyedCreated = () => {
+    const intent = makeIntent(ChainKeys.BSC_MAINNET);
+    vi.spyOn(sodaxKeyed.swaps, 'createIntent').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        tx: '0xspokeTx' as never,
+        intent: { ...intent, feeAmount: 0n },
+        relayData: { address: intent.creator, payload: '0xpay' } as never,
+      } as never,
+    });
+    vi.spyOn(sodaxKeyed.spoke, 'verifyTxHash').mockResolvedValue({ ok: true, value: true });
+  };
+
+  /** The `x-api-key` actually sent to (pathname, method), read through `Headers` so any casing counts. */
+  const keySentTo = (pathname: string, method: string): string | null => {
+    const matches = wireFetch.mock.calls.filter(
+      call => new URL(String(call[0])).pathname === pathname && (call[1]?.method ?? 'GET') === method,
+    );
+    expect(matches).toHaveLength(1);
+    return new Headers(matches[0]?.[1]?.headers).get('x-api-key');
+  };
+
+  const runKeyedSwap = async (extras?: { apiKey?: string }) => {
+    stubKeyedCreated();
+    const args = {
+      params: intentInput(ChainKeys.BSC_MAINNET),
+      raw: false as const,
+      walletProvider: mockEvmProvider,
+    };
+    const result = await sodaxKeyed.swaps.swap(extras ? { ...args, extras } : args);
+    expect(result.ok).toBe(true);
+    // The value round-tripped through the real transport + validators, not a stubbed method.
+    if (result.ok) expect(result.value.intentDeliveryInfo.dstTxHash).toBe('0xDST');
+    expect(wireFetch).toHaveBeenCalledTimes(2);
+  };
+
+  it('sends extras.apiKey over the instance key on both the submit POST and the status poll', async () => {
+    await runKeyedSwap({ apiKey: 'action-key' });
+    expect(keySentTo('/v1/swaps/submit-tx', 'POST')).toBe('action-key');
+    expect(keySentTo('/v1/swaps/submit-tx/status', 'GET')).toBe('action-key');
+  });
+
+  it('sends the instance key on both requests when extras is omitted', async () => {
+    await runKeyedSwap();
+    expect(keySentTo('/v1/swaps/submit-tx', 'POST')).toBe('instance-key');
+    expect(keySentTo('/v1/swaps/submit-tx/status', 'GET')).toBe('instance-key');
+  });
+
+  it('treats an empty extras.apiKey as unset: the instance key still rides both requests', async () => {
+    await runKeyedSwap({ apiKey: '' });
+    expect(keySentTo('/v1/swaps/submit-tx', 'POST')).toBe('instance-key');
+    expect(keySentTo('/v1/swaps/submit-tx/status', 'GET')).toBe('instance-key');
+  });
+});
+
+// =========================================================================
 // buildApproveTxs: the unsigned entry point the swaps API calls. The only logic this layer owns
 // is resolving the spender, so that is what is asserted — the ordering of the plan itself is
 // covered in SpokeService.test.ts.

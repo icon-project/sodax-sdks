@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { HookKind } from '@sodax/types';
 import { SwapsApiError } from './errors.js';
+import { API_KEY_VERIFICATION_UNAVAILABLE_MESSAGE } from './http.js';
 import { SwapsApi } from './client.js';
 
 const BASE = 'https://api.test/v1';
@@ -185,6 +186,43 @@ describe('SwapsApi request shaping', () => {
       const headers = fetchImpl.mock.calls[0]?.[1]?.headers as Record<string, string>;
       expect(Object.keys(headers).filter(h => h.toLowerCase() === 'x-api-key')).toHaveLength(1);
       expect(new Headers(headers).get('x-api-key')).toBe('k-header');
+    }
+  });
+
+  it('sends the configured apiKey on a genuine non-idempotent mutation (createIntent POST)', async () => {
+    const fetchImpl = vi.fn(async () => json({}));
+    const api = new SwapsApi({ baseUrl: BASE, fetch: fetchImpl, apiKey: 'k-123' });
+    await api.createIntent(params).catch(() => {}); // response may fail validation; we only assert the request
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    const [url, init] = fetchImpl.mock.calls[0] ?? [];
+    expect(url).toBe(`${BASE}/swaps/intents`);
+    expect(init?.method).toBe('POST');
+    expect(new Headers(init?.headers).get('x-api-key')).toBe('k-123');
+  });
+
+  it('keeps the configured apiKey on every attempt across an apiguard-503 mutation retry', async () => {
+    // Headers are built once above the retry loop; nothing else pins the key to the replayed attempt.
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = vi
+        .fn<typeof globalThis.fetch>()
+        .mockResolvedValueOnce(
+          json(
+            { statusCode: 503, message: API_KEY_VERIFICATION_UNAVAILABLE_MESSAGE, error: 'Service Unavailable' },
+            503,
+          ),
+        )
+        .mockResolvedValueOnce(json({}));
+      const api = new SwapsApi({ baseUrl: BASE, fetch: fetchImpl, apiKey: 'k-123' });
+      const pending = api.createIntent(params).catch(() => {}); // success body fails validation; requests are the subject
+      await vi.advanceTimersByTimeAsync(250);
+      await pending;
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      for (const call of fetchImpl.mock.calls) {
+        expect(new Headers(call[1]?.headers).get('x-api-key')).toBe('k-123');
+      }
+    } finally {
+      vi.useRealTimers();
     }
   });
 

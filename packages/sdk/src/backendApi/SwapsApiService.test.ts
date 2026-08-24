@@ -24,6 +24,7 @@ import { Sodax } from '../shared/entities/Sodax.js';
 import { SwapsApiService } from './SwapsApiService.js';
 import { SodaxError } from '../errors/SodaxError.js';
 import { SwapsApiError } from '@sodax/swaps-api';
+import type { RequestOverrideConfig } from './api-utils.js';
 
 // --- fetch stub -----------------------------------------------------------
 const mockFetch = vi.fn();
@@ -808,6 +809,58 @@ describe('Sodax → swaps API key wiring', () => {
     expect(keyed.instanceConfig.apiKey).toBeUndefined();
     expect(keyed.config.apiKey).toBe('global-key');
   });
+});
+
+// =========================================================================
+// API key on the submit-tx flow — the two methods runBackendSubmitTx drives.
+// Asserted on the outgoing fetch request, read through `new Headers(...)`.
+// =========================================================================
+
+describe('SwapsApiService API key on the submit-tx flow', () => {
+  const submitFlows = [
+    {
+      name: 'submitTx',
+      invoke: (swaps: SwapsApiService, config?: RequestOverrideConfig) => swaps.submitTx(sampleSubmitTxRequest, config),
+      url: `${BASE}/swaps/submit-tx`,
+      method: 'POST',
+      body: { success: true, data: { status: 'inserted', message: 'ok' } },
+    },
+    {
+      name: 'getSubmitTxStatus',
+      invoke: (swaps: SwapsApiService, config?: RequestOverrideConfig) =>
+        swaps.getSubmitTxStatus({ txHash: '0xabc', srcChainKey: '0x38.bsc' }, config),
+      url: `${BASE}/swaps/submit-tx/status?txHash=0xabc&srcChainKey=0x38.bsc`,
+      method: 'GET',
+      body: {
+        success: true,
+        data: { txHash: '0xabc', srcChainKey: '0x38.bsc', status: 'solved', processingAttempts: 1 },
+      },
+    },
+  ];
+
+  // Exactly one call is pinned first, so the URL, method, and header below all describe THAT request.
+  it.each(submitFlows)('$name sends the instance key on the wire', async ({ invoke, url, method, body }) => {
+    const keyed = new Sodax({ apiKey: 'global-key', logger: 'silent' });
+    mockFetch.mockResolvedValueOnce(okResponse(body));
+    await invoke(keyed.api.swaps);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch.mock.calls[0]?.[0]).toBe(url);
+    expect(mockFetch.mock.calls[0]?.[1]?.method).toBe(method);
+    expect(new Headers(sentHeaders()).get('x-api-key')).toBe('global-key');
+  });
+
+  it.each(submitFlows)(
+    '$name lets a per-request apiKey win over the instance key',
+    async ({ invoke, url, method, body }) => {
+      const keyed = new Sodax({ apiKey: 'global-key', logger: 'silent' });
+      mockFetch.mockResolvedValueOnce(okResponse(body));
+      await invoke(keyed.api.swaps, { apiKey: 'call-key' });
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch.mock.calls[0]?.[0]).toBe(url);
+      expect(mockFetch.mock.calls[0]?.[1]?.method).toBe(method);
+      expect(new Headers(sentHeaders()).get('x-api-key')).toBe('call-key');
+    },
+  );
 });
 
 // =========================================================================
