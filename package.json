@@ -2,9 +2,9 @@
   "name": "sodax-sdks",
   "version": "0.0.0",
   "private": true,
-  "packageManager": "pnpm@10.32.1+sha512.a706938f0e89ac1456b6563eab4edf1d1faf3368d1191fc5c59790e96dc918e4456ab2e67d613de1043d2e8c81f87303e6b40d4ffeca9df15ef1ad567348f2be",
+  "packageManager": "pnpm@10.32.1",
   "engines": {
-    "node": ">=20.12.0"
+    "node": ">=22.12.0"
   },
   "scripts": {
     "build": "turbo run build --filter=!./apps/node",
@@ -18,8 +18,9 @@
     "lint:packages": "turbo run lint:packages",
     "checkTs": "turbo run checkTs --filter=!./apps/node",
     "checkTs:packages": "turbo run checkTs:packages",
-    "test": "pnpm test:release-scripts && turbo run test --filter=!./apps/node",
-    "test:release-scripts": "node --test scripts/bump-config-version.test.mjs scripts/check-doc-links.test.mjs scripts/check-docs-drift.test.mjs scripts/pack-local.test.mjs",
+    "test": "pnpm test:release-scripts && pnpm test:ci-scripts && turbo run test --filter=!./apps/node",
+    "test:release-scripts": "node --test scripts/bump-config-version.test.mjs scripts/check-doc-links.test.mjs scripts/pack-local.test.mjs",
+    "test:ci-scripts": "node --test scripts/ai-drift-scope.test.mjs scripts/ai-drift-report.test.mjs scripts/check-docs-drift.test.mjs",
     "test:e2e": "turbo run test:e2e --filter=!./apps/node",
     "test:packages": "turbo run test:packages",
     "check:circular-deps": "turbo run check:circular-deps",

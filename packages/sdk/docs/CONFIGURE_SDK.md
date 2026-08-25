@@ -115,6 +115,49 @@ const partnerFeeAmount: PartnerFee = {
 };
 ```
 
+### API key
+
+The backend guards its API-keyed routes (starting with the Swaps API v2, `POST /swaps/*`) with an `x-api-key` header check; keys are minted through the partner portal. There is **one** key for every backend request — set it once at construction and the SDK sends it as `x-api-key` on the data API, the swaps API, the bridge API, the solver API, and the backend submit-tx legs of `sodax.swaps.swap()` / `sodax.bridge.bridge()`:
+
+```typescript
+import { Sodax } from '@sodax/sdk';
+
+const sodax = new Sodax({ apiKey: 'partner-api-key' });
+```
+
+Per request, pass `apiKey` in the trailing `RequestOverrideConfig` of any `sodax.api.*` method, or in `extras` on the high-level swap / bridge actions:
+
+```typescript
+await sodax.api.getIntentByTxHash(txHash, { apiKey: 'per-request-key' });
+
+await sodax.api.swaps.getQuote(quoteBody, undefined, { apiKey: 'per-request-key' });
+
+await sodax.swaps.swap({
+  params: createIntentParams,
+  extras: { apiKey: 'per-request-key' }, // applies to the backend submit-tx leg
+  walletProvider,
+});
+
+await sodax.bridge.bridge({
+  params: createBridgeIntentParams,
+  raw: false,
+  extras: { apiKey: 'per-request-key' }, // applies to the backend submit-tx leg
+  walletProvider,
+});
+```
+
+Precedence, highest first: per-request explicit `headers['x-api-key']` (any casing) → per-request `apiKey` → configured explicit `x-api-key` header (`api.headers` / `setHeaders`) → the configured `apiKey`. That full order is what the `sodax.api.*` transports resolve — tiers 1 and 3 exist only there, so the solver (below) carries the configured `apiKey` alone. An empty `apiKey` counts as unset and falls back; an explicit raw `x-api-key` header is authoritative and sent verbatim, a blank one included. The configured value is readable on `sodax.config.apiKey`.
+
+Sponsoring is the one exception. Its own slice key (`api.sponsoringApiConfig.apiKey`) is the credential for that service and wins wherever the slice points. The global key is only *inherited* by sponsoring when the call actually targets a SODAX gateway — the packaged sponsoring default or the resolved shared root — and that check is made per request against the effective target, so a per-call `baseURL` override cannot carry the global key off-gateway. A custom sponsoring origin never receives it.
+
+The solver API (`solver.solverApiEndpoint`, `https://api.sodax.com/v1/intent` by default) receives the configured key on `/quote`, `/execute`, and `/status`. It is the configured-`apiKey` tier only — those requests have no per-call override surface and no configured-header slot, so tiers 1–3 never apply to them. Solver auth failures surface through the solver's own `SolverErrorResponse` contract rather than as an `EXTERNAL_API_ERROR`, so `isAuthFailure` does not recognize them.
+
+Rotating a key at runtime with `backendApi.setHeaders({ 'x-api-key': next })` reaches the data, swaps, and bridge clients only: sponsoring keeps its slice or inherited key (rotate it through `sodax.api.sponsoring.setHeaders`), and the solver keeps reading the configured `ConfigService.apiKey`.
+
+**Security note.** The configured key follows the roots you configure — the data / swaps / bridge `baseURL` and `solver.solverApiEndpoint` — and it equally follows a per-call `RequestOverrideConfig.baseURL` on data / swaps / bridge, plaintext local targets such as `http://localhost:3008` included: those three bake the key into their headers, so retargeting a single call carries it to that host. Sponsoring is the one gated exception described above. Point all of them — configured root and per-call override alike — only at trusted SODAX-related deployments.
+
+Like the global `fee`, the global `apiKey` is a `SodaxOptions` client-side option, never part of the backend-fetched data contract. Keys bundled into a browser app are public by nature. Auth failures come back as `EXTERNAL_API_ERROR` results with `context.status` `401` (missing/invalid key) or `403` (suspended organisation / missing scope) — terminal until the key is fixed — while the transient verification `503` is retried automatically by the wire client.
+
 ## Custom configuration
 
 ### Solver (`solver`)
@@ -248,7 +291,7 @@ const sodax = new Sodax({
 });
 ```
 
-EVM spokes use `rpcUrl` on their spoke config; Stellar uses `horizonRpcUrl` and `sorobanRpcUrl`; Bitcoin includes `radfi` and related fields—mirror the shape of the default `SpokeChainConfig` for the chain you change.
+EVM spokes use `rpcUrl` on their spoke config; Stellar uses `horizonRpcUrl` and `sorobanRpcUrl`; Sui uses `grpc_url` because it speaks gRPC-web rather than JSON-RPC (`rpc_url` is still accepted as a deprecated alias and wins when set — the packaged default always supplies `grpc_url`, so precedence rather than an either/or guard is what keeps overrides working — but the endpoint must serve gRPC; the packaged default is Sui's public fullnode, which is rate-limited per IP, so override it for server-side traffic); Bitcoin includes `radfi` and related fields—mirror the shape of the default `SpokeChainConfig` for the chain you change.
 
 ### Backend API (`api`)
 
@@ -314,7 +357,7 @@ const sodax = new Sodax({
 | `sodax.api.bridge` | flat fields → `baseApiConfig` | Reached as `/bridge/*` on the shared root. Defaults to the same host as swaps, but a `swapsApiConfig` slice does **not** move it — there is no `bridgeApiConfig` slice. Never inherits `basePath`. |
 | `sodax.api.sponsoring` | `sponsoringApiConfig` (own origin; only `timeout` inherits) | Base URL and headers never inherit, so base credentials can't leak to another origin — and pointing the base API at a private proxy never drags sponsoring along. |
 
-Every client method also takes a per-call `RequestOverrideConfig` (`{ baseURL?, timeout?, headers? }`) as its last argument, which wins over the resolved config — useful for pointing one call at a canary host without touching app-wide config. A `baseURL` override replaces the gateway root; the calling service's own path still applies, and a legacy `/be` suffix is trimmed from it just as it is from a configured base URL. Note that a `timeout` override **replaces** the resolved value rather than capping it.
+Every client method also takes a per-call `RequestOverrideConfig` (`{ baseURL?, timeout?, headers?, apiKey? }`) as its last argument, which wins over the resolved config — useful for pointing one call at a canary host without touching app-wide config. A `baseURL` override replaces the gateway root; the calling service's own path still applies, and a legacy `/be` suffix is trimmed from it just as it is from a configured base URL. Note that a `timeout` override **replaces** the resolved value rather than capping it.
 
 ### Relayer (`relay`)
 

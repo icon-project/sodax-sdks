@@ -9,8 +9,8 @@ It mirrors `ISwapsApiV2` (from `@sodax/types`) one method per endpoint (21 total
 - returns `Promise<Result<T>>` — it **never throws**;
 - validates the JSON response at runtime against a valibot schema (a contract drift is surfaced as
   `{ ok: false }`, not returned untyped);
-- accepts an optional trailing `RequestOverrideConfig` (`{ baseURL?, timeout?, headers? }`) for per-call
-  overrides.
+- accepts an optional trailing `RequestOverrideConfig` (`{ baseURL?, timeout?, headers?, apiKey? }`)
+  for per-call overrides — the same shared type every other backend client takes.
 
 > This is the lower-level backend HTTP surface. For the end-to-end create→relay→post-execution swap
 > orchestrator, use `sodax.swaps` (see [`SWAPS.md`](SWAPS.md)).
@@ -67,6 +67,43 @@ await sodax.api.swaps.createIntent({ ...intentBody, partnerFee });
 
 `checkAllowance` / `approve` inherit the field but ignore it. See [MONETIZE_SDK.md](MONETIZE_SDK.md)
 for the orchestrator path and fee claiming.
+
+## Delivery hooks
+
+`hook?: HookRequestV2` (`{ kind: HookKind }`) lives on `SwapExtrasV2`, so it's structurally present on
+every method whose body extends it: `getQuote`, `checkAllowance`, `approve`, `createIntent`, and
+`createLimitOrderIntent` (`CreateLimitOrderParamsV2` is `CreateIntentParamsV2` minus `deadline`, so it
+carries `hook` too). Only the endpoints that actually build a delivery target *consume* it, though —
+`createIntent`, `createLimitOrderIntent`, and `getQuote` with `includeTxData: true`. Setting it there
+routes the intent's output through a registered delivery hook instead of a plain transfer to
+`dstAddress` — the backend resolves the hook's deployed address and encodes its payload, so
+`dstAddress` keeps meaning "the recipient the hook credits," not the delivery target.
+
+```typescript
+import { HookKind } from '@sodax/sdk';
+
+const created = await sodax.api.swaps.createIntent({
+  ...intentBody,
+  hook: { kind: HookKind.HYPERCORE_DEPOSIT },
+});
+```
+
+- **`checkAllowance` / `approve` inherit the field but ignore it**, same as `partnerFee` above:
+  allowance-checking and approval are source-side only and never touch `dstAddress`, so there's
+  nothing for a hook to apply to.
+- **Server-side, deployment-dependent.** Unlike `sodax.swaps` (which resolves a hook client-side),
+  here the hook is resolved by the backend. It only works when the backend forwards the field *and*
+  its pinned SDK has that kind registered for the request's destination chain — `dstChainKey` on
+  every body above except `getQuote`, which names it `tokenDstChainKey` instead. An unregistered kind
+  fails the request rather than silently falling back to a plain transfer.
+- **On `getQuote`, only meaningful with `includeTxData: true`** — a bare quote never builds an
+  intent, so there's nowhere for a hook to apply, mirroring how `srcPublicKey`/`bound` already work
+  on this endpoint. Whether a given backend forwards `hook` through that path at all is a deployment
+  question this SDK cannot verify from here.
+- **Full contract lives on the type.** The `deliveryData` payload's per-`HookKind` ABI shape and the
+  `supportedTokens` metadata-vs-enforcement distinction aren't repeated here — see the `hook` field's
+  own doc comment on `SwapExtrasV2` in `@sodax/types` (`backendApiV2.ts`) for the complete, canonical
+  spec a backend integration should implement against.
 
 ## `approve` can return two transactions
 
@@ -197,6 +234,22 @@ const sodax = new Sodax({
 The swaps slice layers over the base slice over the defaults (per field) — a cross-cutting header on
 `baseApiConfig` (auth/tracing) still reaches swaps calls unless `swapsApiConfig` overrides that key.
 
+### API key
+
+The backend guards `POST /swaps/*` routes with an `x-api-key` header check. Configure the key once —
+`new Sodax({ apiKey })`, the same instance-wide key every backend client uses — and every
+`sodax.api.swaps` call carries it; override it per call via the trailing `RequestOverrideConfig`:
+
+```typescript
+await sodax.api.swaps.createIntent(params, { apiKey: 'per-request-key' });
+```
+
+Auth failures surface as `EXTERNAL_API_ERROR` with `context.status` `401` (missing/invalid key) or `403`
+(suspended organisation / missing scope) — terminal config problems — while the transient verification
+`503` is retried by the wire client. See
+[CONFIGURE_SDK.md § API key](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md#api-key)
+for the full precedence order.
+
 ## Result\<T\> and Error Handling
 
 Every method returns `Result<T, SodaxError<'EXTERNAL_API_ERROR'>>`. On any failure (network, timeout,
@@ -228,7 +281,9 @@ validation/transform, response schemas, HTTP). This service adds the SDK convent
   and the `SwapsApiErrorCode` union are re-exported from `@sodax/sdk`, so you can narrow `error.cause`
   and type `error.context.code` without a direct `@sodax/swaps-api` import.
 - **Idempotent calls retry transient failures.** Reads, polls, and pure-compute POSTs (e.g. `getQuote`)
-  are retried a few times on transient statuses / network errors; mutating calls are never retried.
+  are retried a few times on transient statuses / network errors; mutating calls are never retried —
+  except the apiguard's transient key-verification `503`, which is rejected before the route handler
+  runs and is therefore replayed (with a short backoff) for every call.
 
 ## See also
 

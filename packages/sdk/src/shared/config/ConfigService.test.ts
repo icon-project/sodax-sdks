@@ -35,11 +35,12 @@ function makeService(
   userConfig: SodaxOptions | undefined,
   response: Result<GetAllConfigApiResponse>,
   fee?: PartnerFee,
+  apiKey?: string,
 ) {
   const getAllConfig = vi.fn().mockResolvedValue(response);
   const api = { getAllConfig } as unknown as BackendApiService;
   const config = userConfig ? deepMerge<SodaxConfig>(sodaxConfig, userConfig) : sodaxConfig;
-  const service = new ConfigService({ api, config, userConfig, fee });
+  const service = new ConfigService({ api, config, userConfig, fee, apiKey });
   return { service, getAllConfig };
 }
 
@@ -91,6 +92,21 @@ describe('ConfigService — global fee is a held client option, not dynamic conf
   it('defaults to undefined when no fee option is provided', () => {
     const { service } = makeService(undefined, ok(remoteConfig()));
     expect(service.fee).toBeUndefined();
+  });
+});
+
+describe('ConfigService — global apiKey is a held client option, not dynamic config', () => {
+  it('exposes the held apiKey option independently of the config object', () => {
+    // The held field is the authoritative read path (it survives the dynamic-config swap); the
+    // merge layer may still copy option keys onto the merged config, exactly as it does for `fee`.
+    const { service } = makeService(undefined, ok(remoteConfig()), undefined, 'global-key');
+
+    expect(service.apiKey).toBe('global-key');
+  });
+
+  it('defaults to undefined when no apiKey option is provided', () => {
+    const { service } = makeService(undefined, ok(remoteConfig()));
+    expect(service.apiKey).toBeUndefined();
   });
 });
 

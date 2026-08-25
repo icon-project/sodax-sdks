@@ -10,7 +10,7 @@ Import everything from `@sodax/sdk`. The barrel re-exports the entire `@sodax/ty
 import {
   // Main entry
   Sodax,
-  type SodaxOptions, // constructor param: DeepPartial<SodaxDefaultConfig> & client options (logger + global fee)
+  type SodaxOptions, // constructor param: DeepPartial<SodaxDefaultConfig> & client options (logger + global fee + the instance-wide backend apiKey)
   type SodaxConfig, // merged result: SodaxDefaultConfig & client options (e.g. sodax.instanceConfig)
   type SodaxDefaultConfig, // static data contract the backend serves / defaults are built from
   type DeepPartial,
@@ -128,6 +128,11 @@ import {
   type LeverageYieldVault,
   // …
 
+  // Delivery hooks (CreateIntentParams.hook — see features/swap.md)
+  HookKind,
+  type HookRequest,
+  getSpokeHook,
+
   // Backend / relay
   type IConfigApiV1,
   type SubmitTxRequestV2,       // swaps API submit-tx request (sodax.api.swaps.submitTx)
@@ -142,7 +147,7 @@ import {
   type BaseApiConfig,           // { baseURL, timeout, headers } — baseURL is the GATEWAY ROOT
   type BackendApiConfig,        // BaseApiConfig & { basePath? } — the data API's mount, default '/be'
   type CustomApiConfig,         // point the swaps / sponsoring API at its own endpoint
-  type SwapsApiConfig,
+  type SwapsApiConfig,          // = BaseApiConfig — the swaps client uses the instance-wide apiKey
   type SponsoringApiConfig,     // BaseApiConfig & { apiKey? } — own host, own x-api-key
   DEFAULT_API_BASE_URL,         // 'https://api.sodax.com/v1' — the root every service resolves
   BACKEND_API_BASE_PATH,        // '/be'
@@ -175,6 +180,7 @@ import {
   // Structured non-2xx backend failure (on error.cause) — status + parsed body
   BackendHttpError,
   isBackendHttpError,           // bundle-safe guard; prefer over instanceof
+  isAuthFailure,                // terminal API-key rejection (context.status 401/403); a 503 is transient
 
   // Backend intent events — `IntentResponse.events` is `unknown[]`
   isFillEvent,                  // narrows an events entry to a recorded `intent-filled`

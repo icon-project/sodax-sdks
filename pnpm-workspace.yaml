@@ -18,9 +18,9 @@ catalog:
   "@arethetypeswrong/cli": "0.17.4"
   "vitest": "3.2.6"
   "bignumber.js": "9.3.1"
-  "@mysten/sui": "1.21.2"
-  "@mysten/wallet-standard": "0.15.6"
-  "@mysten/dapp-kit": "0.14.18"
+  "@mysten/sui": "2.23.2"
+  "@mysten/wallet-standard": "0.21.13"
+  "@mysten/dapp-kit-react": "2.1.15"
   "@stellar/stellar-sdk": "15.1.0"
   "@injectivelabs/sdk-ts": "1.18.14"
   "@injectivelabs/networks": "1.18.14"
@@ -41,7 +41,7 @@ catalog:
   "knip": "5.30.5"
   "tslib": "2.8.1"
   "cross-env": "7.0.3"
-  "valibot": "1.4.1"
+  "valibot": "1.4.2"
   # Pin exact: pancake's parents transitively exact-pin @pancakeswap/swap-sdk-evm,
   # so floating v3-sdk->3.10.1 / infinity-sdk->1.0.9 pulls sdk 5.9.1 -> swap-sdk-evm 1.2.1.
   # Hold at 3.10.0 / 1.0.8 to keep swap-sdk-evm at 1.2.0. Bump all three together.

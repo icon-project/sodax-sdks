@@ -32,6 +32,7 @@ import {
 } from '@sodax/types';
 import {
   DETAILED_STATUS_NOT_DELIVERED,
+  SPEED_TIER_SECONDS,
   type IntentResponse,
   type SpokeIsAllowanceValidParamsEvmSpoke,
   type SpokeIsAllowanceValidParamsHub,
@@ -1475,6 +1476,44 @@ describe('SwapService.getSupportedSwapTokensByChainId', () => {
   });
 });
 
+describe('SwapService.getSwapSpeedTier', () => {
+  it('recognizes a real packaged reserve asset despite its mixed-case checksummed config address', () => {
+    // Regression test for a case-sensitivity bug: packaged reserve addresses (from SodaTokens) are
+    // EIP-55 checksummed mixed-case, but ConfigService.isMoneyMarketReserveHubAsset lowercases its
+    // query — so the Set backing it must be normalized too, or every checksummed entry silently
+    // misses and every sodaAsset pair reports the slow default tier instead of the fast one.
+    const reserveHubAsset = sodax.config
+      .getMoneyMarketReserveAssets()
+      .find(address => address !== address.toLowerCase());
+    if (!reserveHubAsset) {
+      throw new Error('no mixed-case packaged reserve asset found — this test needs one to exercise the bug it guards');
+    }
+
+    const result = sodax.swaps.getSwapSpeedTier({
+      srcToken: {
+        symbol: 'RESERVE',
+        name: 'Reserve',
+        decimals: 18,
+        address: reserveHubAsset,
+        chainKey: ChainKeys.BSC_MAINNET,
+        hubAsset: reserveHubAsset,
+        vault: reserveHubAsset,
+      },
+      dstToken: {
+        symbol: 'PLAIN',
+        name: 'Plain',
+        decimals: 18,
+        address: '0x2222222222222222222222222222222222222222',
+        chainKey: ChainKeys.BSC_MAINNET,
+        hubAsset: '0x2222222222222222222222222222222222222222',
+        vault: '0x2222222222222222222222222222222222222222',
+      },
+    });
+
+    expect(result).toEqual({ tier: 'fast', estimatedSeconds: SPEED_TIER_SECONDS.sodaAsset });
+  });
+});
+
 describe('SwapService.getSupportedSwapTokens', () => {
   it('returns whatever ConfigService.getSupportedSwapTokens returns', () => {
     const fakeAllTokens = { [ChainKeys.BSC_MAINNET]: [] } as never;
@@ -1766,6 +1805,7 @@ describe('SwapService.getStatus', () => {
       sodax.swaps.solver,
       sodax.swaps.config.logger,
       undefined,
+      sodax.swaps.config.apiKey,
     );
     expect(backendSpy).not.toHaveBeenCalled();
   });
@@ -1989,6 +2029,7 @@ describe('SwapService.getDetailedStatus', () => {
       sodax.swaps.solver,
       sodax.swaps.config.logger,
       5_000,
+      sodax.swaps.config.apiKey,
     );
   });
 
@@ -2267,7 +2308,12 @@ describe('SwapService.postExecution', () => {
     const result = await sodax.swaps.postExecution(request);
 
     expect(result).toBe(execResult);
-    expect(mocks.solverPostExecution).toHaveBeenCalledWith(request, sodax.swaps.solver, sodax.swaps.config.logger);
+    expect(mocks.solverPostExecution).toHaveBeenCalledWith(
+      request,
+      sodax.swaps.solver,
+      sodax.swaps.config.logger,
+      sodax.swaps.config.apiKey,
+    );
   });
 
   it('wraps a SolverErrorResponse failure as SWAP_SOLVER_API_ERROR with solver code on context', async () => {
@@ -2345,6 +2391,28 @@ describe('SwapService.postExecution', () => {
       expect(result.error.message).toBe('Solver returned malformed error response');
       expect(result.error.context?.solverCode).toBe(-999);
     }
+  });
+});
+
+// The solver transport has no per-request override surface, so the configured instance key is the
+// only tier it can carry — asserted on a keyed instance, since the shared `sodax` holds none.
+describe('SwapService → solver API key', () => {
+  const keyed = new Sodax({ apiKey: 'instance-key', swaps: { useBackendSubmitTx: false }, logger: 'silent' });
+
+  it('forwards the configured key to the solver status read', async () => {
+    mocks.solverGetStatus.mockResolvedValueOnce({ ok: true, value: { status: SolverIntentStatusCode.SOLVED } });
+
+    await keyed.swaps.getStatus({ intent_tx_hash: '0xsome' } as never);
+
+    expect(mocks.solverGetStatus.mock.calls[0]?.[4]).toBe('instance-key');
+  });
+
+  it('forwards the configured key to the solver execution notice', async () => {
+    mocks.solverPostExecution.mockResolvedValueOnce({ ok: true, value: { answer: 'OK' } });
+
+    await keyed.swaps.postExecution({ intent_tx_hash: '0xsome' } as never);
+
+    expect(mocks.solverPostExecution.mock.calls[0]?.[3]).toBe('instance-key');
   });
 });
 
@@ -2740,6 +2808,7 @@ describe('SwapService.swap', () => {
       expect.objectContaining({ intent_tx_hash: '0xsonicTx' }),
       sodax.swaps.solver,
       sodax.swaps.config.logger,
+      sodax.swaps.config.apiKey,
     );
     // The relay path must NOT have been invoked for hub-chain srcChain.
     expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
@@ -2763,6 +2832,7 @@ describe('SwapService.swap', () => {
       expect.objectContaining({ intent_tx_hash: '0xdstTx' }),
       sodax.swaps.solver,
       sodax.swaps.config.logger,
+      sodax.swaps.config.apiKey,
     );
   });
 
@@ -3369,6 +3439,39 @@ describe('SwapService.swap — backend 2-step (useBackendSubmitTx)', () => {
     expect(verifySpy).not.toHaveBeenCalled();
   });
 
+  it('threads extras.apiKey into the backend submit-tx leg as a per-request override', async () => {
+    stubCreatedAndVerified(ChainKeys.BSC_MAINNET);
+    const submitSpy = vi.spyOn(sodaxBE.api.swaps, 'submitTx').mockResolvedValueOnce({
+      ok: true,
+      value: { success: true, data: { status: 'inserted', message: 'accepted' } },
+    } as never);
+    const statusSpy = vi.spyOn(sodaxBE.api.swaps, 'getSubmitTxStatus').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        success: true,
+        data: {
+          txHash: '0xspokeTx',
+          srcChainKey: ChainKeys.BSC_MAINNET,
+          status: 'solved',
+          processingAttempts: 1,
+          result: { dstIntentTxHash: '0xDST', intent_hash: '0xHASH' },
+        },
+      },
+    } as never);
+
+    const result = await sodaxBE.swaps.swap({
+      params: intentInput(ChainKeys.BSC_MAINNET),
+      extras: { apiKey: 'per-action-key' },
+      raw: false,
+      walletProvider: mockEvmProvider,
+    });
+
+    expect(result.ok).toBe(true);
+    // Both the POST and the status poll carry the per-action key (as RequestOverrideConfig.apiKey).
+    expect(submitSpy.mock.calls[0]?.[1]).toMatchObject({ apiKey: 'per-action-key' });
+    expect(statusSpy.mock.calls[0]?.[1]).toMatchObject({ apiKey: 'per-action-key' });
+  });
+
   it('verifies exactly once, on the fallback, when the backend attempt does not complete', async () => {
     const verifySpy = stubCreatedAndVerified(ChainKeys.BSC_MAINNET);
     vi.spyOn(sodaxBE.api.swaps, 'submitTx').mockResolvedValueOnce({
@@ -3657,6 +3760,106 @@ describe('SwapService.swap — backend 2-step (useBackendSubmitTx)', () => {
     expect(submitSpy).toHaveBeenCalledOnce();
     expect(submitSpy.mock.calls[0]?.[1]).toEqual({ timeout: DEFAULT_BACKEND_API_TIMEOUT });
     expect(mocks.relayTxAndWaitPacket.mock.calls.at(-1)?.[0]?.timeout).toBe(DEFAULT_RELAY_TX_TIMEOUT);
+  });
+});
+
+// =========================================================================
+// Batch 7 call-through: extras.apiKey on the wire. Same 2-step flow as above, but the real
+// SwapsApiService transport runs against a test-local global fetch stub, so the `x-api-key`
+// asserted is the header actually sent — not an argument recorded on a stubbed method.
+// =========================================================================
+
+describe('SwapService.swap — backend 2-step extras.apiKey on the wire (call-through)', () => {
+  const sodaxKeyed = new Sodax({ apiKey: 'instance-key', logger: 'silent' });
+
+  // The same payloads the spied specs above return — they satisfy the real swaps-api validators.
+  const SUBMIT_TX_BODY = { success: true, data: { status: 'inserted', message: 'accepted' } };
+  const SOLVED_STATUS_BODY = {
+    success: true,
+    data: {
+      txHash: '0xspokeTx',
+      srcChainKey: ChainKeys.BSC_MAINNET,
+      status: 'solved',
+      processingAttempts: 1,
+      result: { dstIntentTxHash: '0xDST', intent_hash: '0xHASH' },
+    },
+  };
+
+  const wireFetch = vi.fn();
+
+  beforeEach(() => {
+    wireFetch.mockReset();
+    // Only the two submit-tx legs may reach fetch; anything else fails the test loudly.
+    wireFetch.mockImplementation(async (url: unknown, init?: { method?: string }) => {
+      const { pathname } = new URL(String(url));
+      if (pathname === '/v1/swaps/submit-tx' && init?.method === 'POST') {
+        return { ok: true, status: 200, json: async () => SUBMIT_TX_BODY };
+      }
+      if (pathname === '/v1/swaps/submit-tx/status' && (init?.method ?? 'GET') === 'GET') {
+        return { ok: true, status: 200, json: async () => SOLVED_STATUS_BODY };
+      }
+      throw new Error(`unexpected fetch: ${init?.method ?? 'GET'} ${String(url)}`);
+    });
+    vi.stubGlobal('fetch', wireFetch);
+  });
+
+  afterEach(() => {
+    // Scoped to this batch — no other suite in this file stubs fetch.
+    vi.unstubAllGlobals();
+  });
+
+  const stubKeyedCreated = () => {
+    const intent = makeIntent(ChainKeys.BSC_MAINNET);
+    vi.spyOn(sodaxKeyed.swaps, 'createIntent').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        tx: '0xspokeTx' as never,
+        intent: { ...intent, feeAmount: 0n },
+        relayData: { address: intent.creator, payload: '0xpay' } as never,
+      } as never,
+    });
+    vi.spyOn(sodaxKeyed.spoke, 'verifyTxHash').mockResolvedValue({ ok: true, value: true });
+  };
+
+  /** The `x-api-key` actually sent to (pathname, method), read through `Headers` so any casing counts. */
+  const keySentTo = (pathname: string, method: string): string | null => {
+    const matches = wireFetch.mock.calls.filter(
+      call => new URL(String(call[0])).pathname === pathname && (call[1]?.method ?? 'GET') === method,
+    );
+    expect(matches).toHaveLength(1);
+    return new Headers(matches[0]?.[1]?.headers).get('x-api-key');
+  };
+
+  const runKeyedSwap = async (extras?: { apiKey?: string }) => {
+    stubKeyedCreated();
+    const args = {
+      params: intentInput(ChainKeys.BSC_MAINNET),
+      raw: false as const,
+      walletProvider: mockEvmProvider,
+    };
+    const result = await sodaxKeyed.swaps.swap(extras ? { ...args, extras } : args);
+    expect(result.ok).toBe(true);
+    // The value round-tripped through the real transport + validators, not a stubbed method.
+    if (result.ok) expect(result.value.intentDeliveryInfo.dstTxHash).toBe('0xDST');
+    expect(wireFetch).toHaveBeenCalledTimes(2);
+  };
+
+  it('sends extras.apiKey over the instance key on both the submit POST and the status poll', async () => {
+    await runKeyedSwap({ apiKey: 'action-key' });
+    expect(keySentTo('/v1/swaps/submit-tx', 'POST')).toBe('action-key');
+    expect(keySentTo('/v1/swaps/submit-tx/status', 'GET')).toBe('action-key');
+  });
+
+  it('sends the instance key on both requests when extras is omitted', async () => {
+    await runKeyedSwap();
+    expect(keySentTo('/v1/swaps/submit-tx', 'POST')).toBe('instance-key');
+    expect(keySentTo('/v1/swaps/submit-tx/status', 'GET')).toBe('instance-key');
+  });
+
+  it('treats an empty extras.apiKey as unset: the instance key still rides both requests', async () => {
+    await runKeyedSwap({ apiKey: '' });
+    expect(keySentTo('/v1/swaps/submit-tx', 'POST')).toBe('instance-key');
+    expect(keySentTo('/v1/swaps/submit-tx/status', 'GET')).toBe('instance-key');
   });
 });
 

@@ -692,6 +692,7 @@ export class PartnerFeeClaimService {
             { intent_tx_hash: intentTxHash },
             this.config.solver,
             this.config.logger,
+            this.config.apiKey,
           );
 
           if (!solverExecutionResponse.ok) {

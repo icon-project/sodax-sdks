@@ -28,7 +28,7 @@ const rpcConfig: RpcConfig = {
   [ChainKeys.ETHEREUM_MAINNET]: process.env.ETHEREUM_RPC_URL ?? 'https://ethereum-rpc.publicnode.com',
   [ChainKeys.HYPEREVM_MAINNET]: process.env.HYPEREVM_RPC_URL ?? 'https://rpc.hyperliquid.xyz/evm',
   [ChainKeys.SOLANA_MAINNET]: process.env.SOLANA_RPC_URL ?? 'https://solana-rpc.publicnode.com',
-  [ChainKeys.SUI_MAINNET]: process.env.SUI_RPC_URL ?? 'https://sui-rpc.publicnode.com',
+  [ChainKeys.SUI_MAINNET]: process.env.SUI_GRPC_URL ?? 'https://fullnode.mainnet.sui.io',
   [ChainKeys.NEAR_MAINNET]: process.env.NEAR_RPC_URL ?? 'https://free.rpc.fastnear.com',
   [ChainKeys.STELLAR_MAINNET]: {
     horizonRpcUrl: process.env.STELLAR_HORIZON_RPC_URL ?? 'https://horizon.stellar.org',
@@ -45,13 +45,18 @@ function isHttpUrl(value: unknown): value is HttpUrl {
   return typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://'));
 }
 
+/** A set-but-empty env var means "unset" — matching how the SDK treats an empty key or base URL. */
+function nonEmptyEnv(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
 // Read credentials through Vite-scoped env variables, not the inlined process environment.
 // The optional base URL includes any deployment prefix; the SDK appends the sponsoring path.
 const sponsoringApiBaseUrlEnv: unknown = import.meta.env.VITE_SPONSORING_API_BASE_URL;
 const sponsoringApiKeyEnv: unknown = import.meta.env.VITE_SPONSORING_API_KEY;
 const sponsoringApiConfig = {
   ...(isHttpUrl(sponsoringApiBaseUrlEnv) ? { baseURL: sponsoringApiBaseUrlEnv } : {}),
-  ...(typeof sponsoringApiKeyEnv === 'string' && sponsoringApiKeyEnv.length > 0 ? { apiKey: sponsoringApiKeyEnv } : {}),
+  ...(nonEmptyEnv(sponsoringApiKeyEnv) ? { apiKey: sponsoringApiKeyEnv } : {}),
 };
 
 // Retarget the swaps API at canary or a locally started `swaps-api`. Unset leaves swaps on the packaged
@@ -60,6 +65,11 @@ const sponsoringApiConfig = {
 // local service that mounts `/swaps/*` at the bare origin is `http://localhost:3008`.
 const swapsApiBaseUrlEnv: unknown = import.meta.env.VITE_SWAPS_API_BASE_URL;
 const swapsApiConfig = isHttpUrl(swapsApiBaseUrlEnv) ? { baseURL: swapsApiBaseUrlEnv } : undefined;
+
+// Instance-wide SODAX API key: `x-api-key` on every backend call, sponsoring included while it targets
+// the packaged gateway (VITE_SPONSORING_API_KEY is only for an independently hosted one). Unset is fine.
+const sodaxApiKeyEnv: unknown = import.meta.env.VITE_SODAX_API_KEY;
+const sodaxApiKey = nonEmptyEnv(sodaxApiKeyEnv) ? sodaxApiKeyEnv : undefined;
 
 const configMap: Record<SolverEnv, SolverConfig> = {
   [SolverEnv.Production]: productionSolverConfig,
@@ -107,7 +117,7 @@ export default function Providers({ children }: { children: ReactNode }) {
       },
       SUI: {
         chains: {
-          [ChainKeys.SUI_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.SUI_MAINNET] },
+          [ChainKeys.SUI_MAINNET]: { grpcUrl: rpcConfig[ChainKeys.SUI_MAINNET] },
         },
       },
       BITCOIN: {
@@ -146,6 +156,7 @@ export default function Providers({ children }: { children: ReactNode }) {
         swapsApiConfig,
         sponsoringApiConfig,
       },
+      apiKey: sodaxApiKey,
       logger: createDatadogLogger(),
       // Opt-in user-action analytics (issue #175). Enabled by default in the demo; the sink logs each
       // event and re-emits it as a `sodax:analytics` window CustomEvent. `false` when disabled, which
@@ -162,7 +173,7 @@ export default function Providers({ children }: { children: ReactNode }) {
         [ChainKeys.ETHEREUM_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.ETHEREUM_MAINNET] },
         [ChainKeys.HYPEREVM_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.HYPEREVM_MAINNET] },
         [ChainKeys.SOLANA_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.SOLANA_MAINNET] },
-        [ChainKeys.SUI_MAINNET]: { rpc_url: rpcConfig[ChainKeys.SUI_MAINNET] },
+        [ChainKeys.SUI_MAINNET]: { grpc_url: rpcConfig[ChainKeys.SUI_MAINNET] },
         [ChainKeys.NEAR_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.NEAR_MAINNET] },
         [ChainKeys.STELLAR_MAINNET]: rpcConfig[ChainKeys.STELLAR_MAINNET],
         [ChainKeys.BITCOIN_MAINNET]: rpcConfig[ChainKeys.BITCOIN_MAINNET],

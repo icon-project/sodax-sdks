@@ -38,8 +38,6 @@ import {
   type XToken,
   type ChainType,
   ChainKeys,
-  HookKind,
-  isHookSupportedToken,
 } from '@sodax/dapp-kit';
 import {
   getXChainType,
@@ -56,6 +54,7 @@ import { loadLastSelection, saveLastSelection } from '@/lib/lastSelection';
 import { appendOrder } from '@/lib/orderHistory';
 import { buildOrderSummary } from '@/components/swaps/OrderStatus';
 import { solverApiEndpointForEnv } from '@/constants';
+import { HOOK_LABELS, resolveAvailableHookKind, toHookRequest } from '@/lib/deliveryHooks';
 
 export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAction<Order[]>) => void }) {
   const { sodax } = useSodaxContext();
@@ -76,8 +75,12 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   );
 
   // Persist the latest chain/token picks (symbol only) so they restore on reload.
+  // Skip while a chain has no solver-supported token yet (e.g. Hedera in production/dev) —
+  // src.token/dst.token is undefined right after such a chain switch.
   useEffect(() => {
-    saveLastSelection(src, dst);
+    if (src.token && dst.token) {
+      saveLastSelection(src, dst);
+    }
   }, [src, dst]);
   const sourceAccount = useXAccount({ xChainId: src.chain });
   const sourceWalletProvider = useWalletProvider({ xChainId: src.chain });
@@ -122,14 +125,26 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const [nearStorageError, setNearStorageError] = useState<string | null>(null);
   const [stellarError, setStellarError] = useState<string | null>(null);
   const [slippage, setSlippage] = useState<string>('0.5');
-  const [hyperCoreDeposit, setHyperCoreDeposit] = useState(false);
+  const [deliveryHookEnabled, setDeliveryHookEnabled] = useState(false);
   const [isBitcoinReady, setIsBitcoinReady] = useState(false);
   const [isDestBitcoinReady, setIsDestBitcoinReady] = useState(false);
 
-  // HyperCore deposit is available only when the destination chain/token is accepted by the registered
-  // hook (HyperEVM + USDC today). The registry — not this component — owns those constraints.
-  const canHyperCoreDeposit =
-    !!dst.token && isHookSupportedToken(dst.chain, HookKind.HYPERCORE_DEPOSIT, dst.token.address);
+  // The delivery hook — if any — that the registry accepts for this destination chain + output token
+  // (HyperCore on HyperEVM+USDC, Flint on Ethereum+USDC today). Resolved from the registry rather than
+  // pinned to one kind, so a newly registered hook surfaces here without touching this component.
+  const availableHookKind = useMemo(
+    () => resolveAvailableHookKind(dst.chain, dst.token?.address),
+    [dst.chain, dst.token],
+  );
+
+  // Reset the toggle whenever the resolved hook kind changes (including to/from `undefined`) — the
+  // checkbox must never carry an opt-in for a hook the user didn't see. Without this, checking the box
+  // for one destination and then switching to a different destination that resolves a different hook
+  // kind would silently submit that other hook instead.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: availableHookKind is the intentional reset trigger, not a value read in the effect
+  useEffect(() => {
+    setDeliveryHookEnabled(false);
+  }, [availableHookKind]);
 
   const onChangeDirection = () => {
     setSrc(dst);
@@ -281,9 +296,9 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       dstAddress = tradingAddress;
     }
 
-    // HyperCore deposit: select the hook by kind and keep dstAddress as the recipient (the user's own
-    // HyperEVM address). The SDK resolves the hook's deployed address and encodes the payload.
-    const useHyperCoreDeposit = hyperCoreDeposit && canHyperCoreDeposit;
+    // Delivery hook: select it by kind and keep dstAddress as the recipient (the user's own address on
+    // the destination chain). The SDK resolves the hook's deployed address and encodes the payload.
+    const hookRequest = deliveryHookEnabled && availableHookKind ? toHookRequest(availableHookKind) : undefined;
 
     const createIntentParams = {
       inputToken: src.token.address, // The address of the input token on hub chain
@@ -299,7 +314,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       solver: '0x0000000000000000000000000000000000000000', // Optional specific solver address (address(0) = any solver)
       data: '0x', // Additional arbitrary data
       // When set, the SDK routes the output through this hook (overrides dstAddress, encodes deliveryData).
-      hook: useHyperCoreDeposit ? { kind: HookKind.HYPERCORE_DEPOSIT } : undefined,
+      hook: hookRequest,
     } satisfies CreateIntentParams;
 
     setIntentOrderPayload(createIntentParams);
@@ -548,16 +563,16 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
           {quoteQuery.data?.ok === false && <div className="text-red-500">{quoteQuery.data.error.detail.message}</div>}
         </div>
 
-        {canHyperCoreDeposit && (
+        {availableHookKind && (
           <div className="flex items-center gap-2 w-full">
-            <label htmlFor="hypercore-deposit-toggle" className="text-sm font-medium cursor-pointer">
-              Deposit to HyperCore (perps)
+            <label htmlFor="delivery-hook-toggle" className="text-sm font-medium cursor-pointer">
+              {HOOK_LABELS[availableHookKind]}
             </label>
             <input
-              id="hypercore-deposit-toggle"
+              id="delivery-hook-toggle"
               type="checkbox"
-              checked={hyperCoreDeposit}
-              onChange={e => setHyperCoreDeposit(e.target.checked)}
+              checked={deliveryHookEnabled}
+              onChange={e => setDeliveryHookEnabled(e.target.checked)}
               className="h-4 w-4 cursor-pointer"
             />
           </div>

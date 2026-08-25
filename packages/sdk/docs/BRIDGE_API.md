@@ -9,8 +9,8 @@ It mirrors `IBridgeApiV2` (from `@sodax/types`) one method per endpoint. Every m
 - returns `Promise<Result<T>>` — it **never throws**;
 - validates the JSON response at runtime against a valibot schema (a contract drift is surfaced as
   `{ ok: false }`, not returned untyped);
-- accepts an optional trailing `RequestOverrideConfig` (`{ baseURL?, timeout?, headers? }`) for per-call
-  overrides.
+- accepts an optional trailing `RequestOverrideConfig` (`{ baseURL?, timeout?, headers?, apiKey? }`) for
+  per-call overrides.
 
 > This is the lower-level backend HTTP surface. For the end-to-end deposit→relay bridge orchestrator, use
 > `sodax.bridge` (see [`BRIDGE.md`](BRIDGE.md)). It mirrors [`SWAPS_API.md`](SWAPS_API.md) minus the
@@ -59,6 +59,37 @@ Bridge is vault-backed (not solver-based), so the surface is smaller and a few s
   round-trip). They *also* have backend endpoints (listed above), mirrored on this client for non-SDK HTTP
   callers / parity. The token *list* is backend-served via `getTokens` / `getTokensByChain`.
 
+## `approve` can return two transactions
+
+`BridgeApproveResponseV2` is `{ tx, resetTx? }`. `resetTx` is present only when the source token
+rejects an allowance change from one non-zero value to another — the 2017 TetherToken lineage, of
+which Ethereum USDT is the one in the SODAX token list today — and the wallet already holds a stale
+allowance. A wallet in that state cannot approve at all until the allowance is zeroed.
+
+When `resetTx` is present, broadcast it **first** and wait for it to be mined, then broadcast `tx`.
+The second approval is only valid once the reset has landed on-chain, so the two cannot be batched.
+Submitting `tx` while a non-zero stale allowance remains is a guaranteed revert.
+
+```typescript
+const { tx, resetTx } = approveResponse;
+
+if (resetTx) {
+  const resetHash = await sendTransaction(resetTx);
+  await waitForTransactionReceipt(resetHash);
+}
+
+const approveHash = await sendTransaction(tx);
+await waitForTransactionReceipt(approveHash);
+```
+
+The field is optional and absent for every other token, so a client that ignores it keeps working
+exactly as before — it just cannot rescue a wallet stuck on a guarded token.
+
+**In a React app, don't hand-roll the sequence.** `@sodax/dapp-kit` ships
+`useBridgeApiApproveAndBroadcast`, which requests, signs, broadcasts and waits for both transactions
+and resolves with `{ approveTxHash, resetTxHash? }` only once the approval has landed — the ordering
+above lives in the package rather than in every integration.
+
 ## Examples
 
 ```typescript
@@ -71,10 +102,16 @@ const body = {
   inputAmount: '1000000', srcAddress, dstAddress,
 };
 
-// Allowance → approve (sign + broadcast the returned tx yourself)
+// Allowance → approve (sign + broadcast yourself; resetTx first when present)
 const allowance = await sodax.api.bridge.checkAllowance(body);
 if (allowance.ok && !allowance.value.valid) {
-  const approved = await sodax.api.bridge.approve(body); // { tx }
+  const approved = await sodax.api.bridge.approve(body);
+  if (!approved.ok) return;
+  const { tx: approveTx, resetTx } = approved.value;
+  if (resetTx) {
+    await waitForTransactionReceipt(await sendTransaction(resetTx));
+  }
+  await waitForTransactionReceipt(await sendTransaction(approveTx));
 }
 
 // Create intent → submit tx → poll status

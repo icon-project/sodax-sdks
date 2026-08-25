@@ -50,7 +50,7 @@ For most consumers, this whole pipeline is one method call (`sodax.swaps.swap(..
 
 ### Supported chains
 
-21 total. EVM (13): Sonic (hub), Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia, Hedera. Non-EVM (8): Solana, Sui, Stellar, ICON, Injective, NEAR, Stacks, Bitcoin. See [`reference/`](reference/) § "Chain keys" for the full table with relay IDs and address-type mapping.
+22 total. EVM (14): Sonic (hub), Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia, Hedera, Robinhood Chain. Non-EVM (8): Solana, Sui, Stellar, ICON, Injective, NEAR, Stacks, Bitcoin. See [`reference/`](reference/) § "Chain keys" for the full table with relay IDs and address-type mapping.
 
 ---
 
@@ -62,7 +62,7 @@ Instead, the SDK has **one** `SpokeService` instance (owned by `Sodax`) which ho
 
 ```
 SpokeService
- ├── EvmSpokeService        (handles all 13 EVM chains)
+ ├── EvmSpokeService        (handles all 14 EVM chains)
  ├── SonicSpokeService      (special-cased for the hub)
  ├── SolanaSpokeService
  ├── SuiSpokeService
@@ -102,10 +102,12 @@ so a token added or upgraded later is handled without a code change. Consumer im
   transaction hash: the hash of the **last** transaction. Show step progress in the UI if you want,
   but nothing breaks if you do not.
 - **Unsigned flows (`raw: true`)** still return exactly one transaction from `approve`, which cannot
-  express a two-step plan. Use `sodax.swaps.buildApproveTxs({ params, raw: true })` instead — it
-  returns `{ approveTx, resetTx? }`. `resetTx` is present only for a guarded token holding a stale
-  allowance — broadcast it and wait for it to be mined first, because `approveTx` is not valid until
-  the reset has landed.
+  express a two-step plan. Use `sodax.swaps.buildApproveTxs({ params, raw: true })` — or
+  `sodax.bridge.buildApproveTxs` for a bridge — instead; both return `{ approveTx, resetTx? }`.
+  `resetTx` is present only for a guarded token holding a stale allowance — broadcast it and wait for
+  it to be mined first, because `approveTx` is not valid until the reset has landed. Each feature
+  resolves its own spender (a bridge on the hub approves the caller's hub wallet router, a swap the
+  solver's intents contract), so call the one matching the action you are about to take.
 
 ---
 
