@@ -1,5 +1,5 @@
 import { SelectChain } from '@/components/swaps-api/SelectChain';
-import { SelectToken } from '@/components/swaps-api/SelectToken';
+import { SelectToken } from '@/components/shared/SelectToken';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import {
