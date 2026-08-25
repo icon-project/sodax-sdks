@@ -22,13 +22,28 @@ PKGS=$(echo "$CHANGED" \
   | grep -v '/e2e-tests/' \
   | cut -d/ -f2 | sort -u | grep -vx 'skills' || true)
 
-NEW_OR_RENAMED_SDK_DOCS=$(git -c core.quotePath=false diff --name-only --diff-filter=AR \
+# Renames keep their source path, so an in-place rename of an intentionally unmirrored
+# page is not forced onto the map. A move in from elsewhere reports as an add.
+ADDED_SDK_DOCS=$(git -c core.quotePath=false diff --name-only --diff-filter=A \
+  "$RANGE" -- 'packages/sdk/docs' || true)
+RENAMED_SDK_DOCS=$(git -c core.quotePath=false diff --name-status --diff-filter=R \
   "$RANGE" -- 'packages/sdk/docs' || true)
 
 # Membership checks use here-strings, not producer pipelines: under pipefail a
 # huge list can SIGPIPE the producer when grep -q exits early, faking a non-match.
 is_mirrored() {
   grep -qxF "$1" <<< "$MIRRORED_SRCS"
+}
+
+was_published() {
+  grep -qxF "$1" <<< "$BASE_MIRRORED_SRCS"
+}
+
+is_doc_page() {
+  case "$1" in
+    *.md | *.mdx) return 0 ;;
+  esac
+  return 1
 }
 
 # Mapped file for this package, any mapped packages/sdk/docs/ page (covers types/sdk/dapp-kit),
@@ -43,6 +58,40 @@ covers_pkg() {
   grep -qxF "${pkg}"$'\t'"${path}" <<< "$PKG_COVERAGE"
 }
 
+# Mapped srcs at a ref. Strict at HEAD, where a malformed map must fail the PR;
+# tolerant at the base, whose map predates any rule this PR adds.
+read_mirrored_srcs() {
+  git show "$1:$MAP_FILE" | python3 -c '
+import json, sys
+
+strict = sys.argv[1] == "strict"
+
+def reject(message):
+    if strict:
+        print(message, file=sys.stderr)
+        sys.exit(1)
+
+try:
+    data = json.load(sys.stdin)
+except ValueError:
+    reject("::error::scripts/gitbook-sync-map.json is not valid JSON.")
+    sys.exit(0)
+
+for item in data.get("mirrored", []):
+    src = item.get("src")
+    if src is None or src == "":
+        continue
+    if not isinstance(src, str) or any(c in src for c in "\n\r\t\0"):
+        reject("::error::scripts/gitbook-sync-map.json src must be a single-line, tab-free path.")
+        continue
+    # Markdown only: otherwise a PR could map its own changed source file and self-satisfy the gate.
+    if not src.endswith((".md", ".mdx")):
+        reject(f"::error::scripts/gitbook-sync-map.json src must be a .md or .mdx page: {src}")
+        continue
+    print(src)
+' "$2"
+}
+
 load_map() {
   if ! git cat-file -e "$HEAD_REF:$MAP_FILE" 2>/dev/null; then
     echo "::error::$MAP_FILE is missing at $HEAD_REF — cannot verify mirrored docs."
@@ -54,22 +103,19 @@ load_map() {
     exit 1
   fi
 
-  MIRRORED_SRCS=$(git show "$HEAD_REF:$MAP_FILE" | python3 -c '
-import json, sys
-data = json.load(sys.stdin)
-for item in data.get("mirrored", []):
-    src = item.get("src")
-    if src is None or src == "":
-        continue
-    if not isinstance(src, str) or any(c in src for c in "\n\r\t\0"):
-        print("::error::scripts/gitbook-sync-map.json src must be a single-line, tab-free path.", file=sys.stderr)
-        sys.exit(1)
-    # Markdown only: otherwise a PR could map its own changed source file and self-satisfy the gate.
-    if not src.endswith((".md", ".mdx")):
-        print(f"::error::scripts/gitbook-sync-map.json src must be a .md or .mdx page: {src}", file=sys.stderr)
-        sys.exit(1)
-    print(src)
-')
+  MIRRORED_SRCS=$(read_mirrored_srcs "$HEAD_REF" strict)
+
+  # The base map is what tells a rename of a published page apart from a rename of
+  # one that was never published; unreadable means fall back to requiring the map.
+  BASE_MAP_READABLE=0
+  BASE_MIRRORED_SRCS=""
+  if git cat-file -e "$BASE_REF:$MAP_FILE" 2>/dev/null; then
+    if BASE_MIRRORED_SRCS=$(read_mirrored_srcs "$BASE_REF" tolerant 2>/dev/null); then
+      BASE_MAP_READABLE=1
+    else
+      BASE_MIRRORED_SRCS=""
+    fi
+  fi
 
   # pkg<TAB>src pairs from entries that opt into package coverage via pkgs.
   PKG_COVERAGE=$(git show "$HEAD_REF:$MAP_FILE" | python3 -c '
@@ -112,19 +158,43 @@ fi
 UNMAPPED_NEW=""
 while IFS= read -r added; do
   [ -z "$added" ] && continue
-  case "$added" in
-    *.md) ;;
-    *) continue ;;
-  esac
-  if ! is_mirrored "$added"; then
+  if is_doc_page "$added" && ! is_mirrored "$added"; then
     UNMAPPED_NEW="$UNMAPPED_NEW $added"
   fi
-done <<< "$NEW_OR_RENAMED_SDK_DOCS"
+done <<< "$ADDED_SDK_DOCS"
+
+UNPUBLISHED_RENAME=""
+while IFS=$'\t' read -r _status from to; do
+  [ -z "$to" ] && continue
+  if ! is_doc_page "$to" || is_mirrored "$to"; then
+    continue
+  fi
+  case "$from" in
+    packages/sdk/docs/*) ;;
+    *)
+      UNMAPPED_NEW="$UNMAPPED_NEW $to"
+      continue
+      ;;
+  esac
+  # A page that was never on the map stays unpublished under its new name; only one
+  # that was mapped before this PR gets taken down by renaming it off the map.
+  if [ "$BASE_MAP_READABLE" -eq 0 ] || was_published "$from"; then
+    UNPUBLISHED_RENAME="$UNPUBLISHED_RENAME $from -> $to"
+  fi
+done <<< "$RENAMED_SDK_DOCS"
 
 if [ -n "$UNMAPPED_NEW" ]; then
-  echo "::error::New or renamed SDK doc(s) are not in $MAP_FILE:$UNMAPPED_NEW"
+  echo "::error::New SDK doc(s) are not in $MAP_FILE:$UNMAPPED_NEW"
   echo "Add each file to $MAP_FILE — sodax-document copies every mapped src."
   echo "Add a sidebar entry (SUMMARY.md or docs.json) on the docs-sync PR."
+  echo "See CONTRIBUTING.md#documentation."
+  exit 1
+fi
+
+if [ -n "$UNPUBLISHED_RENAME" ]; then
+  echo "::error::Renamed SDK doc(s) dropped off $MAP_FILE:$UNPUBLISHED_RENAME"
+  echo "Point the src entry at the new path so the page keeps publishing."
+  echo "Renaming a page that was never mirrored (DEX.md, LOGGING.md, …) needs no map entry."
   echo "See CONTRIBUTING.md#documentation."
   exit 1
 fi

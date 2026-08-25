@@ -36,17 +36,20 @@ const commit = (root, message) => {
   return git(root, ['rev-parse', 'HEAD']);
 };
 
-const createRepo = t => {
+const createRepo = (t, { map = true } = {}) => {
   const root = mkdtempSync(join(fileURLToPath(new URL('..', import.meta.url)), '.tmp-docs-drift-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
   const template = join(root, '.git-template');
   mkdirSync(join(template, 'hooks'), { recursive: true });
   git(root, ['init', '-b', 'main', `--template=${template}`]);
-  write(root, 'scripts/gitbook-sync-map.json', `${JSON.stringify(MAP, null, 2)}\n`);
+  if (map) {
+    write(root, 'scripts/gitbook-sync-map.json', `${JSON.stringify(MAP, null, 2)}\n`);
+  }
   write(root, 'packages/sdk/src/index.ts', 'export const n = 1;\n');
   write(root, 'packages/sdk/docs/SWAPS.md', '# Swaps\n');
   write(root, 'packages/sdk/docs/DEX.md', '# DEX\n');
+  write(root, 'packages/sdk/notes/DRAFT.mdx', '# Draft\n');
   write(root, 'packages/sdk/README.md', '# sdk\n');
   write(root, 'packages/skills/README.md', '# skills\n');
   write(root, 'packages/types/src/index.ts', 'export type T = string;\n');
@@ -221,15 +224,63 @@ test('fails when sdk src changes and a mapped page is deleted', t => {
   assert.match(result.out, /Source changed in: sdk/);
 });
 
-test('fails when an unmapped sdk doc is renamed', t => {
+test('passes when an intentionally unmirrored sdk doc is renamed', t => {
   const { root, base } = createRepo(t);
   git(root, ['mv', 'packages/sdk/docs/DEX.md', 'packages/sdk/docs/NEW.md']);
   const head = commit(root, 'rename unmapped dex');
 
   const result = run(root, base, head);
+  assert.equal(result.code, 0);
+  assert.match(result.out, /docs check not applicable/);
+});
+
+test('fails when a mapped sdk doc is renamed off the map', t => {
+  const { root, base } = createRepo(t);
+  git(root, ['mv', 'packages/sdk/docs/SWAPS.md', 'packages/sdk/docs/NEW.md']);
+  write(
+    root,
+    'scripts/gitbook-sync-map.json',
+    `${JSON.stringify({ mirrored: MAP.mirrored.filter(item => item.src !== 'packages/sdk/docs/SWAPS.md') }, null, 2)}\n`,
+  );
+  const head = commit(root, 'rename mapped swaps + drop map entry');
+
+  const result = run(root, base, head);
   assert.equal(result.code, 1);
-  assert.match(result.out, /New or renamed SDK doc/);
-  assert.match(result.out, /packages\/sdk\/docs\/NEW.md/);
+  assert.match(result.out, /dropped off scripts\/gitbook-sync-map.json/);
+  assert.match(result.out, /packages\/sdk\/docs\/SWAPS.md -> packages\/sdk\/docs\/NEW.md/);
+});
+
+test('fails closed when a rename cannot be checked against a base map', t => {
+  const { root, base } = createRepo(t, { map: false });
+  git(root, ['mv', 'packages/sdk/docs/DEX.md', 'packages/sdk/docs/NEW.md']);
+  write(root, 'scripts/gitbook-sync-map.json', `${JSON.stringify(MAP, null, 2)}\n`);
+  const head = commit(root, 'add map + rename dex');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 1);
+  assert.match(result.out, /dropped off scripts\/gitbook-sync-map.json/);
+});
+
+test('fails when a new sdk .mdx page is not on the map', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'packages/sdk/docs/NEW.mdx', '# New\n');
+  const head = commit(root, 'unmapped new mdx page');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 1);
+  assert.match(result.out, /not in scripts\/gitbook-sync-map.json/);
+  assert.match(result.out, /packages\/sdk\/docs\/NEW.mdx/);
+});
+
+test('fails when an unmapped page is moved into packages/sdk/docs', t => {
+  const { root, base } = createRepo(t);
+  git(root, ['mv', 'packages/sdk/notes/DRAFT.mdx', 'packages/sdk/docs/DRAFT.mdx']);
+  const head = commit(root, 'move draft into sdk docs');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 1);
+  assert.match(result.out, /not in scripts\/gitbook-sync-map.json/);
+  assert.match(result.out, /packages\/sdk\/docs\/DRAFT.mdx/);
 });
 
 test('fails when a mapped sdk doc is renamed without updating the map', t => {
@@ -262,6 +313,31 @@ test('passes when a mapped sdk doc is renamed and the map is updated', t => {
     )}\n`,
   );
   const head = commit(root, 'rename mapped swaps + map');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 0);
+  assert.match(result.out, /docs check not applicable/);
+});
+
+test('passes when a mapped sdk doc is renamed to .mdx and the map is updated', t => {
+  const { root, base } = createRepo(t);
+  git(root, ['mv', 'packages/sdk/docs/SWAPS.md', 'packages/sdk/docs/NEW.mdx']);
+  write(
+    root,
+    'scripts/gitbook-sync-map.json',
+    `${JSON.stringify(
+      {
+        mirrored: MAP.mirrored.map(item =>
+          item.src === 'packages/sdk/docs/SWAPS.md'
+            ? { src: 'packages/sdk/docs/NEW.mdx', dest: 'developers/new.md' }
+            : item,
+        ),
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  const head = commit(root, 'rename mapped swaps to mdx + map');
 
   const result = run(root, base, head);
   assert.equal(result.code, 0);

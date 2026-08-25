@@ -12,6 +12,10 @@
       {
         "group": "Getting Started",
         "pages": ["index"]
+      },
+      {
+        "group": "Guides",
+        "pages": ["stellar-sponsoring-getting-started", "quick-sponsoring-stellar-guide"]
       }
     ]
   }

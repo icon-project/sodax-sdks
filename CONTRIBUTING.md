@@ -70,17 +70,19 @@ docs.sodax.com. It is the copy list, and both Docs Drift and
   `https://github.com/icon-project/sodax-sdks/blob/main/…` URL.
 - **Adding, renaming, or removing a mirrored doc?** Add, rename, or remove the
   entry in `scripts/gitbook-sync-map.json` — that is what gets the page
-  published. **A new page must also be added to navigation** (`docs/docs.json`):
-  a page with no nav entry is live but absent from the sidebar and from search.
-  Docs Drift does not check nav. A new or renamed `packages/sdk/docs/` page
-  that is not on the map, or a mapped src that no longer exists, fails Docs
-  Drift.
+  published. **A new page under `docs/` must also be added to navigation**
+  (`docs/docs.json`); a mirrored page elsewhere gets its sidebar entry on the
+  docs-sync side. A page with no nav entry is live but absent from the sidebar
+  and from search. Docs Drift does not check nav. A new `packages/sdk/docs/`
+  page that is not on the map, a rename that drops a mapped page off the map,
+  or a mapped src that no longer exists, fails Docs Drift.
 
 Some `packages/sdk/docs/` pages are intentionally **not** mirrored (`DEX.md`,
 `SPONSORING.md`, `SWAPS_API.md`, `BRIDGE_API.md`, `LOGGING.md`,
-`ARCHITECTURE_REFACTOR_SUMMARY.md`). Editing them does not satisfy Docs Drift.
-To publish one, add it to the map (a follow-up when that page is ready to go
-live — not part of the Docs Drift gate itself).
+`ARCHITECTURE_REFACTOR_SUMMARY.md`). Editing them does not satisfy Docs Drift,
+and renaming one needs no map entry — the map is only required for a page that
+was already published. To publish one, add it to the map (a follow-up when that
+page is ready to go live — not part of the Docs Drift gate itself).
 
 ### What CI enforces
 
@@ -92,11 +94,12 @@ live — not part of the Docs Drift gate itself).
   sdk/docs pages, `packages/skills`, an unrelated mapped file (for example
   touching `packages/skills/README.md` while changing `@sodax/sdk`), and
   *deleting* a README or docs file do not count. Moving a source file out of
-  `src/` — or into a test path — is still a source change. A newly added or
-  renamed `packages/sdk/docs/**/*.md` page must be on the map even if `src/`
-  did not change, every mapped src must exist, and every mapped src must be a
-  `.md`/`.mdx` page. If your PR genuinely has no user-facing change, ask a
-  maintainer to apply the `docs-not-needed` label.
+  `src/` — or into a test path — is still a source change. A newly added
+  `packages/sdk/docs/` page (`.md` or `.mdx`), including one moved in from
+  elsewhere, must be on the map even if `src/` did not change; renaming a
+  mapped page must move its map entry with it; and every mapped src must exist
+  and be a `.md`/`.mdx` page. If your PR genuinely has no user-facing change,
+  ask a maintainer to apply the `docs-not-needed` label.
 - `pnpm check:ai` validates that snippets and imports in `packages/skills`
   match the real source (partner-agent docs, separate from Docs Drift).
 - `pnpm check:doc-links` validates links in mirrored docs.
