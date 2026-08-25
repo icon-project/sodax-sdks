@@ -53,7 +53,6 @@ import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
 import { loadLastSelection, saveLastSelection } from '@/lib/lastSelection';
 import { appendOrder } from '@/lib/orderHistory';
 import { buildOrderSummary } from '@/components/swaps/OrderStatus';
-import { solverApiEndpointForEnv } from '@/constants';
 import { HOOK_LABELS, resolveAvailableHookKind, toHookRequest } from '@/lib/deliveryHooks';
 
 export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAction<Order[]>) => void }) {
@@ -339,7 +338,9 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
           dstTxHash: intentDeliveryInfo.dstTxHash as string,
           srcTxHash: intentDeliveryInfo.srcTxHash,
           srcChainKey: intentDeliveryInfo.srcChainKey,
-          statusEndpoint: solverApiEndpointForEnv(solverEnvironment),
+          // The live instance's endpoint — settings overrides included — so status is polled
+          // where /execute actually went, whatever the env/settings become later.
+          statusEndpoint: sodax.config.solver.solverApiEndpoint,
           createdAt: Date.now(),
           summary: buildOrderSummary(src, dst, sourceAmount, quote?.quoted_amount),
         }),

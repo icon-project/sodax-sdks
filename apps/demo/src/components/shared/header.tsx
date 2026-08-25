@@ -2,10 +2,12 @@ import React from 'react';
 import { NavLink } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { WalletModal } from '@/components/shared/wallet-modal';
+import { SodaxSettingsModal } from '@/components/shared/SodaxSettingsModal';
 import { useXAccounts } from '@sodax/wallet-sdk-react';
 import { useAppStore } from '@/zustand/useAppStore';
-import { ChevronDown, Wallet } from 'lucide-react';
+import { ChevronDown, Settings2, Wallet } from 'lucide-react';
 import { ROUTES } from '@/constants';
+import { hasActiveOverrides } from '@/lib/sodaxSettings';
 
 const navLinks = [
   { to: ROUTES.MONEY_MARKET, label: 'Money Market' },
@@ -38,11 +40,22 @@ export function NavigationMenu() {
 }
 
 export default function Header() {
-  const { isWalletModalOpen, openWalletModal, closeWalletModal } = useAppStore();
+  const { isWalletModalOpen, openWalletModal, closeWalletModal, sodaxSettings } = useAppStore();
   const xAccounts = useXAccounts();
   const [showChains, setShowChains] = React.useState(false);
+  const [showSettings, setShowSettings] = React.useState(false);
 
   const connectedXAccounts = Object.values(xAccounts).filter(xAccount => xAccount?.address);
+
+  const settingsButton = (
+    <Button onClick={() => setShowSettings(true)} variant="cherryOutline" size="sm" className="relative">
+      <Settings2 className="w-4 h-4" />
+      Sodax Settings
+      {hasActiveOverrides(sodaxSettings) && (
+        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 rounded-full" title="Overrides active" />
+      )}
+    </Button>
+  );
 
   return (
     <header className="bg-cherry-dark border-b border-cherry-soda/20 sticky top-0 z-50 backdrop-blur-sm">
@@ -52,6 +65,7 @@ export default function Header() {
           <NavigationMenu />
           {connectedXAccounts.length > 0 ? (
             <div className="flex items-center gap-3">
+              {settingsButton}
               {/* Custom Dropdown */}
               <div className="relative">
                 <Button
@@ -98,14 +112,18 @@ export default function Header() {
               </Button>
             </div>
           ) : (
-            <Button onClick={openWalletModal} variant="cherryOutline" size="sm">
-              <Wallet className="w-4 h-4" />
-              Connect Wallet
-            </Button>
+            <div className="flex items-center gap-3">
+              {settingsButton}
+              <Button onClick={openWalletModal} variant="cherryOutline" size="sm">
+                <Wallet className="w-4 h-4" />
+                Connect Wallet
+              </Button>
+            </div>
           )}
         </div>
       </div>
       <WalletModal isOpen={isWalletModalOpen} onDismiss={closeWalletModal} />
+      <SodaxSettingsModal open={showSettings} onOpenChange={setShowSettings} />
     </header>
   );
 }

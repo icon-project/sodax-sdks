@@ -32,14 +32,14 @@ src/
 ├── components/          # feature components grouped by domain (mm, dex, bridge, staking, swaps, bitcoin, shared, ui)
 ├── hooks/               # demo-specific composite hooks
 ├── lib/                 # utilities (chains, scan URLs, logging, etc.)
-└── zustand/useAppStore  # UI state: selected chain, wallet modal, solver env switcher
+└── zustand/useAppStore  # UI state: selected chain, wallet modal, solver env + Sodax settings overrides
 ```
 
 ## How it wires up
 
 - **Routing.** `App.tsx` defines routes with react-router, every path from the `ROUTES` table in `constants.ts` (named `ROUTES`, not `Routes`, because react-router exports a `Routes` component into the same file). `/` redirects to `ROUTES.SWAPS_SDK`; the legacy `/solver` path redirects there too, so links from before the rename keep working; a `*` catch-all redirects anything unknown rather than showing react-router's unstyled error boundary. All three use `replace` — without it the redirect pushes a history entry and Back bounces straight forward again. Money market uses a `:chainId` route param (defaults to Arbitrum).
 - **Providers.** `providers.tsx` is the canonical stack to copy when integrating: `SodaxProvider` → `QueryClientProvider` (via `createSodaxQueryClient`) → `SodaxWalletProvider`. RPC URLs are read from `process.env.*` with public-RPC fallbacks. WalletConnect is opt-in via `VITE_WALLETCONNECT_PROJECT_ID`.
-- **Solver env switcher.** `useAppStore.solverEnvironment` picks between `productionSolverConfig` / `stagingSolverConfig` from `constants.ts`. The `Providers` component re-memoizes the SDK config when this changes.
+- **Solver env switcher + Sodax Settings.** `useAppStore.solverEnvironment` picks between `productionSolverConfig` / `stagingSolverConfig` from `constants.ts`; the header's "Sodax Settings" modal (`components/shared/SodaxSettingsModal.tsx`) layers per-field overrides on top (submit-tx mode, solver endpoint/contracts, gateway/swaps base URLs, API key, relayer). Both persist together under `sodax-demo:sodax-settings` (`lib/sodaxSettings.ts`, sanitizing loader), so the env survives reloads. `Providers` rebuilds the config from env + settings; a new config identity re-creates the SDK in `SodaxProvider`, the provider `key` remounts consumers, and the module-level `queryClient` is `.clear()`ed on change (query keys carry no env/endpoint segment). Order cards stamp `statusEndpoint` from the live instance (`sodax.config.solver.solverApiEndpoint`), so status polls always follow the endpoint the swap actually used.
 - **UI.** Tailwind v4 + Radix primitives + shadcn-style components in `src/components/ui/`.
 - **Logos.** Chain logos come from `baseChainInfo[key].logo` (see `chainIdToChainLogo` in `constants.ts`); token logos render via `<TokenIcon symbol=… />` (`components/shared/TokenIcon.tsx`), which resolves the URL with `tokenLogo(symbol)` from the SDK and falls back to the symbol initials. Don't hardcode icon paths.
 

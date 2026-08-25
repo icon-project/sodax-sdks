@@ -61,7 +61,6 @@ import BigNumber from 'bignumber.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatUnits, parseUnits } from 'viem';
 import { SolverEnv, useAppStore } from '@/zustand/useAppStore';
-import { solverApiEndpointForEnv } from '@/constants';
 
 const SONIC = ChainKeys.SONIC_MAINNET satisfies SpokeChainKey;
 const DEFAULT_SLIPPAGE = '0.5'; // %
@@ -461,7 +460,7 @@ export default function LeverageYieldPage() {
             dstTxHash: intentDeliveryInfo.dstTxHash as string,
             srcTxHash: intentDeliveryInfo.srcTxHash,
             srcChainKey: intentDeliveryInfo.srcChainKey,
-            statusEndpoint: solverApiEndpointForEnv(solverEnvironment),
+            statusEndpoint: sodax.config.solver.solverApiEndpoint,
             createdAt: Date.now(),
             summary,
           }),
