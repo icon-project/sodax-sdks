@@ -338,8 +338,6 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
           dstTxHash: intentDeliveryInfo.dstTxHash as string,
           srcTxHash: intentDeliveryInfo.srcTxHash,
           srcChainKey: intentDeliveryInfo.srcChainKey,
-          // The live instance's endpoint — settings overrides included — so status is polled
-          // where /execute actually went, whatever the env/settings become later.
           statusEndpoint: sodax.config.solver.solverApiEndpoint,
           createdAt: Date.now(),
           summary: buildOrderSummary(src, dst, sourceAmount, quote?.quoted_amount),
@@ -404,7 +402,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   return (
     <Card className="w-full max-w-lg mx-auto">
       <CardHeader>
-        <CardTitle className="text-2xl font-bold text-center">Cross-Chain Swap</CardTitle>
+        <CardTitle className="text-2xl font-bold text-center">Cross-Chain Swap (SDK)</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">

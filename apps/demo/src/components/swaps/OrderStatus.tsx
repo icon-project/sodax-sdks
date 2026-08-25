@@ -321,8 +321,6 @@ function SolverLiveCard({
   onDismiss?: () => void;
   onSettle: SettleFn;
 }) {
-  // Poll the endpoint this order was created against (stored per-order). Orders from before
-  // this field existed fall back to the live instance's endpoint (current env + settings).
   const { sodax } = useSodaxContext();
   const endpoint = order.statusEndpoint ?? sodax.config.solver.solverApiEndpoint;
   const { data: status } = useSolverStatus(order.dstTxHash, endpoint);

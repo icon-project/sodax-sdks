@@ -43,8 +43,7 @@ export function nonEmptyEnv(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
 }
 
-// Stored as one payload with the solver env, kept as a plain string here so this module
-// doesn't import the store's enum (useAppStore imports this module).
+// The env stays a plain string here — importing the store's enum would create a module cycle.
 type StoredPayload = { solverEnvironment?: unknown } & Partial<Record<keyof SodaxSettings, unknown>>;
 
 /** Field-by-field sanitize: an invalid or missing stored value loads as `null` (unset). */
@@ -79,10 +78,8 @@ export function hasActiveOverrides(settings: SodaxSettings): boolean {
   return Object.values(settings).some(value => value !== null);
 }
 
-// Env-derived defaults shared by the provider (effective config) and the modal (placeholders).
-// Retarget the swaps API at canary or a locally started `swaps-api`; unset leaves swaps on the
-// packaged production gateway root. The value includes any version prefix, so a local service
-// mounting `/swaps/*` at the bare origin is `http://localhost:3008`.
+// Env defaults shared by the provider and the modal's prefilled values. Base URLs include any
+// version prefix (a local swaps-api mounting at the bare origin is `http://localhost:3008`).
 const swapsApiBaseUrlEnv: unknown = import.meta.env.VITE_SWAPS_API_BASE_URL;
 export const envSwapsApiBaseUrl: HttpUrl | undefined = isHttpUrl(swapsApiBaseUrlEnv) ? swapsApiBaseUrlEnv : undefined;
 

@@ -185,8 +185,7 @@ export default function Providers({ children }: { children: ReactNode }) {
     prevConfigKey.current = configKey;
   }, [configKey]);
 
-  // A new config identity re-creates the SDK inside SodaxProvider; the key also remounts
-  // consumers so no component state holds data derived from the previous instance.
+  // A new config identity re-creates the SDK; the key also remounts consumers.
   return (
     <SodaxProvider key={configKey} config={sodaxConfig}>
       <QueryClientProvider client={queryClient}>

@@ -1,60 +1,60 @@
 import React, { useEffect, useMemo, useState, type ReactNode } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { SolverEnv, useAppStore } from '@/zustand/useAppStore';
 import { defaultUseBackendSubmitTx, productionSolverConfig, stagingSolverConfig } from '@/constants';
 import { envSodaxApiKey, envSwapsApiBaseUrl, isEvmAddress, isHttpUrl, type SodaxSettings } from '@/lib/sodaxSettings';
+import { Check, Copy, RotateCcw } from 'lucide-react';
 
-// Placeholder hints only — mirrors of the `@sodax/types` packaged defaults, which are not
-// re-exported through dapp-kit. Effective config never reads these (the SDK applies its own).
-const PLACEHOLDER_GATEWAY_URL = 'https://api.sodax.com/v1';
-const PLACEHOLDER_RELAYER_URL = 'https://xcall-relay.nw.iconblockchain.xyz';
+// Display-only mirrors of the `@sodax/types` packaged defaults (not re-exported through dapp-kit).
+const DEFAULT_GATEWAY_URL = 'https://api.sodax.com/v1';
+const DEFAULT_RELAYER_URL = 'https://xcall-relay.nw.iconblockchain.xyz';
 
 type SubmitTxChoice = 'auto' | 'on' | 'off';
 
-/** Modal draft: free-text mirrors of SodaxSettings ('' = unset) plus the env choice. */
-type Draft = {
-  env: SolverEnv;
-  useBackendSubmitTx: SubmitTxChoice;
-  solverApiEndpoint: string;
-  intentsContract: string;
-  protocolIntentsContract: string;
-  apiBaseUrl: string;
-  swapsApiBaseUrl: string;
-  apiKey: string;
-  relayerApiEndpoint: string;
-};
+const URL_FIELDS = ['solverApiEndpoint', 'apiBaseUrl', 'swapsApiBaseUrl', 'relayerApiEndpoint'] as const;
+const ADDRESS_FIELDS = ['intentsContract', 'protocolIntentsContract'] as const;
+const TEXT_FIELDS = [...URL_FIELDS, ...ADDRESS_FIELDS, 'apiKey'] as const;
 
-function seedDraft(env: SolverEnv, s: SodaxSettings): Draft {
+type TextField = (typeof TEXT_FIELDS)[number];
+
+/** Modal draft: the text fields hold the EFFECTIVE value (default prefilled, copyable). */
+type Draft = { env: SolverEnv; useBackendSubmitTx: SubmitTxChoice } & Record<TextField, string>;
+
+/** The effective default text per field for an env — what an unset override resolves to. */
+function defaultsFor(env: SolverEnv): Record<TextField, string> {
+  const solver = env === SolverEnv.Staging ? stagingSolverConfig : productionSolverConfig;
   return {
-    env,
-    useBackendSubmitTx: s.useBackendSubmitTx === null ? 'auto' : s.useBackendSubmitTx ? 'on' : 'off',
-    solverApiEndpoint: s.solverApiEndpoint ?? '',
-    intentsContract: s.intentsContract ?? '',
-    protocolIntentsContract: s.protocolIntentsContract ?? '',
-    apiBaseUrl: s.apiBaseUrl ?? '',
-    swapsApiBaseUrl: s.swapsApiBaseUrl ?? '',
-    apiKey: s.apiKey ?? '',
-    relayerApiEndpoint: s.relayerApiEndpoint ?? '',
+    solverApiEndpoint: solver.solverApiEndpoint,
+    intentsContract: solver.intentsContract,
+    protocolIntentsContract: solver.protocolIntentsContract,
+    apiBaseUrl: DEFAULT_GATEWAY_URL,
+    swapsApiBaseUrl: envSwapsApiBaseUrl ?? DEFAULT_GATEWAY_URL,
+    apiKey: envSodaxApiKey ?? '',
+    relayerApiEndpoint: DEFAULT_RELAYER_URL,
   };
 }
 
-const URL_FIELDS = ['solverApiEndpoint', 'apiBaseUrl', 'swapsApiBaseUrl', 'relayerApiEndpoint'] as const;
-const ADDRESS_FIELDS = ['intentsContract', 'protocolIntentsContract'] as const;
+function seedDraft(env: SolverEnv, s: SodaxSettings): Draft {
+  const defaults = defaultsFor(env);
+  return {
+    env,
+    useBackendSubmitTx: s.useBackendSubmitTx === null ? 'auto' : s.useBackendSubmitTx ? 'on' : 'off',
+    solverApiEndpoint: s.solverApiEndpoint ?? defaults.solverApiEndpoint,
+    intentsContract: s.intentsContract ?? defaults.intentsContract,
+    protocolIntentsContract: s.protocolIntentsContract ?? defaults.protocolIntentsContract,
+    apiBaseUrl: s.apiBaseUrl ?? defaults.apiBaseUrl,
+    swapsApiBaseUrl: s.swapsApiBaseUrl ?? defaults.swapsApiBaseUrl,
+    apiKey: s.apiKey ?? defaults.apiKey,
+    relayerApiEndpoint: s.relayerApiEndpoint ?? defaults.relayerApiEndpoint,
+  };
+}
 
-type FieldErrors = Partial<Record<(typeof URL_FIELDS)[number] | (typeof ADDRESS_FIELDS)[number], string>>;
+type FieldErrors = Partial<Record<TextField, string>>;
 
 function validateDraft(draft: Draft): FieldErrors {
   const errors: FieldErrors = {};
@@ -73,55 +73,138 @@ function validateDraft(draft: Draft): FieldErrors {
   return errors;
 }
 
-/** '' → null (unset); validated values keep their narrowed types via the guards. */
+/** Empty, or equal to the env default → null (unset, keeps following defaults); else an override. */
 function draftToSettings(draft: Draft): SodaxSettings {
-  const url = (value: string) => {
-    const trimmed = value.trim();
-    return isHttpUrl(trimmed) ? trimmed : null;
+  const defaults = defaultsFor(draft.env);
+  const norm = (field: TextField): string | null => {
+    const value = draft[field].trim();
+    return value && value !== defaults[field] ? value : null;
   };
-  const address = (value: string) => {
-    const trimmed = value.trim();
-    return isEvmAddress(trimmed) ? trimmed : null;
+  const url = (field: (typeof URL_FIELDS)[number]) => {
+    const value = norm(field);
+    return value !== null && isHttpUrl(value) ? value : null;
   };
-  const apiKey = draft.apiKey.trim();
+  const address = (field: (typeof ADDRESS_FIELDS)[number]) => {
+    const value = norm(field);
+    return value !== null && isEvmAddress(value) ? value : null;
+  };
   return {
     useBackendSubmitTx: draft.useBackendSubmitTx === 'auto' ? null : draft.useBackendSubmitTx === 'on',
-    solverApiEndpoint: url(draft.solverApiEndpoint),
-    intentsContract: address(draft.intentsContract),
-    protocolIntentsContract: address(draft.protocolIntentsContract),
-    apiBaseUrl: url(draft.apiBaseUrl),
-    swapsApiBaseUrl: url(draft.swapsApiBaseUrl),
-    apiKey: apiKey.length > 0 ? apiKey : null,
-    relayerApiEndpoint: url(draft.relayerApiEndpoint),
+    solverApiEndpoint: url('solverApiEndpoint'),
+    intentsContract: address('intentsContract'),
+    protocolIntentsContract: address('protocolIntentsContract'),
+    apiBaseUrl: url('apiBaseUrl'),
+    swapsApiBaseUrl: url('swapsApiBaseUrl'),
+    apiKey: norm('apiKey'),
+    relayerApiEndpoint: url('relayerApiEndpoint'),
   };
 }
 
-function SettingsField({
+/** Effective-config snapshot for pasting into a bug report; the API key is masked. */
+function draftToDebugJson(draft: Draft): string {
+  return JSON.stringify(
+    {
+      environment: draft.env,
+      submitTxMode: draft.useBackendSubmitTx,
+      useBackendSubmitTx:
+        draft.useBackendSubmitTx === 'auto' ? defaultUseBackendSubmitTx(draft.env) : draft.useBackendSubmitTx === 'on',
+      solverApiEndpoint: draft.solverApiEndpoint.trim(),
+      intentsContract: draft.intentsContract.trim(),
+      protocolIntentsContract: draft.protocolIntentsContract.trim(),
+      apiBaseUrl: draft.apiBaseUrl.trim(),
+      swapsApiBaseUrl: draft.swapsApiBaseUrl.trim(),
+      apiKey: draft.apiKey.trim() ? '(set)' : '(unset)',
+      relayerApiEndpoint: draft.relayerApiEndpoint.trim(),
+    },
+    null,
+    2,
+  );
+}
+
+function CopyButton({ text, label }: { text: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      // clipboard unavailable (permissions/insecure context) — nothing to do
+    }
+  };
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="icon"
+      className="h-9 w-9 shrink-0"
+      onClick={copy}
+      disabled={!text}
+      title={label}
+    >
+      {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+    </Button>
+  );
+}
+
+/** Label · input · copy — with an amber ring and a ↺ reset button while overriding the default. */
+function TextRow({
   label,
-  hint,
+  value,
+  defaultValue,
   error,
-  children,
+  hint,
+  onChange,
 }: {
   label: string;
-  hint?: ReactNode;
+  value: string;
+  defaultValue: string;
   error?: string;
-  children: ReactNode;
+  hint?: ReactNode;
+  onChange: (value: string) => void;
 }) {
+  const modified = value.trim() !== defaultValue;
   return (
-    <div className="flex flex-col gap-1.5">
-      <Label className="text-sm font-medium">{label}</Label>
-      {children}
-      {error ? (
-        <span className="text-xs text-red-500">{error}</span>
-      ) : hint ? (
-        <span className="text-xs text-muted-foreground">{hint}</span>
-      ) : null}
+    <div className="grid sm:grid-cols-[10rem_1fr] items-center gap-x-3 gap-y-1">
+      <Label className="text-sm font-medium">
+        {label}
+        {modified && <span className="ml-1.5 align-middle inline-block w-1.5 h-1.5 bg-amber-400 rounded-full" />}
+      </Label>
+      <div className="flex items-center gap-1.5 min-w-0">
+        <Input
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          className={`h-9 text-sm font-mono flex-1 min-w-0 ${modified ? 'border-amber-400' : ''}`}
+        />
+        {modified && (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-9 w-9 shrink-0"
+            onClick={() => onChange(defaultValue)}
+            title={`Reset to default${defaultValue ? `: ${defaultValue}` : ''}`}
+          >
+            <RotateCcw className="w-4 h-4" />
+          </Button>
+        )}
+        <CopyButton text={value.trim()} label={`Copy ${label}`} />
+      </div>
+      {(error || hint) && (
+        <div className={`sm:col-start-2 text-xs ${error ? 'text-red-500' : 'text-muted-foreground'}`}>
+          {error ?? hint}
+        </div>
+      )}
     </div>
   );
 }
 
 function SectionTitle({ children }: { children: ReactNode }) {
-  return <h4 className="text-sm font-semibold text-cherry-dark">{children}</h4>;
+  return (
+    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1.5 mt-1">
+      {children}
+    </h4>
+  );
 }
 
 export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -138,11 +221,26 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
   const errors = useMemo(() => validateDraft(draft), [draft]);
   const hasErrors = Object.keys(errors).length > 0;
 
-  const envSolver = draft.env === SolverEnv.Staging ? stagingSolverConfig : productionSolverConfig;
+  const defaults = defaultsFor(draft.env);
   const autoSubmitTx = defaultUseBackendSubmitTx(draft.env);
   const submitTxOnStaging = draft.env === SolverEnv.Staging && draft.useBackendSubmitTx === 'on';
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft(prev => ({ ...prev, [key]: value }));
+
+  // Untouched fields (still showing the old env's default) follow the new env's default.
+  const handleEnvChange = (env: SolverEnv) => {
+    setDraft(prev => {
+      const prevDefaults = defaultsFor(prev.env);
+      const nextDefaults = defaultsFor(env);
+      const next = { ...prev, env };
+      for (const field of TEXT_FIELDS) {
+        if (prev[field].trim() === prevDefaults[field]) {
+          next[field] = nextDefaults[field];
+        }
+      }
+      return next;
+    });
+  };
 
   const handleSave = () => {
     if (hasErrors) return;
@@ -151,89 +249,38 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
   };
 
   const handleReset = () => {
-    setDraft(prev => ({
-      ...seedDraft(prev.env, {
-        useBackendSubmitTx: null,
-        solverApiEndpoint: null,
-        intentsContract: null,
-        protocolIntentsContract: null,
-        apiBaseUrl: null,
-        swapsApiBaseUrl: null,
-        apiKey: null,
-        relayerApiEndpoint: null,
-      }),
-    }));
+    setDraft(prev => ({ ...prev, useBackendSubmitTx: 'auto', ...defaultsFor(prev.env) }));
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col gap-0 p-0">
+        <DialogHeader className="px-6 pt-5 pb-3 border-b">
           <DialogTitle>Sodax Settings</DialogTitle>
           <DialogDescription>
-            Overrides for the SDK config used by this demo. Empty fields use the shown defaults.
+            The effective SDK config, ready to copy. Edit a value to override it — equal to its default (or cleared)
+            keeps following the environment.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-4">
-          <SectionTitle>Solver</SectionTitle>
-
-          <SettingsField label="Environment" hint="Also switchable via the tabs on the swap pages.">
-            <Tabs value={draft.env} onValueChange={value => set('env', value as SolverEnv)}>
+        <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-3">
+          <div className="grid sm:grid-cols-[10rem_1fr] items-center gap-x-3 gap-y-1">
+            <Label className="text-sm font-medium">Environment</Label>
+            <Tabs value={draft.env} onValueChange={value => handleEnvChange(value as SolverEnv)}>
               <TabsList>
                 <TabsTrigger value={SolverEnv.Staging}>Staging</TabsTrigger>
                 <TabsTrigger value={SolverEnv.Production}>Production</TabsTrigger>
               </TabsList>
             </Tabs>
-          </SettingsField>
+          </div>
 
-          <SettingsField
-            label="Solver API endpoint"
-            hint="Quotes, /execute and /status go here. Overrides the environment's endpoint."
-            error={errors.solverApiEndpoint}
-          >
-            <Input
-              value={draft.solverApiEndpoint}
-              onChange={e => set('solverApiEndpoint', e.target.value)}
-              placeholder={envSolver.solverApiEndpoint}
-              className="h-9 text-sm font-mono"
-            />
-          </SettingsField>
-
-          <SettingsField label="Intents contract" error={errors.intentsContract}>
-            <Input
-              value={draft.intentsContract}
-              onChange={e => set('intentsContract', e.target.value)}
-              placeholder={envSolver.intentsContract}
-              className="h-9 text-sm font-mono"
-            />
-          </SettingsField>
-
-          <SettingsField label="Protocol intents contract" error={errors.protocolIntentsContract}>
-            <Input
-              value={draft.protocolIntentsContract}
-              onChange={e => set('protocolIntentsContract', e.target.value)}
-              placeholder={envSolver.protocolIntentsContract}
-              className="h-9 text-sm font-mono"
-            />
-          </SettingsField>
-
-          <Separator />
-          <SectionTitle>Swaps</SectionTitle>
-
-          <SettingsField
-            label="Backend submit-tx"
-            hint={
-              submitTxOnStaging ? (
-                <span className="text-amber-600">
-                  Backend submit posts to the production swaps API — the staging solver never sees the intent and its
-                  /status stays NOT_FOUND.
-                </span>
-              ) : (
-                'On: the swaps API relays and post-executes server-side. Off: client-side relay, /execute to the solver above.'
-              )
-            }
-          >
+          <div className="grid sm:grid-cols-[10rem_1fr] items-center gap-x-3 gap-y-1">
+            <Label className="text-sm font-medium">
+              Backend submit-tx
+              {draft.useBackendSubmitTx !== 'auto' && (
+                <span className="ml-1.5 align-middle inline-block w-1.5 h-1.5 bg-amber-400 rounded-full" />
+              )}
+            </Label>
             <Select
               value={draft.useBackendSubmitTx}
               onValueChange={value => set('useBackendSubmitTx', value as SubmitTxChoice)}
@@ -247,84 +294,119 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
                 <SelectItem value="off">Off — client-side relay to the solver</SelectItem>
               </SelectContent>
             </Select>
-          </SettingsField>
+            <div className={`sm:col-start-2 text-xs ${submitTxOnStaging ? 'text-amber-600' : 'text-muted-foreground'}`}>
+              {submitTxOnStaging
+                ? 'Backend submit posts to the production swaps API — the staging solver never sees the intent and its /status stays NOT_FOUND.'
+                : 'On: the swaps API relays and post-executes server-side. Off: client-side relay, /execute to the solver below.'}
+            </div>
+          </div>
 
-          <Separator />
+          <SectionTitle>Solver</SectionTitle>
+
+          <TextRow
+            label="Solver API endpoint"
+            value={draft.solverApiEndpoint}
+            defaultValue={defaults.solverApiEndpoint}
+            error={errors.solverApiEndpoint}
+            hint="Quotes, /execute and /status go here."
+            onChange={value => set('solverApiEndpoint', value)}
+          />
+          <TextRow
+            label="Intents contract"
+            value={draft.intentsContract}
+            defaultValue={defaults.intentsContract}
+            error={errors.intentsContract}
+            onChange={value => set('intentsContract', value)}
+          />
+          <TextRow
+            label="Protocol intents"
+            value={draft.protocolIntentsContract}
+            defaultValue={defaults.protocolIntentsContract}
+            error={errors.protocolIntentsContract}
+            onChange={value => set('protocolIntentsContract', value)}
+          />
+
           <SectionTitle>API</SectionTitle>
 
-          <SettingsField
+          <TextRow
             label="Gateway base URL"
-            hint="Gateway root incl. version prefix, no service segment. Moves data/bridge/swaps APIs — not sponsoring."
+            value={draft.apiBaseUrl}
+            defaultValue={defaults.apiBaseUrl}
             error={errors.apiBaseUrl}
-          >
-            <Input
-              value={draft.apiBaseUrl}
-              onChange={e => set('apiBaseUrl', e.target.value)}
-              placeholder={PLACEHOLDER_GATEWAY_URL}
-              className="h-9 text-sm font-mono"
-            />
-          </SettingsField>
-
-          <SettingsField
+            hint="Gateway root incl. version prefix. Moves data/bridge/swaps APIs — not sponsoring."
+            onChange={value => set('apiBaseUrl', value)}
+          />
+          <TextRow
             label="Swaps API base URL"
-            hint="Retarget swaps alone (canary or a local swaps-api). Includes any version prefix."
+            value={draft.swapsApiBaseUrl}
+            defaultValue={defaults.swapsApiBaseUrl}
             error={errors.swapsApiBaseUrl}
-          >
-            <Input
-              value={draft.swapsApiBaseUrl}
-              onChange={e => set('swapsApiBaseUrl', e.target.value)}
-              placeholder={envSwapsApiBaseUrl ?? (draft.apiBaseUrl.trim() || PLACEHOLDER_GATEWAY_URL)}
-              className="h-9 text-sm font-mono"
-            />
-          </SettingsField>
-
-          <SettingsField
+            hint="Retarget swaps alone. At its default it follows VITE_SWAPS_API_BASE_URL / the gateway."
+            onChange={value => set('swapsApiBaseUrl', value)}
+          />
+          <TextRow
             label="API key"
+            value={draft.apiKey}
+            defaultValue={defaults.apiKey}
             hint={
               envSodaxApiKey
-                ? 'x-api-key on every backend call. Empty falls back to VITE_SODAX_API_KEY.'
+                ? 'x-api-key on every backend call. At its default it follows VITE_SODAX_API_KEY.'
                 : 'x-api-key on every backend call. Keys typed here live in this browser only.'
             }
-          >
-            <Input
-              value={draft.apiKey}
-              onChange={e => set('apiKey', e.target.value)}
-              placeholder={envSodaxApiKey ? '(from VITE_SODAX_API_KEY)' : 'sdx_…'}
-              className="h-9 text-sm font-mono"
-            />
-          </SettingsField>
-
-          <SettingsField
-            label="Relayer API endpoint"
-            hint="Used by the client-side relay path (backend submit-tx off)."
+            onChange={value => set('apiKey', value)}
+          />
+          <TextRow
+            label="Relayer endpoint"
+            value={draft.relayerApiEndpoint}
+            defaultValue={defaults.relayerApiEndpoint}
             error={errors.relayerApiEndpoint}
-          >
-            <Input
-              value={draft.relayerApiEndpoint}
-              onChange={e => set('relayerApiEndpoint', e.target.value)}
-              placeholder={PLACEHOLDER_RELAYER_URL}
-              className="h-9 text-sm font-mono"
-            />
-          </SettingsField>
+            hint="Used by the client-side relay path (backend submit-tx off)."
+            onChange={value => set('relayerApiEndpoint', value)}
+          />
         </div>
 
-        <DialogFooter className="gap-2 sm:justify-between">
-          <Button variant="outline" size="sm" onClick={handleReset}>
-            Reset to defaults
-          </Button>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button variant="cherry" size="sm" onClick={handleSave} disabled={hasErrors}>
-              Save
-            </Button>
+        <div className="px-6 py-4 border-t flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <CopyButtonWithLabel text={draftToDebugJson(draft)} />
+              <Button variant="outline" size="sm" onClick={handleReset}>
+                Reset all
+              </Button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button variant="cherry" size="sm" onClick={handleSave} disabled={hasErrors}>
+                Save
+              </Button>
+            </div>
           </div>
-        </DialogFooter>
-        <p className="text-xs text-muted-foreground text-right">
-          Saving re-creates the SDK instance and clears cached queries.
-        </p>
+          <p className="text-xs text-muted-foreground text-right">
+            Saving re-creates the SDK instance and clears cached queries.
+          </p>
+        </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** "Copy JSON" with the same copied feedback as the per-field button. */
+function CopyButtonWithLabel({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      // clipboard unavailable — nothing to do
+    }
+  };
+  return (
+    <Button type="button" variant="outline" size="sm" onClick={copy} title="Copy the effective config as JSON">
+      {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+      Copy JSON
+    </Button>
   );
 }
