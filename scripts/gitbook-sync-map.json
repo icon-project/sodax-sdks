@@ -1,5 +1,5 @@
 {
-  "note": "src is the file authored in this repo; dest is its page path under docs/ (the docs.sodax.com site root). pnpm docs:sync-pages generates docs/<dest> from each src whose home is a package; title overrides the source H1 as the sidebar label.",
+  "note": "src is the file authored in this repo; dest is its page path under docs/ (the docs.sodax.com site root). pnpm docs:sync-pages generates docs/<dest> from each src whose home is a package; title overrides the source H1 as the sidebar label. A src already under docs/ is the page itself, so it is listed for link checking only and needs no title or icon. pkgs: [\"<package-dir>\", …] declares which packages a page documents.",
   "sourceRepo": "icon-project/sodax-sdks",
   "docRepo": "icon-project/sodax-document",
   "mirrored": [
@@ -116,9 +116,18 @@
       "icon": "bitcoin-sign"
     },
     {
+      "src": "docs/developers/how-to/stellar-sponsoring-getting-started.md",
+      "dest": "developers/how-to/stellar-sponsoring-getting-started.md",
+      "pkgs": ["sdk", "dapp-kit"]
+    },
+    {
+      "src": "docs/developers/how-to/quick-sponsoring-stellar-guide.md",
+      "dest": "developers/how-to/quick-sponsoring-stellar-guide.md",
+      "pkgs": ["sdk", "dapp-kit"]
+    },
+    {
       "src": "docs/ai-integration-guide.md",
-      "dest": "developers/ai-integration/README.md",
-      "icon": "robot"
+      "dest": "ai-integration-guide.md"
     },
     {
       "src": "packages/wallet-sdk-core/README.md",
