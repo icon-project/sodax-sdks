@@ -484,3 +484,61 @@ describe('SolverApiService.getStatus with a timeout budget', () => {
     consoleSpy.mockRestore();
   });
 });
+
+// =========================================================================
+// API key — the configured instance key (`new Sodax({ apiKey })`) rides every solver request.
+// =========================================================================
+//
+// The solver transport has no per-request override surface, so this config-level tier is the only
+// one. Every case asserts the whole header record: the key must be added to `Content-Type`, never
+// replace it, and an unset or empty key must send no `x-api-key` at all.
+
+describe('SolverApiService API key', () => {
+  /** The shared double plus a configured key — the field `getQuote` reads for its `x-api-key`. */
+  const withApiKey = (apiKey: string | undefined): ConfigService =>
+    ({ ...mockConfigService, apiKey }) as unknown as ConfigService;
+
+  const sentHeaders = (): Record<string, string> => fetchMock.mock.calls[0]?.[1]?.headers;
+  const JSON_HEADER = { 'Content-Type': 'application/json' };
+  const request: SolverExecutionRequest = { intent_tx_hash: INTENT_TX_HASH };
+
+  it('sends the configured key on /quote', async () => {
+    fetchMock.mockResolvedValueOnce(okResponse({ quoted_amount: '1' }));
+
+    await SolverApiService.getQuote(QUOTE_REQUEST, SOLVER_CONFIG, withApiKey('instance-key'));
+
+    expect(sentHeaders()).toEqual({ ...JSON_HEADER, 'x-api-key': 'instance-key' });
+  });
+
+  it('sends the configured key on /execute', async () => {
+    fetchMock.mockResolvedValueOnce(okResponse({ answer: 'OK', intent_hash: INTENT_TX_HASH }));
+
+    await SolverApiService.postExecution(request, SOLVER_CONFIG, silentLogger, 'instance-key');
+
+    expect(sentHeaders()).toEqual({ ...JSON_HEADER, 'x-api-key': 'instance-key' });
+  });
+
+  it('sends the configured key on /status', async () => {
+    fetchMock.mockResolvedValueOnce(okResponse({ status: 3 }));
+
+    await SolverApiService.getStatus(request, SOLVER_CONFIG, silentLogger, undefined, 'instance-key');
+
+    expect(sentHeaders()).toEqual({ ...JSON_HEADER, 'x-api-key': 'instance-key' });
+  });
+
+  it.each([
+    ['unset', undefined],
+    ['empty', ''],
+  ])('sends no x-api-key on any endpoint when the key is %s', async (_label, apiKey) => {
+    for (const call of [
+      () => SolverApiService.getQuote(QUOTE_REQUEST, SOLVER_CONFIG, withApiKey(apiKey)),
+      () => SolverApiService.postExecution(request, SOLVER_CONFIG, silentLogger, apiKey),
+      () => SolverApiService.getStatus(request, SOLVER_CONFIG, silentLogger, undefined, apiKey),
+    ]) {
+      fetchMock.mockReset();
+      fetchMock.mockResolvedValueOnce(okResponse({ quoted_amount: '1', status: 3, answer: 'OK' }));
+      await call();
+      expect(sentHeaders()).toEqual(JSON_HEADER);
+    }
+  });
+});

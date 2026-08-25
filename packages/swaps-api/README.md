@@ -43,7 +43,30 @@ const quote = await api.getQuote({
 `baseUrl` is required and injected by the caller — the package never hardcodes
 environment URLs. Optionally set `timeout` (ms — an overall per-call deadline that
 includes retries; on expiry the call throws `TIMEOUT_ERROR`), a custom `fetch` (for
-tests or non-standard runtimes; it receives the timeout `AbortSignal`), and extra `headers`.
+tests or non-standard runtimes; it receives the timeout `AbortSignal`), extra `headers`,
+and an `apiKey`.
+
+## API key
+
+The backend guards `POST /swaps/*` routes with an `x-api-key` header check (keys are
+minted through the partner portal). Pass the key once at construction and the client
+sends it on every request:
+
+```ts
+const api = new SwapsApi({ baseUrl: 'https://<swaps-api-host>', apiKey: 'partner-api-key' });
+```
+
+An explicit `headers: { 'x-api-key': ... }` wins over the `apiKey` convenience option.
+For a different key per call, construct another client — instances are cheap and
+stateless. Keys bundled into a browser app are public by nature.
+
+Auth failures surface as `HTTP_ERROR` with the backend's status and message on
+`context`: `401` (missing or invalid key) and `403` (suspended organisation or missing
+scope) are terminal — fix the key, don't retry. The one transient case, a `503` whose
+message is `API key verification is temporarily unavailable` (exported as
+`API_KEY_VERIFICATION_UNAVAILABLE_MESSAGE`), is retried automatically with a short
+backoff — for every call, mutations included, since the guard rejects before the route
+handler runs.
 
 ## Partner fees
 
@@ -69,7 +92,9 @@ Every method **throws** a `SwapsApiError` on failure — a single typed error wh
 `VALIDATION_ERROR`, with diagnostic `context` (endpoint, method, path, HTTP status,
 validation issues) and the underlying failure on `.cause`. Idempotent calls (reads,
 polls, pure-compute POSTs like `getQuote`) are retried a few times on transient HTTP /
-network failures; a `timeout` and mutating calls are never retried.
+network failures; a `timeout` and mutating calls are never retried — except the
+apiguard's verification `503` (see "API key" above), which is replay-safe and retried
+for every call.
 
 > Note: this throwing contract is intentional and distinct from `@sodax/sdk`'s
 > `sodax.api.swaps`, which wraps these calls and returns `Result<T>` instead of throwing.

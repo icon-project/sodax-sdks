@@ -45,13 +45,18 @@ function isHttpUrl(value: unknown): value is HttpUrl {
   return typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://'));
 }
 
+/** A set-but-empty env var means "unset" — matching how the SDK treats an empty key or base URL. */
+function nonEmptyEnv(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
 // Read credentials through Vite-scoped env variables, not the inlined process environment.
 // The optional base URL includes any deployment prefix; the SDK appends the sponsoring path.
 const sponsoringApiBaseUrlEnv: unknown = import.meta.env.VITE_SPONSORING_API_BASE_URL;
 const sponsoringApiKeyEnv: unknown = import.meta.env.VITE_SPONSORING_API_KEY;
 const sponsoringApiConfig = {
   ...(isHttpUrl(sponsoringApiBaseUrlEnv) ? { baseURL: sponsoringApiBaseUrlEnv } : {}),
-  ...(typeof sponsoringApiKeyEnv === 'string' && sponsoringApiKeyEnv.length > 0 ? { apiKey: sponsoringApiKeyEnv } : {}),
+  ...(nonEmptyEnv(sponsoringApiKeyEnv) ? { apiKey: sponsoringApiKeyEnv } : {}),
 };
 
 // Retarget the swaps API at canary or a locally started `swaps-api`. Unset leaves swaps on the packaged
@@ -60,6 +65,11 @@ const sponsoringApiConfig = {
 // local service that mounts `/swaps/*` at the bare origin is `http://localhost:3008`.
 const swapsApiBaseUrlEnv: unknown = import.meta.env.VITE_SWAPS_API_BASE_URL;
 const swapsApiConfig = isHttpUrl(swapsApiBaseUrlEnv) ? { baseURL: swapsApiBaseUrlEnv } : undefined;
+
+// Instance-wide SODAX API key: `x-api-key` on every backend call, sponsoring included while it targets
+// the packaged gateway (VITE_SPONSORING_API_KEY is only for an independently hosted one). Unset is fine.
+const sodaxApiKeyEnv: unknown = import.meta.env.VITE_SODAX_API_KEY;
+const sodaxApiKey = nonEmptyEnv(sodaxApiKeyEnv) ? sodaxApiKeyEnv : undefined;
 
 const configMap: Record<SolverEnv, SolverConfig> = {
   [SolverEnv.Production]: productionSolverConfig,
@@ -146,6 +156,7 @@ export default function Providers({ children }: { children: ReactNode }) {
         swapsApiConfig,
         sponsoringApiConfig,
       },
+      apiKey: sodaxApiKey,
       logger: createDatadogLogger(),
       // Opt-in user-action analytics (issue #175). Enabled by default in the demo; the sink logs each
       // event and re-emits it as a `sodax:analytics` window CustomEvent. `false` when disabled, which

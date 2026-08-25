@@ -1,6 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SwapsApiError } from './errors.js';
-import { type RequestContext, buildQuery, buildUrl, request } from './http.js';
+import {
+  API_KEY_VERIFICATION_UNAVAILABLE_MESSAGE,
+  type RequestContext,
+  buildQuery,
+  buildUrl,
+  request,
+} from './http.js';
 
 const jsonResponse = (data: unknown, status = 200): Response =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
@@ -140,12 +146,83 @@ describe('request', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(3); // 1 + MAX_RETRIES(2)
   });
 
-  it('never retries a non-idempotent call', async () => {
+  it('never retries a non-idempotent call on a plain 503', async () => {
     const fetchImpl = vi.fn<typeof globalThis.fetch>(async () => jsonResponse({}, 503));
     await expect(
       request(ctx(fetchImpl), { method: 'POST', path: '/swaps/intents', endpoint: 'createIntent', parse: identity }),
     ).rejects.toMatchObject({ code: 'HTTP_ERROR' });
     expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
+  it('never retries a non-idempotent call on a network error', async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new Error('offline');
+    });
+    await expect(
+      request(ctx(fetchImpl), { method: 'POST', path: '/swaps/intents', endpoint: 'createIntent', parse: identity }),
+    ).rejects.toMatchObject({ code: 'NETWORK_ERROR' });
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
+  describe('apiguard verification 503', () => {
+    // Standard NestJS error body the apiguard returns when key verification is down.
+    const apiGuardBody = {
+      statusCode: 503,
+      message: API_KEY_VERIFICATION_UNAVAILABLE_MESSAGE,
+      error: 'Service Unavailable',
+    };
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('retries a mutation after a backoff and succeeds', async () => {
+      vi.useFakeTimers();
+      const fetchImpl = vi
+        .fn<typeof globalThis.fetch>()
+        .mockResolvedValueOnce(jsonResponse(apiGuardBody, 503))
+        .mockResolvedValueOnce(jsonResponse({ ok: true }));
+      const pending = request(ctx(fetchImpl), {
+        method: 'POST',
+        path: '/swaps/intents',
+        endpoint: 'createIntent',
+        parse: identity,
+      });
+      // The retry backs off: nothing is replayed until the 250 ms delay elapses.
+      await vi.advanceTimersByTimeAsync(249);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(pending).resolves.toEqual({ ok: true });
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+
+    it('gives up after the retry budget when the outage persists', async () => {
+      vi.useFakeTimers();
+      const fetchImpl = vi.fn(async () => jsonResponse(apiGuardBody, 503));
+      const pending = request(ctx(fetchImpl), {
+        method: 'POST',
+        path: '/swaps/submit-tx',
+        endpoint: 'submitTx',
+        parse: identity,
+      });
+      const rejection = expect(pending).rejects.toMatchObject({ code: 'HTTP_ERROR', context: { status: 503 } });
+      await vi.advanceTimersByTimeAsync(250 + 500); // attempt-scaled backoffs before attempts 2 and 3
+      await rejection;
+      expect(fetchImpl).toHaveBeenCalledTimes(3); // 1 + MAX_RETRIES(2)
+    });
+
+    it('surfaces TIMEOUT_ERROR when the deadline fires during the backoff sleep', async () => {
+      vi.useFakeTimers();
+      const fetchImpl = vi.fn(async () => jsonResponse(apiGuardBody, 503));
+      const pending = request(
+        { baseUrl: 'https://api.test', fetchImpl, timeout: 100 },
+        { method: 'POST', path: '/swaps/intents', endpoint: 'createIntent', parse: identity },
+      );
+      const rejection = expect(pending).rejects.toMatchObject({ code: 'TIMEOUT_ERROR' });
+      await vi.advanceTimersByTimeAsync(100); // deadline < backoff delay: the sleep ends early, as a timeout
+      await rejection;
+      expect(fetchImpl).toHaveBeenCalledOnce();
+    });
   });
 
   it('aborts the whole call as TIMEOUT_ERROR when the deadline elapses, without retrying', async () => {

@@ -35,5 +35,9 @@ skills-lock.json
 # Local tarballs from `pnpm pack:local`
 pack-local-out/
 
+# Working files the AI files drift check writes into the workspace
+drift-scope.json
+drift-comment.md
+
 # Local SDK audit scratch — the shared Audits/ reports are tracked; the sdk/ subdir stays local.
 Audits/sdk

@@ -175,6 +175,8 @@ Chains six sub-scripts. Each catches a distinct bug class — green guards toget
 
 Run individually for faster feedback: `pnpm run check:ai-imports`, `pnpm run check:ai-keys`, etc.
 
+**Prose accuracy is gated separately.** An `AI Files Drift Check` workflow runs per pull request: it works out which knowledge files the changed source could invalidate, has a read-only agent compare the claims in them against that source, then re-reads each cited quote before letting any finding count. It flags a claim the current source disproves and warns when new public surface reaches no knowledge file. It is advisory until the `AI_DRIFT_ENFORCE` repository variable is set, and is not runnable locally — the guards above are what you run before pushing.
+
 ### Distribution
 
 Two paths:

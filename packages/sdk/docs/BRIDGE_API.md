@@ -9,8 +9,8 @@ It mirrors `IBridgeApiV2` (from `@sodax/types`) one method per endpoint. Every m
 - returns `Promise<Result<T>>` — it **never throws**;
 - validates the JSON response at runtime against a valibot schema (a contract drift is surfaced as
   `{ ok: false }`, not returned untyped);
-- accepts an optional trailing `RequestOverrideConfig` (`{ baseURL?, timeout?, headers? }`) for per-call
-  overrides.
+- accepts an optional trailing `RequestOverrideConfig` (`{ baseURL?, timeout?, headers?, apiKey? }`) for
+  per-call overrides.
 
 > This is the lower-level backend HTTP surface. For the end-to-end deposit→relay bridge orchestrator, use
 > `sodax.bridge` (see [`BRIDGE.md`](BRIDGE.md)). It mirrors [`SWAPS_API.md`](SWAPS_API.md) minus the

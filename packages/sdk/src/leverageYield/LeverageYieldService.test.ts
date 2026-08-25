@@ -1251,6 +1251,15 @@ describe('LeverageYieldService.notifySolver', () => {
     expect(result.error.context?.solverCode).toBe(-7);
     expect(result.error.context?.phase).toBe('postExecution');
   });
+
+  it('forwards the configured backend API key to the solver', async () => {
+    const keyed = new Sodax({ apiKey: 'instance-key', logger: 'silent' });
+    mocks.solverPostExecution.mockResolvedValueOnce({ ok: true, value: { answer: 'OK', intent_hash: '0xhash' } });
+
+    await keyed.leverageYield.notifySolver({ intent_tx_hash: '0xhubIntentTx' });
+
+    expect(mocks.solverPostExecution.mock.calls[0]?.[3]).toBe('instance-key');
+  });
 });
 
 // ─── approve / isAllowanceValid — Sonic-direct underlying-asset allowance ──

@@ -9,8 +9,8 @@ It mirrors `ISwapsApiV2` (from `@sodax/types`) one method per endpoint (21 total
 - returns `Promise<Result<T>>` — it **never throws**;
 - validates the JSON response at runtime against a valibot schema (a contract drift is surfaced as
   `{ ok: false }`, not returned untyped);
-- accepts an optional trailing `RequestOverrideConfig` (`{ baseURL?, timeout?, headers? }`) for per-call
-  overrides.
+- accepts an optional trailing `RequestOverrideConfig` (`{ baseURL?, timeout?, headers?, apiKey? }`)
+  for per-call overrides — the same shared type every other backend client takes.
 
 > This is the lower-level backend HTTP surface. For the end-to-end create→relay→post-execution swap
 > orchestrator, use `sodax.swaps` (see [`SWAPS.md`](SWAPS.md)).
@@ -234,6 +234,22 @@ const sodax = new Sodax({
 The swaps slice layers over the base slice over the defaults (per field) — a cross-cutting header on
 `baseApiConfig` (auth/tracing) still reaches swaps calls unless `swapsApiConfig` overrides that key.
 
+### API key
+
+The backend guards `POST /swaps/*` routes with an `x-api-key` header check. Configure the key once —
+`new Sodax({ apiKey })`, the same instance-wide key every backend client uses — and every
+`sodax.api.swaps` call carries it; override it per call via the trailing `RequestOverrideConfig`:
+
+```typescript
+await sodax.api.swaps.createIntent(params, { apiKey: 'per-request-key' });
+```
+
+Auth failures surface as `EXTERNAL_API_ERROR` with `context.status` `401` (missing/invalid key) or `403`
+(suspended organisation / missing scope) — terminal config problems — while the transient verification
+`503` is retried by the wire client. See
+[CONFIGURE_SDK.md § API key](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md#api-key)
+for the full precedence order.
+
 ## Result\<T\> and Error Handling
 
 Every method returns `Result<T, SodaxError<'EXTERNAL_API_ERROR'>>`. On any failure (network, timeout,
@@ -265,7 +281,9 @@ validation/transform, response schemas, HTTP). This service adds the SDK convent
   and the `SwapsApiErrorCode` union are re-exported from `@sodax/sdk`, so you can narrow `error.cause`
   and type `error.context.code` without a direct `@sodax/swaps-api` import.
 - **Idempotent calls retry transient failures.** Reads, polls, and pure-compute POSTs (e.g. `getQuote`)
-  are retried a few times on transient statuses / network errors; mutating calls are never retried.
+  are retried a few times on transient statuses / network errors; mutating calls are never retried —
+  except the apiguard's transient key-verification `503`, which is rejected before the route handler
+  runs and is therefore replayed (with a short backoff) for every call.
 
 ## See also
 

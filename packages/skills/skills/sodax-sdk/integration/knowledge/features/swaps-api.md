@@ -54,7 +54,7 @@ sodax.api.swaps.submitTx(body: SubmitTxRequestV2, config?): Promise<Result<Submi
 sodax.api.swaps.getSubmitTxStatus(query: SubmitTxStatusQueryV2, config?): Promise<Result<SubmitTxStatusResponseV2>>;
 ```
 
-The optional trailing `config?: RequestOverrideConfig` (`{ baseURL?, timeout?, headers? }`) on every method
+The optional trailing `config?: RequestOverrideConfig` (`{ baseURL?, timeout?, headers?, apiKey? }`) on every method
 applies per-call overrides that take precedence over the service config (see "Per-call overrides" below).
 
 ## `approve` can return two transactions
@@ -96,6 +96,31 @@ Optional on the type, but no default: the backend does not fill it in, and
 `sodax.swaps` orchestrator — not this wire path. Send the same value on quote and
 create-intent. `checkAllowance` / `approve` inherit the field but ignore it.
 Bridge API v2 is different: omitted `partnerFee` falls back to `bridgePartnerFee`.
+
+## API key
+
+The backend guards `POST /swaps/*` routes with an `x-api-key` header check (keys come from the partner
+portal). Unlike `partnerFee`, the config-level key DOES reach this wire path: there is ONE
+instance-wide key, `new Sodax({ apiKey })`, sent on every backend request — this client,
+`sodax.backendApi`, `sodax.api.bridge`, the solver API, and the backend submit-tx legs of `swap()` /
+`bridge()`. There is no per-feature or per-slice swaps key. Override per call via the trailing
+`RequestOverrideConfig`:
+
+```ts
+await sodax.api.swaps.createIntent(body, { apiKey: 'per-request-key' });
+```
+
+Precedence, highest first: per-call `headers['x-api-key']` (any casing) → per-call `apiKey` → a
+configured explicit `x-api-key` header (`api.headers` / `setHeaders`) → the configured `apiKey`. That
+full order is what the data, swaps, and bridge transports resolve; sponsoring's tier 3 is its own
+slice/runtime headers (shared `api.headers` / `backendApi.setHeaders` never reach it — rotate via
+`sodax.api.sponsoring.setHeaders`), and the solver API has no per-call override surface and no
+configured-header slot, so it carries the configured `apiKey` alone. An empty `apiKey` counts as unset
+and falls back. Read the configured value back on `sodax.config.apiKey`.
+Auth failures surface as `EXTERNAL_API_ERROR` with `context.status` `401` (missing/invalid key) or `403`
+(suspended org / missing scope) — terminal until the consumer fixes the key. The transient verification
+`503` is retried automatically by the wire client (all calls, mutations included — the guard rejects
+before the handler runs).
 
 ## Common call shapes
 
@@ -180,7 +205,7 @@ if (status.ok && status.value.data.status === 'solved') { /* settled */ }
 ## Per-call overrides
 
 Every method accepts a trailing `RequestOverrideConfig` to redirect a single call to a different host or
-attach request-specific headers (auth, tracing), overriding the service config:
+attach request-specific headers (auth, tracing) or a per-call `apiKey`, overriding the service config:
 
 ```ts
 // `baseURL` is the gateway ROOT — the SDK appends `/swaps/*` itself. Never include a service segment.

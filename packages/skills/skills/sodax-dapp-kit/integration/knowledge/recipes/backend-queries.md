@@ -136,7 +136,7 @@ import type { SubmitTxRequestV2 } from '@sodax/sdk';
 
 function SubmitButton({ request, baseURL }: { request: SubmitTxRequestV2; baseURL: string }) {
   const { mutateAsync: submitSwapTx, isPending } = useSwapsApiSubmitTx({
-    mutationOptions: { retry: 5 }, // overrides default retry: 3
+    mutationOptions: { retry: 5 }, // overrides the default `retryUnlessAuthFailure` (3 retries, never on 401/403)
   });
 
   const handleSubmit = async () => {

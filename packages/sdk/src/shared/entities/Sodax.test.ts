@@ -404,14 +404,14 @@ describe('Sodax constructor — config override propagates downstream', () => {
     expect(configArg.fee).toEqual(fee);
   });
 
-  it('the RAW override (not the merged result) is forwarded to ConfigService as userConfig', () => {
+  it('the unmerged override (apiKey stripped, not the merged result) is forwarded to ConfigService as userConfig', () => {
     // ConfigService needs the unmerged partial so initialize() can re-layer it on top of the
-    // dynamic config. Passing the merged instanceConfig instead would defeat that — assert identity
-    // with the exact object handed to the constructor.
-    const override = { api: { timeout: 5 } };
+    // dynamic config. The credential is stripped from that copy too, so a future re-merge
+    // cannot land it back on the swapped config.
+    const override = { api: { timeout: 5 }, apiKey: 'secret-key' };
     new Sodax(override);
     const configArg = helpers.captured.config[0] as { config: SodaxConfig; userConfig: unknown };
-    expect(configArg.userConfig).toBe(override);
+    expect(configArg.userConfig).toEqual({ api: { timeout: 5 }, apiKey: undefined });
     // And it is distinct from the merged config the service also receives.
     expect(configArg.userConfig).not.toBe(configArg.config);
   });
