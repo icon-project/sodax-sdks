@@ -72,20 +72,24 @@ Track progress with `getStatus(request)`, and cancel unfilled intents with `canc
 
 ## Orchestrating manually? One Solana-specific step
 
-If you use `createIntent` + `submitIntent` instead of `swap()`, note that **Solana (and Bitcoin) intents require relay extra data**. Fetch it with `getIntentSubmitTxExtraData` and pass it as `data` in the relay submission:
+If you use `createIntent` + `submitIntent` instead of `swap()`, note that **Solana (and Bitcoin) intents require relay extra data**. `createIntent` already returns it as `relayData` — pass that as `data` in the relay submission:
 
 ```typescript
-const extraData = await sodax.swaps.getIntentSubmitTxExtraData({ txHash: hubTxHash });
+// `params` is the same intent params object passed to swap() above
+const created = await sodax.swaps.createIntent({ params, walletProvider });
+if (!created.ok) throw created.error;
 
 await sodax.swaps.submitIntent({
   action: 'submit',
   params: {
     chain_id: 'solana',
-    tx_hash: spokeTxHash,
-    data: extraData.value, // required for Solana sources
+    tx_hash: created.value.tx,      // the Solana intent transaction
+    data: created.value.relayData,  // required for Solana sources
   },
 });
 ```
+
+Only rebuild the extra data if you no longer hold that return value: `getIntentSubmitTxExtraData({ intent })` (or `reconstructRelayData(intent)`) derives it from the intent alone. The `{ txHash }` overload looks the intent up on the hub, so it needs the hub transaction hash — which does not exist until the relay lands.
 
 `swap()` does this automatically; most integrations never touch it.
 

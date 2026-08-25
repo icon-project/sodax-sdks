@@ -64,7 +64,7 @@ Prefer HTTP? Same flow over REST: [Swap API](/developers/http-api/swaps). Prefer
   </Step>
 
   <Step title="Poll until settled">
-    Use `sodax.swaps.getStatus` until the intent is `SOLVED`, `FAILED`, or `NOT_FOUND`. Full polling sample: [How to make a swap](/developers/packages/sdk/docs/HOW_TO_MAKE_A_SWAP).
+    Use `sodax.swaps.getStatus` until the intent is `SOLVED` or `FAILED`. `NOT_FOUND` is not terminal — the solver can answer it for the first few polls after creation, so retry before giving up (the full sample stops after three consecutive ones). Full polling sample: [How to make a swap](/developers/packages/sdk/docs/HOW_TO_MAKE_A_SWAP).
 
     Watch destination fills via `fill_tx_hash` from `getStatus`, or track cross-network message delivery on [SODAX Scan](https://sodaxscan.com).
   </Step>
