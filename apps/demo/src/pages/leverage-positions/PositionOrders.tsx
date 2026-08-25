@@ -16,6 +16,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import OrderStatusPanel from '@/components/swaps/OrderStatusPanel';
 import { buildOrderSummary, orderId, type FinalStatus, type Order } from '@/components/swaps/OrderStatus';
 import { LEVERAGE_POSITIONS_ORDERS_KEY, appendOrder, loadOrders, saveOrders } from '@/lib/orderHistory';
+import { LEVERAGE_POSITIONS_PANEL_KEY } from '@/lib/panelPrefs';
 import { solverApiEndpointForEnv } from '@/constants';
 import { useAppStore } from '@/zustand/useAppStore';
 
@@ -38,11 +39,14 @@ export function useRecordPositionOrder(): (params: RecordIntentParams) => void {
 
 export function PositionOrdersProvider({ children }: { children: React.ReactNode }) {
   const { solverEnvironment } = useAppStore();
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<Order[]>(() => loadOrders(LEVERAGE_POSITIONS_ORDERS_KEY));
 
   // Loaded after mount rather than in the initial state, since localStorage is not available during
   // SSR and the panel is purely a client concern.
-  useEffect(() => setOrders(loadOrders(LEVERAGE_POSITIONS_ORDERS_KEY)), []);
+  // Loaded lazily rather than in a mount effect: with the load in an effect, the sibling save effect
+  // fires first on the initial commit and writes the still-empty array over the stored one, which
+  // StrictMode's effect replay then reads back as empty. Persisted in-flight orders — and the hashes
+  // needed to keep tracking them — were erased by opening the page.
   useEffect(() => saveOrders(LEVERAGE_POSITIONS_ORDERS_KEY, orders), [orders]);
 
   const record = useCallback(
@@ -87,7 +91,7 @@ export function PositionOrdersProvider({ children }: { children: React.ReactNode
             orders={orders}
             onDismiss={onDismiss}
             onSettle={onSettle}
-            storageKey={LEVERAGE_POSITIONS_ORDERS_KEY}
+            storageKey={LEVERAGE_POSITIONS_PANEL_KEY}
           />
         </div>
       )}

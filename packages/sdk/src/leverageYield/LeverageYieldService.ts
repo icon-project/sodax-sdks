@@ -115,8 +115,8 @@ const leveragePositionFactoryAbi = parseAbi([
   'function positionsOf(address owner) view returns (address[])',
   'function nextPositionIdFor(address owner) view returns (uint256)',
   'function predictPosition(address creator, address owner, uint256 positionId) view returns (address)',
-  'function createPositionAndLeverage((address owner, address collateral, address borrowToken, uint8 eModeCategory, uint256 originChainId, bytes originAddress, address originAsset) cfg, uint256 initialAssets, uint256 borrowAmount, uint256 minCollateralOut) returns (address)',
-  'function createPositionFromDebtToken((address owner, address collateral, address borrowToken, uint8 eModeCategory, uint256 originChainId, bytes originAddress, address originAsset) cfg, uint256 contribution, uint256 totalInput, uint256 minCollateralOut) returns (address)',
+  'function createPositionAndLeverage((address owner, address collateral, address borrowToken, uint8 eModeCategory, uint256 originChainId, bytes originAddress, address originAsset, address feeReceiver, uint16 feeBps) cfg, uint256 initialAssets, uint256 borrowAmount, uint256 minCollateralOut) returns (address)',
+  'function createPositionFromDebtToken((address owner, address collateral, address borrowToken, uint8 eModeCategory, uint256 originChainId, bytes originAddress, address originAsset, address feeReceiver, uint16 feeBps) cfg, uint256 contribution, uint256 totalInput, uint256 minCollateralOut) returns (address)',
 ]);
 
 const leveragePositionAbi = parseAbi([
@@ -187,6 +187,13 @@ export type PositionFundingParams<K extends SpokeChainKey> = {
   eModeCategory?: number;
   /** Slippage floor on the collateral the solver must deliver, in the collateral reserve's units. */
   minCollateralOut: bigint;
+  /**
+   * Partner fee to bake into the position, percentage variant only. Defaults to the configured
+   * `leverageYield.partnerFee`. FIXED AT CREATION on-chain and charged on every later operation, so
+   * it must also be fed to {@link projectLeverageLeg} as `feeBps` — the fee is borrowed on top of
+   * what the solver is paid, so a projection that ignores it understates LTV.
+   */
+  partnerFee?: PartnerFee;
 };
 
 /** Opening from the collateral side: deposit collateral, borrow against it, swap into more collateral. */
@@ -1984,6 +1991,36 @@ export class LeverageYieldService {
     };
   }
 
+  /**
+   * Partner fee for a position, in the shape `PositionConfig` takes.
+   *
+   * Only the PERCENTAGE variant of `PartnerFee` maps: the contract stores basis points and derives
+   * the amount per operation (`_feeFor`), so a fixed-amount fee has nowhere to go and is rejected
+   * rather than silently dropped. Same precedence as the vault flows — per-call, then
+   * `leverageYield.partnerFee`, then none.
+   *
+   * The fee is FIXED AT CREATION on-chain, so this is read when a position is created and never
+   * again; changing the config later does not re-price positions already open.
+   */
+  private resolvePositionFee(
+    override: PartnerFee | undefined,
+    method: string,
+  ): Result<{ feeReceiver: Address; feeBps: number }, LeverageYieldLookupError> {
+    const fee = override ?? this.config.leverageYieldPartnerFee;
+    if (!fee) return { ok: true, value: { feeReceiver: zeroAddress, feeBps: 0 } };
+    if (!isPartnerFeePercentage(fee)) {
+      return {
+        ok: false,
+        error: lookupFailed(
+          'leverageYield',
+          method,
+          new Error('a position partner fee must be the percentage variant; PositionConfig stores basis points'),
+        ),
+      };
+    }
+    return { ok: true, value: { feeReceiver: fee.address, feeBps: fee.percentage } };
+  }
+
   /** A hub transaction. Every builder below produces this shape and none of them sends value. */
   private hubTx(from: Address, to: Address, data: Hex): EvmRawTransaction {
     return { from, to, value: 0n, data };
@@ -2002,6 +2039,7 @@ export class LeverageYieldService {
     borrowToken: Address;
     eModeCategory: number;
     origin: { chainId: bigint; address: Hex; asset: Address };
+    fee?: { feeReceiver: Address; feeBps: number };
   }): {
     owner: Address;
     collateral: Address;
@@ -2010,6 +2048,8 @@ export class LeverageYieldService {
     originChainId: bigint;
     originAddress: Hex;
     originAsset: Address;
+    feeReceiver: Address;
+    feeBps: number;
   } {
     return {
       owner: args.owner,
@@ -2019,6 +2059,8 @@ export class LeverageYieldService {
       originChainId: args.origin.chainId,
       originAddress: args.origin.address,
       originAsset: args.origin.asset,
+      feeReceiver: args.fee?.feeReceiver ?? zeroAddress,
+      feeBps: args.fee?.feeBps ?? 0,
     };
   }
 
@@ -2029,6 +2071,7 @@ export class LeverageYieldService {
     borrowToken: Address;
     eModeCategory: number;
     origin: PositionOrigin;
+    partnerFee?: PartnerFee;
     initialAssets: bigint;
     borrowAmount: bigint;
     minCollateralOut: bigint;
@@ -2036,6 +2079,8 @@ export class LeverageYieldService {
     const method = 'buildCreatePositionAndLeverage';
     const factory = this.requireFactory(method);
     if (!factory.ok) return factory;
+    const fee = this.resolvePositionFee(params.partnerFee, method);
+    if (!fee.ok) return fee;
     const origin = this.resolveOrigin(params.origin, method);
     if (!origin.ok) return origin;
     return {
@@ -2047,7 +2092,7 @@ export class LeverageYieldService {
           abi: leveragePositionFactoryAbi,
           functionName: 'createPositionAndLeverage',
           args: [
-            this.positionConfig({ ...params, origin: origin.value }),
+            this.positionConfig({ ...params, origin: origin.value, fee: fee.value }),
             params.initialAssets,
             params.borrowAmount,
             params.minCollateralOut,
@@ -2073,6 +2118,7 @@ export class LeverageYieldService {
     borrowToken: Address;
     eModeCategory: number;
     origin: PositionOrigin;
+    partnerFee?: PartnerFee;
     contribution: bigint;
     totalInput: bigint;
     minCollateralOut: bigint;
@@ -2080,6 +2126,8 @@ export class LeverageYieldService {
     const method = 'buildCreatePositionFromDebtToken';
     const factory = this.requireFactory(method);
     if (!factory.ok) return factory;
+    const fee = this.resolvePositionFee(params.partnerFee, method);
+    if (!fee.ok) return fee;
     const origin = this.resolveOrigin(params.origin, method);
     if (!origin.ok) return origin;
     return {
@@ -2091,7 +2139,7 @@ export class LeverageYieldService {
           abi: leveragePositionFactoryAbi,
           functionName: 'createPositionFromDebtToken',
           args: [
-            this.positionConfig({ ...params, origin: origin.value }),
+            this.positionConfig({ ...params, origin: origin.value, fee: fee.value }),
             params.contribution,
             params.totalInput,
             params.minCollateralOut,
@@ -2341,12 +2389,15 @@ export class LeverageYieldService {
         calls: EvmContractCall[];
         reserveAmount: bigint;
         origin: { chainId: bigint; address: Hex; asset: Address };
+        fee: { feeReceiver: Address; feeBps: number };
       },
       LeverageYieldLookupError
     >
   > {
     const factory = this.requireFactory(method);
     if (!factory.ok) return factory;
+    const fee = this.resolvePositionFee(params.partnerFee, method);
+    if (!fee.ok) return fee;
     const funding = this.resolveFunding(params.srcChainKey, params.token, method);
     if (!funding.ok) return funding;
     const origin = this.resolveOrigin(
@@ -2362,7 +2413,14 @@ export class LeverageYieldService {
     calls.push(Erc20Service.encodeTransfer(funding.value.vault, predicted.value, reserveAmount));
     return {
       ok: true,
-      value: { factory: factory.value, funding: funding.value, calls, reserveAmount, origin: origin.value },
+      value: {
+        factory: factory.value,
+        funding: funding.value,
+        calls,
+        reserveAmount,
+        origin: origin.value,
+        fee: fee.value,
+      },
     };
   }
 
@@ -2389,7 +2447,7 @@ export class LeverageYieldService {
   ): Promise<Result<Hex, LeverageYieldLookupError>> {
     const prep = await this.prepareOpen(params, 'buildOpenPositionData');
     if (!prep.ok) return prep;
-    const { factory, funding, calls, reserveAmount, origin } = prep.value;
+    const { factory, funding, calls, reserveAmount, origin, fee } = prep.value;
     calls.push({
       address: factory,
       value: 0n,
@@ -2403,6 +2461,7 @@ export class LeverageYieldService {
             borrowToken: params.borrowToken,
             eModeCategory: params.eModeCategory ?? 0,
             origin,
+            fee,
           }),
           reserveAmount,
           params.borrowAmount,
@@ -2427,7 +2486,7 @@ export class LeverageYieldService {
   ): Promise<Result<Hex, LeverageYieldLookupError>> {
     const prep = await this.prepareOpen(params, 'buildOpenPositionFromDebtTokenData');
     if (!prep.ok) return prep;
-    const { factory, funding, calls, reserveAmount, origin } = prep.value;
+    const { factory, funding, calls, reserveAmount, origin, fee } = prep.value;
     calls.push({
       address: factory,
       value: 0n,
@@ -2442,6 +2501,7 @@ export class LeverageYieldService {
             borrowToken: funding.vault,
             eModeCategory: params.eModeCategory ?? 0,
             origin,
+            fee,
           }),
           reserveAmount,
           params.totalInput,
@@ -2785,6 +2845,27 @@ export class LeverageYieldService {
     if (!verify.ok) return { ok: false, error: verifyFailed('leverageYield', verify.error, baseCtx) };
 
     if (isHubChainKeyType(baseCtx.srcChainKey)) {
+      /**
+       * WAIT FOR IT, and check it succeeded. `verifyTxHash` above does not: on an EVM chain it
+       * returns `{ ok: true }` without waiting, so returning here on its word reported a merely
+       * BROADCAST transaction as a landed one. A caller then notified the solver about an intent
+       * that might not exist yet, or treated a reverted operation as complete. The same gap was
+       * already patched in `approvePositionFunding`; this is the other half of it.
+       *
+       * Waited on the hub's own public client rather than a wallet provider: the hub transaction is
+       * on Sonic whoever signed it, and the relay branch below needs no equivalent because the
+       * packet it waits for cannot exist unless the hub side landed.
+       */
+      const receipt = await this.hubProvider.publicClient.waitForTransactionReceipt({
+        hash: srcTxHash as Hex,
+        timeout: opts.timeout,
+      });
+      if (receipt.status !== 'success') {
+        return {
+          ok: false,
+          error: verifyFailed('leverageYield', new Error(`hub transaction ${srcTxHash} reverted`), baseCtx),
+        };
+      }
       return { ok: true, value: { srcChainTxHash: srcTxHash as Hex, dstChainTxHash: srcTxHash as Hex } };
     }
 

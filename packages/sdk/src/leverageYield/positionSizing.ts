@@ -52,6 +52,17 @@ export type LeverageLegRequest = {
   borrowDecimals: number;
   /** Target leverage as a multiple of equity. 1 means unlevered and borrows nothing. */
   leverage: number;
+  /**
+   * Partner fee in basis points, as configured on the position (`PositionConfig.feeBps`). Omit or 0
+   * when the position charges none.
+   *
+   * IT IS NOT A CUT OF THE OUTPUT. The hooks require `inputAmount + fee` and `Intents` pays the
+   * receiver on the fill, so on a leverage-up the position borrows the fee ON TOP of what the solver
+   * is paid — extra debt against unchanged collateral — and on an exit it gives up extra collateral.
+   * Leaving it out of the projection therefore understates LTV and overstates the ceiling, which is
+   * the Aave `'36'` failure mode this module exists to prevent.
+   */
+  feeBps?: number;
 };
 
 export type LeverageBorrowSizing = {
@@ -64,8 +75,12 @@ export type LeverageBorrowSizing = {
   intentInput: bigint;
   /** The deposit's value, priced with the token actually deposited. */
   depositUsd: number;
-  /** Value being borrowed. */
+  /** Value being borrowed, EXCLUDING the partner fee. This is what the solver is paid. */
   borrowUsd: number;
+  /** Partner fee on this leg, in the borrow token's own units. Zero when none is configured. */
+  feeAmount: bigint;
+  /** Total the position ends up owing: `borrowUsd` plus the fee's value. */
+  debtUsd: number;
 };
 
 /**
@@ -105,13 +120,35 @@ export function sizeLeverageBorrow(request: LeverageLegRequest): LeverageBorrowS
     (deposit * BigInt(Math.floor(ratio * Number(RATIO_SCALE))) * 10n ** BigInt(borrowDecimals)) /
     (RATIO_SCALE * 10n ** BigInt(depositDecimals));
 
+  /**
+   * The intent input is denominated in the BORROW RESERVE's units, so a debt-side contribution has
+   * to be rescaled before it can be added — `deposit` is in the held token's decimals, which is not
+   * the reserve's for anything but an 18-decimal asset.
+   *
+   * Adding them raw understates the contribution by the decimal gap: a 6-decimal funding token
+   * contributed 1e-12 of its value, so `totalInput` collapsed to roughly the borrow alone and the
+   * position opened well under the requested leverage against a floor quoted for the wrong size.
+   * This is the same translation the asset manager applies to an incoming spoke deposit, and the
+   * same one `encodeWrapIntoReserve` uses for the contribution the contract actually receives.
+   */
+  const depositInBorrowUnits = (deposit * 10n ** BigInt(borrowDecimals)) / 10n ** BigInt(depositDecimals);
+  // Mirrors the contract exactly — `LeveragePosition._feeFor` is `(inputAmount * feeBps) / 10_000`
+  // over the INTENT INPUT, which on a debt-side open includes the user's own contribution.
+  const intentInput = side === 'debt' ? borrowAmount + depositInBorrowUnits : borrowAmount;
+  const feeAmount = request.feeBps ? (intentInput * BigInt(Math.round(request.feeBps))) / 10_000n : 0n;
+  const borrowUsd = Number(formatUnits(borrowAmount, borrowDecimals)) * borrowPriceUsd;
+  const feeUsd = Number(formatUnits(feeAmount, borrowDecimals)) * borrowPriceUsd;
+
   return {
     borrowAmount,
-    intentInput: side === 'debt' ? borrowAmount + deposit : borrowAmount,
+    intentInput,
     depositUsd,
     // Taken from the amount actually being borrowed, so the projection cannot disagree with the
     // transaction by the rounding above.
-    borrowUsd: Number(formatUnits(borrowAmount, borrowDecimals)) * borrowPriceUsd,
+    borrowUsd,
+    feeAmount,
+    // The fee is borrowed on top on a leverage-up, so it is debt even though the solver never sees it.
+    debtUsd: borrowUsd + feeUsd,
   };
 }
 
@@ -151,9 +188,12 @@ export type LeverageLegProjection = {
   /** Oracle value handed to the solver: the borrow, plus the contribution on a debt-side open. */
   inputUsd: number;
   /**
-   * What the leg costs once, in the same units as the prices — `inputUsd x haircut`. Paid up front
-   * and in full, unlike the yield it buys, so it is what a payback period is measured against.
-   * Negative when the quote beat parity.
+   * What the leg costs once, in the same units as the prices: the solver's cut PLUS the partner fee.
+   * Paid up front and in full, unlike the yield it buys, so it is what a payback period is measured
+   * against. Can be negative when the quote beats parity and no fee is charged.
+   *
+   * The fee belongs here even though it is borrowed rather than deducted — the owner owes it without
+   * receiving anything for it, so a breakeven that left it out would promise too short a payback.
    */
   costUsd: number;
   /**
@@ -186,7 +226,8 @@ export function projectLeverageLeg(
   slippagePct: number,
 ): LeverageLegProjection {
   const { side, collateralPriceUsd, leverage } = request;
-  const { depositUsd, borrowUsd } = sizeLeverageBorrow(request);
+  const sized = sizeLeverageBorrow(request);
+  const { depositUsd, borrowUsd } = sized;
 
   const floor = (quote.quotedCollateral * BigInt(Math.round((100 - slippagePct) * 100))) / 10_000n;
   const minCollateralOut = floor > 0n ? floor : 1n;
@@ -200,27 +241,38 @@ export function projectLeverageLeg(
   const haircut = inputUsd > 0 ? 1 - quotedUsd / inputUsd : 0;
 
   const collateralUsd = (side === 'debt' ? 0 : depositUsd) + floorUsd;
-  const debtUsd = borrowUsd;
+  // Fee-inclusive: what the pool will actually see owed, not what the solver was paid.
+  const debtUsd = sized.debtUsd;
   const ltv = collateralUsd > 0 ? debtUsd / collateralUsd : 0;
 
   /**
-   * `ltv x f >= 1` is not a degenerate case, it is the UNBOUNDED one: every extra turn then adds more
-   * borrowing power than it adds debt, so no finite ceiling exists. Reporting `1` there — as this did
-   * first — inverts the answer at exactly the most favourable prices, and does so discontinuously:
-   * at ltv 91% the ceiling climbs 9.88x (f 0.9877) to 11.1x (f 1.0) to 22.5x (f 1.05), then fell to
-   * "no leverage possible" the moment f passed 1/0.91.
+   * The ceiling, from `debt <= ltv x collateral` with `f` the USD returned per USD handed over and
+   * `phi` the fee rate. The fee is borrowed on top, so it enters on the DEBT side:
+   *
+   *   debt side:       (L-1) + phi.L <= ltv.f.L        =>  L <= 1 / (1 + phi - ltv.f)
+   *   collateral side: (L-1)(1+phi)  <= ltv + ltv.f(L-1) => L <= 1 + ltv / (1 + phi - ltv.f)
+   *
+   * Same denominator either way, and at `phi = 0` both collapse to the fee-free forms. A 50 bp fee
+   * is not decorative here: at ltv 91% and f 0.9877 it takes the debt-side ceiling from 9.88x to
+   * roughly 9.44x, so a partner charging it and projecting without it hands users an Aave `'36'`.
+   *
+   * `ltv x f >= 1 + phi` is not a degenerate case, it is the UNBOUNDED one: every extra turn then
+   * adds more borrowing power than it adds debt, so no finite ceiling exists. Reporting `1` there —
+   * as this did first — inverts the answer at exactly the most favourable prices, discontinuously.
    *
    * `ltv == 0` genuinely is 1: borrowing is disabled, so leverage cannot exceed the deposit.
    */
   const ltvF = risk.ltv * f;
+  const phi = (request.feeBps ?? 0) / 10_000;
+  const denominator = 1 + phi - ltvF;
   const usableMaxLeverage =
     risk.ltv <= 0
       ? 1
-      : ltvF >= 1
+      : denominator <= 0
         ? Number.POSITIVE_INFINITY
         : side === 'debt'
-          ? 1 / (1 - ltvF)
-          : 1 + risk.ltv / (1 - ltvF);
+          ? 1 / denominator
+          : 1 + risk.ltv / denominator;
 
   return {
     minCollateralOut,
@@ -231,7 +283,7 @@ export function projectLeverageLeg(
     exceedsMaxLtv: ltv > risk.ltv,
     haircut,
     inputUsd,
-    costUsd: inputUsd * haircut,
+    costUsd: inputUsd * haircut + sized.debtUsd - borrowUsd,
     usableMaxLeverage,
   };
 }

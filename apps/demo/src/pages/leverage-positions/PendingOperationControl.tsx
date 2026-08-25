@@ -134,7 +134,14 @@ export function PendingOperationControl({
         >
           {busy ? 'Working…' : 'Cancel'}
         </Button>
-        <Button className="flex-1" size="sm" variant="outline" disabled={busy || !owner} onClick={onSettle}>
+        {/* Settling while the intent is still live reverts, so offering it is pure wallet friction. */}
+        <Button
+          className="flex-1"
+          size="sm"
+          variant="outline"
+          disabled={busy || !owner || !slot.needsSettle}
+          onClick={onSettle}
+        >
           {busy ? 'Working…' : 'Settle'}
         </Button>
       </div>

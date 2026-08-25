@@ -44,6 +44,25 @@ describe('sizeLeverageBorrow', () => {
     expect(sized.intentInput).toBe(parseUnits('3', 18));
   });
 
+  /**
+   * The regression a static review caught and every existing test missed: they all used 18-decimal
+   * inputs on both sides, so the decimal gap could not show up.
+   */
+  it('rescales a non-18-decimal debt-side contribution into the borrow reserve units', () => {
+    const sized = sizeLeverageBorrow(
+      request({ side: 'debt', leverage: 3, deposit: parseUnits('100', 6), depositDecimals: 6 }),
+    );
+    // 100 USDC of equity at $1 borrows 200 of an 18-decimal reserve...
+    expect(sized.borrowAmount).toBe(parseUnits('200', 18));
+    // ...and the intent input is 300 in RESERVE units, not 200 + 1e8.
+    expect(sized.intentInput).toBe(parseUnits('300', 18));
+  });
+
+  it('leaves a matching-decimal contribution untouched', () => {
+    const sized = sizeLeverageBorrow(request({ side: 'debt', leverage: 3 }));
+    expect(sized.intentInput).toBe(parseUnits('3', 18));
+  });
+
   it('borrows nothing at 1x, and never a negative amount below it', () => {
     expect(sizeLeverageBorrow(request({ leverage: 1 })).borrowAmount).toBe(0n);
     expect(sizeLeverageBorrow(request({ leverage: 0.5 })).borrowAmount).toBe(0n);
@@ -154,6 +173,83 @@ describe('projectLeverageLeg', () => {
     expect(loose.minCollateralOut).toBeLessThan(tight.minCollateralOut);
     expect(loose.ltv).toBeGreaterThan(tight.ltv);
     expect(loose.usableMaxLeverage).toBeLessThan(tight.usableMaxLeverage);
+  });
+
+  // ─── Partner fee ────────────────────────────────────────────────────────────
+  //
+  // The fee is borrowed ON TOP of what the solver is paid (`LeveragePosition._feeFor` over the
+  // intent input, required by the hooks as `inputAmount + fee`), so it is debt against unchanged
+  // collateral. These pin that down, because projecting without it is an Aave '36' at a leverage the
+  // caller was told was safe.
+
+  it('charges the fee over the intent input, matching the contract formula', () => {
+    const collateralSide = sizeLeverageBorrow(request({ leverage: 3, feeBps: 50 }));
+    // Input is the borrow alone here: 2.14 x 50bp.
+    expect(collateralSide.feeAmount).toBe((collateralSide.borrowAmount * 50n) / 10_000n);
+
+    const debtSide = sizeLeverageBorrow(request({ side: 'debt', leverage: 3, feeBps: 50 }));
+    // Input includes the user's own contribution, so the fee is on 3 units, not 2.
+    expect(debtSide.intentInput).toBe(parseUnits('3', 18));
+    expect(debtSide.feeAmount).toBe((parseUnits('3', 18) * 50n) / 10_000n);
+  });
+
+  it('adds the fee to debt without changing what the solver is paid', () => {
+    const free = sizeLeverageBorrow(request({ leverage: 3 }));
+    const paid = sizeLeverageBorrow(request({ leverage: 3, feeBps: 50 }));
+    expect(paid.borrowAmount).toBe(free.borrowAmount);
+    expect(paid.borrowUsd).toBeCloseTo(free.borrowUsd, 10);
+    expect(paid.debtUsd).toBeGreaterThan(free.debtUsd);
+    expect(paid.debtUsd).toBeCloseTo(free.borrowUsd * 1.005, 6);
+  });
+
+  it('projects the higher LTV, and the ceiling shrinks by the closed form', () => {
+    const quote = quoteAt(2.14, 0.9877);
+    const free = projectLeverageLeg(request({ leverage: 3 }), quote, RISK, 0);
+    const paid = projectLeverageLeg(request({ leverage: 3, feeBps: 50 }), quote, RISK, 0);
+
+    expect(paid.debtUsd).toBeGreaterThan(free.debtUsd);
+    expect(paid.ltv).toBeGreaterThan(free.ltv);
+    expect(paid.usableMaxLeverage).toBeLessThan(free.usableMaxLeverage);
+
+    // 1 + ltv / (1 + phi - ltv.f) on the collateral side.
+    const f = free.collateralUsd > 0 ? (free.collateralUsd - 1.07) / free.inputUsd : 0;
+    expect(paid.usableMaxLeverage).toBeCloseTo(1 + RISK.ltv / (1 + 0.005 - RISK.ltv * f), 4);
+  });
+
+  it('a fee can push a leverage that was acceptable over the max-LTV line', () => {
+    const quote = quoteAt(9.6, 0.9877);
+    const req = { side: 'debt', leverage: 9.6 } as const;
+    const free = projectLeverageLeg(request(req), quote, RISK, 0);
+    const paid = projectLeverageLeg(request({ ...req, feeBps: 100 }), quote, RISK, 0);
+    expect(free.exceedsMaxLtv).toBe(false);
+    expect(paid.exceedsMaxLtv).toBe(true);
+  });
+
+  it('is byte-for-byte the fee-free result when no fee is configured', () => {
+    for (const side of ['collateral', 'debt'] as const) {
+      const omitted = projectLeverageLeg(request({ side, leverage: 3 }), quoteAt(3, 0.99), RISK, 1);
+      const zero = projectLeverageLeg(request({ side, leverage: 3, feeBps: 0 }), quoteAt(3, 0.99), RISK, 1);
+      expect(zero).toEqual(omitted);
+      expect(sizeLeverageBorrow(request({ side, leverage: 3, feeBps: 0 })).feeAmount).toBe(0n);
+    }
+  });
+
+  it('counts the partner fee as part of the one-time cost a breakeven has to repay', () => {
+    const quote = quoteAt(2.14, 0.99);
+    const free = projectLeverageLeg(request({ leverage: 3 }), quote, RISK, 0);
+    const paid = projectLeverageLeg(request({ leverage: 3, feeBps: 50 }), quote, RISK, 0);
+    // Same solver haircut, but the owner owes the fee on top without receiving anything for it.
+    expect(paid.haircut).toBeCloseTo(free.haircut, 10);
+    expect(paid.costUsd).toBeCloseTo(free.costUsd + 2.14 * 0.005, 6);
+  });
+
+  it('the unbounded crossing moves with the fee', () => {
+    // ltv.f = 1.0465 is past 1 but NOT past 1 + phi once the fee is 100bp... it is 1.01, so still
+    // unbounded; at f = 1.10 (ltv.f = 1.001) a 100bp fee pulls it back to finite.
+    const feeFree = projectLeverageLeg(request({ side: 'debt', leverage: 2 }), quoteAt(2, 1.1), RISK, 0);
+    expect(feeFree.usableMaxLeverage).toBe(Number.POSITIVE_INFINITY);
+    const withFee = projectLeverageLeg(request({ side: 'debt', leverage: 2, feeBps: 100 }), quoteAt(2, 1.1), RISK, 0);
+    expect(Number.isFinite(withFee.usableMaxLeverage)).toBe(true);
   });
 
   it('reports an infinite health factor when nothing is borrowed', () => {

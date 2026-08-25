@@ -17,7 +17,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { decodeAbiParameters, type Address, type Hex } from 'viem';
+import { decodeAbiParameters, decodeFunctionData, parseAbi, type Address, type Hex } from 'viem';
 import { leverageYieldConfig } from '@sodax/types';
 // Import the barrel by relative path, not as `@sodax/sdk`. A self-referential package import
 // resolves through `package.json#exports` into `dist/`, which makes this unit test depend on a
@@ -241,6 +241,11 @@ beforeEach(() => {
   vi.spyOn(sodax.config, 'isValidOriginalAssetAddress').mockReturnValue(true);
   vi.spyOn(sodax.config, 'isValidSpokeChainKey').mockReturnValue(true);
   vi.spyOn(sodax.spoke, 'verifyTxHash').mockResolvedValue({ ok: true, value: true });
+  // The hub branch now WAITS for its own receipt — `verifyTxHash` does not on EVM — so this has to
+  // be stubbed or every hub-side position test reaches for a real RPC.
+  vi.spyOn(sodax.hubProvider.publicClient, 'waitForTransactionReceipt').mockResolvedValue({
+    status: 'success',
+  } as never);
   // Bind the hoisted hub-wallet stub to the live instance method, with a sane default.
   vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockImplementation(mocks.getUserHubWalletAddress);
   mocks.getUserHubWalletAddress.mockResolvedValue(HUB_WALLET);
@@ -1633,7 +1638,13 @@ const POS_BORROW_TOKEN = '0xb780e09576C2667ba9F5B80FbAb2e6b8A0a21e37' as Address
 
 /** A Sodax instance with the position factory configured, for the happy paths. */
 function sodaxWithFactory(): Sodax {
-  return new Sodax({ leverageYield: { positionFactory: POSITION_FACTORY } });
+  const instance = new Sodax({ leverageYield: { positionFactory: POSITION_FACTORY } });
+  // Fresh instance, fresh public client — the `beforeEach` stub is on the shared `sodax`, so without
+  // this every hub-side test here waits on a real RPC and times out.
+  vi.spyOn(instance.hubProvider.publicClient, 'waitForTransactionReceipt').mockResolvedValue({
+    status: 'success',
+  } as never);
+  return instance;
 }
 
 /**
@@ -1643,6 +1654,103 @@ function sodaxWithFactory(): Sodax {
 function sodaxWithoutFactory(): Sodax {
   return new Sodax({ leverageYield: { positionFactory: '' as Address } });
 }
+
+describe('LeverageYieldService — hub operations wait for the transaction', () => {
+  it('fails when the hub transaction reverted, rather than reporting the broadcast as success', async () => {
+    const configured = sodaxWithFactory();
+    vi.spyOn(configured.hubProvider, 'getUserHubWalletAddress').mockResolvedValue(HUB_WALLET);
+    vi.spyOn(configured.spoke, 'verifyTxHash').mockResolvedValue({ ok: true, value: true });
+    vi.spyOn(configured.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xhubTx' } as never);
+    // `verifyTxHash` says fine because on EVM it does not wait; the receipt is what tells the truth.
+    vi.spyOn(configured.hubProvider.publicClient, 'waitForTransactionReceipt').mockResolvedValue({
+      status: 'reverted',
+    } as never);
+
+    const result = await configured.leverageYield.operatePosition({
+      params: {
+        srcChainKey: 'sonic',
+        srcAddress: SAMPLE_USER,
+        calls: [{ from: HUB_WALLET, to: POSITION, value: 0n, data: '0x1234' }],
+      },
+      walletProvider: mockEvmProvider as never,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('TX_VERIFICATION_FAILED');
+  });
+});
+
+describe('LeverageYieldService — position partner fee', () => {
+  const PARTNER = '0x9999999999999999999999999999999999999999' as Address;
+
+  function build(sodaxInstance: Sodax, partnerFee?: { address: Address; percentage: number } | { amount: bigint }) {
+    return sodaxInstance.leverageYield.buildCreatePositionAndLeverage({
+      from: POSITION_OWNER,
+      owner: POSITION_OWNER,
+      collateral: POS_COLLATERAL,
+      borrowToken: POS_BORROW_TOKEN,
+      eModeCategory: 3,
+      origin: { chainKey: 'sonic', address: POSITION_OWNER },
+      initialAssets: 10n ** 18n,
+      borrowAmount: 10n ** 18n,
+      minCollateralOut: 1n,
+      ...(partnerFee ? { partnerFee: partnerFee as never } : {}),
+    });
+  }
+
+  /**
+   * Decoded rather than read by word offset: `PositionConfig` is a DYNAMIC tuple (it carries
+   * `bytes originAddress`), so its head is offsets, not values, and hand-indexing words silently
+   * reads the wrong field — which is exactly what the first version of this test did.
+   */
+  const CFG_ABI = parseAbi([
+    'function createPositionAndLeverage((address owner, address collateral, address borrowToken, uint8 eModeCategory, uint256 originChainId, bytes originAddress, address originAsset, address feeReceiver, uint16 feeBps) cfg, uint256 initialAssets, uint256 borrowAmount, uint256 minCollateralOut) returns (address)',
+  ]);
+  function feeOf(data: Hex): { receiver: string; bps: number } {
+    const { args } = decodeFunctionData({ abi: CFG_ABI, data });
+    const cfg = args[0] as { feeReceiver: string; feeBps: number };
+    return { receiver: cfg.feeReceiver, bps: cfg.feeBps };
+  }
+
+  it('bakes a percentage fee into PositionConfig', () => {
+    const result = build(sodax, { address: PARTNER, percentage: 50 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const { receiver, bps } = feeOf(result.value.data);
+    expect(receiver.toLowerCase()).toBe(PARTNER.toLowerCase());
+    expect(bps).toBe(50);
+  });
+
+  it('encodes no fee when none is configured, so an unpartnered position is unchanged', () => {
+    const result = build(sodax);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const { receiver, bps } = feeOf(result.value.data);
+    expect(BigInt(receiver)).toBe(0n);
+    expect(bps).toBe(0);
+  });
+
+  /**
+   * `PositionConfig` stores basis points and the contract derives the amount per operation, so a
+   * fixed-amount fee has nowhere to go. Rejected rather than silently dropped — dropping it would
+   * hand a partner a position that quietly earns them nothing.
+   */
+  it('rejects the fixed-amount fee variant', () => {
+    const result = build(sodax, { amount: 1_000n });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('LOOKUP_FAILED');
+  });
+
+  it('takes the fee from the Sodax config when the call does not override it', () => {
+    const configured = new Sodax({ leverageYield: { partnerFee: { address: PARTNER, percentage: 25 } } });
+    const result = build(configured);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(feeOf(result.value.data).bps).toBe(25);
+  });
+});
 
 describe('LeverageYieldService.approvePositionFunding — waiting for the approve to land', () => {
   /**
