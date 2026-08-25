@@ -31,7 +31,7 @@ No — integrate against mainnet. To build and test safely:
 
 ## Keep exploring
 
-* [Make a Swap](/developers/packages/sdk/docs/HOW_TO_MAKE_A_SWAP) — end-to-end swap walkthrough.
-* [Configure the SDK](/developers/packages/sdk/docs/CONFIGURE_SDK) — initialization and configuration.
+* [Make a Swap](/developers/how-to/how_to_make_a_swap) — end-to-end swap walkthrough.
+* [Configure the SDK](/developers/how-to/configure_sdk) — initialization and configuration.
 * [SDKs overview](/developers/packages) — the full package stack (Foundation, Connection, Experience).
 * [FAQ](/developers/faq) — common questions.

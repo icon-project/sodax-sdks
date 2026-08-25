@@ -66,33 +66,33 @@
     },
     {
       "src": "packages/sdk/docs/CONFIGURE_SDK.md",
-      "dest": "developers/packages/sdk/docs/CONFIGURE_SDK.md",
+      "dest": "developers/how-to/configure_sdk.md",
       "icon": "gears"
     },
     {
       "src": "packages/sdk/docs/ESTIMATE_GAS.md",
-      "dest": "developers/packages/sdk/docs/ESTIMATE_GAS.md",
+      "dest": "developers/how-to/estimate_gas.md",
       "title": "Estimate Gas",
       "icon": "gauge"
     },
     {
       "src": "packages/sdk/docs/HOW_TO_MAKE_A_SWAP.md",
-      "dest": "developers/packages/sdk/docs/HOW_TO_MAKE_A_SWAP.md",
+      "dest": "developers/how-to/how_to_make_a_swap.md",
       "icon": "list-check"
     },
     {
       "src": "packages/sdk/docs/MONETIZE_SDK.md",
-      "dest": "developers/packages/sdk/docs/MONETIZE_SDK.md",
+      "dest": "developers/how-to/monetize_sdk.md",
       "icon": "sack-dollar"
     },
     {
       "src": "packages/sdk/docs/WALLET_PROVIDERS.md",
-      "dest": "developers/packages/sdk/docs/WALLET_PROVIDERS.md",
+      "dest": "developers/how-to/wallet_providers.md",
       "icon": "wallet"
     },
     {
       "src": "packages/sdk/docs/STELLAR_TRUSTLINE.md",
-      "dest": "developers/packages/sdk/docs/STELLAR_TRUSTLINE.md",
+      "dest": "developers/how-to/stellar_trustline.md",
       "icon": "star"
     },
     {

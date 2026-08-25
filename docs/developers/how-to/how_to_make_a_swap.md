@@ -69,7 +69,7 @@ if (!initResult.ok) {
 }
 ```
 
-See [CONFIGURE_SDK.md](/developers/packages/sdk/docs/CONFIGURE_SDK) for the full `SodaxConfig` shape and canonical override patterns.
+See [CONFIGURE_SDK.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md) for the full `SodaxConfig` shape and canonical override patterns.
 
 ## Step 2: Obtain a Wallet Provider
 

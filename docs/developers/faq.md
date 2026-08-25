@@ -25,7 +25,7 @@ Deep dives: [Technical Overview](/developers/technical-overview), [Asset Manager
 
 Not strictly. The constructor uses defaults packaged with the SDK version you installed. `await sodax.initialize()` fetches the latest tokens and chains from the backend API. Recommended for production, optional for prototypes. If it fails, the SDK falls back to packaged defaults rather than throwing.
 
-See [Configure SDK](/developers/packages/sdk/docs/CONFIGURE_SDK).
+See [Configure SDK](/developers/how-to/configure_sdk).
 
 #### 5. How do I override the hub RPC or contract addresses?
 
@@ -37,7 +37,7 @@ new Sodax({ hub: { rpcUrl: 'https://rpc.soniclabs.com' } })
 
 Read the merged config from `sodax.instanceConfig.hub`. Note that `sodax.config.getHubChainConfig()` returns the packaged snapshot, not your overrides.
 
-Full config reference: [Configure SDK](/developers/packages/sdk/docs/CONFIGURE_SDK).
+Full config reference: [Configure SDK](/developers/how-to/configure_sdk).
 
 ### SDK behaviour
 
@@ -57,13 +57,13 @@ Per-module code tables: [Swaps](/developers/packages/foundation/sdk/functional-m
 
 The spoke transaction landed but the hub packet has not arrived within the timeout window. The relay may still complete. Persist the spoke tx hash and poll the relayer API. Do not re-submit from the user side.
 
-Error semantics: [Make a Swap](/developers/packages/sdk/docs/HOW_TO_MAKE_A_SWAP), [Relayer API endpoints](/developers/deployments/relayer-api-endpoints).
+Error semantics: [Make a Swap](/developers/how-to/how_to_make_a_swap), [Relayer API endpoints](/developers/deployments/relayer-api-endpoints).
 
 #### 9. What does `TX_SUBMIT_FAILED` mean?
 
 The critical case. The spoke tx landed but the relay submission itself failed. Funds may be in flight. Persist the user's input plus spoke tx hash and retry submission against the relay API. Do not retry the user-facing transaction.
 
-Full code reference: [Make a Swap](/developers/packages/sdk/docs/HOW_TO_MAKE_A_SWAP).
+Full code reference: [Make a Swap](/developers/how-to/how_to_make_a_swap).
 
 ### Swaps and intents
 
@@ -81,7 +81,7 @@ Full method list: [Swaps](/developers/packages/foundation/sdk/functional-modules
 
 Call `sodax.swaps.getQuote(payload)` with `token_src`, `token_dst`, source and destination `ChainKeys`, an amount in the token's smallest unit, and `quote_type: 'exact_input'`. Use `quoted_amount` from the response to set `minOutputAmount` on the intent.
 
-Walkthrough with code: [Make a Swap](/developers/packages/sdk/docs/HOW_TO_MAKE_A_SWAP).
+Walkthrough with code: [Make a Swap](/developers/how-to/how_to_make_a_swap).
 
 #### 12. Can I cancel an intent?
 
@@ -121,7 +121,7 @@ Build a raw tx with `raw: true` from any `createIntent`, `createSupplyIntent`, `
 
 EVM, ICON, Stellar, Bitcoin, NEAR return a `bigint`. Sui returns `{ computationCost, storageCost, storageRebate, nonRefundableStorageFee }`. Injective returns `{ gasWanted, gasUsed }`. Stacks returns `{ low, medium, high }` fee tiers. Solana returns `number | undefined` compute units.
 
-Examples per chain: [Estimate Gas](/developers/packages/sdk/docs/ESTIMATE_GAS).
+Examples per chain: [Estimate Gas](/developers/how-to/estimate_gas).
 
 #### 17. Can I stake SODA from a non-EVM chain like Sui or Stellar?
 
@@ -135,7 +135,7 @@ See [Staking](/developers/packages/foundation/sdk/functional-modules/staking).
 
 Set `swaps.partnerFee`, `moneyMarket.partnerFee` and `bridge.partnerFee` independently on `SodaxConfig`. `getQuote` deducts the swap partner fee from the input amount before forwarding to the solver, so no fee field appears in the request payload. Claim accrued fees via `sodax.partners.feeClaim*` methods, which return `Result<T, PartnerError>`.
 
-Setup and claim flows: [Monetize SDK](/developers/packages/sdk/docs/MONETIZE_SDK).
+Setup and claim flows: [Monetize SDK](/developers/how-to/monetize_sdk).
 
 #### 19. When do I need the `IntentRelayChainId` versus `ChainKeys`?
 

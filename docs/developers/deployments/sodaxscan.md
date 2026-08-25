@@ -7,4 +7,4 @@ icon: magnifying-glass
 
 Available at [sodaxscan.com](https://sodaxscan.com). Look up source/destination tx hashes and delivery status for cross-network messages.
 
-For solver fill status on a swap intent (including `fill_tx_hash` when solved), poll `sodax.swaps.getStatus` — see [How to make a swap](/developers/packages/sdk/docs/HOW_TO_MAKE_A_SWAP).
+For solver fill status on a swap intent (including `fill_tx_hash` when solved), poll `sodax.swaps.getStatus` — see [How to make a swap](/developers/how-to/how_to_make_a_swap).

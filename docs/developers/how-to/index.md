@@ -14,25 +14,25 @@ Task guides for common integration work. For product pickers, start from a [solu
   <Card title="Swap HTTP API" icon="rotate" href="/developers/http-api/swaps">
     Quote, build intent, submit-tx, and status — any language.
   </Card>
-  <Card title="Make a swap" icon="repeat" href="/developers/packages/sdk/docs/HOW_TO_MAKE_A_SWAP">
+  <Card title="Make a swap" icon="repeat" href="/developers/how-to/how_to_make_a_swap">
     Init, quote, execute, and error handling with the SDK.
   </Card>
-  <Card title="Configure the SDK" icon="sliders" href="/developers/packages/sdk/docs/CONFIGURE_SDK">
+  <Card title="Configure the SDK" icon="sliders" href="/developers/how-to/configure_sdk">
     Networks, RPCs, and partner settings.
   </Card>
   <Card title="Install with Next.js" icon="box" href="/developers/packages/sdk/docs/installation/nextjs">
     Create a Next.js app and install `@sodax/sdk`.
   </Card>
-  <Card title="Monetize" icon="coins" href="/developers/packages/sdk/docs/MONETIZE_SDK">
+  <Card title="Monetize" icon="coins" href="/developers/how-to/monetize_sdk">
     Partner fees and claiming.
   </Card>
-  <Card title="Wallet providers" icon="wallet" href="/developers/packages/sdk/docs/WALLET_PROVIDERS">
+  <Card title="Wallet providers" icon="wallet" href="/developers/how-to/wallet_providers">
     Connect wallets across networks.
   </Card>
-  <Card title="Estimate gas" icon="gas-pump" href="/developers/packages/sdk/docs/ESTIMATE_GAS">
+  <Card title="Estimate gas" icon="gas-pump" href="/developers/how-to/estimate_gas">
     Gas estimation patterns in the SDK.
   </Card>
-  <Card title="Stellar trustline" icon="link" href="/developers/packages/sdk/docs/STELLAR_TRUSTLINE">
+  <Card title="Stellar trustline" icon="link" href="/developers/how-to/stellar_trustline">
     Trustline setup for Stellar assets.
   </Card>
   <Card title="Stellar sponsoring" icon="star" href="/developers/how-to/stellar-sponsoring-getting-started">
