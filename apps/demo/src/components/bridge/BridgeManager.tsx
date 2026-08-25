@@ -88,10 +88,11 @@ export function BridgeManager() {
 
   useEffect(() => {
     if (bridgeableTokens && bridgeableTokens.length > 0) {
+      // Ref is read+cleared here, not inside the updater — StrictMode double-invokes updaters.
+      const restored = bridgeableTokens.find(t => t.symbol === restoredDstSymbol.current);
+      restoredDstSymbol.current = undefined;
       setToToken(prev => {
         const kept = prev && bridgeableTokens.some(t => t.address === prev.address) ? prev : undefined;
-        const restored = bridgeableTokens.find(t => t.symbol === restoredDstSymbol.current);
-        restoredDstSymbol.current = undefined;
         return kept ?? restored ?? bridgeableTokens[0];
       });
     } else {
@@ -106,13 +107,17 @@ export function BridgeManager() {
     setFromToken(prev => tokens.find(t => t.symbol === prev?.symbol) ?? tokens[0]);
   }, [fromChainKey, supportedTokensPerChain]);
 
+  // Skip while either token is unresolved (mount, mid chain-switch) — an early write would
+  // overwrite the stored symbols before restoration has run.
   useEffect(() => {
-    saveBridgeSelection({
-      srcChain: fromChainKey,
-      srcSymbol: fromToken?.symbol,
-      dstChain: toChainKey,
-      dstSymbol: toToken?.symbol,
-    });
+    if (fromToken && toToken) {
+      saveBridgeSelection({
+        srcChain: fromChainKey,
+        srcSymbol: fromToken.symbol,
+        dstChain: toChainKey,
+        dstSymbol: toToken.symbol,
+      });
+    }
   }, [fromChainKey, fromToken, toChainKey, toToken]);
 
   const { data: bridgeableAmount, isLoading: isLoadingBridgeableAmount } = useGetBridgeableAmount({

@@ -1,5 +1,4 @@
 import { type SolverConfig, spokeChainConfig, baseChainInfo, ChainKeys, type SpokeChainKey } from '@sodax/dapp-kit';
-import { SolverEnv } from '@/zustand/useAppStore';
 
 declare global {
   interface Window {
@@ -29,9 +28,10 @@ export const productionSolverConfig = {
 } satisfies SolverConfig;
 
 /** Auto default for `swaps.useBackendSubmitTx`: backend submit posts to the production swaps
- *  API, which the staging solver never sees — so Auto is on everywhere except Staging (gh-401). */
-export function defaultUseBackendSubmitTx(env: SolverEnv): boolean {
-  return env !== SolverEnv.Staging;
+ *  API, which only the production solver serves — so Auto is on only when the EFFECTIVE solver
+ *  endpoint (env config or settings override) is production's (gh-401). */
+export function defaultUseBackendSubmitTx(solverApiEndpoint: string): boolean {
+  return solverApiEndpoint === productionSolverConfig.solverApiEndpoint;
 }
 
 export interface ChainUI {

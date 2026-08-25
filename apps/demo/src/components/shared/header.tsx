@@ -56,21 +56,29 @@ function NavDropdown({ label, items }: { label: string; items: NavItem[] }) {
   const { pathname } = useLocation();
   const childActive = items.some(item => pathname.startsWith(item.to));
 
+  // Close on focus leaving the wrapper (not a blur timeout): keyboard users can Tab into the
+  // menu, and a slow click can't unmount the link before its click event fires.
+  const onBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+    if (!(e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget))) {
+      setOpen(false);
+    }
+  };
+
   return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        onBlur={() => setTimeout(() => setOpen(false), 200)}
-        className={navItemClass(childActive)}
-      >
+    <div className="relative" onBlur={onBlur} onKeyDown={e => e.key === 'Escape' && setOpen(false)}>
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className={navItemClass(childActive)}>
         {label}
         <ChevronDown className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
         <div className="absolute left-0 top-full mt-2 min-w-44 bg-white rounded-lg shadow-lg border border-cherry-grey/20 p-1.5 z-50">
           {items.map(item => (
-            <NavLink key={item.to} to={item.to} className={({ isActive }) => menuItemClass(isActive)}>
+            <NavLink
+              key={item.to}
+              to={item.to}
+              onClick={() => setOpen(false)}
+              className={({ isActive }) => menuItemClass(isActive)}
+            >
               {item.label}
             </NavLink>
           ))}

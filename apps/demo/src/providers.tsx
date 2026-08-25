@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, type ReactNode } from 'react';
+import React, { useMemo, type ReactNode } from 'react';
 
 import { QueryClientProvider } from '@tanstack/react-query';
 import { SodaxWalletProvider, type SodaxWalletConfig } from '@sodax/wallet-sdk-react';
@@ -15,8 +15,6 @@ import { SolverEnv, useAppStore } from './zustand/useAppStore';
 import { envSodaxApiKey, envSwapsApiBaseUrl, isHttpUrl, nonEmptyEnv } from './lib/sodaxSettings';
 import { createDatadogLogger } from './lib/loggers/datadogLogger';
 import { createDemoAnalytics } from './lib/analytics';
-
-const queryClient = createSodaxQueryClient();
 
 const rpcConfig: RpcConfig = {
   [ChainKeys.SONIC_MAINNET]: process.env.SONIC_RPC_URL ?? 'https://sonic-rpc.publicnode.com',
@@ -128,6 +126,7 @@ export default function Providers({ children }: { children: ReactNode }) {
   const sodaxConfig: SodaxOptions = useMemo(() => {
     const solverBase = configMap[solverEnvironment];
     const s = sodaxSettings;
+    const solverApiEndpoint = s.solverApiEndpoint ?? solverBase.solverApiEndpoint;
     return {
       api: {
         // Every base URL is a gateway root incl. version prefix — never a service segment; each
@@ -149,10 +148,10 @@ export default function Providers({ children }: { children: ReactNode }) {
       analytics: createDemoAnalytics() ?? false,
       solver: {
         intentsContract: s.intentsContract ?? solverBase.intentsContract,
-        solverApiEndpoint: s.solverApiEndpoint ?? solverBase.solverApiEndpoint,
+        solverApiEndpoint,
         protocolIntentsContract: s.protocolIntentsContract ?? solverBase.protocolIntentsContract,
       },
-      swaps: { useBackendSubmitTx: s.useBackendSubmitTx ?? defaultUseBackendSubmitTx(solverEnvironment) },
+      swaps: { useBackendSubmitTx: s.useBackendSubmitTx ?? defaultUseBackendSubmitTx(solverApiEndpoint) },
       ...(s.relayerApiEndpoint ? { relay: { relayerApiEndpoint: s.relayerApiEndpoint } } : {}),
       chains: {
         [ChainKeys.SONIC_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.SONIC_MAINNET] },
@@ -175,21 +174,19 @@ export default function Providers({ children }: { children: ReactNode }) {
   // Field order is stable (literal object above), so the key is deterministic per config.
   const configKey = `${solverEnvironment}:${JSON.stringify(sodaxSettings)}`;
 
-  // The module-level queryClient outlives the keyed remount and query keys carry no
-  // env/endpoint segment, so clear cross-config cache on every change (not the first mount).
-  const prevConfigKey = useRef<string | null>(null);
-  useEffect(() => {
-    if (prevConfigKey.current !== null && prevConfigKey.current !== configKey) {
-      queryClient.clear();
-    }
-    prevConfigKey.current = configKey;
-  }, [configKey]);
+  // Fresh cache per config — query keys carry no env/endpoint segment, so a shared client
+  // would serve one config's data under another.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: configKey is the cache-reset trigger, not a value read in the factory
+  const queryClient = useMemo(() => createSodaxQueryClient(), [configKey]);
 
-  // A new config identity re-creates the SDK; the key also remounts consumers.
+  // A new config identity re-creates the SDK; keying only the children resets page state
+  // without tearing down wallet sessions.
   return (
-    <SodaxProvider key={configKey} config={sodaxConfig}>
+    <SodaxProvider config={sodaxConfig}>
       <QueryClientProvider client={queryClient}>
-        <SodaxWalletProvider config={walletConfig}>{children}</SodaxWalletProvider>
+        <SodaxWalletProvider config={walletConfig}>
+          <React.Fragment key={configKey}>{children}</React.Fragment>
+        </SodaxWalletProvider>
       </QueryClientProvider>
     </SodaxProvider>
   );

@@ -5,14 +5,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { DEFAULT_API_BASE_URL, DEFAULT_RELAYER_API_ENDPOINT } from '@sodax/dapp-kit';
 import { SolverEnv, useAppStore } from '@/zustand/useAppStore';
 import { defaultUseBackendSubmitTx, productionSolverConfig, stagingSolverConfig } from '@/constants';
 import { envSodaxApiKey, envSwapsApiBaseUrl, isEvmAddress, isHttpUrl, type SodaxSettings } from '@/lib/sodaxSettings';
 import { Check, Copy, RotateCcw } from 'lucide-react';
-
-// Display-only mirrors of the `@sodax/types` packaged defaults (not re-exported through dapp-kit).
-const DEFAULT_GATEWAY_URL = 'https://api.sodax.com/v1';
-const DEFAULT_RELAYER_URL = 'https://xcall-relay.nw.iconblockchain.xyz';
 
 type SubmitTxChoice = 'auto' | 'on' | 'off';
 
@@ -25,22 +22,29 @@ type TextField = (typeof TEXT_FIELDS)[number];
 /** Modal draft: the text fields hold the EFFECTIVE value (default prefilled, copyable). */
 type Draft = { env: SolverEnv; useBackendSubmitTx: SubmitTxChoice } & Record<TextField, string>;
 
-/** The effective default text per field for an env — what an unset override resolves to. */
-function defaultsFor(env: SolverEnv): Record<TextField, string> {
+/** The effective default text per field — what an unset override resolves to. `gatewayUrl` is
+ *  the effective gateway, which unset swaps inherit (`resolveSwapsApiConfig` layering). */
+function defaultsFor(env: SolverEnv, gatewayUrl: string = DEFAULT_API_BASE_URL): Record<TextField, string> {
   const solver = env === SolverEnv.Staging ? stagingSolverConfig : productionSolverConfig;
   return {
     solverApiEndpoint: solver.solverApiEndpoint,
     intentsContract: solver.intentsContract,
     protocolIntentsContract: solver.protocolIntentsContract,
-    apiBaseUrl: DEFAULT_GATEWAY_URL,
-    swapsApiBaseUrl: envSwapsApiBaseUrl ?? DEFAULT_GATEWAY_URL,
+    apiBaseUrl: DEFAULT_API_BASE_URL,
+    swapsApiBaseUrl: envSwapsApiBaseUrl ?? gatewayUrl,
     apiKey: envSodaxApiKey ?? '',
-    relayerApiEndpoint: DEFAULT_RELAYER_URL,
+    relayerApiEndpoint: DEFAULT_RELAYER_API_ENDPOINT,
   };
 }
 
+/** The gateway a draft (or stored override) actually resolves to. */
+function effectiveGateway(apiBaseUrl: string | null): string {
+  const trimmed = apiBaseUrl?.trim() ?? '';
+  return isHttpUrl(trimmed) ? trimmed : DEFAULT_API_BASE_URL;
+}
+
 function seedDraft(env: SolverEnv, s: SodaxSettings): Draft {
-  const defaults = defaultsFor(env);
+  const defaults = defaultsFor(env, effectiveGateway(s.apiBaseUrl));
   return {
     env,
     useBackendSubmitTx: s.useBackendSubmitTx === null ? 'auto' : s.useBackendSubmitTx ? 'on' : 'off',
@@ -73,9 +77,9 @@ function validateDraft(draft: Draft): FieldErrors {
   return errors;
 }
 
-/** Empty, or equal to the env default → null (unset, keeps following defaults); else an override. */
+/** Empty, or equal to the effective default → null (unset, keeps following defaults); else an override. */
 function draftToSettings(draft: Draft): SodaxSettings {
-  const defaults = defaultsFor(draft.env);
+  const defaults = defaultsFor(draft.env, effectiveGateway(draft.apiBaseUrl));
   const norm = (field: TextField): string | null => {
     const value = draft[field].trim();
     return value && value !== defaults[field] ? value : null;
@@ -221,17 +225,21 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
   const errors = useMemo(() => validateDraft(draft), [draft]);
   const hasErrors = Object.keys(errors).length > 0;
 
-  const defaults = defaultsFor(draft.env);
-  const autoSubmitTx = defaultUseBackendSubmitTx(draft.env);
-  const submitTxOnStaging = draft.env === SolverEnv.Staging && draft.useBackendSubmitTx === 'on';
+  const defaults = defaultsFor(draft.env, effectiveGateway(draft.apiBaseUrl));
+  // Auto keys on the EFFECTIVE solver endpoint — a custom/staging endpoint means the production
+  // backend can't reach that solver, whatever the env tab says.
+  const effectiveSolverEndpoint = draft.solverApiEndpoint.trim() || defaults.solverApiEndpoint;
+  const autoSubmitTx = defaultUseBackendSubmitTx(effectiveSolverEndpoint);
+  const submitTxMismatch = draft.useBackendSubmitTx === 'on' && !autoSubmitTx;
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft(prev => ({ ...prev, [key]: value }));
 
   // Untouched fields (still showing the old env's default) follow the new env's default.
   const handleEnvChange = (env: SolverEnv) => {
     setDraft(prev => {
-      const prevDefaults = defaultsFor(prev.env);
-      const nextDefaults = defaultsFor(env);
+      const gateway = effectiveGateway(prev.apiBaseUrl);
+      const prevDefaults = defaultsFor(prev.env, gateway);
+      const nextDefaults = defaultsFor(env, gateway);
       const next = { ...prev, env };
       for (const field of TEXT_FIELDS) {
         if (prev[field].trim() === prevDefaults[field]) {
@@ -294,9 +302,9 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
                 <SelectItem value="off">Off — client-side relay to the solver</SelectItem>
               </SelectContent>
             </Select>
-            <div className={`sm:col-start-2 text-xs ${submitTxOnStaging ? 'text-amber-600' : 'text-muted-foreground'}`}>
-              {submitTxOnStaging
-                ? 'Backend submit posts to the production swaps API — the staging solver never sees the intent and its /status stays NOT_FOUND.'
+            <div className={`sm:col-start-2 text-xs ${submitTxMismatch ? 'text-amber-600' : 'text-muted-foreground'}`}>
+              {submitTxMismatch
+                ? 'Backend submit posts to the production swaps API — the selected solver never sees the intent and its /status stays NOT_FOUND.'
                 : 'On: the swaps API relays and post-executes server-side. Off: client-side relay, /execute to the solver below.'}
             </div>
           </div>
