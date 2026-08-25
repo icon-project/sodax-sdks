@@ -115,13 +115,15 @@ networks land on the same page in each one.
 npm i -g mint          # once; pin an exact version in automation
 
 pnpm check:docs-nav    # nav <-> files, both directions (no network, no CLI)
+pnpm check:docs-pages  # generated copies still match their sources
 pnpm docs:dev          # local preview, opens in the browser
 pnpm docs:validate     # mint validate + mint broken-links
 ```
 
-`mint validate` fails on anything the build would warn about, including nav entries whose
-file is missing. `mint broken-links` resolves every internal link on every page — it is
-the only check that catches rule 1.
+CI runs the first two. `docs:validate` it cannot: the Mintlify CLI is not a repo
+dependency, so running it before you push is on you. `mint validate` fails on anything the
+build would warn about, including nav entries whose file is missing. `mint broken-links`
+resolves every internal link on every page — it is the only check that catches rule 1.
 
 ## What does not belong here
 

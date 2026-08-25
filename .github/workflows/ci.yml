@@ -96,6 +96,12 @@ jobs:
       - name: Doc link validation
         run: pnpm check:doc-links
 
+      - name: Docs navigation validation
+        run: pnpm check:docs-nav
+
+      - name: Generated docs page drift
+        run: pnpm check:docs-pages
+
       - name: Build Apps
         timeout-minutes: 10
         run: pnpm turbo run build --filter='./apps/demo' --filter='./apps/example-next-js-16'

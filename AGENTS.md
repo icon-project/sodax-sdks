@@ -131,7 +131,9 @@ To author or validate changesets and govern a release (SemVer bumps, changelogs,
 
 ## CI Shape
 
-GitHub Actions install dependencies with a frozen lockfile, lint, check circular dependencies, build packages, typecheck, validate dev AI files, validate AI consumer docs, validate mirrored doc links, build apps, run smoke checks, and run tests. When changing `packages/skills`, run `pnpm check:ai` locally; when changing a mirrored doc, run `pnpm check:doc-links`.
+GitHub Actions install dependencies with a frozen lockfile, lint, check circular dependencies, build packages, typecheck, validate dev AI files, validate AI consumer docs, validate mirrored doc links, validate the docs site navigation and its generated pages, build apps, run smoke checks, and run tests. When changing `packages/skills`, run `pnpm check:ai` locally; when changing a mirrored doc, run `pnpm check:doc-links`.
+
+`pnpm docs:validate` is **not** in CI — `mint validate` and `mint broken-links` need the Mintlify CLI, which is not a repo dependency. It is the only check that catches a relative link, so run it locally after any change under `docs/`.
 
 `pnpm test:e2e` runs in its own CI job **on push to `main` / `development` only**, never on pull requests: it hits live mainnet services, so it fails on state no PR controls (a solver that dropped an intent from memory, an unindexed relay tx, on-chain token/vault drift). Run it locally when you touch a flow it covers — a green PR does not mean the e2e suite passed.
 

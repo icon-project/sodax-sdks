@@ -42,13 +42,14 @@ correct. The commands below are the gate.
 ## Verify
 
 ```bash
-pnpm check:docs-nav    # nav <-> files, both directions
+pnpm check:docs-nav    # nav <-> files, both directions        (CI runs this)
+pnpm check:docs-pages  # generated copies match their sources  (CI runs this)
 pnpm docs:validate     # mint validate + mint broken-links (needs the mint CLI)
 ```
 
-Run both after any change under `docs/`. `mint broken-links` is the only check that
-catches a relative link, and `pnpm check:docs-nav` is the only one that catches a page
-missing from the sidebar.
+Run all three after any change under `docs/`. `docs:validate` is the one CI cannot run —
+the Mintlify CLI is not a repo dependency — and `mint broken-links` is the only check that
+catches a relative link.
 
 ## Scope
 
