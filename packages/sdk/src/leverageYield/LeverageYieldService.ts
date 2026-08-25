@@ -1103,7 +1103,12 @@ export class LeverageYieldService {
     request: SolverExecutionRequest,
   ): Promise<Result<SolverExecutionResponse, LeverageYieldPostExecutionError>> {
     try {
-      const result = await SolverApiService.postExecution(request, this.config.solver, this.config.logger);
+      const result = await SolverApiService.postExecution(
+        request,
+        this.config.solver,
+        this.config.logger,
+        this.config.apiKey,
+      );
       if (result.ok) return result;
 
       // Defensive: SolverApiService is contractually typed to return SolverErrorResponse,

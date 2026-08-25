@@ -847,6 +847,37 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
     expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
   });
 
+  it('threads extras.apiKey into the backend submit-tx leg as a per-request override', async () => {
+    stubCreatedAndVerified();
+    const submitSpy = vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValueOnce({
+      ok: true,
+      value: { success: true, data: { status: 'inserted', message: 'accepted' } },
+    } as never);
+    const statusSpy = vi.spyOn(sodaxBE.api.bridge, 'getSubmitTxStatus').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        success: true,
+        data: {
+          txHash: '0xspokeTx',
+          srcChainKey: BSC,
+          status: 'executed',
+          processingAttempts: 1,
+          result: { dstIntentTxHash: '0xDST' },
+        },
+      },
+    } as never);
+
+    const result = await sodaxBE.bridge.bridge({
+      ...bridgeInput(BSC, ARBITRUM),
+      extras: { apiKey: 'per-action-key' },
+    });
+
+    expect(result.ok).toBe(true);
+    // Both the POST and the status poll carry the per-action key (as RequestOverrideConfig.apiKey).
+    expect(submitSpy.mock.calls[0]?.[1]).toMatchObject({ apiKey: 'per-action-key' });
+    expect(statusSpy.mock.calls[0]?.[1]).toMatchObject({ apiKey: 'per-action-key' });
+  });
+
   it('falls back to the client-side relay when the backend submit POST is rejected', async () => {
     stubCreatedAndVerified();
     vi.spyOn(sodaxBE.api.bridge, 'submitTx').mockResolvedValueOnce({
@@ -1075,6 +1106,97 @@ describe('BridgeService.bridge — backend submit-tx (useBackendSubmitTx)', () =
 });
 
 // =========================================================================
+// Backend submit-tx call-through: extras.apiKey on the wire. Same flow as above, but the real
+// BridgeApiService transport runs against a test-local global fetch stub, so the `x-api-key`
+// asserted is the header actually sent — not an argument recorded on a stubbed method.
+// =========================================================================
+
+describe('BridgeService.bridge — backend submit-tx extras.apiKey on the wire (call-through)', () => {
+  const sodaxKeyed = new Sodax({ apiKey: 'instance-key', logger: 'silent' });
+
+  // The same payloads the spied specs above return — they satisfy the real bridge response schemas.
+  const SUBMIT_TX_BODY = { success: true, data: { status: 'inserted', message: 'accepted' } };
+  const EXECUTED_STATUS_BODY = {
+    success: true,
+    data: {
+      txHash: '0xspokeTx',
+      srcChainKey: BSC,
+      status: 'executed',
+      processingAttempts: 1,
+      result: { dstIntentTxHash: '0xDST' },
+    },
+  };
+
+  const wireFetch = vi.fn();
+
+  beforeEach(() => {
+    wireFetch.mockReset();
+    // Only the two submit-tx legs may reach fetch; anything else fails the test loudly.
+    wireFetch.mockImplementation(async (url: unknown, init?: { method?: string }) => {
+      const { pathname } = new URL(String(url));
+      if (pathname === '/v1/bridge/submit-tx' && init?.method === 'POST') {
+        return { ok: true, status: 200, json: async () => SUBMIT_TX_BODY };
+      }
+      if (pathname === '/v1/bridge/submit-tx/status' && (init?.method ?? 'GET') === 'GET') {
+        return { ok: true, status: 200, json: async () => EXECUTED_STATUS_BODY };
+      }
+      throw new Error(`unexpected fetch: ${init?.method ?? 'GET'} ${String(url)}`);
+    });
+    vi.stubGlobal('fetch', wireFetch);
+  });
+
+  afterEach(() => {
+    // Scoped to this suite — no other suite in this file stubs fetch.
+    vi.unstubAllGlobals();
+  });
+
+  const stubKeyedCreated = () => {
+    vi.spyOn(sodaxKeyed.bridge, 'createBridgeIntent').mockResolvedValueOnce({
+      ok: true,
+      value: { tx: '0xspokeTx' as never, relayData: { address: HUB_WALLET, payload: '0x' } },
+    } as never);
+    vi.spyOn(sodaxKeyed.spoke, 'verifyTxHash').mockResolvedValue({ ok: true, value: undefined });
+  };
+
+  /** The `x-api-key` actually sent to (pathname, method), read through `Headers` so any casing counts. */
+  const keySentTo = (pathname: string, method: string): string | null => {
+    const matches = wireFetch.mock.calls.filter(
+      call => new URL(String(call[0])).pathname === pathname && (call[1]?.method ?? 'GET') === method,
+    );
+    expect(matches).toHaveLength(1);
+    return new Headers(matches[0]?.[1]?.headers).get('x-api-key');
+  };
+
+  const runKeyedBridge = async (extras?: { apiKey?: string }) => {
+    stubKeyedCreated();
+    const args = bridgeInput(BSC, ARBITRUM);
+    const result = await sodaxKeyed.bridge.bridge(extras ? { ...args, extras } : args);
+    expect(result.ok).toBe(true);
+    // The value round-tripped through the real transport + schemas, not a stubbed method.
+    if (result.ok) expect(result.value.dstChainTxHash).toBe('0xDST');
+    expect(wireFetch).toHaveBeenCalledTimes(2);
+  };
+
+  it('sends extras.apiKey over the instance key on both the submit POST and the status poll', async () => {
+    await runKeyedBridge({ apiKey: 'action-key' });
+    expect(keySentTo('/v1/bridge/submit-tx', 'POST')).toBe('action-key');
+    expect(keySentTo('/v1/bridge/submit-tx/status', 'GET')).toBe('action-key');
+  });
+
+  it('sends the instance key on both requests when extras is omitted', async () => {
+    await runKeyedBridge();
+    expect(keySentTo('/v1/bridge/submit-tx', 'POST')).toBe('instance-key');
+    expect(keySentTo('/v1/bridge/submit-tx/status', 'GET')).toBe('instance-key');
+  });
+
+  it('treats an empty extras.apiKey as unset: the instance key still rides both requests', async () => {
+    await runKeyedBridge({ apiKey: '' });
+    expect(keySentTo('/v1/bridge/submit-tx', 'POST')).toBe('instance-key');
+    expect(keySentTo('/v1/bridge/submit-tx/status', 'GET')).toBe('instance-key');
+  });
+});
+
+// =========================================================================
 // Sodax wiring — bridge.useBackendSubmitTx flows into BridgeService,
 // and sodax.api.bridge is reachable.
 // =========================================================================
@@ -1143,5 +1265,168 @@ describe('Sodax bridge.useBackendSubmitTx wiring', () => {
     });
     expect(s.swaps.useBackendSubmitTx).toBe(true);
     expect(s.bridge.useBackendSubmitTx).toBe(false);
+  });
+});
+
+// =========================================================================
+// buildApproveTxs — spender resolution, the only logic this layer owns
+// =========================================================================
+
+describe('BridgeService.buildApproveTxs', () => {
+  const SONIC = ChainKeys.SONIC_MAINNET;
+  const STELLAR = ChainKeys.STELLAR_MAINNET;
+  const rawTx = { from: SAMPLE_USER, to: '0x0', value: 0n, data: '0x' } as never;
+
+  const approveInput = <K extends SpokeChainKey>(srcChainKey: K): BridgeParams<K, true> =>
+    ({
+      raw: true,
+      params: {
+        srcAddress: SAMPLE_USER,
+        srcChainKey,
+        srcToken: SAMPLE_TOKEN,
+        amount: 1_000_000n,
+        dstChainKey: ARBITRUM,
+        dstToken: SAMPLE_TOKEN,
+        recipient: SAMPLE_DST,
+      },
+    }) as BridgeParams<K, true>;
+
+  it("approves the caller's own hub wallet on the hub (Sonic), not the swaps intents contract", async () => {
+    // Swaps resolves the hub spender synchronously from `solver.intentsContract`; reusing that here
+    // would approve the wrong contract and still typecheck.
+    vi.spyOn(sodax.bridge.hubProvider, 'getUserHubWalletAddress').mockResolvedValueOnce(HUB_WALLET);
+    vi.spyOn(sodax.bridge.spoke, 'buildApproveTxs').mockResolvedValueOnce({ ok: true, value: { approveTx: rawTx } });
+
+    const result = await sodax.bridge.buildApproveTxs(approveInput(SONIC));
+
+    expect(result).toEqual({ ok: true, value: { approveTx: rawTx } });
+    expect(sodax.bridge.hubProvider.getUserHubWalletAddress).toHaveBeenCalledWith(SAMPLE_USER, SONIC);
+    expect(sodax.bridge.spoke.buildApproveTxs).toHaveBeenCalledWith(
+      expect.objectContaining({ srcChainKey: SONIC, spender: HUB_WALLET, raw: true }),
+    );
+  });
+
+  it('approves the asset manager on an EVM spoke', async () => {
+    vi.spyOn(sodax.bridge.spoke, 'buildApproveTxs').mockResolvedValueOnce({ ok: true, value: { approveTx: rawTx } });
+
+    const result = await sodax.bridge.buildApproveTxs(approveInput(BSC));
+
+    expect(result).toEqual({ ok: true, value: { approveTx: rawTx } });
+    expect(sodax.bridge.spoke.buildApproveTxs).toHaveBeenCalledWith(
+      expect.objectContaining({
+        srcChainKey: BSC,
+        spender: sodax.bridge.config.getChainConfig(BSC).addresses.assetManager,
+        raw: true,
+      }),
+    );
+  });
+
+  it('resolves the same spender as approve() does, on both EVM branches', async () => {
+    // Pins the property, not the shared call, so an inlined copy of the resolver would fail it.
+    vi.spyOn(sodax.bridge.hubProvider, 'getUserHubWalletAddress').mockResolvedValue(HUB_WALLET);
+    const buildSpy = vi
+      .spyOn(sodax.bridge.spoke, 'buildApproveTxs')
+      .mockResolvedValue({ ok: true, value: { approveTx: rawTx } });
+    const approveSpy = vi.spyOn(sodax.bridge.spoke, 'approve').mockResolvedValue({ ok: true, value: rawTx });
+
+    for (const chainKey of [SONIC, BSC] as const) {
+      await sodax.bridge.buildApproveTxs(approveInput(chainKey));
+      await sodax.bridge.approve({ ...approveInput(chainKey), raw: true } as BridgeParams<typeof chainKey, true>);
+    }
+
+    const spenderOf = (spy: typeof buildSpy | typeof approveSpy) =>
+      spy.mock.calls.map(([args]) => (args as { spender: string }).spender);
+    expect(spenderOf(buildSpy)).toEqual(spenderOf(approveSpy));
+    expect(spenderOf(buildSpy)).toEqual([HUB_WALLET, sodax.bridge.config.getChainConfig(BSC).addresses.assetManager]);
+  });
+
+  it('passes the bridge amount, source token and owner through as the approval target', async () => {
+    const input = approveInput(BSC);
+    vi.spyOn(sodax.bridge.spoke, 'buildApproveTxs').mockResolvedValueOnce({ ok: true, value: { approveTx: rawTx } });
+
+    await sodax.bridge.buildApproveTxs(input);
+
+    expect(sodax.bridge.spoke.buildApproveTxs).toHaveBeenCalledWith(
+      expect.objectContaining({
+        token: input.params.srcToken,
+        amount: input.params.amount,
+        owner: input.params.srcAddress,
+      }),
+    );
+  });
+
+  it('surfaces the reset under its own name when the plan needs one', async () => {
+    const resetTx = { ...(rawTx as object), data: '0xreset' } as never;
+    vi.spyOn(sodax.bridge.spoke, 'buildApproveTxs').mockResolvedValueOnce({
+      ok: true,
+      value: { resetTx, approveTx: rawTx },
+    });
+
+    const result = await sodax.bridge.buildApproveTxs(approveInput(BSC));
+
+    // Named, not ordered: no consumer has to know which index is which.
+    expect(result).toEqual({ ok: true, value: { resetTx, approveTx: rawTx } });
+  });
+
+  it('routes Stellar to the trustline branch without a spender', async () => {
+    vi.spyOn(sodax.bridge.spoke, 'buildApproveTxs').mockResolvedValueOnce({ ok: true, value: { approveTx: rawTx } });
+
+    await sodax.bridge.buildApproveTxs(approveInput(STELLAR));
+
+    expect(sodax.bridge.spoke.buildApproveTxs).toHaveBeenCalledWith(
+      expect.not.objectContaining({ spender: expect.anything() }),
+    );
+  });
+
+  it('wraps a spoke failure as SodaxError(APPROVE_FAILED) on the bridge feature, cause preserved', async () => {
+    const spokeError = new Error('BUILD_FAILED');
+    vi.spyOn(sodax.bridge.spoke, 'buildApproveTxs').mockResolvedValueOnce({ ok: false, error: spokeError });
+
+    const result = await sodax.bridge.buildApproveTxs(approveInput(BSC));
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toBeInstanceOf(SodaxError);
+    expect(result.error.code).toBe('APPROVE_FAILED');
+    expect(result.error.feature).toBe('bridge');
+    expect(result.error.cause).toBe(spokeError);
+  });
+
+  it('rejects an unsupported chain (Solana) rather than building a meaningless approval', async () => {
+    const result = await sodax.bridge.buildApproveTxs(approveInput(SOLANA));
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(String(result.error.message)).toMatch(/Approval only supported/);
+  });
+
+  it('ignores a raw:false forced past the type system and still builds unsigned', async () => {
+    // A JavaScript caller can still pass `raw: false`, and the Stellar branch reads it at runtime —
+    // carrying it through would have a method named "build" broadcast.
+    const buildSpy = vi
+      .spyOn(sodax.bridge.spoke, 'buildApproveTxs')
+      .mockResolvedValue({ ok: true, value: { approveTx: rawTx } });
+    const approveSpy = vi.spyOn(sodax.bridge.spoke, 'approve');
+
+    for (const chainKey of [BSC, STELLAR] as const) {
+      const forced = {
+        ...approveInput(chainKey),
+        raw: false,
+        walletProvider: mockEvmProvider,
+      } as unknown as BridgeParams<typeof chainKey, true>;
+      await expect(sodax.bridge.buildApproveTxs(forced)).resolves.toEqual({ ok: true, value: { approveTx: rawTx } });
+    }
+
+    for (const [args] of buildSpy.mock.calls) expect((args as { raw: boolean }).raw).toBe(true);
+    expect(approveSpy).not.toHaveBeenCalled(); // nothing took the signing path
+  });
+
+  it('rejects a zero amount, matching approve()', async () => {
+    const input = approveInput(BSC);
+    const result = await sodax.bridge.buildApproveTxs({ ...input, params: { ...input.params, amount: 0n } });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(String(result.error.message)).toMatch(/Amount must be greater than 0/);
   });
 });

@@ -64,6 +64,7 @@ Full mapping (`RelayChainIdMap` in `@sodax/sdk`):
 | `REDBELLY_MAINNET` | `726564n` |
 | `KAIA_MAINNET` | `27489n` |
 | `HEDERA_MAINNET` | `18501n` |
+| `ROBINHOOD_MAINNET` | `21071n` |
 | `STACKS_MAINNET` | `60n` |
 
 ---

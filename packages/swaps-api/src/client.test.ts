@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import { HookKind } from '@sodax/types';
 import { SwapsApiError } from './errors.js';
+import { API_KEY_VERIFICATION_UNAVAILABLE_MESSAGE } from './http.js';
 import { SwapsApi } from './client.js';
 
 const BASE = 'https://api.test/v1';
@@ -159,6 +161,77 @@ describe('SwapsApi routing (all 21 endpoints hit the right method + URL)', () =>
 });
 
 describe('SwapsApi request shaping', () => {
+  it('sends a configured apiKey as the x-api-key header on every request', async () => {
+    const fetchImpl = vi.fn(async () => json([]));
+    const api = new SwapsApi({ baseUrl: BASE, fetch: fetchImpl, apiKey: 'k-123' });
+    await api.getTokens().catch(() => {});
+    await api.getQuote(quoteBody).catch(() => {});
+    for (const call of fetchImpl.mock.calls) {
+      expect((call[1]?.headers as Record<string, string>)['x-api-key']).toBe('k-123');
+    }
+  });
+
+  it('lets an explicit x-api-key header win over the apiKey option, in any casing', async () => {
+    // HTTP header names are case-insensitive and fetch folds two casings into one comma-joined value,
+    // so a case-variant header must REPLACE the expanded key rather than ride alongside it.
+    for (const name of ['x-api-key', 'X-Api-Key']) {
+      const fetchImpl = vi.fn(async () => json([]));
+      const api = new SwapsApi({
+        baseUrl: BASE,
+        fetch: fetchImpl,
+        apiKey: 'k-option',
+        headers: { [name]: 'k-header' },
+      });
+      await api.getTokens().catch(() => {});
+      const headers = fetchImpl.mock.calls[0]?.[1]?.headers as Record<string, string>;
+      expect(Object.keys(headers).filter(h => h.toLowerCase() === 'x-api-key')).toHaveLength(1);
+      expect(new Headers(headers).get('x-api-key')).toBe('k-header');
+    }
+  });
+
+  it('sends the configured apiKey on a genuine non-idempotent mutation (createIntent POST)', async () => {
+    const fetchImpl = vi.fn(async () => json({}));
+    const api = new SwapsApi({ baseUrl: BASE, fetch: fetchImpl, apiKey: 'k-123' });
+    await api.createIntent(params).catch(() => {}); // response may fail validation; we only assert the request
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    const [url, init] = fetchImpl.mock.calls[0] ?? [];
+    expect(url).toBe(`${BASE}/swaps/intents`);
+    expect(init?.method).toBe('POST');
+    expect(new Headers(init?.headers).get('x-api-key')).toBe('k-123');
+  });
+
+  it('keeps the configured apiKey on every attempt across an apiguard-503 mutation retry', async () => {
+    // Headers are built once above the retry loop; nothing else pins the key to the replayed attempt.
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = vi
+        .fn<typeof globalThis.fetch>()
+        .mockResolvedValueOnce(
+          json(
+            { statusCode: 503, message: API_KEY_VERIFICATION_UNAVAILABLE_MESSAGE, error: 'Service Unavailable' },
+            503,
+          ),
+        )
+        .mockResolvedValueOnce(json({}));
+      const api = new SwapsApi({ baseUrl: BASE, fetch: fetchImpl, apiKey: 'k-123' });
+      const pending = api.createIntent(params).catch(() => {}); // success body fails validation; requests are the subject
+      await vi.advanceTimersByTimeAsync(250);
+      await pending;
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      for (const call of fetchImpl.mock.calls) {
+        expect(new Headers(call[1]?.headers).get('x-api-key')).toBe('k-123');
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('treats an empty apiKey as unset rather than sending a blank credential', async () => {
+    const fetchImpl = vi.fn(async () => json([]));
+    await new SwapsApi({ baseUrl: BASE, fetch: fetchImpl, apiKey: '' }).getTokens().catch(() => {});
+    expect((fetchImpl.mock.calls[0]?.[1]?.headers as Record<string, string>)['x-api-key']).toBeUndefined();
+  });
+
   it('encodeURIComponent-escapes path params', async () => {
     const fetchImpl = vi.fn(async () => json({}));
     await makeApi(fetchImpl)
@@ -191,6 +264,21 @@ describe('SwapsApi request shaping', () => {
     const fetchImpl = vi.fn(async () => json({ quotedAmount: '5' }));
     await makeApi(fetchImpl).getQuote(quoteBody, { includeTxData: false });
     expect(fetchImpl.mock.calls[0]?.[0]).toBe(`${BASE}/swaps/quote`);
+  });
+
+  it('forwards an optional hook field on getQuote unmodified (client-side passthrough only)', async () => {
+    // Wire-client layer counterpart of the same-named assertion in
+    // packages/sdk/src/backendApi/SwapsApiService.test.ts — keep both in sync (this proves the
+    // request-shaping layer puts `hook` on the wire as-is, not that any backend forwards it).
+    const fetchImpl = vi.fn(async () => json({ quotedAmount: '5' }));
+    await makeApi(fetchImpl).getQuote(
+      { ...quoteBody, hook: { kind: HookKind.HYPERCORE_DEPOSIT } },
+      {
+        includeTxData: true,
+      },
+    );
+    const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body));
+    expect(body.hook).toEqual({ kind: HookKind.HYPERCORE_DEPOSIT });
   });
 
   it('deep-serializes bigint tx values in estimateGas instead of throwing on them', async () => {

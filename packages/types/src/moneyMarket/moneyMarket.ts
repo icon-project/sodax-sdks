@@ -218,6 +218,8 @@ export const moneyMarketSupportedTokens = {
     spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.USDS,
     spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.XLM,
   ] as const satisfies XToken[],
+  // Robinhood Chain: lending/borrowing deferred at launch (swaps + bridging only)
+  [ChainKeys.ROBINHOOD_MAINNET]: [] as const satisfies XToken[],
 } as const satisfies Record<SpokeChainKey, readonly XToken[]>;
 
 export const moneyMarketReserveAssets = [

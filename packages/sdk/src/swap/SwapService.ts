@@ -49,6 +49,7 @@ import { isFillEvent } from '../backendApi/guards.js';
 import { resolveTimeoutMs } from '../shared/utils/resolveTimeoutMs.js';
 import type { ApprovalTxs } from '../shared/types/spoke-types.js';
 import { selectSolvedIntentPacket } from './selectSolvedIntentPacket.js';
+import { estimateSwapSpeedTier, type SwapSpeedTierParams, type SwapSpeedTierResult } from './speed-tier.js';
 import { isSodaxError, SodaxError } from '../errors/SodaxError.js';
 import { mapRelayFailure } from '../errors/relay-error-mapping.js';
 import {
@@ -379,7 +380,13 @@ export class SwapService {
     request: SolverIntentStatusRequest,
     timeoutMs?: number,
   ): Promise<Result<SolverIntentStatusResponse, SolverErrorResponse>> {
-    const solverResult = await SolverApiService.getStatus(request, this.solver, this.config.logger, timeoutMs);
+    const solverResult = await SolverApiService.getStatus(
+      request,
+      this.solver,
+      this.config.logger,
+      timeoutMs,
+      this.config.apiKey,
+    );
     const forgotten = !solverResult.ok || solverResult.value.status === SolverIntentStatusCode.NOT_FOUND;
     if (!forgotten) return solverResult;
 
@@ -599,7 +606,7 @@ export class SwapService {
     request: SolverExecutionRequest,
   ): Promise<Result<SolverExecutionResponse, PostExecutionError>> {
     try {
-      const result = await SolverApiService.postExecution(request, this.solver, this.config.logger);
+      const result = await SolverApiService.postExecution(request, this.solver, this.config.logger, this.config.apiKey);
       if (result.ok) return result;
 
       // Defensive: SolverApiService is contractually typed to return SolverErrorResponse,
@@ -868,11 +875,13 @@ export class SwapService {
     const srcChainKey = params.srcChainKey;
     const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey };
     const { tx: spokeTxHash, intent, relayData } = created;
-
     try {
       const outcome = await runBackendSubmitTx({
         attempt,
         api: this.backendApi.swaps,
+        // The configured key is already baked into the SwapsApiService headers, so only this
+        // per-action override (mirroring `extras.partnerFee`) travels per call.
+        overrideConfig: { apiKey: _params.extras?.apiKey },
         body: {
           txHash: spokeTxHash,
           srcChainKey,
@@ -1753,5 +1762,19 @@ export class SwapService {
    */
   public getSupportedSwapTokens(): Record<SpokeChainKey, readonly XToken[]> {
     return this.config.getSupportedSwapTokens();
+  }
+
+  /**
+   * Offline, rule-based estimate of how fast a `srcToken`→`dstToken` swap will settle.
+   *
+   * Derived purely from SDK config (no network / on-chain / backend call): tokens tied to a
+   * money-market-reserve sodaAsset settle faster, and an Ethereum leg adds a fixed penalty. See
+   * {@link estimateSwapSpeedTier} for the rules.
+   *
+   * @param params `{ srcToken, dstToken }` spoke token pair to estimate
+   * @returns the estimated `tier` bucket and `estimatedSeconds`
+   */
+  public getSwapSpeedTier(params: SwapSpeedTierParams): SwapSpeedTierResult {
+    return estimateSwapSpeedTier(params, hubAsset => this.config.isMoneyMarketReserveHubAsset(hubAsset));
   }
 }

@@ -46,6 +46,12 @@ sodax.swaps.cancelLimitOrder<K>(/* … */): Promise<Result<TxHashPair, SodaxErro
 sodax.swaps.approve<K, Raw>(/* … */): Promise<Result<TxReturnType<K, Raw>, SodaxError>>;
 sodax.swaps.isAllowanceValid<K, Raw>(/* … */): Promise<Result<boolean, SodaxError>>;
 
+sodax.swaps.getSwapSpeedTier(params: { srcToken: XToken; dstToken: XToken }): SwapSpeedTierResult;
+//   Synchronous, offline, no Result wrapper — estimates settlement speed from SDK config alone
+//   (no network / on-chain / backend call). SwapSpeedTierResult = { tier: 'fast'|'normal'|'slow', estimatedSeconds }.
+//   A token tied to a money-market-reserve (sodaAsset) settles faster; an Ethereum leg adds a fixed penalty.
+//   Safe to call synchronously while rendering a quote (e.g. an ETA badge next to the output amount).
+
 sodax.swaps.getStatus(
   request: SolverIntentStatusRequest,          // { intent_tx_hash } — the HUB (Sonic) tx hash
 ): Promise<Result<SolverIntentStatusResponse, SolverErrorResponse>>;   // legacy error shape, NOT SodaxError
@@ -91,11 +97,12 @@ type SwapActionParams<K extends SpokeChainKey, Raw extends boolean> = {
 } & WalletProviderSlot<K, Raw>;
 ```
 
-`extras` and every field on it are optional. `partnerFee` overrides the configured swap fee for this single action (the same override `getQuote` accepts, below); `srcPublicKey` is chain-key-gated — only typeable when `K` is a Stacks chain (`never` elsewhere) and only needed for raw (`raw: true`) Stacks `createIntent`; `bound` is chain-key-gated to Bitcoin and groups the Bound Exchange (Radfi) inputs — its `accessToken` is only needed for raw Bitcoin TRADING-mode `createIntent`, overriding the RadfiProvider's configured token and falling back to that instance token when omitted. (Grouping keeps future Bound inputs — trading mode, refresh token — under one slot rather than spreading a new `extras` field per item.) `LimitOrderActionParams<K, Raw>` carries the same `SwapExtras<K>`.
+`extras` and every field on it are optional. `partnerFee` overrides the configured swap fee for this single action (the same override `getQuote` accepts, below); `apiKey` overrides the configured backend API key (`new Sodax({ apiKey })`) for this action's backend submit-tx leg, sent as the `x-api-key` header; `srcPublicKey` is chain-key-gated — only typeable when `K` is a Stacks chain (`never` elsewhere) and only needed for raw (`raw: true`) Stacks `createIntent`; `bound` is chain-key-gated to Bitcoin and groups the Bound Exchange (Radfi) inputs — its `accessToken` is only needed for raw Bitcoin TRADING-mode `createIntent`, overriding the RadfiProvider's configured token and falling back to that instance token when omitted. (Grouping keeps future Bound inputs — trading mode, refresh token — under one slot rather than spreading a new `extras` field per item.) `LimitOrderActionParams<K, Raw>` carries the same `SwapExtras<K>`.
 
 ```ts
 type SwapExtras<K extends SpokeChainKey> = {
   partnerFee?: PartnerFee;        // overrides the configured swap fee for this action; falls back to config
+  apiKey?: string;                // overrides the configured backend API key (x-api-key) for this action's backend submit-tx leg
   srcPublicKey?: string;          // Stacks only (raw createIntent): signer public key. Chain-key-gated — `never` on non-Stacks K.
   bound?: BitcoinBoundExtras;     // Bitcoin only: grouped Bound Exchange (Radfi) inputs. Chain-key-gated — `never` on non-Bitcoin K.
 };
@@ -121,10 +128,46 @@ type CreateIntentParams<K extends SpokeChainKey> = {
   allowPartialFill: boolean;
   solver?: `0x${string}`;   // optional solver address; '0x0…0' for default
   data: `0x${string}`;      // arbitrary calldata; '0x' for default
+  hook?: HookRequest;       // route the output through a registered delivery hook — see below
+  deliveryData?: `0x${string}`;  // low-level delivery payload; escape hatch, ignored when `hook` is set
 };
 ```
 
 `CreateLimitOrderParams<K>` is `Omit<CreateIntentParams<K>, 'deadline'> & { deadline?: bigint }` — it makes `deadline` optional rather than removing it; when omitted the SDK forces it to `0n` internally (limit orders use a different expiry mechanism).
+
+### Delivery hooks (`hook` / `deliveryData`)
+
+By default an intent's output is transferred straight to `dstAddress`. A **delivery hook** instead hands
+it to a contract on the destination spoke that acts on the recipient's behalf — `SpokeAssetManager` calls
+`ISpokeReceiver(dstAddress).hook(token, amount, deliveryData)`.
+
+Prefer `hook` over `deliveryData`: the SDK resolves the hook's deployed address and encodes its payload
+from the registry (`spokeHooks` in `@sodax/types`), so the two can never drift.
+
+```ts
+import { HookKind, getSpokeHook } from '@sodax/sdk';
+
+// Which kinds exist, and on which chains, is registry data that grows — discover, don't hardcode.
+const kind = HookKind.HYPERCORE_DEPOSIT;        // any registered kind; see `HookKind` for the current set
+if (!getSpokeHook(dstChainKey, kind)) return;   // not deployed there → send a plain transfer instead
+
+const params = {
+  // …the usual CreateIntentParams fields…
+  dstAddress: recipient,  // the account the hook CREDITS — the SDK overwrites the on-chain
+                          // dstAddress with the hook's own address
+  hook: { kind },
+};
+```
+
+- **Fails closed** — a kind not registered on `dstChainKey` throws at intent-construction time, before an
+  intent exists. A zero-address recipient is rejected for every hook (it would revert on arrival and
+  wedge the cross-chain message unrecoverably).
+- **Best-effort on-chain** — a hook generally delivers plain tokens to the recipient rather than
+  reverting when it can't act (unsupported token, refusing target, amount below its minimum). Treat a
+  hooked intent as "the tokens arrive; the hook action may not". `supportedTokens` on a registry entry
+  describes that on-chain behaviour; the SDK does not reject a mismatched `outputToken` client-side.
+- `deliveryData` is the escape hatch for a receiver **not** in the registry: opaque bytes whose schema the
+  receiver defines, and you point `dstAddress` at that receiver yourself. Ignored when `hook` is set.
 
 ## Common call shapes
 
@@ -285,6 +328,7 @@ await sodax.swaps.cancelIntent({
 | `cancelIntent` / `cancelLimitOrder` | `TxHashPair` = `{ srcChainTxHash, dstChainTxHash }` (not generic over `Raw`) |
 | `approve` | `TxReturnType<K, Raw>` |
 | `isAllowanceValid` | `boolean` |
+| `getSwapSpeedTier` | `SwapSpeedTierResult` = `{ tier: 'fast' \| 'normal' \| 'slow', estimatedSeconds: number }` (synchronous, not a `Result`) |
 
 `RelayExtraData`:
 

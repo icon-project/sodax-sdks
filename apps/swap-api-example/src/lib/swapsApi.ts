@@ -3,8 +3,11 @@ import { SwapsApi } from '@sodax/swaps-api';
 /** Base URL incl. the version prefix. The canary host mounts swaps under `/v1`. */
 const baseUrl = import.meta.env.VITE_SWAPS_API_BASE_URL ?? 'https://canary-api.sodax.com/v1';
 
+/** Optional partner API key, sent as `x-api-key` (unset is fine until the backend enforces it). */
+const apiKey = import.meta.env.VITE_SODAX_API_KEY || undefined;
+
 /** Single client for the whole app — swaps-api owns all HTTP; the wallet only signs. */
-export const swapsApi = new SwapsApi({ baseUrl });
+export const swapsApi = new SwapsApi({ baseUrl, apiKey });
 
 /**
  * EVM spoke chains this example can sign for (createIntent returns an unsigned EVM tx that the
