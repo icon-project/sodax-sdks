@@ -1,25 +1,28 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChainSelector } from '@/components/shared/ChainSelector';
+import { SelectToken } from '@/components/shared/SelectToken';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   useGetBridgeableTokens,
   useGetBridgeableAmount,
   useSodaxContext,
+  useXBalances,
   loadRadfiSession,
   ChainKeys,
   type SpokeChainKey,
   type XToken,
   type CreateBridgeIntentParams,
 } from '@sodax/dapp-kit';
-import { useWalletProvider, useXAccount, useXDisconnect, getXChainType } from '@sodax/wallet-sdk-react';
+import { useWalletProvider, useXAccount, useXDisconnect, useXService, getXChainType } from '@sodax/wallet-sdk-react';
 import { ArrowDownUp } from 'lucide-react';
 import { formatUnits, parseUnits } from 'viem';
 import { useAppStore } from '@/zustand/useAppStore';
+import { formatTokenAmount } from '@/lib/utils';
+import { loadBridgeSelection, saveBridgeSelection } from '@/lib/bridgeLastSelection';
 import { BridgeDialog } from './BridgeDialog';
 
 export function BridgeManager() {
@@ -29,12 +32,21 @@ export function BridgeManager() {
   const supportedSpokeChains = useMemo(() => sodax.config.getSupportedSpokeChains(), [sodax]);
   const supportedTokensPerChain = useMemo(() => sodax.config.getSupportedTokensPerChain(), [sodax]);
 
-  const [fromChainKey, setFromChainKey] = useState<SpokeChainKey>(ChainKeys.BASE_MAINNET);
-  const [toChainKey, setToChainKey] = useState<SpokeChainKey>(ChainKeys.POLYGON_MAINNET);
+  // Restore the last picked chains/tokens (validated against the live supported lists).
+  const stored = useMemo(loadBridgeSelection, []);
+  const initialSrcChain = supportedSpokeChains.find(c => c === stored.src?.chain) ?? ChainKeys.BASE_MAINNET;
+  const initialDstChain = supportedSpokeChains.find(c => c === stored.dst?.chain) ?? ChainKeys.POLYGON_MAINNET;
+
+  const [fromChainKey, setFromChainKey] = useState<SpokeChainKey>(initialSrcChain);
+  const [toChainKey, setToChainKey] = useState<SpokeChainKey>(initialDstChain);
 
   const fromTokens = supportedTokensPerChain.get(fromChainKey) ?? [];
-  const [fromToken, setFromToken] = useState<XToken | undefined>(fromTokens[0]);
+  const [fromToken, setFromToken] = useState<XToken | undefined>(() => {
+    const tokens = supportedTokensPerChain.get(initialSrcChain) ?? [];
+    return tokens.find(t => t.symbol === stored.src?.tokenSymbol) ?? tokens[0];
+  });
   const [toToken, setToToken] = useState<XToken | undefined>(undefined);
+  const restoredDstSymbol = useRef(stored.dst?.tokenSymbol);
   const [fromAmount, setFromAmount] = useState('');
 
   const fromAccount = useXAccount({ xChainId: fromChainKey });
@@ -43,6 +55,28 @@ export function BridgeManager() {
 
   const walletProvider = useWalletProvider({ xChainId: fromChainKey });
   const fromChainType = getXChainType(fromChainKey);
+
+  const fromXService = useXService({ xChainType: getXChainType(fromChainKey) });
+  const { data: fromBalances } = useXBalances({
+    params: {
+      xService: fromXService,
+      xChainId: fromChainKey,
+      xTokens: fromToken ? [fromToken] : [],
+      address: fromAccount.address,
+    },
+  });
+  const fromBalance = fromBalances?.[fromToken?.address ?? ''] ?? 0n;
+
+  const toXService = useXService({ xChainType: getXChainType(toChainKey) });
+  const { data: toBalances } = useXBalances({
+    params: {
+      xService: toXService,
+      xChainId: toChainKey,
+      xTokens: toToken ? [toToken] : [],
+      address: toAccount.address,
+    },
+  });
+  const toBalance = toBalances?.[toToken?.address ?? ''] ?? 0n;
 
   const { data: bridgeableTokens, isLoading: isLoadingBridgeableTokens } = useGetBridgeableTokens({
     params: {
@@ -54,16 +88,32 @@ export function BridgeManager() {
 
   useEffect(() => {
     if (bridgeableTokens && bridgeableTokens.length > 0) {
-      setToToken(prev => (prev && bridgeableTokens.some(t => t.address === prev.address) ? prev : bridgeableTokens[0]));
+      setToToken(prev => {
+        const kept = prev && bridgeableTokens.some(t => t.address === prev.address) ? prev : undefined;
+        const restored = bridgeableTokens.find(t => t.symbol === restoredDstSymbol.current);
+        restoredDstSymbol.current = undefined;
+        return kept ?? restored ?? bridgeableTokens[0];
+      });
     } else {
       setToToken(undefined);
     }
   }, [bridgeableTokens]);
 
+  // On a chain switch, re-resolve the same symbol on the NEW chain's list (never keep the old
+  // XToken object — balance readers key off xToken.chainKey). Also preserves the restored pick.
   useEffect(() => {
     const tokens = supportedTokensPerChain.get(fromChainKey) ?? [];
-    setFromToken(tokens[0]);
+    setFromToken(prev => tokens.find(t => t.symbol === prev?.symbol) ?? tokens[0]);
   }, [fromChainKey, supportedTokensPerChain]);
+
+  useEffect(() => {
+    saveBridgeSelection({
+      srcChain: fromChainKey,
+      srcSymbol: fromToken?.symbol,
+      dstChain: toChainKey,
+      dstSymbol: toToken?.symbol,
+    });
+  }, [fromChainKey, fromToken, toChainKey, toToken]);
 
   const { data: bridgeableAmount, isLoading: isLoadingBridgeableAmount } = useGetBridgeableAmount({
     params: { from: fromToken, to: toToken },
@@ -127,24 +177,12 @@ export function BridgeManager() {
             <div className="grow">
               <Input type="number" placeholder="0.0" value={fromAmount} onChange={e => setFromAmount(e.target.value)} />
             </div>
-            <Select
-              value={fromToken?.symbol}
-              onValueChange={symbol => {
-                const selected = fromTokens.find(t => t.symbol === symbol);
-                if (selected) setFromToken(selected);
-              }}
-            >
-              <SelectTrigger className="w-[110px]">
-                <SelectValue placeholder="Token" />
-              </SelectTrigger>
-              <SelectContent>
-                {fromTokens.map(t => (
-                  <SelectItem key={`${t.address}-${t.symbol}`} value={t.symbol}>
-                    {t.symbol}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SelectToken tokens={fromTokens} value={fromToken?.symbol} onSelect={setFromToken} className="w-[110px]" />
+          </div>
+
+          <div className="text-sm text-muted-foreground flex gap-1">
+            <span>Balance:</span>
+            <span>{formatTokenAmount(fromBalance, fromToken?.decimals ?? 0, 5)}</span>
           </div>
 
           <div className="grow">
@@ -188,25 +226,18 @@ export function BridgeManager() {
             {isLoadingBridgeableTokens ? (
               <Skeleton className="w-[110px] h-10" />
             ) : (
-              <Select
+              <SelectToken
+                tokens={bridgeableTokens ?? []}
                 value={toToken?.symbol}
-                onValueChange={symbol => {
-                  const selected = bridgeableTokens?.find(t => t.symbol === symbol);
-                  if (selected) setToToken(selected);
-                }}
-              >
-                <SelectTrigger className="w-[110px]">
-                  <SelectValue placeholder="Token" />
-                </SelectTrigger>
-                <SelectContent>
-                  {bridgeableTokens?.map(t => (
-                    <SelectItem key={`${t.address}-${t.symbol}`} value={t.symbol}>
-                      {t.symbol}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onSelect={setToToken}
+                className="w-[110px]"
+              />
             )}
+          </div>
+
+          <div className="text-sm text-muted-foreground flex gap-1">
+            <span>Balance:</span>
+            <span>{formatTokenAmount(toBalance, toToken?.decimals ?? 0, 5)}</span>
           </div>
 
           <div className="grow">
