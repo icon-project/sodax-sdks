@@ -413,6 +413,14 @@
       "destination": "/developers/packages/sdk/docs/STELLAR_TRUSTLINE"
     },
     {
+      "source": "/developers/how-to/how_to_create_a_spoke_provider",
+      "destination": "/developers/how-to"
+    },
+    {
+      "source": "/developers/how-to/how-to-create-a-spoke-provider",
+      "destination": "/developers/how-to"
+    },
+    {
       "source": "/developers/deployments/solver-compatible-assets",
       "destination": "/developers/deployments/swaps-compatible-assets"
     },
