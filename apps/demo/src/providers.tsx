@@ -163,6 +163,9 @@ export default function Providers({ children }: { children: ReactNode }) {
       // leaves the SDK on its default (analytics off).
       analytics: createDemoAnalytics() ?? false,
       solver: configMap[solverEnvironment],
+      // Backend submit-tx (default on) hands the intent to the production swaps-api, which the staging
+      // solver never sees; opt out on staging so the client-side relay targets the selected solver.
+      ...(solverEnvironment === SolverEnv.Staging ? { swaps: { useBackendSubmitTx: false } } : {}),
       chains: {
         [ChainKeys.SONIC_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.SONIC_MAINNET] },
         [ChainKeys.AVALANCHE_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.AVALANCHE_MAINNET] },
