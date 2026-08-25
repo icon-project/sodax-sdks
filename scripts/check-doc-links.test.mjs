@@ -40,14 +40,14 @@ test('accepts a relative link when the mirror keeps both docs in the same direct
   assert.deepEqual(failures, []);
 });
 
-test('rejects a relative link to a doc the mirror moves elsewhere', t => {
+test('rejects a relative link to a doc whose page lands elsewhere', t => {
   const failures = run(t, {
     'packages/sdk/docs/HOW_TO_MAKE_A_SWAP.md': 'See [SWAPS.md](./SWAPS.md#error-handling).\n',
   });
 
   assert.equal(failures.length, 1);
   assert.match(failures[0], /^packages\/sdk\/docs\/HOW_TO_MAKE_A_SWAP\.md:1 /);
-  assert.match(failures[0], /moves it to developers\/packages\/foundation\/sdk\/functional-modules\/swaps\.md/);
+  assert.match(failures[0], /its page moves to developers\/packages\/foundation\/sdk\/functional-modules\/swaps\.md/);
   assert.match(
     failures[0],
     /https:\/\/github\.com\/icon-project\/sodax-sdks\/blob\/main\/packages\/sdk\/docs\/SWAPS\.md#error-handling/,
@@ -60,7 +60,7 @@ test('rejects a relative link to a file that is not mirrored at all', t => {
   });
 
   assert.equal(failures.length, 1);
-  assert.match(failures[0], /not mirrored into GitBook/);
+  assert.match(failures[0], /not published as a page/);
   assert.match(failures[0], /blob\/main\/packages\/sdk\/docs\/LOGGING\.md/);
 });
 
@@ -128,5 +128,5 @@ test('reports a missing manifest instead of silently passing', t => {
 
   const failures = checkDocLinks({ root, manifestPath: 'scripts/missing.json' }).failures;
 
-  assert.deepEqual(failures, ['Missing GitBook mirror manifest scripts/missing.json']);
+  assert.deepEqual(failures, ['Missing docs page manifest scripts/missing.json']);
 });

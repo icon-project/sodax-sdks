@@ -2,10 +2,10 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Links in docs that sodax-document mirrors into GitBook must survive the mirror's
-// move-and-rename step: a relative link is only safe when the target lands in the same
-// destination directory under the same filename. Everything else must be an absolute
-// sodax-sdks URL. See scripts/gitbook-sync-map.json for the mirror manifest.
+// Links in package docs must survive the move-and-rename that generates their page under docs/:
+// a relative link is only safe when the target lands in the same destination directory under the
+// same filename. Everything else must be an absolute sodax-sdks URL, so it also resolves for the
+// npm and GitHub readers of the source. See scripts/gitbook-sync-map.json for the manifest.
 
 const BLOB_BASE = 'https://github.com/icon-project/sodax-sdks/blob/main/';
 const TREE_BASE = 'https://github.com/icon-project/sodax-sdks/tree/main/';
@@ -75,7 +75,7 @@ const checkRelative = ({ target, srcDir, destDir, destBySrc, inRepo, isDir }) =>
   if (mirroredDest && mirroredDest === posix.normalize(posix.join(destDir, path))) return null;
 
   const base = isDir(resolvedSrc) ? TREE_BASE : BLOB_BASE;
-  const reason = mirroredDest ? `the GitBook mirror moves it to ${mirroredDest}` : 'it is not mirrored into GitBook';
+  const reason = mirroredDest ? `its page moves to ${mirroredDest}` : 'it is not published as a page';
   return `relative link ${target} breaks on docs.sodax.com — ${reason}. Use ${base}${resolvedSrc}${anchor}`;
 };
 
@@ -86,7 +86,7 @@ export const checkDocLinks = ({ root, manifestPath = 'scripts/gitbook-sync-map.j
   const isDir = path => inRepo(path) && statSync(absolute(path)).isDirectory();
 
   if (!inRepo(manifestPath)) {
-    return { failures: [`Missing GitBook mirror manifest ${manifestPath}`], checked: 0, links: 0 };
+    return { failures: [`Missing docs page manifest ${manifestPath}`], checked: 0, links: 0 };
   }
 
   const { mirrored } = JSON.parse(readFileSync(absolute(manifestPath), 'utf8'));
@@ -95,10 +95,7 @@ export const checkDocLinks = ({ root, manifestPath = 'scripts/gitbook-sync-map.j
 
   for (const { src, dest } of mirrored) {
     if (!inRepo(src)) {
-      // sodax-document copies this path with `cp -f` under `set -e`, so a rename here breaks the sync.
-      failures.push(
-        `${manifestPath} maps missing file ${src} (update the manifest and sodax-document/sync-sodax-sdks.sh together)`,
-      );
+      failures.push(`${manifestPath} maps missing file ${src} (update the manifest when a doc moves or is renamed)`);
       continue;
     }
 
@@ -126,12 +123,12 @@ if (isMain) {
   const { failures, checked, links } = checkDocLinks({ root: process.cwd() });
 
   if (failures.length > 0) {
-    console.error('GitBook-mirrored doc link validation failed:\n');
+    console.error('Doc link validation failed:\n');
     for (const failure of failures) console.error(`- ${failure}`);
-    console.error('\nRule: inside a mirrored doc a link may stay relative only when the target is mirrored');
-    console.error(`into the same directory under the same name; otherwise use ${BLOB_BASE}<path>.`);
+    console.error('\nRule: inside a published doc a link may stay relative only when the target lands');
+    console.error(`in the same directory under the same name; otherwise use ${BLOB_BASE}<path>.`);
     process.exit(1);
   }
 
-  console.log(`GitBook-mirrored doc link validation passed (${checked} mirrored files, ${links} links).`);
+  console.log(`Doc link validation passed (${checked} published files, ${links} links).`);
 }
