@@ -138,10 +138,8 @@ Changing `packages/types/src` triggers Docs Drift. Update the matching *mapped*
 feature page (`packages/sdk/docs/SWAPS.md` for swap tokens, `MONEY_MARKET.md` for
 MM tokens) or `packages/types/README.md`. JSDoc and `packages/skills` do not
 pass. If you add a brand-new mirrored page, also add it to
-`scripts/gitbook-sync-map.json` and add the downstream nav entry on the
-docs-sync PR (`SUMMARY.md` for GitBook, `docs.json` for Mintlify); the
-downstream sync currently reports missing nav as a warning in the PR body
-rather than failing hard. Ask a maintainer for the `docs-not-needed` label only
+`scripts/gitbook-sync-map.json` and give it a nav entry in `docs/docs.json`, or
+it is live but absent from the sidebar and search. Ask for the `docs-not-needed` label only
 when the change is truly not user-facing (checksum/casing, internal rename).
 
 ## 6. Verify

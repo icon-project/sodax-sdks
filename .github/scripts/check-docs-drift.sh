@@ -10,7 +10,9 @@ RANGE="$BASE_REF...$HEAD_REF"
 MAP_FILE="scripts/gitbook-sync-map.json"
 
 # Without this, non-ASCII paths are C-quoted and miss the ^packages/ anchors.
-CHANGED=$(git -c core.quotePath=false diff --name-only "$RANGE")
+# --no-renames keeps the source side: a rename out of src/ (or into a test path)
+# otherwise reports only the destination and hides the package entirely.
+CHANGED=$(git -c core.quotePath=false diff --name-only --no-renames "$RANGE")
 # ACMR = added/copied/modified/renamed. Deletions are not a docs signal.
 UPDATED=$(git -c core.quotePath=false diff --name-only --diff-filter=ACMR "$RANGE")
 
@@ -62,6 +64,10 @@ for item in data.get("mirrored", []):
     if not isinstance(src, str) or any(c in src for c in "\n\r\t\0"):
         print("::error::scripts/gitbook-sync-map.json src must be a single-line, tab-free path.", file=sys.stderr)
         sys.exit(1)
+    # Markdown only: otherwise a PR could map its own changed source file and self-satisfy the gate.
+    if not src.endswith((".md", ".mdx")):
+        print(f"::error::scripts/gitbook-sync-map.json src must be a .md or .mdx page: {src}", file=sys.stderr)
+        sys.exit(1)
     print(src)
 ')
 
@@ -96,7 +102,9 @@ done <<< "$MIRRORED_SRCS"
 
 if [ -n "$MISSING_MAPPED" ]; then
   echo "::error::Mapped src(s) are missing at $HEAD_REF:$MISSING_MAPPED"
-  echo "Add the file, or remove/update the src entry in $MAP_FILE."
+  echo "If you moved or renamed the page, point the src entry in $MAP_FILE at its new path."
+  echo "Only delete the entry if the page is gone for good — deleting one that carries"
+  echo "pkgs also drops the Docs Drift coverage those packages rely on."
   echo "See CONTRIBUTING.md#documentation."
   exit 1
 fi

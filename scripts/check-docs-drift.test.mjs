@@ -393,6 +393,48 @@ test('fails closed when a map pkgs entry is malformed', t => {
   assert.match(result.out, /pkgs must be a non-empty array/);
 });
 
+test('fails when src is renamed out of the package with no docs', t => {
+  const { root, base } = createRepo(t);
+  mkdirSync(join(root, 'retired'), { recursive: true });
+  git(root, ['mv', 'packages/sdk/src/index.ts', 'retired/index.ts']);
+  const head = commit(root, 'move sdk src out');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 1);
+  assert.match(result.out, /Source changed in: sdk/);
+});
+
+test('fails when src is renamed into a test path with no docs', t => {
+  const { root, base } = createRepo(t);
+  git(root, ['mv', 'packages/sdk/src/index.ts', 'packages/sdk/src/index.test.ts']);
+  const head = commit(root, 'move sdk src to a test path');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 1);
+  assert.match(result.out, /Source changed in: sdk/);
+});
+
+test('fails closed when a map src is not a markdown page', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'packages/sdk/src/index.ts', 'export const n = 2;\n');
+  write(
+    root,
+    'scripts/gitbook-sync-map.json',
+    `${JSON.stringify(
+      {
+        mirrored: [...MAP.mirrored, { src: 'packages/sdk/src/index.ts', dest: 'developers/index.md' }],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  const head = commit(root, 'map own source file as docs');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 1);
+  assert.match(result.out, /must be a .md or .mdx page/);
+});
+
 test('passes when a huge changed-path list still matches the README', t => {
   const { root, base } = createRepo(t);
   write(root, 'packages/types/src/index.ts', 'export type T = number;\n');

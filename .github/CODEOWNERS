@@ -2,3 +2,6 @@
 .github/workflows/ @icon-project/frontend-write
 .github/scripts/ @icon-project/frontend-write
 .github/CODEOWNERS @icon-project/frontend-write
+
+# The sync map decides what satisfies Docs Drift and is read from the PR head.
+scripts/gitbook-sync-map.json @icon-project/frontend-write

@@ -57,6 +57,6 @@ jobs:
             echo "Running Docs Drift script from base $BASE_SHA (ignoring PR edits to the script)."
             git show "$SCRIPT_BLOB" | bash -s -- "$BASE_SHA" "$HEAD_SHA"
           else
-            echo "Docs Drift script is not on the base branch yet — running the checkout copy (bootstrap)."
+            echo "::warning::Docs Drift script is absent from base $BASE_SHA — running this PR's own copy (bootstrap). Only expected until the gate is on the base branch."
             bash .github/scripts/check-docs-drift.sh "$BASE_SHA" "$HEAD_SHA"
           fi
