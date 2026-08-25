@@ -263,7 +263,7 @@
             "pages": ["developers/audits/index"]
           },
           {
-            "group": "FAQ",
+            "group": "Help",
             "icon": "comment-question",
             "pages": ["developers/faq"]
           }
@@ -476,6 +476,10 @@
       {
         "header": "Resources",
         "items": [
+          {
+            "label": "FAQ",
+            "href": "/developers/faq"
+          },
           {
             "label": "Brand kit",
             "href": "https://www.sodax.com/brand"

@@ -15,8 +15,10 @@ import { Sodax, ChainKeys } from '@sodax/sdk';
 
 const sodax = new Sodax();
 
+// find() returns XToken | undefined, so narrow before using the address
 const solanaTokens = sodax.moneyMarket.getSupportedTokensByChainId(ChainKeys.SOLANA_MAINNET);
 const sol = solanaTokens.find(t => t.symbol === 'SOL');
+if (!sol) throw new Error('SOL is not a supported money-market token');
 
 const result = await sodax.moneyMarket.supply({
   params: {

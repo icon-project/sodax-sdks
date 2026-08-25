@@ -46,10 +46,12 @@ Prefer HTTP? Same flow over REST: [Swap API](/developers/http-api/swaps). Prefer
         inputAmount: 1_000_000n,
         minOutputAmount: 900_000n,
         deadline: deadlineResult.value,
+        allowPartialFill: false,
         srcChainKey: ChainKeys.BSC_MAINNET,
         dstChainKey: ChainKeys.ARBITRUM_MAINNET,
         srcAddress: await evmWalletProvider.getWalletAddress(),
         dstAddress: '0x…',
+        data: '0x',
       },
       walletProvider: evmWalletProvider,
     });

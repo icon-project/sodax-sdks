@@ -32,7 +32,7 @@ See [Configure SDK](/developers/packages/sdk/docs/CONFIGURE_SDK).
 Pass a partial `hub` block to the constructor:
 
 ```tsx
-new Sodax({ hub: { rpcUrl: '<https://rpc.soniclabs.com>' } })
+new Sodax({ hub: { rpcUrl: 'https://rpc.soniclabs.com' } })
 ```
 
 Read the merged config from `sodax.instanceConfig.hub`. Note that `sodax.config.getHubChainConfig()` returns the packaged snapshot, not your overrides.

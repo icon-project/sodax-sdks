@@ -2,13 +2,17 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Links in package docs must survive the move-and-rename that generates their page under docs/:
-// a relative link is only safe when the target lands in the same destination directory under the
-// same filename. Everything else must be an absolute sodax-sdks URL, so it also resolves for the
-// npm and GitHub readers of the source. See scripts/gitbook-sync-map.json for the manifest.
+// The manifest holds two kinds of source, with opposite link rules.
+// A package doc is moved and renamed on its way to a page, so a relative link is only safe when
+// the target lands in the same destination directory under the same filename; everything else
+// needs an absolute sodax-sdks URL, which also resolves for the npm and GitHub readers.
+// A source already under docs/ IS the page: its internal links must be root-relative and
+// extensionless, because relative and extension-bearing targets 404 in production.
+// See scripts/gitbook-sync-map.json for the manifest and docs/AGENTS.md for the site rules.
 
 const BLOB_BASE = 'https://github.com/icon-project/sodax-sdks/blob/main/';
 const TREE_BASE = 'https://github.com/icon-project/sodax-sdks/tree/main/';
+const PAGE_EXTENSIONS = ['.md', '.mdx'];
 const SOURCE_URL = /^https:\/\/github\.com\/icon-project\/sodax-sdks\/(?:blob|tree)\/main\/([^?#]+)/;
 const WRONG_REPO_URLS = [
   { pattern: 'github.com/icon-project/sodax-document/', hint: 'link to the sodax-sdks source file instead' },
@@ -62,6 +66,30 @@ const checkAbsolute = ({ target, inRepo }) => {
   return inRepo(path) ? null : `links to ${path}, which does not exist in this repo: ${url}`;
 };
 
+// Resolves a root-relative site target to what Mintlify serves: a page file, a directory index,
+// or a static asset committed under docs/.
+const servesUnderDocs = ({ path, inRepo, isDir }) => {
+  const base = posix.join('docs', path.replace(/^\/+/, '').replace(/\/+$/, ''));
+  if (PAGE_EXTENSIONS.some(ext => inRepo(`${base}${ext}`) || inRepo(posix.join(base, `index${ext}`)))) return true;
+  return inRepo(base) && !isDir(base);
+};
+
+const checkSitePage = ({ target, inRepo, isDir }) => {
+  const [path, anchor] = splitAnchor(target);
+  if (!path) return null;
+
+  if (!path.startsWith('/'))
+    return `relative link ${target} 404s in production; site pages link root-relative, e.g. /developers/faq`;
+
+  const extension = PAGE_EXTENSIONS.find(ext => path.endsWith(ext));
+  if (extension) return `link ${target} keeps its ${extension} extension, which 404s in production; drop it`;
+
+  if (!servesUnderDocs({ path, inRepo, isDir }))
+    return `links to ${path}${anchor}, which no page or asset under docs/ serves`;
+
+  return null;
+};
+
 const checkRelative = ({ target, srcDir, destDir, destBySrc, inRepo, isDir }) => {
   if (target.startsWith('/')) return `uses a root-relative link ${target}; use an absolute ${BLOB_BASE}… URL`;
 
@@ -99,7 +127,9 @@ export const checkDocLinks = ({ root, manifestPath = 'scripts/gitbook-sync-map.j
       continue;
     }
 
+    const isSiteSource = src === 'docs' || src.startsWith('docs/');
     const context = { srcDir: posix.dirname(src), destDir: posix.dirname(dest), destBySrc, inRepo, isDir };
+    const checkInternal = isSiteSource ? checkSitePage : checkRelative;
 
     stripCode(readFileSync(absolute(src), 'utf8')).forEach((line, index) => {
       for (const target of collectTargets(line)) {
@@ -107,7 +137,7 @@ export const checkDocLinks = ({ root, manifestPath = 'scripts/gitbook-sync-map.j
         links += 1;
 
         const isAbsolute = /^[a-z][a-z0-9+.-]*:\/\//i.test(target);
-        const problem = isAbsolute ? checkAbsolute({ target, inRepo }) : checkRelative({ ...context, target });
+        const problem = isAbsolute ? checkAbsolute({ target, inRepo }) : checkInternal({ ...context, target });
 
         if (problem) failures.push(`${src}:${index + 1} ${problem}`);
       }
@@ -125,8 +155,9 @@ if (isMain) {
   if (failures.length > 0) {
     console.error('Doc link validation failed:\n');
     for (const failure of failures) console.error(`- ${failure}`);
-    console.error('\nRule: inside a published doc a link may stay relative only when the target lands');
-    console.error(`in the same directory under the same name; otherwise use ${BLOB_BASE}<path>.`);
+    console.error('\nRules: in a package doc a link may stay relative only when the target lands in the');
+    console.error(`same directory under the same name; otherwise use ${BLOB_BASE}<path>.`);
+    console.error('In a docs/ page, internal links are root-relative and extensionless (/developers/faq).');
     process.exit(1);
   }
 

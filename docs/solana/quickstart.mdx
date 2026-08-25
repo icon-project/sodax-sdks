@@ -21,21 +21,25 @@ npm install @sodax/sdk @sodax/wallet-sdk-core
 
 The SDK talks to Solana through `SolanaWalletProvider` from `@sodax/wallet-sdk-core`, built on `@solana/web3.js`. Use private-key mode for scripts and bots, or browser-extension mode to wrap a connected wallet (Phantom, Backpack, Solflare, or anything exposing `publicKey` and `signTransaction`).
 
-```typescript
-import { SolanaWalletProvider } from '@sodax/wallet-sdk-core';
+<CodeGroup>
+  ```typescript Private key (scripts / bots)
+  import { SolanaWalletProvider } from '@sodax/wallet-sdk-core';
 
-// Private-key mode (scripts / bots)
-const walletProvider = new SolanaWalletProvider({
-  privateKey: keypairBytes, // Uint8Array, raw keypair bytes
-  endpoint: 'https://api.mainnet-beta.solana.com',
-});
+  const walletProvider = new SolanaWalletProvider({
+    privateKey: keypairBytes, // Uint8Array, raw keypair bytes
+    endpoint: 'https://api.mainnet-beta.solana.com',
+  });
+  ```
 
-// Browser-extension mode (dApps)
-const walletProvider = new SolanaWalletProvider({
-  wallet: walletContextState, // { publicKey, signTransaction }
-  endpoint: 'https://api.mainnet-beta.solana.com',
-});
-```
+  ```typescript Browser extension (dApps)
+  import { SolanaWalletProvider } from '@sodax/wallet-sdk-core';
+
+  const walletProvider = new SolanaWalletProvider({
+    wallet: walletContextState, // { publicKey, signTransaction }
+    endpoint: 'https://api.mainnet-beta.solana.com',
+  });
+  ```
+</CodeGroup>
 
 Building in React? [`@sodax/wallet-sdk-react`](/developers/packages/connection/wallet-sdk-react) discovers and connects wallets for you and hands back a ready-made provider via `useWalletProvider`.
 
@@ -44,16 +48,20 @@ Building in React? [`@sodax/wallet-sdk-react`](/developers/packages/connection/w
 Token addresses and decimals come from the SDK config, so you never hard-code mints:
 
 ```typescript
-import { Sodax, ChainKeys } from '@sodax/sdk';
+import { Sodax, ChainKeys, type XToken } from '@sodax/sdk';
 
 const sodax = new Sodax();
 await sodax.initialize(); // optional: pulls the latest token config
 
-const solanaTokens = sodax.swaps.getSupportedSwapTokensByChainId(ChainKeys.SOLANA_MAINNET);
-const sol = solanaTokens.find(t => t.symbol === 'SOL');
+// find() returns XToken | undefined, so narrow before using the address
+const bySymbol = (tokens: readonly XToken[], symbol: string) => {
+  const token = tokens.find(t => t.symbol === symbol);
+  if (!token) throw new Error(`${symbol} is not a supported swap token`);
+  return token;
+};
 
-const arbTokens = sodax.swaps.getSupportedSwapTokensByChainId(ChainKeys.ARBITRUM_MAINNET);
-const usdcArb = arbTokens.find(t => t.symbol === 'USDC');
+const sol = bySymbol(sodax.swaps.getSupportedSwapTokensByChainId(ChainKeys.SOLANA_MAINNET), 'SOL');
+const usdcArb = bySymbol(sodax.swaps.getSupportedSwapTokensByChainId(ChainKeys.ARBITRUM_MAINNET), 'USDC');
 ```
 
 ## 4. Quote and swap
