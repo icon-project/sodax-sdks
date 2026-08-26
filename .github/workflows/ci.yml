@@ -6,7 +6,7 @@ on:
       - main
       - development
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, reopened, ready_for_review]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -58,6 +58,9 @@ jobs:
     runs-on: ubuntu-latest
     # Runs on every pull request, including code-only ones: the doc-link and generated-page
     # checks read package READMEs and packages/sdk/docs, which a code change can break.
+    # Read-only: this is the one job that executes a dependency tree the repo does not pin.
+    permissions:
+      contents: read
     env:
       # Pinned, and at least 14 days old, per the supply-chain rules. The CLI is not a repo
       # dependency: it pulls puppeteer, which no other repo task needs.

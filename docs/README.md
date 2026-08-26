@@ -149,7 +149,7 @@ networks land on the same page in each one.
 ## Check before you push
 
 ```bash
-npm i -g mint          # once; pin an exact version in automation
+npm i -g mint@4.2.794  # once; the version CI pins in ci.yml
 
 pnpm check:docs-nav    # nav <-> files, plus redirects and pinned URLs (no network, no CLI)
 pnpm check:docs-pages  # generated copies still match their sources

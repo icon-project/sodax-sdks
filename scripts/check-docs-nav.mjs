@@ -42,8 +42,10 @@ export const MUST_NOT_BREAK_URLS = [
   '/developers/packages/foundation/sdk/functional-modules/money_market',
   '/developers/packages/foundation/sdk/functional-modules/bridge',
   '/developers/ai-integration',
+  '/developers/how-to/how_to_create_a_spoke_provider',
   '/welcome-to-sodax/audits',
   '/welcome-to-sodax/readme-1',
+  '/partners',
 ];
 
 // Supports the .gitignore subset Mintlify documents: "!" negation, "/" anchor and directory
