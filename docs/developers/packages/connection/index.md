@@ -6,8 +6,11 @@ description: >-
 icon: wallet
 ---
 
-
-<a href="/developers/packages/connection/wallet-sdk-core" class="button secondary" data-icon="wallet">Wallet SDK Core (Typescript)</a>
-
-<a href="/developers/packages/connection/wallet-sdk-react" class="button secondary" data-icon="react">Wallet SDK React</a>
-
+<CardGroup cols={2}>
+  <Card title="Wallet SDK Core (TypeScript)" icon="wallet" href="/developers/packages/connection/wallet-sdk-core" horizontal arrow>
+    Multi-chain wallet providers for signing and broadcasting.
+  </Card>
+  <Card title="Wallet SDK React" icon="react" href="/developers/packages/connection/wallet-sdk-react" horizontal arrow>
+    React wallet state, connectors, providers, and modal primitives.
+  </Card>
+</CardGroup>

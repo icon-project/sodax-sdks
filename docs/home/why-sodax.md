@@ -16,7 +16,9 @@ SODAX is a modular execution system. Integrate each SDK module on its own, or co
 | **Perp DEXs / Yield Apps** | Use **Swaps** to accept deposits from other networks via swap-into-your-asset flows, then complete the deposit inside your app. Use **Lend / Borrow (Money Market)** to enable borrowed asset deposits with user collateral on other networks. |
 | **New Networks** | Integrate SODAX to provide builders with ready-made cross-network execution capabilities and liquidity access from day one. |
 
-<Card title="Go to sodax.com/partners" icon="handshake" href="https://sodax.com/partners" />
+<Card title="Partner with SODAX" icon="handshake" href="https://sodax.com/partners" horizontal arrow>
+  Partner integrations and how to get in touch.
+</Card>
 
 ### Why it fits
 

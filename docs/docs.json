@@ -75,7 +75,17 @@
           {
             "group": "Community",
             "icon": "newspaper",
-            "pages": ["resources/videos", "resources/blog", "resources/changelog"]
+            "pages": ["resources/index", "resources/product-updates", "resources/videos", "resources/blog"]
+          },
+          {
+            "group": "Security",
+            "icon": "shield-halved",
+            "pages": ["developers/audits/index"]
+          },
+          {
+            "group": "Help",
+            "icon": "comment-question",
+            "pages": ["developers/faq"]
           }
         ]
       },
@@ -248,30 +258,14 @@
             ]
           }
         ]
-      },
-      {
-        "tab": "Resources",
-        "groups": [
-          {
-            "group": "Community",
-            "icon": "newspaper",
-            "pages": ["resources/index", "resources/videos", "resources/blog", "resources/changelog"]
-          },
-          {
-            "group": "Security",
-            "icon": "shield-halved",
-            "pages": ["developers/audits/index"]
-          },
-          {
-            "group": "Help",
-            "icon": "comment-question",
-            "pages": ["developers/faq"]
-          }
-        ]
       }
     ]
   },
   "redirects": [
+    {
+      "source": "/resources/changelog",
+      "destination": "/resources/product-updates"
+    },
     {
       "source": "/developers/packages/connection/wallet-kit",
       "destination": "/developers/packages/connection/wallet-sdk-core"

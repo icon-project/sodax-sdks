@@ -6,4 +6,6 @@ description: >-
 icon: browser
 ---
 
-<a href="/developers/packages/experience/dapp-kit" class="button secondary" data-icon="browser">dApp kit</a>
+<Card title="dApp Kit" icon="browser" href="/developers/packages/experience/dapp-kit" horizontal arrow>
+  React hooks combining SDK services, wallet providers, and React Query.
+</Card>
