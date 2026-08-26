@@ -22,7 +22,7 @@ PKGS=$(echo "$CHANGED" \
   | grep -v '/e2e-tests/' \
   | cut -d/ -f2 | sort -u | grep -vx 'skills' || true)
 
-# Renames keep their source path, so an in-place rename of an intentionally unmirrored
+# Renames keep their source path, so an in-place rename of a deliberately unpublished
 # page is not forced onto the map. A move in from elsewhere reports as an add.
 ADDED_SDK_DOCS=$(git -c core.quotePath=false diff --name-only --diff-filter=A \
   "$RANGE" -- 'packages/sdk/docs' || true)
@@ -37,6 +37,11 @@ is_mirrored() {
 
 was_published() {
   grep -qxF "$1" <<< "$BASE_MIRRORED_SRCS"
+}
+
+# Declared as deliberately-not-published-yet, so the gate lets it exist off the map.
+is_unpublished() {
+  grep -qxF "$1" <<< "$UNPUBLISHED_PAGES"
 }
 
 is_doc_page() {
@@ -58,13 +63,15 @@ covers_pkg() {
   grep -qxF "${pkg}"$'\t'"${path}" <<< "$PKG_COVERAGE"
 }
 
-# Mapped srcs at a ref. Strict at HEAD, where a malformed map must fail the PR;
-# tolerant at the base, whose map predates any rule this PR adds.
-read_mirrored_srcs() {
+# Doc paths from one array of the map at a ref: mirrored holds {src, dest} objects,
+# unpublished holds bare paths. Strict at HEAD, where a malformed map must fail the
+# PR; tolerant at the base, whose map predates any rule this PR adds.
+read_map_paths() {
   git show "$1:$MAP_FILE" | python3 -c '
 import json, sys
 
-strict = sys.argv[1] == "strict"
+key = sys.argv[1]
+strict = sys.argv[2] == "strict"
 
 def reject(message):
     if strict:
@@ -77,19 +84,19 @@ except ValueError:
     reject("::error::scripts/gitbook-sync-map.json is not valid JSON.")
     sys.exit(0)
 
-for item in data.get("mirrored", []):
-    src = item.get("src")
-    if src is None or src == "":
+for item in data.get(key, []):
+    path = item.get("src") if isinstance(item, dict) else item
+    if path is None or path == "":
         continue
-    if not isinstance(src, str) or any(c in src for c in "\n\r\t\0"):
-        reject("::error::scripts/gitbook-sync-map.json src must be a single-line, tab-free path.")
+    if not isinstance(path, str) or any(c in path for c in "\n\r\t\0"):
+        reject(f"::error::scripts/gitbook-sync-map.json {key} entry must be a single-line, tab-free path.")
         continue
     # Markdown only: otherwise a PR could map its own changed source file and self-satisfy the gate.
-    if not src.endswith((".md", ".mdx")):
-        reject(f"::error::scripts/gitbook-sync-map.json src must be a .md or .mdx page: {src}")
+    if not path.endswith((".md", ".mdx")):
+        reject(f"::error::scripts/gitbook-sync-map.json {key} entry must be a .md or .mdx page: {path}")
         continue
-    print(src)
-' "$2"
+    print(path)
+' "$2" "$3"
 }
 
 load_map() {
@@ -103,23 +110,30 @@ load_map() {
     exit 1
   fi
 
-  MIRRORED_SRCS=$(read_mirrored_srcs "$HEAD_REF" strict)
+  MIRRORED_SRCS=$(read_map_paths "$HEAD_REF" mirrored strict)
+  UNPUBLISHED_PAGES=$(read_map_paths "$HEAD_REF" unpublished strict)
 
   # The base map is what tells a rename of a published page apart from a rename of
   # one that was never published; unreadable means fall back to requiring the map.
   BASE_MAP_READABLE=0
   BASE_MIRRORED_SRCS=""
   if git cat-file -e "$BASE_REF:$MAP_FILE" 2>/dev/null; then
-    if BASE_MIRRORED_SRCS=$(read_mirrored_srcs "$BASE_REF" tolerant 2>/dev/null); then
+    if BASE_MIRRORED_SRCS=$(read_map_paths "$BASE_REF" mirrored tolerant 2>/dev/null); then
       BASE_MAP_READABLE=1
     else
       BASE_MIRRORED_SRCS=""
     fi
   fi
 
+  # pkgs is checked against the real package dirs at HEAD — read from git, not the
+  # filesystem, so the gate behaves the same on an arbitrary range. A typo'd name
+  # would otherwise pass the pattern check and silently cover no package at all.
+  PKG_DIRS=$(git ls-tree -d --name-only "$HEAD_REF:packages" 2>/dev/null || true)
+
   # pkg<TAB>src pairs from entries that opt into package coverage via pkgs.
-  PKG_COVERAGE=$(git show "$HEAD_REF:$MAP_FILE" | python3 -c '
-import json, re, sys
+  PKG_COVERAGE=$(git show "$HEAD_REF:$MAP_FILE" | PKG_DIRS="$PKG_DIRS" python3 -c '
+import json, os, re, sys
+dirs = set(os.environ["PKG_DIRS"].split("\n"))
 data = json.load(sys.stdin)
 for item in data.get("mirrored", []):
     src = item.get("src")
@@ -132,6 +146,9 @@ for item in data.get("mirrored", []):
         print("::error::scripts/gitbook-sync-map.json pkgs must be a non-empty array of package directory names.", file=sys.stderr)
         sys.exit(1)
     for p in pkgs:
+        if p not in dirs:
+            print(f"::error::scripts/gitbook-sync-map.json pkgs names a package that does not exist: {p} (in {src})", file=sys.stderr)
+            sys.exit(1)
         print(f"{p}\t{src}")
 ')
 }
@@ -158,7 +175,7 @@ fi
 UNMAPPED_NEW=""
 while IFS= read -r added; do
   [ -z "$added" ] && continue
-  if is_doc_page "$added" && ! is_mirrored "$added"; then
+  if is_doc_page "$added" && ! is_mirrored "$added" && ! is_unpublished "$added"; then
     UNMAPPED_NEW="$UNMAPPED_NEW $added"
   fi
 done <<< "$ADDED_SDK_DOCS"
@@ -172,7 +189,10 @@ while IFS=$'\t' read -r _status from to; do
   case "$from" in
     packages/sdk/docs/*) ;;
     *)
-      UNMAPPED_NEW="$UNMAPPED_NEW $to"
+      # Moved in from elsewhere: a new page here, so the same two-list rule applies.
+      if ! is_unpublished "$to"; then
+        UNMAPPED_NEW="$UNMAPPED_NEW $to"
+      fi
       continue
       ;;
   esac
@@ -185,8 +205,9 @@ done <<< "$RENAMED_SDK_DOCS"
 
 if [ -n "$UNMAPPED_NEW" ]; then
   echo "::error::New SDK doc(s) are not in $MAP_FILE:$UNMAPPED_NEW"
-  echo "Add each file to $MAP_FILE — sodax-document copies every mapped src."
-  echo "Add a sidebar entry (SUMMARY.md or docs.json) on the docs-sync PR."
+  echo "To publish one, add it to \"mirrored\" — every mapped src is published — and give"
+  echo "it a nav entry in docs/docs.json, or it is live but absent from sidebar and search."
+  echo "Not ready to publish? Add it to \"unpublished\" and map it in a follow-up."
   echo "See CONTRIBUTING.md#documentation."
   exit 1
 fi
@@ -194,7 +215,7 @@ fi
 if [ -n "$UNPUBLISHED_RENAME" ]; then
   echo "::error::Renamed SDK doc(s) dropped off $MAP_FILE:$UNPUBLISHED_RENAME"
   echo "Point the src entry at the new path so the page keeps publishing."
-  echo "Renaming a page that was never mirrored (DEX.md, LOGGING.md, …) needs no map entry."
+  echo "Renaming a page on the \"unpublished\" list (DEX.md, LOGGING.md, …) needs no map entry."
   echo "See CONTRIBUTING.md#documentation."
   exit 1
 fi
@@ -236,7 +257,7 @@ if [ -n "$MISSING" ]; then
   echo "a packages/sdk/docs/ page on the map, a mapped root docs/ guide whose"
   echo "pkgs entry lists the package, the package README, or"
   echo "packages/<pkg>/docs/ (non-sdk packages)."
-  echo "JSDoc, packages/skills, and unmirrored sdk/docs pages (DEX.md, LOGGING.md, …) do not count."
+  echo "JSDoc, packages/skills, and \"unpublished\" sdk/docs pages (DEX.md, LOGGING.md, …) do not count."
   echo "An unrelated mapped file (e.g. packages/skills/README.md) does not satisfy another package."
   echo "Deleting a README, mapped page, or packages/<pkg>/docs/ file does not count."
   echo "If this PR truly has no user-facing change, ask a maintainer for the 'docs-not-needed' label."

@@ -136,10 +136,13 @@ URL only resolves once merged to `main`. See [`packages/assets/README.md`](../..
 ## 5. Docs Drift
 Changing `packages/types/src` triggers Docs Drift. Update the matching *mapped*
 feature page (`packages/sdk/docs/SWAPS.md` for swap tokens, `MONEY_MARKET.md` for
-MM tokens) or `packages/types/README.md`. JSDoc and `packages/skills` do not
-pass. If you add a brand-new mirrored page, also add it to
-`scripts/gitbook-sync-map.json` and give it a nav entry in `docs/docs.json`, or
-it is live but absent from the sidebar and search. Ask for the `docs-not-needed` label only
+MM tokens) or the deployments page carrying the list,
+`docs/developers/deployments/swaps-compatible-assets.md` (its `pkgs` covers
+`types`). `packages/types/README.md` passes the gate but does not publish, so
+prefer a page that does. JSDoc and `packages/skills` do not pass. A brand-new
+`packages/sdk/docs/` page must join the `mirrored` list in
+`scripts/gitbook-sync-map.json` plus a `docs/docs.json` nav entry — or, if it is
+not ready to go live, the map's `unpublished` list. Ask for the `docs-not-needed` label only
 when the change is truly not user-facing (checksum/casing, internal rename).
 
 ## 6. Verify

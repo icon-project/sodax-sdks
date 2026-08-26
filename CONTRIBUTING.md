@@ -33,8 +33,9 @@ directly, and never edit a copy of a page instead of the source it came from.
 
 | You changed…                                                          | Update…                                                                    |
 | --------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| A functional module (swaps, money market, bridge, staking, migration, leverage yield) | The matching *mirrored* file in `packages/sdk/docs/` (e.g. `SWAPS.md`, listed in `scripts/gitbook-sync-map.json`) |
-| The public API of any package                                          | That package's `README.md`                                                  |
+| A functional module (swaps, money market, bridge, staking, migration, leverage yield) | The matching *published* file in `packages/sdk/docs/` (e.g. `SWAPS.md`, listed in `scripts/gitbook-sync-map.json`) |
+| The public API of `sdk`, `swaps-api`, `wallet-sdk-core`, `wallet-sdk-react`, or `dapp-kit` | That package's `README.md` — these publish, so the README alone is a real docs signal |
+| The public API of `types`, `libs`, or `assets`                          | Their READMEs are **not** on the publish map. The gate accepts them (and `packages/<pkg>/docs/`), but prefer a page that goes live: for `types`, `docs/developers/deployments/mainnet.md` or `swaps-compatible-assets.md` — both list `types` in `pkgs` |
 | A flow with a root-level `docs/` guide (e.g. Stellar sponsoring)       | That guide — it satisfies Docs Drift for the packages its `pkgs` entry lists in `scripts/gitbook-sync-map.json` |
 | Exported types or function signatures                                  | JSDoc on the exports themselves (does not satisfy Docs Drift)               |
 
@@ -54,35 +55,36 @@ directly, and never edit a copy of a page instead of the source it came from.
   CI. If a user would need to read source to use the feature, it needs a
   markdown page that is listed in `scripts/gitbook-sync-map.json`.
 
-### Mirrored docs and docs.sodax.com
+### Published docs and docs.sodax.com
 
 `scripts/gitbook-sync-map.json` maps each authored source — package `README.md`
 files and `packages/sdk/docs/` pages — to the path it publishes at on
 docs.sodax.com. It is the copy list, and both Docs Drift and
 `pnpm check:doc-links` read it. For those files:
 
-- **Don't add frontmatter** (titles, icons, descriptions) — the sync injects it.
+- **Don't add frontmatter** (titles, icons, descriptions) — publishing injects it.
 - **Avoid raw HTML.** Mintlify compiles pages as MDX; HTML attributes like
   `class` fail to render. Stick to plain markdown.
-- **Links follow the mirrored-doc rule** enforced by `pnpm check:doc-links`:
-  relative links are only allowed to targets mirrored into the same destination
-  directory; everything else needs an absolute
+- **Links follow the published-doc rule** enforced by `pnpm check:doc-links`:
+  relative links are only allowed to targets that publish into the same
+  destination directory; everything else needs an absolute
   `https://github.com/icon-project/sodax-sdks/blob/main/…` URL.
-- **Adding, renaming, or removing a mirrored doc?** Add, rename, or remove the
+- **Adding, renaming, or removing a published doc?** Add, rename, or remove the
   entry in `scripts/gitbook-sync-map.json` — that is what gets the page
-  published. **A new page under `docs/` must also be added to navigation**
-  (`docs/docs.json`); a mirrored page elsewhere gets its sidebar entry on the
-  docs-sync side. A page with no nav entry is live but absent from the sidebar
-  and from search. Docs Drift does not check nav. A new `packages/sdk/docs/`
-  page that is not on the map, a rename that drops a mapped page off the map,
-  or a mapped src that no longer exists, fails Docs Drift.
+  published. **A page under `docs/` also needs its own entry in navigation**
+  (`docs/docs.json`). A page with no nav entry is live but absent from the
+  sidebar and from search. Docs Drift does not check nav. A new
+  `packages/sdk/docs/` page that is on neither list in the map, a rename that
+  drops a published page off the map, or a mapped src that no longer exists,
+  fails Docs Drift.
 
-Some `packages/sdk/docs/` pages are intentionally **not** mirrored (`DEX.md`,
-`SPONSORING.md`, `SWAPS_API.md`, `BRIDGE_API.md`, `LOGGING.md`,
-`ARCHITECTURE_REFACTOR_SUMMARY.md`). Editing them does not satisfy Docs Drift,
-and renaming one needs no map entry — the map is only required for a page that
-was already published. To publish one, add it to the map (a follow-up when that
-page is ready to go live — not part of the Docs Drift gate itself).
+The map's **`unpublished`** array holds the `packages/sdk/docs/` pages that
+deliberately do not publish yet (`DEX.md`, `SPONSORING.md`, `SWAPS_API.md`,
+`BRIDGE_API.md`, `LOGGING.md`, `ARCHITECTURE_REFACTOR_SUMMARY.md`). Editing one
+does not satisfy Docs Drift, and renaming one needs no map entry. A new page
+there goes on one of the two lists: `mirrored` to publish it now, `unpublished`
+to hold it back and publish it as its own change. On neither list, it fails
+Docs Drift.
 
 ### What CI enforces
 
@@ -90,19 +92,20 @@ page is ready to go live — not part of the Docs Drift gate itself).
   that changes package `src/` without a *related* publishable docs signal: a
   mapped file under that package, a mapped `packages/sdk/docs/` page, a mapped
   root-level `docs/` guide whose `pkgs` array lists the package, the package
-  `README.md`, or `packages/<pkg>/docs/` (non-sdk). JSDoc, unmirrored
+  `README.md`, or `packages/<pkg>/docs/` (non-sdk). JSDoc, `unpublished`
   sdk/docs pages, `packages/skills`, an unrelated mapped file (for example
   touching `packages/skills/README.md` while changing `@sodax/sdk`), and
   *deleting* a README or docs file do not count. Moving a source file out of
   `src/` — or into a test path — is still a source change. A newly added
   `packages/sdk/docs/` page (`.md` or `.mdx`), including one moved in from
-  elsewhere, must be on the map even if `src/` did not change; renaming a
-  mapped page must move its map entry with it; and every mapped src must exist
-  and be a `.md`/`.mdx` page. If your PR genuinely has no user-facing change,
-  ask a maintainer to apply the `docs-not-needed` label.
+  elsewhere, must be on the map's `mirrored` or `unpublished` list even if
+  `src/` did not change; renaming a published page must move its map entry with
+  it; every mapped src must exist and be a `.md`/`.mdx` page; and every name in
+  a `pkgs` array must be a real package directory. If your PR genuinely has no
+  user-facing change, ask a maintainer to apply the `docs-not-needed` label.
 - `pnpm check:ai` validates that snippets and imports in `packages/skills`
   match the real source (partner-agent docs, separate from Docs Drift).
-- `pnpm check:doc-links` validates links in mirrored docs.
+- `pnpm check:doc-links` validates links in published docs.
 
 docs.sodax.com publishes from this repo — nothing goes live until your PR is
 merged.

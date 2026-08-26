@@ -15,7 +15,10 @@ const MAP = {
     { src: 'docs/guide.md', dest: 'developers/how-to/guide.md', pkgs: ['sdk'] },
     { src: 'docs/meta.md', dest: 'developers/meta.md' },
   ],
+  unpublished: ['packages/sdk/docs/DEX.md'],
 };
+
+const mapWithUnpublished = (...paths) => ({ ...MAP, unpublished: [...MAP.unpublished, ...paths] });
 
 const write = (root, path, content) => {
   mkdirSync(join(root, dirname(path)), { recursive: true });
@@ -183,6 +186,71 @@ test('passes when a docs-only PR adds an sdk page that is on the map', t => {
   const result = run(root, base, head);
   assert.equal(result.code, 0);
   assert.match(result.out, /docs check not applicable/);
+});
+
+test('passes when a docs-only PR adds an sdk page listed as unpublished', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'packages/sdk/docs/SPONSORING.md', '# Sponsoring\n');
+  write(
+    root,
+    'scripts/gitbook-sync-map.json',
+    `${JSON.stringify(mapWithUnpublished('packages/sdk/docs/SPONSORING.md'), null, 2)}\n`,
+  );
+  const head = commit(root, 'docs only unpublished');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 0);
+  assert.match(result.out, /docs check not applicable/);
+});
+
+test('fails when a new sdk page is on neither the map nor the unpublished list', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'packages/sdk/docs/NEW.md', '# New\n');
+  const head = commit(root, 'docs only on neither list');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 1);
+  assert.match(result.out, /not in scripts\/gitbook-sync-map.json/);
+  assert.match(result.out, /packages\/sdk\/docs\/NEW.md/);
+  assert.match(result.out, /Not ready to publish\? Add it to "unpublished"/);
+});
+
+test('passes when a page moved into packages/sdk/docs is listed as unpublished', t => {
+  const { root, base } = createRepo(t);
+  git(root, ['mv', 'packages/sdk/notes/DRAFT.mdx', 'packages/sdk/docs/DRAFT.mdx']);
+  write(
+    root,
+    'scripts/gitbook-sync-map.json',
+    `${JSON.stringify(mapWithUnpublished('packages/sdk/docs/DRAFT.mdx'), null, 2)}\n`,
+  );
+  const head = commit(root, 'move draft in as unpublished');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 0);
+  assert.match(result.out, /docs check not applicable/);
+});
+
+test('fails when a map pkgs entry names a package that does not exist', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'packages/sdk/src/index.ts', 'export const n = 2;\n');
+  write(root, 'docs/guide.md', '# Guide\n\nUpdated.\n');
+  write(
+    root,
+    'scripts/gitbook-sync-map.json',
+    `${JSON.stringify(
+      {
+        ...MAP,
+        mirrored: MAP.mirrored.map(item => (item.src === 'docs/guide.md' ? { ...item, pkgs: ['sdkk'] } : item)),
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  const head = commit(root, 'pkgs names a missing package');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 1);
+  assert.match(result.out, /names a package that does not exist: sdkk/);
 });
 
 test('fails when types src changes and the package README is deleted', t => {

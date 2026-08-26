@@ -47,10 +47,13 @@ Confirm with the user which behavior the solver team intends, and match the comm
 ## Step 4 — Docs Drift
 
 Changing `packages/types/src` triggers Docs Drift. Update
-`packages/sdk/docs/SWAPS.md` (or `packages/types/README.md` if there is no
-user-facing list change). JSDoc does not pass. If you add a brand-new mirrored
-page, also add it to `scripts/gitbook-sync-map.json` and give it a nav entry in
-`docs/docs.json`, or it is live but absent from the sidebar and search.
+`packages/sdk/docs/SWAPS.md` or the deployments page carrying the list,
+`docs/developers/deployments/swaps-compatible-assets.md` (its `pkgs` covers
+`types` and `sdk`). `packages/types/README.md` passes the gate but does not
+publish, so prefer a page that does. JSDoc does not pass. A brand-new
+`packages/sdk/docs/` page must join the `mirrored` list in
+`scripts/gitbook-sync-map.json` plus a `docs/docs.json` nav entry — or, if it is
+not ready to go live, the map's `unpublished` list.
 
 ## Step 5 — Verify
 

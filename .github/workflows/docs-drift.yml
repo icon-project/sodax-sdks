@@ -30,9 +30,14 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           # Exact match. contains() on a single label is substring, so "waiting-docs-not-needed" would skip.
           SKIP: ${{ contains(toJSON(github.event.pull_request.labels.*.name), '"docs-not-needed"') }}
+          # Whoever triggered this run — the labeller on a `labeled` event, but the
+          # pusher on `synchronize`, so not necessarily who applied the label.
+          SKIP_ACTOR: ${{ github.event.sender.login }}
         run: |
+          set -euo pipefail
+
           if [ "$SKIP" = "true" ]; then
-            echo "docs-not-needed label present — Docs Drift skipped."
+            echo "::notice::docs-not-needed label present — Docs Drift skipped (event actor: ${SKIP_ACTOR:-unknown})."
             exit 0
           fi
 

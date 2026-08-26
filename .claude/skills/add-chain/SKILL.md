@@ -34,7 +34,7 @@ A chain *can* reach **every package** — but edit each **only when the family +
 - `types` · `libs` (only if build workaround) · `sdk` · `wallet-sdk-core` · `wallet-sdk-react`
 - `dapp-kit` — usually nothing (chain-agnostic); only a special-need hook (NEAR storage / Stellar trustline).
 - **`packages/skills`** — partner-facing agent docs (how integrators call the SDK), not the feature-introduction path. After the chain is wired, update the skill knowledge that references chains (esp. `sodax-wallet-sdk-react`: config / hooks / imports / checklist), then run `pnpm check:ai`. This does not satisfy Docs Drift.
-- **Mirrored docs** — Docs Drift CI requires a related publishable site signal for every package whose `src/` changed. Update `packages/sdk/docs/WALLET_PROVIDERS.md` (and any other mapped feature doc the chain enables) plus the affected package README / `packages/wallet-sdk-react/docs/`. JSDoc is not enough. A new `packages/sdk/docs/` page must be added to `scripts/gitbook-sync-map.json` (every mapped src is published) and given a nav entry in `docs/docs.json`, or it is live but absent from the sidebar and search.
+- **Published docs** — Docs Drift CI requires a related publishable site signal for every package whose `src/` changed. Update `packages/sdk/docs/WALLET_PROVIDERS.md` (and any other mapped feature doc the chain enables) plus the affected package README / `packages/wallet-sdk-react/docs/`. For `packages/types` use `docs/developers/deployments/mainnet.md` (its `pkgs` covers `types`) — the `types` README passes the gate but does not publish. JSDoc is not enough. A new `packages/sdk/docs/` page must be added to `scripts/gitbook-sync-map.json` (every mapped src is published) and given a nav entry in `docs/docs.json`, or it is live but absent from the sidebar and search; a page not ready to go live goes on the map's `unpublished` list instead.
 - **apps** — `apps/node/src/<chain>.ts` smoke script; wire the chain into the demo / example apps that surface chains (e.g. `apps/demo`, `apps/wallet-modal-example`) as relevant.
 
 ## Per-family quirks — check these 4 dimensions for YOUR non-EVM chain
@@ -115,7 +115,7 @@ pnpm --filter @sodax/sdk test:e2e    # the e2e you updated is a SEPARATE runner
 # apps/node `test` is a no-op → run the chain's smoke directly, e.g. tsx apps/node/src/<chain>.ts
 pnpm check:ai                        # required when packages/skills consumer docs changed
 pnpm check:ai-dev-files
-# Docs Drift: a mirrored doc / package README / packages/<pkg>/docs/ must land with src/ changes
+# Docs Drift: a published doc / package README / packages/<pkg>/docs/ must land with src/ changes
 # (or a maintainer applies the docs-not-needed label). JSDoc does not pass the gate.
 ```
 `pnpm test` does NOT cover `e2e-tests` or `apps/node` — run `test:e2e` and the smoke script explicitly.
