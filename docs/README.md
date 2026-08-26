@@ -1,9 +1,9 @@
 # docs.sodax.com
 
 This directory **is** the published documentation site. Mintlify's GitHub App builds it
-straight from this repo (its monorepo root is set to `/docs`), so a page merged to the
-deploy branch is live without any sync step, and a page pushed to a branch gets a preview
-URL on the **Mintlify Deployment** check of your PR.
+straight from this repo (its monorepo root is set to `/docs`), so a page merged to `main`
+is live without any sync step, and a page pushed to a branch gets a preview URL on the
+**Mintlify Deployment** check of your PR.
 
 Mintlify is not a build gate: it publishes with warnings. The checks below are what catch
 mistakes, so run them before you push.
@@ -73,11 +73,24 @@ next sync overwrites it. Adding a page this way means adding a map entry with it
 
 ## Editing in the Mintlify dashboard
 
-Editing a page in the Mintlify dashboard commits to this repo, so it is a normal way to
-work — with one exception. The 25 pages listed below are copies. Each is generated from a
-file that lives next to the code it documents, and `pnpm docs:sync-pages` rewrites the copy
-from that file. An edit typed into one of these pages survives only until the next sync, and
-until then `pnpm check:docs-pages` fails, which blocks everyone else's work too.
+Two lanes write to this site, and they are not equivalent.
+
+**In a pull request** — engineers, and anyone changing a page that is generated from a
+source file. Reviewed, and every check below runs against it.
+
+**In the Mintlify dashboard** — the docs and marketing team, on the hand-written pages.
+Publishing there commits straight to whichever branch the dashboard is pointed at, with
+**no pull request and none of the checks below** — they are all `pull_request`-triggered,
+so a dashboard commit runs nothing at all. Commits arrive authored as
+`usr-icon-foundation` ("Updated mintlify pages"). Which branch that is, is a setting in the
+Mintlify dashboard and is recorded nowhere in this repo: point it at `main` and a Publish
+click is live on docs.sodax.com with nothing in between.
+
+Dashboard editing is still a normal way to work — with one exception. The 25 pages listed
+below are copies. Each is generated from a file that lives next to the code it documents,
+and `pnpm docs:sync-pages` rewrites the copy from that file. An edit typed into one of
+these pages survives only until the next sync, and until then `pnpm check:docs-pages`
+fails, which blocks everyone else's work too.
 
 **Do not edit these pages here.** The change has to go into the source they come from:
 

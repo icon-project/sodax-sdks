@@ -22,6 +22,16 @@ const createWorkspace = (t, { mirrored, files = {} }) => {
 
 const ENTRY = { src: 'packages/sdk/docs/SWAPS.md', dest: 'developers/swaps.md', icon: 'rotate' };
 
+// What a previous sync left behind: the marker the generator writes, with a since-edited body.
+const GENERATED_PAGE = `---
+title: "Swaps"
+icon: rotate
+# Generated from packages/sdk/docs/SWAPS.md by pnpm docs:sync-pages. Edit the source, not this file.
+---
+
+Stale body.
+`;
+
 test('generates a page with frontmatter and drops the duplicated source H1', t => {
   const { root, read } = createWorkspace(t, {
     mirrored: [ENTRY],
@@ -81,7 +91,7 @@ test('--check reports drift instead of writing', t => {
     mirrored: [ENTRY],
     files: {
       'packages/sdk/docs/SWAPS.md': '# Swaps\n\nNew body.\n',
-      'docs/developers/swaps.md': '---\ntitle: "Swaps"\n---\n\nStale body.\n',
+      'docs/developers/swaps.md': GENERATED_PAGE,
     },
   });
 
@@ -126,5 +136,58 @@ test('pages already under docs/ are left alone', t => {
     files: { 'docs/ai-integration-guide.md': '# Guide\n\nBody.\n' },
   });
 
-  assert.deepEqual(syncDocsPages({ root }), { entries: 0, written: [], stale: [] });
+  assert.deepEqual(syncDocsPages({ root }), { entries: 0, written: [], stale: [], collisions: [] });
+});
+
+test('refuses to overwrite a hand-written page at a mapped dest', t => {
+  const handWritten = '---\ntitle: "Swaps overview"\nicon: rotate\n---\n\nWritten by a human.\n';
+  const { root, read } = createWorkspace(t, {
+    mirrored: [ENTRY],
+    files: {
+      'packages/sdk/docs/SWAPS.md': '# Swaps\n\nBody.\n',
+      'docs/developers/swaps.md': handWritten,
+    },
+  });
+
+  const { written, collisions } = syncDocsPages({ root });
+
+  assert.deepEqual(written, []);
+  assert.equal(collisions.length, 1);
+  assert.match(collisions[0], /docs\/developers\/swaps\.md is a hand-written page/);
+  assert.match(collisions[0], /maps packages\/sdk\/docs\/SWAPS\.md onto it/);
+  assert.equal(read('docs/developers/swaps.md'), handWritten);
+});
+
+test('--check calls a hand-written page at a mapped dest a collision, never drift', t => {
+  const { root } = createWorkspace(t, {
+    mirrored: [ENTRY],
+    files: {
+      'packages/sdk/docs/SWAPS.md': '# Swaps\n\nBody.\n',
+      'docs/developers/swaps.md': '---\ntitle: "Swaps overview"\n---\n\nWritten by a human.\n',
+    },
+  });
+
+  const { stale, collisions } = syncDocsPages({ root, check: true });
+
+  // Reporting this as drift is what makes CI demand the overwrite.
+  assert.deepEqual(stale, []);
+  assert.equal(collisions.length, 1);
+});
+
+test('a generated page whose frontmatter comment was stripped still counts as generated', t => {
+  const { root } = createWorkspace(t, {
+    mirrored: [ENTRY],
+    files: {
+      'packages/sdk/docs/SWAPS.md': '# Swaps\n\nNew body.\n',
+      // What a visual editor leaves behind: frontmatter comment gone, body notice intact.
+      'docs/developers/swaps.md':
+        '---\ntitle: "Swaps"\nicon: rotate\n---\n\n> **Generated page.** Source: [`packages/sdk/docs/SWAPS.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md).\n\nEdited in the dashboard.\n',
+    },
+  });
+
+  const { stale, collisions } = syncDocsPages({ root, check: true });
+
+  assert.deepEqual(collisions, []);
+  assert.equal(stale.length, 1);
+  assert.match(stale[0], /no longer matches it/);
 });

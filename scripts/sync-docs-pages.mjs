@@ -60,16 +60,34 @@ const render = (entry, root, destBySource) => {
   return `${frontmatter}${notice}${rewriteLinks(body, entry, destBySource)}`;
 };
 
+// A generated page says so twice: a frontmatter comment and a notice in the body. Either alone is
+// enough, because a visual editor that strips the comment still leaves the notice.
+const isGeneratedPage = content => {
+  const frontmatter = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (frontmatter && /^# Generated from /m.test(frontmatter[1])) return true;
+  return /^> \*\*Generated page\.\*\* Source:/m.test(content);
+};
+
 export const syncDocsPages = ({ root, check = false } = {}) => {
   const entries = readMap(root);
   const destBySource = new Map(entries.map(entry => [entry.src, entry.dest]));
   const written = [];
   const stale = [];
+  const collisions = [];
 
   for (const entry of entries) {
     const target = join(root, DOCS_DIR, entry.dest);
     const content = render(entry, root, destBySource);
     const current = existsSync(target) ? readFileSync(target, 'utf8') : null;
+
+    // A typo'd dest would otherwise silently replace a hand-written page — and --check would then
+    // report that page as drifted, making CI demand the overwrite.
+    if (current !== null && !isGeneratedPage(current)) {
+      collisions.push(
+        `${DOCS_DIR}/${entry.dest} is a hand-written page, but ${MAP_FILE} maps ${entry.src} onto it. Fix that entry's "dest" — generating it would replace the page.`,
+      );
+      continue;
+    }
     if (current === content) continue;
 
     if (check) {
@@ -85,14 +103,22 @@ export const syncDocsPages = ({ root, check = false } = {}) => {
     written.push(`${DOCS_DIR}/${entry.dest}`);
   }
 
-  return { entries: entries.length, written, stale };
+  return { entries: entries.length, written, stale, collisions };
 };
 
 const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isMain) {
   const check = process.argv.includes('--check');
-  const { entries, written, stale } = syncDocsPages({ root: process.cwd(), check });
+  const { entries, written, stale, collisions } = syncDocsPages({ root: process.cwd(), check });
+
+  // Reported before drift: the fix is the map, and the drift advice would say to overwrite.
+  if (collisions.length > 0) {
+    console.error(`Some ${MAP_FILE} entries point at pages that were never generated:\n`);
+    for (const item of collisions) console.error(`- ${item}`);
+    console.error('\nCorrect the "dest" on those entries, or delete the page if it is meant to be generated.');
+    process.exit(1);
+  }
 
   if (stale.length > 0) {
     console.error('Some pages under docs/ no longer match the sources they are generated from:\n');
