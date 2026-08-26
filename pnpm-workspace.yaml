@@ -56,8 +56,8 @@ overrides:
   "@hpke/core": ">=1.8.0"
   # Pulls valibot forward to a release without the GHSA-q8pj-h94p-6m4r advisory.
   valibot: ">=1.2.0"
-  # Pin to flush out two transitive axios versions resolved by @injectivelabs/*.
-  axios: "1.13.2"
+  # Pin patched axios (1.13.2 sat inside ~29 advisories); only pulled via @injectivelabs/* (^1.13.2).
+  axios: "1.19.0"
   # Clears 8 transitive Trezor advisories that resolve protobufjs <7.5.8.
   protobufjs: "^7.5.8"
   # Clears a Next.js transitive XSS advisory against postcss <8.5.10.
