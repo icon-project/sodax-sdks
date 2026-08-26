@@ -230,3 +230,18 @@ chat-assistant-floating-input {
 body:has(chat-assistant-sheet) chat-assistant-floating-input {
   display: none !important;
 }
+
+/* ---- Global anchors (docs.json navigation.global.anchors) render
+   above the sidebar nav, so the menu opens on FAQ / Get in touch
+   instead of the section itself. Order them last. The anchors are the
+   only <ul> in #navigation-items that is not a .sidebar-group.
+   Unofficial/undocumented-DOM override — re-check after Mintlify
+   platform updates if the anchors stop moving. ------------------- */
+#navigation-items {
+  display: flex;
+  flex-direction: column;
+}
+#navigation-items > ul:not(.sidebar-group) {
+  order: 1;
+  margin-top: 1.5rem;
+}
