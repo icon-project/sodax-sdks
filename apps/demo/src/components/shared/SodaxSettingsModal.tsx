@@ -104,6 +104,12 @@ function draftToSettings(draft: Draft): SodaxSettings {
   };
 }
 
+/** Auto keys on the EFFECTIVE solver endpoint — a custom/staging endpoint means the production
+ *  backend can't reach that solver, whatever the env tab says. */
+function effectiveSolverEndpoint(draft: Draft): string {
+  return draft.solverApiEndpoint.trim() || defaultsFor(draft.env).solverApiEndpoint;
+}
+
 /** Effective-config snapshot for pasting into a bug report; the API key is masked. */
 function draftToDebugJson(draft: Draft): string {
   return JSON.stringify(
@@ -111,7 +117,9 @@ function draftToDebugJson(draft: Draft): string {
       environment: draft.env,
       submitTxMode: draft.useBackendSubmitTx,
       useBackendSubmitTx:
-        draft.useBackendSubmitTx === 'auto' ? defaultUseBackendSubmitTx(draft.env) : draft.useBackendSubmitTx === 'on',
+        draft.useBackendSubmitTx === 'auto'
+          ? defaultUseBackendSubmitTx(effectiveSolverEndpoint(draft))
+          : draft.useBackendSubmitTx === 'on',
       solverApiEndpoint: draft.solverApiEndpoint.trim(),
       intentsContract: draft.intentsContract.trim(),
       protocolIntentsContract: draft.protocolIntentsContract.trim(),
@@ -226,10 +234,7 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
   const hasErrors = Object.keys(errors).length > 0;
 
   const defaults = defaultsFor(draft.env, effectiveGateway(draft.apiBaseUrl));
-  // Auto keys on the EFFECTIVE solver endpoint — a custom/staging endpoint means the production
-  // backend can't reach that solver, whatever the env tab says.
-  const effectiveSolverEndpoint = draft.solverApiEndpoint.trim() || defaults.solverApiEndpoint;
-  const autoSubmitTx = defaultUseBackendSubmitTx(effectiveSolverEndpoint);
+  const autoSubmitTx = defaultUseBackendSubmitTx(effectiveSolverEndpoint(draft));
   const submitTxMismatch = draft.useBackendSubmitTx === 'on' && !autoSubmitTx;
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft(prev => ({ ...prev, [key]: value }));
@@ -245,6 +250,19 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
         if (prev[field].trim() === prevDefaults[field]) {
           next[field] = nextDefaults[field];
         }
+      }
+      return next;
+    });
+  };
+
+  // A swaps URL still at its gateway-inherited default follows the new gateway instead of
+  // becoming an explicit override pinned to the old one.
+  const handleGatewayChange = (apiBaseUrl: string) => {
+    setDraft(prev => {
+      const next = { ...prev, apiBaseUrl };
+      const prevDefault = defaultsFor(prev.env, effectiveGateway(prev.apiBaseUrl)).swapsApiBaseUrl;
+      if (prev.swapsApiBaseUrl.trim() === prevDefault) {
+        next.swapsApiBaseUrl = defaultsFor(prev.env, effectiveGateway(apiBaseUrl)).swapsApiBaseUrl;
       }
       return next;
     });
@@ -342,7 +360,7 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
             defaultValue={defaults.apiBaseUrl}
             error={errors.apiBaseUrl}
             hint="Gateway root incl. version prefix. Moves data/bridge/swaps APIs — not sponsoring."
-            onChange={value => set('apiBaseUrl', value)}
+            onChange={handleGatewayChange}
           />
           <TextRow
             label="Swaps API base URL"
