@@ -4,8 +4,6 @@ icon: star
 # Generated from packages/sdk/docs/STELLAR_TRUSTLINE.md by pnpm docs:sync-pages. Edit the source, not this file.
 ---
 
-> **Generated page.** Source: [`packages/sdk/docs/STELLAR_TRUSTLINE.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/STELLAR_TRUSTLINE.md). An edit made here is replaced on the next sync — change the source instead.
-
 Stellar blockchain requires trustlines to be established before you can receive or hold tokens. This document explains how to handle trustlines when using Stellar with the SODAX SDK across different operations.
 
 ## Overview

@@ -47,7 +47,7 @@ test('generates a page with frontmatter and drops the duplicated source H1', t =
   assert.doesNotMatch(page, /# Swaps \(Solver\)/);
 });
 
-test('the page carries a visible generated-from notice, not only a frontmatter comment', t => {
+test('the page is marked generated in frontmatter, with nothing shown to readers', t => {
   const { root, read } = createWorkspace(t, {
     mirrored: [ENTRY],
     files: { 'packages/sdk/docs/SWAPS.md': '# Swaps\n\nBody.\n' },
@@ -56,9 +56,10 @@ test('the page carries a visible generated-from notice, not only a frontmatter c
   syncDocsPages({ root });
   const page = read('docs/developers/swaps.md');
 
-  assert.match(page, /^> \*\*Generated page\.\*\* Source: \[`packages\/sdk\/docs\/SWAPS\.md`\]/m);
-  assert.match(page, /https:\/\/github\.com\/icon-project\/sodax-sdks\/blob\/main\/packages\/sdk\/docs\/SWAPS\.md/);
   assert.match(page, /# Generated from packages\/sdk\/docs\/SWAPS\.md/);
+  // The body opens on the source's own content: no sync notice reaches the published page.
+  assert.doesNotMatch(page, /^> \*\*Generated page\.\*\*/m);
+  assert.match(page, /^---\n[\s\S]*?\n---\n\nBody\.\n$/);
 });
 
 test('a map title overrides the source heading', t => {

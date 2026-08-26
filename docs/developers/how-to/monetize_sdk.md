@@ -4,8 +4,6 @@ icon: sack-dollar
 # Generated from packages/sdk/docs/MONETIZE_SDK.md by pnpm docs:sync-pages. Edit the source, not this file.
 ---
 
-> **Generated page.** Source: [`packages/sdk/docs/MONETIZE_SDK.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/MONETIZE_SDK.md). An edit made here is replaced on the next sync — change the source instead.
-
 Learn how to configure fees and monetize your SODAX SDK integration.
 
 When using the SODAX SDK, you can monetize your integration by collecting fees from the transactions processed through your application.

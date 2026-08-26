@@ -4,8 +4,6 @@ icon: rotate
 # Generated from packages/sdk/docs/SWAPS.md by pnpm docs:sync-pages. Edit the source, not this file.
 ---
 
-> **Generated page.** Source: [`packages/sdk/docs/SWAPS.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md). An edit made here is replaced on the next sync — change the source instead.
-
 The swap module provides abstractions for interacting with cross-chain Intent Smart Contracts, the solver API, and the Relay API.
 
 All swap operations are accessed through the `swaps` property of a `Sodax` instance:

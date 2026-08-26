@@ -7,7 +7,6 @@ import { fileURLToPath } from 'node:url';
 
 const MAP_FILE = 'scripts/docs-pages-map.json';
 const DOCS_DIR = 'docs';
-const BLOB_BASE = 'https://github.com/icon-project/sodax-sdks/blob/main/';
 
 const stripExtension = path => path.replace(/\.mdx?$/, '');
 
@@ -54,14 +53,11 @@ const render = (entry, root, destBySource) => {
     '',
     '',
   ].join('\n');
-  // The frontmatter comment above is invisible in a visual editor, which is where the edits that
-  // this sync silently reverts come from, so the same warning renders on the page itself.
-  const notice = `> **Generated page.** Source: [\`${entry.src}\`](${BLOB_BASE}${entry.src}). An edit made here is replaced on the next sync — change the source instead.\n\n`;
-  return `${frontmatter}${notice}${rewriteLinks(body, entry, destBySource)}`;
+  return `${frontmatter}${rewriteLinks(body, entry, destBySource)}`;
 };
 
-// A generated page says so twice: a frontmatter comment and a notice in the body. Either alone is
-// enough, because a visual editor that strips the comment still leaves the notice.
+// The frontmatter comment marks a generated page. The body notice is legacy — pages generated
+// before it was dropped still carry one, and reading it keeps them from looking hand-written.
 const isGeneratedPage = content => {
   const frontmatter = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (frontmatter && /^# Generated from /m.test(frontmatter[1])) return true;

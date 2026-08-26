@@ -4,8 +4,6 @@ icon: truck
 # Generated from packages/sdk/docs/MIGRATION.md by pnpm docs:sync-pages. Edit the source, not this file.
 ---
 
-> **Generated page.** Source: [`packages/sdk/docs/MIGRATION.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/MIGRATION.md). An edit made here is replaced on the next sync — change the source instead.
-
 > **Error handling conventions:** This module returns `Result<T, SodaxError<NarrowCode>>` from every async public method. Discriminate on `error.code` (a closed reason-only union) and `error.feature === 'migration'`. See [Error Handling](#error-handling) below.
 
 Migration part of the SDK provides abstractions to assist you with migrating tokens between ICON and the hub chain (Sonic). The service supports multiple migration types including ICX/wICX → SODA, bnUSD legacy → new bnUSD, BALN → SODA, and their reverse operations.

@@ -4,8 +4,6 @@ icon: gauge
 # Generated from packages/sdk/docs/ESTIMATE_GAS.md by pnpm docs:sync-pages. Edit the source, not this file.
 ---
 
-> **Generated page.** Source: [`packages/sdk/docs/ESTIMATE_GAS.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/ESTIMATE_GAS.md). An edit made here is replaced on the next sync — change the source instead.
-
 ### Estimate Gas for Raw Transactions
 
 `estimateGas` estimates the gas cost of a raw (unsigned) transaction before execution. The typical flow is:

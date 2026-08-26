@@ -4,8 +4,6 @@ icon: gears
 # Generated from packages/sdk/docs/CONFIGURE_SDK.md by pnpm docs:sync-pages. Edit the source, not this file.
 ---
 
-> **Generated page.** Source: [`packages/sdk/docs/CONFIGURE_SDK.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md). An edit made here is replaced on the next sync — change the source instead.
-
 Learn how to configure the SODAX SDK for your application. The SDK supports Swaps (intent-based solver swaps), Money Market (cross-chain lending and borrowing), and many other cross-chain DeFi services. All feature configurations are optional—you can use just the features you need.
 
 `new Sodax(...)` accepts [`SodaxOptions`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/sodax-config/sodax-config.ts) — a deep-partial override of the static [`SodaxDefaultConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/sodax-config/sodax-config.ts) data shape plus client-side options (`logger`, global `fee`, and per-feature `partnerFee` options). The merged result is [`SodaxConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/sodax-config/sodax-config.ts) (exposed as `sodax.instanceConfig`). All three live in `@sodax/types` and are re-exported from `@sodax/sdk`.

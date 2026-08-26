@@ -4,8 +4,6 @@ icon: list-check
 # Generated from packages/sdk/docs/HOW_TO_MAKE_A_SWAP.md by pnpm docs:sync-pages. Edit the source, not this file.
 ---
 
-> **Generated page.** Source: [`packages/sdk/docs/HOW_TO_MAKE_A_SWAP.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/HOW_TO_MAKE_A_SWAP.md). An edit made here is replaced on the next sync — change the source instead.
-
 > **Error handling conventions:** The swap module returns `SodaxError<SwapErrorCode>` from `swap`, `createIntent`, `postExecution`, `createLimitOrder`, and `createLimitOrderIntent`. Discriminate on `result.error.code` (e.g. `'RELAY_TIMEOUT'`) — not `result.error.message`. See [SWAPS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md#error-handling) for the full per-method code unions. The lower-level methods (`getQuote`, `getStatus`, `submitIntent`, `getSolvedIntentPacket`, `cancelIntent`, …) still return `Result<T, SolverErrorResponse>` or `Result<T, Error | unknown>` — `cancelIntent`/`cancelLimitOrder` were not migrated to `SodaxError`, so don't `switch (error.code)` on those.
 
 This guide provides a step-by-step walkthrough for executing a cross-chain swap using the SODAX SDK. It covers everything from initializing the SDK to handling errors during the swap process.

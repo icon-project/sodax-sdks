@@ -4,8 +4,6 @@ icon: cup-straw
 # Generated from packages/sdk/README.md by pnpm docs:sync-pages. Edit the source, not this file.
 ---
 
-> **Generated page.** Source: [`packages/sdk/README.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/README.md). An edit made here is replaced on the next sync — change the source instead.
-
 ## Get started
 
 ### Installation
