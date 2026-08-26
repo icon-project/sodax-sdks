@@ -3,9 +3,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
-import { checkDocsNav } from './check-docs-nav.mjs';
+import { MUST_NOT_BREAK_URLS, checkDocsNav } from './check-docs-nav.mjs';
 
-const createWorkspace = (t, { navigation, files = [], mintignore } = {}) => {
+const createWorkspace = (t, { navigation, files = [], mintignore, redirects } = {}) => {
   const root = mkdtempSync(join(tmpdir(), 'check-docs-nav-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
@@ -14,12 +14,15 @@ const createWorkspace = (t, { navigation, files = [], mintignore } = {}) => {
     writeFileSync(join(root, path), content);
   };
 
-  write('docs/docs.json', JSON.stringify({ navigation }));
+  write('docs/docs.json', JSON.stringify({ navigation, redirects }));
   for (const file of files) write(`docs/${file}`, '');
   if (mintignore !== undefined) write('docs/.mintignore', mintignore);
 
   return root;
 };
+
+// The shipped frozen list names real site URLs, so tests about anything else opt out of it.
+const checkNav = ({ frozenUrls = [], ...options }) => checkDocsNav({ ...options, frozenUrls });
 
 test('passes when navigation and files agree', t => {
   const root = createWorkspace(t, {
@@ -27,7 +30,7 @@ test('passes when navigation and files agree', t => {
     files: ['index.mdx', 'swap/index.mdx'],
   });
 
-  const { failures, navPages, files } = checkDocsNav({ root });
+  const { failures, navPages, files } = checkNav({ root });
 
   assert.deepEqual(failures, []);
   assert.equal(navPages, 2);
@@ -40,7 +43,7 @@ test('flags a nav entry with no file as a sidebar 404', t => {
     files: ['index.mdx'],
   });
 
-  const { failures } = checkDocsNav({ root });
+  const { failures } = checkNav({ root });
 
   assert.equal(failures.length, 1);
   assert.match(failures[0], /navigates to "developers\/ai-integration"/);
@@ -53,7 +56,7 @@ test('flags a published page that no nav entry reaches', t => {
     files: ['index.mdx', 'orphan.md'],
   });
 
-  const { failures } = checkDocsNav({ root });
+  const { failures } = checkNav({ root });
 
   assert.equal(failures.length, 1);
   assert.match(failures[0], /docs\/orphan is published but absent/);
@@ -66,7 +69,7 @@ test('.mintignore exempts a file from needing a nav entry', t => {
     mintignore: '# repo docs\nlocal-package-testing.md\ndrafts/\n',
   });
 
-  const { failures, files } = checkDocsNav({ root });
+  const { failures, files } = checkNav({ root });
 
   assert.deepEqual(failures, []);
   assert.equal(files, 1);
@@ -80,14 +83,14 @@ test('README.md and AGENTS.md are treated the way Mintlify treats them', t => {
     mintignore: 'AGENTS.md\n',
   });
 
-  assert.deepEqual(checkDocsNav({ root }).failures, []);
+  assert.deepEqual(checkNav({ root }).failures, []);
 
   const withoutIgnore = createWorkspace(t, {
     navigation: { tabs: [{ tab: 'Home', pages: ['index'] }] },
     files: ['index.mdx', 'README.md', 'AGENTS.md'],
   });
 
-  const { failures } = checkDocsNav({ root: withoutIgnore });
+  const { failures } = checkNav({ root: withoutIgnore });
   assert.equal(failures.length, 1);
   assert.match(failures[0], /docs\/AGENTS is published/);
 });
@@ -107,14 +110,14 @@ test('labels, icons and external links are not treated as page references', t =>
     files: ['index.mdx', 'api/index.mdx'],
   });
 
-  assert.deepEqual(checkDocsNav({ root }).failures, []);
+  assert.deepEqual(checkNav({ root }).failures, []);
 });
 
 test('reports a missing docs.json instead of throwing', t => {
   const root = mkdtempSync(join(tmpdir(), 'check-docs-nav-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
-  const { failures } = checkDocsNav({ root });
+  const { failures } = checkNav({ root });
 
   assert.equal(failures.length, 1);
   assert.match(failures[0], /docs\.json is missing/);
@@ -131,7 +134,7 @@ test('flags a tab whose landing page an earlier tab already claims', t => {
     files: ['index.mdx', 'introduction.md', 'solana/index.mdx'],
   });
 
-  const { failures } = checkDocsNav({ root });
+  const { failures } = checkNav({ root });
 
   assert.equal(failures.length, 1);
   assert.match(failures[0], /tab "Get Started" lands on "introduction", which tab "Home" already lists/);
@@ -148,5 +151,89 @@ test('a shortcut duplicated below a tab\'s landing page is allowed', t => {
     files: ['index.mdx', 'introduction.md', 'quickstart.md'],
   });
 
-  assert.deepEqual(checkDocsNav({ root }).failures, []);
+  assert.deepEqual(checkNav({ root }).failures, []);
+});
+
+test('passes when every redirect destination and frozen URL resolves', t => {
+  const root = createWorkspace(t, {
+    navigation: { tabs: [{ tab: 'Home', pages: ['index', 'developers/deployments/index'] }] },
+    files: ['index.mdx', 'developers/deployments/index.md'],
+    redirects: [
+      { source: '/developers', destination: '/developers/deployments' },
+      { source: '/developers/deployments/', destination: '/developers/deployments' },
+      { source: '/partners', destination: '/' },
+      { source: '/support', destination: 'https://support.sodax.com' },
+    ],
+  });
+
+  const frozenUrls = ['/', '/developers', '/partners', '/developers/deployments'];
+
+  assert.deepEqual(checkNav({ root, frozenUrls }).failures, []);
+});
+
+test('flags a redirect whose destination no page serves', t => {
+  const root = createWorkspace(t, {
+    navigation: { tabs: [{ tab: 'Home', pages: ['index'] }] },
+    files: ['index.mdx'],
+    redirects: [{ source: '/partners', destination: '/contact' }],
+  });
+
+  const { failures } = checkNav({ root });
+
+  assert.equal(failures.length, 1);
+  assert.match(failures[0], /redirects "\/partners" to "\/contact"/);
+  assert.match(failures[0], /lands on a 404/);
+});
+
+test('a redirect pointing at another redirect resolves; a cycle is reported', t => {
+  const chained = createWorkspace(t, {
+    navigation: { tabs: [{ tab: 'Home', pages: ['index'] }] },
+    files: ['index.mdx'],
+    redirects: [
+      { source: '/welcome-to-sodax/readme', destination: '/readme' },
+      { source: '/readme', destination: '/' },
+    ],
+  });
+
+  assert.deepEqual(checkNav({ root: chained }).failures, []);
+
+  const looping = createWorkspace(t, {
+    navigation: { tabs: [{ tab: 'Home', pages: ['index'] }] },
+    files: ['index.mdx'],
+    redirects: [
+      { source: '/a', destination: '/b' },
+      { source: '/b', destination: '/a' },
+    ],
+  });
+
+  const { failures } = checkNav({ root: looping });
+
+  assert.equal(failures.length, 2);
+  assert.match(failures[0], /the redirects loop back to "\/b"/);
+});
+
+test('flags a must-not-break URL that neither a page nor a redirect serves', t => {
+  const root = createWorkspace(t, {
+    navigation: { tabs: [{ tab: 'Home', pages: ['index'] }] },
+    files: ['index.mdx'],
+  });
+
+  const { failures } = checkNav({ root, frozenUrls: ['/', '/developers/faq'] });
+
+  assert.equal(failures.length, 1);
+  assert.match(failures[0], /"\/developers\/faq" is a must-not-break URL/);
+  assert.match(failures[0], /no page under docs\/ serves "\/developers\/faq"/);
+});
+
+test('the shipped must-not-break list is the default, and every entry is checked', t => {
+  const root = createWorkspace(t, {
+    navigation: { tabs: [{ tab: 'Home', pages: ['index'] }] },
+    files: ['index.mdx'],
+  });
+
+  const { failures } = checkDocsNav({ root });
+
+  assert.ok(MUST_NOT_BREAK_URLS.includes('/developers'));
+  // "/" is the only entry this workspace serves; the rest must each be reported.
+  assert.equal(failures.length, MUST_NOT_BREAK_URLS.length - 1);
 });

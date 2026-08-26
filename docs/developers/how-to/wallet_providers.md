@@ -4,6 +4,8 @@ icon: wallet
 # Generated from packages/sdk/docs/WALLET_PROVIDERS.md by pnpm docs:sync-pages. Edit the source, not this file.
 ---
 
+> **Generated page.** Source: [`packages/sdk/docs/WALLET_PROVIDERS.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/WALLET_PROVIDERS.md). An edit made here is replaced on the next sync — change the source instead.
+
 The SODAX SDK does not force you to use a specific wallet library. Instead, SDK calls accept an
 `IWalletProvider` implementation that you supply — either by using the ready-made implementations
 in `@sodax/wallet-sdk-core`, or by writing your own against the interface contracts in

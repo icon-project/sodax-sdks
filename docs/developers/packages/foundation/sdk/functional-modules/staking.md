@@ -4,6 +4,8 @@ icon: piggy-bank
 # Generated from packages/sdk/docs/STAKING.md by pnpm docs:sync-pages. Edit the source, not this file.
 ---
 
+> **Generated page.** Source: [`packages/sdk/docs/STAKING.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/STAKING.md). An edit made here is replaced on the next sync — change the source instead.
+
 > **Error handling conventions:** This module returns `Result<T, SodaxError<NarrowCode>>` from every async public method. Discriminate on `error.code` (a closed reason-only union) and `error.feature === 'staking'`. See [Error Handling](#error-handling) below.
 
 The `StakingService` class, reachable through `sodax.staking`, provides functionality for staking SODA tokens,

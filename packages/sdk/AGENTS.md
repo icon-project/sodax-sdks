@@ -38,7 +38,7 @@ Detailed feature docs live in `docs/`. Read the relevant feature doc before chan
 
 ### Links In `docs/` And `README.md`
 
-`pnpm docs:sync-pages` generates the docs.sodax.com copy of `README.md` and most of `docs/` into the site's `docs/` tree, **moving and renaming them** on the way. `scripts/gitbook-sync-map.json` is the only authority for which docs publish and where each one lands — several (`SWAPS_API.md`, `SPONSORING.md`, `DEX.md`, `LOGGING.md`, `BRIDGE_API.md`, `ARCHITECTURE_REFACTOR_SUMMARY.md`) are not published at all.
+`pnpm docs:sync-pages` generates the docs.sodax.com copy of `README.md` and most of `docs/` into the site's `docs/` tree, **moving and renaming them** on the way. `scripts/docs-pages-map.json` is the only authority for which docs publish and where each one lands — several (`SWAPS_API.md`, `SPONSORING.md`, `DEX.md`, `LOGGING.md`, `BRIDGE_API.md`, `ARCHITECTURE_REFACTOR_SUMMARY.md`) are not published at all.
 
 So a relative link may only point at a doc that lands in the same destination directory under the same filename — in practice only `installation/nextjs.md`, since the how-to set is lowercased on the way out (`CONFIGURE_SDK.md` → `developers/how-to/configure_sdk.md`). Every other target needs an absolute `https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/<FILE>.md` URL (`/tree/main/` for a directory). Run `pnpm check:doc-links`; a relative link to an unpublished doc also fails `pnpm docs:sync-pages`.
 

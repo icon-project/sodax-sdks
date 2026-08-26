@@ -4,6 +4,8 @@ icon: percent
 # Generated from packages/sdk/docs/LEVERAGE_YIELD_APR.md by pnpm docs:sync-pages. Edit the source, not this file.
 ---
 
+> **Generated page.** Source: [`packages/sdk/docs/LEVERAGE_YIELD_APR.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/LEVERAGE_YIELD_APR.md). An edit made here is replaced on the next sync — change the source instead.
+
 How the SDK computes the headline APR for a leverage-yield vault — combining on-chain AAVE rates with the underlying LSD's native staking yield.
 
 ## TL;DR

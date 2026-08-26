@@ -12,7 +12,8 @@ correct. The commands below are the gate.
 
 - **Path is URL.** `docs/<path>.md|mdx` serves at `/<path>`; `index` also serves its
   directory. Moving or renaming a page changes its URL and needs a `redirects` entry in
-  `docs.json`.
+  `docs.json`. `pnpm check:docs-nav` fails on a redirect that lands on a 404, and on any
+  rename that strands one of the must-not-break URLs frozen in `scripts/check-docs-nav.mjs`.
 - **Internal links are root-relative and extensionless** (`/developers/faq`). Relative
   paths and `.md`/`.mdx` extensions resolve in local preview and 404 in production.
 - **Anything outside `docs/` is not a page.** Link source files and repo docs as
@@ -28,7 +29,7 @@ correct. The commands below are the gate.
   `{/* ... */}`; HTML comments break the page. Angle-bracket autolinks (`<https://…>`) are
   not valid MDX either; use `[text](url)`.
 - **Never edit a generated page.** Pages whose frontmatter says they are generated come from
-  a package source listed in `scripts/gitbook-sync-map.json`; edit that source and run
+  a package source listed in `scripts/docs-pages-map.json`; edit that source and run
   `pnpm docs:sync-pages`. `pnpm check:docs-pages` fails on drift.
 - **A tab must land on a page no earlier tab lists**, or the page renders under that earlier
   tab and the navbar link goes nowhere. Repeating a page deeper in another sidebar as a
@@ -42,14 +43,15 @@ correct. The commands below are the gate.
 ## Verify
 
 ```bash
-pnpm check:docs-nav    # nav <-> files, both directions        (CI runs this)
+pnpm check:docs-nav    # nav, redirects, must-not-break URLs   (CI runs this)
 pnpm check:docs-pages  # generated copies match their sources  (CI runs this)
 pnpm docs:validate     # mint validate + mint broken-links (needs the mint CLI)
 ```
 
-Run all three after any change under `docs/`. `docs:validate` is the one CI cannot run —
-the Mintlify CLI is not a repo dependency — and `mint broken-links` is the only check that
-catches a relative link.
+Run all three after any change under `docs/`. CI runs the same three in its `Docs site` job,
+reaching `mint` through `pnpm dlx` at a pinned version because the CLI is not a repo
+dependency. `mint broken-links` is the only check that catches a relative link, and the only
+one that opens a hand-written page — do not wait for CI to find that for you.
 
 ## Scope
 

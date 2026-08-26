@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 // needs an absolute sodax-sdks URL, which also resolves for the npm and GitHub readers.
 // A source already under docs/ IS the page: its internal links must be root-relative and
 // extensionless, because relative and extension-bearing targets 404 in production.
-// See scripts/gitbook-sync-map.json for the manifest and docs/AGENTS.md for the site rules.
+// See scripts/docs-pages-map.json for the manifest and docs/AGENTS.md for the site rules.
 
 const BLOB_BASE = 'https://github.com/icon-project/sodax-sdks/blob/main/';
 const TREE_BASE = 'https://github.com/icon-project/sodax-sdks/tree/main/';
@@ -107,7 +107,7 @@ const checkRelative = ({ target, srcDir, destDir, destBySrc, inRepo, isDir }) =>
   return `relative link ${target} breaks on docs.sodax.com — ${reason}. Use ${base}${resolvedSrc}${anchor}`;
 };
 
-export const checkDocLinks = ({ root, manifestPath = 'scripts/gitbook-sync-map.json' } = {}) => {
+export const checkDocLinks = ({ root, manifestPath = 'scripts/docs-pages-map.json' } = {}) => {
   const failures = [];
   const absolute = path => join(root, path);
   const inRepo = path => existsSync(absolute(path));

@@ -4,6 +4,8 @@ icon: download
 # Generated from packages/sdk/docs/installation/nextjs.md by pnpm docs:sync-pages. Edit the source, not this file.
 ---
 
+> **Generated page.** Source: [`packages/sdk/docs/installation/nextjs.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/installation/nextjs.md). An edit made here is replaced on the next sync — change the source instead.
+
 This guide will walk you through setting up `@sodax/sdk` in a Next.js project, from project creation to using the SDK features.
 
 ## Prerequisites

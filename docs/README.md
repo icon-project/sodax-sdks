@@ -21,7 +21,9 @@ Agent-facing version of the same rules: [`AGENTS.md`](AGENTS.md).
 | `docs/swap/index.mdx` | `/swap` (and `/swap/index`) |
 
 Renaming or moving a file changes its URL. When you do, add a `redirects` entry in
-`docs.json` so inbound links keep working.
+`docs.json` so inbound links keep working. `pnpm check:docs-nav` resolves every redirect
+destination, and holds a frozen list of URLs with real inbound traffic that must keep
+working — it fails if a rename strands one of them.
 
 ## Adding a page
 
@@ -57,7 +59,7 @@ it reachable by URL.
 ## Generated pages
 
 Package READMEs and the `packages/sdk/docs/` module docs stay with their package, because
-npm publishes them from there. `scripts/gitbook-sync-map.json` maps each one to its page
+npm publishes them from there. `scripts/docs-pages-map.json` maps each one to its page
 path, and the copy under `docs/` is generated:
 
 ```bash
@@ -68,6 +70,41 @@ pnpm check:docs-pages         # CI: fails when a copy has drifted
 Every generated file says so in its frontmatter. **Edit the source, never the copy** — the
 next sync overwrites it. Adding a page this way means adding a map entry with its `dest`,
 `title` and `icon`, then a `docs.json` nav entry for that dest.
+
+## Editing in the Mintlify dashboard
+
+Editing a page in the Mintlify dashboard commits to this repo, so it is a normal way to
+work — with one exception. The 25 pages listed below are copies. Each is generated from a
+file that lives next to the code it documents, and `pnpm docs:sync-pages` rewrites the copy
+from that file. An edit typed into one of these pages survives only until the next sync, and
+until then `pnpm check:docs-pages` fails, which blocks everyone else's work too.
+
+**Do not edit these pages here.** The change has to go into the source they come from:
+
+- `/developers/packages/foundation/sdk` and `/developers/packages/foundation/swaps-api`
+- `/developers/packages/foundation/sdk/functional-modules/` — `swaps`, `money_market`,
+  `bridge`, `staking`, `migration`, `leverage_yield`, `leverage_yield_apr`
+- `/developers/packages/foundation/sdk/tooling-modules/` — `backend_api`,
+  `intent_relay_api`
+- `/developers/packages/connection/wallet-sdk-core` and
+  `/developers/packages/connection/wallet-sdk-react`
+- `/developers/packages/experience/dapp-kit` and `/developers/packages/experience/skills`
+- `/developers/packages/sdk/docs/installation/nextjs`
+- `/developers/how-to/` — `configure_sdk`, `estimate_gas`, `how_to_make_a_swap`,
+  `monetize_sdk`, `wallet_providers`, `stellar_trustline`, `bitcoin-integration`
+- `/developers/deployments/relayer-api-endpoints` and
+  `/developers/deployments/solver-api-endpoints`
+
+Each of those pages also names its source in its frontmatter (`Generated from …`), but a
+visual editor may hide that line, so this list is the reference. Everything else on the site
+— including the rest of Deployments and How To, and all of Home, Get Started, Solana and
+Resources — is written here and safe to edit.
+
+**To get one of the generated pages changed**, open an issue on
+[icon-project/sodax-sdks](https://github.com/icon-project/sodax-sdks/issues) with the page
+URL and the wording you want, or ask an SDK engineer directly. They edit the source file and
+the page follows on the next sync. Rewording, reordering and new sections are all fine — the
+edit just cannot start on the page.
 
 ## Adding a network guide
 
@@ -114,16 +151,18 @@ networks land on the same page in each one.
 ```bash
 npm i -g mint          # once; pin an exact version in automation
 
-pnpm check:docs-nav    # nav <-> files, both directions (no network, no CLI)
+pnpm check:docs-nav    # nav <-> files, plus redirects and pinned URLs (no network, no CLI)
 pnpm check:docs-pages  # generated copies still match their sources
 pnpm docs:dev          # local preview, opens in the browser
 pnpm docs:validate     # mint validate + mint broken-links
 ```
 
-CI runs the first two. `docs:validate` it cannot: the Mintlify CLI is not a repo
-dependency, so running it before you push is on you. `mint validate` fails on anything the
-build would warn about, including nav entries whose file is missing. `mint broken-links`
-resolves every internal link on every page — it is the only check that catches rule 1.
+CI runs all of these in its **Docs site** job, reaching `mint` through `pnpm dlx` at a
+pinned version rather than as a repo dependency. Run them locally anyway — a red CI run
+costs you a push and several minutes. `mint validate` fails on anything the build would
+warn about, including nav entries whose file is missing. `mint broken-links` resolves every
+internal link on every page; it is the only check that catches rule 1, and the only one
+that opens a hand-written page at all.
 
 ## What does not belong here
 

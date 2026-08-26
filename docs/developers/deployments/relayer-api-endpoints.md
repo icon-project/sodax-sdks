@@ -4,6 +4,8 @@ icon: network-wired
 # Generated from packages/sdk/docs/RELAYER_API_ENDPOINTS.md by pnpm docs:sync-pages. Edit the source, not this file.
 ---
 
+> **Generated page.** Source: [`packages/sdk/docs/RELAYER_API_ENDPOINTS.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/RELAYER_API_ENDPOINTS.md). An edit made here is replaced on the next sync — change the source instead.
+
 > **Error handling conventions:** Relay-layer failures emit one of two stable strings on `error.message`: `'SUBMIT_TX_FAILED'` or `'RELAY_TIMEOUT'`, also exported as `RELAY_ERROR_CODES` from `@sodax/sdk`. Modules other than swap propagate these errors raw. The **swap module** wraps them into `SodaxError<SwapErrorCode>` with `context.relayCode` (see [SWAPS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md) Error Handling).
 
 The intent relay service bridges spoke-chain transactions to the SODAX hub (Sonic). All cross-chain operations — swaps, bridges, money market deposits/withdrawals, staking — submit a spoke-chain transaction hash to the relay, then poll until the hub confirms execution.

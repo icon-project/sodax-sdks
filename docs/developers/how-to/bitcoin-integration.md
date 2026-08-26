@@ -4,6 +4,8 @@ icon: bitcoin-sign
 # Generated from packages/sdk/docs/BITCOIN_INTEGRATION.md by pnpm docs:sync-pages. Edit the source, not this file.
 ---
 
+> **Generated page.** Source: [`packages/sdk/docs/BITCOIN_INTEGRATION.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BITCOIN_INTEGRATION.md). An edit made here is replaced on the next sync — change the source instead.
+
 ### Why Bitcoin is different
 
 Bitcoin's UTXO model and \~10-minute block time make it behave very differently from account-based chains like EVM. A naive integration would require a fresh on-chain Bitcoin transaction for every swap — slow (10+ minutes per operation) and expensive (miner fees per swap). To deliver an EVM-like UX, SODAX routes every Bitcoin operation through a per-user **trading wallet**: a 2-of-2 multisig the user controls jointly with a transaction-signing partner.

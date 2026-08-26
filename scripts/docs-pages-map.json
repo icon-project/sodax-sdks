@@ -1,7 +1,6 @@
 {
   "note": "src is the file authored in this repo; dest is its page path under docs/ (the docs.sodax.com site root). pnpm docs:sync-pages generates docs/<dest> from each src whose home is a package; title overrides the source H1 as the sidebar label. A src already under docs/ is the page itself, so it is listed for link checking only and needs no title or icon. pkgs: [\"<package-dir>\", …] declares which packages a page documents.",
   "sourceRepo": "icon-project/sodax-sdks",
-  "docRepo": "icon-project/sodax-document",
   "mirrored": [
     {
       "src": "packages/sdk/README.md",
@@ -124,6 +123,16 @@
       "src": "docs/developers/how-to/quick-sponsoring-stellar-guide.md",
       "dest": "developers/how-to/quick-sponsoring-stellar-guide.md",
       "pkgs": ["sdk", "dapp-kit"]
+    },
+    {
+      "src": "docs/developers/deployments/mainnet.md",
+      "dest": "developers/deployments/mainnet.md",
+      "pkgs": ["types"]
+    },
+    {
+      "src": "docs/developers/deployments/swaps-compatible-assets.md",
+      "dest": "developers/deployments/swaps-compatible-assets.md",
+      "pkgs": ["types", "sdk"]
     },
     {
       "src": "docs/ai-integration-guide.md",

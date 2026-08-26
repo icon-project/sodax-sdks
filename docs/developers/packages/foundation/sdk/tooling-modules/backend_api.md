@@ -4,6 +4,8 @@ icon: plug
 # Generated from packages/sdk/docs/BACKEND_API.md by pnpm docs:sync-pages. Edit the source, not this file.
 ---
 
+> **Generated page.** Source: [`packages/sdk/docs/BACKEND_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BACKEND_API.md). An edit made here is replaced on the next sync — change the source instead.
+
 The `BackendApiService` provides a comprehensive HTTP client for the SODAX backend API, covering intent lookup, swap submission, solver orderbook, money market data, and runtime configuration. It implements `IConfigApi` so that `ConfigService` and other services can fetch dynamic chain/token configuration without coupling to a concrete HTTP implementation.
 
 The service is automatically instantiated when you create a `Sodax` instance and is available as `sodax.backendApi`.

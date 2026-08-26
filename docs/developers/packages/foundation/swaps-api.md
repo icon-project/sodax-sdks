@@ -4,6 +4,8 @@ icon: code
 # Generated from packages/swaps-api/README.md by pnpm docs:sync-pages. Edit the source, not this file.
 ---
 
+> **Generated page.** Source: [`packages/swaps-api/README.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/swaps-api/README.md). An edit made here is replaced on the next sync — change the source instead.
+
 Minimal, type-safe HTTP client for the SODAX backend **Swaps API v2**.
 
 - Implements the `ISwapsApiV2` contract from `@sodax/types` over `fetch`.

@@ -21,7 +21,7 @@ const createWorkspace = (t, { mirrored = MIRRORED, files = {} } = {}) => {
     writeFileSync(join(root, path), content);
   };
 
-  write('scripts/gitbook-sync-map.json', JSON.stringify({ mirrored }));
+  write('scripts/docs-pages-map.json', JSON.stringify({ mirrored }));
   for (const { src } of mirrored) write(src, '');
   write('packages/sdk/docs/LOGGING.md', '');
   write('packages/sdk/src/index.ts', '');

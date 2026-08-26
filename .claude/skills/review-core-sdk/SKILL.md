@@ -15,7 +15,7 @@ description: 'Use when reviewing a change, diff, or PR to the SODAX core SDK (pa
 ## 2. Run the gates (read real output, don't assume)
 - `pnpm checkTs` · `pnpm lint` · `pnpm --filter @sodax/sdk test` (add `pnpm --filter @sodax/sdk test:e2e` if cross-chain logic changed; run the `apps/node` smoke script for the affected chain when relevant).
 - `pnpm check:ai-dev-files`, and `pnpm check:ai` if `packages/skills` changed.
-- `pnpm check:doc-links` if the diff touches a doc listed in `scripts/gitbook-sync-map.json` (`packages/sdk/docs/**`, package READMEs, `docs/ai-integration-guide.md`).
+- `pnpm check:doc-links` if the diff touches a doc listed in `scripts/docs-pages-map.json` (`packages/sdk/docs/**`, package READMEs, `docs/ai-integration-guide.md`).
 - The Security workflow runs gitleaks + Semgrep — a new hardcoded `0x`+64-hex key or other secret is a hard reject.
 
 ## 3. Review dimensions

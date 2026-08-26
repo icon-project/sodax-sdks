@@ -5,8 +5,9 @@ import { fileURLToPath } from 'node:url';
 // npm publishes package READMEs and module docs from the package, so the site gets a generated
 // copy at its nav path; --check fails CI when a copy drifts from its source.
 
-const MAP_FILE = 'scripts/gitbook-sync-map.json';
+const MAP_FILE = 'scripts/docs-pages-map.json';
 const DOCS_DIR = 'docs';
+const BLOB_BASE = 'https://github.com/icon-project/sodax-sdks/blob/main/';
 
 const stripExtension = path => path.replace(/\.mdx?$/, '');
 
@@ -53,7 +54,10 @@ const render = (entry, root, destBySource) => {
     '',
     '',
   ].join('\n');
-  return `${frontmatter}${rewriteLinks(body, entry, destBySource)}`;
+  // The frontmatter comment above is invisible in a visual editor, which is where the edits that
+  // this sync silently reverts come from, so the same warning renders on the page itself.
+  const notice = `> **Generated page.** Source: [\`${entry.src}\`](${BLOB_BASE}${entry.src}). An edit made here is replaced on the next sync — change the source instead.\n\n`;
+  return `${frontmatter}${notice}${rewriteLinks(body, entry, destBySource)}`;
 };
 
 export const syncDocsPages = ({ root, check = false } = {}) => {
@@ -69,7 +73,11 @@ export const syncDocsPages = ({ root, check = false } = {}) => {
     if (current === content) continue;
 
     if (check) {
-      stale.push(`${DOCS_DIR}/${entry.dest} ${current === null ? 'is missing' : 'differs from'} ${entry.src}`);
+      stale.push(
+        current === null
+          ? `${DOCS_DIR}/${entry.dest} is generated from ${entry.src} and has not been generated yet.`
+          : `${DOCS_DIR}/${entry.dest} is generated from ${entry.src} and no longer matches it. If you edited the page, make the same edit in ${entry.src} — that file is the original, and the next sync overwrites the page from it.`,
+      );
       continue;
     }
     mkdirSync(dirname(target), { recursive: true });
@@ -87,9 +95,10 @@ if (isMain) {
   const { entries, written, stale } = syncDocsPages({ root: process.cwd(), check });
 
   if (stale.length > 0) {
-    console.error('Generated docs pages are out of date:\n');
+    console.error('Some pages under docs/ no longer match the sources they are generated from:\n');
     for (const item of stale) console.error(`- ${item}`);
     console.error('\nRun `pnpm docs:sync-pages` and commit the result.');
+    console.error(`See "Editing in the Mintlify dashboard" in ${DOCS_DIR}/README.md if you cannot run that.`);
     process.exit(1);
   }
 

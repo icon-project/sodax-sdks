@@ -4,6 +4,8 @@ icon: layer-group
 # Generated from packages/dapp-kit/README.md by pnpm docs:sync-pages. Edit the source, not this file.
 ---
 
+> **Generated page.** Source: [`packages/dapp-kit/README.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/README.md). An edit made here is replaced on the next sync — change the source instead.
+
 High-level React hooks library for dApp developers. Wraps `@sodax/sdk` with React Query into feature-organized hooks. Used alongside `@sodax/wallet-sdk-react` (no direct dependency — shared types come from `@sodax/sdk`).
 
 ## Features

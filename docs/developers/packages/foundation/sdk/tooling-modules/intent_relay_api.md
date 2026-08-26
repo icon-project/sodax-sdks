@@ -4,6 +4,8 @@ icon: tower-broadcast
 # Generated from packages/sdk/docs/INTENT_RELAY_API.md by pnpm docs:sync-pages. Edit the source, not this file.
 ---
 
+> **Generated page.** Source: [`packages/sdk/docs/INTENT_RELAY_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/INTENT_RELAY_API.md). An edit made here is replaced on the next sync — change the source instead.
+
 ## Intent Relay API Service
 
 > **Error handling conventions:** Failures from `submitTransaction` / `relayTxAndWaitPacket` follow the **relay-layer contract**: `error.message` is one of the literal strings exported as `RELAY_ERROR_CODES` (`'SUBMIT_TX_FAILED'`, `'RELAY_TIMEOUT'`). Modules other than swap (moneyMarket, bridge, dex, migration, staking) propagate these errors raw. The **swap module** wraps them into `SodaxError<SwapErrorCode>` with `context.relayCode` (see [SWAPS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md) Error Handling).

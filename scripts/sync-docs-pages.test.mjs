@@ -14,7 +14,7 @@ const createWorkspace = (t, { mirrored, files = {} }) => {
     writeFileSync(join(root, path), content);
   };
 
-  write('scripts/gitbook-sync-map.json', JSON.stringify({ mirrored }));
+  write('scripts/docs-pages-map.json', JSON.stringify({ mirrored }));
   for (const [path, content] of Object.entries(files)) write(path, content);
 
   return { root, read: path => readFileSync(join(root, path), 'utf8') };
@@ -35,6 +35,20 @@ test('generates a page with frontmatter and drops the duplicated source H1', t =
   assert.match(page, /^---\ntitle: "Swaps \(Solver\)"\nicon: rotate\n# Generated from packages\/sdk\/docs\/SWAPS\.md/);
   assert.match(page, /\nBody text\.\n$/);
   assert.doesNotMatch(page, /# Swaps \(Solver\)/);
+});
+
+test('the page carries a visible generated-from notice, not only a frontmatter comment', t => {
+  const { root, read } = createWorkspace(t, {
+    mirrored: [ENTRY],
+    files: { 'packages/sdk/docs/SWAPS.md': '# Swaps\n\nBody.\n' },
+  });
+
+  syncDocsPages({ root });
+  const page = read('docs/developers/swaps.md');
+
+  assert.match(page, /^> \*\*Generated page\.\*\* Source: \[`packages\/sdk\/docs\/SWAPS\.md`\]/m);
+  assert.match(page, /https:\/\/github\.com\/icon-project\/sodax-sdks\/blob\/main\/packages\/sdk\/docs\/SWAPS\.md/);
+  assert.match(page, /# Generated from packages\/sdk\/docs\/SWAPS\.md/);
 });
 
 test('a map title overrides the source heading', t => {
@@ -75,7 +89,8 @@ test('--check reports drift instead of writing', t => {
 
   assert.deepEqual(written, []);
   assert.equal(stale.length, 1);
-  assert.match(stale[0], /docs\/developers\/swaps\.md differs from packages\/sdk\/docs\/SWAPS\.md/);
+  assert.match(stale[0], /docs\/developers\/swaps\.md is generated from packages\/sdk\/docs\/SWAPS\.md/);
+  assert.match(stale[0], /make the same edit in packages\/sdk\/docs\/SWAPS\.md/);
 });
 
 test('--check reports a page that was never generated', t => {
@@ -84,7 +99,7 @@ test('--check reports a page that was never generated', t => {
     files: { 'packages/sdk/docs/SWAPS.md': '# Swaps\n\nBody.\n' },
   });
 
-  assert.match(syncDocsPages({ root, check: true }).stale[0], /is missing/);
+  assert.match(syncDocsPages({ root, check: true }).stale[0], /has not been generated yet/);
 });
 
 test('a source with no H1 and no map title is an error, not an untitled page', t => {

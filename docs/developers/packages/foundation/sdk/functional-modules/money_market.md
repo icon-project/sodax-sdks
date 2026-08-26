@@ -4,6 +4,8 @@ icon: money-bill-trend-up
 # Generated from packages/sdk/docs/MONEY_MARKET.md by pnpm docs:sync-pages. Edit the source, not this file.
 ---
 
+> **Generated page.** Source: [`packages/sdk/docs/MONEY_MARKET.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/MONEY_MARKET.md). An edit made here is replaced on the next sync — change the source instead.
+
 > **Error handling conventions:** This module uses the canonical `SodaxError<MoneyMarketErrorCode>` shape (same family as the swap module). Discriminate on `result.error.code` (e.g. `'RELAY_TIMEOUT'`, `'EXECUTION_FAILED'`); structured details live on `result.error.context` (`action`, `phase`, `relayCode`, `field`). See the **Error Handling** section below for the full per-method code table and migration notes from the legacy `error.message`-based pattern.
 
 Money Market part of SDK provides abstractions to assist you with interacting with the cross-chain Money Market Smart Contracts.

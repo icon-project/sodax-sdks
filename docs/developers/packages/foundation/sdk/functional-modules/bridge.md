@@ -4,6 +4,8 @@ icon: bridge-suspension
 # Generated from packages/sdk/docs/BRIDGE.md by pnpm docs:sync-pages. Edit the source, not this file.
 ---
 
+> **Generated page.** Source: [`packages/sdk/docs/BRIDGE.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BRIDGE.md). An edit made here is replaced on the next sync — change the source instead.
+
 > **Error handling conventions:** This module uses the canonical `SodaxError<BridgeErrorCode>` shape (same family as the swap and money market modules). Discriminate on `result.error.code` (e.g. `'RELAY_TIMEOUT'`, `'INTENT_CREATION_FAILED'`); structured details live on `result.error.context` (`srcChainKey`, `dstChainKey`, `phase`, `relayCode`, `field`). See the **Error Handling** section below for the full per-method code table and migration notes from the legacy `error.message`-based pattern.
 
 The `BridgeService` class, reachable via `sodax.bridge`, orchestrates cross-chain token transfers within the SODAX hub-and-spoke architecture.

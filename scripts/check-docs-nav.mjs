@@ -22,6 +22,29 @@ const DEFAULT_IGNORED_DIRS = [
   '.cache',
   'snippets',
 ];
+// Legacy and campaign URLs with real inbound traffic, from analytics and the GitBook site they
+// replaced. Renaming a page 404s them silently, so the list is frozen: extend it, never trim it.
+export const MUST_NOT_BREAK_URLS = [
+  '/',
+  '/developers',
+  '/developers/packages',
+  '/developers/deployments',
+  '/developers/deployments/mainnet',
+  '/developers/deployments/swaps-compatible-assets',
+  '/developers/deployments/solver-compatible-assets',
+  '/developers/faq',
+  '/solana',
+  '/developers/how-to/bitcoin-integration',
+  '/developers/how-to/wallet_providers',
+  '/developers/how-to/monetize_sdk',
+  '/developers/technical-overview/vault-token',
+  '/developers/packages/foundation/sdk/functional-modules/swaps',
+  '/developers/packages/foundation/sdk/functional-modules/money_market',
+  '/developers/packages/foundation/sdk/functional-modules/bridge',
+  '/developers/ai-integration',
+  '/welcome-to-sodax/audits',
+  '/welcome-to-sodax/readme-1',
+];
 
 // Supports the .gitignore subset Mintlify documents: "!" negation, "/" anchor and directory
 // suffix, "*" within a segment, "**" across segments.
@@ -117,11 +140,45 @@ const listPageFiles = (dir, rules, base = dir) => {
   return found;
 };
 
-export const checkDocsNav = ({ root, docsDir = DOCS_DIR } = {}) => {
+const normalizeUrl = url => {
+  const path = url.split(/[?#]/)[0].replace(/\/+$/, '');
+  return path === '' ? '/' : path;
+};
+
+// Mintlify serves /<path> from docs/<path>.mdx|.md, and a directory path from its index page.
+const servesPage = (url, pageSet) => {
+  const path = url.replace(/^\/+/, '');
+  return pageSet.has(path) || pageSet.has(path ? `${path}/index` : 'index');
+};
+
+// An off-site destination, or one carrying a wildcard or :param, has no single page to resolve.
+const isResolvable = target => target.startsWith('/') && !/[*:]/.test(target);
+
+// Follows the redirect chain the way a browser does; returns why it dead-ends, or null.
+const resolveUrl = (url, pageSet, redirects) => {
+  const seen = new Set();
+  let current = normalizeUrl(url);
+  while (!servesPage(current, pageSet)) {
+    if (seen.has(current)) return `the redirects loop back to "${current}"`;
+    seen.add(current);
+    const next = redirects.get(current);
+    if (next === undefined) return `no page under ${DOCS_DIR}/ serves "${current}"`;
+    if (!isResolvable(next)) return null;
+    current = normalizeUrl(next);
+  }
+  return null;
+};
+
+export const checkDocsNav = ({ root, docsDir = DOCS_DIR, frozenUrls = MUST_NOT_BREAK_URLS } = {}) => {
   const docsPath = join(root, docsDir);
   const configPath = join(docsPath, CONFIG_FILE);
   if (!existsSync(configPath)) {
-    return { failures: [`${docsDir}/${CONFIG_FILE} is missing — cannot verify navigation.`], navPages: 0, files: 0 };
+    return {
+      failures: [`${docsDir}/${CONFIG_FILE} is missing — cannot verify navigation.`],
+      navPages: 0,
+      files: 0,
+      redirects: 0,
+    };
   }
 
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
@@ -152,13 +209,36 @@ export const checkDocsNav = ({ root, docsDir = DOCS_DIR } = {}) => {
     );
   }
 
-  return { failures, navPages: navPages.length, files: files.length };
+  const redirectEntries = (config.redirects ?? []).filter(
+    entry => typeof entry?.source === 'string' && typeof entry?.destination === 'string',
+  );
+  const redirects = new Map(redirectEntries.map(entry => [normalizeUrl(entry.source), entry.destination]));
+
+  for (const { source, destination } of redirectEntries) {
+    if (!isResolvable(destination)) continue;
+    const reason = resolveUrl(destination, fileSet, redirects);
+    if (reason) {
+      failures.push(
+        `${CONFIG_FILE} redirects "${source}" to "${destination}", but ${reason} — the redirect lands on a 404.`,
+      );
+    }
+  }
+  for (const url of frozenUrls) {
+    const reason = resolveUrl(url, fileSet, redirects);
+    if (reason) {
+      failures.push(
+        `"${url}" is a must-not-break URL but ${reason} — restore the page, or add a ${CONFIG_FILE} redirect sending it somewhere that still exists.`,
+      );
+    }
+  }
+
+  return { failures, navPages: navPages.length, files: files.length, redirects: redirectEntries.length };
 };
 
 const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isMain) {
-  const { failures, navPages, files } = checkDocsNav({ root: process.cwd() });
+  const { failures, navPages, files, redirects } = checkDocsNav({ root: process.cwd() });
 
   if (failures.length > 0) {
     console.error('Docs navigation check failed:\n');
@@ -167,5 +247,7 @@ if (isMain) {
     process.exit(1);
   }
 
-  console.log(`Docs navigation check passed (${navPages} nav entries, ${files} published pages).`);
+  console.log(
+    `Docs navigation check passed (${navPages} nav entries, ${files} published pages, ${redirects} redirects, ${MUST_NOT_BREAK_URLS.length} must-not-break URLs).`,
+  );
 }

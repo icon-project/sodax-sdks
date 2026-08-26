@@ -523,6 +523,14 @@
     {
       "source": "/welcome-to-sodax/contact-form",
       "destination": "/contact"
+    },
+    {
+      "source": "/developers",
+      "destination": "/developers/deployments"
+    },
+    {
+      "source": "/partners",
+      "destination": "/contact"
     }
   ],
   "thumbnails": {
