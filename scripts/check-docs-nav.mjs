@@ -46,6 +46,9 @@ export const MUST_NOT_BREAK_URLS = [
   '/welcome-to-sodax/audits',
   '/welcome-to-sodax/readme-1',
   '/partners',
+  // Served from docs/ root before this site absorbed them into /developers/how-to/.
+  '/quick-sponsoring-stellar-guide',
+  '/stellar-sponsoring-getting-started',
 ];
 
 // Supports the .gitignore subset Mintlify documents: "!" negation, "/" anchor and directory

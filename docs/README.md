@@ -80,9 +80,11 @@ source file. Reviewed, and every check below runs against it.
 
 **In the Mintlify dashboard** — the docs and marketing team, on the hand-written pages.
 Publishing there commits straight to whichever branch the dashboard is pointed at, with
-**no pull request and none of the checks below** — they are all `pull_request`-triggered,
-so a dashboard commit runs nothing at all. Commits arrive authored as
-`usr-icon-foundation` ("Updated mintlify pages"). Which branch that is, is a setting in the
+**no pull request and nothing gating the publish**. On `main` or `development` the push
+trigger still runs the checks below — but after the commit has landed and the page is
+already live, so a failure is something to clean up rather than something that stopped you.
+On any other branch nothing runs until someone opens a pull request. Commits arrive authored
+as `usr-icon-foundation` ("Updated mintlify pages"). Which branch that is, is a setting in the
 Mintlify dashboard and is recorded nowhere in this repo: point it at `main` and a Publish
 click is live on docs.sodax.com with nothing in between.
 

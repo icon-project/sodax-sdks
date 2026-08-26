@@ -17,6 +17,10 @@ jobs:
     name: Detect changed paths
     timeout-minutes: 5
     runs-on: ubuntu-latest
+    # The files API below needs `pull-requests: read`, which `contents: read` does not cover.
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       code: ${{ steps.classify.outputs.code }}
 
@@ -105,7 +109,9 @@ jobs:
   build:
     name: Build and Test
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    # Fail closed: only an explicit docs-only verdict skips this job, so a classifier that errors
+    # still builds. `!cancelled()` is what lets it run at all when `changes` failed.
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     timeout-minutes: 15
     runs-on: ubuntu-latest
 

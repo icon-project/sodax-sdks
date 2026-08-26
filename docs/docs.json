@@ -429,6 +429,14 @@
       "destination": "/developers/deployments/swaps-compatible-assets"
     },
     {
+      "source": "/quick-sponsoring-stellar-guide",
+      "destination": "/developers/how-to/quick-sponsoring-stellar-guide"
+    },
+    {
+      "source": "/stellar-sponsoring-getting-started",
+      "destination": "/developers/how-to/stellar-sponsoring-getting-started"
+    },
+    {
       "source": "/developers/ai-integration",
       "destination": "/ai-integration-guide"
     },
