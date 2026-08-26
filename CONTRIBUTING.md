@@ -25,9 +25,27 @@ Run tests with `pnpm test`.
 ## Documentation
 
 Docs ship with code — every feature PR includes its documentation. This repo is
-the source of truth for everything on docs.sodax.com: you write docs here, next
-to the code, and Mintlify publishes them. Never edit the published site
-directly, and never edit a copy of a page instead of the source it came from.
+the source of truth for everything on docs.sodax.com: docs are written here,
+next to the code, and Mintlify publishes them from `main`.
+
+Two lanes write to the site, and they are not equivalent:
+
+- **In a pull request** — engineers, and anyone changing a page that is
+  generated from a source file. Reviewed, and every check below runs against
+  it. This is the lane the rest of this section describes.
+- **In the Mintlify dashboard** — the docs and marketing team, on hand-written
+  pages. Publishing there **commits straight to whichever branch the dashboard
+  is pointed at, with no pull request and none of the checks below** — they are
+  all `pull_request`-triggered, so nothing runs. Commits arrive authored as
+  `usr-icon-foundation` ("Updated mintlify pages"). Whether an edit is allowed
+  is decided entirely by the dashboard's own settings, not by this repo.
+
+Never edit a copy of a page instead of the source it came from: the next sync
+overwrites your edit, and CI is red for everyone until it does.
+
+Creating a page is two steps — the file, and its entry in `docs/docs.json`.
+Skip the second and the page is live and reachable by URL but absent from the
+sidebar, from search and from `llms.txt`. Docs Drift does not check nav.
 
 ### Where docs live
 
