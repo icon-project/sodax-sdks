@@ -58,6 +58,9 @@ overrides:
   valibot: ">=1.2.0"
   # Pin patched axios (1.13.2 sat inside ~29 advisories); only pulled via @injectivelabs/* (^1.13.2).
   axios: "1.19.0"
+  # Pin patched ws per major (DoS GHSA-96hv-2xvq-fx4p, mem-disclosure GHSA-58qx-3vcg-4xpx).
+  "ws@7": "7.5.13"
+  "ws@8": "8.21.3"
   # Clears 8 transitive Trezor advisories that resolve protobufjs <7.5.8.
   protobufjs: "^7.5.8"
   # Clears a Next.js transitive XSS advisory against postcss <8.5.10.
