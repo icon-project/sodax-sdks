@@ -39,7 +39,7 @@ const commit = (root, message) => {
   return git(root, ['rev-parse', 'HEAD']);
 };
 
-const createRepo = (t, { map = true } = {}) => {
+const createRepo = (t, { map = true, mapText = null } = {}) => {
   const root = mkdtempSync(join(fileURLToPath(new URL('..', import.meta.url)), '.tmp-docs-drift-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
@@ -47,7 +47,7 @@ const createRepo = (t, { map = true } = {}) => {
   mkdirSync(join(template, 'hooks'), { recursive: true });
   git(root, ['init', '-b', 'main', `--template=${template}`]);
   if (map) {
-    write(root, 'scripts/gitbook-sync-map.json', `${JSON.stringify(MAP, null, 2)}\n`);
+    write(root, 'scripts/gitbook-sync-map.json', mapText ?? `${JSON.stringify(MAP, null, 2)}\n`);
   }
   write(root, 'packages/sdk/src/index.ts', 'export const n = 1;\n');
   write(root, 'packages/sdk/docs/SWAPS.md', '# Swaps\n');
@@ -327,6 +327,45 @@ test('fails closed when a rename cannot be checked against a base map', t => {
   const result = run(root, base, head);
   assert.equal(result.code, 1);
   assert.match(result.out, /dropped off scripts\/gitbook-sync-map.json/);
+});
+
+test('fails closed when a malformed base map cannot prove a renamed page was unpublished', t => {
+  const { root, base } = createRepo(t, { mapText: `${JSON.stringify(MAP, null, 2)}\n,,,` });
+  git(root, ['mv', 'packages/sdk/docs/SWAPS.md', 'packages/sdk/docs/NEW.md']);
+  write(
+    root,
+    'scripts/gitbook-sync-map.json',
+    `${JSON.stringify({ mirrored: MAP.mirrored.filter(item => item.src !== 'packages/sdk/docs/SWAPS.md') }, null, 2)}\n`,
+  );
+  const head = commit(root, 'repair base map + rename mapped swaps off it');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 1);
+  assert.match(result.out, /is unreadable at/);
+  assert.match(result.out, /dropped off scripts\/gitbook-sync-map.json/);
+  assert.match(result.out, /packages\/sdk\/docs\/SWAPS.md -> packages\/sdk\/docs\/NEW.md/);
+});
+
+test('fails when the map is not valid JSON', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'packages/sdk/src/index.ts', 'export const n = 2;\n');
+  write(root, 'scripts/gitbook-sync-map.json', `${JSON.stringify(MAP, null, 2)}\n,,,`);
+  const head = commit(root, 'malformed map');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 1);
+  assert.match(result.out, /is not valid JSON/);
+});
+
+test('fails when the map is not a JSON object', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'packages/sdk/src/index.ts', 'export const n = 2;\n');
+  write(root, 'scripts/gitbook-sync-map.json', `${JSON.stringify(MAP.mirrored, null, 2)}\n`);
+  const head = commit(root, 'map is a bare array');
+
+  const result = run(root, base, head);
+  assert.equal(result.code, 1);
+  assert.match(result.out, /must be a JSON object/);
 });
 
 test('fails when a new sdk .mdx page is not on the map', t => {

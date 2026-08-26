@@ -78,11 +78,19 @@ def reject(message):
         print(message, file=sys.stderr)
         sys.exit(1)
 
+# A map the caller cannot read at all is not a map with no entries: exit nonzero
+# even when tolerant, so the base read fails closed instead of reporting nothing.
+def unreadable(message):
+    print(message, file=sys.stderr)
+    sys.exit(1 if strict else 2)
+
 try:
     data = json.load(sys.stdin)
 except ValueError:
-    reject("::error::scripts/gitbook-sync-map.json is not valid JSON.")
-    sys.exit(0)
+    unreadable("::error::scripts/gitbook-sync-map.json is not valid JSON.")
+
+if not isinstance(data, dict):
+    unreadable("::error::scripts/gitbook-sync-map.json must be a JSON object.")
 
 for item in data.get(key, []):
     path = item.get("src") if isinstance(item, dict) else item
@@ -121,6 +129,7 @@ load_map() {
     if BASE_MIRRORED_SRCS=$(read_map_paths "$BASE_REF" mirrored tolerant 2>/dev/null); then
       BASE_MAP_READABLE=1
     else
+      echo "::warning::$MAP_FILE is unreadable at $BASE_REF — every renamed page must carry a map entry."
       BASE_MIRRORED_SRCS=""
     fi
   fi
