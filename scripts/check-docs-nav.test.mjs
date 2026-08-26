@@ -140,6 +140,41 @@ test('flags a tab whose landing page an earlier tab already claims', t => {
   assert.match(failures[0], /tab "Get Started" lands on "introduction", which tab "Home" already lists/);
 });
 
+test('flags a tab whose landing directory an earlier tab already serves', t => {
+  const root = createWorkspace(t, {
+    navigation: {
+      tabs: [
+        // Home lists one page from how-to/, so Mintlify serves /how-to from it and the How To tab,
+        // whose own pages are each listed once, is left without a landing URL.
+        { tab: 'Home', pages: ['index', { group: 'Networks', pages: ['how-to/bitcoin'] }] },
+        { tab: 'How To', pages: ['how-to/index', 'how-to/swap'] },
+      ],
+    },
+    files: ['index.mdx', 'how-to/index.md', 'how-to/bitcoin.md', 'how-to/swap.md'],
+  });
+
+  const { failures } = checkNav({ root });
+
+  assert.equal(failures.length, 1);
+  assert.match(failures[0], /tab "How To" lands on "how-to\/index", but an earlier tab lists "how-to\/bitcoin"/);
+});
+
+test('a directory kept in one tab passes, and a sibling directory does not collide', t => {
+  const root = createWorkspace(t, {
+    navigation: {
+      tabs: [
+        // "contact" shares the root directory with Home's landing page, but /  still serves "index".
+        { tab: 'Home', pages: ['index'] },
+        { tab: 'How To', pages: ['how-to/index', 'how-to/bitcoin', 'how-to/swap'] },
+        { tab: 'Help', pages: ['contact'] },
+      ],
+    },
+    files: ['index.mdx', 'contact.mdx', 'how-to/index.md', 'how-to/bitcoin.md', 'how-to/swap.md'],
+  });
+
+  assert.deepEqual(checkNav({ root }).failures, []);
+});
+
 test('a shortcut duplicated below a tab\'s landing page is allowed', t => {
   const root = createWorkspace(t, {
     navigation: {

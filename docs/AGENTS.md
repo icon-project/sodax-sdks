@@ -34,6 +34,12 @@ correct. The commands below are the gate.
 - **A tab must land on a page no earlier tab lists**, or the page renders under that earlier
   tab and the navbar link goes nowhere. Repeating a page deeper in another sidebar as a
   shortcut is fine; `pnpm check:docs-nav` enforces the landing rule.
+- **Every page directly under a directory belongs to one tab.** Mintlify serves `/<dir>` from
+  the first page listed under it, whichever tab that is — an `index` page does not win by being
+  one. Split a directory across tabs and the later tab loses its navbar link, even though every
+  page is listed exactly once. A sidebar group cannot hold a bare link, so cross-section
+  shortcuts go in `navigation.global.anchors`, not in a second tab's `pages`.
+  `pnpm check:docs-nav` enforces this.
 - **Each network is its own nav group** under Network guides, mirroring `solana/` page for
   page. Do not add a network as a loose page beside the groups.
 - **Repo-internal docs do not belong here.** If one must live in this directory, add it to

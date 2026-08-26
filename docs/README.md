@@ -41,9 +41,11 @@ working — it fails if a rename strands one of them.
    ```
 3. **Register it in `docs.json`, under exactly one tab.** A page listed under two tabs renders
    under the first one, so the other tab's navbar link switches straight back and reads as
-   broken. A page missing from `navigation` is still published and
+   broken. The same goes for its neighbours: put a page in a different tab from its folder-mates
+   and Mintlify serves the folder's URL from whichever was listed first, which quietly costs the
+   later tab its navbar link. A page missing from `navigation` is still published and
    still reachable by URL — it is just absent from the sidebar, site search, the sitemap
-   and `llms.txt`, which is almost never what you want. `pnpm check:docs-nav` fails on it.
+   and `llms.txt`, which is almost never what you want. `pnpm check:docs-nav` fails on all three.
 4. **Preview and check** (below).
 5. **Push.** The Mintlify check comments the preview URL on the PR.
 

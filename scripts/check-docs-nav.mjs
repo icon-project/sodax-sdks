@@ -105,6 +105,31 @@ const findDeadTabs = navigation => {
   return dead;
 };
 
+// Mintlify serves a directory URL from the first page listed under it, whichever tab that page sits
+// in — an index page does not win by being an index page. So a tab landing on "<dir>/index" loses
+// its navbar link to any sibling an earlier tab lists: the tab either opens that sibling under the
+// earlier tab, or renders with no link at all. findDeadTabs misses this because the landing page
+// itself is listed once. Fix by keeping every page under a directory in the same tab.
+const findHijackedTabs = navigation => {
+  const tabs = navigation.tabs ?? [];
+  const order = tabs.flatMap(tab => collectNavPages(tab));
+  const servedBy = directory => {
+    const prefix = directory ? `${directory}/` : '';
+    return order.find(page => page.startsWith(prefix) && !page.slice(prefix.length).includes('/'));
+  };
+
+  const hijacked = [];
+  for (const tab of tabs) {
+    const [landing] = collectNavPages(tab);
+    if (!landing) continue;
+    const directory = landing === 'index' ? '' : landing.endsWith('/index') ? landing.slice(0, -6) : null;
+    if (directory === null) continue;
+    const served = servedBy(directory);
+    if (served && served !== landing) hijacked.push({ tab: tab.tab, landing, directory, served });
+  }
+  return hijacked;
+};
+
 // Page references only live in "pages" arrays; other strings are labels, icons and tab names.
 const collectNavPages = node => {
   const pages = [];
@@ -206,6 +231,11 @@ export const checkDocsNav = ({ root, docsDir = DOCS_DIR, frozenUrls = MUST_NOT_B
   for (const { tab, landing, owner } of findDeadTabs(config.navigation ?? {})) {
     failures.push(
       `${CONFIG_FILE} tab "${tab}" lands on "${landing}", which tab "${owner}" already lists — the page renders under "${owner}", so the "${tab}" navbar link goes nowhere. Give "${tab}" a landing page no earlier tab lists.`,
+    );
+  }
+  for (const { tab, landing, directory, served } of findHijackedTabs(config.navigation ?? {})) {
+    failures.push(
+      `${CONFIG_FILE} tab "${tab}" lands on "${landing}", but an earlier tab lists "${served}", so Mintlify serves "/${directory}" from that page instead — the "${tab}" navbar link opens it under the earlier tab. Move every page directly under "${directory}/" into one tab.`,
     );
   }
   for (const file of files.filter(file => !navSet.has(file)).sort()) {
