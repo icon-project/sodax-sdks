@@ -53,7 +53,7 @@ sidebar, from search and from `llms.txt`. Docs Drift does not check nav.
 | --------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | A functional module (swaps, money market, bridge, staking, migration, leverage yield) | The matching *published* file in `packages/sdk/docs/` (e.g. `SWAPS.md`, listed in `scripts/gitbook-sync-map.json`) |
 | The public API of `sdk`, `swaps-api`, `wallet-sdk-core`, `wallet-sdk-react`, or `dapp-kit` | That package's `README.md` — these publish, so the README alone is a real docs signal |
-| The public API of `types`, `libs`, or `assets`                          | Their READMEs are **not** on the publish map. The gate accepts them (and `packages/<pkg>/docs/`), but prefer a page that goes live: for `types`, `docs/developers/deployments/mainnet.md` or `swaps-compatible-assets.md` — both list `types` in `pkgs` |
+| The public API of `types`, `libs`, or `assets`                          | Their READMEs are **not** on the publish map. The gate accepts them (and `packages/<pkg>/docs/`), but prefer a page that goes live: any mapped `packages/sdk/docs/` page satisfies these packages, so update the feature page the change surfaces in |
 | A flow with a root-level `docs/` guide (e.g. Stellar sponsoring)       | That guide — it satisfies Docs Drift for the packages its `pkgs` entry lists in `scripts/gitbook-sync-map.json` |
 | Exported types or function signatures                                  | JSDoc on the exports themselves (does not satisfy Docs Drift)               |
 
