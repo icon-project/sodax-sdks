@@ -1,0 +1,135 @@
+# OSV-Scanner advisory baseline, accepted 2026-08-27 while making the scan job
+# blocking (audit gh-741, secrets-supply-chain:H-3). Burn entries down; do not add
+# new ones without triage.
+
+[[IgnoredVulns]]
+id = "CVE-2025-14505"
+reason = "pre-existing at baseline: elliptic@6.6.1"
+
+[[IgnoredVulns]]
+id = "CVE-2025-3194"
+reason = "pre-existing at baseline: bigint-buffer@1.1.5"
+
+[[IgnoredVulns]]
+id = "CVE-2026-13149"
+reason = "pre-existing at baseline: brace-expansion@2.1.0, brace-expansion@5.0.6"
+
+[[IgnoredVulns]]
+id = "CVE-2026-13676"
+reason = "pre-existing at baseline: fast-uri@3.1.2"
+
+[[IgnoredVulns]]
+id = "CVE-2026-14257"
+reason = "pre-existing at baseline: brace-expansion@2.1.0, brace-expansion@5.0.6"
+
+[[IgnoredVulns]]
+id = "CVE-2026-16221"
+reason = "pre-existing at baseline: fast-uri@3.1.2"
+
+[[IgnoredVulns]]
+id = "CVE-2026-18446"
+reason = "pre-existing at baseline: fast-uri@3.1.2"
+
+[[IgnoredVulns]]
+id = "CVE-2026-2739"
+reason = "pre-existing at baseline: bn.js@5.2.1"
+
+[[IgnoredVulns]]
+id = "CVE-2026-33532"
+reason = "pre-existing at baseline: yaml@2.8.2"
+
+[[IgnoredVulns]]
+id = "CVE-2026-39365"
+reason = "pre-existing at baseline: vite@5.4.21"
+
+[[IgnoredVulns]]
+id = "CVE-2026-41907"
+reason = "pre-existing at baseline: uuid@8.3.2, uuid@9.0.1"
+
+[[IgnoredVulns]]
+id = "CVE-2026-48125"
+reason = "pre-existing at baseline: ua-parser-js@2.0.9"
+
+[[IgnoredVulns]]
+id = "CVE-2026-49356"
+reason = "pre-existing at baseline: @babel/core@7.29.0"
+
+[[IgnoredVulns]]
+id = "CVE-2026-53550"
+reason = "pre-existing at baseline: js-yaml@3.14.2, js-yaml@4.1.1"
+
+[[IgnoredVulns]]
+id = "CVE-2026-53571"
+reason = "pre-existing at baseline: vite@5.4.21"
+
+[[IgnoredVulns]]
+id = "CVE-2026-53632"
+reason = "pre-existing at baseline: vite@5.4.21"
+
+[[IgnoredVulns]]
+id = "CVE-2026-54272"
+reason = "pre-existing at baseline: ip-address@10.2.0"
+
+[[IgnoredVulns]]
+id = "CVE-2026-59869"
+reason = "pre-existing at baseline: js-yaml@3.14.2, js-yaml@4.1.1"
+
+[[IgnoredVulns]]
+id = "CVE-2026-59952"
+reason = "pre-existing at baseline: valibot@1.4.0"
+
+[[IgnoredVulns]]
+id = "CVE-2026-67213"
+reason = "pre-existing at baseline: nanoid@3.3.12"
+
+[[IgnoredVulns]]
+id = "CVE-2026-67214"
+reason = "pre-existing at baseline: nanoid@3.3.12"
+
+[[IgnoredVulns]]
+id = "CVE-2026-69152"
+reason = "pre-existing at baseline: brace-expansion@2.1.0, brace-expansion@5.0.6"
+
+[[IgnoredVulns]]
+id = "CVE-2026-69153"
+reason = "pre-existing at baseline: postcss@8.5.15"
+
+[[IgnoredVulns]]
+id = "CVE-2026-69185"
+reason = "pre-existing at baseline: socket.io-parser@4.2.6"
+
+[[IgnoredVulns]]
+id = "CVE-2026-69192"
+reason = "pre-existing at baseline: ip-address@10.2.0"
+
+[[IgnoredVulns]]
+id = "CVE-2026-69198"
+reason = "pre-existing at baseline: ip-address@10.2.0"
+
+[[IgnoredVulns]]
+id = "CVE-2026-73646"
+reason = "pre-existing at baseline: postcss@8.5.15"
+
+[[IgnoredVulns]]
+id = "CVE-2026-8723"
+reason = "pre-existing at baseline: qs@6.15.1"
+
+[[IgnoredVulns]]
+id = "GHSA-5p4m-2wfm-xmqj"
+reason = "pre-existing at baseline: js-yaml@3.14.2, js-yaml@4.1.1"
+
+[[IgnoredVulns]]
+id = "GHSA-67mh-4wv8-2f99"
+reason = "pre-existing at baseline: esbuild@0.21.5"
+
+[[IgnoredVulns]]
+id = "GHSA-f88m-g3jw-g9cj"
+reason = "pre-existing at baseline: sharp@0.34.5"
+
+[[IgnoredVulns]]
+id = "GHSA-g7r4-m6w7-qqqr"
+reason = "pre-existing at baseline: esbuild@0.28.0"
+
+[[IgnoredVulns]]
+id = "GHSA-qj3p-xc97-xw74"
+reason = "pre-existing at baseline: @metamask/sdk-communication-layer@0.32.0, @metamask/sdk@0.32.0"

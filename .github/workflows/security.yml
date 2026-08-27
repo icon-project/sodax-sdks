@@ -60,10 +60,8 @@ jobs:
       - name: Check out code
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
-      # Non-blocking on first land so we can triage the baseline of pre-existing
-      # findings before making it gate PRs. Remove `continue-on-error` to enforce.
+      # Blocking; the pre-existing advisory baseline is pinned in osv-scanner.toml.
       - name: Run OSV-Scanner
-        continue-on-error: true
         uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
         with:
           scan-args: |-
@@ -92,8 +90,9 @@ jobs:
       - name: Check out code
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
-      # No `--error` flag yet so the baseline of pre-existing findings doesn't block PRs.
-      # Add `--error` once the team has triaged the first run.
+      # Blocking via --error. Excluded: the two audit-tier JS rules are triaged
+      # log/tooling noise; the release-age rule reads .npmrc, but our cooldown is
+      # enforced by minimumReleaseAge in pnpm-workspace.yaml.
       - name: Run Semgrep
         run: |
           semgrep scan \
@@ -101,6 +100,10 @@ jobs:
             --config=p/react \
             --config=p/owasp-top-ten \
             --config=p/secrets \
+            --error \
+            --exclude-rule=javascript.lang.security.audit.unsafe-formatstring.unsafe-formatstring \
+            --exclude-rule=javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp \
+            --exclude-rule=package_managers.npm.npm-missing-minimum-release-age.npm-missing-minimum-release-age \
             --sarif --output=semgrep-results.sarif
 
       - name: Upload Semgrep results
@@ -127,14 +130,12 @@ jobs:
           curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz" | tar -xz gitleaks
           ./gitleaks version
 
-      # Broad low-noise pass (allowlists docs/skills/fixtures). Non-blocking, like OSV/Semgrep.
+      # Broad low-noise pass (allowlists docs/skills/fixtures). Blocking.
       - name: Run gitleaks (broad)
-        continue-on-error: true
         run: ./gitleaks dir . --config .gitleaks.toml --redact --no-banner --report-format sarif --report-path gitleaks-results.sarif
 
       # Strict private-key pass — scans docs/dev-skills too; only fake fixtures exempt.
       - name: Run gitleaks (strict private-key)
-        continue-on-error: true
         run: ./gitleaks dir . --config .gitleaks-strict.toml --redact --no-banner --report-format sarif --report-path gitleaks-strict-results.sarif
 
       - name: Upload gitleaks results

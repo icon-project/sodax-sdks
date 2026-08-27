@@ -8,6 +8,8 @@ minimumReleaseAge: 20160
 # Refuse a release whose npm trust evidence (trusted publisher/provenance) is
 # weaker than an earlier release of the same package.
 trustPolicy: no-downgrade
+# Refuse git/tarball-URL sub-dependencies (registry-only transitive graph).
+blockExoticSubdeps: true
 
 catalog:
   "@types/node": "22.18.1"
