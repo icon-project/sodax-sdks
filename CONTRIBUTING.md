@@ -50,9 +50,9 @@ auditor did not open, so a partial audit never reads as a clean one.
 cycle and its verdicts hold steady across re-runs of the same pull request; until then, treat a
 contradiction as a review comment that happens to come from CI.
 
-If a contradiction is wrong, add the **`no-ai-drift`** label to skip the job — the same escape hatch
-`no-changeset` provides. Please say why in the PR thread so the prompt can be tightened. Pull
-requests from forks skip the audit; a maintainer runs it on a branch in this repository instead.
+If a contradiction is wrong, add the **`no-ai-drift`** label to skip the job. Please say why in the
+PR thread so the prompt can be tightened. Pull requests from forks skip the audit; a maintainer
+runs it on a branch in this repository instead.
 
 Three cases where no audit happens. The first two say so in the PR comment; the third costs nothing
 and stays quiet:
