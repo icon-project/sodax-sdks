@@ -162,9 +162,9 @@ export class EvmSpokeService {
       return rawTx satisfies TxReturnType<EvmSpokeOnlyChainKey, true> as TxReturnType<EvmSpokeOnlyChainKey, Raw>;
     }
 
-    return params.walletProvider.sendTransaction(rawTx) satisfies Promise<
-      TxReturnType<EvmSpokeOnlyChainKey, false>
-    > as Promise<TxReturnType<EvmSpokeOnlyChainKey, Raw>>;
+    return params.walletProvider.sendTransaction(rawTx, {
+      expectedChainId: getEvmViemChain(srcChainKey).id,
+    }) satisfies Promise<TxReturnType<EvmSpokeOnlyChainKey, false>> as Promise<TxReturnType<EvmSpokeOnlyChainKey, Raw>>;
   }
 
   /**
@@ -210,9 +210,9 @@ export class EvmSpokeService {
       return rawTx satisfies TxReturnType<EvmSpokeOnlyChainKey, true> as TxReturnType<EvmSpokeOnlyChainKey, Raw>;
     }
 
-    return params.walletProvider.sendTransaction(rawTx) satisfies Promise<
-      TxReturnType<EvmSpokeOnlyChainKey, false>
-    > as Promise<TxReturnType<EvmSpokeOnlyChainKey, Raw>>;
+    return params.walletProvider.sendTransaction(rawTx, {
+      expectedChainId: getEvmViemChain(srcChainKey).id,
+    }) satisfies Promise<TxReturnType<EvmSpokeOnlyChainKey, false>> as Promise<TxReturnType<EvmSpokeOnlyChainKey, Raw>>;
   }
 
   public async waitForTransactionReceipt(
