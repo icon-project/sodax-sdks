@@ -1,6 +1,7 @@
 import {
   Cl,
   noneCV,
+  Pc,
   PostConditionMode,
   someCV,
   uintCV,
@@ -98,6 +99,26 @@ export class StacksSpokeService {
     return result.value.value as bigint;
   }
 
+  private readonly ftAssetNames = new Map<string, string[]>();
+
+  /** Post-conditions need the on-chain `define-fungible-token` names; SIP-10 exposes no read for them. */
+  private async getFtAssetNames(tokenContractId: string): Promise<string[]> {
+    const cached = this.ftAssetNames.get(tokenContractId);
+    if (cached) return cached;
+    const [address, name] = parseContractId(tokenContractId as ContractIdString);
+    const response = await fetch(`${this.network.client.baseUrl}/v2/contracts/interface/${address}/${name}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch the contract interface for ${tokenContractId}: ${response.statusText}`);
+    }
+    const abi = (await response.json()) as { fungible_tokens?: Array<{ name: string }> };
+    const assetNames = (abi.fungible_tokens ?? []).map(token => token.name);
+    if (assetNames.length === 0) {
+      throw new Error(`${tokenContractId} defines no fungible token — not a SIP-10 contract`);
+    }
+    this.ftAssetNames.set(tokenContractId, assetNames);
+    return assetNames;
+  }
+
   async getImplContractAddress(stateContract: string): Promise<string> {
     const [contractAddress, contractName] = parseContractId(stateContract as ContractIdString);
     const txParams = {
@@ -124,18 +145,28 @@ export class StacksSpokeService {
     const assetManagerImpl = await this.getImplContractAddress(chainConfig.addresses.assetManager);
     const [implAddress, implName] = parseContractId(assetManagerImpl as ContractIdString);
     const [connectionAddress, connectionName] = parseContractId(chainConfig.addresses.connection as ContractIdString);
+    const isNative = isNativeToken(params.srcChainKey, params.token);
     const reqData = {
       contractAddress: implAddress as string,
       contractName: implName as string,
       functionName: 'transfer',
       functionArgs: [
-        isNativeToken(params.srcChainKey, params.token) ? noneCV() : someCV(Cl.principal(params.token)),
+        isNative ? noneCV() : someCV(Cl.principal(params.token)),
         Cl.bufferFromHex(params.to),
         uintCV(params.amount),
         Cl.bufferFromHex(params.data),
         Cl.contractPrincipal(connectionAddress as string, connectionName as string),
       ],
-      postConditionMode: PostConditionMode.Allow,
+      // asset-manager-state.deposit moves exactly `amount` from the caller; cap it and deny the rest.
+      // One cap per FT the contract defines (sBTC has two) — the unmoved ones pass at 0 trivially.
+      postConditionMode: PostConditionMode.Deny,
+      postConditions: isNative
+        ? [Pc.principal(params.srcAddress).willSendLte(params.amount).ustx()]
+        : (await this.getFtAssetNames(params.token)).map(assetName =>
+            Pc.principal(params.srcAddress)
+              .willSendLte(params.amount)
+              .ft(params.token as ContractIdString, assetName),
+          ),
     };
     if (params.raw === true) {
       // srcPublicKey (builds the unsigned tx) and srcAddress (hub-wallet derivation + intent record) must
@@ -200,7 +231,9 @@ export class StacksSpokeService {
       contractName: connectionName as string,
       functionName: 'send-message',
       functionArgs: [uintCV(dstRelayChainId), Cl.bufferFromHex(params.dstAddress), Cl.bufferFromHex(params.payload)],
-      postConditionMode: PostConditionMode.Allow,
+      // send-message moves no assets — deny with no conditions aborts if it ever tries.
+      postConditionMode: PostConditionMode.Deny,
+      postConditions: [],
     };
 
     if (params.raw === true) {

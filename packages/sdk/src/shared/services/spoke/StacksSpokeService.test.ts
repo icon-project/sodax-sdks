@@ -46,7 +46,7 @@
  *  10. waitForTransactionReceipt — every tx_status branch + polling defaults
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Cl, type ContractPrincipalCV, type UIntCV } from '@sodax/libs/stacks/core';
+import { Cl, Pc, type ContractPrincipalCV, type UIntCV } from '@sodax/libs/stacks/core';
 import { ChainKeys, getIntentRelayChainId, spokeChainConfig, type Hex, type IStacksWalletProvider } from '@sodax/types';
 
 // --- hoisted mocks --------------------------------------------------------
@@ -458,24 +458,80 @@ describe('StacksSpokeService.deposit', () => {
 
   it('raw=false → delegates to walletProvider.sendTransaction and returns the txId', async () => {
     (mockStacksProvider.sendTransaction as ReturnType<typeof vi.fn>).mockResolvedValueOnce(TX_ID);
+    // getFtAssetName resolves the on-chain `define-fungible-token` name from the contract interface.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ fungible_tokens: [{ name: 'bnusd' }] }),
+      } as unknown as Response),
+    );
 
     const result = await stacksSpoke.deposit(
       depositParams<false>({ raw: false, walletProvider: mockStacksProvider, token: STACKS_BNUSD }),
     );
 
     expect(result).toBe(TX_ID);
-    // The reqData passed to the wallet provider must carry the impl-split contract id, the
-    // transfer function name, and the postConditionMode=Allow setting.
+    // The reqData must carry the impl-split contract id, the transfer function name, and a
+    // Deny-mode post-condition capping the caller's spend at `amount`.
     expect(mockStacksProvider.sendTransaction).toHaveBeenCalledWith(
       expect.objectContaining({
         contractAddress: 'SP3031RGK734636C8KGW2Y76TEQBTVX59Q472EQH0',
         contractName: 'asset-manager-impl-v1',
         functionName: 'transfer',
-        postConditionMode: 1, // PostConditionMode.Allow
+        postConditionMode: 2, // PostConditionMode.Deny
+        postConditions: [
+          Pc.principal(SRC_ADDR)
+            .willSendLte(1_000n)
+            .ft(STACKS_BNUSD as `${string}.${string}`, 'bnusd'),
+        ],
       }),
     );
     // raw=false must NOT call the unsigned-tx builder.
     expect(mocks.makeUnsignedContractCall).not.toHaveBeenCalled();
+  });
+
+  it('raw=false native STX → caps the spend with a ustx post-condition, no interface fetch', async () => {
+    (mockStacksProvider.sendTransaction as ReturnType<typeof vi.fn>).mockResolvedValueOnce(TX_ID);
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await stacksSpoke.deposit(
+      depositParams<false>({ raw: false, walletProvider: mockStacksProvider, token: STACKS_NATIVE }),
+    );
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(mockStacksProvider.sendTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        postConditionMode: 2, // PostConditionMode.Deny
+        postConditions: [Pc.principal(SRC_ADDR).willSendLte(1_000n).ustx()],
+      }),
+    );
+  });
+
+  it('raw=false multi-FT contract (sBTC shape) → one cap per declared fungible token', async () => {
+    // sbtc-token really defines two FTs on mainnet; the unmoved one passes its cap at 0.
+    const SBTC = 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token' as const;
+    (mockStacksProvider.sendTransaction as ReturnType<typeof vi.fn>).mockResolvedValueOnce(TX_ID);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ fungible_tokens: [{ name: 'sbtc-token' }, { name: 'sbtc-token-locked' }] }),
+      } as unknown as Response),
+    );
+
+    await stacksSpoke.deposit(depositParams<false>({ raw: false, walletProvider: mockStacksProvider, token: SBTC }));
+
+    expect(mockStacksProvider.sendTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        postConditionMode: 2, // PostConditionMode.Deny
+        postConditions: [
+          Pc.principal(SRC_ADDR).willSendLte(1_000n).ft(SBTC, 'sbtc-token'),
+          Pc.principal(SRC_ADDR).willSendLte(1_000n).ft(SBTC, 'sbtc-token-locked'),
+        ],
+      }),
+    );
   });
 });
 
@@ -558,7 +614,8 @@ describe('StacksSpokeService.sendMessage', () => {
         publicKey: SRC_PUBKEY,
         fee: 0,
         nonce: 0n,
-        postConditionMode: 1, // PostConditionMode.Allow
+        postConditionMode: 2, // PostConditionMode.Deny — send-message moves no assets
+        postConditions: [],
       }),
     );
   });
