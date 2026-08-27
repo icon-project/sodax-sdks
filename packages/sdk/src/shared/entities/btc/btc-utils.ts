@@ -70,8 +70,11 @@ export function estimateBitcoinTxSize(
 }
 
 export function encodeBtcPayloadToBytes(payload: BtcPayload): string {
+  // Bech32 addresses (P2WPKH/P2TR) are case-insensitive with a lowercase canonical form;
+  // Base58Check (P2PKH/P2SH) is case-sensitive, so lowercasing corrupts it.
+  const isBase58Check = payload.address_type === 'P2PKH' || payload.address_type === 'P2SH';
   return JSON.stringify({
-    src_address: payload.src_address.toLowerCase(),
+    src_address: isBase58Check ? payload.src_address : payload.src_address.toLowerCase(),
     data: payload.data.toLowerCase(),
     src_chain_id: payload.src_chain_id,
     dst_chain_id: payload.dst_chain_id,
