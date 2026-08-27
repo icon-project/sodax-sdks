@@ -16,8 +16,6 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    env:
-      NODE_AUTH_TOKEN: ${{ secrets.SODAX_SDKS_NPM_PUBLISH_TOKEN }}
     steps:
       - name: Check out code
         uses: actions/checkout@v6
@@ -71,3 +69,4 @@ jobs:
           done
         env:
           DIST_TAG: ${{ steps.dist_tag.outputs.tag }}
+          NODE_AUTH_TOKEN: ${{ secrets.SODAX_SDKS_NPM_PUBLISH_TOKEN }}
