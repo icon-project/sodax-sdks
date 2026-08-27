@@ -1,4 +1,5 @@
 import type { BtcAddressType } from '@sodax/types';
+import { address as bitcoinjsAddress } from 'bitcoinjs-lib';
 
 export type WalletMode = 'USER' | 'TRADING';
 
@@ -82,6 +83,28 @@ export function encodeBtcPayloadToBytes(payload: BtcPayload): string {
     timestamp: payload.timestamp,
     address_type: payload.address_type,
   });
+}
+
+/**
+ * Checksum-validate a Bitcoin destination address (mainnet or testnet, every spendable type).
+ * Decodes via fromBech32/fromBase58Check — payments.p2tr would require initEccLib, which a pure
+ * utility must not depend on. Prefix/version checks keep other bech32 chains (e.g. inj1…) out.
+ */
+export function isValidBitcoinAddress(address: string): boolean {
+  try {
+    const { prefix, version, data } = bitcoinjsAddress.fromBech32(address);
+    if (prefix !== 'bc' && prefix !== 'tb') return false;
+    return (version === 0 && (data.length === 20 || data.length === 32)) || (version === 1 && data.length === 32);
+  } catch {
+    // not bech32 — fall through to Base58Check
+  }
+  try {
+    const { version } = bitcoinjsAddress.fromBase58Check(address);
+    // 0/5 mainnet P2PKH/P2SH, 111/196 their testnet counterparts
+    return version === 0 || version === 5 || version === 111 || version === 196;
+  } catch {
+    return false;
+  }
 }
 
 /**

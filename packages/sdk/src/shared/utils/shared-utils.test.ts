@@ -9,6 +9,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ChainKeys } from '@sodax/types';
+import { toHex } from 'viem';
 import { encodeAddress, getRandomBytes, randomUint256, reverseEncodeAddress } from './shared-utils.js';
 
 const ICON_MAINNET = ChainKeys.ICON_MAINNET;
@@ -43,6 +44,90 @@ describe('encodeAddress (ICON)', () => {
 });
 
 /**
+ * Destination validation in `encodeAddress` (BRIDGE-M-2). EVM previously passed any string
+ * through as Hex (a wrong-length recipient ABI-encodes cleanly, the hub burns the tokens, and
+ * the spoke reverts with no refund path); BITCOIN/NEAR/INJECTIVE utf-8-encoded any garbage.
+ * These lock in fail-closed validation while keeping the wire encoding itself unchanged.
+ */
+describe('encodeAddress destination validation (BRIDGE-M-2)', () => {
+  const utf8Hex = (address: string) => toHex(Buffer.from(address, 'utf-8'));
+
+  it('passes a valid EVM spoke recipient through unchanged', () => {
+    const evm = '0x1468d3529032106291433B7e9e3026dF1Ff78F31';
+    expect(encodeAddress(ChainKeys.BASE_MAINNET, evm)).toBe(evm);
+  });
+
+  it.each([
+    ['wrong length (the stranded-funds case)', '0x1234'],
+    ['39 hex chars', `0x${'a'.repeat(39)}`],
+    ['41 hex chars', `0x${'a'.repeat(41)}`],
+    ['missing 0x prefix', '1468d3529032106291433B7e9e3026dF1Ff78F31'],
+    ['non-hex body', '0xZZ68d3529032106291433B7e9e3026dF1Ff78F31'],
+    ['empty string', ''],
+  ])('rejects a malformed EVM recipient (%s)', (_label, address) => {
+    expect(() => encodeAddress(ChainKeys.BASE_MAINNET, address)).toThrow(/Invalid EVM address/);
+  });
+
+  it.each([
+    ['P2WPKH', 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4'],
+    ['P2TR', 'bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5jj0'],
+    ['P2PKH', '1BoatSLRHtKNngkdXEeobR76b53LETtpyT'],
+    ['P2SH', '3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy'],
+  ])('utf-8 encodes a checksum-valid Bitcoin recipient (%s)', (_label, address) => {
+    expect(encodeAddress(ChainKeys.BITCOIN_MAINNET, address)).toBe(utf8Hex(address));
+  });
+
+  it.each([
+    ['bad Base58Check checksum', '1BoatSLRHtKNngkdXEeobR76b53LETtpyt'],
+    ['bad bech32 checksum', 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t5'],
+    ['other bech32 chain', 'inj1cml96vmptgw99syqrrz8az79xer2pcgp0a885r'],
+    ['garbage', '0x1234'],
+    ['empty string', ''],
+  ])('rejects a malformed Bitcoin recipient (%s)', (_label, address) => {
+    expect(() => encodeAddress(ChainKeys.BITCOIN_MAINNET, address)).toThrow(/Invalid Bitcoin address/);
+  });
+
+  it.each([
+    ['named account', 'alice.near'],
+    ['top-level account', 'aurora'],
+    ['implicit account', 'f'.repeat(64)],
+    ['separators', 'sub_1-a.alice.near'],
+  ])('utf-8 encodes a valid NEAR account id (%s)', (_label, address) => {
+    expect(encodeAddress(ChainKeys.NEAR_MAINNET, address)).toBe(utf8Hex(address));
+  });
+
+  it.each([
+    ['uppercase', 'Alice.near'],
+    ['too short', 'a'],
+    ['over 64 chars', 'a'.repeat(65)],
+    ['consecutive dots', 'alice..near'],
+    ['trailing separator', 'alice-.near'],
+    ['empty string', ''],
+  ])('rejects a malformed NEAR account id (%s)', (_label, address) => {
+    expect(() => encodeAddress(ChainKeys.NEAR_MAINNET, address)).toThrow(/Invalid NEAR account id/);
+  });
+
+  it.each([
+    ['Injective docs address', 'inj1cml96vmptgw99syqrrz8az79xer2pcgp0a885r'],
+    ['bech32-generated vector', 'inj1gfpyysjzgfpyysjzgfpyysjzgfpyysjzgcuxkp'],
+    ['32-byte CosmWasm contract', 'inj1zut3w9chzut3w9chzut3w9chzut3w9chzut3w9chzut3w9chzutsme2qam'],
+  ])('utf-8 encodes a checksum-valid Injective recipient (%s)', (_label, address) => {
+    expect(encodeAddress(ChainKeys.INJECTIVE_MAINNET, address)).toBe(utf8Hex(address));
+  });
+
+  it.each([
+    ['other bech32 prefix', 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4'],
+    ['wrong data length', 'inj1cml96vmptgw99syqrrz8az79xer2pcgp'],
+    ['bech32-invalid chars', 'inj1cml96vmptgw99syqrrz8az79xer2pcgp0a88bo'],
+    ['in-charset single-char typo (checksum)', 'inj1cml96vmptgw99syqrrz8az79xer2pcgp0a885q'],
+    ['uppercase', 'INJ1CML96VMPTGW99SYQRRZ8AZ79XER2PCGP0A885R'],
+    ['empty string', ''],
+  ])('rejects a malformed Injective recipient (%s)', (_label, address) => {
+    expect(() => encodeAddress(ChainKeys.INJECTIVE_MAINNET, address)).toThrow(/Invalid Injective address/);
+  });
+});
+
+/**
  * getRandomBytes / randomUint256 must use a CSPRNG (SWAP-M-2). The old
  * implementation filled bytes with Math.random (non-CSPRNG); these lock in that
  * the bytes come from crypto.getRandomValues and never from Math.random.
@@ -65,7 +150,7 @@ describe('getRandomBytes / randomUint256 (CSPRNG)', () => {
   });
 
   it('randomUint256 hex-encodes the 32 CSPRNG bytes into a bigint', () => {
-    vi.spyOn(globalThis.crypto, 'getRandomValues').mockImplementation((array) => {
+    vi.spyOn(globalThis.crypto, 'getRandomValues').mockImplementation(array => {
       (array as Uint8Array).fill(0xff);
       return array;
     });
