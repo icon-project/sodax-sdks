@@ -46,13 +46,13 @@ jobs:
 
       - name: Check out code
         if: steps.gate.outputs.run == 'true'
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
         if: steps.gate.outputs.run == 'true'
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: '24.x'
 
@@ -102,7 +102,7 @@ jobs:
         if: steps.scope.outputs.should_run == 'true' && steps.scope.outputs.gate_self_edited != 'true'
         continue-on-error: true
         timeout-minutes: 10
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@70fec183852c4f82f3f1969faed7dd60c5149ca7 # v1.0.207
         env:
           DRIFT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         with:
@@ -136,7 +136,7 @@ jobs:
       # inline annotation alone is easy to miss.
       - name: Post the report on the pull request
         if: always() && steps.scope.outputs.should_run == 'true' && hashFiles('drift-comment.md') != ''
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
             const body = require('node:fs').readFileSync('drift-comment.md', 'utf8');
