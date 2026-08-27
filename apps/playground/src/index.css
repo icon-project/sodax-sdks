@@ -1,0 +1,623 @@
+/*
+ * SODAX B2B design system. Layer 1 is the subset of the brand palette this app uses, 1:1 with sodax-frontend
+ * `apps/web/app/design-system.css` and the Figma collection "Design system - B2B world". Layer 2
+ * maps it onto semantic roles per theme. Every rule below references layer 2 only — no rule outside
+ * the palette block may name a colour directly.
+ *
+ * Re-sync the palette from the frontend; never invent a tone here, and never take tokens from the
+ * frontend's `globals.css` legacy palette (its header marks that one retired).
+ *
+ * Brand rules the mapping encodes:
+ *   - yellow-soda / yellow-dark are accent only, over cherry or dark surfaces. Never a light surface.
+ *   - CTA colour follows its surface: cherry-soda + white on light, yellow-dark + cherry-dark on dark.
+ *   - A card steps one shade away from its surface (vibrant-white -> almost-white -> white inset;
+ *     inverted on dark: charcoal -> espresso -> charcoal inset).
+ *
+ * Plain CSS rather than the frontend's Tailwind `@theme` registration: this repo has no
+ * design-system package, and a partner reading `components/` should not need Tailwind.
+ */
+
+/* ── Layer 1: brand palette ─────────────────────────────────────────────── */
+:root {
+  /* Primary — cherry */
+  --cherry-dark: #964d48;
+  --cherry-soda: #a55c55;
+  --cherry-plus: #ad635c;
+  --cherry-on-cherry: #c36c65;
+  --cherry-brighter: #e3bebb;
+  --disabled-cherry-grey: #d7cdcb;
+
+  /* Secondary — yellow */
+  --yellow-dark: #ecc100;
+  --yellow-soda: #ffd92f;
+  --clicked-soda-on-soda: #f6e799;
+  --focused-soda-on-soda: #f6e799;
+  --disabled-soda-grey: #d7d6cb;
+
+  /* Neutrals */
+  --charcoal: #1d1414;
+  --espresso: #483434;
+  --clay-dark: #6b5c5b;
+  --clay: #8e7e7d;
+  --clay-light: #b9acab;
+  --cherry-grey: #d7cdcb;
+  --cream-cherry: #e5d5d4;
+  --cream-white: #ede6e6;
+  --light-cream: #f0eaeb;
+  --almost-white: #f8f3f3;
+  --vibrant-white: #f9f7f5;
+  --white: #ffffff;
+
+  /* Semantic */
+  --error-base: #faecec;
+  --error-lighter: #f5dbdb;
+  --error-light: #d8696c;
+  --error: #ce4446;
+  --error-dark: #a73639;
+  --success-light: #6dd696;
+  --success-dark: #089541;
+
+  /* Typography */
+  --font-body: "Inter", system-ui, sans-serif;
+  --text-panel-heading: 24px;
+  --text-card-title: 20px;
+  --text-body-regular: 16px;
+  --text-body-small: 14px;
+  --text-caption: 12px;
+
+  /* Spacing + radius */
+  --space-8: 8px;
+  --space-16: 16px;
+  --space-24: 24px;
+  --radius-regular: 16px;
+  --radius-small: 8px;
+}
+
+@media (width < 640px) {
+  :root {
+    --text-panel-heading: 20px;
+    --text-body-regular: 14px;
+    --radius-regular: 8px;
+  }
+}
+
+/* ── Layer 2: semantic roles, light ─────────────────────────────────────── */
+:root {
+  color-scheme: light;
+
+  --surface-page: var(--vibrant-white);
+  --surface-hero: var(--cherry-soda);
+  --surface-card: var(--almost-white);
+  --surface-inset: var(--white);
+  --surface-note: var(--cream-white);
+
+  /* The hero is cherry in both themes, so its nested controls and chips are theme-invariant. */
+  --bubble-bg: var(--almost-white);
+  --bubble-fg: var(--cherry-dark);
+  --hero-ctl-bg: var(--cherry-on-cherry);
+  --hero-ctl-bg-hover: var(--cherry-plus);
+  --hero-ctl-fg: var(--white);
+  --hero-ctl-fg-disabled: var(--cherry-brighter);
+  --hero-ctl-ring: var(--yellow-soda);
+
+  --code-bg: var(--charcoal);
+  --code-fg: var(--cream-white);
+
+  --border-subtle: var(--cream-cherry);
+  --border-strong: var(--cherry-grey);
+
+  --text-heading: var(--espresso);
+  --text-body: var(--clay-dark);
+  --text-muted: var(--clay);
+  --text-on-hero: var(--white);
+  --text-on-hero-muted: var(--cherry-brighter);
+  --text-on-hero-accent: var(--yellow-soda);
+
+  --accent: var(--cherry-soda);
+  --accent-hover: var(--cherry-dark);
+
+  --cta-bg: var(--cherry-soda);
+  --cta-bg-hover: var(--cherry-dark);
+  --cta-bg-active: var(--cherry-on-cherry);
+  --cta-fg: var(--white);
+  --cta-ring: var(--cherry-on-cherry);
+  --cta-disabled-bg: var(--disabled-cherry-grey);
+  --cta-disabled-fg: var(--clay-dark);
+
+  --ghost-bg: var(--white);
+  --ghost-bg-hover: var(--light-cream);
+  --ghost-fg: var(--cherry-soda);
+  --ghost-fg-hover: var(--cherry-dark);
+  --ghost-border: var(--cherry-grey);
+
+  --alert-bg: var(--error-base);
+  --alert-border: var(--error-lighter);
+  --alert-fg: var(--error-dark);
+  --alert-detail-fg: var(--error);
+
+  --status-ok: var(--success-dark);
+  --status-bad: var(--error);
+  --status-pending: var(--espresso);
+}
+
+/* ── Layer 2: semantic roles, dark ──────────────────────────────────────── */
+/* The attribute is set pre-paint by the inline script in index.html, so one block covers both the
+   explicit toggle and the system preference — no duplicated media-query copy. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --surface-page: var(--charcoal);
+  --surface-hero: var(--cherry-dark);
+  --surface-card: var(--espresso);
+  --surface-inset: var(--charcoal);
+  --surface-note: var(--espresso);
+
+  --border-subtle: var(--cherry-dark);
+  --border-strong: var(--cherry-soda);
+
+  --text-heading: var(--white);
+  --text-body: var(--cream-white);
+  --text-muted: var(--clay-light);
+
+  --accent: var(--yellow-soda);
+  --accent-hover: var(--yellow-dark);
+
+  /* Brand rule: on a dark or cherry surface the primary CTA is yellow with a cherry-dark label. */
+  --cta-bg: var(--yellow-dark);
+  --cta-bg-hover: var(--yellow-soda);
+  --cta-bg-active: var(--clicked-soda-on-soda);
+  --cta-fg: var(--cherry-dark);
+  --cta-ring: var(--focused-soda-on-soda);
+  --cta-disabled-bg: var(--disabled-soda-grey);
+  --cta-disabled-fg: var(--clay-dark);
+
+  --ghost-bg: var(--charcoal);
+  --ghost-bg-hover: var(--cherry-dark);
+  --ghost-fg: var(--yellow-soda);
+  --ghost-fg-hover: var(--yellow-dark);
+  --ghost-border: var(--cherry-dark);
+
+  --alert-bg: var(--espresso);
+  --alert-border: var(--error-dark);
+  --alert-fg: var(--error-light);
+  --alert-detail-fg: var(--error-light);
+
+  --status-ok: var(--success-light);
+  --status-bad: var(--error-light);
+  --status-pending: var(--cream-white);
+}
+
+/* ── Base ───────────────────────────────────────────────────────────────── */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--surface-page);
+  color: var(--text-body);
+  font-family: var(--font-body);
+  font-size: var(--text-body-regular);
+  font-weight: 400;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+code,
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
+
+.app {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: var(--space-24) var(--space-24) 64px;
+}
+
+/* ── Hero ───────────────────────────────────────────────────────────────── */
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-16);
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface-hero);
+  border-radius: var(--radius-regular);
+  padding: var(--space-24);
+  margin-bottom: var(--space-16);
+}
+
+.app-header h1 {
+  margin: 0 0 6px;
+  color: var(--text-on-hero);
+  font-size: var(--text-panel-heading);
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.app-header .subtitle {
+  margin: 0;
+  color: var(--text-on-hero-muted);
+  font-size: var(--text-body-small);
+  font-weight: 300;
+}
+
+.app-header .subtitle code {
+  color: var(--text-on-hero-accent);
+}
+
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  align-items: center;
+}
+
+/* ── Layout ─────────────────────────────────────────────────────────────── */
+.app-main {
+  display: grid;
+  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  gap: var(--space-16);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .app-main {
+    grid-template-columns: 1fr;
+  }
+}
+
+.app-footer {
+  margin-top: var(--space-24);
+}
+
+/* Question-box pattern. */
+.banner {
+  margin: 0 0 var(--space-16);
+  padding: 12px var(--space-16);
+  background: var(--surface-note);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-regular);
+  color: var(--text-heading);
+  font-size: var(--text-body-small);
+}
+
+.card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-regular);
+  padding: var(--space-24);
+}
+
+/* ── Form ───────────────────────────────────────────────────────────────── */
+.field-label {
+  display: block;
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: 1.3;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: var(--space-8);
+}
+
+.row {
+  display: flex;
+  gap: var(--space-8);
+  margin-bottom: var(--space-8);
+}
+
+.row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  font-size: var(--text-body-small);
+}
+
+.row-between strong {
+  color: var(--text-heading);
+  font-weight: 500;
+}
+
+.select,
+.input {
+  background: var(--surface-inset);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-small);
+  color: var(--text-heading);
+  font-family: var(--font-body);
+  font-size: var(--text-body-small);
+  padding: 11px 12px;
+  width: 100%;
+}
+
+.select:focus-visible,
+.input:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: -2px;
+}
+
+.select {
+  flex: 1;
+}
+
+.amount {
+  font-size: var(--text-card-title);
+  font-weight: 500;
+}
+
+.slip {
+  width: 68px;
+  text-align: right;
+  padding: 5px var(--space-8);
+}
+
+.slippage {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-heading);
+}
+
+.flip {
+  display: flex;
+  justify-content: center;
+  margin: 6px 0;
+}
+
+.summary {
+  margin: var(--space-16) 0;
+  padding: 10px 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+/* Ghost variant — the default secondary control. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  height: 40px;
+  border: 1px solid var(--ghost-border);
+  border-radius: 9999px;
+  background: var(--ghost-bg);
+  color: var(--ghost-fg);
+  font-family: var(--font-body);
+  font-size: var(--text-body-small);
+  font-weight: 700;
+  padding: 0 var(--space-16);
+  cursor: pointer;
+  transition:
+    color 150ms,
+    background-color 150ms,
+    border-color 150ms;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--ghost-bg-hover);
+  border-color: var(--border-strong);
+  color: var(--ghost-fg-hover);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: -2px;
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  background: var(--cta-disabled-bg);
+  border-color: var(--cta-disabled-bg);
+  color: var(--cta-disabled-fg);
+}
+
+/* Primary CTA — 48px pill, colour follows the surface (see the theme blocks). */
+.btn-primary {
+  width: 100%;
+  height: 48px;
+  background: var(--cta-bg);
+  border-color: var(--cta-bg);
+  color: var(--cta-fg);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--cta-bg-hover);
+  border-color: var(--cta-bg-hover);
+  color: var(--cta-fg);
+}
+
+.btn-primary:active:not(:disabled) {
+  background: var(--cta-bg-active);
+  border-color: var(--cta-bg-active);
+}
+
+.btn-primary:focus-visible {
+  outline: 2px solid var(--cta-ring);
+  outline-offset: -2px;
+}
+
+.btn-primary:disabled {
+  background: var(--cta-disabled-bg);
+  border-color: var(--cta-disabled-bg);
+  color: var(--cta-disabled-fg);
+}
+
+/* Secondary variant for controls nested in the cherry hero. */
+.btn-on-cherry {
+  background: var(--hero-ctl-bg);
+  border-color: var(--hero-ctl-bg);
+  color: var(--hero-ctl-fg);
+}
+
+.btn-on-cherry:hover:not(:disabled) {
+  background: var(--hero-ctl-bg-hover);
+  border-color: var(--hero-ctl-bg-hover);
+  color: var(--hero-ctl-fg);
+}
+
+.btn-on-cherry:focus-visible {
+  outline: 2px solid var(--hero-ctl-ring);
+  outline-offset: -2px;
+}
+
+.btn-on-cherry:disabled {
+  background: var(--hero-ctl-bg-hover);
+  border-color: var(--hero-ctl-bg-hover);
+  color: var(--hero-ctl-fg-disabled);
+}
+
+.btn-icon {
+  width: 40px;
+  padding: 0;
+}
+
+/* ── Wallet + bubbles ───────────────────────────────────────────────────── */
+.wallet-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  align-items: center;
+}
+
+/* Bubble pattern: a light chip on the cherry hero. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  padding: 9px var(--space-16);
+  background: var(--bubble-bg);
+  color: var(--bubble-fg);
+  font-size: var(--text-caption);
+  font-weight: 500;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.small {
+  font-size: var(--text-caption);
+  line-height: 1.4;
+}
+
+.link {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.link:hover {
+  color: var(--accent-hover);
+}
+
+/* ── Status + errors ────────────────────────────────────────────────────── */
+.alert {
+  margin: 12px 0;
+  padding: 10px var(--space-16);
+  background: var(--alert-bg);
+  border: 1px solid var(--alert-border);
+  border-radius: var(--radius-small);
+  color: var(--alert-fg);
+  font-size: var(--text-body-small);
+}
+
+.alert details {
+  margin-top: 6px;
+}
+
+.alert summary {
+  cursor: pointer;
+  color: var(--alert-detail-fg);
+  font-size: var(--text-caption);
+}
+
+.alert code {
+  display: block;
+  margin-top: 6px;
+  word-break: break-word;
+  color: var(--alert-detail-fg);
+}
+
+.status-panel {
+  margin-top: var(--space-16);
+  padding-top: var(--space-16);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.status-ok {
+  color: var(--status-ok);
+}
+
+.status-bad {
+  color: var(--status-bad);
+}
+
+.status-pending {
+  color: var(--status-pending);
+}
+
+/* ── Code panel ─────────────────────────────────────────────────────────── */
+.code-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+}
+
+/* Colour-tag pattern. */
+.tab {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-small);
+  color: var(--text-muted);
+  padding: 8px 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--text-caption);
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--accent);
+}
+
+.tab-active {
+  color: var(--accent);
+  background: var(--surface-inset);
+  border-color: var(--border-subtle);
+  font-weight: 500;
+}
+
+/* Dark in both themes: a code surface should read as an inset panel, not as the page. */
+.code {
+  margin: 0;
+  padding: var(--space-24);
+  background: var(--code-bg);
+  color: var(--code-fg);
+  overflow-x: auto;
+  max-height: 62vh;
+  font-size: var(--text-caption);
+  line-height: 1.7;
+  tab-size: 2;
+}
+
+.code-note {
+  margin: 0;
+  padding: 10px var(--space-16) var(--space-16);
+  border-top: 1px solid var(--border-subtle);
+}
