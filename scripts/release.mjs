@@ -15,7 +15,7 @@ const NOTES_PATH = 'release-notes.md';
 const LOG_FORMAT = '%H%x1f%s%x1f%an%x1f%b%x1e';
 const NOTE_GROUPS = ['Breaking changes', 'Features', 'Fixes', 'Maintenance'];
 const VERSION_ATTEMPTS = 3;
-const FETCH_HINT = 'run: git fetch origin main --tags';
+const FETCH_HINT = 'run: git fetch origin --tags';
 
 export class ReleaseError extends Error {
   constructor(errors) {
@@ -276,6 +276,11 @@ export const versionAdvanceErrors = ({ version, currentVersion, tags, requireTag
   return errors;
 };
 
+const remoteHead = (git, ref) => splitLines(git(['ls-remote', 'origin', ref]))[0]?.split(/\s+/)[0] ?? '';
+
+// Zero commits reachable from ref but not HEAD means HEAD already contains it.
+const headContains = (git, ref) => Number(git(['rev-list', '--count', `HEAD..${ref}`]).trim()) === 0;
+
 const remoteSdksTags = git =>
   [
     ...new Set(
@@ -330,8 +335,23 @@ export const cutRelease = async ({
   if (dirty.length > 0) fail(`working tree must be clean: ${dirty.map(entry => entry.line).join(', ')}`);
 
   const localMain = git(['rev-parse', 'origin/main']).trim();
-  const remoteMain = splitLines(git(['ls-remote', 'origin', 'refs/heads/main']))[0]?.split(/\s+/)[0] ?? '';
+  const remoteMain = remoteHead(git, 'refs/heads/main');
   if (remoteMain && remoteMain !== localMain) fail(`origin/main is stale; ${FETCH_HINT}`);
+
+  // A stale release branch would bump from the wrong base and reuse the previous CONFIG_VERSION.
+  const remoteRelease = remoteHead(git, 'refs/heads/release');
+  if (remoteRelease) {
+    let localRelease = '';
+    try {
+      localRelease = git(['rev-parse', 'origin/release']).trim();
+    } catch {
+      fail(`origin/release is not available locally; ${FETCH_HINT}`);
+    }
+    if (localRelease !== remoteRelease) fail(`origin/release is stale; ${FETCH_HINT}`);
+    if (!headContains(git, 'origin/release')) {
+      fail(`HEAD is behind origin/release; ${FETCH_HINT} and fast-forward release before releasing`);
+    }
+  }
 
   const mainBase = git(['merge-base', 'origin/main', 'HEAD']).trim();
   const unmerged = Number(git(['rev-list', '--count', `${mainBase}..origin/main`]).trim());
@@ -347,6 +367,16 @@ export const cutRelease = async ({
   // Two anchors: notes span the last stable release, the version guard uses the newest tag of any kind.
   const baseTag = maxTag(parsedTags.filter(tag => tag.parsed.rc === null));
   const lastTag = maxTag(parsedTags);
+
+  if (lastTag) {
+    let contained;
+    try {
+      contained = headContains(git, lastTag.tag);
+    } catch {
+      fail(`${lastTag.tag} is not available locally; ${FETCH_HINT}`);
+    }
+    if (!contained) fail(`HEAD does not contain ${lastTag.tag}; ${FETCH_HINT} and update release before releasing`);
+  }
 
   let rangeStart;
   if (baseTag) {

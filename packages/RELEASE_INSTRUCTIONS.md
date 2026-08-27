@@ -4,11 +4,14 @@ Every publishable `@sodax/*` package shares one version, cut as a single `@sdks@
 Git history and those tags are the release source of truth. `pnpm release` prompts for the version
 and applies it; committing, tagging, and publishing stay human steps.
 
-- [ ] 1. Make sure all code to publish is merged into `main`, then bring it onto `release`:
+- [ ] 1. Make sure all code to publish is merged into `main`. Then sync `release` itself before
+  merging `main` into it — a stale `release` would bump from the wrong base and reuse the previous
+  `CONFIG_VERSION`:
 
   ```bash
   git checkout release
-  git fetch origin main --tags
+  git fetch origin --tags
+  git pull --ff-only origin release
   git pull --no-ff origin main
   ```
 
@@ -79,7 +82,8 @@ and applies it; committing, tagging, and publishing stay human steps.
 ## What `pnpm release` refuses to do
 
 It stops before making any change if you are not on `release`, the working tree is dirty, your
-`origin/main` is stale against the remote, or `origin/main` is not fully merged into `release`. It
+`origin/main` or `origin/release` is stale against the remote, `origin/main` is not fully merged
+into `release`, or your `release` is missing either `origin/release` or the newest `@sdks@` tag. It
 also fails when the hardcoded package lists in `scripts/bump-versions.sh` and `sdks-publish.yml`
 have drifted from the packages actually present under `packages/` — that check is what stops a newly
 added package from being versioned but never published, or published but never versioned.

@@ -26,6 +26,7 @@ import {
 
 const REPO_ROOT = join(import.meta.dirname, '..');
 const MAIN = 'a'.repeat(40);
+const RELEASE = 'e'.repeat(40);
 const ROOT_COMMIT = 'r'.repeat(40);
 const ALL_DIRS = ['types', 'libs', 'swaps-api', 'skills', 'wallet-sdk-core', 'sdk', 'wallet-sdk-react', 'dapp-kit'];
 const writeJson = (path, value) => writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
@@ -80,6 +81,9 @@ const gitStub = ({
   status = ['', porcelainFor(ALL_DIRS)],
   tags = ['@sdks@2.0.0', '@sdks@2.1.0', '@sdks@2.2.0-rc.1'],
   remoteMain = MAIN,
+  remoteRelease = RELEASE,
+  localRelease = RELEASE,
+  headContains = { 'origin/release': 0, '@sdks@2.2.0-rc.1': 0 },
   log = '',
   releaseOnlyLog = '',
   calls = [],
@@ -92,6 +96,12 @@ const gitStub = ({
     if (key === 'status --porcelain') return statuses.length > 1 ? statuses.shift() : statuses[0];
     if (key === 'rev-parse origin/main') return `${MAIN}\n`;
     if (key === 'ls-remote origin refs/heads/main') return `${remoteMain}\trefs/heads/main\n`;
+    if (key === 'ls-remote origin refs/heads/release') {
+      return remoteRelease ? `${remoteRelease}\trefs/heads/release\n` : '';
+    }
+    if (key === 'rev-parse origin/release') return `${localRelease}\n`;
+    if (key.startsWith('rev-list --count HEAD..'))
+      return `${headContains[key.slice('rev-list --count HEAD..'.length)] ?? 0}\n`;
     if (key === 'ls-remote --tags origin @sdks@*') {
       return tags.map(tag => `${'c'.repeat(40)}\trefs/tags/${tag}`).join('\n');
     }
@@ -267,8 +277,34 @@ test('preflight refuses a stale origin/main rather than trusting a local ref', a
   const root = createWorkspace(t);
   await assert.rejects(
     run(root, { stub: { remoteMain: 'f'.repeat(40) } }),
-    /origin\/main is stale; run: git fetch origin main --tags/,
+    /origin\/main is stale; run: git fetch origin --tags/,
   );
+});
+
+test('preflight refuses a stale release branch, so a bump never starts from the wrong base', async t => {
+  const root = createWorkspace(t);
+  await assert.rejects(
+    run(root, { stub: { remoteRelease: 'f'.repeat(40) } }),
+    /origin\/release is stale; run: git fetch origin --tags/,
+  );
+  await assert.rejects(
+    run(root, { stub: { headContains: { 'origin/release': 2, '@sdks@2.2.0-rc.1': 0 } } }),
+    /HEAD is behind origin\/release/,
+  );
+});
+
+test('preflight refuses a branch that has current main but not the newest release tag', async t => {
+  const root = createWorkspace(t);
+  await assert.rejects(
+    run(root, { stub: { headContains: { 'origin/release': 0, '@sdks@2.2.0-rc.1': 1 } } }),
+    /HEAD does not contain @sdks@2\.2\.0-rc\.1/,
+  );
+});
+
+test('a repository with no release branch yet skips the release-branch checks', async t => {
+  const root = createWorkspace(t, ALL_DIRS, '0.0.0');
+  const result = await run(root, { stub: { remoteRelease: '', tags: [] }, version: '0.0.1' });
+  assert.equal(result.version, '0.0.1');
 });
 
 test('the notes range anchors on the newest stable tag, not the newest tag of any kind', async t => {
