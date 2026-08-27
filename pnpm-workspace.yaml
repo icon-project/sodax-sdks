@@ -2,6 +2,13 @@ packages:
   - "apps/*"
   - "packages/*"
 
+# Supply-chain cooldown: resolve a version only once it is 14+ days old, so a
+# just-published malicious release never enters the lockfile (audit secrets-supply-chain:M-2).
+minimumReleaseAge: 20160
+# Refuse a release whose npm trust evidence (trusted publisher/provenance) is
+# weaker than an earlier release of the same package.
+trustPolicy: no-downgrade
+
 catalog:
   "@types/node": "22.18.1"
   "@types/react": "19.0.8"
