@@ -1,6 +1,49 @@
 import type { SwapFlow } from '../hooks/useSwapFlow';
 import { type PlaygroundChainKey, chainName, swappableChains } from '../lib/chains';
+import { FEE_BPS_MAX } from '../lib/fee';
+import { formatTokenAmount } from '../lib/format';
 import { StatusPanel } from './StatusPanel';
+
+/** Display precision only — `title` keeps the exact value one hover away. */
+function Amount({ value, symbol }: { value: string; symbol: string | undefined }) {
+  if (!value) return <span>—</span>;
+  return (
+    <span title={`${value}${symbol ? ` ${symbol}` : ''}`}>
+      {formatTokenAmount(value)} {symbol ?? ''}
+    </span>
+  );
+}
+
+function PartnerFeeFields({ flow }: { flow: SwapFlow }) {
+  const { address, bps } = flow.partnerFeeInput;
+
+  return (
+    <details className="disclosure">
+      <summary>Charge a partner fee</summary>
+      <p className="muted small">
+        Integration is free and SODAX takes none of it. The quote above stays net of your fee.
+      </p>
+      <div className="row">
+        <input
+          className="input"
+          placeholder="Recipient on Sonic (0x…)"
+          value={address}
+          onChange={event => flow.setPartnerFeeInput({ address: event.target.value, bps })}
+        />
+        <input
+          className="input fee-bps"
+          inputMode="numeric"
+          placeholder="bps"
+          value={bps}
+          onChange={event => flow.setPartnerFeeInput({ address, bps: event.target.value })}
+        />
+      </div>
+      <p className="muted small">
+        Up to {FEE_BPS_MAX} bps ({FEE_BPS_MAX / 100}%). The recipient is not validated — a wrong address is unclaimable.
+      </p>
+    </details>
+  );
+}
 
 function ChainSelect({ value, onChange }: { value: PlaygroundChainKey; onChange: (key: PlaygroundChainKey) => void }) {
   // Resolve the raw <select> value against the derived list instead of casting it to a chain key.
@@ -30,6 +73,7 @@ function PrimaryAction({ flow }: { flow: SwapFlow }) {
   if (!flow.srcToken || !flow.dstToken) return label('No swap tokens on this chain');
   if (!flow.isAmountValid) return label('Enter an amount');
   if (!flow.isSlippageValid) return label('Slippage must be between 0 and 100');
+  if (flow.partnerFeeError) return label('Fix the partner fee');
   if (flow.quoteError) return label('No route available');
   if (!flow.hasQuote) return label(flow.isQuoting ? 'Fetching quote…' : 'Enter an amount');
 
@@ -63,7 +107,7 @@ function PrimaryAction({ flow }: { flow: SwapFlow }) {
 
 export function SwapPanel({ flow }: { flow: SwapFlow }) {
   return (
-    <section className="card">
+    <section className="card swap-card">
       <div className="field">
         <span className="field-label">From</span>
         <div className="row">
@@ -111,7 +155,13 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
             ))}
           </select>
         </div>
-        <input className="input amount" value={flow.quotedOutput} placeholder="0.0" readOnly />
+        <input
+          className="input amount"
+          value={formatTokenAmount(flow.quotedOutput)}
+          title={flow.quotedOutput}
+          placeholder="0.0"
+          readOnly
+        />
       </div>
 
       <div className="summary">
@@ -127,10 +177,22 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
             %
           </span>
         </div>
+        {flow.partnerFee && (
+          <div className="row-between">
+            <span className="muted">Your fee ({flow.partnerFee.percentage / 100}%)</span>
+            <Amount value={flow.partnerFeeAmount} symbol={flow.srcToken?.symbol} />
+          </div>
+        )}
         <div className="row-between">
           <span className="muted">Minimum received</span>
-          <span>{flow.minReceived ? `${flow.minReceived} ${flow.dstToken?.symbol ?? ''}` : '—'}</span>
+          <Amount value={flow.minReceived} symbol={flow.dstToken?.symbol} />
         </div>
+        {flow.speedTier && (
+          <div className="row-between">
+            <span className="muted">Settles in</span>
+            <span>~{flow.speedTier.estimatedSeconds}s</span>
+          </div>
+        )}
         {flow.hasQuote && (
           <div className="row-between">
             <span className="muted small">Quote refreshes every 3s</span>
@@ -138,6 +200,10 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
           </div>
         )}
       </div>
+
+      <PartnerFeeFields flow={flow} />
+
+      {flow.partnerFeeError && <p className="alert">{flow.partnerFeeError}</p>}
 
       {flow.quoteError && <p className="alert">{flow.quoteError}</p>}
 

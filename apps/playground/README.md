@@ -28,11 +28,12 @@ Every SDK call the app makes lives in [`src/hooks/useSwapFlow.ts`](src/hooks/use
 
 1. **Quote** — `useQuote` polls the solver every 3s. No wallet needed.
 2. **Minimum received** — the quote minus slippage, in integer basis-point `bigint` math. Never float math on token amounts.
-3. **Deadline** — `sodax.swaps.getSwapDeadline()` reads the hub-chain block timestamp at submit time. A client clock can be minutes out, and a deadline computed when the form opened is already stale.
-4. **Allowance** — `useSwapAllowance`. On mainnet ERC-20s you must approve before the first swap; the quickstart glosses this.
-5. **Approve** — `useSwapApprove`, only when the allowance check says it is needed.
-6. **Swap** — `useSwap`, returning `intentDeliveryInfo`.
-7. **Status** — `useStatus` polls the hub tx hash until the solver reports `SOLVED` or `FAILED`.
+3. **Settlement estimate** — `sodax.swaps.getSwapSpeedTier()` classifies the pair offline, so it renders before the first quote returns.
+4. **Deadline** — `sodax.swaps.getSwapDeadline()` reads the hub-chain block timestamp at submit time. A client clock can be minutes out, and a deadline computed when the form opened is already stale.
+5. **Allowance** — `useSwapAllowance`. On mainnet ERC-20s you must approve before the first swap; the quickstart glosses this.
+6. **Approve** — `useSwapApprove`, only when the allowance check says it is needed.
+7. **Swap** — `useSwap`, returning `intentDeliveryInfo`.
+8. **Status** — `useStatus` polls the hub tx hash until the solver reports `SOLVED` or `FAILED`.
 
 ## Where the chain and token lists come from
 
@@ -46,15 +47,27 @@ Display names come from `baseChainInfo[key].name` and transaction links from `ba
 
 The pickers read the packaged token list rather than calling `sodax.config.initialize()`, which keeps the embed deterministic with no loading state. A production integrator should initialize to pick up tokens added after the SDK release — the generated snippet says so.
 
-## Adding a partner fee
+## Linking to a specific swap
 
-The playground charges none. The `swap.tsx` snippet shows where yours goes:
+The form state lives in the query string, so the docs can open the page on the pair a page is about:
 
-```ts
-await swap({ params, walletProvider, extras: { partnerFee: { address, percentage } } });
+```
+?srcChain=0x2105.base&dstChain=0xa4b1.arbitrum&srcToken=USDC&dstToken=WETH&amount=100&slippage=0.5
 ```
 
-Integration is free and SODAX takes no cut of that fee. It can also be set once on the SDK config instead of per call.
+Every value is resolved against the derived chain and token lists, so an unknown one falls back to the default rather than reaching the SDK. **The partner fee is deliberately not in the URL** — it is the one field that redirects money, and a crafted link would set it on a mainnet page where a reader may never open the form.
+
+## Adding a partner fee
+
+"Charge a partner fee" takes a recipient and a rate in basis points, and the page then works exactly as an integrator's would: the fee comes off the input before quoting, so the quote shown is what the user receives, and the same fee goes to `swap()`. Quoting with one fee and swapping with a larger one leaves a `minOutputAmount` the intent cannot deliver, and it never fills.
+
+The generated snippets show the production shape — configured once on `SodaxOptions`, where `useQuote` applies it for you:
+
+```ts
+const sodaxConfig: SodaxOptions = { chains, swaps: { partnerFee: { address, percentage } } };
+```
+
+`percentage` is basis points (100 = 1%). Integration is free and SODAX takes no cut of that fee. Nothing validates the recipient — a wrong address sends the fee somewhere you cannot claim it.
 
 ## Theming
 
@@ -73,7 +86,6 @@ pnpm dev          # vite dev server on :3005
 pnpm build        # vite build
 pnpm preview      # serve the built bundle
 pnpm checkTs      # tsc --noEmit
+pnpm test         # vitest run — the pure logic under src/lib
 pnpm lint / pretty
 ```
-
-`pnpm test` is a no-op (`true`).

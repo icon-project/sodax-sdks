@@ -29,9 +29,13 @@ src/
 ├── hooks/useSwapFlow.ts   # every SDK call the app makes, in one place
 ├── lib/chains.ts       # source-derived chain list, names, explorer URLs
 ├── lib/errors.ts       # error → category mapping
+├── lib/fee.ts          # partner-fee form state → PartnerFee
 ├── lib/snippet.ts      # renders the current form state as dapp-kit code
+├── lib/urlState.ts     # form state ⇄ query string
 └── components/         # presentational only — they render what useSwapFlow returns
 ```
+
+`src/lib` is pure and covered by `pnpm test` (vitest). Anything reachable without React belongs there, so it stays testable — `useSwapFlow` holds the hooks, not the logic.
 
 `hooks/useSwapFlow.ts` is the teaching artifact: quote → allowance → approve → swap → status, with no rendering in it. Components must not call SDK hooks directly; add to `useSwapFlow` instead so the "read the code" story stays one file.
 
@@ -41,6 +45,8 @@ src/
 - **The deadline is read from the hub chain.** `sodax.swaps.getSwapDeadline()` at submit time, never `Date.now()`. A client clock can be minutes out, and a deadline computed when the form opened is already stale.
 - **Solver status uses `SolverIntentStatusCode`,** never the raw `3` / `4`.
 - **Raw errors never reach the headline.** `lib/errors.ts` maps to a category; the first line of the underlying error goes in a `<details>` for the developer reading the page.
+- **The quote and the swap use the same partner fee.** The fee comes off the input before quoting, so a swap charging more than the quote assumed leaves a `minOutputAmount` the intent cannot deliver and the intent never fills.
+- **The partner fee is never read from the URL.** `lib/urlState.ts` carries chains, tokens, amount and slippage; the fee is the one field that redirects money, and this page runs on mainnet. Everything it does carry is resolved against the derived lists before use.
 - **RPC endpoints come from env, defaults from `@sodax/types`.** `example.env` carries placeholders only (that filename, not `.env.example`, so the repo's `.env*` ignore rule does not swallow it). Never commit an endpoint with a key in it.
 - **Quoting must work with no wallet.** Most docs readers never connect one. Do not move quote inputs behind a connect gate.
 
@@ -77,5 +83,8 @@ Plain CSS rather than the frontend's Tailwind `@theme` registration: this repo h
 - **Don't add a UI framework or design-system dependency.** The copy-paste story dies with it.
 - **Don't import `@sodax/types` or `@sodax/sdk` directly.** `@sodax/dapp-kit` re-exports both; a direct dep invites version skew.
 - **The pickers are EVM-only** because `providers.tsx` mounts only the EVM wallet adapter. Adding a non-EVM chain means adding its adapter *and* widening `PlaygroundChainKey` — the type exists to stop a chain reaching a picker it cannot sign for.
-- **`IntentDeliveryInfo.dstTxHash` is typed `string` while `useStatus` wants `Hex`.** `useSwapFlow.toHex` normalizes at that one boundary. This is an SDK type gap worth fixing upstream rather than in every consumer.
+- **Never match a token by address across chains.** Every chain's native token is `0x0000…0000`, so an address comparison matches on *any* pair of chains and silently carries the previous chain's token over — including its decimals, which differ (Hedera's HBAR is 8, the rest are 18). That misparses the input amount by 10 orders of magnitude. Re-resolve through `pickToken`, which matches on symbol and always returns a member of the list it was handed.
+- **`IntentDeliveryInfo.dstTxHash` is typed `string` while `useStatus` wants `Hex`.** `useSwapFlow.toHex` normalizes at that one boundary. This is an SDK type gap worth fixing upstream rather than in every consumer. `useDetailedStatus` takes `(srcChainKey, srcTxHash)` — the pair `swap()` already returns — and would avoid the boundary entirely.
+- **`useQuote` takes no per-call `partnerFee`,** though `SwapService.getQuote` does. Its params are typed `SolverIntentQuoteRequest`, not `GetQuoteParams`, and its cache key reads only the *configured* fee — so a per-call fee would silently share a cache entry across rates. That is why an interactive fee is deducted here before the payload is built, while the generated snippet configures it once. Widening the hook (params **and** cache key) is the upstream fix.
+- **`PartnerFeePercentage` documents 100 bps (1%) as its maximum but the runtime invariant allows 10000.** `lib/fee.ts` accepts the documented maximum. Raising it means resolving that contradiction in `@sodax/types` first — a 100% fee also nets the quote input to zero, which `getQuote` rejects.
 - **The pickers use the packaged token list,** not `sodax.config.initialize()`. That keeps the embed deterministic with no loading state; a production integrator should initialize to pick up tokens added after the SDK release. The generated snippet says so.

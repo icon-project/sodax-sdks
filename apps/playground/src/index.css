@@ -255,11 +255,13 @@ code,
 }
 
 /* ── Layout ─────────────────────────────────────────────────────────────── */
+/* `stretch` is what makes the two cards share one height. The cap lives on .code-card: without it
+   the row is sized by the full listing, and a long snippet drags the swap card down with it. */
 .app-main {
   display: grid;
   grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
   gap: var(--space-16);
-  align-items: start;
+  align-items: stretch;
 }
 
 @media (max-width: 900px) {
@@ -288,6 +290,16 @@ code,
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-regular);
   padding: var(--space-24);
+}
+
+.swap-card {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Anchors the action to the bottom, so the height the two columns share reads as deliberate. */
+.swap-card .btn-primary {
+  margin-top: auto;
 }
 
 /* ── Form ───────────────────────────────────────────────────────────────── */
@@ -340,6 +352,12 @@ code,
   outline-offset: -2px;
 }
 
+/* The UA default is ~54% of the text colour, which falls under 4.5:1 on these surfaces. */
+.input::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
 .select {
   flex: 1;
 }
@@ -353,6 +371,12 @@ code,
   width: 68px;
   text-align: right;
   padding: 5px var(--space-8);
+}
+
+.fee-bps {
+  width: 76px;
+  flex: none;
+  text-align: right;
 }
 
 .slippage {
@@ -514,6 +538,27 @@ code,
   color: var(--accent-hover);
 }
 
+/* ── Disclosure ─────────────────────────────────────────────────────────── */
+.disclosure {
+  margin-bottom: var(--space-16);
+}
+
+.disclosure > summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: var(--text-body-small);
+  padding: 5px 0;
+}
+
+.disclosure > summary:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: 2px;
+}
+
+.disclosure p {
+  margin: var(--space-8) 0;
+}
+
 /* ── Status + errors ────────────────────────────────────────────────────── */
 .alert {
   margin: 12px 0;
@@ -561,7 +606,13 @@ code,
 }
 
 /* ── Code panel ─────────────────────────────────────────────────────────── */
+/* Column layout so the tabs and the note stay put and only the code scrolls. The max-height caps
+   how tall a long snippet can make the shared row; below it the card stretches to the swap card. */
 .code-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 420px;
+  max-height: 78vh;
   padding: 0;
   overflow: hidden;
 }
@@ -573,6 +624,7 @@ code,
   gap: 12px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--border-subtle);
+  flex: none;
 }
 
 .tabs {
@@ -609,8 +661,9 @@ code,
   padding: var(--space-24);
   background: var(--code-bg);
   color: var(--code-fg);
-  overflow-x: auto;
-  max-height: 62vh;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
   font-size: var(--text-caption);
   line-height: 1.7;
   tab-size: 2;
@@ -620,4 +673,5 @@ code,
   margin: 0;
   padding: 10px var(--space-16) var(--space-16);
   border-top: 1px solid var(--border-subtle);
+  flex: none;
 }

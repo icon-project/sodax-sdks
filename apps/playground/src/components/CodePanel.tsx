@@ -17,10 +17,11 @@ export function CodePanel({ flow }: { flow: SwapFlow }) {
           dstToken: flow.dstToken,
           amount: flow.amount,
           slippagePercent: flow.slippagePercent,
+          partnerFee: flow.partnerFee,
         },
         swappableChains,
       ),
-    [flow.srcChain, flow.dstChain, flow.srcToken, flow.dstToken, flow.amount, flow.slippagePercent],
+    [flow.srcChain, flow.dstChain, flow.srcToken, flow.dstToken, flow.amount, flow.slippagePercent, flow.partnerFee],
   );
 
   const active = snippets.find(snippet => snippet.id === activeId) ?? snippets[0];

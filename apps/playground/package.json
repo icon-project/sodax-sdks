@@ -10,7 +10,7 @@
     "dev": "vite --port 3005 --host",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "true",
+    "test": "vitest run",
     "checkTs": "tsc --noEmit",
     "pretty": "biome format . --write",
     "lint": "biome lint . --write",
@@ -33,6 +33,7 @@
     "@types/react-dom": "^19.0.3",
     "typescript": "catalog:",
     "vite": "^5.4.11",
-    "vite-tsconfig-paths": "4.3.1"
+    "vite-tsconfig-paths": "4.3.1",
+    "vitest": "catalog:"
   }
 }

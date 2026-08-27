@@ -1,4 +1,4 @@
-import type { SpokeChainKey, XToken } from '@sodax/dapp-kit';
+import type { PartnerFeePercentage, SpokeChainKey, XToken } from '@sodax/dapp-kit';
 import { chainKeyExpression } from './chains';
 
 export type SnippetState = {
@@ -8,12 +8,25 @@ export type SnippetState = {
   dstToken: XToken | undefined;
   amount: string;
   slippagePercent: string;
+  partnerFee: PartnerFeePercentage | undefined;
 };
 
 export type Snippet = { id: string; label: string; code: string };
 
-function providersSnippet(chains: readonly SpokeChainKey[]): string {
+function feeExpression(fee: PartnerFeePercentage): string {
+  return `{ address: '${fee.address}', percentage: ${fee.percentage} }`;
+}
+
+function providersSnippet(chains: readonly SpokeChainKey[], partnerFee: PartnerFeePercentage | undefined): string {
   const entries = chains.map(key => `    [${chainKeyExpression(key)}]: { rpcUrl: '…' },`).join('\n');
+
+  const fee = partnerFee
+    ? `
+
+// Configured once, so every swap charges it and useQuote deducts it before quoting — quoted_amount
+// is already net. percentage is basis points: 100 = 1%. SODAX takes none of this.
+const swaps = { partnerFee: ${feeExpression(partnerFee)} };`
+    : '';
 
   return `import { QueryClientProvider } from '@tanstack/react-query';
 import { ChainKeys, SodaxProvider, createSodaxQueryClient, type SodaxOptions } from '@sodax/dapp-kit';
@@ -24,9 +37,9 @@ const queryClient = createSodaxQueryClient();
 // SodaxProvider freezes its config by reference on first render — keep these module constants.
 const chains = {
 ${entries}
-};
+};${fee}
 
-const sodaxConfig: SodaxOptions = { chains };
+const sodaxConfig: SodaxOptions = { chains${partnerFee ? ', swaps' : ''} };
 const walletConfig: SodaxWalletConfig = { EVM: { ssr: true, chains } };
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -41,12 +54,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
 }
 
 function quoteSnippet(state: SnippetState): string {
-  const { srcChain, dstChain, srcToken, dstToken, amount } = state;
+  const { srcChain, dstChain, srcToken, dstToken, amount, partnerFee } = state;
+
+  const fee = partnerFee
+    ? '\n// The configured partner fee comes off the input first, so quoted_amount is already net of it.'
+    : '';
 
   return `import { useQuote, ChainKeys } from '@sodax/dapp-kit';
 import { parseUnits } from 'viem';
 
-// ${srcToken?.symbol ?? 'TOKEN'} on ${chainKeyExpression(srcChain)} → ${dstToken?.symbol ?? 'TOKEN'} on ${chainKeyExpression(dstChain)}
+// ${srcToken?.symbol ?? 'TOKEN'} on ${chainKeyExpression(srcChain)} → ${dstToken?.symbol ?? 'TOKEN'} on ${chainKeyExpression(dstChain)}${fee}
 const { data: quoteResult, isFetching } = useQuote({
   params: {
     payload: {
@@ -65,8 +82,16 @@ const quotedAmount = quoteResult?.ok ? quoteResult.value.quoted_amount : undefin
 }
 
 function executeSnippet(state: SnippetState): string {
-  const { srcChain, dstChain, srcToken, dstToken, amount, slippagePercent } = state;
+  const { srcChain, dstChain, srcToken, dstToken, amount, slippagePercent, partnerFee } = state;
   const bps = Math.round((100 - Number(slippagePercent || '0')) * 100);
+
+  const swapCall = partnerFee
+    ? `// Per-action override of the configured fee. It must match the fee the quote was taken with —
+// a swap charging more leaves a minOutputAmount the intent cannot deliver, and it never fills.
+const result = await swap({ params, walletProvider, extras: { partnerFee: ${feeExpression(partnerFee)} } });`
+    : `// Charging a fee? Add it here — SODAX takes none of it.
+// const result = await swap({ params, walletProvider, extras: { partnerFee: { address, percentage } } });
+const result = await swap({ params, walletProvider });`;
 
   return `import {
   useSodaxContext, useSwap, useSwapAllowance, useSwapApprove, useStatus, ChainKeys,
@@ -110,9 +135,7 @@ const { mutateAsyncSafe: swap } = useSwap();
 
 if (!hasAllowance) await approve({ params, walletProvider });
 
-// Charging a fee? Add it here — SODAX takes none of it.
-// const result = await swap({ params, walletProvider, extras: { partnerFee: { address, percentage } } });
-const result = await swap({ params, walletProvider });
+${swapCall}
 if (!result.ok) return;
 
 // Poll until the solver reports SOLVED (3) or FAILED (4).
@@ -123,7 +146,7 @@ const { data: status } = useStatus({
 
 export function buildSnippets(state: SnippetState, chains: readonly SpokeChainKey[]): Snippet[] {
   return [
-    { id: 'providers', label: 'providers.tsx', code: providersSnippet(chains) },
+    { id: 'providers', label: 'providers.tsx', code: providersSnippet(chains, state.partnerFee) },
     { id: 'quote', label: 'quote.tsx', code: quoteSnippet(state) },
     { id: 'execute', label: 'swap.tsx', code: executeSnippet(state) },
   ];

@@ -18,6 +18,8 @@ import { formatUnits, parseUnits } from 'viem';
 import { ANY_SOLVER, DEFAULT_SLIPPAGE_PERCENT, playgroundMode } from '../config';
 import { DEFAULT_DST_CHAIN, DEFAULT_SRC_CHAIN, type PlaygroundChainKey } from '../lib/chains';
 import { type FriendlyError, describeError } from '../lib/errors';
+import { NO_PARTNER_FEE, type PartnerFeeInput, feeAmountOf, readPartnerFee } from '../lib/fee';
+import { pickToken, readUrlState, toSearch } from '../lib/urlState';
 
 /** Everything `CreateIntentParams` needs except the deadline, which is resolved at submit time. */
 type IntentDraft = Omit<CreateIntentParams, 'deadline'>;
@@ -47,6 +49,9 @@ function toHex(value: string): Hex {
   return value.startsWith('0x') ? (value as Hex) : `0x${value}`;
 }
 
+/** Read once: the app owns the query string from its first render on. */
+const initialUrl = readUrlState(window.location.search);
+
 /**
  * The whole SODAX surface this playground uses, in one place: quote → allowance → approve → swap →
  * status. Components below only render what this returns.
@@ -55,21 +60,37 @@ export function useSwapFlow() {
   const { sodax } = useSodaxContext();
   const account = useXAccount({ xChainType: 'EVM' });
 
-  const [srcChain, setSrcChain] = useState<PlaygroundChainKey>(DEFAULT_SRC_CHAIN);
-  const [dstChain, setDstChain] = useState<PlaygroundChainKey>(DEFAULT_DST_CHAIN);
-  const [srcToken, setSrcToken] = useState<XToken | undefined>(() => getSupportedSolverTokens(DEFAULT_SRC_CHAIN)[0]);
-  const [dstToken, setDstToken] = useState<XToken | undefined>(() => getSupportedSolverTokens(DEFAULT_DST_CHAIN)[0]);
-  const [amount, setAmount] = useState('');
-  const [slippagePercent, setSlippagePercent] = useState(DEFAULT_SLIPPAGE_PERCENT);
+  const [srcChain, setSrcChain] = useState<PlaygroundChainKey>(initialUrl.srcChain ?? DEFAULT_SRC_CHAIN);
+  const [dstChain, setDstChain] = useState<PlaygroundChainKey>(initialUrl.dstChain ?? DEFAULT_DST_CHAIN);
+  const [srcToken, setSrcToken] = useState<XToken | undefined>(() =>
+    pickToken(getSupportedSolverTokens(initialUrl.srcChain ?? DEFAULT_SRC_CHAIN), initialUrl.srcSymbol),
+  );
+  const [dstToken, setDstToken] = useState<XToken | undefined>(() =>
+    pickToken(getSupportedSolverTokens(initialUrl.dstChain ?? DEFAULT_DST_CHAIN), initialUrl.dstSymbol),
+  );
+  const [amount, setAmount] = useState(initialUrl.amount ?? '');
+  const [slippagePercent, setSlippagePercent] = useState(initialUrl.slippage ?? DEFAULT_SLIPPAGE_PERCENT);
+  const [partnerFeeInput, setPartnerFeeInput] = useState<PartnerFeeInput>(NO_PARTNER_FEE);
   const [error, setError] = useState<FriendlyError | undefined>();
   const [delivery, setDelivery] = useState<Delivery | undefined>();
 
   const srcTokens = useMemo(() => getSupportedSolverTokens(srcChain), [srcChain]);
   const dstTokens = useMemo(() => getSupportedSolverTokens(dstChain), [dstChain]);
 
-  // A chain change snaps its token back to that chain's first supported token.
-  useEffect(() => setSrcToken(srcTokens[0]), [srcTokens]);
-  useEffect(() => setDstToken(dstTokens[0]), [dstTokens]);
+  // A chain change re-resolves the token against the new chain's list, keeping the same symbol when
+  // it exists there. `pickToken` always returns a member of that list, never the previous chain's
+  // object — every chain's native token shares the address 0x0, so an address match would silently
+  // carry the old chain's decimals onto the new chain.
+  useEffect(() => setSrcToken(current => pickToken(srcTokens, current?.symbol)), [srcTokens]);
+  useEffect(() => setDstToken(current => pickToken(dstTokens, current?.symbol)), [dstTokens]);
+
+  useEffect(() => {
+    const search = toSearch({ srcChain, dstChain, srcToken, dstToken, amount, slippage: slippagePercent });
+    // A sandboxed embed has an opaque origin and throws here; the form must still work in one.
+    try {
+      window.history.replaceState(null, '', `${window.location.pathname}?${search}`);
+    } catch {}
+  }, [srcChain, dstChain, srcToken, dstToken, amount, slippagePercent]);
 
   const walletProvider = useWalletProvider({ xChainId: srcChain });
   const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: srcChain });
@@ -79,18 +100,36 @@ export function useSwapFlow() {
     [amount, srcToken],
   );
 
+  const feeState = useMemo(() => readPartnerFee(partnerFeeInput), [partnerFeeInput]);
+  const partnerFee = feeState.kind === 'set' ? feeState.fee : undefined;
+
+  const feeAmount = useMemo(
+    () => (inputAmount === undefined ? undefined : feeAmountOf(inputAmount, partnerFee)),
+    [inputAmount, partnerFee],
+  );
+
   // Quoting needs no wallet, so the panel stays useful to a reader who never connects one.
+  //
+  // The fee comes off the input before quoting, so `quoted_amount` is what the user actually gets.
+  // `SwapService.getQuote` does this itself from the *configured* fee — which is what the generated
+  // snippet uses — but `useQuote` takes no per-call override, so an interactive fee is applied here.
   const quotePayload = useMemo<SolverIntentQuoteRequest | undefined>(() => {
-    if (!srcToken || !dstToken || inputAmount === undefined) return undefined;
+    if (!srcToken || !dstToken || inputAmount === undefined || feeAmount === undefined) return undefined;
     return {
       token_src: srcToken.address,
       token_src_blockchain_id: srcChain,
       token_dst: dstToken.address,
       token_dst_blockchain_id: dstChain,
-      amount: inputAmount,
+      amount: inputAmount - feeAmount,
       quote_type: 'exact_input',
     };
-  }, [srcToken, dstToken, srcChain, dstChain, inputAmount]);
+  }, [srcToken, dstToken, srcChain, dstChain, inputAmount, feeAmount]);
+
+  // Offline and rule-based — no network call, so it can render beside the form before any quote.
+  const speedTier = useMemo(
+    () => (srcToken && dstToken ? sodax.swaps.getSwapSpeedTier({ srcToken, dstToken }) : undefined),
+    [sodax, srcToken, dstToken],
+  );
 
   const quoteQuery = useQuote({ params: { payload: quotePayload } });
   const quote = quoteQuery.data?.ok ? quoteQuery.data.value : undefined;
@@ -166,7 +205,13 @@ export function useSwapFlow() {
       return;
     }
 
-    const result = await swapMutation({ params: { ...draft, deadline: deadline.value }, walletProvider });
+    // The same fee the quote was taken with. A swap charging more than the quote assumed produces a
+    // `minOutputAmount` the intent cannot deliver, and it never fills.
+    const result = await swapMutation({
+      params: { ...draft, deadline: deadline.value },
+      walletProvider,
+      extras: { partnerFee },
+    });
     if (!result.ok) {
       setError(describeError(result.error, 'The swap failed.'));
       return;
@@ -174,7 +219,7 @@ export function useSwapFlow() {
 
     const info = result.value.intentDeliveryInfo;
     setDelivery({ srcTxHash: info.srcTxHash, dstTxHash: toHex(info.dstTxHash), srcChainKey: info.srcChainKey });
-  }, [draft, walletProvider, sodax, swapMutation]);
+  }, [draft, walletProvider, sodax, swapMutation, partnerFee]);
 
   const flipDirection = useCallback(() => {
     setSrcChain(dstChain);
@@ -197,6 +242,12 @@ export function useSwapFlow() {
     setAmount,
     slippagePercent,
     setSlippagePercent,
+    partnerFeeInput,
+    setPartnerFeeInput,
+    partnerFee,
+    partnerFeeError: feeState.kind === 'invalid' ? feeState.message : undefined,
+    partnerFeeAmount: feeAmount && srcToken ? formatUnits(feeAmount, srcToken.decimals) : '',
+    speedTier,
     quotedOutput: quote && dstToken ? formatUnits(BigInt(quote.quoted_amount), dstToken.decimals) : '',
     minReceived: minOutputAmount !== undefined && dstToken ? formatUnits(minOutputAmount, dstToken.decimals) : '',
     hasQuote: !!quote,
