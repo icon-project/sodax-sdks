@@ -58,11 +58,10 @@ export async function retry<T>(
 }
 
 export function getRandomBytes(length: number): Uint8Array {
-  const array = new Uint8Array(length);
-  for (let i = 0; i < length; i++) {
-    array[i] = Math.floor(Math.random() * 256);
+  if (!globalThis.crypto?.getRandomValues) {
+    throw new Error('Web Crypto (crypto.getRandomValues) is unavailable in this runtime');
   }
-  return array;
+  return globalThis.crypto.getRandomValues(new Uint8Array(length));
 }
 
 export function randomUint256(): bigint {

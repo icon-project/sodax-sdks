@@ -7,9 +7,9 @@
  * tests lock in that valid `hx`/`cx` addresses round-trip through `encodeAddress`/`reverseEncodeAddress`
  * and that malformed inputs are rejected before encoding.
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ChainKeys } from '@sodax/types';
-import { encodeAddress, reverseEncodeAddress } from './shared-utils.js';
+import { encodeAddress, getRandomBytes, randomUint256, reverseEncodeAddress } from './shared-utils.js';
 
 const ICON_MAINNET = ChainKeys.ICON_MAINNET;
 
@@ -39,5 +39,42 @@ describe('encodeAddress (ICON)', () => {
     ['empty string', ''],
   ])('rejects a malformed ICON address (%s)', (_label, address) => {
     expect(() => encodeAddress(ICON_MAINNET, address)).toThrow(/Invalid ICON address/);
+  });
+});
+
+/**
+ * getRandomBytes / randomUint256 must use a CSPRNG (SWAP-M-2). The old
+ * implementation filled bytes with Math.random (non-CSPRNG); these lock in that
+ * the bytes come from crypto.getRandomValues and never from Math.random.
+ */
+describe('getRandomBytes / randomUint256 (CSPRNG)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('returns a Uint8Array of the requested length', () => {
+    expect(getRandomBytes(32)).toBeInstanceOf(Uint8Array);
+    expect(getRandomBytes(32)).toHaveLength(32);
+    expect(getRandomBytes(0)).toHaveLength(0);
+  });
+
+  it('sources bytes from crypto.getRandomValues, not Math.random', () => {
+    const cryptoSpy = vi.spyOn(globalThis.crypto, 'getRandomValues');
+    const mathSpy = vi.spyOn(Math, 'random');
+    getRandomBytes(32);
+    expect(cryptoSpy).toHaveBeenCalledTimes(1);
+    expect(mathSpy).not.toHaveBeenCalled();
+  });
+
+  it('randomUint256 hex-encodes the 32 CSPRNG bytes into a bigint', () => {
+    vi.spyOn(globalThis.crypto, 'getRandomValues').mockImplementation((array) => {
+      (array as Uint8Array).fill(0xff);
+      return array;
+    });
+    expect(randomUint256()).toBe(2n ** 256n - 1n);
+  });
+
+  it('randomUint256 stays within the uint256 range', () => {
+    const value = randomUint256();
+    expect(value).toBeGreaterThanOrEqual(0n);
+    expect(value).toBeLessThan(2n ** 256n);
   });
 });
