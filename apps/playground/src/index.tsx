@@ -2,6 +2,7 @@ import { Buffer } from 'buffer';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import './index.css';
 import Providers from './providers';
 
@@ -24,8 +25,10 @@ if (!rootEl) throw new Error('#root element not found');
 
 ReactDOM.createRoot(rootEl).render(
   <React.StrictMode>
-    <Providers>
-      <App />
-    </Providers>
+    <ErrorBoundary>
+      <Providers>
+        <App />
+      </Providers>
+    </ErrorBoundary>
   </React.StrictMode>,
 );
