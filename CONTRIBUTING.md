@@ -36,12 +36,26 @@ Two lanes write to the site, and they are not equivalent:
 - **In the Mintlify dashboard** — the docs and marketing team, on hand-written
   pages. Publishing there **commits straight to whichever branch the dashboard
   is pointed at, with no pull request and none of the checks below** — they are
-  all `pull_request`-triggered, so nothing runs. Commits arrive authored as
-  `usr-icon-foundation` ("Updated mintlify pages"). Whether an edit is allowed
-  is decided entirely by the dashboard's own settings, not by this repo.
+  all `pull_request`-triggered, so nothing runs. Whether an edit is allowed is
+  decided entirely by the dashboard's own settings, not by this repo.
 
-Never edit a copy of a page instead of the source it came from: the next sync
-overwrites your edit, and CI is red for everyone until it does.
+Dashboard commits arrive authored as `usr-icon-foundation` ("Updated mintlify
+pages") — one shared account for everyone, so a page's history does not say who
+changed it. An editor who authorizes GitHub at
+`app.mintlify.com/settings/account` publishes under their own identity from then
+on, which is also what a rule requiring commits attributed to a GitHub user
+needs.
+
+Site settings publish into this repo too. Navigation, Analytics, canonical URL
+and SEO, Redirects and Branding all write to `docs/docs.json`, so changing any
+of them in the dashboard commits the same file `pnpm check:docs-nav` gates — a
+redirect edited there can strand one of the pinned URLs that check holds. Only
+the dashboard's own Settings pages (domain, auth, add-ons, privacy, search) live
+outside git.
+
+Never edit a copy of a page instead of the source it came from — generated pages
+name their source in a `generatedFrom` frontmatter key. The next sync overwrites
+your edit, and CI is red for everyone until it does.
 
 Creating a page is two steps — the file, and its entry in `docs/docs.json`.
 Skip the second and the page is live and reachable by URL but absent from the
