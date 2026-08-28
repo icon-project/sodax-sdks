@@ -33,6 +33,8 @@ export interface ICONexResponseEvent {
 export type ICONexEvent = ICONexRequestEvent | ICONexResponseEvent;
 
 const ICONEX_REQUEST_TIMEOUT_MS = 300_000;
+// Non-interactive hydration must not hold the FIFO queue for the full interactive timeout.
+export const ICONEX_HYDRATION_TIMEOUT_MS = 30_000;
 
 const EXPECTED_RESPONSE: Record<ICONexRequestEventType, ICONexResponseEventType> = {
   [ICONexRequestEventType.REQUEST_HAS_ACCOUNT]: ICONexResponseEventType.RESPONSE_HAS_ACCOUNT,
@@ -48,7 +50,10 @@ const EXPECTED_RESPONSE: Record<ICONexRequestEventType, ICONexResponseEventType>
 // remove the listener on settle. (Security audit WALLET-L-1.)
 let iconexQueue: Promise<unknown> = Promise.resolve();
 
-export const request = (event: ICONexRequestEvent): Promise<ICONexResponseEvent> => {
+export const request = (
+  event: ICONexRequestEvent,
+  timeoutMs: number = ICONEX_REQUEST_TIMEOUT_MS,
+): Promise<ICONexResponseEvent> => {
   const run = (): Promise<ICONexResponseEvent> =>
     new Promise<ICONexResponseEvent>((resolve, reject) => {
       if (typeof window === 'undefined') {
@@ -70,10 +75,7 @@ export const request = (event: ICONexRequestEvent): Promise<ICONexResponseEvent>
         if (detail?.type !== expected) return; // ignore uncorrelated responses
         settle(() => resolve(detail));
       };
-      timer = setTimeout(
-        () => settle(() => reject(new Error('ICONEX relay request timed out'))),
-        ICONEX_REQUEST_TIMEOUT_MS,
-      );
+      timer = setTimeout(() => settle(() => reject(new Error('ICONEX relay request timed out'))), timeoutMs);
       window.addEventListener(ICONEX_RELAY_RESPONSE, handler);
       window.dispatchEvent(new CustomEvent(ICONEX_RELAY_REQUEST, { detail: event }));
     });

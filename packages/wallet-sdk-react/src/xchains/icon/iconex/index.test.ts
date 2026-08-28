@@ -46,4 +46,20 @@ describe('ICONEX request() channel', () => {
     // Listener was removed on timeout — a late response is a no-op (no unhandled resolution).
     expect(() => dispatchResponse(ICONexResponseEventType.RESPONSE_ADDRESS, VALID_ICON_ADDRESS)).not.toThrow();
   });
+
+  // An unanswered short-timeout request (hydration) must not hold the FIFO queue for 300s.
+  it('a short-timeout request frees the queue for the next request when it times out', async () => {
+    vi.useFakeTimers();
+    const hydration = request({ type: ICONexRequestEventType.REQUEST_ADDRESS }, 30_000);
+    const hydrationRejection = expect(hydration).rejects.toThrow(/timed out/);
+    const userConnect = request({ type: ICONexRequestEventType.REQUEST_ADDRESS });
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    await hydrationRejection;
+
+    // The queued user request dispatches now — far before the 300s interactive timeout.
+    await vi.advanceTimersByTimeAsync(0);
+    dispatchResponse(ICONexResponseEventType.RESPONSE_ADDRESS, VALID_ICON_ADDRESS);
+    await expect(userConnect).resolves.toMatchObject({ payload: VALID_ICON_ADDRESS });
+  });
 });
