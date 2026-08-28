@@ -627,10 +627,10 @@ describe('StacksSpokeService.sendMessage', () => {
         publicKey: SRC_PUBKEY,
         fee: 0,
         nonce: 0n,
-        postConditionMode: 2, // PostConditionMode.Deny — send-message moves no assets
-        postConditions: [],
       }),
     );
+    // Post-conditions never ride the serialized payload — raw builds don't carry them.
+    expect(mocks.makeUnsignedContractCall.mock.calls.at(-1)?.[0]?.postConditions).toBeUndefined();
   });
 
   it('raw=true → functionArgs are [uintCV(relayChainId), Cl.bufferFromHex(dstAddress), Cl.bufferFromHex(payload)]', async () => {

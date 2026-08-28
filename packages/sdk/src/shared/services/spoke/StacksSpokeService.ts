@@ -248,9 +248,6 @@ export class StacksSpokeService {
       contractName: connectionName as string,
       functionName: 'send-message',
       functionArgs: [uintCV(dstRelayChainId), Cl.bufferFromHex(params.dstAddress), Cl.bufferFromHex(params.payload)],
-      // send-message moves no assets — deny with no conditions aborts if it ever tries.
-      postConditionMode: PostConditionMode.Deny,
-      postConditions: [],
     };
 
     if (params.raw === true) {
@@ -269,7 +266,12 @@ export class StacksSpokeService {
       } satisfies StacksReturnType<true> as StacksReturnType<Raw>;
     }
 
-    const txId = await params.walletProvider.sendTransaction(reqData);
+    const txId = await params.walletProvider.sendTransaction({
+      ...reqData,
+      // send-message moves no assets — deny with no conditions aborts if it ever tries.
+      postConditionMode: PostConditionMode.Deny,
+      postConditions: [],
+    });
 
     return txId satisfies StacksReturnType<false> as StacksReturnType<Raw>;
   }
