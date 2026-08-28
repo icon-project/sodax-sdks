@@ -26,12 +26,14 @@ function PartnerFeeFields({ flow }: { flow: SwapFlow }) {
       <div className="row">
         <input
           className="input"
+          aria-label="Partner fee recipient on Sonic"
           placeholder="Recipient on Sonic (0x…)"
           value={address}
           onChange={event => flow.setPartnerFeeInput({ address: event.target.value, bps })}
         />
         <input
           className="input fee-bps"
+          aria-label="Partner fee in basis points"
           inputMode="numeric"
           placeholder="bps"
           value={bps}
@@ -45,7 +47,15 @@ function PartnerFeeFields({ flow }: { flow: SwapFlow }) {
   );
 }
 
-function ChainSelect({ value, onChange }: { value: PlaygroundChainKey; onChange: (key: PlaygroundChainKey) => void }) {
+function ChainSelect({
+  value,
+  onChange,
+  label,
+}: {
+  value: PlaygroundChainKey;
+  onChange: (key: PlaygroundChainKey) => void;
+  label: string;
+}) {
   // Resolve the raw <select> value against the derived list instead of casting it to a chain key.
   const handleChange = (raw: string) => {
     const next = swappableChains.find(key => key === raw);
@@ -53,7 +63,7 @@ function ChainSelect({ value, onChange }: { value: PlaygroundChainKey; onChange:
   };
 
   return (
-    <select className="select" value={value} onChange={event => handleChange(event.target.value)}>
+    <select className="select" aria-label={label} value={value} onChange={event => handleChange(event.target.value)}>
       {swappableChains.map(key => (
         <option key={key} value={key}>
           {chainName(key)}
@@ -111,9 +121,10 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
       <div className="field">
         <span className="field-label">From</span>
         <div className="row">
-          <ChainSelect value={flow.srcChain} onChange={flow.setSrcChain} />
+          <ChainSelect value={flow.srcChain} onChange={flow.setSrcChain} label="Network to send from" />
           <select
             className="select"
+            aria-label="Token to send"
             value={flow.srcToken?.address ?? ''}
             onChange={event => flow.setSrcToken(flow.srcTokens.find(token => token.address === event.target.value))}
           >
@@ -126,6 +137,7 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
         </div>
         <input
           className="input amount"
+          aria-label="Amount to send"
           inputMode="decimal"
           placeholder="0.0"
           value={flow.amount}
@@ -134,7 +146,13 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
       </div>
 
       <div className="flip">
-        <button type="button" className="btn btn-icon" onClick={flow.flipDirection} title="Reverse direction">
+        <button
+          type="button"
+          className="btn btn-icon"
+          onClick={flow.flipDirection}
+          aria-label="Reverse swap direction"
+          title="Reverse direction"
+        >
           ⇅
         </button>
       </div>
@@ -142,9 +160,10 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
       <div className="field">
         <span className="field-label">To</span>
         <div className="row">
-          <ChainSelect value={flow.dstChain} onChange={flow.setDstChain} />
+          <ChainSelect value={flow.dstChain} onChange={flow.setDstChain} label="Network to receive on" />
           <select
             className="select"
+            aria-label="Token to receive"
             value={flow.dstToken?.address ?? ''}
             onChange={event => flow.setDstToken(flow.dstTokens.find(token => token.address === event.target.value))}
           >
@@ -157,6 +176,7 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
         </div>
         <input
           className="input amount"
+          aria-label="Amount to receive"
           value={formatTokenAmount(flow.quotedOutput)}
           title={flow.quotedOutput}
           placeholder="0.0"
@@ -170,6 +190,7 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
           <span className="slippage">
             <input
               className="input slip"
+              aria-label="Slippage tolerance, percent"
               inputMode="decimal"
               value={flow.slippagePercent}
               onChange={event => flow.setSlippagePercent(event.target.value)}
@@ -203,12 +224,20 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
 
       <PartnerFeeFields flow={flow} />
 
-      {flow.partnerFeeError && <p className="alert">{flow.partnerFeeError}</p>}
+      {flow.partnerFeeError && (
+        <p className="alert" role="alert">
+          {flow.partnerFeeError}
+        </p>
+      )}
 
-      {flow.quoteError && <p className="alert">{flow.quoteError}</p>}
+      {flow.quoteError && (
+        <p className="alert" role="alert">
+          {flow.quoteError}
+        </p>
+      )}
 
       {flow.error && (
-        <div className="alert">
+        <div className="alert" role="alert">
           {flow.error.message}
           {flow.error.detail && (
             <details>

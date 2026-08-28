@@ -38,7 +38,10 @@ export function StatusPanel({
     <div className="status-panel">
       <div className="row-between">
         <span className="muted">Status</span>
-        <strong className={statusTone(statusCode)}>{statusLabel(statusCode)}</strong>
+        {/* role="status" so a settled or failed intent is announced without stealing focus. */}
+        <strong className={statusTone(statusCode)} role="status">
+          {statusLabel(statusCode)}
+        </strong>
       </div>
       <div className="row-between">
         <span className="muted">Source tx</span>
