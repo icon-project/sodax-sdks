@@ -69,9 +69,9 @@ pnpm docs:sync-pages          # regenerate after editing a source
 pnpm check:docs-pages         # CI: fails when a copy has drifted
 ```
 
-Every generated file says so in its frontmatter. **Edit the source, never the copy** — the
-next sync overwrites it. Adding a page this way means adding a map entry with its `dest`,
-`title` and `icon`, then a `docs.json` nav entry for that dest.
+Every generated file names its source in a `generatedFrom` frontmatter key. **Edit the source,
+never the copy** — the next sync overwrites it. Adding a page this way means adding a map entry
+with its `dest`, `title` and `icon`, then a `docs.json` nav entry for that dest.
 
 ## Editing in the Mintlify dashboard
 
@@ -85,10 +85,20 @@ Publishing there commits straight to whichever branch the dashboard is pointed a
 **no pull request and nothing gating the publish**. On `main` or `development` the push
 trigger still runs the checks below — but after the commit has landed and the page is
 already live, so a failure is something to clean up rather than something that stopped you.
-On any other branch nothing runs until someone opens a pull request. Commits arrive authored
-as `usr-icon-foundation` ("Updated mintlify pages"). Which branch that is, is a setting in the
-Mintlify dashboard and is recorded nowhere in this repo: point it at `main` and a Publish
-click is live on docs.sodax.com with nothing in between.
+On any other branch nothing runs until someone opens a pull request. Which branch that is, is a
+setting in the Mintlify dashboard and is recorded nowhere in this repo: point it at `main` and a
+Publish click is live on docs.sodax.com with nothing in between.
+
+Commits arrive authored as `usr-icon-foundation` ("Updated mintlify pages") — one shared account
+for everyone, so a page's history does not say who changed it. An editor who authorizes GitHub at
+`app.mintlify.com/settings/account` publishes under their own identity from then on, which is
+also what a rule requiring commits attributed to a GitHub user needs.
+
+Site settings publish into this repo too. Navigation, Analytics, canonical URL and SEO, Redirects
+and Branding all write to `docs.json`, so changing any of them in the dashboard commits the same
+file `pnpm check:docs-nav` gates — a redirect edited there can strand one of the pinned URLs that
+check holds. Only the dashboard's own Settings pages (domain, auth, add-ons, privacy, search) live
+outside git.
 
 Dashboard editing is still a normal way to work — with one exception. The 25 pages listed
 below are copies. Each is generated from a file that lives next to the code it documents,
@@ -112,8 +122,10 @@ fails, which blocks everyone else's work too.
 - `/developers/deployments/relayer-api-endpoints` and
   `/developers/deployments/solver-api-endpoints`
 
-Each of those pages also names its source in its frontmatter (`Generated from …`), but a
-visual editor may hide that line, so this list is the reference. Everything else on the site
+Each of those pages also names its source in a `generatedFrom` frontmatter key, but the dashboard
+editor renders frontmatter as the page title and icon and shows no keys, so **nothing in the
+editor marks a page as generated** — that key is there for the sync tooling, and this list is the
+only warning an editor gets. Everything else on the site
 — including the rest of Deployments and How To, and all of Home, Get Started, Solana and
 Resources — is written here and safe to edit.
 

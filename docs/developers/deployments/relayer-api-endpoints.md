@@ -1,7 +1,7 @@
 ---
 title: "Relayer API Endpoints"
 icon: network-wired
-# Generated from packages/sdk/docs/RELAYER_API_ENDPOINTS.md by pnpm docs:sync-pages. Edit the source, not this file.
+generatedFrom: packages/sdk/docs/RELAYER_API_ENDPOINTS.md
 ---
 
 > **Error handling conventions:** Relay-layer failures emit one of two stable strings on `error.message`: `'SUBMIT_TX_FAILED'` or `'RELAY_TIMEOUT'`, also exported as `RELAY_ERROR_CODES` from `@sodax/sdk`. Modules other than swap propagate these errors raw. The **swap module** wraps them into `SodaxError<SwapErrorCode>` with `context.relayCode` (see [SWAPS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md) Error Handling).

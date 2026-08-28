@@ -1,7 +1,7 @@
 ---
 title: "@sodax/skills"
 icon: graduation-cap
-# Generated from packages/skills/README.md by pnpm docs:sync-pages. Edit the source, not this file.
+generatedFrom: packages/skills/README.md
 ---
 
 AI-agent skills and knowledge for building on the **SODAX** cross-chain DeFi platform. Drop this into your repo and your AI coding agent writes v2-correct `@sodax/*` SDK code on the first try.

@@ -1,7 +1,7 @@
 ---
 title: "Leverage-Yield Effective APR"
 icon: percent
-# Generated from packages/sdk/docs/LEVERAGE_YIELD_APR.md by pnpm docs:sync-pages. Edit the source, not this file.
+generatedFrom: packages/sdk/docs/LEVERAGE_YIELD_APR.md
 ---
 
 How the SDK computes the headline APR for a leverage-yield vault — combining on-chain AAVE rates with the underlying LSD's native staking yield.

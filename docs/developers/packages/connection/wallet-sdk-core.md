@@ -1,7 +1,7 @@
 ---
 title: "@sodax/wallet-sdk-core"
 icon: wallet
-# Generated from packages/wallet-sdk-core/README.md by pnpm docs:sync-pages. Edit the source, not this file.
+generatedFrom: packages/wallet-sdk-core/README.md
 ---
 
 The SODAX wallet-sdk-core is a core wallet SDK package containing implementations of wallet providers that enable multi-chain wallet connectivity. This package provides TypeScript implementations of wallet providers for various blockchain networks, making them compatible with the Core SODAX SDK (@sodax/sdk).

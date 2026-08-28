@@ -1,7 +1,7 @@
 ---
 title: "@sodax/sdk"
 icon: cup-straw
-# Generated from packages/sdk/README.md by pnpm docs:sync-pages. Edit the source, not this file.
+generatedFrom: packages/sdk/README.md
 ---
 
 ## Get started

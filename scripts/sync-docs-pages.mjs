@@ -48,7 +48,7 @@ const render = (entry, root, destBySource) => {
     '---',
     `title: ${JSON.stringify(title)}`,
     `icon: ${entry.icon}`,
-    `# Generated from ${entry.src} by pnpm docs:sync-pages. Edit the source, not this file.`,
+    `generatedFrom: ${entry.src}`,
     '---',
     '',
     '',
@@ -56,11 +56,11 @@ const render = (entry, root, destBySource) => {
   return `${frontmatter}${rewriteLinks(body, entry, destBySource)}`;
 };
 
-// The frontmatter comment marks a generated page. The body notice is legacy — pages generated
-// before it was dropped still carry one, and reading it keeps them from looking hand-written.
+// The `generatedFrom` key marks a generated page: a real key survives a dashboard publish, which
+// strips frontmatter comments. The comment and body notice are legacy markers on older pages.
 const isGeneratedPage = content => {
   const frontmatter = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-  if (frontmatter && /^# Generated from /m.test(frontmatter[1])) return true;
+  if (frontmatter && /^(generatedFrom:|# Generated from )/m.test(frontmatter[1])) return true;
   return /^> \*\*Generated page\.\*\* Source:/m.test(content);
 };
 

@@ -1,7 +1,7 @@
 ---
 title: "Configure SDK"
 icon: gears
-# Generated from packages/sdk/docs/CONFIGURE_SDK.md by pnpm docs:sync-pages. Edit the source, not this file.
+generatedFrom: packages/sdk/docs/CONFIGURE_SDK.md
 ---
 
 Learn how to configure the SODAX SDK for your application. The SDK supports Swaps (intent-based solver swaps), Money Market (cross-chain lending and borrowing), and many other cross-chain DeFi services. All feature configurations are optional—you can use just the features you need.

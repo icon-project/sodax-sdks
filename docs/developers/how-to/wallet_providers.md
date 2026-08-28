@@ -1,7 +1,7 @@
 ---
 title: "Wallet Providers"
 icon: wallet
-# Generated from packages/sdk/docs/WALLET_PROVIDERS.md by pnpm docs:sync-pages. Edit the source, not this file.
+generatedFrom: packages/sdk/docs/WALLET_PROVIDERS.md
 ---
 
 The SODAX SDK does not force you to use a specific wallet library. Instead, SDK calls accept an

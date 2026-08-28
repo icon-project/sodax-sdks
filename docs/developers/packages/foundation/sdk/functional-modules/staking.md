@@ -1,7 +1,7 @@
 ---
 title: "Staking"
 icon: piggy-bank
-# Generated from packages/sdk/docs/STAKING.md by pnpm docs:sync-pages. Edit the source, not this file.
+generatedFrom: packages/sdk/docs/STAKING.md
 ---
 
 > **Error handling conventions:** This module returns `Result<T, SodaxError<NarrowCode>>` from every async public method. Discriminate on `error.code` (a closed reason-only union) and `error.feature === 'staking'`. See [Error Handling](#error-handling) below.

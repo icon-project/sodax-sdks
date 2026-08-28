@@ -1,7 +1,7 @@
 ---
 title: "Swaps"
 icon: rotate
-# Generated from packages/sdk/docs/SWAPS.md by pnpm docs:sync-pages. Edit the source, not this file.
+generatedFrom: packages/sdk/docs/SWAPS.md
 ---
 
 The swap module provides abstractions for interacting with cross-chain Intent Smart Contracts, the solver API, and the Relay API.

@@ -1,7 +1,7 @@
 ---
 title: "Stellar Trustline Requirements"
 icon: star
-# Generated from packages/sdk/docs/STELLAR_TRUSTLINE.md by pnpm docs:sync-pages. Edit the source, not this file.
+generatedFrom: packages/sdk/docs/STELLAR_TRUSTLINE.md
 ---
 
 Stellar blockchain requires trustlines to be established before you can receive or hold tokens. This document explains how to handle trustlines when using Stellar with the SODAX SDK across different operations.

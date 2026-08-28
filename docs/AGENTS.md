@@ -28,9 +28,9 @@ correct. The commands below are the gate.
 - **Body starts at `##`** — the H1 comes from frontmatter `title`. MDX comments are
   `{/* ... */}`; HTML comments break the page. Angle-bracket autolinks (`<https://…>`) are
   not valid MDX either; use `[text](url)`.
-- **Never edit a generated page.** Pages whose frontmatter says they are generated come from
-  a package source listed in `scripts/docs-pages-map.json`; edit that source and run
-  `pnpm docs:sync-pages`. `pnpm check:docs-pages` fails on drift.
+- **Never edit a generated page.** A page carrying a `generatedFrom` frontmatter key comes from
+  the package source that key names, listed in `scripts/docs-pages-map.json`; edit that source
+  and run `pnpm docs:sync-pages`. `pnpm check:docs-pages` fails on drift.
 - **A tab must land on a page no earlier tab lists**, or the page renders under that earlier
   tab and the navbar link goes nowhere. Repeating a page deeper in another sidebar as a
   shortcut is fine; `pnpm check:docs-nav` enforces the landing rule.

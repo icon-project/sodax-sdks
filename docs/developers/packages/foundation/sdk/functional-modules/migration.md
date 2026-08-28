@@ -1,7 +1,7 @@
 ---
 title: "Migration"
 icon: truck
-# Generated from packages/sdk/docs/MIGRATION.md by pnpm docs:sync-pages. Edit the source, not this file.
+generatedFrom: packages/sdk/docs/MIGRATION.md
 ---
 
 > **Error handling conventions:** This module returns `Result<T, SodaxError<NarrowCode>>` from every async public method. Discriminate on `error.code` (a closed reason-only union) and `error.feature === 'migration'`. See [Error Handling](#error-handling) below.

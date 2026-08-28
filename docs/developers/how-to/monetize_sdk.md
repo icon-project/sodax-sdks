@@ -1,7 +1,7 @@
 ---
 title: "Monetize SDK"
 icon: sack-dollar
-# Generated from packages/sdk/docs/MONETIZE_SDK.md by pnpm docs:sync-pages. Edit the source, not this file.
+generatedFrom: packages/sdk/docs/MONETIZE_SDK.md
 ---
 
 Learn how to configure fees and monetize your SODAX SDK integration.

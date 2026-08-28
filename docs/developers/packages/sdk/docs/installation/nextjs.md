@@ -1,7 +1,7 @@
 ---
 title: "Installing @sodax/sdk with Next.js"
 icon: download
-# Generated from packages/sdk/docs/installation/nextjs.md by pnpm docs:sync-pages. Edit the source, not this file.
+generatedFrom: packages/sdk/docs/installation/nextjs.md
 ---
 
 This guide will walk you through setting up `@sodax/sdk` in a Next.js project, from project creation to using the SDK features.

@@ -1,7 +1,7 @@
 ---
 title: "Leverage Yield"
 icon: chart-line
-# Generated from packages/sdk/docs/LEVERAGE_YIELD.md by pnpm docs:sync-pages. Edit the source, not this file.
+generatedFrom: packages/sdk/docs/LEVERAGE_YIELD.md
 ---
 
 > **Error handling conventions:** This module uses the canonical `SodaxError<LeverageYieldErrorCode>` shape (same family as the swap, bridge, and money market modules). Discriminate on `result.error.code` (e.g. `'INTENT_CREATION_FAILED'`, `'LOOKUP_FAILED'`); structured details live on `result.error.context` (`srcChainKey`, `action`, `method`, `phase`, `field`). See the **Error Handling** section below for the full per-method code table.

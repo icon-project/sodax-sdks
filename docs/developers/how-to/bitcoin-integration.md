@@ -1,7 +1,7 @@
 ---
 title: "Bitcoin Integration"
 icon: bitcoin-sign
-# Generated from packages/sdk/docs/BITCOIN_INTEGRATION.md by pnpm docs:sync-pages. Edit the source, not this file.
+generatedFrom: packages/sdk/docs/BITCOIN_INTEGRATION.md
 ---
 
 ### Why Bitcoin is different

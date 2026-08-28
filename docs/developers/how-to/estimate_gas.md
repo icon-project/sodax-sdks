@@ -1,7 +1,7 @@
 ---
 title: "Estimate Gas"
 icon: gauge
-# Generated from packages/sdk/docs/ESTIMATE_GAS.md by pnpm docs:sync-pages. Edit the source, not this file.
+generatedFrom: packages/sdk/docs/ESTIMATE_GAS.md
 ---
 
 ### Estimate Gas for Raw Transactions

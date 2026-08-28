@@ -1,7 +1,7 @@
 ---
 title: "@sodax/swaps-api"
 icon: code
-# Generated from packages/swaps-api/README.md by pnpm docs:sync-pages. Edit the source, not this file.
+generatedFrom: packages/swaps-api/README.md
 ---
 
 Minimal, type-safe HTTP client for the SODAX backend **Swaps API v2**.

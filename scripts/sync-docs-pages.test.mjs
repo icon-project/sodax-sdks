@@ -26,7 +26,7 @@ const ENTRY = { src: 'packages/sdk/docs/SWAPS.md', dest: 'developers/swaps.md', 
 const GENERATED_PAGE = `---
 title: "Swaps"
 icon: rotate
-# Generated from packages/sdk/docs/SWAPS.md by pnpm docs:sync-pages. Edit the source, not this file.
+generatedFrom: packages/sdk/docs/SWAPS.md
 ---
 
 Stale body.
@@ -42,12 +42,15 @@ test('generates a page with frontmatter and drops the duplicated source H1', t =
 
   assert.deepEqual(written, ['docs/developers/swaps.md']);
   const page = read('docs/developers/swaps.md');
-  assert.match(page, /^---\ntitle: "Swaps \(Solver\)"\nicon: rotate\n# Generated from packages\/sdk\/docs\/SWAPS\.md/);
+  assert.match(
+    page,
+    /^---\ntitle: "Swaps \(Solver\)"\nicon: rotate\ngeneratedFrom: packages\/sdk\/docs\/SWAPS\.md\n---/,
+  );
   assert.match(page, /\nBody text\.\n$/);
   assert.doesNotMatch(page, /# Swaps \(Solver\)/);
 });
 
-test('the page is marked generated in frontmatter, with nothing shown to readers', t => {
+test('the marker is a real frontmatter key, with nothing shown to readers', t => {
   const { root, read } = createWorkspace(t, {
     mirrored: [ENTRY],
     files: { 'packages/sdk/docs/SWAPS.md': '# Swaps\n\nBody.\n' },
@@ -56,7 +59,10 @@ test('the page is marked generated in frontmatter, with nothing shown to readers
   syncDocsPages({ root });
   const page = read('docs/developers/swaps.md');
 
-  assert.match(page, /# Generated from packages\/sdk\/docs\/SWAPS\.md/);
+  // A comment here would be invisible to a dashboard editor and stripped on publish.
+  const frontmatter = page.match(/^---\n([\s\S]*?)\n---/)[1];
+  assert.match(frontmatter, /^generatedFrom: packages\/sdk\/docs\/SWAPS\.md$/m);
+  assert.doesNotMatch(frontmatter, /^#/m);
   // The body opens on the source's own content: no sync notice reaches the published page.
   assert.doesNotMatch(page, /^> \*\*Generated page\.\*\*/m);
   assert.match(page, /^---\n[\s\S]*?\n---\n\nBody\.\n$/);
@@ -175,20 +181,40 @@ test('--check calls a hand-written page at a mapped dest a collision, never drif
   assert.equal(collisions.length, 1);
 });
 
-test('a generated page whose frontmatter comment was stripped still counts as generated', t => {
+test('a page edited in the dashboard reports drift, not a collision', t => {
   const { root } = createWorkspace(t, {
     mirrored: [ENTRY],
     files: {
       'packages/sdk/docs/SWAPS.md': '# Swaps\n\nNew body.\n',
-      // What a visual editor leaves behind: frontmatter comment gone, body notice intact.
+      // A publish rewrites the body and strips frontmatter comments; the key survives.
       'docs/developers/swaps.md':
-        '---\ntitle: "Swaps"\nicon: rotate\n---\n\n> **Generated page.** Source: [`packages/sdk/docs/SWAPS.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md).\n\nEdited in the dashboard.\n',
+        '---\ntitle: "Swaps"\nicon: rotate\ngeneratedFrom: packages/sdk/docs/SWAPS.md\n---\n\nEdited in the dashboard.\n',
     },
   });
 
   const { stale, collisions } = syncDocsPages({ root, check: true });
 
+  // A collision here would tell the author to fix the map, and stop the page regenerating at all.
   assert.deepEqual(collisions, []);
   assert.equal(stale.length, 1);
   assert.match(stale[0], /no longer matches it/);
+});
+
+test('a page carrying only the legacy comment or body notice still counts as generated', t => {
+  const legacy = [
+    '---\ntitle: "Swaps"\nicon: rotate\n# Generated from packages/sdk/docs/SWAPS.md by pnpm docs:sync-pages.\n---\n\nStale.\n',
+    '---\ntitle: "Swaps"\nicon: rotate\n---\n\n> **Generated page.** Source: [`packages/sdk/docs/SWAPS.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md).\n\nStale.\n',
+  ];
+
+  for (const page of legacy) {
+    const { root } = createWorkspace(t, {
+      mirrored: [ENTRY],
+      files: { 'packages/sdk/docs/SWAPS.md': '# Swaps\n\nNew body.\n', 'docs/developers/swaps.md': page },
+    });
+
+    const { stale, collisions } = syncDocsPages({ root, check: true });
+
+    assert.deepEqual(collisions, []);
+    assert.equal(stale.length, 1);
+  }
 });

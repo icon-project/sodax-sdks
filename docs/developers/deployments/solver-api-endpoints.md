@@ -1,7 +1,7 @@
 ---
 title: "Solver API endpoints"
 icon: handshake
-# Generated from packages/sdk/docs/SOLVER_API_ENDPOINTS.md by pnpm docs:sync-pages. Edit the source, not this file.
+generatedFrom: packages/sdk/docs/SOLVER_API_ENDPOINTS.md
 ---
 
 > **Error handling conventions:** Direct callers of `SolverApiService` (used by lower-level scripts and tests) still receive `SolverErrorResponse` with `detail.code` / `detail.message`. The **swap module's** `postExecution` wraps these into `SodaxError` with code `EXTERNAL_API_ERROR`; the original `SolverIntentErrorCode` is on `result.error.context.solverCode` and the full `detail` is on `result.error.context.solverDetail` — see [SWAPS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md) Error Handling.

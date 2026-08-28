@@ -1,7 +1,7 @@
 ---
 title: "Intent Relay API"
 icon: tower-broadcast
-# Generated from packages/sdk/docs/INTENT_RELAY_API.md by pnpm docs:sync-pages. Edit the source, not this file.
+generatedFrom: packages/sdk/docs/INTENT_RELAY_API.md
 ---
 
 ## Intent Relay API Service
