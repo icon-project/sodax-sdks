@@ -58,6 +58,10 @@ export function CodePanel({ flow }: { flow: SwapFlow }) {
         This updates with the form. Chain and token values come from <code>@sodax/types</code>, so the snippet always
         names symbols that exist in the version you install.
       </p>
+      <p className="code-note muted small">
+        Building with an AI agent? <code>npx skills@latest add icon-project/sodax-sdks/packages/skills</code> installs
+        the SODAX skills, so it writes against the current SDK instead of guessing.
+      </p>
     </section>
   );
 }
