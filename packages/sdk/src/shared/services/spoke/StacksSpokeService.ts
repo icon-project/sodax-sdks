@@ -7,6 +7,7 @@ import {
   uintCV,
   type ContractIdString,
   type ClarityValue,
+  type PostCondition,
   fetchCallReadOnlyFunction,
   parseContractId,
   type ContractPrincipalCV,
@@ -157,17 +158,9 @@ export class StacksSpokeService {
         Cl.bufferFromHex(params.data),
         Cl.contractPrincipal(connectionAddress as string, connectionName as string),
       ],
-      // asset-manager-state.deposit moves exactly `amount` from the caller; cap it and deny the rest.
-      // One cap per FT the contract defines (sBTC has two) — the unmoved ones pass at 0 trivially.
-      postConditionMode: PostConditionMode.Deny,
-      postConditions: isNative
-        ? [Pc.principal(params.srcAddress).willSendLte(params.amount).ustx()]
-        : (await this.getFtAssetNames(params.token)).map(assetName =>
-            Pc.principal(params.srcAddress)
-              .willSendLte(params.amount)
-              .ft(params.token as ContractIdString, assetName),
-          ),
     };
+    // Post-conditions cannot ride the raw return (`serializePayloadBytes` keeps the contract-call
+    // payload only), so raw mode skips the interface lookup they would need.
     if (params.raw === true) {
       // srcPublicKey (builds the unsigned tx) and srcAddress (hub-wallet derivation + intent record) must
       // be the same account — derive the address from the key and match, else the user signs a tx for another.
@@ -199,8 +192,32 @@ export class StacksSpokeService {
         payload: bytesToHex(serializePayloadBytes(tx.payload)),
       } satisfies StacksReturnType<true> as StacksReturnType<R>;
     }
-    const txId = await params.walletProvider.sendTransaction(reqData);
+    const txId = await params.walletProvider.sendTransaction({
+      ...reqData,
+      postConditionMode: PostConditionMode.Deny,
+      postConditions: await this.depositPostConditions(params.srcAddress, params.token, params.amount, isNative),
+    });
     return txId as StacksReturnType<R>;
+  }
+
+  /**
+   * Caps for a Deny-mode deposit: asset-manager-state.deposit moves exactly `amount` from the
+   * caller, so cap the sender at `amount` — one cap per FT the token contract defines (sBTC has
+   * two; the unmoved ones pass at 0 trivially), or uSTX for native.
+   */
+  private async depositPostConditions(
+    srcAddress: string,
+    token: string,
+    amount: bigint,
+    isNative: boolean,
+  ): Promise<PostCondition[]> {
+    if (isNative) return [Pc.principal(srcAddress).willSendLte(amount).ustx()];
+    const assetNames = await this.getFtAssetNames(token);
+    return assetNames.map(assetName =>
+      Pc.principal(srcAddress)
+        .willSendLte(amount)
+        .ft(token as ContractIdString, assetName),
+    );
   }
 
   /**

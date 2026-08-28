@@ -408,6 +408,19 @@ describe('StacksSpokeService.deposit', () => {
     expect(mocks.serializePayloadBytes).toHaveBeenCalledWith(fakeUnsignedTx.payload);
   });
 
+  it('raw=true FT deposit skips the contract-interface fetch and carries no post-conditions', async () => {
+    // Post-conditions cannot ride the serialized payload, so raw mode must not pay (or fail on)
+    // the interface lookup they would need.
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const result = await stacksSpoke.deposit(depositParams<true>({ raw: true, token: STACKS_BNUSD }));
+
+    expect(result).toEqual({ payload: FAKE_PAYLOAD_HEX });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(mocks.makeUnsignedContractCall.mock.calls.at(-1)?.[0]?.postConditions).toBeUndefined();
+  });
+
   it('raw=true non-native → first functionArg is someCV(Cl.principal(token))', async () => {
     await stacksSpoke.deposit(depositParams<true>({ raw: true, token: STACKS_BNUSD }));
 
