@@ -1,6 +1,6 @@
 # apps/playground
 
-Public SDK playground: a live cross-network swap built with `@sodax/dapp-kit`, paired with a panel showing the code that produced the current form state. Deployed standalone and embedded in the Mintlify docs (`docs.sodax.com`) and on `sodax.com/playground`.
+Public SDK playground: a live cross-network swap built with `@sodax/dapp-kit`, paired with a panel showing the code that produced the current form state. It runs standalone; embedding it in the Mintlify docs (`docs.sodax.com`) and on `sodax.com/playground` is the intent — neither embed is wired yet.
 
 Package name: `@sodax/playground`. Dev server port: **3005**.
 

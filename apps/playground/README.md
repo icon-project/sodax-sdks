@@ -1,6 +1,6 @@
 # SODAX SDK Playground
 
-A live cross-network swap built with [`@sodax/dapp-kit`](../../packages/dapp-kit/README.md), next to a panel showing the code that produced whatever the form currently says. Deployed standalone, embedded in the docs, and the source a partner reads before integrating.
+A live cross-network swap built with [`@sodax/dapp-kit`](../../packages/dapp-kit/README.md), next to a panel showing the code that produced whatever the form currently says. It is the source a partner reads before integrating. It runs standalone; embedding it in the docs and on `sodax.com` is the intent, not yet wired.
 
 Quoting works without a wallet, so the page is useful to a reader who never connects one.
 
