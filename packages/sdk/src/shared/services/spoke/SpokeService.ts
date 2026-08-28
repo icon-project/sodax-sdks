@@ -24,7 +24,7 @@ import {
   isBitcoinChainKey,
   type Result,
 } from '@sodax/types';
-import { encodeAddress } from '../../utils/shared-utils.js';
+import { encodeAddress, encodeTokenIdentifier } from '../../utils/shared-utils.js';
 import { StacksSpokeService } from './StacksSpokeService.js';
 import { BitcoinSpokeService } from './BitcoinSpokeService.js';
 import { NearSpokeService } from './NearSpokeService.js';
@@ -636,7 +636,8 @@ export class SpokeService {
         return this.sui.encodeSimulationParams(token, assetManager);
       default:
         return {
-          encodedToken: encodeAddress(srcChainKey, token),
+          // Token identifiers on BITCOIN/NEAR/INJECTIVE are not addresses — recipient validation stays on the address leg only.
+          encodedToken: encodeTokenIdentifier(srcChainKey, token),
           encodedSrcAddress: encodeAddress(srcChainKey, assetManager),
         };
     }

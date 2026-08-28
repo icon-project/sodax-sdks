@@ -10,7 +10,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ChainKeys } from '@sodax/types';
 import { toHex } from 'viem';
-import { encodeAddress, getRandomBytes, randomUint256, reverseEncodeAddress } from './shared-utils.js';
+import {
+  encodeAddress,
+  encodeTokenIdentifier,
+  getRandomBytes,
+  randomUint256,
+  reverseEncodeAddress,
+} from './shared-utils.js';
 
 const ICON_MAINNET = ChainKeys.ICON_MAINNET;
 
@@ -124,6 +130,35 @@ describe('encodeAddress destination validation (BRIDGE-M-2)', () => {
     ['empty string', ''],
   ])('rejects a malformed Injective recipient (%s)', (_label, address) => {
     expect(() => encodeAddress(ChainKeys.INJECTIVE_MAINNET, address)).toThrow(/Invalid Injective address/);
+  });
+});
+
+/**
+ * Token identifiers vs recipient addresses (bot-review-2 R1). On BITCOIN/NEAR/INJECTIVE the
+ * configured token identifiers are not addresses; routing them through `encodeAddress`'s recipient
+ * validators broke default deposit simulation. `encodeTokenIdentifier` keeps identifier semantics
+ * for those families and delegates every other family to the validated path.
+ */
+describe('encodeTokenIdentifier (BOT-R1)', () => {
+  const utf8Hex = (value: string) => toHex(Buffer.from(value, 'utf-8'));
+
+  // Real configured identifiers — the exact values the default simulation path feeds through.
+  it.each([
+    [ChainKeys.BITCOIN_MAINNET, '0:0'],
+    [ChainKeys.BITCOIN_MAINNET, '897442:43'],
+    [ChainKeys.INJECTIVE_MAINNET, 'inj'],
+    [ChainKeys.INJECTIVE_MAINNET, 'factory/inj1d036ftaatxpkqsu9hja8r24rv3v33chz3appxp/bnUSD'],
+    [ChainKeys.NEAR_MAINNET, 'NEAR'],
+  ])('utf-8 encodes the configured identifier (%s %s)', (chainKey, token) => {
+    expect(encodeTokenIdentifier(chainKey, token)).toBe(utf8Hex(token));
+    // Companion: the RECIPIENT validators must keep rejecting these — the split is the fix.
+    expect(() => encodeAddress(chainKey, token)).toThrow(/Invalid/);
+  });
+
+  it('delegates every other family to the validated encodeAddress path', () => {
+    const evm = '0x1468d3529032106291433B7e9e3026dF1Ff78F31';
+    expect(encodeTokenIdentifier(ChainKeys.BASE_MAINNET, evm)).toBe(evm);
+    expect(() => encodeTokenIdentifier(ChainKeys.BASE_MAINNET, 'not-a-token')).toThrow(/Invalid EVM address/);
   });
 });
 

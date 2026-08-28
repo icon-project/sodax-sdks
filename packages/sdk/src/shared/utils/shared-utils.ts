@@ -191,6 +191,23 @@ export function encodeAddress(spokeChainId: SpokeChainKey, address: string): Hex
 }
 
 /**
+ * Encode a chain-native TOKEN IDENTIFIER for hub-side encoding. On BITCOIN/NEAR/INJECTIVE these are
+ * not addresses ('0:0', '897442:43', 'inj', 'factory/…', 'NEAR') — utf-8 identifier semantics, so
+ * they must not hit {@link encodeAddress}'s recipient validators. Every other family's token IS an
+ * address and keeps the validated path.
+ */
+export function encodeTokenIdentifier(spokeChainId: SpokeChainKey, token: string): Hex {
+  switch (getChainType(spokeChainId)) {
+    case 'BITCOIN':
+    case 'NEAR':
+    case 'INJECTIVE':
+      return toHex(Buffer.from(token, 'utf-8'));
+    default:
+      return encodeAddress(spokeChainId, token);
+  }
+}
+
+/**
  * Decode a hub-style hex address produced by {@link encodeAddress} back to the chain-native string form.
  */
 export function reverseEncodeAddress(spokeChainId: SpokeChainKey, encoded: Hex): string {
