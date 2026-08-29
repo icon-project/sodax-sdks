@@ -474,3 +474,89 @@ test('argument parsing accepts a single optional version', () => {
   assert.throws(() => parseReleaseArgs(['--dry-run']), /unknown argument --dry-run/);
   assert.throws(() => parseReleaseArgs(['2.2.0', '2.3.0']), /unexpected arguments: 2\.3\.0/);
 });
+
+// Exercises the real pathspec against a real repository: a stubbed log would hide a pathspec that matches nothing.
+const FIXTURE_IDENTITY = {
+  // git exports these into hook environments, where they would outrank the fixture's own config.
+  GIT_AUTHOR_NAME: 'release',
+  GIT_AUTHOR_EMAIL: 'release@sodax.test',
+  GIT_COMMITTER_NAME: 'release',
+  GIT_COMMITTER_EMAIL: 'release@sodax.test',
+};
+
+const gitFixture = root => {
+  const env = { ...process.env, ...FIXTURE_IDENTITY };
+  const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', env });
+  const sha = ref => git('rev-parse', ref).trim();
+  const commit = subject => {
+    git('add', '-A');
+    git('commit', '-q', '--no-verify', '-m', subject);
+  };
+  git('init', '-q', '-b', 'main');
+  git('config', 'commit.gpgsign', 'false');
+  git('remote', 'add', 'origin', 'git@github.com:icon-project/sodax-sdks.git');
+  commit('chore: scaffold');
+  git('tag', '@sdks@2.1.0');
+
+  mkdirSync(join(root, 'packages/sdk/src'), { recursive: true });
+  writeFileSync(join(root, 'packages/sdk/src/index.ts'), 'export const helper = () => 1;\n');
+  commit('feat(sdk): add a helper (#411)');
+  const main = sha('HEAD');
+  git('update-ref', 'refs/remotes/origin/main', main);
+
+  git('checkout', '-q', '-b', 'release');
+  mkdirSync(join(root, 'packages/sdk/src/services'), { recursive: true });
+  writeFileSync(join(root, 'packages/sdk/src/services/relay.ts'), 'export const relay = () => 2;\n');
+  commit('fix(sdk): patch the relay client');
+  writeFileSync(join(root, 'packages/sdk/README.md'), 'docs only\n');
+  commit('docs(sdk): release-branch readme touch-up');
+  writeFileSync(join(root, 'packages/types/src/index.ts'), 'export const CONFIG_VERSION = 232;\n');
+  commit('chore: bump CONFIG_VERSION on release');
+  git('update-ref', 'refs/remotes/origin/release', sha('HEAD'));
+  return { main, release: sha('HEAD') };
+};
+
+// Only the network-bound lookups are stubbed; every other call runs against the fixture repository.
+const fixtureGit =
+  ({ main, release }) =>
+  (args, options) => {
+    const key = args.join(' ');
+    if (key === 'ls-remote origin refs/heads/main') return `${main}\trefs/heads/main\n`;
+    if (key === 'ls-remote origin refs/heads/release') return `${release}\trefs/heads/release\n`;
+    if (key === 'ls-remote --tags origin @sdks@*') return `${'c'.repeat(40)}\trefs/tags/@sdks@2.1.0`;
+    return execFileSync('git', args, { cwd: options.cwd, encoding: 'utf8' });
+  };
+
+test('release-only source commits survive the real pathspec in the preview and the notes', {
+  skip: process.platform === 'win32',
+}, async t => {
+  const root = createWorkspace(t, ALL_DIRS, '2.1.0');
+  const refs = gitFixture(root);
+  const lines = [];
+  const result = await run(root, {
+    execGit: fixtureGit(refs),
+    version: '2.2.0',
+    log: message => lines.push(message),
+  });
+
+  assert.deepEqual(
+    result.releaseOnly.map(commit => commit.subject),
+    ['fix(sdk): patch the relay client'],
+    'only nested source commits count; the readme and CONFIG_VERSION commits are excluded',
+  );
+  assert.deepEqual(
+    result.commits.map(commit => commit.subject),
+    ['feat(sdk): add a helper (#411)'],
+    'the main range is unaffected by the release-only pathspec',
+  );
+
+  assert.ok(
+    lines.some(line => line.includes('Release-branch source commits (1)')),
+    'the preview reports the release-only commit',
+  );
+  assert.ok(lines.some(line => line.includes('fix(sdk): patch the relay client')));
+
+  const notes = readFileSync(join(root, 'release-notes.md'), 'utf8');
+  assert.match(notes, /### Release-branch changes\n\n- fix\(sdk\): patch the relay client \(`[0-9a-f]{8}`\) — release/);
+  assert.ok(!notes.includes('readme touch-up'), 'non-source release commits stay out of the notes');
+});

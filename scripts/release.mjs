@@ -399,7 +399,7 @@ export const cutRelease = async ({
       `--format=${LOG_FORMAT}`,
       `${mainBase}..HEAD`,
       '--',
-      'packages/*/src',
+      ':(glob)packages/*/src/**',
       `:(exclude)${CONFIG_PATH}`,
     ]),
   );
