@@ -25,6 +25,7 @@ import {
   type Result,
 } from '@sodax/types';
 import { encodeAddress, encodeTokenIdentifier } from '../../utils/shared-utils.js';
+import { getEvmViemChain } from '../../utils/constant-utils.js';
 import { StacksSpokeService } from './StacksSpokeService.js';
 import { BitcoinSpokeService } from './BitcoinSpokeService.js';
 import { NearSpokeService } from './NearSpokeService.js';
@@ -392,6 +393,8 @@ export class SpokeService {
         spender: params.spender,
         raw: false,
         walletProvider,
+        // Covers the reset leg too — an approval must not broadcast on the wrong EVM network.
+        expectedChainId: getEvmViemChain(params.srcChainKey).id,
       });
 
     if (plan.resetAmount !== undefined) {
