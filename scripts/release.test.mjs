@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import test from 'node:test';
 import {
   ReleaseError,
@@ -533,14 +533,25 @@ const FIXTURE_IDENTITY = {
   GIT_COMMITTER_EMAIL: 'release@sodax.test',
 };
 
-const gitFixture = root => {
+const repoCommands = root => {
   const env = { ...process.env, ...FIXTURE_IDENTITY };
   const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', env });
-  const sha = ref => git('rev-parse', ref).trim();
-  const commit = subject => {
-    git('add', '-A');
-    git('commit', '-q', '--no-verify', '-m', subject);
+  return {
+    git,
+    sha: ref => git('rev-parse', ref).trim(),
+    commit: subject => {
+      git('add', '-A');
+      git('commit', '-q', '--no-verify', '-m', subject);
+    },
+    src: (path, body) => {
+      mkdirSync(dirname(join(root, path)), { recursive: true });
+      writeFileSync(join(root, path), body);
+    },
   };
+};
+
+const gitFixture = root => {
+  const { git, sha, commit } = repoCommands(root);
   git('init', '-q', '-b', 'main');
   git('config', 'commit.gpgsign', 'false');
   git('remote', 'add', 'origin', 'git@github.com:icon-project/sodax-sdks.git');
@@ -567,12 +578,14 @@ const gitFixture = root => {
 
 // Only the network-bound lookups are stubbed; every other call runs against the fixture repository.
 const fixtureGit =
-  ({ main, release }) =>
+  ({ main, release }, tags = ['@sdks@2.1.0']) =>
   (args, options) => {
     const key = args.join(' ');
     if (key === 'ls-remote origin refs/heads/main') return `${main}\trefs/heads/main\n`;
     if (key === 'ls-remote origin refs/heads/release') return `${release}\trefs/heads/release\n`;
-    if (key === 'ls-remote --tags origin @sdks@*') return `${'c'.repeat(40)}\trefs/tags/@sdks@2.1.0`;
+    if (key === 'ls-remote --tags origin @sdks@*') {
+      return tags.map(tag => `${'c'.repeat(40)}\trefs/tags/${tag}`).join('\n');
+    }
     if (key === 'ls-remote --tags origin @sodax/*@*') return '';
     return execFileSync('git', args, { cwd: options.cwd, encoding: 'utf8' });
   };
@@ -609,4 +622,72 @@ test('release-only source commits survive the real pathspec in the preview and t
   const notes = readFileSync(join(root, 'release-notes.md'), 'utf8');
   assert.match(notes, /### Release-branch changes\n\n- fix\(sdk\): patch the relay client \(`[0-9a-f]{8}`\) — release/);
   assert.ok(!notes.includes('readme touch-up'), 'non-source release commits stay out of the notes');
+});
+
+// A hotfix that shipped in 2.1.0 stays reachable from HEAD forever, so only the stable anchor drops it.
+const anchorFixture = root => {
+  const { git, sha, commit, src } = repoCommands(root);
+  git('init', '-q', '-b', 'main');
+  git('config', 'commit.gpgsign', 'false');
+  git('remote', 'add', 'origin', 'git@github.com:icon-project/sodax-sdks.git');
+  commit('chore: scaffold');
+
+  git('checkout', '-q', '-b', 'release');
+  src('packages/sdk/src/shipped.ts', 'export const shipped = 1;\n');
+  commit('fix(sdk): hotfix shipped in 2.1.0');
+  git('tag', '@sdks@2.1.0');
+
+  git('checkout', '-q', 'main');
+  src('packages/sdk/src/index.ts', 'export const helper = () => 1;\n');
+  commit('feat(sdk): add a helper');
+  const main = sha('HEAD');
+  git('update-ref', 'refs/remotes/origin/main', main);
+
+  git('checkout', '-q', 'release');
+  git('merge', '-q', '--no-ff', 'main', '-m', 'Merge main into release');
+  src('packages/sdk/src/after-stable.ts', 'export const afterStable = 2;\n');
+  commit('fix(sdk): hotfix after 2.1.0');
+  git('tag', '@sdks@2.2.0-rc.1');
+  src('packages/sdk/src/after-rc.ts', 'export const afterRc = 3;\n');
+  commit('fix(sdk): hotfix after rc.1');
+  git('update-ref', 'refs/remotes/origin/release', sha('HEAD'));
+  return { main, release: sha('HEAD') };
+};
+
+const subjectsFor = async (t, tags) => {
+  const root = createWorkspace(t, ALL_DIRS, '2.1.0');
+  const refs = anchorFixture(root);
+  const result = await run(root, { execGit: fixtureGit(refs, tags), version: '2.2.0' });
+  return { subjects: result.releaseOnly.map(commit => commit.subject), root };
+};
+
+test('a release-only hotfix drops out of the next stable notes once it has shipped', {
+  skip: process.platform === 'win32',
+}, async t => {
+  const { subjects, root } = await subjectsFor(t, ['@sdks@2.1.0']);
+  assert.deepEqual(subjects, ['fix(sdk): hotfix after rc.1', 'fix(sdk): hotfix after 2.1.0']);
+  assert.ok(!subjects.includes('fix(sdk): hotfix shipped in 2.1.0'), 'it already shipped in @sdks@2.1.0');
+  assert.ok(!readFileSync(join(root, 'release-notes.md'), 'utf8').includes('shipped in 2.1.0'));
+});
+
+test('rc notes stay cumulative: the anchor is the newest stable tag, not the newest rc', {
+  skip: process.platform === 'win32',
+}, async t => {
+  const { subjects } = await subjectsFor(t, ['@sdks@2.1.0', '@sdks@2.2.0-rc.1']);
+  assert.deepEqual(
+    subjects,
+    ['fix(sdk): hotfix after rc.1', 'fix(sdk): hotfix after 2.1.0'],
+    'the commit already carried by rc.1 is still listed, because rc notes span the last stable release',
+  );
+});
+
+test('with no stable tag the release-only range keeps its unanchored fallback', {
+  skip: process.platform === 'win32',
+}, async t => {
+  const { subjects } = await subjectsFor(t, []);
+  assert.deepEqual(subjects, [
+    'fix(sdk): hotfix after rc.1',
+    'fix(sdk): hotfix after 2.1.0',
+    'fix(sdk): hotfix shipped in 2.1.0',
+  ]);
 });

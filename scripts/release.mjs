@@ -407,12 +407,14 @@ export const cutRelease = async ({
   const commits = parseLog(
     git(['log', '--first-parent', '--reverse', `--format=${LOG_FORMAT}`, `${rangeStart}..${mainBase}`]),
   );
+  // Anchored on the same stable tag as the main range, so shipped hotfixes drop out but rc notes stay cumulative.
   const releaseOnly = parseLog(
     git([
       'log',
       '--no-merges',
       `--format=${LOG_FORMAT}`,
       `${mainBase}..HEAD`,
+      ...(baseTag ? [`^${baseTag.tag}`] : []),
       '--',
       ':(glob)packages/*/src/**',
       `:(exclude)${CONFIG_PATH}`,
