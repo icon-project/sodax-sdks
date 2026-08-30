@@ -24,7 +24,7 @@ function providersSnippet(chains: readonly SpokeChainKey[], partnerFee: PartnerF
     ? `
 
 // Configured once, so every swap charges it and useQuote deducts it before quoting — quoted_amount
-// is already net. percentage is basis points: 100 = 1%. SODAX takes none of this.
+// is already net. percentage is basis points: 100 = 1%. SODAX takes no share of it.
 const swaps = { partnerFee: ${feeExpression(partnerFee)} };`
     : '';
 
@@ -89,7 +89,7 @@ function executeSnippet(state: SnippetState): string {
     ? `// Per-action override of the configured fee. It must match the fee the quote was taken with —
 // a swap charging more leaves a minOutputAmount the intent cannot deliver, and it never fills.
 const result = await swap({ params, walletProvider, extras: { partnerFee: ${feeExpression(partnerFee)} } });`
-    : `// Charging a fee? Add it here — SODAX takes none of it.
+    : `// Charging a fee? Add it here — SODAX takes no share of it.
 // const result = await swap({ params, walletProvider, extras: { partnerFee: { address, percentage } } });
 const result = await swap({ params, walletProvider });`;
 
@@ -149,5 +149,76 @@ export function buildSnippets(state: SnippetState, chains: readonly SpokeChainKe
     { id: 'providers', label: 'providers.tsx', code: providersSnippet(chains, state.partnerFee) },
     { id: 'quote', label: 'quote.tsx', code: quoteSnippet(state) },
     { id: 'execute', label: 'swap.tsx', code: executeSnippet(state) },
+  ];
+}
+
+export type BridgeSnippetState = {
+  srcChain: SpokeChainKey;
+  dstChain: SpokeChainKey;
+  srcToken: XToken | undefined;
+  dstToken: XToken | undefined;
+  amount: string;
+};
+
+function bridgeableSnippet(state: BridgeSnippetState): string {
+  const { srcChain, dstChain, srcToken } = state;
+
+  return `import { useGetBridgeableTokens, useGetBridgeableAmount, ChainKeys } from '@sodax/dapp-kit';
+
+// "Bridgeable" means the same hub vault on both sides — the SDK derives the destination list, so
+// there is nothing to hardcode and nothing to keep in sync when a token is added.
+const { data: destinationTokens } = useGetBridgeableTokens({
+  params: {
+    from: ${chainKeyExpression(srcChain)},
+    to: ${chainKeyExpression(dstChain)},
+    token: '${srcToken?.address ?? '0x…'}',
+  },
+});
+
+// Vault capacity, not a price: the most this pair can move right now.
+const { data: limit } = useGetBridgeableAmount({ params: { from: srcToken, to: destinationTokens?.[0] } });`;
+}
+
+function bridgeSnippet(state: BridgeSnippetState): string {
+  const { srcChain, dstChain, srcToken, dstToken, amount } = state;
+
+  return `import {
+  useBridge, useBridgeAllowance, useBridgeApprove, ChainKeys,
+  type CreateBridgeIntentParams,
+} from '@sodax/dapp-kit';
+import { useWalletProvider } from '@sodax/wallet-sdk-react';
+import { parseUnits } from 'viem';
+
+const walletProvider = useWalletProvider({ xChainId: ${chainKeyExpression(srcChain)} });
+
+// A bridge is 1:1, so there is no quote, no slippage and no deadline to read off the hub.
+const params: CreateBridgeIntentParams = {
+  srcAddress: account.address,
+  srcChainKey: ${chainKeyExpression(srcChain)},
+  srcToken: '${srcToken?.address ?? '0x…'}',
+  amount: parseUnits('${amount || '0'}', ${srcToken?.decimals ?? 18}),
+  dstChainKey: ${chainKeyExpression(dstChain)},
+  dstToken: '${dstToken?.address ?? '0x…'}',
+  recipient: account.address, // send it anywhere — it does not have to be the sender
+};
+
+const { data: hasAllowance } = useBridgeAllowance({ params: { payload: params, walletProvider } });
+const { mutateAsyncSafe: approve } = useBridgeApprove();
+const { mutateAsyncSafe: bridge } = useBridge();
+
+if (!hasAllowance) await approve({ params, walletProvider });
+
+const result = await bridge({ params, walletProvider });
+if (!result.ok) return;
+
+// srcChainTxHash is the spoke deposit; dstChainTxHash is the hub settlement that releases it.
+const { srcChainTxHash, dstChainTxHash } = result.value;`;
+}
+
+export function buildBridgeSnippets(state: BridgeSnippetState, chains: readonly SpokeChainKey[]): Snippet[] {
+  return [
+    { id: 'providers', label: 'providers.tsx', code: providersSnippet(chains, undefined) },
+    { id: 'tokens', label: 'tokens.tsx', code: bridgeableSnippet(state) },
+    { id: 'execute', label: 'bridge.tsx', code: bridgeSnippet(state) },
   ];
 }

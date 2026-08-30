@@ -25,19 +25,35 @@ src/
 ├── index.tsx           # entry — bigint toJSON shim, Buffer shim, guarded #root
 ├── providers.tsx       # SodaxProvider + QueryClientProvider + SodaxWalletProvider
 ├── config.ts           # env-driven RPC overrides, deployment posture, slippage default
-├── App.tsx             # layout: SwapPanel | CodePanel
-├── hooks/useSwapFlow.ts   # every SDK call the app makes, in one place
-├── lib/chains.ts       # source-derived chain list, names, explorer URLs
+├── App.tsx             # hero, flow tabs, and the active view
+├── views/SwapView.tsx     # useSwapFlow + SwapPanel | CodePanel
+├── views/BridgeView.tsx   # useBridgeFlow + BridgePanel | CodePanel
+├── hooks/useSwapFlow.ts   # every SDK call the swap makes, in one place
+├── hooks/useBridgeFlow.ts # every SDK call the bridge makes, in one place
+├── lib/flows.ts        # the flow union, its labels and its URL param
+├── lib/chains.ts       # source-derived chain lists per flow, names, explorer URLs
 ├── lib/errors.ts       # error → category mapping
 ├── lib/fee.ts          # partner-fee form state → PartnerFee
+├── lib/format.ts       # amount parsing and display trimming, shared by both flows
 ├── lib/snippet.ts      # renders the current form state as dapp-kit code
 ├── lib/urlState.ts     # form state ⇄ query string
-└── components/         # presentational only — they render what useSwapFlow returns
+└── components/         # presentational only — they render what a flow hook returns
 ```
 
-`src/lib` is pure and covered by `pnpm test` (vitest). Anything reachable without React belongs there, so it stays testable — `useSwapFlow` holds the hooks, not the logic.
+`src/lib` is pure and covered by `pnpm test` (vitest). Anything reachable without React belongs there, so it stays testable — the flow hooks hold the hooks, not the logic.
 
-`hooks/useSwapFlow.ts` is the teaching artifact: quote → allowance → approve → swap → status, with no rendering in it. Components must not call SDK hooks directly; add to `useSwapFlow` instead so the "read the code" story stays one file.
+`hooks/useSwapFlow.ts` and `hooks/useBridgeFlow.ts` are the teaching artifacts: one file per flow, no rendering in either. Components must not call SDK hooks directly; add to the flow hook instead so the "read the code" story stays one file per flow.
+
+## Flows
+
+Two flows, one form. The tabs exist because a page showing only a swap reads as though the SDK only swaps — `@sodax/dapp-kit` also ships money-market, staking, migration, DEX, leverage-yield and recovery hooks, and adding a third flow here should follow the same shape rather than growing a config sidebar.
+
+- **Only the active flow mounts.** `App` renders one view, so the inactive flow runs no queries and never writes the query string. That is why each flow hook can own `window.history.replaceState` unconditionally.
+- **A link seeds one flow.** `?flow=` picks the tab; `seedFor` in `lib/urlState.ts` hands the rest of the query string only to that flow, because a chain in the URL was validated against that flow's list and no other. A link with no `flow` is a swap link — that is what every link written before the tabs existed is.
+- **The chain lists differ by flow and are both derived.** `swappableChains` gates on a non-empty `getSupportedSolverTokens`; `bridgeableChains` gates on the chain's own `spokeChainConfig[key].supportedTokens`, which reaches at least as far. `chainsFor(flow)` is the accessor; never index one list for the other flow.
+- **A bridge has no quote.** It moves one asset 1:1, so there is no slippage, no `minOutputAmount` and no hub deadline to read — the destination token list comes from `useGetBridgeableTokens` (same hub vault on both sides) and the only constraint is `useGetBridgeableAmount`, the vault's current capacity. Do not copy swap ceremony into it; `snippet.test.ts` asserts the generated bridge code carries none.
+- **The bridge's second tx hash is a hub tx.** `TxHashPair.dstChainTxHash` settles on Sonic, not on the destination spoke, so it links to the Sonic explorer via `HUB_CHAIN_KEY`.
+- **The partner fee is swap-only here.** `BridgeExtras` accepts one too, but the playground exposes it on the swap only; adding it to the bridge means adding it to both the form and the generated snippet, not just the call.
 
 ## Invariants
 
@@ -49,6 +65,7 @@ src/
 - **The partner fee is never read from the URL.** `lib/urlState.ts` carries chains, tokens, amount and slippage; the fee is the one field that redirects money, and this page runs on mainnet. Everything it does carry is resolved against the derived lists before use.
 - **RPC endpoints come from env, defaults from `@sodax/types`.** `example.env` carries placeholders only (that filename, not `.env.example`, so the repo's `.env*` ignore rule does not swallow it). Never commit an endpoint with a key in it.
 - **Quoting must work with no wallet.** Most docs readers never connect one. Do not move quote inputs behind a connect gate.
+- **The form opens on a seeded amount.** `DEFAULT_AMOUNT` fills the input when no `?amount=` is in the link, so the page lands on a live quote with real numbers in both legs rather than an empty form. The consequence is that every page load starts the 3s quote poll — gate the seed on `playgroundMode === 'full'` if embed traffic ever makes that a problem, rather than removing it.
 
 ## Deployment posture
 
@@ -60,13 +77,15 @@ src/
 
 `src/index.css` copies the SODAX B2B design-system tokens from `sodax-frontend` `apps/web/app/design-system.css` (which mirrors the Figma collection "Design system - B2B world"). Values are 1:1 with that file — re-sync from there, never invent a tone here. Do **not** take tokens from the frontend's `globals.css`: its header marks that palette legacy and forbids new usage.
 
+The one sanctioned exception is the **night ramp** (`--night-950` … `--night-600`). The brand collection is light-only — its darkest neutrals are `charcoal` and `espresso` — so dark-mode surfaces have no upstream to sync with, and `espresso` is far too light to serve as a card. Those five steps are playground-local by design and labelled as such in the palette block; retire them if the collection ever ships a dark ladder.
+
 The file is two layers, and the split is load-bearing: **layer 1** is the raw brand palette, **layer 2** maps it onto semantic roles (`--surface-card`, `--cta-bg`, `--text-muted`, …) once per theme. **No rule below layer 2 may name a palette token directly** — that is what keeps light and dark in sync, and what makes a re-sync a one-block edit. Adding a colour means adding a semantic role in both theme blocks, not reaching for `--cherry-soda` in a component rule.
 
 Three brand rules the mapping encodes, and breaking them is the easiest way to make this page look off:
 
 - **Yellow is accent only, over cherry or dark surfaces. Never a light surface.** In light mode it appears only on the cherry hero; in dark mode it becomes the CTA, because the surface is then dark.
 - **CTA colour follows its surface.** Light → `cherry-soda` + white. Dark → `yellow-dark` + `cherry-dark`. Both come out of `--cta-*`, so `.btn-primary` itself has no colour logic. Controls nested in the cherry hero use `.btn-on-cherry` / `--hero-ctl-*`, which are theme-invariant because the hero is cherry in both themes.
-- **A card steps one shade away from its surface.** Light: `vibrant-white` page → `almost-white` card → `white` inset. Dark inverts it: `charcoal` → `espresso` → `charcoal` inset.
+- **A card steps one shade away from its surface.** Light: `vibrant-white` page → `white` card → `almost-white` inset, matching the collection's own `--surface-card`. Dark walks the night ramp the same way: `night-900` page → `night-800` card → `night-700` inset, with the code block one step deeper again at `night-950`.
 
 ## Light and dark
 
@@ -76,7 +95,7 @@ That is why the CSS needs only one dark block and no `prefers-color-scheme` copy
 
 `color-scheme` is set per theme so native `<select>` and `<input>` chrome follows along. Storage access is wrapped in try/catch: an embed can run with site data blocked, and the toggle must still work for that session.
 
-Plain CSS rather than the frontend's Tailwind `@theme` registration: this repo has no design-system package to depend on, and a partner reading `components/` should not need Tailwind to reuse them. Inter loads from Google Fonts because the frontend's static Inter faces live in its own `public/fonts` and are not vendored here.
+Plain CSS rather than the frontend's Tailwind `@theme` registration: this repo has no design-system package to depend on, and a partner reading `components/` should not need Tailwind to reuse them. Inter, Inria Serif and Shrikhand all load from Google Fonts because the frontend's static faces live in its own `public/fonts` and are not vendored here. The display pair is used only for the hero lockup (`Inria Serif`, with the last word in `Shrikhand`); everything else is Inter.
 
 ## Common pitfalls
 

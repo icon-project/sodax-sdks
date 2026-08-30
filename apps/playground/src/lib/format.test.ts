@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { formatTokenAmount } from './format';
+import { DEFAULT_AMOUNT } from '../config';
+import { formatTokenAmount, parseAmount } from './format';
+
+// The seeded amount is what makes the page open on a live quote instead of an empty form. A value
+// this rejects would land every visitor on "Enter an amount" with no other symptom.
+describe('DEFAULT_AMOUNT', () => {
+  it('parses to a positive amount at the default pair’s decimals', () => {
+    expect(parseAmount(DEFAULT_AMOUNT, 18)).toBeGreaterThan(0n);
+  });
+});
 
 describe('formatTokenAmount', () => {
   it('leaves a whole number alone', () => {

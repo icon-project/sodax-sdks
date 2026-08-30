@@ -1,20 +1,8 @@
 /*
- * SODAX B2B design system. Layer 1 is the subset of the brand palette this app uses, 1:1 with sodax-frontend
- * `apps/web/app/design-system.css` and the Figma collection "Design system - B2B world". Layer 2
- * maps it onto semantic roles per theme. Every rule below references layer 2 only — no rule outside
- * the palette block may name a colour directly.
+ * SODAX B2B design system, in two layers. Layer 1 is the brand palette, 1:1 with sodax-frontend
+ * `apps/web/app/design-system.css`; layer 2 maps it onto semantic roles per theme.
  *
- * Re-sync the palette from the frontend; never invent a tone here, and never take tokens from the
- * frontend's `globals.css` legacy palette (its header marks that one retired).
- *
- * Brand rules the mapping encodes:
- *   - yellow-soda / yellow-dark are accent only, over cherry or dark surfaces. Never a light surface.
- *   - CTA colour follows its surface: cherry-soda + white on light, yellow-dark + cherry-dark on dark.
- *   - A card steps one shade away from its surface (vibrant-white -> almost-white -> white inset;
- *     inverted on dark: charcoal -> espresso -> charcoal inset).
- *
- * Plain CSS rather than the frontend's Tailwind `@theme` registration: this repo has no
- * design-system package, and a partner reading `components/` should not need Tailwind.
+ * No rule below layer 2 may name a palette token directly — that is what keeps the themes in sync.
  */
 
 /* ── Layer 1: brand palette ─────────────────────────────────────────────── */
@@ -32,7 +20,6 @@
   --yellow-soda: #ffd92f;
   --clicked-soda-on-soda: #f6e799;
   --focused-soda-on-soda: #f6e799;
-  --disabled-soda-grey: #d7d6cb;
 
   /* Neutrals */
   --charcoal: #1d1414;
@@ -48,36 +35,64 @@
   --vibrant-white: #f9f7f5;
   --white: #ffffff;
 
+  /* Night ramp — playground-local: the brand collection is light-only, and espresso is far too
+     light to serve as a dark-mode card. Retire these if it ever ships a dark ladder. */
+  --night-950: #120c0c;
+  --night-900: #17100f;
+  --night-800: #241a19;
+  --night-700: #2e2120;
+  --night-600: #382827;
+
+  /* Hairlines */
+  --hairline-light: rgba(142, 126, 125, 0.18);
+  --hairline-light-strong: rgba(142, 126, 125, 0.28);
+  --hairline-dark: rgba(227, 190, 187, 0.12);
+  --hairline-dark-strong: rgba(227, 190, 187, 0.24);
+  --clay-light-veil: rgba(185, 172, 171, 0.2);
+
   /* Semantic */
   --error-base: #faecec;
   --error-lighter: #f5dbdb;
   --error-light: #d8696c;
   --error: #ce4446;
   --error-dark: #a73639;
+  --error-veil: rgba(206, 68, 70, 0.15);
+  --error-veil-border: rgba(216, 105, 108, 0.32);
   --success-light: #6dd696;
   --success-dark: #089541;
 
   /* Typography */
   --font-body: "Inter", system-ui, sans-serif;
-  --text-panel-heading: 24px;
-  --text-card-title: 20px;
-  --text-body-regular: 16px;
-  --text-body-small: 14px;
-  --text-caption: 12px;
+  --font-display: "Inria Serif", Georgia, serif;
+  --font-accent: "Shrikhand", "Inria Serif", Georgia, serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* One step below the brand scale: the page has to fit a laptop viewport without scrolling. */
+  --text-hero: 30px;
+  --text-amount: 26px;
+  --text-lead: 15px;
+  --text-body-regular: 15px;
+  --text-body-small: 13px;
+  --text-mono: 12px;
+  --text-caption: 11px;
 
   /* Spacing + radius */
   --space-8: 8px;
   --space-16: 16px;
   --space-24: 24px;
+  --radius-large: 24px;
   --radius-regular: 16px;
+  --radius-inset: 12px;
   --radius-small: 8px;
 }
 
 @media (width < 640px) {
   :root {
-    --text-panel-heading: 20px;
+    --text-hero: 24px;
+    --text-amount: 22px;
+    --text-lead: 14px;
     --text-body-regular: 14px;
-    --radius-regular: 8px;
+    --radius-large: 16px;
+    --radius-regular: 12px;
   }
 }
 
@@ -87,11 +102,11 @@
 
   --surface-page: var(--vibrant-white);
   --surface-hero: var(--cherry-soda);
-  --surface-card: var(--almost-white);
-  --surface-inset: var(--white);
-  --surface-note: var(--cream-white);
+  --surface-card: var(--white);
+  --surface-inset: var(--almost-white);
+  --surface-note: var(--almost-white);
 
-  /* The hero is cherry in both themes, so its nested controls and chips are theme-invariant. */
+  /* The hero is cherry in both themes, so its nested controls are theme-invariant. */
   --bubble-bg: var(--almost-white);
   --bubble-fg: var(--cherry-dark);
   --hero-ctl-bg: var(--cherry-on-cherry);
@@ -102,13 +117,20 @@
 
   --code-bg: var(--charcoal);
   --code-fg: var(--cream-white);
+  --code-inline-fg: var(--cherry-soda);
 
-  --border-subtle: var(--cream-cherry);
-  --border-strong: var(--cherry-grey);
+  /* The white pill tooltip sodax.com/stake uses: no border, espresso label. */
+  --tooltip-bg: var(--white);
+  --tooltip-fg: var(--espresso);
+
+  --border-subtle: var(--hairline-light);
+  --border-inset: var(--light-cream);
+  --border-strong: var(--hairline-light-strong);
 
   --text-heading: var(--espresso);
   --text-body: var(--clay-dark);
   --text-muted: var(--clay);
+  --text-faint: var(--clay-light);
   --text-on-hero: var(--white);
   --text-on-hero-muted: var(--cherry-brighter);
   --text-on-hero-accent: var(--yellow-soda);
@@ -124,11 +146,11 @@
   --cta-disabled-bg: var(--disabled-cherry-grey);
   --cta-disabled-fg: var(--clay-dark);
 
-  --ghost-bg: var(--white);
-  --ghost-bg-hover: var(--light-cream);
-  --ghost-fg: var(--cherry-soda);
-  --ghost-fg-hover: var(--cherry-dark);
-  --ghost-border: var(--cherry-grey);
+  --ghost-bg: transparent;
+  --ghost-bg-hover: var(--almost-white);
+  --ghost-fg: var(--espresso);
+  --ghost-fg-hover: var(--cherry-soda);
+  --ghost-border: var(--hairline-light-strong);
 
   --alert-bg: var(--error-base);
   --alert-border: var(--error-lighter);
@@ -141,23 +163,30 @@
 }
 
 /* ── Layer 2: semantic roles, dark ──────────────────────────────────────── */
-/* The attribute is set pre-paint by the inline script in index.html, so one block covers both the
-   explicit toggle and the system preference — no duplicated media-query copy. */
+/* One block, no media-query copy: index.html sets the attribute pre-paint from storage or the OS. */
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --surface-page: var(--charcoal);
+  --surface-page: var(--night-900);
   --surface-hero: var(--cherry-dark);
-  --surface-card: var(--espresso);
-  --surface-inset: var(--charcoal);
-  --surface-note: var(--espresso);
+  --surface-card: var(--night-800);
+  --surface-inset: var(--night-700);
+  --surface-note: var(--night-700);
 
-  --border-subtle: var(--cherry-dark);
-  --border-strong: var(--cherry-soda);
+  --code-bg: var(--night-950);
+  --code-inline-fg: var(--cherry-brighter);
+
+  --tooltip-bg: var(--night-700);
+  --tooltip-fg: var(--cream-white);
+
+  --border-subtle: var(--hairline-dark);
+  --border-inset: var(--hairline-dark);
+  --border-strong: var(--hairline-dark-strong);
 
   --text-heading: var(--white);
-  --text-body: var(--cream-white);
+  --text-body: var(--cream-cherry);
   --text-muted: var(--clay-light);
+  --text-faint: var(--clay);
 
   --accent: var(--yellow-soda);
   --accent-hover: var(--yellow-dark);
@@ -168,17 +197,17 @@
   --cta-bg-active: var(--clicked-soda-on-soda);
   --cta-fg: var(--cherry-dark);
   --cta-ring: var(--focused-soda-on-soda);
-  --cta-disabled-bg: var(--disabled-soda-grey);
-  --cta-disabled-fg: var(--clay-dark);
+  --cta-disabled-bg: var(--night-600);
+  --cta-disabled-fg: var(--clay);
 
-  --ghost-bg: var(--charcoal);
-  --ghost-bg-hover: var(--cherry-dark);
-  --ghost-fg: var(--yellow-soda);
-  --ghost-fg-hover: var(--yellow-dark);
-  --ghost-border: var(--cherry-dark);
+  --ghost-bg: transparent;
+  --ghost-bg-hover: var(--night-700);
+  --ghost-fg: var(--cream-cherry);
+  --ghost-fg-hover: var(--white);
+  --ghost-border: var(--hairline-dark-strong);
 
-  --alert-bg: var(--espresso);
-  --alert-border: var(--error-dark);
+  --alert-bg: var(--error-veil);
+  --alert-border: var(--error-veil-border);
   --alert-fg: var(--error-light);
   --alert-detail-fg: var(--error-light);
 
@@ -199,52 +228,85 @@ body {
   font-family: var(--font-body);
   font-size: var(--text-body-regular);
   font-weight: 400;
-  line-height: 1.4;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
 code,
 .mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 0.9em;
 }
 
+/* Wide enough that the headline and a full wallet row share one line. */
+/* One viewport tall, so the hero, tabs and footer sit at fixed offsets whatever the flow renders. */
 .app {
-  max-width: 1180px;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  max-width: 1320px;
   margin: 0 auto;
-  padding: var(--space-24) var(--space-24) 64px;
+  padding: 12px var(--space-24);
 }
 
 /* ── Hero ───────────────────────────────────────────────────────────────── */
 .app-header {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-16);
-  align-items: center;
+  gap: var(--space-8) var(--space-16);
+  align-items: flex-end;
   justify-content: space-between;
   background: var(--surface-hero);
-  border-radius: var(--radius-regular);
-  padding: var(--space-24);
+  border-radius: var(--radius-large);
+  padding: 24px var(--space-24);
   margin-bottom: var(--space-16);
+}
+
+/* Basis 0 so the title never contributes to the wrap decision — the wallet row keeps its line. */
+.app-title {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .app-header h1 {
   margin: 0 0 6px;
   color: var(--text-on-hero);
-  font-size: var(--text-panel-heading);
+  font-family: var(--font-display);
+  font-size: var(--text-hero);
   line-height: 1.2;
-  font-weight: 700;
+  font-weight: 400;
+}
+
+.app-header h1 em {
+  font-family: var(--font-accent);
+  font-style: italic;
+  color: var(--text-on-hero-accent);
 }
 
 .app-header .subtitle {
   margin: 0;
+  max-width: 460px;
   color: var(--text-on-hero-muted);
-  font-size: var(--text-body-small);
-  font-weight: 300;
+  font-size: var(--text-lead);
+  font-weight: 400;
+  text-wrap: pretty;
 }
 
 .app-header .subtitle code {
   color: var(--text-on-hero-accent);
+}
+
+/* Real-funds warning. Red has no contrast on cherry, so the accent carries the weight. */
+.hero-note {
+  margin: 8px 0 0;
+  color: var(--text-on-hero-muted);
+  font-size: var(--text-caption);
+  line-height: 1.4;
+}
+
+.hero-note strong {
+  color: var(--text-on-hero-accent);
+  font-weight: 700;
 }
 
 .header-actions {
@@ -254,14 +316,21 @@ code,
   align-items: center;
 }
 
+/* Page-level muted grey has no contrast on cherry. */
+.app-header .muted {
+  color: var(--text-on-hero-muted);
+}
+
 /* ── Layout ─────────────────────────────────────────────────────────────── */
-/* `stretch` is what makes the two cards share one height. The cap lives on .code-card: without it
-   the row is sized by the full listing, and a long snippet drags the swap card down with it. */
+/* The slack lives here, not on the page: swap and bridge differ in height, and centring the row
+   inside a fixed-height main keeps a tab switch from moving everything around it. */
 .app-main {
   display: grid;
-  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
   gap: var(--space-16);
   align-items: stretch;
+  align-content: center;
+  flex: 1;
 }
 
 @media (max-width: 900px) {
@@ -270,26 +339,17 @@ code,
   }
 }
 
+/* Full app width: the line belongs to the page, not to the column above it. */
 .app-footer {
-  margin-top: var(--space-24);
-}
-
-/* Question-box pattern. */
-.banner {
-  margin: 0 0 var(--space-16);
-  padding: 12px var(--space-16);
-  background: var(--surface-note);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-regular);
-  color: var(--text-heading);
-  font-size: var(--text-body-small);
+  margin-top: var(--space-16);
+  text-wrap: pretty;
 }
 
 .card {
   background: var(--surface-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-regular);
-  padding: var(--space-24);
+  padding: var(--space-16) 18px;
 }
 
 .swap-card {
@@ -303,21 +363,27 @@ code,
 }
 
 /* ── Form ───────────────────────────────────────────────────────────────── */
+/* Each leg is one inset panel; the pickers step back up to the card tone so they read as chips. */
+.field {
+  background: var(--surface-inset);
+  border: 1px solid var(--border-inset);
+  border-radius: var(--radius-inset);
+  padding: 10px 14px;
+}
+
 .field-label {
   display: block;
   color: var(--text-muted);
   font-size: var(--text-caption);
   line-height: 1.3;
   font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-bottom: var(--space-8);
+  margin-bottom: 6px;
 }
 
 .row {
   display: flex;
   gap: var(--space-8);
-  margin-bottom: var(--space-8);
+  margin-bottom: 6px;
 }
 
 .row-between {
@@ -325,7 +391,7 @@ code,
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 5px 0;
+  padding: 3px 0;
   font-size: var(--text-body-small);
 }
 
@@ -334,16 +400,27 @@ code,
   font-weight: 500;
 }
 
+.summary .muted,
+.status-panel .muted {
+  color: var(--text-body);
+}
+
 .select,
 .input {
   background: var(--surface-inset);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border-inset);
   border-radius: var(--radius-small);
   color: var(--text-heading);
   font-family: var(--font-body);
   font-size: var(--text-body-small);
-  padding: 11px 12px;
+  font-weight: 500;
+  padding: 8px 10px;
   width: 100%;
+}
+
+.field .select,
+.field .input {
+  background: var(--surface-card);
 }
 
 .select:focus-visible,
@@ -354,7 +431,7 @@ code,
 
 /* The UA default is ~54% of the text colour, which falls under 4.5:1 on these surfaces. */
 .input::placeholder {
-  color: var(--text-muted);
+  color: var(--text-faint);
   opacity: 1;
 }
 
@@ -362,15 +439,23 @@ code,
   flex: 1;
 }
 
-.amount {
-  font-size: var(--text-card-title);
-  font-weight: 500;
+.field .amount {
+  background: transparent;
+  border-color: transparent;
+  padding: 0;
+  font-size: var(--text-amount);
+  font-weight: 400;
+  line-height: 1.25;
+}
+
+.field .amount:focus-visible {
+  outline-offset: 2px;
 }
 
 .slip {
-  width: 68px;
+  width: 64px;
   text-align: right;
-  padding: 5px var(--space-8);
+  padding: 4px var(--space-8);
 }
 
 .fee-bps {
@@ -386,36 +471,53 @@ code,
   color: var(--text-heading);
 }
 
+/* Sits on the seam between the two legs: 40px tall, but only 8px of it takes flow space. */
 .flip {
   display: flex;
   justify-content: center;
-  margin: 6px 0;
+  position: relative;
+  z-index: 2;
+  margin: -16px 0;
+}
+
+.flip .btn {
+  width: 40px;
+  height: 40px;
+  background: var(--cta-bg);
+  border: 4px solid var(--surface-card);
+  color: var(--cta-fg);
+}
+
+.flip .btn:hover:not(:disabled) {
+  background: var(--cta-bg-hover);
+  border-color: var(--surface-card);
+  color: var(--cta-fg);
 }
 
 .summary {
-  margin: var(--space-16) 0;
-  padding: 10px 0;
-  border-top: 1px solid var(--border-subtle);
-  border-bottom: 1px solid var(--border-subtle);
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-inset);
 }
 
 /* ── Buttons ────────────────────────────────────────────────────────────── */
-/* Ghost variant — the default secondary control. */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-8);
-  height: 40px;
+  height: 36px;
   border: 1px solid var(--ghost-border);
   border-radius: 9999px;
   background: var(--ghost-bg);
   color: var(--ghost-fg);
   font-family: var(--font-body);
   font-size: var(--text-body-small);
-  font-weight: 700;
+  font-weight: 500;
   padding: 0 var(--space-16);
   cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
   transition:
     color 150ms,
     background-color 150ms,
@@ -440,10 +542,9 @@ code,
   color: var(--cta-disabled-fg);
 }
 
-/* Primary CTA — 48px pill, colour follows the surface (see the theme blocks). */
 .btn-primary {
   width: 100%;
-  height: 48px;
+  height: 44px;
   background: var(--cta-bg);
   border-color: var(--cta-bg);
   color: var(--cta-fg);
@@ -471,7 +572,6 @@ code,
   color: var(--cta-disabled-fg);
 }
 
-/* Secondary variant for controls nested in the cherry hero. */
 .btn-on-cherry {
   background: var(--hero-ctl-bg);
   border-color: var(--hero-ctl-bg);
@@ -496,8 +596,20 @@ code,
 }
 
 .btn-icon {
-  width: 40px;
+  width: 36px;
   padding: 0;
+}
+
+.btn-on-cherry.btn-icon {
+  background: transparent;
+  border: 2px solid var(--hero-ctl-bg);
+  color: var(--hero-ctl-ring);
+}
+
+.btn-on-cherry.btn-icon:hover:not(:disabled) {
+  background: var(--hero-ctl-bg);
+  border-color: var(--hero-ctl-bg);
+  color: var(--hero-ctl-ring);
 }
 
 /* ── Wallet + bubbles ───────────────────────────────────────────────────── */
@@ -508,12 +620,11 @@ code,
   align-items: center;
 }
 
-/* Bubble pattern: a light chip on the cherry hero. */
 .pill {
   display: inline-flex;
   align-items: center;
   border-radius: 9999px;
-  padding: 9px var(--space-16);
+  padding: 7px 14px;
   background: var(--bubble-bg);
   color: var(--bubble-fg);
   font-size: var(--text-caption);
@@ -540,14 +651,25 @@ code,
 
 /* ── Disclosure ─────────────────────────────────────────────────────────── */
 .disclosure {
-  margin-bottom: var(--space-16);
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-inset);
 }
 
 .disclosure > summary {
   cursor: pointer;
-  color: var(--text-muted);
+  color: var(--text-body);
   font-size: var(--text-body-small);
-  padding: 5px 0;
+  font-weight: 500;
+  padding: 3px 0;
+}
+
+.disclosure > summary::marker {
+  color: var(--text-muted);
+}
+
+.disclosure > summary:hover {
+  color: var(--accent);
 }
 
 .disclosure > summary:focus-visible {
@@ -560,14 +682,17 @@ code,
 }
 
 /* ── Status + errors ────────────────────────────────────────────────────── */
+/* Solver messages quote raw addresses, so they stay small and break anywhere. */
 .alert {
-  margin: 12px 0;
-  padding: 10px var(--space-16);
+  margin: var(--space-8) 0;
+  padding: var(--space-8) 12px;
   background: var(--alert-bg);
   border: 1px solid var(--alert-border);
   border-radius: var(--radius-small);
   color: var(--alert-fg);
-  font-size: var(--text-body-small);
+  font-size: var(--text-caption);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .alert details {
@@ -583,14 +708,13 @@ code,
 .alert code {
   display: block;
   margin-top: 6px;
-  word-break: break-word;
   color: var(--alert-detail-fg);
 }
 
 .status-panel {
-  margin-top: var(--space-16);
-  padding-top: var(--space-16);
-  border-top: 1px solid var(--border-subtle);
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-inset);
 }
 
 .status-ok {
@@ -606,15 +730,15 @@ code,
 }
 
 /* ── Code panel ─────────────────────────────────────────────────────────── */
-/* Column layout so the tabs and the note stay put and only the code scrolls. The max-height caps
-   how tall a long snippet can make the shared row; below it the card stretches to the swap card. */
+/* Only the snippet scrolls; the cap stops a long listing dragging the swap card down. */
+/* Never clip: `.code` owns its own scroll, and the header tooltip has to escape the card. */
 .code-card {
   display: flex;
   flex-direction: column;
-  min-height: 420px;
-  max-height: 78vh;
-  padding: 0;
-  overflow: hidden;
+  gap: 12px;
+  min-height: 340px;
+  max-height: calc(100vh - 200px);
+  padding: 14px;
 }
 
 .code-header {
@@ -622,56 +746,192 @@ code,
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border-subtle);
   flex: none;
 }
 
+.code-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.code-header .btn {
+  height: 30px;
+  font-size: var(--text-mono);
+}
+
+/* Segmented control: the group is an inset, the active tab steps back up to the card. */
 .tabs {
   display: flex;
   gap: 4px;
+  padding: 4px;
+  background: var(--surface-inset);
+  border-radius: 10px;
 }
 
-/* Colour-tag pattern. */
 .tab {
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radius-small);
   color: var(--text-muted);
-  padding: 8px 14px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: var(--text-caption);
+  padding: 5px 10px;
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
   cursor: pointer;
 }
 
 .tab:hover {
-  color: var(--accent);
+  color: var(--text-heading);
 }
 
 .tab-active {
-  color: var(--accent);
-  background: var(--surface-inset);
-  border-color: var(--border-subtle);
+  color: var(--text-heading);
+  background: var(--surface-card);
+  border-color: var(--border-inset);
   font-weight: 500;
+}
+
+/* ── Flow tabs ──────────────────────────────────────────────────────────── */
+/* Page navigation rather than file tabs, so these take body type and more padding. */
+/* The blurb rides beside the tabs so the row costs one line, not two. */
+.flow-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8) var(--space-16);
+  margin-bottom: var(--space-16);
+}
+
+.flow-tabs .tab {
+  font-family: var(--font-body);
+  font-size: var(--text-body-small);
+  padding: 6px 16px;
+}
+
+.flow-blurb {
+  flex: 1 1 280px;
+  margin: 0;
+}
+
+/* Bare glyph plus a CSS-only bubble — the note it replaces was a standing paragraph nobody needed twice. */
+.hint {
+  position: relative;
+  display: inline-flex;
+}
+
+.hint-trigger {
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 150ms;
+}
+
+.hint-trigger:hover,
+.hint-trigger:focus-visible {
+  color: var(--text-heading);
+}
+
+/* The stake page's tooltip, in plain CSS: a white pill centred above the trigger, px-4 py-2 at
+   12px. The shadow is ours — that surface is cream on sodax.com and white here. */
+.hint-bubble {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  z-index: 5;
+  width: max-content;
+  padding: var(--space-8) var(--space-16);
+  border-radius: 9999px;
+  background: var(--tooltip-bg);
+  box-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 10%),
+    0 4px 6px -4px rgb(0 0 0 / 10%);
+  color: var(--tooltip-fg);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-50%) scale(0.95);
+  transform-origin: bottom center;
+  transition:
+    opacity 120ms,
+    transform 120ms;
+}
+
+/* The frontend's pointer, masked rather than filled so it follows the pill into dark mode. */
+.hint-bubble::after {
+  content: "";
+  position: absolute;
+  top: calc(100% - 16px);
+  left: calc(50% - 4px);
+  width: 8px;
+  height: 40px;
+  background: var(--tooltip-bg);
+  transform: rotate(-90deg);
+  mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 80'%3E%3Cpath d='M0 40C0 38.125 0.9411 37.1741 1.8824 36.6667C11.1437 31.6736 16 18.033 16 0L16 80C16 61.967 11.1437 48.3264 1.8824 43.3333C0.9411 42.8259 0 41.875 0 40Z'/%3E%3C/svg%3E")
+    no-repeat center / contain;
+}
+
+/* No popper here to detect collisions, so the one line wraps rather than overflow a phone. */
+@media (width < 640px) {
+  .hint-bubble {
+    max-width: 240px;
+    white-space: normal;
+    text-wrap: pretty;
+  }
+}
+
+.hint:hover .hint-bubble,
+.hint:focus-within .hint-bubble {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) scale(1);
+}
+
+/* The one outbound CTA on the page, so it reads as accent rather than another ghost control. */
+.btn-docs {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.btn-docs:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--surface-card);
 }
 
 /* Dark in both themes: a code surface should read as an inset panel, not as the page. */
 .code {
   margin: 0;
-  padding: var(--space-24);
+  padding: 18px 20px;
   background: var(--code-bg);
+  border-radius: var(--radius-inset);
   color: var(--code-fg);
   flex: 1;
   min-height: 0;
   overflow: auto;
-  font-size: var(--text-caption);
+  font-size: var(--text-mono);
   line-height: 1.7;
   tab-size: 2;
 }
 
 .code-note {
   margin: 0;
-  padding: 10px var(--space-16) var(--space-16);
-  border-top: 1px solid var(--border-subtle);
+  padding: 10px 14px;
+  background: var(--surface-note);
+  border-radius: var(--radius-inset);
+  color: var(--text-body);
+  font-size: var(--text-body-small);
+  line-height: 1.6;
+  text-wrap: pretty;
   flex: none;
+}
+
+.code-note code {
+  color: var(--code-inline-fg);
 }

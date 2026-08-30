@@ -1,7 +1,7 @@
 import { type XToken, getSupportedSolverTokens } from '@sodax/dapp-kit';
 import { describe, expect, it } from 'vitest';
 import { swappableChains } from './chains';
-import { pickToken, readUrlState, toSearch } from './urlState';
+import { pickToken, readUrlState, seedFor, toSearch } from './urlState';
 
 const [FIRST_CHAIN, SECOND_CHAIN] = swappableChains;
 
@@ -23,6 +23,7 @@ const WETH = token('WETH', '0xbbb');
 describe('readUrlState', () => {
   it('is all-undefined for an empty query string', () => {
     expect(readUrlState('')).toEqual({
+      flow: undefined,
       srcChain: undefined,
       dstChain: undefined,
       srcSymbol: undefined,
@@ -34,6 +35,14 @@ describe('readUrlState', () => {
 
   it('reads a chain that the derived list offers', () => {
     expect(readUrlState(`?srcChain=${FIRST_CHAIN}`).srcChain).toBe(FIRST_CHAIN);
+  });
+
+  it.each(['swap', 'bridge'])('reads the %s flow', value => {
+    expect(readUrlState(`?flow=${value}`).flow).toBe(value);
+  });
+
+  it.each(['stake', 'SWAP', 'borrow', ''])('drops the unknown flow %j', value => {
+    expect(readUrlState(`?flow=${encodeURIComponent(value)}`).flow).toBeUndefined();
   });
 
   // The derived list is the allowlist — a URL never becomes a chain key on its own.
@@ -103,8 +112,37 @@ describe('pickToken', () => {
   });
 });
 
+describe('seedFor', () => {
+  const bridgeLink = readUrlState(`?flow=bridge&srcChain=${FIRST_CHAIN}&amount=2`);
+
+  it('seeds the flow the link was written for', () => {
+    expect(seedFor('bridge', bridgeLink).srcChain).toBe(FIRST_CHAIN);
+  });
+
+  // Otherwise a ?flow=bridge link would also preload the swap form sitting behind the tab, with
+  // chains that were only ever validated against the bridge list.
+  it('seeds nothing into the other flow', () => {
+    expect(seedFor('swap', bridgeLink)).toEqual({
+      flow: undefined,
+      srcChain: undefined,
+      dstChain: undefined,
+      srcSymbol: undefined,
+      dstSymbol: undefined,
+      amount: undefined,
+      slippage: undefined,
+    });
+  });
+
+  it('treats a link with no flow as a swap link, which is what older links are', () => {
+    const legacy = readUrlState(`?srcChain=${FIRST_CHAIN}&amount=2`);
+    expect(seedFor('swap', legacy).amount).toBe('2');
+    expect(seedFor('bridge', legacy).amount).toBeUndefined();
+  });
+});
+
 describe('toSearch', () => {
   const base = {
+    flow: 'swap' as const,
     srcChain: FIRST_CHAIN,
     dstChain: SECOND_CHAIN,
     srcToken: USDC,
@@ -116,6 +154,7 @@ describe('toSearch', () => {
   it('round-trips through readUrlState', () => {
     const state = readUrlState(`?${toSearch(base)}`);
     expect(state).toEqual({
+      flow: 'swap',
       srcChain: FIRST_CHAIN,
       dstChain: SECOND_CHAIN,
       srcSymbol: 'USDC',
@@ -123,6 +162,10 @@ describe('toSearch', () => {
       amount: '1.5',
       slippage: '0.5',
     });
+  });
+
+  it('omits slippage for a bridge link, which has none', () => {
+    expect(toSearch({ ...base, flow: 'bridge', slippage: undefined })).not.toContain('slippage=');
   });
 
   it('omits an empty amount rather than writing amount=', () => {

@@ -1,3 +1,20 @@
+import { parseUnits } from 'viem';
+
+/**
+ * Parses a typed amount into base units, or `undefined` when it is not a positive decimal. Both
+ * flows gate their payload on this, so a half-typed `0.` never reaches an SDK call.
+ */
+export function parseAmount(value: string, decimals: number): bigint | undefined {
+  const trimmed = value.trim();
+  if (!/^\d+(\.\d*)?$|^\.\d+$/.test(trimmed)) return undefined;
+  try {
+    const parsed = parseUnits(trimmed, decimals);
+    return parsed > 0n ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Trims a decimal amount for display. `formatUnits` returns full token precision — eighteen
  * decimals of quoted output is unreadable in a form field, and no swap UI shows it.

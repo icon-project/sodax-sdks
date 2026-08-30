@@ -1,28 +1,12 @@
-import { useMemo, useState } from 'react';
-import type { SwapFlow } from '../hooks/useSwapFlow';
-import { swappableChains } from '../lib/chains';
-import { buildSnippets } from '../lib/snippet';
+import { useState } from 'react';
+import type { Snippet } from '../lib/snippet';
 
-export function CodePanel({ flow }: { flow: SwapFlow }) {
-  const [activeId, setActiveId] = useState('quote');
+const SNIPPET_HINT = 'Updates with the form — values come from @sodax/types';
+
+/** Renders whichever flow's snippets it is handed — the view decides what those are. */
+export function CodePanel({ snippets, initialId }: { snippets: Snippet[]; initialId: string }) {
+  const [activeId, setActiveId] = useState(initialId);
   const [copied, setCopied] = useState(false);
-
-  const snippets = useMemo(
-    () =>
-      buildSnippets(
-        {
-          srcChain: flow.srcChain,
-          dstChain: flow.dstChain,
-          srcToken: flow.srcToken,
-          dstToken: flow.dstToken,
-          amount: flow.amount,
-          slippagePercent: flow.slippagePercent,
-          partnerFee: flow.partnerFee,
-        },
-        swappableChains,
-      ),
-    [flow.srcChain, flow.dstChain, flow.srcToken, flow.dstToken, flow.amount, flow.slippagePercent, flow.partnerFee],
-  );
 
   const active = snippets.find(snippet => snippet.id === activeId) ?? snippets[0];
 
@@ -47,20 +31,45 @@ export function CodePanel({ flow }: { flow: SwapFlow }) {
             </button>
           ))}
         </div>
-        <button type="button" className="btn" onClick={copy}>
-          {copied ? 'Copied' : 'Copy'}
-        </button>
+        <div className="code-actions">
+          <span className="hint">
+            <button type="button" className="hint-trigger" aria-label={SNIPPET_HINT}>
+              {/* lucide's `info`, inlined — the playground carries no icon dependency. */}
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 16v-4" />
+                <path d="M12 8h.01" />
+              </svg>
+            </button>
+            <span className="hint-bubble" role="tooltip">
+              {SNIPPET_HINT}
+            </span>
+          </span>
+          <button type="button" className="btn" onClick={copy}>
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+          <a className="btn btn-docs" href="https://docs.sodax.com/" target="_blank" rel="noreferrer">
+            Read the docs ↗
+          </a>
+        </div>
       </header>
       <pre className="code">
         <code>{active.code}</code>
       </pre>
       <p className="code-note muted small">
-        This updates with the form. Chain and token values come from <code>@sodax/types</code>, so the snippet always
-        names symbols that exist in the version you install.
-      </p>
-      <p className="code-note muted small">
-        Building with an AI agent? <code>npx skills@latest add icon-project/sodax-sdks/packages/skills</code> installs
-        the SODAX skills, so it writes against the current SDK instead of guessing.
+        Building with an AI agent? <code>npx skills@latest add icon-project/sodax-sdks/packages/skills</code>{' '}
+        <a className="link" href="https://docs.sodax.com/developers/ai-integration" target="_blank" rel="noreferrer">
+          AI integration guide ↗
+        </a>
       </p>
     </section>
   );

@@ -14,12 +14,14 @@ import {
 } from '@sodax/dapp-kit';
 import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { formatUnits, parseUnits } from 'viem';
-import { ANY_SOLVER, DEFAULT_SLIPPAGE_PERCENT, playgroundMode } from '../config';
-import { DEFAULT_DST_CHAIN, DEFAULT_SRC_CHAIN, type PlaygroundChainKey } from '../lib/chains';
+import { formatUnits } from 'viem';
+import { ANY_SOLVER, DEFAULT_AMOUNT, DEFAULT_SLIPPAGE_PERCENT, playgroundMode } from '../config';
+import { type PlaygroundChainKey, defaultDstChain, defaultSrcChain } from '../lib/chains';
 import { type FriendlyError, describeError } from '../lib/errors';
 import { NO_PARTNER_FEE, type PartnerFeeInput, feeAmountOf, readPartnerFee } from '../lib/fee';
-import { pickToken, readUrlState, toSearch } from '../lib/urlState';
+import { parseAmount } from '../lib/format';
+import { initialUrl } from '../lib/initialUrl';
+import { pickToken, seedFor, toSearch } from '../lib/urlState';
 
 /** Everything `CreateIntentParams` needs except the deadline, which is resolved at submit time. */
 type IntentDraft = Omit<CreateIntentParams, 'deadline'>;
@@ -32,25 +34,13 @@ export type Delivery = {
 
 export type SwapFlow = ReturnType<typeof useSwapFlow>;
 
-function parseAmount(value: string, decimals: number): bigint | undefined {
-  const trimmed = value.trim();
-  if (!/^\d+(\.\d*)?$|^\.\d+$/.test(trimmed)) return undefined;
-  try {
-    const parsed = parseUnits(trimmed, decimals);
-    return parsed > 0n ? parsed : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 // The SDK types IntentDeliveryInfo.dstTxHash as `string` while useStatus wants `Hex`. A tx hash is
 // always 0x-prefixed hex, so normalize at this one boundary rather than casting blindly.
 function toHex(value: string): Hex {
   return value.startsWith('0x') ? (value as Hex) : `0x${value}`;
 }
 
-/** Read once: the app owns the query string from its first render on. */
-const initialUrl = readUrlState(window.location.search);
+const seed = seedFor('swap', initialUrl);
 
 /**
  * The whole SODAX surface this playground uses, in one place: quote → allowance → approve → swap →
@@ -60,16 +50,16 @@ export function useSwapFlow() {
   const { sodax } = useSodaxContext();
   const account = useXAccount({ xChainType: 'EVM' });
 
-  const [srcChain, setSrcChain] = useState<PlaygroundChainKey>(initialUrl.srcChain ?? DEFAULT_SRC_CHAIN);
-  const [dstChain, setDstChain] = useState<PlaygroundChainKey>(initialUrl.dstChain ?? DEFAULT_DST_CHAIN);
+  const [srcChain, setSrcChain] = useState<PlaygroundChainKey>(seed.srcChain ?? defaultSrcChain('swap'));
+  const [dstChain, setDstChain] = useState<PlaygroundChainKey>(seed.dstChain ?? defaultDstChain('swap'));
   const [srcToken, setSrcToken] = useState<XToken | undefined>(() =>
-    pickToken(getSupportedSolverTokens(initialUrl.srcChain ?? DEFAULT_SRC_CHAIN), initialUrl.srcSymbol),
+    pickToken(getSupportedSolverTokens(seed.srcChain ?? defaultSrcChain('swap')), seed.srcSymbol),
   );
   const [dstToken, setDstToken] = useState<XToken | undefined>(() =>
-    pickToken(getSupportedSolverTokens(initialUrl.dstChain ?? DEFAULT_DST_CHAIN), initialUrl.dstSymbol),
+    pickToken(getSupportedSolverTokens(seed.dstChain ?? defaultDstChain('swap')), seed.dstSymbol),
   );
-  const [amount, setAmount] = useState(initialUrl.amount ?? '');
-  const [slippagePercent, setSlippagePercent] = useState(initialUrl.slippage ?? DEFAULT_SLIPPAGE_PERCENT);
+  const [amount, setAmount] = useState(seed.amount ?? DEFAULT_AMOUNT);
+  const [slippagePercent, setSlippagePercent] = useState(seed.slippage ?? DEFAULT_SLIPPAGE_PERCENT);
   const [partnerFeeInput, setPartnerFeeInput] = useState<PartnerFeeInput>(NO_PARTNER_FEE);
   const [error, setError] = useState<FriendlyError | undefined>();
   const [delivery, setDelivery] = useState<Delivery | undefined>();
@@ -85,7 +75,15 @@ export function useSwapFlow() {
   useEffect(() => setDstToken(current => pickToken(dstTokens, current?.symbol)), [dstTokens]);
 
   useEffect(() => {
-    const search = toSearch({ srcChain, dstChain, srcToken, dstToken, amount, slippage: slippagePercent });
+    const search = toSearch({
+      flow: 'swap',
+      srcChain,
+      dstChain,
+      srcToken,
+      dstToken,
+      amount,
+      slippage: slippagePercent,
+    });
     // A sandboxed embed has an opaque origin and throws here; the form must still work in one.
     try {
       window.history.replaceState(null, '', `${window.location.pathname}?${search}`);

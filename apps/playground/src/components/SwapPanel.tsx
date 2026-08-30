@@ -1,7 +1,8 @@
 import type { SwapFlow } from '../hooks/useSwapFlow';
-import { type PlaygroundChainKey, chainName, swappableChains } from '../lib/chains';
+import { chainName, swappableChains } from '../lib/chains';
 import { FEE_BPS_MAX } from '../lib/fee';
 import { formatTokenAmount } from '../lib/format';
+import { FlipButton, FormLeg } from './FormLeg';
 import { StatusPanel } from './StatusPanel';
 
 /** Display precision only — `title` keeps the exact value one hover away. */
@@ -21,7 +22,8 @@ function PartnerFeeFields({ flow }: { flow: SwapFlow }) {
     <details className="disclosure">
       <summary>Charge a partner fee</summary>
       <p className="muted small">
-        Integration is free and SODAX takes none of it. The quote above stays net of your fee.
+        Integration is free, and this fee is yours in full — SODAX takes no share of it. The quote above stays net of
+        it.
       </p>
       <div className="row">
         <input
@@ -44,32 +46,6 @@ function PartnerFeeFields({ flow }: { flow: SwapFlow }) {
         Up to {FEE_BPS_MAX} bps ({FEE_BPS_MAX / 100}%). The recipient is not validated — a wrong address is unclaimable.
       </p>
     </details>
-  );
-}
-
-function ChainSelect({
-  value,
-  onChange,
-  label,
-}: {
-  value: PlaygroundChainKey;
-  onChange: (key: PlaygroundChainKey) => void;
-  label: string;
-}) {
-  // Resolve the raw <select> value against the derived list instead of casting it to a chain key.
-  const handleChange = (raw: string) => {
-    const next = swappableChains.find(key => key === raw);
-    if (next) onChange(next);
-  };
-
-  return (
-    <select className="select" aria-label={label} value={value} onChange={event => handleChange(event.target.value)}>
-      {swappableChains.map(key => (
-        <option key={key} value={key}>
-          {chainName(key)}
-        </option>
-      ))}
-    </select>
   );
 }
 
@@ -118,71 +94,38 @@ function PrimaryAction({ flow }: { flow: SwapFlow }) {
 export function SwapPanel({ flow }: { flow: SwapFlow }) {
   return (
     <section className="card swap-card">
-      <div className="field">
-        <span className="field-label">From</span>
-        <div className="row">
-          <ChainSelect value={flow.srcChain} onChange={flow.setSrcChain} label="Network to send from" />
-          <select
-            className="select"
-            aria-label="Token to send"
-            value={flow.srcToken?.address ?? ''}
-            onChange={event => flow.setSrcToken(flow.srcTokens.find(token => token.address === event.target.value))}
-          >
-            {flow.srcTokens.map(token => (
-              <option key={token.address} value={token.address}>
-                {token.symbol}
-              </option>
-            ))}
-          </select>
-        </div>
-        <input
-          className="input amount"
-          aria-label="Amount to send"
-          inputMode="decimal"
-          placeholder="0.0"
-          value={flow.amount}
-          onChange={event => flow.setAmount(event.target.value)}
-        />
-      </div>
+      <FormLeg
+        label="From"
+        chains={swappableChains}
+        chain={flow.srcChain}
+        chainLabel="Network to send from"
+        onChainChange={flow.setSrcChain}
+        tokens={flow.srcTokens}
+        token={flow.srcToken}
+        tokenLabel="Token to send"
+        onTokenChange={flow.setSrcToken}
+        amount={flow.amount}
+        amountLabel="Amount to send"
+        onAmountChange={flow.setAmount}
+        emptyTokensLabel="No swap tokens"
+      />
 
-      <div className="flip">
-        <button
-          type="button"
-          className="btn btn-icon"
-          onClick={flow.flipDirection}
-          aria-label="Reverse swap direction"
-          title="Reverse direction"
-        >
-          ⇅
-        </button>
-      </div>
+      <FlipButton onClick={flow.flipDirection} />
 
-      <div className="field">
-        <span className="field-label">To</span>
-        <div className="row">
-          <ChainSelect value={flow.dstChain} onChange={flow.setDstChain} label="Network to receive on" />
-          <select
-            className="select"
-            aria-label="Token to receive"
-            value={flow.dstToken?.address ?? ''}
-            onChange={event => flow.setDstToken(flow.dstTokens.find(token => token.address === event.target.value))}
-          >
-            {flow.dstTokens.map(token => (
-              <option key={token.address} value={token.address}>
-                {token.symbol}
-              </option>
-            ))}
-          </select>
-        </div>
-        <input
-          className="input amount"
-          aria-label="Amount to receive"
-          value={formatTokenAmount(flow.quotedOutput)}
-          title={flow.quotedOutput}
-          placeholder="0.0"
-          readOnly
-        />
-      </div>
+      <FormLeg
+        label="To"
+        chains={swappableChains}
+        chain={flow.dstChain}
+        chainLabel="Network to receive on"
+        onChainChange={flow.setDstChain}
+        tokens={flow.dstTokens}
+        token={flow.dstToken}
+        tokenLabel="Token to receive"
+        onTokenChange={flow.setDstToken}
+        amount={flow.quotedOutput}
+        amountLabel="Amount to receive"
+        emptyTokensLabel="No swap tokens"
+      />
 
       <div className="summary">
         <div className="row-between">

@@ -1,6 +1,15 @@
 import { EVM_CHAIN_KEYS, Sodax, getSupportedSolverTokens, spokeChainConfig } from '@sodax/dapp-kit';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_DST_CHAIN, DEFAULT_SRC_CHAIN, chainKeyExpression, chainName, swappableChains } from './chains';
+import {
+  bridgeableChains,
+  chainKeyExpression,
+  chainName,
+  defaultDstChain,
+  defaultSrcChain,
+  spokeTokens,
+  swappableChains,
+} from './chains';
+import { FLOWS } from './flows';
 
 // These assert the derivation, not a chain list: adding a chain to @sodax/types must be all it takes
 // to see it in the pickers, and any chain that reaches one must be swappable and signable.
@@ -30,14 +39,33 @@ describe('swappableChains', () => {
   });
 });
 
-describe('defaults', () => {
-  it('point at chains the pickers actually offer', () => {
-    expect(swappableChains).toContain(DEFAULT_SRC_CHAIN);
-    expect(swappableChains).toContain(DEFAULT_DST_CHAIN);
+// Bridging is gated on the chain's own token list, not the solver's, so it can reach further than
+// swapping — but never less far, or a flow switch would strand the chain the user was already on.
+describe('bridgeableChains', () => {
+  it('offers only EVM chains with a spoke config and a non-empty token list', () => {
+    for (const key of bridgeableChains) {
+      expect(EVM_CHAIN_KEYS).toContain(key);
+      expect(spokeChainConfig[key]).toBeDefined();
+      expect(spokeTokens(key).length).toBeGreaterThan(0);
+    }
   });
 
-  it('differ, so the page opens on a cross-chain swap', () => {
-    expect(DEFAULT_SRC_CHAIN).not.toBe(DEFAULT_DST_CHAIN);
+  it('covers every swappable chain', () => {
+    for (const key of swappableChains) {
+      expect(bridgeableChains).toContain(key);
+    }
+  });
+});
+
+describe('defaults', () => {
+  it.each(FLOWS)('point %s at chains its own picker offers', flow => {
+    const offered = flow === 'bridge' ? bridgeableChains : swappableChains;
+    expect(offered).toContain(defaultSrcChain(flow));
+    expect(offered).toContain(defaultDstChain(flow));
+  });
+
+  it.each(FLOWS)('open %s on a cross-chain pair', flow => {
+    expect(defaultSrcChain(flow)).not.toBe(defaultDstChain(flow));
   });
 });
 

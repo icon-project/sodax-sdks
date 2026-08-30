@@ -20,5 +20,11 @@ export const walletConnectProjectId = env.VITE_WALLETCONNECT_PROJECT_ID;
 
 export const DEFAULT_SLIPPAGE_PERCENT = '0.5';
 
+/**
+ * Seeded so the page opens on a live quote rather than an empty form. Sized for the default pair
+ * (ETH), and only ever a starting value — a link carrying `?amount=` wins.
+ */
+export const DEFAULT_AMOUNT = '0.1';
+
 /** address(0) = any admitted solver may fill. This never pins a specific solver. */
 export const ANY_SOLVER = '0x0000000000000000000000000000000000000000' as const;
