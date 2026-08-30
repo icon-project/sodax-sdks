@@ -36,6 +36,7 @@ export const moneyMarketSupportedTokens = {
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.SODA,
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.USDT,
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.USDS,
+    spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.sUSDS,
   ] as const satisfies XToken[],
   [ChainKeys.OPTIMISM_MAINNET]: [
     spokeChainConfig[ChainKeys.OPTIMISM_MAINNET].supportedTokens.ETH,
@@ -45,6 +46,7 @@ export const moneyMarketSupportedTokens = {
     spokeChainConfig[ChainKeys.OPTIMISM_MAINNET].supportedTokens.weETH,
     spokeChainConfig[ChainKeys.OPTIMISM_MAINNET].supportedTokens.USDT,
     spokeChainConfig[ChainKeys.OPTIMISM_MAINNET].supportedTokens.SODA,
+    spokeChainConfig[ChainKeys.OPTIMISM_MAINNET].supportedTokens.sUSDS,
   ] as const satisfies XToken[],
   [ChainKeys.POLYGON_MAINNET]: [
     spokeChainConfig[ChainKeys.POLYGON_MAINNET].supportedTokens.POL,
@@ -167,6 +169,7 @@ export const moneyMarketSupportedTokens = {
     spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.WBTC_LEGACY,
     spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.LL,
     spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.USDS,
+    spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.sUSDS,
   ] as const,
   [ChainKeys.REDBELLY_MAINNET]: [
     spokeChainConfig[ChainKeys.REDBELLY_MAINNET].supportedTokens.bnUSD,

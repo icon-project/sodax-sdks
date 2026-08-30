@@ -554,3 +554,25 @@ export function getNativeTokenSymbol(chainId: SpokeChainKey): string {
 
   return nativeToken?.symbol ?? 'native token';
 }
+
+/**
+ * Format a WAD-scaled health factor. AAVE returns `type(uint256).max` when an account has
+ * no debt — display that as `∞` instead of a giant number.
+ *
+ * Shared by the leverage-yield vault view and the leverage-position panel; both read WAD
+ * health factors from the same pool.
+ */
+export function fmtHealthFactor(hfWad: bigint | undefined, digits = 2): string {
+  if (hfWad === undefined) return '—';
+  const UINT256_MAX = (1n << 256n) - 1n;
+  if (hfWad >= UINT256_MAX - 1n) return '∞';
+  const SCALE = 100_000n;
+  const scaled = (hfWad * SCALE) / 1_000_000_000_000_000_000n;
+  return (Number(scaled) / Number(SCALE)).toFixed(digits);
+}
+
+/** Format a basis-points value (e.g. `8500n`) as a percentage string. */
+export function fmtBps(value: bigint | undefined, digits = 2): string {
+  if (value === undefined) return '—';
+  return `${(Number(value) / 100).toFixed(digits)}%`;
+}
