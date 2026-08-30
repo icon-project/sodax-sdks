@@ -13,7 +13,7 @@ jobs:
     name: AI files match the code they describe
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Escape hatch: add the `no-ai-drift` label to skip, the same way `no-changeset` works.
+    # Escape hatch: add the `no-ai-drift` label to skip a disputed model finding.
     # The auditor is a language model, so a wrong finding must never be able to strand a PR.
     if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-ai-drift') }}
     permissions:
