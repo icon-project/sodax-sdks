@@ -1,102 +1,81 @@
-# Instructions for releasing SDK packages
+# Releasing SDK packages
 
 Every publishable `@sodax/*` package shares one version, cut as a single `@sdks@<version>` git tag.
-Git history and those tags are the release source of truth. `pnpm release` prompts for the version
-and applies it; committing, tagging, and publishing stay human steps.
+`pnpm release` bumps the versions; committing, tagging, and publishing stay human steps.
 
-- [ ] 1. Make sure all code to publish is merged into `main`. Then sync `release` itself before
-  merging `main` into it — a stale `release` would bump from the wrong base and reuse the previous
-  `CONFIG_VERSION`:
+1. **Merge everything you are shipping into `main`.**
 
-  ```bash
-  git checkout release
-  git fetch origin --tags
-  git pull --ff-only origin release
-  git pull --no-ff origin main
-  ```
+2. **Sync `release`, then merge `main` into it.** A stale `release` bumps from the wrong base and
+   reuses the previous `CONFIG_VERSION`, so do not skip the fetch or the ff-only pull:
 
-- [ ] 2. Run the release command:
+   ```bash
+   git checkout release
+   git fetch origin --tags
+   git pull --ff-only origin release
+   git pull --no-ff origin main
+   ```
 
-  ```bash
-  pnpm release
-  ```
+3. **Run `pnpm release`.** It prints the current version, the tag the notes are measured from, and
+   the commits grouped by conventional-commit type, then prompts for the new version — `X.Y.Z`, or
+   `X.Y.Z-rc.N` for a release candidate. Picking the number is your call; use the groups it just
+   printed. An invalid or non-advancing version is refused and re-prompted. Pass it as an argument
+   (`pnpm release 2.2.0`) to skip the prompt.
 
-  It first prints the current version, the tag the notes are measured from, and the commits in the
-  release grouped by conventional-commit type, then prompts:
+4. **It stops after mutating.** Every manifest is set to that version, `CONFIG_VERSION` is
+   incremented once, and the gitignored `release-notes.md` is written. Nothing is committed or
+   tagged for you. On failure it prints a one-line recovery command and leaves nothing behind.
 
-  ```
-  New version:
-  ```
+5. **Inspect the diff, then commit and push.** The command prints these with the version filled in:
 
-  Type the version you want — `X.Y.Z` for a stable release or `X.Y.Z-rc.N` for a release candidate.
-  Choosing the number is a human judgement call; use the commit groups it just printed. A version
-  that is malformed, does not advance both the current version and the newest published tag, or
-  reuses an existing tag is refused and re-prompted, so nothing is written until it is valid.
+   ```bash
+   git add packages/
+   git commit -m "chore: release @sdks@<version>"
+   git push -u origin release
+   ```
 
-  To skip the prompt — in a script, or when you already know the number — pass it as an argument:
+6. **Create the GitHub Release** — the tag is what triggers publishing:
 
-  ```bash
-  pnpm release 2.2.0-rc.2
-  ```
+   ```bash
+   gh release create "@sdks@<version>" \
+     --target release \
+     --title "@sdks@<version>" \
+     --notes-file release-notes.md \
+     --prerelease # omit for a stable release
+   ```
 
-- [ ] 3. The command then updates every publishable manifest to that version, increments
-  `CONFIG_VERSION` once, and writes `release-notes.md` (gitignored). It verifies that exactly the
-  eight `packages/*/package.json` files plus `packages/types/src/index.ts` changed, and stops. If
-  anything fails it prints a one-line recovery command and leaves nothing committed.
+   [`sdks-publish.yml`](https://github.com/icon-project/sodax-sdks/blob/main/.github/workflows/sdks-publish.yml)
+   validates every manifest against the tag, then publishes in dependency order. The dist-tag comes
+   from the version: `X.Y.Z-rc.N` under `rc`, `X.Y.Z` under `latest`.
 
-- [ ] 4. Inspect the diff, then commit and push. The command prints these with the version filled in:
+7. **Deprecate the new `@sodax/libs` version.** It ships for transitive installs only:
 
-  ```bash
-  git add packages/
-  git commit -m "chore: release @sdks@<version>"
-  git push -u origin release
-  ```
+   ```bash
+   npm deprecate @sodax/libs@<version> "Internal package — do not depend on directly. Consumed transitively by @sodax/sdk, @sodax/wallet-sdk-core, @sodax/wallet-sdk-react. Subpaths may be removed without notice when upstream Turbopack bugs are fixed."
+   ```
 
-- [ ] 5. Create one unified GitHub Release using the generated notes:
+8. **Announce** the npm links and notes in
+   [Venture 23 #sodax-sdk](https://discord.com/channels/688963201101987847/1385504703672094760) and
+   [Sodax #sodax_sdk](https://discord.com/channels/880651922682560582/1425075360550223994).
 
-  ```bash
-  gh release create "@sdks@<version>" \
-    --target release \
-    --title "@sdks@<version>" \
-    --notes-file release-notes.md \
-    --prerelease # omit for a stable release
-  ```
-
-  The [`sdks-publish.yml`](https://github.com/icon-project/sodax-sdks/blob/main/.github/workflows/sdks-publish.yml)
-  workflow validates every publishable manifest against the tag, then publishes in dependency order.
-  It derives the npm dist-tag from the version itself: `X.Y.Z-rc.N` publishes under `rc`, `X.Y.Z`
-  under `latest`. If validation fails after a version has reached npm, fix the cause and release a
-  new version — npm does not permit republishing the same package version.
-
-- [ ] 6. Deprecate the new `@sodax/libs` version on npm. It is published for transitive installs but
-  is not a supported direct dependency:
-
-  ```bash
-  npm deprecate @sodax/libs@<version> "Internal package — do not depend on directly. Consumed transitively by @sodax/sdk, @sodax/wallet-sdk-core, @sodax/wallet-sdk-react. Subpaths may be removed without notice when upstream Turbopack bugs are fixed."
-  ```
-
-- [ ] 7. Share the npm links and release notes in
-  [Venture 23 #sodax-sdk](https://discord.com/channels/688963201101987847/1385504703672094760)
-  and [Sodax #sodax_sdk](https://discord.com/channels/880651922682560582/1425075360550223994).
+**If publishing fails after a version reached npm, cut a new version.** npm never allows
+republishing the same package version.
 
 ## What `pnpm release` refuses to do
 
-It stops before making any change if you are not on `release`, the working tree is dirty, your
-`origin/main` or `origin/release` is stale against the remote, `origin/main` is not fully merged
-into `release`, or your `release` is missing either `origin/release` or the newest `@sdks@` tag. It
-refuses a version that an `@sodax/<pkg>@<version>` backport tag already published, because the
-unified flow republishes every package and npm versions are immutable. It
-also fails when the hardcoded package lists in `scripts/bump-versions.sh` and `sdks-publish.yml`
-have drifted from the packages actually present under `packages/` — that check is what stops a newly
-added package from being versioned but never published, or published but never versioned.
+It stops before changing anything if:
+
+- you are not on `release`, or the working tree is dirty
+- `origin/main` or `origin/release` is stale, or `main` is not fully merged into `release`
+- your `release` is missing `origin/release` or the newest `@sdks@` tag
+- the version was already published by an `@sodax/<pkg>@<version>` backport tag
+- the package lists in `scripts/bump-versions.sh` and `sdks-publish.yml` have drifted from
+  `packages/` — this is what stops a new package being versioned but never published, or the reverse
 
 `scripts/bump-versions.sh` is the only thing that edits versions. Never hand-edit a package
 `version` or `CONFIG_VERSION`.
 
 ## Republishing a single package
 
-The per-package `sodax-<pkg>-publish.yml` workflows remain available when only one package must be
-published, and are also the way to ship a backport, since the unified flow only moves forward. Use
-the tag `@sodax/<pkg>@<version>`; the matching workflow validates that package's manifest and
-publishes only it. Prefer the unified `@sdks@*` flow for normal releases so published packages stay
-version-aligned.
+The per-package `sodax-<pkg>-publish.yml` workflows publish one package, and are the way to ship a
+backport since the unified flow only moves forward. Push the tag `@sodax/<pkg>@<version>`. Prefer
+the unified `@sdks@*` flow for normal releases so packages stay version-aligned.
