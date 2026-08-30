@@ -86,7 +86,9 @@ export function encodeBtcPayloadToBytes(payload: BtcPayload): string {
 }
 
 /**
- * Checksum-validate a Bitcoin destination address (mainnet or testnet, every spendable type).
+ * Checksum-validate a Bitcoin destination address (every spendable type). Testnet forms are
+ * accepted deliberately: the network is config-driven under the single BITCOIN_MAINNET chain key
+ * (BitcoinSpokeService.getBtcNetwork), and this pure utility cannot see that config.
  * Decodes via fromBech32/fromBase58Check — payments.p2tr would require initEccLib, which a pure
  * utility must not depend on. Prefix/version checks keep other bech32 chains (e.g. inj1…) out.
  */

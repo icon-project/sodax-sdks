@@ -48,6 +48,8 @@ const EXPECTED_RESPONSE: Record<ICONexRequestEventType, ICONexResponseEventType>
 // Serialize so at most one request is in flight (a response can't resolve another
 // request's promise), correlate by expected response type, time out, and always
 // remove the listener on settle. (Security audit WALLET-L-1.)
+// Residual: a late response to a timed-out request can satisfy the NEXT same-type request —
+// benign for REQUEST_ADDRESS (payload is the wallet's own address) and unfixable without ids.
 let iconexQueue: Promise<unknown> = Promise.resolve();
 
 export const request = (
