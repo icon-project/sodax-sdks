@@ -84,6 +84,8 @@ and applies it; committing, tagging, and publishing stay human steps.
 It stops before making any change if you are not on `release`, the working tree is dirty, your
 `origin/main` or `origin/release` is stale against the remote, `origin/main` is not fully merged
 into `release`, or your `release` is missing either `origin/release` or the newest `@sdks@` tag. It
+refuses a version that an `@sodax/<pkg>@<version>` backport tag already published, because the
+unified flow republishes every package and npm versions are immutable. It
 also fails when the hardcoded package lists in `scripts/bump-versions.sh` and `sdks-publish.yml`
 have drifted from the packages actually present under `packages/` — that check is what stops a newly
 added package from being versioned but never published, or published but never versioned.

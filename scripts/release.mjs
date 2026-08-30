@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-rc\.(0|[1-9]\d*))?$/;
 const SDK_TAG_PATTERN = /^@sdks@(.+)$/;
+const PACKAGE_TAG_PATTERN = /^@sodax\/[^@]+@(.+)$/;
 const PR_SUFFIX_PATTERN = /\(#(\d+)\)$/;
 const TYPE_PATTERN = /^([a-z]+)(?:\([^)]*\))?!?:/i;
 const TITLE_BANG_PATTERN = /^[a-z]+(?:\([^)]*\))?!:/i;
@@ -57,6 +58,14 @@ export const compareVersions = (leftValue, rightValue) => {
 
 export const parseSdksTag = tag => {
   const match = typeof tag === 'string' ? tag.match(SDK_TAG_PATTERN) : null;
+  if (!match) return null;
+  const parsed = parseVersion(match[1]);
+  return parsed ? { tag, version: match[1], parsed } : null;
+};
+
+// Per-package backport tags publish into the same npm version namespace as the unified @sdks@ flow.
+export const parsePackageTag = tag => {
+  const match = typeof tag === 'string' ? tag.match(PACKAGE_TAG_PATTERN) : null;
   if (!match) return null;
   const parsed = parseVersion(match[1]);
   return parsed ? { tag, version: match[1], parsed } : null;
@@ -256,20 +265,22 @@ export const packageListErrors = (workspaceRoot, packages) => {
   return errors;
 };
 
-const highestTagVersion = tags =>
-  tags
-    .map(parseSdksTag)
+const highestTagVersion = parsed =>
+  parsed
     .filter(Boolean)
     .reduce((best, tag) => (best === null || compareVersions(tag.version, best) > 0 ? tag.version : best), null);
 
-export const versionAdvanceErrors = ({ version, currentVersion, tags, requireTagAdvance = true }) => {
+export const versionAdvanceErrors = ({ version, currentVersion, tags, packageTags = [], requireTagAdvance = true }) => {
   if (!parseVersion(version)) return [`${version || '(empty)'} is not a valid version; expected X.Y.Z or X.Y.Z-rc.N`];
   const errors = [];
   if (tags.includes(`@sdks@${version}`)) errors.push(`tag @sdks@${version} already exists`);
+  // The unified flow republishes every package, so one backported tag makes the whole version unusable.
+  const claimed = packageTags.find(tag => parsePackageTag(tag)?.version === version);
+  if (claimed) errors.push(`${claimed} already published ${version} to npm`);
   if (parseVersion(currentVersion) && compareVersions(version, currentVersion) <= 0) {
     errors.push(`${version} does not advance the current version ${currentVersion}`);
   }
-  const highest = highestTagVersion(tags);
+  const highest = highestTagVersion([...tags.map(parseSdksTag), ...packageTags.map(parsePackageTag)]);
   if (requireTagAdvance && highest && compareVersions(version, highest) <= 0) {
     errors.push(`${version} does not advance the published version ${highest}`);
   }
@@ -281,15 +292,18 @@ const remoteHead = (git, ref) => splitLines(git(['ls-remote', 'origin', ref]))[0
 // Zero commits reachable from ref but not HEAD means HEAD already contains it.
 const headContains = (git, ref) => Number(git(['rev-list', '--count', `HEAD..${ref}`]).trim()) === 0;
 
-const remoteSdksTags = git =>
+const remoteTags = (git, pattern) =>
   [
     ...new Set(
-      splitLines(git(['ls-remote', '--tags', 'origin', '@sdks@*']))
+      splitLines(git(['ls-remote', '--tags', 'origin', pattern]))
         .map(line => line.split(/\s+/)[1] ?? '')
         .map(ref => ref.replace(/^refs\/tags\//, '').replace(/\^\{\}$/, ''))
         .filter(Boolean),
     ),
   ].sort();
+
+const remoteSdksTags = git => remoteTags(git, '@sdks@*');
+const remotePackageTags = git => remoteTags(git, '@sodax/*@*');
 
 const worktreePaths = git => porcelainEntries(git(['status', '--porcelain']));
 
@@ -363,6 +377,7 @@ export const cutRelease = async ({
   if (listErrors.length > 0) throw new ReleaseError(listErrors);
 
   const tags = remoteSdksTags(git);
+  const packageTags = remotePackageTags(git);
   const parsedTags = tags.map(parseSdksTag).filter(Boolean);
   // Two anchors: notes span the last stable release, the version guard uses the newest tag of any kind.
   const baseTag = maxTag(parsedTags.filter(tag => tag.parsed.rc === null));
@@ -423,7 +438,13 @@ export const cutRelease = async ({
   log('');
 
   const guard = candidate =>
-    versionAdvanceErrors({ version: candidate, currentVersion, tags, requireTagAdvance: Boolean(lastTag) });
+    versionAdvanceErrors({
+      version: candidate,
+      currentVersion,
+      tags,
+      packageTags,
+      requireTagAdvance: Boolean(lastTag),
+    });
 
   let target = null;
   if (version !== null) {

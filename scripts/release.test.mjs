@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -14,6 +14,8 @@ import {
   packageListErrors,
   packageListsIn,
   parseLog,
+  parsePackageTag,
+  parseSdksTag,
   parseReleaseArgs,
   parseRemoteRepo,
   parseVersion,
@@ -80,6 +82,7 @@ const gitStub = ({
   branch = 'release',
   status = ['', porcelainFor(ALL_DIRS)],
   tags = ['@sdks@2.0.0', '@sdks@2.1.0', '@sdks@2.2.0-rc.1'],
+  packageTags = [],
   remoteMain = MAIN,
   remoteRelease = RELEASE,
   localRelease = RELEASE,
@@ -104,6 +107,9 @@ const gitStub = ({
       return `${headContains[key.slice('rev-list --count HEAD..'.length)] ?? 0}\n`;
     if (key === 'ls-remote --tags origin @sdks@*') {
       return tags.map(tag => `${'c'.repeat(40)}\trefs/tags/${tag}`).join('\n');
+    }
+    if (key === 'ls-remote --tags origin @sodax/*@*') {
+      return packageTags.map(tag => `${'c'.repeat(40)}\trefs/tags/${tag}`).join('\n');
     }
     if (key === 'merge-base origin/main HEAD') return `${MAIN}\n`;
     if (key.startsWith('merge-base origin/main @sdks@')) return `${'b'.repeat(40)}\n`;
@@ -158,6 +164,30 @@ test('the version guard refuses anything that does not advance, and allows rc to
     versionAdvanceErrors({ version: '0.0.1', currentVersion: '0.0.0', tags: [], requireTagAdvance: false }),
     [],
   );
+});
+
+test('a backport tag blocks the version it already published, and raises the floor', () => {
+  const tags = ['@sdks@2.1.0'];
+  const packageTags = ['@sodax/sdk@2.1.1'];
+  assert.deepEqual(versionAdvanceErrors({ version: '2.1.1', currentVersion: '2.1.0', tags, packageTags }), [
+    '@sodax/sdk@2.1.1 already published 2.1.1 to npm',
+    '2.1.1 does not advance the published version 2.1.1',
+  ]);
+  // The unified flow may not reuse a version any single package already burned.
+  assert.deepEqual(versionAdvanceErrors({ version: '2.1.2', currentVersion: '2.1.0', tags, packageTags }), []);
+  assert.deepEqual(
+    versionAdvanceErrors({ version: '2.2.0', currentVersion: '2.1.0', tags, packageTags: ['@sodax/skills@3.0.0'] }),
+    ['2.2.0 does not advance the published version 3.0.0'],
+  );
+  assert.deepEqual(versionAdvanceErrors({ version: '2.2.0', currentVersion: '2.1.0', tags }), []);
+});
+
+test('package tags are parsed apart from unified tags and ignored when malformed', () => {
+  assert.equal(parsePackageTag('@sodax/wallet-sdk-core@2.1.0')?.version, '2.1.0');
+  assert.equal(parsePackageTag('@sodax/sdk@2.2.0-rc.3')?.version, '2.2.0-rc.3');
+  assert.equal(parsePackageTag('@sdks@2.1.0'), null, 'the unified family is not a package tag');
+  assert.equal(parsePackageTag('@sodax/sdk@not-a-version'), null);
+  assert.equal(parseSdksTag('@sodax/sdk@2.1.0'), null, 'a package tag never anchors the notes range');
 });
 
 test('commits group by conventional type, including a body-only breaking footer', () => {
@@ -402,6 +432,25 @@ test('the prompt gives up after three rejected versions', async t => {
   });
 });
 
+test('a backport published outside the unified flow is refused before anything is written', async t => {
+  const root = createWorkspace(t, ALL_DIRS, '2.1.0');
+  await assert.rejects(
+    run(root, {
+      stub: { tags: ['@sdks@2.1.0'], packageTags: ['@sodax/sdk@2.2.0'], headContains: { 'origin/release': 0 } },
+      version: '2.2.0',
+    }),
+    /@sodax\/sdk@2\.2\.0 already published 2\.2\.0 to npm/,
+  );
+  for (const directory of ALL_DIRS) {
+    assert.equal(
+      JSON.parse(readFileSync(join(root, 'packages', directory, 'package.json'), 'utf8')).version,
+      '2.1.0',
+      'the guard runs before the bump',
+    );
+  }
+  assert.ok(!existsSync(join(root, 'release-notes.md')));
+});
+
 test('a bump that touches unexpected files is refused', async t => {
   const root = createWorkspace(t);
   const status = ['', `${porcelainFor(ALL_DIRS)}\n M pnpm-lock.yaml`];
@@ -524,6 +573,7 @@ const fixtureGit =
     if (key === 'ls-remote origin refs/heads/main') return `${main}\trefs/heads/main\n`;
     if (key === 'ls-remote origin refs/heads/release') return `${release}\trefs/heads/release\n`;
     if (key === 'ls-remote --tags origin @sdks@*') return `${'c'.repeat(40)}\trefs/tags/@sdks@2.1.0`;
+    if (key === 'ls-remote --tags origin @sodax/*@*') return '';
     return execFileSync('git', args, { cwd: options.cwd, encoding: 'utf8' });
   };
 
