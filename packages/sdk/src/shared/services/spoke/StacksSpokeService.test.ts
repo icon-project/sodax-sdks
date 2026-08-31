@@ -46,7 +46,7 @@
  *  10. waitForTransactionReceipt — every tx_status branch + polling defaults
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Cl, Pc, type ContractPrincipalCV, type UIntCV } from '@sodax/libs/stacks/core';
+import { Cl, Pc, type ContractPrincipalCV } from '@sodax/libs/stacks/core';
 import { ChainKeys, getIntentRelayChainId, spokeChainConfig, type Hex, type IStacksWalletProvider } from '@sodax/types';
 
 // --- hoisted mocks --------------------------------------------------------
@@ -136,9 +136,7 @@ const mockStacksProvider = {
 // content is opaque to the SUT.
 const FAKE_PAYLOAD_BYTES = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
 const FAKE_PAYLOAD_HEX = '0xdeadbeef';
-const fakeUnsignedTx = { payload: { type: 'contract-call', _opaque: true } } as unknown as Awaited<
-  ReturnType<typeof import('@sodax/libs/stacks/core').makeUnsignedContractCall>
->;
+const fakeUnsignedTx = { payload: { type: 'contract-call', _opaque: true } };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -245,7 +243,7 @@ describe('StacksSpokeService.getSTXBalance', () => {
     const fetchSpy = vi.fn().mockResolvedValueOnce({
       ok: true,
       json: () => Promise.resolve({ stx: { balance: '1234567' } }),
-    } as unknown as Response);
+    });
     vi.stubGlobal('fetch', fetchSpy);
 
     const result = await stacksSpoke.getSTXBalance(SRC_ADDR);
@@ -255,10 +253,7 @@ describe('StacksSpokeService.getSTXBalance', () => {
   });
 
   it('throws with the upstream statusText when the response is not ok', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValueOnce({ ok: false, statusText: 'Internal Server Error' } as unknown as Response),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: false, statusText: 'Internal Server Error' }));
 
     await expect(stacksSpoke.getSTXBalance(SRC_ADDR)).rejects.toThrow(
       'Error fetching STX balance: Internal Server Error',
@@ -271,10 +266,7 @@ describe('StacksSpokeService.getSTXBalance', () => {
     // TypeError rather than an explicit "unexpected response shape" error.
     // Pinning the behaviour so a future contributor adding a runtime guard
     // knows it's a contract change.
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) } as unknown as Response),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) }));
 
     await expect(stacksSpoke.getSTXBalance(SRC_ADDR)).rejects.toThrow(TypeError);
   });
@@ -289,7 +281,7 @@ describe('StacksSpokeService.readTokenBalance', () => {
     // The SUT casts the result to `{ value: UIntCV }`, then returns `.value.value`. The actual
     // shape returned by fetchCallReadOnlyFunction for `get-balance` is `(ok uint)` → a ResponseOk
     // wrapping a UInt — but the SUT reads it via the simpler `{ value: UIntCV }` cast.
-    const fakeResponse = { value: { type: 1, value: 9_999n } as unknown as UIntCV };
+    const fakeResponse = { value: { type: 1, value: 9_999n } };
     mocks.fetchCallReadOnlyFunction.mockResolvedValueOnce(fakeResponse);
 
     const result = await stacksSpoke.readTokenBalance(STACKS_BNUSD, STACKS_ASSET_MGR);
@@ -477,7 +469,7 @@ describe('StacksSpokeService.deposit', () => {
       vi.fn().mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ fungible_tokens: [{ name: 'bnusd' }] }),
-      } as unknown as Response),
+      }),
     );
 
     const result = await stacksSpoke.deposit(
@@ -531,7 +523,7 @@ describe('StacksSpokeService.deposit', () => {
       vi.fn().mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ fungible_tokens: [{ name: 'sbtc-token' }, { name: 'sbtc-token-locked' }] }),
-      } as unknown as Response),
+      }),
     );
 
     await stacksSpoke.deposit(depositParams<false>({ raw: false, walletProvider: mockStacksProvider, token: SBTC }));
@@ -557,7 +549,7 @@ describe('StacksSpokeService.getDeposit', () => {
     const fetchSpy = vi.fn().mockResolvedValueOnce({
       ok: true,
       json: () => Promise.resolve({ stx: { balance: '42' } }),
-    } as unknown as Response);
+    });
     vi.stubGlobal('fetch', fetchSpy);
 
     const result = await stacksSpoke.getDeposit({
@@ -575,7 +567,7 @@ describe('StacksSpokeService.getDeposit', () => {
     // The non-native branch checks the asset-manager's balance of the token — i.e. how much the
     // user has deposited. A regression that passed `srcAddress` instead would silently return the
     // user's wallet balance, which is a different number.
-    const fakeResponse = { value: { type: 1, value: 5_555n } as unknown as UIntCV };
+    const fakeResponse = { value: { type: 1, value: 5_555n } };
     mocks.fetchCallReadOnlyFunction.mockResolvedValueOnce(fakeResponse);
 
     const result = await stacksSpoke.getDeposit({
@@ -678,10 +670,7 @@ describe('StacksSpokeService.sendMessage', () => {
 describe('StacksSpokeService.waitForTransactionReceipt', () => {
   it('maps tx_status === "success" to status:success with the JSON body as the receipt', async () => {
     const receipt = { tx_id: TX_ID, tx_status: 'success', tx_type: 'contract_call' };
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(receipt) } as unknown as Response),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(receipt) }));
 
     const result = await stacksSpoke.waitForTransactionReceipt({ chainKey: STACKS, txHash: TX_ID });
 
@@ -692,10 +681,7 @@ describe('StacksSpokeService.waitForTransactionReceipt', () => {
 
   it('maps tx_status === "abort_by_response" to status:failure with a descriptive error', async () => {
     const receipt = { tx_id: TX_ID, tx_status: 'abort_by_response', tx_type: 'contract_call' };
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(receipt) } as unknown as Response),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(receipt) }));
 
     const result = await stacksSpoke.waitForTransactionReceipt({ chainKey: STACKS, txHash: TX_ID });
 
@@ -706,10 +692,7 @@ describe('StacksSpokeService.waitForTransactionReceipt', () => {
 
   it('maps tx_status === "abort_by_post_condition" to status:failure with a descriptive error', async () => {
     const receipt = { tx_id: TX_ID, tx_status: 'abort_by_post_condition', tx_type: 'contract_call' };
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(receipt) } as unknown as Response),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(receipt) }));
 
     const result = await stacksSpoke.waitForTransactionReceipt({ chainKey: STACKS, txHash: TX_ID });
 
@@ -722,10 +705,7 @@ describe('StacksSpokeService.waitForTransactionReceipt', () => {
     // `pending` tx_status loops without resolving. With `sleep` mocked to a no-op and a tiny
     // `maxTimeoutMs` (0), the loop body runs once at most before `Date.now() < deadline` fails.
     const pendingReceipt = { tx_id: TX_ID, tx_status: 'pending', tx_type: 'contract_call' };
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(pendingReceipt) } as unknown as Response),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(pendingReceipt) }));
 
     const result = await stacksSpoke.waitForTransactionReceipt({
       chainKey: STACKS,
@@ -746,7 +726,7 @@ describe('StacksSpokeService.waitForTransactionReceipt', () => {
     const fetchSpy = vi
       .fn()
       .mockRejectedValueOnce(new Error('ECONNRESET'))
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(successReceipt) } as unknown as Response);
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(successReceipt) });
     vi.stubGlobal('fetch', fetchSpy);
 
     const result = await stacksSpoke.waitForTransactionReceipt({
@@ -770,9 +750,7 @@ describe('StacksSpokeService.waitForTransactionReceipt', () => {
     expect(STACKS_TIMEOUT_MS).toBe(120_000);
     // Short-circuit: success on the first poll, so we don't actually wait 120s.
     const successReceipt = { tx_id: TX_ID, tx_status: 'success', tx_type: 'contract_call' };
-    const fetchSpy = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(successReceipt) } as unknown as Response);
+    const fetchSpy = vi.fn().mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(successReceipt) });
     vi.stubGlobal('fetch', fetchSpy);
 
     await stacksSpoke.waitForTransactionReceipt({ chainKey: STACKS, txHash: TX_ID });
@@ -789,10 +767,7 @@ describe('StacksSpokeService.waitForTransactionReceipt', () => {
     // through to the next poll iteration. With `maxTimeoutMs: 0`, the deadline
     // check exits the loop immediately and returns `status: 'timeout'`.
     const submittedReceipt = { tx_id: TX_ID, tx_status: 'submitted', tx_type: 'contract_call' };
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(submittedReceipt) } as unknown as Response),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(submittedReceipt) }));
 
     const result = await stacksSpoke.waitForTransactionReceipt({
       chainKey: STACKS,
@@ -809,10 +784,7 @@ describe('StacksSpokeService.waitForTransactionReceipt', () => {
     // With pending forever, the loop must exit when Date.now() exceeds the *caller-supplied*
     // deadline. We pin the timeout message text to match the override (not the default).
     const pendingReceipt = { tx_id: TX_ID, tx_status: 'pending', tx_type: 'contract_call' };
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(pendingReceipt) } as unknown as Response),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(pendingReceipt) }));
 
     const result = await stacksSpoke.waitForTransactionReceipt({
       chainKey: STACKS,

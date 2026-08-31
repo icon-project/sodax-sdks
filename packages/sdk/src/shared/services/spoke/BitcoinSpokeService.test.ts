@@ -30,6 +30,7 @@ import {
   type IBitcoinWalletProvider,
 } from '@sodax/types';
 import { keccak256, stringToBytes } from 'viem';
+import { invariant } from '../../utils/tiny-invariant.js';
 
 // --- hoisted mocks --------------------------------------------------------
 
@@ -98,7 +99,7 @@ beforeEach(() => {
     vi.fn((url: string, init?: RequestInit) => Promise.resolve(activeHandler(url, init))),
   );
   for (const k of Object.keys(mockBtcProvider) as (keyof IBitcoinWalletProvider)[]) {
-    const v = (mockBtcProvider as unknown as Record<string, unknown>)[k];
+    const v = mockBtcProvider[k];
     if (typeof v === 'function' && 'mockReset' in (v as object)) {
       (v as ReturnType<typeof vi.fn>).mockReset();
     }
@@ -264,9 +265,7 @@ describe('BitcoinSpokeService.estimateGas', () => {
   });
 
   it('throws when tx is a string (raw mode not supported here)', async () => {
-    await expect(btcSpoke.estimateGas({ chainKey: BTC, tx: 'whatever' as never })).rejects.toThrow(
-      /string tx not supported/,
-    );
+    await expect(btcSpoke.estimateGas({ chainKey: BTC, tx: 'whatever' })).rejects.toThrow(/string tx not supported/);
   });
 });
 
@@ -582,7 +581,7 @@ describe('BitcoinSpokeService.deposit', () => {
 
     // The SUT identifies tokens by `address`, not symbol. BTC's address is '0:0'.
     const BTC_TOKEN = btcConfig.supportedTokens.BTC.address;
-    const result = await btcSpoke.deposit({
+    const result = await btcSpoke.deposit<true>({
       srcChainKey: BTC,
       srcAddress: USER_ADDR,
       to: HUB_WALLET,
@@ -631,7 +630,7 @@ describe('BitcoinSpokeService.deposit', () => {
 
   it('TRADING with unsupported token → throws "Unsupported token: …"', async () => {
     await expect(
-      btcSpoke.deposit({
+      btcSpoke.deposit<true>({
         srcChainKey: BTC,
         srcAddress: USER_ADDR,
         to: HUB_WALLET,
@@ -648,7 +647,7 @@ describe('BitcoinSpokeService.deposit', () => {
     Object.defineProperty(btcSpoke, 'walletMode', { value: 'USER', configurable: true });
     try {
       await expect(
-        btcSpoke.deposit({
+        btcSpoke.deposit<true>({
           srcChainKey: BTC,
           srcAddress: USER_ADDR,
           to: HUB_WALLET,
@@ -746,7 +745,7 @@ describe('BitcoinSpokeService.deposit', () => {
     });
     const BTC_TOKEN = btcConfig.supportedTokens.BTC.address;
     const buildSpy = vi.spyOn(btcSpoke, 'buildDepositPsbt').mockResolvedValueOnce({ data: 'fakePsbt' } as never);
-    vi.spyOn(btcSpoke, 'signAndBroadcastTransaction').mockResolvedValueOnce(TX_HASH as never);
+    vi.spyOn(btcSpoke, 'signAndBroadcastTransaction').mockResolvedValueOnce(TX_HASH);
     try {
       await btcSpoke.deposit({
         srcChainKey: BTC,
@@ -760,6 +759,7 @@ describe('BitcoinSpokeService.deposit', () => {
       });
       // buildDepositPsbt receives only the UTXOs that survived the filter
       const receivedUtxos = buildSpy.mock.calls[0]?.[6];
+      invariant(receivedUtxos, 'buildDepositPsbt was not called');
       expect(receivedUtxos).toHaveLength(1);
       expect(receivedUtxos[0]).toMatchObject({ txid: 'bb', vout: 1 });
     } finally {
@@ -783,7 +783,7 @@ describe('BitcoinSpokeService.deposit', () => {
     });
     const BTC_TOKEN = btcConfig.supportedTokens.BTC.address;
     const buildSpy = vi.spyOn(btcSpoke, 'buildDepositPsbt').mockResolvedValueOnce({ data: 'fakePsbt' } as never);
-    vi.spyOn(btcSpoke, 'signAndBroadcastTransaction').mockResolvedValueOnce(TX_HASH as never);
+    vi.spyOn(btcSpoke, 'signAndBroadcastTransaction').mockResolvedValueOnce(TX_HASH);
     try {
       await btcSpoke.deposit({
         srcChainKey: BTC,
@@ -797,6 +797,7 @@ describe('BitcoinSpokeService.deposit', () => {
       });
       // All UTXOs (including the one that could have been filtered) are forwarded
       const receivedUtxos = buildSpy.mock.calls[0]?.[6];
+      invariant(receivedUtxos, 'buildDepositPsbt was not called');
       expect(receivedUtxos).toHaveLength(1);
       expect(receivedUtxos[0]).toMatchObject({ txid: 'cc', vout: 0 });
     } finally {

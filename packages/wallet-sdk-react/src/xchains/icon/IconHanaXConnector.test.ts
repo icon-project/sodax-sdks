@@ -13,6 +13,7 @@ const ICONEX_RELAY_RESPONSE = 'ICONEX_RELAY_RESPONSE';
 const VALID_ICON_ADDRESS = 'hx0000000000000000000000000000000000000001';
 
 const setHanaWallet = (value: unknown): void => {
+  // jsdom's Window has no `hanaWallet` — the injected-provider shape is only known at runtime.
   (window as unknown as Record<string, unknown>).hanaWallet = value;
 };
 

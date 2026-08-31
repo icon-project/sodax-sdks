@@ -134,14 +134,13 @@ jobs:
           key: turbo-v1-${{ runner.os }}-node${{ matrix.node-version }}-turbo${{ steps.turbo.outputs.version }}-${{ github.sha }}-${{ github.run_attempt }}
 
   e2e:
-    name: E2E Tests (live mainnet)
-    # Push-only (main / development). These hit live mainnet services, so they fail on state no PR
-    # controls — a solver that has dropped an intent from memory, an unindexed relay tx, token/vault
-    # config drift on chain. Gating merges on that blocks unrelated work and trains people to ignore
-    # a red check. Running on push still surfaces the drift, against the branch that actually moved.
-    # Run them locally with `pnpm test:e2e` when touching a flow they cover.
-    if: github.event_name != 'pull_request'
-    timeout-minutes: 15
+    name: E2E Tests (live mainnet, advisory)
+    # PRs only. The live suite is guidance (step continue-on-error + warning annotation) so this
+    # check stays green; job-level continue-on-error would still post a red check. Setup/build fail normally.
+    # Job timeout is only for install/build hangs; the live suite's budget is on the step so a
+    # timeout stays advisory instead of cancelling the job.
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 25
     runs-on: ubuntu-latest
 
     strategy:
@@ -171,5 +170,15 @@ jobs:
       - name: Build Packages
         run: pnpm build:packages
 
+      # continue-on-error on the step (not the job): the check stays green; the step is yellow.
+      # timeout-minutes here (not on the job) so a hung live suite is failure/cancelled, not a red job.
       - name: Run E2E Tests
+        id: e2e
+        timeout-minutes: 15
+        continue-on-error: true
         run: pnpm test:e2e
+
+      - name: Annotate E2E failure as warning
+        if: steps.e2e.outcome == 'failure' || steps.e2e.outcome == 'cancelled'
+        run: |
+          echo "::warning title=E2E Tests (live mainnet)::Live mainnet e2e failed or timed out. Guidance only — this check stays green. See the step log or run pnpm test:e2e locally."

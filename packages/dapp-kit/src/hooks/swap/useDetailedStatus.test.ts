@@ -63,7 +63,7 @@ describe('getDetailedStatusRefetchInterval', () => {
   // Both terminal states of the `SubmitSwapTxStatusV2` wire contract. `'failed'` is unreachable via
   // `getDetailedStatus` today (the SDK routes abandoned records to the solver) — asserted here as
   // the hook's own contract, so a terminal record is never polled forever if that routing changes.
-  it.each(['solved', 'failed'])('stops on a backend record at the terminal status %s', status => {
+  it.each(['solved', 'failed'] as const)('stops on a backend record at the terminal status %s', status => {
     expect(getDetailedStatusRefetchInterval(ok(backend(status)), 0)).toBe(false);
   });
 
@@ -73,7 +73,7 @@ describe('getDetailedStatusRefetchInterval', () => {
     'relayed',
     'posting_execution',
     'posted_execution',
-  ])('keeps polling a backend record at %s', status => {
+  ] as const)('keeps polling a backend record at %s', status => {
     expect(getDetailedStatusRefetchInterval(ok(backend(status)), 0)).toBe(STATUS_POLL_MS);
   });
 

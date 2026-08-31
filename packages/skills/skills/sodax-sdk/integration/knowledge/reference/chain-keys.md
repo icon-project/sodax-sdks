@@ -1,6 +1,6 @@
 # Chain keys
 
-21 supported chains. The `ChainKey` type is the union of every `ChainKeys.*` value. **`SpokeChainKey` is the same union — it includes Sonic.** The "spoke" naming refers to how feature services type their `srcChainKey` parameter (they accept the hub too — bridge / swap / staking etc. all run from Sonic as source via the hub-wallet abstraction). When you specifically need "EVM chains excluding the hub" use `EVM_SPOKE_ONLY_CHAIN_KEYS` / `isEvmSpokeOnlyChainKeyType`.
+The `ChainKey` type is the union of every `ChainKeys.*` value — the table below is the full set. **`SpokeChainKey` is the same union — it includes Sonic.** The "spoke" naming refers to how feature services type their `srcChainKey` parameter (they accept the hub too — bridge / swap / staking etc. all run from Sonic as source via the hub-wallet abstraction). When you specifically need "EVM chains excluding the hub" use `EVM_SPOKE_ONLY_CHAIN_KEYS` / `isEvmSpokeOnlyChainKeyType`.
 
 | `ChainKeys.*` | String value | Family | Hub vs spoke | Address type |
 |---|---|---|---|---|
@@ -37,9 +37,9 @@
 
 | Type | What it is |
 |---|---|
-| `ChainKey` | Union of all `ChainKeys.*` values (22 chains). |
-| `SpokeChainKey` | Same union as `ChainKey` — includes Sonic (22 chains). For "EVM chains excluding the hub" use `EvmSpokeOnlyChainKey`. |
-| `EvmChainKey` | Subset of `ChainKey` for the 14 EVM chains. |
+| `ChainKey` | Union of all `ChainKeys.*` values. |
+| `SpokeChainKey` | Same union as `ChainKey` — includes Sonic. For "EVM chains excluding the hub" use `EvmSpokeOnlyChainKey`. |
+| `EvmChainKey` | Subset of `ChainKey` for the EVM chains. |
 | `HubChainKey` | The literal `'sonic'`. |
 
 ### Chain-family helpers

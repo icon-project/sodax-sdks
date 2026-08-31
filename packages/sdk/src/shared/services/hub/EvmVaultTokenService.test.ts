@@ -11,7 +11,7 @@
  *      services there is no static-helper layer to mock, so no `vi.mock` / `vi.hoisted` is needed.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { type Address, type Hash, type Hex, type HttpTransport, type PublicClient, encodeFunctionData } from 'viem';
+import { type Address, type Hash, type HttpTransport, type PublicClient, encodeFunctionData } from 'viem';
 import { ChainKeys } from '@sodax/types';
 import { getEvmViemChain } from '../../utils/constant-utils.js';
 import type { IEvmWalletProvider, TokenInfo } from '@sodax/types';
@@ -119,7 +119,7 @@ describe('EvmVaultTokenService.getTokenInfos', () => {
   });
 
   it('preserves order: result[i] corresponds to tokens[i]', async () => {
-    vi.mocked(mockPublicClient.multicall).mockResolvedValueOnce([tokenInfoTupleB, tokenInfoTupleA] as never);
+    vi.mocked(mockPublicClient.multicall).mockResolvedValueOnce([tokenInfoTupleB, tokenInfoTupleA]);
 
     const result = await EvmVaultTokenService.getTokenInfos(VAULT, [TOKEN_B, TOKEN_A], mockPublicClient);
 
