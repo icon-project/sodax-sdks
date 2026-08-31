@@ -143,7 +143,7 @@ function draftToDebugJson(draft: Draft): string {
   const swapBackendSubmitTx = defaultUseBackendSubmitTx(effectiveSolverEndpoint(draft));
   return JSON.stringify(
     {
-      environment: draft.env,
+      swapSolverEnvironment: draft.env,
       swapSubmitTxMode: draft.swapUseBackendSubmitTx,
       swapUseBackendSubmitTx: submitTxChoiceToBoolean(draft.swapUseBackendSubmitTx, swapBackendSubmitTx),
       bridgeSubmitTxMode: draft.bridgeUseBackendSubmitTx,
@@ -364,19 +364,23 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
           <DialogTitle>Sodax Settings</DialogTitle>
           <DialogDescription>
             Feature-aware SDK and API config, ready to copy. Edit a value to override it — equal to its default (or
-            cleared) keeps following the environment.
+            cleared) keeps following its env var or packaged default.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-3">
           <div className="grid sm:grid-cols-[10rem_1fr] items-center gap-x-3 gap-y-1">
-            <Label className="text-sm font-medium">Environment</Label>
+            <Label className="text-sm font-medium">Swap solver env</Label>
             <Tabs value={draft.env} onValueChange={value => handleEnvChange(value as SolverEnv)}>
               <TabsList>
                 <TabsTrigger value={SolverEnv.Staging}>Staging</TabsTrigger>
                 <TabsTrigger value={SolverEnv.Production}>Production</TabsTrigger>
               </TabsList>
             </Tabs>
+            <p className="sm:col-start-2 text-xs text-muted-foreground">
+              Only swaps use this Production/Staging switch. Bridge has no staging preset; use the Bridge API URL below
+              to test another bridge deployment.
+            </p>
           </div>
 
           <SectionTitle>Submit handling</SectionTitle>
@@ -400,8 +404,8 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
             label="Bridge SDK submit-tx"
             value={draft.bridgeUseBackendSubmitTx}
             autoEnabled={bridgeAutoSubmitTx}
-            hint="Used by the Bridge SDK page. The Bridge API page calls submit-tx directly and uses the Bridge API URL below."
-            onText="On — backend submit via bridge API"
+            hint="Used by the Bridge SDK page. Auto stays on; it is not affected by the swap solver env."
+            onText="On — backend submit via gateway"
             offText="Off — client-side relay"
             onChange={value => set('bridgeUseBackendSubmitTx', value)}
           />
@@ -454,7 +458,7 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
             value={draft.bridgeApiBaseUrl}
             defaultValue={defaults.bridgeApiBaseUrl}
             error={errors.bridgeApiBaseUrl}
-            hint="Used by Bridge API page only. Bridge SDK backend submit-tx uses the gateway above."
+            hint="Used by Bridge API page only. Bridge has no staging preset; override this for a custom bridge-api deployment."
             onChange={value => set('bridgeApiBaseUrl', value)}
           />
           <TextRow
