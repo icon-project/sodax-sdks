@@ -874,7 +874,7 @@ describe('SonicSpokeService.createSwapIntent (static)', () => {
     it('throws when inputToken cast yields a falsy value', async () => {
       await expect(
         SonicSpokeService.createSwapIntent({
-          createIntentParams: baseCreateIntentParams(SONIC, { inputToken: '' as unknown as Address }),
+          createIntentParams: baseCreateIntentParams(SONIC, { inputToken: '' }),
           creatorHubWalletAddress: HUB_WALLET,
           solverConfig,
           fee: undefined,

@@ -114,7 +114,7 @@ These guide every change. Where a rule maps to tooling (types, lint, tests, `che
 
 To review a change against these rules, use the `review-core-sdk` skill (`.claude/skills/review-core-sdk/`).
 
-To author or validate changesets and govern a release (SemVer bumps, changelogs, `CONFIG_VERSION`), use the `release-governance` skill (`.claude/skills/release-governance/`).
+To cut a release, follow [`packages/RELEASE_INSTRUCTIONS.md`](packages/RELEASE_INSTRUCTIONS.md). `pnpm release` prompts for the version and applies it; committing, tagging, and publishing stay human steps.
 
 ## AI File Maintenance
 
@@ -132,7 +132,7 @@ GitHub Actions install dependencies with a frozen lockfile, lint, check circular
 
 A separate `Docs Drift` PR check (job name **Docs ship with code**, script `.github/scripts/check-docs-drift.sh`) fails when package runtime source changes without a *related* publishable docs signal: a mapped file under that package, a mapped `packages/sdk/docs/` page, a mapped root-level `docs/` guide whose `pkgs` array lists the package, the package `README.md`, or `packages/<pkg>/docs/` (non-sdk). JSDoc, unmirrored `packages/sdk/docs/` pages, `packages/skills`, an unrelated mapped file, and deleting a README or docs file do not count. Renaming source out of `src/` still counts as a source change, and every mapped `src` must be a `.md`/`.mdx` page that exists. A newly added `packages/sdk/docs/` page — including one moved in from elsewhere — must be on the map even on a docs-only PR, and renaming a mapped page must move its map entry with it; renaming an intentionally unmirrored page needs no entry. CI runs the check script from the PR base SHA when present so a PR cannot no-op the gate by editing it. Maintainers bypass the check with the `docs-not-needed` label. Nav entries in `docs/docs.json` are outside this gate.
 
-`pnpm test:e2e` runs in its own CI job **on push to `main` / `development` only**, never on pull requests: it hits live mainnet services, so it fails on state no PR controls (a solver that dropped an intent from memory, an unindexed relay tx, on-chain token/vault drift). Run it locally when you touch a flow it covers — a green PR does not mean the e2e suite passed.
+`pnpm test:e2e` runs in its own CI job **on pull requests only**, never on push to `main` / `development`. The check is advisory: a live-mainnet failure or timeout is a warning annotation (the job stays green) because those tests hit live services and can fail on solver/relay/on-chain drift the PR did not cause. Setup/install/build failures in that job still fail the check. Run it locally when you touch a flow it covers.
 
 A separate `AI Files Drift Check` workflow runs per pull request. Those deterministic gates prove AI files are structurally sound and that their code blocks compile; this one covers the prose they wrap. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to read its findings.
 

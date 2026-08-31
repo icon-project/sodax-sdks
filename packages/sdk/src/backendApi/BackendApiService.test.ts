@@ -483,7 +483,7 @@ describe('BackendApiService.getAllMoneyMarketBorrowers', () => {
 describe('BackendApiService config endpoints', () => {
   type ConfigCase = {
     name: string;
-    invoke: () => Promise<{ ok: boolean }>;
+    invoke: () => Promise<{ ok: true; value: unknown } | { ok: false; error: unknown }>;
     endpoint: string;
     // Schema-valid body for validated endpoints; an arbitrary object for the unvalidated
     // config/relay reads (getAllConfig / getRelayChainIdMap / getSpokeChainConfig).

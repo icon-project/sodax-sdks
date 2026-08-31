@@ -18,6 +18,7 @@ const SRC = '0x6c5f91fd68dd7b3a1aedb0f09946659272f523a4' as Address;
 const USDC = '0x29219dd400f2Bf60E5a23d13Be72B486D4038894' as Address;
 const INTENT_TX_HASH = '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef' as Hex;
 
+// Stub provider: createIntentAutoSwap — its only consumer here — is mocked in the test body.
 const EVM_WALLET = { chainType: 'EVM', sendTransaction: vi.fn() } as unknown as IEvmWalletProvider;
 
 const mockFetch = vi.fn();
@@ -35,15 +36,15 @@ function makeService(): PartnerFeeClaimService {
     analytics: noopAnalytics,
     isValidIntentRelayChainId: () => true,
     apiKey: 'instance-key',
-  } as unknown as ConfigService;
+  } as unknown as ConfigService; // deliberate partial: see comment above makeService
   const hubProvider = {
     publicClient: {
       readContract: vi.fn(),
       waitForTransactionReceipt: vi.fn(async () => ({ transactionHash: INTENT_TX_HASH })),
     },
     chainConfig: { chain: { key: ChainKeys.SONIC_MAINNET } },
-  } as unknown as HubProvider;
-  const spoke = {} as unknown as SpokeService;
+  } as unknown as HubProvider; // deliberate partial: see comment above makeService
+  const spoke = {} as unknown as SpokeService; // unused on this path: createIntentAutoSwap is mocked
   return new PartnerFeeClaimService({ config, hubProvider, spoke });
 }
 

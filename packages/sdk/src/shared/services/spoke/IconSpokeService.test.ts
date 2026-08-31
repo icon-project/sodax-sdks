@@ -78,11 +78,7 @@ const mockIconProvider = {
   sendTransaction: vi.fn(),
   getWalletAddress: vi.fn(),
   waitForTransactionReceipt: vi.fn(),
-} as unknown as Parameters<typeof iconSpoke.deposit>[0] extends infer P
-  ? P extends { walletProvider: infer W }
-    ? W
-    : never
-  : never;
+};
 
 // Helper: icon-sdk-js HttpCall<T> is `{ execute(): Promise<T> }`. Spying on the chain entry
 // (`iconService.call(...)` or `.getTransactionResult(...)`) requires returning an object with an
@@ -134,7 +130,7 @@ describe('IconSpokeService.estimateGas', () => {
   it('delegates to estimateStepCost with the per-chain debug RPC URL', async () => {
     mocks.estimateStepCost.mockResolvedValueOnce(123_456n);
 
-    const rawTx = { from: SRC_ADDR, to: ICON_ASSET_MGR } as never;
+    const rawTx = { from: SRC_ADDR, to: ICON_ASSET_MGR };
     const result = await iconSpoke.estimateGas({ chainKey: ICON, tx: rawTx });
 
     expect(result).toBe(123_456n);
