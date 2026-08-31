@@ -1,4 +1,5 @@
 import { SelectChain } from '@/components/swaps-api/SelectChain';
+import { PartnerFeeFields, usePartnerFeeDraft } from '@/components/shared/PartnerFeeFields';
 import { SelectToken } from '@/components/shared/SelectToken';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -98,6 +99,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const [sourceAmount, setSourceAmount] = useState<string>('');
   const [slippage, setSlippage] = useState<string>('0.5');
   const [intentParams, setIntentParams] = useState<CreateIntentParamsV2 | undefined>(undefined);
+  const feeDraft = usePartnerFeeDraft();
   const [open, setOpen] = useState(false);
   const [approveError, setApproveError] = useState<string | null>(null);
   const [swapError, setSwapError] = useState<string | null>(null);
@@ -211,11 +213,14 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
         tokenDstChainKey: dst.chain,
         amount: parseUnits(debouncedAmount, src.token.decimals).toString(),
         quoteType: 'exact_input',
+        // `/swaps/*` has no configured default — omitting this charges nothing, so the quote must
+        // carry the same fee the intent will, or the quoted output overstates what lands.
+        ...(feeDraft.partnerFee ? { partnerFee: feeDraft.partnerFee } : {}),
       };
     } catch {
       return undefined;
     }
-  }, [src.token, dst.token, src.chain, dst.chain, debouncedAmount]);
+  }, [src.token, dst.token, src.chain, dst.chain, debouncedAmount, feeDraft.partnerFee]);
 
   const quoteQuery = useSwapsApiQuote({ params: { body: quoteBody } });
   const quote = quoteQuery.data;
@@ -296,6 +301,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       dstAddress,
       srcPublicKey,
       bound,
+      ...(feeDraft.partnerFee ? { partnerFee: feeDraft.partnerFee } : {}),
       // Wire field: the backend forwards it to the SDK, which overrides the on-chain dstAddress with
       // the hook's address and encodes the payload. `dstAddress` above stays the recipient.
       ...(deliveryHookEnabled && availableHookKind ? { hook: { kind: availableHookKind } } : {}),
@@ -620,6 +626,8 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
             isDestination
           />
         )}
+
+        <PartnerFeeFields draft={feeDraft} unsetBehavior="charge no fee" />
       </CardContent>
       <CardFooter className="flex flex-col space-y-4">
         <div className="w-full text-sm text-muted-foreground">

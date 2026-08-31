@@ -19,6 +19,11 @@ export type SodaxSettings = {
   /** Instance-wide `x-api-key` → `SodaxOptions.apiKey`. */
   apiKey: string | null;
   relayerApiEndpoint: HttpUrl | null;
+  /** Global `SodaxOptions.fee` recipient. Applies to SDK flows only — the Swaps/Bridge API pages
+   *  send their own per-request fee and ignore SDK config. Set together with `partnerFeeBps`. */
+  partnerFeeAddress: Address | null;
+  /** Fee in basis points (100 = 1%), capped by the SDK at `FEE_PERCENTAGE_SCALE` (10000 = 100%). */
+  partnerFeeBps: number | null;
 };
 
 export const DEFAULT_SODAX_SETTINGS: SodaxSettings = {
@@ -32,7 +37,12 @@ export const DEFAULT_SODAX_SETTINGS: SodaxSettings = {
   bridgeApiBaseUrl: null,
   apiKey: null,
   relayerApiEndpoint: null,
+  partnerFeeAddress: null,
+  partnerFeeBps: null,
 };
+
+/** The SDK's own bound (`FEE_PERCENTAGE_SCALE`); the backend swaps/bridge APIs cap far lower. */
+export const MAX_PARTNER_FEE_BPS = 10000;
 
 const STORAGE_KEY = 'sodax-demo:sodax-settings';
 
@@ -42,6 +52,40 @@ export function isHttpUrl(value: unknown): value is HttpUrl {
 
 export function isEvmAddress(value: unknown): value is Address {
   return typeof value === 'string' && /^0x[0-9a-fA-F]{40}$/.test(value);
+}
+
+export function isFeeBps(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= MAX_PARTNER_FEE_BPS;
+}
+
+/** The fee is entered as a percent but stored and sent as basis points, so 0.01% (1 bp) is the
+ *  smallest expressible step: `calculatePercentageFeeAmount` does `BigInt(percentage)`, which
+ *  throws on a fractional bp rather than rounding it. */
+export const MAX_PARTNER_FEE_PERCENT = MAX_PARTNER_FEE_BPS / 100;
+
+function percentDecimals(text: string): number {
+  return text.split('.')[1]?.length ?? 0;
+}
+
+export function percentTextToBps(text: string): number | null {
+  const trimmed = text.trim();
+  if (!trimmed || !Number.isFinite(Number(trimmed)) || percentDecimals(trimmed) > 2) return null;
+  const bps = Math.round(Number(trimmed) * 100);
+  return isFeeBps(bps) ? bps : null;
+}
+
+export function bpsToPercentText(bps: number): string {
+  return String(bps / 100);
+}
+
+/** `undefined` when the text is empty (unset) or a valid percent. */
+export function partnerFeePercentError(text: string): string | undefined {
+  const trimmed = text.trim();
+  if (!trimmed) return undefined;
+  if (!Number.isFinite(Number(trimmed)) || Number(trimmed) < 0) return 'Must be a percentage, e.g. 0.1';
+  if (percentDecimals(trimmed) > 2) return 'Smallest step is 0.01% (1 bp)';
+  if (percentTextToBps(trimmed) === null) return `Max ${MAX_PARTNER_FEE_PERCENT}%`;
+  return undefined;
 }
 
 /** A set-but-empty env var means "unset" — matching how the SDK treats an empty key or base URL. */
@@ -73,6 +117,8 @@ export function loadSodaxSettings(): SodaxSettings {
     bridgeApiBaseUrl: isHttpUrl(raw.bridgeApiBaseUrl) ? raw.bridgeApiBaseUrl : null,
     apiKey: nonEmptyEnv(raw.apiKey) ? raw.apiKey : null,
     relayerApiEndpoint: isHttpUrl(raw.relayerApiEndpoint) ? raw.relayerApiEndpoint : null,
+    partnerFeeAddress: isEvmAddress(raw.partnerFeeAddress) ? raw.partnerFeeAddress : null,
+    partnerFeeBps: isFeeBps(raw.partnerFeeBps) ? raw.partnerFeeBps : null,
   };
 }
 

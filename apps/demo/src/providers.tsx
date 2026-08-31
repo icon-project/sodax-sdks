@@ -153,6 +153,11 @@ export default function Providers({ children }: { children: ReactNode }) {
       },
       swaps: { useBackendSubmitTx: s.swapUseBackendSubmitTx ?? defaultUseBackendSubmitTx(solverApiEndpoint) },
       bridge: { useBackendSubmitTx: s.bridgeUseBackendSubmitTx ?? true },
+      // Global partner fee. Per-call / per-feature fees still win, and the Swaps/Bridge API pages
+      // carry their own per-request fee — `SodaxOptions.fee` never reaches those routes.
+      ...(s.partnerFeeAddress && s.partnerFeeBps !== null
+        ? { fee: { address: s.partnerFeeAddress, percentage: s.partnerFeeBps } }
+        : {}),
       ...(s.relayerApiEndpoint ? { relay: { relayerApiEndpoint: s.relayerApiEndpoint } } : {}),
       chains: {
         [ChainKeys.SONIC_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.SONIC_MAINNET] },

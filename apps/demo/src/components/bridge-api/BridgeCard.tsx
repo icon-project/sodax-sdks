@@ -52,6 +52,7 @@ import {
 } from '@sodax/wallet-sdk-react';
 import { ArrowDownUp, ArrowLeftRight, Loader2 } from 'lucide-react';
 import { formatUnits, parseUnits } from 'viem';
+import { PartnerFeeFields, usePartnerFeeDraft } from '@/components/shared/PartnerFeeFields';
 import { useAppStore } from '@/zustand/useAppStore';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
 import { formatMutationFailureMessage } from '@/lib/utils';
@@ -102,8 +103,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
   const [isFromBtcReady, setIsFromBtcReady] = useState(false);
   const [isToBtcReady, setIsToBtcReady] = useState(false);
   // Optional per-request partner fee (demo): a receiver address + fee percent (0.3 = 0.3%, max 1%).
-  const [feeAddress, setFeeAddress] = useState('');
-  const [feePct, setFeePct] = useState('');
+  const feeDraft = usePartnerFeeDraft();
 
   const fromAccount = useXAccount({ xChainId: fromChainKey });
   const toAccount = useXAccount({ xChainId: toChainKey });
@@ -159,15 +159,8 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
       : toAccount.address;
   }, [toChainKey, toAccount.address]);
 
-  // Optional per-request partnerFee — routes a % of the input to `feeAddress`. Omit to use the backend default.
-  const partnerFee = useMemo(() => {
-    // Input is a PERCENT (e.g. 0.3 = 0.3%); convert to basis points (backend caps at 100 bps = 1%).
-    const pct = Number(feePct);
-    if (!feeAddress || !Number.isFinite(pct) || pct <= 0) return undefined;
-    const bps = Math.round(pct * 100);
-    if (bps <= 0 || bps > 100) return undefined;
-    return { address: feeAddress, percentage: bps };
-  }, [feeAddress, feePct]);
+  // Optional per-request partnerFee, seeded from Sodax Settings. Omit to use the backend default.
+  const partnerFee = feeDraft.partnerFee;
 
   // The wire DTO sent to every Bridge API call (swaps naming; built from the client-side selection).
   const bridgeBody = useMemo((): CreateBridgeIntentParamsV2 | undefined => {
@@ -457,23 +450,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
           </div>
 
           <div className="grow">
-            <Label>Partner fee (optional)</Label>
-            <div className="flex space-x-2">
-              <Input
-                type="text"
-                placeholder="Fee receiver address (0x…)"
-                value={feeAddress}
-                onChange={e => setFeeAddress(e.target.value)}
-              />
-              <Input
-                type="number"
-                step="0.1"
-                className="w-[130px]"
-                placeholder="% (max 1)"
-                value={feePct}
-                onChange={e => setFeePct(e.target.value)}
-              />
-            </div>
+            <PartnerFeeFields draft={feeDraft} unsetBehavior="use the backend's configured fee" />
             {feeQuote && fromToken ? (
               <p className="mt-1 text-xs text-muted-foreground">
                 Fee: {formatUnits(BigInt(feeQuote.fee), fromToken.decimals)} {fromToken.symbol}

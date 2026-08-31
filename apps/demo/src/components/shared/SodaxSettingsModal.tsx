@@ -13,8 +13,12 @@ import {
   envBridgeApiBaseUrl,
   envSodaxApiKey,
   envSwapsApiBaseUrl,
+  bpsToPercentText,
   isEvmAddress,
   isHttpUrl,
+  MAX_PARTNER_FEE_PERCENT,
+  partnerFeePercentError,
+  percentTextToBps,
   type SodaxSettings,
 } from '@/lib/sodaxSettings';
 import { Check, Copy, RotateCcw } from 'lucide-react';
@@ -28,8 +32,8 @@ const URL_FIELDS = [
   'bridgeApiBaseUrl',
   'relayerApiEndpoint',
 ] as const;
-const ADDRESS_FIELDS = ['intentsContract', 'protocolIntentsContract'] as const;
-const TEXT_FIELDS = [...URL_FIELDS, ...ADDRESS_FIELDS, 'apiKey'] as const;
+const ADDRESS_FIELDS = ['intentsContract', 'protocolIntentsContract', 'partnerFeeAddress'] as const;
+const TEXT_FIELDS = [...URL_FIELDS, ...ADDRESS_FIELDS, 'partnerFeePercent', 'apiKey'] as const;
 
 type TextField = (typeof TEXT_FIELDS)[number];
 
@@ -51,6 +55,9 @@ function defaultsFor(env: SolverEnv, gatewayUrl: string = DEFAULT_API_BASE_URL):
     apiBaseUrl: DEFAULT_API_BASE_URL,
     swapsApiBaseUrl: envSwapsApiBaseUrl ?? gatewayUrl,
     bridgeApiBaseUrl: envBridgeApiBaseUrl ?? DEFAULT_BRIDGE_API_BASE_URL,
+    // The demo ships no partner fee: unset means the SDK charges nothing.
+    partnerFeeAddress: '',
+    partnerFeePercent: '',
     apiKey: envSodaxApiKey ?? '',
     relayerApiEndpoint: DEFAULT_RELAYER_API_ENDPOINT,
   };
@@ -74,6 +81,8 @@ function seedDraft(env: SolverEnv, s: SodaxSettings): Draft {
     apiBaseUrl: s.apiBaseUrl ?? defaults.apiBaseUrl,
     swapsApiBaseUrl: s.swapsApiBaseUrl ?? defaults.swapsApiBaseUrl,
     bridgeApiBaseUrl: s.bridgeApiBaseUrl ?? defaults.bridgeApiBaseUrl,
+    partnerFeeAddress: s.partnerFeeAddress ?? defaults.partnerFeeAddress,
+    partnerFeePercent: s.partnerFeeBps === null ? defaults.partnerFeePercent : bpsToPercentText(s.partnerFeeBps),
     apiKey: s.apiKey ?? defaults.apiKey,
     relayerApiEndpoint: s.relayerApiEndpoint ?? defaults.relayerApiEndpoint,
   };
@@ -94,6 +103,17 @@ function validateDraft(draft: Draft): FieldErrors {
     if (value && !isEvmAddress(value)) {
       errors[field] = 'Must be a 0x-prefixed 20-byte address';
     }
+  }
+  // The SDK `fee` is a single object, so a lone address or a lone rate can't be expressed.
+  const feeAddress = draft.partnerFeeAddress.trim();
+  const feePercent = draft.partnerFeePercent.trim();
+  const feePercentError = partnerFeePercentError(feePercent);
+  if (feePercentError) {
+    errors.partnerFeePercent = feePercentError;
+  } else if (feePercent && !feeAddress) {
+    errors.partnerFeeAddress = 'Required when a fee rate is set';
+  } else if (feeAddress && !feePercent) {
+    errors.partnerFeePercent = 'Required when a fee address is set';
   }
   return errors;
 }
@@ -125,6 +145,8 @@ function draftToSettings(draft: Draft): SodaxSettings {
     bridgeApiBaseUrl: url('bridgeApiBaseUrl'),
     apiKey: norm('apiKey'),
     relayerApiEndpoint: url('relayerApiEndpoint'),
+    partnerFeeAddress: address('partnerFeeAddress'),
+    partnerFeeBps: percentTextToBps(draft.partnerFeePercent),
   };
 }
 
@@ -154,6 +176,9 @@ function draftToDebugJson(draft: Draft): string {
       apiBaseUrl: draft.apiBaseUrl.trim(),
       swapsApiBaseUrl: draft.swapsApiBaseUrl.trim(),
       bridgeApiBaseUrl: draft.bridgeApiBaseUrl.trim(),
+      partnerFeeAddress: draft.partnerFeeAddress.trim() || '(unset)',
+      // The percent is the input unit; bps is what the SDK and both APIs actually receive.
+      partnerFeeBps: percentTextToBps(draft.partnerFeePercent) ?? '(unset)',
       apiKey: draft.apiKey.trim() ? '(set)' : '(unset)',
       relayerApiEndpoint: draft.relayerApiEndpoint.trim(),
     },
@@ -311,6 +336,13 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
   const bridgeAutoSubmitTx = true;
   const swapSubmitTxMismatch = draft.swapUseBackendSubmitTx === 'on' && !swapAutoSubmitTx;
 
+  // Show the basis points the percent resolves to — that is the number the SDK and both APIs get.
+  const feeBps = percentTextToBps(draft.partnerFeePercent);
+  const feePercentHint =
+    feeBps === null
+      ? `Percent of the input — 0.1 = 0.1%, max ${MAX_PARTNER_FEE_PERCENT}%. Set it together with the fee address.`
+      : `= ${feeBps} bps. Set it together with the fee address.`;
+
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft(prev => ({ ...prev, [key]: value }));
 
   // Untouched fields (still showing the old env's default) follow the new env's default.
@@ -369,8 +401,10 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-3">
+          <SectionTitle>Swap SDK</SectionTitle>
+
           <div className="grid sm:grid-cols-[10rem_1fr] items-center gap-x-3 gap-y-1">
-            <Label className="text-sm font-medium">Swap solver env</Label>
+            <Label className="text-sm font-medium">Solver env</Label>
             <Tabs value={draft.env} onValueChange={value => handleEnvChange(value as SolverEnv)}>
               <TabsList>
                 <TabsTrigger value={SolverEnv.Staging}>Staging</TabsTrigger>
@@ -378,15 +412,13 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
               </TabsList>
             </Tabs>
             <p className="sm:col-start-2 text-xs text-muted-foreground">
-              Only swaps use this Production/Staging switch. Bridge has no staging preset; use the Bridge API URL below
-              to test another bridge deployment.
+              A swap-only preset: it swaps the solver endpoint below and nothing else. Both presets share the same
+              contracts.
             </p>
           </div>
 
-          <SectionTitle>Submit handling</SectionTitle>
-
           <SubmitTxRow
-            label="Swap SDK submit-tx"
+            label="Submit-tx"
             value={draft.swapUseBackendSubmitTx}
             autoEnabled={swapAutoSubmitTx}
             warning={
@@ -399,19 +431,6 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
             offText="Off — client-side relay to the solver"
             onChange={value => set('swapUseBackendSubmitTx', value)}
           />
-
-          <SubmitTxRow
-            label="Bridge SDK submit-tx"
-            value={draft.bridgeUseBackendSubmitTx}
-            autoEnabled={bridgeAutoSubmitTx}
-            hint="Used by the Bridge SDK page. Auto stays on; it is not affected by the swap solver env."
-            onText="On — backend submit via gateway"
-            offText="Off — client-side relay"
-            onChange={value => set('bridgeUseBackendSubmitTx', value)}
-          />
-
-          <SectionTitle>Solver (swap)</SectionTitle>
-
           <TextRow
             label="Solver API endpoint"
             value={draft.solverApiEndpoint}
@@ -425,13 +444,65 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
             value={draft.intentsContract}
             defaultValue={defaults.intentsContract}
             error={errors.intentsContract}
+            hint="Hub contract the Swap SDK approves and sends createIntent/cancelIntent to. Point it elsewhere only with a solver that watches that contract."
             onChange={value => set('intentsContract', value)}
+          />
+
+          <SectionTitle>Bridge SDK</SectionTitle>
+
+          <p className="text-xs text-muted-foreground">
+            Bridge has no staging preset and never reads the solver config — it runs against production whatever the
+            swap solver env above is set to.
+          </p>
+
+          <SubmitTxRow
+            label="Submit-tx"
+            value={draft.bridgeUseBackendSubmitTx}
+            autoEnabled={bridgeAutoSubmitTx}
+            hint="Used by the Bridge SDK page. Auto follows the SDK default (on)."
+            onText="On — backend submit via gateway"
+            offText="Off — client-side relay"
+            onChange={value => set('bridgeUseBackendSubmitTx', value)}
+          />
+          <TextRow
+            label="Bridge API base URL"
+            value={draft.bridgeApiBaseUrl}
+            defaultValue={defaults.bridgeApiBaseUrl}
+            error={errors.bridgeApiBaseUrl}
+            hint="Used by the Bridge API page only — override it for a custom bridge-api deployment. Bridge SDK calls follow the gateway below."
+            onChange={value => set('bridgeApiBaseUrl', value)}
+          />
+
+          <SectionTitle>Partner fee</SectionTitle>
+
+          <p className="text-xs text-muted-foreground">
+            The global SDK fee, applied to Swap SDK, Bridge SDK, money market and leverage yield. A per-call or
+            per-feature fee still wins over it, and the Swaps API / Bridge API pages send their own per-request fee
+            instead — this does not reach them.
+          </p>
+
+          <TextRow
+            label="Fee address"
+            value={draft.partnerFeeAddress}
+            defaultValue={defaults.partnerFeeAddress}
+            error={errors.partnerFeeAddress}
+            hint="Recipient of the fee. Unset (the demo default) means SDK flows charge nothing."
+            onChange={value => set('partnerFeeAddress', value)}
+          />
+          <TextRow
+            label="Fee (%)"
+            value={draft.partnerFeePercent}
+            defaultValue={defaults.partnerFeePercent}
+            error={errors.partnerFeePercent}
+            hint={feePercentHint}
+            onChange={value => set('partnerFeePercent', value)}
           />
           <TextRow
             label="Protocol intents"
             value={draft.protocolIntentsContract}
             defaultValue={defaults.protocolIntentsContract}
             error={errors.protocolIntentsContract}
+            hint="Used by the Partner fee claim page only — claim, withdraw and cancel target it. Not part of the swap flow."
             onChange={value => set('protocolIntentsContract', value)}
           />
 
@@ -452,14 +523,6 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
             error={errors.swapsApiBaseUrl}
             hint="Used by Swap API page and Swap SDK backend submit-tx. At its default it follows VITE_SWAPS_API_BASE_URL / gateway."
             onChange={value => set('swapsApiBaseUrl', value)}
-          />
-          <TextRow
-            label="Bridge API base URL"
-            value={draft.bridgeApiBaseUrl}
-            defaultValue={defaults.bridgeApiBaseUrl}
-            error={errors.bridgeApiBaseUrl}
-            hint="Used by Bridge API page only. Bridge has no staging preset; override this for a custom bridge-api deployment."
-            onChange={value => set('bridgeApiBaseUrl', value)}
           />
           <TextRow
             label="API key"
