@@ -73,7 +73,6 @@ const HEDERA = ChainKeys.HEDERA_MAINNET; // the only chain that scales native ms
 
 const arbConfig = spokeChainConfig[ARB];
 const ARB_ASSET_MANAGER = arbConfig.addresses.assetManager as Address;
-const ARB_CONNECTION = arbConfig.addresses.connection as Address;
 const ARB_NATIVE = arbConfig.nativeToken as Address;
 const ARB_RPC = arbConfig.rpcUrl;
 // A real ERC-20 deployed on Arbitrum (sourced from chain config). Grounds chain-independent
@@ -339,7 +338,7 @@ describe.each(TEST_CHAINS)('EvmSpokeService — %s', chainKey => {
       });
 
     it("ERC20 raw=true → rawTx targets this chain's assetManager with value=0n", async () => {
-      const result = await evmSpoke.deposit({
+      const result = await evmSpoke.deposit<true>({
         srcAddress: SRC_ADDR,
         srcChainKey: chainKey,
         to: HUB_WALLET,
@@ -381,7 +380,7 @@ describe.each(TEST_CHAINS)('EvmSpokeService — %s', chainKey => {
     });
 
     it("native raw=true → msg.value uses this chain's native scaling when token matches nativeToken", async () => {
-      const result = await evmSpoke.deposit({
+      const result = await evmSpoke.deposit<true>({
         srcAddress: SRC_ADDR,
         srcChainKey: chainKey,
         to: HUB_WALLET,
@@ -627,7 +626,7 @@ describe('EvmSpokeService.deposit — Hedera native msg.value scaling', () => {
     });
 
   it('scales a native HBAR deposit msg.value by 10^10 while leaving the transfer amount in 8 decimals', async () => {
-    const result = await evmSpoke.deposit({
+    const result = await evmSpoke.deposit<true>({
       srcAddress: SRC_ADDR,
       srcChainKey: HEDERA,
       to: HUB_WALLET,
@@ -649,7 +648,7 @@ describe('EvmSpokeService.deposit — Hedera native msg.value scaling', () => {
   });
 
   it('leaves msg.value at 0n for a non-native Hedera (ERC-20) deposit — no scaling', async () => {
-    const result = await evmSpoke.deposit({
+    const result = await evmSpoke.deposit<true>({
       srcAddress: SRC_ADDR,
       srcChainKey: HEDERA,
       to: HUB_WALLET,
@@ -665,7 +664,7 @@ describe('EvmSpokeService.deposit — Hedera native msg.value scaling', () => {
   });
 
   it('passes a non-Hedera native deposit msg.value through unscaled (Arbitrum)', async () => {
-    const result = await evmSpoke.deposit({
+    const result = await evmSpoke.deposit<true>({
       srcAddress: SRC_ADDR,
       srcChainKey: ARB,
       to: HUB_WALLET,
@@ -894,7 +893,7 @@ describe('EvmSpokeService — cross-chain independence', () => {
     const spy = vi.spyOn(sodax.config, 'getChainConfig');
 
     for (const chainKey of TEST_CHAINS) {
-      await evmSpoke.deposit({
+      await evmSpoke.deposit<true>({
         srcAddress: SRC_ADDR,
         srcChainKey: chainKey,
         to: HUB_WALLET,

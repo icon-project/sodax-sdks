@@ -101,3 +101,9 @@ pnpm checkTs
 ```
 
 The package builds ESM with declaration output and subpath entries for chain implementations. Preserve `instanceof` behavior across barrel/deep import paths.
+
+`checkTs` typechecks test files too (`.test.ts` and `.test.tsx`): `tsconfig.json` deliberately does
+not exclude them, and the shared `scripts/check-tests-typechecked.mjs` (repo root, the tail of
+`checkTs`) fails loudly if a future exclude hides them again. It also requires a one-line
+why-comment on every `as unknown as` in a test file, with pre-existing undocumented casts
+grandfathered in this package's `scripts/test-cast-comment-baseline.json`, which may only shrink.

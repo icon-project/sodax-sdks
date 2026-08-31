@@ -110,14 +110,15 @@ These guide every change. Where a rule maps to tooling (types, lint, tests, `che
 - **Keep feature services lean.** Feature-service code stays core feature logic; move reusable utilities and chain-specific work to `utils/`, entities, wallet providers, or spoke services. Extract a helper when it is genuinely shared, not as a speculative single-use abstraction.
 - **Code is the source of truth — comment sparingly.** Make the code self-explanatory (clear names, small functions) instead of explaining it in prose. Add a comment only when confidence is high that the code cannot carry the point: a non-obvious constraint, invariant, or decision — then **1 line (preferred), 2 lines max**. The only exception is a function/class/type-level doc comment, which may be longer. Never narrate what the code or config already says, never leave commented-out code, and never add multi-row inline blocks — they bloat the file and drift out of sync with the code.
 - **Cover new code with meaningful tests.** Add or extend tests for core flows, invariants, edge cases, and chain/feature matrices beside the changed code; don't rely on superficial coverage.
-- **Keep AI docs faithful.** When public behavior, imports, signatures, examples, chains, tokens, or feature support change, update `packages/skills` so agents can implement from code + docs without guessing; run `pnpm check:ai`.
+- **Keep AI docs faithful.** `packages/skills` teaches *partner* agents how to call the public API; it is not where we introduce a feature (that is `.claude/skills/` plus `packages/sdk/docs/`). When public behavior, imports, signatures, examples, chains, tokens, or feature support change, update `packages/skills` and run `pnpm check:ai`. That does not satisfy Docs Drift.
 - **Docs generated into docs.sodax.com keep absolute links.** `scripts/docs-pages-map.json` maps the READMEs and `packages/sdk/docs` pages that `pnpm docs:sync-pages` generates into `docs/`, moving and renaming them on the way. In those sources a link may stay relative only when the target lands in the same destination directory under the same filename; every other target (moved doc, ungenerated doc, source file, directory) needs an absolute `https://github.com/icon-project/sodax-sdks/blob/main/…` URL, and never a `sodax-document` URL. Gate: `pnpm check:doc-links`.
+- **New published docs must also be in nav.** Every mapped `src` is published, but that alone does not make it discoverable: its `dest` needs a matching entry in `docs/docs.json`, or the page is live but absent from the sidebar and from search. Gate: `pnpm check:docs-nav` — Docs Drift does not check nav.
 
-**Definition of done:** scoped diff · behavior verified against `src/` · relevant `test`/`checkTs`/`lint`/`check:ai` green · `packages/skills` updated when public behavior changed · no unrelated refactor.
+**Definition of done:** scoped diff · behavior verified against `src/` · relevant `test`/`checkTs`/`lint`/`check:ai` green · mapped docs when package `src/` changed · `packages/skills` updated when public behavior changed · no unrelated refactor.
 
 To review a change against these rules, use the `review-core-sdk` skill (`.claude/skills/review-core-sdk/`).
 
-To author or validate changesets and govern a release (SemVer bumps, changelogs, `CONFIG_VERSION`), use the `release-governance` skill (`.claude/skills/release-governance/`).
+To cut a release, follow [`packages/RELEASE_INSTRUCTIONS.md`](packages/RELEASE_INSTRUCTIONS.md). `pnpm release` prompts for the version and applies it; committing, tagging, and publishing stay human steps.
 
 ## AI File Maintenance
 
@@ -127,7 +128,7 @@ To author or validate changesets and govern a release (SemVer bumps, changelogs,
 - Prefer broad durable patterns over volatile enumerations. When exact values matter, point agents to source files or package docs rather than copying values.
 - Validate changes to these files with `pnpm check:ai-dev-files`.
 - When a pull request changes source that an AI file describes, a read-only agent compares that guidance against the source and reports guidance the current source disproves. Missing coverage is advisory, and so is the whole check until the `AI_DRIFT_ENFORCE` repository variable is set. Label a pull request `no-ai-drift` to skip it when a finding is wrong.
-- When a generated doc is added, renamed, or removed, update its `scripts/docs-pages-map.json` entry and the `docs.json` nav entry for its `dest` together, then run `pnpm docs:sync-pages`. Gates: `pnpm check:docs-pages` and `pnpm check:docs-nav`.
+- When a generated doc is added, renamed, or removed, update its `scripts/docs-pages-map.json` entry — every mapped src is published — and the `docs.json` nav entry for its `dest` together, then run `pnpm docs:sync-pages`. Gates: `pnpm check:docs-pages` and `pnpm check:docs-nav`.
 
 ## CI Shape
 
@@ -137,7 +138,9 @@ A separate `Docs site` job runs on every pull request and holds the docs gates: 
 
 A `Detect changed paths` job decides whether `Build and Test` runs: a pull request touching only `docs/` skips it, and `Docs site` still gates the change. It is a job-level `if:` rather than a workflow `paths-ignore` on purpose — a path-filtered workflow never reports, so a required check would sit pending forever.
 
-`pnpm test:e2e` runs in its own CI job **on push to `main` / `development` only**, never on pull requests: it hits live mainnet services, so it fails on state no PR controls (a solver that dropped an intent from memory, an unindexed relay tx, on-chain token/vault drift). Run it locally when you touch a flow it covers — a green PR does not mean the e2e suite passed.
+A separate `Docs Drift` PR check (job name **Docs ship with code**, script `.github/scripts/check-docs-drift.sh`) fails when package runtime source changes without a *related* publishable docs signal: a mapped file under that package, a mapped `packages/sdk/docs/` page, a mapped root-level `docs/` guide whose `pkgs` array lists the package, the package `README.md`, or `packages/<pkg>/docs/` (non-sdk). JSDoc, unmirrored `packages/sdk/docs/` pages, `packages/skills`, an unrelated mapped file, and deleting a README or docs file do not count. Renaming source out of `src/` still counts as a source change, and every mapped `src` must be a `.md`/`.mdx` page that exists. A newly added `packages/sdk/docs/` page — including one moved in from elsewhere — must be on the map even on a docs-only PR, and renaming a mapped page must move its map entry with it; renaming an intentionally unmirrored page needs no entry. CI runs the check script from the PR base SHA when present so a PR cannot no-op the gate by editing it. Maintainers bypass the check with the `docs-not-needed` label. Nav entries in `docs/docs.json` are outside this gate.
+
+`pnpm test:e2e` runs in its own CI job **on pull requests only**, never on push to `main` / `development`. The check is advisory: a live-mainnet failure or timeout is a warning annotation (the job stays green) because those tests hit live services and can fail on solver/relay/on-chain drift the PR did not cause. Setup/install/build failures in that job still fail the check. Run it locally when you touch a flow it covers.
 
 A separate `AI Files Drift Check` workflow runs per pull request. Those deterministic gates prove AI files are structurally sound and that their code blocks compile; this one covers the prose they wrap. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to read its findings.
 

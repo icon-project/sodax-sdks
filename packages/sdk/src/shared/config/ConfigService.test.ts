@@ -56,7 +56,9 @@ function remoteConfig(mutate?: (cfg: SodaxConfig) => void): SodaxConfig {
 
 const ok = (config: SodaxConfig, version = CONFIG_VERSION): Result<GetAllConfigApiResponse> => ({
   ok: true,
-  value: { version, config },
+  // Deliberate cast: the dynamic-config path is disabled (getAllConfig is never called), so this
+  // stub only needs to exist — it predates the flat v1 response shape and nothing reads it.
+  value: { version, config } as unknown as GetAllConfigApiResponse,
 });
 
 describe('ConfigService.initialize — current no-op contract (dynamic fetch/merge disabled)', () => {

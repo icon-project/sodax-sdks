@@ -4,6 +4,7 @@ import { fromHex } from 'viem';
 import { describe, expect, it } from 'vitest';
 
 import { isTimeoutError, toMystenTransaction } from './sui-utils.js';
+import { invariant } from './tiny-invariant.js';
 
 const SENDER = `0x${'11'.repeat(32)}`;
 const PACKAGE = `0x${'22'.repeat(32)}`;
@@ -15,14 +16,11 @@ const makeDepositLikeTx = (): Transaction => {
   const tx = new Transaction();
   tx.mergeCoins(COIN, [`0x${'55'.repeat(32)}`]);
   const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(1_000_000n)]);
+  invariant(coin, 'splitCoins returned no coin');
   tx.moveCall({
     target: `${PACKAGE}::asset_manager::transfer`,
     typeArguments: ['0x2::sui::SUI'],
-    arguments: [
-      tx.object(STATE),
-      coin as ReturnType<Transaction['object']>,
-      tx.pure(bcs.vector(bcs.u8()).serialize(fromHex('0xdeadbeef', 'bytes'))),
-    ],
+    arguments: [tx.object(STATE), coin, tx.pure(bcs.vector(bcs.u8()).serialize(fromHex('0xdeadbeef', 'bytes')))],
   });
   return tx;
 };

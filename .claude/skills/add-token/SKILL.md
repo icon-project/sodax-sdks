@@ -133,7 +133,18 @@ URL only resolves once merged to `main`. See [`packages/assets/README.md`](../..
 - The solver/relayer backend must recognize the hub asset to route intents. The SDK config
   only makes the SDK *aware* of the token; it does not create liquidity or routes.
 
-## 5. Verify
+## 5. Docs Drift
+Changing `packages/types/src` triggers Docs Drift. Update the matching *mapped*
+feature page (`packages/sdk/docs/SWAPS.md` for swap tokens, `MONEY_MARKET.md` for
+MM tokens) — any mapped `packages/sdk/docs/` page satisfies a `types` change.
+`packages/types/README.md` passes the gate but does not publish, so
+prefer a page that does. JSDoc and `packages/skills` do not pass. A brand-new
+`packages/sdk/docs/` page must join the `mirrored` list in
+`scripts/docs-pages-map.json` plus a `docs/docs.json` nav entry — or, if it is
+not ready to go live, the map's `unpublished` list. Ask for the `docs-not-needed` label only
+when the change is truly not user-facing (checksum/casing, internal rename).
+
+## 6. Verify
 ```bash
 pnpm --filter @sodax/types test    # vitest → tokens-dedup.test.ts: no dup symbol/address (swap/MM lists only)
                                     #          config-address-checksum.test.ts: EVM addresses pass viem's isAddress
@@ -159,8 +170,8 @@ That is this skill's whole job: the token is defined and wired in the **right pl
 and the checks pass.
 
 **Out of scope — do not do these here:** versioning / releasing / publishing and any
-`CONFIG_VERSION` bump are the separate **`release-governance`** skill. This change only edits
-`@sodax/types` source; it bumps nothing.
+`CONFIG_VERSION` bump belong to the release flow in `packages/RELEASE_INSTRUCTIONS.md`. This change
+only edits `@sodax/types` source; it bumps nothing.
 
 ## Reference
 `references/example-xstock-swap-token.md` — the real 8-token swap-only change, fully worked.

@@ -89,7 +89,7 @@ try {
 3. Route chain-specific behavior through `SpokeService` or an existing shared helper.
 4. Keep backend request/response types JSON-safe; use strings for serialized numeric amounts.
 5. Add or update unit tests beside the changed code.
-6. Update `docs/` and `packages/skills` only when public SDK behavior, imports, signatures, or examples changed.
+6. Update a *mapped* page in `docs/` (listed in `scripts/docs-pages-map.json`) so Docs Drift passes. JSDoc and `packages/skills` do not satisfy that gate. Update `packages/skills` as well when public SDK behavior, imports, signatures, or examples changed, then run `pnpm check:ai`. A brand-new `docs/` page must be added to the map — every mapped src is published — and given its `docs/docs.json` nav entry; one not ready to go live goes on the map's `unpublished` list instead.
 
 To scaffold a **whole new feature/service**, use the `add-feature` skill (`.claude/skills/add-feature/`) — it covers the `Sodax` facade wiring, the `src/index.ts` barrel, and the error/dapp-kit footprint.
 
@@ -129,6 +129,15 @@ pnpm checkTs
 ```
 
 The package builds dual ESM/CJS output with `tsup`. Relative imports in source use `.js` extensions.
+
+`checkTs` typechecks test files too: `tsconfig.json` deliberately does not exclude `**/*.test.ts`,
+and the shared `scripts/check-tests-typechecked.mjs` (repo root, the tail of `checkTs`) fails
+loudly if a future exclude hides them again. Casts in tests follow the no-escape-hatches rule: a stub cast (`as never`,
+`as unknown as …`) is allowed only while removing it breaks the typecheck — a cast that compiles
+away without it is dead weight that can hide fixture drift; delete it. Every `as unknown as` in a
+test also needs a one-line why-comment on or just above it — the same guard script enforces this
+for new casts, with pre-existing undocumented ones grandfathered per file in
+`scripts/test-cast-comment-baseline.json`, which may only shrink (`--update-baseline` regenerates it).
 
 `build` runs `scripts/verify-dist-exports.mjs` after `tsup`, asserting every file named in
 `package.json#exports` was actually emitted. `tsup` runs with `clean: true` and writes JS about ten

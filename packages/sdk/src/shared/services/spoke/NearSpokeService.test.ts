@@ -17,7 +17,15 @@
  *     receipts) are spied per-test on the live instance.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChainKeys, getIntentRelayChainId, spokeChainConfig, type Hex, type INearWalletProvider } from '@sodax/types';
+import {
+  ChainKeys,
+  getIntentRelayChainId,
+  spokeChainConfig,
+  type FTTransferCallArgs,
+  type Hex,
+  type INearWalletProvider,
+  type SendMsgArgs,
+} from '@sodax/types';
 
 // --- hoisted mocks --------------------------------------------------------
 
@@ -52,7 +60,9 @@ const NEAR_BNUSD = nearConfig.bnUSD;
 const NEAR_POLLING_MS = nearConfig.pollingConfig.pollingIntervalMs;
 const NEAR_TIMEOUT_MS = nearConfig.pollingConfig.maxTimeoutMs;
 
-const SRC_ADDR = 'user.near';
+// Deliberate cast: GetAddressType<'near…'> is declared as Address (0x-hex) in @sodax/types, but
+// real NEAR accounts are names like `user.near` and the service consumes them as such at runtime.
+const SRC_ADDR = 'user.near' as unknown as `0x${string}`;
 const HUB_WALLET = '0x2222222222222222222222222222222222222222' as `0x${string}`;
 const DST_ADDR = '0x3333333333333333333333333333333333333333' as `0x${string}`;
 const TX_HASH = '11111111111111111111111111111111';
@@ -120,7 +130,7 @@ describe('NearSpokeService.estimateGas', () => {
 
 describe('NearSpokeService.queryContract', () => {
   it('forwards contractId/method/args to rpcProvider.callFunction', async () => {
-    const spy = vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockResolvedValueOnce('hello' as never);
+    const spy = vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockResolvedValueOnce('hello');
 
     const result = await nearSpoke.queryContract('asset.near', 'get_x', { id: 1 });
 
@@ -139,7 +149,7 @@ describe('NearSpokeService.getRateLimit', () => {
       max_available: 100,
       available: 80,
       rate_per_second: 5,
-    } as never);
+    });
 
     const result = await nearSpoke.getRateLimit(NEAR_BNUSD, NEAR);
     expect(result).toEqual({ maxAvailable: 100, available: 80, ratePerSecond: 5 });
@@ -153,7 +163,7 @@ describe('NearSpokeService.getRateLimit', () => {
   });
 
   it('returns zeroes when callFunction resolves to undefined', async () => {
-    vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockResolvedValueOnce(undefined as never);
+    vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockResolvedValueOnce(undefined);
 
     const result = await nearSpoke.getRateLimit(NEAR_BNUSD, NEAR);
     expect(result).toEqual({ maxAvailable: 0, available: 0, ratePerSecond: 0 });
@@ -162,7 +172,7 @@ describe('NearSpokeService.getRateLimit', () => {
   it('queries the per-chain rateLimit contract from config', async () => {
     const spy = vi
       .spyOn(nearSpoke.rpcProvider, 'callFunction')
-      .mockResolvedValueOnce({ max_available: 1, available: 1, rate_per_second: 1 } as never);
+      .mockResolvedValueOnce({ max_available: 1, available: 1, rate_per_second: 1 });
 
     await nearSpoke.getRateLimit(NEAR_BNUSD, NEAR);
     expect(spy).toHaveBeenCalledWith({
@@ -206,10 +216,11 @@ describe('NearSpokeService.fillIntent', () => {
     expect(tx.params.contractId).toBe(NEAR_BNUSD);
     expect(tx.params.method).toBe('ft_transfer_call');
     expect(tx.params.deposit).toBe(1n);
-    expect((tx.params.args as Record<string, unknown>).receiver_id).toBe(NEAR_INTENT_FILLER);
-    expect((tx.params.args as Record<string, unknown>).amount).toBe('1000');
+    const args = tx.params.args as FTTransferCallArgs;
+    expect(args.receiver_id).toBe(NEAR_INTENT_FILLER);
+    expect(args.amount).toBe('1000');
     // msg is JSON-stringified FillIntent payload
-    expect(typeof (tx.params.args as Record<string, unknown>).msg).toBe('string');
+    expect(typeof args.msg).toBe('string');
   });
 });
 
@@ -247,17 +258,16 @@ describe('NearSpokeService.deposit', () => {
   });
 
   it('non-native raw=true → ft_transfer_call on the token contract with deposit=1 yoctoNEAR', async () => {
-    const tx = (await nearSpoke.deposit(depositParams<true>({ token: NEAR_BNUSD, raw: true }))) as {
-      params: { contractId: string; method: string; deposit: bigint; args: Record<string, unknown> };
-    };
+    const tx = await nearSpoke.deposit(depositParams<true>({ token: NEAR_BNUSD, raw: true }));
 
     expect(tx.params.contractId).toBe(NEAR_BNUSD);
     expect(tx.params.method).toBe('ft_transfer_call');
     expect(tx.params.deposit).toBe(1n);
-    expect(tx.params.args.receiver_id).toBe(NEAR_ASSET_MGR);
-    expect(tx.params.args.amount).toBe('1000');
+    const args = tx.params.args as FTTransferCallArgs;
+    expect(args.receiver_id).toBe(NEAR_ASSET_MGR);
+    expect(args.amount).toBe('1000');
     // msg encodes {to, data} as JSON.
-    const msg = JSON.parse(tx.params.args.msg as string);
+    const msg = JSON.parse(args.msg ?? '');
     expect(msg).toHaveProperty('to');
     expect(msg).toHaveProperty('data');
   });
@@ -278,7 +288,7 @@ describe('NearSpokeService.deposit', () => {
 
 describe('NearSpokeService.getDeposit', () => {
   it('native → calls get_balance on assetManager with empty args', async () => {
-    const spy = vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockResolvedValueOnce('500' as never);
+    const spy = vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockResolvedValueOnce('500');
 
     const result = await nearSpoke.getDeposit({
       srcChainKey: NEAR,
@@ -291,7 +301,7 @@ describe('NearSpokeService.getDeposit', () => {
   });
 
   it('non-native → calls ft_balance_of on token with account_id=assetManager', async () => {
-    const spy = vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockResolvedValueOnce('7500' as never);
+    const spy = vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockResolvedValueOnce('7500');
 
     const result = await nearSpoke.getDeposit({
       srcChainKey: NEAR,
@@ -308,7 +318,7 @@ describe('NearSpokeService.getDeposit', () => {
   });
 
   it('throws when callFunction returns a non-string (defensive type check)', async () => {
-    vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockResolvedValueOnce(123 as never);
+    vi.spyOn(nearSpoke.rpcProvider, 'callFunction').mockResolvedValueOnce(123);
 
     await expect(nearSpoke.getDeposit({ srcChainKey: NEAR, srcAddress: SRC_ADDR, token: NEAR_BNUSD })).rejects.toThrow(
       'Failed to get balance',
@@ -331,7 +341,7 @@ describe('NearSpokeService.isStorageRegistered', () => {
   it('non-native registered → storage_balance_of returns an object → true', async () => {
     const spy = vi
       .spyOn(nearSpoke.rpcProvider, 'callFunction')
-      .mockResolvedValueOnce({ total: '1250000000000000000000', available: '0' } as never);
+      .mockResolvedValueOnce({ total: '1250000000000000000000', available: '0' });
 
     expect(await nearSpoke.isStorageRegistered(NEAR_BNUSD, SRC_ADDR)).toBe(true);
     expect(spy).toHaveBeenCalledWith({
@@ -349,15 +359,12 @@ describe('NearSpokeService.isStorageRegistered', () => {
 
 describe('NearSpokeService.registerStorage', () => {
   it('non-native raw=true → storage_deposit tx with registration_only and default 0.00125 NEAR bond', async () => {
-    const tx = (await nearSpoke.registerStorage({
+    const tx = await nearSpoke.registerStorage({
       token: NEAR_BNUSD,
       accountId: SRC_ADDR,
       walletProvider: mockNearProvider,
       raw: true,
-    })) as {
-      signerId: string;
-      params: { contractId: string; method: string; args: Record<string, unknown>; deposit: bigint; gas: bigint };
-    };
+    });
 
     expect(tx.signerId).toBe(SRC_ADDR);
     expect(tx.params.contractId).toBe(NEAR_BNUSD);
@@ -420,10 +427,7 @@ describe('NearSpokeService.sendMessage', () => {
     }) as SendMessageParams<typeof NEAR, Raw>;
 
   it('raw=true → returns tx targeting the connection contract with send_message', async () => {
-    const tx = (await nearSpoke.sendMessage(sendMessageParams<true>({ raw: true }))) as {
-      signerId: string;
-      params: { contractId: string; method: string; args: Record<string, unknown>; deposit: bigint; gas: bigint };
-    };
+    const tx = await nearSpoke.sendMessage(sendMessageParams<true>({ raw: true }));
 
     expect(tx.signerId).toBe(SRC_ADDR);
     expect(tx.params.contractId).toBe(NEAR_CONNECTION);
@@ -431,7 +435,7 @@ describe('NearSpokeService.sendMessage', () => {
     expect(tx.params.deposit).toBe(0n);
     expect(tx.params.gas).toBe(NEAR_DEFAULT_GAS);
     // dst_chain_id is the relay id parsed to a number
-    expect(tx.params.args.dst_chain_id).toBe(Number(getIntentRelayChainId(SONIC)));
+    expect((tx.params.args as SendMsgArgs).dst_chain_id).toBe(Number(getIntentRelayChainId(SONIC)));
   });
 
   it('raw=false → delegates to walletProvider.signAndSubmitTxn and returns hash', async () => {
@@ -456,7 +460,7 @@ describe('NearSpokeService.getLimit / getAvailable', () => {
       max_available: 42,
       available: 10,
       rate_per_second: 1,
-    } as never);
+    });
 
     expect(await nearSpoke.getLimit(NEAR_BNUSD, NEAR)).toBe(42n);
   });
@@ -466,7 +470,7 @@ describe('NearSpokeService.getLimit / getAvailable', () => {
       max_available: 42,
       available: 10,
       rate_per_second: 1,
-    } as never);
+    });
 
     expect(await nearSpoke.getAvailable(NEAR_BNUSD, NEAR)).toBe(10n);
   });
