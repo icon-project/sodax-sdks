@@ -38,7 +38,7 @@ Detailed feature docs live in `docs/`. Read the relevant feature doc before chan
 
 ### Links In `docs/` And `README.md`
 
-`sodax-document` mirrors most of `docs/` plus `README.md` into GitBook (docs.sodax.com) and **moves and renames them** on the way — the feature docs (`SWAPS.md`, `MONEY_MARKET.md`, `BRIDGE.md`, `STAKING.md`, `MIGRATION.md`, `LEVERAGE_YIELD*.md`) land in `functional-modules/` lowercased, `BACKEND_API.md` / `INTENT_RELAY_API.md` in `tooling-modules/`, `BITCOIN_INTEGRATION.md` under `how-to/`, and only the how-to set (`CONFIGURE_SDK`, `ESTIMATE_GAS`, `HOW_TO_MAKE_A_SWAP`, `MONETIZE_SDK`, `WALLET_PROVIDERS`, `STELLAR_TRUSTLINE`, `RELAYER_API_ENDPOINTS`, `SOLVER_API_ENDPOINTS`) keeps its directory and filenames. `scripts/gitbook-sync-map.json` holds the full mapping; some docs (`SWAPS_API.md`, `SPONSORING.md`, `LOGGING.md`, `DEX.md`, `ARCHITECTURE_REFACTOR_SUMMARY.md`) are not mirrored at all.
+`sodax-document` mirrors most of `docs/` plus `README.md` into GitBook (docs.sodax.com) and **moves and renames them** on the way — the feature docs (`SWAPS.md`, `MONEY_MARKET.md`, `BRIDGE.md`, `STAKING.md`, `MIGRATION.md`, `LEVERAGE_YIELD*.md`) land in `functional-modules/` lowercased, `BACKEND_API.md` / `INTENT_RELAY_API.md` in `tooling-modules/`, `BITCOIN_INTEGRATION.md` under `how-to/`, and only the how-to set (`CONFIGURE_SDK`, `ESTIMATE_GAS`, `HOW_TO_MAKE_A_SWAP`, `MONETIZE_SDK`, `WALLET_PROVIDERS`, `STELLAR_TRUSTLINE`, `RELAYER_API_ENDPOINTS`, `SOLVER_API_ENDPOINTS`) keeps its directory and filenames. `scripts/gitbook-sync-map.json` holds the full mapping; some docs (`SWAPS_API.md`, `BRIDGE_API.md`, `SPONSORING.md`, `LOGGING.md`, `DEX.md`, `ARCHITECTURE_REFACTOR_SUMMARY.md`) are not mirrored at all.
 
 So a relative link may only point at a doc mirrored into the same directory under the same name — in practice how-to → how-to, e.g. `HOW_TO_MAKE_A_SWAP.md` → `./CONFIGURE_SDK.md`. Everything else, including the reverse direction (`SWAPS.md` → `CONFIGURE_SDK.md`), needs an absolute `https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/<FILE>.md` URL (`/tree/main/` for a directory). Relative links that break here render as 404s on docs.sodax.com and get rewritten to dead `sodax-document` URLs on every sync. Run `pnpm check:doc-links`.
 
@@ -89,7 +89,7 @@ try {
 3. Route chain-specific behavior through `SpokeService` or an existing shared helper.
 4. Keep backend request/response types JSON-safe; use strings for serialized numeric amounts.
 5. Add or update unit tests beside the changed code.
-6. Update `docs/` and `packages/skills` only when public SDK behavior, imports, signatures, or examples changed.
+6. Update a *mapped* page in `docs/` (listed in `scripts/gitbook-sync-map.json`) so Docs Drift passes. JSDoc and `packages/skills` do not satisfy that gate. Update `packages/skills` as well when public SDK behavior, imports, signatures, or examples changed, then run `pnpm check:ai`. A brand-new `docs/` page must be added to the map (sodax-document copies mapped srcs; add the sidebar entry on the docs-sync PR).
 
 To scaffold a **whole new feature/service**, use the `add-feature` skill (`.claude/skills/add-feature/`) — it covers the `Sodax` facade wiring, the `src/index.ts` barrel, and the error/dapp-kit footprint.
 

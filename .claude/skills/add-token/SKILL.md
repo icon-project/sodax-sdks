@@ -133,7 +133,18 @@ URL only resolves once merged to `main`. See [`packages/assets/README.md`](../..
 - The solver/relayer backend must recognize the hub asset to route intents. The SDK config
   only makes the SDK *aware* of the token; it does not create liquidity or routes.
 
-## 5. Verify
+## 5. Docs Drift
+Changing `packages/types/src` triggers Docs Drift. Update the matching *mapped*
+feature page (`packages/sdk/docs/SWAPS.md` for swap tokens, `MONEY_MARKET.md` for
+MM tokens) — any mapped `packages/sdk/docs/` page satisfies a `types` change.
+`packages/types/README.md` passes the gate but does not publish, so
+prefer a page that does. JSDoc and `packages/skills` do not pass. A brand-new
+`packages/sdk/docs/` page must join the `mirrored` list in
+`scripts/gitbook-sync-map.json` plus a `docs/docs.json` nav entry — or, if it is
+not ready to go live, the map's `unpublished` list. Ask for the `docs-not-needed` label only
+when the change is truly not user-facing (checksum/casing, internal rename).
+
+## 6. Verify
 ```bash
 pnpm --filter @sodax/types test    # vitest → tokens-dedup.test.ts: no dup symbol/address (swap/MM lists only)
                                     #          config-address-checksum.test.ts: EVM addresses pass viem's isAddress

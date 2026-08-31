@@ -39,5 +39,8 @@ release-notes.md
 drift-scope.json
 drift-comment.md
 
+# Temp git fixtures from scripts/check-docs-drift.test.mjs
+.tmp-docs-drift-*/
+
 # Local SDK audit scratch — the shared Audits/ reports are tracked; the sdk/ subdir stays local.
 Audits/sdk

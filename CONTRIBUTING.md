@@ -22,6 +22,132 @@ Don't forget to setup your IDE with `biome.js`.
 
 Run tests with `pnpm test`.
 
+## Documentation
+
+Docs ship with code — every feature PR includes its documentation. This repo is
+the source of truth for everything on docs.sodax.com: docs are written here,
+next to the code, and Mintlify publishes them from `main`.
+
+Two lanes write to the site, and they are not equivalent:
+
+- **In a pull request** — engineers, and anyone changing a page that is
+  generated from a source file. Reviewed, and every check below runs against
+  it. This is the lane the rest of this section describes.
+- **In the Mintlify dashboard** — the docs and marketing team, on hand-written
+  pages. Publishing there **commits straight to whichever branch the dashboard
+  is pointed at, with no pull request and none of the checks below** — they are
+  all `pull_request`-triggered, so nothing runs. Whether an edit is allowed is
+  decided entirely by the dashboard's own settings, not by this repo.
+
+Dashboard commits arrive authored as `usr-icon-foundation` ("Updated mintlify
+pages") — one shared account for everyone, so a page's history does not say who
+changed it. An editor who authorizes GitHub at
+`app.mintlify.com/settings/account` publishes under their own identity from then
+on, which is also what a rule requiring commits attributed to a GitHub user
+needs.
+
+Site settings publish into this repo too. Navigation, Analytics, canonical URL
+and SEO, Redirects and Branding all write to `docs/docs.json`, so changing any
+of them in the dashboard commits the same file `pnpm check:docs-nav` gates — a
+redirect edited there can strand one of the pinned URLs that check holds. Only
+the dashboard's own Settings pages (domain, auth, add-ons, privacy, search) live
+outside git.
+
+Never edit a copy of a page instead of the source it came from — generated pages
+name their source in a `generatedFrom` frontmatter key. The next sync overwrites
+your edit, and CI is red for everyone until it does.
+
+Creating a page is two steps — the file, and its entry in `docs/docs.json`.
+Skip the second and the page is live and reachable by URL but absent from the
+sidebar, from search and from `llms.txt`. Docs Drift does not check nav.
+
+### Where docs live
+
+| You changed…                                                          | Update…                                                                    |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| A functional module (swaps, money market, bridge, staking, migration, leverage yield) | The matching *published* file in `packages/sdk/docs/` (e.g. `SWAPS.md`, listed in `scripts/gitbook-sync-map.json`) |
+| The public API of `sdk`, `swaps-api`, `wallet-sdk-core`, `wallet-sdk-react`, or `dapp-kit` | That package's `README.md` — these publish, so the README alone is a real docs signal |
+| The public API of `types`, `libs`, or `assets`                          | Their READMEs are **not** on the publish map. The gate accepts them (and `packages/<pkg>/docs/`), but prefer a page that goes live: any mapped `packages/sdk/docs/` page satisfies these packages, so update the feature page the change surfaces in |
+| A flow with a root-level `docs/` guide (e.g. Stellar sponsoring)       | That guide — it satisfies Docs Drift for the packages its `pkgs` entry lists in `scripts/gitbook-sync-map.json` |
+| Exported types or function signatures                                  | JSDoc on the exports themselves (does not satisfy Docs Drift)               |
+
+`packages/skills` is **not** where we introduce a feature. It is the partner-facing agent bundle — how integrators' coding agents call APIs we already shipped. Update it when a public API, example, or chain/token surface changes so their agents stay correct, then run `pnpm check:ai`. That does not publish to docs.sodax.com and does not satisfy Docs Drift. How *we* add features lives in `.claude/skills/` (`add-feature`, `add-chain`, …).
+
+### How to write
+
+- **Lead with working code.** A copy-pasteable snippet beats three paragraphs.
+  Every parameter a user must supply should appear in an example.
+- **Document behavior, not implementation.** What does the caller get, what can
+  fail, and what does failure look like? Skip internal mechanics.
+- **Update, don't append.** If your change alters existing behavior, fix the
+  existing section rather than adding a new one at the bottom.
+- **Keep headings stable.** Inbound links and search results rely on them.
+  If you must rename one, call it out in your PR description.
+- **JSDoc is still required on public exports**, but it does **not** satisfy
+  CI. If a user would need to read source to use the feature, it needs a
+  markdown page that is listed in `scripts/gitbook-sync-map.json`.
+
+### Published docs and docs.sodax.com
+
+`scripts/gitbook-sync-map.json` maps each authored source — package `README.md`
+files and `packages/sdk/docs/` pages — to the path it publishes at on
+docs.sodax.com. It is the copy list, and both Docs Drift and
+`pnpm check:doc-links` read it. For those files:
+
+- **Don't add frontmatter** (titles, icons, descriptions) — publishing injects it.
+- **Avoid raw HTML.** Mintlify compiles pages as MDX; HTML attributes like
+  `class` fail to render. Stick to plain markdown.
+- **Links follow the published-doc rule** enforced by `pnpm check:doc-links`:
+  relative links are only allowed to targets that publish into the same
+  destination directory; everything else needs an absolute
+  `https://github.com/icon-project/sodax-sdks/blob/main/…` URL.
+- **Adding, renaming, or removing a published doc?** Add, rename, or remove the
+  entry in `scripts/gitbook-sync-map.json` — that is what gets the page
+  published. **A page under `docs/` also needs its own entry in navigation**
+  (`docs/docs.json`). A page with no nav entry is live but absent from the
+  sidebar and from search. Docs Drift does not check nav. A new
+  `packages/sdk/docs/` page that is on neither list in the map, a rename that
+  drops a published page off the map, or a mapped src that no longer exists,
+  fails Docs Drift.
+
+The map's **`unpublished`** array holds the `packages/sdk/docs/` pages that
+deliberately do not publish yet (`DEX.md`, `SPONSORING.md`, `SWAPS_API.md`,
+`BRIDGE_API.md`, `LOGGING.md`, `ARCHITECTURE_REFACTOR_SUMMARY.md`). Editing one
+does not satisfy Docs Drift, and renaming one needs no map entry. A new page
+there goes on one of the two lists: `mirrored` to publish it now, `unpublished`
+to hold it back and publish it as its own change. On neither list, it fails
+Docs Drift.
+
+### What CI enforces
+
+- The **Docs Drift** check (job name **Docs ship with code**) fails any PR
+  that changes package `src/` without a *related* publishable docs signal: a
+  mapped file under that package, a mapped `packages/sdk/docs/` page, a mapped
+  root-level `docs/` guide whose `pkgs` array lists the package, the package
+  `README.md`, or `packages/<pkg>/docs/` (non-sdk). JSDoc, `unpublished`
+  sdk/docs pages, `packages/skills`, an unrelated mapped file (for example
+  touching `packages/skills/README.md` while changing `@sodax/sdk`), and
+  *deleting* a README or docs file do not count. Moving a source file out of
+  `src/` — or into a test path — is still a source change. A newly added
+  `packages/sdk/docs/` page (`.md` or `.mdx`), including one moved in from
+  elsewhere, must be on the map's `mirrored` or `unpublished` list even if
+  `src/` did not change; renaming a published page must move its map entry with
+  it; every mapped src must exist and be a `.md`/`.mdx` page; and every name in
+  a `pkgs` array must be a real package directory. If your PR genuinely has no
+  user-facing change, ask a maintainer to apply the `docs-not-needed` label.
+- `pnpm check:ai` validates that snippets and imports in `packages/skills`
+  match the real source (partner-agent docs, separate from Docs Drift).
+- `pnpm check:doc-links` validates links in published docs.
+
+docs.sodax.com publishes from this repo — nothing goes live until your PR is
+merged.
+
+### When docs genuinely aren't needed
+
+Refactors, test-only changes, and internal tooling don't need docs. Say so
+explicitly in the PR's Documentation section — "no user-facing change" is a
+perfectly good answer — and get the `docs-not-needed` label. Silence isn't.
+
 ## AI files drift check
 
 Agents implement against this repository's `AGENTS.md` files, the dev skills in `.claude/skills/`,
