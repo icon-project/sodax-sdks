@@ -24,6 +24,7 @@ import type {
   SpokeChainKey,
   SuiRawTransaction,
 } from '@sodax/types';
+import { spokeChainConfig } from '@sodax/types';
 import { getXChainType } from '@sodax/wallet-sdk-react';
 
 export class SwapsApiSignError extends Error {
@@ -50,7 +51,10 @@ export async function signAndBroadcastSwapsApiTx(args: {
 
   switch (getXChainType(chainKey)) {
     case 'EVM':
-      return (walletProvider as IEvmWalletProvider).sendTransaction(tx as EvmRawTransaction);
+      // Chain-bind the send: the wallet broadcasts on ITS active chain, so refuse a mismatch.
+      return (walletProvider as IEvmWalletProvider).sendTransaction(tx as EvmRawTransaction, {
+        expectedChainId: spokeChainConfig[chainKey].chain.chainId as number,
+      });
     case 'SUI': {
       // The Sui provider rebuilds via Transaction.from(...) from the base64 bytes in `data`.
       const { data } = tx as SuiRawTransaction;

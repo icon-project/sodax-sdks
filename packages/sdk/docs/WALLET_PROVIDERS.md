@@ -500,4 +500,6 @@ Requirements for a valid custom implementation:
 3. **No base class required** — extending `BaseWalletProvider` is optional; it only provides the
    `defaults` storage and merge helpers from `@sodax/wallet-sdk-core`.
 4. **EVM providers must honor `options.expectedChainId`** — refuse to broadcast when the wallet's
-   active chain id differs; ignoring it silently disables the SDK's wrong-chain protection.
+   active chain id differs; ignoring it silently disables the SDK's wrong-chain protection. A provider
+   that already declares its own second options parameter must widen it to
+   `YourOptions & EvmSendTransactionOptions` to keep satisfying the interface.

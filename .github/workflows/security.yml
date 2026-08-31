@@ -137,7 +137,9 @@ jobs:
         run: ./gitleaks dir . --config .gitleaks.toml --redact --no-banner --report-format sarif --report-path gitleaks-results.sarif
 
       # Strict private-key pass — scans docs/dev-skills too; only fake fixtures exempt.
+      # Runs even when the broad pass failed so the artifact carries both reports.
       - name: Run gitleaks (strict private-key)
+        if: always()
         run: ./gitleaks dir . --config .gitleaks-strict.toml --redact --no-banner --report-format sarif --report-path gitleaks-strict-results.sarif
 
       - name: Upload gitleaks results
