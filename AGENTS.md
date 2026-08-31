@@ -129,7 +129,7 @@ To cut a release, follow [`packages/RELEASE_INSTRUCTIONS.md`](packages/RELEASE_I
 
 GitHub Actions install dependencies with a frozen lockfile, lint, check circular dependencies, build packages, typecheck, validate dev AI files, validate AI consumer docs, validate mirrored doc links, build apps, run smoke checks, and run tests. When changing `packages/skills`, run `pnpm check:ai` locally; when changing a mirrored doc, run `pnpm check:doc-links`.
 
-`pnpm test:e2e` runs in its own CI job **on push to `main` / `development` only**, never on pull requests: it hits live mainnet services, so it fails on state no PR controls (a solver that dropped an intent from memory, an unindexed relay tx, on-chain token/vault drift). Run it locally when you touch a flow it covers — a green PR does not mean the e2e suite passed.
+`pnpm test:e2e` runs in its own CI job **on pull requests only**, never on push to `main` / `development`. The check is advisory: a live-mainnet failure or timeout is a warning annotation (the job stays green) because those tests hit live services and can fail on solver/relay/on-chain drift the PR did not cause. Setup/install/build failures in that job still fail the check. Run it locally when you touch a flow it covers.
 
 A separate `AI Files Drift Check` workflow runs per pull request. Those deterministic gates prove AI files are structurally sound and that their code blocks compile; this one covers the prose they wrap. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to read its findings.
 
