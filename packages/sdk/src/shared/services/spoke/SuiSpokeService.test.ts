@@ -33,6 +33,7 @@ import {
   type Address,
   type Hex,
   type ISuiWalletProvider,
+  type SuiExecutionResult,
   type SuiPaginatedCoins,
 } from '@sodax/types';
 
@@ -326,8 +327,9 @@ describe('SuiSpokeService.getNativeCoin', () => {
 
   it('rejects when tx.splitCoins yields an undefined element (defensive branch)', async () => {
     const tx = new Transaction();
-    // Force the only path the catch covers — splitCoins returning [undefined].
-    vi.spyOn(tx, 'splitCoins').mockReturnValueOnce([undefined as never]);
+    // Force the only path the catch covers — splitCoins returning [undefined]. Deliberately
+    // malformed: a real TransactionResult is an array-like with Result/$kind fields.
+    vi.spyOn(tx, 'splitCoins').mockReturnValueOnce([undefined] as unknown as ReturnType<Transaction['splitCoins']>);
 
     await expect(suiSpoke.getNativeCoin(tx, 5_000n)).rejects.toThrow('[SuiIntentService.getNativeCoin] coin undefined');
   });
@@ -431,7 +433,7 @@ describe('SuiSpokeService.viewContract', () => {
     vi.spyOn(suiSpoke.transport, 'simulate').mockResolvedValueOnce({ returnValues: [] });
 
     // Last arg `sender` is required; typeArgs (the 6th positional) defaults to [].
-    await suiSpoke.viewContract(tx, 'pkg', 'mod', 'fn', [], undefined as never, SRC_ADDR);
+    await suiSpoke.viewContract(tx, 'pkg', 'mod', 'fn', [], undefined, SRC_ADDR);
 
     expect(moveCallSpy).toHaveBeenCalledWith(expect.objectContaining({ typeArguments: [] }));
   });
@@ -739,7 +741,7 @@ describe('SuiSpokeService.waitForTransactionReceipt', () => {
   });
 
   it('returns status:failure when effects are missing entirely', async () => {
-    vi.spyOn(suiSpoke.transport, 'waitForTransaction').mockResolvedValueOnce({ digest: TX_DIGEST } as never);
+    vi.spyOn(suiSpoke.transport, 'waitForTransaction').mockResolvedValueOnce({ digest: TX_DIGEST });
 
     const result = await suiSpoke.waitForTransactionReceipt({ chainKey: SUI, txHash: TX_DIGEST });
 
