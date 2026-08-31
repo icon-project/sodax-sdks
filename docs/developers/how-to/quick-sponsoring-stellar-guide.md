@@ -1,4 +1,8 @@
-# Sponsored Stellar account activation
+---
+title: "Stellar Sponsoring: Quick Reference"
+description: "The sponsored Stellar activation flow as a dense reference card."
+icon: bolt
+---
 
 A new Stellar account must exist on-chain before it can receive anything, and a new user has 0 XLM.
 SODAX's sponsor pays the base reserve. The user's wallet signs; the backend co-signs and submits.

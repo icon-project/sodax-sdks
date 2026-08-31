@@ -47,7 +47,7 @@ const createRepo = (t, { map = true, mapText = null } = {}) => {
   mkdirSync(join(template, 'hooks'), { recursive: true });
   git(root, ['init', '-b', 'main', `--template=${template}`]);
   if (map) {
-    write(root, 'scripts/gitbook-sync-map.json', mapText ?? `${JSON.stringify(MAP, null, 2)}\n`);
+    write(root, 'scripts/docs-pages-map.json', mapText ?? `${JSON.stringify(MAP, null, 2)}\n`);
   }
   write(root, 'packages/sdk/src/index.ts', 'export const n = 1;\n');
   write(root, 'packages/sdk/docs/SWAPS.md', '# Swaps\n');
@@ -142,7 +142,7 @@ test('fails when a new sdk doc is not on the map', t => {
 
   const result = run(root, base, head);
   assert.equal(result.code, 1);
-  assert.match(result.out, /not in scripts\/gitbook-sync-map.json/);
+  assert.match(result.out, /not in scripts\/docs-pages-map.json/);
   assert.match(result.out, /packages\/sdk\/docs\/NEW.md/);
 });
 
@@ -163,7 +163,7 @@ test('fails when a docs-only PR adds an unmapped sdk page', t => {
 
   const result = run(root, base, head);
   assert.equal(result.code, 1);
-  assert.match(result.out, /not in scripts\/gitbook-sync-map.json/);
+  assert.match(result.out, /not in scripts\/docs-pages-map.json/);
   assert.match(result.out, /packages\/sdk\/docs\/NEW.md/);
 });
 
@@ -172,7 +172,7 @@ test('passes when a docs-only PR adds an sdk page that is on the map', t => {
   write(root, 'packages/sdk/docs/NEW.md', '# New\n');
   write(
     root,
-    'scripts/gitbook-sync-map.json',
+    'scripts/docs-pages-map.json',
     `${JSON.stringify(
       {
         mirrored: [...MAP.mirrored, { src: 'packages/sdk/docs/NEW.md', dest: 'developers/new.md' }],
@@ -193,7 +193,7 @@ test('passes when a docs-only PR adds an sdk page listed as unpublished', t => {
   write(root, 'packages/sdk/docs/SPONSORING.md', '# Sponsoring\n');
   write(
     root,
-    'scripts/gitbook-sync-map.json',
+    'scripts/docs-pages-map.json',
     `${JSON.stringify(mapWithUnpublished('packages/sdk/docs/SPONSORING.md'), null, 2)}\n`,
   );
   const head = commit(root, 'docs only unpublished');
@@ -210,7 +210,7 @@ test('fails when a new sdk page is on neither the map nor the unpublished list',
 
   const result = run(root, base, head);
   assert.equal(result.code, 1);
-  assert.match(result.out, /not in scripts\/gitbook-sync-map.json/);
+  assert.match(result.out, /not in scripts\/docs-pages-map.json/);
   assert.match(result.out, /packages\/sdk\/docs\/NEW.md/);
   assert.match(result.out, /Not ready to publish\? Add it to "unpublished"/);
 });
@@ -220,7 +220,7 @@ test('passes when a page moved into packages/sdk/docs is listed as unpublished',
   git(root, ['mv', 'packages/sdk/notes/DRAFT.mdx', 'packages/sdk/docs/DRAFT.mdx']);
   write(
     root,
-    'scripts/gitbook-sync-map.json',
+    'scripts/docs-pages-map.json',
     `${JSON.stringify(mapWithUnpublished('packages/sdk/docs/DRAFT.mdx'), null, 2)}\n`,
   );
   const head = commit(root, 'move draft in as unpublished');
@@ -236,7 +236,7 @@ test('fails when a map pkgs entry names a package that does not exist', t => {
   write(root, 'docs/guide.md', '# Guide\n\nUpdated.\n');
   write(
     root,
-    'scripts/gitbook-sync-map.json',
+    'scripts/docs-pages-map.json',
     `${JSON.stringify(
       {
         ...MAP,
@@ -282,7 +282,7 @@ test('fails when sdk src changes and a mapped page is deleted', t => {
   unlinkSync(join(root, 'packages/sdk/docs/SWAPS.md'));
   write(
     root,
-    'scripts/gitbook-sync-map.json',
+    'scripts/docs-pages-map.json',
     `${JSON.stringify({ mirrored: MAP.mirrored.filter(item => item.src !== 'packages/sdk/docs/SWAPS.md') }, null, 2)}\n`,
   );
   const head = commit(root, 'sdk src + delete mapped page + drop map entry');
@@ -307,26 +307,26 @@ test('fails when a mapped sdk doc is renamed off the map', t => {
   git(root, ['mv', 'packages/sdk/docs/SWAPS.md', 'packages/sdk/docs/NEW.md']);
   write(
     root,
-    'scripts/gitbook-sync-map.json',
+    'scripts/docs-pages-map.json',
     `${JSON.stringify({ mirrored: MAP.mirrored.filter(item => item.src !== 'packages/sdk/docs/SWAPS.md') }, null, 2)}\n`,
   );
   const head = commit(root, 'rename mapped swaps + drop map entry');
 
   const result = run(root, base, head);
   assert.equal(result.code, 1);
-  assert.match(result.out, /dropped off scripts\/gitbook-sync-map.json/);
+  assert.match(result.out, /dropped off scripts\/docs-pages-map.json/);
   assert.match(result.out, /packages\/sdk\/docs\/SWAPS.md -> packages\/sdk\/docs\/NEW.md/);
 });
 
 test('fails closed when a rename cannot be checked against a base map', t => {
   const { root, base } = createRepo(t, { map: false });
   git(root, ['mv', 'packages/sdk/docs/DEX.md', 'packages/sdk/docs/NEW.md']);
-  write(root, 'scripts/gitbook-sync-map.json', `${JSON.stringify(MAP, null, 2)}\n`);
+  write(root, 'scripts/docs-pages-map.json', `${JSON.stringify(MAP, null, 2)}\n`);
   const head = commit(root, 'add map + rename dex');
 
   const result = run(root, base, head);
   assert.equal(result.code, 1);
-  assert.match(result.out, /dropped off scripts\/gitbook-sync-map.json/);
+  assert.match(result.out, /dropped off scripts\/docs-pages-map.json/);
 });
 
 test('fails closed when a malformed base map cannot prove a renamed page was unpublished', t => {
@@ -334,7 +334,7 @@ test('fails closed when a malformed base map cannot prove a renamed page was unp
   git(root, ['mv', 'packages/sdk/docs/SWAPS.md', 'packages/sdk/docs/NEW.md']);
   write(
     root,
-    'scripts/gitbook-sync-map.json',
+    'scripts/docs-pages-map.json',
     `${JSON.stringify({ mirrored: MAP.mirrored.filter(item => item.src !== 'packages/sdk/docs/SWAPS.md') }, null, 2)}\n`,
   );
   const head = commit(root, 'repair base map + rename mapped swaps off it');
@@ -342,14 +342,14 @@ test('fails closed when a malformed base map cannot prove a renamed page was unp
   const result = run(root, base, head);
   assert.equal(result.code, 1);
   assert.match(result.out, /is unreadable at/);
-  assert.match(result.out, /dropped off scripts\/gitbook-sync-map.json/);
+  assert.match(result.out, /dropped off scripts\/docs-pages-map.json/);
   assert.match(result.out, /packages\/sdk\/docs\/SWAPS.md -> packages\/sdk\/docs\/NEW.md/);
 });
 
 test('fails when the map is not valid JSON', t => {
   const { root, base } = createRepo(t);
   write(root, 'packages/sdk/src/index.ts', 'export const n = 2;\n');
-  write(root, 'scripts/gitbook-sync-map.json', `${JSON.stringify(MAP, null, 2)}\n,,,`);
+  write(root, 'scripts/docs-pages-map.json', `${JSON.stringify(MAP, null, 2)}\n,,,`);
   const head = commit(root, 'malformed map');
 
   const result = run(root, base, head);
@@ -360,7 +360,7 @@ test('fails when the map is not valid JSON', t => {
 test('fails when the map is not a JSON object', t => {
   const { root, base } = createRepo(t);
   write(root, 'packages/sdk/src/index.ts', 'export const n = 2;\n');
-  write(root, 'scripts/gitbook-sync-map.json', `${JSON.stringify(MAP.mirrored, null, 2)}\n`);
+  write(root, 'scripts/docs-pages-map.json', `${JSON.stringify(MAP.mirrored, null, 2)}\n`);
   const head = commit(root, 'map is a bare array');
 
   const result = run(root, base, head);
@@ -375,7 +375,7 @@ test('fails when a new sdk .mdx page is not on the map', t => {
 
   const result = run(root, base, head);
   assert.equal(result.code, 1);
-  assert.match(result.out, /not in scripts\/gitbook-sync-map.json/);
+  assert.match(result.out, /not in scripts\/docs-pages-map.json/);
   assert.match(result.out, /packages\/sdk\/docs\/NEW.mdx/);
 });
 
@@ -386,7 +386,7 @@ test('fails when an unmapped page is moved into packages/sdk/docs', t => {
 
   const result = run(root, base, head);
   assert.equal(result.code, 1);
-  assert.match(result.out, /not in scripts\/gitbook-sync-map.json/);
+  assert.match(result.out, /not in scripts\/docs-pages-map.json/);
   assert.match(result.out, /packages\/sdk\/docs\/DRAFT.mdx/);
 });
 
@@ -406,7 +406,7 @@ test('passes when a mapped sdk doc is renamed and the map is updated', t => {
   git(root, ['mv', 'packages/sdk/docs/SWAPS.md', 'packages/sdk/docs/NEW.md']);
   write(
     root,
-    'scripts/gitbook-sync-map.json',
+    'scripts/docs-pages-map.json',
     `${JSON.stringify(
       {
         mirrored: MAP.mirrored.map(item =>
@@ -431,7 +431,7 @@ test('passes when a mapped sdk doc is renamed to .mdx and the map is updated', t
   git(root, ['mv', 'packages/sdk/docs/SWAPS.md', 'packages/sdk/docs/NEW.mdx']);
   write(
     root,
-    'scripts/gitbook-sync-map.json',
+    'scripts/docs-pages-map.json',
     `${JSON.stringify(
       {
         mirrored: MAP.mirrored.map(item =>
@@ -455,7 +455,7 @@ test('fails when the map lists a file that does not exist', t => {
   const { root, base } = createRepo(t);
   write(
     root,
-    'scripts/gitbook-sync-map.json',
+    'scripts/docs-pages-map.json',
     `${JSON.stringify(
       {
         mirrored: [...MAP.mirrored, { src: 'packages/sdk/docs/MISSING.md', dest: 'developers/missing.md' }],
@@ -477,7 +477,7 @@ test('fails closed when a map src contains a newline', t => {
   write(root, 'packages/sdk/src/index.ts', 'export const n = 2;\n');
   write(
     root,
-    'scripts/gitbook-sync-map.json',
+    'scripts/docs-pages-map.json',
     `${JSON.stringify(
       {
         mirrored: [
@@ -560,7 +560,7 @@ test('fails closed when a map pkgs entry is malformed', t => {
   write(root, 'packages/sdk/src/index.ts', 'export const n = 2;\n');
   write(
     root,
-    'scripts/gitbook-sync-map.json',
+    'scripts/docs-pages-map.json',
     `${JSON.stringify(
       {
         mirrored: MAP.mirrored.map(item => (item.src === 'docs/guide.md' ? { ...item, pkgs: 'sdk' } : item)),
@@ -602,7 +602,7 @@ test('fails closed when a map src is not a markdown page', t => {
   write(root, 'packages/sdk/src/index.ts', 'export const n = 2;\n');
   write(
     root,
-    'scripts/gitbook-sync-map.json',
+    'scripts/docs-pages-map.json',
     `${JSON.stringify(
       {
         mirrored: [...MAP.mirrored, { src: 'packages/sdk/src/index.ts', dest: 'developers/index.md' }],

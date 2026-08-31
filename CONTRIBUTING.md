@@ -65,10 +65,10 @@ sidebar, from search and from `llms.txt`. Docs Drift does not check nav.
 
 | You changed…                                                          | Update…                                                                    |
 | --------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| A functional module (swaps, money market, bridge, staking, migration, leverage yield) | The matching *published* file in `packages/sdk/docs/` (e.g. `SWAPS.md`, listed in `scripts/gitbook-sync-map.json`) |
+| A functional module (swaps, money market, bridge, staking, migration, leverage yield) | The matching *published* file in `packages/sdk/docs/` (e.g. `SWAPS.md`, listed in `scripts/docs-pages-map.json`) |
 | The public API of `sdk`, `swaps-api`, `wallet-sdk-core`, `wallet-sdk-react`, or `dapp-kit` | That package's `README.md` — these publish, so the README alone is a real docs signal |
 | The public API of `types`, `libs`, or `assets`                          | Their READMEs are **not** on the publish map. The gate accepts them (and `packages/<pkg>/docs/`), but prefer a page that goes live: any mapped `packages/sdk/docs/` page satisfies these packages, so update the feature page the change surfaces in |
-| A flow with a root-level `docs/` guide (e.g. Stellar sponsoring)       | That guide — it satisfies Docs Drift for the packages its `pkgs` entry lists in `scripts/gitbook-sync-map.json` |
+| A flow with a root-level `docs/` guide (e.g. Stellar sponsoring)       | That guide — it satisfies Docs Drift for the packages its `pkgs` entry lists in `scripts/docs-pages-map.json` |
 | Exported types or function signatures                                  | JSDoc on the exports themselves (does not satisfy Docs Drift)               |
 
 `packages/skills` is **not** where we introduce a feature. It is the partner-facing agent bundle — how integrators' coding agents call APIs we already shipped. Update it when a public API, example, or chain/token surface changes so their agents stay correct, then run `pnpm check:ai`. That does not publish to docs.sodax.com and does not satisfy Docs Drift. How *we* add features lives in `.claude/skills/` (`add-feature`, `add-chain`, …).
@@ -85,11 +85,11 @@ sidebar, from search and from `llms.txt`. Docs Drift does not check nav.
   If you must rename one, call it out in your PR description.
 - **JSDoc is still required on public exports**, but it does **not** satisfy
   CI. If a user would need to read source to use the feature, it needs a
-  markdown page that is listed in `scripts/gitbook-sync-map.json`.
+  markdown page that is listed in `scripts/docs-pages-map.json`.
 
 ### Published docs and docs.sodax.com
 
-`scripts/gitbook-sync-map.json` maps each authored source — package `README.md`
+`scripts/docs-pages-map.json` maps each authored source — package `README.md`
 files and `packages/sdk/docs/` pages — to the path it publishes at on
 docs.sodax.com. It is the copy list, and both Docs Drift and
 `pnpm check:doc-links` read it. For those files:
@@ -102,7 +102,7 @@ docs.sodax.com. It is the copy list, and both Docs Drift and
   destination directory; everything else needs an absolute
   `https://github.com/icon-project/sodax-sdks/blob/main/…` URL.
 - **Adding, renaming, or removing a published doc?** Add, rename, or remove the
-  entry in `scripts/gitbook-sync-map.json` — that is what gets the page
+  entry in `scripts/docs-pages-map.json` — that is what gets the page
   published. **A page under `docs/` also needs its own entry in navigation**
   (`docs/docs.json`). A page with no nav entry is live but absent from the
   sidebar and from search. Docs Drift does not check nav. A new

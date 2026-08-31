@@ -8,7 +8,7 @@ Describe what you have done and which # issue this PR closes.
 
 **Which docs did you update?** (check all that apply)
 
-- [ ] Published module docs in `packages/sdk/docs/` (file listed in `scripts/gitbook-sync-map.json`: ______)
+- [ ] Published module docs in `packages/sdk/docs/` (file listed in `scripts/docs-pages-map.json`: ______)
 - [ ] A mapped root-level `docs/` guide whose `pkgs` entry lists the package
 - [ ] Package `README.md` or `packages/<pkg>/docs/`
 - [ ] None needed — no user-facing change (explain below; needs the `docs-not-needed` label)
@@ -24,7 +24,7 @@ Describe what you have done and which # issue this PR closes.
 - [ ] My changes generate no new warnings
 - [ ] I have added tests that prove my fix is effective or that my feature works
 - [ ] I have run the unit tests
-- [ ] If this adds, renames, or removes a published doc, `scripts/gitbook-sync-map.json` and the matching `docs/docs.json` nav entry were updated
+- [ ] If this adds, renames, or removes a published doc, `scripts/docs-pages-map.json` and the matching `docs/docs.json` nav entry were updated
 - [ ] If this changes a public API partners call, `packages/skills` was updated and `pnpm check:ai` passes (partner-agent docs — not Docs Drift)
 - [ ] I only have one commit (if not, squash them into one commit).
 - [ ] I have a descriptive commit message that adheres to the [commit message guidelines](https://www.conventionalcommits.org/en/v1.0.0/)

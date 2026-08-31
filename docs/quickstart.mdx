@@ -1,0 +1,90 @@
+---
+title: 5-Minute Swap
+sidebarTitle: 5-minute swap
+description: Install the SDK, quote an intent, and submit a mainnet swap — then poll until it settles.
+icon: bolt
+---
+
+Prefer HTTP? Same flow over REST: [Swap API](/developers/http-api/swaps). Prefer Solana-first? [Solana quickstart](/solana/quickstart).
+
+<Steps>
+  <Step title="Install">
+    ```bash
+    npm install @sodax/sdk
+    ```
+
+    You also need a wallet provider for the source chain (e.g. from [`@sodax/wallet-sdk-core`](/developers/packages/connection/wallet-sdk-core)).
+  </Step>
+
+  <Step title="Initialize">
+    ```typescript
+    import { Sodax } from '@sodax/sdk';
+
+    const sodax = new Sodax(); // mainnet defaults
+    const init = await sodax.initialize();
+    if (!init.ok) {
+      console.warn('Using packaged config', init.error);
+    }
+    ```
+  </Step>
+
+  <Step title="Quote and execute">
+    ```typescript
+    import { ChainKeys } from '@sodax/sdk';
+
+    // Absolute hub deadline (seconds). Prefer getSwapDeadline; 0n = no deadline.
+    const deadlineResult = await sodax.swaps.getSwapDeadline(300n); // +5 minutes
+    if (!deadlineResult.ok) {
+      console.error(deadlineResult.error);
+      return;
+    }
+
+    const result = await sodax.swaps.swap({
+      params: {
+        inputToken: '0x…',          // src token
+        outputToken: '0x…',         // dst token
+        inputAmount: 1_000_000n,
+        minOutputAmount: 900_000n,
+        deadline: deadlineResult.value,
+        allowPartialFill: false,
+        srcChainKey: ChainKeys.BSC_MAINNET,
+        dstChainKey: ChainKeys.ARBITRUM_MAINNET,
+        srcAddress: await evmWalletProvider.getWalletAddress(),
+        dstAddress: '0x…',
+        data: '0x',
+      },
+      walletProvider: evmWalletProvider,
+    });
+
+    if (!result.ok) {
+      console.error(result.error.code, result.error);
+      return;
+    }
+    ```
+
+    Always branch on `result.ok` / `error.code` — never `try/catch` on the message string.
+  </Step>
+
+  <Step title="Poll until settled">
+    Use `sodax.swaps.getStatus` until the intent is `SOLVED` or `FAILED`. `NOT_FOUND` is not terminal — the solver can answer it for the first few polls after creation, so retry before giving up (the full sample stops after three consecutive ones). Full polling sample: [How to make a swap](/developers/how-to/how_to_make_a_swap).
+
+    Watch destination fills via `fill_tx_hash` from `getStatus`, or track cross-network message delivery on [SODAX Scan](https://sodaxscan.com).
+  </Step>
+</Steps>
+
+### Next
+
+<CardGroup cols={2}>
+  <Card title="Full swap walkthrough" icon="book" href="/developers/how-to/how_to_make_a_swap">
+    Wallet setup, errors, limit orders, and status codes.
+  </Card>
+  <Card title="HTTP Swap API" icon="server" href="/developers/http-api/swaps">
+    Quote, build intent, submit-tx, status — any language.
+  </Card>
+  <Card title="AI coding agents" icon="robot" href="/ai-integration-guide">
+    Install `@sodax/skills` so agents write v2-correct code.
+  </Card>
+  <Card title="Builders MCP" icon="terminal" href="https://builders.sodax.com/">
+    Live chains, tokens, quotes, and SDK docs for agents.
+  </Card>
+</CardGroup>

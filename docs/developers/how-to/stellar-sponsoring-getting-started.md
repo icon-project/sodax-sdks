@@ -1,4 +1,8 @@
-# Stellar Sponsoring — getting started
+---
+title: "Stellar Sponsoring"
+description: "Activate a brand-new Stellar account that holds no XLM, with SODAX paying the base reserve."
+icon: star
+---
 
 A brand-new Stellar account holds 0 XLM, and Stellar accounts must exist on-chain before they can hold or receive anything. SODAX's sponsor account pays that account's base reserve, so activation costs the user nothing. The user's wallet still signs — only the account being created can authorize ending its own sponsorship — and the SODAX backend co-signs as sponsor and submits.
 
@@ -157,7 +161,7 @@ pnpm --filter stellar-sponsor-example dev               # terminal B — http://
 Two more references:
 
 - **Headless (no React)** — [`apps/node/src/stellar-sponsor.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/stellar-sponsor.ts) calls `sodax.sponsoring` directly from a plain Node script.
-- **Terser reference card** — [`docs/quick-sponsoring-stellar-guide.md`](https://github.com/icon-project/sodax-sdks/blob/main/docs/quick-sponsoring-stellar-guide.md), a denser bullet-point version of this same feature.
+- **Terser reference card** — [`docs/quick-sponsoring-stellar-guide.md`](https://github.com/icon-project/sodax-sdks/blob/main/docs/developers/how-to/quick-sponsoring-stellar-guide.md), a denser bullet-point version of this same feature.
 
 ## Learn more
 

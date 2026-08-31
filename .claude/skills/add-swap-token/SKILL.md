@@ -51,7 +51,7 @@ Changing `packages/types/src` triggers Docs Drift. Update
 `types` change. `packages/types/README.md` passes the gate but does not
 publish, so prefer a page that does. JSDoc does not pass. A brand-new
 `packages/sdk/docs/` page must join the `mirrored` list in
-`scripts/gitbook-sync-map.json` plus a `docs/docs.json` nav entry — or, if it is
+`scripts/docs-pages-map.json` plus a `docs/docs.json` nav entry — or, if it is
 not ready to go live, the map's `unpublished` list.
 
 ## Step 5 — Verify

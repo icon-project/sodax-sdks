@@ -7,7 +7,7 @@ set -euo pipefail
 BASE_REF="${1:?usage: check-docs-drift.sh <base-ref> [head-ref]}"
 HEAD_REF="${2:-HEAD}"
 RANGE="$BASE_REF...$HEAD_REF"
-MAP_FILE="scripts/gitbook-sync-map.json"
+MAP_FILE="scripts/docs-pages-map.json"
 
 # Without this, non-ASCII paths are C-quoted and miss the ^packages/ anchors.
 # --no-renames keeps the source side: a rename out of src/ (or into a test path)
@@ -87,21 +87,21 @@ def unreadable(message):
 try:
     data = json.load(sys.stdin)
 except ValueError:
-    unreadable("::error::scripts/gitbook-sync-map.json is not valid JSON.")
+    unreadable("::error::scripts/docs-pages-map.json is not valid JSON.")
 
 if not isinstance(data, dict):
-    unreadable("::error::scripts/gitbook-sync-map.json must be a JSON object.")
+    unreadable("::error::scripts/docs-pages-map.json must be a JSON object.")
 
 for item in data.get(key, []):
     path = item.get("src") if isinstance(item, dict) else item
     if path is None or path == "":
         continue
     if not isinstance(path, str) or any(c in path for c in "\n\r\t\0"):
-        reject(f"::error::scripts/gitbook-sync-map.json {key} entry must be a single-line, tab-free path.")
+        reject(f"::error::scripts/docs-pages-map.json {key} entry must be a single-line, tab-free path.")
         continue
     # Markdown only: otherwise a PR could map its own changed source file and self-satisfy the gate.
     if not path.endswith((".md", ".mdx")):
-        reject(f"::error::scripts/gitbook-sync-map.json {key} entry must be a .md or .mdx page: {path}")
+        reject(f"::error::scripts/docs-pages-map.json {key} entry must be a .md or .mdx page: {path}")
         continue
     print(path)
 ' "$2" "$3"
@@ -152,11 +152,11 @@ for item in data.get("mirrored", []):
     if not isinstance(pkgs, list) or not pkgs or not all(
         isinstance(p, str) and re.fullmatch(r"[A-Za-z0-9_.-]+", p) for p in pkgs
     ):
-        print("::error::scripts/gitbook-sync-map.json pkgs must be a non-empty array of package directory names.", file=sys.stderr)
+        print("::error::scripts/docs-pages-map.json pkgs must be a non-empty array of package directory names.", file=sys.stderr)
         sys.exit(1)
     for p in pkgs:
         if p not in dirs:
-            print(f"::error::scripts/gitbook-sync-map.json pkgs names a package that does not exist: {p} (in {src})", file=sys.stderr)
+            print(f"::error::scripts/docs-pages-map.json pkgs names a package that does not exist: {p} (in {src})", file=sys.stderr)
             sys.exit(1)
         print(f"{p}\t{src}")
 ')
