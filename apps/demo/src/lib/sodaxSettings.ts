@@ -5,25 +5,31 @@ import { readJson, writeJson } from './storage';
 // value falls back to the env solver config, a VITE_* var, or the SDK packaged default.
 export type SodaxSettings = {
   /** null = Auto: backend submit-tx on, except off on Staging (see gh-401). */
-  useBackendSubmitTx: boolean | null;
+  swapUseBackendSubmitTx: boolean | null;
+  /** null = Auto: bridge backend submit-tx follows the SDK default (on). */
+  bridgeUseBackendSubmitTx: boolean | null;
   solverApiEndpoint: HttpUrl | null;
   intentsContract: Address | null;
   protocolIntentsContract: Address | null;
   /** Gateway root incl. version prefix → `api.baseApiConfig.baseURL`. */
   apiBaseUrl: HttpUrl | null;
   swapsApiBaseUrl: HttpUrl | null;
+  /** Per-call base URL for the Bridge API showcase page. */
+  bridgeApiBaseUrl: HttpUrl | null;
   /** Instance-wide `x-api-key` → `SodaxOptions.apiKey`. */
   apiKey: string | null;
   relayerApiEndpoint: HttpUrl | null;
 };
 
 export const DEFAULT_SODAX_SETTINGS: SodaxSettings = {
-  useBackendSubmitTx: null,
+  swapUseBackendSubmitTx: null,
+  bridgeUseBackendSubmitTx: null,
   solverApiEndpoint: null,
   intentsContract: null,
   protocolIntentsContract: null,
   apiBaseUrl: null,
   swapsApiBaseUrl: null,
+  bridgeApiBaseUrl: null,
   apiKey: null,
   relayerApiEndpoint: null,
 };
@@ -44,7 +50,10 @@ export function nonEmptyEnv(value: unknown): value is string {
 }
 
 // The env stays a plain string here — importing the store's enum would create a module cycle.
-type StoredPayload = { solverEnvironment?: unknown } & Partial<Record<keyof SodaxSettings, unknown>>;
+// `useBackendSubmitTx` is the pre-split storage key for swap submit-tx; keep reading it.
+type StoredPayload = { solverEnvironment?: unknown; useBackendSubmitTx?: unknown } & Partial<
+  Record<keyof SodaxSettings, unknown>
+>;
 
 /** Field-by-field sanitize: an invalid or missing stored value loads as `null` (unset). */
 export function loadSodaxSettings(): SodaxSettings {
@@ -52,13 +61,16 @@ export function loadSodaxSettings(): SodaxSettings {
   if (!raw || typeof raw !== 'object') {
     return { ...DEFAULT_SODAX_SETTINGS };
   }
+  const legacySwapSubmitTx = raw.swapUseBackendSubmitTx ?? raw.useBackendSubmitTx;
   return {
-    useBackendSubmitTx: typeof raw.useBackendSubmitTx === 'boolean' ? raw.useBackendSubmitTx : null,
+    swapUseBackendSubmitTx: typeof legacySwapSubmitTx === 'boolean' ? legacySwapSubmitTx : null,
+    bridgeUseBackendSubmitTx: typeof raw.bridgeUseBackendSubmitTx === 'boolean' ? raw.bridgeUseBackendSubmitTx : null,
     solverApiEndpoint: isHttpUrl(raw.solverApiEndpoint) ? raw.solverApiEndpoint : null,
     intentsContract: isEvmAddress(raw.intentsContract) ? raw.intentsContract : null,
     protocolIntentsContract: isEvmAddress(raw.protocolIntentsContract) ? raw.protocolIntentsContract : null,
     apiBaseUrl: isHttpUrl(raw.apiBaseUrl) ? raw.apiBaseUrl : null,
     swapsApiBaseUrl: isHttpUrl(raw.swapsApiBaseUrl) ? raw.swapsApiBaseUrl : null,
+    bridgeApiBaseUrl: isHttpUrl(raw.bridgeApiBaseUrl) ? raw.bridgeApiBaseUrl : null,
     apiKey: nonEmptyEnv(raw.apiKey) ? raw.apiKey : null,
     relayerApiEndpoint: isHttpUrl(raw.relayerApiEndpoint) ? raw.relayerApiEndpoint : null,
   };
@@ -82,6 +94,12 @@ export function hasActiveOverrides(settings: SodaxSettings): boolean {
 // version prefix (a local swaps-api mounting at the bare origin is `http://localhost:3008`).
 const swapsApiBaseUrlEnv: unknown = import.meta.env.VITE_SWAPS_API_BASE_URL;
 export const envSwapsApiBaseUrl: HttpUrl | undefined = isHttpUrl(swapsApiBaseUrlEnv) ? swapsApiBaseUrlEnv : undefined;
+
+export const DEFAULT_BRIDGE_API_BASE_URL = 'https://canary-api.sodax.com/v1' as HttpUrl;
+const bridgeApiBaseUrlEnv: unknown = import.meta.env.VITE_BRIDGE_API_BASE_URL;
+export const envBridgeApiBaseUrl: HttpUrl | undefined = isHttpUrl(bridgeApiBaseUrlEnv)
+  ? bridgeApiBaseUrlEnv
+  : undefined;
 
 // Instance-wide SODAX API key: `x-api-key` on every backend call, sponsoring included while it
 // targets the packaged gateway (VITE_SPONSORING_API_KEY is only for an independently hosted one).

@@ -151,7 +151,8 @@ export default function Providers({ children }: { children: ReactNode }) {
         solverApiEndpoint,
         protocolIntentsContract: s.protocolIntentsContract ?? solverBase.protocolIntentsContract,
       },
-      swaps: { useBackendSubmitTx: s.useBackendSubmitTx ?? defaultUseBackendSubmitTx(solverApiEndpoint) },
+      swaps: { useBackendSubmitTx: s.swapUseBackendSubmitTx ?? defaultUseBackendSubmitTx(solverApiEndpoint) },
+      bridge: { useBackendSubmitTx: s.bridgeUseBackendSubmitTx ?? true },
       ...(s.relayerApiEndpoint ? { relay: { relayerApiEndpoint: s.relayerApiEndpoint } } : {}),
       chains: {
         [ChainKeys.SONIC_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.SONIC_MAINNET] },

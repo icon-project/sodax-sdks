@@ -38,6 +38,7 @@ import {
   type ApprovalProgress,
   type IBitcoinWalletProvider,
   type IStellarWalletProvider,
+  type RequestOverrideConfig,
   type SpokeChainKey,
   type StellarChainKey,
   type XToken,
@@ -55,7 +56,7 @@ import { useAppStore } from '@/zustand/useAppStore';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
 import { formatMutationFailureMessage } from '@/lib/utils';
 import type { BridgeApiOrder } from '@/components/bridge-api/OrderStatus';
-import { BRIDGE_API_CONFIG } from '@/components/bridge-api/lib/config';
+import { DEFAULT_BRIDGE_API_BASE_URL, envBridgeApiBaseUrl } from '@/lib/sodaxSettings';
 import { isSignableBridgeApiChain, signAndBroadcastBridgeApiTx } from '@/components/bridge-api/lib/signAndBroadcast';
 
 /** Short button label for the step the wallet is on, or `null` once that step has landed. */
@@ -77,7 +78,9 @@ function approvalStepLabel({ step, phase, index, total }: ApprovalProgress): str
  */
 export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateAction<BridgeApiOrder[]>) => void }) {
   const { sodax } = useSodaxContext();
-  const { openWalletModal } = useAppStore();
+  const { openWalletModal, sodaxSettings } = useAppStore();
+  const bridgeApiBaseURL = sodaxSettings.bridgeApiBaseUrl ?? envBridgeApiBaseUrl ?? DEFAULT_BRIDGE_API_BASE_URL;
+  const bridgeApiConfig = useMemo((): RequestOverrideConfig => ({ baseURL: bridgeApiBaseURL }), [bridgeApiBaseURL]);
 
   const supportedTokensPerChain = useMemo(() => sodax.config.getSupportedTokensPerChain(), [sodax]);
 
@@ -208,7 +211,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
   const { data: feeQuote } = useBridgeApiFee({
     params: {
       body: parsedAmount !== undefined ? { inputAmount: parsedAmount.toString(), partnerFee } : undefined,
-      apiConfig: BRIDGE_API_CONFIG,
+      apiConfig: bridgeApiConfig,
     },
   });
 
@@ -225,7 +228,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
     // are undefined until the dialog builds them). The hook enables itself on `!!body`, so passing an
     // undefined body while the dialog is closed stops `checkAllowance` firing on every amount keystroke;
     // the amount is fixed once the dialog is open, so it runs once.
-    params: { body: dialogOpen ? bridgeBody : undefined, apiConfig: BRIDGE_API_CONFIG },
+    params: { body: dialogOpen ? bridgeBody : undefined, apiConfig: bridgeApiConfig },
   });
   const hasAllowance = allowance?.valid === true;
 
@@ -302,7 +305,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
       const result = await approve({
         body: bridgeBody,
         walletProvider: sourceWalletProvider,
-        apiConfig: BRIDGE_API_CONFIG,
+        apiConfig: bridgeApiConfig,
         onProgress: setApprovalProgress,
       });
       if (!result.ok) {
@@ -323,7 +326,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
     setIsBridging(true);
     try {
       // 1. The API builds the unsigned spoke-deposit tx + relay envelope.
-      const created = await createBridgeIntent({ body: bridgeBody, apiConfig: BRIDGE_API_CONFIG });
+      const created = await createBridgeIntent({ body: bridgeBody, apiConfig: bridgeApiConfig });
       if (!created.ok) {
         setBridgeError(formatMutationFailureMessage(created.error, 'Create bridge intent failed'));
         return;
@@ -363,16 +366,13 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
         walletAddress: fromAccount.address,
         relayData,
       };
-      const submitted = await submitTx({ request, apiConfig: BRIDGE_API_CONFIG });
+      const submitted = await submitTx({ request, apiConfig: bridgeApiConfig });
       if (!submitted.ok) {
         setBridgeError(formatMutationFailureMessage(submitted.error, 'Submit tx failed'));
         return;
       }
 
-      setOrders(prev => [
-        ...prev,
-        { txHash: spokeTxHash, srcChainKey: fromChainKey, apiBaseURL: BRIDGE_API_CONFIG.baseURL },
-      ]);
+      setOrders(prev => [...prev, { txHash: spokeTxHash, srcChainKey: fromChainKey, apiBaseURL: bridgeApiBaseURL }]);
       setDialogOpen(false);
     } catch (error) {
       setBridgeError(formatMutationFailureMessage(error, 'Bridge signing failed'));

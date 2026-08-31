@@ -8,19 +8,37 @@ import { Button } from '@/components/ui/button';
 import { DEFAULT_API_BASE_URL, DEFAULT_RELAYER_API_ENDPOINT } from '@sodax/dapp-kit';
 import { SolverEnv, useAppStore } from '@/zustand/useAppStore';
 import { defaultUseBackendSubmitTx, productionSolverConfig, stagingSolverConfig } from '@/constants';
-import { envSodaxApiKey, envSwapsApiBaseUrl, isEvmAddress, isHttpUrl, type SodaxSettings } from '@/lib/sodaxSettings';
+import {
+  DEFAULT_BRIDGE_API_BASE_URL,
+  envBridgeApiBaseUrl,
+  envSodaxApiKey,
+  envSwapsApiBaseUrl,
+  isEvmAddress,
+  isHttpUrl,
+  type SodaxSettings,
+} from '@/lib/sodaxSettings';
 import { Check, Copy, RotateCcw } from 'lucide-react';
 
 type SubmitTxChoice = 'auto' | 'on' | 'off';
 
-const URL_FIELDS = ['solverApiEndpoint', 'apiBaseUrl', 'swapsApiBaseUrl', 'relayerApiEndpoint'] as const;
+const URL_FIELDS = [
+  'solverApiEndpoint',
+  'apiBaseUrl',
+  'swapsApiBaseUrl',
+  'bridgeApiBaseUrl',
+  'relayerApiEndpoint',
+] as const;
 const ADDRESS_FIELDS = ['intentsContract', 'protocolIntentsContract'] as const;
 const TEXT_FIELDS = [...URL_FIELDS, ...ADDRESS_FIELDS, 'apiKey'] as const;
 
 type TextField = (typeof TEXT_FIELDS)[number];
 
 /** Modal draft: the text fields hold the EFFECTIVE value (default prefilled, copyable). */
-type Draft = { env: SolverEnv; useBackendSubmitTx: SubmitTxChoice } & Record<TextField, string>;
+type Draft = {
+  env: SolverEnv;
+  swapUseBackendSubmitTx: SubmitTxChoice;
+  bridgeUseBackendSubmitTx: SubmitTxChoice;
+} & Record<TextField, string>;
 
 /** The effective default text per field — what an unset override resolves to. `gatewayUrl` is
  *  the effective gateway, which unset swaps inherit (`resolveSwapsApiConfig` layering). */
@@ -32,6 +50,7 @@ function defaultsFor(env: SolverEnv, gatewayUrl: string = DEFAULT_API_BASE_URL):
     protocolIntentsContract: solver.protocolIntentsContract,
     apiBaseUrl: DEFAULT_API_BASE_URL,
     swapsApiBaseUrl: envSwapsApiBaseUrl ?? gatewayUrl,
+    bridgeApiBaseUrl: envBridgeApiBaseUrl ?? DEFAULT_BRIDGE_API_BASE_URL,
     apiKey: envSodaxApiKey ?? '',
     relayerApiEndpoint: DEFAULT_RELAYER_API_ENDPOINT,
   };
@@ -47,12 +66,14 @@ function seedDraft(env: SolverEnv, s: SodaxSettings): Draft {
   const defaults = defaultsFor(env, effectiveGateway(s.apiBaseUrl));
   return {
     env,
-    useBackendSubmitTx: s.useBackendSubmitTx === null ? 'auto' : s.useBackendSubmitTx ? 'on' : 'off',
+    swapUseBackendSubmitTx: s.swapUseBackendSubmitTx === null ? 'auto' : s.swapUseBackendSubmitTx ? 'on' : 'off',
+    bridgeUseBackendSubmitTx: s.bridgeUseBackendSubmitTx === null ? 'auto' : s.bridgeUseBackendSubmitTx ? 'on' : 'off',
     solverApiEndpoint: s.solverApiEndpoint ?? defaults.solverApiEndpoint,
     intentsContract: s.intentsContract ?? defaults.intentsContract,
     protocolIntentsContract: s.protocolIntentsContract ?? defaults.protocolIntentsContract,
     apiBaseUrl: s.apiBaseUrl ?? defaults.apiBaseUrl,
     swapsApiBaseUrl: s.swapsApiBaseUrl ?? defaults.swapsApiBaseUrl,
+    bridgeApiBaseUrl: s.bridgeApiBaseUrl ?? defaults.bridgeApiBaseUrl,
     apiKey: s.apiKey ?? defaults.apiKey,
     relayerApiEndpoint: s.relayerApiEndpoint ?? defaults.relayerApiEndpoint,
   };
@@ -93,12 +114,15 @@ function draftToSettings(draft: Draft): SodaxSettings {
     return value !== null && isEvmAddress(value) ? value : null;
   };
   return {
-    useBackendSubmitTx: draft.useBackendSubmitTx === 'auto' ? null : draft.useBackendSubmitTx === 'on',
+    swapUseBackendSubmitTx: draft.swapUseBackendSubmitTx === 'auto' ? null : draft.swapUseBackendSubmitTx === 'on',
+    bridgeUseBackendSubmitTx:
+      draft.bridgeUseBackendSubmitTx === 'auto' ? null : draft.bridgeUseBackendSubmitTx === 'on',
     solverApiEndpoint: url('solverApiEndpoint'),
     intentsContract: address('intentsContract'),
     protocolIntentsContract: address('protocolIntentsContract'),
     apiBaseUrl: url('apiBaseUrl'),
     swapsApiBaseUrl: url('swapsApiBaseUrl'),
+    bridgeApiBaseUrl: url('bridgeApiBaseUrl'),
     apiKey: norm('apiKey'),
     relayerApiEndpoint: url('relayerApiEndpoint'),
   };
@@ -110,21 +134,26 @@ function effectiveSolverEndpoint(draft: Draft): string {
   return draft.solverApiEndpoint.trim() || defaultsFor(draft.env).solverApiEndpoint;
 }
 
+function submitTxChoiceToBoolean(choice: SubmitTxChoice, autoValue: boolean): boolean {
+  return choice === 'auto' ? autoValue : choice === 'on';
+}
+
 /** Effective-config snapshot for pasting into a bug report; the API key is masked. */
 function draftToDebugJson(draft: Draft): string {
+  const swapBackendSubmitTx = defaultUseBackendSubmitTx(effectiveSolverEndpoint(draft));
   return JSON.stringify(
     {
       environment: draft.env,
-      submitTxMode: draft.useBackendSubmitTx,
-      useBackendSubmitTx:
-        draft.useBackendSubmitTx === 'auto'
-          ? defaultUseBackendSubmitTx(effectiveSolverEndpoint(draft))
-          : draft.useBackendSubmitTx === 'on',
+      swapSubmitTxMode: draft.swapUseBackendSubmitTx,
+      swapUseBackendSubmitTx: submitTxChoiceToBoolean(draft.swapUseBackendSubmitTx, swapBackendSubmitTx),
+      bridgeSubmitTxMode: draft.bridgeUseBackendSubmitTx,
+      bridgeUseBackendSubmitTx: submitTxChoiceToBoolean(draft.bridgeUseBackendSubmitTx, true),
       solverApiEndpoint: draft.solverApiEndpoint.trim(),
       intentsContract: draft.intentsContract.trim(),
       protocolIntentsContract: draft.protocolIntentsContract.trim(),
       apiBaseUrl: draft.apiBaseUrl.trim(),
       swapsApiBaseUrl: draft.swapsApiBaseUrl.trim(),
+      bridgeApiBaseUrl: draft.bridgeApiBaseUrl.trim(),
       apiKey: draft.apiKey.trim() ? '(set)' : '(unset)',
       relayerApiEndpoint: draft.relayerApiEndpoint.trim(),
     },
@@ -219,6 +248,50 @@ function SectionTitle({ children }: { children: ReactNode }) {
   );
 }
 
+function SubmitTxRow({
+  label,
+  value,
+  autoEnabled,
+  warning,
+  hint,
+  onText,
+  offText,
+  onChange,
+}: {
+  label: string;
+  value: SubmitTxChoice;
+  autoEnabled: boolean;
+  warning?: ReactNode;
+  hint: ReactNode;
+  onText: string;
+  offText: string;
+  onChange: (value: SubmitTxChoice) => void;
+}) {
+  return (
+    <div className="grid sm:grid-cols-[10rem_1fr] items-center gap-x-3 gap-y-1">
+      <Label className="text-sm font-medium">
+        {label}
+        {value !== 'auto' && (
+          <span className="ml-1.5 align-middle inline-block w-1.5 h-1.5 bg-amber-400 rounded-full" />
+        )}
+      </Label>
+      <Select value={value} onValueChange={next => onChange(next as SubmitTxChoice)}>
+        <SelectTrigger className="h-9 text-sm">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="auto">Auto (currently {autoEnabled ? 'on' : 'off'})</SelectItem>
+          <SelectItem value="on">{onText}</SelectItem>
+          <SelectItem value="off">{offText}</SelectItem>
+        </SelectContent>
+      </Select>
+      <div className={`sm:col-start-2 text-xs ${warning ? 'text-amber-600' : 'text-muted-foreground'}`}>
+        {warning ?? hint}
+      </div>
+    </div>
+  );
+}
+
 export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { solverEnvironment, sodaxSettings, applySodaxSettings } = useAppStore();
   const [draft, setDraft] = useState<Draft>(() => seedDraft(solverEnvironment, sodaxSettings));
@@ -234,8 +307,9 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
   const hasErrors = Object.keys(errors).length > 0;
 
   const defaults = defaultsFor(draft.env, effectiveGateway(draft.apiBaseUrl));
-  const autoSubmitTx = defaultUseBackendSubmitTx(effectiveSolverEndpoint(draft));
-  const submitTxMismatch = draft.useBackendSubmitTx === 'on' && !autoSubmitTx;
+  const swapAutoSubmitTx = defaultUseBackendSubmitTx(effectiveSolverEndpoint(draft));
+  const bridgeAutoSubmitTx = true;
+  const swapSubmitTxMismatch = draft.swapUseBackendSubmitTx === 'on' && !swapAutoSubmitTx;
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft(prev => ({ ...prev, [key]: value }));
 
@@ -275,7 +349,12 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
   };
 
   const handleReset = () => {
-    setDraft(prev => ({ ...prev, useBackendSubmitTx: 'auto', ...defaultsFor(prev.env) }));
+    setDraft(prev => ({
+      ...prev,
+      swapUseBackendSubmitTx: 'auto',
+      bridgeUseBackendSubmitTx: 'auto',
+      ...defaultsFor(prev.env),
+    }));
   };
 
   return (
@@ -284,8 +363,8 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
         <DialogHeader className="px-6 pt-5 pb-3 border-b">
           <DialogTitle>Sodax Settings</DialogTitle>
           <DialogDescription>
-            The effective SDK config, ready to copy. Edit a value to override it — equal to its default (or cleared)
-            keeps following the environment.
+            Feature-aware SDK and API config, ready to copy. Edit a value to override it — equal to its default (or
+            cleared) keeps following the environment.
           </DialogDescription>
         </DialogHeader>
 
@@ -300,41 +379,41 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
             </Tabs>
           </div>
 
-          <div className="grid sm:grid-cols-[10rem_1fr] items-center gap-x-3 gap-y-1">
-            <Label className="text-sm font-medium">
-              Backend submit-tx
-              {draft.useBackendSubmitTx !== 'auto' && (
-                <span className="ml-1.5 align-middle inline-block w-1.5 h-1.5 bg-amber-400 rounded-full" />
-              )}
-            </Label>
-            <Select
-              value={draft.useBackendSubmitTx}
-              onValueChange={value => set('useBackendSubmitTx', value as SubmitTxChoice)}
-            >
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="auto">Auto (currently {autoSubmitTx ? 'on' : 'off'})</SelectItem>
-                <SelectItem value="on">On — backend submit (2-step via swaps API)</SelectItem>
-                <SelectItem value="off">Off — client-side relay to the solver</SelectItem>
-              </SelectContent>
-            </Select>
-            <div className={`sm:col-start-2 text-xs ${submitTxMismatch ? 'text-amber-600' : 'text-muted-foreground'}`}>
-              {submitTxMismatch
-                ? 'Backend submit posts to the production swaps API — the selected solver never sees the intent and its /status stays NOT_FOUND.'
-                : 'On: the swaps API relays and post-executes server-side. Off: client-side relay, /execute to the solver below.'}
-            </div>
-          </div>
+          <SectionTitle>Submit handling</SectionTitle>
 
-          <SectionTitle>Solver</SectionTitle>
+          <SubmitTxRow
+            label="Swap SDK submit-tx"
+            value={draft.swapUseBackendSubmitTx}
+            autoEnabled={swapAutoSubmitTx}
+            warning={
+              swapSubmitTxMismatch
+                ? 'Backend submit posts to the production swaps API — the selected solver never sees the intent and its /status stays NOT_FOUND.'
+                : undefined
+            }
+            hint="Used by the Swap SDK page. On: swaps API relays + post-executes. Off: client calls /execute on the solver below."
+            onText="On — backend submit via swaps API"
+            offText="Off — client-side relay to the solver"
+            onChange={value => set('swapUseBackendSubmitTx', value)}
+          />
+
+          <SubmitTxRow
+            label="Bridge SDK submit-tx"
+            value={draft.bridgeUseBackendSubmitTx}
+            autoEnabled={bridgeAutoSubmitTx}
+            hint="Used by the Bridge SDK page. The Bridge API page calls submit-tx directly and uses the Bridge API URL below."
+            onText="On — backend submit via bridge API"
+            offText="Off — client-side relay"
+            onChange={value => set('bridgeUseBackendSubmitTx', value)}
+          />
+
+          <SectionTitle>Solver (swap)</SectionTitle>
 
           <TextRow
             label="Solver API endpoint"
             value={draft.solverApiEndpoint}
             defaultValue={defaults.solverApiEndpoint}
             error={errors.solverApiEndpoint}
-            hint="Quotes, /execute and /status go here."
+            hint="Used by Swap SDK quotes, /execute and solver /status. Bridge does not use the solver."
             onChange={value => set('solverApiEndpoint', value)}
           />
           <TextRow
@@ -352,14 +431,14 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
             onChange={value => set('protocolIntentsContract', value)}
           />
 
-          <SectionTitle>API</SectionTitle>
+          <SectionTitle>API endpoints</SectionTitle>
 
           <TextRow
             label="Gateway base URL"
             value={draft.apiBaseUrl}
             defaultValue={defaults.apiBaseUrl}
             error={errors.apiBaseUrl}
-            hint="Gateway root incl. version prefix. Moves data/bridge/swaps APIs — not sponsoring."
+            hint="Used by SDK data routes and Bridge SDK backend submit-tx. Swaps can override below; sponsoring stays env-only."
             onChange={handleGatewayChange}
           />
           <TextRow
@@ -367,8 +446,16 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
             value={draft.swapsApiBaseUrl}
             defaultValue={defaults.swapsApiBaseUrl}
             error={errors.swapsApiBaseUrl}
-            hint="Retarget swaps alone. At its default it follows VITE_SWAPS_API_BASE_URL / the gateway."
+            hint="Used by Swap API page and Swap SDK backend submit-tx. At its default it follows VITE_SWAPS_API_BASE_URL / gateway."
             onChange={value => set('swapsApiBaseUrl', value)}
+          />
+          <TextRow
+            label="Bridge API base URL"
+            value={draft.bridgeApiBaseUrl}
+            defaultValue={defaults.bridgeApiBaseUrl}
+            error={errors.bridgeApiBaseUrl}
+            hint="Used by Bridge API page only. Bridge SDK backend submit-tx uses the gateway above."
+            onChange={value => set('bridgeApiBaseUrl', value)}
           />
           <TextRow
             label="API key"
@@ -386,7 +473,7 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
             value={draft.relayerApiEndpoint}
             defaultValue={defaults.relayerApiEndpoint}
             error={errors.relayerApiEndpoint}
-            hint="Used by the client-side relay path (backend submit-tx off)."
+            hint="Used by Swap SDK / Bridge SDK client-side relay when submit-tx is Off."
             onChange={value => set('relayerApiEndpoint', value)}
           />
         </div>
