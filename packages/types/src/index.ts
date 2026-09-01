@@ -20,4 +20,4 @@ export * from './swap/index.js';
 export * from './utils/index.js';
 export * from './wallet/index.js';
 
-export const CONFIG_VERSION = 231; // bumped once per release by scripts/bump-versions.sh, on the release branch
+export const CONFIG_VERSION = 232; // bumped once per release by scripts/bump-versions.sh, on the release branch
