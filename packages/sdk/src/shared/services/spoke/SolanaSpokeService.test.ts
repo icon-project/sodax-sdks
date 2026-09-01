@@ -484,9 +484,7 @@ describe('SolanaSpokeService.getDeposit', () => {
 
     const result = await solanaSpoke.getDeposit({
       srcChainKey: SOL,
-      // Deliberate cast: GetAddressType<'solana'> is declared as Hex in @sodax/types, but real
-      // Solana addresses are base58 (getDeposit reads vault PDAs and never touches srcAddress).
-      srcAddress: SRC_ADDR as unknown as `0x${string}`,
+      srcAddress: SRC_ADDR,
       token: SOL_NATIVE,
     });
 
@@ -504,8 +502,7 @@ describe('SolanaSpokeService.getDeposit', () => {
 
     const result = await solanaSpoke.getDeposit({
       srcChainKey: SOL,
-      // Deliberate cast: same GetAddressType<'solana'> wart as the native-SOL case above.
-      srcAddress: SRC_ADDR as unknown as `0x${string}`,
+      srcAddress: SRC_ADDR,
       token: SOL_BNUSD,
     });
 
