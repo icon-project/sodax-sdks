@@ -250,7 +250,7 @@ console.log({ swap, isError, error, swapsInFlight });
 
 ### Balance display
 
-Balances come from `@sodax/wallet-sdk-react`, not from dapp-kit. See `wallet-connectivity.md` for `useXBalances`.
+Two options, both in dapp-kit: `useBalances` (SDK-backed, needs only a `SodaxProvider`) or `useXBalances` (wallet-layer, needs an `xService` from `@sodax/wallet-sdk-react`). See `wallet-connectivity.md`.
 
 ## Types
 

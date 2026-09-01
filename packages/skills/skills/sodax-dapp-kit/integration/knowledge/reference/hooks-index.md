@@ -250,6 +250,7 @@ Typed React Query wrappers over the backend Bridge API v2 (`sodax.api.bridge.*`)
 
 | Hook | Type | Purpose |
 |---|---|---|
+| `useBalances` | Query | SDK-backed wallet token balances (no xService) |
 | `useXBalances` | Query | Cross-chain token balances |
 | `useDeriveUserWalletAddress` | Query | Derive hub wallet (CREATE3) |
 | `useGetUserHubWalletAddress` | Query | Derive hub wallet (wallet router) |

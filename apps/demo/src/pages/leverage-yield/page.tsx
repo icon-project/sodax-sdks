@@ -25,7 +25,7 @@ import {
   useSodaxContext,
   useSwapAllowance,
   useSwapApprove,
-  useXBalances,
+  useBalances,
   useLeverageYieldDeposit,
   useLeverageYieldVaultSwap,
   useLeverageYieldWithdraw,
@@ -51,7 +51,6 @@ import {
   useWalletProvider,
   useXAccount,
   useXAccounts,
-  useXService,
 } from '@sodax/wallet-sdk-react';
 import { type FinalStatus, type Order, buildOrderSummary, orderId } from '@/components/swaps/OrderStatus';
 import OrderStatusPanel from '@/components/swaps/OrderStatusPanel';
@@ -159,17 +158,16 @@ export default function LeverageYieldPage() {
   const supportedSpokeChains = useMemo(() => sodax.config.getSupportedSpokeChains(), [sodax]);
   const [userChain, setUserChain] = useState<SpokeChainKey>(ChainKeys.ARBITRUM_MAINNET);
   const userTokens = useMemo(() => getSupportedSolverTokens(userChain), [userChain]);
-  const [userToken, setUserToken] = useState<XToken | undefined>(userTokens[0]);
-
-  useEffect(() => {
-    if (userTokens.length === 0) return;
-    // Re-resolve to the NEW chain's token instance on every chain switch. Match by symbol so
-    // the user's selection persists, but always return the entry from `userTokens` (carrying
-    // the new chain's `chainKey`) — never keep the stale `prev` object. Balance readers derive
-    // the chain to query from `xToken.chainKey`, so retaining the old object would fetch the
-    // previous chain's balance for an unchanged token.
-    setUserToken(prev => userTokens.find(t => t.symbol === prev?.symbol) ?? userTokens[0]);
-  }, [userTokens]);
+  // Store the SYMBOL and derive the token during render. Holding the token in its own state and
+  // re-resolving it from an effect left one committed render pairing the new `userChain` with the
+  // previous chain's token — a mismatch `useBalances` reads as `0n` instead of rejecting, so it
+  // surfaces as a phantom empty balance. Deriving from `userTokens`, which recomputes in the same
+  // render as `userChain`, closes that window.
+  const [userTokenSymbol, setUserTokenSymbol] = useState<string | undefined>(userTokens[0]?.symbol);
+  const userToken = useMemo(
+    () => userTokens.find(t => t.symbol === userTokenSymbol) ?? userTokens[0],
+    [userTokens, userTokenSymbol],
+  );
 
   // ─── Active tab ──────────────────────────────────────────────────────────
 
@@ -198,17 +196,15 @@ export default function LeverageYieldPage() {
 
   // ─── Balances (single — user's token on user chain) ──────────────────────
 
-  const userXService = useXService({ xChainType: userChainType });
-  const { data: userBalances } = useXBalances({
+  const { data: userBalances } = useBalances({
     params: {
-      xService: userXService,
-      xChainId: userChain,
-      xTokens: userToken ? [userToken] : [],
+      chainKey: userChain,
+      tokens: userToken ? [userToken] : [],
       address: userAccount.address,
     },
   });
   const userBalance: bigint | undefined = userToken
-    ? (userBalances?.[userToken.address] as bigint | undefined)
+    ? userBalances?.[userToken.address]
     : undefined;
 
   // ─── Amount + quote ──────────────────────────────────────────────────────
@@ -375,7 +371,7 @@ export default function LeverageYieldPage() {
     setSourceAmount('');
     setIntentOrderPayload(undefined);
     queryClient.invalidateQueries({ queryKey: ['leverageYield'] });
-    queryClient.invalidateQueries({ queryKey: ['shared', 'xBalances'] });
+    queryClient.invalidateQueries({ queryKey: ['shared', 'balances'] });
   };
 
   // Builds the swap payload via the SDK's leverage-yield builders, then stashes it for
@@ -772,7 +768,7 @@ export default function LeverageYieldPage() {
                 </div>
                 <Select
                   value={userToken?.address}
-                  onValueChange={addr => setUserToken(userTokens.find(t => t.address === addr))}
+                  onValueChange={addr => setUserTokenSymbol(userTokens.find(t => t.address === addr)?.symbol)}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Token" />
