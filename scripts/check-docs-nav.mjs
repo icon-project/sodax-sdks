@@ -49,6 +49,14 @@ export const MUST_NOT_BREAK_URLS = [
   // Served from docs/ root before this site absorbed them into /developers/how-to/.
   '/quick-sponsoring-stellar-guide',
   '/stellar-sponsoring-getting-started',
+  // GitBook URLs still drawing traffic or sitting in Google's index at the docs.sodax.com cutover.
+  '/solana/solana',
+  '/solana/solana/quickstart',
+  '/developers/how-to/oracle',
+  '/sodax-mcp-server-or-cross-network-cross-chain-defi-api-data-and-sdk-docs',
+  // GitBook served these from its own redirect table, which the cutover retires.
+  '/developers/packages/sdk/swaps',
+  '/developers/packages/sdk/money_market',
 ];
 
 // Supports the .gitignore subset Mintlify documents: "!" negation, "/" anchor and directory
