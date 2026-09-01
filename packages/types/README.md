@@ -96,3 +96,23 @@ function isEvmProvider(provider: IWalletProvider): provider is IEvmWalletProvide
   return provider.chainType === 'EVM';
 }
 ```
+
+## Address Types
+
+Use `GetAddressType<C>` to map a `SpokeChainKey` or `ChainType` to the address encoding that chain's spoke service accepts. Each chain family carries its own encoding — a Solana address is a base58 public key, not a hex string.
+
+| Chain family | Address type |
+| --- | --- |
+| EVM, NEAR | `Address` |
+| ICON | `IconAddress` |
+| Solana | `SolanaBase58PublicKey` |
+| Stellar, Sui | `Hex` |
+| Injective, Stacks | `string` |
+
+```typescript
+import type { GetAddressType, SpokeChainKey } from '@sodax/types';
+
+type AddressForChain<C extends SpokeChainKey> = GetAddressType<C>;
+```
+
+`GetTokenAddressType<C>` is the token-address counterpart: `Address` for EVM chains, `string` everywhere else.
