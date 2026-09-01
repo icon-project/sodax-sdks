@@ -1,6 +1,6 @@
 ---
-title: 5-Minute Swap
-sidebarTitle: 5-minute swap
+title: Your first swap
+sidebarTitle: First swap
 description: Install the SDK, quote an intent, and submit a mainnet swap — then poll until it settles.
 icon: bolt
 ---
@@ -8,8 +8,8 @@ icon: bolt
 Prefer HTTP? Same flow over REST: [Swap API](/developers/http-api/swaps). Prefer Solana-first? [Solana quickstart](/solana/quickstart).
 
 <Note>
-  Five minutes is how long it takes to get this code running. How long a submitted swap takes to
-  settle is a separate question — see the last step, **Poll until settled**.
+  Getting this code running and having a submitted swap settle are two different things — see the
+  last step, **Poll until settled**.
 </Note>
 
 <Warning>
@@ -153,9 +153,9 @@ Prefer HTTP? Same flow over REST: [Swap API](/developers/http-api/swaps). Prefer
     }
     ```
 
-    **Settlement time is separate from the five minutes above.** This loop gives up after 5 minutes
-    (60 polls × 5s) — tune that budget to your needs. How long a fill actually takes depends on
-    solver and relay conditions rather than on your code, so treat `SOLVED` as the only success
+    **Settlement is not instant, and it is not on a fixed schedule.** This loop gives up after 5
+    minutes (60 polls × 5s) — tune that budget to your needs. How long a fill actually takes depends
+    on solver and relay conditions rather than on your code, so treat `SOLVED` as the only success
     signal and don't design around a fixed duration.
 
     Watch destination fills via `fill_tx_hash`, or track cross-network message delivery on
