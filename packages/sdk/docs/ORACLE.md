@@ -1,9 +1,4 @@
----
-title: "Oracle API"
-sidebarTitle: "Oracle"
-icon: chart-line
-description: "USD OHLC price candles for charts, plus live solver oracle prices for SODAX-tracked assets."
----
+# Oracle API
 
 Two complementary price surfaces:
 
@@ -188,7 +183,7 @@ curl -s 'https://api.sodax.com/v1/intent/oracle' | head
 | “What’s the mark right now?” for hub assets | `/v1/intent/oracle` |
 | Swap quote | Prefer `POST /v1/swaps/quote` or solver `POST /v1/intent/quote` — not the oracle alone |
 
-Quotes for swaps should go through the [Swaps API](/developers/http-api/swaps) or the SDK. The solver oracle is for display, sanity checks, and tooling — not a substitute for a firm quote.
+Quotes for swaps should go through the [Swaps API](https://docs.sodax.com/developers/http-api/swaps) or the SDK. The solver oracle is for display, sanity checks, and tooling — not a substitute for a firm quote.
 
 ---
 

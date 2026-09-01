@@ -40,6 +40,11 @@ describe('packaged API URL defaults', () => {
     expect(requestedUrl()).toBe('https://api.sodax.com/v1/be/config/all');
   });
 
+  it('oracle reads mount under /be', async () => {
+    await sodax.backendApi.getOracleMarkets();
+    expect(requestedUrl()).toBe('https://api.sodax.com/v1/be/oracle/markets');
+  });
+
   // The reported defect: this posted to `/v1/be/swaps/submit-tx`, which the gateway does not route.
   it('swaps API is a sibling of /be, not a child of it', async () => {
     await sodax.api.swaps.getTokens();

@@ -97,6 +97,7 @@ export const ROUTES = {
   PARTNER_FEE_CLAIM: '/partner-fee-claim',
   RECOVERY: '/recovery',
   LEVERAGE_YIELD: '/leverage-yield',
+  ORACLE: '/oracle',
 } as const;
 
 /**

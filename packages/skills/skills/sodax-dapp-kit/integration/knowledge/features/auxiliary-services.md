@@ -64,6 +64,15 @@ useBackendMoneyMarketAssetBorrowers({ params, queryOptions });
 useBackendAllMoneyMarketBorrowers({ params: { pagination: { offset, limit } }, queryOptions });
 ```
 
+### Oracle data
+
+```ts
+// @ai-snippets-skip
+useBackendOracleMarkets({ queryOptions });   // staleTime 60s; discovery: quote, intervals, symbols
+// from/to are UNIX seconds over the half-open range [from, to), at most 5000 buckets; staleTime 10s
+useBackendOracleCandles({ params: { symbol, interval, from, to }, queryOptions });
+```
+
 ### Swaps API (`sodax.api.swaps`)
 
 Typed React Query wrappers over the backend **Swaps API v2** — one `useSwapsApi*` hook per endpoint of `sodax.api.swaps.*` (21 total: tokens, quote, deadline, allowance, approve, create / submit / cancel intent, status, intent hash / packet / extra-data, intent lookups, limit orders, gas estimate, fees, submit-tx + status). They call the backend HTTP API and are distinct from the on-chain `swap/` hooks (`useQuote`/`useStatus`/`useSwap`/…), which drive `sodax.swaps` (the on-chain `SwapService`). Reads take `{ params, queryOptions }`; the six actions (`approve`, `createIntent`, `submitIntent`, `cancelIntent`, `createLimitOrder`, `submitTx`) are mutations taking `{ mutationOptions }`, with domain inputs flowing through `mutate(vars)`.
@@ -404,6 +413,8 @@ and origin gating are the real controls. Proxy through your own backend if that 
 | `useSwapsApiSubmitTxStatus` | 1s | requires `txHash` + `srcChainKey`; stops on `solved` / `failed` |
 | `useSwapsApiStatus` | 1s | solver intent status; stops on status `3` / `4` |
 | `useBackendOrderbook` | none | `staleTime: 30s` — fresh-window, no background refetch |
+| `useBackendOracleMarkets` | none | `staleTime: 60s` |
+| `useBackendOracleCandles` | none | `staleTime: 10s` — matches the ~10s server-side cache |
 | `useExpiredUtxos` (bitcoin) | 60s | refetchInterval |
 | `useQuote` (swap) | 3s | refetchInterval |
 | `useStatus` (swap) | 3s | stops on status `3`/`4`, and after 40 consecutive NOT_FOUND fetches |
