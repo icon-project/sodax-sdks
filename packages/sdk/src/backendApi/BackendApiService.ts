@@ -627,9 +627,10 @@ export class BackendApiService implements IConfigApiV1 {
    * Fetch USD OHLC candles for a symbol over the half-open time range `[from, to)`.
    *
    * `from` and `to` are UNIX **seconds** (integers); `to` is exclusive and must exceed `from`,
-   * and the range may cover at most 5000 buckets of the requested interval (wider ranges fail
-   * with HTTP 400). An unknown symbol or an empty range resolves `ok` with `candles: []` —
-   * never a 404. The last candle may still be forming; re-poll while its `final === false`.
+   * and the range may cover at most 5000 buckets of the requested interval (invalid or wider
+   * ranges fail with HTTP 400). A valid range with no stored candles resolves `ok` with
+   * `candles: []`; an unknown symbol currently does the same rather than returning 404. The last
+   * candle may still be forming; re-poll while its `final === false`.
    * Responses are cached server-side for roughly 10 seconds per distinct URL.
    *
    * @param params.symbol - Canonical symbol, exact case, from {@link getOracleMarkets} (e.g. `"ETH"`).

@@ -540,7 +540,7 @@ describe('BackendApiService.getOracleCandles', () => {
   });
 
   // `from: 0` also guards the serialization: a falsy-conditional append (the getUserIntents shape)
-  // would silently drop it. An empty range is 200 + `candles: []`, never a 404.
+  // would silently drop it. This valid historical range has no stored candles.
   it('serializes numeric bounds verbatim, including a zero lower bound', async () => {
     const body = { symbol: 'BTC', quote: 'USD', interval: '1d', candles: [] };
     mockFetch.mockResolvedValueOnce(okResponse(body));
@@ -552,6 +552,15 @@ describe('BackendApiService.getOracleCandles', () => {
       `${DATA_API}/oracle/candles?symbol=BTC&interval=1d&from=0&to=86400`,
       expect.any(Object),
     );
+  });
+
+  it('returns ok:true with an empty candles array when the backend accepts an unknown symbol', async () => {
+    const body = { symbol: 'NOPE', quote: 'USD', interval: '1h', candles: [] };
+    mockFetch.mockResolvedValueOnce(okResponse(body));
+
+    await expect(
+      sodax.backendApi.getOracleCandles({ symbol: 'NOPE', interval: '1h', from: 0, to: 3600 }),
+    ).resolves.toEqual({ ok: true, value: body });
   });
 
   it('lifts a 400 (bad range / too many buckets) into error context', async () => {

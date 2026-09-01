@@ -120,7 +120,8 @@ curl -s "https://api.sodax.com/v1/be/oracle/candles?symbol=ETH&interval=1h&from=
 - Candles are ordered **oldest first**.
 - The last candle may still be forming — re-poll while `"final": false`.
 - **No volume** — candles are sampled from the SODAX price feed, not trade flow.
-- Empty ranges return **`200` with `"candles": []`** (never `404`). Render gaps gracefully.
+- A valid range with no stored candles returns **`200` with `"candles": []`**. Render gaps gracefully.
+- An unknown symbol also currently returns **`200` with `"candles": []`** rather than `404`. Use `/oracle/markets` when you need to validate the symbol first.
 - Max **5000 candles** per request; wider ranges return `400`.
 - Responses are cached ~**10 seconds**.
 
@@ -196,6 +197,8 @@ Quotes for swaps should go through the [Swaps API](/developers/http-api/swaps) o
 | Situation | Result |
 |-----------|--------|
 | Missing / invalid query params | `400` |
-| Unknown symbol or interval | `400` |
+| Unknown interval | `400` |
+| Unknown symbol | `200` + empty `candles` array |
+| Zero-width or reversed range (`from >= to`) | `400` |
 | Range wider than 5000 candles | `400` |
-| Empty time range | `200` + empty `candles` array |
+| Valid range with no stored candles | `200` + empty `candles` array |

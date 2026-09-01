@@ -715,9 +715,10 @@ interface OracleCandlesResponse {
 
 - `open` / `high` / `low` / `close` are USD prices as **decimal strings** — convert them yourself; never assume a JSON number.
 - `timestamp` is the bucket **start** in UNIX seconds. A `1h` candle at `T` covers `[T, T + 3600)`.
-- `from` and `to` are UNIX **seconds** (integers). `to` is **exclusive** and must be greater than `from`.
+- `from` and `to` are UNIX **seconds** (integers). `to` is **exclusive** and must be greater than `from`; a zero-width or reversed range returns HTTP 400.
 - A request may cover at most **5000 buckets** of the requested interval. A wider range (or an invalid parameter) returns HTTP 400, which surfaces as `ok: false` with `error.message === 'HTTP_REQUEST_FAILED'` and `error.context.status === 400` (narrow with `isSodaxError(result.error)` first).
-- An unknown symbol or an empty range resolves `ok: true` with `candles: []` — never a 404. Render the gap rather than branching on an error.
+- A valid range with no stored candles resolves `ok: true` with `candles: []`. Render the gap rather than branching on an error.
+- An unknown symbol also currently resolves `ok: true` with `candles: []` rather than a 404; use `getOracleMarkets()` when you need to distinguish selectable symbols before requesting data.
 - Candles are ordered **oldest first**, and the last one may still be forming. Branch on the value, not the field's presence: `final === false` means still forming, so re-poll while that holds; absent (the backend's usual encoding for a closed candle) means closed.
 - There is **no volume field** — candles are sampled from the SODAX price feed, not trade flow.
 - `interval` on the response echoes what you sent and is validated strictly — an unrecognized value resolves `ok: false` with `error.context.reason === 'invalid_response_shape'` rather than a value outside `OracleCandleInterval`.
