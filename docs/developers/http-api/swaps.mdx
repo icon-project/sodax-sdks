@@ -24,7 +24,7 @@ https://api.sodax.com/v1/swaps
 
 Canary: `https://canary-api.sodax.com/v1/swaps`.
 
-All amounts on the wire are **decimal strings**. Unauthenticated; write endpoints are **rate-limited** (~10 requests/min/IP for `submit-tx`).
+All amounts on the wire are **decimal strings**. Unauthenticated; write endpoints such as `submit-tx` are **rate-limited** — the exact limit is not published, so treat `429` as the signal.
 
 ---
 
@@ -164,7 +164,7 @@ Content-Type: application/json
 
 - **Idempotent** on `(txHash, srcChainKey)` — safe to retry.  
 - Response `data.status` is `"inserted"` or `"duplicate"`.  
-- Rate limit ~**10/min/IP** → back off on `429`.
+- Rate-limited → back off on `429`. Implement your own backoff: `@sodax/swaps-api` replays a `429` immediately, without one.
 
 ### 4. Poll status
 
