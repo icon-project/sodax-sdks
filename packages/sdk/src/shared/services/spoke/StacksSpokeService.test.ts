@@ -42,11 +42,12 @@
  *   6. getImplContractAddress — readContract for `get-asset-manager-impl`
  *   7. deposit — native vs non-native, raw vs walletProvider, raw-mode invariant
  *   8. getDeposit — native via getSTXBalance, non-native via readTokenBalance
+ *  8b. getWalletBalance / getWalletBalances — the USER's own holdings (contrast getDeposit)
  *   9. sendMessage — raw vs walletProvider, relay-id derivation
  *  10. waitForTransactionReceipt — every tx_status branch + polling defaults
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Cl, type ContractPrincipalCV } from '@sodax/libs/stacks/core';
+import { Cl, type ContractPrincipalCV, type UIntCV } from '@sodax/libs/stacks/core';
 import { ChainKeys, getIntentRelayChainId, spokeChainConfig, type Hex, type IStacksWalletProvider } from '@sodax/types';
 
 // --- hoisted mocks --------------------------------------------------------
@@ -515,6 +516,165 @@ describe('StacksSpokeService.getDeposit', () => {
         senderAddress: STACKS_ASSET_MGR,
       }),
     );
+  });
+});
+
+// =========================================================================
+// 8b. getWalletBalance / getWalletBalances — the user's own holdings
+// =========================================================================
+
+describe('StacksSpokeService.getWalletBalance / getWalletBalances', () => {
+  // Real config tokens — a synthesised principal would let a native/SIP-010 misclassification pass.
+  const STX_TOKEN = stacksConfig.supportedTokens.STX;
+  const BNUSD_TOKEN = stacksConfig.supportedTokens.bnUSD;
+  const SODA_TOKEN = stacksConfig.supportedTokens.SODA;
+
+  // `getSTXBalance` reads only `ok` and `json`, so a full `Response` is unnecessary.
+  const stxBalanceResponse = (balance: string) =>
+    ({ ok: true, json: () => Promise.resolve({ stx: { balance } }) }) as unknown as Response;
+
+  it('native STX → reads the Hiro balances endpoint for the user and issues no contract call', async () => {
+    // isNativeToken matches token.address against config.nativeToken; if they ever diverge the
+    // native branch silently degrades into a SIP-010 read against a non-existent contract.
+    expect(STX_TOKEN.address).toBe(STACKS_NATIVE);
+    const fetchSpy = vi.fn().mockResolvedValueOnce(stxBalanceResponse('7654321'));
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const result = await stacksSpoke.getWalletBalance({
+      srcChainKey: STACKS,
+      srcAddress: SRC_ADDR,
+      token: STX_TOKEN,
+    });
+
+    expect(result).toBe(7_654_321n);
+    expect(fetchSpy).toHaveBeenCalledWith(`${STACKS_RPC_URL}/extended/v1/address/${SRC_ADDR}/balances`);
+    expect(mocks.fetchCallReadOnlyFunction).not.toHaveBeenCalled();
+  });
+
+  it('SIP-010 → calls `get-balance` with the USER as both principal arg and senderAddress', async () => {
+    // The SUT casts the Clarity result to `{ value: UIntCV }` and reads `.value.value`.
+    mocks.fetchCallReadOnlyFunction.mockResolvedValueOnce({ value: { type: 1, value: 8_888n } as unknown as UIntCV });
+
+    const result = await stacksSpoke.getWalletBalance({
+      srcChainKey: STACKS,
+      srcAddress: SRC_ADDR,
+      token: BNUSD_TOKEN,
+    });
+
+    expect(result).toBe(8_888n);
+    // getDeposit passes STACKS_ASSET_MGR here; the holder is the single field separating the two
+    // reads, so a copy-paste regression would silently return the protocol's balance to the user.
+    expect(mocks.fetchCallReadOnlyFunction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contractAddress: 'SP3031RGK734636C8KGW2Y76TEQBTVX59Q472EQH0',
+        contractName: 'bnusd',
+        functionName: 'get-balance',
+        functionArgs: [Cl.principal(SRC_ADDR)],
+        senderAddress: SRC_ADDR,
+      }),
+    );
+  });
+
+  it('rejects when the SIP-010 read fails — never resolves a fabricated 0n', async () => {
+    // This method used to swallow every error and return 0n, which the UI cannot tell apart from an
+    // empty wallet. The rejection is the contract now.
+    mocks.fetchCallReadOnlyFunction.mockRejectedValueOnce(new Error('Hiro read-only call failed'));
+
+    await expect(
+      stacksSpoke.getWalletBalance({ srcChainKey: STACKS, srcAddress: SRC_ADDR, token: BNUSD_TOKEN }),
+    ).rejects.toThrow('Hiro read-only call failed');
+  });
+
+  it('rejects when the native STX read fails — never resolves a fabricated 0n', async () => {
+    vi.stubGlobal(
+      'fetch',
+      // The failure path reads only `ok` and `statusText`.
+      vi.fn().mockResolvedValueOnce({ ok: false, statusText: 'Bad Gateway' } as unknown as Response),
+    );
+
+    await expect(
+      stacksSpoke.getWalletBalance({ srcChainKey: STACKS, srcAddress: SRC_ADDR, token: STX_TOKEN }),
+    ).rejects.toThrow('Error fetching STX balance: Bad Gateway');
+  });
+
+  it('getWalletBalances → keys successful reads by token.address across both branches', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(stxBalanceResponse('100')));
+    // Same `{ value: UIntCV }` shape the SUT casts to; the real ResponseOkCV wrapper is never read.
+    mocks.fetchCallReadOnlyFunction.mockResolvedValueOnce({ value: { type: 1, value: 700n } as unknown as UIntCV });
+
+    const result = await stacksSpoke.getWalletBalances({
+      srcChainKey: STACKS,
+      srcAddress: SRC_ADDR,
+      tokens: [STX_TOKEN, BNUSD_TOKEN],
+    });
+
+    expect(result).toEqual({
+      [STX_TOKEN.address]: 100n,
+      [BNUSD_TOKEN.address]: 700n,
+    });
+  });
+
+  it('getWalletBalances → a failing token reports 0n via the logger and leaves the others intact', async () => {
+    // A flat map cannot carry the failure, so the SDK logger is the only channel an integrator has
+    // to tell a fabricated 0n apart from a real empty balance — assert it actually fired.
+    const warnSpy = vi.spyOn(sodax.config.logger, 'warn');
+    const rpcError = new Error('HTTP 429');
+    // settleWalletBalances kicks off the reads in token order, so the first `Once` belongs to bnUSD.
+    mocks.fetchCallReadOnlyFunction
+      .mockRejectedValueOnce(rpcError)
+      // The second read succeeds, in the `{ value: UIntCV }` shape the SUT casts to.
+      .mockResolvedValueOnce({ value: { type: 1, value: 250n } as unknown as UIntCV });
+
+    const result = await stacksSpoke.getWalletBalances({
+      srcChainKey: STACKS,
+      srcAddress: SRC_ADDR,
+      tokens: [BNUSD_TOKEN, SODA_TOKEN],
+    });
+
+    expect(mocks.fetchCallReadOnlyFunction.mock.calls[0]?.[0]).toMatchObject({ contractName: 'bnusd' });
+    expect(result[BNUSD_TOKEN.address]).toBe(0n);
+    expect(result[SODA_TOKEN.address]).toBe(250n);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('balance read failed'),
+      expect.objectContaining({ chainKey: STACKS, token: BNUSD_TOKEN.address, error: rpcError.message }),
+    );
+  });
+
+  it('getWalletBalances → rejects when every token in a non-empty batch fails', async () => {
+    // An all-zero map from a dead RPC is indistinguishable from an empty wallet, so the collector
+    // refuses to return one.
+    mocks.fetchCallReadOnlyFunction.mockRejectedValue(new Error('HTTP 503'));
+
+    await expect(
+      stacksSpoke.getWalletBalances({
+        srcChainKey: STACKS,
+        srcAddress: SRC_ADDR,
+        tokens: [BNUSD_TOKEN, SODA_TOKEN],
+      }),
+    ).rejects.toThrow(`every balance read failed on ${STACKS}`);
+  });
+
+  it('getWalletBalances → a genuine on-chain 0n counts as a successful read, not a failure', async () => {
+    // The all-failed guard keys off read outcomes, not values: a wallet that is empty on every
+    // token must still resolve, and must log nothing.
+    const warnSpy = vi.spyOn(sodax.config.logger, 'warn');
+    mocks.fetchCallReadOnlyFunction.mockResolvedValue({ value: { type: 1, value: 0n } as unknown as UIntCV });
+
+    const result = await stacksSpoke.getWalletBalances({
+      srcChainKey: STACKS,
+      srcAddress: SRC_ADDR,
+      tokens: [BNUSD_TOKEN, SODA_TOKEN],
+    });
+
+    expect(result).toEqual({ [BNUSD_TOKEN.address]: 0n, [SODA_TOKEN.address]: 0n });
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('getWalletBalances → an empty token list resolves to an empty map', async () => {
+    // `attempted === 0` must not trip the all-failed guard.
+    await expect(
+      stacksSpoke.getWalletBalances({ srcChainKey: STACKS, srcAddress: SRC_ADDR, tokens: [] }),
+    ).resolves.toEqual({});
   });
 });
 

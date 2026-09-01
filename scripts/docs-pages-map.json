@@ -8,6 +8,7 @@
     "packages/sdk/docs/SWAPS_API.md",
     "packages/sdk/docs/BRIDGE_API.md",
     "packages/sdk/docs/LOGGING.md",
+    "packages/sdk/docs/ORACLE.md",
     "packages/sdk/docs/ARCHITECTURE_REFACTOR_SUMMARY.md"
   ],
   "mirrored": [

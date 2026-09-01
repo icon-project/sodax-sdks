@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isFillEvent } from './guards.js';
+import { isFillEvent, isOracleCandleInterval } from './guards.js';
 
 const FILL_EVENT = {
   eventType: 'intent-filled',
@@ -42,5 +42,17 @@ describe('isFillEvent', () => {
     { ...FILL_EVENT, intentState: { remainingInput: 0 } },
   ])('rejects %#', value => {
     expect(isFillEvent(value)).toBe(false);
+  });
+});
+
+describe('isOracleCandleInterval', () => {
+  it.each(['1m', '5m', '1h', '1d'])('accepts the served interval %s', key => {
+    expect(isOracleCandleInterval(key)).toBe(true);
+  });
+
+  // The markets read is tolerant, so a key from a newer backend reaches consumers as a plain
+  // string; the guard is what keeps it out of `getOracleCandles`.
+  it.each(['4h', '1M', '', '1H'])('rejects %j, which getOracleCandles does not accept', key => {
+    expect(isOracleCandleInterval(key)).toBe(false);
   });
 });

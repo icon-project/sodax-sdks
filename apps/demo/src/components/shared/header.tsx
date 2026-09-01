@@ -18,6 +18,7 @@ const navLinks = [
   { to: ROUTES.DEX, label: 'Dex' },
   { to: ROUTES.RECOVERY, label: 'Recovery' },
   { to: ROUTES.LEVERAGE_YIELD, label: 'Leverage Yield' },
+  { to: ROUTES.ORACLE, label: 'Oracle' },
 ];
 
 const getNavLinkClass = (isActive: boolean) =>

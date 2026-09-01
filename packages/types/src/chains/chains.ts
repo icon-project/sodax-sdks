@@ -856,7 +856,9 @@ export const spokeChainConfig = {
     },
     chain: baseChainInfo[ChainKeys.BITCOIN_MAINNET] satisfies BaseChainInfo<'BITCOIN'>,
     bnUSD: 'no',
-    nativeToken: 'BTC' as const,
+    // Must equal bitcoinSupportedTokens.BTC.address: isNativeToken compares a token's `address`
+    // against this value, so a symbol here classifies native BTC as a contract token.
+    nativeToken: '0:0' as const,
     supportedTokens: bitcoinSupportedTokens,
     radfi: {
       walletMode: 'TRADING',
