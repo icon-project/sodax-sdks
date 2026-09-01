@@ -12,14 +12,14 @@ in `@sodax/wallet-sdk-core`, or by writing your own against the interface contra
 ## Table of Contents
 
 1. [Supported provider interfaces](#1-supported-provider-interfaces)
-2. [WalletProviderSlot — compile-time enforcement](#2-walletproviderslot-—-compile-time-enforcement)
+2. [WalletProviderSlot: compile-time enforcement](#2-walletproviderslot-compile-time-enforcement)
 3. [wallet-sdk-core: ready-to-use implementations](#3-wallet-sdk-core-ready-to-use-implementations)
    - [BaseWalletProvider](#basewalletprovider)
    - [chainType discriminant](#chaintype-discriminant)
    - [Dual config modes (private-key vs browser-extension)](#dual-config-modes-private-key-vs-browser-extension)
    - [Provider reference](#provider-reference)
 4. [Config type reference per chain](#4-config-type-reference-per-chain)
-5. [React integration — useWalletProvider](#5-react-integration-—-usewalletprovider)
+5. [React integration: useWalletProvider](#5-react-integration-usewalletprovider)
 6. [Custom implementations](#6-custom-implementations)
 
 ---
@@ -51,7 +51,7 @@ chain key or `ChainType` literal to the appropriate specific interface.
 
 ---
 
-## 2. WalletProviderSlot — compile-time enforcement
+## 2. WalletProviderSlot: compile-time enforcement
 
 Every SDK method that executes a transaction uses `WalletProviderSlot<K, Raw>` (defined in
 `packages/types/src/common/common.ts`) to enforce the pairing between `raw` mode and the presence
@@ -406,7 +406,7 @@ new NearWalletProvider({
 
 ---
 
-## 5. React integration — useWalletProvider
+## 5. React integration: useWalletProvider
 
 `packages/wallet-sdk-react` provides `useWalletProvider` — a hook that reads the chain-appropriate
 provider from the Zustand store and returns it typed to the correct `I*WalletProvider` interface.

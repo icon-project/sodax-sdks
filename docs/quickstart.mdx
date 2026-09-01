@@ -40,8 +40,13 @@ Prefer HTTP? Same flow over REST: [Swap API](/developers/http-api/swaps). Prefer
       console.warn('Using packaged config', init.error);
     }
 
+    const privateKey = process.env.EVM_PRIVATE_KEY;
+    if (!privateKey?.startsWith('0x')) {
+      throw new Error('Set EVM_PRIVATE_KEY to a 0x-prefixed private key');
+    }
+
     const wallet = new EvmWalletProvider({
-      privateKey: process.env.EVM_PRIVATE_KEY as Hex,
+      privateKey: privateKey as Hex, // the guard above is what makes this cast safe
       chainId: ChainKeys.ARBITRUM_MAINNET,
       // rpcUrl is optional — omitted, the chain's default RPC is used.
     });
@@ -143,9 +148,11 @@ Prefer HTTP? Same flow over REST: [Swap API](/developers/http-api/swaps). Prefer
           throw new Error('Intent failed');
         }
         // NOT_FOUND is not terminal: the solver can answer it for the first few polls after
-        // creation, so retry before giving up.
-        if (status.value.status === SolverIntentStatusCode.NOT_FOUND && ++notFoundCount >= 3) {
-          throw new Error('Intent not found after 3 polls');
+        // creation, so retry before giving up. Reset once any other status arrives.
+        if (status.value.status === SolverIntentStatusCode.NOT_FOUND) {
+          if (++notFoundCount >= 3) throw new Error('Intent not found after 3 consecutive polls');
+        } else {
+          notFoundCount = 0;
         }
       }
 
