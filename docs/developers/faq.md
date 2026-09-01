@@ -5,7 +5,7 @@ icon: comment-question
 
 #### 1. Which chains does SODAX support?
 
-SODAX runs on a hub-and-spoke network of **mainnet** chains. Sonic is the hub; spokes span EVM chains (Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia, Hedera) and non-EVM chains (Solana, Sui, Stellar, ICON, Injective, NEAR, Stacks, Bitcoin). Reference any chain via `ChainKeys.*`, which — together with the backend config — is the source of truth. The legacy `*_CHAIN_ID` constants are deprecated.
+SODAX runs on a hub-and-spoke network of **mainnet** chains. Sonic is the hub; spokes span EVM chains (Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia, Hedera) and non-EVM chains (Solana, Sui, Stellar, ICON, Injective, NEAR, Stacks, Bitcoin). Reference any chain via `ChainKeys.*`, which — together with the backend config — is the source of truth. The legacy `*_CHAIN_ID` constants were **removed in v2**; see [Chain ID migration](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/CHAIN_ID_MIGRATION.md) for the mapping.
 
 Full list with relay IDs: [Relayer API endpoints](/developers/deployments/relayer-api-endpoints).
 
@@ -133,7 +133,7 @@ See [Staking](/developers/packages/foundation/sdk/functional-modules/staking).
 
 #### 18. How do partner fees work and how do I claim them?
 
-Set `swaps.partnerFee`, `moneyMarket.partnerFee` and `bridge.partnerFee` independently on `SodaxConfig`. `getQuote` deducts the swap partner fee from the input amount before forwarding to the solver, so no fee field appears in the request payload. Claim accrued fees via `sodax.partners.feeClaim*` methods, which return `Result<T, PartnerError>`.
+Set a global default with the top-level `fee`, then override it per feature with `swaps.partnerFee`, `moneyMarket.partnerFee`, `bridge.partnerFee` and `leverageYield.partnerFee` on `SodaxConfig` — vault flows read the `leverageYield` slot, not `swaps`. `getQuote` deducts the swap partner fee from the input amount before forwarding to the solver, so no fee field appears in the request payload. Claim accrued fees via `sodax.partners.feeClaim*` methods, which return `Result<T, PartnerError>`.
 
 Setup and claim flows: [Monetize SDK](/developers/how-to/monetize_sdk).
 
@@ -145,7 +145,7 @@ Full mapping: [Relayer API endpoints](/developers/deployments/relayer-api-endpoi
 
 #### 20. How do I wire SODAX into my AI coding agent (Claude Code, Cursor, Codex)?
 
-From your project root run `npx skills@latest add icon-project/sodax-sdks/packages/skills`. The CLI detects your tool (Claude Code, Cursor, Codex, Copilot) and installs `AGENTS.md` plus per-feature `SKILL.md` files into the conventional location. Point your agent rules at the installed `AGENTS.md`, not the GitHub main branch, so version drift does not corrupt the routing.
+From your project root run `npx skills@latest add icon-project/sodax-sdks/packages/skills`. The CLI detects your tool (Claude Code, Cursor, Codex, Copilot) and installs five skill directories, each with its own `SKILL.md`, into the conventional discovery path (e.g. `.claude/skills/sodax-<pkg>/`). The CLI does **not** copy the package-level `AGENTS.md` — agents auto-discover the skills from `SKILL.md` frontmatter, so there is nothing to point your agent rules at. If you install via npm or a `file:` path instead, `node_modules/@sodax/skills/AGENTS.md` is the router.
 
 See [AI Integration](/ai-integration-guide).
 

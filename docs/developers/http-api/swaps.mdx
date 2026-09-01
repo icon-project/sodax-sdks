@@ -14,7 +14,7 @@ Raw HTTP for intent-based swaps — use from any language when you do not want (
 | **SDK adapter** | `sodax.api.swaps` — same endpoints, wraps the standalone client; returns `Result<T>` and **never throws** |
 | **SDK orchestrator** | `sodax.swaps` — end-to-end create → relay → settle ([Swaps module](/developers/packages/foundation/sdk/functional-modules/swaps)) |
 
-> The legacy path `/v1/bes/swaps` is retired (`route_not_found`). Always use `/v1/swaps`.
+> The legacy path `/v1/bes/swaps` is retired and answers `404`. Always use `/v1/swaps`.
 
 ## Base URL
 

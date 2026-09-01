@@ -109,11 +109,16 @@ const swapResult = await sodax.swaps.swap({
 });
 
 if (swapResult.ok) {
-  console.log('Filled. Hub tx:', swapResult.value.intentDeliveryInfo.dstTxHash);
+  console.log('Submitted. Hub tx:', swapResult.value.intentDeliveryInfo.dstTxHash);
 } else {
   console.error('Swap failed:', swapResult.error);
 }
 ```
+
+`ok` means the intent was created, relayed to the hub, and the solver notified — **not** that it was
+filled. Poll `sodax.swaps.getStatus({ intent_tx_hash: intentDeliveryInfo.dstTxHash })` until the
+status is `SolverIntentStatusCode.SOLVED`, which is the only success signal. The
+[main quickstart](/quickstart) has the full polling loop, including why `NOT_FOUND` is not terminal.
 
 A few things you did not have to do:
 

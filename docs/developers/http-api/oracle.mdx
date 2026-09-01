@@ -194,6 +194,7 @@ Quotes for swaps should go through the [Swaps API](/developers/http-api/swaps) o
 | Situation | Result |
 |-----------|--------|
 | Missing / invalid query params | `400` |
-| Unknown symbol or interval | `400` |
+| Unknown interval | `400` |
+| Unknown symbol | `200` + empty `candles` array (the symbol is echoed back, so check for an empty array rather than expecting an error) |
 | Range wider than 5000 candles | `400` |
 | Empty time range | `200` + empty `candles` array |

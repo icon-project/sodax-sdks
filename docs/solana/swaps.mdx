@@ -27,7 +27,7 @@ const quoteResult = await sodax.swaps.getQuote({
   token_src_blockchain_id: ChainKeys.SOLANA_MAINNET,
   token_dst_blockchain_id: ChainKeys.ARBITRUM_MAINNET,
   amount: 100_000_000n,
-  quote_type: 'exact_input',          // or 'exact_output'
+  quote_type: 'exact_input',          // the only supported quote type
 });
 ```
 
