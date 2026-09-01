@@ -91,6 +91,7 @@ const injConfig = spokeChainConfig[INJ];
 const INJ_ASSET_MGR = injConfig.addresses.assetManager;
 const INJ_CONNECTION = injConfig.addresses.connection;
 const INJ_BNUSD = injConfig.bnUSD;
+const INJ_NATIVE = injConfig.nativeToken;
 const INJ_NETWORK_ID = injConfig.networkId;
 const INJ_POLLING_MS = injConfig.pollingConfig.pollingIntervalMs;
 const INJ_TIMEOUT_MS = injConfig.pollingConfig.maxTimeoutMs;
