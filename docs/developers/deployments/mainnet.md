@@ -230,6 +230,11 @@ _RLUSD asset note: [`0x52D94FFC0EEfdc8B6521b19ff2C8c5ddF6E842B3`](https://sonics
 | [USDT(6)](https://polygonscan.com/token/0xc2132d05d31c914a87c6611c10748aeb04b58e8f) | [0xc5dfa58a0f80646d1067d894920acd870ff1888b](https://sonicscan.org/address/0xc5dfa58a0f80646d1067d894920acd870ff1888b) |
 
 ### Nibiru
+
+<Note>
+These contracts are deployed on chain, but Nibiru is **not yet reachable through the SDK** — it has no entry in `ChainKeys` (`@sodax/types`) and is not returned by `GET /config/spoke/chains`. The addresses below are published for reference only.
+</Note>
+
 | Contract | Address |
 |----------|---------|
 | AssetManager | [0x6958a4CBFe11406E2a1c1d3a71A1971aD8B3b92F](https://nibiscan.io/address/0x6958a4CBFe11406E2a1c1d3a71A1971aD8B3b92F) |
@@ -246,6 +251,11 @@ _RLUSD asset note: [`0x52D94FFC0EEfdc8B6521b19ff2C8c5ddF6E842B3`](https://sonics
 | [USDC(6)](https://nibiscan.io/address/0x0829F361A05D993d5CEb035cA6DF3446b060970b) | [0x3d73437dd81b3F9EC82752Beb1752f03a8531710](https://sonicscan.org/address/0x3d73437dd81b3F9EC82752Beb1752f03a8531710)  |
 
 ### Botanix
+
+<Note>
+These contracts are deployed on chain, but Botanix is **not yet reachable through the SDK** — it has no entry in `ChainKeys` (`@sodax/types`) and is not returned by `GET /config/spoke/chains`. The addresses below are published for reference only.
+</Note>
+
 | Contract | Address |
 |----------|---------|
 | AssetManager | [0xA8f30Fd43c7537Dfd175CD117BC2880aB964C192](https://botanixscan.io/address/0xA8f30Fd43c7537Dfd175CD117BC2880aB964C192) |
@@ -622,6 +632,11 @@ Address encoding: `stacks-consensus-buff`
 | [USDC(6)](https://explorer.hiro.so/token/SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx?chain=mainnet) | [0x2336917df30f3417986a29ec384274a83adbef16](https://sonicscan.org/address/0x2336917df30f3417986a29ec384274a83adbef16) |
 
 ### Tron
+
+<Note>
+These contracts are deployed on chain, but Tron is **not yet reachable through the SDK** — it has no entry in `ChainKeys` (`@sodax/types`) and is not returned by `GET /config/spoke/chains`. The addresses below are published for reference only.
+</Note>
+
 Internal chain id (NID): `1953656686`
 
 | Contract | Tron Address | EVM Address (hex) |
@@ -639,6 +654,10 @@ Internal chain id (NID): `1953656686`
 
 ### XRP Ledger
 Hub chain ID: `66` — relay mode: **MPC**
+
+<Note>
+XRP Ledger is **not yet reachable through the SDK** — it has no entry in `ChainKeys` (`@sodax/types`) and is not returned by `GET /config/spoke/chains`. No spoke contracts are published for it; the hub-side asset mappings below are for reference only.
+</Note>
 
 #### Assets
 | Token | Asset id | Issuer / currency | Wrapped on hub |
