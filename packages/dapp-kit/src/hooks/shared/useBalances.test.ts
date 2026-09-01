@@ -13,13 +13,12 @@ const makeToken = (symbol: string, address: string): XToken =>
     vault: '0x0000000000000000000000000000000000000000',
   }) as XToken;
 
-// Minimal Sodax stub exposing only the `spoke.getWalletBalances` path the hook uses.
 const makeSodax = (result: Result<Record<string, bigint>>) =>
   ({
     spoke: {
       getWalletBalances: vi.fn().mockResolvedValue(result),
     },
-  }) as unknown as Sodax;
+  }) as unknown as Sodax; // Minimal stub: only the `spoke.getWalletBalances` path the hook uses.
 
 describe('getBalancesQueryOptions', () => {
   const tokenA = makeToken('AAA', '0xaaa');

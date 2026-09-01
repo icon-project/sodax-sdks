@@ -47,7 +47,7 @@
  *  10. waitForTransactionReceipt — every tx_status branch + polling defaults
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Cl, type ContractPrincipalCV } from '@sodax/libs/stacks/core';
+import { Cl, type ContractPrincipalCV, type UIntCV } from '@sodax/libs/stacks/core';
 import { ChainKeys, getIntentRelayChainId, spokeChainConfig, type Hex, type IStacksWalletProvider } from '@sodax/types';
 
 // --- hoisted mocks --------------------------------------------------------
@@ -529,6 +529,7 @@ describe('StacksSpokeService.getWalletBalance / getWalletBalances', () => {
   const BNUSD_TOKEN = stacksConfig.supportedTokens.bnUSD;
   const SODA_TOKEN = stacksConfig.supportedTokens.SODA;
 
+  // `getSTXBalance` reads only `ok` and `json`, so a full `Response` is unnecessary.
   const stxBalanceResponse = (balance: string) =>
     ({ ok: true, json: () => Promise.resolve({ stx: { balance } }) }) as unknown as Response;
 
@@ -551,6 +552,7 @@ describe('StacksSpokeService.getWalletBalance / getWalletBalances', () => {
   });
 
   it('SIP-010 → calls `get-balance` with the USER as both principal arg and senderAddress', async () => {
+    // The SUT casts the Clarity result to `{ value: UIntCV }` and reads `.value.value`.
     mocks.fetchCallReadOnlyFunction.mockResolvedValueOnce({ value: { type: 1, value: 8_888n } as unknown as UIntCV });
 
     const result = await stacksSpoke.getWalletBalance({
@@ -586,6 +588,7 @@ describe('StacksSpokeService.getWalletBalance / getWalletBalances', () => {
   it('rejects when the native STX read fails — never resolves a fabricated 0n', async () => {
     vi.stubGlobal(
       'fetch',
+      // The failure path reads only `ok` and `statusText`.
       vi.fn().mockResolvedValueOnce({ ok: false, statusText: 'Bad Gateway' } as unknown as Response),
     );
 
@@ -596,6 +599,7 @@ describe('StacksSpokeService.getWalletBalance / getWalletBalances', () => {
 
   it('getWalletBalances → keys successful reads by token.address across both branches', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(stxBalanceResponse('100')));
+    // Same `{ value: UIntCV }` shape the SUT casts to; the real ResponseOkCV wrapper is never read.
     mocks.fetchCallReadOnlyFunction.mockResolvedValueOnce({ value: { type: 1, value: 700n } as unknown as UIntCV });
 
     const result = await stacksSpoke.getWalletBalances({
@@ -618,6 +622,7 @@ describe('StacksSpokeService.getWalletBalance / getWalletBalances', () => {
     // settleWalletBalances kicks off the reads in token order, so the first `Once` belongs to bnUSD.
     mocks.fetchCallReadOnlyFunction
       .mockRejectedValueOnce(rpcError)
+      // The second read succeeds, in the `{ value: UIntCV }` shape the SUT casts to.
       .mockResolvedValueOnce({ value: { type: 1, value: 250n } as unknown as UIntCV });
 
     const result = await stacksSpoke.getWalletBalances({
