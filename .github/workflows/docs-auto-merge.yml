@@ -1,0 +1,94 @@
+name: Docs auto-merge
+
+# pull_request_target, so the classifier and this file are always the copies on the base
+# branch: a PR cannot edit its own gate. Head content is only ever read, never executed.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  auto-merge:
+    name: Docs auto-merge
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    # A fork head is out of scope: it can be opened by anyone.
+    if: >-
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # By SHA, so a force-push between the event and this fetch fails the step rather than
+      # classifying a commit the event did not name.
+      - name: Fetch the pull request head
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$HEAD_SHA"
+          git cat-file -e "${HEAD_SHA}^{commit}"
+
+      # GITHUB_TOKEN reviews do not count toward the ruleset's required approval, so the
+      # approving identity has to be an App with pull-requests: write. Minted before
+      # classification, so a classifier error can still withdraw an earlier approval.
+      - name: Mint an App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.DOCS_PUBLISH_APP_ID }}
+          private-key: ${{ secrets.DOCS_PUBLISH_APP_PRIVATE_KEY }}
+
+      - name: Classify the pull request diff
+        id: classify
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: .github/scripts/classify-docs-pr.sh "$BASE_SHA" "$HEAD_SHA"
+
+      # Auto-merge, not a direct merge: GitHub holds it until the required Docs site check
+      # is green, and drops it if the check fails.
+      - name: Approve and queue the merge
+        if: steps.classify.outputs.marketing_only == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REASON: ${{ steps.classify.outputs.reason }}
+        run: |
+          set -euo pipefail
+          gh pr review "$PR" --approve \
+            --body "Marketing pages only (${REASON}). Merging on a green Docs site check."
+          gh pr merge "$PR" --auto --squash
+
+      # dismiss_stale_reviews_on_push is off on the ruleset, so an earlier approval outlives
+      # a push that adds code. Withdraw it rather than leaving a queued merge armed.
+      - name: Withdraw a stale approval
+        if: ${{ !cancelled() && steps.classify.outputs.marketing_only != 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REASON: ${{ steps.classify.outputs.reason }}
+          BOT: ${{ steps.app-token.outputs.app-slug }}[bot]
+        run: |
+          set -euo pipefail
+          gh pr merge "$PR" --disable-auto || true
+          ids=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR}/reviews" \
+            --jq ".[] | select(.state == \"APPROVED\" and .user.login == \"${BOT}\") | .id")
+          for id in $ids; do
+            gh api -X PUT \
+              "repos/${GITHUB_REPOSITORY}/pulls/${PR}/reviews/${id}/dismissals" \
+              -f event=DISMISS \
+              -f message="No longer a docs-only change (${REASON}); a reviewer is needed."
+          done
