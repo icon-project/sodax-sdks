@@ -113,6 +113,27 @@ const SAMPLE_XTOKEN = {
   vault: '0x0000000000000000000000000000000000000011',
 };
 
+const SAMPLE_ORACLE_MARKETS = {
+  quote: 'USD',
+  intervals: [
+    { key: '1m', label: '1 minute', seconds: 60 },
+    { key: '5m', label: '5 minutes', seconds: 300 },
+    { key: '1h', label: '1 hour', seconds: 3600 },
+    { key: '1d', label: '1 day', seconds: 86400 },
+  ],
+  symbols: ['BTC', 'ETH', 'SOL'],
+};
+
+const SAMPLE_ORACLE_CANDLES = {
+  symbol: 'ETH',
+  quote: 'USD',
+  interval: '1h',
+  candles: [
+    { timestamp: 1782234000, open: '1665.57', high: '1666.22', low: '1663.01', close: '1665.02' },
+    { timestamp: 1782237600, open: '1665.02', high: '1670.40', low: '1664.88', close: '1669.13', final: false },
+  ],
+};
+
 // --- helpers --------------------------------------------------------------
 
 const okResponse = <T>(data: T) => ({ ok: true, status: 200, json: vi.fn().mockResolvedValue(data) });
@@ -475,6 +496,85 @@ describe('BackendApiService.getAllMoneyMarketBorrowers', () => {
 });
 
 // =========================================================================
+// Oracle endpoints — USD OHLC candle discovery and reads. The candles URL is
+// asserted in full because the backend rejects any extra query param with a 400,
+// so the query string this service builds is part of the contract.
+// =========================================================================
+
+describe('BackendApiService.getOracleMarkets', () => {
+  it('issues GET to /oracle/markets and wraps the JSON body in ok:true', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse(SAMPLE_ORACLE_MARKETS));
+
+    const result = await sodax.backendApi.getOracleMarkets();
+
+    expect(result).toEqual({ ok: true, value: SAMPLE_ORACLE_MARKETS });
+    expect(mockFetch).toHaveBeenCalledWith(`${DATA_API}/oracle/markets`, expect.objectContaining({ method: 'GET' }));
+  });
+
+  it('resolves to ok:false with HTTP_REQUEST_FAILED on a non-2xx response', async () => {
+    mockFetch.mockResolvedValueOnce(httpErrorResponse(500, 'boom'));
+
+    await expect(sodax.backendApi.getOracleMarkets()).resolves.toEqual({
+      ok: false,
+      error: expect.objectContaining({ message: 'HTTP_REQUEST_FAILED' }),
+    });
+  });
+});
+
+describe('BackendApiService.getOracleCandles', () => {
+  it('issues GET to /oracle/candles with exactly the four wire params, in order', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse(SAMPLE_ORACLE_CANDLES));
+
+    const result = await sodax.backendApi.getOracleCandles({
+      symbol: 'ETH',
+      interval: '1h',
+      from: 1782234000,
+      to: 1782241200,
+    });
+
+    expect(result).toEqual({ ok: true, value: SAMPLE_ORACLE_CANDLES });
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${DATA_API}/oracle/candles?symbol=ETH&interval=1h&from=1782234000&to=1782241200`,
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
+  // `from: 0` also guards the serialization: a falsy-conditional append (the getUserIntents shape)
+  // would silently drop it. An empty range is 200 + `candles: []`, never a 404.
+  it('serializes numeric bounds verbatim, including a zero lower bound', async () => {
+    const body = { symbol: 'BTC', quote: 'USD', interval: '1d', candles: [] };
+    mockFetch.mockResolvedValueOnce(okResponse(body));
+
+    const result = await sodax.backendApi.getOracleCandles({ symbol: 'BTC', interval: '1d', from: 0, to: 86400 });
+
+    expect(result).toEqual({ ok: true, value: body });
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${DATA_API}/oracle/candles?symbol=BTC&interval=1d&from=0&to=86400`,
+      expect.any(Object),
+    );
+  });
+
+  it('lifts a 400 (bad range / too many buckets) into error context', async () => {
+    mockFetch.mockResolvedValueOnce(httpErrorResponse(400, 'range too wide'));
+
+    const result = await sodax.backendApi.getOracleCandles({
+      symbol: 'ETH',
+      interval: '1m',
+      from: 0,
+      to: 100_000_000,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const err = result.error as SodaxError;
+      expect(err.message).toBe('HTTP_REQUEST_FAILED');
+      expect(err.context?.status).toBe(400);
+      expect(err.context?.api).toBe('backend');
+    }
+  });
+});
+
+// =========================================================================
 // Config endpoints — Result<T> wrappers, all GET, exhaustive endpoint coverage.
 // Each endpoint is asserted to hit its exact path so a refactor that flips a
 // path string surfaces immediately.
@@ -613,6 +713,79 @@ describe('BackendApiService response validation', () => {
     mockFetch.mockResolvedValueOnce(okResponse({ total: 1, data: [{ intentState: {}, intentData: {} }] }));
 
     const result = await sodax.backendApi.getOrderbook({ offset: '0', limit: '1' });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect((result.error as SodaxError).context?.reason).toBe('invalid_response_shape');
+  });
+
+  it('getOracleCandles rejects a candle whose OHLC prices are JSON numbers, not decimal strings', async () => {
+    mockFetch.mockResolvedValueOnce(
+      okResponse({
+        symbol: 'ETH',
+        quote: 'USD',
+        interval: '1h',
+        candles: [{ timestamp: 1782234000, open: 1665.57, high: 1666.22, low: 1663.01, close: 1665.02 }],
+      }),
+    );
+
+    const result = await sodax.backendApi.getOracleCandles({
+      symbol: 'ETH',
+      interval: '1h',
+      from: 1782234000,
+      to: 1782241200,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect((result.error as SodaxError).context?.reason).toBe('invalid_response_shape');
+  });
+
+  it('getOracleMarkets tolerates an unknown interval key (schema is not a picklist)', async () => {
+    const body = {
+      quote: 'USD',
+      intervals: [{ key: '4h', label: '4 hours', seconds: 14400 }],
+      symbols: ['ETH'],
+    };
+    mockFetch.mockResolvedValueOnce(okResponse(body));
+
+    await expect(sodax.backendApi.getOracleMarkets()).resolves.toEqual({ ok: true, value: body });
+  });
+
+  // `final` is advisory, so the schema tolerates `true` rather than blanking a whole chart over it;
+  // consumers branch on `final === false`, not on the field being present.
+  it('getOracleCandles accepts a candle marked final: true', async () => {
+    const body = {
+      symbol: 'ETH',
+      quote: 'USD',
+      interval: '1h',
+      candles: [
+        { timestamp: 1782234000, open: '1665.57', high: '1666.22', low: '1663.01', close: '1665.02', final: true },
+      ],
+    };
+    mockFetch.mockResolvedValueOnce(okResponse(body));
+
+    await expect(
+      sodax.backendApi.getOracleCandles({ symbol: 'ETH', interval: '1h', from: 1782234000, to: 1782241200 }),
+    ).resolves.toEqual({ ok: true, value: body });
+  });
+
+  it('getOracleCandles rejects an interval echo outside the declared union', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse({ symbol: 'ETH', quote: 'USD', interval: '4h', candles: [] }));
+
+    const result = await sodax.backendApi.getOracleCandles({
+      symbol: 'ETH',
+      interval: '1h',
+      from: 1782234000,
+      to: 1782241200,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect((result.error as SodaxError).context?.reason).toBe('invalid_response_shape');
+  });
+
+  it('getOracleMarkets rejects an intervals entry missing required fields', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse({ quote: 'USD', intervals: [{ key: '1h' }], symbols: ['ETH'] }));
+
+    const result = await sodax.backendApi.getOracleMarkets();
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect((result.error as SodaxError).context?.reason).toBe('invalid_response_shape');

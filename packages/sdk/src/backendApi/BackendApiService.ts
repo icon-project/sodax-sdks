@@ -175,6 +175,50 @@ export interface MoneyMarketBorrowers {
   limit: number;
 }
 
+/** Interval keys accepted by the oracle candles endpoint (bucket sizes 60s / 300s / 3600s / 86400s). */
+export type OracleCandleInterval = (typeof schemas.ORACLE_CANDLE_INTERVALS)[number];
+
+/** One selectable candle interval in the oracle markets discovery payload. */
+export interface OracleMarketInterval {
+  /**
+   * Interval id for {@link BackendApiService.getOracleCandles}. Typed `string`, not
+   * `OracleCandleInterval`: discovery must survive the backend adding an interval this SDK version
+   * does not know, so membership-test against `ORACLE_CANDLE_INTERVALS` before passing it on.
+   */
+  key: string;
+  label: string;
+  seconds: number;
+}
+
+/** Discovery payload for the oracle candle store: quote currency, selectable intervals, and covered symbols. */
+export interface OracleMarketsResponse {
+  quote: string;
+  intervals: OracleMarketInterval[];
+  symbols: string[];
+}
+
+/**
+ * One USD OHLC bucket. `timestamp` is the bucket START in UNIX seconds; prices are USD decimal
+ * strings. Treat `final === false` as "still forming" — the backend sends it only on the current
+ * bucket and omits it on closed ones, so absent (or `true`) means closed.
+ */
+export interface OracleCandle {
+  timestamp: number;
+  open: string;
+  high: string;
+  low: string;
+  close: string;
+  final?: boolean;
+}
+
+/** GET /oracle/candles response: the echoed query dimensions plus oldest-first candles (no volume field). */
+export interface OracleCandlesResponse {
+  symbol: string;
+  quote: string;
+  interval: OracleCandleInterval;
+  candles: OracleCandle[];
+}
+
 /** Construction options for {@link BackendApiService}. */
 export type BackendApiServiceOptions = {
   /**
@@ -197,6 +241,7 @@ export type BackendApiServiceOptions = {
  * - **Solver orderbook** — read open intents waiting to be filled.
  * - **Money market** — query per-user positions, per-reserve asset stats,
  *   and paginated borrower/supplier lists.
+ * - **Oracle** — USD OHLC candle discovery and reads for charting.
  *
  * All public methods return `Promise<Result<T>>` — they never throw. On network
  * failure, timeout, non-2xx HTTP response, or unexpected response shape the
@@ -562,6 +607,52 @@ export class BackendApiService implements IConfigApiV1 {
     const endpoint = `/moneymarket/borrowers?${queryString}`;
 
     return this.request(endpoint, { ...config, method: 'GET' }, schemas.MoneyMarketBorrowersSchema);
+  }
+
+  // Oracle endpoints
+  /**
+   * Fetch the oracle candle store's discovery payload: the quote currency (currently always
+   * `"USD"`), the selectable candle intervals, and the canonical symbols that have candle data.
+   *
+   * Use this to populate a symbol picker and interval switcher before calling
+   * {@link getOracleCandles}.
+   *
+   * @returns `Result<OracleMarketsResponse>` — on success, `{ quote, intervals, symbols }`.
+   */
+  public async getOracleMarkets(config?: RequestOverrideConfig): Promise<Result<OracleMarketsResponse>> {
+    return this.request('/oracle/markets', { ...config, method: 'GET' }, schemas.OracleMarketsResponseSchema);
+  }
+
+  /**
+   * Fetch USD OHLC candles for a symbol over the half-open time range `[from, to)`.
+   *
+   * `from` and `to` are UNIX **seconds** (integers); `to` is exclusive and must exceed `from`,
+   * and the range may cover at most 5000 buckets of the requested interval (wider ranges fail
+   * with HTTP 400). An unknown symbol or an empty range resolves `ok` with `candles: []` —
+   * never a 404. The last candle may still be forming; re-poll while its `final === false`.
+   * Responses are cached server-side for roughly 10 seconds per distinct URL.
+   *
+   * @param params.symbol - Canonical symbol, exact case, from {@link getOracleMarkets} (e.g. `"ETH"`).
+   * @param params.interval - Candle bucket size: `'1m' | '5m' | '1h' | '1d'`.
+   * @param params.from - Range start, UNIX seconds, inclusive.
+   * @param params.to - Range end, UNIX seconds, exclusive.
+   * @returns `Result<OracleCandlesResponse>` — on success, the echoed query dimensions and
+   *   oldest-first candles with USD decimal-string prices (no volume field).
+   */
+  public async getOracleCandles(
+    params: { symbol: string; interval: OracleCandleInterval; from: number; to: number },
+    config?: RequestOverrideConfig,
+  ): Promise<Result<OracleCandlesResponse>> {
+    const queryParams = new URLSearchParams();
+    queryParams.append('symbol', params.symbol);
+    queryParams.append('interval', params.interval);
+    queryParams.append('from', String(params.from));
+    queryParams.append('to', String(params.to));
+
+    const queryString = queryParams.toString();
+    const endpoint = `/oracle/candles?${queryString}`;
+
+    return this.request(endpoint, { ...config, method: 'GET' }, schemas.OracleCandlesResponseSchema);
   }
 
   /**

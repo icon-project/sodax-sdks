@@ -14,6 +14,8 @@ Two complementary price surfaces:
 
 Both are **unauthenticated** `GET`s. Quote currency for candles is always **USD**. Prices in candle responses are **decimal strings**.
 
+TypeScript consumers can call the candle endpoints through `@sodax/sdk` instead of `fetch` — `sodax.backendApi.getOracleMarkets()` and `sodax.backendApi.getOracleCandles({ symbol, interval, from, to })` return the same payloads, `Result`-wrapped and schema-validated. The solver oracle has no SDK wrapper.
+
 ## Base URL
 
 ```
