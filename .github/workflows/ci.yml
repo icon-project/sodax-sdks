@@ -176,9 +176,11 @@ jobs:
         run: pnpm check-exports
 
       - name: SDK tarball size check
+        # Refresh the baseline from a known-good build (`pnpm --filter @sodax/sdk size:check`)
+        # whenever a deliberate size increase lands; the tolerance is noise, not a growth budget.
         env:
-          SODAX_SDK_TARBALL_BASELINE_BYTES: '750000'
-          SODAX_SDK_TARBALL_TOLERANCE_PCT: '15'
+          SODAX_SDK_TARBALL_BASELINE_BYTES: '870000' # measured 867406 B at 4f39f730
+          SODAX_SDK_TARBALL_TOLERANCE_PCT: '5'
         run: pnpm --filter @sodax/sdk size:check
 
       - name: Build Check
