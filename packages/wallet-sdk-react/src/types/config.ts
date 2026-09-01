@@ -12,6 +12,7 @@ import type {
   SolanaChainKey,
   StacksChainKey,
   TronChainKey,
+  XrpChainKey,
   StacksNetworkLike,
   StacksNetworkName,
   StellarChainKey,
@@ -29,6 +30,7 @@ import type {
   StellarWalletDefaults,
   SuiWalletDefaults,
   TronWalletDefaults,
+  XrpWalletDefaults,
 } from '@sodax/wallet-sdk-core';
 import type { State as WagmiState } from 'wagmi';
 import type { WalletConnectParameters } from 'wagmi/connectors';
@@ -52,6 +54,7 @@ export type SuiChainEntry = SimpleChainEntry<SuiWalletDefaults>;
 export type IconChainEntry = SimpleChainEntry<IconWalletDefaults>;
 export type NearChainEntry = SimpleChainEntry<NearWalletDefaults>;
 export type TronChainEntry = SimpleChainEntry<TronWalletDefaults>;
+export type XrpChainEntry = SimpleChainEntry<XrpWalletDefaults>;
 
 // Chains with multi-field RPC config (horizon+soroban, rpc+radfi, indexer+grpc)
 // extend the existing `*RpcConfig` from @sodax/types instead.
@@ -129,6 +132,7 @@ export type ChainMeta = {
   INJECTIVE: { keys: InjectiveChainKey; entry: InjectiveChainEntry; defaults: InjectiveWalletDefaults; adapter: {} };
   STACKS: { keys: StacksChainKey; entry: StacksChainEntry; defaults: StacksWalletDefaults; adapter: {} };
   TRON: { keys: TronChainKey; entry: TronChainEntry; defaults: TronWalletDefaults; adapter: {} };
+  XRP: { keys: XrpChainKey; entry: XrpChainEntry; defaults: XrpWalletDefaults; adapter: {} };
 };
 
 // ─── Derived types — change `ChainMeta` and these update automatically ─────
@@ -172,6 +176,7 @@ export type IconTypeConfig = ChainTypeConfig<'ICON'>;
 export type NearTypeConfig = ChainTypeConfig<'NEAR'>;
 export type StacksTypeConfig = ChainTypeConfig<'STACKS'>;
 export type TronTypeConfig = ChainTypeConfig<'TRON'>;
+export type XrpTypeConfig = ChainTypeConfig<'XRP'>;
 
 /** Top-level config for `<SodaxWalletProvider>`. Omitted chain-type slots are not mounted. */
 export type SodaxWalletConfig = {

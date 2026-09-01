@@ -32,6 +32,7 @@ const rpcConfig: RpcConfig = {
   [ChainKeys.SUI_MAINNET]: process.env.SUI_RPC_URL ?? 'https://sui-rpc.publicnode.com',
   [ChainKeys.NEAR_MAINNET]: process.env.NEAR_RPC_URL ?? 'https://free.rpc.fastnear.com',
   [ChainKeys.TRON_MAINNET]: process.env.TRON_RPC_URL ?? 'https://api.trongrid.io',
+  [ChainKeys.XRP_MAINNET]: process.env.XRP_RPC_URL ?? 'https://xrplcluster.com',
   [ChainKeys.STELLAR_MAINNET]: {
     horizonRpcUrl: process.env.STELLAR_HORIZON_RPC_URL ?? 'https://horizon.stellar.org',
     sorobanRpcUrl: process.env.STELLAR_SOROBAN_RPC_URL ?? 'https://rpc.ankr.com/stellar_soroban',
@@ -137,6 +138,12 @@ export default function Providers({ children }: { children: ReactNode }) {
           [ChainKeys.TRON_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.TRON_MAINNET] },
         },
       },
+      // XRPL rides the MPC relay like Tron; GemWallet is its connector.
+      XRP: {
+        chains: {
+          [ChainKeys.XRP_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.XRP_MAINNET] },
+        },
+      },
     };
   }, []);
 
@@ -175,6 +182,7 @@ export default function Providers({ children }: { children: ReactNode }) {
         [ChainKeys.STELLAR_MAINNET]: rpcConfig[ChainKeys.STELLAR_MAINNET],
         [ChainKeys.BITCOIN_MAINNET]: rpcConfig[ChainKeys.BITCOIN_MAINNET],
         [ChainKeys.TRON_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.TRON_MAINNET] },
+        [ChainKeys.XRP_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.XRP_MAINNET] },
       },
     };
   }, [solverEnvironment]);

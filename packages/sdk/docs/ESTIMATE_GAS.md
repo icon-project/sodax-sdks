@@ -50,6 +50,7 @@ The return type is conditional on the source chain's chain family. The concrete 
 | Bitcoin | `bigint` (`BitcoinGasEstimate`) | Fee in satoshis |
 | NEAR | `bigint` (`NearGasEstimate`) | Gas in yoctoNEAR |
 | Stacks | `FeeEstimateTransaction` | Object with `low`, `medium`, `high` tiers, each `{ fee: number, fee_rate: number }` |
+| XRP Ledger | `XrpGasEstimate` | Object with `fee: bigint` — the flat per-transaction fee in drops. XRPL does not meter execution, so the estimate does not depend on the transaction |
 
 The full type definitions are in `packages/types/src/common/common.ts`.
 

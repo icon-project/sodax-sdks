@@ -15,6 +15,7 @@ import {
   type StacksChainKey,
   type SuiChainKey,
   type TronChainKey,
+  type XrpChainKey,
   getChainType,
   type EvmSpokeOnlyChainKey,
   ChainTypeArr,
@@ -37,6 +38,7 @@ import { IconSpokeService } from './IconSpokeService.js';
 import { EvmSpokeService } from './EvmSpokeService.js';
 import { InjectiveSpokeService } from './InjectiveSpokeService.js';
 import { TronSpokeService } from './TronSpokeService.js';
+import { XrpSpokeService } from './XrpSpokeService.js';
 import {
   isHubChainKeyType,
   isNearChainKeyType,
@@ -95,7 +97,8 @@ export type SpokeServiceType =
   | StacksSpokeService
   | NearSpokeService
   | BitcoinSpokeService
-  | TronSpokeService;
+  | TronSpokeService
+  | XrpSpokeService;
 
 export type GetSpokeServiceType<C extends SpokeChainKey> = C extends EvmSpokeOnlyChainKey
   ? EvmSpokeService
@@ -119,7 +122,9 @@ export type GetSpokeServiceType<C extends SpokeChainKey> = C extends EvmSpokeOnl
                     ? BitcoinSpokeService
                     : C extends TronChainKey
                       ? TronSpokeService
-                      : SpokeServiceType;
+                      : C extends XrpChainKey
+                        ? XrpSpokeService
+                        : SpokeServiceType;
 
 export type SpokeServiceConstructorParams = {
   config: ConfigService;
@@ -148,6 +153,7 @@ export class SpokeService {
   public readonly near: NearSpokeService;
   public readonly stacks: StacksSpokeService;
   public readonly tron: TronSpokeService;
+  public readonly xrp: XrpSpokeService;
 
   public constructor({ config, hubProvider }: SpokeServiceConstructorParams) {
     this.config = config;
@@ -163,6 +169,7 @@ export class SpokeService {
     this.near = new NearSpokeService(this.config);
     this.stacks = new StacksSpokeService(this.config);
     this.tron = new TronSpokeService(this.config);
+    this.xrp = new XrpSpokeService(this.config);
   }
 
   public getSpokeService<C extends SpokeChainKey>(chainKey: C): GetSpokeServiceType<C> {
@@ -202,6 +209,9 @@ export class SpokeService {
       }
       case 'TRON': {
         return this.tron satisfies GetSpokeServiceType<TronChainKey> as GetSpokeServiceType<C>;
+      }
+      case 'XRP': {
+        return this.xrp satisfies GetSpokeServiceType<XrpChainKey> as GetSpokeServiceType<C>;
       }
       default: {
         const exhaustiveCheck: never = chainType; // The never type is used to ensure that the default case is exhaustive
@@ -576,6 +586,12 @@ export class SpokeService {
           )) satisfies GetEstimateGasReturnType<TronChainKey> as GetEstimateGasReturnType<C>;
           return { ok: true, value };
         }
+        case 'XRP': {
+          const value = (await this.xrp.estimateGas(
+            params as EstimateGasParams<XrpChainKey>,
+          )) satisfies GetEstimateGasReturnType<XrpChainKey> as GetEstimateGasReturnType<C>;
+          return { ok: true, value };
+        }
         default: {
           const exhaustiveCheck: never = chainType;
           this.config.logger.debug('Unhandled exhaustive case', { value: exhaustiveCheck });
@@ -819,6 +835,14 @@ export class SpokeService {
           > as TxReturnType<K, R>;
           return { ok: true, value };
         }
+        case 'XRP': {
+          // XRPL rides the MPC relay in memo mode — no on-chain asset-manager simulation applies.
+          const value = (await this.xrp.deposit(params as DepositParams<XrpChainKey, R>)) satisfies TxReturnType<
+            XrpChainKey,
+            R
+          > as TxReturnType<K, R>;
+          return { ok: true, value };
+        }
         default: {
           const exhaustiveCheck: never = chainType;
           this.config.logger.debug('Unhandled exhaustive case', { value: exhaustiveCheck });
@@ -903,6 +927,10 @@ export class SpokeService {
         }
         case 'TRON': {
           const value = await this.tron.getDeposit(params as GetDepositParams<TronChainKey>);
+          return { ok: true, value };
+        }
+        case 'XRP': {
+          const value = await this.xrp.getDeposit(params as GetDepositParams<XrpChainKey>);
           return { ok: true, value };
         }
         default: {
@@ -1037,6 +1065,13 @@ export class SpokeService {
         case 'TRON': {
           const value = (await this.tron.sendMessage(params as SendMessageParams<TronChainKey, Raw>)) as TxReturnType<
             TronChainKey,
+            Raw
+          > as TxReturnType<K, Raw>;
+          return { ok: true, value };
+        }
+        case 'XRP': {
+          const value = (await this.xrp.sendMessage(params as SendMessageParams<XrpChainKey, Raw>)) as TxReturnType<
+            XrpChainKey,
             Raw
           > as TxReturnType<K, Raw>;
           return { ok: true, value };
@@ -1188,6 +1223,8 @@ export class SpokeService {
     switch (getChainType(chainKey)) {
       case 'TRON':
         return this.tron;
+      case 'XRP':
+        return this.xrp;
       default:
         // Listed as an MPC-relay chain with no service to settle it. Failing loudly beats falling
         // through to the intent relay, which would submit a packet no relay is waiting for.
@@ -1325,6 +1362,11 @@ export class SpokeService {
           return (await this.tron.waitForTransactionReceipt(
             effectiveParams as WaitForTxReceiptParams<TronChainKey>,
           )) satisfies Result<WaitForTxReceiptReturnType<TronChainKey>> as Result<WaitForTxReceiptReturnType<C>>;
+        }
+        case 'XRP': {
+          return (await this.xrp.waitForTransactionReceipt(
+            effectiveParams as WaitForTxReceiptParams<XrpChainKey>,
+          )) satisfies Result<WaitForTxReceiptReturnType<XrpChainKey>> as Result<WaitForTxReceiptReturnType<C>>;
         }
         default: {
           const exhaustiveCheck: never = chainType;

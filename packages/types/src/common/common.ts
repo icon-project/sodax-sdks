@@ -12,6 +12,7 @@ import type { StacksRawTransaction, StacksReturnType } from '../stacks/stacks.js
 import type { StellarRawTransaction, StellarReturnType } from '../stellar/stellar.js';
 import type { SuiRawTransaction, SuiReturnType } from '../sui/sui.js';
 import type { TronRawTransaction, TronReturnType } from '../tron/tron.js';
+import type { XrpRawTransaction, XrpReturnType } from '../xrp/xrp.js';
 import type { GetWalletProviderType } from '../wallet/providers.js';
 
 export type Default = {
@@ -206,7 +207,8 @@ export type RawTxReturnType =
   | StacksRawTransaction
   | NearRawTransaction
   | BitcoinRawTransaction
-  | TronRawTransaction;
+  | TronRawTransaction
+  | XrpRawTransaction;
 
 export type GetDefaultTxReturnType<Raw extends boolean> = Raw extends true ? RawTxReturnType : HashTxReturnType;
 
@@ -235,7 +237,9 @@ export type TxReturnType<C extends SpokeChainKey | ChainType, Raw extends boolea
                     ? BitcoinReturnType<Raw>
                     : GetChainType<C> extends 'TRON'
                       ? TronReturnType<Raw>
-                      : GetDefaultTxReturnType<Raw>;
+                      : GetChainType<C> extends 'XRP'
+                        ? XrpReturnType<Raw>
+                        : GetDefaultTxReturnType<Raw>;
 
 export type Prettify<T> = {
   [K in keyof T]: T[K];
@@ -292,14 +296,25 @@ export type TronGasEstimate = {
   bandwidth: bigint;
 };
 
+/**
+ * XRPL charges a flat per-transaction fee in drops rather than metering execution, so there is no
+ * gas/limit pair to return — only the fee the ledger will burn.
+ */
+export type XrpGasEstimate = {
+  /** Transaction fee in drops (1 XRP = 1_000_000 drops). */
+  fee: bigint;
+};
+
 export type GasEstimateType =
+  | XrpGasEstimate
   | EvmGasEstimate
   | SolanaGasEstimate
   | StellarGasEstimate
   | IconGasEstimate
   | SuiGasEstimate
   | InjectiveGasEstimate
-  | TronGasEstimate;
+  | TronGasEstimate
+  | XrpGasEstimate;
 
 export type GetEstimateGasReturnTypeForSpokeChainId<C extends SpokeChainKey | ChainType> =
   GetChainType<C> extends 'EVM'
@@ -322,7 +337,9 @@ export type GetEstimateGasReturnTypeForSpokeChainId<C extends SpokeChainKey | Ch
                     ? FeeEstimateTransaction
                     : GetChainType<C> extends 'TRON'
                       ? TronGasEstimate
-                      : GasEstimateType;
+                      : GetChainType<C> extends 'XRP'
+                        ? XrpGasEstimate
+                        : GasEstimateType;
 
 export type GetEstimateGasReturnTypeForChainType<C extends ChainType> = C extends 'EVM'
   ? EvmGasEstimate
@@ -344,7 +361,9 @@ export type GetEstimateGasReturnTypeForChainType<C extends ChainType> = C extend
                   ? NearGasEstimate
                   : C extends 'TRON'
                     ? TronGasEstimate
-                    : GasEstimateType;
+                    : C extends 'XRP'
+                      ? XrpGasEstimate
+                      : GasEstimateType;
 
 export type GetEstimateGasReturnType<C extends SpokeChainKey | ChainType> = C extends SpokeChainKey
   ? GetEstimateGasReturnTypeForSpokeChainId<C>
