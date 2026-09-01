@@ -6,15 +6,112 @@ on:
       - main
       - development
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, reopened, ready_for_review]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: Detect changed paths
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    # The files API below needs `pull-requests: read`, which `contents: read` does not cover.
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.classify.outputs.code }}
+
+    steps:
+      # Deliberately a job output consumed by an `if:`, not a workflow-level `paths-ignore`:
+      # a workflow skipped by a path filter never reports, so a required check stays pending
+      # forever, while a job skipped by `if:` reports as passing.
+      - name: Classify the pull request diff
+        id: classify
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" != 'pull_request' ]; then
+            echo 'code=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=$(gh api --paginate \
+            "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
+            --jq '.[].filename')
+          # Every branch below defaults to running the full build: skipping it is the answer
+          # that can hide a regression, so only an explicitly docs-only diff earns it. grep is
+          # read to the end rather than -q, which can SIGPIPE under pipefail on a long list.
+          if [ -z "$files" ]; then
+            echo 'code=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          outside_docs=$(printf '%s\n' "$files" | grep -vE '^docs/' || true)
+          if [ -n "$outside_docs" ]; then
+            echo 'code=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'code=false' >> "$GITHUB_OUTPUT"
+            echo 'Only docs/ changed: skipping build and tests. The Docs site job still runs.'
+          fi
+
+  docs:
+    name: Docs site
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    # Runs on every pull request, including code-only ones: the doc-link and generated-page
+    # checks read package READMEs and packages/sdk/docs, which a code change can break.
+    # Read-only: this is the one job that executes a dependency tree the repo does not pin.
+    permissions:
+      contents: read
+    env:
+      # Pinned, and at least 14 days old, per the supply-chain rules. The CLI is not a repo
+      # dependency: it pulls puppeteer, which no other repo task needs.
+      MINT_VERSION: '4.2.794'
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.32.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24.x'
+
+      # These four scripts import only node: builtins, so they need no pnpm install.
+      - name: Doc link validation
+        run: pnpm check:doc-links
+
+      - name: Docs navigation validation
+        run: pnpm check:docs-nav
+
+      - name: Generated docs page drift
+        run: pnpm check:docs-pages
+
+      - name: AI dev file validation
+        run: pnpm check:ai-dev-files
+
+      # The ~65 hand-written pages have no other check: check:doc-links reads mapped sources
+      # and check:docs-nav reads navigation, so neither opens them. `broken-links` is also the
+      # only check that catches a relative link, which resolves in preview and 404s in prod.
+      - name: Mintlify build validation and broken links
+        working-directory: docs
+        run: |
+          pnpm dlx "mint@${MINT_VERSION}" validate
+          pnpm dlx "mint@${MINT_VERSION}" broken-links
+
   build:
     name: Build and Test
+    needs: changes
+    # Fail closed: only an explicit docs-only verdict skips this job, so a classifier that errors
+    # still builds. `!cancelled()` is what lets it run at all when `changes` failed.
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     timeout-minutes: 15
     runs-on: ubuntu-latest
 
@@ -79,22 +176,20 @@ jobs:
         run: pnpm check-exports
 
       - name: SDK tarball size check
+        # Refresh the baseline from a known-good build (`pnpm --filter @sodax/sdk size:check`)
+        # whenever a deliberate size increase lands; the tolerance is noise, not a growth budget.
         env:
-          SODAX_SDK_TARBALL_BASELINE_BYTES: '750000'
-          SODAX_SDK_TARBALL_TOLERANCE_PCT: '15'
+          SODAX_SDK_TARBALL_BASELINE_BYTES: '870000' # measured 867406 B at 4f39f730
+          SODAX_SDK_TARBALL_TOLERANCE_PCT: '5'
         run: pnpm --filter @sodax/sdk size:check
 
       - name: Build Check
         run: pnpm checkTs
 
-      - name: AI dev file validation
-        run: pnpm check:ai-dev-files
-
+      # The docs and AI-dev-file checks run in the `docs` job, which is not skipped on a
+      # docs-only pull request.
       - name: AI docs validation
         run: pnpm check:ai
-
-      - name: Doc link validation
-        run: pnpm check:doc-links
 
       - name: Build Apps
         timeout-minutes: 10
@@ -134,14 +229,13 @@ jobs:
           key: turbo-v1-${{ runner.os }}-node${{ matrix.node-version }}-turbo${{ steps.turbo.outputs.version }}-${{ github.sha }}-${{ github.run_attempt }}
 
   e2e:
-    name: E2E Tests (live mainnet)
-    # Push-only (main / development). These hit live mainnet services, so they fail on state no PR
-    # controls — a solver that has dropped an intent from memory, an unindexed relay tx, token/vault
-    # config drift on chain. Gating merges on that blocks unrelated work and trains people to ignore
-    # a red check. Running on push still surfaces the drift, against the branch that actually moved.
-    # Run them locally with `pnpm test:e2e` when touching a flow they cover.
-    if: github.event_name != 'pull_request'
-    timeout-minutes: 15
+    name: E2E Tests (live mainnet, advisory)
+    # PRs only. The live suite is guidance (step continue-on-error + warning annotation) so this
+    # check stays green; job-level continue-on-error would still post a red check. Setup/build fail normally.
+    # Job timeout is only for install/build hangs; the live suite's budget is on the step so a
+    # timeout stays advisory instead of cancelling the job.
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 25
     runs-on: ubuntu-latest
 
     strategy:
@@ -171,5 +265,15 @@ jobs:
       - name: Build Packages
         run: pnpm build:packages
 
+      # continue-on-error on the step (not the job): the check stays green; the step is yellow.
+      # timeout-minutes here (not on the job) so a hung live suite is failure/cancelled, not a red job.
       - name: Run E2E Tests
+        id: e2e
+        timeout-minutes: 15
+        continue-on-error: true
         run: pnpm test:e2e
+
+      - name: Annotate E2E failure as warning
+        if: steps.e2e.outcome == 'failure' || steps.e2e.outcome == 'cancelled'
+        run: |
+          echo "::warning title=E2E Tests (live mainnet)::Live mainnet e2e failed or timed out. Guidance only — this check stays green. See the step log or run pnpm test:e2e locally."

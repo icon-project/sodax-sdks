@@ -1,3 +1,4 @@
+import type { EvmRawTransaction } from '@sodax/types';
 import * as v from 'valibot';
 import { describe, expect, it } from 'vitest';
 import { EvmRawTxSchema } from './rawTxSchemas.js';
@@ -86,7 +87,9 @@ describe('QuoteResponseSchema', () => {
       txData: { tx: evmTx, intent: intentResponse, relayData: { address: '0x', payload: '0x' } },
     });
     expect(parsed.txData?.intent.intentId).toBe('1');
-    expect(parsed.txData?.tx.value).toBe(1000000000000000000n);
+    // The factory types `tx` as the full RawTxReturnType union; the fixture pins the EVM variant.
+    const tx = parsed.txData?.tx as EvmRawTransaction | undefined;
+    expect(tx?.value).toBe(1000000000000000000n);
   });
 
   it('rejects a quote missing quotedAmount', () => {
@@ -132,7 +135,9 @@ describe('CreateIntentResponseSchema', () => {
       intent: intentResponse,
       relayData: { address: '0xa', payload: '0xb' },
     });
-    expect(parsed.tx.value).toBe(1000000000000000000n);
+    // The factory types `tx` as the full RawTxReturnType union; the fixture pins the EVM variant.
+    const tx = parsed.tx as EvmRawTransaction;
+    expect(tx.value).toBe(1000000000000000000n);
     expect(parsed.relayData.payload).toBe('0xb');
   });
 

@@ -625,13 +625,17 @@ import type { IEvmWalletProvider, SwapResponse } from '@sodax/sdk';
 
 declare const evmWalletProvider: IEvmWalletProvider;
 
+// `deadline` is an absolute Unix timestamp — getSwapDeadline turns an offset into one
+const deadlineResult = await sodax.swaps.getSwapDeadline(300n); // 5 minutes from now
+if (!deadlineResult.ok) throw deadlineResult.error;
+
 const swapResult = await sodax.swaps.swap({
   params: {
     inputToken: '0x2170Ed0880ac9A755fd29B2688956BD959F933F8',
     outputToken: '0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f',
     inputAmount: 1_000_000_000_000_000n,
     minOutputAmount: 900_000n,
-    deadline: 300n, // or use getSwapDeadline()
+    deadline: deadlineResult.value,
     allowPartialFill: false,
     srcChainKey: ChainKeys.BSC_MAINNET,
     dstChainKey: ChainKeys.ARBITRUM_MAINNET,

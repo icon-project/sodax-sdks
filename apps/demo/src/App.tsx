@@ -14,6 +14,7 @@ import StakingPage from './pages/staking/page';
 import PartnerFeeClaimPage from './pages/partner-fee-claim/page';
 import RecoveryPage from './pages/recovery/page';
 import LeverageYieldPage from './pages/leverage-yield/page';
+import OraclePage from './pages/oracle/page';
 import { ROUTES } from './constants';
 
 const router = createBrowserRouter([
@@ -79,6 +80,10 @@ const router = createBrowserRouter([
       {
         path: ROUTES.LEVERAGE_YIELD,
         element: <LeverageYieldPage />,
+      },
+      {
+        path: ROUTES.ORACLE,
+        element: <OraclePage />,
       },
       {
         path: '*',

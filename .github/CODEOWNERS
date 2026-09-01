@@ -1,0 +1,16 @@
+# PRs can rewrite workflow YAML; owners must review .github CI changes.
+.github/workflows/ @icon-project/frontend-write
+.github/scripts/ @icon-project/frontend-write
+.github/CODEOWNERS @icon-project/frontend-write
+
+# The sync map decides what satisfies Docs Drift and is read from the PR head.
+scripts/docs-pages-map.json @icon-project/frontend-write
+
+# The docs-site gates, also run from the PR head — unlike the drift script, a PR can
+# edit these to pass itself, including trimming the frozen must-not-break URL list.
+scripts/docs-pages-map.json @icon-project/frontend-write
+scripts/check-docs-nav.mjs @icon-project/frontend-write
+scripts/sync-docs-pages.mjs @icon-project/frontend-write
+
+# The published site. Root-anchored: bare `docs/` would also claim packages/*/docs/.
+/docs/ @icon-project/frontend-write

@@ -125,7 +125,7 @@ Useful validation:
 pnpm --filter @sodax/skills check:ai
 ```
 
-`README.md` is mirrored into GitBook (docs.sodax.com), so its hook-reference links must be absolute `https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/…` URLs — a relative `src/…` link 404s on the published page. Gate: `pnpm check:doc-links`.
+`README.md` is generated into the docs.sodax.com Mintlify site, so its hook-reference links must be absolute `https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/…` URLs — a relative `src/…` link 404s on the published page. Gate: `pnpm check:doc-links`.
 
 ## Build And Tests
 
@@ -137,3 +137,9 @@ pnpm checkTs
 ```
 
 The package builds ESM with declarations. React, React DOM, and React Query are peer/external dependencies.
+
+`checkTs` typechecks test files too: `tsconfig.json` deliberately does not exclude them, and the
+shared `scripts/check-tests-typechecked.mjs` (repo root, the tail of `checkTs`) fails loudly if a
+future exclude hides them again. It also requires a one-line why-comment on every `as unknown as`
+in a test file, with pre-existing undocumented casts grandfathered in this package's
+`scripts/test-cast-comment-baseline.json`, which may only shrink.

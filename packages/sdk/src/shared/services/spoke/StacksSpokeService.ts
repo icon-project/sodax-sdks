@@ -32,10 +32,13 @@ import type {
   DepositParams,
   EstimateGasParams,
   GetDepositParams,
+  GetBalanceParams,
+  GetBalancesParams,
   SendMessageParams,
   WaitForTxReceiptParams,
   WaitForTxReceiptReturnType,
 } from '../../types/spoke-types.js';
+import { createBalanceCollector, settleWalletBalances, type WalletBalanceMap } from './balance-utils.js';
 import type { ConfigService } from '../../config/ConfigService.js';
 import { bytesToHex } from 'viem';
 
@@ -183,6 +186,35 @@ export class StacksSpokeService {
       return this.getSTXBalance(params.srcAddress);
     }
     return this.readTokenBalance(params.token, assetManager);
+  }
+
+  /**
+   * Get the user's own wallet balance of a token on Stacks, in smallest units. Native STX via the
+   * Hiro REST `/extended/v1/address/{addr}/balances` endpoint; SIP-010 fungible tokens via the
+   * read-only `get-balance` contract call. Unlike {@link getDeposit}, this reads the holding of
+   * `srcAddress` (the user), not the protocol asset manager.
+   * @param {GetBalanceParams<StacksChainKey>} params - The chain key, user address, and token.
+   * @returns {Promise<bigint>} The token balance in smallest units.
+   */
+  public async getWalletBalance(params: GetBalanceParams<StacksChainKey>): Promise<bigint> {
+    if (isNativeToken(params.srcChainKey, params.token)) {
+      return this.getSTXBalance(params.srcAddress);
+    }
+    return this.readTokenBalance(params.token.address, params.srcAddress);
+  }
+
+  /**
+   * Get the user's own wallet balances of multiple tokens on Stacks, in smallest units.
+   * @param {GetBalancesParams<StacksChainKey>} params - The chain key, user address, and tokens.
+   * @returns {Promise<WalletBalanceMap>} A map of token address to balance in smallest units.
+   */
+  public async getWalletBalances(params: GetBalancesParams<StacksChainKey>): Promise<WalletBalanceMap> {
+    const { srcChainKey, srcAddress, tokens } = params;
+    const collector = createBalanceCollector({ logger: this.config.logger, chainKey: srcChainKey });
+    await settleWalletBalances(collector, tokens, token =>
+      this.getWalletBalance({ srcChainKey, srcAddress, token }),
+    );
+    return collector.finish();
   }
 
   /**
