@@ -329,8 +329,23 @@ export const stagingSwapSupportedTokens = {
   [ChainKeys.STACKS_MAINNET]: [],
   // Hedera promoted to production — see swapSupportedTokens
   [ChainKeys.HEDERA_MAINNET]: [],
-  // Robinhood Chain promoted to production — see swapSupportedTokens
-  [ChainKeys.ROBINHOOD_MAINNET]: [],
+  // DJT, RDDT and GLD are intentionally excluded — no Chainlink feed exists
+  // for them yet, so the solver can't price them.
+  [ChainKeys.ROBINHOOD_MAINNET]: [
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.SPCX,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.NVDA,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.GME,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.MSTR,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.AAPL,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.TSLA,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.MU,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.SNDK,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.SPY,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.QQQ,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.SGOV,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.USO,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.SLV,
+  ] as const satisfies XToken[],
 } as const satisfies Record<SpokeChainKey, readonly XToken[]>;
 
 export type SwapsOptions = {
