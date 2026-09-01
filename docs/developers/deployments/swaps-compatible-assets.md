@@ -4,15 +4,13 @@ description: Assets (tokens) supported for swaps by solvers on mainnet.
 icon: coins
 ---
 
-Generated: 2026-06-18 02:12 UTC
-
-There are two solver environments on the SODAX marketplace. The **staging** solver supports every production token **plus** the additional staging-only tokens listed below.
-
-**Legend:** ✅ supported in **production** · 🚧 **staging-only** (not yet live on the production solver).
+Last verified against the live solver config on 2026-09-01. This page is maintained by hand, so it can lag a newly listed token — `GET https://api.sodax.com/v1/be/config/swap/tokens` is the source of truth.
 
 Tokens are grouped by their spoke chain; the address shown is the token's **hub asset address on Sonic** (links to sonicscan.org).
 
-Oracles: production `https://sodax-solver.iconblockchain.xyz/oracle` · staging `https://sodax-solver-staging.iconblockchain.xyz/oracle`.
+**Legend:** ✅ live in production · 🚧 not yet live in production.
+
+Price data for these assets is available through the public [Oracle HTTP API](/developers/http-api/oracle).
 
 ### Supported Swap Tokens
 
@@ -50,8 +48,11 @@ Oracles: production `https://sodax-solver.iconblockchain.xyz/oracle` · staging 
 | ✅ sodaNEAR    | [`0xf4ba497c9b805e4bd88a8a9e6a7b8f74984c3e39`](https://sonicscan.org/address/0xf4ba497c9b805e4bd88a8a9e6a7b8f74984c3e39) |
 | ✅ sodaKAIA    | [`0xD7d41b5f803b6A40F8A6eAa34E459A4564e39891`](https://sonicscan.org/address/0xD7d41b5f803b6A40F8A6eAa34E459A4564e39891) |
 | ✅ sodaSTX     | [`0x1Fbe5229e9d189F26bEE77E5bFa24309FdA90483`](https://sonicscan.org/address/0x1Fbe5229e9d189F26bEE77E5bFa24309FdA90483) |
+| ✅ sodaHBAR    | [`0x3BB956cc8922E1Ba4148dc10eD1b4Fa19aa599c4`](https://sonicscan.org/address/0x3BB956cc8922E1Ba4148dc10eD1b4Fa19aa599c4) |
+| ✅ sodaJITOSOL | [`0xe1bad4400d947Bc4fa66f9c0A143D800002083a0`](https://sonicscan.org/address/0xe1bad4400d947Bc4fa66f9c0A143D800002083a0) |
 | ✅ lsodaWEETH  | [`0xD09de2f5070699A909c0FD32fb5A909d3886701D`](https://sonicscan.org/address/0xD09de2f5070699A909c0FD32fb5A909d3886701D) |
 | ✅ lsodaWSTETH | [`0x136E5D1CEC5db1829E24941Eddd9C8640E02Ce7a`](https://sonicscan.org/address/0x136E5D1CEC5db1829E24941Eddd9C8640E02Ce7a) |
+| ✅ lsodaJITOSOL | [`0xD7Ae4853E0f93682F5DaA14734F5D18cBa09Bd78`](https://sonicscan.org/address/0xD7Ae4853E0f93682F5DaA14734F5D18cBa09Bd78) |
 | 🚧 sodaUSDS   | [`0x243b0c26c8b38793908d7C64e8510f21B19B4613`](https://sonicscan.org/address/0x243b0c26c8b38793908d7C64e8510f21B19B4613) |
 
 #### Avalanche
@@ -227,6 +228,9 @@ Oracles: production `https://sodax-solver.iconblockchain.xyz/oracle` · staging 
 | ✅ bnUSD | [`0x23225Ab8E63FCa4070296678cb46566d57E1BBe3`](https://sonicscan.org/address/0x23225Ab8E63FCa4070296678cb46566d57E1BBe3) |
 | ✅ USDC  | [`0x348007B53F25A9A857aB8eA81ec9E3CCBCf440f2`](https://sonicscan.org/address/0x348007B53F25A9A857aB8eA81ec9E3CCBCf440f2) |
 | ✅ SODA  | [`0xD749B5FfFED7cEDaa3239abDd16D677179C29AEc`](https://sonicscan.org/address/0xD749B5FfFED7cEDaa3239abDd16D677179C29AEc) |
+| ✅ sodaETH | [`0x4985a4b72ac723723e9ae82382d12d77e9a715de`](https://sonicscan.org/address/0x4985a4b72ac723723e9ae82382d12d77e9a715de) |
+| ✅ sodaBTC | [`0xddee01f63c18843e2bac30cb702864d7632c83a2`](https://sonicscan.org/address/0xddee01f63c18843e2bac30cb702864d7632c83a2) |
+| ✅ sodaBNB | [`0xa10be5f5c2dea7d272555dc73ea2a7317c3c5b63`](https://sonicscan.org/address/0xa10be5f5c2dea7d272555dc73ea2a7317c3c5b63) |
 
 #### SUI
 

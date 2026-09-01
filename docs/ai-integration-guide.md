@@ -4,7 +4,7 @@ description: "Ship v2-correct SODAX code from your AI coding agent using the @so
 icon: robot
 ---
 
-SODAX ships agent-native documentation as [`@sodax/skills`](https://github.com/icon-project/sodax-sdks/tree/main/packages/skills) — four mode-gated skills (one per `@sodax/*` SDK package, each bundling `integration/knowledge/` for new v2 code and `migration-v1-to-v2/knowledge/` for v1→v2 porting). The goal is v2-correct code on the first try instead of stale training-data APIs.
+SODAX ships agent-native documentation as [`@sodax/skills`](https://github.com/icon-project/sodax-sdks/tree/main/packages/skills) — five skills: four mode-gated ones (one per `@sodax/*` SDK package, each bundling `integration/knowledge/` for new v2 code and `migration-v1-to-v2/knowledge/` for v1→v2 porting), plus the cross-cutting `sodax-build` front-door skill for when you haven't picked a package yet. The goal is v2-correct code on the first try instead of stale training-data APIs.
 
 LLM training data drifts; public docs at [docs.sodax.com](https://docs.sodax.com) are for humans. Agents only use what you install or attach. For what’s in the bundle (skills, knowledge layout, routing table), see [packages/skills/README.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/README.md).
 
@@ -31,7 +31,7 @@ From your consumer repo root:
 npx skills@latest add icon-project/sodax-sdks/packages/skills
 ```
 
-The CLI detects your tool and installs the four mode-gated skill directories into the conventional discovery path (e.g. `.claude/skills/sodax-<pkg>/`, `.cursor/skills/sodax-<pkg>/`). Each skill's `SKILL.md` carries trigger phrases for both integration and migration in its frontmatter `description` — the agent picks the right skill (and the SKILL.md body's mode gate picks the right subtree) automatically. **Note:** the CLI does **not** copy the package-level `AGENTS.md`; agents auto-discover skills via `SKILL.md` frontmatter. **Upgrade (CLI only):** when you bump `@sodax/*` SDK packages, re-run the same `npx skills@latest add …` command — the CLI refreshes from GitHub; it does not follow a `@sodax/skills` entry in `package.json`.
+The CLI detects your tool and installs all five skill directories — the four mode-gated per-package skills plus `sodax-build` — into the conventional discovery path (e.g. `.claude/skills/sodax-<pkg>/`, `.cursor/skills/sodax-<pkg>/`). Each skill's `SKILL.md` carries trigger phrases for both integration and migration in its frontmatter `description` — the agent picks the right skill (and the SKILL.md body's mode gate picks the right subtree) automatically. **Note:** the CLI does **not** copy the package-level `AGENTS.md`; agents auto-discover skills via `SKILL.md` frontmatter. **Upgrade (CLI only):** when you bump `@sodax/*` SDK packages, re-run the same `npx skills@latest add …` command — the CLI refreshes from GitHub; it does not follow a `@sodax/skills` entry in `package.json`.
 
 Useful flags:
 

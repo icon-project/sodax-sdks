@@ -32,11 +32,11 @@ SODAX is a modular execution system. Integrate each SDK module on its own, or co
 
 Live homepage figures refresh from public config (`api.sodax.com`). Approximate capacity:
 
-* **Networks:** 21+ spanning EVM and non-EVM — including Ethereum, Arbitrum, Base, BNB Chain, Avalanche, Optimism, Polygon, Sonic, Solana, Sui, Stellar, Injective, ICON, Near, Stacks, Bitcoin, Hyperliquid, LightLink, Redbelly, Kaia, and Hedera (live list from `/config/spoke/chains`).
+* **Networks:** 21+ spanning EVM and non-EVM — including Ethereum, Arbitrum, Base, BNB Chain, Avalanche, Optimism, Polygon, Sonic, Solana, Sui, Stellar, Injective, ICON, Near, Stacks, Bitcoin, HyperEVM, LightLink, Redbelly, Kaia, and Hedera (live list from `/config/spoke/chains`).
 * **Money market:** 30+ reserve assets available for lending and borrowing across networks.
 * **Swap tokens:** 137+ distinct symbols supported for intent swaps.
 * **Audits:** 8 published reports — see [Audit reports](/developers/audits).
-* **Liquidity venues:** solvers fill intents through venues including Uniswap V3, Pharaoh, Raydium, and Cetus (see [solver-compatible assets](/developers/deployments/swaps-compatible-assets)).
+* **Liquidity access:** SODAX protocol venues — the money market, the AMM, and the intent contracts — are infrastructure that approved solvers can access when they fill. Solvers source and commit their own capital (see [solver-compatible assets](/developers/deployments/swaps-compatible-assets)).
 * **Infrastructure compatibility:** designed to work alongside major messaging standards (GMP) for secure intent propagation, not replace them.
 
 Together, SODAX provides the execution infrastructure required for modern money across networks.

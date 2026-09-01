@@ -334,7 +334,7 @@ Other swap methods (`getQuote`, `getStatus`, `submitIntent`, `cancelIntent`, etc
 
 Requesting a quote requires the user's input amount scaled by the token's decimals. All token addresses and decimals are available via `sodax.config`.
 
-The quoting API supports `'exact_input'` (user specifies the amount to swap) and `'exact_output'` (user specifies the amount to receive).
+The quoting API supports a single quote type, `'exact_input'` — the user specifies the amount to swap and the solver returns the amount they receive. There is no "exact output" mode; the API rejects any other value.
 
 ```typescript
 import { Sodax, ChainKeys } from '@sodax/sdk';
