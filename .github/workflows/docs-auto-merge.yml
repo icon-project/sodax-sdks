@@ -41,11 +41,27 @@ jobs:
           git fetch --no-tags origin "$HEAD_SHA"
           git cat-file -e "${HEAD_SHA}^{commit}"
 
+      # Nothing below concerns a PR that leaves docs/ alone, and minting a token on one would
+      # fail the job on every SDK PR while the App secrets are still pending.
+      - name: Check the diff touches docs
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if git diff --name-only "$BASE_SHA...$HEAD_SHA" | grep -q '^docs/'; then
+            echo 'touches_docs=true' >>"$GITHUB_OUTPUT"
+          else
+            echo 'touches_docs=false' >>"$GITHUB_OUTPUT"
+          fi
+
       # GITHUB_TOKEN reviews do not count toward the ruleset's required approval, so the
       # approving identity has to be an App with pull-requests: write. Minted before
       # classification, so a classifier error can still withdraw an earlier approval.
       - name: Mint an App token
         id: app-token
+        if: steps.scope.outputs.touches_docs == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.DOCS_PUBLISH_APP_ID }}
@@ -53,6 +69,7 @@ jobs:
 
       - name: Classify the pull request diff
         id: classify
+        if: steps.scope.outputs.touches_docs == 'true'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -72,10 +89,10 @@ jobs:
             --body "Marketing pages only (${REASON}). Merging on a green Docs site check."
           gh pr merge "$PR" --auto --squash
 
-      # dismiss_stale_reviews_on_push is off on the ruleset, so an earlier approval outlives
-      # a push that adds code. Withdraw it rather than leaving a queued merge armed.
+      # The ruleset dismisses approvals on push, so this is the second line: it also turns
+      # auto-merge off, and covers a PR that stops qualifying without a push (reopened).
       - name: Withdraw a stale approval
-        if: ${{ !cancelled() && steps.classify.outputs.marketing_only != 'true' }}
+        if: ${{ !cancelled() && steps.scope.outputs.touches_docs == 'true' && steps.classify.outputs.marketing_only != 'true' }}
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PR: ${{ github.event.pull_request.number }}

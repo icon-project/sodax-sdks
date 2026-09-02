@@ -11,8 +11,8 @@ RANGE="$BASE_REF...$HEAD_REF"
 
 # The Home, Solutions, Community and Help tabs — marketing's pages. An allowlist, so the
 # API, SDK, How To and Protocol tabs are out by default, as is anything new under docs/.
-# Keep in step with the marketing block in .github/CODEOWNERS.
-MARKETING_PAGE='^docs/((index|introduction|quickstart|ai-integration-guide|contact)|(home|swap|money-market|bridge|yield|resources)/.+|developers/faq)\.(md|mdx)$'
+# Root pages carry the extension they have on disk, so this is the same set CODEOWNERS names.
+MARKETING_PAGE='^docs/((index|quickstart|contact)\.mdx|(introduction|ai-integration-guide)\.md|developers/faq\.md|(home|swap|money-market|bridge|yield|resources)/.+\.(md|mdx))$'
 
 # A copy edit is a handful of pages; a diff this size is not what this path is for.
 MAX_FILES=200

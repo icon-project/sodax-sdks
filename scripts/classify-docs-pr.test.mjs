@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -37,6 +37,7 @@ const createRepo = t => {
   git(root, ['init', '-b', 'main', `--template=${template}`]);
 
   // Marketing tabs.
+  write(root, 'docs/index.mdx', page('SODAX'));
   write(root, 'docs/introduction.md', page('Introduction'));
   write(root, 'docs/swap/index.mdx', page('Swap'));
   write(root, 'docs/home/why-sodax.md', page('Why SODAX'));
@@ -94,6 +95,25 @@ test('true across the marketing tabs, .md and .mdx', t => {
   const head = commit(root, 'reword five');
 
   assert.match(classify(root, base, head), /marketing_only=true/);
+});
+
+test('true for a root page at the extension it has on disk', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'docs/index.mdx', page('SODAX') + 'more\n');
+  const head = commit(root, 'reword the home page');
+
+  assert.match(classify(root, base, head), /marketing_only=true/);
+});
+
+// The allowlist names one extension per root page, so it is literally the CODEOWNERS set.
+test('false for a root page at the other extension', t => {
+  const { root } = createRepo(t);
+  write(root, 'docs/index.md', page('SODAX'));
+  const base = commit(root, 'a home page at the other extension');
+  write(root, 'docs/index.md', page('SODAX') + 'more\n');
+  const head = commit(root, 'reword it');
+
+  assert.match(classify(root, base, head), /marketing_only=false[\s\S]*docs\/index\.md is not a marketing-tab page/);
 });
 
 test('false for a hand-written feature page in an engineering tab', t => {
@@ -239,5 +259,5 @@ test('writes the verdict to GITHUB_OUTPUT', t => {
     env: { ...process.env, GITHUB_OUTPUT: outFile },
   });
 
-  assert.match(execFileSync('cat', [outFile], { encoding: 'utf8' }), /marketing_only=true/);
+  assert.match(readFileSync(outFile, { encoding: 'utf8' }), /marketing_only=true/);
 });

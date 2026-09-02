@@ -61,24 +61,33 @@ gh api -X PATCH repos/icon-project/sodax-sdks/rulesets/16101300 \
 `integration_id: 15368` is GitHub Actions; without it any app could satisfy the context.
 `strict_required_status_checks_policy` stays `false` so marketing is never asked to rebase.
 
-### Recommended hardening
+### Two keys the payload also flips
 
-Two keys in the `pull_request` rule are currently `false`, and both make the auto-merge path
-safer. Neither loosens anything:
+Both were `false` and are `true` in the payload. Neither loosens anything, and both apply to
+every PR into `main`, SDK ones included:
 
 - `dismiss_stale_reviews_on_push: true` — an approval no longer survives a later push.
 - `require_last_push_approval: true` — the most recent push must itself be approved.
 
-Without them, a marketing-only PR that is approved and queued, then pushed with SDK source,
-is held only by `docs-auto-merge.yml` withdrawing its approval before the re-run of **Docs
-site** finishes. That reliably wins — one API call against a job that runs `mint validate` —
-but it is a race, and these two keys remove it.
+They are what makes the auto-merge path safe rather than merely fast. Without them a
+marketing-only PR that is approved and queued, then pushed with SDK source, is held only by
+`docs-auto-merge.yml` withdrawing its approval before the re-run of **Docs site** finishes —
+a race, not a guarantee. With them GitHub drops the approval itself on the push, and the
+workflow's withdrawal step is the second line rather than the only one.
+
+The cost is on the SDK side: a push after an approval needs the approval again. That is the
+intended trade — marketing's prose gates on CI, code still gates on a human who has seen the
+commit that will merge.
 
 ## How auto-merge decides
 
 [`docs-auto-merge.yml`](workflows/docs-auto-merge.yml) runs on `pull_request_target`, so both
 it and the classifier are always the copies on `main`: a PR cannot edit its own gate. It reads
 head content with `git show` and never checks out or runs it.
+
+A PR that touches nothing under `docs/` stops before the App token is minted, so an SDK PR is
+unaffected by this workflow — including while the App secrets are still missing, when minting
+is what would otherwise fail.
 
 [`classify-docs-pr.sh`](scripts/classify-docs-pr.sh) answers true only when **every** changed
 file is a modification to an allowlisted marketing page carrying no `generatedFrom`
@@ -112,9 +121,11 @@ None of these are in the diff.
    currently off, and `gh pr merge --auto` fails without it.
 3. **Apply the ruleset PATCH** above. Requires repo admin.
 4. **Create the GitHub App** for the approval, owned by `icon-project` and installed on this
-   repo, with repository permissions **Contents: read**, **Pull requests: write**,
-   **Metadata: read**. Do not add it as a ruleset bypass actor — it satisfies the approval,
-   it does not skip it.
+   repo, with repository permissions **Contents: write**, **Pull requests: write**,
+   **Metadata: read**. Pull requests: write submits the review; enabling auto-merge needs
+   repository write, which for an App is Contents: write. Do not add it as a ruleset bypass
+   actor — it satisfies the approval, it does not skip it, and with `main` still requiring a
+   PR the write permission cannot push there directly.
 5. **Store its credentials** as repository secrets `DOCS_PUBLISH_APP_ID` and
    `DOCS_PUBLISH_APP_PRIVATE_KEY` (the full PEM). The private key is a credential that can
    approve merges to `main`: it belongs in secrets only, and rotates on a schedule.
@@ -133,8 +144,8 @@ throwaway PR:
 
 1. Edit one marketing page. Expect: App approval, **Docs site** green, squash-merged with no
    human involved.
-2. Push `packages/sdk/src/**` onto that same PR. Expect: the approval is withdrawn, auto-merge
-   is off, and the PR waits for a reviewer.
+2. Push `packages/sdk/src/**` onto that same PR. Expect: the ruleset dismisses the approval on
+   the push, the workflow turns auto-merge off, and the PR waits for a reviewer.
 3. Edit a page in the SDK or Protocol tab. Expect: no approval, and the PR waits.
 4. Check whether `require_extra_approval_for_unattributed_changes` (on, and a GitHub preview)
    fires on a Mintlify-authored PR. It is documented as applying to unattributed Copilot pull
