@@ -46,6 +46,7 @@ import { LEVERAGE_YIELD_API_CONFIG } from '@/components/leverage-yield-api/lib/c
 import { toIntentRequest } from '@/components/swaps-api/lib/mappers';
 import { isSignableSwapsApiChain, signAndBroadcastSwapsApiTx } from '@/components/swaps-api/lib/signAndBroadcast';
 import { useDebouncedValue } from '@/components/swaps-api/lib/useDebouncedValue';
+import { useAppStore } from '@/zustand/useAppStore';
 
 /** Vault-share decimals (lsoda* ERC-4626 shares are always 18 decimals). */
 const SHARE_DECIMALS = 18;
@@ -136,6 +137,7 @@ export default function LeverageCard({
   setOrders: (value: SetStateAction<LeverageYieldApiOrder[]>) => void;
 }) {
   const { sodax } = useSodaxContext();
+  const { openWalletModal } = useAppStore();
   const apiConfig = LEVERAGE_YIELD_API_CONFIG;
   const supportedChains = useMemo(() => sodax.config.getSupportedSpokeChains() as string[], [sodax]);
 
@@ -604,7 +606,11 @@ export default function LeverageCard({
       <CardFooter className="flex flex-col gap-2">
         {/* Only the active tab's actions are shown. */}
         {activeTab === 'deposit' &&
-          (isDepositWrongChain ? (
+          (!depositAccount.address ? (
+            <Button className="w-full" onClick={openWalletModal}>
+              Connect wallet
+            </Button>
+          ) : isDepositWrongChain ? (
             <Button className="w-full" onClick={handleDepositSwitchChain}>
               Switch network
             </Button>
@@ -633,7 +639,11 @@ export default function LeverageCard({
           ))}
 
         {activeTab === 'withdraw' &&
-          (isWithdrawWrongChain ? (
+          (!withdrawAccount.address ? (
+            <Button className="w-full" onClick={openWalletModal}>
+              Connect wallet
+            </Button>
+          ) : isWithdrawWrongChain ? (
             <Button className="w-full" onClick={handleWithdrawSwitchChain}>
               Switch network
             </Button>
