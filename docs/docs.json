@@ -518,6 +518,94 @@
     {
       "source": "/partners",
       "destination": "/contact"
+    },
+    {
+      "source": "/solana/solana",
+      "destination": "/solana"
+    },
+    {
+      "source": "/solana/solana/quickstart",
+      "destination": "/solana/quickstart"
+    },
+    {
+      "source": "/developers/how-to/oracle",
+      "destination": "/developers/http-api/oracle"
+    },
+    {
+      "source": "/sodax-mcp-server-or-cross-network-cross-chain-defi-api-data-and-sdk-docs",
+      "destination": "/ai-integration-guide"
+    },
+    {
+      "source": "/developers/packages/sdk/swaps",
+      "destination": "/developers/packages/foundation/sdk/functional-modules/swaps"
+    },
+    {
+      "source": "/developers/packages/sdk/money_market",
+      "destination": "/developers/packages/foundation/sdk/functional-modules/money_market"
+    },
+    {
+      "source": "/developers/packages/sdk/bridge",
+      "destination": "/developers/packages/foundation/sdk/functional-modules/bridge"
+    },
+    {
+      "source": "/developers/packages/sdk/staking",
+      "destination": "/developers/packages/foundation/sdk/functional-modules/staking"
+    },
+    {
+      "source": "/developers/packages/sdk/migration",
+      "destination": "/developers/packages/foundation/sdk/functional-modules/migration"
+    },
+    {
+      "source": "/developers/packages/sdk/backend_api",
+      "destination": "/developers/packages/foundation/sdk/tooling-modules/backend_api"
+    },
+    {
+      "source": "/developers/packages/sdk/intent_relay_api",
+      "destination": "/developers/packages/foundation/sdk/tooling-modules/intent_relay_api"
+    },
+    {
+      "source": "/developers/packages/sdk/docs/SWAPS",
+      "destination": "/developers/packages/foundation/sdk/functional-modules/swaps"
+    },
+    {
+      "source": "/developers/packages/sdk/docs/MONEY_MARKET",
+      "destination": "/developers/packages/foundation/sdk/functional-modules/money_market"
+    },
+    {
+      "source": "/developers/packages/sdk/docs/BRIDGE",
+      "destination": "/developers/packages/foundation/sdk/functional-modules/bridge"
+    },
+    {
+      "source": "/developers/packages/sdk/docs/STAKING",
+      "destination": "/developers/packages/foundation/sdk/functional-modules/staking"
+    },
+    {
+      "source": "/developers/packages/sdk/docs/MIGRATION",
+      "destination": "/developers/packages/foundation/sdk/functional-modules/migration"
+    },
+    {
+      "source": "/developers/packages/sdk/docs/BACKEND_API",
+      "destination": "/developers/packages/foundation/sdk/tooling-modules/backend_api"
+    },
+    {
+      "source": "/developers/packages/sdk/docs/INTENT_RELAY_API",
+      "destination": "/developers/packages/foundation/sdk/tooling-modules/intent_relay_api"
+    },
+    {
+      "source": "/developers/packages/sdk/docs/LEVERAGE_YIELD",
+      "destination": "/developers/packages/foundation/sdk/functional-modules/leverage_yield"
+    },
+    {
+      "source": "/developers/packages/sdk/docs/LEVERAGE_YIELD_APR",
+      "destination": "/developers/packages/foundation/sdk/functional-modules/leverage_yield_apr"
+    },
+    {
+      "source": "/developers/packages/sdk/docs/SWAPS_API",
+      "destination": "/developers/packages/foundation/swaps-api"
+    },
+    {
+      "source": "/developers/packages/sdk/docs/BITCOIN_INTEGRATION",
+      "destination": "/developers/how-to/bitcoin-integration"
     }
   ],
   "thumbnails": {
