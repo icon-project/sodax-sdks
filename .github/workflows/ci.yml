@@ -40,10 +40,12 @@ jobs:
           fi
           files=$(gh api --paginate \
             "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
-            --jq '.[].filename')
+            --jq '.[] | .filename, (.previous_filename // empty)')
           # Every branch below defaults to running the full build: skipping it is the answer
-          # that can hide a regression, so only an explicitly docs-only diff earns it. grep is
-          # read to the end rather than -q, which can SIGPIPE under pipefail on a long list.
+          # that can hide a regression, so only an explicitly docs-only diff earns it. A rename
+          # reports only its destination as `filename`, so `previous_filename` is listed too:
+          # source moved into docs/ still deletes source. grep is read to the end rather than
+          # -q, which can SIGPIPE under pipefail on a long list.
           if [ -z "$files" ]; then
             echo 'code=true' >> "$GITHUB_OUTPUT"
             exit 0

@@ -134,6 +134,7 @@ Prefer HTTP? Same flow over REST: [Swap API](/developers/http-api/swaps). Prefer
     import { SolverIntentStatusCode } from '@sodax/sdk';
 
     let notFoundCount = 0;
+    let solved = false;
 
     for (let attempt = 0; attempt < 60; attempt++) {
       // getStatus takes a Hex; intentDeliveryInfo.dstTxHash is typed string.
@@ -142,6 +143,7 @@ Prefer HTTP? Same flow over REST: [Swap API](/developers/http-api/swaps). Prefer
       if (status.ok) {
         if (status.value.status === SolverIntentStatusCode.SOLVED) {
           console.log('Solved. Fill transaction:', status.value.fill_tx_hash);
+          solved = true;
           break;
         }
         if (status.value.status === SolverIntentStatusCode.FAILED) {
@@ -157,6 +159,11 @@ Prefer HTTP? Same flow over REST: [Swap API](/developers/http-api/swaps). Prefer
       }
 
       await new Promise(resolve => setTimeout(resolve, 5000));
+    }
+
+    // Running out of polls is not settlement: the intent is still pending, not done.
+    if (!solved) {
+      throw new Error('Intent still unsettled after 60 polls');
     }
     ```
 
