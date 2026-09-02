@@ -74,7 +74,7 @@ type IconWalletDefaults = {
 
 ## Gotchas
 
-- **Browser-extension mode talks to Hana via the ICONEX relay** — `window.dispatchEvent(new CustomEvent('ICONEX_RELAY_REQUEST', …))` + `window.addEventListener('ICONEX_RELAY_RESPONSE', …)`, not `window.postMessage`. Relay messages use a request-ID — collisions can occur if you fire many parallel calls; tune `defaults.jsonRpcId` if you control the consumer.
+- **Browser-extension mode talks to Hana via the ICONEX relay** — `window.dispatchEvent(new CustomEvent('ICONEX_RELAY_REQUEST', …))` + `window.addEventListener('ICONEX_RELAY_RESPONSE', …)`, not `window.postMessage`. The relay is one shared window channel; the SDK serializes requests so at most one is in flight and concurrent calls no longer cross-resolve. They run one at a time, and each call times out after ~5 min if the wallet never answers.
 - **`walletAddress` is optional in browser-extension mode, but the provider never auto-resolves it.** The consumer must supply it (or resolve it themselves via the exported `requestAddress` helper, which performs the ICONEX `REQUEST_ADDRESS` round-trip). If the wallet isn't set, `getWalletAddress()` throws `Error('Wallet not initialized')`.
 - **Address type is branded — `IconEoaAddress` (`hx…`) vs `IconAddress` (`hx… | cx…`).** EOA only at the wallet level; contracts (`cx…`) appear inside tx params, not as the signer.
 - **Timestamps are microseconds.** `timestampProvider` returns microseconds, not milliseconds — the default is `Date.now() * 1000`.

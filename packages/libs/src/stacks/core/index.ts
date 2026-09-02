@@ -41,7 +41,7 @@ export {
   addressToString,
   PayloadType,
   privateKeyToPublic,
-  publicKeyToHex
+  publicKeyToHex,
 } from '@stacks/transactions';
 
 // @stacks/transactions — types

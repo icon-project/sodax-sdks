@@ -81,7 +81,7 @@ The contract payload gives 4 fields; **supply the other 3 by hand**:
 | `access?` | omit unless restricted (`withdrawOnly` / `depositOnly`) |
 
 **Address format:**
-- **EVM addresses (`hubAsset`, `vault`, EVM `address`): use checksummed (EIP-55)** — viem's `getAddress(...)` or the explorer's mixed-case form. Convention only (lookups `.toLowerCase()`, not CI-enforced), but the preferred form for new entries.
+- **EVM addresses (`hubAsset`, `vault`, EVM `address`): a mixed-case value MUST carry a valid EIP-55 checksum** — copy the explorer's mixed-case form, or run it through viem's `getAddress(...)`. All-lowercase is also valid, and is what existing `hubAsset`/`vault` entries use. **CI-enforced** (`config-address-checksum.test.ts`): a hand-typed case flip is rejected by viem while encoding calldata, which fails a whole `multicall` batch and reads every balance in it as zero. Never "fix" a checksum by re-typing hex digits — re-checksum the lowercase form and confirm the bytes on the explorer.
 - **Non-EVM `address` keeps its native, case-sensitive form** (Solana **base58** like `XsueG8Bt…`, Sui,
   Stacks, …). Checksumming does not apply — **NEVER lowercase/uppercase or transform** it; re-casing
   base58 yields a different, wrong address. Store byte-for-byte from the contract/explorer.
@@ -111,6 +111,16 @@ When handed a **list** of tokens (e.g. 8 at once):
   lists** (per chain); it does **not** scan the raw `<chain>SupportedTokens` map. Manually scan that
   chain's map for an existing `symbol` / `address` before adding (within the list and vs existing entries).
 
+### d) Token icon (optional — `packages/assets/token/`)
+The token's logo is **not** in `@sodax/types`; it is hosted in `packages/assets`
+and resolved by `tokenLogo(symbol)`. Drop a PNG named `tokenLogoSlug(symbol).png`
+(symbol lowercased, non-alphanumeric runs → `-`, e.g. `bnUSD (legacy)` →
+`bnusd-legacy.png`) into `packages/assets/token/`. Source from CoinGecko's coin
+image CDN, matching by the token's `address` on its chain. Optional and
+non-blocking: a missing icon just 404s until added, and a variant that wraps a
+base asset (`soda*`, `*.LL`, `r*`, `lsoda*`) may reuse the base asset's icon. The
+URL only resolves once merged to `main`. See [`packages/assets/README.md`](../../../packages/assets/README.md).
+
 ## 3. Do NOT touch (handled automatically / unrelated)
 - `chains.ts` map body — the new entry flows in by reference.
 - `SpokeTokenSymbols` union, `isSwapSupportedToken`, `getSupportedSolverTokens` — derive from the map.
@@ -123,17 +133,45 @@ When handed a **list** of tokens (e.g. 8 at once):
 - The solver/relayer backend must recognize the hub asset to route intents. The SDK config
   only makes the SDK *aware* of the token; it does not create liquidity or routes.
 
-## 5. Verify
+## 5. Docs Drift
+Changing `packages/types/src` triggers Docs Drift. Update the matching *mapped*
+feature page (`packages/sdk/docs/SWAPS.md` for swap tokens, `MONEY_MARKET.md` for
+MM tokens) — any mapped `packages/sdk/docs/` page satisfies a `types` change.
+`packages/types/README.md` passes the gate but does not publish, so
+prefer a page that does. JSDoc and `packages/skills` do not pass. A brand-new
+`packages/sdk/docs/` page must join the `mirrored` list in
+`scripts/docs-pages-map.json` plus a `docs/docs.json` nav entry — or, if it is
+not ready to go live, the map's `unpublished` list. Ask for the `docs-not-needed` label only
+when the change is truly not user-facing (checksum/casing, internal rename).
+
+## 6. Verify
 ```bash
 pnpm --filter @sodax/types test    # vitest → tokens-dedup.test.ts: no dup symbol/address (swap/MM lists only)
+                                    #          config-address-checksum.test.ts: EVM addresses pass viem's isAddress
+                                    #          tokens-chain-key.test.ts: token.chainKey matches the list it is under
 pnpm checkTs                        # tsc → the `satisfies XToken` constraint catches a malformed entry (missing/wrong-typed field)
 ```
+
+For an ERC-20, also check whether it carries the USDT-class approve guard — a token that rejects an
+allowance change from one non-zero value to another needs two transactions per approval, which is
+worth knowing before it is listed rather than from a stuck user:
+```bash
+pnpm --filter node approve-guard-check -- --chain <chainKey> --token <address>
+```
+With no `--owner` it plants a synthetic stale allowance via an `eth_call` state override, so it
+answers for a token nobody has approved yet — the usual case when listing one. `GUARDED` means the
+token has it. If it reports inconclusive, the RPC does not support state overrides: pass `--rpc` for
+one that does, or `--owner` of a wallet that already holds a non-zero allowance (that path runs the
+shipped planner and is authoritative, but only for that wallet).
+
+The SDK handles a guarded token either way — `Erc20Service.planApproval` detects it at approval time
+— so this is information, not a blocker. Note it in the PR.
 That is this skill's whole job: the token is defined and wired in the **right place and format**,
 and the checks pass.
 
 **Out of scope — do not do these here:** versioning / releasing / publishing and any
-`CONFIG_VERSION` bump are the separate **`release-sdk`** skill. This change only edits
-`@sodax/types` source; it bumps nothing.
+`CONFIG_VERSION` bump belong to the release flow in `packages/RELEASE_INSTRUCTIONS.md`. This change
+only edits `@sodax/types` source; it bumps nothing.
 
 ## Reference
 `references/example-xstock-swap-token.md` — the real 8-token swap-only change, fully worked.

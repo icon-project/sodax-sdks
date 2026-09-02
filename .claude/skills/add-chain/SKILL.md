@@ -33,7 +33,8 @@ Each ✓ feature then drives its own touch points (e.g. money-market token wirin
 A chain *can* reach **every package** — but edit each **only when the family + feature matrix requires it** (`libs` only for a build workaround; `dapp-kit` only for a special gate). Checklist:
 - `types` · `libs` (only if build workaround) · `sdk` · `wallet-sdk-core` · `wallet-sdk-react`
 - `dapp-kit` — usually nothing (chain-agnostic); only a special-need hook (NEAR storage / Stellar trustline).
-- **`packages/skills`** — the **largest footprint and easiest to forget** (consumer docs). Update the skill knowledge that references chains (esp. `sodax-wallet-sdk-react`: config / hooks / imports / checklist), then run `pnpm check:ai`.
+- **`packages/skills`** — partner-facing agent docs (how integrators call the SDK), not the feature-introduction path. After the chain is wired, update the skill knowledge that references chains (esp. `sodax-wallet-sdk-react`: config / hooks / imports / checklist), then run `pnpm check:ai`. This does not satisfy Docs Drift.
+- **Published docs** — Docs Drift CI requires a related publishable site signal for every package whose `src/` changed. Update `packages/sdk/docs/WALLET_PROVIDERS.md` (and any other mapped feature doc the chain enables) plus the affected package README / `packages/wallet-sdk-react/docs/`. That mapped `packages/sdk/docs/` page also covers `packages/types` — the `types` README passes the gate but does not publish. JSDoc is not enough. A new `packages/sdk/docs/` page must be added to `scripts/docs-pages-map.json` (every mapped src is published) and given a nav entry in `docs/docs.json`, or it is live but absent from the sidebar and search; a page not ready to go live goes on the map's `unpublished` list instead.
 - **apps** — `apps/node/src/<chain>.ts` smoke script; wire the chain into the demo / example apps that surface chains (e.g. `apps/demo`, `apps/wallet-modal-example`) as relevant.
 
 ## Per-family quirks — check these 4 dimensions for YOUR non-EVM chain
@@ -42,7 +43,7 @@ A new non-EVM chain follows §2; it is **not** a copy of an existing one. Ask wh
 | Quirk dimension | Trigger → what to add | Examples |
 | --- | --- | --- |
 | **Native SDK breaks the bundler** | → a `@sodax/libs/<chain>/…` subpath and/or force-bundle in wallet-core `tsup` | Stacks (`stacks/core`+`connect`), Injective (`wallet-strategy`), Near (`near-api-js` bundled) |
-| **Special on-chain gate before deposit/MM** | → a dedicated dapp-kit hook | Near (storage: `useRegisterNearStorage`/`useNearStorageCheck`), Stellar (trustline: `useStellarTrustlineCheck`/`useRequestTrustline`) |
+| **Special on-chain gate before deposit/MM** | → a dedicated dapp-kit hook | Near (storage: `useRegisterNearStorage`/`useNearStorageCheck`), Stellar (trustline: `useStellarTrustlineCheck`/`useEstablishTrustline`) |
 | **Native wallet SDK needs React context** | → `providerManaged: true` + a `providers/<chain>/` Provider/Hydrator/Actions trio | Solana, Sui (and EVM) |
 | **Needs a chain-specific helper** | → an `entities/<chain>/` helper | Stellar (`CustomSorobanServer`), Icon, Injective, Solana |
 
@@ -71,7 +72,7 @@ Template: read a recent same-shape chain end-to-end (`Stacks`, `Near`, `Sui`, �
 - **wallet-sdk-core:** `wallet-providers/<chain>/` provider — its "Adding a New Chain Provider" playbook.
 - **wallet-sdk-react:** `xchains/<chain>/` XService/XConnector + a `chainRegistry.ts` entry — its "Adding A New Chain Type" playbook.
 - **dapp-kit** — `@sodax/dapp-kit` is the React-Query hooks layer over `@sodax/sdk`; feature hooks (`useSwap`/`useBridge`/`useStake`/`useSupply`/…) are **chain-agnostic** — they take a `chainKey` + a `walletProvider` and route to the SDK.
-  **When to add:** by default **nothing** — a chain that uses the same deposit/swap/MM flow as existing chains works automatically. Add a hook **only** for a step the generic hooks don't cover: an extra on-chain pre-step (NEAR storage `useRegisterNearStorage`; Stellar trustline `useRequestTrustline`), a custodial/exchange flow (Bitcoin Bound: auth/session/trading-wallet/UTXO hooks), or chain-type-specific balance logic (`useXBalances`). (`useSpokeProvider` was removed in a refactor — don't reference it; confirm provider hooks in current `src/`.)
+  **When to add:** by default **nothing** — a chain that uses the same deposit/swap/MM flow as existing chains works automatically. Add a hook **only** for a step the generic hooks don't cover: an extra on-chain pre-step (NEAR storage `useRegisterNearStorage`; Stellar trustline `useEstablishTrustline`), a custodial/exchange flow (Bitcoin Bound: auth/session/trading-wallet/UTXO hooks), or chain-type-specific balance logic (`useXBalances`). (`useSpokeProvider` was removed in a refactor — don't reference it; confirm provider hooks in current `src/`.)
 - **libs:** a subpath only if the chain SDK needs a build workaround.
 - **Tokens:** run the **`add-token`** skill.
 
@@ -112,8 +113,10 @@ pnpm build:packages && pnpm checkTs
 pnpm test                            # unit — NOTE: excludes apps/node AND sdk e2e-tests
 pnpm --filter @sodax/sdk test:e2e    # the e2e you updated is a SEPARATE runner
 # apps/node `test` is a no-op → run the chain's smoke directly, e.g. tsx apps/node/src/<chain>.ts
-pnpm check:ai                        # ONLY if you changed packages/skills consumer docs
+pnpm check:ai                        # required when packages/skills consumer docs changed
 pnpm check:ai-dev-files
+# Docs Drift: a published doc / package README / packages/<pkg>/docs/ must land with src/ changes
+# (or a maintainer applies the docs-not-needed label). JSDoc does not pass the gate.
 ```
 `pnpm test` does NOT cover `e2e-tests` or `apps/node` — run `test:e2e` and the smoke script explicitly.
 

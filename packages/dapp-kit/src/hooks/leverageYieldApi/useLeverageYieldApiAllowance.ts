@@ -29,7 +29,15 @@ export const useLeverageYieldApiAllowance = ({
   const apiConfig = params?.apiConfig;
 
   return useQuery({
-    queryKey: ['leverageYieldApi', 'allowance', body?.vault, body?.srcChainKey, body?.inputToken, body?.inputAmount, body?.srcAddress],
+    queryKey: [
+      'leverageYieldApi',
+      'allowance',
+      body?.vault,
+      body?.srcChainKey,
+      body?.inputToken,
+      body?.inputAmount,
+      body?.srcAddress,
+    ],
     queryFn: async (): Promise<AllowanceCheckResponseV2 | undefined> => {
       if (!body) return undefined;
       return unwrapResult(await sodax.api.leverageYield.checkAllowance(body, apiConfig));

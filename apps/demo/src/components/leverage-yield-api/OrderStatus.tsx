@@ -18,7 +18,9 @@ export default function OrderStatus({ order }: { order: LeverageYieldApiOrder })
   if (!statusResponse) {
     return (
       <div className="flex flex-col text-center pb-4">
-        <div>{order.kind === 'deposit' ? 'Deposit' : 'Withdraw'} Tx Hash: {order.txHash}</div>
+        <div>
+          {order.kind === 'deposit' ? 'Deposit' : 'Withdraw'} Tx Hash: {order.txHash}
+        </div>
         <div>Status: Loading...</div>
       </div>
     );
@@ -28,7 +30,9 @@ export default function OrderStatus({ order }: { order: LeverageYieldApiOrder })
 
   return (
     <div className="flex flex-col text-center pb-4">
-      <div>{order.kind === 'deposit' ? 'Deposit' : 'Withdraw'} Tx Hash: {order.txHash}</div>
+      <div>
+        {order.kind === 'deposit' ? 'Deposit' : 'Withdraw'} Tx Hash: {order.txHash}
+      </div>
       <div>Src Chain: {order.srcChainKey}</div>
       <div>Status: {status}</div>
       {status === 'solved' && result?.dstIntentTxHash && <div>Dst Intent Tx Hash: {result.dstIntentTxHash}</div>}

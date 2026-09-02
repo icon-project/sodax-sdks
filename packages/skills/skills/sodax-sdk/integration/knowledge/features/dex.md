@@ -165,6 +165,12 @@ The underlying read does not consult the wallet provider; pass `raw: true` to sa
 
 > `getPools()` is **synchronous** in v2 (was `Promise<PoolKey[]>` in v1). v2 reads from cached config — no I/O. `await sodax.dex.clService.getPools()` works (TS allows `await` on non-promise) but `.then(...)` is a runtime error.
 
+`approve` can send **two** transactions on a token that rejects a non-zero to non-zero allowance
+change (Ethereum USDT is the only listed one today): `approve(0)` is mined first, then the real
+approval, so the user signs twice. The returned value is unchanged — one hash, the **last**
+transaction's. Detection simulates the approval, so never gate on a token list. Full note: "ERC-20
+approval can take two transactions" in [`architecture.md`](../architecture.md).
+
 ## Error codes
 
 `feature: 'dex'`. Per-method narrow unions:

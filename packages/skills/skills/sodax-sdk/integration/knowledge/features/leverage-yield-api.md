@@ -181,7 +181,7 @@ To send a single leverage-yield call elsewhere, use the per-call `RequestOverrid
 
 ## Backend submit-tx flow (SDK option)
 
-Opting into `new Sodax({ leverageYieldOptions: { useBackendSubmitTx: true } })` routes the **feature
+Opting into `new Sodax({ leverageYield: { useBackendSubmitTx: true } })` routes the **feature
 service** (`sodax.leverageYield.vaultSwap`) through this client's `submitTx` + `getSubmitTxStatus` (relay +
 post-execution server-side), falling back to the client-side relay on any non-success — the leverage-yield
 mirror of `swapsOptions.useBackendSubmitTx`. See [`leverage-yield.md`](leverage-yield.md).

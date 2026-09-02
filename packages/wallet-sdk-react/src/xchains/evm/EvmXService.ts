@@ -5,7 +5,16 @@ import { getRpcUrl, getWagmiChainId, isNativeToken } from '@/utils/index.js';
 
 import { type Address, type Chain, defineChain, erc20Abi } from 'viem';
 import { getPublicClient } from 'wagmi/actions';
-import { type Config, type CreateConnectorFn, createConfig, http, createStorage, cookieStorage } from 'wagmi';
+import {
+  type Config,
+  type CreateConnectorFn,
+  createConfig,
+  http,
+  createStorage,
+  cookieStorage,
+  cookieToInitialState,
+  type State,
+} from 'wagmi';
 import {
   mainnet,
   avalanche,
@@ -23,6 +32,11 @@ import {
 type WagmiOptions = {
   reconnectOnMount?: boolean;
   ssr?: boolean;
+  /**
+   * Base key for wagmi's cookie storage (state cookie = `<persistKey>.store`). @default 'sodax'.
+   * SSR server and client must build from the same key, else the server reads the wrong cookie.
+   */
+  persistKey?: string;
 };
 
 // Hedera's JSON-RPC relay reports native HBAR in 18-decimal "weibar" via eth_getBalance,
@@ -57,6 +71,26 @@ export const hyper = /*#__PURE__*/ defineChain({
   },
 });
 
+// Robinhood Chain is not yet in viem/wagmi's bundled chain list, so define it manually
+export const robinhoodChain = /*#__PURE__*/ defineChain({
+  id: 4663,
+  name: 'Robinhood Chain',
+  nativeCurrency: {
+    decimals: 18,
+    name: 'Ether',
+    symbol: 'ETH',
+  },
+  rpcUrls: {
+    default: { http: ['https://rpc.mainnet.chain.robinhood.com'] },
+  },
+  blockExplorers: {
+    default: {
+      name: 'Blockscout',
+      url: 'https://robinhoodchain.blockscout.com',
+    },
+  },
+});
+
 export const createWagmiConfig = (
   evmChains?: EvmTypeConfig['chains'],
   options?: WagmiOptions & { connectors?: CreateConnectorFn[] },
@@ -76,6 +110,7 @@ export const createWagmiConfig = (
       kaia,
       redbellyMainnet,
       hedera,
+      robinhoodChain,
     ],
     connectors: options?.connectors ?? [],
     // NOTE: wagmi's `ssr` is a hydration-timing flag, not an "is host app SSR"
@@ -99,13 +134,27 @@ export const createWagmiConfig = (
       [redbellyMainnet.id]: http(getRpcUrl(evmChains?.[ChainKeys.REDBELLY_MAINNET])),
       [kaia.id]: http(getRpcUrl(evmChains?.[ChainKeys.KAIA_MAINNET])),
       [hedera.id]: http(getRpcUrl(evmChains?.[ChainKeys.HEDERA_MAINNET])),
+      [robinhoodChain.id]: http(getRpcUrl(evmChains?.[ChainKeys.ROBINHOOD_MAINNET])),
     },
     storage: createStorage({
       storage: cookieStorage,
-      key: 'sodax',
+      key: options?.persistKey ?? 'sodax',
     }),
   });
 };
+
+/**
+ * Wraps wagmi's `cookieToInitialState` so a malformed cookie returns `undefined` instead of throwing
+ * during SSR. NOT validation: a well-formed but attacker-controlled cookie still passes — the live
+ * wallet is authoritative once a connection is established. Errors are swallowed (not logged).
+ */
+export function tryCookieToInitialState(config: Config, cookie: string | null | undefined): State | undefined {
+  try {
+    return cookieToInitialState(config, cookie ?? undefined);
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Service class for handling EVM chain interactions.

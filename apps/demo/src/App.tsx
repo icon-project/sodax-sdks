@@ -4,16 +4,19 @@ import './App.css';
 import { createBrowserRouter, Outlet, RouterProvider, Navigate } from 'react-router';
 import { ChainKeys } from '@sodax/dapp-kit';
 import Header from './components/shared/header';
-import SolverPage from './pages/solver/page';
+import SwapsSdkPage from './pages/swaps-sdk/page';
 import SwapsApiPage from './pages/swaps-api/page';
 import MoneyMarketPage from './pages/money-market/page';
 import BridgePage from './pages/bridge/page';
+import BridgeApiPage from './pages/bridge-api/page';
 import DexPage from './pages/dex/page';
 import StakingPage from './pages/staking/page';
 import PartnerFeeClaimPage from './pages/partner-fee-claim/page';
 import RecoveryPage from './pages/recovery/page';
 import LeverageYieldPage from './pages/leverage-yield/page';
 import LeverageYieldApiPage from './pages/leverage-yield-api/page';
+import OraclePage from './pages/oracle/page';
+import { ROUTES } from './constants';
 
 const router = createBrowserRouter([
   {
@@ -27,51 +30,69 @@ const router = createBrowserRouter([
     children: [
       {
         path: '/',
-        element: <Navigate to="/solver" />,
+        element: <Navigate to={ROUTES.SWAPS_SDK} replace />,
       },
       {
+        // Legacy path kept as a literal: it is history, not a current route. The demo is deployed, so
+        // existing bookmarks and shared links to the old swaps page must keep working.
         path: '/solver',
-        element: <SolverPage />,
+        element: <Navigate to={ROUTES.SWAPS_SDK} replace />,
       },
       {
-        path: '/swaps-api',
+        path: ROUTES.SWAPS_SDK,
+        element: <SwapsSdkPage />,
+      },
+      {
+        path: ROUTES.SWAPS_API,
         element: <SwapsApiPage />,
       },
       {
-        path: '/money-market',
-        element: <Navigate to={`/money-market/${ChainKeys.ARBITRUM_MAINNET}`} replace />,
+        path: ROUTES.MONEY_MARKET,
+        element: <Navigate to={`${ROUTES.MONEY_MARKET}/${ChainKeys.ARBITRUM_MAINNET}`} replace />,
       },
       {
-        path: '/money-market/:chainId',
+        path: `${ROUTES.MONEY_MARKET}/:chainId`,
         element: <MoneyMarketPage />,
       },
       {
-        path: '/bridge',
+        path: ROUTES.BRIDGE,
         element: <BridgePage />,
       },
       {
-        path: '/dex',
+        path: ROUTES.BRIDGE_API,
+        element: <BridgeApiPage />,
+      },
+      {
+        path: ROUTES.DEX,
         element: <DexPage />,
       },
       {
-        path: '/staking',
+        path: ROUTES.STAKING,
         element: <StakingPage />,
       },
       {
-        path: '/partner-fee-claim',
+        path: ROUTES.PARTNER_FEE_CLAIM,
         element: <PartnerFeeClaimPage />,
       },
       {
-        path: '/recovery',
+        path: ROUTES.RECOVERY,
         element: <RecoveryPage />,
       },
       {
-        path: '/leverage-yield',
+        path: ROUTES.LEVERAGE_YIELD,
         element: <LeverageYieldPage />,
       },
       {
-        path: '/leverage-yield-api',
+        path: ROUTES.LEVERAGE_YIELD_API,
         element: <LeverageYieldApiPage />,
+      },
+      {
+        path: ROUTES.ORACLE,
+        element: <OraclePage />,
+      },
+      {
+        path: '*',
+        element: <Navigate to={ROUTES.SWAPS_SDK} replace />,
       },
     ],
   },

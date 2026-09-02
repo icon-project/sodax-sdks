@@ -39,13 +39,7 @@ import {
   useLeverageYieldApiWithdrawQuote,
   useLeverageYieldApiSubmitTx,
 } from '@sodax/dapp-kit';
-import {
-  getXChainType,
-  useEvmSwitchChain,
-  useWalletProvider,
-  useXAccount,
-  useXService,
-} from '@sodax/wallet-sdk-react';
+import { getXChainType, useEvmSwitchChain, useWalletProvider, useXAccount, useXService } from '@sodax/wallet-sdk-react';
 import type { LeverageYieldApiOrder } from '@/components/leverage-yield-api/OrderStatus';
 import { LEVERAGE_YIELD_API_CONFIG } from '@/components/leverage-yield-api/lib/config';
 import { toIntentRequest } from '@/components/swaps-api/lib/mappers';
@@ -151,7 +145,9 @@ export default function LeverageCard({
   );
 
   // ── Vault info panel ──
-  const { data: effectiveApr } = useLeverageYieldApiEffectiveApr({ params: { vault: selectedVault?.vault, apiConfig } });
+  const { data: effectiveApr } = useLeverageYieldApiEffectiveApr({
+    params: { vault: selectedVault?.vault, apiConfig },
+  });
   const { data: position } = useLeverageYieldApiPosition({ params: { vault: selectedVault?.vault, apiConfig } });
   const { data: totalAssets } = useLeverageYieldApiTotalAssets({ params: { vault: selectedVault?.vault, apiConfig } });
 
@@ -432,7 +428,10 @@ export default function LeverageCard({
     }
   };
 
-  const depositSignable = !depositChain || isSignableSwapsApiChain(depositChain as SpokeChainKey) || getXChainType(depositChain as SpokeChainKey) === 'EVM';
+  const depositSignable =
+    !depositChain ||
+    isSignableSwapsApiChain(depositChain as SpokeChainKey) ||
+    getXChainType(depositChain as SpokeChainKey) === 'EVM';
   const withdrawSignable = !withdrawChain || isSignableSwapsApiChain(withdrawChain as SpokeChainKey);
 
   return (

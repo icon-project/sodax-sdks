@@ -4,9 +4,17 @@
 // them exported. The runtime helper (`makeRequest`) stays package-internal —
 // it was never part of the public API.
 export type { ApiResponse, RequestConfig, RequestOverrideConfig } from './api-utils.js';
+// Export the bundle-safe guard with the structured HTTP error.
+export { BackendHttpError, isBackendHttpError } from './api-utils.js';
 export * from './BackendApiService.js';
+export { isFillEvent, isOracleCandleInterval, type FillEvent } from './guards.js';
+// The oracle interval set is public data: `OracleMarketInterval.key` is `string`, so consumers
+// membership-test it (or call `isOracleCandleInterval`) before passing it to `getOracleCandles`.
+export { ORACLE_CANDLE_INTERVALS } from './backendApiSchemas.js';
 export * from './SwapsApiService.js';
 export * from './LeverageYieldApiService.js';
+export * from './SponsoringApiService.js';
+export * from './BridgeApiService.js';
 
 // Re-export the swaps wire failure taxonomy from the wrapped @sodax/swaps-api client so consumers
 // can narrow the failure `SwapsApiService` surfaces — `error.context.code` (a `SwapsApiErrorCode`)

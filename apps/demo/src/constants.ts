@@ -1,4 +1,5 @@
 import { type SolverConfig, spokeChainConfig, baseChainInfo, ChainKeys, type SpokeChainKey } from '@sodax/dapp-kit';
+import { SolverEnv } from '@/zustand/useAppStore';
 
 declare global {
   interface Window {
@@ -27,11 +28,16 @@ export const productionSolverConfig = {
   protocolIntentsContract: '0xaFf2EDb3057ed6f9C1dA6c930b8ddDf2beE573A5' as const,
 } satisfies SolverConfig;
 
-export const devSolverConfig = {
-  intentsContract: '0x6382D6ccD780758C5e8A6123c33ee8F4472F96ef',
-  solverApiEndpoint: 'https://sodax-solver-dev.iconblockchain.xyz',
-  protocolIntentsContract: '0xaFf2EDb3057ed6f9C1dA6c930b8ddDf2beE573A5' as const,
-} satisfies SolverConfig;
+/** Solver API endpoint for a given env — stored on each order so status is polled against the
+ *  env it was created on, even after the env switcher / a reload changes the active env. */
+export function solverApiEndpointForEnv(env: SolverEnv): string {
+  switch (env) {
+    case SolverEnv.Staging:
+      return stagingSolverConfig.solverApiEndpoint;
+    default:
+      return productionSolverConfig.solverApiEndpoint;
+  }
+}
 
 export interface ChainUI {
   id: string;
@@ -76,7 +82,24 @@ export const availableChains: ChainUI[] = [
   ChainKeys.HYPEREVM_MAINNET,
   ChainKeys.KAIA_MAINNET,
   ChainKeys.REDBELLY_MAINNET,
+  ChainKeys.HEDERA_MAINNET,
+  ChainKeys.ROBINHOOD_MAINNET,
 ].map(key => ({ id: key, name: baseChainInfo[key].name, icon: baseChainInfo[key].logo }));
+
+export const ROUTES = {
+  SWAPS_SDK: '/swaps-sdk',
+  SWAPS_API: '/swaps-api',
+  MONEY_MARKET: '/money-market',
+  BRIDGE: '/bridge',
+  BRIDGE_API: '/bridge-api',
+  DEX: '/dex',
+  STAKING: '/staking',
+  PARTNER_FEE_CLAIM: '/partner-fee-claim',
+  RECOVERY: '/recovery',
+  LEVERAGE_YIELD: '/leverage-yield',
+  LEVERAGE_YIELD_API: '/leverage-yield-api',
+  ORACLE: '/oracle',
+} as const;
 
 /**
  * Helper function to get chain UI data by chain ID

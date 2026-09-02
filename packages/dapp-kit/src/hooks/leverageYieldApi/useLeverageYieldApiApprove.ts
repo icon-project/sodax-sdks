@@ -19,7 +19,11 @@ export type UseLeverageYieldApiApproveVars = {
  */
 export const useLeverageYieldApiApprove = ({
   mutationOptions,
-}: MutationHookParams<ApproveResponseV2, UseLeverageYieldApiApproveVars> = {}): SafeUseMutationResult<ApproveResponseV2, Error, UseLeverageYieldApiApproveVars> => {
+}: MutationHookParams<ApproveResponseV2, UseLeverageYieldApiApproveVars> = {}): SafeUseMutationResult<
+  ApproveResponseV2,
+  Error,
+  UseLeverageYieldApiApproveVars
+> => {
   const { sodax } = useSodaxContext();
 
   return useSafeMutation<ApproveResponseV2, Error, UseLeverageYieldApiApproveVars>({

@@ -19,7 +19,11 @@ export type UseLeverageYieldApiCancelIntentVars = {
  */
 export const useLeverageYieldApiCancelIntent = ({
   mutationOptions,
-}: MutationHookParams<CancelIntentResponseV2, UseLeverageYieldApiCancelIntentVars> = {}): SafeUseMutationResult<CancelIntentResponseV2, Error, UseLeverageYieldApiCancelIntentVars> => {
+}: MutationHookParams<CancelIntentResponseV2, UseLeverageYieldApiCancelIntentVars> = {}): SafeUseMutationResult<
+  CancelIntentResponseV2,
+  Error,
+  UseLeverageYieldApiCancelIntentVars
+> => {
   const { sodax } = useSodaxContext();
 
   return useSafeMutation<CancelIntentResponseV2, Error, UseLeverageYieldApiCancelIntentVars>({

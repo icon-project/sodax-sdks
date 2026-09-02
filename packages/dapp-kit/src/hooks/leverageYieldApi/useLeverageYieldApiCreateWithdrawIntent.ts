@@ -19,7 +19,11 @@ export type UseLeverageYieldApiCreateWithdrawIntentVars = {
  */
 export const useLeverageYieldApiCreateWithdrawIntent = ({
   mutationOptions,
-}: MutationHookParams<CreateIntentResponseV2, UseLeverageYieldApiCreateWithdrawIntentVars> = {}): SafeUseMutationResult<CreateIntentResponseV2, Error, UseLeverageYieldApiCreateWithdrawIntentVars> => {
+}: MutationHookParams<CreateIntentResponseV2, UseLeverageYieldApiCreateWithdrawIntentVars> = {}): SafeUseMutationResult<
+  CreateIntentResponseV2,
+  Error,
+  UseLeverageYieldApiCreateWithdrawIntentVars
+> => {
   const { sodax } = useSodaxContext();
 
   return useSafeMutation<CreateIntentResponseV2, Error, UseLeverageYieldApiCreateWithdrawIntentVars>({

@@ -38,7 +38,7 @@ How to setup local development
 
 ### Functional Modules inside the SDK
 
-<a href="https://docs.sodax.com/developers/packages/sdk/swaps" class="button secondary" data-icon="rotate">Swaps (Solver)</a> -  Cross-chain intent-based swaps
+<a href="https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/swaps" class="button secondary" data-icon="rotate">Swaps (Solver)</a> -  Cross-chain intent-based swaps
 
 * EVM (Sonic, Ethereum, Arbitrum, Avalanche, Base, BSC, Optimism, Polygon, HyperEVM, Lightlink, Redbelly, Kaia, Hedera) ✅
 * Sui ✅
@@ -50,7 +50,7 @@ How to setup local development
 * Stacks ✅
 * Bitcoin ✅
 
-<a href="https://docs.sodax.com/developers/packages/sdk/money_market" class="button secondary" data-icon="sack-dollar">Lend / Borrow (Money Market)</a>- Cross-chain lending and borrowing
+<a href="https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/money_market" class="button secondary" data-icon="sack-dollar">Lend / Borrow (Money Market)</a>- Cross-chain lending and borrowing
 
 * EVM (Sonic, Ethereum, Arbitrum, Avalanche, Base, BSC, Optimism, Polygon, HyperEVM, Lightlink, Redbelly, Kaia, Hedera) ✅
 * Sui ✅
@@ -62,7 +62,7 @@ How to setup local development
 * Stacks ✅
 * Bitcoin ✅ (BTC only)
 
-<a href="https://docs.sodax.com/developers/packages/sdk/bridge" class="button secondary" data-icon="bridge-suspension">Bridge</a>- Cross-chain token bridging
+<a href="https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/bridge" class="button secondary" data-icon="bridge-suspension">Bridge</a>- Cross-chain token bridging
 
 * EVM (Sonic, Ethereum, Arbitrum, Avalanche, Base, BSC, Optimism, Polygon, HyperEVM, Lightlink, Redbelly, Kaia, Hedera) ✅
 * Sui ✅
@@ -74,13 +74,13 @@ How to setup local development
 * Stacks ✅
 * Bitcoin ✅
 
-<a href="https://docs.sodax.com/developers/packages/sdk/migration" class="button secondary" data-icon="truck">Migration</a>- Token migration (ICX, bnUSD, BALN)
+<a href="https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/migration" class="button secondary" data-icon="truck">Migration</a>- Token migration (ICX, bnUSD, BALN)
 
 * ICX / wICX → SODA: source chain ICON only
 * BALN → SODA: source chain ICON only
 * bnUSD: between legacy chains (ICON, Sui, Stellar) and the new bnUSD on any other supported chain
 
-<a href="https://docs.sodax.com/developers/packages/sdk/staking" class="button secondary" data-icon="seedling">Staking</a>- SODA token staking
+<a href="https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/staking" class="button secondary" data-icon="seedling">Staking</a>- SODA token staking
 
 * EVM (Sonic, Ethereum, Arbitrum, Avalanche, Base, BSC, Optimism, Polygon, HyperEVM, Lightlink, Redbelly, Kaia, Hedera) ✅
 * Sui ✅
@@ -92,9 +92,9 @@ How to setup local development
 
 ### Tooling Modules inside the SDK
 
-<a href="https://docs.sodax.com/developers/packages/sdk/backend_api" class="button secondary" data-icon="plug">Backend API</a>- Solver API endpoint documentation
+<a href="https://docs.sodax.com/developers/packages/foundation/sdk/tooling-modules/backend_api" class="button secondary" data-icon="plug">Backend API</a>- Solver API endpoint documentation
 
-<a href="https://docs.sodax.com/developers/packages/sdk/intent_relay_api" class="button secondary" data-icon="envelope">Intent Relay API</a>- Relayer API endpoint documentation
+<a href="https://docs.sodax.com/developers/packages/foundation/sdk/tooling-modules/intent_relay_api" class="button secondary" data-icon="envelope">Intent Relay API</a>- Relayer API endpoint documentation
 
 ## AI agent docs
 
@@ -118,7 +118,7 @@ Then point your agent at `node_modules/@sodax/skills/AGENTS.md`. See [docs/ai-in
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](https://github.com/icon-project/sodax-document/blob/main/developers/packages/sdk/CONTRIBUTING.md) for details.
+We welcome contributions! Please see our [Contributing Guide](https://github.com/icon-project/sodax-sdks/blob/main/CONTRIBUTING.md) for details.
 
 ***
 
@@ -148,7 +148,7 @@ pnpm lint
 
 ## License
 
-* [MIT](https://github.com/icon-project/sodax-document/blob/main/developers/packages/sdk/LICENSE/README.md)
+* [MIT](https://github.com/icon-project/sodax-sdks/blob/main/LICENSE)
 
 ***
 

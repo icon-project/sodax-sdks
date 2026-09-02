@@ -50,4 +50,12 @@ pnpm injective borrow <token> <amount>
 pnpm injective supply <token> <amount>
 ```
 
+Swap native S on Sonic into Ethereum USDC and deposit it into the Flint RWA vault via the
+`FlintDepositHook`, in one intent:
+
+```bash
+EVM_PRIVATE_KEY=0x… pnpm flint-deposit               # dry run: quote + built intent only
+EVM_PRIVATE_KEY=0x… pnpm flint-deposit --execute     # submit
+```
+
 

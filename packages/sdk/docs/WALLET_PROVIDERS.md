@@ -8,14 +8,14 @@ in `@sodax/wallet-sdk-core`, or by writing your own against the interface contra
 ## Table of Contents
 
 1. [Supported provider interfaces](#1-supported-provider-interfaces)
-2. [WalletProviderSlot — compile-time enforcement](#2-walletproviderslot--compile-time-enforcement)
+2. [WalletProviderSlot: compile-time enforcement](#2-walletproviderslot-compile-time-enforcement)
 3. [wallet-sdk-core: ready-to-use implementations](#3-wallet-sdk-core-ready-to-use-implementations)
    - [BaseWalletProvider](#basewalletprovider)
    - [chainType discriminant](#chaintype-discriminant)
    - [Dual config modes (private-key vs browser-extension)](#dual-config-modes-private-key-vs-browser-extension)
    - [Provider reference](#provider-reference)
 4. [Config type reference per chain](#4-config-type-reference-per-chain)
-5. [React integration — useWalletProvider](#5-react-integration--usewalletprovider)
+5. [React integration: useWalletProvider](#5-react-integration-usewalletprovider)
 6. [Custom implementations](#6-custom-implementations)
 
 ---
@@ -47,7 +47,7 @@ chain key or `ChainType` literal to the appropriate specific interface.
 
 ---
 
-## 2. WalletProviderSlot — compile-time enforcement
+## 2. WalletProviderSlot: compile-time enforcement
 
 Every SDK method that executes a transaction uses `WalletProviderSlot<K, Raw>` (defined in
 `packages/types/src/common/common.ts`) to enforce the pairing between `raw` mode and the presence
@@ -247,22 +247,28 @@ new SolanaWalletProvider({
 ```ts
 // Private-key mode (mnemonic-derived)
 new SuiWalletProvider({
-  rpcUrl: 'https://…',
+  grpcUrl: 'https://fullnode.mainnet.sui.io',
   mnemonics: 'word1 word2 …',
   defaults?: SuiWalletDefaults,
 });
 
-// Browser-extension mode
+// Browser-extension mode — the provider builds its own client; you supply the signer
 new SuiWalletProvider({
-  client: suiClient,
-  wallet: walletWithFeatures,
-  account: walletAccount,
+  grpcUrl: 'https://fullnode.mainnet.sui.io',
+  address: walletAccount.address,
+  signTransaction: async txn =>
+    dAppKit.signTransaction({ transaction: await txn.toJSON(), account: walletAccount }),
   defaults?: SuiWalletDefaults,
 });
 ```
 
-`SuiWalletDefaults` accepts: `signAndExecuteTxn` (dry-run toggle + response options),
-`getCoins` (pagination limit).
+The endpoint must speak gRPC-web; `rpcUrl` still works as a deprecated alias for `grpcUrl`, and
+the two are mutually exclusive. `signTransaction` takes the transaction positionally, so an
+options-shaped signer such as `dAppKit.signTransaction` needs the wrapper above rather than a
+direct assignment; `walletAccount` is dApp Kit's `UiWalletAccount`, and naming it stops the wallet
+signing with whichever account happens to be connected.
+
+`SuiWalletDefaults` accepts: `signAndExecuteTxn` (dry-run toggle), `getCoins` (pagination limit).
 
 ### ICON (`IconWalletProvider`)
 
@@ -396,7 +402,7 @@ new NearWalletProvider({
 
 ---
 
-## 5. React integration — useWalletProvider
+## 5. React integration: useWalletProvider
 
 `packages/wallet-sdk-react` provides `useWalletProvider` — a hook that reads the chain-appropriate
 provider from the Zustand store and returns it typed to the correct `I*WalletProvider` interface.

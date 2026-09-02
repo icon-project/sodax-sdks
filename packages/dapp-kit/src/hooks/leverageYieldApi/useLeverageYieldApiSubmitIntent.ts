@@ -19,7 +19,11 @@ export type UseLeverageYieldApiSubmitIntentVars = {
  */
 export const useLeverageYieldApiSubmitIntent = ({
   mutationOptions,
-}: MutationHookParams<SubmitIntentResponseV2, UseLeverageYieldApiSubmitIntentVars> = {}): SafeUseMutationResult<SubmitIntentResponseV2, Error, UseLeverageYieldApiSubmitIntentVars> => {
+}: MutationHookParams<SubmitIntentResponseV2, UseLeverageYieldApiSubmitIntentVars> = {}): SafeUseMutationResult<
+  SubmitIntentResponseV2,
+  Error,
+  UseLeverageYieldApiSubmitIntentVars
+> => {
   const { sodax } = useSodaxContext();
 
   return useSafeMutation<SubmitIntentResponseV2, Error, UseLeverageYieldApiSubmitIntentVars>({

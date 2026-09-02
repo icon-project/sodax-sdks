@@ -16,6 +16,7 @@ import { resolveAnalytics } from '../analytics.js';
 import { PartnerService } from '../../partner/PartnerService.js';
 import { RecoveryService } from '../../recovery/RecoveryService.js';
 import { LeverageYieldService } from '../../leverageYield/LeverageYieldService.js';
+import { SponsoringService } from '../../sponsoring/SponsoringService.js';
 
 /**
  * Sodax class is used to interact with the Sodax.
@@ -35,6 +36,7 @@ export class Sodax {
   public readonly partners: PartnerService; // Partner service enabling partner fee claim and other partner operations
   public readonly recovery: RecoveryService; // Recovery service for withdrawing stuck hub-wallet assets back to a spoke chain
   public readonly dex: DexService; // Dex service enabling DEX operations
+  public readonly sponsoring: SponsoringService;
   public readonly leverageYield: LeverageYieldService; // Leverage-yield service: cross-chain deposits / withdrawals into ERC-4626 leverage vaults on Sonic
   public readonly config: ConfigService; // Config service enabling configuration data fetching from the backend API or fallbacking to default values
 
@@ -52,21 +54,26 @@ export class Sodax {
     // so feature services can call `config.analytics.emit(...)` unconditionally with zero cost when off.
     const analytics = resolveAnalytics(options?.analytics);
     const fee = options?.fee;
-    // Like `logger`, swaps options are client-side runtime toggles read off `SodaxOptions` —
-    // never merged into the backend-fetched `SodaxConfig`/`instanceConfig`.
-    const useBackendSubmitTx = options?.swapsOptions?.useBackendSubmitTx ?? false;
-    // Same for the leverage-yield backend submit-tx toggle (from its own client-options slot).
-    const useLeverageYieldBackendSubmitTx = options?.leverageYieldOptions?.useBackendSubmitTx ?? false;
-    this.instanceConfig = options ? mergeSodaxConfig(sodaxConfig, options) : sodaxConfig;
-    this.backendApi = new BackendApiService(this.instanceConfig.api, logger);
+    // Client-side runtime option like `fee`, sent as `x-api-key` on every backend API request. Held out
+    // of the merge below so the credential never lands on the publicly readable `instanceConfig`.
+    const apiKey = options?.apiKey || undefined;
+    // RadFi/Bound request signer: another client-side runtime hook (like `logger`/`analytics`/`fee`),
+    // held off the data config so the dynamic-config swap never touches it. See `RadfiOptions` / gh-831.
+    const radfiSigner = options?.radfi?.signRequest;
+    // Also the `userConfig` a future dynamic-config re-merge would use, so the strip survives it.
+    const mergeOptions = options ? { ...options, apiKey: undefined } : undefined;
+    this.instanceConfig = mergeOptions ? mergeSodaxConfig(sodaxConfig, mergeOptions) : sodaxConfig;
+    this.backendApi = new BackendApiService(this.instanceConfig.api, logger, { apiKey });
     this.api = this.backendApi;
     this.config = new ConfigService({
       api: this.backendApi,
       config: this.instanceConfig,
-      userConfig: options,
+      userConfig: mergeOptions,
       logger,
       analytics,
       fee,
+      apiKey,
+      radfiSigner,
     });
 
     this.hubProvider = new EvmHubProvider({ config: this.config }); // default to Sonic mainnet
@@ -76,7 +83,6 @@ export class Sodax {
       hubProvider: this.hubProvider,
       spoke: this.spoke,
       backendApi: this.backendApi,
-      useBackendSubmitTx,
     });
 
     this.moneyMarket = new MoneyMarketService({
@@ -96,7 +102,12 @@ export class Sodax {
       config: this.config,
       spoke: this.spoke,
     });
-    this.bridge = new BridgeService({ hubProvider: this.hubProvider, config: this.config, spoke: this.spoke });
+    this.bridge = new BridgeService({
+      hubProvider: this.hubProvider,
+      config: this.config,
+      spoke: this.spoke,
+      backendApi: this.backendApi,
+    });
     this.staking = new StakingService({ hubProvider: this.hubProvider, config: this.config, spoke: this.spoke });
     this.partners = new PartnerService({
       hubProvider: this.hubProvider,
@@ -113,7 +124,12 @@ export class Sodax {
       config: this.config,
       spoke: this.spoke,
       backendApi: this.backendApi,
-      useBackendSubmitTx: useLeverageYieldBackendSubmitTx,
+    });
+    // Sponsored activation never touches the hub.
+    this.sponsoring = new SponsoringService({
+      config: this.config,
+      spoke: this.spoke,
+      api: this.backendApi,
     });
   }
 

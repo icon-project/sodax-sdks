@@ -134,10 +134,19 @@ export class LeverageYieldApiService implements ResultifiedLeverageYieldApiV2 {
         // Backend returned a 2xx body that doesn't match the v2 contract — an upstream-API problem.
         return {
           ok: false,
-          error: new SodaxError('EXTERNAL_API_ERROR', `Invalid response shape from leverage-yield API for ${endpoint}`, {
-            feature: 'backend',
-            context: { api: 'leverageYield', endpoint, reason: 'invalid_response_shape', issues: v.flatten(parsed.issues) },
-          }),
+          error: new SodaxError(
+            'EXTERNAL_API_ERROR',
+            `Invalid response shape from leverage-yield API for ${endpoint}`,
+            {
+              feature: 'backend',
+              context: {
+                api: 'leverageYield',
+                endpoint,
+                reason: 'invalid_response_shape',
+                issues: v.flatten(parsed.issues),
+              },
+            },
+          ),
         };
       }
       return { ok: true, value: parsed.output };
@@ -262,10 +271,7 @@ export class LeverageYieldApiService implements ResultifiedLeverageYieldApiV2 {
    *
    * @returns `Result<LeverageYieldLsdAprV2>` — `{ aprRay, label, stale }`.
    */
-  public async getLsdApr(
-    query: VaultQueryV2,
-    config?: RequestOverrideConfig,
-  ): Promise<Result<LeverageYieldLsdAprV2>> {
+  public async getLsdApr(query: VaultQueryV2, config?: RequestOverrideConfig): Promise<Result<LeverageYieldLsdAprV2>> {
     return this.request(
       this.withQuery('/leverage-yield/apr/lsd', { vault: query.vault }),
       { method: 'GET' },
@@ -396,7 +402,12 @@ export class LeverageYieldApiService implements ResultifiedLeverageYieldApiV2 {
       ? '/leverage-yield/quote/deposit?includeTxData=true'
       : '/leverage-yield/quote/deposit';
     const txSchema = rawTxSchemaForChainKey(body.tokenSrcChainKey);
-    return this.request(endpoint, { method: 'POST', body: toJsonBody(body) }, schemas.makeQuoteResponseSchema(txSchema), config);
+    return this.request(
+      endpoint,
+      { method: 'POST', body: toJsonBody(body) },
+      schemas.makeQuoteResponseSchema(txSchema),
+      config,
+    );
   }
 
   /**
@@ -415,7 +426,12 @@ export class LeverageYieldApiService implements ResultifiedLeverageYieldApiV2 {
       ? '/leverage-yield/quote/withdraw?includeTxData=true'
       : '/leverage-yield/quote/withdraw';
     const txSchema = rawTxSchemaForChainKey(body.srcChainKey);
-    return this.request(endpoint, { method: 'POST', body: toJsonBody(body) }, schemas.makeQuoteResponseSchema(txSchema), config);
+    return this.request(
+      endpoint,
+      { method: 'POST', body: toJsonBody(body) },
+      schemas.makeQuoteResponseSchema(txSchema),
+      config,
+    );
   }
 
   /**
@@ -640,12 +656,7 @@ export class LeverageYieldApiService implements ResultifiedLeverageYieldApiV2 {
    * @returns `Result<GetIntentResponseV2>` — the decoded intent (bigint fields as decimal strings).
    */
   public async getIntent(txHash: string, config?: RequestOverrideConfig): Promise<Result<GetIntentResponseV2>> {
-    return this.request(
-      `/leverage-yield/intents/${txHash}`,
-      { method: 'GET' },
-      schemas.IntentResponseSchema,
-      config,
-    );
+    return this.request(`/leverage-yield/intents/${txHash}`, { method: 'GET' }, schemas.IntentResponseSchema, config);
   }
 
   // ──────────────────────────────────────────────────────────────────────

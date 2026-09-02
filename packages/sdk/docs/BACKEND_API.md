@@ -1,6 +1,6 @@
 # Backend API Service Documentation
 
-The `BackendApiService` provides a comprehensive HTTP client for the SODAX backend API, covering intent lookup, swap submission, solver orderbook, money market data, and runtime configuration. It implements `IConfigApi` so that `ConfigService` and other services can fetch dynamic chain/token configuration without coupling to a concrete HTTP implementation.
+The `BackendApiService` provides a comprehensive HTTP client for the SODAX backend API, covering intent lookup, swap submission, solver orderbook, money market data, USD OHLC price candles, and runtime configuration. It implements `IConfigApi` so that `ConfigService` and other services can fetch dynamic chain/token configuration without coupling to a concrete HTTP implementation.
 
 The service is automatically instantiated when you create a `Sodax` instance and is available as `sodax.backendApi`.
 
@@ -15,6 +15,7 @@ All public methods return `Promise<Result<T>>` — they never throw. On network 
 - [Swap Endpoints](#swap-endpoints)
 - [Solver Endpoints](#solver-endpoints)
 - [Money Market Endpoints](#money-market-endpoints)
+- [Oracle Endpoints](#oracle-endpoints)
 - [Config Endpoints](#config-endpoints)
 - [Utility Methods](#utility-methods)
 - [Complete Example](#complete-example)
@@ -69,22 +70,69 @@ if (!result.ok) {
 
 ### `ApiConfig` Type
 
-`ApiConfig` is either a flat `BaseApiConfig` (shared by `sodax.backendApi` and the swaps client `sodax.api.swaps`) or a nested `CustomApiConfig` that points the swaps API at its own endpoint:
+`ApiConfig` is either a flat `BackendApiConfig` (shared by `sodax.backendApi` and the swaps client `sodax.api.swaps`) or a nested `CustomApiConfig` that points the swaps API at its own endpoint:
 
 ```typescript
 type BaseApiConfig = {
-  baseURL: string;                   // API endpoint URL (default: 'https://api.sodax.com/v1/be')
+  baseURL: string;                   // Gateway ROOT — origin + version prefix (default: 'https://api.sodax.com/v1')
   timeout: number;                   // Request timeout in milliseconds (default: 30000)
   headers: Record<string, string>;   // Request headers (default: Content-Type and Accept)
 };
 
-// Point the swaps API at its own host, separate from the base backend API (at least one slice required):
-type CustomApiConfig =
-  | { baseApiConfig: BaseApiConfig; swapsApiConfig?: BaseApiConfig }
-  | { baseApiConfig?: BaseApiConfig; swapsApiConfig: BaseApiConfig };
+// The backend data API's routes are mounted below the gateway root; `basePath` is that mount.
+type BackendApiConfig = BaseApiConfig & { basePath?: string }; // default: '/be'
 
-type ApiConfig = BaseApiConfig | CustomApiConfig;
+// Point the swaps and/or sponsoring APIs at their own hosts, separate from the base backend API
+// (at least one slice required). Only sponsoring carries a slice `apiKey` — it is routed
+// independently, so it owns its credential; every other service takes the instance-wide key.
+type SwapsApiConfig = BaseApiConfig;
+type SponsoringApiConfig = BaseApiConfig & { apiKey?: string };
+
+type CustomApiConfig =
+  | { baseApiConfig: BackendApiConfig; swapsApiConfig?: SwapsApiConfig; sponsoringApiConfig?: SponsoringApiConfig }
+  | { baseApiConfig?: BackendApiConfig; swapsApiConfig: SwapsApiConfig; sponsoringApiConfig?: SponsoringApiConfig }
+  | { baseApiConfig?: BackendApiConfig; swapsApiConfig?: SwapsApiConfig; sponsoringApiConfig: SponsoringApiConfig };
+
+type ApiConfig = BackendApiConfig | CustomApiConfig;
 ```
+
+**`baseURL` is the gateway root, never a service path.** Every service resolves the same root and appends
+its own path below it — `/be` here, `/swaps` for the swaps client, `/bridge` for the bridge client,
+`/sponsorships/stellar` for sponsoring. A `baseURL` ending in `/be` is trimmed with a warning: that was
+the previous packaged default, and inheriting it nested the sibling services a level too deep
+(`/v1/be/swaps/submit-tx`). See
+[CONFIGURE_SDK.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md)
+for the full URL model.
+
+`basePath` is read only by `sodax.backendApi`. Set it to `''` when addressing a backend directly at its
+origin instead of through the gateway (`{ baseURL: 'http://localhost:4000', basePath: '' }` →
+`http://localhost:4000/config/all`).
+
+Slices layer on top of the flat fields rather than replacing them: an `api` object that carries both a
+top-level `baseURL`/`timeout`/`headers` and a slice keeps applying those flat values wherever the slice
+does not define its own, so adding `swapsApiConfig` or `sponsoringApiConfig` to an existing flat config
+never silently re-routes the base API back to the packaged default. The resolution order is
+defaults → top-level flat fields → `baseApiConfig` → `swapsApiConfig`, so the most specific slice wins
+per field.
+
+The sponsoring slice resolves differently from the others on purpose: its `baseURL` never inherits
+from `baseApiConfig` (it defaults to the same gateway root but reaches it independently, so pointing the
+base API at a private proxy never drags sponsoring along), and neither do
+its `headers` — a credential is scoped to the origin it was set for, so a base-API token is not
+transmitted to the sponsoring host. `timeout` does inherit. For the same reason,
+`backendApi.setHeaders(...)` reaches `swaps` but NOT `sponsoring`; set sponsoring headers on the
+slice, or via `sodax.api.sponsoring.setHeaders(...)`.
+
+### API key
+
+There is one instance-wide backend key: `new Sodax({ apiKey })`, sent as `x-api-key` on this client,
+`sodax.api.swaps`, and `sodax.api.bridge`. Override it for a single call with `apiKey` on the trailing
+`RequestOverrideConfig`. The key follows a per-call `baseURL` override on these three clients too —
+including a plaintext local target — so point one only at a trusted SODAX-related deployment.
+Sponsoring is the exception — its slice key wins there, and the instance-wide
+key reaches it only when the call targets a SODAX gateway root. See
+[CONFIGURE_SDK.md § API key](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md#api-key)
+for the full precedence order.
 
 ### `RequestOverrideConfig` Type
 
@@ -92,16 +140,18 @@ Every public method accepts an optional `RequestOverrideConfig` as its last argu
 
 ```typescript
 type RequestOverrideConfig = {
-  baseURL?: string;
+  baseURL?: string;   // gateway root; the calling service's own path still applies
   timeout?: number;
   headers?: Record<string, string>;
+  apiKey?: string;    // per-call x-api-key; an explicit headers['x-api-key'] here still wins
 };
 ```
 
 ### Default Configuration
 
 ```typescript
-const DEFAULT_BACKEND_API_ENDPOINT = 'https://api.sodax.com/v1/be';
+const DEFAULT_API_BASE_URL = 'https://api.sodax.com/v1'; // gateway root, shared by every service
+const BACKEND_API_BASE_PATH = '/be';                      // this service's mount below that root
 const DEFAULT_BACKEND_API_TIMEOUT = 30000; // 30 seconds
 const DEFAULT_BACKEND_API_HEADERS = {
   'Content-Type': 'application/json',
@@ -269,8 +319,17 @@ Swap-tx submission and the rest of the typed Swaps API v2 moved off `BackendApiS
 client — `sodax.api.swaps` (`SwapsApiService`). Submit a signed spoke-chain swap transaction with
 `sodax.api.swaps.submitTx(...)` and poll it with
 `sodax.api.swaps.getSubmitTxStatus({ txHash, srcChainKey })` (both fields required). See
-[`SWAPS_API.md`](SWAPS_API.md) for the full 21-endpoint reference (quote, create-intent, submit-tx,
+[`SWAPS_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS_API.md) for the full 21-endpoint reference (quote, create-intent, submit-tx,
 status, fees, …).
+
+## Bridge Endpoints
+
+The Bridge API v2 is a sibling typed client — `sodax.api.bridge` (`BridgeApiService`), also reached via the
+`sodax.api` alias and sharing the same backend host (`/bridge/*` sub-paths). It mirrors the swaps client
+minus the solver/intent surface: allowance/approve/create-bridge-intent, submit-tx + status, tokens, and
+the fee/bridgeable-amount/bridgeable discovery quotes. Submit a signed spoke-deposit with
+`sodax.api.bridge.submitTx(...)` (passing the FULL `relayData { address, payload }` envelope, not just the
+payload). See [`BRIDGE_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BRIDGE_API.md) for the full reference.
 
 ## Solver Endpoints
 
@@ -529,6 +588,142 @@ interface MoneyMarketBorrowers {
 }
 ```
 
+## Oracle Endpoints
+
+USD OHLC price candles for charting, served from the backend's oracle candle store. Both reads are plain `GET`s with no authentication requirement beyond the usual API key handling.
+
+### Get Oracle Markets
+
+Retrieves the candle store's discovery payload: the quote currency, the selectable intervals, and the canonical symbols that have candle data. Use it to populate a symbol picker and interval switcher before requesting candles.
+
+```typescript
+const result = await sodax.backendApi.getOracleMarkets();
+
+if (result.ok) {
+  const { quote, intervals, symbols } = result.value;
+  console.log(quote); // 'USD'
+  console.log(intervals.map(i => i.key)); // ['1m', '5m', '1h', '1d']
+  console.log(symbols); // ['BTC', 'ETH', 'SOL', ...]
+}
+```
+
+**Signature:**
+```typescript
+getOracleMarkets(
+  config?: RequestOverrideConfig,
+): Promise<Result<OracleMarketsResponse>>
+```
+
+- **Method:** GET
+- **Endpoint:** `/oracle/markets`
+
+**Response type:**
+```typescript
+type OracleCandleInterval = '1m' | '5m' | '1h' | '1d';
+
+// Exported alongside the union: the raw list, and the guard that narrows a `key` to it.
+const ORACLE_CANDLE_INTERVALS: readonly OracleCandleInterval[];
+function isOracleCandleInterval(value: string): value is OracleCandleInterval;
+
+interface OracleMarketInterval {
+  // `string`, not `OracleCandleInterval` — see the note under this section.
+  key: string;
+  label: string;
+  seconds: number;
+}
+
+interface OracleMarketsResponse {
+  quote: string;
+  intervals: OracleMarketInterval[];
+  symbols: string[];
+}
+```
+
+`intervals[].key` is typed `string` on purpose: discovery is what tells you which intervals exist, so this read stays tolerant of an interval a newer backend serves and this SDK version does not know. Membership-test it before passing it to `getOracleCandles`, which accepts only the four literals:
+
+```typescript
+import { isOracleCandleInterval } from '@sodax/sdk';
+
+// `filter` would leave `key` as `string`; narrowing inside `flatMap` yields the union.
+const selectable = result.value.intervals.flatMap(i => (isOracleCandleInterval(i.key) ? [i.key] : []));
+```
+
+`ORACLE_CANDLE_INTERVALS` is also exported if you need the raw list (to render every option, say).
+
+### Get Oracle Candles
+
+Retrieves USD OHLC candles for one symbol over the half-open time range `[from, to)`.
+
+```typescript
+import { isSodaxError } from '@sodax/sdk';
+
+const now = Math.floor(Date.now() / 1000);
+
+const result = await sodax.backendApi.getOracleCandles({
+  symbol: 'ETH',
+  interval: '1h',
+  from: now - 86400, // last 24 hours
+  to: now,
+});
+
+if (!result.ok) {
+  // `result.error` is `unknown` — narrow before reading `.message` / `.context`.
+  if (isSodaxError(result.error)) console.error(result.error.message, result.error.context?.status);
+  return;
+}
+
+const series = result.value.candles.map(c => ({
+  time: c.timestamp,
+  open: Number(c.open),
+  high: Number(c.high),
+  low: Number(c.low),
+  close: Number(c.close),
+}));
+```
+
+**Signature:**
+```typescript
+getOracleCandles(
+  params: { symbol: string; interval: OracleCandleInterval; from: number; to: number },
+  config?: RequestOverrideConfig,
+): Promise<Result<OracleCandlesResponse>>
+```
+
+- **Method:** GET
+- **Endpoint:** `/oracle/candles?symbol={symbol}&interval={interval}&from={from}&to={to}`
+
+**Response type:**
+```typescript
+interface OracleCandle {
+  timestamp: number;
+  open: string;
+  high: string;
+  low: string;
+  close: string;
+  final?: boolean;
+}
+
+interface OracleCandlesResponse {
+  symbol: string;
+  quote: string;
+  interval: OracleCandleInterval;
+  candles: OracleCandle[];
+}
+```
+
+**Conventions:**
+
+- `open` / `high` / `low` / `close` are USD prices as **decimal strings** — convert them yourself; never assume a JSON number.
+- `timestamp` is the bucket **start** in UNIX seconds. A `1h` candle at `T` covers `[T, T + 3600)`.
+- `from` and `to` are UNIX **seconds** (integers). `to` is **exclusive** and must be greater than `from`; a zero-width or reversed range returns HTTP 400.
+- A request may cover at most **5000 buckets** of the requested interval. A wider range (or an invalid parameter) returns HTTP 400, which surfaces as `ok: false` with `error.message === 'HTTP_REQUEST_FAILED'` and `error.context.status === 400` (narrow with `isSodaxError(result.error)` first).
+- A valid range with no stored candles resolves `ok: true` with `candles: []`. Render the gap rather than branching on an error.
+- An unknown symbol also currently resolves `ok: true` with `candles: []` rather than a 404; use `getOracleMarkets()` when you need to distinguish selectable symbols before requesting data.
+- Candles are ordered **oldest first**, and the last one may still be forming. Branch on the value, not the field's presence: `final === false` means still forming, so re-poll while that holds; absent (the backend's usual encoding for a closed candle) means closed.
+- There is **no volume field** — candles are sampled from the SODAX price feed, not trade flow.
+- `interval` on the response echoes what you sent and is validated strictly — an unrecognized value resolves `ok: false` with `error.context.reason === 'invalid_response_shape'` rather than a value outside `OracleCandleInterval`.
+- Responses are cached server-side for roughly 10 seconds per distinct URL.
+
 ## Config Endpoints
 
 These methods implement `IConfigApi` and are consumed internally by `ConfigService`. You generally do not call them directly — use `sodax.config` instead. They are documented here for completeness and for custom `IConfigApi` implementations.
@@ -562,11 +757,12 @@ sodax.backendApi.setHeaders({
 
 ### Get Base URL
 
-Returns the base URL the service is currently pointing at.
+Returns the gateway root the service is currently pointing at, and the data API's mount below it.
+Requests go to `getBaseURL() + getBasePath() + <route>`.
 
 ```typescript
-const baseURL = sodax.backendApi.getBaseURL();
-console.log('API Base URL:', baseURL);
+console.log('Gateway root:', sodax.backendApi.getBaseURL()); // 'https://api.sodax.com/v1'
+console.log('Data API mount:', sodax.backendApi.getBasePath()); // '/be'
 ```
 
 ## Complete Example
@@ -577,7 +773,7 @@ import { Sodax } from '@sodax/sdk';
 async function example() {
   const sodax = new Sodax({
     api: {
-      baseURL: 'https://api.sodax.com/v1/be',
+      baseURL: 'https://api.sodax.com/v1',
       timeout: 60000,
       headers: {
         'Content-Type': 'application/json',

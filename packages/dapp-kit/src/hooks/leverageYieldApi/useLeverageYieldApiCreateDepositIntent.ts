@@ -19,7 +19,11 @@ export type UseLeverageYieldApiCreateDepositIntentVars = {
  */
 export const useLeverageYieldApiCreateDepositIntent = ({
   mutationOptions,
-}: MutationHookParams<CreateIntentResponseV2, UseLeverageYieldApiCreateDepositIntentVars> = {}): SafeUseMutationResult<CreateIntentResponseV2, Error, UseLeverageYieldApiCreateDepositIntentVars> => {
+}: MutationHookParams<CreateIntentResponseV2, UseLeverageYieldApiCreateDepositIntentVars> = {}): SafeUseMutationResult<
+  CreateIntentResponseV2,
+  Error,
+  UseLeverageYieldApiCreateDepositIntentVars
+> => {
   const { sodax } = useSodaxContext();
 
   return useSafeMutation<CreateIntentResponseV2, Error, UseLeverageYieldApiCreateDepositIntentVars>({

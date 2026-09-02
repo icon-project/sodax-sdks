@@ -21,10 +21,20 @@
  *      / `.rejects` — matching the runtime contract of each method.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChainKeys, type Address, type ApiConfig, type SodaxLogger } from '@sodax/types';
+import {
+  BACKEND_API_BASE_PATH,
+  ChainKeys,
+  DEFAULT_SPONSORING_API_ENDPOINT,
+  type Address,
+  type ApiConfig,
+  type HttpUrl,
+  type SodaxLogger,
+} from '@sodax/types';
 import { Sodax } from '../shared/entities/Sodax.js';
 import { BackendApiService } from './BackendApiService.js';
 import { SodaxError } from '../errors/SodaxError.js';
+import { silentLogger } from '../shared/logger.js';
+import type { RequestOverrideConfig } from './api-utils.js';
 
 // --- fetch stub -----------------------------------------------------------
 //
@@ -38,7 +48,10 @@ vi.stubGlobal('fetch', mockFetch);
 // --- test fixtures --------------------------------------------------------
 
 const sodax = new Sodax();
-const DEFAULT_BASE_URL = 'https://api.sodax.com/v1/be';
+// `api.baseURL` is the gateway ROOT; the backend data API's own `/be` mount is appended by the service.
+// So request URLs are prefixed with DATA_API, while `getBaseURL()` reports ROOT.
+const ROOT = 'https://api.sodax.com/v1';
+const DATA_API = `${ROOT}${BACKEND_API_BASE_PATH}`;
 
 const SAMPLE_USER_ADDRESS = '0x1111111111111111111111111111111111111111' as Address;
 const SAMPLE_TX_HASH = '0x46b053464f50836328b6158e1e33e5cf66c0e3ebe5004d30459b23acae5047a0';
@@ -100,6 +113,27 @@ const SAMPLE_XTOKEN = {
   vault: '0x0000000000000000000000000000000000000011',
 };
 
+const SAMPLE_ORACLE_MARKETS = {
+  quote: 'USD',
+  intervals: [
+    { key: '1m', label: '1 minute', seconds: 60 },
+    { key: '5m', label: '5 minutes', seconds: 300 },
+    { key: '1h', label: '1 hour', seconds: 3600 },
+    { key: '1d', label: '1 day', seconds: 86400 },
+  ],
+  symbols: ['BTC', 'ETH', 'SOL'],
+};
+
+const SAMPLE_ORACLE_CANDLES = {
+  symbol: 'ETH',
+  quote: 'USD',
+  interval: '1h',
+  candles: [
+    { timestamp: 1782234000, open: '1665.57', high: '1666.22', low: '1663.01', close: '1665.02' },
+    { timestamp: 1782237600, open: '1665.02', high: '1670.40', low: '1664.88', close: '1669.13', final: false },
+  ],
+};
+
 // --- helpers --------------------------------------------------------------
 
 const okResponse = <T>(data: T) => ({ ok: true, status: 200, json: vi.fn().mockResolvedValue(data) });
@@ -139,7 +173,7 @@ describe('BackendApiService.getIntentByTxHash', () => {
     expect(result).toEqual({ ok: true, value: intentBody });
     expect(mockFetch).toHaveBeenCalledTimes(1);
     expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/intent/tx/${SAMPLE_TX_HASH}`,
+      `${DATA_API}/intent/tx/${SAMPLE_TX_HASH}`,
       expect.objectContaining({
         method: 'GET',
         headers: expect.objectContaining({
@@ -165,6 +199,22 @@ describe('BackendApiService.getIntentByTxHash', () => {
       // cause chain: SodaxError → makeRequest Error('HTTP_REQUEST_FAILED') → Error('HTTP 500: …')
       expect((err.cause as Error).message).toBe('HTTP_REQUEST_FAILED');
       expect(((err.cause as Error).cause as Error).message).toMatch(/HTTP 500: Internal Server Error/);
+    }
+  });
+
+  // `SwapService.resolveSolverStatus` branches on exactly this: a 404 is the backend answering "no
+  // record", which lets a solver NOT_FOUND stand as a definitive miss, while any other failure leaves
+  // it unverified. The status therefore has to survive into `context`, and nothing else pins that.
+  it('lifts the HTTP status into error context on 404, so callers can tell a definitive miss apart', async () => {
+    mockFetch.mockResolvedValueOnce(httpErrorResponse(404, 'Not Found'));
+
+    const result = await sodax.backendApi.getIntentByTxHash(SAMPLE_TX_HASH);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const err = result.error as SodaxError;
+      expect(err.context?.status).toBe(404);
+      expect(err.context?.api).toBe('backend');
     }
   });
 
@@ -210,7 +260,7 @@ describe('BackendApiService.getIntentByHash', () => {
 
     expect(result).toEqual({ ok: true, value: intentBody });
     expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/intent/${SAMPLE_INTENT_HASH}`,
+      `${DATA_API}/intent/${SAMPLE_INTENT_HASH}`,
       expect.objectContaining({ method: 'GET' }),
     );
   });
@@ -240,7 +290,7 @@ describe('BackendApiService.getOrderbook', () => {
     });
 
     expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/solver/orderbook?offset=0&limit=10`,
+      `${DATA_API}/solver/orderbook?offset=0&limit=10`,
       expect.objectContaining({ method: 'GET' }),
     );
   });
@@ -250,10 +300,7 @@ describe('BackendApiService.getOrderbook', () => {
 
     await sodax.backendApi.getOrderbook({ offset: '20', limit: '5' });
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/solver/orderbook?offset=20&limit=5`,
-      expect.any(Object),
-    );
+    expect(mockFetch).toHaveBeenCalledWith(`${DATA_API}/solver/orderbook?offset=20&limit=5`, expect.any(Object));
   });
 
   it('resolves to ok:false with HTTP_REQUEST_FAILED on a non-2xx response', async () => {
@@ -277,7 +324,7 @@ describe('BackendApiService.getUserIntents', () => {
     });
 
     expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/intent/user/${SAMPLE_USER_ADDRESS}`,
+      `${DATA_API}/intent/user/${SAMPLE_USER_ADDRESS}`,
       expect.objectContaining({ method: 'GET' }),
     );
   });
@@ -338,7 +385,7 @@ describe('BackendApiService.getMoneyMarketPosition', () => {
 
     expect(result).toEqual({ ok: true, value: position });
     expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/moneymarket/position/${SAMPLE_USER_ADDRESS}`,
+      `${DATA_API}/moneymarket/position/${SAMPLE_USER_ADDRESS}`,
       expect.objectContaining({ method: 'GET' }),
     );
   });
@@ -362,7 +409,7 @@ describe('BackendApiService.getAllMoneyMarketAssets', () => {
 
     expect(result).toEqual({ ok: true, value: assets });
     expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/moneymarket/asset/all`,
+      `${DATA_API}/moneymarket/asset/all`,
       expect.objectContaining({ method: 'GET' }),
     );
   });
@@ -377,7 +424,7 @@ describe('BackendApiService.getMoneyMarketAsset', () => {
 
     expect(result).toEqual({ ok: true, value: asset });
     expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/moneymarket/asset/${SAMPLE_RESERVE_ADDRESS}`,
+      `${DATA_API}/moneymarket/asset/${SAMPLE_RESERVE_ADDRESS}`,
       expect.objectContaining({ method: 'GET' }),
     );
   });
@@ -393,7 +440,7 @@ describe('BackendApiService.getMoneyMarketAssetBorrowers', () => {
     ).resolves.toEqual({ ok: true, value: borrowers });
 
     expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/moneymarket/asset/${SAMPLE_RESERVE_ADDRESS}/borrowers?offset=0&limit=10`,
+      `${DATA_API}/moneymarket/asset/${SAMPLE_RESERVE_ADDRESS}/borrowers?offset=0&limit=10`,
       expect.objectContaining({ method: 'GET' }),
     );
   });
@@ -417,7 +464,7 @@ describe('BackendApiService.getMoneyMarketAssetSuppliers', () => {
     ).resolves.toEqual({ ok: true, value: suppliers });
 
     expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/moneymarket/asset/${SAMPLE_RESERVE_ADDRESS}/suppliers?offset=0&limit=10`,
+      `${DATA_API}/moneymarket/asset/${SAMPLE_RESERVE_ADDRESS}/suppliers?offset=0&limit=10`,
       expect.objectContaining({ method: 'GET' }),
     );
   });
@@ -434,7 +481,7 @@ describe('BackendApiService.getAllMoneyMarketBorrowers', () => {
     });
 
     expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/moneymarket/borrowers?offset=0&limit=10`,
+      `${DATA_API}/moneymarket/borrowers?offset=0&limit=10`,
       expect.objectContaining({ method: 'GET' }),
     );
   });
@@ -444,10 +491,95 @@ describe('BackendApiService.getAllMoneyMarketBorrowers', () => {
 
     await sodax.backendApi.getAllMoneyMarketBorrowers({ offset: '20', limit: '5' });
 
+    expect(mockFetch).toHaveBeenCalledWith(`${DATA_API}/moneymarket/borrowers?offset=20&limit=5`, expect.any(Object));
+  });
+});
+
+// =========================================================================
+// Oracle endpoints — USD OHLC candle discovery and reads. The candles URL is
+// asserted in full because the backend rejects any extra query param with a 400,
+// so the query string this service builds is part of the contract.
+// =========================================================================
+
+describe('BackendApiService.getOracleMarkets', () => {
+  it('issues GET to /oracle/markets and wraps the JSON body in ok:true', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse(SAMPLE_ORACLE_MARKETS));
+
+    const result = await sodax.backendApi.getOracleMarkets();
+
+    expect(result).toEqual({ ok: true, value: SAMPLE_ORACLE_MARKETS });
+    expect(mockFetch).toHaveBeenCalledWith(`${DATA_API}/oracle/markets`, expect.objectContaining({ method: 'GET' }));
+  });
+
+  it('resolves to ok:false with HTTP_REQUEST_FAILED on a non-2xx response', async () => {
+    mockFetch.mockResolvedValueOnce(httpErrorResponse(500, 'boom'));
+
+    await expect(sodax.backendApi.getOracleMarkets()).resolves.toEqual({
+      ok: false,
+      error: expect.objectContaining({ message: 'HTTP_REQUEST_FAILED' }),
+    });
+  });
+});
+
+describe('BackendApiService.getOracleCandles', () => {
+  it('issues GET to /oracle/candles with exactly the four wire params, in order', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse(SAMPLE_ORACLE_CANDLES));
+
+    const result = await sodax.backendApi.getOracleCandles({
+      symbol: 'ETH',
+      interval: '1h',
+      from: 1782234000,
+      to: 1782241200,
+    });
+
+    expect(result).toEqual({ ok: true, value: SAMPLE_ORACLE_CANDLES });
     expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/moneymarket/borrowers?offset=20&limit=5`,
+      `${DATA_API}/oracle/candles?symbol=ETH&interval=1h&from=1782234000&to=1782241200`,
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
+  // `from: 0` also guards the serialization: a falsy-conditional append (the getUserIntents shape)
+  // would silently drop it. This valid historical range has no stored candles.
+  it('serializes numeric bounds verbatim, including a zero lower bound', async () => {
+    const body = { symbol: 'BTC', quote: 'USD', interval: '1d', candles: [] };
+    mockFetch.mockResolvedValueOnce(okResponse(body));
+
+    const result = await sodax.backendApi.getOracleCandles({ symbol: 'BTC', interval: '1d', from: 0, to: 86400 });
+
+    expect(result).toEqual({ ok: true, value: body });
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${DATA_API}/oracle/candles?symbol=BTC&interval=1d&from=0&to=86400`,
       expect.any(Object),
     );
+  });
+
+  it('returns ok:true with an empty candles array when the backend accepts an unknown symbol', async () => {
+    const body = { symbol: 'NOPE', quote: 'USD', interval: '1h', candles: [] };
+    mockFetch.mockResolvedValueOnce(okResponse(body));
+
+    await expect(
+      sodax.backendApi.getOracleCandles({ symbol: 'NOPE', interval: '1h', from: 0, to: 3600 }),
+    ).resolves.toEqual({ ok: true, value: body });
+  });
+
+  it('lifts a 400 (bad range / too many buckets) into error context', async () => {
+    mockFetch.mockResolvedValueOnce(httpErrorResponse(400, 'range too wide'));
+
+    const result = await sodax.backendApi.getOracleCandles({
+      symbol: 'ETH',
+      interval: '1m',
+      from: 0,
+      to: 100_000_000,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const err = result.error as SodaxError;
+      expect(err.message).toBe('HTTP_REQUEST_FAILED');
+      expect(err.context?.status).toBe(400);
+      expect(err.context?.api).toBe('backend');
+    }
   });
 });
 
@@ -460,7 +592,7 @@ describe('BackendApiService.getAllMoneyMarketBorrowers', () => {
 describe('BackendApiService config endpoints', () => {
   type ConfigCase = {
     name: string;
-    invoke: () => Promise<{ ok: boolean }>;
+    invoke: () => Promise<{ ok: true; value: unknown } | { ok: false; error: unknown }>;
     endpoint: string;
     // Schema-valid body for validated endpoints; an arbitrary object for the unvalidated
     // config/relay reads (getAllConfig / getRelayChainIdMap / getSpokeChainConfig).
@@ -531,10 +663,7 @@ describe('BackendApiService config endpoints', () => {
       const result = await invoke();
 
       expect(result).toEqual({ ok: true, value: body });
-      expect(mockFetch).toHaveBeenCalledWith(
-        `${DEFAULT_BASE_URL}${endpoint}`,
-        expect.objectContaining({ method: 'GET' }),
-      );
+      expect(mockFetch).toHaveBeenCalledWith(`${DATA_API}${endpoint}`, expect.objectContaining({ method: 'GET' }));
     });
 
     it(`${name}: returns ok:false with HTTP_REQUEST_FAILED on a non-2xx response`, async () => {
@@ -598,6 +727,79 @@ describe('BackendApiService response validation', () => {
     if (!result.ok) expect((result.error as SodaxError).context?.reason).toBe('invalid_response_shape');
   });
 
+  it('getOracleCandles rejects a candle whose OHLC prices are JSON numbers, not decimal strings', async () => {
+    mockFetch.mockResolvedValueOnce(
+      okResponse({
+        symbol: 'ETH',
+        quote: 'USD',
+        interval: '1h',
+        candles: [{ timestamp: 1782234000, open: 1665.57, high: 1666.22, low: 1663.01, close: 1665.02 }],
+      }),
+    );
+
+    const result = await sodax.backendApi.getOracleCandles({
+      symbol: 'ETH',
+      interval: '1h',
+      from: 1782234000,
+      to: 1782241200,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect((result.error as SodaxError).context?.reason).toBe('invalid_response_shape');
+  });
+
+  it('getOracleMarkets tolerates an unknown interval key (schema is not a picklist)', async () => {
+    const body = {
+      quote: 'USD',
+      intervals: [{ key: '4h', label: '4 hours', seconds: 14400 }],
+      symbols: ['ETH'],
+    };
+    mockFetch.mockResolvedValueOnce(okResponse(body));
+
+    await expect(sodax.backendApi.getOracleMarkets()).resolves.toEqual({ ok: true, value: body });
+  });
+
+  // `final` is advisory, so the schema tolerates `true` rather than blanking a whole chart over it;
+  // consumers branch on `final === false`, not on the field being present.
+  it('getOracleCandles accepts a candle marked final: true', async () => {
+    const body = {
+      symbol: 'ETH',
+      quote: 'USD',
+      interval: '1h',
+      candles: [
+        { timestamp: 1782234000, open: '1665.57', high: '1666.22', low: '1663.01', close: '1665.02', final: true },
+      ],
+    };
+    mockFetch.mockResolvedValueOnce(okResponse(body));
+
+    await expect(
+      sodax.backendApi.getOracleCandles({ symbol: 'ETH', interval: '1h', from: 1782234000, to: 1782241200 }),
+    ).resolves.toEqual({ ok: true, value: body });
+  });
+
+  it('getOracleCandles rejects an interval echo outside the declared union', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse({ symbol: 'ETH', quote: 'USD', interval: '4h', candles: [] }));
+
+    const result = await sodax.backendApi.getOracleCandles({
+      symbol: 'ETH',
+      interval: '1h',
+      from: 1782234000,
+      to: 1782241200,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect((result.error as SodaxError).context?.reason).toBe('invalid_response_shape');
+  });
+
+  it('getOracleMarkets rejects an intervals entry missing required fields', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse({ quote: 'USD', intervals: [{ key: '1h' }], symbols: ['ETH'] }));
+
+    const result = await sodax.backendApi.getOracleMarkets();
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect((result.error as SodaxError).context?.reason).toBe('invalid_response_shape');
+  });
+
   it('getAllConfig (unvalidated) returns ok:true for an arbitrary body — config reads are not schema-validated', async () => {
     const body = { version: 1, config: { anything: true } };
     mockFetch.mockResolvedValueOnce(okResponse(body));
@@ -631,11 +833,21 @@ describe('BackendApiService.request config threading', () => {
     await sodax.backendApi.getOrderbook({ offset: '0', limit: '5' });
 
     expect(mockFetch).toHaveBeenCalledWith(
-      `${DEFAULT_BASE_URL}/solver/orderbook?offset=0&limit=5`,
+      `${DATA_API}/solver/orderbook?offset=0&limit=5`,
       expect.objectContaining({
         headers: expect.objectContaining({ 'Content-Type': 'application/json', Accept: 'application/json' }),
       }),
     );
+  });
+
+  it('normalizes a legacy /be-suffixed per-call baseURL override instead of double-mounting', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse({ total: 0, data: [] }));
+
+    // The value the pre-change docs told consumers to pass. Appending the mount to it verbatim would
+    // request `/v1/be/be/solver/orderbook`, which the gateway does not route.
+    await sodax.backendApi.getOrderbook({ offset: '0', limit: '5' }, { baseURL: DATA_API });
+
+    expect(mockFetch).toHaveBeenCalledWith(`${DATA_API}/solver/orderbook?offset=0&limit=5`, expect.anything());
   });
 
   it('threads a per-call override into the request: baseURL replaced, custom header merged with the defaults', async () => {
@@ -646,8 +858,9 @@ describe('BackendApiService.request config threading', () => {
       { baseURL: 'https://custom.example.com', headers: { 'X-Request-Id': '12345' } },
     );
 
+    // The override replaces the gateway root; the service's own `/be` mount still applies.
     expect(mockFetch).toHaveBeenCalledWith(
-      'https://custom.example.com/solver/orderbook?offset=0&limit=5',
+      'https://custom.example.com/be/solver/orderbook?offset=0&limit=5',
       expect.objectContaining({
         headers: expect.objectContaining({
           'Content-Type': 'application/json',
@@ -677,7 +890,7 @@ describe('BackendApiService.request config threading', () => {
 describe('BackendApiService.setHeaders', () => {
   it('persists the supplied headers and merges them into subsequent requests', async () => {
     const isolatedConfig: ApiConfig = {
-      baseURL: DEFAULT_BASE_URL,
+      baseURL: ROOT,
       timeout: 30_000,
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     };
@@ -700,9 +913,27 @@ describe('BackendApiService.setHeaders', () => {
     );
   });
 
+  it('a repeated mixed-casing update sends the newest value, and fans it out to swaps + bridge', async () => {
+    // Updating an existing object key does NOT move it in insertion order, so a raw
+    // `headers[name] = value` would leave the older casing last and let it win the merge.
+    const isolatedService = new BackendApiService({ baseURL: ROOT, timeout: 30_000, headers: {} });
+    isolatedService.setHeaders({ 'x-api-key': 'v1' });
+    isolatedService.setHeaders({ 'X-Api-Key': 'v2' });
+    isolatedService.setHeaders({ 'x-api-key': 'v3' });
+
+    for (const call of [() => isolatedService.getIntentByTxHash('0x123'), () => isolatedService.bridge.getTokens()]) {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(okResponse({ ok: true }));
+      await call();
+      const headers = mockFetch.mock.calls[0]?.[1]?.headers as Record<string, string>;
+      expect(Object.keys(headers).filter(h => h.toLowerCase() === 'x-api-key')).toHaveLength(1);
+      expect(new Headers(headers).get('x-api-key')).toBe('v3');
+    }
+  });
+
   it('overwrites an existing header on subsequent setHeaders calls (last write wins)', async () => {
     const isolatedConfig: ApiConfig = {
-      baseURL: DEFAULT_BASE_URL,
+      baseURL: ROOT,
       timeout: 30_000,
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     };
@@ -721,7 +952,7 @@ describe('BackendApiService.setHeaders', () => {
 
   it('propagates the headers to the swaps sub-service (a token set here reaches swaps.* calls)', async () => {
     const isolatedConfig: ApiConfig = {
-      baseURL: DEFAULT_BASE_URL,
+      baseURL: ROOT,
       timeout: 30_000,
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     };
@@ -741,7 +972,7 @@ describe('BackendApiService.setHeaders', () => {
 describe('BackendApiService logger forwarding', () => {
   it('forwards the injected logger to the swaps sub-service (a swaps error path hits the same sink)', async () => {
     const spy: SodaxLogger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-    const isolatedService = new BackendApiService({ baseURL: DEFAULT_BASE_URL, timeout: 30_000, headers: {} }, spy);
+    const isolatedService = new BackendApiService({ baseURL: ROOT, timeout: 30_000, headers: {} }, spy);
     // A non-2xx on a swaps endpoint makes makeRequest call `logger.error(...)` before rethrowing.
     mockFetch.mockResolvedValueOnce(httpErrorResponse(502, 'Bad Gateway'));
 
@@ -756,9 +987,38 @@ describe('BackendApiService logger forwarding', () => {
   });
 });
 
+describe('BackendApiService legacy baseURL deprecation', () => {
+  const loggerSpy = (): SodaxLogger => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
+
+  it('warns once at construction, naming the trimmed gateway root', () => {
+    const spy = loggerSpy();
+    new BackendApiService({ baseURL: DATA_API, timeout: 30_000, headers: {} }, spy);
+    expect(spy.warn).toHaveBeenCalledTimes(1);
+    // `stringContaining(ROOT)` alone would also pass on the UNtrimmed message, since ROOT is a prefix
+    // of DATA_API — so assert the trimmed value is what the message reports.
+    const [message] = vi.mocked(spy.warn).mock.calls[0] as [string];
+    expect(message).toContain(`"${ROOT}"`);
+    expect(message).not.toContain(`"${DATA_API}"`);
+  });
+
+  it('does not warn when an explicit basePath says the base URL is already a root', () => {
+    const spy = loggerSpy();
+    new BackendApiService({ baseURL: DATA_API, basePath: '', timeout: 30_000, headers: {} }, spy);
+    expect(spy.warn).not.toHaveBeenCalled();
+  });
+
+  it('stays quiet for a gateway root', () => {
+    const spy = loggerSpy();
+    new BackendApiService({ baseURL: ROOT, timeout: 30_000, headers: {} }, spy);
+    expect(spy.warn).not.toHaveBeenCalled();
+  });
+});
+
 describe('BackendApiService.getBaseURL', () => {
-  it('returns the baseURL provided at construction time', () => {
-    expect(sodax.backendApi.getBaseURL()).toBe(DEFAULT_BASE_URL);
+  it('returns the gateway root, not the data API mount that requests are prefixed with', () => {
+    expect(sodax.backendApi.getBaseURL()).toBe(ROOT);
+    expect(sodax.backendApi.getBasePath()).toBe(BACKEND_API_BASE_PATH);
+    expect(`${sodax.backendApi.getBaseURL()}${sodax.backendApi.getBasePath()}`).toBe(DATA_API);
   });
 
   it('returns the overridden baseURL when an instance is constructed with a custom one', () => {
@@ -814,7 +1074,7 @@ describe('BackendApiService ApiConfig variants', () => {
     mockFetch.mockResolvedValueOnce(okResponse({ intentHash: '0x1' }));
     await service.getIntentByTxHash('0xabc');
     expect(mockFetch).toHaveBeenLastCalledWith(
-      'https://base.example/intent/tx/0xabc',
+      'https://base.example/be/intent/tx/0xabc',
       expect.objectContaining({ method: 'GET' }),
     );
 
@@ -857,7 +1117,213 @@ describe('BackendApiService ApiConfig variants', () => {
 
   it('via new Sodax({ api: { timeout } }): flat partial merge keeps the default baseURL for base and swaps', () => {
     const s = new Sodax({ api: { timeout: 12_345 } });
-    expect(s.backendApi.getBaseURL()).toBe(DEFAULT_BASE_URL);
-    expect(s.api.swaps.getBaseURL()).toBe(DEFAULT_BASE_URL);
+    expect(s.backendApi.getBaseURL()).toBe(ROOT);
+    expect(s.api.swaps.getBaseURL()).toBe(ROOT);
+  });
+});
+
+// =========================================================================
+// API key — one `new Sodax({ apiKey })` for every backend service.
+//
+// Asserted on the wire (the style of defaultApiUrls.test.ts) rather than on resolved config: what a
+// gateway authenticates is the header it receives, and sponsoring's inherited key is deliberately
+// NOT baked into any config — it is selected per request from the target URL.
+// =========================================================================
+
+/** The `x-api-key` actually sent, read through `Headers` so any casing counts. */
+const sentApiKey = (): string | null => new Headers(mockFetch.mock.calls.at(-1)?.[1]?.headers).get('x-api-key');
+
+const CUSTOM_SPONSORING: HttpUrl = 'https://sponsoring.mydapp.example';
+/** A whole-stack retarget: one root every service is pointed at, distinct from the packaged one. */
+const STAGING_ROOT: HttpUrl = 'https://staging-api.sodax.example/v1';
+
+type ApiCall = (config?: RequestOverrideConfig) => Promise<unknown>;
+
+describe('one key, every service', () => {
+  const keyed = new Sodax({ apiKey: 'instance-key', logger: silentLogger });
+  const services: Array<[label: string, call: ApiCall]> = [
+    ['data', config => keyed.backendApi.getAllConfig(config)],
+    ['swaps', config => keyed.api.swaps.getTokens(config)],
+    ['bridge', config => keyed.api.bridge.getTokens(config)],
+    ['sponsoring', config => keyed.api.sponsoring.getStellarSponsorConfig(config)],
+  ];
+
+  it.each(services)('sends the instance key on the %s wire', async (_label, call) => {
+    mockFetch.mockResolvedValueOnce(okResponse({}));
+    await call();
+    expect(sentApiKey()).toBe('instance-key');
+  });
+
+  it.each(services)('lets a per-request apiKey win on the %s wire', async (_label, call) => {
+    mockFetch.mockResolvedValueOnce(okResponse({}));
+    await call({ apiKey: 'call-key' });
+    expect(sentApiKey()).toBe('call-key');
+  });
+
+  it.each(services)('treats an empty per-request apiKey as unset on the %s wire', async (_label, call) => {
+    mockFetch.mockResolvedValueOnce(okResponse({}));
+    await call({ apiKey: '' });
+    expect(sentApiKey()).toBe('instance-key');
+  });
+
+  // `undefined` is exactly what runBackendSubmitTx passes when `extras` is omitted.
+  it.each(services)('treats an undefined per-request apiKey as unset on the %s wire', async (_label, call) => {
+    mockFetch.mockResolvedValueOnce(okResponse({}));
+    await call({ apiKey: undefined });
+    expect(sentApiKey()).toBe('instance-key');
+  });
+
+  it.each(services)('sends a mixed-case raw header as the ONLY key header on the %s wire', async (_label, call) => {
+    mockFetch.mockResolvedValueOnce(okResponse({}));
+    await call({ headers: { 'X-Api-Key': 'raw-key' } });
+    const headers = mockFetch.mock.calls.at(-1)?.[1]?.headers as Record<string, string>;
+    expect(Object.keys(headers).filter(h => h.toLowerCase() === 'x-api-key')).toHaveLength(1);
+    expect(new Headers(headers).get('x-api-key')).toBe('raw-key');
+  });
+
+  it.each(services)('sends a blank per-request x-api-key header verbatim on the %s wire', async (_label, call) => {
+    mockFetch.mockResolvedValueOnce(okResponse({}));
+    await call({ apiKey: 'call-key', headers: { 'x-api-key': '' } });
+    expect(sentApiKey()).toBe('');
+  });
+
+  it('lets an explicitly configured x-api-key header win over the instance key', async () => {
+    // Sponsoring is excluded on purpose: it never inherits the shared headers.
+    const configured = new Sodax({
+      apiKey: 'instance-key',
+      api: { headers: { 'x-api-key': 'configured-header' } },
+      logger: silentLogger,
+    });
+    for (const call of [
+      () => configured.backendApi.getAllConfig(),
+      () => configured.api.swaps.getTokens(),
+      () => configured.api.bridge.getTokens(),
+    ]) {
+      mockFetch.mockResolvedValueOnce(okResponse({}));
+      await call();
+      expect(sentApiKey()).toBe('configured-header');
+    }
+  });
+});
+
+describe('sponsoring inherits the instance key only for an allowed root', () => {
+  /**
+   * Issue one sponsoring request and report the `x-api-key` it carried. The target is asserted here
+   * so a "no key sent" expectation can never pass because the request went somewhere else — or nowhere.
+   */
+  const keySentTo = async (target: string, sodax: Sodax, config?: RequestOverrideConfig): Promise<string | null> => {
+    mockFetch.mockResolvedValueOnce(okResponse({}));
+    await sodax.api.sponsoring.getStellarSponsorConfig(config);
+    expect(mockFetch.mock.calls.at(-1)?.[0]).toBe(`${target}/sponsorships/stellar/config`);
+    return sentApiKey();
+  };
+
+  /** POST twin of `keySentTo`: one `createStellarSponsoredAccount` call, target asserted the same way. */
+  const keySentToAccounts = async (target: string, sodax: Sodax, config?: RequestOverrideConfig): Promise<string | null> => {
+    mockFetch.mockResolvedValueOnce(okResponse({ hash: '0xhash', alreadyActive: false }));
+    await sodax.api.sponsoring.createStellarSponsoredAccount({ data: 'AAAA' }, config);
+    expect(mockFetch.mock.calls.at(-1)?.[0]).toBe(`${target}/sponsorships/stellar/accounts`);
+    expect(mockFetch.mock.calls.at(-1)?.[1]?.method).toBe('POST');
+    return sentApiKey();
+  };
+
+  const sliceOrigins: Array<[label: string, baseURL: HttpUrl | undefined]> = [
+    ['the packaged default root', undefined],
+    ['a custom origin', CUSTOM_SPONSORING],
+  ];
+
+  it.each(sliceOrigins)('lets the sponsoring slice key win over the instance key at %s', async (_label, baseURL) => {
+    const sodax = new Sodax({
+      apiKey: 'instance-key',
+      api: { sponsoringApiConfig: { ...(baseURL ? { baseURL } : {}), apiKey: 'slice-key' } },
+      logger: silentLogger,
+    });
+    expect(await keySentTo(baseURL ?? DEFAULT_SPONSORING_API_ENDPOINT, sodax)).toBe('slice-key');
+  });
+
+  it('inherits when only the shared root moved and sponsoring stayed on the packaged default', async () => {
+    const sodax = new Sodax({ apiKey: 'instance-key', api: { baseURL: STAGING_ROOT }, logger: silentLogger });
+    // Sponsoring never inherits a base URL, so it is still the origin the key belongs to.
+    expect(await keySentTo(DEFAULT_SPONSORING_API_ENDPOINT, sodax)).toBe('instance-key');
+  });
+
+  it('inherits when the sponsoring slice points at the retargeted shared root', async () => {
+    const sodax = new Sodax({
+      apiKey: 'instance-key',
+      api: { baseURL: STAGING_ROOT, sponsoringApiConfig: { baseURL: STAGING_ROOT } },
+      logger: silentLogger,
+    });
+    expect(await keySentTo(STAGING_ROOT, sodax)).toBe('instance-key');
+  });
+
+  it('withholds the instance key from a custom sponsoring origin', async () => {
+    const sodax = new Sodax({
+      apiKey: 'instance-key',
+      api: { sponsoringApiConfig: { baseURL: CUSTOM_SPONSORING } },
+      logger: silentLogger,
+    });
+    expect(await keySentTo(CUSTOM_SPONSORING, sodax)).toBeNull();
+  });
+
+  // The gate is re-evaluated per request because a `RequestOverrideConfig.baseURL` retargets the call
+  // while keeping the service defaults — a baked-in key would ride along to the new origin.
+  it('withholds the instance key when a per-request baseURL leaves the allowed roots', async () => {
+    const sodax = new Sodax({ apiKey: 'instance-key', logger: silentLogger });
+    expect(await keySentTo(CUSTOM_SPONSORING, sodax, { baseURL: CUSTOM_SPONSORING })).toBeNull();
+  });
+
+  const explicitOverrides: Array<[label: string, override: RequestOverrideConfig]> = [
+    ['a per-request apiKey', { apiKey: 'call-key' }],
+    ['a raw per-request x-api-key header', { headers: { 'X-Api-Key': 'call-key' } }],
+  ];
+
+  it.each(explicitOverrides)('still sends %s to that same custom target', async (_label, override) => {
+    const sodax = new Sodax({ apiKey: 'instance-key', logger: silentLogger });
+    expect(await keySentTo(CUSTOM_SPONSORING, sodax, { baseURL: CUSTOM_SPONSORING, ...override })).toBe('call-key');
+  });
+
+  it('inherits again when a per-request baseURL points back at an allowed root', async () => {
+    const sodax = new Sodax({
+      apiKey: 'instance-key',
+      api: { baseURL: STAGING_ROOT, sponsoringApiConfig: { baseURL: CUSTOM_SPONSORING } },
+      logger: silentLogger,
+    });
+    expect(await keySentTo(CUSTOM_SPONSORING, sodax)).toBeNull();
+    expect(await keySentTo(STAGING_ROOT, sodax, { baseURL: STAGING_ROOT })).toBe('instance-key');
+  });
+
+  it('inherits when the configured sponsoring baseURL differs from an allowed root only by a trailing slash', async () => {
+    const sodax = new Sodax({
+      apiKey: 'instance-key',
+      api: { sponsoringApiConfig: { baseURL: `${DEFAULT_SPONSORING_API_ENDPOINT}/` } },
+      logger: silentLogger,
+    });
+    // The wire URL is built from the trimmed base, so the asserted target carries no slash.
+    expect(await keySentTo(DEFAULT_SPONSORING_API_ENDPOINT, sodax)).toBe('instance-key');
+  });
+
+  it('inherits when a per-request baseURL differs from an allowed root only by a trailing slash', async () => {
+    const sodax = new Sodax({ apiKey: 'instance-key', logger: silentLogger });
+    const config: RequestOverrideConfig = { baseURL: `${DEFAULT_SPONSORING_API_ENDPOINT}/` };
+    expect(await keySentTo(DEFAULT_SPONSORING_API_ENDPOINT, sodax, config)).toBe('instance-key');
+  });
+
+  it('sends the instance key on the account-creation POST at the packaged default root', async () => {
+    const sodax = new Sodax({ apiKey: 'instance-key', logger: silentLogger });
+    expect(await keySentToAccounts(DEFAULT_SPONSORING_API_ENDPOINT, sodax)).toBe('instance-key');
+  });
+
+  it('withholds the instance key from the account-creation POST at a custom sponsoring origin', async () => {
+    const sodax = new Sodax({
+      apiKey: 'instance-key',
+      api: { sponsoringApiConfig: { baseURL: CUSTOM_SPONSORING } },
+      logger: silentLogger,
+    });
+    expect(await keySentToAccounts(CUSTOM_SPONSORING, sodax)).toBeNull();
+  });
+
+  it('withholds the instance key when a per-request baseURL retargets the account-creation POST', async () => {
+    const sodax = new Sodax({ apiKey: 'instance-key', logger: silentLogger });
+    expect(await keySentToAccounts(CUSTOM_SPONSORING, sodax, { baseURL: CUSTOM_SPONSORING })).toBeNull();
   });
 });

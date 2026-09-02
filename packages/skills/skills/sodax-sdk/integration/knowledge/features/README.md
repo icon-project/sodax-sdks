@@ -14,8 +14,10 @@ One file per feature service. Each file documents the v2 API surface, common cal
 | [`partner.md`](partner.md) | `PartnerService` | Partner-fee handling: token approval, auto-swap preferences, fee-claim flows. |
 | [`recovery.md`](recovery.md) | `RecoveryService` | Withdraw stuck hub-wallet assets back to a spoke chain. |
 | [`backend-api.md`](backend-api.md) | `BackendApiService` | HTTP client for backend services: swap-tx submission, intent / orderbook lookups, money-market reads. |
-| [`swaps-api.md`](swaps-api.md) | `SwapsApiService` | Typed HTTP client for the backend Swaps API v2 (`sodax.api.swaps`): quote, deadline, allowance/approve, create-intent, intent lifecycle (submit/status/cancel/hash/packet/extra-data), limit orders, gas, fees, submit-tx + status. |
-| [`leverage-yield-api.md`](leverage-yield-api.md) | `LeverageYieldApiService` | Typed HTTP client for the backend Leverage Yield API v2 (`sodax.api.leverageYield`): vault registry, vault reads (asset/position/APR/effective-APR/LSD-APR/total-assets/previews/share-balance/max-withdraw), deposit & withdraw quote, allowance/approve, create-deposit/withdraw-intent, intent lifecycle, gas, fees, submit-tx + status. |
+| [`sponsoring.md`](sponsoring.md) | `SponsoringService` | Stellar account activation via sponsored reserves. The sponsor pays the base reserve; the user's wallet signs. |
+| [`swaps-api.md`](swaps-api.md) | `SwapsApiService` | Typed HTTP client for the backend Swaps API v2 (`sodax.api.swaps`, `/swaps/*`). Quote, create-intent, submit-tx + status, fees. |
+| [`bridge-api.md`](bridge-api.md) | `BridgeApiService` | Typed HTTP client for the backend Bridge API v2 (`sodax.api.bridge`, `/bridge/*`). Allowance/approve/create-intent, submit-tx + status, tokens. |
+| [`leverage-yield-api.md`](leverage-yield-api.md) | `LeverageYieldApiService` | Typed HTTP client for the backend Leverage Yield API v2 (`sodax.api.leverageYield`, `/leverage-yield/*`). Vault registry + reads, deposit/withdraw quote + intents, submit-tx + status, fees. |
 
 All feature services are constructed and wired by the `Sodax` facade. You don't instantiate them directly — access them via `sodax.swaps`, `sodax.moneyMarket`, etc. See [`../architecture.md`](../architecture.md) for the service graph.
 

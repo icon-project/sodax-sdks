@@ -1,19 +1,20 @@
 import React, { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { TokenIcon } from '@/components/shared/TokenIcon';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ChainSelector } from '@/components/shared/ChainSelector';
 import { Skeleton } from '@/components/ui/skeleton';
 
-import { getXChainType, useEvmSwitchChain, useWalletProvider, useXAccount, useXService } from '@sodax/wallet-sdk-react';
+import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
 import { formatUnits, parseUnits } from 'viem';
 import {
   useMMAllowance,
   useMMApprove,
   useSodaxContext,
   useSupply,
-  useXBalances,
+  useBalances,
   type SpokeChainKey,
   type XToken,
   type MoneyMarketSupplyParams,
@@ -63,16 +64,20 @@ export function SupplyModal({ open, onOpenChange, token, onSuccess, inlineSucces
   const [srcChainKey, setSrcChainKey] = useState<SpokeChainKey>(selectedChainId);
 
   const supportedSourceChains = getChainsWithThisToken(sodax, token);
-  const sourceToken = getTokenOnChain(sodax, token.symbol, srcChainKey) ?? token;
+  // Falls back to the originally-selected token so the rest of the form keeps rendering, but only
+  // `sourceTokenOnChain` may reach the balance read below — the SDK reads the chain named by
+  // `chainKey` and never consults `token.chainKey`, so a token from a different chain reads as
+  // `0n` with no error, i.e. a wrong balance rather than a caught mistake.
+  const sourceTokenOnChain = getTokenOnChain(sodax, token.symbol, srcChainKey);
+  const sourceToken = sourceTokenOnChain ?? token;
 
   const { address: srcAddress } = useXAccount({ xChainId: srcChainKey });
   const { address: dstAddress } = useXAccount({ xChainId: dstChainKey });
 
   const sourceWalletProvider = useWalletProvider({ xChainId: srcChainKey });
 
-  const xService = useXService({ xChainType: getXChainType(srcChainKey) });
-  const { data: sourceBalances, isLoading: isBalanceLoading } = useXBalances({
-    params: { xService, xChainId: srcChainKey, xTokens: [sourceToken], address: srcAddress },
+  const { data: sourceBalances, isLoading: isBalanceLoading } = useBalances({
+    params: { chainKey: srcChainKey, tokens: sourceTokenOnChain ? [sourceTokenOnChain] : [], address: srcAddress },
   });
 
   const { mutateAsync: supply, isPending, error, reset: resetSupply } = useSupply();
@@ -255,7 +260,10 @@ export function SupplyModal({ open, onOpenChange, token, onSuccess, inlineSucces
                 onChange={e => setAmount(e.target.value)}
                 disabled={isBusy}
               />
-              <span>{token.symbol}</span>
+              <span className="flex items-center gap-1">
+                <TokenIcon symbol={token.symbol} className="h-4 w-4" />
+                {token.symbol}
+              </span>
               <Button
                 type="button"
                 variant="outline"

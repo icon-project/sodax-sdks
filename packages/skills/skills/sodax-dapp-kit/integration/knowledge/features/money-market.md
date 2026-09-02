@@ -66,6 +66,11 @@ type UseATokensBalancesParams = ReadHookParams<Map<Address, bigint>, {
 
 > **Bitcoin `userAddress`**: always pass the **personal** address (the user's wallet address), not the Bound Exchange trading address. The read hooks (`useATokensBalances`, `useUserReservesData`, `useUserFormattedSummary`, `useGetUserHubWalletAddress`) automatically resolve to the trading-wallet-derived hub wallet when a Bound Exchange session is active — this is a local lookup with no network call and no throw on an unauthenticated session. See [`features/bitcoin.md`](bitcoin.md) for Bound Exchange session setup.
 
+`use*Approve` is unchanged and still resolves to one transaction hash, but the SDK may send **two**
+transactions on a token that rejects a non-zero to non-zero allowance change (Ethereum USDT today) —
+the user signs twice and the hash is the **last** one's. An `isPending`-driven "Approving…" should say
+so. See "Approve hooks can prompt the wallet twice" in [`architecture.md`](../architecture.md).
+
 ## Mutation params
 
 All four user mutations share the same TVars shape (only the `action` literal differs):
