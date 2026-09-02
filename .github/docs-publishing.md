@@ -11,11 +11,11 @@ commits, no force-push, no deletion, and no new bypass actor.
 ## Scope: the four marketing tabs
 
 The boundary is the docs.json tab, not the individual page, because nothing in the Mintlify
-editor marks a page as generated. Marketing owns 17 pages across four tabs:
+editor marks a page as generated. Marketing owns 18 pages across four tabs:
 
 | Tab | Paths |
 | --- | --- |
-| Home | `index`, `introduction`, `quickstart`, `ai-integration-guide`, `home/` |
+| Home | `index`, `introduction`, `quickstart`, `ai-integration-guide`, `builders-mcp`, `home/` |
 | Solutions | `swap/`, `money-market/`, `bridge/`, `yield/` |
 | Community | `resources/` |
 | Help | `contact`, `developers/faq` |

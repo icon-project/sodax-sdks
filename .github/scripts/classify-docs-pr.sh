@@ -12,7 +12,7 @@ RANGE="$BASE_REF...$HEAD_REF"
 # The Home, Solutions, Community and Help tabs — marketing's pages. An allowlist, so the
 # API, SDK, How To and Protocol tabs are out by default, as is anything new under docs/.
 # Root pages carry the extension they have on disk, so this is the same set CODEOWNERS names.
-MARKETING_PAGE='^docs/((index|quickstart|contact)\.mdx|(introduction|ai-integration-guide)\.md|developers/faq\.md|(home|swap|money-market|bridge|yield|resources)/.+\.(md|mdx))$'
+MARKETING_PAGE='^docs/((index|quickstart|contact|builders-mcp)\.mdx|(introduction|ai-integration-guide)\.md|developers/faq\.md|(home|swap|money-market|bridge|yield|resources)/.+\.(md|mdx))$'
 
 # A copy edit is a handful of pages; a diff this size is not what this path is for.
 MAX_FILES=200

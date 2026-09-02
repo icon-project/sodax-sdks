@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -39,6 +39,7 @@ const createRepo = t => {
   // Marketing tabs.
   write(root, 'docs/index.mdx', page('SODAX'));
   write(root, 'docs/introduction.md', page('Introduction'));
+  write(root, 'docs/builders-mcp.mdx', page('Builders MCP'));
   write(root, 'docs/swap/index.mdx', page('Swap'));
   write(root, 'docs/home/why-sodax.md', page('Why SODAX'));
   write(root, 'docs/resources/blog.md', page('Blog'));
@@ -88,6 +89,7 @@ test('true for an edited marketing page', t => {
 test('true across the marketing tabs, .md and .mdx', t => {
   const { root, base } = createRepo(t);
   write(root, 'docs/introduction.md', page('Introduction') + 'more\n');
+  write(root, 'docs/builders-mcp.mdx', page('Builders MCP') + 'more\n');
   write(root, 'docs/swap/index.mdx', page('Swap') + 'more\n');
   write(root, 'docs/home/why-sodax.md', page('Why SODAX') + 'more\n');
   write(root, 'docs/resources/blog.md', page('Blog') + 'more\n');
@@ -260,4 +262,44 @@ test('writes the verdict to GITHUB_OUTPUT', t => {
   });
 
   assert.match(readFileSync(outFile, { encoding: 'utf8' }), /marketing_only=true/);
+});
+
+// Against the real docs.json, because nothing else keeps the allowlist and the tabs in step:
+// a page added to a marketing tab would quietly stop auto-merging until someone noticed.
+test('the allowlist is exactly the marketing tabs in docs.json', () => {
+  const MARKETING_TABS = new Set(['Home', 'Solutions', 'Community', 'Help']);
+  const repo = fileURLToPath(new URL('..', import.meta.url));
+
+  const pattern = readFileSync(SCRIPT, 'utf8').match(/^MARKETING_PAGE='(.+)'$/m);
+  assert.ok(pattern, 'MARKETING_PAGE is not a single-quoted one-liner in the classifier');
+  const allowlisted = new RegExp(pattern[1]);
+
+  const slugs = (node, out = []) => {
+    if (typeof node === 'string') out.push(node);
+    else if (Array.isArray(node)) for (const item of node) slugs(item, out);
+    else if (node && typeof node === 'object')
+      for (const key of ['tabs', 'groups', 'pages', 'anchors']) if (node[key]) slugs(node[key], out);
+    return out;
+  };
+
+  const config = JSON.parse(readFileSync(join(repo, 'docs/docs.json'), 'utf8'));
+  for (const tab of config.navigation.tabs) {
+    const marketing = MARKETING_TABS.has(tab.tab);
+    for (const slug of slugs(tab)) {
+      const file = ['.mdx', '.md'].map(ext => `docs/${slug}${ext}`).find(f => existsSync(join(repo, f)));
+      assert.ok(file, `${slug} in the ${tab.tab} tab resolves to no file on disk`);
+      assert.equal(
+        allowlisted.test(file),
+        marketing,
+        marketing
+          ? `${file} is marketing's but MARKETING_PAGE does not allow it — add it there and in CODEOWNERS`
+          : `${file} is in the engineering ${tab.tab} tab but MARKETING_PAGE allows it`,
+      );
+
+      if (!marketing) continue;
+      const frontmatter = readFileSync(join(repo, file), 'utf8').match(/^---\r?\n([\s\S]*?)\r?\n---/);
+      assert.ok(frontmatter, `${file} has no frontmatter, which the classifier reads as generated`);
+      assert.doesNotMatch(frontmatter[1], /^generatedFrom:/m, `${file} is generated but sits in a marketing tab`);
+    }
+  }
 });
