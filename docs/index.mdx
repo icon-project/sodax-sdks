@@ -1,108 +1,293 @@
 ---
-title: "Use SODAX SDKs with your AI coding agent"
-description: "Install and configure @sodax/skills so your AI coding agent writes v2-correct SODAX SDK code."
+title: Liquidity and execution, across every network
+sidebarTitle: Home
+description: A liquidity and cross-network execution solution. Pick API or SDK, then install → quote → execute.
+icon: house
+"og:image": "/images/og/docs-home-card.png"
+"twitter:image": "/images/og/docs-home-card.png"
 ---
 
-SODAX ships agent-native documentation as [`@sodax/skills`](https://github.com/icon-project/sodax-sdks/tree/main/packages/skills) — four mode-gated skills (one per `@sodax/*` SDK package, each bundling `integration/knowledge/` for new v2 code and `migration-v1-to-v2/knowledge/` for v1→v2 porting). The goal is v2-correct code on the first try instead of stale training-data APIs.
+<div className="sodax-home-hero">
+  <p className="sodax-home-hero-kicker">SODAX Docs</p>
+  <p className="sodax-home-hero-sub">What can we help you build?</p>
+</div>
 
-LLM training data drifts; public docs at [docs.sodax.com](https://docs.sodax.com) are for humans. Agents only use what you install or attach. For what’s in the bundle (skills, knowledge layout, routing table), see [packages/skills/README.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/README.md).
+<p className="sodax-stat-line">
+  <span id="sodax-stat-networks">21+</span> networks · <span id="sodax-stat-assets">30+</span> lending assets · <span id="sodax-stat-tokens">137+</span> tokens · <span>8</span> audit reports
+</p>
 
-## Pick a setup
+{/* Newest two from resources/product-updates.mdx; art is the article image, resized to 1200px
+    wide into /images/news/. Cards land on the docs for what shipped, not the article. */}
 
-| You are… | Do this | Entry point |
-|---|---|---|
-| Using Claude Code, Cursor, Copilot, Codex, etc. with the [skills CLI](https://github.com/vercel-labs/skills) | `npx skills@latest add icon-project/sodax-sdks/packages/skills` | Auto-discovered — each `.<agent>/skills/sodax-<pkg>/SKILL.md` is loaded by the agent via its frontmatter `description`. No `AGENTS.md` lands in the install path; SKILL.md mode-gates internally (integration vs migration). |
-| Any project; npm from the registry | `pnpm add -D @sodax/skills` | `node_modules/@sodax/skills/AGENTS.md` |
-| Unreleased docs; app lives **inside** the sodax-sdks pnpm workspace | `pnpm add -D @sodax/skills@workspace:*` | `node_modules/@sodax/skills/AGENTS.md` |
-| Unreleased docs; sodax-sdks is a **sibling repo, submodule, or separate clone** | `pnpm add -D @sodax/skills@file:../sodax-sdks/packages/skills` (not `workspace:*`) | `node_modules/@sodax/skills/AGENTS.md` |
-| Sodax-sdks clone on disk, no install | Point your agent rules at the checkout | `/path/to/sodax-sdks/packages/skills/AGENTS.md` |
-| Web chat (ChatGPT, Claude.ai, etc.) | Attach files to the conversation | `AGENTS.md` + one relevant `skills/sodax-<pkg>/SKILL.md` |
+### Latest product updates
 
-**Canonical entry point:** [`AGENTS.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/AGENTS.md) — tool-neutral router (shipped on npm). [`CLAUDE.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/CLAUDE.md) in `packages/skills/` is optional and **git-only** (not in the npm package); use it when you maintain sodax-sdks or want maintainer layout context. You can also paste a one-line pointer into your own project `CLAUDE.md`.
+<CardGroup cols={2}>
+  <Card title="Leveraged staking vaults in Balanced widgets" img="/images/news/balanced-vault-widget.jpg" href="/yield" arrow>
+    Vault positions enter and exit as ordinary intent-based swaps.
+  </Card>
+  <Card title="Candlestick price data, direct to your app" img="/images/news/candlestick-price-data.jpg" href="/developers/http-api/oracle" arrow>
+    Fixed-interval USD candles over an unauthenticated `GET`.
+  </Card>
+</CardGroup>
 
-## Install
+[All product updates →](/resources/product-updates)
 
-### skills CLI (recommended for IDE agents)
+### Building with an AI agent?
 
-From your consumer repo root:
+Add the [Builders MCP](/builders-mcp) (`https://builders.sodax.com/mcp`) for live chains, tokens, quotes, and API + SDK docs while you integrate, and [`@sodax/skills`](/ai-integration-guide) so the code it writes is v2-correct.
 
-```bash
-npx skills@latest add icon-project/sodax-sdks/packages/skills
-```
+### How it works
 
-The CLI detects your tool and installs the four mode-gated skill directories into the conventional discovery path (e.g. `.claude/skills/sodax-<pkg>/`, `.cursor/skills/sodax-<pkg>/`). Each skill's `SKILL.md` carries trigger phrases for both integration and migration in its frontmatter `description` — the agent picks the right skill (and the SKILL.md body's mode gate picks the right subtree) automatically. **Note:** the CLI does **not** copy the package-level `AGENTS.md`; agents auto-discover skills via `SKILL.md` frontmatter. **Upgrade (CLI only):** when you bump `@sodax/*` SDK packages, re-run the same `npx skills@latest add …` command — the CLI refreshes from GitHub; it does not follow a `@sodax/skills` entry in `package.json`.
+SODAX is not a router you operate. **SODAX routes and settles.** Independent **solvers** on the marketplace **fill**. You submit an intent (the outcome you want) — not the hop-by-hop route.
 
-Useful flags:
+1. **Submit** — Quote and submit an intent. Declare the outcome, not the hop-by-hop route.
+2. **Fill** — Independent solvers fill across networks from coordinated liquidity.
+3. **Settle** — Poll until solved or failed — terminal states, not a silent partial fill.
 
-- `-a <agent>` — target a specific agent (e.g. `-a cursor`).
-- `-g, --global` — install into your user-global agent directory instead of the project.
+[Full execution model →](/home/how-execution-works)
 
-### npm from the registry
+***
 
-```bash
-pnpm add -D @sodax/skills
-# or: npm install --save-dev @sodax/skills
-```
+Pick a solution. Then choose the **HTTP API** or the **open-source SDK**.
 
-Published files: `skills/` (each skill ships its `integration/knowledge/` + `migration-v1-to-v2/knowledge/` subtrees inside), `AGENTS.md`, `.claude-plugin/`, `README.md` — not `CLAUDE.md`. Wire your agent to `node_modules/@sodax/skills/AGENTS.md` (see below). **Upgrade (npm / `file:` / `workspace:`):** `pnpm add -D @sodax/skills@<version>` to match your `@sodax/*` release (package is published on `@sodax/skills@*.*.*` git tags).
+<Tabs>
+  <Tab title="Swap">
+    <h3 className="text-lg font-bold mb-2">Cross-network swaps, filled by solvers</h3>
 
-### Local / monorepo
+    <p className="text-gray-500 mt-2 mb-5">
+      Quote and execute an intent across networks. Solvers fill it — you don't manage liquidity or routing.
+    </p>
 
-`@workspace:*` only resolves when your app is a package **in the same pnpm workspace** as `packages/skills` (i.e. your `package.json` is listed in sodax-sdks’s `pnpm-workspace.yaml`). If sodax-sdks is a sibling directory, git submodule, or second clone, use `@file:…` instead — `workspace:*` will fail with “not found in workspace”.
+    <CardGroup cols={2}>
+      <Card title="HTTP API" icon="server" href="/developers/http-api/swaps" horizontal arrow>
+        Quote, build intent, submit-tx, and status — any language.
+      </Card>
+      <Card title="Open-source SDK" icon="code" href="/developers/packages/foundation/sdk/functional-modules/swaps" horizontal arrow>
+        End-to-end `sodax.swaps` in TypeScript.
+      </Card>
+    </CardGroup>
 
-```bash
-# Your app is packages/my-dapp (or similar) inside the sodax-sdks repo
-pnpm add -D @sodax/skills@workspace:*
+    <CardGroup cols={2}>
+      <Card title="Solution hub" icon="compass" href="/swap" horizontal arrow>
+        All Swap docs in one place.
+      </Card>
+      <Card title="Make a swap (SDK)" icon="repeat" href="/developers/how-to/how_to_make_a_swap" horizontal arrow>
+        Walkthrough: init, quote, execute, errors.
+      </Card>
+    </CardGroup>
 
-# Your app is a separate repo; sodax-sdks checkout is next to it (adjust path)
-pnpm add -D @sodax/skills@file:../sodax-sdks/packages/skills
-```
+    <CodeGroup>
+      ```bash curl
+      curl -s -X POST 'https://api.sodax.com/v1/swaps/quote' \
+        -H 'content-type: application/json' \
+        -d '{
+          "tokenSrc": "0x…",
+          "tokenSrcChainKey": "sonic",
+          "tokenDst": "0x…",
+          "tokenDstChainKey": "0x2105.base",
+          "amount": "1000000",
+          "quoteType": "exact_input"
+        }'
+      ```
 
-Then use `node_modules/@sodax/skills/AGENTS.md` like the registry install.
+      ```typescript sdk.ts
+      import { Sodax, ChainKeys } from '@sodax/sdk';
 
-### Path-only (no package install)
+      const sodax = new Sodax();
+      const deadlineResult = await sodax.swaps.getSwapDeadline(300n);
+      if (!deadlineResult.ok) throw deadlineResult.error;
 
-If you keep a sodax-sdks clone next to your app, reference `packages/skills/AGENTS.md` in rules or `@`-mentions. Prefer the skills CLI when your agent supports it so skills land in the native directory.
+      const result = await sodax.swaps.swap({
+        params: {
+          inputToken: '0x2170...f9338',
+          outputToken: '0x2f2a...fC5B0f',
+          inputAmount: 1_000_000_000_000_000n,
+          minOutputAmount: 900_000n,
+          deadline: deadlineResult.value,
+          allowPartialFill: false,
+          srcChainKey: ChainKeys.BSC_MAINNET,
+          dstChainKey: ChainKeys.ARBITRUM_MAINNET,
+          srcAddress: await evmWalletProvider.getWalletAddress(),
+          dstAddress: '0x...',
+          data: '0x',
+        },
+        walletProvider: evmWalletProvider,
+      });
 
-## Wire your agent
+      if (result.ok) console.log('Swap submitted', result.value);
+      ```
+    </CodeGroup>
+  </Tab>
 
-**If you used the skills CLI**, no manual wiring is required: each agent reads `SKILL.md` files from its skills directory and routes via the frontmatter `description` automatically. Skip to *Prompt naturally*.
+  <Tab title="Lend & Borrow">
+    <h3 className="text-lg font-bold mb-2">One money market, every network</h3>
 
-**For npm, `file:`, `workspace:`, or path-only installs**, paste this into project rules (adapt `<ENTRY_POINT>` to your install path):
+    <p className="text-gray-500 mt-2 mb-5">
+      Supply collateral from any spoke network, borrow against it. The money market lives on the Sonic hub.
+    </p>
 
-```markdown
-Before writing or changing Sodax (@sodax/*) code, read and follow:
-`<ENTRY_POINT>/AGENTS.md`
-Load only the skills it routes you to; each SKILL.md mode-gates internally
-(integration for new v2 code, migration for v1 → v2 porting).
-```
+    <CardGroup cols={2}>
+      <Card title="Open-source SDK" icon="code" href="/developers/packages/foundation/sdk/functional-modules/money_market" horizontal arrow>
+        Supply, borrow, withdraw, repay, and reserve data.
+      </Card>
+      <Card title="HTTP API" icon="server" href="/developers/http-api" horizontal arrow>
+        Reserve/position reads exist. No write API yet — use the SDK to supply and borrow.
+      </Card>
+    </CardGroup>
 
-| Tool | How |
-|---|---|
-| **Claude Code** | Prefer the skills CLI (skills auto-discovered from `.claude/skills/`). For npm install, add the block above to project `CLAUDE.md` with `node_modules/@sodax/skills/AGENTS.md`. |
-| **Cursor** | Prefer `npx skills@latest add ... -a cursor` (skills auto-discovered from `.cursor/skills/`). For npm install, add `.cursor/rules` with the same pointer. |
-| **Codex / Copilot** | Prefer the skills CLI. For npm install, use a rules file or repo `AGENTS.md` symlink/copy pointing at the installed bundle. |
-| **Web UIs** | Attach `AGENTS.md`; add one `SKILL.md` if the task is narrow (e.g. swap only). |
+    <Card title="Solution hub" icon="compass" href="/money-market" horizontal arrow>
+      All Money Market docs in one place.
+    </Card>
 
-For non-CLI installs, your agent must read **`AGENTS.md` from your install path** (e.g. `node_modules/@sodax/skills/AGENTS.md`) — not the live `main` branch on GitHub. That file routes by intent; each skill links into its own `integration/knowledge/` or `migration-v1-to-v2/knowledge/` subtree as needed. Don't read knowledge top-to-bottom. **Web chat with no install:** attach `AGENTS.md` (and any needed `SKILL.md` files) from your checkout or a Git ref that matches your SDK version. **Browse only:** [router source on GitHub (`main`)](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/AGENTS.md).
+    <CodeGroup>
+      ```typescript supply.ts
+      import { Sodax, ChainKeys } from '@sodax/sdk';
 
-## Prompt naturally
+      const sodax = new Sodax();
 
-Once wired, describe the task in plain language.
+      const result = await sodax.moneyMarket.supply({
+        params: {
+          srcChainKey: ChainKeys.BSC_MAINNET,
+          srcAddress: '0x...',
+          token: '0x...',
+          amount: 1000n,
+          action: 'supply',
+        },
+        walletProvider: evmWalletProvider,
+      });
 
-> "Swap 100 USDC on Ethereum for SOL on Solana using `@sodax/sdk`."
+      if (result.ok) console.log('Supplied', result.value);
+      ```
+    </CodeGroup>
+  </Tab>
 
-For v1 → v2 ports, say something like “migrate my project to SODAX v2” — each skill auto-gates into its **migration mode** when it sees v1 fingerprints (`useSpokeProvider`, `*_MAINNET_CHAIN_ID`, `useXWagmiStore`, etc.), and `AGENTS.md` (or frontmatter discovery, on CLI installs) handles skill selection.
+  <Tab title="Bridge">
+    <h3 className="text-lg font-bold mb-2">Move assets, network to network</h3>
 
-## Tips
+    <p className="text-gray-500 mt-2 mb-5">
+      Hub-and-spoke transfer primitives when you need asset movement without swap logic.
+    </p>
 
-- **Keep agent docs in sync when you upgrade `@sodax/*`** — docs should match the SDKs you ship. **skills CLI:** re-run `npx skills@latest add icon-project/sodax-sdks/packages/skills`. **npm / local package install:** bump `@sodax/skills` (e.g. `pnpm add -D @sodax/skills@1.2.3`). Using both CLI and npm is optional; if you use only the CLI, you do not need `@sodax/skills` in `package.json`.
-- **Start from `AGENTS.md`** (or, on CLI installs, let the agent pick a skill via its frontmatter) — not random files under `integration/knowledge/` or `migration-v1-to-v2/knowledge/`.
-- **Don’t add `@sodax/types` as a separate dependency** — types are re-exported from `@sodax/sdk`.
+    <CardGroup cols={2}>
+      <Card title="Open-source SDK" icon="code" href="/developers/packages/foundation/sdk/functional-modules/bridge" horizontal arrow>
+        Spoke → hub, hub → spoke, and spoke → spoke.
+      </Card>
+      <Card title="HTTP API" icon="server" href="/developers/http-api" horizontal arrow>
+        No Bridge write API yet. Live HTTP surfaces: Swaps, Yield, Oracle, and Stats.
+      </Card>
+    </CardGroup>
 
-## Further reading and feedback
+    <Card title="Solution hub" icon="compass" href="/bridge" horizontal arrow>
+      All Bridge docs in one place.
+    </Card>
 
-- Bundle overview: [packages/skills/README.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/README.md)
-- Router (agents): [packages/skills/AGENTS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/AGENTS.md)
+    <CodeGroup>
+      ```typescript bridge.ts
+      import { Sodax, ChainKeys } from '@sodax/sdk';
 
-Wrong output despite the skills? That’s a doc bug — [open an issue](https://github.com/icon-project/sodax-sdks/issues) with the prompt and what the agent generated.
+      const sodax = new Sodax();
+
+      const result = await sodax.bridge.bridge({
+        params: {
+          srcChainKey: ChainKeys.BASE_MAINNET,
+          srcAddress: '0xYourAddress...',
+          srcToken: '0x1234...cdef',
+          amount: 1_000_000_000_000_000_000n,
+          dstChainKey: ChainKeys.POLYGON_MAINNET,
+          dstToken: '0xabcd...567890',
+          recipient: '0x9876...dcba',
+        },
+        walletProvider: evmWalletProvider,
+      });
+
+      if (result.ok) console.log('Bridged', result.value);
+      ```
+    </CodeGroup>
+  </Tab>
+
+  <Tab title="Yield">
+    <h3 className="text-lg font-bold mb-2">Leveraged yield vaults, one swap away</h3>
+
+    <p className="text-gray-500 mt-2 mb-5">
+      Enter and exit vault positions as ordinary intent-based swaps — no vault-specific approvals.
+    </p>
+
+    <CardGroup cols={2}>
+      <Card title="HTTP API" icon="server" href="/developers/http-api/leverage" horizontal arrow>
+        Vault deposit / withdraw over HTTP.
+      </Card>
+      <Card title="Open-source SDK" icon="code" href="/developers/packages/foundation/sdk/functional-modules/leverage_yield" horizontal arrow>
+        Deposit, withdraw, APR, and position data.
+      </Card>
+    </CardGroup>
+
+    <Card title="Solution hub" icon="compass" href="/yield" horizontal arrow>
+      All Yield docs in one place.
+    </Card>
+
+    <CodeGroup>
+      ```typescript deposit.ts
+      import { ChainKeys } from '@sodax/sdk';
+
+      const vault = sodax.leverageYield.getVault('lsodaWEETH');
+
+      const intentResult = await sodax.leverageYield.deposit({
+        vault: vault.vault,
+        srcChainKey: ChainKeys.ARBITRUM_MAINNET,
+        srcAddress: '0xYourArbitrumEOA...',
+        inputToken: '0x...weETHonArbitrum',
+        inputAmount: 1_000_000_000_000_000_000n,
+        minOutputAmount: 900_000_000_000_000_000n,
+      });
+
+      if (intentResult.ok) {
+        const swapResult = await sodax.leverageYield.vaultSwap({
+          ...intentResult.value,
+          walletProvider: evmWalletProvider,
+        });
+      }
+      ```
+    </CodeGroup>
+  </Tab>
+</Tabs>
+
+***
+
+<Note>
+**Building a React frontend?** [`@sodax/dapp-kit`](/developers/packages/experience/dapp-kit) wraps swap, bridge, money market, staking, and migration in hooks, with wallet connection included.
+</Note>
+
+### Audits
+
+Eight published reports covering contracts across Sui, Solana, Soroban (Stellar), Near, Stacks, the Relay, and collaborative reviews (including a Sherlock collaborative on the LST / leverage-yield vault).
+
+<Card title="Audit reports" icon="shield-halved" href="/developers/audits" horizontal arrow>
+  Named reports and PDF downloads.
+</Card>
+
+***
+
+### What you get
+
+* **One surface, every network.** Integrate once via API or SDK.
+* **Execution that settles.** Swaps, borrows, and deposits complete under real cross-network conditions.
+* **Your app stays yours.** You own UX, pricing, and risk — SODAX is infrastructure underneath.
+
+***
+
+### Go deeper
+
+<CardGroup cols={2}>
+  <Card title="Your first swap" icon="bolt" href="/quickstart">
+    Install → quote → execute on mainnet.
+  </Card>
+  <Card title="Get started" icon="signs-post" href="/introduction">
+    Solana, Bitcoin, SDK, API, AI agents, or talk to the team.
+  </Card>
+  <Card title="AI coding agents" icon="robot" href="/ai-integration-guide">
+    Wire `@sodax/skills` into Cursor, Claude Code, or Copilot.
+  </Card>
+  <Card title="Why build with SODAX" icon="chart-line" href="/home/why-sodax">
+    Proof points and ecosystem reach.
+  </Card>
+</CardGroup>

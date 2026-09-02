@@ -10,14 +10,14 @@ import {
   useGetBridgeableTokens,
   useGetBridgeableAmount,
   useSodaxContext,
-  useXBalances,
+  useBalances,
   loadRadfiSession,
   ChainKeys,
   type SpokeChainKey,
   type XToken,
   type CreateBridgeIntentParams,
 } from '@sodax/dapp-kit';
-import { useWalletProvider, useXAccount, useXDisconnect, useXService, getXChainType } from '@sodax/wallet-sdk-react';
+import { useWalletProvider, useXAccount, useXDisconnect, getXChainType } from '@sodax/wallet-sdk-react';
 import { ArrowDownUp } from 'lucide-react';
 import { formatUnits, parseUnits } from 'viem';
 import { useAppStore } from '@/zustand/useAppStore';
@@ -56,23 +56,19 @@ export function BridgeManager() {
   const walletProvider = useWalletProvider({ xChainId: fromChainKey });
   const fromChainType = getXChainType(fromChainKey);
 
-  const fromXService = useXService({ xChainType: getXChainType(fromChainKey) });
-  const { data: fromBalances } = useXBalances({
+  const { data: fromBalances } = useBalances({
     params: {
-      xService: fromXService,
-      xChainId: fromChainKey,
-      xTokens: fromToken ? [fromToken] : [],
+      chainKey: fromChainKey,
+      tokens: fromToken ? [fromToken] : [],
       address: fromAccount.address,
     },
   });
   const fromBalance = fromBalances?.[fromToken?.address ?? ''] ?? 0n;
 
-  const toXService = useXService({ xChainType: getXChainType(toChainKey) });
-  const { data: toBalances } = useXBalances({
+  const { data: toBalances } = useBalances({
     params: {
-      xService: toXService,
-      xChainId: toChainKey,
-      xTokens: toToken ? [toToken] : [],
+      chainKey: toChainKey,
+      tokens: toToken ? [toToken] : [],
       address: toAccount.address,
     },
   });

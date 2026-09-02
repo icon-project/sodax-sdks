@@ -32,6 +32,7 @@ const navEntries: NavEntry[] = [
   { to: ROUTES.STAKING, label: 'Staking' },
   { to: ROUTES.DEX, label: 'Dex' },
   { to: ROUTES.LEVERAGE_YIELD, label: 'Leverage Yield' },
+  { to: ROUTES.ORACLE, label: 'Oracle' },
   {
     label: 'More',
     items: [

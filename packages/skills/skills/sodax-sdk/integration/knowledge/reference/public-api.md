@@ -193,6 +193,13 @@ import {
   type SwapResponse,
   type CreateIntentResult,
   type TxHashPair,
+  type OracleCandleInterval,     // '1m' | '5m' | '1h' | '1d'
+  ORACLE_CANDLE_INTERVALS,       // runtime array of the served intervals
+  isOracleCandleInterval,        // narrows a markets `key` (string) to OracleCandleInterval
+  type OracleMarketInterval,     // `key` is `string`: discovery tolerates an interval this version doesn't know
+  type OracleMarketsResponse,
+  type OracleCandle,             // OHLC prices are USD decimal strings; timestamp is UNIX seconds
+  type OracleCandlesResponse,
 } from '@sodax/sdk';
 ```
 

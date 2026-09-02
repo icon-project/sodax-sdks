@@ -183,7 +183,7 @@ describe('RadfiProvider — empty-credential guard (resolveAuth)', () => {
     const result = await radfi.createWithdrawTransaction(withdrawParams, '');
     expect(result).toEqual({ base64Psbt: 'x', txId: 't' });
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer server-api-key');
   });
 });
@@ -211,7 +211,7 @@ describe('RadfiProvider — signer hook (x-api-signature, gh-831)', () => {
     await radfi.createWithdrawTransaction(withdrawParams, 'user-access-token');
 
     expect(signer).toHaveBeenCalledWith({ method: 'POST', path: '/sodax/transaction' });
-    const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
+    const headers = (fetchMock.mock.calls[0]?.[1] as RequestInit).headers as Record<string, string>;
     expect(headers['x-api-signature']).toBe('sig_abc_1719396000000');
     // the per-user token and the backend signature ride as separate headers on the same request
     expect(headers.Authorization).toBe('Bearer user-access-token');
@@ -226,7 +226,7 @@ describe('RadfiProvider — signer hook (x-api-signature, gh-831)', () => {
     await radfi.getTradingWallet('bc1puser');
 
     expect(signer).toHaveBeenCalledWith({ method: 'GET', path: '/wallets/details/bc1puser' });
-    const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
+    const headers = (fetchMock.mock.calls[0]?.[1] as RequestInit).headers as Record<string, string>;
     expect(headers['x-api-signature']).toBe('sig_get');
   });
 
@@ -237,7 +237,7 @@ describe('RadfiProvider — signer hook (x-api-signature, gh-831)', () => {
 
     await radfi.createWithdrawTransaction(withdrawParams, 'tok');
 
-    const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
+    const headers = (fetchMock.mock.calls[0]?.[1] as RequestInit).headers as Record<string, string>;
     expect(headers['x-api-signature']).toBe('sig_async');
   });
 
@@ -247,7 +247,7 @@ describe('RadfiProvider — signer hook (x-api-signature, gh-831)', () => {
 
     await radfi.createWithdrawTransaction(withdrawParams, 'tok');
 
-    const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
+    const headers = (fetchMock.mock.calls[0]?.[1] as RequestInit).headers as Record<string, string>;
     expect(headers['x-api-signature']).toBeUndefined();
   });
 
@@ -266,7 +266,7 @@ describe('RadfiProvider — signer hook (x-api-signature, gh-831)', () => {
 
     expect(signer).toHaveBeenCalledTimes(2);
     const headerOf = (i: number) =>
-      ((fetchMock.mock.calls[i][1] as RequestInit).headers as Record<string, string>)['x-api-signature'];
+      ((fetchMock.mock.calls[i]?.[1] as RequestInit).headers as Record<string, string>)['x-api-signature'];
     expect(headerOf(0)).toBe('sig_1');
     expect(headerOf(1)).toBe('sig_2');
   });
@@ -294,7 +294,7 @@ describe('RadfiProvider — signer hook (x-api-signature, gh-831)', () => {
 
     await radfi.createWithdrawTransaction(withdrawParams, 'user-access-token');
 
-    const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
+    const headers = (fetchMock.mock.calls[0]?.[1] as RequestInit).headers as Record<string, string>;
     expect(headers.Authorization).toBe('Bearer signer-wins');
     expect(headers['Content-Type']).toBe('application/json');
   });

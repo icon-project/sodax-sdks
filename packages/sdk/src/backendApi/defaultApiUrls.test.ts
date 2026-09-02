@@ -40,6 +40,11 @@ describe('packaged API URL defaults', () => {
     expect(requestedUrl()).toBe('https://api.sodax.com/v1/be/config/all');
   });
 
+  it('oracle reads mount under /be', async () => {
+    await sodax.backendApi.getOracleMarkets();
+    expect(requestedUrl()).toBe('https://api.sodax.com/v1/be/oracle/markets');
+  });
+
   // The reported defect: this posted to `/v1/be/swaps/submit-tx`, which the gateway does not route.
   it('swaps API is a sibling of /be, not a child of it', async () => {
     await sodax.api.swaps.getTokens();
@@ -173,8 +178,8 @@ describe('a bare-origin baseURL on the packaged host', () => {
   });
 
   it.each([
-    ['swapsApiConfig', { swapsApiConfig: { baseURL: 'https://api.sodax.com' } }],
-    ['sponsoringApiConfig', { sponsoringApiConfig: { baseURL: 'https://api.sodax.com' } }],
+    ['swapsApiConfig', { swapsApiConfig: { baseURL: 'https://api.sodax.com' } } as const],
+    ['sponsoringApiConfig', { sponsoringApiConfig: { baseURL: 'https://api.sodax.com' } } as const],
   ])('is reported when the short root arrives through the %s slice', (slice, api) => {
     // Finding 2 from the PR review: the old check layered only the flat fields and `baseApiConfig`, so a
     // root reaching its service through its own slice resolved one segment short with no warning.

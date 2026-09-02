@@ -89,7 +89,7 @@ Reference implementation: `apps/wallet-modal-example`.
 
 ## Docs Links
 
-`README.md` is mirrored into GitBook (docs.sodax.com), which does not receive this package's `docs/` tree. Links from `README.md` into `docs/**` (and any other in-repo path) must be absolute `https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/…` URLs; relative ones 404 on the published page. Links between the `docs/**` guides themselves stay relative — those files are not mirrored. Gate: `pnpm check:doc-links`.
+`README.md` is generated into the docs.sodax.com Mintlify site, which does not receive this package's `docs/` tree. Links from `README.md` into `docs/**` (and any other in-repo path) must be absolute `https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/…` URLs; relative ones 404 on the published page. Links between the `docs/**` guides themselves stay relative — those files are not published. Gate: `pnpm check:doc-links`.
 
 ## Build And Tests
 
@@ -101,3 +101,9 @@ pnpm checkTs
 ```
 
 The package builds ESM with declaration output and subpath entries for chain implementations. Preserve `instanceof` behavior across barrel/deep import paths.
+
+`checkTs` typechecks test files too (`.test.ts` and `.test.tsx`): `tsconfig.json` deliberately does
+not exclude them, and the shared `scripts/check-tests-typechecked.mjs` (repo root, the tail of
+`checkTs`) fails loudly if a future exclude hides them again. It also requires a one-line
+why-comment on every `as unknown as` in a test file, with pre-existing undocumented casts
+grandfathered in this package's `scripts/test-cast-comment-baseline.json`, which may only shrink.

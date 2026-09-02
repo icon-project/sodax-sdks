@@ -27,7 +27,7 @@ import {
   useSodaxContext,
   loadRadfiSession,
   useTradingWalletBalance,
-  useXBalances,
+  useBalances,
   useNearStorageGate,
   getSupportedSolverTokens,
   getStagingSolverTokens,
@@ -45,7 +45,6 @@ import {
   useXAccount,
   useXDisconnect,
   useWalletProvider,
-  useXService,
 } from '@sodax/wallet-sdk-react';
 import type { Order } from '@/components/swaps/OrderStatus';
 import { DEFAULT_SELECTED_CHAIN, SolverEnv, useAppStore } from '@/zustand/useAppStore';
@@ -159,24 +158,20 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   };
 
   // Balance fetching- Fetch source token balance for the connected wallet
-  const sourceXService = useXService({ xChainType: getXChainType(src.chain) });
-  const { data: sourceBalances } = useXBalances({
+  const { data: sourceBalances } = useBalances({
     params: {
-      xService: sourceXService,
-      xChainId: src.chain,
-      xTokens: src.token ? [src.token] : [],
+      chainKey: src.chain,
+      tokens: src.token ? [src.token] : [],
       address: sourceAccount.address,
     },
   });
   const sourceTokenBalance = sourceBalances?.[src.token?.address ?? ''] ?? 0n;
 
   // Fetch destination token balance for the connected wallet
-  const destXService = useXService({ xChainType: getXChainType(dst.chain) });
-  const { data: destBalances } = useXBalances({
+  const { data: destBalances } = useBalances({
     params: {
-      xService: destXService,
-      xChainId: dst.chain,
-      xTokens: dst.token ? [dst.token] : [],
+      chainKey: dst.chain,
+      tokens: dst.token ? [dst.token] : [],
       address: destAccount.address,
     },
   });
