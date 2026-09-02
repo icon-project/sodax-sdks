@@ -38,3 +38,8 @@ How the Sonic hub coordinates spoke networks: asset movement, unified tokens, de
     Cross-network message send, verify, and deliver.
   </Card>
 </CardGroup>
+
+### Two terms used throughout
+
+* **Connection** — verifies incoming messages and acts as a gateway for a network to send messages to any other connected network. See [Generalized Messaging Protocol](/developers/technical-overview/generalized-messaging-protocol).
+* **Relayer** — verifies and delivers messages across networks, confirming events and providing the necessary signatures. See [Relayer API endpoints](/developers/deployments/relayer-api-endpoints).

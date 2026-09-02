@@ -12,7 +12,7 @@ Use this section when integrating over raw HTTP (any language). Prefer a [soluti
     Quote, build intents, submit-tx, status. Product overview: [Swap hub](/swap).
   </Card>
   <Card title="Leverage yield API" icon="money-bill-trend-up" href="/developers/http-api/leverage">
-    Vault deposit / withdraw (Preview). Product overview: [Yield hub](/yield).
+    Vault deposit / withdraw. Product overview: [Yield hub](/yield).
   </Card>
   <Card title="Oracle" icon="chart-line" href="/developers/http-api/oracle">
     USD OHLC candles for charts, plus live solver mark prices.
@@ -21,6 +21,12 @@ Use this section when integrating over raw HTTP (any language). Prefer a [soluti
     Networks, partners, assets, filled-intent volume, and SODA supply.
   </Card>
 </CardGroup>
+
+<Note>
+  **Exploring these routes with an AI agent?** The [Builders MCP](/builders-mcp)
+  (`https://builders.sodax.com/mcp`) wraps the read surfaces below as tools, so the agent works from
+  today's chains, tokens, quotes and rates instead of its training data.
+</Note>
 
 ## Base URLs
 
@@ -84,7 +90,7 @@ Partner monetization uses a per-request `partnerFee` object on quote/create-inte
 | Show live hub token prices | [Solver oracle](/developers/http-api/oracle#solver-oracle-live-prices) |
 | Show “networks / partners / volume / supply” on a site | [Stats](/developers/http-api/stats) |
 | Run swaps from a bot or non-TS stack | [Swaps API](/developers/http-api/swaps) |
-| Deposit into leverage vaults over HTTP | [Leverage yield](/developers/http-api/leverage) (Preview) |
+| Deposit into leverage vaults over HTTP | [Leverage yield](/developers/http-api/leverage) |
 | Activate a new Stellar account | [Stellar sponsoring](/developers/how-to/stellar-sponsoring-getting-started) (`/v1/sponsorships/*`, API key) |
 | Full wallet + multi-chain UX in React | [`@sodax/sdk`](/developers/packages/foundation/sdk) + [`@sodax/dapp-kit`](/developers/packages/experience/dapp-kit) |
 

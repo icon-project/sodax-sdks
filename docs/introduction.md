@@ -8,7 +8,7 @@ icon: signs-post
 
 Pick a solution first. Inside each hub you’ll choose the **HTTP API** or the **open-source SDK**.
 
-<Card title="5-minute swap" icon="bolt" href="/quickstart" horizontal arrow>
+<Card title="Your first swap" icon="bolt" href="/quickstart" horizontal arrow>
   Install → quote → execute on mainnet, then poll until it settles.
 </Card>
 
@@ -23,7 +23,7 @@ Pick a solution first. Inside each hub you’ll choose the **HTTP API** or the *
     Move assets hub-and-spoke — SDK today.
   </Card>
   <Card title="Yield" icon="money-bill-trend-up" href="/yield">
-    Leveraged yield vaults — API (preview) and SDK.
+    Leveraged yield vaults — API and SDK.
   </Card>
 </CardGroup>
 
@@ -48,7 +48,7 @@ Pick a solution first. Inside each hub you’ll choose the **HTTP API** or the *
   <Card title="AI coding agents" icon="robot" href="/ai-integration-guide">
     Install `@sodax/skills` so Cursor, Claude Code, and Copilot write v2-correct code.
   </Card>
-  <Card title="Builders MCP" icon="terminal" href="https://builders.sodax.com/">
+  <Card title="Builders MCP" icon="plug" href="/builders-mcp">
     Live chains, tokens, quotes, and SDK docs for AI coding agents.
   </Card>
   <Card title="Talk to the team" icon="handshake" href="/contact">
