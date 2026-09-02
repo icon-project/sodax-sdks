@@ -90,8 +90,21 @@ unaffected by this workflow — including while the App secrets are still missin
 is what would otherwise fail. The one exception is a PR that already has auto-merge enabled:
 that stays in scope whatever the diff looks like, so a PR approved as marketing-only and then
 pushed with its docs edits *reverted* is still re-classified and still has its approval
-withdrawn. Withdrawal is scoped to the App's own approval, so a maintainer who enables
-auto-merge by hand on an SDK PR keeps it.
+withdrawn.
+
+[`approve-docs-pr.sh`](scripts/approve-docs-pr.sh) binds both privileged calls to the commit
+the classifier read: it re-reads the live head and bails if it has moved, then pins the
+review to that SHA and passes `--match-head-commit` to the merge. Without that, a push
+landing between classification and approval takes an approval an earlier commit earned —
+and the run for that push cannot undo it, because the approval is filed *after* the push, so
+dismiss-on-push does not reach it and it satisfies `require_last_push_approval` on its own.
+
+[`withdraw-docs-pr.sh`](scripts/withdraw-docs-pr.sh) turns auto-merge off whenever the App is
+the one that queued it, and dismisses the App's approval separately. The two are keyed apart
+on purpose: `dismiss_stale_reviews_on_push` usually flips the approval to `DISMISSED` before
+the workflow runs, so a guard looking for a live approval would leave the queued merge armed
+for the next human one. Both are scoped to the App, so a maintainer who approves or enables
+auto-merge by hand on an SDK PR keeps both.
 
 [`classify-docs-pr.sh`](scripts/classify-docs-pr.sh) answers true only when **every** changed
 file is a modification to an allowlisted marketing page carrying no `generatedFrom`

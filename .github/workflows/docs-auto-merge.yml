@@ -82,19 +82,16 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: .github/scripts/classify-docs-pr.sh "$BASE_SHA" "$HEAD_SHA"
 
-      # Auto-merge, not a direct merge: GitHub holds it until the required Docs site check
-      # is green, and drops it if the check fails.
+      # The same HEAD_SHA the classifier read, so the approval cannot land on a commit a
+      # later push put there.
       - name: Approve and queue the merge
         if: steps.classify.outputs.marketing_only == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           REASON: ${{ steps.classify.outputs.reason }}
-        run: |
-          set -euo pipefail
-          gh pr review "$PR" --approve \
-            --body "Marketing pages only (${REASON}). Merging on a green Docs site check."
-          gh pr merge "$PR" --auto --squash
+        run: .github/scripts/approve-docs-pr.sh "$PR" "$HEAD_SHA" "$REASON"
 
       # Second line to the ruleset's dismiss-on-push: also turns auto-merge off, and covers a
       # PR that stops qualifying, stops touching docs/, or is reopened without a push.
@@ -105,18 +102,4 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           REASON: ${{ steps.classify.outputs.reason }}
           BOT: ${{ steps.app-token.outputs.app-slug }}[bot]
-        run: |
-          set -euo pipefail
-          ids=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR}/reviews" \
-            --jq ".[] | select(.state == \"APPROVED\" and .user.login == \"${BOT}\") | .id")
-          # Only this App's own approval, so a maintainer's auto-merge on an SDK PR stands.
-          [ -n "$ids" ] || exit 0
-          gh pr merge "$PR" --disable-auto || true
-          for id in $ids; do
-            # event=DISMISS is a documented optional body param on this endpoint, despite
-            # review bots reporting it as unsupported.
-            gh api -X PUT \
-              "repos/${GITHUB_REPOSITORY}/pulls/${PR}/reviews/${id}/dismissals" \
-              -f event=DISMISS \
-              -f message="No longer a docs-only change (${REASON}); a reviewer is needed."
-          done
+        run: .github/scripts/withdraw-docs-pr.sh "$PR" "$BOT" "$REASON"
