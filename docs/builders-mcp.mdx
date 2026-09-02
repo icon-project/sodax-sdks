@@ -36,8 +36,21 @@ Most clients take the same JSON:
 |---|---|
 | **Claude Code** | `claude mcp add --transport http sodax-builders https://builders.sodax.com/mcp` |
 | **Cursor** | `.cursor/mcp.json` (project) or Settings → MCP (global) |
-| **VS Code / Copilot** | `.vscode/mcp.json` |
+| **VS Code / Copilot** | `.vscode/mcp.json` — its own schema, below |
 | **ChatGPT, Claude Desktop, Windsurf, Cline, Goose, Roo Code, Gemini** | Listed as compatible on [builders.sodax.com](https://builders.sodax.com/) — check the client's own MCP config format |
+
+VS Code keys servers under `servers` and wants the transport named:
+
+```json
+{
+  "servers": {
+    "sodax-builders": {
+      "type": "http",
+      "url": "https://builders.sodax.com/mcp"
+    }
+  }
+}
+```
 
 An SSE endpoint is available at `https://builders.sodax.com/sse` for clients that do not speak streamable HTTP.
 
