@@ -54,8 +54,9 @@ export function isEvmAddress(value: unknown): value is Address {
   return typeof value === 'string' && /^0x[0-9a-fA-F]{40}$/.test(value);
 }
 
+// A fee needs a rate: 0 bps with an address would override a route's configured fee with nothing.
 export function isFeeBps(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= MAX_PARTNER_FEE_BPS;
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= MAX_PARTNER_FEE_BPS;
 }
 
 /** The fee is entered as a percent but stored and sent as basis points, so 0.01% (1 bp) is the
@@ -63,13 +64,17 @@ export function isFeeBps(value: unknown): value is number {
  *  throws on a fractional bp rather than rounding it. */
 export const MAX_PARTNER_FEE_PERCENT = MAX_PARTNER_FEE_BPS / 100;
 
+// Plain decimal only — `Number` also accepts '1e-3' and '0x10', which carry no '.' and so slip
+// past the decimal-place check to round into a different fee than was typed.
+const PERCENT_TEXT = /^\d*\.?\d+$/;
+
 function percentDecimals(text: string): number {
   return text.split('.')[1]?.length ?? 0;
 }
 
 export function percentTextToBps(text: string): number | null {
   const trimmed = text.trim();
-  if (!trimmed || !Number.isFinite(Number(trimmed)) || percentDecimals(trimmed) > 2) return null;
+  if (!PERCENT_TEXT.test(trimmed) || percentDecimals(trimmed) > 2) return null;
   const bps = Math.round(Number(trimmed) * 100);
   return isFeeBps(bps) ? bps : null;
 }
@@ -82,9 +87,11 @@ export function bpsToPercentText(bps: number): string {
 export function partnerFeePercentError(text: string): string | undefined {
   const trimmed = text.trim();
   if (!trimmed) return undefined;
-  if (!Number.isFinite(Number(trimmed)) || Number(trimmed) < 0) return 'Must be a percentage, e.g. 0.1';
+  if (!PERCENT_TEXT.test(trimmed)) return 'Must be a plain percentage, e.g. 0.1';
   if (percentDecimals(trimmed) > 2) return 'Smallest step is 0.01% (1 bp)';
-  if (percentTextToBps(trimmed) === null) return `Max ${MAX_PARTNER_FEE_PERCENT}%`;
+  const bps = Math.round(Number(trimmed) * 100);
+  if (bps === 0) return 'Must be greater than 0%';
+  if (bps > MAX_PARTNER_FEE_BPS) return `Max ${MAX_PARTNER_FEE_PERCENT}%`;
   return undefined;
 }
 

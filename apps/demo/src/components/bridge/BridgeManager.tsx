@@ -91,8 +91,10 @@ export function BridgeManager() {
       // Ref is read+cleared here, not inside the updater — StrictMode double-invokes updaters.
       const restored = bridgeableTokens.find(t => t.symbol === restoredDstSymbol.current);
       restoredDstSymbol.current = undefined;
+      // Re-resolve the kept symbol against the NEW list — never carry the old XToken over, its
+      // `chainKey` would still be the previous chain (addresses collide, e.g. native 0x00…00).
       setToToken(prev => {
-        const kept = prev && bridgeableTokens.some(t => t.address === prev.address) ? prev : undefined;
+        const kept = bridgeableTokens.find(t => t.symbol === prev?.symbol);
         return kept ?? restored ?? bridgeableTokens[0];
       });
     } else {

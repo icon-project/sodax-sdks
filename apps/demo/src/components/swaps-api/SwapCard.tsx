@@ -682,7 +682,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
           }}
         >
           <DialogTrigger asChild>
-            <Button variant="outline" onClick={() => buildIntentParams()}>
+            <Button variant="outline" onClick={() => buildIntentParams()} disabled={!!feeDraft.error}>
               Swap
             </Button>
           </DialogTrigger>
@@ -772,6 +772,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
                       !isSourceSignable ||
                       !hasAllowed ||
                       isSwapping ||
+                      !!feeDraft.error ||
                       (src.chain === ChainKeys.BITCOIN_MAINNET && !isSourceBitcoinReady) ||
                       (dst.chain === ChainKeys.BITCOIN_MAINNET && !isDestBitcoinReady) ||
                       stellar.blocksAction ||

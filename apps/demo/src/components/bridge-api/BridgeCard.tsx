@@ -396,6 +396,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
   const isBridgeDisabled =
     isBridging ||
     !bridgeBody ||
+    !!feeDraft.error ||
     (fromChainType === 'EVM' && !hasAllowance) ||
     (fromChainKey === ChainKeys.BITCOIN_MAINNET && !isFromBtcReady) ||
     (toChainKey === ChainKeys.BITCOIN_MAINNET && !isToBtcReady) ||
@@ -572,7 +573,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
           <Button
             className="w-full"
             onClick={handleOpenDialog}
-            disabled={!bridgeBody || !isBridgeable || !isSourceSignable}
+            disabled={!bridgeBody || !isBridgeable || !isSourceSignable || !!feeDraft.error}
           >
             Bridge
           </Button>
