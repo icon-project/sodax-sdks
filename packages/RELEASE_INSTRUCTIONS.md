@@ -23,7 +23,8 @@ Every publishable `@sodax/*` package shares one version, cut as a single `@sdks@
 
 4. **It stops after mutating.** Every manifest is set to that version, `CONFIG_VERSION` is
    incremented once, and the gitignored `release-notes.md` is written. Nothing is committed or
-   tagged for you. On failure it prints a one-line recovery command and leaves nothing behind.
+   tagged for you. On failure it prints the two cleanup commands — `git checkout -- packages/` and
+   `rm -f release-notes.md` — but does not run them: a partial mutation stays on disk until you do.
 
 5. **Inspect the diff, then commit and push.** The command prints these with the version filled in:
 

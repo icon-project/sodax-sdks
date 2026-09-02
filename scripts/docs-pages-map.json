@@ -87,6 +87,7 @@
     {
       "src": "packages/sdk/docs/HOW_TO_MAKE_A_SWAP.md",
       "dest": "developers/how-to/how_to_make_a_swap.md",
+      "title": "Make a swap (SDK)",
       "icon": "list-check"
     },
     {
