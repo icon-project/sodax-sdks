@@ -87,7 +87,11 @@ head content with `git show` and never checks out or runs it.
 
 A PR that touches nothing under `docs/` stops before the App token is minted, so an SDK PR is
 unaffected by this workflow — including while the App secrets are still missing, when minting
-is what would otherwise fail.
+is what would otherwise fail. The one exception is a PR that already has auto-merge enabled:
+that stays in scope whatever the diff looks like, so a PR approved as marketing-only and then
+pushed with its docs edits *reverted* is still re-classified and still has its approval
+withdrawn. Withdrawal is scoped to the App's own approval, so a maintainer who enables
+auto-merge by hand on an SDK PR keeps it.
 
 [`classify-docs-pr.sh`](scripts/classify-docs-pr.sh) answers true only when **every** changed
 file is a modification to an allowlisted marketing page carrying no `generatedFrom`
@@ -152,7 +156,7 @@ throwaway PR:
    requests, so it should not — but if it demands a second approval, the single App approval
    will not be enough.
 
-The marketing-facing Notion card (Marketing → *Action: Editing docs.sodax.com*) currently
-tells marketing that Publish "commits straight to the repo's deploy branch — no pull request,
-no review". Once this ships that is wrong: Publish opens a PR that merges itself on green.
-Update that card before pointing marketing at this repo.
+The marketing-facing Notion card (Marketing → *Action: Editing docs.sodax.com*) already
+describes this flow, and carries a banner saying it is not switched on yet. Clear that banner
+once steps 1–6 above are done and the throwaway PR has passed — that card is what tells
+marketing Publish is live, and it is the only lane doc they read.
