@@ -44,6 +44,10 @@ export const DEFAULT_SODAX_SETTINGS: SodaxSettings = {
 /** The SDK's own bound (`FEE_PERCENTAGE_SCALE`); the backend swaps/bridge APIs cap far lower. */
 export const MAX_PARTNER_FEE_BPS = 10000;
 
+/** `/bridge/*` bound: `PartnerFeeV2` mirrors the SDK's `PartnerFeePercentage`, documented as
+ *  "Maximum allowed is 100 (1%)". `/swaps/*` states no cap, so it keeps the SDK-wide bound. */
+export const BRIDGE_API_MAX_PARTNER_FEE_BPS = 100;
+
 const STORAGE_KEY = 'sodax-demo:sodax-settings';
 
 export function isHttpUrl(value: unknown): value is HttpUrl {
@@ -83,15 +87,16 @@ export function bpsToPercentText(bps: number): string {
   return String(bps / 100);
 }
 
-/** `undefined` when the text is empty (unset) or a valid percent. */
-export function partnerFeePercentError(text: string): string | undefined {
+/** `undefined` when the text is empty (unset) or a valid percent. `maxBps` narrows the bound for
+ *  a route that caps below the SDK's own (see {@link BRIDGE_API_MAX_PARTNER_FEE_BPS}). */
+export function partnerFeePercentError(text: string, maxBps: number = MAX_PARTNER_FEE_BPS): string | undefined {
   const trimmed = text.trim();
   if (!trimmed) return undefined;
   if (!PERCENT_TEXT.test(trimmed)) return 'Must be a plain percentage, e.g. 0.1';
   if (percentDecimals(trimmed) > 2) return 'Smallest step is 0.01% (1 bp)';
   const bps = Math.round(Number(trimmed) * 100);
   if (bps === 0) return 'Must be greater than 0%';
-  if (bps > MAX_PARTNER_FEE_BPS) return `Max ${MAX_PARTNER_FEE_PERCENT}%`;
+  if (bps > maxBps) return `Max ${maxBps / 100}%`;
   return undefined;
 }
 

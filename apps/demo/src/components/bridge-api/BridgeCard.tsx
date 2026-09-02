@@ -57,7 +57,7 @@ import { useAppStore } from '@/zustand/useAppStore';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
 import { formatMutationFailureMessage } from '@/lib/utils';
 import type { BridgeApiOrder } from '@/components/bridge-api/OrderStatus';
-import { DEFAULT_BRIDGE_API_BASE_URL, envBridgeApiBaseUrl } from '@/lib/sodaxSettings';
+import { BRIDGE_API_MAX_PARTNER_FEE_BPS, DEFAULT_BRIDGE_API_BASE_URL, envBridgeApiBaseUrl } from '@/lib/sodaxSettings';
 import { isSignableBridgeApiChain, signAndBroadcastBridgeApiTx } from '@/components/bridge-api/lib/signAndBroadcast';
 
 /** Short button label for the step the wallet is on, or `null` once that step has landed. */
@@ -103,7 +103,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
   const [isFromBtcReady, setIsFromBtcReady] = useState(false);
   const [isToBtcReady, setIsToBtcReady] = useState(false);
   // Optional per-request partner fee (demo): a receiver address + fee percent (0.3 = 0.3%, max 1%).
-  const feeDraft = usePartnerFeeDraft();
+  const feeDraft = usePartnerFeeDraft({ maxBps: BRIDGE_API_MAX_PARTNER_FEE_BPS });
 
   const fromAccount = useXAccount({ xChainId: fromChainKey });
   const toAccount = useXAccount({ xChainId: toChainKey });

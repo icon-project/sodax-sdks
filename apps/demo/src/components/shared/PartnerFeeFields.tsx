@@ -6,7 +6,7 @@ import { useAppStore } from '@/zustand/useAppStore';
 import {
   bpsToPercentText,
   isEvmAddress,
-  MAX_PARTNER_FEE_PERCENT,
+  MAX_PARTNER_FEE_BPS,
   partnerFeePercentError,
   percentTextToBps,
 } from '@/lib/sodaxSettings';
@@ -20,6 +20,8 @@ export type PartnerFeeDraft = {
    *  differently: bridge falls back to its configured fee, swaps charges nothing. */
   partnerFee: PartnerFeeV2 | undefined;
   error: string | undefined;
+  /** This route's own cap, as a percent — the fields render it and the validator enforces it. */
+  maxPercent: number;
 };
 
 /**
@@ -29,8 +31,10 @@ export type PartnerFeeDraft = {
  *
  * Entered as a percent but sent as basis points — `PartnerFeeV2` mirrors the SDK's `PartnerFee`,
  * whose `percentage` is bps, so one settings value drives the SDK and both API routes.
+ *
+ * `maxBps` defaults to the SDK-wide bound; a route that caps lower passes its own.
  */
-export function usePartnerFeeDraft(): PartnerFeeDraft {
+export function usePartnerFeeDraft({ maxBps = MAX_PARTNER_FEE_BPS }: { maxBps?: number } = {}): PartnerFeeDraft {
   const [address, setAddress] = useState(() => useAppStore.getState().sodaxSettings.partnerFeeAddress ?? '');
   const [percent, setPercent] = useState(() => {
     const seeded = useAppStore.getState().sodaxSettings.partnerFeeBps;
@@ -43,13 +47,13 @@ export function usePartnerFeeDraft(): PartnerFeeDraft {
     if (trimmedAddress && !isEvmAddress(trimmedAddress)) {
       return 'Fee address must be a 0x-prefixed 20-byte address';
     }
-    const percentError = partnerFeePercentError(trimmedPercent);
+    const percentError = partnerFeePercentError(trimmedPercent, maxBps);
     if (percentError) return percentError;
     // `PartnerFeeV2` is one object — a lone address or a lone rate can't be sent.
     if (trimmedAddress && !trimmedPercent) return 'Set a fee rate, or clear the address';
     if (trimmedPercent && !trimmedAddress) return 'Set a fee address, or clear the rate';
     return undefined;
-  }, [address, percent]);
+  }, [address, percent, maxBps]);
 
   const partnerFee = useMemo((): PartnerFeeV2 | undefined => {
     const trimmedAddress = address.trim();
@@ -58,7 +62,7 @@ export function usePartnerFeeDraft(): PartnerFeeDraft {
     return { address: trimmedAddress, percentage: bps };
   }, [address, percent, error]);
 
-  return { address, percent, setAddress, setPercent, partnerFee, error };
+  return { address, percent, setAddress, setPercent, partnerFee, error, maxPercent: maxBps / 100 };
 }
 
 /** `unsetBehavior` names what the route does when `partnerFee` is omitted — the two differ. */
@@ -79,7 +83,7 @@ export function PartnerFeeFields({ draft, unsetBehavior }: { draft: PartnerFeeDr
           type="number"
           step="0.01"
           className="w-[130px]"
-          placeholder={`% (max ${MAX_PARTNER_FEE_PERCENT})`}
+          placeholder={`% (max ${draft.maxPercent})`}
           value={draft.percent}
           onChange={e => draft.setPercent(e.target.value)}
         />
