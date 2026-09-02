@@ -1,6 +1,7 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import type { RequestOverrideConfig, StatusResponseV2 } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import { retryUnlessAuthFailure } from '../shared/retryUnlessAuthFailure.js';
 import { unwrapResult } from '../shared/unwrapResult.js';
 import type { ReadHookParams } from '../shared/types.js';
 // Leverage-yield intents share the solver status codes with swaps, so the terminal-status predicate
@@ -40,7 +41,7 @@ export const useLeverageYieldApiStatus = ({
       return unwrapResult(await sodax.api.leverageYield.getStatus({ intentTxHash }, apiConfig));
     },
     enabled: !!intentTxHash && intentTxHash.length > 0,
-    retry: 3,
+    retry: retryUnlessAuthFailure,
     refetchInterval: query => (isTerminalSwapIntentStatus(query.state.data?.status) ? false : 1000),
     ...queryOptions,
   });

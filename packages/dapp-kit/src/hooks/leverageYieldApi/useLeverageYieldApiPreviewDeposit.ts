@@ -1,6 +1,7 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import type { PreviewDepositResponseV2, RequestOverrideConfig } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import { retryUnlessAuthFailure } from '../shared/retryUnlessAuthFailure.js';
 import { unwrapResult } from '../shared/unwrapResult.js';
 import type { ReadHookParams } from '../shared/types.js';
 
@@ -36,7 +37,7 @@ export const useLeverageYieldApiPreviewDeposit = ({
       return unwrapResult(await sodax.api.leverageYield.previewDeposit({ vault, assets }, apiConfig));
     },
     enabled: !!vault && vault.length > 0 && assets !== undefined,
-    retry: 3,
+    retry: retryUnlessAuthFailure,
     ...queryOptions,
   });
 };

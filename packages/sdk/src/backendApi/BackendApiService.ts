@@ -330,8 +330,12 @@ export class BackendApiService implements IConfigApiV1 {
     // this service's `basePath`, so a `swapsApiConfig` slice moves swaps only (see `resolveBridgeApiConfig`).
     this.bridge = new BridgeApiService(withApiKey(bridgeConfig, options.apiKey), this.logger, overrideOptions);
     // `/leverage-yield/*` is another gateway sibling, resolved like bridge so it never inherits this
-    // service's `basePath`. It does not implement the legacy-override trim, so it takes no options.
-    this.leverageYield = new LeverageYieldApiService(withApiKey(leverageYieldConfig, options.apiKey), this.logger);
+    // service's `basePath` — and it takes the same legacy-override decision.
+    this.leverageYield = new LeverageYieldApiService(
+      withApiKey(leverageYieldConfig, options.apiKey),
+      this.logger,
+      overrideOptions,
+    );
   }
 
   /**

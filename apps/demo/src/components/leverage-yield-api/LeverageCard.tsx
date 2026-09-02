@@ -16,6 +16,7 @@ import type {
   SpokeChainKey,
   LeverageYieldSubmitTxRequestV2,
   XToken,
+  ApprovalProgress,
 } from '@sodax/dapp-kit';
 import { Loader2 } from 'lucide-react';
 import React, { type SetStateAction, useMemo, useState } from 'react';
@@ -26,7 +27,7 @@ import {
   useXBalances,
   useGetUserHubWalletAddress,
   useLeverageYieldApiAllowance,
-  useLeverageYieldApiApprove,
+  useLeverageYieldApiApproveAndBroadcast,
   useLeverageYieldApiCreateDepositIntent,
   useLeverageYieldApiCreateWithdrawIntent,
   useLeverageYieldApiDeadline,
@@ -43,15 +44,21 @@ import { getXChainType, useEvmSwitchChain, useWalletProvider, useXAccount, useXS
 import type { LeverageYieldApiOrder } from '@/components/leverage-yield-api/OrderStatus';
 import { LEVERAGE_YIELD_API_CONFIG } from '@/components/leverage-yield-api/lib/config';
 import { toIntentRequest } from '@/components/swaps-api/lib/mappers';
-import {
-  isSignableSwapsApiChain,
-  signAndBroadcastSwapsApiTx,
-  waitForTxFinality,
-} from '@/components/swaps-api/lib/signAndBroadcast';
+import { isSignableSwapsApiChain, signAndBroadcastSwapsApiTx } from '@/components/swaps-api/lib/signAndBroadcast';
 import { useDebouncedValue } from '@/components/swaps-api/lib/useDebouncedValue';
 
 /** Vault-share decimals (lsoda* ERC-4626 shares are always 18 decimals). */
 const SHARE_DECIMALS = 18;
+
+/** Short button label for the step the wallet is on, or `null` once that step has landed. */
+function approvalStepLabel({ step, phase, index, total }: ApprovalProgress): string | null {
+  if (phase !== 'signing' && phase !== 'broadcast') return null;
+
+  const counter = total > 1 ? ` (${index}/${total})` : '';
+  const [action, pending] = step === 'allowance-reset' ? ['Reset approval', 'Resetting…'] : ['Approve', 'Approving…'];
+
+  return `${phase === 'signing' ? action : pending}${counter}`;
+}
 
 /** `(100 - slippage)%` of `quotedAmount`, in bps to avoid float drift. */
 function applySlippageMinOut(quotedAmount: string, slippagePct: string): string {
@@ -220,7 +227,7 @@ export default function LeverageCard({
     deadlineData,
   ]);
 
-  const { data: allowance, refetch: refetchAllowance } = useLeverageYieldApiAllowance({
+  const { data: allowance } = useLeverageYieldApiAllowance({
     params: { body: depositIntentParams, apiConfig },
   });
   const hasAllowed = allowance?.valid === true;
@@ -235,11 +242,13 @@ export default function LeverageCard({
     params: { vault: selectedVault?.vault, owner: depositHubWallet, apiConfig },
   });
 
-  const { mutateAsyncSafe: approve } = useLeverageYieldApiApprove();
+  const { mutateAsyncSafe: approve } = useLeverageYieldApiApproveAndBroadcast();
   const { mutateAsyncSafe: createDepositIntent } = useLeverageYieldApiCreateDepositIntent();
   const { mutateAsyncSafe: submitTx } = useLeverageYieldApiSubmitTx();
 
   const [isApproving, setIsApproving] = useState(false);
+  // A guarded token needs two signatures; one flat "Approving…" across both looks like a double charge.
+  const [approvalProgress, setApprovalProgress] = useState<ApprovalProgress | null>(null);
   const [isDepositing, setIsDepositing] = useState(false);
   const [depositError, setDepositError] = useState<string | null>(null);
 
@@ -248,22 +257,23 @@ export default function LeverageCard({
     setDepositError(null);
     setIsApproving(true);
     try {
-      const result = await approve({ body: depositIntentParams, apiConfig });
+      // The hook owns plan → sign → broadcast → wait (stale-allowance reset included) and invalidates
+      // the allowance query itself.
+      const result = await approve({
+        body: depositIntentParams,
+        walletProvider: depositWalletProvider,
+        apiConfig,
+        onProgress: setApprovalProgress,
+      });
       if (!result.ok) {
         setDepositError(formatMutationFailureMessage(result.error, 'Approve failed'));
         return;
       }
-      const txHash = await signAndBroadcastSwapsApiTx({
-        chainKey: depositChain as SpokeChainKey,
-        tx: result.value.tx,
-        walletProvider: depositWalletProvider,
-      });
-      await waitForTxFinality(depositChain as SpokeChainKey, depositWalletProvider, txHash);
-      await refetchAllowance();
     } catch (error) {
       setDepositError(formatMutationFailureMessage(error, 'Approve signing failed'));
     } finally {
       setIsApproving(false);
+      setApprovalProgress(null);
     }
   };
 
@@ -602,7 +612,14 @@ export default function LeverageCard({
             <>
               {!hasAllowed && depositIntentParams && (
                 <Button className="w-full" onClick={handleApprove} disabled={isApproving || !depositSignable}>
-                  {isApproving ? <Loader2 className="animate-spin" /> : 'Approve'}
+                  {isApproving ? (
+                    <>
+                      <Loader2 className="animate-spin" />
+                      {approvalProgress && approvalStepLabel(approvalProgress)}
+                    </>
+                  ) : (
+                    'Approve'
+                  )}
                 </Button>
               )}
               <Button

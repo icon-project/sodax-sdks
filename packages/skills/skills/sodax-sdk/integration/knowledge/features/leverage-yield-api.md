@@ -66,12 +66,13 @@ sodax.api.leverageYield.getPartnerFee(query: FeeQueryV2, config?): Promise<Resul
 sodax.api.leverageYield.getSolverFee(query: FeeQueryV2, config?): Promise<Result<FeeResponseV2>>;
 
 // Submit-tx state machine
-sodax.api.leverageYield.submitTx(body: SubmitTxRequestV2, config?): Promise<Result<SubmitTxResponseV2>>;
+sodax.api.leverageYield.submitTx(body: LeverageYieldSubmitTxRequestV2, config?): Promise<Result<SubmitTxResponseV2>>;
 sodax.api.leverageYield.getSubmitTxStatus(query: SubmitTxStatusQueryV2, config?): Promise<Result<SubmitTxStatusResponseV2>>;
 ```
 
-The optional trailing `config?: RequestOverrideConfig` (`{ baseURL?, timeout?, headers? }`) on every method
-applies per-call overrides that take precedence over the service config (see "Per-call overrides" below).
+The optional trailing `config?: RequestOverrideConfig` (`{ baseURL?, timeout?, headers?, apiKey? }`) on
+every method applies per-call overrides that take precedence over the service config (see "Per-call
+overrides" below).
 
 ## Wire shapes — `bigint` vs decimal strings
 
@@ -128,20 +129,40 @@ const { tx, intent, relayData } = created.value;
 // hubWalletSwap internally (spends lsoda* from the hub wallet), so withdraw needs no spoke allowance.
 ```
 
+### Approve can return TWO transactions
+
+```ts
+// Only a deposit needs a spoke allowance — a withdraw spends lsoda* from the hub wallet.
+const allowance = await sodax.api.leverageYield.checkAllowance(depositBody);
+if (allowance.ok && !allowance.value.valid) {
+  const plan = await sodax.api.leverageYield.approve(depositBody);
+  if (!plan.ok) return;
+  const { tx, resetTx } = plan.value;   // ApproveResponseV2
+  // `resetTx` appears only for an input token of the 2017 TetherToken lineage, which rejects an
+  // allowance change from one non-zero value to another: broadcast AND MINE it before `tx`, or the
+  // approve reverts. In @sodax/dapp-kit, useLeverageYieldApiApproveAndBroadcast owns that ordering.
+}
+```
+
 ### Submit tx + poll status
 
 ```ts
 // `intent` here is the IntentRequestV2 (bigint fields) you hold from createDepositIntent/createWithdrawIntent.
+// `LeverageYieldSubmitTxRequestV2` is the swaps body PLUS a required `operation` discriminator, which the
+// backend needs to record the queued row as a vault deposit or withdrawal.
 const submit = await sodax.api.leverageYield.submitTx({
   txHash, srcChainKey, walletAddress, intent,
   relayData: relayData.payload,   // string — the payload, not the RelayExtraData object
+  operation: 'deposit',           // required: 'deposit' | 'withdraw'
 });
 if (!submit.ok) return;
 
 // Both txHash AND srcChainKey are required by the status endpoint.
 const status = await sodax.api.leverageYield.getSubmitTxStatus({ txHash, srcChainKey });
-if (status.ok && status.value.data.status === 'executed') { /* settled */ }
-// Lifecycle: 'pending' → 'relaying' → 'relayed' → 'posting_execution' → 'executed' | 'failed'.
+// A vault swap IS a solver swap, so terminal success is 'solved' — NOT the bridge API's 'executed'.
+if (status.ok && status.value.data.status === 'solved') { /* settled */ }
+// Lifecycle: 'pending' → 'relaying' → 'relayed' → 'posting_execution' → 'solved' | 'failed'.
+// A set `abandonedAt` is terminal too, even while `status` is still non-terminal.
 ```
 
 ## Status fields — three distinct `status` values (don't conflate)
@@ -150,7 +171,7 @@ if (status.ok && status.value.data.status === 'executed') { /* settled */ }
 |---|---|---|---|
 | `getStatus` | `StatusResponseV2.status` | **number** (`SwapIntentStatusCodeV2`) | `-1` NOT_FOUND · `1` NOT_STARTED_YET · `2` STARTED_NOT_FINISHED · `3` SOLVED (terminal) · `4` FAILED (terminal). `fillTxHash` is set only when `status === 3`. |
 | `submitTx` | `SubmitTxResponseV2.data.status` | string | `'inserted'` (new) or `'duplicate'` (already submitted — submit-tx is idempotent on `(txHash, srcChainKey)`). |
-| `getSubmitTxStatus` | `SubmitTxStatusResponseV2.data.status` | string | `'pending'` / `'relaying'` / `'relayed'` / `'posting_execution'` / `'executed'` / `'failed'` (`'executed'` / `'failed'` terminal). |
+| `getSubmitTxStatus` | `SubmitTxStatusResponseV2.data.status` | string | `'pending'` / `'relaying'` / `'relayed'` / `'posting_execution'` / `'posted_execution'` / `'solved'` / `'failed'` (`'solved'` / `'failed'` terminal, as for swaps — `'executed'` is the *bridge* terminal state). A set `abandonedAt` is terminal too. `data.operation` echoes `'leverage_deposit'` / `'leverage_withdraw'` (`SubmitTxOperationV2`). |
 
 `getStatus` reports the **solver** intent status as a numeric code (shared with the Swaps API —
 `SwapIntentStatusCodeV2`); the two submit-tx calls report **string** statuses. They are unrelated — don't
@@ -162,7 +183,7 @@ Every method accepts a trailing `RequestOverrideConfig` to redirect a single cal
 attach request-specific headers (auth, tracing), overriding the service config:
 
 ```ts
-await sodax.api.leverageYield.getVaults({ baseURL: 'https://staging.example/v1/be', headers: { 'X-Trace': 'abc' } });
+await sodax.api.leverageYield.getVaults({ baseURL: 'https://staging.example/v1', headers: { 'X-Trace': 'abc' } });
 ```
 
 ## Custom endpoint for the leverage-yield API
@@ -173,7 +194,9 @@ leverage-yield slice on `ApiConfig` (unlike swaps, which has `swapsApiConfig`). 
 `BaseApiConfig` (or the `baseApiConfig` slice of `CustomApiConfig`) drives it:
 
 ```ts
-const sodax = new Sodax({ api: { baseURL: 'https://api.example/v1/be' } });
+// The gateway ROOT — the client appends `/leverage-yield/*` itself. A legacy `/be`-suffixed value (the
+// data API's own mount) is trimmed back to the root with a warning, configured or per-call.
+const sodax = new Sodax({ api: { baseURL: 'https://api.example/v1' } });
 ```
 
 To send a single leverage-yield call elsewhere, use the per-call `RequestOverrideConfig` above. See
@@ -183,8 +206,11 @@ To send a single leverage-yield call elsewhere, use the per-call `RequestOverrid
 
 Opting into `new Sodax({ leverageYield: { useBackendSubmitTx: true } })` routes the **feature
 service** (`sodax.leverageYield.vaultSwap`) through this client's `submitTx` + `getSubmitTxStatus` (relay +
-post-execution server-side), falling back to the client-side relay on any non-success — the leverage-yield
-mirror of `swapsOptions.useBackendSubmitTx`. See [`leverage-yield.md`](leverage-yield.md).
+post-execution server-side), polling until `'solved'` and falling back to the client-side relay on any
+non-success — the leverage-yield mirror of `swaps.useBackendSubmitTx`, except that it defaults **off**.
+Read the effective value on `sodax.config.leverageYieldUseBackendSubmitTx`. `timeout` is a per-attempt
+budget: the backend attempt gets it and the fallback relay gets a fresh one. See
+[`leverage-yield.md`](leverage-yield.md).
 
 ## Error handling
 
@@ -194,6 +220,8 @@ if (!r.ok) {
   // r.error: SodaxError<'EXTERNAL_API_ERROR'> — feature: 'backend', context.api: 'leverageYield',
   // context.endpoint: '/leverage-yield/quote/deposit'. The transport failure (HTTP_REQUEST_FAILED /
   // REQUEST_TIMEOUT / a shape-validation issue) is on r.error.cause.
+  // A non-2xx also lifts its status onto r.error.context.status, so isAuthFailure(r.error) is true for
+  // a 401/403 — a rejected key is terminal, so stop rather than retry.
   return;
 }
 ```

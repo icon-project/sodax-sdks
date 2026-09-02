@@ -1,6 +1,7 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import type { GetLeverageVaultsResponseV2, RequestOverrideConfig } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import { retryUnlessAuthFailure } from '../shared/retryUnlessAuthFailure.js';
 import { unwrapResult } from '../shared/unwrapResult.js';
 import type { ReadHookParams } from '../shared/types.js';
 
@@ -29,7 +30,7 @@ export const useLeverageYieldApiVaults = ({
     queryKey: ['leverageYieldApi', 'vaults'],
     queryFn: async (): Promise<GetLeverageVaultsResponseV2> =>
       unwrapResult(await sodax.api.leverageYield.getVaults(apiConfig)),
-    retry: 3,
+    retry: retryUnlessAuthFailure,
     ...queryOptions,
   });
 };

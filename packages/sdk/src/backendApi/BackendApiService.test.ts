@@ -913,7 +913,7 @@ describe('BackendApiService.setHeaders', () => {
     );
   });
 
-  it('a repeated mixed-casing update sends the newest value, and fans it out to swaps + bridge', async () => {
+  it('a repeated mixed-casing update sends the newest value, and fans it out to every keyed client', async () => {
     // Updating an existing object key does NOT move it in insertion order, so a raw
     // `headers[name] = value` would leave the older casing last and let it win the merge.
     const isolatedService = new BackendApiService({ baseURL: ROOT, timeout: 30_000, headers: {} });
@@ -921,9 +921,17 @@ describe('BackendApiService.setHeaders', () => {
     isolatedService.setHeaders({ 'X-Api-Key': 'v2' });
     isolatedService.setHeaders({ 'x-api-key': 'v3' });
 
-    for (const call of [() => isolatedService.getIntentByTxHash('0x123'), () => isolatedService.bridge.getTokens()]) {
+    // Each client gets a body its own schema accepts, so the assertion is not read past a
+    // validation rejection that only shows up as log noise.
+    const calls: Array<[call: () => Promise<unknown>, body: unknown]> = [
+      [() => isolatedService.getIntentByTxHash('0x123'), { ok: true }],
+      [() => isolatedService.swaps.getTokens(), {}],
+      [() => isolatedService.bridge.getTokens(), {}],
+      [() => isolatedService.leverageYield.getVaults(), []],
+    ];
+    for (const [call, body] of calls) {
       mockFetch.mockReset();
-      mockFetch.mockResolvedValueOnce(okResponse({ ok: true }));
+      mockFetch.mockResolvedValueOnce(okResponse(body));
       await call();
       const headers = mockFetch.mock.calls[0]?.[1]?.headers as Record<string, string>;
       expect(Object.keys(headers).filter(h => h.toLowerCase() === 'x-api-key')).toHaveLength(1);
@@ -950,7 +958,11 @@ describe('BackendApiService.setHeaders', () => {
     );
   });
 
-  it('propagates the headers to the swaps sub-service (a token set here reaches swaps.* calls)', async () => {
+  it.each([
+    ['swaps', (s: BackendApiService) => s.swaps.getTokens(), {}],
+    ['bridge', (s: BackendApiService) => s.bridge.getTokens(), {}],
+    ['leverageYield', (s: BackendApiService) => s.leverageYield.getVaults(), []],
+  ])('propagates the headers to the %s sub-service (a token set here reaches its calls)', async (_label, call, body) => {
     const isolatedConfig: ApiConfig = {
       baseURL: ROOT,
       timeout: 30_000,
@@ -958,9 +970,9 @@ describe('BackendApiService.setHeaders', () => {
     };
     const isolatedService = new BackendApiService(isolatedConfig);
     isolatedService.setHeaders({ 'X-API-Key': 'shared-key' });
-    mockFetch.mockResolvedValueOnce(okResponse({})); // empty token map is a valid GetSwapTokensResponseV2
+    mockFetch.mockResolvedValueOnce(okResponse(body)); // an empty map / list validates for each client
 
-    await isolatedService.swaps.getTokens();
+    await call(isolatedService);
 
     expect(mockFetch).toHaveBeenCalledWith(
       expect.any(String),
@@ -1145,6 +1157,7 @@ describe('one key, every service', () => {
     ['data', config => keyed.backendApi.getAllConfig(config)],
     ['swaps', config => keyed.api.swaps.getTokens(config)],
     ['bridge', config => keyed.api.bridge.getTokens(config)],
+    ['leverageYield', config => keyed.api.leverageYield.getVaults(config)],
     ['sponsoring', config => keyed.api.sponsoring.getStellarSponsorConfig(config)],
   ];
 
@@ -1198,6 +1211,7 @@ describe('one key, every service', () => {
       () => configured.backendApi.getAllConfig(),
       () => configured.api.swaps.getTokens(),
       () => configured.api.bridge.getTokens(),
+      () => configured.api.leverageYield.getVaults(),
     ]) {
       mockFetch.mockResolvedValueOnce(okResponse({}));
       await call();
@@ -1219,7 +1233,11 @@ describe('sponsoring inherits the instance key only for an allowed root', () => 
   };
 
   /** POST twin of `keySentTo`: one `createStellarSponsoredAccount` call, target asserted the same way. */
-  const keySentToAccounts = async (target: string, sodax: Sodax, config?: RequestOverrideConfig): Promise<string | null> => {
+  const keySentToAccounts = async (
+    target: string,
+    sodax: Sodax,
+    config?: RequestOverrideConfig,
+  ): Promise<string | null> => {
     mockFetch.mockResolvedValueOnce(okResponse({ hash: '0xhash', alreadyActive: false }));
     await sodax.api.sponsoring.createStellarSponsoredAccount({ data: 'AAAA' }, config);
     expect(mockFetch.mock.calls.at(-1)?.[0]).toBe(`${target}/sponsorships/stellar/accounts`);

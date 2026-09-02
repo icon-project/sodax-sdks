@@ -31,6 +31,7 @@ const HOOKS: Array<{ path: string; nativeThrow?: true }> = [
   { path: 'leverageYield/useLeverageYieldVaultSwap.ts' },
   { path: 'leverageYield/useLeverageYieldWithdraw.ts' },
   { path: 'leverageYieldApi/useLeverageYieldApiApprove.ts' },
+  { path: 'leverageYieldApi/useLeverageYieldApiApproveAndBroadcast.ts' },
   { path: 'leverageYieldApi/useLeverageYieldApiCancelIntent.ts' },
   { path: 'leverageYieldApi/useLeverageYieldApiCreateDepositIntent.ts' },
   { path: 'leverageYieldApi/useLeverageYieldApiCreateWithdrawIntent.ts' },

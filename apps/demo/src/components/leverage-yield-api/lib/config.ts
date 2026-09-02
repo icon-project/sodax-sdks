@@ -1,11 +1,16 @@
 import type { RequestOverrideConfig } from '@sodax/dapp-kit';
 
 /**
- * Canary deployment of the backend API. The Leverage Yield API v2 endpoints (`/leverage-yield/*`)
- * live under the same base URL as the Swaps API, so this showcase targets canary per-call via each
- * `useLeverageYieldApi*` hook's `apiConfig` without touching the app-wide SDK config.
+ * Leverage Yield API v2 host, passed per-call via each `useLeverageYieldApi*` hook's `apiConfig` so
+ * this showcase can retarget the backend without touching the app-wide SDK config. Point at a local
+ * leverage-yield API with `VITE_LEVERAGE_YIELD_API_BASE_URL` (e.g. `http://localhost:3008`, which
+ * serves `/leverage-yield/*` with no `/v1` prefix); mirrors `BRIDGE_API_CONFIG`.
+ *
+ * As everywhere else, the value is the gateway ROOT — the SDK appends `/leverage-yield/*` itself.
+ *
+ * The scheme is required either way: `makeRequest` concatenates `baseURL + endpoint` and hands the
+ * result to `fetch`, so a bare `host:port` parses as an unknown URL scheme rather than a host.
  */
 export const LEVERAGE_YIELD_API_CONFIG = {
-  // baseURL: 'https://canary-api.sodax.com/v1',
-  baseURL: 'http://localhost:3008',
+  baseURL: import.meta.env.VITE_LEVERAGE_YIELD_API_BASE_URL ?? 'https://canary-api.sodax.com/v1',
 } as const satisfies RequestOverrideConfig;

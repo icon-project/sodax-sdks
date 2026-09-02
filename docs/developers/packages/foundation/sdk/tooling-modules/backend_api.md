@@ -102,7 +102,7 @@ type ApiConfig = BackendApiConfig | CustomApiConfig;
 
 **`baseURL` is the gateway root, never a service path.** Every service resolves the same root and appends
 its own path below it — `/be` here, `/swaps` for the swaps client, `/bridge` for the bridge client,
-`/sponsorships/stellar` for sponsoring. A `baseURL` ending in `/be` is trimmed with a warning: that was
+`/leverage-yield` for the leverage-yield client, `/sponsorships/stellar` for sponsoring. A `baseURL` ending in `/be` is trimmed with a warning: that was
 the previous packaged default, and inheriting it nested the sibling services a level too deep
 (`/v1/be/swaps/submit-tx`). See
 [CONFIGURE_SDK.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md)
@@ -130,8 +130,9 @@ slice, or via `sodax.api.sponsoring.setHeaders(...)`.
 ### API key
 
 There is one instance-wide backend key: `new Sodax({ apiKey })`, sent as `x-api-key` on this client,
-`sodax.api.swaps`, and `sodax.api.bridge`. Override it for a single call with `apiKey` on the trailing
-`RequestOverrideConfig`. The key follows a per-call `baseURL` override on these three clients too —
+`sodax.api.swaps`, `sodax.api.bridge`, and `sodax.api.leverageYield`. Override it for a single call with
+`apiKey` on the trailing `RequestOverrideConfig`. The key follows a per-call `baseURL` override on these
+gateway clients too —
 including a plaintext local target — so point one only at a trusted SODAX-related deployment.
 Sponsoring is the exception — its slice key wins there, and the instance-wide
 key reaches it only when the call targets a SODAX gateway root. See
@@ -334,6 +335,20 @@ minus the solver/intent surface: allowance/approve/create-bridge-intent, submit-
 the fee/bridgeable-amount/bridgeable discovery quotes. Submit a signed spoke-deposit with
 `sodax.api.bridge.submitTx(...)` (passing the FULL `relayData { address, payload }` envelope, not just the
 payload). See [`BRIDGE_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BRIDGE_API.md) for the full reference.
+
+## Leverage Yield Endpoints
+
+The Leverage Yield API v2 is a third sibling typed client — `sodax.api.leverageYield`
+(`LeverageYieldApiService`), also reached via the `sodax.api` alias and sharing the same backend host
+(`/leverage-yield/*` sub-paths). A leverage-yield deposit/withdraw **is** an intent-based swap (the vault's
+`lsoda*` share token is a solver-tradeable token), so its intent-relay / gas / fee / submit-tx endpoints
+reuse the swaps wire shapes; what is its own is the vault registry (`getVaults` / `getVault`), the vault
+reads (position, APRs, ERC-4626 previews, share balance, max-withdraw), and the split deposit/withdraw
+quote + create-intent routes. `sodax.api.leverageYield.submitTx(...)` additionally carries a required
+`operation: 'deposit' | 'withdraw'` discriminator — echoed back by `getSubmitTxStatus` as
+`data.operation: 'leverage_deposit' | 'leverage_withdraw'` — and its terminal submit-tx status is
+`'solved'` (the solver filled), not the bridge's `'executed'`. See
+[`LEVERAGE_YIELD_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/LEVERAGE_YIELD_API.md) for the full reference.
 
 ## Solver Endpoints
 

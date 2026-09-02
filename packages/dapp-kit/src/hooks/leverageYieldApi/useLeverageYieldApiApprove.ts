@@ -1,5 +1,6 @@
 import type { CreateDepositIntentParamsV2, ApproveResponseV2, RequestOverrideConfig } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import { retryUnlessAuthFailure } from '../shared/retryUnlessAuthFailure.js';
 import { unwrapResult } from '../shared/unwrapResult.js';
 import type { MutationHookParams } from '../shared/types.js';
 import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
@@ -28,7 +29,7 @@ export const useLeverageYieldApiApprove = ({
 
   return useSafeMutation<ApproveResponseV2, Error, UseLeverageYieldApiApproveVars>({
     mutationKey: ['leverageYieldApi', 'approve'],
-    retry: 3,
+    retry: retryUnlessAuthFailure,
     ...mutationOptions,
     mutationFn: async ({ body, apiConfig }): Promise<ApproveResponseV2> =>
       unwrapResult(await sodax.api.leverageYield.approve(body, apiConfig)),

@@ -126,6 +126,32 @@ describe('SubmitTxStatusResponseSchema', () => {
   it('rejects the removed legacy status "executed"', () => {
     expect(v.safeParse(SubmitTxStatusResponseSchema, envelope('executed')).success).toBe(false);
   });
+
+  it('keeps the leverage-yield operation discriminator, fill hash and refund timestamp', () => {
+    const row = envelope('solved');
+    const parsed = v.parse(SubmitTxStatusResponseSchema, {
+      ...row,
+      data: {
+        ...row.data,
+        operation: 'leverage_withdraw',
+        relayedForRefundAt: '2026-09-02T00:00:00.000Z',
+        result: { dstIntentTxHash: '0xdst', fillTxHash: '0xfill' },
+      },
+    }).data;
+    expect(parsed.operation).toBe('leverage_withdraw');
+    expect(parsed.relayedForRefundAt).toBe('2026-09-02T00:00:00.000Z');
+    expect(parsed.result?.fillTxHash).toBe('0xfill');
+  });
+
+  it('parses a row without operation (backends predating the discriminator)', () => {
+    expect(v.parse(SubmitTxStatusResponseSchema, envelope('relaying')).data.operation).toBeUndefined();
+  });
+
+  it('rejects an operation outside the picklist', () => {
+    const row = envelope('solved');
+    const bad = { ...row, data: { ...row.data, operation: 'redeem' } };
+    expect(v.safeParse(SubmitTxStatusResponseSchema, bad).success).toBe(false);
+  });
 });
 
 describe('CreateIntentResponseSchema', () => {

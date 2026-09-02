@@ -202,6 +202,47 @@ Typed wrappers over `sodax.api.bridge.*` (one per Bridge API v2 endpoint), all k
 | `['bridgeApi', 'createBridgeIntent']` | `useBridgeApiCreateBridgeIntent` mutation |
 | `['bridgeApi', 'submitTx']` | `useBridgeApiSubmitTx` mutation |
 
+### Leverage Yield API (`sodax.api.leverageYield`)
+
+Typed wrappers over `sodax.api.leverageYield.*` (one per Leverage Yield API v2 endpoint), all keyed `['leverageYieldApi', action, ...]`.
+
+| Key | Hook |
+|---|---|
+| `['leverageYieldApi', 'vaults']` | `useLeverageYieldApiVaults` |
+| `['leverageYieldApi', 'vault', name]` | `useLeverageYieldApiVault` |
+| `['leverageYieldApi', 'asset', vault]` | `useLeverageYieldApiAsset` |
+| `['leverageYieldApi', 'position', vault]` | `useLeverageYieldApiPosition` |
+| `['leverageYieldApi', 'apr', vault]` | `useLeverageYieldApiApr` |
+| `['leverageYieldApi', 'effectiveApr', vault]` | `useLeverageYieldApiEffectiveApr` |
+| `['leverageYieldApi', 'lsdApr', vault]` | `useLeverageYieldApiLsdApr` |
+| `['leverageYieldApi', 'totalAssets', vault]` | `useLeverageYieldApiTotalAssets` |
+| `['leverageYieldApi', 'previewDeposit', vault, assets]` | `useLeverageYieldApiPreviewDeposit` |
+| `['leverageYieldApi', 'previewWithdraw', vault, assets]` | `useLeverageYieldApiPreviewWithdraw` |
+| `['leverageYieldApi', 'previewRedeem', vault, shares]` | `useLeverageYieldApiPreviewRedeem` |
+| `['leverageYieldApi', 'shareBalance', vault, owner]` | `useLeverageYieldApiShareBalance` |
+| `['leverageYieldApi', 'maxWithdraw', vault, owner]` | `useLeverageYieldApiMaxWithdraw` |
+| `['leverageYieldApi', 'depositQuote', …]` | `useLeverageYieldApiDepositQuote` |
+| `['leverageYieldApi', 'withdrawQuote', …]` | `useLeverageYieldApiWithdrawQuote` |
+| `['leverageYieldApi', 'deadline', …]` | `useLeverageYieldApiDeadline` |
+| `['leverageYieldApi', 'allowance', …]` | `useLeverageYieldApiAllowance` |
+| `['leverageYieldApi', 'status', intentTxHash]` | `useLeverageYieldApiStatus` |
+| `['leverageYieldApi', 'intentHash', …]` | `useLeverageYieldApiIntentHash` |
+| `['leverageYieldApi', 'intentPacket', …]` | `useLeverageYieldApiIntentPacket` |
+| `['leverageYieldApi', 'intentExtraData', …]` | `useLeverageYieldApiIntentExtraData` |
+| `['leverageYieldApi', 'filledIntent', txHash]` | `useLeverageYieldApiFilledIntent` |
+| `['leverageYieldApi', 'intent', txHash]` | `useLeverageYieldApiIntent` |
+| `['leverageYieldApi', 'estimateGas', …]` | `useLeverageYieldApiEstimateGas` |
+| `['leverageYieldApi', 'partnerFee', amount]` | `useLeverageYieldApiPartnerFee` |
+| `['leverageYieldApi', 'solverFee', amount]` | `useLeverageYieldApiSolverFee` |
+| `['leverageYieldApi', 'submitTx', 'status', txHash, srcChainKey]` | `useLeverageYieldApiSubmitTxStatus` — both identifiers required |
+| `['leverageYieldApi', 'approve']` | `useLeverageYieldApiApprove` mutation |
+| `['leverageYieldApi', 'approveAndBroadcast']` | `useLeverageYieldApiApproveAndBroadcast` mutation |
+| `['leverageYieldApi', 'createDepositIntent']` | `useLeverageYieldApiCreateDepositIntent` mutation |
+| `['leverageYieldApi', 'createWithdrawIntent']` | `useLeverageYieldApiCreateWithdrawIntent` mutation |
+| `['leverageYieldApi', 'submitIntent']` | `useLeverageYieldApiSubmitIntent` mutation |
+| `['leverageYieldApi', 'cancelIntent']` | `useLeverageYieldApiCancelIntent` mutation |
+| `['leverageYieldApi', 'submitTx']` | `useLeverageYieldApiSubmitTx` mutation |
+
 ### Leverage Yield
 
 | Key | Hook |

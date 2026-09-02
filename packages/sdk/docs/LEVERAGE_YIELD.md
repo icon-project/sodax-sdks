@@ -197,6 +197,50 @@ if (intentResult.ok) {
 
 To size a full exit, read the withdrawable balance with `getMaxWithdrawForUser(vault, srcChainKey, srcAddress)` (already dust-buffered) or the raw share balance with `getShareBalanceForUser(...)`.
 
+### Completion paths and `timeout`
+
+`vaultSwap()` completes through one of two paths, each bounded by its **own** `timeout` budget:
+
+- **Client-side (the default):** verify the broadcast intent tx landed on-chain, relay it to the hub
+  (Sonic) — skipped when `srcChainKey` is the hub, where the spoke tx already *is* the hub tx — then call
+  `notifySolver` so the solver fills the intent.
+- **Backend 2-step (opt in with `leverageYield.useBackendSubmitTx: true`):** hand the broadcast tx to the
+  Leverage Yield API (`sodax.api.leverageYield.submitTx`, carrying `operation: 'deposit' | 'withdraw'`),
+  which relays and post-executes server-side, then poll `getSubmitTxStatus` until `solved`. On **any**
+  non-success — submission rejected, a 200 the backend did not accept, terminal `failed`/abandoned, a
+  rejected API key, or the poll running out — it falls back to the client-side path so the vault swap
+  still completes, returning the same `VaultSwapResponse` either way. That is safe because re-relaying /
+  re-posting an already-processed vault swap is idempotent (the relay dedups and the solver re-affirms
+  the intent — no double-fill), and it matters in practice: the backend keeps processing at its own pace
+  after the SDK gives up, so the two relays can race.
+
+This is the leverage-yield counterpart of `swaps.useBackendSubmitTx`, but it defaults **off** while the
+backend path beds in. Read the effective value on `sodax.config.leverageYieldUseBackendSubmitTx`.
+
+`timeout` is a **per-attempt** budget, not an end-to-end one: the backend attempt (the POST plus its
+status poll) gets it, and if that attempt does not complete the client-side relay wait gets a fresh one
+starting after verification — so neither a stalled backend nor a slow source-chain confirmation can
+shorten it, and raising `timeout` grows both. Verification runs on the client-side path only (the backend
+runs its own, so verifying first would delay every backend success). Worst-case wall-clock is
+`createVaultIntent + timeout + verification + max(timeout, RELAY_FALLBACK_FLOOR_MS) + notifySolver`, where
+verification is bounded by the source chain's `pollingConfig.maxTimeoutMs` and the first and last terms
+are not bounded by `timeout` at all — the same model
+[SWAPS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md#how-timeout-bounds-each-attempt)
+documents for swaps.
+
+```typescript
+// Default — fully client-side relay + notify-solver.
+const sodax = new Sodax();
+
+// Opt into the backend 2-step path (client-side fallback still applies).
+const sodaxBackend = new Sodax({ leverageYield: { useBackendSubmitTx: true } });
+```
+
+When the backend attempt does not complete, its own error is logged and discarded — the fallback runs and
+its outcome is what you receive, so the code on the `Result` always describes the client-side attempt.
+Check the logs, not the `Result`, to tell why the backend path was abandoned. For the HTTP client itself
+see [LEVERAGE_YIELD_API.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/LEVERAGE_YIELD_API.md).
+
 ### Direct allowance management (hub-side)
 
 `approve()` and `isAllowanceValid()` manage the allowance of the vault's underlying `asset` to the vault on Sonic. These are for callers interacting with the vault **directly on the hub** — the swap-style `deposit()` flow handles its own approvals, so most integrations never need them.
@@ -237,7 +281,7 @@ Creates the vault swap intent on the user's source spoke chain without submittin
 
 ### vaultSwap
 
-Executes the full end-to-end vault swap: `createVaultIntent` → verify the spoke tx → relay to the hub (skipped when the source is Sonic) → notify the solver. Spread a `LeverageYieldSwapPayload` into it alongside the wallet provider: `vaultSwap({ ...payload, walletProvider })`. **Returns:** `Promise<Result<VaultSwapResponse, LeverageYieldSwapError>>` — `solverExecutionResponse`, `intent`, and `intentDeliveryInfo`. `context.action` is `'vaultSwap'`.
+Executes the full end-to-end vault swap. `createVaultIntent` broadcasts the intent on the source spoke chain; completion then runs via one of the two paths in [Completion paths and `timeout`](#completion-paths-and-timeout) — by default the client-side one: verify the spoke tx → relay to the hub (skipped when the source is Sonic) → notify the solver. Spread a `LeverageYieldSwapPayload` into it alongside the wallet provider: `vaultSwap({ ...payload, walletProvider })`. **Returns:** `Promise<Result<VaultSwapResponse, LeverageYieldSwapError>>` — `solverExecutionResponse`, `intent`, and `intentDeliveryInfo`. `context.action` is `'vaultSwap'`.
 
 ### notifySolver
 
@@ -329,7 +373,7 @@ type LeverageYieldPosition = {
 
 All async public methods return `Promise<Result<T, SodaxError<NarrowCode>>>`. Discriminate on `result.error.code` (a string literal) — never on `result.error.message`. Same canonical shape used by swap, bridge, and money market.
 
-The service owns the full vault-swap lifecycle: `deposit` / `withdraw` build swap payloads, `createVaultIntent` submits the intent on the source spoke chain, `vaultSwap` orchestrates create → verify → relay → notify-solver, `approve` / `isAllowanceValid` manage the Sonic allowance, and the read methods query on-chain state. Relay/tx-verification codes appear **only** on `vaultSwap`. `deposit` / `withdraw` can additionally emit `LOOKUP_FAILED` (`method: 'resolveDeadline'`) when the default-`deadline` hub-block read fails — an RPC outage, not an intent-build failure. Every other method stays within the create-intent, approve, allowance-check, and lookup subsets.
+The service owns the full vault-swap lifecycle: `deposit` / `withdraw` build swap payloads, `createVaultIntent` submits the intent on the source spoke chain, `vaultSwap` orchestrates create → verify → relay → notify-solver, `approve` / `isAllowanceValid` manage the Sonic allowance, and the read methods query on-chain state. Relay/tx-verification codes appear **only** on `vaultSwap`, and only on its client-side path (the default, or the backend path's fallback) — so `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT` and `RELAY_FAILED` never surface on a vault swap the backend completes. `deposit` / `withdraw` can additionally emit `LOOKUP_FAILED` (`method: 'resolveDeadline'`) when the default-`deadline` hub-block read fails — an RPC outage, not an intent-build failure. Every other method stays within the create-intent, approve, allowance-check, and lookup subsets.
 
 ### Per-method error code unions
 

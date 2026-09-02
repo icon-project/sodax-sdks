@@ -1,5 +1,5 @@
 /**
- * Executable API-key wire manifest for the swapsApi + bridgeApi hook families.
+ * Executable API-key wire manifest for the swapsApi + bridgeApi + leverageYieldApi hook families.
  *
  * Every hook that accepts a per-request `apiConfig` must land it on the outgoing HTTP request as
  * `x-api-key`. Each row renders its hook without a renderer (the package convention: the React
@@ -10,8 +10,8 @@
  * request that already went out is the whole subject. For the approveAndBroadcast hooks that
  * rejection also means the wallet machinery is never touched.
  *
- * To add a new swapsApi/bridgeApi hook, add its row here. The friction is intentional — it forces
- * key-on-wire coverage from day one.
+ * To add a new swapsApi/bridgeApi/leverageYieldApi hook, add its row here. The friction is
+ * intentional — it forces key-on-wire coverage from day one.
  */
 
 import { ChainKeys, Sodax, type RequestOverrideConfig } from '@sodax/sdk';
@@ -41,6 +41,7 @@ vi.mock('./shared/useSafeMutation.js', () => ({
 
 const swapsApi = await import('./swapsApi/index.js');
 const bridgeApi = await import('./bridgeApi/index.js');
+const leverageYieldApi = await import('./leverageYieldApi/index.js');
 
 const fetchMock = vi.fn<typeof globalThis.fetch>(
   async () => new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }),
@@ -119,6 +120,47 @@ const BRIDGE_SUBMIT_REQUEST = {
   walletAddress: '0x1111111111111111111111111111111111111111',
   relayData: { address: '0x1111111111111111111111111111111111111111', payload: '0x' },
 };
+
+const VAULT = '0x6666666666666666666666666666666666666666';
+
+const LEVERAGE_DEPOSIT_BODY = {
+  vault: VAULT,
+  srcChainKey: ChainKeys.SONIC_MAINNET,
+  srcAddress: '0x1111111111111111111111111111111111111111',
+  inputToken: '0x4444444444444444444444444444444444444444',
+  inputAmount: '1000000',
+  minOutputAmount: '1',
+};
+
+const LEVERAGE_WITHDRAW_BODY = {
+  vault: VAULT,
+  srcChainKey: ChainKeys.SONIC_MAINNET,
+  srcAddress: '0x1111111111111111111111111111111111111111',
+  dstChainKey: ChainKeys.ARBITRUM_MAINNET,
+  outputToken: '0x5555555555555555555555555555555555555555',
+  inputAmount: '1000000000000000000',
+  minOutputAmount: '1',
+};
+
+const LEVERAGE_DEPOSIT_QUOTE_BODY = {
+  vault: VAULT,
+  tokenSrc: '0x4444444444444444444444444444444444444444',
+  tokenSrcChainKey: ChainKeys.SONIC_MAINNET,
+  amount: '1000000',
+  quoteType: 'exact_input' as const,
+};
+
+const LEVERAGE_WITHDRAW_QUOTE_BODY = {
+  vault: VAULT,
+  srcChainKey: ChainKeys.SONIC_MAINNET,
+  tokenDst: '0x5555555555555555555555555555555555555555',
+  tokenDstChainKey: ChainKeys.ARBITRUM_MAINNET,
+  amount: '1000000000000000000',
+  quoteType: 'exact_input' as const,
+};
+
+/** The leverage-yield submit-tx body carries the required `operation` discriminator. */
+const LEVERAGE_SUBMIT_TX_REQUEST = { ...SUBMIT_TX_REQUEST, operation: 'deposit' as const };
 
 // --- manifest ---------------------------------------------------------------
 
@@ -443,6 +485,325 @@ const ROWS: Row[] = [
       return captured.mutationFn({ body: BRIDGE_INTENT_BODY, walletProvider: {}, apiConfig });
     },
   },
+  // leverageYieldApi read hooks
+  {
+    hook: 'useLeverageYieldApiVaults',
+    path: '/leverage-yield/vaults',
+    method: 'GET',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiVaults({ params: { apiConfig } });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiVault',
+    path: '/leverage-yield/vaults/lsodaWEETH',
+    method: 'GET',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiVault({ params: { name: 'lsodaWEETH', apiConfig } });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiAsset',
+    path: '/leverage-yield/asset',
+    method: 'GET',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiAsset({ params: { vault: VAULT, apiConfig } });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiPosition',
+    path: '/leverage-yield/position',
+    method: 'GET',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiPosition({ params: { vault: VAULT, apiConfig } });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiApr',
+    path: '/leverage-yield/apr',
+    method: 'GET',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiApr({ params: { vault: VAULT, apiConfig } });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiEffectiveApr',
+    path: '/leverage-yield/apr/effective',
+    method: 'GET',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiEffectiveApr({ params: { vault: VAULT, apiConfig } });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiLsdApr',
+    path: '/leverage-yield/apr/lsd',
+    method: 'GET',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiLsdApr({ params: { vault: VAULT, apiConfig } });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiTotalAssets',
+    path: '/leverage-yield/total-assets',
+    method: 'GET',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiTotalAssets({ params: { vault: VAULT, apiConfig } });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiPreviewDeposit',
+    path: '/leverage-yield/preview/deposit',
+    method: 'GET',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiPreviewDeposit({ params: { vault: VAULT, assets: '1000000', apiConfig } });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiPreviewWithdraw',
+    path: '/leverage-yield/preview/withdraw',
+    method: 'GET',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiPreviewWithdraw({ params: { vault: VAULT, assets: '1000000', apiConfig } });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiPreviewRedeem',
+    path: '/leverage-yield/preview/redeem',
+    method: 'GET',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiPreviewRedeem({ params: { vault: VAULT, shares: '1000000', apiConfig } });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiShareBalance',
+    path: '/leverage-yield/share-balance',
+    method: 'GET',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiShareBalance({
+        params: { vault: VAULT, owner: '0x1111111111111111111111111111111111111111', apiConfig },
+      });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiMaxWithdraw',
+    path: '/leverage-yield/max-withdraw',
+    method: 'GET',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiMaxWithdraw({
+        params: { vault: VAULT, owner: '0x1111111111111111111111111111111111111111', apiConfig },
+      });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiDepositQuote',
+    path: '/leverage-yield/quote/deposit',
+    method: 'POST',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiDepositQuote({ params: { body: LEVERAGE_DEPOSIT_QUOTE_BODY, apiConfig } });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiWithdrawQuote',
+    path: '/leverage-yield/quote/withdraw',
+    method: 'POST',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiWithdrawQuote({ params: { body: LEVERAGE_WITHDRAW_QUOTE_BODY, apiConfig } });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiDeadline',
+    path: '/leverage-yield/deadline',
+    method: 'GET',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiDeadline({ params: { apiConfig } });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiAllowance',
+    path: '/leverage-yield/allowance/check',
+    method: 'POST',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiAllowance({ params: { body: LEVERAGE_DEPOSIT_BODY, apiConfig } });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiStatus',
+    path: '/leverage-yield/intents/status',
+    method: 'POST',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiStatus({ params: { intentTxHash: '0xabc', apiConfig } });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiIntentHash',
+    path: '/leverage-yield/intents/hash',
+    method: 'POST',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiIntentHash({ params: { intent: INTENT, apiConfig } });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiIntentPacket',
+    path: '/leverage-yield/intents/packet',
+    method: 'POST',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiIntentPacket({
+        params: { body: { chainId: '146', fillTxHash: '0xf' }, apiConfig },
+      });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiIntentExtraData',
+    path: '/leverage-yield/intents/extra-data',
+    method: 'POST',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiIntentExtraData({ params: { body: { txHash: '0xabc' }, apiConfig } });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiFilledIntent',
+    path: '/leverage-yield/intents/0xabc/fill',
+    method: 'GET',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiFilledIntent({ params: { txHash: '0xabc', apiConfig } });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiIntent',
+    path: '/leverage-yield/intents/0xabc',
+    method: 'GET',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiIntent({ params: { txHash: '0xabc', apiConfig } });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiEstimateGas',
+    path: '/leverage-yield/gas/estimate',
+    method: 'POST',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiEstimateGas({
+        params: { body: { chainKey: ChainKeys.SONIC_MAINNET, tx: { from: '0xf', to: '0xt', data: '0x' } }, apiConfig },
+      });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiPartnerFee',
+    path: '/leverage-yield/fees/partner',
+    method: 'GET',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiPartnerFee({ params: { amount: '1000', apiConfig } });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiSolverFee',
+    path: '/leverage-yield/fees/solver',
+    method: 'GET',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiSolverFee({ params: { amount: '1000', apiConfig } });
+      return captured.queryFn();
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiSubmitTxStatus',
+    path: '/leverage-yield/submit-tx/status',
+    method: 'GET',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiSubmitTxStatus({
+        params: { txHash: '0xabc', srcChainKey: ChainKeys.SONIC_MAINNET, apiConfig },
+      });
+      return captured.queryFn();
+    },
+  },
+  // leverageYieldApi mutation hooks
+  {
+    hook: 'useLeverageYieldApiApprove',
+    path: '/leverage-yield/approve',
+    method: 'POST',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiApprove();
+      return captured.mutationFn({ body: LEVERAGE_DEPOSIT_BODY, apiConfig });
+    },
+  },
+  {
+    // Same shape as the swaps/bridge rows: the failed approve unwrap rejects before any wallet work.
+    hook: 'useLeverageYieldApiApproveAndBroadcast',
+    path: '/leverage-yield/approve',
+    method: 'POST',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiApproveAndBroadcast();
+      return captured.mutationFn({ body: LEVERAGE_DEPOSIT_BODY, walletProvider: {}, apiConfig });
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiCreateDepositIntent',
+    path: '/leverage-yield/intents/deposit',
+    method: 'POST',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiCreateDepositIntent();
+      return captured.mutationFn({ body: LEVERAGE_DEPOSIT_BODY, apiConfig });
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiCreateWithdrawIntent',
+    path: '/leverage-yield/intents/withdraw',
+    method: 'POST',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiCreateWithdrawIntent();
+      return captured.mutationFn({ body: LEVERAGE_WITHDRAW_BODY, apiConfig });
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiCancelIntent',
+    path: '/leverage-yield/intents/cancel',
+    method: 'POST',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiCancelIntent();
+      return captured.mutationFn({ body: { srcChainKey: ChainKeys.SONIC_MAINNET, intent: INTENT }, apiConfig });
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiSubmitIntent',
+    path: '/leverage-yield/intents/submit',
+    method: 'POST',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiSubmitIntent();
+      return captured.mutationFn({ body: { chainId: '146', txHash: '0xabc' }, apiConfig });
+    },
+  },
+  {
+    hook: 'useLeverageYieldApiSubmitTx',
+    path: '/leverage-yield/submit-tx',
+    method: 'POST',
+    run: apiConfig => {
+      leverageYieldApi.useLeverageYieldApiSubmitTx();
+      return captured.mutationFn({ request: LEVERAGE_SUBMIT_TX_REQUEST, apiConfig });
+    },
+  },
 ];
 
 /** Fails loudly when a named row is missing, so a hook rename cannot silently drop coverage. */
@@ -469,19 +830,24 @@ describe('apiConfig.apiKey reaches the wire (hook-level key beats the instance k
 });
 
 describe('a raw x-api-key header override wins in any casing, without duplicating the header', () => {
-  const REPRESENTATIVES = [rowFor('useSwapsApiTokens'), rowFor('useBridgeApiTokens')];
+  const REPRESENTATIVES = [
+    rowFor('useSwapsApiTokens'),
+    rowFor('useBridgeApiTokens'),
+    rowFor('useLeverageYieldApiVaults'),
+  ];
 
-  it.each(REPRESENTATIVES)(
-    '$hook → $method $path carries exactly one x-api-key: raw-key',
-    async ({ path, method, run }) => {
-      await run({ headers: { 'X-Api-Key': 'raw-key' } }).catch(() => {});
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      const [url, init] = fetchMock.mock.calls[0] ?? [];
-      expect(new URL(String(url)).pathname).toBe(`/v1${path}`);
-      expect(init?.method).toBe(method);
-      const headers = init?.headers as Record<string, string>;
-      expect(Object.keys(headers).filter(name => name.toLowerCase() === 'x-api-key')).toHaveLength(1);
-      expect(new Headers(headers).get('x-api-key')).toBe('raw-key');
-    },
-  );
+  it.each(REPRESENTATIVES)('$hook → $method $path carries exactly one x-api-key: raw-key', async ({
+    path,
+    method,
+    run,
+  }) => {
+    await run({ headers: { 'X-Api-Key': 'raw-key' } }).catch(() => {});
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(new URL(String(url)).pathname).toBe(`/v1${path}`);
+    expect(init?.method).toBe(method);
+    const headers = init?.headers as Record<string, string>;
+    expect(Object.keys(headers).filter(name => name.toLowerCase() === 'x-api-key')).toHaveLength(1);
+    expect(new Headers(headers).get('x-api-key')).toBe('raw-key');
+  });
 });

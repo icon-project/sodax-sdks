@@ -6,6 +6,7 @@ import type {
   RequestOverrideConfig,
 } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import { retryUnlessAuthFailure } from '../shared/retryUnlessAuthFailure.js';
 import { unwrapResult } from '../shared/unwrapResult.js';
 import type { ReadHookParams } from '../shared/types.js';
 
@@ -50,7 +51,7 @@ export const useLeverageYieldApiDepositQuote = ({
       return unwrapResult(await sodax.api.leverageYield.getDepositQuote(body, query, apiConfig));
     },
     enabled: !!body,
-    retry: 3,
+    retry: retryUnlessAuthFailure,
     ...queryOptions,
   });
 };

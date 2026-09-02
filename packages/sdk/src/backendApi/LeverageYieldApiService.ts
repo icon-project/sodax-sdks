@@ -12,6 +12,7 @@ import type {
   CreateWithdrawIntentParamsV2,
   DeadlineQueryV2,
   DeadlineResponseV2,
+  FeeAmount,
   FeeQueryV2,
   FeeResponseV2,
   GasEstimateRequestV2,
@@ -26,6 +27,7 @@ import type {
   IntentHashResponseV2,
   IntentPacketRequestV2,
   IntentPacketResponseV2,
+  IntentRequestV2,
   IntentStateV2,
   LeverageYieldAprV2,
   LeverageYieldDepositQuoteRequestV2,
@@ -58,10 +60,19 @@ import type {
   VaultTotalAssetsResponseV2,
 } from '@sodax/types';
 
-import { makeRequest, toJsonBody, type RequestConfig, type RequestOverrideConfig } from './api-utils.js';
+import {
+  assignHeaders,
+  makeRequest,
+  toExternalApiError,
+  toInvalidResponseShapeError,
+  toJsonBody,
+  type RequestConfig,
+  type RequestOverrideConfig,
+} from './api-utils.js';
+import { normalizeOverrideBaseURL } from './apiConfig.js';
 import * as schemas from './leverageYieldApiSchemas.js';
 import { rawTxSchemaForChainKey } from './leverageYieldApiSchemas.js';
-import { SodaxError } from '../errors/SodaxError.js';
+import type { SodaxError } from '../errors/SodaxError.js';
 import { consoleLogger } from '../shared/logger.js';
 
 /**
@@ -92,22 +103,45 @@ type ResultifiedLeverageYieldApiV2 = {
  * has `ok: false` with a canonical `SodaxError<'EXTERNAL_API_ERROR'>` (`feature: 'backend'`,
  * `context.api: 'leverageYield'`); the underlying failure is preserved on `error.cause`.
  *
- * Per-call request overrides (base URL, timeout, headers) can be passed as the optional last
- * argument to any method via `RequestOverrideConfig`.
+ * Per-call request overrides (base URL, timeout, headers, API key) can be passed as the optional
+ * last argument to any method via `RequestOverrideConfig`.
+ *
+ * The Leverage Yield API hangs off the shared gateway root as `/leverage-yield/*` — a sibling of the
+ * data API's `/be` mount, not a child of it, so `resolveLeverageYieldApiConfig` returns a flat
+ * {@link BaseApiConfig} with no `basePath`. There is deliberately no `leverageYieldApiConfig` slice:
+ * retarget it via `baseURL` / `baseApiConfig`, or per call.
  *
  * Reachable on the Sodax facade as `sodax.api.leverageYield`.
  */
+/** Construction options for {@link LeverageYieldApiService}. */
+export type LeverageYieldApiServiceOptions = {
+  /**
+   * Whether a legacy `/be` suffix is trimmed off a per-call `baseURL` override. Defaults to `true`, the
+   * migration behaviour. `BackendApiService` passes `false` when the `ApiConfig` states a `basePath`
+   * explicitly: that marks a config written against the current contract, whose base URLs are deliberate
+   * roots, so a trailing `/be` is a real path segment rather than the data API's mount.
+   */
+  trimLegacyOverrides?: boolean;
+};
+
 export class LeverageYieldApiService implements ResultifiedLeverageYieldApiV2 {
   // Fully-resolved API config supplied by the caller (BackendApiService resolves the ApiConfig
   // union via `resolveBaseApiConfig`); leverage-yield endpoints are sub-paths under the base URL.
   private readonly config: BaseApiConfig;
   private readonly headers: Record<string, string>;
   private readonly logger: SodaxLogger;
+  /** See {@link LeverageYieldApiServiceOptions.trimLegacyOverrides}. */
+  private readonly trimsLegacyOverrides: boolean;
 
-  constructor(config: BaseApiConfig, logger: SodaxLogger = consoleLogger) {
+  constructor(
+    config: BaseApiConfig,
+    logger: SodaxLogger = consoleLogger,
+    options: LeverageYieldApiServiceOptions = {},
+  ) {
     this.config = config;
     this.headers = { ...config.headers };
     this.logger = logger;
+    this.trimsLegacyOverrides = options.trimLegacyOverrides ?? true;
   }
 
   /**
@@ -124,7 +158,10 @@ export class LeverageYieldApiService implements ResultifiedLeverageYieldApiV2 {
       const raw = await makeRequest<unknown>({
         endpoint,
         config: { baseURL: this.config.baseURL, timeout: this.config.timeout, headers: this.headers, ...config },
-        overrideConfig,
+        // Normalized like a configured base URL: the override is the gateway root, so a legacy
+        // `/be`-suffixed value must not nest `/leverage-yield/*` under the data API's mount — unless the
+        // config opted out of the legacy trim, in which case the per-call value is left as given.
+        overrideConfig: this.trimsLegacyOverrides ? normalizeOverrideBaseURL(overrideConfig) : overrideConfig,
         logger: this.logger,
         serviceLabel: 'LeverageYieldApiService',
       });
@@ -134,37 +171,32 @@ export class LeverageYieldApiService implements ResultifiedLeverageYieldApiV2 {
         // Backend returned a 2xx body that doesn't match the v2 contract — an upstream-API problem.
         return {
           ok: false,
-          error: new SodaxError(
-            'EXTERNAL_API_ERROR',
-            `Invalid response shape from leverage-yield API for ${endpoint}`,
-            {
-              feature: 'backend',
-              context: {
-                api: 'leverageYield',
-                endpoint,
-                reason: 'invalid_response_shape',
-                issues: v.flatten(parsed.issues),
-              },
-            },
-          ),
+          error: toInvalidResponseShapeError({
+            api: 'leverageYield',
+            feature: 'backend',
+            endpoint,
+            issues: v.flatten(parsed.issues),
+          }),
         };
       }
       return { ok: true, value: parsed.output };
     } catch (error) {
-      // Network failure, timeout, or non-2xx HTTP status thrown by makeRequest.
-      return {
-        ok: false,
-        error: new SodaxError(
-          'EXTERNAL_API_ERROR',
-          error instanceof Error ? error.message : `Request to ${endpoint} failed`,
-          {
-            feature: 'backend',
-            cause: error,
-            context: { api: 'leverageYield', endpoint },
-          },
-        ),
-      };
+      // Network failure, timeout, or non-2xx HTTP status thrown by makeRequest. Preserves the
+      // underlying error as `cause` and lifts its status so `isAuthFailure` recognizes a 401/403.
+      return { ok: false, error: toExternalApiError({ api: 'leverageYield', feature: 'backend', endpoint, error }) };
     }
+  }
+
+  /**
+   * Drop the SDK-only display field `feeAmount` before an intent reaches the strict wire serializer.
+   * `sodax.leverageYield.createVaultIntent` returns `Intent & FeeAmount`, which is structurally
+   * assignable to the wire `IntentRequestV2` and so gets passed straight into the intent-carrying
+   * endpoints; the lenient JSON serializer would send the extra bigint wholesale. Mirrors
+   * `SwapsApiService.toWireIntent`; a no-op for an already-clean `IntentRequestV2`.
+   */
+  private static toWireIntent(intent: IntentRequestV2): IntentRequestV2 {
+    const { feeAmount: _feeAmount, ...rest }: IntentRequestV2 & Partial<FeeAmount> = intent;
+    return rest;
   }
 
   /** Append `params` to `base` as a query string, returning `base` unchanged when `params` is empty. */
@@ -366,7 +398,8 @@ export class LeverageYieldApiService implements ResultifiedLeverageYieldApiV2 {
   }
 
   /**
-   * Get the maximum assets an owner can withdraw (ERC-4626 `maxWithdraw`, dust-trimmed).
+   * Get an owner's RAW ERC-4626 `maxWithdraw` — NOT dust-trimmed, unlike the SDK-local
+   * `sodax.leverageYield.getMaxWithdrawForUser`. Apply a margin before using it as a withdraw amount.
    *
    * @returns `Result<MaxWithdrawResponseV2>` — `{ maxWithdraw }` (decimal string).
    */
@@ -578,7 +611,7 @@ export class LeverageYieldApiService implements ResultifiedLeverageYieldApiV2 {
     const txSchema = rawTxSchemaForChainKey(body.srcChainKey);
     return this.request(
       '/leverage-yield/intents/cancel',
-      { method: 'POST', body: toJsonBody(body) },
+      { method: 'POST', body: toJsonBody({ ...body, intent: LeverageYieldApiService.toWireIntent(body.intent) }) },
       schemas.makeCancelIntentResponseSchema(txSchema),
       config,
     );
@@ -595,7 +628,7 @@ export class LeverageYieldApiService implements ResultifiedLeverageYieldApiV2 {
   ): Promise<Result<IntentHashResponseV2>> {
     return this.request(
       '/leverage-yield/intents/hash',
-      { method: 'POST', body: toJsonBody(body) },
+      { method: 'POST', body: toJsonBody({ ...body, intent: LeverageYieldApiService.toWireIntent(body.intent) }) },
       schemas.IntentHashResponseSchema,
       config,
     );
@@ -628,9 +661,10 @@ export class LeverageYieldApiService implements ResultifiedLeverageYieldApiV2 {
     body: IntentExtraDataRequestV2,
     config?: RequestOverrideConfig,
   ): Promise<Result<IntentExtraDataResponseV2>> {
+    const normalized = body.intent ? { ...body, intent: LeverageYieldApiService.toWireIntent(body.intent) } : body;
     return this.request(
       '/leverage-yield/intents/extra-data',
-      { method: 'POST', body: toJsonBody(body) },
+      { method: 'POST', body: toJsonBody(normalized) },
       schemas.RelayExtraDataResponseSchema,
       config,
     );
@@ -725,7 +759,7 @@ export class LeverageYieldApiService implements ResultifiedLeverageYieldApiV2 {
   ): Promise<Result<SubmitTxResponseV2>> {
     return this.request(
       '/leverage-yield/submit-tx',
-      { method: 'POST', body: toJsonBody(body) },
+      { method: 'POST', body: toJsonBody({ ...body, intent: LeverageYieldApiService.toWireIntent(body.intent) }) },
       schemas.SubmitTxResponseSchema,
       config,
     );
@@ -757,13 +791,23 @@ export class LeverageYieldApiService implements ResultifiedLeverageYieldApiV2 {
    * overwritten; keys absent from `headers` are preserved.
    */
   public setHeaders(headers: Record<string, string>): void {
-    Object.entries(headers).forEach(([key, value]) => {
-      this.headers[key] = value;
-    });
+    assignHeaders(this.headers, headers);
   }
 
   /** Return the base URL the service is currently pointing at. */
   public getBaseURL(): string {
     return this.config.baseURL;
+  }
+
+  /**
+   * Return the effective per-request timeout (ms).
+   *
+   * Callers bounding a request tighter than this need it as the CEILING, because a
+   * `RequestOverrideConfig.timeout` REPLACES the service value rather than lowering it: an override
+   * derived from a caller budget alone would raise the bound whenever that budget is the larger of the
+   * two. `SubmitTxAttempt.requestTimeout` clamps against both (`min(budget left in the attempt, this)`).
+   */
+  public getTimeout(): number {
+    return this.config.timeout;
   }
 }

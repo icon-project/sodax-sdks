@@ -31,6 +31,7 @@ export * from './useLeverageYieldApiAllowance.js';
 
 // Approve · create intent (deposit / withdraw)
 export * from './useLeverageYieldApiApprove.js';
+export * from './useLeverageYieldApiApproveAndBroadcast.js';
 export * from './useLeverageYieldApiCreateDepositIntent.js';
 export * from './useLeverageYieldApiCreateWithdrawIntent.js';
 

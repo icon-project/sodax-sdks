@@ -1,6 +1,6 @@
 // Backend Leverage Yield API v2 — request/response contract types.
 //
-// One type per request/response of every endpoint in the (planned) backend
+// One type per request/response of every endpoint of the backend
 // `leverage-yield-api` controller. This is the leverage-yield counterpart to the
 // Swaps API v2 contract in `./backendApiV2.ts`, and follows the same conventions:
 // - Outbound (response) types are pure JSON — every bigint-derived value (amounts,
@@ -227,9 +227,14 @@ export interface ShareBalanceResponseV2 {
   balance: string;
 }
 
-/** GET /leverage-yield/max-withdraw — the maximum assets an owner can withdraw (ERC-4626 `maxWithdraw`, dust-trimmed). */
+/**
+ * GET /leverage-yield/max-withdraw — an owner's RAW ERC-4626 `maxWithdraw`, NOT dust-trimmed. Fed straight
+ * into an asset-denominated withdraw it can trip the vault's share round-up and revert, so a "MAX" flow
+ * should apply its own margin (the SDK-local `getMaxWithdrawForUser` subtracts `MAX_WITHDRAW_DUST_BUFFER`
+ * for exactly that reason).
+ */
 export interface MaxWithdrawResponseV2 {
-  /** Maximum withdrawable underlying asset, in smallest unit (18 decimals, decimal string). */
+  /** Maximum withdrawable underlying asset, in smallest unit (18 decimals, decimal string). Raw, no dust margin. */
   maxWithdraw: string;
 }
 
@@ -263,6 +268,10 @@ export interface LeverageYieldDepositQuoteRequestV2 {
  * POST /leverage-yield/quote/withdraw — request body. Quotes a swap-style withdraw: the
  * vault's lsoda* shares → any solver-supported `tokenDst` on `tokenDstChainKey`, returning
  * the expected output in {@link QuoteResponseV2.quotedAmount}.
+ *
+ * Deliberately carries no `partnerFee`, unlike the deposit quote: the backend applies its configured
+ * leverage-yield fee to withdraws (deducted from the lsoda* input) and rejects unknown body fields, so
+ * a per-request override is not part of the wire contract.
  */
 export interface LeverageYieldWithdrawQuoteRequestV2 {
   /** Hub-side `LeverageYieldVault` proxy address (source vault). */
@@ -320,7 +329,10 @@ export interface CreateDepositIntentParamsV2 {
  * POST /leverage-yield/intents/withdraw — request body. Builds a swap-style withdraw: the
  * vault's lsoda* shares (held in the user's hub wallet) → any solver-supported `outputToken`
  * on `dstChainKey`. The backend sets `hubWalletSwap` internally so the swap spends the lsoda*
- * held in the user's hub wallet. JSON-safe mirror of the SDK `LeverageYieldSwapWithdrawParams`.
+ * held in the user's hub wallet. JSON-safe mirror of the SDK `LeverageYieldSwapWithdrawParams`
+ * minus its `partnerFee`: the backend applies its configured leverage-yield fee to withdraws
+ * (deducted from the lsoda* input) and rejects unknown body fields, so there is no per-intent
+ * override on the wire.
  */
 export interface CreateWithdrawIntentParamsV2 {
   /** Hub-side `LeverageYieldVault` proxy address (its address doubles as the lsoda* token). */
@@ -360,9 +372,9 @@ export interface CreateWithdrawIntentParamsV2 {
  * leverage-yield-specific surface is the vault registry, the vault reads, and the separate
  * deposit/withdraw create-intent (and quote) endpoints.
  *
- * As with `ISwapsApiV2`, do NOT `implements` this on the NestJS controller: handlers return
- * pre-serialization domain types (`bigint`, branded values) and the response interceptor
- * serializes them into these wire shapes afterwards.
+ * As with `ISwapsApiV2`, the backend `LeverageYieldController` `implements` this — declaring every
+ * handler `async` and typed with the wire-shaped DTOs — so a request or response shape cannot drift
+ * from this contract without failing the backend build.
  */
 export interface ILeverageYieldApiV2 {
   // ── Vault registry ──

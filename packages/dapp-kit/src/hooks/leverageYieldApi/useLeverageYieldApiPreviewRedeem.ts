@@ -1,6 +1,7 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import type { PreviewRedeemResponseV2, RequestOverrideConfig } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import { retryUnlessAuthFailure } from '../shared/retryUnlessAuthFailure.js';
 import { unwrapResult } from '../shared/unwrapResult.js';
 import type { ReadHookParams } from '../shared/types.js';
 
@@ -36,7 +37,7 @@ export const useLeverageYieldApiPreviewRedeem = ({
       return unwrapResult(await sodax.api.leverageYield.previewRedeem({ vault, shares }, apiConfig));
     },
     enabled: !!vault && vault.length > 0 && shares !== undefined,
-    retry: 3,
+    retry: retryUnlessAuthFailure,
     ...queryOptions,
   });
 };
