@@ -53,7 +53,11 @@ jobs:
           set -euo pipefail
           # --no-renames, as the classifier: a rename reports only its destination otherwise,
           # so a docs page moved out of docs/ would read as never having been there.
-          if [ "$AUTO_MERGE" = 'true' ] || git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA" | grep -q '^docs/'; then
+          # Matched on a captured list, as in ci.yml: grep -q would exit on the first hit and
+          # leave git diff writing to a closed pipe, which pipefail reads as no match at all.
+          files=$(git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA")
+          docs_files=$(printf '%s\n' "$files" | grep -E '^docs/' || true)
+          if [ "$AUTO_MERGE" = 'true' ] || [ -n "$docs_files" ]; then
             echo 'in_scope=true' >>"$GITHUB_OUTPUT"
           else
             echo 'in_scope=false' >>"$GITHUB_OUTPUT"

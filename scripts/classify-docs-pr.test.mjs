@@ -164,6 +164,16 @@ test('false for a generated page, which the path allowlist alone would let throu
   assert.match(classify(root, base, head), /marketing_only=false[\s\S]*is generated, or its frontmatter is unreadable/);
 });
 
+// Larger than a pipe buffer, so awk's early exit leaves the rest of the page unread.
+test('false for a generated page too large to read through a pipe', t => {
+  const { root, base } = createRepo(t);
+  const body = 'filler line\n'.repeat(20_000);
+  write(root, 'docs/developers/faq.md', generated('FAQ', 'packages/sdk/docs/FAQ.md') + body);
+  const head = commit(root, 'faq becomes a large generated page');
+
+  assert.match(classify(root, base, head), /marketing_only=false[\s\S]*is generated, or its frontmatter is unreadable/);
+});
+
 test('false when a PR strips the generatedFrom key to qualify itself', t => {
   const { root } = createRepo(t);
   write(root, 'docs/developers/faq.md', generated('FAQ', 'packages/sdk/docs/FAQ.md'));

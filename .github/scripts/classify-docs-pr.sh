@@ -30,15 +30,17 @@ verdict() {
 
 # True when frontmatter carries generatedFrom, and when it is missing, unterminated or
 # unreadable — then generatedFrom cannot be ruled out. Only END exits, or it overrides.
+# A here-string, not a pipe: awk exits early, and a writer left holding a page larger than
+# the pipe buffer would take SIGPIPE and lose awk's verdict to pipefail.
 is_generated() {
   local ref="$1" path="$2" content
   content=$(git show "${ref}:${path}" 2>/dev/null) || return 0
-  printf '%s\n' "$content" | awk '
+  awk '
     NR == 1 && $0 != "---" { nofm = 1; exit }
     NR > 1 && $0 == "---" { closed = 1; exit }
     /^generatedFrom:/ { found = 1; exit }
     END { exit (found || nofm || !closed) ? 0 : 1 }
-  '
+  ' <<<"$content"
 }
 
 # --no-renames splits a rename into delete+add, so a moved page cannot read as a modification.
