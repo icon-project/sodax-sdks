@@ -70,7 +70,7 @@
           {
             "group": "Start here",
             "icon": "rocket",
-            "pages": ["index", "introduction", "quickstart", "ai-integration-guide"]
+            "pages": ["index", "introduction", "quickstart", "ai-integration-guide", "builders-mcp"]
           },
           {
             "group": "How SODAX works",

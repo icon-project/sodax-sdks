@@ -57,13 +57,13 @@ Per-module code tables: [Swaps](/developers/packages/foundation/sdk/functional-m
 
 The spoke transaction landed but the hub packet has not arrived within the timeout window. The relay may still complete. Persist the spoke tx hash and poll the relayer API. Do not re-submit from the user side.
 
-Error semantics: [Make a Swap](/developers/how-to/how_to_make_a_swap), [Relayer API endpoints](/developers/deployments/relayer-api-endpoints).
+Error semantics: [Make a swap (SDK)](/developers/how-to/how_to_make_a_swap), [Relayer API endpoints](/developers/deployments/relayer-api-endpoints).
 
 #### 9. What does `TX_SUBMIT_FAILED` mean?
 
 The critical case. The spoke tx landed but the relay submission itself failed. Funds may be in flight. Persist the user's input plus spoke tx hash and retry submission against the relay API. Do not retry the user-facing transaction.
 
-Full code reference: [Make a Swap](/developers/how-to/how_to_make_a_swap).
+Full code reference: [Make a swap (SDK)](/developers/how-to/how_to_make_a_swap).
 
 ### Swaps and intents
 
@@ -81,7 +81,7 @@ Full method list: [Swaps](/developers/packages/foundation/sdk/functional-modules
 
 Call `sodax.swaps.getQuote(payload)` with `token_src`, `token_dst`, source and destination `ChainKeys`, an amount in the token's smallest unit, and `quote_type: 'exact_input'`. Use `quoted_amount` from the response to set `minOutputAmount` on the intent.
 
-Walkthrough with code: [Make a Swap](/developers/how-to/how_to_make_a_swap).
+Walkthrough with code: [Make a swap (SDK)](/developers/how-to/how_to_make_a_swap).
 
 #### 12. Can I cancel an intent?
 
@@ -157,6 +157,6 @@ See [Hub Wallet Abstraction](/developers/technical-overview/hub-wallet-abstracti
 
 #### 22. Can my AI agent query SODAX docs directly instead of web-searching?
 
-Yes, two ways. This documentation site hosts an auto-generated MCP server at `docs.sodax.com/mcp` that exposes a search tool over these pages — add it to your agent's MCP config, or use the "Add to \[agent]" option in the contextual menu on any page. For deeper, code-aware assistance beyond doc search, SODAX also runs a dedicated MCP server at [builders.sodax.com](https://builders.sodax.com/).
+Yes, two ways. This documentation site hosts an auto-generated MCP server at `docs.sodax.com/mcp` that exposes a search tool over these pages — add it to your agent's MCP config, or use the "Add to \[agent]" option in the contextual menu on any page. For more than doc search, add the [Builders MCP](/builders-mcp) (`https://builders.sodax.com/mcp`): 40 tools giving the agent live chains, tokens, quotes, money market rates, intent lookups **and** these docs, over one endpoint.
 
-See [AI Integration](/ai-integration-guide).
+See [Builders MCP](/builders-mcp) and [AI Integration](/ai-integration-guide).
