@@ -1,9 +1,14 @@
 import type { SwapFlow } from '../hooks/useSwapFlow';
-import { chainName, swappableChains } from '../lib/chains';
+import { type TokenChoice, chainName, swappableChains, tokenChoicesFor } from '../lib/chains';
 import { FEE_BPS_MAX } from '../lib/fee';
 import { formatTokenAmount } from '../lib/format';
-import { FlipButton, FormLeg } from './FormLeg';
+import { assetGroups } from '../lib/pickerOptions';
+import { AssetPicker } from './AssetPicker';
+import { AssetPanel, FlipButton } from './AssetPanel';
 import { StatusPanel } from './StatusPanel';
+
+// Derived from `@sodax/types` and unchanging for the life of the page, so both legs share one grid.
+const SWAP_GROUPS = assetGroups(tokenChoicesFor('swap'));
 
 /** Display precision only — `title` keeps the exact value one hover away. */
 function Amount({ value, symbol }: { value: string; symbol: string | undefined }) {
@@ -92,39 +97,59 @@ function PrimaryAction({ flow }: { flow: SwapFlow }) {
 }
 
 export function SwapPanel({ flow }: { flow: SwapFlow }) {
+  // A pick carries its own chain, so one selection sets both. The chain change re-resolves the
+  // token against the new chain's list by symbol, which returns the very token that was picked.
+  const selectSrc = (choice: TokenChoice) => {
+    flow.setSrcChain(choice.chain);
+    flow.setSrcToken(choice.token);
+  };
+
+  const selectDst = (choice: TokenChoice) => {
+    flow.setDstChain(choice.chain);
+    flow.setDstToken(choice.token);
+  };
+
   return (
     <section className="card swap-card">
-      <FormLeg
-        label="From"
-        chains={swappableChains}
+      <AssetPanel
+        symbol={flow.srcToken?.symbol}
         chain={flow.srcChain}
-        chainLabel="Network to send from"
-        onChainChange={flow.setSrcChain}
-        tokens={flow.srcTokens}
-        token={flow.srcToken}
-        tokenLabel="Token to send"
-        onTokenChange={flow.setSrcToken}
+        emptyLabel="No swap tokens"
+        pickerLabel="Asset to send"
+        picker={state => (
+          <AssetPicker
+            {...state}
+            groups={SWAP_GROUPS}
+            networks={swappableChains}
+            selected={flow.srcToken && { chain: flow.srcChain, symbol: flow.srcToken.symbol }}
+            onSelect={selectSrc}
+          />
+        )}
         amount={flow.amount}
         amountLabel="Amount to send"
         onAmountChange={flow.setAmount}
-        emptyTokensLabel="No swap tokens"
+        note={flow.partnerFee ? `less ${formatTokenAmount(flow.partnerFeeAmount)} fee` : undefined}
       />
 
       <FlipButton onClick={flow.flipDirection} />
 
-      <FormLeg
-        label="To"
-        chains={swappableChains}
+      <AssetPanel
+        symbol={flow.dstToken?.symbol}
         chain={flow.dstChain}
-        chainLabel="Network to receive on"
-        onChainChange={flow.setDstChain}
-        tokens={flow.dstTokens}
-        token={flow.dstToken}
-        tokenLabel="Token to receive"
-        onTokenChange={flow.setDstToken}
+        emptyLabel="No swap tokens"
+        pickerLabel="Asset to receive"
+        picker={state => (
+          <AssetPicker
+            {...state}
+            groups={SWAP_GROUPS}
+            networks={swappableChains}
+            selected={flow.dstToken && { chain: flow.dstChain, symbol: flow.dstToken.symbol }}
+            onSelect={selectDst}
+          />
+        )}
         amount={flow.quotedOutput}
         amountLabel="Amount to receive"
-        emptyTokensLabel="No swap tokens"
+        note={flow.hasQuote ? (flow.isQuoting ? 'refreshing…' : 'live quote, every 3s') : undefined}
       />
 
       <div className="summary">
@@ -155,12 +180,6 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
           <div className="row-between">
             <span className="muted">Settles in</span>
             <span>~{flow.speedTier.estimatedSeconds}s</span>
-          </div>
-        )}
-        {flow.hasQuote && (
-          <div className="row-between">
-            <span className="muted small">Quote refreshes every 3s</span>
-            <span className="muted small">{flow.isQuoting ? 'refreshing…' : 'live'}</span>
           </div>
         )}
       </div>

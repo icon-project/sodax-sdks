@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { CodePanel } from '../components/CodePanel';
+import { Lockup } from '../components/Lockup';
 import { SwapPanel } from '../components/SwapPanel';
 import { useSwapFlow } from '../hooks/useSwapFlow';
 import { swappableChains } from '../lib/chains';
@@ -27,7 +28,10 @@ export function SwapView() {
 
   return (
     <>
-      <SwapPanel flow={flow} />
+      <div className="flow-column">
+        <Lockup flow="swap" />
+        <SwapPanel flow={flow} />
+      </div>
       <CodePanel snippets={snippets} initialId="quote" />
     </>
   );

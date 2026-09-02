@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { BridgePanel } from '../components/BridgePanel';
 import { CodePanel } from '../components/CodePanel';
+import { Lockup } from '../components/Lockup';
 import { useBridgeFlow } from '../hooks/useBridgeFlow';
 import { bridgeableChains } from '../lib/chains';
 import { buildBridgeSnippets } from '../lib/snippet';
@@ -25,7 +26,10 @@ export function BridgeView() {
 
   return (
     <>
-      <BridgePanel flow={flow} />
+      <div className="flow-column">
+        <Lockup flow="bridge" />
+        <BridgePanel flow={flow} />
+      </div>
       <CodePanel snippets={snippets} initialId="tokens" />
     </>
   );

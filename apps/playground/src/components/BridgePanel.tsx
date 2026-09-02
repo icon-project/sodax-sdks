@@ -1,7 +1,11 @@
 import type { BridgeFlow } from '../hooks/useBridgeFlow';
-import { bridgeableChains, chainName, txExplorerUrl } from '../lib/chains';
+import { type TokenChoice, bridgeableChains, chainName, tokenChoicesFor, txExplorerUrl } from '../lib/chains';
 import { formatTokenAmount } from '../lib/format';
-import { FlipButton, FormLeg } from './FormLeg';
+import { assetGroups } from '../lib/pickerOptions';
+import { AssetPicker, NetworkPicker } from './AssetPicker';
+import { AssetPanel, FlipButton } from './AssetPanel';
+
+const BRIDGE_GROUPS = assetGroups(tokenChoicesFor('bridge'));
 
 function shortenHash(hash: string): string {
   return hash.length > 14 ? `${hash.slice(0, 8)}…${hash.slice(-6)}` : hash;
@@ -49,47 +53,47 @@ function PrimaryAction({ flow }: { flow: BridgeFlow }) {
 }
 
 export function BridgePanel({ flow }: { flow: BridgeFlow }) {
+  const selectSend = (choice: TokenChoice) => {
+    flow.setSrcChain(choice.chain);
+    flow.setSrcToken(choice.token);
+  };
+
   return (
     <section className="card swap-card">
-      <FormLeg
-        label="From"
-        chains={bridgeableChains}
+      <AssetPanel
+        symbol={flow.srcToken?.symbol}
         chain={flow.srcChain}
-        chainLabel="Network to send from"
-        onChainChange={flow.setSrcChain}
-        tokens={flow.srcTokens}
-        token={flow.srcToken}
-        tokenLabel="Token to send"
-        onTokenChange={flow.setSrcToken}
+        emptyLabel="No tokens"
+        pickerLabel="Asset to send"
+        picker={state => (
+          <AssetPicker
+            {...state}
+            groups={BRIDGE_GROUPS}
+            networks={bridgeableChains}
+            selected={flow.srcToken && { chain: flow.srcChain, symbol: flow.srcToken.symbol }}
+            onSelect={selectSend}
+          />
+        )}
         amount={flow.amount}
         amountLabel="Amount to send"
         onAmountChange={flow.setAmount}
-        emptyTokensLabel="No tokens"
       />
 
       <FlipButton onClick={flow.flipDirection} />
 
-      <FormLeg
-        label="To"
-        chains={bridgeableChains}
+      {/* The receive leg picks a network, not an asset: the shared hub vault decides what arrives. */}
+      <AssetPanel
+        symbol={flow.dstToken?.symbol}
         chain={flow.dstChain}
-        chainLabel="Network to receive on"
-        onChainChange={flow.setDstChain}
-        tokens={flow.dstTokens}
-        token={flow.dstToken}
-        tokenLabel="Token to receive"
-        onTokenChange={flow.setDstToken}
+        emptyLabel={flow.isLoadingRoute ? 'Finding the route…' : 'No shared asset'}
+        pickerLabel="Network to receive on"
+        picker={state => (
+          <NetworkPicker {...state} networks={bridgeableChains} selected={flow.dstChain} onSelect={flow.setDstChain} />
+        )}
         amount={flow.receivedAmount}
         amountLabel="Amount to receive"
-        emptyTokensLabel={flow.isLoadingRoute ? 'Finding the route…' : 'No shared asset'}
+        note="1:1 — same asset, no quote"
       />
-
-      <div className="summary">
-        <div className="row-between">
-          <span className="muted">Rate</span>
-          <strong>1:1 — same asset, no quote</strong>
-        </div>
-      </div>
 
       {/* The capacity is only worth a reader's attention once they have exceeded it. */}
       {flow.exceedsLimit && (

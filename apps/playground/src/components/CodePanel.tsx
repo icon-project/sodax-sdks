@@ -58,7 +58,7 @@ export function CodePanel({ snippets, initialId }: { snippets: Snippet[]; initia
             {copied ? 'Copied' : 'Copy'}
           </button>
           <a className="btn btn-docs" href="https://docs.sodax.com/" target="_blank" rel="noreferrer">
-            Read the docs ↗
+            Docs ↗
           </a>
         </div>
       </header>

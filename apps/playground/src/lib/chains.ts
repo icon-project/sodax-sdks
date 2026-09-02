@@ -35,6 +35,31 @@ export function chainsFor(flow: Flow): readonly PlaygroundChainKey[] {
   return flow === 'bridge' ? bridgeableChains : swappableChains;
 }
 
+/** A token together with the narrowed key of the chain it lives on, so a pick sets both at once. */
+export type TokenChoice = { chain: PlaygroundChainKey; token: XToken };
+
+function tokensOn(flow: Flow, key: PlaygroundChainKey): readonly XToken[] {
+  return flow === 'bridge' ? spokeTokens(key) : getSupportedSolverTokens(key);
+}
+
+/**
+ * Every token the flow can start from, across every chain in its picker. `XToken.chainKey` is the
+ * wide `ChainKey`, so pairing each token with the key it was derived from is what keeps the pick
+ * assignable to `setSrcChain` without a cast.
+ */
+export function tokenChoicesFor(flow: Flow): readonly TokenChoice[] {
+  return chainsFor(flow).flatMap(chain => tokensOn(flow, chain).map(token => ({ chain, token })));
+}
+
+/** Distinct symbols across the flow's chains — the same asset on two chains counts once. */
+export function assetCountFor(flow: Flow): number {
+  return new Set(tokenChoicesFor(flow).map(({ token }) => token.symbol)).size;
+}
+
+export function chainLogo(key: ChainKey): string {
+  return baseChainInfo[key].logo;
+}
+
 export function chainName(key: ChainKey): string {
   return baseChainInfo[key].name;
 }

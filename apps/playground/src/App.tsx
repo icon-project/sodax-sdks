@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FlowTabs } from './components/FlowTabs';
+import { FlowRail } from './components/FlowRail';
 import { ThemeToggle } from './components/ThemeToggle';
 import { WalletBar } from './components/WalletBar';
 import { playgroundMode } from './config';
@@ -13,31 +13,28 @@ export default function App() {
 
   return (
     <div className="app">
+      {/* A bar, not a hero: the app title belongs to the flow below, the way the exchange reads. */}
       <header className="app-header">
-        <div className="app-title">
-          <h1>
-            SODAX SDK <em>playground</em>
-          </h1>
-          <p className="subtitle">
-            Live cross-network flows built with <code>@sodax/dapp-kit</code>, beside the code that produced them.
-            Reading a quote needs no wallet.
+        <h1 className="app-title">
+          SODAX SDK <em>playground</em>
+        </h1>
+        {playgroundMode === 'full' && (
+          <p className="hero-note">
+            <strong>Mainnet</strong> — no testnet exists; signing moves real funds.
           </p>
-          {playgroundMode === 'full' && (
-            <p className="hero-note">
-              <strong>Mainnet only</strong> — there is no testnet. Approving, swapping and bridging move real funds.
-            </p>
-          )}
-        </div>
+        )}
         <div className="header-actions">
           <WalletBar />
           <ThemeToggle />
         </div>
       </header>
 
-      <FlowTabs flow={flow} onChange={setFlow} />
+      <div className="app-shell">
+        <FlowRail flow={flow} onChange={setFlow} />
 
-      {/* Only the active flow mounts, so the other runs no queries and never writes the URL. */}
-      <main className="app-main">{flow === 'swap' ? <SwapView /> : <BridgeView />}</main>
+        {/* Only the active flow mounts, so the other runs no queries and never writes the URL. */}
+        <main className="app-main">{flow === 'swap' ? <SwapView /> : <BridgeView />}</main>
+      </div>
 
       <footer className="app-footer muted small">
         Non-custodial: SODAX routes and settles. Admitted solvers compete to fill a swap; a bridge moves through the hub
