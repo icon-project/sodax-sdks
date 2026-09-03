@@ -1,14 +1,10 @@
+import { EXCHANGE_URL } from '../config';
 import type { SwapFlow } from '../hooks/useSwapFlow';
-import { type TokenChoice, chainName, swappableChains, tokenChoicesFor } from '../lib/chains';
+import type { TokenChoice } from '../lib/chains';
 import { FEE_BPS_MAX } from '../lib/fee';
 import { formatTokenAmount } from '../lib/format';
-import { assetGroups } from '../lib/pickerOptions';
 import { AssetPicker } from './AssetPicker';
 import { AssetPanel, FlipButton } from './AssetPanel';
-import { StatusPanel } from './StatusPanel';
-
-// Derived from `@sodax/types` and unchanging for the life of the page, so both legs share one grid.
-const SWAP_GROUPS = assetGroups(tokenChoicesFor('swap'));
 
 /** Display precision only — `title` keeps the exact value one hover away. */
 function Amount({ value, symbol }: { value: string; symbol: string | undefined }) {
@@ -54,45 +50,42 @@ function PartnerFeeFields({ flow }: { flow: SwapFlow }) {
   );
 }
 
+/**
+ * The widget cannot sign — no wallet layer is mounted — so a quotable pair hands off to the
+ * exchange instead of gating behind a connect button. Every other state is the form telling the
+ * visitor why there is no quote yet.
+ */
 function PrimaryAction({ flow }: { flow: SwapFlow }) {
-  const label = (text: string) => (
+  const disabled = (text: string) => (
     <button type="button" className="btn btn-primary" disabled>
       {text}
     </button>
   );
 
-  if (!flow.srcToken || !flow.dstToken) return label('No swap tokens on this chain');
-  if (!flow.isAmountValid) return label('Enter an amount');
-  if (!flow.isSlippageValid) return label('Slippage must be between 0 and 100');
-  if (flow.partnerFeeError) return label('Fix the partner fee');
-  if (flow.quoteError) return label('No route available');
-  if (!flow.hasQuote) return label(flow.isQuoting ? 'Fetching quote…' : 'Enter an amount');
-
-  if (!flow.canSign) return label('Quote-only deployment');
-  if (!flow.isConnected) return label('Connect a wallet to swap');
-
-  if (flow.isWrongChain) {
-    return (
-      <button type="button" className="btn btn-primary" onClick={flow.handleSwitchChain}>
-        Switch wallet to {chainName(flow.srcChain)}
-      </button>
-    );
-  }
-
-  if (flow.isCheckingAllowance) return label('Checking approval…');
-
-  if (!flow.hasAllowance) {
-    return (
-      <button type="button" className="btn btn-primary" onClick={flow.approve} disabled={flow.isApproving}>
-        {flow.isApproving ? 'Approving…' : `Approve ${flow.srcToken.symbol}`}
-      </button>
-    );
-  }
+  if (!flow.srcToken || !flow.dstToken) return disabled('No assets on this network');
+  if (!flow.isAmountValid) return disabled('Enter an amount');
+  if (!flow.isSlippageValid) return disabled('Slippage must be between 0 and 100');
+  if (flow.partnerFeeError) return disabled('Fix the partner fee');
+  if (flow.quoteError) return disabled('No route available');
+  if (!flow.hasQuote) return disabled(flow.isQuoting ? 'Fetching quote…' : 'Enter an amount');
 
   return (
-    <button type="button" className="btn btn-primary" onClick={flow.executeSwap} disabled={flow.isSwapping}>
-      {flow.isSwapping ? 'Swapping…' : `Swap ${flow.srcToken.symbol} → ${flow.dstToken.symbol}`}
-    </button>
+    <a className="btn btn-primary" href={EXCHANGE_URL} target="_blank" rel="noreferrer">
+      Swap {flow.srcToken.symbol} → {flow.dstToken.symbol} ↗
+    </a>
+  );
+}
+
+function LoadingForm({ message }: { message: string }) {
+  return (
+    <section className="card swap-card">
+      <div className="asset-panel asset-panel-skeleton" aria-hidden="true" />
+      <FlipButton onClick={() => {}} />
+      <div className="asset-panel asset-panel-skeleton" aria-hidden="true" />
+      <p className="muted small" role="status">
+        {message}
+      </p>
+    </section>
   );
 }
 
@@ -109,19 +102,25 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
     flow.setDstToken(choice.token);
   };
 
+  // Read out before the guard: inside the picker callbacks TS cannot keep a property narrowed.
+  const { srcChain, dstChain } = flow;
+
+  if (flow.assetsError) return <LoadingForm message={flow.assetsError} />;
+  if (!srcChain || !dstChain) return <LoadingForm message="Loading assets…" />;
+
   return (
     <section className="card swap-card">
       <AssetPanel
         symbol={flow.srcToken?.symbol}
-        chain={flow.srcChain}
-        emptyLabel="No swap tokens"
+        chain={srcChain}
+        emptyLabel="No assets"
         pickerLabel="Asset to send"
         picker={state => (
           <AssetPicker
             {...state}
-            groups={SWAP_GROUPS}
-            networks={swappableChains}
-            selected={flow.srcToken && { chain: flow.srcChain, symbol: flow.srcToken.symbol }}
+            groups={flow.groups}
+            networks={flow.chains}
+            selected={flow.srcToken && { chain: srcChain, symbol: flow.srcToken.symbol }}
             onSelect={selectSrc}
           />
         )}
@@ -135,15 +134,15 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
 
       <AssetPanel
         symbol={flow.dstToken?.symbol}
-        chain={flow.dstChain}
-        emptyLabel="No swap tokens"
+        chain={dstChain}
+        emptyLabel="No assets"
         pickerLabel="Asset to receive"
         picker={state => (
           <AssetPicker
             {...state}
-            groups={SWAP_GROUPS}
-            networks={swappableChains}
-            selected={flow.dstToken && { chain: flow.dstChain, symbol: flow.dstToken.symbol }}
+            groups={flow.groups}
+            networks={flow.chains}
+            selected={flow.dstToken && { chain: dstChain, symbol: flow.dstToken.symbol }}
             onSelect={selectDst}
           />
         )}
@@ -194,25 +193,16 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
 
       {flow.quoteError && (
         <p className="alert" role="alert">
-          {flow.quoteError}
+          {flow.quoteError} Try another pair, or a smaller amount.
         </p>
-      )}
-
-      {flow.error && (
-        <div className="alert" role="alert">
-          {flow.error.message}
-          {flow.error.detail && (
-            <details>
-              <summary>Underlying error</summary>
-              <code>{flow.error.detail}</code>
-            </details>
-          )}
-        </div>
       )}
 
       <PrimaryAction flow={flow} />
 
-      {flow.delivery && <StatusPanel delivery={flow.delivery} statusCode={flow.statusCode} />}
+      <p className="muted small action-note">
+        Quotes are live off mainnet liquidity. The widget connects no wallet and cannot move funds — signing happens on
+        sodax.com.
+      </p>
     </section>
   );
 }

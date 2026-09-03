@@ -1,8 +1,11 @@
-# SODAX SDK Playground
+# SODAX Swap Widget
 
-A live cross-network swap built with [`@sodax/dapp-kit`](../../packages/dapp-kit/README.md), next to a panel showing the code that produced whatever the form currently says. It is the source a partner reads before integrating. It runs standalone; embedding it in the docs and on `sodax.com` is the intent, not yet wired.
+An embeddable cross-network swap: live mainnet quotes across every network SODAX reaches, EVM and
+non-EVM, **with no wallet connection**. It ships as a page, so anyone can drop it into a site with
+one `<iframe>`; the demo page beside it shows the embed snippet and the `@sodax/dapp-kit` code
+behind the form.
 
-Quoting works without a wallet, so the page is useful to a reader who never connects one.
+It quotes; it never signs. Nothing here can move a visitor's funds.
 
 ## Run it
 
@@ -12,72 +15,87 @@ pnpm --filter @sodax/playground dev
 # → http://localhost:3005
 ```
 
-Optional configuration lives in [`example.env`](example.env) — copy it to `.env` (gitignored) and fill in what you need. Everything is optional; the app runs on the RPC endpoints packaged in `@sodax/types`.
+Optional configuration lives in [`example.env`](example.env) — copy it to `.env` (gitignored).
+Both values are optional; the widget runs against the public SODAX swaps API with no setup.
 
 | Variable | Effect |
 | --- | --- |
-| `VITE_PLAYGROUND_MODE=quote-only` | Hides every signing path. Use for any embed that must not spend funds. |
-| `VITE_RPC_<CHAIN>` | Per-chain RPC override, keyed by the `ChainKeys` constant name (e.g. `VITE_RPC_BASE_MAINNET`). Public defaults rate-limit under real traffic. |
-| `VITE_WALLETCONNECT_PROJECT_ID` | Enables WalletConnect-based wallets. |
+| `VITE_EMBED_ORIGIN` | The origin the embed snippet points at. Without it the snippet quotes whatever origin serves the page — right for a local preview, wrong for a copied `<iframe>`. |
+| `VITE_SWAPS_API_KEY` | Per-deployment quota on the swaps API, sent as `x-api-key`. The public endpoint needs none. Anything in a Vite bundle is public. |
 
-**SODAX is mainnet-only — there is no testnet.** In the default `full` mode, approving and swapping here moves real funds.
+## Embedding it
+
+```html
+<iframe
+  src="https://<origin>/?embed=1&srcChain=0x2105.base&srcToken=ETH&dstChain=solana&dstToken=TSLAx&amount=0.1"
+  title="SODAX swap"
+  width="480"
+  height="620"
+  loading="lazy"
+  referrerpolicy="no-referrer"
+  style="border: 0; border-radius: 24px; max-width: 100%"
+></iframe>
+```
+
+`?embed=1` drops the page chrome and renders the widget alone. Every other field of the form is a
+query parameter, so the host page decides what it opens on:
+
+| Parameter | Example |
+| --- | --- |
+| `srcChain` · `dstChain` | `0x2105.base`, `solana`, `near`, `sui`, `bitcoin` |
+| `srcToken` · `dstToken` | `ETH`, `TSLAx`, `USDC` — by symbol |
+| `amount` | `0.1` |
+| `slippage` | `0.5` (percent) |
+
+Every value is resolved against the live token list, so an unknown one falls back to a default
+rather than reaching the API. **The partner fee is deliberately not a parameter** — it is the one
+field that redirects money.
+
+`vercel.json` sets `frame-ancestors *`, because "anyone can integrate it" is the point and the page
+holds nothing to steal: no wallet, no signing path, no per-visitor state.
+
+## Where the assets come from
+
+Tokens and quotes both come from the Swaps API v2 (`sodax.api.swaps`, via the `useSwapsApi*` hooks)
+— the same source `sodax.com/exchange/swap` runs on. That is what reaches Solana, NEAR, Sui,
+Bitcoin, Stellar, Stacks, Injective and ICON alongside the EVM chains, and it stays current without
+an SDK release.
+
+A quote is an HTTP call. It needs no signer, which is why the widget needs no wallet.
+
+Vault-share tokens (`soda*`, `lsoda*`) are filtered out on every chain, and a chain the running SDK
+cannot name or badge is dropped rather than rendered as a raw key.
 
 ## The flow it demonstrates
 
-Every SDK call the app makes lives in [`src/hooks/useSwapFlow.ts`](src/hooks/useSwapFlow.ts). The components only render what it returns.
+Every SODAX call the widget makes lives in [`src/hooks/useSwapFlow.ts`](src/hooks/useSwapFlow.ts).
+The components only render what it returns.
 
-1. **Quote** — `useQuote` polls the solver every 3s. No wallet needed.
-2. **Minimum received** — the quote minus slippage, in integer basis-point `bigint` math. Never float math on token amounts.
-3. **Settlement estimate** — `sodax.swaps.getSwapSpeedTier()` classifies the pair offline, so it renders before the first quote returns.
-4. **Deadline** — `sodax.swaps.getSwapDeadline()` reads the hub-chain block timestamp at submit time. A client clock can be minutes out, and a deadline computed when the form opened is already stale.
-5. **Allowance** — `useSwapAllowance`. On mainnet ERC-20s you must approve before the first swap; the quickstart glosses this.
-6. **Approve** — `useSwapApprove`, only when the allowance check says it is needed.
-7. **Swap** — `useSwap`, returning `intentDeliveryInfo`.
-8. **Status** — `useStatus` polls the hub tx hash until the solver reports `SOLVED` or `FAILED`.
+1. **Token list** — `useSwapsApiTokens`, once, grouped by chain.
+2. **Quote** — `useSwapsApiQuote`, refreshed every 3s.
+3. **Minimum received** — the quote minus slippage, in integer basis-point `bigint` math. Never
+   float math on token amounts.
+4. **Settlement estimate** — `sodax.swaps.getSwapSpeedTier()` classifies the pair offline, so it
+   renders before the first quote returns.
 
-## Where the chain and token lists come from
-
-Nothing is hardcoded. [`src/lib/chains.ts`](src/lib/chains.ts) intersects three source-of-truth exports from `@sodax/types`:
-
-```ts
-EVM_CHAIN_KEYS.filter(key => key in spokeChainConfig && getSupportedSolverTokens(key).length > 0)
-```
-
-Display names come from `baseChainInfo[key].name` and transaction links from `baseChainInfo[key].explorer.txUrl`. Adding a chain or token to `@sodax/types` is all it takes to see it here.
-
-The pickers read the packaged token list rather than calling `sodax.config.initialize()`, which keeps the embed deterministic with no loading state. A production integrator should initialize to pick up tokens added after the SDK release — the generated snippet says so.
-
-## Linking to a specific swap
-
-The form state lives in the query string, so the docs can open the page on the pair a page is about:
-
-```
-?srcChain=0x2105.base&dstChain=0xa4b1.arbitrum&srcToken=USDC&dstToken=WETH&amount=100&slippage=0.5
-```
-
-Every value is resolved against the derived chain and token lists, so an unknown one falls back to the default rather than reaching the SDK. **The partner fee is deliberately not in the URL** — it is the one field that redirects money, and a crafted link would set it on a mainnet page where a reader may never open the form.
+The signing path — approve, create intent, submit, poll — is shown in the `swap.tsx` tab as the
+four calls `sodax.com/exchange/swap` makes, for a partner to implement in their own app with their
+own wallet.
 
 ## Adding a partner fee
 
-"Charge a partner fee" takes a recipient and a rate in basis points, and the page then works exactly as an integrator's would: the fee comes off the input before quoting, so the quote shown is what the user receives, and the same fee goes to `swap()`. Quoting with one fee and swapping with a larger one leaves a `minOutputAmount` the intent cannot deliver, and it never fills.
+"Charge a partner fee" takes a recipient and a rate in basis points, and rides on the quote request
+itself (`partnerFee` on `QuoteRequestV2`). The API applies it once, before quoting, so the number on
+screen is what the user receives — **never subtract it yourself**, or it is charged twice.
 
-The generated snippets show the production shape — configured once on `SodaxOptions`, where `useQuote` applies it for you:
-
-```ts
-const sodaxConfig: SodaxOptions = { chains, swaps: { partnerFee: { address, percentage } } };
-```
-
-`percentage` is basis points (100 = 1%). Integration is free and SODAX takes no cut of that fee. Nothing validates the recipient — a wrong address sends the fee somewhere you cannot claim it.
+`percentage` is basis points (100 = 1%). Integration is free and SODAX takes no cut of that fee.
+Nothing validates the recipient — a wrong address sends the fee somewhere you cannot claim it.
 
 ## Theming
 
-Light and dark, both drawn from the SODAX B2B brand palette. The initial theme follows the reader's OS preference; the toggle in the header overrides it and persists. Because the brand rule is "yellow is an accent over cherry or dark surfaces, never a light one", the primary CTA is `cherry-soda` on light and `yellow-dark` on dark — one `--cta-*` mapping, no per-component branching.
-
-## Embedding
-
-`vercel.json` allows framing from `docs.sodax.com`, `www.sodax.com` and `sodax.com`. `X-Frame-Options` is deliberately absent — it has no multi-origin form, and `DENY`/`SAMEORIGIN` would break both embeds.
-
-A host page embedding this origin also needs it in the host's own CSP `frame-src`. For `sodax.com` that change lives in the `sodax-frontend` repo.
+Light and dark, both drawn from the SODAX B2B brand palette, with the light theme matching
+`sodax.com/exchange/swap`: cherry ground, rounded app stage, yellow lockup. The initial theme
+follows the reader's OS preference; the toggle in the header overrides it and persists.
 
 ## Scripts
 

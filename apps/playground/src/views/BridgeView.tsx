@@ -3,9 +3,17 @@ import { BridgePanel } from '../components/BridgePanel';
 import { CodePanel } from '../components/CodePanel';
 import { Lockup } from '../components/Lockup';
 import { useBridgeFlow } from '../hooks/useBridgeFlow';
-import { bridgeableChains } from '../lib/chains';
+import { bridgeTokenChoices, bridgeableChains } from '../lib/chains';
 import { buildBridgeSnippets } from '../lib/snippet';
 
+const BRIDGE_ASSET_COUNT = new Set(bridgeTokenChoices().map(({ token }) => token.symbol)).size;
+
+/**
+ * Parked. Fez's answer to "does this become a browser over the SDK's flows?" was "each thing
+ * separate — a swaps widget now", so the rail is gone and nothing mounts this. It is kept whole,
+ * and typechecked, because a bridge widget is the next one asked for; reviving it means a route of
+ * its own plus remounting `SodaxWalletProvider`, which the swap widget deliberately does without.
+ */
 export function BridgeView() {
   const flow = useBridgeFlow();
 
@@ -27,7 +35,7 @@ export function BridgeView() {
   return (
     <>
       <div className="flow-column">
-        <Lockup flow="bridge" />
+        <Lockup assetCount={BRIDGE_ASSET_COUNT} networkCount={bridgeableChains.length} />
         <BridgePanel flow={flow} />
       </div>
       <CodePanel snippets={snippets} initialId="tokens" />

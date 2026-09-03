@@ -1,80 +1,88 @@
 import {
-  type CreateIntentParams,
-  type Hex,
-  type SolverIntentQuoteRequest,
-  type SpokeChainKey,
+  type ChainKey,
+  type QuoteRequestV2,
   type XToken,
-  getSupportedSolverTokens,
-  useQuote,
   useSodaxContext,
-  useStatus,
-  useSwap,
-  useSwapAllowance,
-  useSwapApprove,
+  useSwapsApiQuote,
+  useSwapsApiTokens,
 } from '@sodax/dapp-kit';
-import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatUnits } from 'viem';
-import { ANY_SOLVER, DEFAULT_AMOUNT, DEFAULT_SLIPPAGE_PERCENT, playgroundMode } from '../config';
-import { type PlaygroundChainKey, defaultDstChain, defaultSrcChain } from '../lib/chains';
-import { type FriendlyError, describeError } from '../lib/errors';
+import { DEFAULT_AMOUNT, DEFAULT_PAIR, DEFAULT_SLIPPAGE_PERCENT } from '../config';
+import { pickChain, pickToken, readSwapAssets, tokensOn } from '../lib/assets';
 import { NO_PARTNER_FEE, type PartnerFeeInput, feeAmountOf, readPartnerFee } from '../lib/fee';
 import { parseAmount } from '../lib/format';
 import { initialUrl } from '../lib/initialUrl';
-import { pickToken, seedFor, toSearch } from '../lib/urlState';
-
-/** Everything `CreateIntentParams` needs except the deadline, which is resolved at submit time. */
-type IntentDraft = Omit<CreateIntentParams, 'deadline'>;
-
-export type Delivery = {
-  srcTxHash: string;
-  dstTxHash: Hex;
-  srcChainKey: SpokeChainKey;
-};
+import { assetGroups } from '../lib/pickerOptions';
+import { seedFor, toSearch } from '../lib/urlState';
 
 export type SwapFlow = ReturnType<typeof useSwapFlow>;
-
-// The SDK types IntentDeliveryInfo.dstTxHash as `string` while useStatus wants `Hex`. A tx hash is
-// always 0x-prefixed hex, so normalize at this one boundary rather than casting blindly.
-function toHex(value: string): Hex {
-  return value.startsWith('0x') ? (value as Hex) : `0x${value}`;
-}
 
 const seed = seedFor('swap', initialUrl);
 
 /**
- * The whole SODAX surface this playground uses, in one place: quote → allowance → approve → swap →
- * status. Components below only render what this returns.
+ * The whole SODAX surface this widget uses: the swaps API's token list, and a quote off it that
+ * refreshes every three seconds. There is no wallet here — no allowance, no approval, no intent —
+ * so nothing this hook can do moves a visitor's funds. Components below only render what it
+ * returns.
+ *
+ * Tokens and quotes both come from the Swaps API v2 (`sodax.api.swaps`), which is what
+ * `sodax.com/exchange/swap` runs: it reaches every chain the backend lists — EVM and non-EVM
+ * alike — and stays current without an SDK release. The packaged `getSupportedSolverTokens` list
+ * would be deterministic but EVM-shaped and frozen at the release we build against.
  */
 export function useSwapFlow() {
   const { sodax } = useSodaxContext();
-  const account = useXAccount({ xChainType: 'EVM' });
 
-  const [srcChain, setSrcChain] = useState<PlaygroundChainKey>(seed.srcChain ?? defaultSrcChain('swap'));
-  const [dstChain, setDstChain] = useState<PlaygroundChainKey>(seed.dstChain ?? defaultDstChain('swap'));
-  const [srcToken, setSrcToken] = useState<XToken | undefined>(() =>
-    pickToken(getSupportedSolverTokens(seed.srcChain ?? defaultSrcChain('swap')), seed.srcSymbol),
-  );
-  const [dstToken, setDstToken] = useState<XToken | undefined>(() =>
-    pickToken(getSupportedSolverTokens(seed.dstChain ?? defaultDstChain('swap')), seed.dstSymbol),
-  );
+  // A "no path" answer is a business result, not a transient failure, so retrying just delays the
+  // headline. The 3s interval is the live-quote promise the receive leg makes.
+  const tokensQuery = useSwapsApiTokens({ queryOptions: { retry: false } });
+  const assets = useMemo(() => readSwapAssets(tokensQuery.data), [tokensQuery.data]);
+
+  const [srcChain, setSrcChain] = useState<ChainKey>();
+  const [dstChain, setDstChain] = useState<ChainKey>();
+  const [srcToken, setSrcToken] = useState<XToken>();
+  const [dstToken, setDstToken] = useState<XToken>();
   const [amount, setAmount] = useState(seed.amount ?? DEFAULT_AMOUNT);
   const [slippagePercent, setSlippagePercent] = useState(seed.slippage ?? DEFAULT_SLIPPAGE_PERCENT);
   const [partnerFeeInput, setPartnerFeeInput] = useState<PartnerFeeInput>(NO_PARTNER_FEE);
-  const [error, setError] = useState<FriendlyError | undefined>();
-  const [delivery, setDelivery] = useState<Delivery | undefined>();
 
-  const srcTokens = useMemo(() => getSupportedSolverTokens(srcChain), [srcChain]);
-  const dstTokens = useMemo(() => getSupportedSolverTokens(dstChain), [dstChain]);
+  // Seeded once, when the token list first arrives: a chain key or a symbol in the URL is a string
+  // until there is a live list to resolve it against, and the list is what the app trusts.
+  const isSeeded = useRef(false);
+
+  useEffect(() => {
+    if (isSeeded.current || assets.chains.length === 0) return;
+
+    const src = pickChain(assets, seed.srcChain ?? DEFAULT_PAIR.srcChain, 0);
+    const dst = pickChain(assets, seed.dstChain ?? DEFAULT_PAIR.dstChain, 1);
+    if (!src || !dst) return;
+
+    isSeeded.current = true;
+    setSrcChain(src);
+    setDstChain(dst);
+    setSrcToken(pickToken(tokensOn(assets, src), seed.srcSymbol ?? DEFAULT_PAIR.srcSymbol));
+    setDstToken(pickToken(tokensOn(assets, dst), seed.dstSymbol ?? DEFAULT_PAIR.dstSymbol));
+  }, [assets]);
+
+  const srcTokens = useMemo(() => (srcChain ? tokensOn(assets, srcChain) : []), [assets, srcChain]);
+  const dstTokens = useMemo(() => (dstChain ? tokensOn(assets, dstChain) : []), [assets, dstChain]);
 
   // A chain change re-resolves the token against the new chain's list, keeping the same symbol when
   // it exists there. `pickToken` always returns a member of that list, never the previous chain's
-  // object — every chain's native token shares the address 0x0, so an address match would silently
-  // carry the old chain's decimals onto the new chain.
-  useEffect(() => setSrcToken(current => pickToken(srcTokens, current?.symbol)), [srcTokens]);
-  useEffect(() => setDstToken(current => pickToken(dstTokens, current?.symbol)), [dstTokens]);
+  // object — every EVM chain's native token shares the address 0x0, so an address match would
+  // silently carry the old chain's decimals onto the new one.
+  useEffect(() => {
+    if (srcTokens.length > 0) setSrcToken(current => pickToken(srcTokens, current?.symbol));
+  }, [srcTokens]);
 
   useEffect(() => {
+    if (dstTokens.length > 0) setDstToken(current => pickToken(dstTokens, current?.symbol));
+  }, [dstTokens]);
+
+  useEffect(() => {
+    if (!srcChain || !dstChain) return;
+
     const search = toSearch({
       flow: 'swap',
       srcChain,
@@ -83,6 +91,7 @@ export function useSwapFlow() {
       dstToken,
       amount,
       slippage: slippagePercent,
+      embed: initialUrl.embed,
     });
     // A sandboxed embed has an opaque origin and throws here; the form must still work in one.
     try {
@@ -90,8 +99,7 @@ export function useSwapFlow() {
     } catch {}
   }, [srcChain, dstChain, srcToken, dstToken, amount, slippagePercent]);
 
-  const walletProvider = useWalletProvider({ xChainId: srcChain });
-  const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: srcChain });
+  const groups = useMemo(() => assetGroups(assets.choices), [assets]);
 
   const inputAmount = useMemo(
     () => (srcToken ? parseAmount(amount, srcToken.decimals) : undefined),
@@ -101,37 +109,37 @@ export function useSwapFlow() {
   const feeState = useMemo(() => readPartnerFee(partnerFeeInput), [partnerFeeInput]);
   const partnerFee = feeState.kind === 'set' ? feeState.fee : undefined;
 
+  // Display only. The API applies the fee itself, once, before quoting — subtracting it from
+  // `amount` here would charge it twice.
   const feeAmount = useMemo(
     () => (inputAmount === undefined ? undefined : feeAmountOf(inputAmount, partnerFee)),
     [inputAmount, partnerFee],
   );
 
-  // Quoting needs no wallet, so the panel stays useful to a reader who never connects one.
-  //
-  // The fee comes off the input before quoting, so `quoted_amount` is what the user actually gets.
-  // `SwapService.getQuote` does this itself from the *configured* fee — which is what the generated
-  // snippet uses — but `useQuote` takes no per-call override, so an interactive fee is applied here.
-  const quotePayload = useMemo<SolverIntentQuoteRequest | undefined>(() => {
-    if (!srcToken || !dstToken || inputAmount === undefined || feeAmount === undefined) return undefined;
+  const quoteBody = useMemo<QuoteRequestV2 | undefined>(() => {
+    if (!srcChain || !dstChain || !srcToken || !dstToken || inputAmount === undefined) return undefined;
     return {
-      token_src: srcToken.address,
-      token_src_blockchain_id: srcChain,
-      token_dst: dstToken.address,
-      token_dst_blockchain_id: dstChain,
-      amount: inputAmount - feeAmount,
-      quote_type: 'exact_input',
+      tokenSrc: srcToken.address,
+      tokenSrcChainKey: srcChain,
+      tokenDst: dstToken.address,
+      tokenDstChainKey: dstChain,
+      amount: inputAmount.toString(),
+      quoteType: 'exact_input',
+      ...(partnerFee ? { partnerFee } : {}),
     };
-  }, [srcToken, dstToken, srcChain, dstChain, inputAmount, feeAmount]);
+  }, [srcChain, dstChain, srcToken, dstToken, inputAmount, partnerFee]);
 
-  // Offline and rule-based — no network call, so it can render beside the form before any quote.
+  const quoteQuery = useSwapsApiQuote({
+    params: { body: quoteBody },
+    queryOptions: { retry: false, refetchInterval: 3000 },
+  });
+  const quotedAmount = quoteQuery.data?.quotedAmount;
+
+  // Offline and rule-based — no network call, so it renders beside the form before any quote.
   const speedTier = useMemo(
     () => (srcToken && dstToken ? sodax.swaps.getSwapSpeedTier({ srcToken, dstToken }) : undefined),
     [sodax, srcToken, dstToken],
   );
-
-  const quoteQuery = useQuote({ params: { payload: quotePayload } });
-  const quote = quoteQuery.data?.ok ? quoteQuery.data.value : undefined;
-  const quoteError = quoteQuery.data && !quoteQuery.data.ok ? quoteQuery.data.error.detail.message : undefined;
 
   const slippageBps = useMemo(() => {
     const percent = Number(slippagePercent);
@@ -140,89 +148,16 @@ export function useSwapFlow() {
   }, [slippagePercent]);
 
   const minOutputAmount = useMemo(() => {
-    if (!quote || slippageBps === undefined) return undefined;
-    return (BigInt(quote.quoted_amount) * slippageBps) / 10_000n;
-  }, [quote, slippageBps]);
-
-  // Built synchronously: on EVM the source signer address is the connected account, so the
-  // allowance check below can run against it without awaiting the wallet provider.
-  const draft = useMemo<IntentDraft | undefined>(() => {
-    if (!srcToken || !dstToken || inputAmount === undefined || minOutputAmount === undefined) return undefined;
-    if (!account.address) return undefined;
-    return {
-      inputToken: srcToken.address,
-      outputToken: dstToken.address,
-      inputAmount,
-      minOutputAmount,
-      allowPartialFill: false,
-      srcChainKey: srcChain,
-      dstChainKey: dstChain,
-      srcAddress: account.address,
-      dstAddress: account.address,
-      solver: ANY_SOLVER,
-      data: '0x',
-    };
-  }, [srcToken, dstToken, inputAmount, minOutputAmount, account.address, srcChain, dstChain]);
-
-  const canSign = playgroundMode === 'full';
-
-  // The allowance check reads only (srcChainKey, srcAddress, inputToken, inputAmount) — the deadline
-  // is filler so the draft satisfies CreateIntentParams; the real one is resolved in executeSwap.
-  const allowancePayload = useMemo<CreateIntentParams | undefined>(
-    () => (draft && canSign ? { ...draft, deadline: 0n } : undefined),
-    [draft, canSign],
-  );
-
-  const { data: hasAllowance, isLoading: isCheckingAllowance } = useSwapAllowance({
-    params: { payload: allowancePayload, srcChainKey: srcChain, walletProvider },
-  });
-
-  const { mutateAsyncSafe: approveMutation, isPending: isApproving } = useSwapApprove();
-  const { mutateAsyncSafe: swapMutation, isPending: isSwapping } = useSwap();
-
-  const statusQuery = useStatus({ params: { intentTxHash: delivery?.dstTxHash } });
-  const statusCode = statusQuery.data?.ok ? statusQuery.data.value.status : undefined;
-
-  const approve = useCallback(async () => {
-    if (!allowancePayload || !walletProvider) return;
-    setError(undefined);
-    const result = await approveMutation({ params: allowancePayload, walletProvider });
-    if (!result.ok) setError(describeError(result.error, 'The approval failed.'));
-  }, [allowancePayload, walletProvider, approveMutation]);
-
-  const executeSwap = useCallback(async () => {
-    if (!draft || !walletProvider) return;
-    setError(undefined);
-    setDelivery(undefined);
-
-    // Read the deadline off the hub chain at submit time — a client clock can be minutes out, and a
-    // deadline computed when the form opened would already be stale.
-    const deadline = await sodax.swaps.getSwapDeadline();
-    if (!deadline.ok) {
-      setError(describeError(deadline.error, 'Could not read the hub-chain deadline.'));
-      return;
-    }
-
-    // The same fee the quote was taken with. A swap charging more than the quote assumed produces a
-    // `minOutputAmount` the intent cannot deliver, and it never fills.
-    const result = await swapMutation({
-      params: { ...draft, deadline: deadline.value },
-      walletProvider,
-      extras: { partnerFee },
-    });
-    if (!result.ok) {
-      setError(describeError(result.error, 'The swap failed.'));
-      return;
-    }
-
-    const info = result.value.intentDeliveryInfo;
-    setDelivery({ srcTxHash: info.srcTxHash, dstTxHash: toHex(info.dstTxHash), srcChainKey: info.srcChainKey });
-  }, [draft, walletProvider, sodax, swapMutation, partnerFee]);
+    if (quotedAmount === undefined || slippageBps === undefined) return undefined;
+    return (BigInt(quotedAmount) * slippageBps) / 10_000n;
+  }, [quotedAmount, slippageBps]);
 
   const flipDirection = useCallback(() => {
     setSrcChain(dstChain);
     setDstChain(srcChain);
-  }, [srcChain, dstChain]);
+    setSrcToken(dstToken);
+    setDstToken(srcToken);
+  }, [srcChain, dstChain, srcToken, dstToken]);
 
   return {
     srcChain,
@@ -234,8 +169,6 @@ export function useSwapFlow() {
     dstToken,
     setSrcToken,
     setDstToken,
-    srcTokens,
-    dstTokens,
     amount,
     setAmount,
     slippagePercent,
@@ -244,27 +177,20 @@ export function useSwapFlow() {
     setPartnerFeeInput,
     partnerFee,
     partnerFeeError: feeState.kind === 'invalid' ? feeState.message : undefined,
-    partnerFeeAmount: feeAmount && srcToken ? formatUnits(feeAmount, srcToken.decimals) : '',
+    partnerFeeAmount: feeAmount !== undefined && srcToken ? formatUnits(feeAmount, srcToken.decimals) : '',
+    chains: assets.chains,
+    groups,
+    assetCount: assets.assetCount,
+    networkCount: assets.chains.length,
+    isLoadingAssets: assets.chains.length === 0 && tokensQuery.isLoading,
+    assetsError: tokensQuery.isError ? 'Could not load the token list. Retry in a moment.' : undefined,
     speedTier,
-    quotedOutput: quote && dstToken ? formatUnits(BigInt(quote.quoted_amount), dstToken.decimals) : '',
+    quotedOutput: quotedAmount !== undefined && dstToken ? formatUnits(BigInt(quotedAmount), dstToken.decimals) : '',
     minReceived: minOutputAmount !== undefined && dstToken ? formatUnits(minOutputAmount, dstToken.decimals) : '',
-    hasQuote: !!quote,
+    hasQuote: quotedAmount !== undefined,
     isQuoting: quoteQuery.isFetching,
-    quoteError,
+    quoteError: quoteQuery.isError ? 'No route for this pair right now.' : undefined,
     isSlippageValid: slippageBps !== undefined,
     isAmountValid: inputAmount !== undefined,
-    isConnected: !!account.address,
-    canSign,
-    isWrongChain,
-    handleSwitchChain,
-    hasAllowance: !!hasAllowance,
-    isCheckingAllowance,
-    approve,
-    isApproving,
-    executeSwap,
-    isSwapping,
-    error,
-    delivery,
-    statusCode,
   };
 }

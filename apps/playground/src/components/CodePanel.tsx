@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Snippet } from '../lib/snippet';
 
-const SNIPPET_HINT = 'Updates with the form — values come from @sodax/types';
+const SNIPPET_HINT = 'Updates with the form. Addresses and decimals come from the SODAX swaps API';
 
 /** Renders whichever flow's snippets it is handed — the view decides what those are. */
 export function CodePanel({ snippets, initialId }: { snippets: Snippet[]; initialId: string }) {
@@ -18,6 +18,10 @@ export function CodePanel({ snippets, initialId }: { snippets: Snippet[]; initia
 
   return (
     <section className="card code-card">
+      <p className="code-lead">
+        <strong>Take it with you.</strong> The first tab is this widget on your own page, opened on the pair the form
+        currently shows. The rest is the code behind it.
+      </p>
       <header className="code-header">
         <div className="tabs">
           {snippets.map(snippet => (

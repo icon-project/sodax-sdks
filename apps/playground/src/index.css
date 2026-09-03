@@ -43,6 +43,13 @@
   --night-700: #2e2120;
   --night-600: #382827;
 
+  /* Stage gradient — the exchange's app panel, 1:1 with sodax-frontend
+     `apps/web/app/(apps)/layout.tsx`. Three of the four stops are outside the brand collection;
+     they belong to that panel and are copied, not invented. */
+  --stage-1: #e3d8d8;
+  --stage-2: #f5f2f2;
+  --stage-3: #f5eded;
+
   /* Hairlines */
   --hairline-light: rgba(142, 126, 125, 0.18);
   --hairline-light-strong: rgba(142, 126, 125, 0.28);
@@ -104,6 +111,17 @@
 :root {
   color-scheme: light;
 
+  /* The exchange's two grounds: cherry behind, and the app panel sitting on it. */
+  --surface-ground: var(--cherry-soda);
+  --stage-bg: radial-gradient(
+    239.64% 141.42% at 0% 0%,
+    var(--stage-1) 0%,
+    var(--stage-2) 22.12%,
+    var(--stage-2) 57.69%,
+    var(--stage-3) 100%
+  );
+  --stage-border: var(--vibrant-white);
+
   --surface-page: var(--vibrant-white);
   --surface-hero: var(--cherry-soda);
   --surface-card: var(--white);
@@ -135,8 +153,10 @@
   --panel-halo: var(--cream-white);
   --panel-halo-hover: var(--cherry-grey);
 
-  /* The form has no card of its own, so discs that punch through the seam ring in the page tone. */
-  --form-surface: var(--surface-page);
+  /* The form has no card of its own, so discs that punch through the seam ring in the tone behind
+     it — which is the stage, not the page. */
+  --form-surface: var(--stage-2);
+  --surface-embed: var(--stage-2);
   --flip-bg: var(--cream-white);
   --flip-bg-hover: var(--cherry-grey);
   --flip-fg: var(--espresso);
@@ -144,9 +164,6 @@
 
   /* The exchange's app title. Yellow on a light page is low-contrast but it is the brand lockup. */
   --lockup-accent: var(--yellow-dark);
-
-  --rail-top: var(--cream-cherry);
-  --rail-bottom: var(--surface-page);
 
   --text-heading: var(--espresso);
   --text-body: var(--clay-dark);
@@ -188,6 +205,11 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
 
+  --surface-ground: var(--night-950);
+  --stage-bg: var(--night-900);
+  --stage-border: var(--night-800);
+  --surface-embed: var(--night-900);
+
   --surface-page: var(--night-900);
   --surface-hero: var(--cherry-dark);
   --surface-card: var(--night-800);
@@ -214,9 +236,6 @@
   --logo-shadow: rgb(0 0 0 / 35%);
 
   --lockup-accent: var(--yellow-soda);
-
-  --rail-top: var(--night-800);
-  --rail-bottom: var(--surface-page);
 
   --text-heading: var(--white);
   --text-body: var(--cream-cherry);
@@ -258,7 +277,7 @@
 
 body {
   margin: 0;
-  background: var(--surface-page);
+  background: var(--surface-ground);
   color: var(--text-body);
   font-family: var(--font-body);
   font-size: var(--text-body-regular);
@@ -273,28 +292,33 @@ code,
   font-size: 0.9em;
 }
 
-/* Wide enough that the headline and a full wallet row share one line. */
-/* One viewport tall, so the hero, tabs and footer sit at fixed offsets whatever the flow renders. */
+/* One viewport tall, so the header, stage and footer sit at fixed offsets whatever loads. */
 .app {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
   max-width: 1320px;
   margin: 0 auto;
-  padding: 12px var(--space-24);
+  padding: 12px var(--space-24) 0;
+}
+
+/* Framed by a host page: the widget alone, on its own surface, with none of our chrome. The full
+   height keeps the cherry ground off an iframe taller than the form. */
+.app-embed {
+  min-height: 100vh;
+  background: var(--surface-embed);
+  padding: var(--space-24);
+  justify-content: center;
 }
 
 /* ── Header bar ─────────────────────────────────────────────────────────── */
-/* Playground chrome only. The app's own title is the lockup above each flow. */
+/* Sits straight on the cherry ground, the way the exchange's does — no pill of its own. */
 .app-header {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-8) var(--space-16);
   align-items: center;
-  background: var(--surface-hero);
-  border-radius: 9999px;
-  padding: 8px 10px 8px var(--space-24);
-  margin-bottom: var(--space-16);
+  padding: var(--space-8) var(--space-16) var(--space-24);
 }
 
 /* Basis 0 so the title never contributes to the wrap decision — the wallet row keeps its line. */
@@ -344,57 +368,44 @@ code,
 }
 
 /* ── Layout ─────────────────────────────────────────────────────────────── */
-/* The slack lives here, not on the page: swap and bridge differ in height, and centring the row
-   inside a fixed-height main keeps a tab switch from moving everything around it. */
-/* Rail beside content. The rail is fixed-width so the two content columns absorb every resize. */
-.app-shell {
-  display: grid;
-  grid-template-columns: 190px minmax(0, 1fr);
-  gap: var(--space-24);
-  align-items: start;
+/* The exchange's stage: one panel on the cherry ground, rounded at the top and running off the
+   bottom of the viewport, with a thick page-toned border reading as a lip. */
+.stage {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+  border: 8px solid var(--stage-border);
+  border-bottom: 0;
+  border-radius: 32px 32px 0 0;
+  background: var(--stage-bg);
+  padding: 64px 40px var(--space-24);
 }
 
 .app-main {
   display: grid;
   grid-template-columns: minmax(380px, 520px) minmax(0, 1fr);
-  gap: var(--space-24);
-  align-items: stretch;
-  align-content: center;
-  min-height: 100%;
+  gap: 40px;
+  /* Each column keeps its own height: stretching the code card to the form's leaves a void of
+     empty code surface under a short snippet. */
+  align-items: start;
+  width: 100%;
 }
 
 @media (max-width: 1180px) {
   .app-main {
     grid-template-columns: 1fr;
   }
-}
 
-/* Below the rail's own breakpoint it lies down as a row of entries above the form. */
-@media (max-width: 720px) {
-  .app-shell {
-    grid-template-columns: 1fr;
-    gap: var(--space-16);
-  }
-
-  .flow-rail {
-    padding: var(--space-8);
-  }
-
-  .flow-rail ul {
-    display: flex;
-    gap: var(--space-8);
-  }
-
-  .rail-item {
-    width: auto;
-    padding: var(--space-8) var(--space-16);
+  .stage {
+    padding: var(--space-24);
   }
 }
 
-/* Full app width: the line belongs to the page, not to the column above it. */
+/* Inside the stage, not under it: the stage runs off the bottom of the viewport. */
 .app-footer {
-  margin-top: var(--space-16);
+  flex: none;
+  margin: auto 0 0;
   text-wrap: pretty;
 }
 
@@ -419,6 +430,14 @@ code,
 /* Anchors the action to the bottom, so the height the two columns share reads as deliberate. */
 .swap-card .btn-primary {
   margin-top: auto;
+}
+
+/* Says what the CTA does not do. The widget mounts no wallet, and a form this familiar otherwise
+   reads as one that is about to ask for a signature. */
+.action-note {
+  margin: var(--space-8) 0 0;
+  text-align: center;
+  text-wrap: pretty;
 }
 
 /* ── Lockup ─────────────────────────────────────────────────────────────── */
@@ -475,6 +494,11 @@ code,
 .asset-panel:focus-within {
   outline-width: 4px;
   outline-color: var(--panel-halo-hover);
+}
+
+/* Holds the panel's exact height while the token list loads, so nothing jumps when it arrives. */
+.asset-panel-skeleton {
+  height: 108px;
 }
 
 .asset-row {
@@ -1096,14 +1120,7 @@ code,
   color: var(--hero-ctl-ring);
 }
 
-/* ── Wallet + bubbles ───────────────────────────────────────────────────── */
-.wallet-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-8);
-  align-items: center;
-}
-
+/* ── Pills + inline text ────────────────────────────────────────────────── */
 .pill {
   display: inline-flex;
   align-items: center;
@@ -1225,8 +1242,24 @@ code,
   padding: 14px;
 }
 
+/* The one line that says the panel is a takeaway rather than a listing. */
+.code-lead {
+  margin: 0;
+  color: var(--text-body);
+  font-size: var(--text-body-small);
+  line-height: 1.5;
+  text-wrap: pretty;
+  flex: none;
+}
+
+.code-lead strong {
+  color: var(--text-heading);
+}
+
+/* Four tabs plus three actions overflow a narrow column before the page's own breakpoint. */
 .code-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -1273,59 +1306,6 @@ code,
   background: var(--surface-card);
   border-color: var(--border-inset);
   font-weight: 500;
-}
-
-/* ── Flow rail ──────────────────────────────────────────────────────────── */
-/* The exchange's left nav: a tinted column that fades into the page, the active entry carrying the
-   display face. Page navigation rather than file tabs, so it takes body type and real padding. */
-.flow-rail {
-  padding: var(--space-24) 0;
-  border-radius: var(--radius-large);
-  background: linear-gradient(180deg, var(--rail-top), var(--rail-bottom));
-}
-
-.flow-rail ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.rail-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 12px var(--space-24);
-  border: 0;
-  background: none;
-  color: var(--text-faint);
-  font-family: var(--font-body);
-  font-size: var(--text-subtitle);
-  text-align: left;
-  cursor: pointer;
-  transition: color 150ms;
-}
-
-.rail-item:hover {
-  color: var(--text-body);
-}
-
-.rail-item:focus-visible {
-  outline: 2px solid var(--border-strong);
-  outline-offset: -2px;
-}
-
-/* The active entry is the page title's sibling, so it takes the display face the lockup uses. */
-.rail-item-active {
-  color: var(--text-heading);
-  font-family: var(--font-accent);
-  font-weight: 400;
-}
-
-.rail-glyph {
-  width: 1em;
-  flex: none;
-  text-align: center;
 }
 
 /* Bare glyph plus a CSS-only bubble — the note it replaces was a standing paragraph nobody needed twice. */

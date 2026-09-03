@@ -34,7 +34,7 @@ Do not hardcode supported chain counts or chain lists in agent guidance. When ex
 | `apps/wallet-modal-example` | Headless wallet-modal reference app for wallet-sdk-react primitives | [`apps/wallet-modal-example/AGENTS.md`](apps/wallet-modal-example/AGENTS.md) |
 | `apps/swap-api-example` | Vite + React reference app driving `@sodax/swaps-api` end to end (wallet SDK for signing) | [`apps/swap-api-example/README.md`](apps/swap-api-example/README.md) |
 | `apps/stellar-sponsor-example` | Vite + React reference app for the Stellar sponsored-activation journey (dapp-kit hooks), plus an offline test lab with a bundled mock backend | [`apps/stellar-sponsor-example/AGENTS.md`](apps/stellar-sponsor-example/AGENTS.md) |
-| `apps/playground` | Public SDK playground: a live dapp-kit swap beside the code that produced it; intended for the docs and sodax.com | [`apps/playground/AGENTS.md`](apps/playground/AGENTS.md) |
+| `apps/playground` | Embeddable SODAX swap widget: live cross-network quotes with no wallet connection, beside the embed snippet and dapp-kit code behind it; intended for the docs | [`apps/playground/AGENTS.md`](apps/playground/AGENTS.md) |
 
 ## Dependency Direction
 

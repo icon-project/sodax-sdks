@@ -1,47 +1,36 @@
-import { EVM_CHAIN_KEYS, Sodax, getSupportedSolverTokens, spokeChainConfig } from '@sodax/dapp-kit';
+import { CHAIN_KEYS, EVM_CHAIN_KEYS, Sodax, getSupportedSolverTokens, spokeChainConfig } from '@sodax/dapp-kit';
 import { describe, expect, it } from 'vitest';
 import {
+  bridgeChainOr,
   bridgeableChains,
   chainKeyExpression,
   chainName,
-  defaultDstChain,
-  defaultSrcChain,
+  defaultBridgeDstChain,
+  defaultBridgeSrcChain,
+  isChainKey,
   spokeTokens,
-  swappableChains,
 } from './chains';
-import { FLOWS } from './flows';
 
-// These assert the derivation, not a chain list: adding a chain to @sodax/types must be all it takes
-// to see it in the pickers, and any chain that reaches one must be swappable and signable.
-describe('swappableChains', () => {
-  it('offers at least the two chains the defaults need', () => {
-    expect(swappableChains.length).toBeGreaterThanOrEqual(2);
-  });
-
-  it('offers only EVM chains, because that is the one wallet adapter mounted', () => {
-    for (const key of swappableChains) {
-      expect(EVM_CHAIN_KEYS).toContain(key);
+// A chain key reaches this app from the swaps API and from the URL, and both are strings. Anything
+// that gets past this predicate is indexed straight into `baseChainInfo` for a name and a logo.
+describe('isChainKey', () => {
+  it('accepts every key the SDK ships, EVM and non-EVM alike', () => {
+    for (const key of CHAIN_KEYS) {
+      expect(isChainKey(key)).toBe(true);
     }
   });
 
-  it('offers only chains with a spoke config and a non-empty solver token list', () => {
-    for (const key of swappableChains) {
-      expect(spokeChainConfig[key]).toBeDefined();
-      expect(getSupportedSolverTokens(key).length).toBeGreaterThan(0);
-    }
-  });
-
-  it('omits no EVM chain that qualifies', () => {
-    const qualifying = EVM_CHAIN_KEYS.filter(
-      key => key in spokeChainConfig && getSupportedSolverTokens(key).length > 0,
-    );
-    expect([...swappableChains]).toEqual(qualifying);
+  it.each(['0xdead.notachain', 'BASE_MAINNET', '../../etc/passwd', '', 'toString'])('rejects %j', value => {
+    expect(isChainKey(value)).toBe(false);
   });
 });
 
-// Bridging is gated on the chain's own token list, not the solver's, so it can reach further than
-// swapping — but never less far, or a flow switch would strand the chain the user was already on.
+// The parked bridge signs, and EVM is the one wallet family this app ever mounted an adapter for.
 describe('bridgeableChains', () => {
+  it('offers at least the two chains its defaults need', () => {
+    expect(bridgeableChains.length).toBeGreaterThanOrEqual(2);
+  });
+
   it('offers only EVM chains with a spoke config and a non-empty token list', () => {
     for (const key of bridgeableChains) {
       expect(EVM_CHAIN_KEYS).toContain(key);
@@ -50,49 +39,59 @@ describe('bridgeableChains', () => {
     }
   });
 
-  it('covers every swappable chain', () => {
-    for (const key of swappableChains) {
-      expect(bridgeableChains).toContain(key);
-    }
+  it('omits no EVM chain that qualifies', () => {
+    const qualifying = EVM_CHAIN_KEYS.filter(key => key in spokeChainConfig && spokeTokens(key).length > 0);
+    expect([...bridgeableChains]).toEqual(qualifying);
   });
 });
 
-describe('defaults', () => {
-  it.each(FLOWS)('point %s at chains its own picker offers', flow => {
-    const offered = flow === 'bridge' ? bridgeableChains : swappableChains;
-    expect(offered).toContain(defaultSrcChain(flow));
-    expect(offered).toContain(defaultDstChain(flow));
+describe('bridgeChainOr', () => {
+  it('resolves a key the derived list offers', () => {
+    expect(bridgeChainOr(bridgeableChains[1], bridgeableChains[0])).toBe(bridgeableChains[1]);
   });
 
-  it.each(FLOWS)('open %s on a cross-chain pair', flow => {
-    expect(defaultSrcChain(flow)).not.toBe(defaultDstChain(flow));
+  // The derived list is the allowlist — a URL never becomes a chain key on its own.
+  it.each(['solana', '0xdead.notachain', undefined])('falls back for %j', value => {
+    expect(bridgeChainOr(value, bridgeableChains[0])).toBe(bridgeableChains[0]);
+  });
+});
+
+describe('bridge defaults', () => {
+  it('point at chains the bridge picker offers', () => {
+    expect(bridgeableChains).toContain(defaultBridgeSrcChain());
+    expect(bridgeableChains).toContain(defaultBridgeDstChain());
+  });
+
+  it('open on a cross-chain pair', () => {
+    expect(defaultBridgeSrcChain()).not.toBe(defaultBridgeDstChain());
   });
 });
 
 describe('chainKeyExpression', () => {
-  it('renders every offered chain as the ChainKeys expression a reader pastes', () => {
-    for (const key of swappableChains) {
+  it('renders every chain the SDK ships as the ChainKeys expression a reader pastes', () => {
+    for (const key of CHAIN_KEYS) {
       expect(chainKeyExpression(key)).toMatch(/^ChainKeys\.[A-Z0-9_]+$/);
     }
   });
 });
 
 describe('chainName', () => {
-  it('has a display name for every offered chain', () => {
-    for (const key of swappableChains) {
+  it('has a display name for every chain the SDK ships', () => {
+    for (const key of CHAIN_KEYS) {
       expect(chainName(key)).toBeTruthy();
     }
   });
 });
 
 // The panel renders a speed tier before any quote, so a pair the estimate cannot classify would
-// break the form rather than degrade it.
-describe('speed tier over the offered pairs', () => {
+// break the form rather than degrade it. The API's list reaches at least as far as this one.
+describe('speed tier over every swappable pair', () => {
   it('classifies every pair the pickers can produce', () => {
     const sodax = new Sodax();
+    const chains = CHAIN_KEYS.filter(key => getSupportedSolverTokens(key).length > 0);
 
-    for (const srcChain of swappableChains) {
-      for (const dstChain of swappableChains) {
+    for (const srcChain of chains) {
+      for (const dstChain of chains) {
         const srcToken = getSupportedSolverTokens(srcChain)[0];
         const dstToken = getSupportedSolverTokens(dstChain)[0];
         if (!srcToken || !dstToken) continue;

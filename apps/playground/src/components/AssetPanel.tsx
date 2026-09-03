@@ -1,12 +1,13 @@
+import type { ChainKey } from '@sodax/dapp-kit';
 import { type ReactNode, useState } from 'react';
-import { type PlaygroundChainKey, chainName } from '../lib/chains';
+import { chainName } from '../lib/chains';
 import { formatTokenAmount } from '../lib/format';
 import { AssetLogo } from './AssetLogo';
 
 export type AssetPanelProps = {
   /** Undefined while the chain carries no token for this flow — the picker still opens. */
   symbol: string | undefined;
-  chain: PlaygroundChainKey;
+  chain: ChainKey;
   emptyLabel: string;
   pickerLabel: string;
   /** Rendered with `open`/`onClose`, so the panel owns the trigger and the picker owns the choosing. */

@@ -1,11 +1,18 @@
 import type { BridgeFlow } from '../hooks/useBridgeFlow';
-import { type TokenChoice, bridgeableChains, chainName, tokenChoicesFor, txExplorerUrl } from '../lib/chains';
+import {
+  type PlaygroundChainKey,
+  type TokenChoice,
+  bridgeTokenChoices,
+  bridgeableChains,
+  chainName,
+  txExplorerUrl,
+} from '../lib/chains';
 import { formatTokenAmount } from '../lib/format';
 import { assetGroups } from '../lib/pickerOptions';
 import { AssetPicker, NetworkPicker } from './AssetPicker';
 import { AssetPanel, FlipButton } from './AssetPanel';
 
-const BRIDGE_GROUPS = assetGroups(tokenChoicesFor('bridge'));
+const BRIDGE_GROUPS = assetGroups(bridgeTokenChoices());
 
 function shortenHash(hash: string): string {
   return hash.length > 14 ? `${hash.slice(0, 8)}…${hash.slice(-6)}` : hash;
@@ -53,7 +60,7 @@ function PrimaryAction({ flow }: { flow: BridgeFlow }) {
 }
 
 export function BridgePanel({ flow }: { flow: BridgeFlow }) {
-  const selectSend = (choice: TokenChoice) => {
+  const selectSend = (choice: TokenChoice<PlaygroundChainKey>) => {
     flow.setSrcChain(choice.chain);
     flow.setSrcToken(choice.token);
   };

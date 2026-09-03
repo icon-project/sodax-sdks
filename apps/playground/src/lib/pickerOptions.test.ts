@@ -1,34 +1,41 @@
+import { CHAIN_KEYS, type ChainKey, getSupportedSolverTokens } from '@sodax/dapp-kit';
 import { describe, expect, it } from 'vitest';
-import { assetCountFor, chainsFor, swappableChains, tokenChoicesFor } from './chains';
-import { FLOWS } from './flows';
+import type { TokenChoice } from './chains';
 import { assetGroups, filterGroups, tokenOptionId } from './pickerOptions';
+
+// The packaged solver list stands in for the API's here: same shape, offline, and it already spans
+// EVM and non-EVM families, which is what the grouping has to survive.
+const CHAINS = CHAIN_KEYS.filter(key => getSupportedSolverTokens(key).length > 0);
+const CHOICES: TokenChoice[] = CHAINS.flatMap(chain =>
+  getSupportedSolverTokens(chain).map(token => ({ chain: chain as ChainKey, token })),
+);
+const SYMBOL_COUNT = new Set(CHOICES.map(({ token }) => token.symbol)).size;
 
 // The picker addresses a token by id, so a collision silently selects the wrong asset. Two shapes
 // collide in the real config: one asset on many chains, and a withdrawOnly entry sharing its
 // on-chain address with the token it deprecates.
 describe('tokenOptionId', () => {
   it('separates one asset held on two chains', () => {
-    const [first, second] = swappableChains;
+    const [first, second] = CHAINS;
     expect(tokenOptionId(first, 'USDC')).not.toBe(tokenOptionId(second, 'USDC'));
   });
 
   it('separates a deprecated entry from the token it shares an address with', () => {
-    const [chain] = swappableChains;
+    const [chain] = CHAINS;
     expect(tokenOptionId(chain, 'WBTC')).not.toBe(tokenOptionId(chain, 'WBTC.legacy'));
   });
 });
 
 describe('assetGroups', () => {
-  it.each(FLOWS)('gives %s one group per symbol, losing no token', flow => {
-    const choices = tokenChoicesFor(flow);
-    const groups = assetGroups(choices);
+  it('gives one group per symbol, losing no token', () => {
+    const groups = assetGroups(CHOICES);
 
-    expect(groups).toHaveLength(assetCountFor(flow));
-    expect(groups.reduce((total, group) => total + group.choices.length, 0)).toBe(choices.length);
+    expect(groups).toHaveLength(SYMBOL_COUNT);
+    expect(groups.reduce((total, group) => total + group.choices.length, 0)).toBe(CHOICES.length);
   });
 
-  it.each(FLOWS)('keeps every %s group internally one symbol on distinct chains', flow => {
-    for (const group of assetGroups(tokenChoicesFor(flow))) {
+  it('keeps every group internally one symbol on distinct chains', () => {
+    for (const group of assetGroups(CHOICES)) {
       for (const choice of group.choices) {
         expect(choice.token.symbol).toBe(group.symbol);
       }
@@ -37,8 +44,8 @@ describe('assetGroups', () => {
   });
 
   // Chain count stands in for the exchange's value sort, so the widest-reaching assets lead.
-  it.each(FLOWS)('orders %s by reach, then alphabetically', flow => {
-    const groups = assetGroups(tokenChoicesFor(flow));
+  it('orders by reach, then alphabetically', () => {
+    const groups = assetGroups(CHOICES);
 
     for (let i = 1; i < groups.length; i++) {
       const previous = groups[i - 1];
@@ -52,7 +59,7 @@ describe('assetGroups', () => {
 });
 
 describe('filterGroups', () => {
-  const groups = assetGroups(tokenChoicesFor('swap'));
+  const groups = assetGroups(CHOICES);
 
   it('returns everything for an empty query and no network', () => {
     expect(filterGroups(groups, '', undefined)).toHaveLength(groups.length);
@@ -70,7 +77,7 @@ describe('filterGroups', () => {
   // Filtering to one network narrows each surviving group to that chain, which is what lets the
   // grid select straight through instead of asking "which chain?" for an answer already given.
   it('narrows every surviving group to the picked network', () => {
-    const [network] = chainsFor('swap');
+    const [network] = CHAINS;
     const matched = filterGroups(groups, '', network);
 
     expect(matched.length).toBeGreaterThan(0);
@@ -81,7 +88,7 @@ describe('filterGroups', () => {
   });
 
   it('drops a group that does not reach the picked network', () => {
-    const [network] = chainsFor('swap');
+    const [network] = CHAINS;
     const offChain = groups.find(group => group.choices.every(choice => choice.chain !== network));
     expect(offChain, 'no asset is absent from the first chain — pick another to keep this meaningful').toBeDefined();
 

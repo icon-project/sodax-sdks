@@ -5,55 +5,45 @@ import {
   type EvmChainKey,
   type XToken,
   baseChainInfo,
-  getSupportedSolverTokens,
   spokeChainConfig,
 } from '@sodax/dapp-kit';
-import type { Flow } from './flows';
 
 /** An EVM chain that `spokeChainConfig` covers — narrow enough to index the config object safely. */
 export type PlaygroundChainKey = EvmChainKey & keyof typeof spokeChainConfig;
 
-function evmChainsWhere(hasTokens: (key: PlaygroundChainKey) => boolean): readonly PlaygroundChainKey[] {
-  return EVM_CHAIN_KEYS.filter((key): key is PlaygroundChainKey => key in spokeChainConfig && hasTokens(key));
+/**
+ * A URL or an API response is a string until it matches a key `baseChainInfo` can name and badge.
+ * `Object.hasOwn`, not `in`: `in` walks the prototype, so `?srcChain=toString` would pass and then
+ * index a function that has no `name` or `logo` to render.
+ */
+export function isChainKey(value: string): value is ChainKey {
+  return Object.hasOwn(baseChainInfo, value);
 }
 
 /**
- * The chains this app offers in its pickers, derived from `@sodax/types` rather than listed here:
- * EVM (the only wallet adapter mounted) and non-empty on the solver's swap-token list.
+ * The parked bridge flow's chain list: bridging moves one asset between chains, so the gate is the
+ * chain's own supported-token list rather than the solver's. Still EVM-only — the bridge signs, and
+ * EVM is the one family this app ever mounted a wallet adapter for.
  */
-export const swappableChains = evmChainsWhere(key => getSupportedSolverTokens(key).length > 0);
+export const bridgeableChains: readonly PlaygroundChainKey[] = EVM_CHAIN_KEYS.filter(
+  (key): key is PlaygroundChainKey => key in spokeChainConfig && spokeTokens(key).length > 0,
+);
 
-/** Bridging moves one asset between chains, so the gate is the chain's own list, not the solver's. */
-export const bridgeableChains = evmChainsWhere(key => spokeTokens(key).length > 0);
-
-/** Every token the chain's spoke supports — the bridge source list, wider than the solver's. */
+/** Every token the chain's spoke supports — the bridge's source list. */
 export function spokeTokens(key: PlaygroundChainKey): XToken[] {
   return Object.values(spokeChainConfig[key].supportedTokens);
 }
 
-export function chainsFor(flow: Flow): readonly PlaygroundChainKey[] {
-  return flow === 'bridge' ? bridgeableChains : swappableChains;
-}
-
-/** A token together with the narrowed key of the chain it lives on, so a pick sets both at once. */
-export type TokenChoice = { chain: PlaygroundChainKey; token: XToken };
-
-function tokensOn(flow: Flow, key: PlaygroundChainKey): readonly XToken[] {
-  return flow === 'bridge' ? spokeTokens(key) : getSupportedSolverTokens(key);
-}
-
 /**
- * Every token the flow can start from, across every chain in its picker. `XToken.chainKey` is the
- * wide `ChainKey`, so pairing each token with the key it was derived from is what keeps the pick
- * assignable to `setSrcChain` without a cast.
+ * A token together with the key of the chain it lives on, so one pick sets both. Generic because
+ * the swap widget's chains come from the API as the wide `ChainKey` while the parked bridge keeps
+ * its EVM-narrowed list, and the pickers are shared.
  */
-export function tokenChoicesFor(flow: Flow): readonly TokenChoice[] {
-  return chainsFor(flow).flatMap(chain => tokensOn(flow, chain).map(token => ({ chain, token })));
-}
+export type TokenChoice<K extends ChainKey = ChainKey> = { chain: K; token: XToken };
 
-/** Distinct symbols across the flow's chains — the same asset on two chains counts once. */
-export function assetCountFor(flow: Flow): number {
-  return new Set(tokenChoicesFor(flow).map(({ token }) => token.symbol)).size;
+/** Every token the parked bridge can start from, paired with the chain it came from. */
+export function bridgeTokenChoices(): readonly TokenChoice<PlaygroundChainKey>[] {
+  return bridgeableChains.flatMap(chain => spokeTokens(chain).map(token => ({ chain, token })));
 }
 
 export function chainLogo(key: ChainKey): string {
@@ -82,10 +72,15 @@ function firstAvailable(
   return chains.includes(preferred) ? preferred : chains[fallbackIndex];
 }
 
-export function defaultSrcChain(flow: Flow): PlaygroundChainKey {
-  return firstAvailable(chainsFor(flow), ChainKeys.BASE_MAINNET, 0);
+/** Resolves a URL chain key against the bridge's derived list, which is the allowlist. */
+export function bridgeChainOr(value: string | undefined, fallback: PlaygroundChainKey): PlaygroundChainKey {
+  return bridgeableChains.find(key => key === value) ?? fallback;
 }
 
-export function defaultDstChain(flow: Flow): PlaygroundChainKey {
-  return firstAvailable(chainsFor(flow), ChainKeys.ARBITRUM_MAINNET, 1);
+export function defaultBridgeSrcChain(): PlaygroundChainKey {
+  return firstAvailable(bridgeableChains, ChainKeys.BASE_MAINNET, 0);
+}
+
+export function defaultBridgeDstChain(): PlaygroundChainKey {
+  return firstAvailable(bridgeableChains, ChainKeys.ARBITRUM_MAINNET, 1);
 }

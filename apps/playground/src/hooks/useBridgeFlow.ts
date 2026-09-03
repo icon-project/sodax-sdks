@@ -11,12 +11,25 @@ import {
 import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatUnits } from 'viem';
-import { DEFAULT_AMOUNT, playgroundMode } from '../config';
-import { type PlaygroundChainKey, defaultDstChain, defaultSrcChain, spokeTokens } from '../lib/chains';
+import { DEFAULT_AMOUNT } from '../config';
+import { pickToken } from '../lib/assets';
+import {
+  type PlaygroundChainKey,
+  bridgeChainOr,
+  defaultBridgeDstChain,
+  defaultBridgeSrcChain,
+  spokeTokens,
+} from '../lib/chains';
 import { type FriendlyError, describeError } from '../lib/errors';
 import { initialUrl } from '../lib/initialUrl';
 import { parseAmount } from '../lib/format';
-import { pickToken, seedFor, toSearch } from '../lib/urlState';
+import { seedFor, toSearch } from '../lib/urlState';
+
+/**
+ * Parked with the flow: nothing mounts `SodaxWalletProvider` any more, so there is no signer to
+ * approve or bridge with. Reviving the bridge means mounting it again for that route only.
+ */
+const CAN_SIGN = false;
 
 /** Bridging settles on the hub, so the second hash is a Sonic tx — not one on the destination spoke. */
 export type BridgeDelivery = {
@@ -37,10 +50,13 @@ const seed = seedFor('bridge', initialUrl);
 export function useBridgeFlow() {
   const account = useXAccount({ xChainType: 'EVM' });
 
-  const [srcChain, setSrcChain] = useState<PlaygroundChainKey>(seed.srcChain ?? defaultSrcChain('bridge'));
-  const [dstChain, setDstChain] = useState<PlaygroundChainKey>(seed.dstChain ?? defaultDstChain('bridge'));
+  // A chain key from the URL is a string until the derived list recognises it — the list is the
+  // allowlist, so an unknown one falls back to the default rather than reaching the SDK.
+  const seedSrcChain = bridgeChainOr(seed.srcChain, defaultBridgeSrcChain());
+  const [srcChain, setSrcChain] = useState<PlaygroundChainKey>(seedSrcChain);
+  const [dstChain, setDstChain] = useState<PlaygroundChainKey>(bridgeChainOr(seed.dstChain, defaultBridgeDstChain()));
   const [srcToken, setSrcToken] = useState<XToken | undefined>(() =>
-    pickToken(spokeTokens(seed.srcChain ?? defaultSrcChain('bridge')), seed.srcSymbol),
+    pickToken(spokeTokens(seedSrcChain), seed.srcSymbol),
   );
   const [dstToken, setDstToken] = useState<XToken | undefined>();
   const [amount, setAmount] = useState(seed.amount ?? DEFAULT_AMOUNT);
@@ -92,7 +108,7 @@ export function useBridgeFlow() {
     };
   }, [srcToken, dstToken, inputAmount, account.address, srcChain, dstChain]);
 
-  const canSign = playgroundMode === 'full';
+  const canSign = CAN_SIGN;
   const signablePayload = canSign ? payload : undefined;
 
   const { data: hasAllowance, isLoading: isCheckingAllowance } = useBridgeAllowance({

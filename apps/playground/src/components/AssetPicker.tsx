@@ -1,11 +1,11 @@
-import { tokenLogo } from '@sodax/dapp-kit';
+import { type ChainKey, tokenLogo } from '@sodax/dapp-kit';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { type PlaygroundChainKey, type TokenChoice, chainLogo, chainName } from '../lib/chains';
 import { type AssetGroup, filterGroups } from '../lib/pickerOptions';
 import { Glyph } from './AssetLogo';
 
 /** A tile's corner mark: how many chains carry the asset, or — when only one does — which chain. */
-type Mark = { kind: 'count'; value: number } | { kind: 'chain'; chain: PlaygroundChainKey };
+type Mark = { kind: 'count'; value: number } | { kind: 'chain'; chain: ChainKey };
 
 function Tile({
   logo,
@@ -101,24 +101,34 @@ function Shell({
   );
 }
 
-export type AssetPickerProps = {
+export type AssetPickerProps<K extends ChainKey> = {
   open: boolean;
   onClose: () => void;
-  groups: readonly AssetGroup[];
-  networks: readonly PlaygroundChainKey[];
-  selected: { chain: PlaygroundChainKey; symbol: string } | undefined;
-  onSelect: (choice: TokenChoice) => void;
+  groups: readonly AssetGroup<K>[];
+  networks: readonly K[];
+  selected: { chain: K; symbol: string } | undefined;
+  onSelect: (choice: TokenChoice<K>) => void;
 };
 
 /**
  * The exchange's asset picker: a grid of assets rather than a list of every token-chain pair. One
  * tile per symbol, marked with how many chains carry it; picking a multi-chain asset asks which.
+ *
+ * Generic over the chain key so the swap widget's API-derived `ChainKey` list and the parked
+ * bridge's EVM-narrowed one both keep their own type through a pick.
  */
-export function AssetPicker({ open, onClose, groups, networks, selected, onSelect }: AssetPickerProps) {
+export function AssetPicker<K extends ChainKey>({
+  open,
+  onClose,
+  groups,
+  networks,
+  selected,
+  onSelect,
+}: AssetPickerProps<K>) {
   const [query, setQuery] = useState('');
-  const [network, setNetwork] = useState<PlaygroundChainKey | undefined>();
+  const [network, setNetwork] = useState<K | undefined>();
   const [isNetworkOpen, setNetworkOpen] = useState(false);
-  const [expanded, setExpanded] = useState<AssetGroup | undefined>();
+  const [expanded, setExpanded] = useState<AssetGroup<K> | undefined>();
 
   // Every open starts from the full grid; state left over from the last pick reads as a bug.
   useEffect(() => {
@@ -131,13 +141,13 @@ export function AssetPicker({ open, onClose, groups, networks, selected, onSelec
 
   const visible = useMemo(() => filterGroups(groups, query, network), [groups, query, network]);
 
-  const pick = (choice: TokenChoice) => {
+  const pick = (choice: TokenChoice<K>) => {
     onSelect(choice);
     onClose();
   };
 
   // A group filtered to one chain has already answered the question the drill-in would ask.
-  const openGroup = (group: AssetGroup) => {
+  const openGroup = (group: AssetGroup<K>) => {
     const only = group.choices.length === 1 ? group.choices[0] : undefined;
     if (only) pick(only);
     else setExpanded(group);
