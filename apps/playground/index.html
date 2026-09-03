@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f9f7f5" />
+    <!-- The mark sodax.com serves, byte-for-byte — copied from sodax-frontend apps/web/app. -->
+    <link rel="icon" type="image/png" sizes="128x128" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inria+Serif:wght@400&family=Inter:wght@400;500;700&family=Shrikhand&display=swap"
+    />
+    <meta
+      name="description"
+      content="An embeddable SODAX swap widget: live cross-network quotes across every network SODAX reaches, EVM and non-EVM, with no wallet connection."
+    />
+    <title>SODAX Swap Widget</title>
+    <script>
+      // Resolve the theme before first paint so an embed never flashes the wrong one. Owns the
+      // initial value; src/hooks/useTheme.ts reads it back and takes over from there.
+      try {
+        var stored = localStorage.getItem('sodax-playground-theme');
+        var dark = stored ? stored === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      } catch (error) {
+        document.documentElement.dataset.theme = 'light';
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <script type="module" src="/src/index.tsx"></script>
+  </body>
+</html>

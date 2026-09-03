@@ -1,0 +1,1432 @@
+/*
+ * SODAX B2B design system, in two layers. Layer 1 is the brand palette, 1:1 with sodax-frontend
+ * `apps/web/app/design-system.css`; layer 2 maps it onto semantic roles per theme.
+ *
+ * No rule below layer 2 may name a palette token directly — that is what keeps the themes in sync.
+ */
+
+/* ── Layer 1: brand palette ─────────────────────────────────────────────── */
+:root {
+  /* Primary — cherry */
+  --cherry-dark: #964d48;
+  --cherry-soda: #a55c55;
+  --cherry-plus: #ad635c;
+  --cherry-on-cherry: #c36c65;
+  --cherry-brighter: #e3bebb;
+  --disabled-cherry-grey: #d7cdcb;
+
+  /* Secondary — yellow */
+  --yellow-dark: #ecc100;
+  --yellow-soda: #ffd92f;
+  --clicked-soda-on-soda: #f6e799;
+  --focused-soda-on-soda: #f6e799;
+
+  /* Neutrals */
+  --charcoal: #1d1414;
+  --espresso: #483434;
+  --clay-dark: #6b5c5b;
+  --clay: #8e7e7d;
+  --clay-light: #b9acab;
+  --cherry-grey: #d7cdcb;
+  --cream-cherry: #e5d5d4;
+  --cream-white: #ede6e6;
+  --light-cream: #f0eaeb;
+  --almost-white: #f8f3f3;
+  --vibrant-white: #f9f7f5;
+  --white: #ffffff;
+
+  /* Night ramp — playground-local: the brand collection is light-only, and espresso is far too
+     light to serve as a dark-mode card. Retire these if it ever ships a dark ladder. */
+  --night-950: #120c0c;
+  --night-900: #17100f;
+  --night-800: #241a19;
+  --night-700: #2e2120;
+  --night-600: #382827;
+
+  /* Stage gradient — the exchange's app panel, 1:1 with sodax-frontend
+     `apps/web/app/(apps)/layout.tsx`. Three of the four stops are outside the brand collection;
+     they belong to that panel and are copied, not invented. */
+  --stage-1: #e3d8d8;
+  --stage-2: #f5f2f2;
+  --stage-3: #f5eded;
+
+  /* Hairlines */
+  --hairline-light: rgba(142, 126, 125, 0.18);
+  --hairline-light-strong: rgba(142, 126, 125, 0.28);
+  --hairline-dark: rgba(227, 190, 187, 0.12);
+  --hairline-dark-strong: rgba(227, 190, 187, 0.24);
+  --clay-light-veil: rgba(185, 172, 171, 0.2);
+
+  /* Semantic */
+  --error-base: #faecec;
+  --error-lighter: #f5dbdb;
+  --error-light: #d8696c;
+  --error: #ce4446;
+  --error-dark: #a73639;
+  --error-veil: rgba(206, 68, 70, 0.15);
+  --error-veil-border: rgba(216, 105, 108, 0.32);
+  --success-light: #6dd696;
+  --success-dark: #089541;
+
+  /* Typography */
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-display: "Inria Serif", Georgia, serif;
+  --font-accent: "Shrikhand", "Inria Serif", Georgia, serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* The form takes the exchange's scale; page chrome stays a step below so it all fits a laptop. */
+  --text-hero: 44px;
+  --text-amount: 36px;
+  --text-symbol: 22px;
+  --text-lead: 15px;
+  --text-subtitle: 18px;
+  --text-body-regular: 15px;
+  --text-body-small: 13px;
+  --text-mono: 12px;
+  --text-caption: 12px;
+
+  /* Spacing + radius */
+  --space-8: 8px;
+  --space-16: 16px;
+  --space-24: 24px;
+  --radius-large: 24px;
+  --radius-regular: 16px;
+  --radius-inset: 12px;
+  --radius-small: 8px;
+}
+
+@media (width < 640px) {
+  :root {
+    --text-hero: 28px;
+    --text-amount: 24px;
+    --text-symbol: 18px;
+    --text-subtitle: 16px;
+    --text-lead: 14px;
+    --text-body-regular: 14px;
+    --radius-large: 16px;
+    --radius-regular: 12px;
+  }
+}
+
+/* ── Layer 2: semantic roles, light ─────────────────────────────────────── */
+:root {
+  color-scheme: light;
+
+  /* The exchange's two grounds: cherry behind, and the app panel sitting on it. */
+  --surface-ground: var(--cherry-soda);
+  --stage-bg: radial-gradient(
+    239.64% 141.42% at 0% 0%,
+    var(--stage-1) 0%,
+    var(--stage-2) 22.12%,
+    var(--stage-2) 57.69%,
+    var(--stage-3) 100%
+  );
+  --stage-border: var(--vibrant-white);
+
+  --surface-page: var(--vibrant-white);
+  --surface-hero: var(--cherry-soda);
+  --surface-card: var(--white);
+  --surface-inset: var(--almost-white);
+  --surface-note: var(--almost-white);
+
+  /* The hero is cherry in both themes, so its nested controls are theme-invariant. */
+  --bubble-bg: var(--almost-white);
+  --bubble-fg: var(--cherry-dark);
+  --hero-ctl-bg: var(--cherry-on-cherry);
+  --hero-ctl-bg-hover: var(--cherry-plus);
+  --hero-ctl-fg: var(--white);
+  --hero-ctl-fg-disabled: var(--cherry-brighter);
+  --hero-ctl-ring: var(--yellow-soda);
+
+  --code-bg: var(--charcoal);
+  --code-fg: var(--cream-white);
+  --code-inline-fg: var(--cherry-soda);
+
+  /* The white pill tooltip sodax.com/stake uses: no border, espresso label. */
+  --tooltip-bg: var(--white);
+  --tooltip-fg: var(--espresso);
+
+  --border-subtle: var(--hairline-light);
+  --border-inset: var(--light-cream);
+  --border-strong: var(--hairline-light-strong);
+
+  /* The exchange's currency panel is an outline, not a fill — one shade off the page behind it. */
+  --panel-halo: var(--cream-white);
+  --panel-halo-hover: var(--cherry-grey);
+
+  /* The form has no card of its own, so discs that punch through the seam ring in the tone behind
+     it — which is the stage, not the page. */
+  --form-surface: var(--stage-2);
+  --surface-embed: var(--stage-2);
+  --flip-bg: var(--cream-white);
+  --flip-bg-hover: var(--cherry-grey);
+  --flip-fg: var(--espresso);
+  --logo-shadow: var(--clay-light-veil);
+
+  /* The exchange's app title. Yellow on a light page is low-contrast but it is the brand lockup. */
+  --lockup-accent: var(--yellow-dark);
+
+  --text-heading: var(--espresso);
+  --text-body: var(--clay-dark);
+  --text-muted: var(--clay);
+  --text-faint: var(--clay-light);
+  --text-on-hero: var(--white);
+  --text-on-hero-muted: var(--cherry-brighter);
+  --text-on-hero-accent: var(--yellow-soda);
+
+  --accent: var(--cherry-soda);
+  --accent-hover: var(--cherry-dark);
+
+  --cta-bg: var(--cherry-soda);
+  --cta-bg-hover: var(--cherry-dark);
+  --cta-bg-active: var(--cherry-on-cherry);
+  --cta-fg: var(--white);
+  --cta-ring: var(--cherry-on-cherry);
+  --cta-disabled-bg: var(--disabled-cherry-grey);
+  --cta-disabled-fg: var(--clay-dark);
+
+  --ghost-bg: transparent;
+  --ghost-bg-hover: var(--almost-white);
+  --ghost-fg: var(--espresso);
+  --ghost-fg-hover: var(--cherry-soda);
+  --ghost-border: var(--hairline-light-strong);
+
+  --alert-bg: var(--error-base);
+  --alert-border: var(--error-lighter);
+  --alert-fg: var(--error-dark);
+  --alert-detail-fg: var(--error);
+
+  --status-ok: var(--success-dark);
+  --status-bad: var(--error);
+  --status-pending: var(--espresso);
+}
+
+/* ── Layer 2: semantic roles, dark ──────────────────────────────────────── */
+/* One block, no media-query copy: index.html sets the attribute pre-paint from storage or the OS. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --surface-ground: var(--night-950);
+  --stage-bg: var(--night-900);
+  --stage-border: var(--night-800);
+  --surface-embed: var(--night-900);
+
+  --surface-page: var(--night-900);
+  --surface-hero: var(--cherry-dark);
+  --surface-card: var(--night-800);
+  --surface-inset: var(--night-700);
+  --surface-note: var(--night-700);
+
+  --code-bg: var(--night-950);
+  --code-inline-fg: var(--cherry-brighter);
+
+  --tooltip-bg: var(--night-700);
+  --tooltip-fg: var(--cream-white);
+
+  --border-subtle: var(--hairline-dark);
+  --border-inset: var(--hairline-dark);
+  --border-strong: var(--hairline-dark-strong);
+
+  --panel-halo: var(--night-700);
+  --panel-halo-hover: var(--night-600);
+
+  --form-surface: var(--surface-page);
+  --flip-bg: var(--night-700);
+  --flip-bg-hover: var(--night-600);
+  --flip-fg: var(--cream-cherry);
+  --logo-shadow: rgb(0 0 0 / 35%);
+
+  --lockup-accent: var(--yellow-soda);
+
+  --text-heading: var(--white);
+  --text-body: var(--cream-cherry);
+  --text-muted: var(--clay-light);
+  --text-faint: var(--clay);
+
+  --accent: var(--yellow-soda);
+  --accent-hover: var(--yellow-dark);
+
+  /* Brand rule: on a dark or cherry surface the primary CTA is yellow with a cherry-dark label. */
+  --cta-bg: var(--yellow-dark);
+  --cta-bg-hover: var(--yellow-soda);
+  --cta-bg-active: var(--clicked-soda-on-soda);
+  --cta-fg: var(--cherry-dark);
+  --cta-ring: var(--focused-soda-on-soda);
+  --cta-disabled-bg: var(--night-600);
+  --cta-disabled-fg: var(--clay);
+
+  --ghost-bg: transparent;
+  --ghost-bg-hover: var(--night-700);
+  --ghost-fg: var(--cream-cherry);
+  --ghost-fg-hover: var(--white);
+  --ghost-border: var(--hairline-dark-strong);
+
+  --alert-bg: var(--error-veil);
+  --alert-border: var(--error-veil-border);
+  --alert-fg: var(--error-light);
+  --alert-detail-fg: var(--error-light);
+
+  --status-ok: var(--success-light);
+  --status-bad: var(--error-light);
+  --status-pending: var(--cream-white);
+}
+
+/* ── Base ───────────────────────────────────────────────────────────────── */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--surface-ground);
+  color: var(--text-body);
+  font-family: var(--font-body);
+  font-size: var(--text-body-regular);
+  font-weight: 400;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+code,
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+/* One viewport tall, so the header, stage and footer sit at fixed offsets whatever loads. */
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 12px var(--space-24) 0;
+}
+
+/* Framed by a host page: the widget alone, on its own surface, with none of our chrome. The full
+   height keeps the cherry ground off an iframe taller than the form. */
+.app-embed {
+  min-height: 100vh;
+  background: var(--surface-embed);
+  padding: var(--space-24);
+  justify-content: center;
+}
+
+/* ── Header bar ─────────────────────────────────────────────────────────── */
+/* Sits straight on the cherry ground, the way the exchange's does — no pill of its own. */
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8) var(--space-16);
+  align-items: center;
+  padding: var(--space-8) var(--space-16) var(--space-24);
+}
+
+/* Basis 0 so the title never contributes to the wrap decision — the wallet row keeps its line. */
+.app-title {
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0;
+  color: var(--text-on-hero);
+  font-family: var(--font-display);
+  font-size: var(--text-lead);
+  line-height: 1.3;
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-title em {
+  font-family: var(--font-accent);
+  font-style: italic;
+  color: var(--text-on-hero-accent);
+}
+
+/* Real-funds warning. Red has no contrast on cherry, so the accent carries the weight. */
+.hero-note {
+  margin: 0;
+  color: var(--text-on-hero-muted);
+  font-size: var(--text-caption);
+  line-height: 1.4;
+}
+
+.hero-note strong {
+  color: var(--text-on-hero-accent);
+  font-weight: 700;
+}
+
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  align-items: center;
+}
+
+/* Page-level muted grey has no contrast on cherry. */
+.app-header .muted {
+  color: var(--text-on-hero-muted);
+}
+
+/* ── Layout ─────────────────────────────────────────────────────────────── */
+/* The exchange's stage: one panel on the cherry ground, rounded at the top and running off the
+   bottom of the viewport, with a thick page-toned border reading as a lip. */
+.stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+  border: 8px solid var(--stage-border);
+  border-bottom: 0;
+  border-radius: 32px 32px 0 0;
+  background: var(--stage-bg);
+  padding: 64px 40px var(--space-24);
+}
+
+.app-main {
+  display: grid;
+  grid-template-columns: minmax(380px, 520px) minmax(0, 1fr);
+  gap: 40px;
+  /* Each column keeps its own height: stretching the code card to the form's leaves a void of
+     empty code surface under a short snippet. */
+  align-items: start;
+  width: 100%;
+}
+
+@media (max-width: 1180px) {
+  .app-main {
+    grid-template-columns: 1fr;
+  }
+
+  .stage {
+    padding: var(--space-24);
+  }
+}
+
+/* Inside the stage, not under it: the stage runs off the bottom of the viewport. */
+.app-footer {
+  flex: none;
+  margin: auto 0 0;
+  text-wrap: pretty;
+}
+
+.card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-regular);
+  padding: var(--space-16) 18px;
+}
+
+/* No card of its own: on the exchange the panels sit straight on the page, and the halo around each
+   is the only edge. A card here would box the widget and read as a second frame inside the page. */
+.swap-card {
+  display: flex;
+  flex-direction: column;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+
+/* Anchors the action to the bottom, so the height the two columns share reads as deliberate. */
+.swap-card .btn-primary {
+  margin-top: auto;
+}
+
+/* Says what the CTA does not do. The widget mounts no wallet, and a form this familiar otherwise
+   reads as one that is about to ask for a signature. */
+.action-note {
+  margin: var(--space-8) 0 0;
+  text-align: center;
+  text-wrap: pretty;
+}
+
+/* ── Lockup ─────────────────────────────────────────────────────────────── */
+/* The app title of the flow, in the exchange's shape: a bold word, then a Shrikhand accent word. */
+.flow-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.lockup {
+  padding: 0 var(--space-8);
+  margin-bottom: var(--space-8);
+}
+
+.lockup-title {
+  margin: 0;
+  color: var(--lockup-accent);
+  font-family: var(--font-body);
+  font-size: var(--text-hero);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.lockup-title em {
+  font-family: var(--font-accent);
+  font-style: normal;
+  font-weight: 400;
+}
+
+.lockup-subtitle {
+  margin: var(--space-8) 0 0;
+  color: var(--text-faint);
+  font-size: var(--text-subtitle);
+}
+
+/* ── Form ───────────────────────────────────────────────────────────────── */
+/* The exchange's currency panel: an outline one shade off the card, thickening on hover, with the
+   asset on the left and the amount on the right. The panel itself has no fill. */
+.asset-panel {
+  position: relative;
+  border-radius: var(--radius-large);
+  outline: 2px solid var(--panel-halo);
+  outline-offset: -2px;
+  padding: var(--space-24) 28px;
+  transition:
+    outline-color 150ms,
+    outline-width 150ms;
+}
+
+.asset-panel:hover,
+.asset-panel:focus-within {
+  outline-width: 4px;
+  outline-color: var(--panel-halo-hover);
+}
+
+/* Holds the panel's exact height while the token list loads, so nothing jumps when it arrives. */
+.asset-panel-skeleton {
+  height: 108px;
+}
+
+.asset-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* The whole identity cluster is the picker trigger, as on the exchange. */
+.asset-id {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-16);
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.asset-id:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: 4px;
+  border-radius: var(--radius-small);
+}
+
+.asset-id-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.asset-symbol {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  color: var(--text-heading);
+  font-size: var(--text-symbol);
+  line-height: 1.25;
+}
+
+.asset-chevron {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--text-muted);
+}
+
+.asset-id:hover .asset-chevron {
+  color: var(--text-heading);
+}
+
+.asset-chain {
+  color: var(--text-faint);
+  font-size: var(--text-body-small);
+  font-weight: 500;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.asset-amount {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.asset-amount .amount {
+  background: transparent;
+  border-color: transparent;
+  padding: 0;
+  text-align: right;
+  font-size: var(--text-amount);
+  font-weight: 400;
+  line-height: 1.25;
+}
+
+.asset-amount .amount:focus-visible {
+  outline-offset: 4px;
+}
+
+/* Reserves its line whether or not there is a note, so a quote arriving never shifts the row. */
+.asset-note {
+  min-height: 1.3em;
+  color: var(--text-faint);
+  font-size: var(--text-body-small);
+  font-weight: 500;
+  line-height: 1.3;
+  text-align: right;
+}
+
+/* ── Asset logo ─────────────────────────────────────────────────────────── */
+/* The exchange's raised tile: the token centred on it, its network badged bottom-right. */
+.asset-logo {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  flex: none;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, var(--surface-card), var(--surface-inset));
+  box-shadow: 0 8px 20px var(--logo-shadow);
+}
+
+.asset-logo-img {
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+}
+
+.asset-logo-badge {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  border: 2px solid var(--surface-card);
+  background: var(--surface-card);
+}
+
+.glyph-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-inset);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.asset-logo-badge.glyph-fallback {
+  font-size: 8px;
+}
+
+.row {
+  display: flex;
+  gap: var(--space-8);
+  margin-bottom: 6px;
+}
+
+.row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: var(--text-body-small);
+}
+
+.row-between strong {
+  color: var(--text-heading);
+  font-weight: 500;
+}
+
+.summary .muted,
+.status-panel .muted {
+  color: var(--text-body);
+}
+
+.select,
+.input {
+  background: var(--surface-inset);
+  border: 1px solid var(--border-inset);
+  border-radius: var(--radius-small);
+  color: var(--text-heading);
+  font-family: var(--font-body);
+  font-size: var(--text-body-small);
+  font-weight: 500;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.select:focus-visible,
+.input:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: -2px;
+}
+
+/* The UA default is ~54% of the text colour, which falls under 4.5:1 on these surfaces. */
+.input::placeholder {
+  color: var(--text-faint);
+  opacity: 1;
+}
+
+.select {
+  flex: 1;
+}
+
+.slip {
+  width: 64px;
+  text-align: right;
+  padding: 4px var(--space-8);
+}
+
+.fee-bps {
+  width: 76px;
+  flex: none;
+  text-align: right;
+}
+
+.slippage {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-heading);
+}
+
+/* Sits on the seam between the two legs: 40px tall, but only 8px of it takes flow space. */
+.flip {
+  display: flex;
+  justify-content: center;
+  position: relative;
+  z-index: 2;
+  margin: -16px 0;
+}
+
+/* The exchange's neutral disc, ringed in the page tone so it punches a hole through the seam. */
+.flip-btn {
+  width: 44px;
+  height: 44px;
+  background: var(--flip-bg);
+  border: 4px solid var(--form-surface);
+  color: var(--flip-fg);
+  transition: transform 200ms;
+}
+
+.flip-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.flip-btn:hover:not(:disabled) {
+  background: var(--flip-bg-hover);
+  border-color: var(--form-surface);
+  color: var(--flip-fg);
+  transform: scale(1.1);
+}
+
+.summary {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-inset);
+}
+
+/* ── Asset picker ───────────────────────────────────────────────────────── */
+/* The exchange's picker: a grid of assets rather than a list of every token-chain pair. */
+.picker {
+  width: min(520px, 92vw);
+  max-height: min(640px, 86vh);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-large);
+  background: var(--surface-page);
+  color: var(--text-body);
+}
+
+.picker::backdrop {
+  background: rgb(29 20 20 / 40%);
+}
+
+.picker-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  max-height: inherit;
+  padding: var(--space-24);
+}
+
+.picker-close {
+  align-self: flex-end;
+  padding: 4px;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: var(--text-lead);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.picker-close:hover {
+  color: var(--text-heading);
+}
+
+/* The exchange's pill: a thick inset ring rather than a border, search on the left, filter right. */
+.picker-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  align-self: center;
+  width: min(400px, 100%);
+  height: 48px;
+  padding: 0 var(--space-16) 0 var(--space-24);
+  border-radius: 9999px;
+  outline: 4px solid var(--panel-halo);
+  outline-offset: -4px;
+  color: var(--text-muted);
+}
+
+.picker-search svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.picker-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--text-heading);
+  font-family: var(--font-body);
+  font-size: var(--text-lead);
+}
+
+.picker-search input:focus {
+  outline: none;
+}
+
+.picker-search input::placeholder {
+  color: var(--text-faint);
+  opacity: 1;
+}
+
+.picker-toolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 4px var(--space-8);
+  border: 0;
+  border-radius: 9999px;
+  background: none;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: var(--text-caption);
+  cursor: pointer;
+}
+
+.picker-toolbar:hover {
+  color: var(--text-heading);
+}
+
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: var(--space-16) var(--space-8);
+  overflow-y: auto;
+  min-height: 0;
+  padding: 4px;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-8);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-body);
+  font: inherit;
+  cursor: pointer;
+  transition: opacity 150ms;
+}
+
+.tile:hover {
+  opacity: 0.7;
+}
+
+.tile:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: 4px;
+  border-radius: var(--radius-inset);
+}
+
+.tile-disc {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, var(--surface-card), var(--surface-inset));
+  box-shadow: 0 8px 20px var(--logo-shadow);
+}
+
+.tile-active .tile-disc {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.tile-img {
+  width: 32px;
+  height: 32px;
+  border-radius: 9999px;
+}
+
+/* Bottom-right corner mark: the chain count, or the single chain that carries the asset. */
+.tile-mark {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 7px;
+  background: var(--surface-card);
+  box-shadow: 0 2px 6px var(--logo-shadow);
+  color: var(--text-heading);
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+
+.tile-mark-chain {
+  width: 22px;
+  padding: 3px;
+  object-fit: contain;
+}
+
+.tile-label {
+  color: var(--text-heading);
+  font-size: var(--text-body-small);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* Two columns, as the exchange's network sheet uses. */
+.network-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 4px var(--space-16);
+  overflow-y: auto;
+  min-height: 0;
+  padding: 4px;
+}
+
+.network-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+  padding: var(--space-8);
+  border: 0;
+  border-radius: var(--radius-inset);
+  background: none;
+  color: var(--text-heading);
+  font-family: var(--font-body);
+  font-size: var(--text-body-regular);
+  text-align: left;
+  cursor: pointer;
+}
+
+.network-row:hover {
+  background: var(--surface-inset);
+}
+
+.network-row:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: -2px;
+}
+
+.network-row-active {
+  font-weight: 600;
+}
+
+.network-logo,
+.network-all {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: 6px;
+  background: var(--surface-card);
+  box-shadow: 0 2px 6px var(--logo-shadow);
+}
+
+/* Stands in for the exchange's four-square "All networks" mark. */
+.network-all {
+  background:
+    linear-gradient(var(--text-faint), var(--text-faint)) 4px 4px / 6px 6px no-repeat,
+    linear-gradient(var(--text-faint), var(--text-faint)) 14px 4px / 6px 6px no-repeat,
+    linear-gradient(var(--text-faint), var(--text-faint)) 4px 14px / 6px 6px no-repeat,
+    linear-gradient(var(--text-faint), var(--text-faint)) 14px 14px / 6px 6px no-repeat,
+    var(--surface-card);
+}
+
+.picker-empty {
+  margin: 0;
+  padding: var(--space-24) 0;
+  text-align: center;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  height: 36px;
+  border: 1px solid var(--ghost-border);
+  border-radius: 9999px;
+  background: var(--ghost-bg);
+  color: var(--ghost-fg);
+  font-family: var(--font-body);
+  font-size: var(--text-body-small);
+  font-weight: 500;
+  padding: 0 var(--space-16);
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    color 150ms,
+    background-color 150ms,
+    border-color 150ms;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--ghost-bg-hover);
+  border-color: var(--border-strong);
+  color: var(--ghost-fg-hover);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: -2px;
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  background: var(--cta-disabled-bg);
+  border-color: var(--cta-disabled-bg);
+  color: var(--cta-disabled-fg);
+}
+
+.btn-primary {
+  width: 100%;
+  height: 56px;
+  background: var(--cta-bg);
+  border-color: var(--cta-bg);
+  color: var(--cta-fg);
+  font-size: var(--text-body-regular);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--cta-bg-hover);
+  border-color: var(--cta-bg-hover);
+  color: var(--cta-fg);
+}
+
+.btn-primary:active:not(:disabled) {
+  background: var(--cta-bg-active);
+  border-color: var(--cta-bg-active);
+}
+
+.btn-primary:focus-visible {
+  outline: 2px solid var(--cta-ring);
+  outline-offset: -2px;
+}
+
+.btn-primary:disabled {
+  background: var(--cta-disabled-bg);
+  border-color: var(--cta-disabled-bg);
+  color: var(--cta-disabled-fg);
+}
+
+.btn-on-cherry {
+  background: var(--hero-ctl-bg);
+  border-color: var(--hero-ctl-bg);
+  color: var(--hero-ctl-fg);
+}
+
+.btn-on-cherry:hover:not(:disabled) {
+  background: var(--hero-ctl-bg-hover);
+  border-color: var(--hero-ctl-bg-hover);
+  color: var(--hero-ctl-fg);
+}
+
+.btn-on-cherry:focus-visible {
+  outline: 2px solid var(--hero-ctl-ring);
+  outline-offset: -2px;
+}
+
+.btn-on-cherry:disabled {
+  background: var(--hero-ctl-bg-hover);
+  border-color: var(--hero-ctl-bg-hover);
+  color: var(--hero-ctl-fg-disabled);
+}
+
+.btn-icon {
+  width: 36px;
+  padding: 0;
+}
+
+.btn-on-cherry.btn-icon {
+  background: transparent;
+  border: 2px solid var(--hero-ctl-bg);
+  color: var(--hero-ctl-ring);
+}
+
+.btn-on-cherry.btn-icon:hover:not(:disabled) {
+  background: var(--hero-ctl-bg);
+  border-color: var(--hero-ctl-bg);
+  color: var(--hero-ctl-ring);
+}
+
+/* ── Pills + inline text ────────────────────────────────────────────────── */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  padding: 7px 14px;
+  background: var(--bubble-bg);
+  color: var(--bubble-fg);
+  font-size: var(--text-caption);
+  font-weight: 500;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.small {
+  font-size: var(--text-caption);
+  line-height: 1.4;
+}
+
+.link {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.link:hover {
+  color: var(--accent-hover);
+}
+
+/* ── Disclosure ─────────────────────────────────────────────────────────── */
+.disclosure {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-inset);
+}
+
+.disclosure > summary {
+  cursor: pointer;
+  color: var(--text-body);
+  font-size: var(--text-body-small);
+  font-weight: 500;
+  padding: 3px 0;
+}
+
+.disclosure > summary::marker {
+  color: var(--text-muted);
+}
+
+.disclosure > summary:hover {
+  color: var(--accent);
+}
+
+.disclosure > summary:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: 2px;
+}
+
+.disclosure p {
+  margin: var(--space-8) 0;
+}
+
+/* ── Status + errors ────────────────────────────────────────────────────── */
+/* Solver messages quote raw addresses, so they stay small and break anywhere. */
+.alert {
+  margin: var(--space-8) 0;
+  padding: var(--space-8) 12px;
+  background: var(--alert-bg);
+  border: 1px solid var(--alert-border);
+  border-radius: var(--radius-small);
+  color: var(--alert-fg);
+  font-size: var(--text-caption);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.alert details {
+  margin-top: 6px;
+}
+
+.alert summary {
+  cursor: pointer;
+  color: var(--alert-detail-fg);
+  font-size: var(--text-caption);
+}
+
+.alert code {
+  display: block;
+  margin-top: 6px;
+  color: var(--alert-detail-fg);
+}
+
+.status-panel {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-inset);
+}
+
+.status-ok {
+  color: var(--status-ok);
+}
+
+.status-bad {
+  color: var(--status-bad);
+}
+
+.status-pending {
+  color: var(--status-pending);
+}
+
+/* ── Code panel ─────────────────────────────────────────────────────────── */
+/* Only the snippet scrolls; the cap stops a long listing dragging the swap card down. */
+/* Never clip: `.code` owns its own scroll, and the header tooltip has to escape the card. */
+.code-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 340px;
+  max-height: calc(100vh - 200px);
+  padding: 14px;
+}
+
+/* The one line that says the panel is a takeaway rather than a listing. */
+.code-lead {
+  margin: 0;
+  color: var(--text-body);
+  font-size: var(--text-body-small);
+  line-height: 1.5;
+  text-wrap: pretty;
+  flex: none;
+}
+
+.code-lead strong {
+  color: var(--text-heading);
+}
+
+/* Four tabs plus three actions overflow a narrow column before the page's own breakpoint. */
+.code-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: none;
+}
+
+.code-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.code-header .btn {
+  height: 30px;
+  font-size: var(--text-mono);
+}
+
+/* Segmented control: the group is an inset, the active tab steps back up to the card. */
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface-inset);
+  border-radius: 10px;
+}
+
+.tab {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-small);
+  color: var(--text-muted);
+  padding: 5px 10px;
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--text-heading);
+}
+
+.tab-active {
+  color: var(--text-heading);
+  background: var(--surface-card);
+  border-color: var(--border-inset);
+  font-weight: 500;
+}
+
+/* Bare glyph plus a CSS-only bubble — the note it replaces was a standing paragraph nobody needed twice. */
+.hint {
+  position: relative;
+  display: inline-flex;
+}
+
+.hint-trigger {
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 150ms;
+}
+
+.hint-trigger:hover,
+.hint-trigger:focus-visible {
+  color: var(--text-heading);
+}
+
+/* The stake page's tooltip, in plain CSS: a white pill centred above the trigger, px-4 py-2 at
+   12px. The shadow is ours — that surface is cream on sodax.com and white here. */
+.hint-bubble {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  z-index: 5;
+  width: max-content;
+  padding: var(--space-8) var(--space-16);
+  border-radius: 9999px;
+  background: var(--tooltip-bg);
+  box-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 10%),
+    0 4px 6px -4px rgb(0 0 0 / 10%);
+  color: var(--tooltip-fg);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-50%) scale(0.95);
+  transform-origin: bottom center;
+  transition:
+    opacity 120ms,
+    transform 120ms;
+}
+
+/* The frontend's pointer, masked rather than filled so it follows the pill into dark mode. */
+.hint-bubble::after {
+  content: "";
+  position: absolute;
+  top: calc(100% - 16px);
+  left: calc(50% - 4px);
+  width: 8px;
+  height: 40px;
+  background: var(--tooltip-bg);
+  transform: rotate(-90deg);
+  mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 80'%3E%3Cpath d='M0 40C0 38.125 0.9411 37.1741 1.8824 36.6667C11.1437 31.6736 16 18.033 16 0L16 80C16 61.967 11.1437 48.3264 1.8824 43.3333C0.9411 42.8259 0 41.875 0 40Z'/%3E%3C/svg%3E")
+    no-repeat center / contain;
+}
+
+/* No popper here to detect collisions, so the one line wraps rather than overflow a phone. */
+@media (width < 640px) {
+  .hint-bubble {
+    max-width: 240px;
+    white-space: normal;
+    text-wrap: pretty;
+  }
+}
+
+.hint:hover .hint-bubble,
+.hint:focus-within .hint-bubble {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) scale(1);
+}
+
+/* The one outbound CTA on the page, so it reads as accent rather than another ghost control. */
+.btn-docs {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.btn-docs:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--surface-card);
+}
+
+/* Dark in both themes: a code surface should read as an inset panel, not as the page. */
+.code {
+  margin: 0;
+  padding: 18px 20px;
+  background: var(--code-bg);
+  border-radius: var(--radius-inset);
+  color: var(--code-fg);
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  font-size: var(--text-mono);
+  line-height: 1.7;
+  tab-size: 2;
+}
+
+.code-note {
+  margin: 0;
+  padding: 10px 14px;
+  background: var(--surface-note);
+  border-radius: var(--radius-inset);
+  color: var(--text-body);
+  font-size: var(--text-body-small);
+  line-height: 1.6;
+  text-wrap: pretty;
+  flex: none;
+}
+
+.code-note code {
+  color: var(--code-inline-fg);
+}
