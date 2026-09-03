@@ -192,7 +192,7 @@ On success, treat these `result` fields as the contract for pollers:
 | `intent_hash` | Solver intent hash (after post-execution), when present |
 | `packetData` | Cross-chain relay packet, when present |
 
-Optional wire field: the backend **may** also return `result.fillTxHash` (solver destination-chain fill) when the solver reported a fill. It can be **absent** even on `solved` if the fill was confirmed via the on-chain journal instead. The typed TypeScript contract (`SubmitTxStatusResultV2` / `@sodax/swaps-api`) **does not include** `fillTxHash` — that client only types `dstIntentTxHash`, `packetData`, and `intent_hash`. For a typed fill hash, use `POST /intents/status` (numeric status `3` SOLVED → top-level `fillTxHash`) or the [on-chain journal](#5-optional-on-chain-journal).
+Optional wire field: the backend **may** also return `result.fillTxHash` (solver destination-chain fill) when the solver reported a fill. It can be **absent** even on `solved` if the fill was confirmed via the on-chain journal instead, and the typed TypeScript contract (`SubmitTxStatusResultV2` / `@sodax/swaps-api`) types it as optional for that reason. For a fill hash that is always set on a solved intent, use `POST /intents/status` (numeric status `3` SOLVED → top-level `fillTxHash`) or the [on-chain journal](#5-optional-on-chain-journal). The row also carries an `operation` discriminator — `swap` here; `leverage_deposit` / `leverage_withdraw` for rows queued through the Leverage Yield API.
 
 On failure, inspect `failedAtStep`, `failureReason`, `userMessage`, `intentCancelled`, `abandonedAt`.
 

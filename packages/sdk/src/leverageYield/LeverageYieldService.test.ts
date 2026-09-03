@@ -24,13 +24,19 @@ import type { Address } from 'viem';
 // can cache that state. Every other test in this package imports `../index.js`; keep it that way.
 import {
   ChainKeys,
+  DEFAULT_BACKEND_API_TIMEOUT,
+  DEFAULT_RELAY_TX_TIMEOUT,
   getIntentRelayChainId,
   type IBitcoinWalletProvider,
   type IEvmWalletProvider,
   isSodaxError,
   type PartnerFee,
+  RELAY_FALLBACK_FLOOR_MS,
+  type Result,
   type SodaxOptions,
   type SpokeChainKey,
+  type SubmitTxStatusDataV2,
+  type SubmitTxStatusResponseV2,
 } from '../index.js';
 import type { CreateIntentParams, Intent } from '../shared/types/intent-types.js';
 import { SodaxError } from '../errors/SodaxError.js';
@@ -1223,6 +1229,322 @@ describe('LeverageYieldService.vaultSwap', () => {
     expect(result.error.code).toBe('EXTERNAL_API_ERROR');
     expect(result.error.context?.solverCode).toBe(-7);
     expect(result.error.context?.phase).toBe('postExecution');
+  });
+});
+
+// ─── vaultSwap — backend submit-tx path (leverageYield.useBackendSubmitTx) ─
+
+describe('LeverageYieldService.vaultSwap — backend submit-tx (useBackendSubmitTx)', () => {
+  // A separate Sodax instance with the opt-in flag ON; the module-level `sodax` leaves it off, which
+  // is the default. Per test we stub createVaultIntent + verifyTxHash on this instance and the backend
+  // leverage-yield API it calls; the module-level `mocks.relayTxAndWaitPacket` covers the fallback.
+  const sodaxBE = new Sodax({ leverageYield: { useBackendSubmitTx: true }, logger: 'silent' });
+
+  /** Deposit params on an EVM spoke, with the wallet-provider wrapper `vaultSwap` takes. */
+  const vaultSwapInput = (timeout?: number) => ({
+    params: vaultIntentParams(ARBITRUM, { dstChainKey: ARBITRUM as SpokeChainKey, dstAddress: SAMPLE_USER }),
+    walletProvider: mockEvmProvider,
+    ...(timeout === undefined ? {} : { timeout }),
+  });
+
+  /**
+   * createVaultIntent (broadcast) succeeds; `verifyTxHash` is only consumed on the fallback path, so
+   * it is returned for the tests that assert whether it ran at all.
+   */
+  const stubCreatedAndVerified = () => {
+    const intent = makeIntent(ARBITRUM);
+    vi.spyOn(sodaxBE.leverageYield, 'createVaultIntent').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        tx: '0xspokeTx',
+        intent: { ...intent, feeAmount: 0n },
+        relayData: { address: intent.creator, payload: '0xdata' },
+      },
+    });
+    return vi.spyOn(sodaxBE.spoke, 'verifyTxHash').mockResolvedValue({ ok: true, value: true });
+  };
+
+  const stubAcceptedSubmit = () =>
+    vi.spyOn(sodaxBE.api.leverageYield, 'submitTx').mockResolvedValueOnce({
+      ok: true,
+      value: { success: true, data: { status: 'inserted', message: 'accepted' } },
+    });
+
+  /** A `getSubmitTxStatus` success Result; only the fields a given test exercises need supplying. */
+  const statusEnvelope = (
+    data: Partial<SubmitTxStatusDataV2> & Pick<SubmitTxStatusDataV2, 'status'>,
+  ): Result<SubmitTxStatusResponseV2> => ({
+    ok: true,
+    value: {
+      success: true,
+      data: { txHash: '0xspokeTx', srcChainKey: ARBITRUM, processingAttempts: 1, ...data },
+    },
+  });
+
+  it('on backend "solved", returns the VaultSwapResponse from the backend (no client-side relay)', async () => {
+    stubCreatedAndVerified();
+    const submitSpy = stubAcceptedSubmit();
+    vi.spyOn(sodaxBE.api.leverageYield, 'getSubmitTxStatus').mockResolvedValueOnce(
+      statusEnvelope({ status: 'solved', result: { dstIntentTxHash: '0xDST', intent_hash: '0xhash' } }),
+    );
+
+    const result = await sodaxBE.leverageYield.vaultSwap(vaultSwapInput());
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.solverExecutionResponse).toEqual({ answer: 'OK', intent_hash: '0xhash' });
+    expect(result.value.intentDeliveryInfo.srcTxHash).toBe('0xspokeTx');
+    expect(result.value.intentDeliveryInfo.dstTxHash).toBe('0xDST');
+    // The backend owns relay + post-execution — neither client-side leg may run.
+    expect(submitSpy).toHaveBeenCalledOnce();
+    expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
+    expect(mocks.solverPostExecution).not.toHaveBeenCalled();
+  });
+
+  it('sends the operation discriminator: "deposit" by default, "withdraw" for a hub-wallet swap', async () => {
+    for (const [hubWalletSwap, operation] of [
+      [undefined, 'deposit'],
+      [true, 'withdraw'],
+    ] as const) {
+      vi.clearAllMocks();
+      stubCreatedAndVerified();
+      const submitSpy = stubAcceptedSubmit();
+      vi.spyOn(sodaxBE.api.leverageYield, 'getSubmitTxStatus').mockResolvedValueOnce(
+        statusEnvelope({ status: 'solved', result: { dstIntentTxHash: '0xDST', intent_hash: '0xhash' } }),
+      );
+
+      const result = await sodaxBE.leverageYield.vaultSwap({
+        ...vaultSwapInput(),
+        ...(hubWalletSwap === undefined ? {} : { hubWalletSwap }),
+      });
+
+      expect(result.ok).toBe(true);
+      // The backend records the queued row as leverage_deposit / leverage_withdraw off this field.
+      expect(submitSpy.mock.calls[0]?.[0]).toMatchObject({ operation });
+    }
+  });
+
+  it('does not verify on-chain before handing the intent to the backend', async () => {
+    const verifySpy = stubCreatedAndVerified();
+    stubAcceptedSubmit();
+    vi.spyOn(sodaxBE.api.leverageYield, 'getSubmitTxStatus').mockResolvedValueOnce(
+      statusEnvelope({ status: 'solved', result: { dstIntentTxHash: '0xDST', intent_hash: '0xhash' } }),
+    );
+
+    expect((await sodaxBE.leverageYield.vaultSwap(vaultSwapInput())).ok).toBe(true);
+    // Backend success costs nothing in verification — verifying first would delay it by the source
+    // chain's confirmation wait and could fail a vault swap the backend would have completed.
+    expect(verifySpy).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the client-side relay when the backend submit POST is rejected', async () => {
+    const verifySpy = stubCreatedAndVerified();
+    vi.spyOn(sodaxBE.api.leverageYield, 'submitTx').mockResolvedValueOnce({
+      ok: false,
+      error: new SodaxError('EXTERNAL_API_ERROR', 'backend down', { feature: 'backend' }),
+    });
+    const statusSpy = vi.spyOn(sodaxBE.api.leverageYield, 'getSubmitTxStatus');
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
+    mocks.solverPostExecution.mockResolvedValueOnce({ ok: true, value: { answer: 'OK', intent_hash: '0xfb' } });
+
+    const result = await sodaxBE.leverageYield.vaultSwap(vaultSwapInput(30_000));
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.intentDeliveryInfo.dstTxHash).toBe('0xFALLBACKDST');
+    expect(statusSpy).not.toHaveBeenCalled(); // POST failed before any status polling
+    // The fallback pays for verification once, and only then.
+    expect(verifySpy).toHaveBeenCalledOnce();
+    // A backend that fails fast leaves the fallback the SAME full budget a stalled one does — the two
+    // paths never share a deadline.
+    expect(mocks.relayTxAndWaitPacket.mock.calls.at(-1)?.[0]?.timeout).toBe(30_000);
+  });
+
+  it('falls back on a 200 that reports success:false instead of polling a row that will never exist', async () => {
+    stubCreatedAndVerified();
+    const submitSpy = vi.spyOn(sodaxBE.api.leverageYield, 'submitTx').mockResolvedValueOnce({
+      ok: true,
+      value: { success: false, data: { status: 'inserted', message: 'not queued' } },
+    });
+    const statusSpy = vi.spyOn(sodaxBE.api.leverageYield, 'getSubmitTxStatus');
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
+    mocks.solverPostExecution.mockResolvedValueOnce({ ok: true, value: { answer: 'OK', intent_hash: '0xfb' } });
+
+    const result = await sodaxBE.leverageYield.vaultSwap(vaultSwapInput(30_000));
+
+    expect(result.ok).toBe(true);
+    expect(submitSpy).toHaveBeenCalledOnce();
+    // `ok` is transport-level only: a 200 carrying success:false means the backend did NOT queue the
+    // submission, so there is nothing to watch for.
+    expect(statusSpy).not.toHaveBeenCalled();
+    expect(mocks.relayTxAndWaitPacket).toHaveBeenCalledOnce();
+  });
+
+  it('falls back when the backend reports a terminal "failed" status', async () => {
+    stubCreatedAndVerified();
+    stubAcceptedSubmit();
+    vi.spyOn(sodaxBE.api.leverageYield, 'getSubmitTxStatus').mockResolvedValueOnce(
+      statusEnvelope({ status: 'failed', failureReason: 'boom' }),
+    );
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
+    mocks.solverPostExecution.mockResolvedValueOnce({ ok: true, value: { answer: 'OK', intent_hash: '0xfb' } });
+
+    const result = await sodaxBE.leverageYield.vaultSwap(vaultSwapInput());
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.intentDeliveryInfo.dstTxHash).toBe('0xFALLBACKDST');
+    expect(mocks.relayTxAndWaitPacket).toHaveBeenCalledOnce();
+  });
+
+  it('stops polling once the backend rejects the API key, rather than burning the attempt', async () => {
+    stubCreatedAndVerified();
+    stubAcceptedSubmit();
+    const statusSpy = vi.spyOn(sodaxBE.api.leverageYield, 'getSubmitTxStatus').mockResolvedValue({
+      ok: false,
+      error: new SodaxError('EXTERNAL_API_ERROR', 'Unauthorized', {
+        feature: 'backend',
+        context: { api: 'leverageYield', endpoint: '/leverage-yield/submit-tx/status', status: 401 },
+      }),
+    });
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
+    mocks.solverPostExecution.mockResolvedValueOnce({ ok: true, value: { answer: 'OK', intent_hash: '0xfb' } });
+
+    const result = await sodaxBE.leverageYield.vaultSwap(vaultSwapInput(30_000));
+
+    expect(result.ok).toBe(true);
+    // A rejected key cannot become success by waiting; retrying it would spend the whole attempt the
+    // client-side fallback is waiting on.
+    expect(statusSpy).toHaveBeenCalledOnce();
+    expect(mocks.relayTxAndWaitPacket).toHaveBeenCalledOnce();
+  });
+
+  it('clamps each backend request by the service timeout, not the caller budget alone', async () => {
+    stubCreatedAndVerified();
+    const submitSpy = stubAcceptedSubmit();
+    vi.spyOn(sodaxBE.api.leverageYield, 'getSubmitTxStatus').mockResolvedValueOnce(
+      statusEnvelope({ status: 'solved', result: { dstIntentTxHash: '0xDST', intent_hash: '0xhash' } }),
+    );
+
+    // A caller budget far above the service timeout must not RAISE the per-request bound: an override
+    // REPLACES `config.timeout` rather than lowering it.
+    await sodaxBE.leverageYield.vaultSwap(vaultSwapInput(600_000));
+
+    expect(submitSpy.mock.calls[0]?.[1]).toEqual({ timeout: DEFAULT_BACKEND_API_TIMEOUT });
+  });
+
+  it('treats a non-finite caller timeout as the default rather than stranding the broadcast intent', async () => {
+    stubCreatedAndVerified();
+    const submitSpy = vi.spyOn(sodaxBE.api.leverageYield, 'submitTx').mockResolvedValueOnce({
+      ok: false,
+      error: new SodaxError('EXTERNAL_API_ERROR', 'backend down', { feature: 'backend' }),
+    });
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
+    mocks.solverPostExecution.mockResolvedValueOnce({ ok: true, value: { answer: 'OK', intent_hash: '0xfb' } });
+
+    // `?? DEFAULT` does not catch NaN; unresolved it would skip the POST and hand the relay
+    // `Math.max(NaN, floor)` = NaN, which reads as an already-expired budget — RELAY_TIMEOUT in
+    // milliseconds on an intent that is live on-chain.
+    const result = await sodaxBE.leverageYield.vaultSwap(vaultSwapInput(Number.NaN));
+
+    expect(result.ok).toBe(true);
+    expect(submitSpy).toHaveBeenCalledOnce();
+    expect(submitSpy.mock.calls[0]?.[1]).toEqual({ timeout: DEFAULT_BACKEND_API_TIMEOUT });
+    expect(mocks.relayTxAndWaitPacket.mock.calls.at(-1)?.[0]?.timeout).toBe(DEFAULT_RELAY_TX_TIMEOUT);
+  });
+
+  it('skips the backend POST entirely when the caller leaves no budget', async () => {
+    stubCreatedAndVerified();
+    // Stubbed even though the assertion is that it never runs: an unmocked spy calls through, so a
+    // regression in the budget guard would turn this unit test into a real POST to the live backend.
+    const submitSpy = vi.spyOn(sodaxBE.api.leverageYield, 'submitTx').mockResolvedValue({
+      ok: false,
+      error: new SodaxError('EXTERNAL_API_ERROR', 'unreachable', { feature: 'backend' }),
+    });
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
+    mocks.solverPostExecution.mockResolvedValueOnce({ ok: true, value: { answer: 'OK', intent_hash: '0xfb' } });
+
+    const result = await sodaxBE.leverageYield.vaultSwap(vaultSwapInput(0));
+
+    expect(result.ok).toBe(true);
+    // Firing the POST would only arm an abort at 0ms; the relay still runs on its floor because the
+    // intent has already landed on-chain.
+    expect(submitSpy).not.toHaveBeenCalled();
+    expect(mocks.relayTxAndWaitPacket.mock.calls.at(-1)?.[0]?.timeout).toBe(RELAY_FALLBACK_FLOOR_MS);
+  });
+
+  it('gives the fallback a FRESH full timeout after a stalled backend consumed its own', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    try {
+      stubCreatedAndVerified();
+      stubAcceptedSubmit();
+      vi.spyOn(sodaxBE.api.leverageYield, 'getSubmitTxStatus').mockResolvedValue(statusEnvelope({ status: 'pending' }));
+      mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xFALLBACKDST' } });
+      mocks.solverPostExecution.mockResolvedValueOnce({ ok: true, value: { answer: 'OK', intent_hash: '0xfb' } });
+
+      const overallTimeout = 30_000;
+      const swapPromise = sodaxBE.leverageYield.vaultSwap(vaultSwapInput(overallTimeout));
+      // Drive the backend attempt past its own deadline so vaultSwap() falls back.
+      await vi.advanceTimersByTimeAsync(overallTimeout);
+      const result = await swapPromise;
+
+      expect(result.ok).toBe(true);
+      // `timeout` is per-attempt: the backend spending all of its own budget must not shorten the relay
+      // wait. Sharing one deadline left this at the ~5s floor, which is how a slow chain hit RELAY_TIMEOUT.
+      expect(mocks.relayTxAndWaitPacket.mock.calls.at(-1)?.[0]?.timeout).toBe(overallTimeout);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not touch the backend submit API when the flag is off (the default)', async () => {
+    // The module-level `sodax` leaves `leverageYield.useBackendSubmitTx` unset → pure client-side flow.
+    const intent = makeIntent(ARBITRUM);
+    vi.spyOn(sodax.leverageYield, 'createVaultIntent').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        tx: '0xspokeTx',
+        intent: { ...intent, feeAmount: 0n },
+        relayData: { address: intent.creator, payload: '0xdata' },
+      },
+    });
+    const submitSpy = vi.spyOn(sodax.api.leverageYield, 'submitTx');
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xdstTx' } });
+    mocks.solverPostExecution.mockResolvedValueOnce({ ok: true, value: { answer: 'OK', intent_hash: '0xhash' } });
+
+    const result = await sodax.leverageYield.vaultSwap({
+      params: vaultIntentParams(ARBITRUM, { dstChainKey: ARBITRUM as SpokeChainKey, dstAddress: SAMPLE_USER }),
+      walletProvider: mockEvmProvider,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(submitSpy).not.toHaveBeenCalled();
+    expect(sodax.leverageYield.useBackendSubmitTx).toBe(false);
+    expect(sodaxBE.leverageYield.useBackendSubmitTx).toBe(true);
+  });
+
+  it('raises a sub-floor caller timeout to the relay floor on the client-side path', async () => {
+    const intent = makeIntent(ARBITRUM);
+    vi.spyOn(sodax.leverageYield, 'createVaultIntent').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        tx: '0xspokeTx',
+        intent: { ...intent, feeAmount: 0n },
+        relayData: { address: intent.creator, payload: '0xdata' },
+      },
+    });
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xdstTx' } });
+    mocks.solverPostExecution.mockResolvedValueOnce({ ok: true, value: { answer: 'OK', intent_hash: '0xhash' } });
+
+    const result = await sodax.leverageYield.vaultSwap({
+      params: vaultIntentParams(ARBITRUM, { dstChainKey: ARBITRUM as SpokeChainKey, dstAddress: SAMPLE_USER }),
+      walletProvider: mockEvmProvider,
+      timeout: 2_000,
+    });
+
+    expect(result.ok).toBe(true);
+    // The floor deliberately outranks a sub-floor caller `timeout` (matching SwapService): the intent
+    // has already landed, and `relayTxAndWaitPacket` submits before `timeout` bounds the wait.
+    expect(mocks.relayTxAndWaitPacket.mock.calls.at(-1)?.[0]?.timeout).toBe(RELAY_FALLBACK_FLOOR_MS);
   });
 });
 
