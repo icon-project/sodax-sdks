@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -65,6 +65,14 @@ const runner = t => {
 };
 
 const has = (calls, ...fragments) => calls.some(call => fragments.every(fragment => call.includes(fragment)));
+
+const step = name => {
+  const chunk = readFileSync(WORKFLOW, 'utf8')
+    .split(/^      - name: /m)
+    .find(candidate => candidate.startsWith(name));
+  assert.ok(chunk, `the ${name} step is not present`);
+  return chunk;
+};
 
 test('approve pins both the review and the queued merge to the classified commit', t => {
   const gh = runner(t);
@@ -220,4 +228,84 @@ test('the workflow withdraws through the withdraw script', () => {
   const workflow = readFileSync(WORKFLOW, 'utf8');
 
   assert.match(workflow, /\.github\/scripts\/withdraw-docs-pr\.sh "\$PR" "\$BOT"/);
+});
+
+test('the workflow withdraws only on a run that minted a token', () => {
+  const withdraw = step('Withdraw a stale approval');
+
+  assert.match(withdraw, /steps\.app-token\.outcome == 'success'/);
+});
+
+// The scope gate is inline shell, so the test runs the workflow's own copy of it against a
+// throwaway repo rather than a transcription of it.
+const scopeGate = () => {
+  const lines = step('Check the pull request is in scope')
+    .split(/^        run: \|\n/m)[1]
+    .split('\n');
+  const end = lines.findIndex(line => line !== '' && !line.startsWith(' '.repeat(10)));
+  return lines
+    .slice(0, end === -1 ? lines.length : end)
+    .map(line => line.slice(10))
+    .join('\n');
+};
+
+const inScope = (t, files, { autoMerge = false } = {}) => {
+  const root = mkdtempSync(join(REPO, '.tmp-docs-scope-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  const template = join(root, '.git-template');
+  mkdirSync(join(template, 'hooks'), { recursive: true });
+  const git = (...args) =>
+    execFileSync(
+      'git',
+      ['-c', 'commit.gpgsign=false', '-c', 'user.email=test@example.com', '-c', 'user.name=test', ...args],
+      { cwd: root, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1', HUSKY: '0' } },
+    ).trim();
+  const write = (path, content) => {
+    mkdirSync(join(root, dirname(path)), { recursive: true });
+    writeFileSync(join(root, path), content);
+  };
+  const commit = (content, message) => {
+    for (const path of files) write(path, content);
+    git('add', '-A');
+    git('commit', '-m', message);
+    return git('rev-parse', 'HEAD');
+  };
+
+  git('init', '-b', 'main', `--template=${template}`);
+  write('README.md', '# scope\n');
+  const base = commit('base', 'base');
+  const head = commit('head', 'head');
+
+  const script = join(root, 'scope.sh');
+  writeFileSync(script, scopeGate());
+  const output = join(root, 'github-output');
+  writeFileSync(output, '');
+  execFileSync('bash', [script], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, BASE_SHA: base, HEAD_SHA: head, AUTO_MERGE: String(autoMerge), GITHUB_OUTPUT: output },
+  });
+
+  return readFileSync(output, 'utf8').trim();
+};
+
+test('a docs-only pull request is in scope', t => {
+  assert.equal(inScope(t, ['docs/index.mdx', 'docs/swap/index.mdx']), 'in_scope=true');
+});
+
+// The case that failed on PR #264: docs/ edits shipped with SDK source. Minting on it costs a
+// failed run for nothing, since the classifier answers false on the source file anyway.
+test('a pull request mixing docs with source is out of scope', t => {
+  assert.equal(inScope(t, ['docs/index.mdx', 'packages/sdk/src/index.ts']), 'in_scope=false');
+});
+
+test('a source-only pull request is out of scope', t => {
+  assert.equal(inScope(t, ['packages/sdk/src/index.ts']), 'in_scope=false');
+});
+
+// Whatever the diff: a marketing PR the App approved, then pushed with its docs edits
+// reverted, still has to reach the classifier so the approval can be withdrawn.
+test('a pull request with auto-merge enabled stays in scope without a docs change', t => {
+  assert.equal(inScope(t, ['packages/sdk/src/index.ts'], { autoMerge: true }), 'in_scope=true');
 });
