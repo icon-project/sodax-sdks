@@ -35,13 +35,14 @@
     return element;
   };
 
-  // Config values are data, never markup: text goes in as textContent, and an
-  // address (base58, Sui coin type, NEAR name) is allowlisted before a URL.
-  const SAFE_ADDRESS = /^[A-Za-z0-9:._-]{1,128}$/;
+  // Config values are data, never markup: text goes in as textContent, and an address
+  // (base58, Sui coin type, Injective factory/ibc denom) is allowlisted before a URL.
+  const SAFE_ADDRESS = /^[A-Za-z0-9:._/-]{1,128}$/;
+  const safeAddress = address => SAFE_ADDRESS.test(address) && !address.split('/').includes('..');
 
   const httpsUrl = (base, value) => {
     if (!base) return null;
-    if (value && !SAFE_ADDRESS.test(String(value))) return null;
+    if (value && !safeAddress(String(value))) return null;
     try {
       const url = new URL(String(base) + (value ?? ''));
       return url.protocol === 'https:' ? url.href : null;
