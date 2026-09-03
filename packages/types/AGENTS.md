@@ -73,8 +73,10 @@ from [`src/chains/chains.ts`](src/chains/chains.ts)) is the directory base, and
 each logo URL is `${CHAIN_LOGO_BASE_URL}/<chainKey>.png` — so the filename in
 `packages/assets/chain/` must equal the `ChainKeys` value. Adding a chain logo:
 drop `<chainKey>.png` in `packages/assets/chain/` and set the new entry's `logo`
-to `chainLogo(ChainKeys.<NAME>)`. Invariants are covered by
-[`src/chains/chains-logo.test.ts`](src/chains/chains-logo.test.ts). Consumers
+to `chainLogo(ChainKeys.<NAME>)`. URL-shape invariants are covered by
+[`src/chains/chains-logo.test.ts`](src/chains/chains-logo.test.ts); that the file
+actually exists is covered by
+[`src/chains/logo-assets.test.ts`](src/chains/logo-assets.test.ts). Consumers
 (demo, web app) must read `baseChainInfo[key].logo`, not hardcode icon paths.
 
 ## Token logos
@@ -89,8 +91,17 @@ are served via `raw.githubusercontent.com`. `TOKEN_LOGO_BASE_URL` (exported from
 Adding a token logo: drop `<tokenLogoSlug(symbol)>.png` in `packages/assets/token/`
 — no per-token config edit is needed. Invariants (URL shape, slug safety, no
 slug collisions across symbols) are covered by
-[`src/chains/tokens-logo.test.ts`](src/chains/tokens-logo.test.ts). Consumers
-must resolve icons with `tokenLogo(token.symbol)`, not hardcode icon paths.
+[`src/chains/tokens-logo.test.ts`](src/chains/tokens-logo.test.ts).
+
+Those cover only how the URL is *built*. [`src/chains/logo-assets.test.ts`](src/chains/logo-assets.test.ts)
+is the CI gate that the URL *resolves*: every token in `spokeChainConfig[*].supportedTokens`
+(not just the swap / money-market ones — `BridgeService` offers destinations straight from
+that map) and every `CHAIN_KEYS` entry must have a non-empty PNG under the matching name in
+`packages/assets`, and no PNG may lack a claimant, which is what catches a misspelled
+filename. Because `packages/assets` is not a dependency of this package, the `test` task in
+[`turbo.json`](turbo.json) lists those directories in `inputs` — without that, deleting a logo
+would replay a cached green run. Consumers must resolve icons with `tokenLogo(token.symbol)`,
+not hardcode icon paths.
 
 ## Build
 
