@@ -41,8 +41,9 @@ jobs:
           git fetch --no-tags origin "$HEAD_SHA"
           git cat-file -e "${HEAD_SHA}^{commit}"
 
-      # An SDK PR stops here, so no token is minted while the App secrets are still pending.
-      # Auto-merge keeps a PR in scope once its docs edits are reverted away.
+      # Docs-only, so a PR carrying a file outside docs/ stops here and mints no token — an
+      # SDK PR that also edits docs/ included. Auto-merge keeps a PR in scope whatever its
+      # diff, so an approved marketing PR is re-classified once its docs edits are reverted.
       - name: Check the pull request is in scope
         id: scope
         env:
@@ -57,7 +58,8 @@ jobs:
           # leave git diff writing to a closed pipe, which pipefail reads as no match at all.
           files=$(git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA")
           docs_files=$(printf '%s\n' "$files" | grep -E '^docs/' || true)
-          if [ "$AUTO_MERGE" = 'true' ] || [ -n "$docs_files" ]; then
+          other_files=$(printf '%s\n' "$files" | grep -Ev '^(docs/|$)' || true)
+          if [ "$AUTO_MERGE" = 'true' ] || { [ -n "$docs_files" ] && [ -z "$other_files" ]; }; then
             echo 'in_scope=true' >>"$GITHUB_OUTPUT"
           else
             echo 'in_scope=false' >>"$GITHUB_OUTPUT"
@@ -95,8 +97,9 @@ jobs:
 
       # Second line to the ruleset's dismiss-on-push: also turns auto-merge off, and covers a
       # PR that stops qualifying, stops touching docs/, or is reopened without a push.
+      # Gated on the mint as well: a run with no token approved nothing, and gh would only fail.
       - name: Withdraw a stale approval
-        if: ${{ !cancelled() && steps.scope.outputs.in_scope == 'true' && steps.classify.outputs.marketing_only != 'true' }}
+        if: ${{ !cancelled() && steps.app-token.outcome == 'success' && steps.scope.outputs.in_scope == 'true' && steps.classify.outputs.marketing_only != 'true' }}
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PR: ${{ github.event.pull_request.number }}

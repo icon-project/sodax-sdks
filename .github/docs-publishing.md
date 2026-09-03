@@ -85,10 +85,12 @@ commit that will merge.
 it and the classifier are always the copies on `main`: a PR cannot edit its own gate. It reads
 head content with `git show` and never checks out or runs it.
 
-A PR that touches nothing under `docs/` stops before the App token is minted, so an SDK PR is
-unaffected by this workflow — including while the App secrets are still missing, when minting
-is what would otherwise fail. The one exception is a PR that already has auto-merge enabled:
-that stays in scope whatever the diff looks like, so a PR approved as marketing-only and then
+A PR that changes any file outside `docs/` stops before the App token is minted, so an SDK PR
+is unaffected by this workflow — one that also edits `docs/` included, and while the App
+secrets are still missing, when minting is what would otherwise fail. Scoping this on
+docs-only rather than touches-docs costs nothing: a PR carrying one source file classifies as
+false on that file anyway. The one exception is a PR that already has auto-merge enabled: that
+stays in scope whatever the diff looks like, so a PR approved as marketing-only and then
 pushed with its docs edits *reverted* is still re-classified and still has its approval
 withdrawn.
 
@@ -104,7 +106,8 @@ the one that queued it, and dismisses the App's approval separately. The two are
 on purpose: `dismiss_stale_reviews_on_push` usually flips the approval to `DISMISSED` before
 the workflow runs, so a guard looking for a live approval would leave the queued merge armed
 for the next human one. Both are scoped to the App, so a maintainer who approves or enables
-auto-merge by hand on an SDK PR keeps both.
+auto-merge by hand on an SDK PR keeps both. The step is also gated on the token mint: a run
+that minted none approved nothing, and `gh` without `GH_TOKEN` can only fail the job.
 
 [`classify-docs-pr.sh`](scripts/classify-docs-pr.sh) answers true only when **every** changed
 file is a modification to an allowlisted marketing page carrying no `generatedFrom`
