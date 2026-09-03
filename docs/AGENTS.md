@@ -16,6 +16,9 @@ correct. The commands below are the gate.
   rename that strands one of the must-not-break URLs frozen in `scripts/check-docs-nav.mjs`.
 - **Internal links are root-relative and extensionless** (`/developers/faq`). Relative
   paths and `.md`/`.mdx` extensions resolve in local preview and 404 in production.
+- **Never hand-write a chain, token or count.** Networks, tokens and their addresses come
+  from the backend config API through a `data-sodax-config` placeholder — the backend, not
+  the SDK, decides what is live. See [`README.md`](README.md#live-config-tables).
 - **Anything outside `docs/` is not a page.** Link source files and repo docs as
   `https://github.com/icon-project/sodax-sdks/blob/main/<path>`.
 - **A new page is not done until it is in `docs.json` `navigation`.** Unregistered pages
