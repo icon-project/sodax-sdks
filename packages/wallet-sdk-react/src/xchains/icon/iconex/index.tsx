@@ -32,7 +32,9 @@ export interface ICONexResponseEvent {
 
 export type ICONexEvent = ICONexRequestEvent | ICONexResponseEvent;
 
-const ICONEX_REQUEST_TIMEOUT_MS = 300_000;
+// A dismissed prompt sends nothing back (the relay defines cancel events for SIGNING/JSON-RPC
+// only), so this bound is the only thing that frees the channel for the next request.
+export const ICONEX_REQUEST_TIMEOUT_MS = 60_000;
 // Non-interactive hydration must not hold the FIFO queue for the full interactive timeout.
 export const ICONEX_HYDRATION_TIMEOUT_MS = 30_000;
 

@@ -6,7 +6,7 @@
  * remove its listener on settle.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ICONexRequestEventType, ICONexResponseEventType, request } from './index.js';
+import { ICONEX_REQUEST_TIMEOUT_MS, ICONexRequestEventType, ICONexResponseEventType, request } from './index.js';
 
 const ICONEX_RELAY_RESPONSE = 'ICONEX_RELAY_RESPONSE';
 const VALID_ICON_ADDRESS = 'hx0000000000000000000000000000000000000001';
@@ -40,7 +40,7 @@ describe('ICONEX request() channel', () => {
     const pending = request({ type: ICONexRequestEventType.REQUEST_ADDRESS });
     const rejection = expect(pending).rejects.toThrow(/timed out/);
 
-    await vi.advanceTimersByTimeAsync(300_000);
+    await vi.advanceTimersByTimeAsync(ICONEX_REQUEST_TIMEOUT_MS);
     await rejection;
 
     // Listener was removed on timeout — a late response is a no-op (no unhandled resolution).
@@ -57,9 +57,24 @@ describe('ICONEX request() channel', () => {
     await vi.advanceTimersByTimeAsync(30_000);
     await hydrationRejection;
 
-    // The queued user request dispatches now — far before the 300s interactive timeout.
+    // The queued user request dispatches now — far before the interactive timeout.
     await vi.advanceTimersByTimeAsync(0);
     dispatchResponse(ICONexResponseEventType.RESPONSE_ADDRESS, VALID_ICON_ADDRESS);
     await expect(userConnect).resolves.toMatchObject({ payload: VALID_ICON_ADDRESS });
+  });
+
+  // A dismissed interactive prompt sends no relay event, so the bounded timeout is what frees the queue.
+  it('an unanswered interactive request frees the queue at the bounded timeout', async () => {
+    vi.useFakeTimers();
+    const dismissed = request({ type: ICONexRequestEventType.REQUEST_ADDRESS });
+    const rejection = expect(dismissed).rejects.toThrow(/timed out/);
+    const retry = request({ type: ICONexRequestEventType.REQUEST_ADDRESS });
+
+    await vi.advanceTimersByTimeAsync(ICONEX_REQUEST_TIMEOUT_MS);
+    await rejection;
+
+    await vi.advanceTimersByTimeAsync(0);
+    dispatchResponse(ICONexResponseEventType.RESPONSE_ADDRESS, VALID_ICON_ADDRESS);
+    await expect(retry).resolves.toMatchObject({ payload: VALID_ICON_ADDRESS });
   });
 });
