@@ -123,6 +123,7 @@ export class Sodax {
       hubProvider: this.hubProvider,
       config: this.config,
       spoke: this.spoke,
+      backendApi: this.backendApi,
     });
     // Sponsored activation never touches the hub.
     this.sponsoring = new SponsoringService({

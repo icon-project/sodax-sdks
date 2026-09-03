@@ -47,7 +47,7 @@
  *  10. waitForTransactionReceipt — every tx_status branch + polling defaults
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Cl, type ContractPrincipalCV, type UIntCV } from '@sodax/libs/stacks/core';
+import { Cl, Pc, type ContractPrincipalCV, type UIntCV } from '@sodax/libs/stacks/core';
 import { ChainKeys, getIntentRelayChainId, spokeChainConfig, type Hex, type IStacksWalletProvider } from '@sodax/types';
 
 // --- hoisted mocks --------------------------------------------------------
@@ -401,6 +401,19 @@ describe('StacksSpokeService.deposit', () => {
     expect(mocks.serializePayloadBytes).toHaveBeenCalledWith(fakeUnsignedTx.payload);
   });
 
+  it('raw=true FT deposit skips the contract-interface fetch and carries no post-conditions', async () => {
+    // Post-conditions cannot ride the serialized payload, so raw mode must not pay (or fail on)
+    // the interface lookup they would need.
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const result = await stacksSpoke.deposit(depositParams<true>({ raw: true, token: STACKS_BNUSD }));
+
+    expect(result).toEqual({ payload: FAKE_PAYLOAD_HEX });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(mocks.makeUnsignedContractCall.mock.calls.at(-1)?.[0]?.postConditions).toBeUndefined();
+  });
+
   it('raw=true non-native → first functionArg is someCV(Cl.principal(token))', async () => {
     await stacksSpoke.deposit(depositParams<true>({ raw: true, token: STACKS_BNUSD }));
 
@@ -451,24 +464,80 @@ describe('StacksSpokeService.deposit', () => {
 
   it('raw=false → delegates to walletProvider.sendTransaction and returns the txId', async () => {
     (mockStacksProvider.sendTransaction as ReturnType<typeof vi.fn>).mockResolvedValueOnce(TX_ID);
+    // getFtAssetName resolves the on-chain `define-fungible-token` name from the contract interface.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ fungible_tokens: [{ name: 'bnusd' }] }),
+      }),
+    );
 
     const result = await stacksSpoke.deposit(
       depositParams<false>({ raw: false, walletProvider: mockStacksProvider, token: STACKS_BNUSD }),
     );
 
     expect(result).toBe(TX_ID);
-    // The reqData passed to the wallet provider must carry the impl-split contract id, the
-    // transfer function name, and the postConditionMode=Allow setting.
+    // The reqData must carry the impl-split contract id, the transfer function name, and a
+    // Deny-mode post-condition capping the caller's spend at `amount`.
     expect(mockStacksProvider.sendTransaction).toHaveBeenCalledWith(
       expect.objectContaining({
         contractAddress: 'SP3031RGK734636C8KGW2Y76TEQBTVX59Q472EQH0',
         contractName: 'asset-manager-impl-v1',
         functionName: 'transfer',
-        postConditionMode: 1, // PostConditionMode.Allow
+        postConditionMode: 2, // PostConditionMode.Deny
+        postConditions: [
+          Pc.principal(SRC_ADDR)
+            .willSendLte(1_000n)
+            .ft(STACKS_BNUSD as `${string}.${string}`, 'bnusd'),
+        ],
       }),
     );
     // raw=false must NOT call the unsigned-tx builder.
     expect(mocks.makeUnsignedContractCall).not.toHaveBeenCalled();
+  });
+
+  it('raw=false native STX → caps the spend with a ustx post-condition, no interface fetch', async () => {
+    (mockStacksProvider.sendTransaction as ReturnType<typeof vi.fn>).mockResolvedValueOnce(TX_ID);
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await stacksSpoke.deposit(
+      depositParams<false>({ raw: false, walletProvider: mockStacksProvider, token: STACKS_NATIVE }),
+    );
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(mockStacksProvider.sendTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        postConditionMode: 2, // PostConditionMode.Deny
+        postConditions: [Pc.principal(SRC_ADDR).willSendLte(1_000n).ustx()],
+      }),
+    );
+  });
+
+  it('raw=false multi-FT contract (sBTC shape) → one cap per declared fungible token', async () => {
+    // sbtc-token really defines two FTs on mainnet; the unmoved one passes its cap at 0.
+    const SBTC = 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token' as const;
+    (mockStacksProvider.sendTransaction as ReturnType<typeof vi.fn>).mockResolvedValueOnce(TX_ID);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ fungible_tokens: [{ name: 'sbtc-token' }, { name: 'sbtc-token-locked' }] }),
+      }),
+    );
+
+    await stacksSpoke.deposit(depositParams<false>({ raw: false, walletProvider: mockStacksProvider, token: SBTC }));
+
+    expect(mockStacksProvider.sendTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        postConditionMode: 2, // PostConditionMode.Deny
+        postConditions: [
+          Pc.principal(SRC_ADDR).willSendLte(1_000n).ft(SBTC, 'sbtc-token'),
+          Pc.principal(SRC_ADDR).willSendLte(1_000n).ft(SBTC, 'sbtc-token-locked'),
+        ],
+      }),
+    );
   });
 });
 
@@ -710,9 +779,10 @@ describe('StacksSpokeService.sendMessage', () => {
         publicKey: SRC_PUBKEY,
         fee: 0,
         nonce: 0n,
-        postConditionMode: 1, // PostConditionMode.Allow
       }),
     );
+    // Post-conditions never ride the serialized payload — raw builds don't carry them.
+    expect(mocks.makeUnsignedContractCall.mock.calls.at(-1)?.[0]?.postConditions).toBeUndefined();
   });
 
   it('raw=true → functionArgs are [uintCV(relayChainId), Cl.bufferFromHex(dstAddress), Cl.bufferFromHex(payload)]', async () => {

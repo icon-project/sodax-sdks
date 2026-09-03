@@ -111,15 +111,21 @@ When handed a **list** of tokens (e.g. 8 at once):
   lists** (per chain); it does **not** scan the raw `<chain>SupportedTokens` map. Manually scan that
   chain's map for an existing `symbol` / `address` before adding (within the list and vs existing entries).
 
-### d) Token icon (optional — `packages/assets/token/`)
+### d) Token icon (**required** — `packages/assets/token/`)
 The token's logo is **not** in `@sodax/types`; it is hosted in `packages/assets`
 and resolved by `tokenLogo(symbol)`. Drop a PNG named `tokenLogoSlug(symbol).png`
 (symbol lowercased, non-alphanumeric runs → `-`, e.g. `bnUSD (legacy)` →
 `bnusd-legacy.png`) into `packages/assets/token/`. Source from CoinGecko's coin
-image CDN, matching by the token's `address` on its chain. Optional and
-non-blocking: a missing icon just 404s until added, and a variant that wraps a
-base asset (`soda*`, `*.LL`, `r*`, `lsoda*`) may reuse the base asset's icon. The
-URL only resolves once merged to `main`. See [`packages/assets/README.md`](../../../packages/assets/README.md).
+image CDN, matching by the token's `address` on its chain. A variant that wraps a
+base asset (`soda*`, `*.LL`, `r*`, `lsoda*`) may copy the base asset's icon under
+its own slug — one file per slug, never a shared file. Every entry in the chain's
+map needs one, not just the swap / money-market ones: `BridgeService` offers
+destination tokens straight from `supportedTokens`, so an entry with no icon 404s
+in the UI. Enforced by
+[`packages/types/src/chains/logo-assets.test.ts`](../../../packages/types/src/chains/logo-assets.test.ts),
+which fails CI naming each missing file; a filename that does not match the slug
+fails too, as an orphan. The URL only resolves once merged to `main`. See
+[`packages/assets/README.md`](../../../packages/assets/README.md).
 
 ## 3. Do NOT touch (handled automatically / unrelated)
 - `chains.ts` map body — the new entry flows in by reference.

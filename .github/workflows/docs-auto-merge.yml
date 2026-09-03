@@ -1,0 +1,108 @@
+name: Docs auto-merge
+
+# pull_request_target, so the classifier and this file are always the copies on the base
+# branch: a PR cannot edit its own gate. Head content is only ever read, never executed.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  auto-merge:
+    name: Docs auto-merge
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    # A fork head is out of scope: it can be opened by anyone.
+    if: >-
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0
+
+      # By SHA, so a force-push between the event and this fetch fails the step rather than
+      # classifying a commit the event did not name.
+      - name: Fetch the pull request head
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$HEAD_SHA"
+          git cat-file -e "${HEAD_SHA}^{commit}"
+
+      # Docs-only, so a PR carrying a file outside docs/ stops here and mints no token — an
+      # SDK PR that also edits docs/ included. Auto-merge keeps a PR in scope whatever its
+      # diff, so an approved marketing PR is re-classified once its docs edits are reverted.
+      - name: Check the pull request is in scope
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          AUTO_MERGE: ${{ github.event.pull_request.auto_merge != null }}
+        run: |
+          set -euo pipefail
+          # --no-renames, as the classifier: a rename reports only its destination otherwise,
+          # so a docs page moved out of docs/ would read as never having been there.
+          # Matched on a captured list, as in ci.yml: grep -q would exit on the first hit and
+          # leave git diff writing to a closed pipe, which pipefail reads as no match at all.
+          files=$(git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA")
+          docs_files=$(printf '%s\n' "$files" | grep -E '^docs/' || true)
+          other_files=$(printf '%s\n' "$files" | grep -Ev '^(docs/|$)' || true)
+          if [ "$AUTO_MERGE" = 'true' ] || { [ -n "$docs_files" ] && [ -z "$other_files" ]; }; then
+            echo 'in_scope=true' >>"$GITHUB_OUTPUT"
+          else
+            echo 'in_scope=false' >>"$GITHUB_OUTPUT"
+          fi
+
+      # GITHUB_TOKEN reviews do not count toward the ruleset's required approval, so the
+      # approving identity has to be an App with pull-requests: write. Minted before
+      # classification, so a classifier error can still withdraw an earlier approval.
+      - name: Mint an App token
+        id: app-token
+        if: steps.scope.outputs.in_scope == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.DOCS_PUBLISH_APP_ID }}
+          private-key: ${{ secrets.DOCS_PUBLISH_APP_PRIVATE_KEY }}
+
+      - name: Classify the pull request diff
+        id: classify
+        if: steps.scope.outputs.in_scope == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: .github/scripts/classify-docs-pr.sh "$BASE_SHA" "$HEAD_SHA"
+
+      # The same HEAD_SHA the classifier read, so the approval cannot land on a commit a
+      # later push put there.
+      - name: Approve and queue the merge
+        if: steps.classify.outputs.marketing_only == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REASON: ${{ steps.classify.outputs.reason }}
+        run: .github/scripts/approve-docs-pr.sh "$PR" "$HEAD_SHA" "$REASON"
+
+      # Second line to the ruleset's dismiss-on-push: also turns auto-merge off, and covers a
+      # PR that stops qualifying, stops touching docs/, or is reopened without a push.
+      # Gated on the mint as well: a run with no token approved nothing, and gh would only fail.
+      - name: Withdraw a stale approval
+        if: ${{ !cancelled() && steps.app-token.outcome == 'success' && steps.scope.outputs.in_scope == 'true' && steps.classify.outputs.marketing_only != 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REASON: ${{ steps.classify.outputs.reason }}
+          BOT: ${{ steps.app-token.outputs.app-slug }}[bot]
+        run: .github/scripts/withdraw-docs-pr.sh "$PR" "$BOT" "$REASON"

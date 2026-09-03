@@ -34,6 +34,7 @@ import {
 import { SwapsApiService } from './SwapsApiService.js';
 import { SponsoringApiService } from './SponsoringApiService.js';
 import { BridgeApiService } from './BridgeApiService.js';
+import { LeverageYieldApiService } from './LeverageYieldApiService.js';
 import {
   hasExplicitBasePath,
   hasLegacyBackendBaseURL,
@@ -41,6 +42,7 @@ import {
   stripLegacyBackendMount,
   resolveBaseApiConfig,
   resolveBridgeApiConfig,
+  resolveLeverageYieldApiConfig,
   resolveSponsoringApiConfig,
   resolveSwapsApiConfig,
   type ResolvedBackendApiConfig,
@@ -257,6 +259,7 @@ export class BackendApiService implements IConfigApiV1 {
   public readonly swaps: SwapsApiService;
   public readonly sponsoring: SponsoringApiService;
   public readonly bridge: BridgeApiService;
+  public readonly leverageYield: LeverageYieldApiService;
 
   // resolved base-API config: the flat fields of the ApiConfig union with any `baseApiConfig` layered on
   // top. `baseURL` is the gateway root; `basePath` is this service's own mount below it.
@@ -290,6 +293,7 @@ export class BackendApiService implements IConfigApiV1 {
     const swapsConfig = resolveSwapsApiConfig(config);
     const sponsoringConfig = resolveSponsoringApiConfig(config);
     const bridgeConfig = resolveBridgeApiConfig(config);
+    const leverageYieldConfig = resolveLeverageYieldApiConfig(config);
 
     const shortRoots = (
       [
@@ -325,6 +329,13 @@ export class BackendApiService implements IConfigApiV1 {
     // Bridge hangs off the same gateway root as `/bridge/*` — resolved from `baseApiConfig` but without
     // this service's `basePath`, so a `swapsApiConfig` slice moves swaps only (see `resolveBridgeApiConfig`).
     this.bridge = new BridgeApiService(withApiKey(bridgeConfig, options.apiKey), this.logger, overrideOptions);
+    // `/leverage-yield/*` is another gateway sibling, resolved like bridge so it never inherits this
+    // service's `basePath` — and it takes the same legacy-override decision.
+    this.leverageYield = new LeverageYieldApiService(
+      withApiKey(leverageYieldConfig, options.apiKey),
+      this.logger,
+      overrideOptions,
+    );
   }
 
   /**
@@ -811,15 +822,17 @@ export class BackendApiService implements IConfigApiV1 {
    * without constructing a new service instance. Existing header keys are
    * overwritten; keys absent from `headers` are preserved.
    *
-   * Headers also reach `swaps` and `bridge`, but never `sponsoring`: it is configured independently, so
-   * base-API credentials must not be forwarded to whatever origin it points at. Note `swaps` can also be
-   * retargeted to another origin via `swapsApiConfig`, in which case a header set here follows it.
+   * Headers also reach `swaps`, `bridge` and `leverageYield`, but never `sponsoring`: it is configured
+   * independently, so base-API credentials must not be forwarded to whatever origin it points at. Note
+   * `swaps` can also be retargeted to another origin via `swapsApiConfig`, in which case a header set
+   * here follows it.
    *
    * @param headers - Key-value pairs to add or overwrite in the default headers.
    */
   public setHeaders(headers: Record<string, string>): void {
     assignHeaders(this.headers, headers);
     this.swaps.setHeaders(headers);
+    this.leverageYield.setHeaders(headers);
     this.bridge.setHeaders(headers);
   }
 

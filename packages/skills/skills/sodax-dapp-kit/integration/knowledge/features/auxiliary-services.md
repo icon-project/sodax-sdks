@@ -176,6 +176,36 @@ await submitBridgeTx({ request, apiConfig: { baseURL: 'https://...' } });
 
 > Full list in [hooks-index.md](../reference/hooks-index.md); key shapes in [querykey-conventions.md](../reference/querykey-conventions.md). For non-React callers, `sodax.api.bridge` is documented in the `sodax-sdk` skill (integration mode).
 
+### Leverage Yield API (`sodax.api.leverageYield`)
+
+Typed React Query wrappers over the backend **Leverage Yield API v2** — `useLeverageYieldApi*` hooks over `sodax.api.leverageYield.*` (vault registry, vault reads, split deposit/withdraw quote + create-intent, deadline, allowance/approve, the intent lifecycle, gas/fees, submit-tx + status). They are the HTTP-API parallel of the on-chain `leverageYield/` hooks (`useLeverageYieldDeposit`/`useLeverageYieldWithdraw`/…, which drive `sodax.leverageYield`). A vault deposit/withdraw IS an intent-based swap, so the intent / gas / fee / submit-tx hooks mirror the swaps family; reads take `{ params, queryOptions }` and the actions are mutations taking `{ mutationOptions }`.
+
+```ts
+// @ai-snippets-skip
+useLeverageYieldApiVaults({ params, queryOptions });          // query    → sodax.api.leverageYield.getVaults
+useLeverageYieldApiEffectiveApr({ params, queryOptions });    // query    → sodax.api.leverageYield.getEffectiveApr
+useLeverageYieldApiCreateDepositIntent({ mutationOptions });  // mutation → sodax.api.leverageYield.createDepositIntent
+useLeverageYieldApiSubmitTxStatus({ params, queryOptions });  // query    → sodax.api.leverageYield.getSubmitTxStatus
+```
+
+Four deltas worth knowing:
+
+- **Create-intent is split.** `useLeverageYieldApiCreateDepositIntent` (any token → `lsoda*`) vs `useLeverageYieldApiCreateWithdrawIntent` (`lsoda*` → any token), each with its own quote hook. Only the deposit path has an allowance step — a withdraw spends `lsoda*` from the hub wallet — so `useLeverageYieldApiAllowance` / `useLeverageYieldApiApprove` take the **deposit** body.
+- **`useLeverageYieldApiSubmitTx`'s `request` carries `operation`.** `LeverageYieldSubmitTxRequestV2` is the swaps `SubmitTxRequestV2` plus a required `operation: 'deposit' | 'withdraw'`; `relayData` is the payload **string**, as for swaps.
+- **Terminal submit-tx status is `solved`**, not the bridge API's `executed` — a vault swap is filled by the solver, so `posting_execution` applies too. `useLeverageYieldApiSubmitTxStatus` polls (1s) while both `txHash` and `srcChainKey` are supplied and stops on `solved` / `failed`, on a set `abandonedAt`, or once the backend rejects the API key.
+- **`lsoda*` shares live in the derived HUB wallet, not the EOA.** Resolve it with `useGetUserHubWalletAddress` before reading `useLeverageYieldApiShareBalance` / `useLeverageYieldApiMaxWithdraw`, or the balance reads as zero.
+
+```ts
+// @ai-snippets-skip
+const { mutateAsync: submitVaultTx } = useLeverageYieldApiSubmitTx();
+// request: LeverageYieldSubmitTxRequestV2 — { txHash, srcChainKey, walletAddress, intent, relayData, operation }
+await submitVaultTx({ request, apiConfig: { baseURL: 'https://...' } });
+```
+
+Prefer `useLeverageYieldApiApproveAndBroadcast` over `useLeverageYieldApiApprove`: a guarded deposit token can need its stale allowance cleared first, and the approve-and-broadcast hook owns plan → sign → broadcast → wait in that order (reporting each step through `onProgress`) and invalidates `['leverageYieldApi','allowance']` itself.
+
+> Full list in [hooks-index.md](../reference/hooks-index.md); key shapes in [querykey-conventions.md](../reference/querykey-conventions.md). For non-React callers, `sodax.api.leverageYield` is documented in the `sodax-sdk` skill (integration mode).
+
 ## Shared utilities
 
 Cross-cutting hooks used by other features.
