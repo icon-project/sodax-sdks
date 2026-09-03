@@ -97,7 +97,8 @@ afterEach(() => {
 // =========================================================================
 
 const BTC = ChainKeys.BITCOIN_MAINNET;
-const BTC_USER_ADDR = 'bc1q5q3xczsl9zlt0gjys5khjknfp40zfdmkme9ene';
+// Must be checksum-valid: encodeAddress rejects malformed Bitcoin recipients.
+const BTC_USER_ADDR = 'bc1qzy3rx3z4vemc3xgqzy3rx3z4vemc3xgq20evkx';
 const BTC_TOKEN = '0:0';
 const HUB_BTC_WALLET = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' as Address;
 

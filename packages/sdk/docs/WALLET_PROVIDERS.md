@@ -473,14 +473,19 @@ You can implement the SDK interfaces directly without using `@sodax/wallet-sdk-c
 interface is defined in `@sodax/sdk` (e.g. `IEvmWalletProvider` in `@sodax/sdk`):
 
 ```ts
-import type { IEvmWalletProvider, EvmRawTransaction, EvmRawTransactionReceipt } from '@sodax/sdk';
+import type {
+  IEvmWalletProvider,
+  EvmRawTransaction,
+  EvmRawTransactionReceipt,
+  EvmSendTransactionOptions,
+} from '@sodax/sdk';
 import type { Hash } from 'viem';
 
 class MyCustomEvmProvider implements IEvmWalletProvider {
   readonly chainType = 'EVM' as const;   // required literal — used as runtime discriminant
 
   async getWalletAddress(): Promise<string> { … }
-  async sendTransaction(tx: EvmRawTransaction): Promise<Hash> { … }
+  async sendTransaction(tx: EvmRawTransaction, options?: EvmSendTransactionOptions): Promise<Hash> { … }
   async waitForTransactionReceipt(hash: Hash): Promise<EvmRawTransactionReceipt> { … }
 }
 ```
@@ -494,3 +499,7 @@ Requirements for a valid custom implementation:
    compile time.
 3. **No base class required** — extending `BaseWalletProvider` is optional; it only provides the
    `defaults` storage and merge helpers from `@sodax/wallet-sdk-core`.
+4. **EVM providers must honor `options.expectedChainId`** — refuse to broadcast when the wallet's
+   active chain id differs; ignoring it silently disables the SDK's wrong-chain protection. A provider
+   that already declares its own second options parameter must widen it to
+   `YourOptions & EvmSendTransactionOptions` to keep satisfying the interface.

@@ -2,6 +2,15 @@ packages:
   - "apps/*"
   - "packages/*"
 
+# Supply-chain cooldown: resolve a version only once it is 14+ days old, so a
+# just-published malicious release never enters the lockfile (audit secrets-supply-chain:M-2).
+minimumReleaseAge: 20160
+# Refuse a release whose npm trust evidence (trusted publisher/provenance) is
+# weaker than an earlier release of the same package.
+trustPolicy: no-downgrade
+# Refuse git/tarball-URL sub-dependencies (registry-only transitive graph).
+blockExoticSubdeps: true
+
 catalog:
   "@types/node": "22.18.1"
   "@types/react": "19.0.8"
@@ -56,10 +65,13 @@ overrides:
   "@hpke/core": ">=1.8.0"
   # Pulls valibot forward to a release without the GHSA-q8pj-h94p-6m4r advisory.
   valibot: ">=1.2.0"
-  # Pin to flush out two transitive axios versions resolved by @injectivelabs/*.
-  axios: "1.13.2"
-  # Clears 8 transitive Trezor advisories that resolve protobufjs <7.5.8.
-  protobufjs: "^7.5.8"
+  # Pin patched axios (1.13.2 sat inside ~29 advisories); only pulled via @injectivelabs/* (^1.13.2).
+  axios: "1.19.0"
+  # Pin patched ws per major (DoS GHSA-96hv-2xvq-fx4p, mem-disclosure GHSA-58qx-3vcg-4xpx).
+  "ws@7": "7.5.13"
+  "ws@8": "8.21.3"
+  # Pin patched protobufjs 7.6.5 (7.6.0 was still in 3 advisory ranges); only via @trezor/protobuf.
+  protobufjs: "7.6.5"
   # Clears a Next.js transitive XSS advisory against postcss <8.5.10.
   postcss: "^8.5.10"
   # Force every transitive `@tanstack/react-query` to the catalog version.

@@ -8,7 +8,7 @@
  * mocked so `mutationFn` can be captured and driven directly.
  */
 
-import { ChainKeys } from '@sodax/sdk';
+import { ChainKeys, getEvmViemChain } from '@sodax/sdk';
 import type { ApprovalProgress } from '../../utils/approvalPlan.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -129,6 +129,10 @@ describe('useSwapsApiApproveAndBroadcast', () => {
 
     expect(result).toEqual({ approveTxHash: APPROVE_HASH });
     expect(walletProvider.sendTransaction).toHaveBeenCalledTimes(1);
+    // Backend-built approvals are chain-bound: the runner must pass the source chain's id.
+    expect(walletProvider.sendTransaction).toHaveBeenCalledWith(expect.anything(), {
+      expectedChainId: getEvmViemChain(ChainKeys.ARBITRUM_MAINNET).id,
+    });
   });
 
   it('works on the hub chain, not just EVM spokes', async () => {
