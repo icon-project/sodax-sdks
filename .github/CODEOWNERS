@@ -1,16 +1,39 @@
 # PRs can rewrite workflow YAML; owners must review .github CI changes.
-.github/workflows/ @icon-project/frontend-write
-.github/scripts/ @icon-project/frontend-write
-.github/CODEOWNERS @icon-project/frontend-write
+/.github/workflows/ @icon-project/frontend-write
+/.github/scripts/ @icon-project/frontend-write
+/.github/CODEOWNERS @icon-project/frontend-write
 
-# The sync map decides what satisfies Docs Drift and is read from the PR head.
-scripts/docs-pages-map.json @icon-project/frontend-write
-
-# The docs-site gates, also run from the PR head — unlike the drift script, a PR can
-# edit these to pass itself, including trimming the frozen must-not-break URL list.
-scripts/docs-pages-map.json @icon-project/frontend-write
-scripts/check-docs-nav.mjs @icon-project/frontend-write
-scripts/sync-docs-pages.mjs @icon-project/frontend-write
+# The docs gates run from the PR head, so a PR can edit them to pass itself — including
+# trimming the frozen must-not-break URL list, or the map Docs Drift reads.
+/scripts/docs-pages-map.json @icon-project/frontend-write
+/scripts/check-doc-links.mjs @icon-project/frontend-write
+/scripts/check-docs-nav.mjs @icon-project/frontend-write
+/scripts/sync-docs-pages.mjs @icon-project/frontend-write
 
 # The published site. Root-anchored: bare `docs/` would also claim packages/*/docs/.
+# Engineering by default, which keeps every generated page and the API, SDK, How To and
+# Protocol tabs here.
 /docs/ @icon-project/frontend-write
+
+# The Home, Solutions, Community and Help tabs: marketing's pages, published from the
+# Mintlify dashboard. Same set as MARKETING_PAGE in .github/scripts/classify-docs-pr.sh.
+/docs/index.mdx @icon-project/docs-marketing
+/docs/introduction.md @icon-project/docs-marketing
+/docs/quickstart.mdx @icon-project/docs-marketing
+/docs/ai-integration-guide.md @icon-project/docs-marketing
+/docs/builders-mcp.mdx @icon-project/docs-marketing
+/docs/contact.mdx @icon-project/docs-marketing
+/docs/home/ @icon-project/docs-marketing
+/docs/swap/ @icon-project/docs-marketing
+/docs/money-market/ @icon-project/docs-marketing
+/docs/bridge/ @icon-project/docs-marketing
+/docs/yield/ @icon-project/docs-marketing
+/docs/resources/ @icon-project/docs-marketing
+/docs/developers/faq.md @icon-project/docs-marketing
+
+# Last, so they hold even if a marketing root above ever grows to cover them: navigation and
+# redirects decide every published URL, and the stylesheet and widget are the site's look.
+/docs/docs.json @icon-project/frontend-write
+/docs/custom.css @icon-project/frontend-write
+/docs/stats-widget.js @icon-project/frontend-write
+/docs/.mintignore @icon-project/frontend-write
