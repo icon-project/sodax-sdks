@@ -1,5 +1,5 @@
 import { SelectChain } from '@/components/swaps/SelectChain';
-import { SelectToken } from '@/components/swaps/SelectToken';
+import { SelectToken } from '@/components/shared/SelectToken';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -27,7 +27,7 @@ import {
   useSodaxContext,
   loadRadfiSession,
   useTradingWalletBalance,
-  useXBalances,
+  useBalances,
   useNearStorageGate,
   getSupportedSolverTokens,
   getStagingSolverTokens,
@@ -45,7 +45,6 @@ import {
   useXAccount,
   useXDisconnect,
   useWalletProvider,
-  useXService,
 } from '@sodax/wallet-sdk-react';
 import type { Order } from '@/components/swaps/OrderStatus';
 import { DEFAULT_SELECTED_CHAIN, SolverEnv, useAppStore } from '@/zustand/useAppStore';
@@ -53,7 +52,6 @@ import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
 import { loadLastSelection, saveLastSelection } from '@/lib/lastSelection';
 import { appendOrder } from '@/lib/orderHistory';
 import { buildOrderSummary } from '@/components/swaps/OrderStatus';
-import { solverApiEndpointForEnv } from '@/constants';
 import { HOOK_LABELS, resolveAvailableHookKind, toHookRequest } from '@/lib/deliveryHooks';
 
 export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAction<Order[]>) => void }) {
@@ -160,24 +158,20 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   };
 
   // Balance fetching- Fetch source token balance for the connected wallet
-  const sourceXService = useXService({ xChainType: getXChainType(src.chain) });
-  const { data: sourceBalances } = useXBalances({
+  const { data: sourceBalances } = useBalances({
     params: {
-      xService: sourceXService,
-      xChainId: src.chain,
-      xTokens: src.token ? [src.token] : [],
+      chainKey: src.chain,
+      tokens: src.token ? [src.token] : [],
       address: sourceAccount.address,
     },
   });
   const sourceTokenBalance = sourceBalances?.[src.token?.address ?? ''] ?? 0n;
 
   // Fetch destination token balance for the connected wallet
-  const destXService = useXService({ xChainType: getXChainType(dst.chain) });
-  const { data: destBalances } = useXBalances({
+  const { data: destBalances } = useBalances({
     params: {
-      xService: destXService,
-      xChainId: dst.chain,
-      xTokens: dst.token ? [dst.token] : [],
+      chainKey: dst.chain,
+      tokens: dst.token ? [dst.token] : [],
       address: destAccount.address,
     },
   });
@@ -339,7 +333,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
           dstTxHash: intentDeliveryInfo.dstTxHash as string,
           srcTxHash: intentDeliveryInfo.srcTxHash,
           srcChainKey: intentDeliveryInfo.srcChainKey,
-          statusEndpoint: solverApiEndpointForEnv(solverEnvironment),
+          statusEndpoint: sodax.config.solver.solverApiEndpoint,
           createdAt: Date.now(),
           summary: buildOrderSummary(src, dst, sourceAmount, quote?.quoted_amount),
         }),
@@ -403,7 +397,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   return (
     <Card className="w-full max-w-lg mx-auto">
       <CardHeader>
-        <CardTitle className="text-2xl font-bold text-center">Cross-Chain Swap</CardTitle>
+        <CardTitle className="text-2xl font-bold text-center">Cross-Chain Swap (SDK)</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">

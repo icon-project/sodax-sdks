@@ -7,6 +7,12 @@ icon: screwdriver-wrench
 
 The SODAX developer suite is architected as a dependency stack. Builders can choose to integrate at the foundational level for maximum control or use opinionated layers for speed.
 
+<Note>
+  **Building with an AI coding agent?** Install [`@sodax/skills`](/ai-integration-guide) so it writes
+  v2-correct code against these packages, and add the [Builders MCP](/builders-mcp) so it can read the
+  live chain and token lists, quote a real pair, and search these docs as it goes.
+</Note>
+
 **1. The Foundation:** [sdk](/developers/packages/foundation/sdk/index)
 
 This is the core logic layer that powers the entire ecosystem. It provides the raw functional modules required to build with SODAX programmatically.

@@ -12,7 +12,7 @@ Use this section when integrating over raw HTTP (any language). Prefer a [soluti
     Quote, build intents, submit-tx, status. Product overview: [Swap hub](/swap).
   </Card>
   <Card title="Leverage yield API" icon="money-bill-trend-up" href="/developers/http-api/leverage">
-    Vault deposit / withdraw (Preview). Product overview: [Yield hub](/yield).
+    Vault deposit / withdraw. Product overview: [Yield hub](/yield).
   </Card>
   <Card title="Oracle" icon="chart-line" href="/developers/http-api/oracle">
     USD OHLC candles for charts, plus live solver mark prices.
@@ -21,6 +21,12 @@ Use this section when integrating over raw HTTP (any language). Prefer a [soluti
     Networks, partners, assets, filled-intent volume, and SODA supply.
   </Card>
 </CardGroup>
+
+<Note>
+  **Exploring these routes with an AI agent?** The [Builders MCP](/builders-mcp)
+  (`https://builders.sodax.com/mcp`) wraps the read surfaces below as tools, so the agent works from
+  today's chains, tokens, quotes and rates instead of its training data.
+</Note>
 
 ## Base URLs
 
@@ -35,8 +41,8 @@ Always use these public hosts. Do not hard-code private infrastructure hostnames
 
 | Prefix | Purpose | Auth |
 |--------|---------|------|
-| `/v1/swaps/*` | Swaps API v2 — quote, build intent, submit-tx, status | Unauthenticated (rate-limited writes) |
-| `/v1/leverage-yield/*` | Leveraged yield vaults over HTTP | Unauthenticated (same pattern as swaps) |
+| `/v1/swaps/*` | Swaps API v2 — quote, build intent, submit-tx, status | No key enforced yet (rate-limited writes) — see [API keys](/developers/how-to/api-keys) |
+| `/v1/leverage-yield/*` | Leveraged yield vaults over HTTP | No key enforced yet (same pattern as swaps) — see [API keys](/developers/how-to/api-keys) |
 | `/v1/be/oracle/*` | USD OHLC price candles for charts | Unauthenticated `GET` |
 | `/v1/be/solver/*` | Solver volume / orderbook / intent journal reads | Unauthenticated `GET` |
 | `/v1/be/config/*` | Chains, tokens, hub assets | Unauthenticated `GET` |
@@ -46,7 +52,7 @@ Always use these public hosts. Do not hard-code private infrastructure hostnames
 | `/v1/be/moneymarket/*` | Money-market positions & reserves (read) | Unauthenticated `GET` |
 | `/v1/intent/*` | Solver service (quote / execute / status / oracle prices) | Unauthenticated |
 | `/v1/a/*` | Sonic data backend (pools, volume, prices) | Unauthenticated `GET` |
-| `/v1/sponsorships/*` | Stellar sponsoring | API key |
+| `/v1/sponsorships/*` | Stellar sponsoring | API key (enforced; its own key registry, not a portal key — see [API keys](/developers/how-to/api-keys)) |
 
 ## Shared conventions
 
@@ -84,7 +90,7 @@ Partner monetization uses a per-request `partnerFee` object on quote/create-inte
 | Show live hub token prices | [Solver oracle](/developers/http-api/oracle#solver-oracle-live-prices) |
 | Show “networks / partners / volume / supply” on a site | [Stats](/developers/http-api/stats) |
 | Run swaps from a bot or non-TS stack | [Swaps API](/developers/http-api/swaps) |
-| Deposit into leverage vaults over HTTP | [Leverage yield](/developers/http-api/leverage) (Preview) |
+| Deposit into leverage vaults over HTTP | [Leverage yield](/developers/http-api/leverage) |
 | Activate a new Stellar account | [Stellar sponsoring](/developers/how-to/stellar-sponsoring-getting-started) (`/v1/sponsorships/*`, API key) |
 | Full wallet + multi-chain UX in React | [`@sodax/sdk`](/developers/packages/foundation/sdk) + [`@sodax/dapp-kit`](/developers/packages/experience/dapp-kit) |
 

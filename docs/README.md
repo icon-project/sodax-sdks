@@ -73,6 +73,38 @@ Every generated file names its source in a `generatedFrom` frontmatter key. **Ed
 never the copy** — the next sync overwrites it. Adding a page this way means adding a map entry
 with its `dest`, `title` and `icon`, then a `docs.json` nav entry for that dest.
 
+## Live config tables
+
+Networks, tokens, addresses and their counts are never typed into a page. They are read in
+the browser from the backend config API — `GET https://api.sodax.com/v2/be/config/all` — by
+[`config-tables.js`](config-tables.js), which Mintlify injects on every page.
+
+The backend is the source of truth deliberately: a published SDK version can list a token
+before the backend serves it, so a page mirroring the SDK advertises support that is not
+fillable yet. Reading the API means a network or token shows up when the backend config
+version bumps, and not before.
+
+A page opts in with a `data-sodax-config` element. Whatever you put inside it is the
+fallback and survives a failed request, so make it a pointer to the endpoint — never a copy
+of the table, which is the drift this replaces.
+
+```mdx
+<div data-sodax-config="swap-tokens" />          {/* add data-chain="solana" for one network */}
+<div data-sodax-config="money-market-tokens" />
+<div data-sodax-config="chains" />
+<span data-sodax-config="chain-names" data-type="EVM" data-exclude="sonic">Ethereum, …</span>
+<span data-sodax-config="count" data-metric="networks">22</span>
+<span data-sodax-config="version">—</span>
+```
+
+`data-metric` takes `networks`, `reserve-assets`, `swap-tokens`, `money-market-tokens`, and
+the per-network `chain-swap-tokens` / `chain-money-market-tokens` with `data-chain`. The
+chain views also accept `data-type` (`EVM` / `non-EVM`) and a comma-separated `data-exclude`.
+
+Two consequences worth knowing: live values are not in the search index or `llms.txt`, so
+keep the surrounding prose meaningful on its own; and agents should be sent to the config
+API or [Builders MCP](/builders-mcp) rather than to the page.
+
 ## Editing in the Mintlify dashboard
 
 Two lanes write to this site, and they are not equivalent.

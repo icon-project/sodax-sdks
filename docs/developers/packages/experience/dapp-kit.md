@@ -279,6 +279,8 @@ These drive sponsored activation, where the SODAX sponsor pays the account's bas
 - [`useBackendMoneyMarketAssetBorrowers()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/backend/useBackendMoneyMarketAssetBorrowers.ts) — Asset borrowers
 - [`useBackendMoneyMarketAssetSuppliers()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/backend/useBackendMoneyMarketAssetSuppliers.ts) — Asset suppliers
 - [`useBackendAllMoneyMarketBorrowers()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/backend/useBackendAllMoneyMarketBorrowers.ts) — All borrowers
+- [`useBackendOracleMarkets()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/backend/useBackendOracleMarkets.ts) — Oracle candle discovery: quote, intervals, symbols (cached 60s)
+- [`useBackendOracleCandles()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/backend/useBackendOracleCandles.ts) — USD OHLC candles for a symbol over `[from, to)` (cached 10s)
 
 ### Swaps API Hooks (`sodax.api.swaps`)
 

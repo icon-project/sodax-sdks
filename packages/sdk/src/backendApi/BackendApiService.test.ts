@@ -113,6 +113,27 @@ const SAMPLE_XTOKEN = {
   vault: '0x0000000000000000000000000000000000000011',
 };
 
+const SAMPLE_ORACLE_MARKETS = {
+  quote: 'USD',
+  intervals: [
+    { key: '1m', label: '1 minute', seconds: 60 },
+    { key: '5m', label: '5 minutes', seconds: 300 },
+    { key: '1h', label: '1 hour', seconds: 3600 },
+    { key: '1d', label: '1 day', seconds: 86400 },
+  ],
+  symbols: ['BTC', 'ETH', 'SOL'],
+};
+
+const SAMPLE_ORACLE_CANDLES = {
+  symbol: 'ETH',
+  quote: 'USD',
+  interval: '1h',
+  candles: [
+    { timestamp: 1782234000, open: '1665.57', high: '1666.22', low: '1663.01', close: '1665.02' },
+    { timestamp: 1782237600, open: '1665.02', high: '1670.40', low: '1664.88', close: '1669.13', final: false },
+  ],
+};
+
 // --- helpers --------------------------------------------------------------
 
 const okResponse = <T>(data: T) => ({ ok: true, status: 200, json: vi.fn().mockResolvedValue(data) });
@@ -475,6 +496,94 @@ describe('BackendApiService.getAllMoneyMarketBorrowers', () => {
 });
 
 // =========================================================================
+// Oracle endpoints — USD OHLC candle discovery and reads. The candles URL is
+// asserted in full because the backend rejects any extra query param with a 400,
+// so the query string this service builds is part of the contract.
+// =========================================================================
+
+describe('BackendApiService.getOracleMarkets', () => {
+  it('issues GET to /oracle/markets and wraps the JSON body in ok:true', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse(SAMPLE_ORACLE_MARKETS));
+
+    const result = await sodax.backendApi.getOracleMarkets();
+
+    expect(result).toEqual({ ok: true, value: SAMPLE_ORACLE_MARKETS });
+    expect(mockFetch).toHaveBeenCalledWith(`${DATA_API}/oracle/markets`, expect.objectContaining({ method: 'GET' }));
+  });
+
+  it('resolves to ok:false with HTTP_REQUEST_FAILED on a non-2xx response', async () => {
+    mockFetch.mockResolvedValueOnce(httpErrorResponse(500, 'boom'));
+
+    await expect(sodax.backendApi.getOracleMarkets()).resolves.toEqual({
+      ok: false,
+      error: expect.objectContaining({ message: 'HTTP_REQUEST_FAILED' }),
+    });
+  });
+});
+
+describe('BackendApiService.getOracleCandles', () => {
+  it('issues GET to /oracle/candles with exactly the four wire params, in order', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse(SAMPLE_ORACLE_CANDLES));
+
+    const result = await sodax.backendApi.getOracleCandles({
+      symbol: 'ETH',
+      interval: '1h',
+      from: 1782234000,
+      to: 1782241200,
+    });
+
+    expect(result).toEqual({ ok: true, value: SAMPLE_ORACLE_CANDLES });
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${DATA_API}/oracle/candles?symbol=ETH&interval=1h&from=1782234000&to=1782241200`,
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
+  // `from: 0` also guards the serialization: a falsy-conditional append (the getUserIntents shape)
+  // would silently drop it. This valid historical range has no stored candles.
+  it('serializes numeric bounds verbatim, including a zero lower bound', async () => {
+    const body = { symbol: 'BTC', quote: 'USD', interval: '1d', candles: [] };
+    mockFetch.mockResolvedValueOnce(okResponse(body));
+
+    const result = await sodax.backendApi.getOracleCandles({ symbol: 'BTC', interval: '1d', from: 0, to: 86400 });
+
+    expect(result).toEqual({ ok: true, value: body });
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${DATA_API}/oracle/candles?symbol=BTC&interval=1d&from=0&to=86400`,
+      expect.any(Object),
+    );
+  });
+
+  it('returns ok:true with an empty candles array when the backend accepts an unknown symbol', async () => {
+    const body = { symbol: 'NOPE', quote: 'USD', interval: '1h', candles: [] };
+    mockFetch.mockResolvedValueOnce(okResponse(body));
+
+    await expect(
+      sodax.backendApi.getOracleCandles({ symbol: 'NOPE', interval: '1h', from: 0, to: 3600 }),
+    ).resolves.toEqual({ ok: true, value: body });
+  });
+
+  it('lifts a 400 (bad range / too many buckets) into error context', async () => {
+    mockFetch.mockResolvedValueOnce(httpErrorResponse(400, 'range too wide'));
+
+    const result = await sodax.backendApi.getOracleCandles({
+      symbol: 'ETH',
+      interval: '1m',
+      from: 0,
+      to: 100_000_000,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const err = result.error as SodaxError;
+      expect(err.message).toBe('HTTP_REQUEST_FAILED');
+      expect(err.context?.status).toBe(400);
+      expect(err.context?.api).toBe('backend');
+    }
+  });
+});
+
+// =========================================================================
 // Config endpoints — Result<T> wrappers, all GET, exhaustive endpoint coverage.
 // Each endpoint is asserted to hit its exact path so a refactor that flips a
 // path string surfaces immediately.
@@ -618,6 +727,79 @@ describe('BackendApiService response validation', () => {
     if (!result.ok) expect((result.error as SodaxError).context?.reason).toBe('invalid_response_shape');
   });
 
+  it('getOracleCandles rejects a candle whose OHLC prices are JSON numbers, not decimal strings', async () => {
+    mockFetch.mockResolvedValueOnce(
+      okResponse({
+        symbol: 'ETH',
+        quote: 'USD',
+        interval: '1h',
+        candles: [{ timestamp: 1782234000, open: 1665.57, high: 1666.22, low: 1663.01, close: 1665.02 }],
+      }),
+    );
+
+    const result = await sodax.backendApi.getOracleCandles({
+      symbol: 'ETH',
+      interval: '1h',
+      from: 1782234000,
+      to: 1782241200,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect((result.error as SodaxError).context?.reason).toBe('invalid_response_shape');
+  });
+
+  it('getOracleMarkets tolerates an unknown interval key (schema is not a picklist)', async () => {
+    const body = {
+      quote: 'USD',
+      intervals: [{ key: '4h', label: '4 hours', seconds: 14400 }],
+      symbols: ['ETH'],
+    };
+    mockFetch.mockResolvedValueOnce(okResponse(body));
+
+    await expect(sodax.backendApi.getOracleMarkets()).resolves.toEqual({ ok: true, value: body });
+  });
+
+  // `final` is advisory, so the schema tolerates `true` rather than blanking a whole chart over it;
+  // consumers branch on `final === false`, not on the field being present.
+  it('getOracleCandles accepts a candle marked final: true', async () => {
+    const body = {
+      symbol: 'ETH',
+      quote: 'USD',
+      interval: '1h',
+      candles: [
+        { timestamp: 1782234000, open: '1665.57', high: '1666.22', low: '1663.01', close: '1665.02', final: true },
+      ],
+    };
+    mockFetch.mockResolvedValueOnce(okResponse(body));
+
+    await expect(
+      sodax.backendApi.getOracleCandles({ symbol: 'ETH', interval: '1h', from: 1782234000, to: 1782241200 }),
+    ).resolves.toEqual({ ok: true, value: body });
+  });
+
+  it('getOracleCandles rejects an interval echo outside the declared union', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse({ symbol: 'ETH', quote: 'USD', interval: '4h', candles: [] }));
+
+    const result = await sodax.backendApi.getOracleCandles({
+      symbol: 'ETH',
+      interval: '1h',
+      from: 1782234000,
+      to: 1782241200,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect((result.error as SodaxError).context?.reason).toBe('invalid_response_shape');
+  });
+
+  it('getOracleMarkets rejects an intervals entry missing required fields', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse({ quote: 'USD', intervals: [{ key: '1h' }], symbols: ['ETH'] }));
+
+    const result = await sodax.backendApi.getOracleMarkets();
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect((result.error as SodaxError).context?.reason).toBe('invalid_response_shape');
+  });
+
   it('getAllConfig (unvalidated) returns ok:true for an arbitrary body — config reads are not schema-validated', async () => {
     const body = { version: 1, config: { anything: true } };
     mockFetch.mockResolvedValueOnce(okResponse(body));
@@ -731,7 +913,7 @@ describe('BackendApiService.setHeaders', () => {
     );
   });
 
-  it('a repeated mixed-casing update sends the newest value, and fans it out to swaps + bridge', async () => {
+  it('a repeated mixed-casing update sends the newest value, and fans it out to every keyed client', async () => {
     // Updating an existing object key does NOT move it in insertion order, so a raw
     // `headers[name] = value` would leave the older casing last and let it win the merge.
     const isolatedService = new BackendApiService({ baseURL: ROOT, timeout: 30_000, headers: {} });
@@ -739,9 +921,17 @@ describe('BackendApiService.setHeaders', () => {
     isolatedService.setHeaders({ 'X-Api-Key': 'v2' });
     isolatedService.setHeaders({ 'x-api-key': 'v3' });
 
-    for (const call of [() => isolatedService.getIntentByTxHash('0x123'), () => isolatedService.bridge.getTokens()]) {
+    // Each client gets a body its own schema accepts, so the assertion is not read past a
+    // validation rejection that only shows up as log noise.
+    const calls: Array<[call: () => Promise<unknown>, body: unknown]> = [
+      [() => isolatedService.getIntentByTxHash('0x123'), { ok: true }],
+      [() => isolatedService.swaps.getTokens(), {}],
+      [() => isolatedService.bridge.getTokens(), {}],
+      [() => isolatedService.leverageYield.getVaults(), []],
+    ];
+    for (const [call, body] of calls) {
       mockFetch.mockReset();
-      mockFetch.mockResolvedValueOnce(okResponse({ ok: true }));
+      mockFetch.mockResolvedValueOnce(okResponse(body));
       await call();
       const headers = mockFetch.mock.calls[0]?.[1]?.headers as Record<string, string>;
       expect(Object.keys(headers).filter(h => h.toLowerCase() === 'x-api-key')).toHaveLength(1);
@@ -768,7 +958,11 @@ describe('BackendApiService.setHeaders', () => {
     );
   });
 
-  it('propagates the headers to the swaps sub-service (a token set here reaches swaps.* calls)', async () => {
+  it.each([
+    ['swaps', (s: BackendApiService) => s.swaps.getTokens(), {}],
+    ['bridge', (s: BackendApiService) => s.bridge.getTokens(), {}],
+    ['leverageYield', (s: BackendApiService) => s.leverageYield.getVaults(), []],
+  ])('propagates the headers to the %s sub-service (a token set here reaches its calls)', async (_label, call, body) => {
     const isolatedConfig: ApiConfig = {
       baseURL: ROOT,
       timeout: 30_000,
@@ -776,9 +970,9 @@ describe('BackendApiService.setHeaders', () => {
     };
     const isolatedService = new BackendApiService(isolatedConfig);
     isolatedService.setHeaders({ 'X-API-Key': 'shared-key' });
-    mockFetch.mockResolvedValueOnce(okResponse({})); // empty token map is a valid GetSwapTokensResponseV2
+    mockFetch.mockResolvedValueOnce(okResponse(body)); // an empty map / list validates for each client
 
-    await isolatedService.swaps.getTokens();
+    await call(isolatedService);
 
     expect(mockFetch).toHaveBeenCalledWith(
       expect.any(String),
@@ -963,6 +1157,7 @@ describe('one key, every service', () => {
     ['data', config => keyed.backendApi.getAllConfig(config)],
     ['swaps', config => keyed.api.swaps.getTokens(config)],
     ['bridge', config => keyed.api.bridge.getTokens(config)],
+    ['leverageYield', config => keyed.api.leverageYield.getVaults(config)],
     ['sponsoring', config => keyed.api.sponsoring.getStellarSponsorConfig(config)],
   ];
 
@@ -1016,6 +1211,7 @@ describe('one key, every service', () => {
       () => configured.backendApi.getAllConfig(),
       () => configured.api.swaps.getTokens(),
       () => configured.api.bridge.getTokens(),
+      () => configured.api.leverageYield.getVaults(),
     ]) {
       mockFetch.mockResolvedValueOnce(okResponse({}));
       await call();
@@ -1037,7 +1233,11 @@ describe('sponsoring inherits the instance key only for an allowed root', () => 
   };
 
   /** POST twin of `keySentTo`: one `createStellarSponsoredAccount` call, target asserted the same way. */
-  const keySentToAccounts = async (target: string, sodax: Sodax, config?: RequestOverrideConfig): Promise<string | null> => {
+  const keySentToAccounts = async (
+    target: string,
+    sodax: Sodax,
+    config?: RequestOverrideConfig,
+  ): Promise<string | null> => {
     mockFetch.mockResolvedValueOnce(okResponse({ hash: '0xhash', alreadyActive: false }));
     await sodax.api.sponsoring.createStellarSponsoredAccount({ data: 'AAAA' }, config);
     expect(mockFetch.mock.calls.at(-1)?.[0]).toBe(`${target}/sponsorships/stellar/accounts`);
