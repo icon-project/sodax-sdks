@@ -3,6 +3,7 @@ import {
   type EvmChainKey,
   type EvmRawTransaction,
   type EvmRawTransactionReceipt,
+  type EvmSendTransactionOptions,
   type IEvmWalletProvider,
 } from '@sodax/types';
 import type { Account, Address, Chain, Hash, PublicClient, TransactionReceipt, Transport, WalletClient } from 'viem';
@@ -173,8 +174,21 @@ export class EvmWalletProvider extends BaseWalletProvider<EvmWalletDefaults> imp
   }
 
   /** Submits a signed transaction to the network and returns the transaction hash. */
-  async sendTransaction(txData: EvmRawTransaction, options?: EvmSendTransactionPolicy): Promise<Hash> {
-    const policy = this.mergePolicy('sendTransaction', options);
+  async sendTransaction(
+    txData: EvmRawTransaction,
+    options?: EvmSendTransactionPolicy & EvmSendTransactionOptions,
+  ): Promise<Hash> {
+    const { expectedChainId, ...policyOverrides } = options ?? {};
+    if (expectedChainId !== undefined) {
+      // The wallet broadcasts on its ACTUAL active chain, not the chain the calldata targets.
+      const actualChainId = await this.walletClient.getChainId();
+      if (actualChainId !== expectedChainId) {
+        throw new Error(
+          `[EvmWalletProvider] wallet is connected to chain ${actualChainId} but the transaction targets chain ${expectedChainId}; switch the wallet network and retry`,
+        );
+      }
+    }
+    const policy = this.mergePolicy('sendTransaction', policyOverrides);
     const tx = { ...policy, ...txData } as Parameters<typeof this.walletClient.sendTransaction>[0];
     return this.walletClient.sendTransaction(tx);
   }

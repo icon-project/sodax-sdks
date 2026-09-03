@@ -275,9 +275,9 @@ export class SonicSpokeService {
       return rawTx satisfies TxReturnType<SonicChainKey, true> as TxReturnType<SonicChainKey, Raw>;
     }
 
-    return params.walletProvider.sendTransaction(rawTx) satisfies Promise<
-      TxReturnType<SonicChainKey, false>
-    > as Promise<TxReturnType<SonicChainKey, Raw>>;
+    return params.walletProvider.sendTransaction(rawTx, {
+      expectedChainId: getEvmViemChain(ChainKeys.SONIC_MAINNET).id,
+    }) satisfies Promise<TxReturnType<SonicChainKey, false>> as Promise<TxReturnType<SonicChainKey, Raw>>;
   }
 
   public static async createSwapIntent<Raw extends boolean>(
@@ -345,10 +345,9 @@ export class SonicSpokeService {
     }
 
     return [
-      (await params.walletProvider.sendTransaction(rawTx)) satisfies TxReturnType<SonicChainKey, false> as TxReturnType<
-        SonicChainKey,
-        Raw
-      >,
+      (await params.walletProvider.sendTransaction(rawTx, {
+        expectedChainId: getEvmViemChain(ChainKeys.SONIC_MAINNET).id,
+      })) satisfies TxReturnType<SonicChainKey, false> as TxReturnType<SonicChainKey, Raw>,
       intent,
       feeAmount,
       txData.data,
@@ -496,8 +495,8 @@ export class SonicSpokeService {
       return rawTx satisfies TxReturnType<SonicChainKey, true> as TxReturnType<SonicChainKey, Raw>;
     }
 
-    return params.walletProvider.sendTransaction(rawTx) satisfies Promise<
-      TxReturnType<SonicChainKey, false>
-    > as Promise<TxReturnType<SonicChainKey, Raw>>;
+    return params.walletProvider.sendTransaction(rawTx, {
+      expectedChainId: getEvmViemChain(ChainKeys.SONIC_MAINNET).id,
+    }) satisfies Promise<TxReturnType<SonicChainKey, false>> as Promise<TxReturnType<SonicChainKey, Raw>>;
   }
 }
