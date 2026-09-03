@@ -24,6 +24,7 @@ paths = [
   '''(^|/)build/''',
   '''(^|/)coverage/''',
   '''.*\.md$''',
+  '''.*\.mdx$''',
 ]
 regexes = [
   # Public addresses / chain ids. The 40-hex \b boundary won't match a 64-hex key.

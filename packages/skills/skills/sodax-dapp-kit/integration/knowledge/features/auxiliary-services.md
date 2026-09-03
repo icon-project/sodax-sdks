@@ -64,6 +64,15 @@ useBackendMoneyMarketAssetBorrowers({ params, queryOptions });
 useBackendAllMoneyMarketBorrowers({ params: { pagination: { offset, limit } }, queryOptions });
 ```
 
+### Oracle data
+
+```ts
+// @ai-snippets-skip
+useBackendOracleMarkets({ queryOptions });   // staleTime 60s; discovery: quote, intervals, symbols
+// from/to are UNIX seconds over the half-open range [from, to), at most 5000 buckets; staleTime 10s
+useBackendOracleCandles({ params: { symbol, interval, from, to }, queryOptions });
+```
+
 ### Swaps API (`sodax.api.swaps`)
 
 Typed React Query wrappers over the backend **Swaps API v2** — one `useSwapsApi*` hook per endpoint of `sodax.api.swaps.*` (21 total: tokens, quote, deadline, allowance, approve, create / submit / cancel intent, status, intent hash / packet / extra-data, intent lookups, limit orders, gas estimate, fees, submit-tx + status). They call the backend HTTP API and are distinct from the on-chain `swap/` hooks (`useQuote`/`useStatus`/`useSwap`/…), which drive `sodax.swaps` (the on-chain `SwapService`). Reads take `{ params, queryOptions }`; the six actions (`approve`, `createIntent`, `submitIntent`, `cancelIntent`, `createLimitOrder`, `submitTx`) are mutations taking `{ mutationOptions }`, with domain inputs flowing through `mutate(vars)`.
@@ -175,7 +184,8 @@ Cross-cutting hooks used by other features.
 // @ai-snippets-skip
 useSodaxContext();                                  // Access the Sodax SDK instance
 useHubProvider();                                   // Hub chain (Sonic) provider
-useXBalances({ params, queryOptions });             // Cross-chain token balances
+useBalances({ params, queryOptions });              // SDK-backed wallet balances (no xService)
+useXBalances({ params, queryOptions });             // Cross-chain token balances (needs xService)
 useDeriveUserWalletAddress({ params, queryOptions }); // Hub wallet address (CREATE3)
 useGetUserHubWalletAddress({ params, queryOptions }); // Hub wallet via wallet router
 useEstimateGas({ mutationOptions });                // Gas estimation for raw tx
@@ -209,6 +219,36 @@ import { useXService, getXChainType } from '@sodax/wallet-sdk-react';
 const xService = useXService({ xChainType: getXChainType(xChainId) });
 const { data: balances } = useXBalances({ params: { xService, xChainId, xTokens, address } });
 ```
+
+### `useBalances` shape (SDK-backed, no `xService`)
+
+`useBalances` is the SDK-backed successor to `useXBalances`: it reads wallet balances straight from the core SDK (`sodax.spoke.getWalletBalances`) via the `SodaxProvider` context, so it needs **no** `xService` from `@sodax/wallet-sdk-react`. Both hooks still exist — prefer `useBalances` when the app already has a `SodaxProvider`; keep `useXBalances` when you're wiring balances through the wallet layer.
+
+```ts
+// @ai-snippets-skip
+type UseBalancesParams = ReadHookParams<Record<string, bigint>, {
+  chainKey: SpokeChainKey | undefined;       // the chain the read executes against
+  tokens: readonly XToken[];                 // tokens to fetch balances for
+  address: string | undefined;
+}>;
+```
+
+The query runs only when `chainKey`, `address`, and `tokens.length > 0` are all present, refetching every 5s (same interval as `useXBalances`). `data` is a `Record<string, bigint>` mapping each token address to its balance in smallest units. queryKey: `['shared', 'balances', chainKey, tokens.map(t => [t.symbol, t.address]), address]`.
+
+**`chainKey` decides the chain that is read.** The SDK ignores `token.chainKey`, so a token that does not live on `chainKey` reads as `0n` rather than erroring — commit the chain and the token list in the same state update. (`useXBalances` is the opposite: it derives the chain from `xTokens[0].chainKey` and ignores the `xChainId` you pass.)
+
+**Failure model.** A token that could not be read is logged by the SDK and reported as `0n` — a flaky RPC and an empty wallet look the same, always in the conservative direction (under-reporting blocks a spend, never permits one). The query errors only when the whole batch is unusable: a mismatched `token.chainKey`, an RPC every token depends on, or a batch in which no token could be read at all.
+
+**Chain-specific values.** Stellar XLM reports the *spendable* amount — total minus the minimum reserve and selling liabilities, not the raw balance. Bitcoin returns `0n` for Rune tokens, whose amounts the UTXO endpoint does not carry.
+
+```tsx
+// @ai-snippets-skip
+// No `xService` — just the SodaxProvider context the hook reads internally.
+const { data: balances } = useBalances({ params: { chainKey, address, tokens } });
+const usdcBalance = balances?.[usdc.address] ?? 0n;
+```
+
+After a mutation, invalidate with the `invalidateBalances(queryClient, chainKey)` helper exported from `@sodax/dapp-kit` — it covers both `['shared','balances']` and `['shared','xBalances']`, which never match each other. Every dapp-kit mutation hook already calls it.
 
 ### Stellar prerequisites — use `useStellarGate`
 
@@ -373,12 +413,16 @@ and origin gating are the real controls. Proxy through your own backend if that 
 | `useSwapsApiSubmitTxStatus` | 1s | requires `txHash` + `srcChainKey`; stops on `solved` / `failed` |
 | `useSwapsApiStatus` | 1s | solver intent status; stops on status `3` / `4` |
 | `useBackendOrderbook` | none | `staleTime: 30s` — fresh-window, no background refetch |
+| `useBackendOracleMarkets` | none | `staleTime: 60s` |
+| `useBackendOracleCandles` | none | `staleTime: 10s` — matches the ~10s server-side cache |
 | `useExpiredUtxos` (bitcoin) | 60s | refetchInterval |
 | `useQuote` (swap) | 3s | refetchInterval |
 | `useStatus` (swap) | 3s | stops on status `3`/`4`, and after 40 consecutive NOT_FOUND fetches |
 | `useSwapAllowance` (swap) | 2s | refetchInterval |
 | `useMMAllowance` (mm) | 5s | refetchInterval; `enabled: false` for borrow/withdraw actions |
 | Reserves data (mm) | 5s | `useReservesData` / `useReservesHumanized` / user position hooks |
+| `useBalances` | 5s | refetchInterval |
+| `useXBalances` | 5s | refetchInterval |
 | Most others | None | |
 
 All overridable via `queryOptions.refetchInterval`.
@@ -386,6 +430,6 @@ All overridable via `queryOptions.refetchInterval`.
 ## Cross-references
 
 - [`../recipes/backend-queries.md`](../recipes/backend-queries.md) — worked examples for intent tracking, orderbook, MM data.
-- [`../recipes/wallet-connectivity.md`](../recipes/wallet-connectivity.md) — `useXBalances` worked example.
+- [`../recipes/wallet-connectivity.md`](../recipes/wallet-connectivity.md) — `useBalances` / `useXBalances` worked examples.
 - [`features/auxiliary-services.md`](../../../migration-v1-to-v2/knowledge/features/auxiliary-services.md) — v1 → v2 porting.
 - `sodax-sdk`: `integration/knowledge/features/auxiliary-services.md` — underlying SDK auxiliary surfaces (partner, recovery, backendApi).

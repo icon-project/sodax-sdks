@@ -28,6 +28,7 @@ import {
   spokeChainConfig,
   type Hex,
   type IBitcoinWalletProvider,
+  type XToken,
 } from '@sodax/types';
 import { keccak256, stringToBytes } from 'viem';
 import { invariant } from '../../utils/tiny-invariant.js';
@@ -213,6 +214,99 @@ describe('BitcoinSpokeService.getBalance', () => {
 
   it('throws for non-BTC tokens (not implemented)', async () => {
     await expect(btcSpoke.getBalance('USDT', USER_ADDR)).rejects.toThrow(/not yet implemented/);
+  });
+});
+
+// =========================================================================
+// 4b. getWalletBalance / getWalletBalances — user wallet balance (native only)
+// =========================================================================
+
+describe('BitcoinSpokeService.getWalletBalance / getWalletBalances', () => {
+  // Real config tokens, never synthesised: a fixture whose address exists in no token list would
+  // classify itself as native and prove nothing about what production actually passes here.
+  const BTC_TOKEN = btcConfig.supportedTokens.BTC as XToken;
+  const BUSD_TOKEN = btcConfig.supportedTokens.BUSD as XToken;
+
+  it("sums the user's UTXO values for native BTC", async () => {
+    setFetch(() =>
+      json([
+        { txid: 'a', vout: 0, value: 100, status: { confirmed: true } },
+        { txid: 'b', vout: 1, value: 250, status: { confirmed: false } },
+      ]),
+    );
+    const result = await btcSpoke.getWalletBalance({
+      srcChainKey: BTC,
+      srcAddress: USER_ADDR,
+      token: BTC_TOKEN,
+    });
+    expect(result).toBe(350n);
+  });
+
+  it('returns 0n for non-native tokens (Rune balances are not in the UTXO endpoint)', async () => {
+    const result = await btcSpoke.getWalletBalance({
+      srcChainKey: BTC,
+      srcAddress: USER_ADDR,
+      token: BUSD_TOKEN,
+    });
+    expect(result).toBe(0n);
+  });
+
+  it('getWalletBalances maps each token address to its balance', async () => {
+    setFetch(() => json([{ txid: 'a', vout: 0, value: 500, status: { confirmed: true } }]));
+    const result = await btcSpoke.getWalletBalances({
+      srcChainKey: BTC,
+      srcAddress: USER_ADDR,
+      tokens: [BTC_TOKEN, BUSD_TOKEN],
+    });
+    expect(result).toEqual({
+      [BTC_TOKEN.address]: 500n,
+      [BUSD_TOKEN.address]: 0n,
+    });
+  });
+
+  it('getWalletBalances isolates a failing read as a logged 0n instead of discarding the batch', async () => {
+    const warnSpy = vi.spyOn(sodax.config.logger, 'warn');
+    setFetch(url =>
+      // Only the native BTC read hits the network; the Rune token never reaches fetch, so this
+      // fails exactly one token of the batch and leaves a successful read behind.
+      url.endsWith('/utxo')
+        ? (({ ok: false, statusText: 'Too Many Requests' }) as unknown as Response)
+        : new Response(null, { status: 404 }),
+    );
+
+    const result = await btcSpoke.getWalletBalances({
+      srcChainKey: BTC,
+      srcAddress: USER_ADDR,
+      tokens: [BTC_TOKEN, BUSD_TOKEN],
+    });
+
+    // A failed read reports 0n, which is indistinguishable from a real zero in the map — the log
+    // is the only signal, so assert it fired or the failure could regress into a silent zero.
+    expect(result[BTC_TOKEN.address]).toBe(0n);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('balance read failed'),
+      expect.objectContaining({ chainKey: BTC, token: BTC_TOKEN.address }),
+    );
+    // ...while the structurally-zero Rune entry still resolves, unlogged.
+    expect(result[BUSD_TOKEN.address]).toBe(0n);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('getWalletBalances rejects when every read in the batch failed', async () => {
+    // An all-zero map from a dead RPC would read as "this wallet is empty on every asset", so the
+    // one case the flat map cannot express safely must throw rather than resolve.
+    const warnSpy = vi.spyOn(sodax.config.logger, 'warn');
+    setFetch(() => ({ ok: false, statusText: 'Too Many Requests' }) as unknown as Response);
+
+    await expect(
+      btcSpoke.getWalletBalances({
+        srcChainKey: BTC,
+        srcAddress: USER_ADDR,
+        tokens: [BTC_TOKEN],
+      }),
+    ).rejects.toThrow(/every balance read failed on bitcoin/);
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
   });
 });
 

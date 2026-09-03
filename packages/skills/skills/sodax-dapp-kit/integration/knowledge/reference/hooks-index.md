@@ -165,6 +165,13 @@ Comprehensive hook table across 12 feature domains. Use this when you know the f
 | `useBackendMoneyMarketAssetBorrowers` | Borrowers for an asset |
 | `useBackendAllMoneyMarketBorrowers` | All borrowers |
 
+### Oracle data
+
+| Hook | Purpose |
+|---|---|
+| `useBackendOracleMarkets` | Candle discovery: quote, intervals, symbols (`staleTime: 60s`) |
+| `useBackendOracleCandles` | USD OHLC candles for a symbol over `[from, to)` (`staleTime: 10s`) |
+
 ## Swaps API (`sodax.api.swaps`)
 
 Typed React Query wrappers over the backend Swaps API v2 (`sodax.api.swaps.*`), one per endpoint. Distinct from the on-chain `swap/` hooks (`useQuote`/`useStatus`/`useSwap`/…), which drive `sodax.swaps` (the `SwapService`).
@@ -250,6 +257,7 @@ Typed React Query wrappers over the backend Bridge API v2 (`sodax.api.bridge.*`)
 
 | Hook | Type | Purpose |
 |---|---|---|
+| `useBalances` | Query | SDK-backed wallet token balances (no xService) |
 | `useXBalances` | Query | Cross-chain token balances |
 | `useDeriveUserWalletAddress` | Query | Derive hub wallet (CREATE3) |
 | `useGetUserHubWalletAddress` | Query | Derive hub wallet (wallet router) |

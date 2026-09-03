@@ -1,4 +1,8 @@
-# Stellar Sponsoring — getting started
+---
+title: "Stellar Sponsoring"
+description: "Activate a brand-new Stellar account that holds no XLM, with SODAX paying the base reserve."
+icon: star
+---
 
 A brand-new Stellar account holds 0 XLM, and Stellar accounts must exist on-chain before they can hold or receive anything. SODAX's sponsor account pays that account's base reserve, so activation costs the user nothing. The user's wallet still signs — only the account being created can authorize ending its own sponsorship — and the SODAX backend co-signs as sponsor and submits.
 
@@ -126,7 +130,7 @@ The `accounts` response is one of two shapes — `{ hash: string, alreadyActive:
 
 ## Examples
 
-Config wiring lives at [`apps/demo/src/providers.tsx:49-55`](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/providers.tsx#L49-L55) (built from `VITE_SPONSORING_API_BASE_URL` / `VITE_SPONSORING_API_KEY`, passed to `Sodax` at [L147](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/providers.tsx#L147); env placeholders at [`example.env`](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/example.env#L8)). Start it from the repo root and open a route below:
+Config wiring lives in the `sponsoringApiConfig` object in [`apps/demo/src/providers.tsx`](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/providers.tsx) (built from `VITE_SPONSORING_API_BASE_URL` / `VITE_SPONSORING_API_KEY`, then passed to `Sodax` as `api.sponsoringApiConfig`; env placeholders at [`example.env`](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/example.env#L8)). Start it from the repo root and open a route below:
 
 ```bash
 pnpm build:packages   # first time only, if the SDK packages aren't built yet
@@ -136,7 +140,7 @@ pnpm dev:demo         # http://localhost:3000
 | Route | What to inspect | Source |
 | --- | --- | --- |
 | [`/bridge`](http://localhost:3000/bridge) | The shortest `useStellarGate` call site — gate at L85, activate/trustline handlers at L122-134, gated UI states at L170-257 | [`BridgeDialog.tsx`](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/components/bridge/BridgeDialog.tsx#L85) |
-| [`/swaps-sdk`](http://localhost:3000/swaps-sdk) | Same gate pattern on a swap/limit-order destination | [`SwapCard.tsx`](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/components/swaps/SwapCard.tsx#L106), [`LimitOrderCard.tsx`](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/components/swaps/LimitOrderCard.tsx#L74) |
+| [`/swaps-sdk`](http://localhost:3000/swaps-sdk) | Same gate pattern on a swap/limit-order destination | [`SwapCard.tsx`](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/components/swaps/SwapCard.tsx#L109), [`LimitOrderCard.tsx`](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/components/swaps/LimitOrderCard.tsx#L74) |
 | [`/swaps-api`](http://localhost:3000/swaps-api) | The same gate driving an API-submitted swap instead of the SDK path | [`SwapCard.tsx`](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/components/swaps-api/SwapCard.tsx#L302) |
 
 For a focused, standalone walkthrough with its own offline mock backend:
@@ -157,7 +161,7 @@ pnpm --filter stellar-sponsor-example dev               # terminal B — http://
 Two more references:
 
 - **Headless (no React)** — [`apps/node/src/stellar-sponsor.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/stellar-sponsor.ts) calls `sodax.sponsoring` directly from a plain Node script.
-- **Terser reference card** — [`docs/quick-sponsoring-stellar-guide.md`](https://github.com/icon-project/sodax-sdks/blob/main/docs/quick-sponsoring-stellar-guide.md), a denser bullet-point version of this same feature.
+- **Terser reference card** — [`docs/quick-sponsoring-stellar-guide.md`](https://github.com/icon-project/sodax-sdks/blob/main/docs/developers/how-to/quick-sponsoring-stellar-guide.md), a denser bullet-point version of this same feature.
 
 ## Learn more
 

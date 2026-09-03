@@ -66,8 +66,13 @@ export class SuiGrpcTransport implements SuiTransport {
     this.client = new SuiGrpcClient({ network: 'mainnet', baseUrl: endpoint });
   }
 
-  async getCoins(owner: string, coinType: string, limit: number = DEFAULT_GET_COINS_LIMIT): Promise<SuiPaginatedCoins> {
-    const response = await this.client.core.listCoins({ owner, coinType, limit });
+  async getCoins(
+    owner: string,
+    coinType: string,
+    limit: number = DEFAULT_GET_COINS_LIMIT,
+    cursor?: string | null,
+  ): Promise<SuiPaginatedCoins> {
+    const response = await this.client.core.listCoins({ owner, coinType, limit, cursor: cursor ?? undefined });
     return toSuiPaginatedCoins(response, coinType);
   }
 

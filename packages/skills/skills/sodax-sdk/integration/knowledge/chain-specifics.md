@@ -149,7 +149,7 @@ const solanaSpoke = sodax.spoke.getSpokeService(ChainKeys.SOLANA_MAINNET) as Sol
 
 ### Pitfall
 
-Solana addresses are base58 PublicKey strings, not `0x…` hex. `GetAddressType<typeof ChainKeys.SOLANA_MAINNET>` resolves to a base58-typed string brand; passing a hex address is a TypeScript error.
+Solana addresses are base58 PublicKey strings, not `0x…` hex. `GetAddressType<typeof ChainKeys.SOLANA_MAINNET>` resolves to `SolanaBase58PublicKey`, which is a plain `string` alias — not a brand — so a hex address compiles and then throws inside `new PublicKey(...)` when the spoke service reads the balance or builds the deposit. Pass the base58 address.
 
 ---
 

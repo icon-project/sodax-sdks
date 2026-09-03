@@ -1,5 +1,4 @@
 import { type SolverConfig, spokeChainConfig, baseChainInfo, ChainKeys, type SpokeChainKey } from '@sodax/dapp-kit';
-import { SolverEnv } from '@/zustand/useAppStore';
 
 declare global {
   interface Window {
@@ -28,15 +27,11 @@ export const productionSolverConfig = {
   protocolIntentsContract: '0xaFf2EDb3057ed6f9C1dA6c930b8ddDf2beE573A5' as const,
 } satisfies SolverConfig;
 
-/** Solver API endpoint for a given env — stored on each order so status is polled against the
- *  env it was created on, even after the env switcher / a reload changes the active env. */
-export function solverApiEndpointForEnv(env: SolverEnv): string {
-  switch (env) {
-    case SolverEnv.Staging:
-      return stagingSolverConfig.solverApiEndpoint;
-    default:
-      return productionSolverConfig.solverApiEndpoint;
-  }
+/** Auto default for `swaps.useBackendSubmitTx`: backend submit posts to the production swaps
+ *  API, which only the production solver serves — so Auto is on only when the EFFECTIVE solver
+ *  endpoint (env config or settings override) is production's (gh-401). */
+export function defaultUseBackendSubmitTx(solverApiEndpoint: string): boolean {
+  return solverApiEndpoint === productionSolverConfig.solverApiEndpoint;
 }
 
 export interface ChainUI {
@@ -97,6 +92,7 @@ export const ROUTES = {
   PARTNER_FEE_CLAIM: '/partner-fee-claim',
   RECOVERY: '/recovery',
   LEVERAGE_YIELD: '/leverage-yield',
+  ORACLE: '/oracle',
 } as const;
 
 /**
