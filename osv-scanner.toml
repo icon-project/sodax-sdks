@@ -1,6 +1,8 @@
 # OSV-Scanner advisory baseline, accepted 2026-08-27 while making the scan job
 # blocking (audit gh-741, secrets-supply-chain:H-3). Burn entries down; do not add
 # new ones without triage.
+# An entry whose reason names a revisit date is already fixed upstream — the patch
+# just sits inside the minimumReleaseAge cooldown. Drop it once that date passes.
 
 [[IgnoredVulns]]
 id = "CVE-2025-14505"
@@ -45,6 +47,10 @@ reason = "pre-existing at baseline: vite@5.4.21"
 [[IgnoredVulns]]
 id = "CVE-2026-41907"
 reason = "pre-existing at baseline: uuid@8.3.2, uuid@9.0.1"
+
+[[IgnoredVulns]]
+id = "CVE-2026-45822"
+reason = "decode-uri-component@0.2.2 via query-string@7.1.3 (@walletconnect/utils); the only fix is 0.5.0, a 0.x major outside the ^0.2.2 its consumer declares"
 
 [[IgnoredVulns]]
 id = "CVE-2026-48125"
@@ -107,8 +113,36 @@ id = "CVE-2026-69198"
 reason = "pre-existing at baseline: ip-address@10.2.0"
 
 [[IgnoredVulns]]
+id = "CVE-2026-73088"
+reason = "browserslist@4.28.2 via @babel/helper-compilation-targets; overriding to the 4.28.7 fix re-resolves the @babel/core subtree and trustPolicy rejects the already-locked semver@6.3.1"
+
+[[IgnoredVulns]]
+id = "CVE-2026-73089"
+reason = "browserslist@4.28.2 via @babel/helper-compilation-targets; overriding to the 4.28.7 fix re-resolves the @babel/core subtree and trustPolicy rejects the already-locked semver@6.3.1"
+
+[[IgnoredVulns]]
 id = "CVE-2026-73646"
 reason = "pre-existing at baseline: postcss@8.5.15"
+
+[[IgnoredVulns]]
+id = "CVE-2026-75899"
+reason = "fast-uri@3.1.2 via ajv; fix 3.1.6 published 2026-08-23, inside the 14-day cooldown; revisit 2026-09-06"
+
+[[IgnoredVulns]]
+id = "CVE-2026-75975"
+reason = "fast-uri@3.1.2 via ajv; fix 3.1.6 published 2026-08-23, inside the 14-day cooldown; revisit 2026-09-06"
+
+[[IgnoredVulns]]
+id = "CVE-2026-76172"
+reason = "fast-uri@3.1.2 via ajv; fix 3.1.6 published 2026-08-23, inside the 14-day cooldown; revisit 2026-09-06"
+
+[[IgnoredVulns]]
+id = "CVE-2026-82417"
+reason = "qs@6.15.1, qs@6.15.2 via typed-rest-client; fix 6.16.0 published 2026-08-29, inside the 14-day cooldown; revisit 2026-09-12"
+
+[[IgnoredVulns]]
+id = "CVE-2026-82562"
+reason = "qs@6.15.1, qs@6.15.2 via typed-rest-client; fix 6.16.0 published 2026-08-29, inside the 14-day cooldown; revisit 2026-09-12"
 
 [[IgnoredVulns]]
 id = "CVE-2026-8723"
