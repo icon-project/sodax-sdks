@@ -286,6 +286,22 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.bnUSD,
     spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.SODA,
     spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.USDG,
+    // Tokenized equities / ETFs — oracle-priced only. DJT, GLD and RDDT are
+    // excluded (no Chainlink feed). Listed in production so both the production
+    // and staging solver environments expose them (staging inherits production).
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.SPCX,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.NVDA,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.GME,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.MSTR,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.AAPL,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.TSLA,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.MU,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.SNDK,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.SPY,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.QQQ,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.SGOV,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.USO,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.SLV,
   ] as const satisfies XToken[],
 } as const satisfies Record<SpokeChainKey, readonly XToken[]>;
 
