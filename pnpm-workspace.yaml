@@ -8,6 +8,21 @@ minimumReleaseAge: 20160
 # Refuse a release whose npm trust evidence (trusted publisher/provenance) is
 # weaker than an earlier release of the same package.
 trustPolicy: no-downgrade
+# Exact versions only, so an exception lapses as soon as the tree moves off them. Each was
+# checked against the registry: same maintainer account as the provenance-bearing releases,
+# same upstream repo, npm-signed — a release that skipped CI, not a publisher change.
+trustPolicyExclude:
+  # Legacy-line backports published after the current major had moved to provenance.
+  - "semver@6.3.1"
+  - "@noble/secp256k1@1.7.2"
+  - "tailwind-merge@2.6.1"
+  - "undici-types@6.19.8"
+  - "undici-types@6.21.0"
+  # Hand-published releases by the package's own long-standing maintainer.
+  - "@noble/curves@1.8.0"
+  - "@noble/hashes@1.7.0"
+  - "chokidar@4.0.3"
+  - "slow-redact@0.3.2"
 # Refuse git/tarball-URL sub-dependencies (registry-only transitive graph).
 blockExoticSubdeps: true
 
@@ -65,6 +80,8 @@ overrides:
   "@hpke/core": ">=1.8.0"
   # Pulls valibot forward to a release without the GHSA-q8pj-h94p-6m4r advisory.
   valibot: ">=1.2.0"
+  # Pulls fflate forward past the GHSA-px8p-9vwx-vf98 unzipSync loop; only via @arethetypeswrong/core.
+  fflate: ">=0.8.3"
   # Pin patched axios (1.13.2 sat inside ~29 advisories); only pulled via @injectivelabs/* (^1.13.2).
   axios: "1.19.0"
   # Pin patched ws per major (DoS GHSA-96hv-2xvq-fx4p, mem-disclosure GHSA-58qx-3vcg-4xpx).
