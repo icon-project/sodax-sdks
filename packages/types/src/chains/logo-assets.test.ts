@@ -12,6 +12,8 @@ import { tokenLogoSlug } from './tokens.js';
  */
 
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+// A partially written file keeps a valid header, so the closing chunk is what proves it is whole.
+const PNG_IEND = Buffer.from([0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]);
 const SOURCE_HINT = 'Source the PNG from CoinGecko, see packages/assets/README.md';
 
 const assetDir = (kind: 'token' | 'chain'): URL => new URL(`../../../assets/${kind}/`, import.meta.url);
@@ -51,7 +53,11 @@ const malformedLogos = (kind: 'token' | 'chain'): string[] =>
   logoFileNames(kind)
     .filter(name => {
       const bytes = readFileSync(new URL(`${name}.png`, assetDir(kind)));
-      return bytes.length === 0 || !bytes.subarray(0, PNG_MAGIC.length).equals(PNG_MAGIC);
+      return (
+        bytes.length === 0 ||
+        !bytes.subarray(0, PNG_MAGIC.length).equals(PNG_MAGIC) ||
+        bytes.lastIndexOf(PNG_IEND) === -1
+      );
     })
     .map(name => `${kind}/${name}.png`)
     .sort();
@@ -71,7 +77,7 @@ describe('token logo assets', () => {
   });
 
   it('stores every token logo as a non-empty PNG', () => {
-    expect(malformedLogos('token'), 'File is empty or is not really a PNG').toEqual([]);
+    expect(malformedLogos('token'), 'File is empty, truncated, or is not really a PNG').toEqual([]);
   });
 });
 
@@ -90,6 +96,6 @@ describe('chain logo assets', () => {
   });
 
   it('stores every chain logo as a non-empty PNG', () => {
-    expect(malformedLogos('chain'), 'File is empty or is not really a PNG').toEqual([]);
+    expect(malformedLogos('chain'), 'File is empty, truncated, or is not really a PNG').toEqual([]);
   });
 });
