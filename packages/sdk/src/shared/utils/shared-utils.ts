@@ -7,7 +7,7 @@ import {
   isValidInjectiveAddress,
   isValidNearAccountId,
 } from '../guards.js';
-import { isValidBitcoinAddress } from '../entities/btc/btc-utils.js';
+import { canonicalizeBitcoinAddress, isValidBitcoinAddress } from '../entities/btc/btc-utils.js';
 import type { ConfigService } from '../config/ConfigService.js';
 import {
   type SpokeChainKey,
@@ -153,9 +153,9 @@ export function encodeAddress(spokeChainId: SpokeChainKey, address: string): Hex
   const chainType = getChainType(spokeChainId);
   switch (chainType) {
     case 'EVM':
-      // strict:false = format only (0x + 40 hex): a wrong-length recipient ABI-encodes cleanly,
-      // the hub burns the tokens, and the spoke reverts with no refund path.
-      invariant(isAddress(address, { strict: false }), `Invalid EVM address: ${address}`);
+      // Strict: a wrong-length recipient ABI-encodes cleanly, the hub burns the tokens, and the
+      // spoke reverts with no refund path — EIP-55 is what catches a mistyped one. Lowercase passes.
+      invariant(isAddress(address), `Invalid EVM address: ${address}`);
       return address as Hex;
     case 'ICON': {
       // Validate type + length before decoding: `Buffer.from(str, 'hex')` silently stops at the
@@ -176,7 +176,7 @@ export function encodeAddress(spokeChainId: SpokeChainKey, address: string): Hex
       return `0x${serializeCV(Cl.principal(address))}`;
     case 'BITCOIN':
       invariant(isValidBitcoinAddress(address), `Invalid Bitcoin address: ${address}`);
-      return toHex(Buffer.from(address, 'utf-8'));
+      return toHex(Buffer.from(canonicalizeBitcoinAddress(address), 'utf-8'));
     case 'NEAR':
       invariant(isValidNearAccountId(address), `Invalid NEAR account id: ${address}`);
       return toHex(Buffer.from(address, 'utf-8'));

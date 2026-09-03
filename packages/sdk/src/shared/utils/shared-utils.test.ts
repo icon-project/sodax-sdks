@@ -70,6 +70,8 @@ describe('encodeAddress destination validation (BRIDGE-M-2)', () => {
     ['missing 0x prefix', '1468d3529032106291433B7e9e3026dF1Ff78F31'],
     ['non-hex body', '0xZZ68d3529032106291433B7e9e3026dF1Ff78F31'],
     ['empty string', ''],
+    // The mistyped-recipient case: right length, right alphabet, one character off.
+    ['mixed case failing its EIP-55 checksum', '0x1468d3529032106291433B7e9e3026dF1Ff78F32'],
   ])('rejects a malformed EVM recipient (%s)', (_label, address) => {
     expect(() => encodeAddress(ChainKeys.BASE_MAINNET, address)).toThrow(/Invalid EVM address/);
   });
@@ -91,6 +93,22 @@ describe('encodeAddress destination validation (BRIDGE-M-2)', () => {
     ['empty string', ''],
   ])('rejects a malformed Bitcoin recipient (%s)', (_label, address) => {
     expect(() => encodeAddress(ChainKeys.BITCOIN_MAINNET, address)).toThrow(/Invalid Bitcoin address/);
+  });
+
+  // bech32 is case-insensitive (BIP-173), and these bytes derive the user's hub wallet — the two
+  // cases of one address must not encode differently. Base58Check is case-sensitive, so it stands.
+  it.each([
+    ['P2WPKH', 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4'],
+    ['P2TR', 'bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5jj0'],
+  ])('encodes an uppercase bech32 recipient to its lowercase bytes (%s)', (_label, address) => {
+    expect(encodeAddress(ChainKeys.BITCOIN_MAINNET, address.toUpperCase())).toBe(utf8Hex(address));
+  });
+
+  it.each([
+    ['P2PKH', '1BoatSLRHtKNngkdXEeobR76b53LETtpyT'],
+    ['P2SH', '3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy'],
+  ])('leaves a case-sensitive Base58Check recipient untouched (%s)', (_label, address) => {
+    expect(encodeAddress(ChainKeys.BITCOIN_MAINNET, address)).toBe(utf8Hex(address));
   });
 
   it.each([

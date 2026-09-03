@@ -110,6 +110,19 @@ export function isValidBitcoinAddress(address: string): boolean {
 }
 
 /**
+ * Canonical byte form of a validated Bitcoin address. bech32 is case-insensitive (BIP-173), so the
+ * two cases of one address would otherwise encode to different bytes; Base58Check is case-sensitive.
+ */
+export function canonicalizeBitcoinAddress(address: string): string {
+  try {
+    bitcoinjsAddress.fromBech32(address);
+    return address.toLowerCase();
+  } catch {
+    return address;
+  }
+}
+
+/**
  * Normalize a signed PSBT to base64 format.
  * Unisat/OKX wallets return hex, Xverse returns base64.
  * Bound Exchange API expects base64.
