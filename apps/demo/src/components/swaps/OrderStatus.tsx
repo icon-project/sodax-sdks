@@ -1,13 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useSwapsApiSubmitTxStatus } from '@sodax/dapp-kit';
+import { useSodaxContext, useSwapsApiSubmitTxStatus } from '@sodax/dapp-kit';
 import { formatUnits } from 'viem';
 import { ArrowRight, Check, Copy, ExternalLink, X } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { cn, getChainExplorerTxUrl, statusCodeToMessage } from '@/lib/utils';
-import { getChainIcon, getChainName, solverApiEndpointForEnv } from '@/constants';
+import { getChainIcon, getChainName } from '@/constants';
 import { sodaxScanSearchUrl } from '@/lib/sodaxScan';
 import { useSolverStatus } from '@/hooks/useSolverStatus';
-import { useAppStore } from '@/zustand/useAppStore';
 
 /** One side of a swap, for the "AMOUNT TOKEN (NETWORK)" summary. `chain` is a chain key. */
 export type OrderLeg = { amount: string; symbol: string; chain: string };
@@ -322,10 +321,8 @@ function SolverLiveCard({
   onDismiss?: () => void;
   onSettle: SettleFn;
 }) {
-  // Poll the env this order was created on (stored per-order). Orders from before this field
-  // existed fall back to the currently-selected env — matching the old global-config behavior.
-  const currentEnv = useAppStore(s => s.solverEnvironment);
-  const endpoint = order.statusEndpoint ?? solverApiEndpointForEnv(currentEnv);
+  const { sodax } = useSodaxContext();
+  const endpoint = order.statusEndpoint ?? sodax.config.solver.solverApiEndpoint;
   const { data: status } = useSolverStatus(order.dstTxHash, endpoint);
 
   const label = status ? statusCodeToMessage(status.status) : 'pending';
