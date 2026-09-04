@@ -89,6 +89,8 @@ export const HubVaultSymbols = [
   'sodaJITOSOL',
   'sodaUSDS',
   'sodaUSSD',
+  'ZEC',
+  'XRP',
 ] as const;
 
 export type HubVaultSymbol = (typeof HubVaultSymbols)[number];
@@ -354,6 +356,25 @@ export const SodaTokens = {
     chainKey: ChainKeys.SONIC_MAINNET,
     hubAsset: '0xb780e09576C2667ba9F5B80FbAb2e6b8A0a21e37',
     vault: '0xb780e09576C2667ba9F5B80FbAb2e6b8A0a21e37',
+  },
+  // ZEC and XRP hub vault tokens use the new no-`soda`-prefix naming convention.
+  ZEC: {
+    symbol: 'ZEC',
+    name: 'Zcash',
+    decimals: 18,
+    address: '0xf54339B1DF8D9CeBF69665FDF002310A4F2Fe9EE',
+    chainKey: ChainKeys.SONIC_MAINNET,
+    hubAsset: '0xf54339B1DF8D9CeBF69665FDF002310A4F2Fe9EE',
+    vault: '0xf54339B1DF8D9CeBF69665FDF002310A4F2Fe9EE',
+  },
+  XRP: {
+    symbol: 'XRP',
+    name: 'XRP',
+    decimals: 18,
+    address: '0xb89B3a6633fb06CAB86b7d54e2f6913C51a73952',
+    chainKey: ChainKeys.SONIC_MAINNET,
+    hubAsset: '0xb89B3a6633fb06CAB86b7d54e2f6913C51a73952',
+    vault: '0xb89B3a6633fb06CAB86b7d54e2f6913C51a73952',
   },
 } as const satisfies Record<HubVaultSymbol, XToken>;
 
@@ -2221,6 +2242,15 @@ export const nearSupportedTokens = {
     chainKey: ChainKeys.NEAR_MAINNET,
     hubAsset: '0x2eC38A4DdfB76E1aae04F392b55A28f0D659BcD4',
     vault: '0x',
+  },
+  ZEC: {
+    symbol: 'ZEC',
+    name: 'Zcash',
+    decimals: 8,
+    address: 'zec.omft.near',
+    chainKey: ChainKeys.NEAR_MAINNET,
+    hubAsset: '0xEd5d71eEd7cb6b62a449522538A6960eA242B8c3',
+    vault: SodaTokens.ZEC.address,
   },
 } as const satisfies Record<string, XToken>;
 
