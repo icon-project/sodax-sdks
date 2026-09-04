@@ -1056,17 +1056,32 @@ code,
   border-color: var(--cta-bg);
   color: var(--cta-fg);
   font-size: var(--text-body-regular);
+  transition:
+    color 150ms,
+    background-color 150ms,
+    border-color 150ms,
+    transform 150ms ease-out;
 }
 
 .btn-primary:hover:not(:disabled) {
   background: var(--cta-bg-hover);
   border-color: var(--cta-bg-hover);
   color: var(--cta-fg);
+  transform: scale(1.02);
 }
 
 .btn-primary:active:not(:disabled) {
   background: var(--cta-bg-active);
   border-color: var(--cta-bg-active);
+  transform: scale(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-primary,
+  .btn-primary:hover:not(:disabled) {
+    transition: none;
+    transform: none;
+  }
 }
 
 .btn-primary:focus-visible {
