@@ -91,6 +91,10 @@ overrides:
   protobufjs: "7.6.5"
   # Clears a Next.js transitive XSS advisory against postcss <8.5.10.
   postcss: "^8.5.10"
+  # Clears CVE-2026-63376 (__proto__ path desync) in toml <4.1.2. Reached via
+  # @stellar/stellar-sdk's stellartoml, which parses a TOML file fetched from a
+  # remote domain. Held on 4.x: 5.0.0 throws on integers outside the safe range.
+  toml: "^4.1.2"
   # Force every transitive `@tanstack/react-query` to the catalog version.
   # Without this, @mysten/dapp-kit's peer `^5.50.1` can resolve to 5.100.x
   # while demo / wagmi keep 5.87.4 — two React Query contexts in the same
