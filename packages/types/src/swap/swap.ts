@@ -155,6 +155,19 @@ export const swapSupportedTokens = {
     // spokeChainConfig[ChainKeys.ICON_MAINNET].supportedTokens.OMM, // NOTE: Not Implemented
   ] as const satisfies XToken[],
   [ChainKeys.STELLAR_MAINNET]: [
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.SPCX,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.NVDA,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.GME,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.MSTR,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.AAPL,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.TSLA,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.MU,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.SNDK,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.SPY,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.QQQ,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.SGOV,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.USO,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.SLV,
     spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.XLM,
     spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.bnUSD, // NOTE: Not Implemented
     spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.USDC,
@@ -263,6 +276,19 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.STACKS_MAINNET].supportedTokens.USDC,
   ] as const satisfies XToken[],
   [ChainKeys.HEDERA_MAINNET]: [
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.SPCX,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.NVDA,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.GME,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.MSTR,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.AAPL,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.TSLA,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.MU,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.SNDK,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.SPY,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.QQQ,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.SGOV,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.USO,
+    spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.SLV,
     spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.HBAR,
     spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.bnUSD,
     spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.USDC,
@@ -286,6 +312,22 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.bnUSD,
     spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.SODA,
     spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.USDG,
+    // Tokenized equities / ETFs — oracle-priced only. DJT, GLD and RDDT are
+    // excluded (no Chainlink feed). Listed in production so both the production
+    // and staging solver environments expose them (staging inherits production).
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.SPCX,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.NVDA,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.GME,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.MSTR,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.AAPL,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.TSLA,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.MU,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.SNDK,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.SPY,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.QQQ,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.SGOV,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.USO,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.SLV,
   ] as const satisfies XToken[],
 } as const satisfies Record<SpokeChainKey, readonly XToken[]>;
 
