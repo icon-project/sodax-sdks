@@ -12,9 +12,9 @@ This is the default value of `DEFAULT_RELAYER_API_ENDPOINT` (exported from `@sod
 
 ## Testnet
 
-URL: `https://testnet-xcall-relay.nw.iconblockchain.xyz`
-
-Pass this URL as the `relayerApiEndpoint` override in your `SodaxConfig` when targeting testnet.
+There is no testnet relayer endpoint for integrators. SODAX is mainnet-only: `ChainKeys` contains
+only `*_MAINNET` entries, and there are no testnet chain configs or RPC endpoints in the SDK. Build
+and test against mainnet with small amounts — see [Testing without a testnet](https://github.com/icon-project/sodax-sdks/blob/main/docs/developers/how-to/testnet.md).
 
 ---
 
@@ -26,7 +26,7 @@ Pass this URL as the `relayerApiEndpoint` override in your `SodaxConfig` when ta
 - `sodax.bridge.bridge(...)` — similarly manages the full relay lifecycle
 - `sodax.moneyMarket.*`, `sodax.staking.*`, and related methods do the same
 
-All of these methods return `Promise<Result<T>>`. On relay failure the `Result` carries an error whose `message` is `'RELAY_TIMEOUT'` or `'SUBMIT_TX_FAILED'` (CODE form — see [error convention](#error-message-convention)).
+All of these methods return `Promise<Result<T>>`. On relay failure the `Result` carries an error whose `message` is `'RELAY_TIMEOUT'` or `'SUBMIT_TX_FAILED'` (CODE form — see the error handling conventions note at the top of this page).
 
 ---
 

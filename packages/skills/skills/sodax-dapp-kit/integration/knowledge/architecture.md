@@ -218,26 +218,30 @@ Nothing about the hook contract changes and there is no flag to set. What matter
 - If the second signature is rejected after the reset landed, the allowance is now zero, so the next
   attempt is a single transaction — retrying is always safe.
 
-On the unsigned (backend-API) paths, prefer **`useSwapsApiApproveAndBroadcast`** — or
-**`useBridgeApiApproveAndBroadcast`** for a bridge: each asks its API for the transactions, then
-signs, broadcasts, and waits for each, resolving with `{ approveTxHash, resetTxHash? }` only once the
-final approval has landed. A transaction that mines but reverts rejects the mutation naming that
-step, so the approve is never sent over a reset that did not take. Each also invalidates its own
-allowance query (`['swapsApi','allowance']` / `['bridgeApi','allowance']`), because confirmation now
-happens inside the hook. Pick the one matching the action you are about to take — swaps and bridge
-approve different spenders on the hub, so an approval built by one does not satisfy the other.
+On the unsigned (backend-API) paths, prefer **`useSwapsApiApproveAndBroadcast`** —
+**`useBridgeApiApproveAndBroadcast`** for a bridge, **`useLeverageYieldApiApproveAndBroadcast`** for a
+leverage-yield deposit: each asks its API for the transactions, then signs, broadcasts, and waits for
+each, resolving with `{ approveTxHash, resetTxHash? }` only once the final approval has landed. A
+transaction that mines but reverts rejects the mutation naming that step, so the approve is never
+sent over a reset that did not take. Each also invalidates its own allowance query
+(`['swapsApi','allowance']` / `['bridgeApi','allowance']` / `['leverageYieldApi','allowance']`),
+because confirmation now happens inside the hook. Pick the one matching the action you are about to
+take — each API builds its approval for its own hub spender, so an approval built by one does not
+satisfy the other. Only a leverage-yield **deposit** needs one; a withdraw spends `lsoda*` from the
+hub wallet and never approves.
 
-Both accept an optional **`onProgress`** in their mutation vars. It reports each transaction as
+All three accept an optional **`onProgress`** in their mutation vars. It reports each transaction as
 `{ step, phase, index, total, hash?, error? }` — `step` is `'allowance-reset'` or `'approve'`, `phase`
 walks `signing → broadcast → confirmed` (or `failed`), and `index`/`total` give "1 of 2" without the
 caller tracking anything. Advisory: the listener is never awaited, one that throws is ignored rather
 than aborting a broadcast, and the mutation's own result stays the source of truth. It lives in the
 vars rather than the hook options so it is never a stale closure.
 
-`useSwapsApiApprove` / `useBridgeApiApprove` still exist and return the API's `{ tx, resetTx? }`
-verbatim — use them only when you need to own signing. If you do, broadcast `resetTx` **first and
-wait for it to succeed**; the approve is not a valid state transition until the reset has landed, so
-sending both together spends the user's gas on a certain revert. Waiting is not enough on its own —
+`useSwapsApiApprove` / `useBridgeApiApprove` / `useLeverageYieldApiApprove` still exist and return
+the API's `{ tx, resetTx? }` verbatim — use them only when you need to own signing. If you do,
+broadcast `resetTx` **first and wait for it to succeed**; the approve is not a valid state
+transition until the reset has landed, so sending both together spends the user's gas on a certain
+revert. Waiting is not enough on its own —
 check the receipt's status, because a mined-and-reverted reset leaves the allowance exactly where it
 was.
 

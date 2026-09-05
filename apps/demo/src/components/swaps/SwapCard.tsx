@@ -1,5 +1,5 @@
 import { SelectChain } from '@/components/swaps/SelectChain';
-import { SelectToken } from '@/components/swaps/SelectToken';
+import { SelectToken } from '@/components/shared/SelectToken';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -52,7 +52,6 @@ import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
 import { loadLastSelection, saveLastSelection } from '@/lib/lastSelection';
 import { appendOrder } from '@/lib/orderHistory';
 import { buildOrderSummary } from '@/components/swaps/OrderStatus';
-import { solverApiEndpointForEnv } from '@/constants';
 import { HOOK_LABELS, resolveAvailableHookKind, toHookRequest } from '@/lib/deliveryHooks';
 
 export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAction<Order[]>) => void }) {
@@ -334,7 +333,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
           dstTxHash: intentDeliveryInfo.dstTxHash as string,
           srcTxHash: intentDeliveryInfo.srcTxHash,
           srcChainKey: intentDeliveryInfo.srcChainKey,
-          statusEndpoint: solverApiEndpointForEnv(solverEnvironment),
+          statusEndpoint: sodax.config.solver.solverApiEndpoint,
           createdAt: Date.now(),
           summary: buildOrderSummary(src, dst, sourceAmount, quote?.quoted_amount),
         }),
@@ -398,7 +397,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   return (
     <Card className="w-full max-w-lg mx-auto">
       <CardHeader>
-        <CardTitle className="text-2xl font-bold text-center">Cross-Chain Swap</CardTitle>
+        <CardTitle className="text-2xl font-bold text-center">Cross-Chain Swap (SDK)</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">

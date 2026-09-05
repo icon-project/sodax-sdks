@@ -14,7 +14,7 @@ Raw HTTP for intent-based swaps — use from any language when you do not want (
 | **SDK adapter** | `sodax.api.swaps` — same endpoints, wraps the standalone client; returns `Result<T>` and **never throws** |
 | **SDK orchestrator** | `sodax.swaps` — end-to-end create → relay → settle ([Swaps module](/developers/packages/foundation/sdk/functional-modules/swaps)) |
 
-> The legacy path `/v1/bes/swaps` is retired (`route_not_found`). Always use `/v1/swaps`.
+> The legacy path `/v1/bes/swaps` is retired and answers `404`. Always use `/v1/swaps`.
 
 ## Base URL
 
@@ -24,7 +24,7 @@ https://api.sodax.com/v1/swaps
 
 Canary: `https://canary-api.sodax.com/v1/swaps`.
 
-All amounts on the wire are **decimal strings**. Unauthenticated; write endpoints are **rate-limited** (~10 requests/min/IP for `submit-tx`).
+All amounts on the wire are **decimal strings**. Unauthenticated; write endpoints such as `submit-tx` are **rate-limited** — the exact limit is not published, so treat `429` as the signal.
 
 ---
 
@@ -99,7 +99,7 @@ If both `amount` and `percentage` are present, **`amount` wins**. There is no gl
 
 ---
 
-## Bot flow: create → submit-tx → poll
+## Bot flow: create, submit-tx, poll
 
 Same for same-chain and cross-chain swaps.
 
@@ -164,7 +164,7 @@ Content-Type: application/json
 
 - **Idempotent** on `(txHash, srcChainKey)` — safe to retry.  
 - Response `data.status` is `"inserted"` or `"duplicate"`.  
-- Rate limit ~**10/min/IP** → back off on `429`.
+- Rate-limited → back off on `429`. Implement your own backoff: `@sodax/swaps-api` replays a `429` immediately, without one.
 
 ### 4. Poll status
 
@@ -192,7 +192,7 @@ On success, treat these `result` fields as the contract for pollers:
 | `intent_hash` | Solver intent hash (after post-execution), when present |
 | `packetData` | Cross-chain relay packet, when present |
 
-Optional wire field: the backend **may** also return `result.fillTxHash` (solver destination-chain fill) when the solver reported a fill. It can be **absent** even on `solved` if the fill was confirmed via the on-chain journal instead. The typed TypeScript contract (`SubmitTxStatusResultV2` / `@sodax/swaps-api`) **does not include** `fillTxHash` — that client only types `dstIntentTxHash`, `packetData`, and `intent_hash`. For a typed fill hash, use `POST /intents/status` (numeric status `3` SOLVED → top-level `fillTxHash`) or the [on-chain journal](#5-optional-on-chain-journal).
+Optional wire field: the backend **may** also return `result.fillTxHash` (solver destination-chain fill) when the solver reported a fill. It can be **absent** even on `solved` if the fill was confirmed via the on-chain journal instead, and the typed TypeScript contract (`SubmitTxStatusResultV2` / `@sodax/swaps-api`) types it as optional for that reason. For a fill hash that is always set on a solved intent, use `POST /intents/status` (numeric status `3` SOLVED → top-level `fillTxHash`) or the [on-chain journal](#5-optional-on-chain-journal). The row also carries an `operation` discriminator — `swap` here; `leverage_deposit` / `leverage_withdraw` for rows queued through the Leverage Yield API.
 
 On failure, inspect `failedAtStep`, `failureReason`, `userMessage`, `intentCancelled`, `abandonedAt`.
 

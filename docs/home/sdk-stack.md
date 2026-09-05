@@ -24,6 +24,7 @@ Functional modules:
 
 * **Swaps** — quote and execute cross-network intents. SODAX routes and settles; solvers on the marketplace fill.
 * **Lend / Borrow** — interact directly with the SODAX money market.
+* **Leverage Yield** — leveraged yield vaults on the Sonic hub.
 * **Bridge** — low-level primitives for asset transfer.
 * **Staking** — manage SODA staking and governance positions.
 * **Migration** — utilities for migrating ICX to SODA.

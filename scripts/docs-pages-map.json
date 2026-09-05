@@ -7,6 +7,7 @@
     "packages/sdk/docs/SPONSORING.md",
     "packages/sdk/docs/SWAPS_API.md",
     "packages/sdk/docs/BRIDGE_API.md",
+    "packages/sdk/docs/LEVERAGE_YIELD_API.md",
     "packages/sdk/docs/LOGGING.md",
     "packages/sdk/docs/ORACLE.md",
     "packages/sdk/docs/ARCHITECTURE_REFACTOR_SUMMARY.md"
@@ -87,6 +88,7 @@
     {
       "src": "packages/sdk/docs/HOW_TO_MAKE_A_SWAP.md",
       "dest": "developers/how-to/how_to_make_a_swap.md",
+      "title": "Make a swap (SDK)",
       "icon": "list-check"
     },
     {

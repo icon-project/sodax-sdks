@@ -57,6 +57,7 @@ vi.mock('../erc-20/Erc20Service.js', async () => {
 });
 
 import { Sodax } from '../../entities/Sodax.js';
+import { getEvmViemChain } from '../../utils/constant-utils.js';
 import { EvmSpokeService } from './EvmSpokeService.js';
 import type { DepositParams, SendMessageParams } from '../../types/spoke-types.js';
 
@@ -372,12 +373,16 @@ describe.each(TEST_CHAINS)('EvmSpokeService — %s', chainKey => {
       });
 
       expect(result).toBe(TX_HASH);
-      expect(mockEvmProvider.sendTransaction).toHaveBeenCalledWith({
-        from: SRC_ADDR,
-        to: ASSET_MANAGER,
-        value: 0n,
-        data: expectedCalldata(CHAIN_TOKEN, 1_000n),
-      });
+      expect(mockEvmProvider.sendTransaction).toHaveBeenCalledWith(
+        {
+          from: SRC_ADDR,
+          to: ASSET_MANAGER,
+          value: 0n,
+          data: expectedCalldata(CHAIN_TOKEN, 1_000n),
+        },
+        // The tx must be chain-bound to the spoke it was built for.
+        { expectedChainId: getEvmViemChain(chainKey).id },
+      );
     });
 
     it("native raw=true → msg.value uses this chain's native scaling when token matches nativeToken", async () => {
@@ -416,6 +421,7 @@ describe.each(TEST_CHAINS)('EvmSpokeService — %s', chainKey => {
       expect(result).toBe(TX_HASH);
       expect(mockEvmProvider.sendTransaction).toHaveBeenCalledWith(
         expect.objectContaining({ to: ASSET_MANAGER, value: scaleNativeMsgValue(chainKey, 1_000n) }),
+        { expectedChainId: getEvmViemChain(chainKey).id },
       );
     });
   });
@@ -464,12 +470,15 @@ describe.each(TEST_CHAINS)('EvmSpokeService — %s', chainKey => {
       });
 
       expect(result).toBe(TX_HASH);
-      expect(mockEvmProvider.sendTransaction).toHaveBeenCalledWith({
-        from: SRC_ADDR,
-        to: CONNECTION,
-        value: 0n,
-        data: expectedCalldata(DST_ADDR, '0xpayload' as Hex),
-      });
+      expect(mockEvmProvider.sendTransaction).toHaveBeenCalledWith(
+        {
+          from: SRC_ADDR,
+          to: CONNECTION,
+          value: 0n,
+          data: expectedCalldata(DST_ADDR, '0xpayload' as Hex),
+        },
+        { expectedChainId: getEvmViemChain(chainKey).id },
+      );
     });
   });
 

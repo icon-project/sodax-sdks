@@ -40,10 +40,12 @@ jobs:
           fi
           files=$(gh api --paginate \
             "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
-            --jq '.[].filename')
+            --jq '.[] | .filename, (.previous_filename // empty)')
           # Every branch below defaults to running the full build: skipping it is the answer
-          # that can hide a regression, so only an explicitly docs-only diff earns it. grep is
-          # read to the end rather than -q, which can SIGPIPE under pipefail on a long list.
+          # that can hide a regression, so only an explicitly docs-only diff earns it. A rename
+          # reports only its destination as `filename`, so `previous_filename` is listed too:
+          # source moved into docs/ still deletes source. grep is read to the end rather than
+          # -q, which can SIGPIPE under pipefail on a long list.
           if [ -z "$files" ]; then
             echo 'code=true' >> "$GITHUB_OUTPUT"
             exit 0
@@ -73,14 +75,14 @@ jobs:
 
     steps:
       - name: Check out code
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           version: 10.32.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: '24.x'
 
@@ -126,16 +128,16 @@ jobs:
 
     steps:
       - name: Check out code
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 2
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           version: 10.32.1
 
       - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
@@ -153,7 +155,7 @@ jobs:
       # does not hash: runner OS, Node major, and the turbo release whose on-disk cache format
       # wrote the entries. Bump `v1` to force a cold cache.
       - name: Restore Turborepo cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: .turbo/cache
           key: turbo-v1-${{ runner.os }}-node${{ matrix.node-version }}-turbo${{ steps.turbo.outputs.version }}-${{ github.sha }}-${{ github.run_attempt }}
@@ -223,7 +225,7 @@ jobs:
       # would skip the live mainnet run.
       - name: Save Turborepo cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: .turbo/cache
           key: turbo-v1-${{ runner.os }}-node${{ matrix.node-version }}-turbo${{ steps.turbo.outputs.version }}-${{ github.sha }}-${{ github.run_attempt }}
@@ -245,16 +247,16 @@ jobs:
 
     steps:
       - name: Check out code
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 2
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           version: 10.32.1
 
       - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'pnpm'

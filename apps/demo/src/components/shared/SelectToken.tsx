@@ -3,20 +3,20 @@
 import React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import type { XToken } from '@sodax/dapp-kit';
 import { useRadixSearchInput } from '@/hooks/useRadixSearchInput';
 import { TokenIcon } from '@/components/shared/TokenIcon';
 
-export function SelectToken({
+/** Searchable token dropdown; works for any token shape carrying symbol + address (XToken, SwapTokenV2). */
+export function SelectToken<T extends { symbol: string; address: string }>({
   tokens,
   value,
   onSelect,
   className,
 }: {
-  tokens: readonly XToken[];
+  tokens: readonly T[];
   /** Selected token symbol. */
   value?: string;
-  onSelect: (token: XToken) => void;
+  onSelect: (token: T) => void;
   className?: string;
 }) {
   const { search, inputProps, handleOpenChange } = useRadixSearchInput();

@@ -5,7 +5,7 @@ icon: comment-question
 
 #### 1. Which chains does SODAX support?
 
-SODAX runs on a hub-and-spoke network of **mainnet** chains. Sonic is the hub; spokes span EVM chains (Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia, Hedera) and non-EVM chains (Solana, Sui, Stellar, ICON, Injective, NEAR, Stacks, Bitcoin). Reference any chain via `ChainKeys.*`, which — together with the backend config — is the source of truth. The legacy `*_CHAIN_ID` constants are deprecated.
+SODAX runs on a hub-and-spoke network of **mainnet** chains. Sonic is the hub; spokes span EVM chains (<span data-sodax-config="chain-names" data-type="EVM" data-exclude="sonic">Arbitrum, Avalanche, Base, BNB Chain, Ethereum, Hedera, Hyper, Kaia, LightLink, Optimism, Polygon, Redbelly, Robinhood Chain</span>) and non-EVM chains (<span data-sodax-config="chain-names" data-type="non-EVM">Bitcoin, ICON, Injective, Near, Solana, Stacks, Stellar, SUI</span>) — both lists read live from the backend config API. Reference any chain via `ChainKeys.*`, which — together with the backend config — is the source of truth. The legacy `*_CHAIN_ID` constants were **removed in v2**; see [Chain ID migration](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/CHAIN_ID_MIGRATION.md) for the mapping.
 
 Full list with relay IDs: [Relayer API endpoints](/developers/deployments/relayer-api-endpoints).
 
@@ -57,13 +57,13 @@ Per-module code tables: [Swaps](/developers/packages/foundation/sdk/functional-m
 
 The spoke transaction landed but the hub packet has not arrived within the timeout window. The relay may still complete. Persist the spoke tx hash and poll the relayer API. Do not re-submit from the user side.
 
-Error semantics: [Make a Swap](/developers/how-to/how_to_make_a_swap), [Relayer API endpoints](/developers/deployments/relayer-api-endpoints).
+Error semantics: [Make a swap (SDK)](/developers/how-to/how_to_make_a_swap), [Relayer API endpoints](/developers/deployments/relayer-api-endpoints).
 
 #### 9. What does `TX_SUBMIT_FAILED` mean?
 
 The critical case. The spoke tx landed but the relay submission itself failed. Funds may be in flight. Persist the user's input plus spoke tx hash and retry submission against the relay API. Do not retry the user-facing transaction.
 
-Full code reference: [Make a Swap](/developers/how-to/how_to_make_a_swap).
+Full code reference: [Make a swap (SDK)](/developers/how-to/how_to_make_a_swap).
 
 ### Swaps and intents
 
@@ -81,7 +81,7 @@ Full method list: [Swaps](/developers/packages/foundation/sdk/functional-modules
 
 Call `sodax.swaps.getQuote(payload)` with `token_src`, `token_dst`, source and destination `ChainKeys`, an amount in the token's smallest unit, and `quote_type: 'exact_input'`. Use `quoted_amount` from the response to set `minOutputAmount` on the intent.
 
-Walkthrough with code: [Make a Swap](/developers/how-to/how_to_make_a_swap).
+Walkthrough with code: [Make a swap (SDK)](/developers/how-to/how_to_make_a_swap).
 
 #### 12. Can I cancel an intent?
 
@@ -133,7 +133,7 @@ See [Staking](/developers/packages/foundation/sdk/functional-modules/staking).
 
 #### 18. How do partner fees work and how do I claim them?
 
-Set `swaps.partnerFee`, `moneyMarket.partnerFee` and `bridge.partnerFee` independently on `SodaxConfig`. `getQuote` deducts the swap partner fee from the input amount before forwarding to the solver, so no fee field appears in the request payload. Claim accrued fees via `sodax.partners.feeClaim*` methods, which return `Result<T, PartnerError>`.
+Set a global default with the top-level `fee`, then override it per feature with `swaps.partnerFee`, `moneyMarket.partnerFee`, `bridge.partnerFee` and `leverageYield.partnerFee` on `SodaxConfig` — vault flows read the `leverageYield` slot, not `swaps`. `getQuote` deducts the swap partner fee from the input amount before forwarding to the solver, so no fee field appears in the request payload. Claim accrued fees via `sodax.partners.feeClaim*` methods, which return `Result<T, PartnerError>`.
 
 Setup and claim flows: [Monetize SDK](/developers/how-to/monetize_sdk).
 
@@ -145,7 +145,7 @@ Full mapping: [Relayer API endpoints](/developers/deployments/relayer-api-endpoi
 
 #### 20. How do I wire SODAX into my AI coding agent (Claude Code, Cursor, Codex)?
 
-From your project root run `npx skills@latest add icon-project/sodax-sdks/packages/skills`. The CLI detects your tool (Claude Code, Cursor, Codex, Copilot) and installs `AGENTS.md` plus per-feature `SKILL.md` files into the conventional location. Point your agent rules at the installed `AGENTS.md`, not the GitHub main branch, so version drift does not corrupt the routing.
+From your project root run `npx skills@latest add icon-project/sodax-sdks/packages/skills`. The CLI detects your tool (Claude Code, Cursor, Codex, Copilot) and installs five skill directories, each with its own `SKILL.md`, into the conventional discovery path (e.g. `.claude/skills/sodax-<pkg>/`). The CLI does **not** copy the package-level `AGENTS.md` — agents auto-discover the skills from `SKILL.md` frontmatter, so there is nothing to point your agent rules at. If you install via npm or a `file:` path instead, `node_modules/@sodax/skills/AGENTS.md` is the router.
 
 See [AI Integration](/ai-integration-guide).
 
@@ -157,6 +157,6 @@ See [Hub Wallet Abstraction](/developers/technical-overview/hub-wallet-abstracti
 
 #### 22. Can my AI agent query SODAX docs directly instead of web-searching?
 
-Yes, two ways. This documentation site hosts an auto-generated MCP server at `docs.sodax.com/mcp` that exposes a search tool over these pages — add it to your agent's MCP config, or use the "Add to \[agent]" option in the contextual menu on any page. For deeper, code-aware assistance beyond doc search, SODAX also runs a dedicated MCP server at [builders.sodax.com](https://builders.sodax.com/).
+Yes, two ways. This documentation site hosts an auto-generated MCP server at `docs.sodax.com/mcp` that exposes a search tool over these pages — add it to your agent's MCP config, or use the "Add to \[agent]" option in the contextual menu on any page. For more than doc search, add the [Builders MCP](/builders-mcp) (`https://builders.sodax.com/mcp`): 40 tools giving the agent live chains, tokens, quotes, money market rates, intent lookups **and** these docs, over one endpoint.
 
-See [AI Integration](/ai-integration-guide).
+See [Builders MCP](/builders-mcp) and [AI Integration](/ai-integration-guide).

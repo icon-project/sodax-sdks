@@ -12,6 +12,7 @@ export { isFillEvent, isOracleCandleInterval, type FillEvent } from './guards.js
 // membership-test it (or call `isOracleCandleInterval`) before passing it to `getOracleCandles`.
 export { ORACLE_CANDLE_INTERVALS } from './backendApiSchemas.js';
 export * from './SwapsApiService.js';
+export * from './LeverageYieldApiService.js';
 export * from './SponsoringApiService.js';
 export * from './BridgeApiService.js';
 

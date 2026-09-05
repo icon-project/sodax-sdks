@@ -1,5 +1,5 @@
 ---
-title: "How to Make a Swap"
+title: "Make a swap (SDK)"
 icon: list-check
 generatedFrom: packages/sdk/docs/HOW_TO_MAKE_A_SWAP.md
 ---

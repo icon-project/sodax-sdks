@@ -60,7 +60,6 @@ import BigNumber from 'bignumber.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatUnits, parseUnits } from 'viem';
 import { SolverEnv, useAppStore } from '@/zustand/useAppStore';
-import { solverApiEndpointForEnv } from '@/constants';
 
 const SONIC = ChainKeys.SONIC_MAINNET satisfies SpokeChainKey;
 const DEFAULT_SLIPPAGE = '0.5'; // %
@@ -457,7 +456,7 @@ export default function LeverageYieldPage() {
             dstTxHash: intentDeliveryInfo.dstTxHash as string,
             srcTxHash: intentDeliveryInfo.srcTxHash,
             srcChainKey: intentDeliveryInfo.srcChainKey,
-            statusEndpoint: solverApiEndpointForEnv(solverEnvironment),
+            statusEndpoint: sodax.config.solver.solverApiEndpoint,
             createdAt: Date.now(),
             summary,
           }),
@@ -556,7 +555,7 @@ export default function LeverageYieldPage() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-start min-h-screen p-4 gap-4">
+    <div className="flex flex-col items-center justify-start min-h-screen p-4 pt-8 pb-12 gap-4">
       {/* Swap history — fixed left sidebar on xl, in-flow below on smaller screens, same as /solver. */}
       <OrderStatusPanel
         orders={orders}

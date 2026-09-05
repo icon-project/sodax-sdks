@@ -38,6 +38,7 @@ import {
   type ApprovalProgress,
   type IBitcoinWalletProvider,
   type IStellarWalletProvider,
+  type RequestOverrideConfig,
   type SpokeChainKey,
   type StellarChainKey,
   type XToken,
@@ -51,11 +52,12 @@ import {
 } from '@sodax/wallet-sdk-react';
 import { ArrowDownUp, ArrowLeftRight, Loader2 } from 'lucide-react';
 import { formatUnits, parseUnits } from 'viem';
+import { PartnerFeeFields, usePartnerFeeDraft } from '@/components/shared/PartnerFeeFields';
 import { useAppStore } from '@/zustand/useAppStore';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
 import { formatMutationFailureMessage } from '@/lib/utils';
 import type { BridgeApiOrder } from '@/components/bridge-api/OrderStatus';
-import { BRIDGE_API_CONFIG } from '@/components/bridge-api/lib/config';
+import { BRIDGE_API_MAX_PARTNER_FEE_BPS, DEFAULT_BRIDGE_API_BASE_URL, envBridgeApiBaseUrl } from '@/lib/sodaxSettings';
 import { isSignableBridgeApiChain, signAndBroadcastBridgeApiTx } from '@/components/bridge-api/lib/signAndBroadcast';
 
 /** Short button label for the step the wallet is on, or `null` once that step has landed. */
@@ -77,7 +79,9 @@ function approvalStepLabel({ step, phase, index, total }: ApprovalProgress): str
  */
 export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateAction<BridgeApiOrder[]>) => void }) {
   const { sodax } = useSodaxContext();
-  const { openWalletModal } = useAppStore();
+  const { openWalletModal, sodaxSettings } = useAppStore();
+  const bridgeApiBaseURL = sodaxSettings.bridgeApiBaseUrl ?? envBridgeApiBaseUrl ?? DEFAULT_BRIDGE_API_BASE_URL;
+  const bridgeApiConfig = useMemo((): RequestOverrideConfig => ({ baseURL: bridgeApiBaseURL }), [bridgeApiBaseURL]);
 
   const supportedTokensPerChain = useMemo(() => sodax.config.getSupportedTokensPerChain(), [sodax]);
 
@@ -99,8 +103,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
   const [isFromBtcReady, setIsFromBtcReady] = useState(false);
   const [isToBtcReady, setIsToBtcReady] = useState(false);
   // Optional per-request partner fee (demo): a receiver address + fee percent (0.3 = 0.3%, max 1%).
-  const [feeAddress, setFeeAddress] = useState('');
-  const [feePct, setFeePct] = useState('');
+  const feeDraft = usePartnerFeeDraft({ maxBps: BRIDGE_API_MAX_PARTNER_FEE_BPS });
 
   const fromAccount = useXAccount({ xChainId: fromChainKey });
   const toAccount = useXAccount({ xChainId: toChainKey });
@@ -156,15 +159,8 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
       : toAccount.address;
   }, [toChainKey, toAccount.address]);
 
-  // Optional per-request partnerFee — routes a % of the input to `feeAddress`. Omit to use the backend default.
-  const partnerFee = useMemo(() => {
-    // Input is a PERCENT (e.g. 0.3 = 0.3%); convert to basis points (backend caps at 100 bps = 1%).
-    const pct = Number(feePct);
-    if (!feeAddress || !Number.isFinite(pct) || pct <= 0) return undefined;
-    const bps = Math.round(pct * 100);
-    if (bps <= 0 || bps > 100) return undefined;
-    return { address: feeAddress, percentage: bps };
-  }, [feeAddress, feePct]);
+  // Optional per-request partnerFee, seeded from Sodax Settings. Omit to use the backend default.
+  const partnerFee = feeDraft.partnerFee;
 
   // The wire DTO sent to every Bridge API call (swaps naming; built from the client-side selection).
   const bridgeBody = useMemo((): CreateBridgeIntentParamsV2 | undefined => {
@@ -208,7 +204,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
   const { data: feeQuote } = useBridgeApiFee({
     params: {
       body: parsedAmount !== undefined ? { inputAmount: parsedAmount.toString(), partnerFee } : undefined,
-      apiConfig: BRIDGE_API_CONFIG,
+      apiConfig: bridgeApiConfig,
     },
   });
 
@@ -225,7 +221,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
     // are undefined until the dialog builds them). The hook enables itself on `!!body`, so passing an
     // undefined body while the dialog is closed stops `checkAllowance` firing on every amount keystroke;
     // the amount is fixed once the dialog is open, so it runs once.
-    params: { body: dialogOpen ? bridgeBody : undefined, apiConfig: BRIDGE_API_CONFIG },
+    params: { body: dialogOpen ? bridgeBody : undefined, apiConfig: bridgeApiConfig },
   });
   const hasAllowance = allowance?.valid === true;
 
@@ -302,7 +298,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
       const result = await approve({
         body: bridgeBody,
         walletProvider: sourceWalletProvider,
-        apiConfig: BRIDGE_API_CONFIG,
+        apiConfig: bridgeApiConfig,
         onProgress: setApprovalProgress,
       });
       if (!result.ok) {
@@ -323,7 +319,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
     setIsBridging(true);
     try {
       // 1. The API builds the unsigned spoke-deposit tx + relay envelope.
-      const created = await createBridgeIntent({ body: bridgeBody, apiConfig: BRIDGE_API_CONFIG });
+      const created = await createBridgeIntent({ body: bridgeBody, apiConfig: bridgeApiConfig });
       if (!created.ok) {
         setBridgeError(formatMutationFailureMessage(created.error, 'Create bridge intent failed'));
         return;
@@ -363,16 +359,13 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
         walletAddress: fromAccount.address,
         relayData,
       };
-      const submitted = await submitTx({ request, apiConfig: BRIDGE_API_CONFIG });
+      const submitted = await submitTx({ request, apiConfig: bridgeApiConfig });
       if (!submitted.ok) {
         setBridgeError(formatMutationFailureMessage(submitted.error, 'Submit tx failed'));
         return;
       }
 
-      setOrders(prev => [
-        ...prev,
-        { txHash: spokeTxHash, srcChainKey: fromChainKey, apiBaseURL: BRIDGE_API_CONFIG.baseURL },
-      ]);
+      setOrders(prev => [...prev, { txHash: spokeTxHash, srcChainKey: fromChainKey, apiBaseURL: bridgeApiBaseURL }]);
       setDialogOpen(false);
     } catch (error) {
       setBridgeError(formatMutationFailureMessage(error, 'Bridge signing failed'));
@@ -403,6 +396,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
   const isBridgeDisabled =
     isBridging ||
     !bridgeBody ||
+    !!feeDraft.error ||
     (fromChainType === 'EVM' && !hasAllowance) ||
     (fromChainKey === ChainKeys.BITCOIN_MAINNET && !isFromBtcReady) ||
     (toChainKey === ChainKeys.BITCOIN_MAINNET && !isToBtcReady) ||
@@ -457,23 +451,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
           </div>
 
           <div className="grow">
-            <Label>Partner fee (optional)</Label>
-            <div className="flex space-x-2">
-              <Input
-                type="text"
-                placeholder="Fee receiver address (0x…)"
-                value={feeAddress}
-                onChange={e => setFeeAddress(e.target.value)}
-              />
-              <Input
-                type="number"
-                step="0.1"
-                className="w-[130px]"
-                placeholder="% (max 1)"
-                value={feePct}
-                onChange={e => setFeePct(e.target.value)}
-              />
-            </div>
+            <PartnerFeeFields draft={feeDraft} unsetBehavior="use the backend's configured fee" />
             {feeQuote && fromToken ? (
               <p className="mt-1 text-xs text-muted-foreground">
                 Fee: {formatUnits(BigInt(feeQuote.fee), fromToken.decimals)} {fromToken.symbol}
@@ -595,7 +573,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
           <Button
             className="w-full"
             onClick={handleOpenDialog}
-            disabled={!bridgeBody || !isBridgeable || !isSourceSignable}
+            disabled={!bridgeBody || !isBridgeable || !isSourceSignable || !!feeDraft.error}
           >
             Bridge
           </Button>
