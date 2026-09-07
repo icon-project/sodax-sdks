@@ -244,10 +244,6 @@
   },
   "redirects": [
     {
-      "source": "/skill.md",
-      "destination": "https://www.sodax.com/skill.md"
-    },
-    {
       "source": "/resources/changelog",
       "destination": "/resources/product-updates"
     },
