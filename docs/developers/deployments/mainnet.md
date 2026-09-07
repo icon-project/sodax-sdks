@@ -106,6 +106,8 @@ Intent Canceller: [0x7Ec046CEB0C01A2Ef16C77d2e6bB56E3AF3464cf](https://sonicscan
 | USO | United States Oil Fund • Robinhood Token | [0x8DaBbADcecfc1a0B91fc68c72301090bc220D2bc](https://sonicscan.org/address/0x8DaBbADcecfc1a0B91fc68c72301090bc220D2bc) | [0x7bbd99721639c5862B16E109eE9Ae1f14C50B5f8](https://sonicscan.org/address/0x7bbd99721639c5862B16E109eE9Ae1f14C50B5f8) | [0xa9f388938Eb8956BDe9fE047885a175e38Fa90C1](https://sonicscan.org/address/0xa9f388938Eb8956BDe9fE047885a175e38Fa90C1) |
 | SLV | iShares Silver Trust • Robinhood Token | [0x690B92c27ac80015E57DB8cc02A81255814f49A2](https://sonicscan.org/address/0x690B92c27ac80015E57DB8cc02A81255814f49A2) | [0x914672C5336f5E00126e431368005f7C22aCe952](https://sonicscan.org/address/0x914672C5336f5E00126e431368005f7C22aCe952) | [0x7eaF987431ce072feBEB2124fEB4d1cEf8Cf4e2e](https://sonicscan.org/address/0x7eaF987431ce072feBEB2124fEB4d1cEf8Cf4e2e) |
 
+> **Trading support (for now).** Each equity is paired only against **USDG** on Robinhood Chain, so every route hops through USDG. The best-supported swaps today are **a native or stablecoin asset ↔ an equity** — e.g. `S`, `USDC`, `USDT`, or `ETH` into a stock, and a stock back out to `USDC`/`S`. **Stock-to-stock swaps may be limited:** they route `stock → USDG → stock`, only quote above a small minimum size, and spoke-to-spoke pairs (e.g. a Hedera stock → another Hedera stock) can exceed the router's multi-hop depth and return "no path". If a direct stock-to-stock quote fails, route through a stable or native asset instead.
+
 ## Spokes
 ### Sonic
 #### Assets
