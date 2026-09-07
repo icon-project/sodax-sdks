@@ -6,7 +6,6 @@ import {
   type NearSpokeChainConfig,
   Sodax,
   type SodaxConfig,
-  type SolverConfigParams,
   SpokeService,
   getHubChainConfig,
   getMoneyMarketConfig,
@@ -27,7 +26,7 @@ import { SONIC_MAINNET_CHAIN_ID, type SpokeChainId, NEAR_MAINNET_CHAIN_ID, type 
 import dotenv from 'dotenv';
 import { EvmWalletProvider, NearWalletProvider } from '@sodax/wallet-sdk-core';
 import * as ethers from 'ethers';
-import { solverConfig as sharedSolverConfig } from './config.js';
+import { solverConfig } from './config.js';
 
 dotenv.config();
 
@@ -62,13 +61,6 @@ const hubConfig = {
   hubRpcUrl: HUB_RPC_URL,
   chainConfig: getHubChainConfig(),
 } satisfies EvmHubProviderConfig;
-
-// Inherits the shared intents contract; only the endpoint differs, because the host this
-// file used to point at is gone and there is no canary tier for it to fall back to.
-const solverConfig = {
-  ...sharedSolverConfig,
-  solverApiEndpoint: 'https://api.sodax.com/v1/intent',
-} satisfies SolverConfigParams;
 
 const moneyMarketConfig = getMoneyMarketConfig(HUB_CHAIN_ID);
 
