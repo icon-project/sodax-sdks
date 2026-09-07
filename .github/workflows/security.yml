@@ -50,32 +50,126 @@ jobs:
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@6f5948dfacef28e207b48d0905cf90c03365536d # v3.37.9
 
-  osv-scanner:
-    name: OSV-Scanner (dependencies)
+  # Blocking, and only on what the branch ADDS: base and head are scanned in the
+  # same job against one advisory snapshot, so an advisory published mid-review
+  # shows up in both and does not fail the check. The scanner reads pnpm-lock.yaml
+  # directly, so neither scan needs an install.
+  osv-scanner-pr:
+    name: OSV-Scanner (new in PR)
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
       - name: Check out code
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
-      # Blocking; the pre-existing advisory baseline is pinned in osv-scanner.toml.
-      - name: Run OSV-Scanner
+      - name: Scan pull request head
         uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+        continue-on-error: true
         with:
           scan-args: |-
             --recursive
-            --format=sarif
-            --output=osv-results.sarif
+            --format=json
+            --output-file=osv-head.json
             ./
+
+      - name: Check out base branch
+        run: |
+          git fetch --no-tags --depth=1 origin "+refs/heads/${GITHUB_BASE_REF}:refs/remotes/origin/${GITHUB_BASE_REF}"
+          git checkout -f --detach "refs/remotes/origin/${GITHUB_BASE_REF}"
+
+      - name: Scan base branch
+        uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+        continue-on-error: true
+        with:
+          scan-args: |-
+            --recursive
+            --format=json
+            --output-file=osv-base.json
+            ./
+
+      # The scan steps swallow their own exit code so the reporter can decide, which
+      # would also swallow a scanner crash. An empty result file means it crashed.
+      - name: Verify both scans produced results
+        run: |
+          for f in osv-head.json osv-base.json; do
+            test -s "$f" || { echo "::error::$f is missing or empty — the scan step failed"; exit 1; }
+          done
+
+      - name: Report advisories the pull request adds
+        uses: google/osv-scanner-action/osv-reporter-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+        with:
+          scan-args: |-
+            --old=osv-base.json
+            --new=osv-head.json
+            --fail-on-vuln=true
+            --output-files=sarif:osv-results.sarif,table:#stdout,gh-annotations:#stderr
+
+      - name: Upload OSV-Scanner results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: osv-scanner-pr-results
+          path: |
+            osv-results.sarif
+            osv-base.json
+            osv-head.json
+          retention-days: 30
+
+  # Advisory, not blocking. OSV's feed moves independently of this repo, so an
+  # absolute scan over the whole lockfile turns red on commits that changed no
+  # dependency. Findings go to Security > Code scanning for triage instead; the
+  # accepted baseline is in osv-scanner.toml and every entry expires.
+  osv-scanner:
+    name: OSV-Scanner (dependencies)
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Check out code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Run OSV-Scanner
+        uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+        continue-on-error: true
+        with:
+          scan-args: |-
+            --recursive
+            --format=json
+            --output-file=osv-results.json
+            ./
+
+      - name: Verify the scan produced results
+        run: test -s osv-results.json || { echo "::error::osv-results.json is missing or empty — the scan step failed"; exit 1; }
+
+      - name: Render results
+        uses: google/osv-scanner-action/osv-reporter-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+        with:
+          scan-args: |-
+            --new=osv-results.json
+            --fail-on-vuln=false
+            --output-files=sarif:osv-results.sarif,table:#stdout
+
+      - name: Upload to Code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@6f5948dfacef28e207b48d0905cf90c03365536d # v3.37.9
+        with:
+          sarif_file: osv-results.sarif
+          category: osv-scanner
 
       - name: Upload OSV-Scanner results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: osv-scanner-results
-          path: osv-results.sarif
+          path: |
+            osv-results.sarif
+            osv-results.json
           retention-days: 30
 
   semgrep:
