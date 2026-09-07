@@ -18,6 +18,7 @@ LLM training data drifts; public docs at [docs.sodax.com](https://docs.sodax.com
 
 | You are… | Do this | Entry point |
 |---|---|---|
+| Any agent that can fetch a URL; nothing to install | Point it at the hosted skill: **[https://www.sodax.com/skill.md](https://www.sodax.com/skill.md)** | The skill itself — an entry point that routes to the granular `sodax-*` skills. Listed for discovery at [`/.well-known/agent-skills/index.json`](https://www.sodax.com/.well-known/agent-skills/index.json). |
 | Using Claude Code, Cursor, Copilot, Codex, etc. with the [skills CLI](https://github.com/vercel-labs/skills) | `npx skills@latest add icon-project/sodax-sdks/packages/skills` | Auto-discovered — each `.<agent>/skills/sodax-<pkg>/SKILL.md` is loaded by the agent via its frontmatter `description`. No `AGENTS.md` lands in the install path; SKILL.md mode-gates internally (integration vs migration). |
 | Any project; npm from the registry | `pnpm add -D @sodax/skills` | `node_modules/@sodax/skills/AGENTS.md` |
 | Unreleased docs; app lives **inside** the sodax-sdks pnpm workspace | `pnpm add -D @sodax/skills@workspace:*` | `node_modules/@sodax/skills/AGENTS.md` |
