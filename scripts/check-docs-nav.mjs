@@ -11,6 +11,8 @@ const IGNORE_FILE = '.mintignore';
 const PAGE_EXTENSIONS = ['.mdx', '.md'];
 // Mintlify skips these without any configuration.
 const DEFAULT_IGNORED_FILES = ['README.md', 'LICENSE.md', 'CHANGELOG.md'];
+// Mintlify serves a root skill.md as the agent skill at /skill.md, never as a /skill page.
+const ROOT_SPECIAL_FILES = ['skill.md'];
 const DEFAULT_IGNORED_DIRS = [
   '.git',
   '.github',
@@ -172,6 +174,7 @@ const listPageFiles = (dir, rules, base = dir) => {
     const extension = PAGE_EXTENSIONS.find(candidate => entry.endsWith(candidate));
     if (!extension) continue;
     if (DEFAULT_IGNORED_FILES.includes(entry)) continue;
+    if (ROOT_SPECIAL_FILES.includes(relPath)) continue;
     if (isIgnored(relPath, rules)) continue;
     found.push(relPath.slice(0, -extension.length));
   }
