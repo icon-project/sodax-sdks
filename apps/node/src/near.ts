@@ -63,8 +63,8 @@ const hubConfig = {
 } satisfies EvmHubProviderConfig;
 
 const solverConfig = {
-  intentsContract: '0x611d800F24b5844Ea874B330ef4Ad6f1d5812f29',
-  solverApiEndpoint: 'https://staging-sodax.iconblockchain.xyz',
+  intentsContract: '0x6382D6ccD780758C5e8A6123c33ee8F4472F96ef',
+  solverApiEndpoint: 'https://api.sodax.com/v1/intent',
   partnerFee: undefined,
 } satisfies SolverConfigParams;
 

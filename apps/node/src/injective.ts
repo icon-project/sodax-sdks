@@ -65,7 +65,7 @@ const moneyMarketConfig = getMoneyMarketConfig(HUB_CHAIN_ID);
 
 const solverConfig = {
   intentsContract: '0x6382D6ccD780758C5e8A6123c33ee8F4472F96ef',
-  solverApiEndpoint: 'https://sodax-solver-staging.iconblockchain.xyz',
+  solverApiEndpoint: 'https://canary-api.sodax.com/v1/intent',
   partnerFee: undefined,
 } satisfies SolverConfigParams;
 
