@@ -353,15 +353,14 @@ async function fillIntentHubRaw(
   console.log('Input amount:', inputAmount.toString());
   console.log('Output amount:', outputAmount.toString());
 
-  const provider = new ethers.JsonRpcProvider('https://rpc.blaze.soniclabs.com ');
+  const provider = new ethers.JsonRpcProvider(HUB_RPC_URL);
   const signer = new ethers.Wallet(evmSpokePrivateKey as string, provider);
 
-  // --- Contract ABI and Address ---
-  const contractAddress = '0x611d800F24b5844Ea874B330ef4Ad6f1d5812f29';
+  // --- Contract ABI ---
   const contractAbi = [
     'function fillIntent((uint256 intentId,address creator,address inputToken,address outputToken,uint256 inputAmount,uint256 minOutputAmount,uint256 deadline,bool allowPartialFill,uint256 srcChain,uint256 dstChain,bytes srcAddress,bytes dstAddress,address solver,bytes data),uint256,uint256,uint256) external',
   ];
-  const contract = new ethers.Contract(contractAddress, contractAbi, signer);
+  const contract = new ethers.Contract(solverConfig.intentsContract, contractAbi, signer);
 
   // --- Other Arguments ---
   const _inputAmount = inputAmount;
