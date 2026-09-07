@@ -366,7 +366,7 @@ export const SodaTokens = {
  * `address`, `hubAsset`, and `vault` are all the leverage-vault proxy address — these
  * tokens live on the hub and aren't further wrapped.
  */
-export const LsodaSymbols = ['lsodaWEETH', 'lsodaWSTETH', 'lsodaJITOSOL'] as const;
+export const LsodaSymbols = ['lsodaWEETH', 'lsodaWSTETH', 'lsodaJITOSOL', 'lsodaSUSDS'] as const;
 
 export type LsodaSymbol = (typeof LsodaSymbols)[number];
 
@@ -397,6 +397,15 @@ export const LsodaTokens = {
     chainKey: ChainKeys.SONIC_MAINNET,
     hubAsset: '0xD7Ae4853E0f93682F5DaA14734F5D18cBa09Bd78',
     vault: '0xD7Ae4853E0f93682F5DaA14734F5D18cBa09Bd78',
+  },
+  lsodaSUSDS: {
+    symbol: 'lsodaSUSDS',
+    name: 'Leveraged Soda sUSDS',
+    decimals: 18,
+    address: '0x758532F160D9D338bf662A4a59BA31a5B918A7cb',
+    chainKey: ChainKeys.SONIC_MAINNET,
+    hubAsset: '0x758532F160D9D338bf662A4a59BA31a5B918A7cb',
+    vault: '0x758532F160D9D338bf662A4a59BA31a5B918A7cb',
   },
 } as const satisfies Record<LsodaSymbol, XToken>;
 
