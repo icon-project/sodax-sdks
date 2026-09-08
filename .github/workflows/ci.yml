@@ -58,6 +58,31 @@ jobs:
             echo 'Only docs/ changed: skipping build and tests. The Docs site job still runs.'
           fi
 
+  private-hosts:
+    name: No private hosts
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    # Deliberately not a step inside `docs` or `build`: both are gated on the `changes` job, so a
+    # guard living in either could be skipped by exactly the diff it exists to catch.
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: No private vendor hosts
+        run: |
+          set -euo pipefail
+          # This repo is public: every host an SDK consumer can reach must be the unified API
+          # (api.sodax.com / canary-api.sodax.com). The domain is assembled from parts so this
+          # file does not match its own pattern and can stay inside the scanned tree.
+          domain='iconblockchain'
+          if git grep -In "${domain}\.xyz" -- . ':!pnpm-lock.yaml'; then
+            echo "::error::private ${domain}.xyz host reintroduced — use api.sodax.com or canary-api.sodax.com"
+            exit 1
+          fi
+
   docs:
     name: Docs site
     timeout-minutes: 10

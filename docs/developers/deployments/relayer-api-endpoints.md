@@ -10,7 +10,7 @@ The intent relay service bridges spoke-chain transactions to the SODAX hub (Soni
 
 ## Mainnet
 
-URL: `https://xcall-relay.nw.iconblockchain.xyz`
+URL: `https://api.sodax.com/v1/relay`
 
 This is the default value of `DEFAULT_RELAYER_API_ENDPOINT` (exported from `@sodax/sdk`). It is set automatically in `relayConfig.relayerApiEndpoint` and picked up by `ConfigService` — no manual configuration is needed unless you are overriding the endpoint.
 
@@ -87,7 +87,7 @@ type SubmitTxParams = {
 `RelayExtraData` (`{ address: Hex; payload: Hex }`) carries the hub destination address and the full call payload. Solana and Bitcoin use split transactions: the on-chain tx stores only a verification hash; the full call data is submitted off-chain here.
 
 ```
-curl --location 'https://xcall-relay.nw.iconblockchain.xyz/' \
+curl --location 'https://api.sodax.com/v1/relay/' \
 --header 'Content-Type: application/json' \
 --data '{
     "action": "submit",
@@ -114,7 +114,7 @@ type GetTransactionPacketsParams = {
 ```
 
 ```
-curl --location 'https://xcall-relay.nw.iconblockchain.xyz/' \
+curl --location 'https://api.sodax.com/v1/relay/' \
 --header 'Content-Type: application/json' \
 --data '{
     "action": "get_transaction_packets",
@@ -162,7 +162,7 @@ type GetPacketParams = {
 ```
 
 ```
-curl --location 'https://xcall-relay.nw.iconblockchain.xyz/' \
+curl --location 'https://api.sodax.com/v1/relay/' \
 --header 'Content-Type: application/json' \
 --data '{
     "action": "get_packet",
@@ -226,7 +226,7 @@ const result = await relayTxAndWaitPacket({
   srcTxHash: '0x...',
   data: relayData,  // RelayExtraData from the preceding spoke operation
   chainKey: ChainKeys.ETHEREUM_MAINNET,
-  relayerApiEndpoint: 'https://xcall-relay.nw.iconblockchain.xyz',
+  relayerApiEndpoint: 'https://api.sodax.com/v1/relay',
   timeout: DEFAULT_RELAY_TX_TIMEOUT,
 });
 
