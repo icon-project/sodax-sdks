@@ -1,7 +1,7 @@
-import { CHAIN_KEYS, type ChainKey, getSupportedSolverTokens } from '@sodax/dapp-kit';
+import { CHAIN_KEYS, ChainKeys, type ChainKey, getSupportedSolverTokens } from '@sodax/dapp-kit';
 import { describe, expect, it } from 'vitest';
 import type { TokenChoice } from './chains';
-import { assetGroups, filterGroups, tokenOptionId } from './pickerOptions';
+import { assetGroups, filterGroups, previewNetworks, tokenOptionId } from './pickerOptions';
 
 // The packaged solver list stands in for the API's here: same shape, offline, and it already spans
 // EVM and non-EVM families, which is what the grouping has to survive.
@@ -98,5 +98,61 @@ describe('filterGroups', () => {
 
   it('returns nothing for a symbol that does not exist', () => {
     expect(filterGroups(groups, 'not-a-real-asset', undefined)).toHaveLength(0);
+  });
+
+  // Reach sorts the grid, so an exactly-typed symbol on few chains would otherwise rank last among
+  // the wider-reaching symbols containing it.
+  it('leads with an exact symbol match', () => {
+    const buried = groups.find(group =>
+      groups.some(
+        other => other.symbol !== group.symbol && other.symbol.toLowerCase().includes(group.symbol.toLowerCase()),
+      ),
+    );
+    expect(buried, 'no symbol is a substring of another — pick another case to keep this meaningful').toBeDefined();
+
+    expect(filterGroups(groups, buried?.symbol ?? '', undefined)[0]?.symbol).toBe(buried?.symbol);
+  });
+
+  it('keeps the reach order among equally relevant matches', () => {
+    const matched = filterGroups(groups, 'usd', undefined);
+
+    for (let i = 1; i < matched.length; i++) {
+      expect(matched[i - 1].choices.length).toBeGreaterThanOrEqual(matched[i].choices.length);
+    }
+  });
+});
+
+describe('previewNetworks', () => {
+  it('prefers the exchange mark (Base, Solana, Arbitrum, Sui) when they are in the list', () => {
+    const extra = CHAINS.find(
+      key =>
+        key !== ChainKeys.BASE_MAINNET &&
+        key !== ChainKeys.SOLANA_MAINNET &&
+        key !== ChainKeys.ARBITRUM_MAINNET &&
+        key !== ChainKeys.SUI_MAINNET,
+    );
+    expect(extra).toBeDefined();
+
+    if (extra === undefined) {
+      expect(CHAINS.length).toBeGreaterThan(2);
+      return;
+    }
+
+    const marked = previewNetworks([extra, ChainKeys.SUI_MAINNET, ChainKeys.BASE_MAINNET]);
+    expect(marked[0]).toBe(ChainKeys.BASE_MAINNET);
+    expect(marked).toContain(ChainKeys.SUI_MAINNET);
+    expect(marked).toHaveLength(3);
+  });
+
+  it('fills from the remaining list when a preferred chain is absent', () => {
+    const exotic = CHAINS.filter(
+      key =>
+        key !== ChainKeys.BASE_MAINNET &&
+        key !== ChainKeys.SOLANA_MAINNET &&
+        key !== ChainKeys.ARBITRUM_MAINNET &&
+        key !== ChainKeys.SUI_MAINNET,
+    ).slice(0, 4);
+    expect(exotic.length).toBeGreaterThan(0);
+    expect(previewNetworks(exotic)).toEqual(exotic);
   });
 });

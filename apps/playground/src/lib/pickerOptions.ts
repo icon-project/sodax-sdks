@@ -1,4 +1,4 @@
-import type { ChainKey } from '@sodax/dapp-kit';
+import { ChainKeys, type ChainKey } from '@sodax/dapp-kit';
 import type { TokenChoice } from './chains';
 
 /** One asset, and every chain that offers it. The picker's grid is one tile per group. */
@@ -43,11 +43,30 @@ export function filterGroups<K extends ChainKey>(
 ): AssetGroup<K>[] {
   const needle = query.trim().toLowerCase();
 
-  return groups.reduce<AssetGroup<K>[]>((kept, group) => {
+  const kept = groups.reduce<AssetGroup<K>[]>((kept, group) => {
     if (needle && !group.symbol.toLowerCase().includes(needle)) return kept;
 
     const choices = network ? group.choices.filter(choice => choice.chain === network) : group.choices;
     if (choices.length > 0) kept.push({ symbol: group.symbol, choices });
     return kept;
   }, []);
+
+  // The exchange leads with an exact symbol match, so "s" finds S rather than burying it under the
+  // wider-reaching symbols that merely contain it. Sort is stable, so ties keep the reach order.
+  if (!needle) return kept;
+  return kept.sort((a, b) => Number(b.symbol.toLowerCase() === needle) - Number(a.symbol.toLowerCase() === needle));
+}
+
+/** The exchange's 2×2 "all networks" mark: Base, Solana, Arbitrum, Sui, then the rest of the list. */
+const MARK_ORDER: readonly ChainKey[] = [
+  ChainKeys.BASE_MAINNET,
+  ChainKeys.SOLANA_MAINNET,
+  ChainKeys.ARBITRUM_MAINNET,
+  ChainKeys.SUI_MAINNET,
+];
+
+export function previewNetworks<K extends ChainKey>(networks: readonly K[], count = 4): K[] {
+  const preferred = MARK_ORDER.filter((key): key is K => (networks as readonly ChainKey[]).includes(key));
+  const rest = networks.filter(key => !preferred.includes(key));
+  return [...preferred, ...rest].slice(0, count);
 }

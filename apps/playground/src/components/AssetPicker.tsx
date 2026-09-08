@@ -1,11 +1,56 @@
 import { type ChainKey, tokenLogo } from '@sodax/dapp-kit';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { type PlaygroundChainKey, type TokenChoice, chainLogo, chainName } from '../lib/chains';
-import { type AssetGroup, filterGroups } from '../lib/pickerOptions';
+import { type AssetGroup, filterGroups, previewNetworks } from '../lib/pickerOptions';
 import { Glyph } from './AssetLogo';
 
 /** A tile's corner mark: how many chains carry the asset, or — when only one does — which chain. */
 type Mark = { kind: 'count'; value: number } | { kind: 'chain'; chain: ChainKey };
+
+function SearchGlyph() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function GridGlyph() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <rect x="1.5" y="1.5" width="5" height="5" rx="1" fill="currentColor" />
+      <rect x="9.5" y="1.5" width="5" height="5" rx="1" fill="currentColor" />
+      <rect x="1.5" y="9.5" width="5" height="5" rx="1" fill="currentColor" />
+      <rect x="9.5" y="9.5" width="5" height="5" rx="1" fill="currentColor" />
+    </svg>
+  );
+}
+
+function Chevron({ up }: { up: boolean }) {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className="picker-chevron">
+      <path
+        d={up ? 'M4 10l4-4 4 4' : 'M4 6l4 4 4-4'}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function AllNetworksMark<K extends ChainKey>({ networks }: { networks: readonly K[] }) {
+  return (
+    <span className="all-networks-mark" aria-hidden="true">
+      {previewNetworks(networks).map(key => (
+        <Glyph key={key} className="all-networks-cell" src={chainLogo(key)} alt="" initial={chainName(key)} />
+      ))}
+    </span>
+  );
+}
 
 function Tile({
   logo,
@@ -26,7 +71,11 @@ function Tile({
     <button type="button" className={`tile${active ? ' tile-active' : ''}`} onClick={onClick}>
       <span className="tile-disc">
         <Glyph key={logo} className="tile-img" src={logo} alt={alt} initial={label} />
-        {mark?.kind === 'count' && <span className="tile-mark">{mark.value}</span>}
+        {mark?.kind === 'count' && (
+          <span className="tile-mark tile-mark-count">
+            <span>{mark.value}</span>
+          </span>
+        )}
         {mark?.kind === 'chain' && (
           <Glyph
             key={chainLogo(mark.chain)}
@@ -49,6 +98,7 @@ function Shell({
   query,
   onQueryChange,
   searchDisabled,
+  leading,
   toolbar,
   children,
 }: {
@@ -58,6 +108,7 @@ function Shell({
   query: string;
   onQueryChange: (value: string) => void;
   searchDisabled?: boolean;
+  leading?: ReactNode;
   toolbar?: ReactNode;
   children: ReactNode;
 }) {
@@ -79,10 +130,7 @@ function Shell({
         </button>
 
         <div className="picker-search">
-          <svg viewBox="0 0 16 16" aria-hidden="true">
-            <circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-            <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
+          {leading ?? <SearchGlyph />}
           <input
             autoFocus
             type="text"
@@ -111,11 +159,8 @@ export type AssetPickerProps<K extends ChainKey> = {
 };
 
 /**
- * The exchange's asset picker: a grid of assets rather than a list of every token-chain pair. One
- * tile per symbol, marked with how many chains carry it; picking a multi-chain asset asks which.
- *
- * Generic over the chain key so the swap widget's API-derived `ChainKey` list and the parked
- * bridge's EVM-narrowed one both keep their own type through a pick.
+ * Port of the exchange's asset picker. Not an import of sodax-frontend — that app pulls in Next,
+ * Tailwind, and wallet balances, none of which belong here.
  */
 export function AssetPicker<K extends ChainKey>({
   open,
@@ -130,7 +175,6 @@ export function AssetPicker<K extends ChainKey>({
   const [isNetworkOpen, setNetworkOpen] = useState(false);
   const [expanded, setExpanded] = useState<AssetGroup<K> | undefined>();
 
-  // Every open starts from the full grid; state left over from the last pick reads as a bug.
   useEffect(() => {
     if (!open) return;
     setQuery('');
@@ -146,108 +190,33 @@ export function AssetPicker<K extends ChainKey>({
     onClose();
   };
 
-  // A group filtered to one chain has already answered the question the drill-in would ask.
   const openGroup = (group: AssetGroup<K>) => {
     const only = group.choices.length === 1 ? group.choices[0] : undefined;
-    if (only) pick(only);
-    else setExpanded(group);
+    if (only) {
+      pick(only);
+      return;
+    }
+    setNetworkOpen(false);
+    setExpanded(current => (current?.symbol === group.symbol ? undefined : group));
   };
 
-  if (expanded) {
-    return (
-      <Shell
-        open={open}
-        onClose={onClose}
-        placeholder={`${expanded.symbol} — pick a network`}
-        query=""
-        onQueryChange={() => {}}
-        searchDisabled
-        toolbar={
-          <button type="button" className="picker-toolbar" onClick={() => setExpanded(undefined)}>
-            Back
-          </button>
-        }
-      >
-        <div className="tile-grid">
-          {expanded.choices.map(choice => (
-            <Tile
-              key={choice.chain}
-              logo={chainLogo(choice.chain)}
-              alt={chainName(choice.chain)}
-              label={chainName(choice.chain)}
-              active={selected?.chain === choice.chain && selected.symbol === expanded.symbol}
-              onClick={() => pick(choice)}
-            />
-          ))}
-        </div>
-      </Shell>
-    );
-  }
+  const locked = isNetworkOpen || expanded !== undefined;
 
-  return (
-    <Shell
-      open={open}
-      onClose={onClose}
-      placeholder={isNetworkOpen ? 'Select a network' : 'Search assets…'}
-      query={query}
-      onQueryChange={setQuery}
-      searchDisabled={isNetworkOpen}
-      toolbar={
-        <button
-          type="button"
-          className="picker-toolbar"
-          aria-expanded={isNetworkOpen}
-          onClick={() => setNetworkOpen(open => !open)}
-        >
-          {network ? chainName(network) : 'All networks'}
-          <span aria-hidden="true">{isNetworkOpen ? '▲' : '▼'}</span>
-        </button>
-      }
-    >
-      {isNetworkOpen ? (
-        <div className="network-list">
-          <button
-            type="button"
-            className={network ? 'network-row' : 'network-row network-row-active'}
-            onClick={() => {
-              setNetwork(undefined);
-              setNetworkOpen(false);
-            }}
-          >
-            <span className="network-all" aria-hidden="true" />
-            All
-          </button>
-          {networks.map(key => (
-            <button
-              key={key}
-              type="button"
-              className={key === network ? 'network-row network-row-active' : 'network-row'}
-              onClick={() => {
-                setNetwork(key);
-                setNetworkOpen(false);
-              }}
-            >
-              <Glyph
-                key={chainLogo(key)}
-                className="network-logo"
-                src={chainLogo(key)}
-                alt=""
-                initial={chainName(key)}
-              />
-              {chainName(key)}
-            </button>
-          ))}
-        </div>
-      ) : visible.length === 0 ? (
+  const tiles = (
+    <div className={`tile-grid${isNetworkOpen ? ' tile-grid-behind' : ''}${locked ? ' tile-grid-locked' : ''}`}>
+      {visible.length === 0 ? (
         <p className="muted small picker-empty">No asset matches that search.</p>
       ) : (
-        <div className="tile-grid">
-          {visible.map(group => {
-            const [first] = group.choices;
-            if (!first) return null;
-            return (
+        visible.map(group => {
+          const [first] = group.choices;
+          if (!first) return null;
+          const isOpen = expanded?.symbol === group.symbol;
+          return (
+            <div
+              key={group.symbol}
+              className={`tile-cell${isOpen ? ' tile-cell-open' : ''}${expanded && !isOpen ? ' tile-cell-dim' : ''}`}
+            >
               <Tile
-                key={group.symbol}
                 logo={tokenLogo(group.symbol)}
                 alt={group.symbol}
                 label={group.symbol}
@@ -259,10 +228,114 @@ export function AssetPicker<K extends ChainKey>({
                 active={selected?.symbol === group.symbol}
                 onClick={() => openGroup(group)}
               />
-            );
-          })}
-        </div>
+              {isOpen && (
+                <div className="chain-flyout" role="listbox" aria-label={`Networks for ${group.symbol}`}>
+                  <p className="chain-flyout-caption">Choose a network</p>
+                  <div className="chain-flyout-row">
+                    {group.choices.map(choice => (
+                      <button
+                        key={choice.chain}
+                        type="button"
+                        className={`chain-flyout-icon${
+                          selected?.chain === choice.chain && selected.symbol === group.symbol
+                            ? ' chain-flyout-icon-active'
+                            : ''
+                        }`}
+                        aria-label={chainName(choice.chain)}
+                        onClick={() => pick(choice)}
+                      >
+                        <Glyph
+                          key={chainLogo(choice.chain)}
+                          className="chain-flyout-logo"
+                          src={chainLogo(choice.chain)}
+                          alt=""
+                          initial={chainName(choice.chain)}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })
       )}
+    </div>
+  );
+
+  return (
+    <Shell
+      open={open}
+      onClose={onClose}
+      placeholder={isNetworkOpen ? 'Select a network' : 'Search assets…'}
+      query={query}
+      onQueryChange={setQuery}
+      searchDisabled={isNetworkOpen}
+      leading={isNetworkOpen ? <GridGlyph /> : <SearchGlyph />}
+      toolbar={
+        <button
+          type="button"
+          className="picker-toolbar"
+          aria-expanded={isNetworkOpen}
+          aria-label={network ? `Network: ${chainName(network)}` : 'All networks'}
+          onClick={() => {
+            setExpanded(undefined);
+            setNetworkOpen(open => !open);
+          }}
+        >
+          {network ? (
+            <Glyph
+              key={chainLogo(network)}
+              className="picker-toolbar-chain"
+              src={chainLogo(network)}
+              alt=""
+              initial={chainName(network)}
+            />
+          ) : (
+            <AllNetworksMark networks={networks} />
+          )}
+          <Chevron up={isNetworkOpen} />
+        </button>
+      }
+    >
+      <div className={`picker-stage${isNetworkOpen ? ' picker-stage-sheet' : ''}`}>
+        {tiles}
+        {isNetworkOpen && (
+          <div className="network-overlay" role="listbox" aria-label="Networks">
+            <button
+              type="button"
+              className={network ? 'network-row' : 'network-row network-row-active'}
+              onClick={() => {
+                setNetwork(undefined);
+                setNetworkOpen(false);
+              }}
+            >
+              <AllNetworksMark networks={networks} />
+              All
+            </button>
+            {networks.map(key => (
+              <button
+                key={key}
+                type="button"
+                className={key === network ? 'network-row network-row-active' : 'network-row'}
+                onClick={() => {
+                  setNetwork(key);
+                  setNetworkOpen(false);
+                }}
+              >
+                <Glyph
+                  key={chainLogo(key)}
+                  className="network-logo"
+                  src={chainLogo(key)}
+                  alt=""
+                  initial={chainName(key)}
+                />
+                {chainName(key)}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </Shell>
   );
 }
