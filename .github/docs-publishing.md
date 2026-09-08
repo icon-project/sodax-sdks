@@ -98,8 +98,10 @@ docs App's own approval and queued merge, leaving a maintainer's or another bot'
 
 The metadata check and token mint can run after classification fails, so an earlier approval
 can still be withdrawn; classification failure never permits a new approval. Failed metadata
-reads fail the job rather than pretending no cleanup is needed. Missing App credentials still
-fail when approval or cleanup requires them — they are not silently ignored.
+reads fail the job rather than pretending no cleanup is needed. Missing App credentials skip
+a new marketing approval with a warning and leave it to a human reviewer. If a non-marketing
+or unclassified PR needs possible cleanup, missing credentials
+fail the job instead of silently leaving an earlier approval or queued merge in place.
 
 [`approve-docs-pr.sh`](scripts/approve-docs-pr.sh) binds both privileged calls to the commit
 the classifier read: it re-reads the live head and bails if it has moved, then pins the

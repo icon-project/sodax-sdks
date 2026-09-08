@@ -1,39 +1,43 @@
 ---
 title: "Partner payout wallet"
 sidebarTitle: "Payout wallet"
-description: "What your payout wallet is, how to add it in the partner portal, where your fees build up, and how claiming turns them into USDC on the network you choose."
+description: "Add the same PartnerFee address your SDK integration uses to track fees and volume and claim your fees in the partner portal."
 icon: wallet
 ---
 
-Your payout wallet is the address your partner fees get paid to. If you arrived here from the **Monitored Wallets** or **Fees** panel in the partner portal, this page explains what that address does, how to set it, and what happens when you cash out.
+Your payout wallet, labelled **PartnerFee address** in the partner portal, is the fee receiver your app uses in its SDK integration: `partnerFee.address`. Add that same address in the portal to track your fees, track your volume, and claim your fees.
 
-No coding needed for anything on this page. If you also build the integration, there is a [developer version](#for-your-developer) at the end.
+The integration sets where fees go. The portal reads the address you register; saving an address there does not change the fee receiver or fee percentage in your app.
+
+If someone else built your integration, ask them for its `partnerFee.address` before saving it. There is a [developer section](#for-your-developer) below.
 
 ## What the payout wallet is
 
-It is a crypto wallet you already own — the `0x…` kind you use on Ethereum, Base, Arbitrum or Sonic. Your own wallet, not something you create here. SODAX never holds it and never touches what is in it.
+It is an EVM wallet address — the `0x…` kind — that your team controls and uses as `partnerFee.address` in the integration. Registering it in the portal does not create a new wallet.
 
-You give the portal that address so it can do two things:
+You give the portal that same address to:
 
-- **Pay you.** Every swap your app sends through SODAX with a fee on it credits this address.
-- **Show you your numbers.** The Fees and Volume sections of the portal show what this address has earned and moved, which is how your app's activity gets told apart from everyone else's.
+- **Track your fees and volume.** View the activity associated with that fee receiver.
+- **Claim your fees.** Connect the matching wallet to claim its accumulated fees.
 
 <Warning>
   **This address only tells the portal where to look. It does not redirect money.**
 
-  Your app is what decides where fees are sent, and that is set in your app's code. If the address in the portal is not the same one your app is using, the fees still arrive safely — just at an address the portal is not watching, so the Fees panel will look empty.
+  Your app sets the fee receiver through `partnerFee.address`. If the portal watches a different address, it will not show the fees credited to the receiver your app actually uses.
+
+  Fee percentage is also set in the integration, including 0%. Registering an address in the portal does not enable or increase a fee.
 
   If you did not set up the integration yourself, ask whoever did to confirm the two match. The [Monetize guide](/developers/how-to/monetize_sdk) is the page to send them.
 </Warning>
 
 ## Adding it in the portal
 
-**When you signed up.** If you told us you were already sending trades to SODAX, we asked for this address before letting you go further. If you told us you were not integrated yet, we skipped the question, and you have no payout address yet.
+**During sign-up.** If you are already integrated, enter the same EVM address used as `partnerFee.address` in your SDK integration. Confirm that it is the PartnerFee address your app uses, then select **Save PartnerFee address**. If you are not integrated yet, use **Not integrated yet?** and add the address once your integration is configured.
 
 **Adding it later.** Go to **Monitored Wallets** in the portal:
 
 1. Open **Monitored Wallets** and pick your organisation.
-2. Paste in the address you want to be paid at. The label box is optional — it is just a name so you recognise the row later.
+2. Paste the exact address your integration uses as `partnerFee.address`. The label box is optional — it is just a name so you recognise the row later.
 3. Click **Add**.
 
 Two things to know before you click:
@@ -41,9 +45,15 @@ Two things to know before you click:
 | | |
 | --- | --- |
 | **You need to be an admin** | Only an owner or admin of the organisation can add it. Other team members can see the panel but not change anything. (The one exception is the question at sign-up, which anyone can answer — otherwise a new member could get stuck with no way past it.) |
-| **You cannot change it afterwards** | Once saved, the portal marks it **Locked**. There is no edit or delete button. **Check the address carefully before you save it** — a typo cannot be fixed in the portal. If you do need it changed later, use **Get in touch** at the top of the portal and we will do it for you. |
+| **Keep it in sync with your integration** | Check that the address matches `partnerFee.address` before saving. If you need to update the registered address and the portal does not offer an edit option, use **Get in touch** at the top of the portal. |
 
 Your organisation has one payout address.
+
+### Changing your fee wallet
+
+Your developer can change the fee receiver in the SDK integration for future intents. When that happens, update the address registered in the portal to match; contact the team if you need help doing this. Updating the portal alone does not change where your app sends fees.
+
+Fees already credited to the previous address stay there. Keep access to that wallet to claim them.
 
 ## Where your fees build up
 
@@ -137,7 +147,9 @@ Still stuck? [Talk to us](#get-help) — include your payout address and we can 
 
 ## For your developer
 
-Everything above can also be done in code — reading balances, setting the payout destination, approving, claiming, and recovering a claim that got stuck — through `sodax.partners.feeClaim` in `@sodax/sdk`.
+The portal's **PartnerFee address** is the `address` field of the fee configuration used by your integration. For SDK swaps, this is normally `swaps.partnerFee.address`, or `fee.address` if you use the global fee configuration. A per-intent `partnerFee` override takes precedence, so register the receiver your app actually uses.
+
+Reading balances, setting the payout destination, approving, claiming, and recovering a claim that got stuck are available through `sodax.partners.feeClaim` in `@sodax/sdk`.
 
 <Card title="Monetize SDK" icon="coins" href="/developers/how-to/monetize_sdk#partner-fee-claiming">
   Setting a partner fee, then the full claim flow in TypeScript.
@@ -150,6 +162,6 @@ Everything above can also be done in code — reading balances, setting the payo
     Questions about fees, cashing out, and payout networks.
   </Card>
   <Card title="Contact the team" icon="envelope" href="/contact">
-    Changing a locked payout address, and anything to do with your account.
+    Updating your registered PartnerFee address, and anything to do with your account.
   </Card>
 </CardGroup>

@@ -178,6 +178,7 @@ curl -s 'https://api.sodax.com/v1/be/sodax/total_supply'
 
 - Single-field endpoints return a **stringified number**.
 - `/supply` returns the full document when you need both figures plus metadata in one call.
+- The figure is **fractional**, so it is not `BigInt`-parseable: `BigInt("1499655823.120187263279086593")` throws a `SyntaxError`, and `Number()` silently truncates it to `1499655823.1201873`. Keep it as a string for display, or parse it with a decimal library.
 
 Suitable for CoinGecko-style listings and public dashboards.
 

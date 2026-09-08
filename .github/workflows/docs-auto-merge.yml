@@ -59,10 +59,32 @@ jobs:
           MARKETING_ONLY: ${{ steps.classify.outcome == 'success' && steps.classify.outputs.marketing_only == 'true' }}
         run: bash .github/scripts/docs-app-needed.sh "$PR" "$MARKETING_ONLY"
 
+      # Missing credentials may skip a new approval, but must not silently skip required cleanup.
+      - name: Check the App credentials are provisioned
+        id: creds
+        if: ${{ !cancelled() && steps.app-needed.outcome == 'success' && steps.app-needed.outputs.token_required == 'true' }}
+        env:
+          APP_ID: ${{ secrets.DOCS_PUBLISH_APP_ID }}
+          APP_KEY: ${{ secrets.DOCS_PUBLISH_APP_PRIVATE_KEY }}
+          MARKETING_ONLY: ${{ steps.classify.outcome == 'success' && steps.classify.outputs.marketing_only == 'true' }}
+        run: |
+          set -euo pipefail
+          if [ -n "$APP_ID" ] && [ -n "$APP_KEY" ]; then
+            echo 'present=true' >>"$GITHUB_OUTPUT"
+          else
+            echo 'present=false' >>"$GITHUB_OUTPUT"
+            if [ "$MARKETING_ONLY" = 'true' ]; then
+              echo '::warning::Docs App credentials are unset; skipping auto-approval. A human reviewer is required.'
+            else
+              echo '::error::Docs App credentials are unset; possible stale approval or queued merge requires cleanup.'
+              exit 1
+            fi
+          fi
+
       # GITHUB_TOKEN cannot supply a qualifying approval; the App is needed for approval or cleanup.
       - name: Mint an App token
         id: app-token
-        if: ${{ !cancelled() && steps.app-needed.outcome == 'success' && steps.app-needed.outputs.token_required == 'true' }}
+        if: ${{ !cancelled() && steps.app-needed.outcome == 'success' && steps.app-needed.outputs.token_required == 'true' && steps.creds.outcome == 'success' && steps.creds.outputs.present == 'true' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.DOCS_PUBLISH_APP_ID }}

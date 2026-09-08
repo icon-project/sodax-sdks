@@ -336,3 +336,56 @@ test('classification failures still allow token selection and cleanup, but never
   );
   assert.doesNotMatch(step('Approve and queue the merge'), /!cancelled\(\)|always\(\)|continue-on-error/);
 });
+
+const credentialsGate = () =>
+  step('Check the App credentials are provisioned')
+    .split('        run: |\n')[1]
+    .split('\n')
+    .filter(line => line.startsWith('          '))
+    .map(line => line.slice(10))
+    .join('\n');
+
+for (const marketing of [true, false]) {
+  for (const credentials of ['both', 'neither', 'id-only', 'key-only']) {
+    test(`credentials gate: marketing=${marketing}, credentials=${credentials}`, t => {
+      const root = mkdtempSync(join(REPO, '.tmp-docs-creds-'));
+      t.after(() => rmSync(root, { recursive: true, force: true }));
+      const output = join(root, 'output');
+      writeFileSync(output, '');
+      const present = credentials === 'both';
+      let code = 0;
+      let stdout = '';
+      try {
+        stdout = execFileSync('bash', ['-c', credentialsGate()], {
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            GITHUB_OUTPUT: output,
+            MARKETING_ONLY: String(marketing),
+            APP_ID: ['both', 'id-only'].includes(credentials) ? 'test-id' : '',
+            APP_KEY: ['both', 'key-only'].includes(credentials) ? 'test-key' : '',
+          },
+        });
+      } catch (error) {
+        code = error.status;
+        stdout = error.stdout;
+      }
+      assert.equal(code, present || marketing ? 0 : 1);
+      assert.equal(readFileSync(output, 'utf8').trim(), `present=${present}`);
+      if (!present) assert.match(stdout, marketing ? /::warning::/ : /::error::/);
+      assert.doesNotMatch(stdout, /test-id|test-key/);
+    });
+  }
+}
+
+test('token mint requires credentials and credential checks still run for cleanup after failure', () => {
+  assert.match(step('Check the App credentials are provisioned'), /!cancelled\(\)/);
+  assert.match(
+    step('Check the App credentials are provisioned'),
+    /steps\.app-needed\.outputs\.token_required == 'true'/,
+  );
+  assert.match(
+    step('Mint an App token'),
+    /steps\.creds\.outcome == 'success' && steps\.creds\.outputs\.present == 'true'/,
+  );
+});
