@@ -3,6 +3,40 @@ import type { Address } from '../shared/shared.js';
 import { type XToken, SodaTokens } from '../chains/tokens.js';
 import { spokeChainConfig, ChainKeys, type SpokeChainKey, hubConfig } from '../chains/chains.js';
 
+// Hub vaults the money market lends against, and the source of `moneyMarketReserveAssets`.
+// Membership is an explicit opt-in: a new SodaTokens entry is not a reserve asset until listed here.
+const moneyMarketHubVaults = [
+  SodaTokens.sodaBNB,
+  SodaTokens.sodaAVAX,
+  SodaTokens.sodaETH,
+  SodaTokens.sodaBTC,
+  SodaTokens.sodaWBTC,
+  SodaTokens.sodaSOL,
+  SodaTokens.sodaXLM,
+  SodaTokens.sodaINJ,
+  SodaTokens.sodaSUI,
+  SodaTokens.bnUSD,
+  SodaTokens.sodaUSDC,
+  SodaTokens.sodaUSDT,
+  SodaTokens.IbnUSD,
+  SodaTokens.sodaS,
+  SodaTokens.sodaPOL,
+  SodaTokens.sodaSODA,
+  SodaTokens.sodaHYPE,
+  SodaTokens.sodaRBNT,
+  SodaTokens.sodaLL,
+  SodaTokens.sodaWEETH,
+  SodaTokens.sodaWSTETH,
+  SodaTokens.sodaNEAR,
+  SodaTokens.sodaKAIA,
+  SodaTokens.sodaSTX,
+  SodaTokens.sodaSUSDS,
+  SodaTokens.sodaHBAR,
+  SodaTokens.sodaJITOSOL,
+  SodaTokens.sodaUSDS,
+  SodaTokens.sodaUSSD,
+] as const satisfies XToken[];
+
 // currently supported spoke chain tokens for money market
 export const moneyMarketSupportedTokens = {
   [ChainKeys.AVALANCHE_MAINNET]: [
@@ -146,7 +180,7 @@ export const moneyMarketSupportedTokens = {
     spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.wS,
     spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.SODA,
     spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.USSD,
-    ...Object.values(SodaTokens),
+    ...moneyMarketHubVaults,
   ] as const satisfies XToken[],
   [ChainKeys.NEAR_MAINNET]: [
     spokeChainConfig[ChainKeys.NEAR_MAINNET].supportedTokens.NEAR,
@@ -227,7 +261,7 @@ export const moneyMarketSupportedTokens = {
 } as const satisfies Record<SpokeChainKey, readonly XToken[]>;
 
 export const moneyMarketReserveAssets = [
-  ...Object.values(SodaTokens).map(vault => vault.address),
+  ...moneyMarketHubVaults.map(vault => vault.address),
   hubConfig.bnUSD,
 ] as const satisfies Address[];
 

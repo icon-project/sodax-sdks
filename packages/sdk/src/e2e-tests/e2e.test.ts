@@ -388,8 +388,9 @@ describe('e2e', () => {
     it('matches regardless of casing on either side', () => {
       const actual = mismatch({
         address: 'cdk5ewv',
-        hubAsset: '0X1111111111111111111111111111111111111111',
-        vault: '0X2222222222222222222222222222222222222222',
+        // Deliberate casts: uppercase 0X prefixes are exactly the casing this test exercises.
+        hubAsset: '0X1111111111111111111111111111111111111111' as unknown as `0x${string}`,
+        vault: '0X2222222222222222222222222222222222222222' as unknown as `0x${string}`,
       });
 
       expect(reconcileVaultHubAssetDrift([actual], [drift()])).toEqual({

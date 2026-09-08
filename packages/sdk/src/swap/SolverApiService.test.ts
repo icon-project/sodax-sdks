@@ -73,7 +73,7 @@ const mockConfigService = {
 
 const realFetch = globalThis.fetch;
 const fetchMock = vi.fn();
-globalThis.fetch = fetchMock as unknown as typeof fetch;
+globalThis.fetch = fetchMock;
 
 afterAll(() => {
   globalThis.fetch = realFetch;

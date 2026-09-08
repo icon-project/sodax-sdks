@@ -629,7 +629,7 @@ if (!result.ok) {
 
 ### Migration from the legacy pattern
 
-If you were on the previous CODE-on-`error.message` pattern (or the older `BridgeError<Code>` typed shape that the published docs at <https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/bridge#error-handling> document), here are the mappings:
+If you were on the previous CODE-on-`error.message` pattern (or the older `BridgeError<Code>` typed shape that the published docs [document](https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/bridge#error-handling)), here are the mappings:
 
 | Before | After |
 |---|---|

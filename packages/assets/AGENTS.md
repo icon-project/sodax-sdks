@@ -35,5 +35,11 @@ All files are PNG, sourced from CoinGecko's CDN.
 - **Don't import these files** into app/package code — reference the URL from
   `@sodax/types` instead. Importing would re-bundle the binary, defeating the
   purpose of hosting them.
+- **Every chain and token needs a file here, and every file needs a claimant.**
+  [`packages/types/src/chains/logo-assets.test.ts`](../types/src/chains/logo-assets.test.ts)
+  fails CI for a `CHAIN_KEYS` entry or a token in `spokeChainConfig[*].supportedTokens`
+  with no PNG, for a PNG no chain or token claims (how a misspelled filename is caught),
+  and for a file that is empty or not really a PNG. Adding a token to `@sodax/types`
+  without its logo is a red build, not a follow-up.
 - A new logo only resolves after it is merged to `main` (raw.githubusercontent
   serves the branch you point at).

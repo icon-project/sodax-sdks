@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { type FeeBumpTransaction, Keypair, Networks, TransactionBuilder } from '@stellar/stellar-sdk';
+import { beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
+import { type FeeBumpTransaction, type Horizon, Keypair, Networks, TransactionBuilder } from '@stellar/stellar-sdk';
 import type { AnalyticsEvent, IStellarWalletProvider, StellarSponsorConfig } from '@sodax/types';
 import { Sodax } from '../shared/entities/Sodax.js';
 import { SPONSOR_CONFIG_TTL_MS } from './SponsoringService.js';
@@ -96,7 +96,10 @@ function makeSodax(keys: { instanceApiKey?: string; sponsoringApiKey?: string } 
 }
 
 /** Stub the `.order().limit().call()` chain the base-reserve read walks. */
-function stubBaseReserve(ledgers: ReturnType<typeof vi.spyOn>, baseReserveInStroops: number | undefined): void {
+function stubBaseReserve(
+  ledgers: MockInstance<Horizon.Server['ledgers']>,
+  baseReserveInStroops: number | undefined,
+): void {
   const call = vi.fn(async () => ({
     records: baseReserveInStroops === undefined ? [] : [{ base_reserve_in_stroops: baseReserveInStroops }],
   }));
@@ -104,7 +107,7 @@ function stubBaseReserve(ledgers: ReturnType<typeof vi.spyOn>, baseReserveInStro
 }
 
 // Horizon uses its own HTTP client, so stub it independently of global fetch.
-function stubHorizon(loadAccount: ReturnType<typeof vi.spyOn>, sequence = '100'): void {
+function stubHorizon(loadAccount: MockInstance<Horizon.Server['loadAccount']>, sequence = '100'): void {
   loadAccount.mockImplementation(async (address: string) => {
     if (address === SPONSOR.publicKey()) return sponsorAccountResponse(sequence) as never;
     throw horizonNotFound();
@@ -277,7 +280,11 @@ describe('sequence conflict handling', () => {
     const sponsorReads = loadAccount.mock.calls.filter(([a]) => a === SPONSOR.publicKey());
     expect(sponsorReads).toHaveLength(1);
     const [, second] = accountRequests().map(([, init]) => JSON.parse((init as { body: string }).body).data);
-    expect(TransactionBuilder.fromXDR(second, Networks.PUBLIC).sequence).toBe('778');
+    const secondTx = TransactionBuilder.fromXDR(second, Networks.PUBLIC) as Exclude<
+      ReturnType<typeof TransactionBuilder.fromXDR>,
+      FeeBumpTransaction
+    >;
+    expect(secondTx.sequence).toBe('778');
   });
 
   it('falls back to a Horizon read when the 409 carries no hint', async () => {

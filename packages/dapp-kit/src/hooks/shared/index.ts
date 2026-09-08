@@ -15,3 +15,5 @@ export * from './useNearStorageGate.js';
 export * from './useStellarGate.js';
 export * from './useGetUserHubWalletAddress.js';
 export * from './useXBalances.js';
+export * from './useBalances.js';
+export * from './invalidateBalances.js';

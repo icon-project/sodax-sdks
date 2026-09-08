@@ -607,7 +607,8 @@ describe('EvmSolverService.getIntent', () => {
     });
 
     it('throws when the intent references an unrecognized relay chain id', async () => {
-      const intent = buildIntent({ srcChain: 9999n });
+      // Deliberate cast: 9999n is exactly the unrecognized relay chain id under test.
+      const intent = buildIntent({ srcChain: 9999n as unknown as Intent['srcChain'] });
       const intentHash = EvmSolverService.getIntentHash(intent);
       const log = encodeIntentCreatedLog(intentHash, intent, INTENTS_CONTRACT);
       vi.mocked(mockPublicClient.waitForTransactionReceipt).mockResolvedValueOnce(receiptWith([log]));

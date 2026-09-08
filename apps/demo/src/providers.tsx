@@ -8,15 +8,13 @@ import {
   type SodaxOptions,
   type SolverConfig,
   ChainKeys,
-  type HttpUrl,
   type RpcConfig,
 } from '@sodax/dapp-kit';
-import { productionSolverConfig, stagingSolverConfig } from './constants';
+import { defaultUseBackendSubmitTx, productionSolverConfig, stagingSolverConfig } from './constants';
 import { SolverEnv, useAppStore } from './zustand/useAppStore';
+import { envSodaxApiKey, envSwapsApiBaseUrl, isHttpUrl, nonEmptyEnv } from './lib/sodaxSettings';
 import { createDatadogLogger } from './lib/loggers/datadogLogger';
 import { createDemoAnalytics } from './lib/analytics';
-
-const queryClient = createSodaxQueryClient();
 
 const rpcConfig: RpcConfig = {
   [ChainKeys.SONIC_MAINNET]: process.env.SONIC_RPC_URL ?? 'https://sonic-rpc.publicnode.com',
@@ -41,17 +39,9 @@ const rpcConfig: RpcConfig = {
   },
 };
 
-function isHttpUrl(value: unknown): value is HttpUrl {
-  return typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://'));
-}
-
-/** A set-but-empty env var means "unset" — matching how the SDK treats an empty key or base URL. */
-function nonEmptyEnv(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0;
-}
-
 // Read credentials through Vite-scoped env variables, not the inlined process environment.
 // The optional base URL includes any deployment prefix; the SDK appends the sponsoring path.
+// Swaps-API and instance-key env defaults live in `lib/sodaxSettings` (shared with the modal).
 const sponsoringApiBaseUrlEnv: unknown = import.meta.env.VITE_SPONSORING_API_BASE_URL;
 const sponsoringApiKeyEnv: unknown = import.meta.env.VITE_SPONSORING_API_KEY;
 const sponsoringApiConfig = {
@@ -59,25 +49,13 @@ const sponsoringApiConfig = {
   ...(nonEmptyEnv(sponsoringApiKeyEnv) ? { apiKey: sponsoringApiKeyEnv } : {}),
 };
 
-// Retarget the swaps API at canary or a locally started `swaps-api`. Unset leaves swaps on the packaged
-// production gateway root, like every other service — it is not pinned to a different host by default.
-// Same shape as the sponsoring override: the value is the base URL *including* any version prefix, so a
-// local service that mounts `/swaps/*` at the bare origin is `http://localhost:3008`.
-const swapsApiBaseUrlEnv: unknown = import.meta.env.VITE_SWAPS_API_BASE_URL;
-const swapsApiConfig = isHttpUrl(swapsApiBaseUrlEnv) ? { baseURL: swapsApiBaseUrlEnv } : undefined;
-
-// Instance-wide SODAX API key: `x-api-key` on every backend call, sponsoring included while it targets
-// the packaged gateway (VITE_SPONSORING_API_KEY is only for an independently hosted one). Unset is fine.
-const sodaxApiKeyEnv: unknown = import.meta.env.VITE_SODAX_API_KEY;
-const sodaxApiKey = nonEmptyEnv(sodaxApiKeyEnv) ? sodaxApiKeyEnv : undefined;
-
 const configMap: Record<SolverEnv, SolverConfig> = {
   [SolverEnv.Production]: productionSolverConfig,
   [SolverEnv.Staging]: stagingSolverConfig,
 };
 
 export default function Providers({ children }: { children: ReactNode }) {
-  const { solverEnvironment } = useAppStore();
+  const { solverEnvironment, sodaxSettings } = useAppStore();
 
   const walletConfig = useMemo((): SodaxWalletConfig => {
     const wcProjectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID;
@@ -143,26 +121,44 @@ export default function Providers({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // override sodax config for rpc urls and solver config
+  // Effective config = "Sodax Settings" override > VITE_ env default > env solver config /
+  // SDK packaged default. Overrides come from the header modal (lib/sodaxSettings).
   const sodaxConfig: SodaxOptions = useMemo(() => {
-    // Opt-in observability sink (Sentry + Datadog), enabled via VITE_ENABLE_OBSERVABILITY.
-    // `undefined` when off, which leaves the SDK on its default console logger.
+    const solverBase = configMap[solverEnvironment];
+    const s = sodaxSettings;
+    const solverApiEndpoint = s.solverApiEndpoint ?? solverBase.solverApiEndpoint;
     return {
       api: {
-        // No `baseApiConfig`: the packaged default already points at the production gateway root, and
-        // every service appends its own path below it (`/be`, `/swaps`, `/bridge`, `/sponsorships/*`).
-        // Never put a service segment in a base URL — that is what sent swaps to `/v1/be/swaps/*`.
+        // Every base URL is a gateway root incl. version prefix — never a service segment; each
+        // service appends its own path (`/be`, `/swaps`, `/bridge`, `/sponsorships/*`).
         // `undefined` slices are skipped by `deepMerge`, so an unset override is the same as no key.
-        swapsApiConfig,
+        ...(s.apiBaseUrl ? { baseApiConfig: { baseURL: s.apiBaseUrl } } : {}),
+        swapsApiConfig: s.swapsApiBaseUrl
+          ? { baseURL: s.swapsApiBaseUrl }
+          : envSwapsApiBaseUrl
+            ? { baseURL: envSwapsApiBaseUrl }
+            : undefined,
         sponsoringApiConfig,
       },
-      apiKey: sodaxApiKey,
+      apiKey: s.apiKey ?? envSodaxApiKey,
       logger: createDatadogLogger(),
       // Opt-in user-action analytics (issue #175). Enabled by default in the demo; the sink logs each
       // event and re-emits it as a `sodax:analytics` window CustomEvent. `false` when disabled, which
       // leaves the SDK on its default (analytics off).
       analytics: createDemoAnalytics() ?? false,
-      solver: configMap[solverEnvironment],
+      solver: {
+        intentsContract: s.intentsContract ?? solverBase.intentsContract,
+        solverApiEndpoint,
+        protocolIntentsContract: s.protocolIntentsContract ?? solverBase.protocolIntentsContract,
+      },
+      swaps: { useBackendSubmitTx: s.swapUseBackendSubmitTx ?? defaultUseBackendSubmitTx(solverApiEndpoint) },
+      bridge: { useBackendSubmitTx: s.bridgeUseBackendSubmitTx ?? true },
+      // Global partner fee. Per-call / per-feature fees still win, and the Swaps/Bridge API pages
+      // carry their own per-request fee — `SodaxOptions.fee` never reaches those routes.
+      ...(s.partnerFeeAddress && s.partnerFeeBps !== null
+        ? { fee: { address: s.partnerFeeAddress, percentage: s.partnerFeeBps } }
+        : {}),
+      ...(s.relayerApiEndpoint ? { relay: { relayerApiEndpoint: s.relayerApiEndpoint } } : {}),
       chains: {
         [ChainKeys.SONIC_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.SONIC_MAINNET] },
         [ChainKeys.AVALANCHE_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.AVALANCHE_MAINNET] },
@@ -179,19 +175,24 @@ export default function Providers({ children }: { children: ReactNode }) {
         [ChainKeys.BITCOIN_MAINNET]: rpcConfig[ChainKeys.BITCOIN_MAINNET],
       },
     };
-  }, [solverEnvironment]);
+  }, [solverEnvironment, sodaxSettings]);
 
-  // `SodaxProvider` freezes its config at first render (read-once via `useRef`), so
-  // setting `solverEnvironment` doesn't take effect on its own. Keying the provider on the
-  // env forces a clean unmount/remount whenever it changes — the SDK reinitialises with the
-  // new solver endpoint. Wallet state is preserved (it lives below in `SodaxWalletProvider`,
-  // which is *outside* the keyed scope is what we'd ideally want — but the wallet provider
-  // is keyed on the SDK provider tree and doesn't carry per-config state, so unmount cost
-  // is just a fresh React Query cache).
+  // Field order is stable (literal object above), so the key is deterministic per config.
+  const configKey = `${solverEnvironment}:${JSON.stringify(sodaxSettings)}`;
+
+  // Fresh cache per config — query keys carry no env/endpoint segment, so a shared client
+  // would serve one config's data under another.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: configKey is the cache-reset trigger, not a value read in the factory
+  const queryClient = useMemo(() => createSodaxQueryClient(), [configKey]);
+
+  // A new config identity re-creates the SDK; keying only the children resets page state
+  // without tearing down wallet sessions.
   return (
-    <SodaxProvider key={solverEnvironment} config={sodaxConfig}>
+    <SodaxProvider config={sodaxConfig}>
       <QueryClientProvider client={queryClient}>
-        <SodaxWalletProvider config={walletConfig}>{children}</SodaxWalletProvider>
+        <SodaxWalletProvider config={walletConfig}>
+          <React.Fragment key={configKey}>{children}</React.Fragment>
+        </SodaxWalletProvider>
       </QueryClientProvider>
     </SodaxProvider>
   );

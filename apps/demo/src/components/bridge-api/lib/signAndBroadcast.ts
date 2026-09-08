@@ -33,6 +33,7 @@ import type {
   SuiRawTransaction,
   TxReturnType,
 } from '@sodax/dapp-kit';
+import { getEvmViemChain, type EvmChainKey } from '@sodax/dapp-kit';
 import { getXChainType } from '@sodax/wallet-sdk-react';
 
 export class BridgeApiSignError extends Error {
@@ -64,7 +65,10 @@ export async function signAndBroadcastBridgeApiTx(args: {
 
   switch (chainType) {
     case 'EVM':
-      return await (walletProvider as IEvmWalletProvider).sendTransaction(tx as EvmRawTransaction);
+      // Chain-bind the send: the wallet must be on `chainKey`'s network, not wherever it happens to be.
+      return await (walletProvider as IEvmWalletProvider).sendTransaction(tx as EvmRawTransaction, {
+        expectedChainId: getEvmViemChain(chainKey as EvmChainKey).id,
+      });
     case 'SUI': {
       // SuiTransaction is structurally { toJSON(): Promise<string> }; the wallet provider rebuilds
       // via Transaction.from(...), which accepts the base64-serialized tx bytes in `data`.

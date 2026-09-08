@@ -2,6 +2,8 @@
 
 Leveraged-yield ERC-4626 vaults on the Sonic hub. Deposit any token → `lsoda*` vault shares, withdraw shares → any token; plus position / APR / TVL / share-balance reads. New in v2 (no v1 equivalent).
 
+> **Backend-API variant:** the hooks below drive the on-chain `LeverageYieldService` (wallet → hub). To call the backend **Leverage Yield API v2** HTTP client (`sodax.api.leverageYield`) directly instead, use the `useLeverageYieldApi*` hooks — typed React Query wrappers over each endpoint (`useLeverageYieldApiVaults`, `useLeverageYieldApiEffectiveApr`, `useLeverageYieldApiDepositQuote` / `useLeverageYieldApiWithdrawQuote`, `useLeverageYieldApiAllowance` / `useLeverageYieldApiApprove`, `useLeverageYieldApiCreateDepositIntent` / `useLeverageYieldApiCreateWithdrawIntent`, `useLeverageYieldApiSubmitTx` / `useLeverageYieldApiSubmitTxStatus`, and the intent-lifecycle/vault-read hooks). Their `queryKey`/`mutationKey` namespace is `leverageYieldApi`. For the endpoint contract, load the `sodax-sdk` skill's leverage-yield-api feature doc.
+
 ## Hook surface
 
 ```ts

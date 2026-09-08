@@ -21,7 +21,7 @@ For the generic intent flow, see [SWAPS.md](https://github.com/icon-project/soda
 
 The trading-wallet flow described in this guide is the only Bitcoin path currently supported end-to-end by the SDK frontend layer (`@sodax/dapp-kit`, `@sodax/wallet-sdk-react`).
 
-A second flow — **direct deposit** from the user's personal wallet without an intermediate trading wallet — exists at the SDK core level but does not yet have frontend hooks or production usage. In that flow, every swap requires its own on-chain Bitcoin transaction and a fresh \~10-minute block confirmation, with miner fees paid each time. It is on the roadmap for users who prefer fully non-custodial execution and infrequent swaps, and will be exposed through a separate service so that future Bitcoin integrations (Lightning, additional partners, alternative custody models) can sit alongside the existing one as parallel services rather than modes of the same provider.
+A second flow — **direct deposit** from the user's personal wallet without an intermediate trading wallet — exists at the SDK core level but does not yet have frontend hooks or production usage. In that flow, every swap requires its own on-chain Bitcoin transaction and a fresh \~10-minute block confirmation, with miner fees paid each time.
 
 **For builders evaluating Bitcoin today:** only the trading-wallet flow is production-ready. Plan against it; the direct-deposit path will be additive when released and will not break existing integrations.
 

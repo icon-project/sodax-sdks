@@ -149,7 +149,7 @@ const solanaSpoke = sodax.spoke.getSpokeService(ChainKeys.SOLANA_MAINNET) as Sol
 
 ### Pitfall
 
-Solana addresses are base58 PublicKey strings, not `0x…` hex. `GetAddressType<typeof ChainKeys.SOLANA_MAINNET>` resolves to a base58-typed string brand; passing a hex address is a TypeScript error.
+Solana addresses are base58 PublicKey strings, not `0x…` hex. `GetAddressType<typeof ChainKeys.SOLANA_MAINNET>` resolves to `SolanaBase58PublicKey`, which is a plain `string` alias — not a brand — so a hex address compiles and then throws inside `new PublicKey(...)` when the spoke service reads the balance or builds the deposit. Pass the base58 address.
 
 ---
 
@@ -240,7 +240,7 @@ Deposits **from** NEAR (`deposit()` / `fillIntent()` on the NEAR spoke service) 
 | Chain | Notes |
 |---|---|
 | **Sui** (`SUI_MAINNET`) | Address: 32-byte `0x…` (different from EVM addresses despite the prefix). Wallet provider `ISuiWalletProvider` uses `@mysten/sui` under the hood. Reads and submission go over gRPC-web (`grpc_url`, default `https://fullnode.mainnet.sui.io`; `rpc_url` remains a deprecated alias that wins when set) — Mysten's public fullnodes stopped serving JSON-RPC in July 2026, and `sui-node` drops it in October 2026. |
-| **Stacks** (`STACKS_MAINNET`) | Address: `SP…` (mainnet) / `ST…` (testnet). Uses `@stacks/transactions` for tx construction. |
+| **Stacks** (`STACKS_MAINNET`) | Address: `SP…` (mainnet) / `ST…` (testnet). Uses `@stacks/transactions` for tx construction. Wallet-signed deposits use post-condition mode `Deny` with exact spend caps (uSTX for native; one cap per fungible token the SIP-10 contract defines), so wallets display the exact spend and anything beyond it aborts on-chain. FT deposits resolve the on-chain asset names via the node's contract-interface endpoint and fail before signing if that lookup fails; `raw: true` skips the lookup — the serialized payload cannot carry post-conditions. |
 | **Injective** (`INJECTIVE_MAINNET`) | Cosmos-ecosystem chain. Address: `inj1…`. Wallet provider uses `@injectivelabs/sdk-ts`. |
 
 Each has its own `I*WalletProvider` interface with chain-specific signing methods. The `chainType` discriminant on every `I*WalletProvider` instance lets you narrow at runtime without `instanceof`.

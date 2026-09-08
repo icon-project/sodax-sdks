@@ -1,3 +1,10 @@
+# Block staged secrets before they enter history; CI gitleaks is the hard gate.
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks git --pre-commit --staged --redact --no-banner --config .gitleaks.toml
+  gitleaks git --pre-commit --staged --redact --no-banner --config .gitleaks-strict.toml
+else
+  echo "warn: gitleaks not installed (brew install gitleaks); skipping staged secret scan"
+fi
 pnpm checkTs
 pnpm build
 pnpm test
