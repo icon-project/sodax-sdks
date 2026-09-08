@@ -24,6 +24,7 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       contents: read
+      pull-requests: read
 
     steps:
       - name: Check out code
@@ -41,53 +42,36 @@ jobs:
           git fetch --no-tags origin "$HEAD_SHA"
           git cat-file -e "${HEAD_SHA}^{commit}"
 
-      # Docs-only, so a PR carrying a file outside docs/ stops here and mints no token — an
-      # SDK PR that also edits docs/ included. Auto-merge keeps a PR in scope whatever its
-      # diff, so an approved marketing PR is re-classified once its docs edits are reverted.
-      - name: Check the pull request is in scope
-        id: scope
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          AUTO_MERGE: ${{ github.event.pull_request.auto_merge != null }}
-        run: |
-          set -euo pipefail
-          # --no-renames, as the classifier: a rename reports only its destination otherwise,
-          # so a docs page moved out of docs/ would read as never having been there.
-          # Matched on a captured list, as in ci.yml: grep -q would exit on the first hit and
-          # leave git diff writing to a closed pipe, which pipefail reads as no match at all.
-          files=$(git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA")
-          docs_files=$(printf '%s\n' "$files" | grep -E '^docs/' || true)
-          other_files=$(printf '%s\n' "$files" | grep -Ev '^(docs/|$)' || true)
-          if [ "$AUTO_MERGE" = 'true' ] || { [ -n "$docs_files" ] && [ -z "$other_files" ]; }; then
-            echo 'in_scope=true' >>"$GITHUB_OUTPUT"
-          else
-            echo 'in_scope=false' >>"$GITHUB_OUTPUT"
-          fi
-
-      # GITHUB_TOKEN reviews do not count toward the ruleset's required approval, so the
-      # approving identity has to be an App with pull-requests: write. Minted before
-      # classification, so a classifier error can still withdraw an earlier approval.
-      - name: Mint an App token
-        id: app-token
-        if: steps.scope.outputs.in_scope == 'true'
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.DOCS_PUBLISH_APP_ID }}
-          private-key: ${{ secrets.DOCS_PUBLISH_APP_PRIVATE_KEY }}
-
       - name: Classify the pull request diff
         id: classify
-        if: steps.scope.outputs.in_scope == 'true'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: .github/scripts/classify-docs-pr.sh "$BASE_SHA" "$HEAD_SHA"
 
+      # Check live metadata even after classification fails, so an earlier approval can be withdrawn.
+      - name: Check whether an App token is needed
+        id: app-needed
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          MARKETING_ONLY: ${{ steps.classify.outcome == 'success' && steps.classify.outputs.marketing_only == 'true' }}
+        run: bash .github/scripts/docs-app-needed.sh "$PR" "$MARKETING_ONLY"
+
+      # GITHUB_TOKEN cannot supply a qualifying approval; the App is needed for approval or cleanup.
+      - name: Mint an App token
+        id: app-token
+        if: ${{ !cancelled() && steps.app-needed.outcome == 'success' && steps.app-needed.outputs.token_required == 'true' }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.DOCS_PUBLISH_APP_ID }}
+          private-key: ${{ secrets.DOCS_PUBLISH_APP_PRIVATE_KEY }}
+
       # The same HEAD_SHA the classifier read, so the approval cannot land on a commit a
       # later push put there.
       - name: Approve and queue the merge
-        if: steps.classify.outputs.marketing_only == 'true'
+        if: steps.classify.outputs.marketing_only == 'true' && steps.app-token.outcome == 'success'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PR: ${{ github.event.pull_request.number }}
@@ -99,7 +83,7 @@ jobs:
       # PR that stops qualifying, stops touching docs/, or is reopened without a push.
       # Gated on the mint as well: a run with no token approved nothing, and gh would only fail.
       - name: Withdraw a stale approval
-        if: ${{ !cancelled() && steps.app-token.outcome == 'success' && steps.scope.outputs.in_scope == 'true' && steps.classify.outputs.marketing_only != 'true' }}
+        if: ${{ !cancelled() && steps.app-token.outcome == 'success' && (steps.classify.outcome != 'success' || steps.classify.outputs.marketing_only != 'true') }}
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PR: ${{ github.event.pull_request.number }}

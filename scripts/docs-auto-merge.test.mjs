@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 const APPROVE = join(REPO, '.github/scripts/approve-docs-pr.sh');
 const WITHDRAW = join(REPO, '.github/scripts/withdraw-docs-pr.sh');
+const APP_NEEDED = join(REPO, '.github/scripts/docs-app-needed.sh');
 const WORKFLOW = join(REPO, '.github/workflows/docs-auto-merge.yml');
 
 const BOT = 'sodax-docs-publisher[bot]';
@@ -39,6 +40,8 @@ const runner = t => {
   chmodSync(bin, 0o755);
   const log = join(root, 'gh.log');
   writeFileSync(log, '');
+  const output = join(root, 'github-output');
+  writeFileSync(output, '');
 
   return (script, args, env = {}) => {
     const options = {
@@ -49,18 +52,25 @@ const runner = t => {
         ...process.env,
         PATH: `${root}:${process.env.PATH}`,
         GH_LOG: log,
+        GITHUB_OUTPUT: output,
         GITHUB_REPOSITORY: 'icon-project/sodax-sdks',
         ...env,
       },
     };
 
     let code = 0;
+    let stdout = '';
     try {
-      execFileSync('bash', [script, ...args], options);
+      stdout = execFileSync('bash', [script, ...args], options);
     } catch (error) {
       code = error.status ?? 1;
     }
-    return { code, calls: readFileSync(log, 'utf8').trim().split('\n').filter(Boolean) };
+    return {
+      code,
+      stdout,
+      output: readFileSync(output, 'utf8').trim(),
+      calls: readFileSync(log, 'utf8').trim().split('\n').filter(Boolean),
+    };
   };
 };
 
@@ -236,76 +246,93 @@ test('the workflow withdraws only on a run that minted a token', () => {
   assert.match(withdraw, /steps\.app-token\.outcome == 'success'/);
 });
 
-// The scope gate is inline shell, so the test runs the workflow's own copy of it against a
-// throwaway repo rather than a transcription of it.
-const scopeGate = () => {
-  const lines = step('Check the pull request is in scope')
-    .split(/^        run: \|\n/m)[1]
-    .split('\n');
-  const end = lines.findIndex(line => line !== '' && !line.startsWith(' '.repeat(10)));
-  return lines
-    .slice(0, end === -1 ? lines.length : end)
-    .map(line => line.slice(10))
-    .join('\n');
-};
+test('marketing-only changes require an App token for approval', t => {
+  const gh = runner(t);
+  const { code, stdout, output, calls } = gh(APP_NEEDED, ['433', 'true']);
+  assert.equal(code, 0);
+  assert.equal(stdout.trim(), 'token_required=true');
+  assert.equal(output, 'token_required=true');
+  assert.deepEqual(calls, []);
+});
 
-const inScope = (t, files, { autoMerge = false } = {}) => {
-  const root = mkdtempSync(join(REPO, '.tmp-docs-scope-'));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+test('non-marketing changes with no queued merge or bot approval need no App token', t => {
+  const gh = runner(t);
+  const { code, stdout, output, calls } = gh(APP_NEEDED, ['433', 'false'], { GH_AUTO_MERGE_BY: 'false' });
+  assert.equal(code, 0);
+  assert.equal(stdout.trim(), 'token_required=false');
+  assert.equal(output, 'token_required=false');
+  assert.ok(has(calls, 'pr view', 'autoMergeRequest'));
+  assert.ok(has(calls, '--paginate', '/reviews', 'APPROVED', 'Bot'));
+  assert.ok(!has(calls, '-X'));
+});
 
-  const template = join(root, '.git-template');
-  mkdirSync(join(template, 'hooks'), { recursive: true });
-  const git = (...args) =>
-    execFileSync(
-      'git',
-      ['-c', 'commit.gpgsign=false', '-c', 'user.email=test@example.com', '-c', 'user.name=test', ...args],
-      { cwd: root, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1', HUSKY: '0' } },
-    ).trim();
-  const write = (path, content) => {
-    mkdirSync(join(root, dirname(path)), { recursive: true });
-    writeFileSync(join(root, path), content);
-  };
-  const commit = (content, message) => {
-    for (const path of files) write(path, content);
-    git('add', '-A');
-    git('commit', '-m', message);
-    return git('rev-parse', 'HEAD');
-  };
-
-  git('init', '-b', 'main', `--template=${template}`);
-  write('README.md', '# scope\n');
-  const base = commit('base', 'base');
-  const head = commit('head', 'head');
-
-  const script = join(root, 'scope.sh');
-  writeFileSync(script, scopeGate());
-  const output = join(root, 'github-output');
-  writeFileSync(output, '');
-  execFileSync('bash', [script], {
-    cwd: root,
-    encoding: 'utf8',
-    env: { ...process.env, BASE_SHA: base, HEAD_SHA: head, AUTO_MERGE: String(autoMerge), GITHUB_OUTPUT: output },
+test('a queued merge requires cleanup even when its approval was already dismissed', t => {
+  const gh = runner(t);
+  const { code, stdout } = gh(APP_NEEDED, ['433', 'false'], {
+    GH_AUTO_MERGE_BY: 'true',
+    GH_APPROVAL_IDS: '',
   });
-
-  return readFileSync(output, 'utf8').trim();
-};
-
-test('a docs-only pull request is in scope', t => {
-  assert.equal(inScope(t, ['docs/index.mdx', 'docs/swap/index.mdx']), 'in_scope=true');
+  assert.equal(code, 0);
+  assert.equal(stdout.trim(), 'token_required=true');
 });
 
-// The case that failed on PR #264: docs/ edits shipped with SDK source. Minting on it costs a
-// failed run for nothing, since the classifier answers false on the source file anyway.
-test('a pull request mixing docs with source is out of scope', t => {
-  assert.equal(inScope(t, ['docs/index.mdx', 'packages/sdk/src/index.ts']), 'in_scope=false');
+test('a bot approval requires cleanup even if queuing auto-merge never succeeded', t => {
+  const gh = runner(t);
+  const { code, stdout } = gh(APP_NEEDED, ['433', 'false'], {
+    GH_AUTO_MERGE_BY: 'false',
+    GH_APPROVAL_IDS: '901\n902',
+  });
+  assert.equal(code, 0);
+  assert.equal(stdout.trim(), 'token_required=true');
 });
 
-test('a source-only pull request is out of scope', t => {
-  assert.equal(inScope(t, ['packages/sdk/src/index.ts']), 'in_scope=false');
+for (const failedRead of ['autoMergeRequest', '/reviews']) {
+  test(`a failed ${failedRead} read does not declare a PR safe to skip`, t => {
+    const gh = runner(t);
+    const { code, stdout } = gh(APP_NEEDED, ['433', 'false'], {
+      GH_AUTO_MERGE_BY: 'false',
+      GH_FAIL_ON: failedRead,
+    });
+    assert.notEqual(code, 0);
+    assert.equal(stdout, '');
+  });
+}
+
+test('an unexpected auto-merge response fails closed', t => {
+  const gh = runner(t);
+  const { code, stdout } = gh(APP_NEEDED, ['433', 'false'], { GH_AUTO_MERGE_BY: '' });
+  assert.notEqual(code, 0);
+  assert.equal(stdout, '');
 });
 
-// Whatever the diff: a marketing PR the App approved, then pushed with its docs edits
-// reverted, still has to reach the classifier so the approval can be withdrawn.
-test('a pull request with auto-merge enabled stays in scope without a docs change', t => {
-  assert.equal(inScope(t, ['packages/sdk/src/index.ts'], { autoMerge: true }), 'in_scope=true');
+test('an invalid eligibility input fails closed', t => {
+  const gh = runner(t);
+  const { code, stdout } = gh(APP_NEEDED, ['433', 'unknown']);
+  assert.notEqual(code, 0);
+  assert.equal(stdout, '');
+});
+
+test('classification precedes token selection and cannot be skipped by a docs-only scope gate', () => {
+  const workflow = readFileSync(WORKFLOW, 'utf8');
+  assert.ok(workflow.indexOf('name: Classify the pull request diff') < workflow.indexOf('name: Mint an App token'));
+  assert.doesNotMatch(step('Classify the pull request diff'), /\n        if:/);
+  assert.match(step('Check whether an App token is needed'), /GH_TOKEN: \$\{\{ github\.token \}\}/);
+  assert.match(workflow, /pull-requests: read/);
+  assert.doesNotMatch(workflow, /steps\.scope/);
+});
+
+test('classification failures still allow token selection and cleanup, but never approval', () => {
+  const check = step('Check whether an App token is needed');
+  const mint = step('Mint an App token');
+  const withdraw = step('Withdraw a stale approval');
+  assert.match(check, /!cancelled\(\)/);
+  assert.match(check, /steps\.classify\.outcome == 'success' && steps\.classify\.outputs\.marketing_only == 'true'/);
+  assert.match(mint, /!cancelled\(\)/);
+  assert.match(mint, /steps\.app-needed\.outcome == 'success' && steps\.app-needed\.outputs\.token_required == 'true'/);
+  assert.match(withdraw, /!cancelled\(\)/);
+  assert.match(
+    withdraw,
+    /steps\.classify\.outcome != 'success' \|\| steps\.classify\.outputs\.marketing_only != 'true'/,
+  );
+  assert.doesNotMatch(step('Approve and queue the merge'), /!cancelled\(\)|always\(\)|continue-on-error/);
 });

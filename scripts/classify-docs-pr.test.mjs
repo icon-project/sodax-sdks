@@ -47,6 +47,7 @@ const createRepo = t => {
 
   // Engineering tabs, generated and hand-written.
   write(root, 'docs/developers/how-to/estimate_gas.md', generated('Estimate Gas', 'packages/sdk/docs/ESTIMATE_GAS.md'));
+  write(root, 'docs/developers/how-to/payout-wallet.md', page('Partner payout wallet'));
   write(root, 'docs/developers/technical-overview/intro.md', page('Technical Overview'));
   write(root, 'docs/developers/http-api/swaps.md', page('Swaps API'));
   write(root, 'docs/solana/index.md', page('Solana'));
@@ -135,6 +136,14 @@ test('false for an HTTP API page, hand-written but engineering-owned', t => {
   const head = commit(root, 'reword the api page');
 
   assert.match(classify(root, base, head), /marketing_only=false[\s\S]*is not a marketing-tab page/);
+});
+
+test('false for a payout-wallet wording change, even though it only touches docs', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'docs/developers/how-to/payout-wallet.md', page('Partner payout wallet') + 'Use partnerFee.address.\n');
+  const head = commit(root, 'clarify the fee receiver');
+
+  assert.match(classify(root, base, head), /marketing_only=false[\s\S]*payout-wallet\.md is not a marketing-tab page/);
 });
 
 test('false for a network guide', t => {

@@ -85,14 +85,21 @@ commit that will merge.
 it and the classifier are always the copies on `main`: a PR cannot edit its own gate. It reads
 head content with `git show` and never checks out or runs it.
 
-A PR that changes any file outside `docs/` stops before the App token is minted, so an SDK PR
-is unaffected by this workflow — one that also edits `docs/` included, and while the App
-secrets are still missing, when minting is what would otherwise fail. Scoping this on
-docs-only rather than touches-docs costs nothing: a PR carrying one source file classifies as
-false on that file anyway. The one exception is a PR that already has auto-merge enabled: that
-stays in scope whatever the diff looks like, so a PR approved as marketing-only and then
-pushed with its docs edits *reverted* is still re-classified and still has its approval
-withdrawn.
+Every PR is classified before the App token is minted. A non-marketing PR with no queued
+auto-merge or active bot approval finishes without App credentials, including a hand-written
+How To edit or a PR mixing source and docs.
+
+[`docs-app-needed.sh`](scripts/docs-app-needed.sh) uses the built-in `GITHUB_TOKEN` with
+**Pull requests: read** to check live auto-merge state and paginated review history. A queued
+merge or any active bot approval requires an App token for possible cleanup, even when the
+PR no longer touches docs. Checking any bot approval is conservative: without App credentials
+the helper does not know the docs App's login. The withdrawal script still modifies only the
+docs App's own approval and queued merge, leaving a maintainer's or another bot's alone.
+
+The metadata check and token mint can run after classification fails, so an earlier approval
+can still be withdrawn; classification failure never permits a new approval. Failed metadata
+reads fail the job rather than pretending no cleanup is needed. Missing App credentials still
+fail when approval or cleanup requires them — they are not silently ignored.
 
 [`approve-docs-pr.sh`](scripts/approve-docs-pr.sh) binds both privileged calls to the commit
 the classifier read: it re-reads the live head and bails if it has moved, then pins the
@@ -166,7 +173,8 @@ throwaway PR:
    human involved.
 2. Push `packages/sdk/src/**` onto that same PR. Expect: the ruleset dismisses the approval on
    the push, the workflow turns auto-merge off, and the PR waits for a reviewer.
-3. Edit a page in the SDK or Protocol tab. Expect: no approval, and the PR waits.
+3. Edit a page in the SDK, How To or Protocol tab on a new PR. Expect: no App token, no
+   approval, a green auto-merge job even without App secrets, and the PR waits for a human.
 4. Check whether `require_extra_approval_for_unattributed_changes` (on, and a GitHub preview)
    fires on a Mintlify-authored PR. It is documented as applying to unattributed Copilot pull
    requests, so it should not — but if it demands a second approval, the single App approval
