@@ -65,12 +65,30 @@ jobs:
             echo 'in_scope=false' >>"$GITHUB_OUTPUT"
           fi
 
+      # Auto-approval is an enhancement, so an unprovisioned App must not fail an in-scope PR:
+      # without this the mint errors on an empty app-id and reds a docs-only PR for a repo
+      # config gap. Secrets are not usable in an if:, hence the indirection through an output.
+      - name: Check the App credentials are provisioned
+        id: creds
+        if: steps.scope.outputs.in_scope == 'true'
+        env:
+          APP_ID: ${{ secrets.DOCS_PUBLISH_APP_ID }}
+          APP_KEY: ${{ secrets.DOCS_PUBLISH_APP_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -n "$APP_ID" ] && [ -n "$APP_KEY" ]; then
+            echo 'present=true' >>"$GITHUB_OUTPUT"
+          else
+            echo 'present=false' >>"$GITHUB_OUTPUT"
+            echo '::warning::DOCS_PUBLISH_APP_ID / DOCS_PUBLISH_APP_PRIVATE_KEY are unset; skipping docs auto-approval. A docs-only PR needs a reviewer until they are provisioned.'
+          fi
+
       # GITHUB_TOKEN reviews do not count toward the ruleset's required approval, so the
       # approving identity has to be an App with pull-requests: write. Minted before
       # classification, so a classifier error can still withdraw an earlier approval.
       - name: Mint an App token
         id: app-token
-        if: steps.scope.outputs.in_scope == 'true'
+        if: steps.scope.outputs.in_scope == 'true' && steps.creds.outputs.present == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.DOCS_PUBLISH_APP_ID }}
@@ -78,7 +96,7 @@ jobs:
 
       - name: Classify the pull request diff
         id: classify
-        if: steps.scope.outputs.in_scope == 'true'
+        if: steps.scope.outputs.in_scope == 'true' && steps.creds.outputs.present == 'true'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
