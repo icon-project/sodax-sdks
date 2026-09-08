@@ -11,6 +11,7 @@ It quotes; it never signs. Nothing here can move a visitor's funds.
 
 ```bash
 pnpm install                              # from the repo root
+pnpm build:packages                       # required: Vite resolves @sodax/sdk from dist/
 pnpm --filter @sodax/playground dev
 # → http://localhost:3005
 ```

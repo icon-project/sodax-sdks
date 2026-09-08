@@ -1,4 +1,4 @@
-import { Buffer } from 'buffer';
+import './polyfill';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
@@ -15,10 +15,6 @@ Object.defineProperty(BigInt.prototype, 'toJSON', {
   writable: true,
   configurable: true,
 });
-
-if (!window.Buffer) {
-  window.Buffer = Buffer;
-}
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('#root element not found');

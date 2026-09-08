@@ -8,6 +8,7 @@ Package name: `@sodax/playground`. Dev server port: **3005**.
 
 ```bash
 pnpm install
+pnpm build:packages                       # required: Vite resolves @sodax/sdk from dist/
 pnpm --filter @sodax/playground dev
 # → http://localhost:3005
 ```
@@ -25,7 +26,8 @@ Four product decisions constrain almost everything below. They came from the v1 
 
 ```
 src/
-├── index.tsx           # entry — bigint toJSON shim, Buffer shim, guarded #root
+├── polyfill.ts         # Buffer on window — must be the first import in index.tsx
+├── index.tsx           # entry — bigint toJSON shim, guarded #root
 ├── providers.tsx       # SodaxProvider + QueryClientProvider. No wallet provider.
 ├── config.ts           # embed origin, optional API key, default pair, slippage
 ├── App.tsx             # embed mode, or header + stage + footer around the widget
@@ -119,6 +121,9 @@ Plain CSS rather than the frontend's Tailwind `@theme` registration: this repo h
 
 ## Common pitfalls
 
+- **The picker is a port, not an import.** sodax-frontend's swap `CurrencySearchPanel` / `TokenAsset` is Next + Tailwind + balances. Recreate the interaction here in `AssetPicker.tsx` (2×2 network mark, overlay network grid, in-place chain flyout). Do not add a frontend dependency, a UI kit, or a MAX/balance row.
+- **Build packages before `vite dev`.** The playground imports `@sodax/dapp-kit`, which re-exports `@sodax/sdk` through `dist/`. If `packages/sdk/dist/index.mjs` is missing (a `tsup --watch` that cleaned then failed, or packages never built), Vite reports `Failed to resolve entry for package "@sodax/sdk"`. Run `pnpm build:packages` from the repo root, then refresh.
+- **Node polyfills.** `new Sodax()` constructs every feature service, so `bitcoinjs-lib` lands in the bundle and needs `Buffer`. The bangjelkoski plugin injects it on `vite build`; `src/polyfill.ts` must be the first import in `index.tsx` so `vite dev` has the global before that graph evaluates. Assigning `window.Buffer` after the other imports is too late — ESM hoists them. `vite.config.ts` aliases `buffer` to the npm package's absolute path; a `'buffer/'` string lets Vite 5 externalize the Node builtin and the page dies with `Buffer is not defined`.
 - **Don't add a UI framework or design-system dependency.** The copy-paste story dies with it.
 - **Don't import `@sodax/types` or `@sodax/sdk` directly.** `@sodax/dapp-kit` re-exports both; a direct dep invites version skew.
 - **Don't mix the two token sources.** The swap reads the API; the parked bridge reads `spokeChainConfig`. A component that takes both is a component that will be handed the wrong one.
