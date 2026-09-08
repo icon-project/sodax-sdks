@@ -64,6 +64,15 @@ Swap tokens live in [`src/swap/swap.ts`](src/swap/swap.ts) as two per-chain `Rec
 
 The two lists are **disjoint per chain** (a token lives in exactly one). The staging solver supports the union — every production token plus the staging-only set. Accessors: `getSupportedSolverTokens` returns the production list only; `getStagingSolverTokens` returns the full staging set (production + staging-only). `isSwapSupportedToken(chainId, token)` validates against the union and does **not** gate on environment — the caller targets the correct one. Invariants (intra-list dedup, disjointness, staging-superset accessor, union validation) are enforced by [`src/chains/tokens-dedup.test.ts`](src/chains/tokens-dedup.test.ts) and [`src/swap/swap.test.ts`](src/swap/swap.test.ts). Add or move entries via the `add-token` skill (see Rules) and always confirm the target environment first.
 
+## Hub vault feature membership (`SodaTokens`)
+
+`SodaTokens` ([`src/chains/tokens.ts`](src/chains/tokens.ts)) is the canonical registry of Sonic hub vaults, and it grants **neither swap nor money-market support** — each of those keeps its own explicit list, so registry membership is never evidence of either. It is not inert: `sonicSupportedTokens` spreads `...SodaTokens`, so bridge / partner-fee / recovery iterate a new vault automatically like any other `supportedTokens` entry.
+
+- **Swap** — `swapSupportedTokens[SONIC_MAINNET]` ([`src/swap/swap.ts`](src/swap/swap.ts)) names each vault as a `SodaTokens.<symbol>` reference. A vault can also be staging-only, or in no swap list at all; the inline comment there says which and why.
+- **Money market** — the module-private `moneyMarketHubVaults` list ([`src/moneyMarket/moneyMarket.ts`](src/moneyMarket/moneyMarket.ts)) feeds both `moneyMarketSupportedTokens[SONIC_MAINNET]` and `moneyMarketReserveAssets`. A vault missing from it has no reserve data and cannot be lent against.
+
+The Robinhood tokenized equities are the worked example of a swap-only vault set — deliberately in no money-market list. [`src/chains/equity-vault-tokens.test.ts`](src/chains/equity-vault-tokens.test.ts) holds the symbols and the chains they are registered on, and is the source of truth for that matrix; [`src/chains/legacy-registry-compat.test.ts`](src/chains/legacy-registry-compat.test.ts) pins every legacy registry, trustline and swap sequence as an unchanged prefix so vault additions stay additive for consumers that index these lists.
+
 ## Chain logos
 
 Each `baseChainInfo` entry carries a `logo` URL (default chain logo). The binary
