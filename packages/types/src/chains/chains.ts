@@ -537,19 +537,23 @@ export type StellarSpokeChainConfig = BaseSpokeChainConfig<'STELLAR'> & {
   baseFee: string;
 };
 
+export const BOUND_API_HOST = 'https://svc.bound.exchange/api';
+
 /**
- * Bound's host set. Kept OUT of `spokeChainConfig` below: `deepMerge` merges `radfi` key by key,
- * so inlining these would let an `apiUrl`-only override inherit them and straddle environments.
+ * Which auth/transactions hosts accompany a given Bound api host. Kept OUT of `spokeChainConfig`
+ * below: `deepMerge` merges `radfi` key by key, so inlining them would let an `apiUrl`-only
+ * override inherit them and straddle environments. A key absent here falls back to the api host.
  */
-export const BOUND_HOSTS = {
-  api: 'https://svc.bound.exchange/api',
-  auth: 'https://auth.bound.exchange/api',
-  transactions: 'https://api.radfi.co/api',
-} as const;
+export const BOUND_COMPANION_HOSTS: Record<string, { auth?: string; transactions?: string }> = {
+  [BOUND_API_HOST]: {
+    auth: 'https://auth.bound.exchange/api',
+    transactions: 'https://api.radfi.co/api',
+  },
+};
 
 /** Retiring hosts → their replacement. Warned about, never rejected. */
 export const DEPRECATED_BOUND_HOSTS: Record<string, string> = {
-  'https://api.bound.exchange/api': BOUND_HOSTS.api,
+  'https://api.bound.exchange/api': BOUND_API_HOST,
 };
 
 export type BitcoinSpokeChainConfig = BaseSpokeChainConfig<'BITCOIN'> & {
@@ -560,9 +564,9 @@ export type BitcoinSpokeChainConfig = BaseSpokeChainConfig<'BITCOIN'> & {
   network: string;
   radfi: {
     apiUrl: string;
-    /** `/auth/*` + `/wallets/*`. Unset falls back to `apiUrl` — see {@link BOUND_HOSTS}. */
+    /** `/auth/*` + `/wallets/*`. Unset falls back to `apiUrl` — see {@link BOUND_COMPANION_HOSTS}. */
     authUrl?: string;
-    /** `/transactions/*`. Unset falls back to `apiUrl` — see {@link BOUND_HOSTS}. */
+    /** `/transactions/*`. Unset falls back to `apiUrl` — see {@link BOUND_COMPANION_HOSTS}. */
     transactionsUrl?: string;
     umsUrl: string;
     apiKey: string;
@@ -881,8 +885,8 @@ export const spokeChainConfig = {
     supportedTokens: bitcoinSupportedTokens,
     radfi: {
       walletMode: 'TRADING',
-      // authUrl / transactionsUrl are intentionally absent: see BOUND_HOSTS.
-      apiUrl: BOUND_HOSTS.api,
+      // authUrl / transactionsUrl are intentionally absent: see BOUND_COMPANION_HOSTS.
+      apiUrl: BOUND_API_HOST,
       apiKey: '',
       umsUrl: 'https://api.ums.bound.exchange/api',
       accessToken: '',

@@ -1,5 +1,5 @@
 import {
-  BOUND_HOSTS,
+  BOUND_COMPANION_HOSTS,
   DEPRECATED_BOUND_HOSTS,
   detectBitcoinAddressType,
   usesBip322MessageSigning,
@@ -136,6 +136,8 @@ export type RadfiProviderOptions = {
 export type RadfiHost = 'api' | 'auth' | 'transactions';
 
 const stripSlash = (url: string): string => (url.endsWith('/') ? url.slice(0, -1) : url);
+const stripSlashOpt = (url: string | undefined): string | undefined =>
+  url === undefined ? undefined : stripSlash(url);
 
 export class RadfiProvider {
   private readonly config: RadfiConfig;
@@ -165,24 +167,28 @@ export class RadfiProvider {
     }
 
     const api = stripSlash(config.apiUrl);
-    // Companions apply only while `apiUrl` is the packaged host; a consumer who named their own
-    // gets every family on it, which is what makes a partial override unable to straddle.
-    const split = api === BOUND_HOSTS.api;
-    const packagedAuth = split ? BOUND_HOSTS.auth : api;
-    const packagedTransactions = split ? BOUND_HOSTS.transactions : api;
+    // Companions are registered per api host, so an apiUrl the table does not know sends every
+    // family to itself — which is what makes a partial override unable to straddle environments.
+    const companions = BOUND_COMPANION_HOSTS[api] ?? {};
 
     this.hosts = {
       api,
-      auth: config.authUrl ? stripSlash(config.authUrl) : packagedAuth,
-      transactions: config.transactionsUrl ? stripSlash(config.transactionsUrl) : packagedTransactions,
+      auth: stripSlashOpt(config.authUrl) ?? companions.auth ?? api,
+      transactions: stripSlashOpt(config.transactionsUrl) ?? companions.transactions ?? api,
     };
 
-    // Deduplicated: an `apiUrl` on a retired host resolves all three to it.
-    for (const url of new Set(Object.values(this.hosts))) {
-      const replacement = DEPRECATED_BOUND_HOSTS[url];
+    // Warn per config field, not per resolved URL: a companion can hold a retired host on its
+    // own, and telling that consumer to change `apiUrl` would not fix it.
+    const configured: [keyof RadfiConfig, string | undefined][] = [
+      ['apiUrl', config.apiUrl],
+      ['authUrl', config.authUrl],
+      ['transactionsUrl', config.transactionsUrl],
+    ];
+    for (const [field, value] of configured) {
+      const replacement = value && DEPRECATED_BOUND_HOSTS[stripSlash(value)];
       if (replacement) {
         this.logger?.warn(
-          `Bound Exchange is retiring ${url}. Point chains.bitcoin.radfi.apiUrl at ${replacement} before the deprecation date.`,
+          `Bound Exchange is retiring ${stripSlash(value)}. Point chains.bitcoin.radfi.${field} at ${replacement} before the deprecation date.`,
         );
       }
     }
@@ -687,8 +693,11 @@ export class RadfiProvider {
     // Let an injected signer add request headers (e.g. Bound's `x-api-signature` HMAC for a backend
     // caller). Computed per request so a time-boxed signature stays inside its validity window. The
     // signer owns the credential; this provider never sees it.
-    const signed = this.signer ? await this.signer({ method: options?.method ?? 'GET', path: endpoint }) : undefined;
-    return fetch(`${this.hosts[host]}${endpoint}`, {
+    const baseUrl = this.hosts[host];
+    const signed = this.signer
+      ? await this.signer({ method: options?.method ?? 'GET', path: endpoint, baseUrl })
+      : undefined;
+    return fetch(`${baseUrl}${endpoint}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',

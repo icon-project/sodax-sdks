@@ -237,7 +237,7 @@ On any non-success (submission rejected, a 200 the backend did not accept, termi
 
 ### RadFi/Bound request signer (`radfi.signRequest`)
 
-`radfi` is a **client-side runtime option** on `SodaxOptions` (like `logger`) — never part of the backend-fetched `SodaxConfig`. The SDK calls `signRequest` once per outbound Bound Exchange (RadFi) `apiUrl` request and merges the returned headers onto it, so a server-to-server caller can attach Bound's `x-api-signature` HMAC header without the SDK ever holding the credential.
+`radfi` is a **client-side runtime option** on `SodaxOptions` (like `logger`) — never part of the backend-fetched `SodaxConfig`. The SDK calls `signRequest` once per outbound Bound Exchange (RadFi) request on **any** routed host — `svc.bound.exchange`, `auth.bound.exchange` or `api.radfi.co` — and merges the returned headers onto it, so a server-to-server caller can attach Bound's `x-api-signature` HMAC header without the SDK ever holding the credential. The context carries `baseUrl`, so a signer that must scope its credential per origin can branch on it. UMS calls (`/wallets/balance`, `/utxos`) bypass this and are never signed.
 
 ```typescript
 import { createHmac } from 'node:crypto';

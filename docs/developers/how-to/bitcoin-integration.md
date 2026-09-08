@@ -82,10 +82,14 @@ new Sodax({
 });
 ```
 
-**Setting `apiUrl` alone sends every family to that host.** That is deliberate: it keeps a
-single-host setup working, and it makes it impossible to half-migrate and have auth traffic
-silently land in a different environment from the rest. To keep the split while changing one
-family, set that family's host explicitly with `authUrl` or `transactionsUrl`.
+**Setting `apiUrl` alone sends the three routed families to that host** — `/sodax/*`,
+`/auth/*` + `/wallets/*`, and `/transactions/*`. That is deliberate: it keeps a single-host
+setup working, and it makes it impossible to half-migrate and have auth traffic silently land
+in a different environment from the rest. To keep the split while changing one family, set that
+family's host explicitly with `authUrl` or `transactionsUrl`.
+
+**UMS is not routed by `apiUrl`.** `/wallets/balance` and `/utxos` always use `umsUrl`, so a
+proxy or test environment that must capture *all* Bound traffic has to override `umsUrl` too.
 
 To override RPC endpoints (canary, signet), pass them under `BITCOIN.chains[ChainKeys.BITCOIN_MAINNET]`:
 
