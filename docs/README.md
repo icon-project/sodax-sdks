@@ -230,7 +230,10 @@ that opens a hand-written page at all.
 - **Package API reference.** Each package's `README.md` lives with the package, because npm
   publishes it from there. Reference it; do not fork it into a page here.
 - **Agent skills.** `packages/skills` is the partner-facing agent bundle, validated by
-  `pnpm check:ai`. It is not published to the site.
+  `pnpm check:ai`. It is not published to the site. The one exception is the root
+  `skill.md`: Mintlify otherwise generates its own skill at `/skill.md`, so that file exists
+  only to point agents at the canonical https://www.sodax.com/skill.md. Never grow it into
+  a second skill.
 - **Contributor and release docs.** Keep them outside `docs/`, or list them in
   `.mintignore`.
 - **Notes to the docs team.** "Add embeds here as they publish", "rewrite these", who owns a

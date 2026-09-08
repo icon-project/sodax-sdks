@@ -62,6 +62,19 @@ test('flags a published page that no nav entry reaches', t => {
   assert.match(failures[0], /docs\/orphan is published but absent/);
 });
 
+test('a root skill.md is the Mintlify agent skill, not a page needing a nav entry', t => {
+  const root = createWorkspace(t, {
+    navigation: { tabs: [{ tab: 'Home', pages: ['index'] }] },
+    files: ['index.mdx', 'skill.md', 'developers/skill.md'],
+  });
+
+  const { failures, files } = checkNav({ root });
+
+  assert.equal(failures.length, 1);
+  assert.match(failures[0], /docs\/developers\/skill is published but absent/);
+  assert.equal(files, 2);
+});
+
 test('.mintignore exempts a file from needing a nav entry', t => {
   const root = createWorkspace(t, {
     navigation: { tabs: [{ tab: 'Home', pages: ['index'] }] },

@@ -36,25 +36,42 @@ Complete feature map (verified — re-check in source, it can change):
 | --- | --- | --- |
 | **Swap** | **EDIT** → add to `swapSupportedTokens[<chain>]` (`swap/swap.ts`) | curated opt-in list (a subset) |
 | **Money market** | **EDIT** → add to `moneyMarketSupportedTokens[<chain>]` (`moneyMarket/moneyMarket.ts`) | curated opt-in list (a subset) |
+| **Hub vault (`SodaTokens`)** | **EDIT** → add to `HubVaultSymbols` + `SodaTokens` (`chains/tokens.ts`) | canonical registry — grants **neither swap nor money market**, but it spreads into `sonicSupportedTokens`, so the auto rows below do pick it up |
 | **Bridge** | nothing — auto | `isBridgeable` derives from `supportedTokens`; real bridging still needs a matching counterpart token + correct `vault` on the dest chain, so *defined ≠ bridgeable everywhere* |
 | **Partner fee** | nothing — auto | iterates **every** `supportedTokens` entry |
 | **Recovery** | nothing — auto | iterates **every** `supportedTokens` entry |
 | **Staking** | nothing — out of scope | SODA-specific (`supportedTokens['SODA']`); staking a different token is a separate feature change, not add-token |
 | **DEX / Migration** | nothing | pools / fixed legacy set (`['ICX','bnUSD','BALN']`) |
 
-**The only explicit edits are the curated lists: swap and money market.** Defining the token in
+**The only explicit edits are the curated lists — swap and money market — plus `SodaTokens` when the
+token needs a new Sonic hub vault (which by itself grants neither swap nor money-market support).** Defining the token in
 the chain map makes bridge / partner-fee / recovery include it automatically (they iterate the
 full map and skip entries whose `hubAsset` is a placeholder like `'0x'`). Both curated lists are
 **packaged in `@sodax/types`** → editing either is **release-gated**. (A backend money-market
 tokens API also exists; whether it enables tokens without a release is **unverified** — confirm first.)
 
+> **`SodaTokens` is neutral for the two curated features.** It is the canonical registry of Sonic hub
+> vaults: a new entry there is **not** swap-supported and **not** a money-market reserve asset until it
+> is listed explicitly. It is not inert, though — `sonicSupportedTokens` spreads `...SodaTokens`, so
+> bridge / partner-fee / recovery pick a new vault up automatically, exactly as the table above says.
+> Sonic swap membership is the per-vault `SodaTokens.<symbol>` list in
+> `swapSupportedTokens[SONIC_MAINNET]` (`swap/swap.ts`); money-market membership is the module-private
+> `moneyMarketHubVaults` list in `moneyMarket.ts`, which is what `moneyMarketReserveAssets` derives from.
+> Never read `SodaTokens` as evidence of either. Feature scope is an explicit choice per vault:
+>
+> | Desired support | Registration |
+> | --- | --- |
+> | Swap only | `SodaTokens` + the applicable production/staging swap entries |
+> | Money market only | `SodaTokens` + `moneyMarketHubVaults` + the money-market chain entries |
+> | Both | explicit additions to both feature lists |
+> | Neither yet | `SodaTokens` only |
+>
 > **Hub-side caveat (vault must be a known hub asset):** for a **money-market** token, the `vault`
-> must be a **hub reserve asset** — a `SodaTokens` entry or `hubConfig.bnUSD`, since `moneyMarketReserveAssets`
-> (`moneyMarket.ts`) is derived from exactly those. If the `vault` is new (not a `SodaTokens` entry),
-> the reserve data is missing and the token will not work in MM — that is a hub-vault change **beyond
-> add-token's scope**: stop and confirm with the requester. (More generally, a `vault` that is a new
-> hub vault rather than the token's own `hubAsset` must already exist — verify. xStocks reuse their
-> `hubAsset` as the vault and are swap-only, so no hub-side entry was needed.)
+> must be a **hub reserve asset** — in `moneyMarketHubVaults` or `hubConfig.bnUSD`. If the `vault` is
+> new, the reserve data is missing and the token will not work in MM — that is a hub-vault change
+> **beyond add-token's scope**: stop and confirm with the requester. (More generally, a `vault` that is
+> a new hub vault rather than the token's own `hubAsset` must already exist — verify. xStocks and the
+> Robinhood tokenized equities reuse their `hubAsset` as the vault and are swap-only.)
 
 > **Scope judgment:** the explicit choice is **swap, money market, or both** — usually more than one
 > (major assets/stables go in both; xStocks are the swap-only exception). **Partner-fee / recovery**

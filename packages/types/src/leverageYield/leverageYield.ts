@@ -120,6 +120,19 @@ export const leverageYieldVaults = [
       label: 'Jito (JitoSOL)',
     },
   },
+  {
+    name: LsodaTokens.lsodaSUSDS.symbol,
+    vault: LsodaTokens.lsodaSUSDS.vault,
+    asset: SodaTokens.sodaSUSDS.address, // sodaSUSDS (sUSDS) on Sonic — eMode-3 collateral
+    borrowToken: SodaTokens.sodaUSSD.address, // sodaUSSD (USSD) on Sonic — eMode-3 borrowable
+    lsdSource: {
+      // DefiLlama pool for the Sky Savings Rate on sUSDS (project: 'sky-lending', Ethereum).
+      // sUSDS appreciates against USDS at the SSR — yield AAVE's currentLiquidityRate omits.
+      poolId: 'd8c4eff5-c8a9-46fc-a888-057c4c668e72',
+      fallbackAprPct: 3.5,
+      label: 'Sky (sUSDS)',
+    },
+  },
 ] as const satisfies readonly LeverageYieldVault[];
 
 // options for the leverage yield service to be configured by the integrator
