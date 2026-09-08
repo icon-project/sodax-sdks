@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { trackSnippetCopied } from '../lib/analytics';
 import type { Snippet } from '../lib/snippet';
 
 const SNIPPET_HINT = 'Updates with the form. Addresses and decimals come from the SODAX swaps API';
@@ -12,6 +13,7 @@ export function CodePanel({ snippets, initialId }: { snippets: Snippet[]; initia
 
   const copy = async () => {
     await navigator.clipboard.writeText(active.code);
+    trackSnippetCopied(active.id);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1500);
   };

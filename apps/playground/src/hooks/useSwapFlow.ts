@@ -9,6 +9,14 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatUnits } from 'viem';
 import { DEFAULT_AMOUNT, DEFAULT_PAIR, DEFAULT_SLIPPAGE_PERCENT } from '../config';
+import {
+  type PairDimensions,
+  quoteEventKey,
+  trackExchangeHandoff,
+  trackPartnerFeeSet,
+  trackQuoteFailed,
+  trackQuoteReceived,
+} from '../lib/analytics';
 import { pickChain, pickToken, readSwapAssets, tokensOn } from '../lib/assets';
 import { NO_PARTNER_FEE, type PartnerFeeInput, feeAmountOf, readPartnerFee } from '../lib/fee';
 import { parseAmount } from '../lib/format';
@@ -152,6 +160,43 @@ export function useSwapFlow() {
     return (BigInt(quotedAmount) * slippageBps) / 10_000n;
   }, [quotedAmount, slippageBps]);
 
+  const pair = useMemo<PairDimensions | undefined>(() => {
+    if (!srcChain || !dstChain || !srcToken || !dstToken) return undefined;
+    return {
+      source_chain: srcChain,
+      destination_chain: dstChain,
+      input_token_symbol: srcToken.symbol,
+      output_token_symbol: dstToken.symbol,
+      input_amount: amount,
+      has_partner_fee: partnerFee !== undefined,
+    };
+  }, [srcChain, dstChain, srcToken, dstToken, amount, partnerFee]);
+
+  const trackedQuote = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (!pair || (quotedAmount === undefined && !quoteQuery.isError)) return;
+
+    const key = `${quoteEventKey(pair)}|${quoteQuery.isError}`;
+    if (trackedQuote.current === key) return;
+    trackedQuote.current = key;
+
+    if (quoteQuery.isError) trackQuoteFailed(pair, 'no_route');
+    else trackQuoteReceived(pair);
+  }, [pair, quotedAmount, quoteQuery.isError]);
+
+  const trackedFeeBps = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    if (partnerFee === undefined || trackedFeeBps.current === partnerFee.percentage) return;
+    trackedFeeBps.current = partnerFee.percentage;
+    trackPartnerFeeSet(partnerFee.percentage);
+  }, [partnerFee]);
+
+  const trackHandoff = useCallback(() => {
+    if (pair) trackExchangeHandoff(pair);
+  }, [pair]);
+
   const flipDirection = useCallback(() => {
     setSrcChain(dstChain);
     setDstChain(srcChain);
@@ -192,5 +237,6 @@ export function useSwapFlow() {
     quoteError: quoteQuery.isError ? 'No route for this pair right now.' : undefined,
     isSlippageValid: slippageBps !== undefined,
     isAmountValid: inputAmount !== undefined,
+    trackHandoff,
   };
 }

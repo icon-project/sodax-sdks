@@ -23,6 +23,27 @@ Both values are optional; the widget runs against the public SODAX swaps API wit
 | --- | --- |
 | `VITE_EMBED_ORIGIN` | The origin the embed snippet points at. Without it the snippet quotes whatever origin serves the page — right for a local preview, wrong for a copied `<iframe>`. |
 | `VITE_SWAPS_API_KEY` | Per-deployment quota on the swaps API, sent as `x-api-key`. The public endpoint needs none. Anything in a Vite bundle is public. |
+| `VITE_GTM_ID` | GTM container the events go to, the same one sodax.com loads. Unset, nothing loads and nothing is pushed. |
+| `VITE_GTM_IN_EMBED` | `1` also loads the container inside a partner's `<iframe>`. Off by default. |
+
+## What it measures
+
+Events go to the GTM dataLayer under GA4 naming, exactly as on sodax.com, and reuse the
+frontend's parameter names (`source_chain`, `input_token_symbol`, …) so the dimensions already
+registered for `swap_completed` read these too. No wallet means no address and no transaction
+hash is ever sent; the partner fee is reported in basis points, never with its recipient.
+
+| Event | Fires when |
+| --- | --- |
+| `widget_viewed` | The container loads. Carries `is_embedded`, as every event below does. |
+| `quote_received` | A configured pair returns a quote — once per pair, not once per 3s refetch. |
+| `quote_failed` | That pair has no route. |
+| `exchange_handoff_clicked` | The visitor clicks through to `sodax.com/exchange/swap`. The conversion step. |
+| `embed_snippet_copied` | A code-panel tab is copied, with `snippet_id`. |
+| `partner_fee_set` | A valid fee is entered, with `fee_bps`. |
+
+A team browser flagged on sodax.com with `?internal=1` shares the `.sodax.com` cookie, so its
+events carry `traffic_type: internal` here too and GA4's internal filter drops them.
 
 ## Embedding it
 

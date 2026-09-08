@@ -13,6 +13,12 @@ export const embedOrigin =
 /** Optional per-deployment quota on the swaps API. Anything in a Vite bundle is public. */
 export const swapsApiKey = env.VITE_SWAPS_API_KEY;
 
+/** GTM container, as on sodax.com. Unset, and nothing loads and nothing is pushed. */
+export const gtmId = env.VITE_GTM_ID;
+
+/** Whether the container also loads inside a partner's `<iframe>`. See `lib/analytics.ts`. */
+export const trackInEmbed = env.VITE_GTM_IN_EMBED === '1';
+
 export const DEFAULT_SLIPPAGE_PERCENT = '0.5';
 
 /** Seeded so the widget opens on a live quote rather than an empty form. A `?amount=` link wins. */

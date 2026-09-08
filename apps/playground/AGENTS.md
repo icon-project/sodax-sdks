@@ -66,6 +66,16 @@ src/
 
 Do not add a connect button, a balance, or a MAX button without re-opening that decision — each one needs the wallet layer back, and with it the signing paths.
 
+## Analytics
+
+`lib/analytics.ts` mirrors sodax-frontend `apps/web/lib/analytics.ts`: events are pushed to the GTM dataLayer under GA4 naming, and the container forwards them. Keep the parameter names identical to the frontend's (`source_chain`, `destination_chain`, `input_token_symbol`, `output_token_symbol`, `input_amount`) — the GA4 custom dimensions are registered against those, so a renamed param lands in no report.
+
+- **`VITE_GTM_ID` is per deployment.** Unset — dev, CI, tests — and `window.dataLayer` never exists, so every `track*` call is a no-op. `tagPolicy` is the whole decision and is unit-tested.
+- **The container does not load in an embed unless `VITE_GTM_IN_EMBED=1`.** Inside an `<iframe>` the site owner owns the consent decision, so it is opt-in per deployment rather than a default.
+- **`quote_received` is deduplicated by pair.** The quote refetches every 3s; `quoteEventKey` is what keeps that from becoming 20 events a minute. Extend the key when you add a form field that changes what was quoted.
+- **Nothing identifying is ever sent.** There is no wallet, so no address and no transaction hash exists to leak; the partner fee is reported as `fee_bps` and its recipient never is.
+- **New events go in the `EventName` union**, and the tracker call belongs in `useSwapFlow` when it needs form state — a component only fires the ones that are pure UI (a copy, a click-through).
+
 ## The parked bridge flow
 
 `views/BridgeView.tsx`, `components/BridgePanel.tsx` and `hooks/useBridgeFlow.ts` are complete, typechecked, and mounted by nothing. Vite tree-shakes them out of the bundle; `@sodax/wallet-sdk-react` stays a dependency so they keep compiling.

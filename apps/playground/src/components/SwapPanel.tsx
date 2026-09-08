@@ -70,7 +70,7 @@ function PrimaryAction({ flow }: { flow: SwapFlow }) {
   if (!flow.hasQuote) return disabled(flow.isQuoting ? 'Fetching quote…' : 'Enter an amount');
 
   return (
-    <a className="btn btn-primary" href={EXCHANGE_URL} target="_blank" rel="noreferrer">
+    <a className="btn btn-primary" href={EXCHANGE_URL} target="_blank" rel="noreferrer" onClick={flow.trackHandoff}>
       Swap {flow.srcToken.symbol} → {flow.dstToken.symbol} ↗
     </a>
   );
