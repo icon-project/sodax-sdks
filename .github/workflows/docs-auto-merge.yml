@@ -49,15 +49,31 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: .github/scripts/classify-docs-pr.sh "$BASE_SHA" "$HEAD_SHA"
 
+      # Secrets are not usable in if:; record presence so cleanup is only required when the App can act.
+      - name: Record whether App credentials exist
+        id: creds-present
+        if: ${{ !cancelled() }}
+        env:
+          APP_ID: ${{ secrets.DOCS_PUBLISH_APP_ID }}
+          APP_KEY: ${{ secrets.DOCS_PUBLISH_APP_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -n "$APP_ID" ] && [ -n "$APP_KEY" ]; then
+            echo 'present=true' >>"$GITHUB_OUTPUT"
+          else
+            echo 'present=false' >>"$GITHUB_OUTPUT"
+          fi
+
       # Check live metadata even after classification fails, so an earlier approval can be withdrawn.
       - name: Check whether an App token is needed
         id: app-needed
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.creds-present.outcome == 'success' }}
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
           MARKETING_ONLY: ${{ steps.classify.outcome == 'success' && steps.classify.outputs.marketing_only == 'true' }}
-        run: bash .github/scripts/docs-app-needed.sh "$PR" "$MARKETING_ONLY"
+          CREDS_PRESENT: ${{ steps.creds-present.outputs.present }}
+        run: bash .github/scripts/docs-app-needed.sh "$PR" "$MARKETING_ONLY" "$CREDS_PRESENT"
 
       # Missing credentials may skip a new approval, but must not silently skip required cleanup.
       - name: Check the App credentials are provisioned

@@ -248,7 +248,7 @@ test('the workflow withdraws only on a run that minted a token', () => {
 
 test('marketing-only changes require an App token for approval', t => {
   const gh = runner(t);
-  const { code, stdout, output, calls } = gh(APP_NEEDED, ['433', 'true']);
+  const { code, stdout, output, calls } = gh(APP_NEEDED, ['433', 'true', 'false']);
   assert.equal(code, 0);
   assert.equal(stdout.trim(), 'token_required=true');
   assert.equal(output, 'token_required=true');
@@ -257,7 +257,9 @@ test('marketing-only changes require an App token for approval', t => {
 
 test('non-marketing changes with no queued merge or bot approval need no App token', t => {
   const gh = runner(t);
-  const { code, stdout, output, calls } = gh(APP_NEEDED, ['433', 'false'], { GH_AUTO_MERGE_BY: 'false' });
+  const { code, stdout, output, calls } = gh(APP_NEEDED, ['433', 'false', 'true'], {
+    GH_AUTO_MERGE_BY: 'false',
+  });
   assert.equal(code, 0);
   assert.equal(stdout.trim(), 'token_required=false');
   assert.equal(output, 'token_required=false');
@@ -266,9 +268,21 @@ test('non-marketing changes with no queued merge or bot approval need no App tok
   assert.ok(!has(calls, '-X'));
 });
 
+test('unset credentials skip metadata so an unrelated bot approval does not fail the job', t => {
+  const gh = runner(t);
+  const { code, stdout, output, calls } = gh(APP_NEEDED, ['433', 'false', 'false'], {
+    GH_AUTO_MERGE_BY: 'true',
+    GH_APPROVAL_IDS: '901',
+  });
+  assert.equal(code, 0);
+  assert.equal(stdout.trim(), 'token_required=false');
+  assert.equal(output, 'token_required=false');
+  assert.deepEqual(calls, []);
+});
+
 test('a queued merge requires cleanup even when its approval was already dismissed', t => {
   const gh = runner(t);
-  const { code, stdout } = gh(APP_NEEDED, ['433', 'false'], {
+  const { code, stdout } = gh(APP_NEEDED, ['433', 'false', 'true'], {
     GH_AUTO_MERGE_BY: 'true',
     GH_APPROVAL_IDS: '',
   });
@@ -278,7 +292,7 @@ test('a queued merge requires cleanup even when its approval was already dismiss
 
 test('a bot approval requires cleanup even if queuing auto-merge never succeeded', t => {
   const gh = runner(t);
-  const { code, stdout } = gh(APP_NEEDED, ['433', 'false'], {
+  const { code, stdout } = gh(APP_NEEDED, ['433', 'false', 'true'], {
     GH_AUTO_MERGE_BY: 'false',
     GH_APPROVAL_IDS: '901\n902',
   });
@@ -289,7 +303,7 @@ test('a bot approval requires cleanup even if queuing auto-merge never succeeded
 for (const failedRead of ['autoMergeRequest', '/reviews']) {
   test(`a failed ${failedRead} read does not declare a PR safe to skip`, t => {
     const gh = runner(t);
-    const { code, stdout } = gh(APP_NEEDED, ['433', 'false'], {
+    const { code, stdout } = gh(APP_NEEDED, ['433', 'false', 'true'], {
       GH_AUTO_MERGE_BY: 'false',
       GH_FAIL_ON: failedRead,
     });
@@ -300,14 +314,21 @@ for (const failedRead of ['autoMergeRequest', '/reviews']) {
 
 test('an unexpected auto-merge response fails closed', t => {
   const gh = runner(t);
-  const { code, stdout } = gh(APP_NEEDED, ['433', 'false'], { GH_AUTO_MERGE_BY: '' });
+  const { code, stdout } = gh(APP_NEEDED, ['433', 'false', 'true'], { GH_AUTO_MERGE_BY: '' });
   assert.notEqual(code, 0);
   assert.equal(stdout, '');
 });
 
 test('an invalid eligibility input fails closed', t => {
   const gh = runner(t);
-  const { code, stdout } = gh(APP_NEEDED, ['433', 'unknown']);
+  const { code, stdout } = gh(APP_NEEDED, ['433', 'unknown', 'true']);
+  assert.notEqual(code, 0);
+  assert.equal(stdout, '');
+});
+
+test('an invalid credentials-present input fails closed', t => {
+  const gh = runner(t);
+  const { code, stdout } = gh(APP_NEEDED, ['433', 'false', 'unknown']);
   assert.notEqual(code, 0);
   assert.equal(stdout, '');
 });
@@ -315,10 +336,24 @@ test('an invalid eligibility input fails closed', t => {
 test('classification precedes token selection and cannot be skipped by a docs-only scope gate', () => {
   const workflow = readFileSync(WORKFLOW, 'utf8');
   assert.ok(workflow.indexOf('name: Classify the pull request diff') < workflow.indexOf('name: Mint an App token'));
+  assert.ok(
+    workflow.indexOf('name: Record whether App credentials exist') <
+      workflow.indexOf('name: Check whether an App token is needed'),
+  );
   assert.doesNotMatch(step('Classify the pull request diff'), /\n        if:/);
   assert.match(step('Check whether an App token is needed'), /GH_TOKEN: \$\{\{ github\.token \}\}/);
+  assert.match(step('Check whether an App token is needed'), /CREDS_PRESENT/);
+  assert.match(workflow, /docs-app-needed\.sh "\$PR" "\$MARKETING_ONLY" "\$CREDS_PRESENT"/);
   assert.match(workflow, /pull-requests: read/);
   assert.doesNotMatch(workflow, /steps\.scope/);
+});
+
+test('credential presence is recorded without failing the job', () => {
+  const probe = step('Record whether App credentials exist');
+  assert.match(probe, /!cancelled\(\)/);
+  assert.doesNotMatch(probe, /exit 1/);
+  assert.match(probe, /present=true/);
+  assert.match(probe, /present=false/);
 });
 
 test('classification failures still allow token selection and cleanup, but never approval', () => {
@@ -326,6 +361,7 @@ test('classification failures still allow token selection and cleanup, but never
   const mint = step('Mint an App token');
   const withdraw = step('Withdraw a stale approval');
   assert.match(check, /!cancelled\(\)/);
+  assert.match(check, /steps\.creds-present\.outcome == 'success'/);
   assert.match(check, /steps\.classify\.outcome == 'success' && steps\.classify\.outputs\.marketing_only == 'true'/);
   assert.match(mint, /!cancelled\(\)/);
   assert.match(mint, /steps\.app-needed\.outcome == 'success' && steps\.app-needed\.outputs\.token_required == 'true'/);
@@ -389,3 +425,31 @@ test('token mint requires credentials and credential checks still run for cleanu
     /steps\.creds\.outcome == 'success' && steps\.creds\.outputs\.present == 'true'/,
   );
 });
+
+const presenceProbe = () =>
+  step('Record whether App credentials exist')
+    .split('        run: |\n')[1]
+    .split('\n')
+    .filter(line => line.startsWith('          '))
+    .map(line => line.slice(10))
+    .join('\n');
+
+for (const credentials of ['both', 'neither', 'id-only', 'key-only']) {
+  test(`credential probe: credentials=${credentials}`, t => {
+    const root = mkdtempSync(join(REPO, '.tmp-docs-creds-probe-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const output = join(root, 'output');
+    writeFileSync(output, '');
+    const present = credentials === 'both';
+    execFileSync('bash', ['-c', presenceProbe()], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        GITHUB_OUTPUT: output,
+        APP_ID: ['both', 'id-only'].includes(credentials) ? 'test-id' : '',
+        APP_KEY: ['both', 'key-only'].includes(credentials) ? 'test-key' : '',
+      },
+    });
+    assert.equal(readFileSync(output, 'utf8').trim(), `present=${present}`);
+  });
+}

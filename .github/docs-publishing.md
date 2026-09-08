@@ -85,23 +85,27 @@ commit that will merge.
 it and the classifier are always the copies on `main`: a PR cannot edit its own gate. It reads
 head content with `git show` and never checks out or runs it.
 
-Every PR is classified before the App token is minted. A non-marketing PR with no queued
-auto-merge or active bot approval finishes without App credentials, including a hand-written
-How To edit or a PR mixing source and docs.
+Every PR is classified before the App token is minted. A non-marketing PR finishes without
+App credentials when there is nothing to clean up, or when credentials are unset so the
+docs App cannot already have approved or queued a merge. That includes a hand-written How To
+edit or a PR mixing source and docs, even if another bot has approved it.
 
 [`docs-app-needed.sh`](scripts/docs-app-needed.sh) uses the built-in `GITHUB_TOKEN` with
-**Pull requests: read** to check live auto-merge state and paginated review history. A queued
-merge or any active bot approval requires an App token for possible cleanup, even when the
-PR no longer touches docs. Checking any bot approval is conservative: without App credentials
-the helper does not know the docs App's login. The withdrawal script still modifies only the
-docs App's own approval and queued merge, leaving a maintainer's or another bot's alone.
+**Pull requests: read** to check live auto-merge state and paginated review history, but
+only after credentials are confirmed present. A queued merge or any active bot approval
+then requires an App token for possible cleanup, even when the PR no longer touches docs.
+Checking any bot approval is conservative: without minting, the helper does not know the
+docs App's login. When credentials are unset, that check is skipped — no docs-App action
+can exist yet, and an unrelated bot's approval or a human-queued merge must not fail the
+job. The withdrawal script still modifies only the docs App's own approval and queued
+merge, leaving a maintainer's or another bot's alone.
 
 The metadata check and token mint can run after classification fails, so an earlier approval
 can still be withdrawn; classification failure never permits a new approval. Failed metadata
 reads fail the job rather than pretending no cleanup is needed. Missing App credentials skip
-a new marketing approval with a warning and leave it to a human reviewer. If a non-marketing
-or unclassified PR needs possible cleanup, missing credentials
-fail the job instead of silently leaving an earlier approval or queued merge in place.
+a new marketing approval with a warning and leave it to a human reviewer. A non-marketing or
+unclassified PR does not request a token while credentials are unset, so missing secrets
+cannot fail it; cleanup runs only when the App is provisioned.
 
 [`approve-docs-pr.sh`](scripts/approve-docs-pr.sh) binds both privileged calls to the commit
 the classifier read: it re-reads the live head and bails if it has moved, then pins the
@@ -177,7 +181,10 @@ throwaway PR:
    the push, the workflow turns auto-merge off, and the PR waits for a reviewer.
 3. Edit a page in the SDK, How To or Protocol tab on a new PR. Expect: no App token, no
    approval, a green auto-merge job even without App secrets, and the PR waits for a human.
-4. Check whether `require_extra_approval_for_unattributed_changes` (on, and a GitHub preview)
+4. On an SDK PR, leave an approval from a bot that is not the docs App (or enable auto-merge
+   by hand) while App secrets are still unset. Expect: a green auto-merge job, that approval
+   or human-queued merge left in place, and the PR waiting for a human.
+5. Check whether `require_extra_approval_for_unattributed_changes` (on, and a GitHub preview)
    fires on a Mintlify-authored PR. It is documented as applying to unattributed Copilot pull
    requests, so it should not — but if it demands a second approval, the single App approval
    will not be enough.
