@@ -537,6 +537,21 @@ export type StellarSpokeChainConfig = BaseSpokeChainConfig<'STELLAR'> & {
   baseFee: string;
 };
 
+/**
+ * Bound's host set. Kept OUT of `spokeChainConfig` below: `deepMerge` merges `radfi` key by key,
+ * so inlining these would let an `apiUrl`-only override inherit them and straddle environments.
+ */
+export const BOUND_HOSTS = {
+  api: 'https://svc.bound.exchange/api',
+  auth: 'https://auth.bound.exchange/api',
+  transactions: 'https://api.radfi.co/api',
+} as const;
+
+/** Retiring hosts → their replacement. Warned about, never rejected. */
+export const DEPRECATED_BOUND_HOSTS: Record<string, string> = {
+  'https://api.bound.exchange/api': BOUND_HOSTS.api,
+};
+
 export type BitcoinSpokeChainConfig = BaseSpokeChainConfig<'BITCOIN'> & {
   addresses: {
     assetManager: string;
@@ -545,6 +560,10 @@ export type BitcoinSpokeChainConfig = BaseSpokeChainConfig<'BITCOIN'> & {
   network: string;
   radfi: {
     apiUrl: string;
+    /** `/auth/*` + `/wallets/*`. Unset falls back to `apiUrl` — see {@link BOUND_HOSTS}. */
+    authUrl?: string;
+    /** `/transactions/*`. Unset falls back to `apiUrl` — see {@link BOUND_HOSTS}. */
+    transactionsUrl?: string;
     umsUrl: string;
     apiKey: string;
     accessToken: string;
@@ -862,7 +881,8 @@ export const spokeChainConfig = {
     supportedTokens: bitcoinSupportedTokens,
     radfi: {
       walletMode: 'TRADING',
-      apiUrl: 'https://api.bound.exchange/api',
+      // authUrl / transactionsUrl are intentionally absent: see BOUND_HOSTS.
+      apiUrl: BOUND_HOSTS.api,
       apiKey: '',
       umsUrl: 'https://api.ums.bound.exchange/api',
       accessToken: '',

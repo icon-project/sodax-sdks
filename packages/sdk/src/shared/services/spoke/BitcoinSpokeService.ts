@@ -91,7 +91,7 @@ export class BitcoinSpokeService {
     this.rpcUrl = chainConfig.rpcUrl;
     // Pass the client-side RadFi signer (if any) so server-to-server callers can attach Bound's
     // `x-api-signature` HMAC header. `config.radfiSigner` is undefined for browser callers. See gh-831.
-    this.radfi = new RadfiProvider(chainConfig.radfi, { signer: config.radfiSigner });
+    this.radfi = new RadfiProvider(chainConfig.radfi, { signer: config.radfiSigner, logger: config.logger });
     this.walletMode = chainConfig.radfi.walletMode ?? 'TRADING';
     this.pollingIntervalMs = chainConfig.pollingConfig.pollingIntervalMs;
     this.maxTimeoutMs = chainConfig.pollingConfig.maxTimeoutMs;

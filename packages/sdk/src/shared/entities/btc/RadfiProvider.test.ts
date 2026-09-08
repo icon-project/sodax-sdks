@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { RadfiConfig } from '@sodax/types';
+import { BOUND_HOSTS, type RadfiConfig, type SodaxLogger } from '@sodax/types';
 import { RadfiApiError, RadfiProvider } from './RadfiProvider.js';
 
 // Regression tests for issue #233: a non-JSON (HTML) Bound Exchange response must surface as a
@@ -297,5 +297,176 @@ describe('RadfiProvider — signer hook (x-api-signature, gh-831)', () => {
     const headers = (fetchMock.mock.calls[0]?.[1] as RequestInit).headers as Record<string, string>;
     expect(headers.Authorization).toBe('Bearer signer-wins');
     expect(headers['Content-Type']).toBe('application/json');
+  });
+});
+
+// Host routing (gh-425). The signer assertions above check the `path` handed to the signer, not
+// the URL fetched — so before these, a total misroute kept the suite green.
+
+const OK_BODY = JSON.stringify({
+  data: {
+    base64Psbt: 'cHNidP8=',
+    txId: 'tx',
+    accessToken: 'a',
+    refreshToken: 'r',
+    tradingAddress: 'bc1ptrade',
+    userAddress: 'bc1puser',
+    userPublicKey: '02ab',
+    maxSatsAmt: 1,
+    feeRate: 1,
+    fee: 1,
+  },
+});
+
+/** One invocation per endpoint that goes through `request()` — nine of them, three families. */
+const ROUTED_CALLS: {
+  path: string;
+  family: 'auth' | 'api' | 'transactions';
+  run: (r: RadfiProvider) => Promise<unknown>;
+}[] = [
+  {
+    path: '/auth/authenticate',
+    family: 'auth',
+    run: r => r.authenticate({ message: 'm', signature: 's', address: 'bc1puser', publicKey: '02ab' }),
+  },
+  { path: '/auth/refresh-token', family: 'auth', run: r => r.refreshAccessToken('refresh-token') },
+  {
+    path: '/wallets',
+    family: 'auth',
+    run: r => r.createTradingWallet({ walletAddress: 'bc1puser', publicKey: '02ab' }, 'tok'),
+  },
+  { path: '/wallets/details/bc1puser', family: 'auth', run: r => r.getTradingWallet('bc1puser') },
+  { path: '/sodax/transaction', family: 'api', run: r => r.createWithdrawTransaction(withdrawParams, 'tok') },
+  {
+    path: '/sodax/transaction/sign',
+    family: 'api',
+    run: r => r.requestRadfiSignature({ userAddress: 'bc1puser', signedBase64Tx: 'x' }, 'tok'),
+  },
+  {
+    path: '/transactions',
+    family: 'transactions',
+    run: r => r.withdrawToUser({ userAddress: 'bc1puser', amount: '1', tokenId: '0:0', withdrawTo: 'bc1q' }, 'tok'),
+  },
+  {
+    path: '/transactions/sign',
+    family: 'transactions',
+    run: r => r.signAndBroadcastWithdraw({ userAddress: 'bc1puser', signedBase64Tx: 'x' }, 'tok'),
+  },
+  {
+    path: '/transactions/max-spent',
+    family: 'transactions',
+    run: r => r.getMaxWithdrawable({ userAddress: 'bc1puser', amount: '1', tokenId: '0:0', withdrawTo: 'bc1q' }, 'tok'),
+  },
+];
+
+/** The first URL each endpoint fetched. Parse failures are irrelevant — routing is the assertion. */
+async function hostsUsed(config: RadfiConfig): Promise<Record<string, string>> {
+  const radfi = new RadfiProvider(config);
+  const used: Record<string, string> = {};
+  for (const call of ROUTED_CALLS) {
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue(makeResponse(200, OK_BODY));
+    await call.run(radfi).catch(() => undefined);
+    used[call.path] = String(fetchMock.mock.calls[0]?.[0]);
+  }
+  return used;
+}
+
+const expectAllOn = (used: Record<string, string>, host: string): void => {
+  for (const call of ROUTED_CALLS) {
+    expect(`${call.path} -> ${used[call.path]}`).toBe(`${call.path} -> ${host}${call.path}`);
+  }
+};
+
+describe('RadfiProvider — host routing (gh-425)', () => {
+  it('splits the three families across the packaged hosts when apiUrl is the packaged one', async () => {
+    const used = await hostsUsed({ ...baseConfig, apiUrl: BOUND_HOSTS.api });
+
+    for (const call of ROUTED_CALLS) {
+      expect(`${call.path} -> ${used[call.path]}`).toBe(`${call.path} -> ${BOUND_HOSTS[call.family]}${call.path}`);
+    }
+  });
+
+  // Anti-straddle: naming your own apiUrl moves EVERY family, as the single-host SDK did.
+  it.each([
+    ['the deprecated host', 'https://api.bound.exchange/api'],
+    ['a signet host', 'https://signet.api.bound.exchange/api'],
+    ['a private proxy', 'https://bound-proxy.internal/api'],
+  ])('sends every family to %s when apiUrl names it', async (_label, apiUrl) => {
+    expectAllOn(await hostsUsed({ ...baseConfig, apiUrl }), apiUrl);
+  });
+
+  it('lets an explicit companion win, without disturbing the other families', async () => {
+    const used = await hostsUsed({
+      ...baseConfig,
+      apiUrl: BOUND_HOSTS.api,
+      transactionsUrl: 'https://staging.api.radfi.co/api',
+    });
+
+    expect(used['/transactions']).toBe('https://staging.api.radfi.co/api/transactions');
+    expect(used['/wallets']).toBe(`${BOUND_HOSTS.auth}/wallets`);
+    expect(used['/sodax/transaction']).toBe(`${BOUND_HOSTS.api}/sodax/transaction`);
+  });
+
+  it('strips trailing slashes, and a trailing-slash apiUrl still resolves the packaged companions', async () => {
+    const used = await hostsUsed({
+      ...baseConfig,
+      apiUrl: `${BOUND_HOSTS.api}/`,
+      authUrl: `${BOUND_HOSTS.auth}/`,
+    });
+
+    expect(used['/wallets']).toBe(`${BOUND_HOSTS.auth}/wallets`);
+    expect(used['/transactions']).toBe(`${BOUND_HOSTS.transactions}/transactions`);
+  });
+
+  // UMS calls bypass request(); routing one through it would land on auth — hence no 'ums' host.
+  it('leaves the UMS calls on umsUrl and unsigned', async () => {
+    const signer = vi.fn().mockReturnValue({ 'x-api-signature': 'sig' });
+    const radfi = new RadfiProvider({ ...baseConfig, apiUrl: BOUND_HOSTS.api }, { signer });
+    fetchMock.mockResolvedValue(makeResponse(200, JSON.stringify({ data: [] })));
+
+    await radfi.getExpiredUtxos('bc1ptrade').catch(() => undefined);
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(`${baseConfig.umsUrl}/utxos`);
+    const headers = (fetchMock.mock.calls[0]?.[1] as RequestInit).headers as Record<string, string>;
+    expect(headers['x-api-signature']).toBeUndefined();
+    expect(signer).not.toHaveBeenCalled();
+  });
+
+  it('signs on every routed host, not just the service host', async () => {
+    const signer = vi.fn().mockReturnValue({ 'x-api-signature': 'sig' });
+    const radfi = new RadfiProvider({ ...baseConfig, apiUrl: BOUND_HOSTS.api }, { signer });
+    fetchMock.mockResolvedValue(makeResponse(200, OK_BODY));
+
+    await radfi
+      .getMaxWithdrawable({ userAddress: 'bc1puser', amount: '1', tokenId: '0:0', withdrawTo: 'bc1q' }, 'tok')
+      .catch(() => undefined);
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(`${BOUND_HOSTS.transactions}/transactions/max-spent`);
+    const headers = (fetchMock.mock.calls[0]?.[1] as RequestInit).headers as Record<string, string>;
+    expect(headers['x-api-signature']).toBe('sig');
+  });
+});
+
+describe('RadfiProvider — retirement warning (gh-425)', () => {
+  const makeLogger = (): SodaxLogger => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
+
+  it('warns once, names the replacement, and still routes', () => {
+    const logger = makeLogger();
+    new RadfiProvider({ ...baseConfig, apiUrl: 'https://api.bound.exchange/api' }, { logger });
+
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(logger.warn).mock.calls[0]?.[0]).toContain('https://api.bound.exchange/api');
+    expect(vi.mocked(logger.warn).mock.calls[0]?.[0]).toContain(BOUND_HOSTS.api);
+  });
+
+  it.each([
+    ['the packaged host', BOUND_HOSTS.api],
+    ['a signet host', 'https://signet.api.bound.exchange/api'],
+    ['a private proxy', 'https://bound-proxy.internal/api'],
+  ])('stays quiet for %s', (_label, apiUrl) => {
+    const logger = makeLogger();
+    new RadfiProvider({ ...baseConfig, apiUrl }, { logger });
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 });

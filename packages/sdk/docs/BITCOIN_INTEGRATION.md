@@ -8,7 +8,7 @@ The trading wallet amortizes Bitcoin's settlement cost. Users sign in once (BIP3
 
 The trade-off is the one-time setup (sign in + fund) and a custody disclosure to end-users (the partner is one of two multisig keys). Once that's done, the dApp UX matches any other spoke chain.
 
-The transaction-signing partner is [**Bound Exchange**](https://bound.exchange) (formerly Radfi). SDK hook names and config field names still use the `Radfi*` prefix for API-compatibility (`useRadfiSession`, `useRadfiWithdraw`, `radfiApiUrl`, etc.), but the live endpoints now resolve to `api.bound.exchange`. For the rest of this guide, "the partner" refers to Bound Exchange.
+The transaction-signing partner is [**Bound Exchange**](https://bound.exchange) (formerly Radfi). SDK hook names and config field names still use the `Radfi*` prefix for API-compatibility (`useRadfiSession`, `useRadfiWithdraw`, `radfiApiUrl`, etc.), but the live endpoints now resolve to Bound's own hosts. For the rest of this guide, "the partner" refers to Bound Exchange.
 
 For the generic intent flow, see [SWAPS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md) and [BRIDGE.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BRIDGE.md). This guide only covers Bitcoin-specific differences.
 
@@ -48,6 +48,41 @@ import { SodaxWalletProvider } from "@sodax/wallet-sdk-react";
 </SodaxProvider>
 ```
 
+### Bound hosts
+
+Bound serves its API from three hosts, and the SDK routes to them per path family. You do not
+need to configure any of this — the packaged defaults are correct:
+
+| Path family | Host |
+| --- | --- |
+| `/sodax/*` | `svc.bound.exchange` |
+| `/auth/*`, `/wallets/*` | `auth.bound.exchange` |
+| `/transactions/*` | `api.radfi.co` |
+| `/wallets/balance`, `/utxos` | `api.ums.bound.exchange` |
+
+**`api.radfi.co` is a different registrable domain.** If your app sets a Content-Security-Policy
+`connect-src`, or runs behind an egress allowlist, allow it explicitly — a rule written as
+`https://*.bound.exchange` will block BTC withdrawal and UTXO renewal, and a rule naming
+`https://api.bound.exchange` will block everything.
+
+To point the SDK somewhere else — a proxy, or a test environment — set `apiUrl` on the SDK
+config (**not** on the wallet provider):
+
+```tsx
+new Sodax({
+  chains: {
+    [ChainKeys.BITCOIN_MAINNET]: {
+      radfi: { apiUrl: "https://my-proxy.internal/bound" },
+    },
+  },
+});
+```
+
+**Setting `apiUrl` alone sends every family to that host.** That is deliberate: it keeps a
+single-host setup working, and it makes it impossible to half-migrate and have auth traffic
+silently land in a different environment from the rest. To keep the split while changing one
+family, set that family's host explicitly with `authUrl` or `transactionsUrl`.
+
 To override RPC endpoints (canary, signet), pass them under `BITCOIN.chains[ChainKeys.BITCOIN_MAINNET]`:
 
 ```tsx
@@ -59,8 +94,6 @@ import { ChainKeys } from "@sodax/types";
       chains: {
         [ChainKeys.BITCOIN_MAINNET]: {
           rpcUrl: "https://mempool.space/api",
-          radfiApiUrl: "https://api.bound.exchange/api",
-          radfiUmsUrl: "https://api.ums.bound.exchange/api",
         },
       },
     },
