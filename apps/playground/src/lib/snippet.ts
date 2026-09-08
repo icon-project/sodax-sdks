@@ -1,4 +1,5 @@
 import type { ChainKey, PartnerFeePercentage, SpokeChainKey, XToken } from '@sodax/dapp-kit';
+import { DENSITIES, FONT_STACKS, RADIUS_SCALES } from './brand';
 import { chainKeyExpression } from './chains';
 
 export type SnippetState = {
@@ -50,7 +51,25 @@ export function SodaxSwapWidget({ src = '${embedUrl}', height = 620 }: SodaxSwap
 
 // Every field of the form is a query parameter, so the host page decides what it opens on:
 // ?srcChain= &srcToken= &dstChain= &dstToken= &amount= &slippage= &embed=1
-// The partner fee is deliberately not one of them — it is the one field that redirects money.`;
+// The partner fee is deliberately not one of them — it is the one field that redirects money.
+${themeParamsComment()}`;
+}
+
+/**
+ * The theme API, listed off the constants that define it so the snippet cannot drift from what the
+ * widget actually accepts.
+ */
+function themeParamsComment(): string {
+  const options = (choices: object) => Object.keys(choices).join('|');
+
+  return `// Styling is query parameters too — the src above already carries whatever you set here:
+// ?theme=light|dark|auto
+// &accent=  &cta=  &surface=  &text=      6-digit hex, no "#" (e.g. accent=7c3aed)
+// &radius=${options(RADIUS_SCALES)}
+// &font=${options(FONT_STACKS)}
+// &density=${options(DENSITIES)}
+// Set accent and surface and the rest is derived: the button label, every border and the text ramp
+// are computed from them, so a brand colour cannot produce a control nobody can read.`;
 }
 
 function quoteSnippet(state: SnippetState): string {

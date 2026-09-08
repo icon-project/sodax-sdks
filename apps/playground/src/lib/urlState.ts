@@ -1,4 +1,5 @@
 import type { ChainKey, XToken } from '@sodax/dapp-kit';
+import { type Brand, NO_BRAND, readBrand, writeBrand } from './brand';
 import { type Flow, flowParam } from './flows';
 
 /**
@@ -19,6 +20,8 @@ export type UrlState = {
   slippage: string | undefined;
   /** Chrome off: the widget alone, which is what a host page frames. */
   embed: boolean;
+  /** How the widget should look. Validated to a closed shape by `readBrand`, never a raw string. */
+  brand: Brand;
 };
 
 export type UrlStateSource = {
@@ -32,6 +35,8 @@ export type UrlStateSource = {
   slippage?: string;
   /** Kept on every rewrite, or a framed widget loses its chrome-off mode on the first reload. */
   embed?: boolean;
+  /** Kept for the same reason, and it is what makes the copied embed snippet carry the styling. */
+  brand?: Brand;
 };
 
 const DECIMAL = /^\d{1,30}(\.\d{0,30})?$/;
@@ -54,6 +59,7 @@ export function readUrlState(search: string): UrlState {
     amount: matching(DECIMAL, params.get('amount')),
     slippage: matching(DECIMAL, params.get('slippage')),
     embed: params.get('embed') === '1',
+    brand: readBrand(search),
   };
 }
 
@@ -66,14 +72,17 @@ const BLANK: UrlState = {
   amount: undefined,
   slippage: undefined,
   embed: false,
+  brand: NO_BRAND,
 };
 
 /**
  * A link seeds only the flow it was written for. Without this a `?flow=bridge` link would also
  * preload the swap form, and its chains were written against a different list.
+ *
+ * Chrome and styling are about the frame rather than the form, so both cross a flow mismatch.
  */
 export function seedFor(flow: Flow, state: UrlState): UrlState {
-  return (state.flow ?? 'swap') === flow ? state : { ...BLANK, embed: state.embed };
+  return (state.flow ?? 'swap') === flow ? state : { ...BLANK, embed: state.embed, brand: state.brand };
 }
 
 export function toSearch(state: UrlStateSource): string {
@@ -86,6 +95,7 @@ export function toSearch(state: UrlStateSource): string {
   if (state.slippage !== undefined) params.set('slippage', state.slippage);
   if (state.flow !== 'swap') params.set('flow', state.flow);
   if (state.embed) params.set('embed', '1');
+  if (state.brand) writeBrand(params, state.brand);
   return params.toString();
 }
 

@@ -18,6 +18,7 @@ import {
   trackQuoteReceived,
 } from '../lib/analytics';
 import { pickChain, pickToken, readSwapAssets, tokensOn } from '../lib/assets';
+import type { Brand } from '../lib/brand';
 import { NO_PARTNER_FEE, type PartnerFeeInput, feeAmountOf, readPartnerFee } from '../lib/fee';
 import { parseAmount } from '../lib/format';
 import { initialUrl } from '../lib/initialUrl';
@@ -27,6 +28,9 @@ import { seedFor, toSearch } from '../lib/urlState';
 export type SwapFlow = ReturnType<typeof useSwapFlow>;
 
 const seed = seedFor('swap', initialUrl);
+
+/** Written back with the form, so a styled widget keeps its styling across the rewrite. */
+export type SwapFlowOptions = { brand: Brand };
 
 /**
  * The whole SODAX surface this widget uses: the swaps API's token list, and a quote off it that
@@ -39,7 +43,7 @@ const seed = seedFor('swap', initialUrl);
  * alike — and stays current without an SDK release. The packaged `getSupportedSolverTokens` list
  * would be deterministic but EVM-shaped and frozen at the release we build against.
  */
-export function useSwapFlow() {
+export function useSwapFlow({ brand }: SwapFlowOptions) {
   const { sodax } = useSodaxContext();
 
   // A "no path" answer is a business result, not a transient failure, so retrying just delays the
@@ -100,12 +104,13 @@ export function useSwapFlow() {
       amount,
       slippage: slippagePercent,
       embed: initialUrl.embed,
+      brand,
     });
     // A sandboxed embed has an opaque origin and throws here; the form must still work in one.
     try {
       window.history.replaceState(null, '', `${window.location.pathname}?${search}`);
     } catch {}
-  }, [srcChain, dstChain, srcToken, dstToken, amount, slippagePercent]);
+  }, [srcChain, dstChain, srcToken, dstToken, amount, slippagePercent, brand]);
 
   const groups = useMemo(() => assetGroups(assets.choices), [assets]);
 
@@ -238,5 +243,6 @@ export function useSwapFlow() {
     isSlippageValid: slippageBps !== undefined,
     isAmountValid: inputAmount !== undefined,
     trackHandoff,
+    brand,
   };
 }

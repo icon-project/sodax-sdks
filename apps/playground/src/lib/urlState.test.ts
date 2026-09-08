@@ -1,5 +1,6 @@
 import { ChainKeys, type XToken } from '@sodax/dapp-kit';
 import { describe, expect, it } from 'vitest';
+import { NO_BRAND } from './brand';
 import { embedUrl, readUrlState, seedFor, toSearch } from './urlState';
 
 const SRC_CHAIN = ChainKeys.BASE_MAINNET;
@@ -29,6 +30,7 @@ const BLANK = {
   amount: undefined,
   slippage: undefined,
   embed: false,
+  brand: NO_BRAND,
 };
 
 describe('readUrlState', () => {
@@ -72,6 +74,12 @@ describe('readUrlState', () => {
     expect(readUrlState(`?srcToken=${encodeURIComponent(value)}`).srcSymbol).toBeUndefined();
   });
 
+  it('reads the theme parameters a partner set on the frame', () => {
+    const state = readUrlState('?embed=1&theme=light&accent=7c3aed&radius=sharp');
+
+    expect(state.brand).toEqual({ ...NO_BRAND, theme: 'light', accent: '#7c3aed', radius: 'sharp' });
+  });
+
   it('reads embed mode only from the exact flag', () => {
     expect(readUrlState('?embed=1').embed).toBe(true);
     expect(readUrlState('?embed=true').embed).toBe(false);
@@ -98,9 +106,13 @@ describe('seedFor', () => {
     expect(seedFor('swap', bridgeLink)).toEqual(BLANK);
   });
 
-  // Embed is about chrome, not about the form, so it survives a flow that does not match.
+  // Embed and styling are about the frame, not about the form, so they survive a flow mismatch.
   it('keeps embed mode across flows', () => {
     expect(seedFor('swap', readUrlState('?flow=bridge&embed=1')).embed).toBe(true);
+  });
+
+  it('keeps the styling across flows', () => {
+    expect(seedFor('swap', readUrlState('?flow=bridge&accent=7c3aed')).brand.accent).toBe('#7c3aed');
   });
 
   it('treats a link with no flow as a swap link, which is what every older link is', () => {
@@ -131,6 +143,7 @@ describe('toSearch', () => {
       amount: '1.5',
       slippage: '0.5',
       embed: false,
+      brand: NO_BRAND,
     });
   });
 
@@ -143,6 +156,19 @@ describe('toSearch', () => {
   // widget out of embed mode on its first reload.
   it('keeps embed mode on a rewrite', () => {
     expect(readUrlState(`?${toSearch({ ...base, embed: true })}`).embed).toBe(true);
+  });
+
+  // The form is rewritten on every change; dropping these would strip a partner's styling from a
+  // framed widget on its first reload, exactly as it would strip embed mode.
+  it('keeps the styling on a rewrite', () => {
+    const styled = { ...base, brand: { ...NO_BRAND, accent: '#7c3aed', font: 'serif' as const } };
+
+    expect(readUrlState(`?${toSearch(styled)}`).brand).toEqual(styled.brand);
+  });
+
+  it('writes no theme parameters for an unstyled widget', () => {
+    expect(toSearch(base)).not.toContain('accent=');
+    expect(toSearch({ ...base, brand: NO_BRAND })).not.toContain('theme=');
   });
 
   it('omits an empty amount rather than writing amount=', () => {
@@ -173,5 +199,13 @@ describe('embedUrl', () => {
     expect(query.embed).toBe(true);
     expect(query.srcChain).toBe(SRC_CHAIN);
     expect(query.dstSymbol).toBe('WETH');
+  });
+
+  // What makes the copy-paste story work: the visitor styles the widget and the snippet is the answer.
+  it('carries the styling the visitor configured', () => {
+    const brand = { ...NO_BRAND, accent: '#7c3aed', radius: 'round' as const, theme: 'light' as const };
+    const url = embedUrl('https://widget.sodax.com', { ...state, brand });
+
+    expect(readUrlState(url.slice(url.indexOf('?'))).brand).toEqual(brand);
   });
 });

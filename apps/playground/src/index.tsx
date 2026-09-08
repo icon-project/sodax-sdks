@@ -4,8 +4,10 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { gtmId, trackInEmbed } from './config';
+import { applyBrandStyles } from './hooks/useBrand';
 import './index.css';
 import { initAnalytics } from './lib/analytics';
+import { brandStyles } from './lib/brand';
 import { initialUrl } from './lib/initialUrl';
 import Providers from './providers';
 
@@ -20,6 +22,10 @@ Object.defineProperty(BigInt.prototype, 'toJSON', {
 });
 
 initAnalytics({ gtmId, embedded: initialUrl.embed, allowInEmbed: trackInEmbed });
+
+// Before the first render, not from an effect: a framed widget must not paint our palette and then
+// the partner's. `useBrand` takes the same stylesheet over from here.
+applyBrandStyles(brandStyles(initialUrl.brand).css);
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('#root element not found');

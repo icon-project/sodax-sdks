@@ -33,7 +33,9 @@ src/
 ├── App.tsx             # embed mode, or header + stage + footer around the widget
 ├── views/SwapView.tsx  # SwapWidget (what an iframe frames) and SwapView (widget + code panel)
 ├── hooks/useSwapFlow.ts # every SODAX call the widget makes, in one place
+├── hooks/useBrand.ts   # theme attribute + the derived stylesheet, one owner
 ├── lib/assets.ts       # the API token list → chains, choices, per-chain lookups
+├── lib/brand.ts        # the theme API: validate the parameters, derive the semantic roles
 ├── lib/chains.ts       # chain-key guard, names, logos, and the parked bridge's derived list
 ├── lib/snippet.ts      # renders the current form state as an embed and as code
 ├── lib/urlState.ts     # form state ⇄ query string, and the embed URL
@@ -89,6 +91,7 @@ The bridge keeps the EVM-narrowed `PlaygroundChainKey` and the packaged `spokeCh
 - **`?embed=1` renders the widget alone.** `App` branches on it before any chrome.
 - **The flag survives a rewrite.** `useSwapFlow` writes the form back to the query string on every change; `toSearch` re-emits `embed=1` or a framed widget loses its mode on the first reload.
 - **`vercel.json` sets `frame-ancestors *`.** Deliberate: "anyone can integrate it" is the product, and the page holds nothing to steal — no wallet, no signing path, no per-visitor state. `X-Frame-Options` stays absent; it has no multi-origin form.
+- **The frame decides how it looks**, through the theme parameters in *Theme and brand* below. They ride the rewrite the same way `embed=1` does.
 - **`VITE_EMBED_ORIGIN` is what the snippet points at.** Unset, it uses `window.location.origin`, which is right for a preview and wrong for a copied `<iframe>`. Set it on every deployment.
 
 ## Invariants
@@ -111,7 +114,7 @@ Two sanctioned additions, both labelled in layer 1:
 - The **night ramp** (`--night-950` … `--night-600`). The brand collection is light-only, so dark-mode surfaces have no upstream to sync with. Retire them if it ever ships a dark ladder.
 - The **stage gradient** (`--stage-1` … `--stage-3`), copied from the frontend's `apps/web/app/(apps)/layout.tsx`. It belongs to the exchange's app panel rather than to the collection.
 
-The file is two layers, and the split is load-bearing: **layer 1** is the raw brand palette, **layer 2** maps it onto semantic roles (`--surface-ground`, `--stage-bg`, `--cta-bg`, …) once per theme. **No rule below layer 2 may name a palette token directly** — that is what keeps light and dark in sync, and what makes a re-sync a one-block edit.
+The file is two layers, and the split is load-bearing: **layer 1** is the raw brand palette, **layer 2** maps it onto semantic roles (`--surface-ground`, `--stage-bg`, `--cta-bg`, …) once per theme. **No rule below layer 2 may name a palette token directly** — that is what keeps light and dark in sync, what makes a re-sync a one-block edit, and what makes the partner theme API below possible at all: a brand override is one block of layer-2 roles, so it retints the whole widget without touching a rule.
 
 Four brand rules the mapping encodes, and breaking them is the easiest way to make this page look off:
 
@@ -122,11 +125,28 @@ Four brand rules the mapping encodes, and breaking them is the easiest way to ma
 
 ## Light and dark
 
-The theme is an attribute on `<html>` (`data-theme="light" | "dark"`), resolved **pre-paint by an inline script in `index.html`** from the stored choice, falling back to the OS preference. That script owns the first value; `hooks/useTheme.ts` reads it back and takes over.
+The theme is an attribute on `<html>` (`data-theme="light" | "dark"`), resolved **pre-paint by an inline script in `index.html`**: `?theme=light|dark` wins, then the stored choice, then the OS preference. That script owns the first value; `resolveTheme` in `hooks/useBrand.ts` mirrors the same order and takes over. Change one and you must change the other.
 
 That is why the CSS needs only one dark block and no `prefers-color-scheme` copy of it — the attribute is always set before the first paint, so there is no flash and no duplicated token list. If you remove the inline script you must add the media query back, and you inherit the duplication.
 
-Storage access is wrapped in try/catch: an embed can run with site data blocked, and the toggle must still work for that session.
+Storage access is wrapped in try/catch: an embed can run with site data blocked, and the theme control must still work for that session.
+
+## Theme and brand
+
+A partner can retint the whole embed from the `<iframe>` src. **The URL is the only channel**: CSS cannot cross an iframe boundary, so a one-line embed has nowhere else to put this. `lib/brand.ts` is the entire API and it is pure and covered by `pnpm test`.
+
+- `theme=light|dark|auto`, `accent=`, `cta=`, `surface=`, `text=` (6-digit hex, no `#`), `radius=`, `font=`, `density=`. `readBrand` validates each one; the option lists live in `RADIUS_SCALES`, `FONT_STACKS` and `DENSITIES` and `lib/snippet.ts` prints them off those constants rather than restating them.
+- **Nothing but a normalized hex or a module constant reaches the sheet.** These land in CSS custom properties, so an unvalidated value is a stylesheet injection. Colours pass `readColor` (`#rrggbb`, nothing else — never `red`, `var(…)` or `currentColor`); the rest are keys checked with `Object.hasOwn`, not `in`, so `?font=toString` does not pass. A test asserts no emitted value can carry `;`, `{` or `}`.
+- **A partner sets four colours at most; the ~30 roles behind them are derived.** The CTA label is chosen by the fill's own luminance — that is what stops white-on-yellow — and a colour used as text is nudged toward the surface's ink until it clears 4.5:1, which is reported in `notes` rather than corrected silently. Do not add a role a partner sets directly without a contrast floor over it; the four brand rules layer 2 encodes are only enforceable while the derivation owns the rest.
+- **`brandStyles` emits two blocks, and the dark one is not optional.** `index.css` maps its dark roles under `:root[data-theme="dark"]`, which outranks a bare `:root`, so a light-only override is won back on every token the dark theme sets. The two are computed separately because the same accent may need correcting on white and not on `--night-800`.
+- **It is applied before the first render**, from `index.tsx` — an effect would paint our palette and then the partner's. `useBrand` takes the same `<style id="sodax-brand">` over afterwards.
+- **The brand rides the URL rewrite**, exactly like `embed=1`: `useSwapFlow` writes the form back on every change and `toSearch` re-emits the theme parameters, or a styled widget loses its styling on the first reload. `seedFor` carries it across a flow mismatch for the same reason.
+- **`components/BrandBar.tsx` is why it lives on this page.** The controls edit the same state the query string carries, so a visitor styles the widget and the `embed.html` snippet is already the answer. They re-validate through `readBrandField`, so nothing the UI can set is anything a link could not.
+- **It is always open, and it shares `.build-column` with the code panel.** Both alternatives were built and both read as bugs: a popover anchored in the header drops straight onto the code panel and hides the snippet the controls exist to produce, and a panel that expands in flow walks the whole stage down the page on every click. Sitting above the snippet also puts the control and the copied URL on one eyeline. It is not a third grid column because the code panel needs that width for the embed `src` line.
+- **The card has a height budget, not just a width.** The page is one viewport tall (`.app` is `min-height: 100vh`, the stage runs off the bottom), and the widget, these controls and the snippet have to fit on a laptop screen together — the first version cost ~420px and made the page scroll. That is why the eight controls are a four-across grid of two rows, the per-field hints are `title` tooltips rather than a line under each cell, and the swatches and selects are sized below the sheet's normal control height. **If you add a row here, take one out.**
+- **Theme has one control, not two.** The header's light/dark icon toggle is gone: the panel's `theme` select is strictly more capable (it carries `auto`) and always visible, and two affordances writing one piece of state is the confusion this panel is supposed to remove. `update` persists a pinned `light`/`dark` to storage, which is what keeps this page's own preference across a reload with no parameters.
+- **No webfont is fetched on a parameter's say-so.** `FONT_STACKS` holds only faces already loaded by `index.html` or resolvable from the visitor's system. A partner's licensed face needs an entry here, which is a deliberate review step, not an oversight.
+- Only cards, panels and insets take `radius` — every pill and disc in the sheet is a hardcoded `9999px`, which is what makes `radius=square` safe.
 
 Plain CSS rather than the frontend's Tailwind `@theme` registration: this repo has no design-system package to depend on, and a partner reading `components/` should not need Tailwind to reuse them.
 

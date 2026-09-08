@@ -73,6 +73,8 @@ Every value is resolved against the live token list, so an unknown one falls bac
 rather than reaching the API. **The partner fee is deliberately not a parameter** — it is the one
 field that redirects money.
 
+How it *looks* is query parameters too — see [Theming](#theming).
+
 `vercel.json` sets `frame-ancestors *`, because "anyone can integrate it" is the point and the page
 holds nothing to steal: no wallet, no signing path, no per-visitor state.
 
@@ -115,9 +117,42 @@ Nothing validates the recipient — a wrong address sends the fee somewhere you 
 
 ## Theming
 
-Light and dark, both drawn from the SODAX B2B brand palette, with the light theme matching
-`sodax.com/exchange/swap`: cherry ground, rounded app stage, yellow lockup. The initial theme
-follows the reader's OS preference; the toggle in the header overrides it and persists.
+Out of the box: light and dark, both drawn from the SODAX B2B brand palette, with the light theme
+matching `sodax.com/exchange/swap` — cherry ground, rounded app stage, yellow lockup.
+
+**A framed widget takes your brand instead.** CSS cannot reach into an iframe, so the styling is
+query parameters on the same `src`, and they compose with the form parameters above:
+
+```html
+<iframe
+  src="https://<origin>/?embed=1&theme=light&accent=7c3aed&surface=ffffff&radius=sharp&font=system"
+  …
+></iframe>
+```
+
+| Parameter | Values |
+| --- | --- |
+| `theme` | `light`, `dark`, or `auto` to follow the visitor's OS. Set it: without it the widget follows the *visitor's* preference, not your page's. |
+| `accent` | 6-digit hex, no `#` — `accent=7c3aed`. Emphasis, and the primary button unless `cta` is set. |
+| `cta` | The primary button's fill, when it differs from your accent. |
+| `surface` | The widget's ground. Borders, insets, halos and the text ramp are all derived from it. |
+| `text` | Heading colour. Body, muted and faint tones are derived from it. |
+| `radius` | `square`, `sharp`, `soft` (default), `round`. Cards, panels and insets — pills and discs stay round. |
+| `font` | `inter` (default), `system`, `helvetica`, `serif`, `mono`. |
+| `density` | `comfortable` (default) or `compact` — tighter spacing and a shorter iframe. |
+
+Set `accent` and `surface` and the rest follows. **Two guarantees you do not have to think about:**
+the button's label colour is computed from its fill, so a pale brand colour can never produce an
+unreadable control; and a colour used as text is moved toward a readable tone if it fails 4.5:1 on
+the surface behind it, rather than shipping as given.
+
+Only colours matching `#rrggbb` and the listed keywords are accepted — anything else is ignored,
+never passed through. Fonts are limited to faces the page already loads or your visitor's system
+resolves; no webfont is fetched on a parameter's say-so. **Need your own face?** It has to be added
+to the allowlist in `src/lib/brand.ts` — open an issue and say which.
+
+The demo page's **Theme & brand** panel drives all of it live and the `embed.html` snippet updates
+as you go, so the fastest route to a themed embed is to style it there and copy the result.
 
 ## Scripts
 

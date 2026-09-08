@@ -323,7 +323,7 @@ code,
   flex-wrap: wrap;
   gap: var(--space-8) var(--space-16);
   align-items: center;
-  padding: var(--space-8) var(--space-16) var(--space-24);
+  padding: var(--space-8) var(--space-16) var(--space-16);
 }
 
 /* Basis 0 so the title never contributes to the wrap decision — the wallet row keeps its line. */
@@ -360,13 +360,6 @@ code,
   font-weight: 700;
 }
 
-.header-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-8);
-  align-items: center;
-}
-
 /* Page-level muted grey has no contrast on cherry. */
 .app-header .muted {
   color: var(--text-on-hero-muted);
@@ -384,7 +377,8 @@ code,
   border-bottom: 0;
   border-radius: 32px 32px 0 0;
   background: var(--stage-bg);
-  padding: 64px 40px var(--space-24);
+  /* Was 64px on top. Trimmed so the widget, the theme controls and the snippet share one viewport. */
+  padding: 40px 40px var(--space-24);
 }
 
 .app-main {
@@ -395,6 +389,14 @@ code,
      empty code surface under a short snippet. */
   align-items: start;
   width: 100%;
+}
+
+/* What a partner leaves with: the theme controls, then the snippet they produce. */
+.build-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+  min-width: 0;
 }
 
 @media (max-width: 1180px) {
@@ -1647,4 +1649,131 @@ code,
 
 .code-note code {
   color: var(--code-inline-fg);
+}
+
+/* ── Theme and brand controls ───────────────────────────────────────────── */
+/* Demo chrome, but built from the same semantic roles as the widget, so it retints with whatever a
+   visitor is trying out — and stays readable, because the derived text clears 4.5:1 on the surface.
+
+   Always open, above the snippet it drives. A popover here covers the code panel and an expanding
+   panel walks the whole stage down the page, so neither reads as anything but a bug.
+
+   The page is one viewport tall — `.app` is `min-height: 100vh` and the stage runs off the bottom —
+   so this card has a height budget, not just a width. Everything below is sized to keep the widget,
+   these controls and the snippet on one screen; the per-field hints are `title` tooltips for the
+   same reason. If you add a row here, take one out. */
+.brand-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-block: 12px;
+}
+
+.brand-head {
+  display: flex;
+  gap: var(--space-8);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.brand-title {
+  margin: 0;
+  color: var(--text-heading);
+  font-size: var(--text-body-small);
+  font-weight: 700;
+}
+
+.brand-lead {
+  margin: 0;
+  color: var(--text-muted);
+  text-wrap: pretty;
+}
+
+.brand-lead code {
+  color: var(--code-inline-fg);
+}
+
+/* Four across on the demo's right column, so eight controls are two rows rather than four. */
+.brand-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px var(--space-16);
+}
+
+.brand-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+/* `.select` grows to fill a row by default, which in this column would stretch its height. */
+.brand-cell .select {
+  flex: none;
+  padding: 5px 8px;
+}
+
+.brand-label {
+  color: var(--text-heading);
+  font-size: var(--text-caption);
+  font-weight: 500;
+}
+
+/* The live parameter value, so the control and the copied URL are visibly the same thing. */
+.brand-value {
+  color: var(--text-muted);
+  font-size: var(--text-mono);
+}
+
+.brand-control {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-height: 30px;
+}
+
+/* The UA swatch carries its own chrome; strip it back to the disc the picker's chips use. */
+.brand-swatch {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 9999px;
+  background: none;
+  cursor: pointer;
+}
+
+.brand-swatch::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.brand-swatch::-webkit-color-swatch {
+  border: 0;
+  border-radius: 9999px;
+}
+
+/* Rendered only when the field is set — four disabled pills is noise, not affordance. */
+.brand-clear {
+  height: 22px;
+  padding: 0 8px;
+  font-size: var(--text-caption);
+}
+
+.brand-reset {
+  flex: none;
+  height: 28px;
+  padding: 0 12px;
+  font-size: var(--text-caption);
+}
+
+/* A correction the widget made on the visitor's behalf, so a failing pair is visible not silent. */
+.brand-notes {
+  margin: 0;
+  color: var(--alert-fg);
+  background: var(--alert-bg);
+  border: 1px solid var(--alert-border);
+  border-radius: var(--radius-small);
+  padding: var(--space-8) var(--space-8) var(--space-8) 24px;
+  text-wrap: pretty;
 }
