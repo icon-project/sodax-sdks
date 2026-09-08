@@ -89,53 +89,15 @@ const { data: quote, isFetching } = useSwapsApiQuote({
 const minOutputAmount = quote && (BigInt(quote.quotedAmount) * ${bps}n) / 10_000n;`;
 }
 
-function executeSnippet(state: SnippetState): string {
-  const { srcChain, dstChain, srcToken, dstToken, partnerFee } = state;
-
-  const fee = partnerFee
-    ? `
-  // The same fee the quote was taken with. Charging more leaves a minOutputAmount the intent
-  // cannot deliver, and it never fills.
-  partnerFee: ${feeExpression(partnerFee)},`
-    : '';
-
-  return `// Signing lives in your app, not in the widget. These are the four calls, in the order
-// sodax.com/exchange/swap makes them — your wallet code sits between the third and the fourth.
-import {
-  useSwapsApiApproveAndBroadcast, useSwapsApiCreateIntent, useSwapsApiSubmitTx,
-  useSwapsApiSubmitTxStatus, ChainKeys, type CreateIntentParamsV2,
-} from '@sodax/dapp-kit';
-
-const params: CreateIntentParamsV2 = {
-  srcChainKey: ${chainKeyExpression(srcChain)},
-  dstChainKey: ${chainKeyExpression(dstChain)},
-  inputToken: '${srcToken?.address ?? '0x…'}',
-  outputToken: '${dstToken?.address ?? '0x…'}',
-  inputAmount: inputAmount.toString(),
-  minOutputAmount: minOutputAmount.toString(),
-  // Read from the chain, never from the client clock: sodax.api.swaps.getDeadline().
-  deadline,
-  allowPartialFill: false,
-  srcAddress: account.address,
-  dstAddress: account.address, // it does not have to be the sender — this is the payment case${fee}
-};
-
-// 1 · approve, when the source token needs it (skipped for a native asset)
-await approveAndBroadcast({ params, walletProvider });
-// 2 · build the unsigned intent tx
-const { tx, intent, relayData } = await createIntent({ params });
-// 3 · sign and broadcast \`tx\` with your own wallet, then
-await submitTx({ request: { txHash, srcChainKey: ${chainKeyExpression(srcChain)}, walletAddress: account.address, intent, relayData } });
-// 4 · poll until the solver reports SOLVED or FAILED
-const { data: status } = useSwapsApiSubmitTxStatus({ params: { txHash } });`;
-}
-
+/**
+ * The embed and the quote calls behind it — nothing that signs. A signing recipe here would teach
+ * the one thing this widget deliberately cannot do, so it lives in the docs instead.
+ */
 export function buildSnippets(state: SnippetState, embedUrl: string): Snippet[] {
   return [
     { id: 'embed', label: 'embed.html', code: embedSnippet(embedUrl) },
     { id: 'widget', label: 'Widget.tsx', code: widgetSnippet(embedUrl) },
     { id: 'quote', label: 'quote.tsx', code: quoteSnippet(state) },
-    { id: 'execute', label: 'swap.tsx', code: executeSnippet(state) },
   ];
 }
 

@@ -122,36 +122,39 @@ describe('filterGroups', () => {
   });
 });
 
+// The decided priority is Solana → NEAR → Sui → Bitcoin. These four slots are the only ranking the
+// widget states, so an EVM chain reaching them is the regression to catch.
+const PREFERRED = [
+  ChainKeys.SOLANA_MAINNET,
+  ChainKeys.NEAR_MAINNET,
+  ChainKeys.SUI_MAINNET,
+  ChainKeys.BITCOIN_MAINNET,
+] as const;
+
 describe('previewNetworks', () => {
-  it('prefers the exchange mark (Base, Solana, Arbitrum, Sui) when they are in the list', () => {
-    const extra = CHAINS.find(
-      key =>
-        key !== ChainKeys.BASE_MAINNET &&
-        key !== ChainKeys.SOLANA_MAINNET &&
-        key !== ChainKeys.ARBITRUM_MAINNET &&
-        key !== ChainKeys.SUI_MAINNET,
-    );
-    expect(extra).toBeDefined();
+  it('leads with the decided non-EVM priority in order', () => {
+    const marked = previewNetworks([
+      ChainKeys.BASE_MAINNET,
+      ChainKeys.SUI_MAINNET,
+      ChainKeys.SOLANA_MAINNET,
+      ChainKeys.NEAR_MAINNET,
+    ]);
 
-    if (extra === undefined) {
-      expect(CHAINS.length).toBeGreaterThan(2);
-      return;
-    }
+    expect(marked).toEqual([
+      ChainKeys.SOLANA_MAINNET,
+      ChainKeys.NEAR_MAINNET,
+      ChainKeys.SUI_MAINNET,
+      ChainKeys.BASE_MAINNET,
+    ]);
+  });
 
-    const marked = previewNetworks([extra, ChainKeys.SUI_MAINNET, ChainKeys.BASE_MAINNET]);
-    expect(marked[0]).toBe(ChainKeys.BASE_MAINNET);
-    expect(marked).toContain(ChainKeys.SUI_MAINNET);
-    expect(marked).toHaveLength(3);
+  it('keeps an EVM chain out of the preview while a decided chain is still unplaced', () => {
+    const marked = previewNetworks([ChainKeys.BASE_MAINNET, ChainKeys.ARBITRUM_MAINNET, ChainKeys.BITCOIN_MAINNET], 2);
+    expect(marked[0]).toBe(ChainKeys.BITCOIN_MAINNET);
   });
 
   it('fills from the remaining list when a preferred chain is absent', () => {
-    const exotic = CHAINS.filter(
-      key =>
-        key !== ChainKeys.BASE_MAINNET &&
-        key !== ChainKeys.SOLANA_MAINNET &&
-        key !== ChainKeys.ARBITRUM_MAINNET &&
-        key !== ChainKeys.SUI_MAINNET,
-    ).slice(0, 4);
+    const exotic = CHAINS.filter(key => !(PREFERRED as readonly string[]).includes(key)).slice(0, 4);
     expect(exotic.length).toBeGreaterThan(0);
     expect(previewNetworks(exotic)).toEqual(exotic);
   });

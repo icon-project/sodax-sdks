@@ -17,9 +17,9 @@ pnpm --filter @sodax/playground dev
 
 Four product decisions constrain almost everything below. They came from the v1 review, and they are not free to revisit in code:
 
-- **It is an embed, not a teaching page.** Modelled on NEAR Intents' widget, built on the `sodax.com/exchange/swap` flow. The visitor must leave holding something they can ship, which is why the code panel opens on `embed.html` rather than on a hook.
+- **It is an embed, not a teaching page.** Modelled on NEAR Intents' widget, built on the `sodax.com/exchange/swap` flow. The visitor must leave holding something they can ship, which is why the code panel opens on `embed.html` rather than on a hook. The panel carries the embed and the quote calls behind it and **no signing recipe** — a locked test in `snippet.test.ts` keeps it that way, because a recipe here would teach the one thing this widget cannot do.
 - **It does not connect.** No wallet layer is mounted at all — see *No wallet* below. A quotable pair hands off to the exchange; it never gates behind a connect button.
-- **Every non-EVM network is reachable.** That is the differentiator against LI.FI, and the reason tokens come from the API rather than the packaged list.
+- **Every non-EVM network is reachable, and they lead.** That is the differentiator against LI.FI, and the reason tokens come from the API rather than the packaged list. The decided priority — Solana, NEAR, Sui, Bitcoin — is `MARK_ORDER` in `lib/pickerOptions.ts`; it fills the picker's four preview slots, so no EVM chain reaches them while a decided chain is unplaced.
 - **One widget, one thing.** No flow rail. A bridge widget is a separate widget; the bridge flow is parked (below), not deleted.
 
 ## Structure

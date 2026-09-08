@@ -57,12 +57,12 @@ export function filterGroups<K extends ChainKey>(
   return kept.sort((a, b) => Number(b.symbol.toLowerCase() === needle) - Number(a.symbol.toLowerCase() === needle));
 }
 
-/** The exchange's 2×2 "all networks" mark: Base, Solana, Arbitrum, Sui, then the rest of the list. */
+/** The decided non-EVM priority, which is what the first four networks are for. Rest of list follows. */
 const MARK_ORDER: readonly ChainKey[] = [
-  ChainKeys.BASE_MAINNET,
   ChainKeys.SOLANA_MAINNET,
-  ChainKeys.ARBITRUM_MAINNET,
+  ChainKeys.NEAR_MAINNET,
   ChainKeys.SUI_MAINNET,
+  ChainKeys.BITCOIN_MAINNET,
 ];
 
 export function previewNetworks<K extends ChainKey>(networks: readonly K[], count = 4): K[] {

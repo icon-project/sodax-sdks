@@ -24,7 +24,18 @@ const codeFor = (state: SnippetState, id: string): string =>
 describe('buildSnippets', () => {
   // The takeaway leads: every competitor's playground ends with something the visitor can ship.
   it('opens on the embed, then the code behind it', () => {
-    expect(buildSnippets(base, EMBED_URL).map(snippet => snippet.id)).toEqual(['embed', 'widget', 'quote', 'execute']);
+    expect(buildSnippets(base, EMBED_URL).map(snippet => snippet.id)).toEqual(['embed', 'widget', 'quote']);
+  });
+
+  // The widget is decided as non-connectable, so the panel must not hand out a signing recipe.
+  it('ships no call that signs or broadcasts', () => {
+    const all = buildSnippets(base, EMBED_URL)
+      .map(snippet => snippet.code)
+      .join('\n');
+
+    for (const call of ['useSwapsApiCreateIntent', 'useSwapsApiSubmitTx', 'approveAndBroadcast', 'walletProvider']) {
+      expect(all).not.toContain(call);
+    }
   });
 
   it('points both embeds at the pair the form currently shows', () => {
@@ -78,14 +89,6 @@ describe('buildSnippets', () => {
     it('warns against deducting it a second time', () => {
       expect(codeFor(withFee, 'quote')).toContain('charges it twice');
     });
-
-    it('passes the same fee to the intent', () => {
-      expect(codeFor(withFee, 'execute')).toContain(`partnerFee: { address: '${RECIPIENT}', percentage: 25 }`);
-    });
-  });
-
-  it('reads the deadline off the chain rather than the client clock', () => {
-    expect(codeFor(base, 'execute')).toContain('never from the client clock');
   });
 });
 
