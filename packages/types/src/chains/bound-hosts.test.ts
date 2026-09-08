@@ -15,7 +15,7 @@ describe('Bound host defaults', () => {
 
   it('never defaults to a host Bound has announced it is retiring', () => {
     for (const url of [radfi.apiUrl, radfi.umsUrl]) {
-      expect(DEPRECATED_BOUND_HOSTS[url]).toBeUndefined();
+      expect(DEPRECATED_BOUND_HOSTS).not.toContain(url);
     }
   });
 

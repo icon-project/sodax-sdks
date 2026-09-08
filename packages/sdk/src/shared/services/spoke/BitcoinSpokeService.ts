@@ -91,7 +91,7 @@ export class BitcoinSpokeService {
     this.rpcUrl = chainConfig.rpcUrl;
     // Pass the client-side RadFi signer (if any) so server-to-server callers can attach Bound's
     // `x-api-signature` HMAC header. `config.radfiSigner` is undefined for browser callers. See gh-831.
-    this.radfi = new RadfiProvider(chainConfig.radfi, { signer: config.radfiSigner, logger: config.logger });
+    this.radfi = new RadfiProvider(chainConfig.radfi, { signer: config.radfiSigner });
     this.walletMode = chainConfig.radfi.walletMode ?? 'TRADING';
     this.pollingIntervalMs = chainConfig.pollingConfig.pollingIntervalMs;
     this.maxTimeoutMs = chainConfig.pollingConfig.maxTimeoutMs;
@@ -137,9 +137,7 @@ export class BitcoinSpokeService {
   public async getWalletBalances(params: GetBalancesParams<BitcoinChainKey>): Promise<WalletBalanceMap> {
     const { srcChainKey, srcAddress, tokens } = params;
     const collector = createBalanceCollector({ logger: this.config.logger, chainKey: srcChainKey });
-    await settleWalletBalances(collector, tokens, token =>
-      this.getWalletBalance({ srcChainKey, srcAddress, token }),
-    );
+    await settleWalletBalances(collector, tokens, token => this.getWalletBalance({ srcChainKey, srcAddress, token }));
     return collector.finish();
   }
 

@@ -551,10 +551,11 @@ export const BOUND_COMPANION_HOSTS: Record<string, { auth?: string; transactions
   },
 };
 
-/** Retiring hosts → their replacement. Warned about, never rejected. */
-export const DEPRECATED_BOUND_HOSTS: Record<string, string> = {
-  'https://api.bound.exchange/api': BOUND_API_HOST,
-};
+/**
+ * Hosts Bound has announced it will retire. Warned about, never rejected. No replacement is
+ * stored: it depends on which family the retired host was configured for, not on the host.
+ */
+export const DEPRECATED_BOUND_HOSTS: readonly string[] = ['https://api.bound.exchange/api'];
 
 export type BitcoinSpokeChainConfig = BaseSpokeChainConfig<'BITCOIN'> & {
   addresses: {

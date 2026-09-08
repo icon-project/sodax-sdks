@@ -1,4 +1,5 @@
 import {
+  BOUND_API_HOST,
   BOUND_COMPANION_HOSTS,
   DEPRECATED_BOUND_HOSTS,
   detectBitcoinAddressType,
@@ -7,7 +8,6 @@ import {
   type RadfiConfig,
   type RadfiDepositTxResponse,
   type RadfiSigner,
-  type SodaxLogger,
 } from '@sodax/types';
 import type { RelayExtraData } from '../../types/relay-types.js';
 
@@ -125,8 +125,6 @@ export type RadfiMaxSpentResponse = {
 export type RadfiProviderOptions = {
   /** Attaches per-request headers to outbound Bound calls, e.g. a backend's HMAC closure. */
   signer?: RadfiSigner;
-  /** Where deprecation notices go. Falls back to silence rather than `console`. */
-  logger?: SodaxLogger;
 };
 
 /**
@@ -136,13 +134,15 @@ export type RadfiProviderOptions = {
 export type RadfiHost = 'api' | 'auth' | 'transactions';
 
 const stripSlash = (url: string): string => (url.endsWith('/') ? url.slice(0, -1) : url);
-const stripSlashOpt = (url: string | undefined): string | undefined =>
-  url === undefined ? undefined : stripSlash(url);
+/** Blank is not a host: `''` from an env var or a form would survive `??` and make every URL relative. */
+const normalizeUrl = (url: string | undefined): string | undefined => {
+  const trimmed = url?.trim();
+  return trimmed ? stripSlash(trimmed) : undefined;
+};
 
 export class RadfiProvider {
   private readonly config: RadfiConfig;
   private readonly hosts: Record<RadfiHost, string>;
-  private readonly logger?: SodaxLogger;
   // Client-side runtime signer (e.g. a backend's HMAC closure). Holds no credential itself — the SDK
   // only keeps the reference and invokes it per outbound Bound request, on every routed host.
   // UMS calls bypass `request()` and stay unsigned. See `RadfiOptions` / gh-831.
@@ -153,7 +153,6 @@ export class RadfiProvider {
   constructor(config: RadfiConfig, options?: RadfiProviderOptions) {
     this.config = config;
     this.signer = options?.signer;
-    this.logger = options?.logger;
     // Seed any pre-provisioned Bound Exchange session from config. `RadfiConfig` declares
     // `accessToken` / `refreshToken` precisely so a server-side caller — which never runs the
     // interactive BIP322 sign-in — can inject a token via `new Sodax({ ... })` and have the
@@ -166,29 +165,32 @@ export class RadfiProvider {
       this.config.umsUrl = config.umsUrl.slice(0, -1);
     }
 
-    const api = stripSlash(config.apiUrl);
+    const api = normalizeUrl(config.apiUrl) ?? config.apiUrl;
     // Companions are registered per api host, so an apiUrl the table does not know sends every
     // family to itself — which is what makes a partial override unable to straddle environments.
     const companions = BOUND_COMPANION_HOSTS[api] ?? {};
 
     this.hosts = {
       api,
-      auth: stripSlashOpt(config.authUrl) ?? companions.auth ?? api,
-      transactions: stripSlashOpt(config.transactionsUrl) ?? companions.transactions ?? api,
+      auth: normalizeUrl(config.authUrl) ?? companions.auth ?? api,
+      transactions: normalizeUrl(config.transactionsUrl) ?? companions.transactions ?? api,
     };
 
-    // Warn per config field, not per resolved URL: a companion can hold a retired host on its
-    // own, and telling that consumer to change `apiUrl` would not fix it.
-    const configured: [keyof RadfiConfig, string | undefined][] = [
-      ['apiUrl', config.apiUrl],
-      ['authUrl', config.authUrl],
-      ['transactionsUrl', config.transactionsUrl],
-    ];
-    for (const [field, value] of configured) {
-      const replacement = value && DEPRECATED_BOUND_HOSTS[stripSlash(value)];
-      if (replacement) {
-        this.logger?.warn(
-          `Bound Exchange is retiring ${stripSlash(value)}. Point chains.bitcoin.radfi.${field} at ${replacement} before the deprecation date.`,
+    // Refuse a retired host outright rather than warning: this SDK routes to the split hosts, and
+    // letting a caller stay on the old one only defers the failure to the day Bound turns it off.
+    // Checked per config field — the replacement differs by family, auth does not move to service.
+    const packaged = BOUND_COMPANION_HOSTS[BOUND_API_HOST] ?? {};
+    const replacementFor = {
+      apiUrl: BOUND_API_HOST,
+      authUrl: packaged.auth ?? BOUND_API_HOST,
+      transactionsUrl: packaged.transactions ?? BOUND_API_HOST,
+    } as const;
+
+    for (const field of ['apiUrl', 'authUrl', 'transactionsUrl'] as const) {
+      const url = normalizeUrl(config[field]);
+      if (url && DEPRECATED_BOUND_HOSTS.includes(url)) {
+        throw new Error(
+          `Bound Exchange has retired ${url}. Set chains.bitcoin.radfi.${field} to ${replacementFor[field]}, or remove it to take the packaged default.`,
         );
       }
     }

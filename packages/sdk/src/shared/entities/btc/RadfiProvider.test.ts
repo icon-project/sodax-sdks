@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BOUND_API_HOST, BOUND_COMPANION_HOSTS, type RadfiConfig, type SodaxLogger } from '@sodax/types';
+import { BOUND_API_HOST, BOUND_COMPANION_HOSTS, type RadfiConfig } from '@sodax/types';
 import { RadfiApiError, RadfiProvider } from './RadfiProvider.js';
 
 // Regression tests for issue #233: a non-JSON (HTML) Bound Exchange response must surface as a
@@ -7,7 +7,7 @@ import { RadfiApiError, RadfiProvider } from './RadfiProvider.js';
 // This guards the BE "build raw intent" path so an SDK bump can't silently regress it.
 
 const baseConfig: RadfiConfig = {
-  apiUrl: 'https://api.bound.exchange/api',
+  apiUrl: BOUND_API_HOST,
   apiKey: '',
   umsUrl: 'https://api.ums.bound.exchange/api',
   accessToken: '',
@@ -228,7 +228,7 @@ describe('RadfiProvider — signer hook (x-api-signature, gh-831)', () => {
     expect(signer).toHaveBeenCalledWith({
       method: 'GET',
       path: '/wallets/details/bc1puser',
-      baseUrl: baseConfig.apiUrl,
+      baseUrl: companion('auth'),
     });
     const headers = (fetchMock.mock.calls[0]?.[1] as RequestInit).headers as Record<string, string>;
     expect(headers['x-api-signature']).toBe('sig_get');
@@ -322,7 +322,7 @@ const OK_BODY = JSON.stringify({
   },
 });
 
-/** One invocation per endpoint that goes through `request()` — nine of them, three families. */
+/** One invocation per `request()` call site — eleven of them, three families. */
 const ROUTED_CALLS: {
   label: string;
   path: string;
@@ -436,7 +436,6 @@ describe('RadfiProvider — host routing (gh-425)', () => {
 
   // Anti-straddle: naming your own apiUrl moves EVERY family, as the single-host SDK did.
   it.each([
-    ['the deprecated host', 'https://api.bound.exchange/api'],
     ['a signet host', 'https://signet.api.bound.exchange/api'],
     ['a private proxy', 'https://bound-proxy.internal/api'],
   ])('sends every family to %s when apiUrl names it', async (_label, apiUrl) => {
@@ -467,6 +466,15 @@ describe('RadfiProvider — host routing (gh-425)', () => {
   });
 
   // UMS calls bypass request(); routing one through it would land on auth — hence no 'ums' host.
+  // An env var or a form field that comes through empty must not survive `??` and turn every
+  // URL relative — blank is normalised to "unset".
+  it('treats a blank companion as unset rather than as a host', async () => {
+    const used = await hostsUsed({ ...baseConfig, apiUrl: BOUND_API_HOST, authUrl: '', transactionsUrl: '   ' });
+
+    expect(used['/wallets']).toBe(`${companion('auth')}/wallets`);
+    expect(used['/transactions']).toBe(`${companion('transactions')}/transactions`);
+  });
+
   it('leaves the UMS calls on umsUrl and unsigned', async () => {
     const signer = vi.fn().mockReturnValue({ 'x-api-signature': 'sig' });
     const radfi = new RadfiProvider({ ...baseConfig, apiUrl: BOUND_API_HOST }, { signer });
@@ -495,25 +503,32 @@ describe('RadfiProvider — host routing (gh-425)', () => {
   });
 });
 
-describe('RadfiProvider — retirement warning (gh-425)', () => {
-  const makeLogger = (): SodaxLogger => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
+describe('RadfiProvider — retired hosts are refused (gh-425)', () => {
+  const RETIRED = 'https://api.bound.exchange/api';
 
-  it('warns once, names the replacement, and still routes', () => {
-    const logger = makeLogger();
-    new RadfiProvider({ ...baseConfig, apiUrl: 'https://api.bound.exchange/api' }, { logger });
+  it.each([
+    ['apiUrl', { apiUrl: RETIRED }, BOUND_API_HOST],
+    ['authUrl', { apiUrl: BOUND_API_HOST, authUrl: RETIRED }, undefined],
+    ['transactionsUrl', { apiUrl: BOUND_API_HOST, transactionsUrl: RETIRED }, undefined],
+  ])('refuses a retired host in %s and names that field', (field, overrides, replacement) => {
+    const expected = replacement ?? (field === 'authUrl' ? companion('auth') : companion('transactions'));
 
-    expect(logger.warn).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(logger.warn).mock.calls[0]?.[0]).toContain('https://api.bound.exchange/api');
-    expect(vi.mocked(logger.warn).mock.calls[0]?.[0]).toContain(BOUND_API_HOST);
+    expect(() => new RadfiProvider({ ...baseConfig, ...overrides })).toThrow(
+      new RegExp(
+        `retired ${RETIRED.replace(/[.*+?^$()|[\]\\]/g, '\\$&')}.*radfi\\.${field}.*${expected.replace(/[.*+?^$()|[\]\\]/g, '\\$&')}`,
+      ),
+    );
+  });
+
+  it('ignores a trailing slash when matching a retired host', () => {
+    expect(() => new RadfiProvider({ ...baseConfig, apiUrl: `${RETIRED}/` })).toThrow(/has retired/);
   });
 
   it.each([
     ['the packaged host', BOUND_API_HOST],
     ['a signet host', 'https://signet.api.bound.exchange/api'],
     ['a private proxy', 'https://bound-proxy.internal/api'],
-  ])('stays quiet for %s', (_label, apiUrl) => {
-    const logger = makeLogger();
-    new RadfiProvider({ ...baseConfig, apiUrl }, { logger });
-    expect(logger.warn).not.toHaveBeenCalled();
+  ])('accepts %s', (_label, apiUrl) => {
+    expect(() => new RadfiProvider({ ...baseConfig, apiUrl })).not.toThrow();
   });
 });

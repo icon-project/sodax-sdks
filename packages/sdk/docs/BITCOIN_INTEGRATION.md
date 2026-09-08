@@ -84,6 +84,29 @@ setup working, and it makes it impossible to half-migrate and have auth traffic 
 in a different environment from the rest. To keep the split while changing one family, set that
 family's host explicitly with `authUrl` or `transactionsUrl`.
 
+**`api.bound.exchange` is refused.** This SDK routes to the split hosts, so a `radfi.apiUrl`,
+`authUrl` or `transactionsUrl` still naming the retired host throws at construction with the
+replacement for that field. Remove the setting to take the packaged default, or point it at the
+new host. Migrating from an older SDK:
+
+```ts
+// before — retired, now throws
+radfi: { apiUrl: 'https://api.bound.exchange/api' }
+
+// after — either of these
+radfi: { }                                              // packaged default
+radfi: { apiUrl: 'https://svc.bound.exchange/api' }     // explicit
+```
+
+Moving to a test environment stays two lines, and both are needed — `apiUrl` does not carry UMS:
+
+```ts
+radfi: {
+  apiUrl: 'https://staging.api.bound.exchange/api',
+  umsUrl: 'https://staging.api.ums.bound.exchange/api',
+}
+```
+
 **UMS is not routed by `apiUrl`.** `/wallets/balance` and `/utxos` always use `umsUrl`, so a
 proxy or test environment that must capture *all* Bound traffic has to override `umsUrl` too.
 

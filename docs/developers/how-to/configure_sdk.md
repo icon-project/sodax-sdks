@@ -255,7 +255,7 @@ const sodax = new Sodax({
 
 **Server-side only** — the closure holds a service credential, so never ship one in a browser bundle. Omit `radfi` and requests go out exactly as before.
 
-The signer receives `{ method, path }`, may be async, and is invoked per request (Bound's signature embeds a timestamp valid for 60 s, so a cached one would replay). Its headers are merged **last**, so it must not return `Authorization`: that carries the per-user Bound access token, which is separate and passed per call via `extras.bound.accessToken`.
+The signer receives `{ method, path, baseUrl }` — `baseUrl` is the resolved Bound host for that call, so a signer that must scope its credential per origin can branch on it. It may be async, and is invoked per request (Bound's signature embeds a timestamp valid for 60 s, so a cached one would replay). Its headers are merged **last**, so it must not return `Authorization`: that carries the per-user Bound access token, which is separate and passed per call via `extras.bound.accessToken`.
 
 ### Money market (`moneyMarket`)
 
