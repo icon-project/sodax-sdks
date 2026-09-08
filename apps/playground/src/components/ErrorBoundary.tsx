@@ -21,12 +21,9 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
     return (
       <div className="app">
         <section className="card">
+          {/* The message stays in the console: this rectangle renders inside someone else's site. */}
           <div className="alert" role="alert">
-            The playground hit an unexpected error and stopped.
-            <details>
-              <summary>Underlying error</summary>
-              <code>{error.message}</code>
-            </details>
+            The widget hit an unexpected error and stopped.
           </div>
           <button type="button" className="btn btn-primary" onClick={() => window.location.reload()}>
             Reload

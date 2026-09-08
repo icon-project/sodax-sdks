@@ -108,6 +108,10 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
   if (flow.assetsError) return <LoadingForm message={flow.assetsError} />;
   if (!srcChain || !dstChain) return <LoadingForm message="Loading assets…" />;
 
+  // One slot, so a fee error and a quote error cannot stack and resize the card between them.
+  // The tail stays short enough to hold one line: "this pair" already says to try another.
+  const message = flow.partnerFeeError ?? (flow.quoteError && `${flow.quoteError} Try a smaller amount.`);
+
   return (
     <section className="card swap-card">
       <AssetPanel
@@ -185,24 +189,18 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
 
       <PartnerFeeFields flow={flow} />
 
-      {flow.partnerFeeError && (
-        <p className="alert" role="alert">
-          {flow.partnerFeeError}
+      <div className="action-dock">
+        <PrimaryAction flow={flow} />
+        {/* Reserved height, and below the action: the quote refetches every 3s, so a slot that
+            collapsed would move the button out from under the visitor's cursor. */}
+        <div className="action-message" role="status" aria-live="polite">
+          {message && <p className="alert">{message}</p>}
+        </div>
+        <p className="muted small action-note">
+          Quotes are live off mainnet liquidity. The widget connects no wallet and cannot move funds — signing happens
+          on sodax.com.
         </p>
-      )}
-
-      {flow.quoteError && (
-        <p className="alert" role="alert">
-          {flow.quoteError} Try another pair, or a smaller amount.
-        </p>
-      )}
-
-      <PrimaryAction flow={flow} />
-
-      <p className="muted small action-note">
-        Quotes are live off mainnet liquidity. The widget connects no wallet and cannot move funds — signing happens on
-        sodax.com.
-      </p>
+      </div>
     </section>
   );
 }

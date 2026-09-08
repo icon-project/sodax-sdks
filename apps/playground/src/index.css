@@ -432,15 +432,30 @@ code,
   padding: 0;
 }
 
-/* Anchors the action to the bottom, so the height the two columns share reads as deliberate. */
-.swap-card .btn-primary {
+/* Action, message and note travel together, anchored to the bottom edge — so the note sits on the
+   card's edge and the height the two columns share reads as deliberate. */
+.action-dock {
+  display: flex;
+  flex-direction: column;
   margin-top: auto;
+}
+
+/* Held open whether or not there is a message: the quote refetches every 3s, and a slot that
+   collapsed would walk the button up and down under the visitor's cursor. One line of caption is
+   the reserve; a long solver string grows into the column's slack instead. */
+.action-message {
+  min-height: calc(1.5 * var(--text-caption) + 2 * var(--space-8) + 2px);
+  margin-top: var(--space-8);
+}
+
+.action-message .alert {
+  margin: 0;
 }
 
 /* Says what the CTA does not do. The widget mounts no wallet, and a form this familiar otherwise
    reads as one that is about to ask for a signature. */
 .action-note {
-  margin: var(--space-8) 0 0;
+  margin: 0;
   text-align: center;
   text-wrap: pretty;
 }

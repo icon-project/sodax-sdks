@@ -53,6 +53,7 @@ src/
 - **The response key is the chain, not `token.chainKey`.** Tokens are paired with the key they were filed under. `assets.test.ts` asserts it.
 - **`isChainKey` uses `Object.hasOwn`, not `in`.** `in` walks the prototype, so `?srcChain=toString` would pass and then index a function with no name or logo.
 - **There is a loading state, and that is the trade.** The old packaged list rendered instantly; this one seeds the form when the list arrives. `SwapPanel` renders skeleton panels at the real height so nothing jumps.
+- **The action never moves.** `.action-dock` pins the button, one message slot and the note to the card's bottom edge, and `.action-message` stays open at one line of caption whether or not there is a message. Errors render *below* the button for that reason — the quote refetches every 3s, so a message above it, or a slot that collapsed, would walk the button out from under the cursor. Keep errors in the single slot; a second stacked alert resizes the card.
 - **The partner fee rides on the quote request.** `QuoteRequestV2.partnerFee` — the API applies it once before quoting. Never deduct it from `amount` first; that charges it twice. (This also retires the `useQuote` cache-key workaround the v1 review filed as an SDK gap.)
 
 ## No wallet
