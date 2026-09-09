@@ -180,7 +180,7 @@ export function BridgeManager() {
             <div className="grow">
               <Input type="number" placeholder="0.0" value={fromAmount} onChange={e => setFromAmount(e.target.value)} />
             </div>
-            <SelectToken tokens={fromTokens} value={fromToken?.symbol} onSelect={setFromToken} className="w-[110px]" />
+            <SelectToken tokens={fromTokens} value={fromToken?.symbol} onSelect={setFromToken} className="w-[170px]" />
           </div>
 
           <div className="text-sm text-muted-foreground flex gap-1">
@@ -227,13 +227,13 @@ export function BridgeManager() {
               <Input type="number" placeholder="0.0" value={fromAmount} readOnly />
             </div>
             {isLoadingBridgeableTokens ? (
-              <Skeleton className="w-[110px] h-10" />
+              <Skeleton className="w-[170px] h-10" />
             ) : (
               <SelectToken
                 tokens={bridgeableTokens ?? []}
                 value={toToken?.symbol}
                 onSelect={setToToken}
-                className="w-[110px]"
+                className="w-[170px]"
               />
             )}
           </div>

@@ -6,8 +6,8 @@ import { Input } from '@/components/ui/input';
 import { useRadixSearchInput } from '@/hooks/useRadixSearchInput';
 import { TokenIcon } from '@/components/shared/TokenIcon';
 
-/** Searchable token dropdown; works for any token shape carrying symbol + address (XToken, SwapTokenV2). */
-export function SelectToken<T extends { symbol: string; address: string }>({
+/** Searchable token dropdown; works for any token shape carrying name + symbol + address (XToken, SwapTokenV2). */
+export function SelectToken<T extends { name: string; symbol: string; address: string }>({
   tokens,
   value,
   onSelect,
@@ -21,7 +21,9 @@ export function SelectToken<T extends { symbol: string; address: string }>({
 }) {
   const { search, inputProps, handleOpenChange } = useRadixSearchInput();
   const q = search.trim().toLowerCase();
-  const filtered = q ? tokens.filter(t => t.symbol.toLowerCase().includes(q)) : tokens;
+  const filtered = q
+    ? tokens.filter(t => t.symbol.toLowerCase().includes(q) || t.name.toLowerCase().includes(q))
+    : tokens;
 
   return (
     <Select
@@ -33,7 +35,10 @@ export function SelectToken<T extends { symbol: string; address: string }>({
       onOpenChange={handleOpenChange}
     >
       <SelectTrigger className={className}>
-        <SelectValue placeholder="Token" />
+        {/* Radix strips className from SelectValue, so the wrapper is what lets the name truncate. */}
+        <span className="min-w-0 flex-1 overflow-hidden">
+          <SelectValue placeholder="Token" />
+        </span>
       </SelectTrigger>
       <SelectContent>
         <div className="sticky top-0 z-10 bg-white p-1">
@@ -44,9 +49,10 @@ export function SelectToken<T extends { symbol: string; address: string }>({
         ) : (
           filtered.map(token => (
             <SelectItem key={`${token.address}-${token.symbol}`} value={token.symbol}>
-              <span className="flex items-center gap-2">
+              <span className="flex min-w-0 items-center gap-2">
                 <TokenIcon symbol={token.symbol} />
-                {token.symbol}
+                <span className="truncate">{token.name}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">{token.symbol}</span>
               </span>
             </SelectItem>
           ))

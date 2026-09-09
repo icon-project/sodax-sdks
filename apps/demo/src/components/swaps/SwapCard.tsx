@@ -423,7 +423,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
             tokens={getSolverTokens(src.chain)}
             value={src.token?.symbol}
             onSelect={token => setSrc(prev => ({ ...prev, token }))}
-            className="w-[110px]"
+            className="w-[170px]"
           />
         </div>
         <div className="mix-blend-multiply text-black text-(length:--body-comfortable) font-medium font-['InterRegular'] flex gap-1">
@@ -484,7 +484,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
             tokens={getSolverTokens(dst.chain)}
             value={dst.token?.symbol}
             onSelect={token => setDst(prev => ({ ...prev, token }))}
-            className="w-[110px]"
+            className="w-[170px]"
           />
         </div>
         <div className="mix-blend-multiply text-black text-(length:--body-comfortable) font-medium font-['InterRegular'] flex gap-1">
