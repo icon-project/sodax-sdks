@@ -24,7 +24,7 @@ The constructor signature is `new Sodax(config?: SodaxOptions)`, where `SodaxOpt
 
 ### Dynamic Configuration
 
-For the latest tokens and chains, call `initialize()` before usage. Without this call the SDK falls back to the static defaults bundled with the installed version:
+Read effective configuration from `sodax.config`, which includes packaged defaults and constructor overrides. `initialize()` is available for the initialization lifecycle:
 
 ```typescript
 const initResult = await sodax.initialize();
@@ -33,7 +33,7 @@ if (!initResult.ok) {
 }
 ```
 
-`initialize()` returns `Promise<Result<void>>`. On success, `ConfigService` is populated with up-to-date chain and token data fetched from the backend API. On failure the SDK continues to work with the packaged defaults — the error is informational only.
+`initialize()` returns `Promise<Result<void>>`. The current implementation returns success without fetching backend configuration; it preserves the constructor-merged configuration. Do not use it as a token-support refresh. A direct import of `spokeChainConfig` is only the packaged snapshot and does not include your overrides.
 
 ## SodaxConfig overview
 
@@ -314,7 +314,7 @@ EVM spokes use `rpcUrl` on their spoke config; Stellar uses `horizonRpcUrl` and 
 
 ### Backend API (`api`)
 
-[`ApiConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/common/constants.ts) controls `baseURL`, `timeout`, and `headers` for `BackendApiService` (used by `ConfigService` and `initialize()`). It is either a flat `BackendApiConfig` (shown below — shared by `sodax.backendApi`, the swaps client `sodax.api.swaps`, and the bridge client `sodax.api.bridge`) or a nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig?, sponsoringApiConfig? }`) to point an individual client at its own endpoint.
+[`ApiConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/common/constants.ts) controls `baseURL`, `timeout`, and `headers` for `BackendApiService` (the configuration service currently does not fetch through `initialize()`). It is either a flat `BackendApiConfig` (shown below — shared by `sodax.backendApi`, the swaps client `sodax.api.swaps`, and the bridge client `sodax.api.bridge`) or a nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig?, sponsoringApiConfig? }`) to point an individual client at its own endpoint.
 
 #### How a request URL is composed
 

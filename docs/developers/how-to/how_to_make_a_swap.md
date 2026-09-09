@@ -47,8 +47,7 @@ if (!initResult.ok) {
 **Note**:
 
 - The `new Sodax()` constructor defaults to mainnet configuration automatically. No configuration is required for basic usage.
-- `initialize()` returns `Promise<Result<void>>`. In the current SDK implementation it returns success without fetching backend configuration.
-- Read configuration from `sodax.config`: it contains packaged defaults merged with your constructor overrides. Calling `initialize()` does not refresh token support.
+- Read effective configuration from `sodax.config` to include constructor overrides. For initialization behavior and configuration options, see [Configure SDK](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md#default-configuration).
 
 ### Optional: Custom Configuration
 
@@ -124,7 +123,7 @@ supportedTokens.forEach(token => {
 
 Before executing a swap, it is good practice to get a quote to show users the expected output amount. This helps set proper expectations and allows you to calculate slippage tolerance.
 
-**Example**: See how quotes are obtained in the example file: [`apps/node/src/swap.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/swap.ts#L62-L80).
+**Example**: See how quotes are obtained in the example file: [`apps/node/src/swap.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/swap.ts).
 
 ```typescript
 import {
@@ -165,7 +164,7 @@ if (!quoteResult.ok) {
 
 Before creating a swap intent, check whether the Asset Manager contract already has permission to spend your tokens. If not, you will need to approve it first.
 
-**Example**: See how allowance checking is implemented in the example file: [`apps/node/src/swap.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/swap.ts#L82-L112).
+**Example**: See how allowance checking is implemented in the example file: [`apps/node/src/swap.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/swap.ts).
 
 ```typescript
 import type { CreateIntentParams } from "@sodax/sdk";
@@ -218,7 +217,7 @@ another. When the wallet already holds a stale allowance on such a token, `appro
 The returned value is still a single hash — the **last** transaction's — so the code below is
 unchanged. If you show an "Approving…" state, expect a second wallet prompt on those tokens.
 
-**Example**: See how token approval is handled in the example file: [`apps/node/src/swap.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/swap.ts#L114-L135).
+**Example**: See how token approval is handled in the example file: [`apps/node/src/swap.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/swap.ts).
 
 ```typescript
 if (!allowanceResult.value) {
@@ -299,7 +298,7 @@ Now you're ready to execute the swap. The `swap` method orchestrates the complet
 3. Submits the transaction to the relayer and waits for the relay packet to land on the hub (Sonic). This step is skipped when `srcChainKey` is the hub itself.
 4. Calls `postExecution` to notify the solver, triggering it to fill the intent
 
-**Example**: See how the swap is executed in the example file: [`apps/node/src/swap.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/swap.ts#L137-L183).
+**Example**: See how the swap is executed in the example file: [`apps/node/src/swap.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/swap.ts).
 
 ```typescript
 const swapResult = await sodax.swaps.swap({
@@ -330,7 +329,7 @@ if (!swapResult.ok) {
 
 After a successful swap submission, continuously monitor the intent status until it reaches a terminal state. Poll every 5 seconds until the swap is completed, failed, or not found.
 
-**Example**: See the complete status polling implementation in the example file: [`apps/node/src/swap.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/swap.ts#L189-L289).
+**Example**: See the complete status polling implementation in the example file: [`apps/node/src/swap.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/swap.ts).
 
 ```typescript
 import type { SolverIntentStatusRequest, SolverIntentStatusCode } from "@sodax/sdk";
