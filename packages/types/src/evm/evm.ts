@@ -51,9 +51,14 @@ export type EvmRawTransactionReceipt = {
   effectiveGasPrice?: string; // hex string, only on EIP-1559 txs
 };
 
+export type EvmSendTransactionOptions = {
+  // Refuse to send unless the wallet's active chain id matches; without it the tx goes to whatever chain the wallet is on.
+  expectedChainId?: number;
+};
+
 export interface IEvmWalletProvider extends ICoreWallet {
   readonly chainType: 'EVM';
   getWalletAddress: () => Promise<Address>;
-  sendTransaction: (evmRawTx: EvmRawTransaction) => Promise<Hash>;
+  sendTransaction: (evmRawTx: EvmRawTransaction, options?: EvmSendTransactionOptions) => Promise<Hash>;
   waitForTransactionReceipt: (txHash: Hash) => Promise<EvmRawTransactionReceipt>;
 }

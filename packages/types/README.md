@@ -96,3 +96,29 @@ function isEvmProvider(provider: IWalletProvider): provider is IEvmWalletProvide
   return provider.chainType === 'EVM';
 }
 ```
+
+## Address Types
+
+`GetAddressType<C>` is the type the SDK's address parameters (`srcAddress`, `owner`, …) declare for a `SpokeChainKey` or `ChainType`. Each chain family carries its own address encoding — a Solana address is a base58 public key, not a hex string.
+
+| Chain family | Declared type | Encoding to pass |
+| --- | --- | --- |
+| EVM | `Address` | `0x…` |
+| ICON | `IconAddress` | `hx…` (or `cx…` for a contract) |
+| Solana | `SolanaBase58PublicKey` | base58 public key |
+| Sui | `Hex` | `0x…` (32-byte) |
+| Stellar | `Hex` [^addr] | `G…` ed25519 strkey |
+| NEAR | `Address` [^addr] | account id (`alice.near`, or a 64-char implicit account) |
+| Injective, Stacks | `string` | `inj1…` / `SP…`, `ST…` |
+
+[^addr]: Stellar and NEAR declare a hex type their chain does not use. The Stellar spoke service passes the address to `Address.fromString` and `loadAccount`, which need a `G…` strkey; the NEAR spoke service passes it as a NEAR account id (`signerId`, `accountId`). Pass the chain's own encoding — the declared type is wrong here, not the chain.
+
+`Address`, `Hex` and `IconAddress` are template-literal types, so the compiler does check the prefix. `SolanaBase58PublicKey` and the `string` entries are plain aliases with no branding — nothing there catches a wrong-encoding address until the chain's own SDK rejects it at runtime.
+
+```typescript
+import type { GetAddressType, SpokeChainKey } from '@sodax/types';
+
+type AddressForChain<C extends SpokeChainKey> = GetAddressType<C>;
+```
+
+`GetTokenAddressType<C>` is the token-address counterpart: `Address` for EVM chains, `string` everywhere else.

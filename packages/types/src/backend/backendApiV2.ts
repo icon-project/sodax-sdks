@@ -650,6 +650,14 @@ export type SubmitSwapTxStatusV2 =
   | 'solved'
   | 'failed';
 
+/**
+ * Product/operation discriminator on a submit-tx status row. `'swap'` for an ordinary swap;
+ * `'leverage_deposit'` / `'leverage_withdraw'` for a leverage-yield vault op queued via
+ * `POST /leverage-yield/submit-tx` (the backend maps that body's `operation: 'deposit' | 'withdraw'`
+ * onto these row-level values).
+ */
+export type SubmitTxOperationV2 = 'swap' | 'leverage_deposit' | 'leverage_withdraw';
+
 /** Lifecycle status of a cross-chain relay packet. */
 export type PacketDataStatusV2 = 'pending' | 'validating' | 'executing' | 'executed';
 
@@ -685,6 +693,11 @@ export interface SubmitTxStatusResultV2 {
   packetData?: PacketDataV2;
   /** Intent hash from the solver API (populated after post-execution). */
   intent_hash?: string;
+  /**
+   * Solver destination-chain fill tx hash. Set on solver-confirmed fills; MAY be absent even when
+   * `status === 'solved'` if the fill was confirmed via the on-chain journal instead.
+   */
+  fillTxHash?: string;
 }
 
 /** Processing state of a submitted swap tx. */
@@ -695,6 +708,8 @@ export interface SubmitTxStatusDataV2 {
   srcChainKey: string;
   /** Current processing status. */
   status: SubmitSwapTxStatusV2;
+  /** Product/operation discriminator. Absent from backends predating the field — treat as `'swap'`. */
+  operation?: SubmitTxOperationV2;
   /** Step where processing failed. */
   failedAtStep?: SubmitSwapTxStatusV2;
   /** Failure reason. */
@@ -703,6 +718,8 @@ export interface SubmitTxStatusDataV2 {
   processingAttempts: number;
   /** ISO 8601 timestamp set when the swap exhausted its processing budget and was abandoned. */
   abandonedAt?: string;
+  /** ISO 8601 timestamp set when an expired, abandoned swap was relayed for refund; the row stays abandoned. */
+  relayedForRefundAt?: string;
   /** Processing result (present when solved). */
   result?: SubmitTxStatusResultV2;
   /** User-facing hint when status is failed or the swap was abandoned. */

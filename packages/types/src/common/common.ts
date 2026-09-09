@@ -7,7 +7,7 @@ import type { BitcoinRawTransaction, BitcoinReturnType } from '../bitcoin/bitcoi
 import type { IconRawTransaction, IconReturnType } from '../icon/icon.js';
 import type { InjectiveRawTransaction, InjectiveReturnType } from '../injective/injective.js';
 import type { NearRawTransaction, NearReturnType } from '../near/near.js';
-import type { SolanaRawTransaction, SolanaReturnType } from '../solana/solana.js';
+import type { SolanaBase58PublicKey, SolanaRawTransaction, SolanaReturnType } from '../solana/solana.js';
 import type { StacksRawTransaction, StacksReturnType } from '../stacks/stacks.js';
 import type { StellarRawTransaction, StellarReturnType } from '../stellar/stellar.js';
 import type { SuiRawTransaction, SuiReturnType } from '../sui/sui.js';
@@ -93,7 +93,7 @@ export type GetAddressType<C extends SpokeChainKey | ChainType> =
           : GetChainType<C> extends 'SUI'
             ? Hex
             : GetChainType<C> extends 'SOLANA'
-              ? Hex
+              ? SolanaBase58PublicKey
               : GetChainType<C> extends 'STACKS'
                 ? string
                 : GetChainType<C> extends 'NEAR'

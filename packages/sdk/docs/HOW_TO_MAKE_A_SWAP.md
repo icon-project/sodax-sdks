@@ -65,7 +65,7 @@ if (!initResult.ok) {
 }
 ```
 
-See [CONFIGURE_SDK.md](./CONFIGURE_SDK.md) for the full `SodaxConfig` shape and canonical override patterns.
+See [CONFIGURE_SDK.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md) for the full `SodaxConfig` shape and canonical override patterns.
 
 ## Step 2: Obtain a Wallet Provider
 
@@ -609,19 +609,15 @@ async function executeSwap(
       const error = swapResult.error;
       console.error('Swap failed');
 
-      if (error instanceof Error) {
-        switch (error.message) {
-          case 'POST_EXECUTION_FAILED':
-            console.error('Post execution failed. Cause:', error.cause);
-            break;
-          case 'RELAY_TIMEOUT':
-            console.error('Hub relay timed out. Cause:', error.cause);
-            break;
-          default:
-            console.error('Error:', error.message, error.cause ?? '');
-        }
-      } else {
-        console.error('Non-Error failure:', error);
+      switch (error.code) {
+        case 'EXECUTION_FAILED':
+          console.error('Swap orchestration failed. Cause:', error.cause);
+          break;
+        case 'RELAY_TIMEOUT':
+          console.error('Hub relay timed out. Cause:', error.cause);
+          break;
+        default:
+          console.error('Error:', error.code, error.cause ?? '');
       }
       return;
     }

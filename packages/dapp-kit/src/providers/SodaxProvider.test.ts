@@ -19,7 +19,7 @@ vi.mock('react', async importOriginal => ({
 
 const { SodaxProvider } = await import('./SodaxProvider.js');
 
-const fetchMock = vi.fn(
+const fetchMock = vi.fn<typeof globalThis.fetch>(
   async () => new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }),
 );
 vi.stubGlobal('fetch', fetchMock);

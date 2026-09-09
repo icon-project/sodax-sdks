@@ -19,10 +19,13 @@ import type {
   DepositParams,
   EstimateGasParams,
   GetDepositParams,
+  GetBalanceParams,
+  GetBalancesParams,
   SendMessageParams,
   WaitForTxReceiptParams,
   WaitForTxReceiptReturnType,
 } from '../../types/spoke-types.js';
+import { createBalanceCollector, settleWalletBalances, type WalletBalanceMap } from './balance-utils.js';
 import type { ConfigService } from '../../config/ConfigService.js';
 import { isTimeoutError } from '../../utils/sui-utils.js';
 import { SuiGrpcTransport } from './SuiGrpcTransport.js';
@@ -270,6 +273,57 @@ export class SuiSpokeService {
     const val: number[] = result.returnValues[0][0];
     const str_u64 = bcs.U64.parse(Uint8Array.from(val));
     return BigInt(str_u64);
+  }
+
+  /**
+   * Get the user's own wallet balance of a token on Sui, in smallest units. Unlike {@link getDeposit}
+   * (which reads the protocol asset manager holding), this reads the balance held by `params.srcAddress`
+   * itself. Native SUI is read via its canonical `0x2::sui::SUI` coin type; other coins use the token's
+   * Sui coinType (`token.address`).
+   * @param {GetBalanceParams<SuiChainKey>} params - The chain key, user address, and token.
+   * @returns {Promise<bigint>} The token balance in smallest units.
+   */
+  public async getWalletBalance(params: GetBalanceParams<SuiChainKey>): Promise<bigint> {
+    const { srcChainKey, srcAddress, token } = params;
+
+    let coinType = isNativeToken(srcChainKey, token) ? '0x2::sui::SUI' : token.address;
+
+    // TODO: hardcoded remap for legacy bnUSD, whose on-chain coinType drops the leading zero in the package id.
+    if (
+      coinType ===
+      '0x03917a812fe4a6d6bc779c5ab53f8a80ba741f8af04121193fc44e0f662e2ceb::balanced_dollar::BALANCED_DOLLAR'
+    ) {
+      coinType =
+        '0x3917a812fe4a6d6bc779c5ab53f8a80ba741f8af04121193fc44e0f662e2ceb::balanced_dollar::BALANCED_DOLLAR';
+    }
+
+    // `getCoins` is capped per page (gRPC `listCoins` limit) — the balance is a full sum across
+    // every coin object of this type the user owns, so page through until the fullnode reports no more.
+    let total = 0n;
+    let cursor: string | null | undefined;
+    do {
+      const page = await this.transport.getCoins(srcAddress, coinType, undefined, cursor);
+      for (const coin of page.data) {
+        total += BigInt(coin.balance);
+      }
+      cursor = page.hasNextPage ? page.nextCursor : undefined;
+    } while (cursor);
+
+    return total;
+  }
+
+  /**
+   * Get the user's own wallet balances of multiple tokens on Sui, in smallest units.
+   * @param {GetBalancesParams<SuiChainKey>} params - The chain key, user address, and tokens.
+   * @returns {Promise<WalletBalanceMap>} A map of token address to balance in smallest units.
+   */
+  public async getWalletBalances(params: GetBalancesParams<SuiChainKey>): Promise<WalletBalanceMap> {
+    const { srcChainKey, srcAddress, tokens } = params;
+    const collector = createBalanceCollector({ logger: this.config.logger, chainKey: srcChainKey });
+    await settleWalletBalances(collector, tokens, token =>
+      this.getWalletBalance({ srcChainKey, srcAddress, token }),
+    );
+    return collector.finish();
   }
 
   /**

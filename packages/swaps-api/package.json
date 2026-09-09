@@ -52,7 +52,7 @@
     "build": "tsup && node ../../scripts/verify-dist-exports.mjs",
     "dev": "tsup --watch",
     "ci": "pnpm run pretty && pnpm run build && pnpm run test",
-    "checkTs": "tsc --noEmit",
+    "checkTs": "tsc --noEmit && node ../../scripts/check-tests-typechecked.mjs",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
     "pretty": "biome format . --write",

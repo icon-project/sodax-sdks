@@ -30,6 +30,13 @@ const HOOKS: Array<{ path: string; nativeThrow?: true }> = [
   { path: 'leverageYield/useLeverageYieldNotifySolver.ts' },
   { path: 'leverageYield/useLeverageYieldVaultSwap.ts' },
   { path: 'leverageYield/useLeverageYieldWithdraw.ts' },
+  { path: 'leverageYieldApi/useLeverageYieldApiApprove.ts' },
+  { path: 'leverageYieldApi/useLeverageYieldApiApproveAndBroadcast.ts' },
+  { path: 'leverageYieldApi/useLeverageYieldApiCancelIntent.ts' },
+  { path: 'leverageYieldApi/useLeverageYieldApiCreateDepositIntent.ts' },
+  { path: 'leverageYieldApi/useLeverageYieldApiCreateWithdrawIntent.ts' },
+  { path: 'leverageYieldApi/useLeverageYieldApiSubmitIntent.ts' },
+  { path: 'leverageYieldApi/useLeverageYieldApiSubmitTx.ts' },
   { path: 'migrate/useMigrateBaln.ts' },
   { path: 'migrate/useMigrateIcxToSoda.ts' },
   { path: 'migrate/useMigratebnUSD.ts' },
@@ -109,6 +116,12 @@ describe.each(HOOKS)('mutation hook contract: $path', ({ path, nativeThrow }) =>
     const spreadIdx = src.indexOf('...mutationOptions');
     const fnIdx = src.search(/\bmutationFn:/);
     expect(fnIdx).toBeGreaterThan(spreadIdx);
+  });
+
+  it('routes balance invalidation through invalidateBalances', () => {
+    // Hand-rolling one balance key invalidates only one of the two balance hooks (useBalances vs
+    // useXBalances) and leaves the other stale — the exact drift the shared helper exists to stop.
+    expect(src).not.toMatch(/invalidateQueries\(\{\s*queryKey:\s*\[\s*'shared',\s*'x?[bB]alances'/);
   });
 
   if (!nativeThrow) {

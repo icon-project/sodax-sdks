@@ -31,6 +31,13 @@ Read-only data hooks. No wallet connection required.
 | `useBackendMoneyMarketAssetBorrowers` | Borrowers for an asset |
 | `useBackendAllMoneyMarketBorrowers` | All borrowers |
 
+### Oracle
+
+| Hook | Purpose |
+|------|---------|
+| `useBackendOracleMarkets` | Oracle candle discovery: quote, intervals, symbols (cached 60s) |
+| `useBackendOracleCandles` | USD OHLC candles for a symbol over `[from, to)` in UNIX seconds (cached 10s) |
+
 ### Swaps API (`sodax.api.swaps`)
 
 | Hook | Purpose |
@@ -92,6 +99,41 @@ function Orderbook() {
     params: { pagination: { offset: '0', limit: '20' } },
   });
   return <pre>{JSON.stringify(orderbook, null, 2)}</pre>;
+}
+```
+
+## Oracle Candles
+
+```tsx
+import { useState } from 'react';
+import { useBackendOracleCandles, useBackendOracleMarkets } from '@sodax/dapp-kit';
+
+function DailyEthCandles() {
+  const { data: markets, isLoading } = useBackendOracleMarkets();
+  // `from`/`to` are UNIX seconds over the half-open range [from, to), at most 5000 buckets.
+  // Hold the window end in state: deriving it from `Date.now()` during render changes the query
+  // key on every render that crosses a second boundary, so the query refetches from scratch.
+  const [to, setTo] = useState(() => Math.floor(Date.now() / 1000));
+  const { data } = useBackendOracleCandles({
+    params: { symbol: 'ETH', interval: '1d', from: to - 30 * 86400, to },
+  });
+
+  if (isLoading) return <div>Loading...</div>;
+  if (!markets?.symbols.includes('ETH')) return <div>No ETH candle data</div>;
+  return (
+    <>
+      <button type="button" onClick={() => setTo(Math.floor(Date.now() / 1000))}>
+        Refresh
+      </button>
+      <ul>
+        {data?.candles.map(candle => (
+          <li key={candle.timestamp}>
+            O {candle.open} H {candle.high} L {candle.low} C {candle.close}
+          </li>
+        ))}
+      </ul>
+    </>
+  );
 }
 ```
 

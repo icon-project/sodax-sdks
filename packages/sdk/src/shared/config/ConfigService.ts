@@ -504,6 +504,12 @@ export class ConfigService {
     return this.bridge.useBackendSubmitTx ?? this.sodax.bridgeOptions?.useBackendSubmitTx ?? true;
   }
 
+  // Opt-in (default OFF), unlike the swaps/bridge toggles above: the leverage-yield submit-tx
+  // backend path is newer, so an omitted flag keeps the proven client-side relay.
+  get leverageYieldUseBackendSubmitTx(): boolean {
+    return this.leverageYield.useBackendSubmitTx ?? false;
+  }
+
   get dex(): DexConfig {
     return this.sodax.dex;
   }

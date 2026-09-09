@@ -4,6 +4,8 @@ Leveraged-yield ERC-4626 vaults on the Sonic hub. A vault loops supply → borro
 
 Access: `sodax.leverageYield`. Service class: `LeverageYieldService`. Feature tag for errors: `'leverageYield'`.
 
+> **Backend HTTP client:** for the typed `sodax.api.leverageYield` client that calls the backend Leverage Yield API v2 directly (vault reads, deposit/withdraw quotes + intents, submit-tx), see [`leverage-yield-api.md`](leverage-yield-api.md). Opting into `new Sodax({ leverageYield: { useBackendSubmitTx: true } })` routes this service's `vaultSwap` through that client's submit-tx flow (with client-side fallback).
+
 ## How it works
 
 - A vault holds `asset` (a Sodax vault token like sodaWEETH) as collateral, borrows `borrowToken` (e.g. sodaETH) from the Sodax-forked AAVE pool, swaps it back into the asset, and re-supplies — to a `targetLTV`.

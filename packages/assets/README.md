@@ -28,6 +28,11 @@ So adding a chain logo is two steps: drop `<chainKey>.png` here, and add the
 > Note: a logo URL only resolves once these files are merged to `main`. On a
 > feature branch, swap `main` for the branch name to preview.
 
+Both directories are gated in CI by `packages/types/src/chains/logo-assets.test.ts`:
+a chain or token with no logo file fails the build, and so does a PNG that no chain
+or token claims — the latter is what catches a filename that does not match the
+`ChainKeys` value or `tokenLogoSlug(symbol)`.
+
 ## token/
 
 One logo per token, named by the token's **slugified symbol** — the symbol

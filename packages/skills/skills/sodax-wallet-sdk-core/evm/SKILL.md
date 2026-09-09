@@ -32,6 +32,7 @@ Granular skill for `EvmWalletProvider` — the low-level EVM wallet for backend 
 - **Passing `publicClient` / `walletClient` / `transport` defaults in browser-extension mode.** They're ignored (provider logs a one-time warn); supply them only in PK mode.
 - **Adding `viem` as a direct dep** when `WalletClient` / `PublicClient` etc. re-export from `@sodax/wallet-sdk-core`.
 - **Assuming nonce management.** There is none — fire parallel sends and you collide; set `defaults.sendTransaction.nonce` or per-call `nonce`.
+- **Skipping `expectedChainId` on chain-specific sends.** Without it the tx goes to whatever chain the wallet is on; with it a mismatch throws and nothing is sent.
 
 ## Migration workflow (port v1 → v2)
 

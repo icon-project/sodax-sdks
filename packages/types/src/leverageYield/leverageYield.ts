@@ -120,6 +120,19 @@ export const leverageYieldVaults = [
       label: 'Jito (JitoSOL)',
     },
   },
+  {
+    name: LsodaTokens.lsodaSUSDS.symbol,
+    vault: LsodaTokens.lsodaSUSDS.vault,
+    asset: SodaTokens.sodaSUSDS.address, // sodaSUSDS (sUSDS) on Sonic — eMode-3 collateral
+    borrowToken: SodaTokens.sodaUSSD.address, // sodaUSSD (USSD) on Sonic — eMode-3 borrowable
+    lsdSource: {
+      // DefiLlama pool for the Sky Savings Rate on sUSDS (project: 'sky-lending', Ethereum).
+      // sUSDS appreciates against USDS at the SSR — yield AAVE's currentLiquidityRate omits.
+      poolId: 'd8c4eff5-c8a9-46fc-a888-057c4c668e72',
+      fallbackAprPct: 3.5,
+      label: 'Sky (sUSDS)',
+    },
+  },
 ] as const satisfies readonly LeverageYieldVault[];
 
 /**
@@ -211,6 +224,13 @@ export type LeverageYieldOptions = {
    * default: config merging skips `undefined`, so an absent override cannot blank it.
    */
   positionFactory?: Address;
+  /**
+   * Route `vaultSwap()` (and so `deposit`/`withdraw`) through the backend submit-tx flow. Default
+   * `false` — the backend leverage-yield submit-tx path is opt-in while it beds in, unlike the
+   * swaps/bridge toggles which default on. Client-side only — not part of backend SodaxDefaultConfig.
+   * Read the effective value via `sodax.config.leverageYieldUseBackendSubmitTx`.
+   */
+  useBackendSubmitTx?: boolean;
 };
 
 export type LeverageYieldConfig = Prettify<LeverageYieldDefaultConfig & LeverageYieldOptions>;

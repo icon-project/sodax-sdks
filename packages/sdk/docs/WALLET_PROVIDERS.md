@@ -8,14 +8,14 @@ in `@sodax/wallet-sdk-core`, or by writing your own against the interface contra
 ## Table of Contents
 
 1. [Supported provider interfaces](#1-supported-provider-interfaces)
-2. [WalletProviderSlot — compile-time enforcement](#2-walletproviderslot--compile-time-enforcement)
+2. [WalletProviderSlot: compile-time enforcement](#2-walletproviderslot-compile-time-enforcement)
 3. [wallet-sdk-core: ready-to-use implementations](#3-wallet-sdk-core-ready-to-use-implementations)
    - [BaseWalletProvider](#basewalletprovider)
    - [chainType discriminant](#chaintype-discriminant)
    - [Dual config modes (private-key vs browser-extension)](#dual-config-modes-private-key-vs-browser-extension)
    - [Provider reference](#provider-reference)
 4. [Config type reference per chain](#4-config-type-reference-per-chain)
-5. [React integration — useWalletProvider](#5-react-integration--usewalletprovider)
+5. [React integration: useWalletProvider](#5-react-integration-usewalletprovider)
 6. [Custom implementations](#6-custom-implementations)
 
 ---
@@ -47,7 +47,7 @@ chain key or `ChainType` literal to the appropriate specific interface.
 
 ---
 
-## 2. WalletProviderSlot — compile-time enforcement
+## 2. WalletProviderSlot: compile-time enforcement
 
 Every SDK method that executes a transaction uses `WalletProviderSlot<K, Raw>` (defined in
 `packages/types/src/common/common.ts`) to enforce the pairing between `raw` mode and the presence
@@ -402,7 +402,7 @@ new NearWalletProvider({
 
 ---
 
-## 5. React integration — useWalletProvider
+## 5. React integration: useWalletProvider
 
 `packages/wallet-sdk-react` provides `useWalletProvider` — a hook that reads the chain-appropriate
 provider from the Zustand store and returns it typed to the correct `I*WalletProvider` interface.
@@ -473,14 +473,19 @@ You can implement the SDK interfaces directly without using `@sodax/wallet-sdk-c
 interface is defined in `@sodax/sdk` (e.g. `IEvmWalletProvider` in `@sodax/sdk`):
 
 ```ts
-import type { IEvmWalletProvider, EvmRawTransaction, EvmRawTransactionReceipt } from '@sodax/sdk';
+import type {
+  IEvmWalletProvider,
+  EvmRawTransaction,
+  EvmRawTransactionReceipt,
+  EvmSendTransactionOptions,
+} from '@sodax/sdk';
 import type { Hash } from 'viem';
 
 class MyCustomEvmProvider implements IEvmWalletProvider {
   readonly chainType = 'EVM' as const;   // required literal — used as runtime discriminant
 
   async getWalletAddress(): Promise<string> { … }
-  async sendTransaction(tx: EvmRawTransaction): Promise<Hash> { … }
+  async sendTransaction(tx: EvmRawTransaction, options?: EvmSendTransactionOptions): Promise<Hash> { … }
   async waitForTransactionReceipt(hash: Hash): Promise<EvmRawTransactionReceipt> { … }
 }
 ```
@@ -494,3 +499,7 @@ Requirements for a valid custom implementation:
    compile time.
 3. **No base class required** — extending `BaseWalletProvider` is optional; it only provides the
    `defaults` storage and merge helpers from `@sodax/wallet-sdk-core`.
+4. **EVM providers must honor `options.expectedChainId`** — refuse to broadcast when the wallet's
+   active chain id differs; ignoring it silently disables the SDK's wrong-chain protection. A provider
+   that already declares its own second options parameter must widen it to
+   `YourOptions & EvmSendTransactionOptions` to keep satisfying the interface.

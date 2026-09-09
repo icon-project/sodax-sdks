@@ -98,3 +98,33 @@ for every call.
 
 > Note: this throwing contract is intentional and distinct from `@sodax/sdk`'s
 > `sodax.api.swaps`, which wraps these calls and returns `Result<T>` instead of throwing.
+
+## Response schemas
+
+The valibot schemas the client validates with are exported too, so a caller that already holds a
+parsed response — or a sibling API whose wire shapes are identical — can reuse them instead of
+re-declaring the contract. `@sodax/sdk`'s Leverage Yield client is exactly that case: a
+leverage-yield deposit/withdraw **is** an intent-based swap, so it reuses these for its intent-relay,
+gas, fee, and submit-tx responses.
+
+- **Intent lifecycle:** `makeCreateIntentResponseSchema`, `makeCancelIntentResponseSchema`,
+  `SubmitIntentResponseSchema`, `StatusResponseSchema`, `IntentHashResponseSchema`,
+  `IntentPacketResponseSchema`, `IntentResponseSchema`, `RelayExtraDataResponseSchema`,
+  `IntentStateSchema`
+- **Quote · deadline · allowance · approve:** `makeQuoteResponseSchema`, `DeadlineResponseSchema`,
+  `AllowanceCheckResponseSchema`, `makeApproveResponseSchema`
+- **Gas · fees:** `GasEstimateResponseSchema`, `FeeResponseSchema`
+- **Submit-tx state machine:** `SubmitTxResponseSchema`, `SubmitTxStatusResponseSchema`
+- **Raw transactions:** `rawTxSchemaForChainKey(chainKey)` — the per-chain-family `tx` schema the
+  `make*ResponseSchema` factories above take, which also transforms the unsigned tx back to its
+  domain shape (decimal-string → `bigint`, Injective index-object bytes → `Uint8Array`)
+
+```ts
+import * as v from 'valibot';
+import { makeApproveResponseSchema, rawTxSchemaForChainKey } from '@sodax/swaps-api';
+
+const schema = makeApproveResponseSchema(rawTxSchemaForChainKey('sonic'));
+const approve = v.parse(schema, await someOtherTransport('/approve'));
+```
+
+These are the response shapes only — request bodies are typed, not schema-validated.

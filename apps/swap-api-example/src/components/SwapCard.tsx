@@ -7,6 +7,7 @@ import type {
   SpokeChainKey,
   SwapTokenV2,
 } from '@sodax/types';
+import { spokeChainConfig } from '@sodax/types';
 import { SwapsApiError } from '@sodax/swaps-api';
 import { getXChainType, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
 import { ArrowDown } from 'lucide-react';
@@ -45,9 +46,10 @@ async function sendAndConfirm(
   provider: IEvmWalletProvider,
   tx: EvmRawTransaction,
   step: string,
+  expectedChainId: number,
   onBroadcast?: () => void,
 ): Promise<string> {
-  const hash = await provider.sendTransaction(tx);
+  const hash = await provider.sendTransaction(tx, { expectedChainId });
   onBroadcast?.();
   const receipt = await provider.waitForTransactionReceipt(
     hash as Parameters<IEvmWalletProvider['waitForTransactionReceipt']>[0],
@@ -160,6 +162,14 @@ export function SwapCard() {
       setSwapLog('Enter an amount and wait for the quote before swapping.');
       return;
     }
+    // The wallet broadcasts on ITS active chain, not the one the calldata targets, so every send
+    // below is bound to the selected source chain. `chainKey` comes off the API response untyped,
+    // and only EVM chains carry a numeric id, so one guard covers an unknown key and a non-EVM one.
+    const expectedChainId = spokeChainConfig[src.chainKey as SpokeChainKey]?.chain.chainId;
+    if (typeof expectedChainId !== 'number') {
+      setSwapLog(`${src.chainKey} cannot be signed here.`);
+      return;
+    }
     setBusy(true);
     setSwapLog('');
     try {
@@ -189,14 +199,19 @@ export function SwapCard() {
             walletProvider as IEvmWalletProvider,
             approve.resetTx as EvmRawTransaction,
             'allowance reset',
+            expectedChainId,
             () => setSwapLog('Waiting for the allowance reset to confirm…'),
           );
         }
 
         setSwapLog('Approve the source token in your wallet…');
         // Wait until the approval is mined — otherwise createIntent's tx can revert on a stale allowance.
-        await sendAndConfirm(walletProvider as IEvmWalletProvider, approve.tx as EvmRawTransaction, 'approve', () =>
-          setSwapLog('Waiting for approval to confirm…'),
+        await sendAndConfirm(
+          walletProvider as IEvmWalletProvider,
+          approve.tx as EvmRawTransaction,
+          'approve',
+          expectedChainId,
+          () => setSwapLog('Waiting for approval to confirm…'),
         );
       }
 
@@ -204,7 +219,9 @@ export function SwapCard() {
       const created = await swapsApi.createIntent(params);
 
       setSwapLog('Confirm the swap in your wallet…');
-      const txHash = await (walletProvider as IEvmWalletProvider).sendTransaction(created.tx as EvmRawTransaction);
+      const txHash = await (walletProvider as IEvmWalletProvider).sendTransaction(created.tx as EvmRawTransaction, {
+        expectedChainId,
+      });
 
       setSwapLog('Submitting to the relay…');
       await swapsApi.submitTx({
