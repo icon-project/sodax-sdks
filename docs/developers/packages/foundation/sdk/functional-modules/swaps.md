@@ -30,8 +30,7 @@ import type { SpokeChainKey, XToken } from '@sodax/sdk';
 
 const sodax = new Sodax();
 
-// If you want dynamic (backend API-based) configuration, initialize the instance before use.
-// By default the configuration bundled in the SDK version you are using is applied.
+// The current SDK keeps packaged defaults merged with constructor overrides.
 await sodax.initialize();
 
 // All supported spoke chain keys
@@ -488,7 +487,7 @@ console.log(estimatedSeconds); // e.g. 15
 
 ## Token Approval Flow
 
-Before creating an intent, check whether the relevant spender contract already has permission to spend the user's input tokens.
+`swap()` and `createIntent()` do not approve the input token for you. Before executing, call `isAllowanceValid()` and `approve()` when it returns `false`. On EVM chains this is an ERC-20 allowance; on Stellar it is a trustline; on other chains it returns `true` and no approval is needed. Native gas tokens on EVM need no approval.
 
 - **Hub (Sonic)**: checks allowance against the intents contract
 - **EVM spoke chains**: checks allowance against the spoke's asset manager
