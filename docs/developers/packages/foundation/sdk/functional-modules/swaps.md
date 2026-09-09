@@ -487,7 +487,7 @@ console.log(estimatedSeconds); // e.g. 15
 
 ## Token Approval Flow
 
-`swap()` and `createIntent()` do not approve the input token for you. For ERC-20 inputs, check whether the relevant spender already has sufficient allowance and call `approve()` when needed before execution. Native gas tokens do not need ERC-20 approval.
+`swap()` and `createIntent()` do not approve the input token for you. Before executing, call `isAllowanceValid()` and `approve()` when it returns `false`. On EVM chains this is an ERC-20 allowance; on Stellar it is a trustline; on other chains it returns `true` and no approval is needed. Native gas tokens on EVM need no approval.
 
 - **Hub (Sonic)**: checks allowance against the intents contract
 - **EVM spoke chains**: checks allowance against the spoke's asset manager

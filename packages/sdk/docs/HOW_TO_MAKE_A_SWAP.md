@@ -485,8 +485,9 @@ if (!swapResult.ok) {
 
 [Your first swap](https://github.com/icon-project/sodax-sdks/blob/main/docs/quickstart.mdx) is the complete ESM example: follow its snippets
 in order for installation, configuration, quoting, execution, and settlement polling. It uses native
-gas tokens; for ERC-20 inputs, also follow [Check Token Allowance](#step-4-check-token-allowance)
-and [Approve Tokens](#step-5-approve-tokens-if-needed) above.
+gas tokens; for other inputs, also follow [Check Token Allowance](#step-4-check-token-allowance)
+and [Approve Tokens](#step-5-approve-tokens-if-needed) above. On EVM chains this grants an ERC-20
+allowance, on Stellar it sets up a trustline, and on other chains the check returns `true`.
 
 The [Node smoke script](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/swap.ts)
 is an additional repository example. It executes on mainnet and reads its private key from the environment.
