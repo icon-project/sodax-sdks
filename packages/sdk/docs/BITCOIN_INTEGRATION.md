@@ -50,8 +50,9 @@ import { SodaxWalletProvider } from "@sodax/wallet-sdk-react";
 
 ### Bound hosts
 
-Bound serves its API from three hosts, and the SDK routes to them per path family. You do not
-need to configure any of this — the packaged defaults are correct:
+Bound serves its API from four hosts. The SDK routes three of them by path family; UMS is called
+directly on `umsUrl` and is never routed. You do not need to configure any of this — the packaged
+defaults are correct:
 
 | Path family | Host |
 | --- | --- |
@@ -78,11 +79,12 @@ new Sodax({
 });
 ```
 
-**Setting `apiUrl` alone sends the three routed families to that host** — `/sodax/*`,
-`/auth/*` + `/wallets/*`, and `/transactions/*`. That is deliberate: it keeps a single-host
-setup working, and it makes it impossible to half-migrate and have auth traffic silently land
-in a different environment from the rest. To keep the split while changing one family, set that
-family's host explicitly with `authUrl` or `transactionsUrl`.
+**Setting `apiUrl` to a host of your own sends all three routed families there** — `/sodax/*`,
+`/auth/*` + `/wallets/*`, and `/transactions/*`. The split above is registered against Bound's own
+service host, so it applies only while `apiUrl` is that host. That is deliberate: it keeps a
+single-host setup working, and it makes it impossible to half-migrate and have auth traffic
+silently land in a different environment from the rest. To keep the split while changing one
+family, set that family's host explicitly with `authUrl` or `transactionsUrl`.
 
 **`api.bound.exchange` is refused.** This SDK routes to the split hosts, so a `radfi.apiUrl`,
 `authUrl` or `transactionsUrl` still naming the retired host throws at construction with the
@@ -129,6 +131,11 @@ import { ChainKeys } from "@sodax/types";
   {children}
 </SodaxWalletProvider>
 ```
+
+That block used to accept `radfiApiUrl` and `radfiUmsUrl` as well. Both are removed: nothing
+ever read them, so setting one silently did nothing. If they fail to compile after upgrading,
+delete them — the Bound hosts they looked like they configured are the `radfi` block on the SDK
+config shown above, which is where they have always actually lived.
 
 ### Step 2: Connect a Bitcoin wallet
 

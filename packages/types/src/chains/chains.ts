@@ -552,8 +552,9 @@ export const BOUND_COMPANION_HOSTS: Record<string, { auth?: string; transactions
 };
 
 /**
- * Hosts Bound has announced it will retire. Warned about, never rejected. No replacement is
- * stored: it depends on which family the retired host was configured for, not on the host.
+ * Hosts Bound has announced it will retire. `RadfiProvider` refuses to construct when one is
+ * configured. No replacement is stored: it depends on which family the retired host was
+ * configured for, not on the host.
  */
 export const DEPRECATED_BOUND_HOSTS: readonly string[] = ['https://api.bound.exchange/api'];
 
@@ -565,9 +566,9 @@ export type BitcoinSpokeChainConfig = BaseSpokeChainConfig<'BITCOIN'> & {
   network: string;
   radfi: {
     apiUrl: string;
-    /** `/auth/*` + `/wallets/*`. Unset falls back to `apiUrl` — see {@link BOUND_COMPANION_HOSTS}. */
+    /** `/auth/*` + `/wallets/*`. Unset resolves via {@link BOUND_COMPANION_HOSTS}[`apiUrl`], then `apiUrl`. */
     authUrl?: string;
-    /** `/transactions/*`. Unset falls back to `apiUrl` — see {@link BOUND_COMPANION_HOSTS}. */
+    /** `/transactions/*`. Unset resolves via {@link BOUND_COMPANION_HOSTS}[`apiUrl`], then `apiUrl`. */
     transactionsUrl?: string;
     umsUrl: string;
     apiKey: string;

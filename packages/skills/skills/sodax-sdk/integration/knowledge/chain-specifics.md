@@ -120,7 +120,7 @@ new Sodax({
 });
 ```
 
-It receives `{ method, path }`, may be async, and runs on every request (a timestamped signature must not be cached). Its headers merge last, so do not return `Authorization` — that is the per-user token. Server-side only: never ship a credential in a browser bundle.
+It receives `{ method, path, baseUrl }` — `baseUrl` is the resolved Bound host for that call, so a signer holding a per-origin credential can branch on it. It may be async, and runs on every routed request (a timestamped signature must not be cached); UMS calls (`/wallets/balance`, `/utxos`) bypass it and go out unsigned. Its headers merge last, so do not return `Authorization` — that is the per-user token. Server-side only: never ship a credential in a browser bundle.
 
 Other public methods on `RadfiProvider` you may need: `setRadfiAccessToken`, `refreshAccessToken`, `createTradingWallet`, `createWithdrawTransaction`, `requestRadfiSignature`, `getExpiredUtxos`, `buildRenewUtxoTransaction`, `signAndBroadcastRenewUtxo`, `withdrawToUser`, `signAndBroadcastWithdraw`, `getMaxWithdrawable`. Read `RadfiProvider` source for argument shapes — the API surface is broader than typical chain providers.
 

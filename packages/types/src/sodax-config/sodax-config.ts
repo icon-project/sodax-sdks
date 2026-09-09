@@ -40,9 +40,9 @@ export type StellarSharedChainConfig = TxPollingConfig & {
 
 export type RadfiConfig = {
   apiUrl: string;
-  /** `/auth/*` + `/wallets/*`. Unset falls back to `apiUrl` — see `BOUND_COMPANION_HOSTS`. */
+  /** `/auth/*` + `/wallets/*`. Unset resolves via `BOUND_COMPANION_HOSTS[apiUrl]`, then `apiUrl`. */
   authUrl?: string;
-  /** `/transactions/*`. Unset falls back to `apiUrl` — see `BOUND_COMPANION_HOSTS`. */
+  /** `/transactions/*`. Unset resolves via `BOUND_COMPANION_HOSTS[apiUrl]`, then `apiUrl`. */
   transactionsUrl?: string;
   apiKey: string;
   umsUrl: string;

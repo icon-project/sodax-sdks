@@ -375,7 +375,7 @@ export type StacksNetworkLike = {
 
 // Mapped type that uses ChainKey as keys and assigns appropriate value types per chain:
 // - Stellar    → StellarRpcConfig                   (horizon + soroban URLs)
-// - Bitcoin    → BitcoinRpcConfig                   (rpcUrl + radfi endpoints)
+// - Bitcoin    → BitcoinRpcConfig                   (rpcUrl only; Bound hosts live on chains.radfi)
 // - Injective  → InjectiveRpcConfig                 (indexer + grpc endpoints)
 // - Stacks     → StacksNetworkName | StacksNetworkLike (preset name or full network)
 // - All others → string                             (single RPC URL)
