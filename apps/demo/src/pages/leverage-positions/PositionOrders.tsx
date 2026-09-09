@@ -13,12 +13,11 @@
  */
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useSodaxContext } from '@sodax/dapp-kit';
 import OrderStatusPanel from '@/components/swaps/OrderStatusPanel';
 import { buildOrderSummary, orderId, type FinalStatus, type Order } from '@/components/swaps/OrderStatus';
 import { LEVERAGE_POSITIONS_ORDERS_KEY, appendOrder, loadOrders, saveOrders } from '@/lib/orderHistory';
 import { LEVERAGE_POSITIONS_PANEL_KEY } from '@/lib/panelPrefs';
-import { solverApiEndpointForEnv } from '@/constants';
-import { useAppStore } from '@/zustand/useAppStore';
 
 export type RecordIntentParams = {
   /** Hub tx the intent was posted in — what `/status` is polled with. */
@@ -38,7 +37,7 @@ export function useRecordPositionOrder(): (params: RecordIntentParams) => void {
 }
 
 export function PositionOrdersProvider({ children }: { children: React.ReactNode }) {
-  const { solverEnvironment } = useAppStore();
+  const { sodax } = useSodaxContext();
   const [orders, setOrders] = useState<Order[]>(() => loadOrders(LEVERAGE_POSITIONS_ORDERS_KEY));
 
   // Loaded lazily in the initial state rather than in a mount effect: with the load in an effect, this save effect
@@ -58,7 +57,7 @@ export function PositionOrdersProvider({ children }: { children: React.ReactNode
           srcTxHash: txHash,
           srcChainKey: 'sonic',
           // Pinned per order: switching environment later must not repoint an existing order's polling.
-          statusEndpoint: solverApiEndpointForEnv(solverEnvironment),
+          statusEndpoint: sodax.config.solver.solverApiEndpoint,
           createdAt: Date.now(),
           summary: buildOrderSummary(
             { chain: 'sonic', token: { symbol: from.symbol } },
@@ -69,7 +68,7 @@ export function PositionOrdersProvider({ children }: { children: React.ReactNode
         }),
       );
     },
-    [solverEnvironment],
+    [sodax],
   );
 
   const onDismiss = useCallback((id: string) => setOrders(prev => prev.filter(o => orderId(o) !== id)), []);

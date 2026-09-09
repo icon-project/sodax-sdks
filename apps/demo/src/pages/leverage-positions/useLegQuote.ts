@@ -15,8 +15,8 @@
  * WHY NOT `sodax.leverageYield.getQuote`: that wrapper asserts `isValidOriginalAssetAddress`, which
  * only accepts tokens registered as spoke originals for the chain. The soda* hub reserves are not, so
  * the wrapper rejects the exact pair the intent uses before any request leaves the client. Until the
- * SDK accepts hub assets on the hub chain, the request goes direct — against the endpoint for the
- * selected solver environment, so the staging/production switch still applies.
+ * SDK accepts hub assets on the hub chain, the request goes direct — against the SDK's effective
+ * solver endpoint, so the environment switch and any Sodax Settings override still apply.
  *
  * FEES: a position's intent is a hook intent carrying no fee data, so no partner fee is applied.
  */
@@ -24,8 +24,6 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '@sodax/dapp-kit';
 import type { Address } from 'viem';
-import { solverApiEndpointForEnv } from '@/constants';
-import { useAppStore } from '@/zustand/useAppStore';
 
 export type LegQuote = {
   /** Amount the solver expects to deliver, in output-token units. */
@@ -49,8 +47,7 @@ export function useLegQuote({
   amount: bigint | undefined;
 }): UseQueryResult<LegQuote, Error> {
   const { sodax } = useSodaxContext();
-  const { solverEnvironment } = useAppStore();
-  const endpoint = solverApiEndpointForEnv(solverEnvironment);
+  const endpoint = sodax.config.solver.solverApiEndpoint;
 
   return useQuery<LegQuote, Error>({
     queryKey: ['leverageYield', 'legQuote', endpoint, inputHubToken, outputHubToken, amount?.toString()],

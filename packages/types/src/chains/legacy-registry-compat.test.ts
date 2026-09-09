@@ -12,9 +12,10 @@ import {
 import { swapSupportedTokens } from '../swap/swap.js';
 import { moneyMarketReserveAssets, moneyMarketSupportedTokens } from '../moneyMarket/moneyMarket.js';
 
-// Registry order and membership as of this branch's merge base (origin/main @ fd4f450d).
-// The equity vaults are purely additive: every legacy sequence below has to survive as an
-// unchanged prefix, so a reorder or a dropped entry fails here instead of in a consumer.
+// Registry order and membership pinned literally: a reorder or a dropped entry fails here
+// instead of in a consumer. Everything below was additive over origin/main @ fd4f450d except
+// the Sonic swap sequence, which gained USSD, sodaSUSDS and sodaUSSD in their registry
+// positions when the solver gained routes for them.
 const EQUITY_SYMBOLS = [
   'SPCX',
   'NVDA',
@@ -167,6 +168,7 @@ const LEGACY_SWAP_SONIC_PREFIX: readonly string[] = [
   'USDT:0x6047828dc181963ba44974801FF68e538dA5eaF9',
   'wS:0x039e2fB66102314Ce7b64Ce5Ce3E5183bc94aD38',
   'SODA:0x7c7d53EEcda37a87ce0D5bf8E0b24512A48dC963',
+  'USSD:0x000000000eCcFf26B795F73fb0A70d48da657fEf',
   'sodaBNB:0x40Cd41b35DB9e5109ae7E54b44De8625dB320E6b',
   'sodaAVAX:0x14238D267557E9d799016ad635B53CD15935d290',
   'sodaETH:0x4effB5813271699683C25c734F4daBc45B363709',
@@ -191,8 +193,10 @@ const LEGACY_SWAP_SONIC_PREFIX: readonly string[] = [
   'sodaNEAR:0xf4ba497c9b805e4bd88a8a9e6a7b8f74984c3e39',
   'sodaKAIA:0xD7d41b5f803b6A40F8A6eAa34E459A4564e39891',
   'sodaSTX:0x1Fbe5229e9d189F26bEE77E5bFa24309FdA90483',
+  'sodaSUSDS:0x243b0c26c8b38793908d7C64e8510f21B19B4613',
   'sodaHBAR:0x3BB956cc8922E1Ba4148dc10eD1b4Fa19aa599c4',
   'sodaJITOSOL:0xe1bad4400d947Bc4fa66f9c0A143D800002083a0',
+  'sodaUSSD:0xb780e09576C2667ba9F5B80FbAb2e6b8A0a21e37',
 ];
 
 const LEGACY_SWAP_STELLAR: readonly string[] = [
