@@ -6,6 +6,7 @@ import {
   type TronChainKey,
   type TronGasEstimate,
   type TronRawTransaction,
+  type TronRawTransactionReceipt,
   type TronSpokeChainConfig,
   type TronUnsignedTransaction,
   type TxReturnType,
@@ -426,11 +427,7 @@ export class TronSpokeService {
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
-        const info = await this.rpc<{
-          id?: string;
-          blockNumber?: number;
-          receipt?: { result?: string };
-        }>('/wallet/gettransactioninfobyid', { value });
+        const info = await this.rpc<TronRawTransactionReceipt>('/wallet/gettransactioninfobyid', { value });
         if (info.blockNumber) {
           const reverted = info.receipt?.result && info.receipt.result !== 'SUCCESS';
           if (reverted) {
