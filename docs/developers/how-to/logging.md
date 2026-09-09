@@ -1,4 +1,8 @@
-# Logging
+---
+title: "Logging"
+icon: file-lines
+generatedFrom: packages/sdk/docs/LOGGING.md
+---
 
 The SDK routes all of its internal diagnostics through a single `SodaxLogger` instead of calling
 `console.*` directly. This lets you silence SDK output or forward it to a structured sink (Sentry,

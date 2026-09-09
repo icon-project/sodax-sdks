@@ -8,7 +8,6 @@
     "packages/sdk/docs/SWAPS_API.md",
     "packages/sdk/docs/BRIDGE_API.md",
     "packages/sdk/docs/LEVERAGE_YIELD_API.md",
-    "packages/sdk/docs/LOGGING.md",
     "packages/sdk/docs/ORACLE.md",
     "packages/sdk/docs/ARCHITECTURE_REFACTOR_SUMMARY.md"
   ],
@@ -78,6 +77,12 @@
       "src": "packages/sdk/docs/CONFIGURE_SDK.md",
       "dest": "developers/how-to/configure_sdk.md",
       "icon": "gears"
+    },
+    {
+      "src": "packages/sdk/docs/LOGGING.md",
+      "dest": "developers/how-to/logging.md",
+      "title": "Logging",
+      "icon": "file-lines"
     },
     {
       "src": "packages/sdk/docs/ESTIMATE_GAS.md",
