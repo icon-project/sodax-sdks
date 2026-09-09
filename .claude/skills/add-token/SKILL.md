@@ -134,8 +134,9 @@ and resolved by `tokenLogo(symbol)`. Drop a PNG named `tokenLogoSlug(symbol).png
 (symbol lowercased, non-alphanumeric runs → `-`, e.g. `bnUSD (legacy)` →
 `bnusd-legacy.png`) into `packages/assets/token/`. Source from CoinGecko's coin
 image CDN, matching by the token's `address` on its chain. A variant that wraps a
-base asset (`soda*`, `*.LL`, `r*`, `lsoda*`) may copy the base asset's icon under
-its own slug — one file per slug, never a shared file. Every entry in the chain's
+base asset (`soda*`-symbol vaults, `*.LL`, `r*`, `lsoda*`) may copy the base asset's icon
+under its own slug — one file per slug, never a shared file. A hub vault whose
+on-chain symbol is the base asset's (`BTC`, `weETH`) needs no file of its own. Every entry in the chain's
 map needs one, not just the swap / money-market ones: `BridgeService` offers
 destination tokens straight from `supportedTokens`, so an entry with no icon 404s
 in the UI. Enforced by
