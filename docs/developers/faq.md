@@ -69,7 +69,9 @@ Full code reference: [Make a swap (SDK)](/developers/how-to/how_to_make_a_swap).
 
 #### 10. What is the difference between `swap()`, `createIntent()` and `createLimitOrder()`?
 
-`swap()` is the recommended end-to-end path. It handles approval, intent creation, relay submission and solver notification automatically (signed execution only).
+`swap()` coordinates intent creation, relay submission and solver notification (signed execution only). It does **not** approve the input token for you. For ERC-20 inputs, check `isAllowanceValid()` and call `approve()` when allowance is insufficient before calling `swap()`. Native gas tokens need no ERC-20 approval. See the [token approval flow](/developers/packages/foundation/sdk/functional-modules/swaps#token-approval-flow) for chain-specific requirements.
+
+A successful submission is not settlement: [poll until settled](/quickstart#poll-until-settled).
 
 `createIntent()` is the lower-level primitive and supports both signed and raw modes (`raw: true` for custom signing flows).
 
