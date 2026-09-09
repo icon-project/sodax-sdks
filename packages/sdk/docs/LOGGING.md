@@ -17,7 +17,7 @@ import { Sodax } from '@sodax/sdk';
 
 new Sodax();                       // default — same as { logger: 'console' }
 new Sodax({ logger: 'console' });  // mirror the SDK's historical console.* behavior
-new Sodax({ logger: 'silent' });   // drop all SDK logs
+new Sodax({ logger: 'silent' });   // drop all SodaxLogger output
 new Sodax({ logger: myLogger });   // forward to your own sink
 ```
 
@@ -26,7 +26,7 @@ Pass it alongside any other constructor option:
 ```typescript
 const sodax = new Sodax({
   logger: myLogger,
-  api: { baseApiConfig: { baseURL: 'https://api.sodax.com/v1/be' } },
+  api: { baseApiConfig: { baseURL: 'https://api.sodax.com/v1' } },
 });
 ```
 
@@ -56,7 +56,7 @@ can attach it as the exception. `warn`, `info` and `debug` take only `(message, 
 
 | Level | Call sites | Content | Typical adapter mapping |
 | --- | --- | --- | --- |
-| `error` | 29 | Service-level failures, already wrapped as `SodaxError` | `captureException` |
+| `error` | 29 | Service-level failures; the second argument is the caught value | `captureException` |
 | `warn` | 17 | Recoverable or degraded paths | `captureMessage`, warning level |
 | `debug` | 9 | Verbose flow tracing | breadcrumb |
 | `info` | 0 | Not emitted today; implement the method anyway | breadcrumb |
@@ -81,13 +81,17 @@ const atLeast = (min: keyof typeof ORDER, sink: SodaxLogger): SodaxLogger => ({
 
 ## Errors reaching the sink
 
-SDK failures arrive as [`SodaxError`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/src/errors/SodaxError.ts)
-instances. Tag them on `error.feature`, `error.code` and `error.context.action` rather than parsing
+The `error` argument is whatever the service caught: usually the raw transport, viem or wallet error,
+occasionally a [`SodaxError`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/src/errors/SodaxError.ts),
+and sometimes `undefined` when a site logs a message alone. The `SodaxError` a caller receives in the
+failed `Result` is built after the log call, so do not expect it in the sink. Use `isSodaxError(error)`
+before tagging on `error.feature`, `error.code` and `error.context.action`, and never parse
 `error.message`, which is human-readable and may change.
 
-`error.toJSON()` is the canonical serialization surface, and `JSON.stringify(error)` invokes it
-automatically — including the `bigint` values inside `context`, which it coerces to strings. Pino,
-Datadog and Winston therefore need no extra configuration.
+`SodaxError.toJSON()` is the canonical serialization surface, and `JSON.stringify(error)` invokes it
+automatically — including the `bigint` values inside `context`, which it coerces to strings. A plain
+`Error` has no `toJSON()` and serializes as `{}`, so an adapter still has to copy `name`, `message`
+and `stack` itself, and `bigint` values in `data` still need a replacer (see the constraints below).
 
 See [Errors And Results](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/AGENTS.md#errors-and-results)
 for the error contract.
@@ -137,9 +141,16 @@ agents consume, so this adapter needs no dependencies:
 ```typescript
 import { Sodax, type SodaxLogger } from '@sodax/sdk';
 
+const bigintReplacer = (_k: string, v: unknown): unknown => (typeof v === 'bigint' ? v.toString() : v);
+
+const serializeError = (error: unknown): unknown =>
+  error instanceof Error && !('toJSON' in error)
+    ? { name: error.name, message: error.message, stack: error.stack }
+    : error; // SodaxError carries toJSON(), which JSON.stringify invokes
+
 const write = (level: string, message: string, data?: Record<string, unknown>, error?: unknown): void => {
-  const line = { level, message, ...(data ?? {}), ...(error !== undefined ? { err: error } : {}) };
-  process.stdout.write(`${JSON.stringify(line, (_k, v) => (typeof v === 'bigint' ? v.toString() : v))}\n`);
+  const line = { level, message, ...(data ?? {}), ...(error !== undefined ? { err: serializeError(error) } : {}) };
+  process.stdout.write(`${JSON.stringify(line, bigintReplacer)}\n`);
 };
 
 const ndjsonLogger: SodaxLogger = {
@@ -158,7 +169,7 @@ A runnable version lives at
 URL points at a closed local port, so a real internal SDK failure reaches the sink immediately.
 
 ```
-logger wired: true
+{"level":"info","message":"logger wired","custom":true}
 {"level":"info","message":"starting backend read","endpoint":"getChains"}
 {"level":"error","message":"[BackendApiService] Request error","err":{"name":"TypeError","message":"fetch failed",…}}
 {"level":"warn","message":"backend read failed as expected","reason":"SodaxError: fetch failed"}
@@ -203,7 +214,7 @@ These route through the configured logger:
 - `BridgeService`, `LeverageYieldService`, `PartnerFeeClaimService`, `SponsoringService`
 - `MoneyMarketDataService` and `ConcentratedLiquidityService`
 - `BackendApiService`, `SwapsApiService` and the shared request helper
-- `SpokeService`, `StellarSpokeService`, `BitcoinSpokeService`, the spoke balance helpers, and `ConfigService`
+- `SpokeService`, `StellarSpokeService`, `BitcoinSpokeService` and the spoke balance helpers
 
 Staking, migration, recovery and the DEX `AssetService` emit nothing today. Some pure utility and
 static-helper functions — `shared/utils/*`, `entities/btc/RadfiProvider`, `entities/solana/utils`,
@@ -224,8 +235,10 @@ const queryClient = createSodaxQueryClient({
 ```
 
 `onMutationError` fires for every failed mutation, which is a UI-level concern, while `logger`
-carries the SDK's internal diagnostics. The two do not overlap. A single mutation opts out of the
-global hook with `meta: { silent: true }`.
+carries the SDK's internal diagnostics. The two overlap on one failure class: a backend request error
+is logged through the sink inside the SDK, and the hook then rethrows the failed `Result`, so
+`onMutationError` sees the same failure again. Send exceptions to your tracker from only one of them.
+A single mutation opts out of the global hook with `meta: { silent: true }`.
 
 ## See also
 

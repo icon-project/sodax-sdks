@@ -112,7 +112,7 @@ docs.sodax.com. It is the copy list, and both Docs Drift and
 
 The map's **`unpublished`** array holds the `packages/sdk/docs/` pages that
 deliberately do not publish yet (`DEX.md`, `SPONSORING.md`, `SWAPS_API.md`,
-`BRIDGE_API.md`, `LOGGING.md`, `ARCHITECTURE_REFACTOR_SUMMARY.md`). Editing one
+`BRIDGE_API.md`, `ARCHITECTURE_REFACTOR_SUMMARY.md`). Editing one
 does not satisfy Docs Drift, and renaming one needs no map entry. A new page
 there goes on one of the two lists: `mirrored` to publish it now, `unpublished`
 to hold it back and publish it as its own change. On neither list, it fails

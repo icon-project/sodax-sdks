@@ -1,37 +1,23 @@
 /**
- * Runnable `SodaxLogger` example for a backend / Node integration.
- *
- * Companion to `packages/sdk/docs/LOGGING.md`. Needs no private key, no RPC and no network:
- * the backend base URL is pointed at a closed local port so the SDK's request path fails
- * immediately and you can watch a real internal error travel through the sink.
- *
- * Run:
- *   pnpm --filter node logging
- *
- * The adapter below is deliberately dependency-free — it writes newline-delimited JSON to
- * stdout, which is the same wire shape Pino, Winston and the Datadog/Cloudwatch agents
- * consume. Swapping in a real logger is a one-line change inside `write`.
+ * Runnable `SodaxLogger` example for a backend / Node integration; companion to
+ * `packages/sdk/docs/LOGGING.md`. Needs no key, RPC or network: the backend base URL points at a
+ * closed local port so a real internal SDK failure travels through the sink immediately.
+ * Run with `pnpm --filter node logging`.
  */
 
 import { Sodax, type SodaxLogger } from '@sodax/sdk';
 
-// ─── The adapter ──────────────────────────────────────────────────────────
-
-/**
- * `data` records routinely carry `bigint` token amounts, and `JSON.stringify` throws a
- * `TypeError` on those. A log call must never throw, so coerce them to decimal strings.
- */
+// `data` records carry `bigint` amounts, which `JSON.stringify` rejects; a log call must never throw.
 const bigintReplacer = (_key: string, value: unknown): unknown =>
   typeof value === 'bigint' ? value.toString() : value;
 
-/** `SodaxError.toJSON()` is the canonical serialization surface; fall back for anything else. */
+const hasToJSON = (value: unknown): value is { toJSON: () => unknown } =>
+  typeof value === 'object' && value !== null && typeof (value as { toJSON?: unknown }).toJSON === 'function';
+
+/** `SodaxError.toJSON()` is the canonical serialization surface; a plain `Error` would serialize as `{}`. */
 function serializeError(error: unknown): unknown {
-  if (error && typeof (error as { toJSON?: () => unknown }).toJSON === 'function') {
-    return (error as { toJSON: () => unknown }).toJSON();
-  }
-  if (error instanceof Error) {
-    return { name: error.name, message: error.message, stack: error.stack };
-  }
+  if (hasToJSON(error)) return error.toJSON();
+  if (error instanceof Error) return { name: error.name, message: error.message, stack: error.stack };
   return error;
 }
 
@@ -39,17 +25,16 @@ type Level = 'debug' | 'info' | 'warn' | 'error';
 
 function createNdjsonLogger(): SodaxLogger {
   const write = (level: Level, message: string, data?: Record<string, unknown>, error?: unknown): void => {
-    const line = {
-      level,
-      message,
-      ...(data ?? {}),
-      ...(error !== undefined ? { err: serializeError(error) } : {}),
-    };
-    // Never throw and never block: a failed log must not take the SDK call down with it.
     try {
+      const line = {
+        level,
+        message,
+        ...(data ?? {}),
+        ...(error !== undefined ? { err: serializeError(error) } : {}),
+      };
       process.stdout.write(`${JSON.stringify(line, bigintReplacer)}\n`);
     } catch {
-      /* dropped */
+      // A failed log line must not take the SDK call down with it.
     }
   };
 
@@ -61,12 +46,8 @@ function createNdjsonLogger(): SodaxLogger {
   };
 }
 
-// ─── Wiring ───────────────────────────────────────────────────────────────
-
 const logger = createNdjsonLogger();
 
-// `logger` is a client-side option on `SodaxOptions`, resolved once at construction and kept
-// off the backend-fetched config — combine it freely with `api` / `chains` / `solver` overrides.
 const sodax = new Sodax({
   logger,
   api: {
@@ -76,14 +57,10 @@ const sodax = new Sodax({
 });
 
 async function main(): Promise<void> {
-  // The resolved sink is readable back off the config service.
-  console.log('logger wired:', sodax.config.logger === logger);
-
-  // Your own lines can share the sink.
+  sodax.config.logger.info('logger wired', { custom: sodax.config.logger === logger });
   sodax.config.logger.info('starting backend read', { endpoint: 'getChains' });
 
-  // A real internal SDK failure: the backend client logs through the configured sink before
-  // the failure surfaces as a `Result`.
+  // The backend client logs through the configured sink before the failure surfaces as a `Result`.
   const result = await sodax.api.getChains();
 
   if (!result.ok) {
