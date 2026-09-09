@@ -44,6 +44,7 @@ import type {
   SodaxLogger,
 } from '@sodax/types';
 import { DEFAULT_BACKEND_API_TIMEOUT } from '@sodax/types';
+import { stripLegacyBackendMount } from './apiConfig.js';
 import { SwapsApi, SwapsApiError } from '@sodax/swaps-api';
 import * as v from 'valibot';
 
@@ -83,17 +84,31 @@ type ResultifiedSwapsApiV2 = {
  *
  * Reachable on the Sodax facade as `sodax.api.swaps`.
  */
+/** Construction options for {@link SwapsApiService}. */
+export type SwapsApiServiceOptions = {
+  /**
+   * Whether a legacy `/be` suffix is trimmed off a per-call `baseURL` override. Defaults to `true`, the
+   * migration behaviour. `BackendApiService` passes `false` when the `ApiConfig` states a `basePath`
+   * explicitly: that marks a config written against the current contract, whose base URLs are deliberate
+   * roots, so a trailing `/be` is a real path segment rather than the data API's mount.
+   */
+  trimLegacyOverrides?: boolean;
+};
+
 export class SwapsApiService implements ResultifiedSwapsApiV2 {
   // Fully-resolved swaps-API config supplied by the caller (BackendApiService resolves the
   // `ApiConfig` union via `resolveSwapsApiConfig`); this service does not resolve the union.
   private readonly config: SwapsApiConfig;
   private readonly headers: Record<string, string>;
   private readonly logger: SodaxLogger;
+  /** See {@link SwapsApiServiceOptions.trimLegacyOverrides}. */
+  private readonly trimsLegacyOverrides: boolean;
 
-  constructor(config: SwapsApiConfig, logger: SodaxLogger = consoleLogger) {
+  constructor(config: SwapsApiConfig, logger: SodaxLogger = consoleLogger, options: SwapsApiServiceOptions = {}) {
     this.config = config;
     this.headers = { ...config.headers };
     this.logger = logger;
+    this.trimsLegacyOverrides = options.trimLegacyOverrides ?? true;
   }
 
   /**
@@ -105,7 +120,16 @@ export class SwapsApiService implements ResultifiedSwapsApiV2 {
    * overrides both take effect without caching stale state.
    */
   private buildClient(overrideConfig?: RequestOverrideConfig): SwapsApi {
-    const baseUrl = overrideConfig?.baseURL || this.config.baseURL;
+    // A per-call override is normalized exactly like a configured base URL: it is the gateway root, so a
+    // legacy `/be`-suffixed value must not nest `/swaps/*` under the data API's mount. `this.config.baseURL`
+    // was already normalized during resolution — including the opt-out, which is why the same decision
+    // has to reach this path too.
+    const override = overrideConfig?.baseURL;
+    const baseUrl = override
+      ? this.trimsLegacyOverrides
+        ? stripLegacyBackendMount(override)
+        : override
+      : this.config.baseURL;
     const timeout = overrideConfig?.timeout ?? this.config.timeout ?? DEFAULT_BACKEND_API_TIMEOUT;
     const headers = { ...this.headers, ...overrideConfig?.headers };
     return new SwapsApi({ baseUrl, headers, timeout });

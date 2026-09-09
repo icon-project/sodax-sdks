@@ -8,7 +8,6 @@ export const DEFAULT_SELECTED_CHAIN = ChainKeys.ARBITRUM_MAINNET;
 export enum SolverEnv {
   Production = 'Production',
   Staging = 'Staging',
-  Dev = 'Dev',
 }
 
 type AppStore = {

@@ -25,6 +25,7 @@ export type UseSwapsApiQuoteParams = ReadHookParams<
  *       tokenSrc: '0x...', tokenSrcChainKey: '0xa4b1.arbitrum',
  *       tokenDst: '0x...', tokenDstChainKey: 'sonic',
  *       amount: '1000000', quoteType: 'exact_input',
+ *       partnerFee: { address: '0xSonicFeeReceiver', percentage: 10 },
  *     },
  *   },
  * });

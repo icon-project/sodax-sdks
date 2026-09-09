@@ -25,9 +25,12 @@ const config: SodaxOptions = {
     [ChainKeys.SONIC_MAINNET]: { rpcUrl: process.env.SONIC_RPC_URL },
     [ChainKeys.ARBITRUM_MAINNET]: { rpcUrl: process.env.ARBITRUM_RPC_URL },
   },
-  // Backend API override (default: https://api.sodax.com/v1/be).
+  // Backend API override. `baseURL` is the gateway ROOT (default: https://api.sodax.com/v1); each
+  // service appends its own path below it (`/be`, `/swaps`, `/bridge`, `/sponsorships/stellar`).
+  // A sandbox that serves `/config/*` at its bare origin has no `/be` mount, so say so with
+  // `basePath: ''` — otherwise the data API requests `<origin>/be/config/all`.
   api: {
-    baseURL: 'https://my-sandbox-backend.example.com',
+    baseApiConfig: { baseURL: 'https://my-sandbox-backend.example.com', basePath: '' },
   },
   // Solver endpoints (default: https://api.sodax.com/v1/intent + production contracts).
   solver: {

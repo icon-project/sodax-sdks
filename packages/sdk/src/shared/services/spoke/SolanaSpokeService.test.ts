@@ -227,15 +227,18 @@ describe('SolanaSpokeService — constructor', () => {
   });
 
   it('wires pollingConfig defaults from spokeChainConfig[SOLANA_MAINNET]', async () => {
-    // Defaults are private but observable via the spy on getTransaction: with no result, the loop
-    // exits on the maxTimeoutMs deadline. Use a tiny override here to keep the test fast and
-    // assert the default polling-interval is forwarded to sleep.
-    vi.spyOn(solanaSpoke.connection, 'getTransaction').mockResolvedValue(null);
-    await solanaSpoke.waitForTransactionReceipt({ chainKey: SOL, txHash: TX_SIG, maxTimeoutMs: 1 });
+    // Defaults are private but observable via the spy on getTransaction: one empty poll forces
+    // exactly one sleep, then a receipt ends the loop. Drive it with the poll results rather than a
+    // tiny `maxTimeoutMs` — a 1ms deadline races real wall clock, and if the process is preempted
+    // between computing the deadline and the loop's first check, no poll (and no sleep) happens.
+    const fakeReceipt = { slot: 2, transaction: {}, meta: { err: null }, blockTime: 0 } as never;
+    vi.spyOn(solanaSpoke.connection, 'getTransaction').mockResolvedValueOnce(null).mockResolvedValueOnce(fakeReceipt);
+
+    await solanaSpoke.waitForTransactionReceipt({ chainKey: SOL, txHash: TX_SIG });
+
     // The default polling interval must have been threaded into sleep (sleep is mocked to no-op).
-    const sleepCalls = (mocks.sleep.mock.calls as Array<[number]>).map(c => c[0]);
-    expect(sleepCalls.length).toBeGreaterThanOrEqual(1);
-    expect(sleepCalls.every(ms => ms === SOL_POLLING_MS)).toBe(true);
+    expect(mocks.sleep).toHaveBeenCalledTimes(1);
+    expect(mocks.sleep).toHaveBeenCalledWith(SOL_POLLING_MS);
   });
 });
 
@@ -669,18 +672,19 @@ describe('SolanaSpokeService.waitForTransactionReceipt', () => {
   });
 
   it('forwards custom pollingIntervalMs to sleep', async () => {
-    vi.spyOn(solanaSpoke.connection, 'getTransaction').mockResolvedValue(null);
+    // One empty poll then a receipt, so exactly one sleep is guaranteed. See the defaults test above
+    // for why this does not bound the loop with a 1ms `maxTimeoutMs`.
+    const fakeReceipt = { slot: 2, transaction: {}, meta: { err: null }, blockTime: 0 } as never;
+    vi.spyOn(solanaSpoke.connection, 'getTransaction').mockResolvedValueOnce(null).mockResolvedValueOnce(fakeReceipt);
 
     await solanaSpoke.waitForTransactionReceipt({
       chainKey: SOL,
       txHash: TX_SIG,
       pollingIntervalMs: 250,
-      maxTimeoutMs: 1,
     });
 
-    const sleepCalls = (mocks.sleep.mock.calls as Array<[number]>).map(c => c[0]);
-    expect(sleepCalls.every(ms => ms === 250)).toBe(true);
-    expect(sleepCalls.length).toBeGreaterThanOrEqual(1);
+    expect(mocks.sleep).toHaveBeenCalledTimes(1);
+    expect(mocks.sleep).toHaveBeenCalledWith(250);
   });
 
   it('passes commitment "confirmed" and maxSupportedTransactionVersion:0 to getTransaction', async () => {

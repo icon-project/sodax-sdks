@@ -52,6 +52,22 @@ sodax.api.swaps.submitTx(body: SubmitTxRequestV2, config?): Promise<Result<Submi
 sodax.api.swaps.getSubmitTxStatus(query: SubmitTxStatusQueryV2, config?): Promise<Result<SubmitTxStatusResponseV2>>;
 ```
 
+## `partnerFee`
+
+Optional on the type, but there is no default — the client forwards the body as given and never
+reads `new Sodax({ fee })` / `new Sodax({ swaps: { partnerFee } })`. Send the same value on quote
+and create-intent:
+
+```typescript
+const partnerFee = { address: '0xYourSonicFeeReceiver', percentage: 10 }; // 10 = 0.1% (bps)
+
+await sodax.api.swaps.getQuote({ ...quoteBody, partnerFee });
+await sodax.api.swaps.createIntent({ ...intentBody, partnerFee });
+```
+
+`checkAllowance` / `approve` inherit the field but ignore it. See [MONETIZE_SDK.md](MONETIZE_SDK.md)
+for the orchestrator path and fee claiming.
+
 ## `approve` can return two transactions
 
 `ApproveResponseV2` is `{ tx, resetTx? }`. `resetTx` is present only when the source token rejects an
@@ -113,6 +129,7 @@ const quote = await sodax.api.swaps.getQuote({
   tokenSrc, tokenSrcChainKey, tokenDst, tokenDstChainKey,
   amount: '1000000',
   quoteType: 'exact_input',
+  partnerFee,
 });
 if (!quote.ok) return;
 quote.value.quotedAmount; // decimal string
@@ -122,6 +139,7 @@ const created = await sodax.api.swaps.createIntent({
   srcChainKey, dstChainKey, inputToken, outputToken,
   inputAmount: '1000000', minOutputAmount: '990000', deadline: '0',
   allowPartialFill: false, srcAddress, dstAddress,
+  partnerFee,
 });
 if (!created.ok) return;
 const { tx, intent, relayData } = created.value;
@@ -150,25 +168,20 @@ These are unrelated; don't treat one as another:
 
 ## Configuration
 
-`sodax.api.swaps` shares the backend API config. By default the swaps endpoints are `/swaps/*` sub-paths
-under the same base URL as `sodax.backendApi`. `SodaxConfig.api` is `ApiConfig`:
-
-```typescript
-// Flat — shared by the base backend API and the swaps client (the common case):
-type BaseApiConfig = { baseURL: string; timeout: number; headers: Record<string, string> };
-
-// Nested — point the swaps API at its own host, separate from the base backend API:
-type CustomApiConfig =
-  | { baseApiConfig: BaseApiConfig; swapsApiConfig?: BaseApiConfig }
-  | { baseApiConfig?: BaseApiConfig; swapsApiConfig: BaseApiConfig };
-
-type ApiConfig = BaseApiConfig | CustomApiConfig;
-```
+`sodax.api.swaps` shares the backend API config. `baseURL` is the **gateway root** — the same value every
+service resolves — and the swaps client appends `/swaps/*` below it, exactly as `sodax.backendApi` appends
+its own `/be` mount. So a `baseURL` must never carry a service segment: a value ending in `/be` (the
+previous packaged default) would put swaps at `/v1/be/swaps/submit-tx`, which the gateway does not route.
+The SDK trims that suffix — with a deprecation warning when it appears on the flat field or the
+`baseApiConfig` slice, silently on a `swapsApiConfig` slice (that combination never worked, so there is
+nothing to deprecate). For the `ApiConfig` type itself — including the `basePath` knob on the flat
+variant — see
+[BACKEND_API.md § `ApiConfig` Type](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BACKEND_API.md).
 
 ```typescript
 const sodax = new Sodax({
   api: {
-    baseApiConfig: { baseURL: 'https://api.example/v1/be' },
+    baseApiConfig: { baseURL: 'https://api.example/v1' },
     swapsApiConfig: { baseURL: 'https://swaps.example/v1' },
   },
 });

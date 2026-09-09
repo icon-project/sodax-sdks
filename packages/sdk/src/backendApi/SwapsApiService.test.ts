@@ -12,7 +12,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  DEFAULT_BACKEND_API_ENDPOINT,
+  DEFAULT_API_BASE_URL,
   type CreateIntentParamsV2,
   type CreateLimitOrderParamsV2,
   type IntentRequestV2,
@@ -30,7 +30,7 @@ vi.stubGlobal('fetch', mockFetch);
 
 // --- fixtures -------------------------------------------------------------
 const sodax = new Sodax();
-const BASE = DEFAULT_BACKEND_API_ENDPOINT;
+const BASE = DEFAULT_API_BASE_URL;
 const TX_HASH = '0x46b053464f50836328b6158e1e33e5cf66c0e3ebe5004d30459b23acae5047a0';
 
 const sampleIntentRequest: IntentRequestV2 = {

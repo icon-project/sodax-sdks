@@ -15,9 +15,9 @@ import type {
   Result,
   SpokeChainKey,
   ApiConfig,
-  BaseApiConfig,
   SodaxLogger,
 } from '@sodax/types';
+import { BACKEND_API_BASE_PATH, DEFAULT_API_BASE_URL } from '@sodax/types';
 import { consoleLogger } from '../shared/logger.js';
 
 import * as v from 'valibot';
@@ -33,10 +33,15 @@ import { SwapsApiService } from './SwapsApiService.js';
 import { SponsoringApiService } from './SponsoringApiService.js';
 import { BridgeApiService } from './BridgeApiService.js';
 import {
+  hasExplicitBasePath,
+  hasLegacyBackendBaseURL,
+  isMissingVersionPrefix,
+  stripLegacyBackendMount,
   resolveBaseApiConfig,
   resolveBridgeApiConfig,
   resolveSponsoringApiConfig,
   resolveSwapsApiConfig,
+  type ResolvedBackendApiConfig,
 } from './apiConfig.js';
 import * as schemas from './backendApiSchemas.js';
 import type { SodaxError } from '../errors/SodaxError.js';
@@ -197,24 +202,85 @@ export class BackendApiService implements IConfigApiV1 {
   public readonly sponsoring: SponsoringApiService;
   public readonly bridge: BridgeApiService;
 
-  // resolved base-API config: the flat fields of the ApiConfig union with any `baseApiConfig` layered on top
-  private readonly config: BaseApiConfig;
+  // resolved base-API config: the flat fields of the ApiConfig union with any `baseApiConfig` layered on
+  // top. `baseURL` is the gateway root; `basePath` is this service's own mount below it.
+  private readonly config: ResolvedBackendApiConfig;
   private readonly headers: Record<string, string>;
   private readonly logger: SodaxLogger;
+  /**
+   * Whether a legacy `/be` suffix is trimmed off a per-call `baseURL` override. Mirrors the config-level
+   * decision: an explicit `basePath` means the consumer writes complete roots, so their per-call value is
+   * left exactly as given rather than having a real path segment eaten.
+   */
+  private readonly trimsLegacyOverrides: boolean;
 
   constructor(config: ApiConfig, logger: SodaxLogger = consoleLogger) {
     this.config = resolveBaseApiConfig(config);
     this.headers = { ...this.config.headers };
     this.logger = logger;
-    // Resolve the swaps slice here (where the ApiConfig union is available) and hand the
-    // sub-service its concrete SwapsApiConfig plus the shared logger — it does not see the union,
-    // and must route diagnostics through the same consumer-selected sink as the rest of the SDK.
-    this.swaps = new SwapsApiService(resolveSwapsApiConfig(config), this.logger);
-    // Sponsoring uses an independent origin and credential scope.
-    this.sponsoring = new SponsoringApiService(resolveSponsoringApiConfig(config), this.logger);
-    // Bridge is served on the base host as `/bridge/*` sub-paths — resolved from `baseApiConfig`, so a
-    // `swapsApiConfig` slice moves swaps only (see `resolveBridgeApiConfig`).
-    this.bridge = new BridgeApiService(resolveBridgeApiConfig(config), this.logger);
+    this.trimsLegacyOverrides = !hasExplicitBasePath(config);
+    // Resolve every slice up front: the diagnostics below inspect what each service will actually
+    // request, which is the only way to catch a base URL that reaches a service through its own slice.
+    const swapsConfig = resolveSwapsApiConfig(config);
+    const sponsoringConfig = resolveSponsoringApiConfig(config);
+    const bridgeConfig = resolveBridgeApiConfig(config);
+
+    const shortRoots = (
+      [
+        ['backendApi', this.config.baseURL],
+        ['api.swaps', swapsConfig.baseURL],
+        ['api.bridge', bridgeConfig.baseURL],
+        ['api.sponsoring', sponsoringConfig.baseURL],
+      ] as const
+    ).filter(([, baseURL]) => isMissingVersionPrefix(baseURL));
+    if (shortRoots.length > 0) {
+      const named = shortRoots.map(([service, baseURL]) => `${service} ("${baseURL}")`).join(', ');
+      this.logger.warn(
+        `[BackendApiService] api.baseURL is missing the gateway's version prefix for ${named}: every route resolves one segment short. Use "${DEFAULT_API_BASE_URL}" — the prefix is deployment-owned, so it belongs in baseURL, and only the data API has a basePath to compensate.`,
+      );
+    }
+    if (hasLegacyBackendBaseURL(config)) {
+      this.logger.warn(
+        `[BackendApiService] api.baseURL should be the gateway root, not the backend data API's mount: trimmed "${BACKEND_API_BASE_PATH}" to "${this.config.baseURL}". Drop the suffix — the SDK appends it, and sibling services (/swaps, /bridge) must not sit under it.`,
+      );
+    }
+    // Each sub-service gets its concrete resolved config plus the shared logger — none of them sees the
+    // `ApiConfig` union, and all must route diagnostics through the same consumer-selected sink. The
+    // legacy-trim decision travels with them so their per-call overrides match the config-level choice.
+    const overrideOptions = { trimLegacyOverrides: this.trimsLegacyOverrides };
+    this.swaps = new SwapsApiService(swapsConfig, this.logger, overrideOptions);
+    // Sponsoring uses an independent origin and credential scope, and never trims (its default never
+    // carried the data API's mount), so it takes no override option.
+    this.sponsoring = new SponsoringApiService(sponsoringConfig, this.logger);
+    // Bridge hangs off the same gateway root as `/bridge/*` — resolved from `baseApiConfig` but without
+    // this service's `basePath`, so a `swapsApiConfig` slice moves swaps only (see `resolveBridgeApiConfig`).
+    this.bridge = new BridgeApiService(bridgeConfig, this.logger, overrideOptions);
+  }
+
+  /**
+   * Issue the HTTP call for a route.
+   *
+   * The mount is applied here rather than at each route literal, so `error.context.endpoint` stays
+   * route-relative and the mount survives a per-call `baseURL` override — that retargets the gateway
+   * root, not which service the route belongs to. For the same reason an override is put through the
+   * legacy-mount trim: without it, passing the old `…/v1/be` value per call would yield `/be/be/…`.
+   *
+   * Defaults are listed field by field so `basePath` cannot cross into `RequestConfig`, where it has no
+   * meaning — a spread would pass it silently, since TypeScript skips excess-property checks on spreads.
+   */
+  private async send<T>(endpoint: string, config: RequestConfig): Promise<T> {
+    const { baseURL, ...rest } = config;
+    const overrideBaseURL =
+      baseURL !== undefined && this.trimsLegacyOverrides ? stripLegacyBackendMount(baseURL) : baseURL;
+    return makeRequest<T>({
+      endpoint: `${this.config.basePath}${endpoint}`,
+      config: resolveRequestConfig(
+        { ...rest, ...(overrideBaseURL === undefined ? {} : { baseURL: overrideBaseURL }) },
+        { baseURL: this.config.baseURL, timeout: this.config.timeout, headers: this.headers },
+      ),
+      logger: this.logger,
+      serviceLabel: 'BackendApiService',
+    });
   }
 
   /**
@@ -230,12 +296,7 @@ export class BackendApiService implements IConfigApiV1 {
     schema: S,
   ): Promise<Result<v.InferOutput<S>, SodaxError<'EXTERNAL_API_ERROR'>>> {
     try {
-      const raw = await makeRequest<unknown>({
-        endpoint,
-        config: resolveRequestConfig(config, { ...this.config, headers: this.headers }),
-        logger: this.logger,
-        serviceLabel: 'BackendApiService',
-      });
+      const raw = await this.send<unknown>(endpoint, config);
       const parsed = v.safeParse(schema, raw);
       if (!parsed.success) {
         return {
@@ -263,12 +324,7 @@ export class BackendApiService implements IConfigApiV1 {
    */
   private async requestUnvalidated<T>(endpoint: string, config: RequestConfig): Promise<Result<T>> {
     try {
-      const value = await makeRequest<T>({
-        endpoint,
-        config: resolveRequestConfig(config, { ...this.config, headers: this.headers }),
-        logger: this.logger,
-        serviceLabel: 'BackendApiService',
-      });
+      const value = await this.send<T>(endpoint, config);
       return { ok: true, value };
     } catch (error) {
       return { ok: false, error: toExternalApiError({ api: 'backend', feature: 'backend', endpoint, error }) };
@@ -638,8 +694,9 @@ export class BackendApiService implements IConfigApiV1 {
    * without constructing a new service instance. Existing header keys are
    * overwritten; keys absent from `headers` are preserved.
    *
-   * Headers also reach `swaps`, which shares this origin, but never `sponsoring`,
-   * whose separate origin must not receive base-API credentials.
+   * Headers also reach `swaps` and `bridge`, but never `sponsoring`: it is configured independently, so
+   * base-API credentials must not be forwarded to whatever origin it points at. Note `swaps` can also be
+   * retargeted to another origin via `swapsApiConfig`, in which case a header set here follows it.
    *
    * @param headers - Key-value pairs to add or overwrite in the default headers.
    */
@@ -652,11 +709,21 @@ export class BackendApiService implements IConfigApiV1 {
   }
 
   /**
-   * Return the base URL the service is currently pointing at.
+   * Return the gateway root the service is currently pointing at — WITHOUT this service's own mount.
+   * Requests go to `getBaseURL() + getBasePath() + <route>`.
    *
-   * @returns The `baseURL` from the `ApiConfig` this instance was constructed with.
+   * @returns The resolved gateway root, i.e. the `baseURL` from the `ApiConfig` this instance was
+   * constructed with, minus a legacy `/be` suffix if one was supplied.
    */
   public getBaseURL(): string {
     return this.config.baseURL;
+  }
+
+  /**
+   * Return the backend data API's mount below {@link getBaseURL} — `/be` by default, or whatever
+   * `basePath` the `ApiConfig` supplied (`''` for a service addressed directly at its origin).
+   */
+  public getBasePath(): string {
+    return this.config.basePath;
   }
 }
