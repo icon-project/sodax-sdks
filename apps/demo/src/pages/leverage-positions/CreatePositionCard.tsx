@@ -28,6 +28,7 @@ import {
   useReservesUsdFormat,
   useEModes,
   useXBalances,
+  isNativeToken,
   EvmVaultTokenService,
   type GetWalletProviderType,
   projectLeverageLeg,
@@ -42,6 +43,7 @@ import {
   AlertTriangle,
   Coins,
   HandCoins,
+  Info,
   Layers,
   ListTree,
   Receipt,
@@ -196,25 +198,53 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
     [reserves, collateral],
   );
 
+  /**
+   * The address the funding is pulled from, which is what a balance has to be read against and what
+   * the deposit is built from. One source for both, because they disagreed and it cost an open: the
+   * balance was read from the registry `address` while the deposit rewrote it to `hubAsset`, so for
+   * Sonic's native S the form showed 42 S and the batch then called
+   * `wS.transferFrom(user, hubWallet, 5e18)` against a wS balance of zero. The approval was correct;
+   * the revert surfaced as nothing but "External call failed".
+   */
+  const fundingAddressFor = useCallback(
+    (token: XToken | undefined): string => {
+      if (!isHubChain) return token?.address ?? '';
+      // A native entry funds AS native: `EvmSpokeService.deposit` keys on the chain's own
+      // `nativeToken` to send msg.value rather than an ERC-20 transferFrom, and Sonic's S carries
+      // exactly that sentinel as its `address`. Rewriting that to wS asks for a token the wallet
+      // does not hold. The hub-asset rewrite is for BRIDGED entries, whose `address` is foreign.
+      if (token && isNativeToken(chain, token)) return token.address;
+      return token?.hubAsset ?? token?.address ?? '';
+    },
+    [isHubChain, chain],
+  );
+
   // Balances of what the user holds ON `chain`, which is not the hub unless they are on it. Keyed by
-  // the token's own address, which is how useXBalances reports them.
+  // the address given here, which is how useXBalances reports them.
   const xService = useXService({ xChainType: getXChainType(chain) });
+  const balanceTokens = useMemo(
+    () =>
+      [collateralToken, borrowTokenSel]
+        .filter((t): t is XToken => !!t)
+        .map(token => ({ ...token, address: fundingAddressFor(token) })),
+    [collateralToken, borrowTokenSel, fundingAddressFor],
+  );
   const { data: balances } = useXBalances({
     params: {
       xService,
       xChainId: chain,
-      xTokens: [collateralToken, borrowTokenSel].filter((t): t is XToken => !!t),
+      xTokens: balanceTokens,
       address: signer,
     },
   });
 
-  const collateralBalance = balances?.[collateralToken?.address ?? ''];
+  const collateralBalance = balances?.[fundingAddressFor(collateralToken)];
   const borrowReserve = useMemo(
     () => reserves?.find(r => r.underlyingAsset.toLowerCase() === borrowToken.toLowerCase()),
     [reserves, borrowToken],
   );
 
-  const borrowBalance = balances?.[borrowTokenSel?.address ?? ''];
+  const borrowBalance = balances?.[fundingAddressFor(borrowTokenSel)];
   const startingDebtSide = startFrom === 'debt';
   const depositReserve = startingDebtSide ? borrowReserve : collateralReserve;
   const depositToken = startingDebtSide ? borrowTokenSel : collateralToken;
@@ -227,7 +257,17 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
    * spoke `address` for a bridged token can point at another chain entirely (the live Sonic sUSDS
    * entry carries an Arbitrum address), and on the hub the hub asset is what the user holds anyway.
    */
-  const depositTokenAddress = ((isHubChain ? depositHubAsset : depositToken?.address) ?? '') as Address;
+  const depositTokenAddress = fundingAddressFor(depositToken) as Address;
+  /**
+   * Named when the funding token is not the one selected, which on the hub is any native entry. The
+   * balance below is that token's, so the difference has to be visible rather than inferred from a
+   * number that looks wrong.
+   */
+  const fundingSymbol = useMemo(() => {
+    if (!depositToken || !depositTokenAddress) return undefined;
+    if (depositTokenAddress.toLowerCase() === (depositToken.address ?? '').toLowerCase()) return undefined;
+    return chainTokens.find(t => t.address.toLowerCase() === depositTokenAddress.toLowerCase())?.symbol;
+  }, [chainTokens, depositToken, depositTokenAddress]);
   /** The held asset is already the reserve for a soda* selection, so there is nothing to wrap. */
   const needsWrap = !!depositHubAsset && depositHubAsset.toLowerCase() !== depositVault.toLowerCase();
   const depositBalance = startingDebtSide ? borrowBalance : collateralBalance;
@@ -422,7 +462,7 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
       if (depositBalance !== undefined && parsed > depositBalance)
         return {
           field: 'amount',
-          message: `You only have ${Number(formatUnits(depositBalance, depositDecimals)).toFixed(4)} ${depositSymbol}`,
+          message: `You only have ${Number(formatUnits(depositBalance, depositDecimals)).toFixed(4)} ${fundingSymbol ?? depositSymbol}`,
         };
       // Every open is leveraged. An unlevered one would be an AAVE supply wrapped in a clone, which
       // is worth nothing over supplying directly, so it is not offered.
@@ -462,6 +502,7 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
     depositDecimals,
     depositBalance,
     depositSymbol,
+    fundingSymbol,
     leverage,
     legQuote.isLoading,
     legQuote.error,
@@ -648,14 +689,15 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
         {/* ---- Your money in. The balance doubles as the max button, as before. ---- */}
         <div className="space-y-1">
           <div className="flex items-center justify-between">
-            <Label>Deposit{depositSymbol ? ` (${depositSymbol})` : ''}</Label>
+            <Label>Deposit{fundingSymbol || depositSymbol ? ` (${fundingSymbol ?? depositSymbol})` : ''}</Label>
             {depositBalance !== undefined && (
               <button
                 type="button"
                 className="text-[10px] text-muted-foreground hover:underline"
                 onClick={() => setAmount(formatUnits(depositBalance, depositDecimals))}
               >
-                Use max: {Number(formatUnits(depositBalance, depositDecimals)).toFixed(4)}
+                Use max: {Number(formatUnits(depositBalance, depositDecimals)).toFixed(4)}{' '}
+                {fundingSymbol ?? depositSymbol}
               </button>
             )}
           </div>
@@ -664,6 +706,11 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
             <div className="text-[10px] text-muted-foreground">
               You fund with the debt token. The solver supplies {collateralToken?.symbol ?? 'collateral'} on fill.
             </div>
+          )}
+          {fundingSymbol && (
+            <Notice icon={Info}>
+              {depositSymbol} is funded as {fundingSymbol} on this chain — wrap it first if the balance reads zero.
+            </Notice>
           )}
           {problem?.field === 'amount' && (
             <Notice tone="danger" icon={AlertTriangle}>
